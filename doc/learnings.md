@@ -162,6 +162,12 @@ then remove or shorten the redundant entry here.
   Multi-selection mutation commands must normalize generated edit ranges before
   constructing a document transaction.
 
+## undo-redo-history
+
+- History integration captures erased UTF-8 bytes from the pre-edit
+  `DocumentSnapshot` before calling `Document::apply`; `TransactionResult` does
+  not retain removed content needed to construct undo inverses.
+
 ## shell-layout
 
 - Priority-based field collapse must retain a prefix of collapse ranks.
