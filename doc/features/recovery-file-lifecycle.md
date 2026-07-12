@@ -143,7 +143,11 @@ Normative commands owned by this feature:
 - `file.new`, `file.open`, `file.open_recent`, `file.open_dropped_content`, `file.save`, `file.save_all`, `file.save_as`, `file.reload`, `file.rename`, `file.delete`, `file.new_directory`
 - `file.reopen_with_encoding`, `file.set_encoding`, `file.set_line_ending`, `file.set_final_newline`
 - `tab.close`, `tab.close_others`, `tab.close_all`, `tab.reopen_closed`, `tab.next`, `tab.previous`, `tab.activate`, `tab.move_left`, `tab.move_right`
-- `external.reload`, `external.keep_buffer`, `external.open_diff`
+
+The external-modification flow owns `external.reload`,
+`external.keep_buffer`, and `external.open_diff`. It uses the reload primitive
+here to install the complete prior `JournalDocument` before replacing a dirty
+buffer, as specified by `doc/features/workspace-live-diffs.md`.
 
 Commands requiring a path use the non-modal `PromptSurface` contract. `file.open_dropped_content` is an ingress-only, Lua-excluded command available only when authenticated host policy grants its `InvocationPrincipal` the `local_file_drop` capability. It applies the normal decode/binary pipeline and opens bytes as untitled documents with bounded sanitized display labels. Labels gain no path authority. Remote and locality-unknown clients cannot invoke it. Encoding, BOM, and line-ending behavior follows `doc/spec.md`.
 
