@@ -1,0 +1,16 @@
+name: benchmark-host
+
+on:
+  workflow_dispatch:
+
+jobs:
+  enforce-budgets:
+    runs-on: [self-hosted, ssg-benchmark-host]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure Release benchmark
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+      - name: Build benchmark
+        run: cmake --build build --config Release --parallel --target editor_benchmark
+      - name: Enforce fixed budgets
+        run: ./build/editor_benchmark --enforce

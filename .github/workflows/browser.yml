@@ -1,0 +1,38 @@
+name: browser-conformance
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  required-browser:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install browser runtime
+        shell: bash
+        run: |
+          sudo apt-get update
+          case "${{ matrix.browser }}" in
+            chromium) sudo apt-get install -y chromium-browser ;;
+            firefox) sudo apt-get install -y firefox ;;
+            webkit)
+              sudo apt-get install -y libwebkit2gtk-4.1-dev
+              find /usr/lib -name MiniBrowser -type f -print -quit |
+                sed 's/^/SSG_WEBKIT=/' >> "$GITHUB_ENV"
+              ;;
+          esac
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+      - name: Build browser fixtures
+        run: cmake --build build --parallel --target browser_client_fixture
+      - name: Input and clipboard conformance
+        run: node tests/browser/input/run-browser-conformance.mjs --require=${{ matrix.browser }}
+      - name: Browser client conformance
+        run: node tests/browser/client/run-browser-conformance.mjs --server=build/browser_client_fixture --require=${{ matrix.browser }}
+      - name: End-to-end parity
+        run: node tests/browser/end_to_end/run-parity-conformance.mjs --server=build/browser_client_fixture --require=${{ matrix.browser }}

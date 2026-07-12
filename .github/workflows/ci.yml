@@ -1,0 +1,36 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build --config Release --parallel
+      - name: Core and platform gates
+        run: ctest --test-dir build -C Release --output-on-failure -LE "browser|performance"
+      - name: Performance correctness
+        run: ctest --test-dir build -C Release --output-on-failure -L performance-correctness
+      - name: Bounded WebSocket queue
+        run: ctest --test-dir build -C Release --output-on-failure -R test_http_server
+
+  sanitizer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure ASan and UBSan
+        run: cmake -S . -B build-sanitize -DCMAKE_BUILD_TYPE=Debug -DSSG_SANITIZE=ON
+      - name: Build
+        run: cmake --build build-sanitize --parallel
+      - name: Sanitizer gates
+        run: ctest --test-dir build-sanitize --output-on-failure -LE "browser|performance"
