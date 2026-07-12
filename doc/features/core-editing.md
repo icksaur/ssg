@@ -103,6 +103,46 @@ centering clamps to the viewport's scroll bounds. Reference-editor scripts use
 ASCII fixtures, while hand-computed page, nested-bracket, tab, combining, and
 wide-grapheme cases cover behavior outside that byte-column oracle.
 
+**Text-input command contract.** The separately scheduled
+`text-input-commands` task owns exactly `text.insert`, `text.newline`,
+`text.delete_backward`, `text.delete_forward`, `text.delete_word_backward`,
+and `text.delete_word_forward`. It exports an immutable feature descriptor set,
+following `SelectionNavigationCommandSet`, plus a pure apply function. The
+function receives a `DocumentSnapshot`, normalized `SelectionSet`, resolved
+indentation/line-ending settings, a command, and the insertion payload. It
+returns either an actionable typed error or a pre-transaction
+`EditTransaction`, the post-edit `SelectionSet`, and the resulting text needed
+to resolve positions. Session assembly later applies the transaction to its
+live `Document`; this feature does not register stateful
+`command_registry::CommandSet` handlers.
+
+All edits use pre-transaction offsets. Selected ranges are replaced before
+caret-only behavior is considered. Coincident carets and overlapping selected
+ranges produce one normalized edit, so insertion is never multiplied at one
+byte offset and `Document` never receives duplicate or overlapping edits.
+Adjacent ranges may be merged. If every requested deletion is already at a
+document boundary, the command succeeds as an explicit no-op without a
+transaction or revision change. Every non-empty accepted edit yields exactly
+one transaction.
+
+Backward and forward character deletion remove one extended grapheme cluster;
+CRLF is one logical terminator. Word deletion groups ASCII letters, digits,
+underscore, all non-ASCII graphemes, whitespace, and punctuation using the
+same category rules as selection navigation. The independent reference-editor
+comparison is restricted to ASCII/single-codepoint input with LF and automatic
+indentation disabled. Hand-authored fixtures are authoritative for grapheme
+clusters, configurable terminators, and indentation.
+
+`text.newline` inserts LF, CRLF, or CR from the resolved line-ending setting.
+For `mixed`, it copies the current line's existing terminator when present and
+falls back to LF on the final unterminated line. With automatic indentation
+enabled it copies the current line's leading whitespace display width and
+re-materializes it using the resolved tabs-versus-spaces style and width.
+There is no bracket-aware indentation increase in this task. Post-edit
+positions are resolved against the resulting text with the resolved tab width.
+Invalid selection coordinates, invalid inserted UTF-8, and non-edit document
+modes fail atomically.
+
 ## Rationale (optional, skippable)
 
 These commands share one mutation and selection algebra; separate specs would duplicate the same oracle and boundary.
