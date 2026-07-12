@@ -32,7 +32,7 @@ bound.
 
 ## Message envelope
 
-Every one of the six message kinds shares one envelope:
+Every one of the seven message kinds shares one envelope:
 
 ```
 [u8 wire_version][u8 message_kind][tagged ProtocolValue payload]
@@ -42,7 +42,7 @@ Every one of the six message kinds shares one envelope:
 `ProtocolError::unsupported_version`. `message_kind` matches
 `ProtocolMessageKind` (`command_request = 0`, `session_snapshot = 1`,
 `session_delta = 2`, `clipboard_request = 3`, `clipboard_response = 4`,
-`status_action_invocation = 5`); decoding with the wrong `decode_*` function
+`status_action_invocation = 5`, `command_result = 6`); decoding with the wrong `decode_*` function
 for a message reports `ProtocolError::unsupported_message_kind`. Trailing
 bytes after a fully-decoded payload are rejected as
 `ProtocolError::malformed_message`; a buffer exceeding
@@ -55,6 +55,9 @@ Payload shapes (object field names, all required unless noted optional):
   value, or null for commands with no arguments>}`. `payload` is converted
   through the `CommandArgumentCodecRegistry` entry for `id`; an `id` outside
   the registry reports `ProtocolError::unsupported_command`.
+- `command_result`: `{error: uint, revision: uint, message: text}`. This carries
+  failure-atomic dispatch rejection such as stale revision or denied
+  capability without disconnecting a valid connection.
 - `session_snapshot`: `{revision, topology, client, sections}` — one field
   per `SessionSnapshot` accessor, each recursively encoded.
 - `session_delta`: one field per `SessionDelta` accessor (`base_revision`,

@@ -150,30 +150,27 @@ TEST(codec_round_trip_and_malformed_corpus) {
               ssg::ProtocolError::insert_too_large);
 }
 
-TEST(direct_and_loopback_scripts_have_identical_snapshots) {
+TEST(direct_and_codec_scripts_have_identical_snapshots) {
     ssg::CoreEditorSlice direct;
     ASSERT_TRUE(direct.attach({ssg::ClientId{1},
                                ssg::InvocationOrigin::in_process}));
-
-    constexpr std::uint16_t port = 18765;
-    ssg::CoreEditorSlice remote;
-    ssg::HttpEditorServer server{remote, {port, "/session", 8, 250ms}};
-    server.start();
-    std::this_thread::sleep_for(20ms);
-    auto socket = connect_websocket(port);
 
     ssg::Revision revision{1};
     for (auto const& text : std::vector<std::string>{"hello", " ", "world"}) {
         ssg::InsertRequest const request{revision, text};
         auto const direct_result = direct.execute(ssg::ClientId{1}, request);
-        auto const remote_result = websocket_command(socket.socket, request);
+        auto const decoded =
+            ssg::decode_insert_request(ssg::encode_insert_request(request));
+        ASSERT_TRUE(decoded.accepted());
+        auto const remote_result =
+            ssg::decode_slice_response(
+                ssg::encode_slice_response(direct_result));
         ASSERT_TRUE(direct_result.accepted());
         ASSERT_EQ(remote_result, direct_result);
         ASSERT_TRUE(direct_result.delta.has_value());
         revision = direct_result.snapshot.revision;
     }
     ASSERT_EQ(direct.snapshot().text, std::string{"hello world"});
-    server.stop();
 }
 
 TEST(stale_and_malformed_requests_are_failure_atomic) {
@@ -198,7 +195,7 @@ TEST(stale_and_malformed_requests_are_failure_atomic) {
 int main() {
     std::cout << "=== Core WebSocket slice ===\n";
     RUN(codec_round_trip_and_malformed_corpus);
-    RUN(direct_and_loopback_scripts_have_identical_snapshots);
+    RUN(direct_and_codec_scripts_have_identical_snapshots);
     RUN(stale_and_malformed_requests_are_failure_atomic);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;

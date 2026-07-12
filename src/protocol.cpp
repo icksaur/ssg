@@ -4704,6 +4704,44 @@ DecodeCommandRequestResult decode_command_request(
             {}};
 }
 
+std::string encode_command_result(CommandResult const& result) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back(
+        "error", ProtocolValue::make_uint(
+                    static_cast<std::uint8_t>(result.error)));
+    fields.emplace_back("revision", to_value(result.revision));
+    fields.emplace_back("message", to_value(result.message));
+    return encode_message(ProtocolMessageKind::command_result,
+                         ProtocolValue::make_object(std::move(fields)));
+}
+
+DecodeCommandResultResult decode_command_result(std::string_view bytes,
+                                               ProtocolLimits limits) {
+    auto decoded =
+        decode_message(bytes, ProtocolMessageKind::command_result, limits);
+    if (decoded.error != ProtocolError::none) {
+        return {decoded.error, std::nullopt, decoded.message};
+    }
+    auto const& payload = *decoded.payload;
+    if (!payload.as_object()) {
+        return {ProtocolError::malformed_message, std::nullopt,
+               "command result payload is not an object"};
+    }
+    auto error = require_field<std::uint8_t>(payload.field("error"));
+    auto revision = require_field<Revision>(payload.field("revision"));
+    auto message = require_field<std::string>(payload.field("message"));
+    if (!error || *error > static_cast<std::uint8_t>(
+                              CommandError::revision_exhausted) ||
+        !revision || !message) {
+        return {ProtocolError::malformed_message, std::nullopt,
+               "command result payload is malformed"};
+    }
+    return {ProtocolError::none,
+            CommandResult{static_cast<CommandError>(*error), *revision,
+                         std::move(*message)},
+            {}};
+}
+
 std::string encode_session_snapshot(SessionSnapshot const& snapshot) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("revision", to_value(snapshot.revision()));
