@@ -33,6 +33,21 @@ user-cache-root lookup, and byte-oriented atomic replacement. Operational
 failures throw actionable standard exceptions; lock contention alone is the
 empty result of `try_lock_file`.
 
+Scratch journal framing is portable and fixed: all multi-byte fields use
+little-endian encoding, and each framed payload is protected by CRC-32C.
+Fixtures are byte-identical on Linux and Windows. The format defines every
+on-disk record kind, including a base/checkpoint record. Replay begins with the
+newest checksum-valid checkpoint and applies later checksum-valid append records;
+a corrupt or truncated tail is ignored after the last complete valid record.
+The later compaction component decides when to emit a checkpoint but adds no
+record kind or journal encoding.
+
+`UntitledDocumentId` is a generated unique identifier defined by
+`scratch_journal.h`, persisted in journal records, and stable across restart.
+The user-visible `Untitled N` number is derived by the later tab layer and is not
+persisted by the journal-format component. Saved document journal keys use
+workspace-relative path identity rather than filesystem inode identity.
+
 Normative commands owned by this feature:
 
 - `workspace.open_directory`
@@ -78,7 +93,18 @@ I4, I5, I9, I10, I16, I19, I21 from `doc/spec.md`.
 
 - Linux and Windows path, permission, locking, cache-root, newline, and replacement semantics differ behind adapters.
 - Journals target durability within 100 ms; footer state exposes pending/failure.
+- Journal encoding, append, flush, and replay are synchronous. The later
+  compaction/quota component owns asynchronous scheduling and durability status.
+- Journal append uses a journal-owned durable-append primitive. Its parent
+  directory must already exist. It flushes the journal file and the
+  platform-required creation metadata: Linux flushes the parent directory on
+  first create, while Windows uses write-through creation plus
+  `FlushFileBuffers`. Atomic replacement is reserved for
+  checkpoint/compaction snapshots.
 - Recovery restores content and topology, not undo history.
+- Journal topology is the recoverable open-document set with each document's
+  identity, mode, and dirty state. Tab/split geometry belongs to session-state
+  persistence.
 - Multiple live sessions never share writable journal files.
 - Untitled-to-saved identity changes only after a successful atomic save.
 
@@ -100,7 +126,9 @@ I4, I5, I9, I10, I16, I19, I21 from `doc/spec.md`.
 | # | Step | Files | Oracle | Invariants |
 |---|------|-------|--------|------------|
 | 1 | Implement platform file identity, locking, paths, permissions, cache roots, and atomic replacement | `include/ssg/platform_files.h`, `src/platform/*files.cpp`, `tests/test_platform_files.cpp` | platform-independent Linux/Windows path decision table on both platforms; native temporary-directory identity/rename, lock/contention/release, owner-only permission, cache-root, and complete-old-or-new replacement cases | I4, I21 |
-| 2 | Implement checksummed document/session journals and restoration | `include/ssg/scratch.h`, `src/scratch.cpp`, `tests/fixtures/scratch/*`, `tests/test_scratch.cpp` | corruption/truncation/concurrency/untitled round trips | I10, I19 |
+| 2a | Implement every on-disk journal record kind, durable append, document recovery-set encoding, untitled IDs, and replay | `include/ssg/scratch_journal.h`, `src/scratch_journal.cpp`, `tests/fixtures/scratch/journal/*`, `tests/test_scratch_journal.cpp` | byte-level corruption/truncation/untitled/restart round trips | I10, I19, I21 |
+| 2b | Implement workspace/session namespaces, process locks, remnant discovery, and newest-restorable policy | `include/ssg/scratch_session.h`, `src/scratch_session.cpp`, `tests/test_scratch_session.cpp` | concurrent live/crashed-session fixtures | I10, I19, I21 |
+| 2c | Compose scratch recovery with checkpoint scheduling, compaction, quota, and durability status | `include/ssg/scratch.h`, `src/scratch.cpp`, `tests/test_scratch.cpp` | compaction/quota/durability-lag fixtures | I10, I19, I21 |
 | 3 | Implement file tabs, path prompts, encoding/EOL conversion, save, close/reopen, and recovery records | `include/ssg/recovery.h`, `src/recovery.cpp`, `tests/fixtures/encoding/*`, `tests/test_recovery.cpp` | byte-exact encoding/EOL and compensating-command round trips | I5, I19 |
 | 4 | Implement directory lifecycle and external-modification status actions | `include/ssg/workspace.h`, `src/workspace.cpp`, `tests/test_workspace.cpp` | filesystem ground truth and fault injection | I9, I16, I21 |
 
