@@ -162,6 +162,63 @@ TEST(identity_reuse_at_another_path_keeps_both_events) {
     ASSERT_EQ(events[1].kind, WatchEventKind::create);
 }
 
+TEST(same_path_replacement_requires_matching_identity_to_coalesce) {
+    WatchEventNormalizer replaced(
+        config(), {WorkspaceEntry{"file.txt", state(40)}}, unchanged_scan);
+    replaced.push(raw(NativeWatchAction::remove, "file.txt"), start);
+    replaced.push(
+        raw(NativeWatchAction::create, "file.txt", state(41)), start + 1ms);
+    auto events = replaced.take_ready(start + 12ms);
+    ASSERT_EQ(events.size(), std::size_t{2});
+    ASSERT_EQ(events[0].kind, WatchEventKind::remove);
+    ASSERT_EQ(events[0].identity,
+              std::optional<FileIdentity>{state(40).identity});
+    ASSERT_EQ(events[1].kind, WatchEventKind::create);
+    ASSERT_EQ(events[1].identity,
+              std::optional<FileIdentity>{state(41).identity});
+
+    WatchEventNormalizer recreated(
+        config(), {WorkspaceEntry{"file.txt", state(42)}}, unchanged_scan);
+    recreated.push(raw(NativeWatchAction::remove, "file.txt"), start);
+    recreated.push(
+        raw(NativeWatchAction::create, "file.txt", state(42, 2)), start + 1ms);
+    events = recreated.take_ready(start + 12ms);
+    ASSERT_EQ(events.size(), std::size_t{1});
+    ASSERT_EQ(events[0].kind, WatchEventKind::modify);
+}
+
+TEST(same_path_replacement_coalesces_followups_with_new_identity) {
+    WatchEventNormalizer modified(
+        config(), {WorkspaceEntry{"file.txt", state(43)}}, unchanged_scan);
+    modified.push(raw(NativeWatchAction::remove, "file.txt"), start);
+    modified.push(
+        raw(NativeWatchAction::create, "file.txt", state(44, 1)), start + 1ms);
+    modified.push(
+        raw(NativeWatchAction::modify, "file.txt", state(44, 3)), start + 2ms);
+    auto events = modified.take_ready(start + 13ms);
+    ASSERT_EQ(events.size(), std::size_t{2});
+    ASSERT_EQ(events[0].kind, WatchEventKind::remove);
+    ASSERT_EQ(events[0].identity,
+              std::optional<FileIdentity>{state(43).identity});
+    ASSERT_EQ(events[1].kind, WatchEventKind::create);
+    ASSERT_EQ(events[1].identity,
+              std::optional<FileIdentity>{state(44).identity});
+    ASSERT_EQ(events[1].size, std::optional<std::uint64_t>{3});
+
+    WatchEventNormalizer vanished(
+        config(), {WorkspaceEntry{"file.txt", state(45)}}, unchanged_scan);
+    vanished.push(raw(NativeWatchAction::remove, "file.txt"), start);
+    vanished.push(
+        raw(NativeWatchAction::create, "file.txt", state(46)), start + 1ms);
+    vanished.push(
+        raw(NativeWatchAction::remove, "file.txt"), start + 2ms);
+    events = vanished.take_ready(start + 13ms);
+    ASSERT_EQ(events.size(), std::size_t{1});
+    ASSERT_EQ(events[0].kind, WatchEventKind::remove);
+    ASSERT_EQ(events[0].identity,
+              std::optional<FileIdentity>{state(45).identity});
+}
+
 TEST(unmatched_rename_halves_become_boundary_events) {
     WatchEventNormalizer moved_out(
         config(), {WorkspaceEntry{"out.txt", state(9)}}, unchanged_scan);
@@ -283,6 +340,47 @@ TEST(queue_exhaustion_collapses_to_overflow_and_rescan) {
     ASSERT_EQ(events[0].kind, WatchEventKind::overflow);
 }
 
+TEST(rename_queue_overflow_does_not_invalidate_active_pair) {
+    auto small = config(1);
+    const auto scan = [](std::size_t) {
+        return WorkspaceScan{{
+            {"occupied.txt", state(50)},
+            {"after.txt", state(51)},
+        }, true};
+    };
+    WatchEventNormalizer normalizer(
+        small, {WorkspaceEntry{"before.txt", state(51)}}, scan);
+    normalizer.push(
+        raw(NativeWatchAction::create, "occupied.txt", state(50)), start);
+    normalizer.push(raw(NativeWatchAction::rename_from, "before.txt",
+                        std::nullopt, 70), start + 1ms);
+    normalizer.push(raw(NativeWatchAction::rename_to, "after.txt",
+                        state(51), 70), start + 2ms);
+
+    const auto events = normalizer.take_ready(start + 2ms);
+    ASSERT_EQ(events.size(), std::size_t{1});
+    ASSERT_EQ(events[0].kind, WatchEventKind::overflow);
+}
+
+TEST(expiring_rename_queue_overflow_does_not_invalidate_iteration) {
+    auto small = config(1);
+    const auto scan = [](std::size_t) {
+        return WorkspaceScan{{
+            {"occupied.txt", state(52)},
+        }, true};
+    };
+    WatchEventNormalizer normalizer(
+        small, {WorkspaceEntry{"before.txt", state(53)}}, scan);
+    normalizer.push(
+        raw(NativeWatchAction::create, "occupied.txt", state(52)), start);
+    normalizer.push(raw(NativeWatchAction::rename_from, "before.txt",
+                        std::nullopt, 71), start);
+
+    const auto events = normalizer.take_ready(start + 10ms);
+    ASSERT_EQ(events.size(), std::size_t{1});
+    ASSERT_EQ(events[0].kind, WatchEventKind::overflow);
+}
+
 TEST(invalid_bounds_are_rejected_at_construction) {
     auto invalid = config();
     invalid.max_queued_events = 0;
@@ -369,6 +467,8 @@ int main() {
     RUN(new_source_renamed_to_existing_path_is_one_modify);
     RUN(new_source_renamed_to_new_path_is_one_create);
     RUN(identity_reuse_at_another_path_keeps_both_events);
+    RUN(same_path_replacement_requires_matching_identity_to_coalesce);
+    RUN(same_path_replacement_coalesces_followups_with_new_identity);
     RUN(unmatched_rename_halves_become_boundary_events);
     RUN(debounce_releases_only_after_the_window);
     RUN(exact_save_result_is_correlated_once);
@@ -376,6 +476,8 @@ int main() {
     RUN(partial_rescan_never_publishes_partial_truth);
     RUN(rescan_uses_stable_identity_to_recover_rename);
     RUN(queue_exhaustion_collapses_to_overflow_and_rescan);
+    RUN(rename_queue_overflow_does_not_invalidate_active_pair);
+    RUN(expiring_rename_queue_overflow_does_not_invalidate_iteration);
     RUN(invalid_bounds_are_rejected_at_construction);
     RUN(platform_adapter_reports_recursive_normalized_events);
     RUN(platform_poll_timeout_is_finite);

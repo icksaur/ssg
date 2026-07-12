@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <deque>
+#include <iterator>
 #include <map>
 #include <stdexcept>
 #include <tuple>
@@ -128,11 +129,14 @@ public:
     }
 
     std::vector<WatchEvent> take_ready(WatchTimePoint now) {
-        expire_renames(now);
         if (overflow_requested) {
             if (now < next_rescan_at) {
                 return {};
             }
+            return rescan(now);
+        }
+        expire_renames(now);
+        if (overflow_requested) {
             return rescan(now);
         }
 
@@ -229,15 +233,15 @@ private:
             observed = pair.from->observed;
         }
         const auto source_pending = std::find_if(
-            pending.begin(), pending.end(),
+            pending.rbegin(), pending.rend(),
             [&pair](const PendingEvent& candidate) {
                 return candidate.event.path == pair.from->path;
             });
         const auto source_was_new =
-            source_pending != pending.end() &&
+            source_pending != pending.rend() &&
             source_pending->event.kind == WatchEventKind::create;
-        if (source_pending != pending.end()) {
-            pending.erase(source_pending);
+        if (source_pending != pending.rend()) {
+            pending.erase(std::next(source_pending).base());
         }
         WatchEvent event = event_from(
             NativeWatchAction::modify, pair.to->path, observed);
@@ -285,17 +289,24 @@ private:
 
     void enqueue(WatchEvent event, WatchTimePoint observed_at) {
         const auto same = std::find_if(
-            pending.begin(), pending.end(),
+            pending.rbegin(), pending.rend(),
             [&event](const PendingEvent& candidate) {
                 return same_event_key(candidate.event, event);
             });
-        if (same != pending.end()) {
-            if (coalesce(same->event, event)) {
-                same->ready_at = observed_at + config.debounce;
-            } else {
-                pending.erase(same);
+        if (same != pending.rend()) {
+            const auto distinct_replacement =
+                same->event.kind == WatchEventKind::remove &&
+                event.kind == WatchEventKind::create &&
+                (!same->event.identity || !event.identity ||
+                 same->event.identity != event.identity);
+            if (!distinct_replacement) {
+                if (coalesce(same->event, event)) {
+                    same->ready_at = observed_at + config.debounce;
+                } else {
+                    pending.erase(std::next(same).base());
+                }
+                return;
             }
-            return;
         }
         if (pending.size() == config.max_queued_events) {
             request_overflow();
@@ -352,10 +363,10 @@ private:
         overflow_announced = false;
         next_rescan_at = WatchTimePoint::min();
         pending.clear();
-        renames.clear();
     }
 
     std::vector<WatchEvent> rescan(WatchTimePoint now) {
+        renames.clear();
         std::vector<WatchEvent> result;
         if (!overflow_announced) {
             WatchEvent overflow;
