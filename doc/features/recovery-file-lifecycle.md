@@ -21,6 +21,19 @@ Plan 1 owns the shared platform primitive used by later recovery work:
 - `ExclusiveFileLock` is the sole move-only, RAII OS advisory-lock primitive;
   Plan 2 session locking consumes it and owns workspace/session namespace,
   remnant-discovery, and newest-restorable policy rather than another OS lock;
+- scratch-session callers provide an explicit scratch root and an
+  already-canonical absolute workspace path. Its lowercase SHA-256 workspace
+  key is computed from the path's native UTF-8 representation. Session IDs use
+  a fixed-width UTC creation timestamp plus 128 random bits, making lexical
+  order the total newest-first order. The namespace is
+  `<root>/workspaces/<workspace-hash>/sessions/<session-id>/`, containing
+  `session.lock`, `journal.bin`, and an optional `restored` marker;
+- an unlocked remnant is restorable only when it is not marked restored and
+  replaying its journal yields at least one document. Newest-restorable
+  selection holds the remnant's existing `ExclusiveFileLock` in a move-only
+  claim. Successful import atomically writes the restored marker; a crash
+  before that point leaves the remnant retryable, while cleanup and quota
+  remain the later scratch-composition component's policy;
 - owner-only permission operations deny other principals read/write access;
 - cache-root lookup returns the OS user cache location with a validated
   application component; and
