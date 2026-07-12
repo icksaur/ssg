@@ -6,9 +6,22 @@
 #include <array>
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <string_view>
+#include <vector>
 
 namespace ssg {
+
+// Ingress-only payload for `file.open_dropped_content`: this command has no
+// existing bundled argument type because `Workspace::open_dropped_content`
+// takes its bytes and label as separate parameters. The protocol codec needs
+// one std::any-held type to bind the command to a wire converter.
+struct DroppedContentArguments {
+    std::vector<std::uint8_t> bytes;
+    std::string suggested_label;
+
+    bool operator==(const DroppedContentArguments&) const = default;
+};
 
 enum class FileCommand : std::uint8_t {
     open_directory,
