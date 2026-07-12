@@ -301,3 +301,11 @@ then remove or shorten the redundant entry here.
   non-navigation; transport or Lua origin alone is insufficient.
 - Feature components emit stable activation intents. Editor-session assembly
   alone binds them to shared tab and pane state.
+
+## editor-session-assembly
+
+- Aggregate headers require globally unique public type names. Selection and
+  syntax cannot both export an unqualified `BracketPair` into one translation
+  unit.
+- Per-client deltas bind client ID, view ID, and immutable capabilities so
+  replay cannot leak viewport or authorization state across attachments.
