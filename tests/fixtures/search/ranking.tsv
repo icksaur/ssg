@@ -1,0 +1,5 @@
+# mode	query	expected result labels in rank order
+file	srch	src/search.cpp,include/ssg/search.h
+file	sess	src/session.cpp
+symbol	Search	include/ssg/search.h:SearchResult,src/search.cpp:SearchController
+text	cancel	src/search.cpp:3
