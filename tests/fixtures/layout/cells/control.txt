@@ -1,0 +1,47 @@
+# Control character cell-run golden fixture
+# Unicode 15.0.0
+#
+# Non-tab C0 controls (U+0000–U+0008, U+000A–U+001F), DEL (U+007F),
+# and C1 controls (U+0080–U+009F) are rendered as visible 1-cell
+# replacement glyphs.  kind=control, cell_width=1.
+# Tab (U+0009) is NOT a control in this sense; see tab.txt.
+#
+# Format: description | utf8 bytes (hex) | tab_width → total_cells | spans
+# Kind codes: T=text, C=combining, TAB=tab, CTL=control, INV=invalid_utf8
+
+# NUL (U+0000): 00
+nul               | 00             | 4 → 1 | 0:1:1:CTL
+
+# SOH (U+0001): 01
+soh               | 01             | 4 → 1 | 0:1:1:CTL
+
+# BEL (U+0007): 07
+bel               | 07             | 4 → 1 | 0:1:1:CTL
+
+# LF (U+000A): 0A — line terminator, but per contract input won't contain it;
+# included here for completeness: it is a C0 control, 1 cell if encountered
+lf_control        | 0A             | 4 → 1 | 0:1:1:CTL
+
+# ESC (U+001B): 1B
+esc               | 1B             | 4 → 1 | 0:1:1:CTL
+
+# US (U+001F): 1F — last C0 before space
+us                | 1F             | 4 → 1 | 0:1:1:CTL
+
+# DEL (U+007F): 7F
+del               | 7F             | 4 → 1 | 0:1:1:CTL
+
+# C1 control PAD (U+0080): C2 80 (2 bytes in UTF-8)
+c1_pad            | C2 80          | 4 → 1 | 0:2:1:CTL
+
+# C1 control APC (U+009F): C2 9F (2 bytes in UTF-8)
+c1_apc            | C2 9F          | 4 → 1 | 0:2:1:CTL
+
+# Two C0 controls: BEL + ESC
+two_controls      | 07 1B          | 4 → 2 | 0:1:1:CTL 1:1:1:CTL
+
+# Control followed by text: BEL + 'A'
+ctl_then_text     | 07 41          | 4 → 2 | 0:1:1:CTL 1:1:1:T
+
+# Text followed by control: 'A' + BEL
+text_then_ctl     | 41 07          | 4 → 2 | 0:1:1:T 1:1:1:CTL

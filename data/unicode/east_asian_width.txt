@@ -1,0 +1,145 @@
+# East Asian Width — Wide (W) and Fullwidth (F) ranges
+# Unicode 15.0.0, EastAsianWidth.txt (2022-09-13)
+# Source: https://unicode.org/Public/15.0.0/ucd/EastAsianWidth.txt
+#
+# These ranges are compiled into src/layout.cpp:k_wide[].
+# Format: U+XXXX..U+YYYY   ; W/F   # comment
+
+U+1100..U+115F    ; W    # Hangul Jamo (leading consonants)
+U+231A..U+231B    ; W    # Watch, Hourglass Done
+U+2329..U+232A    ; W    # LEFT/RIGHT-POINTING ANGLE BRACKET
+U+23E9..U+23F3    ; W    # various clock/play symbols
+U+23F8..U+23FA    ; W
+U+25FD..U+25FE    ; W
+U+2614..U+2615    ; W    # Umbrella with Rain, Hot Beverage
+U+2648..U+2653    ; W    # Zodiac signs
+U+267F             ; W    # Wheelchair Symbol
+U+2693             ; W    # Anchor
+U+26A1             ; W    # Lightning
+U+26AA..U+26AB    ; W
+U+26BD..U+26BE    ; W
+U+26C4..U+26C5    ; W
+U+26CE             ; W
+U+26D4             ; W
+U+26EA             ; W
+U+26F2..U+26F3    ; W
+U+26F5             ; W
+U+26FA             ; W
+U+26FD             ; W
+U+2702             ; W
+U+2705             ; W
+U+2708..U+270D    ; W
+U+270F             ; W
+U+2712             ; W
+U+2714             ; W
+U+2716             ; W
+U+271D             ; W
+U+2721             ; W
+U+2728             ; W
+U+2733..U+2734    ; W
+U+2744             ; W
+U+2747             ; W
+U+274C             ; W
+U+274E             ; W
+U+2753..U+2755    ; W
+U+2757             ; W
+U+2763..U+2764    ; W
+U+2795..U+2797    ; W
+U+27A1             ; W
+U+27B0             ; W
+U+27BF             ; W
+U+2934..U+2935    ; W
+U+2B05..U+2B07    ; W
+U+2B1B..U+2B1C    ; W
+U+2B50             ; W
+U+2B55             ; W
+U+2E80..U+2EFF    ; W    # CJK Radicals Supplement
+U+2F00..U+2FDF    ; W    # Kangxi Radicals
+U+2FF0..U+2FFB    ; W    # Ideographic Description Characters
+U+3000..U+303F    ; W    # CJK Symbols and Punctuation
+U+3040..U+33FF    ; W    # Hiragana through CJK Compatibility
+U+3400..U+4DBF    ; W    # CJK Unified Ideographs Extension A
+U+4E00..U+9FFF    ; W    # CJK Unified Ideographs
+U+A000..U+A4CF    ; W    # Yi Syllables and Radicals
+U+A960..U+A97C    ; W    # Hangul Jamo Extended-A
+U+AC00..U+D7A3    ; W    # Hangul Syllables
+U+F900..U+FAFF    ; W    # CJK Compatibility Ideographs
+U+FE10..U+FE19    ; W    # Vertical Forms
+U+FE30..U+FE4F    ; W    # CJK Compatibility Forms
+U+FF01..U+FF60    ; F    # Fullwidth ASCII variants
+U+FFE0..U+FFE6    ; F    # Fullwidth signs
+U+16FE0..U+16FE4  ; W    # Tangut / Khitan iteration marks
+U+16FF0..U+16FF1  ; W
+U+17000..U+187F7  ; W    # Tangut
+U+18800..U+18CD5  ; W    # Tangut Components
+U+18D00..U+18D08  ; W    # Tangut Supplement
+U+1AFF0..U+1AFF3  ; W    # Katakana Phonetic Extensions (Unicode 15.0)
+U+1AFF5..U+1AFFB  ; W
+U+1AFFD..U+1AFFE  ; W
+U+1B000..U+1B122  ; W    # Kana Supplement and Extended-A
+U+1B132            ; W
+U+1B150..U+1B152  ; W    # Small Kana Extension
+U+1B155            ; W
+U+1B164..U+1B167  ; W
+U+1B170..U+1B2FF  ; W    # Nushu
+U+1F004            ; W    # MAHJONG TILE RED DRAGON
+U+1F0CF            ; W    # PLAYING CARD BLACK JOKER
+U+1F18E            ; W
+U+1F191..U+1F19A  ; W
+U+1F1E0..U+1F1FF  ; W    # Regional Indicator Symbols
+U+1F201..U+1F202  ; W
+U+1F21A            ; W
+U+1F22F            ; W
+U+1F232..U+1F23A  ; W
+U+1F250..U+1F251  ; W
+U+1F300..U+1F321  ; W    # Miscellaneous Symbols and Pictographs
+U+1F324..U+1F393  ; W
+U+1F396..U+1F397  ; W
+U+1F399..U+1F39B  ; W
+U+1F39E..U+1F3F0  ; W
+U+1F3F3..U+1F3F5  ; W
+U+1F3F7..U+1F4FD  ; W
+U+1F4FF..U+1F53D  ; W
+U+1F549..U+1F54E  ; W
+U+1F550..U+1F567  ; W
+U+1F56F..U+1F570  ; W
+U+1F573..U+1F57A  ; W
+U+1F587            ; W
+U+1F58A..U+1F58D  ; W
+U+1F590            ; W
+U+1F595..U+1F596  ; W
+U+1F5A4..U+1F5A5  ; W
+U+1F5A8            ; W
+U+1F5B1..U+1F5B2  ; W
+U+1F5BC            ; W
+U+1F5C2..U+1F5C4  ; W
+U+1F5D1..U+1F5D3  ; W
+U+1F5DC..U+1F5DE  ; W
+U+1F5E1            ; W
+U+1F5E3            ; W
+U+1F5E8            ; W
+U+1F5EF            ; W
+U+1F5F3            ; W
+U+1F5FA..U+1F64F  ; W    # Miscellaneous Symbols / Emoticons
+U+1F680..U+1F6C5  ; W    # Transport and Map Symbols
+U+1F6CB..U+1F6D2  ; W
+U+1F6D5..U+1F6D7  ; W
+U+1F6DC..U+1F6E5  ; W
+U+1F6E9            ; W
+U+1F6EB..U+1F6EC  ; W
+U+1F6F0..U+1F6FC  ; W
+U+1F7E0..U+1F7EB  ; W    # Geometric Shapes Extended
+U+1F7F0            ; W
+U+1F90C..U+1F93A  ; W    # Supplemental Symbols and Pictographs
+U+1F93C..U+1F945  ; W
+U+1F947..U+1F9FF  ; W
+U+1FA00..U+1FA6F  ; W    # Symbols and Pictographs Extended-A
+U+1FA70..U+1FA7C  ; W
+U+1FA80..U+1FA88  ; W
+U+1FA90..U+1FABD  ; W
+U+1FABF..U+1FAC5  ; W
+U+1FACE..U+1FADB  ; W
+U+1FAE0..U+1FAE8  ; W
+U+1FAF0..U+1FAF8  ; W
+U+20000..U+2FFFD  ; W    # CJK Extension B through F and Compatibility
+U+30000..U+3FFFD  ; W    # CJK Extension G, H
