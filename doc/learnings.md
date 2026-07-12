@@ -255,3 +255,12 @@ then remove or shorten the redundant entry here.
 - Mixed per-line EOL metadata transforms with each document transaction.
   Reconstructing it from post-edit line indices corrupts untouched lines after
   insertions or deletions.
+
+## edit-history-integration
+
+- Clipboard cut/paste and find/replace already create non-coalescing history
+  units internally. The reusable integration seam applies only to text-input
+  and edit-command mutations.
+- Word deletion uses the same directional history kind as character deletion,
+  allowing adjacent same-direction operations to coalesce when history shape
+  and timing rules permit.
