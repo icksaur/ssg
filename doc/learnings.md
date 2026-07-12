@@ -118,6 +118,17 @@ then remove or shorten the redundant entry here.
   so Windows checkouts preserve hashes. Use `-whitespace` when official data
   contains trailing whitespace that must not fail repository diff checks.
 
+## viewport-wrap-scrollbar
+
+- Keep Unicode cell-run computation separate from viewport composition.
+  Wrapping, scrolling, scrollbar metrics, and hit targets consume immutable
+  `CellRun` values without modifying Unicode layout.
+- Define hit targets from source spans so every visible cell of a wide grapheme
+  maps to the same stable logical cell and byte range.
+- Use 64-bit intermediates for proportional scrollbar arithmetic and signed
+  scroll saturation, then clamp through the same viewport construction path to
+  avoid overflow and divergent bounds behavior.
+
 ## document-transactions
 
 - Apply validated multi-edit transactions from highest to lowest byte offset to
