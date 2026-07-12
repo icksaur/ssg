@@ -63,3 +63,11 @@ then remove or shorten the redundant entry here.
   value cycle.
 - A feature command set enumerates every command ID normatively owned by that
   feature even when downstream session assembly binds handlers or presentation.
+
+## scratch-journal-format
+
+- Journal append assumes its parent directory already exists. The scratch
+  session layer owns namespace and directory creation before opening a journal.
+- Windows durable journal creation uses write-through file creation followed by
+  `FlushFileBuffers`; unlike Linux, Windows exposes no parent-directory fsync
+  step for making the new directory entry durable.
