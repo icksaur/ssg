@@ -141,6 +141,12 @@ then remove or shorten the redundant entry here.
   before calling cell layout. Otherwise `compute_cell_run` throws and bypasses
   the feature's typed error contract.
 
+## text-input-commands
+
+- Normalized selections do not guarantee non-overlapping derived edits.
+  Multi-selection mutation commands must normalize generated edit ranges before
+  constructing a document transaction.
+
 ## shell-layout
 
 - Priority-based field collapse must retain a prefix of collapse ranks.
