@@ -249,3 +249,9 @@ then remove or shorten the redundant entry here.
   restores that value verbatim rather than deriving it from replacement spans.
 - For variable-length regular expressions, apply whole-word filtering before
   choosing the longest candidate end.
+
+## file-commands
+
+- Mixed per-line EOL metadata transforms with each document transaction.
+  Reconstructing it from post-edit line indices corrupts untouched lines after
+  insertions or deletions.
