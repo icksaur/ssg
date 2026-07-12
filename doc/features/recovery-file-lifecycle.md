@@ -8,6 +8,43 @@ Open directories and files, save/close/reopen tabs immediately without dialogs, 
 
 The workspace and recovery mechanisms are those in `doc/spec.md`. Recovery namespaces use workspace hashes, generated session IDs, operating-system locks, stable file identities, and `UntitledDocumentId`. Atomic save uses same-directory temporary replacement. Close, reload, overwrite, rename, delete, and workspace replacement create bounded compensating records before mutation.
 
+Plan 3 owns only the transport-neutral compensating-record primitive and its
+filesystem/document restoration operations. File-tab, prompt, encoding/EOL,
+save, directory-lifecycle, and command-handler integration remain owned by the
+later `file-commands` and Plan 4 tasks. Plan 3 does not expose tab UI state.
+
+`RecoveryActions` is constructed with an explicit recovery root and immutable
+finite count and byte budgets. Records are evicted oldest-first only after the
+newest record and every required recovery artifact have been installed
+successfully. An action whose record cannot fit after eligible eviction is
+rejected before mutation. Close and reload records contain the complete prior
+`JournalDocument`; overwrite records contain the prior destination bytes and
+whether it existed; rename records preserve both source identity/content and
+any prior destination; delete records preserve the removed tree; workspace
+replacement records preserve the prior workspace tree. Recovery artifacts live
+under the supplied root; composition may place that root beneath the current
+scratch session, but Plan 3 enforces its own budget and cleanup.
+
+Every major-action operation follows one failure contract: install its complete
+record and recovery artifacts first, perform the mutation second, and publish
+the compensating record only after the mutation succeeds. Failure while
+preparing the record leaves canonical document/filesystem state unchanged.
+Failure during mutation rolls back from the prepared record; if rollback itself
+fails, the prepared record remains available and the operation reports both the
+action and rollback failure. A compensating command is retryable until it
+succeeds and removes only its own record and artifacts after restoration.
+Injected-failure tests cover preparation, each mutation step, restoration, and
+retry.
+
+Dirty close first submits the complete document to `ScratchStore` and waits for
+that accepted generation to become durable within a caller-supplied finite
+timeout. Timeout or failed durability rejects close without changing document
+state. This synchronous service boundary is non-modal: it requests no user
+decision, while later command/status assembly reports the actionable failure.
+Plan 3's workspace-replacement, rename, and delete operations are the reversible
+storage primitives only; Plan 4 owns `workspace.open_directory` and directory
+lifecycle policy.
+
 Plan 1 owns the shared platform primitive used by later recovery work:
 
 - syntactic workspace-relative path validation is a pure operation parameterized
@@ -181,7 +218,7 @@ I4, I5, I9, I10, I16, I19, I21 from `doc/spec.md`.
 | 2a | Implement every on-disk journal record kind, durable append, document recovery-set encoding, untitled IDs, and replay | `include/ssg/scratch_journal.h`, `src/scratch_journal.cpp`, `tests/fixtures/scratch/journal/*`, `tests/test_scratch_journal.cpp` | byte-level corruption/truncation/untitled/restart round trips | I10, I19, I21 |
 | 2b | Implement workspace/session namespaces, process locks, remnant discovery, and newest-restorable policy | `include/ssg/scratch_session.h`, `src/scratch_session.cpp`, `tests/test_scratch_session.cpp` | concurrent live/crashed-session fixtures | I10, I19, I21 |
 | 2c | Compose scratch recovery with checkpoint scheduling, compaction, quota, and durability status | `include/ssg/scratch.h`, `src/scratch.cpp`, `tests/test_scratch.cpp` | compaction/quota/durability-lag fixtures | I10, I19, I21 |
-| 3 | Implement file tabs, path prompts, encoding/EOL conversion, save, close/reopen, and recovery records | `include/ssg/recovery.h`, `src/recovery.cpp`, `tests/fixtures/encoding/*`, `tests/test_recovery.cpp` | byte-exact encoding/EOL and compensating-command round trips | I5, I19 |
+| 3 | Implement bounded compensating records and restoration primitives for close, reload, overwrite, rename, delete, and workspace replacement | `include/ssg/recovery.h`, `src/recovery.cpp`, `tests/test_recovery.cpp`, `cmake/components/recovery-actions.cmake` | canonical document/filesystem ground truth after major-action plus compensation, with injected failures proving record-before-mutation ordering, failure atomicity, restoration retry, and oldest-first count/byte bounds | I5, I19 |
 | 4 | Implement directory lifecycle and external-modification status actions | `include/ssg/workspace.h`, `src/workspace.cpp`, `tests/test_workspace.cpp` | filesystem ground truth and fault injection | I9, I16, I21 |
 
 ## Rationale (optional, skippable)
