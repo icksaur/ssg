@@ -97,6 +97,50 @@ Normative commands owned by this component, in order:
 
 The component enforces I3, I5, I14, I16, I19, and I21.
 
+### Follow-edits contract
+
+`FollowEditsModel` consumes accepted, revision-ordered `DiffFileView` changes
+after `ExternalModificationFlow` has routed watcher input through `DiffModel`.
+The same input is used for clean reloads and dirty-buffer conflicts: follow
+state observes disk-derived diff content and never mutates an editable buffer.
+Each target is keyed by `DiffFileId`; a newer target for the same file replaces
+the queued one. The queue is bounded and ordered by accepted source revision.
+
+This component owns shared follow mode, the active diff target and pane,
+per-client viewport dimensions and scroll offsets, and target activation
+intents. It does not create or activate `TabManager` tabs. Later
+`editor-session-assembly` binds an active-target intent to the stable live-diff
+tab for that file in the active pane. This preserves Plan 4's file-disjoint
+component boundary without adding `tab-management` as a dependency.
+
+Navigation input is classified by semantic command handling as user
+navigation, programmatic navigation, or non-navigation; transport or Lua
+origin alone does not determine the class. User scroll, tab, pane, cursor,
+Goto/Search-result, and panel navigation pauses the shared state before the
+navigation is applied. Programmatic navigation and non-navigation commands do
+not pause. A navigation updates shared target/pane state when requested and
+only the initiating client's scroll offset; other clients retain their
+dimension-specific offsets while observing the shared mode and target.
+
+While following, an accepted target becomes active immediately and every
+client receives the smallest non-negative vertical offset that exposes the
+newest hunk in that client's viewport. While paused, accepted targets only
+update the bounded queue. `follow_edits.pause` explicitly enters paused mode.
+`follow_edits.resume` resolves queued identities against the current
+`DiffViewState`, newest first. A target is valid only when its identity still
+resolves and the current view has at least one hunk; current rename and delete
+views remain valid, while missing and reverted views do not. Resume activates
+the newest valid target using its current path and newest hunk, recomputes every
+client offset, clears older targets, and returns to following. If none is
+valid, it clears the queue and returns to following without changing the active
+target or client offsets.
+
+The component exports the immutable `FollowEditsCommandSet` in
+`follow_edits.resume`, `follow_edits.pause` order, typed
+`FollowEditsViewState` and `FollowEditsDelta` values, pure delta derivation, and
+a footer projection containing the mode plus the configured resume binding
+when paused.
+
 Normative commands owned by this feature:
 
 - `tree.toggle_expanded`, `tree.invoke_node_command`
