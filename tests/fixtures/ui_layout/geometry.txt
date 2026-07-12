@@ -1,0 +1,19 @@
+# normal 20x4, requested panel collapses
+header=0,0,20,1
+tab_bar=0,1,20,1
+pane=0,2,19,1
+scrollbar=19,2,1,1
+footer=0,3,20,1
+
+# normal 80x12, panel and two prompt rows
+header=0,0,80,1
+panel=0,1,24,10
+tab_bar=24,1,56,1
+prompt=24,2,56,2
+pane=24,4,55,7
+scrollbar=79,4,1,7
+footer=0,11,80,1
+
+# distraction-free 20x4
+pane=0,0,19,4
+scrollbar=19,0,1,4

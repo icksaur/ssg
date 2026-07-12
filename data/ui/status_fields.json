@@ -1,0 +1,14 @@
+[
+  {"id":"active_command","region":"header","collapse_rank":0,"accessible_label":"Active command"},
+  {"id":"current_path","region":"header","collapse_rank":1,"accessible_label":"Current path"},
+  {"id":"mode","region":"header","collapse_rank":2,"accessible_label":"Editor mode"},
+  {"id":"actionable_status","region":"footer","collapse_rank":0,"accessible_label":"Status message"},
+  {"id":"follow_state","region":"footer","collapse_rank":1,"accessible_label":"Follow edits state and resume binding"},
+  {"id":"background_activity","region":"footer","collapse_rank":2,"accessible_label":"Background activity"},
+  {"id":"encoding","region":"footer","collapse_rank":3,"accessible_label":"Text encoding"},
+  {"id":"line_ending","region":"footer","collapse_rank":4,"accessible_label":"Line ending"},
+  {"id":"git_branch","region":"footer","collapse_rank":5,"accessible_label":"Git branch"},
+  {"id":"git_repository","region":"footer","collapse_rank":6,"accessible_label":"Git repository"},
+  {"id":"file_type","region":"footer","collapse_rank":7,"accessible_label":"File type"},
+  {"id":"file_size","region":"footer","collapse_rank":8,"accessible_label":"File size"}
+]
