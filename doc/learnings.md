@@ -46,3 +46,12 @@ then remove or shorten the redundant entry here.
 - Durable Linux atomic replacement requires flushing the temporary file before
   rename and flushing the parent directory after rename. Flushing only file
   contents does not make the directory-entry replacement crash durable.
+
+## http-cross-platform
+
+- An HTTP upgrade read may contain bytes from the first WebSocket frame after
+  the header terminator. The transport must preserve and feed those bytes into
+  frame decoding rather than discarding them with the handshake buffer.
+- Cross-platform native socket handles require a pointer-width representation
+  and an explicit invalid sentinel. Narrowing a Windows `SOCKET` to `int` can
+  corrupt valid handles.
