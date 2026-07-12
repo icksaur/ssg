@@ -77,3 +77,18 @@ then remove or shorten the redundant entry here.
 - Windows durable journal creation uses write-through file creation followed by
   `FlushFileBuffers`; unlike Linux, Windows exposes no parent-directory fsync
   step for making the new directory entry durable.
+
+## filesystem-watchers
+
+- Overflow recovery must reconcile native watch registrations as well as cached
+  entries. Rebuilding only the snapshot leaves newly created Linux
+  subdirectories unwatched.
+- `ReadDirectoryChangesW` should keep an overlapped read continuously
+  outstanding. Copy completed bytes before rearming so parsing cannot race
+  buffer reuse.
+- Event coalescing must distinguish same-path identity replacement from
+  same-identity recreation and apply subsequent changes to the newest pending
+  event.
+- Moving a populated directory into a workspace requires an explicit subtree
+  scan on Linux and Windows because native APIs may report only the directory
+  move.
