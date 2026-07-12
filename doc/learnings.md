@@ -171,6 +171,13 @@ then remove or shorten the redundant entry here.
   Multi-selection mutation commands must normalize generated edit ranges before
   constructing a document transaction.
 
+## edit-command-suite
+
+- Display tab width remains distinct from indentation width when validating or
+  rematerializing `DocumentPosition` cell coordinates.
+- Document-end text transforms account for the phantom empty logical line
+  created by a trailing line terminator.
+
 ## undo-redo-history
 
 - History integration captures erased UTF-8 bytes from the pre-edit
