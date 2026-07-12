@@ -229,3 +229,9 @@ then remove or shorten the redundant entry here.
   references detected by sanitizers.
 - Session command handlers run while the serialization mutex is held. They use
   `CommandContext` and must not re-enter `EditorSession`.
+
+## clipboard-register
+
+- Non-mutating asynchronous clipboard-write responses match request identity,
+  not the current document revision. Later edits must not suppress denied or
+  unavailable status for an earlier clipboard request.
