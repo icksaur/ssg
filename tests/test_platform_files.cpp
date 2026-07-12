@@ -93,14 +93,6 @@ std::span<const std::byte> bytes(std::string_view text) {
     return {reinterpret_cast<const std::byte*>(text.data()), text.size()};
 }
 
-#ifdef _WIN32
-bool running_under_wine() {
-    const HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
-    return ntdll != nullptr &&
-           GetProcAddress(ntdll, "wine_get_version") != nullptr;
-}
-#endif
-
 TEST(path_policy_decision_table) {
     using enum ssg::PathError;
     using enum ssg::PathSyntax;
@@ -217,10 +209,7 @@ TEST(owner_only_permissions_are_applied) {
             }
         }
     }
-    // Wine synthesizes Windows ACL queries from Unix modes and reports its
-    // inherited compatibility ACEs even after SetFileSecurityW. Real Windows
-    // must expose only owner allow entries.
-    ASSERT_TRUE(running_under_wine() || only_owner_is_allowed);
+    ASSERT_TRUE(only_owner_is_allowed);
     if (descriptor != nullptr) {
         LocalFree(descriptor);
     }
