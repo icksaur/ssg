@@ -17,8 +17,9 @@ without wrapping, scrolling, shell geometry, or rendering.
 
 ## Oracle
 
-Pinned hand-authored combining, emoji, invalid-input, tab, control, and
-double-width cell-run fixtures.
+Hand-authored combining, emoji, invalid-input, tab, control, and double-width
+cell-run goldens (`tests/test_cell_layout.cpp`), plus the official Unicode 15.0.0
+GraphemeBreakTest.txt corpus (`tests/test_gcb_oracle.cpp`).
 
 ## Done
 

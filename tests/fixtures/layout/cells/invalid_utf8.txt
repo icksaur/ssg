@@ -1,0 +1,86 @@
+# Invalid UTF-8 cell-run golden fixture
+# Unicode 15.0.0
+#
+# Each invalid UTF-8 byte yields exactly one CellSpan:
+#   kind=invalid_utf8, byte_len=1, cell_width=1 (visible replacement glyph)
+#
+# Invalid cases:
+#   - Continuation byte at sequence start (0x80–0xBF)
+#   - Invalid/overlong lead byte (0xC0, 0xC1)
+#   - Lead byte > 0xF4
+#   - 0xFF, 0xFE (not valid UTF-8 bytes)
+#   - Truncated multi-byte sequence (lead without enough continuations)
+#   - Bad continuation within a multi-byte sequence
+#
+# A truncated sequence reports the lead byte as invalid, then subsequent
+# continuation bytes are seen as standalone continuations and each is also
+# invalid.
+#
+# Format: description | utf8 bytes (hex) | tab_width → total_cells | spans
+# Kind codes: T=text, C=combining, TAB=tab, CTL=control, INV=invalid_utf8
+
+# Lone 0xFF byte
+lone_ff           | FF             | 4 → 1 | 0:1:1:INV
+
+# Lone 0xFE byte
+lone_fe           | FE             | 4 → 1 | 0:1:1:INV
+
+# Lone continuation byte 0x80
+lone_continuation | 80             | 4 → 1 | 0:1:1:INV
+
+# Lone continuation byte 0xBF
+lone_bf           | BF             | 4 → 1 | 0:1:1:INV
+
+# Overlong 2-byte lead 0xC0 followed by continuation 0x80
+# 0xC0 is an invalid lead (overlong), yielded as 1 invalid byte
+# 0x80 is now a standalone continuation, yielded as another invalid byte
+overlong_c0_80    | C0 80          | 4 → 2 | 0:1:1:INV 1:1:1:INV
+
+# Overlong 2-byte lead 0xC1 followed by continuation 0x80
+overlong_c1_80    | C1 80          | 4 → 2 | 0:1:1:INV 1:1:1:INV
+
+# Two lone 0xFF bytes
+two_ff            | FF FF          | 4 → 2 | 0:1:1:INV 1:1:1:INV
+
+# Truncated 3-byte sequence: 0xE4 with no continuations
+# 0xE4 is a 3-byte lead needing 2 continuations; truncated at end of input
+# → 0xE4 yielded as 1 invalid byte
+truncated_e4      | E4             | 4 → 1 | 0:1:1:INV
+
+# Truncated 3-byte sequence: 0xE4 0xB8 (1 of 2 needed continuations)
+# 0xE4 invalid (truncated lead) → 1 invalid byte
+# 0xB8 standalone continuation → 1 invalid byte
+truncated_e4_b8   | E4 B8          | 4 → 2 | 0:1:1:INV 1:1:1:INV
+
+# Truncated 4-byte sequence: 0xF0 0x9F with no more bytes
+# 0xF0 invalid (truncated 4-byte lead) → 1 invalid byte
+# 0x9F standalone continuation → 1 invalid byte
+truncated_f0_9f   | F0 9F          | 4 → 2 | 0:1:1:INV 1:1:1:INV
+
+# Valid ASCII followed by invalid byte
+valid_then_ff     | 41 FF          | 4 → 2 | 0:1:1:T 1:1:1:INV
+
+# Invalid byte followed by valid ASCII
+ff_then_valid     | FF 41          | 4 → 2 | 0:1:1:INV 1:1:1:T
+
+# Bad second continuation in 3-byte sequence:
+# 0xE4 (3-byte lead) + 0xB8 (valid first cont) + 0x41 (not a continuation!)
+# Per our decoder: 0xE4 → truncated (0x41 is the third expected byte?), no:
+# actually the decoder reads pos, pos+1, pos+2 for a 3-byte sequence.
+# data[pos+2]=0x41 is not a continuation (0x80–0xBF), so the sequence fails.
+# 0xE4 is yielded as 1 invalid byte; then 0xB8 is a standalone continuation
+# (invalid); then 0x41 'A' is valid ASCII.
+# → 3 spans: INV(0xE4), INV(0xB8), T('A')
+bad_continuation  | E4 B8 41       | 4 → 3 | 0:1:1:INV 1:1:1:INV 2:1:1:T
+
+# 3-byte sequence with overlong check: 0xE0 0x80 0x80
+# 0xE0 requires second byte >= 0xA0; 0x80 < 0xA0 → 0xE0 is invalid (overlong)
+# 0x80 standalone continuation → invalid
+# 0x80 standalone continuation → invalid
+overlong_e0_80_80 | E0 80 80       | 4 → 3 | 0:1:1:INV 1:1:1:INV 2:1:1:INV
+
+# Surrogate half: 0xED 0xA0 0x80 (U+D800, high surrogate)
+# 0xED requires second byte <= 0x9F; 0xA0 > 0x9F → surrogate → 0xED invalid
+# 0xA0 standalone continuation → invalid
+# 0x80 standalone continuation → invalid
+surrogate_high    | ED A0 80       | 4 → 3 | 0:1:1:INV 1:1:1:INV 2:1:1:INV

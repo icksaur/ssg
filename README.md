@@ -4,9 +4,12 @@ SSG is a library-first, client-server text editor. Its authoritative editor
 state runs headlessly so TUI, browser, and future desktop clients can share one
 implementation.
 
-The project is currently initialized with a minimal C++20 static library and
-standalone smoke test. The complete architecture and delivery plan are in
-`doc/spec.md`; `spec.md` is a root-level link to that canonical document.
+The C++20 static library currently includes the foundation types and
+Unicode-aware logical-line cell layout. Grapheme segmentation is pinned to
+Unicode 15.0.0 using the official `GraphemeBreakProperty.txt`,
+`emoji-data.txt`, and `GraphemeBreakTest.txt` data under `data/unicode/`.
+The complete architecture and delivery plan are in `doc/spec.md`; `spec.md`
+is a root-level link to that canonical document.
 
 ## Build and test
 
@@ -21,6 +24,7 @@ ctest --test-dir build --output-on-failure
 - `include/ssg/` — public C++ API
 - `src/` — library implementation
 - `tests/` — standalone test executables
+- `data/unicode/` — pinned Unicode sources, provenance, and update procedure
 - `doc/` — feature specifications and backlog
 - `doc/spec.md` — canonical project specification
 - `doc/learnings.md` — durable project tribal knowledge

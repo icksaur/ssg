@@ -1,0 +1,24 @@
+# ASCII cell-run golden fixture
+# Unicode 15.0.0 — UAX #29 grapheme clusters / UAX #11 widths
+#
+# Format: description | utf8 bytes (hex, space-sep) | tab_width
+#         → total_cells spans (offset:len:width:kind)
+# Kind codes: T=text, C=combining, TAB=tab, CTL=control, INV=invalid_utf8
+#
+# All ASCII printable characters are narrow (1 cell each).
+# Each character is its own grapheme cluster (no combining extensions).
+
+# Single ASCII printable character
+single_space      | 20          | 4 → 1  | 0:1:1:T
+single_A          | 41          | 4 → 1  | 0:1:1:T
+single_z          | 7A          | 4 → 1  | 0:1:1:T
+single_tilde      | 7E          | 4 → 1  | 0:1:1:T
+
+# "hello" — 5 narrow characters, 5 spans
+hello             | 68 65 6C 6C 6F | 4 → 5 | 0:1:1:T 1:1:1:T 2:1:1:T 3:1:1:T 4:1:1:T
+
+# Empty input
+empty             | (none)      | 4 → 0  | (none)
+
+# Mixed ASCII
+abc               | 61 62 63    | 4 → 3  | 0:1:1:T 1:1:1:T 2:1:1:T

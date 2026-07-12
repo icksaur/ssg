@@ -1,0 +1,26 @@
+# SpacingMark cell-run golden fixture
+# Unicode 15.0.0 — UAX #29 GB9a: × SpacingMark
+#
+# SpacingMark (GCB=SpacingMark, General_Category=Mc) code points extend the
+# preceding grapheme cluster and contribute 0 additional terminal cells.
+# Without GB9a, base+SpacingMark would be 2 separate clusters.
+#
+# Format: description | utf8 bytes (hex) | tab_width → total_cells | spans
+
+# Devanagari: क (U+0915, E0 A4 95) + ā (U+093E, E0 A4 BE, SpacingMark)
+# Together they form का (kaa), 1 cluster, width=1 (base ka is narrow)
+# Adversarial: without GB9a, result would be 2 clusters, total=2 cells
+devanagari_kaa    | E0 A4 95 E0 A4 BE | 4 → 1 | 0:6:1:T
+
+# Two SpacingMarks after a base: क + ा (U+093E) + ो component...
+# Devanagari: use क (U+0915) + vowel sign U+094B (ो, SpacingMark E0 A5 8B)
+# = को, 1 cluster, width=1
+devanagari_ko     | E0 A4 95 E0 A5 8B | 4 → 1 | 0:6:1:T
+
+# Lone SpacingMark at line start (no preceding base):
+# U+093E alone → kind=combining (lone zero-width mark), width=0
+lone_spacing_mark | E0 A4 BE          | 4 → 0 | 0:3:0:C
+
+# Bengali: ক (U+0995, E0 A6 95) + া (U+09BE, E0 A6 BE, SpacingMark)
+# = কা, 1 cluster, width=1
+bengali_kaa       | E0 A6 95 E0 A6 BE | 4 → 1 | 0:6:1:T

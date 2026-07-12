@@ -1,0 +1,40 @@
+# Combining mark cell-run golden fixture
+# Unicode 15.0.0 — UAX #29 grapheme clusters
+#
+# Combining marks are absorbed into the preceding grapheme cluster.
+# The cluster width equals the base character's width; combining marks
+# add 0 cells.  A lone combining mark at line start is a zero-width
+# cluster of kind=combining.
+#
+# Format: description | utf8 bytes (hex) | tab_width → total_cells | spans
+# Kind codes: T=text, C=combining, TAB=tab, CTL=control, INV=invalid_utf8
+
+# 'a' (U+0061, 1 byte) + COMBINING ACUTE ACCENT (U+0301, 2 bytes CC 81)
+# Grapheme cluster: base='a' (width 1) extended by U+0301 (combining)
+# → 1 span of byte_len=3, cell_width=1, kind=text
+latin_a_acute     | 61 CC 81       | 4 → 1 | 0:3:1:T
+
+# 'e' + COMBINING MACRON (U+0304, 2 bytes CC 84)
+latin_e_macron    | 65 CC 84       | 4 → 1 | 0:3:1:T
+
+# 'a' + two combining marks: COMBINING GRAVE (U+0300) + COMBINING TILDE (U+0303)
+# U+0300 = CC 80, U+0303 = CC 83
+# → 1 cluster of 5 bytes
+latin_a_grave_tilde | 61 CC 80 CC 83 | 4 → 1 | 0:5:1:T
+
+# Lone combining mark: COMBINING ACUTE ACCENT alone at line start
+# No base character → kind=combining, width=0
+lone_acute        | CC 81          | 4 → 0 | 0:2:0:C
+
+# Two consecutive lone combining marks
+# First U+0301 starts a combining cluster; second U+0300 extends it
+# → 1 cluster of 4 bytes, width 0, kind=combining
+two_lone_combining | CC 81 CC 80   | 4 → 0 | 0:4:0:C
+
+# 'n' + COMBINING TILDE (U+0303): Spanish 'ñ'
+latin_n_tilde     | 6E CC 83       | 4 → 1 | 0:3:1:T
+
+# Wide base + combining mark:
+# CJK U+4E2D (中, E4 B8 AD, 3 bytes) + COMBINING ACUTE ACCENT (CC 81)
+# → 1 cluster of 5 bytes, width=2 (wide base), kind=text
+wide_base_combining | E4 B8 AD CC 81 | 4 → 2 | 0:5:2:T

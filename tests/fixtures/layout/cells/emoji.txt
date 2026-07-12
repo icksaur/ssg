@@ -1,0 +1,50 @@
+# Emoji cell-run golden fixture
+# Unicode 15.0.0 — emoji-data.txt wide emoji, ZWJ sequences, RI flag pairs
+#
+# Emoji in the wide range are 2 cells.  ZWJ sequences (man + ZWJ + woman, etc.)
+# are absorbed into one grapheme cluster via GB11.  Regional Indicator pairs
+# (flag emoji) form one cluster via GB12/GB13 with width 2.
+#
+# Format: description | utf8 bytes (hex) | tab_width → total_cells | spans
+# Kind codes: T=text, C=combining, TAB=tab, CTL=control, INV=invalid_utf8
+
+# U+1F600 😀 GRINNING FACE (wide): F0 9F 98 80 (4 bytes)
+grinning_face     | F0 9F 98 80                    | 4 → 2 | 0:4:2:T
+
+# U+1F642 🙂 SLIGHTLY SMILING FACE (wide): F0 9F 99 82 (4 bytes)
+slight_smile      | F0 9F 99 82                    | 4 → 2 | 0:4:2:T
+
+# U+1F468 👨 MAN (wide): F0 9F 91 A8 (4 bytes)
+# Standalone (no ZWJ sequence)
+man_standalone    | F0 9F 91 A8                    | 4 → 2 | 0:4:2:T
+
+# ZWJ sequence: MAN + ZWJ + WOMAN
+# U+1F468 (F0 9F 91 A8) + U+200D ZWJ (E2 80 8D) + U+1F469 (F0 9F 91 A9)
+# Total: 11 bytes, 1 cluster, width=2 (base=man, wide)
+# ZWJ has GCB=ZWJ (zero-width, extends cluster); woman after ZWJ is wide
+# → absorbed into man's cluster via GB11
+man_zwj_woman     | F0 9F 91 A8 E2 80 8D F0 9F 91 A9 | 4 → 2 | 0:11:2:T
+
+# Regional Indicator pair: 🇺🇸 US flag
+# U+1F1FA 🇺 (F0 9F 87 BA) + U+1F1F8 🇸 (F0 9F 87 B8)
+# GB12/GB13: two consecutive RI symbols form one flag cluster, width=2
+us_flag           | F0 9F 87 BA F0 9F 87 B8        | 4 → 2 | 0:8:2:T
+
+# Emoji followed by narrow text: "😀A"
+emoji_then_ascii  | F0 9F 98 80 41                  | 4 → 3 | 0:4:2:T 4:1:1:T
+
+# Two emoji
+two_emoji         | F0 9F 98 80 F0 9F 99 82         | 4 → 4 | 0:4:2:T 4:4:2:T
+
+# Emoji modifier sequence: 👍 (U+1F44D) + 🏻 skin-tone (U+1F3FB)
+# U+1F44D (F0 9F 91 8D) + U+1F3FB (F0 9F 8F BB)
+# U+1F3FB has GCB=Extend (UAX #29 emoji modifier), so it extends the cluster.
+# → 1 span, 8 bytes, 2 cells (base=👍 is wide)
+thumbs_skin_tone  | F0 9F 91 8D F0 9F 8F BB         | 4 → 2 | 0:8:2:T
+
+# Adversarial GB11: ZWJ + wide non-ExtPic must NOT join.
+# U+1F468 👨 MAN (F0 9F 91 A8, Extended_Pictographic) + ZWJ (E2 80 8D) +
+# U+FF21 Ａ FULLWIDTH LATIN CAPITAL A (EF BC A1, EAW=F wide, NOT Extended_Pictographic).
+# ZWJ is absorbed by man via GB9; GB11 checks is_extpic(Ａ) → false → no join.
+# → 2 clusters: [man+ZWJ 7 bytes 2 cells] + [Ａ 3 bytes 2 cells], total=4 cells
+man_zwj_fullwidth_a | F0 9F 91 A8 E2 80 8D EF BC A1 | 4 → 4 | 0:7:2:T 7:3:2:T
