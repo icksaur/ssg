@@ -1,4 +1,5 @@
 {
+  "default_effect": "mutation",
   "commands": [
     {"id":"text.insert","owner":"text-input-commands","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"text.newline","owner":"text-input-commands","required_capabilities":[],"lua":true,"keymap":true,"palette":true},

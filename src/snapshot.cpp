@@ -32,4 +32,21 @@ std::optional<DocumentDelta> derive_document_delta(
         after.text.substr(prefix, after.text.size() - prefix - suffix)};
 }
 
+std::optional<DocumentViewState> replay_document_delta(
+    DocumentViewState const& before, DocumentDelta const& delta,
+    ByteOffset target_caret) {
+    if (before.revision != delta.base_revision ||
+        delta.revision == delta.base_revision ||
+        delta.start.value() > before.text.size() ||
+        delta.erased_bytes > before.text.size() - delta.start.value()) {
+        return std::nullopt;
+    }
+    std::string text = before.text;
+    text.replace(delta.start.value(), delta.erased_bytes, delta.inserted_text);
+    if (target_caret.value() > text.size()) {
+        return std::nullopt;
+    }
+    return DocumentViewState{delta.revision, std::move(text), target_caret};
+}
+
 }  // namespace ssg

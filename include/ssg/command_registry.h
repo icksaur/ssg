@@ -9,6 +9,8 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <typeindex>
+#include <utility>
 #include <vector>
 
 namespace ssg {
@@ -90,12 +92,47 @@ private:
 };
 
 class EditorSession;
+struct CommandHandlerResult;
+
+class CommandServices {
+public:
+    virtual ~CommandServices() = default;
+
+    template <typename State>
+    [[nodiscard]] State& feature_state() {
+        return std::any_cast<State&>(feature_state_value(typeid(State)));
+    }
+
+    template <typename Status>
+    void publish_status(Status status) {
+        publish_status_value(typeid(Status), std::any{std::move(status)});
+    }
+
+    template <typename Delta>
+    void publish_delta(Delta delta) {
+        publish_delta_value(typeid(Delta), std::any{std::move(delta)});
+    }
+
+    [[nodiscard]] virtual CommandHandlerResult run_transaction(
+        std::function<CommandHandlerResult()> operation) = 0;
+
+private:
+    [[nodiscard]] virtual std::any& feature_state_value(
+        std::type_index type) = 0;
+    virtual void publish_status_value(std::type_index type,
+                                      std::any status) = 0;
+    virtual void publish_delta_value(std::type_index type,
+                                     std::any delta) = 0;
+};
 
 class CommandContext {
 public:
     [[nodiscard]] Revision revision() const noexcept { return revision_; }
     [[nodiscard]] InvocationPrincipal const& principal() const noexcept {
         return principal_;
+    }
+    [[nodiscard]] CommandServices* services() const noexcept {
+        return services_;
     }
 
     void set_active_workspace(WorkspaceId workspace) noexcept;
@@ -104,11 +141,13 @@ public:
 private:
     friend class EditorSession;
 
-    CommandContext(Revision revision, InvocationPrincipal const& principal)
-        : revision_{revision}, principal_{principal} {}
+    CommandContext(Revision revision, InvocationPrincipal const& principal,
+                   CommandServices* services)
+        : revision_{revision}, principal_{principal}, services_{services} {}
 
     Revision revision_;
     InvocationPrincipal const& principal_;
+    CommandServices* services_;
     bool workspace_changed_{false};
     WorkspaceId active_workspace_;
     bool view_changed_{false};

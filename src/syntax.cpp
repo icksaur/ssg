@@ -230,7 +230,7 @@ std::vector<CommentRange> canonical_comment_ranges(
 }
 
 struct ResolvedBrackets {
-    std::vector<BracketPair> pairs;
+    std::vector<SyntaxBracketPair> pairs;
     std::vector<UnmatchedBracket> unmatched;
 };
 
@@ -281,7 +281,7 @@ ResolvedBrackets resolve_brackets(std::uint64_t text_bytes,
             {open.token.offset, open.token.kind, BracketRole::open});
     }
     std::sort(result.pairs.begin(), result.pairs.end(),
-              [](const BracketPair& left, const BracketPair& right) {
+              [](const SyntaxBracketPair& left, const SyntaxBracketPair& right) {
                   return left.open < right.open;
               });
     std::sort(result.unmatched.begin(), result.unmatched.end(),
@@ -412,7 +412,7 @@ void SyntaxParseRequest::cancel() const noexcept {
 
 SyntaxViewState::SyntaxViewState(
     Revision revision, LanguageId language, std::uint64_t text_bytes,
-    std::vector<SyntaxSpan> spans, std::vector<BracketPair> bracket_pairs,
+    std::vector<SyntaxSpan> spans, std::vector<SyntaxBracketPair> bracket_pairs,
     std::vector<UnmatchedBracket> unmatched_brackets,
     std::vector<CommentToken> comment_tokens,
     std::vector<CommentRange> comment_ranges,
@@ -506,7 +506,7 @@ SyntaxDelta::SyntaxDelta(
     std::optional<LanguageId> language,
     std::optional<std::uint64_t> text_bytes,
     std::optional<std::vector<SyntaxSpan>> spans,
-    std::optional<std::vector<BracketPair>> bracket_pairs,
+    std::optional<std::vector<SyntaxBracketPair>> bracket_pairs,
     std::optional<std::vector<UnmatchedBracket>> unmatched_brackets,
     std::optional<std::vector<CommentToken>> comment_tokens,
     std::optional<std::vector<CommentRange>> comment_ranges,

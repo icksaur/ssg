@@ -28,5 +28,8 @@ struct DocumentDelta {
 
 [[nodiscard]] std::optional<DocumentDelta> derive_document_delta(
     DocumentViewState const& before, DocumentViewState const& after);
+[[nodiscard]] std::optional<DocumentViewState> replay_document_delta(
+    DocumentViewState const& before, DocumentDelta const& delta,
+    ByteOffset target_caret);
 
 }  // namespace ssg

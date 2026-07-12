@@ -22,18 +22,19 @@ CommandResult rejected(CommandError error, Revision revision,
 }  // namespace
 
 struct EditorSession::Impl {
-    explicit Impl(CommandRegistry command_registry)
-        : registry{std::move(command_registry)} {}
+    explicit Impl(CommandRegistry command_registry, CommandServices* services)
+        : registry{std::move(command_registry)}, services{services} {}
 
     mutable std::mutex mutex;
     CommandRegistry registry;
+    CommandServices* services;
     Revision revision{1};
     SessionTopology topology;
     std::unordered_map<ClientId, AttachedClient, ClientIdHash> clients;
 };
 
-EditorSession::EditorSession(CommandRegistry registry)
-    : impl_{std::make_unique<Impl>(std::move(registry))} {}
+EditorSession::EditorSession(CommandRegistry registry, CommandServices* services)
+    : impl_{std::make_unique<Impl>(std::move(registry), services)} {}
 
 EditorSession::~EditorSession() = default;
 
@@ -95,7 +96,8 @@ CommandResult EditorSession::dispatch(ClientId client_id,
                         "session revision is exhausted");
     }
 
-    CommandContext context{current_revision, client->second.principal};
+    CommandContext context{current_revision, client->second.principal,
+                           impl_->services};
     CommandHandlerResult handler_result;
     try {
         handler_result = registration->handler(context, command.payload);
