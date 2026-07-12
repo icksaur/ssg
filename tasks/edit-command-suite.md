@@ -7,8 +7,10 @@
 ## Scope
 
 Implement indent/outdent, line duplicate/move/delete/join, comment toggle, case
-transforms, sorting, and transpose as command sets. Matching-bracket selection
-belongs to `selection-navigation`.
+transforms, sorting, and transpose as one immutable
+`EditCommandSuiteCommandSet` plus a pure apply function. Matching-bracket
+selection belongs to `selection-navigation`; stateful registration, clipboard,
+and history coalescing are out of scope.
 
 ## Files
 
@@ -18,7 +20,10 @@ belongs to `selection-navigation`.
 ## Oracle
 
 Every normative transform command compares against independent hand fixtures
-for single/multiple selections and line-ending/indent settings.
+for single/multiple selections, LF/CRLF/CR and final-unterminated input,
+tabs/spaces, comment settings, invalid settings/selections, non-edit modes, and
+explicit no-op atomicity. ASCII case and UTF-8 grapheme transpose fixtures pin
+the deterministic boundaries from the feature contract.
 
 ## Done
 
