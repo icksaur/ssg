@@ -6,7 +6,7 @@ Emit renderer-neutral wrapped text, scrollbars, hit targets, fixed shell geometr
 
 ## Design
 
-The backend emits cell runs, semantic roles, rectangles, and hit-test metadata; clients render them. `Theme` is the only color source. The shell, collapse priorities, wrap behavior, and per-client viewport rules are defined in `doc/spec.md`.
+The backend emits cell runs, semantic roles, rectangles, and hit-test metadata; clients render them. `Theme` is the only color source. Its scoped `SemanticRole` catalog and syntax-scope catalog are exhaustive, unknown syntax scopes resolve to the cataloged plain-text role, and every theme maps both catalogs to palette indices. The shared co-visibility relation in `tests/fixtures/theme_roles.json` applies to every theme rather than being theme-defined. Theme snapshots expose palette and mappings in index/catalog order so equal themes produce byte-for-byte deterministic snapshots. The shell, collapse priorities, wrap behavior, and per-client viewport rules are defined in `doc/spec.md`.
 
 Normative commands owned by this feature:
 
@@ -20,7 +20,7 @@ Normative commands owned by this feature:
 
 ## Invariants
 
-I7, I8, I15, I17, I18, I22 from `doc/spec.md`.
+I7, I8, I15, I17, I22, I23 from `doc/spec.md`.
 
 ## Considerations
 
@@ -47,7 +47,7 @@ I7, I8, I15, I17, I18, I22 from `doc/spec.md`.
 |---|------|-------|--------|------------|
 | 1 | Implement grapheme, cell, wrap, and scrollbar models | `include/ssg/layout.h`, `src/layout.cpp`, `tests/test_layout.cpp` | Unicode/wrap/scrollbar goldens | I7 |
 | 2 | Implement fixed shell, prompt/status queue geometry, caret reveal, and accessible labels | `include/ssg/ui_layout.h`, `src/ui_layout.cpp`, `data/ui/status_fields.json`, `tests/test_ui_layout.cpp` | rectangle, prompt, queue, caret-visibility, and accessibility goldens | I15, I17, I23 |
-| 3 | Implement the sole-source 16-color theme model | `include/ssg/theme.h`, `src/theme.cpp`, `data/themes/*`, `tests/test_theme.cpp` | cardinality, role, and literal-color properties | I8, I22 |
+| 3 | Implement the sole-source 16-color theme model | `include/ssg/theme.h`, `src/theme.cpp`, `data/themes/*`, `tests/fixtures/theme_roles.json`, `tests/test_theme.cpp` | exact indexed cardinality; exhaustive semantic/syntax mappings; shared co-visible-role distinctness; deterministic snapshots; source/config scans rejecting literal or computed colors outside theme data | I8, I22 |
 
 ## Rationale (optional, skippable)
 

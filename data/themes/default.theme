@@ -1,0 +1,60 @@
+name default
+palette 0 24 24 27
+palette 1 244 244 245
+palette 2 63 63 70
+palette 3 161 161 170
+palette 4 59 130 246
+palette 5 250 204 21
+palette 6 239 68 68
+palette 7 34 197 94
+palette 8 168 85 247
+palette 9 6 182 212
+palette 10 249 115 22
+palette 11 236 72 153
+palette 12 39 39 42
+palette 13 82 82 91
+palette 14 212 212 216
+palette 15 255 255 255
+role foreground 1
+role background 0
+role caret 15
+role selection 4
+role diagnostic_error 6
+role diagnostic_warning 5
+role diagnostic_info 9
+role diagnostic_hint 8
+role git_added 7
+role git_modified 10
+role git_deleted 6
+role git_conflict 11
+role tree_background 12
+role tree_focus 4
+role tab_active 4
+role tab_inactive 13
+role panel_active 9
+role panel_inactive 2
+role header 12
+role footer 12
+role status_info 9
+role status_warning 5
+role status_error 6
+role line_number 3
+role active_line_number 14
+role search_match 10
+role prompt 8
+role scrollbar_track 2
+role scrollbar_thumb 13
+role diff_added 7
+role diff_removed 6
+role diff_modified 10
+syntax plain_text 1
+syntax comment 3
+syntax keyword 8
+syntax string 7
+syntax number 10
+syntax type 9
+syntax function 4
+syntax variable 1
+syntax operator 5
+syntax punctuation 14
+syntax invalid 6

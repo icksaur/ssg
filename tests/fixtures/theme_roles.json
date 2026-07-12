@@ -1,0 +1,9 @@
+{
+  "co_visible_role_classes": [
+    ["caret", "selection"],
+    ["diagnostic_error", "diagnostic_warning", "diagnostic_info", "diagnostic_hint"],
+    ["git_added", "git_modified", "git_deleted", "git_conflict"],
+    ["tree_background", "tree_focus"],
+    ["tab_active", "tab_inactive", "panel_active", "panel_inactive"]
+  ]
+}

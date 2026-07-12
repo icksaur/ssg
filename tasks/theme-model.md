@@ -17,8 +17,11 @@ only color source.
 
 ## Oracle
 
-Cardinality/property tests, co-visible role fixtures, and scans rejecting
-literal or computed colors outside theme data.
+Cardinality/property tests reject missing, duplicate, and extra palette indices;
+exhaustive catalog tests require every semantic role and syntax scope exactly
+once; the shared co-visible-role fixture applies to every theme; equal values
+produce deterministic palette/catalog-ordered snapshots; and source/config
+scans reject literal or computed colors outside theme data.
 
 ## Done
 
