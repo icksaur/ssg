@@ -74,13 +74,14 @@ struct BracketToken {
     friend bool operator==(const BracketToken&, const BracketToken&) = default;
 };
 
-struct BracketPair {
+struct SyntaxBracketPair {
     ByteOffset open;
     ByteOffset close;
     BracketKind kind = BracketKind::round;
     std::uint32_t depth = 0;
 
-    friend bool operator==(const BracketPair&, const BracketPair&) = default;
+    friend bool operator==(const SyntaxBracketPair&,
+                           const SyntaxBracketPair&) = default;
 };
 
 struct UnmatchedBracket {
@@ -200,7 +201,7 @@ class SyntaxViewState {
 public:
     SyntaxViewState(Revision revision, LanguageId language,
                     std::uint64_t text_bytes, std::vector<SyntaxSpan> spans,
-                    std::vector<BracketPair> bracket_pairs,
+                    std::vector<SyntaxBracketPair> bracket_pairs,
                     std::vector<UnmatchedBracket> unmatched_brackets,
                     std::vector<CommentToken> comment_tokens,
                     std::vector<CommentRange> comment_ranges,
@@ -216,7 +217,7 @@ public:
     [[nodiscard]] const std::vector<SyntaxSpan>& spans() const noexcept {
         return spans_;
     }
-    [[nodiscard]] const std::vector<BracketPair>& bracket_pairs() const noexcept {
+    [[nodiscard]] const std::vector<SyntaxBracketPair>& bracket_pairs() const noexcept {
         return bracket_pairs_;
     }
     [[nodiscard]] const std::vector<UnmatchedBracket>& unmatched_brackets()
@@ -244,7 +245,7 @@ private:
     LanguageId language_;
     std::uint64_t text_bytes_;
     std::vector<SyntaxSpan> spans_;
-    std::vector<BracketPair> bracket_pairs_;
+    std::vector<SyntaxBracketPair> bracket_pairs_;
     std::vector<UnmatchedBracket> unmatched_brackets_;
     std::vector<CommentToken> comment_tokens_;
     std::vector<CommentRange> comment_ranges_;
@@ -269,7 +270,7 @@ public:
         std::optional<LanguageId> language,
         std::optional<std::uint64_t> text_bytes,
         std::optional<std::vector<SyntaxSpan>> spans,
-        std::optional<std::vector<BracketPair>> bracket_pairs,
+        std::optional<std::vector<SyntaxBracketPair>> bracket_pairs,
         std::optional<std::vector<UnmatchedBracket>> unmatched_brackets,
         std::optional<std::vector<CommentToken>> comment_tokens,
         std::optional<std::vector<CommentRange>> comment_ranges,
@@ -290,7 +291,7 @@ public:
         const noexcept {
         return spans_;
     }
-    [[nodiscard]] const std::optional<std::vector<BracketPair>>& bracket_pairs()
+    [[nodiscard]] const std::optional<std::vector<SyntaxBracketPair>>& bracket_pairs()
         const noexcept {
         return bracket_pairs_;
     }
@@ -320,7 +321,7 @@ private:
     std::optional<LanguageId> language_;
     std::optional<std::uint64_t> text_bytes_;
     std::optional<std::vector<SyntaxSpan>> spans_;
-    std::optional<std::vector<BracketPair>> bracket_pairs_;
+    std::optional<std::vector<SyntaxBracketPair>> bracket_pairs_;
     std::optional<std::vector<UnmatchedBracket>> unmatched_brackets_;
     std::optional<std::vector<CommentToken>> comment_tokens_;
     std::optional<std::vector<CommentRange>> comment_ranges_;

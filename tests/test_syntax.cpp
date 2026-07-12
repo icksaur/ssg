@@ -306,7 +306,7 @@ TEST(hand_computed_metadata_golden_covers_all_exported_sections) {
         }));
     ASSERT_EQ(
         state.bracket_pairs(),
-        (std::vector<BracketPair>{
+        (std::vector<SyntaxBracketPair>{
             {byte(2), byte(7), BracketKind::round, 0},
             {byte(4), byte(6), BracketKind::square, 1},
             {byte(9), byte(30), BracketKind::curly, 0},

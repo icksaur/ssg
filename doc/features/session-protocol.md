@@ -17,9 +17,17 @@ state. Snapshot/delta aggregation, replay, and serialization are later
 
 The generic `CommandSet` defined by session state binds command descriptors to
 handlers and is distinct from existing immutable `<Feature>CommandSet`
-descriptor catalogs. Adapting those feature catalogs and handlers into generic
-sets belongs to `editor-session-assembly`; session state does not refactor
-feature-owned command sets.
+descriptor catalogs. `editor-session-assembly` explicitly enumerates every
+feature catalog, adapts each descriptor and bound handler into a generic
+registration, and proves its command effects and capabilities equal the
+independently reviewed metadata in `data/required-commands.json`. The catalog
+is an oracle rather than a runtime configuration dependency. Every P0 command
+changes authoritative shared or per-client snapshot state, so the catalog's
+reviewed default effect is `mutation`; `observation` remains available for
+future commands that return information without changing any snapshot section.
+Assembly rejects missing or extra bindings.
+`EditorSessionBuilder` is the public construction seam; session state does not
+refactor feature-owned command sets.
 
 The core WebSocket thin slice precedes that general assembly with one explicit,
 temporary adapter for `text.insert`. A slice-owned object contains one
@@ -43,7 +51,8 @@ principal, and staged active-workspace/view changes. Successful mutating
 handlers atomically commit staged topology and advance the revision once.
 Rejected, failed, or throwing handlers commit nothing and do not advance the
 revision. Feature state, transaction, status, and delta sinks are added by the
-later assembly task without creating a second dispatch path.
+later assembly task through an explicit caller-owned services interface without
+creating a second dispatch path.
 
 For this single-document slice, session and document revisions start at one and
 advance in lockstep exactly once for each accepted non-empty insert. The
@@ -52,10 +61,22 @@ base revision. Rejected, stale, malformed, failed, and empty insert requests
 advance neither revision. The slice owns the caret needed to make sequential
 insert scripts deterministic.
 
-`snapshot.h` defines only the minimal document section plus its replacement
-delta for this slice, not the eventual aggregate session snapshot. The assembly
-task extends/replaces this contributor seam and remains the sole owner of the
-complete aggregate.
+`snapshot.h` defines the document contributor section and its incremental
+delta. `session_snapshot.h` defines the eventual aggregate session snapshot and
+delta. The assembly task adds document replay, invokes every typed feature
+delta contributor, and remains the sole owner of aggregate derivation and
+replay.
+
+An aggregate snapshot is produced for one attached client. Shared feature
+sections are combined with that client's immutable host-granted capability
+IDs, view identity, viewport dimensions, scroll state, visible rows, and hit
+targets. No aggregate exposes another client's capabilities or viewport.
+Capabilities remain immutable for the lifetime of an attachment.
+
+The assembly task extends the common session/command-context seam but does not
+edit the temporary `HttpEditorServer` slice. Gate 10 protocol/server composition
+replaces that slice-owned standalone document closure with the assembled
+session; both paths continue to call `EditorSession::dispatch`.
 
 `../http` owns one platform socket seam used by HTTP and WebSocket lifecycle,
 receive, and write paths. A complete write loops over partial writes until all
@@ -119,6 +140,7 @@ I1, I2, I3, I10, I11, I12, I16, I21 from `doc/spec.md`.
 | 2 | Implement the minimal single-document snapshot/delta section and bounded versioned `text.insert` codec | `include/ssg/snapshot.h`, `src/snapshot.cpp`, `include/ssg/protocol.h`, `src/protocol.cpp`, `tests/test_core_websocket_slice.cpp` | direct/WebSocket insert parity after every command, codec round-trip, and malformed corpus | I2, I3, I11 |
 | 3 | Extract the `../http` socket seam, add typed deadline-aware complete writes, then add its Windows backend | `../http/http.*`, `../http/src/platform/*`, `../http/tests/test_http.cpp` | existing suite after seam extraction; scripted partial/timeout/close/error writes; native loopback frame and lifecycle scripts; Linux runtime plus Windows compile/native-CI parity | I10, I21 |
 | 4 | Implement the finite-queue one-channel thin-slice server adapter for `text.insert` | `include/ssg/http_server.h`, `src/http_server.cpp`, `tests/test_core_websocket_slice.cpp`, `cmake/components/core-websocket-slice.cmake` | in-process/loopback-WebSocket parity, stale/malformed scripts, and side-channel audit | I1, I2, I11, I16 |
+| 5 | Assemble every P0 feature command catalog, extend the common dispatch services, and aggregate/replay every typed snapshot/delta section for one client | `include/ssg/editor_session_assembly.h`, `src/editor_session_assembly.cpp`, `include/ssg/session_snapshot.h`, `src/session_snapshot.cpp`, session/registry/document seams, assembly tests and manifest | required catalog equals registry exactly; full transition snapshot equals replay; two-client capabilities and viewports remain isolated | I2, I3, I16 |
 
 ## Rationale (optional, skippable)
 

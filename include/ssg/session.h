@@ -64,7 +64,8 @@ struct SessionTopology {
 
 class EditorSession {
 public:
-    explicit EditorSession(CommandRegistry registry);
+    explicit EditorSession(CommandRegistry registry,
+                           CommandServices* services = nullptr);
     ~EditorSession();
 
     EditorSession(EditorSession const&) = delete;
