@@ -8,6 +8,15 @@ Provide search/navigation, incremental syntax, Lua command extensibility, and LS
 
 Search, Tree-sitter, Lua handles/capabilities, LSP version conversion, and atomic workspace edits follow `doc/spec.md`. The Lua registry exposes every required user command except the explicit I20 exclusions.
 
+Plan 1 keeps optional-service boundaries explicit. Search receives a
+caller-owned `SearchCommandSource` that exposes immutable registered-command
+descriptors plus dispatch, and `palette.execute` uses only that seam. It also
+receives a caller-owned `SearchWorkspaceSource` that supplies revision-stable
+workspace-relative file/content and symbol snapshots. Search therefore neither
+owns nor reaches into the session registry, filesystem, Tree-sitter, or LSP.
+It exports an immutable `SearchCommandSet`, typed `SearchViewState`, and
+`SearchDelta` derivation/replay for later session aggregation.
+
 Normative commands owned by this feature:
 
 - `palette.open`, `palette.close`, `palette.next`, `palette.previous`, `palette.execute`
@@ -26,6 +35,14 @@ I3, I5, I10, I12, I16, I20 from `doc/spec.md`.
 ## Considerations
 
 - Background outputs are cancellable and revision-tagged.
+- Search requests and batches carry a monotonic generation and source revision;
+  cancelled, superseded, or stale-revision batches are discarded.
+- Goto Anything modes are unprefixed file matching, `@` injected symbols, `:`
+  one-based lines, and `#` literal workspace-text search. Regex and zero-width
+  matching belong to current-file find/replace, not workspace text mode.
+- Goto and search-result choices are classified as user navigation and request
+  primary-caret reveal; later assembly pauses follow-edits and delegates
+  minimal reveal to the view owner. Programmatic navigation remains distinct.
 - Lua callbacks have instruction/time budgets and capability checks.
 - LSP process launch remains an injected host adapter.
 
@@ -45,7 +62,7 @@ I3, I5, I10, I12, I16, I20 from `doc/spec.md`.
 
 | # | Step | Files | Oracle | Invariants |
 |---|------|-------|--------|------------|
-| 1 | Implement palette, goto, current-file find/replace, and cancellable workspace search/replace | `include/ssg/search.h`, `src/search.cpp`, `tests/test_search.cpp` | independent matcher, ranking goldens, zero-width termination, and preview/apply/recovery round trips | I3, I5, I10 |
+| 1 | Implement palette, goto, current-file find/replace, and cancellable workspace search/replace | `include/ssg/search.h`, `src/search.cpp`, `tests/test_search.cpp` | independent matcher, ranking/query goldens, cancellation/stale batches, navigation transition/caret-reveal tables, zero-width termination, and preview/apply/recovery round trips | I3, I5, I10, I12, I16, I23 |
 | 2 | Implement incremental Tree-sitter syntax | `include/ssg/syntax.h`, `src/syntax.cpp`, `tests/test_syntax.cpp` | full parse vs incremental parse | I10, I12 |
 | 3 | Implement capability-limited Lua command parity | `include/ssg/lua.h`, `src/lua.cpp`, `tests/test_lua.cpp` | manifest parity and timeout/capability faults | I20 |
 | 4 | Implement injected LSP and atomic workspace edits | `include/ssg/lsp.h`, `src/lsp.cpp`, `tests/test_lsp.cpp` | independent position fixtures and fake server | I5, I12 |
