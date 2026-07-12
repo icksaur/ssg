@@ -140,6 +140,14 @@ public:
     [[nodiscard]] WorkspaceResult save_as(FileDocumentId document,
                                           std::string_view path);
     [[nodiscard]] WorkspaceResult reload(FileDocumentId document);
+    [[nodiscard]] WorkspaceResult reopen_with_encoding(
+        FileDocumentId document, TextEncoding encoding);
+    [[nodiscard]] WorkspaceResult set_encoding(
+        FileDocumentId document, TextEncoding encoding);
+    [[nodiscard]] WorkspaceResult set_line_ending(
+        FileDocumentId document, LineEnding line_ending);
+    [[nodiscard]] WorkspaceResult set_final_newline(
+        FileDocumentId document, bool final_newline);
     [[nodiscard]] WorkspaceResult rename_file(FileDocumentId document,
                                               std::string_view path);
     [[nodiscard]] WorkspaceResult delete_file(FileDocumentId document);

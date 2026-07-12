@@ -203,6 +203,13 @@ struct WorkspaceReplacePreview {
     bool operator==(const WorkspaceReplacePreview&) const = default;
 };
 
+struct WorkspaceReplaceArguments {
+    FindRequest request;
+    std::string replacement;
+
+    bool operator==(const WorkspaceReplaceArguments&) const = default;
+};
+
 struct WorkspaceRecoveryRecord {
     Revision source_revision{0};
     Revision applied_revision{0};

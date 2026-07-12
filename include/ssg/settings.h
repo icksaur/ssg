@@ -142,6 +142,27 @@ struct SettingsCommandSet {
     }};
 };
 
+struct SettingSetArguments {
+    SettingScope scope = SettingScope::user;
+    SettingKey key = SettingKey::indent_width;
+    SettingValue value = std::uint32_t{4};
+
+    bool operator==(const SettingSetArguments&) const = default;
+};
+
+struct SettingResetArguments {
+    SettingScope scope = SettingScope::user;
+    SettingKey key = SettingKey::indent_width;
+
+    bool operator==(const SettingResetArguments&) const = default;
+};
+
+struct SettingResetScopeArguments {
+    SettingScope scope = SettingScope::user;
+
+    bool operator==(const SettingResetScopeArguments&) const = default;
+};
+
 class SettingsModel {
 public:
     SettingsModel();

@@ -3,8 +3,11 @@
 #include <ssg/document.h>
 #include <ssg/editor_session_assembly.h>
 #include <ssg/file_commands.h>
+#include <ssg/find_replace.h>
 #include <ssg/input.h>
 #include <ssg/selection.h>
+#include <ssg/settings.h>
+#include <ssg/text_encoding.h>
 #include <ssg/text_input_commands.h>
 
 #include <any>
@@ -1150,10 +1153,18 @@ ProtocolValue to_value(SearchViewState const& value);
 bool decode_present(ProtocolValue const& value, std::optional<SearchViewState>& out);
 ProtocolValue to_value(SearchDelta const& value);
 bool decode_present(ProtocolValue const& value, std::optional<SearchDelta>& out);
+ProtocolValue to_value(ByteRange const& value);
+bool decode_present(ProtocolValue const& value, std::optional<ByteRange>& out);
 ProtocolValue to_value(FindOptions const& value);
 bool decode_present(ProtocolValue const& value, std::optional<FindOptions>& out);
+ProtocolValue to_value(FindRequest const& value);
+bool decode_present(ProtocolValue const& value, std::optional<FindRequest>& out);
 ProtocolValue to_value(FindMatch const& value);
 bool decode_present(ProtocolValue const& value, std::optional<FindMatch>& out);
+ProtocolValue to_value(WorkspaceFileReplacement const& value);
+bool decode_present(ProtocolValue const& value, std::optional<WorkspaceFileReplacement>& out);
+ProtocolValue to_value(WorkspaceReplacePreview const& value);
+bool decode_present(ProtocolValue const& value, std::optional<WorkspaceReplacePreview>& out);
 ProtocolValue to_value(FindReplaceViewState const& value);
 bool decode_present(ProtocolValue const& value, std::optional<FindReplaceViewState>& out);
 ProtocolValue to_value(FindReplaceDelta const& value);
@@ -1322,6 +1333,22 @@ ProtocolValue to_value(ScrollFractionArguments const& value);
 bool decode_present(ProtocolValue const& value, std::optional<ScrollFractionArguments>& out);
 ProtocolValue to_value(DroppedContentArguments const& value);
 bool decode_present(ProtocolValue const& value, std::optional<DroppedContentArguments>& out);
+ProtocolValue to_value(ReopenWithEncodingArguments const& value);
+bool decode_present(ProtocolValue const& value, std::optional<ReopenWithEncodingArguments>& out);
+ProtocolValue to_value(SetEncodingArguments const& value);
+bool decode_present(ProtocolValue const& value, std::optional<SetEncodingArguments>& out);
+ProtocolValue to_value(SetLineEndingArguments const& value);
+bool decode_present(ProtocolValue const& value, std::optional<SetLineEndingArguments>& out);
+ProtocolValue to_value(SetFinalNewlineArguments const& value);
+bool decode_present(ProtocolValue const& value, std::optional<SetFinalNewlineArguments>& out);
+ProtocolValue to_value(SettingSetArguments const& value);
+bool decode_present(ProtocolValue const& value, std::optional<SettingSetArguments>& out);
+ProtocolValue to_value(SettingResetArguments const& value);
+bool decode_present(ProtocolValue const& value, std::optional<SettingResetArguments>& out);
+ProtocolValue to_value(SettingResetScopeArguments const& value);
+bool decode_present(ProtocolValue const& value, std::optional<SettingResetScopeArguments>& out);
+ProtocolValue to_value(WorkspaceReplaceArguments const& value);
+bool decode_present(ProtocolValue const& value, std::optional<WorkspaceReplaceArguments>& out);
 
 // -- Forward declarations: generic container shapes ------------------------
 template <typename T>
@@ -2653,6 +2680,31 @@ bool decode_present(ProtocolValue const& value, std::optional<FindOptions>& out)
     return true;
 }
 
+ProtocolValue to_value(FindRequest const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("query", to_value(value.query));
+    fields.emplace_back("options", to_value(value.options));
+    fields.emplace_back("selection", to_value(value.selection));
+    fields.emplace_back("work_budget", to_value(value.work_budget));
+    return ProtocolValue::make_object(std::move(fields));
+}
+bool decode_present(ProtocolValue const& value, std::optional<FindRequest>& out) {
+    auto const* object = value.as_object();
+    if (!object) return false;
+    auto query = require_field<std::string>(value.field("query"));
+    auto options = require_field<FindOptions>(value.field("options"));
+    std::optional<ByteRange> selection;
+    auto work_budget = require_field<std::uint64_t>(value.field("work_budget"));
+    if (!query || !options ||
+        !decode_optional_field(value.field("selection"), selection) ||
+        !work_budget) {
+        return false;
+    }
+    out.emplace(FindRequest{*query, *options, std::move(selection),
+                            *work_budget, nullptr});
+    return true;
+}
+
 ProtocolValue to_value(FindMatch const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("begin", to_value(value.begin));
@@ -2666,6 +2718,49 @@ bool decode_present(ProtocolValue const& value, std::optional<FindMatch>& out) {
     auto end = require_field<ByteOffset>(value.field("end"));
     if (!begin || !end) return false;
     out.emplace(FindMatch{*begin, *end});
+    return true;
+}
+
+ProtocolValue to_value(WorkspaceFileReplacement const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("path", to_value(value.path));
+    fields.emplace_back("before", to_value(value.before));
+    fields.emplace_back("after", to_value(value.after));
+    fields.emplace_back("matches", to_value(value.matches));
+    return ProtocolValue::make_object(std::move(fields));
+}
+bool decode_present(ProtocolValue const& value, std::optional<WorkspaceFileReplacement>& out) {
+    auto const* object = value.as_object();
+    if (!object) return false;
+    auto path = require_field<std::string>(value.field("path"));
+    auto before = require_field<std::string>(value.field("before"));
+    auto after = require_field<std::string>(value.field("after"));
+    auto matches = require_field<std::vector<FindMatch>>(value.field("matches"));
+    if (!path || !before || !after || !matches) return false;
+    out.emplace(WorkspaceFileReplacement{*path, *before, *after, *matches});
+    return true;
+}
+
+ProtocolValue to_value(WorkspaceReplacePreview const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("source_revision", to_value(value.source_revision));
+    fields.emplace_back("query", to_value(value.query));
+    fields.emplace_back("replacement", to_value(value.replacement));
+    fields.emplace_back("options", to_value(value.options));
+    fields.emplace_back("changes", to_value(value.changes));
+    return ProtocolValue::make_object(std::move(fields));
+}
+bool decode_present(ProtocolValue const& value, std::optional<WorkspaceReplacePreview>& out) {
+    auto const* object = value.as_object();
+    if (!object) return false;
+    auto source_revision = require_field<Revision>(value.field("source_revision"));
+    auto query = require_field<std::string>(value.field("query"));
+    auto replacement = require_field<std::string>(value.field("replacement"));
+    auto options = require_field<FindOptions>(value.field("options"));
+    auto changes = require_field<std::vector<WorkspaceFileReplacement>>(value.field("changes"));
+    if (!source_revision || !query || !replacement || !options || !changes) return false;
+    out.emplace(WorkspaceReplacePreview{*source_revision, *query,
+                                        *replacement, *options, *changes});
     return true;
 }
 
@@ -4479,6 +4574,126 @@ bool decode_present(ProtocolValue const& value, std::optional<DroppedContentArgu
     return true;
 }
 
+ProtocolValue to_value(ReopenWithEncodingArguments const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("encoding", to_value(value.encoding));
+    return ProtocolValue::make_object(std::move(fields));
+}
+bool decode_present(ProtocolValue const& value, std::optional<ReopenWithEncodingArguments>& out) {
+    auto const* object = value.as_object();
+    if (!object) return false;
+    auto encoding = require_field<TextEncoding>(value.field("encoding"));
+    if (!encoding) return false;
+    out.emplace(ReopenWithEncodingArguments{*encoding});
+    return true;
+}
+
+ProtocolValue to_value(SetEncodingArguments const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("encoding", to_value(value.encoding));
+    return ProtocolValue::make_object(std::move(fields));
+}
+bool decode_present(ProtocolValue const& value, std::optional<SetEncodingArguments>& out) {
+    auto const* object = value.as_object();
+    if (!object) return false;
+    auto encoding = require_field<TextEncoding>(value.field("encoding"));
+    if (!encoding) return false;
+    out.emplace(SetEncodingArguments{*encoding});
+    return true;
+}
+
+ProtocolValue to_value(SetLineEndingArguments const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("line_ending", to_value(value.line_ending));
+    return ProtocolValue::make_object(std::move(fields));
+}
+bool decode_present(ProtocolValue const& value, std::optional<SetLineEndingArguments>& out) {
+    auto const* object = value.as_object();
+    if (!object) return false;
+    auto line_ending = require_field<LineEnding>(value.field("line_ending"));
+    if (!line_ending) return false;
+    out.emplace(SetLineEndingArguments{*line_ending});
+    return true;
+}
+
+ProtocolValue to_value(SetFinalNewlineArguments const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("final_newline", to_value(value.final_newline));
+    return ProtocolValue::make_object(std::move(fields));
+}
+bool decode_present(ProtocolValue const& value, std::optional<SetFinalNewlineArguments>& out) {
+    auto const* object = value.as_object();
+    if (!object) return false;
+    auto final_newline = require_field<bool>(value.field("final_newline"));
+    if (!final_newline) return false;
+    out.emplace(SetFinalNewlineArguments{*final_newline});
+    return true;
+}
+
+ProtocolValue to_value(SettingSetArguments const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("scope", to_value(value.scope));
+    fields.emplace_back("key", to_value(value.key));
+    fields.emplace_back("value", to_value(value.value));
+    return ProtocolValue::make_object(std::move(fields));
+}
+bool decode_present(ProtocolValue const& value, std::optional<SettingSetArguments>& out) {
+    auto const* object = value.as_object();
+    if (!object) return false;
+    auto scope = require_field<SettingScope>(value.field("scope"));
+    auto key = require_field<SettingKey>(value.field("key"));
+    auto setting_value = require_field<SettingValue>(value.field("value"));
+    if (!scope || !key || !setting_value) return false;
+    out.emplace(SettingSetArguments{*scope, *key, *setting_value});
+    return true;
+}
+
+ProtocolValue to_value(SettingResetArguments const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("scope", to_value(value.scope));
+    fields.emplace_back("key", to_value(value.key));
+    return ProtocolValue::make_object(std::move(fields));
+}
+bool decode_present(ProtocolValue const& value, std::optional<SettingResetArguments>& out) {
+    auto const* object = value.as_object();
+    if (!object) return false;
+    auto scope = require_field<SettingScope>(value.field("scope"));
+    auto key = require_field<SettingKey>(value.field("key"));
+    if (!scope || !key) return false;
+    out.emplace(SettingResetArguments{*scope, *key});
+    return true;
+}
+
+ProtocolValue to_value(SettingResetScopeArguments const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("scope", to_value(value.scope));
+    return ProtocolValue::make_object(std::move(fields));
+}
+bool decode_present(ProtocolValue const& value, std::optional<SettingResetScopeArguments>& out) {
+    auto const* object = value.as_object();
+    if (!object) return false;
+    auto scope = require_field<SettingScope>(value.field("scope"));
+    if (!scope) return false;
+    out.emplace(SettingResetScopeArguments{*scope});
+    return true;
+}
+
+ProtocolValue to_value(WorkspaceReplaceArguments const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("request", to_value(value.request));
+    fields.emplace_back("replacement", to_value(value.replacement));
+    return ProtocolValue::make_object(std::move(fields));
+}
+bool decode_present(ProtocolValue const& value, std::optional<WorkspaceReplaceArguments>& out) {
+    auto const* object = value.as_object();
+    if (!object) return false;
+    auto request = require_field<FindRequest>(value.field("request"));
+    auto replacement = require_field<std::string>(value.field("replacement"));
+    if (!request || !replacement) return false;
+    out.emplace(WorkspaceReplaceArguments{*request, *replacement});
+    return true;
+}
+
 ProtocolValue to_value(ThemeSectionDelta const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("replacement", to_value(value.replacement));
@@ -4605,6 +4820,24 @@ CommandArgumentCodec make_typed_codec() {
         }};
 }
 
+CommandArgumentCodec make_workspace_apply_codec() {
+    return CommandArgumentCodec{
+        [](std::any const& payload) {
+            if (!payload.has_value()) return ProtocolValue::make_null();
+            return to_value(std::any_cast<WorkspaceReplacePreview const&>(payload));
+        },
+        [](ProtocolValue const& value) -> std::optional<std::any> {
+            if (value.kind() == ProtocolValue::Kind::null_value) {
+                return std::any{};
+            }
+            std::optional<WorkspaceReplacePreview> decoded;
+            if (!from_value(value, decoded) || !decoded.has_value()) {
+                return std::nullopt;
+            }
+            return std::any{std::move(*decoded)};
+        }};
+}
+
 }  // namespace
 
 CommandArgumentCodecRegistry build_command_argument_codec_registry() {
@@ -4629,6 +4862,20 @@ CommandArgumentCodecRegistry build_command_argument_codec_registry() {
         make_typed_codec<ScrollFractionArguments>();
     auto const dropped_content_codec =
         make_typed_codec<DroppedContentArguments>();
+    auto const reopen_with_encoding_codec =
+        make_typed_codec<ReopenWithEncodingArguments>();
+    auto const set_encoding_codec = make_typed_codec<SetEncodingArguments>();
+    auto const set_line_ending_codec =
+        make_typed_codec<SetLineEndingArguments>();
+    auto const set_final_newline_codec =
+        make_typed_codec<SetFinalNewlineArguments>();
+    auto const setting_set_codec = make_typed_codec<SettingSetArguments>();
+    auto const setting_reset_codec = make_typed_codec<SettingResetArguments>();
+    auto const setting_reset_scope_codec =
+        make_typed_codec<SettingResetScopeArguments>();
+    auto const workspace_replace_codec =
+        make_typed_codec<WorkspaceReplaceArguments>();
+    auto const workspace_apply_codec = make_workspace_apply_codec();
 
     std::vector<std::pair<std::string, CommandArgumentCodec>> entries;
     for (auto const& descriptor : p0_command_descriptors()) {
@@ -4640,6 +4887,24 @@ CommandArgumentCodecRegistry build_command_argument_codec_registry() {
             entries.emplace_back(descriptor.id, scroll_fraction_codec);
         } else if (descriptor.id == "file.open_dropped_content") {
             entries.emplace_back(descriptor.id, dropped_content_codec);
+        } else if (descriptor.id == "file.reopen_with_encoding") {
+            entries.emplace_back(descriptor.id, reopen_with_encoding_codec);
+        } else if (descriptor.id == "file.set_encoding") {
+            entries.emplace_back(descriptor.id, set_encoding_codec);
+        } else if (descriptor.id == "file.set_line_ending") {
+            entries.emplace_back(descriptor.id, set_line_ending_codec);
+        } else if (descriptor.id == "file.set_final_newline") {
+            entries.emplace_back(descriptor.id, set_final_newline_codec);
+        } else if (descriptor.id == "settings.set") {
+            entries.emplace_back(descriptor.id, setting_set_codec);
+        } else if (descriptor.id == "settings.reset") {
+            entries.emplace_back(descriptor.id, setting_reset_codec);
+        } else if (descriptor.id == "settings.reset_scope") {
+            entries.emplace_back(descriptor.id, setting_reset_scope_codec);
+        } else if (descriptor.id == "replace.workspace_preview") {
+            entries.emplace_back(descriptor.id, workspace_replace_codec);
+        } else if (descriptor.id == "replace.workspace_apply") {
+            entries.emplace_back(descriptor.id, workspace_apply_codec);
         } else if (text_input_ids.contains(descriptor.id)) {
             entries.emplace_back(descriptor.id, text_input_codec);
         } else if (selection_ids.contains(descriptor.id)) {

@@ -95,6 +95,19 @@ LineTerminator default_terminator(const TextEncodingStatus& status) {
     return LineTerminator::lf;
 }
 
+LineTerminator line_ending_terminator(LineEnding line_ending) {
+    switch (line_ending) {
+        case LineEnding::crlf:
+            return LineTerminator::crlf;
+        case LineEnding::cr:
+            return LineTerminator::cr;
+        case LineEnding::lf:
+        case LineEnding::mixed:
+            return LineTerminator::lf;
+    }
+    return LineTerminator::lf;
+}
+
 DecodedText text_for_save(const DecodedText& original,
                           std::string current_text) {
     if (current_text == original.utf8) {
@@ -235,6 +248,7 @@ public:
         std::vector<std::uint8_t> raw_bytes;
         Document document;
         std::string persisted_text;
+        TextEncodingStatus persisted_status;
     };
 
     struct CompensationState {
@@ -247,6 +261,7 @@ public:
         std::optional<Entry> deleted_entry;
         std::optional<DecodedText> prior_decoded;
         std::string prior_persisted_text;
+        TextEncodingStatus prior_persisted_status;
     };
 
     struct ReplacedWorkspace {
@@ -348,21 +363,23 @@ public:
         if (contains_nul(as_unsigned_bytes(bytes))) {
             entries.push_back({id, std::move(key), std::move(label),
                                FileContentKind::binary, {}, std::move(bytes),
-                               Document{"", DocumentMode::read_only}, {}});
+                               Document{"", DocumentMode::read_only}, {}, {}});
         } else {
             auto decoded = decode_text(as_unsigned_bytes(bytes));
             if (!decoded.accepted()) {
                 entries.push_back(
                     {id, std::move(key), std::move(label),
                      FileContentKind::decode_failure, {}, std::move(bytes),
-                     Document{"", DocumentMode::read_only}, {}});
+                     Document{"", DocumentMode::read_only}, {}, {}});
             } else {
                 const auto persisted = dirty ? std::string{} : decoded.text->utf8;
+                const auto persisted_status = decoded.text->status;
                 auto document = Document{decoded.text->utf8};
                 entries.push_back(
                     {id, std::move(key), std::move(label),
                      FileContentKind::text, std::move(*decoded.text),
-                     std::move(bytes), std::move(document), persisted});
+                     std::move(bytes), std::move(document), persisted,
+                     persisted_status});
             }
         }
         WorkspaceResult result;
@@ -400,6 +417,7 @@ public:
                                             entry.display_label};
                     state.mark_dirty_on_restore = true;
                     state.prior_persisted_text = prior_persisted;
+                    state.prior_persisted_status = entry.persisted_status;
                     compensations.emplace(
                         std::string{action.compensation->value()},
                         std::move(state));
@@ -413,6 +431,7 @@ public:
             entry.decoded = std::move(decoded);
             entry.raw_bytes = encoded.bytes;
             entry.persisted_text = current;
+            entry.persisted_status = entry.decoded.status;
             touch_recent(std::move(path));
             result.document = entry.id;
             return result;
@@ -466,7 +485,8 @@ std::optional<WorkspaceDocumentState> Workspace::state(
         entry->content_kind,
         entry->decoded.status,
         entry->key.kind() == JournalDocumentKeyKind::untitled ||
-            text != entry->persisted_text,
+            text != entry->persisted_text ||
+            entry->decoded.status != entry->persisted_status,
     };
 }
 
@@ -699,6 +719,7 @@ WorkspaceResult Workspace::reload(FileDocumentId id) {
             state.restores_document = true;
             state.prior_decoded = entry->decoded;
             state.prior_persisted_text = entry->persisted_text;
+            state.prior_persisted_status = entry->persisted_status;
             impl_->compensations.emplace(
                 std::string{action.compensation->value()}, std::move(state));
         }
@@ -706,6 +727,7 @@ WorkspaceResult Workspace::reload(FileDocumentId id) {
         entry->decoded = std::move(*decoded.text);
         entry->raw_bytes = bytes;
         entry->persisted_text = entry->document.snapshot().text;
+        entry->persisted_status = entry->decoded.status;
         WorkspaceResult result;
         result.document = id;
         result.compensation = action.compensation;
@@ -713,6 +735,124 @@ WorkspaceResult Workspace::reload(FileDocumentId id) {
     } catch (const std::exception& exception) {
         return failure(WorkspaceError::io_failed, exception.what());
     }
+}
+
+WorkspaceResult Workspace::reopen_with_encoding(FileDocumentId id,
+                                               TextEncoding encoding) {
+    auto* entry = impl_->find(id);
+    if (!entry) {
+        return failure(WorkspaceError::not_found,
+                       "workspace document does not exist");
+    }
+    if (state(id)->dirty) {
+        return failure(WorkspaceError::read_only,
+                       "dirty document cannot be reopened with encoding");
+    }
+    if (contains_nul(as_unsigned_bytes(entry->raw_bytes))) {
+        return failure(WorkspaceError::decode_failed,
+                       "binary file cannot be reopened with encoding");
+    }
+    auto decoded = decode_text(as_unsigned_bytes(entry->raw_bytes), encoding);
+    if (!decoded.accepted()) {
+        return failure(WorkspaceError::decode_failed, decoded.error->message);
+    }
+    entry->content_kind = FileContentKind::text;
+    entry->decoded = std::move(*decoded.text);
+    entry->document = Document{entry->decoded.utf8};
+    entry->persisted_text = entry->decoded.utf8;
+    entry->persisted_status = entry->decoded.status;
+    WorkspaceResult result;
+    result.document = id;
+    return result;
+}
+
+WorkspaceResult Workspace::set_encoding(FileDocumentId id,
+                                       TextEncoding encoding) {
+    auto* entry = impl_->find(id);
+    if (!entry) {
+        return failure(WorkspaceError::not_found,
+                       "workspace document does not exist");
+    }
+    if (entry->content_kind != FileContentKind::text) {
+        return failure(WorkspaceError::read_only,
+                       "read-only content cannot change encoding");
+    }
+    if (static_cast<std::uint8_t>(encoding) >
+        static_cast<std::uint8_t>(TextEncoding::iso88591)) {
+        return failure(WorkspaceError::decode_failed,
+                       "text encoding is not recognized");
+    }
+    entry->decoded.status.encoding = encoding;
+    entry->decoded.status.had_bom =
+        encoding == TextEncoding::utf8_bom ||
+        encoding == TextEncoding::utf16le ||
+        encoding == TextEncoding::utf16be;
+    WorkspaceResult result;
+    result.document = id;
+    return result;
+}
+
+WorkspaceResult Workspace::set_line_ending(FileDocumentId id,
+                                          LineEnding line_ending) {
+    auto* entry = impl_->find(id);
+    if (!entry) {
+        return failure(WorkspaceError::not_found,
+                       "workspace document does not exist");
+    }
+    if (entry->content_kind != FileContentKind::text) {
+        return failure(WorkspaceError::read_only,
+                       "read-only content cannot change line endings");
+    }
+    if (line_ending == LineEnding::mixed) {
+        return failure(WorkspaceError::decode_failed,
+                       "line ending must be lf, crlf, or cr");
+    }
+    const auto terminator = line_ending_terminator(line_ending);
+    for (auto& stored : entry->decoded.line_terminators) {
+        if (stored != LineTerminator::none) stored = terminator;
+    }
+    entry->decoded.status.line_ending = line_ending;
+    WorkspaceResult result;
+    result.document = id;
+    return result;
+}
+
+WorkspaceResult Workspace::set_final_newline(FileDocumentId id,
+                                            bool final_newline) {
+    auto* entry = impl_->find(id);
+    if (!entry) {
+        return failure(WorkspaceError::not_found,
+                       "workspace document does not exist");
+    }
+    if (entry->content_kind != FileContentKind::text) {
+        return failure(WorkspaceError::read_only,
+                       "read-only content cannot change final newline");
+    }
+    auto snapshot = entry->document.snapshot();
+    const bool has_final_newline =
+        !snapshot.text.empty() && snapshot.text.back() == '\n';
+    if (has_final_newline == final_newline) {
+        entry->decoded.status.final_newline = final_newline;
+        WorkspaceResult result;
+        result.document = id;
+        return result;
+    }
+    EditTransaction transaction{snapshot.revision, {}};
+    if (final_newline) {
+        transaction.edits.push_back(
+            {ByteOffset{snapshot.text.size()}, 0, "\n"});
+    } else {
+        transaction.edits.push_back(
+            {ByteOffset{snapshot.text.size() - 1}, 1, ""});
+    }
+    auto applied = apply(id, transaction);
+    if (!applied.accepted()) {
+        return failure(WorkspaceError::io_failed, applied.message);
+    }
+    entry->decoded.status.final_newline = final_newline;
+    WorkspaceResult result;
+    result.document = id;
+    return result;
 }
 
 WorkspaceResult Workspace::rename_file(FileDocumentId id,
@@ -835,6 +975,7 @@ WorkspaceResult Workspace::restore(
         entry->persisted_text = restored_document->dirty
                                     ? found->second.prior_persisted_text
                                     : restored_document->utf8_content;
+        entry->persisted_status = found->second.prior_persisted_status;
         impl_->compensations.erase(found);
         return {};
     }
@@ -852,6 +993,8 @@ WorkspaceResult Workspace::restore(
             entry->display_label = found->second.prior_label;
             if (found->second.mark_dirty_on_restore) {
                 entry->persisted_text = found->second.prior_persisted_text;
+                entry->persisted_status =
+                    found->second.prior_persisted_status;
             }
         }
         impl_->compensations.erase(found);

@@ -116,6 +116,26 @@ struct TextEncodingCommandSet {
     std::array<TextEncodingCommandDescriptor, 4> descriptors;
 };
 
+struct ReopenWithEncodingArguments {
+    TextEncoding encoding = TextEncoding::utf8;
+    bool operator==(const ReopenWithEncodingArguments&) const = default;
+};
+
+struct SetEncodingArguments {
+    TextEncoding encoding = TextEncoding::utf8;
+    bool operator==(const SetEncodingArguments&) const = default;
+};
+
+struct SetLineEndingArguments {
+    LineEnding line_ending = LineEnding::lf;
+    bool operator==(const SetLineEndingArguments&) const = default;
+};
+
+struct SetFinalNewlineArguments {
+    bool final_newline = false;
+    bool operator==(const SetFinalNewlineArguments&) const = default;
+};
+
 inline constexpr TextEncodingCommandSet text_encoding_command_set{{
     TextEncodingCommandDescriptor{"file.reopen_with_encoding"},
     TextEncodingCommandDescriptor{"file.set_encoding"},

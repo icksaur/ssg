@@ -1,0 +1,50 @@
+target_sources(ssg PRIVATE
+    ${SSG_SOURCE_DIR}/src/editor_runtime.cpp
+    ${SSG_SOURCE_DIR}/src/runtime/editing.cpp
+    ${SSG_SOURCE_DIR}/src/runtime/files.cpp
+    ${SSG_SOURCE_DIR}/src/runtime/language_services.cpp
+    ${SSG_SOURCE_DIR}/src/runtime/navigation.cpp
+    ${SSG_SOURCE_DIR}/src/runtime/presentation.cpp
+    ${SSG_SOURCE_DIR}/src/runtime/snapshot.cpp
+)
+
+if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+    add_executable(test_runtime_snapshot
+        ${SSG_SOURCE_DIR}/tests/runtime/test_runtime_snapshot.cpp
+    )
+    target_compile_definitions(test_runtime_snapshot PRIVATE
+        SSG_SOURCE_SCAN_ROOT="${SSG_SOURCE_DIR}"
+    )
+    target_link_libraries(test_runtime_snapshot PRIVATE ssg)
+    add_test(NAME test_runtime_snapshot COMMAND test_runtime_snapshot)
+
+    add_executable(test_runtime_files
+        ${SSG_SOURCE_DIR}/tests/runtime/test_runtime_files.cpp
+    )
+    target_link_libraries(test_runtime_files PRIVATE ssg)
+    add_test(NAME test_runtime_files COMMAND test_runtime_files)
+
+    add_executable(test_runtime_editing
+        ${SSG_SOURCE_DIR}/tests/runtime/test_runtime_editing.cpp
+    )
+    target_link_libraries(test_runtime_editing PRIVATE ssg)
+    add_test(NAME test_runtime_editing COMMAND test_runtime_editing)
+
+    add_executable(test_runtime_presentation
+        ${SSG_SOURCE_DIR}/tests/runtime/test_runtime_presentation.cpp
+    )
+    target_link_libraries(test_runtime_presentation PRIVATE ssg)
+    add_test(NAME test_runtime_presentation COMMAND test_runtime_presentation)
+
+    add_executable(test_runtime_navigation
+        ${SSG_SOURCE_DIR}/tests/runtime/test_runtime_navigation.cpp
+    )
+    target_link_libraries(test_runtime_navigation PRIVATE ssg)
+    add_test(NAME test_runtime_navigation COMMAND test_runtime_navigation)
+
+    add_executable(test_runtime_language_services
+        ${SSG_SOURCE_DIR}/tests/runtime/test_runtime_language_services.cpp
+    )
+    target_link_libraries(test_runtime_language_services PRIVATE ssg)
+    add_test(NAME test_runtime_language_services COMMAND test_runtime_language_services)
+endif()
