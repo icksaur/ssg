@@ -1,7 +1,7 @@
 # lua-command-host
 
 - Spec: `doc/features/language-services.md`, Plan 3
-- Depends: `session-state`, `required-command-catalog`
+- Depends: `session-state`, `required-command-catalog`, `core-websocket-slice`
 - Branch: `lua-command-host-task`
 
 ## Scope
