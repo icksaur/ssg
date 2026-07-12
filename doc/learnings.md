@@ -349,3 +349,8 @@ then remove or shorten the redundant entry here.
 - Browser parity fixtures inject a deterministic secure-context clipboard
   adapter so OS permission and user-gesture behavior cannot stall semantic
   workflow gates.
+
+## performance-ci
+
+- MSVC `std::clock()` measures wall time. Portable idle-CPU gates use
+  `GetProcessTimes` on Windows and `CLOCK_PROCESS_CPUTIME_ID` on POSIX.
