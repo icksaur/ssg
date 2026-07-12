@@ -143,6 +143,78 @@ positions are resolved against the resulting text with the resolved tab width.
 Invalid selection coordinates, invalid inserted UTF-8, and non-edit document
 modes fail atomically.
 
+**Edit-command-suite contract.** The separately scheduled
+`edit-command-suite` task owns exactly `edit.indent`, `edit.outdent`,
+`edit.duplicate_line`, `edit.move_line_up`, `edit.move_line_down`,
+`edit.delete_line`, `edit.join_lines`, `edit.uppercase`, `edit.lowercase`,
+`edit.swap_case`, `edit.sort_lines`, `edit.transpose`, and
+`edit.toggle_comment`. It exports one immutable
+`EditCommandSuiteCommandSet` containing those descriptors and one pure apply
+function. The function receives a `DocumentSnapshot`, normalized
+`SelectionSet`, resolved `EditCommandSettings`, and a command. It returns
+either an actionable typed error or a pre-transaction `EditTransaction`, the
+post-edit `SelectionSet`, and resulting text. It does not register stateful
+`command_registry::CommandSet` handlers or edit session, aggregate snapshot,
+or protocol files.
+
+`EditCommandSettings` contains the indentation style and width, display tab
+width, preferred line ending, and line-comment token. Both widths are in
+`[1, 16]`; selection coordinates are validated and rematerialized with the
+display tab width rather than assuming it equals the indentation width.
+`mixed` uses LF when a new separator is required when it is the preferred
+line-ending value. The comment token must be non-empty, valid UTF-8, and
+contain no line terminator. Commands reject invalid settings or selection
+positions and reject read-only and diff documents atomically.
+
+A caret touches its containing logical line. A non-empty half-open selection
+touches every intersected line, except that its upper endpoint at a line start
+does not add that line. Duplicate and overlapping selections collapse to one
+ordered set of lines, partitioned into contiguous runs, so each line is
+transformed once and untouched gaps remain unchanged. LF, CRLF, and CR are
+logical terminators. Existing terminator bytes are preserved unless a command
+necessarily removes or moves them; when duplication of a final unterminated
+line needs a separator, the preferred line ending is used. Endpoints outside
+an edit shift by the cumulative byte delta of all edits at lower offsets;
+endpoints inside replaced text retain their relative byte displacement clamped
+to the replacement. Insertions at an endpoint move that endpoint after the
+inserted bytes. The result is normalized through `SelectionSet`.
+
+Indent prefixes one configured indentation unit at each touched line.
+Outdent removes one leading tab or up to `indent_width` leading spaces,
+regardless of the configured insertion style. Duplicate copies each contiguous
+touched run immediately after itself. Move-line commands move each touched run
+across the adjacent line while preserving line contents and terminator style;
+a run at the requested document boundary is unchanged. Delete removes complete
+touched lines; deleting a final unterminated line also consumes its preceding
+terminator. Join replaces each distinct touched line's terminator with one
+ASCII space and leaves a final unterminated line unchanged.
+
+Uppercase, lowercase, and swap-case transform only non-empty selections using
+ASCII case mapping; non-ASCII bytes are preserved. Sort orders each contiguous
+run of at least two touched lines independently, ascending by unsigned UTF-8
+content bytes, stably for equal lines. Terminators remain in their original
+row slots, including a final unterminated slot. A lone caret therefore does
+not sort. Transpose applies only to carets and swaps the extended grapheme
+cluster before the caret with the one after it; at document end it swaps the
+final two clusters. It is a no-op at document start, with fewer than two
+available clusters, or for non-empty selections. Cluster boundaries are the
+Unicode 15.0.0 UAX #29 boundaries produced by `compute_cell_run`, shared with
+text-input deletion. At document end, a trailing line terminator is skipped so
+the final two content clusters are transposed while the terminator is retained.
+
+Toggle-comment operates at the first non-horizontal-whitespace byte of each
+touched line. Blank lines are unchanged. It removes the token iff every
+non-blank touched line already has the token there; otherwise it inserts the
+token at every non-blank touched line. Existing indentation is preserved.
+
+Every accepted byte-changing transform emits exactly one transaction. An already
+satisfied sort, a boundary move/join/transpose, an outdent with no removable
+indentation, a case transform with no changed byte, and any other transform
+whose resulting text is unchanged succeed as explicit no-ops without a
+transaction or revision change. Hand fixtures cover every command with single
+and multiple selections, LF/CRLF/CR and final-unterminated input, tabs and
+spaces, invalid settings/selections, non-edit modes, and no-op atomicity.
+
 ## Rationale (optional, skippable)
 
 These commands share one mutation and selection algebra; separate specs would duplicate the same oracle and boundary.
