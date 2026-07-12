@@ -723,12 +723,18 @@ bool clipboard_paste(Editor& ed) {
     ops.reserve(ed.selections.size());
 
     bool one_to_one = ed.clipboard.size() == ed.selections.size();
+    std::string plain_text;
+    if (!one_to_one) {
+        for (auto const& fragment : ed.clipboard) {
+            plain_text += fragment;
+        }
+    }
 
     for (size_t i = 0; i < ed.selections.size(); ++i) {
         auto const& s = ed.selections[i];
         std::string const& frag = one_to_one
                                       ? ed.clipboard[i]
-                                      : ed.clipboard[0]; // single fragment for all
+                                      : plain_text;
         ops.push_back({s.lo(), s.hi(), frag});
     }
     apply_ops(ed, std::move(ops));

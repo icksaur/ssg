@@ -91,6 +91,51 @@ that the following document-transaction task uses against this storage.
 | 5 | Implement clipboard request/response transforms | `include/ssg/clipboard.h`, `src/clipboard.cpp`, `tests/test_clipboard.cpp` | hand cases and stale/denied fault tests | I16, I18 |
 | 6 | Implement coalesced bounded per-file undo/redo with selection restoration | `include/ssg/history.h`, `src/history.cpp`, `tests/test_history.cpp` | timed coalescing and forward/undo/redo round trips | I5 |
 
+**Clipboard contract (Plan 5 scope).** One move-only `ClipboardRegister` owns
+the structured internal register and outstanding best-effort system requests.
+It exports the immutable `clipboard.copy`, `clipboard.cut`, and
+`clipboard.paste` descriptor set plus typed request, response, result, view
+state, and delta values. Session assembly and protocol serialization remain
+owned by their later tasks. Browser-input code decides whether a principal has
+a qualifying secure-context user gesture and asks for either system-first or
+internal-only paste; this component never calls a browser or platform API.
+
+Copy stores one fragment per normalized selection in selection order. A
+non-empty selection contributes its exact half-open UTF-8 byte range. A caret
+contributes its complete logical line, including its LF, CRLF, or CR terminator
+when present; a caret on the final unterminated line contributes the remaining
+bytes, which may be empty. Distinct carets on one line contribute duplicate
+fragments. The register's plain-text payload is the bytewise concatenation of
+all fragments in order with no added separator. That same payload is used for
+system export and, when the number of register fragments differs from the
+number of paste selections, at every selection. Equal nonzero counts distribute
+fragments one-to-one. Paste replaces non-empty selections and inserts at
+carets; line fragments have no separate insertion mode.
+
+Cut derives fragments using the copy rules and deletes the corresponding
+selected or complete-line ranges. Overlapping derived deletion ranges,
+including multiple carets on one line, are merged so each byte is removed once.
+The register changes only if the history-owned document edit is accepted; a
+zero-byte cut may still update the register without creating history. Every
+byte-changing cut and paste is one non-coalescing history unit, and undo/redo
+restore the pre/post selections.
+
+Copy and an accepted cut publish a `ClipboardWriteRequest` tagged with a
+monotonic request ID and the current document revision. Write failure never
+rolls back the authoritative register or an accepted cut; its typed response
+reports denied, unavailable, or disconnected status. An internal-only paste
+uses the register immediately. A system-first paste publishes a
+`ClipboardReadRequest` and stores the request-time document revision,
+selections, and fallback register snapshot without mutating the document.
+A response is fresh only when its request ID and request revision match the
+outstanding request, its observed document revision equals that revision and
+the current document revision, and the current selections equal the
+request-time selections. A fresh successful read pastes the returned UTF-8
+text as one plain fragment. A fresh denied, unavailable, or disconnected read
+pastes the captured internal fallback. A mismatched, superseded, or otherwise
+stale response is rejected without system-text or fallback mutation. Invalid
+UTF-8 system text and read-only/diff documents are rejected atomically.
+
 **History contract (Plan 6 scope).** One `DocumentHistory` instance owns the
 non-persistent history for one document. Callers submit an edit through history
 with the pre- and post-edit selections, edit kind, and an explicitly injected
