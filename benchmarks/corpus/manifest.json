@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "target_document_bytes": 10485760,
+  "operation_count": 10000,
+  "warmup_operations": 1000,
+  "repetitions": 5,
+  "entries": [
+    {
+      "path": "mixed-code.txt",
+      "sha256": "9bc5fc2f53731bd55808e6e2317cb4b0e221e629e65daf59a69320420b4c1fe0",
+      "bytes": 184320
+    },
+    {
+      "path": "operations.tsv",
+      "sha256": "14a8d188567cde43ae22f7f21db0d2835e4f00c0f629ae222e2d40f06b07f674",
+      "bytes": 119316
+    }
+  ]
+}
