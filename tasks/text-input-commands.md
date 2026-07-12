@@ -1,14 +1,16 @@
 # text-input-commands
 
 - Spec: `doc/features/core-editing.md`, Plan 3
-- Depends: `selection-navigation`, `settings-model`
+- Depends: `document-transactions`, `selection-navigation`, `settings-model`,
+  `unicode-cell-layout`
 - Branch: `text-input-commands-task`
 
 ## Scope
 
 Implement `text.insert`, newline, backward/forward character and word deletion,
 selection replacement, multi-caret insertion, and automatic indentation as one
-`CommandSet`.
+immutable feature `CommandSet`. The set owns descriptors and a pure apply
+function; session assembly later binds it to live document and selection state.
 
 ## Files
 
@@ -21,6 +23,10 @@ selection replacement, multi-caret insertion, and automatic indentation as one
 Independent hand fixtures cover single/multiple carets, selected replacement,
 line endings, indentation settings, grapheme deletion, and overlapping edit
 normalization.
+
+Reference-editor parity is restricted to ASCII/single-codepoint input with LF
+and automatic indentation disabled. Hand fixtures are authoritative for
+grapheme clusters, CR/CRLF/mixed line endings, and automatic indentation.
 
 ## Done
 
