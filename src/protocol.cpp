@@ -4249,7 +4249,8 @@ bool decode_present(ProtocolValue const& value, std::optional<SrgbColor>& out) {
     auto green = require_field<std::uint8_t>(value.field("green"));
     auto blue = require_field<std::uint8_t>(value.field("blue"));
     if (!red || !green || !blue) return false;
-    out.emplace(SrgbColor{*red, *green, *blue});
+    out.emplace(
+        SrgbColor::from_serialized_channels(*red, *green, *blue));
     return true;
 }
 
