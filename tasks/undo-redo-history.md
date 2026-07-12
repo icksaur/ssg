@@ -1,6 +1,6 @@
 # undo-redo-history
 
-- Spec: `doc/features/core-editing.md`, Plan 5
+- Spec: `doc/features/core-editing.md`, Plan 6 and `doc/spec.md` history rules
 - Depends: `selection-navigation`, `document-transactions`
 - Branch: `undo-redo-history-task`
 
