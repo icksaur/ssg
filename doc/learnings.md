@@ -109,3 +109,10 @@ then remove or shorten the redundant entry here.
 - Byte-pinned upstream Unicode data needs `.gitattributes` entries with `-text`
   so Windows checkouts preserve hashes. Use `-whitespace` when official data
   contains trailing whitespace that must not fail repository diff checks.
+
+## document-transactions
+
+- Apply validated multi-edit transactions from highest to lowest byte offset to
+  preserve pre-transaction coordinates without rebasing later edits.
+- Validate replacement UTF-8 and every erase-range endpoint boundary before any
+  piece-tree mutation so invalid transactions remain failure-atomic.
