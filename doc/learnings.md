@@ -283,3 +283,14 @@ then remove or shorten the redundant entry here.
   `default-keymap.json` rather than duplicating a hard-coded catalog count.
 - When an LSP `WorkspaceEdit` contains `documentChanges`, it takes precedence
   over `changes`; applying both duplicates edits and violates atomicity.
+
+## external-modification-flow
+
+- Diff-model rejection must not suppress dirty-buffer external-modification
+  status. Preserve safety actions while reporting degraded diff availability.
+
+## tab-management
+
+- `tab.reopen_closed` deduplicates against currently open content identities. A
+  file can be reopened independently while its close record remains; reopening
+  it again would violate authoritative tab and delta-replay uniqueness.
