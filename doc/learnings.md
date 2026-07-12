@@ -273,3 +273,13 @@ then remove or shorten the redundant entry here.
   non-trivial C++ locals are live.
 - Nested Lua calls share one state hook. Save and restore budget state and stack
   depth so an inner call cannot disable the outer call's limits.
+
+## lsp-workspace-edits
+
+- Recovery for multiple edits to one document chains expected revisions in
+  reverse application order. Fixed per-operation revisions make later
+  compensation stale.
+- Browser keymap conformance derives command cardinality from
+  `default-keymap.json` rather than duplicating a hard-coded catalog count.
+- When an LSP `WorkspaceEdit` contains `documentChanges`, it takes precedence
+  over `changes`; applying both duplicates edits and violates atomicity.
