@@ -133,6 +133,15 @@ then remove or shorten the redundant entry here.
   own their input and share an atomic cancellation flag. Session state changes
   only when the matching non-stale result is accepted.
 
+## lsp-sync-diagnostics
+
+- LSP stream polling must drain every decoded frame after soft per-message
+  rejection. Otherwise one stale or bounded diagnostic can discard later
+  lifecycle responses or valid diagnostics from the same read.
+- Cancelled requests remain in bounded pending-request accounting until their
+  responses arrive, preventing cancellation churn from creating unbounded
+  tombstone state.
+
 ## unicode-cell-layout
 
 - Byte-pinned upstream Unicode data needs `.gitattributes` entries with `-text`
