@@ -53,6 +53,33 @@ I6, I16, I17, I18, I20 from `doc/spec.md`.
   snapshot capabilities contain `local_file_drop`; remote and locality-unknown
   snapshots do neither. Common-dispatch capability rejection remains owned by
   session/file-command integration and is not reimplemented by this harness.
+- The product-style browser fixture is served from a dependency-free loopback
+  HTTP server and opens a separate WebSocket to `HttpEditorServer`; the editor
+  transport remains exactly one ordered WebSocket. The loopback origin is a
+  secure context for gesture-gated clipboard APIs.
+- The browser fixture owns a small JavaScript implementation of the documented
+  binary protocol envelope and `ProtocolValue` tree. Checked-in C++ protocol
+  fixture bytes are the anti-drift oracle for JavaScript decoding and command
+  encoding.
+- Remote and local-capability pages use one client implementation. Test
+  credentials select host-created principals; only the local principal is
+  granted `local_file_drop`. Credentials are URL query inputs supplied by the
+  fixture host, never inferred or self-granted by browser code. Reconnects send
+  the last applied revision from the same client state.
+- The mandatory browser workflow is the `doc/spec.md` Observable browser
+  workflow: open, edit, multi-selection, clipboard, undo/redo, wrap, wheel and
+  scrollbar navigation, save, dirty close/reopen, read-only rejection, diff,
+  recovery, external-change follow/pause/resume, capability-gated drop, theme,
+  prompt, status, and accessibility surfaces.
+- Key bindings, hit targets, cell runs, theme values, prompts, statuses, and
+  accessible labels are rendered only from snapshot/delta API data. The client
+  does not load the default keymap as product behavior or synthesize editor
+  semantics and labels.
+- Browser client conformance uses the existing dependency-free live-browser
+  launcher policy: source tests always run, while the required live gate names
+  and fails for any unavailable Chromium, Firefox, or WebKit runtime. Identical
+  semantic scripts compare canonical protocol state after direct-API and
+  WebSocket execution.
 
 ## Risks and Mitigations
 
@@ -73,6 +100,7 @@ I6, I16, I17, I18, I20 from `doc/spec.md`.
 | 1 | Accept required-command and browser-reserved fixtures | `data/required-commands.json`, `tests/browser/fixtures/reserved-chords.json` | exact comparison with the union of all P0 normative lists, independently maintained category/count/owner data, exact capability and Lua/keymap/palette exclusions, and browser docs/capture | I6, I18, I20 |
 | 2 | Define keymap and hit-target API data | `include/ssg/input.h`, `src/input.cpp`, `data/default-keymap.json`, `tests/test_input.cpp` | exact coverage of the 159 keymap-eligible commands, rejection of excluded/duplicate/unreachable/reserved bindings, committed UTF-8 and semantic hit-target round trips, and backend dependency scan | I16, I17 |
 | 3 | Implement the test-only browser input, IME, mouse, clipboard, and file-drop conformance harness without the product browser fixture | `tests/browser/input/*`, `cmake/components/browser-input-conformance.cmake` | checked-in event/semantic cases plus a dependency-free loopback runner against already-installed Chromium, Firefox, and WebKit; IME commit, clipboard denial/internal fallback/status, reserved chord, pointer/wheel/scrollbar, and local-only file-drop cases | I6, I18 |
+| 4 | Implement the minimal product-style browser fixture and complete browser-client oracle | `examples/browser/*`, `tests/browser/client/*`, `cmake/components/browser-client.cmake` | canonical C++ wire fixtures, direct-API/WebSocket state parity, scripted Chromium/Firefox/WebKit workflows, API-sourced accessibility snapshots, and remote/local-capability cases | I6, I16, I17, I18, I20 |
 
 ## Rationale (optional, skippable)
 
