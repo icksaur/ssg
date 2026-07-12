@@ -39,7 +39,7 @@ try {
   "engine event fields preserve canonical strokes");
 
   const bindings = expandKeymap(keymap);
-  check(bindings.length === 159, "all keymap commands expand");
+  check(bindings.length === keymap.commands.length, "all keymap commands expand");
   const keyboardCommands = [];
   const keyboardAdapter = new BrowserInputAdapter({
     browser,

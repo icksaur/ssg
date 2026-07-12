@@ -19,13 +19,16 @@ const reserved = await readJson("tests/browser/fixtures/reserved-chords.json");
 const cases = await readJson("tests/browser/input/event-cases.json");
 
 const bindings = expandKeymap(keymap);
-assert.equal(bindings.length, 159);
+assert.equal(bindings.length, keymap.commands.length);
 assert.deepEqual(bindings[0], {
   sequence: ["Ctrl+Shift+KeyM", "KeyA", "KeyA"],
   command_id: "text.insert",
   context: "*",
 });
-assert.equal(new Set(bindings.map((binding) => binding.command_id)).size, 159);
+assert.equal(
+  new Set(bindings.map((binding) => binding.command_id)).size,
+  keymap.commands.length,
+);
 
 for (const fixture of cases.keyboard) {
   assert.equal(canonicalStroke(fixture.event), fixture.stroke, fixture.name);
