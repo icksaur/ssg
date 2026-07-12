@@ -340,3 +340,12 @@ then remove or shorten the redundant entry here.
 - `EditorSession` exposes dispatch but no snapshot accessor. In-process clients
   require a host-provided snapshot assembler, and `EditorSessionBuilder`
   requires handlers for the complete P0 command catalog.
+
+## end-to-end-parity
+
+- WebKitGTK MiniBrowser can exit with a Wayland protocol error during rapid
+  WebSocket and clipboard workflows. Force `GDK_BACKEND=x11`, drain child
+  pipes, and race reports against process exit.
+- Browser parity fixtures inject a deterministic secure-context clipboard
+  adapter so OS permission and user-gesture behavior cannot stall semantic
+  workflow gates.
