@@ -13,7 +13,8 @@ state over the established synchronized LSP connection.
 
 `include/ssg/lsp_features.h`, `src/lsp_features.cpp`,
 `tests/fixtures/lsp/features/`, `tests/test_lsp_features.cpp`,
-`cmake/components/lsp-language-features.cmake`
+`cmake/components/lsp-language-features.cmake`, plus the additive completed
+response and synchronized-document snapshot seam in `lsp_sync.*`
 
 ## Oracle
 

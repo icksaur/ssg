@@ -219,6 +219,30 @@ struct LspRequestResult {
     }
 };
 
+struct LspDocumentSnapshot {
+    std::string uri;
+    Revision revision{0};
+    std::int64_t version = 0;
+    std::string text;
+    friend bool operator==(const LspDocumentSnapshot&,
+                           const LspDocumentSnapshot&) = default;
+};
+
+enum class LspCompletedResponseStatus : std::uint8_t {
+    result,
+    cancelled,
+    server_error,
+};
+
+struct LspCompletedResponse {
+    std::uint64_t id = 0;
+    LspCompletedResponseStatus status = LspCompletedResponseStatus::result;
+    std::string payload_json;
+    std::string message;
+    friend bool operator==(const LspCompletedResponse&,
+                           const LspCompletedResponse&) = default;
+};
+
 class LspSyncClient {
 public:
     LspSyncClient(LspByteStream& stream, LspSyncConfig config = {},
@@ -242,10 +266,14 @@ public:
     [[nodiscard]] LspSyncResult close_document(std::string_view uri);
     [[nodiscard]] std::optional<std::int64_t> document_version(
         std::string_view uri) const;
+    [[nodiscard]] std::optional<LspDocumentSnapshot> document_snapshot(
+        std::string_view uri) const;
 
     [[nodiscard]] LspRequestResult request(std::string method,
                                            std::string params_json);
     [[nodiscard]] LspSyncResult cancel(std::uint64_t request_id);
+    [[nodiscard]] std::vector<LspCompletedResponse>
+    take_completed_responses();
 
     [[nodiscard]] LspLifecycleState state() const noexcept;
     [[nodiscard]] const LspSyncViewState& view_state() const noexcept;

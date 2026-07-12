@@ -96,8 +96,17 @@ I3, I5, I10, I12, I16, I20 from `doc/spec.md`.
 | 2 | Implement optional incremental Tree-sitter syntax and typed syntax snapshot/delta seams | `include/ssg/syntax.h`, `src/syntax.cpp`, `tests/test_syntax.cpp` | injected deterministic parser full-vs-incremental snapshots, stale cancellation, and plain-text fallback | I10, I12 |
 | 3 | Implement capability-limited Lua command parity | `include/ssg/lua.h`, `src/lua.cpp`, `tests/test_lua.cpp` | manifest parity and timeout/capability faults | I20 |
 | 4a | Implement injected LSP framing, lifecycle, document synchronization, cancellation, and bounded/coalesced diagnostics | `include/ssg/lsp_sync.h`, `src/lsp_sync.cpp`, `tests/fake_lsp_server.*`, `tests/fixtures/lsp/sync/`, `tests/test_lsp_sync.cpp` | scripted fake server, independent UTF-8/UTF-16 fixtures, version/stale diagnostics, cancellation/timeouts, bounds, malformed messages, and nested-consumer optional-linkability | I10, I12 |
-| 4b | Implement LSP completion, hover, definition, references, and rename | `include/ssg/lsp_features.h`, `src/lsp_features.cpp`, `tests/test_lsp_features.cpp` | scripted fake-server language-feature cases | I10, I12 |
+| 4b | Implement LSP completion, hover, definition, and references | `include/ssg/lsp_features.h`, `src/lsp_features.cpp`, `tests/test_lsp_features.cpp`, plus an additive completed-response/document-snapshot seam in `lsp_sync.*` | scripted fake-server request/response cases, stale/cancelled result rejection, completion ordering/acceptance, and navigation fixtures | I10, I12 |
 | 4c | Implement atomic LSP workspace edits | `include/ssg/lsp_workspace_edit.h`, `src/lsp_workspace_edit.cpp`, `tests/test_lsp_workspace_edit.cpp` | full validation, fault injection, and all-or-nothing document snapshots | I5, I10, I12 |
+
+Plan 4b consumes responses only through `LspSyncClient`: the synchronization
+layer exposes completed request IDs with raw response payloads and immutable
+document snapshots containing URI, revision, server version, and exact
+synchronized text. The feature controller retains request kind, URI, revision,
+generation, and cancellation/supersession state, so late results cannot update
+observable state. Request errors are correlated without failing the connection.
+Rename remains out of Plan 4b because applying its `WorkspaceEdit` belongs to
+Plan 4c.
 
 ## Rationale (optional, skippable)
 
