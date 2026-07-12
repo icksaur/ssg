@@ -40,6 +40,9 @@ async function run() {
   check(labels.includes("Workspace /fixture"), "header API label is rendered");
   check(labels.includes("Reopen closed tab"), "status action API label is rendered");
 
+  await local.command("workspace.open_directory");
+  await local.command("file.open");
+
   const revisionBeforeInput = local.state.revision;
   local.root.querySelector(".ssg-editor").dispatchEvent(new InputEvent("beforeinput", {
     bubbles: true,

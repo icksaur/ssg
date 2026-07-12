@@ -1,10 +1,10 @@
+#include "fixtures/end_to_end/e2e_fixture.h"
+
 #include <ssg/editor_session_assembly.h>
-#include <ssg/file_commands.h>
 #include <ssg/http_server.h>
 #include <ssg/protocol.h>
 #include <ssg/session_snapshot.h>
 
-#include <algorithm>
 #include <any>
 #include <atomic>
 #include <chrono>
@@ -14,7 +14,6 @@
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -45,79 +44,12 @@ public:
         std::optional<ssg::ClipboardRequest> clipboard_request;
         {
             std::lock_guard lock{mutex_};
-            if (id == "text.insert") {
-                if (mode_ != ssg::DocumentMode::edit) {
-                    return ssg::CommandHandlerResult::failure(
-                        "document is not editable");
-                }
-                undo_text_ = text_;
-                text_ += std::any_cast<ssg::TextInputArguments const&>(payload).text;
-                dirty_ = true;
-            } else if (id == "select.add_cursor_down") {
-                selection_count_ = 2;
-            } else if (id == "clipboard.copy") {
-                clipboard_ = text_;
+            auto result = state_.apply(id, payload);
+            if (!result.accepted) return result;
+            if (id == "clipboard.copy") {
                 clipboard_request = ssg::ClipboardRequest{
-                    41, ssg::ClipboardRequestKind::write, revision, clipboard_};
-            } else if (id == "clipboard.cut") {
-                undo_text_ = text_;
-                clipboard_ = text_;
-                text_.clear();
-                dirty_ = true;
-            } else if (id == "clipboard.paste") {
-                undo_text_ = text_;
-                text_ += clipboard_;
-                dirty_ = true;
-            } else if (id == "edit.undo") {
-                redo_text_ = text_;
-                text_ = undo_text_;
-                dirty_ = true;
-            } else if (id == "edit.redo") {
-                undo_text_ = text_;
-                text_ = redo_text_;
-                dirty_ = true;
-            } else if (id == "view.toggle_word_wrap") {
-                word_wrap_ = !word_wrap_;
-            } else if (id == "view.scroll_lines") {
-                auto rows =
-                    std::any_cast<ssg::ScrollLinesArguments const&>(payload).rows;
-                first_row_ = static_cast<std::uint32_t>(
-                    std::clamp<std::int64_t>(
-                        static_cast<std::int64_t>(first_row_) + rows, 0, 80));
-            } else if (id == "view.scroll_to_fraction") {
-                auto const& value =
-                    std::any_cast<ssg::ScrollFractionArguments const&>(payload);
-                first_row_ = static_cast<std::uint32_t>(
-                    80ULL * value.numerator / value.denominator);
-            } else if (id == "file.save") {
-                dirty_ = false;
-            } else if (id == "tab.close") {
-                tab_open_ = false;
-                recovery_ = ssg::TabRecoveryBadge::durable;
-            } else if (id == "tab.reopen_closed") {
-                tab_open_ = true;
-            } else if (id == "file.reload") {
-                mode_ = ssg::DocumentMode::read_only;
-            } else if (id == "external.open_diff") {
-                mode_ = ssg::DocumentMode::diff;
-                tab_kind_ = ssg::TabKind::live_diff;
-            } else if (id == "follow_edits.pause") {
-                follow_mode_ = ssg::FollowMode::paused;
-                ++follow_generation_;
-            } else if (id == "follow_edits.resume") {
-                follow_mode_ = ssg::FollowMode::following;
-                ++follow_generation_;
-            } else if (id == "prompt.submit") {
-                prompt_open_ = false;
-            } else if (id == "file.open_dropped_content") {
-                auto const& dropped =
-                    std::any_cast<ssg::DroppedContentArguments const&>(payload);
-                text_.assign(dropped.bytes.begin(), dropped.bytes.end());
-                label_ = dropped.suggested_label;
-                mode_ = ssg::DocumentMode::edit;
-                tab_kind_ = ssg::TabKind::document;
-                tab_open_ = true;
-                dirty_ = true;
+                    41, ssg::ClipboardRequestKind::write, revision,
+                    state_.clipboard};
             }
         }
         if (clipboard_request && send_clipboard_request) {
@@ -129,18 +61,18 @@ public:
     ssg::SessionSnapshotSections sections(ssg::Revision revision) const {
         std::lock_guard lock{mutex_};
         ssg::DocumentPosition const position{
-            ssg::ByteOffset{text_.size()}, ssg::LineIndex{0},
-            ssg::CellIndex{static_cast<std::uint32_t>(text_.size())}};
+            ssg::ByteOffset{state_.text.size()}, ssg::LineIndex{0},
+            ssg::CellIndex{static_cast<std::uint32_t>(state_.text.size())}};
         std::vector<ssg::Selection> selections{
             ssg::Selection{position, position}};
-        if (selection_count_ > 1) {
+        if (state_.selection_count > 1) {
             ssg::DocumentPosition const start{
                 ssg::ByteOffset{0}, ssg::LineIndex{0}, ssg::CellIndex{0}};
             selections.push_back(ssg::Selection{start, start});
         }
 
         ssg::PromptStatusViewState prompt_status;
-        if (prompt_open_) {
+        if (state_.prompt_open) {
             prompt_status.prompt = ssg::PromptViewState{
                 ssg::PromptKind::path,
                 "Open a workspace path",
@@ -161,16 +93,16 @@ public:
             {{{ssg::KeyStroke{"KeyA", false, false, false, false}},
               "select.add_cursor_down", "editor"}}};
         ssg::TabViewState tabs;
-        if (tab_open_) {
+        if (state_.tab_open) {
             tabs.tabs.push_back({ssg::TabId{1},
-                                 tab_kind_,
+                                 state_.tab_kind,
                                  std::nullopt,
                                  std::nullopt,
                                  "fixture",
-                                 label_,
-                                 mode_,
-                                 dirty_,
-                                 recovery_});
+                                 state_.label,
+                                 state_.mode,
+                                 state_.dirty,
+                                 state_.recovery});
             tabs.active = ssg::TabId{1};
         }
 
@@ -194,7 +126,7 @@ public:
         shell.footer = ssg::Rect{0, 23, 80, 1};
         shell.tab_bar = ssg::Rect{18, 1, 62, 1};
         shell.panel = ssg::Rect{0, 1, 18, 22};
-        shell.prompt = prompt_open_
+        shell.prompt = state_.prompt_open
                            ? std::optional<ssg::Rect>{ssg::Rect{18, 2, 61, 1}}
                            : std::nullopt;
         shell.panes.push_back(
@@ -218,7 +150,7 @@ public:
              "Editor scrollbar", shell.panes.front().scrollbar,
              ssg::SemanticRole::scrollbar_thumb},
         };
-        if (prompt_open_) {
+        if (state_.prompt_open) {
             shell.accessibility_nodes.push_back(
                 {ssg::ShellNodeKind::prompt_reservation, "prompt",
                  "Open a workspace path", *shell.prompt,
@@ -226,15 +158,16 @@ public:
         }
         shell.accessibility_nodes.push_back(
             {ssg::ShellNodeKind::footer_field, "wrap",
-             word_wrap_ ? "Word wrap on" : "Word wrap off", *shell.footer,
-             ssg::SemanticRole::footer});
+             state_.word_wrap ? "Word wrap on" : "Word wrap off",
+             *shell.footer, ssg::SemanticRole::footer});
 
         return {
-            {revision, text_, ssg::ByteOffset{text_.size()}},
-            {ssg::SelectionSet{std::move(selections)}, first_row_, std::nullopt},
-            {!undo_text_.empty(), !redo_text_.empty(),
-             undo_text_.size() + redo_text_.size()},
-            {{clipboard_}, clipboard_, std::nullopt, std::nullopt},
+            {revision, state_.text, ssg::ByteOffset{state_.text.size()}},
+            {ssg::SelectionSet{std::move(selections)}, state_.first_row,
+             std::nullopt},
+            {!state_.undo_text.empty(), !state_.redo_text.empty(),
+             state_.undo_text.size() + state_.redo_text.size()},
+            {{state_.clipboard}, state_.clipboard, std::nullopt, std::nullopt},
             std::move(prompt_status),
             {revision, false, {}, ssg::SearchMode::file, {}, std::nullopt, 0,
              false},
@@ -246,11 +179,12 @@ public:
             std::move(tabs),
             {revision, {}},
             {revision, {}},
-            {follow_generation_, follow_mode_, ssg::PaneId{1}, std::nullopt, {},
-             {}},
+            {state_.follow_generation, state_.follow_mode, ssg::PaneId{1},
+             std::nullopt, {}, {}},
             {ssg::TreeRevision{revision.value()}, {}},
             ssg::plain_text_syntax_view_state(revision,
-                                              ssg::LanguageId{"plain"}, text_, 4),
+                                              ssg::LanguageId{"plain"},
+                                              state_.text, 4),
             {revision, {}},
             {revision, {}, std::nullopt, {}, {}},
             std::move(theme),
@@ -262,11 +196,11 @@ public:
         std::lock_guard lock{mutex_};
         return {
             ssg::ViewportDimensions{80, 20},
-            first_row_,
+            state_.first_row,
             100,
             {},
             {{0, 0, 0, ssg::CellIndex{0}, 0, 1}},
-            {100, 20, first_row_, 80, first_row_, 4},
+            {100, 20, state_.first_row, 80, state_.first_row, 4},
         };
     }
 
@@ -276,22 +210,7 @@ public:
 
 private:
     mutable std::mutex mutex_;
-    std::string text_{"alpha"};
-    std::string undo_text_;
-    std::string redo_text_;
-    std::string clipboard_;
-    std::string label_{"fixture.txt"};
-    std::size_t selection_count_{1};
-    std::uint32_t first_row_{0};
-    std::uint64_t follow_generation_{0};
-    ssg::FollowMode follow_mode_{ssg::FollowMode::following};
-    ssg::DocumentMode mode_{ssg::DocumentMode::edit};
-    ssg::TabKind tab_kind_{ssg::TabKind::document};
-    ssg::TabRecoveryBadge recovery_{ssg::TabRecoveryBadge::none};
-    bool dirty_{false};
-    bool tab_open_{true};
-    bool word_wrap_{false};
-    bool prompt_open_{true};
+    e2e::FixtureState state_;
 };
 
 struct Scenario {
@@ -372,34 +291,13 @@ void dispatch_workflow(Scenario& scenario) {
     auto const principal = local_principal();
     auto attached = scenario.session->attach(principal, ssg::ViewId{21});
     if (!attached.accepted()) throw std::runtime_error{attached.message};
-    auto dispatch = [&](std::string id, std::any payload = {}) {
+    for (auto const& step : e2e::load_workflow(SSG_E2E_WORKFLOW_PATH)) {
+        if (!step.expected_accepted) continue;
         auto result = scenario.session->dispatch(
             principal.client_id(),
-            {std::move(id), scenario.session->revision(), std::move(payload)});
+            {step.command_id, scenario.session->revision(), step.payload});
         if (!result.accepted()) throw std::runtime_error{result.message};
-    };
-    dispatch("text.insert", ssg::TextInputArguments{"!"});
-    dispatch("select.add_cursor_down");
-    dispatch("clipboard.copy");
-    dispatch("clipboard.cut");
-    dispatch("clipboard.paste");
-    dispatch("edit.undo");
-    dispatch("edit.redo");
-    dispatch("view.toggle_word_wrap");
-    dispatch("view.scroll_lines", ssg::ScrollLinesArguments{1});
-    dispatch("view.scroll_to_fraction", ssg::ScrollFractionArguments{1, 2});
-    dispatch("file.save");
-    dispatch("text.insert", ssg::TextInputArguments{" dirty"});
-    dispatch("tab.close");
-    dispatch("tab.reopen_closed");
-    dispatch("file.reload");
-    dispatch("external.open_diff");
-    dispatch("follow_edits.pause");
-    dispatch("follow_edits.resume");
-    dispatch("prompt.submit");
-    dispatch("file.open_dropped_content",
-             ssg::DroppedContentArguments{{'d', 'r', 'o', 'p', 'p', 'e', 'd'},
-                                          "drop.txt"});
+    }
 }
 
 void print_delta_oracle() {
@@ -422,6 +320,20 @@ void print_delta_oracle() {
     std::cout << "BEFORE " << hex(ssg::encode_session_snapshot(before)) << '\n'
               << "DELTA " << hex(ssg::encode_session_delta(delta)) << '\n'
               << "AFTER " << hex(ssg::encode_session_snapshot(after)) << '\n';
+}
+
+void print_per_step_oracle() {
+    Scenario scenario;
+    auto const principal = local_principal();
+    auto attached = scenario.session->attach(principal, ssg::ViewId{21});
+    if (!attached.accepted()) throw std::runtime_error{attached.message};
+    for (auto const& step : e2e::load_workflow(SSG_E2E_WORKFLOW_PATH)) {
+        (void)scenario.session->dispatch(
+            principal.client_id(),
+            {step.command_id, scenario.session->revision(), step.payload});
+        auto snapshot = scenario.snapshot(principal, ssg::ViewId{21});
+        std::cout << hex(ssg::encode_session_snapshot(snapshot)) << '\n';
+    }
 }
 
 void print_workflow_oracle() {
@@ -459,6 +371,10 @@ int main(int argc, char** argv) {
             print_delta_oracle();
             return 0;
         }
+        if (argc == 2 && std::string_view{argv[1]} == "--per-step-oracle") {
+            print_per_step_oracle();
+            return 0;
+        }
         if (argc == 2 && std::string_view{argv[1]} == "--workflow-oracle") {
             print_workflow_oracle();
             return 0;
@@ -468,7 +384,7 @@ int main(int argc, char** argv) {
             return 0;
         }
         std::cerr << "usage: browser_client_fixture "
-                     "(--delta-oracle|--workflow-oracle|--serve PORT)\n";
+                     "(--delta-oracle|--per-step-oracle|--workflow-oracle|--serve PORT)\n";
         return 2;
     } catch (std::exception const& error) {
         std::cerr << error.what() << '\n';

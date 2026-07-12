@@ -4,6 +4,12 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         add_executable(browser_client_fixture
             ${SSG_SOURCE_DIR}/tests/browser/client/fixture.cpp
         )
+        target_include_directories(browser_client_fixture PRIVATE
+            ${SSG_SOURCE_DIR}/tests
+        )
+        target_compile_definitions(browser_client_fixture PRIVATE
+            SSG_E2E_WORKFLOW_PATH="${SSG_SOURCE_DIR}/tests/fixtures/end_to_end/mandatory-workflow.tsv"
+        )
         target_link_libraries(browser_client_fixture PRIVATE ssg_http_server)
 
         add_test(

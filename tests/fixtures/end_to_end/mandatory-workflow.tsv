@@ -1,8 +1,11 @@
+# Client-neutral mandatory workflow for Gate 12 end-to-end parity.
+# Consumed by direct API, loopback WebSocket, TUI, and browser paths.
+# Each path must reach identical EndToEndCanonicalState after every step.
 # command_id	argument_kind	argument	expected
 workspace.open_directory	none		accepted
 file.open	none		accepted
 text.insert	text	!	accepted
-select.add_cursor_down	none		accepted
+select.add_cursor_down	select_default		accepted
 clipboard.copy	none		accepted
 clipboard.cut	none		accepted
 clipboard.paste	none		accepted
