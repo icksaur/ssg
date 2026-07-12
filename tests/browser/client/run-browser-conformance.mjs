@@ -202,9 +202,24 @@ async function runSelfReportingBrowser(browser, executable, url, reportPromise) 
     ? ["--headless=new", "--no-first-run", "--disable-gpu",
       `--user-data-dir=${temporary}`, url]
     : [url];
-  const child = spawn(executable, args, {stdio: ["ignore", "pipe", "pipe"]});
+  const env = browser === "webkit"
+    ? {...process.env, GDK_BACKEND: "x11"}
+    : process.env;
+  const child = spawn(executable, args, {
+    stdio: ["ignore", "pipe", "pipe"],
+    env,
+  });
+  let diagnostics = "";
+  child.stdout.on("data", (chunk) => { diagnostics += chunk; });
+  child.stderr.on("data", (chunk) => { diagnostics += chunk; });
   try {
-    await reportPromise;
+    await Promise.race([
+      reportPromise,
+      new Promise((resolve) => child.once("exit", resolve)).then(() => {
+        throw new Error(
+          `${browser} exited before reporting\n${diagnostics.trim()}`);
+      }),
+    ]);
   } finally {
     child.kill("SIGTERM");
     await waitForExit(child);
