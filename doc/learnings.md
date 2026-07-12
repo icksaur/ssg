@@ -69,6 +69,9 @@ then remove or shorten the redundant entry here.
 - Adding normative feature command IDs requires updating both
   `data/required-commands.json` and the independently maintained expected IDs,
   owners, category counts, and total count in `tests/test_required_commands.cpp`.
+- The feature-spec union oracle treats backticked dotted tokens as command IDs.
+  Write dotted filenames without backticks so they do not become false catalog
+  entries.
 
 ## scratch-journal-format
 
