@@ -147,6 +147,22 @@ Normative commands owned by this feature:
 
 Commands requiring a path use the non-modal `PromptSurface` contract. `file.open_dropped_content` is an ingress-only, Lua-excluded command available only when authenticated host policy grants its `InvocationPrincipal` the `local_file_drop` capability. It applies the normal decode/binary pipeline and opens bytes as untitled documents with bounded sanitized display labels. Labels gain no path authority. Remote and locality-unknown clients cannot invoke it. Encoding, BOM, and line-ending behavior follows `doc/spec.md`.
 
+The file-command component exports one immutable `FileCommandsCommandSet`.
+Common command dispatch enforces required capabilities and Lua exclusion; the
+dropped-content handler also validates the principal so direct typed use cannot
+bypass the ingress contract. `file.open_recent` uses a workspace-owned,
+process-memory MRU list of at most 32 normalized workspace-relative paths;
+successful open and save add an entry, duplicates move to the front, and
+missing entries are removed when selected. Later session persistence may
+serialize this typed state. `file.save_all` attempts every dirty saved document,
+reports all failures, and retains dirty state only for failed saves.
+
+Every workspace-relative path is rejected before mutation when it is absolute,
+contains traversal, or resolves through a symlink outside the canonical CWD.
+Duplicate editable-document detection uses normalized workspace-relative path
+identity rather than inode identity. An untitled document retains its generated
+`UntitledDocumentId` and dirty state until atomic replacement succeeds.
+
 The encoding/EOL component is a pure library seam. It does not read settings,
 documents, tabs, or files. Callers pass the selected encoding and output policy
 explicitly. Automatic detection recognizes valid UTF-8, UTF-8 BOM, and
@@ -220,6 +236,7 @@ I4, I5, I9, I10, I16, I19, I21 from `doc/spec.md`.
 | 2c | Compose scratch recovery with checkpoint scheduling, compaction, quota, and durability status | `include/ssg/scratch.h`, `src/scratch.cpp`, `tests/test_scratch.cpp` | compaction/quota/durability-lag fixtures | I10, I19, I21 |
 | 3 | Implement bounded compensating records and restoration primitives for close, reload, overwrite, rename, delete, and workspace replacement | `include/ssg/recovery.h`, `src/recovery.cpp`, `tests/test_recovery.cpp`, `cmake/components/recovery-actions.cmake` | canonical document/filesystem ground truth after major-action plus compensation, with injected failures proving record-before-mutation ordering, failure atomicity, restoration retry, and oldest-first count/byte bounds | I5, I19 |
 | 4 | Implement directory lifecycle and external-modification status actions | `include/ssg/workspace.h`, `src/workspace.cpp`, `tests/test_workspace.cpp` | filesystem ground truth and fault injection | I9, I16, I21 |
+| 4a | Implement directory lifecycle, untitled and saved-document identity, path prompts, the immutable file command set, and new/open/recent/save/save-all/save-as/reload/rename/delete/new-directory/drop handlers | `include/ssg/workspace.h`, `include/ssg/file_commands.h`, `src/workspace.cpp`, `src/file_commands.cpp`, `tests/test_workspace.cpp`, `tests/test_file_commands.cpp`, `cmake/components/file-commands.cmake` | temporary-directory truth; byte-exact save and decode round trips; normalized-path duplicate prevention; successful and failed untitled identity transitions; bounded recent MRU; absolute/traversal/symlink escape rejection before mutation; best-effort save-all; compensating-command scripts; authenticated local-drop acceptance and Lua/remote/unknown/client-asserted-locality rejection without allocation | I5, I9, I16, I19, I21 |
 
 ## Rationale (optional, skippable)
 
