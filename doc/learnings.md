@@ -64,6 +64,12 @@ then remove or shorten the redundant entry here.
 - A feature command set enumerates every command ID normatively owned by that
   feature even when downstream session assembly binds handlers or presentation.
 
+## required-command-catalog
+
+- Adding normative feature command IDs requires updating both
+  `data/required-commands.json` and the independently maintained expected IDs,
+  owners, category counts, and total count in `tests/test_required_commands.cpp`.
+
 ## scratch-journal-format
 
 - Journal append assumes its parent directory already exists. The scratch
