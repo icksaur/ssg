@@ -91,6 +91,17 @@ that the following document-transaction task uses against this storage.
 | 5 | Implement clipboard request/response transforms | `include/ssg/clipboard.h`, `src/clipboard.cpp`, `tests/test_clipboard.cpp` | hand cases and stale/denied fault tests | I16, I18 |
 | 6 | Implement coalesced bounded per-file undo/redo with selection restoration | `include/ssg/history.h`, `src/history.cpp`, `tests/test_history.cpp` | timed coalescing and forward/undo/redo round trips | I5 |
 
+**Edit/history integration contract (Plan 7 scope).** The integration seam maps
+`text.insert` to `HistoryEditKind::typing`; `text.delete_backward` and
+`text.delete_word_backward` to `HistoryEditKind::delete_backward`;
+`text.delete_forward` and `text.delete_word_forward` to
+`HistoryEditKind::delete_forward`; and `text.newline` plus every mutating
+`edit.*` command to `HistoryEditKind::other`. Word deletion therefore
+coalesces with adjacent same-direction character deletion when the history
+shape and time-window rules permit. Clipboard cut/paste and find-replace
+already apply `HistoryEditKind::other`; Plan 7 verifies those boundaries rather
+than adding a second routing path.
+
 **Clipboard contract (Plan 5 scope).** One move-only `ClipboardRegister` owns
 the structured internal register and outstanding best-effort system requests.
 It exports the immutable `clipboard.copy`, `clipboard.cut`, and
