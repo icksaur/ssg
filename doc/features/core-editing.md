@@ -50,6 +50,33 @@ I3, I4, I5, I13, I16, I18, I19 from `doc/spec.md`.
 | 2 | Implement the private balanced piece-tree storage | `src/piece_tree.h`, `src/piece_tree.cpp`, `tests/test_piece_tree.cpp`, `cmake/components/piece-tree.cmake` | randomized insert, erase, read, and line queries against a direct `std::string` model, plus structural invariants | I4 |
 | 3 | Implement document transactions and document modes over private storage | `include/ssg/document.h`, `src/document.cpp`, `tests/test_document.cpp` | reference-editor snapshots; read-only failures | I3, I5, I13 |
 
+**Document transaction contract (Plan 3 scope).** `Document` is a move-only
+owning value whose mode is fixed at construction. It accepts only well-formed
+UTF-8 text without NUL; file decoding and binary/read-only fallback happen
+before construction in the encoding and file-lifecycle layers. A transaction
+carries its observed document revision and one or more replacements expressed
+as pre-transaction byte offset, erased byte length, and inserted UTF-8 text.
+Ranges and both endpoints must be valid UTF-8 boundaries. Ranges must be
+distinct and non-overlapping; accepted edits are applied from highest to lowest
+offset.
+
+The typed transaction result distinguishes stale revision, read-only mode,
+diff mode, empty transaction, invalid range, overlap, invalid UTF-8, UTF-8
+boundary split, and revision exhaustion. Rejection changes neither text,
+revision, nor dirty state. Every accepted transaction advances the document
+revision exactly once and marks the document dirty. Documents begin at
+revision 1 and clean. Dirty clearing is deferred to save/file-lifecycle
+integration. Undo/redo storage and coalescing remain Plan 6; Plan 3 supplies
+one atomic revision boundary per accepted transaction.
+
+The canonical owning `DocumentSnapshot` contains text, revision, mode, and
+dirty state. Reference-editor comparison maps each replacement to an
+independent selection replacement and applies replacements highest-offset
+first; reference snapshots validate text while hand-authored properties
+validate revision, mode, dirty state, snapshot ownership, and every rejection.
+The component manifest is
+`cmake/components/document-transactions.cmake`.
+
 **Reference editor primitives (Plan 1 scope).** The reference editor is a minimal `std::string`-based implementation that covers: text mutations (`text.insert`, `text.newline`, `text.delete_backward`, `text.delete_forward`, `text.delete_word_backward`, `text.delete_word_forward`); cursor movement (`cursor.set_position`, `cursor.left`, `cursor.right`, `cursor.word_left`, `cursor.word_right`, `cursor.line_up`, `cursor.line_down`, `cursor.line_start`, `cursor.line_end`, `cursor.document_start`, `cursor.document_end`); selection (`select.set_range`, `select.add_range`, `select.left`, `select.right`, `select.word_left`, `select.word_right`, `select.line_up`, `select.line_down`, `select.line_start`, `select.line_end`, `select.document_start`, `select.document_end`, `select.all`, `select.add_next_occurrence`, `select.add_cursor_up`, `select.add_cursor_down`, `select.split_into_lines`); clipboard (`clipboard.copy`, `clipboard.cut`, `clipboard.paste`); history (`edit.undo`, `edit.redo`); and edit transforms (`edit.indent`, `edit.outdent`, `edit.duplicate_line`, `edit.move_line_up`, `edit.move_line_down`, `edit.delete_line`, `edit.join_lines`, `edit.uppercase`, `edit.lowercase`, `edit.swap_case`, `edit.sort_lines`, `edit.transpose`, `edit.toggle_comment`). Page and scroll commands and `select.to_matching_bracket` are deferred to later tasks that own viewport and bracket state. The reference editor may use `include/ssg/types.h` and `include/ssg/config.h` (foundation domain value types, not editing code) but must reimplement all mutation, selection, and history algorithms independently; using any SSG editing, selection, or history implementation would defeat the oracle purpose of I13.
 The piece tree stores byte and newline summaries in this task. Display metadata
 depends on the separately scheduled Unicode cell-layout work and is added by
