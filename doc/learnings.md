@@ -235,3 +235,10 @@ then remove or shorten the redundant entry here.
 - Non-mutating asynchronous clipboard-write responses match request identity,
   not the current document revision. Later edits must not suppress denied or
   unavailable status for an earlier clipboard request.
+
+## browser-input-conformance
+
+- A mandatory browser gate explicitly requires every target engine. Running only
+  discovered runtimes can silently pass an incomplete conformance matrix.
+- Probe Firefox's BiDi TCP endpoint before opening one WebSocket. Repeated
+  pre-start WebSocket attempts can consume the single automation session.
