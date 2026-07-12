@@ -624,6 +624,7 @@ struct LspSyncClient::Impl {
     std::map<std::string, DocumentState> documents;
     std::set<std::uint64_t> pending;
     std::set<std::uint64_t> cancelled;
+    std::vector<LspCompletedResponse> completed;
     std::uint64_t next_id = 1;
     std::uint64_t initialize_id = 0;
     std::uint64_t shutdown_id = 0;
@@ -793,7 +794,7 @@ struct LspSyncClient::Impl {
         return {};
     }
 
-    LspSyncResult process(const Json& message) {
+    LspSyncResult process(const Json& message, std::string_view payload_json) {
         if (message.kind != Json::Kind::object) {
             return fail_malformed("LSP message must be an object");
         }
@@ -824,6 +825,8 @@ struct LspSyncClient::Impl {
         const auto request_id = static_cast<std::uint64_t>(*number);
         if (cancelled.erase(request_id) != 0) {
             pending.erase(request_id);
+            completed.push_back(
+                {request_id, LspCompletedResponseStatus::cancelled, {}, {}});
             return {};
         }
         if (pending.erase(request_id) == 0) {
@@ -831,7 +834,14 @@ struct LspSyncClient::Impl {
         }
         if (message.member("error")) {
             if (request_id == initialize_id) lifecycle = LspLifecycleState::failed;
-            return {LspSyncError::server_error, "LSP server returned an error"};
+            if (request_id == initialize_id || request_id == shutdown_id) {
+                return {LspSyncError::server_error,
+                        "LSP server returned an error"};
+            }
+            completed.push_back(
+                {request_id, LspCompletedResponseStatus::server_error,
+                 std::string{payload_json}, "LSP server returned an error"});
+            return {};
         }
         if (!message.member("result")) {
             return fail_malformed("LSP response has neither result nor error");
@@ -855,6 +865,10 @@ struct LspSyncClient::Impl {
                 return exited;
             }
             lifecycle = LspLifecycleState::stopped;
+        } else {
+            completed.push_back(
+                {request_id, LspCompletedResponseStatus::result,
+                 std::string{payload_json}, {}});
         }
         return {};
     }
@@ -918,7 +932,7 @@ LspSyncResult LspSyncClient::poll() {
     if (!framed.accepted()) {
         return impl_->fail_malformed(framed.message);
     }
-    std::vector<Json> messages;
+    std::vector<std::pair<Json, std::string>> messages;
     messages.reserve(framed.messages.size());
     for (const auto& payload : framed.messages) {
         auto parsed =
@@ -926,11 +940,11 @@ LspSyncResult LspSyncClient::poll() {
         if (!parsed) {
             return impl_->fail_malformed("LSP payload is malformed JSON");
         }
-        messages.push_back(std::move(*parsed));
+        messages.emplace_back(std::move(*parsed), payload);
     }
     LspSyncResult first_error;
-    for (const auto& message : messages) {
-        auto result = impl_->process(message);
+    for (const auto& [message, payload] : messages) {
+        auto result = impl_->process(message, payload);
         if (impl_->lifecycle == LspLifecycleState::failed) {
             return result;
         }
@@ -1041,6 +1055,14 @@ std::optional<std::int64_t> LspSyncClient::document_version(
                : std::optional<std::int64_t>{found->second.version};
 }
 
+std::optional<LspDocumentSnapshot> LspSyncClient::document_snapshot(
+    std::string_view uri) const {
+    const auto found = impl_->documents.find(std::string{uri});
+    if (found == impl_->documents.end()) return std::nullopt;
+    return LspDocumentSnapshot{found->first, found->second.revision,
+                               found->second.version, found->second.text};
+}
+
 LspRequestResult LspSyncClient::request(std::string method,
                                         std::string params_json) {
     if (impl_->lifecycle != LspLifecycleState::ready) {
@@ -1077,6 +1099,12 @@ LspSyncResult LspSyncClient::cancel(std::uint64_t request_id) {
     if (!sent.accepted()) return sent;
     impl_->cancelled.insert(request_id);
     return {};
+}
+
+std::vector<LspCompletedResponse> LspSyncClient::take_completed_responses() {
+    auto completed = std::move(impl_->completed);
+    impl_->completed.clear();
+    return completed;
 }
 
 LspLifecycleState LspSyncClient::state() const noexcept {

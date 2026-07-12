@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":2,"result":{"isIncomplete":false,"items":[{"label":"beta","sortText":"20","insertText":"beta"},{"label":"alpha","sortText":"10","detail":"first","textEdit":{"range":{"start":{"line":0,"character":1},"end":{"line":0,"character":3}},"newText":"alpha"}}]}}
