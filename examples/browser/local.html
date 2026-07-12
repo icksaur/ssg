@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SSG local-capability browser client</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <main id="ssg" aria-live="polite"></main>
+  <script>
+    const query = new URLSearchParams(location.search);
+    if (!query.has("credential")) query.set("credential", "local");
+    history.replaceState(null, "", `${location.pathname}?${query}`);
+  </script>
+  <script type="module" src="./app.mjs"></script>
+</body>
+</html>
