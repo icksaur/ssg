@@ -129,9 +129,27 @@ then remove or shorten the redundant entry here.
   scroll saturation, then clamp through the same viewport construction path to
   avoid overflow and divergent bounds behavior.
 
+## shell-layout
+
+- Priority-based field collapse must retain a prefix of collapse ranks.
+  Skipping an oversized field and admitting lower-priority fields inverts the
+  contract.
+- Reserve footer action rectangles before status-field collapse so accessible
+  child nodes cannot overlap.
+- Distraction-free rendering suppresses chrome without mutating retained pane
+  or panel focus state.
+
 ## document-transactions
 
 - Apply validated multi-edit transactions from highest to lowest byte offset to
   preserve pre-transaction coordinates without rebasing later edits.
 - Validate replacement UTF-8 and every erase-range endpoint boundary before any
   piece-tree mutation so invalid transactions remain failure-atomic.
+
+## session-state
+
+- Test assertion macros bind operands by const reference. Store members of
+  temporary snapshots or optionals in locals before asserting to avoid dangling
+  references detected by sanitizers.
+- Session command handlers run while the serialization mutex is held. They use
+  `CommandContext` and must not re-enter `EditorSession`.
