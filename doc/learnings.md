@@ -264,3 +264,12 @@ then remove or shorten the redundant entry here.
 - Word deletion uses the same directional history kind as character deletion,
   allowing adjacent same-direction operations to coalesce when history shape
   and timing rules permit.
+
+## lua-command-host
+
+- Lua's base library exposes `dofile`, `loadfile`, and raw output even when
+  `io` and `package` are unopened. Sandboxed states remove them explicitly.
+- Lua C API errors use `longjmp`; fallible API calls must not run while
+  non-trivial C++ locals are live.
+- Nested Lua calls share one state hook. Save and restore budget state and stack
+  depth so an inner call cannot disable the outer call's limits.
