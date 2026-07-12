@@ -33,21 +33,23 @@ I3, I4, I5, I13, I16, I18, I19 from `doc/spec.md`.
 ## Risks and Mitigations
 
 - Piece-tree and multi-cursor bugs: compare randomized scripts with the independent reference editor.
-- Missing ordinary commands: author the normative list above before `data/required-commands.json` and require exact transcription.
+- Missing ordinary commands: author the normative list above; `required-command-catalog` independently transcribes it into `data/required-commands.json` and verifies exactness.
 
 ## Acceptance (Definition of Done)
 
 - Observable: all listed commands work through the in-process API, and read-only/diff tabs never mutate.
 - Budgets: document edit budgets from `doc/spec.md`.
 - Gates: project build, unit tests, and sanitizers are green.
-- Oracles: hand cases establish the reference editor; randomized command scripts compare snapshots; clipboard stale-response and denied-system/fallback cases prove atomicity; required-command fixture equals the normative list.
+- Oracles: hand cases establish the reference editor; randomized command scripts compare snapshots; clipboard stale-response and denied-system/fallback cases prove atomicity.
 
 ## Plan
 
 | # | Step | Files | Oracle | Invariants |
 |---|------|-------|--------|------------|
-| 1 | Establish the reference editor and required-command fixture | `tests/reference_editor.*`, `tests/test_reference_editor.cpp`, `data/required-commands.json` | hand-computed command scripts; exact normative-list comparison | I13 |
+| 1 | Establish the reference editor | `tests/reference_editor.h`, `tests/reference_editor.cpp`, `tests/test_reference_editor.cpp`, `cmake/components/reference-editor.cmake` | hand-computed mutation, selection, clipboard-transform, and history command scripts covering the primitives listed below | I13 |
 | 2 | Implement piece-tree transactions and document modes | `include/ssg/document.h`, `src/document.cpp`, `tests/test_document.cpp`, `tests/test_piece_tree.cpp` | reference snapshots; read-only failures | I3, I5 |
+
+**Reference editor primitives (Plan 1 scope).** The reference editor is a minimal `std::string`-based implementation that covers: text mutations (`text.insert`, `text.newline`, `text.delete_backward`, `text.delete_forward`, `text.delete_word_backward`, `text.delete_word_forward`); cursor movement (`cursor.set_position`, `cursor.left`, `cursor.right`, `cursor.word_left`, `cursor.word_right`, `cursor.line_up`, `cursor.line_down`, `cursor.line_start`, `cursor.line_end`, `cursor.document_start`, `cursor.document_end`); selection (`select.set_range`, `select.add_range`, `select.left`, `select.right`, `select.word_left`, `select.word_right`, `select.line_up`, `select.line_down`, `select.line_start`, `select.line_end`, `select.document_start`, `select.document_end`, `select.all`, `select.add_next_occurrence`, `select.add_cursor_up`, `select.add_cursor_down`, `select.split_into_lines`); clipboard (`clipboard.copy`, `clipboard.cut`, `clipboard.paste`); history (`edit.undo`, `edit.redo`); and edit transforms (`edit.indent`, `edit.outdent`, `edit.duplicate_line`, `edit.move_line_up`, `edit.move_line_down`, `edit.delete_line`, `edit.join_lines`, `edit.uppercase`, `edit.lowercase`, `edit.swap_case`, `edit.sort_lines`, `edit.transpose`, `edit.toggle_comment`). Page and scroll commands and `select.to_matching_bracket` are deferred to later tasks that own viewport and bracket state. The reference editor may use `include/ssg/types.h` and `include/ssg/config.h` (foundation domain value types, not editing code) but must reimplement all mutation, selection, and history algorithms independently; using any SSG editing, selection, or history implementation would defeat the oracle purpose of I13.
 | 3 | Implement movement, caret reveal, selections, multi-cursor creation, typing, indentation, lines, comments, brackets, and transforms | `include/ssg/selection.h`, `src/selection.cpp`, `tests/test_selection.cpp` | reference command scripts and viewport intersection properties | I5, I13, I23 |
 | 4 | Implement clipboard request/response transforms | `include/ssg/clipboard.h`, `src/clipboard.cpp`, `tests/test_clipboard.cpp` | hand cases and stale/denied fault tests | I16, I18 |
 | 5 | Implement coalesced bounded per-file undo/redo with selection restoration | `include/ssg/history.h`, `src/history.cpp`, `tests/test_history.cpp` | timed coalescing and forward/undo/redo round trips | I5 |
