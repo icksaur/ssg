@@ -334,3 +334,9 @@ then remove or shorten the redundant entry here.
   types; the runtime value's sign is insufficient to select an encoding.
 - Selection-navigation commands include typed nullable position and selection
   payloads even when logically argument-free.
+
+## tui-client
+
+- `EditorSession` exposes dispatch but no snapshot accessor. In-process clients
+  require a host-provided snapshot assembler, and `EditorSessionBuilder`
+  requires handlers for the complete P0 command catalog.
