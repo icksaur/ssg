@@ -16,13 +16,17 @@ worktree resolves to the isolated HTTP worktree.
 ## Files
 
 The paired HTTP worktree's `http.h`, `http.cpp`, `src/platform/`, and
-`tests/test_http.cpp`; SSG records the parent's merged HTTP commit in
-`tasks/dependencies/http.commit`.
+`tests/test_http.cpp`. The child does not create
+`tasks/dependencies/http.commit`; after integration, the parent records the
+merged HTTP commit on SSG `master`.
 
 ## Oracle
 
-Identical Linux/Windows partial-write, deadline, close, frame, and connection
-lifecycle scripts.
+The platform-independent complete-write script injects partial, timeout,
+closed, and error attempts deterministically. Identical native loopback frame
+and connection-lifecycle scripts run on Linux and Windows. The child runs Linux
+runtime gates and a source/build check with an already-installed Windows
+cross-compiler when available; native Windows CI is authoritative.
 
 ## Done
 
