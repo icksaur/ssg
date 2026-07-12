@@ -56,7 +56,26 @@ LSP initialization and adds no mandatory LSP runtime dependency. Slow, hung,
 cancelled, or malformed servers cannot block the session indefinitely or
 publish partial state.
 
-Find is incremental and highlights all current-document matches with active match/count. Regex, literal, case, whole-word, and selection-limited options are typed search state. Replace-current and replace-all are atomic document transactions and one undo unit. Workspace search streams revision-tagged results into a search-results tab. Workspace replace always produces a reviewable preview; apply is one validated workspace edit with a recovery record. Zero-width regex matches must advance by one Unicode scalar to terminate.
+Find is incremental and highlights all current-document matches with active
+match/count. Regex, literal, case, whole-word, and selection-limited options are
+typed search state. The find-replace component receives caller-owned
+current-document/selection values and a caller-owned workspace target; it does
+not reach into session, filesystem, or search-palette internals. Replace-current
+and replace-all are atomic document transactions and one undo unit. Workspace
+search streams revision-tagged results into a search-results tab. Workspace
+replace uses a distinct typed preview model and always produces a reviewable
+preview; apply is one validated workspace edit whose caller-owned target writes
+a typed recovery record through an injected recovery sink as part of the atomic
+apply contract. Recovery replays that record through the same target seam.
+Regex uses a pinned deterministic matcher with an explicit work budget and
+cancellation check; exhaustion is a typed error, never an unbounded
+session-executor operation. Zero-width regex matches advance by one Unicode
+scalar to terminate.
+
+Find-replace exports one immutable `FindReplaceCommandSet` for its normative
+commands and typed `FindReplaceViewState`/`FindReplaceDelta` derive/replay
+values. It owns `find_replace.*` and does not edit `search.*`, aggregate session
+state, or protocol codecs.
 
 ## Invariants
 
@@ -92,7 +111,7 @@ I3, I5, I10, I12, I16, I20 from `doc/spec.md`.
 
 | # | Step | Files | Oracle | Invariants |
 |---|------|-------|--------|------------|
-| 1 | Implement palette, goto, current-file find/replace, and cancellable workspace search/replace | `include/ssg/search.h`, `src/search.cpp`, `tests/test_search.cpp` | independent matcher, ranking/query goldens, cancellation/stale batches, navigation transition/caret-reveal tables, zero-width termination, and preview/apply/recovery round trips | I3, I5, I10, I12, I16, I23 |
+| 1 | Implement palette, goto, current-file find/replace, and cancellable workspace search/replace as file-disjoint search-palette and find-replace components | `include/ssg/search.h`, `src/search.cpp`, `tests/test_search.cpp`; `include/ssg/find_replace.h`, `src/find_replace.cpp`, `tests/test_find_replace.cpp` | independent matcher, ranking/query goldens, cancellation/stale batches, navigation transition/caret-reveal tables, bounded regex and zero-width termination, and preview/apply/recovery round trips | I3, I5, I10, I12, I16, I23 |
 | 2 | Implement optional incremental Tree-sitter syntax and typed syntax snapshot/delta seams | `include/ssg/syntax.h`, `src/syntax.cpp`, `tests/test_syntax.cpp` | injected deterministic parser full-vs-incremental snapshots, stale cancellation, and plain-text fallback | I10, I12 |
 | 3 | Implement capability-limited Lua command parity | `include/ssg/lua.h`, `src/lua.cpp`, `tests/test_lua.cpp` | manifest parity and timeout/capability faults | I20 |
 | 4a | Implement injected LSP framing, lifecycle, document synchronization, cancellation, and bounded/coalesced diagnostics | `include/ssg/lsp_sync.h`, `src/lsp_sync.cpp`, `tests/fake_lsp_server.*`, `tests/fixtures/lsp/sync/`, `tests/test_lsp_sync.cpp` | scripted fake server, independent UTF-8/UTF-16 fixtures, version/stale diagnostics, cancellation/timeouts, bounds, malformed messages, and nested-consumer optional-linkability | I10, I12 |

@@ -1,0 +1,14 @@
+target_sources(ssg PRIVATE
+    ${SSG_SOURCE_DIR}/src/find_replace.cpp
+)
+
+if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+    add_executable(test_find_replace
+        ${SSG_SOURCE_DIR}/tests/test_find_replace.cpp
+    )
+    target_include_directories(test_find_replace PRIVATE
+        ${SSG_SOURCE_DIR}/tests
+    )
+    target_link_libraries(test_find_replace PRIVATE ssg)
+    add_test(NAME test_find_replace COMMAND test_find_replace)
+endif()
