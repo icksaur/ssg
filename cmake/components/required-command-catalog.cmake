@@ -7,6 +7,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     )
     target_compile_definitions(test_required_commands PRIVATE
         SSG_REQUIRED_COMMANDS_PATH="${SSG_SOURCE_DIR}/data/required-commands.json"
+        SSG_FEATURE_DOCS_PATH="${SSG_SOURCE_DIR}/doc/features"
     )
     add_test(NAME test_required_commands COMMAND test_required_commands)
 endif()

@@ -6,8 +6,12 @@
 
 ## Scope
 
-Implement the generic stable-ID tree provider model and filesystem/Git/symbol
-provider deltas without filesystem watching.
+Implement the generic stable-ID tree provider model, explicit deterministic
+filesystem scans, caller-fed Git/symbol snapshots, expansion persistence, and
+bounded provider deltas without filesystem watching, repository access, or
+Tree-sitter parsing. Export immutable `TreeCommandSet`, `TreeViewState`, and
+`TreeDelta` values. This task owns `tree.toggle_expanded` and
+`tree.invoke_node_command`.
 
 ## Files
 
@@ -17,7 +21,8 @@ provider deltas without filesystem watching.
 ## Oracle
 
 Temporary-directory and hand-authored provider snapshots verify expansion,
-stable identity, commands, and delta replay.
+stable identity, deterministic filesystem/Git/symbol ordering, exact command
+ownership, and bounded delta replay against an independently derived full view.
 
 ## Done
 

@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstddef>
+#include <filesystem>
 #include <fstream>
 #include <map>
 #include <optional>
@@ -145,6 +146,8 @@ constexpr auto expected_commands = std::to_array<ExpectedCommand>({
     {"panel.focus", "shell-layout"},
     {"panel.next_provider", "shell-layout"},
     {"panel.previous_provider", "shell-layout"},
+    {"tree.toggle_expanded", "tree-providers"},
+    {"tree.invoke_node_command", "tree-providers"},
     {"view.toggle_distraction_free", "shell-layout"},
     {"prompt.submit", "prompt-status-surface"},
     {"prompt.cancel", "prompt-status-surface"},
@@ -200,12 +203,13 @@ constexpr auto expected_category_counts =
         {"palette", 5},    {"goto", 8},      {"find", 8},
         {"replace", 5},    {"search", 3},    {"completion", 5},
         {"hover", 2},      {"pane", 9},      {"panel", 4},
+        {"tree", 2},
         {"prompt", 2},     {"status", 4},    {"workspace", 1},
         {"file", 15},      {"tab", 9},       {"external", 3},
         {"settings", 6},   {"follow_edits", 2}, {"diff", 3},
     });
 
-static_assert(expected_commands.size() == 158);
+static_assert(expected_commands.size() == 160);
 
 std::optional<std::string> field(const std::string& object,
                                  const std::string& name) {
@@ -295,6 +299,33 @@ std::map<std::string, ExpectedCommand> expected_by_id() {
     return expected;
 }
 
+std::set<std::string> feature_spec_commands() {
+    const std::regex command_id{
+        R"(^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$)"};
+    const std::regex backticked{
+        R"(`([^`]+)`)"};
+    std::set<std::string> result;
+
+    for (const auto& entry :
+         std::filesystem::directory_iterator{SSG_FEATURE_DOCS_PATH}) {
+        if (entry.path().extension() != ".md") {
+            continue;
+        }
+        std::ifstream input{entry.path()};
+        const std::string document{std::istreambuf_iterator<char>{input},
+                                   std::istreambuf_iterator<char>{}};
+        for (auto match = std::sregex_iterator{document.begin(), document.end(),
+                                               backticked};
+             match != std::sregex_iterator{}; ++match) {
+            const auto token = (*match)[1].str();
+            if (std::regex_match(token, command_id) && !token.ends_with(".h")) {
+                result.insert(token);
+            }
+        }
+    }
+    return result;
+}
+
 TEST(catalog_exactly_matches_independent_id_and_owner_oracle) {
     const auto catalog = load_catalog();
     ASSERT_TRUE(catalog.has_value());
@@ -318,6 +349,20 @@ TEST(catalog_exactly_matches_independent_id_and_owner_oracle) {
         ASSERT_FALSE(command.owner.empty());
     }
     ASSERT_EQ(seen.size(), expected_commands.size());
+}
+
+TEST(feature_spec_command_union_exactly_matches_catalog) {
+    const auto catalog = load_catalog();
+    ASSERT_TRUE(catalog.has_value());
+    if (!catalog) {
+        return;
+    }
+
+    std::set<std::string> catalog_ids;
+    for (const auto& command : *catalog) {
+        catalog_ids.insert(command.id);
+    }
+    ASSERT_EQ(feature_spec_commands(), catalog_ids);
 }
 
 TEST(category_counts_are_independently_fixed) {
@@ -386,6 +431,7 @@ TEST(capability_and_surface_exclusions_are_exact) {
 
 int main() {
     RUN(catalog_exactly_matches_independent_id_and_owner_oracle);
+    RUN(feature_spec_command_union_exactly_matches_catalog);
     RUN(category_counts_are_independently_fixed);
     RUN(ids_are_exact_not_fuzzy_and_all_fields_are_owned);
     RUN(capability_and_surface_exclusions_are_exact);
