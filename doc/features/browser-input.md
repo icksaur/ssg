@@ -15,7 +15,17 @@ I6, I16, I17, I18, I20 from `doc/spec.md`.
 ## Considerations
 
 - IME submits committed UTF-8 text, never raw composition internals.
-- Browser-reserved chords cannot be required defaults.
+- Browser-reserved chords cannot be required defaults. The accepted denylist
+  lives at `tests/browser/fixtures/reserved-chords.json`.
+- The default keymap covers exactly the 159 catalog entries whose `keymap`
+  field is true. The capability-gated ingress command
+  `file.open_dropped_content` has no binding; coverage tests reject either a
+  missing eligible command or a binding for that excluded command.
+- Semantic input data reuses the existing text-input, selection, and viewport
+  command argument types. IME input is a validated committed UTF-8 value and
+  never exposes composition internals. Hit targets carry sufficient typed
+  metadata to reconstruct those semantic arguments without backend input
+  capture.
 - Mouse selection, wheel, and scrollbar gestures use the same semantic command path as keyboard navigation.
 - Locality is host-granted; browser code may not infer or self-assert it.
 
@@ -35,8 +45,8 @@ I6, I16, I17, I18, I20 from `doc/spec.md`.
 
 | # | Step | Files | Oracle | Invariants |
 |---|------|-------|--------|------------|
-| 1 | Accept required-command and browser-reserved fixtures | `data/required-commands.json`, `tests/browser/reserved-chords.json` | exact comparison with the union of all P0 normative lists, independently maintained category/count/owner data, exact capability and Lua/keymap/palette exclusions, and browser docs/capture | I6, I18, I20 |
-| 2 | Define keymap and hit-target API data | `include/ssg/input.h`, `data/default-keymap.json`, `tests/test_input.cpp` | fixture coverage and backend dependency scan | I16, I17 |
+| 1 | Accept required-command and browser-reserved fixtures | `data/required-commands.json`, `tests/browser/fixtures/reserved-chords.json` | exact comparison with the union of all P0 normative lists, independently maintained category/count/owner data, exact capability and Lua/keymap/palette exclusions, and browser docs/capture | I6, I18, I20 |
+| 2 | Define keymap and hit-target API data | `include/ssg/input.h`, `src/input.cpp`, `data/default-keymap.json`, `tests/test_input.cpp` | exact coverage of the 159 keymap-eligible commands, rejection of excluded/duplicate/unreachable/reserved bindings, committed UTF-8 and semantic hit-target round trips, and backend dependency scan | I16, I17 |
 | 3 | Implement browser input, IME, mouse, and clipboard adapters | `examples/browser/*`, `tests/browser/*` | real-browser capture and permission cases | I6, I18 |
 
 ## Rationale (optional, skippable)
