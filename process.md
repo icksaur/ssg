@@ -48,6 +48,9 @@ read.
    the default is four active implementers. Serialize sanitizer and
    resource-intensive browser matrices when host pressure would make failures
    ambiguous.
+   Do not install or use Wine for Windows validation. Task workers perform
+   source-level best-effort review and use an existing cross-compiler only when
+   already available; native Windows CI is the authoritative runtime gate.
 6. Use `caco_herd_state` to collect terminal child responses. Only responses
    matching the terminal envelope below are terminal.
 7. For `BLOCKED` or `UNCLEAR`, inspect the evidence, resolve the issue when

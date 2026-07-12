@@ -58,6 +58,9 @@ Read `doc/spec.md`, `doc/learnings.md`, `code-quality.md`,
   in-process API and WebSocket codec and compare canonical semantic state.
 - Add Linux and Windows tests for every platform adapter. Browser-facing input
   and clipboard contracts require Chromium, Firefox, and WebKit conformance.
+- Do not install or use Wine for Windows validation. Local task work performs
+  source-level best-effort checks and may use an already-installed
+  cross-compiler; native Windows CI is authoritative for Windows runtime parity.
 - Each test file is a standalone executable using `tests/test_helpers.h`; do not
   add a test framework.
 - Before review, run the configured build, `ctest --test-dir build
