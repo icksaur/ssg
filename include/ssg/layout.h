@@ -6,6 +6,10 @@
 // individual logical lines of UTF-8 text.  It implements:
 //   - UTF-8 decoding (each invalid byte yields one replacement span)
 //   - Extended grapheme cluster segmentation (UAX #29, Unicode 15.0.0)
+//     Rules: GB6–GB8 (Hangul), GB9 (Extend/ZWJ), GB9a (SpacingMark),
+//            GB9b (Prepend), GB11 (Extended_Pictographic ZWJ sequences),
+//            GB12/13 (Regional Indicator flag pairs).
+//     GB3–GB5 are subsumed by the no-CR/LF input precondition.
 //   - Terminal display-width mapping (UAX #11 EAW + emoji-data, Unicode 15.0.0)
 //
 // This module does NOT implement line wrapping, scrollbars, viewports, or

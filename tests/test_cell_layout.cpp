@@ -258,6 +258,19 @@ TEST(emoji_then_ascii) {
     CHECK_SPAN(run, 1, 4, 1, 1, T);
 }
 
+TEST(emoji_man_zwj_fullwidth_a) {
+    // Adversarial GB11: ZWJ + wide non-ExtPic must NOT join.
+    // U+1F468 (man, ExtPic) + ZWJ + U+FF21 (Ａ, wide but NOT ExtPic)
+    // ZWJ absorbed into man via GB9; GB11 checks is_extpic(Ａ) → false → break.
+    // → 2 clusters: [man+ZWJ, 7 bytes, 2 cells] + [Ａ, 3 bytes, 2 cells]
+    const std::string_view seq = "\xF0\x9F\x91\xA8\xE2\x80\x8D\xEF\xBC\xA1";
+    auto run = ssg::compute_cell_run(seq);
+    ASSERT_EQ(run.total_cells, 4u);
+    ASSERT_EQ(run.spans.size(), 2u);
+    CHECK_SPAN(run, 0, 0, 7, 2, T);
+    CHECK_SPAN(run, 1, 7, 3, 2, T);
+}
+
 TEST(emoji_thumbs_skin_tone) {
     // 👍 (U+1F44D, F0 9F 91 8D) + 🏻 (U+1F3FB, F0 9F 8F BB)
     // U+1F3FB has UAX #29 GCB=Extend → absorbed into 👍's cluster
@@ -591,6 +604,151 @@ TEST(invalid_surrogate_high) {
 }
 
 // ---------------------------------------------------------------------------
+// Hangul jamo composition fixtures (hangul.txt) — GB6/GB7/GB8
+
+TEST(hangul_L_V) {
+    // U+1100 ᄀ (E1 84 80) + U+1161 ᅡ (E1 85 A1) → 1 cluster via GB6 (L × V)
+    // Base L jamo is wide (EAW=W) → cluster width = 2
+    auto run = ssg::compute_cell_run("\xE1\x84\x80\xE1\x85\xA1");
+    ASSERT_EQ(run.total_cells, 2u);
+    ASSERT_EQ(run.spans.size(), 1u);
+    CHECK_SPAN(run, 0, 0, 6, 2, T);
+}
+
+TEST(hangul_L_V_T) {
+    // L (E1 84 80) + V (E1 85 A1) + T/U+11A8 (E1 86 88) → 1 cluster, GB6+GB7
+    auto run = ssg::compute_cell_run("\xE1\x84\x80\xE1\x85\xA1\xE1\x86\xA8");
+    ASSERT_EQ(run.total_cells, 2u);
+    ASSERT_EQ(run.spans.size(), 1u);
+    CHECK_SPAN(run, 0, 0, 9, 2, T);
+}
+
+TEST(hangul_LV_T) {
+    // U+AC00 가 (EA B0 80) + U+11A8 ᆨ (E1 86 88) → 1 cluster via GB7 (LV × T)
+    // LV syllable is wide → cluster width = 2
+    auto run = ssg::compute_cell_run("\xEA\xB0\x80\xE1\x86\xA8");
+    ASSERT_EQ(run.total_cells, 2u);
+    ASSERT_EQ(run.spans.size(), 1u);
+    CHECK_SPAN(run, 0, 0, 6, 2, T);
+}
+
+TEST(hangul_LVT_T) {
+    // U+AC01 각 (EA B0 81) + U+11A8 ᆨ (E1 86 88) → 1 cluster via GB8 (LVT × T)
+    auto run = ssg::compute_cell_run("\xEA\xB0\x81\xE1\x86\xA8");
+    ASSERT_EQ(run.total_cells, 2u);
+    ASSERT_EQ(run.spans.size(), 1u);
+    CHECK_SPAN(run, 0, 0, 6, 2, T);
+}
+
+TEST(hangul_L_extend_V_no_compose) {
+    // Adversarial per UAX #29 GraphemeBreakTest.txt: ÷ 1100 × 0308 ÷ 1160 ÷
+    // L + Extend (combining diaeresis U+0308, CC 88) + V (E1 85 A1)
+    // GB6–GB8 have no Extend*: the Extend severs Hangul composition.
+    // → 2 clusters: [L+Extend=5 bytes=2 cells] + [V=3 bytes=1 cell]
+    auto run = ssg::compute_cell_run("\xE1\x84\x80\xCC\x88\xE1\x85\xA1");
+    ASSERT_EQ(run.total_cells, 3u);
+    ASSERT_EQ(run.spans.size(), 2u);
+    CHECK_SPAN(run, 0, 0, 5, 2, T);
+    CHECK_SPAN(run, 1, 5, 3, 1, T);
+}
+
+TEST(hangul_L_ascii_no_compose) {
+    // Adversarial: L jamo + ASCII 'A' must NOT compose (only L/V/LV/LVT follow L)
+    // → 2 clusters: [L=2 cells] + [A=1 cell]
+    auto run = ssg::compute_cell_run("\xE1\x84\x80\x41");
+    ASSERT_EQ(run.total_cells, 3u);
+    ASSERT_EQ(run.spans.size(), 2u);
+    CHECK_SPAN(run, 0, 0, 3, 2, T);
+    CHECK_SPAN(run, 1, 3, 1, 1, T);
+}
+
+TEST(hangul_lv_alone) {
+    // Standalone LV syllable 가 (U+AC00, EA B0 80): 1 cluster, 2 cells
+    auto run = ssg::compute_cell_run("\xEA\xB0\x80");
+    ASSERT_EQ(run.total_cells, 2u);
+    ASSERT_EQ(run.spans.size(), 1u);
+    CHECK_SPAN(run, 0, 0, 3, 2, T);
+}
+
+// ---------------------------------------------------------------------------
+// SpacingMark fixtures (spacing_mark.txt) — GB9a
+
+TEST(spacing_mark_devanagari_kaa) {
+    // क (U+0915, E0 A4 95) + ā (U+093E, E0 A4 BE, SpacingMark)
+    // GB9a: SpacingMark extends base → 1 cluster, 1 cell (narrow base)
+    // Adversarial: without GB9a, would be 2 clusters (2 cells)
+    auto run = ssg::compute_cell_run("\xE0\xA4\x95\xE0\xA4\xBE");
+    ASSERT_EQ(run.total_cells, 1u);
+    ASSERT_EQ(run.spans.size(), 1u);
+    CHECK_SPAN(run, 0, 0, 6, 1, T);
+}
+
+TEST(spacing_mark_devanagari_ko) {
+    // क (U+0915) + ो (U+094B, E0 A5 8B, SpacingMark) → को, 1 cluster, 1 cell
+    auto run = ssg::compute_cell_run("\xE0\xA4\x95\xE0\xA5\x8B");
+    ASSERT_EQ(run.total_cells, 1u);
+    ASSERT_EQ(run.spans.size(), 1u);
+    CHECK_SPAN(run, 0, 0, 6, 1, T);
+}
+
+TEST(spacing_mark_lone) {
+    // Lone SpacingMark U+093E (E0 A4 BE) at line start → kind=combining, width=0
+    auto run = ssg::compute_cell_run("\xE0\xA4\xBE");
+    ASSERT_EQ(run.total_cells, 0u);
+    ASSERT_EQ(run.spans.size(), 1u);
+    CHECK_SPAN(run, 0, 0, 3, 0, C);
+}
+
+TEST(spacing_mark_bengali_kaa) {
+    // ক (U+0995, E0 A6 95) + া (U+09BE, E0 A6 BE, SpacingMark) → কা, 1 cluster
+    auto run = ssg::compute_cell_run("\xE0\xA6\x95\xE0\xA6\xBE");
+    ASSERT_EQ(run.total_cells, 1u);
+    ASSERT_EQ(run.spans.size(), 1u);
+    CHECK_SPAN(run, 0, 0, 6, 1, T);
+}
+
+// ---------------------------------------------------------------------------
+// Prepend fixtures (prepend.txt) — GB9b
+
+TEST(prepend_0600_digit) {
+    // U+0600 Arabic Number Sign (D8 80, Prepend) + '1' (31)
+    // GB9b: Prepend absorbs '1'; cluster width = 1 (digit is narrow)
+    auto run = ssg::compute_cell_run("\xD8\x80\x31");
+    ASSERT_EQ(run.total_cells, 1u);
+    ASSERT_EQ(run.spans.size(), 1u);
+    CHECK_SPAN(run, 0, 0, 3, 1, T);
+}
+
+TEST(prepend_a_then_prepend_digit) {
+    // Adversarial: 'a' then Prepend+digit → 2 clusters.
+    // Prepend does NOT extend the preceding 'a' cluster.
+    // 'a' = cluster 1 {0, 1, 1, T}; [U+0600 + '1'] = cluster 2 {1, 3, 1, T}
+    auto run = ssg::compute_cell_run("a\xD8\x80\x31");
+    ASSERT_EQ(run.total_cells, 2u);
+    ASSERT_EQ(run.spans.size(), 2u);
+    CHECK_SPAN(run, 0, 0, 1, 1, T);
+    CHECK_SPAN(run, 1, 1, 3, 1, T);
+}
+
+TEST(prepend_lone_at_eol) {
+    // Standalone Prepend U+0600 at end of line: no char to absorb → width=0
+    auto run = ssg::compute_cell_run("\xD8\x80");
+    ASSERT_EQ(run.total_cells, 0u);
+    ASSERT_EQ(run.spans.size(), 1u);
+    CHECK_SPAN(run, 0, 0, 2, 0, T);
+}
+
+TEST(prepend_before_control) {
+    // Prepend (D8 80) before BEL (07): control is GCB-Control → not absorbed.
+    // → Prepend cluster {0, 2, 0, T} + control cluster {2, 1, 1, CTL}
+    auto run = ssg::compute_cell_run("\xD8\x80\x07");
+    ASSERT_EQ(run.total_cells, 1u);
+    ASSERT_EQ(run.spans.size(), 2u);
+    CHECK_SPAN(run, 0, 0, 2, 0, T);
+    CHECK_SPAN(run, 1, 2, 1, 1, CTL);
+}
+
+// ---------------------------------------------------------------------------
 // Additional edge cases
 
 TEST(edge_tab_then_combining) {
@@ -664,6 +822,7 @@ int main() {
     RUN(emoji_man_zwj_woman);
     RUN(emoji_us_flag);
     RUN(emoji_then_ascii);
+    RUN(emoji_man_zwj_fullwidth_a);
     RUN(emoji_thumbs_skin_tone);
     RUN(emoji_two);
 
@@ -707,6 +866,27 @@ int main() {
     RUN(invalid_bad_continuation_e4_b8_41);
     RUN(invalid_overlong_e0_80_80);
     RUN(invalid_surrogate_high);
+
+    // Hangul
+    RUN(hangul_L_V);
+    RUN(hangul_L_V_T);
+    RUN(hangul_LV_T);
+    RUN(hangul_LVT_T);
+    RUN(hangul_L_extend_V_no_compose);
+    RUN(hangul_L_ascii_no_compose);
+    RUN(hangul_lv_alone);
+
+    // SpacingMark (GB9a)
+    RUN(spacing_mark_devanagari_kaa);
+    RUN(spacing_mark_devanagari_ko);
+    RUN(spacing_mark_lone);
+    RUN(spacing_mark_bengali_kaa);
+
+    // Prepend (GB9b)
+    RUN(prepend_0600_digit);
+    RUN(prepend_a_then_prepend_digit);
+    RUN(prepend_lone_at_eol);
+    RUN(prepend_before_control);
 
     // Edge cases
     RUN(edge_tab_then_combining);

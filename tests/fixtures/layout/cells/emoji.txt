@@ -38,6 +38,13 @@ two_emoji         | F0 9F 98 80 F0 9F 99 82         | 4 → 4 | 0:4:2:T 4:4:2:T
 
 # Emoji modifier sequence: 👍 (U+1F44D) + 🏻 skin-tone (U+1F3FB)
 # U+1F44D (F0 9F 91 8D) + U+1F3FB (F0 9F 8F BB)
-# U+1F3FB has GCB=Extend (UAX #29), so it extends the preceding cluster.
+# U+1F3FB has GCB=Extend (UAX #29 emoji modifier), so it extends the cluster.
 # → 1 span, 8 bytes, 2 cells (base=👍 is wide)
 thumbs_skin_tone  | F0 9F 91 8D F0 9F 8F BB         | 4 → 2 | 0:8:2:T
+
+# Adversarial GB11: ZWJ + wide non-ExtPic must NOT join.
+# U+1F468 👨 MAN (F0 9F 91 A8, Extended_Pictographic) + ZWJ (E2 80 8D) +
+# U+FF21 Ａ FULLWIDTH LATIN CAPITAL A (EF BC A1, EAW=F wide, NOT Extended_Pictographic).
+# ZWJ is absorbed by man via GB9; GB11 checks is_extpic(Ａ) → false → no join.
+# → 2 clusters: [man+ZWJ 7 bytes 2 cells] + [Ａ 3 bytes 2 cells], total=4 cells
+man_zwj_fullwidth_a | F0 9F 91 A8 E2 80 8D EF BC A1 | 4 → 4 | 0:7:2:T 7:3:2:T

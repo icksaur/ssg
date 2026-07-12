@@ -3,17 +3,28 @@
 // See include/ssg/layout.h for the public contract and
 // doc/features/presentation-shell.md §Cell-width rules for the normative spec.
 //
-// Unicode data: Unicode 15.0.0 (released 2022-09-13).
-// Grapheme clusters: UAX #29 extended grapheme clusters, simplified to the
-//   rules needed for terminal cell layout:
-//     GB9  — × (Extend | ZWJ)                           [combining marks, ZWJ]
-//     GB9a — × SpacingMark                              [absorbed into base]
-//     GB11 — Extended_Pictographic Extend* ZWJ × Wide   [emoji ZWJ sequences]
-//     GB12/13 — RI × RI                                 [flag pairs]
-// Width:  UAX #11 East Asian Width (W and F → 2 cells), emoji-data Wide.
+// Unicode version: 15.0.0 (released 2022-09-13).
+// Grapheme clusters: UAX #29 extended grapheme clusters.
+//   All rules applicable under the single-logical-line precondition
+//   (input contains no CR or LF; GB3/GB4/GB5 are subsumed by that precondition):
+//     GB6    — L × (L|V|LV|LVT)                      [Hangul leading jamo]
+//     GB7    — (LV|V) × (V|T)                        [Hangul vowel/syllable]
+//     GB8    — (LVT|T) × T                           [Hangul trailing jamo]
+//     GB9    — × (Extend | ZWJ)                      [combining marks, ZWJ]
+//     GB9a   — × SpacingMark                         [Indic/script spacing marks]
+//     GB9b   — Prepend ×                             [Prepend chars absorb next]
+//     GB11   — ExtPic Extend* ZWJ × ExtPic           [emoji ZWJ sequences]
+//     GB12/13 — RI × RI                              [regional-indicator flag pairs]
+// Width:  UAX #11 East Asian Width (W and F → 2 cells) + emoji-data.txt Wide.
 //
-// All Unicode property data is embedded as sorted, non-overlapping URange
-// arrays and looked up with binary search.
+// Data sources (all Unicode 15.0.0):
+//   k_combining    — DerivedCoreProperties.txt (GCB=Extend subset: Mn/Me/Cf zero-width)
+//   k_spacing_mark — GraphemeBreakProperty.txt (GCB=SpacingMark, i.e., Mc subset)
+//   k_extpic       — emoji-data.txt (Extended_Pictographic property)
+//   k_prepend      — GraphemeBreakProperty.txt (GCB=Prepend)
+//   k_wide         — EastAsianWidth.txt (EAW=W or F) + emoji-data.txt Wide
+//
+// All property tables are sorted, non-overlapping URange arrays; binary search.
 
 #include <ssg/layout.h>
 
@@ -560,10 +571,355 @@ static constexpr int k_wide_n =
     static_cast<int>(sizeof(k_wide) / sizeof(k_wide[0]));
 
 // ---------------------------------------------------------------------------
+// Unicode 15.0.0 — SpacingMark code points (GCB=SpacingMark, i.e., Mc subset)
+//
+// These code points extend the preceding grapheme cluster (GB9a) and add
+// 0 terminal cells.  They are spacing combining marks (category Mc) that
+// visually modify a base character within the same terminal cell.
+// Source: GraphemeBreakProperty.txt, Unicode 15.0.0 (2022-09-13).
+
+static constexpr URange k_spacing_mark[] = {
+    {0x0903, 0x0903},   // Devanagari sign visarga
+    {0x093B, 0x093B},   // Devanagari vowel sign OOE
+    {0x093E, 0x0940},   // Devanagari vowel signs AA/I/II
+    {0x0949, 0x094C},   // Devanagari vowel signs O/OO/AU
+    {0x094E, 0x094F},   // Devanagari vowel signs OE/OOE
+    {0x0982, 0x0983},   // Bengali
+    {0x09BE, 0x09C0},   // Bengali vowel signs
+    {0x09C7, 0x09C8},   // Bengali
+    {0x09CB, 0x09CC},   // Bengali
+    {0x09D7, 0x09D7},   // Bengali AU length mark
+    {0x0A03, 0x0A03},   // Gurmukhi
+    {0x0A3E, 0x0A40},   // Gurmukhi
+    {0x0A83, 0x0A83},   // Gujarati
+    {0x0ABE, 0x0AC0},   // Gujarati
+    {0x0AC9, 0x0AC9},
+    {0x0ACB, 0x0ACC},   // Gujarati
+    {0x0B02, 0x0B03},   // Oriya
+    {0x0B3E, 0x0B3E},
+    {0x0B40, 0x0B40},
+    {0x0B47, 0x0B48},
+    {0x0B4B, 0x0B4C},
+    {0x0B57, 0x0B57},
+    {0x0BBE, 0x0BBF},   // Tamil
+    {0x0BC1, 0x0BC2},
+    {0x0BC6, 0x0BC8},
+    {0x0BCA, 0x0BCC},
+    {0x0BD7, 0x0BD7},
+    {0x0C01, 0x0C03},   // Telugu
+    {0x0C41, 0x0C44},
+    {0x0C82, 0x0C83},   // Kannada
+    {0x0CBE, 0x0CBE},
+    {0x0CC0, 0x0CC4},
+    {0x0CC7, 0x0CC8},
+    {0x0CCA, 0x0CCB},
+    {0x0CD5, 0x0CD6},
+    {0x0D02, 0x0D03},   // Malayalam
+    {0x0D3E, 0x0D40},
+    {0x0D46, 0x0D48},
+    {0x0D4A, 0x0D4C},
+    {0x0D57, 0x0D57},
+    {0x0D82, 0x0D83},   // Sinhala
+    {0x0DCF, 0x0DD1},
+    {0x0DD8, 0x0DDF},
+    {0x0DF2, 0x0DF3},
+    {0x0E33, 0x0E33},   // Thai SARA AM
+    {0x0EB3, 0x0EB3},   // Lao
+    {0x0F3E, 0x0F3F},   // Tibetan
+    {0x0F7F, 0x0F7F},
+    {0x102B, 0x102C},   // Myanmar
+    {0x1031, 0x1031},
+    {0x1038, 0x1038},
+    {0x103B, 0x103C},
+    {0x1056, 0x1057},
+    {0x1062, 0x1064},
+    {0x1067, 0x106D},
+    {0x1083, 0x1084},
+    {0x1087, 0x108C},
+    {0x108F, 0x108F},
+    {0x109A, 0x109C},
+    {0x1A61, 0x1A61},   // Tai Tham
+    {0x1A63, 0x1A64},
+    {0x1A6D, 0x1A72},
+    {0x1B04, 0x1B04},   // Balinese
+    {0x1B35, 0x1B35},
+    {0x1B3B, 0x1B3B},
+    {0x1B3D, 0x1B41},
+    {0x1B43, 0x1B44},
+    {0x1B82, 0x1B82},   // Sundanese
+    {0x1BA1, 0x1BA1},   // Batak
+    {0x1BA6, 0x1BA7},
+    {0x1BAA, 0x1BAA},
+    {0x1BE7, 0x1BE7},
+    {0x1BEA, 0x1BEC},
+    {0x1BEE, 0x1BEE},
+    {0x1BF2, 0x1BF3},
+    {0x1C24, 0x1C2B},   // Lepcha
+    {0x1C34, 0x1C35},
+    {0x1CE1, 0x1CE1},   // Vedic
+    {0x1CF7, 0x1CF7},
+    {0x302E, 0x302F},   // CJK tone marks
+    {0xA823, 0xA824},   // Sylheti Nagri
+    {0xA827, 0xA827},
+    {0xA880, 0xA881},   // Saurashtra
+    {0xA8B4, 0xA8C3},
+    {0xA952, 0xA953},   // Rejang
+    {0xA983, 0xA983},   // Javanese
+    {0xA9B4, 0xA9B5},
+    {0xA9BA, 0xA9BB},
+    {0xA9BE, 0xA9C0},
+    {0xAA2F, 0xAA30},   // Cham
+    {0xAA33, 0xAA34},
+    {0xAA4D, 0xAA4D},
+    {0xAA7B, 0xAA7B},   // Myanmar Extended-A
+    {0xAA7D, 0xAA7D},
+    {0xAAEB, 0xAAEB},   // Meetei Mayek
+    {0xAAEE, 0xAAEF},
+    {0xAAF5, 0xAAF5},
+    {0xABE3, 0xABE4},   // Meetei Mayek Extensions
+    {0xABE6, 0xABE7},
+    {0xABE9, 0xABEA},
+    {0xABEC, 0xABEC},
+    {0x11000, 0x11000}, // Brahmi
+    {0x11002, 0x11002},
+    {0x11082, 0x11082}, // Kaithi
+    {0x110B0, 0x110B2},
+    {0x110B7, 0x110B8},
+    {0x1112C, 0x1112C}, // Chakma
+    {0x11145, 0x11146}, // Newa
+    {0x11182, 0x11182}, // Sharada
+    {0x111B3, 0x111B5},
+    {0x111BF, 0x111C0},
+    {0x111CE, 0x111CE},
+    {0x1122C, 0x1122E}, // Khojki
+    {0x11232, 0x11233},
+    {0x11235, 0x11235},
+    {0x112E0, 0x112E2}, // Khudawadi
+    {0x11302, 0x11303}, // Grantha
+    {0x1133E, 0x1133F},
+    {0x11341, 0x11344},
+    {0x11347, 0x11348},
+    {0x1134B, 0x1134D},
+    {0x11362, 0x11363},
+    {0x11435, 0x11437}, // Newa
+    {0x11440, 0x11441},
+    {0x11445, 0x11445},
+    {0x114B0, 0x114B2}, // Tirhuta
+    {0x114B9, 0x114B9},
+    {0x114BB, 0x114BE},
+    {0x114C1, 0x114C1},
+    {0x115AF, 0x115B1}, // Siddham
+    {0x115B8, 0x115BB},
+    {0x115BE, 0x115BE},
+    {0x11630, 0x11632}, // Modi
+    {0x1163B, 0x1163C},
+    {0x1163E, 0x1163E},
+    {0x116AC, 0x116AC}, // Takri
+    {0x116AE, 0x116AF},
+    {0x116B6, 0x116B6},
+    {0x11720, 0x11721}, // Ahom
+    {0x11726, 0x11726},
+    {0x1182C, 0x1182E}, // Dogra
+    {0x11838, 0x11838},
+    {0x11930, 0x11935}, // Dives Akuru
+    {0x11937, 0x11938},
+    {0x1193D, 0x1193D},
+    {0x11940, 0x11940},
+    {0x11942, 0x11942},
+    {0x119D1, 0x119D3}, // Nandinagari
+    {0x119DC, 0x119DF},
+    {0x119E4, 0x119E4},
+    {0x11A39, 0x11A39}, // Zanabazar
+    {0x11A57, 0x11A58}, // Soyombo
+    {0x11A97, 0x11A97}, // Pau Cin Hau
+    {0x11C2F, 0x11C2F}, // Bhaiksuki
+    {0x11C3E, 0x11C3E},
+    {0x11CA9, 0x11CA9}, // Marchen
+    {0x11CB1, 0x11CB1},
+    {0x11CB4, 0x11CB4},
+    {0x11D8A, 0x11D8E}, // Masaram Gondi
+    {0x11D93, 0x11D94},
+    {0x11D96, 0x11D96},
+    {0x11EF5, 0x11EF6}, // Makasar
+    {0x11F03, 0x11F03}, // Kawi (Unicode 15.0)
+    {0x11F34, 0x11F35},
+    {0x11F3E, 0x11F3F},
+    {0x11F41, 0x11F41},
+    {0x16F51, 0x16F87}, // Miao
+    {0x16FF0, 0x16FF1}, // Khitan Small Script
+    {0x1D165, 0x1D166}, // Musical combining
+    {0x1D16D, 0x1D172},
+};
+
+static constexpr int k_spacing_mark_n =
+    static_cast<int>(sizeof(k_spacing_mark) / sizeof(k_spacing_mark[0]));
+
+// ---------------------------------------------------------------------------
+// Unicode 15.0.0 — Extended_Pictographic code points
+//
+// Used by GB11: ExtPic Extend* ZWJ × ExtPic.  Only code points with this
+// property may continue an emoji ZWJ sequence.  Wide CJK characters are NOT
+// Extended_Pictographic and must NOT be joined merely because they are wide.
+// Source: emoji-data.txt, Unicode 15.0.0 (2022-09-13).
+// https://unicode.org/Public/15.0.0/ucd/emoji/emoji-data.txt
+
+static constexpr URange k_extpic[] = {
+    {0x00A9, 0x00A9},   // © COPYRIGHT SIGN
+    {0x00AE, 0x00AE},   // ® REGISTERED SIGN
+    {0x203C, 0x203C},
+    {0x2049, 0x2049},
+    {0x2122, 0x2122},
+    {0x2139, 0x2139},
+    {0x2194, 0x2199},
+    {0x21A9, 0x21AA},
+    {0x231A, 0x231B},
+    {0x2328, 0x2328},
+    {0x23CF, 0x23CF},
+    {0x23E9, 0x23F3},
+    {0x23F8, 0x23FA},
+    {0x24C2, 0x24C2},
+    {0x25AA, 0x25AB},
+    {0x25B6, 0x25B6},
+    {0x25C0, 0x25C0},
+    {0x25FB, 0x25FE},
+    {0x2600, 0x2604},
+    {0x260E, 0x260E},
+    {0x2611, 0x2611},
+    {0x2614, 0x2615},
+    {0x2618, 0x2618},
+    {0x261D, 0x261D},
+    {0x2620, 0x2620},
+    {0x2622, 0x2623},
+    {0x2626, 0x2626},
+    {0x262A, 0x262A},
+    {0x262E, 0x262F},
+    {0x2638, 0x263A},
+    {0x2640, 0x2640},
+    {0x2642, 0x2642},
+    {0x2648, 0x2653},
+    {0x265F, 0x2660},
+    {0x2663, 0x2663},
+    {0x2665, 0x2666},
+    {0x2668, 0x2668},
+    {0x267B, 0x267B},
+    {0x267E, 0x267F},
+    {0x2692, 0x2697},
+    {0x2699, 0x2699},
+    {0x269B, 0x269C},
+    {0x26A0, 0x26A1},
+    {0x26A7, 0x26A7},
+    {0x26AA, 0x26AB},
+    {0x26B0, 0x26B1},
+    {0x26BD, 0x26BE},
+    {0x26C4, 0x26C5},
+    {0x26CE, 0x26CF},
+    {0x26D1, 0x26D1},
+    {0x26D3, 0x26D4},
+    {0x26E9, 0x26EA},
+    {0x26F0, 0x26F5},
+    {0x26F7, 0x26FA},
+    {0x26FD, 0x26FD},
+    {0x2702, 0x2702},
+    {0x2705, 0x2705},
+    {0x2708, 0x270D},
+    {0x270F, 0x270F},
+    {0x2712, 0x2712},
+    {0x2714, 0x2714},
+    {0x2716, 0x2716},
+    {0x271D, 0x271D},
+    {0x2721, 0x2721},
+    {0x2728, 0x2728},
+    {0x2733, 0x2734},
+    {0x2744, 0x2744},
+    {0x2747, 0x2747},
+    {0x274C, 0x274C},
+    {0x274E, 0x274E},
+    {0x2753, 0x2755},
+    {0x2757, 0x2757},
+    {0x2763, 0x2764},
+    {0x2795, 0x2797},
+    {0x27A1, 0x27A1},
+    {0x27B0, 0x27B0},
+    {0x27BF, 0x27BF},
+    {0x2934, 0x2935},
+    {0x2B05, 0x2B07},
+    {0x2B1B, 0x2B1C},
+    {0x2B50, 0x2B50},
+    {0x2B55, 0x2B55},
+    {0x3030, 0x3030},
+    {0x303D, 0x303D},
+    {0x3297, 0x3297},
+    {0x3299, 0x3299},
+    {0x1F004, 0x1F004},
+    {0x1F0CF, 0x1F0CF},
+    {0x1F170, 0x1F171},
+    {0x1F17E, 0x1F17F},
+    {0x1F18E, 0x1F18E},
+    {0x1F191, 0x1F19A},
+    {0x1F1E0, 0x1F1FF}, // Regional Indicators (also ExtPic per emoji-data.txt)
+    {0x1F201, 0x1F202},
+    {0x1F21A, 0x1F21A},
+    {0x1F22F, 0x1F22F},
+    {0x1F232, 0x1F23A},
+    {0x1F250, 0x1F251},
+    {0x1F300, 0x1F6FF}, // Misc symbols, emoticons, transport (incl. 1F468 man, 1F469 woman)
+    {0x1F700, 0x1F77F}, // Alchemical Symbols
+    {0x1F780, 0x1F7FF}, // Geometric Shapes Extended
+    {0x1F800, 0x1F8FF}, // Supplemental Arrows-C
+    {0x1F900, 0x1FA6F}, // Supplemental Symbols and Pictographs + Chess
+    {0x1FA70, 0x1FAFF}, // Symbols and Pictographs Extended-A
+};
+
+static constexpr int k_extpic_n =
+    static_cast<int>(sizeof(k_extpic) / sizeof(k_extpic[0]));
+
+// ---------------------------------------------------------------------------
+// Unicode 15.0.0 — Prepend code points (GCB=Prepend)
+//
+// GB9b: Prepend × [^(Control|CR|LF)].  A Prepend character starts a cluster
+// and absorbs the following non-control code point into the same cluster.
+// Source: GraphemeBreakProperty.txt, Unicode 15.0.0 (2022-09-13).
+// https://unicode.org/Public/15.0.0/ucd/auxiliary/GraphemeBreakProperty.txt
+// (15 ranges exactly matching the official file)
+
+static constexpr URange k_prepend[] = {
+    {0x0600, 0x0605},   // Arabic Number Signs (Cf)
+    {0x06DD, 0x06DD},   // Arabic End of Ayah
+    {0x070F, 0x070F},   // Syriac Abbreviation Mark (Cf)
+    {0x0890, 0x0891},   // Arabic Pound/Piastre Marks (Cf)
+    {0x08E2, 0x08E2},   // Arabic Disputed End of Ayah (Cf)
+    {0x0D4E, 0x0D4E},   // Malayalam Letter Dot Reph
+    {0x110BD, 0x110BD}, // Kaithi Number Sign
+    {0x110CD, 0x110CD}, // Kaithi Number Sign Above
+    {0x111C2, 0x111C3}, // Sharada sign jihvamuliya/upadhmaniya
+    {0x1193F, 0x1193F}, // Dives Akuru prefixed nasal sign
+    {0x11941, 0x11941}, // Dives Akuru initial ra
+    {0x11A3A, 0x11A3A}, // Zanabazar Square cluster-initial letter ra
+    {0x11A84, 0x11A89}, // Zanabazar Square sign gvang/etc.
+    {0x11D46, 0x11D46}, // Masaram Gondi repha
+    {0x11F02, 0x11F02}, // Kawi sign repha (Unicode 15.0)
+};
+
+static constexpr int k_prepend_n =
+    static_cast<int>(sizeof(k_prepend) / sizeof(k_prepend[0]));
+
+// ---------------------------------------------------------------------------
 // Unicode property predicates
 
 static bool is_combining(uint32_t cp) noexcept {
     return in_ranges(k_combining, k_combining_n, cp);
+}
+
+static bool is_spacing_mark(uint32_t cp) noexcept {
+    return in_ranges(k_spacing_mark, k_spacing_mark_n, cp);
+}
+
+static bool is_extended_pictographic(uint32_t cp) noexcept {
+    return in_ranges(k_extpic, k_extpic_n, cp);
+}
+
+static bool is_prepend(uint32_t cp) noexcept {
+    return in_ranges(k_prepend, k_prepend_n, cp);
 }
 
 static bool is_wide(uint32_t cp) noexcept {
@@ -573,7 +929,71 @@ static bool is_wide(uint32_t cp) noexcept {
 // Regional Indicator Symbols: U+1F1E0–U+1F1FF.
 // Two consecutive RIs form one flag emoji cluster (GB12/GB13).
 static bool is_regional_indicator(uint32_t cp) noexcept {
-    return cp >= 0x1F1E0 && cp <= 0x1F1FF;
+    return cp >= 0x1F1E0u && cp <= 0x1F1FFu;
+}
+
+// ---------------------------------------------------------------------------
+// Hangul Jamo and Syllable classification (GB6–GB8)
+//
+// Hangul L (leading consonant jamo): U+1100–U+115F, U+A960–U+A97C
+// Hangul V (vowel jamo):             U+1160–U+11A7, U+D7B0–U+D7C6
+// Hangul T (trailing consonant):     U+11A8–U+11FF, U+D7CB–U+D7FB
+// Hangul LV syllable:  U+AC00–U+D7A3 where (cp-AC00)%28==0
+// Hangul LVT syllable: U+AC00–U+D7A3 where (cp-AC00)%28!=0
+
+static bool is_hangul_l(uint32_t cp) noexcept {
+    return (cp >= 0x1100u && cp <= 0x115Fu) ||
+           (cp >= 0xA960u && cp <= 0xA97Cu);
+}
+static bool is_hangul_v(uint32_t cp) noexcept {
+    return (cp >= 0x1160u && cp <= 0x11A7u) ||
+           (cp >= 0xD7B0u && cp <= 0xD7C6u);
+}
+static bool is_hangul_t(uint32_t cp) noexcept {
+    return (cp >= 0x11A8u && cp <= 0x11FFu) ||
+           (cp >= 0xD7CBu && cp <= 0xD7FBu);
+}
+static bool is_hangul_lv(uint32_t cp) noexcept {
+    return (cp >= 0xAC00u && cp <= 0xD7A3u) &&
+           ((cp - 0xAC00u) % 28u == 0u);
+}
+static bool is_hangul_lvt(uint32_t cp) noexcept {
+    return (cp >= 0xAC00u && cp <= 0xD7A3u) &&
+           ((cp - 0xAC00u) % 28u != 0u);
+}
+
+// GCB type for Hangul cluster-extension state machine.
+// None: not a Hangul code point (or context cleared by intervening non-Hangul).
+enum class HangulGCB : uint8_t { None, L, V, T, LV, LVT };
+
+static HangulGCB hangul_gcb_of(uint32_t cp) noexcept {
+    if (is_hangul_l(cp))   return HangulGCB::L;
+    if (is_hangul_lv(cp))  return HangulGCB::LV;
+    if (is_hangul_lvt(cp)) return HangulGCB::LVT;
+    if (is_hangul_v(cp))   return HangulGCB::V;
+    if (is_hangul_t(cp))   return HangulGCB::T;
+    return HangulGCB::None;
+}
+
+// Returns true when a Hangul code point of type `next` may extend a cluster
+// whose last non-Extend code point had type `last`.
+static bool hangul_extends(HangulGCB last, HangulGCB next) noexcept {
+    switch (last) {
+    case HangulGCB::L:
+        // GB6: L × (L | V | LV | LVT)
+        return next == HangulGCB::L   || next == HangulGCB::V  ||
+               next == HangulGCB::LV  || next == HangulGCB::LVT;
+    case HangulGCB::LV:
+    case HangulGCB::V:
+        // GB7: (LV | V) × (V | T)
+        return next == HangulGCB::V || next == HangulGCB::T;
+    case HangulGCB::LVT:
+    case HangulGCB::T:
+        // GB8: (LVT | T) × T
+        return next == HangulGCB::T;
+    default:
+        return false;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -665,9 +1085,7 @@ CellRun compute_cell_run(std::string_view line_utf8, int tab_width) {
         if (!base.valid) {
             // Each invalid byte becomes its own 1-cell invalid span
             result.spans.push_back({
-                static_cast<uint32_t>(cluster_start),
-                1u,
-                1u,
+                static_cast<uint32_t>(cluster_start), 1u, 1u,
                 CellKind::invalid_utf8
             });
             result.total_cells += 1;
@@ -684,80 +1102,142 @@ CellRun compute_cell_run(std::string_view line_utf8, int tab_width) {
             const uint32_t tw      = static_cast<uint32_t>(tab_width);
             const uint32_t advance = tw - (cur_cell % tw);
             result.spans.push_back({
-                static_cast<uint32_t>(cluster_start),
-                1u,
-                advance,
-                CellKind::tab
+                static_cast<uint32_t>(cluster_start), 1u, advance, CellKind::tab
             });
             result.total_cells += advance;
             cur_cell            += advance;
             continue; // Tab is never extended
         }
 
-        // C0 controls (except tab), DEL, C1 controls → 1-cell replacement
+        // C0 controls (except tab), DEL, C1 controls → 1-cell replacement glyph
         if (cp < 0x20u || cp == 0x7Fu || (cp >= 0x80u && cp <= 0x9Fu)) {
             result.spans.push_back({
                 static_cast<uint32_t>(cluster_start),
                 static_cast<uint32_t>(base.byte_len),
-                1u,
-                CellKind::control
+                1u, CellKind::control
             });
             result.total_cells += 1;
             cur_cell            += 1;
             continue; // Control chars are never extended
         }
 
-        // Determine the base cluster kind and cell width
-        uint32_t base_width;
-        CellKind kind;
-        if (is_combining(cp)) {
-            // Lone combining mark at line start or after a non-base
-            base_width = 0u;
-            kind       = CellKind::combining;
+        // Determine the base cluster kind, cell width, and Hangul GCB state.
+        // Prepend bases start at width 0 and are updated when they absorb
+        // their following character (GB9b).
+        uint32_t  base_width;
+        CellKind  kind;
+        HangulGCB last_hgcb;
+        bool      is_prepend_base;
+
+        if (is_combining(cp) || is_spacing_mark(cp)) {
+            // Lone combining or spacing mark at line start (no preceding base)
+            base_width      = 0u;
+            kind            = CellKind::combining;
+            last_hgcb       = HangulGCB::None;
+            is_prepend_base = false;
+        } else if (is_prepend(cp)) {
+            // GB9b: Prepend character; width is set when following char absorbed
+            base_width      = 0u;
+            kind            = CellKind::text;
+            last_hgcb       = HangulGCB::None;
+            is_prepend_base = true;
         } else if (is_wide(cp)) {
-            base_width = 2u;
-            kind       = CellKind::text;
+            base_width      = 2u;
+            kind            = CellKind::text;
+            last_hgcb       = hangul_gcb_of(cp); // handles LV/LVT syllables
+            is_prepend_base = false;
         } else {
-            base_width = 1u;
-            kind       = CellKind::text;
+            base_width      = 1u;
+            kind            = CellKind::text;
+            last_hgcb       = hangul_gcb_of(cp); // handles L/V/T jamo
+            is_prepend_base = false;
         }
 
-        uint32_t cluster_len  = base.byte_len;
-        bool     after_zwj    = (cp == 0x200Du);
-        bool     base_is_ri   = is_regional_indicator(cp);
-        bool     ri_paired    = false;
+        uint32_t cluster_len = base.byte_len;
+        bool     after_zwj   = (cp == 0x200Du);
+        bool     base_is_ri  = is_regional_indicator(cp);
+        bool     ri_paired   = false;
 
         // Absorb extending code points into this grapheme cluster.
-        // Rules applied (UAX #29, simplified for terminal layout):
-        //   GB9  — × (Extend | ZWJ) : combining marks and ZWJ extend
-        //   GB11 — after ZWJ, a wide code point extends (emoji ZWJ sequences)
-        //   GB12/GB13 — a second consecutive Regional Indicator extends
+        // Rules applied in priority order (UAX #29, Unicode 15.0.0):
+        //   GB9   — × (Extend | ZWJ): combining marks, modifiers, ZWJ
+        //   GB9a  — × SpacingMark:    Indic/script spacing vowel signs
+        //   GB11  — ExtPic Extend* ZWJ × ExtPic: emoji ZWJ sequences
+        //   GB12/13 — RI × RI: regional indicator flag pairs
+        //   GB6–8 — Hangul jamo/syllable composition
+        //   GB9b  — Prepend × [^Control]: absorb following char
         while (pos < end) {
             const DecodeResult ext = decode_utf8(data, pos, end);
-            if (!ext.valid) break;
+            if (!ext.valid) break;  // Invalid byte starts its own cluster
 
-            const uint32_t ext_cp  = ext.codepoint;
-            bool           extends = false;
+            const uint32_t ext_cp   = ext.codepoint;
+            bool           extends  = false;
+            bool           upd_hgcb = false;
+            HangulGCB      ext_hgcb = HangulGCB::None;
 
-            if (is_combining(ext_cp)) {
-                // GB9: combining marks / ZWJ always extend
-                extends = true;
-            } else if (after_zwj && is_wide(ext_cp)) {
-                // GB11: wide emoji after ZWJ continues the sequence
+            if (is_combining(ext_cp) || is_spacing_mark(ext_cp)) {
+                // GB9: × (Extend | ZWJ)
+                // GB9a: × SpacingMark
+                // GB6–GB8 lack the Extend* qualifier: Extend/SpacingMark
+                // absorptions sever Hangul composition (UAX #29 test data:
+                // L × Extend ÷ V).  Reset Hangul context here so a following
+                // jamo cannot compose across this Extend.
+                extends   = true;
+                last_hgcb = HangulGCB::None;
+                after_zwj = (ext_cp == 0x200Du); // re-arm ZWJ tracking
+            } else if (after_zwj && is_extended_pictographic(ext_cp)) {
+                // GB11: Extended_Pictographic Extend* ZWJ × Extended_Pictographic.
+                // Only ExtPic chars continue an emoji ZWJ sequence; wide CJK or
+                // fullwidth Latin chars do NOT qualify (is_wide ≠ is_extpic).
                 extends   = true;
                 after_zwj = false;
             } else if (base_is_ri && !ri_paired && is_regional_indicator(ext_cp)) {
-                // GB12/GB13: second RI completes a flag pair
+                // GB12/GB13: second Regional Indicator completes a flag pair
                 extends   = true;
                 ri_paired = true;
+                after_zwj = false;
+            } else {
+                // GB6–GB8: Hangul jamo/syllable composition.
+                // These rules are checked before GB9b so that a Hangul sequence
+                // starting after a Prepend is correctly composed.
+                ext_hgcb = hangul_gcb_of(ext_cp);
+                if (last_hgcb != HangulGCB::None &&
+                    ext_hgcb  != HangulGCB::None &&
+                    hangul_extends(last_hgcb, ext_hgcb)) {
+                    extends   = true;
+                    upd_hgcb  = true;
+                    after_zwj = false;
+                } else if (is_prepend_base) {
+                    // GB9b: Prepend × [^Control].
+                    // GCB-Control: C0 (< 0x20), DEL (0x7F), C1 (0x80–0x9F).
+                    // CR/LF absent by precondition.
+                    const bool is_gcb_ctrl =
+                        (ext_cp < 0x20u) ||
+                        (ext_cp == 0x7Fu) ||
+                        (ext_cp >= 0x80u && ext_cp <= 0x9Fu);
+                    if (!is_gcb_ctrl) {
+                        extends   = true;
+                        after_zwj = false;
+                        // If absorbed char is not itself a Prepend: finalise width.
+                        if (!is_prepend(ext_cp)) {
+                            is_prepend_base = false;
+                            if (is_wide(ext_cp))       base_width = 2u;
+                            else if (!is_combining(ext_cp) &&
+                                     !is_spacing_mark(ext_cp)) base_width = 1u;
+                            // Update Hangul state for the newly absorbed base
+                            ext_hgcb = hangul_gcb_of(ext_cp);
+                            upd_hgcb = (ext_hgcb != HangulGCB::None);
+                        }
+                        // If it is another Prepend: is_prepend_base stays true
+                    }
+                }
             }
 
             if (!extends) break;
 
             cluster_len += ext.byte_len;
             pos         += ext.byte_len;
-            // Track ZWJ so the next code point can continue the emoji sequence
-            after_zwj = (ext_cp == 0x200Du);
+            if (upd_hgcb) last_hgcb = ext_hgcb;
         }
 
         result.spans.push_back({
