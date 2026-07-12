@@ -76,14 +76,65 @@ These must not be conflated.
 
 The `compute_cell_run` function is a **pure function** taking a `std::string_view` (one logical line, must not contain `\n` or `\r`) and an `int tab_width` in `[1, 16]`. It returns a `CellRun` containing one `CellSpan` per grapheme cluster. `CellIndex` (from `types.h`) identifies a zero-based column in the unwrapped logical line. No `LayoutViewState`, `LayoutDelta`, or viewport type is introduced by this step; those belong to the `viewport-wrap-scrollbar` task (Wave 2).
 
-`include/ssg/layout.h` and `src/layout.cpp` are owned by `unicode-cell-layout` (Wave 1) and extended additively by `viewport-wrap-scrollbar` (Wave 2). They are not file-disjoint but are dependency-ordered, so the parallel constraint does not apply.
+`include/ssg/layout.h` and `src/layout.cpp` are owned by `unicode-cell-layout`
+(Wave 1). `viewport-wrap-scrollbar` (Wave 2) consumes that API from the
+separate `include/ssg/viewport.h` and `src/viewport.cpp` component. This keeps
+the Unicode cell-run implementation unchanged while making the dependency
+explicit.
+
+## Viewport, wrapping, scrollbar, and hit targets (normative, Plan step 1b)
+
+`ViewportDimensions` contains a positive cell-column count and a positive
+visual-row count. The viewport component accepts dimensions down to one by one;
+the shell's 20-by-4 supported-grid minimum and `viewport_too_small` state are a
+separate shell-layout concern.
+
+`compute_viewport` is a pure function over an ordered span of `CellRun` values,
+one per logical line, viewport dimensions, and a requested first visual row.
+It returns typed `ViewportViewState`. An empty span has zero visual rows; an
+empty `CellRun` contributes one empty visual row.
+
+Wrapping preserves each `CellSpan` atomically and never changes logical line,
+byte, or cell identity. A nonzero-width span that does not fit in a nonempty
+visual row starts the next visual row. A span wider than the full viewport
+(including a wide grapheme or tab in a one-column viewport) occupies one
+visual row and is clipped to the viewport width; it is never split into
+multiple visual rows. Zero-width spans remain in their current visual row and
+never force a wrap. Every emitted visual row records its logical line, source
+span range, starting logical cell, un-clipped content width, and clipped
+visible width.
+
+The requested first visual row is clamped to
+`[0, max(total_visual_rows - viewport_rows, 0)]`. `scroll_viewport_by` applies a
+signed row delta with saturating arithmetic and then uses the same clamping
+path. The scrollbar track is exactly `viewport_rows` cells. When all content
+fits, the thumb fills the track and starts at zero. Otherwise:
+
+```
+thumb_size  = max(1, floor(viewport_rows * viewport_rows / total_visual_rows))
+thumb_start = floor(first_visual_row * (viewport_rows - thumb_size)
+                    / (total_visual_rows - viewport_rows))
+```
+
+All arithmetic is bounded integer arithmetic. The thumb is always wholly
+inside the track.
+
+`CellHitTarget` uses viewport-relative zero-based row and column coordinates.
+Each visible cell occupied by a nonzero-width source span has one target
+containing the logical line, the span's starting logical `CellIndex`, and its
+byte offset/length. Both cells of a visible wide grapheme map to the same
+source span. Clipped cells and zero-width spans have no target.
+
+This observable component exports `ViewportViewState`, `ViewportDelta`, and
+`derive_viewport_delta`. Equal states derive an unchanged delta with no
+replacement payload; changed states carry one complete replacement state.
 
 ## Plan
 
 | # | Step | Task | Files | Oracle | Invariants |
 |---|------|------|-------|--------|------------|
 | 1a | Implement grapheme segmentation and per-logical-line cell runs (no wrapping, no scrollbar, no viewport) | `unicode-cell-layout` (Wave 1) | `include/ssg/layout.h`, `src/layout.cpp`, `data/unicode/`, `tests/fixtures/layout/cells/`, `tests/test_cell_layout.cpp`, `tests/test_gcb_oracle.cpp`, `cmake/components/unicode-cell-layout.cmake` | Official Unicode 15.0.0 `GraphemeBreakTest.txt` corpus plus hand-authored combining, emoji, double-width, tab, control, and invalid-UTF-8 cell-run goldens | I7 |
-| 1b | Implement wrap model and scrollbar model (adds wrap and scrollbar to layout.h/layout.cpp) | `viewport-wrap-scrollbar` (Wave 2) | `include/ssg/layout.h`, `src/layout.cpp`, `tests/test_layout.cpp` | Unicode/wrap/scrollbar goldens | I7 |
+| 1b | Implement visual-row wrapping, viewport slicing, scrolling, scrollbar metrics, and cell hit targets atop cell runs | `viewport-wrap-scrollbar` (Wave 2) | `include/ssg/viewport.h`, `src/viewport.cpp`, `tests/fixtures/layout/viewports/`, `tests/test_viewport.cpp`, `cmake/components/viewport-wrap-scrollbar.cmake` | Hand-authored empty/short/wide/wrapped/tiny viewport, scrollbar, and hit-target goldens plus bounds properties | I7 |
 | 2 | Implement fixed shell, prompt/status queue geometry, caret reveal, and accessible labels | `shell-layout` (Wave 2) | `include/ssg/ui_layout.h`, `src/ui_layout.cpp`, `data/ui/status_fields.json`, `tests/test_ui_layout.cpp` | rectangle, prompt, queue, caret-visibility, and accessibility goldens | I15, I17, I23 |
 | 3 | Implement the sole-source 16-color theme model | `theme-model` (Wave 1) | `include/ssg/theme.h`, `src/theme.cpp`, `data/themes/*`, `tests/fixtures/theme_roles.json`, `tests/test_theme.cpp` | exact indexed cardinality; exhaustive semantic/syntax mappings; shared co-visible-role distinctness; deterministic snapshots; source/config scans rejecting literal or computed colors outside theme data | I8, I22 |
 
