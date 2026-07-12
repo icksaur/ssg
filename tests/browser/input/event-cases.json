@@ -1,0 +1,30 @@
+{
+  "keyboard": [
+    {
+      "name": "unmodified key is captured by code",
+      "event": {"code": "KeyA", "ctrlKey": false, "altKey": false, "metaKey": false, "shiftKey": false},
+      "stroke": "KeyA"
+    },
+    {
+      "name": "modifier order is canonical",
+      "event": {"code": "KeyM", "ctrlKey": true, "altKey": false, "metaKey": false, "shiftKey": true},
+      "stroke": "Ctrl+Shift+KeyM"
+    },
+    {
+      "name": "reserved browser location chord",
+      "event": {"code": "KeyL", "ctrlKey": true, "altKey": false, "metaKey": false, "shiftKey": false},
+      "stroke": "Ctrl+KeyL"
+    }
+  ],
+  "ime": {
+    "updates": ["n", "ni"],
+    "committed": "你",
+    "command": {"command_id": "text.insert", "arguments": {"text": "你"}}
+  },
+  "pointer": {
+    "command": {
+      "command_id": "cursor.set_position",
+      "arguments": {"byte_offset": 4, "line": 1, "cell": 2}
+    }
+  }
+}

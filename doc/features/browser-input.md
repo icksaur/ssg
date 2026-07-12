@@ -28,6 +28,31 @@ I6, I16, I17, I18, I20 from `doc/spec.md`.
   capture.
 - Mouse selection, wheel, and scrollbar gestures use the same semantic command path as keyboard navigation.
 - Locality is host-granted; browser code may not infer or self-assert it.
+- Plan 3 supplies a test-only browser client, not the product browser fixture.
+  `tests/browser/input/harness.html` loads the checked-in keymap and captured
+  event cases through `tests/browser/input/browser-input.mjs`. A dependency-free
+  Node runner serves those files over loopback HTTP, launches already-installed
+  Chromium, Firefox, and WebKit executables, and collects each runtime's
+  event-to-semantic report. Browser-native automation supplies trusted events
+  when the installed runtime exposes it; otherwise the live runtime constructs
+  and dispatches standards DOM events and records the exact fields observed by
+  its listeners. Checked-in cases are replayed by the source gate even when a
+  browser executable is unavailable; the required live matrix gate fails with
+  the missing runtime names.
+- Plan 3 adds browser-layer coverage beyond the C++ input/keymap contract:
+  engine-observed key events map to semantic commands, composition updates are
+  suppressed until one committed UTF-8 insertion, pointer/wheel/scrollbar
+  gestures produce existing semantic argument shapes, and reserved chords are
+  neither mapped nor suppressed.
+- Clipboard denial and unavailable APIs fall back to the test client's internal
+  register and emit the typed
+  **clipboard.system_paste_unavailable** status with a non-empty action label.
+  The harness observes this semantic status object, never DOM presentation.
+- File-drop coverage in this task is client-side capability gating only. The
+  test-only local client renders and emits dropped content only when its
+  snapshot capabilities contain `local_file_drop`; remote and locality-unknown
+  snapshots do neither. Common-dispatch capability rejection remains owned by
+  session/file-command integration and is not reimplemented by this harness.
 
 ## Risks and Mitigations
 
@@ -47,7 +72,7 @@ I6, I16, I17, I18, I20 from `doc/spec.md`.
 |---|------|-------|--------|------------|
 | 1 | Accept required-command and browser-reserved fixtures | `data/required-commands.json`, `tests/browser/fixtures/reserved-chords.json` | exact comparison with the union of all P0 normative lists, independently maintained category/count/owner data, exact capability and Lua/keymap/palette exclusions, and browser docs/capture | I6, I18, I20 |
 | 2 | Define keymap and hit-target API data | `include/ssg/input.h`, `src/input.cpp`, `data/default-keymap.json`, `tests/test_input.cpp` | exact coverage of the 159 keymap-eligible commands, rejection of excluded/duplicate/unreachable/reserved bindings, committed UTF-8 and semantic hit-target round trips, and backend dependency scan | I16, I17 |
-| 3 | Implement browser input, IME, mouse, and clipboard adapters | `examples/browser/*`, `tests/browser/*` | real-browser capture and permission cases | I6, I18 |
+| 3 | Implement the test-only browser input, IME, mouse, clipboard, and file-drop conformance harness without the product browser fixture | `tests/browser/input/*`, `cmake/components/browser-input-conformance.cmake` | checked-in event/semantic cases plus a dependency-free loopback runner against already-installed Chromium, Firefox, and WebKit; IME commit, clipboard denial/internal fallback/status, reserved chord, pointer/wheel/scrollbar, and local-only file-drop cases | I6, I18 |
 
 ## Rationale (optional, skippable)
 
