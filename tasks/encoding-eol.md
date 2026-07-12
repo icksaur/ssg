@@ -6,10 +6,11 @@
 
 ## Scope
 
-Implement decode/encode and status metadata for UTF-8, BOM variants,
-UTF-16LE/BE, Windows-1252, ISO-8859-1, and mixed line endings, and own
-`file.reopen_with_encoding`, `file.set_encoding`, `file.set_line_ending`, and
-`file.set_final_newline` command sets.
+Implement the pure decode/encode/EOL primitives and status metadata for UTF-8,
+BOM variants, UTF-16LE/BE, Windows-1252, ISO-8859-1, and mixed line endings.
+Own the immutable descriptors for exactly `file.reopen_with_encoding`,
+`file.set_encoding`, `file.set_line_ending`, and `file.set_final_newline`;
+file-tab command handlers remain in the later recovery/file-command layer.
 
 ## Files
 

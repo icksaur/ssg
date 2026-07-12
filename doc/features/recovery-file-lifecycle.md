@@ -43,6 +43,33 @@ Normative commands owned by this feature:
 
 Commands requiring a path use the non-modal `PromptSurface` contract. `file.open_dropped_content` is an ingress-only, Lua-excluded command available only when authenticated host policy grants its `InvocationPrincipal` the `local_file_drop` capability. It applies the normal decode/binary pipeline and opens bytes as untitled documents with bounded sanitized display labels. Labels gain no path authority. Remote and locality-unknown clients cannot invoke it. Encoding, BOM, and line-ending behavior follows `doc/spec.md`.
 
+The encoding/EOL component is a pure library seam. It does not read settings,
+documents, tabs, or files. Callers pass the selected encoding and output policy
+explicitly. Automatic detection recognizes valid UTF-8, UTF-8 BOM, and
+BOM-marked UTF-16LE/BE. Windows-1252, ISO-8859-1, and BOM-less UTF-16 are
+manual reopen choices only. Invalid BOM-less UTF-8 is refused rather than
+replaced; decoding either single-byte encoding always succeeds.
+
+Decoded text is valid UTF-8 with all line terminators normalized to LF. Separate
+per-line terminator metadata records LF, CRLF, CR, or no terminator, allowing
+mixed endings and final-newline presence to round trip byte-exactly. CR-only is
+a first-class detected ending. NUL/binary classification remains the
+file-command pipeline's responsibility.
+
+UTF-16 output always includes its endian BOM. UTF-8 preserves whether its BOM
+was present; no command toggles that flag. Windows-1252 and ISO-8859-1 encoding
+refuse atomically when any Unicode scalar is unrepresentable and report the
+offending UTF-8 byte offset; substitution is never allowed.
+
+`file.reopen_with_encoding` asks the recovery layer to re-decode the original
+file bytes and create its compensating record. `file.set_encoding` changes only
+the next-save encoding after representability validation.
+`file.set_line_ending` is the explicit normalization command and replaces every
+stored terminator with LF, CRLF, or CR. `file.set_final_newline` selects
+preserve-as-detected, ensure-present, or ensure-absent. These commands' handlers
+and recovery effects belong to the later file-command layer; this component
+exports only their immutable descriptors and pure view/delta derivation.
+
 ## Invariants
 
 I4, I5, I9, I10, I16, I19, I21 from `doc/spec.md`.
