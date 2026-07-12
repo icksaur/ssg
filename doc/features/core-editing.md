@@ -47,12 +47,22 @@ I3, I4, I5, I13, I16, I18, I19 from `doc/spec.md`.
 | # | Step | Files | Oracle | Invariants |
 |---|------|-------|--------|------------|
 | 1 | Establish the reference editor | `tests/reference_editor.h`, `tests/reference_editor.cpp`, `tests/test_reference_editor.cpp`, `cmake/components/reference-editor.cmake` | hand-computed mutation, selection, clipboard-transform, and history command scripts covering the primitives listed below | I13 |
-| 2 | Implement piece-tree transactions and document modes | `include/ssg/document.h`, `src/document.cpp`, `tests/test_document.cpp`, `tests/test_piece_tree.cpp` | reference snapshots; read-only failures | I3, I5 |
+| 2 | Implement the private balanced piece-tree storage | `src/piece_tree.h`, `src/piece_tree.cpp`, `tests/test_piece_tree.cpp`, `cmake/components/piece-tree.cmake` | randomized insert, erase, read, and line queries against a direct `std::string` model, plus structural invariants | I4 |
+| 3 | Implement document transactions and document modes over private storage | `include/ssg/document.h`, `src/document.cpp`, `tests/test_document.cpp` | reference-editor snapshots; read-only failures | I3, I5, I13 |
 
 **Reference editor primitives (Plan 1 scope).** The reference editor is a minimal `std::string`-based implementation that covers: text mutations (`text.insert`, `text.newline`, `text.delete_backward`, `text.delete_forward`, `text.delete_word_backward`, `text.delete_word_forward`); cursor movement (`cursor.set_position`, `cursor.left`, `cursor.right`, `cursor.word_left`, `cursor.word_right`, `cursor.line_up`, `cursor.line_down`, `cursor.line_start`, `cursor.line_end`, `cursor.document_start`, `cursor.document_end`); selection (`select.set_range`, `select.add_range`, `select.left`, `select.right`, `select.word_left`, `select.word_right`, `select.line_up`, `select.line_down`, `select.line_start`, `select.line_end`, `select.document_start`, `select.document_end`, `select.all`, `select.add_next_occurrence`, `select.add_cursor_up`, `select.add_cursor_down`, `select.split_into_lines`); clipboard (`clipboard.copy`, `clipboard.cut`, `clipboard.paste`); history (`edit.undo`, `edit.redo`); and edit transforms (`edit.indent`, `edit.outdent`, `edit.duplicate_line`, `edit.move_line_up`, `edit.move_line_down`, `edit.delete_line`, `edit.join_lines`, `edit.uppercase`, `edit.lowercase`, `edit.swap_case`, `edit.sort_lines`, `edit.transpose`, `edit.toggle_comment`). Page and scroll commands and `select.to_matching_bracket` are deferred to later tasks that own viewport and bracket state. The reference editor may use `include/ssg/types.h` and `include/ssg/config.h` (foundation domain value types, not editing code) but must reimplement all mutation, selection, and history algorithms independently; using any SSG editing, selection, or history implementation would defeat the oracle purpose of I13.
-| 3 | Implement movement, caret reveal, selections, multi-cursor creation, typing, indentation, lines, comments, brackets, and transforms | `include/ssg/selection.h`, `src/selection.cpp`, `tests/test_selection.cpp` | reference command scripts and viewport intersection properties | I5, I13, I23 |
-| 4 | Implement clipboard request/response transforms | `include/ssg/clipboard.h`, `src/clipboard.cpp`, `tests/test_clipboard.cpp` | hand cases and stale/denied fault tests | I16, I18 |
-| 5 | Implement coalesced bounded per-file undo/redo with selection restoration | `include/ssg/history.h`, `src/history.cpp`, `tests/test_history.cpp` | timed coalescing and forward/undo/redo round trips | I5 |
+The piece tree stores byte and newline summaries in this task. Display metadata
+depends on the separately scheduled Unicode cell-layout work and is added by
+the viewport/layout layer rather than computed by storage. The private node
+summary is deliberately centralized so later cached metadata can be attached
+without changing the piece split/join representation. A direct `std::string`
+model is the strongest independent oracle for the storage-only operations;
+the `reference-editor` dependency establishes the independent editor oracle
+that the following document-transaction task uses against this storage.
+
+| 4 | Implement movement, caret reveal, selections, multi-cursor creation, typing, indentation, lines, comments, brackets, and transforms | `include/ssg/selection.h`, `src/selection.cpp`, `tests/test_selection.cpp` | reference command scripts and viewport intersection properties | I5, I13, I23 |
+| 5 | Implement clipboard request/response transforms | `include/ssg/clipboard.h`, `src/clipboard.cpp`, `tests/test_clipboard.cpp` | hand cases and stale/denied fault tests | I16, I18 |
+| 6 | Implement coalesced bounded per-file undo/redo with selection restoration | `include/ssg/history.h`, `src/history.cpp`, `tests/test_history.cpp` | timed coalescing and forward/undo/redo round trips | I5 |
 
 ## Rationale (optional, skippable)
 
