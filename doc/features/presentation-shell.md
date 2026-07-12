@@ -109,6 +109,15 @@ I7, I8, I15, I17, I22, I23 from `doc/spec.md`.
 ## Acceptance (Definition of Done)
 
 - Observable: equal viewport inputs produce equal shell/cell snapshots across clients.
+- In-process TUI fixtures receive terminal events as committed text, key
+  strokes, or semantic hit targets, resolve them through snapshot input models,
+  and submit typed commands without owning editor state. Because
+  `EditorSession` has no snapshot accessor, a fixture host binds the complete
+  command catalog and explicitly assembles snapshots; direct and TUI oracle
+  paths share that host model and one client-neutral workflow script.
+- TUI grid goldens are hand-authored fixtures. Every rendered cell references
+  an index in the snapshot's authoritative 16-entry palette; clients do not
+  define or derive colors.
 - Budgets: unchanged viewports emit no cell-run payload.
 - Gates: layout/theme tests and browser accessibility snapshots are green.
 - Oracles: the official Unicode 15.0.0 `GraphemeBreakTest.txt` corpus, hand-authored Unicode/wrap/geometry/scrollbar goldens, accessibility snapshots, and color-origin properties.
