@@ -9,7 +9,8 @@
 //     Rules: GB6–GB8 (Hangul), GB9 (Extend/ZWJ), GB9a (SpacingMark),
 //            GB9b (Prepend), GB11 (Extended_Pictographic ZWJ sequences),
 //            GB12/13 (Regional Indicator flag pairs).
-//     GB3–GB5 are subsumed by the no-CR/LF input precondition.
+//     CR/LF cases from GB3–GB5 are excluded by the logical-line precondition;
+//     GB4/GB5 boundaries around every other GCB=Control are enforced.
 //   - Terminal display-width mapping (UAX #11 EAW + emoji-data, Unicode 15.0.0)
 //
 // This module does NOT implement line wrapping, scrollbars, viewports, or
@@ -28,12 +29,15 @@ namespace ssg {
 
 // Kind of grapheme cluster in a cell run.
 enum class CellKind : uint8_t {
-    // Printable grapheme cluster (narrow or wide).
-    // cell_width is 1 (narrow) or 2 (wide per UAX #11 / emoji-data).
+    // Printable grapheme cluster (narrow or wide), OR a lone extending code
+    // point (GCB=Extend/ZWJ/SpacingMark) that has nonzero display width (e.g.
+    // a standalone wide emoji modifier such as U+1F3FB–U+1F3FF with EAW=W).
+    // cell_width is 1 (narrow) or 2 (wide per UAX #11 / Emoji_Presentation).
     text,
 
-    // Zero-width combining cluster.  The base code point is itself a combining
-    // or zero-width character with no prior base in the logical line.
+    // Zero-width combining cluster.  The base code point is a combining,
+    // variation-selector, or zero-width extending character with no prior base
+    // in the logical line, and its display width is 0.
     // cell_width is always 0.
     combining,
 
@@ -41,9 +45,8 @@ enum class CellKind : uint8_t {
     // cell_width advances to the next tab stop (1..tab_width columns).
     tab,
 
-    // Non-tab C0 control (U+0000–U+0008, U+000A–U+001F), DEL (U+007F), or
-    // C1 control (U+0080–U+009F).  Rendered as a visible 1-cell replacement
-    // glyph; cell_width is always 1.
+    // GCB=Control cluster. C0, DEL, and C1 controls render as a visible
+    // 1-cell replacement glyph; zero-width format controls consume 0 cells.
     control,
 
     // Invalid UTF-8 byte.  Each individual invalid byte yields one span with
@@ -71,9 +74,8 @@ struct CellRun {
 
 // Compute the cell run for one logical line of UTF-8 text.
 //
-// Preconditions:
-//   - line_utf8 must not contain '\n' or '\r'.
-//   - tab_width must be in [1, 16].
+// Precondition: line_utf8 must not contain '\n' or '\r'.
+// Throws std::invalid_argument when tab_width is outside [1, 16].
 //
 // Each invalid UTF-8 byte (lone continuation, overlong lead, truncated
 // multi-byte sequence, or byte > U+10FFFF encoding range) yields exactly one

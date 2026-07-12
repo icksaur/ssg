@@ -39,34 +39,50 @@ I7, I8, I15, I17, I22, I23 from `doc/spec.md`.
 - Observable: equal viewport inputs produce equal shell/cell snapshots across clients.
 - Budgets: unchanged viewports emit no cell-run payload.
 - Gates: layout/theme tests and browser accessibility snapshots are green.
-- Oracles: hand-authored Unicode/wrap/geometry/scrollbar goldens, accessibility snapshots, and color-origin properties.
+- Oracles: the official Unicode 15.0.0 `GraphemeBreakTest.txt` corpus, hand-authored Unicode/wrap/geometry/scrollbar goldens, accessibility snapshots, and color-origin properties.
 
 ## Cell-width rules (normative, referenced by Plan steps 1a and 1b)
 
-Unicode version pinned at **15.0.0**. Grapheme cluster boundaries follow **UAX #29 extended grapheme clusters** including ZWJ sequences (GB11), regional-indicator flag pairs (GB12/GB13), emoji modifier sequences, and variation-selector attachment. Width follows **UAX #11 East Asian Width** (EAW = Wide or Fullwidth → 2 cells) plus `emoji-data.txt` emoji-presentation sequences.
+Unicode version pinned at **15.0.0**. Grapheme cluster boundaries follow **UAX #29 extended grapheme clusters** using a full GCB property state machine sourced from `data/unicode/GraphemeBreakProperty.txt` (generated via `tools/gen_gcb_table.py`). Rules implemented: GB6–GB8 (Hangul), GB9 (× Extend/ZWJ), GB9a (× SpacingMark), GB9b (Prepend ×), GB11 (ExtPic Extend* ZWJ × ExtPic), GB12/GB13 (RI × RI). Width follows **UAX #11 East Asian Width** (`EAW=W` or `EAW=F`) plus **Emoji_Presentation** and **Emoji+VS-16 sequence** rules.
 
-Per-code-point rules (applied to the **base** code point of each grapheme cluster):
+Per-cluster width rules (applied to the **effective base** code point after Prepend absorption):
 
-- **Printable ASCII (U+0020–U+007E):** 1 cell.
+- **EAW = W or F** (`is_eaw_wide`, from `data/unicode/east_asian_width.txt` via `tools/gen_eaw_table.py`): 2 cells.
+- **Emoji_Presentation = Yes** (`is_emoji_pres`, from `emoji-data.txt`): 2 cells. This covers Regional Indicators (U+1F1E6–U+1F1FF, EAW=N) and all other characters whose default presentation is emoji-style.
+- **Emoji + VS-16 sequence:** a cluster whose effective base has `Emoji=Yes` (from `emoji-data.txt`) and into which U+FE0F (Variation Selector 16) was absorbed (via GB9) → 2 cells. This upgrades text-default emoji such as `#` (U+0023), `*` (U+002A), `0`–`9` (U+0030–U+0039), U+2702 ✂ (BLACK SCISSORS), and similar characters.
+- **All other printable code points:** 1 cell (EAW=N, Na, H, A, or unassigned).
+
+Per-code-point rules:
+
+- **Printable ASCII (U+0020–U+007E):** 1 cell (covered by the last rule above, since none are EAW=W/F or Emoji_Presentation).
 - **Horizontal tab (U+0009):** advances to the next column index that is a multiple of `tab_width` relative to the logical line start (cell 0); minimum advance 1 cell.
-- **C0 controls (U+0000–U+0008, U+000A–U+001F) and DEL (U+007F):** rendered as a visible 1-cell replacement glyph.
-- **C1 controls (U+0080–U+009F):** rendered as a visible 1-cell replacement glyph.
-- **Combining / zero-width code points** (General_Category Mn, Me, Cf zero-width; U+0300–U+036F and the full set from `data/unicode/combining_zero_width.txt`): 0 cells; the code point extends its preceding grapheme cluster.
-- **Wide code points** (EAW = W or F, per `data/unicode/east_asian_width.txt`): 2 cells.
-- **All other printable code points:** 1 cell.
-- **Invalid UTF-8:** each maximal invalid byte unit (lone lead byte, overlong sequence lead, lone continuation byte, or truncated sequence lead at end-of-input) yields **one** replacement glyph of 1 cell; every byte of the malformed unit is reported individually, one span per byte.
+- **GCB=Control:** each code point is its own cluster (NOT absorbed into a preceding cluster). Two sub-cases by Unicode general category:
+  - **C0 (U+0000–U+001F), DEL (U+007F), C1 (U+0080–U+009F):** `kind=control, width=1` (visible replacement glyph).
+  - **Non-C0/C1 GCB=Control (cp > U+009F):** `kind=control, width=0` (Unicode Cf format characters: U+00AD Soft Hyphen, U+200B ZWSP, U+202A–U+202E bidi controls, U+2060–U+206F Word Joiners, U+FEFF BOM, and others listed in `GraphemeBreakProperty.txt` as GCB=Control).
+- **GCB=Extend, ZWJ, SpacingMark:** extends the preceding grapheme cluster (GB9/GB9a). A lone Extend/ZWJ/SpacingMark at line start is a cluster: `kind=text, width=N` if the code point has nonzero display width (e.g. wide emoji modifiers U+1F3FB–U+1F3FF, EAW=W, produce `kind=text, width=2`); otherwise `kind=combining, width=0`. This preserves the invariant: `CellKind::combining` always has `cell_width=0`.
+- **GCB=Prepend:** 0 cells until a following non-control code point is absorbed (GB9b), at which point the cluster takes the following code point's width. A lone Prepend at end-of-line has width 0.
+- **Invalid UTF-8:** each maximal invalid byte unit yields **one** replacement glyph of 1 cell; every byte of the malformed unit is reported individually, one span per byte.
 
-A grapheme cluster's display width equals its base code point's width. Combining/zero-width extending code points within the cluster contribute 0 additional cells. A lone combining mark (no preceding base in the current logical line) is a cluster of kind `combining` with width 0.
+A grapheme cluster's display width equals its effective base code point's width (after VS-16 upgrade if applicable). Combining/zero-width extending code points within the cluster contribute 0 additional cells.
+
+**Data sources and separation of concerns:**
+- `k_extpic[]` (Extended_Pictographic) is used for GB11 segmentation only — never for width.
+- `k_wide[]` (EAW=W/F) is used for width only — not for segmentation.
+- `k_emoji_pres[]` (Emoji_Presentation) is used for width only.
+- `k_emoji[]` (Emoji property) is used for VS-16 sequence detection only.
+These must not be conflated.
+
+**GB11 state machine:** `GB11State ∈ { None, ExtPic, Zwj }`. Initial state: `ExtPic` if the cluster base is Extended_Pictographic (per `emoji-data.txt`), else `None`. Transitions on GB9 Extend absorption: `ExtPic→ExtPic`, `Zwj→None`, `None→None`. Transitions on GB9 ZWJ absorption: `ExtPic→Zwj`, `Zwj→None`, `None→None`. GB9a SpacingMark absorption: any state → `None`. GB11 fires only when `state==Zwj` and the next code point is Extended_Pictographic; result state → `ExtPic`.
 
 The `compute_cell_run` function is a **pure function** taking a `std::string_view` (one logical line, must not contain `\n` or `\r`) and an `int tab_width` in `[1, 16]`. It returns a `CellRun` containing one `CellSpan` per grapheme cluster. `CellIndex` (from `types.h`) identifies a zero-based column in the unwrapped logical line. No `LayoutViewState`, `LayoutDelta`, or viewport type is introduced by this step; those belong to the `viewport-wrap-scrollbar` task (Wave 2).
 
-`layout.h`/`layout.cpp` are owned by `unicode-cell-layout` (Wave 1) and extended additively by `viewport-wrap-scrollbar` (Wave 2). They are not file-disjoint but are dependency-ordered, so the parallel constraint does not apply.
+`include/ssg/layout.h` and `src/layout.cpp` are owned by `unicode-cell-layout` (Wave 1) and extended additively by `viewport-wrap-scrollbar` (Wave 2). They are not file-disjoint but are dependency-ordered, so the parallel constraint does not apply.
 
 ## Plan
 
 | # | Step | Task | Files | Oracle | Invariants |
 |---|------|------|-------|--------|------------|
-| 1a | Implement grapheme segmentation and per-logical-line cell runs (no wrapping, no scrollbar, no viewport) | `unicode-cell-layout` (Wave 1) | `include/ssg/layout.h`, `src/layout.cpp`, `data/unicode/`, `tests/fixtures/layout/cells/`, `tests/test_cell_layout.cpp`, `cmake/components/unicode-cell-layout.cmake` | Hand-authored combining, emoji, double-width, tab, control, and invalid-UTF-8 cell-run goldens (Unicode 15.0.0) | I7 |
+| 1a | Implement grapheme segmentation and per-logical-line cell runs (no wrapping, no scrollbar, no viewport) | `unicode-cell-layout` (Wave 1) | `include/ssg/layout.h`, `src/layout.cpp`, `data/unicode/`, `tests/fixtures/layout/cells/`, `tests/test_cell_layout.cpp`, `tests/test_gcb_oracle.cpp`, `cmake/components/unicode-cell-layout.cmake` | Official Unicode 15.0.0 `GraphemeBreakTest.txt` corpus plus hand-authored combining, emoji, double-width, tab, control, and invalid-UTF-8 cell-run goldens | I7 |
 | 1b | Implement wrap model and scrollbar model (adds wrap and scrollbar to layout.h/layout.cpp) | `viewport-wrap-scrollbar` (Wave 2) | `include/ssg/layout.h`, `src/layout.cpp`, `tests/test_layout.cpp` | Unicode/wrap/scrollbar goldens | I7 |
 | 2 | Implement fixed shell, prompt/status queue geometry, caret reveal, and accessible labels | `shell-layout` (Wave 2) | `include/ssg/ui_layout.h`, `src/ui_layout.cpp`, `data/ui/status_fields.json`, `tests/test_ui_layout.cpp` | rectangle, prompt, queue, caret-visibility, and accessibility goldens | I15, I17, I23 |
 | 3 | Implement the sole-source 16-color theme model | `theme-model` (Wave 1) | `include/ssg/theme.h`, `src/theme.cpp`, `data/themes/*`, `tests/fixtures/theme_roles.json`, `tests/test_theme.cpp` | exact indexed cardinality; exhaustive semantic/syntax mappings; shared co-visible-role distinctness; deterministic snapshots; source/config scans rejecting literal or computed colors outside theme data | I8, I22 |

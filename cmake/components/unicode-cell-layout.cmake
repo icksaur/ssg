@@ -22,4 +22,13 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     )
     target_link_libraries(test_cell_layout PRIVATE ssg)
     add_test(NAME test_cell_layout COMMAND test_cell_layout)
+
+    add_executable(test_gcb_oracle
+        ${SSG_SOURCE_DIR}/tests/test_gcb_oracle.cpp
+    )
+    target_link_libraries(test_gcb_oracle PRIVATE ssg)
+    target_compile_definitions(test_gcb_oracle PRIVATE
+        UNICODE_DATA_DIR="${SSG_SOURCE_DIR}/data/unicode"
+    )
+    add_test(NAME test_gcb_oracle COMMAND test_gcb_oracle)
 endif()

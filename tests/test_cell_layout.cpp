@@ -229,7 +229,7 @@ TEST(emoji_man_standalone) {
 
 TEST(emoji_man_zwj_woman) {
     // MAN (F0 9F 91 A8) + ZWJ (E2 80 8D) + WOMAN (F0 9F 91 A9)
-    // ZWJ is in k_combining; WOMAN (wide) follows ZWJ → GB11, absorbed into cluster.
+    // ZWJ has GCB=ZWJ; WOMAN follows the armed GB11 pattern and is absorbed.
     // → 1 span, 11 bytes, 2 cells, kind=text
     const std::string_view seq = "\xF0\x9F\x91\xA8\xE2\x80\x8D\xF0\x9F\x91\xA9";
     auto run = ssg::compute_cell_run(seq);
@@ -364,6 +364,18 @@ TEST(tab_two_tabs_w4) {
     ASSERT_EQ(run.spans.size(), 2u);
     CHECK_SPAN(run, 0, 0, 1, 4, TAB);
     CHECK_SPAN(run, 1, 1, 1, 4, TAB);
+}
+
+TEST(tab_width_invalid_zero) {
+    ASSERT_THROWS(ssg::compute_cell_run("", 0), std::invalid_argument);
+}
+
+TEST(tab_width_invalid_negative) {
+    ASSERT_THROWS(ssg::compute_cell_run("", -1), std::invalid_argument);
+}
+
+TEST(tab_width_invalid_too_large) {
+    ASSERT_THROWS(ssg::compute_cell_run("", 17), std::invalid_argument);
 }
 
 // ---------------------------------------------------------------------------
@@ -735,16 +747,16 @@ TEST(prepend_lone_at_eol) {
     auto run = ssg::compute_cell_run("\xD8\x80");
     ASSERT_EQ(run.total_cells, 0u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 2, 0, T);
+    CHECK_SPAN(run, 0, 0, 2, 0, C);
 }
 
 TEST(prepend_before_control) {
     // Prepend (D8 80) before BEL (07): control is GCB-Control → not absorbed.
-    // → Prepend cluster {0, 2, 0, T} + control cluster {2, 1, 1, CTL}
+    // → Prepend cluster {0, 2, 0, C} + control cluster {2, 1, 1, CTL}
     auto run = ssg::compute_cell_run("\xD8\x80\x07");
     ASSERT_EQ(run.total_cells, 1u);
     ASSERT_EQ(run.spans.size(), 2u);
-    CHECK_SPAN(run, 0, 0, 2, 0, T);
+    CHECK_SPAN(run, 0, 0, 2, 0, C);
     CHECK_SPAN(run, 1, 2, 1, 1, CTL);
 }
 
@@ -769,13 +781,31 @@ TEST(edge_valid_3byte_cjk) {
 
 TEST(edge_variation_selector) {
     // U+0023 '#' + U+FE0F VS-16 (EF B8 8F, variation selector 16)
-    // VS-16 is in k_combining (range FE00-FE0F) → extends '#' cluster
-    // '#' is ASCII narrow (1 cell); VS-16 adds 0 cells
-    // → 1 span, 4 bytes, 1 cell
+    // '#' is Emoji=Yes, Emoji_Presentation=No → alone=1 cell (text-default emoji)
+    // VS-16 (GCB=Extend) is absorbed via GB9; saw_vs16=true triggers upgrade to 2
+    // → 1 span, 4 bytes, 2 cells (emoji presentation sequence)
     auto run = ssg::compute_cell_run("#\xEF\xB8\x8F");
-    ASSERT_EQ(run.total_cells, 1u);
+    ASSERT_EQ(run.total_cells, 2u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 4, 1, T);
+    CHECK_SPAN(run, 0, 0, 4, 2, T);
+}
+
+TEST(emoji_scissors_alone) {
+    // U+2702 ✂ BLACK SCISSORS (E2 9C 82): EAW=N, Emoji=Yes, Emoji_Presentation=No
+    // Text-default emoji; alone → 1 cell (was INCORRECTLY 2 in old k_wide[])
+    auto run = ssg::compute_cell_run("\xE2\x9C\x82");
+    ASSERT_EQ(run.spans.size(), 1u);
+    CHECK_SPAN(run, 0, 0, 3, 1, T);
+    ASSERT_EQ(run.total_cells, 1u);
+}
+
+TEST(emoji_scissors_vs16) {
+    // U+2702 ✂ + U+FE0F VS-16 (E2 9C 82 EF B8 8F) = 6 bytes
+    // Emoji=Yes + VS-16 absorbed → upgrade to 2 cells
+    auto run = ssg::compute_cell_run("\xE2\x9C\x82\xEF\xB8\x8F");
+    ASSERT_EQ(run.spans.size(), 1u);
+    CHECK_SPAN(run, 0, 0, 6, 2, T);
+    ASSERT_EQ(run.total_cells, 2u);
 }
 
 TEST(edge_space_is_printable) {
@@ -787,9 +817,129 @@ TEST(edge_space_is_printable) {
 }
 
 // ---------------------------------------------------------------------------
+// Adversarial fixtures — GB11 state machine bugs (must pass with new code)
+// Bug 1: lone ZWJ base followed by ExtPic → was 1 cluster (ZWJ treated as ExtPic
+//         base), should be 2 clusters.
+// Bug 2: ExtPic + ZWJ + ZWJ + ExtPic → was 1 cluster (second ZWJ re-armed
+//         after_zwj), should be 2 clusters (ZWJ ZWJ breaks Extend* pattern).
+
+TEST(adv_lone_zwj_before_extpic) {
+    // U+200D ZWJ (E2 80 8D) + U+1F600 GRINNING FACE (F0 9F 98 80)
+    // ZWJ alone is not ExtPic; it does not satisfy the ExtPic precondition of GB11.
+    // Expected: 2 clusters — [ZWJ] {0,3,0,C} and [😀] {3,4,2,T}
+    auto run = ssg::compute_cell_run("\xE2\x80\x8D\xF0\x9F\x98\x80");
+    ASSERT_EQ(run.spans.size(), 2u);
+    CHECK_SPAN(run, 0, 0, 3, 0, C);  // ZWJ: combining, 0 cells
+    CHECK_SPAN(run, 1, 3, 4, 2, T);  // 😀: text, 2 cells
+    ASSERT_EQ(run.total_cells, 2u);
+}
+
+TEST(adv_extpic_zwj_zwj_extpic) {
+    // U+1F600 (F0 9F 98 80) + ZWJ (E2 80 8D) + ZWJ (E2 80 8D) + U+1F600
+    // Pattern: ExtPic ZWJ ZWJ ExtPic.  The second ZWJ has GCB=ZWJ (not Extend)
+    // so it is NOT part of Extend*; GB11 requires ExtPic Extend* ZWJ × ExtPic.
+    // Two ZWJs break the pattern → 2 clusters.
+    // Cluster 1: 1F600 + ZWJ + ZWJ (11 bytes, 2 cells)
+    // Cluster 2: 1F600 (4 bytes, 2 cells)
+    auto run = ssg::compute_cell_run(
+        "\xF0\x9F\x98\x80\xE2\x80\x8D\xE2\x80\x8D\xF0\x9F\x98\x80");
+    ASSERT_EQ(run.spans.size(), 2u);
+    CHECK_SPAN(run, 0, 0,  10, 2, T);  // 😀+ZWJ+ZWJ absorbed via GB9, no GB11
+    CHECK_SPAN(run, 1, 10, 4,  2, T);  // 😀 in its own cluster
+    ASSERT_EQ(run.total_cells, 4u);
+}
+
+TEST(adv_soft_hyphen_own_cluster) {
+    // U+00AD SOFT HYPHEN (C2 AD): GCB=Control (not Extend).
+    // Non-C0/C1 Cf format control → own cluster with kind=control, width=0.
+    auto run = ssg::compute_cell_run("\xC2\xAD");
+    ASSERT_EQ(run.spans.size(), 1u);
+    CHECK_SPAN(run, 0, 0, 2, 0, CTL);
+    ASSERT_EQ(run.total_cells, 0u);
+}
+
+TEST(adv_zwsp_own_cluster) {
+    // U+200B ZERO WIDTH SPACE (E2 80 8B): GCB=Control (not Extend).
+    // Non-C0/C1 Cf format control → own cluster with kind=control, width=0.
+    auto run = ssg::compute_cell_run("\xE2\x80\x8B");
+    ASSERT_EQ(run.spans.size(), 1u);
+    CHECK_SPAN(run, 0, 0, 3, 0, CTL);
+    ASSERT_EQ(run.total_cells, 0u);
+}
+
+TEST(adv_three_regional_indicators) {
+    // 🇺 (U+1F1FA, F0 9F 87 BA) + 🇸 (U+1F1F8, F0 9F 87 B8) + 🇦 (U+1F1E6, F0 9F 87 A6)
+    // GB12/13: first RI pair → cluster 1 [🇺🇸] (8 bytes, 2 cells)
+    // Third RI starts a new cluster: cluster 2 [🇦] (4 bytes, 2 cells)
+    auto run = ssg::compute_cell_run(
+        "\xF0\x9F\x87\xBA\xF0\x9F\x87\xB8\xF0\x9F\x87\xA6");
+    ASSERT_EQ(run.spans.size(), 2u);
+    CHECK_SPAN(run, 0, 0, 8, 2, T);   // 🇺🇸 flag pair
+    CHECK_SPAN(run, 1, 8, 4, 2, T);   // 🇦 lone RI
+    ASSERT_EQ(run.total_cells, 4u);
+}
+
+TEST(adv_extpic_zwj_extend_no_gb11) {
+    // U+1F600 + ZWJ + Emoji Modifier 🏻 (U+1F3FB, F0 9F 8F BB, GCB=Extend) + U+1F600
+    // After ExtPic + ZWJ → gb11=Zwj; then Extend → gb11=None (Extend after Zwj breaks chain)
+    // So the second 1F600 does NOT absorb via GB11 → 2 clusters
+    // Cluster 1: 1F600 + ZWJ + 1F3FB (11 bytes, 2 cells)
+    // Cluster 2: 1F600 (4 bytes, 2 cells)
+    auto run = ssg::compute_cell_run(
+        "\xF0\x9F\x98\x80\xE2\x80\x8D\xF0\x9F\x8F\xBB\xF0\x9F\x98\x80");
+    ASSERT_EQ(run.spans.size(), 2u);
+    CHECK_SPAN(run, 0, 0,  11, 2, T);
+    CHECK_SPAN(run, 1, 11, 4,  2, T);
+    ASSERT_EQ(run.total_cells, 4u);
+}
+
+TEST(adv_extpic_extend_zwj_extpic_gb11) {
+    // U+1F600 + Variation Selector VS-16 (U+FE0F, GCB=Extend) + ZWJ + U+1F600
+    // ExtPic Extend ZWJ ExtPic → all one cluster via GB11
+    // F0 9F 98 80  EF B8 8F  E2 80 8D  F0 9F 98 80  = 15 bytes
+    auto run = ssg::compute_cell_run(
+        "\xF0\x9F\x98\x80\xEF\xB8\x8F\xE2\x80\x8D\xF0\x9F\x98\x80");
+    ASSERT_EQ(run.spans.size(), 1u);
+    CHECK_SPAN(run, 0, 0, 14, 2, T);  // 4+3+3+4 bytes
+    ASSERT_EQ(run.total_cells, 2u);
+}
+
+TEST(adv_lone_emoji_modifier) {
+    // U+1F3FB EMOJI MODIFIER FITZPATRICK TYPE-1-2 (F0 9F 8F BB)
+    // GCB=Extend, EAW=W (in k_wide range 1F3F7–1F4FD).
+    // NOT Extended_Pictographic; when standalone (no preceding base) it renders
+    // as a 2-cell wide glyph — base_width=2, kind=text (wide lone Extend).
+    auto run = ssg::compute_cell_run("\xF0\x9F\x8F\xBB");
+    ASSERT_EQ(run.spans.size(), 1u);
+    CHECK_SPAN(run, 0, 0, 4, 2, T);
+    ASSERT_EQ(run.total_cells, 2u);
+}
+
+TEST(adv_bidi_control_own_cluster) {
+    // U+202A LEFT-TO-RIGHT EMBEDDING (E2 80 AA): GCB=Control.
+    // Non-C0/C1 Cf format control → own cluster with kind=control, width=0.
+    auto run = ssg::compute_cell_run("\xE2\x80\xAA");
+    ASSERT_EQ(run.spans.size(), 1u);
+    CHECK_SPAN(run, 0, 0, 3, 0, CTL);
+    ASSERT_EQ(run.total_cells, 0u);
+}
+
+TEST(adv_prepend_extend_breaks_gb9b) {
+    // U+0600 Prepend + U+0308 Extend + 'A'
+    // (0600, 0308): GB9 absorbs Extend → last_gcb=Other (no longer Prepend)
+    // (Other/Extend, A): no applicable rule → break
+    // Expected: 2 clusters — [0600+0308] {0,4,0,T}, ['A'] {4,1,1,T}
+    // D8 80 = U+0600, CC 88 = U+0308, 41 = 'A'
+    auto run = ssg::compute_cell_run("\xD8\x80\xCC\x88\x41");
+    ASSERT_EQ(run.spans.size(), 2u);
+    CHECK_SPAN(run, 0, 0, 4, 0, C);  // Prepend+Extend: no visible base absorbed
+    CHECK_SPAN(run, 1, 4, 1, 1, T);  // 'A': separate cluster
+    ASSERT_EQ(run.total_cells, 1u);
+}
+
+// ---------------------------------------------------------------------------
 
 int main() {
-    std::cout << "=== SSG cell layout tests ===\n";
 
     // ASCII
     RUN(ascii_empty);
@@ -835,6 +985,9 @@ int main() {
     RUN(tab_abcd_tab_w4);
     RUN(tab_a_tab_b_w4);
     RUN(tab_two_tabs_w4);
+    RUN(tab_width_invalid_zero);
+    RUN(tab_width_invalid_negative);
+    RUN(tab_width_invalid_too_large);
 
     // Control
     RUN(control_nul);
@@ -888,10 +1041,24 @@ int main() {
     RUN(prepend_lone_at_eol);
     RUN(prepend_before_control);
 
+    // Adversarial fixtures — GB11, GCB=Control chars, RI, Prepend+Extend
+    RUN(adv_lone_zwj_before_extpic);
+    RUN(adv_extpic_zwj_zwj_extpic);
+    RUN(adv_soft_hyphen_own_cluster);
+    RUN(adv_zwsp_own_cluster);
+    RUN(adv_three_regional_indicators);
+    RUN(adv_extpic_zwj_extend_no_gb11);
+    RUN(adv_extpic_extend_zwj_extpic_gb11);
+    RUN(adv_lone_emoji_modifier);
+    RUN(adv_bidi_control_own_cluster);
+    RUN(adv_prepend_extend_breaks_gb9b);
+
     // Edge cases
     RUN(edge_tab_then_combining);
     RUN(edge_valid_3byte_cjk);
     RUN(edge_variation_selector);
+    RUN(emoji_scissors_alone);
+    RUN(emoji_scissors_vs16);
     RUN(edge_space_is_printable);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";

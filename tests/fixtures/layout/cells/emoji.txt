@@ -21,7 +21,7 @@ man_standalone    | F0 9F 91 A8                    | 4 → 2 | 0:4:2:T
 # ZWJ sequence: MAN + ZWJ + WOMAN
 # U+1F468 (F0 9F 91 A8) + U+200D ZWJ (E2 80 8D) + U+1F469 (F0 9F 91 A9)
 # Total: 11 bytes, 1 cluster, width=2 (base=man, wide)
-# ZWJ is in k_combining (zero-width, extends cluster); woman after ZWJ is wide
+# ZWJ has GCB=ZWJ (zero-width, extends cluster); woman after ZWJ is wide
 # → absorbed into man's cluster via GB11
 man_zwj_woman     | F0 9F 91 A8 E2 80 8D F0 9F 91 A9 | 4 → 2 | 0:11:2:T
 
