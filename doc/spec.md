@@ -63,6 +63,16 @@ Themes are immutable values and the single source of truth for all color. Each c
 
 High performance is achieved by bounded command work, incremental document/syntax/layout updates, shared immutable snapshots, and deltas proportional to the changed region rather than full-session serialization. The P0 editor targets normal text files up to 10 MiB; very-large-file mode is explicitly deferred. No renderer, HTTP dependency, LSP process, or Lua plugin is required to construct and use the basic in-process editor.
 
+## Foundation infrastructure
+
+`include/ssg/types.h` provides unconstrained strong-id types shared across all feature components: `Revision` (totally-ordered session revision; `Revision{0}` is the null sentinel), `ByteOffset` (zero-based byte offset into a UTF-8 buffer), `LineIndex` (zero-based line number), `CellIndex` (zero-based display-cell index within a rendered line), and `DocumentPosition` (the three coordinates together, as they appear at API boundaries). It also defines `DocumentMode` (`edit`, `read_only`, `diff`). All constructors are constexpr and noexcept with no validation, because these types represent unconstrained ordinals; the spec states that stale or inconsistent positions produce a typed protocol error at the consuming boundary, not here.
+
+`include/ssg/config.h` provides immutable construction-time configuration aggregates: `IndentStyle`, `LineEnding`, `TabWidth` (validated to `[1, 16]`), `HistoryConfig`, and `IndentConfig`. These are fixed at object-construction time. They differ from `SettingsModel` (owned by the `settings-model` feature): `config.h` types encode invariant construction parameters; `SettingsModel` owns runtime-adjustable, multi-scope, persistent settings with delta publication. When a component needs settings that change during a live session, it receives them through `SettingsModel`; when it needs fixed construction parameters, it receives them through `config.h` types.
+
+Construction failure: validated `config.h` types throw `std::invalid_argument` with an actionable message for out-of-range inputs (I4). Types with no domain constraint (all of `types.h`) never throw from their constructors.
+
+The build system uses `cmake/components/*.cmake` manifests for component-local source and test registration. The root `CMakeLists.txt` creates the `ssg` library target, calls `enable_testing()`, and then globs and includes manifests in sorted order with `CONFIGURE_DEPENDS` so new manifests are re-discovered on the next build invocation. A manifest may call `target_sources(ssg PRIVATE ...)` to add library sources and, inside `if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)`, add and register standalone test executables. Manifests use `${CMAKE_SOURCE_DIR}/<rel-path>` for project-root-relative paths and must produce uniquely named CMake targets. The sanitizer toggle `SSG_SANITIZE=ON` enables AddressSanitizer and UBSanitizer (Clang and GCC) by applying flags to the `ssg` target as `PUBLIC` so test executables inherit them.
+
 ## Invariants
 
 - **I1 — Headless core:** Editor behavior is usable through the C++ library without HTTP, a renderer, browser APIs, terminal APIs, `../gridui`, or an event-loop framework.
