@@ -55,3 +55,11 @@ then remove or shorten the redundant entry here.
 - Cross-platform native socket handles require a pointer-width representation
   and an explicit invalid sentinel. Narrowing a Windows `SOCKET` to `int` can
   corrupt valid handles.
+
+## settings-model
+
+- State import or reload must advance mutation generations so compensating
+  actions created before the import cannot become valid again through an ABA
+  value cycle.
+- A feature command set enumerates every command ID normatively owned by that
+  feature even when downstream session assembly binds handlers or presentation.
