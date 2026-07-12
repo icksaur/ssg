@@ -113,4 +113,3 @@ inline int failed = 0;
             ++passed;                                                          \
         }                                                                      \
     } while (0)
-
