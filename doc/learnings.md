@@ -70,8 +70,8 @@ then remove or shorten the redundant entry here.
   `data/required-commands.json` and the independently maintained expected IDs,
   owners, category counts, and total count in `tests/test_required_commands.cpp`.
 - The feature-spec union oracle treats backticked dotted tokens as command IDs.
-  Write dotted filenames without backticks so they do not become false catalog
-  entries.
+  Write dotted filenames without backticks or use repository-qualified paths
+  such as `src/layout.cpp` so they do not become false catalog entries.
 
 ## scratch-journal-format
 
@@ -95,3 +95,17 @@ then remove or shorten the redundant entry here.
 - Moving a populated directory into a workspace requires an explicit subtree
   scan on Linux and Windows because native APIs may report only the directory
   move.
+
+## diff-model
+
+- Git diff computation consumes caller-supplied index blob content and an opaque
+  index identity; it does not read Git objects or invoke a shell.
+- Non-Git watcher startup must seed bounded file content before publishing
+  events. Accepted events atomically advance the diff model's acknowledged
+  baseline.
+
+## unicode-cell-layout
+
+- Byte-pinned upstream Unicode data needs `.gitattributes` entries with `-text`
+  so Windows checkouts preserve hashes. Use `-whitespace` when official data
+  contains trailing whitespace that must not fail repository diff checks.
