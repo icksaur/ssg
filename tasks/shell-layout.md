@@ -8,6 +8,8 @@
 
 Implement fixed header/middle/footer geometry, shared tab row, panels, panes,
 per-pane scrollbar columns, collapse priorities, and accessible labels.
+Own the `pane.*` and `panel.*` command sets and
+`view.toggle_distraction_free`.
 Prompt/status queue behavior is owned by `prompt-status-surface`; caret reveal
 is owned by `selection-navigation`; this task owns their reserved rectangles
 and label-bearing shell nodes only.

@@ -7,7 +7,8 @@
 ## Scope
 
 Implement indent/outdent, line duplicate/move/delete/join, comment toggle, case
-transforms, sorting, transpose, and bracket selection as command sets.
+transforms, sorting, and transpose as command sets. Matching-bracket selection
+belongs to `selection-navigation`.
 
 ## Files
 

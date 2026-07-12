@@ -8,7 +8,8 @@
 
 Implement directory open/replace and file new/open/recent/save/save-all/save-as/
 reload/rename/delete/new-directory commands, untitled identity, path prompts,
-encoding/EOL commands, and host-authorized local file drop as untitled content.
+and host-authorized local file drop as untitled content. Encoding/EOL command
+sets belong to `encoding-eol`.
 `file.open_dropped_content` validates `InvocationPrincipal.local_file_drop`,
 rejects Lua origin, applies normal decode/binary handling, and treats suggested
 names as bounded display labels without path authority.
