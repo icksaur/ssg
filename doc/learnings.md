@@ -318,3 +318,12 @@ then remove or shorten the redundant entry here.
   oracle rejects independent `SrgbColor` construction outside `theme.h`.
 - `CommandSet::descriptors()` returns a borrowed view. Retain the `CommandSet`
   object before iterating instead of calling it on a temporary.
+
+## websocket-server
+
+- Valid command rejections such as `stale_revision` return typed
+  `CommandResult` messages without disconnecting the client.
+- If a retained replay chain exceeds outbound queue capacity, send a fresh
+  snapshot instead of repeatedly disconnecting mid-replay.
+- `Http::Server::closeConnection` sends a close frame but does not immediately
+  remove the connection. SSG detaches it and marks it logically stopped.
