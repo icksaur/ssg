@@ -242,3 +242,10 @@ then remove or shorten the redundant entry here.
   discovered runtimes can silently pass an incomplete conformance matrix.
 - Probe Firefox's BiDi TCP endpoint before opening one WebSocket. Repeated
   pre-start WebSocket attempts can consume the single automation session.
+
+## find-replace
+
+- `DocumentHistory` callers supply the true post-edit `SelectionSet`; redo
+  restores that value verbatim rather than deriving it from replacement spans.
+- For variable-length regular expressions, apply whole-word filtering before
+  choosing the longest candidate end.
