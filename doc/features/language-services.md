@@ -17,6 +17,24 @@ owns nor reaches into the session registry, filesystem, Tree-sitter, or LSP.
 It exports an immutable `SearchCommandSet`, typed `SearchViewState`, and
 `SearchDelta` derivation/replay for later session aggregation.
 
+Syntax parsing is an optional injected service. The core owns revision-tagged
+parse requests, cancellation, plain-text fallback, immutable syntax snapshots,
+and delta derivation; a host-supplied `SyntaxParser` owns the Tree-sitter
+runtime, grammars, queries, and parse-tree lifetime. Constructing or using SSG
+without a parser performs no Tree-sitter initialization and adds no mandatory
+Tree-sitter link dependency. Grammar availability is reported per language, and
+an unavailable or failed grammar produces the same deterministic plain-text
+snapshot. The parser input contains the prior accepted parse plus byte edits so
+Tree-sitter adapters can update trees incrementally.
+
+This step exports immutable `SyntaxViewState` and `SyntaxDelta` values with pure
+derive/replay functions for later session assembly. It also exports syntax
+roles, bracket pairs/matches, comment tokens/ranges, and line indentation
+metadata. It does not edit session aggregates, protocol codecs, LSP, or
+rendering. The full-versus-incremental oracle uses an injected deterministic
+parser fixture; this keeps the oracle unconditional while proving the exact
+request/result contract a separately linked Tree-sitter adapter implements.
+
 Normative commands owned by this feature:
 
 - `palette.open`, `palette.close`, `palette.next`, `palette.previous`, `palette.execute`
@@ -63,7 +81,7 @@ I3, I5, I10, I12, I16, I20 from `doc/spec.md`.
 | # | Step | Files | Oracle | Invariants |
 |---|------|-------|--------|------------|
 | 1 | Implement palette, goto, current-file find/replace, and cancellable workspace search/replace | `include/ssg/search.h`, `src/search.cpp`, `tests/test_search.cpp` | independent matcher, ranking/query goldens, cancellation/stale batches, navigation transition/caret-reveal tables, zero-width termination, and preview/apply/recovery round trips | I3, I5, I10, I12, I16, I23 |
-| 2 | Implement incremental Tree-sitter syntax | `include/ssg/syntax.h`, `src/syntax.cpp`, `tests/test_syntax.cpp` | full parse vs incremental parse | I10, I12 |
+| 2 | Implement optional incremental Tree-sitter syntax and typed syntax snapshot/delta seams | `include/ssg/syntax.h`, `src/syntax.cpp`, `tests/test_syntax.cpp` | injected deterministic parser full-vs-incremental snapshots, stale cancellation, and plain-text fallback | I10, I12 |
 | 3 | Implement capability-limited Lua command parity | `include/ssg/lua.h`, `src/lua.cpp`, `tests/test_lua.cpp` | manifest parity and timeout/capability faults | I20 |
 | 4 | Implement injected LSP and atomic workspace edits | `include/ssg/lsp.h`, `src/lsp.cpp`, `tests/test_lsp.cpp` | independent position fixtures and fake server | I5, I12 |
 
