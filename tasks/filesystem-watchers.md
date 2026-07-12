@@ -18,7 +18,9 @@ create/modify/rename/delete/overflow/coalescing behavior.
 ## Oracle
 
 Identical normalized event scripts on Linux/Windows, save-correlation cases,
-overflow/rescan fixtures, and bounded-queue properties.
+overflow/rescan fixtures, bounded-queue properties, and finite-time shutdown.
+The watcher marks exact registered save results as `ssg_save`; the dependent
+external-modification flow owns the resulting document/status behavior.
 
 ## Done
 
