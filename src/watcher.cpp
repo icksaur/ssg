@@ -105,11 +105,11 @@ public:
     }
 
     void push(NativeWatchEvent native, WatchTimePoint observed_at) {
-        if (native.action == NativeWatchAction::overflow) {
-            request_overflow();
+        if (overflow_requested) {
             return;
         }
-        if (overflow_requested) {
+        if (native.action == NativeWatchAction::overflow) {
+            request_overflow();
             return;
         }
         native.path = normalize_path(std::move(native.path));
@@ -228,10 +228,27 @@ private:
         if (!observed) {
             observed = pair.from->observed;
         }
+        const auto source_pending = std::find_if(
+            pending.begin(), pending.end(),
+            [&pair](const PendingEvent& candidate) {
+                return candidate.event.path == pair.from->path;
+            });
+        const auto source_was_new =
+            source_pending != pending.end() &&
+            source_pending->event.kind == WatchEventKind::create;
+        if (source_pending != pending.end()) {
+            pending.erase(source_pending);
+        }
         WatchEvent event = event_from(
             NativeWatchAction::modify, pair.to->path, observed);
-        event.kind = WatchEventKind::rename;
-        event.previous_path = pair.from->path;
+        if (source_was_new) {
+            event.kind = cache.contains(pair.to->path)
+                ? WatchEventKind::modify
+                : WatchEventKind::create;
+        } else {
+            event.kind = WatchEventKind::rename;
+            event.previous_path = pair.from->path;
+        }
         cache.erase(pair.from->path);
         if (observed) {
             cache[pair.to->path] = *observed;

@@ -117,6 +117,39 @@ TEST(rename_then_delete_reports_the_original_path) {
     ASSERT_FALSE(events[0].previous_path.has_value());
 }
 
+TEST(new_source_renamed_to_existing_path_is_one_modify) {
+    WatchEventNormalizer normalizer(
+        config(), {WorkspaceEntry{"target.txt", state(30, 1)}}, unchanged_scan);
+    normalizer.register_save({"target.txt", state(31, 8, 4)});
+    normalizer.push(
+        raw(NativeWatchAction::create, "temp.txt", state(31, 8, 4)), start);
+    normalizer.push(raw(NativeWatchAction::rename_from, "temp.txt",
+                        std::nullopt, 60), start + 1ms);
+    normalizer.push(raw(NativeWatchAction::rename_to, "target.txt",
+                        state(31, 8, 4), 60), start + 2ms);
+
+    const auto events = normalizer.take_ready(start + 13ms);
+    ASSERT_EQ(events.size(), std::size_t{1});
+    ASSERT_EQ(events[0].kind, WatchEventKind::modify);
+    ASSERT_EQ(events[0].path, std::filesystem::path{"target.txt"});
+    ASSERT_EQ(events[0].origin, WatchEventOrigin::ssg_save);
+}
+
+TEST(new_source_renamed_to_new_path_is_one_create) {
+    WatchEventNormalizer normalizer(config(), {}, unchanged_scan);
+    normalizer.push(
+        raw(NativeWatchAction::create, "temp.txt", state(32)), start);
+    normalizer.push(raw(NativeWatchAction::rename_from, "temp.txt",
+                        std::nullopt, 61), start + 1ms);
+    normalizer.push(raw(NativeWatchAction::rename_to, "target.txt",
+                        state(32), 61), start + 2ms);
+
+    const auto events = normalizer.take_ready(start + 13ms);
+    ASSERT_EQ(events.size(), std::size_t{1});
+    ASSERT_EQ(events[0].kind, WatchEventKind::create);
+    ASSERT_EQ(events[0].path, std::filesystem::path{"target.txt"});
+}
+
 TEST(identity_reuse_at_another_path_keeps_both_events) {
     WatchEventNormalizer normalizer(
         config(), {WorkspaceEntry{"old.txt", state(12)}}, unchanged_scan);
@@ -205,6 +238,7 @@ TEST(partial_rescan_never_publishes_partial_truth) {
     auto events = normalizer.take_ready(start);
     ASSERT_EQ(events.size(), std::size_t{1});
     ASSERT_EQ(events[0].kind, WatchEventKind::overflow);
+    normalizer.push(raw(NativeWatchAction::overflow, ""), start + 1ms);
     ASSERT_TRUE(normalizer.take_ready(start + 99ms).empty());
     ASSERT_EQ(scans, 1);
     events = normalizer.take_ready(start + 100ms);
@@ -332,6 +366,8 @@ int main() {
     RUN(create_modify_delete_scripts_are_deterministic);
     RUN(rename_pairing_preserves_identity_and_final_path);
     RUN(rename_then_delete_reports_the_original_path);
+    RUN(new_source_renamed_to_existing_path_is_one_modify);
+    RUN(new_source_renamed_to_new_path_is_one_create);
     RUN(identity_reuse_at_another_path_keeps_both_events);
     RUN(unmatched_rename_halves_become_boundary_events);
     RUN(debounce_releases_only_after_the_window);

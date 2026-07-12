@@ -97,7 +97,8 @@ class WindowsFilesystemWatcher final : public FilesystemWatcher {
 public:
     WindowsFilesystemWatcher(std::filesystem::path root, WatcherConfig config)
         : root_(std::filesystem::canonical(std::move(root))),
-          buffer_(64 * 1024) {
+          buffer_(64 * 1024),
+          max_rescan_entries_(config.max_rescan_entries) {
         directory_ = ::CreateFileW(
             root_.c_str(), FILE_LIST_DIRECTORY,
             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
@@ -234,6 +235,7 @@ private:
             case FILE_ACTION_ADDED:
                 normalizer_->push(
                     {NativeWatchAction::create, relative, 0, observed}, now);
+                push_subtree_creates(relative, now);
                 break;
             case FILE_ACTION_REMOVED:
                 normalizer_->push(
@@ -256,6 +258,7 @@ private:
                     {NativeWatchAction::rename_to, relative, token, observed},
                     now);
                 pending_rename_token_.reset();
+                push_subtree_creates(relative, now);
                 break;
             }
             default:
@@ -270,6 +273,29 @@ private:
         }
     }
 
+    void push_subtree_creates(const std::filesystem::path& relative,
+                              WatchTimePoint now) {
+        std::error_code error;
+        const auto status =
+            std::filesystem::symlink_status(root_ / relative, error);
+        if (error || !std::filesystem::is_directory(status)) {
+            return;
+        }
+        const auto subtree =
+            scan_workspace(root_ / relative, max_rescan_entries_);
+        if (!subtree.complete) {
+            normalizer_->push(
+                {NativeWatchAction::overflow, {}, 0, {}}, now);
+            return;
+        }
+        for (const auto& entry : subtree.entries) {
+            normalizer_->push(
+                {NativeWatchAction::create, relative / entry.path, 0,
+                 entry.state},
+                now);
+        }
+    }
+
     std::filesystem::path root_;
     HANDLE directory_ = INVALID_HANDLE_VALUE;
     HANDLE event_ = nullptr;
@@ -279,6 +305,7 @@ private:
     std::unique_ptr<WatchEventNormalizer> normalizer_;
     std::uint64_t next_rename_token_ = 1;
     std::optional<std::uint64_t> pending_rename_token_;
+    std::size_t max_rescan_entries_;
 };
 
 } // namespace
