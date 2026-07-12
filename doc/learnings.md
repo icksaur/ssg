@@ -294,3 +294,10 @@ then remove or shorten the redundant entry here.
 - `tab.reopen_closed` deduplicates against currently open content identities. A
   file can be reopened independently while its close record remains; reopening
   it again would violate authoritative tab and delta-replay uniqueness.
+
+## follow-edits
+
+- Follow interruption is classified semantically as user, programmatic, or
+  non-navigation; transport or Lua origin alone is insufficient.
+- Feature components emit stable activation intents. Editor-session assembly
+  alone binds them to shared tab and pane state.
