@@ -6,17 +6,43 @@ Provide typed, persistent, reversible settings for ordinary editor behavior with
 
 ## Design
 
-`SettingsModel` resolves default, user, workspace, language, and document scopes in increasing specificity. Values are validated typed variants. Required keys include indentation width/style/detection, auto-indent, line-ending/final-newline policy, encoding, word wrap, theme, keymap, search options, undo/recovery budgets, and typing-coalescing duration. User settings persist in the user configuration root; workspace settings use host storage keyed by canonical CWD unless explicitly exported; language/document overrides persist with session recovery.
+`SettingsModel` resolves default, user, workspace, language, and document scopes in increasing specificity. Values are validated typed variants. The required key domains are:
+
+- indentation width: integer `[1, 16]`; indentation style: `spaces` or `tabs`;
+  indentation detection and automatic indentation: Boolean;
+- line ending: `lf`, `crlf`, or `cr`; final newline and word wrap: Boolean;
+- encoding: `utf8`, `utf8_bom`, `utf16le`, `utf16be`, `windows1252`, or
+  `iso88591`;
+- theme and keymap: non-empty identity strings;
+- search case sensitivity, whole-word matching, and regular-expression mode:
+  Boolean;
+- undo and recovery byte budgets: unsigned 64-bit integers; typing-coalescing
+  duration: unsigned 32-bit milliseconds.
+
+The public types reuse `IndentStyle` and `LineEnding` from `config.h`; mixed line
+endings are observable document state, not a selectable setting. A setting key
+accepts only its declared value alternative.
+
+The model takes host-provided user-configuration and workspace-storage roots so
+headless tests and embedders do not depend on process-global environment
+discovery. User settings persist in the user configuration root; workspace
+settings use host storage keyed by canonical CWD and are not written into the
+workspace. This task defines serializable language/document scope records;
+later session-recovery assembly owns storing and restoring those records.
 
 Normative commands owned by this feature:
 
 - `settings.open`, `settings.set`, `settings.reset`, `settings.reset_scope`, `settings.export_workspace`, `settings.import_workspace`
 
-Settings use the non-modal `PromptSurface`, apply immediately after validation, and expose a compensating footer action containing the prior effective value.
+`settings.set` and `settings.reset` apply immediately after validation and
+return a bounded compensation record that restores the prior scoped presence
+or value. They publish typed view-state/delta data for downstream session and
+status assembly. The later `prompt-status-surface` owner renders the non-modal
+settings prompt and footer action; this task has no dependency on that surface.
 
 ## Invariants
 
-I4, I16, I18, I19, I20, I22 from `doc/spec.md`.
+I4, I16, I18, I19, I20, I21, I22 from `doc/spec.md`.
 
 ## Considerations
 
@@ -27,7 +53,9 @@ I4, I16, I18, I19, I20, I22 from `doc/spec.md`.
 ## Risks and Mitigations
 
 - Scope confusion: expose effective value plus source scope in snapshots.
-- Configuration drift: round-trip versioned schema and preserve unknown future fields without applying them.
+- Configuration drift: round-trip versioned schema and preserve unknown future
+  fields without applying them. A load-save test injects an unknown field and
+  proves both non-application and byte-for-byte field preservation.
 
 ## Acceptance (Definition of Done)
 
@@ -40,9 +68,9 @@ I4, I16, I18, I19, I20, I22 from `doc/spec.md`.
 
 | # | Step | Files | Oracle | Invariants |
 |---|------|-------|--------|------------|
-| 1 | Define typed keys, values, scopes, and resolution | `include/ssg/settings.h`, `src/settings.cpp`, `tests/test_settings.cpp` | hand-authored resolution tables | I4, I16 |
-| 2 | Implement versioned Linux/Windows persistence | `src/platform/*settings.cpp`, `tests/test_settings_persistence.cpp` | schema/restart round trips | I18 |
-| 3 | Implement command, prompt, and compensating-action integration | `data/required-commands.json`, `tests/test_settings.cpp` | invalid-value and restoration scripts | I19, I20 |
+| 1 | Define typed keys, values, scopes, view/delta values, and resolution | `include/ssg/settings.h`, `src/settings.cpp`, `tests/test_settings.cpp` | hand-authored resolution tables | I4, I16 |
+| 2 | Implement host-rooted, versioned Linux/Windows persistence seams | `src/platform/{linux,windows}_settings.cpp`, `tests/test_settings_persistence.cpp` | schema/restart round trips plus unknown-field preservation/non-application | I18, I21 |
+| 3 | Implement reversible set/reset and compensation records; leave prompt rendering and aggregate/Lua wiring to their downstream owners | `include/ssg/settings.h`, `src/settings.cpp`, `tests/test_settings.cpp`, `cmake/components/settings-model.cmake` | invalid-value atomicity and scoped-state restoration scripts | I19, I20 |
 
 ## Rationale (optional, skippable)
 
