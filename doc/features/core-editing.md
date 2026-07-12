@@ -91,6 +91,44 @@ that the following document-transaction task uses against this storage.
 | 5 | Implement clipboard request/response transforms | `include/ssg/clipboard.h`, `src/clipboard.cpp`, `tests/test_clipboard.cpp` | hand cases and stale/denied fault tests | I16, I18 |
 | 6 | Implement coalesced bounded per-file undo/redo with selection restoration | `include/ssg/history.h`, `src/history.cpp`, `tests/test_history.cpp` | timed coalescing and forward/undo/redo round trips | I5 |
 
+**History contract (Plan 6 scope).** One `DocumentHistory` instance owns the
+non-persistent history for one document. Callers submit an edit through history
+with the pre- and post-edit selections, edit kind, and an explicitly injected
+monotonic session-clock timestamp in milliseconds. History captures erased text
+from the pre-edit document snapshot before forwarding the transaction to
+`Document::apply`; rejected edits change neither the document nor history.
+`HistoryConfig` is the construction-time snapshot of the resolved history
+settings. Runtime settings integration may replace that snapshot in a later
+assembly task without changing history semantics.
+
+Undo and redo replay stored inverse or forward edits through
+`Document::apply`; they never restore an old revision. Every replayed
+transaction therefore advances the monotonic document revision and leaves the
+document dirty, including when its bytes again equal the opening content.
+Undo restores the selection before the undo unit and redo restores the
+selection after it. A new accepted edit after undo clears redo. A revision
+change that bypasses the owning history makes undo/redo fail atomically as
+stale.
+
+Typing, backward deletion, and forward deletion are distinct coalescing kinds.
+Units coalesce only when the kind and ordered caret count match, the prior
+post-edit selections exactly equal the next pre-edit selections, every
+selection at the join is a caret, each edit has the declared insertion or
+same-direction deletion shape adjacent to its caret, no explicit coalescing
+barrier occurred, timestamps are nondecreasing, and their difference is at
+most `coalesce_ms`. Newline, paste, transforms, replacement edits, navigation,
+selection changes, and other non-edit commands are barriers. Multi-caret
+coalescing applies these rules pairwise in normalized selection order.
+
+The byte budget counts retained inserted and erased UTF-8 payload bytes plus
+the stored pre- and post-selection objects. Fixed container metadata is not
+charged. History evicts oldest undo units until within budget; a unit larger
+than the entire budget is not retained, and a zero budget disables retention.
+Moving a unit between undo and redo does not change its charge. Deterministic
+coalescing tests inject timestamps directly. Reference-editor round trips use
+non-coalescing edit kinds or timestamps beyond the window so one SSG undo unit
+corresponds to one reference-editor snapshot.
+
 **Selection/navigation contract (Plan 4 scope).** The
 `selection-navigation` task owns normalized selection state, the `cursor.*` and
 `select.*` command families, `goto.matching_bracket`, `view.reveal_caret`, and
