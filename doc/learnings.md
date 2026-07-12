@@ -46,6 +46,12 @@ then remove or shorten the redundant entry here.
 - Durable Linux atomic replacement requires flushing the temporary file before
   rename and flushing the parent directory after rename. Flushing only file
   contents does not make the directory-entry replacement crash durable.
+- Compensating records need durable in-progress, published, and restored states.
+  Restart recovery and cleanup retries must not reapply a completed restoration
+  over newer state.
+- Rename compensation must persist partial restoration explicitly. Inferring
+  progress from path existence can replace an identity-preserving moved inode
+  with a copied inode on retry.
 
 ## http-cross-platform
 
