@@ -99,6 +99,7 @@
     {"id":"completion.dismiss","owner":"lsp-language-features","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"hover.show","owner":"lsp-language-features","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"hover.dismiss","owner":"lsp-language-features","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
+    {"id":"rename.symbol","owner":"lsp-workspace-edits","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"pane.split_horizontal","owner":"shell-layout","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"pane.split_vertical","owner":"shell-layout","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"pane.close","owner":"shell-layout","required_capabilities":[],"lua":true,"keymap":true,"palette":true},

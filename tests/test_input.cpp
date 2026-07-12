@@ -178,7 +178,7 @@ TEST(default_keymap_exactly_covers_keymap_eligible_commands) {
     for (const auto& binding : bindings) {
         ASSERT_TRUE(actual.insert(binding.command).second);
     }
-    ASSERT_EQ(expected.size(), std::size_t{159});
+    ASSERT_EQ(expected.size(), std::size_t{160});
     ASSERT_EQ(actual, expected);
     ASSERT_FALSE(actual.contains("file.open_dropped_content"));
 }

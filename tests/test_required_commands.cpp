@@ -133,6 +133,7 @@ constexpr auto expected_commands = std::to_array<ExpectedCommand>({
     {"completion.dismiss", "lsp-language-features"},
     {"hover.show", "lsp-language-features"},
     {"hover.dismiss", "lsp-language-features"},
+    {"rename.symbol", "lsp-workspace-edits"},
     {"pane.split_horizontal", "shell-layout"},
     {"pane.split_vertical", "shell-layout"},
     {"pane.close", "shell-layout"},
@@ -202,14 +203,15 @@ constexpr auto expected_category_counts =
         {"edit", 15},      {"clipboard", 3}, {"view", 7},
         {"palette", 5},    {"goto", 8},      {"find", 8},
         {"replace", 5},    {"search", 3},    {"completion", 5},
-        {"hover", 2},      {"pane", 9},      {"panel", 4},
+        {"hover", 2},      {"rename", 1},    {"pane", 9},
+        {"panel", 4},
         {"tree", 2},
         {"prompt", 2},     {"status", 4},    {"workspace", 1},
         {"file", 15},      {"tab", 9},       {"external", 3},
         {"settings", 6},   {"follow_edits", 2}, {"diff", 3},
     });
 
-static_assert(expected_commands.size() == 160);
+static_assert(expected_commands.size() == 161);
 
 std::optional<std::string> field(const std::string& object,
                                  const std::string& name) {
