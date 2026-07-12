@@ -81,6 +81,14 @@ then remove or shorten the redundant entry here.
   `FlushFileBuffers`; unlike Linux, Windows exposes no parent-directory fsync
   step for making the new directory entry durable.
 
+## scratch-compaction-quota
+
+- Atomic journal compaction must use the recovery snapshot captured at its
+  queued generation. Reading current mutable state can reorder later accepted
+  updates across replacement.
+- Quota and purge eligibility can use the restored marker to preserve live and
+  unrestored sessions while evicting imported remnants oldest-first.
+
 ## filesystem-watchers
 
 - Overflow recovery must reconcile native watch registrations as well as cached
