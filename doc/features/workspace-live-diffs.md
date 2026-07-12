@@ -59,6 +59,44 @@ workspace-relative path (the prior path for a deletion) for later session
 assembly; it does not open a tab in this component. These helpers neither
 change revision nor own presentation state.
 
+### External-modification flow
+
+`ExternalModificationFlow` is the sole event-to-buffer policy owner. It accepts
+revision-tagged normalized watcher events, their post-event disk content when
+available, and the affected document state. A clean buffer auto-reloads to the
+new disk content; this automatic synchronization is not a state-losing action
+and creates no compensating record. A dirty buffer remains unchanged and enters
+the externally-modified state with footer status and reload, keep-buffer, and
+open-diff actions.
+
+`external.reload` installs a complete reload record through `RecoveryActions`
+before replacing the buffer, making the command reversible. `external.keep_buffer`
+acknowledges the current disk content as the diff baseline, clears the
+externally-modified status, preserves the dirty buffer, and creates no recovery
+record. `external.open_diff` resolves the affected stable file identity and path
+for later session assembly without changing document, recovery, baseline, or
+status state.
+
+The flow exports one immutable `ExternalModificationCommandSet`, typed
+`ExternalModificationViewState` and `ExternalModificationDelta`, and pure delta
+derivation. It routes normalized events and save correlation into `DiffModel`;
+it does not compute diffs itself.
+
+An `ssg_save` event matching the saved identity and metadata advances the
+document/diff disk baseline and clears stale externally-modified state without
+publishing footer status or follow transitions. A non-matching external event is
+never consumed by a pending save expectation and follows the normal clean/dirty
+path. Inputs are strictly revision ordered; stale or repeated events are rejected
+without mutation, making correlation idempotent.
+
+Normative commands owned by this component, in order:
+
+- `external.reload`
+- `external.keep_buffer`
+- `external.open_diff`
+
+The component enforces I3, I5, I14, I16, I19, and I21.
+
 Normative commands owned by this feature:
 
 - `tree.toggle_expanded`, `tree.invoke_node_command`
@@ -181,6 +219,7 @@ derived target view exactly or reports that a replacement snapshot is needed.
 | 2 | Implement Linux/Windows watcher normalization | `include/ssg/watcher.h`, `src/watcher.cpp`, `src/platform/*watcher.cpp`, `tests/test_watcher.cpp` | identical normalized event scripts | I10, I21 |
 | 3 | Implement Git/non-Git diff models | `include/ssg/diff.h`, `src/diff.cpp`, `tests/fixtures/diff/`, `tests/test_diff.cpp`, `cmake/components/diff-model.cmake` | patch reconstruction, independent normalized changed-line fixtures, revision failure atomicity, and exact command/navigation cases | I3, I5 |
 | 4 | Implement follow/pause/resume | `include/ssg/follow_edits.h`, `src/follow_edits.cpp`, `tests/test_follow_edits.cpp` | independent transition table | I14, I19 |
+| 5 | Implement event-to-buffer routing, external status/actions, reversible reload, and save correlation | `include/ssg/external_modification.h`, `src/external_modification.cpp`, `tests/test_external_modification.cpp`, `cmake/components/external-modification-flow.cmake` | temporary-directory event scripts covering clean/dirty/save-correlation races and every external action's document, recovery, baseline, and status transition | I3, I5, I14, I16, I19, I21 |
 
 ## Rationale (optional, skippable)
 
