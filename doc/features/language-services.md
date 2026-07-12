@@ -44,6 +44,18 @@ Normative commands owned by this feature:
 - `search.workspace`, `search.results_next`, `search.results_previous`
 - `completion.open`, `completion.next`, `completion.previous`, `completion.accept`, `completion.dismiss`, `hover.show`, `hover.dismiss`
 
+LSP is split into separately reviewable synchronization/diagnostics, language
+feature, and workspace-edit components. The synchronization component owns
+injected stream framing, bounded initialize/shutdown, document version mapping,
+request cancellation, UTF-8/UTF-16 boundary conversion, and bounded,
+coalesced diagnostics. It exports immutable `LspSyncViewState` and
+`LspSyncDelta` values with pure derive/replay functions for later session
+assembly; feature tasks do not edit aggregate session or protocol codec files.
+Constructing or using SSG without an injected LSP stream performs no process or
+LSP initialization and adds no mandatory LSP runtime dependency. Slow, hung,
+cancelled, or malformed servers cannot block the session indefinitely or
+publish partial state.
+
 Find is incremental and highlights all current-document matches with active match/count. Regex, literal, case, whole-word, and selection-limited options are typed search state. Replace-current and replace-all are atomic document transactions and one undo unit. Workspace search streams revision-tagged results into a search-results tab. Workspace replace always produces a reviewable preview; apply is one validated workspace edit with a recovery record. Zero-width regex matches must advance by one Unicode scalar to terminate.
 
 ## Invariants
@@ -83,7 +95,9 @@ I3, I5, I10, I12, I16, I20 from `doc/spec.md`.
 | 1 | Implement palette, goto, current-file find/replace, and cancellable workspace search/replace | `include/ssg/search.h`, `src/search.cpp`, `tests/test_search.cpp` | independent matcher, ranking/query goldens, cancellation/stale batches, navigation transition/caret-reveal tables, zero-width termination, and preview/apply/recovery round trips | I3, I5, I10, I12, I16, I23 |
 | 2 | Implement optional incremental Tree-sitter syntax and typed syntax snapshot/delta seams | `include/ssg/syntax.h`, `src/syntax.cpp`, `tests/test_syntax.cpp` | injected deterministic parser full-vs-incremental snapshots, stale cancellation, and plain-text fallback | I10, I12 |
 | 3 | Implement capability-limited Lua command parity | `include/ssg/lua.h`, `src/lua.cpp`, `tests/test_lua.cpp` | manifest parity and timeout/capability faults | I20 |
-| 4 | Implement injected LSP and atomic workspace edits | `include/ssg/lsp.h`, `src/lsp.cpp`, `tests/test_lsp.cpp` | independent position fixtures and fake server | I5, I12 |
+| 4a | Implement injected LSP framing, lifecycle, document synchronization, cancellation, and bounded/coalesced diagnostics | `include/ssg/lsp_sync.h`, `src/lsp_sync.cpp`, `tests/fake_lsp_server.*`, `tests/fixtures/lsp/sync/`, `tests/test_lsp_sync.cpp` | scripted fake server, independent UTF-8/UTF-16 fixtures, version/stale diagnostics, cancellation/timeouts, bounds, malformed messages, and nested-consumer optional-linkability | I10, I12 |
+| 4b | Implement LSP completion, hover, definition, references, and rename | `include/ssg/lsp_features.h`, `src/lsp_features.cpp`, `tests/test_lsp_features.cpp` | scripted fake-server language-feature cases | I10, I12 |
+| 4c | Implement atomic LSP workspace edits | `include/ssg/lsp_workspace_edit.h`, `src/lsp_workspace_edit.cpp`, `tests/test_lsp_workspace_edit.cpp` | full validation, fault injection, and all-or-nothing document snapshots | I5, I10, I12 |
 
 ## Rationale (optional, skippable)
 
