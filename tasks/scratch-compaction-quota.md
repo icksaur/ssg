@@ -9,6 +9,21 @@
 Compose session journals with atomic compaction, byte/age quotas, durability
 tracking, purge commands, and failed/pending footer state.
 
+## Contract
+
+`ScratchStore` owns one `ScratchSession`, synchronously imports the newest
+restorable remnant with marker-last ordering, and serializes asynchronous
+appends and atomic checkpoint replacement on one writer queue. Immutable
+configuration supplies compaction, quota, and 100 ms durability policy.
+Shutdown rejects new mutations and drains accepted work.
+
+The public durability state is durable, pending, or failed and includes
+generation progress, overdue state, and an actionable failure; later session
+assembly maps it to footer presentation. Quotas evict only restored remnants,
+oldest session first, and never remove current, live, or unrestored sessions.
+Typed `purge_workspace` and `purge_all` maintenance operations have the same
+eligibility rule.
+
 ## Files
 
 `include/ssg/scratch.h`, `src/scratch.cpp`,
