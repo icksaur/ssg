@@ -327,3 +327,10 @@ then remove or shorten the redundant entry here.
   snapshot instead of repeatedly disconnecting mid-replay.
 - `Http::Server::closeConnection` sends a close frame but does not immediately
   remove the connection. SSG detaches it and marks it logically stopped.
+
+## browser-client
+
+- JavaScript protocol encoders preserve declared signed and unsigned C++ wire
+  types; the runtime value's sign is insufficient to select an encoding.
+- Selection-navigation commands include typed nullable position and selection
+  payloads even when logically argument-free.
