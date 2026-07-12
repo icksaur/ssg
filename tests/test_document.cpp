@@ -1,0 +1,270 @@
+#include <ssg/document.h>
+
+#include "reference_editor.h"
+#include "test_helpers.h"
+
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
+
+namespace {
+
+using ssg::ByteOffset;
+using ssg::Document;
+using ssg::DocumentError;
+using ssg::DocumentMode;
+using ssg::EditTransaction;
+using ssg::Revision;
+using ssg::TextEdit;
+
+TextEdit edit(std::uint64_t offset, std::uint64_t erased,
+              std::string inserted) {
+    return TextEdit{ByteOffset{offset}, erased, std::move(inserted)};
+}
+
+EditTransaction transaction(Revision base, std::vector<TextEdit> edits) {
+    return EditTransaction{base, std::move(edits)};
+}
+
+void apply_to_reference(ref::Editor& editor,
+                        std::vector<TextEdit> const& edits) {
+    auto ordered = edits;
+    std::sort(ordered.begin(), ordered.end(),
+              [](TextEdit const& left, TextEdit const& right) {
+                  return left.offset.value() > right.offset.value();
+              });
+    for (auto const& replacement : ordered) {
+        const auto begin = static_cast<std::size_t>(replacement.offset.value());
+        const auto end = begin + static_cast<std::size_t>(replacement.erased_bytes);
+        ref::select_set_range(editor, begin, end);
+        ref::text_insert(editor, replacement.inserted_text);
+    }
+}
+
+TEST(construction_produces_canonical_clean_snapshot) {
+    Document document("alpha\n\xCE\xB2" "eta", DocumentMode::edit);
+    const auto snapshot = document.snapshot();
+
+    ASSERT_EQ(snapshot.text, std::string("alpha\n\xCE\xB2" "eta"));
+    ASSERT_EQ(snapshot.revision, Revision{1});
+    ASSERT_EQ(snapshot.mode, DocumentMode::edit);
+    ASSERT_FALSE(snapshot.dirty);
+}
+
+TEST(reference_editor_transaction_script) {
+    Document document("0123456789");
+    auto oracle = ref::make_editor("0123456789");
+    const std::vector<TextEdit> edits{
+        edit(1, 2, "one"),
+        edit(6, 0, "-"),
+        edit(8, 2, "tail"),
+    };
+
+    apply_to_reference(oracle, edits);
+    const auto result = document.apply(transaction(document.revision(), edits));
+
+    ASSERT_TRUE(result.accepted());
+    ASSERT_EQ(document.snapshot().text, std::string(ref::snapshot_text(oracle)));
+    ASSERT_EQ(result.revision, Revision{2});
+    ASSERT_TRUE(document.dirty());
+}
+
+class Random {
+public:
+    explicit Random(std::uint64_t state) : state_(state) {}
+
+    std::size_t below(std::size_t limit) {
+        state_ ^= state_ << 13U;
+        state_ ^= state_ >> 7U;
+        state_ ^= state_ << 17U;
+        return limit == 0 ? 0 : static_cast<std::size_t>(state_ % limit);
+    }
+
+private:
+    std::uint64_t state_;
+};
+
+std::string random_insert(Random& random) {
+    static const std::vector<std::string> values{"x", "YZ", "\n", "_"};
+    return values[random.below(values.size())];
+}
+
+TEST(randomized_multi_edit_snapshots_match_reference_editor) {
+    Document document("the quick brown fox\njumps over the lazy dog");
+    auto oracle = ref::make_editor("the quick brown fox\njumps over the lazy dog");
+    Random random{0xD0C7A11ULL};
+
+    for (std::size_t step = 0; step < 500; ++step) {
+        const auto size = ref::snapshot_text(oracle).size();
+        const auto count = std::min<std::size_t>(1 + random.below(3), size + 1);
+        std::vector<std::size_t> offsets;
+        while (offsets.size() < count) {
+            const auto candidate = random.below(size + 1);
+            if (std::find(offsets.begin(), offsets.end(), candidate) ==
+                offsets.end()) {
+                offsets.push_back(candidate);
+            }
+        }
+        std::sort(offsets.begin(), offsets.end());
+
+        std::vector<TextEdit> edits;
+        for (std::size_t index = 0; index < offsets.size(); ++index) {
+            const auto offset = offsets[index];
+            const auto next = index + 1 < offsets.size() ? offsets[index + 1] : size;
+            const auto available = next - offset;
+            const auto erased = available == 0 ? 0 : random.below(
+                std::min<std::size_t>(available, 3) + 1);
+            edits.push_back(edit(offset, erased, random_insert(random)));
+        }
+
+        apply_to_reference(oracle, edits);
+        const auto result =
+            document.apply(transaction(document.revision(), std::move(edits)));
+        ASSERT_TRUE(result.accepted());
+        ASSERT_EQ(document.snapshot().text,
+                  std::string(ref::snapshot_text(oracle)));
+    }
+
+    ASSERT_EQ(document.revision(), Revision{501});
+    ASSERT_TRUE(document.dirty());
+}
+
+TEST(read_only_and_diff_modes_reject_without_state_change) {
+    for (const auto mode : {DocumentMode::read_only, DocumentMode::diff}) {
+        Document document("fixed", mode);
+        const auto before = document.snapshot();
+        const auto result = document.apply(
+            transaction(document.revision(), {edit(0, 1, "F")}));
+
+        ASSERT_FALSE(result.accepted());
+        ASSERT_EQ(result.error, mode == DocumentMode::read_only
+                                    ? DocumentError::read_only
+                                    : DocumentError::diff);
+        ASSERT_EQ(document.snapshot(), before);
+    }
+}
+
+TEST(stale_revision_rejects_without_state_change) {
+    Document document("abc");
+    ASSERT_TRUE(document.apply(
+        transaction(document.revision(), {edit(3, 0, "d")})).accepted());
+    const auto before = document.snapshot();
+
+    const auto result =
+        document.apply(transaction(Revision{1}, {edit(0, 1, "A")}));
+
+    ASSERT_EQ(result.error, DocumentError::stale_revision);
+    ASSERT_EQ(document.snapshot(), before);
+}
+
+TEST(invalid_later_edit_preserves_whole_transaction) {
+    Document document("abcdef");
+    const auto before = document.snapshot();
+
+    const auto result = document.apply(transaction(
+        document.revision(), {edit(1, 2, "ok"), edit(99, 0, "bad")}));
+
+    ASSERT_EQ(result.error, DocumentError::invalid_range);
+    ASSERT_EQ(document.snapshot(), before);
+}
+
+TEST(overlapping_and_duplicate_ranges_are_atomic_rejections) {
+    Document document("abcdef");
+    const auto before = document.snapshot();
+
+    ASSERT_EQ(document.apply(transaction(
+                  document.revision(), {edit(1, 3, "x"), edit(2, 1, "y")}))
+                  .error,
+              DocumentError::overlapping_edits);
+    ASSERT_EQ(document.snapshot(), before);
+    ASSERT_EQ(document.apply(transaction(
+                  document.revision(), {edit(2, 0, "x"), edit(2, 0, "y")}))
+                  .error,
+              DocumentError::overlapping_edits);
+    ASSERT_EQ(document.snapshot(), before);
+}
+
+TEST(utf8_text_and_boundaries_are_validated_atomically) {
+    Document document("a\xC3\xA9z");
+    const auto before = document.snapshot();
+
+    ASSERT_TRUE(document.apply(transaction(
+        document.revision(), {edit(1, 2, "\xE4\xB8\xAD")}))
+                    .accepted());
+    ASSERT_EQ(document.snapshot().text, std::string("a\xE4\xB8\xADz"));
+
+    Document rejected("a\xC3\xA9z");
+    const auto rejected_before = rejected.snapshot();
+    ASSERT_EQ(document.apply(transaction(
+                  document.revision(), {edit(2, 0, "x")}))
+                  .error,
+              DocumentError::invalid_utf8_boundary);
+    ASSERT_EQ(rejected.apply(transaction(
+                  rejected.revision(), {edit(1, 1, "x")}))
+                  .error,
+              DocumentError::invalid_utf8_boundary);
+    ASSERT_EQ(rejected.apply(transaction(
+                  rejected.revision(), {edit(1, 2, std::string("\xC3", 1))}))
+                  .error,
+              DocumentError::invalid_utf8);
+    ASSERT_EQ(rejected.apply(transaction(
+                  rejected.revision(), {edit(1, 2, std::string("x\0y", 3))}))
+                  .error,
+              DocumentError::invalid_utf8);
+    ASSERT_EQ(rejected.snapshot(), rejected_before);
+}
+
+TEST(invalid_construction_is_actionable) {
+    ASSERT_THROWS(Document(std::string("\xC3", 1)), std::invalid_argument);
+    ASSERT_THROWS(Document(std::string("x\0y", 3)), std::invalid_argument);
+}
+
+TEST(empty_and_noop_transactions_are_rejected) {
+    Document document("abc");
+    const auto before = document.snapshot();
+
+    ASSERT_EQ(document.apply(transaction(document.revision(), {})).error,
+              DocumentError::empty_transaction);
+    ASSERT_EQ(document.apply(transaction(
+                  document.revision(), {edit(1, 0, "")}))
+                  .error,
+              DocumentError::empty_transaction);
+    ASSERT_EQ(document.snapshot(), before);
+}
+
+TEST(snapshot_is_owning_and_revision_advances_once_per_transaction) {
+    Document document("abc");
+    const auto old_snapshot = document.snapshot();
+
+    const auto result = document.apply(transaction(
+        document.revision(), {edit(0, 1, "A"), edit(3, 0, "!")}));
+
+    ASSERT_TRUE(result.accepted());
+    ASSERT_EQ(result.revision, Revision{2});
+    ASSERT_EQ(document.revision(), Revision{2});
+    ASSERT_EQ(old_snapshot.text, std::string("abc"));
+    ASSERT_FALSE(old_snapshot.dirty);
+    ASSERT_EQ(document.snapshot().text, std::string("Abc!"));
+    ASSERT_TRUE(document.snapshot().dirty);
+}
+
+}  // namespace
+
+int main() {
+    RUN(construction_produces_canonical_clean_snapshot);
+    RUN(reference_editor_transaction_script);
+    RUN(randomized_multi_edit_snapshots_match_reference_editor);
+    RUN(read_only_and_diff_modes_reject_without_state_change);
+    RUN(stale_revision_rejects_without_state_change);
+    RUN(invalid_later_edit_preserves_whole_transaction);
+    RUN(overlapping_and_duplicate_ranges_are_atomic_rejections);
+    RUN(utf8_text_and_boundaries_are_validated_atomically);
+    RUN(invalid_construction_is_actionable);
+    RUN(empty_and_noop_transactions_are_rejected);
+    RUN(snapshot_is_owning_and_revision_advances_once_per_transaction);
+    return failed == 0 ? 0 : 1;
+}
