@@ -27,7 +27,8 @@ Plan 1 owns the shared platform primitive used by later recovery work:
   a fixed-width UTC creation timestamp plus 128 random bits, making lexical
   order the total newest-first order. The namespace is
   `<root>/workspaces/<workspace-hash>/sessions/<session-id>/`, containing
-  `session.lock`, `journal.bin`, and an optional `restored` marker;
+  files named **session.lock**, **journal.bin**, and an optional **restored**
+  marker;
 - an unlocked remnant is restorable only when it is not marked restored and
   replaying its journal yields at least one document. Newest-restorable
   selection holds the remnant's existing `ExclusiveFileLock` in a move-only
