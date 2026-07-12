@@ -7,6 +7,18 @@ import {
 const query = new URLSearchParams(location.search);
 const browser = query.get("browser");
 const websocket = query.get("websocket");
+let reported = false;
+
+globalThis.addEventListener("unhandledrejection", (event) => {
+  report({
+    browser,
+    ok: false,
+    per_step_states: [],
+    error: event.reason instanceof Error
+      ? `${event.reason.message}\n${event.reason.stack}`
+      : String(event.reason),
+  });
+});
 
 run()
   .then((states) => report({browser, ok: true, per_step_states: states}))
@@ -110,6 +122,7 @@ async function run() {
 
 function mount(credential) {
   let resolveReady;
+  let clipboardText = "";
   const fixture = {
     root: document.querySelector("#local"),
     state: undefined,
@@ -119,6 +132,11 @@ function mount(credential) {
   const session = new BrowserSession({
     url: websocket,
     credential,
+    clipboard: {
+      writeText: async (text) => { clipboardText = text; },
+      readText: async () => clipboardText,
+    },
+    secureContext: true,
     render(snapshot, result) {
       fixture.state = snapshot;
       fixture.lastResult = result;
@@ -154,6 +172,8 @@ async function waitFor(predicate, timeoutMs = 5000) {
 }
 
 async function report(value) {
+  if (reported) return;
+  reported = true;
   await fetch("/__result", {
     method: "POST",
     headers: {"content-type": "application/json"},
