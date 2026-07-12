@@ -8,7 +8,17 @@
 
 Establish the stable command-registry seam, minimal document snapshot/delta
 envelope, minimal bounded codec, and loopback WebSocket route for
-the existing `text.insert` command set only.
+the existing `text.insert` command ID only. The slice owns one `Document` and
+single-caret `SelectionSet`; a registry handler closure is the only edit path.
+Session/document revisions advance in lockstep, and assembly later replaces
+this temporary single-document adapter.
+
+`snapshot.h` is the minimal document-section seam, not the final aggregate.
+Malformed input is rejected at the codec/WebSocket boundary; stale requests
+are compared through direct and WebSocket dispatch. The route uses a finite
+per-connection outbound queue and one writer thread; command callbacks do not
+send on the socket. Replay, reconnect, authentication, other text commands,
+and optional services are out of scope.
 
 ## Files
 

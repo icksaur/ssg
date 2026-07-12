@@ -21,6 +21,15 @@ descriptor catalogs. Adapting those feature catalogs and handlers into generic
 sets belongs to `editor-session-assembly`; session state does not refactor
 feature-owned command sets.
 
+The core WebSocket thin slice precedes that general assembly with one explicit,
+temporary adapter for `text.insert`. A slice-owned object contains one
+`Document`, its single caret `SelectionSet`, and an `EditorSession`. Its
+registered handler closure calls `apply_text_input`, applies the resulting
+transaction to that document, and advances the caret before returning success.
+Both direct and WebSocket entry points call `EditorSession::dispatch`; neither
+may apply an edit directly. `editor-session-assembly` later replaces this
+single-document adapter rather than creating a second dispatch path.
+
 Every generic command descriptor declares whether it mutates authoritative
 state and the capabilities required at dispatch. Mutating commands require a
 base revision equal to the current session revision. Non-mutating commands may
@@ -35,6 +44,18 @@ handlers atomically commit staged topology and advance the revision once.
 Rejected, failed, or throwing handlers commit nothing and do not advance the
 revision. Feature state, transaction, status, and delta sinks are added by the
 later assembly task without creating a second dispatch path.
+
+For this single-document slice, session and document revisions start at one and
+advance in lockstep exactly once for each accepted non-empty insert. The
+document revision is exposed in the envelope and is the next command's session
+base revision. Rejected, stale, malformed, failed, and empty insert requests
+advance neither revision. The slice owns the caret needed to make sequential
+insert scripts deterministic.
+
+`snapshot.h` defines only the minimal document section plus its replacement
+delta for this slice, not the eventual aggregate session snapshot. The assembly
+task extends/replaces this contributor seam and remains the sole owner of the
+complete aggregate.
 
 `../http` owns one platform socket seam used by HTTP and WebSocket lifecycle,
 receive, and write paths. A complete write loops over partial writes until all
@@ -59,6 +80,16 @@ I1, I2, I3, I10, I11, I12, I16, I21 from `doc/spec.md`.
 - Serialization owns payload bytes through send completion.
 - Duplicate command IDs are rejected while constructing a command set and while
   composing multiple sets into a registry, never deferred until dispatch.
+- The thin slice registers exactly one command ID, `text.insert`; the other five
+  descriptors in `TextInputCommandSet` remain for assembly.
+- The thin-slice route owns a finite per-connection outbound queue and one
+  writer thread. Command callbacks enqueue owned payloads and never call socket
+  send directly. Queue overflow or a failed/deadline-expired write closes the
+  connection. Broader replay, reconnect, authentication, and service
+  integration remain later work.
+- Malformed frames are a codec/WebSocket rejection oracle because the typed
+  in-process API has no decode step. Stale requests are compared through both
+  direct and WebSocket dispatch.
 
 ## Risks and Mitigations
 
@@ -85,9 +116,9 @@ I1, I2, I3, I10, I11, I12, I16, I21 from `doc/spec.md`.
 | # | Step | Files | Oracle | Invariants |
 |---|------|-------|--------|------------|
 | 1 | Implement the serialized session executor, identities, shared active workspace/view topology, immutable principals, and duplicate-rejecting generic command registry; keep snapshot/delta aggregation, replay, and serialization out of scope | `include/ssg/session.h`, `src/session.cpp`, `include/ssg/command_registry.h`, `src/command_registry.cpp`, `tests/test_session.cpp`, `cmake/components/session-state.cmake` | hand-authored scripts for interleaved two-client total order, mutation-only stale rejection, client isolation, failed/throwing-handler atomicity, duplicate IDs within/across sets, registered dispatch, and identical capability enforcement for in-process/WebSocket-origin principals | I2, I3 |
-| 2 | Implement bounded versioned protocol codecs | `include/ssg/protocol.h`, `src/protocol.cpp`, `protocol/schema/*`, `tests/test_protocol.cpp` | round-trip and malformed corpus | I11 |
+| 2 | Implement the minimal single-document snapshot/delta section and bounded versioned `text.insert` codec | `include/ssg/snapshot.h`, `src/snapshot.cpp`, `include/ssg/protocol.h`, `src/protocol.cpp`, `tests/test_core_websocket_slice.cpp` | direct/WebSocket insert parity after every command, codec round-trip, and malformed corpus | I2, I3, I11 |
 | 3 | Extract the `../http` socket seam, add typed deadline-aware complete writes, then add its Windows backend | `../http/http.*`, `../http/src/platform/*`, `../http/tests/test_http.cpp` | existing suite after seam extraction; scripted partial/timeout/close/error writes; native loopback frame and lifecycle scripts; Linux runtime plus Windows compile/native-CI parity | I10, I21 |
-| 4 | Implement the one-channel server adapter | `include/ssg/http_server.h`, `src/http_server.cpp`, `tests/test_http_server.cpp` | in-process/WebSocket parity and side-channel audit | I1, I16 |
+| 4 | Implement the finite-queue one-channel thin-slice server adapter for `text.insert` | `include/ssg/http_server.h`, `src/http_server.cpp`, `tests/test_core_websocket_slice.cpp`, `cmake/components/core-websocket-slice.cmake` | in-process/loopback-WebSocket parity, stale/malformed scripts, and side-channel audit | I1, I2, I11, I16 |
 
 ## Rationale (optional, skippable)
 
