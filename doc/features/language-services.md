@@ -43,6 +43,7 @@ Normative commands owned by this feature:
 - `replace.open`, `replace.current`, `replace.all`, `replace.workspace_preview`, `replace.workspace_apply`
 - `search.workspace`, `search.results_next`, `search.results_previous`
 - `completion.open`, `completion.next`, `completion.previous`, `completion.accept`, `completion.dismiss`, `hover.show`, `hover.dismiss`
+- `rename.symbol`
 
 LSP is split into separately reviewable synchronization/diagnostics, language
 feature, and workspace-edit components. The synchronization component owns
@@ -146,7 +147,7 @@ consumer without constructing a Lua host.
 | 3 | Implement capability-limited Lua command parity | `include/ssg/lua.h`, `src/lua.cpp`, `tests/test_lua.cpp` | data-driven manifest parity; timeout, stale-handle, capability, registration-rollback, dispatcher, and atomic-edit fault isolation; basic-consumer construction without Lua initialization | I5, I10, I12, I20 |
 | 4a | Implement injected LSP framing, lifecycle, document synchronization, cancellation, and bounded/coalesced diagnostics | `include/ssg/lsp_sync.h`, `src/lsp_sync.cpp`, `tests/fake_lsp_server.*`, `tests/fixtures/lsp/sync/`, `tests/test_lsp_sync.cpp` | scripted fake server, independent UTF-8/UTF-16 fixtures, version/stale diagnostics, cancellation/timeouts, bounds, malformed messages, and nested-consumer optional-linkability | I10, I12 |
 | 4b | Implement LSP completion, hover, definition, and references | `include/ssg/lsp_features.h`, `src/lsp_features.cpp`, `tests/test_lsp_features.cpp`, plus an additive completed-response/document-snapshot seam in `lsp_sync.*` | scripted fake-server request/response cases, stale/cancelled result rejection, completion ordering/acceptance, and navigation fixtures | I10, I12 |
-| 4c | Implement atomic LSP workspace edits | `include/ssg/lsp_workspace_edit.h`, `src/lsp_workspace_edit.cpp`, `tests/test_lsp_workspace_edit.cpp` | full validation, fault injection, and all-or-nothing document snapshots | I5, I10, I12 |
+| 4c | Implement atomic LSP workspace edits and the immutable `LspWorkspaceEditCommandSet` | `include/ssg/lsp_workspace_edit.h`, `src/lsp_workspace_edit.cpp`, `tests/test_lsp_workspace_edit.cpp` | full validation, fault injection, and all-or-nothing document snapshots | I5, I10, I12 |
 
 Plan 4b consumes responses only through `LspSyncClient`: the synchronization
 layer exposes completed request IDs with raw response payloads and immutable
@@ -156,6 +157,12 @@ generation, and cancellation/supersession state, so late results cannot update
 observable state. Request errors are correlated without failing the connection.
 Rename remains out of Plan 4b because applying its `WorkspaceEdit` belongs to
 Plan 4c.
+
+Plan 4c depends on Plan 4b's completed-response/document-snapshot seam. File
+resource operations use an injected workspace adapter. The component validates
+the complete edit before mutation, applies document and file changes through
+one compensating operation, and retains recovery records when rollback cannot
+fully restore the pre-edit state.
 
 ## Rationale (optional, skippable)
 

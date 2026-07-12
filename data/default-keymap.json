@@ -18,7 +18,7 @@
     "find.open", "find.close", "find.next", "find.previous", "find.toggle_case", "find.toggle_whole_word", "find.toggle_regex", "find.toggle_selection",
     "replace.open", "replace.current", "replace.all", "replace.workspace_preview", "replace.workspace_apply",
     "search.workspace", "search.results_next", "search.results_previous",
-    "completion.open", "completion.next", "completion.previous", "completion.accept", "completion.dismiss", "hover.show", "hover.dismiss",
+    "completion.open", "completion.next", "completion.previous", "completion.accept", "completion.dismiss", "hover.show", "hover.dismiss", "rename.symbol",
     "pane.split_horizontal", "pane.split_vertical", "pane.close", "pane.next", "pane.previous", "pane.focus_left", "pane.focus_right", "pane.focus_up", "pane.focus_down",
     "panel.toggle", "panel.focus", "panel.next_provider", "panel.previous_provider", "tree.toggle_expanded", "tree.invoke_node_command", "view.toggle_distraction_free",
     "prompt.submit", "prompt.cancel", "status.next", "status.previous", "status.dismiss", "status.invoke_action",

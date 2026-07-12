@@ -1,0 +1,1 @@
+{"documentChanges":[{"textDocument":{"uri":"file:///workspace/a.cpp","version":1},"edits":[{"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":3}},"newText":"ONE"}]},{"textDocument":{"uri":"file:///workspace/b.cpp","version":1},"edits":[{"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":3}},"newText":"TWO"}]}]}

@@ -134,7 +134,7 @@ the same document snapshot before broader feature fan-out.
 | `find-replace` | `search-palette`, `edit-command-suite`, `undo-redo-history` |
 | `tab-management` | `file-commands`, `session-state` |
 | `lsp-language-features` | `lsp-sync-diagnostics` |
-| `lsp-workspace-edits` | `lsp-sync-diagnostics`, `recovery-actions` |
+| `lsp-workspace-edits` | `lsp-sync-diagnostics`, `lsp-language-features`, `recovery-actions` |
 | `browser-input-conformance` | `input-keymap-contract` |
 | `external-modification-flow` | `filesystem-watchers`, `file-commands`, `recovery-actions`, `prompt-status-surface`, `diff-model` |
 

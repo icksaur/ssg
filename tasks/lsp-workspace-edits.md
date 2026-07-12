@@ -1,13 +1,20 @@
 # lsp-workspace-edits
 
-- Spec: `doc/features/language-services.md`, Plan 4
-- Depends: `lsp-sync-diagnostics`, `recovery-actions`
+- Spec: `doc/features/language-services.md`, Plan 4c
+- Depends: `lsp-sync-diagnostics`, `lsp-language-features`, `recovery-actions`
 - Branch: `lsp-workspace-edits-task`
 
 ## Scope
 
 Implement rename and validated multi-document workspace edits, including file
 operations, revision checks, recovery records, and all-or-nothing application.
+Export the immutable `LspWorkspaceEditCommandSet`. File resource operations use
+an injected workspace file-operation seam; the workspace-edit component owns
+validation and compensation while the adapter owns platform I/O.
+
+## Invariants
+
+I5, I10, I12 from `doc/spec.md`.
 
 ## Files
 
