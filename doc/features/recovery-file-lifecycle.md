@@ -194,6 +194,58 @@ preserve-as-detected, ensure-present, or ensure-absent. These commands' handlers
 and recovery effects belong to the later file-command layer; this component
 exports only their immutable descriptors and pure view/delta derivation.
 
+### Tab management
+
+The tab-management component is the sole owner of `tab.close`,
+`tab.close_others`, `tab.close_all`, `tab.reopen_closed`, `tab.next`,
+`tab.previous`, `tab.activate`, `tab.move_left`, and `tab.move_right`.
+File commands create and identify documents but do not own tab ordering or these
+commands. The component exports one immutable `TabManagementCommandSet`, a
+typed `TabViewState`, and pure `TabDelta` derivation and replay functions for
+later session assembly.
+
+Tabs have strong tab IDs and typed kinds: document, live diff, read-only output,
+search results, and tree view. Every kind participates in activation, cyclic
+next/previous navigation, close, and reorder. Document tabs additionally carry
+their `FileDocumentId` and `JournalDocumentKey`; duplicate saved path identity
+or duplicate untitled ID activates the existing tab instead of allocating
+another. Saved identity is the normalized workspace-relative path, never inode
+identity. Each untitled identity is unique.
+
+Tab state exposes kind, label, mode, dirty state, and recovery status. The tab
+layer derives the smallest available positive `Untitled N` label for an
+untitled document without a caller-supplied label. A closed tab retains its
+label in its recently-closed entry, so reopening preserves the number; a newly
+created tab may reuse a number not used by an open tab.
+
+Closing delegates document removal and dirty-document durability to an injected
+document-lifecycle boundary; tab management performs no filesystem I/O. A dirty
+close is accepted only when that boundary reports an installed durable recovery
+record within the caller-supplied finite positive timeout. Timeout, durability
+failure, or a success-shaped dirty close without a recovery record leaves tab
+topology unchanged and returns an actionable error. Clean and non-document
+closes use the same boundary so lifecycle mutation and topology have one
+failure-atomic seam.
+
+Closing an active tab selects its immediate right neighbor, or its immediate
+left neighbor when no right neighbor remains. Closing a non-active tab preserves
+the active tab. `close_others` and `close_all` are deterministic best-effort
+operations in original left-to-right order: each accepted close is removed and
+recorded, each failed close remains, and all failures are returned. If the
+active tab survives it remains active; otherwise the first surviving tab at or
+to the right of its original position is selected, falling back to the last
+survivor.
+
+Recently closed entries are a LIFO stack bounded to 32 entries, evicting the
+oldest entry after each accepted close. `tab.reopen_closed` restores the newest
+entry through the same lifecycle boundary, inserts it at its original index
+clamped to the current tab count, activates it, and removes the entry only after
+successful restoration. Failed restoration is retryable and changes no tab
+state. If the same content identity is already open, reopen activates that tab
+and consumes the stale recently-closed entry without restoring a duplicate.
+Reopen restores content, identity, mode, badges, and tab position but not undo
+history.
+
 ## Invariants
 
 I4, I5, I9, I10, I16, I19, I21 from `doc/spec.md`.
@@ -241,6 +293,7 @@ I4, I5, I9, I10, I16, I19, I21 from `doc/spec.md`.
 | 3 | Implement bounded compensating records and restoration primitives for close, reload, overwrite, rename, delete, and workspace replacement | `include/ssg/recovery.h`, `src/recovery.cpp`, `tests/test_recovery.cpp`, `cmake/components/recovery-actions.cmake` | canonical document/filesystem ground truth after major-action plus compensation, with injected failures proving record-before-mutation ordering, failure atomicity, restoration retry, and oldest-first count/byte bounds | I5, I19 |
 | 4 | Implement directory lifecycle and external-modification status actions | `include/ssg/workspace.h`, `src/workspace.cpp`, `tests/test_workspace.cpp` | filesystem ground truth and fault injection | I9, I16, I21 |
 | 4a | Implement directory lifecycle, untitled and saved-document identity, path prompts, the immutable file command set, and new/open/recent/save/save-all/save-as/reload/rename/delete/new-directory/drop handlers | `include/ssg/workspace.h`, `include/ssg/file_commands.h`, `src/workspace.cpp`, `src/file_commands.cpp`, `tests/test_workspace.cpp`, `tests/test_file_commands.cpp`, `cmake/components/file-commands.cmake` | temporary-directory truth; byte-exact save and decode round trips; normalized-path duplicate prevention; successful and failed untitled identity transitions; bounded recent MRU; absolute/traversal/symlink escape rejection before mutation; best-effort save-all; compensating-command scripts; authenticated local-drop acceptance and Lua/remote/unknown/client-asserted-locality rejection without allocation | I5, I9, I16, I19, I21 |
+| 4b | Implement typed tab state, badges, activation, cyclic navigation, ordering, immediate close variants, and bounded reopen | `include/ssg/tabs.h`, `src/tabs.cpp`, `tests/test_tabs.cpp`, `cmake/components/tab-management.cmake` | hand-authored transition tables for duplicate identities, dirty-close durability failure, active selection, best-effort batch close, LIFO reopen, ordering, and oldest-first bounded eviction | I2, I15, I16, I19 |
 
 ## Rationale (optional, skippable)
 
