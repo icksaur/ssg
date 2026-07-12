@@ -41,8 +41,9 @@ read.
    ```
 
 4. Call `caco_herd create` with `cwd` set to the absolute worktree path, the
-   chosen model, and the dispatch prompt defined below. `caco_herd` creates a
-   session, not a git worktree.
+   chosen model, and the dispatch prompt defined below. Use `gpt-5.6-sol` for
+   implementers and Claude Opus 4.8 for their sanity and diff reviews.
+   `caco_herd` creates a session, not a git worktree.
 5. Dispatch independent tasks in parallel up to the configured concurrency cap;
    the default is four active implementers. Serialize sanitizer and
    resource-intensive browser matrices when host pressure would make failures

@@ -31,3 +31,12 @@ then remove or shorten the redundant entry here.
 - A nested consumer oracle should call an out-of-line public API, not only
   include a header. Linking an out-of-line symbol proves that the component
   source was discovered and compiled from SSG's source root.
+
+## reference-editor
+
+- Deleting a final line without a trailing newline must also consume its
+  preceding newline. Deleting only the final line's byte range leaves an
+  unintended empty trailing line.
+- Multi-selection transforms that operate on touched lines must partition line
+  starts into contiguous runs. Replacing one span from the first touched line
+  through the last would modify untouched lines between disjoint selections.
