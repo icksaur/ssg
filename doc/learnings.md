@@ -148,6 +148,15 @@ then remove or shorten the redundant entry here.
   responses arrive, preventing cancellation churn from creating unbounded
   tombstone state.
 
+## lsp-language-features
+
+- Feature consumers require the exact synchronized document text and revision
+  for UTF-16 position conversion and stale-result rejection; document version
+  alone is insufficient.
+- Ordinary request errors remain correlated to request IDs without failing the
+  shared connection. Cancelled and superseded responses remain observable for
+  deterministic rejection.
+
 ## unicode-cell-layout
 
 - Byte-pinned upstream Unicode data needs `.gitattributes` entries with `-text`
