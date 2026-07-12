@@ -21,6 +21,45 @@ above. The later `prompt-status-surface` task owns `prompt.submit`,
 
 `PromptSurface` is a non-modal one-to-three-row view below the shared tab bar. Path prompts use one input; find uses one input plus toggles/count; replace uses find and replacement inputs plus toggles/count. Footer statuses are a bounded priority queue rather than one lossy slot.
 
+The prompt/status component owns the contents of the shell reservation, not the
+reservation itself. `PromptKind::path`, `settings`, and `command_argument` use
+one row; `find` uses two rows (input, then toggles/count); `replace` uses three
+rows (find input, replacement input, then toggles/count). The component lays
+out labeled input, toggle, and count controls within the `Rect` returned as
+`ShellViewState::prompt`; it rejects a reservation whose height does not match
+the prompt kind. Prompt configuration supplies text and accessible labels but
+does not implement path validation, completion, find matching, or replacement
+policy. `prompt.submit` returns the current field values to the owning feature
+and closes the prompt. `prompt.cancel` closes it without a submission or other
+state change.
+
+The status queue has a fixed capacity of 16. Its canonical order is severity
+(`error`, `warning`, `information`, `progress`) and then oldest first. When
+full, a new item is admitted only if it outranks at least one queued item; it
+evicts the oldest item at the lowest queued severity. The selected item starts
+at the head, `status.next` and `status.previous` wrap in canonical order, and
+`status.dismiss` removes the selected item and selects its successor (or the
+new tail when the removed item was last). Each enqueue receives a monotonically
+increasing generation. Action invocation carries status ID, action ID, and
+generation; `status.invoke_action` rejects a missing or mismatched tuple
+without mutating the queue, so an action captured before dismissal, eviction,
+or same-ID replacement cannot target newer state.
+
+The selected queue item projects into the shell request as the actionable
+footer field value followed by a deterministic `position/total` indicator.
+Its actions project in declared order to `ShellLayoutRequest::footer_actions`;
+each `ShellLabel::id` is the action ID and each accessible label is non-empty.
+The shell owns the outer footer and action rectangles. The status component
+owns queue ordering, selection, labels, projection, and action resolution.
+
+This component exports the immutable six-descriptor
+`PromptStatusCommandSet`, typed `PromptStatusViewState` and
+`PromptStatusDelta`, and pure `derive_prompt_status_delta`. An equal before and
+after state produces an unchanged delta with no replacement payload; a changed
+state carries one complete replacement state. Downstream feature owners open
+configured prompts and enqueue configured statuses; session assembly later
+binds the six descriptors to these transitions.
+
 ## Shell layout contract
 
 The minimum supported viewport is 20 columns by 4 rows; smaller viewports
@@ -168,7 +207,8 @@ replacement payload; changed states carry one complete replacement state.
 |---|------|------|-------|--------|------------|
 | 1a | Implement grapheme segmentation and per-logical-line cell runs (no wrapping, no scrollbar, no viewport) | `unicode-cell-layout` (Wave 1) | `include/ssg/layout.h`, `src/layout.cpp`, `data/unicode/`, `tests/fixtures/layout/cells/`, `tests/test_cell_layout.cpp`, `tests/test_gcb_oracle.cpp`, `cmake/components/unicode-cell-layout.cmake` | Official Unicode 15.0.0 `GraphemeBreakTest.txt` corpus plus hand-authored combining, emoji, double-width, tab, control, and invalid-UTF-8 cell-run goldens | I7 |
 | 1b | Implement visual-row wrapping, viewport slicing, scrolling, scrollbar metrics, and cell hit targets atop cell runs | `viewport-wrap-scrollbar` (Wave 2) | `include/ssg/viewport.h`, `src/viewport.cpp`, `tests/fixtures/layout/viewports/`, `tests/test_viewport.cpp`, `cmake/components/viewport-wrap-scrollbar.cmake` | Hand-authored empty/short/wide/wrapped/tiny viewport, scrollbar, and hit-target goldens plus bounds properties | I7 |
-| 2 | Implement fixed shell, prompt/status queue geometry, caret reveal, and accessible labels | `shell-layout` (Wave 2) | `include/ssg/ui_layout.h`, `src/ui_layout.cpp`, `data/ui/status_fields.json`, `tests/test_ui_layout.cpp` | rectangle, prompt, queue, caret-visibility, and accessibility goldens | I15, I17, I23 |
+| 2 | Implement the fixed shell, opaque prompt reservation, footer field/action rectangles, and accessible shell labels | `shell-layout` (Wave 2) | `include/ssg/ui_layout.h`, `src/ui_layout.cpp`, `data/ui/status_fields.json`, `tests/test_ui_layout.cpp` | shell rectangle, collapse-priority, and accessibility goldens | I15, I17 |
+| 2a | Implement non-modal prompt contents and the bounded actionable status queue | `prompt-status-surface` (Wave 3) | `include/ssg/prompt.h`, `include/ssg/status.h`, `src/prompt.cpp`, `src/status.cpp`, `tests/test_prompt_status.cpp`, `cmake/components/prompt-status-surface.cmake` | prompt geometry goldens, priority/queue transition tables, stale-action rejection, and accessible-label snapshots | I15, I17, I19 |
 | 3 | Implement the sole-source 16-color theme model | `theme-model` (Wave 1) | `include/ssg/theme.h`, `src/theme.cpp`, `data/themes/*`, `tests/fixtures/theme_roles.json`, `tests/test_theme.cpp` | exact indexed cardinality; exhaustive semantic/syntax mappings; shared co-visible-role distinctness; deterministic snapshots; source/config scans rejecting literal or computed colors outside theme data | I8, I22 |
 
 ## Rationale (optional, skippable)

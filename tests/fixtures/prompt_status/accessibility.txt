@@ -1,0 +1,8 @@
+prompt|Find
+input|Find text
+toggle|Case sensitive
+toggle|Whole word
+count|Match count
+status|Build failed
+action|Retry build
+action|Open log
