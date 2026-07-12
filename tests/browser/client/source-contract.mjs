@@ -17,6 +17,7 @@ import {
   isRejectedCommandResult,
   renderSession,
 } from "../../../examples/browser/client.mjs";
+import {consumeCredential} from "../../../examples/browser/app.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const fixtureExecutable = process.argv[2];
@@ -80,6 +81,28 @@ assert.equal(encodeSessionAttach("remote fixture", undefined),
   "SSG1 ATTACH - 72656d6f74652066697874757265");
 assert.equal(encodeSessionAttach("local", 42n),
   "SSG1 ATTACH 42 6c6f63616c");
+
+const historyCalls = [];
+const browserLocation = {
+  href: "http://127.0.0.1:9000/?websocket=ws%3A%2F%2Ffixture#credential=launch-token",
+};
+assert.equal(consumeCredential(browserLocation, {
+  replaceState(state, title, url) { historyCalls.push({state, title, url}); },
+}), "launch-token");
+assert.equal(historyCalls.length, 1);
+assert.equal(historyCalls[0].url,
+  "http://127.0.0.1:9000/?websocket=ws%3A%2F%2Ffixture");
+
+const fixtureLocation = {
+  href: "http://127.0.0.1:9000/?credential=remote",
+};
+assert.equal(consumeCredential(fixtureLocation, {
+  replaceState() { assert.fail("query fixture credential must not rewrite history"); },
+}), "remote");
+
+const localSource = fs.readFileSync(
+  path.join(root, "examples/browser/local.html"), "utf8");
+assert.doesNotMatch(localSource, /credential.*local|local.*credential/i);
 
 const oracle = spawnSync(fixtureExecutable, ["--delta-oracle"], {
   encoding: "utf8",

@@ -1,5 +1,5 @@
 #include "test_helpers.h"
-
+#include <ssg/application_auth.h>
 #include <ssg/editor_session_assembly.h>
 #include <ssg/http_server.h>
 #include <ssg/protocol.h>
@@ -150,6 +150,28 @@ SocketOwner connect_websocket(std::uint16_t port) {
     return owner;
 }
 
+SocketOwner connect_loopback(std::uint16_t port) {
+#ifdef _WIN32
+    WSADATA data{};
+    if (WSAStartup(MAKEWORD(2, 2), &data) != 0) {
+        throw std::runtime_error{"WSAStartup failed"};
+    }
+#endif
+    SocketOwner owner{socket(AF_INET, SOCK_STREAM, 0)};
+    if (owner.socket == invalid_test_socket) {
+        throw std::runtime_error{"socket creation failed"};
+    }
+    sockaddr_in address{};
+    address.sin_family = AF_INET;
+    address.sin_port = htons(port);
+    address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    if (connect(owner.socket, reinterpret_cast<sockaddr*>(&address),
+                sizeof(address)) != 0) {
+        throw std::runtime_error{"loopback connect failed"};
+    }
+    return owner;
+}
+
 ssg::SelectionViewState selection(std::uint64_t byte) {
     ssg::DocumentPosition const position{
         ssg::ByteOffset{byte}, ssg::LineIndex{0}, ssg::CellIndex{byte}};
@@ -199,7 +221,7 @@ ssg::ViewportViewState viewport() {
             {8, 8, 0, 0, 0, 8}};
 }
 
-class TestHost final : public ssg::HttpEditorSessionHost {
+class TestHost : public ssg::HttpEditorSessionHost {
 public:
     explicit TestHost(ssg::EditorSession& session) : session_{session} {}
 
@@ -248,6 +270,21 @@ public:
     std::atomic<int> binary_frames{0};
 };
 
+class ApplicationHost final : public TestHost {
+public:
+    ApplicationHost(ssg::EditorSession& session,
+                    ssg::ApplicationAuthentication authentication)
+        : TestHost{session}, authentication_{std::move(authentication)} {}
+
+    std::optional<ssg::AuthenticatedSession> authenticate(
+        std::string_view credential) override {
+        return authentication_.authenticate(credential);
+    }
+
+private:
+    ssg::ApplicationAuthentication authentication_;
+};
+
 struct Fixture {
     Fixture() {
         for (auto const& descriptor : ssg::p0_command_descriptors()) {
@@ -276,6 +313,79 @@ void attach(TestSocket socket, std::string credential,
     send_all(socket,
              masked_frame(0x1, ssg::encode_session_attach_request(
                                    {std::move(credential), revision})));
+}
+
+TEST(externally_owned_route_shares_one_server_lifecycle) {
+    Fixture fixture;
+    Http::Server server{0, Http::BindAddress::loopback};
+    server.get("/", [](Http::Context&) {
+        return Http::Ok("browser asset", "text/plain");
+    });
+    ssg::HttpEditorRoute route{
+        server, *fixture.session, ssg::build_command_argument_codec_registry(),
+        *fixture.host, {"/session", 8, 8, 250ms}};
+
+    server.start();
+    auto const bound_port = server.boundPort();
+    ASSERT_TRUE(bound_port.has_value());
+
+    auto http = connect_loopback(static_cast<std::uint16_t>(*bound_port));
+    send_all(http.socket, "GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
+    auto const response = receive_some(http.socket);
+    ASSERT_TRUE(response.find("200 OK") != std::string::npos);
+    ASSERT_TRUE(response.find("browser asset") != std::string::npos);
+
+    auto websocket =
+        connect_websocket(static_cast<std::uint16_t>(*bound_port));
+    FrameReader reader{websocket.socket};
+    attach(websocket.socket, "local");
+    auto decoded = ssg::decode_session_snapshot(reader.next().payload);
+    ASSERT_TRUE(decoded.accepted());
+    ASSERT_EQ(decoded.snapshot->client().client_id, ssg::ClientId{11});
+
+    server.stop();
+    ASSERT_FALSE(server.boundPort().has_value());
+}
+
+TEST(application_route_rejects_wrong_and_stale_bearers_before_attach) {
+    Fixture fixture;
+    auto stale = ssg::generate_bearer_credential();
+    auto current = ssg::generate_bearer_credential();
+    auto const stale_value = std::string{stale.value()};
+    auto const current_value = std::string{current.value()};
+    ApplicationHost host{
+        *fixture.session,
+        ssg::ApplicationAuthentication{
+            std::move(current), ssg::SessionId{"application-session"},
+            ssg::ClientId{51}, ssg::ViewId{52}}};
+    Http::Server server{0, Http::BindAddress::loopback};
+    ssg::HttpEditorRoute route{
+        server, *fixture.session, ssg::build_command_argument_codec_registry(),
+        host};
+    server.start();
+    auto const port = static_cast<std::uint16_t>(*server.boundPort());
+
+    {
+        auto socket = connect_websocket(port);
+        attach(socket.socket, "wrong");
+    }
+    {
+        auto socket = connect_websocket(port);
+        attach(socket.socket, stale_value);
+    }
+    std::this_thread::sleep_for(20ms);
+    ASSERT_FALSE(
+        fixture.session->attached_client(ssg::ClientId{51}).has_value());
+
+    auto socket = connect_websocket(port);
+    FrameReader reader{socket.socket};
+    attach(socket.socket, current_value);
+    auto decoded = ssg::decode_session_snapshot(reader.next().payload);
+    ASSERT_TRUE(decoded.accepted());
+    ASSERT_EQ(decoded.snapshot->client().client_id, ssg::ClientId{51});
+    ASSERT_EQ(decoded.snapshot->client().capabilities.size(), std::size_t{1});
+
+    server.stop();
 }
 
 TEST(attach_uses_host_principal_and_socket_snapshot_matches_in_process) {
@@ -500,6 +610,8 @@ TEST(slow_client_cannot_grow_the_outbound_queue) {
 
 int main() {
     std::cout << "=== HTTP editor server ===\n";
+    RUN(externally_owned_route_shares_one_server_lifecycle);
+    RUN(application_route_rejects_wrong_and_stale_bearers_before_attach);
     RUN(attach_uses_host_principal_and_socket_snapshot_matches_in_process);
     RUN(command_delta_replays_on_reconnect_and_eviction_sends_snapshot);
     RUN(clipboard_status_and_binary_ingress_share_the_attached_connection);

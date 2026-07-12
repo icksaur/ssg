@@ -10,6 +10,10 @@
 #include <string>
 #include <string_view>
 
+namespace Http {
+class Server;
+}
+
 namespace ssg {
 
 class SessionId {
@@ -66,6 +70,14 @@ public:
                         BinaryFrame const& frame) = 0;
 };
 
+struct HttpEditorRouteConfig {
+    std::string route{"/session"};
+    std::size_t outbound_queue_messages{32};
+    std::size_t replay_deltas{64};
+    std::chrono::milliseconds write_timeout{1000};
+    ProtocolLimits protocol_limits{};
+};
+
 struct HttpEditorServerConfig {
     std::uint16_t port;
     std::string route{"/session"};
@@ -73,6 +85,29 @@ struct HttpEditorServerConfig {
     std::size_t replay_deltas{64};
     std::chrono::milliseconds write_timeout{1000};
     ProtocolLimits protocol_limits{};
+};
+
+class HttpEditorRoute {
+public:
+    // The referenced server must outlive this route and must be stopped before
+    // route destruction so no registered callback can outlive its state.
+    HttpEditorRoute(Http::Server& server, EditorSession& session,
+                    CommandArgumentCodecRegistry argument_codecs,
+                    HttpEditorSessionHost& host,
+                    HttpEditorRouteConfig config = {});
+    ~HttpEditorRoute();
+
+    HttpEditorRoute(HttpEditorRoute const&) = delete;
+    HttpEditorRoute& operator=(HttpEditorRoute const&) = delete;
+
+    [[nodiscard]] bool send_clipboard_request(
+        ClientId client_id, ClipboardRequest const& request);
+    [[nodiscard]] bool send_binary(ClientId client_id,
+                                   BinaryFrame const& frame);
+
+private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
 };
 
 class HttpEditorServer {

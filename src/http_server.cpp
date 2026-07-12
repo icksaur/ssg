@@ -5,6 +5,7 @@
 #include <charconv>
 #include <condition_variable>
 #include <deque>
+#include <exception>
 #include <map>
 #include <mutex>
 #include <stdexcept>
@@ -112,7 +113,7 @@ DecodeSessionAttachRequestResult decode_session_attach_request(
             SessionAttachRequest{std::move(*credential), revision}, {}};
 }
 
-struct HttpEditorServer::Impl {
+struct HttpEditorRoute::Impl {
     struct Outbound {
         std::string payload;
         bool binary;
@@ -137,15 +138,15 @@ struct HttpEditorServer::Impl {
 
     using ReplayKey = std::pair<std::string, std::uint64_t>;
 
-    Impl(EditorSession& editor_session,
+    Impl(Http::Server& http_server, EditorSession& editor_session,
          CommandArgumentCodecRegistry command_argument_codecs,
          HttpEditorSessionHost& session_host,
-         HttpEditorServerConfig server_config)
+         HttpEditorRouteConfig route_config)
         : session{editor_session},
           argument_codecs{std::move(command_argument_codecs)},
           host{session_host},
-          config{std::move(server_config)},
-          server{config.port} {
+          config{std::move(route_config)},
+          server{http_server} {
         if (config.route.empty() || config.route.front() != '/') {
             throw std::invalid_argument{
                 "WebSocket route must start with a slash"};
@@ -165,7 +166,7 @@ struct HttpEditorServer::Impl {
     }
 
     ~Impl() {
-        if (started) stop();
+        if (server.boundPort().has_value()) std::terminate();
     }
 
     void opened(Http::WebSocketHandle handle) {
@@ -472,6 +473,48 @@ struct HttpEditorServer::Impl {
         return true;
     }
 
+    EditorSession& session;
+    CommandArgumentCodecRegistry argument_codecs;
+    HttpEditorSessionHost& host;
+    HttpEditorRouteConfig config;
+    Http::Server& server;
+    std::recursive_mutex processing_mutex;
+    std::mutex connections_mutex;
+    std::map<Http::WebSocketHandle, std::shared_ptr<Connection>> connections;
+    std::map<ReplayKey, std::deque<ReplayRecord>> replay;
+};
+
+HttpEditorRoute::HttpEditorRoute(
+    Http::Server& server, EditorSession& session,
+    CommandArgumentCodecRegistry argument_codecs,
+    HttpEditorSessionHost& host, HttpEditorRouteConfig config)
+    : impl_{std::make_unique<Impl>(server, session, std::move(argument_codecs),
+                                  host, std::move(config))} {}
+
+HttpEditorRoute::~HttpEditorRoute() = default;
+
+bool HttpEditorRoute::send_clipboard_request(
+    ClientId client_id, ClipboardRequest const& request) {
+    return impl_->send_to(client_id, encode_clipboard_request(request));
+}
+
+bool HttpEditorRoute::send_binary(ClientId client_id,
+                                  BinaryFrame const& frame) {
+    return impl_->send_to(client_id, encode_binary_frame(frame));
+}
+
+struct HttpEditorServer::Impl {
+    Impl(EditorSession& session,
+         CommandArgumentCodecRegistry argument_codecs,
+         HttpEditorSessionHost& host, HttpEditorServerConfig config)
+        : server{config.port},
+          route{server, session, std::move(argument_codecs), host,
+                {std::move(config.route), config.outbound_queue_messages,
+                 config.replay_deltas, config.write_timeout,
+                 config.protocol_limits}} {}
+
+    ~Impl() { stop(); }
+
     void start() {
         if (started) {
             throw std::logic_error{"HTTP editor server is already started"};
@@ -486,15 +529,8 @@ struct HttpEditorServer::Impl {
         started = false;
     }
 
-    EditorSession& session;
-    CommandArgumentCodecRegistry argument_codecs;
-    HttpEditorSessionHost& host;
-    HttpEditorServerConfig config;
     Http::Server server;
-    std::recursive_mutex processing_mutex;
-    std::mutex connections_mutex;
-    std::map<Http::WebSocketHandle, std::shared_ptr<Connection>> connections;
-    std::map<ReplayKey, std::deque<ReplayRecord>> replay;
+    HttpEditorRoute route;
     bool started{false};
 };
 
@@ -511,12 +547,12 @@ void HttpEditorServer::stop() { impl_->stop(); }
 
 bool HttpEditorServer::send_clipboard_request(
     ClientId client_id, ClipboardRequest const& request) {
-    return impl_->send_to(client_id, encode_clipboard_request(request));
+    return impl_->route.send_clipboard_request(client_id, request);
 }
 
 bool HttpEditorServer::send_binary(ClientId client_id,
                                    BinaryFrame const& frame) {
-    return impl_->send_to(client_id, encode_binary_frame(frame));
+    return impl_->route.send_binary(client_id, frame);
 }
 
 }  // namespace ssg

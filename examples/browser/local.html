@@ -8,11 +8,6 @@
 </head>
 <body>
   <main id="ssg" aria-live="polite"></main>
-  <script>
-    const query = new URLSearchParams(location.search);
-    if (!query.has("credential")) query.set("credential", "local");
-    history.replaceState(null, "", `${location.pathname}?${query}`);
-  </script>
   <script type="module" src="./app.mjs"></script>
 </body>
 </html>
