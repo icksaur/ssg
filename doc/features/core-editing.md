@@ -87,9 +87,21 @@ model is the strongest independent oracle for the storage-only operations;
 the `reference-editor` dependency establishes the independent editor oracle
 that the following document-transaction task uses against this storage.
 
-| 4 | Implement movement, caret reveal, selections, multi-cursor creation, typing, indentation, lines, comments, brackets, and transforms | `include/ssg/selection.h`, `src/selection.cpp`, `tests/test_selection.cpp` | reference command scripts and viewport intersection properties | I5, I13, I23 |
+| 4 | Implement movement, caret reveal, selections, multi-cursor creation, typing, indentation, lines, comments, brackets, and transforms | `include/ssg/selection.h`, `src/selection.cpp`, `tests/test_selection.cpp` | reference command scripts, hand-computed page/bracket cases, and minimal viewport-intersection properties | I5, I13, I23 |
 | 5 | Implement clipboard request/response transforms | `include/ssg/clipboard.h`, `src/clipboard.cpp`, `tests/test_clipboard.cpp` | hand cases and stale/denied fault tests | I16, I18 |
 | 6 | Implement coalesced bounded per-file undo/redo with selection restoration | `include/ssg/history.h`, `src/history.cpp`, `tests/test_history.cpp` | timed coalescing and forward/undo/redo round trips | I5 |
+
+**Selection/navigation contract (Plan 4 scope).** The
+`selection-navigation` task owns normalized selection state, the `cursor.*` and
+`select.*` command families, `goto.matching_bracket`, `view.reveal_caret`, and
+`view.center_caret`; text mutation and transform commands in this plan row are
+implemented by their separately scheduled tasks. Bracket pairs are resolved
+settings injected into selection operations. Vertical and page movement use
+display cells and preserve a desired cell across shorter lines. Every accepted
+selection transition minimally reveals the primary active endpoint; explicit
+centering clamps to the viewport's scroll bounds. Reference-editor scripts use
+ASCII fixtures, while hand-computed page, nested-bracket, tab, combining, and
+wide-grapheme cases cover behavior outside that byte-column oracle.
 
 ## Rationale (optional, skippable)
 
