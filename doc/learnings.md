@@ -309,3 +309,12 @@ then remove or shorten the redundant entry here.
   unit.
 - Per-client deltas bind client ID, view ID, and immutable capabilities so
   replay cannot leak viewport or authorization state across attachments.
+
+## protocol-codec
+
+- Wire decoders translate domain-constructor invariant exceptions into
+  malformed-message results; hostile bytes never escape as C++ exceptions.
+- Protocol color reconstruction uses the theme-owned API because the theme
+  oracle rejects independent `SrgbColor` construction outside `theme.h`.
+- `CommandSet::descriptors()` returns a borrowed view. Retain the `CommandSet`
+  object before iterating instead of calling it on a temporary.
