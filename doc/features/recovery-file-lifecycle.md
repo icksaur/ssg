@@ -8,6 +8,31 @@ Open directories and files, save/close/reopen tabs immediately without dialogs, 
 
 The workspace and recovery mechanisms are those in `doc/spec.md`. Recovery namespaces use workspace hashes, generated session IDs, operating-system locks, stable file identities, and `UntitledDocumentId`. Atomic save uses same-directory temporary replacement. Close, reload, overwrite, rename, delete, and workspace replacement create bounded compensating records before mutation.
 
+Plan 1 owns the shared platform primitive used by later recovery work:
+
+- syntactic workspace-relative path validation is a pure operation parameterized
+  by Linux or Windows syntax; canonicalization, symlink traversal, and CWD
+  authority enforcement remain Plan 4 responsibilities;
+- Windows legacy paths are limited to 259 UTF-16 code units (excluding the
+  terminating NUL), while extended policy permits at most 32,766 UTF-16 code
+  units; both policies reject components beyond 255 UTF-16 code units;
+- `FileIdentity` normalizes Linux device/inode and Windows volume/file ID and is
+  stable across close/reopen and rename while distinguishing different files;
+- `ExclusiveFileLock` is the sole move-only, RAII OS advisory-lock primitive;
+  Plan 2 session locking consumes it and owns workspace/session namespace,
+  remnant-discovery, and newest-restorable policy rather than another OS lock;
+- owner-only permission operations deny other principals read/write access;
+- cache-root lookup returns the OS user cache location with a validated
+  application component; and
+- atomic replacement writes a same-directory temporary file and leaves the
+  destination containing either complete old bytes or complete new bytes.
+
+The public seam is `platform_files.h`: typed path validation and errors,
+`FileIdentity`, move-only `ExclusiveFileLock`, owner-only permissions,
+user-cache-root lookup, and byte-oriented atomic replacement. Operational
+failures throw actionable standard exceptions; lock contention alone is the
+empty result of `try_lock_file`.
+
 Normative commands owned by this feature:
 
 - `workspace.open_directory`
@@ -47,7 +72,7 @@ I4, I5, I9, I10, I16, I19, I21 from `doc/spec.md`.
 
 | # | Step | Files | Oracle | Invariants |
 |---|------|-------|--------|------------|
-| 1 | Implement platform file identity, locking, paths, and atomic replacement | `include/ssg/platform_files.h`, `src/platform/*files.cpp`, `tests/test_platform_files.cpp` | Linux/Windows temporary-directory cases | I4, I21 |
+| 1 | Implement platform file identity, locking, paths, permissions, cache roots, and atomic replacement | `include/ssg/platform_files.h`, `src/platform/*files.cpp`, `tests/test_platform_files.cpp` | platform-independent Linux/Windows path decision table on both platforms; native temporary-directory identity/rename, lock/contention/release, owner-only permission, cache-root, and complete-old-or-new replacement cases | I4, I21 |
 | 2 | Implement checksummed document/session journals and restoration | `include/ssg/scratch.h`, `src/scratch.cpp`, `tests/fixtures/scratch/*`, `tests/test_scratch.cpp` | corruption/truncation/concurrency/untitled round trips | I10, I19 |
 | 3 | Implement file tabs, path prompts, encoding/EOL conversion, save, close/reopen, and recovery records | `include/ssg/recovery.h`, `src/recovery.cpp`, `tests/fixtures/encoding/*`, `tests/test_recovery.cpp` | byte-exact encoding/EOL and compensating-command round trips | I5, I19 |
 | 4 | Implement directory lifecycle and external-modification status actions | `include/ssg/workspace.h`, `src/workspace.cpp`, `tests/test_workspace.cpp` | filesystem ground truth and fault injection | I9, I16, I21 |
