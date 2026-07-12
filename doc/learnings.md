@@ -40,3 +40,9 @@ then remove or shorten the redundant entry here.
 - Multi-selection transforms that operate on touched lines must partition line
   starts into contiguous runs. Replacing one span from the first touched line
   through the last would modify untouched lines between disjoint selections.
+
+## platform-file-io
+
+- Durable Linux atomic replacement requires flushing the temporary file before
+  rename and flushing the parent directory after rename. Flushing only file
+  contents does not make the directory-entry replacement crash durable.
