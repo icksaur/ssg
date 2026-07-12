@@ -1,0 +1,24 @@
+# command_id	argument_kind	argument	expected
+workspace.open_directory	none		accepted
+file.open	none		accepted
+text.insert	text	!	accepted
+select.add_cursor_down	none		accepted
+clipboard.copy	none		accepted
+clipboard.cut	none		accepted
+clipboard.paste	none		accepted
+edit.undo	none		accepted
+edit.redo	none		accepted
+view.toggle_word_wrap	none		accepted
+view.scroll_lines	lines:1		accepted
+view.scroll_to_fraction	fraction:1/2		accepted
+file.save	none		accepted
+text.insert	text	 dirty	accepted
+tab.close	none		accepted
+tab.reopen_closed	none		accepted
+file.reload	none		accepted
+text.insert	text	rejected	rejected
+external.open_diff	none		accepted
+follow_edits.pause	none		accepted
+follow_edits.resume	none		accepted
+prompt.submit	none		accepted
+file.open_dropped_content	dropped:dropped/drop.txt		accepted
