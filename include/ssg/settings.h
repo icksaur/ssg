@@ -132,9 +132,13 @@ struct SettingsCommandDescriptor {
 };
 
 struct SettingsCommandSet {
-    std::array<SettingsCommandDescriptor, 2> descriptors{{
+    std::array<SettingsCommandDescriptor, 6> descriptors{{
+        {"settings.open"},
         {"settings.set"},
         {"settings.reset"},
+        {"settings.reset_scope"},
+        {"settings.export_workspace"},
+        {"settings.import_workspace"},
     }};
 };
 

@@ -34,11 +34,16 @@ Normative commands owned by this feature:
 
 - `settings.open`, `settings.set`, `settings.reset`, `settings.reset_scope`, `settings.export_workspace`, `settings.import_workspace`
 
+`SettingsCommandSet` immutably enumerates all six owned IDs exactly once. This
+task establishes their descriptor ownership and implements the reversible
+model operations used by `settings.set` and `settings.reset`. Downstream session
+assembly binds the command handlers and aggregates settings view/delta state;
+the later `prompt-status-surface` owner renders prompts and status actions.
+
 `settings.set` and `settings.reset` apply immediately after validation and
 return a bounded compensation record that restores the prior scoped presence
 or value. They publish typed view-state/delta data for downstream session and
-status assembly. The later `prompt-status-surface` owner renders the non-modal
-settings prompt and footer action; this task has no dependency on that surface.
+status assembly. This task has no dependency on those downstream surfaces.
 
 ## Invariants
 
@@ -62,7 +67,9 @@ I4, I16, I18, I19, I20, I21, I22 from `doc/spec.md`.
 - Observable: changing each required setting updates the relevant API view/behavior and is reversible without a dialog.
 - Budgets: settings resolution is bounded by the five fixed scopes.
 - Gates: project build, settings tests, and Linux/Windows persistence tests are green.
-- Oracles: hand-authored scope-resolution tables, schema round trips, invalid-value atomicity, restart persistence, and compensating-command restoration.
+- Oracles: hand-authored scope-resolution tables, exact/no-duplicate ownership
+  of all six normative command IDs, schema round trips, invalid-value
+  atomicity, restart persistence, and compensating-command restoration.
 
 ## Plan
 
@@ -70,7 +77,7 @@ I4, I16, I18, I19, I20, I21, I22 from `doc/spec.md`.
 |---|------|-------|--------|------------|
 | 1 | Define typed keys, values, scopes, view/delta values, and resolution | `include/ssg/settings.h`, `src/settings.cpp`, `tests/test_settings.cpp` | hand-authored resolution tables | I4, I16 |
 | 2 | Implement host-rooted, versioned Linux/Windows persistence seams | `src/platform/{linux,windows}_settings.cpp`, `tests/test_settings_persistence.cpp` | schema/restart round trips plus unknown-field preservation/non-application | I18, I21 |
-| 3 | Implement reversible set/reset and compensation records; leave prompt rendering and aggregate/Lua wiring to their downstream owners | `include/ssg/settings.h`, `src/settings.cpp`, `tests/test_settings.cpp`, `cmake/components/settings-model.cmake` | invalid-value atomicity and scoped-state restoration scripts | I19, I20 |
+| 3 | Export all six immutable command descriptors and implement reversible set/reset model operations; leave handler binding, prompt rendering, and aggregate/Lua wiring to downstream owners | `include/ssg/settings.h`, `src/settings.cpp`, `tests/test_settings.cpp`, `cmake/components/settings-model.cmake` | exact command-ID cardinality/order/no-duplicates, invalid-value atomicity, and scoped-state restoration scripts | I19, I20 |
 
 ## Rationale (optional, skippable)
 

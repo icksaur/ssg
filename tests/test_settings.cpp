@@ -162,7 +162,7 @@ TEST(stale_compensation_does_not_overwrite_a_newer_change) {
     ASSERT_EQ(std::get<bool>(effective.value), true);
 }
 
-TEST(view_state_delta_and_command_set_are_typed_and_complete_for_task_scope) {
+TEST(view_state_delta_and_command_set_cover_all_owned_settings_ids) {
     ssg::SettingsModel settings;
     const auto before = settings.view_state();
     const auto changed =
@@ -174,9 +174,21 @@ TEST(view_state_delta_and_command_set_are_typed_and_complete_for_task_scope) {
     ASSERT_EQ(changed.delta->after, after.find(SettingKey::auto_indent)->effective);
 
     constexpr ssg::SettingsCommandSet commands;
-    static_assert(commands.descriptors.size() == 2);
-    ASSERT_EQ(commands.descriptors[0].id, std::string_view{"settings.set"});
-    ASSERT_EQ(commands.descriptors[1].id, std::string_view{"settings.reset"});
+    constexpr std::array expected{
+        std::string_view{"settings.open"},
+        std::string_view{"settings.set"},
+        std::string_view{"settings.reset"},
+        std::string_view{"settings.reset_scope"},
+        std::string_view{"settings.export_workspace"},
+        std::string_view{"settings.import_workspace"},
+    };
+    static_assert(commands.descriptors.size() == expected.size());
+    for (std::size_t i = 0; i < expected.size(); ++i) {
+        ASSERT_EQ(commands.descriptors[i].id, expected[i]);
+        for (std::size_t j = i + 1; j < expected.size(); ++j) {
+            ASSERT_NE(commands.descriptors[i].id, commands.descriptors[j].id);
+        }
+    }
 }
 
 } // namespace
@@ -186,7 +198,7 @@ int main() {
     RUN(invalid_values_and_keys_are_failure_atomic);
     RUN(set_and_reset_compensations_restore_scoped_and_effective_state);
     RUN(stale_compensation_does_not_overwrite_a_newer_change);
-    RUN(view_state_delta_and_command_set_are_typed_and_complete_for_task_scope);
+    RUN(view_state_delta_and_command_set_cover_all_owned_settings_ids);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }
