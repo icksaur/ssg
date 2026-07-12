@@ -60,12 +60,17 @@ read.
    surface the decision to the user, and continue independent tasks. The
    child's last status remains `BLOCKED` or `UNCLEAR`; `PARKED` is not a child
    response.
-8. For implementation `DONE`, verify the branch and reviewed commit SHA from
-   the envelope, run every task and integration gate, and merge the task branch
-   into `master` only when green.
-9. If dependency changes require a rebase, resume the same child to rebase onto
-   the new `master`, rerun gates, obtain a new Opus 4.8 diff review, and return a
-   new `DONE` SHA. A reviewed pre-rebase commit is not mergeable.
+8. For implementation `DONE`, verify the branch and reviewed commit SHA from the
+   envelope, require a clean worktree, verify that its recorded base contains
+   every task dependency, and confirm that it merges cleanly into current
+   `master`. The parent does not repeat the child's implementation diff review.
+   Run every task and integration gate, then merge the task branch into `master`
+   only when green. Return gate failures to the same child with the failing
+   output.
+9. If dependency changes or merge conflicts require a rebase, resume the same
+   child to rebase onto the new `master`. The child reruns gates, obtains a new
+   Opus 4.8 diff review, and returns a new `DONE` SHA. A reviewed pre-rebase
+   commit is not mergeable.
 10. Run the relevant gates again on merged `master`. Resume the same child for
     integration failures within task scope; create a dedicated integration-fix
     task when the failure crosses task boundaries.
@@ -83,8 +88,10 @@ read.
 14. Repeat until every task in the current milestone is merged and its
     milestone acceptance gates pass.
 
-The parent owns dependency ordering and integration decisions. Children do not
-merge their own branches or modify another child's worktree.
+The parent owns dependency ordering and integration decisions. The child owns
+implementation correctness, oracle construction, and implementation diff
+review. Children do not merge their own branches or modify another child's
+worktree.
 
 The parent does not run `git gc`, `git prune`, or destructive repository cleanup
 while child worktrees exist. Worktrees share the repository object store, so
