@@ -1,0 +1,22 @@
+0|header|Status header|0,0,80,1|18
+2|footer|Status footer|0,11,80,1|19
+1|active_command|Active command|0,0,8,1|18
+1|current_path|Current path|9,0,14,1|18
+1|mode|Editor mode|24,0,6,1|18
+4|status.retry|Retry status action|59,11,21,1|20
+3|actionable_status|Status message|0,11,7,1|19
+3|follow_state|Follow edits state and resume binding|8,11,11,1|19
+3|background_activity|Background activity|20,11,6,1|19
+3|encoding|Text encoding|27,11,7,1|19
+3|line_ending|Line ending|35,11,4,1|19
+3|git_branch|Git branch|40,11,6,1|19
+3|git_repository|Git repository|47,11,5,1|19
+3|file_type|File type|53,11,5,1|19
+7|panel|Side panel|0,1,24,10|17
+8|panel.provider|Files|0,1,24,10|17
+5|tabs|Open tabs|24,1,56,1|15
+6|tab.0|main.cpp tab|24,1,10,1|14
+11|prompt|Prompt surface|24,2,56,1|26
+9|pane.1|Editor pane 1|24,3,56,8|1
+10|pane.1.scrollbar|Scrollbar for editor pane 1|79,3,1,8|27
+12|pane.1.empty|Empty editor|24,3,55,8|1

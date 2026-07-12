@@ -13,10 +13,43 @@ Normative commands owned by this feature:
 - `pane.split_horizontal`, `pane.split_vertical`, `pane.close`, `pane.next`, `pane.previous`, `pane.focus_left`, `pane.focus_right`, `pane.focus_up`, `pane.focus_down`
 - `panel.toggle`, `panel.focus`, `panel.next_provider`, `panel.previous_provider`
 - `view.toggle_distraction_free`
-- `prompt.submit`, `prompt.cancel`
-- `status.next`, `status.previous`, `status.dismiss`, `status.invoke_action`
+
+The `shell-layout` task owns the pane, panel, and distraction-free commands
+above. The later `prompt-status-surface` task owns `prompt.submit`,
+`prompt.cancel`, `status.next`, `status.previous`, `status.dismiss`, and
+`status.invoke_action`.
 
 `PromptSurface` is a non-modal one-to-three-row view below the shared tab bar. Path prompts use one input; find uses one input plus toggles/count; replace uses find and replacement inputs plus toggles/count. Footer statuses are a bounded priority queue rather than one lossy slot.
+
+## Shell layout contract
+
+The minimum supported viewport is 20 columns by 4 rows; smaller viewports
+produce a typed `viewport_too_small` result and no shell snapshot. Normal mode
+uses one full-width header row, one full-width footer row, and a middle region
+with one shared tab row. Distraction-free mode suppresses header, footer, tab
+row, and panel nodes and gives the full viewport to editor panes; it does not
+change pane or panel state.
+
+Prompt/status behavior is not part of shell layout. Layout accepts an opaque
+reserved prompt-row count from zero through three and reserves those rows
+below the tab row. Region collapse is separate from field collapse: the panel
+targets 24 columns, has a 12-column minimum, and collapses before the editor
+would become narrower than 20 columns. Pane topology remains authoritative;
+when a client viewport cannot give every pane at least one content cell and a
+one-column scrollbar, that client shows only the active pane.
+
+`data/ui/status_fields.json` is an array of objects with `id`, `region`,
+`collapse_rank`, and non-empty `accessible_label`. Lower ranks are retained
+first. Header order is active command/palette query, current path, then mode.
+Footer order is actionable status, follow state/resume binding, background
+activity, encoding, line ending, Git branch, Git repository, file type, then
+file size.
+
+Accessible shell nodes comprise the header and visible fields, footer and
+visible fields/actions, shared tab row and tabs, panel/provider, visible panes,
+each pane scrollbar, prompt reservation, and empty-state surface. Every node
+has a non-empty label and `SemanticRole`. Shell layout reserves scrollbar
+columns only; thumb/track geometry belongs to `viewport-wrap-scrollbar`.
 
 ## Invariants
 
