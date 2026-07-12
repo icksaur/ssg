@@ -65,6 +65,12 @@ then remove or shorten the redundant entry here.
   spanning dispatch and response-snapshot derivation so another command cannot
   interleave between an accepted mutation and its snapshot.
 
+## input-keymap-contract
+
+- Reserved-chord validation rejects any key sequence beginning with a
+  browser-reserved chord. Appending later strokes cannot make an intercepted
+  prefix deliverable.
+
 ## settings-model
 
 - State import or reload must advance mutation generations so compensating
