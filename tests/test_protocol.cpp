@@ -462,6 +462,19 @@ TEST(two_client_capability_and_viewport_isolation_survives_the_wire) {
 // ---------------------------------------------------------------------------
 // Clipboard and status-action message kinds.
 
+TEST(command_result_round_trips_through_the_wire) {
+    ssg::CommandResult const result{
+        ssg::CommandError::stale_revision, ssg::Revision{17},
+        "base revision is stale"};
+    auto const decoded =
+        ssg::decode_command_result(ssg::encode_command_result(result));
+    ASSERT_TRUE(decoded.accepted());
+    ASSERT_TRUE(decoded.result.has_value());
+    ASSERT_EQ(decoded.result->error, result.error);
+    ASSERT_EQ(decoded.result->revision, result.revision);
+    ASSERT_EQ(decoded.result->message, result.message);
+}
+
 TEST(clipboard_request_round_trips_through_the_wire) {
     ssg::ClipboardRequest const request{
         42, ssg::ClipboardRequestKind::write, ssg::Revision{6}, "copied text"};
@@ -692,6 +705,16 @@ TEST(canonical_fixtures_decode_to_the_expected_values) {
         ASSERT_EQ(arguments->text, std::string{"hello"});
     }
     {
+        auto decoded = ssg::decode_command_result(
+            read_fixture_bytes("command_result.hex"));
+        ASSERT_TRUE(decoded.accepted());
+        ASSERT_EQ(decoded.result->error,
+                  ssg::CommandError::stale_revision);
+        ASSERT_EQ(decoded.result->revision, ssg::Revision{17});
+        ASSERT_EQ(decoded.result->message,
+                  std::string{"base revision is stale"});
+    }
+    {
         auto decoded = ssg::decode_session_snapshot(
             read_fixture_bytes("session_snapshot.hex"));
         ASSERT_TRUE(decoded.accepted());
@@ -761,6 +784,7 @@ int main() {
     RUN(session_delta_round_trips_and_replay_matches_the_decoded_delta);
     RUN(two_client_capability_and_viewport_isolation_survives_the_wire);
     RUN(clipboard_request_round_trips_through_the_wire);
+    RUN(command_result_round_trips_through_the_wire);
     RUN(clipboard_response_round_trips_through_the_wire);
     RUN(status_action_invocation_round_trips_through_the_wire);
     RUN(binary_frame_round_trips_through_the_wire);

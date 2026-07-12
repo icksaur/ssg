@@ -230,6 +230,7 @@ enum class ProtocolMessageKind : std::uint8_t {
     clipboard_request,
     clipboard_response,
     status_action_invocation,
+    command_result,
 };
 
 [[nodiscard]] std::string encode_command_request(
@@ -248,6 +249,21 @@ struct DecodeCommandRequestResult {
 [[nodiscard]] DecodeCommandRequestResult decode_command_request(
     std::string_view bytes, CommandArgumentCodecRegistry const& registry,
     ProtocolLimits limits = {});
+
+[[nodiscard]] std::string encode_command_result(CommandResult const& result);
+
+struct DecodeCommandResultResult {
+    ProtocolError error;
+    std::optional<CommandResult> result;
+    std::string message;
+
+    [[nodiscard]] bool accepted() const noexcept {
+        return error == ProtocolError::none;
+    }
+};
+
+[[nodiscard]] DecodeCommandResultResult decode_command_result(
+    std::string_view bytes, ProtocolLimits limits = {});
 
 [[nodiscard]] std::string encode_session_snapshot(
     SessionSnapshot const& snapshot);
