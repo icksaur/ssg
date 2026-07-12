@@ -78,6 +78,30 @@ edit the temporary `HttpEditorServer` slice. Gate 10 protocol/server composition
 replaces that slice-owned standalone document closure with the assembled
 session; both paths continue to call `EditorSession::dispatch`.
 
+The complete codec owns a versioned, bounded `ProtocolValue` argument model and
+an immutable `CommandArgumentCodecRegistry`. Each registry entry binds one
+assembled command ID to the conversion between its typed `std::any` payload and
+the wire value. Registry construction compares its IDs with
+`p0_command_descriptors()` and rejects missing, extra, or duplicate entries, so
+there is no untyped fallback and ingress-only commands such as
+`file.open_dropped_content` cannot be omitted. Feature-owned argument types stay
+in their feature headers; the protocol component owns only their wire adapters.
+
+The complete codec serializes and reconstructs the concrete per-client
+`SessionSnapshot` and `SessionDelta` aggregates, including client identity,
+capabilities, viewport, and every assembled typed section. A protocol-owned
+factory is friended by `SessionDelta` solely to reconstruct a validated delta;
+normal in-process construction remains through aggregate derivation. Distinct
+versioned message kinds carry command requests, snapshots, deltas,
+`ClipboardRequest`, `ClipboardResponse`, and `StatusActionInvocation`.
+Capability state remains part of the per-client snapshot/delta rather than a
+client-asserted message.
+
+Binary support in P0 is limited to an owned binary-frame envelope containing
+version, payload kind, request identity, declared length, and bytes. The codec
+validates header and body limits and owns decoded bytes independently of the
+input buffer. Producing streaming-output or image payloads remains stretch work.
+
 `../http` owns one platform socket seam used by HTTP and WebSocket lifecycle,
 receive, and write paths. A complete write loops over partial writes until all
 bytes are sent or an absolute `std::chrono::steady_clock::time_point` deadline
@@ -141,6 +165,7 @@ I1, I2, I3, I10, I11, I12, I16, I21 from `doc/spec.md`.
 | 3 | Extract the `../http` socket seam, add typed deadline-aware complete writes, then add its Windows backend | `../http/http.*`, `../http/src/platform/*`, `../http/tests/test_http.cpp` | existing suite after seam extraction; scripted partial/timeout/close/error writes; native loopback frame and lifecycle scripts; Linux runtime plus Windows compile/native-CI parity | I10, I21 |
 | 4 | Implement the finite-queue one-channel thin-slice server adapter for `text.insert` | `include/ssg/http_server.h`, `src/http_server.cpp`, `tests/test_core_websocket_slice.cpp`, `cmake/components/core-websocket-slice.cmake` | in-process/loopback-WebSocket parity, stale/malformed scripts, and side-channel audit | I1, I2, I11, I16 |
 | 5 | Assemble every P0 feature command catalog, extend the common dispatch services, and aggregate/replay every typed snapshot/delta section for one client | `include/ssg/editor_session_assembly.h`, `src/editor_session_assembly.cpp`, `include/ssg/session_snapshot.h`, `src/session_snapshot.cpp`, session/registry/document seams, assembly tests and manifest | required catalog equals registry exactly; full transition snapshot equals replay; two-client capabilities and viewports remain isolated | I2, I3, I16 |
+| 6 | Implement the complete socket-free protocol codec, typed command-argument registry, aggregate snapshot/delta reconstruction, clipboard/status messages, and bounded binary-frame envelope | `include/ssg/protocol.h`, `src/protocol.cpp`, `include/ssg/session_snapshot.h`, `protocol/schema/`, `tests/fixtures/protocol/`, `tests/test_protocol.cpp`, `cmake/components/protocol-codec.cmake` | canonical round trips; malformed, truncated, oversized, and unknown-version corpus; exact command-registry coverage; two-client isolation; replay-vs-decoded-snapshot equivalence; decoded byte-lifetime tests | I2, I3, I11, I16 |
 
 ## Rationale (optional, skippable)
 

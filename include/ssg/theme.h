@@ -17,6 +17,14 @@ struct SrgbColor {
     std::uint8_t green = 0;
     std::uint8_t blue = 0;
 
+    // Reconstructs channels already owned by an authoritative Theme snapshot.
+    // This is not a second color-definition path: callers must not derive or
+    // substitute channels outside theme data.
+    [[nodiscard]] static constexpr SrgbColor from_serialized_channels(
+        std::uint8_t red, std::uint8_t green, std::uint8_t blue) noexcept {
+        return SrgbColor{red, green, blue};
+    }
+
     friend bool operator==(const SrgbColor&, const SrgbColor&) = default;
 };
 
