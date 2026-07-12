@@ -69,17 +69,19 @@ if (missing.length > 0 && required.size > 0) {
 }
 const available = requested.filter((browser) => executables[browser]);
 if (available.length === 0) {
-  console.log("browser client live gate skipped: no supported runtime found");
+  console.log("end-to-end parity browser gate skipped: no supported runtime found");
   process.exit(77);
 }
 
-const expectedResult = spawnSync(fixtureExecutable, ["--workflow-oracle"], {
+const oracleResult = spawnSync(fixtureExecutable, ["--per-step-oracle"], {
   encoding: "utf8",
 });
-if (expectedResult.status !== 0) {
-  throw new Error(expectedResult.stderr || "workflow oracle failed");
+if (oracleResult.status !== 0) {
+  throw new Error(oracleResult.stderr || "per-step oracle failed");
 }
-const expected = canonical(decodeProtocolHex(expectedResult.stdout.trim()));
+const oracleLines = oracleResult.stdout.trimEnd().split("\n").filter(Boolean);
+const expectedStates = oracleLines.map(
+  (line) => canonical(decodeProtocolHex(line.trim())));
 const browserTemporaryRoot = path.join(root, ".browser-tmp");
 fs.mkdirSync(browserTemporaryRoot, {recursive: true});
 
@@ -96,7 +98,7 @@ const staticServer = http.createServer(async (request, response) => {
       return;
     }
     const relative = url.pathname === "/"
-      ? "tests/browser/client/harness.html"
+      ? "tests/browser/end_to_end/harness.html"
       : decodeURIComponent(url.pathname.slice(1));
     const filename = path.resolve(root, relative);
     if (filename !== root && !filename.startsWith(`${root}${path.sep}`)) {
@@ -127,7 +129,7 @@ for (const browser of available) {
   fixture.stderr.setEncoding("utf8");
   fixture.stdout.on("data", (chunk) => { fixtureOutput += chunk; });
   fixture.stderr.on("data", (chunk) => { fixtureErrors += chunk; });
-  const url = `http://127.0.0.1:${staticPort}/tests/browser/client/harness.html` +
+  const url = `http://127.0.0.1:${staticPort}/tests/browser/end_to_end/harness.html` +
     `?browser=${browser}&websocket=${encodeURIComponent(
       `ws://127.0.0.1:${websocketPort}/session`)}`;
   try {
@@ -142,12 +144,19 @@ for (const browser of available) {
     }
     const report = reports.get(browser) ?? await reportPromise;
     if (!report.ok) throw new Error(report.error);
-    if (report.state !== expected) {
-      throw new Error("WebSocket workflow state differs from direct API oracle");
+    if (!Array.isArray(report.per_step_states)) {
+      throw new Error("browser report missing per_step_states array");
     }
-    await waitFor(() => fixtureOutput.includes("CLIPBOARD_RESPONSE") &&
-      fixtureOutput.includes("STATUS_ACTION"), 5000);
-    console.log(`${browser}: ${report.assertions.length} assertions passed`);
+    if (report.per_step_states.length !== expectedStates.length) {
+      throw new Error(
+        `step count mismatch: oracle ${expectedStates.length}, browser ${report.per_step_states.length}`);
+    }
+    for (let i = 0; i < expectedStates.length; i++) {
+      if (report.per_step_states[i] !== expectedStates[i]) {
+        throw new Error(`step ${i + 1}: per-step canonical state diverges from oracle`);
+      }
+    }
+    console.log(`${browser}: ${expectedStates.length} per-step states match oracle`);
   } catch (error) {
     failed = true;
     console.error(`${browser}: ${error instanceof Error ? error.message : error}`);

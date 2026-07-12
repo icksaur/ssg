@@ -8,7 +8,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ${SSG_SOURCE_DIR}/tests
     )
     target_compile_definitions(test_tui_fixture PRIVATE
-        SSG_TUI_WORKFLOW_PATH="${SSG_SOURCE_DIR}/tests/fixtures/tui/mandatory-workflow.tsv"
+        SSG_TUI_WORKFLOW_PATH="${SSG_SOURCE_DIR}/tests/fixtures/end_to_end/mandatory-workflow.tsv"
         SSG_TUI_SCREEN_PATH="${SSG_SOURCE_DIR}/tests/fixtures/tui/final-screen.txt"
     )
     target_link_libraries(test_tui_fixture PRIVATE ssg)

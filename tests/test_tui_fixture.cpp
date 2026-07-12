@@ -1,8 +1,8 @@
+#include "fixtures/end_to_end/e2e_fixture.h"
 #include "test_helpers.h"
 #include "tui_fixture.h"
 
 #include <ssg/editor_session_assembly.h>
-#include <ssg/file_commands.h>
 #include <ssg/session_snapshot.h>
 
 #include <any>
@@ -10,7 +10,6 @@
 #include <fstream>
 #include <optional>
 #include <sstream>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -18,185 +17,36 @@
 
 namespace {
 
-struct ScriptStep {
-    std::string command_id;
-    std::any payload;
-    bool accepted;
-};
 
-std::vector<std::string> fields(std::string const& line) {
-    std::vector<std::string> result;
-    std::size_t begin = 0;
-    while (begin <= line.size()) {
-        auto const end = line.find('\t', begin);
-        result.push_back(line.substr(begin, end - begin));
-        if (end == std::string::npos) break;
-        begin = end + 1;
-    }
-    return result;
+using CanonicalState = e2e::CanonicalState;
+
+std::vector<e2e::WorkflowStep> workflow() {
+    return e2e::load_workflow(SSG_TUI_WORKFLOW_PATH);
 }
-
-std::vector<ScriptStep> workflow() {
-    std::ifstream input{SSG_TUI_WORKFLOW_PATH};
-    if (!input) throw std::runtime_error{"cannot open TUI workflow"};
-    std::vector<ScriptStep> result;
-    for (std::string line; std::getline(input, line);) {
-        if (line.empty() || line.front() == '#') continue;
-        auto columns = fields(line);
-        if (columns.size() != 4) throw std::runtime_error{"invalid TUI workflow"};
-        std::any arguments;
-        if (columns[1] == "text") {
-            arguments = ssg::TextInputArguments{columns[2]};
-        } else if (columns[1].starts_with("lines:")) {
-            arguments = ssg::ScrollLinesArguments{
-                std::stoll(columns[1].substr(6))};
-        } else if (columns[1].starts_with("fraction:")) {
-            auto value = columns[1].substr(9);
-            auto slash = value.find('/');
-            arguments = ssg::ScrollFractionArguments{
-                static_cast<std::uint32_t>(std::stoul(value.substr(0, slash))),
-                static_cast<std::uint32_t>(std::stoul(value.substr(slash + 1)))};
-        } else if (columns[1].starts_with("dropped:")) {
-            auto value = columns[1].substr(8);
-            auto slash = value.find('/');
-            arguments = ssg::DroppedContentArguments{
-                std::vector<std::uint8_t>{value.begin(),
-                                          value.begin() + slash},
-                value.substr(slash + 1)};
-        } else if (columns[1] != "none") {
-            throw std::runtime_error{"unknown TUI workflow argument"};
-        }
-        result.push_back({std::move(columns[0]), std::move(arguments),
-                          columns[3] == "accepted"});
-    }
-    return result;
-}
-
-struct CanonicalState {
-    std::string text;
-    std::string clipboard;
-    std::string label;
-    std::size_t selection_count;
-    std::uint32_t first_row;
-    ssg::DocumentMode mode;
-    ssg::TabKind tab_kind;
-    ssg::FollowMode follow_mode;
-    bool workspace_open;
-    bool dirty;
-    bool tab_open;
-    bool word_wrap;
-
-    bool operator==(CanonicalState const&) const = default;
-};
 
 class FixtureModel {
 public:
     ssg::CommandHandlerResult apply(std::string_view id,
-                                    std::any const& command_payload) {
-        if (id == "workspace.open_directory") {
-            workspace_open_ = true;
-        } else if (id == "file.open") {
-            tab_open_ = true;
-            mode_ = ssg::DocumentMode::edit;
-        } else if (id == "text.insert") {
-            if (mode_ != ssg::DocumentMode::edit) {
-                return ssg::CommandHandlerResult::failure(
-                    "document is not editable");
-            }
-            undo_text_ = text_;
-            text_ += std::any_cast<ssg::TextInputArguments const&>(
-                         command_payload)
-                         .text;
-            dirty_ = true;
-        } else if (id == "select.add_cursor_down") {
-            selection_count_ = 2;
-        } else if (id == "clipboard.copy") {
-            clipboard_ = text_;
-        } else if (id == "clipboard.cut") {
-            undo_text_ = text_;
-            clipboard_ = text_;
-            text_.clear();
-            dirty_ = true;
-        } else if (id == "clipboard.paste") {
-            undo_text_ = text_;
-            text_ += clipboard_;
-            dirty_ = true;
-        } else if (id == "edit.undo") {
-            redo_text_ = text_;
-            text_ = undo_text_;
-            dirty_ = true;
-        } else if (id == "edit.redo") {
-            undo_text_ = text_;
-            text_ = redo_text_;
-            dirty_ = true;
-        } else if (id == "view.toggle_word_wrap") {
-            word_wrap_ = !word_wrap_;
-        } else if (id == "view.scroll_lines") {
-            auto rows = std::any_cast<ssg::ScrollLinesArguments const&>(
-                            command_payload)
-                            .rows;
-            first_row_ = static_cast<std::uint32_t>(
-                std::max<std::int64_t>(0, first_row_ + rows));
-        } else if (id == "view.scroll_to_fraction") {
-            auto const& fraction =
-                std::any_cast<ssg::ScrollFractionArguments const&>(
-                    command_payload);
-            first_row_ = static_cast<std::uint32_t>(
-                80ULL * fraction.numerator / fraction.denominator);
-        } else if (id == "file.save") {
-            dirty_ = false;
-        } else if (id == "tab.close") {
-            tab_open_ = false;
-            recovery_ = ssg::TabRecoveryBadge::durable;
-        } else if (id == "tab.reopen_closed") {
-            tab_open_ = true;
-        } else if (id == "file.reload") {
-            mode_ = ssg::DocumentMode::read_only;
-        } else if (id == "external.open_diff") {
-            mode_ = ssg::DocumentMode::diff;
-            tab_kind_ = ssg::TabKind::live_diff;
-        } else if (id == "follow_edits.pause") {
-            follow_mode_ = ssg::FollowMode::paused;
-            ++follow_generation_;
-        } else if (id == "follow_edits.resume") {
-            follow_mode_ = ssg::FollowMode::following;
-            ++follow_generation_;
-        } else if (id == "prompt.submit") {
-            prompt_open_ = false;
-        } else if (id == "file.open_dropped_content") {
-            auto const& dropped =
-                std::any_cast<ssg::DroppedContentArguments const&>(
-                    command_payload);
-            text_.assign(dropped.bytes.begin(), dropped.bytes.end());
-            label_ = dropped.suggested_label;
-            mode_ = ssg::DocumentMode::edit;
-            tab_kind_ = ssg::TabKind::document;
-            tab_open_ = true;
-            dirty_ = true;
-        }
-        return ssg::CommandHandlerResult::success();
+                                    std::any const& payload) {
+        return state_.apply(id, payload);
     }
 
-    CanonicalState canonical() const {
-        return {text_,          clipboard_, label_,      selection_count_,
-                first_row_,     mode_,      tab_kind_,   follow_mode_,
-                workspace_open_, dirty_,    tab_open_,   word_wrap_};
-    }
+    CanonicalState canonical() const { return state_.canonical(); }
 
     ssg::SessionSnapshotSections sections(ssg::Revision revision) const {
-        auto const byte = static_cast<std::uint64_t>(text_.size());
+        auto const byte = static_cast<std::uint64_t>(state_.text.size());
         ssg::DocumentPosition const position{
             ssg::ByteOffset{byte}, ssg::LineIndex{0}, ssg::CellIndex{byte}};
         std::vector<ssg::Selection> selections{
             ssg::Selection{position, position}};
-        if (selection_count_ > 1) {
+        if (state_.selection_count > 1) {
             ssg::DocumentPosition const start{
                 ssg::ByteOffset{0}, ssg::LineIndex{0}, ssg::CellIndex{0}};
             selections.push_back({start, start});
         }
 
         ssg::PromptStatusViewState prompt_status;
-        if (prompt_open_) {
+        if (state_.prompt_open) {
             prompt_status.prompt = ssg::PromptViewState{
                 ssg::PromptKind::path, "Open workspace", {0, 2, 24, 1}, {}};
         }
@@ -214,10 +64,11 @@ public:
                ssg::KeyStroke{"KeyW", true, false, false, false}},
               "tab.close", "editor"}}};
         ssg::TabViewState tabs;
-        if (tab_open_) {
+        if (state_.tab_open) {
             tabs.tabs.push_back(
-                {ssg::TabId{1}, tab_kind_, std::nullopt, std::nullopt,
-                 "fixture", label_, mode_, dirty_, recovery_});
+                {ssg::TabId{1}, state_.tab_kind, std::nullopt, std::nullopt,
+                 "fixture", state_.label, state_.mode, state_.dirty,
+                 state_.recovery});
             tabs.active = ssg::TabId{1};
         }
 
@@ -252,7 +103,7 @@ public:
              *shell.header, ssg::SemanticRole::header},
             {ssg::ShellNodeKind::panel, "panel", "Files", *shell.panel,
              ssg::SemanticRole::panel_active},
-            {ssg::ShellNodeKind::tab_bar, "tabs", label_, *shell.tab_bar,
+            {ssg::ShellNodeKind::tab_bar, "tabs", state_.label, *shell.tab_bar,
              ssg::SemanticRole::tab_active},
             {ssg::ShellNodeKind::pane, "pane", "Editor",
              shell.panes.front().content, ssg::SemanticRole::background},
@@ -264,11 +115,12 @@ public:
         };
 
         return {
-            {revision, text_, ssg::ByteOffset{byte}},
-            {ssg::SelectionSet{std::move(selections)}, first_row_, std::nullopt},
-            {!undo_text_.empty(), !redo_text_.empty(),
-             undo_text_.size() + redo_text_.size()},
-            {{clipboard_}, clipboard_, std::nullopt, std::nullopt},
+            {revision, state_.text, ssg::ByteOffset{byte}},
+            {ssg::SelectionSet{std::move(selections)}, state_.first_row,
+             std::nullopt},
+            {!state_.undo_text.empty(), !state_.redo_text.empty(),
+             state_.undo_text.size() + state_.redo_text.size()},
+            {{state_.clipboard}, state_.clipboard, std::nullopt, std::nullopt},
             std::move(prompt_status),
             {revision, false, {}, ssg::SearchMode::file, {}, std::nullopt, 0,
              false},
@@ -280,11 +132,11 @@ public:
             std::move(tabs),
             {revision, {}},
             {revision, {}},
-            {follow_generation_, follow_mode_, ssg::PaneId{1}, std::nullopt, {},
-             {}},
+            {state_.follow_generation, state_.follow_mode, ssg::PaneId{1},
+             std::nullopt, {}, {}},
             {ssg::TreeRevision{revision.value()}, {}},
             ssg::plain_text_syntax_view_state(
-                revision, ssg::LanguageId{"plain"}, text_, 4),
+                revision, ssg::LanguageId{"plain"}, state_.text, 4),
             {revision, {}},
             {revision, {}, std::nullopt, {}, {}},
             std::move(theme),
@@ -293,30 +145,14 @@ public:
     }
 
     ssg::ViewportViewState viewport() const {
-        auto run = ssg::compute_cell_run(text_);
+        auto run = ssg::compute_cell_run(state_.text);
         return ssg::compute_viewport(
             std::span<const ssg::CellRun>{&run, 1},
-            ssg::ViewportDimensions{17, 5}, first_row_);
+            ssg::ViewportDimensions{17, 5}, state_.first_row);
     }
 
 private:
-    std::string text_{"alpha"};
-    std::string undo_text_;
-    std::string redo_text_;
-    std::string clipboard_;
-    std::string label_{"fixture.txt"};
-    std::size_t selection_count_{1};
-    std::uint32_t first_row_{0};
-    std::uint64_t follow_generation_{0};
-    ssg::FollowMode follow_mode_{ssg::FollowMode::following};
-    ssg::DocumentMode mode_{ssg::DocumentMode::edit};
-    ssg::TabKind tab_kind_{ssg::TabKind::document};
-    ssg::TabRecoveryBadge recovery_{ssg::TabRecoveryBadge::none};
-    bool workspace_open_{false};
-    bool dirty_{false};
-    bool tab_open_{true};
-    bool word_wrap_{false};
-    bool prompt_open_{true};
+    e2e::FixtureState state_;
 };
 
 class Scenario {
@@ -404,8 +240,8 @@ TEST(scripted_tui_commands_match_direct_api_after_every_step) {
             direct_principal.client_id(),
             {step.command_id, direct.session->revision(), step.payload});
         auto tui_result = client.submit(step.command_id, step.payload);
-        ASSERT_EQ(direct_result.accepted(), step.accepted);
-        ASSERT_EQ(tui_result.accepted(), step.accepted);
+        ASSERT_EQ(direct_result.accepted(), step.expected_accepted);
+        ASSERT_EQ(tui_result.accepted(), step.expected_accepted);
         ASSERT_EQ(direct.model.canonical(), tui.model.canonical());
     }
 }
@@ -426,7 +262,7 @@ TEST(final_workflow_screen_matches_hand_authored_16_color_golden) {
         [&] { return scenario.snapshot(principal, ssg::ViewId{3}); }};
     for (auto const& step : workflow()) {
         auto result = client.submit(step.command_id, step.payload);
-        ASSERT_EQ(result.accepted(), step.accepted);
+        ASSERT_EQ(result.accepted(), step.expected_accepted);
     }
 
     auto screen = ssg::tui::render_screen(client.snapshot());
