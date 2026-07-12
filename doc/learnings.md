@@ -112,6 +112,12 @@ then remove or shorten the redundant entry here.
   events. Accepted events atomically advance the diff model's acknowledged
   baseline.
 
+## search-palette
+
+- Copied background requests need shared cancellation state. Publication must
+  independently validate both request generation and source revision to reject
+  superseded and stale results.
+
 ## unicode-cell-layout
 
 - Byte-pinned upstream Unicode data needs `.gitattributes` entries with `-text`
