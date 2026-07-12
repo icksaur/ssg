@@ -135,6 +135,12 @@ then remove or shorten the redundant entry here.
   scroll saturation, then clamp through the same viewport construction path to
   avoid overflow and divergent bounds behavior.
 
+## selection-navigation
+
+- APIs accepting raw tab widths must validate the inclusive `[1, 16]` range
+  before calling cell layout. Otherwise `compute_cell_run` throws and bypasses
+  the feature's typed error contract.
+
 ## shell-layout
 
 - Priority-based field collapse must retain a prefix of collapse ranks.
