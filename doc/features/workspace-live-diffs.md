@@ -8,6 +8,57 @@ Watch the CWD on Linux and Windows, expose filesystem/Git trees and external-mod
 
 Watcher normalization, seeded baselines, diff tabs, dirty conflicts, shared follow state, per-client scrolling, pause/resume, and target validity follow `doc/spec.md`. Diff correctness is defined by patch reconstruction and normalized changed-line sets, not byte-identical Git hunk boundaries.
 
+### Diff model contract
+
+`DiffModel` is a content consumer and never invokes Git or a shell. The
+repository service supplies a stable file ID, workspace-relative current and
+prior paths, the index blob content (absent for an untracked file), current
+working-tree content (absent for a deletion), and an opaque index identity.
+Resubmitting a file after the index or branch identity changes recomputes its
+view against the new index blob. The identity tags the published result so a
+session can reject work computed for an obsolete index.
+
+Outside a Git worktree, watcher startup reads eligible bounded file content and
+passes it to `seed_non_git` before events are published. The diff model owns
+that acknowledged content baseline. A content-bearing normalized event carries
+the stable file ID, revision, paths, kind, and post-event content; delete
+events omit post-event content. An accepted event computes against the
+acknowledged content and then advances it atomically. Rename and delete views
+retain the stable ID, prior path, and prior content needed to describe the
+event. The watcher remains responsible only for event normalization and
+metadata.
+
+Diff lines retain their line terminators, so replacing emitted hunk baseline
+lines with target lines reconstructs target bytes exactly, including the final
+newline. A normalized changed-line set is derived independently from every
+hunk: pair removed and added lines by ordinal as `modified`, then emit any
+unpaired old lines as `removed` and any unpaired new lines as `added`.
+Coordinates are zero-based; modified entries carry both old and new
+coordinates, removed entries only the old coordinate, and added entries only
+the new coordinate. Entries are ordered by hunk, paired modifications,
+remaining removals, then remaining additions. This normalization, rather than
+the implementation's hunk boundaries, is the fixture oracle. The canonical
+line alignment is a longest common subsequence; when two alignments have equal
+remaining length, the old line is consumed first.
+
+Every mutation carries a strictly increasing source `Revision`. Stale input,
+unknown or cross-source identities, missing Git index identity, malformed event
+content, and configured diff-work limit exhaustion return a typed error and
+leave the model unchanged. A
+successful publication is all-or-nothing; invariant I5 applies to that
+atomicity rather than editor undo.
+
+The immutable `DiffCommandSet` contains exactly, in order,
+`diff.next_hunk`, `diff.previous_hunk`, and `diff.open_file`. Navigation is
+pure model navigation: next selects the first hunk whose target start is
+strictly after the supplied target line and wraps to the first; previous
+selects the last hunk strictly before it and wraps to the last. With no current
+line they select first and last respectively; with no hunks they return no
+target. `diff.open_file` resolves the stable file ID and retained
+workspace-relative path (the prior path for a deletion) for later session
+assembly; it does not open a tab in this component. These helpers neither
+change revision nor own presentation state.
+
 Normative commands owned by this feature:
 
 - `tree.toggle_expanded`, `tree.invoke_node_command`
@@ -128,7 +179,7 @@ derived target view exactly or reports that a replacement snapshot is needed.
 |---|------|-------|--------|------------|
 | 1 | Implement generic tree providers and owned tree commands, without watching | `include/ssg/tree.h`, `src/tree.cpp`, `tests/test_tree.cpp`, `cmake/components/tree-providers.cmake` | temporary-directory ground truth and hand-authored Git/symbol snapshots; bounded delta replay equals an independently derived full view | I9, I10, I16 |
 | 2 | Implement Linux/Windows watcher normalization | `include/ssg/watcher.h`, `src/watcher.cpp`, `src/platform/*watcher.cpp`, `tests/test_watcher.cpp` | identical normalized event scripts | I10, I21 |
-| 3 | Implement Git/non-Git diff models | `include/ssg/diff.h`, `src/diff.cpp`, `tests/test_diff.cpp` | patch reconstruction and changed-line fixtures | I3, I5 |
+| 3 | Implement Git/non-Git diff models | `include/ssg/diff.h`, `src/diff.cpp`, `tests/fixtures/diff/`, `tests/test_diff.cpp`, `cmake/components/diff-model.cmake` | patch reconstruction, independent normalized changed-line fixtures, revision failure atomicity, and exact command/navigation cases | I3, I5 |
 | 4 | Implement follow/pause/resume | `include/ssg/follow_edits.h`, `src/follow_edits.cpp`, `tests/test_follow_edits.cpp` | independent transition table | I14, I19 |
 
 ## Rationale (optional, skippable)
