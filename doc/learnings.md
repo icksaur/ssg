@@ -118,6 +118,12 @@ then remove or shorten the redundant entry here.
   independently validate both request generation and source revision to reject
   superseded and stale results.
 
+## treesitter-syntax
+
+- Optional background services receive immutable, revision-tagged requests that
+  own their input and share an atomic cancellation flag. Session state changes
+  only when the matching non-stale result is accepted.
+
 ## unicode-cell-layout
 
 - Byte-pinned upstream Unicode data needs `.gitattributes` entries with `-text`
