@@ -56,6 +56,44 @@ a corrupt or truncated tail is ignored after the last complete valid record.
 The later compaction component decides when to emit a checkpoint but adds no
 record kind or journal encoding.
 
+Scratch composition owns a move-only `ScratchStore` created from an explicit
+scratch root, an already-canonical absolute workspace path, and immutable
+`ScratchStoreConfig`. The configuration supplies finite byte and age quotas, a
+compaction threshold, and a durability target that defaults to 100 ms. A test
+storage seam may replace journal append and atomic replacement operations; its
+caller-owned lifetime must exceed the store.
+
+Construction creates and owns the current `ScratchSession`, claims the newest
+restorable remnant, replays it, atomically installs one checkpoint in the new
+session, and only then marks the remnant restored. Failure before the marker
+leaves the remnant retryable. The imported recovery set is available to the
+caller. Accepted document updates and removals update that set and enter one
+ordered background queue. The queue is the sole writer to the current journal.
+Shutdown rejects new updates, drains accepted work, and joins the writer.
+
+Compaction serializes against appends on that same queue. It atomically replaces
+journal.bin with exactly one checkpoint encoding the accepted recovery set at
+the compaction generation; subsequent records append after the replacement.
+Replay before and after compaction therefore produces the same recovery set.
+A failed append or replacement preserves the last replayable journal, records
+an actionable failure, and does not report the failed generation durable.
+
+`ScratchDurabilityState` exposes durable, pending, or failed state, accepted and
+durable generations, whether pending work has exceeded the configured target,
+and an actionable failure string. This is typed service state consumed later by
+session/footer assembly, not a footer or out-of-band presentation channel.
+
+Quota and explicit purge operations inspect restored remnants under the scratch
+root. Automatic age eviction removes eligible remnants older than the configured
+age, then byte eviction removes eligible remnants oldest-first by fixed-width
+session ID until the root is within budget. The current session, another live
+session, and every unrestored remnant are ineligible even when the quota cannot
+otherwise be met. `purge_workspace` removes eligible restored remnants only for
+the current workspace; `purge_all` does so for every workspace. These are typed
+maintenance operations, not user-visible registry commands, and need no
+compensating record because they delete only redundant remnants already imported
+and marked restored.
+
 `UntitledDocumentId` is a generated unique identifier defined by
 `scratch_journal.h`, persisted in journal records, and stable across restart.
 The user-visible `Untitled N` number is derived by the later tab layer and is not
