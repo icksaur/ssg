@@ -46,7 +46,8 @@ public:
     [[nodiscard]] Revision revision() const;
     [[nodiscard]] std::filesystem::path const& workspace_root() const noexcept;
     [[nodiscard]] std::optional<SessionSnapshot> snapshot(
-        ClientId client_id, ViewportDimensions dimensions) const;
+        ClientId client_id, ViewportDimensions dimensions,
+        KeySequence leader_pending = {}) const;
     [[nodiscard]] std::string active_document_text() const;
 
     struct Impl;

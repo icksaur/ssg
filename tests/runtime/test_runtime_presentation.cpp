@@ -96,9 +96,39 @@ TEST(settings_dispatch_matches_settings_model_oracle_snapshot) {
 
 } // namespace
 
+TEST(reported_leader_sequence_renders_a_per_snapshot_hint) {
+    auto root = unique_root();
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+
+    const auto leader_content = [](ssg::SessionSnapshot const& snapshot) {
+        for (auto const& node : snapshot.sections().shell.accessibility_nodes) {
+            if (node.id == "leader") return node.content;
+        }
+        return std::string{};
+    };
+
+    // A snapshot with a reported leader sequence carries the hint.
+    auto with_leader = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12},
+                                        ssg::KeySequence{ssg::KeyStroke{"Escape"}});
+    ASSERT_TRUE(with_leader.has_value());
+    if (with_leader) ASSERT_EQ(leader_content(*with_leader), std::string{"leader: Escape"});
+
+    // A snapshot with no reported sequence (a second client, or the same client
+    // not in leader mode) carries no hint -- the state is per snapshot call.
+    auto without_leader = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    ASSERT_TRUE(without_leader.has_value());
+    if (without_leader) ASSERT_TRUE(leader_content(*without_leader).empty());
+}
+
 int main() {
     RUN(viewport_shell_settings_and_theme_are_live_sections);
     RUN(settings_dispatch_matches_settings_model_oracle_snapshot);
+    RUN(reported_leader_sequence_renders_a_per_snapshot_hint);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

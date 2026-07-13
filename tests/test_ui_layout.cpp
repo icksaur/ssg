@@ -371,6 +371,33 @@ TEST(focus_transitions_follow_the_navigation_table) {
     ASSERT_TRUE(state.focus() == FocusTarget::editor);
 }
 
+TEST(leader_hint_renders_in_the_header_when_present) {
+    auto value = request(80, 12);
+    value.leader_hint = "leader: Escape";
+    ShellState state;
+    auto result = compute_shell_layout(value, state);
+    ASSERT_TRUE(result.accepted());
+    const AccessibilityNode* leader = nullptr;
+    for (const auto& node : result.view->accessibility_nodes) {
+        if (node.kind == ShellNodeKind::header_field && node.id == "leader") {
+            leader = &node;
+        }
+    }
+    ASSERT_TRUE(leader != nullptr);
+    if (leader) {
+        ASSERT_EQ(leader->content, std::string{"leader: Escape"});
+        ASSERT_TRUE(leader->role == SemanticRole::prompt);
+        ASSERT_EQ(leader->rect.y, 0);
+    }
+    // No hint node when the request carries no leader sequence.
+    auto plain = compute_shell_layout(request(80, 12), state);
+    ASSERT_TRUE(plain.accepted());
+    const bool has_leader = std::ranges::any_of(
+        plain.view->accessibility_nodes,
+        [](const auto& node) { return node.id == "leader"; });
+    ASSERT_FALSE(has_leader);
+}
+
 int main() {
     RUN(hand_authored_geometry_goldens);
     RUN(viewport_and_prompt_errors_are_typed);
@@ -381,6 +408,7 @@ int main() {
     RUN(accessibility_leaf_nodes_carry_display_content);
     RUN(dirty_tab_content_shows_marker);
     RUN(focus_transitions_follow_the_navigation_table);
+    RUN(leader_hint_renders_in_the_header_when_present);
     RUN(non_overlap_and_cardinality_properties);
     RUN(status_field_manifest_has_exact_order_and_labels);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << '\n';

@@ -128,7 +128,8 @@ int main(int argc, char** argv) {
     auto focus = ssg::FocusTarget::editor;
     bool panel_open = false;
     while (!quit) {
-        auto snapshot = runtime.snapshot(client, terminal_size());
+        auto snapshot = runtime.snapshot(client, terminal_size(),
+                                         ssg::app::pending_leader(pending));
         if (snapshot) {
             focus = snapshot->sections().shell.focus;
             panel_open = snapshot->sections().shell.panel.has_value();

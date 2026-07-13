@@ -61,14 +61,23 @@ sequence locally, but the library owns how leader mode is *presented*.
   server-published keymap (as in `browser-input.md`): bindings in one context are
   prefix-free, so no timeout or server round-trip is needed to resolve a chord.
 - When the client enters, extends, or clears leader mode, it reports the current
-  pending sequence to the library as **per-client presentation state**, not a
-  command - one report per leader transition, never per typed character.  This
-  mirrors how per-client viewport dimensions flow into the snapshot rather than
-  through the command registry, so it adds no command-catalog surface.
-- The library renders a leader hint (for example `leader: Esc `) into the shell's
-  status area using a theme role for color, and the client draws the
+  pending sequence to the library.  For the in-process terminal client this is an
+  ingress **parameter** of the per-client snapshot call
+  (`snapshot(client_id, dimensions, leader_pending)`), exactly like per-client
+  viewport dimensions - one report per leader transition, never per typed
+  character, and not a registered command.  The shell view state is materialized
+  per snapshot call, so the leader hint it carries is per-client and never leaks
+  into another client's render even though `ShellViewState` is otherwise shared
+  session-shaped state.  The equivalent browser wire message is deferred with the
+  low-latency input model below.
+- The library forms the hint text from the reported `KeySequence` using its own
+  key-name source (human key names, e.g. `leader: Escape`) and places it in the
+  shell's status area using a theme role for color; the client draws the
   server-described cells.  Layout and color stay server-owned (I7, I17, I22); the
-  client invents no UI element and picks no color.
+  client uses the server-described placement and role and invents neither.
+- A library-initiated focus or keymap change (including `settings.open`) that
+  invalidates a pending chord requires the client to report an empty sequence on
+  its next snapshot call, so a stale hint cannot outlive its context.
 - Because leader state is per-client input capture, each attached client shows
   its own leader hint.
 
@@ -156,8 +165,10 @@ area in a distinct theme role.
   surface is gone).
 - N6 (server-presented leader): the pending leader sequence is client-local input
   capture, but its presentation is library-owned - the client reports it as
-  per-client state and the library places a theme-colored leader hint; the client
-  neither positions nor colors it.
+  per-client snapshot ingress and the library places a theme-colored leader hint;
+  the client uses the server-described placement and role and invents neither.
+  This does not require a round trip before the hint may appear: a future
+  low-latency client may render the same server-described role optimistically.
 
 ## Considerations
 
@@ -197,12 +208,13 @@ area in a distinct theme role.
 - Gates: `ctest --preset dev` green.
 - Oracles: an independent focus-transition table (including tree-open, nested
   prompt push/pop, and surface-disappears rows) compared step-by-step against the
-  library; a leader-hint test proving a reported non-empty sequence renders the
-  hint in a theme role and an empty sequence renders none; a snapshot round-trip
-  carrying the focus and reported-leader state; when local keymap resolution
-  lands, context-resolution tests asserting one key yields the **exact expected
-  command** per context and that `*` chords resolve in every focus with precedence
-  over focus bindings.
+  library; a leader-hint test proving a reported non-empty sequence renders a
+  status hint whose text reflects the pending keys and an empty sequence renders
+  none; a per-client isolation test where one client is in leader mode and a
+  second client's snapshot renders no hint; when local keymap resolution lands,
+  context-resolution tests asserting one key yields the **exact expected command**
+  per context and that `*` chords resolve in every focus with precedence over
+  focus bindings.
 
 ## Plan
 
@@ -211,6 +223,8 @@ landed.  The remaining work:
 
 | Step | Work | Files | Oracle |
 |---|---|---|---|
-| A | Add per-client reported leader sequence as presentation state and render a theme-colored `leader:` hint in the status area | `include/ssg/ui_layout.h`, `src/ui_layout.cpp`, `src/runtime/*.cpp`, `src/render.cpp`, `src/protocol.cpp`, `tests/test_ui_layout.cpp`, `tests/test_render.cpp` | leader-hint render test (non-empty renders, empty does not); round-trip carries reported leader |
-| B | TUI derives the pending sequence from the published keymap and reports it; replace hard-coded chords with keymap-driven local resolution | `apps/ssg_main.cpp`, `apps/ssg_terminal.{h,cpp}`, `tests/test_ssg_app.cpp` | `test_ssg_app` resolution table; PTY leader-hint demo |
+| A1 | Add reported leader sequence as per-client snapshot ingress (a `snapshot()` parameter threaded to the shell view); format the hint from the key sequence via a server key-name source | `include/ssg/editor_runtime.h`, `include/ssg/ui_layout.h`, `src/ui_layout.cpp`, `src/runtime/snapshot.cpp`, `src/editor_runtime.cpp`, `tests/test_ui_layout.cpp` | non-empty sequence yields a status hint whose text reflects the keys; two clients, one in leader, the other's snapshot renders no hint (per-client isolation) |
+| A2 | Render the theme-colored `leader:` hint in the status area | `src/render.cpp`, `tests/test_render.cpp` | render places the hint text in the status region in the leader theme role |
+| B | TUI derives the pending sequence from the published keymap and reports it via the snapshot parameter; replace hard-coded chords with keymap-driven local resolution | `apps/ssg_main.cpp`, `apps/ssg_terminal.{h,cpp}`, `tests/test_ssg_app.cpp` | `test_ssg_app` resolution table; PTY leader-hint demo |
+| C (deferred, with keymap/M6) | Assign keymap contexts (`*`/`editor`/`panel`/`prompt`), per-context text sinks, and `validate_keymap` context checks | `include/ssg/input.h`, `src/input.cpp`, `data/default-keymap.json`, `tests/test_input.cpp` | exact-command-per-context resolution; `*`-precedence; unreachable-context rejected |
 | C (deferred, with keymap/M6) | Assign keymap contexts (`*`/`editor`/`panel`/`prompt`), per-context text sinks, and `validate_keymap` context checks | `include/ssg/input.h`, `src/input.cpp`, `data/default-keymap.json`, `tests/test_input.cpp` | exact-command-per-context resolution; `*`-precedence; unreachable-context rejected |

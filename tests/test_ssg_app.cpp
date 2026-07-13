@@ -173,6 +173,21 @@ TEST(parse_input_backspace_and_caret) {
     ASSERT_TRUE(left.action == ssg::app::InputAction::caret_left);
 }
 
+TEST(pending_leader_reports_escape_prefix_only) {
+    // No pending buffer, or ordinary bytes: not in leader mode.
+    ASSERT_TRUE(ssg::app::pending_leader("").empty());
+    ASSERT_TRUE(ssg::app::pending_leader("a").empty());
+    // A lone Escape means a chord is being collected.
+    auto lone = ssg::app::pending_leader("\x1b");
+    ASSERT_EQ(lone.size(), std::size_t{1});
+    if (!lone.empty()) ASSERT_EQ(lone.front().code, std::string{"Escape"});
+    // Escape + a non-CSI key is still a leader chord in progress.
+    ASSERT_EQ(ssg::app::pending_leader("\x1b" "b").size(), std::size_t{1});
+    // Escape introducing a CSI/SS3 sequence (arrow) is not leader mode.
+    ASSERT_TRUE(ssg::app::pending_leader("\x1b[").empty());
+    ASSERT_TRUE(ssg::app::pending_leader("\x1bO").empty());
+}
+
 int main() {
     RUN(resolve_launch_no_argument_opens_cwd);
     RUN(resolve_launch_directory_opens_that_directory);
@@ -187,6 +202,7 @@ int main() {
     RUN(parse_input_incomplete_waits);
     RUN(parse_input_printable_is_text);
     RUN(parse_input_backspace_and_caret);
+    RUN(pending_leader_reports_escape_prefix_only);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;

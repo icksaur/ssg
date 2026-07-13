@@ -139,9 +139,11 @@ struct EditorRuntime::Impl final : CommandServices,
     void clamp_selection_to_active_document();
     [[nodiscard]] std::vector<CellRun> active_cell_runs() const;
     [[nodiscard]] ViewportViewState viewport(ViewportDimensions dimensions) const;
-    [[nodiscard]] SessionSnapshotSections sections(ViewportDimensions dimensions) const;
+    [[nodiscard]] SessionSnapshotSections sections(ViewportDimensions dimensions,
+                                                   KeySequence const& leader_pending = {}) const;
     [[nodiscard]] PromptStatusViewState prompt_status_view(ViewportDimensions dimensions) const;
-    [[nodiscard]] ShellViewState shell_view(ViewportDimensions dimensions) const;
+    [[nodiscard]] ShellViewState shell_view(ViewportDimensions dimensions,
+                                            KeySequence const& leader_pending = {}) const;
     [[nodiscard]] TextEncodingViewState text_encoding_view() const;
     [[nodiscard]] DocumentViewState document_view() const;
     [[nodiscard]] std::string current_path_label() const;

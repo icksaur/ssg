@@ -35,7 +35,8 @@ PromptStatusViewState EditorRuntime::Impl::prompt_status_view(ViewportDimensions
     return view;
 }
 
-ShellViewState EditorRuntime::Impl::shell_view(ViewportDimensions dimensions) const {
+ShellViewState EditorRuntime::Impl::shell_view(ViewportDimensions dimensions,
+                                               KeySequence const& leader_pending) const {
     std::vector<TabLabel> labels;
     for (auto const& tab : tabs.view_state().tabs) {
         labels.push_back({tab.label, tab.label,
@@ -54,12 +55,21 @@ ShellViewState EditorRuntime::Impl::shell_view(ViewportDimensions dimensions) co
                              {"follow", "Follow edits", follow_projection.mode, 1}};
     request.footer_actions = status_projection.actions;
     request.tabs = std::move(labels);
+    if (!leader_pending.empty()) {
+        std::string hint = "leader:";
+        for (auto const& stroke : leader_pending) {
+            hint += ' ';
+            hint += format_key_stroke(stroke);
+        }
+        request.leader_hint = std::move(hint);
+    }
     auto result = compute_shell_layout(request, shell);
     if (result.accepted()) return *result.view;
     return {};
 }
 
-SessionSnapshotSections EditorRuntime::Impl::sections(ViewportDimensions dimensions) const {
+SessionSnapshotSections EditorRuntime::Impl::sections(ViewportDimensions dimensions,
+                                                     KeySequence const& leader_pending) const {
     auto current_history = HistoryViewState{false, false, 0};
     if (auto id = active_document_id()) {
         auto found = histories.find(id->value());
@@ -84,7 +94,7 @@ SessionSnapshotSections EditorRuntime::Impl::sections(ViewportDimensions dimensi
             lsp_sync,
             lsp_features,
             theme,
-            shell_view(dimensions)};
+            shell_view(dimensions, leader_pending)};
 }
 
 } // namespace ssg

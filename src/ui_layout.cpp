@@ -342,7 +342,19 @@ ShellLayoutResult compute_shell_layout(const ShellLayoutRequest& request,
                  *view.header, SemanticRole::header);
         add_node(view, ShellNodeKind::footer, "footer", "Status footer",
                  *view.footer, SemanticRole::footer);
-        add_fields(view, request.header_fields, *view.header,
+        int header_x = view.header->x;
+        if (!request.leader_hint.empty()) {
+            const int width = std::min(
+                view.header->width,
+                static_cast<int>(request.leader_hint.size()) + 1);
+            add_node(view, ShellNodeKind::header_field, "leader", "Leader hint",
+                     {header_x, view.header->y, width, 1}, SemanticRole::prompt,
+                     request.leader_hint);
+            header_x += width;
+        }
+        add_fields(view, request.header_fields,
+                   {header_x, view.header->y,
+                    view.header->right() - header_x, view.header->height},
                    ShellNodeKind::header_field, SemanticRole::header);
         int action_x = view.footer->right();
         for (auto action = request.footer_actions.rbegin();

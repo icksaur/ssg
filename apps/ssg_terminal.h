@@ -59,6 +59,12 @@ struct InputEvent {
 [[nodiscard]] InputEvent parse_input(std::string_view bytes,
                                      std::size_t& consumed);
 
+// The leader sequence to report while a chord is mid-entry, derived from the
+// undecoded input buffer: a lone Escape (or Escape followed by a non-CSI byte)
+// means the client is collecting a chord.  Empty when not in leader mode.  This
+// is client-local input capture; the library owns how it is presented.
+[[nodiscard]] ssg::KeySequence pending_leader(std::string_view buffer);
+
 // Encode a rendered cell grid as a full-screen ANSI frame: cursor-addressed
 // rows with 24-bit foreground/background colors drawn from the snapshot's
 // 16-color palette.  Continuation cells (the trailing half of a wide glyph)

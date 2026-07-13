@@ -1,5 +1,6 @@
 #include "ssg_terminal.h"
 
+#include <ssg/input.h>
 #include <ssg/theme.h>
 
 #include <algorithm>
@@ -8,6 +9,18 @@
 namespace ssg::app {
 
 namespace fs = std::filesystem;
+
+ssg::KeySequence pending_leader(std::string_view buffer) {
+    if (buffer.empty() || static_cast<unsigned char>(buffer[0]) != 0x1b) {
+        return {};
+    }
+    // An Escape that introduces a CSI/SS3 sequence (arrow, function key) is not a
+    // leader chord; only a lone Escape or Escape + a non-CSI key is.
+    if (buffer.size() >= 2 && (buffer[1] == '[' || buffer[1] == 'O')) {
+        return {};
+    }
+    return {ssg::KeyStroke{"Escape"}};
+}
 
 LaunchTarget resolve_launch(fs::path const& argument) {
     if (argument.empty()) {

@@ -102,6 +102,7 @@ struct ShellLayoutRequest {
     std::vector<StatusField> footer_fields;
     std::vector<ShellLabel> footer_actions;
     std::vector<TabLabel> tabs;
+    std::string leader_hint;  // Non-empty when a client is mid-chord.
 };
 
 struct PaneGeometry {
