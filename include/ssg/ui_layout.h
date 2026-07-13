@@ -103,6 +103,9 @@ struct ShellLayoutRequest {
     std::vector<ShellLabel> footer_actions;
     std::vector<TabLabel> tabs;
     std::string leader_hint;  // Non-empty when a client is mid-chord.
+    bool palette_active = false;  // The palette prompt is open on this client.
+    std::string palette_query;    // The client's current palette query text.
+    std::string palette_ghost;    // Fish-style completion of the top candidate.
 };
 
 struct PaneGeometry {

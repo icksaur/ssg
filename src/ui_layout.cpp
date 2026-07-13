@@ -343,7 +343,30 @@ ShellLayoutResult compute_shell_layout(const ShellLayoutRequest& request,
         add_node(view, ShellNodeKind::footer, "footer", "Status footer",
                  *view.footer, SemanticRole::footer);
         int header_x = view.header->x;
-        if (!request.leader_hint.empty()) {
+        if (request.palette_active) {
+            // The palette owns the header while open: its query renders in the
+            // prompt role, the ghost completion trails it dim.  Palette focus
+            // and leader-chord entry are mutually exclusive, so they never
+            // compete for the header start.
+            std::string query = "> " + request.palette_query;
+            const int query_width =
+                std::min(view.header->width, static_cast<int>(query.size()));
+            add_node(view, ShellNodeKind::header_field, "palette_query",
+                     "Palette query", {header_x, view.header->y, query_width, 1},
+                     SemanticRole::prompt, std::move(query));
+            header_x += query_width;
+            if (!request.palette_ghost.empty() &&
+                header_x < view.header->right()) {
+                const int ghost_width =
+                    std::min(view.header->right() - header_x,
+                             static_cast<int>(request.palette_ghost.size()));
+                add_node(view, ShellNodeKind::header_field, "palette_ghost",
+                         "Palette completion",
+                         {header_x, view.header->y, ghost_width, 1},
+                         SemanticRole::line_number, request.palette_ghost);
+                header_x += ghost_width;
+            }
+        } else if (!request.leader_hint.empty()) {
             const int width = std::min(
                 view.header->width,
                 static_cast<int>(request.leader_hint.size()) + 1);

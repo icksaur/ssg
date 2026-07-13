@@ -64,12 +64,17 @@ ShellViewState EditorRuntime::Impl::shell_view(ViewportDimensions dimensions,
         }
         request.leader_hint = std::move(hint);
     }
+    bool const palette_open = prompt.active() && prompt.request() &&
+                              prompt.request()->kind == PromptKind::palette;
+    if (palette_open) {
+        request.palette_active = true;
+        request.palette_query = palette_report.query;
+        request.palette_ghost = palette_report.ghost;
+    }
     auto result = compute_shell_layout(request, shell);
     if (!result.accepted()) return {};
     auto view = *result.view;
 
-    bool const palette_open = prompt.active() && prompt.request() &&
-                              prompt.request()->kind == PromptKind::palette;
     if (palette_open && !view.panes.empty()) {
         PaletteProjection projection;
         projection.rect = view.panes.front().content;

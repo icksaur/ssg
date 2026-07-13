@@ -9,9 +9,11 @@
 
 #include <ssg/search.h>
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace ssg {
@@ -36,14 +38,32 @@ struct PaletteViewState {
 
 // A client's locally-ranked palette view, reported for library-owned
 // presentation (see doc/spec-palette.md).  `rows` is the bounded visible window
-// of ranked candidates; `selected` indexes into it.  The library projects this
-// into the active pane only while the palette prompt is open.
+// of ranked candidates; `selected` indexes into it.  `ghost` is the remaining
+// characters of the top candidate's label after the query (fish-style
+// completion), shown dim in the header.  The library projects this into the
+// active pane and header only while the palette prompt is open.
 struct PaletteReport {
     std::string query;
+    std::string ghost;
     std::vector<PaletteCandidate> rows;
     std::optional<std::uint32_t> selected;
 
     friend bool operator==(const PaletteReport&, const PaletteReport&) = default;
 };
+
+// The authoritative fuzzy ranker for the palette.  Returns indices into
+// `candidates`, keeping only entries whose `label` or `id` subsequence-matches
+// `query`, ordered by descending score with a stable tiebreak (label ascending,
+// then id ascending).  An empty query keeps every candidate in `label`/`id`
+// order.  This is the single scoring algorithm every client shares so no two
+// rankers diverge (spec P5); the TUI reports a window of this order.
+[[nodiscard]] std::vector<std::size_t> palette_rank(
+    std::vector<PaletteCandidate> const& candidates, std::string_view query);
+
+// The fish-style ghost completion for `query` given the top-ranked candidate's
+// label: the label's remaining characters when the label starts with `query`
+// (case-insensitively), else empty.  Presentation-only; never mutates state.
+[[nodiscard]] std::string palette_ghost(std::string_view top_label,
+                                        std::string_view query);
 
 }  // namespace ssg

@@ -152,11 +152,54 @@ TEST(render_projects_palette_results_into_active_pane) {
                  ssg::SemanticRole::selection);
 }
 
+TEST(render_shows_palette_query_and_ghost_in_header) {
+    auto root = unique_root();
+    std::ofstream{root / "hello.txt"} << "alpha\n";
+    auto runtime = make_runtime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(
+        ssg::ClientId{1},
+        {"file.open", runtime->revision(), std::string{"hello.txt"}});
+    (void)runtime->dispatch(ssg::ClientId{1},
+                            {"palette.open", runtime->revision(), {}});
+
+    ssg::PaletteReport report;
+    report.query = "sa";
+    report.ghost = "ve File";
+    report.rows = {{"file.save", "Save File", ""}};
+    report.selected = std::uint32_t{0};
+    auto snapshot =
+        runtime->snapshot(ssg::ClientId{1}, {80, 24}, {}, report);
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    auto grid = ssg::render(*snapshot);
+
+    // The header shows the query (prompt role) and the dim ghost completion.
+    ASSERT_TRUE(grid_contains(grid, "> sa"));
+    ASSERT_TRUE(grid_contains(grid, "ve File"));
+
+    bool query_prompt_role = false;
+    bool ghost_dim_role = false;
+    for (int column = 0; column < grid.size.columns; ++column) {
+        auto const& cell = grid.at(column, 0);
+        if (cell.text == "s" && cell.role == ssg::SemanticRole::prompt) {
+            query_prompt_role = true;
+        }
+        if (cell.text == "v" && cell.role == ssg::SemanticRole::line_number) {
+            ghost_dim_role = true;
+        }
+    }
+    ASSERT_TRUE(query_prompt_role);
+    ASSERT_TRUE(ghost_dim_role);
+}
+
 int main() {
     RUN(render_paints_content_not_accessibility_labels);
     RUN(render_colors_are_palette_indices);
     RUN(render_is_deterministic);
     RUN(render_projects_palette_results_into_active_pane);
+    RUN(render_shows_palette_query_and_ghost_in_header);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;

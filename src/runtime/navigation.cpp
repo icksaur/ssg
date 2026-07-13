@@ -1,19 +1,62 @@
 #include "editor_runtime_internal.h"
 
+#include <algorithm>
+
 namespace ssg {
 namespace {
 
 template <typename T>
 T const* payload_as(std::any const& payload) { return std::any_cast<T>(&payload); }
 
-CommandHandlerResult search_command(EditorRuntime::Impl& runtime, Revision revision, std::string_view id, std::any const& payload) {
-    if (id == "palette.open") runtime.search.open_palette(revision);
-    else if (id == "palette.close") runtime.search.close_palette(revision);
+PromptRequest palette_prompt_request() {
+    return PromptRequest{PromptKind::palette, "Command Palette",
+                         {{"query", "Command palette query", ""}}, {}, std::nullopt};
+}
+
+// Validates that `command_id` is a member of the published palette candidate set
+// and that the invoking principal holds its required capabilities.  The palette
+// never offers a command outside this set, so this rejects any id a client tries
+// to smuggle through `palette.execute` (see doc/spec-palette.md P1).  Execution
+// of the validated command is the client's follow-up dispatch through the
+// registry (the session mutex is non-reentrant, so the handler cannot re-enter
+// dispatch itself).
+CommandHandlerResult validate_palette_target(EditorRuntime::Impl& runtime,
+                                             CommandContext& context,
+                                             std::string const& command_id) {
+    auto const candidates = runtime.descriptors();
+    bool const published =
+        std::any_of(candidates.begin(), candidates.end(),
+                    [&](auto const& candidate) { return candidate.id == command_id; });
+    if (!published) {
+        return failure("command is not in the palette candidate set: " + command_id);
+    }
+    auto const descriptors = p0_command_descriptors();
+    auto const found = std::find_if(
+        descriptors.begin(), descriptors.end(),
+        [&](CommandDescriptor const& descriptor) { return descriptor.id == command_id; });
+    if (found != descriptors.end()) {
+        for (auto const& capability : found->required_capabilities) {
+            if (!context.principal().has_capability(capability)) {
+                return failure("principal lacks capability for palette command: " +
+                               command_id);
+            }
+        }
+    }
+    return success();
+}
+
+CommandHandlerResult search_command(EditorRuntime::Impl& runtime, CommandContext& context, std::string_view id, std::any const& payload) {
+    Revision const revision = context.revision();
+    if (id == "palette.open") { (void)runtime.prompt.open(palette_prompt_request()); }
+    else if (id == "palette.close") { (void)runtime.prompt.cancel(); }
     else if (id == "palette.next" || id == "search.results_next") runtime.search.select_next();
     else if (id == "palette.previous" || id == "search.results_previous") runtime.search.select_previous();
     else if (id == "palette.execute") {
-        auto result = runtime.search.execute_palette();
-        if (!result.accepted) return failure(result.message);
+        auto const* command_id = payload_as<std::string>(payload);
+        if (command_id == nullptr) return failure("palette.execute requires a command id payload");
+        auto validation = validate_palette_target(runtime, context, *command_id);
+        if (!validation.accepted) return validation;
+        (void)runtime.prompt.cancel();
     } else if (id == "search.workspace") {
         std::string query;
         if (auto const* text = payload_as<std::string>(payload)) query = *text;
@@ -85,7 +128,7 @@ void bind_runtime_navigation(EditorSessionBuilder& builder, EditorRuntime::Impl&
     auto follow_commands = follow_edits_command_set();
     for (auto const& descriptor : search_commands.descriptors()) {
         builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext& context, std::any const& payload) {
-            return runtime.run_transaction([&] { return search_command(runtime, context.revision(), descriptor.id, payload); });
+            return runtime.run_transaction([&] { return search_command(runtime, context, descriptor.id, payload); });
         });
     }
     for (auto const& descriptor : tree_commands.descriptors()) {

@@ -13,6 +13,7 @@
 
 #include <ssg/editor_runtime.h>
 #include <ssg/input.h>
+#include <ssg/palette.h>
 #include <ssg/session_snapshot.h>
 #include <ssg/text_input_commands.h>
 
@@ -25,6 +26,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <vector>
 
 namespace {
 
@@ -127,12 +129,36 @@ int main(int argc, char** argv) {
     bool quit = false;
     auto focus = ssg::FocusTarget::editor;
     bool panel_open = false;
+    // Client-owned palette state: the query and selection are local (reported for
+    // library presentation), ranked against the server's published candidate set.
+    bool palette_open = false;
+    std::string palette_query;
+    std::size_t palette_selected = 0;
+    std::vector<ssg::PaletteCandidate> candidates;
     while (!quit) {
+        ssg::PaletteReport report;
+        if (palette_open) {
+            auto order = ssg::palette_rank(candidates, palette_query);
+            report.query = palette_query;
+            if (!order.empty()) {
+                report.ghost =
+                    ssg::palette_ghost(candidates[order.front()].label, palette_query);
+            }
+            if (palette_selected >= order.size()) {
+                palette_selected = order.empty() ? 0 : order.size() - 1;
+            }
+            for (auto index : order) report.rows.push_back(candidates[index]);
+            if (!order.empty()) {
+                report.selected = static_cast<std::uint32_t>(palette_selected);
+            }
+        }
         auto snapshot = runtime.snapshot(client, terminal_size(),
-                                         ssg::app::pending_leader(pending));
+                                         ssg::app::pending_leader(pending), report);
         if (snapshot) {
             focus = snapshot->sections().shell.focus;
             panel_open = snapshot->sections().shell.panel.has_value();
+            candidates = snapshot->sections().palette.candidates;
+            if (focus != ssg::FocusTarget::prompt) palette_open = false;
             auto grid = ssg::render(*snapshot);
             std::string frame = "\x1b[?25l";  // Hide the cursor while redrawing.
             frame += ssg::app::encode_ansi_frame(grid);
@@ -189,32 +215,72 @@ int main(int argc, char** argv) {
                     command("tab.previous");
                 } else if (event.key == 'w') {
                     command("tab.close");
+                } else if (event.key == 'P') {
+                    if (!palette_open) {
+                        command("palette.open");
+                        palette_open = true;
+                        palette_query.clear();
+                        palette_selected = 0;
+                    } else {
+                        command("palette.close");
+                        palette_open = false;
+                    }
                 }
                 break;
             case ssg::app::InputAction::text:
-                if (editor) {
+                if (palette_open) {
+                    palette_query += event.text;
+                    palette_selected = 0;
+                } else if (editor) {
                     (void)runtime.dispatch(
                         client, {"text.insert", runtime.revision(),
                                  ssg::TextInputArguments{event.text}});
                 }
                 break;
             case ssg::app::InputAction::delete_backward:
-                if (editor) command("text.delete_backward");
+                if (palette_open) {
+                    if (!palette_query.empty()) palette_query.pop_back();
+                    palette_selected = 0;
+                } else if (editor) {
+                    command("text.delete_backward");
+                }
                 break;
             case ssg::app::InputAction::line_up:
-                command(on_panel ? "tree.select_previous" : "cursor.line_up");
+                if (palette_open) {
+                    if (palette_selected > 0) --palette_selected;
+                } else {
+                    command(on_panel ? "tree.select_previous" : "cursor.line_up");
+                }
                 break;
             case ssg::app::InputAction::line_down:
-                command(on_panel ? "tree.select_next" : "cursor.line_down");
+                if (palette_open) {
+                    ++palette_selected;  // Clamped against the ranked count next frame.
+                } else {
+                    command(on_panel ? "tree.select_next" : "cursor.line_down");
+                }
                 break;
             case ssg::app::InputAction::caret_left:
-                if (editor) command("cursor.left");
+                if (!palette_open && editor) command("cursor.left");
                 break;
             case ssg::app::InputAction::caret_right:
-                if (editor) command("cursor.right");
+                if (!palette_open && editor) command("cursor.right");
                 break;
             case ssg::app::InputAction::activate:
-                command(on_panel ? "tree.activate" : "text.newline");
+                if (palette_open) {
+                    auto order = ssg::palette_rank(candidates, palette_query);
+                    if (!order.empty() && palette_selected < order.size()) {
+                        auto const& id = candidates[order[palette_selected]].id;
+                        auto validated = runtime.dispatch(
+                            client, {"palette.execute", runtime.revision(), id});
+                        if (validated.accepted()) {
+                            (void)runtime.dispatch(
+                                client, {id, runtime.revision(), {}});
+                        }
+                    }
+                    palette_open = false;
+                } else {
+                    command(on_panel ? "tree.activate" : "text.newline");
+                }
                 break;
             case ssg::app::InputAction::scroll_lines:
                 scroll(event.amount);
