@@ -565,6 +565,14 @@ void EditorRuntime::Impl::refresh_tree() {
         TreeProviderId{"filesystem"}, root, TreeRevision{next_tree_revision++}));
 }
 
+void EditorRuntime::Impl::reconcile_prompt_focus() {
+    if (prompt.active() && shell.focus() != FocusTarget::prompt) {
+        shell.enter_prompt_focus();
+    } else if (!prompt.active() && shell.focus() == FocusTarget::prompt) {
+        shell.exit_prompt_focus();
+    }
+}
+
 void EditorRuntime::Impl::refresh_syntax() {
     auto const* document = active_document();
     auto text = document ? document->snapshot().text : std::string{};
@@ -622,7 +630,9 @@ bool EditorRuntime::detach(ClientId client_id) {
 }
 
 CommandResult EditorRuntime::dispatch(ClientId client_id, ClientCommand const& command) {
-    return impl_->session->dispatch(client_id, command);
+    auto result = impl_->session->dispatch(client_id, command);
+    impl_->reconcile_prompt_focus();
+    return result;
 }
 
 Revision EditorRuntime::revision() const { return impl_->session->revision(); }

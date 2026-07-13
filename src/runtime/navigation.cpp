@@ -44,7 +44,9 @@ CommandHandlerResult tree_command(EditorRuntime::Impl& runtime, std::string_view
         if (selected->workspace_path) {
             auto result = runtime.workspace.open_file(*selected->workspace_path);
             if (!result.accepted() || !result.document) return failure("failed to open tree file");
-            return runtime.activate_document(*result.document);
+            auto opened = runtime.activate_document(*result.document);
+            if (opened.accepted) runtime.shell.focus_editor();
+            return opened;
         }
         return success();
     }

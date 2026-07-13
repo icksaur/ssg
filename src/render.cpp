@@ -167,7 +167,7 @@ void paint_shell_leaves(CellGrid& grid, ShellViewState const& shell,
 // Paints the active filesystem provider's visible nodes below the provider row.
 void paint_panel_tree(CellGrid& grid, Rect const& panel,
                       TreeViewState const& tree, ThemeSnapshot const& theme,
-                      std::uint8_t background) {
+                      std::uint8_t background, bool focused) {
     if (tree.providers.empty() || panel.width <= 0) return;
     auto const& provider = tree.providers.front();
     auto const foreground = semantic_index(theme, SemanticRole::foreground);
@@ -185,6 +185,7 @@ void paint_panel_tree(CellGrid& grid, Rect const& panel,
         if (is_selected) {
             fill_rect(grid, {panel.x, y, panel.width, 1}, foreground,
                       row_background, SemanticRole::tree_focus);
+            if (focused) grid.caret = GridPosition{panel.x, y};
         }
         std::string line(view.depth * 2, ' ');
         if (view.node.expandable) {
@@ -343,7 +344,7 @@ CellGrid render(SessionSnapshot const& snapshot) {
 
     if (shell.panel) {
         paint_panel_tree(grid, *shell.panel, snapshot.sections().tree, theme,
-                         panel_background);
+                         panel_background, shell.focus == FocusTarget::panel);
     }
     if (!shell.panes.empty()) {
         paint_document(grid, snapshot, shell.panes.front().content, theme,
@@ -352,7 +353,8 @@ CellGrid render(SessionSnapshot const& snapshot) {
                         theme, background);
 
         // Place the primary caret at its screen cell so the client can position
-        // a terminal cursor there.
+        // a terminal cursor there, but only when the editor is focused.
+        if (shell.focus == FocusTarget::editor) {
         auto const& content = shell.panes.front().content;
         auto const& viewport = snapshot.client().viewport;
         auto const& primary = snapshot.sections().selection.selections.primary();
@@ -372,6 +374,7 @@ CellGrid render(SessionSnapshot const& snapshot) {
                 grid.caret = GridPosition{column, screen_row};
             }
             break;
+        }
         }
     }
     return grid;

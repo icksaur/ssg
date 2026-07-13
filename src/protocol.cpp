@@ -1060,6 +1060,7 @@ bool decode_present(ProtocolValue const& value, std::optional<CommentKind>& out)
 bool decode_present(ProtocolValue const& value, std::optional<CommentTokenRole>& out);
 bool decode_present(ProtocolValue const& value, std::optional<LspDiagnosticSeverity>& out);
 bool decode_present(ProtocolValue const& value, std::optional<ShellNodeKind>& out);
+bool decode_present(ProtocolValue const& value, std::optional<FocusTarget>& out);
 bool decode_present(ProtocolValue const& value, std::optional<SemanticRole>& out);
 
 // -- Forward declarations: strong ids -------------------------------------
@@ -1699,6 +1700,12 @@ bool decode_present(ProtocolValue const& value, std::optional<ShellNodeKind>& ou
     return decode_enum(value, out, values);
 }
 
+bool decode_present(ProtocolValue const& value, std::optional<FocusTarget>& out) {
+    static constexpr std::array values{FocusTarget::editor, FocusTarget::panel,
+                                       FocusTarget::prompt};
+    return decode_enum(value, out, values);
+}
+
 bool decode_present(ProtocolValue const& value, std::optional<SemanticRole>& out) {
     return decode_enum(value, out, all_semantic_roles);
 }
@@ -2202,6 +2209,7 @@ ProtocolValue to_value(ShellViewState const& value) {
     fields.emplace_back("prompt", to_value(value.prompt));
     fields.emplace_back("panes", to_value(value.panes));
     fields.emplace_back("accessibility_nodes", to_value(value.accessibility_nodes));
+    fields.emplace_back("focus", to_value(value.focus));
     return ProtocolValue::make_object(std::move(fields));
 }
 bool decode_present(ProtocolValue const& value, std::optional<ShellViewState>& out) {
@@ -2214,6 +2222,11 @@ bool decode_present(ProtocolValue const& value, std::optional<ShellViewState>& o
     if (!viewport || !panes || !accessibility_nodes) return false;
     ShellViewState result;
     result.viewport = *viewport;
+    if (auto const* focus_field = value.field("focus")) {
+        std::optional<FocusTarget> focus;
+        if (!decode_present(*focus_field, focus) || !focus) return false;
+        result.focus = *focus;
+    }
     if (!decode_optional_field(value.field("header"), result.header)) return false;
     if (!decode_optional_field(value.field("footer"), result.footer)) return false;
     if (!decode_optional_field(value.field("tab_bar"), result.tab_bar)) return false;

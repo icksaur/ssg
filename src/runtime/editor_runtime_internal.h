@@ -148,6 +148,7 @@ struct EditorRuntime::Impl final : CommandServices,
     [[nodiscard]] CommandHandlerResult update_tabs_for(FileDocumentId document);
     [[nodiscard]] CommandHandlerResult activate_document(FileDocumentId document);
     void refresh_tree();
+    void reconcile_prompt_focus();
     void refresh_syntax();
     void enqueue_status(StatusPriority priority, std::string text);
 };

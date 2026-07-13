@@ -153,7 +153,8 @@ struct ShellState::Impl {
     std::vector<std::string> providers;
     std::size_t provider_index = 0;
     bool panel_requested = false;
-    bool panel_focused = false;
+    FocusTarget focus = FocusTarget::editor;
+    std::vector<FocusTarget> focus_stack;
     bool distraction_free = false;
 };
 
@@ -237,19 +238,46 @@ bool ShellState::focus_pane(PaneDirection direction,
     }
     if (!best) return false;
     impl_->active = best->id;
+    impl_->focus = FocusTarget::editor;
     return true;
 }
 
 void ShellState::toggle_panel() noexcept {
     impl_->panel_requested = !impl_->panel_requested;
-    if (!impl_->panel_requested) impl_->panel_focused = false;
+    if (!impl_->panel_requested && impl_->focus == FocusTarget::panel) {
+        impl_->focus = FocusTarget::editor;
+    }
 }
 
 bool ShellState::focus_panel() noexcept {
     if (!impl_->panel_requested || impl_->providers.empty()) return false;
-    impl_->panel_focused = true;
+    impl_->focus = FocusTarget::panel;
     return true;
 }
+
+void ShellState::focus_editor() noexcept {
+    impl_->focus = FocusTarget::editor;
+    impl_->focus_stack.clear();
+}
+
+void ShellState::enter_prompt_focus() noexcept {
+    impl_->focus_stack.push_back(impl_->focus);
+    impl_->focus = FocusTarget::prompt;
+}
+
+void ShellState::exit_prompt_focus() noexcept {
+    FocusTarget restored = FocusTarget::editor;
+    if (!impl_->focus_stack.empty()) {
+        restored = impl_->focus_stack.back();
+        impl_->focus_stack.pop_back();
+    }
+    if (restored == FocusTarget::panel && !impl_->panel_requested) {
+        restored = FocusTarget::editor;
+    }
+    impl_->focus = restored;
+}
+
+FocusTarget ShellState::focus() const noexcept { return impl_->focus; }
 
 void ShellState::next_panel_provider() noexcept {
     if (!impl_->providers.empty()) {
@@ -270,7 +298,7 @@ bool ShellState::panel_requested() const noexcept {
 }
 
 bool ShellState::panel_focused() const noexcept {
-    return impl_->panel_focused;
+    return impl_->focus == FocusTarget::panel;
 }
 
 std::string_view ShellState::active_panel_provider() const noexcept {
@@ -302,6 +330,7 @@ ShellLayoutResult compute_shell_layout(const ShellLayoutRequest& request,
 
     ShellViewState view;
     view.viewport = request.viewport;
+    view.focus = state.focus();
     const bool distraction_free = state.impl_->distraction_free;
     Rect editor{0, 0, request.viewport.columns, request.viewport.rows};
 
@@ -345,7 +374,7 @@ ShellLayoutResult compute_shell_layout(const ShellLayoutRequest& request,
                      *view.panel, SemanticRole::panel_inactive);
             add_node(view, ShellNodeKind::panel_provider, "panel.provider",
                      request.panel_provider_label, *view.panel,
-                     state.impl_->panel_focused ? SemanticRole::panel_active :
+                     state.impl_->focus == FocusTarget::panel ? SemanticRole::panel_active :
                                                   SemanticRole::panel_inactive,
                      request.panel_provider_label);
         }

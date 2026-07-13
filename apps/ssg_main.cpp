@@ -125,11 +125,13 @@ int main(int argc, char** argv) {
 
     std::string pending;
     bool quit = false;
-    bool panel_visible = false;
+    auto focus = ssg::FocusTarget::editor;
+    bool panel_open = false;
     while (!quit) {
         auto snapshot = runtime.snapshot(client, terminal_size());
         if (snapshot) {
-            panel_visible = snapshot->sections().shell.panel.has_value();
+            focus = snapshot->sections().shell.focus;
+            panel_open = snapshot->sections().shell.panel.has_value();
             auto grid = ssg::render(*snapshot);
             std::string frame = "\x1b[?25l";  // Hide the cursor while redrawing.
             frame += ssg::app::encode_ansi_frame(grid);
@@ -150,6 +152,8 @@ int main(int argc, char** argv) {
             auto event = ssg::app::parse_input(pending, consumed);
             if (consumed == 0) break;  // Incomplete sequence; read more.
             pending.erase(0, consumed);
+            auto const editor = focus == ssg::FocusTarget::editor;
+            auto const on_panel = focus == ssg::FocusTarget::panel;
             auto scroll = [&](std::int64_t lines) {
                 (void)runtime.dispatch(
                     client, {"view.scroll_lines", runtime.revision(),
@@ -163,7 +167,15 @@ int main(int argc, char** argv) {
                 if (event.key == 'Q') {
                     quit = true;
                 } else if (event.key == 'b') {
-                    command("panel.toggle");
+                    // Cycle focus: reveal+focus the bar, focus it, then hide it.
+                    if (!panel_open) {
+                        command("panel.toggle");
+                        command("panel.focus");
+                    } else if (!on_panel) {
+                        command("panel.focus");
+                    } else {
+                        command("panel.toggle");
+                    }
                 } else if (event.key == 's') {
                     command("file.save");
                 } else if (event.key == 'z') {
@@ -179,27 +191,29 @@ int main(int argc, char** argv) {
                 }
                 break;
             case ssg::app::InputAction::text:
-                (void)runtime.dispatch(
-                    client, {"text.insert", runtime.revision(),
-                             ssg::TextInputArguments{event.text}});
+                if (editor) {
+                    (void)runtime.dispatch(
+                        client, {"text.insert", runtime.revision(),
+                                 ssg::TextInputArguments{event.text}});
+                }
                 break;
             case ssg::app::InputAction::delete_backward:
-                command("text.delete_backward");
+                if (editor) command("text.delete_backward");
                 break;
             case ssg::app::InputAction::line_up:
-                command(panel_visible ? "tree.select_previous" : "cursor.line_up");
+                command(on_panel ? "tree.select_previous" : "cursor.line_up");
                 break;
             case ssg::app::InputAction::line_down:
-                command(panel_visible ? "tree.select_next" : "cursor.line_down");
+                command(on_panel ? "tree.select_next" : "cursor.line_down");
                 break;
             case ssg::app::InputAction::caret_left:
-                if (!panel_visible) command("cursor.left");
+                if (editor) command("cursor.left");
                 break;
             case ssg::app::InputAction::caret_right:
-                if (!panel_visible) command("cursor.right");
+                if (editor) command("cursor.right");
                 break;
             case ssg::app::InputAction::activate:
-                command(panel_visible ? "tree.activate" : "text.newline");
+                command(on_panel ? "tree.activate" : "text.newline");
                 break;
             case ssg::app::InputAction::scroll_lines:
                 scroll(event.amount);

@@ -43,6 +43,10 @@ private:
 enum class SplitAxis : std::uint8_t { horizontal, vertical };
 enum class PaneDirection : std::uint8_t { left, right, up, down };
 
+// The surface that currently receives keyboard input.  One value is authoritative
+// session state; clients route keys by it.
+enum class FocusTarget : std::uint8_t { editor, panel, prompt };
+
 enum class ShellNodeKind : std::uint8_t {
     header,
     header_field,
@@ -118,6 +122,7 @@ struct ShellViewState {
     std::optional<Rect> prompt;
     std::vector<PaneGeometry> panes;
     std::vector<AccessibilityNode> accessibility_nodes;
+    FocusTarget focus = FocusTarget::editor;
 
     [[nodiscard]] std::size_t scrollbar_count() const noexcept {
         return panes.size();
@@ -186,6 +191,10 @@ public:
 
     void toggle_panel() noexcept;
     [[nodiscard]] bool focus_panel() noexcept;
+    void focus_editor() noexcept;
+    void enter_prompt_focus() noexcept;
+    void exit_prompt_focus() noexcept;
+    [[nodiscard]] FocusTarget focus() const noexcept;
     void next_panel_provider() noexcept;
     void previous_panel_provider() noexcept;
     [[nodiscard]] bool panel_requested() const noexcept;

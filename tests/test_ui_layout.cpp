@@ -344,6 +344,33 @@ TEST(dirty_tab_content_shows_marker) {
     if (tab) ASSERT_EQ(tab->content, std::string{"a.cpp *"});
 }
 
+TEST(focus_transitions_follow_the_navigation_table) {
+    ShellState state{{"filesystem"}};
+    ASSERT_TRUE(state.focus() == FocusTarget::editor);
+    // The panel cannot be focused while hidden.
+    ASSERT_FALSE(state.focus_panel());
+    ASSERT_TRUE(state.focus() == FocusTarget::editor);
+    state.toggle_panel();  // show
+    ASSERT_TRUE(state.focus_panel());
+    ASSERT_TRUE(state.focus() == FocusTarget::panel);
+    ASSERT_TRUE(state.panel_focused());
+    // A prompt pushes the current focus and restores it on close.
+    state.enter_prompt_focus();
+    ASSERT_TRUE(state.focus() == FocusTarget::prompt);
+    state.exit_prompt_focus();
+    ASSERT_TRUE(state.focus() == FocusTarget::panel);
+    // Hiding the panel while it is focused returns focus to the editor.
+    state.toggle_panel();  // hide
+    ASSERT_TRUE(state.focus() == FocusTarget::editor);
+    // A prompt over a panel that is hidden before close restores to editor.
+    state.toggle_panel();
+    ASSERT_TRUE(state.focus_panel());
+    state.enter_prompt_focus();
+    state.toggle_panel();  // hide the panel while the prompt is focused
+    state.exit_prompt_focus();
+    ASSERT_TRUE(state.focus() == FocusTarget::editor);
+}
+
 int main() {
     RUN(hand_authored_geometry_goldens);
     RUN(viewport_and_prompt_errors_are_typed);
@@ -353,6 +380,7 @@ int main() {
     RUN(accessibility_nodes_have_labels_and_roles);
     RUN(accessibility_leaf_nodes_carry_display_content);
     RUN(dirty_tab_content_shows_marker);
+    RUN(focus_transitions_follow_the_navigation_table);
     RUN(non_overlap_and_cardinality_properties);
     RUN(status_field_manifest_has_exact_order_and_labels);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << '\n';
