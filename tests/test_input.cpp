@@ -227,6 +227,37 @@ TEST(has_global_binding_requires_unreserved_unshadowed_star) {
     ASSERT_FALSE(ssg::has_global_binding(present, "file.save", {}));
 }
 
+TEST(validate_keymap_flags_global_shadow_regardless_of_order) {
+    const auto seq = *ssg::parse_key_sequence({"Escape", "KeyS"});
+    // Global-then-focus and focus-then-global must both flag the focus binding.
+    ssg::KeymapViewState global_first{
+        "m", {{seq, "file.save", "*"}, {seq, "focus.only", "editor"}}};
+    ssg::KeymapViewState focus_first{
+        "m", {{seq, "focus.only", "editor"}, {seq, "file.save", "*"}}};
+    ASSERT_TRUE(has_error(ssg::validate_keymap(global_first, {}),
+                          ssg::KeymapErrorCode::unreachable_binding));
+    ASSERT_TRUE(has_error(ssg::validate_keymap(focus_first, {}),
+                          ssg::KeymapErrorCode::unreachable_binding));
+}
+
+TEST(resolver_and_has_global_binding_agree_on_duplicate_globals) {
+    const auto seq = *ssg::parse_key_sequence({"Escape", "KeyF", "KeyT"});
+    // An invalid map with two "*" bindings for one sequence: the resolver's
+    // winner must be the same command has_global_binding calls authoritative.
+    for (const auto& first : {std::string{"settings.open"}, std::string{"other.cmd"}}) {
+        const std::string second =
+            first == "settings.open" ? "other.cmd" : "settings.open";
+        ssg::KeymapViewState keymap{
+            "m", {{seq, first, "*"}, {seq, second, "*"}}};
+        const auto resolved = ssg::resolve_key_sequence(keymap, seq, "editor");
+        ASSERT_EQ(resolved.kind, ssg::KeymapMatchKind::resolved);
+        // First "*" binding wins in both functions.
+        ASSERT_EQ(resolved.command_id, first);
+        ASSERT_EQ(ssg::has_global_binding(keymap, first, {}), true);
+        ASSERT_EQ(ssg::has_global_binding(keymap, second, {}), false);
+    }
+}
+
 TEST(ime_accepts_only_committed_utf8_text) {
     const auto committed =
         ssg::CommittedText::from_utf8("e\xCC\x81 \xF0\x9F\x98\x80");
@@ -302,6 +333,8 @@ int main() {
     RUN(resolve_key_sequence_reports_pending_and_none);
     RUN(text_routing_is_per_context);
     RUN(has_global_binding_requires_unreserved_unshadowed_star);
+    RUN(validate_keymap_flags_global_shadow_regardless_of_order);
+    RUN(resolver_and_has_global_binding_agree_on_duplicate_globals);
     RUN(ime_accepts_only_committed_utf8_text);
     RUN(hit_targets_round_trip_typed_semantic_arguments);
     RUN(backend_has_no_platform_input_capture_dependency);

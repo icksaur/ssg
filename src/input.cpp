@@ -253,10 +253,20 @@ std::vector<KeymapError> validate_keymap(
                                   "binding duplicates an earlier binding"});
                 break;
             }
-            if (earlier.context == "*") {
+        }
+        // A focus binding shadowed by a same-sequence global binding is
+        // unreachable: "*"-precedence (K4) means the global command always wins.
+        // Checked against all indices so the error does not depend on which of
+        // the two is declared first (reported once, on the focus binding).
+        if (binding.context != "*" && !binding.context.empty()) {
+            const bool globally_shadowed = std::ranges::any_of(
+                keymap.bindings, [&](const KeyBinding& other) {
+                    return other.context == "*" &&
+                           other.sequence == binding.sequence;
+                });
+            if (globally_shadowed) {
                 errors.push_back({KeymapErrorCode::unreachable_binding, index,
                                   "a global binding shadows this binding"});
-                break;
             }
         }
         // A binding whose sequence strictly prefixes (or is strictly prefixed
@@ -310,10 +320,13 @@ KeymapResolution resolve_key_sequence(const KeymapViewState& keymap,
             continue;
         }
         if (binding.sequence == pending) {
-            // "*" wins over a focus binding for the same sequence (K4), so a
-            // global chord is never shadowed.  Prefix-freeness guarantees no
-            // eligible binding is also pending here.
-            if (match == nullptr || binding.context == "*") {
+            // First eligible match wins; a "*" binding upgrades a focus match
+            // (K4 precedence) but two "*" bindings keep the first, matching
+            // has_global_binding's first-authoritative rule so the two agree on
+            // any (even invalid) keymap.
+            if (match == nullptr) {
+                match = &binding;
+            } else if (binding.context == "*" && match->context != "*") {
                 match = &binding;
             }
         } else if (is_strict_prefix(pending, binding.sequence)) {
