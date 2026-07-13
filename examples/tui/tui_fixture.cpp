@@ -197,6 +197,59 @@ void paint_document(ScreenSnapshot& screen, SessionSnapshot const& snapshot,
     }
 }
 
+void paint_text(ScreenSnapshot& screen, int x, int y, int right_limit,
+                std::string_view text, std::uint8_t foreground,
+                std::uint8_t background, SemanticRole role) {
+    auto run = compute_cell_run(text);
+    int column = x;
+    for (auto const& span : run.spans) {
+        if (column >= right_limit) break;
+        auto piece = std::string{text.substr(span.byte_offset, span.byte_len)};
+        if (span.kind == CellKind::tab) {
+            piece.assign(span.cell_width, ' ');
+        } else if (span.kind == CellKind::control ||
+                   span.kind == CellKind::invalid_utf8) {
+            piece = "\xef\xbf\xbd";
+        }
+        auto const width = std::max<std::uint32_t>(span.cell_width, 1);
+        put(screen, column, y, std::move(piece), foreground, background, role);
+        for (std::uint32_t offset = 1;
+             offset < width && column + static_cast<int>(offset) < right_limit;
+             ++offset) {
+            put(screen, column + static_cast<int>(offset), y, "", foreground,
+                background, role, true);
+        }
+        column += static_cast<int>(width);
+    }
+}
+
+// Paints the active filesystem provider's visible nodes into the panel: one
+// node per row with depth indentation, a twisty for expandable directories,
+// and the node label.  Selection highlighting arrives with tree navigation.
+void paint_panel_tree(ScreenSnapshot& screen, Rect const& panel,
+                      TreeViewState const& tree, ThemeSnapshot const& theme,
+                      std::uint8_t background) {
+    if (tree.providers.empty() || panel.width <= 0) return;
+    auto const& provider = tree.providers.front();
+    auto const foreground = semantic_index(theme, SemanticRole::foreground);
+    auto const directory = semantic_index(theme, SemanticRole::panel_active);
+    int const right_limit = panel.right();
+    for (std::size_t index = 0; index < provider.nodes.size(); ++index) {
+        if (static_cast<int>(index) >= panel.height) break;
+        auto const& view = provider.nodes[index];
+        std::string line(view.depth * 2, ' ');
+        if (view.node.expandable) {
+            line += view.expanded ? "\xe2\x96\xbe " : "\xe2\x96\xb8 ";  // v / >
+        }
+        line += view.node.label;
+        auto const color =
+            view.node.kind == TreeNodeKind::directory ? directory : foreground;
+        paint_text(screen, panel.x, panel.y + static_cast<int>(index),
+                   right_limit, line, color, background,
+                   SemanticRole::foreground);
+    }
+}
+
 void paint_scrollbar(ScreenSnapshot& screen, PaneGeometry const& pane,
                      ViewportViewState const& viewport,
                      ThemeSnapshot const& theme, std::uint8_t background) {
@@ -324,6 +377,10 @@ ScreenSnapshot render_screen(SessionSnapshot const& snapshot) {
                        SemanticRole::background, false})};
     for (auto const& node : shell.accessibility_nodes) {
         paint_label(screen, node, theme, background);
+    }
+    if (shell.panel) {
+        paint_panel_tree(screen, *shell.panel, snapshot.sections().tree, theme,
+                         background);
     }
     if (!shell.panes.empty()) {
         paint_document(screen, snapshot, shell.panes.front().content, theme,

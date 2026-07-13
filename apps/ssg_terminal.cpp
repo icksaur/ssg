@@ -82,13 +82,10 @@ InputEvent parse_input(std::string_view bytes, std::size_t& consumed) {
     if (bytes.size() < 2) return {};  // Lone ESC: wait for the rest.
 
     auto const second = static_cast<unsigned char>(bytes[1]);
-    if (second == 'Q') {
-        consumed = 2;
-        return {InputAction::quit, 0};
-    }
     if (second != '[' && second != 'O') {
-        consumed = 2;  // ESC + other: ignore.
-        return {};
+        // ESC followed by any non-CSI byte is a two-key chord (ESC b, ESC Q).
+        consumed = 2;
+        return {InputAction::chord, 0, static_cast<char>(second)};
     }
     if (bytes.size() < 3) return {};
 

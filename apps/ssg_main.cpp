@@ -142,8 +142,13 @@ int main(int argc, char** argv) {
             if (consumed == 0) break;  // Incomplete sequence; read more.
             pending.erase(0, consumed);
             switch (event.action) {
-            case ssg::app::InputAction::quit:
-                quit = true;
+            case ssg::app::InputAction::chord:
+                if (event.key == 'Q') {
+                    quit = true;
+                } else if (event.key == 'b') {
+                    (void)runtime.dispatch(
+                        client, {"panel.toggle", runtime.revision(), {}});
+                }
                 break;
             case ssg::app::InputAction::scroll_lines:
                 (void)runtime.dispatch(

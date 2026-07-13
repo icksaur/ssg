@@ -28,12 +28,13 @@ struct LaunchTarget {
 
 [[nodiscard]] LaunchTarget resolve_launch(std::filesystem::path const& argument);
 
-// A decoded terminal input event, reduced to the actions milestone 2 handles.
-enum class InputAction { none, quit, scroll_lines, scroll_pages };
+// A decoded terminal input event, reduced to the actions milestone 3 handles.
+enum class InputAction { none, chord, scroll_lines, scroll_pages };
 
 struct InputEvent {
     InputAction action = InputAction::none;
     std::int64_t amount = 0;  // Signed: negative scrolls up, positive down.
+    char key = 0;             // For chord: the key pressed after the ESC leader.
 };
 
 // Decode the first complete event from `bytes`.

@@ -81,10 +81,15 @@ TEST(encode_ansi_frame_skips_wide_glyph_continuation) {
                 frame.find("\x1b[0m", glyph) < frame.find(' ', glyph + 3));
 }
 
-TEST(parse_input_quit_chord) {
+TEST(parse_input_chord_keys) {
     std::size_t consumed = 0;
-    auto event = ssg::app::parse_input(std::string_view{"\x1b" "Q"}, consumed);
-    ASSERT_TRUE(event.action == ssg::app::InputAction::quit);
+    auto quit = ssg::app::parse_input(std::string_view{"\x1b" "Q"}, consumed);
+    ASSERT_TRUE(quit.action == ssg::app::InputAction::chord);
+    ASSERT_EQ(quit.key, 'Q');
+    ASSERT_EQ(consumed, std::size_t{2});
+    auto toggle = ssg::app::parse_input(std::string_view{"\x1b" "b"}, consumed);
+    ASSERT_TRUE(toggle.action == ssg::app::InputAction::chord);
+    ASSERT_EQ(toggle.key, 'b');
     ASSERT_EQ(consumed, std::size_t{2});
 }
 
@@ -146,7 +151,7 @@ int main() {
     RUN(resolve_launch_file_opens_parent_directory_and_file);
     RUN(encode_ansi_frame_addresses_rows_and_emits_palette_colors);
     RUN(encode_ansi_frame_skips_wide_glyph_continuation);
-    RUN(parse_input_quit_chord);
+    RUN(parse_input_chord_keys);
     RUN(parse_input_arrows_scroll_lines);
     RUN(parse_input_page_keys_scroll_pages);
     RUN(parse_input_sgr_wheel);
