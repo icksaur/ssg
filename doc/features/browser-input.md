@@ -6,21 +6,70 @@ Make all required interaction workflows reachable in Chromium, Firefox, and WebK
 
 ## Design
 
-The API publishes the authoritative keymap, required command metadata, semantic hit targets, clipboard requests, and the current principal's host-granted capability IDs in per-client snapshot state. Clients map raw events to semantic commands. The accepted required-command fixture is the exact union of normative command IDs in all P0 feature specs and is reviewed before registry/keymap implementation. Every entry records its owning task, required capabilities, and Lua/keymap/palette availability. `file.open_dropped_content` is the only capability-gated entry: it requires `local_file_drop` and is excluded from Lua, keymaps, and the palette; every other required entry has no required capability and is available through all three surfaces. Clipboard read requires a secure-context user gesture; unavailable requests use the internal register and produce an actionable footer status. Browser drag-and-drop is excluded for ordinary remote clients. A client renders and emits file-drop interaction only when snapshot capabilities include `local_file_drop`; the common command dispatcher independently enforces the same grant.
+The API publishes the authoritative keymap, required command metadata, semantic
+hit targets, clipboard requests, and the current principal's host-granted
+capability IDs in per-client snapshot state. Clients map raw events to semantic
+commands. The default keymap uses canonical `Escape` as its leader. Text
+commitment, Backspace/Delete, Enter, Tab, arrows, Home/End, and Page Up/Down
+remain direct semantic bindings; commands that do not require those primitive
+keys use accepted leader-prefixed sequences. The complete default sequence
+fixture, rather than command-list position, is authoritative.
+`settings.open` defaults to `[Escape, KeyF, KeyT]` with context `*`. Context
+`*` means global: it is evaluated before focus- or mode-specific bindings and
+remains active in every client state. A browser-deliverable sequence is observed
+by Chromium, Firefox, and WebKit in a normal SSG page, activates no browser or
+OS function, and can be suppressed after matching begins. Named server-owned
+keymaps may choose another leader or explicit prefix-free sequences, but
+validation rejects a keymap that lacks at least one browser-deliverable global
+`settings.open` sequence. The accepted required-command fixture is the exact
+union of normative command IDs in all P0 feature specs and is reviewed before
+registry/keymap implementation. Every entry records its owning task, required
+capabilities, and Lua/keymap/palette availability.
+`file.open_dropped_content` is the only capability-gated entry: it requires
+`local_file_drop` and is excluded from Lua, keymaps, and the palette. Its
+server-described local-file control is focusable and keyboard invokable because
+the browser must obtain a user-selected payload before submitting the command.
+Clipboard read has the same browser-gesture constraint; its keyboard command is
+the qualifying gesture when the browser permits it. Every other required entry
+has no required capability and is available through Lua, keymap, and palette
+surfaces. Clipboard denial uses the internal register and produces an
+actionable footer status. Browser drag-and-drop is excluded for ordinary remote
+clients. A client renders and emits file ingress only when the snapshot
+describes that UI element and capabilities include `local_file_drop`; common
+dispatch independently enforces the same grant.
 
 ## Invariants
 
-I6, I16, I17, I18, I20 from `doc/spec.md`.
+I6, I7, I16, I17, I18, I20, I24 from `doc/spec.md`.
 
 ## Considerations
 
 - IME submits committed UTF-8 text, never raw composition internals.
 - Browser-reserved chords cannot be required defaults. The accepted denylist
-  lives at `tests/browser/fixtures/reserved-chords.json`.
-- The default keymap covers exactly the 159 catalog entries whose `keymap`
-  field is true. The capability-gated ingress command
-  `file.open_dropped_content` has no binding; coverage tests reject either a
-  missing eligible command or a binding for that excluded command.
+  lives at `tests/browser/fixtures/reserved-chords.json` and validates named
+  keymaps as well as defaults.
+- The reserved fixture includes `Ctrl+Shift+KeyM`; it is not a valid default
+  because Chromium-based browsers consume it for device/mobile emulation.
+- Pressing `Escape` starts the leader sequence and suppresses that key event in
+  every focus state, including prompt and settings inputs. `Escape` has no
+  implicit cancel/dismiss meaning; cancel and dismiss are ordinary
+  server-published command bindings. Pressing `Escape` again restarts the
+  leader unless an explicit complete `[Escape, Escape]` binding exists in the
+  active context. A non-matching continuation clears pending leader state and
+  is not suppressed, so its normal text/control behavior continues. Pending
+  leader state is client-local input-capture state derived exclusively from the
+  current server-published keymap and is cleared on keymap or focus changes.
+  Bindings in one context are prefix-free, so no timeout or client-owned
+  disambiguation policy is required.
+- `settings.open` is resolved before focus- or mode-specific bindings. Invoking
+  it cancels any pending leader sequence, exits distraction-free mode when
+  necessary, opens the server-described configuration input, and focuses its
+  first control. It does not depend on an open document or writable buffer.
+- The default keymap covers every catalog entry whose `keymap` field is true;
+  direct primitive aliases may give a command more than one binding. The
+  capability-gated ingress command `file.open_dropped_content` has no binding;
+  coverage tests reject either a missing eligible command or a binding for that
+  excluded command.
 - Semantic input data reuses the existing text-input, selection, and viewport
   command argument types. IME input is a validated committed UTF-8 value and
   never exposes composition internals. Hit targets carry sufficient typed
@@ -88,20 +137,33 @@ I6, I16, I17, I18, I20 from `doc/spec.md`.
 
 ## Acceptance (Definition of Done)
 
-- Observable: every required interactive command has a browser-deliverable route or a documented gesture-gated flow.
+- Observable: every required interactive command has a browser-deliverable
+  route or a documented gesture-gated flow; `Escape`, `F`, `T` opens and focuses
+  server-described configuration input from every enumerated client state.
 - Budgets: input-to-command translation adds no backend work.
 - Gates: Chromium, Firefox, and WebKit conformance suites are green.
-- Oracles: captured event fixtures, reserved-chord denylist, IME goldens, clipboard permission/gesture cases, required-command coverage, and local-accept/remote-reject file-drop capability cases.
+- Oracles: captured event fixtures; a denylist containing
+  `Ctrl+Shift+KeyM`; hand-authored `Escape` leader and
+  `settings.open = [Escape, KeyF, KeyT]` cases; table-driven configuration-open
+  cases covering editor, panel, prompt, empty, read-only, diff, and
+  distraction-free states; atomic rejection of keymaps without a global
+  configuration binding; IME goldens; clipboard permission/gesture cases;
+  required-command coverage; and local-accept/remote-reject file-drop
+  capability cases.
 
 ## Plan
 
 | # | Step | Files | Oracle | Invariants |
 |---|------|-------|--------|------------|
-| 1 | Accept required-command and browser-reserved fixtures | `data/required-commands.json`, `tests/browser/fixtures/reserved-chords.json` | exact comparison with the union of all P0 normative lists, independently maintained category/count/owner data, exact capability and Lua/keymap/palette exclusions, and browser docs/capture | I6, I18, I20 |
-| 2 | Define keymap and hit-target API data | `include/ssg/input.h`, `src/input.cpp`, `data/default-keymap.json`, `tests/test_input.cpp` | exact coverage of the 159 keymap-eligible commands, rejection of excluded/duplicate/unreachable/reserved bindings, committed UTF-8 and semantic hit-target round trips, and backend dependency scan | I16, I17 |
+| 1 | Accept required-command and browser-reserved fixtures | `data/required-commands.json`, `tests/browser/fixtures/reserved-chords.json` | exact comparison with the union of all P0 normative lists, independently maintained category/count/owner data, exact capability and Lua/keymap/palette exclusions, and browser docs/capture including `Ctrl+Shift+KeyM` rejection | I6, I18, I20 |
+| 2 | Define direct primitive bindings, the `Escape` default leader, global configuration binding, context/prefix validation, and hit-target API data | `include/ssg/input.h`, `src/input.cpp`, `data/default-keymap.json`, `tests/browser/fixtures/default-keymap.json`, `tests/test_input.cpp` | independently accepted direct/leader sequence fixture including `settings.open = [Escape, KeyF, KeyT]`; complete keymap-eligible command coverage; atomic rejection of excluded, duplicate, unreachable, reserved, ambiguous-prefix, or configuration-lockout bindings; committed UTF-8 and semantic hit-target round trips; backend dependency scan | I6, I16, I17, I24 |
 | 3 | Implement the test-only browser input, IME, mouse, clipboard, and file-drop conformance harness without the product browser fixture | `tests/browser/input/*`, `cmake/components/browser-input-conformance.cmake` | checked-in event/semantic cases plus a dependency-free loopback runner against already-installed Chromium, Firefox, and WebKit; IME commit, clipboard denial/internal fallback/status, reserved chord, pointer/wheel/scrollbar, and local-only file-drop cases | I6, I18 |
-| 4 | Implement the minimal product-style browser fixture and complete browser-client oracle | `examples/browser/*`, `tests/browser/client/*`, `cmake/components/browser-client.cmake` | canonical C++ wire fixtures, direct-API/WebSocket state parity, scripted Chromium/Firefox/WebKit workflows, API-sourced accessibility snapshots, and remote/local-capability cases | I6, I16, I17, I18, I20 |
+| 4 | Implement the thin product browser input adapter, including leader restart/reset and global configuration access, and complete browser-client oracle | `examples/browser/*`, `tests/browser/client/*`, `cmake/components/browser-client.cmake` | canonical C++ wire fixtures, direct-API/WebSocket state parity, scripted Chromium/Firefox/WebKit leader and configuration-access workflows in every enumerated state, API-sourced accessibility snapshots, and remote/local-capability cases | I6, I7, I16, I17, I18, I20, I24 |
 
 ## Rationale (optional, skippable)
 
 Browser feasibility is a product boundary, not a later client compatibility task.
+`Escape` is the initial leader because it is unmodified, terminal-friendly,
+and accepted as sufficient for the current product. Direct primitive bindings
+preserve modeless editing fluency, while the global settings sequence makes a
+later server-owned remap recoverable.

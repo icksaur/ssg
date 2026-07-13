@@ -2,11 +2,30 @@
 
 ## Goals
 
-Emit renderer-neutral wrapped text, scrollbars, hit targets, fixed shell geometry, accessible labels, and exactly 16 authoritative colors for every client.
+Emit one keyboard-first, renderer-neutral product layout with wrapped text,
+scrollbars, hit targets, fixed shell geometry, accessible labels, and exactly
+16 authoritative colors for every client. Browser, TUI, and desktop clients
+must present the same server-owned regions and actions rather than inventing
+client-specific shells.
 
 ## Design
 
-The backend emits cell runs, semantic roles, rectangles, and hit-test metadata; clients render them. `Theme` is the only color source. Its scoped `SemanticRole` catalog and syntax-scope catalog are exhaustive, unknown syntax scopes resolve to the cataloged plain-text role, and every theme maps both catalogs to palette indices. The shared co-visibility relation in `tests/fixtures/theme_roles.json` applies to every theme rather than being theme-defined. Theme snapshots expose palette and mappings in index/catalog order so equal themes produce byte-for-byte deterministic snapshots. The shell, collapse priorities, wrap behavior, and per-client viewport rules are defined in `doc/spec.md`.
+The backend emits every UI element as server-owned cell runs, semantic roles,
+grid-aligned rectangles, control semantics, and hit-test metadata; clients
+render them and MUST NOT add elements absent from the current view model.
+Clients MAY adapt borders, emphasis, and platform accessibility markup for
+readability without changing grid geometry, element identity, focus order,
+semantics, or behavior. Every visible foreground, background, border,
+selection, focus, and decoration color resolves through the active 16-entry
+`Theme`; styling may not introduce gradients, shadows, opacity-derived colors,
+or platform accent colors. Its scoped `SemanticRole` catalog and syntax-scope
+catalog are exhaustive, unknown syntax scopes resolve to the cataloged
+plain-text role, and every theme maps both catalogs to palette indices. The
+shared co-visibility relation in `tests/fixtures/theme_roles.json` applies to
+every theme rather than being theme-defined. Theme snapshots expose palette and
+mappings in index/catalog order so equal themes produce byte-for-byte
+deterministic snapshots. The shell, collapse priorities, wrap behavior, and
+per-client viewport rules are defined in `doc/spec.md`.
 
 Normative commands owned by this feature:
 
@@ -77,6 +96,64 @@ would become narrower than 20 columns. Pane topology remains authoritative;
 when a client viewport cannot give every pane at least one content cell and a
 one-column scrollbar, that client shows only the active pane.
 
+### Intended product layout
+
+Normal mode has the following top-to-bottom and left-to-right composition. All
+geometry is expressed in monospace cells by `ShellViewState`; CSS pixels,
+terminal cells, and desktop coordinates are renderer concerns.
+
+| Region | Placement | Contents and behavior |
+|---|---|---|
+| Header | Full width, fixed first row | Active command or palette query, current workspace-relative path, and editor mode. Fields collapse by server-provided rank when space is limited. |
+| Left panel | Below the header and above the footer, at the left edge | One collapsible tree surface. Its active server-owned provider is Filesystem, Git, Symbols/Tree-sitter, or a future registered tree provider. It targets 24 columns, never renders below 12 columns, and collapses before shrinking the editor below 20 columns. |
+| Tab bar | First row of the main column, to the right of a visible panel | One shared tab row for all open document, diff, and streaming tabs. It displays server-provided order, labels, active state, dirty/recovery state, and mode. |
+| Prompt surface | Zero to three rows directly below the tab bar in the main column | Non-modal command arguments, path entry, find, replace, settings, and command-palette interaction. Opening a prompt reduces pane height; it never overlays or blocks the editor. |
+| Pane area | Remaining main-column space | One or more server-owned editor panes arranged by the authoritative split topology. Each pane contains document cell runs, selections, carets, diagnostics, and one right-edge vertical scrollbar. |
+| Footer | Full width, fixed last row | Actionable status followed by follow state, background activity, encoding, line ending, Git branch, Git repository, file type, and file size fields. Fields collapse by server-provided rank; status actions remain keyboard reachable. |
+
+The left panel occupies the full middle height, beside the tab bar, prompt, and
+pane area. When hidden, the main column expands to the full viewport width.
+The header and footer always span both columns. There is no permanent
+client-owned toolbar: Save, Open, Save As, panel changes, tab operations, and
+all other user actions are commands reached through the authoritative keymap,
+command palette, prompt surfaces, or optional server-described hit targets.
+
+The filesystem provider is rooted at the server's canonical CWD. Directory
+nodes expand in place and file nodes open workspace-relative paths in tabs.
+Git and syntax providers replace the panel contents without changing its
+geometry. Provider selection, expansion, focus, selection, and node actions are
+server state and survive a client reconnect. Provider data, identity,
+refresh, and command behavior are owned by the tree provider contract in
+`doc/features/workspace-live-diffs.md`; this specification owns only panel
+placement and projection.
+
+The tab bar is shared rather than repeated per pane. Pane focus determines
+which tab/document is active for commands. Split commands divide only the pane
+area; they do not duplicate the header, panel, tab bar, prompt, or footer.
+When space cannot represent every split, only the active pane is projected for
+that client while the server preserves the complete topology.
+
+Distraction-free mode removes the header, footer, panel, tab bar, and prompt
+projection and gives the full viewport to the pane area. It preserves all
+hidden state and restores the same layout when disabled. Empty workspaces use
+the pane area for a server-described empty-state surface; clients must not
+substitute onboarding, upload, or configuration UI.
+
+Every visible action has an authoritative command and browser-deliverable
+key sequence. Pointer hit targets and browser file selection may supplement
+keyboard workflows but cannot be the only way to invoke an action. Focus order
+is server-described and follows header, tab bar, prompt when present, panel,
+active pane then other panes, and footer actions; direct focus commands may
+bypass that traversal. Scrollbars are pointer hit targets rather than focus
+stops, and the empty-state surface is informational; every action either
+surface exposes remains reachable through the authoritative keymap.
+
+Themes, region visibility, panel providers, tab and pane topology, labels,
+collapse ranks, key bindings, prompts, statuses, and hit targets arrive through
+snapshots or deltas. A client may adapt typography and native accessibility
+markup to its platform, but it may not add controls, choose defaults, retain
+authoritative UI state, or implement command behavior.
+
 `data/ui/status_fields.json` is an array of objects with `id`, `region`,
 `collapse_rank`, and non-empty `accessible_label`. Lower ranks are retained
 first. Header order is active command/palette query, current path, then mode.
@@ -94,12 +171,28 @@ columns only; thumb/track geometry belongs to `viewport-wrap-scrollbar`.
 
 I7, I8, I15, I17, I22, I23 from `doc/spec.md`.
 
+- **UI1 — Keyboard refinement of I6/I24:** every command-backed action has a
+  browser-deliverable route through the server-owned keymap. Capability-gated
+  platform ingress uses a server-described focusable control that is keyboard
+  invokable; pointer-only actions are forbidden.
+- **UI2 — Authority refinement of I7/I17:** themes, configuration, keymaps,
+  complete layout, UI element identity/semantics/state, labels, focus order,
+  and behavior originate on the server and cross the typed client API.
+- **UI3 — Rendering refinement of I7/I8/I17/I22:** clients capture platform
+  input, render server view models on the server-described monospace grid, and
+  expose native accessibility semantics; they MUST NOT invent product elements,
+  controls, defaults, state transitions, or editor behavior. Readability
+  styling MUST use only active-theme palette indices and MUST NOT change grid
+  geometry or semantics.
+
 ## Considerations
 
 - Zoom/font size changes client viewport dimensions only.
 - Wrapped visual rows never change document line identity.
 - Every status/action node has a non-empty accessible label.
 - Every cursor, selection, edit, undo/redo, and find-result transition keeps the primary caret visible in each displaying viewport.
+- A client-created control or action that is absent from the current snapshot
+  is a contract violation.
 
 ## Risks and Mitigations
 
@@ -108,7 +201,10 @@ I7, I8, I15, I17, I22, I23 from `doc/spec.md`.
 
 ## Acceptance (Definition of Done)
 
-- Observable: equal viewport inputs produce equal shell/cell snapshots across clients.
+- Observable: equal viewport inputs produce equal shell/cell snapshots across
+  clients; browser, TUI, and desktop render the specified region order without
+  adding client-owned controls; every rendered action is executable using only
+  browser-deliverable keyboard input.
 - In-process TUI fixtures receive terminal events as committed text, key
   strokes, or semantic hit targets, resolve them through snapshot input models,
   and submit typed commands without owning editor state. Because
@@ -120,7 +216,11 @@ I7, I8, I15, I17, I22, I23 from `doc/spec.md`.
   define or derive colors.
 - Budgets: unchanged viewports emit no cell-run payload.
 - Gates: layout/theme tests and browser accessibility snapshots are green.
-- Oracles: the official Unicode 15.0.0 `GraphemeBreakTest.txt` corpus, hand-authored Unicode/wrap/geometry/scrollbar goldens, accessibility snapshots, and color-origin properties.
+- Oracles: the official Unicode 15.0.0 `GraphemeBreakTest.txt` corpus,
+  hand-authored Unicode/wrap/geometry/scrollbar goldens, accessibility
+  snapshots, color-origin properties, exact rendered-control-to-command/keymap
+  coverage, supplemented by source scans rejecting client-owned controls or
+  defaults.
 
 ## Cell-width rules (normative, referenced by Plan steps 1a and 1b)
 
@@ -216,9 +316,9 @@ replacement payload; changed states carry one complete replacement state.
 |---|------|------|-------|--------|------------|
 | 1a | Implement grapheme segmentation and per-logical-line cell runs (no wrapping, no scrollbar, no viewport) | `unicode-cell-layout` (Wave 1) | `include/ssg/layout.h`, `src/layout.cpp`, `data/unicode/`, `tests/fixtures/layout/cells/`, `tests/test_cell_layout.cpp`, `tests/test_gcb_oracle.cpp`, `cmake/components/unicode-cell-layout.cmake` | Official Unicode 15.0.0 `GraphemeBreakTest.txt` corpus plus hand-authored combining, emoji, double-width, tab, control, and invalid-UTF-8 cell-run goldens | I7 |
 | 1b | Implement visual-row wrapping, viewport slicing, scrolling, scrollbar metrics, and cell hit targets atop cell runs | `viewport-wrap-scrollbar` (Wave 2) | `include/ssg/viewport.h`, `src/viewport.cpp`, `tests/fixtures/layout/viewports/`, `tests/test_viewport.cpp`, `cmake/components/viewport-wrap-scrollbar.cmake` | Hand-authored empty/short/wide/wrapped/tiny viewport, scrollbar, and hit-target goldens plus bounds properties | I7 |
-| 2 | Implement the fixed shell, opaque prompt reservation, footer field/action rectangles, and accessible shell labels | `shell-layout` (Wave 2) | `include/ssg/ui_layout.h`, `src/ui_layout.cpp`, `data/ui/status_fields.json`, `tests/test_ui_layout.cpp` | shell rectangle, collapse-priority, and accessibility goldens | I15, I17 |
+| 2 | Implement the fixed shell, opaque prompt reservation, footer field/action rectangles, accessible shell labels, and keyboard/server-ownership checks | `shell-layout` (Wave 2) | `include/ssg/ui_layout.h`, `src/ui_layout.cpp`, `data/ui/status_fields.json`, `tests/test_ui_layout.cpp`, `tests/browser/client/*`, `cmake/components/shell-layout.cmake` | normal and distraction-free shell rectangle goldens, collapse-priority and accessibility goldens, exact rendered-control command/keymap coverage, supplemented by a client-default source scan | I15, I17, UI1, UI2, UI3 |
 | 2a | Implement non-modal prompt contents and the bounded actionable status queue | `prompt-status-surface` (Wave 3) | `include/ssg/prompt.h`, `include/ssg/status.h`, `src/prompt.cpp`, `src/status.cpp`, `tests/test_prompt_status.cpp`, `cmake/components/prompt-status-surface.cmake` | prompt geometry goldens, priority/queue transition tables, stale-action rejection, and accessible-label snapshots | I15, I17, I19 |
-| 3 | Implement the sole-source 16-color theme model | `theme-model` (Wave 1) | `include/ssg/theme.h`, `src/theme.cpp`, `data/themes/*`, `tests/fixtures/theme_roles.json`, `tests/test_theme.cpp` | exact indexed cardinality; exhaustive semantic/syntax mappings; shared co-visible-role distinctness; deterministic snapshots; source/config scans rejecting literal or computed colors outside theme data | I8, I22 |
+| 3 | Implement the sole-source 16-color theme model | `theme-model` (Wave 1) | `include/ssg/theme.h`, `src/theme.cpp`, `data/themes/*`, `tests/fixtures/theme_roles.json`, `tests/test_theme.cpp`, `cmake/components/theme-model.cmake` | exact indexed cardinality; exhaustive semantic/syntax mappings; shared co-visible-role distinctness; deterministic snapshots; source/config scans rejecting literal or computed colors outside theme data | I8, I22 |
 
 ## Rationale (optional, skippable)
 

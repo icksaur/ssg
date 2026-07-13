@@ -1,19 +1,40 @@
 # Copilot instructions
 
-Read `doc/spec.md`, `doc/learnings.md`, `code-quality.md`,
-`cpp-lib-values.md`, and `process.md` before changing SSG.
+Read `doc/spec.md`, `doc/learnings.md`, `code-quality.md`, and
+`cpp-lib-values.md` before changing SSG.
+
+Use the workflow: specification, specification review, implementation, code
+review. Do not begin implementation before warranted specification-review
+findings are folded into the specification.
 
 ## Cross-cutting invariants
 
 - The C++ library is the authoritative source of editor, workspace, command,
   and view-model state.
+- SSG is keyboard-first. Every user-visible action must be operable using
+  browser-deliverable keyboard input. Editor commands use the authoritative
+  keymap. Capability-gated platform ingress that requires browser-owned payload
+  selection, such as choosing a local file, uses a server-described focusable
+  control that is keyboard invokable; pointer interaction may supplement but
+  never replace keyboard access.
+- The server owns themes, configuration, keymaps, layout, UI elements, and
+  editor behavior. Clients are thin input-and-rendering adapters and MUST NOT
+  invent UI elements, product behavior, state, or defaults.
+- Every client MUST expose a server-owned configuration input through an
+  authoritative browser-deliverable global key binding that works in every
+  client state. Configuration changes that remove all such bindings are
+  invalid.
+- Every UI element occupies server-described cells on the shared monospace
+  grid. Clients MAY style those elements for platform readability without
+  changing geometry, semantics, or behavior, and every visible color MUST come
+  from the active exactly-16-color server theme.
 - Every interaction enters through the typed client API and every observable
   view leaves through snapshots or deltas on that API. The complete product
   must work over one ordered WebSocket connection; do not add an out-of-band
   UI, filesystem, clipboard, status, or control channel.
-- The backend implements editor semantics, not rendering or platform input.
-  Browser, TUI, and desktop clients capture input and render API view models.
-  They must not implement editor behavior.
+- The backend implements editor and UI semantics, not rendering or platform
+  input. Browser, TUI, and desktop clients capture input, map server-published
+  keymaps, and render API view models on the server-described grid.
 - Do not add a feature unless a current standards-based web browser can expose
   it through the client API. Browser sandboxing may require a backend service,
   but the browser client must retain the complete workflow.

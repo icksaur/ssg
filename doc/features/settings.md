@@ -45,15 +45,27 @@ return a bounded compensation record that restores the prior scoped presence
 or value. They publish typed view-state/delta data for downstream session and
 status assembly. This task has no dependency on those downstream surfaces.
 
+`settings.open` is the global configuration escape hatch. Downstream runtime
+assembly binds it before focus- or mode-specific commands and opens a
+server-described settings prompt with a focused input in every client state,
+including an empty workspace, an existing prompt, read-only/diff content, and
+distraction-free mode. Opening settings replaces an existing prompt and exits
+distraction-free projection so the input is visible; it does not mutate
+documents. Keymap selection or mutation is accepted only when the selected
+server-owned keymap retains at least one global browser-deliverable
+`settings.open` sequence.
+
 ## Invariants
 
-I4, I16, I18, I19, I20, I21, I22 from `doc/spec.md`.
+I4, I16, I17, I18, I19, I20, I21, I22, I24 from `doc/spec.md`.
 
 ## Considerations
 
 - Syntax packages provide default comment/bracket/indent rules, not mutable hidden state.
 - Theme settings choose a theme identity; literal colors remain forbidden outside `Theme`.
 - Invalid or unknown keys fail without changing effective settings.
+- Configuration input is a server-described prompt; clients do not invent a
+  settings form or retain unsent authoritative values.
 
 ## Risks and Mitigations
 
@@ -64,10 +76,15 @@ I4, I16, I18, I19, I20, I21, I22 from `doc/spec.md`.
 
 ## Acceptance (Definition of Done)
 
-- Observable: changing each required setting updates the relevant API view/behavior and is reversible without a dialog.
+- Observable: the global settings binding opens focused server-described
+  configuration input from every enumerated state; changing each required
+  setting updates the relevant API view/behavior and is reversible without a
+  dialog.
 - Budgets: settings resolution is bounded by the five fixed scopes.
 - Gates: project build, settings tests, and Linux/Windows persistence tests are green.
-- Oracles: hand-authored scope-resolution tables, exact/no-duplicate ownership
+- Oracles: table-driven global settings-open transitions, including prompt
+  replacement and distraction-free exit; keymap-lockout rejection;
+  hand-authored scope-resolution tables; exact/no-duplicate ownership
   of all six normative command IDs, schema round trips, invalid-value
   atomicity, restart persistence, and compensating-command restoration.
 
