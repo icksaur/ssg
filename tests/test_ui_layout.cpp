@@ -330,6 +330,20 @@ TEST(accessibility_leaf_nodes_carry_display_content) {
     if (header) ASSERT_TRUE(header->content.empty());
 }
 
+TEST(dirty_tab_content_shows_marker) {
+    auto value = request(80, 12);
+    value.tabs = {{"a.cpp", "a.cpp tab", true, true}};
+    ShellState state;
+    auto result = compute_shell_layout(value, state);
+    ASSERT_TRUE(result.accepted());
+    const AccessibilityNode* tab = nullptr;
+    for (const auto& node : result.view->accessibility_nodes) {
+        if (node.kind == ShellNodeKind::tab) tab = &node;
+    }
+    ASSERT_TRUE(tab != nullptr);
+    if (tab) ASSERT_EQ(tab->content, std::string{"a.cpp *"});
+}
+
 int main() {
     RUN(hand_authored_geometry_goldens);
     RUN(viewport_and_prompt_errors_are_typed);
@@ -338,6 +352,7 @@ int main() {
     RUN(exact_owned_command_set);
     RUN(accessibility_nodes_have_labels_and_roles);
     RUN(accessibility_leaf_nodes_carry_display_content);
+    RUN(dirty_tab_content_shows_marker);
     RUN(non_overlap_and_cardinality_properties);
     RUN(status_field_manifest_has_exact_order_and_labels);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << '\n';

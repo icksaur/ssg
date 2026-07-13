@@ -86,6 +86,7 @@ struct TabLabel {
     std::string title;
     std::string accessible_label;
     bool active = false;
+    bool dirty = false;
 };
 
 struct ShellLayoutRequest {

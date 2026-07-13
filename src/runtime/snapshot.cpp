@@ -38,7 +38,8 @@ PromptStatusViewState EditorRuntime::Impl::prompt_status_view(ViewportDimensions
 ShellViewState EditorRuntime::Impl::shell_view(ViewportDimensions dimensions) const {
     std::vector<TabLabel> labels;
     for (auto const& tab : tabs.view_state().tabs) {
-        labels.push_back({tab.label, tab.label, tabs.view_state().active == tab.id});
+        labels.push_back({tab.label, tab.label,
+                          tabs.view_state().active == tab.id, tab.dirty});
     }
     auto status_projection = status.footer_projection();
     auto follow_projection = follow.footer_projection();

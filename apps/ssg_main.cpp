@@ -170,6 +170,12 @@ int main(int argc, char** argv) {
                     command("edit.undo");
                 } else if (event.key == 'Z') {
                     command("edit.redo");
+                } else if (event.key == ']') {
+                    command("tab.next");
+                } else if (event.key == 'p') {
+                    command("tab.previous");
+                } else if (event.key == 'w') {
+                    command("tab.close");
                 }
                 break;
             case ssg::app::InputAction::text:

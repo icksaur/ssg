@@ -358,16 +358,18 @@ ShellLayoutResult compute_shell_layout(const ShellLayoutRequest& request,
         int tab_x = view.tab_bar->x;
         for (std::size_t i = 0; i < request.tabs.size(); ++i) {
             const auto& tab = request.tabs[i];
+            const std::string display =
+                tab.dirty ? tab.title + " *" : tab.title;
             const int width =
                 std::min(view.tab_bar->right() - tab_x,
-                         std::max(1, static_cast<int>(tab.title.size()) + 2));
+                         std::max(1, static_cast<int>(display.size()) + 2));
             if (width <= 0 || tab.accessible_label.empty()) break;
             add_node(view, ShellNodeKind::tab, "tab." + std::to_string(i),
                      tab.accessible_label,
                      {tab_x, view.tab_bar->y, width, 1},
                      tab.active ? SemanticRole::tab_active :
                                   SemanticRole::tab_inactive,
-                     tab.title);
+                     display);
             tab_x += width;
         }
 
