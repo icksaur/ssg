@@ -190,7 +190,6 @@ The designated-host limits are:
 
 ## Data and configuration
 
-- `data/default-keymap.json` — browser-deliverable default bindings
 - `data/required-commands.json` — exact required command catalog
 - `data/themes/` — bundled exactly-16-color themes
 - `data/unicode/` — pinned Unicode 15 source data and provenance

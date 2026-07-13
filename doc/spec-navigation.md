@@ -42,12 +42,13 @@ prompt (focus `prompt`).
 
 Key bindings carry a `context` string (`KeyBinding.context`): a binding applies
 when its context is `*` (global) or equals the current `FocusTarget` name
-(`editor`, `panel`, `prompt`).  `validate_keymap` treats a binding whose context
-is neither `*` nor a `FocusTarget` name as `unreachable_binding`.  A client
+(`editor`, `panel`, `prompt`).  `validate_keymap` rejects a binding whose context
+is neither `*` nor a `FocusTarget` name with `unknown_context` (see
+`doc/spec-keymap.md`).  A client
 resolves a keystroke against the published keymap **using the snapshot's focus as
 the context**; resolution is client-local so typing and command dispatch never
-round-trip (consistent with `doc/features/browser-input.md`, which owns the
-keymap and resolution model).  The same physical key can map to different
+round-trip (consistent with `doc/spec-keymap.md`, which owns the keymap and
+resolution model).  The same physical key can map to different
 commands per focus - Down is `cursor.line_down` in `editor`, `tree.select_next`
 in `panel`, and a prompt-list move in `prompt`.
 
@@ -58,7 +59,7 @@ is: the client resolves keys and owns the transient pending multi-key (leader)
 sequence locally, but the library owns how leader mode is *presented*.
 
 - Pending leader state is client-local input-capture state derived from the
-  server-published keymap (as in `browser-input.md`): bindings in one context are
+  server-published keymap (as in `doc/spec-keymap.md`): bindings in one context are
   prefix-free, so no timeout or server round-trip is needed to resolve a chord.
 - When the client enters, extends, or clears leader mode, it reports the current
   pending sequence to the library.  For the in-process terminal client this is an
@@ -97,7 +98,7 @@ current context's text sink.
 
 ### The Escape leader and cancel
 
-Escape is the leader prefix.  Following `browser-input.md`, context bindings are
+Escape is the leader prefix.  Following `doc/spec-keymap.md`, context bindings are
 **prefix-free**, so resolution is unambiguous without a timeout: `Escape` begins
 a pending sequence, and the next keys either complete a binding or clear it.
 Escape has no implicit cancel/dismiss meaning; cancel and dismiss are ordinary
@@ -174,7 +175,7 @@ area in a distinct theme role.
 
 - `FocusTarget` subsumes `ShellState.panel_focused`; that field is removed or
   made a derived accessor so the two can never disagree.
-- Leader resolution stays client-local per `browser-input.md`; this spec adds
+- Leader resolution stays client-local per `doc/spec-keymap.md`; this spec adds
   only the presentation seam (per-client reported pending sequence -> library
   leader hint).  The full distant-client perceived-latency input model
   (optimistic echo, coalescing, reconciliation) is explicitly deferred.
@@ -226,5 +227,4 @@ landed.  The remaining work:
 | A1 | Add reported leader sequence as per-client snapshot ingress (a `snapshot()` parameter threaded to the shell view); format the hint from the key sequence via a server key-name source | `include/ssg/editor_runtime.h`, `include/ssg/ui_layout.h`, `src/ui_layout.cpp`, `src/runtime/snapshot.cpp`, `src/editor_runtime.cpp`, `tests/test_ui_layout.cpp` | non-empty sequence yields a status hint whose text reflects the keys; two clients, one in leader, the other's snapshot renders no hint (per-client isolation) |
 | A2 | Render the theme-colored `leader:` hint in the status area | `src/render.cpp`, `tests/test_render.cpp` | render places the hint text in the status region in the leader theme role |
 | B | TUI derives the pending sequence from the published keymap and reports it via the snapshot parameter; replace hard-coded chords with keymap-driven local resolution | `apps/ssg_main.cpp`, `apps/ssg_terminal.{h,cpp}`, `tests/test_ssg_app.cpp` | `test_ssg_app` resolution table; PTY leader-hint demo |
-| C (deferred, with keymap/M6) | Assign keymap contexts (`*`/`editor`/`panel`/`prompt`), per-context text sinks, and `validate_keymap` context checks | `include/ssg/input.h`, `src/input.cpp`, `data/default-keymap.json`, `tests/test_input.cpp` | exact-command-per-context resolution; `*`-precedence; unreachable-context rejected |
-| C (deferred, with keymap/M6) | Assign keymap contexts (`*`/`editor`/`panel`/`prompt`), per-context text sinks, and `validate_keymap` context checks | `include/ssg/input.h`, `src/input.cpp`, `data/default-keymap.json`, `tests/test_input.cpp` | exact-command-per-context resolution; `*`-precedence; unreachable-context rejected |
+| C (done in `doc/spec-keymap.md`, M6) | Assign keymap contexts (`*`/`editor`/`panel`/`prompt`), per-context text routing, and `validate_keymap` context checks (`unknown_context`) | `include/ssg/input.h`, `src/input.cpp`, `tests/test_input.cpp` | exact-command-per-context resolution; `*`-precedence; unknown-context rejected — see `doc/spec-keymap.md` |
