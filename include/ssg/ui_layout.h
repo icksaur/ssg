@@ -65,6 +65,7 @@ struct AccessibilityNode {
     std::string label;
     Rect rect;
     SemanticRole role = SemanticRole::background;
+    std::string content;  // Display text for leaves; empty for containers/panes.
 
     friend bool operator==(const AccessibilityNode&, const AccessibilityNode&) = default;
 };

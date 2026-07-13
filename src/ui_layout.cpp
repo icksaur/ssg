@@ -98,9 +98,10 @@ void layout_panes(const PaneNode& node, Rect rect,
 }
 
 void add_node(ShellViewState& view, ShellNodeKind kind, std::string id,
-              std::string label, Rect rect, SemanticRole role) {
+              std::string label, Rect rect, SemanticRole role,
+              std::string content = {}) {
     view.accessibility_nodes.push_back(
-        {kind, std::move(id), std::move(label), rect, role});
+        {kind, std::move(id), std::move(label), rect, role, std::move(content)});
 }
 
 void add_fields(ShellViewState& view, const std::vector<StatusField>& fields,
@@ -129,7 +130,7 @@ void add_fields(ShellViewState& view, const std::vector<StatusField>& fields,
         if (x != row.x) ++x;
         const int width = static_cast<int>(field->value.size()) + 2;
         add_node(view, kind, field->id, field->accessible_label,
-                 {x, row.y, width, 1}, role);
+                 {x, row.y, width, 1}, role, field->value);
         x += width;
     }
 }
@@ -324,7 +325,7 @@ ShellLayoutResult compute_shell_layout(const ShellLayoutRequest& request,
             add_node(view, ShellNodeKind::footer_action, action->id,
                      action->accessible_label,
                      {action_x, view.footer->y, width, 1},
-                     SemanticRole::status_info);
+                     SemanticRole::status_info, action->accessible_label);
         }
         add_fields(view, request.footer_fields,
                    {view.footer->x, view.footer->y,
@@ -345,7 +346,8 @@ ShellLayoutResult compute_shell_layout(const ShellLayoutRequest& request,
             add_node(view, ShellNodeKind::panel_provider, "panel.provider",
                      request.panel_provider_label, *view.panel,
                      state.impl_->panel_focused ? SemanticRole::panel_active :
-                                                  SemanticRole::panel_inactive);
+                                                  SemanticRole::panel_inactive,
+                     request.panel_provider_label);
         }
 
         editor = {panel_width, 1, request.viewport.columns - panel_width,
@@ -364,7 +366,8 @@ ShellLayoutResult compute_shell_layout(const ShellLayoutRequest& request,
                      tab.accessible_label,
                      {tab_x, view.tab_bar->y, width, 1},
                      tab.active ? SemanticRole::tab_active :
-                                  SemanticRole::tab_inactive);
+                                  SemanticRole::tab_inactive,
+                     tab.title);
             tab_x += width;
         }
 
@@ -407,7 +410,7 @@ ShellLayoutResult compute_shell_layout(const ShellLayoutRequest& request,
         if (request.empty_state) {
             add_node(view, ShellNodeKind::empty_state,
                      "pane." + suffix + ".empty", "Empty editor",
-                     pane.content, SemanticRole::background);
+                     pane.content, SemanticRole::background, "Empty editor");
         }
     }
 

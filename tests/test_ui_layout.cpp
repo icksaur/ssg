@@ -303,6 +303,33 @@ TEST(status_field_manifest_has_exact_order_and_labels) {
 
 } // namespace
 
+TEST(accessibility_leaf_nodes_carry_display_content) {
+    ShellState state;
+    state.toggle_panel();
+    auto result = compute_shell_layout(request(80, 12), state);
+    ASSERT_TRUE(result.accepted());
+    const auto find = [&](ShellNodeKind kind,
+                          std::string_view id) -> const AccessibilityNode* {
+        for (const auto& node : result.view->accessibility_nodes) {
+            if (node.kind == kind && node.id == id) return &node;
+        }
+        return nullptr;
+    };
+    const auto* command = find(ShellNodeKind::header_field, "active_command");
+    ASSERT_TRUE(command != nullptr);
+    if (command) ASSERT_EQ(command->content, std::string{"INSERT"});
+    const auto* tab = find(ShellNodeKind::tab, "tab.0");
+    ASSERT_TRUE(tab != nullptr);
+    if (tab) ASSERT_EQ(tab->content, std::string{"main.cpp"});
+    const auto* provider = find(ShellNodeKind::panel_provider, "panel.provider");
+    ASSERT_TRUE(provider != nullptr);
+    if (provider) ASSERT_EQ(provider->content, std::string{"Files"});
+    // Container nodes carry no display text.
+    const auto* header = find(ShellNodeKind::header, "header");
+    ASSERT_TRUE(header != nullptr);
+    if (header) ASSERT_TRUE(header->content.empty());
+}
+
 int main() {
     RUN(hand_authored_geometry_goldens);
     RUN(viewport_and_prompt_errors_are_typed);
@@ -310,6 +337,7 @@ int main() {
     RUN(panel_commands_preserve_provider_state_when_hidden);
     RUN(exact_owned_command_set);
     RUN(accessibility_nodes_have_labels_and_roles);
+    RUN(accessibility_leaf_nodes_carry_display_content);
     RUN(non_overlap_and_cardinality_properties);
     RUN(status_field_manifest_has_exact_order_and_labels);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << '\n';

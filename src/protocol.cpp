@@ -2155,6 +2155,7 @@ ProtocolValue to_value(AccessibilityNode const& value) {
     fields.emplace_back("label", to_value(value.label));
     fields.emplace_back("rect", to_value(value.rect));
     fields.emplace_back("role", to_value(value.role));
+    fields.emplace_back("content", to_value(value.content));
     return ProtocolValue::make_object(std::move(fields));
 }
 bool decode_present(ProtocolValue const& value, std::optional<AccessibilityNode>& out) {
@@ -2165,8 +2166,9 @@ bool decode_present(ProtocolValue const& value, std::optional<AccessibilityNode>
     auto label = require_field<std::string>(value.field("label"));
     auto rect = require_field<Rect>(value.field("rect"));
     auto role = require_field<SemanticRole>(value.field("role"));
-    if (!kind || !id || !label || !rect || !role) return false;
-    out.emplace(AccessibilityNode{*kind, *id, *label, *rect, *role});
+    auto content = require_field<std::string>(value.field("content"));
+    if (!kind || !id || !label || !rect || !role || !content) return false;
+    out.emplace(AccessibilityNode{*kind, *id, *label, *rect, *role, *content});
     return true;
 }
 
