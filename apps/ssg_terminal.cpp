@@ -81,7 +81,144 @@ std::int64_t parse_decimal(std::string_view text, std::size_t& pos) {
     return value;
 }
 
+// The named KeyStroke code for a single printable ASCII byte, or "" if the byte
+// has no keycode we bind or route as a chord.  Letters fold to KeyA..KeyZ with a
+// shift flag; the code carries no shift itself (the caller sets it).
+std::string ascii_key_code(unsigned char byte) {
+    if (byte >= 'a' && byte <= 'z') return std::string{"Key"} + static_cast<char>(byte - 'a' + 'A');
+    if (byte >= 'A' && byte <= 'Z') return std::string{"Key"} + static_cast<char>(byte);
+    if (byte >= '0' && byte <= '9') return std::string{"Digit"} + static_cast<char>(byte);
+    switch (byte) {
+    case '[': return "BracketLeft";
+    case ']': return "BracketRight";
+    case '\\': return "Backslash";
+    case ';': return "Semicolon";
+    case '\'': return "Quote";
+    case ',': return "Comma";
+    case '.': return "Period";
+    case '/': return "Slash";
+    case '-': return "Minus";
+    case '=': return "Equal";
+    case '`': return "Backquote";
+    case ' ': return "Space";
+    default: return {};
+    }
+}
+
+// Length of the UTF-8 sequence introduced by `lead`, or 0 for a continuation or
+// invalid lead byte.
+std::size_t utf8_length(unsigned char lead) {
+    if (lead < 0x80) return 1;
+    if (lead >= 0xF0) return 4;
+    if (lead >= 0xE0) return 3;
+    if (lead >= 0xC0) return 2;
+    return 0;
+}
+
 }  // namespace
+
+Decoded decode_input(std::string_view bytes, bool input_exhausted,
+                     std::size_t& consumed) {
+    consumed = 0;
+    if (bytes.empty()) return {};
+
+    auto const first = static_cast<unsigned char>(bytes[0]);
+
+    if (first == '\r' || first == '\n') {
+        consumed = 1;
+        return {DecodeStatus::key, ssg::KeyStroke{"Enter"}, {}, 0};
+    }
+    if (first == 0x7f || first == 0x08) {
+        consumed = 1;
+        return {DecodeStatus::key, ssg::KeyStroke{"Backspace"}, {}, 0};
+    }
+    if (first == '\t') {
+        consumed = 1;
+        return {DecodeStatus::key, ssg::KeyStroke{"Tab"}, {}, 0};
+    }
+    if (first == 0x1b) {
+        if (bytes.size() < 2) {
+            // A lone ESC: a complete Escape stroke only once input is exhausted;
+            // otherwise wait for the byte that disambiguates CSI vs. chord.
+            if (input_exhausted) {
+                consumed = 1;
+                return {DecodeStatus::key, ssg::KeyStroke{"Escape"}, {}, 0};
+            }
+            return {DecodeStatus::incomplete, {}, {}, 0};
+        }
+        auto const second = static_cast<unsigned char>(bytes[1]);
+        if (second != '[' && second != 'O') {
+            // ESC followed by a non-CSI byte: ESC is a standalone Escape stroke;
+            // the next byte is decoded on the following call.
+            consumed = 1;
+            return {DecodeStatus::key, ssg::KeyStroke{"Escape"}, {}, 0};
+        }
+        if (bytes.size() < 3) return {DecodeStatus::incomplete, {}, {}, 0};
+        auto const third = static_cast<unsigned char>(bytes[2]);
+        switch (third) {
+        case 'A': consumed = 3; return {DecodeStatus::key, ssg::KeyStroke{"ArrowUp"}, {}, 0};
+        case 'B': consumed = 3; return {DecodeStatus::key, ssg::KeyStroke{"ArrowDown"}, {}, 0};
+        case 'C': consumed = 3; return {DecodeStatus::key, ssg::KeyStroke{"ArrowRight"}, {}, 0};
+        case 'D': consumed = 3; return {DecodeStatus::key, ssg::KeyStroke{"ArrowLeft"}, {}, 0};
+        case 'H': consumed = 3; return {DecodeStatus::key, ssg::KeyStroke{"Home"}, {}, 0};
+        case 'F': consumed = 3; return {DecodeStatus::key, ssg::KeyStroke{"End"}, {}, 0};
+        case '5':
+        case '6': {
+            if (bytes.size() < 4) return {DecodeStatus::incomplete, {}, {}, 0};
+            consumed = 4;
+            if (bytes[3] == '~') {
+                return {DecodeStatus::key,
+                        ssg::KeyStroke{third == '5' ? "PageUp" : "PageDown"}, {}, 0};
+            }
+            return {DecodeStatus::none, {}, {}, 0};
+        }
+        case '<': {
+            // SGR mouse: ESC [ < Cb ; Cx ; Cy (M|m).  Wheel up 64, down 65.
+            std::size_t end = 3;
+            while (end < bytes.size() && bytes[end] != 'M' && bytes[end] != 'm') ++end;
+            if (end >= bytes.size()) return {DecodeStatus::incomplete, {}, {}, 0};
+            std::size_t pos = 3;
+            auto const button = parse_decimal(bytes, pos);
+            consumed = end + 1;
+            if (button == 64) return {DecodeStatus::scroll, {}, {}, -3};
+            if (button == 65) return {DecodeStatus::scroll, {}, {}, 3};
+            return {DecodeStatus::none, {}, {}, 0};
+        }
+        case 'M': {
+            // Legacy X10 mouse: ESC [ M b x y.  Wheel up 0x60, down 0x61.
+            if (bytes.size() < 6) return {DecodeStatus::incomplete, {}, {}, 0};
+            auto const button = static_cast<unsigned char>(bytes[3]);
+            consumed = 6;
+            if (button == 0x60) return {DecodeStatus::scroll, {}, {}, -3};
+            if (button == 0x61) return {DecodeStatus::scroll, {}, {}, 3};
+            return {DecodeStatus::none, {}, {}, 0};
+        }
+        default:
+            consumed = 3;  // Unknown CSI: skip its introducer conservatively.
+            return {DecodeStatus::none, {}, {}, 0};
+        }
+    }
+    if (first >= 0x20) {
+        auto const length = utf8_length(first);
+        if (length == 0) {
+            consumed = 1;  // Stray UTF-8 continuation byte; skip.
+            return {DecodeStatus::none, {}, {}, 0};
+        }
+        if (bytes.size() < length) return {DecodeStatus::incomplete, {}, {}, 0};
+        auto text = std::string{bytes.substr(0, length)};
+        consumed = length;
+        ssg::KeyStroke stroke;
+        if (length == 1) {
+            stroke.code = ascii_key_code(first);
+            stroke.shift = first >= 'A' && first <= 'Z';
+        }
+        // A printable commits text and, when it has a keycode, also carries a
+        // stroke so it can participate in a chord (e.g. Escape then KeyS).
+        return {DecodeStatus::key, stroke, std::move(text), 0};
+    }
+    consumed = 1;  // Other control byte: ignore.
+    return {DecodeStatus::none, {}, {}, 0};
+}
 
 InputEvent parse_input(std::string_view bytes, std::size_t& consumed) {
     consumed = 0;

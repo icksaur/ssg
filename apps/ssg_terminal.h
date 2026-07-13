@@ -59,6 +59,33 @@ struct InputEvent {
 [[nodiscard]] InputEvent parse_input(std::string_view bytes,
                                      std::size_t& consumed);
 
+// K3a decoder (doc/spec-keymap.md): the outcome of decoding one input event as a
+// KeyStroke (so it can drive keymap resolution) and/or committed text.
+enum class DecodeStatus : std::uint8_t {
+    none,        // A recognized but unhandled byte was skipped (consumed > 0).
+    incomplete,  // Only a partial escape sequence is buffered; read more bytes.
+    key,         // A KeyStroke (with optional committed text for printables).
+    scroll,      // A mouse-wheel event (signed line count in `scroll`).
+};
+
+struct Decoded {
+    DecodeStatus status = DecodeStatus::none;
+    ssg::KeyStroke stroke;    // status == key.
+    std::string text;         // status == key: the committed UTF-8 if the stroke
+                              // also commits text (a printable); empty otherwise.
+    std::int64_t scroll = 0;  // status == scroll: signed line count.
+};
+
+// Decode the first event from `bytes` into a KeyStroke / committed text / scroll.
+// `input_exhausted` resolves the terminal Escape ambiguity: a lone ESC byte is
+// both a complete Escape stroke and the start of a CSI/SS3 sequence.  When the
+// byte after ESC is buffered it disambiguates ('['/'O' -> CSI/SS3, else ESC is a
+// standalone Escape stroke and the next byte is decoded separately).  When no
+// byte follows ESC, `input_exhausted == true` (a bounded read returned nothing)
+// emits the Escape stroke; otherwise the result is `incomplete` (await bytes).
+[[nodiscard]] Decoded decode_input(std::string_view bytes, bool input_exhausted,
+                                   std::size_t& consumed);
+
 // The leader sequence to report while a chord is mid-entry, derived from the
 // undecoded input buffer: a lone Escape (or Escape followed by a non-CSI byte)
 // means the client is collecting a chord.  Empty when not in leader mode.  This
