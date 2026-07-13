@@ -134,7 +134,12 @@ The build system uses `cmake/components/*.cmake` manifests for component-local s
   configuration, keymaps, layout, UI element identity, semantics, and state but
   contains no platform input capture, DOM, terminal, pixel, glyph rasterization,
   or rendering implementation. Clients contain no editor behavior and must not
-  invent UI elements, controls, defaults, or authoritative state.
+  invent UI elements, controls, defaults, or authoritative state. A client may
+  compute a **latency-sensitive derived view** as a pure function of authoritative
+  server-published state plus local input — key-sequence (leader) resolution from
+  the published keymap, and fuzzy filtering/ranking of a published candidate list
+  — provided the authoritative catalog, command execution, and presentation
+  placement/color remain server-owned and the client invents no product data.
 - **I18 — Browser feasibility:** A feature is admissible only when a standards-based browser client can complete its workflow through available browser capabilities and the SSG API.
 - **I19 — Non-modal reversibility:** No command requires a blocking dialog. State-losing major actions take effect immediately and create a bounded recovery or compensating command before loss.
 - **I20 — Lua command parity:** Every user-visible command except lifecycle, transport authentication, raw platform I/O, host capability grants, and explicitly cataloged capability-gated ingress commands is callable through the versioned Lua API.

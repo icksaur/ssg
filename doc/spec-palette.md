@@ -42,8 +42,25 @@ The existing library `SearchController` ranking becomes the **reference ranker**
 it defines the canonical fuzzy-scoring algorithm as the oracle and remains the
 ranker for clients that cannot rank locally (the initial browser client may use
 it before a local ranker lands).  The TUI ranks locally against the published
-candidate list.  There are not two rankers that must agree on shared state: each
-client owns its own ranked view; the server owns only candidates and execution.
+candidate list.
+
+To avoid two rankers writing the same shared state, the ranked view is **not**
+shared session state.  The shared `SearchViewState.results`/`query`/
+`selected_index` fields are retired from the palette path; the authoritative
+shared palette state is only the per-mode candidate list plus which client (if
+any) has the palette open.  A client's query, ranked order, and selection are its
+own reported presentation view.  A server-ranking client reports nothing and
+instead requests the reference ranker, which computes **that client's** view
+without touching another client's; it is never a second authority over an
+already client-ranked view (P5).
+
+### Relationship to I17
+
+Client-side fuzzy ranking is permitted by the I17 carve-out for a
+latency-sensitive derived view: it is a pure function of the server-published
+candidate list and the local query, the authoritative catalog and command
+execution stay server-owned, and the library owns presentation placement and
+color.  This is the same sanctioned pattern as client-local leader resolution.
 
 ## Design
 
@@ -57,15 +74,28 @@ text (e.g. the bound key sequence for a command, or the directory for a file).
 The candidate list changes only when the catalog or workspace changes, not per
 keystroke, so it is not on the typing hot path.
 
+### The palette is a prompt
+
+`focus == prompt` holds exactly when a prompt surface is active
+(`doc/spec-navigation.md` N1), so the palette is a **`PromptKind::palette`**
+prompt, not an ad-hoc mode.  Unlike the find/replace/settings prompts, which
+render their controls in the reserved 1-3 rows below the tab bar, the palette
+prompt renders its query in the header status area and its candidates in the pane
+projection (below).  Opening it activates the prompt surface (so N1 holds and
+focus becomes `prompt`); its text-input value is the query, edited through the
+prompt text-input path and reported for header presentation.
+
 ### Header query and ghost-text completion
 
 When the palette is open, the header shows the query the user is typing.  After
 the query, the client's top-ranked candidate is shown as **ghost text** (the
 remaining characters of the best completion) in a dim theme role, fish-style.
-Accepting the completion (a bound key) fills the query with the top candidate;
-Enter on the query executes the selected candidate.  The query and ghost text are
-placed by the library in the header status area using theme roles; the client
-reports the query and the top completion as presentation input.
+Accepting the completion is a **client-local query edit** that fills the query
+input with the top candidate's label - it is not a command and mutates no
+document or command state, only the client's reported query view.  Enter on the
+query executes the selected candidate.  The query and ghost text are placed by the
+library in the header status area using theme roles; the client reports the query
+and the top completion as presentation input.
 
 ### Results pane
 
@@ -74,9 +104,14 @@ reuses the document pane's cell/scrollbar/selection rendering.  While the palett
 is open, the active pane projects the results list instead of the document: one
 candidate per row (`label` left, `detail` right-aligned/dim), the selected row
 highlighted with the selection role, and the shared scrollbar abstraction for
-overflow.  The underlying document state is unchanged and restored when the
-palette closes.  This stays within the "cells, no overlays, non-modal" invariants
-- it is a projection of the pane, not a floating popup.
+overflow.  The client reports only the bounded **visible window** of ranked rows
+(viewport height), not the full list, so per-keystroke reporting re-diffs at most
+a screenful.  The underlying document state is unchanged and restored (including
+scroll offset) when the palette closes.  When no document/tab is open, the palette
+projects over the empty-state surface and restores it on close.  With split panes,
+the palette projects into the active pane only; other panes keep their documents.
+This stays within the "cells, no overlays, non-modal" invariants (I7, I19) - it is
+a projection of the active pane, not a floating popup.
 
 Pane takeover fits `prompt` focus: `palette.open` opens the palette, focus becomes
 `prompt`, keys drive the palette (query edit, `palette.next`/`previous`,
@@ -93,9 +128,13 @@ client concern:
   for header presentation), not a per-keystroke server rank.
 - `palette.next` / `palette.previous` move the client selection; the client
   reports the new selected index.
-- `palette.execute` dispatches the **selected candidate's command id** directly.
-  Because the client owns the ranked view and selection, it sends the resolved id;
-  the server validates and dispatches it through the registry.
+- `palette.execute` dispatches the **selected candidate's command id**.  Its typed
+  argument becomes the candidate id (previously arg-less), so `required-commands.json`
+  records the new argument shape.  The server validates that the id is a member of
+  the currently published candidate set for the open palette mode **and** that it
+  passes normal capability gating before dispatching through the registry; an id
+  outside the published candidates or lacking capability is rejected, so a client
+  cannot reach a command the palette never offered.
 
 ## Invariants
 
@@ -112,11 +151,27 @@ client concern:
   not an overlay or modal; the underlying document state is preserved and
   restored on close.
 - P5 (reference ranker): the library ranker defines the canonical scoring oracle
-  and serves clients that do not rank locally; per-client ranked views need not be
-  byte-identical across clients.
+  and serves clients that do not rank locally.  A client that ranks locally MUST
+  match the reference ranker's order for the oracle fixture set; per-client views
+  may differ only when a client deliberately uses a different ranker.  The TUI
+  ranker is tested to match the oracle.
 
 ## Considerations
 
+- **Per-client palette vs shared focus (open design fork).**  `doc/spec-navigation.md`
+  makes focus per-session shared ("every attached client observes the same
+  focus"), but the palette query, ranking, and selection are per-client.  For P0
+  there is a single interactive client (the TUI), so the palette prompt and its
+  focus are treated as per-session and this tension does not bite.  Genuine
+  multi-client palettes require per-client focus and per-client prompt surfaces;
+  that is deferred with the multi-client input model and is called out here so the
+  P0 implementation does not assume it away.  Until then, a second attached client
+  observing another's open palette is out of scope.
+- The reported derived view is the bounded visible window (viewport rows), not the
+  full ranked list; the browser wire message for reporting the view is deferred
+  with the low-latency input model, exactly as the leader hint deferred its wire
+  message.  The initial server-ranked browser path reports nothing and requests
+  the reference ranker, which writes only that client's view.
 - Performance: client-side fuzzy over thousands of candidates (large workspaces)
   can be slow; the initial implementation ranks the full list per keystroke.
   Deferred optimizations (server-side pre-filtering to a bounded candidate window,
@@ -126,6 +181,11 @@ client concern:
   palette doubles as keybinding discovery; this depends on the keymap work (M6).
 - Ghost-text completion must never change document or command state; it is a
   presentation hint until explicitly accepted.
+- `SearchViewState.palette_open` is derived from `focus == prompt` with a
+  `PromptKind::palette` surface, not an independent flag.
+- The `SearchController` palette mutators (`open_palette`, `update_palette_query`,
+  `select_next`/`previous`, `execute_palette`, `rank_palette`) are retained solely
+  as the reference/browser ranker and are not on the TUI path.
 
 ## Risks and mitigations
 
@@ -161,7 +221,8 @@ client concern:
 
 | Step | Work | Files | Oracle |
 |---|---|---|---|
-| 1 | Publish a per-mode `PaletteCandidate` list on the snapshot from the command registry and workspace, with `detail` | `include/ssg/search.h` or a new palette header, `src/search.cpp`, `src/runtime/*.cpp`, `include/ssg/session_snapshot.h`, `src/protocol.cpp`, catalog/round-trip tests | candidate list matches the registry/workspace; round-trip |
-| 2 | Render the results pane: project ranked candidates into the active pane with selection highlight and scrollbar, restore document on close | `src/ui_layout.cpp`, `src/render.cpp`, `tests/test_ui_layout.cpp`, `tests/test_render.cpp` | projection render + restore-on-close test |
+| 1 | Publish a per-mode `PaletteCandidate {id,label,detail}` list on the snapshot from the command registry and workspace in a new `include/ssg/palette.h`; retire shared `SearchViewState` results/query/selection from the palette path | `include/ssg/palette.h`, `src/palette.cpp`, `src/runtime/*.cpp`, `src/protocol.cpp`, catalog/round-trip tests | candidate list matches the registry/workspace; round-trip |
+| 2 | Add the `PromptKind::palette` surface and render the results pane: project ranked candidates into the active pane with selection highlight and scrollbar, restore document/empty-state on close | `include/ssg/prompt.h`, `src/ui_layout.cpp`, `src/render.cpp`, `tests/test_ui_layout.cpp`, `tests/test_render.cpp` | projection render + restore-on-close test |
 | 3 | Header query + ghost-text completion in the status area | `src/ui_layout.cpp`, `src/render.cpp`, `tests/test_ui_layout.cpp` | header query/ghost-text render test |
-| 4 | Client-local fuzzy ranker in the TUI reporting query/selected view; wire `palette.*` and open under `prompt` focus; `palette.execute` sends the selected id | `apps/ssg_main.cpp`, `apps/ssg_terminal.{h,cpp}`, `tests/test_ssg_app.cpp` | client ranker matches reference-ranker order; PTY palette demo |
+| 4a | Client-local fuzzy ranker in the TUI reporting the bounded query/selected view | `apps/ssg_terminal.{h,cpp}`, `tests/test_ssg_app.cpp` | client ranker matches reference-ranker order for the fixture set |
+| 4b | Wire `palette.*` under `prompt` focus; `palette.execute` sends the selected id; server validates membership + capability | `apps/ssg_main.cpp`, `src/runtime/navigation.cpp`, `data/required-commands.json`, `tests/*` | PTY palette demo; execute-validation test |
