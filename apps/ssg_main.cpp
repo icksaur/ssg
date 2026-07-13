@@ -174,11 +174,14 @@ int main(int argc, char** argv) {
     };
     // Dispatch a resolved command, fulfilling prompt-context commands against the
     // client-local palette view when a palette prompt is open (doc/spec-keymap.md
-    // Prompt-focus fulfillment).
+    // Prompt-focus fulfillment).  Palette open/closed is reconciled from the
+    // server focus on the next snapshot, not forced here, so a failed submit (no
+    // candidate / rejected execute) leaves the prompt open rather than
+    // desynchronizing the client.
     auto dispatch_resolved = [&](std::string const& id) {
         if (palette_open && focus == ssg::FocusTarget::prompt) {
-            if (id == "prompt.submit") { execute_selected_candidate(); palette_open = false; return; }
-            if (id == "prompt.cancel") { dispatch("palette.close"); palette_open = false; return; }
+            if (id == "prompt.submit") { execute_selected_candidate(); return; }
+            if (id == "prompt.cancel") { dispatch("palette.close"); return; }
             if (id == "palette.next") { ++palette_selected; return; }
             if (id == "palette.previous") { if (palette_selected > 0) --palette_selected; return; }
         }
@@ -202,7 +205,7 @@ int main(int argc, char** argv) {
         }
     };
 
-    while (!quit) {
+    auto build_report = [&] {
         ssg::PaletteReport report;
         if (palette_open) {
             auto order = ssg::palette_rank(candidates, palette_query);
@@ -219,12 +222,26 @@ int main(int argc, char** argv) {
                 report.selected = static_cast<std::uint32_t>(palette_selected);
             }
         }
-        auto snapshot = runtime.snapshot(client, terminal_size(), chord, report);
+        return report;
+    };
+    // Take a fresh snapshot and adopt its authoritative client state (focus,
+    // keymap, published candidates).  Called before every input event so that
+    // coalesced input after a focus-changing command routes against the new
+    // focus rather than a stale one.
+    auto refresh = [&]() -> std::optional<ssg::SessionSnapshot> {
+        auto snapshot = runtime.snapshot(client, terminal_size(), chord, build_report());
         if (snapshot) {
             focus = snapshot->sections().shell.focus;
             keymap = snapshot->sections().keymap;
             candidates = snapshot->sections().palette.candidates;
             if (focus != ssg::FocusTarget::prompt) palette_open = false;
+        }
+        return snapshot;
+    };
+
+    while (!quit) {
+        auto snapshot = refresh();
+        if (snapshot) {
             auto grid = ssg::render(*snapshot);
             std::string frame = "\x1b[?25l";  // Hide the cursor while redrawing.
             frame += ssg::app::encode_ansi_frame(grid);
@@ -240,6 +257,7 @@ int main(int argc, char** argv) {
         if (read_bytes <= 0) break;
         buffer.append(bytes, static_cast<std::size_t>(read_bytes));
 
+        bool first_event = true;
         while (!buffer.empty() && !quit) {
             std::size_t consumed = 0;
             auto decoded = ssg::app::decode_input(buffer, false, consumed);
@@ -259,12 +277,22 @@ int main(int argc, char** argv) {
             }
             buffer.erase(0, consumed);
 
+            // Adopt fresh authoritative focus before every event after the first
+            // (the first uses the snapshot already taken at the top of the loop).
+            if (!first_event) refresh();
+            first_event = false;
+
             if (decoded.status == ssg::app::DecodeStatus::scroll) {
                 dispatch("view.scroll_lines", ssg::ScrollLinesArguments{decoded.scroll});
                 chord.clear();
                 continue;
             }
-            if (decoded.status != ssg::app::DecodeStatus::key) continue;
+            if (decoded.status != ssg::app::DecodeStatus::key) {
+                // A recognized but unhandled byte (unknown CSI, stray control):
+                // a non-matching continuation that clears any pending chord.
+                chord.clear();
+                continue;
+            }
 
             // A printable without a keycode (e.g. multibyte text) cannot be a
             // chord; route it straight to the text sink.

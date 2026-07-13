@@ -349,6 +349,30 @@ detail; the client still fuzzy-ranks locally (`spec-palette.md` P2/P5).
   message, while argument-optional and argument-free commands succeed (modulo
   benign state failures such as "no active prompt"). K5's oracle dispatches each
   bound command with an empty payload and asserts no argument-shaped failure.
+- **Known limitation — palette lists argument-required commands (deferred).**
+  `palette_view` publishes every command descriptor as a candidate, including
+  commands that require a caller-supplied argument and do not self-prompt
+  (`text.insert`, `settings.set`, `cursor.set_position`, `goto.file`,
+  `workspace.open_directory`, …).  Selecting one runs the server-validated
+  `palette.execute`, which dispatches it argument-free; the dispatch fails and
+  the palette closes — a safe no-op, not a crash.  Filtering candidates to the
+  argument-free / self-prompting set is **deferred**: the wire command-argument
+  codec registry is not a sufficient arity source (in-process-only commands such
+  as `goto.file` and `workspace.open_directory` map to `none_codec` yet still
+  require a `std::any` payload), so a correct filter needs new per-command
+  *palette-executable* arity metadata.  That metadata is a separate change from
+  the M6 keymap contract and is tracked for a follow-up; until it lands the
+  palette over-lists.
+- **Known limitation — non-palette prompt text input (deferred).**  Only the
+  palette's query is edited client-locally.  Other prompt kinds
+  (path/find/replace/settings) store authoritative text in server-owned
+  `PromptSurface` inputs, and there is no server prompt-text-edit command yet, so
+  the TUI cannot type into them.  The `settings.open` escape hatch (I24) therefore
+  opens and focuses a settings prompt that can be viewed and cancelled
+  (`[Escape, Escape]`) but not yet edited; full settings editing arrives with a
+  server prompt-input command in a later milestone.  This satisfies I24's
+  reachability intent (the configuration surface is always reachable) while its
+  editing is deferred.
 - The runtime keymap is compiled-in C++ with no data-file dependency, so library
   consumers need no repository-relative resources. (The former
   `data/default-keymap.json` browser-encoding contract and its coverage test have
