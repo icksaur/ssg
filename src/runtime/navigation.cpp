@@ -13,16 +13,20 @@ PromptRequest palette_prompt_request() {
                          {{"query", "Command palette query", ""}}, {}, std::nullopt};
 }
 
-// Validates that `command_id` is a member of the published palette candidate set
-// and that the invoking principal holds its required capabilities.  The palette
-// never offers a command outside this set, so this rejects any id a client tries
-// to smuggle through `palette.execute` (see doc/spec-palette.md P1).  Execution
-// of the validated command is the client's follow-up dispatch through the
-// registry (the session mutex is non-reentrant, so the handler cannot re-enter
-// dispatch itself).
+// Validates that the palette is open and that `command_id` is a member of the
+// currently published palette candidate set (the command mode's candidates,
+// which `palette_view()` publishes from `descriptors()`) and that the invoking
+// principal holds its required capabilities.  On success the target id is
+// stashed for the EditorRuntime dispatch wrapper to execute through the registry
+// (the session mutex is non-reentrant, so the handler cannot re-enter dispatch).
+// This keeps execution server-owned and rejects any id the palette never offered
+// (see doc/spec-palette.md P1).
 CommandHandlerResult validate_palette_target(EditorRuntime::Impl& runtime,
                                              CommandContext& context,
                                              std::string const& command_id) {
+    bool const palette_open = runtime.prompt.active() && runtime.prompt.request() &&
+                              runtime.prompt.request()->kind == PromptKind::palette;
+    if (!palette_open) return failure("palette.execute requires the palette to be open");
     auto const candidates = runtime.descriptors();
     bool const published =
         std::any_of(candidates.begin(), candidates.end(),
@@ -52,10 +56,11 @@ CommandHandlerResult search_command(EditorRuntime::Impl& runtime, CommandContext
     else if (id == "palette.next" || id == "search.results_next") runtime.search.select_next();
     else if (id == "palette.previous" || id == "search.results_previous") runtime.search.select_previous();
     else if (id == "palette.execute") {
-        auto const* command_id = payload_as<std::string>(payload);
-        if (command_id == nullptr) return failure("palette.execute requires a command id payload");
-        auto validation = validate_palette_target(runtime, context, *command_id);
+        auto const* arguments = payload_as<PaletteExecuteArguments>(payload);
+        if (arguments == nullptr) return failure("palette.execute requires a command id payload");
+        auto validation = validate_palette_target(runtime, context, arguments->command_id);
         if (!validation.accepted) return validation;
+        runtime.pending_palette_target = arguments->command_id;
         (void)runtime.prompt.cancel();
     } else if (id == "search.workspace") {
         std::string query;

@@ -154,6 +154,22 @@ TEST(registry_rejects_duplicate_entries) {
 // ---------------------------------------------------------------------------
 // Command request round trips: one canonical fixture per argument shape.
 
+TEST(command_request_round_trips_with_palette_execute_arguments) {
+    auto const registry = ssg::build_command_argument_codec_registry();
+    ssg::ClientCommand const command{
+        "palette.execute", ssg::Revision{4},
+        ssg::PaletteExecuteArguments{"file.save"}};
+    auto const bytes = ssg::encode_command_request(command, registry);
+    auto const decoded = ssg::decode_command_request(bytes, registry);
+    ASSERT_TRUE(decoded.accepted());
+    ASSERT_EQ(decoded.command->id, command.id);
+    auto const* arguments =
+        std::any_cast<ssg::PaletteExecuteArguments>(&decoded.command->payload);
+    ASSERT_TRUE(arguments != nullptr);
+    ASSERT_EQ(*arguments,
+              std::any_cast<ssg::PaletteExecuteArguments>(command.payload));
+}
+
 TEST(command_request_round_trips_with_no_payload) {
     auto const registry = ssg::build_command_argument_codec_registry();
     ssg::ClientCommand const command{"edit.undo", ssg::Revision{3}, {}};
@@ -770,6 +786,7 @@ int main() {
     RUN(registry_rejects_extra_entries);
     RUN(registry_rejects_duplicate_entries);
     RUN(command_request_round_trips_with_no_payload);
+    RUN(command_request_round_trips_with_palette_execute_arguments);
     RUN(command_request_round_trips_with_text_input_arguments);
     RUN(command_request_round_trips_with_selection_command_arguments);
     RUN(command_request_round_trips_with_empty_selection_command_arguments);

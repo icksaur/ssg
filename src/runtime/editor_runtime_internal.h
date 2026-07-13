@@ -84,6 +84,11 @@ struct EditorRuntime::Impl final : CommandServices,
     ThemeSnapshot theme{};
     std::optional<WorkspaceReplacePreview> workspace_replace_preview;
     std::unique_ptr<EditorSession> session;
+    // Set by palette.execute after validating the selected candidate; the
+    // EditorRuntime dispatch wrapper runs it through the registry once the
+    // palette.execute transaction's session lock releases (the session mutex is
+    // non-reentrant, so a handler cannot re-enter dispatch).
+    std::optional<std::string> pending_palette_target;
     std::uint32_t requested_first_visual_row = 0;
     bool word_wrap = false;
     std::uint64_t next_status_id = 1;

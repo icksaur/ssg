@@ -36,6 +36,16 @@ struct PaletteViewState {
     friend bool operator==(const PaletteViewState&, const PaletteViewState&) = default;
 };
 
+// The typed argument for `palette.execute`: the id of the selected candidate the
+// server should execute.  Carrying the id (rather than a client-held selection
+// index) lets the server validate membership in the published candidate set and
+// keeps the command's argument shape explicit on the wire (see spec-palette.md).
+struct PaletteExecuteArguments {
+    std::string command_id;
+
+    friend bool operator==(const PaletteExecuteArguments&, const PaletteExecuteArguments&) = default;
+};
+
 // A client's locally-ranked palette view, reported for library-owned
 // presentation (see doc/spec-palette.md).  `rows` is the bounded visible window
 // of ranked candidates; `selected` indexes into it.  `ghost` is the remaining

@@ -239,6 +239,11 @@ int main(int argc, char** argv) {
                 break;
             case ssg::app::InputAction::delete_backward:
                 if (palette_open) {
+                    // Drop one whole UTF-8 code point, not a single byte.
+                    while (!palette_query.empty() &&
+                           (static_cast<unsigned char>(palette_query.back()) & 0xC0) == 0x80) {
+                        palette_query.pop_back();
+                    }
                     if (!palette_query.empty()) palette_query.pop_back();
                     palette_selected = 0;
                 } else if (editor) {
@@ -270,12 +275,11 @@ int main(int argc, char** argv) {
                     auto order = ssg::palette_rank(candidates, palette_query);
                     if (!order.empty() && palette_selected < order.size()) {
                         auto const& id = candidates[order[palette_selected]].id;
-                        auto validated = runtime.dispatch(
-                            client, {"palette.execute", runtime.revision(), id});
-                        if (validated.accepted()) {
-                            (void)runtime.dispatch(
-                                client, {id, runtime.revision(), {}});
-                        }
+                        // The server validates membership and executes the target
+                        // through the registry; the client only names the id.
+                        (void)runtime.dispatch(
+                            client, {"palette.execute", runtime.revision(),
+                                     ssg::PaletteExecuteArguments{id}});
                     }
                     palette_open = false;
                 } else {

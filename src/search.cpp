@@ -360,7 +360,10 @@ void SearchController::rank_palette() {
         if (left.score != right.score) {
             return left.score > right.score;
         }
-        return left.label < right.label;
+        if (left.label != right.label) {
+            return left.label < right.label;
+        }
+        return left.path < right.path;  // Mirror palette_rank's stable id tiebreak.
     });
     state_.selected_index =
         state_.results.empty() ? std::nullopt : std::optional<std::size_t>{0};

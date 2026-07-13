@@ -632,6 +632,17 @@ bool EditorRuntime::detach(ClientId client_id) {
 CommandResult EditorRuntime::dispatch(ClientId client_id, ClientCommand const& command) {
     auto result = impl_->session->dispatch(client_id, command);
     impl_->reconcile_prompt_focus();
+    // palette.execute validates the selected candidate then defers execution to
+    // here so the target runs through the registry (with its own capability and
+    // revision checks) outside the non-reentrant session lock.
+    if (result.accepted() && impl_->pending_palette_target) {
+        auto target = std::move(*impl_->pending_palette_target);
+        impl_->pending_palette_target.reset();
+        auto target_result = impl_->session->dispatch(
+            client_id, {target, impl_->session->revision(), {}});
+        impl_->reconcile_prompt_focus();
+        return target_result;
+    }
     return result;
 }
 

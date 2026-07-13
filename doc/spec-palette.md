@@ -177,6 +177,13 @@ client concern:
   seam and are out of scope here.
 - The candidate `detail` for commands should carry the bound key sequence so the
   palette doubles as keybinding discovery; this depends on the keymap work (M6).
+- Command candidates currently publish `label == id` because `p0_command_descriptors`
+  carries no human-readable label; human labels and the key-sequence `detail` land
+  with the command-metadata/keymap work (M6).  Until then the palette rows and the
+  ghost completion show command ids.
+- The authoritative fuzzy ranker is `ssg::palette_rank` (`src/palette.cpp`).  The
+  retained `SearchController` ranker mirrors its scoring and tiebreak (score desc,
+  label then id ascending) so the reference/browser path cannot diverge from it.
 - Ghost-text completion must never change document or command state; it is a
   presentation hint until explicitly accepted.
 - `SearchViewState.palette_open` is derived from `focus == prompt` with a

@@ -1324,6 +1324,8 @@ bool decode_present(ProtocolValue const& value, std::optional<SessionSnapshotSec
 // -- Forward declarations: command argument payload types -------------------
 ProtocolValue to_value(TextInputArguments const& value);
 bool decode_present(ProtocolValue const& value, std::optional<TextInputArguments>& out);
+ProtocolValue to_value(PaletteExecuteArguments const& value);
+bool decode_present(ProtocolValue const& value, std::optional<PaletteExecuteArguments>& out);
 ProtocolValue to_value(SelectionCommandArguments const& value);
 bool decode_present(ProtocolValue const& value, std::optional<SelectionCommandArguments>& out);
 ProtocolValue to_value(ScrollLinesArguments const& value);
@@ -4517,6 +4519,20 @@ bool decode_present(ProtocolValue const& value, std::optional<TextInputArguments
     return true;
 }
 
+ProtocolValue to_value(PaletteExecuteArguments const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("command_id", to_value(value.command_id));
+    return ProtocolValue::make_object(std::move(fields));
+}
+bool decode_present(ProtocolValue const& value, std::optional<PaletteExecuteArguments>& out) {
+    auto const* object = value.as_object();
+    if (!object) return false;
+    auto command_id = require_field<std::string>(value.field("command_id"));
+    if (!command_id) return false;
+    out.emplace(PaletteExecuteArguments{*command_id});
+    return true;
+}
+
 ProtocolValue to_value(SelectionCommandArguments const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("position", to_value(value.position));
@@ -4873,6 +4889,7 @@ CommandArgumentCodecRegistry build_command_argument_codec_registry() {
 
     auto const none_codec = make_none_codec();
     auto const text_input_codec = make_typed_codec<TextInputArguments>();
+    auto const palette_execute_codec = make_typed_codec<PaletteExecuteArguments>();
     auto const selection_codec =
         make_typed_codec<SelectionCommandArguments>();
     auto const scroll_lines_codec = make_typed_codec<ScrollLinesArguments>();
@@ -4924,6 +4941,8 @@ CommandArgumentCodecRegistry build_command_argument_codec_registry() {
             entries.emplace_back(descriptor.id, workspace_replace_codec);
         } else if (descriptor.id == "replace.workspace_apply") {
             entries.emplace_back(descriptor.id, workspace_apply_codec);
+        } else if (descriptor.id == "palette.execute") {
+            entries.emplace_back(descriptor.id, palette_execute_codec);
         } else if (text_input_ids.contains(descriptor.id)) {
             entries.emplace_back(descriptor.id, text_input_codec);
         } else if (selection_ids.contains(descriptor.id)) {
