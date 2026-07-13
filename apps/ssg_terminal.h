@@ -28,37 +28,6 @@ struct LaunchTarget {
 
 [[nodiscard]] LaunchTarget resolve_launch(std::filesystem::path const& argument);
 
-// A decoded terminal input event, reduced to the actions milestone 4 handles.
-enum class InputAction {
-    none,
-    chord,
-    line_up,          // Arrow up: move caret up, or tree selection when focused.
-    line_down,        // Arrow down.
-    caret_left,       // Arrow left.
-    caret_right,      // Arrow right.
-    scroll_lines,     // Mouse wheel (amount in lines).
-    scroll_pages,     // Page Up/Down.
-    activate,         // Enter: newline, or activate the tree node when focused.
-    text,             // A committed character to insert.
-    delete_backward,  // Backspace.
-};
-
-struct InputEvent {
-    InputAction action = InputAction::none;
-    std::int64_t amount = 0;  // Signed line count for scroll_lines.
-    char key = 0;             // For chord: the key pressed after the ESC leader.
-    std::string text;         // For text: the committed UTF-8 character.
-};
-
-// Decode the first complete event from `bytes`.
-//   consumed > 0                    -> that many bytes form one event (which may
-//                                      be InputAction::none for a recognized but
-//                                      unhandled key/sequence to skip).
-//   consumed == 0, action == none   -> `bytes` holds only an incomplete escape
-//                                      sequence; read more before parsing again.
-[[nodiscard]] InputEvent parse_input(std::string_view bytes,
-                                     std::size_t& consumed);
-
 // K3a decoder (doc/spec-keymap.md): the outcome of decoding one input event as a
 // KeyStroke (so it can drive keymap resolution) and/or committed text.
 enum class DecodeStatus : std::uint8_t {
@@ -85,12 +54,6 @@ struct Decoded {
 // emits the Escape stroke; otherwise the result is `incomplete` (await bytes).
 [[nodiscard]] Decoded decode_input(std::string_view bytes, bool input_exhausted,
                                    std::size_t& consumed);
-
-// The leader sequence to report while a chord is mid-entry, derived from the
-// undecoded input buffer: a lone Escape (or Escape followed by a non-CSI byte)
-// means the client is collecting a chord.  Empty when not in leader mode.  This
-// is client-local input capture; the library owns how it is presented.
-[[nodiscard]] ssg::KeySequence pending_leader(std::string_view buffer);
 
 // Encode a rendered cell grid as a full-screen ANSI frame: cursor-addressed
 // rows with 24-bit foreground/background colors drawn from the snapshot's

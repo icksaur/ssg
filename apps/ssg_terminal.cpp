@@ -10,18 +10,6 @@ namespace ssg::app {
 
 namespace fs = std::filesystem;
 
-ssg::KeySequence pending_leader(std::string_view buffer) {
-    if (buffer.empty() || static_cast<unsigned char>(buffer[0]) != 0x1b) {
-        return {};
-    }
-    // An Escape that introduces a CSI/SS3 sequence (arrow, function key) is not a
-    // leader chord; only a lone Escape or Escape + a non-CSI key is.
-    if (buffer.size() >= 2 && (buffer[1] == '[' || buffer[1] == 'O')) {
-        return {};
-    }
-    return {ssg::KeyStroke{"Escape"}};
-}
-
 LaunchTarget resolve_launch(fs::path const& argument) {
     if (argument.empty()) {
         return {fs::current_path(), std::nullopt};
@@ -218,108 +206,6 @@ Decoded decode_input(std::string_view bytes, bool input_exhausted,
     }
     consumed = 1;  // Other control byte: ignore.
     return {DecodeStatus::none, {}, {}, 0};
-}
-
-InputEvent parse_input(std::string_view bytes, std::size_t& consumed) {
-    consumed = 0;
-    if (bytes.empty()) return {};
-
-    auto const first = static_cast<unsigned char>(bytes[0]);
-    if (first == '\r' || first == '\n') {
-        consumed = 1;
-        return {InputAction::activate, 0, 0};
-    }
-    if (first == 0x7f || first == 0x08) {
-        consumed = 1;
-        return {InputAction::delete_backward, 0, 0};
-    }
-    if (first != 0x1b) {
-        if (first >= 0x20) {
-            // Printable ASCII or a UTF-8 sequence; emit one committed character.
-            std::size_t length = 1;
-            if (first < 0x80) {
-                length = 1;
-            } else if (first >= 0xF0) {
-                length = 4;
-            } else if (first >= 0xE0) {
-                length = 3;
-            } else if (first >= 0xC0) {
-                length = 2;
-            } else {
-                consumed = 1;  // Stray UTF-8 continuation byte; skip.
-                return {};
-            }
-            if (bytes.size() < length) return {};  // Await the full character.
-            consumed = length;
-            return {InputAction::text, 0, 0, std::string{bytes.substr(0, length)}};
-        }
-        consumed = 1;  // Other control byte: ignore.
-        return {};
-    }
-    if (bytes.size() < 2) return {};  // Lone ESC: wait for the rest.
-
-    auto const second = static_cast<unsigned char>(bytes[1]);
-    if (second != '[' && second != 'O') {
-        // ESC followed by any non-CSI byte is a two-key chord (ESC b, ESC Q).
-        consumed = 2;
-        return {InputAction::chord, 0, static_cast<char>(second)};
-    }
-    if (bytes.size() < 3) return {};
-
-    auto const third = static_cast<unsigned char>(bytes[2]);
-    switch (third) {
-    case 'A':
-        consumed = 3;
-        return {InputAction::line_up, 0, 0};
-    case 'B':
-        consumed = 3;
-        return {InputAction::line_down, 0, 0};
-    case 'C':
-        consumed = 3;
-        return {InputAction::caret_right, 0, 0};
-    case 'D':
-        consumed = 3;
-        return {InputAction::caret_left, 0, 0};
-    case 'H':
-    case 'F':
-        consumed = 3;  // Home/end: unhandled in milestone 4.
-        return {};
-    case '5':
-    case '6': {
-        if (bytes.size() < 4) return {};
-        consumed = 4;
-        if (bytes[3] == '~') {
-            return {InputAction::scroll_pages, third == '5' ? -1 : 1};
-        }
-        return {};
-    }
-    case '<': {
-        // SGR mouse: ESC [ < Cb ; Cx ; Cy (M|m).  Wheel up is 64, down is 65.
-        std::size_t end = 3;
-        while (end < bytes.size() && bytes[end] != 'M' && bytes[end] != 'm') {
-            ++end;
-        }
-        if (end >= bytes.size()) return {};  // Incomplete report.
-        std::size_t pos = 3;
-        auto const button = parse_decimal(bytes, pos);
-        consumed = end + 1;
-        if (button == 64) return {InputAction::scroll_lines, -3};
-        if (button == 65) return {InputAction::scroll_lines, 3};
-        return {};
-    }
-    case 'M': {
-        // Legacy X10 mouse: ESC [ M b x y.  Wheel up is 0x60, down is 0x61.
-        if (bytes.size() < 6) return {};
-        auto const button = static_cast<unsigned char>(bytes[3]);
-        consumed = 6;
-        if (button == 0x60) return {InputAction::scroll_lines, -3};
-        if (button == 0x61) return {InputAction::scroll_lines, 3};
-        return {};
-    }
-    default:
-        consumed = 3;  // Unknown CSI: skip its introducer conservatively.
-        return {};
-    }
 }
 
 }  // namespace ssg::app

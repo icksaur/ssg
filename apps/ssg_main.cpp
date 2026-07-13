@@ -18,10 +18,12 @@
 #include <ssg/text_input_commands.h>
 
 #include <sys/ioctl.h>
+#include <sys/select.h>
 #include <termios.h>
 #include <unistd.h>
 
 #include <cstdio>
+#include <any>
 #include <filesystem>
 #include <string>
 #include <string_view>
@@ -86,6 +88,28 @@ ssg::ViewportDimensions terminal_size() {
     return {80, 24};
 }
 
+// Whether more input is available within `timeout_ms`.  Used only to bound the
+// terminal Escape ambiguity: a lone trailing ESC waits briefly for a follow-up
+// byte before being decoded as a standalone Escape stroke.
+bool input_ready(int timeout_ms) {
+    fd_set set;
+    FD_ZERO(&set);
+    FD_SET(STDIN_FILENO, &set);
+    timeval timeout{timeout_ms / 1000, (timeout_ms % 1000) * 1000};
+    return ::select(STDIN_FILENO + 1, &set, nullptr, nullptr, &timeout) > 0;
+}
+
+constexpr int kEscapeTimeoutMs = 30;
+
+// Delete one UTF-8 code point from the end of a client-local query string.
+void pop_code_point(std::string& text) {
+    while (!text.empty() &&
+           (static_cast<unsigned char>(text.back()) & 0xC0) == 0x80) {
+        text.pop_back();
+    }
+    if (!text.empty()) text.pop_back();
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -125,16 +149,59 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    std::string pending;
+    std::string buffer;             // Raw bytes read but not yet decoded.
+    ssg::KeySequence chord;         // The pending (mid-entry) key chord.
     bool quit = false;
     auto focus = ssg::FocusTarget::editor;
-    bool panel_open = false;
-    // Client-owned palette state: the query and selection are local (reported for
-    // library presentation), ranked against the server's published candidate set.
+    // Client-owned palette state: query and selection are local (reported for
+    // library presentation), ranked against the server's published candidates.
     bool palette_open = false;
     std::string palette_query;
     std::size_t palette_selected = 0;
+    ssg::KeymapViewState keymap;
     std::vector<ssg::PaletteCandidate> candidates;
+
+    auto dispatch = [&](std::string_view id, std::any payload = {}) {
+        (void)runtime.dispatch(client, {std::string{id}, runtime.revision(),
+                                        std::move(payload)});
+    };
+    auto execute_selected_candidate = [&] {
+        auto order = ssg::palette_rank(candidates, palette_query);
+        if (!order.empty() && palette_selected < order.size()) {
+            dispatch("palette.execute",
+                     ssg::PaletteExecuteArguments{candidates[order[palette_selected]].id});
+        }
+    };
+    // Dispatch a resolved command, fulfilling prompt-context commands against the
+    // client-local palette view when a palette prompt is open (doc/spec-keymap.md
+    // Prompt-focus fulfillment).
+    auto dispatch_resolved = [&](std::string const& id) {
+        if (palette_open && focus == ssg::FocusTarget::prompt) {
+            if (id == "prompt.submit") { execute_selected_candidate(); palette_open = false; return; }
+            if (id == "prompt.cancel") { dispatch("palette.close"); palette_open = false; return; }
+            if (id == "palette.next") { ++palette_selected; return; }
+            if (id == "palette.previous") { if (palette_selected > 0) --palette_selected; return; }
+        }
+        dispatch(id);
+        if (id == "palette.open") {
+            palette_open = true;
+            palette_query.clear();
+            palette_selected = 0;
+        }
+    };
+    auto route_text = [&](std::string const& text) {
+        switch (ssg::text_routing(ssg::focus_target_name(focus))) {
+        case ssg::TextRouting::insert:
+            dispatch("text.insert", ssg::TextInputArguments{text});
+            break;
+        case ssg::TextRouting::prompt_query:
+            if (palette_open) { palette_query += text; palette_selected = 0; }
+            break;
+        case ssg::TextRouting::ignore:
+            break;
+        }
+    };
+
     while (!quit) {
         ssg::PaletteReport report;
         if (palette_open) {
@@ -152,11 +219,10 @@ int main(int argc, char** argv) {
                 report.selected = static_cast<std::uint32_t>(palette_selected);
             }
         }
-        auto snapshot = runtime.snapshot(client, terminal_size(),
-                                         ssg::app::pending_leader(pending), report);
+        auto snapshot = runtime.snapshot(client, terminal_size(), chord, report);
         if (snapshot) {
             focus = snapshot->sections().shell.focus;
-            panel_open = snapshot->sections().shell.panel.has_value();
+            keymap = snapshot->sections().keymap;
             candidates = snapshot->sections().palette.candidates;
             if (focus != ssg::FocusTarget::prompt) palette_open = false;
             auto grid = ssg::render(*snapshot);
@@ -169,135 +235,72 @@ int main(int argc, char** argv) {
             write_all(frame);
         }
 
-        char buffer[64];
-        auto read_bytes = ::read(STDIN_FILENO, buffer, sizeof buffer);
+        char bytes[64];
+        auto read_bytes = ::read(STDIN_FILENO, bytes, sizeof bytes);
         if (read_bytes <= 0) break;
-        pending.append(buffer, static_cast<std::size_t>(read_bytes));
+        buffer.append(bytes, static_cast<std::size_t>(read_bytes));
 
-        for (;;) {
+        while (!buffer.empty() && !quit) {
             std::size_t consumed = 0;
-            auto event = ssg::app::parse_input(pending, consumed);
-            if (consumed == 0) break;  // Incomplete sequence; read more.
-            pending.erase(0, consumed);
-            auto const editor = focus == ssg::FocusTarget::editor;
-            auto const on_panel = focus == ssg::FocusTarget::panel;
-            auto scroll = [&](std::int64_t lines) {
-                (void)runtime.dispatch(
-                    client, {"view.scroll_lines", runtime.revision(),
-                             ssg::ScrollLinesArguments{lines}});
-            };
-            auto command = [&](char const* id) {
-                (void)runtime.dispatch(client, {id, runtime.revision(), {}});
-            };
-            switch (event.action) {
-            case ssg::app::InputAction::chord:
-                if (event.key == 'Q') {
-                    quit = true;
-                } else if (event.key == 'b') {
-                    // Cycle focus: reveal+focus the bar, focus it, then hide it.
-                    if (!panel_open) {
-                        command("panel.toggle");
-                        command("panel.focus");
-                    } else if (!on_panel) {
-                        command("panel.focus");
-                    } else {
-                        command("panel.toggle");
-                    }
-                } else if (event.key == 's') {
-                    command("file.save");
-                } else if (event.key == 'z') {
-                    command("edit.undo");
-                } else if (event.key == 'Z') {
-                    command("edit.redo");
-                } else if (event.key == ']') {
-                    command("tab.next");
-                } else if (event.key == 'p') {
-                    command("tab.previous");
-                } else if (event.key == 'w') {
-                    command("tab.close");
-                } else if (event.key == 'P') {
-                    if (!palette_open) {
-                        command("palette.open");
-                        palette_open = true;
-                        palette_query.clear();
-                        palette_selected = 0;
-                    } else {
-                        command("palette.close");
-                        palette_open = false;
+            auto decoded = ssg::app::decode_input(buffer, false, consumed);
+            if (decoded.status == ssg::app::DecodeStatus::incomplete) {
+                // A partial sequence (lone ESC or truncated CSI) remains.  Wait
+                // briefly for the disambiguating bytes; if none arrive, force the
+                // bounded-Escape resolution.
+                if (input_ready(kEscapeTimeoutMs)) {
+                    auto more = ::read(STDIN_FILENO, bytes, sizeof bytes);
+                    if (more > 0) {
+                        buffer.append(bytes, static_cast<std::size_t>(more));
+                        continue;
                     }
                 }
-                break;
-            case ssg::app::InputAction::text:
-                if (palette_open) {
-                    palette_query += event.text;
-                    palette_selected = 0;
-                } else if (editor) {
-                    (void)runtime.dispatch(
-                        client, {"text.insert", runtime.revision(),
-                                 ssg::TextInputArguments{event.text}});
-                }
-                break;
-            case ssg::app::InputAction::delete_backward:
-                if (palette_open) {
-                    // Drop one whole UTF-8 code point, not a single byte.
-                    while (!palette_query.empty() &&
-                           (static_cast<unsigned char>(palette_query.back()) & 0xC0) == 0x80) {
-                        palette_query.pop_back();
-                    }
-                    if (!palette_query.empty()) palette_query.pop_back();
-                    palette_selected = 0;
-                } else if (editor) {
-                    command("text.delete_backward");
-                }
-                break;
-            case ssg::app::InputAction::line_up:
-                if (palette_open) {
-                    if (palette_selected > 0) --palette_selected;
-                } else {
-                    command(on_panel ? "tree.select_previous" : "cursor.line_up");
-                }
-                break;
-            case ssg::app::InputAction::line_down:
-                if (palette_open) {
-                    ++palette_selected;  // Clamped against the ranked count next frame.
-                } else {
-                    command(on_panel ? "tree.select_next" : "cursor.line_down");
-                }
-                break;
-            case ssg::app::InputAction::caret_left:
-                if (!palette_open && editor) command("cursor.left");
-                break;
-            case ssg::app::InputAction::caret_right:
-                if (!palette_open && editor) command("cursor.right");
-                break;
-            case ssg::app::InputAction::activate:
-                if (palette_open) {
-                    auto order = ssg::palette_rank(candidates, palette_query);
-                    if (!order.empty() && palette_selected < order.size()) {
-                        auto const& id = candidates[order[palette_selected]].id;
-                        // The server validates membership and executes the target
-                        // through the registry; the client only names the id.
-                        (void)runtime.dispatch(
-                            client, {"palette.execute", runtime.revision(),
-                                     ssg::PaletteExecuteArguments{id}});
-                    }
-                    palette_open = false;
-                } else {
-                    command(on_panel ? "tree.activate" : "text.newline");
-                }
-                break;
-            case ssg::app::InputAction::scroll_lines:
-                scroll(event.amount);
-                break;
-            case ssg::app::InputAction::scroll_pages:
-                (void)runtime.dispatch(
-                    client, {"view.scroll_pages", runtime.revision(),
-                             ssg::ScrollPagesArguments{event.amount}});
-                break;
-            case ssg::app::InputAction::none:
-                break;
+                decoded = ssg::app::decode_input(buffer, true, consumed);
+                if (decoded.status == ssg::app::DecodeStatus::incomplete) break;
             }
-            if (quit || pending.empty()) break;
+            buffer.erase(0, consumed);
+
+            if (decoded.status == ssg::app::DecodeStatus::scroll) {
+                dispatch("view.scroll_lines", ssg::ScrollLinesArguments{decoded.scroll});
+                chord.clear();
+                continue;
+            }
+            if (decoded.status != ssg::app::DecodeStatus::key) continue;
+
+            // A printable without a keycode (e.g. multibyte text) cannot be a
+            // chord; route it straight to the text sink.
+            if (decoded.stroke.code.empty()) {
+                route_text(decoded.text);
+                chord.clear();
+                continue;
+            }
+
+            chord.push_back(decoded.stroke);
+            auto resolution = ssg::resolve_key_sequence(
+                keymap, chord, ssg::focus_target_name(focus));
+            if (resolution.kind == ssg::KeymapMatchKind::resolved) {
+                dispatch_resolved(resolution.command_id);
+                chord.clear();
+            } else if (resolution.kind == ssg::KeymapMatchKind::pending) {
+                // Keep collecting; the leader hint renders next frame.
+            } else {
+                // No binding.  Quit is the sole app-local chord (process
+                // lifecycle); everything else clears the chord and, for a
+                // printable, still routes as text.
+                const bool quit_chord =
+                    chord.size() == 2 && chord[0].code == "Escape" &&
+                    chord[1].code == "KeyQ";
+                const auto stroke = decoded.stroke;
+                chord.clear();
+                if (quit_chord) {
+                    quit = true;
+                } else if (palette_open && focus == ssg::FocusTarget::prompt &&
+                           stroke.code == "Backspace") {
+                    pop_code_point(palette_query);
+                    palette_selected = 0;
+                } else if (!decoded.text.empty()) {
+                    route_text(decoded.text);
+                }
+            }
         }
     }
 
