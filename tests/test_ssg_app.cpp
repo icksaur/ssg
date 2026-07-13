@@ -81,12 +81,77 @@ TEST(encode_ansi_frame_skips_wide_glyph_continuation) {
                 frame.find("\x1b[0m", glyph) < frame.find(' ', glyph + 3));
 }
 
+TEST(parse_input_quit_chord) {
+    std::size_t consumed = 0;
+    auto event = ssg::app::parse_input(std::string_view{"\x1b" "Q"}, consumed);
+    ASSERT_TRUE(event.action == ssg::app::InputAction::quit);
+    ASSERT_EQ(consumed, std::size_t{2});
+}
+
+TEST(parse_input_arrows_scroll_lines) {
+    std::size_t consumed = 0;
+    auto up = ssg::app::parse_input(std::string_view{"\x1b[A"}, consumed);
+    ASSERT_TRUE(up.action == ssg::app::InputAction::scroll_lines);
+    ASSERT_EQ(up.amount, std::int64_t{-1});
+    ASSERT_EQ(consumed, std::size_t{3});
+    auto down = ssg::app::parse_input(std::string_view{"\x1b[B"}, consumed);
+    ASSERT_TRUE(down.action == ssg::app::InputAction::scroll_lines);
+    ASSERT_EQ(down.amount, std::int64_t{1});
+}
+
+TEST(parse_input_page_keys_scroll_pages) {
+    std::size_t consumed = 0;
+    auto up = ssg::app::parse_input(std::string_view{"\x1b[5~"}, consumed);
+    ASSERT_TRUE(up.action == ssg::app::InputAction::scroll_pages);
+    ASSERT_EQ(up.amount, std::int64_t{-1});
+    ASSERT_EQ(consumed, std::size_t{4});
+    auto down = ssg::app::parse_input(std::string_view{"\x1b[6~"}, consumed);
+    ASSERT_TRUE(down.action == ssg::app::InputAction::scroll_pages);
+    ASSERT_EQ(down.amount, std::int64_t{1});
+}
+
+TEST(parse_input_sgr_wheel) {
+    std::size_t consumed = 0;
+    auto up = ssg::app::parse_input(std::string_view{"\x1b[<64;10;5M"}, consumed);
+    ASSERT_TRUE(up.action == ssg::app::InputAction::scroll_lines);
+    ASSERT_EQ(up.amount, std::int64_t{-3});
+    ASSERT_EQ(consumed, std::size_t{11});
+    auto down =
+        ssg::app::parse_input(std::string_view{"\x1b[<65;10;5M"}, consumed);
+    ASSERT_TRUE(down.action == ssg::app::InputAction::scroll_lines);
+    ASSERT_EQ(down.amount, std::int64_t{3});
+}
+
+TEST(parse_input_incomplete_waits) {
+    std::size_t consumed = 99;
+    auto partial = ssg::app::parse_input(std::string_view{"\x1b["}, consumed);
+    ASSERT_TRUE(partial.action == ssg::app::InputAction::none);
+    ASSERT_EQ(consumed, std::size_t{0});
+    auto partial_mouse =
+        ssg::app::parse_input(std::string_view{"\x1b[<64;10"}, consumed);
+    ASSERT_TRUE(partial_mouse.action == ssg::app::InputAction::none);
+    ASSERT_EQ(consumed, std::size_t{0});
+}
+
+TEST(parse_input_plain_byte_skipped) {
+    std::size_t consumed = 0;
+    auto event = ssg::app::parse_input(std::string_view{"a"}, consumed);
+    ASSERT_TRUE(event.action == ssg::app::InputAction::none);
+    ASSERT_EQ(consumed, std::size_t{1});
+}
+
 int main() {
     RUN(resolve_launch_no_argument_opens_cwd);
     RUN(resolve_launch_directory_opens_that_directory);
     RUN(resolve_launch_file_opens_parent_directory_and_file);
     RUN(encode_ansi_frame_addresses_rows_and_emits_palette_colors);
     RUN(encode_ansi_frame_skips_wide_glyph_continuation);
+    RUN(parse_input_quit_chord);
+    RUN(parse_input_arrows_scroll_lines);
+    RUN(parse_input_page_keys_scroll_pages);
+    RUN(parse_input_sgr_wheel);
+    RUN(parse_input_incomplete_waits);
+    RUN(parse_input_plain_byte_skipped);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;

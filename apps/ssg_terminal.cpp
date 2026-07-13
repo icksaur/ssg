@@ -56,4 +56,92 @@ std::string encode_ansi_frame(ssg::tui::ScreenSnapshot const& screen) {
     return out;
 }
 
+namespace {
+
+// Parse a leading run of decimal digits; returns the value and advances `pos`.
+std::int64_t parse_decimal(std::string_view text, std::size_t& pos) {
+    std::int64_t value = 0;
+    while (pos < text.size() && text[pos] >= '0' && text[pos] <= '9') {
+        value = value * 10 + (text[pos] - '0');
+        ++pos;
+    }
+    return value;
+}
+
+}  // namespace
+
+InputEvent parse_input(std::string_view bytes, std::size_t& consumed) {
+    consumed = 0;
+    if (bytes.empty()) return {};
+
+    auto const first = static_cast<unsigned char>(bytes[0]);
+    if (first != 0x1b) {
+        consumed = 1;  // Milestone 2 has no text entry; skip ordinary bytes.
+        return {};
+    }
+    if (bytes.size() < 2) return {};  // Lone ESC: wait for the rest.
+
+    auto const second = static_cast<unsigned char>(bytes[1]);
+    if (second == 'Q') {
+        consumed = 2;
+        return {InputAction::quit, 0};
+    }
+    if (second != '[' && second != 'O') {
+        consumed = 2;  // ESC + other: ignore.
+        return {};
+    }
+    if (bytes.size() < 3) return {};
+
+    auto const third = static_cast<unsigned char>(bytes[2]);
+    switch (third) {
+    case 'A':
+        consumed = 3;
+        return {InputAction::scroll_lines, -1};
+    case 'B':
+        consumed = 3;
+        return {InputAction::scroll_lines, 1};
+    case 'C':
+    case 'D':
+    case 'H':
+    case 'F':
+        consumed = 3;  // Horizontal/home/end: unhandled in milestone 2.
+        return {};
+    case '5':
+    case '6': {
+        if (bytes.size() < 4) return {};
+        consumed = 4;
+        if (bytes[3] == '~') {
+            return {InputAction::scroll_pages, third == '5' ? -1 : 1};
+        }
+        return {};
+    }
+    case '<': {
+        // SGR mouse: ESC [ < Cb ; Cx ; Cy (M|m).  Wheel up is 64, down is 65.
+        std::size_t end = 3;
+        while (end < bytes.size() && bytes[end] != 'M' && bytes[end] != 'm') {
+            ++end;
+        }
+        if (end >= bytes.size()) return {};  // Incomplete report.
+        std::size_t pos = 3;
+        auto const button = parse_decimal(bytes, pos);
+        consumed = end + 1;
+        if (button == 64) return {InputAction::scroll_lines, -3};
+        if (button == 65) return {InputAction::scroll_lines, 3};
+        return {};
+    }
+    case 'M': {
+        // Legacy X10 mouse: ESC [ M b x y.  Wheel up is 0x60, down is 0x61.
+        if (bytes.size() < 6) return {};
+        auto const button = static_cast<unsigned char>(bytes[3]);
+        consumed = 6;
+        if (button == 0x60) return {InputAction::scroll_lines, -3};
+        if (button == 0x61) return {InputAction::scroll_lines, 3};
+        return {};
+    }
+    default:
+        consumed = 3;  // Unknown CSI: skip its introducer conservatively.
+        return {};
+    }
+}
+
 }  // namespace ssg::app

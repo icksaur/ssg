@@ -12,6 +12,7 @@
 #include "ssg_terminal.h"
 
 #include <ssg/editor_runtime.h>
+#include <ssg/input.h>
 #include <ssg/session_snapshot.h>
 
 #include <sys/ioctl.h>
@@ -53,12 +54,13 @@ public:
         raw.c_cc[VTIME] = 0;
         if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) != 0) return;
         active_ = true;
-        write_all("\x1b[?1049h\x1b[?25l");
+        // Alternate screen, hidden cursor, SGR mouse reporting for wheel scroll.
+        write_all("\x1b[?1049h\x1b[?25l\x1b[?1000h\x1b[?1006h");
     }
 
     ~TerminalMode() {
         if (!active_) return;
-        write_all("\x1b[?25h\x1b[?1049l");
+        write_all("\x1b[?1006l\x1b[?1000l\x1b[?25h\x1b[?1049l");
         tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_);
     }
 
@@ -120,23 +122,43 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    for (;;) {
+    std::string pending;
+    bool quit = false;
+    while (!quit) {
         auto snapshot = runtime.snapshot(client, terminal_size());
         if (snapshot) {
             write_all(
                 ssg::app::encode_ansi_frame(ssg::tui::render_screen(*snapshot)));
         }
 
-        unsigned char byte = 0;
-        if (::read(STDIN_FILENO, &byte, 1) != 1) break;
-        if (byte == 0x1b) {
-            unsigned char next = 0;
-            if (::read(STDIN_FILENO, &next, 1) != 1) break;
-            if (next == 'Q') break;  // ESC Q quits.
-            if (next == '[' || next == 'O') {
-                unsigned char final = 0;
-                (void)::read(STDIN_FILENO, &final, 1);  // Consume a CSI/SS3 tail.
+        char buffer[64];
+        auto read_bytes = ::read(STDIN_FILENO, buffer, sizeof buffer);
+        if (read_bytes <= 0) break;
+        pending.append(buffer, static_cast<std::size_t>(read_bytes));
+
+        for (;;) {
+            std::size_t consumed = 0;
+            auto event = ssg::app::parse_input(pending, consumed);
+            if (consumed == 0) break;  // Incomplete sequence; read more.
+            pending.erase(0, consumed);
+            switch (event.action) {
+            case ssg::app::InputAction::quit:
+                quit = true;
+                break;
+            case ssg::app::InputAction::scroll_lines:
+                (void)runtime.dispatch(
+                    client, {"view.scroll_lines", runtime.revision(),
+                             ssg::ScrollLinesArguments{event.amount}});
+                break;
+            case ssg::app::InputAction::scroll_pages:
+                (void)runtime.dispatch(
+                    client, {"view.scroll_pages", runtime.revision(),
+                             ssg::ScrollPagesArguments{event.amount}});
+                break;
+            case ssg::app::InputAction::none:
+                break;
             }
+            if (quit || pending.empty()) break;
         }
     }
 

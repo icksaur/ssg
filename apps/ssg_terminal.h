@@ -9,9 +9,12 @@
 
 #include "tui_fixture.h"
 
+#include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <string_view>
 
 namespace ssg::app {
 
@@ -24,6 +27,23 @@ struct LaunchTarget {
 };
 
 [[nodiscard]] LaunchTarget resolve_launch(std::filesystem::path const& argument);
+
+// A decoded terminal input event, reduced to the actions milestone 2 handles.
+enum class InputAction { none, quit, scroll_lines, scroll_pages };
+
+struct InputEvent {
+    InputAction action = InputAction::none;
+    std::int64_t amount = 0;  // Signed: negative scrolls up, positive down.
+};
+
+// Decode the first complete event from `bytes`.
+//   consumed > 0                    -> that many bytes form one event (which may
+//                                      be InputAction::none for a recognized but
+//                                      unhandled key/sequence to skip).
+//   consumed == 0, action == none   -> `bytes` holds only an incomplete escape
+//                                      sequence; read more before parsing again.
+[[nodiscard]] InputEvent parse_input(std::string_view bytes,
+                                     std::size_t& consumed);
 
 // Encode a rendered cell grid as a full-screen ANSI frame: cursor-addressed
 // rows with 24-bit foreground/background colors drawn from the snapshot's
