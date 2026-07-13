@@ -55,13 +55,13 @@ public:
         raw.c_cc[VTIME] = 0;
         if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) != 0) return;
         active_ = true;
-        // Alternate screen, hidden cursor, SGR mouse reporting for wheel scroll.
-        write_all("\x1b[?1049h\x1b[?25l\x1b[?1000h\x1b[?1006h");
+        // Alternate screen, blinking bar cursor, SGR mouse reporting for wheel.
+        write_all("\x1b[?1049h\x1b[5 q\x1b[?1000h\x1b[?1006h");
     }
 
     ~TerminalMode() {
         if (!active_) return;
-        write_all("\x1b[?1006l\x1b[?1000l\x1b[?25h\x1b[?1049l");
+        write_all("\x1b[?1006l\x1b[?1000l\x1b[0 q\x1b[?25h\x1b[?1049l");
         tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_);
     }
 
@@ -130,8 +130,14 @@ int main(int argc, char** argv) {
         auto snapshot = runtime.snapshot(client, terminal_size());
         if (snapshot) {
             panel_visible = snapshot->sections().shell.panel.has_value();
-            write_all(
-                ssg::app::encode_ansi_frame(ssg::render(*snapshot)));
+            auto grid = ssg::render(*snapshot);
+            std::string frame = "\x1b[?25l";  // Hide the cursor while redrawing.
+            frame += ssg::app::encode_ansi_frame(grid);
+            if (grid.caret) {
+                frame += "\x1b[" + std::to_string(grid.caret->row + 1) + ";" +
+                         std::to_string(grid.caret->column + 1) + "H\x1b[?25h";
+            }
+            write_all(frame);
         }
 
         char buffer[64];

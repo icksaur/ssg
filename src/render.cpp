@@ -350,6 +350,29 @@ CellGrid render(SessionSnapshot const& snapshot) {
                        background);
         paint_scrollbar(grid, shell.panes.front(), snapshot.client().viewport,
                         theme, background);
+
+        // Place the primary caret at its screen cell so the client can position
+        // a terminal cursor there.
+        auto const& content = shell.panes.front().content;
+        auto const& viewport = snapshot.client().viewport;
+        auto const& primary = snapshot.sections().selection.selections.primary();
+        auto const caret_line = primary.active.line.value();
+        auto const caret_cell = primary.active.cell.value();
+        for (std::size_t index = 0; index < viewport.visible_rows.size();
+             ++index) {
+            auto const& row = viewport.visible_rows[index];
+            if (row.logical_line != caret_line) continue;
+            auto const start = row.start_cell.value();
+            auto const end = start + row.content_cells;
+            if (caret_cell < start || caret_cell > end) continue;
+            int const column = content.x + static_cast<int>(caret_cell - start);
+            int const screen_row = content.y + static_cast<int>(index);
+            if (column >= content.x && column < content.right() &&
+                screen_row >= content.y && screen_row < content.bottom()) {
+                grid.caret = GridPosition{column, screen_row};
+            }
+            break;
+        }
     }
     return grid;
 }

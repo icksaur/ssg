@@ -11,6 +11,7 @@
 
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -26,10 +27,19 @@ struct CellGridCell {
     bool operator==(CellGridCell const&) const = default;
 };
 
+// The primary caret's cell, for the client to place its terminal/hardware cursor.
+struct GridPosition {
+    int column = 0;
+    int row = 0;
+
+    bool operator==(GridPosition const&) const = default;
+};
+
 struct CellGrid {
     GridSize size;
     std::array<SrgbColor, theme_palette_size> palette{};
     std::vector<CellGridCell> cells;
+    std::optional<GridPosition> caret;
 
     [[nodiscard]] CellGridCell const& at(int column, int row) const;
     [[nodiscard]] std::string canonical() const;
