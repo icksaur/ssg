@@ -82,6 +82,38 @@ TEST(runtime_text_selection_and_history_match_feature_operations) {
     ASSERT_EQ(runtime.active_document_text(), std::string{"abcd"});
 }
 
+TEST(typing_undo_breaks_on_word_and_line_boundaries) {
+    auto root = unique_root();
+    auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"edit.txt"}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"cursor.set_position", runtime.revision(), ssg::SelectionCommandArguments{ssg::resolve_document_position("abc", ssg::ByteOffset{3}), std::nullopt}}).accepted());
+
+    const auto type = [&](char character) {
+        return runtime.dispatch(ssg::ClientId{1}, {"text.insert", runtime.revision(), ssg::TextInputArguments{std::string{character}}}).accepted();
+    };
+    for (char character : std::string{"foo bar"}) ASSERT_TRUE(type(character));
+    ASSERT_EQ(runtime.active_document_text(), std::string{"abcfoo bar"});
+
+    // The space sealed the "foo " unit, so the first undo removes only "bar".
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"edit.undo", runtime.revision(), {}}).accepted());
+    ASSERT_EQ(runtime.active_document_text(), std::string{"abcfoo "});
+    // The second undo removes the "foo " word unit.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"edit.undo", runtime.revision(), {}}).accepted());
+    ASSERT_EQ(runtime.active_document_text(), std::string{"abc"});
+
+    // Newlines seal a unit per line.
+    ASSERT_TRUE(type('x'));
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"text.newline", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(type('y'));
+    ASSERT_EQ(runtime.active_document_text(), std::string{"abcx\ny"});
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"edit.undo", runtime.revision(), {}}).accepted());
+    ASSERT_EQ(runtime.active_document_text(), std::string{"abcx\n"});
+}
+
 TEST(workspace_replace_dispatch_matches_feature_preview_and_disk_apply) {
     auto root = unique_root();
     std::ofstream{root / "workspace" / "other.txt"} << "cat";
@@ -212,6 +244,7 @@ TEST(workspace_search_and_replace_exclude_runtime_state_roots) {
 
 int main() {
     RUN(runtime_text_selection_and_history_match_feature_operations);
+    RUN(typing_undo_breaks_on_word_and_line_boundaries);
     RUN(workspace_replace_dispatch_matches_feature_preview_and_disk_apply);
     RUN(workspace_replace_rejects_stale_and_out_of_bounds_preview);
     RUN(workspace_replace_updates_open_document_snapshot_and_disk);

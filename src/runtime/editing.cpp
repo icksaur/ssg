@@ -1,6 +1,7 @@
 #include "editor_runtime_internal.h"
 
 #include <algorithm>
+#include <cctype>
 
 namespace ssg {
 namespace {
@@ -63,13 +64,32 @@ CommandHandlerResult bind_text(EditorRuntime::Impl& runtime,
         if (typed == nullptr) return failure(wrong_payload(id));
         arguments = *typed;
     }
+    std::string inserted = arguments.text;
     auto result = apply_text_input(document->snapshot(), runtime.selection.selections,
                                    text_input_settings(runtime), command, std::move(arguments));
     if (!result.accepted() || !result.transaction || !result.selections) {
         return failure(result.message);
     }
-    return apply_transaction(runtime, *result.transaction, *result.selections,
-                             history_kind(command));
+    auto outcome = apply_transaction(runtime, *result.transaction, *result.selections,
+                                     history_kind(command));
+    // Keep undo word-granular: seal the current unit after a newline or after
+    // inserting a whitespace/punctuation boundary, so the next word starts a
+    // fresh undo step.
+    if (outcome.accepted) {
+        bool boundary = command == TextInputCommand::newline;
+        if (command == TextInputCommand::insert && !inserted.empty()) {
+            auto const last = static_cast<unsigned char>(inserted.back());
+            if (last < 0x80 && (std::isspace(last) || std::ispunct(last))) {
+                boundary = true;
+            }
+        }
+        if (boundary) {
+            if (auto const active = runtime.active_document_id()) {
+                runtime.history_for(*active).break_coalescing();
+            }
+        }
+    }
+    return outcome;
 }
 
 CommandHandlerResult bind_selection(EditorRuntime::Impl& runtime,
