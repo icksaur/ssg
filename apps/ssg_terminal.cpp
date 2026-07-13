@@ -75,8 +75,12 @@ InputEvent parse_input(std::string_view bytes, std::size_t& consumed) {
     if (bytes.empty()) return {};
 
     auto const first = static_cast<unsigned char>(bytes[0]);
+    if (first == '\r' || first == '\n') {
+        consumed = 1;
+        return {InputAction::activate, 0, 0};
+    }
     if (first != 0x1b) {
-        consumed = 1;  // Milestone 2 has no text entry; skip ordinary bytes.
+        consumed = 1;  // Milestone 3 has no text entry; skip ordinary bytes.
         return {};
     }
     if (bytes.size() < 2) return {};  // Lone ESC: wait for the rest.
@@ -93,10 +97,10 @@ InputEvent parse_input(std::string_view bytes, std::size_t& consumed) {
     switch (third) {
     case 'A':
         consumed = 3;
-        return {InputAction::scroll_lines, -1};
+        return {InputAction::line_up, 0, 0};
     case 'B':
         consumed = 3;
-        return {InputAction::scroll_lines, 1};
+        return {InputAction::line_down, 0, 0};
     case 'C':
     case 'D':
     case 'H':

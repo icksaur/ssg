@@ -117,14 +117,14 @@ class TreeCommandSet {
 public:
     TreeCommandSet(const TreeCommandSet&) = default;
     TreeCommandSet& operator=(const TreeCommandSet&) = delete;
-    const std::array<TreeCommandDescriptor, 2>& descriptors() const noexcept {
+    const std::array<TreeCommandDescriptor, 5>& descriptors() const noexcept {
         return descriptors_;
     }
 
 private:
     friend TreeCommandSet tree_command_set();
     TreeCommandSet();
-    const std::array<TreeCommandDescriptor, 2> descriptors_;
+    const std::array<TreeCommandDescriptor, 5> descriptors_;
 };
 
 TreeCommandSet tree_command_set();
@@ -140,6 +140,7 @@ struct TreeProviderView {
     TreeProviderId provider_id;
     TreeProviderKind kind;
     std::vector<TreeNodeView> nodes;
+    std::optional<TreeNodeId> selected;
     bool operator==(const TreeProviderView&) const = default;
 };
 
@@ -166,6 +167,14 @@ public:
     std::optional<TreeCommandInvocation> invoke_node_command(
         const TreeProviderId& provider_id, const TreeNodeId& node_id,
         std::string_view command_id) const;
+
+    // Selection navigation over the active provider's visible nodes.  Selection
+    // is library-owned UI state so every client presents the same focus.
+    bool select_next();
+    bool select_previous();
+    bool toggle_selected();  // Expand/collapse the selected directory.
+    [[nodiscard]] std::optional<TreeNode> selected_node() const;
+
     TreeViewState view_state() const;
 
 private:
@@ -174,8 +183,12 @@ private:
         std::vector<TreeNodeId> expanded;
     };
 
+    [[nodiscard]] ProviderState* active_provider();
+    [[nodiscard]] const ProviderState* active_provider() const;
+
     TreeRevision revision_{0};
     std::vector<ProviderState> providers_;
+    std::optional<TreeNodeId> selected_;
 };
 
 struct TreeProviderDelta {

@@ -35,6 +35,19 @@ CommandHandlerResult search_command(EditorRuntime::Impl& runtime, Revision revis
 }
 
 CommandHandlerResult tree_command(EditorRuntime::Impl& runtime, std::string_view id, std::any const& payload) {
+    if (id == "tree.select_next") { (void)runtime.tree.select_next(); return success(); }
+    if (id == "tree.select_previous") { (void)runtime.tree.select_previous(); return success(); }
+    if (id == "tree.activate") {
+        auto selected = runtime.tree.selected_node();
+        if (!selected) return failure("no tree node is selected");
+        if (selected->expandable) { (void)runtime.tree.toggle_selected(); return success(); }
+        if (selected->workspace_path) {
+            auto result = runtime.workspace.open_file(*selected->workspace_path);
+            if (!result.accepted() || !result.document) return failure("failed to open tree file");
+            return runtime.activate_document(*result.document);
+        }
+        return success();
+    }
     auto const* invocation = payload_as<TreeCommandInvocation>(payload);
     if (invocation == nullptr) return failure(std::string{id} + " requires a tree invocation payload");
     if (id == "tree.toggle_expanded") {

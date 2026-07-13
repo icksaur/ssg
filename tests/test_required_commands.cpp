@@ -149,6 +149,9 @@ constexpr auto expected_commands = std::to_array<ExpectedCommand>({
     {"panel.previous_provider", "shell-layout"},
     {"tree.toggle_expanded", "tree-providers"},
     {"tree.invoke_node_command", "tree-providers"},
+    {"tree.select_next", "tree-providers"},
+    {"tree.select_previous", "tree-providers"},
+    {"tree.activate", "tree-providers"},
     {"view.toggle_distraction_free", "shell-layout"},
     {"prompt.submit", "prompt-status-surface"},
     {"prompt.cancel", "prompt-status-surface"},
@@ -205,13 +208,13 @@ constexpr auto expected_category_counts =
         {"replace", 5},    {"search", 3},    {"completion", 5},
         {"hover", 2},      {"rename", 1},    {"pane", 9},
         {"panel", 4},
-        {"tree", 2},
+        {"tree", 5},
         {"prompt", 2},     {"status", 4},    {"workspace", 1},
         {"file", 15},      {"tab", 9},       {"external", 3},
         {"settings", 6},   {"follow_edits", 2}, {"diff", 3},
     });
 
-static_assert(expected_commands.size() == 161);
+static_assert(expected_commands.size() == 164);
 
 std::optional<std::string> field(const std::string& object,
                                  const std::string& name) {

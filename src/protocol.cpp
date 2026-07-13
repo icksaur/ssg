@@ -3747,6 +3747,7 @@ ProtocolValue to_value(TreeProviderView const& value) {
     fields.emplace_back("provider_id", to_value(value.provider_id));
     fields.emplace_back("kind", to_value(value.kind));
     fields.emplace_back("nodes", to_value(value.nodes));
+    fields.emplace_back("selected", to_value(value.selected));
     return ProtocolValue::make_object(std::move(fields));
 }
 bool decode_present(ProtocolValue const& value, std::optional<TreeProviderView>& out) {
@@ -3755,8 +3756,10 @@ bool decode_present(ProtocolValue const& value, std::optional<TreeProviderView>&
     auto provider_id = require_field<TreeProviderId>(value.field("provider_id"));
     auto kind = require_field<TreeProviderKind>(value.field("kind"));
     auto nodes = require_field<std::vector<TreeNodeView>>(value.field("nodes"));
+    std::optional<TreeNodeId> selected;
     if (!provider_id || !kind || !nodes) return false;
-    out.emplace(TreeProviderView{*provider_id, *kind, *nodes});
+    if (!decode_optional_field(value.field("selected"), selected)) return false;
+    out.emplace(TreeProviderView{*provider_id, *kind, *nodes, selected});
     return true;
 }
 

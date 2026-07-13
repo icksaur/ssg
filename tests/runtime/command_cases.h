@@ -126,6 +126,9 @@ inline constexpr auto runtime_command_cases = std::to_array<RuntimeCommandCase>(
     RuntimeCommandCase{"panel.previous_provider", "shell-layout"},
     RuntimeCommandCase{"tree.toggle_expanded", "tree-providers"},
     RuntimeCommandCase{"tree.invoke_node_command", "tree-providers"},
+    RuntimeCommandCase{"tree.select_next", "tree-providers"},
+    RuntimeCommandCase{"tree.select_previous", "tree-providers"},
+    RuntimeCommandCase{"tree.activate", "tree-providers"},
     RuntimeCommandCase{"view.toggle_distraction_free", "shell-layout"},
     RuntimeCommandCase{"prompt.submit", "prompt-status-surface"},
     RuntimeCommandCase{"prompt.cancel", "prompt-status-surface"},
@@ -174,6 +177,6 @@ inline constexpr auto runtime_command_cases = std::to_array<RuntimeCommandCase>(
     RuntimeCommandCase{"diff.open_file", "diff-model"},
 });
 
-static_assert(runtime_command_cases.size() == 161);
+static_assert(runtime_command_cases.size() == 164);
 
 } // namespace ssg::test

@@ -124,9 +124,11 @@ int main(int argc, char** argv) {
 
     std::string pending;
     bool quit = false;
+    bool panel_visible = false;
     while (!quit) {
         auto snapshot = runtime.snapshot(client, terminal_size());
         if (snapshot) {
+            panel_visible = snapshot->sections().shell.panel.has_value();
             write_all(
                 ssg::app::encode_ansi_frame(ssg::render(*snapshot)));
         }
@@ -141,19 +143,36 @@ int main(int argc, char** argv) {
             auto event = ssg::app::parse_input(pending, consumed);
             if (consumed == 0) break;  // Incomplete sequence; read more.
             pending.erase(0, consumed);
+            auto scroll = [&](std::int64_t lines) {
+                (void)runtime.dispatch(
+                    client, {"view.scroll_lines", runtime.revision(),
+                             ssg::ScrollLinesArguments{lines}});
+            };
+            auto tree = [&](char const* command) {
+                (void)runtime.dispatch(client,
+                                       {command, runtime.revision(), {}});
+            };
             switch (event.action) {
             case ssg::app::InputAction::chord:
                 if (event.key == 'Q') {
                     quit = true;
                 } else if (event.key == 'b') {
-                    (void)runtime.dispatch(
-                        client, {"panel.toggle", runtime.revision(), {}});
+                    tree("panel.toggle");
                 }
                 break;
+            case ssg::app::InputAction::line_up:
+                if (panel_visible) tree("tree.select_previous");
+                else scroll(-1);
+                break;
+            case ssg::app::InputAction::line_down:
+                if (panel_visible) tree("tree.select_next");
+                else scroll(1);
+                break;
+            case ssg::app::InputAction::activate:
+                if (panel_visible) tree("tree.activate");
+                break;
             case ssg::app::InputAction::scroll_lines:
-                (void)runtime.dispatch(
-                    client, {"view.scroll_lines", runtime.revision(),
-                             ssg::ScrollLinesArguments{event.amount}});
+                scroll(event.amount);
                 break;
             case ssg::app::InputAction::scroll_pages:
                 (void)runtime.dispatch(

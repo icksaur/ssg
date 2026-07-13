@@ -172,11 +172,20 @@ void paint_panel_tree(CellGrid& grid, Rect const& panel,
     auto const& provider = tree.providers.front();
     auto const foreground = semantic_index(theme, SemanticRole::foreground);
     auto const directory = semantic_index(theme, SemanticRole::panel_active);
+    auto const selected_bg = semantic_index(theme, SemanticRole::tree_focus);
     int const top = panel.y + 1;  // Row 0 shows the provider name.
     int const rows = panel.height - 1;
     for (std::size_t index = 0; index < provider.nodes.size(); ++index) {
         if (static_cast<int>(index) >= rows) break;
         auto const& view = provider.nodes[index];
+        int const y = top + static_cast<int>(index);
+        bool const is_selected =
+            provider.selected && view.node.id == *provider.selected;
+        auto const row_background = is_selected ? selected_bg : background;
+        if (is_selected) {
+            fill_rect(grid, {panel.x, y, panel.width, 1}, foreground,
+                      row_background, SemanticRole::tree_focus);
+        }
         std::string line(view.depth * 2, ' ');
         if (view.node.expandable) {
             line += view.expanded ? "\xe2\x96\xbe " : "\xe2\x96\xb8 ";  // v / >
@@ -184,8 +193,8 @@ void paint_panel_tree(CellGrid& grid, Rect const& panel,
         line += view.node.label;
         auto const color =
             view.node.kind == TreeNodeKind::directory ? directory : foreground;
-        paint_text(grid, panel.x, top + static_cast<int>(index), panel.right(),
-                   line, color, background, SemanticRole::foreground);
+        paint_text(grid, panel.x, y, panel.right(), line, color, row_background,
+                   SemanticRole::foreground);
     }
 }
 

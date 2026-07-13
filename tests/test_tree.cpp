@@ -130,10 +130,14 @@ TEST(expansion_survives_refresh_by_identity_and_disappearing_nodes_are_pruned) {
 
 TEST(command_set_is_exact_and_invocation_is_provider_data_only) {
     const auto commands = tree_command_set();
-    ASSERT_EQ(commands.descriptors().size(), std::size_t{2});
+    ASSERT_EQ(commands.descriptors().size(), std::size_t{5});
     ASSERT_EQ(commands.descriptors()[0].id, std::string_view{"tree.toggle_expanded"});
     ASSERT_EQ(commands.descriptors()[1].id,
               std::string_view{"tree.invoke_node_command"});
+    ASSERT_EQ(commands.descriptors()[2].id, std::string_view{"tree.select_next"});
+    ASSERT_EQ(commands.descriptors()[3].id,
+              std::string_view{"tree.select_previous"});
+    ASSERT_EQ(commands.descriptors()[4].id, std::string_view{"tree.activate"});
 
     TreeModel model;
     model.replace_provider(symbol_tree_snapshot(
@@ -148,6 +152,50 @@ TEST(command_set_is_exact_and_invocation_is_provider_data_only) {
     ASSERT_FALSE(model.invoke_node_command(
         TreeProviderId{"symbols"}, TreeNodeId{"symbols:type/A"}, "missing")
                      .has_value());
+}
+
+TEST(selection_navigates_expands_and_reports_selected_node) {
+    TreeModel model;
+    model.replace_provider(symbol_tree_snapshot(
+        TreeProviderId{"symbols"}, TreeRevision{1},
+        {{.stable_key = "A", .label = "A"},
+         {.stable_key = "A/one", .parent_key = "A", .label = "one"},
+         {.stable_key = "B", .label = "B"}}));
+
+    // Populating the provider auto-selects its first visible node.
+    auto selected = model.selected_node();
+    ASSERT_TRUE(selected.has_value());
+    if (selected) ASSERT_EQ(selected->id, TreeNodeId{"symbols:A"});
+
+    // Only roots A and B are visible while A is collapsed; next selects B.
+    ASSERT_TRUE(model.select_next());
+    selected = model.selected_node();
+    if (selected) ASSERT_EQ(selected->id, TreeNodeId{"symbols:B"});
+
+    // At the last visible node, next clamps.
+    ASSERT_TRUE(model.select_next());
+    selected = model.selected_node();
+    if (selected) ASSERT_EQ(selected->id, TreeNodeId{"symbols:B"});
+
+    // Return to A and expand it, revealing its child.
+    ASSERT_TRUE(model.select_previous());
+    selected = model.selected_node();
+    if (selected) ASSERT_EQ(selected->id, TreeNodeId{"symbols:A"});
+    ASSERT_TRUE(model.toggle_selected());
+    ASSERT_TRUE(model.select_next());
+    selected = model.selected_node();
+    if (selected) ASSERT_EQ(selected->id, TreeNodeId{"symbols:A/one"});
+
+    // The selection is exposed on the provider view.
+    const auto view = model.view_state();
+    ASSERT_FALSE(view.providers.empty());
+    if (!view.providers.empty()) {
+        ASSERT_TRUE(view.providers.front().selected.has_value());
+        if (view.providers.front().selected) {
+            ASSERT_EQ(*view.providers.front().selected,
+                      TreeNodeId{"symbols:A/one"});
+        }
+    }
 }
 
 TEST(bounded_delta_replays_to_independent_view_and_rejects_stale_base) {
@@ -208,6 +256,7 @@ int main() {
     RUN(git_and_symbol_snapshots_are_deterministic_and_use_stable_keys);
     RUN(expansion_survives_refresh_by_identity_and_disappearing_nodes_are_pruned);
     RUN(command_set_is_exact_and_invocation_is_provider_data_only);
+    RUN(selection_navigates_expands_and_reports_selected_node);
     RUN(bounded_delta_replays_to_independent_view_and_rejects_stale_base);
     RUN(over_budget_delta_requires_snapshot_without_partial_operations);
     return failed == 0 ? 0 : 1;

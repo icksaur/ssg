@@ -93,15 +93,22 @@ TEST(parse_input_chord_keys) {
     ASSERT_EQ(consumed, std::size_t{2});
 }
 
-TEST(parse_input_arrows_scroll_lines) {
+TEST(parse_input_arrows_are_line_events) {
     std::size_t consumed = 0;
     auto up = ssg::app::parse_input(std::string_view{"\x1b[A"}, consumed);
-    ASSERT_TRUE(up.action == ssg::app::InputAction::scroll_lines);
-    ASSERT_EQ(up.amount, std::int64_t{-1});
+    ASSERT_TRUE(up.action == ssg::app::InputAction::line_up);
     ASSERT_EQ(consumed, std::size_t{3});
     auto down = ssg::app::parse_input(std::string_view{"\x1b[B"}, consumed);
-    ASSERT_TRUE(down.action == ssg::app::InputAction::scroll_lines);
-    ASSERT_EQ(down.amount, std::int64_t{1});
+    ASSERT_TRUE(down.action == ssg::app::InputAction::line_down);
+}
+
+TEST(parse_input_enter_activates) {
+    std::size_t consumed = 0;
+    auto cr = ssg::app::parse_input(std::string_view{"\r"}, consumed);
+    ASSERT_TRUE(cr.action == ssg::app::InputAction::activate);
+    ASSERT_EQ(consumed, std::size_t{1});
+    auto lf = ssg::app::parse_input(std::string_view{"\n"}, consumed);
+    ASSERT_TRUE(lf.action == ssg::app::InputAction::activate);
 }
 
 TEST(parse_input_page_keys_scroll_pages) {
@@ -152,7 +159,8 @@ int main() {
     RUN(encode_ansi_frame_addresses_rows_and_emits_palette_colors);
     RUN(encode_ansi_frame_skips_wide_glyph_continuation);
     RUN(parse_input_chord_keys);
-    RUN(parse_input_arrows_scroll_lines);
+    RUN(parse_input_arrows_are_line_events);
+    RUN(parse_input_enter_activates);
     RUN(parse_input_page_keys_scroll_pages);
     RUN(parse_input_sgr_wheel);
     RUN(parse_input_incomplete_waits);
