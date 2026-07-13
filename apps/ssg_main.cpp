@@ -128,7 +128,7 @@ int main(int argc, char** argv) {
         auto snapshot = runtime.snapshot(client, terminal_size());
         if (snapshot) {
             write_all(
-                ssg::app::encode_ansi_frame(ssg::tui::render_screen(*snapshot)));
+                ssg::app::encode_ansi_frame(ssg::render(*snapshot)));
         }
 
         char buffer[64];

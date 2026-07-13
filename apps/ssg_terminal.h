@@ -7,7 +7,7 @@
 // module only resolves launch arguments and formats an already-rendered cell
 // grid into terminal bytes.
 
-#include "tui_fixture.h"
+#include <ssg/render.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -50,6 +50,6 @@ struct InputEvent {
 // rows with 24-bit foreground/background colors drawn from the snapshot's
 // 16-color palette.  Continuation cells (the trailing half of a wide glyph)
 // emit nothing because the wide glyph already advanced the cursor.
-[[nodiscard]] std::string encode_ansi_frame(ssg::tui::ScreenSnapshot const& screen);
+[[nodiscard]] std::string encode_ansi_frame(ssg::CellGrid const& screen);
 
 }  // namespace ssg::app

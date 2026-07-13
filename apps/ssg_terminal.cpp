@@ -23,7 +23,7 @@ LaunchTarget resolve_launch(fs::path const& argument) {
     return {parent, absolute.filename().string()};
 }
 
-std::string encode_ansi_frame(ssg::tui::ScreenSnapshot const& screen) {
+std::string encode_ansi_frame(ssg::CellGrid const& screen) {
     constexpr std::size_t max_index = ssg::theme_palette_size - 1;
     auto color = [&](std::uint8_t index, char kind) {
         auto const& c = screen.palette[std::min<std::size_t>(index, max_index)];

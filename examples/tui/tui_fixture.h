@@ -32,27 +32,6 @@ private:
     KeySequence pending_;
 };
 
-struct ScreenCell {
-    std::string text{" "};
-    std::uint8_t foreground{0};
-    std::uint8_t background{0};
-    SemanticRole role{SemanticRole::background};
-    bool continuation{false};
-
-    bool operator==(ScreenCell const&) const = default;
-};
-
-struct ScreenSnapshot {
-    GridSize size;
-    std::array<SrgbColor, theme_palette_size> palette;
-    std::vector<ScreenCell> cells;
-
-    [[nodiscard]] ScreenCell const& at(int column, int row) const;
-    [[nodiscard]] std::string canonical() const;
-};
-
-[[nodiscard]] ScreenSnapshot render_screen(SessionSnapshot const& snapshot);
-
 class TuiClient {
 public:
     using SnapshotProvider = std::function<SessionSnapshot()>;

@@ -34,15 +34,15 @@ TEST(resolve_launch_file_opens_parent_directory_and_file) {
 }
 
 TEST(encode_ansi_frame_addresses_rows_and_emits_palette_colors) {
-    ssg::tui::ScreenSnapshot screen;
+    ssg::CellGrid screen;
     screen.size = {2, 1};
     screen.palette[0] = {10, 20, 30};
     screen.palette[1] = {200, 100, 50};
-    ssg::tui::ScreenCell left;
+    ssg::CellGridCell left;
     left.text = "X";
     left.foreground = 1;
     left.background = 0;
-    ssg::tui::ScreenCell right;
+    ssg::CellGridCell right;
     right.text = "Y";
     right.foreground = 1;
     right.background = 0;
@@ -61,12 +61,12 @@ TEST(encode_ansi_frame_addresses_rows_and_emits_palette_colors) {
 }
 
 TEST(encode_ansi_frame_skips_wide_glyph_continuation) {
-    ssg::tui::ScreenSnapshot screen;
+    ssg::CellGrid screen;
     screen.size = {2, 1};
     screen.palette[0] = {0, 0, 0};
-    ssg::tui::ScreenCell wide;
+    ssg::CellGridCell wide;
     wide.text = "\xe4\xb8\xad";  // U+4E2D, a double-width glyph.
-    ssg::tui::ScreenCell continuation;
+    ssg::CellGridCell continuation;
     continuation.continuation = true;
     continuation.text = " ";
     screen.cells = {wide, continuation};

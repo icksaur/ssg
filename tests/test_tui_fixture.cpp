@@ -2,6 +2,8 @@
 #include "test_helpers.h"
 #include "tui_fixture.h"
 
+#include <ssg/render.h>
+
 #include <ssg/editor_session_assembly.h>
 #include <ssg/session_snapshot.h>
 
@@ -265,7 +267,7 @@ TEST(final_workflow_screen_matches_hand_authored_16_color_golden) {
         ASSERT_EQ(result.accepted(), step.expected_accepted);
     }
 
-    auto screen = ssg::tui::render_screen(client.snapshot());
+    auto screen = ssg::render(client.snapshot());
     ASSERT_EQ(screen.palette.size(), ssg::theme_palette_size);
     for (auto const& cell : screen.cells) {
         ASSERT_TRUE(cell.foreground < ssg::theme_palette_size);
