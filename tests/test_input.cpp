@@ -1,3 +1,4 @@
+#include <ssg/focus.h>
 #include <ssg/input.h>
 
 #include "test_helpers.h"
@@ -5,6 +6,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -74,6 +76,157 @@ TEST(validate_keymap_flags_duplicate_unreachable_and_reserved_bindings) {
     }));
 }
 
+TEST(keymap_contexts_are_star_plus_focus_names) {
+    const auto contexts = ssg::keymap_contexts();
+    std::set<std::string_view> actual{contexts.begin(), contexts.end()};
+    const std::set<std::string_view> expected{"*", "editor", "panel", "prompt"};
+    ASSERT_TRUE(actual == expected);
+    ASSERT_EQ(ssg::focus_target_name(ssg::FocusTarget::editor),
+              std::string_view{"editor"});
+    ASSERT_EQ(ssg::focus_target_name(ssg::FocusTarget::panel),
+              std::string_view{"panel"});
+    ASSERT_EQ(ssg::focus_target_name(ssg::FocusTarget::prompt),
+              std::string_view{"prompt"});
+}
+
+namespace {
+
+bool has_error(const std::vector<ssg::KeymapError>& errors,
+               ssg::KeymapErrorCode code) {
+    return std::ranges::any_of(
+        errors, [&](const auto& error) { return error.code == code; });
+}
+
+}  // namespace
+
+TEST(validate_keymap_rejects_unknown_context) {
+    const auto seq = *ssg::parse_key_sequence({"ArrowDown"});
+    ssg::KeymapViewState bad{"bad", {{seq, "cursor.line_down", "sidebar"}}};
+    ASSERT_TRUE(
+        has_error(ssg::validate_keymap(bad, {}), ssg::KeymapErrorCode::unknown_context));
+
+    for (const auto context : {"*", "editor", "panel", "prompt"}) {
+        ssg::KeymapViewState good{"ok", {{seq, "cursor.line_down", context}}};
+        ASSERT_FALSE(has_error(ssg::validate_keymap(good, {}),
+                               ssg::KeymapErrorCode::unknown_context));
+    }
+}
+
+TEST(validate_keymap_rejects_ambiguous_prefix_order_independently) {
+    const auto esc_f = *ssg::parse_key_sequence({"Escape", "KeyF"});
+    const auto esc_f_t = *ssg::parse_key_sequence({"Escape", "KeyF", "KeyT"});
+
+    // Same context (both "*"): a strict prefix pair is ambiguous, in either order.
+    ssg::KeymapViewState forward{
+        "m", {{esc_f, "a", "*"}, {esc_f_t, "b", "*"}}};
+    ssg::KeymapViewState reversed{
+        "m", {{esc_f_t, "b", "*"}, {esc_f, "a", "*"}}};
+    ASSERT_TRUE(has_error(ssg::validate_keymap(forward, {}),
+                          ssg::KeymapErrorCode::ambiguous_prefix));
+    ASSERT_TRUE(has_error(ssg::validate_keymap(reversed, {}),
+                          ssg::KeymapErrorCode::ambiguous_prefix));
+
+    // "*"/focus overlap: a global prefix and a focus continuation collide.
+    ssg::KeymapViewState star_focus{
+        "m", {{esc_f, "a", "*"}, {esc_f_t, "b", "editor"}}};
+    ASSERT_TRUE(has_error(ssg::validate_keymap(star_focus, {}),
+                          ssg::KeymapErrorCode::ambiguous_prefix));
+
+    // focus/focus in the SAME context collide.
+    ssg::KeymapViewState focus_focus{
+        "m", {{esc_f, "a", "editor"}, {esc_f_t, "b", "editor"}}};
+    ASSERT_TRUE(has_error(ssg::validate_keymap(focus_focus, {}),
+                          ssg::KeymapErrorCode::ambiguous_prefix));
+
+    // DIFFERENT focus contexts do not overlap, so a prefix pair is allowed.
+    ssg::KeymapViewState disjoint{
+        "m", {{esc_f, "a", "editor"}, {esc_f_t, "b", "panel"}}};
+    ASSERT_FALSE(has_error(ssg::validate_keymap(disjoint, {}),
+                           ssg::KeymapErrorCode::ambiguous_prefix));
+}
+
+TEST(resolve_key_sequence_maps_same_key_per_context) {
+    const auto down = *ssg::parse_key_sequence({"ArrowDown"});
+    ssg::KeymapViewState keymap{
+        "default",
+        {{down, "cursor.line_down", "editor"},
+         {down, "tree.select_next", "panel"}}};
+
+    const auto in_editor = ssg::resolve_key_sequence(keymap, down, "editor");
+    ASSERT_EQ(in_editor.kind, ssg::KeymapMatchKind::resolved);
+    ASSERT_EQ(in_editor.command_id, std::string{"cursor.line_down"});
+
+    const auto in_panel = ssg::resolve_key_sequence(keymap, down, "panel");
+    ASSERT_EQ(in_panel.kind, ssg::KeymapMatchKind::resolved);
+    ASSERT_EQ(in_panel.command_id, std::string{"tree.select_next"});
+
+    // No eligible binding in prompt context.
+    ASSERT_EQ(ssg::resolve_key_sequence(keymap, down, "prompt").kind,
+              ssg::KeymapMatchKind::none);
+}
+
+TEST(resolve_key_sequence_star_beats_focus_and_resolves_everywhere) {
+    const auto save = *ssg::parse_key_sequence({"Escape", "KeyS"});
+    // A "*" binding and a same-sequence focus binding; "*" must win regardless of
+    // which is listed first, and resolve in every context.
+    ssg::KeymapViewState focus_first{
+        "m", {{save, "focus.only", "editor"}, {save, "file.save", "*"}}};
+    ssg::KeymapViewState star_first{
+        "m", {{save, "file.save", "*"}, {save, "focus.only", "editor"}}};
+    for (const auto* keymap : {&focus_first, &star_first}) {
+        for (const auto context : {"editor", "panel", "prompt"}) {
+            const auto r = ssg::resolve_key_sequence(*keymap, save, context);
+            ASSERT_EQ(r.kind, ssg::KeymapMatchKind::resolved);
+            ASSERT_EQ(r.command_id, std::string{"file.save"});
+        }
+    }
+}
+
+TEST(resolve_key_sequence_reports_pending_and_none) {
+    const auto esc = *ssg::parse_key_sequence({"Escape"});
+    const auto esc_s = *ssg::parse_key_sequence({"Escape", "KeyS"});
+    const auto esc_x = *ssg::parse_key_sequence({"Escape", "KeyX"});
+    ssg::KeymapViewState keymap{"m", {{esc_s, "file.save", "*"}}};
+
+    ASSERT_EQ(ssg::resolve_key_sequence(keymap, esc, "editor").kind,
+              ssg::KeymapMatchKind::pending);
+    ASSERT_EQ(ssg::resolve_key_sequence(keymap, esc_s, "editor").kind,
+              ssg::KeymapMatchKind::resolved);
+    ASSERT_EQ(ssg::resolve_key_sequence(keymap, esc_x, "editor").kind,
+              ssg::KeymapMatchKind::none);
+    ASSERT_EQ(ssg::resolve_key_sequence(keymap, {}, "editor").kind,
+              ssg::KeymapMatchKind::none);
+}
+
+TEST(text_routing_is_per_context) {
+    ASSERT_EQ(ssg::text_routing("editor"), ssg::TextRouting::insert);
+    ASSERT_EQ(ssg::text_routing("prompt"), ssg::TextRouting::prompt_query);
+    ASSERT_EQ(ssg::text_routing("panel"), ssg::TextRouting::ignore);
+    ASSERT_EQ(ssg::text_routing("*"), ssg::TextRouting::ignore);
+}
+
+TEST(has_global_binding_requires_unreserved_unshadowed_star) {
+    const auto seq = *ssg::parse_key_sequence({"Escape", "KeyF", "KeyT"});
+
+    ssg::KeymapViewState present{"m", {{seq, "settings.open", "*"}}};
+    ASSERT_TRUE(ssg::has_global_binding(present, "settings.open", {}));
+
+    // Focus-context (not global) does not count.
+    ssg::KeymapViewState contextual{"m", {{seq, "settings.open", "editor"}}};
+    ASSERT_FALSE(ssg::has_global_binding(contextual, "settings.open", {}));
+
+    // Reserved sequence does not count.
+    ASSERT_FALSE(ssg::has_global_binding(present, "settings.open", {&seq, 1}));
+
+    // Shadowed by an earlier "*" binding of the same sequence does not count.
+    ssg::KeymapViewState shadowed{
+        "m", {{seq, "other.command", "*"}, {seq, "settings.open", "*"}}};
+    ASSERT_FALSE(ssg::has_global_binding(shadowed, "settings.open", {}));
+
+    // Absent command.
+    ASSERT_FALSE(ssg::has_global_binding(present, "file.save", {}));
+}
+
 TEST(ime_accepts_only_committed_utf8_text) {
     const auto committed =
         ssg::CommittedText::from_utf8("e\xCC\x81 \xF0\x9F\x98\x80");
@@ -141,6 +294,14 @@ TEST(backend_has_no_platform_input_capture_dependency) {
 int main() {
     RUN(key_strokes_have_a_canonical_round_trip);
     RUN(validate_keymap_flags_duplicate_unreachable_and_reserved_bindings);
+    RUN(keymap_contexts_are_star_plus_focus_names);
+    RUN(validate_keymap_rejects_unknown_context);
+    RUN(validate_keymap_rejects_ambiguous_prefix_order_independently);
+    RUN(resolve_key_sequence_maps_same_key_per_context);
+    RUN(resolve_key_sequence_star_beats_focus_and_resolves_everywhere);
+    RUN(resolve_key_sequence_reports_pending_and_none);
+    RUN(text_routing_is_per_context);
+    RUN(has_global_binding_requires_unreserved_unshadowed_star);
     RUN(ime_accepts_only_committed_utf8_text);
     RUN(hit_targets_round_trip_typed_semantic_arguments);
     RUN(backend_has_no_platform_input_capture_dependency);

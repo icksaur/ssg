@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ssg/focus.h>
 #include <ssg/selection.h>
 #include <ssg/text_input_commands.h>
 
@@ -64,6 +65,8 @@ enum class KeymapErrorCode : std::uint8_t {
     duplicate_binding,
     unreachable_binding,
     reserved_binding,
+    unknown_context,
+    ambiguous_prefix,
 };
 
 struct KeymapError {
@@ -79,6 +82,50 @@ struct KeymapError {
     std::span<const KeySequence> reserved_sequences);
 [[nodiscard]] KeymapDelta derive_keymap_delta(const KeymapViewState& previous,
                                               const KeymapViewState& current);
+
+// The canonical keymap contexts: "*" plus every FocusTarget name (see
+// keymap_contexts() in <ssg/focus.h>).  A binding whose context is outside this
+// set is rejected by validate_keymap with unknown_context.
+
+// Whether a binding is eligible in the given resolution context: its context is
+// "*" (global) or equals the context (a FocusTarget name).  See
+// doc/spec-keymap.md.
+enum class KeymapMatchKind : std::uint8_t { none, pending, resolved };
+
+struct KeymapResolution {
+    KeymapMatchKind kind = KeymapMatchKind::none;
+    std::string command_id;  // Set iff kind == resolved.
+
+    bool operator==(const KeymapResolution&) const = default;
+};
+
+// Resolve a pending key sequence against the published keymap in a focus
+// context.  Pure: a function of (keymap, pending, context) with no state and no
+// round-trip (doc/spec-keymap.md K3).  `context` is a FocusTarget name.
+//   resolved - an eligible binding's sequence equals `pending`; a "*" binding
+//              takes precedence over a same-sequence focus binding (K4).
+//   pending  - some eligible binding's sequence has `pending` as a strict prefix
+//              (the chord is mid-entry).
+//   none     - neither; the caller clears the pending sequence.
+// Prefix-freeness (validate_keymap ambiguous_prefix) makes resolved and pending
+// mutually exclusive.
+[[nodiscard]] KeymapResolution resolve_key_sequence(
+    const KeymapViewState& keymap, const KeySequence& pending,
+    std::string_view context);
+
+// Where committed text (with no pending chord) is routed in a focus context
+// (doc/spec-keymap.md).  Committed text is never a keymap binding.
+enum class TextRouting : std::uint8_t { insert, prompt_query, ignore };
+
+[[nodiscard]] TextRouting text_routing(std::string_view context) noexcept;
+
+// Whether the keymap has a usable global binding for `command_id`: some
+// "*"-context binding names it, is not browser-reserved (checked against
+// `reserved_sequences`), and is not shadowed by an earlier "*" binding of the
+// same sequence.  Used to enforce the settings.open escape hatch (I24, K6).
+[[nodiscard]] bool has_global_binding(
+    const KeymapViewState& keymap, std::string_view command_id,
+    std::span<const KeySequence> reserved_sequences);
 
 class CommittedText {
 public:

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ssg/focus.h"
 #include "ssg/theme.h"
 
 #include <array>
@@ -42,10 +43,6 @@ private:
 
 enum class SplitAxis : std::uint8_t { horizontal, vertical };
 enum class PaneDirection : std::uint8_t { left, right, up, down };
-
-// The surface that currently receives keyboard input.  One value is authoritative
-// session state; clients route keys by it.
-enum class FocusTarget : std::uint8_t { editor, panel, prompt };
 
 enum class ShellNodeKind : std::uint8_t {
     header,

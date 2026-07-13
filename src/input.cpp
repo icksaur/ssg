@@ -97,6 +97,23 @@ bool starts_with_sequence(const KeySequence& sequence,
            std::equal(prefix.begin(), prefix.end(), sequence.begin());
 }
 
+bool is_strict_prefix(const KeySequence& shorter, const KeySequence& longer) {
+    return shorter.size() < longer.size() &&
+           std::equal(shorter.begin(), shorter.end(), longer.begin());
+}
+
+bool known_context(std::string_view context) {
+    const auto contexts = keymap_contexts();
+    return std::ranges::find(contexts, context) != contexts.end();
+}
+
+// Two bindings can both apply during resolution when their contexts overlap:
+// either shares "*", or they name the same context.  A "*" binding is eligible
+// in every context, so it overlaps every binding.
+bool contexts_overlap(std::string_view left, std::string_view right) {
+    return left == "*" || right == "*" || left == right;
+}
+
 bool selection_arguments_equal(const SelectionCommandArguments& left,
                                const SelectionCommandArguments& right) {
     return left.position == right.position &&
@@ -215,6 +232,9 @@ std::vector<KeymapError> validate_keymap(
         if (binding.context.empty()) {
             errors.push_back({KeymapErrorCode::empty_context, index,
                               "binding context is empty"});
+        } else if (!known_context(binding.context)) {
+            errors.push_back({KeymapErrorCode::unknown_context, index,
+                              "binding context is not '*' or a focus target"});
         }
         if (std::ranges::any_of(
                 reserved_sequences, [&](const auto& reserved) {
@@ -239,6 +259,24 @@ std::vector<KeymapError> validate_keymap(
                 break;
             }
         }
+        // A binding whose sequence strictly prefixes (or is strictly prefixed
+        // by) another eligible binding's sequence makes resolution ambiguous:
+        // one input would be both a resolved chord and a pending prefix.  The
+        // check is symmetric and order-independent (it reports the longer,
+        // higher-indexed binding once).
+        for (std::size_t other = 0; other < index; ++other) {
+            const auto& earlier = keymap.bindings[other];
+            if (!contexts_overlap(earlier.context, binding.context)) {
+                continue;
+            }
+            if (is_strict_prefix(earlier.sequence, binding.sequence) ||
+                is_strict_prefix(binding.sequence, earlier.sequence)) {
+                errors.push_back(
+                    {KeymapErrorCode::ambiguous_prefix, index,
+                     "binding sequence is a prefix of another eligible binding"});
+                break;
+            }
+        }
     }
     return errors;
 }
@@ -249,6 +287,80 @@ KeymapDelta derive_keymap_delta(const KeymapViewState& previous,
         return {false, std::nullopt};
     }
     return {true, current};
+}
+
+namespace {
+
+bool eligible_in(const KeyBinding& binding, std::string_view context) {
+    return binding.context == "*" || binding.context == context;
+}
+
+}  // namespace
+
+KeymapResolution resolve_key_sequence(const KeymapViewState& keymap,
+                                      const KeySequence& pending,
+                                      std::string_view context) {
+    if (pending.empty()) {
+        return {KeymapMatchKind::none, {}};
+    }
+    const KeyBinding* match = nullptr;
+    bool has_pending = false;
+    for (const auto& binding : keymap.bindings) {
+        if (!eligible_in(binding, context)) {
+            continue;
+        }
+        if (binding.sequence == pending) {
+            // "*" wins over a focus binding for the same sequence (K4), so a
+            // global chord is never shadowed.  Prefix-freeness guarantees no
+            // eligible binding is also pending here.
+            if (match == nullptr || binding.context == "*") {
+                match = &binding;
+            }
+        } else if (is_strict_prefix(pending, binding.sequence)) {
+            has_pending = true;
+        }
+    }
+    if (match != nullptr) {
+        return {KeymapMatchKind::resolved, match->command_id};
+    }
+    return {has_pending ? KeymapMatchKind::pending : KeymapMatchKind::none, {}};
+}
+
+TextRouting text_routing(std::string_view context) noexcept {
+    if (context == focus_target_name(FocusTarget::editor)) {
+        return TextRouting::insert;
+    }
+    if (context == focus_target_name(FocusTarget::prompt)) {
+        return TextRouting::prompt_query;
+    }
+    return TextRouting::ignore;
+}
+
+bool has_global_binding(const KeymapViewState& keymap,
+                        std::string_view command_id,
+                        std::span<const KeySequence> reserved_sequences) {
+    for (std::size_t index = 0; index < keymap.bindings.size(); ++index) {
+        const auto& binding = keymap.bindings[index];
+        if (binding.context != "*" || binding.command_id != command_id) {
+            continue;
+        }
+        if (std::ranges::any_of(reserved_sequences, [&](const auto& reserved) {
+                return starts_with_sequence(binding.sequence, reserved);
+            })) {
+            continue;
+        }
+        const bool shadowed = std::any_of(
+            keymap.bindings.begin(), keymap.bindings.begin() + index,
+            [&](const KeyBinding& earlier) {
+                return earlier.context == "*" &&
+                       earlier.sequence == binding.sequence &&
+                       earlier.command_id != binding.command_id;
+            });
+        if (!shadowed) {
+            return true;
+        }
+    }
+    return false;
 }
 
 std::optional<CommittedText> CommittedText::from_utf8(std::string text) {
