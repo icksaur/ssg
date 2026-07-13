@@ -538,15 +538,16 @@ LspWorkspaceFileResult EditorRuntime::Impl::restore_path(std::string uri, const 
 }
 
 std::optional<FileDocumentId> EditorRuntime::Impl::active_document_id() const {
+    // The active tab is the single source of truth for the active editor
+    // document.  With no active tab (e.g. the last tab was closed) there is no
+    // active document and the shell renders its empty state; the editor view
+    // never shows a document that has no tab.
     auto const& view = tabs.view_state();
-    if (view.active) {
-        auto found = std::find_if(view.tabs.begin(), view.tabs.end(), [&](TabState const& tab) {
-            return tab.id == *view.active;
-        });
-        if (found != view.tabs.end()) return found->document;
-    }
-    auto ids = workspace.documents();
-    if (!ids.empty()) return ids.front();
+    if (!view.active) return std::nullopt;
+    auto found = std::find_if(view.tabs.begin(), view.tabs.end(), [&](TabState const& tab) {
+        return tab.id == *view.active;
+    });
+    if (found != view.tabs.end()) return found->document;
     return std::nullopt;
 }
 

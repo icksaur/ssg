@@ -2,6 +2,7 @@
 
 #include <ssg/editor_runtime.h>
 #include <ssg/file_commands.h>
+#include <ssg/session_snapshot.h>
 #include <ssg/text_encoding.h>
 #include <ssg/text_input_commands.h>
 
@@ -140,6 +141,42 @@ TEST(reopen_with_encoding_dispatch_redecodes_real_file_bytes) {
     ASSERT_EQ(snapshot->sections().text_encoding.status.line_ending, ssg::LineEnding::cr);
 }
 
+TEST(closing_the_last_tab_clears_the_editor_document) {
+    auto root = unique_root("close_last_tab");
+    std::ofstream{root / "workspace" / "a.txt", std::ios::binary} << "alpha";
+    std::ofstream{root / "workspace" / "b.txt", std::ios::binary} << "beta";
+
+    auto created = ssg::EditorRuntime::create(config_for(root));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+
+    auto tab_count = [&] {
+        return runtime.snapshot(ssg::ClientId{1}, {80, 24})->sections().tabs.tabs.size();
+    };
+
+    // Open two files: two tabs, the active document shows content.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"a.txt"}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"b.txt"}}).accepted());
+    ASSERT_EQ(tab_count(), std::size_t{2});
+    ASSERT_EQ(runtime.active_document_text(), std::string{"beta"});
+
+    // Closing one tab switches to the remaining tab's document (still shown).
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tab.close", runtime.revision(), {}}).accepted());
+    ASSERT_EQ(tab_count(), std::size_t{1});
+    ASSERT_EQ(runtime.active_document_text(), std::string{"alpha"});
+
+    // Closing the last tab must clear the editor document (empty state), not
+    // leave a phantom document with no tab.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tab.close", runtime.revision(), {}}).accepted());
+    ASSERT_EQ(tab_count(), std::size_t{0});
+    ASSERT_TRUE(runtime.active_document_text().empty());
+    auto snapshot = runtime.snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (snapshot) ASSERT_TRUE(snapshot->sections().document.text.empty());
+}
+
 } // namespace
 
 int main() {
@@ -147,6 +184,7 @@ int main() {
     RUN(dropped_content_requires_real_capability);
     RUN(encoding_dispatch_matches_encode_oracle_and_saved_bytes);
     RUN(reopen_with_encoding_dispatch_redecodes_real_file_bytes);
+    RUN(closing_the_last_tab_clears_the_editor_document);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }
