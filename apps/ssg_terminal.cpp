@@ -79,8 +79,31 @@ InputEvent parse_input(std::string_view bytes, std::size_t& consumed) {
         consumed = 1;
         return {InputAction::activate, 0, 0};
     }
+    if (first == 0x7f || first == 0x08) {
+        consumed = 1;
+        return {InputAction::delete_backward, 0, 0};
+    }
     if (first != 0x1b) {
-        consumed = 1;  // Milestone 3 has no text entry; skip ordinary bytes.
+        if (first >= 0x20) {
+            // Printable ASCII or a UTF-8 sequence; emit one committed character.
+            std::size_t length = 1;
+            if (first < 0x80) {
+                length = 1;
+            } else if (first >= 0xF0) {
+                length = 4;
+            } else if (first >= 0xE0) {
+                length = 3;
+            } else if (first >= 0xC0) {
+                length = 2;
+            } else {
+                consumed = 1;  // Stray UTF-8 continuation byte; skip.
+                return {};
+            }
+            if (bytes.size() < length) return {};  // Await the full character.
+            consumed = length;
+            return {InputAction::text, 0, 0, std::string{bytes.substr(0, length)}};
+        }
+        consumed = 1;  // Other control byte: ignore.
         return {};
     }
     if (bytes.size() < 2) return {};  // Lone ESC: wait for the rest.
@@ -102,10 +125,14 @@ InputEvent parse_input(std::string_view bytes, std::size_t& consumed) {
         consumed = 3;
         return {InputAction::line_down, 0, 0};
     case 'C':
+        consumed = 3;
+        return {InputAction::caret_right, 0, 0};
     case 'D':
+        consumed = 3;
+        return {InputAction::caret_left, 0, 0};
     case 'H':
     case 'F':
-        consumed = 3;  // Horizontal/home/end: unhandled in milestone 2.
+        consumed = 3;  // Home/end: unhandled in milestone 4.
         return {};
     case '5':
     case '6': {

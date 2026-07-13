@@ -28,21 +28,26 @@ struct LaunchTarget {
 
 [[nodiscard]] LaunchTarget resolve_launch(std::filesystem::path const& argument);
 
-// A decoded terminal input event, reduced to the actions milestone 3 handles.
+// A decoded terminal input event, reduced to the actions milestone 4 handles.
 enum class InputAction {
     none,
     chord,
-    line_up,      // Arrow up: scroll a line, or move tree selection when focused.
-    line_down,    // Arrow down.
-    scroll_lines, // Mouse wheel (amount in lines).
-    scroll_pages, // Page Up/Down.
-    activate,     // Enter: activate the selected tree node.
+    line_up,          // Arrow up: move caret up, or tree selection when focused.
+    line_down,        // Arrow down.
+    caret_left,       // Arrow left.
+    caret_right,      // Arrow right.
+    scroll_lines,     // Mouse wheel (amount in lines).
+    scroll_pages,     // Page Up/Down.
+    activate,         // Enter: newline, or activate the tree node when focused.
+    text,             // A committed character to insert.
+    delete_backward,  // Backspace.
 };
 
 struct InputEvent {
     InputAction action = InputAction::none;
     std::int64_t amount = 0;  // Signed line count for scroll_lines.
     char key = 0;             // For chord: the key pressed after the ESC leader.
+    std::string text;         // For text: the committed UTF-8 character.
 };
 
 // Decode the first complete event from `bytes`.

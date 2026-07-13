@@ -14,6 +14,7 @@
 #include <ssg/editor_runtime.h>
 #include <ssg/input.h>
 #include <ssg/session_snapshot.h>
+#include <ssg/text_input_commands.h>
 
 #include <sys/ioctl.h>
 #include <termios.h>
@@ -148,28 +149,45 @@ int main(int argc, char** argv) {
                     client, {"view.scroll_lines", runtime.revision(),
                              ssg::ScrollLinesArguments{lines}});
             };
-            auto tree = [&](char const* command) {
-                (void)runtime.dispatch(client,
-                                       {command, runtime.revision(), {}});
+            auto command = [&](char const* id) {
+                (void)runtime.dispatch(client, {id, runtime.revision(), {}});
             };
             switch (event.action) {
             case ssg::app::InputAction::chord:
                 if (event.key == 'Q') {
                     quit = true;
                 } else if (event.key == 'b') {
-                    tree("panel.toggle");
+                    command("panel.toggle");
+                } else if (event.key == 's') {
+                    command("file.save");
+                } else if (event.key == 'z') {
+                    command("edit.undo");
+                } else if (event.key == 'Z') {
+                    command("edit.redo");
                 }
                 break;
+            case ssg::app::InputAction::text:
+                (void)runtime.dispatch(
+                    client, {"text.insert", runtime.revision(),
+                             ssg::TextInputArguments{event.text}});
+                break;
+            case ssg::app::InputAction::delete_backward:
+                command("text.delete_backward");
+                break;
             case ssg::app::InputAction::line_up:
-                if (panel_visible) tree("tree.select_previous");
-                else scroll(-1);
+                command(panel_visible ? "tree.select_previous" : "cursor.line_up");
                 break;
             case ssg::app::InputAction::line_down:
-                if (panel_visible) tree("tree.select_next");
-                else scroll(1);
+                command(panel_visible ? "tree.select_next" : "cursor.line_down");
+                break;
+            case ssg::app::InputAction::caret_left:
+                if (!panel_visible) command("cursor.left");
+                break;
+            case ssg::app::InputAction::caret_right:
+                if (!panel_visible) command("cursor.right");
                 break;
             case ssg::app::InputAction::activate:
-                if (panel_visible) tree("tree.activate");
+                command(panel_visible ? "tree.activate" : "text.newline");
                 break;
             case ssg::app::InputAction::scroll_lines:
                 scroll(event.amount);

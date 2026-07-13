@@ -145,11 +145,32 @@ TEST(parse_input_incomplete_waits) {
     ASSERT_EQ(consumed, std::size_t{0});
 }
 
-TEST(parse_input_plain_byte_skipped) {
+TEST(parse_input_printable_is_text) {
     std::size_t consumed = 0;
-    auto event = ssg::app::parse_input(std::string_view{"a"}, consumed);
-    ASSERT_TRUE(event.action == ssg::app::InputAction::none);
+    auto ascii = ssg::app::parse_input(std::string_view{"a"}, consumed);
+    ASSERT_TRUE(ascii.action == ssg::app::InputAction::text);
+    ASSERT_EQ(ascii.text, std::string{"a"});
     ASSERT_EQ(consumed, std::size_t{1});
+    // A two-byte UTF-8 character is emitted whole.
+    auto utf8 = ssg::app::parse_input(std::string_view{"\xc3\xa9"}, consumed);
+    ASSERT_TRUE(utf8.action == ssg::app::InputAction::text);
+    ASSERT_EQ(utf8.text, std::string{"\xc3\xa9"});
+    ASSERT_EQ(consumed, std::size_t{2});
+    // A truncated UTF-8 lead byte waits for the rest.
+    auto partial = ssg::app::parse_input(std::string_view{"\xc3"}, consumed);
+    ASSERT_TRUE(partial.action == ssg::app::InputAction::none);
+    ASSERT_EQ(consumed, std::size_t{0});
+}
+
+TEST(parse_input_backspace_and_caret) {
+    std::size_t consumed = 0;
+    auto del = ssg::app::parse_input(std::string_view{"\x7f"}, consumed);
+    ASSERT_TRUE(del.action == ssg::app::InputAction::delete_backward);
+    ASSERT_EQ(consumed, std::size_t{1});
+    auto right = ssg::app::parse_input(std::string_view{"\x1b[C"}, consumed);
+    ASSERT_TRUE(right.action == ssg::app::InputAction::caret_right);
+    auto left = ssg::app::parse_input(std::string_view{"\x1b[D"}, consumed);
+    ASSERT_TRUE(left.action == ssg::app::InputAction::caret_left);
 }
 
 int main() {
@@ -164,7 +185,8 @@ int main() {
     RUN(parse_input_page_keys_scroll_pages);
     RUN(parse_input_sgr_wheel);
     RUN(parse_input_incomplete_waits);
-    RUN(parse_input_plain_byte_skipped);
+    RUN(parse_input_printable_is_text);
+    RUN(parse_input_backspace_and_caret);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;
