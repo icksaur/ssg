@@ -9,6 +9,7 @@
 #include <ssg/input.h>
 #include <ssg/lsp_features.h>
 #include <ssg/lsp_sync.h>
+#include <ssg/palette.h>
 #include <ssg/search.h>
 #include <ssg/selection.h>
 #include <ssg/session.h>
@@ -50,6 +51,7 @@ struct SessionSnapshotSections {
     LspFeatureViewState lsp_features;
     ThemeSnapshot theme;
     ShellViewState shell;
+    PaletteViewState palette;
 };
 
 [[nodiscard]] bool operator==(SessionSnapshotSections const& left,

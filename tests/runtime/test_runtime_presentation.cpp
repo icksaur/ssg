@@ -1,11 +1,13 @@
 #include "../test_helpers.h"
 
 #include <ssg/editor_runtime.h>
+#include <ssg/editor_session_assembly.h>
 #include <ssg/input.h>
 #include <ssg/settings.h>
 
 #include <filesystem>
 #include <fstream>
+#include <set>
 #include <string>
 
 namespace {
@@ -125,10 +127,38 @@ TEST(reported_leader_sequence_renders_a_per_snapshot_hint) {
     if (without_leader) ASSERT_TRUE(leader_content(*without_leader).empty());
 }
 
+TEST(palette_candidates_match_the_command_registry) {
+    auto root = unique_root();
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+
+    auto const& palette = snapshot->sections().palette;
+    ASSERT_TRUE(palette.mode == ssg::SearchMode::command);
+    // Every registered P0 command appears exactly once as a candidate.
+    auto const descriptors = ssg::p0_command_descriptors();
+    ASSERT_EQ(palette.candidates.size(), descriptors.size());
+    std::set<std::string> candidate_ids;
+    for (auto const& candidate : palette.candidates) {
+        ASSERT_FALSE(candidate.label.empty());
+        candidate_ids.insert(candidate.id);
+    }
+    for (auto const& descriptor : descriptors) {
+        ASSERT_TRUE(candidate_ids.contains(descriptor.id));
+    }
+}
+
 int main() {
     RUN(viewport_shell_settings_and_theme_are_live_sections);
     RUN(settings_dispatch_matches_settings_model_oracle_snapshot);
     RUN(reported_leader_sequence_renders_a_per_snapshot_hint);
+    RUN(palette_candidates_match_the_command_registry);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

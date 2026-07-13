@@ -158,15 +158,13 @@ client concern:
 
 ## Considerations
 
-- **Per-client palette vs shared focus (open design fork).**  `doc/spec-navigation.md`
-  makes focus per-session shared ("every attached client observes the same
-  focus"), but the palette query, ranking, and selection are per-client.  For P0
-  there is a single interactive client (the TUI), so the palette prompt and its
-  focus are treated as per-session and this tension does not bite.  Genuine
-  multi-client palettes require per-client focus and per-client prompt surfaces;
-  that is deferred with the multi-client input model and is called out here so the
-  P0 implementation does not assume it away.  Until then, a second attached client
-  observing another's open palette is out of scope.
+- **Per-client palette vs shared focus (decided: single interactive client).**
+  `doc/spec-navigation.md` makes focus per-session shared, but the palette query,
+  ranking, and selection are per-client.  SSG assumes a **single interactive
+  client**, so the palette prompt and its focus are per-session and this tension
+  does not arise; multi-client palettes (which would require per-client focus and
+  prompt surfaces) are explicitly out of scope.  A second attached client
+  observing another's open palette is not supported.
 - The reported derived view is the bounded visible window (viewport rows), not the
   full ranked list; the browser wire message for reporting the view is deferred
   with the low-latency input model, exactly as the leader hint deferred its wire

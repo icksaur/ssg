@@ -82,7 +82,8 @@ bool operator==(SessionSnapshotSections const& left,
            left.tree == right.tree && left.syntax == right.syntax &&
            left.lsp_sync == right.lsp_sync &&
            left.lsp_features == right.lsp_features &&
-           left.theme == right.theme && shell_equal(left.shell, right.shell);
+           left.theme == right.theme && shell_equal(left.shell, right.shell) &&
+           left.palette == right.palette;
 }
 
 SessionSnapshot::SessionSnapshot(Revision revision, SessionTopology topology,

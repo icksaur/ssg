@@ -94,7 +94,17 @@ SessionSnapshotSections EditorRuntime::Impl::sections(ViewportDimensions dimensi
             lsp_sync,
             lsp_features,
             theme,
-            shell_view(dimensions, leader_pending)};
+            shell_view(dimensions, leader_pending),
+            palette_view()};
+}
+
+PaletteViewState EditorRuntime::Impl::palette_view() const {
+    PaletteViewState view;
+    view.mode = SearchMode::command;
+    for (auto const& descriptor : descriptors()) {
+        view.candidates.push_back({descriptor.id, descriptor.label, {}});
+    }
+    return view;
 }
 
 } // namespace ssg
