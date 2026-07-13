@@ -104,7 +104,9 @@ void sync_runtime_settings(EditorRuntime::Impl& runtime) {
 
 CommandHandlerResult settings_command(EditorRuntime::Impl& runtime, std::string_view id, std::any const& payload) {
     if (id == "settings.open") {
-        (void)runtime.prompt.open(PromptRequest{PromptKind::settings, "Settings", {}, {}, std::nullopt});
+        (void)runtime.prompt.open(PromptRequest{
+            PromptKind::settings, "Settings",
+            {{"settings.query", "Settings query", ""}}, {}, std::nullopt});
         return success();
     }
     if (id == "settings.export_workspace") {

@@ -305,12 +305,16 @@ detail; the client still fuzzy-ranks locally (`spec-palette.md` P2/P5).
   (`doc/spec-navigation.md`, `spec.md` I17 carve-out).
 - K4 (`*`-precedence): for one sequence, a `*` binding resolves in every context
   and takes precedence over a focus binding (`spec-navigation.md` N3).
-- K5 (bindings are argument-free): every runtime keymap binding names a command
-  that carries no wire argument — i.e. maps to the `none_codec` in the command
-  argument codec registry (`build_command_argument_codec_registry`, the
-  authoritative arity source). Typed-argument commands are reached via text
-  routing / mouse / prompts, not chords. Exhaustive command reachability is the
-  palette, not the keymap.
+- K5 (bindings are argument-free-usable): every runtime keymap binding names a
+  command that dispatches successfully with an **empty payload** — i.e. it never
+  fails for a missing or mistyped caller argument. (The command-argument codec
+  registry is not the arity source: many argument-*optional* commands such as
+  `cursor.line_down` and `text.newline` carry a typed codec yet dispatch fine
+  with no payload; only commands that *require* an argument — `text.insert`,
+  `cursor.set_position`, `settings.set`, `view.scroll_lines` — reject an empty
+  payload.) Argument-required commands are reached via text routing / mouse /
+  prompts, not chords. Exhaustive command reachability is the palette, not the
+  keymap.
 - K6 (escape-hatch lock, I24): the runtime keymap always has a valid, unreserved,
   unshadowed `*` binding for `settings.open`; assembly rejects a keymap without
   one.
@@ -339,9 +343,12 @@ detail; the client still fuzzy-ranks locally (`spec-palette.md` P2/P5).
   clause belonged to the retired browser encoding contract and no longer applies;
   the terminal runtime keymap deliberately binds a curated subset, and exhaustive
   reachability is the palette's job.
-- **Argument-free is checkable.** The command argument codec registry already
-  partitions commands into typed-argument vs. `none_codec` (argument-free), so K5
-  is verifiable structurally against it without new arity metadata.
+- **Argument-free is checkable.** Whether a command is dispatchable with an
+  empty payload is observable by dispatching it against a fresh runtime: a
+  command that requires an argument fails with a "requires …" / "wrong type"
+  message, while argument-optional and argument-free commands succeed (modulo
+  benign state failures such as "no active prompt"). K5's oracle dispatches each
+  bound command with an empty payload and asserts no argument-shaped failure.
 - The runtime keymap is compiled-in C++ with no data-file dependency, so library
   consumers need no repository-relative resources. (The former
   `data/default-keymap.json` browser-encoding contract and its coverage test have
@@ -404,7 +411,7 @@ palette labels/detail.
 | Step | Work | Files | Oracle |
 |---|---|---|---|
 | K1 | Add `keymap_contexts()` (derived from `FocusTarget`); `KeymapErrorCode::unknown_context` and `ambiguous_prefix` with their `validate_keymap` checks (context-name validity; order-independent strict-prefix per resolvable context); the pure `resolve_key_sequence` + `text_routing` with `*`-precedence / pending / none semantics; and `has_global_binding`. Update `doc/spec-navigation.md` step C wording to name `unknown_context` and delete its duplicated Step C row | `include/ssg/input.h`, `src/input.cpp`, `include/ssg/focus.h` (or reuse the `FocusTarget`-name helper), `tests/test_input.cpp`, `doc/spec-navigation.md` | `keymap_contexts()` == `{*,editor,panel,prompt}`; unknown context → `unknown_context`; strict-prefix (`*`/`*`, focus/focus, `*`/focus) → `ambiguous_prefix`, order-independent; exact-command-per-context resolution table (same key → different command per context); a `*` chord resolves in every context and beats a same-sequence focus binding; strict-prefix input → `pending`; non-match → `none`; `text_routing` per context; `has_global_binding` true/false cases (present vs reserved vs shadowed vs contextualized) |
-| K2 | Author the curated runtime keymap as a compiled-in C++ table; fix `settings.open` to open a valid one-input settings prompt; at `EditorRuntime::create` run `validate_keymap` (empty reserved set) and assert `has_global_binding(keymap, "settings.open", {})`, failing create with a message on error; load it into `Impl::keymap` so it is published | `src/editor_runtime.cpp` (keymap table + assembly + load), `src/runtime/presentation.cpp` (`settings.open` prompt), `tests/runtime/test_runtime_snapshot.cpp` | the assembled keymap validates error-free and every bound command maps to `none_codec` in the argument codec registry (K5); `EditorRuntime::create` succeeds and the snapshot publishes non-empty bindings; a deliberately invalid keymap fails create with a message; dispatching `settings.open` yields `prompt` focus with a visible settings input (effect, not just resolution); `resolve_key_sequence` over the published keymap returns `cursor.line_down` for `ArrowDown@editor`, `tree.select_next` for `ArrowDown@panel`, `file.save` for `[Escape,KeyS]@*`, and `settings.open` for `[Escape,KeyF,KeyT]` in every context |
+| K2 | Author the curated runtime keymap as a compiled-in C++ table; fix `settings.open` to open a valid one-input settings prompt; at `EditorRuntime::create` run `validate_keymap` (empty reserved set) and assert `has_global_binding(keymap, "settings.open", {})`, failing create with a message on error (a guard protecting future edits to the compiled table; its predicates are unit-tested in K1); load it into `Impl::keymap` so it is published | `src/editor_runtime.cpp` (keymap table + assembly + load), `src/runtime/presentation.cpp` (`settings.open` prompt), `tests/runtime/test_runtime_snapshot.cpp` | the published keymap validates error-free (empty reserved set) and is non-empty; every bound command dispatched with an empty payload against a fresh runtime produces no argument-shaped failure (K5); `EditorRuntime::create` succeeds; dispatching `settings.open` yields `prompt` focus with a visible settings input (effect, not just resolution); `resolve_key_sequence` over the published keymap returns `cursor.line_down` for `ArrowDown@editor`, `tree.select_next` for `ArrowDown@panel`, `file.save` for `[Escape,KeyS]@*`, and `settings.open` for `[Escape,KeyF,KeyT]` in every context |
 | K3a | Add byte→`KeyStroke` decoding to the terminal app: map arrows/Enter/Backspace/named keys/printables to `KeyStroke`s or committed text; and resolve fragmented ANSI vs. a standalone `Escape` with a bounded contract — after an `Escape` byte, if the next byte is already buffered it disambiguates (`[`/`O` → CSI/SS3; else a chord stroke); if none is buffered, a short bounded read (a few ms) distinguishes a lone `Escape` stroke from a fragmented sequence (timeout → the `Escape` stroke) | `apps/ssg_terminal.{h,cpp}`, `tests/test_ssg_app.cpp` | decode table: byte sequences → expected `KeyStroke`/committed text; buffered `Esc [ A` → `ArrowUp`; buffered `Esc x` → `Escape` then `x`; lone `Escape` with no follow byte → the `Escape` stroke (timeout branch is unit-tested via the pure decode entry that takes an "input exhausted" flag); SGR mouse still decodes |
 | K3b | Replace the TUI's hard-coded chord table and `focus==editor|panel` branch with: maintain a pending sequence, `resolve_key_sequence(published_keymap, pending, snapshot_focus)`, dispatch the resolved command (applying prompt-focus fulfillment for palette prompts), route committed text per `text_routing`, and report the pending sequence for the leader hint via the existing seam; keep only process quit app-local | `apps/ssg_main.cpp`, `tests/test_ssg_app.cpp` | `test_ssg_app` end-to-end table (bytes → resolved command per focus, incl. `ArrowDown` differing editor vs panel, `Esc S` → `file.save`, and an unbound continuation after `Escape` clearing leader while still inserting the printable); PTY demo: `Esc S` saves, `ArrowDown` moves caret in editor and tree in panel, palette opens/types/selects/executes |
 | K4 | Add compiled-in `command_label(id)` metadata (full coverage of the palette-reachable set) and `format_key_sequence(seq)`; build palette candidates with `label = command_label(id)` and `detail` = `format_key_sequence` of the deterministically-preferred bound sequence from the runtime keymap (shortest, then lexicographically least form), empty if unbound | `include/ssg/command_metadata.h`, `src/command_metadata.cpp`, `include/ssg/input.h`/`src/input.cpp` (`format_key_sequence`), `src/runtime/snapshot.cpp`, `tests/test_palette.cpp` and/or `tests/runtime/test_runtime_navigation.cpp` | the `file.save` candidate has label `Save File` and detail `Esc S`; an unbound command has empty detail; every palette candidate has a non-id label (coverage); a command with two bindings shows the shortest/least; rebinding a command changes its candidate detail |

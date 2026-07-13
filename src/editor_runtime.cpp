@@ -95,6 +95,54 @@ ThemeSnapshot default_theme() {
     return snapshot;
 }
 
+// The curated terminal runtime keymap (doc/spec-keymap.md K2): a small set of
+// argument-free bindings the TUI drives, plus the context-divergent navigation
+// keys.  Only argument-free-usable commands are bound (a bare chord dispatches
+// with no payload); exhaustive reachability is the palette's job.  Global (*)
+// chords are Escape-led and prefix-free; single strokes differ per focus.
+KeymapViewState default_terminal_keymap() {
+    auto seq = [](std::initializer_list<std::string_view> strokes) {
+        auto parsed = parse_key_sequence(strokes);
+        if (!parsed) throw std::logic_error{"curated keymap has an invalid stroke"};
+        return *parsed;
+    };
+    KeymapViewState keymap{"default", {}};
+    auto bind = [&](KeySequence sequence, std::string command,
+                    std::string context) {
+        keymap.bindings.push_back(
+            {std::move(sequence), std::move(command), std::move(context)});
+    };
+
+    bind(seq({"Escape", "KeyS"}), "file.save", "*");
+    bind(seq({"Escape", "KeyZ"}), "edit.undo", "*");
+    bind(seq({"Escape", "Shift+KeyZ"}), "edit.redo", "*");
+    bind(seq({"Escape", "KeyP"}), "palette.open", "*");
+    bind(seq({"Escape", "KeyB"}), "panel.toggle", "*");
+    bind(seq({"Escape", "KeyO"}), "panel.focus", "*");
+    bind(seq({"Escape", "BracketRight"}), "tab.next", "*");
+    bind(seq({"Escape", "BracketLeft"}), "tab.previous", "*");
+    bind(seq({"Escape", "KeyW"}), "tab.close", "*");
+    bind(seq({"Escape", "KeyF", "KeyT"}), "settings.open", "*");
+
+    bind(seq({"ArrowDown"}), "cursor.line_down", "editor");
+    bind(seq({"ArrowUp"}), "cursor.line_up", "editor");
+    bind(seq({"ArrowLeft"}), "cursor.left", "editor");
+    bind(seq({"ArrowRight"}), "cursor.right", "editor");
+    bind(seq({"Enter"}), "text.newline", "editor");
+    bind(seq({"Backspace"}), "text.delete_backward", "editor");
+
+    bind(seq({"ArrowDown"}), "tree.select_next", "panel");
+    bind(seq({"ArrowUp"}), "tree.select_previous", "panel");
+    bind(seq({"Enter"}), "tree.activate", "panel");
+
+    bind(seq({"Enter"}), "prompt.submit", "prompt");
+    bind(seq({"Escape", "Escape"}), "prompt.cancel", "prompt");
+    bind(seq({"ArrowDown"}), "palette.next", "prompt");
+    bind(seq({"ArrowUp"}), "palette.previous", "prompt");
+
+    return keymap;
+}
+
 DocumentPosition zero_position() {
     return {ByteOffset{0}, LineIndex{0}, CellIndex{0}};
 }
@@ -601,6 +649,14 @@ EditorRuntimeCreateResult EditorRuntime::create(EditorRuntimeConfig config) {
         std::filesystem::create_directories(config.scratch_root);
         std::filesystem::create_directories(config.recovery_root);
         auto impl = std::make_unique<Impl>(cwd, config.scratch_root, config.recovery_root);
+        impl->keymap = default_terminal_keymap();
+        if (auto errors = validate_keymap(impl->keymap, {}); !errors.empty()) {
+            return {nullptr, "default keymap is invalid: " + errors.front().message};
+        }
+        if (!has_global_binding(impl->keymap, "settings.open", {})) {
+            return {nullptr,
+                    "default keymap lacks a global settings.open escape hatch"};
+        }
         EditorSessionBuilder builder;
         builder.services(*impl);
         bind_runtime_editing(builder, *impl);

@@ -3,6 +3,7 @@
 
 #include <ssg/editor_runtime.h>
 #include <ssg/editor_session_assembly.h>
+#include <ssg/input.h>
 
 #include <algorithm>
 #include <filesystem>
@@ -83,6 +84,105 @@ TEST(runtime_sources_do_not_include_fixture_model) {
     ASSERT_FALSE(found);
 }
 
+TEST(runtime_publishes_valid_curated_keymap) {
+    auto root = unique_root("keymap_valid");
+    auto created = ssg::EditorRuntime::create(config_for(root));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    const auto& keymap = snapshot->sections().keymap;
+    ASSERT_FALSE(keymap.bindings.empty());
+    ASSERT_TRUE(ssg::validate_keymap(keymap, {}).empty());
+    ASSERT_TRUE(ssg::has_global_binding(keymap, "settings.open", {}));
+}
+
+TEST(curated_keymap_bindings_are_argument_free) {
+    auto root = unique_root("keymap_argfree");
+    std::ofstream{root / "workspace" / "doc.txt"} << "alpha\nbeta\n";
+    auto created = ssg::EditorRuntime::create(config_for(root));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    (void)runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"doc.txt"}});
+    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+
+    // Every bound command must dispatch with an empty payload without failing
+    // for a missing/mistyped argument.  Benign state failures (e.g. a prompt
+    // command with no open prompt) are allowed; an argument-shaped failure is
+    // not (doc/spec-keymap.md K5).
+    std::set<std::string> commands;
+    for (const auto& binding : snapshot->sections().keymap.bindings) {
+        commands.insert(binding.command_id);
+    }
+    for (const auto& command : commands) {
+        auto result = runtime.dispatch(ssg::ClientId{1}, {command, runtime.revision(), {}});
+        const bool argument_error =
+            result.message.find("requires") != std::string::npos ||
+            result.message.find("wrong type") != std::string::npos ||
+            result.message.find("payload") != std::string::npos;
+        if (argument_error) {
+            std::cerr << "  argument-required command bound: " << command
+                      << " (" << result.message << ")\n";
+        }
+        ASSERT_FALSE(argument_error);
+    }
+}
+
+TEST(curated_keymap_resolves_per_context) {
+    auto root = unique_root("keymap_resolve");
+    auto created = ssg::EditorRuntime::create(config_for(root));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    const auto& keymap = snapshot->sections().keymap;
+
+    const auto down = *ssg::parse_key_sequence({"ArrowDown"});
+    ASSERT_EQ(ssg::resolve_key_sequence(keymap, down, "editor").command_id,
+              std::string{"cursor.line_down"});
+    ASSERT_EQ(ssg::resolve_key_sequence(keymap, down, "panel").command_id,
+              std::string{"tree.select_next"});
+    ASSERT_EQ(ssg::resolve_key_sequence(keymap, down, "prompt").command_id,
+              std::string{"palette.next"});
+
+    const auto save = *ssg::parse_key_sequence({"Escape", "KeyS"});
+    ASSERT_EQ(ssg::resolve_key_sequence(keymap, save, "editor").command_id,
+              std::string{"file.save"});
+
+    // The settings.open escape hatch resolves in every context.
+    const auto settings = *ssg::parse_key_sequence({"Escape", "KeyF", "KeyT"});
+    for (const auto context : {"editor", "panel", "prompt"}) {
+        ASSERT_EQ(ssg::resolve_key_sequence(keymap, settings, context).command_id,
+                  std::string{"settings.open"});
+    }
+}
+
+TEST(settings_open_focuses_a_settings_prompt) {
+    auto root = unique_root("settings_open");
+    auto created = ssg::EditorRuntime::create(config_for(root));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"settings.open", runtime.revision(), {}}).accepted());
+    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    // The chord actually opens: focus moves to the prompt with a visible input.
+    ASSERT_EQ(snapshot->sections().shell.focus, ssg::FocusTarget::prompt);
+    ASSERT_TRUE(snapshot->sections().prompt_status.prompt.has_value());
+}
+
 } // namespace
 
 int main() {
@@ -90,6 +190,10 @@ int main() {
     RUN(command_case_table_exactly_matches_p0_catalog);
     RUN(runtime_constructs_attaches_and_produces_live_snapshot);
     RUN(runtime_sources_do_not_include_fixture_model);
+    RUN(runtime_publishes_valid_curated_keymap);
+    RUN(curated_keymap_bindings_are_argument_free);
+    RUN(curated_keymap_resolves_per_context);
+    RUN(settings_open_focuses_a_settings_prompt);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }
