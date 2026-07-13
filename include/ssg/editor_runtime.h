@@ -47,7 +47,8 @@ public:
     [[nodiscard]] std::filesystem::path const& workspace_root() const noexcept;
     [[nodiscard]] std::optional<SessionSnapshot> snapshot(
         ClientId client_id, ViewportDimensions dimensions,
-        KeySequence leader_pending = {}) const;
+        KeySequence leader_pending = {},
+        PaletteReport palette_report = {}) const;
     [[nodiscard]] std::string active_document_text() const;
 
     struct Impl;

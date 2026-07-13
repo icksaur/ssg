@@ -1531,7 +1531,8 @@ bool decode_present(ProtocolValue const& value, std::optional<StatusPriority>& o
 bool decode_present(ProtocolValue const& value, std::optional<PromptKind>& out) {
     static constexpr std::array values{PromptKind::path, PromptKind::find,
                                        PromptKind::replace, PromptKind::settings,
-                                       PromptKind::command_argument};
+                                       PromptKind::command_argument,
+                                       PromptKind::palette};
     return decode_enum(value, out, values);
 }
 

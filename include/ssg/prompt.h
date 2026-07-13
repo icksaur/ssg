@@ -17,6 +17,7 @@ enum class PromptKind : std::uint8_t {
     replace,
     settings,
     command_argument,
+    palette,
 };
 
 enum class PromptControlKind : std::uint8_t { input, toggle, count };

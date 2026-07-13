@@ -9,6 +9,8 @@
 
 #include <ssg/search.h>
 
+#include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -30,6 +32,18 @@ struct PaletteViewState {
     std::vector<PaletteCandidate> candidates;
 
     friend bool operator==(const PaletteViewState&, const PaletteViewState&) = default;
+};
+
+// A client's locally-ranked palette view, reported for library-owned
+// presentation (see doc/spec-palette.md).  `rows` is the bounded visible window
+// of ranked candidates; `selected` indexes into it.  The library projects this
+// into the active pane only while the palette prompt is open.
+struct PaletteReport {
+    std::string query;
+    std::vector<PaletteCandidate> rows;
+    std::optional<std::uint32_t> selected;
+
+    friend bool operator==(const PaletteReport&, const PaletteReport&) = default;
 };
 
 }  // namespace ssg

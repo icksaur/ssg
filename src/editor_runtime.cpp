@@ -638,13 +638,14 @@ CommandResult EditorRuntime::dispatch(ClientId client_id, ClientCommand const& c
 Revision EditorRuntime::revision() const { return impl_->session->revision(); }
 std::filesystem::path const& EditorRuntime::workspace_root() const noexcept { return impl_->root; }
 std::optional<SessionSnapshot> EditorRuntime::snapshot(ClientId client_id, ViewportDimensions dimensions,
-                                                       KeySequence leader_pending) const {
+                                                       KeySequence leader_pending,
+                                                       PaletteReport palette_report) const {
     auto client = impl_->session->attached_client(client_id);
     if (!client) return std::nullopt;
     return assemble_session_snapshot(impl_->session->revision(), impl_->session->topology(),
                                      client->principal, client->view_id,
                                      impl_->viewport(dimensions),
-                                     impl_->sections(dimensions, leader_pending));
+                                     impl_->sections(dimensions, leader_pending, palette_report));
 }
 
 std::string EditorRuntime::active_document_text() const { return impl_->active_text(); }

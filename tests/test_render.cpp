@@ -107,10 +107,58 @@ TEST(render_is_deterministic) {
     ASSERT_EQ(ssg::render(*first).canonical(), ssg::render(*second).canonical());
 }
 
+TEST(render_projects_palette_results_into_active_pane) {
+    auto root = unique_root();
+    std::ofstream{root / "hello.txt"} << "alpha\nbeta\n";
+    auto runtime = make_runtime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(
+        ssg::ClientId{1},
+        {"file.open", runtime->revision(), std::string{"hello.txt"}});
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+
+    // Without a palette projection the document content is painted.
+    ASSERT_TRUE(grid_contains(ssg::render(*snapshot), "alpha"));
+
+    auto sections = snapshot->sections();
+    ASSERT_FALSE(sections.shell.panes.empty());
+    if (sections.shell.panes.empty()) return;
+    ssg::PaletteProjection projection;
+    projection.rect = sections.shell.panes.front().content;
+    projection.rows = {{"file.save", "ESC s"}, {"file.quit", "ESC q"}};
+    projection.selected = std::uint32_t{1};
+    sections.shell.palette = projection;
+
+    ssg::SessionSnapshot projected{snapshot->revision(), snapshot->topology(),
+                                   snapshot->client(), std::move(sections)};
+    auto grid = ssg::render(projected);
+
+    // Results replace the document text in the pane.
+    ASSERT_TRUE(grid_contains(grid, "file.save"));
+    ASSERT_TRUE(grid_contains(grid, "ESC q"));
+    ASSERT_FALSE(grid_contains(grid, "alpha"));
+
+    // The selected row is painted with the selection role.
+    int const selected_row = projection.rect.y + 1;
+    bool selection_painted = false;
+    for (int column = projection.rect.x; column < projection.rect.right();
+         ++column) {
+        if (grid.at(column, selected_row).role == ssg::SemanticRole::selection) {
+            selection_painted = true;
+            break;
+        }
+    }
+    ASSERT_TRUE(selection_painted);
+}
+
 int main() {
     RUN(render_paints_content_not_accessibility_labels);
     RUN(render_colors_are_palette_indices);
     RUN(render_is_deterministic);
+    RUN(render_projects_palette_results_into_active_pane);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;

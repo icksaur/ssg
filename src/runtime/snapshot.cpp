@@ -36,7 +36,8 @@ PromptStatusViewState EditorRuntime::Impl::prompt_status_view(ViewportDimensions
 }
 
 ShellViewState EditorRuntime::Impl::shell_view(ViewportDimensions dimensions,
-                                               KeySequence const& leader_pending) const {
+                                               KeySequence const& leader_pending,
+                                               PaletteReport const& palette_report) const {
     std::vector<TabLabel> labels;
     for (auto const& tab : tabs.view_state().tabs) {
         labels.push_back({tab.label, tab.label,
@@ -64,12 +65,26 @@ ShellViewState EditorRuntime::Impl::shell_view(ViewportDimensions dimensions,
         request.leader_hint = std::move(hint);
     }
     auto result = compute_shell_layout(request, shell);
-    if (result.accepted()) return *result.view;
-    return {};
+    if (!result.accepted()) return {};
+    auto view = *result.view;
+
+    bool const palette_open = prompt.active() && prompt.request() &&
+                              prompt.request()->kind == PromptKind::palette;
+    if (palette_open && !view.panes.empty()) {
+        PaletteProjection projection;
+        projection.rect = view.panes.front().content;
+        projection.selected = palette_report.selected;
+        for (auto const& candidate : palette_report.rows) {
+            projection.rows.push_back({candidate.label, candidate.detail});
+        }
+        view.palette = std::move(projection);
+    }
+    return view;
 }
 
 SessionSnapshotSections EditorRuntime::Impl::sections(ViewportDimensions dimensions,
-                                                     KeySequence const& leader_pending) const {
+                                                     KeySequence const& leader_pending,
+                                                     PaletteReport const& palette_report) const {
     auto current_history = HistoryViewState{false, false, 0};
     if (auto id = active_document_id()) {
         auto found = histories.find(id->value());
@@ -94,7 +109,7 @@ SessionSnapshotSections EditorRuntime::Impl::sections(ViewportDimensions dimensi
             lsp_sync,
             lsp_features,
             theme,
-            shell_view(dimensions, leader_pending),
+            shell_view(dimensions, leader_pending, palette_report),
             palette_view()};
 }
 

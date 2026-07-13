@@ -199,6 +199,42 @@ void paint_panel_tree(CellGrid& grid, Rect const& panel,
     }
 }
 
+// Projects the palette's ranked results into the active pane while the palette
+// prompt is open.  The query and caret live in the header (see spec-palette.md);
+// this paints only the results window with the selected row highlighted.
+void paint_palette(CellGrid& grid, PaletteProjection const& palette,
+                   ThemeSnapshot const& theme, std::uint8_t background) {
+    auto const& rect = palette.rect;
+    if (rect.width <= 0 || rect.height <= 0) return;
+    auto const foreground = semantic_index(theme, SemanticRole::foreground);
+    auto const detail_color = semantic_index(theme, SemanticRole::line_number);
+    auto const selected_bg = semantic_index(theme, SemanticRole::selection);
+    for (std::size_t index = 0; index < palette.rows.size(); ++index) {
+        if (static_cast<int>(index) >= rect.height) break;
+        auto const& row = palette.rows[index];
+        int const y = rect.y + static_cast<int>(index);
+        bool const is_selected =
+            palette.selected && *palette.selected == index;
+        auto const row_background = is_selected ? selected_bg : background;
+        auto const row_role =
+            is_selected ? SemanticRole::selection : SemanticRole::background;
+        fill_rect(grid, {rect.x, y, rect.width, 1}, foreground, row_background,
+                  row_role);
+        paint_text(grid, rect.x, y, rect.right(), row.label, foreground,
+                   row_background, SemanticRole::foreground);
+        if (!row.detail.empty()) {
+            auto const run = compute_cell_run(row.detail);
+            int width = 0;
+            for (auto const& span : run.spans) {
+                width += static_cast<int>(std::max<std::uint32_t>(span.cell_width, 1));
+            }
+            int const start = std::max(rect.x, rect.right() - width);
+            paint_text(grid, start, y, rect.right(), row.detail, detail_color,
+                       row_background, SemanticRole::line_number);
+        }
+    }
+}
+
 void paint_document(CellGrid& grid, SessionSnapshot const& snapshot,
                     Rect const& content, ThemeSnapshot const& theme,
                     std::uint8_t background) {
@@ -347,34 +383,38 @@ CellGrid render(SessionSnapshot const& snapshot) {
                          panel_background, shell.focus == FocusTarget::panel);
     }
     if (!shell.panes.empty()) {
-        paint_document(grid, snapshot, shell.panes.front().content, theme,
-                       background);
-        paint_scrollbar(grid, shell.panes.front(), snapshot.client().viewport,
-                        theme, background);
+        if (shell.palette) {
+            paint_palette(grid, *shell.palette, theme, background);
+        } else {
+            paint_document(grid, snapshot, shell.panes.front().content, theme,
+                           background);
+            paint_scrollbar(grid, shell.panes.front(), snapshot.client().viewport,
+                            theme, background);
 
-        // Place the primary caret at its screen cell so the client can position
-        // a terminal cursor there, but only when the editor is focused.
-        if (shell.focus == FocusTarget::editor) {
-        auto const& content = shell.panes.front().content;
-        auto const& viewport = snapshot.client().viewport;
-        auto const& primary = snapshot.sections().selection.selections.primary();
-        auto const caret_line = primary.active.line.value();
-        auto const caret_cell = primary.active.cell.value();
-        for (std::size_t index = 0; index < viewport.visible_rows.size();
-             ++index) {
-            auto const& row = viewport.visible_rows[index];
-            if (row.logical_line != caret_line) continue;
-            auto const start = row.start_cell.value();
-            auto const end = start + row.content_cells;
-            if (caret_cell < start || caret_cell > end) continue;
-            int const column = content.x + static_cast<int>(caret_cell - start);
-            int const screen_row = content.y + static_cast<int>(index);
-            if (column >= content.x && column < content.right() &&
-                screen_row >= content.y && screen_row < content.bottom()) {
-                grid.caret = GridPosition{column, screen_row};
+            // Place the primary caret at its screen cell so the client can position
+            // a terminal cursor there, but only when the editor is focused.
+            if (shell.focus == FocusTarget::editor) {
+            auto const& content = shell.panes.front().content;
+            auto const& viewport = snapshot.client().viewport;
+            auto const& primary = snapshot.sections().selection.selections.primary();
+            auto const caret_line = primary.active.line.value();
+            auto const caret_cell = primary.active.cell.value();
+            for (std::size_t index = 0; index < viewport.visible_rows.size();
+                 ++index) {
+                auto const& row = viewport.visible_rows[index];
+                if (row.logical_line != caret_line) continue;
+                auto const start = row.start_cell.value();
+                auto const end = start + row.content_cells;
+                if (caret_cell < start || caret_cell > end) continue;
+                int const column = content.x + static_cast<int>(caret_cell - start);
+                int const screen_row = content.y + static_cast<int>(index);
+                if (column >= content.x && column < content.right() &&
+                    screen_row >= content.y && screen_row < content.bottom()) {
+                    grid.caret = GridPosition{column, screen_row};
+                }
+                break;
             }
-            break;
-        }
+            }
         }
     }
     return grid;

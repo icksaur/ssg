@@ -100,6 +100,7 @@ TEST(prompt_rows_and_invalid_reservation_are_typed) {
     ASSERT_EQ(prompt_row_count(PromptKind::replace), std::uint8_t{3});
     ASSERT_EQ(prompt_row_count(PromptKind::settings), std::uint8_t{1});
     ASSERT_EQ(prompt_row_count(PromptKind::command_argument), std::uint8_t{1});
+    ASSERT_EQ(prompt_row_count(PromptKind::palette), std::uint8_t{0});
 
     PromptSurface surface;
     ASSERT_TRUE(surface.open(request(PromptKind::find)).accepted());

@@ -114,6 +114,23 @@ struct PaneGeometry {
     friend bool operator==(const PaneGeometry&, const PaneGeometry&) = default;
 };
 
+// One projected palette result row.
+struct PaletteRow {
+    std::string label;
+    std::string detail;
+
+    friend bool operator==(const PaletteRow&, const PaletteRow&) = default;
+};
+
+// The palette results projected into the active pane while the palette is open.
+struct PaletteProjection {
+    Rect rect;
+    std::vector<PaletteRow> rows;
+    std::optional<std::uint32_t> selected;
+
+    friend bool operator==(const PaletteProjection&, const PaletteProjection&) = default;
+};
+
 struct ShellViewState {
     GridSize viewport;
     std::optional<Rect> header;
@@ -124,6 +141,7 @@ struct ShellViewState {
     std::vector<PaneGeometry> panes;
     std::vector<AccessibilityNode> accessibility_nodes;
     FocusTarget focus = FocusTarget::editor;
+    std::optional<PaletteProjection> palette;
 
     [[nodiscard]] std::size_t scrollbar_count() const noexcept {
         return panes.size();

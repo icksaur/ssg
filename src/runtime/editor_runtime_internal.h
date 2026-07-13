@@ -140,10 +140,12 @@ struct EditorRuntime::Impl final : CommandServices,
     [[nodiscard]] std::vector<CellRun> active_cell_runs() const;
     [[nodiscard]] ViewportViewState viewport(ViewportDimensions dimensions) const;
     [[nodiscard]] SessionSnapshotSections sections(ViewportDimensions dimensions,
-                                                   KeySequence const& leader_pending = {}) const;
+                                                   KeySequence const& leader_pending = {},
+                                                   PaletteReport const& palette_report = {}) const;
     [[nodiscard]] PromptStatusViewState prompt_status_view(ViewportDimensions dimensions) const;
     [[nodiscard]] ShellViewState shell_view(ViewportDimensions dimensions,
-                                            KeySequence const& leader_pending = {}) const;
+                                            KeySequence const& leader_pending = {},
+                                            PaletteReport const& palette_report = {}) const;
     [[nodiscard]] PaletteViewState palette_view() const;
     [[nodiscard]] TextEncodingViewState text_encoding_view() const;
     [[nodiscard]] DocumentViewState document_view() const;

@@ -57,6 +57,7 @@ std::uint8_t prompt_row_count(PromptKind kind) noexcept {
     case PromptKind::path:
     case PromptKind::settings:
     case PromptKind::command_argument: return 1;
+    case PromptKind::palette: return 0;  // Query renders in the header; results project into the pane.
     }
     return 1;
 }
