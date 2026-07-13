@@ -218,10 +218,14 @@ void paint_palette(CellGrid& grid, PaletteProjection const& palette,
         auto const row_background = is_selected ? selected_bg : background;
         auto const row_role =
             is_selected ? SemanticRole::selection : SemanticRole::background;
+        auto const label_role =
+            is_selected ? SemanticRole::selection : SemanticRole::foreground;
+        auto const detail_role =
+            is_selected ? SemanticRole::selection : SemanticRole::line_number;
         fill_rect(grid, {rect.x, y, rect.width, 1}, foreground, row_background,
                   row_role);
         paint_text(grid, rect.x, y, rect.right(), row.label, foreground,
-                   row_background, SemanticRole::foreground);
+                   row_background, label_role);
         if (!row.detail.empty()) {
             auto const run = compute_cell_run(row.detail);
             int width = 0;
@@ -230,7 +234,7 @@ void paint_palette(CellGrid& grid, PaletteProjection const& palette,
             }
             int const start = std::max(rect.x, rect.right() - width);
             paint_text(grid, start, y, rect.right(), row.detail, detail_color,
-                       row_background, SemanticRole::line_number);
+                       row_background, detail_role);
         }
     }
 }

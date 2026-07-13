@@ -141,17 +141,15 @@ TEST(render_projects_palette_results_into_active_pane) {
     ASSERT_TRUE(grid_contains(grid, "ESC q"));
     ASSERT_FALSE(grid_contains(grid, "alpha"));
 
-    // The selected row is painted with the selection role.
+    // The selected row is painted with the selection role, including on the
+    // label's glyph cells (not only trailing filler).
     int const selected_row = projection.rect.y + 1;
-    bool selection_painted = false;
-    for (int column = projection.rect.x; column < projection.rect.right();
-         ++column) {
-        if (grid.at(column, selected_row).role == ssg::SemanticRole::selection) {
-            selection_painted = true;
-            break;
-        }
-    }
-    ASSERT_TRUE(selection_painted);
+    ASSERT_EQ(grid.at(projection.rect.x, selected_row).text, std::string{"f"});
+    ASSERT_EQ(grid.at(projection.rect.x, selected_row).role,
+              ssg::SemanticRole::selection);
+    // The unselected row must not carry the selection role.
+    ASSERT_FALSE(grid.at(projection.rect.x, projection.rect.y).role ==
+                 ssg::SemanticRole::selection);
 }
 
 int main() {
