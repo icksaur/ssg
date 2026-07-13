@@ -13,7 +13,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_compile_definitions(test_input PRIVATE
         SSG_DEFAULT_KEYMAP_PATH="${SSG_SOURCE_DIR}/data/default-keymap.json"
         SSG_REQUIRED_COMMANDS_PATH="${SSG_SOURCE_DIR}/data/required-commands.json"
-        SSG_RESERVED_CHORDS_PATH="${SSG_SOURCE_DIR}/tests/browser/fixtures/reserved-chords.json"
+        SSG_RESERVED_CHORDS_PATH="${SSG_SOURCE_DIR}/tests/fixtures/reserved-chords.json"
         SSG_SOURCE_PATH="${SSG_SOURCE_DIR}/src"
     )
     add_test(NAME test_input COMMAND test_input)
