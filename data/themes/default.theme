@@ -1,19 +1,19 @@
 name default
-palette 0 24 24 27
-palette 1 244 244 245
-palette 2 63 63 70
-palette 3 161 161 170
-palette 4 59 130 246
-palette 5 250 204 21
-palette 6 239 68 68
-palette 7 34 197 94
-palette 8 168 85 247
-palette 9 6 182 212
-palette 10 249 115 22
-palette 11 236 72 153
-palette 12 39 39 42
-palette 13 82 82 91
-palette 14 212 212 216
+palette 0 30 30 30
+palette 1 212 212 212
+palette 2 62 62 66
+palette 3 133 133 133
+palette 4 77 170 252
+palette 5 229 192 123
+palette 6 239 74 74
+palette 7 76 175 80
+palette 8 171 71 188
+palette 9 38 192 192
+palette 10 212 149 106
+palette 11 209 109 158
+palette 12 187 187 187
+palette 13 106 106 106
+palette 14 232 232 232
 palette 15 255 255 255
 role foreground 1
 role background 0
@@ -27,12 +27,12 @@ role git_added 7
 role git_modified 10
 role git_deleted 6
 role git_conflict 11
-role tree_background 12
+role tree_background 2
 role tree_focus 4
 role tab_active 4
 role tab_inactive 13
 role panel_active 9
-role panel_inactive 2
+role panel_inactive 3
 role header 12
 role footer 12
 role status_info 9

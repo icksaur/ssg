@@ -3,6 +3,7 @@
 #include <ssg/layout.h>
 
 #include <algorithm>
+#include <array>
 #include <fstream>
 #include <iterator>
 #include <stdexcept>
@@ -12,17 +13,85 @@ namespace ssg {
 namespace {
 
 ThemeSnapshot default_theme() {
+    // Readable dark theme derived from the VSCode-style palette in
+    // caco/public/themes/dark.css.  Low indices are dark fills, high indices
+    // are light text, hues sit in the middle.  Role assignments keep every
+    // co_visible_role_pairs member on a distinct palette index.
     ThemeSnapshot snapshot{};
+    constexpr std::array<std::array<std::uint8_t, 3>, theme_palette_size>
+        palette{{
+            {30, 30, 30},     // 0  background
+            {212, 212, 212},  // 1  foreground
+            {62, 62, 66},     // 2  chrome fill / scrollbar track
+            {133, 133, 133},  // 3  muted: line numbers, comments, inactive
+            {77, 170, 252},   // 4  blue: functions, focus, active
+            {229, 192, 123},  // 5  yellow: operators, warnings
+            {239, 74, 74},    // 6  red: errors, deletions
+            {76, 175, 80},    // 7  green: strings, additions
+            {171, 71, 188},   // 8  purple: keywords, prompt, hints
+            {38, 192, 192},   // 9  cyan: types, info
+            {212, 149, 106},  // 10 orange: numbers, modifications, search
+            {209, 109, 158},  // 11 pink: conflicts
+            {187, 187, 187},  // 12 chrome text: header, footer
+            {106, 106, 106},  // 13 dim: inactive tab, scrollbar thumb
+            {232, 232, 232},  // 14 bright: active line number, punctuation
+            {255, 255, 255},  // 15 caret
+        }};
     for (std::size_t index = 0; index < snapshot.palette.size(); ++index) {
-        auto channel = static_cast<std::uint8_t>(index * 16U);
-        snapshot.palette[index] = SrgbColor::from_serialized_channels(channel, channel, channel);
+        snapshot.palette[index] = SrgbColor::from_serialized_channels(
+            palette[index][0], palette[index][1], palette[index][2]);
     }
-    for (std::size_t index = 0; index < snapshot.semantic_indices.size(); ++index) {
-        snapshot.semantic_indices[index] = static_cast<std::uint8_t>(index % theme_palette_size);
-    }
-    for (std::size_t index = 0; index < snapshot.syntax_indices.size(); ++index) {
-        snapshot.syntax_indices[index] = static_cast<std::uint8_t>(index % theme_palette_size);
-    }
+
+    auto role = [&](SemanticRole which, std::uint8_t index) {
+        snapshot.semantic_indices[static_cast<std::size_t>(which)] = index;
+    };
+    role(SemanticRole::foreground, 1);
+    role(SemanticRole::background, 0);
+    role(SemanticRole::caret, 15);
+    role(SemanticRole::selection, 4);
+    role(SemanticRole::diagnostic_error, 6);
+    role(SemanticRole::diagnostic_warning, 5);
+    role(SemanticRole::diagnostic_info, 9);
+    role(SemanticRole::diagnostic_hint, 8);
+    role(SemanticRole::git_added, 7);
+    role(SemanticRole::git_modified, 10);
+    role(SemanticRole::git_deleted, 6);
+    role(SemanticRole::git_conflict, 11);
+    role(SemanticRole::tree_background, 2);
+    role(SemanticRole::tree_focus, 4);
+    role(SemanticRole::tab_active, 4);
+    role(SemanticRole::tab_inactive, 13);
+    role(SemanticRole::panel_active, 9);
+    role(SemanticRole::panel_inactive, 3);
+    role(SemanticRole::header, 12);
+    role(SemanticRole::footer, 12);
+    role(SemanticRole::status_info, 9);
+    role(SemanticRole::status_warning, 5);
+    role(SemanticRole::status_error, 6);
+    role(SemanticRole::line_number, 3);
+    role(SemanticRole::active_line_number, 14);
+    role(SemanticRole::search_match, 10);
+    role(SemanticRole::prompt, 8);
+    role(SemanticRole::scrollbar_track, 2);
+    role(SemanticRole::scrollbar_thumb, 13);
+    role(SemanticRole::diff_added, 7);
+    role(SemanticRole::diff_removed, 6);
+    role(SemanticRole::diff_modified, 10);
+
+    auto syntax = [&](SyntaxScope scope, std::uint8_t index) {
+        snapshot.syntax_indices[static_cast<std::size_t>(scope)] = index;
+    };
+    syntax(SyntaxScope::plain_text, 1);
+    syntax(SyntaxScope::comment, 3);
+    syntax(SyntaxScope::keyword, 8);
+    syntax(SyntaxScope::string, 7);
+    syntax(SyntaxScope::number, 10);
+    syntax(SyntaxScope::type, 9);
+    syntax(SyntaxScope::function, 4);
+    syntax(SyntaxScope::variable, 1);
+    syntax(SyntaxScope::operator_token, 5);
+    syntax(SyntaxScope::punctuation, 14);
+    syntax(SyntaxScope::invalid, 6);
     return snapshot;
 }
 
