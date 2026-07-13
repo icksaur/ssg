@@ -1,5 +1,7 @@
 #include "editor_runtime_internal.h"
 
+#include <ssg/command_metadata.h>
+
 #include <algorithm>
 #include <variant>
 
@@ -122,7 +124,12 @@ PaletteViewState EditorRuntime::Impl::palette_view() const {
     PaletteViewState view;
     view.mode = SearchMode::command;
     for (auto const& descriptor : descriptors()) {
-        view.candidates.push_back({descriptor.id, descriptor.label, {}});
+        std::string detail;
+        if (auto sequence = preferred_binding(keymap, descriptor.id)) {
+            detail = format_key_sequence(*sequence);
+        }
+        view.candidates.push_back(
+            {descriptor.id, command_label(descriptor.id), std::move(detail)});
     }
     return view;
 }

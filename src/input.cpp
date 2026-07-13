@@ -204,6 +204,51 @@ std::optional<KeySequence> parse_key_sequence(
     return result;
 }
 
+namespace {
+
+// The compact display name for a single key code (no modifiers).
+std::string key_display(std::string_view code) {
+    if (code.size() == 4 && code.starts_with("Key")) {
+        return std::string{code.substr(3)};
+    }
+    if (code.size() == 6 && code.starts_with("Digit")) {
+        return std::string{code.substr(5)};
+    }
+    if (code == "Escape") return "Esc";
+    if (code == "ArrowUp") return "Up";
+    if (code == "ArrowDown") return "Down";
+    if (code == "ArrowLeft") return "Left";
+    if (code == "ArrowRight") return "Right";
+    if (code == "BracketLeft") return "[";
+    if (code == "BracketRight") return "]";
+    if (code == "Backspace") return "Bksp";
+    if (code == "Backslash") return "\\";
+    if (code == "Semicolon") return ";";
+    if (code == "Quote") return "'";
+    if (code == "Comma") return ",";
+    if (code == "Period") return ".";
+    if (code == "Slash") return "/";
+    if (code == "Minus") return "-";
+    if (code == "Equal") return "=";
+    if (code == "Backquote") return "`";
+    return std::string{code};
+}
+
+}  // namespace
+
+std::string format_key_sequence(const KeySequence& sequence) {
+    std::string result;
+    for (const auto& stroke : sequence) {
+        if (!result.empty()) result += ' ';
+        if (stroke.control) result += "Ctrl+";
+        if (stroke.alt) result += "Alt+";
+        if (stroke.shift) result += "Shift+";
+        if (stroke.meta) result += "Meta+";
+        result += key_display(stroke.code);
+    }
+    return result;
+}
+
 std::vector<KeymapError> validate_keymap(
     const KeymapViewState& keymap,
     std::span<const KeySequence> reserved_sequences) {
@@ -374,6 +419,29 @@ bool has_global_binding(const KeymapViewState& keymap,
         }
     }
     return false;
+}
+
+std::optional<KeySequence> preferred_binding(const KeymapViewState& keymap,
+                                             std::string_view command_id) {
+    const KeySequence* best = nullptr;
+    std::string best_display;
+    for (const auto& binding : keymap.bindings) {
+        if (binding.command_id != command_id) continue;
+        if (best == nullptr || binding.sequence.size() < best->size()) {
+            best = &binding.sequence;
+            best_display = format_key_sequence(binding.sequence);
+            continue;
+        }
+        if (binding.sequence.size() == best->size()) {
+            auto display = format_key_sequence(binding.sequence);
+            if (display < best_display) {
+                best = &binding.sequence;
+                best_display = std::move(display);
+            }
+        }
+    }
+    if (best == nullptr) return std::nullopt;
+    return *best;
 }
 
 std::optional<CommittedText> CommittedText::from_utf8(std::string text) {

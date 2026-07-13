@@ -80,12 +80,55 @@ TEST(palette_execute_validates_candidate_membership) {
     ASSERT_EQ(snapshot->sections().shell.focus, ssg::FocusTarget::editor);
 }
 
+TEST(palette_candidates_carry_labels_and_key_detail) {
+    auto root = unique_root();
+    auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+
+    const auto& candidates = snapshot->sections().palette.candidates;
+    ASSERT_FALSE(candidates.empty());
+
+    const ssg::PaletteCandidate* save = nullptr;
+    const ssg::PaletteCandidate* undo = nullptr;
+    for (const auto& candidate : candidates) {
+        // Every candidate carries a human label, never the raw dotted id.
+        ASSERT_NE(candidate.label, candidate.id);
+        ASSERT_FALSE(candidate.label.empty());
+        if (candidate.id == "file.save") save = &candidate;
+        if (candidate.id == "edit.undo") undo = &candidate;
+    }
+    ASSERT_TRUE(save != nullptr);
+    ASSERT_TRUE(undo != nullptr);
+    if (save) {
+        ASSERT_EQ(save->label, std::string{"Save File"});
+        ASSERT_EQ(save->detail, std::string{"Esc S"});  // Its bound chord.
+    }
+    if (undo) {
+        ASSERT_EQ(undo->detail, std::string{"Esc Z"});
+    }
+
+    // An unbound command shows a label but no key detail.
+    const ssg::PaletteCandidate* unbound = nullptr;
+    for (const auto& candidate : candidates) {
+        if (candidate.id == "edit.sort_lines") unbound = &candidate;
+    }
+    ASSERT_TRUE(unbound != nullptr);
+    if (unbound) ASSERT_TRUE(unbound->detail.empty());
+}
+
 } // namespace
 
 int main() {
     RUN(search_tree_diff_and_follow_sections_use_runtime_state);
     RUN(palette_open_enters_prompt_focus_and_publishes_candidates);
     RUN(palette_execute_validates_candidate_membership);
+    RUN(palette_candidates_carry_labels_and_key_detail);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

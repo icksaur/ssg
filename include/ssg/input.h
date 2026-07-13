@@ -34,6 +34,11 @@ using KeySequence = std::vector<KeyStroke>;
 [[nodiscard]] std::optional<KeySequence> parse_key_sequence(
     std::initializer_list<std::string_view> encoded);
 
+// A compact human display form of a key sequence, e.g. {Escape, KeyS} -> "Esc S"
+// and {ArrowDown} -> "Down".  Modifiers are prefixed (Ctrl+/Alt+/Shift+/Meta+);
+// strokes are space-joined.  Used for palette key-sequence detail (K7).
+[[nodiscard]] std::string format_key_sequence(const KeySequence& sequence);
+
 struct KeyBinding {
     KeySequence sequence;
     std::string command_id;
@@ -126,6 +131,13 @@ enum class TextRouting : std::uint8_t { insert, prompt_query, ignore };
 [[nodiscard]] bool has_global_binding(
     const KeymapViewState& keymap, std::string_view command_id,
     std::span<const KeySequence> reserved_sequences);
+
+// The preferred key sequence bound to `command_id` for display, chosen
+// deterministically (independent of binding order): the shortest sequence, then
+// the lexicographically least display form (K7).  Empty if the command is
+// unbound.
+[[nodiscard]] std::optional<KeySequence> preferred_binding(
+    const KeymapViewState& keymap, std::string_view command_id);
 
 class CommittedText {
 public:
