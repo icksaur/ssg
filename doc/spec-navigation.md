@@ -40,45 +40,63 @@ prompt (focus `prompt`).
 
 ### Input context follows focus
 
-Key bindings already carry a `context` string (`KeyBinding.context`).  This spec
-gives context meaning: a binding applies when its context is `*` (global) or
-equals the current `FocusTarget` name (`editor`, `panel`, `prompt`).
-`validate_keymap` treats a binding whose context is neither `*` nor a
-`FocusTarget` name as `unreachable_binding`.  A client resolves a keystroke
-against the published keymap **using the snapshot's focus as the context** and
-applies no independent routing.  The same physical key can map to different
-commands per focus - Down is `cursor.line_down` in `editor`,
-`tree.select_next` in `panel`, and a prompt-list move in `prompt`.
+Key bindings carry a `context` string (`KeyBinding.context`): a binding applies
+when its context is `*` (global) or equals the current `FocusTarget` name
+(`editor`, `panel`, `prompt`).  `validate_keymap` treats a binding whose context
+is neither `*` nor a `FocusTarget` name as `unreachable_binding`.  A client
+resolves a keystroke against the published keymap **using the snapshot's focus as
+the context**; resolution is client-local so typing and command dispatch never
+round-trip (consistent with `doc/features/browser-input.md`, which owns the
+keymap and resolution model).  The same physical key can map to different
+commands per focus - Down is `cursor.line_down` in `editor`, `tree.select_next`
+in `panel`, and a prompt-list move in `prompt`.
 
-### Printable input is also context-resolved
+### Leader is client-resolved, server-presented
 
-Printable/committed text is not special-cased by the client.  Each context binds
-a **text sink** command that receives committed text as its argument:
-`text.insert` in `editor`, `prompt.input` in `prompt` (a prompt text-input
-command owned by the prompt feature), and no text sink in `panel` (printable
-keys there are either bound navigation or ignored).  The client therefore has one
-rule for every key, printable or not: resolve it in the snapshot's focus context
-and dispatch.  This keeps N2 literally true.
+Resolution is latency-sensitive; presentation must be consistent.  So the split
+is: the client resolves keys and owns the transient pending multi-key (leader)
+sequence locally, but the library owns how leader mode is *presented*.
+
+- Pending leader state is client-local input-capture state derived from the
+  server-published keymap (as in `browser-input.md`): bindings in one context are
+  prefix-free, so no timeout or server round-trip is needed to resolve a chord.
+- When the client enters, extends, or clears leader mode, it reports the current
+  pending sequence to the library as **per-client presentation state**, not a
+  command - one report per leader transition, never per typed character.  This
+  mirrors how per-client viewport dimensions flow into the snapshot rather than
+  through the command registry, so it adds no command-catalog surface.
+- The library renders a leader hint (for example `leader: Esc `) into the shell's
+  status area using a theme role for color, and the client draws the
+  server-described cells.  Layout and color stay server-owned (I7, I17, I22); the
+  client invents no UI element and picks no color.
+- Because leader state is per-client input capture, each attached client shows
+  its own leader hint.
+
+This is the affordance distant clients need: a client reports an input-capture
+state and the library owns its presentation.  The pattern generalizes to IME
+preedit and other capture states.  The full perceived-low-latency input model
+(optimistic local echo, keystroke coalescing, reconciliation) is deferred and
+builds on this seam rather than replacing it.
+
+### Printable input is context-resolved by the client
+
+Printable/committed text is resolved locally like any other key.  Each context
+has a **text sink**: `text.insert` in `editor`, a prompt text-input command in
+`prompt`, and none in `panel` (printable keys there are bound navigation or
+ignored).  Committed text that is not part of a pending chord dispatches to the
+current context's text sink.
 
 ### The Escape leader and cancel
 
-Escape is both the global leader prefix and the natural cancel.  Disambiguation
-is explicit:
-
-- A key sequence beginning with Escape is matched against bindings whose context
-  is `*` or the current focus.  If the bytes so far are a strict prefix of a
-  longer candidate, the client waits up to a bound timeout (default 250 ms) for
-  the next key.
-- If a complete `*` chord matches (e.g. `Escape b`), it fires regardless of
-  focus.  A complete focus-context binding matches only in that focus.
-- A lone Escape that completes (timeout elapses, or the next key does not extend
-  any candidate) resolves the current context's cancel/back binding: in `prompt`
-  that is `prompt.cancel`; in `panel` it returns focus to the editor; in
-  `editor` it clears secondary selections or is a no-op.
-
-Because bare Escape is a one-key `prompt`/`panel` binding and the leader chords
-are longer `*` sequences, the same prefix-with-timeout rule the keymap already
-uses resolves both without a separate mechanism.
+Escape is the leader prefix.  Following `browser-input.md`, context bindings are
+**prefix-free**, so resolution is unambiguous without a timeout: `Escape` begins
+a pending sequence, and the next keys either complete a binding or clear it.
+Escape has no implicit cancel/dismiss meaning; cancel and dismiss are ordinary
+commands bound in their context (e.g. an explicit `[Escape, Escape]` binding
+cancels a prompt).  A `*` chord (e.g. `Escape b`) resolves in every focus; a
+focus-context binding resolves only in that focus, with `*` taking precedence so
+the `settings.open` escape hatch (I24) is never shadowed.  A non-matching
+continuation clears the pending sequence and is not suppressed.
 
 ### Focus transitions
 
@@ -101,46 +119,58 @@ on a missing surface falls back to editor.
 
 ### Client responsibility
 
-Clients stay thin: read `focus` from the snapshot, use it as the keymap context
-when translating a keystroke, dispatch the resolved command, and draw a focus
-indicator on the focused region.  No client contains routing rules beyond
-"context = snapshot focus".  The TUI replaces its `panel_visible` branching with
-this rule.
+Clients stay thin: decode platform input into keystrokes/committed text, resolve
+them locally against the published keymap using the snapshot's focus as context,
+dispatch the resolved command, and draw a focus indicator on the focused region.
+When leader mode is entered, extended, or cleared, the client reports the pending
+sequence to the library as per-client presentation state and renders the
+server-produced leader hint.  A client contains no routing rules beyond
+"context = snapshot focus" and invents no UI; the TUI replaces its `panel_visible`
+branching and hard-coded chords with keymap-driven local resolution.
 
 ### Rendering
 
 The renderer marks the focused region using the active/inactive role split
 already present for the panel, generalized to each surface.  The terminal cursor
 is placed in the focused surface: the caret in `editor`, the selected tree row in
-`panel`, the prompt input position in `prompt`.
+`panel`, the prompt input position in `prompt`.  When a client's reported leader
+sequence is non-empty, the library places a leader hint in that client's status
+area in a distinct theme role.
 
 ## Invariants
 
 - N1 (single focus): exactly one `FocusTarget` is focused; it is authoritative
-  `EditorSession` state carried in its own snapshot section, and
-  `panel_focused`/prompt-active are derived from it.
-- N2 (context routing): every key - printable or not - is resolved in the
-  current focus context through the keymap; the client uses the snapshot focus as
-  the context and adds no independent routing.
+  `EditorSession` state carried on the snapshot, and `panel_focused`/prompt-active
+  are derived from it.
+- N2 (context routing): every key - printable or not - is resolved by the client
+  locally in the current focus context through the published keymap; the client
+  uses the snapshot focus as the context and adds no independent routing.
 - N3 (global reachability): `*`-context leader chords - including the
   `settings.open` escape hatch (I24) and the focus-change commands - resolve in
-  every focus.
+  every focus, and `*` takes precedence over a focus binding for the same
+  sequence.
 - N4 (no orphan focus): focus never targets a hidden or absent surface; a
   transition that would do so falls back to editor.
 - N5 (prompt capture and stacked restore): opening a prompt pushes the current
   focus and focuses the prompt; closing pops and restores it (or editor if that
-  surface is gone).  Printable input reaches the prompt via its context text
-  sink.
+  surface is gone).
+- N6 (server-presented leader): the pending leader sequence is client-local input
+  capture, but its presentation is library-owned - the client reports it as
+  per-client state and the library places a theme-colored leader hint; the client
+  neither positions nor colors it.
 
 ## Considerations
 
 - `FocusTarget` subsumes `ShellState.panel_focused`; that field is removed or
   made a derived accessor so the two can never disagree.
-- Plan step 2 defines only context *semantics* and resolution; it authors no
-  default bindings (owned by the keymap work) and tests resolution with synthetic
-  context-tagged fixtures.
+- Leader resolution stays client-local per `browser-input.md`; this spec adds
+  only the presentation seam (per-client reported pending sequence -> library
+  leader hint).  The full distant-client perceived-latency input model
+  (optimistic echo, coalescing, reconciliation) is explicitly deferred.
+- The per-client leader report is presentation input like viewport dimensions,
+  not a registered command, so it adds no command-catalog or Lua surface.
 - Focus is per session, consistent with shared shell state; every attached client
-  observes the same focus.
+  observes the same focus, but each renders its own leader hint.
 - Multiple panes are one `editor` focus; which pane is active remains existing
   active-pane state.
 
@@ -148,33 +178,39 @@ is placed in the focused surface: the caret in `editor`, the selected tree row i
 
 - Hidden re-routing regressions: cover focus transitions with an independent
   transition table, not only end-to-end checks.
-- Leader/cancel ambiguity: test that a `*` chord fires while a prompt is focused,
-  that bare Escape cancels the prompt, and that printable keys still reach the
-  prompt text sink.
+- Leader visibility: test that entering leader mode produces a non-empty reported
+  sequence and a rendered hint, and that completing or abandoning the chord clears
+  it.
 - Nested prompts: test push/pop restores the correct prior focus.
 
 ## Acceptance (Definition of Done)
 
 - Observable: at all times exactly one region is focused and visibly indicated;
   keyboard input affects only that region.  `ESC b` focuses the bar and every key
-  then drives the bar; `editor.focus` returns to editing; opening the palette
-  captures typing; Escape closes it and restores the prior focus; a nested prompt
-  restores to its parent prompt.
-- The TUI contains no `panel_visible`-style routing; it routes solely by the
-  snapshot's focus.
+  then drives the bar; opening the palette captures typing; a nested prompt
+  restores to its parent prompt.  Pressing the leader key shows a theme-colored
+  `leader:` hint in the status area until the chord completes or is abandoned, and
+  the hint's placement and color come from the library, not the client.
+- The TUI contains no `panel_visible`-style routing and no hard-coded chord
+  table; it resolves keys locally against the published keymap and reports leader
+  state for presentation.
 - Gates: `ctest --preset dev` green.
 - Oracles: an independent focus-transition table (including tree-open, nested
   prompt push/pop, and surface-disappears rows) compared step-by-step against the
-  library; context-resolution tests asserting one key yields the **exact expected
-  command** per context against an independent reference mapping (not mere
-  inequality); a test that a `*` leader chord and `settings.open` resolve in
-  every focus and that bare Escape cancels a focused prompt; a snapshot round-trip
-  carrying the focus section.
+  library; a leader-hint test proving a reported non-empty sequence renders the
+  hint in a theme role and an empty sequence renders none; a snapshot round-trip
+  carrying the focus and reported-leader state; when local keymap resolution
+  lands, context-resolution tests asserting one key yields the **exact expected
+  command** per context and that `*` chords resolve in every focus with precedence
+  over focus bindings.
 
 ## Plan
 
+Steps 1 and 3 (FocusTarget session state and focus-based TUI routing) have
+landed.  The remaining work:
+
 | Step | Work | Files | Oracle |
 |---|---|---|---|
-| 1 | Add `FocusTarget` session state with the stacked transitions and an `editor.focus` command; derive `panel_focused`; expose a `FocusViewState` snapshot section and protocol codec | `include/ssg/ui_layout.h`, `src/ui_layout.cpp`, `src/runtime/*.cpp`, `include/ssg/session_snapshot.h`, `src/protocol.cpp`, `data/required-commands.json` and catalog fixtures, `tests/test_ui_layout.cpp`, `tests/test_protocol.cpp` | independent stacked focus-transition table; snapshot round-trip carries focus |
-| 2 | Define keymap context semantics (`*`/`editor`/`panel`/`prompt`), the per-context text sink, and resolution + validation in the shared input layer | `include/ssg/input.h`, `src/input.cpp`, `include/ssg/prompt.h` (`prompt.input`), `tests/test_input.cpp` | one key resolves to the exact expected command per context; global chords resolve in all; unreachable-context rejected |
-| 3 | Route TUI input by snapshot focus; remove `panel_visible` branching; draw the focus indicator and focus-aware cursor | `apps/ssg_main.cpp`, `apps/ssg_terminal.{h,cpp}`, `src/render.cpp`, `tests/test_ssg_app.cpp`, `tests/test_render.cpp` | `test_ssg_app` routing table; PTY focus demo |
+| A | Add per-client reported leader sequence as presentation state and render a theme-colored `leader:` hint in the status area | `include/ssg/ui_layout.h`, `src/ui_layout.cpp`, `src/runtime/*.cpp`, `src/render.cpp`, `src/protocol.cpp`, `tests/test_ui_layout.cpp`, `tests/test_render.cpp` | leader-hint render test (non-empty renders, empty does not); round-trip carries reported leader |
+| B | TUI derives the pending sequence from the published keymap and reports it; replace hard-coded chords with keymap-driven local resolution | `apps/ssg_main.cpp`, `apps/ssg_terminal.{h,cpp}`, `tests/test_ssg_app.cpp` | `test_ssg_app` resolution table; PTY leader-hint demo |
+| C (deferred, with keymap/M6) | Assign keymap contexts (`*`/`editor`/`panel`/`prompt`), per-context text sinks, and `validate_keymap` context checks | `include/ssg/input.h`, `src/input.cpp`, `data/default-keymap.json`, `tests/test_input.cpp` | exact-command-per-context resolution; `*`-precedence; unreachable-context rejected |
