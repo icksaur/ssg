@@ -41,20 +41,34 @@ browser test matrices. Linux and Windows are the required platforms.
 
 ## Build
 
+Configure once with the `dev` preset (Ninja + ccache, Debug), then iterate with
+a single build command:
+
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --parallel
-ctest --test-dir build --output-on-failure
+cmake --preset dev     # one-time configuration into build/
+cmake --build build    # steady-state build
 ```
 
-Enable AddressSanitizer and UndefinedBehaviorSanitizer with GCC or Clang:
+Fast inner loop for iteration:
 
 ```sh
-cmake -S . -B build-sanitize \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DSSG_SANITIZE=ON
-cmake --build build-sanitize --parallel
-ctest --test-dir build-sanitize --output-on-failure
+cmake --build build --target test_document   # build only the target you touched
+ctest --preset dev                           # fast unit tests (~0.3s)
+```
+
+`ctest --preset dev` excludes the browser, performance, recovery, and theme
+suites so the unit loop stays sub-second. Run everything with:
+
+```sh
+ctest --preset all
+```
+
+Release and sanitizer builds use their own presets and out-of-source build
+directories (`build-release/`, `build-sanitize/`):
+
+```sh
+cmake --preset release && cmake --build build-release
+cmake --preset sanitize && cmake --build build-sanitize && ctest --preset sanitize
 ```
 
 Browser tests discover installed runtimes automatically. Override executable
