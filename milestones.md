@@ -123,14 +123,15 @@ Documented deferrals (in `doc/spec-keymap.md` Considerations):
 2. The settings prompt is view/cancel-only (needs a server prompt-text-edit
    command) — reachability is satisfied; editing is deferred.
 
-## 7. Find, select, multi-cursor — IN PROGRESS
+## 7. Find, select, multi-cursor — DONE
 The editing feature set beyond basic typing.
 - Find / replace in the current document.
 - Multiple selections and multi-caret edits.
 
 Demo: find-all a token, add cursors, edit them together.
 
-Spec: `doc/spec-m7.md` (reviewed x3). Steps: S / D / M / F1 / F2.
+Spec: `doc/spec-m7.md` (reviewed x3; F2 split into F2a/F2b after review).
+Steps: S / D / M / F1 / F2a / F2b.
 
 Delivered:
 - M7-S: paint selection highlights + secondary carets — `a3c5aff`, fold
@@ -148,10 +149,18 @@ Delivered:
   Scroll-follow: reveal the active match, against the real pane height so it
   clears the prompt rows — `c774735`, `ef9f612`. Reviewed (gpt-5.6-sol): no
   findings.
-
-Remaining:
-- M7-F2: replace — `replace.update_replacement`, three-row replace prompt,
-  toggles as prompt-context bindings, `replace.current` / `replace.all`.
+- M7-F2a: replace workflow — `FindReplaceViewState.replacement` (published +
+  wire-serialized) + `replace.update_replacement` command; three-row
+  `PromptKind::replace` prompt (query display-only, replacement editable);
+  `replace.current`/`replace.all` source the replacement from state; guards to a
+  benign no-op unless a replace prompt is active; reveal the successor match —
+  `30270f0`.
+- M7-F2b: find/replace option toggles — prompt-context chords `[Escape,KeyC/KeyG/
+  KeyE]`→case/word/regex, `[Escape,KeyL]`→`replace.all`; option indicators
+  projected into both prompts from `options` — `855a449`.
+- F2 review fold: carry find options into find.open/replace.open (sticky toggles,
+  so replace acts on the reviewed match set); find.close/reconcile dismiss a find
+  OR replace prompt — `f064ab5`. Reviewed (gpt-5.6-sol): no findings.
 
 ## 8. Mouse — PLANNED
 Pointer supplements the keyboard; it never becomes the only path.
