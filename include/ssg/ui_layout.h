@@ -137,6 +137,10 @@ struct ShellViewState {
     std::optional<Rect> footer;
     std::optional<Rect> tab_bar;
     std::optional<Rect> panel;
+    // The reserved 1-column scrollbar gutter for the side panel (the tree). Set
+    // whenever `panel` is set; the panel content is the panel minus this column,
+    // so the content width is stable whether or not a thumb is shown.
+    std::optional<Rect> panel_scrollbar;
     std::optional<Rect> prompt;
     std::vector<PaneGeometry> panes;
     std::vector<AccessibilityNode> accessibility_nodes;

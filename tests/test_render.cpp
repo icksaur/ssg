@@ -6,6 +6,7 @@
 
 #include "test_helpers.h"
 
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -556,6 +557,74 @@ TEST(render_find_prompt_shows_option_indicators) {
     ASSERT_TRUE(grid_contains(grid, "[ ] Word"));
 }
 
+TEST(render_panel_tree_windows_and_draws_a_thumb_when_taller_than_the_panel) {
+    auto root = unique_root();
+    for (int i = 0; i < 40; ++i) {
+        char name[32];
+        std::snprintf(name, sizeof name, "file-%02d.txt", i);
+        std::ofstream{root / name} << "x";
+    }
+    auto runtime = make_runtime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(ssg::ClientId{1}, {"panel.toggle", runtime->revision(), {}});
+    // Expand the workspace root, then drive the selection to the bottom.
+    (void)runtime->dispatch(ssg::ClientId{1}, {"tree.select_next", runtime->revision(), {}});
+    (void)runtime->dispatch(ssg::ClientId{1}, {"tree.activate", runtime->revision(), {}});
+    for (int i = 0; i < 60; ++i) {
+        (void)runtime->dispatch(ssg::ClientId{1}, {"tree.select_next", runtime->revision(), {}});
+    }
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 12});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    auto const& shell = snapshot->sections().shell;
+    ASSERT_TRUE(shell.panel_scrollbar.has_value());
+    if (!shell.panel_scrollbar) return;
+    auto grid = ssg::render(*snapshot);
+
+    // A thumb ('#') is drawn in the reserved gutter column.
+    int const gx = shell.panel_scrollbar->x;
+    bool has_thumb = false;
+    for (int y = shell.panel_scrollbar->y;
+         y < shell.panel_scrollbar->y + shell.panel_scrollbar->height; ++y) {
+        if (grid.at(gx, y).text == "#") has_thumb = true;
+    }
+    ASSERT_TRUE(has_thumb);
+    // The window scrolled to the end: the first file is off-screen, the last is
+    // visible.
+    ASSERT_FALSE(grid_contains(grid, "file-00.txt"));
+    ASSERT_TRUE(grid_contains(grid, "file-39.txt"));
+}
+
+TEST(render_panel_tree_reserves_an_empty_gutter_when_it_fits) {
+    auto root = unique_root();
+    std::ofstream{root / "a.txt"} << "x";
+    std::ofstream{root / "b.txt"} << "x";
+    auto runtime = make_runtime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(ssg::ClientId{1}, {"panel.toggle", runtime->revision(), {}});
+    // Expand the root so its two files are visible; the tree still fits.
+    (void)runtime->dispatch(ssg::ClientId{1}, {"tree.select_next", runtime->revision(), {}});
+    (void)runtime->dispatch(ssg::ClientId{1}, {"tree.activate", runtime->revision(), {}});
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    auto const& shell = snapshot->sections().shell;
+    ASSERT_TRUE(shell.panel_scrollbar.has_value());
+    if (!shell.panel_scrollbar) return;
+    auto grid = ssg::render(*snapshot);
+    // The gutter is reserved (column exists) but blank: no thumb or track glyphs,
+    // so the tree's content width never changes as items are added or removed.
+    int const gx = shell.panel_scrollbar->x;
+    for (int y = shell.panel_scrollbar->y;
+         y < shell.panel_scrollbar->y + shell.panel_scrollbar->height; ++y) {
+        ASSERT_NE(grid.at(gx, y).text, std::string{"#"});
+        ASSERT_NE(grid.at(gx, y).text, std::string{"|"});
+    }
+    ASSERT_TRUE(grid_contains(grid, "a.txt"));
+}
+
 int main() {
     RUN(render_paints_content_not_accessibility_labels);
     RUN(render_colors_are_palette_indices);
@@ -571,6 +640,8 @@ int main() {
     RUN(render_hides_find_matches_after_document_revision_changes);
     RUN(render_replace_prompt_shows_query_and_replacement_with_cursor_on_replacement);
     RUN(render_find_prompt_shows_option_indicators);
+    RUN(render_panel_tree_windows_and_draws_a_thumb_when_taller_than_the_panel);
+    RUN(render_panel_tree_reserves_an_empty_gutter_when_it_fits);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;

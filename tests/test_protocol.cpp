@@ -493,6 +493,40 @@ TEST(two_client_capability_and_viewport_isolation_survives_the_wire) {
     ASSERT_EQ(first_decoded.snapshot->sections(), second_decoded.snapshot->sections());
 }
 
+TEST(session_snapshot_round_trips_tree_scroll_fields) {
+    auto sections_value = sections(ssg::Revision{4}, "alpha");
+    ssg::TreeNode node_a{ssg::TreeNodeId{"files:a"}, std::nullopt, "a.txt",
+                         ssg::TreeNodeKind::file};
+    ssg::TreeNode node_b{ssg::TreeNodeId{"files:b"}, std::nullopt, "b.txt",
+                         ssg::TreeNodeKind::file};
+    ssg::TreeProviderView provider{
+        ssg::TreeProviderId{"files"}, ssg::TreeProviderKind::filesystem,
+        {ssg::TreeNodeView{node_a, 0, false}, ssg::TreeNodeView{node_b, 0, false}},
+        ssg::TreeNodeId{"files:b"}};
+    provider.first_visible = 3;
+    provider.scrollbar = ssg::scrollbar_metrics(40, 9, 3);
+    provider.visible_node_ids = {ssg::TreeNodeId{"files:a"},
+                                 ssg::TreeNodeId{"files:b"}};
+    sections_value.tree = ssg::TreeViewState{ssg::TreeRevision{7}, {provider}};
+
+    auto snapshot = ssg::assemble_session_snapshot(
+        ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::in_process},
+        ssg::ViewId{9}, client_view(3), std::move(sections_value));
+    auto const decoded =
+        ssg::decode_session_snapshot(ssg::encode_session_snapshot(snapshot));
+    ASSERT_TRUE(decoded.accepted());
+    ASSERT_TRUE(decoded.snapshot.has_value());
+    if (!decoded.snapshot) return;
+    // Whole-section equality proves the new scroll fields survive the wire.
+    ASSERT_EQ(decoded.snapshot->sections().tree, snapshot.sections().tree);
+    auto const& p = decoded.snapshot->sections().tree.providers.front();
+    ASSERT_EQ(p.first_visible, std::uint32_t{3});
+    ASSERT_EQ(p.scrollbar, ssg::scrollbar_metrics(40, 9, 3));
+    ASSERT_EQ(p.visible_node_ids.size(), std::size_t{2});
+}
+
 // ---------------------------------------------------------------------------
 // Clipboard and status-action message kinds.
 
@@ -886,6 +920,7 @@ int main() {
     RUN(session_snapshot_round_trips_through_the_wire);
     RUN(session_delta_round_trips_and_replay_matches_the_decoded_delta);
     RUN(two_client_capability_and_viewport_isolation_survives_the_wire);
+    RUN(session_snapshot_round_trips_tree_scroll_fields);
     RUN(clipboard_request_round_trips_through_the_wire);
     RUN(command_result_round_trips_through_the_wire);
     RUN(clipboard_response_round_trips_through_the_wire);

@@ -2,6 +2,7 @@
 
 #include <ssg/editor_runtime.h>
 
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -122,6 +123,88 @@ TEST(palette_candidates_carry_labels_and_key_detail) {
     if (unbound) ASSERT_TRUE(unbound->detail.empty());
 }
 
+TEST(tree_scrolls_to_keep_selection_visible_in_a_short_panel) {
+    auto root = std::filesystem::current_path() / "runtime_nav_treescroll";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root / "workspace");
+    std::filesystem::create_directories(root / "scratch");
+    std::filesystem::create_directories(root / "recovery");
+    // 40 top-level files -> a tree far taller than a short panel.
+    for (int i = 0; i < 40; ++i) {
+        char name[32];
+        std::snprintf(name, sizeof name, "file-%02d.txt", i);
+        std::ofstream{root / "workspace" / name} << "x";
+    }
+    auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    // Show the panel; a 12-row terminal gives a panel content height of ~9.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"panel.toggle", runtime.revision(), {}}).accepted());
+    // Select the workspace root and expand it so its 40 files become visible.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select_next", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.activate", runtime.revision(), {}}).accepted());
+    const ssg::ViewportDimensions dims{80, 12};
+
+    // Baseline: selection at the top (root), window pinned to the top with a live
+    // thumb.
+    {
+        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        ASSERT_TRUE(snap.has_value());
+        if (!snap) return;
+        auto const& p = snap->sections().tree.providers.front();
+        ASSERT_TRUE(p.nodes.size() >= 40);
+        ASSERT_EQ(p.first_visible, std::uint32_t{0});
+        ASSERT_TRUE(p.scrollbar.maximum_first_row > 0);          // scrollable
+        ASSERT_TRUE(p.scrollbar.thumb_size < p.scrollbar.viewport_rows);
+        ASSERT_EQ(p.visible_node_ids.size(),
+                  std::size_t{p.scrollbar.viewport_rows});       // window bound
+        ASSERT_EQ(p.visible_node_ids.front(), p.nodes.front().node.id);
+    }
+
+    // Move the selection to the bottom: the window scrolls to keep it shown.
+    for (int i = 0; i < 60; ++i) {
+        ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select_next", runtime.revision(), {}}).accepted());
+    }
+    std::uint32_t deep_first = 0;
+    {
+        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        ASSERT_TRUE(snap.has_value());
+        if (!snap) return;
+        auto const& p = snap->sections().tree.providers.front();
+        ASSERT_TRUE(p.selected.has_value());
+        // The selected node's absolute index lies within the visible window.
+        std::optional<std::uint32_t> sel_index;
+        for (std::uint32_t i = 0; i < p.nodes.size(); ++i) {
+            if (p.nodes[i].node.id == *p.selected) { sel_index = i; break; }
+        }
+        ASSERT_TRUE(sel_index.has_value());
+        ASSERT_TRUE(p.first_visible > 0);
+        ASSERT_TRUE(*sel_index >= p.first_visible &&
+                    *sel_index < p.first_visible + p.visible_node_ids.size());
+        // The hit map maps each viewport row to the correct on-screen node id.
+        for (std::size_t row = 0; row < p.visible_node_ids.size(); ++row) {
+            ASSERT_EQ(p.visible_node_ids[row],
+                      p.nodes[p.first_visible + row].node.id);
+        }
+        deep_first = p.first_visible;
+    }
+    ASSERT_TRUE(deep_first > 0);
+
+    // Move back up to the top: the window scrolls back to first_visible == 0.
+    for (int i = 0; i < 40; ++i) {
+        ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select_previous", runtime.revision(), {}}).accepted());
+    }
+    {
+        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        ASSERT_TRUE(snap.has_value());
+        if (!snap) return;
+        ASSERT_EQ(snap->sections().tree.providers.front().first_visible, std::uint32_t{0});
+    }
+    std::filesystem::remove_all(root);
+}
+
 } // namespace
 
 int main() {
@@ -129,6 +212,7 @@ int main() {
     RUN(palette_open_enters_prompt_focus_and_publishes_candidates);
     RUN(palette_execute_validates_candidate_membership);
     RUN(palette_candidates_carry_labels_and_key_detail);
+    RUN(tree_scrolls_to_keep_selection_visible_in_a_short_panel);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

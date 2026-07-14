@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ssg/viewport.h>
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -141,6 +143,15 @@ struct TreeProviderView {
     TreeProviderKind kind;
     std::vector<TreeNodeView> nodes;
     std::optional<TreeNodeId> selected;
+    // Scroll state resolved at snapshot time against the panel height (see
+    // doc/spec-scroll.md R2). `first_visible` is the index into `nodes` of the
+    // first on-screen node; `scrollbar` is its thumb geometry; `visible_node_ids`
+    // is the bounded viewport_row -> node id hit map for the visible window only
+    // (empty when the panel is hidden). `nodes` still carries the full expanded
+    // list; render and hit-testing window it with `first_visible`.
+    std::uint32_t first_visible = 0;
+    ScrollbarMetrics scrollbar{};
+    std::vector<TreeNodeId> visible_node_ids;
     bool operator==(const TreeProviderView&) const = default;
 };
 

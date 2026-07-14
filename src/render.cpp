@@ -165,7 +165,34 @@ void paint_shell_leaves(CellGrid& grid, ShellViewState const& shell,
 }
 
 // Paints the active filesystem provider's visible nodes below the provider row.
+// Paint a scrollbar into a reserved 1-column gutter from resolved metrics.  When
+// the content fits (`maximum_first_row == 0`) the gutter is left blank (the thumb
+// is hidden), so a thumb appearing or vanishing never changes the content width
+// (see doc/spec-scroll.md). Otherwise it draws a `|` track with a `#` thumb.
+void paint_scroll_gutter(CellGrid& grid, int x, int y, int height,
+                         ScrollbarMetrics const& metrics,
+                         ThemeSnapshot const& theme, std::uint8_t background) {
+    auto const track = semantic_index(theme, SemanticRole::scrollbar_track);
+    auto const thumb = semantic_index(theme, SemanticRole::scrollbar_thumb);
+    bool const scrollable = metrics.maximum_first_row > 0;
+    for (int row = 0; row < height; ++row) {
+        if (!scrollable) {
+            put(grid, x, y + row, " ", track, background,
+                SemanticRole::scrollbar_track);
+            continue;
+        }
+        bool const is_thumb =
+            row >= static_cast<int>(metrics.thumb_start) &&
+            row < static_cast<int>(metrics.thumb_start + metrics.thumb_size);
+        put(grid, x, y + row, is_thumb ? "#" : "|", is_thumb ? thumb : track,
+            background,
+            is_thumb ? SemanticRole::scrollbar_thumb
+                     : SemanticRole::scrollbar_track);
+    }
+}
+
 void paint_panel_tree(CellGrid& grid, Rect const& panel,
+                      std::optional<Rect> const& panel_scrollbar,
                       TreeViewState const& tree, ThemeSnapshot const& theme,
                       std::uint8_t background, bool focused) {
     if (tree.providers.empty() || panel.width <= 0) return;
@@ -175,15 +202,22 @@ void paint_panel_tree(CellGrid& grid, Rect const& panel,
     auto const selected_bg = semantic_index(theme, SemanticRole::tree_focus);
     int const top = panel.y + 1;  // Row 0 shows the provider name.
     int const rows = panel.height - 1;
-    for (std::size_t index = 0; index < provider.nodes.size(); ++index) {
-        if (static_cast<int>(index) >= rows) break;
+    // Content stops before the reserved scrollbar gutter so text width is stable.
+    int const content_right =
+        panel_scrollbar ? panel_scrollbar->x : panel.right();
+    // Window the visible nodes at the resolved scroll offset.
+    for (int row = 0; row < rows; ++row) {
+        std::size_t const index =
+            static_cast<std::size_t>(provider.first_visible) +
+            static_cast<std::size_t>(row);
+        if (index >= provider.nodes.size()) break;
         auto const& view = provider.nodes[index];
-        int const y = top + static_cast<int>(index);
+        int const y = top + row;
         bool const is_selected =
             provider.selected && view.node.id == *provider.selected;
         auto const row_background = is_selected ? selected_bg : background;
         if (is_selected) {
-            fill_rect(grid, {panel.x, y, panel.width, 1}, foreground,
+            fill_rect(grid, {panel.x, y, content_right - panel.x, 1}, foreground,
                       row_background, SemanticRole::tree_focus);
             if (focused) grid.caret = GridPosition{panel.x, y};
         }
@@ -194,8 +228,14 @@ void paint_panel_tree(CellGrid& grid, Rect const& panel,
         line += view.node.label;
         auto const color =
             view.node.kind == TreeNodeKind::directory ? directory : foreground;
-        paint_text(grid, panel.x, y, panel.right(), line, color, row_background,
+        paint_text(grid, panel.x, y, content_right, line, color, row_background,
                    SemanticRole::foreground);
+    }
+    // Paint the reserved gutter (blank when the tree fits).
+    if (panel_scrollbar) {
+        paint_scroll_gutter(grid, panel_scrollbar->x, panel_scrollbar->y,
+                            panel_scrollbar->height, provider.scrollbar, theme,
+                            background);
     }
 }
 
@@ -407,18 +447,9 @@ void paint_document(CellGrid& grid, SessionSnapshot const& snapshot,
 void paint_scrollbar(CellGrid& grid, PaneGeometry const& pane,
                      ViewportViewState const& viewport,
                      ThemeSnapshot const& theme, std::uint8_t background) {
-    auto const track = semantic_index(theme, SemanticRole::scrollbar_track);
-    auto const thumb = semantic_index(theme, SemanticRole::scrollbar_thumb);
-    for (int row = 0; row < pane.scrollbar.height; ++row) {
-        auto const is_thumb =
-            row >= static_cast<int>(viewport.scrollbar.thumb_start) &&
-            row < static_cast<int>(viewport.scrollbar.thumb_start +
-                                   viewport.scrollbar.thumb_size);
-        put(grid, pane.scrollbar.x, pane.scrollbar.y + row,
-            is_thumb ? "#" : "|", is_thumb ? thumb : track, background,
-            is_thumb ? SemanticRole::scrollbar_thumb
-                     : SemanticRole::scrollbar_track);
-    }
+    paint_scroll_gutter(grid, pane.scrollbar.x, pane.scrollbar.y,
+                        pane.scrollbar.height, viewport.scrollbar, theme,
+                        background);
 }
 
 // Paint the reserved prompt rows (find/replace/settings/command_argument).  The
@@ -554,7 +585,8 @@ CellGrid render(SessionSnapshot const& snapshot) {
     paint_shell_leaves(grid, shell, theme, background, panel_background);
 
     if (shell.panel) {
-        paint_panel_tree(grid, *shell.panel, snapshot.sections().tree, theme,
+        paint_panel_tree(grid, *shell.panel, shell.panel_scrollbar,
+                         snapshot.sections().tree, theme,
                          panel_background, shell.focus == FocusTarget::panel);
     }
     if (!shell.panes.empty()) {

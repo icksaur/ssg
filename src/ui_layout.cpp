@@ -412,6 +412,16 @@ ShellLayoutResult compute_shell_layout(const ShellLayoutRequest& request,
                      state.impl_->focus == FocusTarget::panel ? SemanticRole::panel_active :
                                                   SemanticRole::panel_inactive,
                      request.panel_provider_label);
+            // Reserve the tree's scrollbar gutter: the right column over the tree
+            // content rows (below the provider-label row). Content is the panel
+            // minus this column, so tree text width never changes with the thumb.
+            if (panel_width > 1 && view.panel->height > 1) {
+                view.panel_scrollbar = Rect{panel_width - 1, view.panel->y + 1, 1,
+                                            view.panel->height - 1};
+                add_node(view, ShellNodeKind::scrollbar, "panel.scrollbar",
+                         "Panel scrollbar", *view.panel_scrollbar,
+                         SemanticRole::scrollbar_track);
+            }
         }
 
         editor = {panel_width, 1, request.viewport.columns - panel_width,

@@ -116,6 +116,11 @@ ShellViewState EditorRuntime::Impl::shell_view(ViewportDimensions dimensions,
         last_pane_content_columns = static_cast<std::uint32_t>(std::max(content.width, 1));
         last_reserved_prompt_rows = static_cast<std::uint32_t>(request.reserved_prompt_rows);
     }
+    // Cache the tree content height (panel height minus the provider-label row)
+    // so tree_view can resolve the scroll offset against the real panel size.
+    last_panel_content_rows =
+        view.panel ? static_cast<std::uint32_t>(std::max(view.panel->height - 1, 0))
+                   : 0;
 
     if (palette_open && !view.panes.empty()) {
         PaletteProjection projection;
@@ -137,6 +142,11 @@ SessionSnapshotSections EditorRuntime::Impl::sections(ViewportDimensions dimensi
         auto found = histories.find(id->value());
         if (found != histories.end()) current_history = found->second.view_state();
     }
+    // Compute the shell layout first: it caches the panel height that tree_view
+    // resolves the tree scroll offset against (the aggregate below does not
+    // guarantee evaluation order).
+    auto shell = shell_view(dimensions, leader_pending, palette_report);
+    auto tree_section = tree_view();
     return {document_view(),
             selection,
             current_history,
@@ -151,13 +161,44 @@ SessionSnapshotSections EditorRuntime::Impl::sections(ViewportDimensions dimensi
             diff.view_state(),
             external.view_state(),
             follow.view_state(),
-            tree.view_state(),
+            std::move(tree_section),
             syntax.view_state(),
             lsp_sync,
             lsp_features,
             theme,
-            shell_view(dimensions, leader_pending, palette_report),
+            std::move(shell),
             palette_view()};
+}
+
+TreeViewState EditorRuntime::Impl::tree_view() const {
+    auto view = tree.view_state();
+    if (view.providers.empty()) return view;
+    // Only the active (front) provider is rendered; resolve its scroll window
+    // against the cached panel height and persist the offset for minimal shifts.
+    auto& provider = view.providers.front();
+    std::optional<std::uint32_t> selected_index;
+    if (provider.selected) {
+        for (std::size_t i = 0; i < provider.nodes.size(); ++i) {
+            if (provider.nodes[i].node.id == *provider.selected) {
+                selected_index = static_cast<std::uint32_t>(i);
+                break;
+            }
+        }
+    }
+    auto scroll = compute_list_scroll_view(
+        static_cast<std::uint32_t>(provider.nodes.size()),
+        last_panel_content_rows, tree_first_visible, selected_index,
+        /*keep_selection_visible=*/true);
+    tree_first_visible = scroll.first_visible;
+    provider.first_visible = scroll.first_visible;
+    provider.scrollbar = scroll.scrollbar;
+    provider.visible_node_ids.clear();
+    provider.visible_node_ids.reserve(scroll.visible_count);
+    for (std::uint32_t row = 0; row < scroll.visible_count; ++row) {
+        provider.visible_node_ids.push_back(
+            provider.nodes[scroll.first_visible + row].node.id);
+    }
+    return view;
 }
 
 PaletteViewState EditorRuntime::Impl::palette_view() const {
