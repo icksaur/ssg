@@ -656,7 +656,8 @@ void EditorRuntime::Impl::reconcile_find_document() {
     // close the controller and dismiss its prompt so no stale match is navigable.
     find_replace.close();
     if (auto const& request = prompt.request();
-        request && request->kind == PromptKind::find) {
+        request && (request->kind == PromptKind::find ||
+                    request->kind == PromptKind::replace)) {
         (void)prompt.cancel();
     }
     find_document_id.reset();

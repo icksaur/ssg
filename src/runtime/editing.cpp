@@ -256,7 +256,7 @@ CommandHandlerResult bind_find_replace(EditorRuntime::Impl& runtime,
     }
     switch (command) {
         case FindReplaceCommand::find_open:
-            runtime.find_replace.open(snapshot, FindRequest{query, {}, range});
+            runtime.find_replace.open(snapshot, FindRequest{query, runtime.find_replace.view_state().options, range});
             runtime.find_document_id = runtime.active_document_id();
             reveal_active_find_match(runtime);
             // Open the find prompt so focus moves to it and the reserved rows
@@ -267,7 +267,7 @@ CommandHandlerResult bind_find_replace(EditorRuntime::Impl& runtime,
                 PromptMatchCount{"find.count", "Match count", ""}});
             return success();
         case FindReplaceCommand::replace_open:
-            runtime.find_replace.open_replace(snapshot, FindRequest{query, {}, range});
+            runtime.find_replace.open_replace(snapshot, FindRequest{query, runtime.find_replace.view_state().options, range});
             runtime.find_document_id = runtime.active_document_id();
             reveal_active_find_match(runtime);
             // Three-row replace prompt: query (row 0, display-only, seeded from
@@ -292,10 +292,12 @@ CommandHandlerResult bind_find_replace(EditorRuntime::Impl& runtime,
         case FindReplaceCommand::find_close:
             runtime.find_replace.close();
             runtime.find_document_id.reset();
-            // Only dismiss the prompt when it is the find prompt: a global
-            // find.close must not cancel an unrelated palette/settings prompt.
+            // Dismiss the find or replace prompt (both belong to this
+            // controller); a global find.close must not cancel an unrelated
+            // palette/settings prompt.
             if (auto const& request = runtime.prompt.request();
-                request && request->kind == PromptKind::find) {
+                request && (request->kind == PromptKind::find ||
+                            request->kind == PromptKind::replace)) {
                 (void)runtime.prompt.cancel();
             }
             return success();
