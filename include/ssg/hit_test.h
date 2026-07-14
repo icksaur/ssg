@@ -1,0 +1,57 @@
+#pragma once
+
+// Uniform pointer hit-testing over the scrollable regions a snapshot publishes
+// (see doc/spec-scroll.md R4). This is pure, data-only classification: it maps a
+// terminal cell to the region and item under it, or to a scrollbar position. It
+// performs NO input handling — milestone 8 (mouse) is the caller that turns a
+// RegionHit into commands.
+
+#include <ssg/session_snapshot.h>
+#include <ssg/tree.h>
+
+#include <cstdint>
+#include <optional>
+
+namespace ssg {
+
+enum class HitRegion : std::uint8_t {
+    none,               // out of bounds, chrome, or a reserved-but-empty cell
+    editor,             // a document cell: byte_offset / byte_len are set
+    panel,              // a tree row: node_id is set
+    palette,            // a palette row: item_index is the absolute rank index
+    editor_scrollbar,   // the editor pane gutter: scroll_* are set
+    panel_scrollbar,    // the side-panel gutter: scroll_* are set
+    palette_scrollbar,  // the palette gutter: scroll_* are set
+};
+
+struct RegionHit {
+    HitRegion region = HitRegion::none;
+    // Editor content: the document byte span of the hit cell.
+    std::uint32_t byte_offset = 0;
+    std::uint32_t byte_len = 0;
+    // Panel content: the tree node under the cell.
+    std::optional<TreeNodeId> node_id;
+    // Palette content: the ABSOLUTE index into the full ranked order
+    // (first_visible + on-screen row).
+    std::uint32_t item_index = 0;
+    // Scrollbar regions: the position as a numerator/denominator pair ready to
+    // feed view.scroll_to_fraction (first_row = maximum_first_row * numerator /
+    // denominator), plus the equivalent [0, 1] fraction for display.
+    std::uint32_t scroll_numerator = 0;
+    std::uint32_t scroll_denominator = 1;
+    double scrollbar_fraction = 0.0;
+
+    [[nodiscard]] bool hit() const noexcept { return region != HitRegion::none; }
+    bool operator==(const RegionHit&) const = default;
+};
+
+// Classify the terminal cell at (column, row) against the snapshot's regions.
+// Precedence: when the palette is open it overlays the editor pane, so a cell in
+// the pane area resolves to the palette (or its gutter), never the editor. The
+// side panel, editor pane, and their gutters occupy disjoint columns, so their
+// order does not matter. A cell outside every region, on the tree provider-label
+// row, or in a reserved-but-empty gutter/list area returns HitRegion::none.
+[[nodiscard]] RegionHit hit_test(SessionSnapshot const& snapshot, int column,
+                                 int row);
+
+}  // namespace ssg
