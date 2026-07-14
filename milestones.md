@@ -4,6 +4,9 @@ TUI-first `ssg` editor. The library owns all behavior, layout, and state; the
 `ssg` app owns only terminal I/O (drawing cells, colors, keyboard, mouse,
 resize). Every milestone ends in something you can run and validate by hand.
 
+Status legend: **DONE** · **IN PROGRESS** · **PLANNED**. Delivered work lists
+the spec (if any) and the landing commits, most-recent last.
+
 Layout the app renders (all geometry comes from the library):
 
 ```
@@ -18,7 +21,7 @@ Layout the app renders (all geometry comes from the library):
 scrollbar column. The bar and the document view use the same scrollbar
 abstraction.
 
-## 1. Launch and frame
+## 1. Launch and frame — DONE
 `ssg [path]` starts, draws the full shell, and quits with `ESC Q`.
 - No arg or a directory: open that directory (CWD if none). File: open its
   parent directory and that file in a tab.
@@ -28,7 +31,14 @@ abstraction.
 Demo: `ssg`, `ssg src`, `ssg README.md` — see the VSCode-like frame; `ESC Q`
 restores the terminal cleanly.
 
-## 2. Read-only document view
+Delivered:
+- `ssg` binary (`apps/ssg_main.cpp`, `apps/ssg_terminal.{h,cpp}`), termios raw
+  mode, reuses the library renderer — `f44bd93`.
+- Readable 16-color dark theme replacing the grayscale placeholder — `08a50b9`.
+- Build/tooling groundwork: Ninja + ccache presets (`1e112fa`); removed the
+  browser client and browser conformance tests (`96bfe4c`).
+
+## 2. Read-only document view — DONE
 Open a file and see its text rendered with the 16-color theme, scrollable.
 - Vertical scroll by keyboard and mouse wheel; the doc-view scrollbar tracks
   position and size.
@@ -36,28 +46,50 @@ Open a file and see its text rendered with the 16-color theme, scrollable.
 
 Demo: `ssg somefile.cpp`, scroll top-to-bottom; scrollbar matches.
 
-## 3. Filesystem bar
+Delivered:
+- Read-only scrolling (arrows / PageUp-Down / wheel → `view.scroll_*`) —
+  `3a6a66a`.
+
+## 3. Filesystem bar — DONE
 The bar shows the workspace tree; navigate and open files.
 - Move selection, expand/collapse directories, `Enter` opens a file in a tab.
 - Toggle the bar with `ESC b`; the document area reclaims the width.
 
 Demo: browse the tree, open two files, `ESC b` to hide/show the bar.
 
-## 4. Editing and save
+Delivered:
+- M3a: filesystem bar renders + `ESC b` toggle — `88a6a4e`.
+- Renderer promoted into the library (spec `bfac33c`): content on
+  accessibility nodes (`1c87f06`), `ssg::render`/`CellGrid` in the library with
+  phantom-label overlaps fixed (`1b6071e`).
+- M3b: library-owned `TreeModel` selection / navigation / expand / open, three
+  tree commands through the catalog machinery — `6a42cb0`.
+
+## 4. Editing and save — DONE
 Type into a document and persist it.
 - Insert, delete, newline; caret movement; selection; undo (`ESC z`) / redo.
 - Save with `ESC s`; dirty state shows in the tab and footer.
 
 Demo: edit a scratch file, save, confirm the bytes changed on disk.
 
-## 5. Tabs
+Delivered:
+- Editing / undo / redo / save — `cfd9f20`.
+- Blinking cursor at the caret (`CellGrid.caret`) — `27d99e7`.
+- Word/line-boundary undo coalescing breaks — `b4388ad`.
+
+## 5. Tabs — DONE
 Work across multiple open documents.
 - Open several files, switch tabs (`ESC ]` / `ESC [`), close a tab (`ESC w`).
 - Dirty indicator per tab; closing a dirty tab is recoverable.
 
 Demo: open three files, switch, edit one, close another.
 
-## 6. Command palette and chords
+Delivered:
+- Tab switch / close / dirty indicator — `74f84b4`.
+- Fix: closing the last tab left a phantom document in the editor; the active
+  tab is now the sole source of truth — `a125869`.
+
+## 6. Command palette and chords — DONE
 Every action is a library command reachable by a 2-key chord and the palette.
 - Palette (`ESC p`) lists and runs commands.
 - All default chords are two keys: `ESC` then one key (`ESC b`, `ESC B`).
@@ -65,21 +97,70 @@ Every action is a library command reachable by a 2-key chord and the palette.
 
 Demo: run commands from the palette; invoke the same ones by chord.
 
-## 7. Find, select, multi-cursor
+Delivered:
+- Focus model (spec `doc/spec-navigation.md`): library-owned `FocusTarget`
+  (editor / panel / prompt), stacked prompt transitions, TUI routes input by
+  focus — `e403a20` (over-reach reverted at `ca5c1ee`).
+- Leader hint, client-resolved and server-presented: the client derives the
+  pending chord and reports it via `snapshot(..., leader_pending)`; the library
+  renders a theme-colored `leader:` hint — `7541412`, `df51b2c`.
+- Command palette (spec `doc/spec-palette.md`, `ca31d4f` / fold `cbe6fde`):
+  server publishes the candidate list, client does the fuzzy find. Steps:
+  candidate list on snapshot (`f5b3df6`); `PromptKind::palette` + results-pane
+  projection (`d134f8d`); header query + ghost-text + client ranker + wiring
+  (`07b5e0c`); review fold — server-owned execution, wire codec, guards
+  (`3eae7e0`).
+- Keymap contexts (spec `doc/spec-keymap.md`): retire the browser-input vestige
+  (`a9b7998`); K1 context set + validation + pure resolver (`d276768`); K2
+  curated runtime keymap + `settings.open` fix (`5371297`); K3a byte→KeyStroke
+  decode with a bounded-Escape contract (`d0a4430`); K3b keymap-driven TUI
+  routing (`ffb2e31`); K4 command labels + palette key-sequence detail
+  (`d004e40`).
+
+Documented deferrals (in `doc/spec-keymap.md` Considerations):
+1. Palette over-lists argument-required commands (needs per-command
+   palette-executable arity metadata); executing one is a safe no-op close.
+2. The settings prompt is view/cancel-only (needs a server prompt-text-edit
+   command) — reachability is satisfied; editing is deferred.
+
+## 7. Find, select, multi-cursor — IN PROGRESS
 The editing feature set beyond basic typing.
 - Find / replace in the current document.
 - Multiple selections and multi-caret edits.
 
 Demo: find-all a token, add cursors, edit them together.
 
-## 8. Mouse
+Spec: `doc/spec-m7.md` (reviewed x3). Steps: S / D / M / F1 / F2.
+
+Delivered:
+- M7-S: paint selection highlights + secondary carets — `a3c5aff`, fold
+  `0cd4360`.
+- M7-D: decode modified arrows (Shift/Ctrl/Alt) in the terminal — `585e72f`.
+- M7-M: Shift+Arrow→select.*, multi-cursor chords, find/replace-open chords —
+  `21cb765`, fold `9b1b0be`.
+- M7-F1: find UI — `find.update_query` command + `FindQueryArguments` codec;
+  `find.open` opens a `PromptKind::find` prompt; the snapshot projects
+  query+match-count into the reserved rows; matches render (`search_match` /
+  active `selection`); the client edits the query with no local copy and fulfils
+  Enter/↓→next, ↑→previous, EscEsc→close — `93c58a8`. Review folds: prompt-kind
+  gating, guarded close, stale-match render gate (`9ae1f8e`); bind find to
+  document identity + revision, closing on document change/edit (`686772d`).
+  Scroll-follow: reveal the active match, against the real pane height so it
+  clears the prompt rows — `c774735`, `ef9f612`. Reviewed (gpt-5.6-sol): no
+  findings.
+
+Remaining:
+- M7-F2: replace — `replace.update_replacement`, three-row replace prompt,
+  toggles as prompt-context bindings, `replace.current` / `replace.all`.
+
+## 8. Mouse — PLANNED
 Pointer supplements the keyboard; it never becomes the only path.
 - Click to place the caret, drag to select, click tabs and tree nodes, drag
   either scrollbar, wheel-scroll.
 
 Demo: place the caret by click, drag-select, drag the scrollbar thumb.
 
-## 9. Terminal robustness
+## 9. Terminal robustness — PLANNED
 The app behaves under real terminal conditions.
 - Resize (`SIGWINCH`) re-lays out from the library with no artifacts.
 - Wide/combining Unicode occupies correct cells; truecolor and 256-color
@@ -88,14 +169,14 @@ The app behaves under real terminal conditions.
 
 Demo: resize the window while editing; open a Unicode-heavy file.
 
-## 10. Fast startup
+## 10. Fast startup — PLANNED
 Cold start competes with comparable editors.
 - Time from `ssg <file>` to first drawn frame under the target budget; no
   optional subsystem (Lua, LSP, Tree-sitter, watchers) on the startup path.
 
 Demo: `time ssg <file>` and compare against a peer editor.
 
-## 11. Library API is the contract
+## 11. Library API is the contract — PLANNED (ongoing invariant)
 The `ssg` app contains no editor or layout behavior; all of it is library API.
 - The command/snapshot/delta surface the TUI consumes is the same contract a
   future browser or `--http` client must adhere to.
