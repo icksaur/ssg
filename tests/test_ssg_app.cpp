@@ -380,6 +380,21 @@ TEST(route_pointer_ignores_non_editor_and_non_left) {
     ASSERT_FALSE(unresolved.begins_drag);
 }
 
+TEST(decode_input_pointer_rejects_malformed_but_terminated_payloads) {
+    std::size_t consumed = 0;
+    // Empty Cb, empty Cx, empty Cy, and non-digit Cy each terminate with M/m but
+    // are malformed: they are consumed and dropped (none), never dispatched as a
+    // real pointer event at (0,0).
+    for (std::string_view malformed :
+         {"\x1b[<;1;1M", "\x1b[<0;;1M", "\x1b[<0;1;M", "\x1b[<0;1;xM",
+          "\x1b[<0;1M", "\x1b[<0;1;5;9M"}) {
+        consumed = 0;
+        auto decoded = ssg::app::decode_input(malformed, true, consumed);
+        ASSERT_TRUE(decoded.status == ssg::app::DecodeStatus::none);
+        ASSERT_EQ(consumed, malformed.size());  // consumed so the loop advances
+    }
+}
+
 int main() {
     RUN(resolve_launch_no_argument_opens_cwd);
     RUN(resolve_launch_directory_opens_that_directory);
@@ -392,6 +407,7 @@ int main() {
     RUN(decode_input_arrows_and_mouse);
     RUN(decode_input_pointer_press_release_drag);
     RUN(decode_input_pointer_split_reads_are_incomplete);
+    RUN(decode_input_pointer_rejects_malformed_but_terminated_payloads);
     RUN(route_pointer_left_press_on_editor_places_caret);
     RUN(route_pointer_ignores_non_editor_and_non_left);
     RUN(decode_input_escape_boundary_is_bounded);

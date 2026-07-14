@@ -212,21 +212,28 @@ Decoded decode_input(std::string_view bytes, bool input_exhausted,
             while (end < bytes.size() && bytes[end] != 'M' && bytes[end] != 'm') ++end;
             if (end >= bytes.size()) return {DecodeStatus::incomplete, {}, {}, 0};
             char const final_byte = bytes[end];
+            consumed = end + 1;  // A malformed-but-terminated sequence is consumed.
             std::size_t pos = 3;
-            auto const cb = parse_decimal(bytes, pos);
-            if (pos >= bytes.size() || bytes[pos] != ';') {
-                consumed = end + 1;
-                return {DecodeStatus::none, {}, {}, 0};
-            }
+            // Each of Cb/Cx/Cy must be a non-empty run of digits followed by its
+            // delimiter; Cy must end exactly at the final byte (no trailing junk).
+            // Otherwise the sequence is malformed and dropped rather than
+            // dispatching a command from garbage bytes.
+            auto parse_field = [&](std::int64_t& out) {
+                std::size_t const start = pos;
+                out = parse_decimal(bytes, pos);
+                return pos > start;
+            };
+            std::int64_t cb = 0;
+            std::int64_t cx = 0;
+            std::int64_t cy = 0;
+            if (!parse_field(cb)) return {DecodeStatus::none, {}, {}, 0};
+            if (pos >= bytes.size() || bytes[pos] != ';') return {DecodeStatus::none, {}, {}, 0};
             ++pos;
-            auto const cx = parse_decimal(bytes, pos);
-            if (pos >= bytes.size() || bytes[pos] != ';') {
-                consumed = end + 1;
-                return {DecodeStatus::none, {}, {}, 0};
-            }
+            if (!parse_field(cx)) return {DecodeStatus::none, {}, {}, 0};
+            if (pos >= bytes.size() || bytes[pos] != ';') return {DecodeStatus::none, {}, {}, 0};
             ++pos;
-            auto const cy = parse_decimal(bytes, pos);
-            consumed = end + 1;
+            if (!parse_field(cy)) return {DecodeStatus::none, {}, {}, 0};
+            if (pos != end) return {DecodeStatus::none, {}, {}, 0};
             if (cb == 64) return {DecodeStatus::scroll, {}, {}, -3};
             if (cb == 65) return {DecodeStatus::scroll, {}, {}, 3};
             if ((cb & 64) != 0) return {DecodeStatus::none, {}, {}, 0};  // other wheel/ext
