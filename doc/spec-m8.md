@@ -138,7 +138,16 @@ the command to dispatch. The mapping `route_pointer` implements:
   client holds for that absolute `item_index` (the client already owns the ranked
   order, so it maps `item_index` → candidate id and dispatches, exactly as
   `Enter` does).
-- **Wheel** (`DecodeStatus::scroll`, unchanged) → `view.scroll_lines`.
+- **Wheel** (`DecodeStatus::scroll`) → routed by the region under the pointer: a
+  wheel over `panel`/`panel_scrollbar` dispatches `tree.scroll(delta)` (scrolls the
+  tree viewport without moving the selection); `palette`/`palette_scrollbar` is a
+  no-op (the palette overlay is inert to the wheel — its client-owned scroll is a
+  follow-up, and falling through to `view.scroll_lines` would wrongly scroll the
+  editor underneath the open palette); every other region — editor, editor gutter,
+  tab bar, `none`, or no snapshot — dispatches `view.scroll_lines(delta)` as before.
+  The wheel decode carries the pointer position for this (previously discarded).
+  `route_wheel(HitRegion) -> optional<command id>` is a pure, unit-tested helper
+  mirroring `route_pointer` (empty = no dispatch).
 - Any other `(region, button, kind)` (right/middle click, press on `none`) is a
   no-op in M8.
 
@@ -233,6 +242,7 @@ only for end-to-end confirmation, not as the primary correctness oracle.
 | M8-B | Editor scrollbar click/drag scrolls: route press/drag on `editor_scrollbar` → `view.scroll_to_fraction{numerator, denominator}` from the hit; panel/palette gutter → no command | `apps/ssg_main.cpp` (routing), `tests/test_ssg_app.cpp` | `route_pointer` unit tests: an `editor_scrollbar` hit at the bottom (num==denom) returns `view.scroll_to_fraction` yielding `maximum_first_row`, at the top yields `0`; a `panel_scrollbar`/`palette_scrollbar` hit returns no command; end-to-end drag on the editor gutter scrolls |
 | M8-T | Tabs + palette clicks: layout publishes a typed `TabHit{rect,index}` list on `ShellViewState` (codec + `shell_equal` + round-trip); `hit_test` gains `HitRegion::tab` + `tab_index`; route tab press → `tab.activate(TabId from tabs[index])`, palette-row press → `palette.execute(candidate id for item_index)` | `include/ssg/ui_layout.h`, `src/ui_layout.cpp`, `include/ssg/hit_test.h`, `src/hit_test.cpp`, `src/protocol.cpp`, `src/session_snapshot.cpp`, `tests/test_hit_test.cpp`, `tests/test_protocol.cpp`, `tests/test_editor_session_assembly.cpp`, `apps/ssg_main.cpp`, `tests/test_ssg_app.cpp` | `hit_test` over a tab cell returns `tab` + the right index; padding on the tab bar → `none`; `TabHit` round-trips + a tab-hit-only shell change is not suppressed by `shell_equal`; `route_pointer` maps a tab hit → `tab.activate(TabId)` and a palette hit → `palette.execute(id)`; end-to-end a tab click activates it |
 | M8-R | Tree node click: add `tree.select` with a `TreeSelectArguments{TreeNodeId}` payload (`keymap:false`/`palette:false`/`lua:true`) + catalog cascade + protocol round-trip; route panel press → `tree.select(node_id)` then `tree.activate` | `include/ssg/tree.h`, `src/tree.cpp`, `src/runtime/navigation.cpp`, `data/required-commands.json`, `tests/test_required_commands.cpp`, `tests/runtime/command_cases.h`, `src/protocol.cpp`, `tests/test_protocol.cpp`, `apps/ssg_main.cpp`, `tests/runtime/test_runtime_navigation.cpp`, `tests/test_ssg_app.cpp` | runtime: `tree.select(node_id)` makes that node the selection (and rejects an unknown id); `route_pointer` maps a panel hit → the ordered pair `[tree.select(node_id), tree.activate]`; end-to-end a click on a tree row selects that node and then activates it (opens a file / toggles a directory) as the keyboard select+activate does |
+| M8-W | Wheel routes by region so the side panel (tree) scrolls: the wheel decode carries the pointer position; add a `tree.scroll` command (`ScrollLinesArguments{rows}` payload, `keymap:false`/`palette:false`/`lua:true`) that adjusts the server-owned `tree_first_visible` by `rows` clamped to `[0, maximum_first_row]` WITHOUT moving the tree selection (the editor's `view.scroll_lines` analog); route a wheel over `panel`/`panel_scrollbar` → `tree.scroll(delta)`, `palette`/`palette_scrollbar` → no-op (inert overlay; client-owned palette wheel is a follow-up), every other region (editor, gutter, tab bar, none) → `view.scroll_lines(delta)` unchanged | `apps/ssg_terminal.{h,cpp}`, `include/ssg/tree.h`, `src/tree.cpp`, `src/runtime/navigation.cpp`, `src/runtime/editor_runtime_internal.h`, `data/required-commands.json`, `tests/test_required_commands.cpp`, `tests/runtime/command_cases.h`, `src/protocol.cpp`, `apps/pointer_routing.{h,cpp}`, `apps/ssg_main.cpp`, `tests/test_tree.cpp`, `tests/runtime/test_runtime_navigation.cpp`, `tests/test_ssg_app.cpp` | decode: an SGR wheel event decodes to `scroll` with the delta AND the 0-based grid position; runtime: `tree.scroll(+n)` advances `tree_first_visible` clamped to `maximum_first_row` and `tree.scroll(-n)` clamps at 0, and it does NOT change the selection (a later `reveal_tree_selection` still re-snaps); a pure `route_wheel(HitRegion) -> optional<command id>` returns `tree.scroll` for `panel`/`panel_scrollbar`, nothing for `palette`/`palette_scrollbar`, and `view.scroll_lines` otherwise (unit-tested per region); end-to-end (PTY) the wheel over the panel scrolls the tree without moving selection, and over the editor still scrolls the document |
 
 ## Invariants and fit
 
@@ -241,19 +251,27 @@ only for end-to-end confirmation, not as the primary correctness oracle.
   classification. The app adds only terminal decode + a `(RegionHit) → dispatch`
   switch — no editor logic.
 - **Keyboard remains sufficient.** Every mouse action maps to a command already
-  reachable by keyboard (or, for `tree.select`, a client-fulfilled argument
-  command); the pointer is purely an alternate input, never the only path.
+  reachable by keyboard, or to a client/pointer-fulfilled convenience command
+  whose *outcome* is already keyboard-reachable. Two such carve-outs exist:
+  `tree.select` (a click selects a node by id; the keyboard selects the same nodes
+  via `tree.select_next`/`tree.select_previous`) and `tree.scroll` (a wheel scrolls
+  the tree viewport; the keyboard reaches every node — and thus scrolls the view —
+  via `tree.select_next`/`tree.select_previous`, which move the selection and
+  `reveal_tree_selection`). Both are `keymap:false`/`palette:false`/`lua:true`. The
+  pointer is purely an alternate input, never the only path.
 - **Single source of truth.** Drag anchor is the only new client state and is
   transient; the authoritative selection/scroll/tab/tree state stays server-side.
   The palette candidate mapping reuses the client's existing ranked order.
 - **Snapshot/delta discipline.** The new published/argument types
-  (`tree.select`'s `TreeSelectArguments{TreeNodeId}`; the `ShellViewState` tab hit
-  map) each get a protocol codec + round-trip test and, for the shell field,
-  `shell_equal` coverage, per the existing wire discipline.
-- **Pit of success.** Routing is a single pure `route_pointer` over
-  `RegionHit.region`, unit-tested in isolation; adding a future clickable region
-  means teaching `hit_test` about it and adding one `route_pointer` case, not
-  threading logic through the I/O loop.
+  (`tree.select`'s `TreeSelectArguments{TreeNodeId}`; `tree.scroll`'s reused
+  `ScrollLinesArguments`; the `ShellViewState` tab hit map) each get a protocol
+  codec + round-trip test and, for the shell field, `shell_equal` coverage, per the
+  existing wire discipline.
+- **Pit of success.** Button routing is a single pure `route_pointer` over
+  `RegionHit.region` and wheel routing a single pure `route_wheel(HitRegion)`, both
+  unit-tested in isolation; adding a future clickable/scrollable region means
+  teaching `hit_test` about it and adding one routing case, not threading logic
+  through the I/O loop.
 
 ## Considerations and risks
 
