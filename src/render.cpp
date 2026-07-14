@@ -308,6 +308,18 @@ void paint_document(CellGrid& grid, SessionSnapshot const& snapshot,
     auto const& viewport = snapshot.client().viewport;
     auto const& selection = snapshot.sections().selection;
     auto const& find_state = snapshot.sections().find_replace;
+    // Find matches are byte offsets into a specific document revision; only paint
+    // them when that revision still matches the document being rendered.  A
+    // global undo/redo or tab switch during prompt focus moves the document out
+    // from under stale offsets, which must not highlight unrelated cells.
+    bool const find_matches_current =
+        find_state.open &&
+        find_state.source_revision == snapshot.sections().document.revision;
+    auto const match_role_at =
+        [&](std::uint64_t offset) -> std::optional<SemanticRole> {
+        if (!find_matches_current) return std::nullopt;
+        return find_match_role(find_state, offset);
+    };
     auto const selection_bg = semantic_index(theme, SemanticRole::selection);
     auto const search_match_bg = semantic_index(theme, SemanticRole::search_match);
     for (std::size_t row_index = 0; row_index < viewport.visible_rows.size();
@@ -343,7 +355,7 @@ void paint_document(CellGrid& grid, SessionSnapshot const& snapshot,
                 selected ? SemanticRole::selection : SemanticRole::foreground;
             // Find matches take precedence over the text selection so the query
             // hits stay visible; the active match reuses the selection role.
-            if (auto match_role = find_match_role(find_state, document_offset)) {
+            if (auto match_role = match_role_at(document_offset)) {
                 cell_role = *match_role;
                 cell_bg = *match_role == SemanticRole::selection ? selection_bg
                                                                  : search_match_bg;
@@ -370,11 +382,23 @@ void paint_document(CellGrid& grid, SessionSnapshot const& snapshot,
         bool const is_final_visual_row =
             last_span >= line.cells.spans.size();
         auto const line_end = line.document_offset + line.text.size();
-        if (is_final_visual_row && offset_in_selection(selection, line_end)) {
-            auto const foreground = semantic_index(theme, SemanticRole::foreground);
-            for (int fill = column; fill < content.right(); ++fill) {
-                put(grid, fill, content.y + static_cast<int>(row_index), " ",
-                    foreground, selection_bg, SemanticRole::selection);
+        // A find match (or text selection) that spans the newline highlights the
+        // end-of-line: fill the trailing columns, giving find-role precedence.
+        if (is_final_visual_row) {
+            auto const eol_match_role = match_role_at(line_end);
+            bool const eol_selected = offset_in_selection(selection, line_end);
+            if (eol_match_role || eol_selected) {
+                auto const role = eol_match_role ? *eol_match_role
+                                                 : SemanticRole::selection;
+                auto const fill_bg =
+                    role == SemanticRole::search_match ? search_match_bg
+                                                       : selection_bg;
+                auto const foreground =
+                    semantic_index(theme, SemanticRole::foreground);
+                for (int fill = column; fill < content.right(); ++fill) {
+                    put(grid, fill, content.y + static_cast<int>(row_index), " ",
+                        foreground, fill_bg, role);
+                }
             }
         }
     }

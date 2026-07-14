@@ -247,8 +247,15 @@ int main(int argc, char** argv) {
             keymap = snapshot->sections().keymap;
             candidates = snapshot->sections().palette.candidates;
             if (focus != ssg::FocusTarget::prompt) palette_open = false;
+            // Derive find fulfillment from the ACTIVE prompt kind, not merely the
+            // controller being open under prompt focus: a palette/settings prompt
+            // may be active while the find controller is still open, and find
+            // fulfillment must not hijack that unrelated prompt's keys.
             auto const& find_view = snapshot->sections().find_replace;
-            find_open = find_view.open && focus == ssg::FocusTarget::prompt;
+            auto const& active_prompt = snapshot->sections().prompt_status.prompt;
+            bool const find_prompt_active =
+                active_prompt && active_prompt->kind == ssg::PromptKind::find;
+            find_open = find_view.open && find_prompt_active;
             find_query = find_view.query;
         }
         return snapshot;

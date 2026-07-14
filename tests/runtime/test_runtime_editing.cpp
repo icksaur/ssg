@@ -3,6 +3,7 @@
 #include <ssg/editor_runtime.h>
 #include <ssg/find_replace.h>
 #include <ssg/selection.h>
+#include <ssg/prompt.h>
 #include <ssg/text_input_commands.h>
 
 #include <filesystem>
@@ -295,6 +296,61 @@ TEST(find_update_query_projects_matches_and_prompt_and_next_cycles) {
     ASSERT_EQ(active_after(1), std::size_t{1});
     ASSERT_EQ(active_after(1), std::size_t{2});
     ASSERT_EQ(active_after(1), std::size_t{0});
+}
+
+TEST(find_close_succeeds_without_an_active_document) {
+    auto root = unique_root();
+    auto workspace = root / "workspace";
+    std::filesystem::create_directories(workspace);
+    auto created = ssg::EditorRuntime::create({
+        workspace, root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+
+    // No document is open: find.close (and next/previous) must not be rejected by
+    // the active-document guard, so a find opened before the last tab closed can
+    // still be dismissed.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.close", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.next", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.previous", runtime.revision(), {}}).accepted());
+}
+
+TEST(find_close_does_not_cancel_an_unrelated_prompt) {
+    auto root = unique_root();
+    auto workspace = root / "workspace";
+    std::filesystem::create_directories(workspace);
+    std::ofstream{workspace / "doc.txt"} << "hello";
+    auto created = ssg::EditorRuntime::create({
+        workspace, root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"doc.txt"}}).accepted());
+
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.open", runtime.revision(), {}}).accepted());
+    auto before = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(before.has_value());
+    if (before) {
+        ASSERT_TRUE(before->sections().prompt_status.prompt.has_value());
+        if (before->sections().prompt_status.prompt) {
+            ASSERT_EQ(before->sections().prompt_status.prompt->kind, ssg::PromptKind::palette);
+        }
+    }
+
+    // A find.close while the palette prompt is active must leave the palette
+    // prompt intact (it only owns the find prompt).
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.close", runtime.revision(), {}}).accepted());
+    auto after = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(after.has_value());
+    if (after) {
+        ASSERT_TRUE(after->sections().prompt_status.prompt.has_value());
+        if (after->sections().prompt_status.prompt) {
+            ASSERT_EQ(after->sections().prompt_status.prompt->kind, ssg::PromptKind::palette);
+        }
+    }
 }
 
 } // namespace

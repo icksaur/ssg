@@ -451,6 +451,43 @@ TEST(render_paints_find_matches_and_active_match) {
     }
 }
 
+TEST(render_hides_find_matches_after_document_revision_changes) {
+    auto root = unique_root();
+    std::ofstream{root / "stale.txt"} << "cat cat cat\n";
+    auto runtime = make_runtime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(
+        ssg::ClientId{1},
+        {"file.open", runtime->revision(), std::string{"stale.txt"}});
+    (void)runtime->dispatch(ssg::ClientId{1},
+                            {"find.open", runtime->revision(), {}});
+    (void)runtime->dispatch(
+        ssg::ClientId{1},
+        {"find.update_query", runtime->revision(), ssg::FindQueryArguments{"cat"}});
+
+    // Editing the document advances its revision without re-evaluating find, so
+    // the matches become stale and must not be painted onto the new revision.
+    (void)runtime->dispatch(
+        ssg::ClientId{1},
+        {"text.insert", runtime->revision(), ssg::TextInputArguments{"z"}});
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    ASSERT_NE(snapshot->sections().find_replace.source_revision,
+              snapshot->sections().document.revision);
+    auto grid = ssg::render(*snapshot);
+    bool any_match = false;
+    for (int row = 0; row < grid.size.rows; ++row) {
+        for (int col = 0; col < grid.size.columns; ++col) {
+            if (grid.at(col, row).role == ssg::SemanticRole::search_match) {
+                any_match = true;
+            }
+        }
+    }
+    ASSERT_FALSE(any_match);
+}
+
 int main() {
     RUN(render_paints_content_not_accessibility_labels);
     RUN(render_colors_are_palette_indices);
@@ -463,6 +500,7 @@ int main() {
     RUN(render_paints_secondary_ranged_selection_caret);
     RUN(render_paints_secondary_caret_as_a_cell);
     RUN(render_paints_find_matches_and_active_match);
+    RUN(render_hides_find_matches_after_document_revision_changes);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;

@@ -176,7 +176,10 @@ CommandHandlerResult bind_find_replace(EditorRuntime::Impl& runtime,
         auto selected = runtime.selection.selections.primary();
         if (!selected.is_caret()) range = ByteRange{selected.lower().byte_offset, selected.upper().byte_offset};
     } else if (command != FindReplaceCommand::replace_workspace_preview &&
-               command != FindReplaceCommand::replace_workspace_apply) {
+               command != FindReplaceCommand::replace_workspace_apply &&
+               command != FindReplaceCommand::find_close &&
+               command != FindReplaceCommand::find_next &&
+               command != FindReplaceCommand::find_previous) {
         return failure("no active document");
     }
     switch (command) {
@@ -193,7 +196,12 @@ CommandHandlerResult bind_find_replace(EditorRuntime::Impl& runtime,
             return success();
         case FindReplaceCommand::find_close:
             runtime.find_replace.close();
-            (void)runtime.prompt.cancel();
+            // Only dismiss the prompt when it is the find prompt: a global
+            // find.close must not cancel an unrelated palette/settings prompt.
+            if (auto const& request = runtime.prompt.request();
+                request && request->kind == PromptKind::find) {
+                (void)runtime.prompt.cancel();
+            }
             return success();
         case FindReplaceCommand::find_next:
             runtime.find_replace.next();
