@@ -1,7 +1,12 @@
+#include "pointer_routing.h"
 #include "ssg_terminal.h"
+
+#include <ssg/hit_test.h>
+#include <ssg/selection.h>
 
 #include "test_helpers.h"
 
+#include <any>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -307,6 +312,74 @@ TEST(decode_input_pointer_split_reads_are_incomplete) {
     ASSERT_TRUE(complete.status == ssg::app::DecodeStatus::pointer);
 }
 
+TEST(route_pointer_left_press_on_editor_places_caret) {
+    ssg::RegionHit hit;
+    hit.region = ssg::HitRegion::editor;
+    hit.byte_offset = 3;
+    ssg::app::PointerTargets targets;
+    targets.document_position =
+        ssg::DocumentPosition{ssg::ByteOffset{3}, ssg::LineIndex{0}, ssg::CellIndex{3}};
+
+    auto plan = ssg::app::route_pointer(hit, ssg::app::PointerButton::left,
+                                        ssg::app::PointerKind::press, false,
+                                        std::nullopt, targets);
+    ASSERT_EQ(plan.commands.size(), std::size_t{1});
+    if (plan.commands.size() == 1) {
+        ASSERT_EQ(plan.commands[0].command_id, std::string{"cursor.set_position"});
+        auto const* args = std::any_cast<ssg::SelectionCommandArguments>(
+            &plan.commands[0].payload);
+        ASSERT_TRUE(args != nullptr);
+        if (args) {
+            ASSERT_TRUE(args->position.has_value());
+            if (args->position) ASSERT_EQ(*args->position, *targets.document_position);
+            ASSERT_FALSE(args->selection.has_value());
+        }
+    }
+    // The press begins a potential selection drag.
+    ASSERT_TRUE(plan.begins_drag);
+    ASSERT_FALSE(plan.ends_drag);
+}
+
+TEST(route_pointer_ignores_non_editor_and_non_left) {
+    ssg::app::PointerTargets const empty;
+
+    // A press on nothing (out of bounds / chrome) dispatches no command.
+    ssg::RegionHit none_hit;  // region defaults to HitRegion::none
+    auto none_plan = ssg::app::route_pointer(
+        none_hit, ssg::app::PointerButton::left, ssg::app::PointerKind::press,
+        false, std::nullopt, empty);
+    ASSERT_TRUE(none_plan.commands.empty());
+    ASSERT_FALSE(none_plan.begins_drag);
+
+    // A left press on a non-editor region (e.g. the panel) is not handled by
+    // M8-C: no editor command, no drag.
+    ssg::RegionHit panel_hit;
+    panel_hit.region = ssg::HitRegion::panel;
+    auto panel_plan = ssg::app::route_pointer(
+        panel_hit, ssg::app::PointerButton::left, ssg::app::PointerKind::press,
+        false, std::nullopt, empty);
+    ASSERT_TRUE(panel_plan.commands.empty());
+
+    // A right/middle press on the editor is a no-op in M8.
+    ssg::RegionHit editor_hit;
+    editor_hit.region = ssg::HitRegion::editor;
+    ssg::app::PointerTargets targets;
+    targets.document_position =
+        ssg::DocumentPosition{ssg::ByteOffset{0}, ssg::LineIndex{0}, ssg::CellIndex{0}};
+    auto right_plan = ssg::app::route_pointer(
+        editor_hit, ssg::app::PointerButton::right, ssg::app::PointerKind::press,
+        false, std::nullopt, targets);
+    ASSERT_TRUE(right_plan.commands.empty());
+
+    // A left press on the editor with no resolved position (e.g. a blank cell)
+    // dispatches nothing.
+    auto unresolved = ssg::app::route_pointer(
+        editor_hit, ssg::app::PointerButton::left, ssg::app::PointerKind::press,
+        false, std::nullopt, empty);
+    ASSERT_TRUE(unresolved.commands.empty());
+    ASSERT_FALSE(unresolved.begins_drag);
+}
+
 int main() {
     RUN(resolve_launch_no_argument_opens_cwd);
     RUN(resolve_launch_directory_opens_that_directory);
@@ -319,6 +392,8 @@ int main() {
     RUN(decode_input_arrows_and_mouse);
     RUN(decode_input_pointer_press_release_drag);
     RUN(decode_input_pointer_split_reads_are_incomplete);
+    RUN(route_pointer_left_press_on_editor_places_caret);
+    RUN(route_pointer_ignores_non_editor_and_non_left);
     RUN(decode_input_escape_boundary_is_bounded);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";

@@ -9,9 +9,11 @@
 // editing arrive in later milestones; quitting is an application lifecycle
 // concern owned here.
 
+#include "pointer_routing.h"
 #include "ssg_terminal.h"
 
 #include <ssg/editor_runtime.h>
+#include <ssg/hit_test.h>
 #include <ssg/find_replace.h>
 #include <ssg/input.h>
 #include <ssg/palette.h>
@@ -167,6 +169,11 @@ int main(int argc, char** argv) {
     // R3). The window is resolved with the shared list-scroll primitive.
     std::uint32_t palette_first_visible = 0;
     std::uint32_t palette_pane_rows = 1;
+    // Mouse drag state (M8): a left press on the editor records the anchor and
+    // enters dragging; subsequent motion extends the selection. Client-local and
+    // transient — the server only ever sees cursor.set_position / select.set_range.
+    bool dragging = false;
+    std::optional<ssg::DocumentPosition> drag_anchor;
     // Find prompt: the client holds no authoritative query.  It reads the
     // published controller query (adopted in refresh), edits it, and reports the
     // full next string via find.update_query.  find_open mirrors the controller.
@@ -354,8 +361,44 @@ int main(int argc, char** argv) {
 
             // Adopt fresh authoritative focus before every event after the first
             // (the first uses the snapshot already taken at the top of the loop).
-            if (!first_event) refresh();
+            // Capture the refreshed snapshot so pointer hit-testing sees the
+            // current frame's layout.
+            if (!first_event) snapshot = refresh();
             first_event = false;
+
+            if (decoded.status == ssg::app::DecodeStatus::pointer) {
+                // Classify the cell via the library hit_test, resolve the target
+                // the hit needs, then let the pure route_pointer decide the
+                // command sequence and drag-state change.
+                ssg::RegionHit hit;
+                ssg::app::PointerTargets targets;
+                if (snapshot) {
+                    hit = ssg::hit_test(*snapshot, decoded.pointer.column,
+                                        decoded.pointer.row);
+                    if (hit.region == ssg::HitRegion::editor) {
+                        targets.document_position = ssg::resolve_document_position(
+                            snapshot->sections().document.text,
+                            ssg::ByteOffset{hit.byte_offset});
+                    }
+                }
+                auto plan =
+                    ssg::app::route_pointer(hit, decoded.pointer.button,
+                                            decoded.pointer.kind, dragging,
+                                            drag_anchor, targets);
+                for (auto const& command : plan.commands) {
+                    dispatch(command.command_id, command.payload);
+                }
+                if (plan.begins_drag) {
+                    dragging = true;
+                    drag_anchor = targets.document_position;
+                }
+                if (plan.ends_drag) {
+                    dragging = false;
+                    drag_anchor.reset();
+                }
+                chord.clear();
+                continue;
+            }
 
             if (decoded.status == ssg::app::DecodeStatus::scroll) {
                 dispatch("view.scroll_lines", ssg::ScrollLinesArguments{decoded.scroll});
