@@ -123,11 +123,22 @@ KeymapViewState default_terminal_keymap() {
     bind(seq({"Escape", "BracketLeft"}), "tab.previous", "*");
     bind(seq({"Escape", "KeyW"}), "tab.close", "*");
     bind(seq({"Escape", "KeyF", "KeyT"}), "settings.open", "*");
+    bind(seq({"Escape", "KeyA"}), "select.all", "*");
+    bind(seq({"Escape", "KeyD"}), "select.add_next_occurrence", "*");
+    bind(seq({"Escape", "KeyI"}), "select.split_into_lines", "*");
+    bind(seq({"Escape", "KeyK"}), "select.add_cursor_up", "*");
+    bind(seq({"Escape", "KeyJ"}), "select.add_cursor_down", "*");
+    bind(seq({"Escape", "Slash"}), "find.open", "*");
+    bind(seq({"Escape", "KeyR"}), "replace.open", "*");
 
     bind(seq({"ArrowDown"}), "cursor.line_down", "editor");
     bind(seq({"ArrowUp"}), "cursor.line_up", "editor");
     bind(seq({"ArrowLeft"}), "cursor.left", "editor");
     bind(seq({"ArrowRight"}), "cursor.right", "editor");
+    bind(seq({"Shift+ArrowLeft"}), "select.left", "editor");
+    bind(seq({"Shift+ArrowRight"}), "select.right", "editor");
+    bind(seq({"Shift+ArrowUp"}), "select.line_up", "editor");
+    bind(seq({"Shift+ArrowDown"}), "select.line_down", "editor");
     bind(seq({"Enter"}), "text.newline", "editor");
     bind(seq({"Backspace"}), "text.delete_backward", "editor");
 

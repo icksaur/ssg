@@ -165,6 +165,55 @@ TEST(curated_keymap_resolves_per_context) {
         ASSERT_EQ(ssg::resolve_key_sequence(keymap, settings, context).command_id,
                   std::string{"settings.open"});
     }
+
+    // M7-M selection/multi-cursor bindings: Shift+Arrow extends the selection in
+    // the editor; the multi-cursor and find/replace chords resolve globally.
+    const auto shift_right = *ssg::parse_key_sequence({"Shift+ArrowRight"});
+    ASSERT_EQ(ssg::resolve_key_sequence(keymap, shift_right, "editor").command_id,
+              std::string{"select.right"});
+    const auto shift_up = *ssg::parse_key_sequence({"Shift+ArrowUp"});
+    ASSERT_EQ(ssg::resolve_key_sequence(keymap, shift_up, "editor").command_id,
+              std::string{"select.line_up"});
+    // Plain ArrowRight is still cursor motion, distinct from the shifted stroke.
+    const auto plain_right = *ssg::parse_key_sequence({"ArrowRight"});
+    ASSERT_EQ(ssg::resolve_key_sequence(keymap, plain_right, "editor").command_id,
+              std::string{"cursor.right"});
+    const auto add_next = *ssg::parse_key_sequence({"Escape", "KeyD"});
+    ASSERT_EQ(ssg::resolve_key_sequence(keymap, add_next, "editor").command_id,
+              std::string{"select.add_next_occurrence"});
+    const auto find_open = *ssg::parse_key_sequence({"Escape", "Slash"});
+    ASSERT_EQ(ssg::resolve_key_sequence(keymap, find_open, "editor").command_id,
+              std::string{"find.open"});
+    const auto replace_open = *ssg::parse_key_sequence({"Escape", "KeyR"});
+    ASSERT_EQ(ssg::resolve_key_sequence(keymap, replace_open, "editor").command_id,
+              std::string{"replace.open"});
+}
+
+TEST(add_cursor_chord_produces_multiple_selections) {
+    auto root = unique_root("multi_cursor");
+    std::ofstream{root / "workspace" / "m.txt"} << "alpha\nbeta\n";
+    auto created = ssg::EditorRuntime::create(config_for(root));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"m.txt"}}).accepted());
+
+    // Resolve the add-cursor-down chord from the published keymap, then dispatch
+    // the resolved command: the snapshot must show more than one selection.
+    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    const auto chord = *ssg::parse_key_sequence({"Escape", "KeyJ"});
+    auto resolved = ssg::resolve_key_sequence(snapshot->sections().keymap, chord, "editor");
+    ASSERT_EQ(resolved.kind, ssg::KeymapMatchKind::resolved);
+    ASSERT_EQ(resolved.command_id, std::string{"select.add_cursor_down"});
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {resolved.command_id, runtime.revision(), {}}).accepted());
+
+    auto after = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(after.has_value());
+    if (!after) return;
+    ASSERT_TRUE(after->sections().selection.selections.items().size() > std::size_t{1});
 }
 
 TEST(settings_open_focuses_a_settings_prompt) {
@@ -193,6 +242,7 @@ int main() {
     RUN(runtime_publishes_valid_curated_keymap);
     RUN(curated_keymap_bindings_are_argument_free);
     RUN(curated_keymap_resolves_per_context);
+    RUN(add_cursor_chord_produces_multiple_selections);
     RUN(settings_open_focuses_a_settings_prompt);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
