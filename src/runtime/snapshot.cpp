@@ -125,7 +125,10 @@ ShellViewState EditorRuntime::Impl::shell_view(ViewportDimensions dimensions,
     if (palette_open && !view.panes.empty()) {
         PaletteProjection projection;
         projection.rect = view.panes.front().content;
+        projection.scrollbar_rect = view.panes.front().scrollbar;
         projection.selected = palette_report.selected;
+        projection.first_visible = palette_report.first_visible;
+        projection.scrollbar = palette_report.scrollbar;
         for (auto const& candidate : palette_report.rows) {
             projection.rows.push_back({candidate.label, candidate.detail});
         }

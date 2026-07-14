@@ -8,6 +8,7 @@
 // this authoritative list.
 
 #include <ssg/search.h>
+#include <ssg/viewport.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -55,8 +56,15 @@ struct PaletteExecuteArguments {
 struct PaletteReport {
     std::string query;
     std::string ghost;
+    // The client windows its ranked list (client-owned fuzzy find) and reports
+    // only the visible rows, the ABSOLUTE selected index into the full ranked
+    // order, the absolute first visible index, and the scrollbar geometry it
+    // resolved with the shared list-scroll primitive. In-process only (see
+    // doc/spec-scroll.md R3).
     std::vector<PaletteCandidate> rows;
     std::optional<std::uint32_t> selected;
+    std::uint32_t first_visible = 0;
+    ScrollbarMetrics scrollbar{};
 
     friend bool operator==(const PaletteReport&, const PaletteReport&) = default;
 };

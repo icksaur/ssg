@@ -249,12 +249,15 @@ void paint_palette(CellGrid& grid, PaletteProjection const& palette,
     auto const foreground = semantic_index(theme, SemanticRole::foreground);
     auto const detail_color = semantic_index(theme, SemanticRole::line_number);
     auto const selected_bg = semantic_index(theme, SemanticRole::selection);
+    // `rows` is already the client's windowed subset; `selected`/`first_visible`
+    // are absolute, so the selected row's screen index is selected-first_visible.
     for (std::size_t index = 0; index < palette.rows.size(); ++index) {
         if (static_cast<int>(index) >= rect.height) break;
         auto const& row = palette.rows[index];
         int const y = rect.y + static_cast<int>(index);
         bool const is_selected =
-            palette.selected && *palette.selected == index;
+            palette.selected &&
+            *palette.selected == palette.first_visible + index;
         auto const row_background = is_selected ? selected_bg : background;
         auto const row_role =
             is_selected ? SemanticRole::selection : SemanticRole::background;
@@ -276,6 +279,13 @@ void paint_palette(CellGrid& grid, PaletteProjection const& palette,
             paint_text(grid, start, y, rect.right(), row.detail, detail_color,
                        row_background, detail_role);
         }
+    }
+    // Paint the reserved gutter (blank when the ranked list fits).
+    if (palette.scrollbar_rect.width > 0 && palette.scrollbar_rect.height > 0) {
+        paint_scroll_gutter(grid, palette.scrollbar_rect.x,
+                            palette.scrollbar_rect.y,
+                            palette.scrollbar_rect.height, palette.scrollbar,
+                            theme, background);
     }
 }
 

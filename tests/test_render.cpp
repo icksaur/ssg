@@ -627,6 +627,94 @@ TEST(render_panel_tree_reserves_an_empty_gutter_when_it_fits) {
     ASSERT_TRUE(grid_contains(grid, "a.txt"));
 }
 
+TEST(render_palette_windows_rows_and_draws_a_thumb_with_absolute_selection) {
+    auto root = unique_root();
+    std::ofstream{root / "hello.txt"} << "alpha\nbeta\n";
+    auto runtime = make_runtime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(
+        ssg::ClientId{1},
+        {"file.open", runtime->revision(), std::string{"hello.txt"}});
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    auto sections = snapshot->sections();
+    ASSERT_FALSE(sections.shell.panes.empty());
+    if (sections.shell.panes.empty()) return;
+
+    // A 40-item ranked list windowed to rows [20, 20+height); the absolute
+    // selection is 25, so the on-screen highlight is at window row 5.
+    auto const& pane = sections.shell.panes.front();
+    std::uint32_t const rows = static_cast<std::uint32_t>(pane.content.height);
+    ssg::PaletteProjection projection;
+    projection.rect = pane.content;
+    projection.scrollbar_rect = pane.scrollbar;
+    projection.first_visible = 20;
+    projection.selected = std::uint32_t{25};
+    projection.scrollbar = ssg::scrollbar_metrics(40, rows, 20);
+    for (std::uint32_t i = 0; i < rows; ++i) {
+        projection.rows.push_back(
+            {"cmd-" + std::to_string(20 + i), ""});
+    }
+    sections.shell.palette = projection;
+    ssg::SessionSnapshot projected{snapshot->revision(), snapshot->topology(),
+                                   snapshot->client(), std::move(sections)};
+    auto grid = ssg::render(projected);
+
+    // The window shows cmd-20.. (not cmd-00), and the absolute-25 selection lands
+    // at window row 5.
+    ASSERT_TRUE(grid_contains(grid, "cmd-20"));
+    ASSERT_FALSE(grid_contains(grid, "cmd-00"));
+    int const selected_row = projection.rect.y + 5;
+    ASSERT_EQ(grid.at(projection.rect.x, selected_row).role,
+              ssg::SemanticRole::selection);
+    // Row 0 (absolute 20) is not selected.
+    ASSERT_FALSE(grid.at(projection.rect.x, projection.rect.y).role ==
+                 ssg::SemanticRole::selection);
+    // A thumb is drawn in the reserved gutter column.
+    bool has_thumb = false;
+    for (int y = projection.scrollbar_rect.y;
+         y < projection.scrollbar_rect.y + projection.scrollbar_rect.height; ++y) {
+        if (grid.at(projection.scrollbar_rect.x, y).text == "#") has_thumb = true;
+    }
+    ASSERT_TRUE(has_thumb);
+}
+
+TEST(render_palette_reserves_an_empty_gutter_when_the_list_fits) {
+    auto root = unique_root();
+    std::ofstream{root / "hello.txt"} << "alpha\n";
+    auto runtime = make_runtime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(
+        ssg::ClientId{1},
+        {"file.open", runtime->revision(), std::string{"hello.txt"}});
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    auto sections = snapshot->sections();
+    auto const& pane = sections.shell.panes.front();
+    ssg::PaletteProjection projection;
+    projection.rect = pane.content;
+    projection.scrollbar_rect = pane.scrollbar;
+    projection.first_visible = 0;
+    projection.selected = std::uint32_t{0};
+    projection.scrollbar =
+        ssg::scrollbar_metrics(2, static_cast<std::uint32_t>(pane.content.height), 0);
+    projection.rows = {{"a", ""}, {"b", ""}};
+    sections.shell.palette = projection;
+    ssg::SessionSnapshot projected{snapshot->revision(), snapshot->topology(),
+                                   snapshot->client(), std::move(sections)};
+    auto grid = ssg::render(projected);
+    // The gutter is reserved (column exists) but blank: no thumb/track glyphs.
+    for (int y = projection.scrollbar_rect.y;
+         y < projection.scrollbar_rect.y + projection.scrollbar_rect.height; ++y) {
+        ASSERT_NE(grid.at(projection.scrollbar_rect.x, y).text, std::string{"#"});
+        ASSERT_NE(grid.at(projection.scrollbar_rect.x, y).text, std::string{"|"});
+    }
+}
+
 int main() {
     RUN(render_paints_content_not_accessibility_labels);
     RUN(render_colors_are_palette_indices);
@@ -644,6 +732,8 @@ int main() {
     RUN(render_find_prompt_shows_option_indicators);
     RUN(render_panel_tree_windows_and_draws_a_thumb_when_taller_than_the_panel);
     RUN(render_panel_tree_reserves_an_empty_gutter_when_it_fits);
+    RUN(render_palette_windows_rows_and_draws_a_thumb_with_absolute_selection);
+    RUN(render_palette_reserves_an_empty_gutter_when_the_list_fits);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;

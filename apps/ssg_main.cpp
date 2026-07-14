@@ -159,6 +159,12 @@ int main(int argc, char** argv) {
     bool palette_open = false;
     std::string palette_query;
     std::size_t palette_selected = 0;
+    // Client-owned palette scroll: the offset into the ranked order and the pane
+    // height cached from the last snapshot (the palette pane == the editor pane,
+    // so this is populated before the palette ever opens; see doc/spec-scroll.md
+    // R3). The window is resolved with the shared list-scroll primitive.
+    std::uint32_t palette_first_visible = 0;
+    std::uint32_t palette_pane_rows = 1;
     // Find prompt: the client holds no authoritative query.  It reads the
     // published controller query (adopted in refresh), edits it, and reports the
     // full next string via find.update_query.  find_open mirrors the controller.
@@ -212,6 +218,7 @@ int main(int argc, char** argv) {
             palette_open = true;
             palette_query.clear();
             palette_selected = 0;
+            palette_first_visible = 0;
         }
     };
     auto route_text = [&](std::string const& text) {
@@ -241,10 +248,25 @@ int main(int argc, char** argv) {
             if (palette_selected >= order.size()) {
                 palette_selected = order.empty() ? 0 : order.size() - 1;
             }
-            for (auto index : order) report.rows.push_back(candidates[index]);
-            if (!order.empty()) {
-                report.selected = static_cast<std::uint32_t>(palette_selected);
+            // Resolve the client-owned scroll window with the shared primitive,
+            // keeping the selection visible, and report only the windowed rows +
+            // the absolute selection/offset + the thumb geometry. The gutter is
+            // always reserved (server side), so the content width never jumps as
+            // the ranked list grows/shrinks per keystroke.
+            std::optional<std::uint32_t> selected =
+                order.empty() ? std::nullopt
+                              : std::optional<std::uint32_t>{
+                                    static_cast<std::uint32_t>(palette_selected)};
+            auto scroll = ssg::compute_list_scroll_view(
+                static_cast<std::uint32_t>(order.size()), palette_pane_rows,
+                palette_first_visible, selected, /*keep_selection_visible=*/true);
+            palette_first_visible = scroll.first_visible;
+            report.first_visible = scroll.first_visible;
+            report.scrollbar = scroll.scrollbar;
+            for (std::uint32_t row = 0; row < scroll.visible_count; ++row) {
+                report.rows.push_back(candidates[order[scroll.first_visible + row]]);
             }
+            report.selected = selected;
         }
         return report;
     };
@@ -259,6 +281,14 @@ int main(int argc, char** argv) {
             keymap = snapshot->sections().keymap;
             candidates = snapshot->sections().palette.candidates;
             if (focus != ssg::FocusTarget::prompt) palette_open = false;
+            // Cache the palette pane height for the next window computation: the
+            // palette pane is the editor pane, so this is populated every frame,
+            // including before the palette opens (no cold start).
+            auto const& shell = snapshot->sections().shell;
+            if (!shell.panes.empty()) {
+                palette_pane_rows = static_cast<std::uint32_t>(
+                    std::max(shell.panes.front().content.height, 1));
+            }
             // Derive find fulfillment from the ACTIVE prompt kind, not merely the
             // controller being open under prompt focus: a palette/settings prompt
             // may be active while the find controller is still open, and find

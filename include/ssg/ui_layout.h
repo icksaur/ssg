@@ -2,6 +2,7 @@
 
 #include "ssg/focus.h"
 #include "ssg/theme.h"
+#include "ssg/viewport.h"
 
 #include <array>
 #include <cstddef>
@@ -125,8 +126,17 @@ struct PaletteRow {
 // The palette results projected into the active pane while the palette is open.
 struct PaletteProjection {
     Rect rect;
+    // The reserved 1-column scrollbar gutter (the pane's gutter column), always
+    // present so the palette content width is stable as the list grows/shrinks.
+    Rect scrollbar_rect;
     std::vector<PaletteRow> rows;
+    // `selected` and `first_visible` are ABSOLUTE indices into the full ranked
+    // order; `rows` is the windowed subset, so the on-screen row for the
+    // selection is `selected - first_visible`. `scrollbar` drives the gutter
+    // thumb (hidden when the list fits).
     std::optional<std::uint32_t> selected;
+    std::uint32_t first_visible = 0;
+    ScrollbarMetrics scrollbar{};
 
     friend bool operator==(const PaletteProjection&, const PaletteProjection&) = default;
 };
