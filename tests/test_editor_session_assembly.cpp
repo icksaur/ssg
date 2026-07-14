@@ -268,6 +268,32 @@ TEST(per_client_capabilities_and_viewports_are_isolated) {
     ASSERT_EQ(first.sections(), second.sections());
 }
 
+TEST(shell_delta_detects_a_panel_scrollbar_only_change) {
+    auto old_sections = sections(ssg::Revision{4}, "same");
+    old_sections.shell.panel = ssg::Rect{0, 1, 24, 10};
+    old_sections.shell.panel_scrollbar = ssg::Rect{23, 2, 1, 9};
+    auto new_sections = old_sections;
+    // Only the gutter geometry differs (e.g. a taller panel): the shell delta
+    // must not treat this as unchanged.
+    new_sections.shell.panel_scrollbar = ssg::Rect{23, 2, 1, 12};
+
+    auto before = ssg::assemble_session_snapshot(
+        ssg::Revision{4}, {},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::in_process},
+        ssg::ViewId{9}, client_view(1), std::move(old_sections));
+    auto after = ssg::assemble_session_snapshot(
+        ssg::Revision{5}, {},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::in_process},
+        ssg::ViewId{9}, client_view(1), std::move(new_sections));
+    auto delta = ssg::derive_session_delta(before, after);
+    ASSERT_TRUE(delta.shell().replacement.has_value());
+    auto replayed = ssg::replay_session_delta(before, delta);
+    ASSERT_TRUE(replayed.accepted());
+    ASSERT_EQ(*replayed.snapshot, after);
+}
+
 static_assert(!std::is_copy_constructible_v<ssg::SessionSnapshot>);
 static_assert(std::is_move_constructible_v<ssg::SessionSnapshot>);
 static_assert(!std::is_copy_constructible_v<ssg::SessionDelta>);
@@ -281,5 +307,6 @@ int main() {
     RUN(full_snapshot_matches_replayed_aggregate_delta);
     RUN(non_document_transition_replays_and_rejects_a_different_client);
     RUN(per_client_capabilities_and_viewports_are_isolated);
+    RUN(shell_delta_detects_a_panel_scrollbar_only_change);
     return failed == 0 ? 0 : 1;
 }

@@ -10,7 +10,9 @@ namespace {
 bool shell_equal(ShellViewState const& left, ShellViewState const& right) {
     return left.viewport == right.viewport && left.header == right.header &&
            left.footer == right.footer && left.tab_bar == right.tab_bar &&
-           left.panel == right.panel && left.prompt == right.prompt &&
+           left.panel == right.panel &&
+           left.panel_scrollbar == right.panel_scrollbar &&
+           left.prompt == right.prompt &&
            left.panes == right.panes &&
            left.accessibility_nodes == right.accessibility_nodes;
 }
