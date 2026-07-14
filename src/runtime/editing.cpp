@@ -178,9 +178,23 @@ void reveal_active_find_match(EditorRuntime::Impl& runtime) {
     if (!anchor || !active) return;
     runtime.selection.selections =
         SelectionSet{std::vector<Selection>{Selection{*anchor, *active}}};
+    // Reveal against the real document pane from the last snapshot, reserving the
+    // find prompt's rows plus a one-row margin so the match never sits flush
+    // against the prompt.  Adding back the rows that snapshot reserved yields a
+    // prompt-agnostic pane height; subtracting the find prompt's rows (and the
+    // margin) guarantees the match lands above the prompt whether or not it was
+    // open last snapshot.
+    auto const reserved = prompt_row_count(PromptKind::find) + 1;
+    auto const base_rows = runtime.last_pane_content_rows +
+                           runtime.last_reserved_prompt_rows;
+    auto const reveal_rows = base_rows > reserved
+                                 ? base_rows - reserved
+                                 : std::uint32_t{1};
+    ViewportDimensions reveal_viewport{runtime.last_pane_content_columns,
+                                       reveal_rows};
     auto result = apply_selection_navigation(
         text, runtime.selection, SelectionCommand::view_reveal_caret,
-        ViewportDimensions{80, 24});
+        reveal_viewport);
     if (result.accepted() && result.delta.replacement) {
         runtime.selection = *result.delta.replacement;
     }

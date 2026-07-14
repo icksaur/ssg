@@ -102,6 +102,13 @@ ShellViewState EditorRuntime::Impl::shell_view(ViewportDimensions dimensions,
     if (!result.accepted()) return {};
     auto view = *result.view;
 
+    if (!view.panes.empty()) {
+        auto const& content = view.panes.front().content;
+        last_pane_content_rows = static_cast<std::uint32_t>(std::max(content.height, 1));
+        last_pane_content_columns = static_cast<std::uint32_t>(std::max(content.width, 1));
+        last_reserved_prompt_rows = static_cast<std::uint32_t>(request.reserved_prompt_rows);
+    }
+
     if (palette_open && !view.panes.empty()) {
         PaletteProjection projection;
         projection.rect = view.panes.front().content;

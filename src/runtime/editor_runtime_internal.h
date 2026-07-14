@@ -95,6 +95,14 @@ struct EditorRuntime::Impl final : CommandServices,
     // non-reentrant, so a handler cannot re-enter dispatch).
     std::optional<std::string> pending_palette_target;
     std::uint32_t requested_first_visual_row = 0;
+    // The document pane geometry from the most recent snapshot, plus the prompt
+    // rows that snapshot reserved.  Used to reveal find matches against the real
+    // pane height (not a fixed 24) so a match never lands behind the prompt rows.
+    // Adding the reserved rows back yields a prompt-agnostic pane height, from
+    // which the reveal subtracts the find prompt's rows deterministically.
+    mutable std::uint32_t last_pane_content_rows = 24;
+    mutable std::uint32_t last_pane_content_columns = 80;
+    mutable std::uint32_t last_reserved_prompt_rows = 0;
     bool word_wrap = false;
     std::uint64_t next_status_id = 1;
     std::uint64_t next_tree_revision = 1;
