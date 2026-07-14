@@ -395,6 +395,94 @@ TEST(decode_input_pointer_rejects_malformed_but_terminated_payloads) {
     }
 }
 
+TEST(route_pointer_drag_extends_selection_from_anchor) {
+    auto const anchor =
+        ssg::DocumentPosition{ssg::ByteOffset{3}, ssg::LineIndex{0}, ssg::CellIndex{3}};
+    ssg::RegionHit hit;
+    hit.region = ssg::HitRegion::editor;
+    hit.byte_offset = 10;
+    ssg::app::PointerTargets targets;
+    auto const active =
+        ssg::DocumentPosition{ssg::ByteOffset{10}, ssg::LineIndex{1}, ssg::CellIndex{2}};
+    targets.document_position = active;
+
+    // A drag while dragging with an anchor -> select.set_range spanning the two.
+    auto plan = ssg::app::route_pointer(hit, ssg::app::PointerButton::left,
+                                        ssg::app::PointerKind::drag, true,
+                                        anchor, targets);
+    ASSERT_EQ(plan.commands.size(), std::size_t{1});
+    if (plan.commands.size() == 1) {
+        ASSERT_EQ(plan.commands[0].command_id, std::string{"select.set_range"});
+        auto const* args = std::any_cast<ssg::SelectionCommandArguments>(
+            &plan.commands[0].payload);
+        ASSERT_TRUE(args != nullptr);
+        if (args) {
+            ASSERT_FALSE(args->position.has_value());
+            ASSERT_TRUE(args->selection.has_value());
+            if (args->selection) {
+                ASSERT_EQ(args->selection->anchor, anchor);
+                ASSERT_EQ(args->selection->active, active);
+            }
+        }
+    }
+    ASSERT_FALSE(plan.begins_drag);
+    ASSERT_FALSE(plan.ends_drag);
+}
+
+TEST(route_pointer_drag_without_anchor_or_target_is_a_no_op) {
+    auto const anchor =
+        ssg::DocumentPosition{ssg::ByteOffset{3}, ssg::LineIndex{0}, ssg::CellIndex{3}};
+    ssg::RegionHit editor_hit;
+    editor_hit.region = ssg::HitRegion::editor;
+    ssg::app::PointerTargets targets;
+    targets.document_position =
+        ssg::DocumentPosition{ssg::ByteOffset{5}, ssg::LineIndex{0}, ssg::CellIndex{5}};
+
+    // Not dragging (no prior press) -> no command even over the editor.
+    auto not_dragging = ssg::app::route_pointer(
+        editor_hit, ssg::app::PointerButton::left, ssg::app::PointerKind::drag,
+        false, anchor, targets);
+    ASSERT_TRUE(not_dragging.commands.empty());
+
+    // Dragging but the pointer is over a cell with no document target (past a
+    // short line's end / beyond the viewport edge) -> no command, selection holds.
+    ssg::app::PointerTargets const no_target;
+    auto off_content = ssg::app::route_pointer(
+        editor_hit, ssg::app::PointerButton::left, ssg::app::PointerKind::drag,
+        true, anchor, no_target);
+    ASSERT_TRUE(off_content.commands.empty());
+
+    // Dragging over a non-editor region (e.g. the panel) -> no command.
+    ssg::RegionHit panel_hit;
+    panel_hit.region = ssg::HitRegion::panel;
+    auto off_editor = ssg::app::route_pointer(
+        panel_hit, ssg::app::PointerButton::left, ssg::app::PointerKind::drag,
+        true, anchor, targets);
+    ASSERT_TRUE(off_editor.commands.empty());
+}
+
+TEST(route_pointer_release_ends_drag_without_a_command) {
+    ssg::RegionHit editor_hit;
+    editor_hit.region = ssg::HitRegion::editor;
+    ssg::app::PointerTargets targets;
+    targets.document_position =
+        ssg::DocumentPosition{ssg::ByteOffset{5}, ssg::LineIndex{0}, ssg::CellIndex{5}};
+
+    // Release while dragging ends the drag and dispatches nothing.
+    auto ending = ssg::app::route_pointer(
+        editor_hit, ssg::app::PointerButton::left, ssg::app::PointerKind::release,
+        true, targets.document_position, targets);
+    ASSERT_TRUE(ending.commands.empty());
+    ASSERT_TRUE(ending.ends_drag);
+
+    // A release when not dragging is inert.
+    auto stray = ssg::app::route_pointer(
+        editor_hit, ssg::app::PointerButton::left, ssg::app::PointerKind::release,
+        false, std::nullopt, targets);
+    ASSERT_TRUE(stray.commands.empty());
+    ASSERT_FALSE(stray.ends_drag);
+}
+
 int main() {
     RUN(resolve_launch_no_argument_opens_cwd);
     RUN(resolve_launch_directory_opens_that_directory);
@@ -410,6 +498,9 @@ int main() {
     RUN(decode_input_pointer_rejects_malformed_but_terminated_payloads);
     RUN(route_pointer_left_press_on_editor_places_caret);
     RUN(route_pointer_ignores_non_editor_and_non_left);
+    RUN(route_pointer_drag_extends_selection_from_anchor);
+    RUN(route_pointer_drag_without_anchor_or_target_is_a_no_op);
+    RUN(route_pointer_release_ends_drag_without_a_command);
     RUN(decode_input_escape_boundary_is_bounded);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";

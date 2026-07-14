@@ -3,8 +3,8 @@
 namespace ssg::app {
 
 PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
-                              PointerKind kind, bool /*dragging*/,
-                              std::optional<ssg::DocumentPosition> /*drag_anchor*/,
+                              PointerKind kind, bool dragging,
+                              std::optional<ssg::DocumentPosition> drag_anchor,
                               PointerTargets const& targets) {
     PointerDispatch dispatch;
     // Only the left button drives editing actions in M8; other buttons are a
@@ -25,8 +25,24 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
             }
             return dispatch;
         case PointerKind::drag:
+            // While dragging, a motion over an editor cell extends the selection
+            // from the press anchor to the cell under the pointer. A drag over a
+            // cell with no document target (short line, blank row, or beyond the
+            // viewport edge) dispatches nothing, so the selection holds at the
+            // last in-viewport position (edge auto-scroll is M8-S2).
+            if (dragging && drag_anchor && hit.region == ssg::HitRegion::editor &&
+                targets.document_position) {
+                dispatch.commands.push_back(
+                    {"select.set_range",
+                     ssg::SelectionCommandArguments{
+                         std::nullopt,
+                         ssg::Selection{*drag_anchor, *targets.document_position}}});
+            }
+            return dispatch;
         case PointerKind::release:
-            // Drag and release routing arrive in later M8 steps.
+            // Release ends the drag; the last set_position/set_range already
+            // reflects the selection, so no command is dispatched.
+            if (dragging) dispatch.ends_drag = true;
             return dispatch;
     }
     return dispatch;
