@@ -110,6 +110,90 @@ TEST(decode_input_maps_printables_and_named_keys) {
     ASSERT_EQ(back.stroke.code, std::string{"Backspace"});
 }
 
+TEST(decode_input_modified_arrows) {
+    std::size_t consumed = 0;
+    // Shift+ArrowUp: ESC [ 1 ; 2 A (modifier 2 -> bitmask 1 = Shift).
+    auto shift_up = ssg::app::decode_input("\x1b[1;2A", true, consumed);
+    ASSERT_EQ(consumed, std::size_t{6});
+    ASSERT_TRUE(shift_up.status == ssg::app::DecodeStatus::key);
+    ASSERT_EQ(shift_up.stroke.code, std::string{"ArrowUp"});
+    ASSERT_TRUE(shift_up.stroke.shift);
+    ASSERT_FALSE(shift_up.stroke.alt);
+    ASSERT_FALSE(shift_up.stroke.control);
+
+    // Ctrl+ArrowRight: modifier 5 -> bitmask 4 = Ctrl.
+    auto ctrl_right = ssg::app::decode_input("\x1b[1;5C", true, consumed);
+    ASSERT_EQ(ctrl_right.stroke.code, std::string{"ArrowRight"});
+    ASSERT_TRUE(ctrl_right.stroke.control);
+    ASSERT_FALSE(ctrl_right.stroke.shift);
+
+    // Alt+ArrowLeft: modifier 3 -> bitmask 2 = Alt.
+    auto alt_left = ssg::app::decode_input("\x1b[1;3D", true, consumed);
+    ASSERT_EQ(alt_left.stroke.code, std::string{"ArrowLeft"});
+    ASSERT_TRUE(alt_left.stroke.alt);
+
+    // Ctrl+Shift+ArrowDown: modifier 6 -> bitmask 5 = Shift|Ctrl.
+    auto cs_down = ssg::app::decode_input("\x1b[1;6B", true, consumed);
+    ASSERT_EQ(cs_down.stroke.code, std::string{"ArrowDown"});
+    ASSERT_TRUE(cs_down.stroke.shift);
+    ASSERT_TRUE(cs_down.stroke.control);
+    ASSERT_FALSE(cs_down.stroke.alt);
+
+    // Shift+Home / Shift+End.
+    auto shift_home = ssg::app::decode_input("\x1b[1;2H", true, consumed);
+    ASSERT_EQ(shift_home.stroke.code, std::string{"Home"});
+    ASSERT_TRUE(shift_home.stroke.shift);
+    auto shift_end = ssg::app::decode_input("\x1b[1;2F", true, consumed);
+    ASSERT_EQ(shift_end.stroke.code, std::string{"End"});
+    ASSERT_TRUE(shift_end.stroke.shift);
+
+    // Plain arrow still decodes unmodified.
+    auto plain = ssg::app::decode_input("\x1b[A", true, consumed);
+    ASSERT_EQ(plain.stroke.code, std::string{"ArrowUp"});
+    ASSERT_FALSE(plain.stroke.shift);
+
+    // An unsupported modifier (m=9 -> bitmask 8, a Meta bit) falls back to the
+    // plain, unmodified arrow, consuming the whole sequence.
+    auto meta = ssg::app::decode_input("\x1b[1;9A", true, consumed);
+    ASSERT_EQ(consumed, std::size_t{6});
+    ASSERT_EQ(meta.stroke.code, std::string{"ArrowUp"});
+    ASSERT_FALSE(meta.stroke.shift);
+    ASSERT_FALSE(meta.stroke.alt);
+    ASSERT_FALSE(meta.stroke.control);
+
+    // Ctrl+Alt+ArrowRight: modifier 7 -> bitmask 6 = Alt|Ctrl.
+    auto ctrl_alt = ssg::app::decode_input("\x1b[1;7C", true, consumed);
+    ASSERT_EQ(ctrl_alt.stroke.code, std::string{"ArrowRight"});
+    ASSERT_TRUE(ctrl_alt.stroke.alt);
+    ASSERT_TRUE(ctrl_alt.stroke.control);
+    ASSERT_FALSE(ctrl_alt.stroke.shift);
+
+    // A multi-digit modifier parses; m=16 -> bitmask 15 includes the unsupported
+    // Meta bit, so it falls back to the plain arrow (consuming all 7 bytes).
+    auto multi = ssg::app::decode_input("\x1b[1;16C", true, consumed);
+    ASSERT_EQ(consumed, std::size_t{7});
+    ASSERT_EQ(multi.stroke.code, std::string{"ArrowRight"});
+    ASSERT_FALSE(multi.stroke.alt);
+    ASSERT_FALSE(multi.stroke.control);
+    ASSERT_FALSE(multi.stroke.shift);
+}
+
+TEST(decode_input_modified_arrow_split_reads_are_incomplete) {
+    std::size_t consumed = 0;
+    // Every partial-parameter prefix is incomplete and consumes nothing until the
+    // final letter arrives.
+    for (auto const* partial : {"\x1b[1", "\x1b[1;", "\x1b[1;2", "\x1b[1;16"}) {
+        consumed = 99;
+        auto decoded = ssg::app::decode_input(partial, true, consumed);
+        ASSERT_TRUE(decoded.status == ssg::app::DecodeStatus::incomplete);
+        ASSERT_EQ(consumed, std::size_t{0});
+    }
+    // The completing bytes finish the sequence.
+    auto done = ssg::app::decode_input("\x1b[1;16D", true, consumed);
+    ASSERT_EQ(done.stroke.code, std::string{"ArrowLeft"});
+    ASSERT_EQ(consumed, std::size_t{7});
+}
+
 TEST(decode_input_arrows_and_mouse) {
     std::size_t consumed = 0;
     auto up = ssg::app::decode_input("\x1b[A", true, consumed);
@@ -159,6 +243,8 @@ int main() {
     RUN(encode_ansi_frame_addresses_rows_and_emits_palette_colors);
     RUN(encode_ansi_frame_skips_wide_glyph_continuation);
     RUN(decode_input_maps_printables_and_named_keys);
+    RUN(decode_input_modified_arrows);
+    RUN(decode_input_modified_arrow_split_reads_are_incomplete);
     RUN(decode_input_arrows_and_mouse);
     RUN(decode_input_escape_boundary_is_bounded);
 

@@ -144,6 +144,45 @@ Decoded decode_input(std::string_view bytes, bool input_exhausted,
         if (bytes.size() < 3) return {DecodeStatus::incomplete, {}, {}, 0};
         auto const third = static_cast<unsigned char>(bytes[2]);
         switch (third) {
+        case '1': {
+            // Modified key: ESC [ 1 ; m {A|B|C|D|H|F}, modifier m = 1 + bitmask
+            // (bit0 Shift, bit1 Alt, bit2 Ctrl).  Any partial parameter is
+            // incomplete until the final letter arrives.
+            if (bytes.size() < 4) return {DecodeStatus::incomplete, {}, {}, 0};
+            if (bytes[3] != ';') {
+                consumed = 3;  // Some other '1'-prefixed CSI; skip conservatively.
+                return {DecodeStatus::none, {}, {}, 0};
+            }
+            std::size_t pos = 4;
+            auto const modifier = parse_decimal(bytes, pos);
+            if (pos == 4 || pos >= bytes.size()) {
+                return {DecodeStatus::incomplete, {}, {}, 0};  // Await digits/final.
+            }
+            auto const final = static_cast<unsigned char>(bytes[pos]);
+            std::string code;
+            switch (final) {
+            case 'A': code = "ArrowUp"; break;
+            case 'B': code = "ArrowDown"; break;
+            case 'C': code = "ArrowRight"; break;
+            case 'D': code = "ArrowLeft"; break;
+            case 'H': code = "Home"; break;
+            case 'F': code = "End"; break;
+            default:
+                consumed = pos + 1;  // Unknown final byte; skip.
+                return {DecodeStatus::none, {}, {}, 0};
+            }
+            consumed = pos + 1;
+            ssg::KeyStroke stroke{code};
+            auto const bitmask = modifier - 1;
+            // Only Shift/Alt/Ctrl are supported; any other bits (e.g. m=9) fall
+            // back to the plain, unmodified arrow.
+            if (bitmask > 0 && (bitmask & ~std::int64_t{0b111}) == 0) {
+                stroke.shift = (bitmask & 0b001) != 0;
+                stroke.alt = (bitmask & 0b010) != 0;
+                stroke.control = (bitmask & 0b100) != 0;
+            }
+            return {DecodeStatus::key, stroke, {}, 0};
+        }
         case 'A': consumed = 3; return {DecodeStatus::key, ssg::KeyStroke{"ArrowUp"}, {}, 0};
         case 'B': consumed = 3; return {DecodeStatus::key, ssg::KeyStroke{"ArrowDown"}, {}, 0};
         case 'C': consumed = 3; return {DecodeStatus::key, ssg::KeyStroke{"ArrowRight"}, {}, 0};
