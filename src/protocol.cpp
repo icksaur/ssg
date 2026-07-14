@@ -2242,9 +2242,10 @@ bool decode_present(ProtocolValue const& value, std::optional<ShellViewState>& o
     if (!object) return false;
     auto viewport = require_field<GridSize>(value.field("viewport"));
     auto panes = require_field<std::vector<PaneGeometry>>(value.field("panes"));
+    auto tab_hits = require_field<std::vector<TabHit>>(value.field("tab_hits"));
     auto accessibility_nodes =
         require_field<std::vector<AccessibilityNode>>(value.field("accessibility_nodes"));
-    if (!viewport || !panes || !accessibility_nodes) return false;
+    if (!viewport || !panes || !tab_hits || !accessibility_nodes) return false;
     ShellViewState result;
     result.viewport = *viewport;
     if (auto const* focus_field = value.field("focus")) {
@@ -2259,14 +2260,7 @@ bool decode_present(ProtocolValue const& value, std::optional<ShellViewState>& o
     if (!decode_optional_field(value.field("panel_scrollbar"), result.panel_scrollbar)) return false;
     if (!decode_optional_field(value.field("prompt"), result.prompt)) return false;
     result.panes = *panes;
-    // tab_hits is an additive shell field: decode it when present, else leave it
-    // empty so canonical fixtures predating it still decode (consistent with the
-    // panel_scrollbar addition). to_value always emits it, so it round-trips.
-    if (auto const* tab_hits_field = value.field("tab_hits")) {
-        auto tab_hits = require_field<std::vector<TabHit>>(tab_hits_field);
-        if (!tab_hits) return false;
-        result.tab_hits = std::move(*tab_hits);
-    }
+    result.tab_hits = *tab_hits;
     result.accessibility_nodes = *accessibility_nodes;
     out.emplace(std::move(result));
     return true;
