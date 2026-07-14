@@ -192,6 +192,19 @@ TEST(decode_input_modified_arrow_split_reads_are_incomplete) {
     auto done = ssg::app::decode_input("\x1b[1;16D", true, consumed);
     ASSERT_EQ(done.stroke.code, std::string{"ArrowLeft"});
     ASSERT_EQ(consumed, std::size_t{7});
+
+    // A pathologically long modifier parameter must not overflow the decimal
+    // accumulator; it saturates, falls back to the plain arrow, and consumes the
+    // whole sequence.
+    std::string huge = "\x1b[1;";
+    huge.append(40, '9');
+    huge += "A";
+    auto overflow = ssg::app::decode_input(huge, true, consumed);
+    ASSERT_EQ(consumed, huge.size());
+    ASSERT_EQ(overflow.stroke.code, std::string{"ArrowUp"});
+    ASSERT_FALSE(overflow.stroke.shift);
+    ASSERT_FALSE(overflow.stroke.alt);
+    ASSERT_FALSE(overflow.stroke.control);
 }
 
 TEST(decode_input_arrows_and_mouse) {

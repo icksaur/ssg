@@ -60,10 +60,14 @@ std::string encode_ansi_frame(ssg::CellGrid const& screen) {
 namespace {
 
 // Parse a leading run of decimal digits; returns the value and advances `pos`.
+// The accumulator saturates at a safe bound so a maliciously long parameter
+// cannot overflow the signed integer (undefined behavior); all digits are still
+// consumed so `pos` (and the caller's `consumed`) stays correct.
 std::int64_t parse_decimal(std::string_view text, std::size_t& pos) {
+    constexpr std::int64_t saturation = 1'000'000'000;
     std::int64_t value = 0;
     while (pos < text.size() && text[pos] >= '0' && text[pos] <= '9') {
-        value = value * 10 + (text[pos] - '0');
+        if (value < saturation) value = value * 10 + (text[pos] - '0');
         ++pos;
     }
     return value;
