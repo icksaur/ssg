@@ -1,6 +1,7 @@
 #include <ssg/hit_test.h>
 
 #include <ssg/editor_runtime.h>
+#include <ssg/selection.h>
 #include <ssg/session_snapshot.h>
 
 #include "test_helpers.h"
@@ -37,7 +38,8 @@ std::unique_ptr<ssg::EditorRuntime> make_runtime(fs::path const& root) {
 
 TEST(editor_cell_maps_to_its_document_byte_offset) {
     auto root = unique_root();
-    std::ofstream{root / "doc.txt"} << "alpha\nbeta\ngamma\n";
+    std::string const text = "alpha\nbeta\ngamma\n";
+    std::ofstream{root / "doc.txt"} << text;
     auto runtime = make_runtime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
@@ -54,14 +56,43 @@ TEST(editor_cell_maps_to_its_document_byte_offset) {
     ASSERT_FALSE(targets.empty());
     if (targets.empty()) return;
 
-    // Pick a real hit target and translate it back to a screen cell.
-    auto const& target = targets.front();
-    int const column = content.x + static_cast<int>(target.viewport_column);
-    int const row = content.y + static_cast<int>(target.viewport_row);
-    auto hit = ssg::hit_test(*snapshot, column, row);
-    ASSERT_EQ(hit.region, ssg::HitRegion::editor);
-    ASSERT_EQ(hit.byte_offset, target.byte_offset);
-    ASSERT_EQ(hit.byte_len, target.byte_len);
+    // Strong oracle: every hit target's byte offset must be DOCUMENT-absolute,
+    // not line-relative. Cross-check each against the independent line model
+    // (resolve_document_position / TextModel), which the app uses to turn a hit
+    // into a caret. A regression to line-relative offsets makes every line's
+    // cells resolve to line 0 and fails here immediately.
+    bool saw_second_line = false;
+    for (auto const& target : targets) {
+        int const column = content.x + static_cast<int>(target.viewport_column);
+        int const row = content.y + static_cast<int>(target.viewport_row);
+        auto hit = ssg::hit_test(*snapshot, column, row);
+        ASSERT_EQ(hit.region, ssg::HitRegion::editor);
+        ASSERT_EQ(hit.byte_offset, target.byte_offset);
+        auto position =
+            ssg::resolve_document_position(text, ssg::ByteOffset{hit.byte_offset});
+        ASSERT_TRUE(position.has_value());
+        if (position) {
+            ASSERT_EQ(position->line.value(),
+                      static_cast<std::uint64_t>(target.logical_line));
+        }
+        if (target.logical_line > 0) saw_second_line = true;
+    }
+    // The document has three lines, so the targets must reach past line 0 (the
+    // property above is only meaningful if we actually exercised later lines).
+    ASSERT_TRUE(saw_second_line);
+
+    // Column 0 of a later visual row resolves to that line's first byte.
+    ssg::CellHitTarget const* line_one_start = nullptr;
+    for (auto const& target : targets) {
+        if (target.logical_line == 1 && target.viewport_column == 0) {
+            line_one_start = &target;
+            break;
+        }
+    }
+    ASSERT_TRUE(line_one_start != nullptr);
+    if (line_one_start) {
+        ASSERT_EQ(line_one_start->byte_offset, std::uint32_t{6});  // after "alpha\n"
+    }
 
     // A cell far past the end of the short first line has no document position.
     auto blank = ssg::hit_test(*snapshot, content.right() - 2, content.y);

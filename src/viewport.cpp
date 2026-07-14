@@ -157,6 +157,27 @@ ViewportViewState compute_viewport(std::span<const CellRun> logical_lines,
     const uint32_t first_row =
         std::min(requested_first_visual_row, maximum_first);
 
+    // A CellSpan's byte_offset is relative to its logical line, but a hit target
+    // must carry a DOCUMENT-absolute byte offset (so resolve_document_position
+    // maps it to the right line, not always line 0). Reconstruct each logical
+    // line's document start: lines are separated by exactly one '\n', and
+    // compute_cell_run accounts for every content byte, so a line's document
+    // start is the running sum of prior lines' content bytes plus one separator
+    // byte each -- the same accounting TextModel uses (start = newline + 1).
+    std::vector<uint32_t> line_document_start(logical_lines.size(), 0);
+    {
+        uint64_t document_byte = 0;
+        for (std::size_t line = 0; line < logical_lines.size(); ++line) {
+            line_document_start[line] =
+                checked_u32(document_byte, "viewport byte offset exceeds uint32");
+            uint64_t content_bytes = 0;
+            for (const auto& span : logical_lines[line].spans) {
+                content_bytes += span.byte_len;
+            }
+            document_byte += content_bytes + 1;  // +1 for the '\n' separator
+        }
+    }
+
     std::vector<VisualRow> visible_rows;
     std::vector<CellHitTarget> hit_targets;
     const auto visible_count =
@@ -182,7 +203,7 @@ ViewportViewState compute_viewport(std::span<const CellRun> logical_lines,
                     viewport_column + cell,
                     row.logical_line,
                     CellIndex{logical_cell},
-                    span.byte_offset,
+                    line_document_start[row.logical_line] + span.byte_offset,
                     span.byte_len,
                 });
             }
