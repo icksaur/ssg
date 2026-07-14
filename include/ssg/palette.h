@@ -49,10 +49,12 @@ struct PaletteExecuteArguments {
 
 // A client's locally-ranked palette view, reported for library-owned
 // presentation (see doc/spec-palette.md).  `rows` is the bounded visible window
-// of ranked candidates; `selected` indexes into it.  `ghost` is the remaining
-// characters of the top candidate's label after the query (fish-style
-// completion), shown dim in the header.  The library projects this into the
-// active pane and header only while the palette prompt is open.
+// of ranked candidates; `selected` and `first_visible` are ABSOLUTE indices into
+// the full ranked order (so the on-screen row for the selection is
+// `selected - first_visible`).  `ghost` is the remaining characters of the top
+// candidate's label after the query (fish-style completion), shown dim in the
+// header.  The library projects this into the active pane and header only while
+// the palette prompt is open.
 struct PaletteReport {
     std::string query;
     std::string ghost;

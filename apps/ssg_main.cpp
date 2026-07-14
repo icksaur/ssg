@@ -283,7 +283,11 @@ int main(int argc, char** argv) {
             if (focus != ssg::FocusTarget::prompt) palette_open = false;
             // Cache the palette pane height for the next window computation: the
             // palette pane is the editor pane, so this is populated every frame,
-            // including before the palette opens (no cold start).
+            // including before the palette opens (no cold start). The window is
+            // computed from the PREVIOUS frame's height, so a terminal resize
+            // lags one frame before keep-visible re-settles — the same one-frame
+            // clamp the editor's server-side scroll offset already has, and it
+            // self-corrects on the next snapshot.
             auto const& shell = snapshot->sections().shell;
             if (!shell.panes.empty()) {
                 palette_pane_rows = static_cast<std::uint32_t>(
