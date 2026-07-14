@@ -51,6 +51,42 @@ struct ScrollbarMetrics {
     bool operator==(const ScrollbarMetrics&) const noexcept = default;
 };
 
+// The scrollbar thumb geometry for a list of `total_rows` items shown in a
+// `viewport_rows`-tall window scrolled to `first_row`.  When the content fits
+// (`total_rows <= viewport_rows`) the thumb is hidden: `maximum_first_row`,
+// `thumb_start`, and `thumb_size` collapse to a no-thumb sentinel.  Shared by
+// every scrollable region (editor, tree, palette) so thumb math lives in one
+// place (see doc/spec-scroll.md).
+ScrollbarMetrics scrollbar_metrics(uint32_t total_rows, uint32_t viewport_rows,
+                                   uint32_t first_row);
+
+// A resolved scroll view for a simple list region: the clamped first visible
+// item, how many items are visible, and the scrollbar geometry.  This is the
+// generalized primitive the tree and palette use, mirroring what
+// `compute_viewport` produces for the editor.
+struct ListScrollView {
+    uint32_t first_visible;
+    uint32_t visible_count;
+    ScrollbarMetrics scrollbar;
+
+    bool operator==(const ListScrollView&) const noexcept = default;
+};
+
+// Resolve a list scroll view.  `first_visible` is always clamped to
+// `[0, maximum_first_row]`.  Keep-visible is an explicit input, never inferred:
+// only when `keep_selection_visible` is true AND `selected` holds an item index
+// does the window shift minimally so `selected` lies within
+// `[first_visible, first_visible + visible_count)`.  With
+// `keep_selection_visible == false` the (clamped) `first_visible` is honored
+// verbatim and the selection may fall outside the window, exactly as the editor
+// caret can.  `selected` is an absolute item index.
+ListScrollView compute_list_scroll_view(uint32_t total_items,
+                                        uint32_t viewport_rows,
+                                        uint32_t first_visible,
+                                        std::optional<uint32_t> selected,
+                                        bool keep_selection_visible);
+
+
 struct ViewportViewState {
     ViewportDimensions dimensions;
     uint32_t first_visual_row;

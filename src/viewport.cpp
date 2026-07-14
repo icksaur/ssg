@@ -69,9 +69,9 @@ std::vector<VisualRow> wrap_rows(std::span<const CellRun> lines,
     return rows;
 }
 
-ScrollbarMetrics scrollbar_metrics(uint32_t total_rows,
-                                    uint32_t viewport_rows,
-                                    uint32_t first_row) {
+ScrollbarMetrics scrollbar_metrics_impl(uint32_t total_rows,
+                                        uint32_t viewport_rows,
+                                        uint32_t first_row) {
     const uint32_t maximum_first =
         total_rows > viewport_rows ? total_rows - viewport_rows : 0;
     if (maximum_first == 0) {
@@ -95,6 +95,44 @@ ScrollbarMetrics scrollbar_metrics(uint32_t total_rows,
 }
 
 }  // namespace
+
+ScrollbarMetrics scrollbar_metrics(uint32_t total_rows, uint32_t viewport_rows,
+                                   uint32_t first_row) {
+    return scrollbar_metrics_impl(total_rows, viewport_rows, first_row);
+}
+
+ListScrollView compute_list_scroll_view(uint32_t total_items,
+                                        uint32_t viewport_rows,
+                                        uint32_t first_visible,
+                                        std::optional<uint32_t> selected,
+                                        bool keep_selection_visible) {
+    if (viewport_rows == 0) {
+        return ListScrollView{0, 0, scrollbar_metrics_impl(total_items, 0, 0)};
+    }
+    const uint32_t maximum_first =
+        total_items > viewport_rows ? total_items - viewport_rows : 0;
+    uint32_t first = std::min(first_visible, maximum_first);
+
+    // Keep-visible only shifts the window when scrolling is possible and the
+    // caller opted in with a selection.  It is never inferred from `selected`
+    // alone: explicit scroll (keep_selection_visible == false) leaves `first`
+    // at the clamped request even if the selection falls outside the window.
+    if (keep_selection_visible && selected && maximum_first > 0) {
+        const uint32_t target = std::min(*selected, total_items - 1);
+        if (target < first) {
+            first = target;
+        } else if (target >= first + viewport_rows) {
+            first = target - viewport_rows + 1;
+        }
+        first = std::min(first, maximum_first);
+    }
+
+    const uint32_t visible_count =
+        std::min(viewport_rows, total_items - first);
+    return ListScrollView{first, visible_count,
+                          scrollbar_metrics_impl(total_items, viewport_rows,
+                                                 first)};
+}
 
 ViewportDimensions::ViewportDimensions(uint32_t column_count,
                                        uint32_t row_count)

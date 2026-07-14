@@ -165,6 +165,104 @@ TEST(invalid_dimensions_are_actionable) {
     ASSERT_TRUE(rows_threw);
 }
 
+TEST(list_scroll_view_clamps_and_hides_thumb_when_content_fits) {
+    // Shorter than the viewport: first pinned to 0, all items visible, no thumb.
+    auto view = ssg::compute_list_scroll_view(3, 10, 5, std::nullopt, false);
+    ASSERT_EQ(view.first_visible, std::uint32_t{0});
+    ASSERT_EQ(view.visible_count, std::uint32_t{3});
+    ASSERT_EQ(view.scrollbar.maximum_first_row, std::uint32_t{0});
+    ASSERT_EQ(view.scrollbar.thumb_start, std::uint32_t{0});
+    ASSERT_EQ(view.scrollbar, ssg::scrollbar_metrics(3, 10, 0));
+
+    // Exactly full: still no scrolling room.
+    auto full = ssg::compute_list_scroll_view(10, 10, 4, std::nullopt, false);
+    ASSERT_EQ(full.first_visible, std::uint32_t{0});
+    ASSERT_EQ(full.visible_count, std::uint32_t{10});
+    ASSERT_EQ(full.scrollbar.maximum_first_row, std::uint32_t{0});
+}
+
+TEST(list_scroll_view_empty_list) {
+    auto view = ssg::compute_list_scroll_view(0, 8, 3, std::nullopt, false);
+    ASSERT_EQ(view.first_visible, std::uint32_t{0});
+    ASSERT_EQ(view.visible_count, std::uint32_t{0});
+    ASSERT_EQ(view.scrollbar, ssg::scrollbar_metrics(0, 8, 0));
+}
+
+TEST(list_scroll_view_zero_viewport_is_inert) {
+    auto view = ssg::compute_list_scroll_view(20, 0, 5, std::optional<std::uint32_t>{7}, true);
+    ASSERT_EQ(view.first_visible, std::uint32_t{0});
+    ASSERT_EQ(view.visible_count, std::uint32_t{0});
+    ASSERT_EQ(view.scrollbar, ssg::scrollbar_metrics(20, 0, 0));
+}
+
+TEST(list_scroll_view_clamps_over_scroll_to_maximum) {
+    // 100 items, 10-tall window: maximum first is 90.  A larger request clamps.
+    auto view = ssg::compute_list_scroll_view(100, 10, 500, std::nullopt, false);
+    ASSERT_EQ(view.scrollbar.maximum_first_row, std::uint32_t{90});
+    ASSERT_EQ(view.first_visible, std::uint32_t{90});
+    ASSERT_EQ(view.visible_count, std::uint32_t{10});
+    ASSERT_EQ(view.scrollbar, ssg::scrollbar_metrics(100, 10, 90));
+}
+
+TEST(list_scroll_view_free_scroll_ignores_selection) {
+    // keep=false: the clamped request is honored even though the selection (0)
+    // is far above the window, and even though a selection is present.
+    auto view = ssg::compute_list_scroll_view(100, 10, 40,
+                                              std::optional<std::uint32_t>{0}, false);
+    ASSERT_EQ(view.first_visible, std::uint32_t{40});
+    ASSERT_EQ(view.visible_count, std::uint32_t{10});
+    ASSERT_EQ(view.scrollbar, ssg::scrollbar_metrics(100, 10, 40));
+}
+
+TEST(list_scroll_view_keep_visible_scrolls_down_to_selection) {
+    // Selection below the window forces the minimal downward shift so it lands
+    // on the last visible row: first = selected - viewport + 1.
+    auto view = ssg::compute_list_scroll_view(100, 10, 0,
+                                              std::optional<std::uint32_t>{25}, true);
+    ASSERT_EQ(view.first_visible, std::uint32_t{16});
+    ASSERT_TRUE(25 >= view.first_visible &&
+                25 < view.first_visible + view.visible_count);
+    ASSERT_EQ(view.scrollbar, ssg::scrollbar_metrics(100, 10, 16));
+}
+
+TEST(list_scroll_view_keep_visible_scrolls_up_to_selection) {
+    // Selection above the window forces first = selected.
+    auto view = ssg::compute_list_scroll_view(100, 10, 50,
+                                              std::optional<std::uint32_t>{12}, true);
+    ASSERT_EQ(view.first_visible, std::uint32_t{12});
+    ASSERT_TRUE(12 >= view.first_visible &&
+                12 < view.first_visible + view.visible_count);
+}
+
+TEST(list_scroll_view_keep_visible_leaves_in_window_selection_untouched) {
+    // Selection already inside the window: no shift.
+    auto view = ssg::compute_list_scroll_view(100, 10, 20,
+                                              std::optional<std::uint32_t>{25}, true);
+    ASSERT_EQ(view.first_visible, std::uint32_t{20});
+}
+
+TEST(list_scroll_view_keep_visible_clamps_selection_to_last_item) {
+    // An out-of-range selection is clamped to the last item, which still forces
+    // a valid in-range window that never exceeds maximum_first_row.
+    auto view = ssg::compute_list_scroll_view(100, 10, 0,
+                                              std::optional<std::uint32_t>{999}, true);
+    ASSERT_EQ(view.first_visible, std::uint32_t{90});
+    ASSERT_EQ(view.scrollbar.maximum_first_row, std::uint32_t{90});
+}
+
+TEST(list_scroll_view_matches_compute_viewport_metrics) {
+    // The generalized primitive must produce the same scrollbar metrics the
+    // editor's compute_viewport already does for the same (total, viewport,
+    // first) — no regression in the reused thumb math.
+    std::vector<CellRun> lines;
+    for (int i = 0; i < 40; ++i) lines.push_back(ssg::compute_cell_run("line", 4));
+    auto viewport = ssg::compute_viewport(lines, ssg::ViewportDimensions{20, 10}, 7);
+    auto list = ssg::compute_list_scroll_view(
+        viewport.total_visual_rows, 10, 7, std::nullopt, false);
+    ASSERT_EQ(list.scrollbar, viewport.scrollbar);
+    ASSERT_EQ(list.first_visible, viewport.first_visual_row);
+}
+
 int main() {
     RUN(empty_viewport_golden);
     RUN(short_viewport_golden);
@@ -174,6 +272,16 @@ int main() {
     RUN(scroll_saturates_and_delta_suppresses_equal_payload);
     RUN(viewport_bounds_properties);
     RUN(invalid_dimensions_are_actionable);
+    RUN(list_scroll_view_clamps_and_hides_thumb_when_content_fits);
+    RUN(list_scroll_view_empty_list);
+    RUN(list_scroll_view_zero_viewport_is_inert);
+    RUN(list_scroll_view_clamps_over_scroll_to_maximum);
+    RUN(list_scroll_view_free_scroll_ignores_selection);
+    RUN(list_scroll_view_keep_visible_scrolls_down_to_selection);
+    RUN(list_scroll_view_keep_visible_scrolls_up_to_selection);
+    RUN(list_scroll_view_keep_visible_leaves_in_window_selection_untouched);
+    RUN(list_scroll_view_keep_visible_clamps_selection_to_last_item);
+    RUN(list_scroll_view_matches_compute_viewport_metrics);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;
 }
