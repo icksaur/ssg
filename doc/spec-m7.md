@@ -52,9 +52,9 @@ change for multiple carets. No new editor semantics are invented here.
 
 ## Design
 
-M7 is **five independently shippable designs**, in order (S, D, M, F1, F2). Each
-ends in a hand-testable TUI improvement. S/D/M need no find/replace; F1 and F2
-build on the selection/match rendering from S.
+M7 is **six independently shippable designs**, in order (S, D, M, F1, F2a, F2b).
+Each ends in a hand-testable TUI improvement. S/D/M need no find/replace; F1,
+F2a, and F2b build on the selection/match rendering from S.
 
 ### S — Selection and multi-caret rendering (library render only)
 
@@ -222,43 +222,104 @@ the active match's cells carry `selection`, including a match clipped at the
 viewport edge and a match containing a wide/UTF-8 glyph; a protocol round-trip
 test for `find.update_query`.
 
-### F2 — Replace and find toggles
+### F2a — Replace workflow
 
-- Replacement text is controller state. Add a `replacement` field to
-  `FindReplaceViewState` and a bound **`replace.update_replacement`** command
-  (payload: the replacement string) that updates it and re-projects it into the
-  `replace` prompt's second input, exactly as `find.update_query` handles the
-  query. `replace.open` opens the three-row `PromptKind::replace` prompt (query
-  row, replacement row, option/match-count row — the existing `prompt_row_count`
-  contract, unchanged). The client edits the replacement field the same
-  no-client-copy way (next value = published `replacement` mutated by the event).
-- `replace.current` replaces the active match and advances; `replace.all`
-  replaces every match. Both already exist; F2 sources the replacement from
-  `FindReplaceViewState.replacement` (single source of truth) rather than a
-  payload.
-- **Reachable operations and toggles.** In a **replace** prompt, client
-  fulfilment maps `Enter` (`prompt.submit`) → `replace.current`, `ArrowDown` →
-  `find.next`, `ArrowUp` → `find.previous`, `[Escape, Escape]` → `find.close`.
-  The toggles and replace-all are **prompt-context keymap bindings** (argument-
-  free, decodable `Escape`+letter, prefix-free against the `*` overlay, and
-  **server-guarded to a benign no-op when the find controller is closed** so they
-  cannot mutate hidden state from a palette/settings prompt): `[Escape, KeyC]` →
-  `find.toggle_case`, `[Escape, KeyG]` → `find.toggle_whole_word`,
-  `[Escape, KeyE]` → `find.toggle_regex`, `[Escape, KeyL]` → `replace.all`. The
-  published `FindReplaceViewState.options` renders as indicators in the reserved
-  rows. (`KeyC`/`KeyG`/`KeyE`/`KeyL` are not in the `*` chord set, so prefix-
-  freeness holds.)
-- `replace.update_replacement` is a second string-payload command with the same
-  `keymap:false`/`palette:false`/`lua:true` catalog cascade as `find.update_query`.
+Splits out the replacement state, editing, and execution (F2b adds the toggle
+chords and option indicators).
 
-Oracle (F2): a runtime test sets a query with three matches and a replacement,
-dispatches `replace.current` and asserts only the active match changed and the
-active index advanced, then `replace.all` and asserts the document text equals a
-hand-authored expected string; a toggle test asserts `find.toggle_case` flips
+- **Replacement is controller state, and it is published/serialized.** Add a
+  `replacement` string field to `FindReplaceViewState` (after `query`). Because
+  the view state crosses the wire in the snapshot and delta, F2a extends the
+  `FindReplaceViewState` protocol codec (`to_value`/`decode_present` in
+  `src/protocol.cpp`) to encode/decode `replacement`, and a delta-replay
+  round-trip must preserve it. Add a bound **`replace.update_replacement`**
+  command (string payload, reusing `FindQueryArguments` — its comment already
+  covers the replacement case) that calls a new
+  `FindReplaceController::update_replacement(std::string)` setting
+  `state_.replacement` and bumping `generation`. Updating the replacement does
+  **not** re-evaluate matches (replacement does not affect matching), and
+  `evaluate()` must **not** clobber `state_.replacement`.
+- **`replace.open`** opens the three-row `PromptKind::replace` prompt (existing
+  `prompt_row_count(replace)==3`): row 0 = query (display-only), row 1 =
+  replacement (editable), row 2 = option/match-count row. It sets
+  `replace_mode` and seeds the query from the current find query (so a
+  find→replace flow carries the query). `prompt_status_view` projects
+  `FindReplaceViewState.query` into row 0 and `replacement` into row 1 at
+  snapshot time (mirroring F1's query projection).
+- **Replace-field routing (single active field).** In a replace prompt the
+  **query row is display-only**; **all** printable text and Backspace edit the
+  **replacement** via `replace.update_replacement` (next value = published
+  `replacement` mutated by the event, the same no-client-copy rule as F1). To
+  change the query, use find first (its value carries into replace). `paint_prompt`
+  places the hardware text cursor on the **replacement** input row (row 1) for a
+  replace prompt, not the first input. Client fulfilment in replace focus:
+  `Enter` (`prompt.submit`) → `replace.current`, `ArrowDown` → `find.next`,
+  `ArrowUp` → `find.previous`, `[Escape, Escape]` → `find.close`. The client
+  tracks a replace-prompt flag parallel to F1's find flag, derived from the
+  active prompt kind being `replace`.
+- **Execution sources the replacement from state.** `replace.current` replaces
+  the active match; `replace.all` replaces every match. Both already exist; F2a
+  changes only the runtime call site to pass `view_state().replacement` (single
+  source of truth) instead of the payload — no controller-signature change.
+- **Reset-to-first semantics (committed).** After `replace.current`, the
+  controller's `evaluate()` recomputes matches and resets `active_match` to the
+  first remaining match (index 0). F2a keeps this behavior (no controller
+  change); the active index does **not** "advance" — the replaced match is
+  removed and index 0 points at the next remaining match.
+- **Guards (destructive-op safety).** `find` can remain open behind a
+  palette/settings prompt, so an open-only guard is insufficient. Guard exactly
+  `replace.update_replacement`, `replace.current`, and `replace.all` to a benign
+  **success no-op** unless `view_state().open` **and** `view_state().replace_mode`
+  **and** the active prompt kind is `PromptKind::replace`. Do **not** guard
+  `replace.open` or the standalone `replace.workspace_*` commands.
+- **Reveal the successor.** After `replace.current`/`replace.all`, follow the
+  viewport to the newly active match using F1's non-destructive
+  `reveal_active_find_match`.
+
+Oracle (F2a): a runtime test opens replace with query `"cat"` over
+`"cat cat cat"`, sets the replacement to `"dog"` via `replace.update_replacement`,
+and asserts `view_state().replacement == "dog"` and that the replace prompt row 1
+projects `"dog"`. It dispatches `replace.current` and asserts the document text
+is exactly `"dog cat cat"`, `matches.size() == 2`, the replaced span `[0,3)` no
+longer matches, and `active_match == 0` pointing at the match now at `[4,7)`. From
+a fresh state (query `"cat"`, replacement `"dog"`), `replace.all` yields exactly
+`"dog dog dog"` with `matches` empty and `active_match == nullopt`. A guard test
+asserts `replace.current`/`replace.all`/`replace.update_replacement` are benign
+success no-ops (document and state unchanged) when no replace prompt is active. A
+protocol test round-trips a `FindReplaceViewState` carrying a non-empty
+`replacement` through the snapshot codec and a delta replay. A render test asserts
+the replace prompt's three rows show the query (row 0), replacement (row 1), and
+the hardware cursor on row 1.
+
+### F2b — Find/replace toggles and option indicators
+
+- **Toggle chords in prompt context.** The toggle commands already exist; F2b
+  binds them as prompt-context keymap chords (context `prompt`, not `*`):
+  `[Escape, KeyC]` → `find.toggle_case`, `[Escape, KeyG]` →
+  `find.toggle_whole_word`, `[Escape, KeyE]` → `find.toggle_regex`,
+  `[Escape, KeyL]` → `replace.all`. `KeyC`/`KeyG`/`KeyE`/`KeyL` are not in the
+  `*` chord set, so prefix-freeness holds.
+- **Guards.** Guard `find.toggle_case`/`find.toggle_whole_word`/
+  `find.toggle_regex`/`find.next`/`find.previous` to a benign **success no-op**
+  unless `view_state().open` and the active prompt kind is `find` or `replace`,
+  so a stray chord from a palette/settings prompt cannot mutate hidden find
+  state. (`replace.all` is already guarded by F2a's destructive-op rule.)
+- **Option indicators in both prompt kinds.** Add three toggle controls
+  (case / whole-word / regex) seeded from `options` to **both** the find and
+  replace `PromptRequest`s; `prompt_status_view` projects each toggle's `checked`
+  from the authoritative `FindReplaceViewState.options`. The existing
+  `paint_prompt`/`compute_prompt_layout` render the toggles (`[x]`/`[ ] label`)
+  left-to-right on the bottom reserved row alongside the match count — the find
+  prompt's row 1 and the replace prompt's row 2.
+
+Oracle (F2b): a runtime test asserts `find.toggle_case` flips
 `options.case_sensitive` and changes the match set for a mixed-case fixture, and
-that dispatching `find.toggle_case` with no open find controller is a benign
-no-op; a render test asserts the three reserved replace rows display the query,
-replacement, and option indicators from the published view.
+that dispatching `find.toggle_case` with no active find/replace prompt is a
+benign success no-op (options unchanged). A keymap-validation test asserts the
+assembled keymap has no errors or ambiguous prefixes with the new prompt-context
+bindings. A render test asserts the find prompt's bottom row and the replace
+prompt's third row display `[ ]`/`[x]` case/word/regex indicators reflecting
+`options`, plus the match count, from the published view.
 
 ## Invariants
 
@@ -338,4 +399,5 @@ replacement, and option indicators from the published view.
 | D | Decode modified arrows/home/end (`ESC [ 1 ; m {A-D,H,F}`, modifier = 1+bitmask: Shift/Alt/Ctrl) into flagged strokes; plain arrows unchanged; pending on every partial-parameter read | `apps/ssg_terminal.{h,cpp}`, `tests/test_ssg_app.cpp` | decode table (exact strokes) for Shift/Ctrl/Alt/Ctrl+Shift arrows, Shift+Home/End, unsupported-modifier fallback, and split-read incompleteness at each boundary |
 | M | Bind `Shift+Arrow`→`select.left/right/line_up/line_down` (editor) and `[Escape, KeyA/KeyD/KeyI/KeyK/KeyJ]`→`select.all/add_next_occurrence/split_into_lines/add_cursor_up/add_cursor_down` plus `[Escape, Slash]`→`find.open`, `[Escape, KeyR]`→`replace.open` (*); settings binding unchanged | `src/editor_runtime.cpp`, `tests/runtime/test_runtime_snapshot.cpp` | resolution test: `Shift+ArrowRight@editor`→`select.right`, `Shift+ArrowUp@editor`→`select.line_up`, `[Escape,KeyD]@editor`→`select.add_next_occurrence`, `[Escape,Slash]`→`find.open`, `[Escape,KeyF,KeyT]`→`settings.open` (unchanged); keymap-validation test: assembled keymap has no errors; runtime test: add-cursor chord command yields >1 selection; K5 argument-free test green |
 | F1 | Add `find.update_query` (string payload, `keymap:false`/`palette:false`/`lua:true`) + catalog cascade; `find.open` opens a one-input `PromptKind::find` prompt; `prompt_status_view` projects `FindReplaceViewState.query`+match-count into the reserved rows at snapshot time; client edits the query no-copy (next = published query ± event) and fulfils, in find focus, `Enter`/`ArrowDown`→`find.next`, `ArrowUp`→`find.previous`, `[Escape,Escape]`→`find.close`; paint matches (`search_match`) + active match (`selection`) in `paint_document` | `include/ssg/find_replace.h`/`src/find_replace.cpp`, `src/runtime/editing.cpp` (bind + open), `src/runtime/snapshot.cpp` (project query+match-count into find prompt rows), `data/required-commands.json`, `tests/test_required_commands.cpp`, `tests/runtime/command_cases.h`, `src/protocol.cpp` (+ round-trip test in `tests/test_protocol.cpp`), `src/editor_runtime.cpp` (keymap `[Escape,Slash]`), `src/render.cpp`, `apps/ssg_main.cpp`, `tests/runtime/test_runtime_editing.cpp`, `tests/test_render.cpp` | runtime: `find.update_query("cat")` over three hand-authored offsets yields exactly those three match ranges and the find prompt rows project `"cat"`+`1/3`; `find.next` advances active 0→1→2→0; render: exact match cells carry `search_match`, active-match cells carry `selection`, incl. clipped + wide-glyph; round-trip; PTY: type query → matches highlight, Enter advances |
-| F2 | Add `FindReplaceViewState.replacement` + `replace.update_replacement` (string payload, `lua:true`) + catalog cascade; `replace.open` opens the three-row `PromptKind::replace` prompt (existing `prompt_row_count`); project replacement into row 2 at snapshot time; `replace.current`/`replace.all` use the controller replacement; server-guard `find.toggle_*`/`find.next`/`find.previous`/`replace.*` to a no-op when find is closed; bind `[Escape,KeyC/KeyG/KeyE]`→toggles and `[Escape,KeyL]`→`replace.all` in `prompt` context; client fulfils, in replace focus, `Enter`→`replace.current`, `ArrowUp/Down`→`find.previous/next`, `[Escape,Escape]`→`find.close` | `include/ssg/find_replace.h`/`src/find_replace.cpp`, `src/runtime/editing.cpp` (guards), `src/runtime/snapshot.cpp` (project replacement), `data/required-commands.json`, `tests/test_required_commands.cpp`, `tests/runtime/command_cases.h`, `src/protocol.cpp` (+ round-trip test), `src/editor_runtime.cpp` (keymap toggles/replace.all), `apps/ssg_main.cpp` (replace fulfilment), `src/render.cpp`, `tests/runtime/test_runtime_editing.cpp`, `tests/test_render.cpp` | runtime: three matches + replacement, `replace.current` changes only the active match and advances; `replace.all` yields a hand-authored expected document string; `find.toggle_case` flips `options.case_sensitive` and changes the match set, and is a benign no-op when find is closed; keymap-validation stays clean with the toggle bindings; render: three reserved replace rows display query + replacement + option indicators from the published view |
+| F2a | Add `FindReplaceViewState.replacement` (published + serialized) + `FindReplaceController::update_replacement` + `replace.update_replacement` command (string payload `FindQueryArguments`, `keymap:false`/`palette:false`/`lua:true`) + catalog cascade; `replace.open` opens the three-row `PromptKind::replace` prompt seeded with the current query and sets `replace_mode`; `prompt_status_view` projects query→row 0 and replacement→row 1; `paint_prompt` puts the cursor on the replacement row; `replace.current`/`replace.all` source `view_state().replacement`; guard `replace.update_replacement`/`replace.current`/`replace.all` to a success no-op unless `open && replace_mode && active prompt kind == replace`; reveal the successor match after replace; client (replace focus): text/Backspace→`replace.update_replacement` (replacement only; query display-only), `Enter`→`replace.current`, `ArrowDown/Up`→`find.next`/`find.previous`, `[Escape,Escape]`→`find.close` | `include/ssg/find_replace.h`/`src/find_replace.cpp`, `src/runtime/editing.cpp` (bind + open + guards + reveal), `src/runtime/snapshot.cpp` (project replacement + cursor row), `data/required-commands.json`, `tests/test_required_commands.cpp`, `tests/runtime/command_cases.h`, `src/protocol.cpp` (view-state `replacement` codec + `replace.update_replacement` arg codec, + round-trip/delta tests in `tests/test_protocol.cpp`), `src/render.cpp`, `apps/ssg_main.cpp` (replace fulfilment), `tests/runtime/test_runtime_editing.cpp`, `tests/test_render.cpp` | runtime: query `"cat"` over `"cat cat cat"`, `replace.update_replacement("dog")` → `view_state().replacement=="dog"` and replace row 1 projects `"dog"`; `replace.current` → doc `"dog cat cat"`, `matches.size()==2`, `[0,3)` no longer matches, `active_match==0` at `[4,7)`; fresh `replace.all` → `"dog dog dog"`, matches empty; the three guarded commands are benign success no-ops with no active replace prompt; protocol round-trip + delta replay preserve `replacement`; render: replace rows show query (row 0) + replacement (row 1) + cursor on row 1 |
+| F2b | Bind `[Escape,KeyC/KeyG/KeyE]`→`find.toggle_case`/`find.toggle_whole_word`/`find.toggle_regex` and `[Escape,KeyL]`→`replace.all` in `prompt` context; guard `find.toggle_*`/`find.next`/`find.previous` to a success no-op unless `open && active prompt kind ∈ {find,replace}`; add three toggle controls seeded from `options` to both find and replace `PromptRequest`s; `prompt_status_view` projects each toggle's `checked` from `options` | `src/editor_runtime.cpp` (keymap), `src/runtime/editing.cpp` (guards), `src/runtime/editing.cpp`/`src/runtime/snapshot.cpp` (toggle controls + projection), `tests/runtime/test_runtime_editing.cpp`, `tests/runtime/test_runtime_snapshot.cpp`, `tests/test_render.cpp` | runtime: `find.toggle_case` flips `options.case_sensitive` and changes the match set on a mixed-case fixture; `find.toggle_case` with no active find/replace prompt is a benign success no-op; keymap-validation: assembled keymap has no errors/ambiguous prefixes with the new bindings; render: find bottom row and replace third row show `[ ]`/`[x]` case/word/regex indicators + match count from the published view |
