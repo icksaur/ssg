@@ -237,9 +237,19 @@ void EditorRuntime::Impl::scroll_tree(std::int64_t rows) {
         static_cast<std::uint32_t>(provider.nodes.size()),
         last_panel_content_rows, tree_first_visible, std::nullopt,
         /*keep_selection_visible=*/false);
+    // Saturating add-then-clamp: `rows` is a wire-decoded int64 and may be huge,
+    // so guard the extremes before the add to avoid signed overflow. Within the
+    // guarded range |rows| < maximum <= UINT32_MAX, so cur + rows cannot overflow.
     auto const maximum = static_cast<std::int64_t>(scroll.scrollbar.maximum_first_row);
-    auto const next = std::clamp<std::int64_t>(
-        static_cast<std::int64_t>(tree_first_visible) + rows, 0, maximum);
+    auto const current = static_cast<std::int64_t>(tree_first_visible);
+    std::int64_t next;
+    if (rows >= maximum) {
+        next = maximum;
+    } else if (rows <= -maximum) {
+        next = 0;
+    } else {
+        next = std::clamp<std::int64_t>(current + rows, 0, maximum);
+    }
     tree_first_visible = static_cast<std::uint32_t>(next);
 }
 

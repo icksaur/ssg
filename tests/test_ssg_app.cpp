@@ -223,6 +223,10 @@ TEST(decode_input_arrows_and_mouse) {
     auto wheel = ssg::app::decode_input("\x1b[<65;10;5M", true, consumed);
     ASSERT_TRUE(wheel.status == ssg::app::DecodeStatus::scroll);
     ASSERT_EQ(wheel.scroll, std::int64_t{3});
+    // The wheel carries its 0-based grid position (SGR 1-based 10,5 -> 9,4) so
+    // the app can route it to the region under the pointer.
+    ASSERT_EQ(wheel.pointer.column, 9);
+    ASSERT_EQ(wheel.pointer.row, 4);
 }
 
 TEST(decode_input_escape_boundary_is_bounded) {
@@ -293,6 +297,8 @@ TEST(decode_input_pointer_press_release_drag) {
     auto wheel_up = ssg::app::decode_input("\x1b[<64;10;5M", true, consumed);
     ASSERT_TRUE(wheel_up.status == ssg::app::DecodeStatus::scroll);
     ASSERT_EQ(wheel_up.scroll, std::int64_t{-3});
+    ASSERT_EQ(wheel_up.pointer.column, 9);
+    ASSERT_EQ(wheel_up.pointer.row, 4);
 }
 
 TEST(decode_input_pointer_split_reads_are_incomplete) {
