@@ -259,6 +259,7 @@ std::optional<GridPosition> screen_cell_for(ViewportViewState const& viewport,
                                             Rect const& content,
                                             std::uint32_t caret_line,
                                             std::uint32_t caret_cell) {
+    std::optional<GridPosition> boundary;  // A match landing at the row's edge.
     for (std::size_t index = 0; index < viewport.visible_rows.size(); ++index) {
         auto const& row = viewport.visible_rows[index];
         if (row.logical_line != caret_line) continue;
@@ -267,13 +268,19 @@ std::optional<GridPosition> screen_cell_for(ViewportViewState const& viewport,
         if (caret_cell < start || caret_cell > end) continue;
         int const column = content.x + static_cast<int>(caret_cell - start);
         int const screen_row = content.y + static_cast<int>(index);
-        if (column >= content.x && column < content.right() &&
-            screen_row >= content.y && screen_row < content.bottom()) {
-            return GridPosition{column, screen_row};
+        if (screen_row < content.y || screen_row >= content.bottom()) continue;
+        if (column >= content.x && column < content.right()) {
+            return GridPosition{column, screen_row};  // Fits on this row.
         }
-        break;
+        // At a wrap boundary the caret equals this row's inclusive end and lands
+        // at content.right(); a later visual row of the same logical line hosts
+        // it at column 0.  Remember this edge match but keep scanning for a
+        // fitting row before falling back to it.
+        if (column == content.right() && !boundary) {
+            boundary = GridPosition{content.right() - 1, screen_row};
+        }
     }
-    return std::nullopt;
+    return boundary;
 }
 
 void paint_document(CellGrid& grid, SessionSnapshot const& snapshot,
@@ -330,8 +337,13 @@ void paint_document(CellGrid& grid, SessionSnapshot const& snapshot,
         // A selection spanning into the next line highlights this line's
         // end-of-line: the newline byte at the line's end offset lies inside the
         // selection range, so fill the remaining columns with the selection role.
+        // Only the FINAL visual row of a wrapped logical line owns the newline,
+        // so gate on this row having painted the line's last span; interior wrap
+        // rows must not fill their trailing padding.
+        bool const is_final_visual_row =
+            last_span >= line.cells.spans.size();
         auto const line_end = line.document_offset + line.text.size();
-        if (offset_in_selection(selection, line_end)) {
+        if (is_final_visual_row && offset_in_selection(selection, line_end)) {
             auto const foreground = semantic_index(theme, SemanticRole::foreground);
             for (int fill = column; fill < content.right(); ++fill) {
                 put(grid, fill, content.y + static_cast<int>(row_index), " ",
@@ -464,10 +476,16 @@ CellGrid render(SessionSnapshot const& snapshot) {
                     grid.caret = *cell;
                 }
                 auto const caret_bg = semantic_index(theme, SemanticRole::caret);
-                auto const caret_fg = semantic_index(theme, SemanticRole::background);
+                // Draw the secondary caret glyph in the selection role: the theme
+                // co-visibility constraint already guarantees caret != selection,
+                // so the block cursor is legible in every valid theme without a
+                // new constraint (the primary caret uses the hardware cursor).
+                auto const caret_fg = semantic_index(theme, SemanticRole::selection);
                 for (auto const& item : selections.items()) {
                     if (&item == &primary) continue;  // Primary uses grid.caret.
-                    if (!item.is_caret()) continue;    // Ranged carets: no cursor cell.
+                    // Every non-primary selection (ranged or a bare caret) has an
+                    // active caret position that renders as a caret cell; only the
+                    // primary uses the single hardware cursor.
                     auto cell = screen_cell_for(viewport, content,
                                                 item.active.line.value(),
                                                 item.active.cell.value());

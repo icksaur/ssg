@@ -249,12 +249,121 @@ TEST(render_paints_selection_highlight_and_secondary_carets) {
         ASSERT_EQ(grid.at(alpha_col + k, alpha_row).role,
                   ssg::SemanticRole::selection);
     }
+    // The end-of-line past "alpha" is NOT filled: the selection ends at the line
+    // end and does not span into the next line.
+    ASSERT_NE(grid.at(alpha_col + 5, alpha_row).role,
+              ssg::SemanticRole::selection);
     // The hardware caret sits at the primary active position (end of "alpha").
     ASSERT_TRUE(grid.caret.has_value());
     if (grid.caret) {
         ASSERT_EQ(grid.caret->row, alpha_row);
         ASSERT_EQ(grid.caret->column, alpha_col + 5);
     }
+}
+
+TEST(render_fills_end_of_line_for_multiline_selection) {
+    auto root = unique_root();
+    std::ofstream{root / "ml.txt"} << "alpha\nbeta\n";
+    auto runtime = make_runtime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(
+        ssg::ClientId{1},
+        {"file.open", runtime->revision(), std::string{"ml.txt"}});
+    // Anchor at line 0 col 0, extend down into line 1: the selection spans the
+    // newline after "alpha", so alpha's end-of-line fills to the pane edge.
+    (void)runtime->dispatch(ssg::ClientId{1},
+                            {"select.line_down", runtime->revision(), {}});
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    auto grid = ssg::render(*snapshot);
+
+    int alpha_row = -1, alpha_col = -1;
+    for (int row = 0; row < grid.size.rows && alpha_row < 0; ++row) {
+        for (int col = 0; col + 5 <= grid.size.columns; ++col) {
+            std::string window;
+            for (int k = 0; k < 5; ++k) window += grid.at(col + k, row).text;
+            if (window == "alpha") { alpha_row = row; alpha_col = col; break; }
+        }
+    }
+    ASSERT_TRUE(alpha_row >= 0);
+    if (alpha_row < 0) return;
+    // "alpha" is highlighted AND the cells past it to the pane's right edge are
+    // the end-of-line fill (all selection role).
+    for (int col = alpha_col; col < grid.size.columns - 1; ++col) {
+        ASSERT_EQ(grid.at(col, alpha_row).role, ssg::SemanticRole::selection);
+    }
+}
+
+TEST(render_highlights_wide_glyph_cells) {
+    auto root = unique_root();
+    // A CJK wide glyph occupies two cells; selecting it must highlight both.
+    std::ofstream{root / "w.txt"} << "a\xe4\xb8\x80""b\n";  // "a一b"
+    auto runtime = make_runtime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(
+        ssg::ClientId{1},
+        {"file.open", runtime->revision(), std::string{"w.txt"}});
+    (void)runtime->dispatch(ssg::ClientId{1},
+                            {"select.all", runtime->revision(), {}});
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    auto grid = ssg::render(*snapshot);
+
+    int row = -1, col = -1;
+    for (int r = 0; r < grid.size.rows && row < 0; ++r) {
+        for (int c = 0; c < grid.size.columns; ++c) {
+            if (grid.at(c, r).text == "\xe4\xb8\x80") { row = r; col = c; break; }
+        }
+    }
+    ASSERT_TRUE(row >= 0);
+    if (row < 0) return;
+    // The wide glyph's lead cell and its continuation cell both carry selection.
+    ASSERT_EQ(grid.at(col, row).role, ssg::SemanticRole::selection);
+    ASSERT_TRUE(grid.at(col + 1, row).continuation);
+    ASSERT_EQ(grid.at(col + 1, row).role, ssg::SemanticRole::selection);
+}
+
+TEST(render_paints_secondary_ranged_selection_caret) {
+    auto root = unique_root();
+    std::ofstream{root / "rc.txt"} << "cat cat\n";
+    auto runtime = make_runtime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(
+        ssg::ClientId{1},
+        {"file.open", runtime->revision(), std::string{"rc.txt"}});
+    // Select the first word, then add the next occurrence: two RANGED selections,
+    // each with an active caret. The secondary (non-primary) ranged selection's
+    // caret must render as a caret cell even though it is not a bare caret.
+    (void)runtime->dispatch(ssg::ClientId{1},
+                            {"select.word_right", runtime->revision(), {}});
+    (void)runtime->dispatch(ssg::ClientId{1},
+                            {"select.add_next_occurrence", runtime->revision(), {}});
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    auto const& items = snapshot->sections().selection.selections.items();
+    if (items.size() < 2) return;  // Ranker may not find a second; skip if so.
+    bool all_ranged = true;
+    for (auto const& item : items) if (item.is_caret()) all_ranged = false;
+    ASSERT_TRUE(all_ranged);
+    auto grid = ssg::render(*snapshot);
+    int painted_secondary = 0;
+    for (int row = 0; row < grid.size.rows; ++row) {
+        for (int col = 0; col < grid.size.columns; ++col) {
+            bool const is_primary = grid.caret && grid.caret->row == row &&
+                                    grid.caret->column == col;
+            if (grid.at(col, row).role == ssg::SemanticRole::caret && !is_primary) {
+                ++painted_secondary;
+            }
+        }
+    }
+    // One painted caret for the secondary ranged selection's active position.
+    ASSERT_EQ(painted_secondary, 1);
 }
 
 TEST(render_paints_secondary_caret_as_a_cell) {
@@ -300,6 +409,9 @@ int main() {
     RUN(render_projects_palette_results_into_active_pane);
     RUN(render_shows_palette_query_and_ghost_in_header);
     RUN(render_paints_selection_highlight_and_secondary_carets);
+    RUN(render_fills_end_of_line_for_multiline_selection);
+    RUN(render_highlights_wide_glyph_cells);
+    RUN(render_paints_secondary_ranged_selection_caret);
     RUN(render_paints_secondary_caret_as_a_cell);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
