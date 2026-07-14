@@ -175,9 +175,13 @@ oracle, the routing decision is a **pure function** in the app, separate from th
 I/O loop:
 
 ```
+struct PointerCommand {             // one command to dispatch
+    std::string command_id;
+    std::any payload;               // the typed argument, or empty for none
+};
 struct PointerDispatch {            // what the loop should dispatch, or nothing
-    std::optional<std::string> command_id;
-    std::any payload;               // the typed argument, when the command needs one
+    std::vector<PointerCommand> commands;  // 0, 1, or (for a tree click) 2,
+                                           // dispatched in order
     bool begins_drag = false;       // press that starts an editor drag
     bool ends_drag = false;         // release that ends a drag
 };
@@ -190,12 +194,16 @@ PointerDispatch route_pointer(RegionHit const& hit, PointerButton button,
 
 The exact signature is an implementation detail, but the contract is: **a pure
 function that, given a classified hit + the button/kind + the current drag state
-(and the caller-resolved document position / candidate / tab id), returns which
-command to dispatch (or none) and how the drag state changes.** The I/O loop does
-only: decode → refresh snapshot → `hit_test` → resolve the document
-position/candidate/tab id → `route_pointer` → dispatch. Every M8 routing oracle
-tests `route_pointer` directly with synthesized inputs; `test_tui_fixture`/PTY
-are used only for end-to-end confirmation, not as the primary correctness oracle.
+(and the caller-resolved document position / candidate / tab id), returns an
+ordered list of commands to dispatch (empty for none) and how the drag state
+changes.** The list is a sequence because a single pointer event can drive more
+than one command — a tree-row click returns `[tree.select(node_id),
+tree.activate]`, dispatched in order; every other event returns zero or one
+command. The I/O loop does only: decode → refresh snapshot → `hit_test` → resolve
+the document position/candidate/tab id → `route_pointer` → dispatch each command
+in order. Every M8 routing oracle tests `route_pointer` directly with synthesized
+inputs (asserting the exact command sequence); `test_tui_fixture`/PTY are used
+only for end-to-end confirmation, not as the primary correctness oracle.
 
 ### Deferred (stated, not implemented)
 
@@ -219,7 +227,7 @@ are used only for end-to-end confirmation, not as the primary correctness oracle
 | M8-S | Drag selects: press records a client anchor + dragging mode (`route_pointer` sets `begins_drag`); each drag → `select.set_range{Selection{anchor, active}}`; release clears dragging (`ends_drag`) | `apps/ssg_main.cpp` (routing), `tests/test_ssg_app.cpp` | `route_pointer` unit tests: press returns set_position + begins_drag; a subsequent drag with an anchor returns `select.set_range` with `Selection{anchor, active}`; release returns ends_drag + no command; drag with no anchor / non-editor hit returns no command; end-to-end press-then-drag spans the two cells |
 | M8-B | Editor scrollbar click/drag scrolls: route press/drag on `editor_scrollbar` → `view.scroll_to_fraction{numerator, denominator}` from the hit; panel/palette gutter → no command | `apps/ssg_main.cpp` (routing), `tests/test_ssg_app.cpp` | `route_pointer` unit tests: an `editor_scrollbar` hit at the bottom (num==denom) returns `view.scroll_to_fraction` yielding `maximum_first_row`, at the top yields `0`; a `panel_scrollbar`/`palette_scrollbar` hit returns no command; end-to-end drag on the editor gutter scrolls |
 | M8-T | Tabs + palette clicks: layout publishes a typed `TabHit{rect,index}` list on `ShellViewState` (codec + `shell_equal` + round-trip); `hit_test` gains `HitRegion::tab` + `tab_index`; route tab press → `tab.activate(TabId from tabs[index])`, palette-row press → `palette.execute(candidate id for item_index)` | `include/ssg/ui_layout.h`, `src/ui_layout.cpp`, `include/ssg/hit_test.h`, `src/hit_test.cpp`, `src/protocol.cpp`, `src/session_snapshot.cpp`, `tests/test_hit_test.cpp`, `tests/test_protocol.cpp`, `tests/test_editor_session_assembly.cpp`, `apps/ssg_main.cpp`, `tests/test_ssg_app.cpp` | `hit_test` over a tab cell returns `tab` + the right index; padding on the tab bar → `none`; `TabHit` round-trips + a tab-hit-only shell change is not suppressed by `shell_equal`; `route_pointer` maps a tab hit → `tab.activate(TabId)` and a palette hit → `palette.execute(id)`; end-to-end a tab click activates it |
-| M8-R | Tree node click: add `tree.select` with a `TreeSelectArguments{TreeNodeId}` payload (`keymap:false`/`palette:false`/`lua:true`) + catalog cascade + protocol round-trip; route panel press → `tree.select(node_id)` then `tree.activate` | `include/ssg/tree.h`, `src/tree.cpp`, `src/runtime/navigation.cpp`, `data/required-commands.json`, `tests/test_required_commands.cpp`, `tests/runtime/command_cases.h`, `src/protocol.cpp`, `tests/test_protocol.cpp`, `apps/ssg_main.cpp`, `tests/runtime/test_runtime_navigation.cpp`, `tests/test_ssg_app.cpp` | runtime: `tree.select(node_id)` makes that node the selection (and rejects an unknown id); `route_pointer` maps a panel hit → a `tree.select(node_id)` then `tree.activate` pair; end-to-end a click on a tree row selects that node and then activates it (opens a file / toggles a directory) as the keyboard select+activate does |
+| M8-R | Tree node click: add `tree.select` with a `TreeSelectArguments{TreeNodeId}` payload (`keymap:false`/`palette:false`/`lua:true`) + catalog cascade + protocol round-trip; route panel press → `tree.select(node_id)` then `tree.activate` | `include/ssg/tree.h`, `src/tree.cpp`, `src/runtime/navigation.cpp`, `data/required-commands.json`, `tests/test_required_commands.cpp`, `tests/runtime/command_cases.h`, `src/protocol.cpp`, `tests/test_protocol.cpp`, `apps/ssg_main.cpp`, `tests/runtime/test_runtime_navigation.cpp`, `tests/test_ssg_app.cpp` | runtime: `tree.select(node_id)` makes that node the selection (and rejects an unknown id); `route_pointer` maps a panel hit → the ordered pair `[tree.select(node_id), tree.activate]`; end-to-end a click on a tree row selects that node and then activates it (opens a file / toggles a directory) as the keyboard select+activate does |
 
 ## Invariants and fit
 
