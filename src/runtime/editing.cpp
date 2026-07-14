@@ -185,6 +185,7 @@ CommandHandlerResult bind_find_replace(EditorRuntime::Impl& runtime,
     switch (command) {
         case FindReplaceCommand::find_open:
             runtime.find_replace.open(snapshot, FindRequest{query, {}, range});
+            runtime.find_document_id = runtime.active_document_id();
             // Open the find prompt so focus moves to it and the reserved rows
             // display the controller query (projected at snapshot time).
             (void)runtime.prompt.open(PromptRequest{
@@ -193,9 +194,11 @@ CommandHandlerResult bind_find_replace(EditorRuntime::Impl& runtime,
             return success();
         case FindReplaceCommand::replace_open:
             runtime.find_replace.open_replace(snapshot, FindRequest{query, {}, range});
+            runtime.find_document_id = runtime.active_document_id();
             return success();
         case FindReplaceCommand::find_close:
             runtime.find_replace.close();
+            runtime.find_document_id.reset();
             // Only dismiss the prompt when it is the find prompt: a global
             // find.close must not cancel an unrelated palette/settings prompt.
             if (auto const& request = runtime.prompt.request();
@@ -213,19 +216,24 @@ CommandHandlerResult bind_find_replace(EditorRuntime::Impl& runtime,
             auto const* arguments = payload_as<FindQueryArguments>(payload);
             if (arguments == nullptr) return failure("find.update_query requires a query payload");
             runtime.find_replace.update_query(snapshot, arguments->query, range);
+            runtime.find_document_id = runtime.active_document_id();
             return success();
         }
         case FindReplaceCommand::find_toggle_case:
             runtime.find_replace.toggle_case(snapshot);
+            runtime.find_document_id = runtime.active_document_id();
             return success();
         case FindReplaceCommand::find_toggle_whole_word:
             runtime.find_replace.toggle_whole_word(snapshot);
+            runtime.find_document_id = runtime.active_document_id();
             return success();
         case FindReplaceCommand::find_toggle_regex:
             runtime.find_replace.toggle_regex(snapshot);
+            runtime.find_document_id = runtime.active_document_id();
             return success();
         case FindReplaceCommand::find_toggle_selection:
             runtime.find_replace.toggle_selection(snapshot, range);
+            runtime.find_document_id = runtime.active_document_id();
             return success();
         case FindReplaceCommand::replace_current:
         case FindReplaceCommand::replace_all: {

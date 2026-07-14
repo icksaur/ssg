@@ -633,6 +633,27 @@ void EditorRuntime::Impl::reconcile_prompt_focus() {
     }
 }
 
+void EditorRuntime::Impl::reconcile_find_document() {
+    if (!find_replace.view_state().open) {
+        find_document_id.reset();
+        return;
+    }
+    auto const active = active_document_id();
+    auto const* document = active_document();
+    bool const stale =
+        !active || active != find_document_id || document == nullptr ||
+        document->snapshot().revision != find_replace.view_state().source_revision;
+    if (!stale) return;
+    // The document the find evaluated against is gone, changed, or was edited:
+    // close the controller and dismiss its prompt so no stale match is navigable.
+    find_replace.close();
+    if (auto const& request = prompt.request();
+        request && request->kind == PromptKind::find) {
+        (void)prompt.cancel();
+    }
+    find_document_id.reset();
+}
+
 void EditorRuntime::Impl::refresh_syntax() {
     auto const* document = active_document();
     auto text = document ? document->snapshot().text : std::string{};
@@ -699,6 +720,7 @@ bool EditorRuntime::detach(ClientId client_id) {
 
 CommandResult EditorRuntime::dispatch(ClientId client_id, ClientCommand const& command) {
     auto result = impl_->session->dispatch(client_id, command);
+    impl_->reconcile_find_document();
     impl_->reconcile_prompt_focus();
     // palette.execute validates the selected candidate then defers execution to
     // here so the target runs through the registry (with its own capability and
@@ -708,6 +730,7 @@ CommandResult EditorRuntime::dispatch(ClientId client_id, ClientCommand const& c
         impl_->pending_palette_target.reset();
         auto target_result = impl_->session->dispatch(
             client_id, {target, impl_->session->revision(), {}});
+        impl_->reconcile_find_document();
         impl_->reconcile_prompt_focus();
         return target_result;
     }

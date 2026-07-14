@@ -353,6 +353,38 @@ TEST(find_close_does_not_cancel_an_unrelated_prompt) {
     }
 }
 
+TEST(find_closes_when_switching_to_a_different_document) {
+    auto root = unique_root();
+    auto workspace = root / "workspace";
+    std::filesystem::create_directories(workspace);
+    std::ofstream{workspace / "a.txt"} << "cat cat cat";
+    std::ofstream{workspace / "b.txt"} << "dog dog dog";
+    auto created = ssg::EditorRuntime::create({
+        workspace, root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"a.txt"}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.open", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.update_query", runtime.revision(), ssg::FindQueryArguments{"cat"}}).accepted());
+    {
+        auto snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        ASSERT_TRUE(snap.has_value());
+        if (snap) ASSERT_EQ(snap->sections().find_replace.matches.size(), std::size_t{3});
+    }
+
+    // Switching to another freshly opened document (which shares revision 1 with
+    // a.txt) must dismiss find: identity, not revision equality, binds the state.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"b.txt"}}).accepted());
+    auto after = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(after.has_value());
+    if (after) {
+        ASSERT_FALSE(after->sections().find_replace.open);
+        ASSERT_FALSE(after->sections().prompt_status.prompt.has_value());
+    }
+}
+
 } // namespace
 
 int main() {

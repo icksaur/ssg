@@ -67,6 +67,11 @@ struct EditorRuntime::Impl final : CommandServices,
     ClipboardRegister clipboard;
     SettingsModel settings;
     FindReplaceController find_replace;
+    // The document the find/replace controller last evaluated against.  Find
+    // matches are byte offsets into one specific document; when the active
+    // document identity or revision drifts from this, the controller is stale and
+    // must be dismissed (see reconcile_find_document).
+    std::optional<FileDocumentId> find_document_id;
     PromptSurface prompt;
     StatusQueue status;
     ShellState shell;
@@ -149,6 +154,10 @@ struct EditorRuntime::Impl final : CommandServices,
                                                    PaletteReport const& palette_report = {}) const;
     [[nodiscard]] PromptStatusViewState prompt_status_view(ViewportDimensions dimensions) const;
     void project_find_replace_prompt(PromptViewState& prompt_view) const;
+    // Dismiss the find/replace controller (and its prompt) when the active
+    // document identity or revision no longer matches what it evaluated against,
+    // so stale matches are never navigable or projected.
+    void reconcile_find_document();
     [[nodiscard]] ShellViewState shell_view(ViewportDimensions dimensions,
                                             KeySequence const& leader_pending = {},
                                             PaletteReport const& palette_report = {}) const;

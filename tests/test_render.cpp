@@ -467,15 +467,14 @@ TEST(render_hides_find_matches_after_document_revision_changes) {
         {"find.update_query", runtime->revision(), ssg::FindQueryArguments{"cat"}});
 
     // Editing the document advances its revision without re-evaluating find, so
-    // the matches become stale and must not be painted onto the new revision.
+    // the controller is stale: reconcile closes it and no matches are painted.
     (void)runtime->dispatch(
         ssg::ClientId{1},
         {"text.insert", runtime->revision(), ssg::TextInputArguments{"z"}});
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_NE(snapshot->sections().find_replace.source_revision,
-              snapshot->sections().document.revision);
+    ASSERT_FALSE(snapshot->sections().find_replace.open);
     auto grid = ssg::render(*snapshot);
     bool any_match = false;
     for (int row = 0; row < grid.size.rows; ++row) {
