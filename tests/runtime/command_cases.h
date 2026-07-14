@@ -91,6 +91,7 @@ inline constexpr auto runtime_command_cases = std::to_array<RuntimeCommandCase>(
     RuntimeCommandCase{"find.close", "find-replace"},
     RuntimeCommandCase{"find.next", "find-replace"},
     RuntimeCommandCase{"find.previous", "find-replace"},
+    RuntimeCommandCase{"find.update_query", "find-replace"},
     RuntimeCommandCase{"find.toggle_case", "find-replace"},
     RuntimeCommandCase{"find.toggle_whole_word", "find-replace"},
     RuntimeCommandCase{"find.toggle_regex", "find-replace"},
@@ -177,6 +178,6 @@ inline constexpr auto runtime_command_cases = std::to_array<RuntimeCommandCase>(
     RuntimeCommandCase{"diff.open_file", "diff-model"},
 });
 
-static_assert(runtime_command_cases.size() == 164);
+static_assert(runtime_command_cases.size() == 165);
 
 } // namespace ssg::test

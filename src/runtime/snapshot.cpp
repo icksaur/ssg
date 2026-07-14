@@ -32,9 +32,34 @@ PromptStatusViewState EditorRuntime::Impl::prompt_status_view(ViewportDimensions
     Rect reservation{0, static_cast<int>(dimensions.rows > rows ? dimensions.rows - rows : 0),
                      static_cast<int>(dimensions.columns), static_cast<int>(rows)};
     auto prompt_layout = compute_prompt_layout(prompt, reservation);
-    if (prompt_layout.accepted()) view.prompt = prompt_layout.view;
+    if (prompt_layout.accepted()) {
+        view.prompt = prompt_layout.view;
+        project_find_replace_prompt(*view.prompt);
+    }
     view.status = status.view_state();
     return view;
+}
+
+void EditorRuntime::Impl::project_find_replace_prompt(PromptViewState& prompt_view) const {
+    if (prompt_view.kind != PromptKind::find && prompt_view.kind != PromptKind::replace) {
+        return;
+    }
+    auto const& find_state = find_replace.view_state();
+    for (auto& control : prompt_view.controls) {
+        switch (control.kind) {
+            case PromptControlKind::input:
+                if (control.id == "find.query") control.value = find_state.query;
+                break;
+            case PromptControlKind::count: {
+                auto position = find_state.active_match ? *find_state.active_match + 1 : 0;
+                control.value = std::to_string(position) + "/" +
+                                std::to_string(find_state.matches.size());
+                break;
+            }
+            case PromptControlKind::toggle:
+                break;
+        }
+    }
 }
 
 ShellViewState EditorRuntime::Impl::shell_view(ViewportDimensions dimensions,

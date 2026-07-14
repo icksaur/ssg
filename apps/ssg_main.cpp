@@ -12,6 +12,7 @@
 #include "ssg_terminal.h"
 
 #include <ssg/editor_runtime.h>
+#include <ssg/find_replace.h>
 #include <ssg/input.h>
 #include <ssg/palette.h>
 #include <ssg/session_snapshot.h>
@@ -158,6 +159,11 @@ int main(int argc, char** argv) {
     bool palette_open = false;
     std::string palette_query;
     std::size_t palette_selected = 0;
+    // Find prompt: the client holds no authoritative query.  It reads the
+    // published controller query (adopted in refresh), edits it, and reports the
+    // full next string via find.update_query.  find_open mirrors the controller.
+    bool find_open = false;
+    std::string find_query;
     ssg::KeymapViewState keymap;
     std::vector<ssg::PaletteCandidate> candidates;
 
@@ -179,6 +185,11 @@ int main(int argc, char** argv) {
     // candidate / rejected execute) leaves the prompt open rather than
     // desynchronizing the client.
     auto dispatch_resolved = [&](std::string const& id) {
+        if (find_open && focus == ssg::FocusTarget::prompt) {
+            if (id == "prompt.submit" || id == "palette.next") { dispatch("find.next"); return; }
+            if (id == "palette.previous") { dispatch("find.previous"); return; }
+            if (id == "prompt.cancel") { dispatch("find.close"); return; }
+        }
         if (palette_open && focus == ssg::FocusTarget::prompt) {
             if (id == "prompt.submit") { execute_selected_candidate(); return; }
             if (id == "prompt.cancel") { dispatch("palette.close"); return; }
@@ -199,6 +210,7 @@ int main(int argc, char** argv) {
             break;
         case ssg::TextRouting::prompt_query:
             if (palette_open) { palette_query += text; palette_selected = 0; }
+            else if (find_open) { dispatch("find.update_query", ssg::FindQueryArguments{find_query + text}); }
             break;
         case ssg::TextRouting::ignore:
             break;
@@ -235,6 +247,9 @@ int main(int argc, char** argv) {
             keymap = snapshot->sections().keymap;
             candidates = snapshot->sections().palette.candidates;
             if (focus != ssg::FocusTarget::prompt) palette_open = false;
+            auto const& find_view = snapshot->sections().find_replace;
+            find_open = find_view.open && focus == ssg::FocusTarget::prompt;
+            find_query = find_view.query;
         }
         return snapshot;
     };
@@ -325,6 +340,11 @@ int main(int argc, char** argv) {
                            stroke.code == "Backspace") {
                     pop_code_point(palette_query);
                     palette_selected = 0;
+                } else if (find_open && focus == ssg::FocusTarget::prompt &&
+                           stroke.code == "Backspace") {
+                    auto next = find_query;
+                    pop_code_point(next);
+                    dispatch("find.update_query", ssg::FindQueryArguments{next});
                 } else if (!decoded.text.empty()) {
                     route_text(decoded.text);
                 }

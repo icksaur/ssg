@@ -1,6 +1,7 @@
 #include <ssg/render.h>
 
 #include <ssg/editor_runtime.h>
+#include <ssg/find_replace.h>
 #include <ssg/session_snapshot.h>
 
 #include "test_helpers.h"
@@ -402,6 +403,54 @@ TEST(render_paints_secondary_caret_as_a_cell) {
     ASSERT_EQ(painted_secondary, 1);
 }
 
+TEST(render_paints_find_matches_and_active_match) {
+    auto root = unique_root();
+    std::ofstream{root / "find.txt"} << "cat cat cat\n";
+    auto runtime = make_runtime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(
+        ssg::ClientId{1},
+        {"file.open", runtime->revision(), std::string{"find.txt"}});
+    (void)runtime->dispatch(ssg::ClientId{1},
+                            {"find.open", runtime->revision(), {}});
+    (void)runtime->dispatch(
+        ssg::ClientId{1},
+        {"find.update_query", runtime->revision(), ssg::FindQueryArguments{"cat"}});
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    ASSERT_EQ(snapshot->sections().find_replace.matches.size(), std::size_t{3});
+    auto grid = ssg::render(*snapshot);
+
+    int row = -1;
+    for (int r = 0; r < grid.size.rows; ++r) {
+        if (row_text(grid, r).find("cat cat cat") != std::string::npos) row = r;
+    }
+    ASSERT_TRUE(row >= 0);
+    if (row < 0) return;
+    int col = -1;
+    for (int c = 0; c + 3 <= grid.size.columns; ++c) {
+        std::string window;
+        for (int k = 0; k < 3; ++k) window += grid.at(c + k, row).text;
+        if (window == "cat") { col = c; break; }
+    }
+    ASSERT_TRUE(col >= 0);
+    if (col < 0) return;
+
+    // The active match (the first "cat") carries the selection role; the two
+    // other matches carry search_match; the separating spaces carry neither.
+    for (int k = 0; k < 3; ++k) {
+        ASSERT_EQ(grid.at(col + k, row).role, ssg::SemanticRole::selection);
+    }
+    ASSERT_NE(grid.at(col + 3, row).role, ssg::SemanticRole::selection);
+    ASSERT_NE(grid.at(col + 3, row).role, ssg::SemanticRole::search_match);
+    for (int k = 0; k < 3; ++k) {
+        ASSERT_EQ(grid.at(col + 4 + k, row).role, ssg::SemanticRole::search_match);
+        ASSERT_EQ(grid.at(col + 8 + k, row).role, ssg::SemanticRole::search_match);
+    }
+}
+
 int main() {
     RUN(render_paints_content_not_accessibility_labels);
     RUN(render_colors_are_palette_indices);
@@ -413,6 +462,7 @@ int main() {
     RUN(render_highlights_wide_glyph_cells);
     RUN(render_paints_secondary_ranged_selection_caret);
     RUN(render_paints_secondary_caret_as_a_cell);
+    RUN(render_paints_find_matches_and_active_match);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;

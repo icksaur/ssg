@@ -610,6 +610,8 @@ FindReplaceCommandSet::FindReplaceCommandSet()
                     {"find.close", FindReplaceCommand::find_close},
                     {"find.next", FindReplaceCommand::find_next},
                     {"find.previous", FindReplaceCommand::find_previous},
+                    {"find.update_query",
+                     FindReplaceCommand::find_update_query},
                     {"find.toggle_case",
                      FindReplaceCommand::find_toggle_case},
                     {"find.toggle_whole_word",
@@ -627,7 +629,7 @@ FindReplaceCommandSet::FindReplaceCommandSet()
                     {"replace.workspace_apply",
                      FindReplaceCommand::replace_workspace_apply}}} {}
 
-const std::array<FindReplaceCommandDescriptor, 13>&
+const std::array<FindReplaceCommandDescriptor, 14>&
 FindReplaceCommandSet::descriptors() const noexcept {
     return descriptors_;
 }

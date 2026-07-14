@@ -240,6 +240,63 @@ TEST(workspace_search_and_replace_exclude_runtime_state_roots) {
     ASSERT_EQ(read_text(workspace / ".ssg" / "recovery" / "journal.txt"), std::string{"secret"});
 }
 
+TEST(find_update_query_projects_matches_and_prompt_and_next_cycles) {
+    auto root = unique_root();
+    auto workspace = root / "workspace";
+    std::filesystem::create_directories(workspace);
+    std::ofstream{workspace / "hits.txt"} << "cat cat cat";
+
+    auto created = ssg::EditorRuntime::create({
+        workspace, root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"hits.txt"}}).accepted());
+
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.open", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.update_query", runtime.revision(), ssg::FindQueryArguments{"cat"}}).accepted());
+
+    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    auto const& find = snapshot->sections().find_replace;
+    ASSERT_TRUE(find.open);
+    ASSERT_EQ(find.query, std::string{"cat"});
+    ASSERT_EQ(find.matches.size(), std::size_t{3});
+    ASSERT_EQ(find.matches[0].begin.value(), std::uint64_t{0});
+    ASSERT_EQ(find.matches[0].end.value(), std::uint64_t{3});
+    ASSERT_EQ(find.matches[1].begin.value(), std::uint64_t{4});
+    ASSERT_EQ(find.matches[1].end.value(), std::uint64_t{7});
+    ASSERT_EQ(find.matches[2].begin.value(), std::uint64_t{8});
+    ASSERT_EQ(find.matches[2].end.value(), std::uint64_t{11});
+
+    // The find prompt projects the controller query and the 1-based match count.
+    auto const& prompt = snapshot->sections().prompt_status.prompt;
+    ASSERT_TRUE(prompt.has_value());
+    if (prompt) {
+        std::string query_value;
+        std::string count_value;
+        for (auto const& control : prompt->controls) {
+            if (control.kind == ssg::PromptControlKind::input) query_value = control.value;
+            if (control.kind == ssg::PromptControlKind::count) count_value = control.value;
+        }
+        ASSERT_EQ(query_value, std::string{"cat"});
+        ASSERT_EQ(count_value, std::string{"1/3"});
+    }
+
+    const auto active_after = [&](int advances) -> std::size_t {
+        for (int i = 0; i < advances; ++i) {
+            (void)runtime.dispatch(ssg::ClientId{1}, {"find.next", runtime.revision(), {}});
+        }
+        auto snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+        return snap->sections().find_replace.active_match.value_or(999);
+    };
+    ASSERT_EQ(active_after(1), std::size_t{1});
+    ASSERT_EQ(active_after(1), std::size_t{2});
+    ASSERT_EQ(active_after(1), std::size_t{0});
+}
+
 } // namespace
 
 int main() {

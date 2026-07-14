@@ -39,7 +39,7 @@ Normative commands owned by this feature:
 
 - `palette.open`, `palette.close`, `palette.next`, `palette.previous`, `palette.execute`
 - `goto.file`, `goto.line`, `goto.symbol`, `goto.definition`, `goto.reference`, `goto.matching_bracket`, `goto.back`, `goto.forward`
-- `find.open`, `find.close`, `find.next`, `find.previous`, `find.toggle_case`, `find.toggle_whole_word`, `find.toggle_regex`, `find.toggle_selection`
+- `find.open`, `find.close`, `find.next`, `find.previous`, `find.update_query`, `find.toggle_case`, `find.toggle_whole_word`, `find.toggle_regex`, `find.toggle_selection`
 - `replace.open`, `replace.current`, `replace.all`, `replace.workspace_preview`, `replace.workspace_apply`
 - `search.workspace`, `search.results_next`, `search.results_previous`
 - `completion.open`, `completion.next`, `completion.previous`, `completion.accept`, `completion.dismiss`, `hover.show`, `hover.dismiss`

@@ -252,6 +252,24 @@ bool offset_in_selection(SelectionViewState const& selection,
     return false;
 }
 
+// The find-match role for a byte offset, honouring precedence: the active match
+// wins over any other match.  Returns nullopt when the offset is outside every
+// match or find is closed.  The active match reuses the selection role so the
+// current hit reads like a selection; other matches use search_match.
+std::optional<SemanticRole> find_match_role(FindReplaceViewState const& find,
+                                            std::uint64_t offset) {
+    if (!find.open) return std::nullopt;
+    for (std::size_t index = 0; index < find.matches.size(); ++index) {
+        auto const& match = find.matches[index];
+        auto const lo = match.begin.value();
+        auto const hi = match.end.value();
+        if (offset < lo || offset >= hi) continue;
+        bool const active = find.active_match && *find.active_match == index;
+        return active ? SemanticRole::selection : SemanticRole::search_match;
+    }
+    return std::nullopt;
+}
+
 // The screen cell for a document position (line, cell) within the content rect,
 // or nullopt if it is not on a visible row.  Used to place the primary hardware
 // cursor and to paint secondary caret cells.
@@ -289,7 +307,9 @@ void paint_document(CellGrid& grid, SessionSnapshot const& snapshot,
     auto lines = logical_lines(snapshot.sections().document.text);
     auto const& viewport = snapshot.client().viewport;
     auto const& selection = snapshot.sections().selection;
+    auto const& find_state = snapshot.sections().find_replace;
     auto const selection_bg = semantic_index(theme, SemanticRole::selection);
+    auto const search_match_bg = semantic_index(theme, SemanticRole::search_match);
     for (std::size_t row_index = 0; row_index < viewport.visible_rows.size();
          ++row_index) {
         auto const& row = viewport.visible_rows[row_index];
@@ -318,9 +338,16 @@ void paint_document(CellGrid& grid, SessionSnapshot const& snapshot,
                 scope_at(snapshot.sections().syntax, ByteOffset{document_offset});
             auto const foreground = syntax_index(theme, scope);
             auto const selected = offset_in_selection(selection, document_offset);
-            auto const cell_bg = selected ? selection_bg : background;
-            auto const cell_role =
+            auto cell_bg = selected ? selection_bg : background;
+            auto cell_role =
                 selected ? SemanticRole::selection : SemanticRole::foreground;
+            // Find matches take precedence over the text selection so the query
+            // hits stay visible; the active match reuses the selection role.
+            if (auto match_role = find_match_role(find_state, document_offset)) {
+                cell_role = *match_role;
+                cell_bg = *match_role == SemanticRole::selection ? selection_bg
+                                                                 : search_match_bg;
+            }
             auto const width = std::max<std::uint32_t>(span.cell_width, 1);
             put(grid, column, content.y + static_cast<int>(row_index),
                 std::move(text), foreground, cell_bg, cell_role);
@@ -368,6 +395,54 @@ void paint_scrollbar(CellGrid& grid, PaneGeometry const& pane,
             is_thumb ? SemanticRole::scrollbar_thumb
                      : SemanticRole::scrollbar_track);
     }
+}
+
+// Paint the reserved prompt rows (find/replace/settings/command_argument).  The
+// palette is excluded: it renders its query in the header and reserves no rows.
+// Returns the screen cell for the text cursor at the end of the first input, so
+// the caller can place the hardware cursor when the prompt is focused.
+std::optional<GridPosition> paint_prompt(CellGrid& grid,
+                                         PromptViewState const& prompt,
+                                         ThemeSnapshot const& theme,
+                                         std::uint8_t background) {
+    auto const prompt_fg = semantic_index(theme, SemanticRole::prompt);
+    auto const prompt_bg = semantic_index(theme, SemanticRole::background);
+    std::optional<GridPosition> caret;
+    for (auto const& control : prompt.controls) {
+        std::string text;
+        switch (control.kind) {
+            case PromptControlKind::input:
+                text = control.accessible_label + ": " + control.value;
+                break;
+            case PromptControlKind::count:
+                text = control.value;
+                break;
+            case PromptControlKind::toggle:
+                text = std::string{control.checked ? "[x] " : "[ ] "} +
+                       control.accessible_label;
+                break;
+        }
+        // Clear the row region first so a shrinking value does not leave stale
+        // glyphs behind, then paint the control text.
+        for (int column = control.rect.x; column < control.rect.right(); ++column) {
+            put(grid, column, control.rect.y, " ", prompt_fg, prompt_bg,
+                SemanticRole::prompt);
+        }
+        paint_text(grid, control.rect.x, control.rect.y, control.rect.right(),
+                   text, prompt_fg, prompt_bg, SemanticRole::prompt);
+        if (control.kind == PromptControlKind::input && !caret) {
+            auto const label_width =
+                static_cast<int>(compute_cell_run(control.accessible_label + ": ")
+                                     .total_cells);
+            auto const value_width =
+                static_cast<int>(compute_cell_run(control.value).total_cells);
+            auto const cursor_column =
+                std::min(control.rect.x + label_width + value_width,
+                         control.rect.right() - 1);
+            caret = GridPosition{cursor_column, control.rect.y};
+        }
+    }
+    return caret;
 }
 
 }  // namespace
@@ -459,6 +534,16 @@ CellGrid render(SessionSnapshot const& snapshot) {
                            background);
             paint_scrollbar(grid, shell.panes.front(), snapshot.client().viewport,
                             theme, background);
+
+            // Paint the reserved prompt rows (find/replace/settings) and place
+            // the hardware cursor at the query when the prompt is focused.
+            auto const& prompt = snapshot.sections().prompt_status.prompt;
+            if (prompt) {
+                auto prompt_caret = paint_prompt(grid, *prompt, theme, background);
+                if (shell.focus == FocusTarget::prompt && prompt_caret) {
+                    grid.caret = *prompt_caret;
+                }
+            }
 
             // Place the primary caret at its screen cell so the client can position
             // a terminal cursor there, and paint any secondary carets as cells

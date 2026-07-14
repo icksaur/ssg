@@ -2,6 +2,7 @@
 
 #include <ssg/editor_session_assembly.h>
 #include <ssg/file_commands.h>
+#include <ssg/find_replace.h>
 #include <ssg/protocol.h>
 #include <ssg/session_snapshot.h>
 
@@ -169,6 +170,23 @@ TEST(command_request_round_trips_with_palette_execute_arguments) {
     ASSERT_EQ(*arguments,
               std::any_cast<ssg::PaletteExecuteArguments>(command.payload));
 }
+
+TEST(command_request_round_trips_with_find_query_arguments) {
+    auto const registry = ssg::build_command_argument_codec_registry();
+    ssg::ClientCommand const command{
+        "find.update_query", ssg::Revision{7},
+        ssg::FindQueryArguments{"cat"}};
+    auto const bytes = ssg::encode_command_request(command, registry);
+    auto const decoded = ssg::decode_command_request(bytes, registry);
+    ASSERT_TRUE(decoded.accepted());
+    ASSERT_EQ(decoded.command->id, command.id);
+    auto const* arguments =
+        std::any_cast<ssg::FindQueryArguments>(&decoded.command->payload);
+    ASSERT_TRUE(arguments != nullptr);
+    ASSERT_EQ(*arguments,
+              std::any_cast<ssg::FindQueryArguments>(command.payload));
+}
+
 
 TEST(command_request_round_trips_with_no_payload) {
     auto const registry = ssg::build_command_argument_codec_registry();

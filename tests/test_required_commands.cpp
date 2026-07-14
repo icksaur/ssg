@@ -114,6 +114,7 @@ constexpr auto expected_commands = std::to_array<ExpectedCommand>({
     {"find.close", "find-replace"},
     {"find.next", "find-replace"},
     {"find.previous", "find-replace"},
+    {"find.update_query", "find-replace"},
     {"find.toggle_case", "find-replace"},
     {"find.toggle_whole_word", "find-replace"},
     {"find.toggle_regex", "find-replace"},
@@ -204,7 +205,7 @@ constexpr auto expected_category_counts =
     std::to_array<std::pair<std::string_view, std::size_t>>({
         {"text", 6},       {"cursor", 13},   {"select", 20},
         {"edit", 15},      {"clipboard", 3}, {"view", 7},
-        {"palette", 5},    {"goto", 8},      {"find", 8},
+        {"palette", 5},    {"goto", 8},      {"find", 9},
         {"replace", 5},    {"search", 3},    {"completion", 5},
         {"hover", 2},      {"rename", 1},    {"pane", 9},
         {"panel", 4},
@@ -214,7 +215,7 @@ constexpr auto expected_category_counts =
         {"settings", 6},   {"follow_edits", 2}, {"diff", 3},
     });
 
-static_assert(expected_commands.size() == 164);
+static_assert(expected_commands.size() == 165);
 
 std::optional<std::string> field(const std::string& object,
                                  const std::string& name) {
@@ -421,6 +422,14 @@ TEST(capability_and_surface_exclusions_are_exact) {
             ASSERT_EQ(command.required_capabilities,
                       std::vector<std::string>{"local_file_drop"});
             ASSERT_FALSE(command.lua);
+            ASSERT_FALSE(command.keymap);
+            ASSERT_FALSE(command.palette);
+        } else if (command.id == "find.update_query") {
+            // A client-fulfilment command: the client edits the query and reports
+            // the full next string, so it carries a payload and is neither
+            // keymap- nor palette-reachable, but remains scriptable via Lua.
+            ASSERT_TRUE(command.required_capabilities.empty());
+            ASSERT_TRUE(command.lua);
             ASSERT_FALSE(command.keymap);
             ASSERT_FALSE(command.palette);
         } else {

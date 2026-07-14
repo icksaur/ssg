@@ -148,6 +148,7 @@ struct EditorRuntime::Impl final : CommandServices,
                                                    KeySequence const& leader_pending = {},
                                                    PaletteReport const& palette_report = {}) const;
     [[nodiscard]] PromptStatusViewState prompt_status_view(ViewportDimensions dimensions) const;
+    void project_find_replace_prompt(PromptViewState& prompt_view) const;
     [[nodiscard]] ShellViewState shell_view(ViewportDimensions dimensions,
                                             KeySequence const& leader_pending = {},
                                             PaletteReport const& palette_report = {}) const;

@@ -81,6 +81,7 @@
     {"id":"find.close","owner":"find-replace","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"find.next","owner":"find-replace","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"find.previous","owner":"find-replace","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
+    {"id":"find.update_query","owner":"find-replace","required_capabilities":[],"lua":true,"keymap":false,"palette":false},
     {"id":"find.toggle_case","owner":"find-replace","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"find.toggle_whole_word","owner":"find-replace","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"find.toggle_regex","owner":"find-replace","required_capabilities":[],"lua":true,"keymap":true,"palette":true},

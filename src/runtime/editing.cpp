@@ -182,12 +182,18 @@ CommandHandlerResult bind_find_replace(EditorRuntime::Impl& runtime,
     switch (command) {
         case FindReplaceCommand::find_open:
             runtime.find_replace.open(snapshot, FindRequest{query, {}, range});
+            // Open the find prompt so focus moves to it and the reserved rows
+            // display the controller query (projected at snapshot time).
+            (void)runtime.prompt.open(PromptRequest{
+                PromptKind::find, "Find", {{"find.query", "Find query", query}},
+                {}, PromptMatchCount{"find.count", "Match count", ""}});
             return success();
         case FindReplaceCommand::replace_open:
             runtime.find_replace.open_replace(snapshot, FindRequest{query, {}, range});
             return success();
         case FindReplaceCommand::find_close:
             runtime.find_replace.close();
+            (void)runtime.prompt.cancel();
             return success();
         case FindReplaceCommand::find_next:
             runtime.find_replace.next();
@@ -195,6 +201,12 @@ CommandHandlerResult bind_find_replace(EditorRuntime::Impl& runtime,
         case FindReplaceCommand::find_previous:
             runtime.find_replace.previous();
             return success();
+        case FindReplaceCommand::find_update_query: {
+            auto const* arguments = payload_as<FindQueryArguments>(payload);
+            if (arguments == nullptr) return failure("find.update_query requires a query payload");
+            runtime.find_replace.update_query(snapshot, arguments->query, range);
+            return success();
+        }
         case FindReplaceCommand::find_toggle_case:
             runtime.find_replace.toggle_case(snapshot);
             return success();

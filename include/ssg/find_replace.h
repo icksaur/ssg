@@ -74,6 +74,7 @@ enum class FindReplaceCommand : std::uint8_t {
     find_close,
     find_next,
     find_previous,
+    find_update_query,
     find_toggle_case,
     find_toggle_whole_word,
     find_toggle_regex,
@@ -85,6 +86,15 @@ enum class FindReplaceCommand : std::uint8_t {
     replace_workspace_apply,
 };
 
+// The typed argument for find.update_query / replace.update_replacement: the full
+// query (or replacement) text.  Carried as a command argument so the query lives
+// in the controller (server-authoritative), edited by the client which reports
+// the next full string (see doc/spec-m7.md F1).
+struct FindQueryArguments {
+    std::string query;
+    friend bool operator==(const FindQueryArguments&, const FindQueryArguments&) = default;
+};
+
 struct FindReplaceCommandDescriptor {
     std::string_view id;
     FindReplaceCommand command;
@@ -93,13 +103,13 @@ struct FindReplaceCommandDescriptor {
 
 class FindReplaceCommandSet {
 public:
-    [[nodiscard]] const std::array<FindReplaceCommandDescriptor, 13>&
+    [[nodiscard]] const std::array<FindReplaceCommandDescriptor, 14>&
     descriptors() const noexcept;
 
 private:
     friend FindReplaceCommandSet find_replace_command_set();
     FindReplaceCommandSet();
-    const std::array<FindReplaceCommandDescriptor, 13> descriptors_;
+    const std::array<FindReplaceCommandDescriptor, 14> descriptors_;
 };
 
 [[nodiscard]] FindReplaceCommandSet find_replace_command_set();
