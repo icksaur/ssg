@@ -234,8 +234,17 @@ Decoded decode_input(std::string_view bytes, bool input_exhausted,
             ++pos;
             if (!parse_field(cy)) return {DecodeStatus::none, {}, {}, 0};
             if (pos != end) return {DecodeStatus::none, {}, {}, 0};
-            if (cb == 64) return {DecodeStatus::scroll, {}, {}, -3};
-            if (cb == 65) return {DecodeStatus::scroll, {}, {}, 3};
+            if (cb == 64 || cb == 65) {
+                Decoded decoded;
+                decoded.status = DecodeStatus::scroll;
+                decoded.scroll = cb == 64 ? -3 : 3;
+                // Carry the pointer position so the app can route the wheel to
+                // the region under the cursor (the panel scrolls, not just the
+                // editor).
+                decoded.pointer.column = static_cast<int>(cx > 0 ? cx - 1 : 0);
+                decoded.pointer.row = static_cast<int>(cy > 0 ? cy - 1 : 0);
+                return decoded;
+            }
             if ((cb & 64) != 0) return {DecodeStatus::none, {}, {}, 0};  // other wheel/ext
             PointerEvent event;
             event.column = static_cast<int>(cx > 0 ? cx - 1 : 0);

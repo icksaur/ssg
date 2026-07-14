@@ -105,6 +105,12 @@ CommandHandlerResult tree_command(EditorRuntime::Impl& runtime, std::string_view
         runtime.reveal_tree_selection();
         return success();
     }
+    if (id == "tree.scroll") {
+        auto const* arguments = payload_as<ScrollLinesArguments>(payload);
+        if (arguments == nullptr) return failure("tree.scroll requires a scroll-lines payload");
+        runtime.scroll_tree(arguments->rows);
+        return success();
+    }
     auto const* invocation = payload_as<TreeCommandInvocation>(payload);
     if (invocation == nullptr) return failure(std::string{id} + " requires a tree invocation payload");
     if (id == "tree.toggle_expanded") {

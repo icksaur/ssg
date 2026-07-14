@@ -300,7 +300,8 @@ TreeCommandSet::TreeCommandSet()
                     {"tree.select"},
                     {"tree.select_next"},
                     {"tree.select_previous"},
-                    {"tree.activate"}}} {}
+                    {"tree.activate"},
+                    {"tree.scroll"}}} {}
 
 TreeCommandSet tree_command_set() { return TreeCommandSet{}; }
 

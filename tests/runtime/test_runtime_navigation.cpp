@@ -261,6 +261,74 @@ TEST(tree_select_sets_selection_to_a_node_and_rejects_unknown_ids) {
     std::filesystem::remove_all(root);
 }
 
+TEST(tree_scroll_moves_the_viewport_without_moving_the_selection) {
+    auto root = std::filesystem::current_path() / "runtime_nav_treescroll_wheel";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root / "workspace");
+    std::filesystem::create_directories(root / "scratch");
+    std::filesystem::create_directories(root / "recovery");
+    for (int i = 0; i < 40; ++i) {
+        char name[32];
+        std::snprintf(name, sizeof name, "file-%02d.txt", i);
+        std::ofstream{root / "workspace" / name} << "x";
+    }
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process},
+                               ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"panel.toggle", runtime.revision(), {}}).accepted());
+    // Expand the root so the 40 files become a tree taller than a short panel.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select_next", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.activate", runtime.revision(), {}}).accepted());
+    const ssg::ViewportDimensions dims{80, 12};
+
+    auto baseline = runtime.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(baseline.has_value());
+    if (!baseline) return;
+    auto const& p0 = baseline->sections().tree.providers.front();
+    ASSERT_EQ(p0.first_visible, std::uint32_t{0});
+    ASSERT_TRUE(p0.scrollbar.maximum_first_row > 0);
+    auto const selected_before = p0.selected;
+
+    // Wheel down: the viewport offset advances, but the selection does not move.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"tree.scroll", runtime.revision(),
+                                  ssg::ScrollLinesArguments{3}}).accepted());
+    auto scrolled = runtime.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(scrolled.has_value());
+    if (!scrolled) return;
+    auto const& p1 = scrolled->sections().tree.providers.front();
+    ASSERT_EQ(p1.first_visible, std::uint32_t{3});
+    ASSERT_EQ(p1.selected, selected_before);  // selection unchanged
+
+    // Wheel up past the top clamps at 0.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"tree.scroll", runtime.revision(),
+                                  ssg::ScrollLinesArguments{-99}}).accepted());
+    auto topped = runtime.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(topped.has_value());
+    if (!topped) return;
+    ASSERT_EQ(topped->sections().tree.providers.front().first_visible, std::uint32_t{0});
+
+    // Wheel down past the bottom clamps at maximum_first_row.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"tree.scroll", runtime.revision(),
+                                  ssg::ScrollLinesArguments{999}}).accepted());
+    auto bottomed = runtime.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(bottomed.has_value());
+    if (!bottomed) return;
+    auto const& p3 = bottomed->sections().tree.providers.front();
+    ASSERT_EQ(p3.first_visible, p3.scrollbar.maximum_first_row);
+
+    // A missing payload is rejected.
+    ASSERT_FALSE(runtime.dispatch(ssg::ClientId{1},
+                                  {"tree.scroll", runtime.revision(), {}}).accepted());
+    std::filesystem::remove_all(root);
+}
+
 } // namespace
 
 int main() {
@@ -270,6 +338,7 @@ int main() {
     RUN(palette_candidates_carry_labels_and_key_detail);
     RUN(tree_scrolls_to_keep_selection_visible_in_a_short_panel);
     RUN(tree_select_sets_selection_to_a_node_and_rejects_unknown_ids);
+    RUN(tree_scroll_moves_the_viewport_without_moving_the_selection);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

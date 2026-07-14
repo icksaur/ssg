@@ -119,14 +119,14 @@ class TreeCommandSet {
 public:
     TreeCommandSet(const TreeCommandSet&) = default;
     TreeCommandSet& operator=(const TreeCommandSet&) = delete;
-    const std::array<TreeCommandDescriptor, 6>& descriptors() const noexcept {
+    const std::array<TreeCommandDescriptor, 7>& descriptors() const noexcept {
         return descriptors_;
     }
 
 private:
     friend TreeCommandSet tree_command_set();
     TreeCommandSet();
-    const std::array<TreeCommandDescriptor, 6> descriptors_;
+    const std::array<TreeCommandDescriptor, 7> descriptors_;
 };
 
 TreeCommandSet tree_command_set();

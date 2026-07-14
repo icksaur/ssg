@@ -59,7 +59,8 @@ struct Decoded {
     std::string text;         // status == key: the committed UTF-8 if the stroke
                               // also commits text (a printable); empty otherwise.
     std::int64_t scroll = 0;  // status == scroll: signed line count.
-    PointerEvent pointer;     // status == pointer.
+    PointerEvent pointer;     // status == pointer; also carries the wheel's
+                              // 0-based grid position when status == scroll.
 };
 
 // Decode the first event from `bytes` into a KeyStroke / committed text / scroll.

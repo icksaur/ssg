@@ -130,7 +130,7 @@ TEST(expansion_survives_refresh_by_identity_and_disappearing_nodes_are_pruned) {
 
 TEST(command_set_is_exact_and_invocation_is_provider_data_only) {
     const auto commands = tree_command_set();
-    ASSERT_EQ(commands.descriptors().size(), std::size_t{6});
+    ASSERT_EQ(commands.descriptors().size(), std::size_t{7});
     ASSERT_EQ(commands.descriptors()[0].id, std::string_view{"tree.toggle_expanded"});
     ASSERT_EQ(commands.descriptors()[1].id,
               std::string_view{"tree.invoke_node_command"});
@@ -139,6 +139,7 @@ TEST(command_set_is_exact_and_invocation_is_provider_data_only) {
     ASSERT_EQ(commands.descriptors()[4].id,
               std::string_view{"tree.select_previous"});
     ASSERT_EQ(commands.descriptors()[5].id, std::string_view{"tree.activate"});
+    ASSERT_EQ(commands.descriptors()[6].id, std::string_view{"tree.scroll"});
 
     TreeModel model;
     model.replace_provider(symbol_tree_snapshot(

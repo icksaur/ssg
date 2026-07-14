@@ -4987,6 +4987,8 @@ CommandArgumentCodecRegistry build_command_argument_codec_registry() {
     for (auto const& descriptor : p0_command_descriptors()) {
         if (descriptor.id == "view.scroll_lines") {
             entries.emplace_back(descriptor.id, scroll_lines_codec);
+        } else if (descriptor.id == "tree.scroll") {
+            entries.emplace_back(descriptor.id, scroll_lines_codec);
         } else if (descriptor.id == "view.scroll_pages") {
             entries.emplace_back(descriptor.id, scroll_pages_codec);
         } else if (descriptor.id == "view.scroll_to_fraction") {

@@ -96,4 +96,20 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
     return dispatch;
 }
 
+std::optional<std::string_view> route_wheel(ssg::HitRegion region) {
+    switch (region) {
+        case ssg::HitRegion::panel:
+        case ssg::HitRegion::panel_scrollbar:
+            return "tree.scroll";
+        case ssg::HitRegion::palette:
+        case ssg::HitRegion::palette_scrollbar:
+            // The open palette overlay is inert to the wheel; its client-owned
+            // scroll is a follow-up. Falling through to view.scroll_lines would
+            // wrongly scroll the editor underneath the palette.
+            return std::nullopt;
+        default:
+            return "view.scroll_lines";
+    }
+}
+
 }  // namespace ssg::app

@@ -155,6 +155,7 @@ constexpr auto expected_commands = std::to_array<ExpectedCommand>({
     {"tree.select_next", "tree-providers"},
     {"tree.select_previous", "tree-providers"},
     {"tree.activate", "tree-providers"},
+    {"tree.scroll", "tree-providers"},
     {"view.toggle_distraction_free", "shell-layout"},
     {"prompt.submit", "prompt-status-surface"},
     {"prompt.cancel", "prompt-status-surface"},
@@ -211,13 +212,13 @@ constexpr auto expected_category_counts =
         {"replace", 6},    {"search", 3},    {"completion", 5},
         {"hover", 2},      {"rename", 1},    {"pane", 9},
         {"panel", 4},
-        {"tree", 6},
+        {"tree", 7},
         {"prompt", 2},     {"status", 4},    {"workspace", 1},
         {"file", 15},      {"tab", 9},       {"external", 3},
         {"settings", 6},   {"follow_edits", 2}, {"diff", 3},
     });
 
-static_assert(expected_commands.size() == 167);
+static_assert(expected_commands.size() == 168);
 
 std::optional<std::string> field(const std::string& object,
                                  const std::string& name) {
@@ -440,6 +441,15 @@ TEST(capability_and_surface_exclusions_are_exact) {
             // by id, so it carries a node-id payload and is neither keymap- nor
             // palette-reachable (the keyboard selects via next/previous), but
             // remains Lua-scriptable.
+            ASSERT_TRUE(command.required_capabilities.empty());
+            ASSERT_TRUE(command.lua);
+            ASSERT_FALSE(command.keymap);
+            ASSERT_FALSE(command.palette);
+        } else if (command.id == "tree.scroll") {
+            // A pointer-fulfilment command: the wheel scrolls the tree viewport,
+            // so it carries a scroll-lines payload and is neither keymap- nor
+            // palette-reachable (the keyboard scrolls via next/previous, which
+            // move the selection), but remains Lua-scriptable.
             ASSERT_TRUE(command.required_capabilities.empty());
             ASSERT_TRUE(command.lua);
             ASSERT_FALSE(command.keymap);

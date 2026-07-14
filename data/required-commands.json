@@ -122,6 +122,7 @@
     {"id":"tree.select_next","owner":"tree-providers","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"tree.select_previous","owner":"tree-providers","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"tree.activate","owner":"tree-providers","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
+    {"id":"tree.scroll","owner":"tree-providers","required_capabilities":[],"lua":true,"keymap":false,"palette":false},
     {"id":"view.toggle_distraction_free","owner":"shell-layout","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"prompt.submit","owner":"prompt-status-surface","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"prompt.cancel","owner":"prompt-status-surface","required_capabilities":[],"lua":true,"keymap":true,"palette":true},

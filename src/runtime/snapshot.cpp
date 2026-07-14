@@ -226,6 +226,23 @@ void EditorRuntime::Impl::reveal_tree_selection() {
     tree_first_visible = scroll.first_visible;
 }
 
+void EditorRuntime::Impl::scroll_tree(std::int64_t rows) {
+    auto view = tree.view_state();
+    if (view.providers.empty()) return;
+    auto const& provider = view.providers.front();
+    // Resolve the current scroll geometry (read-only) to bound the offset, then
+    // shift it by `rows`. keep_selection_visible is false: a wheel scroll moves
+    // the viewport, not the selection (a later reveal_tree_selection re-snaps).
+    auto scroll = compute_list_scroll_view(
+        static_cast<std::uint32_t>(provider.nodes.size()),
+        last_panel_content_rows, tree_first_visible, std::nullopt,
+        /*keep_selection_visible=*/false);
+    auto const maximum = static_cast<std::int64_t>(scroll.scrollbar.maximum_first_row);
+    auto const next = std::clamp<std::int64_t>(
+        static_cast<std::int64_t>(tree_first_visible) + rows, 0, maximum);
+    tree_first_visible = static_cast<std::uint32_t>(next);
+}
+
 PaletteViewState EditorRuntime::Impl::palette_view() const {
     PaletteViewState view;
     view.mode = SearchMode::command;

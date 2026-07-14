@@ -52,4 +52,11 @@ struct PointerTargets {
     bool dragging, std::optional<ssg::DocumentPosition> drag_anchor,
     PointerTargets const& targets);
 
+// Route a mouse-wheel event to the scroll command for the region under the
+// pointer: `tree.scroll` over the side panel (or its gutter), nothing over the
+// palette (its overlay is inert to the wheel), and `view.scroll_lines` for the
+// editor and everywhere else. Pure; the caller supplies the wheel's line delta
+// as the command's ScrollLinesArguments. Empty result means no dispatch.
+[[nodiscard]] std::optional<std::string_view> route_wheel(ssg::HitRegion region);
+
 }  // namespace ssg::app

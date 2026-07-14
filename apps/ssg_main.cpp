@@ -414,7 +414,17 @@ int main(int argc, char** argv) {
             }
 
             if (decoded.status == ssg::app::DecodeStatus::scroll) {
-                dispatch("view.scroll_lines", ssg::ScrollLinesArguments{decoded.scroll});
+                // Route the wheel to the region under the pointer: the side panel
+                // scrolls its tree, the palette overlay is inert, everything else
+                // scrolls the editor document.
+                ssg::HitRegion region = ssg::HitRegion::none;
+                if (snapshot) {
+                    region = ssg::hit_test(*snapshot, decoded.pointer.column,
+                                           decoded.pointer.row).region;
+                }
+                if (auto command = ssg::app::route_wheel(region)) {
+                    dispatch(*command, ssg::ScrollLinesArguments{decoded.scroll});
+                }
                 chord.clear();
                 continue;
             }

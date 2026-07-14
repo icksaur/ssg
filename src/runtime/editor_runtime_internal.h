@@ -105,10 +105,11 @@ struct EditorRuntime::Impl final : CommandServices,
     mutable std::uint32_t last_reserved_prompt_rows = 0;
     // The side-panel (tree) content height from the most recent snapshot (a
     // read-only layout cache, like last_pane_content_rows), and the server-owned
-    // tree scroll offset. The offset is written ONLY on the command path
-    // (reveal_tree_selection, after a selection/expansion change) using the last
-    // cached height, so snapshot generation never mutates it — one client's
-    // snapshot cannot move another client's scroll (see doc/spec-scroll.md R2).
+    // tree scroll offset. The offset is written on the command path only
+    // (reveal_tree_selection after a selection/expansion change, or tree.scroll
+    // for a wheel) using the last cached height, so snapshot generation never
+    // mutates it — one client's snapshot cannot move another client's scroll
+    // (see doc/spec-scroll.md R2).
     mutable std::uint32_t last_panel_content_rows = 0;
     std::uint32_t tree_first_visible = 0;
     bool word_wrap = false;
@@ -185,6 +186,10 @@ struct EditorRuntime::Impl final : CommandServices,
     // panel height. Called on the command path after a selection/expansion change
     // (never during snapshot generation), so it cannot perturb another client.
     void reveal_tree_selection();
+    // Scroll the tree viewport by `rows` (wheel), adjusting the server-owned
+    // offset clamped to [0, maximum_first_row] WITHOUT moving the selection --
+    // the tree analog of the editor's view.scroll_lines.
+    void scroll_tree(std::int64_t rows);
     [[nodiscard]] TextEncodingViewState text_encoding_view() const;
     [[nodiscard]] DocumentViewState document_view() const;
     [[nodiscard]] std::string current_path_label() const;

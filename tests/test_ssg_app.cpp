@@ -643,6 +643,23 @@ TEST(route_pointer_panel_press_selects_and_activates_the_node) {
     ASSERT_TRUE(inert.commands.empty());
 }
 
+TEST(route_wheel_maps_region_to_scroll_command) {
+    // The side panel and its gutter scroll the tree.
+    ASSERT_TRUE(ssg::app::route_wheel(ssg::HitRegion::panel) ==
+                std::string_view{"tree.scroll"});
+    ASSERT_TRUE(ssg::app::route_wheel(ssg::HitRegion::panel_scrollbar) ==
+                std::string_view{"tree.scroll"});
+    // The palette overlay is inert to the wheel (no dispatch).
+    ASSERT_FALSE(ssg::app::route_wheel(ssg::HitRegion::palette).has_value());
+    ASSERT_FALSE(ssg::app::route_wheel(ssg::HitRegion::palette_scrollbar).has_value());
+    // The editor, its gutter, a tab, and no region all scroll the document.
+    for (auto region : {ssg::HitRegion::editor, ssg::HitRegion::editor_scrollbar,
+                        ssg::HitRegion::tab, ssg::HitRegion::none}) {
+        ASSERT_TRUE(ssg::app::route_wheel(region) ==
+                    std::string_view{"view.scroll_lines"});
+    }
+}
+
 int main() {
     RUN(resolve_launch_no_argument_opens_cwd);
     RUN(resolve_launch_directory_opens_that_directory);
@@ -666,6 +683,7 @@ int main() {
     RUN(route_pointer_tab_press_activates_the_tab);
     RUN(route_pointer_palette_press_executes_the_candidate);
     RUN(route_pointer_panel_press_selects_and_activates_the_node);
+    RUN(route_wheel_maps_region_to_scroll_command);
     RUN(decode_input_escape_boundary_is_bounded);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
