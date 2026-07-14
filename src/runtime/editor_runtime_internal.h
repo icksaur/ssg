@@ -103,12 +103,14 @@ struct EditorRuntime::Impl final : CommandServices,
     mutable std::uint32_t last_pane_content_rows = 24;
     mutable std::uint32_t last_pane_content_columns = 80;
     mutable std::uint32_t last_reserved_prompt_rows = 0;
-    // The side-panel (tree) content height from the most recent snapshot, and the
-    // server-owned tree scroll offset. The offset persists across frames so
-    // keep-visible produces minimal shifts; it is resolved against the panel
-    // height at snapshot time (see doc/spec-scroll.md R2).
+    // The side-panel (tree) content height from the most recent snapshot (a
+    // read-only layout cache, like last_pane_content_rows), and the server-owned
+    // tree scroll offset. The offset is written ONLY on the command path
+    // (reveal_tree_selection, after a selection/expansion change) using the last
+    // cached height, so snapshot generation never mutates it — one client's
+    // snapshot cannot move another client's scroll (see doc/spec-scroll.md R2).
     mutable std::uint32_t last_panel_content_rows = 0;
-    mutable std::uint32_t tree_first_visible = 0;
+    std::uint32_t tree_first_visible = 0;
     bool word_wrap = false;
     std::uint64_t next_status_id = 1;
     std::uint64_t next_tree_revision = 1;
@@ -179,6 +181,10 @@ struct EditorRuntime::Impl final : CommandServices,
     // The tree view state with its scroll offset, scrollbar, and visible-window
     // hit map resolved against the last panel height (keep-selection-visible).
     [[nodiscard]] TreeViewState tree_view() const;
+    // Scroll the tree so the selected node is visible, using the last cached
+    // panel height. Called on the command path after a selection/expansion change
+    // (never during snapshot generation), so it cannot perturb another client.
+    void reveal_tree_selection();
     [[nodiscard]] TextEncodingViewState text_encoding_view() const;
     [[nodiscard]] DocumentViewState document_view() const;
     [[nodiscard]] std::string current_path_label() const;

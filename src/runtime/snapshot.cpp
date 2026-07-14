@@ -173,8 +173,11 @@ SessionSnapshotSections EditorRuntime::Impl::sections(ViewportDimensions dimensi
 TreeViewState EditorRuntime::Impl::tree_view() const {
     auto view = tree.view_state();
     if (view.providers.empty()) return view;
-    // Only the active (front) provider is rendered; resolve its scroll window
-    // against the cached panel height and persist the offset for minimal shifts.
+    // Only the active (front) provider is rendered. Resolve a display window from
+    // the command-set offset and the current client's panel height WITHOUT
+    // persisting anything: keep-visible ran on the command path, so here we only
+    // clamp the offset to this height and window the nodes. This keeps snapshot
+    // generation a pure read (no cross-client scroll interference).
     auto& provider = view.providers.front();
     std::optional<std::uint32_t> selected_index;
     if (provider.selected) {
@@ -188,8 +191,7 @@ TreeViewState EditorRuntime::Impl::tree_view() const {
     auto scroll = compute_list_scroll_view(
         static_cast<std::uint32_t>(provider.nodes.size()),
         last_panel_content_rows, tree_first_visible, selected_index,
-        /*keep_selection_visible=*/true);
-    tree_first_visible = scroll.first_visible;
+        /*keep_selection_visible=*/false);
     provider.first_visible = scroll.first_visible;
     provider.scrollbar = scroll.scrollbar;
     provider.visible_node_ids.clear();
@@ -199,6 +201,26 @@ TreeViewState EditorRuntime::Impl::tree_view() const {
             provider.nodes[scroll.first_visible + row].node.id);
     }
     return view;
+}
+
+void EditorRuntime::Impl::reveal_tree_selection() {
+    auto view = tree.view_state();
+    if (view.providers.empty()) return;
+    auto const& provider = view.providers.front();
+    if (!provider.selected) return;
+    std::optional<std::uint32_t> selected_index;
+    for (std::size_t i = 0; i < provider.nodes.size(); ++i) {
+        if (provider.nodes[i].node.id == *provider.selected) {
+            selected_index = static_cast<std::uint32_t>(i);
+            break;
+        }
+    }
+    if (!selected_index) return;
+    auto scroll = compute_list_scroll_view(
+        static_cast<std::uint32_t>(provider.nodes.size()),
+        last_panel_content_rows, tree_first_visible, selected_index,
+        /*keep_selection_visible=*/true);
+    tree_first_visible = scroll.first_visible;
 }
 
 PaletteViewState EditorRuntime::Impl::palette_view() const {

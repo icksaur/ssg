@@ -2211,6 +2211,7 @@ ProtocolValue to_value(ShellViewState const& value) {
     fields.emplace_back("footer", to_value(value.footer));
     fields.emplace_back("tab_bar", to_value(value.tab_bar));
     fields.emplace_back("panel", to_value(value.panel));
+    fields.emplace_back("panel_scrollbar", to_value(value.panel_scrollbar));
     fields.emplace_back("prompt", to_value(value.prompt));
     fields.emplace_back("panes", to_value(value.panes));
     fields.emplace_back("accessibility_nodes", to_value(value.accessibility_nodes));
@@ -2236,6 +2237,7 @@ bool decode_present(ProtocolValue const& value, std::optional<ShellViewState>& o
     if (!decode_optional_field(value.field("footer"), result.footer)) return false;
     if (!decode_optional_field(value.field("tab_bar"), result.tab_bar)) return false;
     if (!decode_optional_field(value.field("panel"), result.panel)) return false;
+    if (!decode_optional_field(value.field("panel_scrollbar"), result.panel_scrollbar)) return false;
     if (!decode_optional_field(value.field("prompt"), result.prompt)) return false;
     result.panes = *panes;
     result.accessibility_nodes = *accessibility_nodes;

@@ -571,6 +571,8 @@ TEST(render_panel_tree_windows_and_draws_a_thumb_when_taller_than_the_panel) {
     // Expand the workspace root, then drive the selection to the bottom.
     (void)runtime->dispatch(ssg::ClientId{1}, {"tree.select_next", runtime->revision(), {}});
     (void)runtime->dispatch(ssg::ClientId{1}, {"tree.activate", runtime->revision(), {}});
+    // Prime the cached panel height (the command-path keep-visible reads it).
+    (void)runtime->snapshot(ssg::ClientId{1}, {80, 12});
     for (int i = 0; i < 60; ++i) {
         (void)runtime->dispatch(ssg::ClientId{1}, {"tree.select_next", runtime->revision(), {}});
     }

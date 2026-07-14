@@ -508,6 +508,9 @@ TEST(session_snapshot_round_trips_tree_scroll_fields) {
     provider.visible_node_ids = {ssg::TreeNodeId{"files:a"},
                                  ssg::TreeNodeId{"files:b"}};
     sections_value.tree = ssg::TreeViewState{ssg::TreeRevision{7}, {provider}};
+    // Also exercise the shell panel scrollbar gutter geometry on the wire.
+    sections_value.shell.panel = ssg::Rect{0, 1, 24, 10};
+    sections_value.shell.panel_scrollbar = ssg::Rect{23, 2, 1, 9};
 
     auto snapshot = ssg::assemble_session_snapshot(
         ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
@@ -525,6 +528,9 @@ TEST(session_snapshot_round_trips_tree_scroll_fields) {
     ASSERT_EQ(p.first_visible, std::uint32_t{3});
     ASSERT_EQ(p.scrollbar, ssg::scrollbar_metrics(40, 9, 3));
     ASSERT_EQ(p.visible_node_ids.size(), std::size_t{2});
+    ASSERT_TRUE(decoded.snapshot->sections().shell.panel_scrollbar.has_value());
+    ASSERT_EQ(decoded.snapshot->sections().shell.panel_scrollbar,
+              snapshot.sections().shell.panel_scrollbar);
 }
 
 // ---------------------------------------------------------------------------

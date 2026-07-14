@@ -83,12 +83,12 @@ CommandHandlerResult search_command(EditorRuntime::Impl& runtime, CommandContext
 }
 
 CommandHandlerResult tree_command(EditorRuntime::Impl& runtime, std::string_view id, std::any const& payload) {
-    if (id == "tree.select_next") { (void)runtime.tree.select_next(); return success(); }
-    if (id == "tree.select_previous") { (void)runtime.tree.select_previous(); return success(); }
+    if (id == "tree.select_next") { (void)runtime.tree.select_next(); runtime.reveal_tree_selection(); return success(); }
+    if (id == "tree.select_previous") { (void)runtime.tree.select_previous(); runtime.reveal_tree_selection(); return success(); }
     if (id == "tree.activate") {
         auto selected = runtime.tree.selected_node();
         if (!selected) return failure("no tree node is selected");
-        if (selected->expandable) { (void)runtime.tree.toggle_selected(); return success(); }
+        if (selected->expandable) { (void)runtime.tree.toggle_selected(); runtime.reveal_tree_selection(); return success(); }
         if (selected->workspace_path) {
             auto result = runtime.workspace.open_file(*selected->workspace_path);
             if (!result.accepted() || !result.document) return failure("failed to open tree file");
@@ -101,7 +101,9 @@ CommandHandlerResult tree_command(EditorRuntime::Impl& runtime, std::string_view
     auto const* invocation = payload_as<TreeCommandInvocation>(payload);
     if (invocation == nullptr) return failure(std::string{id} + " requires a tree invocation payload");
     if (id == "tree.toggle_expanded") {
-        return runtime.tree.toggle_expanded(invocation->provider_id, invocation->node_id) ? success() : failure("tree node does not exist");
+        auto toggled = runtime.tree.toggle_expanded(invocation->provider_id, invocation->node_id);
+        if (toggled) runtime.reveal_tree_selection();
+        return toggled ? success() : failure("tree node does not exist");
     }
     auto command = runtime.tree.invoke_node_command(invocation->provider_id, invocation->node_id, invocation->command_id);
     return command ? success() : failure("tree node command does not exist");
