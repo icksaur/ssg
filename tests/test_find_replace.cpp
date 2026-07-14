@@ -305,7 +305,7 @@ TEST(workspace_preview_apply_recover_and_failures_round_trip) {
 
 TEST(view_delta_replay_and_command_exports_are_exact) {
     const auto commands = find_replace_command_set();
-    ASSERT_EQ(commands.descriptors().size(), std::size_t{14});
+    ASSERT_EQ(commands.descriptors().size(), std::size_t{15});
     ASSERT_EQ(commands.descriptors().front().id, std::string_view{"find.open"});
     ASSERT_EQ(commands.descriptors().back().id,
               std::string_view{"replace.workspace_apply"});

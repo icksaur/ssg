@@ -120,6 +120,7 @@ constexpr auto expected_commands = std::to_array<ExpectedCommand>({
     {"find.toggle_regex", "find-replace"},
     {"find.toggle_selection", "find-replace"},
     {"replace.open", "find-replace"},
+    {"replace.update_replacement", "find-replace"},
     {"replace.current", "find-replace"},
     {"replace.all", "find-replace"},
     {"replace.workspace_preview", "find-replace"},
@@ -206,7 +207,7 @@ constexpr auto expected_category_counts =
         {"text", 6},       {"cursor", 13},   {"select", 20},
         {"edit", 15},      {"clipboard", 3}, {"view", 7},
         {"palette", 5},    {"goto", 8},      {"find", 9},
-        {"replace", 5},    {"search", 3},    {"completion", 5},
+        {"replace", 6},    {"search", 3},    {"completion", 5},
         {"hover", 2},      {"rename", 1},    {"pane", 9},
         {"panel", 4},
         {"tree", 5},
@@ -215,7 +216,7 @@ constexpr auto expected_category_counts =
         {"settings", 6},   {"follow_edits", 2}, {"diff", 3},
     });
 
-static_assert(expected_commands.size() == 165);
+static_assert(expected_commands.size() == 166);
 
 std::optional<std::string> field(const std::string& object,
                                  const std::string& name) {
@@ -424,10 +425,11 @@ TEST(capability_and_surface_exclusions_are_exact) {
             ASSERT_FALSE(command.lua);
             ASSERT_FALSE(command.keymap);
             ASSERT_FALSE(command.palette);
-        } else if (command.id == "find.update_query") {
-            // A client-fulfilment command: the client edits the query and reports
-            // the full next string, so it carries a payload and is neither
-            // keymap- nor palette-reachable, but remains scriptable via Lua.
+        } else if (command.id == "find.update_query" ||
+                   command.id == "replace.update_replacement") {
+            // Client-fulfilment commands: the client edits the query/replacement
+            // and reports the full next string, so each carries a payload and is
+            // neither keymap- nor palette-reachable, but remains Lua-scriptable.
             ASSERT_TRUE(command.required_capabilities.empty());
             ASSERT_TRUE(command.lua);
             ASSERT_FALSE(command.keymap);

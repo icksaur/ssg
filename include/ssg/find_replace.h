@@ -80,6 +80,7 @@ enum class FindReplaceCommand : std::uint8_t {
     find_toggle_regex,
     find_toggle_selection,
     replace_open,
+    replace_update_replacement,
     replace_current,
     replace_all,
     replace_workspace_preview,
@@ -103,13 +104,13 @@ struct FindReplaceCommandDescriptor {
 
 class FindReplaceCommandSet {
 public:
-    [[nodiscard]] const std::array<FindReplaceCommandDescriptor, 14>&
+    [[nodiscard]] const std::array<FindReplaceCommandDescriptor, 15>&
     descriptors() const noexcept;
 
 private:
     friend FindReplaceCommandSet find_replace_command_set();
     FindReplaceCommandSet();
-    const std::array<FindReplaceCommandDescriptor, 14> descriptors_;
+    const std::array<FindReplaceCommandDescriptor, 15> descriptors_;
 };
 
 [[nodiscard]] FindReplaceCommandSet find_replace_command_set();
@@ -120,6 +121,7 @@ struct FindReplaceViewState {
     bool replace_mode = false;
     Revision source_revision{0};
     std::string query;
+    std::string replacement;
     FindOptions options;
     std::vector<FindMatch> matches;
     std::optional<std::size_t> active_match;
@@ -167,6 +169,7 @@ public:
     void close();
     void update_query(const DocumentSnapshot& document, std::string query,
                       std::optional<ByteRange> selection);
+    void update_replacement(std::string replacement);
     void toggle_case(const DocumentSnapshot& document);
     void toggle_whole_word(const DocumentSnapshot& document);
     void toggle_regex(const DocumentSnapshot& document);

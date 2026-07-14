@@ -126,7 +126,7 @@ public:
             std::move(prompt_status),
             {revision, false, {}, ssg::SearchMode::file, {}, std::nullopt, 0,
              false},
-            {0, false, false, revision, {}, {}, {}, std::nullopt,
+            {0, false, false, revision, {}, {}, {}, {}, std::nullopt,
              ssg::FindReplaceError::none, {}},
             std::move(settings),
             std::move(keymap),

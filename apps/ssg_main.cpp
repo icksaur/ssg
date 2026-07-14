@@ -164,6 +164,11 @@ int main(int argc, char** argv) {
     // full next string via find.update_query.  find_open mirrors the controller.
     bool find_open = false;
     std::string find_query;
+    // Replace prompt: the query row is display-only; the client edits the
+    // replacement the same no-copy way as the find query (reads the published
+    // replacement, mutates it, dispatches replace.update_replacement).
+    bool replace_open = false;
+    std::string replace_replacement;
     ssg::KeymapViewState keymap;
     std::vector<ssg::PaletteCandidate> candidates;
 
@@ -190,6 +195,12 @@ int main(int argc, char** argv) {
             if (id == "palette.previous") { dispatch("find.previous"); return; }
             if (id == "prompt.cancel") { dispatch("find.close"); return; }
         }
+        if (replace_open && focus == ssg::FocusTarget::prompt) {
+            if (id == "prompt.submit") { dispatch("replace.current"); return; }
+            if (id == "palette.next") { dispatch("find.next"); return; }
+            if (id == "palette.previous") { dispatch("find.previous"); return; }
+            if (id == "prompt.cancel") { dispatch("find.close"); return; }
+        }
         if (palette_open && focus == ssg::FocusTarget::prompt) {
             if (id == "prompt.submit") { execute_selected_candidate(); return; }
             if (id == "prompt.cancel") { dispatch("palette.close"); return; }
@@ -210,6 +221,7 @@ int main(int argc, char** argv) {
             break;
         case ssg::TextRouting::prompt_query:
             if (palette_open) { palette_query += text; palette_selected = 0; }
+            else if (replace_open) { dispatch("replace.update_replacement", ssg::FindQueryArguments{replace_replacement + text}); }
             else if (find_open) { dispatch("find.update_query", ssg::FindQueryArguments{find_query + text}); }
             break;
         case ssg::TextRouting::ignore:
@@ -257,6 +269,11 @@ int main(int argc, char** argv) {
                 active_prompt && active_prompt->kind == ssg::PromptKind::find;
             find_open = find_view.open && find_prompt_active;
             find_query = find_view.query;
+            // The replace prompt edits the replacement, not the query.
+            bool const replace_prompt_active =
+                active_prompt && active_prompt->kind == ssg::PromptKind::replace;
+            replace_open = find_view.open && replace_prompt_active;
+            replace_replacement = find_view.replacement;
         }
         return snapshot;
     };
@@ -352,6 +369,11 @@ int main(int argc, char** argv) {
                     auto next = find_query;
                     pop_code_point(next);
                     dispatch("find.update_query", ssg::FindQueryArguments{next});
+                } else if (replace_open && focus == ssg::FocusTarget::prompt &&
+                           stroke.code == "Backspace") {
+                    auto next = replace_replacement;
+                    pop_code_point(next);
+                    dispatch("replace.update_replacement", ssg::FindQueryArguments{next});
                 } else if (!decoded.text.empty()) {
                     route_text(decoded.text);
                 }

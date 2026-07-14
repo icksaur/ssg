@@ -2791,6 +2791,7 @@ ProtocolValue to_value(FindReplaceViewState const& value) {
     fields.emplace_back("replace_mode", to_value(value.replace_mode));
     fields.emplace_back("source_revision", to_value(value.source_revision));
     fields.emplace_back("query", to_value(value.query));
+    fields.emplace_back("replacement", to_value(value.replacement));
     fields.emplace_back("options", to_value(value.options));
     fields.emplace_back("matches", to_value(value.matches));
     if (value.active_match) {
@@ -2811,12 +2812,13 @@ bool decode_present(ProtocolValue const& value, std::optional<FindReplaceViewSta
     auto replace_mode = require_field<bool>(value.field("replace_mode"));
     auto source_revision = require_field<Revision>(value.field("source_revision"));
     auto query = require_field<std::string>(value.field("query"));
+    auto replacement = require_field<std::string>(value.field("replacement"));
     auto options = require_field<FindOptions>(value.field("options"));
     auto matches = require_field<std::vector<FindMatch>>(value.field("matches"));
     auto error = require_field<FindReplaceError>(value.field("error"));
     auto message = require_field<std::string>(value.field("message"));
     if (!generation || !open || !replace_mode || !source_revision || !query ||
-        !options || !matches || !error || !message) {
+        !replacement || !options || !matches || !error || !message) {
         return false;
     }
     FindReplaceViewState result;
@@ -2825,6 +2827,7 @@ bool decode_present(ProtocolValue const& value, std::optional<FindReplaceViewSta
     result.replace_mode = *replace_mode;
     result.source_revision = *source_revision;
     result.query = *query;
+    result.replacement = *replacement;
     result.options = *options;
     result.matches = *matches;
     std::optional<std::uint64_t> active_match;
@@ -4961,6 +4964,8 @@ CommandArgumentCodecRegistry build_command_argument_codec_registry() {
         } else if (descriptor.id == "palette.execute") {
             entries.emplace_back(descriptor.id, palette_execute_codec);
         } else if (descriptor.id == "find.update_query") {
+            entries.emplace_back(descriptor.id, find_query_codec);
+        } else if (descriptor.id == "replace.update_replacement") {
             entries.emplace_back(descriptor.id, find_query_codec);
         } else if (text_input_ids.contains(descriptor.id)) {
             entries.emplace_back(descriptor.id, text_input_codec);

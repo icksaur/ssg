@@ -65,7 +65,7 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision, std::string marker
         {std::nullopt, {{}, marker.size()}},
         {revision, true, marker, ssg::SearchMode::file, {}, std::nullopt,
          marker.size(), false},
-        {marker.size(), true, false, revision, marker, {}, {}, std::nullopt,
+        {marker.size(), true, false, revision, marker, {}, {}, {}, std::nullopt,
          ssg::FindReplaceError::none, {}},
         settings,
         {marker, {}},
@@ -798,6 +798,72 @@ TEST(canonical_fixtures_decode_to_the_expected_values) {
 
 }  // namespace
 
+TEST(command_request_round_trips_with_replace_replacement_arguments) {
+    auto const registry = ssg::build_command_argument_codec_registry();
+    ssg::ClientCommand const command{
+        "replace.update_replacement", ssg::Revision{9},
+        ssg::FindQueryArguments{"dog"}};
+    auto const bytes = ssg::encode_command_request(command, registry);
+    auto const decoded = ssg::decode_command_request(bytes, registry);
+    ASSERT_TRUE(decoded.accepted());
+    ASSERT_EQ(decoded.command->id, command.id);
+    auto const* arguments =
+        std::any_cast<ssg::FindQueryArguments>(&decoded.command->payload);
+    ASSERT_TRUE(arguments != nullptr);
+    ASSERT_EQ(*arguments,
+              std::any_cast<ssg::FindQueryArguments>(command.payload));
+}
+
+TEST(find_replace_view_state_round_trips_replacement_through_the_wire) {
+    // A snapshot carrying a non-empty replacement must preserve it through the
+    // snapshot codec and a delta replay (F2a).
+    auto with_replacement = [](ssg::Revision revision, std::string marker,
+                               std::string replacement) {
+        auto s = sections(revision, std::move(marker));
+        s.find_replace.replacement = std::move(replacement);
+        return s;
+    };
+    auto snapshot = ssg::assemble_session_snapshot(
+        ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::in_process},
+        ssg::ViewId{9}, client_view(3),
+        with_replacement(ssg::Revision{4}, "alpha", "dog"));
+    auto const decoded =
+        ssg::decode_session_snapshot(ssg::encode_session_snapshot(snapshot));
+    ASSERT_TRUE(decoded.accepted());
+    ASSERT_TRUE(decoded.snapshot.has_value());
+    if (decoded.snapshot) {
+        ASSERT_EQ(decoded.snapshot->sections().find_replace.replacement,
+                  std::string{"dog"});
+    }
+
+    auto before = ssg::assemble_session_snapshot(
+        ssg::Revision{4}, {},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::in_process},
+        ssg::ViewId{9}, client_view(1),
+        with_replacement(ssg::Revision{4}, "a", ""));
+    auto after = ssg::assemble_session_snapshot(
+        ssg::Revision{5}, {},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::in_process},
+        ssg::ViewId{9}, client_view(1),
+        with_replacement(ssg::Revision{4}, "a", "dog"));
+    auto const delta = ssg::derive_session_delta(before, after);
+    auto decoded_delta =
+        ssg::decode_session_delta(ssg::encode_session_delta(delta));
+    ASSERT_TRUE(decoded_delta.accepted());
+    ASSERT_TRUE(decoded_delta.delta.has_value());
+    auto replayed = ssg::replay_session_delta(before, *decoded_delta.delta);
+    ASSERT_TRUE(replayed.accepted());
+    ASSERT_TRUE(replayed.snapshot.has_value());
+    if (replayed.snapshot) {
+        ASSERT_EQ(replayed.snapshot->sections().find_replace.replacement,
+                  std::string{"dog"});
+    }
+}
+
 int main() {
     RUN(registry_covers_every_p0_command_and_rejects_unknown_ids);
     RUN(registry_rejects_missing_entries);
@@ -805,6 +871,8 @@ int main() {
     RUN(registry_rejects_duplicate_entries);
     RUN(command_request_round_trips_with_no_payload);
     RUN(command_request_round_trips_with_palette_execute_arguments);
+    RUN(command_request_round_trips_with_replace_replacement_arguments);
+    RUN(find_replace_view_state_round_trips_replacement_through_the_wire);
     RUN(command_request_round_trips_with_text_input_arguments);
     RUN(command_request_round_trips_with_selection_command_arguments);
     RUN(command_request_round_trips_with_empty_selection_command_arguments);

@@ -201,6 +201,18 @@ void reveal_active_find_match(EditorRuntime::Impl& runtime) {
     runtime.requested_first_visual_row = runtime.selection.first_visual_row;
 }
 
+// A replace prompt is active when the controller is open in replace mode AND
+// the active prompt is the replace prompt.  The replacement-editing and
+// destructive replace commands guard on this so a stray prompt-context chord
+// from an unrelated (palette/settings) prompt cannot mutate hidden state (an
+// open-only guard leaks because find can stay open behind another prompt).
+bool replace_prompt_active(EditorRuntime::Impl& runtime) {
+    auto const& state = runtime.find_replace.view_state();
+    auto const& request = runtime.prompt.request();
+    return state.open && state.replace_mode && request &&
+           request->kind == PromptKind::replace;
+}
+
 CommandHandlerResult bind_find_replace(EditorRuntime::Impl& runtime,
                                        Revision revision,
                                        FindReplaceCommand command,
@@ -234,7 +246,25 @@ CommandHandlerResult bind_find_replace(EditorRuntime::Impl& runtime,
         case FindReplaceCommand::replace_open:
             runtime.find_replace.open_replace(snapshot, FindRequest{query, {}, range});
             runtime.find_document_id = runtime.active_document_id();
+            reveal_active_find_match(runtime);
+            // Three-row replace prompt: query (row 0, display-only, seeded from
+            // the current find query), replacement (row 1, editable), and the
+            // option/match-count row.  The client edits only the replacement.
+            (void)runtime.prompt.open(PromptRequest{
+                PromptKind::replace, "Replace",
+                {{"find.query", "Find query", query},
+                 {"replace.replacement", "Replace with",
+                  runtime.find_replace.view_state().replacement}},
+                {}, PromptMatchCount{"find.count", "Match count", ""}});
             return success();
+        case FindReplaceCommand::replace_update_replacement: {
+            if (!replace_prompt_active(runtime)) return success();
+            auto const* arguments = payload_as<FindQueryArguments>(payload);
+            if (arguments == nullptr) return failure("replace.update_replacement requires a replacement payload");
+            runtime.find_replace.update_replacement(arguments->query);
+            runtime.find_document_id = runtime.active_document_id();
+            return success();
+        }
         case FindReplaceCommand::find_close:
             runtime.find_replace.close();
             runtime.find_document_id.reset();
@@ -279,9 +309,10 @@ CommandHandlerResult bind_find_replace(EditorRuntime::Impl& runtime,
             return success();
         case FindReplaceCommand::replace_current:
         case FindReplaceCommand::replace_all: {
+            if (!replace_prompt_active(runtime)) return success();
             auto id = runtime.active_document_id();
             if (!id) return failure("no active document");
-            auto replacement = payload_as<std::string>(payload) ? *payload_as<std::string>(payload) : std::string{};
+            auto replacement = runtime.find_replace.view_state().replacement;
             auto before = runtime.selection.selections;
             auto after = runtime.selection.selections;
             auto result = command == FindReplaceCommand::replace_current
@@ -289,7 +320,9 @@ CommandHandlerResult bind_find_replace(EditorRuntime::Impl& runtime,
                 : runtime.find_replace.replace_all(*document, runtime.history_for(*id), before, after, replacement, 0);
             if (!result.accepted()) return failure(result.message);
             runtime.refresh_syntax();
-            return runtime.update_tabs_for(*id);
+            auto tabs_result = runtime.update_tabs_for(*id);
+            reveal_active_find_match(runtime);
+            return tabs_result;
         }
         case FindReplaceCommand::replace_workspace_preview:
         {

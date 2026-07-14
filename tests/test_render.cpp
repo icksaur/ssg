@@ -487,6 +487,38 @@ TEST(render_hides_find_matches_after_document_revision_changes) {
     ASSERT_FALSE(any_match);
 }
 
+TEST(render_replace_prompt_shows_query_and_replacement_with_cursor_on_replacement) {
+    auto root = unique_root();
+    std::ofstream{root / "rep.txt"} << "cat cat cat\n";
+    auto runtime = make_runtime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(
+        ssg::ClientId{1},
+        {"file.open", runtime->revision(), std::string{"rep.txt"}});
+    (void)runtime->dispatch(ssg::ClientId{1},
+                            {"replace.open", runtime->revision(), {}});
+    (void)runtime->dispatch(
+        ssg::ClientId{1},
+        {"find.update_query", runtime->revision(), ssg::FindQueryArguments{"cat"}});
+    (void)runtime->dispatch(
+        ssg::ClientId{1},
+        {"replace.update_replacement", runtime->revision(), ssg::FindQueryArguments{"dog"}});
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    auto grid = ssg::render(*snapshot);
+
+    // The reserved replace rows show the query and the replacement.
+    ASSERT_TRUE(grid_contains(grid, "cat"));
+    ASSERT_TRUE(grid_contains(grid, "dog"));
+    // The hardware cursor sits on the replacement row (the one containing "dog").
+    ASSERT_TRUE(grid.caret.has_value());
+    if (grid.caret) {
+        ASSERT_TRUE(row_text(grid, grid.caret->row).find("dog") != std::string::npos);
+    }
+}
+
 int main() {
     RUN(render_paints_content_not_accessibility_labels);
     RUN(render_colors_are_palette_indices);
@@ -500,6 +532,7 @@ int main() {
     RUN(render_paints_secondary_caret_as_a_cell);
     RUN(render_paints_find_matches_and_active_match);
     RUN(render_hides_find_matches_after_document_revision_changes);
+    RUN(render_replace_prompt_shows_query_and_replacement_with_cursor_on_replacement);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;

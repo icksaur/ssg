@@ -427,6 +427,112 @@ TEST(find_scrolls_the_viewport_to_follow_the_active_match) {
     ASSERT_TRUE(match_line_visible);
 }
 
+TEST(replace_current_replaces_active_match_and_resets_to_first) {
+    auto root = unique_root();
+    auto workspace = root / "workspace";
+    std::filesystem::create_directories(workspace);
+    std::ofstream{workspace / "r.txt"} << "cat cat cat";
+    auto created = ssg::EditorRuntime::create({
+        workspace, root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"r.txt"}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"replace.open", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.update_query", runtime.revision(), ssg::FindQueryArguments{"cat"}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"replace.update_replacement", runtime.revision(), ssg::FindQueryArguments{"dog"}}).accepted());
+
+    {
+        auto snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        ASSERT_TRUE(snap.has_value());
+        if (snap) {
+            ASSERT_EQ(snap->sections().find_replace.replacement, std::string{"dog"});
+            ASSERT_EQ(snap->sections().find_replace.matches.size(), std::size_t{3});
+            // The replace prompt row 1 projects the replacement.
+            auto const& prompt = snap->sections().prompt_status.prompt;
+            ASSERT_TRUE(prompt.has_value());
+            if (prompt) {
+                std::string replacement_value;
+                for (auto const& control : prompt->controls) {
+                    if (control.kind == ssg::PromptControlKind::input &&
+                        control.id == "replace.replacement") {
+                        replacement_value = control.value;
+                    }
+                }
+                ASSERT_EQ(replacement_value, std::string{"dog"});
+            }
+        }
+    }
+
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"replace.current", runtime.revision(), {}}).accepted());
+    ASSERT_EQ(runtime.active_document_text(), std::string{"dog cat cat"});
+    auto after = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(after.has_value());
+    if (after) {
+        auto const& fr = after->sections().find_replace;
+        ASSERT_EQ(fr.matches.size(), std::size_t{2});
+        // Reset-to-first: active index is 0, now pointing at the match at [4,7).
+        ASSERT_TRUE(fr.active_match.has_value());
+        if (fr.active_match) ASSERT_EQ(*fr.active_match, std::size_t{0});
+        if (fr.matches.size() == 2) {
+            ASSERT_EQ(fr.matches[0].begin.value(), std::uint64_t{4});
+            ASSERT_EQ(fr.matches[0].end.value(), std::uint64_t{7});
+        }
+    }
+}
+
+TEST(replace_all_replaces_every_match) {
+    auto root = unique_root();
+    auto workspace = root / "workspace";
+    std::filesystem::create_directories(workspace);
+    std::ofstream{workspace / "r.txt"} << "cat cat cat";
+    auto created = ssg::EditorRuntime::create({
+        workspace, root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"r.txt"}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"replace.open", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.update_query", runtime.revision(), ssg::FindQueryArguments{"cat"}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"replace.update_replacement", runtime.revision(), ssg::FindQueryArguments{"dog"}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"replace.all", runtime.revision(), {}}).accepted());
+    ASSERT_EQ(runtime.active_document_text(), std::string{"dog dog dog"});
+    auto after = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(after.has_value());
+    if (after) {
+        ASSERT_TRUE(after->sections().find_replace.matches.empty());
+        ASSERT_FALSE(after->sections().find_replace.active_match.has_value());
+    }
+}
+
+TEST(replace_commands_are_benign_no_ops_without_a_replace_prompt) {
+    auto root = unique_root();
+    auto workspace = root / "workspace";
+    std::filesystem::create_directories(workspace);
+    std::ofstream{workspace / "r.txt"} << "cat cat cat";
+    auto created = ssg::EditorRuntime::create({
+        workspace, root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"r.txt"}}).accepted());
+
+    // A find prompt (not replace) is open: replace commands must be benign
+    // success no-ops that do not mutate the document or controller state.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.open", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.update_query", runtime.revision(), ssg::FindQueryArguments{"cat"}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"replace.update_replacement", runtime.revision(), ssg::FindQueryArguments{"dog"}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"replace.current", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"replace.all", runtime.revision(), {}}).accepted());
+    ASSERT_EQ(runtime.active_document_text(), std::string{"cat cat cat"});
+    auto snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(snap.has_value());
+    if (snap) ASSERT_TRUE(snap->sections().find_replace.replacement.empty());
+}
+
 } // namespace
 
 int main() {

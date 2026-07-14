@@ -621,6 +621,8 @@ FindReplaceCommandSet::FindReplaceCommandSet()
                     {"find.toggle_selection",
                      FindReplaceCommand::find_toggle_selection},
                     {"replace.open", FindReplaceCommand::replace_open},
+                    {"replace.update_replacement",
+                     FindReplaceCommand::replace_update_replacement},
                     {"replace.current",
                      FindReplaceCommand::replace_current},
                     {"replace.all", FindReplaceCommand::replace_all},
@@ -629,7 +631,7 @@ FindReplaceCommandSet::FindReplaceCommandSet()
                     {"replace.workspace_apply",
                      FindReplaceCommand::replace_workspace_apply}}} {}
 
-const std::array<FindReplaceCommandDescriptor, 14>&
+const std::array<FindReplaceCommandDescriptor, 15>&
 FindReplaceCommandSet::descriptors() const noexcept {
     return descriptors_;
 }
@@ -679,6 +681,7 @@ void FindReplaceController::open_replace(const DocumentSnapshot& document,
 void FindReplaceController::close() {
     state_.open = false;
     state_.replace_mode = false;
+    state_.replacement.clear();
     state_.matches.clear();
     state_.active_match.reset();
     state_.error = FindReplaceError::none;
@@ -693,6 +696,14 @@ void FindReplaceController::update_query(
     request_.selection = selection;
     ++state_.generation;
     evaluate(document);
+}
+
+void FindReplaceController::update_replacement(std::string replacement) {
+    // The replacement does not affect matching, so this never re-evaluates; it
+    // only updates the published replacement text (the single source of truth
+    // that replace_current/replace_all read).
+    state_.replacement = std::move(replacement);
+    ++state_.generation;
 }
 
 void FindReplaceController::toggle_case(const DocumentSnapshot& document) {

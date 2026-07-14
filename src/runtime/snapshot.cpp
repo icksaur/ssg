@@ -49,6 +49,8 @@ void EditorRuntime::Impl::project_find_replace_prompt(PromptViewState& prompt_vi
         switch (control.kind) {
             case PromptControlKind::input:
                 if (control.id == "find.query") control.value = find_state.query;
+                else if (control.id == "replace.replacement")
+                    control.value = find_state.replacement;
                 break;
             case PromptControlKind::count: {
                 auto position = find_state.active_match ? *find_state.active_match + 1 : 0;

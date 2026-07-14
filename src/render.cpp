@@ -454,7 +454,14 @@ std::optional<GridPosition> paint_prompt(CellGrid& grid,
         }
         paint_text(grid, control.rect.x, control.rect.y, control.rect.right(),
                    text, prompt_fg, prompt_bg, SemanticRole::prompt);
-        if (control.kind == PromptControlKind::input && !caret) {
+        // Place the hardware cursor on the editable input: the replacement row
+        // for a replace prompt (its query row is display-only), otherwise the
+        // first input.
+        bool const active_input =
+            prompt.kind == PromptKind::replace
+                ? control.id == "replace.replacement"
+                : !caret;
+        if (control.kind == PromptControlKind::input && active_input && !caret) {
             auto const label_width =
                 static_cast<int>(compute_cell_run(control.accessible_label + ": ")
                                      .total_cells);
