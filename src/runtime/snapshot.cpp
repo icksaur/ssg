@@ -59,6 +59,12 @@ void EditorRuntime::Impl::project_find_replace_prompt(PromptViewState& prompt_vi
                 break;
             }
             case PromptControlKind::toggle:
+                if (control.id == "find.toggle_case")
+                    control.checked = find_state.options.case_sensitive;
+                else if (control.id == "find.toggle_whole_word")
+                    control.checked = find_state.options.whole_word;
+                else if (control.id == "find.toggle_regex")
+                    control.checked = find_state.options.regex;
                 break;
         }
     }

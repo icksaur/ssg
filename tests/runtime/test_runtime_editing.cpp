@@ -533,6 +533,47 @@ TEST(replace_commands_are_benign_no_ops_without_a_replace_prompt) {
     if (snap) ASSERT_TRUE(snap->sections().find_replace.replacement.empty());
 }
 
+TEST(find_toggle_case_flips_option_and_changes_matches_and_guards_when_no_prompt) {
+    auto root = unique_root();
+    auto workspace = root / "workspace";
+    std::filesystem::create_directories(workspace);
+    std::ofstream{workspace / "m.txt"} << "Cat cat CAT";
+    auto created = ssg::EditorRuntime::create({
+        workspace, root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"m.txt"}}).accepted());
+
+    // No find/replace prompt yet: find.toggle_case must be a benign no-op that
+    // leaves the (default) options untouched.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.toggle_case", runtime.revision(), {}}).accepted());
+    {
+        auto snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        ASSERT_TRUE(snap.has_value());
+        if (snap) ASSERT_FALSE(snap->sections().find_replace.options.case_sensitive);
+    }
+
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.open", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.update_query", runtime.revision(), ssg::FindQueryArguments{"cat"}}).accepted());
+    {
+        // Case-insensitive (default): all three "cat"s match.
+        auto snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        ASSERT_TRUE(snap.has_value());
+        if (snap) ASSERT_EQ(snap->sections().find_replace.matches.size(), std::size_t{3});
+    }
+
+    // Toggle case sensitivity: now only the lowercase "cat" matches.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.toggle_case", runtime.revision(), {}}).accepted());
+    auto snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(snap.has_value());
+    if (snap) {
+        ASSERT_TRUE(snap->sections().find_replace.options.case_sensitive);
+        ASSERT_EQ(snap->sections().find_replace.matches.size(), std::size_t{1});
+    }
+}
+
 } // namespace
 
 int main() {

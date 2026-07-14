@@ -519,6 +519,43 @@ TEST(render_replace_prompt_shows_query_and_replacement_with_cursor_on_replacemen
     }
 }
 
+TEST(render_find_prompt_shows_option_indicators) {
+    auto root = unique_root();
+    std::ofstream{root / "opt.txt"} << "Cat cat CAT\n";
+    auto runtime = make_runtime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(
+        ssg::ClientId{1},
+        {"file.open", runtime->revision(), std::string{"opt.txt"}});
+    (void)runtime->dispatch(ssg::ClientId{1},
+                            {"find.open", runtime->revision(), {}});
+    (void)runtime->dispatch(
+        ssg::ClientId{1},
+        {"find.update_query", runtime->revision(), ssg::FindQueryArguments{"cat"}});
+
+    // Default options: all three indicators render unchecked.
+    {
+        auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+        ASSERT_TRUE(snapshot.has_value());
+        if (!snapshot) return;
+        auto grid = ssg::render(*snapshot);
+        ASSERT_TRUE(grid_contains(grid, "[ ] Case"));
+        ASSERT_TRUE(grid_contains(grid, "[ ] Word"));
+        ASSERT_TRUE(grid_contains(grid, "[ ] Regex"));
+    }
+
+    // Toggling case flips its indicator to checked.
+    (void)runtime->dispatch(ssg::ClientId{1},
+                            {"find.toggle_case", runtime->revision(), {}});
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    auto grid = ssg::render(*snapshot);
+    ASSERT_TRUE(grid_contains(grid, "[x] Case"));
+    ASSERT_TRUE(grid_contains(grid, "[ ] Word"));
+}
+
 int main() {
     RUN(render_paints_content_not_accessibility_labels);
     RUN(render_colors_are_palette_indices);
@@ -533,6 +570,7 @@ int main() {
     RUN(render_paints_find_matches_and_active_match);
     RUN(render_hides_find_matches_after_document_revision_changes);
     RUN(render_replace_prompt_shows_query_and_replacement_with_cursor_on_replacement);
+    RUN(render_find_prompt_shows_option_indicators);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;

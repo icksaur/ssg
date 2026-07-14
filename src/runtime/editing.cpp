@@ -213,6 +213,28 @@ bool replace_prompt_active(EditorRuntime::Impl& runtime) {
            request->kind == PromptKind::replace;
 }
 
+// A find or replace prompt is the active prompt over an open controller.  The
+// toggle/next/previous chords guard on this so a stray prompt-context chord from
+// an unrelated (palette/settings) prompt cannot mutate hidden find state (find
+// can remain open behind another prompt).
+bool find_or_replace_prompt_active(EditorRuntime::Impl& runtime) {
+    auto const& state = runtime.find_replace.view_state();
+    auto const& request = runtime.prompt.request();
+    return state.open && request &&
+           (request->kind == PromptKind::find ||
+            request->kind == PromptKind::replace);
+}
+
+// The find/replace option indicators shared by the find and replace prompts,
+// seeded from the current options; project_find_replace_prompt refreshes their
+// `checked` state from the authoritative options at snapshot time.
+std::vector<PromptToggle> find_option_toggles(EditorRuntime::Impl& runtime) {
+    auto const& options = runtime.find_replace.view_state().options;
+    return {{"find.toggle_case", "Case", options.case_sensitive, 9},
+            {"find.toggle_whole_word", "Word", options.whole_word, 9},
+            {"find.toggle_regex", "Regex", options.regex, 10}};
+}
+
 CommandHandlerResult bind_find_replace(EditorRuntime::Impl& runtime,
                                        Revision revision,
                                        FindReplaceCommand command,
@@ -241,7 +263,8 @@ CommandHandlerResult bind_find_replace(EditorRuntime::Impl& runtime,
             // display the controller query (projected at snapshot time).
             (void)runtime.prompt.open(PromptRequest{
                 PromptKind::find, "Find", {{"find.query", "Find query", query}},
-                {}, PromptMatchCount{"find.count", "Match count", ""}});
+                find_option_toggles(runtime),
+                PromptMatchCount{"find.count", "Match count", ""}});
             return success();
         case FindReplaceCommand::replace_open:
             runtime.find_replace.open_replace(snapshot, FindRequest{query, {}, range});
@@ -255,7 +278,8 @@ CommandHandlerResult bind_find_replace(EditorRuntime::Impl& runtime,
                 {{"find.query", "Find query", query},
                  {"replace.replacement", "Replace with",
                   runtime.find_replace.view_state().replacement}},
-                {}, PromptMatchCount{"find.count", "Match count", ""}});
+                find_option_toggles(runtime),
+                PromptMatchCount{"find.count", "Match count", ""}});
             return success();
         case FindReplaceCommand::replace_update_replacement: {
             if (!replace_prompt_active(runtime)) return success();
@@ -276,10 +300,12 @@ CommandHandlerResult bind_find_replace(EditorRuntime::Impl& runtime,
             }
             return success();
         case FindReplaceCommand::find_next:
+            if (!find_or_replace_prompt_active(runtime)) return success();
             runtime.find_replace.next();
             reveal_active_find_match(runtime);
             return success();
         case FindReplaceCommand::find_previous:
+            if (!find_or_replace_prompt_active(runtime)) return success();
             runtime.find_replace.previous();
             reveal_active_find_match(runtime);
             return success();
@@ -292,14 +318,17 @@ CommandHandlerResult bind_find_replace(EditorRuntime::Impl& runtime,
             return success();
         }
         case FindReplaceCommand::find_toggle_case:
+            if (!find_or_replace_prompt_active(runtime)) return success();
             runtime.find_replace.toggle_case(snapshot);
             runtime.find_document_id = runtime.active_document_id();
             return success();
         case FindReplaceCommand::find_toggle_whole_word:
+            if (!find_or_replace_prompt_active(runtime)) return success();
             runtime.find_replace.toggle_whole_word(snapshot);
             runtime.find_document_id = runtime.active_document_id();
             return success();
         case FindReplaceCommand::find_toggle_regex:
+            if (!find_or_replace_prompt_active(runtime)) return success();
             runtime.find_replace.toggle_regex(snapshot);
             runtime.find_document_id = runtime.active_document_id();
             return success();
