@@ -115,8 +115,12 @@ the command to dispatch. The mapping `route_pointer` implements:
   mode.
 - **Left drag while dragging** (any `editor` cell) → `select.set_range` with
   `Selection{anchor, active}` where `active` = `resolve_document_position` of the
-  hit cell. A drag that leaves the editor content clamps to the last valid
-  in-editor position (no dispatch for a cell with no document target).
+  hit cell. A drag over a cell with no document target (past a short line's end,
+  a blank row, or **beyond the viewport edge**) dispatches nothing, so the
+  selection holds at the last in-viewport position. **M8-S is within-viewport
+  only:** dragging past the top/bottom edge does not scroll the document —
+  timer-driven edge auto-scroll is a separate step (M8-S2, below), because it
+  requires a periodic wake in the event loop rather than a per-event mapping.
 - **Left release** → end dragging (no dispatch; the last `set_range`/`set_position`
   already reflects the state).
 - **Left press on `editor_scrollbar`** → `view.scroll_to_fraction` with the hit's
@@ -224,7 +228,8 @@ only for end-to-end confirmation, not as the primary correctness oracle.
 |---|---|---|---|
 | M8-D | Decode SGR button press/release/drag into `DecodeStatus::pointer` + `PointerEvent{column,row,button,kind}`; enable/disable `1002h`; wheel decode unchanged; 0-based coordinate conversion; incompleteness at every boundary | `apps/ssg_terminal.{h,cpp}`, `tests/test_ssg_app.cpp` | decode table (exact `PointerEvent`s) for: left/middle/right press (`M`), release (`m`), drag (button+`32`, `M`), wheel still → `scroll`, out-of-order/partial split reads → `incomplete` at each parameter boundary; a 1-based `(1,1)` SGR coord decodes to grid `(0,0)` |
 | M8-C | Left click on the editor places the caret: introduce the pure `route_pointer` helper; route `pointer` press on `editor` → `cursor.set_position(resolve_document_position(document.text, byte_offset))` | `apps/ssg_main.cpp` (+ a small routing header/TU the test links), `tests/test_ssg_app.cpp` | `route_pointer` unit tests: a left press on an `editor` hit returns `cursor.set_position` with the resolved position; a press on `none`/`tab`/header returns no command; wired end-to-end, a synthesized left press moves the caret |
-| M8-S | Drag selects: press records a client anchor + dragging mode (`route_pointer` sets `begins_drag`); each drag → `select.set_range{Selection{anchor, active}}`; release clears dragging (`ends_drag`) | `apps/ssg_main.cpp` (routing), `tests/test_ssg_app.cpp` | `route_pointer` unit tests: press returns set_position + begins_drag; a subsequent drag with an anchor returns `select.set_range` with `Selection{anchor, active}`; release returns ends_drag + no command; drag with no anchor / non-editor hit returns no command; end-to-end press-then-drag spans the two cells |
+| M8-S | Drag selects (within-viewport): press records a client anchor + dragging mode (`route_pointer` sets `begins_drag`); each drag → `select.set_range{Selection{anchor, active}}`; release clears dragging (`ends_drag`). A drag over a cell with no document target (short line, blank row, past the viewport edge) dispatches nothing | `apps/ssg_main.cpp` (routing), `apps/pointer_routing.{h,cpp}`, `tests/test_ssg_app.cpp` | `route_pointer` unit tests: press returns set_position + begins_drag; a subsequent drag with an anchor returns `select.set_range` with `Selection{anchor, active}`; release returns ends_drag + no command; drag with no anchor / non-editor hit / unresolved position returns no command; end-to-end press-then-drag spans the two cells |
+| M8-S2 | Edge auto-scroll during drag (event-loop timer): while a drag is active and the pointer is at/beyond the top or bottom of the editor content, wake the loop periodically (bounded `input_ready` timeout) to dispatch `view.scroll_lines(±1)` and re-extend the selection to the new edge, so a drag past the fold scrolls and keeps selecting. No pointer event is required to keep scrolling (the mouse may hold still at the edge) | `apps/ssg_main.cpp` (event loop: timed read while edge-dragging), `tests/test_ssg_app.cpp` (a pure edge-scroll-decision helper) | a pure helper `edge_scroll(drag active, pointer row, editor content rect) -> optional<int lines>` returns −1 above the top, +1 below the bottom, none inside; unit-tested at both edges and the interior; end-to-end (PTY) a drag held past the bottom keeps scrolling and extending the selection |
 | M8-B | Editor scrollbar click/drag scrolls: route press/drag on `editor_scrollbar` → `view.scroll_to_fraction{numerator, denominator}` from the hit; panel/palette gutter → no command | `apps/ssg_main.cpp` (routing), `tests/test_ssg_app.cpp` | `route_pointer` unit tests: an `editor_scrollbar` hit at the bottom (num==denom) returns `view.scroll_to_fraction` yielding `maximum_first_row`, at the top yields `0`; a `panel_scrollbar`/`palette_scrollbar` hit returns no command; end-to-end drag on the editor gutter scrolls |
 | M8-T | Tabs + palette clicks: layout publishes a typed `TabHit{rect,index}` list on `ShellViewState` (codec + `shell_equal` + round-trip); `hit_test` gains `HitRegion::tab` + `tab_index`; route tab press → `tab.activate(TabId from tabs[index])`, palette-row press → `palette.execute(candidate id for item_index)` | `include/ssg/ui_layout.h`, `src/ui_layout.cpp`, `include/ssg/hit_test.h`, `src/hit_test.cpp`, `src/protocol.cpp`, `src/session_snapshot.cpp`, `tests/test_hit_test.cpp`, `tests/test_protocol.cpp`, `tests/test_editor_session_assembly.cpp`, `apps/ssg_main.cpp`, `tests/test_ssg_app.cpp` | `hit_test` over a tab cell returns `tab` + the right index; padding on the tab bar → `none`; `TabHit` round-trips + a tab-hit-only shell change is not suppressed by `shell_equal`; `route_pointer` maps a tab hit → `tab.activate(TabId)` and a palette hit → `palette.execute(id)`; end-to-end a tab click activates it |
 | M8-R | Tree node click: add `tree.select` with a `TreeSelectArguments{TreeNodeId}` payload (`keymap:false`/`palette:false`/`lua:true`) + catalog cascade + protocol round-trip; route panel press → `tree.select(node_id)` then `tree.activate` | `include/ssg/tree.h`, `src/tree.cpp`, `src/runtime/navigation.cpp`, `data/required-commands.json`, `tests/test_required_commands.cpp`, `tests/runtime/command_cases.h`, `src/protocol.cpp`, `tests/test_protocol.cpp`, `apps/ssg_main.cpp`, `tests/runtime/test_runtime_navigation.cpp`, `tests/test_ssg_app.cpp` | runtime: `tree.select(node_id)` makes that node the selection (and rejects an unknown id); `route_pointer` maps a panel hit → the ordered pair `[tree.select(node_id), tree.activate]`; end-to-end a click on a tree row selects that node and then activates it (opens a file / toggles a directory) as the keyboard select+activate does |
@@ -259,6 +264,16 @@ only for end-to-end confirmation, not as the primary correctness oracle.
   chatty, the app may coalesce consecutive drag events between snapshots (the loop
   already coalesces buffered input) — an optimization, not required for
   correctness.
+- **Edge auto-scroll is M8-S2, not M8-S.** `hit_test` returns `none` for a cell
+  past the last line or below the pane, and `1002h` reports motion only while the
+  pointer *moves*, so a within-viewport drag (M8-S) cannot scroll: it holds the
+  selection at the last in-viewport position. Continuous auto-scroll — where a
+  drag held still at the bottom edge keeps scrolling — needs a periodic wake in
+  the event loop (the loop currently blocks on `::read`; it already has
+  `input_ready(timeout)` for Escape disambiguation, so a timed read is feasible).
+  Because that is an event-loop change with a loop-behavior oracle rather than a
+  pure-`route_pointer` mapping, it is a dedicated step (M8-S2) after M8-S, keeping
+  each step hand-validatable.
 - **Click = select + activate for the tree.** This mirrors `Enter` (select then
   open/expand). It means a single click on a directory toggles it and on a file
   opens it. If that feels too eager, a later refinement can distinguish single
