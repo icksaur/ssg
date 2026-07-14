@@ -119,14 +119,14 @@ class TreeCommandSet {
 public:
     TreeCommandSet(const TreeCommandSet&) = default;
     TreeCommandSet& operator=(const TreeCommandSet&) = delete;
-    const std::array<TreeCommandDescriptor, 5>& descriptors() const noexcept {
+    const std::array<TreeCommandDescriptor, 6>& descriptors() const noexcept {
         return descriptors_;
     }
 
 private:
     friend TreeCommandSet tree_command_set();
     TreeCommandSet();
-    const std::array<TreeCommandDescriptor, 5> descriptors_;
+    const std::array<TreeCommandDescriptor, 6> descriptors_;
 };
 
 TreeCommandSet tree_command_set();
@@ -168,6 +168,14 @@ struct TreeCommandInvocation {
     bool operator==(const TreeCommandInvocation&) const = default;
 };
 
+// Argument for `tree.select`: the node to make the active provider's selection.
+// A dedicated payload (rather than the TreeCommandInvocation triple) keeps a
+// click's argument minimal -- a pointer click needs only the node id.
+struct TreeSelectArguments {
+    TreeNodeId node_id;
+    bool operator==(const TreeSelectArguments&) const = default;
+};
+
 class TreeModel {
 public:
     void replace_provider(TreeProviderSnapshot snapshot);
@@ -183,6 +191,10 @@ public:
     // is library-owned UI state so every client presents the same focus.
     bool select_next();
     bool select_previous();
+    // Set the active provider's selection to `node_id`. Returns false (leaving
+    // the selection unchanged) when no provider is active or the id is not among
+    // the active provider's visible nodes.
+    bool select(const TreeNodeId& node_id);
     bool toggle_selected();  // Expand/collapse the selected directory.
     [[nodiscard]] std::optional<TreeNode> selected_node() const;
 

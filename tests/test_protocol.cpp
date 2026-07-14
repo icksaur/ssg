@@ -188,6 +188,22 @@ TEST(command_request_round_trips_with_find_query_arguments) {
 }
 
 
+TEST(command_request_round_trips_with_tree_select_arguments) {
+    auto const registry = ssg::build_command_argument_codec_registry();
+    ssg::ClientCommand const command{
+        "tree.select", ssg::Revision{9},
+        ssg::TreeSelectArguments{ssg::TreeNodeId{"files:src/main.cpp"}}};
+    auto const bytes = ssg::encode_command_request(command, registry);
+    auto const decoded = ssg::decode_command_request(bytes, registry);
+    ASSERT_TRUE(decoded.accepted());
+    ASSERT_EQ(decoded.command->id, command.id);
+    auto const* arguments =
+        std::any_cast<ssg::TreeSelectArguments>(&decoded.command->payload);
+    ASSERT_TRUE(arguments != nullptr);
+    ASSERT_EQ(*arguments,
+              std::any_cast<ssg::TreeSelectArguments>(command.payload));
+}
+
 TEST(command_request_round_trips_with_no_payload) {
     auto const registry = ssg::build_command_argument_codec_registry();
     ssg::ClientCommand const command{"edit.undo", ssg::Revision{3}, {}};
@@ -916,6 +932,7 @@ int main() {
     RUN(registry_rejects_duplicate_entries);
     RUN(command_request_round_trips_with_no_payload);
     RUN(command_request_round_trips_with_palette_execute_arguments);
+    RUN(command_request_round_trips_with_tree_select_arguments);
     RUN(command_request_round_trips_with_replace_replacement_arguments);
     RUN(find_replace_view_state_round_trips_replacement_through_the_wire);
     RUN(command_request_round_trips_with_text_input_arguments);

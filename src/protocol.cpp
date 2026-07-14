@@ -1328,6 +1328,8 @@ ProtocolValue to_value(TextInputArguments const& value);
 bool decode_present(ProtocolValue const& value, std::optional<TextInputArguments>& out);
 ProtocolValue to_value(PaletteExecuteArguments const& value);
 bool decode_present(ProtocolValue const& value, std::optional<PaletteExecuteArguments>& out);
+ProtocolValue to_value(TreeSelectArguments const& value);
+bool decode_present(ProtocolValue const& value, std::optional<TreeSelectArguments>& out);
 ProtocolValue to_value(FindQueryArguments const& value);
 bool decode_present(ProtocolValue const& value, std::optional<FindQueryArguments>& out);
 ProtocolValue to_value(SelectionCommandArguments const& value);
@@ -4571,6 +4573,20 @@ bool decode_present(ProtocolValue const& value, std::optional<PaletteExecuteArgu
     return true;
 }
 
+ProtocolValue to_value(TreeSelectArguments const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("node_id", to_value(value.node_id));
+    return ProtocolValue::make_object(std::move(fields));
+}
+bool decode_present(ProtocolValue const& value, std::optional<TreeSelectArguments>& out) {
+    auto const* object = value.as_object();
+    if (!object) return false;
+    auto node_id = require_field<TreeNodeId>(value.field("node_id"));
+    if (!node_id) return false;
+    out.emplace(TreeSelectArguments{*node_id});
+    return true;
+}
+
 ProtocolValue to_value(FindQueryArguments const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("query", to_value(value.query));
@@ -4942,6 +4958,7 @@ CommandArgumentCodecRegistry build_command_argument_codec_registry() {
     auto const none_codec = make_none_codec();
     auto const text_input_codec = make_typed_codec<TextInputArguments>();
     auto const palette_execute_codec = make_typed_codec<PaletteExecuteArguments>();
+    auto const tree_select_codec = make_typed_codec<TreeSelectArguments>();
     auto const find_query_codec = make_typed_codec<FindQueryArguments>();
     auto const selection_codec =
         make_typed_codec<SelectionCommandArguments>();
@@ -4996,6 +5013,8 @@ CommandArgumentCodecRegistry build_command_argument_codec_registry() {
             entries.emplace_back(descriptor.id, workspace_apply_codec);
         } else if (descriptor.id == "palette.execute") {
             entries.emplace_back(descriptor.id, palette_execute_codec);
+        } else if (descriptor.id == "tree.select") {
+            entries.emplace_back(descriptor.id, tree_select_codec);
         } else if (descriptor.id == "find.update_query") {
             entries.emplace_back(descriptor.id, find_query_codec);
         } else if (descriptor.id == "replace.update_replacement") {

@@ -205,6 +205,62 @@ TEST(tree_scrolls_to_keep_selection_visible_in_a_short_panel) {
     std::filesystem::remove_all(root);
 }
 
+TEST(tree_select_sets_selection_to_a_node_and_rejects_unknown_ids) {
+    auto root = std::filesystem::current_path() / "runtime_nav_treeselect";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root / "workspace");
+    std::filesystem::create_directories(root / "scratch");
+    std::filesystem::create_directories(root / "recovery");
+    for (int i = 0; i < 6; ++i) {
+        char name[32];
+        std::snprintf(name, sizeof name, "file-%02d.txt", i);
+        std::ofstream{root / "workspace" / name} << "x";
+    }
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process},
+                               ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"panel.toggle", runtime.revision(), {}}).accepted());
+    // Expand the workspace root so its files become visible/selectable nodes.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select_next", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.activate", runtime.revision(), {}}).accepted());
+
+    const ssg::ViewportDimensions dims{80, 24};
+    auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(snap.has_value());
+    if (!snap) return;
+    auto const& nodes = snap->sections().tree.providers.front().nodes;
+    ASSERT_TRUE(nodes.size() >= 4);
+    if (nodes.size() < 4) return;
+    // Pick a node that is NOT already selected (the third visible node).
+    auto const target = nodes[2].node.id;
+
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"tree.select", runtime.revision(),
+                                  ssg::TreeSelectArguments{target}}).accepted());
+    auto after = runtime.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(after.has_value());
+    if (!after) return;
+    ASSERT_TRUE(after->sections().tree.providers.front().selected.has_value());
+    ASSERT_EQ(*after->sections().tree.providers.front().selected, target);
+
+    // An id absent from the active provider is rejected; a missing payload too.
+    ASSERT_FALSE(runtime.dispatch(ssg::ClientId{1},
+                                  {"tree.select", runtime.revision(),
+                                   ssg::TreeSelectArguments{ssg::TreeNodeId{"nope"}}}).accepted());
+    ASSERT_FALSE(runtime.dispatch(ssg::ClientId{1},
+                                  {"tree.select", runtime.revision(), {}}).accepted());
+    // The selection is unchanged after the rejected attempts.
+    auto again = runtime.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(again.has_value());
+    if (!again) return;
+    ASSERT_EQ(*again->sections().tree.providers.front().selected, target);
+    std::filesystem::remove_all(root);
+}
+
 } // namespace
 
 int main() {
@@ -213,6 +269,7 @@ int main() {
     RUN(palette_execute_validates_candidate_membership);
     RUN(palette_candidates_carry_labels_and_key_detail);
     RUN(tree_scrolls_to_keep_selection_visible_in_a_short_panel);
+    RUN(tree_select_sets_selection_to_a_node_and_rejects_unknown_ids);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

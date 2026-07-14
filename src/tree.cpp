@@ -297,6 +297,7 @@ TreeProviderSnapshot symbol_tree_snapshot(
 TreeCommandSet::TreeCommandSet()
     : descriptors_{{{"tree.toggle_expanded"},
                     {"tree.invoke_node_command"},
+                    {"tree.select"},
                     {"tree.select_next"},
                     {"tree.select_previous"},
                     {"tree.activate"}}} {}
@@ -393,6 +394,21 @@ bool TreeModel::select_previous() {
         }
     }
     selected_ = visible[index].node.id;
+    revision_ = TreeRevision{revision_.value() + 1};
+    return true;
+}
+
+bool TreeModel::select(const TreeNodeId& node_id) {
+    auto* provider = active_provider();
+    if (provider == nullptr) return false;
+    auto visible = visible_nodes(provider->snapshot, provider->expanded);
+    const bool present =
+        std::any_of(visible.begin(), visible.end(), [&](const TreeNodeView& view) {
+            return view.node.id == node_id;
+        });
+    if (!present) return false;
+    if (selected_ && *selected_ == node_id) return true;
+    selected_ = node_id;
     revision_ = TreeRevision{revision_.value() + 1};
     return true;
 }

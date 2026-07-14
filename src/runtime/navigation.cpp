@@ -98,6 +98,13 @@ CommandHandlerResult tree_command(EditorRuntime::Impl& runtime, std::string_view
         }
         return success();
     }
+    if (id == "tree.select") {
+        auto const* arguments = payload_as<TreeSelectArguments>(payload);
+        if (arguments == nullptr) return failure("tree.select requires a node id payload");
+        if (!runtime.tree.select(arguments->node_id)) return failure("tree node is not selectable");
+        runtime.reveal_tree_selection();
+        return success();
+    }
     auto const* invocation = payload_as<TreeCommandInvocation>(payload);
     if (invocation == nullptr) return failure(std::string{id} + " requires a tree invocation payload");
     if (id == "tree.toggle_expanded") {

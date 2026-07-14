@@ -611,6 +611,38 @@ TEST(route_pointer_palette_press_executes_the_candidate) {
     ASSERT_TRUE(unresolved.commands.empty());
 }
 
+TEST(route_pointer_panel_press_selects_and_activates_the_node) {
+    ssg::RegionHit hit;
+    hit.region = ssg::HitRegion::panel;
+    hit.node_id = ssg::TreeNodeId{"files:src/main.cpp"};
+    ssg::app::PointerTargets const empty;
+
+    auto plan = ssg::app::route_pointer(hit, ssg::app::PointerButton::left,
+                                        ssg::app::PointerKind::press, false,
+                                        std::nullopt, empty);
+    // A tree-row click selects the node, then activates it (matching keyboard
+    // select-then-Enter), in that order.
+    ASSERT_EQ(plan.commands.size(), std::size_t{2});
+    if (plan.commands.size() == 2) {
+        ASSERT_EQ(plan.commands[0].command_id, std::string{"tree.select"});
+        auto const* args = std::any_cast<ssg::TreeSelectArguments>(
+            &plan.commands[0].payload);
+        ASSERT_TRUE(args != nullptr);
+        if (args) ASSERT_EQ(args->node_id, *hit.node_id);
+        ASSERT_EQ(plan.commands[1].command_id, std::string{"tree.activate"});
+    }
+    ASSERT_FALSE(plan.begins_drag);
+    ASSERT_FALSE(plan.ends_drag);
+
+    // A panel hit with no node id (the provider-label row / empty area) is inert.
+    ssg::RegionHit no_node;
+    no_node.region = ssg::HitRegion::panel;
+    auto inert = ssg::app::route_pointer(
+        no_node, ssg::app::PointerButton::left, ssg::app::PointerKind::press,
+        false, std::nullopt, empty);
+    ASSERT_TRUE(inert.commands.empty());
+}
+
 int main() {
     RUN(resolve_launch_no_argument_opens_cwd);
     RUN(resolve_launch_directory_opens_that_directory);
@@ -633,6 +665,7 @@ int main() {
     RUN(route_pointer_panel_and_palette_scrollbars_are_no_ops);
     RUN(route_pointer_tab_press_activates_the_tab);
     RUN(route_pointer_palette_press_executes_the_candidate);
+    RUN(route_pointer_panel_press_selects_and_activates_the_node);
     RUN(decode_input_escape_boundary_is_bounded);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";

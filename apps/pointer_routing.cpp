@@ -2,6 +2,7 @@
 
 #include <ssg/input.h>
 #include <ssg/palette.h>
+#include <ssg/tree.h>
 
 namespace ssg::app {
 
@@ -40,6 +41,15 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
                 dispatch.commands.push_back(
                     {"palette.execute",
                      ssg::PaletteExecuteArguments{*targets.palette_command_id}});
+                return dispatch;
+            }
+            // A left press on a tree row selects that node and then activates it
+            // (opens a file / toggles a directory), matching the keyboard
+            // select-then-Enter behavior. The node id travels on the hit.
+            if (hit.region == ssg::HitRegion::panel && hit.node_id) {
+                dispatch.commands.push_back(
+                    {"tree.select", ssg::TreeSelectArguments{*hit.node_id}});
+                dispatch.commands.push_back({"tree.activate", std::any{}});
                 return dispatch;
             }
             // A left press on the editor places the caret and begins a potential

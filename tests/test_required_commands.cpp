@@ -151,6 +151,7 @@ constexpr auto expected_commands = std::to_array<ExpectedCommand>({
     {"panel.previous_provider", "shell-layout"},
     {"tree.toggle_expanded", "tree-providers"},
     {"tree.invoke_node_command", "tree-providers"},
+    {"tree.select", "tree-providers"},
     {"tree.select_next", "tree-providers"},
     {"tree.select_previous", "tree-providers"},
     {"tree.activate", "tree-providers"},
@@ -210,13 +211,13 @@ constexpr auto expected_category_counts =
         {"replace", 6},    {"search", 3},    {"completion", 5},
         {"hover", 2},      {"rename", 1},    {"pane", 9},
         {"panel", 4},
-        {"tree", 5},
+        {"tree", 6},
         {"prompt", 2},     {"status", 4},    {"workspace", 1},
         {"file", 15},      {"tab", 9},       {"external", 3},
         {"settings", 6},   {"follow_edits", 2}, {"diff", 3},
     });
 
-static_assert(expected_commands.size() == 166);
+static_assert(expected_commands.size() == 167);
 
 std::optional<std::string> field(const std::string& object,
                                  const std::string& name) {
@@ -430,6 +431,15 @@ TEST(capability_and_surface_exclusions_are_exact) {
             // Client-fulfilment commands: the client edits the query/replacement
             // and reports the full next string, so each carries a payload and is
             // neither keymap- nor palette-reachable, but remains Lua-scriptable.
+            ASSERT_TRUE(command.required_capabilities.empty());
+            ASSERT_TRUE(command.lua);
+            ASSERT_FALSE(command.keymap);
+            ASSERT_FALSE(command.palette);
+        } else if (command.id == "tree.select") {
+            // A pointer-fulfilment command: a click selects a specific tree node
+            // by id, so it carries a node-id payload and is neither keymap- nor
+            // palette-reachable (the keyboard selects via next/previous), but
+            // remains Lua-scriptable.
             ASSERT_TRUE(command.required_capabilities.empty());
             ASSERT_TRUE(command.lua);
             ASSERT_FALSE(command.keymap);

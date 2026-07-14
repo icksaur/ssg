@@ -130,14 +130,15 @@ TEST(expansion_survives_refresh_by_identity_and_disappearing_nodes_are_pruned) {
 
 TEST(command_set_is_exact_and_invocation_is_provider_data_only) {
     const auto commands = tree_command_set();
-    ASSERT_EQ(commands.descriptors().size(), std::size_t{5});
+    ASSERT_EQ(commands.descriptors().size(), std::size_t{6});
     ASSERT_EQ(commands.descriptors()[0].id, std::string_view{"tree.toggle_expanded"});
     ASSERT_EQ(commands.descriptors()[1].id,
               std::string_view{"tree.invoke_node_command"});
-    ASSERT_EQ(commands.descriptors()[2].id, std::string_view{"tree.select_next"});
-    ASSERT_EQ(commands.descriptors()[3].id,
+    ASSERT_EQ(commands.descriptors()[2].id, std::string_view{"tree.select"});
+    ASSERT_EQ(commands.descriptors()[3].id, std::string_view{"tree.select_next"});
+    ASSERT_EQ(commands.descriptors()[4].id,
               std::string_view{"tree.select_previous"});
-    ASSERT_EQ(commands.descriptors()[4].id, std::string_view{"tree.activate"});
+    ASSERT_EQ(commands.descriptors()[5].id, std::string_view{"tree.activate"});
 
     TreeModel model;
     model.replace_provider(symbol_tree_snapshot(
@@ -196,6 +197,35 @@ TEST(selection_navigates_expands_and_reports_selected_node) {
                       TreeNodeId{"symbols:A/one"});
         }
     }
+}
+
+TEST(select_by_id_sets_visible_selection_and_rejects_unknown_or_hidden_nodes) {
+    TreeModel model;
+    model.replace_provider(symbol_tree_snapshot(
+        TreeProviderId{"symbols"}, TreeRevision{1},
+        {{.stable_key = "A", .label = "A"},
+         {.stable_key = "A/one", .parent_key = "A", .label = "one"},
+         {.stable_key = "B", .label = "B"}}));
+
+    // A is auto-selected; select B directly by id.
+    ASSERT_TRUE(model.select(TreeNodeId{"symbols:B"}));
+    auto selected = model.selected_node();
+    ASSERT_TRUE(selected.has_value());
+    if (selected) ASSERT_EQ(selected->id, TreeNodeId{"symbols:B"});
+
+    // An id that is not a node at all is rejected, leaving the selection intact.
+    ASSERT_FALSE(model.select(TreeNodeId{"symbols:missing"}));
+    selected = model.selected_node();
+    if (selected) ASSERT_EQ(selected->id, TreeNodeId{"symbols:B"});
+
+    // A/one is hidden while A is collapsed, so selecting it is rejected.
+    ASSERT_FALSE(model.select(TreeNodeId{"symbols:A/one"}));
+    // Expand A, then it becomes selectable.
+    ASSERT_TRUE(model.select(TreeNodeId{"symbols:A"}));
+    ASSERT_TRUE(model.toggle_selected());
+    ASSERT_TRUE(model.select(TreeNodeId{"symbols:A/one"}));
+    selected = model.selected_node();
+    if (selected) ASSERT_EQ(selected->id, TreeNodeId{"symbols:A/one"});
 }
 
 TEST(bounded_delta_replays_to_independent_view_and_rejects_stale_base) {
@@ -257,6 +287,7 @@ int main() {
     RUN(expansion_survives_refresh_by_identity_and_disappearing_nodes_are_pruned);
     RUN(command_set_is_exact_and_invocation_is_provider_data_only);
     RUN(selection_navigates_expands_and_reports_selected_node);
+    RUN(select_by_id_sets_visible_selection_and_rejects_unknown_or_hidden_nodes);
     RUN(bounded_delta_replays_to_independent_view_and_rejects_stale_base);
     RUN(over_budget_delta_requires_snapshot_without_partial_operations);
     return failed == 0 ? 0 : 1;

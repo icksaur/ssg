@@ -118,6 +118,7 @@
     {"id":"panel.previous_provider","owner":"shell-layout","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"tree.toggle_expanded","owner":"tree-providers","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"tree.invoke_node_command","owner":"tree-providers","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
+    {"id":"tree.select","owner":"tree-providers","required_capabilities":[],"lua":true,"keymap":false,"palette":false},
     {"id":"tree.select_next","owner":"tree-providers","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"tree.select_previous","owner":"tree-providers","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"tree.activate","owner":"tree-providers","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
