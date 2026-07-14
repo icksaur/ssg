@@ -239,11 +239,50 @@ void paint_palette(CellGrid& grid, PaletteProjection const& palette,
     }
 }
 
+// Whether a document byte offset falls inside any ranged (non-caret) selection.
+// Caret selections (anchor == active) have no width and are not highlighted.
+bool offset_in_selection(SelectionViewState const& selection,
+                         std::uint64_t offset) {
+    for (auto const& item : selection.selections.items()) {
+        if (item.is_caret()) continue;
+        auto const lo = item.lower().byte_offset.value();
+        auto const hi = item.upper().byte_offset.value();
+        if (offset >= lo && offset < hi) return true;
+    }
+    return false;
+}
+
+// The screen cell for a document position (line, cell) within the content rect,
+// or nullopt if it is not on a visible row.  Used to place the primary hardware
+// cursor and to paint secondary caret cells.
+std::optional<GridPosition> screen_cell_for(ViewportViewState const& viewport,
+                                            Rect const& content,
+                                            std::uint32_t caret_line,
+                                            std::uint32_t caret_cell) {
+    for (std::size_t index = 0; index < viewport.visible_rows.size(); ++index) {
+        auto const& row = viewport.visible_rows[index];
+        if (row.logical_line != caret_line) continue;
+        auto const start = row.start_cell.value();
+        auto const end = start + row.content_cells;
+        if (caret_cell < start || caret_cell > end) continue;
+        int const column = content.x + static_cast<int>(caret_cell - start);
+        int const screen_row = content.y + static_cast<int>(index);
+        if (column >= content.x && column < content.right() &&
+            screen_row >= content.y && screen_row < content.bottom()) {
+            return GridPosition{column, screen_row};
+        }
+        break;
+    }
+    return std::nullopt;
+}
+
 void paint_document(CellGrid& grid, SessionSnapshot const& snapshot,
                     Rect const& content, ThemeSnapshot const& theme,
                     std::uint8_t background) {
     auto lines = logical_lines(snapshot.sections().document.text);
     auto const& viewport = snapshot.client().viewport;
+    auto const& selection = snapshot.sections().selection;
+    auto const selection_bg = semantic_index(theme, SemanticRole::selection);
     for (std::size_t row_index = 0; row_index < viewport.visible_rows.size();
          ++row_index) {
         auto const& row = viewport.visible_rows[row_index];
@@ -271,19 +310,33 @@ void paint_document(CellGrid& grid, SessionSnapshot const& snapshot,
             auto const scope =
                 scope_at(snapshot.sections().syntax, ByteOffset{document_offset});
             auto const foreground = syntax_index(theme, scope);
+            auto const selected = offset_in_selection(selection, document_offset);
+            auto const cell_bg = selected ? selection_bg : background;
+            auto const cell_role =
+                selected ? SemanticRole::selection : SemanticRole::foreground;
             auto const width = std::max<std::uint32_t>(span.cell_width, 1);
             put(grid, column, content.y + static_cast<int>(row_index),
-                std::move(text), foreground, background,
-                SemanticRole::foreground);
+                std::move(text), foreground, cell_bg, cell_role);
             for (std::uint32_t offset = 1;
                  offset < width &&
                  column + static_cast<int>(offset) < content.right();
                  ++offset) {
                 put(grid, column + static_cast<int>(offset),
                     content.y + static_cast<int>(row_index), "", foreground,
-                    background, SemanticRole::foreground, true);
+                    cell_bg, cell_role, true);
             }
             column += static_cast<int>(width);
+        }
+        // A selection spanning into the next line highlights this line's
+        // end-of-line: the newline byte at the line's end offset lies inside the
+        // selection range, so fill the remaining columns with the selection role.
+        auto const line_end = line.document_offset + line.text.size();
+        if (offset_in_selection(selection, line_end)) {
+            auto const foreground = semantic_index(theme, SemanticRole::foreground);
+            for (int fill = column; fill < content.right(); ++fill) {
+                put(grid, fill, content.y + static_cast<int>(row_index), " ",
+                    foreground, selection_bg, SemanticRole::selection);
+            }
         }
     }
 }
@@ -396,28 +449,34 @@ CellGrid render(SessionSnapshot const& snapshot) {
                             theme, background);
 
             // Place the primary caret at its screen cell so the client can position
-            // a terminal cursor there, but only when the editor is focused.
+            // a terminal cursor there, and paint any secondary carets as cells
+            // (a terminal has one hardware cursor), but only when the editor is
+            // focused.
             if (shell.focus == FocusTarget::editor) {
-            auto const& content = shell.panes.front().content;
-            auto const& viewport = snapshot.client().viewport;
-            auto const& primary = snapshot.sections().selection.selections.primary();
-            auto const caret_line = primary.active.line.value();
-            auto const caret_cell = primary.active.cell.value();
-            for (std::size_t index = 0; index < viewport.visible_rows.size();
-                 ++index) {
-                auto const& row = viewport.visible_rows[index];
-                if (row.logical_line != caret_line) continue;
-                auto const start = row.start_cell.value();
-                auto const end = start + row.content_cells;
-                if (caret_cell < start || caret_cell > end) continue;
-                int const column = content.x + static_cast<int>(caret_cell - start);
-                int const screen_row = content.y + static_cast<int>(index);
-                if (column >= content.x && column < content.right() &&
-                    screen_row >= content.y && screen_row < content.bottom()) {
-                    grid.caret = GridPosition{column, screen_row};
+                auto const& content = shell.panes.front().content;
+                auto const& viewport = snapshot.client().viewport;
+                auto const& selections =
+                    snapshot.sections().selection.selections;
+                auto const& primary = selections.primary();
+                if (auto cell = screen_cell_for(viewport, content,
+                                                primary.active.line.value(),
+                                                primary.active.cell.value())) {
+                    grid.caret = *cell;
                 }
-                break;
-            }
+                auto const caret_bg = semantic_index(theme, SemanticRole::caret);
+                auto const caret_fg = semantic_index(theme, SemanticRole::background);
+                for (auto const& item : selections.items()) {
+                    if (&item == &primary) continue;  // Primary uses grid.caret.
+                    if (!item.is_caret()) continue;    // Ranged carets: no cursor cell.
+                    auto cell = screen_cell_for(viewport, content,
+                                                item.active.line.value(),
+                                                item.active.cell.value());
+                    if (!cell) continue;
+                    auto const& existing = grid.at(cell->column, cell->row);
+                    put(grid, cell->column, cell->row,
+                        existing.text.empty() ? std::string{" "} : existing.text,
+                        caret_fg, caret_bg, SemanticRole::caret);
+                }
             }
         }
     }

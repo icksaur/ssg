@@ -194,12 +194,113 @@ TEST(render_shows_palette_query_and_ghost_in_header) {
     ASSERT_TRUE(ghost_dim_role);
 }
 
+TEST(render_paints_selection_highlight_and_secondary_carets) {
+    auto root = unique_root();
+    std::ofstream{root / "sel.txt"} << "alpha\nbeta\n";
+    auto runtime = make_runtime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(
+        ssg::ClientId{1},
+        {"file.open", runtime->revision(), std::string{"sel.txt"}});
+
+    // Baseline: no selection -> the document row has no selection-role cells.
+    {
+        auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+        ASSERT_TRUE(snapshot.has_value());
+        if (!snapshot) return;
+        auto grid = ssg::render(*snapshot);
+        bool any_selection = false;
+        for (int row = 0; row < grid.size.rows; ++row) {
+            for (int col = 0; col < grid.size.columns; ++col) {
+                if (grid.at(col, row).role == ssg::SemanticRole::selection) {
+                    any_selection = true;
+                }
+            }
+        }
+        ASSERT_FALSE(any_selection);
+    }
+
+    // Select to end of the first line: "alpha" cells carry the selection role.
+    (void)runtime->dispatch(ssg::ClientId{1},
+                            {"select.line_end", runtime->revision(), {}});
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    auto grid = ssg::render(*snapshot);
+
+    int alpha_row = -1;
+    for (int row = 0; row < grid.size.rows; ++row) {
+        if (row_text(grid, row).find("alpha") != std::string::npos) alpha_row = row;
+    }
+    ASSERT_TRUE(alpha_row >= 0);
+    if (alpha_row < 0) return;
+
+    // Find the first column of "alpha" on that row.
+    int alpha_col = -1;
+    for (int col = 0; col + 5 <= grid.size.columns; ++col) {
+        std::string window;
+        for (int k = 0; k < 5; ++k) window += grid.at(col + k, alpha_row).text;
+        if (window == "alpha") { alpha_col = col; break; }
+    }
+    ASSERT_TRUE(alpha_col >= 0);
+    if (alpha_col < 0) return;
+    for (int k = 0; k < 5; ++k) {
+        ASSERT_EQ(grid.at(alpha_col + k, alpha_row).role,
+                  ssg::SemanticRole::selection);
+    }
+    // The hardware caret sits at the primary active position (end of "alpha").
+    ASSERT_TRUE(grid.caret.has_value());
+    if (grid.caret) {
+        ASSERT_EQ(grid.caret->row, alpha_row);
+        ASSERT_EQ(grid.caret->column, alpha_col + 5);
+    }
+}
+
+TEST(render_paints_secondary_caret_as_a_cell) {
+    auto root = unique_root();
+    std::ofstream{root / "car.txt"} << "alpha\nbeta\n";
+    auto runtime = make_runtime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(
+        ssg::ClientId{1},
+        {"file.open", runtime->revision(), std::string{"car.txt"}});
+
+    // Two carets (primary + one below): the primary uses the hardware cursor,
+    // the other renders as a caret-role cell.
+    (void)runtime->dispatch(ssg::ClientId{1},
+                            {"select.add_cursor_down", runtime->revision(), {}});
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    ASSERT_EQ(snapshot->sections().selection.selections.items().size(),
+              std::size_t{2});
+    auto grid = ssg::render(*snapshot);
+    ASSERT_TRUE(grid.caret.has_value());
+
+    int painted_secondary = 0;
+    for (int row = 0; row < grid.size.rows; ++row) {
+        for (int col = 0; col < grid.size.columns; ++col) {
+            bool const is_primary = grid.caret && grid.caret->row == row &&
+                                    grid.caret->column == col;
+            if (grid.at(col, row).role == ssg::SemanticRole::caret && !is_primary) {
+                ++painted_secondary;
+            }
+        }
+    }
+    // Exactly one caret is painted as a cell; the other is the hardware cursor.
+    ASSERT_EQ(painted_secondary, 1);
+}
+
 int main() {
     RUN(render_paints_content_not_accessibility_labels);
     RUN(render_colors_are_palette_indices);
     RUN(render_is_deterministic);
     RUN(render_projects_palette_results_into_active_pane);
     RUN(render_shows_palette_query_and_ghost_in_header);
+    RUN(render_paints_selection_highlight_and_secondary_carets);
+    RUN(render_paints_secondary_caret_as_a_cell);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;
