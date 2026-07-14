@@ -483,6 +483,78 @@ TEST(route_pointer_release_ends_drag_without_a_command) {
     ASSERT_FALSE(stray.ends_drag);
 }
 
+TEST(route_pointer_editor_scrollbar_scrolls_to_fraction) {
+    // A press or drag on the editor gutter scrolls to the fraction hit_test
+    // reported, independent of the selection drag state. The bottom of the
+    // gutter reports numerator == denominator (-> maximum_first_row); the top
+    // reports numerator 0 (-> first_row 0).
+    auto scroll_args = [](ssg::app::PointerDispatch const& plan)
+        -> ssg::ScrollFractionArguments const* {
+        if (plan.commands.size() != 1) return nullptr;
+        if (plan.commands[0].command_id != "view.scroll_to_fraction") return nullptr;
+        return std::any_cast<ssg::ScrollFractionArguments>(&plan.commands[0].payload);
+    };
+
+    ssg::RegionHit bottom;
+    bottom.region = ssg::HitRegion::editor_scrollbar;
+    bottom.scroll_numerator = 7;
+    bottom.scroll_denominator = 7;
+    ssg::app::PointerTargets const empty;
+
+    for (auto kind : {ssg::app::PointerKind::press, ssg::app::PointerKind::drag}) {
+        auto plan = ssg::app::route_pointer(
+            bottom, ssg::app::PointerButton::left, kind, false, std::nullopt, empty);
+        auto const* args = scroll_args(plan);
+        ASSERT_TRUE(args != nullptr);
+        if (args) {
+            ASSERT_EQ(args->numerator, std::uint32_t{7});
+            ASSERT_EQ(args->denominator, std::uint32_t{7});
+        }
+        ASSERT_FALSE(plan.begins_drag);
+        ASSERT_FALSE(plan.ends_drag);
+    }
+
+    ssg::RegionHit top;
+    top.region = ssg::HitRegion::editor_scrollbar;
+    top.scroll_numerator = 0;
+    top.scroll_denominator = 7;
+    auto top_plan = ssg::app::route_pointer(
+        top, ssg::app::PointerButton::left, ssg::app::PointerKind::press, false,
+        std::nullopt, empty);
+    auto const* top_args = scroll_args(top_plan);
+    ASSERT_TRUE(top_args != nullptr);
+    if (top_args) {
+        ASSERT_EQ(top_args->numerator, std::uint32_t{0});
+        ASSERT_EQ(top_args->denominator, std::uint32_t{7});
+    }
+
+    // A mid-drag onto the editor gutter scrolls even while a selection drag is
+    // active; the scrollbar path does not consult the drag anchor.
+    auto const anchor =
+        ssg::DocumentPosition{ssg::ByteOffset{3}, ssg::LineIndex{0}, ssg::CellIndex{3}};
+    auto mid = ssg::app::route_pointer(bottom, ssg::app::PointerButton::left,
+                                       ssg::app::PointerKind::drag, true, anchor,
+                                       empty);
+    ASSERT_TRUE(scroll_args(mid) != nullptr);
+}
+
+TEST(route_pointer_panel_and_palette_scrollbars_are_no_ops) {
+    // Panel/palette gutter drag is not wired in M8; those hits dispatch nothing.
+    ssg::app::PointerTargets const empty;
+    for (auto region : {ssg::HitRegion::panel_scrollbar,
+                        ssg::HitRegion::palette_scrollbar}) {
+        ssg::RegionHit hit;
+        hit.region = region;
+        hit.scroll_numerator = 3;
+        hit.scroll_denominator = 5;
+        for (auto kind : {ssg::app::PointerKind::press, ssg::app::PointerKind::drag}) {
+            auto plan = ssg::app::route_pointer(
+                hit, ssg::app::PointerButton::left, kind, false, std::nullopt, empty);
+            ASSERT_TRUE(plan.commands.empty());
+        }
+    }
+}
+
 int main() {
     RUN(resolve_launch_no_argument_opens_cwd);
     RUN(resolve_launch_directory_opens_that_directory);
@@ -501,6 +573,8 @@ int main() {
     RUN(route_pointer_drag_extends_selection_from_anchor);
     RUN(route_pointer_drag_without_anchor_or_target_is_a_no_op);
     RUN(route_pointer_release_ends_drag_without_a_command);
+    RUN(route_pointer_editor_scrollbar_scrolls_to_fraction);
+    RUN(route_pointer_panel_and_palette_scrollbars_are_no_ops);
     RUN(decode_input_escape_boundary_is_bounded);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";

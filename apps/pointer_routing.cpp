@@ -1,5 +1,7 @@
 #include "pointer_routing.h"
 
+#include <ssg/input.h>
+
 namespace ssg::app {
 
 PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
@@ -13,6 +15,18 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
 
     switch (kind) {
         case PointerKind::press:
+            // A left press or drag on the editor gutter scrolls the document to
+            // the fraction hit_test computed from the pointer row (M8-B). This is
+            // independent of the selection drag state: the server-owned scroll
+            // offset moves live as the thumb is dragged. Panel/palette gutters
+            // are not draggable yet, so they fall through to no command.
+            if (hit.region == ssg::HitRegion::editor_scrollbar) {
+                dispatch.commands.push_back(
+                    {"view.scroll_to_fraction",
+                     ssg::ScrollFractionArguments{hit.scroll_numerator,
+                                                  hit.scroll_denominator}});
+                return dispatch;
+            }
             // A left press on the editor places the caret and begins a potential
             // selection drag (the drag itself is routed on subsequent motion in
             // M8-S).  Requires the caller to have resolved the document position.
@@ -25,6 +39,15 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
             }
             return dispatch;
         case PointerKind::drag:
+            // Dragging the editor gutter thumb scrolls live, each motion (M8-B),
+            // independent of the selection drag state.
+            if (hit.region == ssg::HitRegion::editor_scrollbar) {
+                dispatch.commands.push_back(
+                    {"view.scroll_to_fraction",
+                     ssg::ScrollFractionArguments{hit.scroll_numerator,
+                                                  hit.scroll_denominator}});
+                return dispatch;
+            }
             // While dragging, a motion over an editor cell extends the selection
             // from the press anchor to the cell under the pointer. A drag over a
             // cell with no document target (short line, blank row, or beyond the
