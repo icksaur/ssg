@@ -385,6 +385,48 @@ TEST(find_closes_when_switching_to_a_different_document) {
     }
 }
 
+TEST(find_scrolls_the_viewport_to_follow_the_active_match) {
+    auto root = unique_root();
+    auto workspace = root / "workspace";
+    std::filesystem::create_directories(workspace);
+    std::string text;
+    for (int line = 0; line < 50; ++line) {
+        text += (line == 40) ? "target here" : "filler";
+        text += '\n';
+    }
+    std::ofstream{workspace / "tall.txt"} << text;
+    auto created = ssg::EditorRuntime::create({
+        workspace, root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"tall.txt"}}).accepted());
+
+    // Baseline: the viewport starts at the top.
+    {
+        auto snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        ASSERT_TRUE(snap.has_value());
+        if (snap) ASSERT_EQ(snap->client().viewport.first_visual_row, std::uint32_t{0});
+    }
+
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.open", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.update_query", runtime.revision(), ssg::FindQueryArguments{"target"}}).accepted());
+
+    // The match on line 40 lies below the initial 24-row viewport, so revealing
+    // it must scroll down and the match's logical line must be visible.
+    auto snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(snap.has_value());
+    if (!snap) return;
+    auto const& viewport = snap->client().viewport;
+    ASSERT_TRUE(viewport.first_visual_row > std::uint32_t{0});
+    bool match_line_visible = false;
+    for (auto const& row : viewport.visible_rows) {
+        if (row.logical_line == 40) match_line_visible = true;
+    }
+    ASSERT_TRUE(match_line_visible);
+}
+
 } // namespace
 
 int main() {

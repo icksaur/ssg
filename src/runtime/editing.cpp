@@ -163,6 +163,30 @@ CommandHandlerResult bind_clipboard(EditorRuntime::Impl& runtime, ClipboardComma
     return success();
 }
 
+// Move the primary selection onto the active find match and reveal it so the
+// viewport scrolls to follow find navigation (find.next/previous/update_query).
+void reveal_active_find_match(EditorRuntime::Impl& runtime) {
+    auto const& state = runtime.find_replace.view_state();
+    if (!state.open || !state.active_match ||
+        *state.active_match >= state.matches.size()) {
+        return;
+    }
+    auto const& match = state.matches[*state.active_match];
+    auto text = runtime.active_text();
+    auto anchor = resolve_document_position(text, match.begin);
+    auto active = resolve_document_position(text, match.end);
+    if (!anchor || !active) return;
+    runtime.selection.selections =
+        SelectionSet{std::vector<Selection>{Selection{*anchor, *active}}};
+    auto result = apply_selection_navigation(
+        text, runtime.selection, SelectionCommand::view_reveal_caret,
+        ViewportDimensions{80, 24});
+    if (result.accepted() && result.delta.replacement) {
+        runtime.selection = *result.delta.replacement;
+    }
+    runtime.requested_first_visual_row = runtime.selection.first_visual_row;
+}
+
 CommandHandlerResult bind_find_replace(EditorRuntime::Impl& runtime,
                                        Revision revision,
                                        FindReplaceCommand command,
@@ -186,6 +210,7 @@ CommandHandlerResult bind_find_replace(EditorRuntime::Impl& runtime,
         case FindReplaceCommand::find_open:
             runtime.find_replace.open(snapshot, FindRequest{query, {}, range});
             runtime.find_document_id = runtime.active_document_id();
+            reveal_active_find_match(runtime);
             // Open the find prompt so focus moves to it and the reserved rows
             // display the controller query (projected at snapshot time).
             (void)runtime.prompt.open(PromptRequest{
@@ -208,15 +233,18 @@ CommandHandlerResult bind_find_replace(EditorRuntime::Impl& runtime,
             return success();
         case FindReplaceCommand::find_next:
             runtime.find_replace.next();
+            reveal_active_find_match(runtime);
             return success();
         case FindReplaceCommand::find_previous:
             runtime.find_replace.previous();
+            reveal_active_find_match(runtime);
             return success();
         case FindReplaceCommand::find_update_query: {
             auto const* arguments = payload_as<FindQueryArguments>(payload);
             if (arguments == nullptr) return failure("find.update_query requires a query payload");
             runtime.find_replace.update_query(snapshot, arguments->query, range);
             runtime.find_document_id = runtime.active_document_id();
+            reveal_active_find_match(runtime);
             return success();
         }
         case FindReplaceCommand::find_toggle_case:
