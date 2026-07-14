@@ -204,16 +204,47 @@ Decoded decode_input(std::string_view bytes, bool input_exhausted,
             return {DecodeStatus::none, {}, {}, 0};
         }
         case '<': {
-            // SGR mouse: ESC [ < Cb ; Cx ; Cy (M|m).  Wheel up 64, down 65.
+            // SGR mouse: ESC [ < Cb ; Cx ; Cy (M|m).  Cb encodes the button in
+            // its low 2 bits, motion in bit 5 (a drag when a button is held),
+            // and the wheel in bit 6 (64 up, 65 down).  The final byte is 'M'
+            // for press/drag and 'm' for release.  Coordinates are 1-based.
             std::size_t end = 3;
             while (end < bytes.size() && bytes[end] != 'M' && bytes[end] != 'm') ++end;
             if (end >= bytes.size()) return {DecodeStatus::incomplete, {}, {}, 0};
+            char const final_byte = bytes[end];
             std::size_t pos = 3;
-            auto const button = parse_decimal(bytes, pos);
+            auto const cb = parse_decimal(bytes, pos);
+            if (pos >= bytes.size() || bytes[pos] != ';') {
+                consumed = end + 1;
+                return {DecodeStatus::none, {}, {}, 0};
+            }
+            ++pos;
+            auto const cx = parse_decimal(bytes, pos);
+            if (pos >= bytes.size() || bytes[pos] != ';') {
+                consumed = end + 1;
+                return {DecodeStatus::none, {}, {}, 0};
+            }
+            ++pos;
+            auto const cy = parse_decimal(bytes, pos);
             consumed = end + 1;
-            if (button == 64) return {DecodeStatus::scroll, {}, {}, -3};
-            if (button == 65) return {DecodeStatus::scroll, {}, {}, 3};
-            return {DecodeStatus::none, {}, {}, 0};
+            if (cb == 64) return {DecodeStatus::scroll, {}, {}, -3};
+            if (cb == 65) return {DecodeStatus::scroll, {}, {}, 3};
+            if ((cb & 64) != 0) return {DecodeStatus::none, {}, {}, 0};  // other wheel/ext
+            PointerEvent event;
+            event.column = static_cast<int>(cx > 0 ? cx - 1 : 0);
+            event.row = static_cast<int>(cy > 0 ? cy - 1 : 0);
+            auto const button_bits = cb & 3;
+            event.button = button_bits == 0   ? PointerButton::left
+                           : button_bits == 1 ? PointerButton::middle
+                           : button_bits == 2 ? PointerButton::right
+                                              : PointerButton::other;
+            event.kind = final_byte == 'm' ? PointerKind::release
+                         : (cb & 32) != 0  ? PointerKind::drag
+                                           : PointerKind::press;
+            Decoded decoded;
+            decoded.status = DecodeStatus::pointer;
+            decoded.pointer = event;
+            return decoded;
         }
         case 'M': {
             // Legacy X10 mouse: ESC [ M b x y.  Wheel up 0x60, down 0x61.

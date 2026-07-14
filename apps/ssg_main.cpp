@@ -60,13 +60,15 @@ public:
         raw.c_cc[VTIME] = 0;
         if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) != 0) return;
         active_ = true;
-        // Alternate screen, blinking bar cursor, SGR mouse reporting for wheel.
-        write_all("\x1b[?1049h\x1b[5 q\x1b[?1000h\x1b[?1006h");
+        // Alternate screen, blinking bar cursor, SGR mouse reporting. 1000h =
+        // button press/release, 1002h = button-event motion (drags), 1006h = SGR
+        // extended coordinates.
+        write_all("\x1b[?1049h\x1b[5 q\x1b[?1000h\x1b[?1002h\x1b[?1006h");
     }
 
     ~TerminalMode() {
         if (!active_) return;
-        write_all("\x1b[?1006l\x1b[?1000l\x1b[0 q\x1b[?25h\x1b[?1049l");
+        write_all("\x1b[?1006l\x1b[?1002l\x1b[?1000l\x1b[0 q\x1b[?25h\x1b[?1049l");
         tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_);
     }
 

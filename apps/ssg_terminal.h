@@ -35,6 +35,22 @@ enum class DecodeStatus : std::uint8_t {
     incomplete,  // Only a partial escape sequence is buffered; read more bytes.
     key,         // A KeyStroke (with optional committed text for printables).
     scroll,      // A mouse-wheel event (signed line count in `scroll`).
+    pointer,     // A mouse button press/release/drag (see `pointer`).
+};
+
+// A decoded mouse button event (M8): which button, whether it is a press,
+// release, or drag (motion with a button held), and the 0-based grid cell it
+// occurred over.  Wheel events remain `DecodeStatus::scroll`, not pointer events.
+enum class PointerButton : std::uint8_t { left, middle, right, other };
+enum class PointerKind : std::uint8_t { press, release, drag };
+
+struct PointerEvent {
+    int column = 0;  // 0-based grid column (SGR reports 1-based).
+    int row = 0;     // 0-based grid row.
+    PointerButton button = PointerButton::left;
+    PointerKind kind = PointerKind::press;
+
+    friend bool operator==(const PointerEvent&, const PointerEvent&) = default;
 };
 
 struct Decoded {
@@ -43,6 +59,7 @@ struct Decoded {
     std::string text;         // status == key: the committed UTF-8 if the stroke
                               // also commits text (a printable); empty otherwise.
     std::int64_t scroll = 0;  // status == scroll: signed line count.
+    PointerEvent pointer;     // status == pointer.
 };
 
 // Decode the first event from `bytes` into a KeyStroke / committed text / scroll.

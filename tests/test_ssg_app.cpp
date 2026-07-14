@@ -249,6 +249,64 @@ TEST(decode_input_escape_boundary_is_bounded) {
     ASSERT_TRUE(partial.status == ssg::app::DecodeStatus::incomplete);
 }
 
+TEST(decode_input_pointer_press_release_drag) {
+    std::size_t consumed = 0;
+
+    // Left press at SGR (1,1) -> grid (0,0). Button bits 0, final 'M'.
+    auto press = ssg::app::decode_input("\x1b[<0;1;1M", true, consumed);
+    ASSERT_TRUE(press.status == ssg::app::DecodeStatus::pointer);
+    ASSERT_EQ(consumed, std::size_t{9});
+    ASSERT_EQ(press.pointer.column, 0);
+    ASSERT_EQ(press.pointer.row, 0);
+    ASSERT_TRUE(press.pointer.button == ssg::app::PointerButton::left);
+    ASSERT_TRUE(press.pointer.kind == ssg::app::PointerKind::press);
+
+    // Left release (final 'm') at (10,5) -> grid (9,4).
+    auto release = ssg::app::decode_input("\x1b[<0;10;5m", true, consumed);
+    ASSERT_TRUE(release.status == ssg::app::DecodeStatus::pointer);
+    ASSERT_EQ(release.pointer.column, 9);
+    ASSERT_EQ(release.pointer.row, 4);
+    ASSERT_TRUE(release.pointer.button == ssg::app::PointerButton::left);
+    ASSERT_TRUE(release.pointer.kind == ssg::app::PointerKind::release);
+
+    // Left drag: motion bit 32 set (Cb 32), final 'M', at (3,7) -> grid (2,6).
+    auto drag = ssg::app::decode_input("\x1b[<32;3;7M", true, consumed);
+    ASSERT_TRUE(drag.status == ssg::app::DecodeStatus::pointer);
+    ASSERT_EQ(drag.pointer.column, 2);
+    ASSERT_EQ(drag.pointer.row, 6);
+    ASSERT_TRUE(drag.pointer.button == ssg::app::PointerButton::left);
+    ASSERT_TRUE(drag.pointer.kind == ssg::app::PointerKind::drag);
+
+    // Middle press (button bits 1) and right press (button bits 2).
+    auto middle = ssg::app::decode_input("\x1b[<1;2;2M", true, consumed);
+    ASSERT_TRUE(middle.pointer.button == ssg::app::PointerButton::middle);
+    ASSERT_TRUE(middle.pointer.kind == ssg::app::PointerKind::press);
+    auto right = ssg::app::decode_input("\x1b[<2;2;2M", true, consumed);
+    ASSERT_TRUE(right.pointer.button == ssg::app::PointerButton::right);
+
+    // The wheel stays a scroll event, not a pointer event.
+    auto wheel_up = ssg::app::decode_input("\x1b[<64;10;5M", true, consumed);
+    ASSERT_TRUE(wheel_up.status == ssg::app::DecodeStatus::scroll);
+    ASSERT_EQ(wheel_up.scroll, std::int64_t{-3});
+}
+
+TEST(decode_input_pointer_split_reads_are_incomplete) {
+    std::size_t consumed = 0;
+    // Every truncation before the final M/m byte is incomplete and consumes
+    // nothing, so the loop waits for more bytes.
+    for (std::string_view partial :
+         {"\x1b[<", "\x1b[<0", "\x1b[<0;", "\x1b[<0;10", "\x1b[<0;10;",
+          "\x1b[<0;10;5"}) {
+        consumed = 0;
+        auto decoded = ssg::app::decode_input(partial, true, consumed);
+        ASSERT_TRUE(decoded.status == ssg::app::DecodeStatus::incomplete);
+        ASSERT_EQ(consumed, std::size_t{0});
+    }
+    // The complete sequence then decodes.
+    auto complete = ssg::app::decode_input("\x1b[<0;10;5M", true, consumed);
+    ASSERT_TRUE(complete.status == ssg::app::DecodeStatus::pointer);
+}
+
 int main() {
     RUN(resolve_launch_no_argument_opens_cwd);
     RUN(resolve_launch_directory_opens_that_directory);
@@ -259,6 +317,8 @@ int main() {
     RUN(decode_input_modified_arrows);
     RUN(decode_input_modified_arrow_split_reads_are_incomplete);
     RUN(decode_input_arrows_and_mouse);
+    RUN(decode_input_pointer_press_release_drag);
+    RUN(decode_input_pointer_split_reads_are_incomplete);
     RUN(decode_input_escape_boundary_is_bounded);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
