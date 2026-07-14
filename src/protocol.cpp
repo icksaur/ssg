@@ -1300,6 +1300,8 @@ ProtocolValue to_value(AccessibilityNode const& value);
 bool decode_present(ProtocolValue const& value, std::optional<AccessibilityNode>& out);
 ProtocolValue to_value(PaneGeometry const& value);
 bool decode_present(ProtocolValue const& value, std::optional<PaneGeometry>& out);
+ProtocolValue to_value(TabHit const& value);
+bool decode_present(ProtocolValue const& value, std::optional<TabHit>& out);
 ProtocolValue to_value(ShellViewState const& value);
 bool decode_present(ProtocolValue const& value, std::optional<ShellViewState>& out);
 ProtocolValue to_value(ShellSectionDelta const& value);
@@ -2204,6 +2206,22 @@ bool decode_present(ProtocolValue const& value, std::optional<PaneGeometry>& out
     return true;
 }
 
+ProtocolValue to_value(TabHit const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("rect", to_value(value.rect));
+    fields.emplace_back("index", to_value(value.index));
+    return ProtocolValue::make_object(std::move(fields));
+}
+bool decode_present(ProtocolValue const& value, std::optional<TabHit>& out) {
+    auto const* object = value.as_object();
+    if (!object) return false;
+    auto rect = require_field<Rect>(value.field("rect"));
+    auto index = require_field<std::uint32_t>(value.field("index"));
+    if (!rect || !index) return false;
+    out.emplace(TabHit{*rect, *index});
+    return true;
+}
+
 ProtocolValue to_value(ShellViewState const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("viewport", to_value(value.viewport));
@@ -2214,6 +2232,7 @@ ProtocolValue to_value(ShellViewState const& value) {
     fields.emplace_back("panel_scrollbar", to_value(value.panel_scrollbar));
     fields.emplace_back("prompt", to_value(value.prompt));
     fields.emplace_back("panes", to_value(value.panes));
+    fields.emplace_back("tab_hits", to_value(value.tab_hits));
     fields.emplace_back("accessibility_nodes", to_value(value.accessibility_nodes));
     fields.emplace_back("focus", to_value(value.focus));
     return ProtocolValue::make_object(std::move(fields));
@@ -2240,6 +2259,14 @@ bool decode_present(ProtocolValue const& value, std::optional<ShellViewState>& o
     if (!decode_optional_field(value.field("panel_scrollbar"), result.panel_scrollbar)) return false;
     if (!decode_optional_field(value.field("prompt"), result.prompt)) return false;
     result.panes = *panes;
+    // tab_hits is an additive shell field: decode it when present, else leave it
+    // empty so canonical fixtures predating it still decode (consistent with the
+    // panel_scrollbar addition). to_value always emits it, so it round-trips.
+    if (auto const* tab_hits_field = value.field("tab_hits")) {
+        auto tab_hits = require_field<std::vector<TabHit>>(tab_hits_field);
+        if (!tab_hits) return false;
+        result.tab_hits = std::move(*tab_hits);
+    }
     result.accessibility_nodes = *accessibility_nodes;
     out.emplace(std::move(result));
     return true;

@@ -1,6 +1,7 @@
 #include "pointer_routing.h"
 
 #include <ssg/input.h>
+#include <ssg/palette.h>
 
 namespace ssg::app {
 
@@ -25,6 +26,20 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
                     {"view.scroll_to_fraction",
                      ssg::ScrollFractionArguments{hit.scroll_numerator,
                                                   hit.scroll_denominator}});
+                return dispatch;
+            }
+            // A left press on a tab activates it (the caller resolved tab_index
+            // -> TabId); on a palette row it executes that candidate (the caller
+            // mapped the absolute item_index -> candidate id). Neither begins a
+            // selection drag.
+            if (hit.region == ssg::HitRegion::tab && targets.tab_id) {
+                dispatch.commands.push_back({"tab.activate", *targets.tab_id});
+                return dispatch;
+            }
+            if (hit.region == ssg::HitRegion::palette && targets.palette_command_id) {
+                dispatch.commands.push_back(
+                    {"palette.execute",
+                     ssg::PaletteExecuteArguments{*targets.palette_command_id}});
                 return dispatch;
             }
             // A left press on the editor places the caret and begins a potential

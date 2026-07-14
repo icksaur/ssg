@@ -444,6 +444,9 @@ ShellLayoutResult compute_shell_layout(const ShellLayoutRequest& request,
                      tab.active ? SemanticRole::tab_active :
                                   SemanticRole::tab_inactive,
                      display);
+            view.tab_hits.push_back(
+                TabHit{{tab_x, view.tab_bar->y, width, 1},
+                       static_cast<std::uint32_t>(i)});
             tab_x += width;
         }
 

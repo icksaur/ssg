@@ -115,6 +115,16 @@ struct PaneGeometry {
     friend bool operator==(const PaneGeometry&, const PaneGeometry&) = default;
 };
 
+// A clickable tab's rectangle plus its index into `sections().tabs.tabs`. Layout
+// publishes one per visible tab so pointer hit-testing maps a cell to a tab
+// without parsing the stringly-typed `tab.{i}` accessibility-node id.
+struct TabHit {
+    Rect rect;
+    std::uint32_t index = 0;
+
+    friend bool operator==(const TabHit&, const TabHit&) = default;
+};
+
 // One projected palette result row.
 struct PaletteRow {
     std::string label;
@@ -153,6 +163,9 @@ struct ShellViewState {
     std::optional<Rect> panel_scrollbar;
     std::optional<Rect> prompt;
     std::vector<PaneGeometry> panes;
+    // One entry per visible tab (in tab-bar order), each carrying the tab's
+    // rectangle and its index into `sections().tabs.tabs`.
+    std::vector<TabHit> tab_hits;
     std::vector<AccessibilityNode> accessibility_nodes;
     FocusTarget focus = FocusTarget::editor;
     std::optional<PaletteProjection> palette;

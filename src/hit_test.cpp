@@ -94,6 +94,18 @@ RegionHit hit_test(SessionSnapshot const& snapshot, int column, int row) {
                          row);
     }
 
+    // The tab bar sits above the editor pane (disjoint from the panel and the
+    // pane content), so a tab click resolves here even while the palette
+    // overlays the pane below.
+    for (auto const& tab : shell.tab_hits) {
+        if (contains(tab.rect, column, row)) {
+            RegionHit hit;
+            hit.region = HitRegion::tab;
+            hit.tab_index = tab.index;
+            return hit;
+        }
+    }
+
     // The palette overlays the editor pane while it is open, so it takes
     // precedence over the editor content in the same rectangle.
     if (shell.palette) {

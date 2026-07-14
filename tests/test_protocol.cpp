@@ -511,6 +511,9 @@ TEST(session_snapshot_round_trips_tree_scroll_fields) {
     // Also exercise the shell panel scrollbar gutter geometry on the wire.
     sections_value.shell.panel = ssg::Rect{0, 1, 24, 10};
     sections_value.shell.panel_scrollbar = ssg::Rect{23, 2, 1, 9};
+    // And the typed per-tab hit map.
+    sections_value.shell.tab_hits = {ssg::TabHit{ssg::Rect{24, 0, 10, 1}, 0},
+                                     ssg::TabHit{ssg::Rect{34, 0, 8, 1}, 1}};
 
     auto snapshot = ssg::assemble_session_snapshot(
         ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
@@ -531,6 +534,8 @@ TEST(session_snapshot_round_trips_tree_scroll_fields) {
     ASSERT_TRUE(decoded.snapshot->sections().shell.panel_scrollbar.has_value());
     ASSERT_EQ(decoded.snapshot->sections().shell.panel_scrollbar,
               snapshot.sections().shell.panel_scrollbar);
+    ASSERT_EQ(decoded.snapshot->sections().shell.tab_hits,
+              snapshot.sections().shell.tab_hits);
 }
 
 // ---------------------------------------------------------------------------

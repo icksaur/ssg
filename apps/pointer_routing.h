@@ -12,6 +12,7 @@
 
 #include <ssg/hit_test.h>
 #include <ssg/selection.h>
+#include <ssg/tabs.h>
 
 #include <any>
 #include <optional>
@@ -37,10 +38,11 @@ struct PointerDispatch {
 };
 
 // The snapshot-derived data a pointer event needs, resolved by the caller (only
-// the field matching the hit region is populated).  Later M8 steps add the
-// palette candidate id and tab id here.
+// the field matching the hit region is populated).
 struct PointerTargets {
     std::optional<ssg::DocumentPosition> document_position;  // an editor hit
+    std::optional<ssg::TabId> tab_id;             // a tab hit (tabs[index] id)
+    std::optional<std::string> palette_command_id;  // a palette-row candidate id
 };
 
 // Route one pointer event.  `dragging`/`drag_anchor` are the loop's current

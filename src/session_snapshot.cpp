@@ -14,6 +14,7 @@ bool shell_equal(ShellViewState const& left, ShellViewState const& right) {
            left.panel_scrollbar == right.panel_scrollbar &&
            left.prompt == right.prompt &&
            left.panes == right.panes &&
+           left.tab_hits == right.tab_hits &&
            left.accessibility_nodes == right.accessibility_nodes;
 }
 

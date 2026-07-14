@@ -294,6 +294,32 @@ TEST(shell_delta_detects_a_panel_scrollbar_only_change) {
     ASSERT_EQ(*replayed.snapshot, after);
 }
 
+TEST(shell_delta_detects_a_tab_hit_only_change) {
+    auto old_sections = sections(ssg::Revision{4}, "same");
+    old_sections.shell.tab_hits = {ssg::TabHit{ssg::Rect{24, 0, 10, 1}, 0}};
+    auto new_sections = old_sections;
+    // A second tab opens: only the tab hit map differs. The shell delta must not
+    // treat this as unchanged (or pointer hit-testing would target a stale map).
+    new_sections.shell.tab_hits = {ssg::TabHit{ssg::Rect{24, 0, 10, 1}, 0},
+                                   ssg::TabHit{ssg::Rect{34, 0, 8, 1}, 1}};
+
+    auto before = ssg::assemble_session_snapshot(
+        ssg::Revision{4}, {},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::in_process},
+        ssg::ViewId{9}, client_view(1), std::move(old_sections));
+    auto after = ssg::assemble_session_snapshot(
+        ssg::Revision{5}, {},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::in_process},
+        ssg::ViewId{9}, client_view(1), std::move(new_sections));
+    auto delta = ssg::derive_session_delta(before, after);
+    ASSERT_TRUE(delta.shell().replacement.has_value());
+    auto replayed = ssg::replay_session_delta(before, delta);
+    ASSERT_TRUE(replayed.accepted());
+    ASSERT_EQ(*replayed.snapshot, after);
+}
+
 static_assert(!std::is_copy_constructible_v<ssg::SessionSnapshot>);
 static_assert(std::is_move_constructible_v<ssg::SessionSnapshot>);
 static_assert(!std::is_copy_constructible_v<ssg::SessionDelta>);
@@ -308,5 +334,6 @@ int main() {
     RUN(non_document_transition_replays_and_rejects_a_different_client);
     RUN(per_client_capabilities_and_viewports_are_isolated);
     RUN(shell_delta_detects_a_panel_scrollbar_only_change);
+    RUN(shell_delta_detects_a_tab_hit_only_change);
     return failed == 0 ? 0 : 1;
 }

@@ -19,6 +19,7 @@ enum class HitRegion : std::uint8_t {
     editor,             // a document cell: byte_offset / byte_len are set
     panel,              // a tree row: node_id is set
     palette,            // a palette row: item_index is the absolute rank index
+    tab,                // a tab-bar tab: tab_index selects sections().tabs.tabs
     editor_scrollbar,   // the editor pane gutter: scroll_* are set
     panel_scrollbar,    // the side-panel gutter: scroll_* are set
     palette_scrollbar,  // the palette gutter: scroll_* are set
@@ -34,6 +35,8 @@ struct RegionHit {
     // Palette content: the ABSOLUTE index into the full ranked order
     // (first_visible + on-screen row).
     std::uint32_t item_index = 0;
+    // Tab content: the index into sections().tabs.tabs of the clicked tab.
+    std::uint32_t tab_index = 0;
     // Scrollbar regions: the position as a numerator/denominator pair ready to
     // feed view.scroll_to_fraction (first_row = maximum_first_row * numerator /
     // denominator), plus the equivalent [0, 1] fraction for display.

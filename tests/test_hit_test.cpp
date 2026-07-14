@@ -223,6 +223,40 @@ TEST(editor_scrollbar_fraction_feeds_scroll_to_fraction) {
     ASSERT_EQ(resolved, max_first);
 }
 
+TEST(tab_bar_cell_maps_to_its_tab_index) {
+    auto root = unique_root();
+    std::ofstream{root / "alpha.txt"} << "a\n";
+    std::ofstream{root / "beta.txt"} << "b\n";
+    auto runtime = make_runtime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(
+        ssg::ClientId{1},
+        {"file.open", runtime->revision(), std::string{"alpha.txt"}});
+    (void)runtime->dispatch(
+        ssg::ClientId{1},
+        {"file.open", runtime->revision(), std::string{"beta.txt"}});
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    auto const& shell = snapshot->sections().shell;
+    ASSERT_TRUE(shell.tab_hits.size() >= 2);
+    if (shell.tab_hits.size() < 2) return;
+
+    // A cell inside each published tab rect resolves to that tab's index.
+    for (auto const& tab : shell.tab_hits) {
+        auto hit = ssg::hit_test(*snapshot, tab.rect.x, tab.rect.y);
+        ASSERT_EQ(hit.region, ssg::HitRegion::tab);
+        ASSERT_EQ(hit.tab_index, tab.index);
+    }
+
+    // The tab-bar row past the last tab is padding, not a tab.
+    auto const& last = shell.tab_hits.back();
+    ASSERT_TRUE(last.rect.right() < shell.viewport.columns);
+    auto pad = ssg::hit_test(*snapshot, last.rect.right(), last.rect.y);
+    ASSERT_TRUE(pad.region != ssg::HitRegion::tab);
+}
+
 TEST(out_of_bounds_and_chrome_return_no_target) {
     auto root = unique_root();
     std::ofstream{root / "doc.txt"} << "alpha\n";
@@ -251,6 +285,7 @@ int main() {
     RUN(palette_row_maps_to_its_absolute_rank_index);
     RUN(palette_scrollbar_and_empty_area_classify_correctly);
     RUN(editor_scrollbar_fraction_feeds_scroll_to_fraction);
+    RUN(tab_bar_cell_maps_to_its_tab_index);
     RUN(out_of_bounds_and_chrome_return_no_target);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;

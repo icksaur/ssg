@@ -555,6 +555,62 @@ TEST(route_pointer_panel_and_palette_scrollbars_are_no_ops) {
     }
 }
 
+TEST(route_pointer_tab_press_activates_the_tab) {
+    ssg::RegionHit hit;
+    hit.region = ssg::HitRegion::tab;
+    hit.tab_index = 2;
+    ssg::app::PointerTargets targets;
+    targets.tab_id = ssg::TabId{7};
+
+    auto plan = ssg::app::route_pointer(hit, ssg::app::PointerButton::left,
+                                        ssg::app::PointerKind::press, false,
+                                        std::nullopt, targets);
+    ASSERT_EQ(plan.commands.size(), std::size_t{1});
+    if (plan.commands.size() == 1) {
+        ASSERT_EQ(plan.commands[0].command_id, std::string{"tab.activate"});
+        auto const* id = std::any_cast<ssg::TabId>(&plan.commands[0].payload);
+        ASSERT_TRUE(id != nullptr);
+        if (id) ASSERT_TRUE(*id == ssg::TabId{7});
+    }
+    ASSERT_FALSE(plan.begins_drag);
+    ASSERT_FALSE(plan.ends_drag);
+
+    // A tab hit the caller could not resolve to a TabId dispatches nothing.
+    ssg::app::PointerTargets const empty;
+    auto unresolved = ssg::app::route_pointer(
+        hit, ssg::app::PointerButton::left, ssg::app::PointerKind::press, false,
+        std::nullopt, empty);
+    ASSERT_TRUE(unresolved.commands.empty());
+}
+
+TEST(route_pointer_palette_press_executes_the_candidate) {
+    ssg::RegionHit hit;
+    hit.region = ssg::HitRegion::palette;
+    hit.item_index = 4;
+    ssg::app::PointerTargets targets;
+    targets.palette_command_id = std::string{"view.split"};
+
+    auto plan = ssg::app::route_pointer(hit, ssg::app::PointerButton::left,
+                                        ssg::app::PointerKind::press, false,
+                                        std::nullopt, targets);
+    ASSERT_EQ(plan.commands.size(), std::size_t{1});
+    if (plan.commands.size() == 1) {
+        ASSERT_EQ(plan.commands[0].command_id, std::string{"palette.execute"});
+        auto const* args = std::any_cast<ssg::PaletteExecuteArguments>(
+            &plan.commands[0].payload);
+        ASSERT_TRUE(args != nullptr);
+        if (args) ASSERT_EQ(args->command_id, std::string{"view.split"});
+    }
+    ASSERT_FALSE(plan.begins_drag);
+
+    // A palette hit with no resolved candidate id dispatches nothing.
+    ssg::app::PointerTargets const empty;
+    auto unresolved = ssg::app::route_pointer(
+        hit, ssg::app::PointerButton::left, ssg::app::PointerKind::press, false,
+        std::nullopt, empty);
+    ASSERT_TRUE(unresolved.commands.empty());
+}
+
 int main() {
     RUN(resolve_launch_no_argument_opens_cwd);
     RUN(resolve_launch_directory_opens_that_directory);
@@ -575,6 +631,8 @@ int main() {
     RUN(route_pointer_release_ends_drag_without_a_command);
     RUN(route_pointer_editor_scrollbar_scrolls_to_fraction);
     RUN(route_pointer_panel_and_palette_scrollbars_are_no_ops);
+    RUN(route_pointer_tab_press_activates_the_tab);
+    RUN(route_pointer_palette_press_executes_the_candidate);
     RUN(decode_input_escape_boundary_is_bounded);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";

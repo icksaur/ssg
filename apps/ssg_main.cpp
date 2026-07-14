@@ -379,6 +379,19 @@ int main(int argc, char** argv) {
                         targets.document_position = ssg::resolve_document_position(
                             snapshot->sections().document.text,
                             ssg::ByteOffset{hit.byte_offset});
+                    } else if (hit.region == ssg::HitRegion::tab) {
+                        auto const& tabs = snapshot->sections().tabs.tabs;
+                        if (hit.tab_index < tabs.size()) {
+                            targets.tab_id = tabs[hit.tab_index].id;
+                        }
+                    } else if (hit.region == ssg::HitRegion::palette) {
+                        // Map the absolute rank index to its candidate id using
+                        // the same ranked order the client renders.
+                        auto order = ssg::palette_rank(candidates, palette_query);
+                        if (hit.item_index < order.size()) {
+                            targets.palette_command_id =
+                                candidates[order[hit.item_index]].id;
+                        }
                     }
                 }
                 auto plan =
