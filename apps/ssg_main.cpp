@@ -108,6 +108,10 @@ bool input_ready(int timeout_ms) {
 
 constexpr int kEscapeTimeoutMs = 30;
 
+// While a drag is held at the editor edge, wake this often to auto-scroll one
+// line and re-extend the selection, even with no new pointer event (M8-S2).
+constexpr int kEdgeScrollIntervalMs = 40;
+
 // Delete one UTF-8 code point from the end of a client-local query string.
 void pop_code_point(std::string& text) {
     while (!text.empty() &&
@@ -176,6 +180,11 @@ int main(int argc, char** argv) {
     // transient — the server only ever sees cursor.set_position / select.set_range.
     bool dragging = false;
     std::optional<ssg::DocumentPosition> drag_anchor;
+    // The last pointer cell (0-based) from a press/drag, so a drag held still at
+    // the editor edge can auto-scroll on a timer without a fresh pointer event
+    // (M8-S2).
+    int last_pointer_column = 0;
+    int last_pointer_row = 0;
     // Find prompt: the client holds no authoritative query.  It reads the
     // published controller query (adopted in refresh), edits it, and reports the
     // full next string via find.update_query.  find_open mirrors the controller.
@@ -385,6 +394,41 @@ int main(int argc, char** argv) {
         }
 
         char bytes[64];
+        // Edge auto-scroll (M8-S2): if a drag is held past the top/bottom of the
+        // editor content, don't block indefinitely on input — wake on a timer to
+        // scroll one line and re-extend the selection to the new edge cell, so a
+        // drag held still at the edge keeps scrolling and selecting.
+        std::optional<int> drag_edge;
+        if (dragging && snapshot && !snapshot->sections().shell.panes.empty()) {
+            drag_edge = ssg::app::edge_scroll(
+                dragging, last_pointer_row,
+                snapshot->sections().shell.panes.front().content);
+        }
+        if (drag_edge && !input_ready(kEdgeScrollIntervalMs)) {
+            dispatch("view.scroll_lines", ssg::ScrollLinesArguments{*drag_edge});
+            auto scrolled = refresh();
+            if (scrolled && drag_anchor &&
+                !scrolled->sections().shell.panes.empty()) {
+                auto const content = scrolled->sections().shell.panes.front().content;
+                int const edge_row =
+                    *drag_edge < 0 ? content.y : content.bottom() - 1;
+                int const column = std::clamp(last_pointer_column, content.x,
+                                              content.right() - 1);
+                auto hit = ssg::hit_test(*scrolled, column, edge_row);
+                if (hit.region == ssg::HitRegion::editor) {
+                    auto active = ssg::resolve_document_position(
+                        scrolled->sections().document.text,
+                        ssg::ByteOffset{hit.byte_offset});
+                    if (active) {
+                        dispatch("select.set_range",
+                                 ssg::SelectionCommandArguments{
+                                     std::nullopt,
+                                     ssg::Selection{*drag_anchor, *active}});
+                    }
+                }
+            }
+            continue;  // re-render with the scrolled viewport, then re-evaluate
+        }
         auto read_bytes = ::read(STDIN_FILENO, bytes, sizeof bytes);
         if (read_bytes <= 0) break;
         buffer.append(bytes, static_cast<std::size_t>(read_bytes));
@@ -417,6 +461,8 @@ int main(int argc, char** argv) {
             first_event = false;
 
             if (decoded.status == ssg::app::DecodeStatus::pointer) {
+                last_pointer_column = decoded.pointer.column;
+                last_pointer_row = decoded.pointer.row;
                 // Classify the cell via the library hit_test, resolve the target
                 // the hit needs, then let the pure route_pointer decide the
                 // command sequence and drag-state change.

@@ -112,4 +112,12 @@ WheelTarget route_wheel(ssg::HitRegion region) {
     }
 }
 
+std::optional<int> edge_scroll(bool dragging, int pointer_row,
+                               ssg::Rect const& content) {
+    if (!dragging || content.height <= 0) return std::nullopt;
+    if (pointer_row < content.y) return -1;
+    if (pointer_row >= content.bottom()) return 1;
+    return std::nullopt;
+}
+
 }  // namespace ssg::app

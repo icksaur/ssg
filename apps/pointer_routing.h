@@ -13,6 +13,7 @@
 #include <ssg/hit_test.h>
 #include <ssg/selection.h>
 #include <ssg/tabs.h>
+#include <ssg/ui_layout.h>
 
 #include <any>
 #include <optional>
@@ -65,5 +66,13 @@ enum class WheelTarget : std::uint8_t {
 // gutter) scrolls the client-owned palette window, and the editor and everywhere
 // else scroll the document. Pure; the caller applies the wheel's line delta.
 [[nodiscard]] WheelTarget route_wheel(ssg::HitRegion region);
+
+// Decide whether an active drag whose pointer is held at `pointer_row` should
+// auto-scroll the editor (M8-S2): -1 when the pointer is above the content's top
+// row, +1 when at or below its bottom, nullopt when inside the content rows or
+// not dragging. Vertical only (the column does not affect the direction). Pure;
+// the loop wakes on a timer and re-extends the selection to the new edge cell.
+[[nodiscard]] std::optional<int> edge_scroll(bool dragging, int pointer_row,
+                                             ssg::Rect const& content);
 
 }  // namespace ssg::app

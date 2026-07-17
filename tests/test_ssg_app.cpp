@@ -667,6 +667,37 @@ TEST(route_wheel_maps_region_to_scroll_target) {
     }
 }
 
+TEST(edge_scroll_decides_direction_at_the_content_edges) {
+    // Editor content occupying rows [2, 23): y=2, height=21, bottom=23.
+    ssg::Rect const content{0, 2, 79, 21};
+
+    // Not dragging: never auto-scrolls, wherever the pointer is.
+    ASSERT_FALSE(ssg::app::edge_scroll(false, 0, content).has_value());
+    ASSERT_FALSE(ssg::app::edge_scroll(false, 100, content).has_value());
+
+    // Above the top content row -> scroll up.
+    auto up = ssg::app::edge_scroll(true, 1, content);
+    ASSERT_TRUE(up.has_value());
+    if (up) ASSERT_EQ(*up, -1);
+
+    // At or below the bottom -> scroll down.
+    auto at_bottom = ssg::app::edge_scroll(true, 23, content);  // == bottom()
+    ASSERT_TRUE(at_bottom.has_value());
+    if (at_bottom) ASSERT_EQ(*at_bottom, 1);
+    auto below = ssg::app::edge_scroll(true, 60, content);
+    ASSERT_TRUE(below.has_value());
+    if (below) ASSERT_EQ(*below, 1);
+
+    // Every interior row (including the top and last visible content rows) is
+    // within-viewport -> no auto-scroll (M8-S handles those).
+    for (int row = content.y; row < content.bottom(); ++row) {
+        ASSERT_FALSE(ssg::app::edge_scroll(true, row, content).has_value());
+    }
+
+    // A degenerate (zero-height) content rect never scrolls.
+    ASSERT_FALSE(ssg::app::edge_scroll(true, 5, ssg::Rect{0, 2, 79, 0}).has_value());
+}
+
 int main() {
     RUN(resolve_launch_no_argument_opens_cwd);
     RUN(resolve_launch_directory_opens_that_directory);
@@ -691,6 +722,7 @@ int main() {
     RUN(route_pointer_palette_press_executes_the_candidate);
     RUN(route_pointer_panel_press_selects_and_activates_the_node);
     RUN(route_wheel_maps_region_to_scroll_target);
+    RUN(edge_scroll_decides_direction_at_the_content_edges);
     RUN(decode_input_escape_boundary_is_bounded);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
