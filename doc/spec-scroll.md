@@ -8,6 +8,14 @@ does, and so each scrollable region publishes the hit-test classification that
 milestone 8 (mouse) needs. Preserve the client-side fuzzy-find latency path for
 the palette: typing must never round-trip to scroll.
 
+This spec also owns the **reveal policy** — when the editor viewport follows the
+caret — and the fix for the hardcoded viewport dimensions in the editor
+scroll/reveal math. R1–R4 (delivered) built the scrollable-region model, layout,
+rendering, and hit data. R5–R6 make edits reveal the caret (today typing
+off-screen does not scroll into view) and replace the fake `{80, 24}` viewport in
+the reveal, page-scroll, and scrollbar-fraction math with the real pane size.
+
+
 This is groundwork for M8. It delivers the scrollable-region **model, layout,
 rendering, and hit data**. It does **not** implement pointer input (click,
 drag) — that is M8 — but it is designed so M8 is a thin client-side router over
@@ -55,6 +63,40 @@ the data this refactor publishes.
   `AccessibilityNode { kind: ShellNodeKind, id, label, rect, role, content }`
   classifies header/footer/tab/pane/scrollbar/prompt/empty regions — but carries
   **no row-level item mapping** for tree or palette.
+- **R1–R4 are delivered** (this spec's original scope: the shared
+  `scrollbar_metrics`/`compute_list_scroll_view` primitive, the scrolling tree and
+  palette, and the `hit_test` seam). The remaining work below (R5–R6) is the
+  **reveal policy** and the **real-viewport-dimension** fixes layered on top.
+- **The reveal primitive already exists but is applied unevenly.**
+  `revealed_first_row(model, state, dims, center)` (`src/selection.cpp`) is the one
+  pure keep-visible function: it returns the minimal `first_visual_row` so the
+  **primary** caret (`state.selections.primary().active`) lies in the viewport
+  (or centers it when `center`). It is reached through the `view_reveal_caret` /
+  `view_center_caret` selection commands. Every **selection-navigation** command
+  ends by writing `selection.first_visual_row = revealed_first_row(...)`, and
+  `bind_selection` copies that into the scroll offset
+  (`requested_first_visual_row`), so cursor motion reveals the caret. Find does the
+  same explicitly via `reveal_active_find_match`. **Edits do not.**
+- **Edits never reveal the caret (the bug).** Typing, delete, indent/comment
+  (`apply_transaction`, shared by `bind_text`/`bind_edit`), undo/redo
+  (`bind_history`), and cut/paste (`bind_clipboard`) all set
+  `selection.selections` and clamp, but **none touch `requested_first_visual_row`**.
+  So an edit whose caret is off-screen leaves the viewport where it was — the user
+  types where they are not looking. Three call sites update the selection after a
+  document mutation without revealing.
+- **Reveal/scroll math uses a hardcoded `{80, 24}` viewport, not the real pane.**
+  `bind_selection` reveals against `ViewportDimensions{80, 24}`
+  (`src/runtime/editing.cpp`); `view.scroll_pages` advances by `pages * 24`; and
+  `view.scroll_to_fraction` derives `maximum_first_row` from
+  `compute_viewport(runs, {80, 24})` (`src/runtime/presentation.cpp`). The real pane
+  size is cached every snapshot as `last_pane_content_rows`/
+  `last_pane_content_columns`/`last_reserved_prompt_rows`
+  (`src/runtime/snapshot.cpp`) — the same cache `reveal_active_find_match` already
+  uses. Because the navigation reveal is later re-clamped in `compute_viewport`
+  against the *actual* dimensions, navigation mostly self-corrects; but a page is
+  the wrong size and scrollbar-drag maps to the wrong maximum on any terminal that
+  is not exactly 24 rows tall.
+
 
 ## Design
 
@@ -128,6 +170,68 @@ Everything the server lays out (the content rect and the reserved gutter) is
 authoritative for **all three** regions; only the palette adds a small,
 already-per-keystroke payload (its windowed rows + metrics) on top.
 
+### Reveal policy: the editor viewport follows the caret
+
+The editor's scroll offset (`requested_first_visual_row`) changes for exactly two
+reasons, and every command falls into one:
+
+1. **A caret-affecting change → reveal (keep-visible).** Any command that moves or
+   edits the primary caret pulls the viewport minimally so the caret is on-screen,
+   via `revealed_first_row` against the **real** pane. This covers:
+   - **Navigation** — cursor/select commands (arrows, word/line/page/document
+     motion, click-to-caret, drag-select). Already reveals.
+   - **Edits** — insert/newline/delete/indent/outdent/comment/duplicate/move-line/
+     etc. (`apply_transaction`), undo/redo (`bind_history`), and cut/paste
+     (`bind_clipboard`). **R5 makes these reveal** — the gap today.
+   - **Find** — `find.next`/`previous`/`update_query` reveal the active match.
+     Already reveals (`reveal_active_find_match`), reserving the prompt rows.
+2. **An explicit scroll gesture → free scroll (no reveal).** `view.scroll_lines`
+   (wheel), `view.scroll_to_fraction` (scrollbar drag), and `view.scroll_pages`
+   (PageUp/Down) set the offset directly and deliberately let the caret leave the
+   viewport — scrolling is the one gesture that decouples the view from the caret.
+   These must **not** snap back.
+
+The **single reveal target is `selections.primary().active`** — the primary
+caret. This resolves the multi-cursor ambiguity by contract: an edit at N cursors
+inserts at all of them but the viewport follows the **primary** caret only (the
+well-defined lead), exactly as most editors do. No averaging, no "nearest",
+no per-cursor policy. `view.center_caret` is the sole command that centers rather
+than minimally reveals; every other reveal is minimal (bring just onto the edge).
+
+**One reveal helper, one real viewport.** R5 introduces a single internal
+`reveal_primary_caret(runtime)` that mirrors `reveal_active_find_match` for the
+plain caret: it builds the reveal `ViewportDimensions` from the cached real pane
+(`last_pane_content_columns` × the pane rows minus any reserved prompt rows),
+runs `view_reveal_caret`, and writes `requested_first_visual_row`. It is called
+from the three edit call sites (R5) and replaces `bind_selection`'s hardcoded
+`{80, 24}` reveal (R6), so navigation and edits share one reveal path at the real
+size. Like the existing tree-scroll and find-reveal, it reads the pane dimensions
+cached from the previous snapshot — a one-frame lag that self-corrects on the next
+frame, the same discipline already in use (never a cross-client hazard: the offset
+is this document's server state).
+
+**Reveal is a post-mutation obligation (the anti-drift rule).** The invariant a
+fresh implementer must uphold: **any command that mutates `selection.selections`
+following a document mutation reveals the primary caret** (calls
+`reveal_primary_caret`), unless it is one of the three explicit scroll commands.
+The three known edit hooks today are `apply_transaction` (typing + edit commands),
+`bind_history` (undo/redo), and `bind_clipboard` (cut/paste) — but the rule is the
+contract, not the list, so future mutating commands cannot silently regress.
+Because `apply_transaction` is already the shared seam for `bind_text`/`bind_edit`,
+R5 should prefer routing every document-mutating command through it (or a single
+post-mutation helper it calls) rather than sprinkling reveal calls; where a path
+cannot yet share that seam (`bind_history`, `bind_clipboard`), it calls the helper
+directly. **Also audit these caret-moving paths and route them through the same
+seam or confirm they already reveal:** `replace.current`/`replace.all` (they move
+the caret onto/after replaced text), LSP `rename.symbol` and `goto.definition`/
+`goto.reference` (they move the caret to a new location — some already reveal via
+navigation), and `tree.activate` opening a file (`reset_selection_for_active_document`
+resets the caret to the document start, which should also reveal to the top). R5's
+oracle includes the dispatch-level guard that a representative command from each
+family leaves the primary caret within the viewport.
+
+
+
 ### Scroll-command targeting
 
 `view.scroll_*` implicitly targets the editor today. Generalize with an optional
@@ -160,10 +264,16 @@ exact seam M8's pointer handling will call. R4 implements **no** input handling.
 
 ### Divisibility
 
-Five independently shippable steps, in order (R2 is split into R2a behavior/render
-and R2b wire/hit-map). R1 is a pure refactor with no behavior change; R2a and R3
-each end in a hand-testable scrolling panel; R2b and R4 add the M8-facing hit
-contract.
+Seven independently shippable steps, in order: R1, R2a, R2b, R3, R4 (all
+**delivered**), then R5, R6. R1 is a pure refactor with no behavior change; R2a
+and R3 each end in a hand-testable scrolling panel; R2b and R4 add the M8-facing
+hit contract. R5 (reveal on edit) and R6 (real-viewport dimensions) are the two
+new steps: R5 fixes the type-off-screen bug, R6 fixes page size and
+scrollbar-drag maximum on non-24-row terminals. R5 depends on the
+`reveal_primary_caret` helper it introduces and ships/validates independently
+(its edit reveal already uses the real cached dimensions); R6 then reuses that
+helper for `bind_selection` and applies the same real-pane cache to the two
+scroll commands.
 
 ## Plan
 
@@ -174,6 +284,10 @@ contract.
 | R2b | Publish the tree hit map + wire it. Add a bounded `viewport_row -> TreeNodeId` hit map (visible window only) plus the tree scroll offset to `TreeProviderView`/`TreeViewState`; serialize the new fields in `src/protocol.cpp` with a round-trip test. | `include/ssg/tree.h`, `src/runtime/snapshot.cpp`, `src/protocol.cpp`, `tests/test_protocol.cpp`, `tests/test_tree.cpp` | hit map: for a scrolled tree, `viewport_row 0..k` map to exactly the on-screen `TreeNodeId`s (absolute index `first_visible + row`); the map length never exceeds the visible window; protocol round-trip preserves the offset + hit map. |
 | R3 | Command palette scrolls (client-owned). Client computes its palette scroll view with R1 (`keep_selection_visible=true` on selection move; false on explicit scroll), reports the **windowed** rows, the **absolute** `selected`, `first_visible`, and the resolved `ScrollbarMetrics` in `PaletteReport`; `shell_view` projects them into `PaletteProjection` verbatim; `paint_palette` renders the window and the gutter thumb from the reported metrics, highlighting `selected - first_visible`; content width is unchanged whether or not a thumb shows. **Wire scope:** both `PaletteReport` (a client→server call parameter) and `PaletteProjection` (a render-derived field of `ShellViewState`) are **in-process only** — the palette projection is already excluded from the `ShellViewState` protocol codec and from `shell_equal`, because a remote client owns its own fuzzy-find/report and renders its own palette. R3 keeps this: no new codec, no `shell_equal` change. The client caches the palette pane height from the previous snapshot's `panes.front().content.height` (identical to the editor pane), so the window is resolved against the real height with no cold-start (the editor pane rect exists before the palette opens). | `include/ssg/palette.h`, `include/ssg/ui_layout.h`, `src/runtime/snapshot.cpp`, `src/render.cpp`, `apps/ssg_main.cpp`, `tests/test_render.cpp`, `tests/test_ssg_app.cpp` | app unit: with N ranked candidates and a pane of `rows` < N, the client's reported window is exactly the R1 window around the absolute `selected`, and shrinking N by typing so `N <= rows` hides the thumb without changing `content` width. render: a projection with more rows than fit draws exactly the windowed rows + a correctly sized thumb, highlighting `selected - first_visible`; `selected` stays visible after windowing. PTY: type to produce a long list, arrow past the fold, the list scrolls and the selected row stays on screen. |
 | R4 | Uniform hit-test seam (data + pure helper; no input handling). Add a client-side pure `hit_test(SessionSnapshot const&, int column, int row) -> RegionHit` returning `{ kind: editor/panel/palette/scrollbar, item: document offset / TreeNodeId / palette row index, or scrollbar fraction }`, built from the editor `CellHitTarget[]`, the R2 tree hit map, the R3 palette window, and the region rects + `ScrollbarMetrics`. | `include/ssg/hit_test.h` (or `apps/`-local), `src/hit_test.cpp`, `cmake`, `tests/test_hit_test.cpp` | unit: for a known composed snapshot (bar + editor + open palette), a column/row in the editor returns the right document offset; in the bar returns the right `TreeNodeId`; in the palette returns the right row index; on a scrollbar returns the right region + a fraction that round-trips through `scroll_to_fraction`; a cell in the reserved-but-empty gutter and out-of-bounds return "no target". |
+| R5 | Reveal the caret on edit (the type-off-screen fix), consolidated. Add an internal `reveal_primary_caret(EditorRuntime::Impl&)` that resolves the real reveal viewport from the cached pane (`last_pane_content_columns` × `last_pane_content_rows` minus reserved prompt rows, ≥1), runs `apply_selection_navigation(..., SelectionCommand::view_reveal_caret, real_viewport)`, and writes `requested_first_visual_row` (the plain-caret analog of `reveal_active_find_match`). Call it after the selection is updated in the three edit paths: `apply_transaction` (covers `bind_text` typing/newline and `bind_edit` edit commands), `bind_history` (undo/redo), and `bind_clipboard` (cut/paste; skip copy, which does not move the caret off-screen). It always reveals the **primary** caret and never centers. Explicit scroll commands are untouched (they must still let the caret leave the viewport). | `src/runtime/editing.cpp`, `src/runtime/editor_runtime_internal.h`, `tests/runtime/test_runtime_editing.cpp`, `tests/runtime/test_runtime_presentation.cpp` | runtime with a **concrete, hand-computed** expectation (independent of `revealed_first_row`, so the test catches a mis-wired helper): open a document of, say, 100 single-cell lines into a pane of exactly `H` content rows (snapshot once at a fixed size so the cache is `H`); `view.scroll_lines(+40)` moves `first_visual_row` to 40 with the caret (line 0) now off-screen above; then a `text.insert` at the caret must set `first_visual_row` to exactly **0** (the minimal offset that brings visual row 0 onto the top edge) — assert the literal `0`, not a re-derivation. Symmetrically, put the caret on line 99, scroll to `first_visual_row = 0`, and assert an edit reveals it to exactly `100 - H` (the last-line-visible offset). Plus behavior cases: a **plain `view.scroll_lines` with no edit does NOT snap back** (free scroll preserved); newline/delete/paste/undo each reveal; with two cursors (primary on line 0, secondary on line 99) an insert reveals to `0` (the **primary**, not the secondary). A dispatch-level wiring guard rounds it out: after each of `text.insert`, `edit.duplicate_line`, `edit.move_line_down`, `clipboard.paste`, and `edit.undo` from a scrolled-away view, the primary caret's visual row is within `[first_visual_row, first_visual_row + H)`. |
+
+| R6 | Real viewport dimensions for editor scroll (row×col resolution limits). Replace the hardcoded `{80, 24}` in the editor scroll/reveal math with the cached real pane: `bind_selection` reveals via the R5 `reveal_primary_caret` helper (real dimensions) instead of `ViewportDimensions{80, 24}`; `view.scroll_pages` advances by `pages * max(last_pane_content_rows, 1)` (a page == the real pane height) instead of `pages * 24`; `view.scroll_to_fraction` derives `maximum_first_row` from `compute_viewport(runs, real_dimensions)` instead of `{80, 24}`. (Pane-focus geometry `pane.focus_*`'s `{80, 24}` and the follow-edits attach default are layout/geometry, not editor scroll, and are out of this step's scope.) | `src/runtime/presentation.cpp`, `src/runtime/editing.cpp`, `tests/runtime/test_runtime_presentation.cpp`, `tests/runtime/test_runtime_editing.cpp` | runtime on a non-24-row terminal (e.g. a 40-row pane): `view.scroll_pages(+1)` advances `first_visual_row` by the real pane rows (not 24); `view.scroll_to_fraction(1/1)` reaches the real `maximum_first_row` for that terminal (the last line becomes visible, not the 24-row-derived max); a cursor move at the far right column of a >80-column line reveals correctly (no clamp at column 80). Navigation reveal continues to keep the caret visible after routing through the shared helper. |
+
 
 ## Invariants and fit
 
@@ -206,7 +320,25 @@ contract.
   off-screen (like the editor). R1's `keep_selection_visible` flag makes this a
   call-site decision: selection-change handlers pass `true`; explicit-scroll
   handlers pass `false`. No handler infers the mode from whether a selection
-  exists.
+  exists. **R5 extends "selection movement" to include edits:** an edit is a
+  caret-affecting change and reveals; only the three explicit scroll commands are
+  free-scroll. The distinction is per-command (edit vs. scroll), never inferred.
+- **Reveal target is the primary caret.** Every editor reveal (navigation, edit,
+  find) targets `selections.primary().active` at the real pane size. Multi-cursor
+  never averages or picks "nearest" — the viewport follows the primary caret. This
+  is the single rule that keeps "where to scroll" unambiguous across N cursors.
+- **Reveal is a post-mutation obligation.** Any command that mutates
+  `selection.selections` after a document mutation must reveal the primary caret
+  (only the three explicit scroll commands are exempt). Prefer routing mutating
+  commands through the one post-mutation seam that reveals, so a new mutating
+  command cannot silently ship without a reveal. (New invariant this spec's R5
+  establishes.)
+- **Cached pane dimensions have a one-frame lag.** R5/R6 read
+  `last_pane_content_rows`/`columns`/`last_reserved_prompt_rows` cached from the
+  previous snapshot (the same cache find-reveal and tree-scroll already use). A
+  resize lags one frame before a reveal settles; it self-corrects on the next
+  snapshot, and `compute_viewport` re-clamps the offset to the real dimensions
+  regardless, so a stale cache can never place the offset out of range.
 - **Tree hit map size.** Publish only the visible window's row→id entries, not
   the whole tree, to bound snapshot size.
 - **R4 placement.** If a future `--http` client needs hit-testing too, `hit_test`
