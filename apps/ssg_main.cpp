@@ -26,8 +26,10 @@
 #include <unistd.h>
 
 #include <cstdio>
+#include <algorithm>
 #include <any>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -191,6 +193,47 @@ int main(int argc, char** argv) {
         (void)runtime.dispatch(client, {std::string{id}, runtime.revision(),
                                         std::move(payload)});
     };
+    // Re-center the client-owned palette window on the current selection
+    // (keep-visible). Called ONLY when the selection changes (arrow navigation,
+    // open, type, backspace); the per-frame build_report otherwise honors the
+    // free offset so a wheel scroll persists (see doc/spec-m8.md M8-P). Mirrors
+    // the tree's reveal_tree_selection.
+    auto reveal_palette_selection = [&] {
+        auto order = ssg::palette_rank(candidates, palette_query);
+        if (palette_selected >= order.size()) {
+            palette_selected = order.empty() ? 0 : order.size() - 1;
+        }
+        std::optional<std::uint32_t> selected =
+            order.empty() ? std::nullopt
+                          : std::optional<std::uint32_t>{
+                                static_cast<std::uint32_t>(palette_selected)};
+        auto scroll = ssg::compute_list_scroll_view(
+            static_cast<std::uint32_t>(order.size()), palette_pane_rows,
+            palette_first_visible, selected, /*keep_selection_visible=*/true);
+        palette_first_visible = scroll.first_visible;
+    };
+    // Scroll the client-owned palette window by `delta` rows WITHOUT moving the
+    // selection (a wheel over the open palette), clamped to [0, maximum_first_row].
+    // Saturating: `delta` is a decoded int64, so guard the extremes before adding.
+    auto scroll_palette = [&](std::int64_t delta) {
+        if (!palette_open) return;
+        auto order = ssg::palette_rank(candidates, palette_query);
+        auto probe = ssg::compute_list_scroll_view(
+            static_cast<std::uint32_t>(order.size()), palette_pane_rows,
+            palette_first_visible, std::nullopt, /*keep_selection_visible=*/false);
+        auto const maximum =
+            static_cast<std::int64_t>(probe.scrollbar.maximum_first_row);
+        auto const current = static_cast<std::int64_t>(palette_first_visible);
+        std::int64_t next;
+        if (delta >= maximum) {
+            next = maximum;
+        } else if (delta <= -maximum) {
+            next = 0;
+        } else {
+            next = std::clamp<std::int64_t>(current + delta, 0, maximum);
+        }
+        palette_first_visible = static_cast<std::uint32_t>(next);
+    };
     auto execute_selected_candidate = [&] {
         auto order = ssg::palette_rank(candidates, palette_query);
         if (!order.empty() && palette_selected < order.size()) {
@@ -219,8 +262,8 @@ int main(int argc, char** argv) {
         if (palette_open && focus == ssg::FocusTarget::prompt) {
             if (id == "prompt.submit") { execute_selected_candidate(); return; }
             if (id == "prompt.cancel") { dispatch("palette.close"); return; }
-            if (id == "palette.next") { ++palette_selected; return; }
-            if (id == "palette.previous") { if (palette_selected > 0) --palette_selected; return; }
+            if (id == "palette.next") { ++palette_selected; reveal_palette_selection(); return; }
+            if (id == "palette.previous") { if (palette_selected > 0) --palette_selected; reveal_palette_selection(); return; }
         }
         dispatch(id);
         if (id == "palette.open") {
@@ -228,6 +271,7 @@ int main(int argc, char** argv) {
             palette_query.clear();
             palette_selected = 0;
             palette_first_visible = 0;
+            reveal_palette_selection();
         }
     };
     auto route_text = [&](std::string const& text) {
@@ -236,7 +280,7 @@ int main(int argc, char** argv) {
             dispatch("text.insert", ssg::TextInputArguments{text});
             break;
         case ssg::TextRouting::prompt_query:
-            if (palette_open) { palette_query += text; palette_selected = 0; }
+            if (palette_open) { palette_query += text; palette_selected = 0; reveal_palette_selection(); }
             else if (replace_open) { dispatch("replace.update_replacement", ssg::FindQueryArguments{replace_replacement + text}); }
             else if (find_open) { dispatch("find.update_query", ssg::FindQueryArguments{find_query + text}); }
             break;
@@ -254,21 +298,27 @@ int main(int argc, char** argv) {
                 report.ghost =
                     ssg::palette_ghost(candidates[order.front()].label, palette_query);
             }
+            // Resolve the client-owned scroll window with the shared primitive.
+            // The window normally HONORS the free offset (keep_selection_visible
+            // false) so a wheel scroll persists; keep-visible runs on the
+            // selection-change path (reveal_palette_selection). The one exception
+            // is a shrink-clamp: if the ranked set shrank under the selection and
+            // the defensive clamp below actually moves it, re-center on it this
+            // frame so the forced-new selection is not left off-screen. The gutter
+            // is always reserved (server side), so the content width never jumps.
+            bool selection_clamped = false;
             if (palette_selected >= order.size()) {
                 palette_selected = order.empty() ? 0 : order.size() - 1;
+                selection_clamped = true;
             }
-            // Resolve the client-owned scroll window with the shared primitive,
-            // keeping the selection visible, and report only the windowed rows +
-            // the absolute selection/offset + the thumb geometry. The gutter is
-            // always reserved (server side), so the content width never jumps as
-            // the ranked list grows/shrinks per keystroke.
             std::optional<std::uint32_t> selected =
                 order.empty() ? std::nullopt
                               : std::optional<std::uint32_t>{
                                     static_cast<std::uint32_t>(palette_selected)};
             auto scroll = ssg::compute_list_scroll_view(
                 static_cast<std::uint32_t>(order.size()), palette_pane_rows,
-                palette_first_visible, selected, /*keep_selection_visible=*/true);
+                palette_first_visible, selected,
+                /*keep_selection_visible=*/selection_clamped);
             palette_first_visible = scroll.first_visible;
             report.first_visible = scroll.first_visible;
             report.scrollbar = scroll.scrollbar;
@@ -415,15 +465,27 @@ int main(int argc, char** argv) {
 
             if (decoded.status == ssg::app::DecodeStatus::scroll) {
                 // Route the wheel to the region under the pointer: the side panel
-                // scrolls its tree, the palette overlay is inert, everything else
-                // scrolls the editor document.
+                // scrolls its tree, the open palette scrolls its client-owned
+                // window, everything else scrolls the editor document.
                 ssg::HitRegion region = ssg::HitRegion::none;
                 if (snapshot) {
                     region = ssg::hit_test(*snapshot, decoded.pointer.column,
                                            decoded.pointer.row).region;
                 }
-                if (auto command = ssg::app::route_wheel(region)) {
-                    dispatch(*command, ssg::ScrollLinesArguments{decoded.scroll});
+                switch (ssg::app::route_wheel(region)) {
+                    case ssg::app::WheelTarget::editor:
+                        dispatch("view.scroll_lines",
+                                 ssg::ScrollLinesArguments{decoded.scroll});
+                        break;
+                    case ssg::app::WheelTarget::tree:
+                        dispatch("tree.scroll",
+                                 ssg::ScrollLinesArguments{decoded.scroll});
+                        break;
+                    case ssg::app::WheelTarget::palette:
+                        scroll_palette(decoded.scroll);
+                        break;
+                    case ssg::app::WheelTarget::none:
+                        break;
                 }
                 chord.clear();
                 continue;
@@ -466,6 +528,7 @@ int main(int argc, char** argv) {
                            stroke.code == "Backspace") {
                     pop_code_point(palette_query);
                     palette_selected = 0;
+                    reveal_palette_selection();
                 } else if (find_open && focus == ssg::FocusTarget::prompt &&
                            stroke.code == "Backspace") {
                     auto next = find_query;
