@@ -162,12 +162,27 @@ Delivered:
   so replace acts on the reviewed match set); find.close/reconcile dismiss a find
   OR replace prompt — `f064ab5`. Reviewed (gpt-5.6-sol): no findings.
 
-## 8. Mouse — PLANNED
-Pointer supplements the keyboard; it never becomes the only path.
-- Click to place the caret, drag to select, click tabs and tree nodes, drag
-  either scrollbar, wheel-scroll.
+## 8. Mouse — DONE
+Pointer supplements the keyboard; it never becomes the only path. Spec:
+`doc/spec-m8.md` (reviewed; all findings folded). Every mouse action maps to a
+command already reachable by keyboard, or to a client/pointer-fulfilled command
+whose outcome is keyboard-reachable.
+- Click to place the caret, drag to select, click tabs and tree nodes, drag the
+  editor scrollbar, wheel-scroll the document/tree/palette by region.
+- Steps: M8-D SGR decode (`5fb57fd`, fold `15be3b2`); M8-C click→caret + pure
+  `route_pointer` (`bdc0bff`); M8-S within-viewport drag-select (`b726683`); M8-B
+  editor scrollbar click/drag → `view.scroll_to_fraction` (`8592948`); M8-T typed
+  `TabHit` map + tab/palette clicks (`35eb7bc`, fold `fd851ef`); M8-R `tree.select`
+  command + tree-row click (`861b7e9`); M8-W wheel routes by region + `tree.scroll`
+  (`8c5df5c`, fold `0e10b99`); M8-P client-owned palette wheel scroll (`67cbfaa`);
+  M8-S2 timer-driven edge auto-scroll during drag (`f1d6a7e`). Also fixed a
+  pre-existing editor click bug where viewport hit targets carried line-relative
+  (not document-absolute) byte offsets, so every click resolved to line 0
+  (`9dda5c9`).
 
-Demo: place the caret by click, drag-select, drag the scrollbar thumb.
+Demo: place the caret by click, drag-select (including a drag held past the edge
+that auto-scrolls), drag the scrollbar thumb, click tabs/tree rows, wheel-scroll
+the tree and palette.
 
 ## 9. Terminal robustness — PLANNED
 The app behaves under real terminal conditions.
