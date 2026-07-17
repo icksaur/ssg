@@ -177,6 +177,35 @@ TEST(closing_the_last_tab_clears_the_editor_document) {
     if (snapshot) ASSERT_TRUE(snapshot->sections().document.text.empty());
 }
 
+TEST(tab_activate_focuses_the_editor) {
+    auto root = unique_root("tab_activate_focus");
+    std::ofstream{root / "workspace" / "a.txt", std::ios::binary} << "alpha";
+    std::ofstream{root / "workspace" / "b.txt", std::ios::binary} << "beta";
+
+    auto created = ssg::EditorRuntime::create(config_for(root));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"a.txt"}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"b.txt"}}).accepted());
+    const ssg::ViewportDimensions dims{80, 24};
+    auto focus = [&] {
+        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        return snap ? snap->sections().shell.focus : ssg::FocusTarget::editor;
+    };
+
+    // Move focus to the panel, then activating a tab (a tab click) returns focus
+    // to the editor.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"panel.toggle", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"panel.focus", runtime.revision(), {}}).accepted());
+    ASSERT_EQ(focus(), ssg::FocusTarget::panel);
+
+    auto first = runtime.snapshot(ssg::ClientId{1}, dims)->sections().tabs.tabs.front().id;
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tab.activate", runtime.revision(), first}).accepted());
+    ASSERT_EQ(focus(), ssg::FocusTarget::editor);
+}
+
 } // namespace
 
 int main() {
@@ -185,6 +214,7 @@ int main() {
     RUN(encoding_dispatch_matches_encode_oracle_and_saved_bytes);
     RUN(reopen_with_encoding_dispatch_redecodes_real_file_bytes);
     RUN(closing_the_last_tab_clears_the_editor_document);
+    RUN(tab_activate_focuses_the_editor);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

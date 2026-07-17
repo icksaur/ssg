@@ -103,6 +103,10 @@ CommandHandlerResult tree_command(EditorRuntime::Impl& runtime, std::string_view
         if (arguments == nullptr) return failure("tree.select requires a node id payload");
         if (!runtime.tree.select(arguments->node_id)) return failure("tree node is not selectable");
         runtime.reveal_tree_selection();
+        // Focus follows the pointer (M8-F): clicking a tree row acts on the panel,
+        // so move keyboard focus there. (For a file click the app dispatches
+        // tree.activate next, whose file-open focus_editor() then wins.)
+        (void)runtime.shell.focus_panel();
         return success();
     }
     if (id == "tree.scroll") {

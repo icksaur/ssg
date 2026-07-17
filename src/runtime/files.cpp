@@ -152,6 +152,12 @@ CommandHandlerResult bind_tab(EditorRuntime::Impl& runtime,
     if (!result.accepted()) return failure(tab_message(result));
     runtime.clamp_selection_to_active_document();
     runtime.refresh_syntax();
+    // Focus follows the pointer (M8-F): activating a tab (a tab click, or the
+    // palette/lua "Tab Activate") acts on the editor, so move keyboard focus there.
+    // Keyboard tab switching uses tab.next/tab.previous, which do not reach here.
+    if (command == TabCommand::activate) {
+        runtime.shell.focus_editor();
+    }
     return success();
 }
 

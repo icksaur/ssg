@@ -638,6 +638,52 @@ TEST(find_close_dismisses_the_replace_prompt) {
     }
 }
 
+TEST(pointer_selection_commands_focus_the_editor_keyboard_motion_does_not) {
+    auto root = unique_root();
+    auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"edit.txt"}}).accepted());
+    const ssg::ViewportDimensions dims{80, 24};
+    auto focus = [&] {
+        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        return snap ? snap->sections().shell.focus : ssg::FocusTarget::editor;
+    };
+    auto focus_panel = [&] {
+        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        bool const shown = snap && snap->sections().shell.panel.has_value();
+        if (!shown) {
+            ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"panel.toggle", runtime.revision(), {}}).accepted());
+        }
+        ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"panel.focus", runtime.revision(), {}}).accepted());
+    };
+
+    // A pointer click-to-caret (cursor.set_position) from panel focus moves focus
+    // to the editor.
+    focus_panel();
+    ASSERT_EQ(focus(), ssg::FocusTarget::panel);
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"cursor.set_position", runtime.revision(), ssg::SelectionCommandArguments{ssg::resolve_document_position("abc", ssg::ByteOffset{1}), std::nullopt}}).accepted());
+    ASSERT_EQ(focus(), ssg::FocusTarget::editor);
+
+    // A pointer drag (select.set_range) likewise focuses the editor.
+    focus_panel();
+    ASSERT_EQ(focus(), ssg::FocusTarget::panel);
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"select.set_range", runtime.revision(),
+        ssg::SelectionCommandArguments{std::nullopt, ssg::Selection{ssg::resolve_document_position("abc", ssg::ByteOffset{0}), ssg::resolve_document_position("abc", ssg::ByteOffset{2})}}}).accepted());
+    ASSERT_EQ(focus(), ssg::FocusTarget::editor);
+
+    // A KEYBOARD caret motion (a different SelectionCommand) does NOT change focus:
+    // dispatched from panel focus, the caret moves but the keyboard stays on the panel.
+    focus_panel();
+    ASSERT_EQ(focus(), ssg::FocusTarget::panel);
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"cursor.left", runtime.revision(), {}}).accepted());
+    ASSERT_EQ(focus(), ssg::FocusTarget::panel);
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"select.line_down", runtime.revision(), {}}).accepted());
+    ASSERT_EQ(focus(), ssg::FocusTarget::panel);
+}
+
 } // namespace
 
 int main() {
@@ -647,6 +693,7 @@ int main() {
     RUN(workspace_replace_rejects_stale_and_out_of_bounds_preview);
     RUN(workspace_replace_updates_open_document_snapshot_and_disk);
     RUN(workspace_search_and_replace_exclude_runtime_state_roots);
+    RUN(pointer_selection_commands_focus_the_editor_keyboard_motion_does_not);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

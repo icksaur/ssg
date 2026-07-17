@@ -261,6 +261,64 @@ TEST(tree_select_sets_selection_to_a_node_and_rejects_unknown_ids) {
     std::filesystem::remove_all(root);
 }
 
+TEST(tree_select_focuses_the_panel_and_the_click_pair_nets_expected_focus) {
+    auto root = std::filesystem::current_path() / "runtime_nav_treefocus";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root / "workspace" / "dir");
+    std::filesystem::create_directories(root / "scratch");
+    std::filesystem::create_directories(root / "recovery");
+    std::ofstream{root / "workspace" / "dir" / "inner.txt"} << "x";
+    std::ofstream{root / "workspace" / "top.txt"} << "hello";
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process},
+                               ssg::ViewId{1}).accepted());
+    const ssg::ViewportDimensions dims{80, 24};
+    auto focus = [&] {
+        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        return snap ? snap->sections().shell.focus : ssg::FocusTarget::editor;
+    };
+    // Show the panel (focus stays on the editor), then expand the root so a
+    // directory node and a file node are both visible/selectable.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"panel.toggle", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select_next", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.activate", runtime.revision(), {}}).accepted());
+    ASSERT_EQ(focus(), ssg::FocusTarget::editor);
+
+    auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(snap.has_value());
+    if (!snap) return;
+    std::optional<ssg::TreeNodeId> dir_id;
+    std::optional<ssg::TreeNodeId> file_id;
+    for (auto const& view : snap->sections().tree.providers.front().nodes) {
+        if (view.node.expandable && !dir_id) dir_id = view.node.id;
+        if (!view.node.expandable && view.node.workspace_path && !file_id) file_id = view.node.id;
+    }
+    ASSERT_TRUE(dir_id.has_value());
+    ASSERT_TRUE(file_id.has_value());
+    if (!dir_id || !file_id) return;
+
+    // tree.select alone moves keyboard focus to the panel.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select", runtime.revision(), ssg::TreeSelectArguments{*file_id}}).accepted());
+    ASSERT_EQ(focus(), ssg::FocusTarget::panel);
+
+    // The file click pair [tree.select, tree.activate] ends on the editor (the
+    // file opens, so tree.activate's focus_editor wins over tree.select's panel).
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select", runtime.revision(), ssg::TreeSelectArguments{*file_id}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.activate", runtime.revision(), {}}).accepted());
+    ASSERT_EQ(focus(), ssg::FocusTarget::editor);
+
+    // The directory click pair ends on the panel (tree.select focuses the panel,
+    // tree.activate toggles the directory and leaves focus alone).
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select", runtime.revision(), ssg::TreeSelectArguments{*dir_id}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.activate", runtime.revision(), {}}).accepted());
+    ASSERT_EQ(focus(), ssg::FocusTarget::panel);
+    std::filesystem::remove_all(root);
+}
+
 TEST(tree_scroll_moves_the_viewport_without_moving_the_selection) {
     auto root = std::filesystem::current_path() / "runtime_nav_treescroll_wheel";
     std::filesystem::remove_all(root);
@@ -339,6 +397,7 @@ int main() {
     RUN(tree_scrolls_to_keep_selection_visible_in_a_short_panel);
     RUN(tree_select_sets_selection_to_a_node_and_rejects_unknown_ids);
     RUN(tree_scroll_moves_the_viewport_without_moving_the_selection);
+    RUN(tree_select_focuses_the_panel_and_the_click_pair_nets_expected_focus);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }
