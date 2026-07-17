@@ -281,12 +281,12 @@ TEST(tree_select_focuses_the_panel_and_the_click_pair_nets_expected_focus) {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
         return snap ? snap->sections().shell.focus : ssg::FocusTarget::editor;
     };
-    // Show the panel (focus stays on the editor), then expand the root so a
-    // directory node and a file node are both visible/selectable.
+    // Showing the panel now focuses it (QOL); expand the root so a directory node
+    // and a file node are both visible/selectable.
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"panel.toggle", runtime.revision(), {}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select_next", runtime.revision(), {}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.activate", runtime.revision(), {}}).accepted());
-    ASSERT_EQ(focus(), ssg::FocusTarget::editor);
+    ASSERT_EQ(focus(), ssg::FocusTarget::panel);
 
     auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
     ASSERT_TRUE(snap.has_value());
@@ -301,15 +301,15 @@ TEST(tree_select_focuses_the_panel_and_the_click_pair_nets_expected_focus) {
     ASSERT_TRUE(file_id.has_value());
     if (!dir_id || !file_id) return;
 
-    // tree.select alone moves keyboard focus to the panel.
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select", runtime.revision(), ssg::TreeSelectArguments{*file_id}}).accepted());
-    ASSERT_EQ(focus(), ssg::FocusTarget::panel);
-
     // The file click pair [tree.select, tree.activate] ends on the editor (the
     // file opens, so tree.activate's focus_editor wins over tree.select's panel).
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select", runtime.revision(), ssg::TreeSelectArguments{*file_id}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.activate", runtime.revision(), {}}).accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::editor);
+
+    // From editor focus, tree.select alone moves keyboard focus to the panel.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select", runtime.revision(), ssg::TreeSelectArguments{*file_id}}).accepted());
+    ASSERT_EQ(focus(), ssg::FocusTarget::panel);
 
     // The directory click pair ends on the panel (tree.select focuses the panel,
     // tree.activate toggles the directory and leaves focus alone).

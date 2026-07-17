@@ -350,8 +350,8 @@ TEST(focus_transitions_follow_the_navigation_table) {
     // The panel cannot be focused while hidden.
     ASSERT_FALSE(state.focus_panel());
     ASSERT_TRUE(state.focus() == FocusTarget::editor);
+    // Showing the panel focuses it (no explicit focus_panel needed).
     state.toggle_panel();  // show
-    ASSERT_TRUE(state.focus_panel());
     ASSERT_TRUE(state.focus() == FocusTarget::panel);
     ASSERT_TRUE(state.panel_focused());
     // A prompt pushes the current focus and restores it on close.
@@ -359,15 +359,33 @@ TEST(focus_transitions_follow_the_navigation_table) {
     ASSERT_TRUE(state.focus() == FocusTarget::prompt);
     state.exit_prompt_focus();
     ASSERT_TRUE(state.focus() == FocusTarget::panel);
-    // Hiding the panel while it is focused returns focus to the editor.
+    // Hiding the focused panel restores the focus present when it was shown (the
+    // editor here).
     state.toggle_panel();  // hide
     ASSERT_TRUE(state.focus() == FocusTarget::editor);
     // A prompt over a panel that is hidden before close restores to editor.
-    state.toggle_panel();
-    ASSERT_TRUE(state.focus_panel());
+    state.toggle_panel();  // show (focuses the panel)
+    ASSERT_TRUE(state.focus() == FocusTarget::panel);
     state.enter_prompt_focus();
     state.toggle_panel();  // hide the panel while the prompt is focused
     state.exit_prompt_focus();
+    ASSERT_TRUE(state.focus() == FocusTarget::editor);
+}
+
+TEST(hiding_an_unfocused_panel_leaves_focus_untouched) {
+    ShellState state{{"filesystem"}};
+    // Show (focuses the panel), then move focus to the editor while the panel is
+    // still shown; hiding it must NOT yank focus (it isn't the focused surface).
+    state.toggle_panel();  // show -> panel focused
+    ASSERT_TRUE(state.focus() == FocusTarget::panel);
+    state.focus_editor();
+    ASSERT_TRUE(state.focus() == FocusTarget::editor);
+    state.toggle_panel();  // hide while editor-focused
+    ASSERT_TRUE(state.focus() == FocusTarget::editor);
+    // Re-showing focuses the panel again; hiding restores the editor.
+    state.toggle_panel();  // show
+    ASSERT_TRUE(state.focus() == FocusTarget::panel);
+    state.toggle_panel();  // hide
     ASSERT_TRUE(state.focus() == FocusTarget::editor);
 }
 
@@ -408,6 +426,7 @@ int main() {
     RUN(accessibility_leaf_nodes_carry_display_content);
     RUN(dirty_tab_content_shows_marker);
     RUN(focus_transitions_follow_the_navigation_table);
+    RUN(hiding_an_unfocused_panel_leaves_focus_untouched);
     RUN(leader_hint_renders_in_the_header_when_present);
     RUN(non_overlap_and_cardinality_properties);
     RUN(status_field_manifest_has_exact_order_and_labels);

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <optional>
 #include <utility>
 
 namespace ssg {
@@ -155,6 +156,10 @@ struct ShellState::Impl {
     bool panel_requested = false;
     FocusTarget focus = FocusTarget::editor;
     std::vector<FocusTarget> focus_stack;
+    // The focus present when the panel was last shown, so hiding a focused panel
+    // restores it (a dedicated slot rather than the prompt focus_stack, so it
+    // never orphans an entry when the panel is hidden while a prompt holds focus).
+    std::optional<FocusTarget> focus_before_panel;
     bool distraction_free = false;
 };
 
@@ -243,9 +248,25 @@ bool ShellState::focus_pane(PaneDirection direction,
 }
 
 void ShellState::toggle_panel() noexcept {
-    impl_->panel_requested = !impl_->panel_requested;
-    if (!impl_->panel_requested && impl_->focus == FocusTarget::panel) {
-        impl_->focus = FocusTarget::editor;
+    const bool showing = !impl_->panel_requested;
+    impl_->panel_requested = showing;
+    if (showing) {
+        // Showing the panel moves focus to it (remembering the prior focus so
+        // hiding can restore it), when the panel can actually take focus.
+        if (!impl_->providers.empty()) {
+            impl_->focus_before_panel = impl_->focus;
+            impl_->focus = FocusTarget::panel;
+        }
+    } else if (impl_->focus == FocusTarget::panel) {
+        // Hiding the focused panel restores the focus that was present when it
+        // was shown; never restore to the panel itself or a transient prompt.
+        FocusTarget restored =
+            impl_->focus_before_panel.value_or(FocusTarget::editor);
+        if (restored == FocusTarget::panel || restored == FocusTarget::prompt) {
+            restored = FocusTarget::editor;
+        }
+        impl_->focus = restored;
+        impl_->focus_before_panel.reset();
     }
 }
 
