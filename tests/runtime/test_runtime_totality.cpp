@@ -102,7 +102,7 @@ void run_state(const UiState& state) {
     auto created = ssg::EditorRuntime::create(
         {root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
-    if (!created.accepted()) return;
+    if (!created.accepted()) { fs::remove_all(root); return; }
     auto& runtime = *created.runtime;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process},
                                ssg::ViewId{1}).accepted());
@@ -135,6 +135,14 @@ void run_state(const UiState& state) {
             ASSERT_FALSE(laid_out);
             ASSERT_EQ(shell.viewport.columns, 0);
             ASSERT_EQ(shell.viewport.rows, 0);
+        }
+
+        // Positive side of the oracle: a roomy viewport (>= 80x24) must lay out in
+        // every UI state — otherwise an "always too small" regression would pass
+        // the negative checks alone.
+        if (static_cast<int>(dims.columns) >= 80 &&
+            static_cast<int>(dims.rows) >= 24) {
+            ASSERT_TRUE(laid_out);
         }
 
         // A too-small snapshot (e.g. a prompt-open state at a height that leaves
