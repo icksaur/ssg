@@ -47,4 +47,10 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     )
     target_link_libraries(test_runtime_language_services PRIVATE ssg)
     add_test(NAME test_runtime_language_services COMMAND test_runtime_language_services)
+
+    add_executable(test_runtime_totality
+        ${SSG_SOURCE_DIR}/tests/runtime/test_runtime_totality.cpp
+    )
+    target_link_libraries(test_runtime_totality PRIVATE ssg)
+    add_test(NAME test_runtime_totality COMMAND test_runtime_totality)
 endif()

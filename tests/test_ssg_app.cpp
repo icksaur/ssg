@@ -133,6 +133,19 @@ TEST(encode_ansi_frame_skips_wide_glyph_continuation) {
                 frame.find("\x1b[0m", glyph) < frame.find(' ', glyph + 3));
 }
 
+TEST(encode_too_small_frame_fits_any_size) {
+    // Clears and homes, then centers a truncated message; must be safe at 1x1.
+    auto tiny = ssg::app::encode_too_small_frame(1, 1);
+    ASSERT_TRUE(tiny.find("\x1b[2J") != std::string::npos);
+    ASSERT_TRUE(tiny.find("\x1b[H") != std::string::npos);
+    // A degenerate zero size clears but writes no positioned text.
+    auto zero = ssg::app::encode_too_small_frame(0, 0);
+    ASSERT_TRUE(zero.find("\x1b[2J") != std::string::npos);
+    // A roomy size shows the whole message.
+    auto roomy = ssg::app::encode_too_small_frame(40, 10);
+    ASSERT_TRUE(roomy.find("terminal too small") != std::string::npos);
+}
+
 TEST(terminal_sequences_are_inverse_control_strings) {
     auto setup = ssg::app::terminal_setup_sequence();
     auto restore = ssg::app::terminal_restore_sequence();
@@ -807,6 +820,7 @@ int main() {
     RUN(resolve_launch_directory_opens_that_directory);
     RUN(resolve_launch_file_opens_parent_directory_and_file);
     RUN(terminal_sequences_are_inverse_control_strings);
+    RUN(encode_too_small_frame_fits_any_size);
     RUN(classify_signal_tags_maps_signal_numbers);
     RUN(encode_ansi_frame_adapts_to_color_depth);
     RUN(detect_color_depth_reads_environment);

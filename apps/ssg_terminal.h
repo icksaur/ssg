@@ -104,6 +104,13 @@ struct Decoded {
 [[nodiscard]] ssg::ColorDepth detect_color_depth(char const* colorterm,
                                                  char const* term);
 
+// A minimal placeholder frame for a viewport below the library's 20x4 minimum
+// (M9-T): the library declines to lay out such a viewport (a snapshot with a
+// zeroed shell), and render() requires a positive viewport, so the client shows
+// this instead.  Clears the screen and writes a truncated, centered "terminal
+// too small" message that fits any size down to 1x1.  Pure and testable.
+[[nodiscard]] std::string encode_too_small_frame(int columns, int rows);
+
 // The exact control bytes that put the terminal into / take it out of the
 // editor's display mode.  Pure so the RAII guard, a signal-driven restore, and a
 // test all share one definition (M9-X): setup enters the alternate screen with a

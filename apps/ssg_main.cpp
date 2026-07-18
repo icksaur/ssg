@@ -479,14 +479,23 @@ int main(int argc, char** argv) {
         while (!quit) {
             auto snapshot = refresh();
         if (snapshot) {
-            auto grid = ssg::render(*snapshot);
-            std::string frame = "\x1b[?25l";  // Hide the cursor while redrawing.
-            frame += ssg::app::encode_ansi_frame(grid, color_depth);
-            if (grid.caret) {
-                frame += "\x1b[" + std::to_string(grid.caret->row + 1) + ";" +
-                         std::to_string(grid.caret->column + 1) + "H\x1b[?25h";
+            auto const& shell = snapshot->sections().shell;
+            if (shell.viewport.columns <= 0 || shell.viewport.rows <= 0) {
+                // Below the library's 20x4 minimum: render() requires a positive
+                // viewport, so show a placeholder instead of laying out (M9-T).
+                auto const size = terminal_size();
+                write_all(ssg::app::encode_too_small_frame(
+                    static_cast<int>(size.columns), static_cast<int>(size.rows)));
+            } else {
+                auto grid = ssg::render(*snapshot);
+                std::string frame = "\x1b[?25l";  // Hide the cursor while redrawing.
+                frame += ssg::app::encode_ansi_frame(grid, color_depth);
+                if (grid.caret) {
+                    frame += "\x1b[" + std::to_string(grid.caret->row + 1) + ";" +
+                             std::to_string(grid.caret->column + 1) + "H\x1b[?25h";
+                }
+                write_all(frame);
             }
-            write_all(frame);
         }
 
         char bytes[64];
