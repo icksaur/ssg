@@ -7,6 +7,7 @@
 // module only resolves launch arguments and formats an already-rendered cell
 // grid into terminal bytes.
 
+#include <ssg/color.h>
 #include <ssg/render.h>
 
 #include <cstddef>
@@ -89,10 +90,19 @@ struct Decoded {
                                    std::size_t& consumed);
 
 // Encode a rendered cell grid as a full-screen ANSI frame: cursor-addressed
-// rows with 24-bit foreground/background colors drawn from the snapshot's
-// 16-color palette.  Continuation cells (the trailing half of a wide glyph)
-// emit nothing because the wide glyph already advanced the cursor.
-[[nodiscard]] std::string encode_ansi_frame(ssg::CellGrid const& screen);
+// rows whose colors are drawn from the snapshot's 16-color palette and adapted
+// to `depth` via ssg::resolve_color (truecolor 38;2, indexed256 38;5, or ANSI16
+// 30-37/90-97).  Continuation cells (the trailing half of a wide glyph) emit
+// nothing because the wide glyph already advanced the cursor.
+[[nodiscard]] std::string encode_ansi_frame(
+    ssg::CellGrid const& screen, ssg::ColorDepth depth = ssg::ColorDepth::truecolor);
+
+// Detect the terminal's color capability from the environment (M9-C2): COLORTERM
+// of "truecolor"/"24bit" -> truecolor; else a TERM containing "256color" ->
+// indexed256; else ansi16.  Nullable inputs (a missing variable) are treated as
+// absent.  Pure, so it is unit-testable without touching the real environment.
+[[nodiscard]] ssg::ColorDepth detect_color_depth(char const* colorterm,
+                                                 char const* term);
 
 // The exact control bytes that put the terminal into / take it out of the
 // editor's display mode.  Pure so the RAII guard, a signal-driven restore, and a

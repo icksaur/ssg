@@ -29,6 +29,7 @@
 #include <cerrno>
 #include <csignal>
 #include <cstdio>
+#include <cstdlib>
 #include <algorithm>
 #include <any>
 #include <filesystem>
@@ -223,6 +224,11 @@ int main(int argc, char** argv) {
     install_signal_tag_handler(SIGWINCH);
     install_signal_tag_handler(SIGTERM);
     install_signal_tag_handler(SIGHUP);
+
+    // Detect the terminal color depth once at startup (M9-C2); the frame encoder
+    // adapts the theme's 16 colors to it via the library's resolve_color.
+    ssg::ColorDepth const color_depth =
+        ssg::app::detect_color_depth(std::getenv("COLORTERM"), std::getenv("TERM"));
 
     // Drain and classify any pending signal tags.  Returns false to keep looping;
     // a terminating signal does not return — it restores the terminal in normal
@@ -475,7 +481,7 @@ int main(int argc, char** argv) {
         if (snapshot) {
             auto grid = ssg::render(*snapshot);
             std::string frame = "\x1b[?25l";  // Hide the cursor while redrawing.
-            frame += ssg::app::encode_ansi_frame(grid);
+            frame += ssg::app::encode_ansi_frame(grid, color_depth);
             if (grid.caret) {
                 frame += "\x1b[" + std::to_string(grid.caret->row + 1) + ";" +
                          std::to_string(grid.caret->column + 1) + "H\x1b[?25h";

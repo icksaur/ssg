@@ -36,6 +36,20 @@ std::string terminal_restore_sequence() {
     return "\x1b[?1006l\x1b[?1002l\x1b[?1000l\x1b[0 q\x1b[?25h\x1b[?1049l";
 }
 
+ssg::ColorDepth detect_color_depth(char const* colorterm, char const* term) {
+    if (colorterm != nullptr) {
+        std::string_view const value{colorterm};
+        if (value == "truecolor" || value == "24bit") {
+            return ssg::ColorDepth::truecolor;
+        }
+    }
+    if (term != nullptr &&
+        std::string_view{term}.find("256color") != std::string_view::npos) {
+        return ssg::ColorDepth::indexed256;
+    }
+    return ssg::ColorDepth::ansi16;
+}
+
 LaunchTarget resolve_launch(fs::path const& argument) {
     if (argument.empty()) {
         return {fs::current_path(), std::nullopt};
@@ -50,13 +64,33 @@ LaunchTarget resolve_launch(fs::path const& argument) {
     return {parent, absolute.filename().string()};
 }
 
-std::string encode_ansi_frame(ssg::CellGrid const& screen) {
+std::string encode_ansi_frame(ssg::CellGrid const& screen, ssg::ColorDepth depth) {
     constexpr std::size_t max_index = ssg::theme_palette_size - 1;
-    auto color = [&](std::uint8_t index, char kind) {
+    // Format one SGR color for palette entry `index`, adapted to the terminal's
+    // depth.  `kind` is '3' for foreground, '4' for background (SGR selectors),
+    // which also selects the ANSI-16 base ('3'/'4' -> 30/40) vs bright
+    // ('9'/'10' -> 90/100) prefix.
+    auto color = [&](std::uint8_t index, char kind) -> std::string {
         auto const& c = screen.palette[std::min<std::size_t>(index, max_index)];
-        return "\x1b[" + std::string{kind} + "8;2;" +
-               std::to_string(c.red) + ";" + std::to_string(c.green) + ";" +
-               std::to_string(c.blue) + "m";
+        auto const resolved = ssg::resolve_color(c, depth);
+        switch (resolved.encoding) {
+            case ssg::ResolvedColor::Encoding::truecolor:
+                return "\x1b[" + std::string{kind} + "8;2;" +
+                       std::to_string(c.red) + ";" + std::to_string(c.green) +
+                       ";" + std::to_string(c.blue) + "m";
+            case ssg::ResolvedColor::Encoding::indexed256:
+                return "\x1b[" + std::string{kind} + "8;5;" +
+                       std::to_string(resolved.index) + "m";
+            case ssg::ResolvedColor::Encoding::ansi16: {
+                int const base = kind == '3' ? 30 : 40;
+                int const bright = kind == '3' ? 90 : 100;
+                int const code = resolved.index < 8
+                                     ? base + resolved.index
+                                     : bright + (resolved.index - 8);
+                return "\x1b[" + std::to_string(code) + "m";
+            }
+        }
+        return {};
     };
 
     std::string out = "\x1b[H";

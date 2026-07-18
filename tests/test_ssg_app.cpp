@@ -39,6 +39,52 @@ TEST(resolve_launch_file_opens_parent_directory_and_file) {
     ASSERT_EQ(*target.file, std::string{"hello.txt"});
 }
 
+TEST(encode_ansi_frame_adapts_to_color_depth) {
+    ssg::CellGrid screen;
+    screen.size = {1, 1};
+    // Foreground pure red (theme index 1), background pure black (index 0).
+    screen.palette[0] = {0, 0, 0};
+    screen.palette[1] = {255, 0, 0};
+    ssg::CellGridCell cell;
+    cell.text = "X";
+    cell.foreground = 1;
+    cell.background = 0;
+    screen.cells = {cell};
+
+    // Truecolor: exact channels.
+    auto truecolor = ssg::app::encode_ansi_frame(screen, ssg::ColorDepth::truecolor);
+    ASSERT_TRUE(truecolor.find("\x1b[38;2;255;0;0m") != std::string::npos);
+    ASSERT_TRUE(truecolor.find("\x1b[48;2;0;0;0m") != std::string::npos);
+
+    // Indexed256: pure red is xterm cube index 196; black is index 16.
+    auto indexed = ssg::app::encode_ansi_frame(screen, ssg::ColorDepth::indexed256);
+    ASSERT_TRUE(indexed.find("\x1b[38;5;196m") != std::string::npos);
+    ASSERT_TRUE(indexed.find("\x1b[48;5;16m") != std::string::npos);
+    ASSERT_TRUE(indexed.find(";2;") == std::string::npos);  // no truecolor bytes
+
+    // ANSI16: pure red is base index 9 (bright red) -> fg SGR 91; black is index
+    // 0 -> bg SGR 40.
+    auto ansi = ssg::app::encode_ansi_frame(screen, ssg::ColorDepth::ansi16);
+    ASSERT_TRUE(ansi.find("\x1b[91m") != std::string::npos);
+    ASSERT_TRUE(ansi.find("\x1b[40m") != std::string::npos);
+    ASSERT_TRUE(ansi.find(";5;") == std::string::npos);
+    ASSERT_TRUE(ansi.find(";2;") == std::string::npos);
+}
+
+TEST(detect_color_depth_reads_environment) {
+    using ssg::ColorDepth;
+    ASSERT_TRUE(ssg::app::detect_color_depth("truecolor", "xterm") == ColorDepth::truecolor);
+    ASSERT_TRUE(ssg::app::detect_color_depth("24bit", nullptr) == ColorDepth::truecolor);
+    // COLORTERM wins over TERM.
+    ASSERT_TRUE(ssg::app::detect_color_depth("truecolor", "xterm-256color") == ColorDepth::truecolor);
+    // No COLORTERM: a 256color TERM is indexed256.
+    ASSERT_TRUE(ssg::app::detect_color_depth(nullptr, "xterm-256color") == ColorDepth::indexed256);
+    ASSERT_TRUE(ssg::app::detect_color_depth("", "screen-256color") == ColorDepth::indexed256);
+    // Neither signal: fall back to 16 colors.
+    ASSERT_TRUE(ssg::app::detect_color_depth(nullptr, "xterm") == ColorDepth::ansi16);
+    ASSERT_TRUE(ssg::app::detect_color_depth(nullptr, nullptr) == ColorDepth::ansi16);
+}
+
 TEST(encode_ansi_frame_addresses_rows_and_emits_palette_colors) {
     ssg::CellGrid screen;
     screen.size = {2, 1};
@@ -760,6 +806,10 @@ int main() {
     RUN(resolve_launch_no_argument_opens_cwd);
     RUN(resolve_launch_directory_opens_that_directory);
     RUN(resolve_launch_file_opens_parent_directory_and_file);
+    RUN(terminal_sequences_are_inverse_control_strings);
+    RUN(classify_signal_tags_maps_signal_numbers);
+    RUN(encode_ansi_frame_adapts_to_color_depth);
+    RUN(detect_color_depth_reads_environment);
     RUN(encode_ansi_frame_addresses_rows_and_emits_palette_colors);
     RUN(encode_ansi_frame_skips_wide_glyph_continuation);
     RUN(decode_input_maps_printables_and_named_keys);
