@@ -249,6 +249,14 @@ TEST(source_and_config_have_no_independent_color_sources) {
             relative.starts_with("doc/") || relative.starts_with("tasks/") ||
             relative.starts_with("data/themes/") ||
             relative == "include/ssg/theme.h" ||
+            // Terminal color-depth adaptation (M9-C): these define the xterm-256
+            // and ANSI-16 TERMINAL palettes — hardware swatches a reduced-depth
+            // terminal can display — not editor theme colors.  See
+            // doc/spec-terminal-robustness.md (M9-C1) for the I22 reconciliation:
+            // resolve_color adds no color to the theme/snapshot/API surface.
+            relative == "include/ssg/color.h" ||
+            relative == "src/color.cpp" ||
+            relative == "tests/test_color.cpp" ||
             relative == "tests/test_theme.cpp") {
             continue;
         }
