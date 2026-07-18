@@ -243,10 +243,13 @@ the editor caret was checked against the reveal obligation:
   runtime handler currently discards the `NavigationTransition` (which carries the
   target and `reveal_primary_caret = true`), so goto does not yet move the editor
   caret. **When goto application is wired, it must honour that flag and reveal.**
-- **`tab.activate` (switching tabs)** — does not currently reveal (it clamps the
-  selection into the newly active document without resetting the scroll). Per-tab
-  caret/scroll is not stored, so this is deferred with that larger feature, not a
-  reveal-policy fix here.
+- **`tab.activate`/`tab.next`/`tab.previous`/`tab.close`/`reopen_closed` (switching
+  the active document)** — reveal. `bind_tab` reveals the primary caret whenever a
+  tab command changes the active document, so the newly active tab's caret is
+  on-screen instead of inheriting the previous tab's scroll offset.
+  `tab.move_left`/`tab.move_right`/`tab.close_others` keep the same active document
+  and deliberately do NOT reveal (they must not snap a scroll the user set). Per-tab
+  caret/scroll persistence across switches remains a separate future feature.
 
 
 

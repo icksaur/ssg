@@ -237,6 +237,43 @@ TEST(tab_activate_focuses_the_editor) {
     ASSERT_EQ(focus(), ssg::FocusTarget::editor);
 }
 
+TEST(switching_tabs_reveals_the_new_documents_caret) {
+    // Reveal-policy: switching to a different tab shows that document's caret
+    // instead of inheriting the previous tab's scroll offset.
+    auto root = unique_root("tab_switch_reveal");
+    std::string tall;
+    for (int i = 0; i < 100; ++i) tall += "line\n";
+    std::ofstream{root / "workspace" / "a.txt", std::ios::binary} << tall;
+    std::ofstream{root / "workspace" / "b.txt", std::ios::binary} << tall;
+    auto created = ssg::EditorRuntime::create(config_for(root));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    const ssg::ViewportDimensions dims{80, 24};
+    auto first_row = [&] {
+        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        return snap ? snap->client().viewport.first_visual_row : 0U;
+    };
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"a.txt"}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"b.txt"}}).accepted());
+    // B is active; scroll it far down (free scroll leaves B's caret off-screen).
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{50}}).accepted());
+    ASSERT_EQ(first_row(), 50U);
+
+    // Switch to A (previous tab): its caret (top) is revealed, not B's stale 50.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tab.previous", runtime.revision(), {}}).accepted());
+    ASSERT_EQ(first_row(), 0U);
+
+    // Moving a tab keeps the SAME active document and must NOT snap the scroll:
+    // switch back to B, scroll away, move the tab, and the offset stays put.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tab.next", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{50}}).accepted());
+    ASSERT_EQ(first_row(), 50U);
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tab.move_left", runtime.revision(), {}}).accepted());
+    ASSERT_EQ(first_row(), 50U);  // same document -> no reveal snap
+}
+
 } // namespace
 
 int main() {
@@ -247,6 +284,7 @@ int main() {
     RUN(reopen_with_encoding_dispatch_redecodes_real_file_bytes);
     RUN(closing_the_last_tab_clears_the_editor_document);
     RUN(tab_activate_focuses_the_editor);
+    RUN(switching_tabs_reveals_the_new_documents_caret);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

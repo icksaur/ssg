@@ -137,6 +137,11 @@ CommandHandlerResult bind_tab(EditorRuntime::Impl& runtime,
                               std::any const& payload) {
     auto active = runtime.tabs.view_state().active;
     auto tab = payload_as<TabId>(payload) ? *payload_as<TabId>(payload) : active.value_or(TabId{0});
+    // Remember the active document so we can reveal the caret only when the tab
+    // command actually switches to a different document (activate/next/previous/
+    // a close that changes the active tab / reopen). move_left/move_right and
+    // close_others keep the same active document and must NOT snap the scroll.
+    auto const document_before = runtime.active_document_id();
     TabResult result;
     switch (command) {
         case TabCommand::close: result = runtime.tabs.close(tab, std::chrono::milliseconds{100}); break;
@@ -151,6 +156,12 @@ CommandHandlerResult bind_tab(EditorRuntime::Impl& runtime,
     }
     if (!result.accepted()) return failure(tab_message(result));
     runtime.clamp_selection_to_active_document();
+    // Reveal the caret when switching to a different document, so the newly
+    // active tab's caret is on-screen instead of inheriting the previous tab's
+    // scroll offset (doc/spec-scroll.md reveal policy).
+    if (runtime.active_document_id() != document_before) {
+        runtime.reveal_primary_caret();
+    }
     runtime.refresh_syntax();
     // Focus follows the pointer (M8-F): activating a tab (a tab click, or the
     // palette/lua "Tab Activate") acts on the editor, so move keyboard focus there.
