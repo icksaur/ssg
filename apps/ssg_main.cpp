@@ -53,8 +53,10 @@ void write_all(std::string_view bytes) {
 }
 
 // Puts the terminal in raw mode on the alternate screen and restores the
-// original mode, cursor, and primary screen on destruction (RAII; the only exit
-// path in milestone 1 is `ESC Q`, which returns normally).
+// original mode, cursor, and primary screen on destruction (RAII).  restore()
+// performs the same teardown eagerly and idempotently so a terminating-signal
+// path (M9-X) can restore the terminal before re-raising, without the
+// destructor undoing or repeating it.
 class TerminalMode {
 public:
     TerminalMode() {
@@ -67,15 +69,17 @@ public:
         raw.c_cc[VTIME] = 0;
         if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) != 0) return;
         active_ = true;
-        // Alternate screen, blinking bar cursor, SGR mouse reporting. 1000h =
-        // button press/release, 1002h = button-event motion (drags), 1006h = SGR
-        // extended coordinates.
-        write_all("\x1b[?1049h\x1b[5 q\x1b[?1000h\x1b[?1002h\x1b[?1006h");
+        write_all(ssg::app::terminal_setup_sequence());
     }
 
-    ~TerminalMode() {
+    ~TerminalMode() { restore(); }
+
+    // Restore the terminal to its pre-launch state.  Safe to call more than once
+    // (the destructor calls it again); only the first call does the work.
+    void restore() noexcept {
         if (!active_) return;
-        write_all("\x1b[?1006l\x1b[?1002l\x1b[?1000l\x1b[0 q\x1b[?25h\x1b[?1049l");
+        active_ = false;
+        write_all(ssg::app::terminal_restore_sequence());
         tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_);
     }
 
@@ -220,10 +224,12 @@ int main(int argc, char** argv) {
     install_signal_tag_handler(SIGTERM);
     install_signal_tag_handler(SIGHUP);
 
-    // Drain and classify any pending signal tags; returns false when the loop
-    // should terminate (a terminating signal was received).  Resize needs no
-    // work here: the next snapshot at the loop top re-queries terminal_size().
-    auto drain_signals = [&]() -> bool {
+    // Drain and classify any pending signal tags.  Returns false to keep looping;
+    // a terminating signal does not return — it restores the terminal in normal
+    // context (tcsetattr is not async-signal-safe) and re-raises with the default
+    // disposition so the exit status reflects the signal (M9-X).  A resize needs
+    // no work here: the next snapshot at the loop top re-queries terminal_size().
+    auto drain_signals = [&]() -> void {
         char scratch[64];
         std::string tags;
         for (;;) {
@@ -232,8 +238,12 @@ int main(int argc, char** argv) {
             tags.append(scratch, static_cast<std::size_t>(n));
         }
         auto const events = ssg::app::classify_signal_tags(tags);
-        // M9-X upgrades terminate to restore-and-re-raise; for now quit cleanly.
-        return !events.terminate.has_value();
+        if (events.terminate) {
+            int const signo = *events.terminate;
+            mode.restore();
+            ::signal(signo, SIG_DFL);
+            ::raise(signo);
+        }
     };
 
     std::string buffer;             // Raw bytes read but not yet decoded.
@@ -456,8 +466,12 @@ int main(int argc, char** argv) {
         return snapshot;
     };
 
-    while (!quit) {
-        auto snapshot = refresh();
+    // Top-level boundary (M9-X): an exception escaping the loop is not portably
+    // guaranteed to unwind `mode` once past main, so restore the terminal here
+    // before it propagates.
+    try {
+        while (!quit) {
+            auto snapshot = refresh();
         if (snapshot) {
             auto grid = ssg::render(*snapshot);
             std::string frame = "\x1b[?25l";  // Hide the cursor while redrawing.
@@ -484,9 +498,10 @@ int main(int argc, char** argv) {
             auto const ready = wait_readiness(kEdgeScrollIntervalMs, signal_pipe[0]);
             if (ready.signal) {
                 // A resize/terminate signal arrived mid-drag: drain it now rather
-                // than deferring until the drag releases.  Terminate quits;
-                // resize re-snapshots at the loop top with the drag preserved.
-                if (!drain_signals()) quit = true;
+                // than deferring until the drag releases.  Terminate does not
+                // return (restore + re-raise); resize re-snapshots at the loop
+                // top with the drag preserved.
+                drain_signals();
                 continue;
             }
             if (!ready.input) {
@@ -521,11 +536,9 @@ int main(int argc, char** argv) {
         // signal; selecting on both fds makes the wake deterministic.
         auto const wait = wait_readiness(-1, signal_pipe[0]);
         if (wait.signal) {
-            if (!drain_signals()) {
-                quit = true;
-                continue;
-            }
-            // A resize (or a spurious wake) just re-snapshots at the loop top.
+            // Terminate does not return (restore + re-raise); a resize just
+            // re-snapshots at the loop top.
+            drain_signals();
             if (!wait.input) continue;
         }
         if (!wait.input) continue;  // EINTR or spurious wake: re-render and retry.
@@ -543,10 +556,7 @@ int main(int argc, char** argv) {
                 // bounded-Escape resolution.  The wait also watches the signal
                 // pipe so a resize/terminate is not deferred by a lone ESC.
                 auto const ready = wait_readiness(kEscapeTimeoutMs, signal_pipe[0]);
-                if (ready.signal && !drain_signals()) {
-                    quit = true;
-                    break;
-                }
+                if (ready.signal) drain_signals();
                 if (ready.input) {
                     auto more = ::read(STDIN_FILENO, bytes, sizeof bytes);
                     if (more > 0) {
@@ -696,6 +706,15 @@ int main(int argc, char** argv) {
                 }
             }
         }
+    }
+    } catch (std::exception const& error) {
+        mode.restore();
+        std::fprintf(stderr, "ssg: %s\n", error.what());
+        return 1;
+    } catch (...) {
+        mode.restore();
+        std::fprintf(stderr, "ssg: terminated by an unknown error\n");
+        return 1;
     }
 
     return 0;

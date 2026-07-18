@@ -87,6 +87,23 @@ TEST(encode_ansi_frame_skips_wide_glyph_continuation) {
                 frame.find("\x1b[0m", glyph) < frame.find(' ', glyph + 3));
 }
 
+TEST(terminal_sequences_are_inverse_control_strings) {
+    auto setup = ssg::app::terminal_setup_sequence();
+    auto restore = ssg::app::terminal_restore_sequence();
+
+    // The exact bytes are pinned: a signal-driven restore and the RAII destructor
+    // share these, so any drift would leave a real terminal in raw/alt-screen
+    // state after a terminating signal.
+    ASSERT_EQ(setup, std::string{"\x1b[?1049h\x1b[5 q\x1b[?1000h\x1b[?1002h\x1b[?1006h"});
+    ASSERT_EQ(restore, std::string{"\x1b[?1006l\x1b[?1002l\x1b[?1000l\x1b[0 q\x1b[?25h\x1b[?1049l"});
+
+    // Every mode setup turns ON (…h / high) restore turns OFF (…l / low).
+    ASSERT_TRUE(setup.find("\x1b[?1049h") != std::string::npos);
+    ASSERT_TRUE(restore.find("\x1b[?1049l") != std::string::npos);
+    ASSERT_TRUE(setup.find("\x1b[?1000h") != std::string::npos);
+    ASSERT_TRUE(restore.find("\x1b[?1000l") != std::string::npos);
+}
+
 TEST(classify_signal_tags_maps_signal_numbers) {
     // Empty drain: no events.
     auto none = ssg::app::classify_signal_tags({});

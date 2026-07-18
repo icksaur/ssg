@@ -94,4 +94,12 @@ struct Decoded {
 // emit nothing because the wide glyph already advanced the cursor.
 [[nodiscard]] std::string encode_ansi_frame(ssg::CellGrid const& screen);
 
+// The exact control bytes that put the terminal into / take it out of the
+// editor's display mode.  Pure so the RAII guard, a signal-driven restore, and a
+// test all share one definition (M9-X): setup enters the alternate screen with a
+// blinking bar cursor and SGR mouse reporting; restore reverses each in the
+// opposite order and shows the cursor.
+[[nodiscard]] std::string terminal_setup_sequence();
+[[nodiscard]] std::string terminal_restore_sequence();
+
 }  // namespace ssg::app
