@@ -1,7 +1,9 @@
 #include "pointer_routing.h"
 #include "ssg_terminal.h"
 
+#include <ssg/editor_runtime.h>
 #include <ssg/hit_test.h>
+#include <ssg/render.h>
 #include <ssg/selection.h>
 
 #include "test_helpers.h"
@@ -131,6 +133,101 @@ TEST(encode_ansi_frame_skips_wide_glyph_continuation) {
     auto glyph = frame.find("\xe4\xb8\xad", row_start);
     ASSERT_TRUE(frame.find(' ', glyph + 3) == std::string::npos ||
                 frame.find("\x1b[0m", glyph) < frame.find(' ', glyph + 3));
+}
+
+TEST(unicode_end_to_end_grid_and_encoding) {
+    // text -> snapshot -> render -> encode, locking the client Unicode path:
+    // a wide CJG glyph occupies a cell + continuation, a combining mark folds
+    // into its base grapheme (width 1), a ZWJ emoji sequence is one wide cluster,
+    // the caret advances by 2 past a wide glyph, and the encoder emits one glyph
+    // per cluster and nothing for a continuation cell.
+    auto root = fs::temp_directory_path() / "ssg-m9u";
+    fs::remove_all(root);
+    fs::create_directories(root / "workspace");
+    fs::create_directories(root / "scratch");
+    fs::create_directories(root / "recovery");
+    // a b [U+4E00 wide] e [U+0301 combining] [U+1F468 ZWJ U+1F469]
+    const std::string cjk = "\xE4\xB8\x80";                 // U+4E00, wide
+    const std::string ecombining = "e\xCC\x81";             // e + U+0301
+    const std::string emoji = "\xF0\x9F\x91\xA8\xE2\x80\x8D\xF0\x9F\x91\xA9";
+    const std::string line = "ab" + cjk + ecombining + emoji;
+    std::ofstream{root / "workspace" / "u.txt", std::ios::binary} << line << "\n";
+
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process},
+                               ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.open", runtime.revision(), std::string{"u.txt"}})
+                    .accepted());
+    auto snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(snap.has_value());
+    if (!snap.has_value()) return;
+    auto grid = ssg::render(*snap);
+
+    // Locate the content row: the first cell run "a","b".
+    int row = -1, startx = -1;
+    for (int y = 0; y < grid.size.rows && row < 0; ++y) {
+        for (int x = 0; x + 1 < grid.size.columns; ++x) {
+            auto const& c0 = grid.cells[static_cast<std::size_t>(y * grid.size.columns + x)];
+            auto const& c1 = grid.cells[static_cast<std::size_t>(y * grid.size.columns + x + 1)];
+            if (c0.text == "a" && c1.text == "b") { row = y; startx = x; break; }
+        }
+    }
+    ASSERT_TRUE(row >= 0);
+    if (row < 0) return;
+    auto cell = [&](int k) -> ssg::CellGridCell const& {
+        return grid.cells[static_cast<std::size_t>(row * grid.size.columns + startx + k)];
+    };
+
+    // Exact cell placement (the golden).
+    ASSERT_EQ(cell(0).text, std::string{"a"});
+    ASSERT_FALSE(cell(0).continuation);
+    ASSERT_EQ(cell(1).text, std::string{"b"});
+    ASSERT_EQ(cell(2).text, cjk);          // wide glyph in its first cell
+    ASSERT_FALSE(cell(2).continuation);
+    ASSERT_TRUE(cell(3).continuation);     // trailing half of the wide glyph
+    ASSERT_EQ(cell(4).text, ecombining);   // combining mark folded into the base
+    ASSERT_FALSE(cell(4).continuation);
+    ASSERT_EQ(cell(5).text, emoji);        // ZWJ sequence is one cluster
+    ASSERT_FALSE(cell(5).continuation);
+    ASSERT_TRUE(cell(6).continuation);     // the emoji is wide too
+
+    // The caret advances by 2 columns across the wide CJK glyph: byte offset 2
+    // (before the glyph) resolves to column startx+2, and offset 5 (just after
+    // it, at 'e') to column startx+4.
+    auto before = ssg::resolve_document_position(line, ssg::ByteOffset{2});
+    auto after = ssg::resolve_document_position(line, ssg::ByteOffset{5});
+    ASSERT_TRUE(before.has_value());
+    ASSERT_TRUE(after.has_value());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"cursor.set_position", runtime.revision(),
+                                  ssg::SelectionCommandArguments{after, std::nullopt}})
+                    .accepted());
+    auto caret_snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(caret_snap.has_value());
+    if (caret_snap.has_value()) {
+        auto caret_grid = ssg::render(*caret_snap);
+        ASSERT_TRUE(caret_grid.caret.has_value());
+        if (caret_grid.caret) ASSERT_EQ(caret_grid.caret->column, startx + 4);
+    }
+
+    // Encoding: each wide cluster emits exactly one glyph and continuation cells
+    // emit nothing, so the CJK and emoji byte sequences each appear exactly once.
+    auto frame = ssg::app::encode_ansi_frame(grid, ssg::ColorDepth::truecolor);
+    auto count = [&](std::string const& needle) {
+        std::size_t n = 0, pos = 0;
+        while ((pos = frame.find(needle, pos)) != std::string::npos) { ++n; pos += needle.size(); }
+        return n;
+    };
+    ASSERT_EQ(count(cjk), std::size_t{1});
+    ASSERT_EQ(count(emoji), std::size_t{1});
+    ASSERT_EQ(count(ecombining), std::size_t{1});
+
+    fs::remove_all(root);
 }
 
 TEST(encode_too_small_frame_fits_any_size) {
@@ -820,6 +917,7 @@ int main() {
     RUN(resolve_launch_directory_opens_that_directory);
     RUN(resolve_launch_file_opens_parent_directory_and_file);
     RUN(terminal_sequences_are_inverse_control_strings);
+    RUN(unicode_end_to_end_grid_and_encoding);
     RUN(encode_too_small_frame_fits_any_size);
     RUN(classify_signal_tags_maps_signal_numbers);
     RUN(encode_ansi_frame_adapts_to_color_depth);
