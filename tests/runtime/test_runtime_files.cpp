@@ -72,7 +72,7 @@ TEST(opening_a_file_reveals_the_caret_resetting_a_stale_scroll) {
     ASSERT_EQ(first_row(), 0U);
 }
 
-
+TEST(open_edit_save_round_trips_real_disk_bytes) {
     auto root = unique_root("round_trip");
     {
         std::ofstream output{root / "workspace" / "note.txt", std::ios::binary};

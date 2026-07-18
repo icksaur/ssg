@@ -672,7 +672,7 @@ TEST(pointer_selection_commands_focus_the_editor_keyboard_motion_does_not) {
     focus_panel();
     ASSERT_EQ(focus(), ssg::FocusTarget::panel);
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"select.set_range", runtime.revision(),
-        ssg::SelectionCommandArguments{std::nullopt, ssg::Selection{ssg::resolve_document_position("abc", ssg::ByteOffset{0}), ssg::resolve_document_position("abc", ssg::ByteOffset{2})}}}).accepted());
+        ssg::SelectionCommandArguments{std::nullopt, ssg::Selection{ssg::resolve_document_position("abc", ssg::ByteOffset{0}).value(), ssg::resolve_document_position("abc", ssg::ByteOffset{2}).value()}}}).accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::editor);
 
     // A KEYBOARD caret motion (a different SelectionCommand) does NOT change focus:
@@ -785,13 +785,19 @@ TEST(undo_and_paste_reveal_the_caret) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"edit.undo", runtime.revision(), {}}).accepted());
     ASSERT_EQ(first_row(), 0U);
 
-    // Copy a line, scroll away, and PASTE: paste reveals the caret.
+    // Copy a line, collapse the caret to the top, scroll away, and PASTE: the
+    // paste inserts a duplicate (a real document mutation) and reveals the caret.
+    // (Pasting over the same selection would reproduce identical bytes — a no-op
+    // that correctly does not mutate or reveal.)
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"select.line_down", runtime.revision(), {}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"clipboard.copy", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"cursor.set_position", runtime.revision(), ssg::SelectionCommandArguments{ssg::resolve_document_position(text, ssg::ByteOffset{0}), std::nullopt}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{40}}).accepted());
     ASSERT_EQ(first_row(), 40U);
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"clipboard.paste", runtime.revision(), {}}).accepted());
-    ASSERT_EQ(first_row(), 0U);
+    // The pasted "a\n" pushes the caret to line 1; revealing from row 40 scrolls
+    // up so the caret's row sits at the viewport top (first_row == its row).
+    ASSERT_EQ(first_row(), 1U);
     std::filesystem::remove_all(root);
 }
 
