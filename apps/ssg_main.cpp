@@ -98,15 +98,27 @@ ssg::ViewportDimensions terminal_size() {
     return {80, 24};
 }
 
-// Whether more input is available within `timeout_ms`.  Used only to bound the
-// terminal Escape ambiguity: a lone trailing ESC waits briefly for a follow-up
-// byte before being decoded as a standalone Escape stroke.
-bool input_ready(int timeout_ms) {
+// Which descriptors became ready within `timeout_ms` (negative blocks): the
+// keyboard, the signal self-pipe, or both.  Every wait in the loop watches the
+// signal pipe so a resize/terminate signal is observed promptly even mid-drag or
+// mid-Escape (M9-W); the callers drain and act on `signal`.
+struct FdReadiness {
+    bool input = false;   // STDIN has bytes.
+    bool signal = false;  // The signal self-pipe has pending tags.
+};
+
+FdReadiness wait_readiness(int timeout_ms, int signal_fd) {
     fd_set set;
     FD_ZERO(&set);
     FD_SET(STDIN_FILENO, &set);
+    FD_SET(signal_fd, &set);
+    int const max_fd = std::max(STDIN_FILENO, signal_fd);
     timeval timeout{timeout_ms / 1000, (timeout_ms % 1000) * 1000};
-    return ::select(STDIN_FILENO + 1, &set, nullptr, nullptr, &timeout) > 0;
+    int const ready =
+        ::select(max_fd + 1, &set, nullptr, nullptr,
+                 timeout_ms < 0 ? nullptr : &timeout);
+    if (ready <= 0) return {};
+    return {FD_ISSET(STDIN_FILENO, &set) != 0, FD_ISSET(signal_fd, &set) != 0};
 }
 
 constexpr int kEscapeTimeoutMs = 30;
@@ -468,52 +480,55 @@ int main(int argc, char** argv) {
                 dragging, last_pointer_row,
                 snapshot->sections().shell.panes.front().content);
         }
-        if (drag_edge && !input_ready(kEdgeScrollIntervalMs)) {
-            dispatch("view.scroll_lines", ssg::ScrollLinesArguments{*drag_edge});
-            auto scrolled = refresh();
-            if (scrolled && drag_anchor &&
-                !scrolled->sections().shell.panes.empty()) {
-                auto const content = scrolled->sections().shell.panes.front().content;
-                int const edge_row =
-                    *drag_edge < 0 ? content.y : content.bottom() - 1;
-                int const column = std::clamp(last_pointer_column, content.x,
-                                              content.right() - 1);
-                auto hit = ssg::hit_test(*scrolled, column, edge_row);
-                if (hit.region == ssg::HitRegion::editor) {
-                    auto active = ssg::resolve_document_position(
-                        scrolled->sections().document.text,
-                        ssg::ByteOffset{hit.byte_offset});
-                    if (active) {
-                        dispatch("select.set_range",
-                                 ssg::SelectionCommandArguments{
-                                     std::nullopt,
-                                     ssg::Selection{*drag_anchor, *active}});
+        if (drag_edge) {
+            auto const ready = wait_readiness(kEdgeScrollIntervalMs, signal_pipe[0]);
+            if (ready.signal) {
+                // A resize/terminate signal arrived mid-drag: drain it now rather
+                // than deferring until the drag releases.  Terminate quits;
+                // resize re-snapshots at the loop top with the drag preserved.
+                if (!drain_signals()) quit = true;
+                continue;
+            }
+            if (!ready.input) {
+                dispatch("view.scroll_lines", ssg::ScrollLinesArguments{*drag_edge});
+                auto scrolled = refresh();
+                if (scrolled && drag_anchor &&
+                    !scrolled->sections().shell.panes.empty()) {
+                    auto const content = scrolled->sections().shell.panes.front().content;
+                    int const edge_row =
+                        *drag_edge < 0 ? content.y : content.bottom() - 1;
+                    int const column = std::clamp(last_pointer_column, content.x,
+                                                  content.right() - 1);
+                    auto hit = ssg::hit_test(*scrolled, column, edge_row);
+                    if (hit.region == ssg::HitRegion::editor) {
+                        auto active = ssg::resolve_document_position(
+                            scrolled->sections().document.text,
+                            ssg::ByteOffset{hit.byte_offset});
+                        if (active) {
+                            dispatch("select.set_range",
+                                     ssg::SelectionCommandArguments{
+                                         std::nullopt,
+                                         ssg::Selection{*drag_anchor, *active}});
+                        }
                     }
                 }
+                continue;  // re-render with the scrolled viewport, then re-evaluate
             }
-            continue;  // re-render with the scrolled viewport, then re-evaluate
+            // Keyboard input arrived during the drag: fall through and read it.
         }
         // Block until keyboard input OR a signal-driven self-pipe wake (M9-W).
         // A bare read() could not be interrupted reliably by a resize/terminate
         // signal; selecting on both fds makes the wake deterministic.
-        fd_set read_set;
-        FD_ZERO(&read_set);
-        FD_SET(STDIN_FILENO, &read_set);
-        FD_SET(signal_pipe[0], &read_set);
-        int const max_fd = std::max(STDIN_FILENO, signal_pipe[0]);
-        int const ready = ::select(max_fd + 1, &read_set, nullptr, nullptr, nullptr);
-        if (ready < 0) {
-            if (errno == EINTR) continue;
-            break;
-        }
-        if (FD_ISSET(signal_pipe[0], &read_set)) {
+        auto const wait = wait_readiness(-1, signal_pipe[0]);
+        if (wait.signal) {
             if (!drain_signals()) {
                 quit = true;
                 continue;
             }
             // A resize (or a spurious wake) just re-snapshots at the loop top.
-            if (!FD_ISSET(STDIN_FILENO, &read_set)) continue;
+            if (!wait.input) continue;
         }
+        if (!wait.input) continue;  // EINTR or spurious wake: re-render and retry.
         auto read_bytes = ::read(STDIN_FILENO, bytes, sizeof bytes);
         if (read_bytes <= 0) break;
         buffer.append(bytes, static_cast<std::size_t>(read_bytes));
@@ -525,8 +540,14 @@ int main(int argc, char** argv) {
             if (decoded.status == ssg::app::DecodeStatus::incomplete) {
                 // A partial sequence (lone ESC or truncated CSI) remains.  Wait
                 // briefly for the disambiguating bytes; if none arrive, force the
-                // bounded-Escape resolution.
-                if (input_ready(kEscapeTimeoutMs)) {
+                // bounded-Escape resolution.  The wait also watches the signal
+                // pipe so a resize/terminate is not deferred by a lone ESC.
+                auto const ready = wait_readiness(kEscapeTimeoutMs, signal_pipe[0]);
+                if (ready.signal && !drain_signals()) {
+                    quit = true;
+                    break;
+                }
+                if (ready.input) {
                     auto more = ::read(STDIN_FILENO, bytes, sizeof bytes);
                     if (more > 0) {
                         buffer.append(bytes, static_cast<std::size_t>(more));
