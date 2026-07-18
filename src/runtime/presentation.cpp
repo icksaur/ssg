@@ -36,7 +36,10 @@ CommandHandlerResult scroll_lines(EditorRuntime::Impl& runtime, std::any const& 
 CommandHandlerResult scroll_pages(EditorRuntime::Impl& runtime, std::any const& payload) {
     auto const* arguments = payload_as<ScrollPagesArguments>(payload);
     if (arguments == nullptr) return failure("view.scroll_pages requires scroll-pages payload");
-    auto rows = static_cast<std::int64_t>(runtime.requested_first_visual_row) + arguments->pages * 24;
+    // A page is the real pane height cached from the last snapshot, not a fake 24.
+    auto const page_rows = static_cast<std::int64_t>(
+        std::max<std::uint32_t>(runtime.last_pane_content_rows, 1));
+    auto rows = static_cast<std::int64_t>(runtime.requested_first_visual_row) + arguments->pages * page_rows;
     runtime.requested_first_visual_row = rows < 0 ? 0U : static_cast<std::uint32_t>(rows);
     runtime.selection.first_visual_row = runtime.requested_first_visual_row;
     return success();
@@ -46,7 +49,13 @@ CommandHandlerResult scroll_fraction(EditorRuntime::Impl& runtime, std::any cons
     auto const* arguments = payload_as<ScrollFractionArguments>(payload);
     if (arguments == nullptr) return failure("view.scroll_to_fraction requires scroll-fraction payload");
     auto runs = runtime.active_cell_runs();
-    auto view = compute_viewport(runs, ViewportDimensions{80, 24});
+    // Resolve maximum_first_row against the REAL pane cached from the last
+    // snapshot, so a scrollbar drag to the bottom reaches the true last line on a
+    // terminal that is not 24 rows tall. See doc/spec-scroll.md R6.
+    ViewportDimensions const viewport{
+        std::max<std::uint32_t>(runtime.last_pane_content_columns, 1),
+        std::max<std::uint32_t>(runtime.last_pane_content_rows, 1)};
+    auto view = compute_viewport(runs, viewport);
     runtime.requested_first_visual_row = arguments->denominator == 0 ? 0 :
         static_cast<std::uint32_t>((static_cast<std::uint64_t>(view.scrollbar.maximum_first_row) * arguments->numerator) / arguments->denominator);
     runtime.selection.first_visual_row = runtime.requested_first_visual_row;

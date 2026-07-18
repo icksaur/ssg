@@ -96,7 +96,50 @@ TEST(settings_dispatch_matches_settings_model_oracle_snapshot) {
     ASSERT_EQ(snapshot->sections().settings, expected);
 }
 
+TEST(editor_scroll_uses_the_real_pane_height_not_a_hardcoded_24) {
+    auto root = std::filesystem::current_path() / "runtime_presentation_scroll";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root / "workspace");
+    std::filesystem::create_directories(root / "scratch");
+    std::filesystem::create_directories(root / "recovery");
+    std::string text;
+    for (int i = 0; i < 100; ++i) text += "a\n";
+    std::ofstream{root / "workspace" / "tall.txt", std::ios::binary} << text;
+    auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"tall.txt"}}).accepted());
+
+    // A 40-row terminal (NOT 24): a page is the real pane content height.
+    const ssg::ViewportDimensions dims{80, 40};
+    auto snap0 = runtime.snapshot(ssg::ClientId{1}, dims);  // populate the cache
+    ASSERT_TRUE(snap0.has_value());
+    if (!snap0) return;
+    auto const pane_rows = static_cast<std::uint32_t>(snap0->sections().shell.panes.front().content.height);
+    ASSERT_TRUE(pane_rows != 24);  // the whole point: not the hardcoded value
+
+    // PageDown advances by the real pane height, not 24.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_pages", runtime.revision(), ssg::ScrollPagesArguments{1}}).accepted());
+    auto after_page = runtime.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(after_page.has_value());
+    if (!after_page) return;
+    ASSERT_EQ(after_page->client().viewport.first_visual_row, pane_rows);
+
+    // Scroll-to-fraction(1/1) reaches the REAL maximum for this terminal (the last
+    // line becomes visible), not the 24-row-derived maximum.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_to_fraction", runtime.revision(), ssg::ScrollFractionArguments{1, 1}}).accepted());
+    auto after_bottom = runtime.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(after_bottom.has_value());
+    if (!after_bottom) return;
+    ASSERT_EQ(after_bottom->client().viewport.first_visual_row,
+              after_bottom->client().viewport.scrollbar.maximum_first_row);
+    std::filesystem::remove_all(root);
+}
+
 } // namespace
+
 
 TEST(reported_leader_sequence_renders_a_per_snapshot_hint) {
     auto root = unique_root();
@@ -159,6 +202,7 @@ int main() {
     RUN(settings_dispatch_matches_settings_model_oracle_snapshot);
     RUN(reported_leader_sequence_renders_a_per_snapshot_hint);
     RUN(palette_candidates_match_the_command_registry);
+    RUN(editor_scroll_uses_the_real_pane_height_not_a_hardcoded_24);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

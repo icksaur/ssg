@@ -47,6 +47,7 @@ CommandHandlerResult apply_transaction(EditorRuntime::Impl& runtime,
     if (!result.accepted()) return failure(result.message);
     runtime.selection.selections = result.selections.value_or(selections_after);
     runtime.clamp_selection_to_active_document();
+    runtime.reveal_primary_caret();
     (void)runtime.update_tabs_for(*id);
     runtime.refresh_syntax();
     return success();
@@ -99,8 +100,15 @@ CommandHandlerResult bind_selection(EditorRuntime::Impl& runtime,
     if (auto const* typed = payload_as<SelectionCommandArguments>(payload)) {
         arguments = *typed;
     }
+    // Navigate and reveal against the REAL editor pane cached from the last
+    // snapshot, not a fake {80, 24}: page motion advances by the real height and
+    // the built-in caret reveal uses the real height/width (so a far-right column
+    // on a wide line is not clamped at column 80). See doc/spec-scroll.md R6.
+    ViewportDimensions const viewport{
+        std::max<std::uint32_t>(runtime.last_pane_content_columns, 1),
+        std::max<std::uint32_t>(runtime.last_pane_content_rows, 1)};
     auto result = apply_selection_navigation(runtime.active_text(), runtime.selection,
-                                             command, ViewportDimensions{80, 24},
+                                             command, viewport,
                                              arguments, {}, 4);
     if (!result.accepted()) return failure(result.message);
     if (result.delta.replacement) runtime.selection = *result.delta.replacement;
@@ -138,6 +146,7 @@ CommandHandlerResult bind_history(EditorRuntime::Impl& runtime, HistoryCommand c
     if (!result.accepted()) return failure(result.message);
     if (result.selections) runtime.selection.selections = *result.selections;
     runtime.clamp_selection_to_active_document();
+    runtime.reveal_primary_caret();
     (void)runtime.update_tabs_for(*id);
     runtime.refresh_syntax();
     return success();
@@ -165,6 +174,8 @@ CommandHandlerResult bind_clipboard(EditorRuntime::Impl& runtime, ClipboardComma
     if (!result.accepted()) return failure(result.message);
     if (result.selections) runtime.selection.selections = *result.selections;
     if (result.document_changed) {
+        runtime.clamp_selection_to_active_document();
+        runtime.reveal_primary_caret();
         (void)runtime.update_tabs_for(*id);
         runtime.refresh_syntax();
     }
@@ -401,6 +412,24 @@ CommandHandlerResult bind_find_replace(EditorRuntime::Impl& runtime,
 }
 
 } // namespace
+
+void EditorRuntime::Impl::reveal_primary_caret() {
+    // Reveal against the real editor pane cached from the last snapshot: the
+    // content rows/columns already exclude any reserved prompt rows, so no prompt
+    // adjustment is needed (unlike reveal_active_find_match, which runs while the
+    // find prompt is open). The offset is re-clamped in compute_viewport, so a
+    // one-frame-stale cache can never place it out of range.
+    ViewportDimensions reveal_viewport{
+        std::max<std::uint32_t>(last_pane_content_columns, 1),
+        std::max<std::uint32_t>(last_pane_content_rows, 1)};
+    auto result = apply_selection_navigation(
+        active_text(), selection, SelectionCommand::view_reveal_caret,
+        reveal_viewport);
+    if (result.accepted() && result.delta.replacement) {
+        selection = *result.delta.replacement;
+    }
+    requested_first_visual_row = selection.first_visual_row;
+}
 
 void bind_runtime_editing(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime) {
     auto text_commands = text_input_command_set();

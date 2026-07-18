@@ -2,6 +2,7 @@
 
 #include <ssg/editor_runtime.h>
 #include <ssg/find_replace.h>
+#include <ssg/input.h>
 #include <ssg/selection.h>
 #include <ssg/prompt.h>
 #include <ssg/text_input_commands.h>
@@ -684,6 +685,116 @@ TEST(pointer_selection_commands_focus_the_editor_keyboard_motion_does_not) {
     ASSERT_EQ(focus(), ssg::FocusTarget::panel);
 }
 
+TEST(edit_reveals_the_primary_caret_free_scroll_does_not_and_follows_primary) {
+    // A document taller than the pane, one single-cell line per row.
+    auto root = std::filesystem::current_path() / "runtime_editing_reveal";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root / "workspace");
+    std::filesystem::create_directories(root / "scratch");
+    std::filesystem::create_directories(root / "recovery");
+    std::string text;
+    for (int i = 0; i < 100; ++i) text += "a\n";  // line L starts at byte L*2
+    std::ofstream{root / "workspace" / "tall.txt", std::ios::binary} << text;
+    auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"tall.txt"}}).accepted());
+
+    const ssg::ViewportDimensions dims{80, 24};
+    auto first_row = [&] {
+        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        return snap ? snap->client().viewport.first_visual_row : 0U;
+    };
+    auto maximum = [&] {
+        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        return snap ? snap->client().viewport.scrollbar.maximum_first_row : 0U;
+    };
+    // Snapshot once to populate the pane-height cache; the caret is at the top.
+    ASSERT_EQ(first_row(), 0U);
+    auto const max_first = maximum();
+    ASSERT_TRUE(max_first > 0);  // the document is scrollable
+
+    // Free scroll DOWN with no edit: the offset moves and does NOT snap back.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{40}}).accepted());
+    ASSERT_EQ(first_row(), 40U);   // caret (line 0) is now off-screen above
+    ASSERT_EQ(first_row(), 40U);   // a second read without an edit stays put
+
+    // Typing at the (off-screen) caret reveals it: minimal offset to show line 0.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"text.insert", runtime.revision(), ssg::TextInputArguments{"x"}}).accepted());
+    ASSERT_EQ(first_row(), 0U);
+
+    // Move the caret to the last line (navigation reveals it to the bottom), then
+    // free-scroll to the top so the caret is off-screen below.
+    auto doc = runtime.active_document_text();
+    auto end_pos = ssg::resolve_document_position(doc, ssg::ByteOffset{static_cast<std::uint32_t>(doc.size())});
+    ASSERT_TRUE(end_pos.has_value());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"cursor.set_position", runtime.revision(), ssg::SelectionCommandArguments{end_pos, std::nullopt}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{-200}}).accepted());
+    ASSERT_EQ(first_row(), 0U);
+    // An edit at the bottom caret reveals it to the maximum offset (last line shown).
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"text.insert", runtime.revision(), ssg::TextInputArguments{"y"}}).accepted());
+    ASSERT_EQ(first_row(), maximum());
+
+    // Two cursors: secondary near the top (line 0), PRIMARY near the bottom (the
+    // back selection). select.add_range pushes the new range to the back.
+    doc = runtime.active_document_text();
+    auto top = ssg::resolve_document_position(doc, ssg::ByteOffset{0});
+    auto bottom_line_start = ssg::resolve_document_position(doc, ssg::ByteOffset{static_cast<std::uint32_t>(doc.size()) - 2});
+    ASSERT_TRUE(top.has_value());
+    ASSERT_TRUE(bottom_line_start.has_value());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"cursor.set_position", runtime.revision(), ssg::SelectionCommandArguments{top, std::nullopt}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"select.add_range", runtime.revision(), ssg::SelectionCommandArguments{std::nullopt, ssg::Selection{*bottom_line_start, *bottom_line_start}}}).accepted());
+    // Free-scroll to the top so the primary (bottom) caret is off-screen below.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{-200}}).accepted());
+    ASSERT_EQ(first_row(), 0U);
+    // A multi-cursor insert reveals the PRIMARY caret (bottom), not the secondary
+    // (top): the offset jumps to the maximum, not staying at 0.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"text.insert", runtime.revision(), ssg::TextInputArguments{"z"}}).accepted());
+    ASSERT_EQ(first_row(), maximum());
+    std::filesystem::remove_all(root);
+}
+
+TEST(undo_and_paste_reveal_the_caret) {
+    auto root = std::filesystem::current_path() / "runtime_editing_reveal2";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root / "workspace");
+    std::filesystem::create_directories(root / "scratch");
+    std::filesystem::create_directories(root / "recovery");
+    std::string text;
+    for (int i = 0; i < 100; ++i) text += "a\n";
+    std::ofstream{root / "workspace" / "tall.txt", std::ios::binary} << text;
+    auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"tall.txt"}}).accepted());
+    const ssg::ViewportDimensions dims{80, 24};
+    auto first_row = [&] {
+        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        return snap ? snap->client().viewport.first_visual_row : 0U;
+    };
+    ASSERT_EQ(first_row(), 0U);
+
+    // Type a character (caret at top), then scroll away and UNDO: undo reveals.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"text.insert", runtime.revision(), ssg::TextInputArguments{"x"}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{40}}).accepted());
+    ASSERT_EQ(first_row(), 40U);
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"edit.undo", runtime.revision(), {}}).accepted());
+    ASSERT_EQ(first_row(), 0U);
+
+    // Copy a line, scroll away, and PASTE: paste reveals the caret.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"select.line_down", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"clipboard.copy", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{40}}).accepted());
+    ASSERT_EQ(first_row(), 40U);
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"clipboard.paste", runtime.revision(), {}}).accepted());
+    ASSERT_EQ(first_row(), 0U);
+    std::filesystem::remove_all(root);
+}
+
 } // namespace
 
 int main() {
@@ -694,6 +805,8 @@ int main() {
     RUN(workspace_replace_updates_open_document_snapshot_and_disk);
     RUN(workspace_search_and_replace_exclude_runtime_state_roots);
     RUN(pointer_selection_commands_focus_the_editor_keyboard_motion_does_not);
+    RUN(edit_reveals_the_primary_caret_free_scroll_does_not_and_follows_primary);
+    RUN(undo_and_paste_reveal_the_caret);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

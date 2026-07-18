@@ -190,6 +190,12 @@ struct EditorRuntime::Impl final : CommandServices,
     // offset clamped to [0, maximum_first_row] WITHOUT moving the selection --
     // the tree analog of the editor's view.scroll_lines.
     void scroll_tree(std::int64_t rows);
+    // Scroll the editor viewport minimally so the PRIMARY caret is visible, using
+    // the last cached pane dimensions. Called on the command path after any edit
+    // moves the caret (typing, delete, undo/redo, paste), so the view follows the
+    // caret instead of leaving the user typing off-screen (see doc/spec-scroll.md
+    // R5). The plain-caret analog of reveal_active_find_match.
+    void reveal_primary_caret();
     [[nodiscard]] TextEncodingViewState text_encoding_view() const;
     [[nodiscard]] DocumentViewState document_view() const;
     [[nodiscard]] std::string current_path_label() const;
