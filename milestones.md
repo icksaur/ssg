@@ -184,14 +184,42 @@ Demo: place the caret by click, drag-select (including a drag held past the edge
 that auto-scrolls), drag the scrollbar thumb, click tabs/tree rows, wheel-scroll
 the tree and palette.
 
-## 9. Terminal robustness — PLANNED
-The app behaves under real terminal conditions.
+## 9. Terminal robustness — DONE
+The app behaves under real terminal conditions. Spec:
+`doc/spec-terminal-robustness.md` (reviewed; all findings folded). Every new
+capability is a library abstraction so other clients present identically.
 - Resize (`SIGWINCH`) re-lays out from the library with no artifacts.
-- Wide/combining Unicode occupies correct cells; truecolor and 256-color
-  terminals both render the theme.
-- Clean terminal restore on quit, error, and signal.
+- Wide/combining/ZWJ Unicode occupies correct cells; truecolor, 256-color, and
+  16-color terminals all render the theme.
+- Clean terminal restore on quit, error, and terminating signal.
 
-Demo: resize the window while editing; open a Unicode-heavy file.
+Demo: resize the window while editing (reflows immediately; shrinking below 20×4
+shows a placeholder and recovers on grow); open a Unicode-heavy file; run on
+`TERM=xterm`/`xterm-256color`/`COLORTERM=truecolor`; `kill -TERM` restores the
+terminal.
+
+Delivered:
+- M9-W: self-pipe signal wakeup — async-signal-safe handlers write one tag byte;
+  the event loop `select()`s over stdin + the pipe (replacing a bare `read()`);
+  pure `classify_signal_tags` — `68c3239`, fold `0c30bc6` (watch the pipe in the
+  Escape/edge-scroll waits too).
+- M9-R: resize consumer re-snapshots at the new `terminal_size()` (delivered by
+  the M9-W loop change).
+- M9-X: restore the terminal and re-raise on `SIGTERM`/`SIGHUP` (restore in
+  normal context since `tcsetattr` is not async-signal-safe); pure
+  setup/restore-sequence helpers; top-level `try/catch` boundary — `1d4d2b9`.
+- M9-C: library `resolve_color`(SrgbColor, ColorDepth) with pinned xterm-256 and
+  ANSI-16 palettes (`d165e71`), plus app depth detection + depth-aware
+  `encode_ansi_frame` (`f0e0480`). I22 upheld: the swatches are terminal
+  hardware palettes, not theme colors.
+- M9-T: layout totality property test + a too-small placeholder — the app guards
+  `render()` on a positive viewport and shows "terminal too small" below the
+  20×4 minimum instead of crashing — `e038af4`, oracle fold `293b1dd`.
+- M9-U: end-to-end Unicode golden (text→snapshot→render→encode) locking
+  wide/combining/ZWJ placement, caret advance, and continuation skipping —
+  `65fe265`.
+- Repaired a baseline committed broken in `b794e3e` (two non-compiling test
+  files + a no-op-paste reveal test) — `89343bc`.
 
 ## 10. Fast startup — PLANNED
 Cold start competes with comparable editors.
