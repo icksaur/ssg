@@ -196,24 +196,27 @@ TEST(unicode_end_to_end_grid_and_encoding) {
     ASSERT_FALSE(cell(5).continuation);
     ASSERT_TRUE(cell(6).continuation);     // the emoji is wide too
 
-    // The caret advances by 2 columns across the wide CJK glyph: byte offset 2
-    // (before the glyph) resolves to column startx+2, and offset 5 (just after
-    // it, at 'e') to column startx+4.
+    // The caret advances by exactly 2 columns across the wide CJK glyph: byte
+    // offset 2 (before the glyph) resolves to column startx+2, and offset 5 (just
+    // after it, at 'e') to column startx+4 — a literal +2.
     auto before = ssg::resolve_document_position(line, ssg::ByteOffset{2});
     auto after = ssg::resolve_document_position(line, ssg::ByteOffset{5});
     ASSERT_TRUE(before.has_value());
     ASSERT_TRUE(after.has_value());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
-                                 {"cursor.set_position", runtime.revision(),
-                                  ssg::SelectionCommandArguments{after, std::nullopt}})
-                    .accepted());
-    auto caret_snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
-    ASSERT_TRUE(caret_snap.has_value());
-    if (caret_snap.has_value()) {
-        auto caret_grid = ssg::render(*caret_snap);
-        ASSERT_TRUE(caret_grid.caret.has_value());
-        if (caret_grid.caret) ASSERT_EQ(caret_grid.caret->column, startx + 4);
-    }
+    auto caret_column_at = [&](std::optional<ssg::DocumentPosition> pos) -> int {
+        (void)runtime.dispatch(ssg::ClientId{1},
+                               {"cursor.set_position", runtime.revision(),
+                                ssg::SelectionCommandArguments{pos, std::nullopt}});
+        auto s = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        if (!s) return -1;
+        auto g = ssg::render(*s);
+        return g.caret ? g.caret->column : -1;
+    };
+    int const column_before = caret_column_at(before);
+    int const column_after = caret_column_at(after);
+    ASSERT_EQ(column_before, startx + 2);
+    ASSERT_EQ(column_after, startx + 4);
+    ASSERT_EQ(column_after - column_before, 2);
 
     // Encoding: each wide cluster emits exactly one glyph and continuation cells
     // emit nothing, so the CJK and emoji byte sequences each appear exactly once.
