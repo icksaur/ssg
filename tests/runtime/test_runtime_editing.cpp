@@ -795,6 +795,75 @@ TEST(undo_and_paste_reveal_the_caret) {
     std::filesystem::remove_all(root);
 }
 
+TEST(multi_cursor_paste_preserves_all_cursors) {
+    auto root = std::filesystem::current_path() / "runtime_editing_mcpaste";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root / "workspace");
+    std::filesystem::create_directories(root / "scratch");
+    std::filesystem::create_directories(root / "recovery");
+    std::ofstream{root / "workspace" / "m.txt", std::ios::binary} << "aaa\nbbb\nccc\n";
+    auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"m.txt"}}).accepted());
+    const ssg::ViewportDimensions dims{80, 24};
+    auto selection_count = [&] {
+        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        return snap ? snap->sections().selection.selections.items().size() : std::size_t{0};
+    };
+
+    // Build two cursors (top of line 0 and top of line 1), copy, then paste. The
+    // paste must not collapse the multi-cursor set to a single caret.
+    auto doc = runtime.active_document_text();
+    auto p0 = ssg::resolve_document_position(doc, ssg::ByteOffset{0});
+    auto p1 = ssg::resolve_document_position(doc, ssg::ByteOffset{4});
+    ASSERT_TRUE(p0.has_value() && p1.has_value());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"cursor.set_position", runtime.revision(), ssg::SelectionCommandArguments{p0, std::nullopt}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"select.add_range", runtime.revision(), ssg::SelectionCommandArguments{std::nullopt, ssg::Selection{*p1, *p1}}}).accepted());
+    ASSERT_EQ(selection_count(), std::size_t{2});
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"select.line_end", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"clipboard.copy", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"clipboard.paste", runtime.revision(), {}}).accepted());
+    ASSERT_EQ(selection_count(), std::size_t{2});
+    std::filesystem::remove_all(root);
+}
+
+TEST(replace_all_reveals_the_caret_when_no_match_remains) {
+    auto root = std::filesystem::current_path() / "runtime_editing_replacereveal";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root / "workspace");
+    std::filesystem::create_directories(root / "scratch");
+    std::filesystem::create_directories(root / "recovery");
+    // A tall doc with the only match near the bottom.
+    std::string text;
+    for (int i = 0; i < 90; ++i) text += "filler\n";
+    text += "needle\n";
+    std::ofstream{root / "workspace" / "t.txt", std::ios::binary} << text;
+    auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"t.txt"}}).accepted());
+    const ssg::ViewportDimensions dims{80, 24};
+    auto first_row = [&] {
+        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        return snap ? snap->client().viewport.first_visual_row : 0U;
+    };
+    ASSERT_EQ(first_row(), 0U);  // caret at top; the match is off-screen far below
+
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"replace.open", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.update_query", runtime.revision(), ssg::FindQueryArguments{"needle"}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"replace.update_replacement", runtime.revision(), ssg::FindQueryArguments{"pin"}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"replace.all", runtime.revision(), {}}).accepted());
+    // No match remains, but the caret (now at the replaced text near the bottom)
+    // is revealed rather than left off-screen.
+    ASSERT_TRUE(first_row() > 0U);
+    std::filesystem::remove_all(root);
+}
+
 } // namespace
 
 int main() {
@@ -807,6 +876,8 @@ int main() {
     RUN(pointer_selection_commands_focus_the_editor_keyboard_motion_does_not);
     RUN(edit_reveals_the_primary_caret_free_scroll_does_not_and_follows_primary);
     RUN(undo_and_paste_reveal_the_caret);
+    RUN(multi_cursor_paste_preserves_all_cursors);
+    RUN(replace_all_reveals_the_caret_when_no_match_remains);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

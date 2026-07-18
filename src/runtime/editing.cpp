@@ -174,7 +174,10 @@ CommandHandlerResult bind_clipboard(EditorRuntime::Impl& runtime, ClipboardComma
     if (!result.accepted()) return failure(result.message);
     if (result.selections) runtime.selection.selections = *result.selections;
     if (result.document_changed) {
-        runtime.clamp_selection_to_active_document();
+        // Reveal the primary caret (a pure viewport op that preserves the whole
+        // selection set) so a cut/paste with the caret off-screen scrolls into
+        // view. Do NOT clamp here: clamp_selection_to_active_document collapses
+        // the set to a single caret and would discard a multi-cursor cut/paste.
         runtime.reveal_primary_caret();
         (void)runtime.update_tabs_for(*id);
         runtime.refresh_syntax();
@@ -372,6 +375,16 @@ CommandHandlerResult bind_find_replace(EditorRuntime::Impl& runtime,
             runtime.refresh_syntax();
             auto tabs_result = runtime.update_tabs_for(*id);
             reveal_active_find_match(runtime);
+            // If no match remains to reveal (common after replace.all), still
+            // reveal the primary caret so a replace with the caret off-screen
+            // scrolls into view, per the edits-reveal policy (doc/spec-scroll.md
+            // R5). When a match does remain, reveal_active_find_match already
+            // revealed it above the prompt; don't override that.
+            auto const& fr = runtime.find_replace.view_state();
+            if (!fr.open || !fr.active_match ||
+                *fr.active_match >= fr.matches.size()) {
+                runtime.reveal_primary_caret();
+            }
             return tabs_result;
         }
         case FindReplaceCommand::replace_workspace_preview:
