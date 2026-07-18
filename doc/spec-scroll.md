@@ -221,14 +221,32 @@ Because `apply_transaction` is already the shared seam for `bind_text`/`bind_edi
 R5 should prefer routing every document-mutating command through it (or a single
 post-mutation helper it calls) rather than sprinkling reveal calls; where a path
 cannot yet share that seam (`bind_history`, `bind_clipboard`), it calls the helper
-directly. **Also audit these caret-moving paths and route them through the same
-seam or confirm they already reveal:** `replace.current`/`replace.all` (they move
-the caret onto/after replaced text), LSP `rename.symbol` and `goto.definition`/
-`goto.reference` (they move the caret to a new location — some already reveal via
-navigation), and `tree.activate` opening a file (`reset_selection_for_active_document`
-resets the caret to the document start, which should also reveal to the top). R5's
-oracle includes the dispatch-level guard that a representative command from each
-family leaves the primary caret within the viewport.
+directly.
+
+**Audit of the other caret-moving paths (outcome).** Every command that can move
+the editor caret was checked against the reveal obligation:
+- **`replace.current`/`replace.all`** — reveal. `reveal_active_find_match` reveals
+  the next remaining match; when none remains (common after `replace.all`) the
+  handler falls back to `reveal_primary_caret`. (R5.)
+- **`file.open`/`file.open_recent`/`tree.activate` opening a file** — reveal via
+  `reset_selection_for_active_document`, which puts the caret at the document start
+  and sets `requested_first_visual_row = 0`; a freshly opened document shows its
+  top with the caret visible, and a stale scroll from the previous document does
+  not carry over (regression-tested). This is the reveal for a top caret; if a
+  future feature restores a non-top caret on reopen, that path must call
+  `reveal_primary_caret` explicitly.
+- **LSP `goto.definition`/`goto.reference`/`rename.symbol`** — no-op today
+  (unconfigured stubs returning failure); they move no caret, so there is nothing
+  to reveal. **When LSP navigation is implemented, its caret move must reveal**
+  (the navigation view state already carries a `reveal_primary_caret` intent flag).
+- **`goto.file`/`goto.line`/`goto.symbol`/`goto.back`/`goto.forward`** — the
+  runtime handler currently discards the `NavigationTransition` (which carries the
+  target and `reveal_primary_caret = true`), so goto does not yet move the editor
+  caret. **When goto application is wired, it must honour that flag and reveal.**
+- **`tab.activate` (switching tabs)** — does not currently reveal (it clamps the
+  selection into the newly active document without resetting the scroll). Per-tab
+  caret/scroll is not stored, so this is deferred with that larger feature, not a
+  reveal-policy fix here.
 
 
 

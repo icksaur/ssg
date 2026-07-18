@@ -2,6 +2,7 @@
 
 #include <ssg/editor_runtime.h>
 #include <ssg/file_commands.h>
+#include <ssg/input.h>
 #include <ssg/session_snapshot.h>
 #include <ssg/text_encoding.h>
 #include <ssg/text_input_commands.h>
@@ -41,7 +42,37 @@ void write_bytes(const std::filesystem::path& path, std::initializer_list<std::u
     for (auto byte : bytes) output.put(static_cast<char>(byte));
 }
 
-TEST(open_edit_save_round_trips_real_disk_bytes) {
+TEST(opening_a_file_reveals_the_caret_resetting_a_stale_scroll) {
+    // Reveal-policy audit (doc/spec-scroll.md): opening a document must show the
+    // caret, not inherit the previous document's scroll offset. Two tall files.
+    auto root = unique_root("open_reveal");
+    std::string tall;
+    for (int i = 0; i < 100; ++i) tall += "line\n";
+    std::ofstream{root / "workspace" / "a.txt", std::ios::binary} << tall;
+    std::ofstream{root / "workspace" / "b.txt", std::ios::binary} << tall;
+    auto created = ssg::EditorRuntime::create(config_for(root));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    const ssg::ViewportDimensions dims{80, 24};
+    auto first_row = [&] {
+        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        return snap ? snap->client().viewport.first_visual_row : 0U;
+    };
+
+    // Open A and scroll far down (free scroll leaves the caret off-screen above).
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"a.txt"}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{50}}).accepted());
+    ASSERT_EQ(first_row(), 50U);
+
+    // Opening B resets the view so B's caret (its document start) is visible: the
+    // stale offset of 50 must not carry over.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"b.txt"}}).accepted());
+    ASSERT_EQ(first_row(), 0U);
+}
+
+
     auto root = unique_root("round_trip");
     {
         std::ofstream output{root / "workspace" / "note.txt", std::ios::binary};
@@ -210,6 +241,7 @@ TEST(tab_activate_focuses_the_editor) {
 
 int main() {
     RUN(open_edit_save_round_trips_real_disk_bytes);
+    RUN(opening_a_file_reveals_the_caret_resetting_a_stale_scroll);
     RUN(dropped_content_requires_real_capability);
     RUN(encoding_dispatch_matches_encode_oracle_and_saved_bytes);
     RUN(reopen_with_encoding_dispatch_redecodes_real_file_bytes);
