@@ -7,6 +7,7 @@
 #include "test_helpers.h"
 
 #include <any>
+#include <csignal>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -84,6 +85,46 @@ TEST(encode_ansi_frame_skips_wide_glyph_continuation) {
     auto glyph = frame.find("\xe4\xb8\xad", row_start);
     ASSERT_TRUE(frame.find(' ', glyph + 3) == std::string::npos ||
                 frame.find("\x1b[0m", glyph) < frame.find(' ', glyph + 3));
+}
+
+TEST(classify_signal_tags_maps_signal_numbers) {
+    // Empty drain: no events.
+    auto none = ssg::app::classify_signal_tags({});
+    ASSERT_FALSE(none.resize);
+    ASSERT_FALSE(none.terminate.has_value());
+
+    // A single SIGWINCH byte sets resize only.
+    std::string winch(1, static_cast<char>(SIGWINCH));
+    auto resize = ssg::app::classify_signal_tags(winch);
+    ASSERT_TRUE(resize.resize);
+    ASSERT_FALSE(resize.terminate.has_value());
+
+    // Duplicate resize tags coalesce to a single resize event.
+    std::string winches(5, static_cast<char>(SIGWINCH));
+    auto coalesced = ssg::app::classify_signal_tags(winches);
+    ASSERT_TRUE(coalesced.resize);
+
+    // SIGTERM sets terminate carrying the exact signal for a correct re-raise.
+    std::string term(1, static_cast<char>(SIGTERM));
+    auto terminate = ssg::app::classify_signal_tags(term);
+    ASSERT_TRUE(terminate.terminate.has_value());
+    ASSERT_EQ(*terminate.terminate, SIGTERM);
+
+    // Mixed drain: resize is set and the last terminating signal wins.
+    std::string mixed;
+    mixed.push_back(static_cast<char>(SIGWINCH));
+    mixed.push_back(static_cast<char>(SIGTERM));
+    mixed.push_back(static_cast<char>(SIGHUP));
+    auto both = ssg::app::classify_signal_tags(mixed);
+    ASSERT_TRUE(both.resize);
+    ASSERT_TRUE(both.terminate.has_value());
+    ASSERT_EQ(*both.terminate, SIGHUP);
+
+    // Unknown bytes are ignored (total function).
+    std::string junk(1, static_cast<char>(7));
+    auto ignored = ssg::app::classify_signal_tags(junk);
+    ASSERT_FALSE(ignored.resize);
+    ASSERT_FALSE(ignored.terminate.has_value());
 }
 
 TEST(decode_input_maps_printables_and_named_keys) {

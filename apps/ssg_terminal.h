@@ -18,6 +18,21 @@
 
 namespace ssg::app {
 
+// M9-W signal-event wakeup.  Terminating and resize signals cannot do work in
+// async-signal context, so their handlers only write one tag byte per signal to
+// a self-pipe the event loop selects on.  The tag byte IS the signal number
+// (SIGWINCH/SIGTERM/SIGHUP all fit in a byte), so no separate tag table is
+// needed and `terminate` can carry the exact signal for a correct re-raise.
+struct SignalEvents {
+    bool resize = false;             // At least one SIGWINCH was drained.
+    std::optional<int> terminate;    // The last terminating signal drained, if any.
+};
+
+// Interpret each byte of the drained self-pipe as a signal number: SIGWINCH sets
+// `resize`; SIGTERM/SIGHUP set `terminate` (last wins).  Pure and total: unknown
+// bytes are ignored, and any number of duplicate tags coalesce.
+[[nodiscard]] SignalEvents classify_signal_tags(std::string_view drained);
+
 // The workspace directory to open and, optionally, a file within it to open in
 // a tab.  A file argument opens its parent directory; a directory argument
 // opens that directory; no argument opens the current working directory.

@@ -3,12 +3,27 @@
 #include <ssg/input.h>
 #include <ssg/theme.h>
 
+#include <csignal>
+
 #include <algorithm>
 #include <system_error>
 
 namespace ssg::app {
 
 namespace fs = std::filesystem;
+
+SignalEvents classify_signal_tags(std::string_view drained) {
+    SignalEvents events;
+    for (unsigned char byte : drained) {
+        int const signo = static_cast<int>(byte);
+        if (signo == SIGWINCH) {
+            events.resize = true;
+        } else if (signo == SIGTERM || signo == SIGHUP) {
+            events.terminate = signo;
+        }
+    }
+    return events;
+}
 
 LaunchTarget resolve_launch(fs::path const& argument) {
     if (argument.empty()) {

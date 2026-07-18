@@ -24,7 +24,10 @@
 #include <sys/select.h>
 #include <termios.h>
 #include <unistd.h>
+#include <fcntl.h>
 
+#include <cerrno>
+#include <csignal>
 #include <cstdio>
 #include <algorithm>
 #include <any>
@@ -112,6 +115,34 @@ constexpr int kEscapeTimeoutMs = 30;
 // line and re-extend the selection, even with no new pointer event (M8-S2).
 constexpr int kEdgeScrollIntervalMs = 40;
 
+// M9-W signal-event wakeup: the write end of a non-blocking self-pipe.  Signal
+// handlers are the only writers and touch nothing else, so a raw fd in a
+// sig_atomic-safe int is the whole async-signal-safe surface.  -1 until the pipe
+// is created; a handler firing before then is a no-op.
+volatile std::sig_atomic_t g_signal_pipe_write = -1;
+
+// The sole action taken in async-signal context: write this signal's number as
+// one tag byte to the self-pipe so the event loop wakes and handles it in normal
+// context.  A full pipe (EAGAIN) already means "wake pending", so the result is
+// ignored; write() is async-signal-safe.
+extern "C" void signal_tag_handler(int signo) {
+    int const fd = g_signal_pipe_write;
+    if (fd < 0) return;
+    unsigned char const tag = static_cast<unsigned char>(signo);
+    ssize_t const written = ::write(fd, &tag, 1);
+    (void)written;
+}
+
+// Install the tag-writing handler for a signal, restarting interrupted syscalls
+// (the self-pipe select() is the reliable wake, independent of SA_RESTART).
+void install_signal_tag_handler(int signo) {
+    struct sigaction action{};
+    action.sa_handler = signal_tag_handler;
+    sigemptyset(&action.sa_mask);
+    action.sa_flags = SA_RESTART;
+    sigaction(signo, &action, nullptr);
+}
+
 // Delete one UTF-8 code point from the end of a client-local query string.
 void pop_code_point(std::string& text) {
     while (!text.empty() &&
@@ -159,6 +190,39 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "ssg: stdin/stdout is not an interactive terminal\n");
         return 1;
     }
+
+    // M9-W: a non-blocking self-pipe the event loop selects on, woken by signal
+    // handlers that write one tag byte each.  Both ends are non-blocking so the
+    // handler never blocks and a drain never stalls.
+    int signal_pipe[2] = {-1, -1};
+    if (::pipe(signal_pipe) != 0) {
+        std::fprintf(stderr, "ssg: failed to create signal pipe\n");
+        return 1;
+    }
+    ::fcntl(signal_pipe[0], F_SETFL,
+            ::fcntl(signal_pipe[0], F_GETFL, 0) | O_NONBLOCK);
+    ::fcntl(signal_pipe[1], F_SETFL,
+            ::fcntl(signal_pipe[1], F_GETFL, 0) | O_NONBLOCK);
+    g_signal_pipe_write = signal_pipe[1];
+    install_signal_tag_handler(SIGWINCH);
+    install_signal_tag_handler(SIGTERM);
+    install_signal_tag_handler(SIGHUP);
+
+    // Drain and classify any pending signal tags; returns false when the loop
+    // should terminate (a terminating signal was received).  Resize needs no
+    // work here: the next snapshot at the loop top re-queries terminal_size().
+    auto drain_signals = [&]() -> bool {
+        char scratch[64];
+        std::string tags;
+        for (;;) {
+            auto const n = ::read(signal_pipe[0], scratch, sizeof scratch);
+            if (n <= 0) break;
+            tags.append(scratch, static_cast<std::size_t>(n));
+        }
+        auto const events = ssg::app::classify_signal_tags(tags);
+        // M9-X upgrades terminate to restore-and-re-raise; for now quit cleanly.
+        return !events.terminate.has_value();
+    };
 
     std::string buffer;             // Raw bytes read but not yet decoded.
     ssg::KeySequence chord;         // The pending (mid-entry) key chord.
@@ -428,6 +492,27 @@ int main(int argc, char** argv) {
                 }
             }
             continue;  // re-render with the scrolled viewport, then re-evaluate
+        }
+        // Block until keyboard input OR a signal-driven self-pipe wake (M9-W).
+        // A bare read() could not be interrupted reliably by a resize/terminate
+        // signal; selecting on both fds makes the wake deterministic.
+        fd_set read_set;
+        FD_ZERO(&read_set);
+        FD_SET(STDIN_FILENO, &read_set);
+        FD_SET(signal_pipe[0], &read_set);
+        int const max_fd = std::max(STDIN_FILENO, signal_pipe[0]);
+        int const ready = ::select(max_fd + 1, &read_set, nullptr, nullptr, nullptr);
+        if (ready < 0) {
+            if (errno == EINTR) continue;
+            break;
+        }
+        if (FD_ISSET(signal_pipe[0], &read_set)) {
+            if (!drain_signals()) {
+                quit = true;
+                continue;
+            }
+            // A resize (or a spurious wake) just re-snapshots at the loop top.
+            if (!FD_ISSET(STDIN_FILENO, &read_set)) continue;
         }
         auto read_bytes = ::read(STDIN_FILENO, bytes, sizeof bytes);
         if (read_bytes <= 0) break;
