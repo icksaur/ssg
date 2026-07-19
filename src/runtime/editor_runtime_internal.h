@@ -54,7 +54,8 @@ struct EditorRuntime::Impl final : CommandServices,
                                    LspWorkspaceFileOperations {
     Impl(std::filesystem::path canonical_cwd,
          std::filesystem::path scratch_root,
-         std::filesystem::path recovery_root);
+         std::filesystem::path recovery_root,
+         bool defer_enrichment = false);
 
     std::filesystem::path root;
     std::filesystem::path scratch_root;
@@ -204,6 +205,19 @@ struct EditorRuntime::Impl final : CommandServices,
     void refresh_tree();
     void reconcile_prompt_focus();
     void refresh_syntax();
+    // M10 fast startup deferral (doc/spec-fast-startup.md M10-3/M10-4).  While
+    // `deferring_enrichment` is set (the pre-first-frame window when created with
+    // defer_enrichment=true), refresh_tree and refresh_syntax record that work is
+    // pending instead of running the O(workspace)/O(document) scan, so the first
+    // frame is not blocked by it.  prime_deferred() clears the flag and runs any
+    // pending scan.  The run counters exist for the startup oracle to assert no
+    // scan happened before priming.
+    void prime_deferred();
+    bool deferring_enrichment = false;
+    bool pending_tree_refresh = false;
+    bool pending_syntax_refresh = false;
+    std::uint64_t tree_scan_count = 0;
+    std::uint64_t syntax_run_count = 0;
     void enqueue_status(StatusPriority priority, std::string text);
 };
 

@@ -265,7 +265,8 @@ std::string tab_message(TabResult const& result) {
 
 EditorRuntime::Impl::Impl(std::filesystem::path canonical_cwd,
                           std::filesystem::path scratch_root,
-                          std::filesystem::path recovery_root)
+                          std::filesystem::path recovery_root,
+                          bool defer_enrichment)
     : root{std::move(canonical_cwd)},
       scratch_root{std::filesystem::weakly_canonical(scratch_root)},
       recovery_root{std::filesystem::weakly_canonical(recovery_root)},
@@ -279,7 +280,8 @@ EditorRuntime::Impl::Impl(std::filesystem::path canonical_cwd,
       external{recovery, diff},
       syntax{},
       search{*this, *this},
-      theme{default_theme()} {
+      theme{default_theme()},
+      deferring_enrichment{defer_enrichment} {
     refresh_tree();
     refresh_syntax();
 }
@@ -629,6 +631,11 @@ ViewportViewState EditorRuntime::Impl::viewport(ViewportDimensions dimensions) c
 }
 
 void EditorRuntime::Impl::refresh_tree() {
+    if (deferring_enrichment) {
+        pending_tree_refresh = true;
+        return;
+    }
+    ++tree_scan_count;
     tree.replace_provider(filesystem_tree_snapshot(
         TreeProviderId{"filesystem"}, root, TreeRevision{next_tree_revision++}));
 }
@@ -664,6 +671,11 @@ void EditorRuntime::Impl::reconcile_find_document() {
 }
 
 void EditorRuntime::Impl::refresh_syntax() {
+    if (deferring_enrichment) {
+        pending_syntax_refresh = true;
+        return;
+    }
+    ++syntax_run_count;
     auto const* document = active_document();
     auto text = document ? document->snapshot().text : std::string{};
     auto revision = document ? document->revision() : Revision{0};
@@ -671,6 +683,22 @@ void EditorRuntime::Impl::refresh_syntax() {
     if (request.accepted()) {
         auto output = syntax.run(*request.request);
         (void)syntax.accept(request.request, output);
+    }
+}
+
+void EditorRuntime::Impl::prime_deferred() {
+    if (!deferring_enrichment) return;
+    deferring_enrichment = false;
+    // Run whichever scans were requested while deferring, now that the first
+    // frame is drawn.  Order: tree then syntax (independent; both publish through
+    // the normal snapshot channel on the next snapshot).
+    if (pending_tree_refresh) {
+        pending_tree_refresh = false;
+        refresh_tree();
+    }
+    if (pending_syntax_refresh) {
+        pending_syntax_refresh = false;
+        refresh_syntax();
     }
 }
 
@@ -690,7 +718,9 @@ EditorRuntimeCreateResult EditorRuntime::create(EditorRuntimeConfig config) {
         if (config.recovery_root.empty()) config.recovery_root = cwd / ".ssg" / "recovery";
         std::filesystem::create_directories(config.scratch_root);
         std::filesystem::create_directories(config.recovery_root);
-        auto impl = std::make_unique<Impl>(cwd, config.scratch_root, config.recovery_root);
+        auto impl = std::make_unique<Impl>(cwd, config.scratch_root,
+                                           config.recovery_root,
+                                           config.defer_enrichment);
         impl->keymap = default_terminal_keymap();
         if (auto errors = validate_keymap(impl->keymap, {}); !errors.empty()) {
             return {nullptr, "default keymap is invalid: " + errors.front().message};
@@ -725,6 +755,12 @@ AttachResult EditorRuntime::attach(InvocationPrincipal principal, ViewId view_id
 bool EditorRuntime::detach(ClientId client_id) {
     (void)impl_->follow.detach_client(client_id);
     return impl_->session->detach(client_id);
+}
+
+void EditorRuntime::prime_deferred() { impl_->prime_deferred(); }
+
+EditorRuntime::DeferredWorkCounts EditorRuntime::deferred_work_counts() const {
+    return {impl_->syntax_run_count, impl_->tree_scan_count};
 }
 
 CommandResult EditorRuntime::dispatch(ClientId client_id, ClientCommand const& command) {

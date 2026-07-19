@@ -53,4 +53,11 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     )
     target_link_libraries(test_runtime_totality PRIVATE ssg)
     add_test(NAME test_runtime_totality COMMAND test_runtime_totality)
+
+    add_executable(test_startup_path
+        ${SSG_SOURCE_DIR}/tests/test_startup_path.cpp
+    )
+    target_include_directories(test_startup_path PRIVATE ${SSG_SOURCE_DIR}/tests)
+    target_link_libraries(test_startup_path PRIVATE ssg)
+    add_test(NAME test_startup_path COMMAND test_startup_path)
 endif()

@@ -206,8 +206,15 @@ int main(int argc, char** argv) {
     fs::create_directories(base / "scratch", code);
     fs::create_directories(base / "recovery", code);
 
-    auto created = ssg::EditorRuntime::create(
-        {target.cwd, base / "scratch", base / "recovery"});
+    ssg::EditorRuntimeConfig config;
+    config.cwd = target.cwd;
+    config.scratch_root = base / "scratch";
+    config.recovery_root = base / "recovery";
+    // M10 fast startup: defer the workspace tree scan and syntax highlighting off
+    // the first-frame path; prime_deferred() runs them once the first frame is
+    // drawn.
+    config.defer_enrichment = true;
+    auto created = ssg::EditorRuntime::create(config);
     if (!created.accepted()) {
         std::fprintf(stderr, "ssg: %s\n", created.message.c_str());
         return 1;
@@ -529,6 +536,12 @@ int main(int argc, char** argv) {
                     // rendered payload), not the earlier terminal-setup bytes.
                     STARTUP_MARK("first_content_frame");
                     first_frame_marked = true;
+                    write_all(frame);
+                    // M10-3/M10-4: the first frame is on screen; now run the
+                    // enrichment (tree scan, syntax) deferred off the startup
+                    // path.  It publishes on the next snapshot at the loop top.
+                    runtime.prime_deferred();
+                    continue;
                 }
                 write_all(frame);
             }
