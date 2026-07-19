@@ -221,12 +221,31 @@ Delivered:
 - Repaired a baseline committed broken in `b794e3e` (two non-compiling test
   files + a no-op-paste reveal test) — `89343bc`.
 
-## 10. Fast startup — PLANNED
-Cold start competes with comparable editors.
+## 10. Fast startup — IN PROGRESS
+Cold start competes with comparable editors. Spec:
+`doc/spec-fast-startup.md` (reviewed; 6 MUST + 4 SHOULD folded). Measurement-first:
+structural invariants are the primary, portable gate; the wall-clock budget is
+measured first and pinned last on the benchmark host.
 - Time from `ssg <file>` to first drawn frame under the target budget; no
   optional subsystem (Lua, LSP, Tree-sitter, watchers) on the startup path.
 
 Demo: `time ssg <file>` and compare against a peer editor.
+
+Delivered:
+- M10-1: startup measurement harness (`benchmarks/startup_benchmark.cpp`,
+  gated `STARTUP_MARK` in `ssg_main`, `startup-benchmark.cmake`,
+  `startup_trace_compiled_out` ctest) + baseline — `<commit>`. Reviewed (3 MUST
+  folded). Baseline: small 4.7 ms, deep-tree 17 ms, 10 MiB 2.6 s.
+- M10-3/M10-4: `prime_deferred` seam + `defer_enrichment` config defers the
+  workspace tree scan and syntax pass off the first frame; the app primes after
+  the first frame; `EditorSession::advance_revision()` so delta clients observe
+  the primed state. `tests/test_startup_path.cpp`. Reviewed (1 MUST folded).
+  Measured: deep-tree 17 ms → 2.6 ms (tree defer). The 10 MiB case is unchanged:
+  its cost is the document read + `active_cell_runs` whole-document scan, not
+  syntax — deferred to Milestone 12 (see below).
+
+Remaining: M10-2 (executable optional-init audit), M10-5 (pin the exec→first-frame
+budget on a Release bench host beside the preserved 250 ms/10 MiB gate).
 
 ## 11. Library API is the contract — PLANNED (ongoing invariant)
 The `ssg` app contains no editor or layout behavior; all of it is library API.
@@ -236,3 +255,21 @@ The `ssg` app contains no editor or layout behavior; all of it is library API.
 
 Demo: a render fixture reproduces a TUI screen from a library snapshot with no
 app-side logic.
+
+## 12. Large files — PLANNED
+Open and edit large documents without a per-frame whole-document cost. Spec:
+`doc/spec-viewport-projection.md` (reviewed; 4 MUST folded). The M10 startup work
+measured a ~1.7 s first frame on a 10 MiB file: the snapshot AND render both run
+`compute_cell_run` (Unicode grapheme/width) over every line to compute exact
+wrapped geometry. This milestone makes the first frame viewport-bounded.
+- Honor `word_wrap=false` (currently long lines wrap regardless): with wrap off,
+  one logical line is one visual row, long lines clip; `total_visual_rows`
+  becomes a cheap line count and only visible lines are segmented — across
+  viewport, render, AND selection navigation.
+- Add minimal horizontal scrolling (decision A) so a clipped caret stays visible.
+- Keep the word-wrap-ON path exact; a future incremental per-line width cache is
+  its speed path. (Lazy/mmapped file loading — the document read cost — is a
+  further very-large-file concern.)
+
+Demo: open a 10 MiB file — first frame is effectively instant; long lines clip
+(wrap off) or wrap (wrap on); caret stays visible via horizontal scroll.
