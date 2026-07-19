@@ -45,7 +45,7 @@ ssg::SelectionViewState selection(std::uint64_t byte, std::uint32_t first_row) {
     ssg::DocumentPosition const position{
         ssg::ByteOffset{byte}, ssg::LineIndex{0}, ssg::CellIndex{byte}};
     return {ssg::SelectionSet{{ssg::Selection{position, position}}},
-            first_row, std::nullopt};
+            first_row, 0, std::nullopt};
 }
 
 ssg::SessionSnapshotSections sections(ssg::Revision revision, std::string marker) {

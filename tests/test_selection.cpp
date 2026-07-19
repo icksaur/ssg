@@ -55,7 +55,7 @@ SelectionViewState state(
         selections.push_back(selection(text, anchor, active, tab_width));
     }
     return SelectionViewState{SelectionSet{std::move(selections)},
-                              first_visual_row, desired_cell};
+                              first_visual_row, 0, desired_cell};
 }
 
 SelectionViewState resulting_state(const SelectionViewState& before,
@@ -156,7 +156,7 @@ TEST(selection_set_normalizes_order_duplicates_and_overlaps) {
         selection(text, 0, 0),
     }};
 
-    ASSERT_EQ(byte_ranges(SelectionViewState{selections, 0, std::nullopt}),
+    ASSERT_EQ(byte_ranges(SelectionViewState{selections, 0, 0, std::nullopt}),
               (std::vector<std::pair<std::uint64_t, std::uint64_t>>{
                   {0, 0}, {2, 8}, {10, 8}}));
     ASSERT_EQ(selections.primary().anchor.byte_offset, ByteOffset{10});

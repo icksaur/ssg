@@ -109,10 +109,11 @@ CommandHandlerResult bind_selection(EditorRuntime::Impl& runtime,
         std::max<std::uint32_t>(runtime.last_pane_content_rows, 1)};
     auto result = apply_selection_navigation(runtime.active_text(), runtime.selection,
                                              command, viewport,
-                                             arguments, {}, 4);
+                                             arguments, {}, 4, runtime.word_wrap);
     if (!result.accepted()) return failure(result.message);
     if (result.delta.replacement) runtime.selection = *result.delta.replacement;
     runtime.requested_first_visual_row = runtime.selection.first_visual_row;
+    runtime.requested_first_visual_column = runtime.selection.first_visual_column;
     runtime.history_for(runtime.active_document_id().value_or(FileDocumentId{0})).break_coalescing();
     // Focus follows the pointer (M8-F): a click-to-caret / drag-select acts on the
     // editor, so it moves the authoritative keyboard focus there. Gated on the two
@@ -216,11 +217,12 @@ void reveal_active_find_match(EditorRuntime::Impl& runtime) {
                                        reveal_rows};
     auto result = apply_selection_navigation(
         text, runtime.selection, SelectionCommand::view_reveal_caret,
-        reveal_viewport);
+        reveal_viewport, {}, {}, 4, runtime.word_wrap);
     if (result.accepted() && result.delta.replacement) {
         runtime.selection = *result.delta.replacement;
     }
     runtime.requested_first_visual_row = runtime.selection.first_visual_row;
+    runtime.requested_first_visual_column = runtime.selection.first_visual_column;
 }
 
 // A replace prompt is active when the controller is open in replace mode AND
@@ -437,11 +439,12 @@ void EditorRuntime::Impl::reveal_primary_caret() {
         std::max<std::uint32_t>(last_pane_content_rows, 1)};
     auto result = apply_selection_navigation(
         active_text(), selection, SelectionCommand::view_reveal_caret,
-        reveal_viewport);
+        reveal_viewport, {}, {}, 4, word_wrap);
     if (result.accepted() && result.delta.replacement) {
         selection = *result.delta.replacement;
     }
     requested_first_visual_row = selection.first_visual_row;
+    requested_first_visual_column = selection.first_visual_column;
 }
 
 void bind_runtime_editing(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime) {

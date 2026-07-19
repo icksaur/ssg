@@ -176,7 +176,7 @@ ssg::SelectionViewState selection(std::uint64_t byte) {
     ssg::DocumentPosition const position{
         ssg::ByteOffset{byte}, ssg::LineIndex{0}, ssg::CellIndex{byte}};
     return {ssg::SelectionSet{{ssg::Selection{position, position}}},
-            0, std::nullopt};
+            0, 0, std::nullopt};
 }
 
 ssg::SessionSnapshotSections sections(ssg::Revision revision,

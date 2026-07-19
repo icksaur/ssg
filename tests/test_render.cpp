@@ -118,6 +118,38 @@ TEST(render_segments_only_visible_lines_not_whole_document) {
 }
 
 
+TEST(word_wrap_off_renders_horizontally_scrolled_content) {
+    // M12 VP-H: with the caret at the end of a long line (word wrap off), the
+    // editor paints the horizontally-scrolled window — the line's END is visible
+    // and its START has scrolled off — proving render honors first_visual_column.
+    auto root = unique_root();
+    std::string line = "STARTmarker";
+    line += std::string(120, '.');
+    line += "ENDmarker";
+    std::ofstream{root / "long.txt"} << line << "\nsecond\n";
+    auto runtime = make_runtime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(
+        ssg::ClientId{1},
+        {"file.open", runtime->revision(), std::string{"long.txt"}});
+
+    ssg::ViewportDimensions const dims{40, 8};
+    (void)runtime->snapshot(ssg::ClientId{1}, dims);  // prime the pane cache
+    (void)runtime->dispatch(ssg::ClientId{1},
+                            {"cursor.line_end", runtime->revision(), {}});
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    ASSERT_TRUE(snapshot->client().viewport.first_visual_column > 0);
+    auto grid = ssg::render(*snapshot);
+
+    // The end of the line is on screen; the start has scrolled off.
+    ASSERT_TRUE(grid_contains(grid, "ENDmarker"));
+    ASSERT_FALSE(grid_contains(grid, "STARTmarker"));
+}
+
+
 TEST(render_colors_are_palette_indices) {
     auto root = unique_root();
     auto runtime = make_runtime(root);
@@ -825,6 +857,7 @@ TEST(render_too_small_is_safe_at_one_by_one) {
 int main() {
     RUN(render_paints_content_not_accessibility_labels);
     RUN(render_segments_only_visible_lines_not_whole_document);
+    RUN(word_wrap_off_renders_horizontally_scrolled_content);
     RUN(render_colors_are_palette_indices);
     RUN(render_is_deterministic);
     RUN(render_projects_palette_results_into_active_pane);

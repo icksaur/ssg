@@ -271,7 +271,7 @@ public:
 
         return {
             {revision, state_.text, ssg::ByteOffset{state_.text.size()}},
-            {ssg::SelectionSet{std::move(sels)}, state_.first_row, std::nullopt},
+            {ssg::SelectionSet{std::move(sels)}, state_.first_row, 0, std::nullopt},
             {!state_.undo_text.empty(), !state_.redo_text.empty(),
              state_.undo_text.size() + state_.redo_text.size()},
             {{state_.clipboard}, state_.clipboard, std::nullopt, std::nullopt},
@@ -546,7 +546,7 @@ public:
         return {
             {revision, "concurrent", ssg::ByteOffset{0}},
             {ssg::SelectionSet{{ssg::Selection{pos, pos}}}, first_row,
-             std::nullopt},
+             0, std::nullopt},
             {false, false, 0},
             {{}, {}, std::nullopt, std::nullopt},
             {std::nullopt, {{}, 0}},

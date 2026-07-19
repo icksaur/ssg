@@ -389,6 +389,100 @@ TEST(tree_scroll_moves_the_viewport_without_moving_the_selection) {
 
 } // namespace
 
+namespace {
+
+// M12 VP-H: word-wrap-off horizontal caret reveal. A long line whose caret moves
+// past the pane width scrolls horizontally so the caret stays visible; returning
+// to the line start resets the offset. A short (fitting) line never scrolls.
+TEST(word_wrap_off_reveals_caret_horizontally) {
+    auto root = std::filesystem::current_path() / "runtime_hscroll";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root / "workspace");
+    std::filesystem::create_directories(root / "scratch");
+    std::filesystem::create_directories(root / "recovery");
+    // A single 60-cell line, far wider than the test pane.
+    std::ofstream{root / "workspace" / "long.txt"} << std::string(60, 'a') << "\n";
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process},
+                               ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.open", runtime.revision(),
+                                  std::string{"long.txt"}}).accepted());
+
+    ssg::ViewportDimensions const dims{24, 6};
+    // Prime the pane-size cache the reveal path reads.
+    auto primed = runtime.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(primed.has_value());
+    if (!primed) return;
+    ASSERT_EQ(primed->client().viewport.first_visual_column, std::uint32_t{0});
+
+    // Move the caret to the end of the long line: it is past the pane width, so
+    // the viewport scrolls horizontally to keep it visible.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"cursor.line_end", runtime.revision(), {}})
+                    .accepted());
+    auto scrolled = runtime.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(scrolled.has_value());
+    if (!scrolled) return;
+    auto const offset = scrolled->client().viewport.first_visual_column;
+    ASSERT_TRUE(offset > 0);
+    // The caret's cell (60) is within the visible horizontal window.
+    ASSERT_TRUE(60u >= offset);
+    ASSERT_TRUE(60u < offset + dims.columns);
+
+    // Returning to the line start resets the horizontal offset to zero.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"cursor.line_start", runtime.revision(), {}})
+                    .accepted());
+    auto reset = runtime.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(reset.has_value());
+    if (!reset) return;
+    ASSERT_EQ(reset->client().viewport.first_visual_column, std::uint32_t{0});
+    std::filesystem::remove_all(root);
+}
+
+// A fitting line never scrolls horizontally, and word-wrap-ON never does.
+TEST(fitting_line_and_word_wrap_on_never_scroll_horizontally) {
+    auto root = std::filesystem::current_path() / "runtime_hscroll_fit";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root / "workspace");
+    std::filesystem::create_directories(root / "scratch");
+    std::filesystem::create_directories(root / "recovery");
+    std::ofstream{root / "workspace" / "wide.txt"} << std::string(200, 'b') << "\n";
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process},
+                               ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.open", runtime.revision(),
+                                  std::string{"wide.txt"}}).accepted());
+    ssg::ViewportDimensions const dims{80, 24};
+    (void)runtime.snapshot(ssg::ClientId{1}, dims);
+
+    // Word wrap ON: even at the far end of a 200-cell line, no horizontal scroll
+    // (the line wraps instead).
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"view.toggle_word_wrap", runtime.revision(), {}})
+                    .accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"cursor.line_end", runtime.revision(), {}})
+                    .accepted());
+    auto wrapped = runtime.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(wrapped.has_value());
+    if (!wrapped) return;
+    ASSERT_EQ(wrapped->client().viewport.first_visual_column, std::uint32_t{0});
+    std::filesystem::remove_all(root);
+}
+
+} // namespace
+
 int main() {
     RUN(search_tree_diff_and_follow_sections_use_runtime_state);
     RUN(palette_open_enters_prompt_focus_and_publishes_candidates);
@@ -398,6 +492,8 @@ int main() {
     RUN(tree_select_sets_selection_to_a_node_and_rejects_unknown_ids);
     RUN(tree_scroll_moves_the_viewport_without_moving_the_selection);
     RUN(tree_select_focuses_the_panel_and_the_click_pair_nets_expected_focus);
+    RUN(word_wrap_off_reveals_caret_horizontally);
+    RUN(fitting_line_and_word_wrap_on_never_scroll_horizontally);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

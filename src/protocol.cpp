@@ -2040,6 +2040,7 @@ ProtocolValue to_value(SelectionViewState const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("selections", to_value(value.selections));
     fields.emplace_back("first_visual_row", to_value(value.first_visual_row));
+    fields.emplace_back("first_visual_column", to_value(value.first_visual_column));
     fields.emplace_back("desired_cell", to_value(value.desired_cell));
     return ProtocolValue::make_object(std::move(fields));
 }
@@ -2049,10 +2050,13 @@ bool decode_present(ProtocolValue const& value, std::optional<SelectionViewState
     auto selections = require_field<SelectionSet>(value.field("selections"));
     auto first_visual_row =
         require_field<std::uint32_t>(value.field("first_visual_row"));
-    if (!selections || !first_visual_row) return false;
+    auto first_visual_column =
+        require_field<std::uint32_t>(value.field("first_visual_column"));
+    if (!selections || !first_visual_row || !first_visual_column) return false;
     std::optional<CellIndex> desired_cell;
     if (!decode_optional_field(value.field("desired_cell"), desired_cell)) return false;
-    out.emplace(SelectionViewState{*selections, *first_visual_row, desired_cell});
+    out.emplace(SelectionViewState{*selections, *first_visual_row,
+                                   *first_visual_column, desired_cell});
     return true;
 }
 

@@ -168,7 +168,7 @@ DocumentPosition zero_position() {
 
 SelectionViewState initial_selection() {
     auto zero = zero_position();
-    return {SelectionSet{std::vector<Selection>{Selection{zero, zero}}}, 0, std::nullopt};
+    return {SelectionSet{std::vector<Selection>{Selection{zero, zero}}}, 0, 0, std::nullopt};
 }
 
 std::filesystem::path canonical_directory(std::filesystem::path const& path) {

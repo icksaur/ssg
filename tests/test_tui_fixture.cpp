@@ -119,7 +119,7 @@ public:
         return {
             {revision, state_.text, ssg::ByteOffset{byte}},
             {ssg::SelectionSet{std::move(selections)}, state_.first_row,
-             std::nullopt},
+             0, std::nullopt},
             {!state_.undo_text.empty(), !state_.redo_text.empty(),
              state_.undo_text.size() + state_.redo_text.size()},
             {{state_.clipboard}, state_.clipboard, std::nullopt, std::nullopt},

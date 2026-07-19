@@ -410,32 +410,76 @@ bool is_valid_position(const TextModel& model,
 std::uint32_t revealed_first_row(const TextModel& model,
                                  const SelectionViewState& state,
                                  ViewportDimensions dimensions,
-                                 bool center) {
-    const auto viewport =
-        model.viewport_state(dimensions, state.first_visual_row);
-    const auto target =
-        model.visual_row(state.selections.primary().active,
-                         dimensions.columns);
-    const auto maximum = viewport.scrollbar.maximum_first_row;
+                                 bool center, bool word_wrap) {
+    if (word_wrap) {
+        const auto viewport =
+            model.viewport_state(dimensions, state.first_visual_row);
+        const auto target =
+            model.visual_row(state.selections.primary().active,
+                             dimensions.columns);
+        const auto maximum = viewport.scrollbar.maximum_first_row;
+        if (center) {
+            const auto half = dimensions.rows / 2;
+            const auto requested = target > half ? target - half : 0;
+            return std::min(requested, maximum);
+        }
+        if (target < viewport.first_visual_row) {
+            return target;
+        }
+        const auto visible_end =
+            static_cast<std::uint64_t>(viewport.first_visual_row) +
+            viewport.visible_rows.size();
+        if (target >= visible_end) {
+            const auto requested =
+                target - static_cast<std::uint32_t>(
+                             viewport.visible_rows.size()) +
+                1;
+            return std::min(requested, maximum);
+        }
+        return viewport.first_visual_row;
+    }
+
+    // Word wrap OFF (M12 VP-H): one logical line is one visual row, so the caret's
+    // visual row is its logical line index and the total is the line count — no
+    // O(document) wrapped counting.
+    const auto total = static_cast<std::uint32_t>(model.line_count());
+    const std::uint32_t maximum =
+        total > dimensions.rows ? total - dimensions.rows : 0;
+    const std::uint32_t current_first =
+        std::min(state.first_visual_row, maximum);
+    const auto target = static_cast<std::uint32_t>(
+        state.selections.primary().active.line.value());
     if (center) {
         const auto half = dimensions.rows / 2;
         const auto requested = target > half ? target - half : 0;
         return std::min(requested, maximum);
     }
-    if (target < viewport.first_visual_row) {
+    if (target < current_first) {
         return target;
     }
-    const auto visible_end =
-        static_cast<std::uint64_t>(viewport.first_visual_row) +
-        viewport.visible_rows.size();
-    if (target >= visible_end) {
-        const auto requested =
-            target - static_cast<std::uint32_t>(
-                         viewport.visible_rows.size()) +
-            1;
-        return std::min(requested, maximum);
+    if (target >= current_first + dimensions.rows) {
+        return std::min(target - dimensions.rows + 1, maximum);
     }
-    return viewport.first_visual_row;
+    return current_first;
+}
+
+// The horizontal scroll offset (word wrap OFF only) that keeps the primary
+// caret's cell column within the pane, scrolling minimally.  The caret's visual
+// column under no-wrap is its per-line cell index (the row starts at cell 0), so
+// this needs no document scan.  Returns 0 when word wrap is on.
+std::uint32_t revealed_first_column(const SelectionViewState& state,
+                                    ViewportDimensions dimensions,
+                                    bool word_wrap) {
+    if (word_wrap) return 0;
+    const auto caret_cell = static_cast<std::uint32_t>(
+        state.selections.primary().active.cell.value());
+    std::uint32_t first = state.first_visual_column;
+    if (caret_cell < first) {
+        first = caret_cell;
+    } else if (caret_cell >= first + dimensions.columns) {
+        first = caret_cell - dimensions.columns + 1;
+    }
+    return first;
 }
 
 bool valid_bracket_pairs(std::span<const BracketPair> pairs) {
@@ -655,12 +699,16 @@ SelectionNavigationResult apply_selection_navigation(
     std::string_view text, const SelectionViewState& before,
     SelectionCommand command, ViewportDimensions viewport,
     SelectionCommandArguments arguments,
-    std::span<const BracketPair> bracket_pairs, int tab_width) {
+    std::span<const BracketPair> bracket_pairs, int tab_width, bool word_wrap) {
     if (tab_width < 1 || tab_width > 16) {
         return rejected(SelectionNavigationError::invalid_tab_width,
                         "tab width must be between 1 and 16");
     }
     const TextModel model{text, tab_width};
+    // Under no-wrap, caret vertical/page movement is by logical line: an effective
+    // unbounded width makes the wrapping helpers treat each line as one row.
+    const std::uint32_t nav_columns =
+        word_wrap ? viewport.columns : std::numeric_limits<std::uint32_t>::max();
     for (const auto& selection : before.selections.items()) {
         if (!is_valid_position(model, selection.anchor) ||
             !is_valid_position(model, selection.active)) {
@@ -768,17 +816,17 @@ SelectionNavigationResult apply_selection_navigation(
             const auto desired =
                 index + 1 == selections.size() && before.desired_cell
                     ? *before.desired_cell
-                    : model.visual_column(origin, viewport.columns);
+                    : model.visual_column(origin, nav_columns);
             const auto destination =
                 model.vertical_visual(origin, down, count, desired,
-                                      viewport.columns);
+                                      nav_columns);
             selection = Selection{destination, destination};
             if (index + 1 == selections.size()) {
                 primary_desired =
-                    model.visual_row(destination, viewport.columns) ==
-                            model.visual_row(origin, viewport.columns)
+                    model.visual_row(destination, nav_columns) ==
+                            model.visual_row(origin, nav_columns)
                         ? model.visual_column(destination,
-                                              viewport.columns)
+                                              nav_columns)
                         : desired;
             }
         }
@@ -1055,10 +1103,12 @@ SelectionNavigationResult apply_selection_navigation(
 
     SelectionViewState after{
         SelectionSet{std::move(selections)}, first_visual_row,
-        desired_cell};
+        before.first_visual_column, desired_cell};
     after.first_visual_row = revealed_first_row(
         model, after, viewport,
-        command == SelectionCommand::view_center_caret);
+        command == SelectionCommand::view_center_caret, word_wrap);
+    after.first_visual_column =
+        revealed_first_column(after, viewport, word_wrap);
     return accepted(before, std::move(after));
 }
 
