@@ -166,6 +166,11 @@ struct EditorRuntime::Impl final : CommandServices,
     void reset_selection_for_active_document();
     void clamp_selection_to_active_document();
     [[nodiscard]] std::vector<CellRun> active_cell_runs() const;
+    // The editor viewport, gated on word wrap: exact wrapped geometry when word
+    // wrap is on; O(visible rows) unwrapped projection (compute_viewport_unwrapped)
+    // when off, so a large document's first frame is viewport-bounded (M12).
+    [[nodiscard]] ViewportViewState compute_editor_viewport(
+        ViewportDimensions dimensions, std::uint32_t first_row) const;
     [[nodiscard]] ViewportViewState viewport(ViewportDimensions dimensions) const;
     [[nodiscard]] SessionSnapshotSections sections(ViewportDimensions dimensions,
                                                    KeySequence const& leader_pending = {},

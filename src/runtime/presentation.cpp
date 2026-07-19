@@ -48,14 +48,15 @@ CommandHandlerResult scroll_pages(EditorRuntime::Impl& runtime, std::any const& 
 CommandHandlerResult scroll_fraction(EditorRuntime::Impl& runtime, std::any const& payload) {
     auto const* arguments = payload_as<ScrollFractionArguments>(payload);
     if (arguments == nullptr) return failure("view.scroll_to_fraction requires scroll-fraction payload");
-    auto runs = runtime.active_cell_runs();
     // Resolve maximum_first_row against the REAL pane cached from the last
     // snapshot, so a scrollbar drag to the bottom reaches the true last line on a
-    // terminal that is not 24 rows tall. See doc/spec-scroll.md R6.
+    // terminal that is not 24 rows tall (see doc/spec-scroll.md R6). Route through
+    // the same wrap-gated viewport the snapshot uses so the drag maps to the same
+    // total the scrollbar thumb was drawn from (M12).
     ViewportDimensions const viewport{
         std::max<std::uint32_t>(runtime.last_pane_content_columns, 1),
         std::max<std::uint32_t>(runtime.last_pane_content_rows, 1)};
-    auto view = compute_viewport(runs, viewport);
+    auto view = runtime.compute_editor_viewport(viewport, 0);
     runtime.requested_first_visual_row = arguments->denominator == 0 ? 0 :
         static_cast<std::uint32_t>((static_cast<std::uint64_t>(view.scrollbar.maximum_first_row) * arguments->numerator) / arguments->denominator);
     runtime.selection.first_visual_row = runtime.requested_first_visual_row;
