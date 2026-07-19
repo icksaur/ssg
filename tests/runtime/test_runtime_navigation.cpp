@@ -445,14 +445,19 @@ TEST(word_wrap_off_reveals_caret_horizontally) {
     std::filesystem::remove_all(root);
 }
 
-// A fitting line never scrolls horizontally, and word-wrap-ON never does.
-TEST(fitting_line_and_word_wrap_on_never_scroll_horizontally) {
-    auto root = std::filesystem::current_path() / "runtime_hscroll_fit";
+// VP-3 regression: the word-wrap-ON path stays EXACT — a long line still wraps to
+// multiple visual rows through the runtime — while word-wrap-OFF clips it to one
+// row and scrolls horizontally.  Locks both directions of the wrap gate so the
+// M12 projection can never silently disable wrapping.
+TEST(word_wrap_on_wraps_long_lines_off_clips_them) {
+    auto root = std::filesystem::current_path() / "runtime_wrap_gate";
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
     std::filesystem::create_directories(root / "scratch");
     std::filesystem::create_directories(root / "recovery");
-    std::ofstream{root / "workspace" / "wide.txt"} << std::string(200, 'b') << "\n";
+    // One 200-cell line (far wider than the 80-col pane) plus a short line.
+    std::ofstream{root / "workspace" / "wide.txt"}
+        << std::string(200, 'b') << "\nshort\n";
     auto created = ssg::EditorRuntime::create(
         {root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
@@ -464,20 +469,42 @@ TEST(fitting_line_and_word_wrap_on_never_scroll_horizontally) {
                                  {"file.open", runtime.revision(),
                                   std::string{"wide.txt"}}).accepted());
     ssg::ViewportDimensions const dims{80, 24};
-    (void)runtime.snapshot(ssg::ClientId{1}, dims);
 
-    // Word wrap ON: even at the far end of a 200-cell line, no horizontal scroll
-    // (the line wraps instead).
+    // Word wrap OFF (default): three logical lines (the trailing newline yields a
+    // final empty line) -> three visual rows total; the 200-cell line is ONE
+    // clipped visual row.
+    auto off = runtime.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(off.has_value());
+    if (!off) return;
+    ASSERT_EQ(off->client().viewport.total_visual_rows, std::uint32_t{3});
+    std::uint32_t off_rows_for_line0 = 0;
+    for (auto const& row : off->client().viewport.visible_rows) {
+        if (row.logical_line == 0) ++off_rows_for_line0;
+    }
+    ASSERT_EQ(off_rows_for_line0, std::uint32_t{1});  // clipped, not wrapped
+
+    // Word wrap ON: the 200-cell line wraps into ceil(200/80) = 3 visual rows, so
+    // the total exceeds the OFF total and logical line 0 spans >1 row.
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"view.toggle_word_wrap", runtime.revision(), {}})
                     .accepted());
+    auto on = runtime.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(on.has_value());
+    if (!on) return;
+    ASSERT_TRUE(on->client().viewport.total_visual_rows > 3u);  // wrapped
+    std::uint32_t on_rows_for_line0 = 0;
+    for (auto const& row : on->client().viewport.visible_rows) {
+        if (row.logical_line == 0) ++on_rows_for_line0;
+    }
+    ASSERT_EQ(on_rows_for_line0, std::uint32_t{3});  // 200 cells / 80 -> 3 rows
+    // Wrapped lines never scroll horizontally.
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"cursor.line_end", runtime.revision(), {}})
                     .accepted());
-    auto wrapped = runtime.snapshot(ssg::ClientId{1}, dims);
-    ASSERT_TRUE(wrapped.has_value());
-    if (!wrapped) return;
-    ASSERT_EQ(wrapped->client().viewport.first_visual_column, std::uint32_t{0});
+    auto wrapped_end = runtime.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(wrapped_end.has_value());
+    if (!wrapped_end) return;
+    ASSERT_EQ(wrapped_end->client().viewport.first_visual_column, std::uint32_t{0});
     std::filesystem::remove_all(root);
 }
 
@@ -493,7 +520,7 @@ int main() {
     RUN(tree_scroll_moves_the_viewport_without_moving_the_selection);
     RUN(tree_select_focuses_the_panel_and_the_click_pair_nets_expected_focus);
     RUN(word_wrap_off_reveals_caret_horizontally);
-    RUN(fitting_line_and_word_wrap_on_never_scroll_horizontally);
+    RUN(word_wrap_on_wraps_long_lines_off_clips_them);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }
