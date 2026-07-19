@@ -26,6 +26,13 @@ struct VisualRow {
     CellIndex start_cell;
     uint32_t content_cells;
     uint32_t visible_cells;
+    // Document-absolute byte offset of this VISUAL row's end — the position a
+    // click at/past the row's last content cell takes (M8 click-past-EOL).  For a
+    // final/unwrapped visual row this is the logical end-of-line (the newline byte,
+    // or text.size() for the last line without a trailing newline); for an interior
+    // wrapped row it is the wrap boundary; for an empty line it is the line start.
+    // Always a valid document position.
+    uint32_t end_byte_offset;
 
     bool operator==(const VisualRow&) const noexcept = default;
 };

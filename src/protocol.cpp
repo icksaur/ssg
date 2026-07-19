@@ -3474,6 +3474,7 @@ ProtocolValue to_value(VisualRow const& value) {
     fields.emplace_back("start_cell", to_value(value.start_cell));
     fields.emplace_back("content_cells", to_value(value.content_cells));
     fields.emplace_back("visible_cells", to_value(value.visible_cells));
+    fields.emplace_back("end_byte_offset", to_value(value.end_byte_offset));
     return ProtocolValue::make_object(std::move(fields));
 }
 bool decode_present(ProtocolValue const& value, std::optional<VisualRow>& out) {
@@ -3485,12 +3486,13 @@ bool decode_present(ProtocolValue const& value, std::optional<VisualRow>& out) {
     auto start_cell = require_field<CellIndex>(value.field("start_cell"));
     auto content_cells = require_field<std::uint32_t>(value.field("content_cells"));
     auto visible_cells = require_field<std::uint32_t>(value.field("visible_cells"));
+    auto end_byte_offset = require_field<std::uint32_t>(value.field("end_byte_offset"));
     if (!logical_line || !first_span || !span_count || !start_cell || !content_cells ||
-        !visible_cells) {
+        !visible_cells || !end_byte_offset) {
         return false;
     }
     out.emplace(VisualRow{*logical_line, *first_span, *span_count, *start_cell,
-                          *content_cells, *visible_cells});
+                          *content_cells, *visible_cells, *end_byte_offset});
     return true;
 }
 

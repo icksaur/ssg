@@ -94,9 +94,81 @@ TEST(editor_cell_maps_to_its_document_byte_offset) {
         ASSERT_EQ(line_one_start->byte_offset, std::uint32_t{6});  // after "alpha\n"
     }
 
-    // A cell far past the end of the short first line has no document position.
-    auto blank = ssg::hit_test(*snapshot, content.right() - 2, content.y);
-    ASSERT_EQ(blank.region, ssg::HitRegion::none);
+    // A cell far past the end of the short first line ("alpha", 5 cells) now
+    // clamps to that line's end (M8 click-past-EOL): an editor hit at the newline
+    // byte after "alpha" (offset 5), zero-width.
+    auto past_eol = ssg::hit_test(*snapshot, content.right() - 2, content.y);
+    ASSERT_EQ(past_eol.region, ssg::HitRegion::editor);
+    ASSERT_EQ(past_eol.byte_offset, std::uint32_t{5});
+    ASSERT_EQ(past_eol.byte_len, std::uint32_t{0});
+    {
+        auto position = ssg::resolve_document_position(
+            text, ssg::ByteOffset{past_eol.byte_offset});
+        ASSERT_TRUE(position.has_value());
+        if (position) ASSERT_EQ(position->line.value(), std::uint64_t{0});
+    }
+}
+
+TEST(click_past_eol_blank_line_and_below_document_clamp_to_line_end) {
+    // M8 click-past-EOL: a document with a blank (newline-only) line and short
+    // lines. Clicking past content, on the blank line, and below the last line all
+    // place the caret at the appropriate line end.
+    auto root = unique_root();
+    //             offsets: a=0 b=1 \n=2 | (blank) \n=3 | c=4 d=5 e=6 \n=7
+    std::string const text = "ab\n\ncde\n";
+    std::ofstream{root / "doc.txt"} << text;
+    auto runtime = make_runtime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(ssg::ClientId{1},
+                            {"file.open", runtime->revision(), std::string{"doc.txt"}});
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    auto const& shell = snapshot->sections().shell;
+    ASSERT_FALSE(shell.panes.empty());
+    if (shell.panes.empty()) return;
+    auto const content = shell.panes.front().content;
+
+    auto resolve_line = [&](std::uint32_t offset) -> std::uint64_t {
+        auto p = ssg::resolve_document_position(text, ssg::ByteOffset{offset});
+        return p ? p->line.value() : 9999;
+    };
+
+    // Exact cell unchanged: 'a' at row 0 col 0 -> offset 0.
+    auto exact = ssg::hit_test(*snapshot, content.x, content.y);
+    ASSERT_EQ(exact.region, ssg::HitRegion::editor);
+    ASSERT_EQ(exact.byte_offset, std::uint32_t{0});
+    ASSERT_TRUE(exact.byte_len > 0);
+
+    // Past the end of line 0 ("ab") -> the newline at offset 2, on line 0.
+    auto past0 = ssg::hit_test(*snapshot, content.x + 30, content.y);
+    ASSERT_EQ(past0.region, ssg::HitRegion::editor);
+    ASSERT_EQ(past0.byte_offset, std::uint32_t{2});
+    ASSERT_EQ(past0.byte_len, std::uint32_t{0});
+    ASSERT_EQ(resolve_line(past0.byte_offset), std::uint64_t{0});
+
+    // The blank line (row 1) — anywhere on it, including column 0 — resolves to the
+    // blank line's own offset (3), on line 1. A blank row has no hit targets, so
+    // this is purely the clamp.
+    auto blank = ssg::hit_test(*snapshot, content.x + 5, content.y + 1);
+    ASSERT_EQ(blank.region, ssg::HitRegion::editor);
+    ASSERT_EQ(blank.byte_offset, std::uint32_t{3});
+    ASSERT_EQ(blank.byte_len, std::uint32_t{0});
+    ASSERT_EQ(resolve_line(blank.byte_offset), std::uint64_t{1});
+
+    // A row BELOW the last line (Decision B) clamps to the LAST visible row's end.
+    // The document's last visual row is the trailing empty line (offset 8 == the
+    // text end after "cde\n").
+    auto const last_row_end =
+        snapshot->client().viewport.visible_rows.back().end_byte_offset;
+    auto below = ssg::hit_test(*snapshot, content.x + 10, content.bottom() - 1);
+    ASSERT_EQ(below.region, ssg::HitRegion::editor);
+    ASSERT_EQ(below.byte_offset, last_row_end);
+    ASSERT_EQ(below.byte_len, std::uint32_t{0});
+    auto below_pos =
+        ssg::resolve_document_position(text, ssg::ByteOffset{below.byte_offset});
+    ASSERT_TRUE(below_pos.has_value());
 }
 
 TEST(panel_row_maps_to_its_tree_node_id) {
@@ -312,6 +384,7 @@ TEST(out_of_bounds_and_chrome_return_no_target) {
 
 int main() {
     RUN(editor_cell_maps_to_its_document_byte_offset);
+    RUN(click_past_eol_blank_line_and_below_document_clamp_to_line_end);
     RUN(panel_row_maps_to_its_tree_node_id);
     RUN(palette_row_maps_to_its_absolute_rank_index);
     RUN(palette_scrollbar_and_empty_area_classify_correctly);

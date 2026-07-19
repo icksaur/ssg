@@ -16,7 +16,11 @@ namespace ssg {
 
 enum class HitRegion : std::uint8_t {
     none,               // out of bounds, chrome, or a reserved-but-empty cell
-    editor,             // a document cell: byte_offset / byte_len are set
+    editor,             // a document cell: byte_offset / byte_len are set.  A click
+                        // past a row's content, on a blank row, or below the last
+                        // line resolves to a zero-width END-OF-LINE position
+                        // (byte_offset = the row's end, byte_len = 0), so clicking
+                        // anywhere on an editor row places the caret at the line end.
     panel,              // a tree row: node_id is set
     palette,            // a palette row: item_index is the absolute rank index
     tab,                // a tab-bar tab: tab_index selects sections().tabs.tabs

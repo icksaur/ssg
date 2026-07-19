@@ -1,9 +1,11 @@
 #include <ssg/layout.h>
+#include <ssg/selection.h>
 #include <ssg/viewport.h>
 
 #include "test_helpers.h"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <fstream>
 #include <sstream>
@@ -423,6 +425,55 @@ TEST(unwrapped_horizontal_offset_snaps_to_grapheme_boundary) {
     ASSERT_EQ(proj.hit_targets[0].viewport_column, 0u);
 }
 
+// CE-1 (M8 click-past-EOL): VisualRow.end_byte_offset is the document-absolute
+// end of each visual row, over BOTH viewport builders. For the UNWRAPPED builder
+// every visual row is a full logical line, so its end is the logical EOL (the
+// newline byte, or text.size() for the last line) — and is INDEPENDENT of the
+// horizontal offset. Verified against a hand-computed line-end table and
+// resolve_document_position.
+TEST(unwrapped_end_byte_offset_is_the_true_line_end) {
+    // Lines: "ab"(0..2) | ""(3) blank | "cde"(4..7) | ""(8) trailing.
+    const std::string doc = "ab\n\ncde\n";
+    // Expected end offset per logical line: newline byte, or text.size() for the
+    // final (trailing-newline) empty line.
+    const std::array<std::uint32_t, 4> want_end{2, 3, 7, 8};
+    for (uint32_t columns : {1u, 3u, 80u}) {          // incl. a clipping width
+        for (uint32_t first_col : {0u, 1u, 5u}) {      // incl. horizontal offset
+            const auto proj = ssg::compute_viewport_unwrapped(
+                doc, ViewportDimensions{columns, 8}, 0, first_col, 4);
+            for (const auto& row : proj.visible_rows) {
+                ASSERT_EQ(row.end_byte_offset, want_end[row.logical_line]);
+                auto pos = ssg::resolve_document_position(
+                    doc, ssg::ByteOffset{row.end_byte_offset});
+                ASSERT_TRUE(pos.has_value());
+                if (pos) {
+                    ASSERT_EQ(pos->line.value(),
+                              static_cast<std::uint64_t>(row.logical_line));
+                }
+            }
+        }
+    }
+}
+
+// CE-1: for the WRAPPED builder, end_byte_offset is the VISUAL row's end — the
+// wrap boundary for an interior row, the logical EOL for the final row of a line.
+TEST(wrapped_end_byte_offset_is_the_visual_row_end) {
+    // "abcdef"(0..6) wraps at width 3 into "abc"(rel 0..3) + "def"(rel 3..6);
+    // then "xy"(7..9). Document ends after "xy" with no trailing newline.
+    const std::string doc = "abcdef\nxy";
+    const auto lines = cell_runs_from_text(doc, 4);
+    const auto proj = ssg::compute_viewport(lines, ViewportDimensions{3, 8}, 0);
+    // Rows: 0="abc" end=3 (wrap boundary), 1="def" end=6 (logical EOL / newline),
+    // 2="xy" end=9 (text.size()).
+    ASSERT_EQ(proj.visible_rows.size(), std::size_t{3});
+    ASSERT_EQ(proj.visible_rows[0].logical_line, 0u);
+    ASSERT_EQ(proj.visible_rows[0].end_byte_offset, 3u);   // interior wrap boundary
+    ASSERT_EQ(proj.visible_rows[1].logical_line, 0u);
+    ASSERT_EQ(proj.visible_rows[1].end_byte_offset, 6u);   // logical EOL
+    ASSERT_EQ(proj.visible_rows[2].logical_line, 1u);
+    ASSERT_EQ(proj.visible_rows[2].end_byte_offset, 9u);   // last line, no newline
+}
+
 int main() {
     RUN(empty_viewport_golden);
     RUN(short_viewport_golden);
@@ -434,6 +485,8 @@ int main() {
     RUN(unwrapped_clips_long_lines_to_one_row);
     RUN(unwrapped_vs_wrapped_row_count_differs_for_long_lines);
     RUN(unwrapped_clamps_first_row_to_line_count);
+    RUN(unwrapped_end_byte_offset_is_the_true_line_end);
+    RUN(wrapped_end_byte_offset_is_the_visual_row_end);
     RUN(unwrapped_horizontal_offset_windows_each_row);
     RUN(unwrapped_horizontal_offset_snaps_to_grapheme_boundary);
     RUN(viewport_bounds_properties);

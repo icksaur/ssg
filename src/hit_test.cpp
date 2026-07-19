@@ -41,9 +41,22 @@ RegionHit editor_hit(SessionSnapshot const& snapshot, Rect const& content,
             return hit;
         }
     }
-    // A cell in the pane past the end of a short line or a blank row has no
-    // document position.
-    return {};
+    // A cell past a row's content (or on a blank row, which has no hit targets)
+    // clamps to that visual row's end — the caret lands at the row's end-of-line
+    // (M8 click-past-EOL). A row BELOW the last visible row (an empty area under a
+    // short document) clamps to the LAST visible row's end (Decision B), so
+    // clicking/dragging below the text reaches the last line. An empty viewport
+    // (no visible rows) has nowhere to place the caret -> none.
+    if (viewport.visible_rows.empty()) return {};
+    auto const& target_row =
+        viewport_row < viewport.visible_rows.size()
+            ? viewport.visible_rows[viewport_row]
+            : viewport.visible_rows.back();
+    RegionHit hit;
+    hit.region = HitRegion::editor;
+    hit.byte_offset = target_row.end_byte_offset;
+    hit.byte_len = 0;
+    return hit;
 }
 
 RegionHit palette_hit(PaletteProjection const& palette, int column, int row) {

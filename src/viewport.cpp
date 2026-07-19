@@ -25,8 +25,10 @@ std::vector<VisualRow> wrap_rows(std::span<const CellRun> lines,
             checked_u32(line_index, "viewport logical line count exceeds uint32");
         const auto& line = lines[line_index];
         if (line.spans.empty()) {
+            // Empty line: the row end is the line start (line-relative offset 0);
+            // compute_viewport adds the line's document start.
             rows.push_back(
-                VisualRow{logical_line, 0, 0, CellIndex{0}, 0, 0});
+                VisualRow{logical_line, 0, 0, CellIndex{0}, 0, 0, 0});
             continue;
         }
 
@@ -36,6 +38,10 @@ std::vector<VisualRow> wrap_rows(std::span<const CellRun> lines,
         uint32_t content_cells = 0;
 
         const auto finish_row = [&] {
+            // The row's end is its LAST span's line-relative end byte
+            // (byte_offset + byte_len); compute_viewport adds the line's document
+            // start to make it document-absolute.
+            const auto& last = line.spans[first_span + span_count - 1];
             rows.push_back(VisualRow{
                 logical_line,
                 first_span,
@@ -43,6 +49,7 @@ std::vector<VisualRow> wrap_rows(std::span<const CellRun> lines,
                 CellIndex{start_cell},
                 content_cells,
                 std::min(content_cells, columns),
+                last.byte_offset + last.byte_len,
             });
         };
 
@@ -186,7 +193,9 @@ ViewportViewState compute_viewport(std::span<const CellRun> logical_lines,
 
     for (uint32_t viewport_row = 0; viewport_row < visible_count;
          ++viewport_row) {
-        const auto& row = all_rows[first_row + viewport_row];
+        auto row = all_rows[first_row + viewport_row];
+        // wrap_rows stored a LINE-RELATIVE end offset; make it document-absolute.
+        row.end_byte_offset += line_document_start[row.logical_line];
         visible_rows.push_back(row);
         const auto& line = logical_lines[row.logical_line];
         uint32_t viewport_column = 0;
@@ -276,6 +285,10 @@ ViewportViewState compute_viewport_unwrapped(
             document_text.substr(start, end - start), tab_width);
         const auto document_start =
             checked_u32(start, "viewport byte offset exceeds uint32");
+        // The row's end is the line's TRUE end (newline byte, or text.size() for
+        // the last line) — the FULL line, independent of the horizontal clip.
+        const auto end_byte_offset =
+            checked_u32(end, "viewport byte offset exceeds uint32");
 
         // Locate the first span at or past the requested horizontal offset; its
         // start cell is this row's visible origin.  A row shorter than the offset
@@ -291,7 +304,7 @@ ViewportViewState compute_viewport_unwrapped(
             // Empty line, or the whole line scrolled off to the left.
             visible_rows.push_back(
                 VisualRow{logical_line, first_span, 0, CellIndex{start_cell},
-                          run.total_cells, 0});
+                          run.total_cells, 0, end_byte_offset});
             continue;
         }
 
@@ -323,7 +336,8 @@ ViewportViewState compute_viewport_unwrapped(
         visible_rows.push_back(
             VisualRow{logical_line, first_span, span_count, CellIndex{start_cell},
                       run.total_cells,
-                      std::min(content_from_offset, dimensions.columns)});
+                      std::min(content_from_offset, dimensions.columns),
+                      end_byte_offset});
     }
 
     return ViewportViewState{
