@@ -303,6 +303,12 @@ SessionReplayResult replay_session_delta(SessionSnapshot const& base,
     auto shell = delta.shell_.replacement.value_or(base.sections().shell);
     auto viewport = delta.viewport_.replacement.value_or(
         base.client().viewport);
+    // The published palette candidate list is authoritative server state that the
+    // delta does not carry (the P0 command catalog is static within a session), so
+    // preserve it from the base rather than dropping it -- otherwise a
+    // delta-replaying client loses its command catalog and diverges from a fresh
+    // snapshot.
+    auto palette = base.sections().palette;
 
     SessionSnapshotSections sections{
         std::move(*document),
@@ -325,6 +331,7 @@ SessionReplayResult replay_session_delta(SessionSnapshot const& base,
         std::move(*lsp_features.state),
         std::move(theme),
         std::move(shell),
+        std::move(palette),
     };
     ClientSnapshotState client = base.client();
     client.viewport = std::move(viewport);
