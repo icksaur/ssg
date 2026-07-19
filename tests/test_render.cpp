@@ -715,6 +715,72 @@ TEST(render_palette_reserves_an_empty_gutter_when_the_list_fits) {
     }
 }
 
+TEST(render_too_small_viewport_produces_library_placeholder) {
+    // M11-L: below the 20x4 minimum the library (not the app) renders the
+    // placeholder screen, sized to the terminal, so no app code authors cells.
+    auto root = unique_root();
+    auto runtime = make_runtime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+
+    // A sub-minimum viewport: render must NOT throw and must yield a grid of the
+    // requested terminal size carrying the centered message.
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {10, 5});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    ASSERT_EQ(snapshot->sections().shell.viewport.columns, 0);  // declined layout
+    ssg::CellGrid grid;
+    ASSERT_NO_THROW(grid = ssg::render(*snapshot));
+    ASSERT_EQ(grid.size.columns, 10);
+    ASSERT_EQ(grid.size.rows, 5);
+    ASSERT_EQ(grid.cells.size(), std::size_t{50});
+    // The message is centered on the middle row (rows/2 = 2) and clipped with an
+    // ellipsis to the 10-column width.
+    ASSERT_EQ(row_text(grid, 2), std::string("terminal \xe2\x80\xa6"));
+    ASSERT_EQ(row_text(grid, 0), std::string(10, ' '));
+
+    std::filesystem::remove_all(root);
+}
+
+TEST(render_too_small_matches_hand_authored_golden) {
+    auto root = unique_root();
+    auto runtime = make_runtime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    // A 24-wide, 3-row terminal fits the whole 18-cell message, centered.
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {24, 3});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    auto grid = ssg::render(*snapshot);
+    ASSERT_EQ(grid.size.columns, 24);
+    ASSERT_EQ(grid.size.rows, 3);
+    // 18-cell message centered in 24 columns -> start column (24-18)/2 = 3, on
+    // the middle row (3/2 = 1).
+    ASSERT_EQ(row_text(grid, 0), std::string(24, ' '));
+    ASSERT_EQ(row_text(grid, 1),
+              std::string("   terminal too small   "));
+    ASSERT_EQ(row_text(grid, 2), std::string(24, ' '));
+    // Determinism.
+    ASSERT_EQ(ssg::render(*snapshot).canonical(), grid.canonical());
+    std::filesystem::remove_all(root);
+}
+
+TEST(render_too_small_is_safe_at_one_by_one) {
+    auto root = unique_root();
+    auto runtime = make_runtime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {1, 1});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    ssg::CellGrid grid;
+    ASSERT_NO_THROW(grid = ssg::render(*snapshot));
+    ASSERT_EQ(grid.size.columns, 1);
+    ASSERT_EQ(grid.size.rows, 1);
+    ASSERT_EQ(grid.cells.size(), std::size_t{1});
+    std::filesystem::remove_all(root);
+}
+
 int main() {
     RUN(render_paints_content_not_accessibility_labels);
     RUN(render_colors_are_palette_indices);
@@ -734,6 +800,9 @@ int main() {
     RUN(render_panel_tree_reserves_an_empty_gutter_when_it_fits);
     RUN(render_palette_windows_rows_and_draws_a_thumb_with_absolute_selection);
     RUN(render_palette_reserves_an_empty_gutter_when_the_list_fits);
+    RUN(render_too_small_viewport_produces_library_placeholder);
+    RUN(render_too_small_matches_hand_authored_golden);
+    RUN(render_too_small_is_safe_at_one_by_one);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;

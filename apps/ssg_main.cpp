@@ -516,35 +516,28 @@ int main(int argc, char** argv) {
         while (!quit) {
             auto snapshot = refresh();
         if (snapshot) {
-            auto const& shell = snapshot->sections().shell;
-            if (shell.viewport.columns <= 0 || shell.viewport.rows <= 0) {
-                // Below the library's 20x4 minimum: render() requires a positive
-                // viewport, so show a placeholder instead of laying out (M9-T).
-                auto const size = terminal_size();
-                write_all(ssg::app::encode_too_small_frame(
-                    static_cast<int>(size.columns), static_cast<int>(size.rows)));
-            } else {
-                auto grid = ssg::render(*snapshot);
-                std::string frame = "\x1b[?25l";  // Hide the cursor while redrawing.
-                frame += ssg::app::encode_ansi_frame(grid, color_depth);
-                if (grid.caret) {
-                    frame += "\x1b[" + std::to_string(grid.caret->row + 1) + ";" +
-                             std::to_string(grid.caret->column + 1) + "H\x1b[?25h";
-                }
-                if (!first_frame_marked) {
-                    // M10-1 stop mark: the first content frame (an actual
-                    // rendered payload), not the earlier terminal-setup bytes.
-                    STARTUP_MARK("first_content_frame");
-                    first_frame_marked = true;
-                    write_all(frame);
-                    // M10-3/M10-4: the first frame is on screen; now run the
-                    // enrichment (tree scan, syntax) deferred off the startup
-                    // path.  It publishes on the next snapshot at the loop top.
-                    runtime.prime_deferred();
-                    continue;
-                }
-                write_all(frame);
+            // The library renders every screen branch, including the declined-
+            // layout "too small" placeholder (M11-L); the app only encodes.
+            auto grid = ssg::render(*snapshot);
+            std::string frame = "\x1b[?25l";  // Hide the cursor while redrawing.
+            frame += ssg::app::encode_ansi_frame(grid, color_depth);
+            if (grid.caret) {
+                frame += "\x1b[" + std::to_string(grid.caret->row + 1) + ";" +
+                         std::to_string(grid.caret->column + 1) + "H\x1b[?25h";
             }
+            if (!first_frame_marked) {
+                // M10-1 stop mark: the first content frame (an actual rendered
+                // payload), not the earlier terminal-setup bytes.
+                STARTUP_MARK("first_content_frame");
+                first_frame_marked = true;
+                write_all(frame);
+                // M10-3/M10-4: the first frame is on screen; now run the
+                // enrichment (tree scan, syntax) deferred off the startup
+                // path.  It publishes on the next snapshot at the loop top.
+                runtime.prime_deferred();
+                continue;
+            }
+            write_all(frame);
         }
 
         char bytes[64];

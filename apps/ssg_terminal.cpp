@@ -50,21 +50,6 @@ ssg::ColorDepth detect_color_depth(char const* colorterm, char const* term) {
     return ssg::ColorDepth::ansi16;
 }
 
-std::string encode_too_small_frame(int columns, int rows) {
-    std::string out = "\x1b[0m\x1b[2J\x1b[H";  // reset, clear, home
-    if (columns <= 0 || rows <= 0) return out;
-    std::string_view const message = "terminal too small";
-    auto const visible = message.substr(
-        0, std::min<std::size_t>(message.size(),
-                                 static_cast<std::size_t>(columns)));
-    int const row = rows / 2 + 1;  // 1-based; vertically centered.
-    int const column =
-        std::max(1, (columns - static_cast<int>(visible.size())) / 2 + 1);
-    out += "\x1b[" + std::to_string(row) + ";" + std::to_string(column) + "H";
-    out += std::string{visible};
-    return out;
-}
-
 LaunchTarget resolve_launch(fs::path const& argument) {
     if (argument.empty()) {
         return {fs::current_path(), std::nullopt};

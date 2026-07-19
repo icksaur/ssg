@@ -517,6 +517,32 @@ std::optional<GridPosition> paint_prompt(CellGrid& grid,
     return caret;
 }
 
+// Render the declined-layout ("terminal too small") screen: a placeholder grid
+// of the terminal's size carrying a centered library-owned message.  The library
+// owns this screen so a client contributes no cell content (M11-L,
+// doc/spec-library-contract.md).  Sized from the terminal dimensions the client
+// viewport carries, since the shell layout was declined (viewport {0,0}).
+CellGrid render_too_small(GridSize size, ThemeSnapshot const& theme) {
+    auto const foreground = semantic_index(theme, SemanticRole::foreground);
+    auto const background = semantic_index(theme, SemanticRole::background);
+    CellGrid grid{
+        size, theme.palette,
+        std::vector<CellGridCell>(
+            static_cast<std::size_t>(std::max(0, size.columns) *
+                                     std::max(0, size.rows)),
+            CellGridCell{" ", foreground, background, SemanticRole::background,
+                         false})};
+    if (size.columns <= 0 || size.rows <= 0) return grid;
+    std::string_view const message = "terminal too small";
+    auto const message_cells =
+        static_cast<int>(compute_cell_run(message).total_cells);
+    int const row = size.rows / 2;
+    int const start = std::max(0, (size.columns - message_cells) / 2);
+    paint_text(grid, start, row, size.columns, message, foreground, background,
+               SemanticRole::foreground);
+    return grid;
+}
+
 }  // namespace
 
 CellGridCell const& CellGrid::at(int column, int row) const {
@@ -558,9 +584,6 @@ std::string CellGrid::canonical() const {
 CellGrid render(SessionSnapshot const& snapshot) {
     auto const& shell = snapshot.sections().shell;
     auto const& theme = snapshot.sections().theme;
-    if (shell.viewport.columns <= 0 || shell.viewport.rows <= 0) {
-        throw std::invalid_argument{"grid viewport must be positive"};
-    }
     for (auto index : theme.semantic_indices) {
         if (index >= theme_palette_size) {
             throw std::invalid_argument{
@@ -572,6 +595,16 @@ CellGrid render(SessionSnapshot const& snapshot) {
             throw std::invalid_argument{
                 "syntax scope references a color outside the 16-color palette"};
         }
+    }
+    if (shell.viewport.columns <= 0 || shell.viewport.rows <= 0) {
+        // The shell layout was declined (viewport below the 20x4 minimum): the
+        // library renders the too-small placeholder, sized from the terminal
+        // dimensions the client viewport carries (M11-L).
+        auto const& dimensions = snapshot.client().viewport.dimensions;
+        return render_too_small(
+            GridSize{static_cast<int>(dimensions.columns),
+                     static_cast<int>(dimensions.rows)},
+            theme);
     }
 
     auto const foreground = semantic_index(theme, SemanticRole::foreground);
