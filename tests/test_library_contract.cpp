@@ -76,39 +76,17 @@ bool matches_golden(std::string const& actual, char const* path) {
     return true;
 }
 
-// M11-4: the client's PaletteReport is a pure, bounded derived view — a function
-// only of the server-published candidates plus the local query/selection/window.
-// This test-local recompute mirrors the client's build_report (apps/ssg_main.cpp)
-// using the SAME shared library primitives (palette_rank, palette_ghost,
-// compute_list_scroll_view), so any private client ranker or invented product
-// data would make the client's snapshot disagree with this reference.
-ssg::PaletteReport recompute_report(
+// M11-4: the client's PaletteReport is a pure, bounded derived view built ONLY by
+// the library seam `derive_palette_report` from the server-published candidates
+// plus the local query/selection/window.  The app (apps/ssg_main.cpp build_report)
+// uses this exact seam, so exercising it here proves the client cannot invent
+// product data or substitute a private ranker — the projection is library code.
+ssg::PaletteReport project_report(
     std::vector<ssg::PaletteCandidate> const& candidates, std::string const& query,
     std::uint32_t pane_rows, std::uint32_t first_visible,
     std::size_t selected_index) {
-    ssg::PaletteReport report;
-    auto order = ssg::palette_rank(candidates, query);
-    report.query = query;
-    if (!order.empty()) {
-        report.ghost = ssg::palette_ghost(candidates[order.front()].label, query);
-    }
-    if (selected_index >= order.size()) {
-        selected_index = order.empty() ? 0 : order.size() - 1;
-    }
-    std::optional<std::uint32_t> selected =
-        order.empty() ? std::nullopt
-                      : std::optional<std::uint32_t>{
-                            static_cast<std::uint32_t>(selected_index)};
-    auto scroll = ssg::compute_list_scroll_view(
-        static_cast<std::uint32_t>(order.size()), pane_rows, first_visible,
-        selected, /*keep_selection_visible=*/false);
-    report.first_visible = scroll.first_visible;
-    report.scrollbar = scroll.scrollbar;
-    for (std::uint32_t row = 0; row < scroll.visible_count; ++row) {
-        report.rows.push_back(candidates[order[scroll.first_visible + row]]);
-    }
-    report.selected = selected;
-    return report;
+    ssg::PaletteWindowState window{query, selected_index, first_visible, pane_rows};
+    return ssg::derive_palette_report(candidates, window);
 }
 
 // The published candidate list for an open palette, straight from the runtime.
@@ -147,10 +125,10 @@ TEST(palette_report_is_a_pure_function_of_candidates_and_query) {
     // A representative match, the empty (keep-all) query, and a no-match query.
     for (std::string const& query : {std::string{}, std::string{"sa"},
                                      std::string{"zzq-no-such-command"}}) {
-        auto report = recompute_report(candidates, query, 12, 0, 0);
+        auto report = project_report(candidates, query, 12, 0, 0);
 
         // Pure function: identical inputs reproduce an identical report.
-        ASSERT_TRUE(recompute_report(candidates, query, 12, 0, 0) == report);
+        ASSERT_TRUE(project_report(candidates, query, 12, 0, 0) == report);
 
         // The query is echoed verbatim; it is not server-derived.
         ASSERT_EQ(report.query, query);
@@ -193,7 +171,7 @@ TEST(rendered_palette_labels_trace_to_published_candidates) {
     ASSERT_TRUE(!candidates.empty());
     if (candidates.empty()) return;
 
-    auto report = recompute_report(candidates, "sa", 12, 0, 0);
+    auto report = project_report(candidates, "sa", 12, 0, 0);
     ASSERT_TRUE(!report.rows.empty());
     if (report.rows.empty()) return;
 

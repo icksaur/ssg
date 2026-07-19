@@ -86,4 +86,28 @@ struct PaletteReport {
 [[nodiscard]] std::string palette_ghost(std::string_view top_label,
                                         std::string_view query);
 
+// The client-owned palette window: the local query, the desired absolute
+// selection index into the ranked order, the free scroll offset, and the number
+// of ranked rows the pane can show.  `derive_palette_report` may clamp `selected`
+// and resolve `first_visible`, writing them back, when the ranked set shrank.
+struct PaletteWindowState {
+    std::string query;
+    std::size_t selected = 0;
+    std::uint32_t first_visible = 0;
+    std::uint32_t pane_rows = 1;
+};
+
+// The library's canonical palette projection, and the single seam every client
+// uses to build the palette view.  Fuzzy-ranks the published `candidates` against
+// `window.query` (via `palette_rank`), windows them with the shared list-scroll
+// primitive, and assembles the bounded `PaletteReport` the library renders into
+// the active pane and header.  Every reported row is one of `candidates` and the
+// ghost derives only from the top candidate's label — the client contributes only
+// the query/selection/window, never product data (INV-derived-view-bounded, see
+// doc/spec-library-contract.md).  When the ranked set shrank under the selection,
+// the selection is clamped and re-centered; the resolved `selected` and
+// `first_visible` are written back to `window`.
+[[nodiscard]] PaletteReport derive_palette_report(
+    std::vector<PaletteCandidate> const& candidates, PaletteWindowState& window);
+
 }  // namespace ssg

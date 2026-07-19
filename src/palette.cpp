@@ -87,4 +87,39 @@ std::string palette_ghost(std::string_view top_label, std::string_view query) {
     return std::string{top_label.substr(query.size())};
 }
 
+PaletteReport derive_palette_report(
+    std::vector<PaletteCandidate> const& candidates, PaletteWindowState& window) {
+    PaletteReport report;
+    auto const order = palette_rank(candidates, window.query);
+    report.query = window.query;
+    if (!order.empty()) {
+        report.ghost =
+            palette_ghost(candidates[order.front()].label, window.query);
+    }
+    // Clamp the selection into the (possibly shrunken) ranked set; only when the
+    // clamp actually moves it do we re-center the window on it, so a free wheel
+    // scroll otherwise persists (see doc/spec-scroll.md, spec-m8.md M8-P).
+    bool selection_clamped = false;
+    if (window.selected >= order.size()) {
+        window.selected = order.empty() ? 0 : order.size() - 1;
+        selection_clamped = true;
+    }
+    std::optional<std::uint32_t> const selected =
+        order.empty() ? std::nullopt
+                      : std::optional<std::uint32_t>{
+                            static_cast<std::uint32_t>(window.selected)};
+    auto const scroll = compute_list_scroll_view(
+        static_cast<std::uint32_t>(order.size()), window.pane_rows,
+        window.first_visible, selected,
+        /*keep_selection_visible=*/selection_clamped);
+    window.first_visible = scroll.first_visible;
+    report.first_visible = scroll.first_visible;
+    report.scrollbar = scroll.scrollbar;
+    for (std::uint32_t row = 0; row < scroll.visible_count; ++row) {
+        report.rows.push_back(candidates[order[scroll.first_visible + row]]);
+    }
+    report.selected = selected;
+    return report;
+}
+
 }  // namespace ssg

@@ -429,40 +429,17 @@ int main(int argc, char** argv) {
     auto build_report = [&] {
         ssg::PaletteReport report;
         if (palette_open) {
-            auto order = ssg::palette_rank(candidates, palette_query);
-            report.query = palette_query;
-            if (!order.empty()) {
-                report.ghost =
-                    ssg::palette_ghost(candidates[order.front()].label, palette_query);
-            }
-            // Resolve the client-owned scroll window with the shared primitive.
-            // The window normally HONORS the free offset (keep_selection_visible
-            // false) so a wheel scroll persists; keep-visible runs on the
-            // selection-change path (reveal_palette_selection). The one exception
-            // is a shrink-clamp: if the ranked set shrank under the selection and
-            // the defensive clamp below actually moves it, re-center on it this
-            // frame so the forced-new selection is not left off-screen. The gutter
-            // is always reserved (server side), so the content width never jumps.
-            bool selection_clamped = false;
-            if (palette_selected >= order.size()) {
-                palette_selected = order.empty() ? 0 : order.size() - 1;
-                selection_clamped = true;
-            }
-            std::optional<std::uint32_t> selected =
-                order.empty() ? std::nullopt
-                              : std::optional<std::uint32_t>{
-                                    static_cast<std::uint32_t>(palette_selected)};
-            auto scroll = ssg::compute_list_scroll_view(
-                static_cast<std::uint32_t>(order.size()), palette_pane_rows,
-                palette_first_visible, selected,
-                /*keep_selection_visible=*/selection_clamped);
-            palette_first_visible = scroll.first_visible;
-            report.first_visible = scroll.first_visible;
-            report.scrollbar = scroll.scrollbar;
-            for (std::uint32_t row = 0; row < scroll.visible_count; ++row) {
-                report.rows.push_back(candidates[order[scroll.first_visible + row]]);
-            }
-            report.selected = selected;
+            // The library owns the palette projection: rank the published
+            // candidates, window them, and assemble the bounded report. The app
+            // supplies only the client-owned window (query/selection/scroll) and
+            // adopts back the clamped selection and resolved offset, inventing no
+            // product data (INV-derived-view-bounded).
+            ssg::PaletteWindowState window{palette_query, palette_selected,
+                                           palette_first_visible,
+                                           palette_pane_rows};
+            report = ssg::derive_palette_report(candidates, window);
+            palette_selected = window.selected;
+            palette_first_visible = window.first_visible;
         }
         return report;
     };
