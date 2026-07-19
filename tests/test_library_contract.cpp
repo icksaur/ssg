@@ -309,14 +309,9 @@ TEST(delta_replay_reconstructs_the_same_snapshot_and_grid) {
         {"cursor.right", {}},
         {"cursor.line_down", {}},
         {"select.line_down", {}},
+        {"panel.toggle", {}},
         {"view.scroll_lines", ssg::ScrollLinesArguments{1}},
     };
-    // NOTE: panel.toggle is intentionally excluded. It exposed a SEPARATE,
-    // tracked delta-fidelity gap: focusing the panel changes tree-section content
-    // without advancing the tree revision, and the tree delta round-trip does not
-    // reproduce it (a fresh snapshot != a delta-replayed one). That is a
-    // tree-model/delta issue distinct from this milestone's contract proof and is
-    // filed for follow-up; conflating it here would hide it behind a red test.
 
     auto previous = runtime->snapshot(ssg::ClientId{1}, dims);
     ASSERT_TRUE(previous.has_value());

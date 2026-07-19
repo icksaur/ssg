@@ -3843,6 +3843,10 @@ ProtocolValue to_value(TreeProviderDelta const& value) {
     fields.emplace_back("start", to_value(static_cast<std::uint64_t>(value.start)));
     fields.emplace_back("erase_count", to_value(static_cast<std::uint64_t>(value.erase_count)));
     fields.emplace_back("insert", to_value(value.insert));
+    fields.emplace_back("selected", to_value(value.selected));
+    fields.emplace_back("first_visible", to_value(value.first_visible));
+    fields.emplace_back("scrollbar", to_value(value.scrollbar));
+    fields.emplace_back("visible_node_ids", to_value(value.visible_node_ids));
     return ProtocolValue::make_object(std::move(fields));
 }
 bool decode_present(ProtocolValue const& value, std::optional<TreeProviderDelta>& out) {
@@ -3857,9 +3861,18 @@ bool decode_present(ProtocolValue const& value, std::optional<TreeProviderDelta>
     if (!provider_id || !kind || !remove_provider || !start || !erase_count || !insert) {
         return false;
     }
+    std::optional<TreeNodeId> selected;
+    if (!decode_optional_field(value.field("selected"), selected)) return false;
+    auto first_visible = require_field<std::uint32_t>(value.field("first_visible"));
+    auto scrollbar = require_field<ScrollbarMetrics>(value.field("scrollbar"));
+    auto visible_node_ids =
+        require_field<std::vector<TreeNodeId>>(value.field("visible_node_ids"));
+    if (!first_visible || !scrollbar || !visible_node_ids) return false;
     out.emplace(TreeProviderDelta{*provider_id, *kind, *remove_provider,
                                   static_cast<std::size_t>(*start),
-                                  static_cast<std::size_t>(*erase_count), *insert});
+                                  static_cast<std::size_t>(*erase_count), *insert,
+                                  selected, *first_visible, *scrollbar,
+                                  std::move(*visible_node_ids)});
     return true;
 }
 

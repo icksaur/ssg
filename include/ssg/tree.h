@@ -221,6 +221,13 @@ struct TreeProviderDelta {
     std::size_t start = 0;
     std::size_t erase_count = 0;
     std::vector<TreeNodeView> insert;
+    // Resolved scroll state carried so a delta reproduces the provider view even
+    // when only the panel-height-resolved scroll state changed (e.g. showing the
+    // panel) with no node edit or tree-revision bump.  Ignored for removals.
+    std::optional<TreeNodeId> selected;
+    std::uint32_t first_visible = 0;
+    ScrollbarMetrics scrollbar{};
+    std::vector<TreeNodeId> visible_node_ids;
     bool operator==(const TreeProviderDelta&) const = default;
 };
 

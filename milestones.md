@@ -274,11 +274,6 @@ browser or `--http` client must adhere to. Spec: `doc/spec-library-contract.md`
   equals `render(snapshot)` — text, resolved color, and cursor
   (`tests/test_terminal_parity.cpp`; Linux forkpty capture, portable decoder).
 
-Known follow-up (tracked, not a regression): `panel.toggle` focus changes
-tree-section content without advancing the tree revision, so the tree delta
-round-trip does not reproduce it; excluded from the M11-3 script with a documented
-note.
-
 ## 12. Large files — PLANNED
 Open and edit large documents without a per-frame whole-document cost. Spec:
 `doc/spec-viewport-projection.md` (reviewed; 4 MUST folded). The M10 startup work

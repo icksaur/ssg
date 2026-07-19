@@ -541,13 +541,11 @@ TreeDelta derive_tree_delta(const TreeViewState& base,
         if (base_index == base.providers.size() ||
             target.providers[target_index].provider_id <
                 base.providers[base_index].provider_id) {
+            const auto& added = target.providers[target_index];
             result.providers.push_back(TreeProviderDelta{
-                target.providers[target_index].provider_id,
-                target.providers[target_index].kind,
-                false,
-                0,
-                0,
-                target.providers[target_index].nodes});
+                added.provider_id, added.kind, false, 0, 0, added.nodes,
+                added.selected, added.first_visible, added.scrollbar,
+                added.visible_node_ids});
             ++target_index;
             continue;
         }
@@ -578,7 +576,9 @@ TreeDelta derive_tree_delta(const TreeViewState& base,
                 before.nodes.size() - prefix - suffix,
                 std::vector<TreeNodeView>{
                     after.nodes.begin() + static_cast<std::ptrdiff_t>(prefix),
-                    after.nodes.end() - static_cast<std::ptrdiff_t>(suffix)}});
+                    after.nodes.end() - static_cast<std::ptrdiff_t>(suffix)},
+                after.selected, after.first_visible, after.scrollbar,
+                after.visible_node_ids});
         }
         ++base_index;
         ++target_index;
@@ -628,7 +628,10 @@ TreeReplayResult replay_tree_delta(const TreeViewState& base,
             }
             state.providers.insert(
                 provider, TreeProviderView{change.provider_id, change.kind,
-                                           change.insert});
+                                           change.insert, change.selected,
+                                           change.first_visible,
+                                           change.scrollbar,
+                                           change.visible_node_ids});
             continue;
         }
         if (change.start > provider->nodes.size() ||
@@ -642,6 +645,10 @@ TreeReplayResult replay_tree_delta(const TreeViewState& base,
                     static_cast<std::ptrdiff_t>(change.erase_count);
         first = provider->nodes.erase(first, last);
         provider->nodes.insert(first, change.insert.begin(), change.insert.end());
+        provider->selected = change.selected;
+        provider->first_visible = change.first_visible;
+        provider->scrollbar = change.scrollbar;
+        provider->visible_node_ids = change.visible_node_ids;
     }
     state.revision = delta.revision;
     return {std::move(state), TreeReplayError::none};
