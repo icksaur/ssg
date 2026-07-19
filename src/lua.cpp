@@ -1,4 +1,5 @@
 #include <ssg/lua.h>
+#include <ssg/startup_audit.h>
 
 extern "C" {
 #include <lauxlib.h>
@@ -50,6 +51,7 @@ struct LuaCommandHost::Impl {
           dispatcher{std::move(configured_dispatcher)},
           principal{options.plugin_id, InvocationOrigin::lua,
                     options.capabilities} {
+        note_optional_construction(OptionalSubsystem::lua);
         if (!dispatcher) {
             throw std::invalid_argument{"Lua dispatcher must not be empty"};
         }

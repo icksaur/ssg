@@ -1,5 +1,7 @@
 #include "ssg/watcher.h"
 
+#include <ssg/startup_audit.h>
+
 #include <cerrno>
 #include <chrono>
 #include <cstdint>
@@ -101,6 +103,7 @@ public:
     LinuxFilesystemWatcher(std::filesystem::path root, WatcherConfig config)
         : root_(std::filesystem::canonical(std::move(root))),
           max_rescan_entries_(config.max_rescan_entries) {
+        note_optional_construction(OptionalSubsystem::filesystem_watcher);
         descriptor_ = ::inotify_init1(IN_NONBLOCK | IN_CLOEXEC);
         if (descriptor_ == -1) {
             throw std::system_error(errno, std::generic_category(),

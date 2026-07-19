@@ -1,5 +1,7 @@
 #include "ssg/syntax.h"
 
+#include <ssg/startup_audit.h>
+
 #include <algorithm>
 #include <limits>
 #include <stdexcept>
@@ -577,6 +579,12 @@ SyntaxModel::SyntaxModel(std::shared_ptr<SyntaxParser> parser,
       config_(config),
       view_state_(plain_text_syntax_view_state(
           Revision{0}, LanguageId::plain_text(), {}, config.tab_width)) {
+    // A real Tree-sitter grammar is only present when a parser is injected; the
+    // plain-text fallback (parser == nullptr) constructs no grammar, so it is not
+    // counted by the startup audit (I12 / doc/spec-fast-startup.md M10-2).
+    if (parser_ != nullptr) {
+        note_optional_construction(OptionalSubsystem::tree_sitter_grammar);
+    }
     if (config_.tab_width == 0) {
         throw std::invalid_argument{"tab width must be positive"};
     }

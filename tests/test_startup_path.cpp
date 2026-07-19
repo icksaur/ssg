@@ -1,9 +1,12 @@
 #include "test_helpers.h"
 
 #include <ssg/editor_runtime.h>
+#include <ssg/startup_audit.h>
+#include <ssg/watcher.h>
 
 #include <filesystem>
 #include <fstream>
+#include <cstdint>
 #include <string>
 
 // M10 fast-startup structural oracle (doc/spec-fast-startup.md).
@@ -115,9 +118,68 @@ TEST(eager_construction_runs_enrichment_immediately) {
     fs::remove_all(root);
 }
 
+TEST(first_frame_constructs_no_optional_subsystem) {
+    // M10-2 (doc/spec-fast-startup.md): producing the first frame must construct
+    // no optional subsystem (Lua, LSP, a real Tree-sitter grammar, a filesystem
+    // watcher, HTTP) — project invariant I12.
+    ssg::reset_optional_construction_audit();
+    auto root = make_workspace("no_optional");
+    auto created = ssg::EditorRuntime::create(config_for(root, /*defer=*/true));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process},
+                               ssg::ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.open", runtime.revision(), std::string{"code.txt"}})
+                    .accepted());
+    (void)runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+
+    // Exhaustive over the enumerated subsystems (a missing enum entry fails the
+    // static_assert in startup_audit.h, so the list cannot silently omit one).
+    for (auto subsystem : ssg::all_optional_subsystems) {
+        ASSERT_EQ(ssg::optional_construction_count(subsystem), std::uint64_t{0});
+    }
+    ASSERT_EQ(ssg::optional_construction_total(), std::uint64_t{0});
+
+    // Priming (post-first-frame enrichment) also constructs nothing optional:
+    // the plain-text syntax pass uses no Tree-sitter grammar.
+    runtime.prime_deferred();
+    ASSERT_EQ(ssg::optional_construction_total(), std::uint64_t{0});
+
+    fs::remove_all(root);
+}
+
+TEST(optional_construction_audit_is_wired_positive_control) {
+    // Guards against a false pass from broken instrumentation: constructing a
+    // real optional subsystem (a filesystem watcher) MUST increment its counter.
+    ssg::reset_optional_construction_audit();
+    ASSERT_EQ(ssg::optional_construction_count(ssg::OptionalSubsystem::filesystem_watcher),
+              std::uint64_t{0});
+    auto root = make_workspace("positive_control");
+    {
+        auto watcher = ssg::make_platform_filesystem_watcher(
+            std::filesystem::canonical(root / "workspace"));
+        ASSERT_TRUE(watcher != nullptr);
+    }
+    ASSERT_TRUE(ssg::optional_construction_count(
+                    ssg::OptionalSubsystem::filesystem_watcher) >= 1);
+    fs::remove_all(root);
+}
+
 int main() {
+    // M10-2 static-init probe: nothing optional may construct before main (no
+    // self-registering globals); the ledger must be empty at process entry.
+    if (ssg::optional_construction_total() != 0) {
+        std::cerr << "  FAIL: an optional subsystem constructed before main "
+                     "(static-init side effect)\n";
+        ++failed;
+    }
     RUN(deferred_enrichment_skips_syntax_and_tree_until_primed);
     RUN(eager_construction_runs_enrichment_immediately);
+    RUN(first_frame_constructs_no_optional_subsystem);
+    RUN(optional_construction_audit_is_wired_positive_control);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

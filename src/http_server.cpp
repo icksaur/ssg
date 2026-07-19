@@ -1,4 +1,5 @@
 #include <ssg/http_server.h>
+#include <ssg/startup_audit.h>
 
 #include <http.h>
 
@@ -511,7 +512,9 @@ struct HttpEditorServer::Impl {
           route{server, session, std::move(argument_codecs), host,
                 {std::move(config.route), config.outbound_queue_messages,
                  config.replay_deltas, config.write_timeout,
-                 config.protocol_limits}} {}
+                 config.protocol_limits}} {
+        note_optional_construction(OptionalSubsystem::http);
+    }
 
     ~Impl() { stop(); }
 

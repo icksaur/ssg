@@ -1,4 +1,5 @@
 #include <ssg/lsp_sync.h>
+#include <ssg/startup_audit.h>
 
 #include <algorithm>
 #include <charconv>
@@ -633,6 +634,7 @@ struct LspSyncClient::Impl {
          std::chrono::milliseconds io_timeout)
         : stream(&source), config(limits), timeout(io_timeout),
           decoder(config.framing) {
+        note_optional_construction(OptionalSubsystem::lsp);
         if (timeout.count() < 0 || config.maximum_read_bytes == 0 ||
             config.maximum_documents == 0 ||
             config.maximum_pending_requests == 0 ||
