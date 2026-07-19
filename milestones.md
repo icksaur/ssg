@@ -221,7 +221,7 @@ Delivered:
 - Repaired a baseline committed broken in `b794e3e` (two non-compiling test
   files + a no-op-paste reveal test) — `89343bc`.
 
-## 10. Fast startup — IN PROGRESS
+## 10. Fast startup — DONE
 Cold start competes with comparable editors. Spec:
 `doc/spec-fast-startup.md` (reviewed; 6 MUST + 4 SHOULD folded). Measurement-first:
 structural invariants are the primary, portable gate; the wall-clock budget is
@@ -234,18 +234,21 @@ Demo: `time ssg <file>` and compare against a peer editor.
 Delivered:
 - M10-1: startup measurement harness (`benchmarks/startup_benchmark.cpp`,
   gated `STARTUP_MARK` in `ssg_main`, `startup-benchmark.cmake`,
-  `startup_trace_compiled_out` ctest) + baseline — `<commit>`. Reviewed (3 MUST
-  folded). Baseline: small 4.7 ms, deep-tree 17 ms, 10 MiB 2.6 s.
+  `startup_trace_compiled_out` ctest) + baseline. Reviewed (3 MUST folded).
 - M10-3/M10-4: `prime_deferred` seam + `defer_enrichment` config defers the
   workspace tree scan and syntax pass off the first frame; the app primes after
   the first frame; `EditorSession::advance_revision()` so delta clients observe
   the primed state. `tests/test_startup_path.cpp`. Reviewed (1 MUST folded).
-  Measured: deep-tree 17 ms → 2.6 ms (tree defer). The 10 MiB case is unchanged:
-  its cost is the document read + `active_cell_runs` whole-document scan, not
-  syntax — deferred to Milestone 12 (see below).
+  Measured: deep-tree 17 ms → 2.6 ms.
+- M10-2: executable optional-init audit (`include/ssg/startup_audit.h`) locking
+  I12 — a per-subsystem construction ledger (Lua/LSP/Tree-sitter grammar/watcher/
+  HTTP) proves the first-frame path builds nothing optional, with a static-init
+  probe and a positive control. Reviewed (1 MUST + 1 SHOULD folded).
+- M10-5: `--enforce` gates the small cache-warm exec→first-frame p99; `spec.md`
+  Budgets documents it beside the preserved 250 ms library first-viewport gate.
 
-Remaining: M10-2 (executable optional-init audit), M10-5 (pin the exec→first-frame
-budget on a Release bench host beside the preserved 250 ms/10 MiB gate).
+The 10 MiB first frame (document read + whole-document `active_cell_runs`) is NOT
+addressed here — it is Milestone 12 (large files).
 
 ## 11. Library API is the contract — PLANNED (ongoing invariant)
 The `ssg` app contains no editor or layout behavior; all of it is library API.
