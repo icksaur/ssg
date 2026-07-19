@@ -30,6 +30,7 @@
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
+#include <ctime>
 #include <algorithm>
 #include <any>
 #include <filesystem>
@@ -42,6 +43,30 @@
 namespace {
 
 namespace fs = std::filesystem;
+
+// M10-1 startup instrumentation.  Records a CLOCK_MONOTONIC timestamp per cold-
+// start phase to the file named by the SSG_STARTUP_TRACE env var, so the startup
+// benchmark can attribute exec->first-frame time to phases.  The call sites are
+// preprocessor-gated (STARTUP_MARK), so unless SSG_STARTUP_TRACE_ENABLED is
+// defined (the shipped `ssg` binary) there is no function, symbol, or call at
+// any optimization level.
+#ifdef SSG_STARTUP_TRACE_ENABLED
+void startup_mark_impl(char const* phase) {
+    static char const* const path = std::getenv("SSG_STARTUP_TRACE");
+    if (path == nullptr) return;
+    timespec now{};
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    long long const ns =
+        static_cast<long long>(now.tv_sec) * 1'000'000'000LL + now.tv_nsec;
+    if (std::FILE* file = std::fopen(path, "a"); file != nullptr) {
+        std::fprintf(file, "%s %lld\n", phase, ns);
+        std::fclose(file);
+    }
+}
+#define STARTUP_MARK(phase) startup_mark_impl(phase)
+#else
+#define STARTUP_MARK(phase) ((void)0)
+#endif
 
 void write_all(std::string_view bytes) {
     std::size_t offset = 0;
@@ -172,6 +197,7 @@ void pop_code_point(std::string& text) {
 }  // namespace
 
 int main(int argc, char** argv) {
+    STARTUP_MARK("main_entry");
     fs::path argument = argc > 1 ? fs::path{argv[1]} : fs::path{};
     auto target = ssg::app::resolve_launch(argument);
 
@@ -187,6 +213,7 @@ int main(int argc, char** argv) {
         return 1;
     }
     auto& runtime = *created.runtime;
+    STARTUP_MARK("post_create");
 
     ssg::ClientId client{1};
     if (!runtime.attach({client, ssg::InvocationOrigin::in_process}, ssg::ViewId{1})
@@ -194,6 +221,7 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "ssg: failed to attach client\n");
         return 1;
     }
+    STARTUP_MARK("post_attach");
 
     if (target.file) {
         if (fs::exists(target.cwd / *target.file)) {
@@ -201,6 +229,7 @@ int main(int argc, char** argv) {
                 client, {"file.open", runtime.revision(), *target.file});
         }
     }
+    STARTUP_MARK("post_open");
 
     TerminalMode mode;
     if (!mode.active()) {
@@ -475,6 +504,7 @@ int main(int argc, char** argv) {
     // Top-level boundary (M9-X): an exception escaping the loop is not portably
     // guaranteed to unwind `mode` once past main, so restore the terminal here
     // before it propagates.
+    bool first_frame_marked = false;
     try {
         while (!quit) {
             auto snapshot = refresh();
@@ -493,6 +523,12 @@ int main(int argc, char** argv) {
                 if (grid.caret) {
                     frame += "\x1b[" + std::to_string(grid.caret->row + 1) + ";" +
                              std::to_string(grid.caret->column + 1) + "H\x1b[?25h";
+                }
+                if (!first_frame_marked) {
+                    // M10-1 stop mark: the first content frame (an actual
+                    // rendered payload), not the earlier terminal-setup bytes.
+                    STARTUP_MARK("first_content_frame");
+                    first_frame_marked = true;
                 }
                 write_all(frame);
             }
