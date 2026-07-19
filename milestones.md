@@ -274,20 +274,44 @@ browser or `--http` client must adhere to. Spec: `doc/spec-library-contract.md`
   equals `render(snapshot)` — text, resolved color, and cursor
   (`tests/test_terminal_parity.cpp`; Linux forkpty capture, portable decoder).
 
-## 12. Large files — PLANNED
+## 12. Large files — DONE
 Open and edit large documents without a per-frame whole-document cost. Spec:
-`doc/spec-viewport-projection.md` (reviewed; 4 MUST folded). The M10 startup work
-measured a ~1.7 s first frame on a 10 MiB file: the snapshot AND render both run
-`compute_cell_run` (Unicode grapheme/width) over every line to compute exact
-wrapped geometry. This milestone makes the first frame viewport-bounded.
-- Honor `word_wrap=false` (currently long lines wrap regardless): with wrap off,
-  one logical line is one visual row, long lines clip; `total_visual_rows`
-  becomes a cheap line count and only visible lines are segmented — across
-  viewport, render, AND selection navigation.
-- Add minimal horizontal scrolling (decision A) so a clipped caret stays visible.
-- Keep the word-wrap-ON path exact; a future incremental per-line width cache is
-  its speed path. (Lazy/mmapped file loading — the document read cost — is a
-  further very-large-file concern.)
+`doc/spec-viewport-projection.md` (reviewed; 4 MUST folded; Decision A/H0 folded).
+The M10 startup work measured a ~1.7 s first frame on a 10 MiB file: the snapshot
+AND render both ran `compute_cell_run` (Unicode grapheme/width) over every line to
+compute exact wrapped geometry. This milestone makes the first frame
+viewport-bounded. **Measured: 10 MiB first_frame p50 ~1.7 s → 9.3 ms (~180x).**
+- **VP-1** (`b9aa385`): `compute_viewport_unwrapped` library seam — total row count
+  is the logical line count (byte scan), only visible lines are segmented;
+  equivalence oracle vs the full wrapped path for fitting lines.
+- **VP-2a** (`de6a9e0`): runtime `viewport()` + scrollbar drag honor `word_wrap`
+  (unwrapped projection by default).
+- **VP-R** (`c383e4c`): `render()` segments only the visible logical lines
+  (test hook `render_segmentation_calls`; ≤ rows, doc-length independent).
+- **VP-H1** (`51b2533`) / **VP-H2** (`d8a80bc`): Decision A / H0 horizontal scroll
+  — `first_visual_column` in the viewport + selection model; caret-driven reveal
+  keeps the caret cell in the pane (grapheme-boundary snapped); render + hit-test
+  honor the offset; no-wrap caret movement is by logical line. No bottom
+  horizontal scrollbar (a faithful thumb needs O(document) max-width — deferred as
+  H2). Visually signed off on the real binary.
+- **VP-3** (`acce0a2`): word-wrap gate regression (ON wraps a long line to multiple
+  visual rows through the runtime, OFF clips to one) + remeasure.
+Non-goal (future): lazy/mmapped file loading — the document READ (868 ms for
+10 MiB) is now the dominant large-file cost and is a separate milestone.
 
 Demo: open a 10 MiB file — first frame is effectively instant; long lines clip
 (wrap off) or wrap (wrap on); caret stays visible via horizontal scroll.
+
+Demo: open a 10 MiB file — first frame is effectively instant; long lines clip
+(wrap off) or wrap (wrap on); caret stays visible via horizontal scroll.
+
+## 12-notes (historical, superseded by the DONE list above)
+- Honored `word_wrap=false` (previously long lines wrapped regardless): with wrap
+  off, one logical line is one visual row, long lines clip; `total_visual_rows`
+  is a cheap line count and only visible lines are segmented — across viewport,
+  render, AND selection navigation.
+- Added minimal horizontal scrolling (Decision A / H0) so a clipped caret stays
+  visible; no bottom scrollbar.
+- Word-wrap-ON path kept exact; a future incremental per-line width cache is its
+  speed path. (Lazy/mmapped file loading — the document read cost — is a further
+  very-large-file concern, deferred.)

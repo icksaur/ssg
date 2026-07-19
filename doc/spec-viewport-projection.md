@@ -1,8 +1,10 @@
 # spec-viewport-projection — Viewport-bounded first frame
 
-Status: PLANNED. Follow-up to Milestone 10 (exceeds the reviewed
+Status: DONE (Milestone 12). Follow-up to Milestone 10 (exceeds the reviewed
 `doc/spec-fast-startup.md` scope, which explicitly deferred sub-linear first
-frames). Goal: the 10 MiB first frame drops from ~1.7 s to viewport-bounded.
+frames). Goal achieved: the 10 MiB first frame dropped from ~1.7 s to ~9 ms
+(viewport-bounded). Delivered as VP-1 / VP-2a / VP-R / VP-H1 / VP-H2 / VP-3;
+Decision A / H0 (horizontal scroll, no bottom scrollbar) chosen by the user.
 
 ## Goals
 
