@@ -1,5 +1,7 @@
 #include "ssg/watcher.h"
 
+#include <ssg/startup_audit.h>
+
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
@@ -99,6 +101,7 @@ public:
         : root_(std::filesystem::canonical(std::move(root))),
           buffer_(64 * 1024),
           max_rescan_entries_(config.max_rescan_entries) {
+        note_optional_construction(OptionalSubsystem::filesystem_watcher);
         directory_ = ::CreateFileW(
             root_.c_str(), FILE_LIST_DIRECTORY,
             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,

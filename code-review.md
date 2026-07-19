@@ -444,3 +444,22 @@ prime_deferred() advances the revision when deferred work actually ran. Test
 strengthened to assert the revision advances on prime and not on the idempotent
 second call.
 
+
+
+## M10-2
+
+Reviewer: gpt-5.5 (code-review agent). 1 MUST + 1 SHOULD, both folded.
+
+MUST (src/platform/windows_watcher.cpp) — the watcher audit was wired only in
+linux_watcher.cpp; on the required Windows platform the WindowsFilesystemWatcher
+ctor never noted its construction, so the audit would false-negative (and the
+positive-control test fail) there. Fixed: note_optional_construction added to the
+Windows watcher ctor.
+
+SHOULD (include/ssg/startup_audit.h) — the exhaustiveness static_assert was
+tautological (the array was declared with size optional_subsystem_count then
+asserted to have that size). Fixed: a count_ enum sentinel derives
+optional_subsystem_count from the enum, and all_optional_subsystems is built with
+std::to_array (size deduced from initializers), so adding an OptionalSubsystem
+without listing it fails the assert.
+
