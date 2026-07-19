@@ -329,6 +329,35 @@ TEST(wrapped_vertical_and_page_movement_use_visual_rows) {
     ASSERT_EQ(view.selections.primary().active.byte_offset, ByteOffset{8});
 }
 
+// M12 VP-H / review-fold #3: with word wrap OFF, BOTH cursor and selection
+// vertical movement are by LOGICAL line, never through wrap-chunks of a long
+// line. The wrapped test above (columns=3) moves within wrap rows of "abcdef";
+// with word_wrap=false the same down-move jumps straight to the next logical line.
+TEST(word_wrap_off_vertical_movement_is_by_logical_line) {
+    const std::string text = "abcdef\nxy\nuvwxyz";  // line 0 is 6 cells wide
+    const auto dimensions = ViewportDimensions{3, 4};  // narrower than line 0
+    auto view = state(text, {{1, 1}});  // caret in "abcdef"
+
+    // cursor_line_down: wrapped path would land inside "abcdef" (byte 4); no-wrap
+    // jumps to the next LOGICAL line "xy", preserving desired cell 1 (byte 8).
+    auto cursor = resulting_state(
+        view, ssg::apply_selection_navigation(
+                  text, view, SelectionCommand::cursor_line_down, dimensions,
+                  {}, {}, 4, /*word_wrap=*/false));
+    ASSERT_EQ(cursor.selections.primary().active.line, ssg::LineIndex{1});
+    ASSERT_EQ(cursor.selections.primary().active.byte_offset, ByteOffset{8});
+
+    // select_line_down must ALSO move by logical line (the #3 fix); the wrapped
+    // path would have extended into a wrap-row of "abcdef".
+    auto selected = resulting_state(
+        view, ssg::apply_selection_navigation(
+                  text, view, SelectionCommand::select_line_down, dimensions,
+                  {}, {}, 4, /*word_wrap=*/false));
+    ASSERT_EQ(selected.selections.primary().active.line, ssg::LineIndex{1});
+    ASSERT_EQ(selected.selections.primary().active.byte_offset, ByteOffset{8});
+    ASSERT_EQ(selected.selections.primary().anchor.byte_offset, ByteOffset{1});
+}
+
 TEST(selection_extension_keeps_anchor_and_page_uses_visible_rows) {
     const std::string text = "a0\na1\na2\na3\na4\na5\na6";
     auto view = state(text, {{1, 1}});
@@ -523,6 +552,7 @@ int main() {
     RUN(horizontal_movement_uses_extended_grapheme_boundaries);
     RUN(vertical_movement_uses_cells_and_preserves_desired_cell);
     RUN(wrapped_vertical_and_page_movement_use_visual_rows);
+    RUN(word_wrap_off_vertical_movement_is_by_logical_line);
     RUN(selection_extension_keeps_anchor_and_page_uses_visible_rows);
     RUN(multicursor_occurrence_and_line_splitting_match_oracles);
     RUN(injected_brackets_match_with_nesting);

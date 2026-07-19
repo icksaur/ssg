@@ -256,18 +256,16 @@ ViewportViewState compute_viewport_unwrapped(
     std::vector<CellHitTarget> hit_targets;
     visible_rows.reserve(visible_count);
 
-    // Horizontal scroll (VP-H / H0): `requested_first_visual_column` shifts every
-    // visible row's window left, snapping to a grapheme boundary — the leftmost
-    // visible span is the first whose start cell is >= the requested offset (a wide
-    // cluster straddling the offset scrolls fully off rather than splitting).  The
-    // resolved offset (VisualRow.start_cell / first_visual_column) is that
-    // boundary, so render — which paints the row's spans from the pane's left edge
-    // using VisualRow.first_span — needs no change: at offset 0 this is exactly the
-    // pre-VP-H behavior.  The offset is shared by every row, resolved once against
-    // the first visible row so all rows share the same left origin.
-    uint32_t resolved_column = 0;
-    bool resolved_column_set = false;
-
+    // Horizontal scroll (VP-H / H0): every visible row windows from the SAME
+    // requested offset `requested_first_visual_column` (the shared per-pane left
+    // origin, which is the reported first_visual_column).  Each row snaps that
+    // offset to its OWN grapheme boundary (a wide cluster straddling the offset
+    // scrolls fully off rather than splitting), recorded per row in
+    // VisualRow.start_cell / first_span — so a short row and a long row can have
+    // different per-row origins while sharing one pane offset.  Render paints each
+    // row's spans from the pane's left edge using VisualRow.first_span, so it needs
+    // no change; at offset 0 this is exactly the pre-VP-H behavior, so
+    // INV-projection-equivalence for fitting lines holds.
     for (uint32_t viewport_row = 0; viewport_row < visible_count; ++viewport_row) {
         const uint32_t logical_line = first_row + viewport_row;
         const std::size_t start = line_start[logical_line];
@@ -287,10 +285,6 @@ ViewportViewState compute_viewport_unwrapped(
         for (; first_span < run.spans.size(); ++first_span) {
             if (start_cell >= requested_first_visual_column) break;
             start_cell += run.spans[first_span].cell_width;
-        }
-        if (!resolved_column_set) {
-            resolved_column = start_cell;
-            resolved_column_set = true;
         }
 
         if (first_span >= run.spans.size()) {
@@ -335,7 +329,7 @@ ViewportViewState compute_viewport_unwrapped(
     return ViewportViewState{
         dimensions,
         first_row,
-        resolved_column,
+        requested_first_visual_column,
         total_rows,
         std::move(visible_rows),
         std::move(hit_targets),

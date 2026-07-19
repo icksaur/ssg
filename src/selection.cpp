@@ -932,17 +932,17 @@ SelectionNavigationResult apply_selection_navigation(
             const auto desired =
                 index + 1 == selections.size() && before.desired_cell
                     ? *before.desired_cell
-                    : model.visual_column(origin, viewport.columns);
+                    : model.visual_column(origin, nav_columns);
             selection.active =
                 model.vertical_visual(origin, down, count, desired,
-                                      viewport.columns);
+                                      nav_columns);
             if (index + 1 == selections.size()) {
                 primary_desired =
                     model.visual_row(selection.active,
-                                     viewport.columns) ==
-                            model.visual_row(origin, viewport.columns)
+                                     nav_columns) ==
+                            model.visual_row(origin, nav_columns)
                         ? model.visual_column(selection.active,
-                                              viewport.columns)
+                                              nav_columns)
                         : desired;
             }
         }

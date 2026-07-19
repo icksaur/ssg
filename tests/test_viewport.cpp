@@ -412,10 +412,11 @@ TEST(unwrapped_horizontal_offset_snaps_to_grapheme_boundary) {
     // "A" + U+4E2D (wide, 2 cells) + "B" -> cells: A@0, 中@1-2, B@3.
     const std::string doc = "A\xE4\xB8\xAD" "B";
     const ViewportDimensions dims{4, 1};
-    // Requesting offset 2 lands inside the wide cluster (cells 1-2); the first
-    // span at/after cell 2 is "B" at cell 3, so the row snaps to origin 3.
+    // Requesting offset 2 lands inside the wide cluster (cells 1-2); the pane
+    // offset is the requested value (2), while the row's own origin snaps to the
+    // first span at/after cell 2 — "B" at cell 3 — recorded in start_cell.
     const auto proj = ssg::compute_viewport_unwrapped(doc, dims, 0, 2, 4);
-    ASSERT_EQ(proj.first_visual_column, 3u);
+    ASSERT_EQ(proj.first_visual_column, 2u);
     ASSERT_EQ(proj.visible_rows[0].start_cell.value(), 3u);
     ASSERT_EQ(proj.visible_rows[0].span_count, 1u);  // just "B"
     ASSERT_EQ(proj.hit_targets.size(), std::size_t{1});
