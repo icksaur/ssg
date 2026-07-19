@@ -250,14 +250,34 @@ Delivered:
 The 10 MiB first frame (document read + whole-document `active_cell_runs`) is NOT
 addressed here — it is Milestone 12 (large files).
 
-## 11. Library API is the contract — PLANNED (ongoing invariant)
+## 11. Library API is the contract — DONE
 The `ssg` app contains no editor or layout behavior; all of it is library API.
-- The command/snapshot/delta surface the TUI consumes is the same contract a
-  future browser or `--http` client must adhere to.
-- A headless test drives the same snapshots the TUI renders.
+The command/snapshot/delta surface the TUI consumes is the same contract a future
+browser or `--http` client must adhere to. Spec: `doc/spec-library-contract.md`
+(reviewed; 6 MUST folded). All steps reviewed/folded.
+- **M11-L**: `render()` renders the too-small placeholder (from
+  `snapshot.client().viewport.dimensions`, no wire change); the app-side
+  `encode_too_small_frame` special case is deleted — the app renders every frame.
+- **M11-1**: production-runtime render goldens (`tests/test_library_contract.cpp`,
+  `tests/fixtures/tui/runtime-{normal,palette,too-small}.txt`); the screen is a
+  pure function of the runtime's `SessionSnapshot`. `SSG_REGEN_GOLDEN=1`
+  regenerates. Linux-first (goldens embed the workspace path).
+- **M11-3**: delta-parity — `derive_session_delta`/`replay_session_delta` after
+  each command reconstruct the same snapshot and grid as a fresh one. Caught and
+  fixed a real library bug: `replay_session_delta` dropped the `palette` section.
+- **M11-4**: derived-view boundary — the client `PaletteReport` is a pure function
+  of published candidates + query (shared `palette_rank`/`palette_ghost`/
+  `compute_list_scroll_view`), invents no product data, and every rendered label
+  traces to a published candidate.
+- **M11-2** (capstone): an independent ANSI decoder (round-trip self-tested)
+  decodes the REAL `ssg` binary's pty output and asserts the decoded screen
+  equals `render(snapshot)` — text, resolved color, and cursor
+  (`tests/test_terminal_parity.cpp`; Linux forkpty capture, portable decoder).
 
-Demo: a render fixture reproduces a TUI screen from a library snapshot with no
-app-side logic.
+Known follow-up (tracked, not a regression): `panel.toggle` focus changes
+tree-section content without advancing the tree revision, so the tree delta
+round-trip does not reproduce it; excluded from the M11-3 script with a documented
+note.
 
 ## 12. Large files — PLANNED
 Open and edit large documents without a per-frame whole-document cost. Spec:
