@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <optional>
 #include <span>
+#include <string_view>
 #include <vector>
 
 namespace ssg {
@@ -109,6 +110,22 @@ ViewportViewState compute_viewport(
     std::span<const CellRun> logical_lines,
     ViewportDimensions dimensions,
     uint32_t requested_first_visual_row = 0);
+
+// Word-wrap-OFF viewport projection.  Builds the SAME ViewportViewState shape as
+// compute_viewport for a NON-wrapping document, but in O(visible rows) grapheme
+// segmentation instead of O(document): the total visual row count is the logical
+// line count (a byte scan for '\n'), and compute_cell_run runs only for the
+// visible lines.  Long lines are clipped at `dimensions.columns` (cells beyond
+// the width are not emitted).  For documents whose lines all fit the width, the
+// result is field-for-field equal to
+// compute_viewport(active_cell_runs(document_text), dimensions, first_row) — the
+// reference oracle (INV-projection-equivalence).  `tab_width` must match the full
+// path's (4 today).  Hit-target byte offsets are document-absolute.
+ViewportViewState compute_viewport_unwrapped(
+    std::string_view document_text,
+    ViewportDimensions dimensions,
+    uint32_t requested_first_visual_row,
+    int tab_width);
 
 ViewportViewState scroll_viewport_by(
     std::span<const CellRun> logical_lines,

@@ -222,6 +222,90 @@ ViewportViewState compute_viewport(std::span<const CellRun> logical_lines,
     };
 }
 
+ViewportViewState compute_viewport_unwrapped(
+    std::string_view document_text, ViewportDimensions dimensions,
+    uint32_t requested_first_visual_row, int tab_width) {
+    // Word wrap OFF: one logical line renders as exactly one visual row, clipped
+    // to the pane width.  The total visual row count is the logical line count, a
+    // cheap byte scan for '\n' — NO compute_cell_run over the whole document.
+    // compute_cell_run runs only for the visible lines.  For documents whose lines
+    // all fit `dimensions.columns`, the result is field-for-field equal to
+    // compute_viewport(active_cell_runs(document_text), ...) (INV-projection-
+    // equivalence): the line count matches (active_cell_runs splits on '\n' the
+    // same way), and because compute_cell_run accounts for every content byte, the
+    // '\n' offsets recorded here equal the running-sum offsets compute_viewport
+    // derives — so hit-target byte offsets are identical and document-absolute.
+    std::vector<std::size_t> line_start{0};
+    for (std::size_t newline = document_text.find('\n');
+         newline != std::string_view::npos;
+         newline = document_text.find('\n', newline + 1)) {
+        line_start.push_back(newline + 1);
+    }
+    const auto total_rows =
+        checked_u32(line_start.size(), "viewport line count exceeds uint32");
+    const uint32_t maximum_first =
+        total_rows > dimensions.rows ? total_rows - dimensions.rows : 0;
+    const uint32_t first_row =
+        std::min(requested_first_visual_row, maximum_first);
+    const uint32_t visible_count =
+        std::min<uint32_t>(dimensions.rows, total_rows - first_row);
+
+    std::vector<VisualRow> visible_rows;
+    std::vector<CellHitTarget> hit_targets;
+    visible_rows.reserve(visible_count);
+
+    for (uint32_t viewport_row = 0; viewport_row < visible_count; ++viewport_row) {
+        const uint32_t logical_line = first_row + viewport_row;
+        const std::size_t start = line_start[logical_line];
+        const std::size_t end = logical_line + 1 < line_start.size()
+                                    ? line_start[logical_line + 1] - 1
+                                    : document_text.size();
+        const auto run = compute_cell_run(
+            document_text.substr(start, end - start), tab_width);
+
+        if (run.spans.empty()) {
+            visible_rows.push_back(
+                VisualRow{logical_line, 0, 0, CellIndex{0}, 0, 0});
+            continue;
+        }
+        const auto span_count =
+            checked_u32(run.spans.size(), "viewport span count exceeds uint32");
+        visible_rows.push_back(
+            VisualRow{logical_line, 0, span_count, CellIndex{0}, run.total_cells,
+                      std::min(run.total_cells, dimensions.columns)});
+
+        const auto document_start =
+            checked_u32(start, "viewport byte offset exceeds uint32");
+        uint32_t viewport_column = 0;
+        uint64_t logical_cell = 0;
+        for (const auto& span : run.spans) {
+            const auto available = dimensions.columns - viewport_column;
+            const auto visible_width = std::min(span.cell_width, available);
+            for (uint32_t cell = 0; cell < visible_width; ++cell) {
+                hit_targets.push_back(CellHitTarget{
+                    viewport_row,
+                    viewport_column + cell,
+                    logical_line,
+                    CellIndex{logical_cell},
+                    document_start + span.byte_offset,
+                    span.byte_len,
+                });
+            }
+            viewport_column += visible_width;
+            logical_cell += span.cell_width;
+        }
+    }
+
+    return ViewportViewState{
+        dimensions,
+        first_row,
+        total_rows,
+        std::move(visible_rows),
+        std::move(hit_targets),
+        scrollbar_metrics(total_rows, dimensions.rows, first_row),
+    };
+}
+
 ViewportViewState scroll_viewport_by(
     std::span<const CellRun> logical_lines,
     ViewportDimensions dimensions,

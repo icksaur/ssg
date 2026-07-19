@@ -30,6 +30,25 @@ std::vector<CellRun> runs(std::initializer_list<std::string_view> lines) {
     return result;
 }
 
+// The reference line splitter: mirrors EditorRuntime::Impl::active_cell_runs
+// (split on '\n', one CellRun per logical line, an empty document -> one empty
+// run).  compute_viewport over these runs is the oracle compute_viewport_unwrapped
+// must match for fitting lines.
+std::vector<CellRun> cell_runs_from_text(std::string_view text, int tab) {
+    std::vector<CellRun> result;
+    std::size_t start = 0;
+    while (start <= text.size()) {
+        auto end = text.find('\n', start);
+        auto line = text.substr(
+            start, end == std::string_view::npos ? end : end - start);
+        result.push_back(ssg::compute_cell_run(line, tab));
+        if (end == std::string_view::npos) break;
+        start = end + 1;
+    }
+    if (result.empty()) result.push_back(ssg::compute_cell_run("", tab));
+    return result;
+}
+
 std::string serialize(const ViewportViewState& state) {
     std::ostringstream out;
     out << "offset=" << state.first_visual_row
@@ -263,6 +282,99 @@ TEST(list_scroll_view_matches_compute_viewport_metrics) {
     ASSERT_EQ(list.first_visible, viewport.first_visual_row);
 }
 
+// VP-1 (INV-projection-equivalence): for documents whose lines all fit the pane
+// width, compute_viewport_unwrapped is field-for-field equal to the full path
+// compute_viewport(active_cell_runs(text), ...).  Reference oracle over a
+// generated corpus crossed with dimensions, first_row, and tab width.
+TEST(unwrapped_matches_full_path_for_fitting_lines) {
+    const std::vector<std::string> corpus = {
+        "",                                        // empty document
+        "abc",                                     // single line, no newline
+        "abc\n",                                   // trailing newline
+        "a\nbb\nccc\n\ndd",                        // short lines incl. an empty one
+        std::string{"A\xE4\xB8\xAD" "B"},          // wide char (fits)
+        std::string{"x\xCC\x81y"},                 // combining mark
+        "ab\tcd",                                  // tab
+        "l1\nl2\nl3\nl4\nl5\nl6\nl7",              // more lines than any tested rows
+        "\n\n\n",                                  // only newlines
+    };
+    for (int tab : {2, 4, 8}) {
+        for (const auto& doc : corpus) {
+            const auto lines = cell_runs_from_text(doc, tab);
+            uint32_t maxwidth = 0;
+            for (const auto& r : lines) {
+                maxwidth = std::max(maxwidth, r.total_cells);
+            }
+            for (uint32_t columns = 1; columns <= 24; ++columns) {
+                if (columns < maxwidth) continue;  // fitting-lines precondition
+                for (uint32_t rows = 1; rows <= 6; ++rows) {
+                    for (uint32_t first = 0; first <= 12; ++first) {
+                        ViewportDimensions dims{columns, rows};
+                        const auto full = ssg::compute_viewport(lines, dims, first);
+                        const auto proj = ssg::compute_viewport_unwrapped(
+                            doc, dims, first, tab);
+                        ASSERT_EQ(serialize(proj), serialize(full));
+                        ASSERT_TRUE(proj == full);
+                    }
+                }
+            }
+        }
+    }
+}
+
+// VP-1 (no-wrap clipping): a line wider than the pane is ONE visual row clipped
+// to the width, not multiple wrapped rows; hit offsets are document-absolute.
+TEST(unwrapped_clips_long_lines_to_one_row) {
+    const std::string doc = "abcdef\nxy";  // line 0 is 6 cells wide
+    const ViewportDimensions dims{3, 2};
+    const auto proj = ssg::compute_viewport_unwrapped(doc, dims, 0, 4);
+
+    ASSERT_EQ(proj.total_visual_rows, 2u);  // two logical lines, NOT wrapped
+    ASSERT_EQ(proj.visible_rows.size(), 2u);
+    ASSERT_EQ(proj.visible_rows[0].logical_line, 0u);
+    ASSERT_EQ(proj.visible_rows[0].span_count, 6u);
+    ASSERT_EQ(proj.visible_rows[0].content_cells, 6u);
+    ASSERT_EQ(proj.visible_rows[0].visible_cells, 3u);  // clipped to the width
+
+    int row0_hits = 0;
+    for (const auto& hit : proj.hit_targets) {
+        if (hit.viewport_row == 0) ++row0_hits;
+    }
+    ASSERT_EQ(row0_hits, 3);  // only the visible cols 0,1,2 are hit targets
+
+    // "xy" begins at document byte 7 (6 content bytes + one '\n').
+    for (const auto& hit : proj.hit_targets) {
+        if (hit.viewport_row == 1 && hit.viewport_column == 0) {
+            ASSERT_EQ(hit.byte_offset, 7u);
+        }
+    }
+}
+
+// VP-1: the same long-line document wraps into MORE rows on the full path and
+// clips to fewer on the unwrapped path — the intended wrap-on vs wrap-off split.
+TEST(unwrapped_vs_wrapped_row_count_differs_for_long_lines) {
+    const std::string doc = "abcdef\nxy";
+    const ViewportDimensions dims{3, 8};
+    const auto wrapped = ssg::compute_viewport(cell_runs_from_text(doc, 4), dims, 0);
+    const auto proj = ssg::compute_viewport_unwrapped(doc, dims, 0, 4);
+    ASSERT_EQ(proj.total_visual_rows, 2u);
+    ASSERT_EQ(wrapped.total_visual_rows, 3u);  // "abcdef" -> 2 rows, "xy" -> 1
+    ASSERT_TRUE(wrapped.total_visual_rows > proj.total_visual_rows);
+}
+
+// VP-1 (INV-scrollbar-total): total rows is the line count, and first_row clamps
+// against it exactly as the full path clamps against its total.
+TEST(unwrapped_clamps_first_row_to_line_count) {
+    const std::string doc = "a\nb\nc\nd\ne";  // 5 logical lines
+    const ViewportDimensions dims{4, 2};
+    const auto proj = ssg::compute_viewport_unwrapped(doc, dims, 99, 4);
+    ASSERT_EQ(proj.total_visual_rows, 5u);
+    ASSERT_EQ(proj.scrollbar.maximum_first_row, 3u);  // 5 - 2
+    ASSERT_EQ(proj.first_visual_row, 3u);
+    ASSERT_EQ(proj.visible_rows.size(), 2u);
+    ASSERT_EQ(proj.visible_rows[0].logical_line, 3u);
+}
+
 int main() {
     RUN(empty_viewport_golden);
     RUN(short_viewport_golden);
@@ -270,6 +382,10 @@ int main() {
     RUN(wrapped_scrolled_golden);
     RUN(tiny_clipped_golden);
     RUN(scroll_saturates_and_delta_suppresses_equal_payload);
+    RUN(unwrapped_matches_full_path_for_fitting_lines);
+    RUN(unwrapped_clips_long_lines_to_one_row);
+    RUN(unwrapped_vs_wrapped_row_count_differs_for_long_lines);
+    RUN(unwrapped_clamps_first_row_to_line_count);
     RUN(viewport_bounds_properties);
     RUN(invalid_dimensions_are_actionable);
     RUN(list_scroll_view_clamps_and_hides_thumb_when_content_fits);
