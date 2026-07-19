@@ -249,9 +249,10 @@ std::unique_ptr<ssg::EditorRuntime> make_headless(fs::path const& root) {
     return runtime;
 }
 
-// Launch the real `ssg` binary over the fixture under a pty and capture its
-// output until it settles (its frames are drawn and it blocks on input).
-std::string capture_frames(std::string const& binary, fs::path const& workspace) {
+// Launch the real `ssg` binary over `launch_path` (a workspace dir or a file)
+// under a pty and capture its output until it settles (frames drawn, blocked on
+// input).
+std::string capture_frames(std::string const& binary, fs::path const& launch_path) {
     winsize ws{};
     ws.ws_col = 80;
     ws.ws_row = 24;
@@ -261,7 +262,7 @@ std::string capture_frames(std::string const& binary, fs::path const& workspace)
     if (pid == 0) {
         setenv("COLORTERM", "truecolor", 1);
         setenv("TERM", "xterm-256color", 1);
-        execl(binary.c_str(), binary.c_str(), workspace.c_str(),
+        execl(binary.c_str(), binary.c_str(), launch_path.c_str(),
               static_cast<char*>(nullptr));
         _exit(127);
     }
@@ -299,6 +300,34 @@ std::string capture_frames(std::string const& binary, fs::path const& workspace)
     return output;
 }
 
+// Assert the decoded screen equals render(snapshot): every non-continuation cell
+// matches text + resolved color, and every continuation cell decodes to a blank
+// (the wide glyph advanced the cursor past it — this locks wide-glyph handling).
+// Returns the number of content cells compared.
+int compare_screen(DecodedScreen const& screen, ssg::CellGrid const& grid) {
+    ASSERT_EQ(screen.columns, grid.size.columns);
+    ASSERT_EQ(screen.rows, grid.size.rows);
+    int compared = 0;
+    for (int row = 0; row < grid.size.rows; ++row) {
+        for (int column = 0; column < grid.size.columns; ++column) {
+            auto const& cell =
+                grid.cells[static_cast<std::size_t>(row) * grid.size.columns +
+                           column];
+            auto const& decoded = screen.at(row, column);
+            if (cell.continuation) {
+                ASSERT_EQ(decoded.text, std::string{" "});
+                continue;
+            }
+            std::string const expected = cell.text.empty() ? " " : cell.text;
+            ASSERT_EQ(decoded.text, expected);
+            ASSERT_TRUE(color_eq(decoded.foreground, grid.palette[cell.foreground]));
+            ASSERT_TRUE(color_eq(decoded.background, grid.palette[cell.background]));
+            ++compared;
+        }
+    }
+    return compared;
+}
+
 }  // namespace
 
 // M11-2b: the independent decoder round-trips the app's encoded frame — proving
@@ -322,22 +351,7 @@ TEST(decoder_roundtrips_the_encoded_frame) {
     auto encoded =
         ssg::app::encode_ansi_frame(grid, ssg::ColorDepth::truecolor);
     auto screen = decode(encoded, grid.size.columns, grid.size.rows);
-
-    ASSERT_EQ(screen.columns, grid.size.columns);
-    ASSERT_EQ(screen.rows, grid.size.rows);
-    for (int row = 0; row < grid.size.rows; ++row) {
-        for (int column = 0; column < grid.size.columns; ++column) {
-            auto const& cell =
-                grid.cells[static_cast<std::size_t>(row) * grid.size.columns +
-                           column];
-            if (cell.continuation) continue;
-            auto const& decoded = screen.at(row, column);
-            std::string const expected = cell.text.empty() ? " " : cell.text;
-            ASSERT_EQ(decoded.text, expected);
-            ASSERT_TRUE(color_eq(decoded.foreground, grid.palette[cell.foreground]));
-            ASSERT_TRUE(color_eq(decoded.background, grid.palette[cell.background]));
-        }
-    }
+    compare_screen(screen, grid);
     fs::remove_all(root);
 }
 
@@ -361,25 +375,7 @@ TEST(real_binary_output_matches_render_snapshot) {
     if (!snapshot) { fs::remove_all(root); return; }
     auto grid = ssg::render(*snapshot);
 
-    ASSERT_EQ(screen.columns, grid.size.columns);
-    ASSERT_EQ(screen.rows, grid.size.rows);
-
-    int compared = 0;
-    for (int row = 0; row < grid.size.rows; ++row) {
-        for (int column = 0; column < grid.size.columns; ++column) {
-            auto const& cell =
-                grid.cells[static_cast<std::size_t>(row) * grid.size.columns +
-                           column];
-            if (cell.continuation) continue;
-            auto const& decoded = screen.at(row, column);
-            std::string const expected = cell.text.empty() ? " " : cell.text;
-            ASSERT_EQ(decoded.text, expected);
-            ASSERT_TRUE(color_eq(decoded.foreground, grid.palette[cell.foreground]));
-            ASSERT_TRUE(color_eq(decoded.background, grid.palette[cell.background]));
-            ++compared;
-        }
-    }
-    ASSERT_TRUE(compared > 0);
+    ASSERT_TRUE(compare_screen(screen, grid) > 0);
 
     // The captured hardware cursor equals the rendered caret.
     ASSERT_EQ(screen.cursor.has_value(), grid.caret.has_value());
@@ -390,9 +386,50 @@ TEST(real_binary_output_matches_render_snapshot) {
     fs::remove_all(root);
 }
 
+// M11-2a, wide glyphs: open a document of wide (CJK) text in the REAL binary and
+// assert the decoded screen still equals render(snapshot).  This exercises the
+// decoder's wide-glyph advance and the encoder's continuation-cell handling
+// end-to-end (the ASCII case above never advances the cursor by two).
+TEST(real_binary_wide_glyph_output_matches_render) {
+    auto root = make_fixture();
+    auto wide = root / "workspace" / "wide.txt";
+    std::ofstream{wide, std::ios::binary}
+        << "\xe6\xbc\xa2\xe5\xad\x97\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e ascii\n"
+        << "second line\n";  // U+6F22 U+5B57 U+65E5 U+672C U+8A9E ("漢字日本語")
+
+    auto output = capture_frames(SSG_APP_BINARY, wide);
+    ASSERT_TRUE(!output.empty());
+    if (output.empty()) { fs::remove_all(root); return; }
+    auto screen = decode(output, 80, 24);
+
+    auto runtime = make_headless(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) { fs::remove_all(root); return; }
+    ASSERT_TRUE(runtime->dispatch(ssg::ClientId{1},
+                                  {"file.open", runtime->revision(),
+                                   std::string{"wide.txt"}})
+                    .accepted());
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) { fs::remove_all(root); return; }
+    auto grid = ssg::render(*snapshot);
+
+    // Sanity: the rendered document actually contains wide (continuation) cells,
+    // so this case genuinely exercises wide-glyph handling.
+    bool has_continuation = false;
+    for (auto const& cell : grid.cells) {
+        if (cell.continuation) { has_continuation = true; break; }
+    }
+    ASSERT_TRUE(has_continuation);
+
+    ASSERT_TRUE(compare_screen(screen, grid) > 0);
+    fs::remove_all(root);
+}
+
 int main() {
     RUN(decoder_roundtrips_the_encoded_frame);
     RUN(real_binary_output_matches_render_snapshot);
+    RUN(real_binary_wide_glyph_output_matches_render);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }
