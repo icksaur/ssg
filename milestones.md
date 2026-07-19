@@ -299,13 +299,14 @@ viewport-bounded. **Measured: 10 MiB first_frame p50 ~1.7 s → 9.3 ms (~180x).*
 - **Review fold** (`fc1189e`): shared horizontal origin (report requested offset,
   per-row snap in VisualRow.start_cell) + no-wrap selection extension uses
   logical-line steps.
-- **OUTSTANDING (review MUST, tracked m12-vp2b-selection):** the selection/reveal
-  path still builds a whole-document `TextModel` + full wrapped viewport on every
-  caret move / reveal, so interactive editing on a large file is ~O(document) per
-  keystroke under no-wrap (first frame unaffected; not a regression vs pre-M12).
-  INV-viewport-bounded-work says selection must project too. Fix is a windowed/
-  lazy TextModel or a no-wrap fast path — a larger change to the central selection
-  class; scope decision pending.
+- **VP-2b** (review fold): lazy per-line `TextModel` — construction is a cheap
+  '\n' scan; each line's `compute_cell_run` + boundaries are computed on first use
+  and cached (stable addresses). No-wrap `visual_row/column/vertical_visual`
+  short-circuit (columns==UINT32_MAX) and `current_viewport` uses
+  `compute_viewport_unwrapped`, so caret nav + reveal segment only the visible +
+  moved lines — O(visible), not O(document). Oracle: `cell_run_calls` counter shows
+  identical per-move segmentation for a 50-line and 20000-line file. Closes the
+  outstanding INV-viewport-bounded-work gap; first frame unregressed (9.4 ms).
 Non-goal (future): lazy/mmapped file loading — the document READ (868 ms for
 10 MiB) is now the dominant large-file cost and is a separate milestone.
 

@@ -1,6 +1,7 @@
 #include "../test_helpers.h"
 
 #include <ssg/editor_runtime.h>
+#include <ssg/layout.h>
 
 #include <cstdio>
 #include <filesystem>
@@ -508,6 +509,58 @@ TEST(word_wrap_on_wraps_long_lines_off_clips_them) {
     std::filesystem::remove_all(root);
 }
 
+// M12 VP-2b (INV-viewport-bounded-work): with word wrap OFF, a caret navigation
+// segments only the visible + moved lines — bounded and INDEPENDENT of document
+// length — not the whole document. Proven by the compute_cell_run counter: the
+// per-move segmentation count is identical for a 50-line and a 20000-line file.
+TEST(word_wrap_off_navigation_is_viewport_bounded) {
+    auto root = std::filesystem::current_path() / "runtime_navbound";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root / "workspace");
+    std::filesystem::create_directories(root / "scratch");
+    std::filesystem::create_directories(root / "recovery");
+    auto make_doc = [](std::size_t lines) {
+        std::string text;
+        for (std::size_t i = 0; i < lines; ++i) {
+            text += "line " + std::to_string(i) + " content\n";
+        }
+        return text;
+    };
+    std::ofstream{root / "workspace" / "small.txt"} << make_doc(50);
+    std::ofstream{root / "workspace" / "big.txt"} << make_doc(20000);
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process},
+                               ssg::ViewId{1}).accepted());
+    ssg::ViewportDimensions const dims{80, 24};
+
+    auto nav_segmentations = [&](std::string const& file) -> std::uint64_t {
+        (void)runtime.dispatch(
+            ssg::ClientId{1}, {"file.open", runtime.revision(), file});
+        (void)runtime.snapshot(ssg::ClientId{1}, dims);  // prime pane cache
+        ssg::reset_cell_run_calls();
+        for (int i = 0; i < 4; ++i) {
+            (void)runtime.dispatch(
+                ssg::ClientId{1},
+                {"cursor.line_down", runtime.revision(), {}});
+        }
+        return ssg::cell_run_calls();
+    };
+
+    auto const small_calls = nav_segmentations("small.txt");
+    auto const big_calls = nav_segmentations("big.txt");
+
+    ASSERT_TRUE(small_calls > 0);
+    // Bounded (~ per move: visible rows + the moved line), and NOT proportional to
+    // the 400x-larger document.
+    ASSERT_TRUE(small_calls < 200);
+    ASSERT_EQ(small_calls, big_calls);
+    std::filesystem::remove_all(root);
+}
+
 } // namespace
 
 int main() {
@@ -521,6 +574,7 @@ int main() {
     RUN(tree_select_focuses_the_panel_and_the_click_pair_nets_expected_focus);
     RUN(word_wrap_off_reveals_caret_horizontally);
     RUN(word_wrap_on_wraps_long_lines_off_clips_them);
+    RUN(word_wrap_off_navigation_is_viewport_bounded);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

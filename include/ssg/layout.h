@@ -86,4 +86,12 @@ struct CellRun {
 // cluster's byte_len; they do not produce additional spans.
 CellRun compute_cell_run(std::string_view line_utf8, int tab_width = 4);
 
+// Test instrumentation (M12 INV-viewport-bounded-work).  Counts the
+// compute_cell_run (grapheme-segmentation) calls made on the current thread since
+// the last reset.  Diagnostic only, not production state; it lets a test assert
+// that a no-wrap navigation/reveal segments only the caret + target lines
+// (bounded, document-length independent) rather than the whole document.
+[[nodiscard]] std::uint64_t cell_run_calls();
+void reset_cell_run_calls();
+
 }  // namespace ssg

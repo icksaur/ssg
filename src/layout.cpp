@@ -39,6 +39,10 @@
 
 namespace ssg {
 
+namespace {
+thread_local std::uint64_t g_cell_run_calls = 0;
+}
+
 // ---------------------------------------------------------------------------
 // Internal types
 
@@ -1362,6 +1366,7 @@ CellRun compute_cell_run(std::string_view line_utf8, int tab_width) {
     if (tab_width < 1 || tab_width > 16) {
         throw std::invalid_argument("tab width must be between 1 and 16");
     }
+    ++g_cell_run_calls;
 
     CellRun result;
     result.total_cells = 0;
@@ -1544,5 +1549,8 @@ CellRun compute_cell_run(std::string_view line_utf8, int tab_width) {
 
     return result;
 }
+
+std::uint64_t cell_run_calls() { return g_cell_run_calls; }
+void reset_cell_run_calls() { g_cell_run_calls = 0; }
 
 }  // namespace ssg
