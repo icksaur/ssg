@@ -215,6 +215,7 @@ ViewportViewState compute_viewport(std::span<const CellRun> logical_lines,
     return ViewportViewState{
         dimensions,
         first_row,
+        0,  // word-wrap-ON never scrolls horizontally (first_visual_column)
         total_rows,
         std::move(visible_rows),
         std::move(hit_targets),
@@ -224,7 +225,8 @@ ViewportViewState compute_viewport(std::span<const CellRun> logical_lines,
 
 ViewportViewState compute_viewport_unwrapped(
     std::string_view document_text, ViewportDimensions dimensions,
-    uint32_t requested_first_visual_row, int tab_width) {
+    uint32_t requested_first_visual_row, uint32_t requested_first_visual_column,
+    int tab_width) {
     // Word wrap OFF: one logical line renders as exactly one visual row, clipped
     // to the pane width.  The total visual row count is the logical line count, a
     // cheap byte scan for '\n' — NO compute_cell_run over the whole document.
@@ -254,6 +256,18 @@ ViewportViewState compute_viewport_unwrapped(
     std::vector<CellHitTarget> hit_targets;
     visible_rows.reserve(visible_count);
 
+    // Horizontal scroll (VP-H / H0): `requested_first_visual_column` shifts every
+    // visible row's window left, snapping to a grapheme boundary — the leftmost
+    // visible span is the first whose start cell is >= the requested offset (a wide
+    // cluster straddling the offset scrolls fully off rather than splitting).  The
+    // resolved offset (VisualRow.start_cell / first_visual_column) is that
+    // boundary, so render — which paints the row's spans from the pane's left edge
+    // using VisualRow.first_span — needs no change: at offset 0 this is exactly the
+    // pre-VP-H behavior.  The offset is shared by every row, resolved once against
+    // the first visible row so all rows share the same left origin.
+    uint32_t resolved_column = 0;
+    bool resolved_column_set = false;
+
     for (uint32_t viewport_row = 0; viewport_row < visible_count; ++viewport_row) {
         const uint32_t logical_line = first_row + viewport_row;
         const std::size_t start = line_start[logical_line];
@@ -262,24 +276,39 @@ ViewportViewState compute_viewport_unwrapped(
                                     : document_text.size();
         const auto run = compute_cell_run(
             document_text.substr(start, end - start), tab_width);
-
-        if (run.spans.empty()) {
-            visible_rows.push_back(
-                VisualRow{logical_line, 0, 0, CellIndex{0}, 0, 0});
-            continue;
-        }
-        const auto span_count =
-            checked_u32(run.spans.size(), "viewport span count exceeds uint32");
-        visible_rows.push_back(
-            VisualRow{logical_line, 0, span_count, CellIndex{0}, run.total_cells,
-                      std::min(run.total_cells, dimensions.columns)});
-
         const auto document_start =
             checked_u32(start, "viewport byte offset exceeds uint32");
+
+        // Locate the first span at or past the requested horizontal offset; its
+        // start cell is this row's visible origin.  A row shorter than the offset
+        // contributes no visible spans.
+        uint32_t first_span = 0;
+        uint32_t start_cell = 0;
+        for (; first_span < run.spans.size(); ++first_span) {
+            if (start_cell >= requested_first_visual_column) break;
+            start_cell += run.spans[first_span].cell_width;
+        }
+        if (!resolved_column_set) {
+            resolved_column = start_cell;
+            resolved_column_set = true;
+        }
+
+        if (first_span >= run.spans.size()) {
+            // Empty line, or the whole line scrolled off to the left.
+            visible_rows.push_back(
+                VisualRow{logical_line, first_span, 0, CellIndex{start_cell},
+                          run.total_cells, 0});
+            continue;
+        }
+
         uint32_t viewport_column = 0;
-        uint64_t logical_cell = 0;
-        for (const auto& span : run.spans) {
+        uint32_t logical_cell = start_cell;
+        uint32_t span_count = 0;
+        for (uint32_t span_index = first_span; span_index < run.spans.size();
+             ++span_index) {
+            const auto& span = run.spans[span_index];
             const auto available = dimensions.columns - viewport_column;
+            if (available == 0) break;
             const auto visible_width = std::min(span.cell_width, available);
             for (uint32_t cell = 0; cell < visible_width; ++cell) {
                 hit_targets.push_back(CellHitTarget{
@@ -293,12 +322,20 @@ ViewportViewState compute_viewport_unwrapped(
             }
             viewport_column += visible_width;
             logical_cell += span.cell_width;
+            ++span_count;
         }
+        const uint32_t content_from_offset =
+            run.total_cells > start_cell ? run.total_cells - start_cell : 0;
+        visible_rows.push_back(
+            VisualRow{logical_line, first_span, span_count, CellIndex{start_cell},
+                      run.total_cells,
+                      std::min(content_from_offset, dimensions.columns)});
     }
 
     return ViewportViewState{
         dimensions,
         first_row,
+        resolved_column,
         total_rows,
         std::move(visible_rows),
         std::move(hit_targets),

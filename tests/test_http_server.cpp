@@ -215,6 +215,7 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision,
 ssg::ViewportViewState viewport() {
     return {ssg::ViewportDimensions{20, 8},
             0,
+            0,
             8,
             {},
             {},

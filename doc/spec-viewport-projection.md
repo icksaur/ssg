@@ -56,23 +56,32 @@ which both (a) contradicts the `word_wrap=false` default (Sublime-style: long
 lines clip and scroll horizontally, not wrap) and (b) forces `total_visual_rows`
 to depend on every line's width, defeating projection.
 
-### Open product decision (needs the user): caret visibility under clipping
+### Open product decision (RESOLVED by the user): caret visibility under clipping
 
-If word wrap OFF clips long lines at the pane width and there is **no horizontal
-scrolling**, a caret (or a match) positioned past the pane width is not visible —
-which contradicts INV-caret-reveal and the spec.md caret-reveal invariant ("every
-displaying view minimally scrolls to reveal its primary caret"). This must be
-resolved before implementation. Options:
-- **(A) Add minimal horizontal scrolling** (recommended, correct): the viewport
-  model gains a `first_visual_column` (horizontal offset), and reveal keeps the
-  caret's cell column within `[first_col, first_col + width)` exactly as vertical
-  reveal keeps its row visible. This makes clipping correct but adds a horizontal
-  dimension to the viewport/render/hit-test/reveal model (more scope).
-- **(B) Accept horizontal caret invisibility** and weaken the caret-reveal
-  invariant to *vertical only* when word wrap is off (documented limitation).
-  Cheaper, but a real UX regression on long lines.
-This spec assumes **(A)** in its invariants and plan; if the user chooses (B),
-drop the horizontal-scroll step and weaken INV-caret-reveal accordingly.
+Word wrap OFF clips long lines at the pane width. To keep a caret (or match) past
+the pane width visible, **Decision A (horizontal scrolling) is chosen**, in its
+minimal form **H0**:
+
+- **H0 (chosen):** the viewport model gains a single `first_visual_column`
+  (horizontal offset shared by all rows of the pane). Caret reveal keeps the
+  caret's cell column within `[first_visual_column, first_visual_column +
+  pane_width)` exactly as vertical reveal keeps its row visible. Render and mouse
+  hit-testing add the column offset. There is **no bottom horizontal scrollbar**:
+  a faithful proportional horizontal thumb needs the maximum line width across the
+  *whole* document — an O(document) segmentation pass that would reintroduce the
+  very cost this milestone removes. Horizontal reveal needs only the visible lines'
+  widths (already segmented), so it stays O(visible rows). This matches how
+  terminal editors (vim/nano/less) handle long lines: content slides to keep the
+  caret visible, no horizontal gutter.
+- **Deferred (H2, a future milestone if wanted):** a proportional bottom
+  horizontal scrollbar, which requires an incremental max-line-width cache (the
+  horizontal twin of the deferred word-wrap-ON width cache, Option C). Out of M12
+  scope.
+- **(B) Rejected:** accepting horizontal caret invisibility (weakening
+  INV-caret-reveal to vertical-only) — a real UX regression on long lines.
+
+The wrapped (word-wrap-ON) path never scrolls horizontally: `first_visual_column`
+is always 0 there.
 
 ### The projection, gated on wrap mode
 
@@ -234,7 +243,7 @@ path for making *word-wrap-ON* huge documents fast.
 | VP-1 | `compute_viewport_unwrapped(text, dims, first_row, tab_width)` in the library: one-pass line scan for total line count + visible-line byte starts; `compute_cell_run` for visible lines only; assemble `ViewportViewState` (clip long lines at columns; document-absolute hit offsets; scrollbar from line-count total) | `include/ssg/viewport.h`, `src/viewport.cpp`; `tests/test_viewport.cpp` | (a) reference-impl equivalence: over a DETERMINISTIC GENERATED corpus (empty, 1 line, trailing newline, many short lines, exact-width lines, wide/combining/tab lines — all fitting the width) crossed with several `first_visual_row`, dimensions, and tab widths, `compute_viewport_unwrapped` `operator==` `compute_viewport(cell_runs(text),...)`; (b) hand-computed NO-WRAP long-line cases (a line wider than columns): exact clipped visible cells, hit-target count/offsets, `total_rows` = line count, clamping, and toggling wrap on→off | INV-projection-equivalence, INV-hit-offsets-absolute, INV-scrollbar-total |
 | VP-2 | Runtime + selection use the wrap-gated path: `viewport()` and `scroll_fraction` call `compute_viewport_unwrapped` when `!word_wrap`; thread wrap mode through `TextModel::viewport_state`/`visual_row`/`visual_column` and vertical/page caret movement (`src/selection.cpp`) so no-wrap movement is by logical line; caret reveal uses logical-line index | `src/editor_runtime.cpp`, `src/runtime/presentation.cpp`, `include/ssg/selection.h`, `src/selection.cpp` | property: with word wrap off, existing runtime snapshot + hit-test + reveal + caret-movement tests pass for fitting-line documents; a long-line movement test asserts down-arrow moves one logical line (not a wrap row) | INV-caret-reveal, INV-viewport-bounded-work |
 | VP-R | Project render: `render()` computes `compute_cell_run` only for the logical lines in `viewport.visible_rows`, not the whole document (`logical_lines` becomes windowed, keyed off the viewport) | `src/render.cpp`; `tests/test_render.cpp` | property: a render-side `compute_cell_run` counter (test hook) is ≤ visible rows for a tall document; the rendered grid for a fitting-line document is unchanged vs. today (existing render goldens green) | INV-render-projection, INV-viewport-bounded-work |
-| VP-H | (Decision A) Minimal horizontal scrolling: `first_visual_column` in the viewport model; reveal keeps the caret column in `[first_col, first_col+width)`; render/hit-test honor the horizontal offset | `include/ssg/viewport.h`, `src/viewport.cpp`, `src/render.cpp`, `src/selection.cpp`, `src/editor_runtime.cpp`; tests | hand cases: caret past the pane width scrolls horizontally so its cell is visible; hit-testing accounts for the horizontal offset; a fitting-line document has `first_visual_column==0` and is unchanged | INV-caret-reveal | 
+| VP-H | (Decision A / H0) Minimal horizontal scrolling, NO bottom scrollbar: `first_visual_column` in the viewport model (a single per-pane offset, always 0 when word wrap is on); reveal keeps the caret column in `[first_col, first_col+width)`; render and hit-test honor the horizontal offset; a `view.scroll_columns` command mirrors `view.scroll_lines` for explicit horizontal scroll. Folds VP-2b: under no-wrap, caret vertical/page movement and reveal use the logical-line index (not wrapped counting). | `include/ssg/viewport.h`, `src/viewport.cpp`, `src/render.cpp`, `src/selection.cpp`, `src/editor_runtime.cpp`, `src/runtime/presentation.cpp`, `src/protocol.cpp`; tests | hand cases: caret past the pane width scrolls horizontally so its cell is visible; hit-testing accounts for the horizontal offset; a fitting-line document has `first_visual_column==0` and is unchanged; wire round-trip of the new field | INV-caret-reveal, INV-viewport-bounded-work |
 | VP-3 | Re-class always-wrap tests + goldens under word-wrap-ON; add a word-wrap-ON regression that long lines still wrap; re-measure the 10 MiB first frame | named files: `tests/test_viewport.cpp`, `tests/test_render.cpp`, `tests/test_tui_fixture.cpp`, `tests/runtime/test_runtime_presentation.cpp`, `tests/fixtures/render/wrapped.txt`, `benchmarks/startup_benchmark.cpp` | the startup harness reports 10 MiB `first_frame` p50 in single-digit ms; a wrap-ON test still yields multiple visual rows for a long line | INV-scrollbar-total |
 
 Instrumentation note: the `≤ rows` cell-run counters (VP-R, VP-2) are a

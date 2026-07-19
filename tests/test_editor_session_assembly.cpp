@@ -111,6 +111,7 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision,
 ssg::ViewportViewState client_view(std::uint32_t first_row) {
     return {ssg::ViewportDimensions{20, 8},
             first_row,
+            0,
             first_row + 8,
             {},
             {},

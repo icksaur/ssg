@@ -3550,6 +3550,7 @@ ProtocolValue to_value(ViewportViewState const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("dimensions", to_value(value.dimensions));
     fields.emplace_back("first_visual_row", to_value(value.first_visual_row));
+    fields.emplace_back("first_visual_column", to_value(value.first_visual_column));
     fields.emplace_back("total_visual_rows", to_value(value.total_visual_rows));
     fields.emplace_back("visible_rows", to_value(value.visible_rows));
     fields.emplace_back("hit_targets", to_value(value.hit_targets));
@@ -3561,15 +3562,17 @@ bool decode_present(ProtocolValue const& value, std::optional<ViewportViewState>
     if (!object) return false;
     auto dimensions = require_field<ViewportDimensions>(value.field("dimensions"));
     auto first_visual_row = require_field<std::uint32_t>(value.field("first_visual_row"));
+    auto first_visual_column = require_field<std::uint32_t>(value.field("first_visual_column"));
     auto total_visual_rows = require_field<std::uint32_t>(value.field("total_visual_rows"));
     auto visible_rows = require_field<std::vector<VisualRow>>(value.field("visible_rows"));
     auto hit_targets = require_field<std::vector<CellHitTarget>>(value.field("hit_targets"));
     auto scrollbar = require_field<ScrollbarMetrics>(value.field("scrollbar"));
-    if (!dimensions || !first_visual_row || !total_visual_rows || !visible_rows ||
-        !hit_targets || !scrollbar) {
+    if (!dimensions || !first_visual_row || !first_visual_column ||
+        !total_visual_rows || !visible_rows || !hit_targets || !scrollbar) {
         return false;
     }
-    out.emplace(ViewportViewState{*dimensions, *first_visual_row, *total_visual_rows,
+    out.emplace(ViewportViewState{*dimensions, *first_visual_row,
+                                  *first_visual_column, *total_visual_rows,
                                   *visible_rows, *hit_targets, *scrollbar});
     return true;
 }

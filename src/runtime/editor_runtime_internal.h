@@ -96,6 +96,9 @@ struct EditorRuntime::Impl final : CommandServices,
     // non-reentrant, so a handler cannot re-enter dispatch).
     std::optional<std::string> pending_palette_target;
     std::uint32_t requested_first_visual_row = 0;
+    // Horizontal scroll offset in cells (word wrap OFF only; VP-H). Reveal and the
+    // horizontal scroll command update it; the viewport path passes it through.
+    std::uint32_t requested_first_visual_column = 0;
     // The document pane geometry from the most recent snapshot, plus the prompt
     // rows that snapshot reserved.  Used to reveal find matches against the real
     // pane height (not a fixed 24) so a match never lands behind the prompt rows.
@@ -170,7 +173,8 @@ struct EditorRuntime::Impl final : CommandServices,
     // wrap is on; O(visible rows) unwrapped projection (compute_viewport_unwrapped)
     // when off, so a large document's first frame is viewport-bounded (M12).
     [[nodiscard]] ViewportViewState compute_editor_viewport(
-        ViewportDimensions dimensions, std::uint32_t first_row) const;
+        ViewportDimensions dimensions, std::uint32_t first_row,
+        std::uint32_t first_column) const;
     [[nodiscard]] ViewportViewState viewport(ViewportDimensions dimensions) const;
     [[nodiscard]] SessionSnapshotSections sections(ViewportDimensions dimensions,
                                                    KeySequence const& leader_pending = {},

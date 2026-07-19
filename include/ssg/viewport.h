@@ -91,6 +91,12 @@ ListScrollView compute_list_scroll_view(uint32_t total_items,
 struct ViewportViewState {
     ViewportDimensions dimensions;
     uint32_t first_visual_row;
+    // The horizontal scroll offset in cells (word wrap OFF only; always 0 when
+    // word wrap is on, since wrapped lines never scroll horizontally).  All
+    // visible rows share this single per-pane offset.  It snaps to a grapheme
+    // boundary: the leftmost visible cell is the first span start >= the requested
+    // offset, so a wide cluster is never split (M12 VP-H / Decision A / H0).
+    uint32_t first_visual_column;
     uint32_t total_visual_rows;
     std::vector<VisualRow> visible_rows;
     std::vector<CellHitTarget> hit_targets;
@@ -125,6 +131,7 @@ ViewportViewState compute_viewport_unwrapped(
     std::string_view document_text,
     ViewportDimensions dimensions,
     uint32_t requested_first_visual_row,
+    uint32_t requested_first_visual_column,
     int tab_width);
 
 ViewportViewState scroll_viewport_by(

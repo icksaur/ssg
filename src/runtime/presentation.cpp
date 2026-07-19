@@ -56,7 +56,7 @@ CommandHandlerResult scroll_fraction(EditorRuntime::Impl& runtime, std::any cons
     ViewportDimensions const viewport{
         std::max<std::uint32_t>(runtime.last_pane_content_columns, 1),
         std::max<std::uint32_t>(runtime.last_pane_content_rows, 1)};
-    auto view = runtime.compute_editor_viewport(viewport, 0);
+    auto view = runtime.compute_editor_viewport(viewport, 0, 0);
     runtime.requested_first_visual_row = arguments->denominator == 0 ? 0 :
         static_cast<std::uint32_t>((static_cast<std::uint64_t>(view.scrollbar.maximum_first_row) * arguments->numerator) / arguments->denominator);
     runtime.selection.first_visual_row = runtime.requested_first_visual_row;

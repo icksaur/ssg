@@ -626,18 +626,21 @@ std::vector<CellRun> EditorRuntime::Impl::active_cell_runs() const {
 }
 
 ViewportViewState EditorRuntime::Impl::compute_editor_viewport(
-    ViewportDimensions dimensions, std::uint32_t first_row) const {
+    ViewportDimensions dimensions, std::uint32_t first_row,
+    std::uint32_t first_column) const {
     if (word_wrap) {
         auto runs = active_cell_runs();
         return compute_viewport(runs, dimensions, first_row);
     }
     // Word wrap off (default): one logical line is one visual row; only the
     // visible lines are segmented, so this is O(visible rows), not O(document).
-    return compute_viewport_unwrapped(active_text(), dimensions, first_row, 4);
+    return compute_viewport_unwrapped(active_text(), dimensions, first_row,
+                                      first_column, 4);
 }
 
 ViewportViewState EditorRuntime::Impl::viewport(ViewportDimensions dimensions) const {
-    return compute_editor_viewport(dimensions, requested_first_visual_row);
+    return compute_editor_viewport(dimensions, requested_first_visual_row,
+                                   requested_first_visual_column);
 }
 
 void EditorRuntime::Impl::refresh_tree() {

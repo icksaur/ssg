@@ -304,6 +304,7 @@ public:
         return {
             ssg::ViewportDimensions{80, 20},
             state_.first_row,
+            0,
             100,
             {},
             {{0, 0, 0, ssg::CellIndex{0}, 0, 1}},
@@ -575,7 +576,7 @@ public:
         auto first_row = per_client_row_.count(client)
                              ? per_client_row_.at(client)
                              : std::uint32_t{0};
-        return {ssg::ViewportDimensions{80, 20}, first_row, 100, {},
+        return {ssg::ViewportDimensions{80, 20}, first_row, 0, 100, {},
                 {{0, 0, 0, ssg::CellIndex{0}, 0, 1}},
                 {100, 20, first_row, 80, first_row, 4}};
     }

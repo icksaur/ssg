@@ -312,7 +312,7 @@ TEST(unwrapped_matches_full_path_for_fitting_lines) {
                         ViewportDimensions dims{columns, rows};
                         const auto full = ssg::compute_viewport(lines, dims, first);
                         const auto proj = ssg::compute_viewport_unwrapped(
-                            doc, dims, first, tab);
+                            doc, dims, first, 0, tab);
                         ASSERT_EQ(serialize(proj), serialize(full));
                         ASSERT_TRUE(proj == full);
                     }
@@ -327,13 +327,14 @@ TEST(unwrapped_matches_full_path_for_fitting_lines) {
 TEST(unwrapped_clips_long_lines_to_one_row) {
     const std::string doc = "abcdef\nxy";  // line 0 is 6 cells wide
     const ViewportDimensions dims{3, 2};
-    const auto proj = ssg::compute_viewport_unwrapped(doc, dims, 0, 4);
+    const auto proj = ssg::compute_viewport_unwrapped(doc, dims, 0, 0, 4);
 
     ASSERT_EQ(proj.total_visual_rows, 2u);  // two logical lines, NOT wrapped
     ASSERT_EQ(proj.visible_rows.size(), 2u);
     ASSERT_EQ(proj.visible_rows[0].logical_line, 0u);
-    ASSERT_EQ(proj.visible_rows[0].span_count, 6u);
-    ASSERT_EQ(proj.visible_rows[0].content_cells, 6u);
+    // span_count is the VISIBLE (clipped) span count: 3 of the 6 fit the width.
+    ASSERT_EQ(proj.visible_rows[0].span_count, 3u);
+    ASSERT_EQ(proj.visible_rows[0].content_cells, 6u);  // full line width
     ASSERT_EQ(proj.visible_rows[0].visible_cells, 3u);  // clipped to the width
 
     int row0_hits = 0;
@@ -356,7 +357,7 @@ TEST(unwrapped_vs_wrapped_row_count_differs_for_long_lines) {
     const std::string doc = "abcdef\nxy";
     const ViewportDimensions dims{3, 8};
     const auto wrapped = ssg::compute_viewport(cell_runs_from_text(doc, 4), dims, 0);
-    const auto proj = ssg::compute_viewport_unwrapped(doc, dims, 0, 4);
+    const auto proj = ssg::compute_viewport_unwrapped(doc, dims, 0, 0, 4);
     ASSERT_EQ(proj.total_visual_rows, 2u);
     ASSERT_EQ(wrapped.total_visual_rows, 3u);  // "abcdef" -> 2 rows, "xy" -> 1
     ASSERT_TRUE(wrapped.total_visual_rows > proj.total_visual_rows);
@@ -367,12 +368,58 @@ TEST(unwrapped_vs_wrapped_row_count_differs_for_long_lines) {
 TEST(unwrapped_clamps_first_row_to_line_count) {
     const std::string doc = "a\nb\nc\nd\ne";  // 5 logical lines
     const ViewportDimensions dims{4, 2};
-    const auto proj = ssg::compute_viewport_unwrapped(doc, dims, 99, 4);
+    const auto proj = ssg::compute_viewport_unwrapped(doc, dims, 99, 0, 4);
     ASSERT_EQ(proj.total_visual_rows, 5u);
     ASSERT_EQ(proj.scrollbar.maximum_first_row, 3u);  // 5 - 2
     ASSERT_EQ(proj.first_visual_row, 3u);
     ASSERT_EQ(proj.visible_rows.size(), 2u);
     ASSERT_EQ(proj.visible_rows[0].logical_line, 3u);
+}
+
+// VP-H (H0): a horizontal offset windows each row from that cell, snapping to a
+// grapheme boundary, with document-absolute hit offsets.
+TEST(unwrapped_horizontal_offset_windows_each_row) {
+    const std::string doc = "abcdefghij\nkl";  // line 0 is 10 cells wide
+    const ViewportDimensions dims{4, 2};
+    // Scroll right by 3 cells: the row shows cells [3, 7) = "defg".
+    const auto proj = ssg::compute_viewport_unwrapped(doc, dims, 0, 3, 4);
+
+    ASSERT_EQ(proj.first_visual_column, 3u);
+    ASSERT_EQ(proj.total_visual_rows, 2u);
+    ASSERT_EQ(proj.visible_rows[0].start_cell.value(), 3u);
+    ASSERT_EQ(proj.visible_rows[0].span_count, 4u);   // d e f g
+    ASSERT_EQ(proj.visible_rows[0].visible_cells, 4u);
+
+    // Row 0 hit targets map viewport columns 0..3 to document bytes 3..6 ("defg").
+    int checked = 0;
+    for (const auto& hit : proj.hit_targets) {
+        if (hit.viewport_row != 0) continue;
+        ASSERT_EQ(hit.byte_offset, 3u + hit.viewport_column);
+        ASSERT_EQ(hit.cell.value(), 3u + hit.viewport_column);
+        ++checked;
+    }
+    ASSERT_EQ(checked, 4);
+
+    // A short line (row 1 = "kl", 2 cells) scrolled past its end shows nothing.
+    for (const auto& row : proj.visible_rows) {
+        if (row.logical_line == 1) ASSERT_EQ(row.visible_cells, 0u);
+    }
+}
+
+// VP-H (H0): the offset snaps to a grapheme boundary — a wide cluster straddling
+// the requested column scrolls fully off rather than splitting.
+TEST(unwrapped_horizontal_offset_snaps_to_grapheme_boundary) {
+    // "A" + U+4E2D (wide, 2 cells) + "B" -> cells: A@0, 中@1-2, B@3.
+    const std::string doc = "A\xE4\xB8\xAD" "B";
+    const ViewportDimensions dims{4, 1};
+    // Requesting offset 2 lands inside the wide cluster (cells 1-2); the first
+    // span at/after cell 2 is "B" at cell 3, so the row snaps to origin 3.
+    const auto proj = ssg::compute_viewport_unwrapped(doc, dims, 0, 2, 4);
+    ASSERT_EQ(proj.first_visual_column, 3u);
+    ASSERT_EQ(proj.visible_rows[0].start_cell.value(), 3u);
+    ASSERT_EQ(proj.visible_rows[0].span_count, 1u);  // just "B"
+    ASSERT_EQ(proj.hit_targets.size(), std::size_t{1});
+    ASSERT_EQ(proj.hit_targets[0].viewport_column, 0u);
 }
 
 int main() {
@@ -386,6 +433,8 @@ int main() {
     RUN(unwrapped_clips_long_lines_to_one_row);
     RUN(unwrapped_vs_wrapped_row_count_differs_for_long_lines);
     RUN(unwrapped_clamps_first_row_to_line_count);
+    RUN(unwrapped_horizontal_offset_windows_each_row);
+    RUN(unwrapped_horizontal_offset_snaps_to_grapheme_boundary);
     RUN(viewport_bounds_properties);
     RUN(invalid_dimensions_are_actionable);
     RUN(list_scroll_view_clamps_and_hides_thumb_when_content_fits);

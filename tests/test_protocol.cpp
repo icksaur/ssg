@@ -6,6 +6,7 @@
 #include <ssg/protocol.h>
 #include <ssg/session_snapshot.h>
 
+#include <cstdlib>
 #include <fstream>
 #include <regex>
 #include <sstream>
@@ -94,6 +95,7 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision, std::string marker
 ssg::ViewportViewState client_view(std::uint32_t first_row) {
     return {ssg::ViewportDimensions{20, 8},
             first_row,
+            0,  // first_visual_column
             first_row + 8,
             {},
             {},
@@ -778,6 +780,48 @@ std::string read_fixture_bytes(std::string const& name) {
     return bytes;
 }
 
+void write_fixture_hex(std::string const& name, std::string const& bytes) {
+    std::string hex;
+    hex.reserve(bytes.size() * 2);
+    char const* digits = "0123456789abcdef";
+    for (unsigned char byte : bytes) {
+        hex.push_back(digits[byte >> 4]);
+        hex.push_back(digits[byte & 0x0f]);
+    }
+    hex.push_back('\n');
+    std::ofstream out{std::string{SSG_PROTOCOL_FIXTURES_DIR} + "/" + name};
+    out << hex;
+}
+
+// Regenerate the canonical session_snapshot/session_delta wire goldens from the
+// same objects the round-trip tests build.  Gated on SSG_REGEN_PROTOCOL_FIXTURES
+// so a wire-format change (e.g. a new ViewportViewState field) can re-lock the
+// goldens: `SSG_REGEN_PROTOCOL_FIXTURES=1 ./build/test_protocol`.
+TEST(regenerate_canonical_fixtures) {
+    if (std::getenv("SSG_REGEN_PROTOCOL_FIXTURES") == nullptr) return;
+    auto snapshot = ssg::assemble_session_snapshot(
+        ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
+        ssg::InvocationPrincipal{
+            ssg::ClientId{7}, ssg::InvocationOrigin::in_process,
+            {ssg::CapabilityId{"local_file_drop"}}},
+        ssg::ViewId{9}, client_view(3), sections(ssg::Revision{4}, "alpha"));
+    write_fixture_hex("session_snapshot.hex",
+                      ssg::encode_session_snapshot(snapshot));
+
+    auto before = ssg::assemble_session_snapshot(
+        ssg::Revision{4}, {},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::in_process},
+        ssg::ViewId{9}, client_view(1), sections(ssg::Revision{4}, "a"));
+    auto after = ssg::assemble_session_snapshot(
+        ssg::Revision{5}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::in_process},
+        ssg::ViewId{9}, client_view(5), sections(ssg::Revision{5}, "changed"));
+    write_fixture_hex("session_delta.hex",
+                      ssg::encode_session_delta(ssg::derive_session_delta(before, after)));
+}
+
 TEST(canonical_fixtures_decode_to_the_expected_values) {
     auto const registry = ssg::build_command_argument_codec_registry();
 
@@ -859,6 +903,25 @@ TEST(canonical_fixtures_decode_to_the_expected_values) {
 
 }  // namespace
 
+TEST(viewport_first_visual_column_survives_the_wire) {
+    // VP-H (M12): the horizontal scroll offset is a wire field and must round-trip.
+    auto view = client_view(3);
+    view.first_visual_column = 7;
+    auto snapshot = ssg::assemble_session_snapshot(
+        ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::in_process},
+        ssg::ViewId{9}, view, sections(ssg::Revision{4}, "alpha"));
+    auto const decoded =
+        ssg::decode_session_snapshot(ssg::encode_session_snapshot(snapshot));
+    ASSERT_TRUE(decoded.accepted());
+    ASSERT_TRUE(decoded.snapshot.has_value());
+    if (!decoded.snapshot) return;
+    ASSERT_EQ(decoded.snapshot->client().viewport.first_visual_column,
+              std::uint32_t{7});
+    ASSERT_EQ(*decoded.snapshot, snapshot);
+}
+
 TEST(command_request_round_trips_with_replace_replacement_arguments) {
     auto const registry = ssg::build_command_argument_codec_registry();
     ssg::ClientCommand const command{
@@ -933,6 +996,7 @@ int main() {
     RUN(command_request_round_trips_with_no_payload);
     RUN(command_request_round_trips_with_palette_execute_arguments);
     RUN(command_request_round_trips_with_tree_select_arguments);
+    RUN(viewport_first_visual_column_survives_the_wire);
     RUN(command_request_round_trips_with_replace_replacement_arguments);
     RUN(find_replace_view_state_round_trips_replacement_through_the_wire);
     RUN(command_request_round_trips_with_text_input_arguments);
@@ -960,6 +1024,7 @@ int main() {
     RUN(binary_frame_rejects_truncated_input);
     RUN(malformed_and_truncated_and_oversized_and_unknown_version_corpus);
     RUN(value_bounds_are_enforced_on_decode);
+    RUN(regenerate_canonical_fixtures);
     RUN(canonical_fixtures_decode_to_the_expected_values);
     return failed == 0 ? 0 : 1;
 }
