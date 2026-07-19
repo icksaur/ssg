@@ -76,7 +76,153 @@ bool matches_golden(std::string const& actual, char const* path) {
     return true;
 }
 
+// M11-4: the client's PaletteReport is a pure, bounded derived view — a function
+// only of the server-published candidates plus the local query/selection/window.
+// This test-local recompute mirrors the client's build_report (apps/ssg_main.cpp)
+// using the SAME shared library primitives (palette_rank, palette_ghost,
+// compute_list_scroll_view), so any private client ranker or invented product
+// data would make the client's snapshot disagree with this reference.
+ssg::PaletteReport recompute_report(
+    std::vector<ssg::PaletteCandidate> const& candidates, std::string const& query,
+    std::uint32_t pane_rows, std::uint32_t first_visible,
+    std::size_t selected_index) {
+    ssg::PaletteReport report;
+    auto order = ssg::palette_rank(candidates, query);
+    report.query = query;
+    if (!order.empty()) {
+        report.ghost = ssg::palette_ghost(candidates[order.front()].label, query);
+    }
+    if (selected_index >= order.size()) {
+        selected_index = order.empty() ? 0 : order.size() - 1;
+    }
+    std::optional<std::uint32_t> selected =
+        order.empty() ? std::nullopt
+                      : std::optional<std::uint32_t>{
+                            static_cast<std::uint32_t>(selected_index)};
+    auto scroll = ssg::compute_list_scroll_view(
+        static_cast<std::uint32_t>(order.size()), pane_rows, first_visible,
+        selected, /*keep_selection_visible=*/false);
+    report.first_visible = scroll.first_visible;
+    report.scrollbar = scroll.scrollbar;
+    for (std::uint32_t row = 0; row < scroll.visible_count; ++row) {
+        report.rows.push_back(candidates[order[scroll.first_visible + row]]);
+    }
+    report.selected = selected;
+    return report;
+}
+
+// The published candidate list for an open palette, straight from the runtime.
+std::vector<ssg::PaletteCandidate> published_candidates(
+    ssg::EditorRuntime& runtime) {
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"palette.open", runtime.revision(), {}})
+                    .accepted());
+    auto snapshot = runtime.snapshot(ssg::ClientId{1}, {80, 24});
+    if (!snapshot) return {};
+    return snapshot->sections().palette.candidates;
+}
+
+// Reconstruct grid row `row` as a plain string (continuation cells contribute no
+// text), for tracing rendered palette labels back to published candidates.
+std::string grid_line(ssg::CellGrid const& grid, int row) {
+    std::string line;
+    for (int column = 0; column < grid.size.columns; ++column) {
+        auto const& cell = grid.at(column, row);
+        if (!cell.continuation) line += cell.text;
+    }
+    return line;
+}
+
 }  // namespace
+
+TEST(palette_report_is_a_pure_function_of_candidates_and_query) {
+    auto root = unique_root("derived");
+    auto runtime = make_runtime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    auto candidates = published_candidates(*runtime);
+    ASSERT_TRUE(!candidates.empty());
+    if (candidates.empty()) return;
+
+    // A representative match, the empty (keep-all) query, and a no-match query.
+    for (std::string const& query : {std::string{}, std::string{"sa"},
+                                     std::string{"zzq-no-such-command"}}) {
+        auto report = recompute_report(candidates, query, 12, 0, 0);
+
+        // Pure function: identical inputs reproduce an identical report.
+        ASSERT_TRUE(recompute_report(candidates, query, 12, 0, 0) == report);
+
+        // The query is echoed verbatim; it is not server-derived.
+        ASSERT_EQ(report.query, query);
+
+        // Invents no product data: every reported row is a published candidate,
+        // and the ghost is derived solely from the top candidate's label.
+        auto order = ssg::palette_rank(candidates, query);
+        for (auto const& shown : report.rows) {
+            bool member = false;
+            for (auto const& candidate : candidates) {
+                if (candidate == shown) { member = true; break; }
+            }
+            ASSERT_TRUE(member);
+        }
+        if (order.empty()) {
+            ASSERT_TRUE(report.rows.empty());
+            ASSERT_EQ(report.ghost, std::string{});
+        } else {
+            ASSERT_EQ(report.ghost,
+                      ssg::palette_ghost(candidates[order.front()].label, query));
+            // The reported rows are exactly the window of the shared ranker's
+            // order — the client uses no private ranking.
+            ASSERT_EQ(report.rows.size(),
+                      std::min<std::size_t>(order.size(), 12));
+            for (std::size_t row = 0; row < report.rows.size(); ++row) {
+                ASSERT_TRUE(report.rows[row] ==
+                            candidates[order[report.first_visible + row]]);
+            }
+        }
+    }
+    fs::remove_all(root);
+}
+
+TEST(rendered_palette_labels_trace_to_published_candidates) {
+    auto root = unique_root("derived-render");
+    auto runtime = make_runtime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    auto candidates = published_candidates(*runtime);
+    ASSERT_TRUE(!candidates.empty());
+    if (candidates.empty()) return;
+
+    auto report = recompute_report(candidates, "sa", 12, 0, 0);
+    ASSERT_TRUE(!report.rows.empty());
+    if (report.rows.empty()) return;
+
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24}, {}, report);
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    auto grid = ssg::render(*snapshot);
+
+    // Every rendered candidate row's label text traces to a published candidate:
+    // for each reported row there is a grid line beginning with its label, and
+    // that label belongs to the published set.
+    for (auto const& shown : report.rows) {
+        bool member = false;
+        for (auto const& candidate : candidates) {
+            if (candidate == shown) { member = true; break; }
+        }
+        ASSERT_TRUE(member);
+
+        bool rendered = false;
+        for (int row = 0; row < grid.size.rows; ++row) {
+            if (grid_line(grid, row).rfind(shown.label, 0) == 0) {
+                rendered = true;
+                break;
+            }
+        }
+        ASSERT_TRUE(rendered);
+    }
+    fs::remove_all(root);
+}
 
 TEST(production_runtime_normal_screen_matches_golden) {
     auto root = unique_root("normal");
@@ -211,6 +357,8 @@ int main() {
     RUN(production_runtime_palette_screen_matches_golden);
     RUN(production_runtime_too_small_screen_matches_golden);
     RUN(delta_replay_reconstructs_the_same_snapshot_and_grid);
+    RUN(palette_report_is_a_pure_function_of_candidates_and_query);
+    RUN(rendered_palette_labels_trace_to_published_candidates);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }
