@@ -143,6 +143,14 @@ KeymapViewState default_terminal_keymap() {
     bind(seq({"End"}), "cursor.line_end", "editor");
     bind(seq({"Shift+Home"}), "select.line_start", "editor");
     bind(seq({"Shift+End"}), "select.line_end", "editor");
+    bind(seq({"Ctrl+Home"}), "cursor.document_start", "editor");
+    bind(seq({"Ctrl+End"}), "cursor.document_end", "editor");
+    bind(seq({"Ctrl+Shift+Home"}), "select.document_start", "editor");
+    bind(seq({"Ctrl+Shift+End"}), "select.document_end", "editor");
+    bind(seq({"PageUp"}), "cursor.page_up", "editor");
+    bind(seq({"PageDown"}), "cursor.page_down", "editor");
+    bind(seq({"Shift+PageUp"}), "select.page_up", "editor");
+    bind(seq({"Shift+PageDown"}), "select.page_down", "editor");
     bind(seq({"Enter"}), "text.newline", "editor");
     bind(seq({"Backspace"}), "text.delete_backward", "editor");
 

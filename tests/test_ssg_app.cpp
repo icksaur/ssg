@@ -416,6 +416,50 @@ TEST(decode_input_modified_arrow_split_reads_are_incomplete) {
     ASSERT_FALSE(overflow.stroke.control);
 }
 
+TEST(decode_input_page_keys_plain_and_modified) {
+    std::size_t consumed = 0;
+    // Plain PageUp / PageDown: ESC [ 5 ~ / ESC [ 6 ~.
+    auto page_up = ssg::app::decode_input("\x1b[5~", true, consumed);
+    ASSERT_EQ(consumed, std::size_t{4});
+    ASSERT_TRUE(page_up.status == ssg::app::DecodeStatus::key);
+    ASSERT_EQ(page_up.stroke.code, std::string{"PageUp"});
+    ASSERT_FALSE(page_up.stroke.shift);
+    auto page_down = ssg::app::decode_input("\x1b[6~", true, consumed);
+    ASSERT_EQ(consumed, std::size_t{4});
+    ASSERT_EQ(page_down.stroke.code, std::string{"PageDown"});
+
+    // Modified form ESC [ 5 ; m ~ (m = 1 + bitmask). Shift+PageUp: m=2 -> Shift.
+    auto shift_pgup = ssg::app::decode_input("\x1b[5;2~", true, consumed);
+    ASSERT_EQ(consumed, std::size_t{6});
+    ASSERT_EQ(shift_pgup.stroke.code, std::string{"PageUp"});
+    ASSERT_TRUE(shift_pgup.stroke.shift);
+    ASSERT_FALSE(shift_pgup.stroke.control);
+    ASSERT_FALSE(shift_pgup.stroke.alt);
+
+    // Shift+PageDown.
+    auto shift_pgdn = ssg::app::decode_input("\x1b[6;2~", true, consumed);
+    ASSERT_EQ(shift_pgdn.stroke.code, std::string{"PageDown"});
+    ASSERT_TRUE(shift_pgdn.stroke.shift);
+
+    // Ctrl+PageUp: m=5 -> bitmask 4 = Ctrl.
+    auto ctrl_pgup = ssg::app::decode_input("\x1b[5;5~", true, consumed);
+    ASSERT_EQ(ctrl_pgup.stroke.code, std::string{"PageUp"});
+    ASSERT_TRUE(ctrl_pgup.stroke.control);
+    ASSERT_FALSE(ctrl_pgup.stroke.shift);
+
+    // Split reads of the modified form are incomplete until the '~' arrives.
+    for (auto const* partial : {"\x1b[5", "\x1b[5;", "\x1b[5;2"}) {
+        consumed = 99;
+        auto decoded = ssg::app::decode_input(partial, true, consumed);
+        ASSERT_TRUE(decoded.status == ssg::app::DecodeStatus::incomplete);
+        ASSERT_EQ(consumed, std::size_t{0});
+    }
+    // A '5'-prefixed sequence that is neither '~' nor ';' is skipped, not misread.
+    auto junk = ssg::app::decode_input("\x1b[5X", true, consumed);
+    ASSERT_EQ(consumed, std::size_t{4});
+    ASSERT_TRUE(junk.status == ssg::app::DecodeStatus::none);
+}
+
 TEST(decode_input_arrows_and_mouse) {
     std::size_t consumed = 0;
     auto up = ssg::app::decode_input("\x1b[A", true, consumed);
@@ -916,6 +960,7 @@ int main() {
     RUN(decode_input_maps_printables_and_named_keys);
     RUN(decode_input_modified_arrows);
     RUN(decode_input_modified_arrow_split_reads_are_incomplete);
+    RUN(decode_input_page_keys_plain_and_modified);
     RUN(decode_input_arrows_and_mouse);
     RUN(decode_input_pointer_press_release_drag);
     RUN(decode_input_pointer_split_reads_are_incomplete);

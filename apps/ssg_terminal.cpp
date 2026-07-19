@@ -255,13 +255,37 @@ Decoded decode_input(std::string_view bytes, bool input_exhausted,
         case 'F': consumed = 3; return {DecodeStatus::key, ssg::KeyStroke{"End"}, {}, 0};
         case '5':
         case '6': {
+            // PageUp/PageDown: plain ESC [ 5 ~ / ESC [ 6 ~, or the modified form
+            // ESC [ 5 ; m ~ (m = 1 + bitmask: bit0 Shift, bit1 Alt, bit2 Ctrl),
+            // mirroring the '1'-prefixed arrow/Home/End modifier handling above.
+            std::string const code = third == '5' ? "PageUp" : "PageDown";
             if (bytes.size() < 4) return {DecodeStatus::incomplete, {}, {}, 0};
-            consumed = 4;
             if (bytes[3] == '~') {
-                return {DecodeStatus::key,
-                        ssg::KeyStroke{third == '5' ? "PageUp" : "PageDown"}, {}, 0};
+                consumed = 4;
+                return {DecodeStatus::key, ssg::KeyStroke{code}, {}, 0};
             }
-            return {DecodeStatus::none, {}, {}, 0};
+            if (bytes[3] != ';') {
+                consumed = 4;  // Unknown '5'/'6'-prefixed CSI; skip conservatively.
+                return {DecodeStatus::none, {}, {}, 0};
+            }
+            std::size_t pos = 4;
+            auto const modifier = parse_decimal(bytes, pos);
+            if (pos == 4 || pos >= bytes.size()) {
+                return {DecodeStatus::incomplete, {}, {}, 0};  // Await digits/final.
+            }
+            if (bytes[pos] != '~') {
+                consumed = pos + 1;  // Malformed; skip.
+                return {DecodeStatus::none, {}, {}, 0};
+            }
+            consumed = pos + 1;
+            ssg::KeyStroke stroke{code};
+            auto const bitmask = modifier - 1;
+            if (bitmask > 0 && (bitmask & ~std::int64_t{0b111}) == 0) {
+                stroke.shift = (bitmask & 0b001) != 0;
+                stroke.alt = (bitmask & 0b010) != 0;
+                stroke.control = (bitmask & 0b100) != 0;
+            }
+            return {DecodeStatus::key, stroke, {}, 0};
         }
         case '<': {
             // SGR mouse: ESC [ < Cb ; Cx ; Cy (M|m).  Cb encodes the button in
