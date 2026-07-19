@@ -426,3 +426,21 @@ now requires the instrumented probe to WRITE a trace (positive control) and both
 binaries to actually exec, before concluding the clean binary's missing trace
 means "compiled out".
 
+
+
+## M10-3/M10-4
+
+Reviewer: gpt-5.5 (code-review agent). 1 MUST, folded.
+
+MUST snapshot-revision-invariant (src/editor_runtime.cpp prime_deferred) —
+prime_deferred() mutated snapshot-visible tree/syntax state without advancing the
+session revision. derive_session_delta rejects a same-revision snapshot pair and
+http_server skips enqueueing when the revision is unchanged, so a delta-based
+(WebSocket) client would silently miss the primed enrichment (the in-process TUI
+is unaffected because it takes full snapshots). Fixed: added
+EditorSession::advance_revision() (mirrors dispatch's overflow guard) as the
+runtime's seam for library-internal out-of-band authoritative changes;
+prime_deferred() advances the revision when deferred work actually ran. Test
+strengthened to assert the revision advances on prime and not on the idempotent
+second call.
+

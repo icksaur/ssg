@@ -132,6 +132,15 @@ Revision EditorSession::revision() const {
     return impl_->revision;
 }
 
+Revision EditorSession::advance_revision() {
+    std::lock_guard lock{impl_->mutex};
+    if (impl_->revision.value() == std::numeric_limits<std::uint64_t>::max()) {
+        throw std::overflow_error{"session revision is exhausted"};
+    }
+    impl_->revision = Revision{impl_->revision.value() + 1};
+    return impl_->revision;
+}
+
 SessionTopology EditorSession::topology() const {
     std::lock_guard lock{impl_->mutex};
     return impl_->topology;

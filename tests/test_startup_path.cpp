@@ -66,16 +66,23 @@ TEST(deferred_enrichment_skips_syntax_and_tree_until_primed) {
     ASSERT_EQ(before.tree_scans, std::uint64_t{0});
 
     // Priming runs the deferred work; it must actually arrive.
+    auto const revision_before_prime = runtime.revision();
     runtime.prime_deferred();
     auto after = runtime.deferred_work_counts();
     ASSERT_TRUE(after.syntax_runs >= 1);
     ASSERT_TRUE(after.tree_scans >= 1);
+    // The session revision advances so delta-based clients observe the primed
+    // enrichment (a same-revision snapshot pair yields no delta).
+    ASSERT_TRUE(runtime.revision().value() > revision_before_prime.value());
 
-    // Idempotent: a second prime does no additional deferred work.
+    // Idempotent: a second prime does no additional deferred work and does not
+    // advance the revision again.
+    auto const revision_after_prime = runtime.revision();
     runtime.prime_deferred();
     auto again = runtime.deferred_work_counts();
     ASSERT_EQ(again.syntax_runs, after.syntax_runs);
     ASSERT_EQ(again.tree_scans, after.tree_scans);
+    ASSERT_EQ(runtime.revision().value(), revision_after_prime.value());
 
     fs::remove_all(root);
 }

@@ -692,14 +692,21 @@ void EditorRuntime::Impl::prime_deferred() {
     // Run whichever scans were requested while deferring, now that the first
     // frame is drawn.  Order: tree then syntax (independent; both publish through
     // the normal snapshot channel on the next snapshot).
+    bool ran = false;
     if (pending_tree_refresh) {
         pending_tree_refresh = false;
         refresh_tree();
+        ran = true;
     }
     if (pending_syntax_refresh) {
         pending_syntax_refresh = false;
         refresh_syntax();
+        ran = true;
     }
+    // Advance the session revision so delta-based clients observe the primed
+    // enrichment; a same-revision snapshot pair yields no delta (derive_session_
+    // delta rejects it), so without this a WebSocket client would miss it.
+    if (ran && session) session->advance_revision();
 }
 
 void EditorRuntime::Impl::enqueue_status(StatusPriority priority, std::string text) {
