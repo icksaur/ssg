@@ -47,4 +47,13 @@ struct CellGrid {
 
 [[nodiscard]] CellGrid render(SessionSnapshot const& snapshot);
 
+// Test instrumentation (M12 INV-render-projection).  Counts the compute_cell_run
+// (grapheme-segmentation) calls render() has made since the last reset.  This is a
+// diagnostic counter, not production state; it lets a test assert that render
+// segments only the logical lines the viewport shows (<= viewport rows), never the
+// whole document — so a regression to whole-document segmentation fails the count
+// oracle.  Not thread-safe across concurrent render() calls (per-thread counter).
+[[nodiscard]] std::uint64_t render_segmentation_calls();
+void reset_render_segmentation_calls();
+
 }  // namespace ssg

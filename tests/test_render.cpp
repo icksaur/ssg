@@ -77,6 +77,47 @@ TEST(render_paints_content_not_accessibility_labels) {
     ASSERT_TRUE(grid_contains(grid, "alpha"));
 }
 
+TEST(render_segments_only_visible_lines_not_whole_document) {
+    // INV-render-projection (M12): render() runs compute_cell_run only for the
+    // logical lines the viewport shows (<= rows), independent of document length.
+    auto root = unique_root();
+    auto make_doc = [](std::size_t line_count) {
+        std::string text;
+        for (std::size_t i = 0; i < line_count; ++i) {
+            text += "line " + std::to_string(i) + "\n";
+        }
+        return text;
+    };
+    std::ofstream{root / "small.txt"} << make_doc(50);
+    std::ofstream{root / "big.txt"} << make_doc(5000);
+    auto runtime = make_runtime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+
+    auto segment_count_for = [&](std::string const& file) -> std::uint64_t {
+        (void)runtime->dispatch(
+            ssg::ClientId{1}, {"file.open", runtime->revision(), file});
+        auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+        ASSERT_TRUE(snapshot.has_value());
+        if (!snapshot) return 0;
+        ssg::reset_render_segmentation_calls();
+        auto grid = ssg::render(*snapshot);
+        (void)grid;
+        return ssg::render_segmentation_calls();
+    };
+
+    auto const small_calls = segment_count_for("small.txt");
+    auto const big_calls = segment_count_for("big.txt");
+
+    // At most one segmentation per visible editor row (24-tall terminal, minus
+    // the chrome rows), and NOT proportional to the 100x-larger document.
+    ASSERT_TRUE(small_calls > 0);
+    ASSERT_TRUE(small_calls <= 24);
+    ASSERT_TRUE(big_calls <= 24);
+    ASSERT_EQ(small_calls, big_calls);
+}
+
+
 TEST(render_colors_are_palette_indices) {
     auto root = unique_root();
     auto runtime = make_runtime(root);
@@ -783,6 +824,7 @@ TEST(render_too_small_is_safe_at_one_by_one) {
 
 int main() {
     RUN(render_paints_content_not_accessibility_labels);
+    RUN(render_segments_only_visible_lines_not_whole_document);
     RUN(render_colors_are_palette_indices);
     RUN(render_is_deterministic);
     RUN(render_projects_palette_results_into_active_pane);

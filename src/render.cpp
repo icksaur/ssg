@@ -5,11 +5,16 @@
 
 #include <algorithm>
 #include <iomanip>
+#include <span>
 #include <sstream>
 #include <stdexcept>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace ssg {
 namespace {
+
+thread_local std::uint64_t g_render_segmentation_calls = 0;
 
 std::uint8_t semantic_index(ThemeSnapshot const& theme, SemanticRole role) {
     auto const role_index = static_cast<std::size_t>(role);
@@ -66,26 +71,41 @@ struct LogicalLine {
     CellRun cells;
 };
 
-std::vector<LogicalLine> logical_lines(std::string const& text) {
-    std::vector<LogicalLine> result;
+// Segment ONLY the logical lines the viewport's visible rows reference, keyed by
+// logical line index — O(visible rows) grapheme segmentation, not O(document)
+// (M12 INV-render-projection).  Lines are located by a single '\n' byte scan
+// (cheap memchr-class work) that stops once past the last referenced line; the
+// '\n'-only split matches the viewport's line model (active_cell_runs /
+// compute_viewport_unwrapped), so `row.logical_line` indexes the same lines the
+// snapshot's viewport was built from.  A `row.logical_line` past the document's
+// last line is simply absent (skipped by the caller), matching the old
+// out-of-range guard.
+std::unordered_map<std::uint32_t, LogicalLine> visible_logical_lines(
+    std::string const& text, std::span<const VisualRow> visible_rows) {
+    std::unordered_map<std::uint32_t, LogicalLine> lines;
+    if (visible_rows.empty()) return lines;
+    std::unordered_set<std::uint32_t> referenced;
+    std::uint32_t max_line = 0;
+    for (auto const& row : visible_rows) {
+        referenced.insert(row.logical_line);
+        max_line = std::max(max_line, row.logical_line);
+    }
+    std::uint32_t index = 0;
     std::size_t begin = 0;
     for (;;) {
-        auto const end = text.find_first_of("\r\n", begin);
+        auto const end = text.find('\n', begin);
         auto const length =
             end == std::string::npos ? text.size() - begin : end - begin;
-        auto line = std::string_view{text}.substr(begin, length);
-        result.push_back({line, begin, compute_cell_run(line)});
-        if (end == std::string::npos) break;
+        if (referenced.contains(index)) {
+            auto const line = std::string_view{text}.substr(begin, length);
+            ++g_render_segmentation_calls;
+            lines.emplace(index, LogicalLine{line, begin, compute_cell_run(line)});
+        }
+        if (end == std::string::npos || index >= max_line) break;
         begin = end + 1;
-        if (text[end] == '\r' && begin < text.size() && text[begin] == '\n') {
-            ++begin;
-        }
-        if (begin == text.size()) {
-            result.push_back({{}, begin, compute_cell_run({})});
-            break;
-        }
+        ++index;
     }
-    return result;
+    return lines;
 }
 
 void put(CellGrid& grid, int x, int y, std::string text, std::uint8_t foreground,
@@ -354,8 +374,9 @@ std::optional<GridPosition> screen_cell_for(ViewportViewState const& viewport,
 void paint_document(CellGrid& grid, SessionSnapshot const& snapshot,
                     Rect const& content, ThemeSnapshot const& theme,
                     std::uint8_t background) {
-    auto lines = logical_lines(snapshot.sections().document.text);
     auto const& viewport = snapshot.client().viewport;
+    auto lines = visible_logical_lines(snapshot.sections().document.text,
+                                       viewport.visible_rows);
     auto const& selection = snapshot.sections().selection;
     auto const& find_state = snapshot.sections().find_replace;
     // Find matches are byte offsets into a specific document revision; only paint
@@ -375,11 +396,12 @@ void paint_document(CellGrid& grid, SessionSnapshot const& snapshot,
     for (std::size_t row_index = 0; row_index < viewport.visible_rows.size();
          ++row_index) {
         auto const& row = viewport.visible_rows[row_index];
-        if (row.logical_line >= lines.size() ||
+        auto const line_it = lines.find(row.logical_line);
+        if (line_it == lines.end() ||
             row_index >= static_cast<std::size_t>(content.height)) {
             continue;
         }
-        auto const& line = lines[row.logical_line];
+        auto const& line = line_it->second;
         int column = content.x;
         auto const last_span = std::min<std::size_t>(
             line.cells.spans.size(),
@@ -691,5 +713,8 @@ CellGrid render(SessionSnapshot const& snapshot) {
     }
     return grid;
 }
+
+std::uint64_t render_segmentation_calls() { return g_render_segmentation_calls; }
+void reset_render_segmentation_calls() { g_render_segmentation_calls = 0; }
 
 }  // namespace ssg
