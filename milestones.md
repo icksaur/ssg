@@ -296,6 +296,16 @@ viewport-bounded. **Measured: 10 MiB first_frame p50 ~1.7 s → 9.3 ms (~180x).*
   H2). Visually signed off on the real binary.
 - **VP-3** (`acce0a2`): word-wrap gate regression (ON wraps a long line to multiple
   visual rows through the runtime, OFF clips to one) + remeasure.
+- **Review fold** (`fc1189e`): shared horizontal origin (report requested offset,
+  per-row snap in VisualRow.start_cell) + no-wrap selection extension uses
+  logical-line steps.
+- **OUTSTANDING (review MUST, tracked m12-vp2b-selection):** the selection/reveal
+  path still builds a whole-document `TextModel` + full wrapped viewport on every
+  caret move / reveal, so interactive editing on a large file is ~O(document) per
+  keystroke under no-wrap (first frame unaffected; not a regression vs pre-M12).
+  INV-viewport-bounded-work says selection must project too. Fix is a windowed/
+  lazy TextModel or a no-wrap fast path — a larger change to the central selection
+  class; scope decision pending.
 Non-goal (future): lazy/mmapped file loading — the document READ (868 ms for
 10 MiB) is now the dominant large-file cost and is a separate milestone.
 
