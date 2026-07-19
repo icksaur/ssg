@@ -347,6 +347,40 @@ struct TraceProbeResult {
     return 0;
 }
 
+// The exec->first-frame ceiling for the small cache-warm fixture, enforced only
+// under --enforce on the designated benchmark host (per doc/spec-fast-startup.md
+// M10-5).  Generous relative to the measured baseline (single-digit ms) so it is
+// a gross-regression tripwire, not a host-tight gate; the real number is tuned on
+// the bench host.  The 10 MiB fixture is intentionally NOT gated here — its cost
+// is the O(document) work deferred to Milestone 12.
+constexpr double kSmallFileBudgetMs = 250.0;
+
+[[nodiscard]] double total_exec_p99(std::vector<Trace> const& traces) {
+    std::vector<double> samples;
+    samples.reserve(traces.size());
+    for (auto const& trace : traces) {
+        samples.push_back(
+            static_cast<double>(trace.marks.at("first_content_frame") - trace.t0) /
+            1'000'000.0);
+    }
+    return percentile(std::move(samples), 0.99);
+}
+
+// Measure every fixture; returns per-fixture kept traces (post-discard).
+[[nodiscard]] std::map<std::string, std::vector<Trace>> measure_fixtures(
+    std::string const& probe, std::vector<Fixture> const& fixtures) {
+    std::map<std::string, std::vector<Trace>> result;
+    for (auto const& fixture : fixtures) {
+        std::vector<Trace> traces;
+        for (std::size_t rep = 0; rep < repetitions; ++rep) {
+            auto trace = run_once(probe, fixture.file_arg, fixture.cwd);
+            if (trace && rep >= discard) traces.push_back(*trace);
+        }
+        result.emplace(fixture.name, std::move(traces));
+    }
+    return result;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -356,8 +390,10 @@ int main(int argc, char** argv) {
     if (argc == 2 && std::string_view{argv[1]} == "--verify-clean") {
         return verify_clean(clean, probe);
     }
-    if (argc > 1) {
-        std::cerr << "usage: startup_benchmark [--verify-clean]\n";
+    bool const enforce =
+        argc == 2 && std::string_view{argv[1]} == "--enforce";
+    if (argc > 1 && !enforce) {
+        std::cerr << "usage: startup_benchmark [--verify-clean|--enforce]\n";
         return 1;
     }
 
@@ -366,6 +402,7 @@ int main(int argc, char** argv) {
     std::error_code ec;
     fs::remove_all(root, ec);
     auto fixtures = make_fixtures(root);
+    auto measured = measure_fixtures(probe, fixtures);
 
     std::ostringstream report;
     report << "provenance platform=linux compiler=\"" << SSG_BENCHMARK_COMPILER
@@ -375,12 +412,7 @@ int main(int argc, char** argv) {
            << " cache=warm winsize=80x24 clock=CLOCK_MONOTONIC\n";
 
     for (auto const& fixture : fixtures) {
-        // Warm the page cache by opening once (result discarded), then measure.
-        std::vector<Trace> traces;
-        for (std::size_t rep = 0; rep < repetitions; ++rep) {
-            auto trace = run_once(probe, fixture.file_arg, fixture.cwd);
-            if (trace && rep >= discard) traces.push_back(*trace);
-        }
+        auto const& traces = measured.at(fixture.name);
         if (traces.empty()) {
             report << "fixture " << fixture.name << " FAILED to produce traces\n";
             continue;
@@ -395,6 +427,22 @@ int main(int argc, char** argv) {
         std::ofstream out{out_path};
         out << report.str();
         std::cout << "baseline report written to " << out_path << '\n';
+    }
+
+    if (enforce) {
+        auto const it = measured.find("small_file");
+        if (it == measured.end() || it->second.empty()) {
+            std::cerr << "enforce: small_file produced no traces\n";
+            return 1;
+        }
+        double const p99 = total_exec_p99(it->second);
+        if (p99 >= kSmallFileBudgetMs) {
+            std::cerr << "enforce: small_file exec->first-frame p99 " << p99
+                      << "ms exceeds budget " << kSmallFileBudgetMs << "ms\n";
+            return 1;
+        }
+        std::cout << "enforce: small_file exec->first-frame p99 " << p99
+                  << "ms within budget " << kSmallFileBudgetMs << "ms OK\n";
     }
     return 0;
 }
