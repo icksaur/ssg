@@ -463,3 +463,16 @@ optional_subsystem_count from the enum, and all_optional_subsystems is built wit
 std::to_array (size deduced from initializers), so adding an OptionalSubsystem
 without listing it fails the assert.
 
+
+
+## M10-5
+
+Reviewer: gpt-5.5 (code-review agent). 1 MUST, folded.
+
+MUST goal-drift (.github/workflows/benchmark.yml) — M10-5 added
+startup_benchmark --enforce and documented the exec->first-frame budget, but the
+self-hosted benchmark-host workflow still only built/ran editor_benchmark, so the
+new ceiling was not actually enforced by the designated gate (doc/spec-fast-
+startup.md M10-5 requires it). Fixed: the benchmark-host workflow now also builds
+and runs startup_benchmark --enforce (kept off portable ctest).
+

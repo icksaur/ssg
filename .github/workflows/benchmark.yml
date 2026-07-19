@@ -14,3 +14,7 @@ jobs:
         run: cmake --build build --config Release --parallel --target editor_benchmark
       - name: Enforce fixed budgets
         run: ./build/editor_benchmark --enforce
+      - name: Build startup benchmark
+        run: cmake --build build --config Release --parallel --target startup_benchmark
+      - name: Enforce exec-to-first-frame startup budget
+        run: ./build/startup_benchmark --enforce
