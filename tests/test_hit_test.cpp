@@ -171,6 +171,52 @@ TEST(click_past_eol_blank_line_and_below_document_clamp_to_line_end) {
     ASSERT_TRUE(below_pos.has_value());
 }
 
+TEST(click_past_eol_integration_lands_caret_at_line_end) {
+    // CE-2 (reproducible headless integration): a click past a line's content, on
+    // a blank line, and below the document flows hit_test -> resolve_document_
+    // position -> cursor.set_position and lands the caret at the row's end.
+    auto root = unique_root();
+    std::string const text = "ab\n\ncde\n";  // ends: line0=2, blank=3, line2=7, tail=8
+    std::ofstream{root / "doc.txt"} << text;
+    auto runtime = make_runtime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(ssg::ClientId{1},
+                            {"file.open", runtime->revision(), std::string{"doc.txt"}});
+
+    auto caret_offset_after_click = [&](int column, int row) -> std::uint64_t {
+        auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+        if (!snapshot) return 9999;
+        auto const content = snapshot->sections().shell.panes.front().content;
+        auto hit = ssg::hit_test(*snapshot, column, row);
+        if (hit.region != ssg::HitRegion::editor) return 9999;
+        auto pos = ssg::resolve_document_position(text, ssg::ByteOffset{hit.byte_offset});
+        if (!pos) return 9999;
+        (void)runtime->dispatch(
+            ssg::ClientId{1},
+            {"cursor.set_position", runtime->revision(),
+             ssg::SelectionCommandArguments{pos, std::nullopt}});
+        auto after = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+        if (!after) return 9999;
+        return after->sections()
+            .selection.selections.primary()
+            .active.byte_offset.value();
+    };
+
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    auto const content = snapshot->sections().shell.panes.front().content;
+
+    // Click far right of line 0 ("ab") -> caret at its end (offset 2).
+    ASSERT_EQ(caret_offset_after_click(content.x + 40, content.y), std::uint64_t{2});
+    // Click on the blank line -> caret on the blank line (offset 3).
+    ASSERT_EQ(caret_offset_after_click(content.x + 5, content.y + 1), std::uint64_t{3});
+    // Click below the last line -> caret at the last visual row's end (offset 8).
+    ASSERT_EQ(caret_offset_after_click(content.x + 10, content.bottom() - 1),
+              std::uint64_t{8});
+}
+
 TEST(panel_row_maps_to_its_tree_node_id) {
     auto root = unique_root();
     for (int i = 0; i < 6; ++i) {
@@ -385,6 +431,7 @@ TEST(out_of_bounds_and_chrome_return_no_target) {
 int main() {
     RUN(editor_cell_maps_to_its_document_byte_offset);
     RUN(click_past_eol_blank_line_and_below_document_clamp_to_line_end);
+    RUN(click_past_eol_integration_lands_caret_at_line_end);
     RUN(panel_row_maps_to_its_tree_node_id);
     RUN(palette_row_maps_to_its_absolute_rank_index);
     RUN(palette_scrollbar_and_empty_area_classify_correctly);
