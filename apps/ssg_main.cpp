@@ -13,7 +13,7 @@
 #include "ssg_terminal.h"
 
 #include <ssg/editor_runtime.h>
-#include <ssg/hit_test.h>
+#include <ssg/hit_tester.h>
 #include <ssg/find_replace.h>
 #include <ssg/input.h>
 #include <ssg/palette.h>
@@ -548,7 +548,7 @@ int main(int argc, char** argv) {
                         *dragEdge < 0 ? content.y : content.bottom() - 1;
                     int const column = std::clamp(lastPointerColumn, content.x,
                                                   content.right() - 1);
-                    auto hit = ssg::hitTest(*scrolled, column, edgeRow);
+                    auto hit = ssg::HitTester{*scrolled}.at( column, edgeRow);
                     if (hit.region == ssg::HitRegion::Editor) {
                         auto active = ssg::resolveDocumentPosition(
                             scrolled->sections().document.text,
@@ -619,7 +619,7 @@ int main(int argc, char** argv) {
                 ssg::RegionHit hit;
                 ssg::app::PointerTargets targets;
                 if (snapshot) {
-                    hit = ssg::hitTest(*snapshot, decoded.pointer.column,
+                    hit = ssg::HitTester{*snapshot}.at( decoded.pointer.column,
                                         decoded.pointer.row);
                     if (hit.region == ssg::HitRegion::Editor) {
                         targets.document_position = ssg::resolveDocumentPosition(
@@ -665,7 +665,7 @@ int main(int argc, char** argv) {
                 // window, everything else scrolls the editor document.
                 ssg::HitRegion region = ssg::HitRegion::None;
                 if (snapshot) {
-                    region = ssg::hitTest(*snapshot, decoded.pointer.column,
+                    region = ssg::HitTester{*snapshot}.at( decoded.pointer.column,
                                            decoded.pointer.row).region;
                 }
                 switch (ssg::app::route_wheel(region)) {

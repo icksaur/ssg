@@ -2,7 +2,7 @@
 #include "ssg_terminal.h"
 
 #include <ssg/editor_runtime.h>
-#include <ssg/hit_test.h>
+#include <ssg/hit_tester.h>
 #include <ssg/render.h>
 #include <ssg/selection.h>
 
