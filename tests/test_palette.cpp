@@ -1,4 +1,4 @@
-#include <ssg/palette.h>
+#include <ssg/palette_searcher.h>
 
 #include "test_helpers.h"
 
@@ -11,7 +11,7 @@ std::vector<std::string> idsInRankOrder(
     std::vector<ssg::PaletteCandidate> const& candidates,
     std::string_view query) {
     std::vector<std::string> ids;
-    for (auto index : ssg::paletteRank(candidates, query)) {
+    for (auto index : ssg::PaletteSearcher{}.rank(candidates, query)) {
         ids.push_back(candidates[index].id);
     }
     return ids;
@@ -61,14 +61,14 @@ TEST(subsequenceMatchesAcrossSeparators) {
 }
 
 TEST(ghostCompletesMatchingPrefixCaseInsensitively) {
-    ASSERT_EQ(ssg::paletteGhost("Save File", "sa"), std::string{"ve File"});
-    ASSERT_EQ(ssg::paletteGhost("Save File", "Save"), std::string{" File"});
+    ASSERT_EQ(ssg::PaletteSearcher{}.ghost("Save File", "sa"), std::string{"ve File"});
+    ASSERT_EQ(ssg::PaletteSearcher{}.ghost("Save File", "Save"), std::string{" File"});
 }
 
 TEST(ghostEmptyWhenQueryIsNotAPrefix) {
-    ASSERT_EQ(ssg::paletteGhost("Save File", "ile"), std::string{});
-    ASSERT_EQ(ssg::paletteGhost("Save File", ""), std::string{});
-    ASSERT_EQ(ssg::paletteGhost("Sa", "save"), std::string{});
+    ASSERT_EQ(ssg::PaletteSearcher{}.ghost("Save File", "ile"), std::string{});
+    ASSERT_EQ(ssg::PaletteSearcher{}.ghost("Save File", ""), std::string{});
+    ASSERT_EQ(ssg::PaletteSearcher{}.ghost("Sa", "save"), std::string{});
 }
 
 int main() {

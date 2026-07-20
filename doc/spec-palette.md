@@ -181,7 +181,7 @@ client concern:
   carries no human-readable label; human labels and the key-sequence `detail` land
   with the command-metadata/keymap work (M6).  Until then the palette rows and the
   ghost completion show command ids.
-- The authoritative fuzzy ranker is `ssg::palette_rank` (`src/palette.cpp`).  The
+- The authoritative fuzzy ranker is `ssg::PaletteSearcher{}.rank` (`src/palette_searcher.cpp`).  The
   retained `SearchController` ranker mirrors its scoring and tiebreak (score desc,
   label then id ascending) so the reference/browser path cannot diverge from it.
 - Ghost-text completion must never change document or command state; it is a
@@ -226,7 +226,7 @@ client concern:
 
 | Step | Work | Files | Oracle |
 |---|---|---|---|
-| 1 | Publish a per-mode `PaletteCandidate {id,label,detail}` list on the snapshot from the command registry and workspace in a new `include/ssg/palette.h`; retire shared `SearchViewState` results/query/selection from the palette path | `include/ssg/palette.h`, `src/palette.cpp`, `src/runtime/*.cpp`, `src/protocol.cpp`, catalog/round-trip tests | candidate list matches the registry/workspace; round-trip |
+| 1 | Publish a per-mode `PaletteCandidate {id,label,detail}` list on the snapshot from the command registry and workspace in a new `include/ssg/palette_searcher.h`; retire shared `SearchViewState` results/query/selection from the palette path | `include/ssg/palette_searcher.h`, `src/palette_searcher.cpp`, `src/runtime/*.cpp`, `src/protocol.cpp`, catalog/round-trip tests | candidate list matches the registry/workspace; round-trip |
 | 2 | Add the `PromptKind::palette` surface and render the results pane: project ranked candidates into the active pane with selection highlight and scrollbar, restore document/empty-state on close | `include/ssg/prompt.h`, `src/ui_layout.cpp`, `src/render.cpp`, `tests/test_ui_layout.cpp`, `tests/test_render.cpp` | projection render + restore-on-close test |
 | 3 | Header query + ghost-text completion in the status area | `src/ui_layout.cpp`, `src/render.cpp`, `tests/test_ui_layout.cpp` | header query/ghost-text render test |
 | 4a | Client-local fuzzy ranker in the TUI reporting the bounded query/selected view | `apps/ssg_terminal.{h,cpp}`, `tests/test_ssg_app.cpp` | client ranker matches reference-ranker order for the fixture set |

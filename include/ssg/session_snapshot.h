@@ -9,7 +9,7 @@
 #include <ssg/input.h>
 #include <ssg/lsp_features.h>
 #include <ssg/lsp_sync.h>
-#include <ssg/palette.h>
+#include <ssg/palette_searcher.h>
 #include <ssg/search.h>
 #include <ssg/selection.h>
 #include <ssg/session.h>
