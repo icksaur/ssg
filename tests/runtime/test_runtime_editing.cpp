@@ -128,7 +128,7 @@ TEST(workspaceReplaceDispatchMatchesFeaturePreviewAndDiskApply) {
 
     ssg::FindRequest request{"cat", {}, std::nullopt, 100000, nullptr};
     DiskPreviewWorkspace oracleWorkspace{root / "workspace", runtime.revision()};
-    auto oracle = ssg::previewWorkspaceReplace(oracleWorkspace, runtime.revision(), request, "dog");
+    auto oracle = ssg::WorkspaceReplacer{}.preview(oracleWorkspace, runtime.revision(), request, "dog");
     ASSERT_TRUE(oracle.accepted());
     ASSERT_EQ(oracle.preview->changes.size(), std::size_t{1});
 
@@ -157,7 +157,7 @@ TEST(workspaceReplaceRejectsStaleAndOutOfBoundsPreview) {
 
     ssg::FindRequest request{"cat", {}, std::nullopt, 100000, nullptr};
     DiskPreviewWorkspace oracleWorkspace{workspace, runtime.revision()};
-    auto oracle = ssg::previewWorkspaceReplace(oracleWorkspace, runtime.revision(), request, "dog");
+    auto oracle = ssg::WorkspaceReplacer{}.preview(oracleWorkspace, runtime.revision(), request, "dog");
     ASSERT_TRUE(oracle.accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"replace.workspace_preview", runtime.revision(), ssg::WorkspaceReplaceArguments{request, "dog"}}).accepted());
 
@@ -198,7 +198,7 @@ TEST(workspaceReplaceUpdatesOpenDocumentSnapshotAndDisk) {
 
     ssg::FindRequest request{"cat", {}, std::nullopt, 100000, nullptr};
     DiskPreviewWorkspace oracleWorkspace{root / "workspace", runtime.revision()};
-    auto oracle = ssg::previewWorkspaceReplace(oracleWorkspace, runtime.revision(), request, "dog");
+    auto oracle = ssg::WorkspaceReplacer{}.preview(oracleWorkspace, runtime.revision(), request, "dog");
     ASSERT_TRUE(oracle.accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"replace.workspace_preview", runtime.revision(), ssg::WorkspaceReplaceArguments{request, "dog"}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"replace.workspace_apply", runtime.revision(), {}}).accepted());

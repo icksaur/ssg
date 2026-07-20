@@ -395,7 +395,7 @@ CommandHandlerResult bindFindReplace(EditorRuntime::Impl& runtime,
             if (arguments == nullptr) {
                 return failure("replace.workspace_preview requires a workspace replace payload");
             }
-            auto result = previewWorkspaceReplace(runtime, revision,
+            auto result = WorkspaceReplacer{}.preview(runtime, revision,
                                                     arguments->request,
                                                     arguments->replacement);
             if (!result.accepted()) return failure(result.message);
@@ -416,7 +416,7 @@ CommandHandlerResult bindFindReplace(EditorRuntime::Impl& runtime,
             if (explicitPreview != nullptr && *explicitPreview != *preview) {
                 return failure("replace.workspace_apply payload does not match the current workspace preview");
             }
-            auto result = applyWorkspaceReplace(runtime, *preview, runtime);
+            auto result = WorkspaceReplacer{}.apply(runtime, *preview, runtime);
             if (!result.accepted()) return failure(result.message);
             runtime.workspaceReplacePreview.reset();
             runtime.refreshTree();
