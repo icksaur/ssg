@@ -14,7 +14,7 @@
 namespace {
 
 ssg::DocumentPosition position(std::string_view text, std::uint64_t offset) {
-    return *ssg::resolveDocumentPosition(text, ssg::ByteOffset{offset}, 4);
+    return *ssg::SelectionNavigator::resolvePosition(text, ssg::ByteOffset{offset}, 4);
 }
 
 ssg::SelectionSet selections(

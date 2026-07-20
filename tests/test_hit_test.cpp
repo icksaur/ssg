@@ -69,7 +69,7 @@ TEST(editorCellMapsToItsDocumentByteOffset) {
         ASSERT_EQ(hit.region, ssg::HitRegion::Editor);
         ASSERT_EQ(hit.byteOffset, target.byteOffset);
         auto position =
-            ssg::resolveDocumentPosition(text, ssg::ByteOffset{hit.byteOffset});
+            ssg::SelectionNavigator::resolvePosition(text, ssg::ByteOffset{hit.byteOffset});
         ASSERT_TRUE(position.has_value());
         if (position) {
             ASSERT_EQ(position->line.value(),
@@ -102,7 +102,7 @@ TEST(editorCellMapsToItsDocumentByteOffset) {
     ASSERT_EQ(pastEol.byteOffset, std::uint32_t{5});
     ASSERT_EQ(pastEol.byteLen, std::uint32_t{0});
     {
-        auto position = ssg::resolveDocumentPosition(
+        auto position = ssg::SelectionNavigator::resolvePosition(
             text, ssg::ByteOffset{pastEol.byteOffset});
         ASSERT_TRUE(position.has_value());
         if (position) ASSERT_EQ(position->line.value(), std::uint64_t{0});
@@ -131,7 +131,7 @@ TEST(clickPastEolBlankLineAndBelowDocumentClampToLineEnd) {
     auto const content = shell.panes.front().content;
 
     auto resolveLine = [&](std::uint32_t offset) -> std::uint64_t {
-        auto p = ssg::resolveDocumentPosition(text, ssg::ByteOffset{offset});
+        auto p = ssg::SelectionNavigator::resolvePosition(text, ssg::ByteOffset{offset});
         return p ? p->line.value() : 9999;
     };
 
@@ -167,7 +167,7 @@ TEST(clickPastEolBlankLineAndBelowDocumentClampToLineEnd) {
     ASSERT_EQ(below.byteOffset, lastRowEnd);
     ASSERT_EQ(below.byteLen, std::uint32_t{0});
     auto belowPos =
-        ssg::resolveDocumentPosition(text, ssg::ByteOffset{below.byteOffset});
+        ssg::SelectionNavigator::resolvePosition(text, ssg::ByteOffset{below.byteOffset});
     ASSERT_TRUE(belowPos.has_value());
 }
 
@@ -190,7 +190,7 @@ TEST(clickPastEolIntegrationLandsCaretAtLineEnd) {
         auto const content = snapshot->sections().shell.panes.front().content;
         auto hit = ssg::HitTester{*snapshot}.at( column, row);
         if (hit.region != ssg::HitRegion::Editor) return 9999;
-        auto pos = ssg::resolveDocumentPosition(text, ssg::ByteOffset{hit.byteOffset});
+        auto pos = ssg::SelectionNavigator::resolvePosition(text, ssg::ByteOffset{hit.byteOffset});
         if (!pos) return 9999;
         (void)runtime->dispatch(
             ssg::ClientId{1},

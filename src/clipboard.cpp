@@ -48,7 +48,7 @@ ClipboardSystemStatus systemStatus(ClipboardResponseStatus status) {
 bool positionIsValid(std::string_view text, const DocumentPosition& position,
                        int tabWidth) {
     const auto resolved =
-        resolveDocumentPosition(text, position.byteOffset, tabWidth);
+        ssg::SelectionNavigator::resolvePosition(text, position.byteOffset, tabWidth);
     return resolved.has_value() && *resolved == position;
 }
 
@@ -156,7 +156,7 @@ std::optional<SelectionSet> cutSelections(
     std::uint64_t erasedBefore = 0;
     for (const auto range : ranges) {
         const auto offset = range.begin - erasedBefore;
-        const auto position = resolveDocumentPosition(
+        const auto position = ssg::SelectionNavigator::resolvePosition(
             resultingText, ByteOffset{offset}, tabWidth);
         if (!position) {
             return std::nullopt;
@@ -184,7 +184,7 @@ std::optional<SelectionSet> pasteSelections(
         if (signedOffset < 0) {
             return std::nullopt;
         }
-        const auto position = resolveDocumentPosition(
+        const auto position = ssg::SelectionNavigator::resolvePosition(
             resultingText, ByteOffset{static_cast<std::uint64_t>(signedOffset)},
             tabWidth);
         if (!position) {

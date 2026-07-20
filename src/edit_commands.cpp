@@ -245,11 +245,11 @@ std::optional<SelectionSet> remapSelections(
     std::vector<Selection> values;
     values.reserve(before.items().size());
     const auto resolveMapped = [&](std::uint64_t offset) {
-        auto resolved = resolveDocumentPosition(
+        auto resolved = ssg::SelectionNavigator::resolvePosition(
             resultingText, ByteOffset{offset}, tabWidth);
         while (!resolved && offset < resultingText.size()) {
             ++offset;
-            resolved = resolveDocumentPosition(
+            resolved = ssg::SelectionNavigator::resolvePosition(
                 resultingText, ByteOffset{offset}, tabWidth);
         }
         return resolved;
@@ -271,7 +271,7 @@ bool validateSelections(std::string_view text,
                          const SelectionSet& selections, int tabWidth) {
     for (const auto& selection : selections.items()) {
         for (const auto* endpoint : {&selection.anchor, &selection.active}) {
-            const auto resolved = resolveDocumentPosition(
+            const auto resolved = ssg::SelectionNavigator::resolvePosition(
                 text, endpoint->byteOffset, tabWidth);
             if (!resolved || *resolved != *endpoint) {
                 return false;

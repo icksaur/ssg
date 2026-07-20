@@ -150,14 +150,17 @@ struct SelectionNavigationResult {
     }
 };
 
-[[nodiscard]] std::optional<DocumentPosition> resolveDocumentPosition(
-    std::string_view text, ByteOffset byteOffset, int tabWidth = 4);
+class SelectionNavigator {
+public:
+    [[nodiscard]] static std::optional<DocumentPosition> resolvePosition(
+        std::string_view text, ByteOffset byteOffset, int tabWidth = 4);
 
-[[nodiscard]] SelectionNavigationResult applySelectionNavigation(
-    std::string_view text, const SelectionViewState& before,
-    SelectionCommand command, ViewportDimensions viewport,
-    SelectionCommandArguments arguments = {},
-    std::span<const BracketPair> bracketPairs = {}, int tabWidth = 4,
-    bool wordWrap = true);
+    [[nodiscard]] SelectionNavigationResult apply(
+        std::string_view text, const SelectionViewState& before,
+        SelectionCommand command, ViewportDimensions viewport,
+        SelectionCommandArguments arguments = {},
+        std::span<const BracketPair> bracketPairs = {}, int tabWidth = 4,
+        bool wordWrap = true) const;
+};
 
 } // namespace ssg

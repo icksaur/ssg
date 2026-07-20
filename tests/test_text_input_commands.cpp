@@ -28,7 +28,7 @@ using ssg::TextInputSettings;
 DocumentPosition position(std::string_view text, std::uint64_t offset,
                           int tabWidth = 4) {
     const auto resolved =
-        ssg::resolveDocumentPosition(text, ByteOffset{offset}, tabWidth);
+        ssg::SelectionNavigator::resolvePosition(text, ByteOffset{offset}, tabWidth);
     ASSERT_TRUE(resolved.has_value());
     return resolved.value();
 }

@@ -107,7 +107,7 @@ CommandHandlerResult bindSelection(EditorRuntime::Impl& runtime,
     ViewportDimensions const viewport{
         std::max<std::uint32_t>(runtime.lastPaneContentColumns, 1),
         std::max<std::uint32_t>(runtime.lastPaneContentRows, 1)};
-    auto result = applySelectionNavigation(runtime.activeText(), runtime.selection,
+    auto result = ssg::SelectionNavigator{}.apply(runtime.activeText(), runtime.selection,
                                              command, viewport,
                                              arguments, {}, 4, runtime.wordWrap);
     if (!result.accepted()) return failure(result.message);
@@ -196,8 +196,8 @@ void revealActiveFindMatch(EditorRuntime::Impl& runtime) {
     }
     auto const& match = state.matches[*state.activeMatch];
     auto text = runtime.activeText();
-    auto anchor = resolveDocumentPosition(text, match.begin);
-    auto active = resolveDocumentPosition(text, match.end);
+    auto anchor = ssg::SelectionNavigator::resolvePosition(text, match.begin);
+    auto active = ssg::SelectionNavigator::resolvePosition(text, match.end);
     if (!anchor || !active) return;
     runtime.selection.selections =
         SelectionSet{std::vector<Selection>{Selection{*anchor, *active}}};
@@ -215,7 +215,7 @@ void revealActiveFindMatch(EditorRuntime::Impl& runtime) {
                                  : std::uint32_t{1};
     ViewportDimensions revealViewport{runtime.lastPaneContentColumns,
                                        revealRows};
-    auto result = applySelectionNavigation(
+    auto result = ssg::SelectionNavigator{}.apply(
         text, runtime.selection, SelectionCommand::ViewRevealCaret,
         revealViewport, {}, {}, 4, runtime.wordWrap);
     if (result.accepted() && result.delta.replacement) {
@@ -437,7 +437,7 @@ void EditorRuntime::Impl::revealPrimaryCaret() {
     ViewportDimensions revealViewport{
         std::max<std::uint32_t>(lastPaneContentColumns, 1),
         std::max<std::uint32_t>(lastPaneContentRows, 1)};
-    auto result = applySelectionNavigation(
+    auto result = ssg::SelectionNavigator{}.apply(
         activeText(), selection, SelectionCommand::ViewRevealCaret,
         revealViewport, {}, {}, 4, wordWrap);
     if (result.accepted() && result.delta.replacement) {

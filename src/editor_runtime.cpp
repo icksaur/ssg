@@ -618,7 +618,7 @@ void EditorRuntime::Impl::clampSelectionToActiveDocument() {
     auto text = activeText();
     auto offset = selection.selections.primary().active.byteOffset.value();
     if (offset > text.size()) offset = text.size();
-    auto position = resolveDocumentPosition(text, ByteOffset{offset}).value_or(zeroPosition());
+    auto position = ssg::SelectionNavigator::resolvePosition(text, ByteOffset{offset}).value_or(zeroPosition());
     selection.selections = SelectionSet{std::vector<Selection>{Selection{position, position}}};
 }
 

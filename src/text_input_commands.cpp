@@ -234,7 +234,7 @@ std::string indentationFor(std::string_view text, std::size_t offset,
 bool validPosition(std::string_view text, const DocumentPosition& position,
                     int tabWidth) {
     const auto resolved =
-        resolveDocumentPosition(text, position.byteOffset, tabWidth);
+        ssg::SelectionNavigator::resolvePosition(text, position.byteOffset, tabWidth);
     return resolved.has_value() && *resolved == position;
 }
 
@@ -436,7 +436,7 @@ TextInputResult TextInputInterpreter::apply(
     for (std::size_t action = 0; action < actionTargets.size(); ++action) {
         const auto caret =
             ownCarets[action].value_or(mapTarget(actionTargets[action]));
-        const auto resolved = resolveDocumentPosition(
+        const auto resolved = ssg::SelectionNavigator::resolvePosition(
             resultingText, ByteOffset{caret}, tabWidth);
         if (!resolved.has_value()) {
             return failure(TextInputError::InvalidSelection,

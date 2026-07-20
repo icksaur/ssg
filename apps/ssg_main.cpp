@@ -550,7 +550,7 @@ int main(int argc, char** argv) {
                                                   content.right() - 1);
                     auto hit = ssg::HitTester{*scrolled}.at( column, edgeRow);
                     if (hit.region == ssg::HitRegion::Editor) {
-                        auto active = ssg::resolveDocumentPosition(
+                        auto active = ssg::SelectionNavigator::resolvePosition(
                             scrolled->sections().document.text,
                             ssg::ByteOffset{hit.byteOffset});
                         if (active) {
@@ -622,7 +622,7 @@ int main(int argc, char** argv) {
                     hit = ssg::HitTester{*snapshot}.at( decoded.pointer.column,
                                         decoded.pointer.row);
                     if (hit.region == ssg::HitRegion::Editor) {
-                        targets.document_position = ssg::resolveDocumentPosition(
+                        targets.document_position = ssg::SelectionNavigator::resolvePosition(
                             snapshot->sections().document.text,
                             ssg::ByteOffset{hit.byteOffset});
                     } else if (hit.region == ssg::HitRegion::Tab) {

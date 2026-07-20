@@ -443,7 +443,7 @@ TEST(unwrappedEndByteOffsetIsTheTrueLineEnd) {
                 doc, ViewportDimensions{columns, 8}, 0, firstCol, 4);
             for (const auto& row : proj.visibleRows) {
                 ASSERT_EQ(row.endByteOffset, wantEnd[row.logicalLine]);
-                auto pos = ssg::resolveDocumentPosition(
+                auto pos = ssg::SelectionNavigator::resolvePosition(
                     doc, ssg::ByteOffset{row.endByteOffset});
                 ASSERT_TRUE(pos.has_value());
                 if (pos) {
