@@ -195,7 +195,7 @@ public:
     // the selection unchanged) when no provider is active or the id is not among
     // the active provider's visible nodes.
     bool select(const TreeNodeId& node_id);
-    bool toggle_selected();  // Expand/collapse the selected directory.
+    bool toggle_selected();
     [[nodiscard]] std::optional<TreeNode> selected_node() const;
 
     TreeViewState view_state() const;

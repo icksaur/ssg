@@ -106,7 +106,6 @@ private:
     std::unique_ptr<Impl> impl_;
 };
 
-// ---------------------------------------------------------------------------
 // Complete protocol codec (Plan 6): a bounded, versioned wire value tree, a
 // typed command-argument registry over it, aggregate snapshot/delta
 // reconstruction, clipboard/status messages, and a binary-frame envelope.
@@ -168,7 +167,6 @@ private:
     explicit ProtocolValue(std::shared_ptr<Storage> storage);
 };
 
-// ---------------------------------------------------------------------------
 // Command argument codec registry: binds every assembled P0 command ID
 // (`p0_command_descriptors()`) to a converter between its typed std::any
 // payload and `ProtocolValue`. There is no untyped fallback; construction
@@ -218,7 +216,6 @@ private:
 // headers; this registry owns only their wire adapters.
 [[nodiscard]] CommandArgumentCodecRegistry build_command_argument_codec_registry();
 
-// ---------------------------------------------------------------------------
 // Versioned message kinds. Each carries a distinct payload; there is no
 // client-asserted capability message (capabilities live in the per-client
 // snapshot/delta).
@@ -345,7 +342,6 @@ struct DecodeStatusActionInvocationResult {
 decode_status_action_invocation(std::string_view bytes,
                                 ProtocolLimits limits = {});
 
-// ---------------------------------------------------------------------------
 // Binary-frame envelope: the only P0 binary-payload support. Producing
 // streaming-output or image payloads remains stretch work; this envelope
 // exists so ingress commands (e.g. `file.open_dropped_content`) can carry
