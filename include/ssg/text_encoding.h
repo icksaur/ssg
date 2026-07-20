@@ -59,11 +59,45 @@ struct DecodedText {
     friend bool operator==(const DecodedText&, const DecodedText&) = default;
 };
 
+// A move-only proof that its bytes are well-formed UTF-8 without NUL bytes.
+// Minted only from an accepted decode result (`DecodeTextResult::validated`) and
+// consumed by `Document` so a document can be built from decoder-validated bytes
+// WITHOUT re-validating them (removing the redundant second scan on the open
+// path), while the public `Document(std::string_view)` still validates for
+// external callers.  Move-only + a private constructor make it hard to fabricate
+// a proof for unvalidated bytes by accident.
+class ValidatedUtf8 {
+public:
+    ValidatedUtf8(ValidatedUtf8&&) noexcept = default;
+    ValidatedUtf8& operator=(ValidatedUtf8&&) noexcept = default;
+    ValidatedUtf8(const ValidatedUtf8&) = delete;
+    ValidatedUtf8& operator=(const ValidatedUtf8&) = delete;
+
+    [[nodiscard]] std::string_view view() const noexcept { return utf8_; }
+
+private:
+    explicit ValidatedUtf8(std::string utf8) noexcept
+        : utf8_(std::move(utf8)) {}
+    [[nodiscard]] std::string take() && noexcept { return std::move(utf8_); }
+
+    friend struct DecodeTextResult;
+    friend class Document;
+
+    std::string utf8_;
+};
+
 struct DecodeTextResult {
     std::optional<DecodedText> text;
     std::optional<TextEncodingError> error;
 
     [[nodiscard]] bool accepted() const noexcept { return text.has_value(); }
+
+    // Mint a validation proof for the just-decoded bytes.  Precondition:
+    // accepted().  The decoder is the only producer of an accepted result, so the
+    // proof genuinely reflects a validation.
+    [[nodiscard]] ValidatedUtf8 validated() const {
+        return ValidatedUtf8{text->utf8};
+    }
 };
 
 struct EncodeTextOptions {

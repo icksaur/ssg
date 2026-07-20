@@ -3,6 +3,7 @@
 #include "piece_tree.h"
 
 #include <ssg/open_metrics.h>
+#include <ssg/text_encoding.h>
 
 #include <algorithm>
 #include <cstddef>
@@ -83,6 +84,8 @@ TransactionResult failure(DocumentError error, Revision revision,
 struct Document::Impl {
     explicit Impl(std::string_view text, DocumentMode document_mode)
         : tree(text), mode(document_mode) {}
+    explicit Impl(std::string&& text, DocumentMode document_mode)
+        : tree(std::move(text)), mode(document_mode) {}
 
     detail::PieceTree tree;
     Revision revision{1};
@@ -96,6 +99,10 @@ Document::Document(std::string_view initial_text, DocumentMode mode) {
             "document text must be well-formed UTF-8 without NUL bytes");
     }
     impl_ = std::make_unique<Impl>(initial_text, mode);
+}
+
+Document::Document(ValidatedUtf8 validated, DocumentMode mode) {
+    impl_ = std::make_unique<Impl>(std::move(validated).take(), mode);
 }
 
 Document::~Document() = default;

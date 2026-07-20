@@ -14,6 +14,7 @@ public:
     using NodePtr = std::unique_ptr<Node>;
 
     explicit PieceTree(std::string_view original = {});
+    explicit PieceTree(std::string&& original);
     ~PieceTree();
 
     PieceTree(const PieceTree&) = delete;

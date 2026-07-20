@@ -10,6 +10,8 @@
 
 namespace ssg {
 
+class ValidatedUtf8;
+
 struct TextEdit {
     ByteOffset offset;
     std::uint64_t erased_bytes;
@@ -62,6 +64,10 @@ struct DocumentSnapshot {
 class Document {
 public:
     explicit Document(std::string_view initial_text = {},
+                      DocumentMode mode = DocumentMode::edit);
+    // Construct from decoder-validated UTF-8 WITHOUT re-validating (open path).
+    // The bytes are moved into the piece tree, not copied.
+    explicit Document(ValidatedUtf8 validated,
                       DocumentMode mode = DocumentMode::edit);
     ~Document();
 

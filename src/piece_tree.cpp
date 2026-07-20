@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <stdexcept>
 #include <tuple>
+#include <utility>
 
 namespace ssg::detail {
 
@@ -287,6 +288,13 @@ PieceTree::PieceTree(std::string_view original)
     : original_buffer_(original) {
     if (!original.empty()) {
         root_ = make_node(false, 0, original.size());
+    }
+}
+
+PieceTree::PieceTree(std::string&& original)
+    : original_buffer_(std::move(original)) {
+    if (!original_buffer_.empty()) {
+        root_ = make_node(false, 0, original_buffer_.size());
     }
 }
 

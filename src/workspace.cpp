@@ -400,7 +400,7 @@ public:
                 const auto persisted_status = decoded.text->status;
                 Document document = [&] {
                     OpenPhaseTimer timer{OpenPhase::document_build};
-                    return Document{decoded.text->utf8};
+                    return Document{decoded.validated()};
                 }();
                 entries.push_back(
                     {id, std::move(key), std::move(label),

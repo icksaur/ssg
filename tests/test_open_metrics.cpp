@@ -33,7 +33,7 @@ fs::path unique_root() {
     return base;
 }
 
-TEST(direct_utf8_open_validates_twice_today) {
+TEST(direct_utf8_open_validates_once) {
     auto root = unique_root();
     { std::ofstream{root / "a.txt", std::ios::binary} << "hello\nworld\n"; }
     auto recovery = ssg::RecoveryActions::create(root / ".recovery");
@@ -42,8 +42,9 @@ TEST(direct_utf8_open_validates_twice_today) {
     ssg::reset_utf8_validation_calls();
     auto opened = workspace.open_file("a.txt");
     ASSERT_TRUE(opened.accepted());
-    // Decode's validating scan + the Document ctor's redundant re-validation.
-    ASSERT_EQ(ssg::utf8_validation_calls(), std::uint64_t{2});
+    // The fused decoder's single scan; the Document consumes ValidatedUtf8 and
+    // does NOT re-validate (LF-3a removed the redundant second scan).
+    ASSERT_EQ(ssg::utf8_validation_calls(), std::uint64_t{1});
 
     fs::remove_all(root);
 }
@@ -69,7 +70,7 @@ TEST(fresh_open_state_materializes_tree_once_today) {
 }  // namespace
 
 int main() {
-    RUN(direct_utf8_open_validates_twice_today);
+    RUN(direct_utf8_open_validates_once);
     RUN(fresh_open_state_materializes_tree_once_today);
     std::cout << passed << " passed, " << failed << " failed\n";
     return failed == 0 ? 0 : 1;
