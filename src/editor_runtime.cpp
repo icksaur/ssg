@@ -20,22 +20,22 @@ ThemeSnapshot default_theme() {
     ThemeSnapshot snapshot{};
     constexpr std::array<std::array<std::uint8_t, 3>, theme_palette_size>
         palette{{
-            {30, 30, 30},     // 0  background
-            {212, 212, 212},  // 1  foreground
-            {62, 62, 66},     // 2  chrome fill / scrollbar track
-            {133, 133, 133},  // 3  muted: line numbers, comments, inactive
-            {77, 170, 252},   // 4  blue: functions, focus, active
-            {229, 192, 123},  // 5  yellow: operators, warnings
-            {239, 74, 74},    // 6  red: errors, deletions
-            {76, 175, 80},    // 7  green: strings, additions
-            {171, 71, 188},   // 8  purple: keywords, prompt, hints
-            {38, 192, 192},   // 9  cyan: types, info
-            {212, 149, 106},  // 10 orange: numbers, modifications, search
-            {209, 109, 158},  // 11 pink: conflicts
-            {187, 187, 187},  // 12 chrome text: header, footer
-            {106, 106, 106},  // 13 dim: inactive tab, scrollbar thumb
-            {232, 232, 232},  // 14 bright: active line number, punctuation
-            {255, 255, 255},  // 15 caret
+            {30, 30, 30},
+            {212, 212, 212},
+            {62, 62, 66},
+            {133, 133, 133},
+            {77, 170, 252},
+            {229, 192, 123},
+            {239, 74, 74},
+            {76, 175, 80},
+            {171, 71, 188},
+            {38, 192, 192},
+            {212, 149, 106},
+            {209, 109, 158},
+            {187, 187, 187},
+            {106, 106, 106},
+            {232, 232, 232},
+            {255, 255, 255},
         }};
     for (std::size_t index = 0; index < snapshot.palette.size(); ++index) {
         snapshot.palette[index] = SrgbColor::from_serialized_channels(
