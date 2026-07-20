@@ -32,8 +32,24 @@ std::vector<std::uint8_t> read_file(const std::filesystem::path& path) {
                                  path.string());
     }
     OpenPhaseTimer timer{OpenPhase::read};
-    return {std::istreambuf_iterator<char>{stream},
-            std::istreambuf_iterator<char>{}};
+    std::vector<std::uint8_t> bytes;
+    std::error_code size_error;
+    const auto hint = std::filesystem::file_size(path, size_error);
+    if (!size_error) {
+        bytes.reserve(static_cast<std::size_t>(hint));
+    }
+    // Read to EOF in chunks: size the buffer from the stat hint but never trust
+    // it (the file may grow/shrink under us), and copy each chunk into the
+    // reserved vector without zero-initializing capacity first.
+    std::array<char, 1U << 16> chunk;
+    while (stream.read(chunk.data(), static_cast<std::streamsize>(chunk.size())) ||
+           stream.gcount() > 0) {
+        const auto got = static_cast<std::size_t>(stream.gcount());
+        bytes.insert(bytes.end(),
+                     reinterpret_cast<const std::uint8_t*>(chunk.data()),
+                     reinterpret_cast<const std::uint8_t*>(chunk.data()) + got);
+    }
+    return bytes;
 }
 
 std::span<const std::byte> as_bytes(
