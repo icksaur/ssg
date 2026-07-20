@@ -1,6 +1,6 @@
 # Code quality
 
-SSG follows `cpp-lib-values.md`.
+SSG follows `cpp-values.md`.
 Cross-cutting implementation invariants are in `copilot-instructions.md`.
 
 Priority order:

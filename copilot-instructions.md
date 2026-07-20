@@ -1,7 +1,7 @@
 # Copilot instructions
 
 Read `doc/spec.md`, `doc/learnings.md`, `code-quality.md`, and
-`cpp-lib-values.md` before changing SSG.
+`cpp-values.md` before changing SSG.
 
 Use the workflow: specification, specification review, implementation, code
 review. Do not begin implementation before warranted specification-review
@@ -55,7 +55,7 @@ findings are folded into the specification.
 ## C++ and code quality
 
 - Prefer correctness, maintainability, simplicity, then measured performance.
-- Follow `cpp-lib-values.md`: RAII, explicit caller-owned lifetime, move-only
+- Follow `cpp-values.md`: RAII, explicit caller-owned lifetime, move-only
   resource owners, valid construction, strong domain types, scoped enums, and
   separate configuration from operation.
 - Keep one behavior path. In-process and WebSocket clients call the same command

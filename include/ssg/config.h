@@ -3,7 +3,7 @@
 // Construction-time configuration types for SSG components.
 //
 // These are immutable value objects passed to constructors to separate
-// configuration from operational state (cpp-lib-values.md).  They differ from
+// configuration from operational state (cpp-values.md).  They differ from
 // SettingsModel (owned by the settings-model feature task): config.h types are
 // fixed at object-construction time, while SettingsModel values may change
 // during a live session and include multi-scope resolution, persistence, and

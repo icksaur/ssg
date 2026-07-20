@@ -204,6 +204,6 @@ canonical CWD.
 - `doc/spec.md` — architecture, invariants, acceptance gates, and scope
 - `doc/features/` — detailed feature contracts
 - `doc/learnings.md` — durable implementation and integration constraints
-- `cpp-lib-values.md` — public C++ API design values
+- `cpp-values.md` — public C++ API design values
 - `process.md` — development and review workflow
 - `doc/backlog.md` — deferred work

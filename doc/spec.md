@@ -13,7 +13,7 @@ Priority:
 
 ## Design
 
-`ssg` is a C++20 library target with transport- and renderer-neutral public interfaces. The library owns resource validity, state transitions, revision ordering, and input validation; applications own presentation, event loops, scheduling policy, and storage of credentials. Read [cpp-lib-values.md](../cpp-lib-values.md) before designing or changing the public C++ API. Its required values include RAII, explicit ownership, move-only resource owners, scoped enums and domain types, construction-time validation, descriptive names, and no required `init()`/`destroy()` sequence.
+`ssg` is a C++20 library target with transport- and renderer-neutral public interfaces. The library owns resource validity, state transitions, revision ordering, and input validation; applications own presentation, event loops, scheduling policy, and storage of credentials. Read [cpp-values.md](../cpp-values.md) before designing or changing the public C++ API. Its required values include RAII, explicit ownership, move-only resource owners, scoped enums and domain types, construction-time validation, descriptive names, and no required `init()`/`destroy()` sequence.
 
 `EditorRuntime` is the default production composition of the complete command
 catalog and live feature-state contributors over a canonical-CWD `Workspace`.
