@@ -107,21 +107,21 @@ TEST(checkpointEncodingMatchesCrossPlatformByteFixture) {
     const ssg::JournalRecoverySet recovery{
         {savedDocument(), untitledDocument()}};
 
-    ASSERT_EQ(ssg::encodeCheckpointRecord(recovery),
+    ASSERT_EQ(ssg::JournalCodec{}.encodeCheckpoint(recovery),
               readHexFixture("checkpoint.hex"));
 }
 
 TEST(replayAppliesCheckpointUpdatesAndRemovals) {
     std::vector<std::byte> journal =
-        ssg::encodeCheckpointRecord({{savedDocument(), untitledDocument()}});
+        ssg::JournalCodec{}.encodeCheckpoint({{savedDocument(), untitledDocument()}});
     const auto updated =
-        ssg::encodeDocumentRecord(untitledDocument("new draft"));
+        ssg::JournalCodec{}.encodeDocument(untitledDocument("new draft"));
     journal.insert(journal.end(), updated.begin(), updated.end());
     const auto removed =
-        ssg::encodeRemoveRecord(ssg::JournalDocumentKey::saved("notes.txt"));
+        ssg::JournalCodec{}.encodeRemove(ssg::JournalDocumentKey::saved("notes.txt"));
     journal.insert(journal.end(), removed.begin(), removed.end());
 
-    const auto replayed = ssg::replayJournal(journal);
+    const auto replayed = ssg::JournalCodec{}.replay(journal);
     ASSERT_FALSE(replayed.discardedTail);
     ASSERT_EQ(replayed.validBytes, journal.size());
     ASSERT_EQ(replayed.recovery.documents.size(), std::size_t{1});
@@ -131,14 +131,14 @@ TEST(replayAppliesCheckpointUpdatesAndRemovals) {
 
 TEST(replayStartsFromNewestCheckpoint) {
     std::vector<std::byte> journal =
-        ssg::encodeCheckpointRecord({{savedDocument("old")}});
-    const auto update = ssg::encodeDocumentRecord(savedDocument("ignored"));
+        ssg::JournalCodec{}.encodeCheckpoint({{savedDocument("old")}});
+    const auto update = ssg::JournalCodec{}.encodeDocument(savedDocument("ignored"));
     journal.insert(journal.end(), update.begin(), update.end());
     const auto checkpoint =
-        ssg::encodeCheckpointRecord({{untitledDocument("new base")}});
+        ssg::JournalCodec{}.encodeCheckpoint({{untitledDocument("new base")}});
     journal.insert(journal.end(), checkpoint.begin(), checkpoint.end());
 
-    const auto replayed = ssg::replayJournal(journal);
+    const auto replayed = ssg::JournalCodec{}.replay(journal);
     ASSERT_EQ(replayed.recovery.documents,
               std::vector<ssg::JournalDocument>{
                   untitledDocument("new base")});
@@ -146,14 +146,14 @@ TEST(replayStartsFromNewestCheckpoint) {
 
 TEST(corruptOrTruncatedTailStopsAtLastValidRecord) {
     const auto checkpoint =
-        ssg::encodeCheckpointRecord({{savedDocument("base")}});
-    const auto update = ssg::encodeDocumentRecord(savedDocument("changed"));
+        ssg::JournalCodec{}.encodeCheckpoint({{savedDocument("base")}});
+    const auto update = ssg::JournalCodec{}.encodeDocument(savedDocument("changed"));
     std::vector<std::byte> complete = checkpoint;
     complete.insert(complete.end(), update.begin(), update.end());
 
     auto corrupt = complete;
     corrupt.back() ^= std::byte{0x80};
-    const auto corruptReplay = ssg::replayJournal(corrupt);
+    const auto corruptReplay = ssg::JournalCodec{}.replay(corrupt);
     ASSERT_TRUE(corruptReplay.discardedTail);
     ASSERT_EQ(corruptReplay.validBytes, checkpoint.size());
     ASSERT_EQ(corruptReplay.recovery.documents,
@@ -162,7 +162,7 @@ TEST(corruptOrTruncatedTailStopsAtLastValidRecord) {
     for (std::size_t cut = checkpoint.size() + 1; cut < complete.size();
          ++cut) {
         const auto truncated =
-            ssg::replayJournal(std::span{complete}.first(cut));
+            ssg::JournalCodec{}.replay(std::span{complete}.first(cut));
         ASSERT_TRUE(truncated.discardedTail);
         ASSERT_EQ(truncated.validBytes, checkpoint.size());
         ASSERT_EQ(truncated.recovery.documents,
@@ -172,17 +172,17 @@ TEST(corruptOrTruncatedTailStopsAtLastValidRecord) {
 
 TEST(malformedInputFailsClosedWithoutAllocationOrState) {
     std::vector<std::byte> malformed(16, std::byte{0xff});
-    const auto replayed = ssg::replayJournal(malformed);
+    const auto replayed = ssg::JournalCodec{}.replay(malformed);
     ASSERT_TRUE(replayed.discardedTail);
     ASSERT_EQ(replayed.validBytes, std::size_t{0});
     ASSERT_TRUE(replayed.recovery.documents.empty());
 
-    auto oversized = ssg::encodeCheckpointRecord({{}});
+    auto oversized = ssg::JournalCodec{}.encodeCheckpoint({{}});
     oversized[6] = std::byte{0xff};
     oversized[7] = std::byte{0xff};
     oversized[8] = std::byte{0xff};
     oversized[9] = std::byte{0x7f};
-    ASSERT_TRUE(ssg::replayJournal(oversized).recovery.documents.empty());
+    ASSERT_TRUE(ssg::JournalCodec{}.replay(oversized).recovery.documents.empty());
 }
 
 TEST(untitledIdsAreNonzeroUniqueAndStableValues) {
@@ -226,7 +226,7 @@ TEST(appendRejectsInvalidSavedIdentityAndInvalidUtf8) {
                   std::invalid_argument);
     ASSERT_THROWS(ssg::JournalDocumentKey::saved(""), std::invalid_argument);
     ASSERT_THROWS(
-        ssg::encodeDocumentRecord(
+        ssg::JournalCodec{}.encodeDocument(
             {ssg::JournalDocumentKey::saved("valid"),
              ssg::DocumentMode::Edit, true, std::string{"bad\xff", 4}}),
         std::invalid_argument);

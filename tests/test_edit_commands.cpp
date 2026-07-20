@@ -27,7 +27,7 @@ using ssg::SelectionSet;
 DocumentPosition position(std::string_view text, std::uint64_t offset,
                           int tabWidth = 4) {
     const auto value =
-        ssg::resolveDocumentPosition(text, ByteOffset{offset}, tabWidth);
+        ssg::SelectionNavigator::resolvePosition(text, ByteOffset{offset}, tabWidth);
     ASSERT_TRUE(value.has_value());
     return *value;
 }
@@ -81,7 +81,7 @@ SelectionSet fixtureSelections(const Fixture& fixture) {
 
 void runFixture(const Fixture& fixture) {
     Document document{fixture.input};
-    const auto result = ssg::applyEditCommand(
+    const auto result = ssg::EditInterpreter{}.apply(
         document.snapshot(), fixtureSelections(fixture),
         fixture.commandSettings, fixture.command);
     ASSERT_EQ(apply(document, result), fixture.expected);
@@ -177,14 +177,14 @@ TEST(multipleSelectionHandFixturesCoverEveryTransform) {
 
 TEST(commentToggleRemovesOnlyWhenAllNonblankLinesAreCommented) {
     Document document{"  //a\n  \n\t//b"};
-    auto result = ssg::applyEditCommand(
+    auto result = ssg::EditInterpreter{}.apply(
         document.snapshot(),
         selections(document.snapshot().text, {{0, 13}}, 2),
         settings(), EditCommand::ToggleComment);
     ASSERT_EQ(apply(document, result), std::string{"  a\n  \n\tb"});
 
     Document mixed{"//a\nb"};
-    result = ssg::applyEditCommand(
+    result = ssg::EditInterpreter{}.apply(
         mixed.snapshot(), selections(mixed.snapshot().text, {{0, 5}}),
         settings(), EditCommand::ToggleComment);
     ASSERT_EQ(apply(mixed, result), std::string{"////a\n//b"});
@@ -192,7 +192,7 @@ TEST(commentToggleRemovesOnlyWhenAllNonblankLinesAreCommented) {
 
 TEST(selectionEndAtLineStartDoesNotTouchNextLine) {
     Document document{"a\nb"};
-    const auto result = ssg::applyEditCommand(
+    const auto result = ssg::EditInterpreter{}.apply(
         document.snapshot(), selections("a\nb", {{0, 2}}), settings(),
         EditCommand::Indent);
     ASSERT_EQ(apply(document, result), std::string{"  a\nb"});
@@ -200,7 +200,7 @@ TEST(selectionEndAtLineStartDoesNotTouchNextLine) {
 
 TEST(resultSelectionsAreResolvedAgainstResultingText) {
     Document document{"a\nb"};
-    const auto result = ssg::applyEditCommand(
+    const auto result = ssg::EditInterpreter{}.apply(
         document.snapshot(), selections("a\nb", {{0, 0}, {2, 2}}),
         settings(), EditCommand::Indent);
     ASSERT_EQ(apply(document, result), std::string{"  a\n  b"});
@@ -214,7 +214,7 @@ TEST(displayTabWidthIsIndependentOfIndentWidth) {
     Document document{"\tabc"};
     auto commandSettings = settings(IndentStyle::Spaces, 2);
     commandSettings.tabWidth = 4;
-    const auto result = ssg::applyEditCommand(
+    const auto result = ssg::EditInterpreter{}.apply(
         document.snapshot(), selections("\tabc", {{1, 1}}, 4),
         commandSettings, EditCommand::Indent);
     ASSERT_EQ(apply(document, result), std::string{"  \tabc"});
@@ -225,7 +225,7 @@ TEST(displayTabWidthIsIndependentOfIndentWidth) {
 TEST(transposeAtDocumentEndIgnoresTrailingTerminator) {
     for (const std::string text : {"ab\n", "ab\r\n", "ab\r"}) {
         Document document{text};
-        const auto result = ssg::applyEditCommand(
+        const auto result = ssg::EditInterpreter{}.apply(
             document.snapshot(),
             selections(text, {{text.size(), text.size()}}), settings(),
             EditCommand::Transpose);
@@ -238,7 +238,7 @@ TEST(nonEditModesAndInvalidInputsFailAtomically) {
     for (const auto mode : {DocumentMode::ReadOnly, DocumentMode::Diff}) {
         Document document{"abc", mode};
         const auto before = document.snapshot();
-        const auto result = ssg::applyEditCommand(
+        const auto result = ssg::EditInterpreter{}.apply(
             before, selections("abc", {{0, 0}}), settings(),
             EditCommand::Indent);
         ASSERT_FALSE(result.accepted());
@@ -249,21 +249,21 @@ TEST(nonEditModesAndInvalidInputsFailAtomically) {
     Document document{"abc"};
     auto badSettings = settings();
     badSettings.indentWidth = 0;
-    auto result = ssg::applyEditCommand(
+    auto result = ssg::EditInterpreter{}.apply(
         document.snapshot(), selections("abc", {{0, 0}}), badSettings,
         EditCommand::Indent);
     ASSERT_EQ(result.error, ssg::EditCommandError::InvalidSettings);
 
     badSettings = settings();
     badSettings.lineCommentToken = "\n";
-    result = ssg::applyEditCommand(
+    result = ssg::EditInterpreter{}.apply(
         document.snapshot(), selections("abc", {{0, 0}}), badSettings,
         EditCommand::ToggleComment);
     ASSERT_EQ(result.error, ssg::EditCommandError::InvalidSettings);
 
     const DocumentPosition inconsistent{
         ByteOffset{1}, ssg::LineIndex{8}, ssg::CellIndex{8}};
-    result = ssg::applyEditCommand(
+    result = ssg::EditInterpreter{}.apply(
         document.snapshot(),
         SelectionSet{{Selection{inconsistent, inconsistent}}}, settings(),
         EditCommand::Indent);
@@ -290,7 +290,7 @@ TEST(unchangedTransformsAreExplicitNoops) {
     };
     for (const auto& test : cases) {
         Document document{test.text};
-        const auto result = ssg::applyEditCommand(
+        const auto result = ssg::EditInterpreter{}.apply(
             document.snapshot(), selections(test.text, {test.range}),
             settings(), test.command);
         ASSERT_TRUE(result.accepted());

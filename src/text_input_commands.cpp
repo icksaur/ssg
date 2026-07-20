@@ -1,6 +1,6 @@
 #include <ssg/text_input_commands.h>
 
-#include <ssg/layout.h>
+#include <ssg/grapheme_layout.h>
 
 #include <algorithm>
 #include <cstddef>
@@ -87,7 +87,7 @@ std::vector<std::size_t> graphemeBoundaries(std::string_view text,
             ++lineEnd;
         }
         const auto run =
-            computeCellRun(text.substr(lineStart, lineEnd - lineStart),
+            GraphemeLayout{}.computeRun(text.substr(lineStart, lineEnd - lineStart),
                              tabWidth);
         for (const auto& span : run.spans) {
             boundaries.push_back(lineStart + span.byteOffset + span.byteLen);
@@ -234,7 +234,7 @@ std::string indentationFor(std::string_view text, std::size_t offset,
 bool validPosition(std::string_view text, const DocumentPosition& position,
                     int tabWidth) {
     const auto resolved =
-        resolveDocumentPosition(text, position.byteOffset, tabWidth);
+        ssg::SelectionNavigator::resolvePosition(text, position.byteOffset, tabWidth);
     return resolved.has_value() && *resolved == position;
 }
 
@@ -288,11 +288,10 @@ TextInputCommandSet textInputCommandSet() {
     return TextInputCommandSet{};
 }
 
-TextInputResult applyTextInput(const DocumentSnapshot& document,
-                                 const SelectionSet& selections,
-                                 TextInputSettings settings,
-                                 TextInputCommand command,
-                                 TextInputArguments arguments) {
+TextInputResult TextInputInterpreter::apply(
+    const DocumentSnapshot& document, const SelectionSet& selections,
+    TextInputSettings settings, TextInputCommand command,
+    TextInputArguments arguments) const {
     if (document.mode == DocumentMode::ReadOnly) {
         return failure(TextInputError::ReadOnly,
                        "text input requires an editable document");
@@ -437,7 +436,7 @@ TextInputResult applyTextInput(const DocumentSnapshot& document,
     for (std::size_t action = 0; action < actionTargets.size(); ++action) {
         const auto caret =
             ownCarets[action].value_or(mapTarget(actionTargets[action]));
-        const auto resolved = resolveDocumentPosition(
+        const auto resolved = ssg::SelectionNavigator::resolvePosition(
             resultingText, ByteOffset{caret}, tabWidth);
         if (!resolved.has_value()) {
             return failure(TextInputError::InvalidSelection,

@@ -1,6 +1,6 @@
 #include <ssg/editor_runtime.h>
-#include <ssg/input.h>
-#include <ssg/render.h>
+#include <ssg/keymap.h>
+#include <ssg/renderer.h>
 #include <ssg/session_snapshot.h>
 
 #include "test_helpers.h"
@@ -86,7 +86,7 @@ ssg::PaletteReport projectReport(
     std::uint32_t paneRows, std::uint32_t firstVisible,
     std::size_t selectedIndex) {
     ssg::PaletteWindowState window{query, selectedIndex, firstVisible, paneRows};
-    return ssg::derivePaletteReport(candidates, window);
+    return ssg::PaletteSearcher{}.report(candidates, window);
 }
 
 // The published candidate list for an open palette, straight from the runtime.
@@ -135,7 +135,7 @@ TEST(paletteReportIsAPureFunctionOfCandidatesAndQuery) {
 
         // Invents no product data: every reported row is a published candidate,
         // and the ghost is derived solely from the top candidate's label.
-        auto order = ssg::paletteRank(candidates, query);
+        auto order = ssg::PaletteSearcher{}.rank(candidates, query);
         for (auto const& shown : report.rows) {
             bool member = false;
             for (auto const& candidate : candidates) {
@@ -148,7 +148,7 @@ TEST(paletteReportIsAPureFunctionOfCandidatesAndQuery) {
             ASSERT_EQ(report.ghost, std::string{});
         } else {
             ASSERT_EQ(report.ghost,
-                      ssg::paletteGhost(candidates[order.front()].label, query));
+                      ssg::PaletteSearcher{}.ghost(candidates[order.front()].label, query));
             // The reported rows are exactly the window of the shared ranker's
             // order — the client uses no private ranking.
             ASSERT_EQ(report.rows.size(),
@@ -178,7 +178,7 @@ TEST(renderedPaletteLabelsTraceToPublishedCandidates) {
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24}, {}, report);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::render(*snapshot);
+    auto grid = ssg::Renderer{}.render(*snapshot);
 
     // Every rendered candidate row's label text traces to a published candidate:
     // for each reported row there is a grid line beginning with its label, and
@@ -214,10 +214,10 @@ TEST(productionRuntimeNormalScreenMatchesGolden) {
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::render(*snapshot);
+    auto grid = ssg::Renderer{}.render(*snapshot);
     ASSERT_TRUE(matchesGolden(grid.canonical(), SSG_CONTRACT_NORMAL_GOLDEN));
     // The screen is a pure function of the snapshot: a second render is identical.
-    ASSERT_EQ(ssg::render(*snapshot).canonical(), grid.canonical());
+    ASSERT_EQ(ssg::Renderer{}.render(*snapshot).canonical(), grid.canonical());
     fs::remove_all(root);
 }
 
@@ -244,9 +244,9 @@ TEST(productionRuntimePaletteScreenMatchesGolden) {
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24}, {}, report);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::render(*snapshot);
+    auto grid = ssg::Renderer{}.render(*snapshot);
     ASSERT_TRUE(matchesGolden(grid.canonical(), SSG_CONTRACT_PALETTE_GOLDEN));
-    ASSERT_EQ(ssg::render(*snapshot).canonical(), grid.canonical());
+    ASSERT_EQ(ssg::Renderer{}.render(*snapshot).canonical(), grid.canonical());
     fs::remove_all(root);
 }
 
@@ -262,7 +262,7 @@ TEST(productionRuntimeTooSmallScreenMatchesGolden) {
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, {24, 3});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::render(*snapshot);
+    auto grid = ssg::Renderer{}.render(*snapshot);
     ASSERT_TRUE(matchesGolden(grid.canonical(), SSG_CONTRACT_TOO_SMALL_GOLDEN));
     fs::remove_all(root);
 }
@@ -309,16 +309,16 @@ TEST(deltaReplayReconstructsTheSameSnapshotAndGrid) {
             continue;
         }
 
-        auto delta = ssg::deriveSessionDelta(*previous, *fresh);
-        auto replayed = ssg::replaySessionDelta(*previous, delta);
+        auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(*previous, *fresh);
+        auto replayed = ssg::SessionSnapshotCodec{}.replay(*previous, delta);
         ASSERT_TRUE(replayed.accepted());
         if (!replayed.accepted()) break;
 
         // The delta-reconstructed snapshot equals a fresh production snapshot,
         // and renders to the identical screen.
         ASSERT_TRUE(*replayed.snapshot == *fresh);
-        ASSERT_EQ(ssg::render(*replayed.snapshot).canonical(),
-                  ssg::render(*fresh).canonical());
+        ASSERT_EQ(ssg::Renderer{}.render(*replayed.snapshot).canonical(),
+                  ssg::Renderer{}.render(*fresh).canonical());
 
         previous = std::move(fresh);
     }

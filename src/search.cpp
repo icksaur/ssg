@@ -157,7 +157,7 @@ NavigationTransition emptyTransition() { return {}; }
 
 } // namespace
 
-ParsedSearchQuery parseSearchQuery(std::string_view query) {
+ParsedSearchQuery WorkspaceSearcher::parse(std::string_view query) const {
     ParsedSearchQuery result;
     if (query.empty()) {
         return result;
@@ -202,9 +202,9 @@ void SearchCancellationToken::cancel() const noexcept {
     cancelled_->store(true, std::memory_order_relaxed);
 }
 
-std::vector<SearchResult> rankWorkspace(
+std::vector<SearchResult> WorkspaceSearcher::rank(
     const WorkspaceSnapshot& workspace, const ParsedSearchQuery& query,
-    const SearchCancellationToken& cancellation) {
+    const SearchCancellationToken& cancellation) const {
     if (query.error != SearchQueryError::None || cancellation.cancelled()) {
         return {};
     }
@@ -222,9 +222,9 @@ std::vector<SearchResult> rankWorkspace(
     return {};
 }
 
-WorkspaceSearchBatch evaluateWorkspaceSearch(
+WorkspaceSearchBatch WorkspaceSearcher::evaluate(
     const SearchWorkspaceSource& source,
-    const WorkspaceSearchRequest& request) {
+    const WorkspaceSearchRequest& request) const {
     WorkspaceSearchBatch batch{.generation = request.generation,
                                .sourceRevision = request.sourceRevision};
     if (request.cancellation.cancelled()) {
@@ -233,13 +233,13 @@ WorkspaceSearchBatch evaluateWorkspaceSearch(
     }
     const auto workspace = source.snapshot(request.sourceRevision);
     batch.sourceRevision = workspace.revision;
-    batch.results =
-        rankWorkspace(workspace, request.query, request.cancellation);
+    batch.results = rank(workspace, request.query, request.cancellation);
     batch.cancelled = request.cancellation.cancelled();
     return batch;
 }
 
-std::optional<NavigationTarget> navigationTarget(const SearchResult& result) {
+std::optional<NavigationTarget> SearchNavigator::target(
+    const SearchResult& result) const {
     if (result.path.empty()) {
         return std::nullopt;
     }
@@ -253,8 +253,8 @@ std::optional<NavigationTarget> navigationTarget(const SearchResult& result) {
                                           : std::nullopt};
 }
 
-std::optional<NavigationTarget> gotoLine(
-    std::string path, const ParsedSearchQuery& query) {
+std::optional<NavigationTarget> SearchNavigator::gotoLine(
+    std::string path, const ParsedSearchQuery& query) const {
     if (path.empty() || query.mode != SearchMode::Line ||
         query.error != SearchQueryError::None || !query.line) {
         return std::nullopt;
@@ -399,7 +399,7 @@ WorkspaceSearchRequest SearchController::beginWorkspaceSearch(
     WorkspaceSearchRequest request{
         .generation = state_.searchGeneration + 1,
         .sourceRevision = sourceRevision,
-        .query = parseSearchQuery(query)};
+        .query = WorkspaceSearcher{}.parse(query)};
     state_.revision = sourceRevision;
     state_.query = std::move(query);
     state_.mode = request.query.mode;
@@ -413,7 +413,7 @@ WorkspaceSearchRequest SearchController::beginWorkspaceSearch(
 
 WorkspaceSearchBatch SearchController::evaluate(
     const WorkspaceSearchRequest& request) const {
-    return evaluateWorkspaceSearch(workspace_, request);
+    return WorkspaceSearcher{}.evaluate(workspace_, request);
 }
 
 void SearchController::cancelWorkspaceSearch() noexcept {
@@ -445,16 +445,16 @@ SearchPublishResult SearchController::publish(
 
 SearchCommandSet searchCommandSet() { return {}; }
 
-SearchDelta deriveSearchDelta(const SearchViewState& base,
-                                const SearchViewState& target) {
+SearchDelta SearchDeltaCodec::derive(const SearchViewState& base,
+                                     const SearchViewState& target) const {
     return {.baseRevision = base.revision,
             .revision = target.revision,
             .state = base == target ? std::nullopt
                                     : std::optional<SearchViewState>{target}};
 }
 
-SearchReplayResult replaySearchDelta(const SearchViewState& base,
-                                       const SearchDelta& delta) {
+SearchReplayResult SearchDeltaCodec::replay(const SearchViewState& base,
+                                            const SearchDelta& delta) const {
     if (base.revision != delta.baseRevision) {
         return {.error = SearchReplayError::StaleRevision};
     }

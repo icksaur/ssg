@@ -4,13 +4,13 @@
 #include <ssg/diff.h>
 #include <ssg/edit_commands.h>
 #include <ssg/editor_runtime.h>
-#include <ssg/editor_session_assembly.h>
-#include <ssg/external_modification.h>
+#include <ssg/editor_session_builder.h>
+#include <ssg/external_modification_flow.h>
 #include <ssg/file_commands.h>
 #include <ssg/find_replace.h>
 #include <ssg/follow_edits.h>
 #include <ssg/history.h>
-#include <ssg/input.h>
+#include <ssg/keymap.h>
 #include <ssg/lsp_features.h>
 #include <ssg/lsp_workspace_edit.h>
 #include <ssg/lua.h>

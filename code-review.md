@@ -476,3 +476,25 @@ new ceiling was not actually enforced by the designated gate (doc/spec-fast-
 startup.md M10-5 requires it). Fixed: the benchmark-host workflow now also builds
 and runs startup_benchmark --enforce (kept off portable ctest).
 
+
+---
+## Resolution (author)
+HIGH `ValidatedUtf8` NUL bypass — FIXED (commit follows). The decoders now reject a
+NUL scalar (U+0000): `decode_utf8_fused` rejects a 0x00 lead byte and `normalized`
+rejects a value==0 scalar, so `decode_text` never produces text containing NUL and
+`DecodeTextResult::validated()` cannot mint a proof carrying NUL. This aligns the
+code with the spec's stated design ("decode is the single validation and rejects
+malformed/NUL input") at zero hot-path cost (one extra branch in the byte loop).
+The workspace's contains_nul-first binary classification is retained (it still
+distinguishes binary from decode_failure). Added a decode NUL-rejection test; the
+only golden changes are the two NUL fixtures' independent terminator-summary/save
+fields (now reporting the NUL decode error) — the actual open records
+(kind/dirty/status/texthash) are unchanged. All 71 tests pass.
+
+## TextCodec objectification (obj-utf8)
+
+Reviewer: code-review agent (`code-quality.md` standard).
+
+No material findings. Reviewed rename/objectification scope:
+`include/ssg/text_codec.h`, `src/text_codec.cpp`, call-site migrations,
+include path migration, and CMake source path update.

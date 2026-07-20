@@ -1,4 +1,4 @@
-#include <ssg/input.h>
+#include <ssg/keymap.h>
 
 #include <algorithm>
 #include <array>
@@ -122,7 +122,7 @@ bool selectionArgumentsEqual(const SelectionCommandArguments& left,
 
 } // namespace
 
-std::optional<KeyStroke> parseKeyStroke(std::string_view encoded) {
+std::optional<KeyStroke> KeyCodec::parseStroke(std::string_view encoded) const {
     if (encoded.empty()) {
         return std::nullopt;
     }
@@ -160,7 +160,7 @@ std::optional<KeyStroke> parseKeyStroke(std::string_view encoded) {
     return result;
 }
 
-std::string formatKeyStroke(const KeyStroke& stroke) {
+std::string KeyCodec::formatStroke(const KeyStroke& stroke) const {
     if (!validStroke(stroke)) {
         return {};
     }
@@ -187,15 +187,15 @@ std::string formatKeyStroke(const KeyStroke& stroke) {
     return result;
 }
 
-std::optional<KeySequence> parseKeySequence(
-    std::initializer_list<std::string_view> encoded) {
+std::optional<KeySequence> KeyCodec::parseSequence(
+    std::initializer_list<std::string_view> encoded) const {
     if (encoded.size() == 0) {
         return std::nullopt;
     }
     KeySequence result;
     result.reserve(encoded.size());
     for (const auto item : encoded) {
-        const auto stroke = parseKeyStroke(item);
+        const auto stroke = parseStroke(item);
         if (!stroke) {
             return std::nullopt;
         }
@@ -235,7 +235,7 @@ std::string keyDisplay(std::string_view code) {
 
 }  // namespace
 
-std::string formatKeySequence(const KeySequence& sequence) {
+std::string KeyCodec::formatSequence(const KeySequence& sequence) const {
     std::string result;
     for (const auto& stroke : sequence) {
         if (!result.empty()) result += ' ';
@@ -248,16 +248,15 @@ std::string formatKeySequence(const KeySequence& sequence) {
     return result;
 }
 
-std::vector<KeymapError> validateKeymap(
-    const KeymapViewState& keymap,
-    std::span<const KeySequence> reservedSequences) {
+std::vector<KeymapError> KeymapMatcher::validate(
+    std::span<const KeySequence> reservedSequences) const {
     std::vector<KeymapError> errors;
-    if (keymap.name.empty()) {
+    if (keymap_.name.empty()) {
         errors.push_back(
             {KeymapErrorCode::EmptyName, 0, "keymap name is empty"});
     }
-    for (std::size_t index = 0; index < keymap.bindings.size(); ++index) {
-        const auto& binding = keymap.bindings[index];
+    for (std::size_t index = 0; index < keymap_.bindings.size(); ++index) {
+        const auto& binding = keymap_.bindings[index];
         if (binding.sequence.empty()) {
             errors.push_back({KeymapErrorCode::EmptySequence, index,
                               "binding sequence is empty"});
@@ -288,7 +287,7 @@ std::vector<KeymapError> validateKeymap(
                               "binding uses a browser-reserved sequence"});
         }
         for (std::size_t previous = 0; previous < index; ++previous) {
-            const auto& earlier = keymap.bindings[previous];
+            const auto& earlier = keymap_.bindings[previous];
             if (earlier.sequence != binding.sequence) {
                 continue;
             }
@@ -304,7 +303,7 @@ std::vector<KeymapError> validateKeymap(
         // the two is declared first (reported once, on the focus binding).
         if (binding.context != "*" && !binding.context.empty()) {
             const bool globallyShadowed = std::ranges::any_of(
-                keymap.bindings, [&](const KeyBinding& other) {
+                keymap_.bindings, [&](const KeyBinding& other) {
                     return other.context == "*" &&
                            other.sequence == binding.sequence;
                 });
@@ -319,7 +318,7 @@ std::vector<KeymapError> validateKeymap(
         // check is symmetric and order-independent (it reports the longer,
         // higher-indexed binding once).
         for (std::size_t other = 0; other < index; ++other) {
-            const auto& earlier = keymap.bindings[other];
+            const auto& earlier = keymap_.bindings[other];
             if (!contextsOverlap(earlier.context, binding.context)) {
                 continue;
             }
@@ -335,8 +334,8 @@ std::vector<KeymapError> validateKeymap(
     return errors;
 }
 
-KeymapDelta deriveKeymapDelta(const KeymapViewState& previous,
-                                const KeymapViewState& current) {
+KeymapDelta KeymapMatcher::deriveDelta(const KeymapViewState& previous,
+                                       const KeymapViewState& current) {
     if (previous == current) {
         return {false, std::nullopt};
     }
@@ -351,15 +350,14 @@ bool eligibleIn(const KeyBinding& binding, std::string_view context) {
 
 }  // namespace
 
-KeymapResolution resolveKeySequence(const KeymapViewState& keymap,
-                                      const KeySequence& pending,
-                                      std::string_view context) {
+KeymapResolution KeymapMatcher::resolveSequence(
+    const KeySequence& pending, std::string_view context) const {
     if (pending.empty()) {
         return {KeymapMatchKind::None, {}};
     }
     const KeyBinding* match = nullptr;
     bool hasPending = false;
-    for (const auto& binding : keymap.bindings) {
+    for (const auto& binding : keymap_.bindings) {
         if (!eligibleIn(binding, context)) {
             continue;
         }
@@ -383,7 +381,7 @@ KeymapResolution resolveKeySequence(const KeymapViewState& keymap,
     return {hasPending ? KeymapMatchKind::Pending : KeymapMatchKind::None, {}};
 }
 
-TextRouting textRouting(std::string_view context) noexcept {
+TextRouting SemanticInputRouter::textRouting(std::string_view context) const noexcept {
     if (context == focusTargetName(FocusTarget::Editor)) {
         return TextRouting::Insert;
     }
@@ -393,11 +391,11 @@ TextRouting textRouting(std::string_view context) noexcept {
     return TextRouting::Ignore;
 }
 
-bool hasGlobalBinding(const KeymapViewState& keymap,
-                        std::string_view commandId,
-                        std::span<const KeySequence> reservedSequences) {
-    for (std::size_t index = 0; index < keymap.bindings.size(); ++index) {
-        const auto& binding = keymap.bindings[index];
+bool KeymapMatcher::hasGlobalBinding(
+    std::string_view commandId,
+    std::span<const KeySequence> reservedSequences) const {
+    for (std::size_t index = 0; index < keymap_.bindings.size(); ++index) {
+        const auto& binding = keymap_.bindings[index];
         if (binding.context != "*" || binding.commandId != commandId) {
             continue;
         }
@@ -407,7 +405,7 @@ bool hasGlobalBinding(const KeymapViewState& keymap,
             continue;
         }
         const bool shadowed = std::any_of(
-            keymap.bindings.begin(), keymap.bindings.begin() + index,
+            keymap_.bindings.begin(), keymap_.bindings.begin() + index,
             [&](const KeyBinding& earlier) {
                 return earlier.context == "*" &&
                        earlier.sequence == binding.sequence &&
@@ -420,19 +418,19 @@ bool hasGlobalBinding(const KeymapViewState& keymap,
     return false;
 }
 
-std::optional<KeySequence> preferredBinding(const KeymapViewState& keymap,
-                                             std::string_view commandId) {
+std::optional<KeySequence> KeymapMatcher::preferredBinding(
+    std::string_view commandId) const {
     const KeySequence* best = nullptr;
     std::string bestDisplay;
-    for (const auto& binding : keymap.bindings) {
+    for (const auto& binding : keymap_.bindings) {
         if (binding.commandId != commandId) continue;
         if (best == nullptr || binding.sequence.size() < best->size()) {
             best = &binding.sequence;
-            bestDisplay = formatKeySequence(binding.sequence);
+            bestDisplay = KeyCodec{}.formatSequence(binding.sequence);
             continue;
         }
         if (binding.sequence.size() == best->size()) {
-            auto display = formatKeySequence(binding.sequence);
+            auto display = KeyCodec{}.formatSequence(binding.sequence);
             if (display < bestDisplay) {
                 best = &binding.sequence;
                 bestDisplay = std::move(display);
@@ -480,12 +478,13 @@ bool SemanticCommand::operator==(const SemanticCommand& other) const {
         arguments, other.arguments);
 }
 
-SemanticCommand semanticInput(const CommittedText& committed) {
+SemanticCommand SemanticInputRouter::semanticInput(
+    const CommittedText& committed) const {
     return {"text.insert", TextInputArguments{committed.utf8()}};
 }
 
-const SemanticCommand& activateHitTarget(
-    const SemanticHitTarget& target) noexcept {
+const SemanticCommand& SemanticInputRouter::activateHitTarget(
+    const SemanticHitTarget& target) const noexcept {
     return target.command;
 }
 

@@ -1,7 +1,7 @@
 #include "../test_helpers.h"
 
 #include <ssg/editor_runtime.h>
-#include <ssg/render.h>
+#include <ssg/renderer.h>
 #include <ssg/ui_layout.h>
 #include <ssg/viewport.h>
 
@@ -159,8 +159,8 @@ void runState(const UiState& state) {
         ASSERT_EQ(shell.viewport.rows, static_cast<int>(dims.rows));
         assertRegionsInBounds(shell);
 
-        ASSERT_NO_THROW(ssg::render(*snapshot));
-        auto grid = ssg::render(*snapshot);
+        ASSERT_NO_THROW(ssg::Renderer{}.render(*snapshot));
+        auto grid = ssg::Renderer{}.render(*snapshot);
         ASSERT_EQ(grid.size.columns, static_cast<int>(dims.columns));
         ASSERT_EQ(grid.size.rows, static_cast<int>(dims.rows));
         ASSERT_EQ(grid.cells.size(),

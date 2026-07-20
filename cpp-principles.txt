@@ -155,6 +155,71 @@ METRICS THAT MATTER
   - Types with two-phase construction            (zero is the target)
   - Calls of form `x.method()` where method just delegates to a member
                                                  (zero is the target)
+  - Public free functions carrying behavior      (zero is the target — see
+                                                  "COMPOSABLE OBJECTS")
+  - src/*.cpp whose primary export is free functions, not an object
+                                                 (zero is the target)
+  - Filenames that are verbs/features, not the noun object inside
+                                                 (zero is the target)
+
+
+COMPOSABLE OBJECTS, NOT FEATURES (SSG, July 2026)
+-------------------------------------------------
+
+The library is built FROM objects that compose, not FROM features expressed as
+free-function modules. An app composes the library's objects to make an editor;
+the library composes its own objects to make behavior. A file named for a feature
+or a verb ("find_replace", "external_modification", "edit_history_integration",
+"follow_edits", "recovery", "audit") is a smell: it names an activity, not a thing
+that encapsulates the activity.
+
+An audit of SSG's 56 src/*.cpp (files/style-audit) found ~21 already true objects,
+~10 stateless transform/codec modules exported as free functions, and ~13
+glue/mixed files. The verb filenames were usually the smell, not the code — several
+"verb" files already held a real object badly named. The rules below convert the
+rest and rename the files.
+
+11. Behavior belongs to an object; public free functions do not carry behavior.
+    Every public operation is a member of the object that owns the relevant state
+    or concept. Free functions are allowed ONLY as .cpp-local helpers (static or
+    anonymous-namespace), never in a public header. This holds EVEN FOR STATELESS
+    logic: a pure transform becomes an object-like class with verb methods on a
+    value (e.g. `Renderer{}.render(snapshot)` not free `render(snapshot)`;
+    `Utf8Codec{}.decode(bytes)` not free `decode_text(bytes)`). A stateless class
+    is still the unit of composition, naming, and testing. (Small POD value structs
+    and their `operator==`/aggregate init are not "behavior" and stay plain.)
+
+12. Commands are member functions of the domain object they act on.
+    Editing commands are methods on `Document`; file/workspace commands are methods
+    on `Workspace`. A "*_commands" file is not an object — it is a thin registration
+    table that binds command ids to those methods and contains NO business logic.
+    The handler is a one-line adapter: look up the target object, call its method,
+    map the result.
+
+13. One primary object per file, named after it; helpers may share the file.
+    A file has exactly one primary object and is named for it (Document.cpp defines
+    Document). Builders, small collaborators, and value types used only by that
+    object may live in the same file — colocating a builder with its product is
+    easier to reason about than scattering it. What a file must NOT be is a bag of
+    unrelated free functions.
+
+14. Filenames and type names are accurate nouns; git mv verb files to their object.
+    Rename the file to the primary object's noun, preserving history with `git mv`.
+    external_modification -> the object that guards it; follow_edits -> the object
+    that follows; find_replace -> the search/replace session object; palette (as a
+    ranker) -> a Searcher; viewport (as a projector) -> a Viewport. If the code is
+    already an object under a verb filename, the fix is just the rename.
+
+15. Objects are valid at construction (reinforces #4/#5 for this refactor).
+    When gathering free functions into a class, prefer a constructor that takes what
+    the operations need over a default-construct-then-call shape. A stateless
+    transform class may be default-constructed; a stateful one takes its collaborators
+    in the ctor and is usable immediately.
+
+Process for this refactor: it is staged on the `cpp-objects` branch, one object per
+commit, green build + tests at every step (ctest -E performance_measurement). Public
+API changes (free function -> method) ripple to call sites and tests in the same
+commit. `git mv` first (history), then wrap, then update call sites.
 
 
 WORKED EXAMPLES (audio library, May 2026)

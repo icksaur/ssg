@@ -6,7 +6,7 @@ Usage:
 
 Output is written to stdout.  Adjacent or overlapping Extended_Pictographic
 ranges are merged so the result is a minimal sorted non-overlapping URange array
-suitable for embedding directly in src/layout.cpp.
+suitable for embedding directly in src/grapheme_layout.cpp.
 """
 
 import re

@@ -13,10 +13,10 @@
 #include "ssg_terminal.h"
 
 #include <ssg/editor_runtime.h>
-#include <ssg/hit_test.h>
+#include <ssg/hit_tester.h>
 #include <ssg/find_replace.h>
-#include <ssg/input.h>
-#include <ssg/palette.h>
+#include <ssg/keymap.h>
+#include <ssg/palette_searcher.h>
 #include <ssg/session_snapshot.h>
 #include <ssg/text_input_commands.h>
 
@@ -336,7 +336,7 @@ int main(int argc, char** argv) {
     // free offset so a wheel scroll persists (see doc/spec-m8.md M8-P). Mirrors
     // the tree's reveal_tree_selection.
     auto revealPaletteSelection = [&] {
-        auto order = ssg::paletteRank(candidates, paletteQuery);
+        auto order = ssg::PaletteSearcher{}.rank(candidates, paletteQuery);
         if (paletteSelected >= order.size()) {
             paletteSelected = order.empty() ? 0 : order.size() - 1;
         }
@@ -344,7 +344,7 @@ int main(int argc, char** argv) {
             order.empty() ? std::nullopt
                           : std::optional<std::uint32_t>{
                                 static_cast<std::uint32_t>(paletteSelected)};
-        auto scroll = ssg::computeListScrollView(
+        auto scroll = ssg::Viewport{}.listScrollView(
             static_cast<std::uint32_t>(order.size()), palettePaneRows,
             paletteFirstVisible, selected, /*keep_selection_visible=*/true);
         paletteFirstVisible = scroll.firstVisible;
@@ -354,8 +354,8 @@ int main(int argc, char** argv) {
     // Saturating: `delta` is a decoded int64, so guard the extremes before adding.
     auto scrollPalette = [&](std::int64_t delta) {
         if (!paletteOpen) return;
-        auto order = ssg::paletteRank(candidates, paletteQuery);
-        auto probe = ssg::computeListScrollView(
+        auto order = ssg::PaletteSearcher{}.rank(candidates, paletteQuery);
+        auto probe = ssg::Viewport{}.listScrollView(
             static_cast<std::uint32_t>(order.size()), palettePaneRows,
             paletteFirstVisible, std::nullopt, /*keep_selection_visible=*/false);
         auto const maximum =
@@ -372,7 +372,7 @@ int main(int argc, char** argv) {
         paletteFirstVisible = static_cast<std::uint32_t>(next);
     };
     auto executeSelectedCandidate = [&] {
-        auto order = ssg::paletteRank(candidates, paletteQuery);
+        auto order = ssg::PaletteSearcher{}.rank(candidates, paletteQuery);
         if (!order.empty() && paletteSelected < order.size()) {
             dispatch("palette.execute",
                      ssg::PaletteExecuteArguments{candidates[order[paletteSelected]].id});
@@ -412,7 +412,7 @@ int main(int argc, char** argv) {
         }
     };
     auto routeText = [&](std::string const& text) {
-        switch (ssg::textRouting(ssg::focusTargetName(focus))) {
+        switch (ssg::SemanticInputRouter{}.textRouting(ssg::focusTargetName(focus))) {
         case ssg::TextRouting::Insert:
             dispatch("text.insert", ssg::TextInputArguments{text});
             break;
@@ -437,7 +437,7 @@ int main(int argc, char** argv) {
             ssg::PaletteWindowState window{paletteQuery, paletteSelected,
                                            paletteFirstVisible,
                                            palettePaneRows};
-            report = ssg::derivePaletteReport(candidates, window);
+            report = ssg::PaletteSearcher{}.report(candidates, window);
             paletteSelected = window.selected;
             paletteFirstVisible = window.firstVisible;
         }
@@ -495,7 +495,7 @@ int main(int argc, char** argv) {
         if (snapshot) {
             // The library renders every screen branch, including the declined-
             // layout "too small" placeholder (M11-L); the app only encodes.
-            auto grid = ssg::render(*snapshot);
+            auto grid = ssg::Renderer{}.render(*snapshot);
             std::string frame = "\x1b[?25l";  // Hide the cursor while redrawing.
             frame += ssg::app::encode_ansi_frame(grid, colorDepth);
             if (grid.caret) {
@@ -548,9 +548,9 @@ int main(int argc, char** argv) {
                         *dragEdge < 0 ? content.y : content.bottom() - 1;
                     int const column = std::clamp(lastPointerColumn, content.x,
                                                   content.right() - 1);
-                    auto hit = ssg::hitTest(*scrolled, column, edgeRow);
+                    auto hit = ssg::HitTester{*scrolled}.at( column, edgeRow);
                     if (hit.region == ssg::HitRegion::Editor) {
-                        auto active = ssg::resolveDocumentPosition(
+                        auto active = ssg::SelectionNavigator::resolvePosition(
                             scrolled->sections().document.text,
                             ssg::ByteOffset{hit.byteOffset});
                         if (active) {
@@ -619,10 +619,10 @@ int main(int argc, char** argv) {
                 ssg::RegionHit hit;
                 ssg::app::PointerTargets targets;
                 if (snapshot) {
-                    hit = ssg::hitTest(*snapshot, decoded.pointer.column,
+                    hit = ssg::HitTester{*snapshot}.at( decoded.pointer.column,
                                         decoded.pointer.row);
                     if (hit.region == ssg::HitRegion::Editor) {
-                        targets.document_position = ssg::resolveDocumentPosition(
+                        targets.document_position = ssg::SelectionNavigator::resolvePosition(
                             snapshot->sections().document.text,
                             ssg::ByteOffset{hit.byteOffset});
                     } else if (hit.region == ssg::HitRegion::Tab) {
@@ -633,7 +633,7 @@ int main(int argc, char** argv) {
                     } else if (hit.region == ssg::HitRegion::Palette) {
                         // Map the absolute rank index to its candidate id using
                         // the same ranked order the client renders.
-                        auto order = ssg::paletteRank(candidates, paletteQuery);
+                        auto order = ssg::PaletteSearcher{}.rank(candidates, paletteQuery);
                         if (hit.itemIndex < order.size()) {
                             targets.palette_command_id =
                                 candidates[order[hit.itemIndex]].id;
@@ -665,7 +665,7 @@ int main(int argc, char** argv) {
                 // window, everything else scrolls the editor document.
                 ssg::HitRegion region = ssg::HitRegion::None;
                 if (snapshot) {
-                    region = ssg::hitTest(*snapshot, decoded.pointer.column,
+                    region = ssg::HitTester{*snapshot}.at( decoded.pointer.column,
                                            decoded.pointer.row).region;
                 }
                 switch (ssg::app::route_wheel(region)) {
@@ -702,8 +702,7 @@ int main(int argc, char** argv) {
             }
 
             chord.push_back(decoded.stroke);
-            auto resolution = ssg::resolveKeySequence(
-                keymap, chord, ssg::focusTargetName(focus));
+            auto resolution = ssg::KeymapMatcher{keymap}.resolveSequence(chord, ssg::focusTargetName(focus));
             if (resolution.kind == ssg::KeymapMatchKind::Resolved) {
                 dispatchResolved(resolution.commandId);
                 chord.clear();

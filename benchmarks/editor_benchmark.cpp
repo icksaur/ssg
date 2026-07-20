@@ -1,6 +1,6 @@
 #include <ssg/command_registry.h>
 #include <ssg/document.h>
-#include <ssg/layout.h>
+#include <ssg/grapheme_layout.h>
 #include <ssg/session.h>
 #include <ssg/snapshot.h>
 #include <ssg/viewport.h>
@@ -231,7 +231,7 @@ void verifyInputs(std::string const& seed, std::string const& script) {
     while (runs.size() < 80 && begin < text.size()) {
         auto end = text.find('\n', begin);
         if (end == std::string_view::npos) end = text.size();
-        runs.push_back(ssg::computeCellRun(text.substr(begin, end - begin)));
+        runs.push_back(ssg::GraphemeLayout{}.computeRun(text.substr(begin, end - begin)));
         begin = end + (end < text.size() ? 1U : 0U);
     }
     return runs;
@@ -255,8 +255,8 @@ void verifyCorrectness(std::string const& base,
         throw std::runtime_error{"operation script does not restore canonical text"};
 
     auto runs = firstViewportRuns(base);
-    auto view = ssg::computeViewport(runs, ssg::ViewportDimensions{120, 40});
-    auto unchanged = ssg::deriveViewportDelta(view, view);
+    auto view = ssg::Viewport{}.compute(runs, ssg::ViewportDimensions{120, 40});
+    auto unchanged = ssg::Viewport{}.deriveDelta(view, view);
     if (unchanged.changed || unchanged.replacement.has_value())
         throw std::runtime_error{"unchanged viewport emitted a payload"};
 
@@ -321,7 +321,7 @@ void measureCommandDelta(std::vector<Operation> const& operations,
             ssg::DocumentViewState after{
                 snapshot.revision, std::move(snapshot.text),
                 ssg::ByteOffset{normalized.insert ? 1U : 0U}};
-            auto delta = ssg::deriveDocumentDelta(view, after);
+            auto delta = ssg::DocumentSnapshotCodec{}.deriveDelta(view, after);
             auto const elapsed = Clock::now() - start;
             if (!result.accepted() || !delta.has_value())
                 throw std::runtime_error{"command-to-delta cycle failed"};
@@ -342,7 +342,7 @@ void measureOpenViewport(std::string const& base, Timings& timings) {
         auto snapshot = document.snapshot();
         auto runs = firstViewportRuns(snapshot.text);
         auto view =
-            ssg::computeViewport(runs, ssg::ViewportDimensions{120, 40});
+            ssg::Viewport{}.compute(runs, ssg::ViewportDimensions{120, 40});
         if (view.visibleRows.empty())
             throw std::runtime_error{"first viewport is empty"};
         timings.openViewportMilliseconds.push_back(

@@ -146,10 +146,10 @@ SessionDelta::SessionDelta(
       shell_{std::move(shell)},
       viewport_{std::move(viewport)} {}
 
-SessionSnapshot assembleSessionSnapshot(
+SessionSnapshot SessionSnapshotCodec::assemble(
     Revision revision, SessionTopology topology,
     InvocationPrincipal const& principal, ViewId viewId,
-    ViewportViewState viewport, SessionSnapshotSections sections) {
+    ViewportViewState viewport, SessionSnapshotSections sections) const {
     return {revision,
             std::move(topology),
             {principal.clientId(), viewId, principal.capabilities(),
@@ -157,8 +157,9 @@ SessionSnapshot assembleSessionSnapshot(
             std::move(sections)};
 }
 
-SessionDelta deriveSessionDelta(SessionSnapshot const& before,
-                                  SessionSnapshot const& after) {
+SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
+                                               SessionSnapshot const& after)
+    const {
     if (before.client().clientId != after.client().clientId ||
         before.client().viewId != after.client().viewId ||
         before.client().capabilities != after.client().capabilities) {
@@ -170,8 +171,8 @@ SessionDelta deriveSessionDelta(SessionSnapshot const& before,
         throw std::invalid_argument{"session delta revisions must advance"};
     }
     auto document =
-        deriveDocumentDelta(before.sections().document,
-                              after.sections().document);
+        DocumentSnapshotCodec{}.deriveDelta(before.sections().document,
+                                           after.sections().document);
     auto const& old = before.sections();
     auto const& next = after.sections();
     if (!document &&
@@ -197,17 +198,17 @@ SessionDelta deriveSessionDelta(SessionSnapshot const& before,
         deriveHistoryDelta(old.history, next.history),
         deriveClipboardDelta(old.clipboard, next.clipboard),
         derivePromptStatusDelta(old.promptStatus, next.promptStatus),
-        deriveSearchDelta(old.search, next.search),
-        deriveFindReplaceDelta(old.findReplace, next.findReplace),
+        SearchDeltaCodec{}.derive(old.search, next.search),
+        FindReplaceDeltaCodec{}.derive(old.findReplace, next.findReplace),
         settingsDelta(old.settings, next.settings),
-        deriveKeymapDelta(old.keymap, next.keymap),
-        deriveTextEncodingDelta(old.textEncoding, next.textEncoding),
+        KeymapMatcher::deriveDelta(old.keymap, next.keymap),
+        TextCodec{}.deriveDelta(old.textEncoding, next.textEncoding),
         deriveTabDelta(old.tabs, next.tabs),
         deriveDiffDelta(old.diff, next.diff),
         deriveExternalModificationDelta(old.externalModification,
                                             next.externalModification),
         deriveFollowEditsDelta(old.followEdits, next.followEdits),
-        deriveTreeDelta(old.tree, next.tree, 4096),
+        TreeDeltaCodec{}.derive(old.tree, next.tree, 4096),
         deriveSyntaxDelta(old.syntax, next.syntax),
         deriveLspSyncDelta(old.lspSync, next.lspSync),
         deriveLspFeatureDelta(old.lspFeatures, next.lspFeatures),
@@ -216,13 +217,14 @@ SessionDelta deriveSessionDelta(SessionSnapshot const& before,
         {shellEqual(old.shell, next.shell)
              ? std::nullopt
              : std::optional{next.shell}},
-        deriveViewportDelta(before.client().viewport,
+        Viewport{}.deriveDelta(before.client().viewport,
                               after.client().viewport),
     };
 }
 
-SessionReplayResult replaySessionDelta(SessionSnapshot const& base,
-                                         SessionDelta const& delta) {
+SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
+                                                 SessionDelta const& delta)
+    const {
     if (base.revision() != delta.baseRevision_ ||
         delta.revision_ <= delta.baseRevision_ ||
         base.client().clientId != delta.clientId_ ||
@@ -233,7 +235,7 @@ SessionReplayResult replaySessionDelta(SessionSnapshot const& base,
 
     auto document = std::optional<DocumentViewState>{base.sections().document};
     if (delta.document_) {
-        document = replayDocumentDelta(
+        document = DocumentSnapshotCodec{}.replay(
             base.sections().document, *delta.document_,
             delta.documentCaret_.value_or(base.sections().document.caret));
     } else if (delta.documentCaret_) {
@@ -249,8 +251,8 @@ SessionReplayResult replaySessionDelta(SessionSnapshot const& base,
         replayReplacement(base.sections().clipboard, delta.clipboard_);
     auto promptStatus = replayReplacement(base.sections().promptStatus,
                                             delta.promptStatus_);
-    auto search = replaySearchDelta(base.sections().search, delta.search_);
-    auto findReplace = replayFindReplaceDelta(base.sections().findReplace,
+    auto search = SearchDeltaCodec{}.replay(base.sections().search, delta.search_);
+    auto findReplace = FindReplaceDeltaCodec{}.replay(base.sections().findReplace,
                                                   delta.findReplace_);
     auto settings = replaySettings(base.sections().settings, delta.settings_);
     auto keymap = replayReplacement(base.sections().keymap, delta.keymap_);
@@ -259,7 +261,7 @@ SessionReplayResult replaySessionDelta(SessionSnapshot const& base,
     auto external = replayExternalModificationDelta(
         base.sections().externalModification,
         delta.externalModification_);
-    auto tree = replayTreeDelta(base.sections().tree, delta.tree_);
+    auto tree = TreeDeltaCodec{}.replay(base.sections().tree, delta.tree_);
     auto syntax = replaySyntaxDelta(base.sections().syntax, delta.syntax_);
     auto lspSync =
         replayLspSyncDelta(base.sections().lspSync, delta.lspSync_);
@@ -343,7 +345,7 @@ SessionReplayResult replaySessionDelta(SessionSnapshot const& base,
             {}};
 }
 
-SessionDelta decodeWireSessionDelta(
+SessionDelta SessionSnapshotCodec::decodeWire(
     Revision baseRevision, Revision revision, ClientId clientId,
     ViewId viewId, std::vector<CapabilityId> capabilities,
     std::optional<SessionTopology> topology,
@@ -357,7 +359,8 @@ SessionDelta decodeWireSessionDelta(
     ExternalModificationDelta externalModification,
     FollowEditsDelta followEdits, TreeDelta tree, SyntaxDelta syntax,
     LspSyncDelta lspSync, LspFeatureDelta lspFeatures,
-    ThemeSectionDelta theme, ShellSectionDelta shell, ViewportDelta viewport) {
+    ThemeSectionDelta theme, ShellSectionDelta shell,
+    ViewportDelta viewport) const {
     return SessionDelta{baseRevision,
                         revision,
                         clientId,

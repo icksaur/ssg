@@ -1,6 +1,6 @@
 #include "test_helpers.h"
 
-#include <ssg/editor_session_assembly.h>
+#include <ssg/editor_session_builder.h>
 #include <ssg/session_snapshot.h>
 
 #include <algorithm>
@@ -200,19 +200,19 @@ TEST(builderThreadsServicesThroughTheCommonDispatchPath) {
 }
 
 TEST(fullSnapshotMatchesReplayedAggregateDelta) {
-    auto before = ssg::assembleSessionSnapshot(
+    auto before = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {}, ssg::InvocationPrincipal{
                                   ssg::ClientId{7},
                                   ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(1), sections(ssg::Revision{4}, "a"));
-    auto after = ssg::assembleSessionSnapshot(
+    auto after = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{5}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(5), sections(ssg::Revision{5}, "changed"));
 
-    auto delta = ssg::deriveSessionDelta(before, after);
-    auto replayed = ssg::replaySessionDelta(before, delta);
+    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, after);
+    auto replayed = ssg::SessionSnapshotCodec{}.replay(before, delta);
     ASSERT_TRUE(replayed.accepted());
     ASSERT_TRUE(replayed.snapshot.has_value());
     ASSERT_EQ(*replayed.snapshot, after);
@@ -223,40 +223,40 @@ TEST(nonDocumentTransitionReplaysAndRejectsADifferentClient) {
     auto newSections = oldSections;
     newSections.tabs.tabs.front().label = "new label";
 
-    auto before = ssg::assembleSessionSnapshot(
+    auto before = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(1), std::move(oldSections));
-    auto after = ssg::assembleSessionSnapshot(
+    auto after = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{5}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(1), std::move(newSections));
-    auto delta = ssg::deriveSessionDelta(before, after);
+    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, after);
     ASSERT_FALSE(delta.document().has_value());
-    auto replayed = ssg::replaySessionDelta(before, delta);
+    auto replayed = ssg::SessionSnapshotCodec{}.replay(before, delta);
     ASSERT_TRUE(replayed.accepted());
     ASSERT_EQ(*replayed.snapshot, after);
 
-    auto otherClient = ssg::assembleSessionSnapshot(
+    auto otherClient = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {},
         ssg::InvocationPrincipal{ssg::ClientId{8},
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{10}, clientView(1),
         sections(ssg::Revision{4}, "same"));
-    ASSERT_FALSE(ssg::replaySessionDelta(otherClient, delta).accepted());
+    ASSERT_FALSE(ssg::SessionSnapshotCodec{}.replay(otherClient, delta).accepted());
 }
 
 TEST(perClientCapabilitiesAndViewportsAreIsolated) {
     auto shared = sections(ssg::Revision{8}, "shared");
-    auto first = ssg::assembleSessionSnapshot(
+    auto first = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{8}, {},
         ssg::InvocationPrincipal{
             ssg::ClientId{1}, ssg::InvocationOrigin::Websocket,
             {ssg::CapabilityId{"local_file_drop"}}},
         ssg::ViewId{10}, clientView(2), shared);
-    auto second = ssg::assembleSessionSnapshot(
+    auto second = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{8}, {},
         ssg::InvocationPrincipal{ssg::ClientId{2},
                                  ssg::InvocationOrigin::Websocket},
@@ -278,19 +278,19 @@ TEST(shellDeltaDetectsAPanelScrollbarOnlyChange) {
     // must not treat this as unchanged.
     newSections.shell.panelScrollbar = ssg::Rect{23, 2, 1, 12};
 
-    auto before = ssg::assembleSessionSnapshot(
+    auto before = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(1), std::move(oldSections));
-    auto after = ssg::assembleSessionSnapshot(
+    auto after = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{5}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(1), std::move(newSections));
-    auto delta = ssg::deriveSessionDelta(before, after);
+    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, after);
     ASSERT_TRUE(delta.shell().replacement.has_value());
-    auto replayed = ssg::replaySessionDelta(before, delta);
+    auto replayed = ssg::SessionSnapshotCodec{}.replay(before, delta);
     ASSERT_TRUE(replayed.accepted());
     ASSERT_EQ(*replayed.snapshot, after);
 }
@@ -304,19 +304,19 @@ TEST(shellDeltaDetectsATabHitOnlyChange) {
     newSections.shell.tabHits = {ssg::TabHit{ssg::Rect{24, 0, 10, 1}, 0},
                                    ssg::TabHit{ssg::Rect{34, 0, 8, 1}, 1}};
 
-    auto before = ssg::assembleSessionSnapshot(
+    auto before = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(1), std::move(oldSections));
-    auto after = ssg::assembleSessionSnapshot(
+    auto after = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{5}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(1), std::move(newSections));
-    auto delta = ssg::deriveSessionDelta(before, after);
+    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, after);
     ASSERT_TRUE(delta.shell().replacement.has_value());
-    auto replayed = ssg::replaySessionDelta(before, delta);
+    auto replayed = ssg::SessionSnapshotCodec{}.replay(before, delta);
     ASSERT_TRUE(replayed.accepted());
     ASSERT_EQ(*replayed.snapshot, after);
 }

@@ -1,12 +1,12 @@
-#include <ssg/edit_history_integration.h>
+#include <ssg/edit_history_coordinator.h>
 
 #include <utility>
 
 namespace ssg {
 namespace {
 
-EditHistoryIntegrationResult invalidResult(std::string message) {
-    return {EditHistoryIntegrationError::InvalidCommandResult,
+EditHistoryResult invalidResult(std::string message) {
+    return {EditHistoryError::InvalidCommandResult,
             std::nullopt,
             std::nullopt,
             std::nullopt,
@@ -14,7 +14,7 @@ EditHistoryIntegrationResult invalidResult(std::string message) {
             std::move(message)};
 }
 
-EditHistoryIntegrationResult applyDerivedEdit(
+EditHistoryResult applyDerivedEdit(
     Document& document, DocumentHistory& history,
     const SelectionSet& selectionsBefore, const EditTransaction& transaction,
     const SelectionSet& selectionsAfter, HistoryEditKind kind,
@@ -24,7 +24,7 @@ EditHistoryIntegrationResult applyDerivedEdit(
                            selectionsAfter, kind, timestampMs);
     if (!historyResult.accepted()) {
         auto message = historyResult.message;
-        return {EditHistoryIntegrationError::HistoryRejected,
+        return {EditHistoryError::HistoryRejected,
                 std::nullopt,
                 std::nullopt,
                 std::move(historyResult),
@@ -33,7 +33,7 @@ EditHistoryIntegrationResult applyDerivedEdit(
     }
 
     auto restored = historyResult.selections;
-    return {EditHistoryIntegrationError::None,
+    return {EditHistoryError::None,
             std::nullopt,
             std::nullopt,
             std::move(historyResult),
@@ -43,7 +43,8 @@ EditHistoryIntegrationResult applyDerivedEdit(
 
 }  // namespace
 
-HistoryEditKind historyEditKind(TextInputCommand command) noexcept {
+HistoryEditKind EditHistoryCoordinator::editKind(
+    TextInputCommand command) noexcept {
     switch (command) {
         case TextInputCommand::Insert:
             return HistoryEditKind::Typing;
@@ -59,21 +60,20 @@ HistoryEditKind historyEditKind(TextInputCommand command) noexcept {
     return HistoryEditKind::Other;
 }
 
-HistoryEditKind historyEditKind(EditCommand) noexcept {
+HistoryEditKind EditHistoryCoordinator::editKind(EditCommand) noexcept {
     return HistoryEditKind::Other;
 }
 
-EditHistoryIntegrationResult applyTextInputWithHistory(
-    Document& document, DocumentHistory& history,
+EditHistoryResult EditHistoryCoordinator::applyTextInput(
     const SelectionSet& selections, TextInputSettings settings,
     TextInputCommand command, TextInputArguments arguments,
     std::uint64_t timestampMs) {
     auto result =
-        applyTextInput(document.snapshot(), selections, std::move(settings),
-                         command, std::move(arguments));
+        TextInputInterpreter{}.apply(document_.snapshot(), selections,
+                         std::move(settings), command, std::move(arguments));
     if (!result.accepted()) {
         auto message = result.message;
-        return {EditHistoryIntegrationError::TextInputRejected,
+        return {EditHistoryError::TextInputRejected,
                 result.error,
                 std::nullopt,
                 std::nullopt,
@@ -85,28 +85,27 @@ EditHistoryIntegrationResult applyTextInputWithHistory(
             "accepted text-input command did not return selections");
     }
     if (!result.transaction.has_value()) {
-        return {EditHistoryIntegrationError::None,
+        return {EditHistoryError::None,
                 std::nullopt,
                 std::nullopt,
                 std::nullopt,
                 std::move(result.selections),
                 {}};
     }
-    return applyDerivedEdit(document, history, selections,
+    return applyDerivedEdit(document_, history_, selections,
                               *result.transaction, *result.selections,
-                              historyEditKind(command), timestampMs);
+                              editKind(command), timestampMs);
 }
 
-EditHistoryIntegrationResult applyEditCommandWithHistory(
-    Document& document, DocumentHistory& history,
+EditHistoryResult EditHistoryCoordinator::applyEditCommand(
     const SelectionSet& selections, EditCommandSettings settings,
     EditCommand command, std::uint64_t timestampMs) {
     auto result =
-        applyEditCommand(document.snapshot(), selections, std::move(settings),
-                           command);
+        EditInterpreter{}.apply(document_.snapshot(), selections,
+                           std::move(settings), command);
     if (!result.accepted()) {
         auto message = result.message;
-        return {EditHistoryIntegrationError::EditCommandRejected,
+        return {EditHistoryError::EditCommandRejected,
                 std::nullopt,
                 result.error,
                 std::nullopt,
@@ -118,16 +117,16 @@ EditHistoryIntegrationResult applyEditCommandWithHistory(
             "accepted edit command did not return selections");
     }
     if (!result.transaction.has_value()) {
-        return {EditHistoryIntegrationError::None,
+        return {EditHistoryError::None,
                 std::nullopt,
                 std::nullopt,
                 std::nullopt,
                 std::move(result.selections),
                 {}};
     }
-    return applyDerivedEdit(document, history, selections,
+    return applyDerivedEdit(document_, history_, selections,
                               *result.transaction, *result.selections,
-                              historyEditKind(command), timestampMs);
+                              editKind(command), timestampMs);
 }
 
 }  // namespace ssg

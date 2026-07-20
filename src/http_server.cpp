@@ -198,14 +198,14 @@ struct HttpEditorRoute::Impl {
             return;
         }
 
-        auto command = decodeCommandRequest(
+        auto command = ProtocolCodec{}.decodeCommandRequest(
             message.data, argumentCodecs, config.protocolLimits);
         if (command.accepted()) {
             auto const result = session.dispatch(
                 connection->binding->principal.clientId(), *command.command);
             if (!result.accepted()) {
                 enqueue(handle, connection,
-                        {encodeCommandResult(result), true});
+                        {ProtocolCodec{}.encodeCommandResult(result), true});
                 return;
             }
             publishSession(connection->binding->sessionId);
@@ -213,7 +213,7 @@ struct HttpEditorRoute::Impl {
         }
 
         auto clipboard =
-            decodeClipboardResponse(message.data, config.protocolLimits);
+            ProtocolCodec{}.decodeClipboardResponse(message.data, config.protocolLimits);
         if (clipboard.accepted()) {
             try {
                 host.clipboardResponse(
@@ -226,7 +226,7 @@ struct HttpEditorRoute::Impl {
             }
             return;
         }
-        auto status = decodeStatusActionInvocation(message.data,
+        auto status = ProtocolCodec{}.decodeStatusActionInvocation(message.data,
                                                        config.protocolLimits);
         if (status.accepted()) {
             try {
@@ -239,7 +239,7 @@ struct HttpEditorRoute::Impl {
             }
             return;
         }
-        auto binary = decodeBinaryFrame(message.data, config.protocolLimits);
+        auto binary = ProtocolCodec{}.decodeBinaryFrame(message.data, config.protocolLimits);
         if (binary.accepted()) {
             try {
                 host.binary(connection->binding->sessionId,
@@ -304,7 +304,7 @@ struct HttpEditorRoute::Impl {
         }
         if (!replayed) {
             enqueue(handle, connection,
-                    {encodeSessionSnapshot(*connection->snapshot), true});
+                    {ProtocolCodec{}.encodeSessionSnapshot(*connection->snapshot), true});
         }
         return true;
     }
@@ -332,8 +332,8 @@ struct HttpEditorRoute::Impl {
                 connection->snapshot.emplace(std::move(current));
                 continue;
             }
-            auto delta = deriveSessionDelta(*connection->snapshot, current);
-            auto encoded = encodeSessionDelta(delta);
+            auto delta = SessionSnapshotCodec{}.deriveDelta(*connection->snapshot, current);
+            auto encoded = ProtocolCodec{}.encodeSessionDelta(delta);
             auto& history = replay[replayKey(*connection->binding)];
             history.push_back({delta.baseRevision(), delta.revision(), encoded});
             while (history.size() > config.replayDeltas) history.pop_front();
@@ -496,12 +496,12 @@ HttpEditorRoute::~HttpEditorRoute() = default;
 
 bool HttpEditorRoute::sendClipboardRequest(
     ClientId clientId, ClipboardRequest const& request) {
-    return impl_->sendTo(clientId, encodeClipboardRequest(request));
+    return impl_->sendTo(clientId, ProtocolCodec{}.encodeClipboardRequest(request));
 }
 
 bool HttpEditorRoute::sendBinary(ClientId clientId,
                                   BinaryFrame const& frame) {
-    return impl_->sendTo(clientId, encodeBinaryFrame(frame));
+    return impl_->sendTo(clientId, ProtocolCodec{}.encodeBinaryFrame(frame));
 }
 
 struct HttpEditorServer::Impl {

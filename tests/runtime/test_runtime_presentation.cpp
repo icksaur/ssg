@@ -1,8 +1,8 @@
 #include "../test_helpers.h"
 
 #include <ssg/editor_runtime.h>
-#include <ssg/editor_session_assembly.h>
-#include <ssg/input.h>
+#include <ssg/editor_session_builder.h>
+#include <ssg/keymap.h>
 #include <ssg/settings.h>
 
 #include <filesystem>

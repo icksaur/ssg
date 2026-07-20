@@ -2,8 +2,8 @@
 #include "ssg_terminal.h"
 
 #include <ssg/editor_runtime.h>
-#include <ssg/hit_test.h>
-#include <ssg/render.h>
+#include <ssg/hit_tester.h>
+#include <ssg/renderer.h>
 #include <ssg/selection.h>
 
 #include "test_helpers.h"
@@ -166,7 +166,7 @@ TEST(unicodeEndToEndGridAndEncoding) {
     auto snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snap.has_value());
     if (!snap.has_value()) return;
-    auto grid = ssg::render(*snap);
+    auto grid = ssg::Renderer{}.render(*snap);
 
     // Locate the content row: the first cell run "a","b".
     int row = -1, startx = -1;
@@ -199,8 +199,8 @@ TEST(unicodeEndToEndGridAndEncoding) {
     // The caret advances by exactly 2 columns across the wide CJK glyph: byte
     // offset 2 (before the glyph) resolves to column startx+2, and offset 5 (just
     // after it, at 'e') to column startx+4 — a literal +2.
-    auto before = ssg::resolveDocumentPosition(line, ssg::ByteOffset{2});
-    auto after = ssg::resolveDocumentPosition(line, ssg::ByteOffset{5});
+    auto before = ssg::SelectionNavigator::resolvePosition(line, ssg::ByteOffset{2});
+    auto after = ssg::SelectionNavigator::resolvePosition(line, ssg::ByteOffset{5});
     ASSERT_TRUE(before.has_value());
     ASSERT_TRUE(after.has_value());
     auto caretColumnAt = [&](std::optional<ssg::DocumentPosition> pos) -> int {
@@ -209,7 +209,7 @@ TEST(unicodeEndToEndGridAndEncoding) {
                                 ssg::SelectionCommandArguments{pos, std::nullopt}});
         auto s = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
         if (!s) return -1;
-        auto g = ssg::render(*s);
+        auto g = ssg::Renderer{}.render(*s);
         return g.caret ? g.caret->column : -1;
     };
     int const columnBefore = caretColumnAt(before);

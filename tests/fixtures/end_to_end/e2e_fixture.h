@@ -1,6 +1,6 @@
 #pragma once
 
-#include <ssg/editor_session_assembly.h>
+#include <ssg/editor_session_builder.h>
 #include <ssg/file_commands.h>
 #include <ssg/follow_edits.h>
 #include <ssg/selection.h>

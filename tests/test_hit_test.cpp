@@ -1,4 +1,4 @@
-#include <ssg/hit_test.h>
+#include <ssg/hit_tester.h>
 
 #include <ssg/editor_runtime.h>
 #include <ssg/selection.h>
@@ -65,11 +65,11 @@ TEST(editorCellMapsToItsDocumentByteOffset) {
     for (auto const& target : targets) {
         int const column = content.x + static_cast<int>(target.viewportColumn);
         int const row = content.y + static_cast<int>(target.viewportRow);
-        auto hit = ssg::hitTest(*snapshot, column, row);
+        auto hit = ssg::HitTester{*snapshot}.at( column, row);
         ASSERT_EQ(hit.region, ssg::HitRegion::Editor);
         ASSERT_EQ(hit.byteOffset, target.byteOffset);
         auto position =
-            ssg::resolveDocumentPosition(text, ssg::ByteOffset{hit.byteOffset});
+            ssg::SelectionNavigator::resolvePosition(text, ssg::ByteOffset{hit.byteOffset});
         ASSERT_TRUE(position.has_value());
         if (position) {
             ASSERT_EQ(position->line.value(),
@@ -97,12 +97,12 @@ TEST(editorCellMapsToItsDocumentByteOffset) {
     // A cell far past the end of the short first line ("alpha", 5 cells) now
     // clamps to that line's end (M8 click-past-EOL): an editor hit at the newline
     // byte after "alpha" (offset 5), zero-width.
-    auto pastEol = ssg::hitTest(*snapshot, content.right() - 2, content.y);
+    auto pastEol = ssg::HitTester{*snapshot}.at( content.right() - 2, content.y);
     ASSERT_EQ(pastEol.region, ssg::HitRegion::Editor);
     ASSERT_EQ(pastEol.byteOffset, std::uint32_t{5});
     ASSERT_EQ(pastEol.byteLen, std::uint32_t{0});
     {
-        auto position = ssg::resolveDocumentPosition(
+        auto position = ssg::SelectionNavigator::resolvePosition(
             text, ssg::ByteOffset{pastEol.byteOffset});
         ASSERT_TRUE(position.has_value());
         if (position) ASSERT_EQ(position->line.value(), std::uint64_t{0});
@@ -131,18 +131,18 @@ TEST(clickPastEolBlankLineAndBelowDocumentClampToLineEnd) {
     auto const content = shell.panes.front().content;
 
     auto resolveLine = [&](std::uint32_t offset) -> std::uint64_t {
-        auto p = ssg::resolveDocumentPosition(text, ssg::ByteOffset{offset});
+        auto p = ssg::SelectionNavigator::resolvePosition(text, ssg::ByteOffset{offset});
         return p ? p->line.value() : 9999;
     };
 
     // Exact cell unchanged: 'a' at row 0 col 0 -> offset 0.
-    auto exact = ssg::hitTest(*snapshot, content.x, content.y);
+    auto exact = ssg::HitTester{*snapshot}.at( content.x, content.y);
     ASSERT_EQ(exact.region, ssg::HitRegion::Editor);
     ASSERT_EQ(exact.byteOffset, std::uint32_t{0});
     ASSERT_TRUE(exact.byteLen > 0);
 
     // Past the end of line 0 ("ab") -> the newline at offset 2, on line 0.
-    auto past0 = ssg::hitTest(*snapshot, content.x + 30, content.y);
+    auto past0 = ssg::HitTester{*snapshot}.at( content.x + 30, content.y);
     ASSERT_EQ(past0.region, ssg::HitRegion::Editor);
     ASSERT_EQ(past0.byteOffset, std::uint32_t{2});
     ASSERT_EQ(past0.byteLen, std::uint32_t{0});
@@ -151,7 +151,7 @@ TEST(clickPastEolBlankLineAndBelowDocumentClampToLineEnd) {
     // The blank line (row 1) — anywhere on it, including column 0 — resolves to the
     // blank line's own offset (3), on line 1. A blank row has no hit targets, so
     // this is purely the clamp.
-    auto blank = ssg::hitTest(*snapshot, content.x + 5, content.y + 1);
+    auto blank = ssg::HitTester{*snapshot}.at( content.x + 5, content.y + 1);
     ASSERT_EQ(blank.region, ssg::HitRegion::Editor);
     ASSERT_EQ(blank.byteOffset, std::uint32_t{3});
     ASSERT_EQ(blank.byteLen, std::uint32_t{0});
@@ -162,12 +162,12 @@ TEST(clickPastEolBlankLineAndBelowDocumentClampToLineEnd) {
     // text end after "cde\n").
     auto const lastRowEnd =
         snapshot->client().viewport.visibleRows.back().endByteOffset;
-    auto below = ssg::hitTest(*snapshot, content.x + 10, content.bottom() - 1);
+    auto below = ssg::HitTester{*snapshot}.at( content.x + 10, content.bottom() - 1);
     ASSERT_EQ(below.region, ssg::HitRegion::Editor);
     ASSERT_EQ(below.byteOffset, lastRowEnd);
     ASSERT_EQ(below.byteLen, std::uint32_t{0});
     auto belowPos =
-        ssg::resolveDocumentPosition(text, ssg::ByteOffset{below.byteOffset});
+        ssg::SelectionNavigator::resolvePosition(text, ssg::ByteOffset{below.byteOffset});
     ASSERT_TRUE(belowPos.has_value());
 }
 
@@ -188,9 +188,9 @@ TEST(clickPastEolIntegrationLandsCaretAtLineEnd) {
         auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
         if (!snapshot) return 9999;
         auto const content = snapshot->sections().shell.panes.front().content;
-        auto hit = ssg::hitTest(*snapshot, column, row);
+        auto hit = ssg::HitTester{*snapshot}.at( column, row);
         if (hit.region != ssg::HitRegion::Editor) return 9999;
-        auto pos = ssg::resolveDocumentPosition(text, ssg::ByteOffset{hit.byteOffset});
+        auto pos = ssg::SelectionNavigator::resolvePosition(text, ssg::ByteOffset{hit.byteOffset});
         if (!pos) return 9999;
         (void)runtime->dispatch(
             ssg::ClientId{1},
@@ -241,17 +241,17 @@ TEST(panelRowMapsToItsTreeNodeId) {
     if (provider.visibleNodeIds.empty()) return;
 
     // The provider-label row (panel.y) is not a node.
-    auto label = ssg::hitTest(*snapshot, shell.panel->x, shell.panel->y);
+    auto label = ssg::HitTester{*snapshot}.at( shell.panel->x, shell.panel->y);
     ASSERT_EQ(label.region, ssg::HitRegion::None);
 
     // The first content row maps to the first visible node id.
-    auto hit = ssg::hitTest(*snapshot, shell.panel->x, shell.panel->y + 1);
+    auto hit = ssg::HitTester{*snapshot}.at( shell.panel->x, shell.panel->y + 1);
     ASSERT_EQ(hit.region, ssg::HitRegion::Panel);
     ASSERT_TRUE(hit.nodeId.has_value());
     if (hit.nodeId) ASSERT_EQ(*hit.nodeId, provider.visibleNodeIds.front());
 
     // A row below the last visible node is empty.
-    auto empty = ssg::hitTest(*snapshot, shell.panel->x, shell.panel->bottom() - 1);
+    auto empty = ssg::HitTester{*snapshot}.at( shell.panel->x, shell.panel->bottom() - 1);
     ASSERT_EQ(empty.region, ssg::HitRegion::None);
 }
 
@@ -279,7 +279,7 @@ TEST(paletteRowMapsToItsAbsoluteRankIndex) {
     projection.scrollbarRect = pane.scrollbar;
     projection.firstVisible = 20;
     projection.selected = std::uint32_t{25};
-    projection.scrollbar = ssg::scrollbarMetrics(40, rows, 20);
+    projection.scrollbar = ssg::Viewport{}.scrollbarMetrics(40, rows, 20);
     for (std::uint32_t i = 0; i < rows; ++i) {
         projection.rows.push_back({"cmd-" + std::to_string(20 + i), ""});
     }
@@ -287,12 +287,12 @@ TEST(paletteRowMapsToItsAbsoluteRankIndex) {
     ssg::SessionSnapshot projected{snapshot->revision(), snapshot->topology(),
                                    snapshot->client(), std::move(sections)};
 
-    auto hit = ssg::hitTest(projected, pane.content.x, pane.content.y + 3);
+    auto hit = ssg::HitTester{projected}.at( pane.content.x, pane.content.y + 3);
     ASSERT_EQ(hit.region, ssg::HitRegion::Palette);
     ASSERT_EQ(hit.itemIndex, std::uint32_t{23});
 
     // The palette overlays the pane: a document cell is inert while it is open.
-    auto overDoc = ssg::hitTest(projected, pane.content.x, pane.content.y);
+    auto overDoc = ssg::HitTester{projected}.at( pane.content.x, pane.content.y);
     ASSERT_EQ(overDoc.region, ssg::HitRegion::Palette);
     ASSERT_EQ(overDoc.itemIndex, std::uint32_t{20});
 }
@@ -317,7 +317,7 @@ TEST(paletteScrollbarAndEmptyAreaClassifyCorrectly) {
     projection.scrollbarRect = pane.scrollbar;
     projection.firstVisible = 0;
     projection.selected = std::uint32_t{0};
-    projection.scrollbar = ssg::scrollbarMetrics(100, rows, 0);
+    projection.scrollbar = ssg::Viewport{}.scrollbarMetrics(100, rows, 0);
     for (std::uint32_t i = 0; i < rows; ++i) {  // exactly fills the window
         projection.rows.push_back({"cmd-" + std::to_string(i), ""});
     }
@@ -326,10 +326,10 @@ TEST(paletteScrollbarAndEmptyAreaClassifyCorrectly) {
                                    snapshot->client(), std::move(sections)};
 
     // Top of the palette gutter -> fraction 0; bottom -> fraction ~1.
-    auto top = ssg::hitTest(projected, pane.scrollbar.x, pane.scrollbar.y);
+    auto top = ssg::HitTester{projected}.at( pane.scrollbar.x, pane.scrollbar.y);
     ASSERT_EQ(top.region, ssg::HitRegion::PaletteScrollbar);
     ASSERT_EQ(top.scrollNumerator, std::uint32_t{0});
-    auto bottom = ssg::hitTest(projected, pane.scrollbar.x, pane.scrollbar.bottom() - 1);
+    auto bottom = ssg::HitTester{projected}.at( pane.scrollbar.x, pane.scrollbar.bottom() - 1);
     ASSERT_EQ(bottom.region, ssg::HitRegion::PaletteScrollbar);
     ASSERT_EQ(bottom.scrollNumerator, bottom.scrollDenominator);
 }
@@ -354,7 +354,7 @@ TEST(editorScrollbarFractionFeedsScrollToFraction) {
     ASSERT_TRUE(gutter.height > 1);
 
     // Top of the gutter -> numerator 0 (scroll to the document top).
-    auto top = ssg::hitTest(*snapshot, gutter.x, gutter.y);
+    auto top = ssg::HitTester{*snapshot}.at( gutter.x, gutter.y);
     ASSERT_EQ(top.region, ssg::HitRegion::EditorScrollbar);
     ASSERT_EQ(top.scrollNumerator, std::uint32_t{0});
     ASSERT_EQ(top.scrollDenominator,
@@ -362,7 +362,7 @@ TEST(editorScrollbarFractionFeedsScrollToFraction) {
 
     // Bottom of the gutter -> numerator == denominator (fraction 1.0), which
     // view.scroll_to_fraction turns into maximum_first_row (the document end).
-    auto bottom = ssg::hitTest(*snapshot, gutter.x, gutter.bottom() - 1);
+    auto bottom = ssg::HitTester{*snapshot}.at( gutter.x, gutter.bottom() - 1);
     ASSERT_EQ(bottom.region, ssg::HitRegion::EditorScrollbar);
     ASSERT_EQ(bottom.scrollNumerator, bottom.scrollDenominator);
     auto const maxFirst = snapshot->client().viewport.scrollbar.maximumFirstRow;
@@ -394,7 +394,7 @@ TEST(tabBarCellMapsToItsTabIndex) {
 
     // A cell inside each published tab rect resolves to that tab's index.
     for (auto const& tab : shell.tabHits) {
-        auto hit = ssg::hitTest(*snapshot, tab.rect.x, tab.rect.y);
+        auto hit = ssg::HitTester{*snapshot}.at( tab.rect.x, tab.rect.y);
         ASSERT_EQ(hit.region, ssg::HitRegion::Tab);
         ASSERT_EQ(hit.tabIndex, tab.index);
     }
@@ -402,7 +402,7 @@ TEST(tabBarCellMapsToItsTabIndex) {
     // The tab-bar row past the last tab is padding, not a tab.
     auto const& last = shell.tabHits.back();
     ASSERT_TRUE(last.rect.right() < shell.viewport.columns);
-    auto pad = ssg::hitTest(*snapshot, last.rect.right(), last.rect.y);
+    auto pad = ssg::HitTester{*snapshot}.at( last.rect.right(), last.rect.y);
     ASSERT_TRUE(pad.region != ssg::HitRegion::Tab);
 }
 
@@ -418,12 +418,12 @@ TEST(outOfBoundsAndChromeReturnNoTarget) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
 
-    ASSERT_EQ(ssg::hitTest(*snapshot, -1, 5).region, ssg::HitRegion::None);
-    ASSERT_EQ(ssg::hitTest(*snapshot, 5, -1).region, ssg::HitRegion::None);
-    ASSERT_EQ(ssg::hitTest(*snapshot, 9999, 5).region, ssg::HitRegion::None);
-    ASSERT_EQ(ssg::hitTest(*snapshot, 5, 9999).region, ssg::HitRegion::None);
+    ASSERT_EQ(ssg::HitTester{*snapshot}.at( -1, 5).region, ssg::HitRegion::None);
+    ASSERT_EQ(ssg::HitTester{*snapshot}.at( 5, -1).region, ssg::HitRegion::None);
+    ASSERT_EQ(ssg::HitTester{*snapshot}.at( 9999, 5).region, ssg::HitRegion::None);
+    ASSERT_EQ(ssg::HitTester{*snapshot}.at( 5, 9999).region, ssg::HitRegion::None);
     // The header row (row 0) is chrome, not a region.
-    ASSERT_EQ(ssg::hitTest(*snapshot, 0, 0).region, ssg::HitRegion::None);
+    ASSERT_EQ(ssg::HitTester{*snapshot}.at( 0, 0).region, ssg::HitRegion::None);
 }
 
 }  // namespace

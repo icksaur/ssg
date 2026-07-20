@@ -1,4 +1,4 @@
-#include <ssg/hit_test.h>
+#include <ssg/hit_tester.h>
 
 #include <algorithm>
 
@@ -93,7 +93,8 @@ RegionHit panelHit(SessionSnapshot const& snapshot, Rect const& panel,
 
 }  // namespace
 
-RegionHit hitTest(SessionSnapshot const& snapshot, int column, int row) {
+RegionHit HitTester::at(int column, int row) const {
+    auto const& snapshot = snapshot_;
     auto const& shell = snapshot.sections().shell;
     if (column < 0 || row < 0 || column >= shell.viewport.columns ||
         row >= shell.viewport.rows) {

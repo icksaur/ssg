@@ -1,6 +1,6 @@
 #pragma once
 
-#include <ssg/input.h>
+#include <ssg/keymap.h>
 #include <ssg/session.h>
 #include <ssg/session_snapshot.h>
 

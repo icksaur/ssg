@@ -390,7 +390,7 @@ public:
                                FileContentKind::Binary, {}, std::move(bytes),
                                Document{"", DocumentMode::ReadOnly}, {}, {}});
         } else {
-            auto decoded = decodeText(asUnsignedBytes(bytes));
+            auto decoded = TextCodec{}.decode(asUnsignedBytes(bytes));
             if (!decoded.accepted()) {
                 entries.push_back(
                     {id, std::move(key), std::move(label),
@@ -425,7 +425,7 @@ public:
         }
         const auto current = entry.document.snapshot().text;
         auto decoded = textForSave(entry.decoded, current);
-        const auto encoded = encodeText(decoded);
+        const auto encoded = TextCodec{}.encode(decoded);
         if (!encoded.accepted()) {
             return failure(WorkspaceError::DecodeFailed,
                            encoded.error->message);
@@ -730,7 +730,7 @@ WorkspaceResult Workspace::reload(FileDocumentId id) {
             return failure(WorkspaceError::DecodeFailed,
                            "binary file cannot replace an editable document");
         }
-        auto decoded = decodeText(asUnsignedBytes(bytes));
+        auto decoded = TextCodec{}.decode(asUnsignedBytes(bytes));
         if (!decoded.accepted()) {
             return failure(WorkspaceError::DecodeFailed,
                            decoded.error->message);
@@ -786,7 +786,7 @@ WorkspaceResult Workspace::reopenWithEncoding(FileDocumentId id,
         return failure(WorkspaceError::DecodeFailed,
                        "binary file cannot be reopened with encoding");
     }
-    auto decoded = decodeText(asUnsignedBytes(entry->rawBytes), encoding);
+    auto decoded = TextCodec{}.decode(asUnsignedBytes(entry->rawBytes), encoding);
     if (!decoded.accepted()) {
         return failure(WorkspaceError::DecodeFailed, decoded.error->message);
     }

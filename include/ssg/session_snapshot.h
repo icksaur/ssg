@@ -2,14 +2,14 @@
 
 #include <ssg/clipboard.h>
 #include <ssg/diff.h>
-#include <ssg/external_modification.h>
+#include <ssg/external_modification_flow.h>
 #include <ssg/find_replace.h>
 #include <ssg/follow_edits.h>
 #include <ssg/history.h>
-#include <ssg/input.h>
+#include <ssg/keymap.h>
 #include <ssg/lsp_features.h>
 #include <ssg/lsp_sync.h>
-#include <ssg/palette.h>
+#include <ssg/palette_searcher.h>
 #include <ssg/search.h>
 #include <ssg/selection.h>
 #include <ssg/session.h>
@@ -18,7 +18,7 @@
 #include <ssg/status.h>
 #include <ssg/syntax.h>
 #include <ssg/tabs.h>
-#include <ssg/text_encoding.h>
+#include <ssg/text_codec.h>
 #include <ssg/theme.h>
 #include <ssg/tree.h>
 #include <ssg/ui_layout.h>
@@ -29,6 +29,8 @@
 #include <vector>
 
 namespace ssg {
+
+class SessionSnapshotCodec;
 
 struct SessionSnapshotSections {
     DocumentViewState document;
@@ -189,29 +191,10 @@ public:
     }
 
 private:
-    friend SessionDelta deriveSessionDelta(SessionSnapshot const&,
-                                             SessionSnapshot const&);
-    friend SessionReplayResult replaySessionDelta(SessionSnapshot const&,
-                                                     SessionDelta const&);
+    friend class SessionSnapshotCodec;
     // The protocol codec reconstructs a SessionDelta from decoded wire
     // fields; this factory is the only non-derivation construction path so
     // normal in-process construction remains through derive_session_delta.
-    friend SessionDelta decodeWireSessionDelta(
-        Revision baseRevision, Revision revision, ClientId clientId,
-        ViewId viewId, std::vector<CapabilityId> capabilities,
-        std::optional<SessionTopology> topology,
-        std::optional<DocumentDelta> document,
-        std::optional<ByteOffset> documentCaret,
-        SelectionViewDelta selection, HistoryDelta history,
-        ClipboardDelta clipboard, PromptStatusDelta promptStatus,
-        SearchDelta search, FindReplaceDelta findReplace,
-        SettingsSectionDelta settings, KeymapDelta keymap,
-        std::optional<TextEncodingDelta> textEncoding, TabDelta tabs,
-        DiffDelta diff, ExternalModificationDelta externalModification,
-        FollowEditsDelta followEdits, TreeDelta tree, SyntaxDelta syntax,
-        LspSyncDelta lspSync, LspFeatureDelta lspFeatures,
-        ThemeSectionDelta theme, ShellSectionDelta shell,
-        ViewportDelta viewport);
 
     SessionDelta(
         Revision baseRevision, Revision revision, ClientId clientId,
@@ -269,32 +252,35 @@ struct SessionReplayResult {
     }
 };
 
-[[nodiscard]] SessionSnapshot assembleSessionSnapshot(
-    Revision revision, SessionTopology topology,
-    InvocationPrincipal const& principal, ViewId viewId,
-    ViewportViewState viewport, SessionSnapshotSections sections);
-[[nodiscard]] SessionDelta deriveSessionDelta(SessionSnapshot const& before,
-                                                SessionSnapshot const& after);
-[[nodiscard]] SessionReplayResult replaySessionDelta(
-    SessionSnapshot const& base, SessionDelta const& delta);
+class SessionSnapshotCodec {
+public:
+    [[nodiscard]] SessionSnapshot assemble(
+        Revision revision, SessionTopology topology,
+        InvocationPrincipal const& principal, ViewId viewId,
+        ViewportViewState viewport, SessionSnapshotSections sections) const;
+    [[nodiscard]] SessionDelta deriveDelta(SessionSnapshot const& before,
+                                           SessionSnapshot const& after) const;
+    [[nodiscard]] SessionReplayResult replay(SessionSnapshot const& base,
+                                             SessionDelta const& delta) const;
 
-// Reconstructs a SessionDelta from already-validated wire fields (protocol
-// codec use only; see the friend declaration above). Ordinary code derives
-// deltas through derive_session_delta instead.
-[[nodiscard]] SessionDelta decodeWireSessionDelta(
-    Revision baseRevision, Revision revision, ClientId clientId,
-    ViewId viewId, std::vector<CapabilityId> capabilities,
-    std::optional<SessionTopology> topology,
-    std::optional<DocumentDelta> document,
-    std::optional<ByteOffset> documentCaret, SelectionViewDelta selection,
-    HistoryDelta history, ClipboardDelta clipboard,
-    PromptStatusDelta promptStatus, SearchDelta search,
-    FindReplaceDelta findReplace, SettingsSectionDelta settings,
-    KeymapDelta keymap, std::optional<TextEncodingDelta> textEncoding,
-    TabDelta tabs, DiffDelta diff,
-    ExternalModificationDelta externalModification,
-    FollowEditsDelta followEdits, TreeDelta tree, SyntaxDelta syntax,
-    LspSyncDelta lspSync, LspFeatureDelta lspFeatures,
-    ThemeSectionDelta theme, ShellSectionDelta shell, ViewportDelta viewport);
+    // Reconstructs a SessionDelta from already-validated wire fields (protocol
+    // codec use only). Ordinary code derives deltas through deriveDelta.
+    [[nodiscard]] SessionDelta decodeWire(
+        Revision baseRevision, Revision revision, ClientId clientId,
+        ViewId viewId, std::vector<CapabilityId> capabilities,
+        std::optional<SessionTopology> topology,
+        std::optional<DocumentDelta> document,
+        std::optional<ByteOffset> documentCaret,
+        SelectionViewDelta selection, HistoryDelta history,
+        ClipboardDelta clipboard, PromptStatusDelta promptStatus,
+        SearchDelta search, FindReplaceDelta findReplace,
+        SettingsSectionDelta settings, KeymapDelta keymap,
+        std::optional<TextEncodingDelta> textEncoding, TabDelta tabs,
+        DiffDelta diff, ExternalModificationDelta externalModification,
+        FollowEditsDelta followEdits, TreeDelta tree, SyntaxDelta syntax,
+        LspSyncDelta lspSync, LspFeatureDelta lspFeatures,
+        ThemeSectionDelta theme, ShellSectionDelta shell,
+        ViewportDelta viewport) const;
+};
 
 }  // namespace ssg

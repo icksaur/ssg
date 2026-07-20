@@ -448,8 +448,8 @@ UntitledDocumentId JournalDocumentKey::untitledId() const {
     return id_;
 }
 
-std::vector<std::byte> encodeCheckpointRecord(
-    const JournalRecoverySet& recovery) {
+std::vector<std::byte> JournalCodec::encodeCheckpoint(
+    const JournalRecoverySet& recovery) const {
     if (recovery.documents.size() >
         std::numeric_limits<std::uint32_t>::max()) {
         throw std::length_error("too many documents in journal checkpoint");
@@ -464,25 +464,26 @@ std::vector<std::byte> encodeCheckpointRecord(
                 "journal checkpoint contains duplicate document identity");
         }
         keys.push_back(document.key);
-        encodeDocument(body, document);
+        ::ssg::encodeDocument(body, document);
     }
     return frame(RecordKind::Checkpoint, std::move(body));
 }
 
-std::vector<std::byte> encodeDocumentRecord(
-    const JournalDocument& document) {
+std::vector<std::byte> JournalCodec::encodeDocument(
+    const JournalDocument& document) const {
     Writer body;
-    encodeDocument(body, document);
+    ::ssg::encodeDocument(body, document);
     return frame(RecordKind::Document, std::move(body));
 }
 
-std::vector<std::byte> encodeRemoveRecord(const JournalDocumentKey& key) {
+std::vector<std::byte> JournalCodec::encodeRemove(
+    const JournalDocumentKey& key) const {
     Writer body;
     encodeKey(body, key);
     return frame(RecordKind::Remove, std::move(body));
 }
 
-JournalReplayResult replayJournal(std::span<const std::byte> bytes) {
+JournalReplayResult JournalCodec::replay(std::span<const std::byte> bytes) const {
     JournalReplayResult result;
     std::size_t position = 0;
     while (position < bytes.size()) {
@@ -530,22 +531,22 @@ ScratchJournal::ScratchJournal(std::filesystem::path path)
 
 void ScratchJournal::appendCheckpoint(
     const JournalRecoverySet& recovery) const {
-    const auto record = encodeCheckpointRecord(recovery);
+    const auto record = JournalCodec{}.encodeCheckpoint(recovery);
     append(record);
 }
 
 void ScratchJournal::appendDocument(const JournalDocument& document) const {
-    const auto record = encodeDocumentRecord(document);
+    const auto record = JournalCodec{}.encodeDocument(document);
     append(record);
 }
 
 void ScratchJournal::appendRemove(const JournalDocumentKey& key) const {
-    const auto record = encodeRemoveRecord(key);
+    const auto record = JournalCodec{}.encodeRemove(key);
     append(record);
 }
 
 JournalReplayResult ScratchJournal::replay() const {
-    return replayJournal(readFile(path_));
+    return JournalCodec{}.replay(readFile(path_));
 }
 
 void ScratchJournal::append(std::span<const std::byte> record) const {

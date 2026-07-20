@@ -1,7 +1,7 @@
 #include "test_helpers.h"
 
 #include <ssg/clipboard.h>
-#include <ssg/edit_history_integration.h>
+#include <ssg/edit_history_coordinator.h>
 #include <ssg/find_replace.h>
 
 #include <array>
@@ -14,7 +14,7 @@
 namespace {
 
 ssg::DocumentPosition position(std::string_view text, std::uint64_t offset) {
-    return *ssg::resolveDocumentPosition(text, ssg::ByteOffset{offset}, 4);
+    return *ssg::SelectionNavigator::resolvePosition(text, ssg::ByteOffset{offset}, 4);
 }
 
 ssg::SelectionSet selections(
@@ -37,21 +37,21 @@ ssg::EditCommandSettings editSettings() {
 }
 
 TEST(everyMutatingCommandHasTheSpecifiedHistoryKind) {
-    ASSERT_EQ(ssg::historyEditKind(ssg::TextInputCommand::Insert),
+    ASSERT_EQ(ssg::EditHistoryCoordinator::editKind(ssg::TextInputCommand::Insert),
               ssg::HistoryEditKind::Typing);
-    ASSERT_EQ(ssg::historyEditKind(
+    ASSERT_EQ(ssg::EditHistoryCoordinator::editKind(
                   ssg::TextInputCommand::DeleteBackward),
               ssg::HistoryEditKind::DeleteBackward);
-    ASSERT_EQ(ssg::historyEditKind(
+    ASSERT_EQ(ssg::EditHistoryCoordinator::editKind(
                   ssg::TextInputCommand::DeleteWordBackward),
               ssg::HistoryEditKind::DeleteBackward);
-    ASSERT_EQ(ssg::historyEditKind(
+    ASSERT_EQ(ssg::EditHistoryCoordinator::editKind(
                   ssg::TextInputCommand::DeleteForward),
               ssg::HistoryEditKind::DeleteForward);
-    ASSERT_EQ(ssg::historyEditKind(
+    ASSERT_EQ(ssg::EditHistoryCoordinator::editKind(
                   ssg::TextInputCommand::DeleteWordForward),
               ssg::HistoryEditKind::DeleteForward);
-    ASSERT_EQ(ssg::historyEditKind(ssg::TextInputCommand::Newline),
+    ASSERT_EQ(ssg::EditHistoryCoordinator::editKind(ssg::TextInputCommand::Newline),
               ssg::HistoryEditKind::Other);
 
     constexpr std::array editCommands{
@@ -70,7 +70,7 @@ TEST(everyMutatingCommandHasTheSpecifiedHistoryKind) {
         ssg::EditCommand::ToggleComment,
     };
     for (const auto command : editCommands) {
-        ASSERT_EQ(ssg::historyEditKind(command),
+        ASSERT_EQ(ssg::EditHistoryCoordinator::editKind(command),
                   ssg::HistoryEditKind::Other);
     }
 }
@@ -79,8 +79,7 @@ TEST(noopAndRejectedCommandsDoNotCreateHistory) {
     ssg::Document document{"x"};
     ssg::DocumentHistory history;
     const auto atStart = selections("x", {{0, 0}});
-    const auto noop = ssg::applyTextInputWithHistory(
-        document, history, atStart, textSettings(),
+    const auto noop = ssg::EditHistoryCoordinator{document, history}.applyTextInput(atStart, textSettings(),
         ssg::TextInputCommand::DeleteBackward, {}, 100);
     ASSERT_TRUE(noop.accepted());
     ASSERT_FALSE(noop.documentChanged());
@@ -88,12 +87,11 @@ TEST(noopAndRejectedCommandsDoNotCreateHistory) {
     ASSERT_FALSE(history.canUndo());
 
     ssg::Document readOnly{"x", ssg::DocumentMode::ReadOnly};
-    const auto rejected = ssg::applyTextInputWithHistory(
-        readOnly, history, atStart, textSettings(),
+    const auto rejected = ssg::EditHistoryCoordinator{readOnly, history}.applyTextInput(atStart, textSettings(),
         ssg::TextInputCommand::Insert, {"y"}, 200);
     ASSERT_FALSE(rejected.accepted());
     ASSERT_EQ(rejected.error,
-              ssg::EditHistoryIntegrationError::TextInputRejected);
+              ssg::EditHistoryError::TextInputRejected);
     ASSERT_EQ(rejected.textInputError,
               std::optional{ssg::TextInputError::ReadOnly});
     ASSERT_EQ(readOnly.snapshot().text, std::string{"x"});
@@ -105,20 +103,17 @@ TEST(textInputSequenceHasHandAuthoredUndoBoundaries) {
     ssg::DocumentHistory history;
     auto current = selections("word", {{4, 4}});
 
-    auto result = ssg::applyTextInputWithHistory(
-        document, history, current, textSettings(),
+    auto result = ssg::EditHistoryCoordinator{document, history}.applyTextInput(current, textSettings(),
         ssg::TextInputCommand::Insert, {"a"}, 100);
     ASSERT_TRUE(result.accepted());
     current = *result.selections;
-    result = ssg::applyTextInputWithHistory(
-        document, history, current, textSettings(),
+    result = ssg::EditHistoryCoordinator{document, history}.applyTextInput(current, textSettings(),
         ssg::TextInputCommand::Insert, {"b"}, 200);
     ASSERT_TRUE(result.accepted());
     current = *result.selections;
     ASSERT_EQ(document.snapshot().text, std::string{"wordab"});
 
-    result = ssg::applyTextInputWithHistory(
-        document, history, current, textSettings(),
+    result = ssg::EditHistoryCoordinator{document, history}.applyTextInput(current, textSettings(),
         ssg::TextInputCommand::Newline, {}, 300);
     ASSERT_TRUE(result.accepted());
     current = *result.selections;
@@ -139,13 +134,11 @@ TEST(wordAndCharacterDeleteCoalesceByDirection) {
     ssg::DocumentHistory history;
     auto current = selections("one two!", {{8, 8}});
 
-    auto result = ssg::applyTextInputWithHistory(
-        document, history, current, textSettings(),
+    auto result = ssg::EditHistoryCoordinator{document, history}.applyTextInput(current, textSettings(),
         ssg::TextInputCommand::DeleteBackward, {}, 100);
     ASSERT_TRUE(result.accepted());
     current = *result.selections;
-    result = ssg::applyTextInputWithHistory(
-        document, history, current, textSettings(),
+    result = ssg::EditHistoryCoordinator{document, history}.applyTextInput(current, textSettings(),
         ssg::TextInputCommand::DeleteWordBackward, {}, 200);
     ASSERT_TRUE(result.accepted());
     ASSERT_EQ(document.snapshot().text, std::string{"one "});
@@ -161,13 +154,11 @@ TEST(lineTransformIsAHistoryBarrierAndRestoresSelection) {
     ssg::DocumentHistory history;
     auto current = selections("a\nb\n", {{0, 0}});
 
-    auto typed = ssg::applyTextInputWithHistory(
-        document, history, current, textSettings(),
+    auto typed = ssg::EditHistoryCoordinator{document, history}.applyTextInput(current, textSettings(),
         ssg::TextInputCommand::Insert, {"x"}, 100);
     ASSERT_TRUE(typed.accepted());
     current = *typed.selections;
-    const auto transformed = ssg::applyEditCommandWithHistory(
-        document, history, current, editSettings(),
+    const auto transformed = ssg::EditHistoryCoordinator{document, history}.applyEditCommand(current, editSettings(),
         ssg::EditCommand::DuplicateLine, 200);
     ASSERT_TRUE(transformed.accepted());
     ASSERT_EQ(document.snapshot().text, std::string{"xa\nxa\nb\n"});

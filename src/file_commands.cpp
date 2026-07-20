@@ -8,7 +8,7 @@ FileCommandsCommandSet fileCommandsCommandSet() {
     return {};
 }
 
-PromptRequest filePathPrompt(FileCommand command) {
+PromptRequest FileCommandsCommandSet::pathPrompt(FileCommand command) const {
     std::string label;
     switch (command) {
         case FileCommand::OpenDirectory:

@@ -66,8 +66,11 @@ struct FindResult {
     }
 };
 
-[[nodiscard]] FindResult findMatches(std::string_view text,
-                                      const FindRequest& request);
+class FindMatcher {
+public:
+    [[nodiscard]] FindResult find(std::string_view text,
+                                  const FindRequest& request) const;
+};
 
 enum class FindReplaceCommand : std::uint8_t {
     FindOpen,
@@ -148,10 +151,14 @@ struct FindReplaceReplayResult {
     FindReplaceViewState state;
 };
 
-[[nodiscard]] FindReplaceDelta deriveFindReplaceDelta(
-    const FindReplaceViewState& before, const FindReplaceViewState& after);
-[[nodiscard]] FindReplaceReplayResult replayFindReplaceDelta(
-    const FindReplaceViewState& base, const FindReplaceDelta& delta);
+class FindReplaceDeltaCodec {
+public:
+    [[nodiscard]] FindReplaceDelta derive(
+        const FindReplaceViewState& before,
+        const FindReplaceViewState& after) const;
+    [[nodiscard]] FindReplaceReplayResult replay(
+        const FindReplaceViewState& base, const FindReplaceDelta& delta) const;
+};
 
 struct FindReplaceOperationResult {
     FindReplaceError error = FindReplaceError::None;
@@ -266,13 +273,18 @@ struct WorkspacePreviewResult {
     }
 };
 
-[[nodiscard]] WorkspacePreviewResult previewWorkspaceReplace(
-    const FindReplaceWorkspace& workspace, Revision sourceRevision,
-    const FindRequest& request, std::string replacement);
-[[nodiscard]] WorkspaceApplyResult applyWorkspaceReplace(
-    FindReplaceWorkspace& workspace, const WorkspaceReplacePreview& preview,
-    WorkspaceRecoverySink& recoverySink);
-[[nodiscard]] WorkspaceApplyResult recoverWorkspaceReplace(
-    FindReplaceWorkspace& workspace, const WorkspaceRecoveryRecord& record);
+class WorkspaceReplacer {
+public:
+    [[nodiscard]] WorkspacePreviewResult preview(
+        const FindReplaceWorkspace& workspace, Revision sourceRevision,
+        const FindRequest& request, std::string replacement) const;
+    [[nodiscard]] WorkspaceApplyResult apply(
+        FindReplaceWorkspace& workspace,
+        const WorkspaceReplacePreview& preview,
+        WorkspaceRecoverySink& recoverySink) const;
+    [[nodiscard]] WorkspaceApplyResult recover(
+        FindReplaceWorkspace& workspace,
+        const WorkspaceRecoveryRecord& record) const;
+};
 
 }  // namespace ssg

@@ -28,7 +28,7 @@ using ssg::TextInputSettings;
 DocumentPosition position(std::string_view text, std::uint64_t offset,
                           int tabWidth = 4) {
     const auto resolved =
-        ssg::resolveDocumentPosition(text, ByteOffset{offset}, tabWidth);
+        ssg::SelectionNavigator::resolvePosition(text, ByteOffset{offset}, tabWidth);
     ASSERT_TRUE(resolved.has_value());
     return resolved.value();
 }
@@ -94,7 +94,7 @@ TEST(commandSetIsExactAndImmutable) {
 
 TEST(singleCaretInsertAndSelectionReplacement) {
     Document insertDocument{"abcd"};
-    auto inserted = ssg::applyTextInput(
+    auto inserted = ssg::TextInputInterpreter{}.apply(
         insertDocument.snapshot(), selections("abcd", {{2, 2}}), settings(),
         TextInputCommand::Insert, {.text = "XY"});
     ASSERT_EQ(applyResult(insertDocument, inserted), std::string{"abXYcd"});
@@ -102,7 +102,7 @@ TEST(singleCaretInsertAndSelectionReplacement) {
               (std::vector<std::uint64_t>{4}));
 
     Document replaceDocument{"abcdef"};
-    auto replaced = ssg::applyTextInput(
+    auto replaced = ssg::TextInputInterpreter{}.apply(
         replaceDocument.snapshot(), selections("abcdef", {{5, 2}}),
         settings(), TextInputCommand::Insert, {.text = "Q"});
     ASSERT_EQ(applyResult(replaceDocument, replaced),
@@ -113,7 +113,7 @@ TEST(singleCaretInsertAndSelectionReplacement) {
 
 TEST(multipleCaretsInsertOnceEach) {
     Document document{"abcd"};
-    auto result = ssg::applyTextInput(
+    auto result = ssg::TextInputInterpreter{}.apply(
         document.snapshot(), selections("abcd", {{1, 1}, {3, 3}}),
         settings(), TextInputCommand::Insert, {.text = "_"});
 
@@ -124,7 +124,7 @@ TEST(multipleCaretsInsertOnceEach) {
 
 TEST(newlineUsesConfiguredEolAndIndentation) {
     Document crlfDocument{"    alpha"};
-    auto crlf = ssg::applyTextInput(
+    auto crlf = ssg::TextInputInterpreter{}.apply(
         crlfDocument.snapshot(), selections("    alpha", {{9, 9}}),
         settings(LineEnding::Crlf, IndentStyle::Spaces, 4, true),
         TextInputCommand::Newline);
@@ -134,7 +134,7 @@ TEST(newlineUsesConfiguredEolAndIndentation) {
               (std::vector<std::uint64_t>{15}));
 
     Document tabsDocument{" \t value"};
-    auto tabs = ssg::applyTextInput(
+    auto tabs = ssg::TextInputInterpreter{}.apply(
         tabsDocument.snapshot(), selections(" \t value", {{8, 8}}),
         settings(LineEnding::Lf, IndentStyle::Tabs, 4, true),
         TextInputCommand::Newline);
@@ -144,14 +144,14 @@ TEST(newlineUsesConfiguredEolAndIndentation) {
 
 TEST(mixedEolMatchesCurrentLineThenFallsBackToLf) {
     Document matchedDocument{"one\r\ntwo"};
-    auto matched = ssg::applyTextInput(
+    auto matched = ssg::TextInputInterpreter{}.apply(
         matchedDocument.snapshot(), selections("one\r\ntwo", {{1, 1}}),
         settings(LineEnding::Mixed), TextInputCommand::Newline);
     ASSERT_EQ(applyResult(matchedDocument, matched),
               std::string{"o\r\nne\r\ntwo"});
 
     Document fallbackDocument{"tail"};
-    auto fallback = ssg::applyTextInput(
+    auto fallback = ssg::TextInputInterpreter{}.apply(
         fallbackDocument.snapshot(), selections("tail", {{4, 4}}),
         settings(LineEnding::Mixed), TextInputCommand::Newline);
     ASSERT_EQ(applyResult(fallbackDocument, fallback),
@@ -161,7 +161,7 @@ TEST(mixedEolMatchesCurrentLineThenFallsBackToLf) {
 TEST(characterDeletionUsesGraphemeClustersAndCrlf) {
     const std::string combining = "A" "e\xCC\x81" "B";
     Document backwardDocument{combining};
-    auto backward = ssg::applyTextInput(
+    auto backward = ssg::TextInputInterpreter{}.apply(
         backwardDocument.snapshot(), selections(combining, {{4, 4}}),
         settings(), TextInputCommand::DeleteBackward);
     ASSERT_EQ(applyResult(backwardDocument, backward), std::string{"AB"});
@@ -172,13 +172,13 @@ TEST(characterDeletionUsesGraphemeClustersAndCrlf) {
         "X\xF0\x9F\x91\xA9\xE2\x80\x8D\xF0\x9F\x91\xA9"
         "\xE2\x80\x8D\xF0\x9F\x91\xA7Y";
     Document forwardDocument{family};
-    auto forward = ssg::applyTextInput(
+    auto forward = ssg::TextInputInterpreter{}.apply(
         forwardDocument.snapshot(), selections(family, {{1, 1}}), settings(),
         TextInputCommand::DeleteForward);
     ASSERT_EQ(applyResult(forwardDocument, forward), std::string{"XY"});
 
     Document crlfDocument{"a\r\nb"};
-    auto crlf = ssg::applyTextInput(
+    auto crlf = ssg::TextInputInterpreter{}.apply(
         crlfDocument.snapshot(), selections("a\r\nb", {{3, 3}}), settings(),
         TextInputCommand::DeleteBackward);
     ASSERT_EQ(applyResult(crlfDocument, crlf), std::string{"ab"});
@@ -186,7 +186,7 @@ TEST(characterDeletionUsesGraphemeClustersAndCrlf) {
 
 TEST(wordDeletionAndSelectedDeletion) {
     Document backwardDocument{"alpha  beta!"};
-    auto backward = ssg::applyTextInput(
+    auto backward = ssg::TextInputInterpreter{}.apply(
         backwardDocument.snapshot(),
         selections("alpha  beta!", {{11, 11}}), settings(),
         TextInputCommand::DeleteWordBackward);
@@ -194,14 +194,14 @@ TEST(wordDeletionAndSelectedDeletion) {
               std::string{"alpha  !"});
 
     Document forwardDocument{"alpha  beta!"};
-    auto forward = ssg::applyTextInput(
+    auto forward = ssg::TextInputInterpreter{}.apply(
         forwardDocument.snapshot(), selections("alpha  beta!", {{5, 5}}),
         settings(), TextInputCommand::DeleteWordForward);
     ASSERT_EQ(applyResult(forwardDocument, forward),
               std::string{"alphabeta!"});
 
     Document selectedDocument{"012345"};
-    auto selected = ssg::applyTextInput(
+    auto selected = ssg::TextInputInterpreter{}.apply(
         selectedDocument.snapshot(), selections("012345", {{1, 4}}),
         settings(), TextInputCommand::DeleteForward);
     ASSERT_EQ(applyResult(selectedDocument, selected),
@@ -210,7 +210,7 @@ TEST(wordDeletionAndSelectedDeletion) {
 
 TEST(overlapNormalizationAndCoincidentCaretsEmitValidEdits) {
     Document overlapDocument{"abcdefgh"};
-    auto overlap = ssg::applyTextInput(
+    auto overlap = ssg::TextInputInterpreter{}.apply(
         overlapDocument.snapshot(),
         selections("abcdefgh", {{1, 5}, {3, 7}}), settings(),
         TextInputCommand::Insert, {.text = "X"});
@@ -220,7 +220,7 @@ TEST(overlapNormalizationAndCoincidentCaretsEmitValidEdits) {
     const auto coincident = selections("abc", {{1, 1}, {1, 1}});
     ASSERT_EQ(coincident.items().size(), 1u);
     Document coincidentDocument{"abc"};
-    auto oneInsert = ssg::applyTextInput(
+    auto oneInsert = ssg::TextInputInterpreter{}.apply(
         coincidentDocument.snapshot(), coincident, settings(),
         TextInputCommand::Insert, {.text = "X"});
     ASSERT_EQ(applyResult(coincidentDocument, oneInsert),
@@ -228,7 +228,7 @@ TEST(overlapNormalizationAndCoincidentCaretsEmitValidEdits) {
     ASSERT_EQ(oneInsert.transaction->edits.size(), 1u);
 
     Document boundaryDocument{"abcdefgh"};
-    auto boundary = ssg::applyTextInput(
+    auto boundary = ssg::TextInputInterpreter{}.apply(
         boundaryDocument.snapshot(),
         selections("abcdefgh", {{2, 2}, {2, 5}}), settings(),
         TextInputCommand::Insert, {.text = "Q"});
@@ -241,7 +241,7 @@ TEST(overlapNormalizationAndCoincidentCaretsEmitValidEdits) {
 
 TEST(boundaryDeletionIsSuccessfulNoop) {
     Document backwardDocument{"abc"};
-    auto backward = ssg::applyTextInput(
+    auto backward = ssg::TextInputInterpreter{}.apply(
         backwardDocument.snapshot(), selections("abc", {{0, 0}}), settings(),
         TextInputCommand::DeleteBackward);
     ASSERT_TRUE(backward.accepted());
@@ -250,7 +250,7 @@ TEST(boundaryDeletionIsSuccessfulNoop) {
     ASSERT_EQ(backwardDocument.revision(), ssg::Revision{1});
 
     Document forwardDocument{"abc"};
-    auto forward = ssg::applyTextInput(
+    auto forward = ssg::TextInputInterpreter{}.apply(
         forwardDocument.snapshot(), selections("abc", {{3, 3}}), settings(),
         TextInputCommand::DeleteForward);
     ASSERT_TRUE(forward.accepted());
@@ -258,7 +258,7 @@ TEST(boundaryDeletionIsSuccessfulNoop) {
     ASSERT_EQ(applyResult(forwardDocument, forward), std::string{"abc"});
 
     Document mixedDocument{"abc"};
-    auto mixed = ssg::applyTextInput(
+    auto mixed = ssg::TextInputInterpreter{}.apply(
         mixedDocument.snapshot(), selections("abc", {{0, 0}, {3, 3}}),
         settings(), TextInputCommand::DeleteBackward);
     ASSERT_EQ(applyResult(mixedDocument, mixed), std::string{"ab"});
@@ -268,7 +268,7 @@ TEST(boundaryDeletionIsSuccessfulNoop) {
 
 TEST(invalidInputAndNonEditModesFailAtomically) {
     Document document{"abc"};
-    auto invalidUtf8 = ssg::applyTextInput(
+    auto invalidUtf8 = ssg::TextInputInterpreter{}.apply(
         document.snapshot(), selections("abc", {{1, 1}}), settings(),
         TextInputCommand::Insert, {.text = std::string{"\xFF", 1}});
     ASSERT_EQ(invalidUtf8.error, TextInputError::InvalidUtf8);
@@ -277,7 +277,7 @@ TEST(invalidInputAndNonEditModesFailAtomically) {
 
     auto badPosition = position("abc", 1);
     badPosition.line = ssg::LineIndex{7};
-    auto invalidSelection = ssg::applyTextInput(
+    auto invalidSelection = ssg::TextInputInterpreter{}.apply(
         document.snapshot(),
         SelectionSet{{Selection{badPosition, badPosition}}}, settings(),
         TextInputCommand::Insert, {.text = "x"});
@@ -285,7 +285,7 @@ TEST(invalidInputAndNonEditModesFailAtomically) {
     ASSERT_EQ(document.snapshot().text, std::string{"abc"});
 
     Document readOnly{"abc", DocumentMode::ReadOnly};
-    auto rejected = ssg::applyTextInput(
+    auto rejected = ssg::TextInputInterpreter{}.apply(
         readOnly.snapshot(), selections("abc", {{1, 1}}), settings(),
         TextInputCommand::Insert, {.text = "x"});
     ASSERT_EQ(rejected.error, TextInputError::ReadOnly);

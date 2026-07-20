@@ -1,4 +1,4 @@
-#include <ssg/render.h>
+#include <ssg/renderer.h>
 
 #include <ssg/editor_runtime.h>
 #include <ssg/find_replace.h>
@@ -68,7 +68,7 @@ TEST(renderPaintsContentNotAccessibilityLabels) {
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::render(*snapshot);
+    auto grid = ssg::Renderer{}.render(*snapshot);
     // Container accessibility labels must never be painted.
     ASSERT_FALSE(gridContains(grid, "Status header"));
     ASSERT_FALSE(gridContains(grid, "Open tabs"));
@@ -100,10 +100,10 @@ TEST(renderSegmentsOnlyVisibleLinesNotWholeDocument) {
         auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) return 0;
-        ssg::resetRenderSegmentationCalls();
-        auto grid = ssg::render(*snapshot);
+        ssg::Renderer::resetRenderSegmentationCalls();
+        auto grid = ssg::Renderer{}.render(*snapshot);
         (void)grid;
-        return ssg::renderSegmentationCalls();
+        return ssg::Renderer::renderSegmentationCalls();
     };
 
     auto const smallCalls = segmentCountFor("small.txt");
@@ -142,7 +142,7 @@ TEST(wordWrapOffRendersHorizontallyScrolledContent) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_TRUE(snapshot->client().viewport.firstVisualColumn > 0);
-    auto grid = ssg::render(*snapshot);
+    auto grid = ssg::Renderer{}.render(*snapshot);
 
     // The end of the line is on screen; the start has scrolled off.
     ASSERT_TRUE(gridContains(grid, "ENDmarker"));
@@ -158,7 +158,7 @@ TEST(renderColorsArePaletteIndices) {
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::render(*snapshot);
+    auto grid = ssg::Renderer{}.render(*snapshot);
     bool allInPalette = true;
     for (auto const& cell : grid.cells) {
         if (cell.foreground >= ssg::kThemePaletteSize ||
@@ -179,7 +179,7 @@ TEST(renderIsDeterministic) {
     auto second = runtime->snapshot(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(first.has_value() && second.has_value());
     if (!first || !second) return;
-    ASSERT_EQ(ssg::render(*first).canonical(), ssg::render(*second).canonical());
+    ASSERT_EQ(ssg::Renderer{}.render(*first).canonical(), ssg::Renderer{}.render(*second).canonical());
 }
 
 TEST(renderProjectsPaletteResultsIntoActivePane) {
@@ -196,7 +196,7 @@ TEST(renderProjectsPaletteResultsIntoActivePane) {
     if (!snapshot) return;
 
     // Without a palette projection the document content is painted.
-    ASSERT_TRUE(gridContains(ssg::render(*snapshot), "alpha"));
+    ASSERT_TRUE(gridContains(ssg::Renderer{}.render(*snapshot), "alpha"));
 
     auto sections = snapshot->sections();
     ASSERT_FALSE(sections.shell.panes.empty());
@@ -209,7 +209,7 @@ TEST(renderProjectsPaletteResultsIntoActivePane) {
 
     ssg::SessionSnapshot projected{snapshot->revision(), snapshot->topology(),
                                    snapshot->client(), std::move(sections)};
-    auto grid = ssg::render(projected);
+    auto grid = ssg::Renderer{}.render(projected);
 
     // Results replace the document text in the pane.
     ASSERT_TRUE(gridContains(grid, "file.save"));
@@ -248,7 +248,7 @@ TEST(renderShowsPaletteQueryAndGhostInHeader) {
         runtime->snapshot(ssg::ClientId{1}, {80, 24}, {}, report);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::render(*snapshot);
+    auto grid = ssg::Renderer{}.render(*snapshot);
 
     // The header shows the query (prompt role) and the dim ghost completion.
     ASSERT_TRUE(gridContains(grid, "> sa"));
@@ -284,7 +284,7 @@ TEST(renderPaintsSelectionHighlightAndSecondaryCarets) {
         auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) return;
-        auto grid = ssg::render(*snapshot);
+        auto grid = ssg::Renderer{}.render(*snapshot);
         bool anySelection = false;
         for (int row = 0; row < grid.size.rows; ++row) {
             for (int col = 0; col < grid.size.columns; ++col) {
@@ -302,7 +302,7 @@ TEST(renderPaintsSelectionHighlightAndSecondaryCarets) {
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::render(*snapshot);
+    auto grid = ssg::Renderer{}.render(*snapshot);
 
     int alphaRow = -1;
     for (int row = 0; row < grid.size.rows; ++row) {
@@ -352,7 +352,7 @@ TEST(renderFillsEndOfLineForMultilineSelection) {
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::render(*snapshot);
+    auto grid = ssg::Renderer{}.render(*snapshot);
 
     int alphaRow = -1, alphaCol = -1;
     for (int row = 0; row < grid.size.rows && alphaRow < 0; ++row) {
@@ -386,7 +386,7 @@ TEST(renderHighlightsWideGlyphCells) {
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::render(*snapshot);
+    auto grid = ssg::Renderer{}.render(*snapshot);
 
     int row = -1, col = -1;
     for (int r = 0; r < grid.size.rows && row < 0; ++r) {
@@ -426,7 +426,7 @@ TEST(renderPaintsSecondaryRangedSelectionCaret) {
     bool allRanged = true;
     for (auto const& item : items) if (item.isCaret()) allRanged = false;
     ASSERT_TRUE(allRanged);
-    auto grid = ssg::render(*snapshot);
+    auto grid = ssg::Renderer{}.render(*snapshot);
     int paintedSecondary = 0;
     for (int row = 0; row < grid.size.rows; ++row) {
         for (int col = 0; col < grid.size.columns; ++col) {
@@ -460,7 +460,7 @@ TEST(renderPaintsSecondaryCaretAsACell) {
     if (!snapshot) return;
     ASSERT_EQ(snapshot->sections().selection.selections.items().size(),
               std::size_t{2});
-    auto grid = ssg::render(*snapshot);
+    auto grid = ssg::Renderer{}.render(*snapshot);
     ASSERT_TRUE(grid.caret.has_value());
 
     int paintedSecondary = 0;
@@ -495,7 +495,7 @@ TEST(renderPaintsFindMatchesAndActiveMatch) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_EQ(snapshot->sections().findReplace.matches.size(), std::size_t{3});
-    auto grid = ssg::render(*snapshot);
+    auto grid = ssg::Renderer{}.render(*snapshot);
 
     int row = -1;
     for (int r = 0; r < grid.size.rows; ++r) {
@@ -549,7 +549,7 @@ TEST(renderHidesFindMatchesAfterDocumentRevisionChanges) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_FALSE(snapshot->sections().findReplace.open);
-    auto grid = ssg::render(*snapshot);
+    auto grid = ssg::Renderer{}.render(*snapshot);
     bool anyMatch = false;
     for (int row = 0; row < grid.size.rows; ++row) {
         for (int col = 0; col < grid.size.columns; ++col) {
@@ -581,7 +581,7 @@ TEST(renderReplacePromptShowsQueryAndReplacementWithCursorOnReplacement) {
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::render(*snapshot);
+    auto grid = ssg::Renderer{}.render(*snapshot);
 
     // The reserved replace rows show the query and the replacement.
     ASSERT_TRUE(gridContains(grid, "cat"));
@@ -613,7 +613,7 @@ TEST(renderFindPromptShowsOptionIndicators) {
         auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) return;
-        auto grid = ssg::render(*snapshot);
+        auto grid = ssg::Renderer{}.render(*snapshot);
         ASSERT_TRUE(gridContains(grid, "[ ] Case"));
         ASSERT_TRUE(gridContains(grid, "[ ] Word"));
         ASSERT_TRUE(gridContains(grid, "[ ] Regex"));
@@ -625,7 +625,7 @@ TEST(renderFindPromptShowsOptionIndicators) {
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::render(*snapshot);
+    auto grid = ssg::Renderer{}.render(*snapshot);
     ASSERT_TRUE(gridContains(grid, "[x] Case"));
     ASSERT_TRUE(gridContains(grid, "[ ] Word"));
 }
@@ -655,7 +655,7 @@ TEST(renderPanelTreeWindowsAndDrawsAThumbWhenTallerThanThePanel) {
     auto const& shell = snapshot->sections().shell;
     ASSERT_TRUE(shell.panelScrollbar.has_value());
     if (!shell.panelScrollbar) return;
-    auto grid = ssg::render(*snapshot);
+    auto grid = ssg::Renderer{}.render(*snapshot);
 
     // A thumb ('#') is drawn in the reserved gutter column.
     int const gx = shell.panelScrollbar->x;
@@ -688,7 +688,7 @@ TEST(renderPanelTreeReservesAnEmptyGutterWhenItFits) {
     auto const& shell = snapshot->sections().shell;
     ASSERT_TRUE(shell.panelScrollbar.has_value());
     if (!shell.panelScrollbar) return;
-    auto grid = ssg::render(*snapshot);
+    auto grid = ssg::Renderer{}.render(*snapshot);
     // The gutter is reserved (column exists) but blank: no thumb or track glyphs,
     // so the tree's content width never changes as items are added or removed.
     int const gx = shell.panelScrollbar->x;
@@ -725,7 +725,7 @@ TEST(renderPaletteWindowsRowsAndDrawsAThumbWithAbsoluteSelection) {
     projection.scrollbarRect = pane.scrollbar;
     projection.firstVisible = 20;
     projection.selected = std::uint32_t{25};
-    projection.scrollbar = ssg::scrollbarMetrics(40, rows, 20);
+    projection.scrollbar = ssg::Viewport{}.scrollbarMetrics(40, rows, 20);
     for (std::uint32_t i = 0; i < rows; ++i) {
         projection.rows.push_back(
             {"cmd-" + std::to_string(20 + i), ""});
@@ -733,7 +733,7 @@ TEST(renderPaletteWindowsRowsAndDrawsAThumbWithAbsoluteSelection) {
     sections.shell.palette = projection;
     ssg::SessionSnapshot projected{snapshot->revision(), snapshot->topology(),
                                    snapshot->client(), std::move(sections)};
-    auto grid = ssg::render(projected);
+    auto grid = ssg::Renderer{}.render(projected);
 
     // The window shows cmd-20.. (not cmd-00), and the absolute-25 selection lands
     // at window row 5.
@@ -774,12 +774,12 @@ TEST(renderPaletteReservesAnEmptyGutterWhenTheListFits) {
     projection.firstVisible = 0;
     projection.selected = std::uint32_t{0};
     projection.scrollbar =
-        ssg::scrollbarMetrics(2, static_cast<std::uint32_t>(pane.content.height), 0);
+        ssg::Viewport{}.scrollbarMetrics(2, static_cast<std::uint32_t>(pane.content.height), 0);
     projection.rows = {{"a", ""}, {"b", ""}};
     sections.shell.palette = projection;
     ssg::SessionSnapshot projected{snapshot->revision(), snapshot->topology(),
                                    snapshot->client(), std::move(sections)};
-    auto grid = ssg::render(projected);
+    auto grid = ssg::Renderer{}.render(projected);
     // The gutter is reserved (column exists) but blank: no thumb/track glyphs.
     for (int y = projection.scrollbarRect.y;
          y < projection.scrollbarRect.y + projection.scrollbarRect.height; ++y) {
@@ -803,7 +803,7 @@ TEST(renderTooSmallViewportProducesLibraryPlaceholder) {
     if (!snapshot) return;
     ASSERT_EQ(snapshot->sections().shell.viewport.columns, 0);  // declined layout
     ssg::CellGrid grid;
-    ASSERT_NO_THROW(grid = ssg::render(*snapshot));
+    ASSERT_NO_THROW(grid = ssg::Renderer{}.render(*snapshot));
     ASSERT_EQ(grid.size.columns, 10);
     ASSERT_EQ(grid.size.rows, 5);
     ASSERT_EQ(grid.cells.size(), std::size_t{50});
@@ -824,7 +824,7 @@ TEST(renderTooSmallMatchesHandAuthoredGolden) {
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, {24, 3});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto grid = ssg::render(*snapshot);
+    auto grid = ssg::Renderer{}.render(*snapshot);
     ASSERT_EQ(grid.size.columns, 24);
     ASSERT_EQ(grid.size.rows, 3);
     // 18-cell message centered in 24 columns -> start column (24-18)/2 = 3, on
@@ -834,7 +834,7 @@ TEST(renderTooSmallMatchesHandAuthoredGolden) {
               std::string("   terminal too small   "));
     ASSERT_EQ(rowText(grid, 2), std::string(24, ' '));
     // Determinism.
-    ASSERT_EQ(ssg::render(*snapshot).canonical(), grid.canonical());
+    ASSERT_EQ(ssg::Renderer{}.render(*snapshot).canonical(), grid.canonical());
     std::filesystem::remove_all(root);
 }
 
@@ -847,7 +847,7 @@ TEST(renderTooSmallIsSafeAtOneByOne) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ssg::CellGrid grid;
-    ASSERT_NO_THROW(grid = ssg::render(*snapshot));
+    ASSERT_NO_THROW(grid = ssg::Renderer{}.render(*snapshot));
     ASSERT_EQ(grid.size.columns, 1);
     ASSERT_EQ(grid.size.rows, 1);
     ASSERT_EQ(grid.cells.size(), std::size_t{1});

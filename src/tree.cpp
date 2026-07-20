@@ -175,7 +175,7 @@ TreeProviderSnapshot::TreeProviderSnapshot(
     validateAndSortNodes(providerId_, nodes_);
 }
 
-TreeProviderSnapshot filesystemTreeSnapshot(
+TreeProviderSnapshot TreeProviderSnapshot::fromFilesystem(
     TreeProviderId providerId, const std::filesystem::path& canonicalCwd,
     TreeRevision revision) {
     std::error_code error;
@@ -237,9 +237,9 @@ TreeProviderSnapshot filesystemTreeSnapshot(
                                 std::move(nodes)};
 }
 
-TreeProviderSnapshot gitTreeSnapshot(TreeProviderId providerId,
-                                       TreeRevision revision,
-                                       std::vector<GitTreeRecord> records) {
+TreeProviderSnapshot TreeProviderSnapshot::fromGit(
+    TreeProviderId providerId, TreeRevision revision,
+    std::vector<GitTreeRecord> records) {
     std::vector<TreeNode> nodes;
     nodes.reserve(records.size());
     for (auto& record : records) {
@@ -261,7 +261,7 @@ TreeProviderSnapshot gitTreeSnapshot(TreeProviderId providerId,
                                 revision, std::move(nodes)};
 }
 
-TreeProviderSnapshot symbolTreeSnapshot(
+TreeProviderSnapshot TreeProviderSnapshot::fromSymbols(
     TreeProviderId providerId, TreeRevision revision,
     std::vector<SymbolTreeRecord> records) {
     std::vector<TreeNode> nodes;
@@ -520,9 +520,9 @@ std::size_t TreeDelta::operationCount() const noexcept {
     return result;
 }
 
-TreeDelta deriveTreeDelta(const TreeViewState& base,
-                            const TreeViewState& target,
-                            std::size_t maximumOperations) {
+TreeDelta TreeDeltaCodec::derive(const TreeViewState& base,
+                                 const TreeViewState& target,
+                                 std::size_t maximumOperations) const {
     TreeDelta result{base.revision, target.revision, false, {}};
     std::size_t baseIndex = 0;
     std::size_t targetIndex = 0;
@@ -591,8 +591,8 @@ TreeDelta deriveTreeDelta(const TreeViewState& base,
     return result;
 }
 
-TreeReplayResult replayTreeDelta(const TreeViewState& base,
-                                   const TreeDelta& delta) {
+TreeReplayResult TreeDeltaCodec::replay(const TreeViewState& base,
+                                        const TreeDelta& delta) const {
     if (base.revision != delta.baseRevision) {
         return {std::nullopt, TreeReplayError::StaleRevision};
     }

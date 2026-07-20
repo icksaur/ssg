@@ -55,6 +55,10 @@ public:
         return descriptors_;
     }
 
+    // The path-entry prompt for a command that takes a filesystem path
+    // (throws for a command that accepts no path prompt).
+    [[nodiscard]] PromptRequest pathPrompt(FileCommand command) const;
+
 private:
     const std::array<FileCommandDescriptor, 12> descriptors_{{
         {"workspace.open_directory", FileCommand::OpenDirectory},
@@ -74,6 +78,5 @@ private:
 };
 
 [[nodiscard]] FileCommandsCommandSet fileCommandsCommandSet();
-[[nodiscard]] PromptRequest filePathPrompt(FileCommand command);
 
 }  // namespace ssg

@@ -5,6 +5,18 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Use ccache as the compiler launcher when available.  Fresh build trees (e.g.
+# per-worktree builds) then reuse cached object files instead of recompiling from
+# scratch, which turns a clean build of an already-seen tree into a near-instant
+# cache replay.  Opt out with -DSSG_CCACHE=OFF.
+option(SSG_CCACHE "Use ccache as the compiler launcher when found" ON)
+if(SSG_CCACHE AND NOT CMAKE_CXX_COMPILER_LAUNCHER)
+    find_program(SSG_CCACHE_PROGRAM ccache)
+    if(SSG_CCACHE_PROGRAM)
+        set(CMAKE_CXX_COMPILER_LAUNCHER "${SSG_CCACHE_PROGRAM}")
+    endif()
+endif()
+
 # Capture SSG's own source root immediately after project().  Manifests are
 # included() from this file and share its variable scope, so they see
 # SSG_SOURCE_DIR directly.  Manifests MUST use ${SSG_SOURCE_DIR} for all

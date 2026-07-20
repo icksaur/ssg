@@ -1,6 +1,6 @@
 #include "runtime/editor_runtime_internal.h"
 
-#include <ssg/layout.h>
+#include <ssg/grapheme_layout.h>
 
 #include <algorithm>
 #include <array>
@@ -102,7 +102,7 @@ ThemeSnapshot defaultTheme() {
 // chords are Escape-led and prefix-free; single strokes differ per focus.
 KeymapViewState defaultTerminalKeymap() {
     auto seq = [](std::initializer_list<std::string_view> strokes) {
-        auto parsed = parseKeySequence(strokes);
+        auto parsed = KeyCodec{}.parseSequence(strokes);
         if (!parsed) throw std::logic_error{"curated keymap has an invalid stroke"};
         return *parsed;
     };
@@ -618,7 +618,7 @@ void EditorRuntime::Impl::clampSelectionToActiveDocument() {
     auto text = activeText();
     auto offset = selection.selections.primary().active.byteOffset.value();
     if (offset > text.size()) offset = text.size();
-    auto position = resolveDocumentPosition(text, ByteOffset{offset}).value_or(zeroPosition());
+    auto position = ssg::SelectionNavigator::resolvePosition(text, ByteOffset{offset}).value_or(zeroPosition());
     selection.selections = SelectionSet{std::vector<Selection>{Selection{position, position}}};
 }
 
@@ -629,11 +629,11 @@ std::vector<CellRun> EditorRuntime::Impl::activeCellRuns() const {
     while (start <= text.size()) {
         auto end = text.find('\n', start);
         auto line = text.substr(start, end == std::string::npos ? end : end - start);
-        runs.push_back(computeCellRun(line, 4));
+        runs.push_back(GraphemeLayout{}.computeRun(line, 4));
         if (end == std::string::npos) break;
         start = end + 1;
     }
-    if (runs.empty()) runs.push_back(computeCellRun("", 4));
+    if (runs.empty()) runs.push_back(GraphemeLayout{}.computeRun("", 4));
     return runs;
 }
 
@@ -642,11 +642,11 @@ ViewportViewState EditorRuntime::Impl::computeEditorViewport(
     std::uint32_t firstColumn) const {
     if (wordWrap) {
         auto runs = activeCellRuns();
-        return computeViewport(runs, dimensions, firstRow);
+        return Viewport{}.compute(runs, dimensions, firstRow);
     }
     // Word wrap off (default): one logical line is one visual row; only the
     // visible lines are segmented, so this is O(visible rows), not O(document).
-    return computeViewportUnwrapped(activeText(), dimensions, firstRow,
+    return Viewport{}.computeUnwrapped(activeText(), dimensions, firstRow,
                                       firstColumn, 4);
 }
 
@@ -661,7 +661,7 @@ void EditorRuntime::Impl::refreshTree() {
         return;
     }
     ++treeScanCount;
-    tree.replaceProvider(filesystemTreeSnapshot(
+    tree.replaceProvider(TreeProviderSnapshot::fromFilesystem(
         TreeProviderId{"filesystem"}, root, TreeRevision{nextTreeRevision++}));
 }
 
@@ -754,10 +754,10 @@ EditorRuntimeCreateResult EditorRuntime::create(EditorRuntimeConfig config) {
                                            config.recoveryRoot,
                                            config.deferEnrichment);
         impl->keymap = defaultTerminalKeymap();
-        if (auto errors = validateKeymap(impl->keymap, {}); !errors.empty()) {
+        if (auto errors = KeymapMatcher{impl->keymap}.validate({}); !errors.empty()) {
             return {nullptr, "default keymap is invalid: " + errors.front().message};
         }
-        if (!hasGlobalBinding(impl->keymap, "settings.open", {})) {
+        if (!KeymapMatcher{impl->keymap}.hasGlobalBinding("settings.open", {})) {
             return {nullptr,
                     "default keymap lacks a global settings.open escape hatch"};
         }
@@ -821,7 +821,7 @@ std::optional<SessionSnapshot> EditorRuntime::snapshot(ClientId clientId, Viewpo
                                                        PaletteReport paletteReport) const {
     auto client = impl_->session->attachedClient(clientId);
     if (!client) return std::nullopt;
-    return assembleSessionSnapshot(impl_->session->revision(), impl_->session->topology(),
+    return SessionSnapshotCodec{}.assemble(impl_->session->revision(), impl_->session->topology(),
                                      client->principal, client->viewId,
                                      impl_->viewport(dimensions),
                                      impl_->sections(dimensions, leaderPending, paletteReport));

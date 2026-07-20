@@ -32,7 +32,7 @@ public:
     void replaceCheckpoint(
         const std::filesystem::path& path,
         const JournalRecoverySet& recovery) override {
-        const auto record = encodeCheckpointRecord(recovery);
+        const auto record = JournalCodec{}.encodeCheckpoint(recovery);
         replaceFileAtomically(path, record);
         setOwnerOnlyPermissions(path);
     }

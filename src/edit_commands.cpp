@@ -1,6 +1,6 @@
 #include <ssg/edit_commands.h>
 
-#include <ssg/layout.h>
+#include <ssg/grapheme_layout.h>
 
 #include <algorithm>
 #include <cctype>
@@ -245,11 +245,11 @@ std::optional<SelectionSet> remapSelections(
     std::vector<Selection> values;
     values.reserve(before.items().size());
     const auto resolveMapped = [&](std::uint64_t offset) {
-        auto resolved = resolveDocumentPosition(
+        auto resolved = ssg::SelectionNavigator::resolvePosition(
             resultingText, ByteOffset{offset}, tabWidth);
         while (!resolved && offset < resultingText.size()) {
             ++offset;
-            resolved = resolveDocumentPosition(
+            resolved = ssg::SelectionNavigator::resolvePosition(
                 resultingText, ByteOffset{offset}, tabWidth);
         }
         return resolved;
@@ -271,7 +271,7 @@ bool validateSelections(std::string_view text,
                          const SelectionSet& selections, int tabWidth) {
     for (const auto& selection : selections.items()) {
         for (const auto* endpoint : {&selection.anchor, &selection.active}) {
-            const auto resolved = resolveDocumentPosition(
+            const auto resolved = ssg::SelectionNavigator::resolvePosition(
                 text, endpoint->byteOffset, tabWidth);
             if (!resolved || *resolved != *endpoint) {
                 return false;
@@ -494,7 +494,7 @@ std::vector<TextEdit> transposeEdits(const DocumentSnapshot& document,
             --lineIndex;
         }
         const auto& line = lines[lineIndex];
-        const auto run = computeCellRun(
+        const auto run = GraphemeLayout{}.computeRun(
             std::string_view{document.text}.substr(
                 line.start, line.contentEnd - line.start));
         if (run.spans.size() < 2) {
@@ -570,9 +570,9 @@ EditCommandSuiteCommandSet editCommandSuiteCommandSet() {
     return EditCommandSuiteCommandSet{};
 }
 
-EditCommandResult applyEditCommand(
+EditCommandResult EditInterpreter::apply(
     const DocumentSnapshot& document, const SelectionSet& selections,
-    EditCommandSettings settings, EditCommand command) {
+    EditCommandSettings settings, EditCommand command) const {
     if (document.mode == DocumentMode::ReadOnly) {
         return failure(EditCommandError::ReadOnly,
                        "edit command requires an editable document");

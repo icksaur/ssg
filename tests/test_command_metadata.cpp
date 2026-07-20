@@ -1,5 +1,5 @@
 #include <ssg/command_metadata.h>
-#include <ssg/input.h>
+#include <ssg/keymap.h>
 
 #include "test_helpers.h"
 
@@ -22,42 +22,42 @@ TEST(commandLabelUsesAuthoredLabelsAndHumanizesTheRest) {
 }
 
 TEST(formatKeySequenceIsCompactAndHuman) {
-    ASSERT_EQ(ssg::formatKeySequence(*ssg::parseKeySequence({"Escape", "KeyS"})),
+    ASSERT_EQ(ssg::KeyCodec{}.formatSequence(*ssg::KeyCodec{}.parseSequence({"Escape", "KeyS"})),
               std::string{"Esc S"});
-    ASSERT_EQ(ssg::formatKeySequence(*ssg::parseKeySequence({"ArrowDown"})),
+    ASSERT_EQ(ssg::KeyCodec{}.formatSequence(*ssg::KeyCodec{}.parseSequence({"ArrowDown"})),
               std::string{"Down"});
-    ASSERT_EQ(ssg::formatKeySequence(
-                  *ssg::parseKeySequence({"Escape", "Shift+KeyZ"})),
+    ASSERT_EQ(ssg::KeyCodec{}.formatSequence(
+                  *ssg::KeyCodec{}.parseSequence({"Escape", "Shift+KeyZ"})),
               std::string{"Esc Shift+Z"});
-    ASSERT_EQ(ssg::formatKeySequence(
-                  *ssg::parseKeySequence({"Escape", "BracketRight"})),
+    ASSERT_EQ(ssg::KeyCodec{}.formatSequence(
+                  *ssg::KeyCodec{}.parseSequence({"Escape", "BracketRight"})),
               std::string{"Esc ]"});
-    ASSERT_TRUE(ssg::formatKeySequence({}).empty());
+    ASSERT_TRUE(ssg::KeyCodec{}.formatSequence({}).empty());
 }
 
 TEST(preferredBindingIsDeterministic) {
-    const auto shortSeq = *ssg::parseKeySequence({"Escape", "KeyS"});
-    const auto longSeq = *ssg::parseKeySequence({"Escape", "KeyF", "KeyT"});
+    const auto shortSeq = *ssg::KeyCodec{}.parseSequence({"Escape", "KeyS"});
+    const auto longSeq = *ssg::KeyCodec{}.parseSequence({"Escape", "KeyF", "KeyT"});
     // Two bindings for one command: the shorter wins regardless of order.
     ssg::KeymapViewState a{"m", {{longSeq, "cmd", "*"}, {shortSeq, "cmd", "*"}}};
     ssg::KeymapViewState b{"m", {{shortSeq, "cmd", "*"}, {longSeq, "cmd", "*"}}};
-    auto aPref = ssg::preferredBinding(a, "cmd");
-    auto bPref = ssg::preferredBinding(b, "cmd");
+    auto aPref = ssg::KeymapMatcher{a}.preferredBinding("cmd");
+    auto bPref = ssg::KeymapMatcher{b}.preferredBinding("cmd");
     ASSERT_TRUE(aPref.has_value());
     ASSERT_TRUE(bPref.has_value());
     ASSERT_EQ(*aPref, shortSeq);
     ASSERT_EQ(*bPref, shortSeq);
 
     // Equal length: the lexicographically least display form wins.
-    const auto escA = *ssg::parseKeySequence({"Escape", "KeyA"});
-    const auto escB = *ssg::parseKeySequence({"Escape", "KeyB"});
+    const auto escA = *ssg::KeyCodec{}.parseSequence({"Escape", "KeyA"});
+    const auto escB = *ssg::KeyCodec{}.parseSequence({"Escape", "KeyB"});
     ssg::KeymapViewState c{"m", {{escB, "cmd", "*"}, {escA, "cmd", "*"}}};
-    auto cPref = ssg::preferredBinding(c, "cmd");
+    auto cPref = ssg::KeymapMatcher{c}.preferredBinding("cmd");
     ASSERT_TRUE(cPref.has_value());
     ASSERT_EQ(*cPref, escA);
 
     // Unbound command -> no preferred binding.
-    ASSERT_FALSE(ssg::preferredBinding(a, "other").has_value());
+    ASSERT_FALSE(ssg::KeymapMatcher{a}.preferredBinding("other").has_value());
 }
 
 int main() {

@@ -1,10 +1,9 @@
 #pragma once
 
 // Uniform pointer hit-testing over the scrollable regions a snapshot publishes
-// (see doc/spec-scroll.md R4). This is pure, data-only classification: it maps a
-// terminal cell to the region and item under it, or to a scrollbar position. It
-// performs NO input handling — milestone 8 (mouse) is the caller that turns a
-// RegionHit into commands.
+// (see doc/spec-scroll.md R4). HitTester maps a terminal cell to the region and
+// item under it, or to a scrollbar position. It performs NO input handling —
+// milestone 8 (mouse) is the caller that turns a RegionHit into commands.
 
 #include <ssg/session_snapshot.h>
 #include <ssg/tree.h>
@@ -52,13 +51,21 @@ struct RegionHit {
     bool operator==(const RegionHit&) const = default;
 };
 
-// Classify the terminal cell at (column, row) against the snapshot's regions.
+// Classifies the terminal cell at (column, row) against a snapshot's regions.
 // Precedence: when the palette is open it overlays the editor pane, so a cell in
 // the pane area resolves to the palette (or its gutter), never the editor. The
 // side panel, editor pane, and their gutters occupy disjoint columns, so their
 // order does not matter. A cell outside every region, on the tree provider-label
-// row, or in a reserved-but-empty gutter/list area returns HitRegion::none.
-[[nodiscard]] RegionHit hitTest(SessionSnapshot const& snapshot, int column,
-                                 int row);
+// row, or in a reserved-but-empty gutter/list area is HitRegion::None.
+class HitTester {
+public:
+    explicit HitTester(SessionSnapshot const& snapshot) noexcept
+        : snapshot_(snapshot) {}
+
+    [[nodiscard]] RegionHit at(int column, int row) const;
+
+private:
+    SessionSnapshot const& snapshot_;
+};
 
 }  // namespace ssg

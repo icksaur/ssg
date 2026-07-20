@@ -1,7 +1,7 @@
 #include "../test_helpers.h"
 
 #include <ssg/editor_runtime.h>
-#include <ssg/layout.h>
+#include <ssg/grapheme_layout.h>
 
 #include <cstdio>
 #include <filesystem>
@@ -541,13 +541,13 @@ TEST(wordWrapOffNavigationIsViewportBounded) {
         (void)runtime.dispatch(
             ssg::ClientId{1}, {"file.open", runtime.revision(), file});
         (void)runtime.snapshot(ssg::ClientId{1}, dims);  // prime pane cache
-        ssg::resetCellRunCalls();
+        ssg::GraphemeLayout::resetCellRunCalls();
         for (int i = 0; i < 4; ++i) {
             (void)runtime.dispatch(
                 ssg::ClientId{1},
                 {"cursor.line_down", runtime.revision(), {}});
         }
-        return ssg::cellRunCalls();
+        return ssg::GraphemeLayout::cellRunCalls();
     };
 
     auto const smallCalls = navSegmentations("small.txt");

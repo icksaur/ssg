@@ -206,7 +206,7 @@ public:
     [[nodiscard]] ViewportViewState viewportState(
         ViewportDimensions dimensions,
         std::uint32_t requestedFirstVisualRow) const {
-        return computeViewport(allRuns(), dimensions,
+        return Viewport{}.compute(allRuns(), dimensions,
                                 requestedFirstVisualRow);
     }
 
@@ -388,7 +388,7 @@ private:
                                     ? lineStarts_[index + 1] - 1
                                     : text_.size();
         auto run =
-            computeCellRun(text_.substr(start, end - start), tabWidth_);
+            GraphemeLayout{}.computeRun(text_.substr(start, end - start), tabWidth_);
         std::vector<DocumentPosition> boundaries;
         boundaries.reserve(run.spans.size() + 1);
         std::uint64_t cell = 0;
@@ -749,7 +749,7 @@ SelectionNavigationCommandSet selectionNavigationCommandSet() {
     return SelectionNavigationCommandSet{};
 }
 
-std::optional<DocumentPosition> resolveDocumentPosition(
+std::optional<DocumentPosition> SelectionNavigator::resolvePosition(
     std::string_view text, ByteOffset byteOffset, int tabWidth) {
     if (tabWidth < 1 || tabWidth > 16) {
         return std::nullopt;
@@ -757,11 +757,12 @@ std::optional<DocumentPosition> resolveDocumentPosition(
     return TextModel{text, tabWidth}.resolve(byteOffset);
 }
 
-SelectionNavigationResult applySelectionNavigation(
+SelectionNavigationResult SelectionNavigator::apply(
     std::string_view text, const SelectionViewState& before,
     SelectionCommand command, ViewportDimensions viewport,
     SelectionCommandArguments arguments,
-    std::span<const BracketPair> bracketPairs, int tabWidth, bool wordWrap) {
+    std::span<const BracketPair> bracketPairs, int tabWidth,
+    bool wordWrap) const {
     if (tabWidth < 1 || tabWidth > 16) {
         return rejected(SelectionNavigationError::InvalidTabWidth,
                         "tab width must be between 1 and 16");
@@ -786,7 +787,7 @@ SelectionNavigationResult applySelectionNavigation(
     // the exact wrapped viewport.
     const auto currentViewport =
         wordWrap ? model.viewportState(viewport, before.firstVisualRow)
-                  : computeViewportUnwrapped(text, viewport,
+                  : Viewport{}.computeUnwrapped(text, viewport,
                                                before.firstVisualRow, 0,
                                                tabWidth);
     std::uint32_t firstVisualRow =

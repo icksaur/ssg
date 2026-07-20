@@ -2,9 +2,9 @@
 #include "test_helpers.h"
 #include "tui_fixture.h"
 
-#include <ssg/render.h>
+#include <ssg/renderer.h>
 
-#include <ssg/editor_session_assembly.h>
+#include <ssg/editor_session_builder.h>
 #include <ssg/session_snapshot.h>
 
 #include <any>
@@ -147,8 +147,8 @@ public:
     }
 
     ssg::ViewportViewState viewport() const {
-        auto run = ssg::computeCellRun(state_.text);
-        return ssg::computeViewport(
+        auto run = ssg::GraphemeLayout{}.computeRun(state_.text);
+        return ssg::Viewport{}.compute(
             std::span<const ssg::CellRun>{&run, 1},
             ssg::ViewportDimensions{17, 5}, state_.first_row);
     }
@@ -172,7 +172,7 @@ public:
 
     ssg::SessionSnapshot snapshot(ssg::InvocationPrincipal const& principal,
                                   ssg::ViewId view) const {
-        return ssg::assembleSessionSnapshot(
+        return ssg::SessionSnapshotCodec{}.assemble(
             session->revision(), session->topology(), principal, view,
             model.viewport(), model.sections(session->revision()));
     }
@@ -267,7 +267,7 @@ TEST(finalWorkflowScreenMatchesHandAuthored16ColorGolden) {
         ASSERT_EQ(result.accepted(), step.expected_accepted);
     }
 
-    auto screen = ssg::render(client.snapshot());
+    auto screen = ssg::Renderer{}.render(client.snapshot());
     ASSERT_EQ(screen.palette.size(), ssg::kThemePaletteSize);
     for (auto const& cell : screen.cells) {
         ASSERT_TRUE(cell.foreground < ssg::kThemePaletteSize);

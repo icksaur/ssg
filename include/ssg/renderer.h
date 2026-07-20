@@ -1,6 +1,7 @@
 #pragma once
 
-// The authoritative cell renderer.  ssg::render turns a SessionSnapshot into a
+// The authoritative cell renderer.  ssg::Renderer{}.render turns a
+// SessionSnapshot into a
 // deterministic monospace CellGrid: the single place where shell geometry and
 // content become cells.  Clients (terminal, browser) only translate the grid to
 // their medium; they add no layout, content, or color.
@@ -45,15 +46,19 @@ struct CellGrid {
     [[nodiscard]] std::string canonical() const;
 };
 
-[[nodiscard]] CellGrid render(SessionSnapshot const& snapshot);
+class Renderer {
+public:
+    [[nodiscard]] CellGrid render(SessionSnapshot const& snapshot) const;
 
-// Test instrumentation (M12 INV-render-projection).  Counts the compute_cell_run
-// (grapheme-segmentation) calls render() has made since the last reset.  This is a
-// diagnostic counter, not production state; it lets a test assert that render
-// segments only the logical lines the viewport shows (<= viewport rows), never the
-// whole document — so a regression to whole-document segmentation fails the count
-// oracle.  Not thread-safe across concurrent render() calls (per-thread counter).
-[[nodiscard]] std::uint64_t renderSegmentationCalls();
-void resetRenderSegmentationCalls();
+    // Test instrumentation (M12 INV-render-projection).  Counts the
+    // compute_cell_run (grapheme-segmentation) calls render() has made since the
+    // last reset.  This is a diagnostic counter, not production state; it lets a
+    // test assert that render segments only the logical lines the viewport shows
+    // (<= viewport rows), never the whole document — so a regression to
+    // whole-document segmentation fails the count oracle.  Not thread-safe across
+    // concurrent render() calls (per-thread counter).
+    [[nodiscard]] static std::uint64_t renderSegmentationCalls();
+    static void resetRenderSegmentationCalls();
+};
 
 }  // namespace ssg

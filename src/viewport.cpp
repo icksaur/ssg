@@ -103,16 +103,18 @@ ScrollbarMetrics scrollbarMetricsImpl(uint32_t totalRows,
 
 }  // namespace
 
-ScrollbarMetrics scrollbarMetrics(uint32_t totalRows, uint32_t viewportRows,
-                                   uint32_t firstRow) {
+ScrollbarMetrics Viewport::scrollbarMetrics(uint32_t totalRows,
+                                            uint32_t viewportRows,
+                                            uint32_t firstRow) const {
     return scrollbarMetricsImpl(totalRows, viewportRows, firstRow);
 }
 
-ListScrollView computeListScrollView(uint32_t totalItems,
-                                        uint32_t viewportRows,
-                                        uint32_t firstVisible,
-                                        std::optional<uint32_t> selected,
-                                        bool keepSelectionVisible) {
+ListScrollView Viewport::listScrollView(
+    uint32_t totalItems,
+    uint32_t viewportRows,
+    uint32_t firstVisible,
+    std::optional<uint32_t> selected,
+    bool keepSelectionVisible) const {
     if (viewportRows == 0) {
         return ListScrollView{0, 0, scrollbarMetricsImpl(totalItems, 0, 0)};
     }
@@ -153,9 +155,9 @@ ViewportDimensions::ViewportDimensions(uint32_t columnCount,
     }
 }
 
-ViewportViewState computeViewport(std::span<const CellRun> logicalLines,
-                                   ViewportDimensions dimensions,
-                                   uint32_t requestedFirstVisualRow) {
+ViewportViewState Viewport::compute(std::span<const CellRun> logicalLines,
+                                    ViewportDimensions dimensions,
+                                    uint32_t requestedFirstVisualRow) const {
     const auto allRows = wrapRows(logicalLines, dimensions.columns);
     const auto totalRows =
         checkedU32(allRows.size(), "viewport visual row count exceeds uint32");
@@ -232,10 +234,9 @@ ViewportViewState computeViewport(std::span<const CellRun> logicalLines,
     };
 }
 
-ViewportViewState computeViewportUnwrapped(
+ViewportViewState Viewport::computeUnwrapped(
     std::string_view documentText, ViewportDimensions dimensions,
-    uint32_t requestedFirstVisualRow, uint32_t requestedFirstVisualColumn,
-    int tabWidth) {
+    uint32_t requestedFirstVisualRow, uint32_t requestedFirstVisualColumn, int tabWidth) const {
     // Word wrap OFF: one logical line renders as exactly one visual row, clipped
     // to the pane width.  The total visual row count is the logical line count, a
     // cheap byte scan for '\n' — NO compute_cell_run over the whole document.
@@ -281,7 +282,7 @@ ViewportViewState computeViewportUnwrapped(
         const std::size_t end = logicalLine + 1 < lineStart.size()
                                     ? lineStart[logicalLine + 1] - 1
                                     : documentText.size();
-        const auto run = computeCellRun(
+        const auto run = GraphemeLayout{}.computeRun(
             documentText.substr(start, end - start), tabWidth);
         const auto documentStart =
             checkedU32(start, "viewport byte offset exceeds uint32");
@@ -351,11 +352,11 @@ ViewportViewState computeViewportUnwrapped(
     };
 }
 
-ViewportViewState scrollViewportBy(
+ViewportViewState Viewport::scrollBy(
     std::span<const CellRun> logicalLines,
     ViewportDimensions dimensions,
     uint32_t currentFirstVisualRow,
-    int64_t rowDelta) {
+    int64_t rowDelta) const {
     uint32_t requested = currentFirstVisualRow;
     if (rowDelta >= 0) {
         const auto delta = static_cast<uint64_t>(rowDelta);
@@ -369,11 +370,11 @@ ViewportViewState scrollViewportBy(
                         ? 0
                         : requested - static_cast<uint32_t>(magnitude);
     }
-    return computeViewport(logicalLines, dimensions, requested);
+    return compute(logicalLines, dimensions, requested);
 }
 
-ViewportDelta deriveViewportDelta(const ViewportViewState& previous,
-                                    const ViewportViewState& current) {
+ViewportDelta Viewport::deriveDelta(const ViewportViewState& previous,
+                                    const ViewportViewState& current) const {
     if (previous == current) {
         return ViewportDelta{false, std::nullopt};
     }

@@ -117,7 +117,7 @@ SocketOwner connectWebsocket(std::uint16_t port) {
 
 ssg::SliceResponse websocketCommand(TestSocket socket,
                                      ssg::InsertRequest const& request) {
-    sendAll(socket, maskedTextFrame(ssg::encodeInsertRequest(request)));
+    sendAll(socket, maskedTextFrame(ssg::ProtocolCodec{}.encodeInsertRequest(request)));
     std::string bytes;
     std::size_t consumed = 0;
     Http::WebSocketFrame frame;
@@ -125,14 +125,14 @@ ssg::SliceResponse websocketCommand(TestSocket socket,
         bytes += receiveSome(socket);
         frame = Http::parseWebSocketFrame(bytes, consumed);
     } while (consumed == 0);
-    return ssg::decodeSliceResponse(frame.payload);
+    return ssg::ProtocolCodec{}.decodeSliceResponse(frame.payload);
 }
 
 TEST(codecRoundTripAndMalformedCorpus) {
     ssg::ProtocolLimits const limits{256, 32};
     auto const wire =
-        ssg::encodeInsertRequest({ssg::Revision{9}, "a b\n\xC3\xA9"});
-    auto const decoded = ssg::decodeInsertRequest(wire, limits);
+        ssg::ProtocolCodec{}.encodeInsertRequest({ssg::Revision{9}, "a b\n\xC3\xA9"});
+    auto const decoded = ssg::ProtocolCodec{}.decodeInsertRequest(wire, limits);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_EQ(decoded.request->baseRevision, ssg::Revision{9});
     ASSERT_EQ(decoded.request->text, std::string{"a b\n\xC3\xA9"});
@@ -141,12 +141,12 @@ TEST(codecRoundTripAndMalformedCorpus) {
          std::vector<std::string>{"", "SSG0 INSERT 1 61", "SSG1 DELETE 1 61",
                                   "SSG1 INSERT x 61", "SSG1 INSERT 1 6",
                                   "SSG1 INSERT 1 zz", "SSG1 INSERT 1 6100"}) {
-        auto const result = ssg::decodeInsertRequest(malformed, limits);
+        auto const result = ssg::ProtocolCodec{}.decodeInsertRequest(malformed, limits);
         ASSERT_FALSE(result.accepted());
     }
-    ASSERT_EQ(ssg::decodeInsertRequest(std::string(257, 'x'), limits).error,
+    ASSERT_EQ(ssg::ProtocolCodec{}.decodeInsertRequest(std::string(257, 'x'), limits).error,
               ssg::ProtocolError::MessageTooLarge);
-    ASSERT_EQ(ssg::decodeInsertRequest("SSG1 INSERT 1 616263", {256, 2}).error,
+    ASSERT_EQ(ssg::ProtocolCodec{}.decodeInsertRequest("SSG1 INSERT 1 616263", {256, 2}).error,
               ssg::ProtocolError::InsertTooLarge);
 }
 
@@ -160,11 +160,11 @@ TEST(directAndCodecScriptsHaveIdenticalSnapshots) {
         ssg::InsertRequest const request{revision, text};
         auto const directResult = direct.execute(ssg::ClientId{1}, request);
         auto const decoded =
-            ssg::decodeInsertRequest(ssg::encodeInsertRequest(request));
+            ssg::ProtocolCodec{}.decodeInsertRequest(ssg::ProtocolCodec{}.encodeInsertRequest(request));
         ASSERT_TRUE(decoded.accepted());
         auto const remoteResult =
-            ssg::decodeSliceResponse(
-                ssg::encodeSliceResponse(directResult));
+            ssg::ProtocolCodec{}.decodeSliceResponse(
+                ssg::ProtocolCodec{}.encodeSliceResponse(directResult));
         ASSERT_TRUE(directResult.accepted());
         ASSERT_EQ(remoteResult, directResult);
         ASSERT_TRUE(directResult.delta.has_value());
@@ -185,7 +185,7 @@ TEST(staleAndMalformedRequestsAreFailureAtomic) {
     ASSERT_EQ(stale.snapshot, accepted.snapshot);
     ASSERT_FALSE(stale.delta.has_value());
 
-    auto const malformed = ssg::decodeInsertRequest("not a command");
+    auto const malformed = ssg::ProtocolCodec{}.decodeInsertRequest("not a command");
     ASSERT_EQ(malformed.error, ssg::ProtocolError::MalformedMessage);
     ASSERT_EQ(direct.snapshot(), accepted.snapshot);
 }

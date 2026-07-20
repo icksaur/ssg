@@ -2,7 +2,7 @@
 
 #include <ssg/editor_runtime.h>
 #include <ssg/find_replace.h>
-#include <ssg/input.h>
+#include <ssg/keymap.h>
 #include <ssg/selection.h>
 #include <ssg/prompt.h>
 #include <ssg/text_input_commands.h>
@@ -70,7 +70,7 @@ TEST(runtimeTextSelectionAndHistoryMatchFeatureOperations) {
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"edit.txt"}}).accepted());
 
-    auto setPosition = runtime.dispatch(ssg::ClientId{1}, {"cursor.set_position", runtime.revision(), ssg::SelectionCommandArguments{ssg::resolveDocumentPosition("abc", ssg::ByteOffset{3}), std::nullopt}});
+    auto setPosition = runtime.dispatch(ssg::ClientId{1}, {"cursor.set_position", runtime.revision(), ssg::SelectionCommandArguments{ssg::SelectionNavigator::resolvePosition("abc", ssg::ByteOffset{3}), std::nullopt}});
     ASSERT_TRUE(setPosition.accepted());
     auto typed = runtime.dispatch(ssg::ClientId{1}, {"text.insert", runtime.revision(), ssg::TextInputArguments{"d"}});
     ASSERT_TRUE(typed.accepted());
@@ -92,7 +92,7 @@ TEST(typingUndoBreaksOnWordAndLineBoundaries) {
     auto& runtime = *created.runtime;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"edit.txt"}}).accepted());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"cursor.set_position", runtime.revision(), ssg::SelectionCommandArguments{ssg::resolveDocumentPosition("abc", ssg::ByteOffset{3}), std::nullopt}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"cursor.set_position", runtime.revision(), ssg::SelectionCommandArguments{ssg::SelectionNavigator::resolvePosition("abc", ssg::ByteOffset{3}), std::nullopt}}).accepted());
 
     const auto type = [&](char character) {
         return runtime.dispatch(ssg::ClientId{1}, {"text.insert", runtime.revision(), ssg::TextInputArguments{std::string{character}}}).accepted();
@@ -128,7 +128,7 @@ TEST(workspaceReplaceDispatchMatchesFeaturePreviewAndDiskApply) {
 
     ssg::FindRequest request{"cat", {}, std::nullopt, 100000, nullptr};
     DiskPreviewWorkspace oracleWorkspace{root / "workspace", runtime.revision()};
-    auto oracle = ssg::previewWorkspaceReplace(oracleWorkspace, runtime.revision(), request, "dog");
+    auto oracle = ssg::WorkspaceReplacer{}.preview(oracleWorkspace, runtime.revision(), request, "dog");
     ASSERT_TRUE(oracle.accepted());
     ASSERT_EQ(oracle.preview->changes.size(), std::size_t{1});
 
@@ -157,7 +157,7 @@ TEST(workspaceReplaceRejectsStaleAndOutOfBoundsPreview) {
 
     ssg::FindRequest request{"cat", {}, std::nullopt, 100000, nullptr};
     DiskPreviewWorkspace oracleWorkspace{workspace, runtime.revision()};
-    auto oracle = ssg::previewWorkspaceReplace(oracleWorkspace, runtime.revision(), request, "dog");
+    auto oracle = ssg::WorkspaceReplacer{}.preview(oracleWorkspace, runtime.revision(), request, "dog");
     ASSERT_TRUE(oracle.accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"replace.workspace_preview", runtime.revision(), ssg::WorkspaceReplaceArguments{request, "dog"}}).accepted());
 
@@ -198,7 +198,7 @@ TEST(workspaceReplaceUpdatesOpenDocumentSnapshotAndDisk) {
 
     ssg::FindRequest request{"cat", {}, std::nullopt, 100000, nullptr};
     DiskPreviewWorkspace oracleWorkspace{root / "workspace", runtime.revision()};
-    auto oracle = ssg::previewWorkspaceReplace(oracleWorkspace, runtime.revision(), request, "dog");
+    auto oracle = ssg::WorkspaceReplacer{}.preview(oracleWorkspace, runtime.revision(), request, "dog");
     ASSERT_TRUE(oracle.accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"replace.workspace_preview", runtime.revision(), ssg::WorkspaceReplaceArguments{request, "dog"}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"replace.workspace_apply", runtime.revision(), {}}).accepted());
@@ -665,14 +665,14 @@ TEST(pointerSelectionCommandsFocusTheEditorKeyboardMotionDoesNot) {
     // to the editor.
     focusPanel();
     ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"cursor.set_position", runtime.revision(), ssg::SelectionCommandArguments{ssg::resolveDocumentPosition("abc", ssg::ByteOffset{1}), std::nullopt}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"cursor.set_position", runtime.revision(), ssg::SelectionCommandArguments{ssg::SelectionNavigator::resolvePosition("abc", ssg::ByteOffset{1}), std::nullopt}}).accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Editor);
 
     // A pointer drag (select.set_range) likewise focuses the editor.
     focusPanel();
     ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"select.set_range", runtime.revision(),
-        ssg::SelectionCommandArguments{std::nullopt, ssg::Selection{ssg::resolveDocumentPosition("abc", ssg::ByteOffset{0}).value(), ssg::resolveDocumentPosition("abc", ssg::ByteOffset{2}).value()}}}).accepted());
+        ssg::SelectionCommandArguments{std::nullopt, ssg::Selection{ssg::SelectionNavigator::resolvePosition("abc", ssg::ByteOffset{0}).value(), ssg::SelectionNavigator::resolvePosition("abc", ssg::ByteOffset{2}).value()}}}).accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Editor);
 
     // A KEYBOARD caret motion (a different SelectionCommand) does NOT change focus:
@@ -728,7 +728,7 @@ TEST(editRevealsThePrimaryCaretFreeScrollDoesNotAndFollowsPrimary) {
     // Move the caret to the last line (navigation reveals it to the bottom), then
     // free-scroll to the top so the caret is off-screen below.
     auto doc = runtime.activeDocumentText();
-    auto endPos = ssg::resolveDocumentPosition(doc, ssg::ByteOffset{static_cast<std::uint32_t>(doc.size())});
+    auto endPos = ssg::SelectionNavigator::resolvePosition(doc, ssg::ByteOffset{static_cast<std::uint32_t>(doc.size())});
     ASSERT_TRUE(endPos.has_value());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"cursor.set_position", runtime.revision(), ssg::SelectionCommandArguments{endPos, std::nullopt}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{-200}}).accepted());
@@ -740,8 +740,8 @@ TEST(editRevealsThePrimaryCaretFreeScrollDoesNotAndFollowsPrimary) {
     // Two cursors: secondary near the top (line 0), PRIMARY near the bottom (the
     // back selection). select.add_range pushes the new range to the back.
     doc = runtime.activeDocumentText();
-    auto top = ssg::resolveDocumentPosition(doc, ssg::ByteOffset{0});
-    auto bottomLineStart = ssg::resolveDocumentPosition(doc, ssg::ByteOffset{static_cast<std::uint32_t>(doc.size()) - 2});
+    auto top = ssg::SelectionNavigator::resolvePosition(doc, ssg::ByteOffset{0});
+    auto bottomLineStart = ssg::SelectionNavigator::resolvePosition(doc, ssg::ByteOffset{static_cast<std::uint32_t>(doc.size()) - 2});
     ASSERT_TRUE(top.has_value());
     ASSERT_TRUE(bottomLineStart.has_value());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"cursor.set_position", runtime.revision(), ssg::SelectionCommandArguments{top, std::nullopt}}).accepted());
@@ -791,7 +791,7 @@ TEST(undoAndPasteRevealTheCaret) {
     // that correctly does not mutate or reveal.)
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"select.line_down", runtime.revision(), {}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"clipboard.copy", runtime.revision(), {}}).accepted());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"cursor.set_position", runtime.revision(), ssg::SelectionCommandArguments{ssg::resolveDocumentPosition(text, ssg::ByteOffset{0}), std::nullopt}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"cursor.set_position", runtime.revision(), ssg::SelectionCommandArguments{ssg::SelectionNavigator::resolvePosition(text, ssg::ByteOffset{0}), std::nullopt}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{40}}).accepted());
     ASSERT_EQ(firstRow(), 40U);
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"clipboard.paste", runtime.revision(), {}}).accepted());
@@ -823,8 +823,8 @@ TEST(multiCursorPastePreservesAllCursors) {
     // Build two cursors (top of line 0 and top of line 1), copy, then paste. The
     // paste must not collapse the multi-cursor set to a single caret.
     auto doc = runtime.activeDocumentText();
-    auto p0 = ssg::resolveDocumentPosition(doc, ssg::ByteOffset{0});
-    auto p1 = ssg::resolveDocumentPosition(doc, ssg::ByteOffset{4});
+    auto p0 = ssg::SelectionNavigator::resolvePosition(doc, ssg::ByteOffset{0});
+    auto p1 = ssg::SelectionNavigator::resolvePosition(doc, ssg::ByteOffset{4});
     ASSERT_TRUE(p0.has_value() && p1.has_value());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"cursor.set_position", runtime.revision(), ssg::SelectionCommandArguments{p0, std::nullopt}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"select.add_range", runtime.revision(), ssg::SelectionCommandArguments{std::nullopt, ssg::Selection{*p1, *p1}}}).accepted());

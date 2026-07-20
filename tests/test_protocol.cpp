@@ -1,6 +1,6 @@
 #include "test_helpers.h"
 
-#include <ssg/editor_session_assembly.h>
+#include <ssg/editor_session_builder.h>
 #include <ssg/file_commands.h>
 #include <ssg/find_replace.h>
 #include <ssg/protocol.h>
@@ -106,7 +106,7 @@ ssg::ViewportViewState clientView(std::uint32_t firstRow) {
 // Registry coverage and construction validation.
 
 TEST(registryCoversEveryP0CommandAndRejectsUnknownIds) {
-    auto registry = ssg::buildCommandArgumentCodecRegistry();
+    auto registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
     for (auto const& id : catalogIds()) {
         ASSERT_TRUE(registry.contains(id));
     }
@@ -158,12 +158,12 @@ TEST(registryRejectsDuplicateEntries) {
 // Command request round trips: one canonical fixture per argument shape.
 
 TEST(commandRequestRoundTripsWithPaletteExecuteArguments) {
-    auto const registry = ssg::buildCommandArgumentCodecRegistry();
+    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
     ssg::ClientCommand const command{
         "palette.execute", ssg::Revision{4},
         ssg::PaletteExecuteArguments{"file.save"}};
-    auto const bytes = ssg::encodeCommandRequest(command, registry);
-    auto const decoded = ssg::decodeCommandRequest(bytes, registry);
+    auto const bytes = ssg::ProtocolCodec{}.encodeCommandRequest(command, registry);
+    auto const decoded = ssg::ProtocolCodec{}.decodeCommandRequest(bytes, registry);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_EQ(decoded.command->id, command.id);
     auto const* arguments =
@@ -174,12 +174,12 @@ TEST(commandRequestRoundTripsWithPaletteExecuteArguments) {
 }
 
 TEST(commandRequestRoundTripsWithFindQueryArguments) {
-    auto const registry = ssg::buildCommandArgumentCodecRegistry();
+    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
     ssg::ClientCommand const command{
         "find.update_query", ssg::Revision{7},
         ssg::FindQueryArguments{"cat"}};
-    auto const bytes = ssg::encodeCommandRequest(command, registry);
-    auto const decoded = ssg::decodeCommandRequest(bytes, registry);
+    auto const bytes = ssg::ProtocolCodec{}.encodeCommandRequest(command, registry);
+    auto const decoded = ssg::ProtocolCodec{}.decodeCommandRequest(bytes, registry);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_EQ(decoded.command->id, command.id);
     auto const* arguments =
@@ -191,12 +191,12 @@ TEST(commandRequestRoundTripsWithFindQueryArguments) {
 
 
 TEST(commandRequestRoundTripsWithTreeSelectArguments) {
-    auto const registry = ssg::buildCommandArgumentCodecRegistry();
+    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
     ssg::ClientCommand const command{
         "tree.select", ssg::Revision{9},
         ssg::TreeSelectArguments{ssg::TreeNodeId{"files:src/main.cpp"}}};
-    auto const bytes = ssg::encodeCommandRequest(command, registry);
-    auto const decoded = ssg::decodeCommandRequest(bytes, registry);
+    auto const bytes = ssg::ProtocolCodec{}.encodeCommandRequest(command, registry);
+    auto const decoded = ssg::ProtocolCodec{}.decodeCommandRequest(bytes, registry);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_EQ(decoded.command->id, command.id);
     auto const* arguments =
@@ -207,10 +207,10 @@ TEST(commandRequestRoundTripsWithTreeSelectArguments) {
 }
 
 TEST(commandRequestRoundTripsWithNoPayload) {
-    auto const registry = ssg::buildCommandArgumentCodecRegistry();
+    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
     ssg::ClientCommand const command{"edit.undo", ssg::Revision{3}, {}};
-    auto const bytes = ssg::encodeCommandRequest(command, registry);
-    auto const decoded = ssg::decodeCommandRequest(bytes, registry);
+    auto const bytes = ssg::ProtocolCodec{}.encodeCommandRequest(command, registry);
+    auto const decoded = ssg::ProtocolCodec{}.decodeCommandRequest(bytes, registry);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.command.has_value());
     ASSERT_EQ(decoded.command->id, command.id);
@@ -219,12 +219,12 @@ TEST(commandRequestRoundTripsWithNoPayload) {
 }
 
 TEST(commandRequestRoundTripsWithTextInputArguments) {
-    auto const registry = ssg::buildCommandArgumentCodecRegistry();
+    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
     ssg::ClientCommand const command{
         "text.insert", ssg::Revision{5},
         ssg::TextInputArguments{"hello world"}};
-    auto const bytes = ssg::encodeCommandRequest(command, registry);
-    auto const decoded = ssg::decodeCommandRequest(bytes, registry);
+    auto const bytes = ssg::ProtocolCodec{}.encodeCommandRequest(command, registry);
+    auto const decoded = ssg::ProtocolCodec{}.decodeCommandRequest(bytes, registry);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_EQ(decoded.command->id, command.id);
     auto const* arguments =
@@ -234,15 +234,15 @@ TEST(commandRequestRoundTripsWithTextInputArguments) {
 }
 
 TEST(commandRequestRoundTripsWithSelectionCommandArguments) {
-    auto const registry = ssg::buildCommandArgumentCodecRegistry();
+    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
     ssg::DocumentPosition const position{ssg::ByteOffset{4}, ssg::LineIndex{0},
                                          ssg::CellIndex{4}};
     ssg::SelectionCommandArguments const original{
         position, ssg::Selection{position, position}};
     ssg::ClientCommand const command{"cursor.set_position", ssg::Revision{2},
                                      original};
-    auto const bytes = ssg::encodeCommandRequest(command, registry);
-    auto const decoded = ssg::decodeCommandRequest(bytes, registry);
+    auto const bytes = ssg::ProtocolCodec{}.encodeCommandRequest(command, registry);
+    auto const decoded = ssg::ProtocolCodec{}.decodeCommandRequest(bytes, registry);
     ASSERT_TRUE(decoded.accepted());
     auto const* arguments = std::any_cast<ssg::SelectionCommandArguments>(
         &decoded.command->payload);
@@ -252,11 +252,11 @@ TEST(commandRequestRoundTripsWithSelectionCommandArguments) {
 }
 
 TEST(commandRequestRoundTripsWithEmptySelectionCommandArguments) {
-    auto const registry = ssg::buildCommandArgumentCodecRegistry();
+    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
     ssg::SelectionCommandArguments const original{std::nullopt, std::nullopt};
     ssg::ClientCommand const command{"cursor.left", ssg::Revision{2}, original};
-    auto const bytes = ssg::encodeCommandRequest(command, registry);
-    auto const decoded = ssg::decodeCommandRequest(bytes, registry);
+    auto const bytes = ssg::ProtocolCodec{}.encodeCommandRequest(command, registry);
+    auto const decoded = ssg::ProtocolCodec{}.decodeCommandRequest(bytes, registry);
     ASSERT_TRUE(decoded.accepted());
     auto const* arguments = std::any_cast<ssg::SelectionCommandArguments>(
         &decoded.command->payload);
@@ -266,11 +266,11 @@ TEST(commandRequestRoundTripsWithEmptySelectionCommandArguments) {
 }
 
 TEST(commandRequestRoundTripsWithScrollLinesArguments) {
-    auto const registry = ssg::buildCommandArgumentCodecRegistry();
+    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
     ssg::ClientCommand const command{"view.scroll_lines", ssg::Revision{1},
                                      ssg::ScrollLinesArguments{-7}};
-    auto const bytes = ssg::encodeCommandRequest(command, registry);
-    auto const decoded = ssg::decodeCommandRequest(bytes, registry);
+    auto const bytes = ssg::ProtocolCodec{}.encodeCommandRequest(command, registry);
+    auto const decoded = ssg::ProtocolCodec{}.decodeCommandRequest(bytes, registry);
     ASSERT_TRUE(decoded.accepted());
     auto const* arguments =
         std::any_cast<ssg::ScrollLinesArguments>(&decoded.command->payload);
@@ -279,11 +279,11 @@ TEST(commandRequestRoundTripsWithScrollLinesArguments) {
 }
 
 TEST(commandRequestRoundTripsWithScrollPagesArguments) {
-    auto const registry = ssg::buildCommandArgumentCodecRegistry();
+    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
     ssg::ClientCommand const command{"view.scroll_pages", ssg::Revision{1},
                                      ssg::ScrollPagesArguments{3}};
-    auto const bytes = ssg::encodeCommandRequest(command, registry);
-    auto const decoded = ssg::decodeCommandRequest(bytes, registry);
+    auto const bytes = ssg::ProtocolCodec{}.encodeCommandRequest(command, registry);
+    auto const decoded = ssg::ProtocolCodec{}.decodeCommandRequest(bytes, registry);
     ASSERT_TRUE(decoded.accepted());
     auto const* arguments =
         std::any_cast<ssg::ScrollPagesArguments>(&decoded.command->payload);
@@ -292,11 +292,11 @@ TEST(commandRequestRoundTripsWithScrollPagesArguments) {
 }
 
 TEST(commandRequestRoundTripsWithScrollFractionArguments) {
-    auto const registry = ssg::buildCommandArgumentCodecRegistry();
+    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
     ssg::ClientCommand const command{"view.scroll_to_fraction", ssg::Revision{1},
                                      ssg::ScrollFractionArguments{3, 4}};
-    auto const bytes = ssg::encodeCommandRequest(command, registry);
-    auto const decoded = ssg::decodeCommandRequest(bytes, registry);
+    auto const bytes = ssg::ProtocolCodec{}.encodeCommandRequest(command, registry);
+    auto const decoded = ssg::ProtocolCodec{}.decodeCommandRequest(bytes, registry);
     ASSERT_TRUE(decoded.accepted());
     auto const* arguments =
         std::any_cast<ssg::ScrollFractionArguments>(&decoded.command->payload);
@@ -306,12 +306,12 @@ TEST(commandRequestRoundTripsWithScrollFractionArguments) {
 }
 
 TEST(commandRequestRoundTripsWithDroppedContentArguments) {
-    auto const registry = ssg::buildCommandArgumentCodecRegistry();
+    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
     ssg::ClientCommand const command{
         "file.open_dropped_content", ssg::Revision{1},
         ssg::DroppedContentArguments{{1, 2, 3, 4}, "dropped.txt"}};
-    auto const bytes = ssg::encodeCommandRequest(command, registry);
-    auto const decoded = ssg::decodeCommandRequest(bytes, registry);
+    auto const bytes = ssg::ProtocolCodec{}.encodeCommandRequest(command, registry);
+    auto const decoded = ssg::ProtocolCodec{}.decodeCommandRequest(bytes, registry);
     ASSERT_TRUE(decoded.accepted());
     auto const* arguments =
         std::any_cast<ssg::DroppedContentArguments>(&decoded.command->payload);
@@ -407,31 +407,31 @@ std::string buildInvalidScrollFractionMessage() {
 }
 
 TEST(decodeCommandRequestRejectsUnknownCommandId) {
-    auto const registry = ssg::buildCommandArgumentCodecRegistry();
+    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
     ASSERT_THROWS(registry.encodeArgument("not.a.command", std::any{}),
                  std::invalid_argument);
 
     auto const bytes = buildCommandRequestMessage("not.a.command", 1);
-    auto const decoded = ssg::decodeCommandRequest(bytes, registry);
+    auto const decoded = ssg::ProtocolCodec{}.decodeCommandRequest(bytes, registry);
     ASSERT_FALSE(decoded.accepted());
     ASSERT_EQ(decoded.error, ssg::ProtocolError::UnsupportedCommand);
 }
 
 TEST(decodeCommandRequestRejectsMalformedPayload) {
-    auto const registry = ssg::buildCommandArgumentCodecRegistry();
+    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
     ssg::ClientCommand const command{"text.insert", ssg::Revision{1},
                                      ssg::TextInputArguments{"x"}};
-    auto bytes = ssg::encodeCommandRequest(command, registry);
+    auto bytes = ssg::ProtocolCodec{}.encodeCommandRequest(command, registry);
     // Truncate the trailing bytes so the payload's "text" field is cut off,
     // producing a structurally-truncated command request.
     bytes.resize(bytes.size() - 2);
-    auto const decoded = ssg::decodeCommandRequest(bytes, registry);
+    auto const decoded = ssg::ProtocolCodec{}.decodeCommandRequest(bytes, registry);
     ASSERT_FALSE(decoded.accepted());
 }
 
 TEST(decodeCommandRequestMapsDomainInvariantFailuresToMalformed) {
-    auto const registry = ssg::buildCommandArgumentCodecRegistry();
-    auto const decoded = ssg::decodeCommandRequest(
+    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
+    auto const decoded = ssg::ProtocolCodec{}.decodeCommandRequest(
         buildInvalidScrollFractionMessage(), registry);
     ASSERT_FALSE(decoded.accepted());
     ASSERT_EQ(decoded.error, ssg::ProtocolError::MalformedMessage);
@@ -442,39 +442,39 @@ TEST(decodeCommandRequestMapsDomainInvariantFailuresToMalformed) {
 // equivalence and two-client isolation.
 
 TEST(sessionSnapshotRoundTripsThroughTheWire) {
-    auto snapshot = ssg::assembleSessionSnapshot(
+    auto snapshot = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{
             ssg::ClientId{7}, ssg::InvocationOrigin::InProcess,
             {ssg::CapabilityId{"local_file_drop"}}},
         ssg::ViewId{9}, clientView(3), sections(ssg::Revision{4}, "alpha"));
 
-    auto const bytes = ssg::encodeSessionSnapshot(snapshot);
-    auto const decoded = ssg::decodeSessionSnapshot(bytes);
+    auto const bytes = ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot);
+    auto const decoded = ssg::ProtocolCodec{}.decodeSessionSnapshot(bytes);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.snapshot.has_value());
     ASSERT_EQ(*decoded.snapshot, snapshot);
 }
 
 TEST(sessionDeltaRoundTripsAndReplayMatchesTheDecodedDelta) {
-    auto before = ssg::assembleSessionSnapshot(
+    auto before = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(1), sections(ssg::Revision{4}, "a"));
-    auto after = ssg::assembleSessionSnapshot(
+    auto after = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{5}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(5), sections(ssg::Revision{5}, "changed"));
 
-    auto const delta = ssg::deriveSessionDelta(before, after);
-    auto const bytes = ssg::encodeSessionDelta(delta);
-    auto decoded = ssg::decodeSessionDelta(bytes);
+    auto const delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, after);
+    auto const bytes = ssg::ProtocolCodec{}.encodeSessionDelta(delta);
+    auto decoded = ssg::ProtocolCodec{}.decodeSessionDelta(bytes);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.delta.has_value());
 
-    auto replayed = ssg::replaySessionDelta(before, *decoded.delta);
+    auto replayed = ssg::SessionSnapshotCodec{}.replay(before, *decoded.delta);
     ASSERT_TRUE(replayed.accepted());
     ASSERT_TRUE(replayed.snapshot.has_value());
     ASSERT_EQ(*replayed.snapshot, after);
@@ -482,22 +482,22 @@ TEST(sessionDeltaRoundTripsAndReplayMatchesTheDecodedDelta) {
 
 TEST(twoClientCapabilityAndViewportIsolationSurvivesTheWire) {
     auto shared = sections(ssg::Revision{8}, "shared");
-    auto first = ssg::assembleSessionSnapshot(
+    auto first = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{8}, {},
         ssg::InvocationPrincipal{
             ssg::ClientId{1}, ssg::InvocationOrigin::Websocket,
             {ssg::CapabilityId{"local_file_drop"}}},
         ssg::ViewId{10}, clientView(2), shared);
-    auto second = ssg::assembleSessionSnapshot(
+    auto second = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{8}, {},
         ssg::InvocationPrincipal{ssg::ClientId{2},
                                  ssg::InvocationOrigin::Websocket},
         ssg::ViewId{11}, clientView(7), std::move(shared));
 
     auto const firstDecoded =
-        ssg::decodeSessionSnapshot(ssg::encodeSessionSnapshot(first));
+        ssg::ProtocolCodec{}.decodeSessionSnapshot(ssg::ProtocolCodec{}.encodeSessionSnapshot(first));
     auto const secondDecoded =
-        ssg::decodeSessionSnapshot(ssg::encodeSessionSnapshot(second));
+        ssg::ProtocolCodec{}.decodeSessionSnapshot(ssg::ProtocolCodec{}.encodeSessionSnapshot(second));
     ASSERT_TRUE(firstDecoded.accepted());
     ASSERT_TRUE(secondDecoded.accepted());
 
@@ -522,7 +522,7 @@ TEST(sessionSnapshotRoundTripsTreeScrollFields) {
         {ssg::TreeNodeView{nodeA, 0, false}, ssg::TreeNodeView{nodeB, 0, false}},
         ssg::TreeNodeId{"files:b"}};
     provider.firstVisible = 3;
-    provider.scrollbar = ssg::scrollbarMetrics(40, 9, 3);
+    provider.scrollbar = ssg::Viewport{}.scrollbarMetrics(40, 9, 3);
     provider.visibleNodeIds = {ssg::TreeNodeId{"files:a"},
                                  ssg::TreeNodeId{"files:b"}};
     sectionsValue.tree = ssg::TreeViewState{ssg::TreeRevision{7}, {provider}};
@@ -533,13 +533,13 @@ TEST(sessionSnapshotRoundTripsTreeScrollFields) {
     sectionsValue.shell.tabHits = {ssg::TabHit{ssg::Rect{24, 0, 10, 1}, 0},
                                      ssg::TabHit{ssg::Rect{34, 0, 8, 1}, 1}};
 
-    auto snapshot = ssg::assembleSessionSnapshot(
+    auto snapshot = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(3), std::move(sectionsValue));
     auto const decoded =
-        ssg::decodeSessionSnapshot(ssg::encodeSessionSnapshot(snapshot));
+        ssg::ProtocolCodec{}.decodeSessionSnapshot(ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot));
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.snapshot.has_value());
     if (!decoded.snapshot) return;
@@ -547,7 +547,7 @@ TEST(sessionSnapshotRoundTripsTreeScrollFields) {
     ASSERT_EQ(decoded.snapshot->sections().tree, snapshot.sections().tree);
     auto const& p = decoded.snapshot->sections().tree.providers.front();
     ASSERT_EQ(p.firstVisible, std::uint32_t{3});
-    ASSERT_EQ(p.scrollbar, ssg::scrollbarMetrics(40, 9, 3));
+    ASSERT_EQ(p.scrollbar, ssg::Viewport{}.scrollbarMetrics(40, 9, 3));
     ASSERT_EQ(p.visibleNodeIds.size(), std::size_t{2});
     ASSERT_TRUE(decoded.snapshot->sections().shell.panelScrollbar.has_value());
     ASSERT_EQ(decoded.snapshot->sections().shell.panelScrollbar,
@@ -564,7 +564,7 @@ TEST(commandResultRoundTripsThroughTheWire) {
         ssg::CommandError::StaleRevision, ssg::Revision{17},
         "base revision is stale"};
     auto const decoded =
-        ssg::decodeCommandResult(ssg::encodeCommandResult(result));
+        ssg::ProtocolCodec{}.decodeCommandResult(ssg::ProtocolCodec{}.encodeCommandResult(result));
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.result.has_value());
     ASSERT_EQ(decoded.result->error, result.error);
@@ -575,8 +575,8 @@ TEST(commandResultRoundTripsThroughTheWire) {
 TEST(clipboardRequestRoundTripsThroughTheWire) {
     ssg::ClipboardRequest const request{
         42, ssg::ClipboardRequestKind::Write, ssg::Revision{6}, "copied text"};
-    auto const bytes = ssg::encodeClipboardRequest(request);
-    auto const decoded = ssg::decodeClipboardRequest(bytes);
+    auto const bytes = ssg::ProtocolCodec{}.encodeClipboardRequest(request);
+    auto const decoded = ssg::ProtocolCodec{}.decodeClipboardRequest(bytes);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.request.has_value());
     ASSERT_EQ(*decoded.request, request);
@@ -586,8 +586,8 @@ TEST(clipboardResponseRoundTripsThroughTheWire) {
     ssg::ClipboardResponse const response{
         42, ssg::Revision{6}, ssg::Revision{7},
         ssg::ClipboardResponseStatus::Success, "pasted text"};
-    auto const bytes = ssg::encodeClipboardResponse(response);
-    auto const decoded = ssg::decodeClipboardResponse(bytes);
+    auto const bytes = ssg::ProtocolCodec{}.encodeClipboardResponse(response);
+    auto const decoded = ssg::ProtocolCodec{}.decodeClipboardResponse(bytes);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.response.has_value());
     ASSERT_EQ(*decoded.response, response);
@@ -595,8 +595,8 @@ TEST(clipboardResponseRoundTripsThroughTheWire) {
 
 TEST(statusActionInvocationRoundTripsThroughTheWire) {
     ssg::StatusActionInvocation const invocation{ssg::StatusId{9}, "dismiss", 3};
-    auto const bytes = ssg::encodeStatusActionInvocation(invocation);
-    auto const decoded = ssg::decodeStatusActionInvocation(bytes);
+    auto const bytes = ssg::ProtocolCodec{}.encodeStatusActionInvocation(invocation);
+    auto const decoded = ssg::ProtocolCodec{}.decodeStatusActionInvocation(bytes);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.invocation.has_value());
     ASSERT_EQ(decoded.invocation->statusId, invocation.statusId);
@@ -610,8 +610,8 @@ TEST(statusActionInvocationRoundTripsThroughTheWire) {
 TEST(binaryFrameRoundTripsThroughTheWire) {
     ssg::BinaryFrame const frame{
         1, ssg::BinaryPayloadKind::DroppedContent, 99, {9, 8, 7, 6, 5}};
-    auto const bytes = ssg::encodeBinaryFrame(frame);
-    auto const decoded = ssg::decodeBinaryFrame(bytes);
+    auto const bytes = ssg::ProtocolCodec{}.encodeBinaryFrame(frame);
+    auto const decoded = ssg::ProtocolCodec{}.decodeBinaryFrame(bytes);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.frame.has_value());
     ASSERT_EQ(*decoded.frame, frame);
@@ -620,9 +620,9 @@ TEST(binaryFrameRoundTripsThroughTheWire) {
 TEST(binaryFrameDecodedBytesOutliveTheInputBuffer) {
     std::optional<ssg::BinaryFrame> survivingFrame;
     {
-        std::string bytes = ssg::encodeBinaryFrame(ssg::BinaryFrame{
+        std::string bytes = ssg::ProtocolCodec{}.encodeBinaryFrame(ssg::BinaryFrame{
             1, ssg::BinaryPayloadKind::DroppedContent, 7, {1, 2, 3, 4, 5, 6}});
-        auto decoded = ssg::decodeBinaryFrame(bytes);
+        auto decoded = ssg::ProtocolCodec{}.decodeBinaryFrame(bytes);
         ASSERT_TRUE(decoded.accepted());
         survivingFrame = std::move(decoded.frame);
         // bytes (the input buffer) is destroyed at the end of this scope;
@@ -636,10 +636,10 @@ TEST(binaryFrameDecodedBytesOutliveTheInputBuffer) {
 }
 
 TEST(binaryFrameRejectsAnUnsupportedPayloadKind) {
-    std::string bytes = ssg::encodeBinaryFrame(ssg::BinaryFrame{
+    std::string bytes = ssg::ProtocolCodec{}.encodeBinaryFrame(ssg::BinaryFrame{
         1, ssg::BinaryPayloadKind::DroppedContent, 1, {1}});
     bytes[1] = static_cast<char>(0xEE);
-    auto const decoded = ssg::decodeBinaryFrame(bytes);
+    auto const decoded = ssg::ProtocolCodec{}.decodeBinaryFrame(bytes);
     ASSERT_FALSE(decoded.accepted());
     ASSERT_EQ(decoded.error, ssg::ProtocolError::MalformedMessage);
 }
@@ -647,18 +647,18 @@ TEST(binaryFrameRejectsAnUnsupportedPayloadKind) {
 TEST(binaryFrameRejectsOversizedDeclaredLengthAndFrame) {
     ssg::ProtocolLimits limits;
     limits.maxBinaryFrameBytes = 4;
-    auto const bytes = ssg::encodeBinaryFrame(ssg::BinaryFrame{
+    auto const bytes = ssg::ProtocolCodec{}.encodeBinaryFrame(ssg::BinaryFrame{
         1, ssg::BinaryPayloadKind::DroppedContent, 1, {1, 2, 3, 4, 5}});
-    auto const decoded = ssg::decodeBinaryFrame(bytes, limits);
+    auto const decoded = ssg::ProtocolCodec{}.decodeBinaryFrame(bytes, limits);
     ASSERT_FALSE(decoded.accepted());
     ASSERT_EQ(decoded.error, ssg::ProtocolError::BinaryFrameTooLarge);
 }
 
 TEST(binaryFrameRejectsTruncatedInput) {
-    auto bytes = ssg::encodeBinaryFrame(ssg::BinaryFrame{
+    auto bytes = ssg::ProtocolCodec{}.encodeBinaryFrame(ssg::BinaryFrame{
         1, ssg::BinaryPayloadKind::DroppedContent, 1, {1, 2, 3}});
     bytes.resize(bytes.size() - 1);
-    auto const decoded = ssg::decodeBinaryFrame(bytes);
+    auto const decoded = ssg::ProtocolCodec{}.decodeBinaryFrame(bytes);
     ASSERT_FALSE(decoded.accepted());
     ASSERT_EQ(decoded.error, ssg::ProtocolError::TruncatedMessage);
 }
@@ -670,12 +670,12 @@ TEST(binaryFrameRejectsTruncatedInput) {
 TEST(malformedAndTruncatedAndOversizedAndUnknownVersionCorpus) {
     ssg::ClipboardRequest const request{
         1, ssg::ClipboardRequestKind::Read, ssg::Revision{1}, "x"};
-    auto const canonical = ssg::encodeClipboardRequest(request);
+    auto const canonical = ssg::ProtocolCodec{}.encodeClipboardRequest(request);
     ASSERT_TRUE(canonical.size() > 3);
 
     // Empty buffer: missing version byte.
     {
-        auto const decoded = ssg::decodeClipboardRequest(std::string_view{});
+        auto const decoded = ssg::ProtocolCodec{}.decodeClipboardRequest(std::string_view{});
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::TruncatedMessage);
     }
@@ -683,7 +683,7 @@ TEST(malformedAndTruncatedAndOversizedAndUnknownVersionCorpus) {
     // Single byte: missing kind byte.
     {
         auto const decoded =
-            ssg::decodeClipboardRequest(canonical.substr(0, 1));
+            ssg::ProtocolCodec{}.decodeClipboardRequest(canonical.substr(0, 1));
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::TruncatedMessage);
     }
@@ -692,14 +692,14 @@ TEST(malformedAndTruncatedAndOversizedAndUnknownVersionCorpus) {
     {
         auto corrupted = canonical;
         corrupted[0] = static_cast<char>(0xFF);
-        auto const decoded = ssg::decodeClipboardRequest(corrupted);
+        auto const decoded = ssg::ProtocolCodec{}.decodeClipboardRequest(corrupted);
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::UnsupportedVersion);
     }
 
     // Wrong kind byte (decoded with the wrong expected-kind decoder).
     {
-        auto const decoded = ssg::decodeClipboardResponse(canonical);
+        auto const decoded = ssg::ProtocolCodec{}.decodeClipboardResponse(canonical);
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::UnsupportedMessageKind);
     }
@@ -708,14 +708,14 @@ TEST(malformedAndTruncatedAndOversizedAndUnknownVersionCorpus) {
     {
         ssg::ProtocolLimits limits;
         limits.maxMessageBytes = canonical.size() - 1;
-        auto const decoded = ssg::decodeClipboardRequest(canonical, limits);
+        auto const decoded = ssg::ProtocolCodec{}.decodeClipboardRequest(canonical, limits);
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::MessageTooLarge);
     }
 
     // Truncated payload: valid header, body cut short.
     {
-        auto const decoded = ssg::decodeClipboardRequest(
+        auto const decoded = ssg::ProtocolCodec{}.decodeClipboardRequest(
             canonical.substr(0, canonical.size() - 2));
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::TruncatedMessage);
@@ -725,7 +725,7 @@ TEST(malformedAndTruncatedAndOversizedAndUnknownVersionCorpus) {
     {
         auto padded = canonical;
         padded.push_back('\x7f');
-        auto const decoded = ssg::decodeClipboardRequest(padded);
+        auto const decoded = ssg::ProtocolCodec{}.decodeClipboardRequest(padded);
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::MalformedMessage);
     }
@@ -733,26 +733,26 @@ TEST(malformedAndTruncatedAndOversizedAndUnknownVersionCorpus) {
 
 TEST(valueBoundsAreEnforcedOnDecode) {
     ssg::StatusActionInvocation const invocation{ssg::StatusId{1}, "a", 1};
-    auto const bytes = ssg::encodeStatusActionInvocation(invocation);
+    auto const bytes = ssg::ProtocolCodec{}.encodeStatusActionInvocation(invocation);
 
     {
         ssg::ProtocolLimits limits;
         limits.maxCollectionLength = 0;
-        auto const decoded = ssg::decodeStatusActionInvocation(bytes, limits);
+        auto const decoded = ssg::ProtocolCodec{}.decodeStatusActionInvocation(bytes, limits);
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::ValueBoundsExceeded);
     }
     {
         ssg::ProtocolLimits limits;
         limits.maxTextBytes = 0;
-        auto const decoded = ssg::decodeStatusActionInvocation(bytes, limits);
+        auto const decoded = ssg::ProtocolCodec{}.decodeStatusActionInvocation(bytes, limits);
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::ValueBoundsExceeded);
     }
     {
         ssg::ProtocolLimits limits;
         limits.maxValueDepth = 0;
-        auto const decoded = ssg::decodeStatusActionInvocation(bytes, limits);
+        auto const decoded = ssg::ProtocolCodec{}.decodeStatusActionInvocation(bytes, limits);
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::ValueBoundsExceeded);
     }
@@ -799,34 +799,34 @@ void writeFixtureHex(std::string const& name, std::string const& bytes) {
 // goldens: `SSG_REGEN_PROTOCOL_FIXTURES=1 ./build/test_protocol`.
 TEST(regenerateCanonicalFixtures) {
     if (std::getenv("SSG_REGEN_PROTOCOL_FIXTURES") == nullptr) return;
-    auto snapshot = ssg::assembleSessionSnapshot(
+    auto snapshot = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{
             ssg::ClientId{7}, ssg::InvocationOrigin::InProcess,
             {ssg::CapabilityId{"local_file_drop"}}},
         ssg::ViewId{9}, clientView(3), sections(ssg::Revision{4}, "alpha"));
     writeFixtureHex("session_snapshot.hex",
-                      ssg::encodeSessionSnapshot(snapshot));
+                      ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot));
 
-    auto before = ssg::assembleSessionSnapshot(
+    auto before = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(1), sections(ssg::Revision{4}, "a"));
-    auto after = ssg::assembleSessionSnapshot(
+    auto after = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{5}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(5), sections(ssg::Revision{5}, "changed"));
     writeFixtureHex("session_delta.hex",
-                      ssg::encodeSessionDelta(ssg::deriveSessionDelta(before, after)));
+                      ssg::ProtocolCodec{}.encodeSessionDelta(ssg::SessionSnapshotCodec{}.deriveDelta(before, after)));
 }
 
 TEST(canonicalFixturesDecodeToTheExpectedValues) {
-    auto const registry = ssg::buildCommandArgumentCodecRegistry();
+    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
 
     {
-        auto decoded = ssg::decodeCommandRequest(
+        auto decoded = ssg::ProtocolCodec{}.decodeCommandRequest(
             readFixtureBytes("command_request_no_payload.hex"), registry);
         ASSERT_TRUE(decoded.accepted());
         ASSERT_EQ(decoded.command->id, std::string{"edit.undo"});
@@ -834,7 +834,7 @@ TEST(canonicalFixturesDecodeToTheExpectedValues) {
         ASSERT_FALSE(decoded.command->payload.has_value());
     }
     {
-        auto decoded = ssg::decodeCommandRequest(
+        auto decoded = ssg::ProtocolCodec{}.decodeCommandRequest(
             readFixtureBytes("command_request_text_input.hex"), registry);
         ASSERT_TRUE(decoded.accepted());
         ASSERT_EQ(decoded.command->id, std::string{"text.insert"});
@@ -844,7 +844,7 @@ TEST(canonicalFixturesDecodeToTheExpectedValues) {
         ASSERT_EQ(arguments->text, std::string{"hello"});
     }
     {
-        auto decoded = ssg::decodeCommandResult(
+        auto decoded = ssg::ProtocolCodec{}.decodeCommandResult(
             readFixtureBytes("command_result.hex"));
         ASSERT_TRUE(decoded.accepted());
         ASSERT_EQ(decoded.result->error,
@@ -854,7 +854,7 @@ TEST(canonicalFixturesDecodeToTheExpectedValues) {
                   std::string{"base revision is stale"});
     }
     {
-        auto decoded = ssg::decodeSessionSnapshot(
+        auto decoded = ssg::ProtocolCodec{}.decodeSessionSnapshot(
             readFixtureBytes("session_snapshot.hex"));
         ASSERT_TRUE(decoded.accepted());
         ASSERT_EQ(decoded.snapshot->revision(), ssg::Revision{4});
@@ -864,28 +864,28 @@ TEST(canonicalFixturesDecodeToTheExpectedValues) {
     }
     {
         auto decoded =
-            ssg::decodeSessionDelta(readFixtureBytes("session_delta.hex"));
+            ssg::ProtocolCodec{}.decodeSessionDelta(readFixtureBytes("session_delta.hex"));
         ASSERT_TRUE(decoded.accepted());
         ASSERT_EQ(decoded.delta->baseRevision(), ssg::Revision{4});
         ASSERT_EQ(decoded.delta->revision(), ssg::Revision{5});
         ASSERT_EQ(decoded.delta->clientId(), ssg::ClientId{7});
     }
     {
-        auto decoded = ssg::decodeClipboardRequest(
+        auto decoded = ssg::ProtocolCodec{}.decodeClipboardRequest(
             readFixtureBytes("clipboard_request.hex"));
         ASSERT_TRUE(decoded.accepted());
         ASSERT_EQ(decoded.request->id, std::uint64_t{42});
         ASSERT_EQ(decoded.request->text, std::string{"copied text"});
     }
     {
-        auto decoded = ssg::decodeClipboardResponse(
+        auto decoded = ssg::ProtocolCodec{}.decodeClipboardResponse(
             readFixtureBytes("clipboard_response.hex"));
         ASSERT_TRUE(decoded.accepted());
         ASSERT_EQ(decoded.response->id, std::uint64_t{42});
         ASSERT_EQ(decoded.response->text, std::string{"pasted text"});
     }
     {
-        auto decoded = ssg::decodeStatusActionInvocation(
+        auto decoded = ssg::ProtocolCodec{}.decodeStatusActionInvocation(
             readFixtureBytes("status_action_invocation.hex"));
         ASSERT_TRUE(decoded.accepted());
         ASSERT_EQ(decoded.invocation->statusId, ssg::StatusId{9});
@@ -893,7 +893,7 @@ TEST(canonicalFixturesDecodeToTheExpectedValues) {
     }
     {
         auto decoded =
-            ssg::decodeBinaryFrame(readFixtureBytes("binary_frame.hex"));
+            ssg::ProtocolCodec{}.decodeBinaryFrame(readFixtureBytes("binary_frame.hex"));
         ASSERT_TRUE(decoded.accepted());
         ASSERT_EQ(decoded.frame->requestId, std::uint64_t{99});
         ASSERT_EQ(decoded.frame->bytes,
@@ -907,13 +907,13 @@ TEST(viewportFirstVisualColumnSurvivesTheWire) {
     // VP-H (M12): the horizontal scroll offset is a wire field and must round-trip.
     auto view = clientView(3);
     view.firstVisualColumn = 7;
-    auto snapshot = ssg::assembleSessionSnapshot(
+    auto snapshot = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, view, sections(ssg::Revision{4}, "alpha"));
     auto const decoded =
-        ssg::decodeSessionSnapshot(ssg::encodeSessionSnapshot(snapshot));
+        ssg::ProtocolCodec{}.decodeSessionSnapshot(ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot));
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.snapshot.has_value());
     if (!decoded.snapshot) return;
@@ -923,12 +923,12 @@ TEST(viewportFirstVisualColumnSurvivesTheWire) {
 }
 
 TEST(commandRequestRoundTripsWithReplaceReplacementArguments) {
-    auto const registry = ssg::buildCommandArgumentCodecRegistry();
+    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
     ssg::ClientCommand const command{
         "replace.update_replacement", ssg::Revision{9},
         ssg::FindQueryArguments{"dog"}};
-    auto const bytes = ssg::encodeCommandRequest(command, registry);
-    auto const decoded = ssg::decodeCommandRequest(bytes, registry);
+    auto const bytes = ssg::ProtocolCodec{}.encodeCommandRequest(command, registry);
+    auto const decoded = ssg::ProtocolCodec{}.decodeCommandRequest(bytes, registry);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_EQ(decoded.command->id, command.id);
     auto const* arguments =
@@ -947,14 +947,14 @@ TEST(findReplaceViewStateRoundTripsReplacementThroughTheWire) {
         s.findReplace.replacement = std::move(replacement);
         return s;
     };
-    auto snapshot = ssg::assembleSessionSnapshot(
+    auto snapshot = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(3),
         withReplacement(ssg::Revision{4}, "alpha", "dog"));
     auto const decoded =
-        ssg::decodeSessionSnapshot(ssg::encodeSessionSnapshot(snapshot));
+        ssg::ProtocolCodec{}.decodeSessionSnapshot(ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot));
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.snapshot.has_value());
     if (decoded.snapshot) {
@@ -962,24 +962,24 @@ TEST(findReplaceViewStateRoundTripsReplacementThroughTheWire) {
                   std::string{"dog"});
     }
 
-    auto before = ssg::assembleSessionSnapshot(
+    auto before = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(1),
         withReplacement(ssg::Revision{4}, "a", ""));
-    auto after = ssg::assembleSessionSnapshot(
+    auto after = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{5}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(1),
         withReplacement(ssg::Revision{4}, "a", "dog"));
-    auto const delta = ssg::deriveSessionDelta(before, after);
+    auto const delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, after);
     auto decodedDelta =
-        ssg::decodeSessionDelta(ssg::encodeSessionDelta(delta));
+        ssg::ProtocolCodec{}.decodeSessionDelta(ssg::ProtocolCodec{}.encodeSessionDelta(delta));
     ASSERT_TRUE(decodedDelta.accepted());
     ASSERT_TRUE(decodedDelta.delta.has_value());
-    auto replayed = ssg::replaySessionDelta(before, *decodedDelta.delta);
+    auto replayed = ssg::SessionSnapshotCodec{}.replay(before, *decodedDelta.delta);
     ASSERT_TRUE(replayed.accepted());
     ASSERT_TRUE(replayed.snapshot.has_value());
     if (replayed.snapshot) {
