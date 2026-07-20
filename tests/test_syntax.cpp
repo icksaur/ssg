@@ -35,20 +35,20 @@ private:
 
 class DeterministicParser final : public SyntaxParser {
 public:
-    bool grammar_available = true;
-    bool fail_parse = false;
-    std::size_t parse_calls = 0;
-    SyntaxParseHandle last_prior;
-    std::vector<SyntaxEdit> last_edits;
+    bool grammarAvailable = true;
+    bool failParse = false;
+    std::size_t parseCalls = 0;
+    SyntaxParseHandle lastPrior;
+    std::vector<SyntaxEdit> lastEdits;
 
     bool hasGrammar(const LanguageId&) const override {
-        return grammar_available;
+        return grammarAvailable;
     }
 
     SyntaxParseOutput parse(const SyntaxParseRequest& request) override {
-        ++parse_calls;
-        last_prior = request.priorParse();
-        last_edits = request.edits();
+        ++parseCalls;
+        lastPrior = request.priorParse();
+        lastEdits = request.edits();
 
         SyntaxParseOutput output;
         output.revision = request.revision();
@@ -56,7 +56,7 @@ public:
             output.status = SyntaxParseStatus::Cancelled;
             return output;
         }
-        if (fail_parse) {
+        if (failParse) {
             output.status = SyntaxParseStatus::Failed;
             return output;
         }
@@ -90,10 +90,10 @@ private:
         std::int64_t precedingDelta = 0;
         for (const auto& edit : request.edits()) {
             const auto finalStart = static_cast<std::int64_t>(
-                                         edit.start_byte.value()) +
+                                         edit.startByte.value()) +
                                      precedingDelta;
             const auto insertedSize =
-                edit.new_end_byte.value() - edit.start_byte.value();
+                edit.newEndByte.value() - edit.startByte.value();
             if (finalStart < 0 ||
                 static_cast<std::uint64_t>(finalStart) >
                     request.text().size() ||
@@ -106,14 +106,14 @@ private:
                 static_cast<std::size_t>(finalStart), insertedSize));
             precedingDelta += static_cast<std::int64_t>(insertedSize) -
                                static_cast<std::int64_t>(
-                                   edit.old_end_byte.value() -
-                                   edit.start_byte.value());
+                                   edit.oldEndByte.value() -
+                                   edit.startByte.value());
         }
         for (std::size_t index = request.edits().size(); index > 0; --index) {
             const auto& edit = request.edits()[index - 1];
             result.replace(
-                edit.start_byte.value(),
-                edit.old_end_byte.value() - edit.start_byte.value(),
+                edit.startByte.value(),
+                edit.oldEndByte.value() - edit.startByte.value(),
                 inserted[index - 1]);
         }
         return result;
@@ -147,9 +147,9 @@ private:
                     end == std::string_view::npos ? text.size() : end;
                 output.spans.push_back(
                     {byte(index), byte(rangeEnd), SyntaxScope::Comment});
-                output.comment_tokens.push_back(
+                output.commentTokens.push_back(
                     {{byte(index), byte(index + 2)}, CommentTokenRole::Line});
-                output.comment_ranges.push_back(
+                output.commentRanges.push_back(
                     {{byte(index), byte(rangeEnd)}, CommentKind::Line});
                 index = rangeEnd;
                 continue;
@@ -160,15 +160,15 @@ private:
                     close == std::string_view::npos ? text.size() : close + 2;
                 output.spans.push_back(
                     {byte(index), byte(rangeEnd), SyntaxScope::Comment});
-                output.comment_tokens.push_back(
+                output.commentTokens.push_back(
                     {{byte(index), byte(index + 2)},
                      CommentTokenRole::BlockOpen});
                 if (close != std::string_view::npos) {
-                    output.comment_tokens.push_back(
+                    output.commentTokens.push_back(
                         {{byte(close), byte(close + 2)},
                          CommentTokenRole::BlockClose});
                 }
-                output.comment_ranges.push_back(
+                output.commentRanges.push_back(
                     {{byte(index), byte(rangeEnd)}, CommentKind::Block});
                 index = rangeEnd;
                 continue;
@@ -273,13 +273,13 @@ TEST(handComputedMetadataGoldenCoversAllExportedSections) {
                 {byte(7), BracketKind::Round, BracketRole::Close},
                 {byte(9), BracketKind::Curly, BracketRole::Open},
             },
-        .comment_tokens =
+        .commentTokens =
             {
                 {{byte(27), byte(29)}, CommentTokenRole::BlockClose},
                 {{byte(12), byte(14)}, CommentTokenRole::Line},
                 {{byte(22), byte(24)}, CommentTokenRole::BlockOpen},
             },
-        .comment_ranges =
+        .commentRanges =
             {
                 {{byte(22), byte(29)}, CommentKind::Block},
                 {{byte(12), byte(16)}, CommentKind::Line},
@@ -287,7 +287,7 @@ TEST(handComputedMetadataGoldenCoversAllExportedSections) {
     };
 
     const auto state = buildSyntaxViewState(
-        Revision{7}, LanguageId{"toy"}, text, raw, SyntaxConfig{.tab_width = 4});
+        Revision{7}, LanguageId{"toy"}, text, raw, SyntaxConfig{.tabWidth = 4});
 
     ASSERT_EQ(state.revision(), Revision{7});
     ASSERT_EQ(state.language(), LanguageId{"toy"});
@@ -355,19 +355,19 @@ TEST(injectedParserReceivesPriorParseAndEditsAndMatchesFullParse) {
     const std::string before = "fn main() {\n  let x = [1];\n}\n";
     const auto initial = requestFor(incremental, Revision{1}, before);
     ASSERT_TRUE(parseAndAccept(incremental, initial).accepted());
-    const auto acceptedParse = incrementalParser->last_prior;
+    const auto acceptedParse = incrementalParser->lastPrior;
     ASSERT_FALSE(acceptedParse != nullptr);
 
     const auto number = before.find('1');
     std::string after = before;
     after.replace(number, 1, "42");
     const SyntaxEdit edit{
-        .start_byte = ByteOffset{number},
-        .old_end_byte = ByteOffset{number + 1},
-        .new_end_byte = ByteOffset{number + 2},
-        .start_position = {line(1), number - before.find('\n') - 1},
-        .old_end_position = {line(1), number - before.find('\n')},
-        .new_end_position = {line(1), number - before.find('\n') + 1},
+        .startByte = ByteOffset{number},
+        .oldEndByte = ByteOffset{number + 1},
+        .newEndByte = ByteOffset{number + 2},
+        .startPosition = {line(1), number - before.find('\n') - 1},
+        .oldEndPosition = {line(1), number - before.find('\n')},
+        .newEndPosition = {line(1), number - before.find('\n') + 1},
     };
 
     const auto updated =
@@ -376,8 +376,8 @@ TEST(injectedParserReceivesPriorParseAndEditsAndMatchesFullParse) {
     ASSERT_TRUE(updated.request->priorParse() != nullptr);
     ASSERT_EQ(updated.request->edits(), (std::vector<SyntaxEdit>{edit}));
     ASSERT_TRUE(parseAndAccept(incremental, updated).accepted());
-    ASSERT_TRUE(incrementalParser->last_prior != nullptr);
-    ASSERT_EQ(incrementalParser->last_edits,
+    ASSERT_TRUE(incrementalParser->lastPrior != nullptr);
+    ASSERT_EQ(incrementalParser->lastEdits,
               (std::vector<SyntaxEdit>{edit}));
 
     auto fullParser = std::make_shared<DeterministicParser>();
@@ -506,35 +506,35 @@ TEST(noParserUnavailableGrammarAndFailedParseShareFallbackSnapshot) {
     const auto absent = requestFor(noParser, Revision{1}, text);
     const auto absentResult = parseAndAccept(noParser, absent);
     ASSERT_TRUE(absentResult.accepted());
-    ASSERT_TRUE(absentResult.used_fallback);
+    ASSERT_TRUE(absentResult.usedFallback);
 
     auto unavailableParser = std::make_shared<DeterministicParser>();
-    unavailableParser->grammar_available = false;
+    unavailableParser->grammarAvailable = false;
     SyntaxModel unavailable{unavailableParser};
     const auto unavailableRequest =
         requestFor(unavailable, Revision{1}, text);
     const auto unavailableResult =
         parseAndAccept(unavailable, unavailableRequest);
     ASSERT_TRUE(unavailableResult.accepted());
-    ASSERT_TRUE(unavailableResult.used_fallback);
-    ASSERT_EQ(unavailableParser->parse_calls, std::size_t{0});
+    ASSERT_TRUE(unavailableResult.usedFallback);
+    ASSERT_EQ(unavailableParser->parseCalls, std::size_t{0});
 
     auto failedParser = std::make_shared<DeterministicParser>();
-    failedParser->fail_parse = true;
+    failedParser->failParse = true;
     SyntaxModel failedModel{failedParser};
     const auto failedRequest = requestFor(failedModel, Revision{1}, text);
     const auto failedResult =
         parseAndAccept(failedModel, failedRequest);
     ASSERT_TRUE(failedResult.accepted());
-    ASSERT_TRUE(failedResult.used_fallback);
-    ASSERT_EQ(failedParser->parse_calls, std::size_t{1});
+    ASSERT_TRUE(failedResult.usedFallback);
+    ASSERT_EQ(failedParser->parseCalls, std::size_t{1});
 
     auto plainParser = std::make_shared<DeterministicParser>();
     SyntaxModel explicitPlain{plainParser};
     const auto plainRequest = explicitPlain.request(
         Revision{1}, LanguageId::plainText(), text);
     ASSERT_TRUE(parseAndAccept(explicitPlain, plainRequest).accepted());
-    ASSERT_EQ(plainParser->parse_calls, std::size_t{0});
+    ASSERT_EQ(plainParser->parseCalls, std::size_t{0});
 
     ASSERT_EQ(noParser.viewState(), unavailable.viewState());
     ASSERT_EQ(unavailable.viewState(), failedModel.viewState());
@@ -550,7 +550,7 @@ TEST(noParserUnavailableGrammarAndFailedParseShareFallbackSnapshot) {
 
 TEST(requestAndResultValidationIsFailureAtomic) {
     auto parser = std::make_shared<DeterministicParser>();
-    SyntaxModel model{parser, SyntaxConfig{.maximum_document_bytes = 8}};
+    SyntaxModel model{parser, SyntaxConfig{.maximumDocumentBytes = 8}};
 
     const auto oversized =
         requestFor(model, Revision{1}, "123456789");
@@ -558,12 +558,12 @@ TEST(requestAndResultValidationIsFailureAtomic) {
     ASSERT_EQ(model.viewState().revision(), Revision{0});
 
     const SyntaxEdit malformed{
-        .start_byte = ByteOffset{4},
-        .old_end_byte = ByteOffset{3},
-        .new_end_byte = ByteOffset{4},
-        .start_position = {line(0), 4},
-        .old_end_position = {line(0), 3},
-        .new_end_position = {line(0), 4},
+        .startByte = ByteOffset{4},
+        .oldEndByte = ByteOffset{3},
+        .newEndByte = ByteOffset{4},
+        .startPosition = {line(0), 4},
+        .oldEndPosition = {line(0), 3},
+        .newEndPosition = {line(0), 4},
     };
     const auto malformedRequest =
         requestFor(model, Revision{1}, "abc", {malformed});

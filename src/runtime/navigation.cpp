@@ -39,7 +39,7 @@ CommandHandlerResult validatePaletteTarget(EditorRuntime::Impl& runtime,
         descriptors.begin(), descriptors.end(),
         [&](CommandDescriptor const& descriptor) { return descriptor.id == commandId; });
     if (found != descriptors.end()) {
-        for (auto const& capability : found->required_capabilities) {
+        for (auto const& capability : found->requiredCapabilities) {
             if (!context.principal().hasCapability(capability)) {
                 return failure("principal lacks capability for palette command: " +
                                commandId);
@@ -58,9 +58,9 @@ CommandHandlerResult searchCommand(EditorRuntime::Impl& runtime, CommandContext&
     else if (id == "palette.execute") {
         auto const* arguments = payloadAs<PaletteExecuteArguments>(payload);
         if (arguments == nullptr) return failure("palette.execute requires a command id payload");
-        auto validation = validatePaletteTarget(runtime, context, arguments->command_id);
+        auto validation = validatePaletteTarget(runtime, context, arguments->commandId);
         if (!validation.accepted) return validation;
-        runtime.pending_palette_target = arguments->command_id;
+        runtime.pendingPaletteTarget = arguments->commandId;
         (void)runtime.prompt.cancel();
     } else if (id == "search.workspace") {
         std::string query;
@@ -89,8 +89,8 @@ CommandHandlerResult treeCommand(EditorRuntime::Impl& runtime, std::string_view 
         auto selected = runtime.tree.selectedNode();
         if (!selected) return failure("no tree node is selected");
         if (selected->expandable) { (void)runtime.tree.toggleSelected(); runtime.revealTreeSelection(); return success(); }
-        if (selected->workspace_path) {
-            auto result = runtime.workspace.openFile(*selected->workspace_path);
+        if (selected->workspacePath) {
+            auto result = runtime.workspace.openFile(*selected->workspacePath);
             if (!result.accepted() || !result.document) return failure("failed to open tree file");
             auto opened = runtime.activateDocument(*result.document);
             if (opened.accepted) runtime.shell.focusEditor();
@@ -101,7 +101,7 @@ CommandHandlerResult treeCommand(EditorRuntime::Impl& runtime, std::string_view 
     if (id == "tree.select") {
         auto const* arguments = payloadAs<TreeSelectArguments>(payload);
         if (arguments == nullptr) return failure("tree.select requires a node id payload");
-        if (!runtime.tree.select(arguments->node_id)) return failure("tree node is not selectable");
+        if (!runtime.tree.select(arguments->nodeId)) return failure("tree node is not selectable");
         runtime.revealTreeSelection();
         // Focus follows the pointer (M8-F): clicking a tree row acts on the panel,
         // so move keyboard focus there. (For a file click the app dispatches
@@ -118,11 +118,11 @@ CommandHandlerResult treeCommand(EditorRuntime::Impl& runtime, std::string_view 
     auto const* invocation = payloadAs<TreeCommandInvocation>(payload);
     if (invocation == nullptr) return failure(std::string{id} + " requires a tree invocation payload");
     if (id == "tree.toggle_expanded") {
-        auto toggled = runtime.tree.toggleExpanded(invocation->provider_id, invocation->node_id);
+        auto toggled = runtime.tree.toggleExpanded(invocation->providerId, invocation->nodeId);
         if (toggled) runtime.revealTreeSelection();
         return toggled ? success() : failure("tree node does not exist");
     }
-    auto command = runtime.tree.invokeNodeCommand(invocation->provider_id, invocation->node_id, invocation->command_id);
+    auto command = runtime.tree.invokeNodeCommand(invocation->providerId, invocation->nodeId, invocation->commandId);
     return command ? success() : failure("tree node command does not exist");
 }
 

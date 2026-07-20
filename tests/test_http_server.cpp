@@ -224,7 +224,7 @@ ssg::ViewportViewState viewport() {
 
 class TestHost : public ssg::HttpEditorSessionHost {
 public:
-    explicit TestHost(ssg::EditorSession& session) : session_{session} {}
+    explicit TestHost(ssg::EditorSession& session) : session{session} {}
 
     std::optional<ssg::AuthenticatedSession> authenticate(
         std::string_view credential) override {
@@ -243,32 +243,32 @@ public:
 
     ssg::SessionSnapshot snapshot(ssg::SessionId const&,
                                   ssg::ClientId clientId) override {
-        auto attached = session_.attachedClient(clientId);
+        auto attached = session.attachedClient(clientId);
         if (!attached) throw std::logic_error{"snapshot for detached client"};
         return ssg::assembleSessionSnapshot(
-            session_.revision(), session_.topology(), attached->principal,
-            attached->view_id, viewport(),
-            sections(session_.revision(), document));
+            session.revision(), session.topology(), attached->principal,
+            attached->viewId, viewport(),
+            sections(session.revision(), document));
     }
 
     void clipboardResponse(ssg::SessionId const&, ssg::ClientId,
                             ssg::ClipboardResponse const&) override {
-        ++clipboard_responses;
+        ++clipboardResponses;
     }
     void statusAction(ssg::SessionId const&, ssg::ClientId,
                        ssg::StatusActionInvocation const&) override {
-        ++status_actions;
+        ++statusActions;
     }
     void binary(ssg::SessionId const&, ssg::ClientId,
                 ssg::BinaryFrame const&) override {
-        ++binary_frames;
+        ++binaryFrames;
     }
 
-    ssg::EditorSession& session_;
+    ssg::EditorSession& session;
     std::string document;
-    std::atomic<int> clipboard_responses{0};
-    std::atomic<int> status_actions{0};
-    std::atomic<int> binary_frames{0};
+    std::atomic<int> clipboardResponses{0};
+    std::atomic<int> statusActions{0};
+    std::atomic<int> binaryFrames{0};
 };
 
 class ApplicationHost final : public TestHost {
@@ -342,7 +342,7 @@ TEST(externallyOwnedRouteSharesOneServerLifecycle) {
     attach(websocket.socket, "local");
     auto decoded = ssg::decodeSessionSnapshot(reader.next().payload);
     ASSERT_TRUE(decoded.accepted());
-    ASSERT_EQ(decoded.snapshot->client().client_id, ssg::ClientId{11});
+    ASSERT_EQ(decoded.snapshot->client().clientId, ssg::ClientId{11});
 
     server.stop();
     ASSERT_FALSE(server.boundPort().has_value());
@@ -383,7 +383,7 @@ TEST(applicationRouteRejectsWrongAndStaleBearersBeforeAttach) {
     attach(socket.socket, currentValue);
     auto decoded = ssg::decodeSessionSnapshot(reader.next().payload);
     ASSERT_TRUE(decoded.accepted());
-    ASSERT_EQ(decoded.snapshot->client().client_id, ssg::ClientId{51});
+    ASSERT_EQ(decoded.snapshot->client().clientId, ssg::ClientId{51});
     ASSERT_EQ(decoded.snapshot->client().capabilities.size(), std::size_t{1});
 
     server.stop();
@@ -402,7 +402,7 @@ TEST(attachUsesHostPrincipalAndSocketSnapshotMatchesInProcess) {
     attach(socket.socket, "local");
     auto decoded = ssg::decodeSessionSnapshot(reader.next().payload);
     ASSERT_TRUE(decoded.accepted());
-    ASSERT_EQ(decoded.snapshot->client().client_id, ssg::ClientId{11});
+    ASSERT_EQ(decoded.snapshot->client().clientId, ssg::ClientId{11});
     ASSERT_EQ(decoded.snapshot->client().capabilities.size(), std::size_t{1});
     ASSERT_EQ(decoded.snapshot->revision(), fixture.session->revision());
     ASSERT_EQ(decoded.snapshot->sections().document.text,
@@ -442,11 +442,11 @@ TEST(commandDeltaReplaysOnReconnectAndEvictionSendsSnapshot) {
                  maskedFrame(0x2, ssg::encodeStatusActionInvocation(
                                            {ssg::StatusId{3}, "run", 1})));
         for (int attempt = 0;
-             attempt < 100 && fixture.host->status_actions.load() != 1;
+             attempt < 100 && fixture.host->statusActions.load() != 1;
              ++attempt) {
             std::this_thread::sleep_for(2ms);
         }
-        ASSERT_EQ(fixture.host->status_actions.load(), 1);
+        ASSERT_EQ(fixture.host->statusActions.load(), 1);
     }
     std::this_thread::sleep_for(20ms);
     {
@@ -504,14 +504,14 @@ TEST(clipboardStatusAndBinaryIngressShareTheAttachedConnection) {
     sendAll(socket.socket, maskedFrame(0x2, status));
     sendAll(socket.socket, maskedFrame(0x2, binary));
     for (int attempt = 0;
-         attempt < 100 && fixture.host->binary_frames.load() != 1;
+         attempt < 100 && fixture.host->binaryFrames.load() != 1;
          ++attempt) {
         std::this_thread::sleep_for(2ms);
     }
 
-    ASSERT_EQ(fixture.host->clipboard_responses.load(), 1);
-    ASSERT_EQ(fixture.host->status_actions.load(), 1);
-    ASSERT_EQ(fixture.host->binary_frames.load(), 1);
+    ASSERT_EQ(fixture.host->clipboardResponses.load(), 1);
+    ASSERT_EQ(fixture.host->statusActions.load(), 1);
+    ASSERT_EQ(fixture.host->binaryFrames.load(), 1);
     server.stop();
 }
 
@@ -559,7 +559,7 @@ TEST(configAndAttachCodecRejectUnboundedOrClientAuthorityInputs) {
     auto decoded = ssg::decodeSessionAttachRequest(encoded);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_EQ(decoded.request->credential, std::string{"opaque"});
-    ASSERT_EQ(decoded.request->last_applied_revision, ssg::Revision{9});
+    ASSERT_EQ(decoded.request->lastAppliedRevision, ssg::Revision{9});
     ASSERT_FALSE(ssg::decodeSessionAttachRequest(
                      "SSG1 ATTACH 9 6f7061717565 capabilities=all")
                      .accepted());

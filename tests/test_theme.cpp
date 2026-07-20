@@ -42,9 +42,9 @@ std::vector<RoleMapping> roles() {
     for (const auto& pair : ssg::kCoVisibleRolePairs) {
         const auto left = static_cast<std::size_t>(pair.first);
         const auto right = static_cast<std::size_t>(pair.second);
-        if (result[left].palette_index == result[right].palette_index) {
-            result[right].palette_index =
-                static_cast<std::uint8_t>((result[right].palette_index + 1) % 16);
+        if (result[left].paletteIndex == result[right].paletteIndex) {
+            result[right].paletteIndex =
+                static_cast<std::uint8_t>((result[right].paletteIndex + 1) % 16);
         }
     }
     return result;
@@ -158,8 +158,8 @@ TEST(sharedFixtureRolesAreDistinctForEveryTheme) {
 
     auto invalidRoles = roles();
     const auto firstPair = ssg::kCoVisibleRolePairs.front();
-    invalidRoles[static_cast<std::size_t>(firstPair.second)].palette_index =
-        invalidRoles[static_cast<std::size_t>(firstPair.first)].palette_index;
+    invalidRoles[static_cast<std::size_t>(firstPair.second)].paletteIndex =
+        invalidRoles[static_cast<std::size_t>(firstPair.first)].paletteIndex;
     const auto colors = palette();
     const auto syntaxMappings = syntax();
     ASSERT_THROWS(ssg::Theme("collision", colors, invalidRoles, syntaxMappings),
@@ -174,13 +174,13 @@ TEST(snapshotIsCompleteAndDeterministic) {
 
     ASSERT_EQ(firstSnapshot, secondSnapshot);
     ASSERT_EQ(firstSnapshot.palette.size(), ssg::kThemePaletteSize);
-    ASSERT_EQ(firstSnapshot.semantic_indices.size(), ssg::kSemanticRoleCount);
-    ASSERT_EQ(firstSnapshot.syntax_indices.size(), ssg::kSyntaxScopeCount);
+    ASSERT_EQ(firstSnapshot.semanticIndices.size(), ssg::kSemanticRoleCount);
+    ASSERT_EQ(firstSnapshot.syntaxIndices.size(), ssg::kSyntaxScopeCount);
     for (std::size_t index = 0; index < firstSnapshot.palette.size(); ++index) {
         ASSERT_EQ(firstSnapshot.palette[index], first.palette()[index]);
     }
     for (std::size_t index = 0; index < ssg::kAllSemanticRoles.size(); ++index) {
-        ASSERT_EQ(firstSnapshot.semantic_indices[index],
+        ASSERT_EQ(firstSnapshot.semanticIndices[index],
                   first.indexFor(ssg::kAllSemanticRoles[index]));
     }
     ASSERT_EQ(first.indexForSyntax("not.a.known.scope"),

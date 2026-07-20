@@ -53,9 +53,9 @@ std::vector<ref::Sel> referenceSelections(const ssg::SelectionSet& selections) {
     std::vector<ref::Sel> result;
     for (const auto& selection : selections.items()) {
         result.push_back({static_cast<std::size_t>(
-                              selection.anchor.byte_offset.value()),
+                              selection.anchor.byteOffset.value()),
                           static_cast<std::size_t>(
-                              selection.active.byte_offset.value())});
+                              selection.active.byteOffset.value())});
     }
     return result;
 }
@@ -275,7 +275,7 @@ TEST(rejectionAndStaleDocumentAreFailureAtomic) {
         history.applyEdit(document, stale, selections, caret(2),
                            ssg::HistoryEditKind::Other, 0);
     ASSERT_FALSE(rejected.accepted());
-    ASSERT_EQ(rejected.document_error, ssg::DocumentError::StaleRevision);
+    ASSERT_EQ(rejected.documentError, ssg::DocumentError::StaleRevision);
     ASSERT_EQ(document.snapshot().text, std::string{"a"});
     ASSERT_FALSE(history.canUndo());
 
@@ -311,8 +311,8 @@ TEST(viewStateAndDeltaTrackHistoryAvailability) {
     ssg::Document document;
     ssg::DocumentHistory history{{4096, 750}};
     const auto empty = history.viewState();
-    ASSERT_FALSE(empty.can_undo);
-    ASSERT_FALSE(empty.can_redo);
+    ASSERT_FALSE(empty.canUndo);
+    ASSERT_FALSE(empty.canRedo);
     ASSERT_FALSE(ssg::deriveHistoryDelta(empty, empty).changed);
 
     auto selections = caret(0);
@@ -322,12 +322,12 @@ TEST(viewStateAndDeltaTrackHistoryAvailability) {
     const auto delta = ssg::deriveHistoryDelta(empty, edited);
     ASSERT_TRUE(delta.changed);
     ASSERT_EQ(*delta.replacement, edited);
-    ASSERT_TRUE(edited.can_undo);
+    ASSERT_TRUE(edited.canUndo);
 
     selections = *history.undo(document).selections;
     const auto undone = history.viewState();
-    ASSERT_FALSE(undone.can_undo);
-    ASSERT_TRUE(undone.can_redo);
+    ASSERT_FALSE(undone.canUndo);
+    ASSERT_TRUE(undone.canRedo);
 }
 
 }  // namespace

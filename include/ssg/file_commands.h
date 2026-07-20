@@ -18,7 +18,7 @@ namespace ssg {
 // one std::any-held type to bind the command to a wire converter.
 struct DroppedContentArguments {
     std::vector<std::uint8_t> bytes;
-    std::string suggested_label;
+    std::string suggestedLabel;
 
     bool operator==(const DroppedContentArguments&) const = default;
 };
@@ -42,7 +42,7 @@ struct FileCommandDescriptor {
     std::string_view id;
     FileCommand command;
     bool lua = true;
-    std::optional<std::string_view> required_capability;
+    std::optional<std::string_view> requiredCapability;
 
     friend bool operator==(const FileCommandDescriptor&,
                            const FileCommandDescriptor&) = default;

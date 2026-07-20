@@ -20,7 +20,7 @@ std::vector<FindMatch> referenceLiteral(std::string_view text,
                                          std::optional<ByteRange> selection) {
     auto fold = [&](char value) {
         const auto byte = static_cast<unsigned char>(value);
-        return options.case_sensitive
+        return options.caseSensitive
                    ? value
                    : static_cast<char>(std::tolower(byte));
     };
@@ -42,7 +42,7 @@ std::vector<FindMatch> referenceLiteral(std::string_view text,
         if (!equal) {
             continue;
         }
-        if (options.whole_word &&
+        if (options.wholeWord &&
             ((at > lower && word(text[at - 1])) ||
              (at + query.size() < upper && word(text[at + query.size()])))) {
             continue;
@@ -87,7 +87,7 @@ public:
 
     WorkspaceApplyResult apply(const WorkspaceReplacePreview& preview,
                                WorkspaceRecoverySink& sink) override {
-        if (preview.source_revision != revision_) {
+        if (preview.sourceRevision != revision_) {
             return {FindReplaceError::StaleRevision, revision_,
                     "stale workspace preview"};
         }
@@ -110,13 +110,13 @@ public:
                     "recovery sink rejected record"};
         }
         files_ = std::move(candidate);
-        revision_ = record.applied_revision;
+        revision_ = record.appliedRevision;
         return {FindReplaceError::None, revision_, {}};
     }
 
     WorkspaceApplyResult recover(
         const WorkspaceRecoveryRecord& record) override {
-        if (record.applied_revision != revision_) {
+        if (record.appliedRevision != revision_) {
             return {FindReplaceError::StaleRevision, revision_,
                     "stale recovery record"};
         }
@@ -160,7 +160,7 @@ TEST(literalCaseWordAndSelectionMatchIndependentOracle) {
                               referenceLiteral(text, query, options,
                                                 std::nullopt));
                     if (text.size() >= 2) {
-                        request.options.selection_only = true;
+                        request.options.selectionOnly = true;
                         request.selection =
                             ByteRange{ByteOffset{1},
                                       ByteOffset{text.size() - 1}};
@@ -182,13 +182,13 @@ TEST(regexOracleCoversGrammarCaseWordAndInvalidPattern) {
                                       {ByteOffset{12}, ByteOffset{14}}}));
 
     request.query = "h[ae]llo";
-    request.options.case_sensitive = false;
+    request.options.caseSensitive = false;
     ASSERT_EQ(findMatches("HELLO hallo hxllo", request).matches,
               (std::vector<FindMatch>{{ByteOffset{0}, ByteOffset{5}},
                                       {ByteOffset{6}, ByteOffset{11}}}));
 
     request.query = "cat";
-    request.options.whole_word = true;
+    request.options.wholeWord = true;
     ASSERT_EQ(findMatches("cat scatter cat", request).matches,
               (std::vector<FindMatch>{{ByteOffset{0}, ByteOffset{3}},
                                       {ByteOffset{12}, ByteOffset{15}}}));
@@ -214,18 +214,18 @@ TEST(zeroWidthAdvancesOneUnicodeScalarAndBudgetCancels) {
                                       {ByteOffset{3}, ByteOffset{3}}}));
 
     request.query = "(a|aa)*b";
-    request.work_budget = 1;
+    request.workBudget = 1;
     ASSERT_EQ(findMatches(std::string(200, 'a'), request).error,
               FindReplaceError::BudgetExhausted);
 
     request.query = "z";
     request.options.regex = false;
-    request.work_budget = 3;
+    request.workBudget = 3;
     ASSERT_EQ(findMatches("aaaaaaaa", request).error,
               FindReplaceError::BudgetExhausted);
 
     std::atomic_bool cancelled{true};
-    request.work_budget = 100000;
+    request.workBudget = 100000;
     request.cancelled = &cancelled;
     ASSERT_EQ(findMatches("ab", request).error,
               FindReplaceError::Cancelled);
@@ -316,15 +316,15 @@ TEST(viewDeltaReplayAndCommandExportsAreExact) {
     controller.open(document.snapshot(),
                     FindRequest{"alpha", {}, std::nullopt, 100000, nullptr});
     const auto open = controller.viewState();
-    ASSERT_FALSE(open.replace_mode);
+    ASSERT_FALSE(open.replaceMode);
     controller.toggleCase(document.snapshot());
-    ASSERT_TRUE(controller.viewState().options.case_sensitive);
+    ASSERT_TRUE(controller.viewState().options.caseSensitive);
     controller.updateQuery(document.snapshot(), "ALPHA", std::nullopt);
     ASSERT_EQ(controller.viewState().matches.size(), std::size_t{0});
     controller.openReplace(
         document.snapshot(),
         FindRequest{"alpha", {}, std::nullopt, 100000, nullptr});
-    ASSERT_TRUE(controller.viewState().replace_mode);
+    ASSERT_TRUE(controller.viewState().replaceMode);
     const auto delta = deriveFindReplaceDelta(closed, open);
     ASSERT_TRUE(delta.changed);
     ASSERT_EQ(replayFindReplaceDelta(closed, delta).state, open);

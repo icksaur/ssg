@@ -93,19 +93,19 @@ FileIdentity fileIdentity(const std::filesystem::path& path) {
 }
 
 ExclusiveFileLock::ExclusiveFileLock(std::intptr_t nativeHandle) noexcept
-    : native_handle_(nativeHandle) {}
+    : nativeHandle_(nativeHandle) {}
 
 ExclusiveFileLock::~ExclusiveFileLock() {
-    closeNoexcept(native_handle_);
+    closeNoexcept(nativeHandle_);
 }
 
 ExclusiveFileLock::ExclusiveFileLock(ExclusiveFileLock&& other) noexcept
-    : native_handle_(std::exchange(other.native_handle_, -1)) {}
+    : nativeHandle_(std::exchange(other.nativeHandle_, -1)) {}
 
 ExclusiveFileLock& ExclusiveFileLock::operator=(ExclusiveFileLock&& other) noexcept {
     if (this != &other) {
-        closeNoexcept(native_handle_);
-        native_handle_ = std::exchange(other.native_handle_, -1);
+        closeNoexcept(nativeHandle_);
+        nativeHandle_ = std::exchange(other.nativeHandle_, -1);
     }
     return *this;
 }

@@ -36,14 +36,14 @@ std::string reconstruct(std::string_view baseline,
     std::ptrdiff_t offset = 0;
     for (const auto& hunk : hunks) {
         const auto start =
-            static_cast<std::ptrdiff_t>(hunk.baseline_start) + offset;
+            static_cast<std::ptrdiff_t>(hunk.baselineStart) + offset;
         lines.erase(lines.begin() + start,
                     lines.begin() + start +
-                        static_cast<std::ptrdiff_t>(hunk.baseline_lines.size()));
-        lines.insert(lines.begin() + start, hunk.target_lines.begin(),
-                     hunk.target_lines.end());
-        offset += static_cast<std::ptrdiff_t>(hunk.target_lines.size()) -
-                  static_cast<std::ptrdiff_t>(hunk.baseline_lines.size());
+                        static_cast<std::ptrdiff_t>(hunk.baselineLines.size()));
+        lines.insert(lines.begin() + start, hunk.targetLines.begin(),
+                     hunk.targetLines.end());
+        offset += static_cast<std::ptrdiff_t>(hunk.targetLines.size()) -
+                  static_cast<std::ptrdiff_t>(hunk.baselineLines.size());
     }
     std::string result;
     for (const auto& line : lines) {
@@ -54,12 +54,12 @@ std::string reconstruct(std::string_view baseline,
 
 std::vector<std::string> normalized(const DiffFileView& view) {
     std::vector<std::string> result;
-    for (const auto& change : view.changed_lines) {
-        const auto oldLine = change.baseline_line
-                                  ? std::to_string(*change.baseline_line)
+    for (const auto& change : view.changedLines) {
+        const auto oldLine = change.baselineLine
+                                  ? std::to_string(*change.baselineLine)
                                   : "-";
         const auto newLine =
-            change.target_line ? std::to_string(*change.target_line) : "-";
+            change.targetLine ? std::to_string(*change.targetLine) : "-";
         const char kind = change.kind == DiffLineKind::Modified
                               ? 'M'
                               : change.kind == DiffLineKind::Removed ? 'R' : 'A';
@@ -79,9 +79,9 @@ TEST(gitTrackedFixtureReconstructsAndMatchesIndependentChangedLines) {
     const auto result = model.updateGitFile(
         {.id = DiffFileId{"tracked"},
          .path = "src/file.cpp",
-         .index_content = fixture("tracked.baseline"),
-         .working_content = fixture("tracked.target"),
-         .index_identity = "index-a"},
+         .indexContent = fixture("tracked.baseline"),
+         .workingContent = fixture("tracked.target"),
+         .indexIdentity = "index-a"},
         Revision{1});
 
     ASSERT_TRUE(result.accepted());
@@ -89,7 +89,7 @@ TEST(gitTrackedFixtureReconstructsAndMatchesIndependentChangedLines) {
     ASSERT_EQ(reconstruct(fixture("tracked.baseline"), view.hunks),
               fixture("tracked.target"));
     ASSERT_EQ(normalized(view), fixtureChanges("tracked.changes"));
-    ASSERT_EQ(view.baseline_identity, std::string{"index-a"});
+    ASSERT_EQ(view.baselineIdentity, std::string{"index-a"});
 }
 
 TEST(gitUntrackedRenameDeleteAndIndexChangeRetainIdentity) {
@@ -98,8 +98,8 @@ TEST(gitUntrackedRenameDeleteAndIndexChangeRetainIdentity) {
                     .updateGitFile(
                         {.id = DiffFileId{"untracked"},
                          .path = "new.txt",
-                         .working_content = fixture("untracked.target"),
-                         .index_identity = "index-a"},
+                         .workingContent = fixture("untracked.target"),
+                         .indexIdentity = "index-a"},
                         Revision{1})
                     .accepted());
     ASSERT_EQ(normalized(onlyFile(untracked)),
@@ -110,14 +110,14 @@ TEST(gitUntrackedRenameDeleteAndIndexChangeRetainIdentity) {
                     .updateGitFile(
                         {.id = DiffFileId{"stable"},
                          .path = "new-name.txt",
-                         .previous_path = std::filesystem::path{"old-name.txt"},
-                         .index_content = fixture("tracked.baseline"),
-                         .working_content = fixture("tracked.target"),
-                         .index_identity = "index-a"},
+                         .previousPath = std::filesystem::path{"old-name.txt"},
+                         .indexContent = fixture("tracked.baseline"),
+                         .workingContent = fixture("tracked.target"),
+                         .indexIdentity = "index-a"},
                         Revision{1})
                     .accepted());
     ASSERT_EQ(onlyFile(renamed).id, DiffFileId{"stable"});
-    ASSERT_EQ(onlyFile(renamed).previous_path,
+    ASSERT_EQ(onlyFile(renamed).previousPath,
               std::optional<std::filesystem::path>{"old-name.txt"});
 
     DiffModel removed;
@@ -125,8 +125,8 @@ TEST(gitUntrackedRenameDeleteAndIndexChangeRetainIdentity) {
                     .updateGitFile(
                         {.id = DiffFileId{"deleted"},
                          .path = "gone.txt",
-                         .index_content = fixture("delete.baseline"),
-                         .index_identity = "index-a"},
+                         .indexContent = fixture("delete.baseline"),
+                         .indexIdentity = "index-a"},
                         Revision{1})
                     .accepted());
     ASSERT_TRUE(onlyFile(removed).deleted);
@@ -139,13 +139,13 @@ TEST(gitUntrackedRenameDeleteAndIndexChangeRetainIdentity) {
                     .updateGitFile(
                         {.id = DiffFileId{"stable"},
                          .path = "new-name.txt",
-                         .index_content = fixture("tracked.target"),
-                         .working_content = fixture("tracked.target"),
-                         .index_identity = "index-b"},
+                         .indexContent = fixture("tracked.target"),
+                         .workingContent = fixture("tracked.target"),
+                         .indexIdentity = "index-b"},
                         Revision{2})
                     .accepted());
     ASSERT_TRUE(onlyFile(renamed).hunks.empty());
-    ASSERT_EQ(onlyFile(renamed).baseline_identity, std::string{"index-b"});
+    ASSERT_EQ(onlyFile(renamed).baselineIdentity, std::string{"index-b"});
 }
 
 TEST(seededNonGitEventsAdvanceBaselineAndRetainRenameDelete) {
@@ -161,12 +161,12 @@ TEST(seededNonGitEventsAdvanceBaselineAndRetainRenameDelete) {
                         {.kind = NonGitDiffEventKind::Rename,
                          .id = DiffFileId{"seed"},
                          .path = "new.txt",
-                         .previous_path = std::filesystem::path{"old.txt"},
+                         .previousPath = std::filesystem::path{"old.txt"},
                          .content = fixture("tracked.target")},
                         Revision{2})
                     .accepted());
     ASSERT_EQ(onlyFile(model).id, DiffFileId{"seed"});
-    ASSERT_EQ(onlyFile(model).previous_path,
+    ASSERT_EQ(onlyFile(model).previousPath,
               std::optional<std::filesystem::path>{"old.txt"});
     ASSERT_EQ(reconstruct(fixture("tracked.baseline"), onlyFile(model).hunks),
               fixture("tracked.target"));
@@ -179,9 +179,9 @@ TEST(seededNonGitEventsAdvanceBaselineAndRetainRenameDelete) {
                          .content = fixture("tracked.target") + "tail\n"},
                         Revision{3})
                     .accepted());
-    ASSERT_EQ(onlyFile(model).hunks.front().baseline_lines.size(),
+    ASSERT_EQ(onlyFile(model).hunks.front().baselineLines.size(),
               std::size_t{0});
-    ASSERT_EQ(onlyFile(model).hunks.front().target_lines,
+    ASSERT_EQ(onlyFile(model).hunks.front().targetLines,
               (std::vector<std::string>{"tail\n"}));
 
     ASSERT_TRUE(model
@@ -197,8 +197,8 @@ TEST(seededNonGitEventsAdvanceBaselineAndRetainRenameDelete) {
 }
 
 TEST(staleInvalidAndOverBudgetWorkAreFailureAtomic) {
-    DiffModel model{DiffConfig{.maximum_line_count = 4,
-                               .maximum_matrix_cells = 4}};
+    DiffModel model{DiffConfig{.maximumLineCount = 4,
+                               .maximumMatrixCells = 4}};
     ASSERT_TRUE(model.seedNonGit(
                          {{.id = DiffFileId{"seed"},
                            .path = "a.txt",
@@ -232,9 +232,9 @@ TEST(staleInvalidAndOverBudgetWorkAreFailureAtomic) {
                   .updateGitFile(
                       {.id = DiffFileId{"seed"},
                        .path = "a.txt",
-                       .index_content = "a\n",
-                       .working_content = "b\n",
-                       .index_identity = "index"},
+                       .indexContent = "a\n",
+                       .workingContent = "b\n",
+                       .indexIdentity = "index"},
                       Revision{2})
                   .error,
               DiffError::DuplicateFile);
@@ -244,8 +244,8 @@ TEST(staleInvalidAndOverBudgetWorkAreFailureAtomic) {
                   .updateGitFile(
                       {.id = DiffFileId{"git"},
                        .path = "git.txt",
-                       .index_content = "a\n",
-                       .working_content = "b\n"},
+                       .indexContent = "a\n",
+                       .workingContent = "b\n"},
                       Revision{2})
                   .error,
               DiffError::BaselineIdentityRequired);
@@ -280,9 +280,9 @@ TEST(deltaReplayAndExactCommandNavigationContract) {
                     .updateGitFile(
                         {.id = DiffFileId{"tracked"},
                          .path = "file.txt",
-                         .index_content = "a\nsame\nb\n",
-                         .working_content = "A\nsame\nB\n",
-                         .index_identity = "index"},
+                         .indexContent = "a\nsame\nb\n",
+                         .workingContent = "A\nsame\nB\n",
+                         .indexIdentity = "index"},
                         Revision{1})
                     .accepted());
     const auto target = model.viewState();
@@ -307,13 +307,13 @@ TEST(deltaReplayAndExactCommandNavigationContract) {
 
     const auto& file = onlyFile(model);
     ASSERT_EQ(nextDiffHunk(file, std::nullopt), std::optional<std::size_t>{0});
-    ASSERT_EQ(nextDiffHunk(file, file.hunks.front().target_start),
+    ASSERT_EQ(nextDiffHunk(file, file.hunks.front().targetStart),
               std::optional<std::size_t>{1});
-    ASSERT_EQ(nextDiffHunk(file, file.hunks.back().target_start),
+    ASSERT_EQ(nextDiffHunk(file, file.hunks.back().targetStart),
               std::optional<std::size_t>{0});
     ASSERT_EQ(previousDiffHunk(file, std::nullopt),
               std::optional<std::size_t>{1});
-    ASSERT_EQ(previousDiffHunk(file, file.hunks.front().target_start),
+    ASSERT_EQ(previousDiffHunk(file, file.hunks.front().targetStart),
               std::optional<std::size_t>{1});
 }
 

@@ -15,7 +15,7 @@ namespace ssg {
 
 struct LspFeatureCommandDescriptor {
     std::string_view id;
-    bool user_navigation = false;
+    bool userNavigation = false;
     friend bool operator==(const LspFeatureCommandDescriptor&,
                            const LspFeatureCommandDescriptor&) = default;
 };
@@ -46,9 +46,9 @@ private:
 struct LspCompletionItem {
     std::string label;
     std::string detail;
-    std::string sort_text;
-    std::string insert_text;
-    std::optional<LspRange> replacement_range;
+    std::string sortText;
+    std::string insertText;
+    std::optional<LspRange> replacementRange;
     friend bool operator==(const LspCompletionItem&,
                            const LspCompletionItem&) = default;
 };
@@ -57,7 +57,7 @@ struct LspCompletionViewState {
     bool visible = false;
     bool loading = false;
     std::vector<LspCompletionItem> items;
-    std::optional<std::size_t> selected_index;
+    std::optional<std::size_t> selectedIndex;
     friend bool operator==(const LspCompletionViewState&,
                            const LspCompletionViewState&) = default;
 };
@@ -77,9 +77,9 @@ struct LspNavigationTarget {
 
 struct LspNavigationViewState {
     std::vector<LspNavigationTarget> targets;
-    std::optional<std::size_t> selected_index;
-    bool user_navigation = false;
-    bool reveal_primary_caret = false;
+    std::optional<std::size_t> selectedIndex;
+    bool userNavigation = false;
+    bool revealPrimaryCaret = false;
     friend bool operator==(const LspNavigationViewState&,
                            const LspNavigationViewState&) = default;
 };
@@ -95,7 +95,7 @@ struct LspFeatureViewState {
 };
 
 struct LspFeatureDelta {
-    Revision base_revision{0};
+    Revision baseRevision{0};
     Revision revision{0};
     std::optional<LspFeatureViewState> state;
     friend bool operator==(const LspFeatureDelta&,
@@ -129,11 +129,11 @@ enum class LspFeatureError : std::uint8_t {
 };
 
 struct LspFeatureRequestResult {
-    std::uint64_t request_id = 0;
+    std::uint64_t requestId = 0;
     LspFeatureError error = LspFeatureError::None;
     std::string message;
     [[nodiscard]] bool accepted() const noexcept {
-        return request_id != 0 && error == LspFeatureError::None;
+        return requestId != 0 && error == LspFeatureError::None;
     }
 };
 
@@ -147,7 +147,7 @@ enum class LspFeaturePublishResult : std::uint8_t {
 };
 
 struct LspFeaturePublication {
-    std::uint64_t request_id = 0;
+    std::uint64_t requestId = 0;
     LspFeaturePublishResult result = LspFeaturePublishResult::Accepted;
     std::string message;
     friend bool operator==(const LspFeaturePublication&,
@@ -171,9 +171,9 @@ struct LspCompletionAcceptance {
 };
 
 struct LspFeatureConfig {
-    std::size_t maximum_completion_items = 1000;
-    std::size_t maximum_navigation_targets = 1000;
-    std::size_t maximum_json_depth = 64;
+    std::size_t maximumCompletionItems = 1000;
+    std::size_t maximumNavigationTargets = 1000;
+    std::size_t maximumJsonDepth = 64;
 };
 
 class LspFeatureController {
@@ -227,7 +227,7 @@ private:
     LspFeatureConfig config_;
     LspFeatureViewState state_;
     std::map<std::uint64_t, Pending> pending_;
-    std::array<std::uint64_t, 4> active_ids_{};
+    std::array<std::uint64_t, 4> activeIds_{};
     std::uint64_t generation_ = 0;
 };
 

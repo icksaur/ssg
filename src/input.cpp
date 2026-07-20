@@ -269,7 +269,7 @@ std::vector<KeymapError> validateKeymap(
             errors.push_back({KeymapErrorCode::InvalidStroke, index,
                               "binding contains an invalid key stroke"});
         }
-        if (binding.command_id.empty()) {
+        if (binding.commandId.empty()) {
             errors.push_back({KeymapErrorCode::EmptyCommand, index,
                               "binding command is empty"});
         }
@@ -378,7 +378,7 @@ KeymapResolution resolveKeySequence(const KeymapViewState& keymap,
         }
     }
     if (match != nullptr) {
-        return {KeymapMatchKind::Resolved, match->command_id};
+        return {KeymapMatchKind::Resolved, match->commandId};
     }
     return {hasPending ? KeymapMatchKind::Pending : KeymapMatchKind::None, {}};
 }
@@ -398,7 +398,7 @@ bool hasGlobalBinding(const KeymapViewState& keymap,
                         std::span<const KeySequence> reservedSequences) {
     for (std::size_t index = 0; index < keymap.bindings.size(); ++index) {
         const auto& binding = keymap.bindings[index];
-        if (binding.context != "*" || binding.command_id != commandId) {
+        if (binding.context != "*" || binding.commandId != commandId) {
             continue;
         }
         if (std::ranges::any_of(reservedSequences, [&](const auto& reserved) {
@@ -411,7 +411,7 @@ bool hasGlobalBinding(const KeymapViewState& keymap,
             [&](const KeyBinding& earlier) {
                 return earlier.context == "*" &&
                        earlier.sequence == binding.sequence &&
-                       earlier.command_id != binding.command_id;
+                       earlier.commandId != binding.commandId;
             });
         if (!shadowed) {
             return true;
@@ -425,7 +425,7 @@ std::optional<KeySequence> preferredBinding(const KeymapViewState& keymap,
     const KeySequence* best = nullptr;
     std::string bestDisplay;
     for (const auto& binding : keymap.bindings) {
-        if (binding.command_id != commandId) continue;
+        if (binding.commandId != commandId) continue;
         if (best == nullptr || binding.sequence.size() < best->size()) {
             best = &binding.sequence;
             bestDisplay = formatKeySequence(binding.sequence);
@@ -460,7 +460,7 @@ ScrollFractionArguments::ScrollFractionArguments(
 }
 
 bool SemanticCommand::operator==(const SemanticCommand& other) const {
-    if (command_id != other.command_id ||
+    if (commandId != other.commandId ||
         arguments.index() != other.arguments.index()) {
         return false;
     }

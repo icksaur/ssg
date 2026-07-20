@@ -33,8 +33,8 @@ enum class StatusPriority : std::uint8_t {
 
 struct StatusAction {
     std::string id;
-    std::string accessible_label;
-    std::string command_id;
+    std::string accessibleLabel;
+    std::string commandId;
     friend bool operator==(const StatusAction&, const StatusAction&) = default;
 };
 
@@ -50,7 +50,7 @@ struct StatusItemView {
     StatusId id;
     StatusPriority priority = StatusPriority::Information;
     std::uint64_t generation = 0;
-    std::string accessible_label;
+    std::string accessibleLabel;
     std::vector<StatusAction> actions;
     friend bool operator==(const StatusItemView&,
                            const StatusItemView&) = default;
@@ -70,8 +70,8 @@ struct StatusEnqueueResult {
 };
 
 struct StatusActionInvocation {
-    StatusId status_id;
-    std::string action_id;
+    StatusId statusId;
+    std::string actionId;
     std::uint64_t generation = 0;
 };
 
@@ -83,9 +83,9 @@ enum class StatusActionError : std::uint8_t {
 
 struct StatusActionResult {
     StatusActionError error = StatusActionError::None;
-    std::optional<std::string> command_id;
+    std::optional<std::string> commandId;
     [[nodiscard]] bool accepted() const noexcept {
-        return error == StatusActionError::None && command_id.has_value();
+        return error == StatusActionError::None && commandId.has_value();
     }
 };
 
@@ -117,7 +117,7 @@ private:
 
     std::vector<Entry> entries_;
     std::size_t selected_ = 0;
-    std::uint64_t next_generation_ = 1;
+    std::uint64_t nextGeneration_ = 1;
 };
 
 struct PromptStatusViewState {

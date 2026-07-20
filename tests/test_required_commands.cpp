@@ -27,7 +27,7 @@ struct ExpectedCommand {
 struct CatalogCommand {
     std::string id;
     std::string owner;
-    std::vector<std::string> required_capabilities;
+    std::vector<std::string> requiredCapabilities;
     bool lua{};
     bool keymap{};
     bool palette{};
@@ -422,7 +422,7 @@ TEST(capabilityAndSurfaceExclusionsAreExact) {
 
     for (const auto& command : *catalog) {
         if (command.id == "file.open_dropped_content") {
-            ASSERT_EQ(command.required_capabilities,
+            ASSERT_EQ(command.requiredCapabilities,
                       std::vector<std::string>{"local_file_drop"});
             ASSERT_FALSE(command.lua);
             ASSERT_FALSE(command.keymap);
@@ -432,7 +432,7 @@ TEST(capabilityAndSurfaceExclusionsAreExact) {
             // Client-fulfilment commands: the client edits the query/replacement
             // and reports the full next string, so each carries a payload and is
             // neither keymap- nor palette-reachable, but remains Lua-scriptable.
-            ASSERT_TRUE(command.required_capabilities.empty());
+            ASSERT_TRUE(command.requiredCapabilities.empty());
             ASSERT_TRUE(command.lua);
             ASSERT_FALSE(command.keymap);
             ASSERT_FALSE(command.palette);
@@ -441,7 +441,7 @@ TEST(capabilityAndSurfaceExclusionsAreExact) {
             // by id, so it carries a node-id payload and is neither keymap- nor
             // palette-reachable (the keyboard selects via next/previous), but
             // remains Lua-scriptable.
-            ASSERT_TRUE(command.required_capabilities.empty());
+            ASSERT_TRUE(command.requiredCapabilities.empty());
             ASSERT_TRUE(command.lua);
             ASSERT_FALSE(command.keymap);
             ASSERT_FALSE(command.palette);
@@ -450,12 +450,12 @@ TEST(capabilityAndSurfaceExclusionsAreExact) {
             // so it carries a scroll-lines payload and is neither keymap- nor
             // palette-reachable (the keyboard scrolls via next/previous, which
             // move the selection), but remains Lua-scriptable.
-            ASSERT_TRUE(command.required_capabilities.empty());
+            ASSERT_TRUE(command.requiredCapabilities.empty());
             ASSERT_TRUE(command.lua);
             ASSERT_FALSE(command.keymap);
             ASSERT_FALSE(command.palette);
         } else {
-            ASSERT_TRUE(command.required_capabilities.empty());
+            ASSERT_TRUE(command.requiredCapabilities.empty());
             ASSERT_TRUE(command.lua);
             ASSERT_TRUE(command.keymap);
             ASSERT_TRUE(command.palette);

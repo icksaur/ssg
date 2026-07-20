@@ -14,14 +14,14 @@ class ValidatedUtf8;
 
 struct TextEdit {
     ByteOffset offset;
-    std::uint64_t erased_bytes;
-    std::string inserted_text;
+    std::uint64_t erasedBytes;
+    std::string insertedText;
 
     bool operator==(TextEdit const&) const = default;
 };
 
 struct EditTransaction {
-    Revision base_revision;
+    Revision baseRevision;
     std::vector<TextEdit> edits;
 
     bool operator==(EditTransaction const&) const = default;

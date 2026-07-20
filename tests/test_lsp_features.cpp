@@ -77,7 +77,7 @@ TEST(completionResultsAreSortedAndAcceptTheSelectedEdit) {
               LspFeaturePublishResult::Accepted);
     ASSERT_EQ(features.viewState().completion.items[0].label,
               std::string{"alpha"});
-    ASSERT_EQ(features.viewState().completion.selected_index,
+    ASSERT_EQ(features.viewState().completion.selectedIndex,
               std::optional<std::size_t>{0});
 
     features.selectNextCompletion();
@@ -100,7 +100,7 @@ TEST(nullCompletionResultIsAnAcceptedEmptyList) {
     const auto request = features.requestCompletion(
         "file:///workspace/main.cpp", Revision{1}, ByteOffset{0});
     ASSERT_TRUE(request.accepted());
-    server.queue_payload(ssg::test::response(request.request_id, "null"));
+    server.queue_payload(ssg::test::response(request.requestId, "null"));
     const auto published = features.poll(Revision{1});
     ASSERT_TRUE(published.accepted());
     ASSERT_EQ(published.publications.front().result,
@@ -130,7 +130,7 @@ TEST(staleAndCancelledResultsDoNotPublishState) {
                     .accepted());
     features.dismissHover();
     auto late = fixture("hover.json");
-    const auto id = stale.publications.front().request_id + 1;
+    const auto id = stale.publications.front().requestId + 1;
     const auto marker = std::string{"\"id\":2"};
     late.replace(late.find(marker), marker.size(),
                  "\"id\":" + std::to_string(id));
@@ -173,7 +173,7 @@ TEST(malformedAndServerErrorResponsesAreCorrelatedAndBounded) {
         "file:///workspace/main.cpp", Revision{1}, ByteOffset{0});
     ASSERT_TRUE(malformedRequest.accepted());
     server.queue_payload(ssg::test::response(
-        malformedRequest.request_id, R"({"items":[{"detail":"no label"}]})"));
+        malformedRequest.requestId, R"({"items":[{"detail":"no label"}]})"));
     const auto malformed = features.poll(Revision{1});
     ASSERT_EQ(malformed.publications.front().result,
               LspFeaturePublishResult::MalformedResponse);
@@ -185,7 +185,7 @@ TEST(malformedAndServerErrorResponsesAreCorrelatedAndBounded) {
     ASSERT_TRUE(errorRequest.accepted());
     server.queue_payload(
         "{\"jsonrpc\":\"2.0\",\"id\":" +
-        std::to_string(errorRequest.request_id) +
+        std::to_string(errorRequest.requestId) +
         ",\"error\":{\"code\":-32603,\"message\":\"failed\"}}");
     const auto error = features.poll(Revision{1});
     ASSERT_TRUE(error.accepted());
@@ -206,7 +206,7 @@ TEST(supersededCompletionResponseCannotReplaceTheNewerResult) {
         "file:///workspace/main.cpp", Revision{1}, ByteOffset{1});
     ASSERT_TRUE(first.accepted());
     ASSERT_TRUE(second.accepted());
-    server.queue_payload(ssg::test::response(first.request_id, "[]"));
+    server.queue_payload(ssg::test::response(first.requestId, "[]"));
     const auto old = features.poll(Revision{1});
     ASSERT_EQ(old.publications.front().result,
               LspFeaturePublishResult::Superseded);
@@ -215,7 +215,7 @@ TEST(supersededCompletionResponseCannotReplaceTheNewerResult) {
     auto completion = fixture("completion.json");
     const auto marker = std::string{"\"id\":2"};
     completion.replace(completion.find(marker), marker.size(),
-                       "\"id\":" + std::to_string(second.request_id));
+                       "\"id\":" + std::to_string(second.requestId));
     server.queue_payload(std::move(completion));
     ASSERT_TRUE(features.poll(Revision{1}).accepted());
     ASSERT_EQ(features.viewState().completion.items[0].label,
@@ -236,8 +236,8 @@ TEST(definitionAndReferencesPublishUserNavigationTargets) {
     ASSERT_EQ(features.viewState().navigation.targets.size(), std::size_t{1});
     ASSERT_EQ(features.viewState().navigation.targets[0].uri,
               std::string{"file:///workspace/definition.cpp"});
-    ASSERT_TRUE(features.viewState().navigation.user_navigation);
-    ASSERT_TRUE(features.viewState().navigation.reveal_primary_caret);
+    ASSERT_TRUE(features.viewState().navigation.userNavigation);
+    ASSERT_TRUE(features.viewState().navigation.revealPrimaryCaret);
 
     ASSERT_TRUE(features.requestReferences("file:///workspace/main.cpp",
                                             Revision{1}, ByteOffset{0})
@@ -245,7 +245,7 @@ TEST(definitionAndReferencesPublishUserNavigationTargets) {
     server.queue_payload(fixture("references.json"));
     ASSERT_TRUE(features.poll(Revision{1}).accepted());
     ASSERT_EQ(features.viewState().navigation.targets.size(), std::size_t{2});
-    ASSERT_EQ(features.viewState().navigation.selected_index,
+    ASSERT_EQ(features.viewState().navigation.selectedIndex,
               std::optional<std::size_t>{0});
 }
 

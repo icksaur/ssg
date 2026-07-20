@@ -122,8 +122,8 @@ TEST(replayAppliesCheckpointUpdatesAndRemovals) {
     journal.insert(journal.end(), removed.begin(), removed.end());
 
     const auto replayed = ssg::replayJournal(journal);
-    ASSERT_FALSE(replayed.discarded_tail);
-    ASSERT_EQ(replayed.valid_bytes, journal.size());
+    ASSERT_FALSE(replayed.discardedTail);
+    ASSERT_EQ(replayed.validBytes, journal.size());
     ASSERT_EQ(replayed.recovery.documents.size(), std::size_t{1});
     ASSERT_EQ(replayed.recovery.documents.front(),
               untitledDocument("new draft"));
@@ -154,8 +154,8 @@ TEST(corruptOrTruncatedTailStopsAtLastValidRecord) {
     auto corrupt = complete;
     corrupt.back() ^= std::byte{0x80};
     const auto corruptReplay = ssg::replayJournal(corrupt);
-    ASSERT_TRUE(corruptReplay.discarded_tail);
-    ASSERT_EQ(corruptReplay.valid_bytes, checkpoint.size());
+    ASSERT_TRUE(corruptReplay.discardedTail);
+    ASSERT_EQ(corruptReplay.validBytes, checkpoint.size());
     ASSERT_EQ(corruptReplay.recovery.documents,
               std::vector<ssg::JournalDocument>{savedDocument("base")});
 
@@ -163,8 +163,8 @@ TEST(corruptOrTruncatedTailStopsAtLastValidRecord) {
          ++cut) {
         const auto truncated =
             ssg::replayJournal(std::span{complete}.first(cut));
-        ASSERT_TRUE(truncated.discarded_tail);
-        ASSERT_EQ(truncated.valid_bytes, checkpoint.size());
+        ASSERT_TRUE(truncated.discardedTail);
+        ASSERT_EQ(truncated.validBytes, checkpoint.size());
         ASSERT_EQ(truncated.recovery.documents,
                   std::vector<ssg::JournalDocument>{savedDocument("base")});
     }
@@ -173,8 +173,8 @@ TEST(corruptOrTruncatedTailStopsAtLastValidRecord) {
 TEST(malformedInputFailsClosedWithoutAllocationOrState) {
     std::vector<std::byte> malformed(16, std::byte{0xff});
     const auto replayed = ssg::replayJournal(malformed);
-    ASSERT_TRUE(replayed.discarded_tail);
-    ASSERT_EQ(replayed.valid_bytes, std::size_t{0});
+    ASSERT_TRUE(replayed.discardedTail);
+    ASSERT_EQ(replayed.validBytes, std::size_t{0});
     ASSERT_TRUE(replayed.recovery.documents.empty());
 
     auto oversized = ssg::encodeCheckpointRecord({{}});
@@ -207,7 +207,7 @@ TEST(durableAppendSurvivesCloseAndRestartReplay) {
 
     const ssg::ScratchJournal reopened{path};
     const auto replayed = reopened.replay();
-    ASSERT_FALSE(replayed.discarded_tail);
+    ASSERT_FALSE(replayed.discardedTail);
     ASSERT_EQ(replayed.recovery.documents,
               std::vector<ssg::JournalDocument>{
                   savedDocument("after restart")});

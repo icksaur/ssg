@@ -134,13 +134,13 @@ Theme::Theme(std::string name,
         if (!valid(mapping.role)) {
             throw std::invalid_argument("theme contains an unknown semantic role");
         }
-        validatePaletteIndex(mapping.palette_index);
+        validatePaletteIndex(mapping.paletteIndex);
         const auto index = position(mapping.role);
         if (seenRoles[index]) {
             throw std::invalid_argument("theme contains a duplicate semantic role");
         }
         seenRoles[index] = true;
-        semantic_indices_[index] = mapping.palette_index;
+        semanticIndices_[index] = mapping.paletteIndex;
     }
 
     if (syntaxMappings.size() != kSyntaxScopeCount) {
@@ -151,18 +151,18 @@ Theme::Theme(std::string name,
         if (!valid(mapping.scope)) {
             throw std::invalid_argument("theme contains an unknown syntax scope");
         }
-        validatePaletteIndex(mapping.palette_index);
+        validatePaletteIndex(mapping.paletteIndex);
         const auto index = position(mapping.scope);
         if (seenScopes[index]) {
             throw std::invalid_argument("theme contains a duplicate syntax scope");
         }
         seenScopes[index] = true;
-        syntax_indices_[index] = mapping.palette_index;
+        syntaxIndices_[index] = mapping.paletteIndex;
     }
 
     for (const auto& pair : kCoVisibleRolePairs) {
-        if (semantic_indices_[position(pair.first)] ==
-            semantic_indices_[position(pair.second)]) {
+        if (semanticIndices_[position(pair.first)] ==
+            semanticIndices_[position(pair.second)]) {
             throw std::invalid_argument(
                 "co-visible semantic roles must use distinct palette indices");
         }
@@ -171,21 +171,21 @@ Theme::Theme(std::string name,
 
 std::uint8_t Theme::indexFor(SemanticRole role) const {
     if (!valid(role)) throw std::invalid_argument("semantic role is not recognized");
-    return semantic_indices_[position(role)];
+    return semanticIndices_[position(role)];
 }
 
 std::uint8_t Theme::indexFor(SyntaxScope scope) const {
     if (!valid(scope)) throw std::invalid_argument("syntax scope is not recognized");
-    return syntax_indices_[position(scope)];
+    return syntaxIndices_[position(scope)];
 }
 
 std::uint8_t Theme::indexForSyntax(std::string_view scope) const noexcept {
     const auto recognized = syntaxScopeFromName(scope);
-    return syntax_indices_[position(recognized.value_or(SyntaxScope::PlainText))];
+    return syntaxIndices_[position(recognized.value_or(SyntaxScope::PlainText))];
 }
 
 ThemeSnapshot Theme::snapshot() const noexcept {
-    return {palette_, semantic_indices_, syntax_indices_};
+    return {palette_, semanticIndices_, syntaxIndices_};
 }
 
 } // namespace ssg

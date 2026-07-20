@@ -90,7 +90,7 @@ std::vector<std::size_t> graphemeBoundaries(std::string_view text,
             computeCellRun(text.substr(lineStart, lineEnd - lineStart),
                              tabWidth);
         for (const auto& span : run.spans) {
-            boundaries.push_back(lineStart + span.byte_offset + span.byte_len);
+            boundaries.push_back(lineStart + span.byteOffset + span.byteLen);
         }
         if (lineEnd == text.size()) {
             break;
@@ -204,7 +204,7 @@ std::string terminatorFor(std::string_view text, std::size_t offset,
 
 std::string indentationFor(std::string_view text, std::size_t offset,
                             TextInputSettings settings) {
-    if (!settings.auto_indent) {
+    if (!settings.autoIndent) {
         return {};
     }
     const auto start = lineBounds(text, offset).first;
@@ -215,18 +215,18 @@ std::string indentationFor(std::string_view text, std::size_t offset,
             ++columns;
             ++cursor;
         } else if (text[cursor] == '\t') {
-            columns += settings.indent_width -
-                       (columns % settings.indent_width);
+            columns += settings.indentWidth -
+                       (columns % settings.indentWidth);
             ++cursor;
         } else {
             break;
         }
     }
-    if (settings.indent_style == IndentStyle::Spaces) {
+    if (settings.indentStyle == IndentStyle::Spaces) {
         return std::string(static_cast<std::size_t>(columns), ' ');
     }
-    const auto tabs = columns / settings.indent_width;
-    const auto spaces = columns % settings.indent_width;
+    const auto tabs = columns / settings.indentWidth;
+    const auto spaces = columns % settings.indentWidth;
     return std::string(static_cast<std::size_t>(tabs), '\t') +
            std::string(static_cast<std::size_t>(spaces), ' ');
 }
@@ -234,7 +234,7 @@ std::string indentationFor(std::string_view text, std::size_t offset,
 bool validPosition(std::string_view text, const DocumentPosition& position,
                     int tabWidth) {
     const auto resolved =
-        resolveDocumentPosition(text, position.byte_offset, tabWidth);
+        resolveDocumentPosition(text, position.byteOffset, tabWidth);
     return resolved.has_value() && *resolved == position;
 }
 
@@ -301,15 +301,15 @@ TextInputResult applyTextInput(const DocumentSnapshot& document,
         return failure(TextInputError::Diff,
                        "text input is unavailable in diff mode");
     }
-    if (settings.indent_width < 1 || settings.indent_width > 16 ||
-        (settings.indent_style != IndentStyle::Spaces &&
-         settings.indent_style != IndentStyle::Tabs) ||
-        static_cast<std::uint8_t>(settings.line_ending) >
+    if (settings.indentWidth < 1 || settings.indentWidth > 16 ||
+        (settings.indentStyle != IndentStyle::Spaces &&
+         settings.indentStyle != IndentStyle::Tabs) ||
+        static_cast<std::uint8_t>(settings.lineEnding) >
             static_cast<std::uint8_t>(LineEnding::Mixed)) {
         return failure(TextInputError::InvalidSettings,
                        "text input settings are outside their valid range");
     }
-    const auto tabWidth = static_cast<int>(settings.indent_width);
+    const auto tabWidth = static_cast<int>(settings.indentWidth);
     for (const auto& selection : selections.items()) {
         if (!validPosition(document.text, selection.anchor, tabWidth) ||
             !validPosition(document.text, selection.active, tabWidth)) {
@@ -330,9 +330,9 @@ TextInputResult applyTextInput(const DocumentSnapshot& document,
     const auto boundaries = graphemeBoundaries(document.text, tabWidth);
     for (const auto& selection : selections.items()) {
         const auto anchor =
-            static_cast<std::size_t>(selection.anchor.byte_offset.value());
+            static_cast<std::size_t>(selection.anchor.byteOffset.value());
         const auto active =
-            static_cast<std::size_t>(selection.active.byte_offset.value());
+            static_cast<std::size_t>(selection.active.byteOffset.value());
         if (!std::binary_search(boundaries.begin(), boundaries.end(), anchor) ||
             !std::binary_search(boundaries.begin(), boundaries.end(), active)) {
             return failure(TextInputError::InvalidSelection,
@@ -346,18 +346,18 @@ TextInputResult applyTextInput(const DocumentSnapshot& document,
     for (std::size_t action = 0; action < selections.items().size(); ++action) {
         const auto& selection = selections.items()[action];
         auto start =
-            static_cast<std::size_t>(selection.lower().byte_offset.value());
+            static_cast<std::size_t>(selection.lower().byteOffset.value());
         auto end =
-            static_cast<std::size_t>(selection.upper().byte_offset.value());
+            static_cast<std::size_t>(selection.upper().byteOffset.value());
         std::string inserted;
 
         if (command == TextInputCommand::Insert) {
             inserted = arguments.text;
         } else if (command == TextInputCommand::Newline) {
             const auto active =
-                static_cast<std::size_t>(selection.active.byte_offset.value());
+                static_cast<std::size_t>(selection.active.byteOffset.value());
             inserted = terminatorFor(document.text, active,
-                                      settings.line_ending) +
+                                      settings.lineEnding) +
                        indentationFor(document.text, active, settings);
         } else if (selection.isCaret()) {
             switch (command) {

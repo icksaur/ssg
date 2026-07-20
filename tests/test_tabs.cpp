@@ -13,20 +13,20 @@ using namespace std::chrono_literals;
 
 class FakeLifecycle final : public ssg::TabLifecycle {
 public:
-    std::vector<ssg::TabId> fail_close;
-    bool fail_reopen = false;
-    int close_calls = 0;
-    int reopen_calls = 0;
+    std::vector<ssg::TabId> failClose;
+    bool failReopen = false;
+    int closeCalls = 0;
+    int reopenCalls = 0;
 
     ssg::TabLifecycleResult close(
         const ssg::TabState& tab,
         std::chrono::milliseconds durabilityTimeout) override {
-        ++close_calls;
+        ++closeCalls;
         if (durabilityTimeout <= 0ms) {
             return {ssg::TabError::DurabilityFailed, "invalid timeout"};
         }
-        if (std::find(fail_close.begin(), fail_close.end(), tab.id) !=
-            fail_close.end()) {
+        if (std::find(failClose.begin(), failClose.end(), tab.id) !=
+            failClose.end()) {
             return {ssg::TabError::DurabilityFailed, "durability failed"};
         }
         return {ssg::TabError::None, {},
@@ -38,8 +38,8 @@ public:
     ssg::TabLifecycleResult reopen(
         const ssg::TabState&,
         const ssg::RecoveryRecordId&) override {
-        ++reopen_calls;
-        if (fail_reopen) {
+        ++reopenCalls;
+        if (failReopen) {
             return {ssg::TabError::LifecycleFailed, "restore failed"};
         }
         return {};
@@ -120,7 +120,7 @@ TEST(activeClosePrefersRightThenLeftAndDirtyFailureIsAtomic) {
     const auto b = openSaved(tabs, 2, "b", true);
     const auto c = openSaved(tabs, 3, "c");
     (void)tabs.activate(b);
-    lifecycle.fail_close.push_back(b);
+    lifecycle.failClose.push_back(b);
     const auto before = tabs.viewState();
 
     const auto closeFailure = tabs.close(b, 100ms);
@@ -128,7 +128,7 @@ TEST(activeClosePrefersRightThenLeftAndDirtyFailureIsAtomic) {
     ASSERT_EQ(tabs.viewState(), before);
     ASSERT_EQ(tabs.recentlyClosedCount(), std::size_t{0});
 
-    lifecycle.fail_close.clear();
+    lifecycle.failClose.clear();
     ASSERT_TRUE(tabs.close(b, 100ms).accepted());
     ASSERT_EQ(tabs.viewState().active, std::optional{c});
     ASSERT_TRUE(tabs.close(c, 100ms).accepted());
@@ -143,7 +143,7 @@ TEST(batchCloseIsLeftToRightBestEffort) {
     const auto c = openSaved(tabs, 3, "c");
     const auto d = openSaved(tabs, 4, "d", true);
     (void)tabs.activate(c);
-    lifecycle.fail_close = {b, d};
+    lifecycle.failClose = {b, d};
 
     const auto result = tabs.closeOthers(a, 100ms);
     ASSERT_TRUE(result.accepted());
@@ -164,11 +164,11 @@ TEST(reopenIsLifoRetryableAndRestoresPositionAndActivation) {
     (void)tabs.close(b, 100ms);
     (void)tabs.close(c, 100ms);
 
-    lifecycle.fail_reopen = true;
+    lifecycle.failReopen = true;
     ASSERT_EQ(tabs.reopenClosed().error, ssg::TabError::LifecycleFailed);
     ASSERT_EQ(tabs.recentlyClosedCount(), std::size_t{2});
 
-    lifecycle.fail_reopen = false;
+    lifecycle.failReopen = false;
     ASSERT_EQ(tabs.reopenClosed().tab, std::optional{c});
     ASSERT_EQ(tabs.viewState().active, std::optional{c});
     ASSERT_EQ(tabs.reopenClosed().tab, std::optional{b});
@@ -180,7 +180,7 @@ TEST(reopenIsLifoRetryableAndRestoresPositionAndActivation) {
 
 TEST(recentlyClosedEvictsOldestAtConfiguredBound) {
     FakeLifecycle lifecycle;
-    ssg::TabManager tabs{lifecycle, {.maximum_recently_closed = 2}};
+    ssg::TabManager tabs{lifecycle, {.maximumRecentlyClosed = 2}};
     const auto a = openSaved(tabs, 1, "a");
     const auto b = openSaved(tabs, 2, "b");
     const auto c = openSaved(tabs, 3, "c");
@@ -205,7 +205,7 @@ TEST(reopenActivatesAnIdentityAlreadyOpenedByAnotherPath) {
     ASSERT_EQ(tabs.viewState().tabs.size(), std::size_t{1});
     ASSERT_EQ(tabs.viewState().active, std::optional{replacement});
     ASSERT_EQ(tabs.recentlyClosedCount(), std::size_t{0});
-    ASSERT_EQ(lifecycle.reopen_calls, 0);
+    ASSERT_EQ(lifecycle.reopenCalls, 0);
     const auto delta = ssg::deriveTabDelta({}, tabs.viewState());
     ASSERT_TRUE(ssg::replayTabDelta({}, delta).accepted());
 }

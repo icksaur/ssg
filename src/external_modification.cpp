@@ -71,10 +71,10 @@ ExternalModificationDelta deriveExternalModificationDelta(
 ExternalDeltaReplayResult replayExternalModificationDelta(
     const ExternalModificationViewState& base,
     const ExternalModificationDelta& delta) {
-    if (base.revision != delta.base_revision) {
+    if (base.revision != delta.baseRevision) {
         return {std::nullopt, ExternalDeltaError::StaleRevision};
     }
-    if (delta.revision < delta.base_revision) {
+    if (delta.revision < delta.baseRevision) {
         return {std::nullopt, ExternalDeltaError::MalformedDelta};
     }
 
@@ -102,7 +102,7 @@ class ExternalModificationFlow::Impl {
 public:
     struct PendingChange {
         ExternalDocumentView view;
-        std::optional<std::string> disk_content;
+        std::optional<std::string> diskContent;
     };
 
     Impl(RecoveryActions& recovery, DiffModel& diff)
@@ -111,7 +111,7 @@ public:
     ExternalModificationResult processEvent(
         ExternalEventInput input,
         std::optional<JournalDocument>& document) {
-        if (input.event.sequence <= last_watcher_sequence_) {
+        if (input.event.sequence <= lastWatcherSequence_) {
             return failure(ExternalModificationError::StaleEvent);
         }
         if (input.event.kind == WatchEventKind::Overflow) {
@@ -119,14 +119,14 @@ public:
         }
         if (input.event.path.empty() ||
             (input.event.kind == WatchEventKind::Rename &&
-             !input.event.previous_path.has_value())) {
+             !input.event.previousPath.has_value())) {
             return failure(ExternalModificationError::InvalidEvent);
         }
         if (!document.has_value()) {
             return failure(ExternalModificationError::DocumentMissing);
         }
         if (requiresContent(input.event.kind) &&
-            !input.disk_content.has_value()) {
+            !input.diskContent.has_value()) {
             return failure(ExternalModificationError::ContentRequired);
         }
 
@@ -147,7 +147,7 @@ public:
                 stagedPending.erase(existing);
             }
         } else if (!stagedDocument.dirty && !removed) {
-            stagedDocument.utf8_content = *input.disk_content;
+            stagedDocument.utf8Content = *input.diskContent;
             stagedDocument.dirty = false;
             if (input.event.kind == WatchEventKind::Rename) {
                 stagedDocument.key = JournalDocumentKey::saved(
@@ -171,7 +171,7 @@ public:
                               ExternalAction::Reload,
                               ExternalAction::KeepBuffer,
                               ExternalAction::OpenDiff}};
-            PendingChange change{std::move(view), input.disk_content};
+            PendingChange change{std::move(view), input.diskContent};
             if (existing == stagedPending.end()) {
                 stagedPending.push_back(std::move(change));
             } else {
@@ -184,18 +184,18 @@ public:
             diffKind(input.event.kind),
             input.id,
             input.event.path,
-            input.event.previous_path,
-            input.disk_content};
+            input.event.previousPath,
+            input.diskContent};
         const auto diffResult = diff_.applyNonGitEvent(
             std::move(diffEvent), Revision{input.event.sequence});
 
         if (!saveEvent && !document->dirty && !removed) {
             document->key = std::move(stagedDocument.key);
-            document->utf8_content.swap(stagedDocument.utf8_content);
+            document->utf8Content.swap(stagedDocument.utf8Content);
             document->dirty = false;
         }
         pending_.swap(stagedPending);
-        last_watcher_sequence_ = input.event.sequence;
+        lastWatcherSequence_ = input.event.sequence;
         advanceRevision();
         return {ExternalModificationError::None, publishStatus,
                 diffResult.accepted(), std::nullopt};
@@ -207,7 +207,7 @@ public:
         if (pending == pending_.end()) {
             return failure(ExternalModificationError::NoExternalChange);
         }
-        if (!pending->disk_content.has_value()) {
+        if (!pending->diskContent.has_value()) {
             return failure(ExternalModificationError::ContentRequired);
         }
         if (!document.has_value()) {
@@ -218,7 +218,7 @@ public:
             JournalDocumentKey::saved(pending->view.path.generic_string()),
             document->mode,
             false,
-            *pending->disk_content};
+            *pending->diskContent};
         auto result =
             recovery_.reloadDocument(document, std::move(replacement));
         if (!result.accepted()) {
@@ -292,7 +292,7 @@ private:
 
     RecoveryActions& recovery_;
     DiffModel& diff_;
-    std::uint64_t last_watcher_sequence_ = 0;
+    std::uint64_t lastWatcherSequence_ = 0;
     Revision revision_{0};
     std::vector<PendingChange> pending_;
 };

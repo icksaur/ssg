@@ -15,7 +15,7 @@ namespace ssg {
 
 struct LspWorkspaceEditCommandDescriptor {
     std::string_view id;
-    bool user_navigation = false;
+    bool userNavigation = false;
     friend bool operator==(const LspWorkspaceEditCommandDescriptor&,
                            const LspWorkspaceEditCommandDescriptor&) = default;
 };
@@ -129,8 +129,8 @@ struct LspWorkspaceEditRecoveryOperation {
     LspWorkspaceEditRecoveryKind kind =
         LspWorkspaceEditRecoveryKind::DocumentText;
     std::string uri;
-    std::string secondary_uri;
-    Revision expected_revision{0};
+    std::string secondaryUri;
+    Revision expectedRevision{0};
     std::string text;
     LspWorkspaceFileNode node;
     bool recursive = false;
@@ -155,7 +155,7 @@ struct LspWorkspaceEditApplyResult {
 };
 
 struct LspWorkspaceEditConfig {
-    std::size_t maximum_json_depth = 64;
+    std::size_t maximumJsonDepth = 64;
 };
 
 class LspWorkspaceEditApplier {
@@ -185,11 +185,11 @@ enum class LspRenameError : std::uint8_t {
 };
 
 struct LspRenameRequestResult {
-    std::uint64_t request_id = 0;
+    std::uint64_t requestId = 0;
     LspRenameError error = LspRenameError::None;
     std::string message;
     [[nodiscard]] bool accepted() const noexcept {
-        return request_id != 0 && error == LspRenameError::None;
+        return requestId != 0 && error == LspRenameError::None;
     }
 };
 
@@ -204,7 +204,7 @@ enum class LspRenamePublishResult : std::uint8_t {
 };
 
 struct LspRenamePublication {
-    std::uint64_t request_id = 0;
+    std::uint64_t requestId = 0;
     LspRenamePublishResult result = LspRenamePublishResult::Accepted;
     std::string message;
     std::optional<LspWorkspaceEditRecoveryRecord> recovery;
@@ -244,7 +244,7 @@ private:
     LspSyncClient* client_ = nullptr;
     LspWorkspaceEditApplier* applier_ = nullptr;
     std::map<std::uint64_t, Pending> pending_;
-    std::uint64_t active_id_ = 0;
+    std::uint64_t activeId_ = 0;
 };
 
 } // namespace ssg

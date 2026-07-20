@@ -109,7 +109,7 @@ struct SettingCompensation {
     SettingKey key = SettingKey::IndentWidth;
     std::optional<SettingValue> expected;
     std::optional<SettingValue> restore;
-    std::uint64_t expected_generation = 0;
+    std::uint64_t expectedGeneration = 0;
 
     friend bool operator==(const SettingCompensation&, const SettingCompensation&) = default;
 };
@@ -185,15 +185,15 @@ private:
     struct ScopeData {
         std::array<std::optional<SettingValue>, kSettingKeyCount> values;
         std::array<std::uint64_t, kSettingKeyCount> generations{};
-        std::vector<std::string> unknown_fields;
+        std::vector<std::string> unknownFields;
     };
 
     std::array<ScopeData, 5> scopes_;
 };
 
 struct SettingsPaths {
-    std::filesystem::path user_file;
-    std::filesystem::path workspace_file;
+    std::filesystem::path userFile;
+    std::filesystem::path workspaceFile;
 };
 
 [[nodiscard]] SettingsPaths linuxSettingsPaths(

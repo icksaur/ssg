@@ -41,7 +41,7 @@ inline CanonicalState canonical(ssg::SessionSnapshot const& snapshot) {
         sections.tabs.tabs.empty() ? nullptr : &sections.tabs.tabs.front();
     bool workspace_open = false;
     bool word_wrap = false;
-    for (auto const& node : sections.shell.accessibility_nodes) {
+    for (auto const& node : sections.shell.accessibilityNodes) {
         workspace_open =
             workspace_open || node.label.starts_with("Workspace ");
         word_wrap = word_wrap || node.label == "Word wrap on";
@@ -49,13 +49,13 @@ inline CanonicalState canonical(ssg::SessionSnapshot const& snapshot) {
     return {
         snapshot.revision(),
         sections.document.text,
-        sections.clipboard.plain_text,
+        sections.clipboard.plainText,
         tab ? tab->label : std::string{},
         sections.selection.selections.items().size(),
-        sections.selection.first_visual_row,
+        sections.selection.firstVisualRow,
         tab ? tab->mode : ssg::DocumentMode::Edit,
         tab ? tab->kind : ssg::TabKind::Document,
-        sections.follow_edits.mode,
+        sections.followEdits.mode,
         workspace_open,
         tab ? tab->dirty : false,
         tab != nullptr,
@@ -70,16 +70,16 @@ inline void apply(CanonicalState& state, ssg::SessionDelta const& delta) {
         auto const& document = *delta.document();
         auto const start = static_cast<std::size_t>(document.start.value());
         state.text.replace(start,
-                           static_cast<std::size_t>(document.erased_bytes),
-                           document.inserted_text);
+                           static_cast<std::size_t>(document.erasedBytes),
+                           document.insertedText);
     }
     if (delta.selection().replacement) {
         auto const& selection = *delta.selection().replacement;
         state.selection_count = selection.selections.items().size();
-        state.first_row = selection.first_visual_row;
+        state.first_row = selection.firstVisualRow;
     }
     if (delta.clipboard().replacement)
-        state.clipboard = delta.clipboard().replacement->plain_text;
+        state.clipboard = delta.clipboard().replacement->plainText;
     if (delta.tabs().state) {
         auto const& tabs = *delta.tabs().state;
         auto const* tab = tabs.tabs.empty() ? nullptr : &tabs.tabs.front();
@@ -95,7 +95,7 @@ inline void apply(CanonicalState& state, ssg::SessionDelta const& delta) {
         state.workspace_open = false;
         state.word_wrap = false;
         for (auto const& node :
-             delta.shell().replacement->accessibility_nodes) {
+             delta.shell().replacement->accessibilityNodes) {
             state.workspace_open =
                 state.workspace_open || node.label.starts_with("Workspace ");
             state.word_wrap = state.word_wrap || node.label == "Word wrap on";
@@ -206,7 +206,7 @@ struct FixtureState {
             auto const& dropped =
                 std::any_cast<ssg::DroppedContentArguments const&>(payload);
             text.assign(dropped.bytes.begin(), dropped.bytes.end());
-            label = dropped.suggested_label;
+            label = dropped.suggestedLabel;
             mode = ssg::DocumentMode::Edit;
             tab_kind = ssg::TabKind::Document;
             tab_open = true;

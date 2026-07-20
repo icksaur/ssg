@@ -241,7 +241,7 @@ ScratchSession ScratchSession::create(
 std::optional<ScratchRemnantClaim>
 ScratchSession::claimNewestRestorable() const {
     std::vector<std::filesystem::path> candidates;
-    for (const auto& entry : std::filesystem::directory_iterator(sessions_path_)) {
+    for (const auto& entry : std::filesystem::directory_iterator(sessionsPath_)) {
         std::error_code statusError;
         const bool isDirectory = entry.is_directory(statusError);
         if (statusError == std::errc::no_such_file_or_directory) {

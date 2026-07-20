@@ -262,7 +262,7 @@ TEST(findUpdateQueryProjectsMatchesAndPromptAndNextCycles) {
     auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    auto const& find = snapshot->sections().find_replace;
+    auto const& find = snapshot->sections().findReplace;
     ASSERT_TRUE(find.open);
     ASSERT_EQ(find.query, std::string{"cat"});
     ASSERT_EQ(find.matches.size(), std::size_t{3});
@@ -274,7 +274,7 @@ TEST(findUpdateQueryProjectsMatchesAndPromptAndNextCycles) {
     ASSERT_EQ(find.matches[2].end.value(), std::uint64_t{11});
 
     // The find prompt projects the controller query and the 1-based match count.
-    auto const& prompt = snapshot->sections().prompt_status.prompt;
+    auto const& prompt = snapshot->sections().promptStatus.prompt;
     ASSERT_TRUE(prompt.has_value());
     if (prompt) {
         std::string queryValue;
@@ -292,7 +292,7 @@ TEST(findUpdateQueryProjectsMatchesAndPromptAndNextCycles) {
             (void)runtime.dispatch(ssg::ClientId{1}, {"find.next", runtime.revision(), {}});
         }
         auto snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
-        return snap->sections().find_replace.active_match.value_or(999);
+        return snap->sections().findReplace.activeMatch.value_or(999);
     };
     ASSERT_EQ(activeAfter(1), std::size_t{1});
     ASSERT_EQ(activeAfter(1), std::size_t{2});
@@ -335,9 +335,9 @@ TEST(findCloseDoesNotCancelAnUnrelatedPrompt) {
     auto before = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(before.has_value());
     if (before) {
-        ASSERT_TRUE(before->sections().prompt_status.prompt.has_value());
-        if (before->sections().prompt_status.prompt) {
-            ASSERT_EQ(before->sections().prompt_status.prompt->kind, ssg::PromptKind::Palette);
+        ASSERT_TRUE(before->sections().promptStatus.prompt.has_value());
+        if (before->sections().promptStatus.prompt) {
+            ASSERT_EQ(before->sections().promptStatus.prompt->kind, ssg::PromptKind::Palette);
         }
     }
 
@@ -347,9 +347,9 @@ TEST(findCloseDoesNotCancelAnUnrelatedPrompt) {
     auto after = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(after.has_value());
     if (after) {
-        ASSERT_TRUE(after->sections().prompt_status.prompt.has_value());
-        if (after->sections().prompt_status.prompt) {
-            ASSERT_EQ(after->sections().prompt_status.prompt->kind, ssg::PromptKind::Palette);
+        ASSERT_TRUE(after->sections().promptStatus.prompt.has_value());
+        if (after->sections().promptStatus.prompt) {
+            ASSERT_EQ(after->sections().promptStatus.prompt->kind, ssg::PromptKind::Palette);
         }
     }
 }
@@ -372,7 +372,7 @@ TEST(findClosesWhenSwitchingToADifferentDocument) {
     {
         auto snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
         ASSERT_TRUE(snap.has_value());
-        if (snap) ASSERT_EQ(snap->sections().find_replace.matches.size(), std::size_t{3});
+        if (snap) ASSERT_EQ(snap->sections().findReplace.matches.size(), std::size_t{3});
     }
 
     // Switching to another freshly opened document (which shares revision 1 with
@@ -381,8 +381,8 @@ TEST(findClosesWhenSwitchingToADifferentDocument) {
     auto after = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(after.has_value());
     if (after) {
-        ASSERT_FALSE(after->sections().find_replace.open);
-        ASSERT_FALSE(after->sections().prompt_status.prompt.has_value());
+        ASSERT_FALSE(after->sections().findReplace.open);
+        ASSERT_FALSE(after->sections().promptStatus.prompt.has_value());
     }
 }
 
@@ -408,7 +408,7 @@ TEST(findScrollsTheViewportToFollowTheActiveMatch) {
     {
         auto snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
         ASSERT_TRUE(snap.has_value());
-        if (snap) ASSERT_EQ(snap->client().viewport.first_visual_row, std::uint32_t{0});
+        if (snap) ASSERT_EQ(snap->client().viewport.firstVisualRow, std::uint32_t{0});
     }
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.open", runtime.revision(), {}}).accepted());
@@ -420,10 +420,10 @@ TEST(findScrollsTheViewportToFollowTheActiveMatch) {
     ASSERT_TRUE(snap.has_value());
     if (!snap) return;
     auto const& viewport = snap->client().viewport;
-    ASSERT_TRUE(viewport.first_visual_row > std::uint32_t{0});
+    ASSERT_TRUE(viewport.firstVisualRow > std::uint32_t{0});
     bool matchLineVisible = false;
-    for (auto const& row : viewport.visible_rows) {
-        if (row.logical_line == 40) matchLineVisible = true;
+    for (auto const& row : viewport.visibleRows) {
+        if (row.logicalLine == 40) matchLineVisible = true;
     }
     ASSERT_TRUE(matchLineVisible);
 }
@@ -448,10 +448,10 @@ TEST(replaceCurrentReplacesActiveMatchAndResetsToFirst) {
         auto snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
         ASSERT_TRUE(snap.has_value());
         if (snap) {
-            ASSERT_EQ(snap->sections().find_replace.replacement, std::string{"dog"});
-            ASSERT_EQ(snap->sections().find_replace.matches.size(), std::size_t{3});
+            ASSERT_EQ(snap->sections().findReplace.replacement, std::string{"dog"});
+            ASSERT_EQ(snap->sections().findReplace.matches.size(), std::size_t{3});
             // The replace prompt row 1 projects the replacement.
-            auto const& prompt = snap->sections().prompt_status.prompt;
+            auto const& prompt = snap->sections().promptStatus.prompt;
             ASSERT_TRUE(prompt.has_value());
             if (prompt) {
                 std::string replacementValue;
@@ -471,11 +471,11 @@ TEST(replaceCurrentReplacesActiveMatchAndResetsToFirst) {
     auto after = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(after.has_value());
     if (after) {
-        auto const& fr = after->sections().find_replace;
+        auto const& fr = after->sections().findReplace;
         ASSERT_EQ(fr.matches.size(), std::size_t{2});
         // Reset-to-first: active index is 0, now pointing at the match at [4,7).
-        ASSERT_TRUE(fr.active_match.has_value());
-        if (fr.active_match) ASSERT_EQ(*fr.active_match, std::size_t{0});
+        ASSERT_TRUE(fr.activeMatch.has_value());
+        if (fr.activeMatch) ASSERT_EQ(*fr.activeMatch, std::size_t{0});
         if (fr.matches.size() == 2) {
             ASSERT_EQ(fr.matches[0].begin.value(), std::uint64_t{4});
             ASSERT_EQ(fr.matches[0].end.value(), std::uint64_t{7});
@@ -503,8 +503,8 @@ TEST(replaceAllReplacesEveryMatch) {
     auto after = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(after.has_value());
     if (after) {
-        ASSERT_TRUE(after->sections().find_replace.matches.empty());
-        ASSERT_FALSE(after->sections().find_replace.active_match.has_value());
+        ASSERT_TRUE(after->sections().findReplace.matches.empty());
+        ASSERT_FALSE(after->sections().findReplace.activeMatch.has_value());
     }
 }
 
@@ -531,7 +531,7 @@ TEST(replaceCommandsAreBenignNoOpsWithoutAReplacePrompt) {
     ASSERT_EQ(runtime.activeDocumentText(), std::string{"cat cat cat"});
     auto snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snap.has_value());
-    if (snap) ASSERT_TRUE(snap->sections().find_replace.replacement.empty());
+    if (snap) ASSERT_TRUE(snap->sections().findReplace.replacement.empty());
 }
 
 TEST(findToggleCaseFlipsOptionAndChangesMatchesAndGuardsWhenNoPrompt) {
@@ -553,7 +553,7 @@ TEST(findToggleCaseFlipsOptionAndChangesMatchesAndGuardsWhenNoPrompt) {
     {
         auto snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
         ASSERT_TRUE(snap.has_value());
-        if (snap) ASSERT_FALSE(snap->sections().find_replace.options.case_sensitive);
+        if (snap) ASSERT_FALSE(snap->sections().findReplace.options.caseSensitive);
     }
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.open", runtime.revision(), {}}).accepted());
@@ -562,7 +562,7 @@ TEST(findToggleCaseFlipsOptionAndChangesMatchesAndGuardsWhenNoPrompt) {
         // Case-insensitive (default): all three "cat"s match.
         auto snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
         ASSERT_TRUE(snap.has_value());
-        if (snap) ASSERT_EQ(snap->sections().find_replace.matches.size(), std::size_t{3});
+        if (snap) ASSERT_EQ(snap->sections().findReplace.matches.size(), std::size_t{3});
     }
 
     // Toggle case sensitivity: now only the lowercase "cat" matches.
@@ -570,8 +570,8 @@ TEST(findToggleCaseFlipsOptionAndChangesMatchesAndGuardsWhenNoPrompt) {
     auto snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snap.has_value());
     if (snap) {
-        ASSERT_TRUE(snap->sections().find_replace.options.case_sensitive);
-        ASSERT_EQ(snap->sections().find_replace.matches.size(), std::size_t{1});
+        ASSERT_TRUE(snap->sections().findReplace.options.caseSensitive);
+        ASSERT_EQ(snap->sections().findReplace.matches.size(), std::size_t{1});
     }
 }
 
@@ -594,7 +594,7 @@ TEST(replaceOpenPreservesFindOptions) {
     {
         auto snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
         ASSERT_TRUE(snap.has_value());
-        if (snap) ASSERT_EQ(snap->sections().find_replace.matches.size(), std::size_t{1});
+        if (snap) ASSERT_EQ(snap->sections().findReplace.matches.size(), std::size_t{1});
     }
     // Opening replace must NOT widen the match population: options carry over so
     // replace.all acts on exactly what the user reviewed.
@@ -602,8 +602,8 @@ TEST(replaceOpenPreservesFindOptions) {
     auto snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snap.has_value());
     if (snap) {
-        ASSERT_TRUE(snap->sections().find_replace.options.case_sensitive);
-        ASSERT_EQ(snap->sections().find_replace.matches.size(), std::size_t{1});
+        ASSERT_TRUE(snap->sections().findReplace.options.caseSensitive);
+        ASSERT_EQ(snap->sections().findReplace.matches.size(), std::size_t{1});
     }
 }
 
@@ -624,8 +624,8 @@ TEST(findCloseDismissesTheReplacePrompt) {
         auto snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
         ASSERT_TRUE(snap.has_value());
         if (snap) {
-            ASSERT_TRUE(snap->sections().find_replace.open);
-            ASSERT_TRUE(snap->sections().prompt_status.prompt.has_value());
+            ASSERT_TRUE(snap->sections().findReplace.open);
+            ASSERT_TRUE(snap->sections().promptStatus.prompt.has_value());
         }
     }
     // A single find.close must close the controller AND dismiss the replace
@@ -634,8 +634,8 @@ TEST(findCloseDismissesTheReplacePrompt) {
     auto snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snap.has_value());
     if (snap) {
-        ASSERT_FALSE(snap->sections().find_replace.open);
-        ASSERT_FALSE(snap->sections().prompt_status.prompt.has_value());
+        ASSERT_FALSE(snap->sections().findReplace.open);
+        ASSERT_FALSE(snap->sections().promptStatus.prompt.has_value());
     }
 }
 
@@ -705,11 +705,11 @@ TEST(editRevealsThePrimaryCaretFreeScrollDoesNotAndFollowsPrimary) {
     const ssg::ViewportDimensions dims{80, 24};
     auto firstRow = [&] {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
-        return snap ? snap->client().viewport.first_visual_row : 0U;
+        return snap ? snap->client().viewport.firstVisualRow : 0U;
     };
     auto maximum = [&] {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
-        return snap ? snap->client().viewport.scrollbar.maximum_first_row : 0U;
+        return snap ? snap->client().viewport.scrollbar.maximumFirstRow : 0U;
     };
     // Snapshot once to populate the pane-height cache; the caret is at the top.
     ASSERT_EQ(firstRow(), 0U);
@@ -774,7 +774,7 @@ TEST(undoAndPasteRevealTheCaret) {
     const ssg::ViewportDimensions dims{80, 24};
     auto firstRow = [&] {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
-        return snap ? snap->client().viewport.first_visual_row : 0U;
+        return snap ? snap->client().viewport.firstVisualRow : 0U;
     };
     ASSERT_EQ(firstRow(), 0U);
 
@@ -856,7 +856,7 @@ TEST(replaceAllRevealsTheCaretWhenNoMatchRemains) {
     const ssg::ViewportDimensions dims{80, 24};
     auto firstRow = [&] {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
-        return snap ? snap->client().viewport.first_visual_row : 0U;
+        return snap ? snap->client().viewport.firstVisualRow : 0U;
     };
     ASSERT_EQ(firstRow(), 0U);  // caret at top; the match is off-screen far below
 

@@ -12,10 +12,10 @@
 namespace ssg {
 
 struct ScratchStoreConfig {
-    std::uintmax_t maximum_bytes = 256U * 1024U * 1024U;
-    std::chrono::seconds maximum_age = std::chrono::hours{24 * 30};
-    std::uintmax_t compaction_threshold_bytes = 4U * 1024U * 1024U;
-    std::chrono::milliseconds durability_target{100};
+    std::uintmax_t maximumBytes = 256U * 1024U * 1024U;
+    std::chrono::seconds maximumAge = std::chrono::hours{24 * 30};
+    std::uintmax_t compactionThresholdBytes = 4U * 1024U * 1024U;
+    std::chrono::milliseconds durabilityTarget{100};
 };
 
 enum class ScratchDurability {
@@ -26,16 +26,16 @@ enum class ScratchDurability {
 
 struct ScratchDurabilityState {
     ScratchDurability kind = ScratchDurability::Durable;
-    std::uint64_t accepted_generation = 0;
-    std::uint64_t durable_generation = 0;
+    std::uint64_t acceptedGeneration = 0;
+    std::uint64_t durableGeneration = 0;
     bool overdue = false;
     std::string failure;
 };
 
 struct ScratchQuotaResult {
-    std::vector<std::string> evicted_session_ids;
-    std::uintmax_t remaining_bytes = 0;
-    bool within_byte_quota = true;
+    std::vector<std::string> evictedSessionIds;
+    std::uintmax_t remainingBytes = 0;
+    bool withinByteQuota = true;
 };
 
 class ScratchStorage {

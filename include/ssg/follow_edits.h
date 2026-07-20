@@ -25,8 +25,8 @@ enum class NavigationClass : std::uint8_t {
 };
 
 struct FollowScrollOffset {
-    std::uint64_t first_row = 0;
-    std::uint64_t first_column = 0;
+    std::uint64_t firstRow = 0;
+    std::uint64_t firstColumn = 0;
     friend bool operator==(const FollowScrollOffset&,
                            const FollowScrollOffset&) = default;
 };
@@ -35,8 +35,8 @@ struct FollowTarget {
     DiffFileId id;
     std::filesystem::path path;
     bool deleted = false;
-    std::size_t newest_hunk_line = 0;
-    Revision source_revision{0};
+    std::size_t newestHunkLine = 0;
+    Revision sourceRevision{0};
     friend bool operator==(const FollowTarget&, const FollowTarget&) = default;
 };
 
@@ -51,16 +51,16 @@ struct FollowClientView {
 struct FollowEditsViewState {
     std::uint64_t generation = 0;
     FollowMode mode = FollowMode::Following;
-    PaneId active_pane;
-    std::optional<FollowTarget> active_target;
-    std::vector<FollowTarget> queued_targets;
+    PaneId activePane;
+    std::optional<FollowTarget> activeTarget;
+    std::vector<FollowTarget> queuedTargets;
     std::vector<FollowClientView> clients;
     friend bool operator==(const FollowEditsViewState&,
                            const FollowEditsViewState&) = default;
 };
 
 struct FollowEditsDelta {
-    std::uint64_t base_generation = 0;
+    std::uint64_t baseGeneration = 0;
     std::uint64_t generation = 0;
     std::optional<FollowEditsViewState> replacement;
     friend bool operator==(const FollowEditsDelta&,
@@ -72,8 +72,8 @@ struct FollowEditsDelta {
 
 struct FollowEditsFooterProjection {
     std::string mode;
-    std::optional<std::string> resume_binding;
-    std::optional<std::string> resume_command;
+    std::optional<std::string> resumeBinding;
+    std::optional<std::string> resumeCommand;
     friend bool operator==(const FollowEditsFooterProjection&,
                            const FollowEditsFooterProjection&) = default;
 };
@@ -102,8 +102,8 @@ private:
 [[nodiscard]] FollowEditsCommandSet followEditsCommandSet();
 
 struct FollowEditsConfig {
-    std::size_t queue_capacity = 16;
-    std::string resume_binding = "follow_edits.resume";
+    std::size_t queueCapacity = 16;
+    std::string resumeBinding = "follow_edits.resume";
 };
 
 enum class FollowEditsError : std::uint8_t {
@@ -153,7 +153,7 @@ private:
 
     FollowEditsConfig config_;
     FollowEditsViewState state_;
-    Revision latest_source_revision_{0};
+    Revision latestSourceRevision_{0};
 };
 
 }  // namespace ssg

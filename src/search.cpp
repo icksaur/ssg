@@ -226,13 +226,13 @@ WorkspaceSearchBatch evaluateWorkspaceSearch(
     const SearchWorkspaceSource& source,
     const WorkspaceSearchRequest& request) {
     WorkspaceSearchBatch batch{.generation = request.generation,
-                               .source_revision = request.source_revision};
+                               .sourceRevision = request.sourceRevision};
     if (request.cancellation.cancelled()) {
         batch.cancelled = true;
         return batch;
     }
-    const auto workspace = source.snapshot(request.source_revision);
-    batch.source_revision = workspace.revision;
+    const auto workspace = source.snapshot(request.sourceRevision);
+    batch.sourceRevision = workspace.revision;
     batch.results =
         rankWorkspace(workspace, request.query, request.cancellation);
     batch.cancelled = request.cancellation.cancelled();
@@ -273,8 +273,8 @@ NavigationHistory::NavigationHistory(std::size_t capacity)
 NavigationTransition NavigationHistory::transition(
     const NavigationTarget& target, NavigationOrigin origin) {
     return {.target = target,
-            .pause_follow_edits = origin == NavigationOrigin::User,
-            .reveal_primary_caret = true};
+            .pauseFollowEdits = origin == NavigationOrigin::User,
+            .revealPrimaryCaret = true};
 }
 
 NavigationTransition NavigationHistory::visit(
@@ -315,7 +315,7 @@ SearchController::SearchController(const SearchWorkspaceSource& workspace,
     : workspace_{workspace}, commands_{commands} {}
 
 void SearchController::openPalette(Revision revision) {
-    state_.palette_open = true;
+    state_.paletteOpen = true;
     state_.revision = revision;
     state_.query.clear();
     state_.mode = SearchMode::Command;
@@ -323,16 +323,16 @@ void SearchController::openPalette(Revision revision) {
 }
 
 void SearchController::closePalette(Revision revision) {
-    state_.palette_open = false;
+    state_.paletteOpen = false;
     state_.revision = revision;
     state_.query.clear();
     state_.results.clear();
-    state_.selected_index.reset();
+    state_.selectedIndex.reset();
 }
 
 void SearchController::updatePaletteQuery(std::string query,
                                             Revision revision) {
-    if (!state_.palette_open) {
+    if (!state_.paletteOpen) {
         return;
     }
     state_.query = std::move(query);
@@ -365,49 +365,49 @@ void SearchController::rankPalette() {
         }
         return left.path < right.path;  // Mirror palette_rank's stable id tiebreak.
     });
-    state_.selected_index =
+    state_.selectedIndex =
         state_.results.empty() ? std::nullopt : std::optional<std::size_t>{0};
 }
 
 void SearchController::selectNext() {
-    if (!state_.selected_index || state_.results.empty()) {
+    if (!state_.selectedIndex || state_.results.empty()) {
         return;
     }
-    *state_.selected_index = (*state_.selected_index + 1) % state_.results.size();
+    *state_.selectedIndex = (*state_.selectedIndex + 1) % state_.results.size();
 }
 
 void SearchController::selectPrevious() {
-    if (!state_.selected_index || state_.results.empty()) {
+    if (!state_.selectedIndex || state_.results.empty()) {
         return;
     }
-    *state_.selected_index =
-        (*state_.selected_index + state_.results.size() - 1) %
+    *state_.selectedIndex =
+        (*state_.selectedIndex + state_.results.size() - 1) %
         state_.results.size();
 }
 
 PaletteExecutionResult SearchController::executePalette() {
-    if (!state_.palette_open || !state_.selected_index ||
-        *state_.selected_index >= state_.results.size()) {
+    if (!state_.paletteOpen || !state_.selectedIndex ||
+        *state_.selectedIndex >= state_.results.size()) {
         return {.accepted = false, .message = "no palette command selected"};
     }
-    return commands_.execute(state_.results[*state_.selected_index].path);
+    return commands_.execute(state_.results[*state_.selectedIndex].path);
 }
 
 WorkspaceSearchRequest SearchController::beginWorkspaceSearch(
     std::string query, Revision sourceRevision) {
     cancelWorkspaceSearch();
     WorkspaceSearchRequest request{
-        .generation = state_.search_generation + 1,
-        .source_revision = sourceRevision,
+        .generation = state_.searchGeneration + 1,
+        .sourceRevision = sourceRevision,
         .query = parseSearchQuery(query)};
     state_.revision = sourceRevision;
     state_.query = std::move(query);
     state_.mode = request.query.mode;
     state_.results.clear();
-    state_.selected_index.reset();
-    state_.search_generation = request.generation;
+    state_.selectedIndex.reset();
+    state_.searchGeneration = request.generation;
     state_.searching = true;
-    active_request_ = request;
+    activeRequest_ = request;
     return request;
 }
 
@@ -417,8 +417,8 @@ WorkspaceSearchBatch SearchController::evaluate(
 }
 
 void SearchController::cancelWorkspaceSearch() noexcept {
-    if (active_request_) {
-        active_request_->cancellation.cancel();
+    if (activeRequest_) {
+        activeRequest_->cancellation.cancel();
         state_.searching = false;
     }
 }
@@ -428,18 +428,18 @@ SearchPublishResult SearchController::publish(
     if (batch.cancelled) {
         return SearchPublishResult::Cancelled;
     }
-    if (!active_request_ || batch.generation != active_request_->generation) {
+    if (!activeRequest_ || batch.generation != activeRequest_->generation) {
         return SearchPublishResult::Superseded;
     }
-    if (batch.source_revision != active_request_->source_revision ||
-        batch.source_revision != currentRevision) {
+    if (batch.sourceRevision != activeRequest_->sourceRevision ||
+        batch.sourceRevision != currentRevision) {
         return SearchPublishResult::StaleRevision;
     }
     state_.results = batch.results;
-    state_.selected_index =
+    state_.selectedIndex =
         state_.results.empty() ? std::nullopt : std::optional<std::size_t>{0};
     state_.searching = false;
-    active_request_.reset();
+    activeRequest_.reset();
     return SearchPublishResult::Accepted;
 }
 
@@ -447,7 +447,7 @@ SearchCommandSet searchCommandSet() { return {}; }
 
 SearchDelta deriveSearchDelta(const SearchViewState& base,
                                 const SearchViewState& target) {
-    return {.base_revision = base.revision,
+    return {.baseRevision = base.revision,
             .revision = target.revision,
             .state = base == target ? std::nullopt
                                     : std::optional<SearchViewState>{target}};
@@ -455,7 +455,7 @@ SearchDelta deriveSearchDelta(const SearchViewState& base,
 
 SearchReplayResult replaySearchDelta(const SearchViewState& base,
                                        const SearchDelta& delta) {
-    if (base.revision != delta.base_revision) {
+    if (base.revision != delta.baseRevision) {
         return {.error = SearchReplayError::StaleRevision};
     }
     if (!delta.state) {

@@ -60,7 +60,7 @@ enum class HistoryError : std::uint8_t {
 
 struct HistoryResult {
     HistoryError error;
-    DocumentError document_error;
+    DocumentError documentError;
     Revision revision;
     std::optional<SelectionSet> selections;
     std::string message;
@@ -71,9 +71,9 @@ struct HistoryResult {
 };
 
 struct HistoryViewState {
-    bool can_undo;
-    bool can_redo;
-    std::uint64_t retained_bytes;
+    bool canUndo;
+    bool canRedo;
+    std::uint64_t retainedBytes;
 
     bool operator==(const HistoryViewState&) const noexcept = default;
 };

@@ -107,11 +107,11 @@ std::string terminatorSummary(std::string_view bytes) {
     if (!decoded.accepted()) {
         std::ostringstream out;
         out << "err:" << static_cast<int>(decoded.error->code) << "@"
-            << decoded.error->utf8_offset;
+            << decoded.error->utf8Offset;
         return out.str();
     }
     int lf = 0, crlf = 0, cr = 0, none = 0;
-    for (auto t : decoded.text->line_terminators) {
+    for (auto t : decoded.text->lineTerminators) {
         switch (t) {
         case ssg::LineTerminator::Lf: ++lf; break;
         case ssg::LineTerminator::Crlf: ++crlf; break;
@@ -180,11 +180,11 @@ std::string capture() {
         auto id = *opened.document;
         auto state = workspace.state(id);
         auto snapshot = workspace.document(id).snapshot();
-        out << " kind=" << kindName(state->content_kind)
+        out << " kind=" << kindName(state->contentKind)
             << " encoding=" << encodingName(state->encoding.encoding)
-            << " bom=" << (state->encoding.had_bom ? 1 : 0)
-            << " eol=" << endingName(state->encoding.line_ending)
-            << " final_nl=" << (state->encoding.final_newline ? 1 : 0)
+            << " bom=" << (state->encoding.hadBom ? 1 : 0)
+            << " eol=" << endingName(state->encoding.lineEnding)
+            << " final_nl=" << (state->encoding.finalNewline ? 1 : 0)
             << " dirty=" << (state->dirty ? 1 : 0)
             << " revision=" << snapshot.revision.value()
             << " mode=" << modeName(snapshot.mode)

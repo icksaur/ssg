@@ -41,7 +41,7 @@ using KeySequence = std::vector<KeyStroke>;
 
 struct KeyBinding {
     KeySequence sequence;
-    std::string command_id;
+    std::string commandId;
     std::string context;
 
     bool operator==(const KeyBinding&) const = default;
@@ -76,7 +76,7 @@ enum class KeymapErrorCode : std::uint8_t {
 
 struct KeymapError {
     KeymapErrorCode code;
-    std::size_t binding_index;
+    std::size_t bindingIndex;
     std::string message;
 
     bool operator==(const KeymapError&) const = default;
@@ -99,7 +99,7 @@ enum class KeymapMatchKind : std::uint8_t { None, Pending, Resolved };
 
 struct KeymapResolution {
     KeymapMatchKind kind = KeymapMatchKind::None;
-    std::string command_id;  // Set iff kind == resolved.
+    std::string commandId;  // Set iff kind == resolved.
 
     bool operator==(const KeymapResolution&) const = default;
 };
@@ -176,7 +176,7 @@ using SemanticInputArguments =
                  ScrollFractionArguments>;
 
 struct SemanticCommand {
-    std::string command_id;
+    std::string commandId;
     SemanticInputArguments arguments;
 
     bool operator==(const SemanticCommand& other) const;
@@ -196,7 +196,7 @@ enum class HitTargetKind : std::uint8_t {
 struct SemanticHitTarget {
     std::uint64_t id;
     HitTargetKind kind;
-    std::string accessible_label;
+    std::string accessibleLabel;
     SemanticCommand command;
 
     bool operator==(const SemanticHitTarget& other) const = default;

@@ -80,7 +80,7 @@ struct Json {
 class JsonParser {
 public:
     JsonParser(std::string_view input, std::size_t maximumDepth)
-        : input_(input), maximum_depth_(maximumDepth) {}
+        : input_(input), maximumDepth_(maximumDepth) {}
 
     [[nodiscard]] std::optional<Json> parse() {
         auto value = parseValue(0);
@@ -168,7 +168,7 @@ private:
     }
     std::optional<Json> parseValue(std::size_t depth) {
         skipSpace();
-        if (depth > maximum_depth_ || offset_ >= input_.size()) {
+        if (depth > maximumDepth_ || offset_ >= input_.size()) {
             return std::nullopt;
         }
         if (input_[offset_] == '"') {
@@ -246,7 +246,7 @@ private:
     }
 
     std::string_view input_;
-    std::size_t maximum_depth_;
+    std::size_t maximumDepth_;
     std::size_t offset_ = 0;
 };
 
@@ -300,19 +300,19 @@ std::optional<std::vector<LspCompletionItem>> parseCompletion(
         if (!label || label->kind != Json::Kind::String) return std::nullopt;
         LspCompletionItem item;
         item.label = label->scalar;
-        item.sort_text = item.label;
-        item.insert_text = item.label;
+        item.sortText = item.label;
+        item.insertText = item.label;
         if (const auto* detail = value.member("detail")) {
             if (detail->kind != Json::Kind::String) return std::nullopt;
             item.detail = detail->scalar;
         }
         if (const auto* sort = value.member("sortText")) {
             if (sort->kind != Json::Kind::String) return std::nullopt;
-            item.sort_text = sort->scalar;
+            item.sortText = sort->scalar;
         }
         if (const auto* insert = value.member("insertText")) {
             if (insert->kind != Json::Kind::String) return std::nullopt;
-            item.insert_text = insert->scalar;
+            item.insertText = insert->scalar;
         }
         if (const auto* edit = value.member("textEdit")) {
             if (edit->kind != Json::Kind::Object) return std::nullopt;
@@ -321,15 +321,15 @@ std::optional<std::vector<LspCompletionItem>> parseCompletion(
             if (!range || !text || text->kind != Json::Kind::String) {
                 return std::nullopt;
             }
-            item.replacement_range = parseRange(*range);
-            if (!item.replacement_range) return std::nullopt;
-            item.insert_text = text->scalar;
+            item.replacementRange = parseRange(*range);
+            if (!item.replacementRange) return std::nullopt;
+            item.insertText = text->scalar;
         }
         items.push_back(std::move(item));
     }
     std::stable_sort(items.begin(), items.end(), [](const auto& left,
                                                     const auto& right) {
-        return left.sort_text < right.sort_text;
+        return left.sortText < right.sortText;
     });
     return items;
 }
@@ -405,12 +405,12 @@ LspFeatureDelta deriveLspFeatureDelta(const LspFeatureViewState& base,
 
 LspFeatureReplayResult replayLspFeatureDelta(
     const LspFeatureViewState& base, const LspFeatureDelta& delta) {
-    if (delta.base_revision != base.revision) {
+    if (delta.baseRevision != base.revision) {
         return {std::nullopt, LspFeatureReplayError::StaleRevision};
     }
-    if (delta.revision < delta.base_revision ||
+    if (delta.revision < delta.baseRevision ||
         (delta.state && delta.state->revision != delta.revision) ||
-        (!delta.state && delta.revision != delta.base_revision)) {
+        (!delta.state && delta.revision != delta.baseRevision)) {
         return {std::nullopt, LspFeatureReplayError::MalformedDelta};
     }
     return {delta.state ? delta.state
@@ -421,9 +421,9 @@ LspFeatureReplayResult replayLspFeatureDelta(
 LspFeatureController::LspFeatureController(LspSyncClient& client,
                                            LspFeatureConfig config)
     : client_(client), config_(config) {
-    if (config.maximum_completion_items == 0 ||
-        config.maximum_navigation_targets == 0 ||
-        config.maximum_json_depth == 0) {
+    if (config.maximumCompletionItems == 0 ||
+        config.maximumNavigationTargets == 0 ||
+        config.maximumJsonDepth == 0) {
         throw std::invalid_argument("LSP feature limits must be non-zero");
     }
 }
@@ -487,7 +487,7 @@ LspFeatureRequestResult LspFeatureController::request(
     pending_.emplace(sent.id,
                      Pending{kind, std::move(uri), revision, generation,
                              Disposition::Active});
-    active_ids_[static_cast<std::size_t>(kind)] = sent.id;
+    activeIds_[static_cast<std::size_t>(kind)] = sent.id;
     if (kind == Kind::Completion) {
         state_.completion.visible = true;
         state_.completion.loading = true;
@@ -502,7 +502,7 @@ void LspFeatureController::supersede(Kind kind) {
 }
 
 void LspFeatureController::cancel(Kind kind, Disposition disposition) {
-    auto& id = active_ids_[static_cast<std::size_t>(kind)];
+    auto& id = activeIds_[static_cast<std::size_t>(kind)];
     if (id == 0) return;
     const auto found = pending_.find(id);
     if (found != pending_.end() &&
@@ -525,7 +525,7 @@ LspFeaturePollResult LspFeatureController::poll(Revision currentRevision) {
         const auto pending = found->second;
         pending_.erase(found);
         auto& active =
-            active_ids_[static_cast<std::size_t>(pending.kind)];
+            activeIds_[static_cast<std::size_t>(pending.kind)];
         if (active == response.id) active = 0;
 
         LspFeaturePublishResult outcome;
@@ -544,20 +544,20 @@ LspFeaturePollResult LspFeatureController::poll(Revision currentRevision) {
                 outcome = LspFeaturePublishResult::StaleRevision;
             } else {
                 const auto root =
-                    JsonParser{response.payload_json, config_.maximum_json_depth}
+                    JsonParser{response.payloadJson, config_.maximumJsonDepth}
                         .parse();
                 const auto* payload = root ? responseResult(*root) : nullptr;
                 bool accepted = false;
                 if (payload && pending.kind == Kind::Completion) {
                     auto items =
                         parseCompletion(*payload,
-                                         config_.maximum_completion_items);
+                                         config_.maximumCompletionItems);
                     if (items) {
                         state_.completion.items = std::move(*items);
                         state_.completion.loading = false;
                         state_.completion.visible =
                             !state_.completion.items.empty();
-                        state_.completion.selected_index =
+                        state_.completion.selectedIndex =
                             state_.completion.items.empty()
                                 ? std::nullopt
                                 : std::optional<std::size_t>{0};
@@ -574,15 +574,15 @@ LspFeaturePollResult LspFeatureController::poll(Revision currentRevision) {
                     }
                 } else if (payload) {
                     auto locations = parseLocations(
-                        *payload, config_.maximum_navigation_targets);
+                        *payload, config_.maximumNavigationTargets);
                     if (locations) {
                         state_.navigation.targets = std::move(*locations);
-                        state_.navigation.selected_index =
+                        state_.navigation.selectedIndex =
                             state_.navigation.targets.empty()
                                 ? std::nullopt
                                 : std::optional<std::size_t>{0};
-                        state_.navigation.user_navigation = true;
-                        state_.navigation.reveal_primary_caret =
+                        state_.navigation.userNavigation = true;
+                        state_.navigation.revealPrimaryCaret =
                             !state_.navigation.targets.empty();
                         accepted = true;
                     }
@@ -624,23 +624,23 @@ LspFeaturePollResult LspFeatureController::poll(Revision currentRevision) {
 
 void LspFeatureController::selectNextCompletion() {
     auto& completion = state_.completion;
-    if (!completion.selected_index || completion.items.empty()) return;
-    completion.selected_index =
-        (*completion.selected_index + 1) % completion.items.size();
+    if (!completion.selectedIndex || completion.items.empty()) return;
+    completion.selectedIndex =
+        (*completion.selectedIndex + 1) % completion.items.size();
     changed();
 }
 
 void LspFeatureController::selectPreviousCompletion() {
     auto& completion = state_.completion;
-    if (!completion.selected_index || completion.items.empty()) return;
-    completion.selected_index =
-        (*completion.selected_index + completion.items.size() - 1) %
+    if (!completion.selectedIndex || completion.items.empty()) return;
+    completion.selectedIndex =
+        (*completion.selectedIndex + completion.items.size() - 1) %
         completion.items.size();
     changed();
 }
 
 LspCompletionAcceptance LspFeatureController::acceptCompletion() {
-    const auto selected = state_.completion.selected_index;
+    const auto selected = state_.completion.selectedIndex;
     if (!selected || *selected >= state_.completion.items.size()) {
         return {false, {}, std::nullopt, "no completion is selected"};
     }
@@ -648,7 +648,7 @@ LspCompletionAcceptance LspFeatureController::acceptCompletion() {
     state_.completion = {};
     state_.status = "completion accepted";
     changed();
-    return {true, item.insert_text, item.replacement_range, {}};
+    return {true, item.insertText, item.replacementRange, {}};
 }
 
 void LspFeatureController::dismissCompletion() {

@@ -35,20 +35,20 @@ struct SessionSnapshotSections {
     SelectionViewState selection;
     HistoryViewState history;
     ClipboardViewState clipboard;
-    PromptStatusViewState prompt_status;
+    PromptStatusViewState promptStatus;
     SearchViewState search;
-    FindReplaceViewState find_replace;
+    FindReplaceViewState findReplace;
     SettingsViewState settings;
     KeymapViewState keymap;
-    TextEncodingViewState text_encoding;
+    TextEncodingViewState textEncoding;
     TabViewState tabs;
     DiffViewState diff;
-    ExternalModificationViewState external_modification;
-    FollowEditsViewState follow_edits;
+    ExternalModificationViewState externalModification;
+    FollowEditsViewState followEdits;
     TreeViewState tree;
     SyntaxViewState syntax;
-    LspSyncViewState lsp_sync;
-    LspFeatureViewState lsp_features;
+    LspSyncViewState lspSync;
+    LspFeatureViewState lspFeatures;
     ThemeSnapshot theme;
     ShellViewState shell;
     PaletteViewState palette;
@@ -58,8 +58,8 @@ struct SessionSnapshotSections {
                               SessionSnapshotSections const& right);
 
 struct ClientSnapshotState {
-    ClientId client_id;
-    ViewId view_id;
+    ClientId clientId;
+    ViewId viewId;
     std::vector<CapabilityId> capabilities;
     ViewportViewState viewport;
 
@@ -119,11 +119,11 @@ public:
     SessionDelta& operator=(SessionDelta&&) noexcept = default;
 
     [[nodiscard]] Revision baseRevision() const noexcept {
-        return base_revision_;
+        return baseRevision_;
     }
     [[nodiscard]] Revision revision() const noexcept { return revision_; }
-    [[nodiscard]] ClientId clientId() const noexcept { return client_id_; }
-    [[nodiscard]] ViewId viewId() const noexcept { return view_id_; }
+    [[nodiscard]] ClientId clientId() const noexcept { return clientId_; }
+    [[nodiscard]] ViewId viewId() const noexcept { return viewId_; }
     [[nodiscard]] std::vector<CapabilityId> const& capabilities() const noexcept {
         return capabilities_;
     }
@@ -135,7 +135,7 @@ public:
     }
     [[nodiscard]] std::optional<ByteOffset> const& documentCaret()
         const noexcept {
-        return document_caret_;
+        return documentCaret_;
     }
     [[nodiscard]] SelectionViewDelta const& selection() const noexcept {
         return selection_;
@@ -147,11 +147,11 @@ public:
         return clipboard_;
     }
     [[nodiscard]] PromptStatusDelta const& promptStatus() const noexcept {
-        return prompt_status_;
+        return promptStatus_;
     }
     [[nodiscard]] SearchDelta const& search() const noexcept { return search_; }
     [[nodiscard]] FindReplaceDelta const& findReplace() const noexcept {
-        return find_replace_;
+        return findReplace_;
     }
     [[nodiscard]] SettingsSectionDelta const& settings() const noexcept {
         return settings_;
@@ -159,24 +159,24 @@ public:
     [[nodiscard]] KeymapDelta const& keymap() const noexcept { return keymap_; }
     [[nodiscard]] std::optional<TextEncodingDelta> const& textEncoding()
         const noexcept {
-        return text_encoding_;
+        return textEncoding_;
     }
     [[nodiscard]] TabDelta const& tabs() const noexcept { return tabs_; }
     [[nodiscard]] DiffDelta const& diff() const noexcept { return diff_; }
     [[nodiscard]] ExternalModificationDelta const& externalModification()
         const noexcept {
-        return external_modification_;
+        return externalModification_;
     }
     [[nodiscard]] FollowEditsDelta const& followEdits() const noexcept {
-        return follow_edits_;
+        return followEdits_;
     }
     [[nodiscard]] TreeDelta const& tree() const noexcept { return tree_; }
     [[nodiscard]] SyntaxDelta const& syntax() const noexcept { return syntax_; }
     [[nodiscard]] LspSyncDelta const& lspSync() const noexcept {
-        return lsp_sync_;
+        return lspSync_;
     }
     [[nodiscard]] LspFeatureDelta const& lspFeatures() const noexcept {
-        return lsp_features_;
+        return lspFeatures_;
     }
     [[nodiscard]] ThemeSectionDelta const& theme() const noexcept {
         return theme_;
@@ -230,31 +230,31 @@ private:
         ThemeSectionDelta theme, ShellSectionDelta shell,
         ViewportDelta viewport);
 
-    Revision base_revision_;
+    Revision baseRevision_;
     Revision revision_;
-    ClientId client_id_;
-    ViewId view_id_;
+    ClientId clientId_;
+    ViewId viewId_;
     std::vector<CapabilityId> capabilities_;
     std::optional<SessionTopology> topology_;
     std::optional<DocumentDelta> document_;
-    std::optional<ByteOffset> document_caret_;
+    std::optional<ByteOffset> documentCaret_;
     SelectionViewDelta selection_;
     HistoryDelta history_;
     ClipboardDelta clipboard_;
-    PromptStatusDelta prompt_status_;
+    PromptStatusDelta promptStatus_;
     SearchDelta search_;
-    FindReplaceDelta find_replace_;
+    FindReplaceDelta findReplace_;
     SettingsSectionDelta settings_;
     KeymapDelta keymap_;
-    std::optional<TextEncodingDelta> text_encoding_;
+    std::optional<TextEncodingDelta> textEncoding_;
     TabDelta tabs_;
     DiffDelta diff_;
-    ExternalModificationDelta external_modification_;
-    FollowEditsDelta follow_edits_;
+    ExternalModificationDelta externalModification_;
+    FollowEditsDelta followEdits_;
     TreeDelta tree_;
     SyntaxDelta syntax_;
-    LspSyncDelta lsp_sync_;
-    LspFeatureDelta lsp_features_;
+    LspSyncDelta lspSync_;
+    LspFeatureDelta lspFeatures_;
     ThemeSectionDelta theme_;
     ShellSectionDelta shell_;
     ViewportDelta viewport_;

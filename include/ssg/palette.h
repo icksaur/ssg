@@ -39,7 +39,7 @@ struct PaletteViewState {
 // index) lets the server validate membership in the published candidate set and
 // keeps the command's argument shape explicit on the wire (see spec-palette.md).
 struct PaletteExecuteArguments {
-    std::string command_id;
+    std::string commandId;
 
     friend bool operator==(const PaletteExecuteArguments&, const PaletteExecuteArguments&) = default;
 };
@@ -57,7 +57,7 @@ struct PaletteReport {
     std::string ghost;
     std::vector<PaletteCandidate> rows;
     std::optional<std::uint32_t> selected;
-    std::uint32_t first_visible = 0;
+    std::uint32_t firstVisible = 0;
     ScrollbarMetrics scrollbar{};
 
     friend bool operator==(const PaletteReport&, const PaletteReport&) = default;
@@ -85,8 +85,8 @@ struct PaletteReport {
 struct PaletteWindowState {
     std::string query;
     std::size_t selected = 0;
-    std::uint32_t first_visible = 0;
-    std::uint32_t pane_rows = 1;
+    std::uint32_t firstVisible = 0;
+    std::uint32_t paneRows = 1;
 };
 
 // The library's canonical palette projection, and the single seam every client

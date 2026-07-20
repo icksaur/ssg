@@ -20,9 +20,9 @@ enum class EditHistoryIntegrationError : std::uint8_t {
 
 struct EditHistoryIntegrationResult {
     EditHistoryIntegrationError error;
-    std::optional<TextInputError> text_input_error;
-    std::optional<EditCommandError> edit_command_error;
-    std::optional<HistoryResult> history_result;
+    std::optional<TextInputError> textInputError;
+    std::optional<EditCommandError> editCommandError;
+    std::optional<HistoryResult> historyResult;
     std::optional<SelectionSet> selections;
     std::string message;
 
@@ -31,7 +31,7 @@ struct EditHistoryIntegrationResult {
     }
 
     [[nodiscard]] bool documentChanged() const noexcept {
-        return history_result.has_value() && history_result->accepted();
+        return historyResult.has_value() && historyResult->accepted();
     }
 };
 

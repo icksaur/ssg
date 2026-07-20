@@ -141,7 +141,7 @@ TEST(wordWrapOffRendersHorizontallyScrolledContent) {
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, dims);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_TRUE(snapshot->client().viewport.first_visual_column > 0);
+    ASSERT_TRUE(snapshot->client().viewport.firstVisualColumn > 0);
     auto grid = ssg::render(*snapshot);
 
     // The end of the line is on screen; the start has scrolled off.
@@ -494,7 +494,7 @@ TEST(renderPaintsFindMatchesAndActiveMatch) {
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_EQ(snapshot->sections().find_replace.matches.size(), std::size_t{3});
+    ASSERT_EQ(snapshot->sections().findReplace.matches.size(), std::size_t{3});
     auto grid = ssg::render(*snapshot);
 
     int row = -1;
@@ -548,7 +548,7 @@ TEST(renderHidesFindMatchesAfterDocumentRevisionChanges) {
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_FALSE(snapshot->sections().find_replace.open);
+    ASSERT_FALSE(snapshot->sections().findReplace.open);
     auto grid = ssg::render(*snapshot);
     bool anyMatch = false;
     for (int row = 0; row < grid.size.rows; ++row) {
@@ -653,15 +653,15 @@ TEST(renderPanelTreeWindowsAndDrawsAThumbWhenTallerThanThePanel) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto const& shell = snapshot->sections().shell;
-    ASSERT_TRUE(shell.panel_scrollbar.has_value());
-    if (!shell.panel_scrollbar) return;
+    ASSERT_TRUE(shell.panelScrollbar.has_value());
+    if (!shell.panelScrollbar) return;
     auto grid = ssg::render(*snapshot);
 
     // A thumb ('#') is drawn in the reserved gutter column.
-    int const gx = shell.panel_scrollbar->x;
+    int const gx = shell.panelScrollbar->x;
     bool hasThumb = false;
-    for (int y = shell.panel_scrollbar->y;
-         y < shell.panel_scrollbar->y + shell.panel_scrollbar->height; ++y) {
+    for (int y = shell.panelScrollbar->y;
+         y < shell.panelScrollbar->y + shell.panelScrollbar->height; ++y) {
         if (grid.at(gx, y).text == "#") hasThumb = true;
     }
     ASSERT_TRUE(hasThumb);
@@ -686,14 +686,14 @@ TEST(renderPanelTreeReservesAnEmptyGutterWhenItFits) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto const& shell = snapshot->sections().shell;
-    ASSERT_TRUE(shell.panel_scrollbar.has_value());
-    if (!shell.panel_scrollbar) return;
+    ASSERT_TRUE(shell.panelScrollbar.has_value());
+    if (!shell.panelScrollbar) return;
     auto grid = ssg::render(*snapshot);
     // The gutter is reserved (column exists) but blank: no thumb or track glyphs,
     // so the tree's content width never changes as items are added or removed.
-    int const gx = shell.panel_scrollbar->x;
-    for (int y = shell.panel_scrollbar->y;
-         y < shell.panel_scrollbar->y + shell.panel_scrollbar->height; ++y) {
+    int const gx = shell.panelScrollbar->x;
+    for (int y = shell.panelScrollbar->y;
+         y < shell.panelScrollbar->y + shell.panelScrollbar->height; ++y) {
         ASSERT_NE(grid.at(gx, y).text, std::string{"#"});
         ASSERT_NE(grid.at(gx, y).text, std::string{"|"});
     }
@@ -722,8 +722,8 @@ TEST(renderPaletteWindowsRowsAndDrawsAThumbWithAbsoluteSelection) {
     std::uint32_t const rows = static_cast<std::uint32_t>(pane.content.height);
     ssg::PaletteProjection projection;
     projection.rect = pane.content;
-    projection.scrollbar_rect = pane.scrollbar;
-    projection.first_visible = 20;
+    projection.scrollbarRect = pane.scrollbar;
+    projection.firstVisible = 20;
     projection.selected = std::uint32_t{25};
     projection.scrollbar = ssg::scrollbarMetrics(40, rows, 20);
     for (std::uint32_t i = 0; i < rows; ++i) {
@@ -747,9 +747,9 @@ TEST(renderPaletteWindowsRowsAndDrawsAThumbWithAbsoluteSelection) {
                  ssg::SemanticRole::Selection);
     // A thumb is drawn in the reserved gutter column.
     bool hasThumb = false;
-    for (int y = projection.scrollbar_rect.y;
-         y < projection.scrollbar_rect.y + projection.scrollbar_rect.height; ++y) {
-        if (grid.at(projection.scrollbar_rect.x, y).text == "#") hasThumb = true;
+    for (int y = projection.scrollbarRect.y;
+         y < projection.scrollbarRect.y + projection.scrollbarRect.height; ++y) {
+        if (grid.at(projection.scrollbarRect.x, y).text == "#") hasThumb = true;
     }
     ASSERT_TRUE(hasThumb);
 }
@@ -770,8 +770,8 @@ TEST(renderPaletteReservesAnEmptyGutterWhenTheListFits) {
     auto const& pane = sections.shell.panes.front();
     ssg::PaletteProjection projection;
     projection.rect = pane.content;
-    projection.scrollbar_rect = pane.scrollbar;
-    projection.first_visible = 0;
+    projection.scrollbarRect = pane.scrollbar;
+    projection.firstVisible = 0;
     projection.selected = std::uint32_t{0};
     projection.scrollbar =
         ssg::scrollbarMetrics(2, static_cast<std::uint32_t>(pane.content.height), 0);
@@ -781,10 +781,10 @@ TEST(renderPaletteReservesAnEmptyGutterWhenTheListFits) {
                                    snapshot->client(), std::move(sections)};
     auto grid = ssg::render(projected);
     // The gutter is reserved (column exists) but blank: no thumb/track glyphs.
-    for (int y = projection.scrollbar_rect.y;
-         y < projection.scrollbar_rect.y + projection.scrollbar_rect.height; ++y) {
-        ASSERT_NE(grid.at(projection.scrollbar_rect.x, y).text, std::string{"#"});
-        ASSERT_NE(grid.at(projection.scrollbar_rect.x, y).text, std::string{"|"});
+    for (int y = projection.scrollbarRect.y;
+         y < projection.scrollbarRect.y + projection.scrollbarRect.height; ++y) {
+        ASSERT_NE(grid.at(projection.scrollbarRect.x, y).text, std::string{"#"});
+        ASSERT_NE(grid.at(projection.scrollbarRect.x, y).text, std::string{"|"});
     }
 }
 

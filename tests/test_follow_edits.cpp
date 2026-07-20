@@ -19,10 +19,10 @@ DiffFileView changedFile(std::string id, std::filesystem::path path,
     view.path = std::move(path);
     view.deleted = deleted;
     view.hunks.push_back(
-        {.baseline_start = newestLine,
-         .target_start = newestLine,
-         .baseline_lines = {"old\n"},
-         .target_lines = deleted ? std::vector<std::string>{}
+        {.baselineStart = newestLine,
+         .targetStart = newestLine,
+         .baselineLines = {"old\n"},
+         .targetLines = deleted ? std::vector<std::string>{}
                                  : std::vector<std::string>{"new\n"}});
     return view;
 }
@@ -46,11 +46,11 @@ std::string targetId(const std::optional<FollowTarget>& target) {
 }
 
 std::string queueIds(const FollowEditsViewState& state) {
-    if (state.queued_targets.empty()) {
+    if (state.queuedTargets.empty()) {
         return "-";
     }
     std::string result;
-    for (const auto& target : state.queued_targets) {
+    for (const auto& target : state.queuedTargets) {
         if (!result.empty()) {
             result += ",";
         }
@@ -62,7 +62,7 @@ std::string queueIds(const FollowEditsViewState& state) {
 std::string rowFor(const FollowEditsViewState& state, std::uint64_t client) {
     for (const auto& view : state.clients) {
         if (view.client == ClientId{client}) {
-            return std::to_string(view.offset.first_row);
+            return std::to_string(view.offset.firstRow);
         }
     }
     return "-";
@@ -73,8 +73,8 @@ TEST(independentTransitionTableCoversSharedFollowPolicy) {
         std::filesystem::path{SSG_FOLLOW_EDITS_FIXTURE_DIR} / "transitions.tsv"};
     ASSERT_TRUE(input.good());
 
-    FollowEditsModel model{{.queue_capacity = 4,
-                            .resume_binding = "Ctrl+Shift+F"}};
+    FollowEditsModel model{{.queueCapacity = 4,
+                            .resumeBinding = "Ctrl+Shift+F"}};
     std::string line;
     while (std::getline(input, line)) {
         if (line.empty() || line.front() == '#') {
@@ -132,7 +132,7 @@ TEST(independentTransitionTableCoversSharedFollowPolicy) {
         const auto state = model.viewState();
         ASSERT_EQ(state.mode == FollowMode::Following ? "following" : "paused",
                   fields[3]);
-        ASSERT_EQ(targetId(state.active_target), fields[4]);
+        ASSERT_EQ(targetId(state.activeTarget), fields[4]);
         ASSERT_EQ(queueIds(state), fields[5]);
         ASSERT_EQ(rowFor(state, 1), fields[6]);
         ASSERT_EQ(rowFor(state, 2), fields[7]);
@@ -145,12 +145,12 @@ TEST(dirtyConflictUsesDiskDiffTargetWithoutBufferPolicy) {
                     .acceptExternalChange(
                         changedFile("dirty", "dirty.txt", 6), Revision{1})
                     .accepted());
-    ASSERT_EQ(targetId(model.viewState().active_target), "dirty");
+    ASSERT_EQ(targetId(model.viewState().activeTarget), "dirty");
 }
 
 TEST(queueIsBoundedAndSameFileReplacesInPlace) {
-    FollowEditsModel model{{.queue_capacity = 2,
-                            .resume_binding = "Ctrl+Shift+F"}};
+    FollowEditsModel model{{.queueCapacity = 2,
+                            .resumeBinding = "Ctrl+Shift+F"}};
     ASSERT_TRUE(model.pause().accepted());
     ASSERT_TRUE(model
                     .acceptExternalChange(changedFile("a", "a", 1),
@@ -167,7 +167,7 @@ TEST(queueIsBoundedAndSameFileReplacesInPlace) {
 
     const auto state = model.viewState();
     ASSERT_EQ(queueIds(state), "b,a");
-    ASSERT_EQ(state.queued_targets.back().path,
+    ASSERT_EQ(state.queuedTargets.back().path,
               std::filesystem::path{"renamed-a"});
 
     ASSERT_TRUE(model
@@ -194,13 +194,13 @@ TEST(resumeResolvesRenameDeleteAndSkipsRevertedOrMissingTargets) {
                     .accepted());
 
     auto renamed = changedFile("rename", "new", 7);
-    renamed.previous_path = "old";
+    renamed.previousPath = "old";
     auto deleted = changedFile("delete", "gone", 8, true);
-    deleted.previous_path = "gone";
+    deleted.previousPath = "gone";
     ASSERT_TRUE(
         model.resume(currentDiff({renamed, deleted}, 4)).accepted());
-    ASSERT_EQ(targetId(model.viewState().active_target), "delete");
-    ASSERT_TRUE(model.viewState().active_target->deleted);
+    ASSERT_EQ(targetId(model.viewState().activeTarget), "delete");
+    ASSERT_TRUE(model.viewState().activeTarget->deleted);
 
     ASSERT_TRUE(model.pause().accepted());
     ASSERT_TRUE(model
@@ -211,9 +211,9 @@ TEST(resumeResolvesRenameDeleteAndSkipsRevertedOrMissingTargets) {
     ASSERT_TRUE(model.resume(currentDiff({}, 5)).accepted());
     const auto after = model.viewState();
     ASSERT_EQ(after.mode, FollowMode::Following);
-    ASSERT_EQ(after.active_target, before.active_target);
+    ASSERT_EQ(after.activeTarget, before.activeTarget);
     ASSERT_EQ(after.clients, before.clients);
-    ASSERT_TRUE(after.queued_targets.empty());
+    ASSERT_TRUE(after.queuedTargets.empty());
 }
 
 TEST(staleChangesAndInvalidClientsAreFailureAtomic) {
@@ -252,27 +252,27 @@ TEST(commandViewDeltaAndFooterAreComplete) {
     ASSERT_EQ(commands[0].id, "follow_edits.resume");
     ASSERT_EQ(commands[1].id, "follow_edits.pause");
 
-    FollowEditsModel model{{.queue_capacity = 2,
-                            .resume_binding = "Ctrl+Shift+F"}};
+    FollowEditsModel model{{.queueCapacity = 2,
+                            .resumeBinding = "Ctrl+Shift+F"}};
     const auto before = model.viewState();
     ASSERT_TRUE(model.pause().accepted());
     const auto after = model.viewState();
     const auto delta = deriveFollowEditsDelta(before, after);
-    ASSERT_EQ(delta.base_generation, before.generation);
+    ASSERT_EQ(delta.baseGeneration, before.generation);
     ASSERT_EQ(delta.generation, after.generation);
     ASSERT_EQ(delta.replacement, after);
 
     const auto footer = model.footerProjection();
     ASSERT_EQ(footer.mode, "paused");
-    ASSERT_EQ(footer.resume_binding, std::optional<std::string>{"Ctrl+Shift+F"});
-    ASSERT_EQ(footer.resume_command,
+    ASSERT_EQ(footer.resumeBinding, std::optional<std::string>{"Ctrl+Shift+F"});
+    ASSERT_EQ(footer.resumeCommand,
               std::optional<std::string>{"follow_edits.resume"});
 }
 
 TEST(configurationRejectsInvalidQueueCapacity) {
     ASSERT_THROWS(FollowEditsModel(
-                      {.queue_capacity = 0,
-                       .resume_binding = "Ctrl+Shift+F"}),
+                      {.queueCapacity = 0,
+                       .resumeBinding = "Ctrl+Shift+F"}),
                   std::invalid_argument);
 }
 

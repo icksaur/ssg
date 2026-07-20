@@ -11,7 +11,7 @@ namespace {
 
 struct Utf8Length {
     bool valid = true;
-    std::size_t utf16_units = 0;
+    std::size_t utf16Units = 0;
 };
 
 Utf8Length utf8Length(std::string_view text) noexcept {
@@ -55,7 +55,7 @@ Utf8Length utf8Length(std::string_view text) noexcept {
             result.valid = false;
             return result;
         }
-        result.utf16_units += codepoint > 0xffff ? 2 : 1;
+        result.utf16Units += codepoint > 0xffff ? 2 : 1;
         i += length;
     }
     return result;
@@ -113,7 +113,7 @@ PathValidation validateComponent(std::string_view component,
     if (isWindowsReserved(component)) {
         return {PathError::ReservedName, index};
     }
-    if (length.utf16_units > 255) {
+    if (length.utf16Units > 255) {
         return {PathError::ComponentTooLong, index};
     }
     return {};
@@ -164,7 +164,7 @@ PathValidation validateWorkspaceRelativePath(std::string_view path,
             ? 4095
             : (longPaths == LongPathPolicy::Legacy ? 259 : 32766);
     const std::size_t measured =
-        syntax == PathSyntax::Linux ? path.size() : totalLength.utf16_units;
+        syntax == PathSyntax::Linux ? path.size() : totalLength.utf16Units;
     if (measured > maximum) {
         return {PathError::PathTooLong, 0};
     }

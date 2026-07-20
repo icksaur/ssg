@@ -54,9 +54,9 @@ ApplicationAuthentication::ApplicationAuthentication(
     BearerCredential credential, SessionId sessionId, ClientId clientId,
     ViewId viewId)
     : credential_{std::move(credential)},
-      session_id_{std::move(sessionId)},
-      client_id_{clientId},
-      view_id_{viewId} {}
+      sessionId_{std::move(sessionId)},
+      clientId_{clientId},
+      viewId_{viewId} {}
 
 std::optional<AuthenticatedSession> ApplicationAuthentication::authenticate(
     std::string_view presentedCredential) const {
@@ -64,11 +64,11 @@ std::optional<AuthenticatedSession> ApplicationAuthentication::authenticate(
         return std::nullopt;
     }
     return AuthenticatedSession{
-        session_id_,
+        sessionId_,
         InvocationPrincipal{
-            client_id_, InvocationOrigin::Websocket,
+            clientId_, InvocationOrigin::Websocket,
             std::vector<CapabilityId>{CapabilityId{"local_file_drop"}}},
-        view_id_};
+        viewId_};
 }
 
 }  // namespace ssg

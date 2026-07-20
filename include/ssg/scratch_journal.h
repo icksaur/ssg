@@ -66,7 +66,7 @@ struct JournalDocument {
     JournalDocumentKey key;
     DocumentMode mode = DocumentMode::Edit;
     bool dirty = false;
-    std::string utf8_content;
+    std::string utf8Content;
 
     friend bool operator==(const JournalDocument&,
                            const JournalDocument&) = default;
@@ -81,8 +81,8 @@ struct JournalRecoverySet {
 
 struct JournalReplayResult {
     JournalRecoverySet recovery;
-    std::size_t valid_bytes = 0;
-    bool discarded_tail = false;
+    std::size_t validBytes = 0;
+    bool discardedTail = false;
 };
 
 [[nodiscard]] std::vector<std::byte> encodeCheckpointRecord(

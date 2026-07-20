@@ -52,7 +52,7 @@ enum class ClipboardRequestKind : std::uint8_t {
 struct ClipboardRequest {
     std::uint64_t id;
     ClipboardRequestKind kind;
-    Revision request_revision;
+    Revision requestRevision;
     std::string text;
 
     bool operator==(const ClipboardRequest&) const = default;
@@ -67,8 +67,8 @@ enum class ClipboardResponseStatus : std::uint8_t {
 
 struct ClipboardResponse {
     std::uint64_t id;
-    Revision request_revision;
-    Revision observed_document_revision;
+    Revision requestRevision;
+    Revision observedDocumentRevision;
     ClipboardResponseStatus status;
     std::string text;
 
@@ -104,11 +104,11 @@ enum class ClipboardError : std::uint8_t {
 
 struct ClipboardResult {
     ClipboardError error;
-    ClipboardSystemStatus system_status;
+    ClipboardSystemStatus systemStatus;
     Revision revision;
     std::optional<SelectionSet> selections;
     std::optional<ClipboardRequest> request;
-    bool document_changed;
+    bool documentChanged;
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
@@ -118,9 +118,9 @@ struct ClipboardResult {
 
 struct ClipboardViewState {
     std::vector<std::string> fragments;
-    std::string plain_text;
-    std::optional<ClipboardRequest> pending_read;
-    std::optional<ClipboardRequest> pending_write;
+    std::string plainText;
+    std::optional<ClipboardRequest> pendingRead;
+    std::optional<ClipboardRequest> pendingWrite;
 
     bool operator==(const ClipboardViewState&) const = default;
 };

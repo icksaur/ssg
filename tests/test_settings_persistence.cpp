@@ -82,13 +82,13 @@ TEST(workspaceKeysFollowPlatformIdentityRules) {
         root.path() / "u", root.path() / "w", "/work/Project");
     const auto linuxLower = ssg::linuxSettingsPaths(
         root.path() / "u", root.path() / "w", "/work/project");
-    ASSERT_NE(linuxUpper.workspace_file, linuxLower.workspace_file);
+    ASSERT_NE(linuxUpper.workspaceFile, linuxLower.workspaceFile);
 
     const auto windowsUpper = ssg::windowsSettingsPaths(
         root.path() / "u", root.path() / "w", R"(C:\Work\Project)");
     const auto windowsLower = ssg::windowsSettingsPaths(
         root.path() / "u", root.path() / "w", "c:/work/project");
-    ASSERT_EQ(windowsUpper.workspace_file, windowsLower.workspace_file);
+    ASSERT_EQ(windowsUpper.workspaceFile, windowsLower.workspaceFile);
 }
 
 TEST(unknownFutureFieldSurvivesWithoutBecomingASetting) {
@@ -99,16 +99,16 @@ TEST(unknownFutureFieldSurvivesWithoutBecomingASetting) {
     ssg::SettingsModel initial;
     ASSERT_TRUE(persistence.save(initial).ok);
 
-    auto contents = readText(paths.user_file);
+    auto contents = readText(paths.userFile);
     contents += "future.setting=s:opaque%20value\n";
-    writeText(paths.user_file, contents);
+    writeText(paths.userFile, contents);
 
     ssg::SettingsModel restarted;
     ASSERT_TRUE(persistence.load(restarted).ok);
     ASSERT_EQ(restarted.resolve(ssg::SettingKey::Theme).value,
               initial.resolve(ssg::SettingKey::Theme).value);
     ASSERT_TRUE(persistence.save(restarted).ok);
-    ASSERT_TRUE(readText(paths.user_file).find(
+    ASSERT_TRUE(readText(paths.userFile).find(
                     "future.setting=s:opaque%20value\n") != std::string::npos);
 }
 
@@ -123,13 +123,13 @@ TEST(invalidSchemaOrKnownValueIsLoadAtomic) {
                     .accepted());
     const auto before = settings.viewState();
 
-    writeText(paths.user_file, "schema=1\nindent_width=u32:99\n");
+    writeText(paths.userFile, "schema=1\nindent_width=u32:99\n");
     const ssg::SettingsPersistence persistence{paths};
     const auto invalidValue = persistence.load(settings);
     ASSERT_FALSE(invalidValue.ok);
     ASSERT_EQ(settings.viewState(), before);
 
-    writeText(paths.user_file, "schema=2\ntheme=s:future\n");
+    writeText(paths.userFile, "schema=2\ntheme=s:future\n");
     const auto invalidSchema = persistence.load(settings);
     ASSERT_FALSE(invalidSchema.ok);
     ASSERT_EQ(settings.viewState(), before);

@@ -45,9 +45,9 @@ public:
 
 private:
     BearerCredential credential_;
-    SessionId session_id_;
-    ClientId client_id_;
-    ViewId view_id_;
+    SessionId sessionId_;
+    ClientId clientId_;
+    ViewId viewId_;
 };
 
 }  // namespace ssg

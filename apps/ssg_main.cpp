@@ -208,12 +208,12 @@ int main(int argc, char** argv) {
 
     ssg::EditorRuntimeConfig config;
     config.cwd = target.cwd;
-    config.scratch_root = base / "scratch";
-    config.recovery_root = base / "recovery";
+    config.scratchRoot = base / "scratch";
+    config.recoveryRoot = base / "recovery";
     // M10 fast startup: defer the workspace tree scan and syntax highlighting off
     // the first-frame path; prime_deferred() runs them once the first frame is
     // drawn.
-    config.defer_enrichment = true;
+    config.deferEnrichment = true;
     auto created = ssg::EditorRuntime::create(config);
     if (!created.accepted()) {
         std::fprintf(stderr, "ssg: %s\n", created.message.c_str());
@@ -347,7 +347,7 @@ int main(int argc, char** argv) {
         auto scroll = ssg::computeListScrollView(
             static_cast<std::uint32_t>(order.size()), palettePaneRows,
             paletteFirstVisible, selected, /*keep_selection_visible=*/true);
-        paletteFirstVisible = scroll.first_visible;
+        paletteFirstVisible = scroll.firstVisible;
     };
     // Scroll the client-owned palette window by `delta` rows WITHOUT moving the
     // selection (a wheel over the open palette), clamped to [0, maximum_first_row].
@@ -359,7 +359,7 @@ int main(int argc, char** argv) {
             static_cast<std::uint32_t>(order.size()), palettePaneRows,
             paletteFirstVisible, std::nullopt, /*keep_selection_visible=*/false);
         auto const maximum =
-            static_cast<std::int64_t>(probe.scrollbar.maximum_first_row);
+            static_cast<std::int64_t>(probe.scrollbar.maximumFirstRow);
         auto const current = static_cast<std::int64_t>(paletteFirstVisible);
         std::int64_t next;
         if (delta >= maximum) {
@@ -439,7 +439,7 @@ int main(int argc, char** argv) {
                                            palettePaneRows};
             report = ssg::derivePaletteReport(candidates, window);
             paletteSelected = window.selected;
-            paletteFirstVisible = window.first_visible;
+            paletteFirstVisible = window.firstVisible;
         }
         return report;
     };
@@ -470,8 +470,8 @@ int main(int argc, char** argv) {
             // controller being open under prompt focus: a palette/settings prompt
             // may be active while the find controller is still open, and find
             // fulfillment must not hijack that unrelated prompt's keys.
-            auto const& findView = snapshot->sections().find_replace;
-            auto const& activePrompt = snapshot->sections().prompt_status.prompt;
+            auto const& findView = snapshot->sections().findReplace;
+            auto const& activePrompt = snapshot->sections().promptStatus.prompt;
             bool const findPromptActive =
                 activePrompt && activePrompt->kind == ssg::PromptKind::Find;
             findOpen = findView.open && findPromptActive;
@@ -552,7 +552,7 @@ int main(int argc, char** argv) {
                     if (hit.region == ssg::HitRegion::Editor) {
                         auto active = ssg::resolveDocumentPosition(
                             scrolled->sections().document.text,
-                            ssg::ByteOffset{hit.byte_offset});
+                            ssg::ByteOffset{hit.byteOffset});
                         if (active) {
                             dispatch("select.set_range",
                                      ssg::SelectionCommandArguments{
@@ -624,19 +624,19 @@ int main(int argc, char** argv) {
                     if (hit.region == ssg::HitRegion::Editor) {
                         targets.document_position = ssg::resolveDocumentPosition(
                             snapshot->sections().document.text,
-                            ssg::ByteOffset{hit.byte_offset});
+                            ssg::ByteOffset{hit.byteOffset});
                     } else if (hit.region == ssg::HitRegion::Tab) {
                         auto const& tabs = snapshot->sections().tabs.tabs;
-                        if (hit.tab_index < tabs.size()) {
-                            targets.tab_id = tabs[hit.tab_index].id;
+                        if (hit.tabIndex < tabs.size()) {
+                            targets.tab_id = tabs[hit.tabIndex].id;
                         }
                     } else if (hit.region == ssg::HitRegion::Palette) {
                         // Map the absolute rank index to its candidate id using
                         // the same ranked order the client renders.
                         auto order = ssg::paletteRank(candidates, paletteQuery);
-                        if (hit.item_index < order.size()) {
+                        if (hit.itemIndex < order.size()) {
                             targets.palette_command_id =
-                                candidates[order[hit.item_index]].id;
+                                candidates[order[hit.itemIndex]].id;
                         }
                     }
                 }
@@ -705,7 +705,7 @@ int main(int argc, char** argv) {
             auto resolution = ssg::resolveKeySequence(
                 keymap, chord, ssg::focusTargetName(focus));
             if (resolution.kind == ssg::KeymapMatchKind::Resolved) {
-                dispatchResolved(resolution.command_id);
+                dispatchResolved(resolution.commandId);
                 chord.clear();
             } else if (resolution.kind == ssg::KeymapMatchKind::Pending) {
                 // Keep collecting; the leader hint renders next frame.

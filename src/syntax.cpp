@@ -13,8 +13,8 @@ namespace {
 
 bool pointBeforeOrEqual(const SyntaxPoint& left,
                            const SyntaxPoint& right) {
-    return std::tie(left.row, left.column_byte) <=
-           std::tie(right.row, right.column_byte);
+    return std::tie(left.row, left.columnByte) <=
+           std::tie(right.row, right.columnByte);
 }
 
 SyntaxPoint pointAt(std::string_view text, std::uint64_t offset) {
@@ -35,9 +35,9 @@ SyntaxPoint advancePoint(SyntaxPoint point, std::string_view text) {
     for (const char value : text) {
         if (value == '\n') {
             point.row = LineIndex{point.row.value() + 1};
-            point.column_byte = 0;
+            point.columnByte = 0;
         } else {
-            ++point.column_byte;
+            ++point.columnByte;
         }
     }
     return point;
@@ -51,19 +51,19 @@ bool validEdits(const std::vector<SyntaxEdit>& edits,
     std::uint64_t currentCursor = 0;
     bool first = true;
     for (const auto& edit : edits) {
-        const auto start = edit.start_byte.value();
-        const auto oldEnd = edit.old_end_byte.value();
-        const auto newEnd = edit.new_end_byte.value();
-        if (edit.start_byte > edit.old_end_byte ||
-            edit.start_byte > edit.new_end_byte ||
+        const auto start = edit.startByte.value();
+        const auto oldEnd = edit.oldEndByte.value();
+        const auto newEnd = edit.newEndByte.value();
+        if (edit.startByte > edit.oldEndByte ||
+            edit.startByte > edit.newEndByte ||
             oldEnd > previousText.size() ||
-            !pointBeforeOrEqual(edit.start_position,
-                                   edit.old_end_position) ||
-            !pointBeforeOrEqual(edit.start_position,
-                                   edit.new_end_position) ||
+            !pointBeforeOrEqual(edit.startPosition,
+                                   edit.oldEndPosition) ||
+            !pointBeforeOrEqual(edit.startPosition,
+                                   edit.newEndPosition) ||
             (!first && start < previousOldEnd) ||
-            edit.start_position != pointAt(previousText, start) ||
-            edit.old_end_position != pointAt(previousText, oldEnd)) {
+            edit.startPosition != pointAt(previousText, start) ||
+            edit.oldEndPosition != pointAt(previousText, oldEnd)) {
             return false;
         }
 
@@ -76,8 +76,8 @@ bool validEdits(const std::vector<SyntaxEdit>& edits,
         }
         currentCursor += unchangedBytes;
         if (insertedBytes > currentText.size() - currentCursor ||
-            edit.new_end_position !=
-                advancePoint(edit.start_position,
+            edit.newEndPosition !=
+                advancePoint(edit.startPosition,
                               currentText.substr(currentCursor,
                                                   insertedBytes))) {
             return false;
@@ -368,10 +368,10 @@ bool validState(const SyntaxViewState& state) {
     for (std::size_t index = 0; index < state.indentation().size(); ++index) {
         const auto& line = state.indentation()[index];
         if (line.line != LineIndex{index} ||
-            line.line_start > line.content_start ||
-            line.content_start.value() > state.textBytes() ||
+            line.lineStart > line.contentStart ||
+            line.contentStart.value() > state.textBytes() ||
             (index != 0 &&
-             line.line_start <= state.indentation()[index - 1].line_start)) {
+             line.lineStart <= state.indentation()[index - 1].lineStart)) {
             return false;
         }
     }
@@ -400,7 +400,7 @@ SyntaxParseRequest::SyntaxParseRequest(
     : revision_(revision),
       language_(std::move(language)),
       text_(std::move(text)),
-      prior_parse_(std::move(priorParse)),
+      priorParse_(std::move(priorParse)),
       edits_(std::move(edits)),
       cancelled_(std::make_shared<std::atomic_bool>(false)) {}
 
@@ -421,12 +421,12 @@ SyntaxViewState::SyntaxViewState(
     std::vector<LineIndentation> indentation)
     : revision_(revision),
       language_(std::move(language)),
-      text_bytes_(textBytes),
+      textBytes_(textBytes),
       spans_(std::move(spans)),
-      bracket_pairs_(std::move(bracketPairs)),
-      unmatched_brackets_(std::move(unmatchedBrackets)),
-      comment_tokens_(std::move(commentTokens)),
-      comment_ranges_(std::move(commentRanges)),
+      bracketPairs_(std::move(bracketPairs)),
+      unmatchedBrackets_(std::move(unmatchedBrackets)),
+      commentTokens_(std::move(commentTokens)),
+      commentRanges_(std::move(commentRanges)),
       indentation_(std::move(indentation)) {}
 
 SyntaxViewState plainTextSyntaxViewState(
@@ -454,12 +454,12 @@ SyntaxViewState plainTextSyntaxViewState(
 SyntaxViewState buildSyntaxViewState(
     Revision revision, LanguageId language, std::string_view text,
     const SyntaxParseOutput& output, const SyntaxConfig& config) {
-    if (config.tab_width == 0) {
+    if (config.tabWidth == 0) {
         throw std::invalid_argument{"tab width must be positive"};
     }
     if (output.status != SyntaxParseStatus::Parsed || !output.parse) {
         return plainTextSyntaxViewState(
-            revision, std::move(language), text, config.tab_width);
+            revision, std::move(language), text, config.tabWidth);
     }
     auto brackets = resolveBrackets(text.size(), output.brackets);
     return {
@@ -469,9 +469,9 @@ SyntaxViewState buildSyntaxViewState(
         canonicalSpans(text.size(), output.spans),
         std::move(brackets.pairs),
         std::move(brackets.unmatched),
-        canonicalCommentTokens(text.size(), output.comment_tokens),
-        canonicalCommentRanges(text.size(), output.comment_ranges),
-        deriveIndentation(text, config.tab_width),
+        canonicalCommentTokens(text.size(), output.commentTokens),
+        canonicalCommentRanges(text.size(), output.commentRanges),
+        deriveIndentation(text, config.tabWidth),
     };
 }
 
@@ -513,20 +513,20 @@ SyntaxDelta::SyntaxDelta(
     std::optional<std::vector<CommentToken>> commentTokens,
     std::optional<std::vector<CommentRange>> commentRanges,
     std::optional<std::vector<LineIndentation>> indentation)
-    : base_revision_(baseRevision),
+    : baseRevision_(baseRevision),
       revision_(revision),
       language_(std::move(language)),
-      text_bytes_(std::move(textBytes)),
+      textBytes_(std::move(textBytes)),
       spans_(std::move(spans)),
-      bracket_pairs_(std::move(bracketPairs)),
-      unmatched_brackets_(std::move(unmatchedBrackets)),
-      comment_tokens_(std::move(commentTokens)),
-      comment_ranges_(std::move(commentRanges)),
+      bracketPairs_(std::move(bracketPairs)),
+      unmatchedBrackets_(std::move(unmatchedBrackets)),
+      commentTokens_(std::move(commentTokens)),
+      commentRanges_(std::move(commentRanges)),
       indentation_(std::move(indentation)) {}
 
 bool SyntaxDelta::empty() const noexcept {
-    return !language_ && !text_bytes_ && !spans_ && !bracket_pairs_ &&
-           !unmatched_brackets_ && !comment_tokens_ && !comment_ranges_ &&
+    return !language_ && !textBytes_ && !spans_ && !bracketPairs_ &&
+           !unmatchedBrackets_ && !commentTokens_ && !commentRanges_ &&
            !indentation_;
 }
 
@@ -577,15 +577,15 @@ SyntaxModel::SyntaxModel(std::shared_ptr<SyntaxParser> parser,
                          SyntaxConfig config)
     : parser_(std::move(parser)),
       config_(config),
-      view_state_(plainTextSyntaxViewState(
-          Revision{0}, LanguageId::plainText(), {}, config.tab_width)) {
+      viewState_(plainTextSyntaxViewState(
+          Revision{0}, LanguageId::plainText(), {}, config.tabWidth)) {
     // A real Tree-sitter grammar is only present when a parser is injected; the
     // plain-text fallback (parser == nullptr) constructs no grammar, so it is not
     // counted by the startup audit (I12 / doc/spec-fast-startup.md M10-2).
     if (parser_ != nullptr) {
         noteOptionalConstruction(OptionalSubsystem::TreeSitterGrammar);
     }
-    if (config_.tab_width == 0) {
+    if (config_.tabWidth == 0) {
         throw std::invalid_argument{"tab width must be positive"};
     }
 }
@@ -604,23 +604,23 @@ bool SyntaxModel::hasGrammar(const LanguageId& language) const noexcept {
 SyntaxParseRequestResult SyntaxModel::request(
     Revision revision, LanguageId language, std::string text,
     std::vector<SyntaxEdit> edits) {
-    if (revision <= view_state_.revision() ||
+    if (revision <= viewState_.revision() ||
         (pending_ && revision <= pending_->revision())) {
         return {nullptr, SyntaxRequestError::StaleRevision};
     }
     cancelPending();
-    if (text.size() > config_.maximum_document_bytes) {
+    if (text.size() > config_.maximumDocumentBytes) {
         return {nullptr, SyntaxRequestError::DocumentTooLarge};
     }
     const auto priorParse =
-        language == view_state_.language() ? accepted_parse_ : nullptr;
+        language == viewState_.language() ? acceptedParse_ : nullptr;
     if (!edits.empty() &&
-        (!priorParse || !validEdits(edits, text, accepted_text_))) {
+        (!priorParse || !validEdits(edits, text, acceptedText_))) {
         return {nullptr, SyntaxRequestError::MalformedEdits};
     }
 
     const auto requestPrior =
-        priorParse && (text == accepted_text_ || !edits.empty())
+        priorParse && (text == acceptedText_ || !edits.empty())
             ? priorParse
             : nullptr;
     pending_ = std::shared_ptr<const SyntaxParseRequest>(
@@ -653,7 +653,7 @@ SyntaxAcceptResult SyntaxModel::accept(
     if (!request) {
         return {SyntaxAcceptError::UnknownRequest, false};
     }
-    if (request->revision() <= view_state_.revision()) {
+    if (request->revision() <= viewState_.revision()) {
         return {SyntaxAcceptError::StaleRevision, false};
     }
     if (request->cancelled()) {
@@ -674,13 +674,13 @@ SyntaxAcceptResult SyntaxModel::accept(
     auto next = fallback
                     ? plainTextSyntaxViewState(
                           request->revision(), request->language(),
-                          request->text(), config_.tab_width)
+                          request->text(), config_.tabWidth)
                     : buildSyntaxViewState(
                           request->revision(), request->language(),
                           request->text(), output, config_);
-    view_state_ = std::move(next);
-    accepted_parse_ = fallback ? nullptr : output.parse;
-    accepted_text_ = request->text();
+    viewState_ = std::move(next);
+    acceptedParse_ = fallback ? nullptr : output.parse;
+    acceptedText_ = request->text();
     pending_.reset();
     return {SyntaxAcceptError::None, fallback};
 }

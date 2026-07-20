@@ -24,14 +24,14 @@ enum class PromptControlKind : std::uint8_t { Input, Toggle, Count };
 
 struct PromptInput {
     std::string id;
-    std::string accessible_label;
+    std::string accessibleLabel;
     std::string value;
     friend bool operator==(const PromptInput&, const PromptInput&) = default;
 };
 
 struct PromptToggle {
     std::string id;
-    std::string accessible_label;
+    std::string accessibleLabel;
     bool value = false;
     int width = 0;
     friend bool operator==(const PromptToggle&, const PromptToggle&) = default;
@@ -39,7 +39,7 @@ struct PromptToggle {
 
 struct PromptMatchCount {
     std::string id;
-    std::string accessible_label;
+    std::string accessibleLabel;
     std::string value;
     friend bool operator==(const PromptMatchCount&,
                            const PromptMatchCount&) = default;
@@ -47,10 +47,10 @@ struct PromptMatchCount {
 
 struct PromptRequest {
     PromptKind kind = PromptKind::CommandArgument;
-    std::string accessible_label;
+    std::string accessibleLabel;
     std::vector<PromptInput> inputs;
     std::vector<PromptToggle> toggles;
-    std::optional<PromptMatchCount> match_count;
+    std::optional<PromptMatchCount> matchCount;
     friend bool operator==(const PromptRequest&, const PromptRequest&) = default;
 };
 
@@ -84,7 +84,7 @@ struct PromptCommandResult {
 struct PromptControlView {
     PromptControlKind kind = PromptControlKind::Input;
     std::string id;
-    std::string accessible_label;
+    std::string accessibleLabel;
     std::string value;
     bool checked = false;
     Rect rect;
@@ -94,7 +94,7 @@ struct PromptControlView {
 
 struct PromptViewState {
     PromptKind kind = PromptKind::CommandArgument;
-    std::string accessible_label;
+    std::string accessibleLabel;
     Rect rect;
     std::vector<PromptControlView> controls;
     friend bool operator==(const PromptViewState&,

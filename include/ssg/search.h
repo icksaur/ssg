@@ -106,14 +106,14 @@ struct SearchResult {
 
 struct WorkspaceSearchRequest {
     std::uint64_t generation = 0;
-    Revision source_revision{0};
+    Revision sourceRevision{0};
     ParsedSearchQuery query;
     SearchCancellationToken cancellation;
 };
 
 struct WorkspaceSearchBatch {
     std::uint64_t generation = 0;
-    Revision source_revision{0};
+    Revision sourceRevision{0};
     std::vector<SearchResult> results;
     bool cancelled = false;
 };
@@ -135,8 +135,8 @@ struct NavigationTarget {
 
 struct NavigationTransition {
     std::optional<NavigationTarget> target;
-    bool pause_follow_edits = false;
-    bool reveal_primary_caret = false;
+    bool pauseFollowEdits = false;
+    bool revealPrimaryCaret = false;
     friend bool operator==(const NavigationTransition&,
                            const NavigationTransition&) = default;
 };
@@ -165,12 +165,12 @@ private:
 
 struct SearchViewState {
     Revision revision{0};
-    bool palette_open = false;
+    bool paletteOpen = false;
     std::string query;
     SearchMode mode = SearchMode::File;
     std::vector<SearchResult> results;
-    std::optional<std::size_t> selected_index;
-    std::uint64_t search_generation = 0;
+    std::optional<std::size_t> selectedIndex;
+    std::uint64_t searchGeneration = 0;
     bool searching = false;
     friend bool operator==(const SearchViewState&,
                            const SearchViewState&) = default;
@@ -213,12 +213,12 @@ private:
     const SearchWorkspaceSource& workspace_;
     SearchCommandSource& commands_;
     SearchViewState state_;
-    std::optional<WorkspaceSearchRequest> active_request_;
+    std::optional<WorkspaceSearchRequest> activeRequest_;
 };
 
 struct SearchCommandDescriptorExport {
     std::string_view id;
-    bool user_navigation = false;
+    bool userNavigation = false;
     friend bool operator==(const SearchCommandDescriptorExport&,
                            const SearchCommandDescriptorExport&) = default;
 };
@@ -251,7 +251,7 @@ private:
 [[nodiscard]] SearchCommandSet searchCommandSet();
 
 struct SearchDelta {
-    Revision base_revision{0};
+    Revision baseRevision{0};
     Revision revision{0};
     std::optional<SearchViewState> state;
     friend bool operator==(const SearchDelta&, const SearchDelta&) = default;

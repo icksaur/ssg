@@ -23,11 +23,11 @@ struct LogicalLine {
 };
 
 struct WrappedRow {
-    std::size_t logical_line;
-    std::size_t start_byte;
-    std::size_t end_byte;
-    std::uint64_t start_cell;
-    std::uint64_t end_cell;
+    std::size_t logicalLine;
+    std::size_t startByte;
+    std::size_t endByte;
+    std::uint64_t startCell;
+    std::uint64_t endCell;
 };
 
 class TextModel {
@@ -46,14 +46,14 @@ public:
     // work).  The wrap-ON path still faults in every line via wrapped_rows /
     // all_runs, which is the accepted O(document) cost for exact wrapped geometry.
     TextModel(std::string_view text, int tabWidth)
-        : text_(text), tab_width_(tabWidth) {
-        line_starts_.push_back(0);
+        : text_(text), tabWidth_(tabWidth) {
+        lineStarts_.push_back(0);
         for (std::size_t newline = text.find('\n');
              newline != std::string_view::npos;
              newline = text.find('\n', newline + 1)) {
-            line_starts_.push_back(newline + 1);
+            lineStarts_.push_back(newline + 1);
         }
-        cache_.resize(line_starts_.size());
+        cache_.resize(lineStarts_.size());
     }
 
     [[nodiscard]] std::optional<DocumentPosition> resolve(
@@ -64,10 +64,10 @@ public:
         const auto found = std::lower_bound(
             boundaries.begin(), boundaries.end(), raw,
             [](const DocumentPosition& candidate, std::size_t value) {
-                return candidate.byte_offset.value() < value;
+                return candidate.byteOffset.value() < value;
             });
         if (found == boundaries.end() ||
-            found->byte_offset.value() != offset.value()) {
+            found->byteOffset.value() != offset.value()) {
             return std::nullopt;
         }
         return *found;
@@ -89,7 +89,7 @@ public:
         const auto& boundaries = lineData(line).line.boundaries;
         const auto index = boundaryIndex(boundaries, position);
         if (index + 1 < boundaries.size()) return boundaries[index + 1];
-        if (line + 1 >= line_starts_.size()) return boundaries.back();
+        if (line + 1 >= lineStarts_.size()) return boundaries.back();
         return lineData(line + 1).line.boundaries.front();
     }
 
@@ -109,7 +109,7 @@ public:
         const DocumentPosition& position, bool down, std::size_t lineCount,
         CellIndex desiredCell) const {
         const auto current = static_cast<std::size_t>(position.line.value());
-        const auto lastLine = line_starts_.size() - 1;
+        const auto lastLine = lineStarts_.size() - 1;
         std::size_t target = current;
         if (down) {
             target = lineCount > lastLine - current ? lastLine
@@ -141,8 +141,8 @@ public:
                  : (rowCount > current ? 0 : current - rowCount);
         if (target == current) {
             return *resolve(ByteOffset{
-                down ? rows[current].end_byte
-                     : rows[current].start_byte});
+                down ? rows[current].endByte
+                     : rows[current].startByte});
         }
         return positionForWrappedCell(rows[target], desiredCell);
     }
@@ -152,11 +152,11 @@ public:
         if (columns == kNoWrap) return position.cell;
         const auto rows = wrappedRows(columns);
         const auto& row = rows[wrappedRowIndex(rows, position)];
-        return CellIndex{position.cell.value() - row.start_cell};
+        return CellIndex{position.cell.value() - row.startCell};
     }
 
     [[nodiscard]] std::size_t lineCount() const noexcept {
-        return line_starts_.size();
+        return lineStarts_.size();
     }
 
     [[nodiscard]] const LogicalLine& line(std::size_t index) const {
@@ -168,7 +168,7 @@ public:
     }
 
     [[nodiscard]] const DocumentPosition& documentEnd() const {
-        return lineData(line_starts_.size() - 1).line.boundaries.back();
+        return lineData(lineStarts_.size() - 1).line.boundaries.back();
     }
 
     [[nodiscard]] DocumentPosition wordLeft(
@@ -234,7 +234,7 @@ private:
     [[nodiscard]] SegmentCategory categoryAt(
         const DocumentPosition& position) const {
         const auto start =
-            static_cast<std::size_t>(position.byte_offset.value());
+            static_cast<std::size_t>(position.byteOffset.value());
         const auto first = static_cast<unsigned char>(text_[start]);
         if (first >= 0x80 ||
             (first >= static_cast<unsigned char>('a') &&
@@ -273,7 +273,7 @@ private:
     [[nodiscard]] std::vector<WrappedRow> wrappedRows(
         std::uint32_t columns) const {
         std::vector<WrappedRow> rows;
-        for (std::size_t lineIndex = 0; lineIndex < line_starts_.size();
+        for (std::size_t lineIndex = 0; lineIndex < lineStarts_.size();
              ++lineIndex) {
             const auto& data = lineData(lineIndex);
             const auto& line = data.line;
@@ -294,8 +294,8 @@ private:
                     run.spans[firstSpan + spanCount - 1];
                 rows.push_back(WrappedRow{
                     lineIndex,
-                    line.start + first.byte_offset,
-                    line.start + last.byte_offset + last.byte_len,
+                    line.start + first.byteOffset,
+                    line.start + last.byteOffset + last.byteLen,
                     startCell,
                     startCell + contentCells,
                 });
@@ -303,7 +303,7 @@ private:
 
             for (std::size_t spanIndex = 0;
                  spanIndex < run.spans.size(); ++spanIndex) {
-                const auto width = run.spans[spanIndex].cell_width;
+                const auto width = run.spans[spanIndex].cellWidth;
                 if (width > 0 && contentCells > 0 &&
                     width >
                         columns - std::min(contentCells, columns)) {
@@ -325,20 +325,20 @@ private:
         const std::vector<WrappedRow>& rows,
         const DocumentPosition& position) const {
         const auto byteOffset =
-            static_cast<std::size_t>(position.byte_offset.value());
+            static_cast<std::size_t>(position.byteOffset.value());
         const auto logicalLine =
             static_cast<std::size_t>(position.line.value());
         for (std::size_t index = 0; index < rows.size(); ++index) {
             const auto& row = rows[index];
-            if (row.logical_line != logicalLine ||
-                byteOffset < row.start_byte) {
+            if (row.logicalLine != logicalLine ||
+                byteOffset < row.startByte) {
                 continue;
             }
             const bool finalRow =
                 index + 1 == rows.size() ||
-                rows[index + 1].logical_line != logicalLine;
-            if (byteOffset < row.end_byte ||
-                (finalRow && byteOffset == row.end_byte)) {
+                rows[index + 1].logicalLine != logicalLine;
+            if (byteOffset < row.endByte ||
+                (finalRow && byteOffset == row.endByte)) {
                 return index;
             }
         }
@@ -349,16 +349,16 @@ private:
     [[nodiscard]] DocumentPosition positionForWrappedCell(
         const WrappedRow& row, CellIndex desiredCell) const {
         const auto target =
-            std::min(row.start_cell + desiredCell.value(),
-                     row.end_cell);
-        const auto& boundaries = lineData(row.logical_line).line.boundaries;
+            std::min(row.startCell + desiredCell.value(),
+                     row.endCell);
+        const auto& boundaries = lineData(row.logicalLine).line.boundaries;
         const DocumentPosition* chosen = nullptr;
         for (const auto& boundary : boundaries) {
-            const auto byteOffset = boundary.byte_offset.value();
-            if (byteOffset < row.start_byte) {
+            const auto byteOffset = boundary.byteOffset.value();
+            if (byteOffset < row.startByte) {
                 continue;
             }
-            if (byteOffset > row.end_byte ||
+            if (byteOffset > row.endByte ||
                 boundary.cell.value() > target) {
                 break;
             }
@@ -369,7 +369,7 @@ private:
         }
         return chosen != nullptr
                    ? *chosen
-                   : *resolve(ByteOffset{row.start_byte});
+                   : *resolve(ByteOffset{row.startByte});
     }
 
     // One logical line's segmentation, computed on first use and cached with
@@ -383,21 +383,21 @@ private:
     [[nodiscard]] const LineData& lineData(std::size_t index) const {
         auto& slot = cache_[index];
         if (slot) return *slot;
-        const std::size_t start = line_starts_[index];
-        const std::size_t end = index + 1 < line_starts_.size()
-                                    ? line_starts_[index + 1] - 1
+        const std::size_t start = lineStarts_[index];
+        const std::size_t end = index + 1 < lineStarts_.size()
+                                    ? lineStarts_[index + 1] - 1
                                     : text_.size();
         auto run =
-            computeCellRun(text_.substr(start, end - start), tab_width_);
+            computeCellRun(text_.substr(start, end - start), tabWidth_);
         std::vector<DocumentPosition> boundaries;
         boundaries.reserve(run.spans.size() + 1);
         std::uint64_t cell = 0;
         boundaries.push_back(
             DocumentPosition{ByteOffset{start}, LineIndex{index}, CellIndex{0}});
         for (const auto& span : run.spans) {
-            cell += span.cell_width;
+            cell += span.cellWidth;
             boundaries.push_back(DocumentPosition{
-                ByteOffset{start + span.byte_offset + span.byte_len},
+                ByteOffset{start + span.byteOffset + span.byteLen},
                 LineIndex{index}, CellIndex{cell}});
         }
         slot = std::make_unique<LineData>(
@@ -410,18 +410,18 @@ private:
     // start is <= raw), via the cheap line-start index — no segmentation.
     [[nodiscard]] std::size_t lineContaining(std::size_t raw) const {
         const auto it =
-            std::upper_bound(line_starts_.begin(), line_starts_.end(), raw);
+            std::upper_bound(lineStarts_.begin(), lineStarts_.end(), raw);
         return static_cast<std::size_t>(
-            std::distance(line_starts_.begin(), it) - 1);
+            std::distance(lineStarts_.begin(), it) - 1);
     }
 
     [[nodiscard]] std::size_t boundaryIndex(
         const std::vector<DocumentPosition>& boundaries,
         const DocumentPosition& position) const {
         const auto found = std::lower_bound(
-            boundaries.begin(), boundaries.end(), position.byte_offset,
+            boundaries.begin(), boundaries.end(), position.byteOffset,
             [](const DocumentPosition& candidate, ByteOffset value) {
-                return candidate.byte_offset < value;
+                return candidate.byteOffset < value;
             });
         return static_cast<std::size_t>(
             std::distance(boundaries.begin(), found));
@@ -430,16 +430,16 @@ private:
     // Every line's CellRun (faults in all lines) — the wrap-ON viewport path only.
     [[nodiscard]] std::vector<CellRun> allRuns() const {
         std::vector<CellRun> runs;
-        runs.reserve(line_starts_.size());
-        for (std::size_t index = 0; index < line_starts_.size(); ++index) {
+        runs.reserve(lineStarts_.size());
+        for (std::size_t index = 0; index < lineStarts_.size(); ++index) {
             runs.push_back(lineData(index).run);
         }
         return runs;
     }
 
     std::string_view text_;
-    int tab_width_;
-    std::vector<std::size_t> line_starts_;
+    int tabWidth_;
+    std::vector<std::size_t> lineStarts_;
     mutable std::vector<std::unique_ptr<LineData>> cache_;
 };
 
@@ -465,7 +465,7 @@ SelectionNavigationResult accepted(const SelectionViewState& before,
 
 bool isValidPosition(const TextModel& model,
                        const DocumentPosition& position) {
-    const auto resolved = model.resolve(position.byte_offset);
+    const auto resolved = model.resolve(position.byteOffset);
     return resolved && *resolved == position;
 }
 
@@ -475,30 +475,30 @@ std::uint32_t revealedFirstRow(const TextModel& model,
                                  bool center, bool wordWrap) {
     if (wordWrap) {
         const auto viewport =
-            model.viewportState(dimensions, state.first_visual_row);
+            model.viewportState(dimensions, state.firstVisualRow);
         const auto target =
             model.visualRow(state.selections.primary().active,
                              dimensions.columns);
-        const auto maximum = viewport.scrollbar.maximum_first_row;
+        const auto maximum = viewport.scrollbar.maximumFirstRow;
         if (center) {
             const auto half = dimensions.rows / 2;
             const auto requested = target > half ? target - half : 0;
             return std::min(requested, maximum);
         }
-        if (target < viewport.first_visual_row) {
+        if (target < viewport.firstVisualRow) {
             return target;
         }
         const auto visibleEnd =
-            static_cast<std::uint64_t>(viewport.first_visual_row) +
-            viewport.visible_rows.size();
+            static_cast<std::uint64_t>(viewport.firstVisualRow) +
+            viewport.visibleRows.size();
         if (target >= visibleEnd) {
             const auto requested =
                 target - static_cast<std::uint32_t>(
-                             viewport.visible_rows.size()) +
+                             viewport.visibleRows.size()) +
                 1;
             return std::min(requested, maximum);
         }
-        return viewport.first_visual_row;
+        return viewport.firstVisualRow;
     }
 
     // Word wrap OFF (M12 VP-H): one logical line is one visual row, so the caret's
@@ -508,7 +508,7 @@ std::uint32_t revealedFirstRow(const TextModel& model,
     const std::uint32_t maximum =
         total > dimensions.rows ? total - dimensions.rows : 0;
     const std::uint32_t currentFirst =
-        std::min(state.first_visual_row, maximum);
+        std::min(state.firstVisualRow, maximum);
     const auto target = static_cast<std::uint32_t>(
         state.selections.primary().active.line.value());
     if (center) {
@@ -535,7 +535,7 @@ std::uint32_t revealedFirstColumn(const SelectionViewState& state,
     if (wordWrap) return 0;
     const auto caretCell = static_cast<std::uint32_t>(
         state.selections.primary().active.cell.value());
-    std::uint32_t first = state.first_visual_column;
+    std::uint32_t first = state.firstVisualColumn;
     if (caretCell < first) {
         first = caretCell;
     } else if (caretCell >= first + dimensions.columns) {
@@ -567,8 +567,8 @@ bool validBracketPairs(std::span<const BracketPair> pairs) {
 }
 
 struct BracketMatch {
-    std::size_t mate_start;
-    std::size_t mate_end;
+    std::size_t mateStart;
+    std::size_t mateEnd;
     bool forward;
 };
 
@@ -627,7 +627,7 @@ std::unordered_map<std::size_t, BracketMatch> bracketMatches(
             ++offset;
             continue;
         }
-        const auto next = model.next(*current).byte_offset.value();
+        const auto next = model.next(*current).byteOffset.value();
         if (next <= offset) {
             break;
         }
@@ -639,15 +639,15 @@ std::unordered_map<std::size_t, BracketMatch> bracketMatches(
 } // namespace
 
 const DocumentPosition& Selection::lower() const noexcept {
-    return anchor.byte_offset <= active.byte_offset ? anchor : active;
+    return anchor.byteOffset <= active.byteOffset ? anchor : active;
 }
 
 const DocumentPosition& Selection::upper() const noexcept {
-    return anchor.byte_offset <= active.byte_offset ? active : anchor;
+    return anchor.byteOffset <= active.byteOffset ? active : anchor;
 }
 
 bool Selection::isCaret() const noexcept {
-    return anchor.byte_offset == active.byte_offset;
+    return anchor.byteOffset == active.byteOffset;
 }
 
 SelectionSet::SelectionSet(std::vector<Selection> selections)
@@ -658,12 +658,12 @@ SelectionSet::SelectionSet(std::vector<Selection> selections)
     }
     std::sort(selections_.begin(), selections_.end(),
               [](const Selection& left, const Selection& right) {
-                  if (left.lower().byte_offset != right.lower().byte_offset) {
-                      return left.lower().byte_offset <
-                             right.lower().byte_offset;
+                  if (left.lower().byteOffset != right.lower().byteOffset) {
+                      return left.lower().byteOffset <
+                             right.lower().byteOffset;
                   }
-                  return left.upper().byte_offset <
-                         right.upper().byte_offset;
+                  return left.upper().byteOffset <
+                         right.upper().byteOffset;
               });
 
     std::vector<Selection> normalized;
@@ -675,9 +675,9 @@ SelectionSet::SelectionSet(std::vector<Selection> selections)
         if (current == previous) {
             continue;
         }
-        if (current.lower().byte_offset < previous.upper().byte_offset) {
+        if (current.lower().byteOffset < previous.upper().byteOffset) {
             const auto& upper =
-                current.upper().byte_offset > previous.upper().byte_offset
+                current.upper().byteOffset > previous.upper().byteOffset
                     ? current.upper()
                     : previous.upper();
             previous = Selection{previous.lower(), upper};
@@ -779,18 +779,18 @@ SelectionNavigationResult applySelectionNavigation(
     }
 
     auto selections = before.selections.items();
-    auto desiredCell = before.desired_cell;
+    auto desiredCell = before.desiredCell;
     // The current viewport supplies the page size (visible row count) and the base
     // scroll row.  Under no-wrap, use the O(visible rows) unwrapped projection so
     // this does NOT segment the whole document (M12 VP-2b); the wrap-ON path keeps
     // the exact wrapped viewport.
     const auto currentViewport =
-        wordWrap ? model.viewportState(viewport, before.first_visual_row)
+        wordWrap ? model.viewportState(viewport, before.firstVisualRow)
                   : computeViewportUnwrapped(text, viewport,
-                                               before.first_visual_row, 0,
+                                               before.firstVisualRow, 0,
                                                tabWidth);
     std::uint32_t firstVisualRow =
-        currentViewport.first_visual_row;
+        currentViewport.firstVisualRow;
 
     const auto replaceWithCarets = [&](auto&& destination) {
         for (auto& selection : selections) {
@@ -874,15 +874,15 @@ SelectionNavigationResult applySelectionNavigation(
             command == SelectionCommand::CursorPageUp ||
             command == SelectionCommand::CursorPageDown;
         const auto count =
-            page ? currentViewport.visible_rows.size() : 1;
+            page ? currentViewport.visibleRows.size() : 1;
         std::optional<CellIndex> primaryDesired;
         for (std::size_t index = 0; index < selections.size(); ++index) {
             auto& selection = selections[index];
             const auto origin = down ? selection.upper()
                                      : selection.lower();
             const auto desired =
-                index + 1 == selections.size() && before.desired_cell
-                    ? *before.desired_cell
+                index + 1 == selections.size() && before.desiredCell
+                    ? *before.desiredCell
                     : model.visualColumn(origin, navColumns);
             const auto destination =
                 model.verticalVisual(origin, down, count, desired,
@@ -991,14 +991,14 @@ SelectionNavigationResult applySelectionNavigation(
             command == SelectionCommand::SelectPageUp ||
             command == SelectionCommand::SelectPageDown;
         const auto count =
-            page ? currentViewport.visible_rows.size() : 1;
+            page ? currentViewport.visibleRows.size() : 1;
         std::optional<CellIndex> primaryDesired;
         for (std::size_t index = 0; index < selections.size(); ++index) {
             auto& selection = selections[index];
             const auto origin = selection.active;
             const auto desired =
-                index + 1 == selections.size() && before.desired_cell
-                    ? *before.desired_cell
+                index + 1 == selections.size() && before.desiredCell
+                    ? *before.desiredCell
                     : model.visualColumn(origin, navColumns);
             selection.active =
                 model.verticalVisual(origin, down, count, desired,
@@ -1041,9 +1041,9 @@ SelectionNavigationResult applySelectionNavigation(
         const auto& source = selections.back();
         if (!source.isCaret()) {
             const auto low = static_cast<std::size_t>(
-                source.lower().byte_offset.value());
+                source.lower().byteOffset.value());
             const auto high = static_cast<std::size_t>(
-                source.upper().byte_offset.value());
+                source.upper().byteOffset.value());
             const auto needle = text.substr(low, high - low);
             const auto findValid =
                 [&](std::size_t start,
@@ -1106,9 +1106,9 @@ SelectionNavigationResult applySelectionNavigation(
                 continue;
             }
             const auto low = static_cast<std::size_t>(
-                selection.lower().byte_offset.value());
+                selection.lower().byteOffset.value());
             const auto high = static_cast<std::size_t>(
-                selection.upper().byte_offset.value());
+                selection.upper().byteOffset.value());
             for (std::size_t lineIndex = 0;
                  lineIndex < model.lineCount(); ++lineIndex) {
                 const auto& line = model.line(lineIndex);
@@ -1140,15 +1140,15 @@ SelectionNavigationResult applySelectionNavigation(
         for (auto& selection : selections) {
             const auto found = matches.find(
                 static_cast<std::size_t>(
-                    selection.active.byte_offset.value()));
+                    selection.active.byteOffset.value()));
             if (found == matches.end()) {
                 continue;
             }
             const auto offset =
                 command == SelectionCommand::GotoMatchingBracket ||
                         !found->second.forward
-                    ? found->second.mate_start
-                    : found->second.mate_end;
+                    ? found->second.mateStart
+                    : found->second.mateEnd;
             const auto destination =
                 *model.resolve(ByteOffset{offset});
             if (command ==
@@ -1170,11 +1170,11 @@ SelectionNavigationResult applySelectionNavigation(
 
     SelectionViewState after{
         SelectionSet{std::move(selections)}, firstVisualRow,
-        before.first_visual_column, desiredCell};
-    after.first_visual_row = revealedFirstRow(
+        before.firstVisualColumn, desiredCell};
+    after.firstVisualRow = revealedFirstRow(
         model, after, viewport,
         command == SelectionCommand::ViewCenterCaret, wordWrap);
-    after.first_visual_column =
+    after.firstVisualColumn =
         revealedFirstColumn(after, viewport, wordWrap);
     return accepted(before, std::move(after));
 }

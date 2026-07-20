@@ -47,7 +47,7 @@ FollowEditsCommandSet followEditsCommandSet() {
 
 FollowEditsModel::FollowEditsModel(FollowEditsConfig config)
     : config_{std::move(config)} {
-    if (config_.queue_capacity == 0) {
+    if (config_.queueCapacity == 0) {
         throw std::invalid_argument{"follow queue capacity must be positive"};
     }
 }
@@ -62,8 +62,8 @@ FollowEditsResult FollowEditsModel::attachClient(
     }
 
     FollowScrollOffset offset;
-    if (state_.active_target) {
-        offset = offsetFor(state_.active_target->newest_hunk_line, dimensions);
+    if (state_.activeTarget) {
+        offset = offsetFor(state_.activeTarget->newestHunkLine, dimensions);
     }
     state_.clients.push_back({client, dimensions, offset});
     advanceGeneration();
@@ -82,20 +82,20 @@ FollowEditsResult FollowEditsModel::detachClient(ClientId client) {
 
 FollowEditsResult FollowEditsModel::acceptExternalChange(
     const DiffFileView& file, Revision sourceRevision) {
-    if (sourceRevision <= latest_source_revision_) {
+    if (sourceRevision <= latestSourceRevision_) {
         return {FollowEditsError::StaleRevision};
     }
 
-    latest_source_revision_ = sourceRevision;
-    std::erase_if(state_.queued_targets, [&file](const FollowTarget& target) {
+    latestSourceRevision_ = sourceRevision;
+    std::erase_if(state_.queuedTargets, [&file](const FollowTarget& target) {
         return target.id == file.id;
     });
 
     if (!file.hunks.empty()) {
         auto target = targetFor(file, sourceRevision);
-        state_.queued_targets.push_back(target);
-        if (state_.queued_targets.size() > config_.queue_capacity) {
-            state_.queued_targets.erase(state_.queued_targets.begin());
+        state_.queuedTargets.push_back(target);
+        if (state_.queuedTargets.size() > config_.queueCapacity) {
+            state_.queuedTargets.erase(state_.queuedTargets.begin());
         }
         if (state_.mode == FollowMode::Following) {
             activate(target);
@@ -117,7 +117,7 @@ FollowEditsResult FollowEditsModel::applyNavigation(
         state_.mode = FollowMode::Paused;
     }
     if (navigation.pane) {
-        state_.active_pane = *navigation.pane;
+        state_.activePane = *navigation.pane;
     }
     if (navigation.offset) {
         client->offset = *navigation.offset;
@@ -133,26 +133,26 @@ FollowEditsResult FollowEditsModel::pause() {
 }
 
 FollowEditsResult FollowEditsModel::resume(const DiffViewState& currentDiff) {
-    if (currentDiff.revision < latest_source_revision_) {
+    if (currentDiff.revision < latestSourceRevision_) {
         return {FollowEditsError::StaleRevision};
     }
 
     std::optional<FollowTarget> resolved;
-    for (auto queued = state_.queued_targets.rbegin();
-         queued != state_.queued_targets.rend(); ++queued) {
+    for (auto queued = state_.queuedTargets.rbegin();
+         queued != state_.queuedTargets.rend(); ++queued) {
         const auto current =
             std::find_if(currentDiff.files.begin(), currentDiff.files.end(),
                          [&queued](const DiffFileView& file) {
                              return file.id == queued->id && !file.hunks.empty();
                          });
         if (current != currentDiff.files.end()) {
-            resolved = targetFor(*current, queued->source_revision);
+            resolved = targetFor(*current, queued->sourceRevision);
             break;
         }
     }
 
     state_.mode = FollowMode::Following;
-    state_.queued_targets.clear();
+    state_.queuedTargets.clear();
     if (resolved) {
         activate(*resolved);
     }
@@ -166,7 +166,7 @@ FollowEditsViewState FollowEditsModel::viewState() const {
 
 FollowEditsFooterProjection FollowEditsModel::footerProjection() const {
     if (state_.mode == FollowMode::Paused) {
-        return {"paused", config_.resume_binding, "follow_edits.resume"};
+        return {"paused", config_.resumeBinding, "follow_edits.resume"};
     }
     return {"following", std::nullopt, std::nullopt};
 }
@@ -174,14 +174,14 @@ FollowEditsFooterProjection FollowEditsModel::footerProjection() const {
 FollowTarget FollowEditsModel::targetFor(const DiffFileView& file,
                                           Revision sourceRevision) const {
     const auto opened = diffOpenFile(file);
-    return {file.id, opened.path, file.deleted, file.hunks.back().target_start,
+    return {file.id, opened.path, file.deleted, file.hunks.back().targetStart,
             sourceRevision};
 }
 
 void FollowEditsModel::activate(const FollowTarget& target) {
-    state_.active_target = target;
+    state_.activeTarget = target;
     for (auto& client : state_.clients) {
-        client.offset = offsetFor(target.newest_hunk_line, client.dimensions);
+        client.offset = offsetFor(target.newestHunkLine, client.dimensions);
     }
 }
 

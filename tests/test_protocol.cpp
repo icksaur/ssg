@@ -214,7 +214,7 @@ TEST(commandRequestRoundTripsWithNoPayload) {
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.command.has_value());
     ASSERT_EQ(decoded.command->id, command.id);
-    ASSERT_EQ(decoded.command->base_revision, command.base_revision);
+    ASSERT_EQ(decoded.command->baseRevision, command.baseRevision);
     ASSERT_FALSE(decoded.command->payload.has_value());
 }
 
@@ -318,7 +318,7 @@ TEST(commandRequestRoundTripsWithDroppedContentArguments) {
     ASSERT_TRUE(arguments != nullptr);
     ASSERT_EQ(arguments->bytes,
              (std::vector<std::uint8_t>{1, 2, 3, 4}));
-    ASSERT_EQ(arguments->suggested_label, std::string{"dropped.txt"});
+    ASSERT_EQ(arguments->suggestedLabel, std::string{"dropped.txt"});
 }
 
 std::string wireU8(std::uint8_t value) {
@@ -504,9 +504,9 @@ TEST(twoClientCapabilityAndViewportIsolationSurvivesTheWire) {
     ASSERT_EQ(firstDecoded.snapshot->client().capabilities.size(),
              std::size_t{1});
     ASSERT_TRUE(secondDecoded.snapshot->client().capabilities.empty());
-    ASSERT_EQ(firstDecoded.snapshot->client().viewport.first_visual_row,
+    ASSERT_EQ(firstDecoded.snapshot->client().viewport.firstVisualRow,
              std::uint32_t{2});
-    ASSERT_EQ(secondDecoded.snapshot->client().viewport.first_visual_row,
+    ASSERT_EQ(secondDecoded.snapshot->client().viewport.firstVisualRow,
              std::uint32_t{7});
     ASSERT_EQ(firstDecoded.snapshot->sections(), secondDecoded.snapshot->sections());
 }
@@ -521,16 +521,16 @@ TEST(sessionSnapshotRoundTripsTreeScrollFields) {
         ssg::TreeProviderId{"files"}, ssg::TreeProviderKind::Filesystem,
         {ssg::TreeNodeView{nodeA, 0, false}, ssg::TreeNodeView{nodeB, 0, false}},
         ssg::TreeNodeId{"files:b"}};
-    provider.first_visible = 3;
+    provider.firstVisible = 3;
     provider.scrollbar = ssg::scrollbarMetrics(40, 9, 3);
-    provider.visible_node_ids = {ssg::TreeNodeId{"files:a"},
+    provider.visibleNodeIds = {ssg::TreeNodeId{"files:a"},
                                  ssg::TreeNodeId{"files:b"}};
     sectionsValue.tree = ssg::TreeViewState{ssg::TreeRevision{7}, {provider}};
     // Also exercise the shell panel scrollbar gutter geometry on the wire.
     sectionsValue.shell.panel = ssg::Rect{0, 1, 24, 10};
-    sectionsValue.shell.panel_scrollbar = ssg::Rect{23, 2, 1, 9};
+    sectionsValue.shell.panelScrollbar = ssg::Rect{23, 2, 1, 9};
     // And the typed per-tab hit map.
-    sectionsValue.shell.tab_hits = {ssg::TabHit{ssg::Rect{24, 0, 10, 1}, 0},
+    sectionsValue.shell.tabHits = {ssg::TabHit{ssg::Rect{24, 0, 10, 1}, 0},
                                      ssg::TabHit{ssg::Rect{34, 0, 8, 1}, 1}};
 
     auto snapshot = ssg::assembleSessionSnapshot(
@@ -546,14 +546,14 @@ TEST(sessionSnapshotRoundTripsTreeScrollFields) {
     // Whole-section equality proves the new scroll fields survive the wire.
     ASSERT_EQ(decoded.snapshot->sections().tree, snapshot.sections().tree);
     auto const& p = decoded.snapshot->sections().tree.providers.front();
-    ASSERT_EQ(p.first_visible, std::uint32_t{3});
+    ASSERT_EQ(p.firstVisible, std::uint32_t{3});
     ASSERT_EQ(p.scrollbar, ssg::scrollbarMetrics(40, 9, 3));
-    ASSERT_EQ(p.visible_node_ids.size(), std::size_t{2});
-    ASSERT_TRUE(decoded.snapshot->sections().shell.panel_scrollbar.has_value());
-    ASSERT_EQ(decoded.snapshot->sections().shell.panel_scrollbar,
-              snapshot.sections().shell.panel_scrollbar);
-    ASSERT_EQ(decoded.snapshot->sections().shell.tab_hits,
-              snapshot.sections().shell.tab_hits);
+    ASSERT_EQ(p.visibleNodeIds.size(), std::size_t{2});
+    ASSERT_TRUE(decoded.snapshot->sections().shell.panelScrollbar.has_value());
+    ASSERT_EQ(decoded.snapshot->sections().shell.panelScrollbar,
+              snapshot.sections().shell.panelScrollbar);
+    ASSERT_EQ(decoded.snapshot->sections().shell.tabHits,
+              snapshot.sections().shell.tabHits);
 }
 
 // ---------------------------------------------------------------------------
@@ -599,8 +599,8 @@ TEST(statusActionInvocationRoundTripsThroughTheWire) {
     auto const decoded = ssg::decodeStatusActionInvocation(bytes);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.invocation.has_value());
-    ASSERT_EQ(decoded.invocation->status_id, invocation.status_id);
-    ASSERT_EQ(decoded.invocation->action_id, invocation.action_id);
+    ASSERT_EQ(decoded.invocation->statusId, invocation.statusId);
+    ASSERT_EQ(decoded.invocation->actionId, invocation.actionId);
     ASSERT_EQ(decoded.invocation->generation, invocation.generation);
 }
 
@@ -632,7 +632,7 @@ TEST(binaryFrameDecodedBytesOutliveTheInputBuffer) {
     ASSERT_TRUE(survivingFrame.has_value());
     ASSERT_EQ(survivingFrame->bytes,
              (std::vector<std::uint8_t>{1, 2, 3, 4, 5, 6}));
-    ASSERT_EQ(survivingFrame->request_id, std::uint64_t{7});
+    ASSERT_EQ(survivingFrame->requestId, std::uint64_t{7});
 }
 
 TEST(binaryFrameRejectsAnUnsupportedPayloadKind) {
@@ -646,7 +646,7 @@ TEST(binaryFrameRejectsAnUnsupportedPayloadKind) {
 
 TEST(binaryFrameRejectsOversizedDeclaredLengthAndFrame) {
     ssg::ProtocolLimits limits;
-    limits.max_binary_frame_bytes = 4;
+    limits.maxBinaryFrameBytes = 4;
     auto const bytes = ssg::encodeBinaryFrame(ssg::BinaryFrame{
         1, ssg::BinaryPayloadKind::DroppedContent, 1, {1, 2, 3, 4, 5}});
     auto const decoded = ssg::decodeBinaryFrame(bytes, limits);
@@ -707,7 +707,7 @@ TEST(malformedAndTruncatedAndOversizedAndUnknownVersionCorpus) {
     // Oversized: buffer larger than the configured message-byte limit.
     {
         ssg::ProtocolLimits limits;
-        limits.max_message_bytes = canonical.size() - 1;
+        limits.maxMessageBytes = canonical.size() - 1;
         auto const decoded = ssg::decodeClipboardRequest(canonical, limits);
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::MessageTooLarge);
@@ -737,21 +737,21 @@ TEST(valueBoundsAreEnforcedOnDecode) {
 
     {
         ssg::ProtocolLimits limits;
-        limits.max_collection_length = 0;
+        limits.maxCollectionLength = 0;
         auto const decoded = ssg::decodeStatusActionInvocation(bytes, limits);
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::ValueBoundsExceeded);
     }
     {
         ssg::ProtocolLimits limits;
-        limits.max_text_bytes = 0;
+        limits.maxTextBytes = 0;
         auto const decoded = ssg::decodeStatusActionInvocation(bytes, limits);
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::ValueBoundsExceeded);
     }
     {
         ssg::ProtocolLimits limits;
-        limits.max_value_depth = 0;
+        limits.maxValueDepth = 0;
         auto const decoded = ssg::decodeStatusActionInvocation(bytes, limits);
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::ValueBoundsExceeded);
@@ -830,7 +830,7 @@ TEST(canonicalFixturesDecodeToTheExpectedValues) {
             readFixtureBytes("command_request_no_payload.hex"), registry);
         ASSERT_TRUE(decoded.accepted());
         ASSERT_EQ(decoded.command->id, std::string{"edit.undo"});
-        ASSERT_EQ(decoded.command->base_revision, ssg::Revision{3});
+        ASSERT_EQ(decoded.command->baseRevision, ssg::Revision{3});
         ASSERT_FALSE(decoded.command->payload.has_value());
     }
     {
@@ -858,7 +858,7 @@ TEST(canonicalFixturesDecodeToTheExpectedValues) {
             readFixtureBytes("session_snapshot.hex"));
         ASSERT_TRUE(decoded.accepted());
         ASSERT_EQ(decoded.snapshot->revision(), ssg::Revision{4});
-        ASSERT_EQ(decoded.snapshot->client().client_id, ssg::ClientId{7});
+        ASSERT_EQ(decoded.snapshot->client().clientId, ssg::ClientId{7});
         ASSERT_EQ(decoded.snapshot->client().capabilities.size(),
                  std::size_t{1});
     }
@@ -888,14 +888,14 @@ TEST(canonicalFixturesDecodeToTheExpectedValues) {
         auto decoded = ssg::decodeStatusActionInvocation(
             readFixtureBytes("status_action_invocation.hex"));
         ASSERT_TRUE(decoded.accepted());
-        ASSERT_EQ(decoded.invocation->status_id, ssg::StatusId{9});
-        ASSERT_EQ(decoded.invocation->action_id, std::string{"dismiss"});
+        ASSERT_EQ(decoded.invocation->statusId, ssg::StatusId{9});
+        ASSERT_EQ(decoded.invocation->actionId, std::string{"dismiss"});
     }
     {
         auto decoded =
             ssg::decodeBinaryFrame(readFixtureBytes("binary_frame.hex"));
         ASSERT_TRUE(decoded.accepted());
-        ASSERT_EQ(decoded.frame->request_id, std::uint64_t{99});
+        ASSERT_EQ(decoded.frame->requestId, std::uint64_t{99});
         ASSERT_EQ(decoded.frame->bytes,
                  (std::vector<std::uint8_t>{9, 8, 7, 6, 5}));
     }
@@ -906,7 +906,7 @@ TEST(canonicalFixturesDecodeToTheExpectedValues) {
 TEST(viewportFirstVisualColumnSurvivesTheWire) {
     // VP-H (M12): the horizontal scroll offset is a wire field and must round-trip.
     auto view = clientView(3);
-    view.first_visual_column = 7;
+    view.firstVisualColumn = 7;
     auto snapshot = ssg::assembleSessionSnapshot(
         ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{ssg::ClientId{7},
@@ -917,7 +917,7 @@ TEST(viewportFirstVisualColumnSurvivesTheWire) {
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.snapshot.has_value());
     if (!decoded.snapshot) return;
-    ASSERT_EQ(decoded.snapshot->client().viewport.first_visual_column,
+    ASSERT_EQ(decoded.snapshot->client().viewport.firstVisualColumn,
               std::uint32_t{7});
     ASSERT_EQ(*decoded.snapshot, snapshot);
 }
@@ -944,7 +944,7 @@ TEST(findReplaceViewStateRoundTripsReplacementThroughTheWire) {
     auto withReplacement = [](ssg::Revision revision, std::string marker,
                                std::string replacement) {
         auto s = sections(revision, std::move(marker));
-        s.find_replace.replacement = std::move(replacement);
+        s.findReplace.replacement = std::move(replacement);
         return s;
     };
     auto snapshot = ssg::assembleSessionSnapshot(
@@ -958,7 +958,7 @@ TEST(findReplaceViewStateRoundTripsReplacementThroughTheWire) {
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.snapshot.has_value());
     if (decoded.snapshot) {
-        ASSERT_EQ(decoded.snapshot->sections().find_replace.replacement,
+        ASSERT_EQ(decoded.snapshot->sections().findReplace.replacement,
                   std::string{"dog"});
     }
 
@@ -983,7 +983,7 @@ TEST(findReplaceViewStateRoundTripsReplacementThroughTheWire) {
     ASSERT_TRUE(replayed.accepted());
     ASSERT_TRUE(replayed.snapshot.has_value());
     if (replayed.snapshot) {
-        ASSERT_EQ(replayed.snapshot->sections().find_replace.replacement,
+        ASSERT_EQ(replayed.snapshot->sections().findReplace.replacement,
                   std::string{"dog"});
     }
 }

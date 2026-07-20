@@ -14,16 +14,16 @@ namespace {
 struct HistoryStep {
     std::vector<TextEdit> forward;
     std::vector<TextEdit> inverse;
-    std::uint64_t payload_bytes;
+    std::uint64_t payloadBytes;
 };
 
 struct HistoryUnit {
     std::vector<HistoryStep> steps;
-    SelectionSet selections_before;
-    SelectionSet selections_after;
+    SelectionSet selectionsBefore;
+    SelectionSet selectionsAfter;
     HistoryEditKind kind;
-    std::uint64_t last_timestamp_ms;
-    std::uint64_t charged_bytes;
+    std::uint64_t lastTimestampMs;
+    std::uint64_t chargedBytes;
     bool coalescible;
 };
 
@@ -81,22 +81,22 @@ bool editShapeMatches(const EditTransaction& transaction,
     for (std::size_t index = 0; index < ordered.size(); ++index) {
         const auto& edit = *ordered[index];
         const auto caret =
-            selections.items()[index].active.byte_offset.value();
+            selections.items()[index].active.byteOffset.value();
         switch (kind) {
         case HistoryEditKind::Typing:
-            if (edit.erased_bytes != 0 || edit.inserted_text.empty() ||
+            if (edit.erasedBytes != 0 || edit.insertedText.empty() ||
                 edit.offset.value() != caret) {
                 return false;
             }
             break;
         case HistoryEditKind::DeleteBackward:
-            if (!edit.inserted_text.empty() || edit.erased_bytes == 0 ||
-                edit.offset.value() + edit.erased_bytes != caret) {
+            if (!edit.insertedText.empty() || edit.erasedBytes == 0 ||
+                edit.offset.value() + edit.erasedBytes != caret) {
                 return false;
             }
             break;
         case HistoryEditKind::DeleteForward:
-            if (!edit.inserted_text.empty() || edit.erased_bytes == 0 ||
+            if (!edit.insertedText.empty() || edit.erasedBytes == 0 ||
                 edit.offset.value() != caret) {
                 return false;
             }
@@ -112,7 +112,7 @@ bool rangesAreCapturable(const DocumentSnapshot& before,
                            const EditTransaction& transaction) {
     for (const auto& edit : transaction.edits) {
         if (edit.offset.value() > before.text.size() ||
-            edit.erased_bytes >
+            edit.erasedBytes >
                 before.text.size() -
                     static_cast<std::size_t>(edit.offset.value())) {
             return false;
@@ -133,17 +133,17 @@ HistoryStep makeStep(const DocumentSnapshot& before,
         const auto outputOffset = offset + displacement;
         const auto erased = before.text.substr(
             static_cast<std::size_t>(edit->offset.value()),
-            static_cast<std::size_t>(edit->erased_bytes));
+            static_cast<std::size_t>(edit->erasedBytes));
         step.inverse.push_back(
             {ByteOffset{static_cast<std::uint64_t>(outputOffset)},
-             static_cast<std::uint64_t>(edit->inserted_text.size()), erased});
-        step.payload_bytes = saturatedAdd(
-            step.payload_bytes,
-            saturatedAdd(static_cast<std::uint64_t>(edit->inserted_text.size()),
-                          edit->erased_bytes));
+             static_cast<std::uint64_t>(edit->insertedText.size()), erased});
+        step.payloadBytes = saturatedAdd(
+            step.payloadBytes,
+            saturatedAdd(static_cast<std::uint64_t>(edit->insertedText.size()),
+                          edit->erasedBytes));
         displacement +=
-            static_cast<std::int64_t>(edit->inserted_text.size()) -
-            static_cast<std::int64_t>(edit->erased_bytes);
+            static_cast<std::int64_t>(edit->insertedText.size()) -
+            static_cast<std::int64_t>(edit->erasedBytes);
     }
     return step;
 }
@@ -152,7 +152,7 @@ std::uint64_t unitCharge(const HistoryStep& step,
                           const SelectionSet& before,
                           const SelectionSet& after) {
     return saturatedAdd(
-        step.payload_bytes,
+        step.payloadBytes,
         saturatedAdd(selectionCharge(before), selectionCharge(after)));
 }
 
@@ -164,12 +164,12 @@ struct DocumentHistory::Impl {
     HistoryConfig config;
     std::vector<HistoryUnit> undo;
     std::vector<HistoryUnit> redo;
-    std::optional<Revision> expected_revision;
+    std::optional<Revision> expectedRevision;
     std::uint64_t retained{0};
     bool barrier{true};
 
     void removeCharge(const HistoryUnit& unit) noexcept {
-        retained -= unit.charged_bytes;
+        retained -= unit.chargedBytes;
     }
 
     void clearRedo() noexcept {
@@ -186,7 +186,7 @@ struct DocumentHistory::Impl {
     }
 
     void enforceBudget() {
-        while (retained > config.byte_budget && !undo.empty()) {
+        while (retained > config.byteBudget && !undo.empty()) {
             removeCharge(undo.front());
             undo.erase(undo.begin());
         }
@@ -199,9 +199,9 @@ struct DocumentHistory::Impl {
         (void)step;
         return !barrier && unit.coalescible && stepCoalescible &&
                unit.kind == kind &&
-               unit.selections_after == before &&
-               timestampMs >= unit.last_timestamp_ms &&
-               timestampMs - unit.last_timestamp_ms <= config.coalesce_ms;
+               unit.selectionsAfter == before &&
+               timestampMs >= unit.lastTimestampMs &&
+               timestampMs - unit.lastTimestampMs <= config.coalesceMs;
     }
 };
 
@@ -241,8 +241,8 @@ HistoryResult DocumentHistory::applyEdit(
     std::uint64_t timestampMs) {
     const auto before = document.snapshot();
     const bool bypassed =
-        impl_->expected_revision &&
-        *impl_->expected_revision != before.revision;
+        impl_->expectedRevision &&
+        *impl_->expectedRevision != before.revision;
     if (!rangesAreCapturable(before, transaction)) {
         const auto result = document.apply(transaction);
         return failure(HistoryError::DocumentRejected, result.revision,
@@ -268,15 +268,15 @@ HistoryResult DocumentHistory::applyEdit(
         impl_->canCoalesce(impl_->undo.back(), step, selectionsBefore, kind,
                             timestampMs, stepCoalescible)) {
         auto& unit = impl_->undo.back();
-        impl_->retained -= unit.charged_bytes;
+        impl_->retained -= unit.chargedBytes;
         unit.steps.push_back(std::move(step));
-        unit.selections_after = selectionsAfter;
-        unit.last_timestamp_ms = timestampMs;
-        unit.charged_bytes = saturatedAdd(
-            unit.charged_bytes,
-            unit.steps.back().payload_bytes);
+        unit.selectionsAfter = selectionsAfter;
+        unit.lastTimestampMs = timestampMs;
+        unit.chargedBytes = saturatedAdd(
+            unit.chargedBytes,
+            unit.steps.back().payloadBytes);
         impl_->retained =
-            saturatedAdd(impl_->retained, unit.charged_bytes);
+            saturatedAdd(impl_->retained, unit.chargedBytes);
     } else {
         const auto charge =
             unitCharge(step, selectionsBefore, selectionsAfter);
@@ -287,7 +287,7 @@ HistoryResult DocumentHistory::applyEdit(
     }
 
     impl_->enforceBudget();
-    impl_->expected_revision = result.revision;
+    impl_->expectedRevision = result.revision;
     impl_->barrier = false;
     return {HistoryError::None, DocumentError::None, result.revision,
             selectionsAfter, {}};
@@ -298,8 +298,8 @@ HistoryResult DocumentHistory::undo(Document& document) {
         return failure(HistoryError::NoUndo, document.revision(),
                        "document has no undo history");
     }
-    if (!impl_->expected_revision ||
-        document.revision() != *impl_->expected_revision) {
+    if (!impl_->expectedRevision ||
+        document.revision() != *impl_->expectedRevision) {
         return failure(HistoryError::StaleDocument, document.revision(),
                        "document revision changed outside its history");
     }
@@ -324,9 +324,9 @@ HistoryResult DocumentHistory::undo(Document& document) {
 
     auto moved = std::move(impl_->undo.back());
     impl_->undo.pop_back();
-    const auto selections = moved.selections_before;
+    const auto selections = moved.selectionsBefore;
     impl_->redo.push_back(std::move(moved));
-    impl_->expected_revision = document.revision();
+    impl_->expectedRevision = document.revision();
     impl_->barrier = true;
     return {HistoryError::None, DocumentError::None, document.revision(),
             selections, {}};
@@ -337,8 +337,8 @@ HistoryResult DocumentHistory::redo(Document& document) {
         return failure(HistoryError::NoRedo, document.revision(),
                        "document has no redo history");
     }
-    if (!impl_->expected_revision ||
-        document.revision() != *impl_->expected_revision) {
+    if (!impl_->expectedRevision ||
+        document.revision() != *impl_->expectedRevision) {
         return failure(HistoryError::StaleDocument, document.revision(),
                        "document revision changed outside its history");
     }
@@ -362,9 +362,9 @@ HistoryResult DocumentHistory::redo(Document& document) {
 
     auto moved = std::move(impl_->redo.back());
     impl_->redo.pop_back();
-    const auto selections = moved.selections_after;
+    const auto selections = moved.selectionsAfter;
     impl_->undo.push_back(std::move(moved));
-    impl_->expected_revision = document.revision();
+    impl_->expectedRevision = document.revision();
     impl_->barrier = true;
     return {HistoryError::None, DocumentError::None, document.revision(),
             selections, {}};

@@ -80,14 +80,14 @@ public:
             theme.palette[index] = ssg::SrgbColor::fromSerializedChannels(
                 channel, channel, channel);
         }
-        for (std::size_t index = 0; index < theme.semantic_indices.size();
+        for (std::size_t index = 0; index < theme.semanticIndices.size();
              ++index) {
-            theme.semantic_indices[index] =
+            theme.semanticIndices[index] =
                 static_cast<std::uint8_t>(index % ssg::kThemePaletteSize);
         }
-        for (std::size_t index = 0; index < theme.syntax_indices.size();
+        for (std::size_t index = 0; index < theme.syntaxIndices.size();
              ++index) {
-            theme.syntax_indices[index] =
+            theme.syntaxIndices[index] =
                 static_cast<std::uint8_t>((index + 1) %
                                           ssg::kThemePaletteSize);
         }
@@ -96,16 +96,16 @@ public:
         shell.viewport = {24, 8};
         shell.header = ssg::Rect{0, 0, 24, 1};
         shell.footer = ssg::Rect{0, 7, 24, 1};
-        shell.tab_bar = ssg::Rect{6, 1, 18, 1};
+        shell.tabBar = ssg::Rect{6, 1, 18, 1};
         shell.panel = ssg::Rect{0, 1, 6, 6};
         shell.panes.push_back(
             {ssg::PaneId{1}, {6, 2, 18, 5}, {6, 2, 17, 5}, {23, 2, 1, 5}});
-        shell.accessibility_nodes = {
+        shell.accessibilityNodes = {
             {ssg::ShellNodeKind::Header, "header", "Workspace /fixture",
              *shell.header, ssg::SemanticRole::Header},
             {ssg::ShellNodeKind::Panel, "panel", "Files", *shell.panel,
              ssg::SemanticRole::PanelActive},
-            {ssg::ShellNodeKind::TabBar, "tabs", state_.label, *shell.tab_bar,
+            {ssg::ShellNodeKind::TabBar, "tabs", state_.label, *shell.tabBar,
              ssg::SemanticRole::TabActive},
             {ssg::ShellNodeKind::Pane, "pane", "Editor",
              shell.panes.front().content, ssg::SemanticRole::Background},
@@ -198,7 +198,7 @@ TEST(terminalEventsResolveOnlyThroughSnapshotInputModels) {
     ASSERT_TRUE(text.has_value());
     auto textCommand = capture.capture(*text, keymap, "editor");
     ASSERT_TRUE(textCommand.has_value());
-    ASSERT_EQ(textCommand->command_id, std::string{"text.insert"});
+    ASSERT_EQ(textCommand->commandId, std::string{"text.insert"});
     ASSERT_TRUE(client.submit(*textCommand).accepted());
     ASSERT_EQ(scenario.model.canonical().text, std::string{"alphahello"});
 
@@ -208,7 +208,7 @@ TEST(terminalEventsResolveOnlyThroughSnapshotInputModels) {
     auto chordEnd = capture.capture(
         ssg::KeyStroke{"KeyW", true, false, false, false}, keymap, "editor");
     ASSERT_TRUE(chordEnd.has_value());
-    ASSERT_EQ(chordEnd->command_id, std::string{"tab.close"});
+    ASSERT_EQ(chordEnd->commandId, std::string{"tab.close"});
     ASSERT_TRUE(client.submit(*chordEnd).accepted());
     ASSERT_FALSE(scenario.model.canonical().tab_open);
 
@@ -217,7 +217,7 @@ TEST(terminalEventsResolveOnlyThroughSnapshotInputModels) {
         {"tab.reopen_closed", {}}};
     auto hit = capture.capture(target, keymap, "editor");
     ASSERT_TRUE(hit.has_value());
-    ASSERT_EQ(hit->command_id, std::string{"tab.reopen_closed"});
+    ASSERT_EQ(hit->commandId, std::string{"tab.reopen_closed"});
     ASSERT_TRUE(client.submit(*hit).accepted());
     ASSERT_TRUE(scenario.model.canonical().tab_open);
 }

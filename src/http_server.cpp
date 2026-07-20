@@ -74,15 +74,15 @@ SessionId::SessionId(std::string value) : value_{std::move(value)} {
 
 std::string encodeSessionAttachRequest(SessionAttachRequest const& request) {
     return "SSG1 ATTACH " +
-           (request.last_applied_revision
-                ? std::to_string(request.last_applied_revision->value())
+           (request.lastAppliedRevision
+                ? std::to_string(request.lastAppliedRevision->value())
                 : std::string{"-"}) +
            " " + hexEncode(request.credential);
 }
 
 DecodeSessionAttachRequestResult decodeSessionAttachRequest(
     std::string_view message, ProtocolLimits limits) {
-    if (message.size() > limits.max_message_bytes) {
+    if (message.size() > limits.maxMessageBytes) {
         return {ProtocolError::MessageTooLarge, std::nullopt,
                 "attach request exceeds message limit"};
     }
@@ -132,7 +132,7 @@ struct HttpEditorRoute::Impl {
     };
 
     struct ReplayRecord {
-        Revision base_revision;
+        Revision baseRevision;
         Revision revision;
         std::string payload;
     };
@@ -144,7 +144,7 @@ struct HttpEditorRoute::Impl {
          HttpEditorSessionHost& sessionHost,
          HttpEditorRouteConfig routeConfig)
         : session{editorSession},
-          argument_codecs{std::move(commandArgumentCodecs)},
+          argumentCodecs{std::move(commandArgumentCodecs)},
           host{sessionHost},
           config{std::move(routeConfig)},
           server{httpServer} {
@@ -152,8 +152,8 @@ struct HttpEditorRoute::Impl {
             throw std::invalid_argument{
                 "WebSocket route must start with a slash"};
         }
-        if (config.outbound_queue_messages == 0 || config.replay_deltas == 0 ||
-            config.write_timeout <= std::chrono::milliseconds::zero()) {
+        if (config.outboundQueueMessages == 0 || config.replayDeltas == 0 ||
+            config.writeTimeout <= std::chrono::milliseconds::zero()) {
             throw std::invalid_argument{
                 "WebSocket queue, replay, and write timeout must be positive"};
         }
@@ -173,7 +173,7 @@ struct HttpEditorRoute::Impl {
     void opened(Http::WebSocketHandle handle) {
         auto connection = std::make_shared<Connection>();
         {
-            std::lock_guard lock{connections_mutex};
+            std::lock_guard lock{connectionsMutex};
             connections.emplace(handle, connection);
         }
         connection->writer =
@@ -185,7 +185,7 @@ struct HttpEditorRoute::Impl {
         auto connection = find(handle);
         if (!connection) return;
 
-        std::lock_guard processLock{processing_mutex};
+        std::lock_guard processLock{processingMutex};
         if (!connection->binding) {
             if (message.opcode != 0x1 ||
                 !attach(handle, connection, message.data)) {
@@ -199,7 +199,7 @@ struct HttpEditorRoute::Impl {
         }
 
         auto command = decodeCommandRequest(
-            message.data, argument_codecs, config.protocol_limits);
+            message.data, argumentCodecs, config.protocolLimits);
         if (command.accepted()) {
             auto const result = session.dispatch(
                 connection->binding->principal.clientId(), *command.command);
@@ -208,44 +208,44 @@ struct HttpEditorRoute::Impl {
                         {encodeCommandResult(result), true});
                 return;
             }
-            publishSession(connection->binding->session_id);
+            publishSession(connection->binding->sessionId);
             return;
         }
 
         auto clipboard =
-            decodeClipboardResponse(message.data, config.protocol_limits);
+            decodeClipboardResponse(message.data, config.protocolLimits);
         if (clipboard.accepted()) {
             try {
                 host.clipboardResponse(
-                    connection->binding->session_id,
+                    connection->binding->sessionId,
                     connection->binding->principal.clientId(),
                     *clipboard.response);
-                publishSession(connection->binding->session_id);
+                publishSession(connection->binding->sessionId);
             } catch (...) {
                 close(handle, connection);
             }
             return;
         }
         auto status = decodeStatusActionInvocation(message.data,
-                                                       config.protocol_limits);
+                                                       config.protocolLimits);
         if (status.accepted()) {
             try {
-                host.statusAction(connection->binding->session_id,
+                host.statusAction(connection->binding->sessionId,
                                    connection->binding->principal.clientId(),
                                    *status.invocation);
-                publishSession(connection->binding->session_id);
+                publishSession(connection->binding->sessionId);
             } catch (...) {
                 close(handle, connection);
             }
             return;
         }
-        auto binary = decodeBinaryFrame(message.data, config.protocol_limits);
+        auto binary = decodeBinaryFrame(message.data, config.protocolLimits);
         if (binary.accepted()) {
             try {
-                host.binary(connection->binding->session_id,
+                host.binary(connection->binding->sessionId,
                             connection->binding->principal.clientId(),
                             *binary.frame);
-                publishSession(connection->binding->session_id);
+                publishSession(connection->binding->sessionId);
             } catch (...) {
                 close(handle, connection);
             }
@@ -258,7 +258,7 @@ struct HttpEditorRoute::Impl {
                 std::shared_ptr<Connection> const& connection,
                 std::string_view payload) {
         auto request =
-            decodeSessionAttachRequest(payload, config.protocol_limits);
+            decodeSessionAttachRequest(payload, config.protocolLimits);
         if (!request.accepted()) return false;
         auto authenticated = host.authenticate(request.request->credential);
         if (!authenticated) return false;
@@ -267,17 +267,17 @@ struct HttpEditorRoute::Impl {
         }
         auto const clientId = authenticated->principal.clientId();
         auto const attached =
-            session.attach(authenticated->principal, authenticated->view_id);
+            session.attach(authenticated->principal, authenticated->viewId);
         if (!attached.accepted()) return false;
 
         connection->binding.emplace(std::move(*authenticated));
         connection->snapshot.emplace(host.snapshot(
-            connection->binding->session_id, clientId));
+            connection->binding->sessionId, clientId));
         auto const currentRevision = connection->snapshot->revision();
 
         bool replayed = false;
-        if (request.request->last_applied_revision) {
-            auto next = *request.request->last_applied_revision;
+        if (request.request->lastAppliedRevision) {
+            auto next = *request.request->lastAppliedRevision;
             if (next == currentRevision) {
                 replayed = true;
             } else {
@@ -286,14 +286,14 @@ struct HttpEditorRoute::Impl {
                 std::vector<std::string> chain;
                 if (found != replay.end()) {
                     for (auto const& record : found->second) {
-                        if (record.base_revision == next) {
+                        if (record.baseRevision == next) {
                             chain.push_back(record.payload);
                             next = record.revision;
                         }
                     }
                 }
                 if (next == currentRevision && !chain.empty() &&
-                    chain.size() <= config.outbound_queue_messages) {
+                    chain.size() <= config.outboundQueueMessages) {
                     for (auto& encoded : chain) {
                         enqueue(handle, connection,
                                 {std::move(encoded), true});
@@ -314,18 +314,18 @@ struct HttpEditorRoute::Impl {
                               std::shared_ptr<Connection>>>
             targets;
         {
-            std::lock_guard lock{connections_mutex};
+            std::lock_guard lock{connectionsMutex};
             for (auto const& [handle, connection] : connections) {
                 std::lock_guard connectionLock{connection->mutex};
                 if (connection->binding && !connection->stopping &&
-                    connection->binding->session_id == sessionId) {
+                    connection->binding->sessionId == sessionId) {
                     targets.emplace_back(handle, connection);
                 }
             }
         }
         for (auto const& [handle, connection] : targets) {
             auto current = host.snapshot(
-                connection->binding->session_id,
+                connection->binding->sessionId,
                 connection->binding->principal.clientId());
             if (!connection->snapshot ||
                 connection->snapshot->revision() == current.revision()) {
@@ -336,14 +336,14 @@ struct HttpEditorRoute::Impl {
             auto encoded = encodeSessionDelta(delta);
             auto& history = replay[replayKey(*connection->binding)];
             history.push_back({delta.baseRevision(), delta.revision(), encoded});
-            while (history.size() > config.replay_deltas) history.pop_front();
+            while (history.size() > config.replayDeltas) history.pop_front();
             connection->snapshot.emplace(std::move(current));
             enqueue(handle, connection, {std::move(encoded), true});
         }
     }
 
     ReplayKey replayKey(AuthenticatedSession const& binding) const {
-        return {std::string{binding.session_id.value()},
+        return {std::string{binding.sessionId.value()},
                 binding.principal.clientId().value()};
     }
 
@@ -355,7 +355,7 @@ struct HttpEditorRoute::Impl {
             std::lock_guard lock{connection->mutex};
             if (connection->stopping) return;
             if (connection->queue.size() >=
-                config.outbound_queue_messages) {
+                config.outboundQueueMessages) {
                 connection->stopping = true;
                 overflow = true;
             } else {
@@ -380,7 +380,7 @@ struct HttpEditorRoute::Impl {
                 connection->queue.pop_front();
             }
             auto const deadline =
-                std::chrono::steady_clock::now() + config.write_timeout;
+                std::chrono::steady_clock::now() + config.writeTimeout;
             auto const result =
                 outbound.binary
                     ? server.send(handle, bytes(outbound.payload), deadline)
@@ -400,7 +400,7 @@ struct HttpEditorRoute::Impl {
         }
         connection->ready.notify_one();
         {
-            std::lock_guard processLock{processing_mutex};
+            std::lock_guard processLock{processingMutex};
             if (connection->binding && !connection->detached) {
                 (void)session.detach(
                     connection->binding->principal.clientId());
@@ -413,7 +413,7 @@ struct HttpEditorRoute::Impl {
     void closed(Http::WebSocketHandle handle) {
         std::shared_ptr<Connection> connection;
         {
-            std::lock_guard lock{connections_mutex};
+            std::lock_guard lock{connectionsMutex};
             auto const found = connections.find(handle);
             if (found == connections.end()) return;
             connection = std::move(found->second);
@@ -428,7 +428,7 @@ struct HttpEditorRoute::Impl {
             connection->writer.get_id() != std::this_thread::get_id()) {
             connection->writer.join();
         }
-        std::lock_guard processLock{processing_mutex};
+        std::lock_guard processLock{processingMutex};
         if (connection->binding && !connection->detached) {
             (void)session.detach(connection->binding->principal.clientId());
             connection->detached = true;
@@ -436,13 +436,13 @@ struct HttpEditorRoute::Impl {
     }
 
     std::shared_ptr<Connection> find(Http::WebSocketHandle handle) {
-        std::lock_guard lock{connections_mutex};
+        std::lock_guard lock{connectionsMutex};
         auto const found = connections.find(handle);
         return found == connections.end() ? nullptr : found->second;
     }
 
     std::shared_ptr<Connection> find(ClientId clientId) {
-        std::lock_guard lock{connections_mutex};
+        std::lock_guard lock{connectionsMutex};
         for (auto const& [handle, connection] : connections) {
             (void)handle;
             std::lock_guard connectionLock{connection->mutex};
@@ -456,12 +456,12 @@ struct HttpEditorRoute::Impl {
     }
 
     bool sendTo(ClientId clientId, std::string payload) {
-        std::lock_guard processLock{processing_mutex};
+        std::lock_guard processLock{processingMutex};
         auto connection = find(clientId);
         if (!connection) return false;
         Http::WebSocketHandle handle = 0;
         {
-            std::lock_guard lock{connections_mutex};
+            std::lock_guard lock{connectionsMutex};
             for (auto const& entry : connections) {
                 if (entry.second == connection) {
                     handle = entry.first;
@@ -475,12 +475,12 @@ struct HttpEditorRoute::Impl {
     }
 
     EditorSession& session;
-    CommandArgumentCodecRegistry argument_codecs;
+    CommandArgumentCodecRegistry argumentCodecs;
     HttpEditorSessionHost& host;
     HttpEditorRouteConfig config;
     Http::Server& server;
-    std::recursive_mutex processing_mutex;
-    std::mutex connections_mutex;
+    std::recursive_mutex processingMutex;
+    std::mutex connectionsMutex;
     std::map<Http::WebSocketHandle, std::shared_ptr<Connection>> connections;
     std::map<ReplayKey, std::deque<ReplayRecord>> replay;
 };
@@ -510,9 +510,9 @@ struct HttpEditorServer::Impl {
          HttpEditorSessionHost& host, HttpEditorServerConfig config)
         : server{config.port},
           route{server, session, std::move(argumentCodecs), host,
-                {std::move(config.route), config.outbound_queue_messages,
-                 config.replay_deltas, config.write_timeout,
-                 config.protocol_limits}} {
+                {std::move(config.route), config.outboundQueueMessages,
+                 config.replayDeltas, config.writeTimeout,
+                 config.protocolLimits}} {
         noteOptionalConstruction(OptionalSubsystem::Http);
     }
 

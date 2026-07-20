@@ -33,7 +33,7 @@ enum class WatchEventOrigin {
 struct WatchFileState {
     FileIdentity identity;
     std::uint64_t size = 0;
-    std::int64_t modification_time = 0;
+    std::int64_t modificationTime = 0;
 
     friend bool operator==(const WatchFileState&, const WatchFileState&) = default;
 };
@@ -41,11 +41,11 @@ struct WatchFileState {
 struct WatchEvent {
     WatchEventKind kind = WatchEventKind::Overflow;
     std::filesystem::path path;
-    std::optional<std::filesystem::path> previous_path;
+    std::optional<std::filesystem::path> previousPath;
     std::optional<FileIdentity> identity;
     std::uint64_t sequence = 0;
     std::optional<std::uint64_t> size;
-    std::optional<std::int64_t> modification_time;
+    std::optional<std::int64_t> modificationTime;
     WatchEventOrigin origin = WatchEventOrigin::External;
 
     friend bool operator==(const WatchEvent&, const WatchEvent&) = default;
@@ -60,11 +60,11 @@ struct SaveExpectation {
 
 struct WatcherConfig {
     std::chrono::milliseconds debounce{50};
-    std::chrono::milliseconds rescan_retry{1000};
-    std::size_t max_queued_events = 1024;
-    std::size_t max_pending_renames = 256;
-    std::size_t max_save_expectations = 256;
-    std::size_t max_rescan_entries = 100'000;
+    std::chrono::milliseconds rescanRetry{1000};
+    std::size_t maxQueuedEvents = 1024;
+    std::size_t maxPendingRenames = 256;
+    std::size_t maxSaveExpectations = 256;
+    std::size_t maxRescanEntries = 100'000;
 };
 
 enum class NativeWatchAction {
@@ -79,7 +79,7 @@ enum class NativeWatchAction {
 struct NativeWatchEvent {
     NativeWatchAction action = NativeWatchAction::Overflow;
     std::filesystem::path path;
-    std::uint64_t rename_token = 0;
+    std::uint64_t renameToken = 0;
     std::optional<WatchFileState> observed;
 };
 

@@ -295,7 +295,7 @@ private:
 
 struct MatchContext {
     const ScalarText& text;
-    bool case_sensitive;
+    bool caseSensitive;
     std::size_t lower;
     std::size_t upper;
     std::uint64_t remaining;
@@ -374,8 +374,8 @@ std::vector<std::size_t> evaluateNode(const std::shared_ptr<Node>& node,
         return {position};
     case NodeKind::Literal:
         if (position < context.upper &&
-            folded(context.text.values[position], context.case_sensitive) ==
-                folded(node->literal, context.case_sensitive)) {
+            folded(context.text.values[position], context.caseSensitive) ==
+                folded(node->literal, context.caseSensitive)) {
             return {position + 1};
         }
         return {};
@@ -388,12 +388,12 @@ std::vector<std::size_t> evaluateNode(const std::shared_ptr<Node>& node,
             return {};
         }
         const auto value =
-            folded(context.text.values[position], context.case_sensitive);
+            folded(context.text.values[position], context.caseSensitive);
         bool inside = false;
         for (const auto range : node->ranges) {
             inside = inside ||
-                     (value >= folded(range.first, context.case_sensitive) &&
-                      value <= folded(range.last, context.case_sensitive));
+                     (value >= folded(range.first, context.caseSensitive) &&
+                      value <= folded(range.last, context.caseSensitive));
         }
         return inside != node->negated
                    ? std::vector<std::size_t>{position + 1}
@@ -455,7 +455,7 @@ FindResult literalMatches(const ScalarText& text, const ScalarText& query,
                            const FindRequest& request, std::size_t lower,
                            std::size_t upper) {
     FindResult result;
-    std::uint64_t remaining = request.work_budget;
+    std::uint64_t remaining = request.workBudget;
     if (query.values.empty()) {
         return result;
     }
@@ -475,12 +475,12 @@ FindResult literalMatches(const ScalarText& text, const ScalarText& query,
             matches =
                 matches &&
                 folded(text.values[at + index],
-                       request.options.case_sensitive) ==
+                       request.options.caseSensitive) ==
                     folded(query.values[index],
-                           request.options.case_sensitive);
+                           request.options.caseSensitive);
         }
         if (matches &&
-            (!request.options.whole_word ||
+            (!request.options.wholeWord ||
              wholeWordMatch(text, at, at + query.values.size(), lower,
                               upper))) {
             result.matches.push_back(
@@ -527,7 +527,7 @@ FindResult findMatches(std::string_view text, const FindRequest& request) {
     }
     std::size_t lower = 0;
     std::size_t upper = decodedText.values.size();
-    if (request.options.selection_only) {
+    if (request.options.selectionOnly) {
         if (!request.selection ||
             request.selection->begin > request.selection->end) {
             return {FindReplaceError::InvalidSelection, {},
@@ -555,7 +555,7 @@ FindResult findMatches(std::string_view text, const FindRequest& request) {
         return {FindReplaceError::InvalidPattern, {},
                 "regex pattern exceeds the complexity limit"};
     }
-    if (decodedQuery.values.size() > request.work_budget) {
+    if (decodedQuery.values.size() > request.workBudget) {
         return {FindReplaceError::BudgetExhausted, {},
                 "regex work budget exhausted while parsing"};
     }
@@ -567,10 +567,10 @@ FindResult findMatches(std::string_view text, const FindRequest& request) {
                 "regex pattern is invalid"};
     }
     MatchContext context{decodedText,
-                         request.options.case_sensitive,
+                         request.options.caseSensitive,
                          lower,
                          upper,
-                         request.work_budget - decodedQuery.values.size(),
+                         request.workBudget - decodedQuery.values.size(),
                          request.cancelled};
     FindResult result;
     std::size_t at = lower;
@@ -583,7 +583,7 @@ FindResult findMatches(std::string_view text, const FindRequest& request) {
                         : "regex work budget exhausted"};
         }
         if (!ends.empty()) {
-            if (request.options.whole_word) {
+            if (request.options.wholeWord) {
                 std::erase_if(ends, [&](std::size_t end) {
                     return !wholeWordMatch(decodedText, at, end, lower,
                                              upper);
@@ -650,7 +650,7 @@ FindReplaceDelta deriveFindReplaceDelta(
 
 FindReplaceReplayResult replayFindReplaceDelta(
     const FindReplaceViewState& base, const FindReplaceDelta& delta) {
-    if (base.generation != delta.base_generation) {
+    if (base.generation != delta.baseGeneration) {
         return {FindReplaceReplayError::BaseMismatch, base};
     }
     if (delta.changed != delta.replacement.has_value()) {
@@ -664,7 +664,7 @@ void FindReplaceController::open(const DocumentSnapshot& document,
                                  FindRequest request) {
     request_ = std::move(request);
     state_.open = true;
-    state_.replace_mode = false;
+    state_.replaceMode = false;
     ++state_.generation;
     evaluate(document);
 }
@@ -673,17 +673,17 @@ void FindReplaceController::openReplace(const DocumentSnapshot& document,
                                          FindRequest request) {
     request_ = std::move(request);
     state_.open = true;
-    state_.replace_mode = true;
+    state_.replaceMode = true;
     ++state_.generation;
     evaluate(document);
 }
 
 void FindReplaceController::close() {
     state_.open = false;
-    state_.replace_mode = false;
+    state_.replaceMode = false;
     state_.replacement.clear();
     state_.matches.clear();
-    state_.active_match.reset();
+    state_.activeMatch.reset();
     state_.error = FindReplaceError::None;
     state_.message.clear();
     ++state_.generation;
@@ -707,14 +707,14 @@ void FindReplaceController::updateReplacement(std::string replacement) {
 }
 
 void FindReplaceController::toggleCase(const DocumentSnapshot& document) {
-    request_.options.case_sensitive = !request_.options.case_sensitive;
+    request_.options.caseSensitive = !request_.options.caseSensitive;
     ++state_.generation;
     evaluate(document);
 }
 
 void FindReplaceController::toggleWholeWord(
     const DocumentSnapshot& document) {
-    request_.options.whole_word = !request_.options.whole_word;
+    request_.options.wholeWord = !request_.options.wholeWord;
     ++state_.generation;
     evaluate(document);
 }
@@ -727,7 +727,7 @@ void FindReplaceController::toggleRegex(const DocumentSnapshot& document) {
 
 void FindReplaceController::toggleSelection(
     const DocumentSnapshot& document, std::optional<ByteRange> selection) {
-    request_.options.selection_only = !request_.options.selection_only;
+    request_.options.selectionOnly = !request_.options.selectionOnly;
     request_.selection = selection;
     ++state_.generation;
     evaluate(document);
@@ -741,29 +741,29 @@ void FindReplaceController::refresh(const DocumentSnapshot& document,
 }
 
 void FindReplaceController::evaluate(const DocumentSnapshot& document) {
-    state_.source_revision = document.revision;
+    state_.sourceRevision = document.revision;
     state_.query = request_.query;
     state_.options = request_.options;
     auto result = findMatches(document.text, request_);
     state_.matches = std::move(result.matches);
     state_.error = result.error;
     state_.message = std::move(result.message);
-    state_.active_match =
+    state_.activeMatch =
         state_.matches.empty() ? std::nullopt : std::optional<std::size_t>{0};
 }
 
 void FindReplaceController::next() {
     if (!state_.matches.empty()) {
-        state_.active_match =
-            (state_.active_match.value_or(0) + 1) % state_.matches.size();
+        state_.activeMatch =
+            (state_.activeMatch.value_or(0) + 1) % state_.matches.size();
         ++state_.generation;
     }
 }
 
 void FindReplaceController::previous() {
     if (!state_.matches.empty()) {
-        const auto current = state_.active_match.value_or(0);
-        state_.active_match =
+        const auto current = state_.activeMatch.value_or(0);
+        state_.activeMatch =
             (current + state_.matches.size() - 1) % state_.matches.size();
         ++state_.generation;
     }
@@ -774,23 +774,23 @@ FindReplaceOperationResult FindReplaceController::replaceCurrent(
     const SelectionSet& selectionsBefore,
     const SelectionSet& selectionsAfter, std::string replacement,
     std::uint64_t timestampMs) {
-    if (document.revision() != state_.source_revision) {
+    if (document.revision() != state_.sourceRevision) {
         return operationFailure(FindReplaceError::StaleRevision,
                                  document.revision(),
                                  "find result revision is stale");
     }
-    if (!state_.active_match || state_.error != FindReplaceError::None) {
+    if (!state_.activeMatch || state_.error != FindReplaceError::None) {
         return operationFailure(FindReplaceError::NoMatch,
                                  document.revision(), "no active match");
     }
-    const auto match = state_.matches[*state_.active_match];
+    const auto match = state_.matches[*state_.activeMatch];
     if (match.begin == match.end && replacement.empty()) {
         return operationFailure(FindReplaceError::DocumentRejected,
                                  document.revision(),
                                  "replacement would not change the document");
     }
     EditTransaction transaction{
-        state_.source_revision,
+        state_.sourceRevision,
         {{match.begin, match.end.value() - match.begin.value(),
           std::move(replacement)}}};
     auto historyResult = history.applyEdit(
@@ -813,7 +813,7 @@ FindReplaceOperationResult FindReplaceController::replaceAll(
     const SelectionSet& selectionsBefore,
     const SelectionSet& selectionsAfter, std::string replacement,
     std::uint64_t timestampMs) {
-    if (document.revision() != state_.source_revision) {
+    if (document.revision() != state_.sourceRevision) {
         return operationFailure(FindReplaceError::StaleRevision,
                                  document.revision(),
                                  "find result revision is stale");
@@ -822,7 +822,7 @@ FindReplaceOperationResult FindReplaceController::replaceAll(
         return operationFailure(FindReplaceError::NoMatch,
                                  document.revision(), "no matches");
     }
-    EditTransaction transaction{state_.source_revision, {}};
+    EditTransaction transaction{state_.sourceRevision, {}};
     transaction.edits.reserve(state_.matches.size());
     for (const auto& match : state_.matches) {
         if (match.begin == match.end && replacement.empty()) {
@@ -859,7 +859,7 @@ const FindReplaceViewState& FindReplaceController::viewState() const noexcept {
 WorkspacePreviewResult previewWorkspaceReplace(
     const FindReplaceWorkspace& workspace, Revision sourceRevision,
     const FindRequest& request, std::string replacement) {
-    if (request.options.selection_only) {
+    if (request.options.selectionOnly) {
         return {FindReplaceError::InvalidSelection, std::nullopt,
                 "workspace replace cannot use a document selection"};
     }
@@ -875,12 +875,12 @@ WorkspacePreviewResult previewWorkspaceReplace(
                                     {}};
     const auto perFileBudget =
         snapshot.files.empty()
-            ? request.work_budget
-            : request.work_budget /
+            ? request.workBudget
+            : request.workBudget /
                   static_cast<std::uint64_t>(snapshot.files.size());
     for (const auto& file : snapshot.files) {
         auto fileRequest = request;
-        fileRequest.work_budget = perFileBudget;
+        fileRequest.workBudget = perFileBudget;
         auto result = findMatches(file.text, fileRequest);
         if (!result.accepted()) {
             return {result.error, std::nullopt, std::move(result.message)};

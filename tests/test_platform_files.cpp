@@ -100,7 +100,7 @@ TEST(pathPolicyDecisionTable) {
     struct Case {
         std::string path;
         ssg::PathSyntax syntax;
-        ssg::LongPathPolicy long_paths;
+        ssg::LongPathPolicy longPaths;
         ssg::PathError expected;
     };
 
@@ -130,7 +130,7 @@ TEST(pathPolicyDecisionTable) {
 
     for (const auto& test : cases) {
         ASSERT_EQ(ssg::validateWorkspaceRelativePath(
-                      test.path, test.syntax, test.long_paths)
+                      test.path, test.syntax, test.longPaths)
                       .error,
                   test.expected);
     }

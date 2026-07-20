@@ -36,7 +36,7 @@ enum class TextEncodingErrorCode : std::uint8_t {
 
 struct TextEncodingError {
     TextEncodingErrorCode code = TextEncodingErrorCode::InvalidInput;
-    std::size_t utf8_offset = 0;
+    std::size_t utf8Offset = 0;
     std::string message;
 
     friend bool operator==(const TextEncodingError&,
@@ -45,9 +45,9 @@ struct TextEncodingError {
 
 struct TextEncodingStatus {
     TextEncoding encoding = TextEncoding::Utf8;
-    LineEnding line_ending = LineEnding::Lf;
-    bool had_bom = false;
-    bool final_newline = false;
+    LineEnding lineEnding = LineEnding::Lf;
+    bool hadBom = false;
+    bool finalNewline = false;
 
     friend bool operator==(const TextEncodingStatus&,
                            const TextEncodingStatus&) = default;
@@ -55,7 +55,7 @@ struct TextEncodingStatus {
 
 struct DecodedText {
     std::string utf8;
-    std::vector<LineTerminator> line_terminators;
+    std::vector<LineTerminator> lineTerminators;
     TextEncodingStatus status;
 
     friend bool operator==(const DecodedText&, const DecodedText&) = default;
@@ -109,8 +109,8 @@ struct DecodeTextResult {
 
 struct EncodeTextOptions {
     TextEncoding encoding = TextEncoding::Utf8;
-    LineEnding line_ending = LineEnding::Mixed;
-    FinalNewlinePolicy final_newline = FinalNewlinePolicy::Preserve;
+    LineEnding lineEnding = LineEnding::Mixed;
+    FinalNewlinePolicy finalNewline = FinalNewlinePolicy::Preserve;
 };
 
 struct EncodeTextResult {
@@ -168,12 +168,12 @@ struct SetEncodingArguments {
 };
 
 struct SetLineEndingArguments {
-    LineEnding line_ending = LineEnding::Lf;
+    LineEnding lineEnding = LineEnding::Lf;
     bool operator==(const SetLineEndingArguments&) const = default;
 };
 
 struct SetFinalNewlineArguments {
-    bool final_newline = false;
+    bool finalNewline = false;
     bool operator==(const SetFinalNewlineArguments&) const = default;
 };
 

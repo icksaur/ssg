@@ -25,8 +25,8 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
             if (hit.region == ssg::HitRegion::EditorScrollbar) {
                 dispatch.commands.push_back(
                     {"view.scroll_to_fraction",
-                     ssg::ScrollFractionArguments{hit.scroll_numerator,
-                                                  hit.scroll_denominator}});
+                     ssg::ScrollFractionArguments{hit.scrollNumerator,
+                                                  hit.scrollDenominator}});
                 return dispatch;
             }
             // A left press on a tab activates it (the caller resolved tab_index
@@ -46,9 +46,9 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
             // A left press on a tree row selects that node and then activates it
             // (opens a file / toggles a directory), matching the keyboard
             // select-then-Enter behavior. The node id travels on the hit.
-            if (hit.region == ssg::HitRegion::Panel && hit.node_id) {
+            if (hit.region == ssg::HitRegion::Panel && hit.nodeId) {
                 dispatch.commands.push_back(
-                    {"tree.select", ssg::TreeSelectArguments{*hit.node_id}});
+                    {"tree.select", ssg::TreeSelectArguments{*hit.nodeId}});
                 dispatch.commands.push_back({"tree.activate", std::any{}});
                 return dispatch;
             }
@@ -69,8 +69,8 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
             if (hit.region == ssg::HitRegion::EditorScrollbar) {
                 dispatch.commands.push_back(
                     {"view.scroll_to_fraction",
-                     ssg::ScrollFractionArguments{hit.scroll_numerator,
-                                                  hit.scroll_denominator}});
+                     ssg::ScrollFractionArguments{hit.scrollNumerator,
+                                                  hit.scrollDenominator}});
                 return dispatch;
             }
             // While dragging, a motion over an editor cell extends the selection

@@ -12,7 +12,7 @@ namespace ssg {
 
 struct ClientCommand {
     std::string id;
-    Revision base_revision;
+    Revision baseRevision;
     std::any payload;
 };
 
@@ -52,12 +52,12 @@ struct AttachResult {
 
 struct AttachedClient {
     InvocationPrincipal principal;
-    ViewId view_id;
+    ViewId viewId;
 };
 
 struct SessionTopology {
-    std::optional<WorkspaceId> active_workspace;
-    std::optional<ViewId> active_view;
+    std::optional<WorkspaceId> activeWorkspace;
+    std::optional<ViewId> activeView;
 
     bool operator==(SessionTopology const&) const = default;
 };

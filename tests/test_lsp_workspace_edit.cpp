@@ -77,7 +77,7 @@ public:
 
     LspWorkspaceDocumentWriteResult apply(std::string uri, Revision expectedRevision,
                                           std::string text) override {
-        ++apply_calls;
+        ++applyCalls;
         const auto found = documents.find(uri);
         if (found == documents.end()) {
             return {Revision{0},
@@ -89,8 +89,8 @@ public:
                     ssg::LspWorkspaceDocumentError::StaleRevision,
                     "stale revision"};
         }
-        if (std::find(failing_calls.begin(), failing_calls.end(), apply_calls) !=
-            failing_calls.end()) {
+        if (std::find(failingCalls.begin(), failingCalls.end(), applyCalls) !=
+            failingCalls.end()) {
             return {found->second.revision,
                     ssg::LspWorkspaceDocumentError::WriteFailed,
                     "injected write failure"};
@@ -103,8 +103,8 @@ public:
     }
 
     std::map<std::string, LspDocumentSnapshot> documents;
-    std::vector<int> failing_calls;
-    int apply_calls = 0;
+    std::vector<int> failingCalls;
+    int applyCalls = 0;
 };
 
 class FakeFiles final : public LspWorkspaceFileOperations {
@@ -223,8 +223,8 @@ public:
     }
 
     bool shouldFail(std::string_view operation) {
-        ++operation_calls;
-        if (fail_operation == operation && operation_calls == fail_call) {
+        ++operationCalls;
+        if (failOperation == operation && operationCalls == failCall) {
             return true;
         }
         return false;
@@ -232,9 +232,9 @@ public:
 
     std::map<std::string, std::string> files;
     std::set<std::string> directories;
-    std::string fail_operation;
-    int fail_call = -1;
-    int operation_calls = 0;
+    std::string failOperation;
+    int failCall = -1;
+    int operationCalls = 0;
 };
 
 TEST(commandSetExportsTheSingleNormativeRenameAction) {
@@ -242,7 +242,7 @@ TEST(commandSetExportsTheSingleNormativeRenameAction) {
     const auto commands = set.descriptors();
     ASSERT_EQ(commands.size(), std::size_t{1});
     ASSERT_EQ(commands[0].id, std::string_view{"rename.symbol"});
-    ASSERT_FALSE(commands[0].user_navigation);
+    ASSERT_FALSE(commands[0].userNavigation);
 }
 
 TEST(unicodePositionFixtureAppliesExpectedEdit) {
@@ -287,8 +287,8 @@ TEST(validationRejectsMalformedRangesBeforeAnyMutation) {
     ASSERT_EQ(result.error, ssg::LspWorkspaceEditError::InvalidPosition);
     ASSERT_EQ(documents.documents, beforeDocs);
     ASSERT_EQ(files.files, beforeFiles);
-    ASSERT_EQ(documents.apply_calls, 0);
-    ASSERT_EQ(files.operation_calls, 0);
+    ASSERT_EQ(documents.applyCalls, 0);
+    ASSERT_EQ(files.operationCalls, 0);
 }
 
 TEST(equalPositionInsertionsPreservePayloadOrder) {
@@ -321,7 +321,7 @@ TEST(multiDocumentWriteFailureRollsBackAtomically) {
         "file:///workspace/b.cpp",
         LspDocumentSnapshot{"file:///workspace/b.cpp", Revision{4}, 1,
                             "two"});
-    documents.failing_calls = {2};
+    documents.failingCalls = {2};
     FakeFiles files;
     LspWorkspaceEditApplier applier{documents, files};
     const auto before = documentTexts(documents.documents);
@@ -396,7 +396,7 @@ TEST(rollbackFailureSurfacesRecoveryRecordForRetry) {
         "file:///workspace/b.cpp",
         LspDocumentSnapshot{"file:///workspace/b.cpp", Revision{4}, 1,
                             "two"});
-    documents.failing_calls = {2, 3};
+    documents.failingCalls = {2, 3};
     FakeFiles files;
     LspWorkspaceEditApplier applier{documents, files};
 
@@ -409,7 +409,7 @@ TEST(rollbackFailureSurfacesRecoveryRecordForRetry) {
     ASSERT_EQ(result.recovery->operations[0].kind,
               LspWorkspaceEditRecoveryKind::DocumentText);
 
-    documents.failing_calls.clear();
+    documents.failingCalls.clear();
     ASSERT_TRUE(applier.recover(*result.recovery).accepted());
     ASSERT_EQ(documents.documents["file:///workspace/a.cpp"].text,
               std::string{"one"});
@@ -424,8 +424,8 @@ TEST(fileOperationFailureRollsBackDocumentsAndPaths) {
     FakeFiles files;
     files.files["file:///workspace/old.txt"] = "old";
     files.files["file:///workspace/existing.txt"] = "existing";
-    files.fail_operation = "rename";
-    files.fail_call = 2;
+    files.failOperation = "rename";
+    files.failCall = 2;
     LspWorkspaceEditApplier applier{documents, files};
     const auto beforeDocs = documentTexts(documents.documents);
     const auto beforeFiles = files.files;
@@ -487,7 +487,7 @@ TEST(renameRequestsUseSyncedUtf16PositionsAndApplyWorkspaceEdits) {
                 std::string::npos);
 
     server.queue_payload(withId(fixture("rename_response.json"),
-                                 request.request_id));
+                                 request.requestId));
     const auto published = controller.poll(Revision{1});
 
     ASSERT_TRUE(published.accepted());
@@ -519,7 +519,7 @@ TEST(supersededRenameResponseCannotReplaceNewerResult) {
     ASSERT_TRUE(second.accepted());
 
     server.queue_payload(withId(fixture("rename_response.json"),
-                                 first.request_id));
+                                 first.requestId));
     const auto stale = controller.poll(Revision{1});
     ASSERT_EQ(stale.publications[0].result,
               LspRenamePublishResult::Superseded);
@@ -527,7 +527,7 @@ TEST(supersededRenameResponseCannotReplaceNewerResult) {
               std::string{"symbol"});
 
     server.queue_payload(withId(fixture("rename_response_second.json"),
-                                 second.request_id));
+                                 second.requestId));
     const auto accepted = controller.poll(Revision{1});
     ASSERT_EQ(accepted.publications[0].result,
               LspRenamePublishResult::Accepted);

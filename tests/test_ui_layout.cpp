@@ -25,12 +25,12 @@ void assertRect(Rect actual, Rect expected) {
 ShellLayoutRequest request(int columns, int rows) {
     ShellLayoutRequest value;
     value.viewport = {columns, rows};
-    value.header_fields = {
+    value.headerFields = {
         {"active_command", "Active command", "INSERT", 0},
         {"current_path", "Current path", "src/main.cpp", 1},
         {"mode", "Editor mode", "edit", 2},
     };
-    value.footer_fields = {
+    value.footerFields = {
         {"actionable_status", "Status message", "Saved", 0},
         {"follow_state", "Follow edits state and resume binding", "following", 1},
         {"background_activity", "Background activity", "idle", 2},
@@ -42,8 +42,8 @@ ShellLayoutRequest request(int columns, int rows) {
         {"file_size", "File size", "1 KiB", 8},
     };
     value.tabs = {{"main.cpp", "main.cpp tab", true}};
-    value.footer_actions = {{"status.retry", "Retry status action"}};
-    value.panel_provider_label = "Files";
+    value.footerActions = {{"status.retry", "Retry status action"}};
+    value.panelProviderLabel = "Files";
     return value;
 }
 
@@ -56,13 +56,13 @@ TEST(handAuthoredGeometryGoldens) {
     ASSERT_TRUE(minimumResult.accepted());
     ASSERT_FALSE(minimumResult.view->panel.has_value());
     assertRect(*minimumResult.view->header, {0, 0, 20, 1});
-    assertRect(*minimumResult.view->tab_bar, {0, 1, 20, 1});
+    assertRect(*minimumResult.view->tabBar, {0, 1, 20, 1});
     assertRect(minimumResult.view->panes[0].content, {0, 2, 19, 1});
     assertRect(minimumResult.view->panes[0].scrollbar, {19, 2, 1, 1});
     assertRect(*minimumResult.view->footer, {0, 3, 20, 1});
     const auto hasHeaderField = [&](std::string_view id) {
         return std::ranges::any_of(
-            minimumResult.view->accessibility_nodes, [&](const auto& node) {
+            minimumResult.view->accessibilityNodes, [&](const auto& node) {
                 return node.kind == ShellNodeKind::HeaderField &&
                        node.id == id;
             });
@@ -72,12 +72,12 @@ TEST(handAuthoredGeometryGoldens) {
     ASSERT_FALSE(hasHeaderField("mode"));
 
     auto wide = request(80, 12);
-    wide.reserved_prompt_rows = 2;
+    wide.reservedPromptRows = 2;
     auto wideResult = computeShellLayout(wide, state);
     ASSERT_TRUE(wideResult.accepted());
     assertRect(*wideResult.view->header, {0, 0, 80, 1});
     assertRect(*wideResult.view->panel, {0, 1, 24, 10});
-    assertRect(*wideResult.view->tab_bar, {24, 1, 56, 1});
+    assertRect(*wideResult.view->tabBar, {24, 1, 56, 1});
     assertRect(*wideResult.view->prompt, {24, 2, 56, 2});
     assertRect(wideResult.view->panes[0].content, {24, 4, 55, 7});
     assertRect(wideResult.view->panes[0].scrollbar, {79, 4, 1, 7});
@@ -89,7 +89,7 @@ TEST(handAuthoredGeometryGoldens) {
     ASSERT_TRUE(focusedResult.accepted());
     ASSERT_FALSE(focusedResult.view->header.has_value());
     ASSERT_FALSE(focusedResult.view->footer.has_value());
-    ASSERT_FALSE(focusedResult.view->tab_bar.has_value());
+    ASSERT_FALSE(focusedResult.view->tabBar.has_value());
     assertRect(focusedResult.view->panes[0].content, {0, 0, 19, 4});
     assertRect(focusedResult.view->panes[0].scrollbar, {19, 0, 1, 4});
 }
@@ -106,13 +106,13 @@ TEST(viewportAndPromptErrorsAreTyped) {
     ASSERT_EQ(shortView.error->code, ShellLayoutErrorCode::ViewportTooSmall);
 
     auto invalidPrompt = request(80, 12);
-    invalidPrompt.reserved_prompt_rows = 4;
+    invalidPrompt.reservedPromptRows = 4;
     auto invalid = computeShellLayout(invalidPrompt, state);
     ASSERT_FALSE(invalid.accepted());
     ASSERT_EQ(invalid.error->code, ShellLayoutErrorCode::InvalidPromptRows);
 
     auto noRoom = request(20, 4);
-    noRoom.reserved_prompt_rows = 2;
+    noRoom.reservedPromptRows = 2;
     auto noRoomResult = computeShellLayout(noRoom, state);
     ASSERT_FALSE(noRoomResult.accepted());
     ASSERT_EQ(noRoomResult.error->code, ShellLayoutErrorCode::ViewportTooSmall);
@@ -194,12 +194,12 @@ TEST(accessibilityNodesHaveLabelsAndRoles) {
     ShellState state({"Files"});
     auto input = request(80, 12);
     state.togglePanel();
-    input.reserved_prompt_rows = 1;
-    input.empty_state = true;
+    input.reservedPromptRows = 1;
+    input.emptyState = true;
     auto result = computeShellLayout(input, state);
     ASSERT_TRUE(result.accepted());
 
-    const auto& nodes = result.view->accessibility_nodes;
+    const auto& nodes = result.view->accessibilityNodes;
     ASSERT_FALSE(nodes.empty());
     for (const auto& node : nodes) {
         ASSERT_FALSE(node.label.empty());
@@ -264,7 +264,7 @@ TEST(nonOverlapAndCardinalityProperties) {
             std::vector<Rect> leaves;
             leaves.push_back(*view.header);
             leaves.push_back(*view.footer);
-            leaves.push_back(*view.tab_bar);
+            leaves.push_back(*view.tabBar);
             if (view.panel) leaves.push_back(*view.panel);
             for (const auto& pane : view.panes) {
                 leaves.push_back(pane.content);
@@ -310,7 +310,7 @@ TEST(accessibilityLeafNodesCarryDisplayContent) {
     ASSERT_TRUE(result.accepted());
     const auto find = [&](ShellNodeKind kind,
                           std::string_view id) -> const AccessibilityNode* {
-        for (const auto& node : result.view->accessibility_nodes) {
+        for (const auto& node : result.view->accessibilityNodes) {
             if (node.kind == kind && node.id == id) return &node;
         }
         return nullptr;
@@ -337,7 +337,7 @@ TEST(dirtyTabContentShowsMarker) {
     auto result = computeShellLayout(value, state);
     ASSERT_TRUE(result.accepted());
     const AccessibilityNode* tab = nullptr;
-    for (const auto& node : result.view->accessibility_nodes) {
+    for (const auto& node : result.view->accessibilityNodes) {
         if (node.kind == ShellNodeKind::Tab) tab = &node;
     }
     ASSERT_TRUE(tab != nullptr);
@@ -391,12 +391,12 @@ TEST(hidingAnUnfocusedPanelLeavesFocusUntouched) {
 
 TEST(leaderHintRendersInTheHeaderWhenPresent) {
     auto value = request(80, 12);
-    value.leader_hint = "leader: Escape";
+    value.leaderHint = "leader: Escape";
     ShellState state;
     auto result = computeShellLayout(value, state);
     ASSERT_TRUE(result.accepted());
     const AccessibilityNode* leader = nullptr;
-    for (const auto& node : result.view->accessibility_nodes) {
+    for (const auto& node : result.view->accessibilityNodes) {
         if (node.kind == ShellNodeKind::HeaderField && node.id == "leader") {
             leader = &node;
         }
@@ -411,7 +411,7 @@ TEST(leaderHintRendersInTheHeaderWhenPresent) {
     auto plain = computeShellLayout(request(80, 12), state);
     ASSERT_TRUE(plain.accepted());
     const bool hasLeader = std::ranges::any_of(
-        plain.view->accessibility_nodes,
+        plain.view->accessibilityNodes,
         [](const auto& node) { return node.id == "leader"; });
     ASSERT_FALSE(hasLeader);
 }

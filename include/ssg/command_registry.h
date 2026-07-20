@@ -78,7 +78,7 @@ public:
     InvocationPrincipal& operator=(InvocationPrincipal const&) = delete;
     InvocationPrincipal& operator=(InvocationPrincipal&&) = delete;
 
-    [[nodiscard]] ClientId clientId() const noexcept { return client_id_; }
+    [[nodiscard]] ClientId clientId() const noexcept { return clientId_; }
     [[nodiscard]] InvocationOrigin origin() const noexcept { return origin_; }
     [[nodiscard]] std::vector<CapabilityId> const& capabilities() const noexcept {
         return capabilities_;
@@ -86,7 +86,7 @@ public:
     [[nodiscard]] bool hasCapability(CapabilityId const& capability) const;
 
 private:
-    ClientId client_id_;
+    ClientId clientId_;
     InvocationOrigin origin_;
     std::vector<CapabilityId> capabilities_;
 };
@@ -148,10 +148,10 @@ private:
     Revision revision_;
     InvocationPrincipal const& principal_;
     CommandServices* services_;
-    bool workspace_changed_{false};
-    WorkspaceId active_workspace_;
-    bool view_changed_{false};
-    ViewId active_view_;
+    bool workspaceChanged_{false};
+    WorkspaceId activeWorkspace_;
+    bool viewChanged_{false};
+    ViewId activeView_;
 };
 
 enum class CommandEffect : std::uint8_t {
@@ -173,7 +173,7 @@ using CommandHandler =
 struct CommandDescriptor {
     std::string id;
     CommandEffect effect;
-    std::vector<CapabilityId> required_capabilities;
+    std::vector<CapabilityId> requiredCapabilities;
 };
 
 struct CommandRegistration {

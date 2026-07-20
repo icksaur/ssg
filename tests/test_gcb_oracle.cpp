@@ -51,7 +51,7 @@ static std::string encodeUtf8(uint32_t cp) {
 
 // Parses one test line: "÷ HHHH × HHHH ÷ ..." into a list of (codepoint, is_break_after).
 // Returns false if line should be skipped (blank, comment, or contains CR/LF).
-struct Entry { uint32_t cp; bool break_after; };
+struct Entry { uint32_t cp; bool breakAfter; };
 
 static bool parseLine(const std::string& line,
                         std::vector<Entry>& outEntries,
@@ -97,21 +97,21 @@ static bool parseLine(const std::string& line,
             bool breakBefore = lastWasBreakMarker && !outEntries.empty();
             // We record break_after on the PREVIOUS entry
             if (!outEntries.empty()) {
-                outEntries.back().break_after = lastWasBreakMarker;
+                outEntries.back().breakAfter = lastWasBreakMarker;
             }
             outEntries.push_back({cp, false});
             lastWasBreakMarker = false;
             first = false;
         }
     }
-    if (!outEntries.empty()) outEntries.back().break_after = true; // final ÷
+    if (!outEntries.empty()) outEntries.back().breakAfter = true; // final ÷
 
     if (outEntries.empty()) return false;
 
     // Compute break byte positions (excluding position 0 and total_bytes)
     size_t bytePos = 0;
     for (size_t i = 0; i < outEntries.size(); ++i) {
-        if (i > 0 && outEntries[i - 1].break_after) {
+        if (i > 0 && outEntries[i - 1].breakAfter) {
             outBreakBytes.push_back(bytePos);
         }
         bytePos += encodeUtf8(outEntries[i].cp).size();
@@ -170,8 +170,8 @@ int main() {
             };
 
             for (size_t i = 0; i < run.spans.size(); ++i) {
-                if (run.spans[i].byte_offset != expectedOffset(i) ||
-                    run.spans[i].byte_len    != expectedLen(i)) {
+                if (run.spans[i].byteOffset != expectedOffset(i) ||
+                    run.spans[i].byteLen    != expectedLen(i)) {
                     ok = false;
                     break;
                 }
@@ -187,7 +187,7 @@ int main() {
                          expectedSpans, run.spans.size());
             for (size_t i = 0; i < run.spans.size(); ++i) {
                 std::fprintf(stderr, "  span[%zu] offset=%u len=%u (expected offset=%zu",
-                             i, run.spans[i].byte_offset, run.spans[i].byte_len,
+                             i, run.spans[i].byteOffset, run.spans[i].byteLen,
                              (i == 0) ? 0u : breakBytes[i - 1]);
                 if (i < run.spans.size()) {
                     const size_t expStart = (i == 0) ? 0 : breakBytes[i - 1];

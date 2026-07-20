@@ -81,7 +81,7 @@ struct WorkspaceResult {
     std::string message;
     std::optional<FileDocumentId> document;
     std::optional<RecoveryRecordId> compensation;
-    std::optional<WorkspaceReplacementId> workspace_compensation;
+    std::optional<WorkspaceReplacementId> workspaceCompensation;
     std::vector<WorkspaceFailure> failures;
 
     [[nodiscard]] bool accepted() const noexcept {
@@ -92,8 +92,8 @@ struct WorkspaceResult {
 struct WorkspaceDocumentState {
     FileDocumentId id;
     JournalDocumentKey key;
-    std::string display_label;
-    FileContentKind content_kind = FileContentKind::Text;
+    std::string displayLabel;
+    FileContentKind contentKind = FileContentKind::Text;
     TextEncodingStatus encoding;
     bool dirty = false;
 

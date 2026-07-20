@@ -222,11 +222,11 @@ void encodeKey(Writer& writer, const JournalDocumentKey& key) {
 }
 
 void encodeDocument(Writer& writer, const JournalDocument& document) {
-    requireValidText(document.utf8_content, "journal document content");
+    requireValidText(document.utf8Content, "journal document content");
     encodeKey(writer, document.key);
     writer.u8(static_cast<std::uint8_t>(document.mode));
     writer.u8(document.dirty ? 1 : 0);
-    writer.string64(document.utf8_content);
+    writer.string64(document.utf8Content);
 }
 
 std::vector<std::byte> frame(RecordKind kind, Writer body) {
@@ -488,7 +488,7 @@ JournalReplayResult replayJournal(std::span<const std::byte> bytes) {
     while (position < bytes.size()) {
         if (bytes.size() - position < kHeaderSize ||
             !std::equal(kMagic.begin(), kMagic.end(), bytes.begin() + position)) {
-            result.discarded_tail = true;
+            result.discardedTail = true;
             break;
         }
         Reader header{bytes.subspan(position + kMagic.size(),
@@ -505,18 +505,18 @@ JournalReplayResult replayJournal(std::span<const std::byte> bytes) {
             payloadSize > kMaximumPayloadSize ||
             !header.u32(expectedCrc) ||
             payloadSize > bytes.size() - position - kHeaderSize) {
-            result.discarded_tail = true;
+            result.discardedTail = true;
             break;
         }
         const auto payload =
             bytes.subspan(position + kHeaderSize, payloadSize);
         if (crc32c(payload) != expectedCrc ||
             !applyPayload(payload, result.recovery)) {
-            result.discarded_tail = true;
+            result.discardedTail = true;
             break;
         }
         position += kHeaderSize + payloadSize;
-        result.valid_bytes = position;
+        result.validBytes = position;
     }
     return result;
 }

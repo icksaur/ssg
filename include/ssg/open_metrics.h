@@ -36,7 +36,7 @@ public:
 
 private:
     OpenPhase phase_;
-    std::int64_t start_ns_;
+    std::int64_t startNs_;
 };
 
 [[nodiscard]] std::uint64_t openPhaseNs(OpenPhase phase);

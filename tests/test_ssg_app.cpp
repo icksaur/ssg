@@ -569,7 +569,7 @@ TEST(decodeInputPointerSplitReadsAreIncomplete) {
 TEST(routePointerLeftPressOnEditorPlacesCaret) {
     ssg::RegionHit hit;
     hit.region = ssg::HitRegion::Editor;
-    hit.byte_offset = 3;
+    hit.byteOffset = 3;
     ssg::app::PointerTargets targets;
     targets.document_position =
         ssg::DocumentPosition{ssg::ByteOffset{3}, ssg::LineIndex{0}, ssg::CellIndex{3}};
@@ -654,7 +654,7 @@ TEST(routePointerDragExtendsSelectionFromAnchor) {
         ssg::DocumentPosition{ssg::ByteOffset{3}, ssg::LineIndex{0}, ssg::CellIndex{3}};
     ssg::RegionHit hit;
     hit.region = ssg::HitRegion::Editor;
-    hit.byte_offset = 10;
+    hit.byteOffset = 10;
     ssg::app::PointerTargets targets;
     auto const active =
         ssg::DocumentPosition{ssg::ByteOffset{10}, ssg::LineIndex{1}, ssg::CellIndex{2}};
@@ -751,8 +751,8 @@ TEST(routePointerEditorScrollbarScrollsToFraction) {
 
     ssg::RegionHit bottom;
     bottom.region = ssg::HitRegion::EditorScrollbar;
-    bottom.scroll_numerator = 7;
-    bottom.scroll_denominator = 7;
+    bottom.scrollNumerator = 7;
+    bottom.scrollDenominator = 7;
     ssg::app::PointerTargets const empty;
 
     for (auto kind : {ssg::app::PointerKind::press, ssg::app::PointerKind::drag}) {
@@ -770,8 +770,8 @@ TEST(routePointerEditorScrollbarScrollsToFraction) {
 
     ssg::RegionHit top;
     top.region = ssg::HitRegion::EditorScrollbar;
-    top.scroll_numerator = 0;
-    top.scroll_denominator = 7;
+    top.scrollNumerator = 0;
+    top.scrollDenominator = 7;
     auto topPlan = ssg::app::route_pointer(
         top, ssg::app::PointerButton::left, ssg::app::PointerKind::press, false,
         std::nullopt, empty);
@@ -799,8 +799,8 @@ TEST(routePointerPanelAndPaletteScrollbarsAreNoOps) {
                         ssg::HitRegion::PaletteScrollbar}) {
         ssg::RegionHit hit;
         hit.region = region;
-        hit.scroll_numerator = 3;
-        hit.scroll_denominator = 5;
+        hit.scrollNumerator = 3;
+        hit.scrollDenominator = 5;
         for (auto kind : {ssg::app::PointerKind::press, ssg::app::PointerKind::drag}) {
             auto plan = ssg::app::route_pointer(
                 hit, ssg::app::PointerButton::left, kind, false, std::nullopt, empty);
@@ -812,7 +812,7 @@ TEST(routePointerPanelAndPaletteScrollbarsAreNoOps) {
 TEST(routePointerTabPressActivatesTheTab) {
     ssg::RegionHit hit;
     hit.region = ssg::HitRegion::Tab;
-    hit.tab_index = 2;
+    hit.tabIndex = 2;
     ssg::app::PointerTargets targets;
     targets.tab_id = ssg::TabId{7};
 
@@ -840,7 +840,7 @@ TEST(routePointerTabPressActivatesTheTab) {
 TEST(routePointerPalettePressExecutesTheCandidate) {
     ssg::RegionHit hit;
     hit.region = ssg::HitRegion::Palette;
-    hit.item_index = 4;
+    hit.itemIndex = 4;
     ssg::app::PointerTargets targets;
     targets.palette_command_id = std::string{"view.split"};
 
@@ -853,7 +853,7 @@ TEST(routePointerPalettePressExecutesTheCandidate) {
         auto const* args = std::any_cast<ssg::PaletteExecuteArguments>(
             &plan.commands[0].payload);
         ASSERT_TRUE(args != nullptr);
-        if (args) ASSERT_EQ(args->command_id, std::string{"view.split"});
+        if (args) ASSERT_EQ(args->commandId, std::string{"view.split"});
     }
     ASSERT_FALSE(plan.begins_drag);
 
@@ -868,7 +868,7 @@ TEST(routePointerPalettePressExecutesTheCandidate) {
 TEST(routePointerPanelPressSelectsAndActivatesTheNode) {
     ssg::RegionHit hit;
     hit.region = ssg::HitRegion::Panel;
-    hit.node_id = ssg::TreeNodeId{"files:src/main.cpp"};
+    hit.nodeId = ssg::TreeNodeId{"files:src/main.cpp"};
     ssg::app::PointerTargets const empty;
 
     auto plan = ssg::app::route_pointer(hit, ssg::app::PointerButton::left,
@@ -882,7 +882,7 @@ TEST(routePointerPanelPressSelectsAndActivatesTheNode) {
         auto const* args = std::any_cast<ssg::TreeSelectArguments>(
             &plan.commands[0].payload);
         ASSERT_TRUE(args != nullptr);
-        if (args) ASSERT_EQ(args->node_id, *hit.node_id);
+        if (args) ASSERT_EQ(args->nodeId, *hit.nodeId);
         ASSERT_EQ(plan.commands[1].command_id, std::string{"tree.activate"});
     }
     ASSERT_FALSE(plan.begins_drag);

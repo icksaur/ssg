@@ -432,7 +432,7 @@ SettingMutation SettingsModel::apply(const SettingCompensation& compensation) {
     auto& slot = data.values[index(compensation.key)];
     if (slot != compensation.expected ||
         data.generations[index(compensation.key)] !=
-            compensation.expected_generation) {
+            compensation.expectedGeneration) {
         return {{SettingError{SettingErrorCode::StaleCompensation, compensation.key,
                               "setting changed after the compensating action was created"}},
                 std::nullopt, {}};
@@ -460,7 +460,7 @@ std::string SettingsModel::exportScope(SettingScope scope) const {
             document += '\n';
         }
     }
-    for (const auto& field : data.unknown_fields) {
+    for (const auto& field : data.unknownFields) {
         document += field;
         document += '\n';
     }
@@ -495,7 +495,7 @@ SettingsIoResult SettingsModel::importScope(
         const auto name = line.substr(0, separator);
         const auto key = keyFromName(name);
         if (!key) {
-            parsed.unknown_fields.emplace_back(line);
+            parsed.unknownFields.emplace_back(line);
             continue;
         }
         auto& slot = parsed.values[index(*key)];
@@ -516,7 +516,7 @@ SettingsIoResult SettingsModel::importScope(
 
 SettingsPersistence::SettingsPersistence(SettingsPaths paths)
     : paths_(std::move(paths)) {
-    if (paths_.user_file.empty() || paths_.workspace_file.empty()) {
+    if (paths_.userFile.empty() || paths_.workspaceFile.empty()) {
         throw std::invalid_argument("settings persistence paths must not be empty");
     }
 }
@@ -524,13 +524,13 @@ SettingsPersistence::SettingsPersistence(SettingsPaths paths)
 SettingsIoResult SettingsPersistence::load(SettingsModel& settings) const {
     SettingsModel candidate = settings;
     std::string error;
-    const auto user = readIfPresent(paths_.user_file, error);
+    const auto user = readIfPresent(paths_.userFile, error);
     if (!error.empty()) return {false, error};
     if (user) {
         const auto result = candidate.importScope(SettingScope::User, *user);
         if (!result.ok) return result;
     }
-    const auto workspace = readIfPresent(paths_.workspace_file, error);
+    const auto workspace = readIfPresent(paths_.workspaceFile, error);
     if (!error.empty()) return {false, error};
     if (workspace) {
         const auto result = candidate.importScope(SettingScope::Workspace, *workspace);
@@ -542,8 +542,8 @@ SettingsIoResult SettingsPersistence::load(SettingsModel& settings) const {
 
 SettingsIoResult SettingsPersistence::save(const SettingsModel& settings) const {
     try {
-        writeDocument(paths_.user_file, settings.exportScope(SettingScope::User));
-        writeDocument(paths_.workspace_file,
+        writeDocument(paths_.userFile, settings.exportScope(SettingScope::User));
+        writeDocument(paths_.workspaceFile,
                        settings.exportScope(SettingScope::Workspace));
         return {};
     } catch (const std::exception& error) {

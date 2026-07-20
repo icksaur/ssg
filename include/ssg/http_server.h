@@ -29,7 +29,7 @@ private:
 
 struct SessionAttachRequest {
     std::string credential;
-    std::optional<Revision> last_applied_revision;
+    std::optional<Revision> lastAppliedRevision;
 };
 
 struct DecodeSessionAttachRequestResult {
@@ -48,9 +48,9 @@ struct DecodeSessionAttachRequestResult {
     std::string_view message, ProtocolLimits limits = {});
 
 struct AuthenticatedSession {
-    SessionId session_id;
+    SessionId sessionId;
     InvocationPrincipal principal;
-    ViewId view_id;
+    ViewId viewId;
 };
 
 class HttpEditorSessionHost {
@@ -72,19 +72,19 @@ public:
 
 struct HttpEditorRouteConfig {
     std::string route{"/session"};
-    std::size_t outbound_queue_messages{32};
-    std::size_t replay_deltas{64};
-    std::chrono::milliseconds write_timeout{1000};
-    ProtocolLimits protocol_limits{};
+    std::size_t outboundQueueMessages{32};
+    std::size_t replayDeltas{64};
+    std::chrono::milliseconds writeTimeout{1000};
+    ProtocolLimits protocolLimits{};
 };
 
 struct HttpEditorServerConfig {
     std::uint16_t port;
     std::string route{"/session"};
-    std::size_t outbound_queue_messages{32};
-    std::size_t replay_deltas{64};
-    std::chrono::milliseconds write_timeout{1000};
-    ProtocolLimits protocol_limits{};
+    std::size_t outboundQueueMessages{32};
+    std::size_t replayDeltas{64};
+    std::chrono::milliseconds writeTimeout{1000};
+    ProtocolLimits protocolLimits{};
 };
 
 class HttpEditorRoute {

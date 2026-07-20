@@ -47,7 +47,7 @@ std::string controlKindText(PromptControlKind kind) {
 PromptRequest request(PromptKind kind) {
     PromptRequest value;
     value.kind = kind;
-    value.accessible_label =
+    value.accessibleLabel =
         kind == PromptKind::Path ? "Path" :
         kind == PromptKind::Replace ? "Replace" : "Find";
     value.inputs.push_back(
@@ -59,7 +59,7 @@ PromptRequest request(PromptKind kind) {
     if (kind == PromptKind::Find || kind == PromptKind::Replace) {
         value.toggles.push_back({"case", "Case sensitive", false, 6});
         value.toggles.push_back({"word", "Whole word", true, 7});
-        value.match_count = PromptMatchCount{"matches", "Match count", "2/7"};
+        value.matchCount = PromptMatchCount{"matches", "Match count", "2/7"};
     }
     return value;
 }
@@ -207,7 +207,7 @@ TEST(statusStaleActionsAreRejectedWithoutMutation) {
         StatusId{7}, "retry", replacement.generation};
     const auto invoked = queue.invokeAction(current);
     ASSERT_TRUE(invoked.accepted());
-    ASSERT_EQ(invoked.command_id, std::optional<std::string>{"build.retry"});
+    ASSERT_EQ(invoked.commandId, std::optional<std::string>{"build.retry"});
 }
 
 TEST(footerProjectionAndAccessibilityMatchGolden) {
@@ -223,17 +223,17 @@ TEST(footerProjectionAndAccessibilityMatchGolden) {
     const auto footer = queue.footerProjection();
     ASSERT_EQ(footer.value, std::string{"Build failed 1/1"});
     ASSERT_EQ(footer.actions[0].id, std::string{"retry"});
-    ASSERT_EQ(footer.actions[1].accessible_label, std::string{"Open log"});
+    ASSERT_EQ(footer.actions[1].accessibleLabel, std::string{"Open log"});
 
-    std::string actual = "prompt|" + layout.view->accessible_label + "\n";
+    std::string actual = "prompt|" + layout.view->accessibleLabel + "\n";
     for (const auto& control : layout.view->controls) {
         actual += controlKindText(control.kind) + "|" +
-                  control.accessible_label + "\n";
+                  control.accessibleLabel + "\n";
     }
     const auto statusView = queue.viewState();
-    actual += "status|" + statusView.items[0].accessible_label + "\n";
+    actual += "status|" + statusView.items[0].accessibleLabel + "\n";
     for (const auto& action : footer.actions) {
-        actual += "action|" + action.accessible_label + "\n";
+        actual += "action|" + action.accessibleLabel + "\n";
     }
     ASSERT_EQ(actual,
               readFixture("tests/fixtures/prompt_status/accessibility.txt"));

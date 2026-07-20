@@ -34,14 +34,14 @@ TEST(viewportShellSettingsAndThemeAreLiveSections) {
 
     auto before = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(before.has_value());
-    ASSERT_EQ(before->client().viewport.first_visual_row, 0U);
+    ASSERT_EQ(before->client().viewport.firstVisualRow, 0U);
     ASSERT_EQ(before->sections().theme.palette.size(), ssg::kThemePaletteSize);
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{5}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"panel.toggle", runtime.revision(), {}}).accepted());
     auto after = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(after.has_value());
-    ASSERT_EQ(after->client().viewport.first_visual_row, 5U);
+    ASSERT_EQ(after->client().viewport.firstVisualRow, 5U);
     ASSERT_TRUE(after->sections().shell.panel.has_value());
 }
 
@@ -125,7 +125,7 @@ TEST(editorScrollUsesTheRealPaneHeightNotAHardcoded24) {
     auto afterPage = runtime.snapshot(ssg::ClientId{1}, dims);
     ASSERT_TRUE(afterPage.has_value());
     if (!afterPage) return;
-    ASSERT_EQ(afterPage->client().viewport.first_visual_row, paneRows);
+    ASSERT_EQ(afterPage->client().viewport.firstVisualRow, paneRows);
 
     // Scroll-to-fraction(1/1) reaches the REAL maximum for this terminal (the last
     // line becomes visible), not the 24-row-derived maximum.
@@ -133,8 +133,8 @@ TEST(editorScrollUsesTheRealPaneHeightNotAHardcoded24) {
     auto afterBottom = runtime.snapshot(ssg::ClientId{1}, dims);
     ASSERT_TRUE(afterBottom.has_value());
     if (!afterBottom) return;
-    ASSERT_EQ(afterBottom->client().viewport.first_visual_row,
-              afterBottom->client().viewport.scrollbar.maximum_first_row);
+    ASSERT_EQ(afterBottom->client().viewport.firstVisualRow,
+              afterBottom->client().viewport.scrollbar.maximumFirstRow);
     std::filesystem::remove_all(root);
 }
 
@@ -151,7 +151,7 @@ TEST(reportedLeaderSequenceRendersAPerSnapshotHint) {
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
     const auto leaderContent = [](ssg::SessionSnapshot const& snapshot) {
-        for (auto const& node : snapshot.sections().shell.accessibility_nodes) {
+        for (auto const& node : snapshot.sections().shell.accessibilityNodes) {
             if (node.id == "leader") return node.content;
         }
         return std::string{};

@@ -17,11 +17,11 @@ struct DocumentViewState {
 };
 
 struct DocumentDelta {
-    Revision base_revision;
+    Revision baseRevision;
     Revision revision;
     ByteOffset start;
-    std::uint64_t erased_bytes;
-    std::string inserted_text;
+    std::uint64_t erasedBytes;
+    std::string insertedText;
 
     bool operator==(DocumentDelta const&) const = default;
 };

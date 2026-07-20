@@ -155,7 +155,7 @@ TEST(paletteReportIsAPureFunctionOfCandidatesAndQuery) {
                       std::min<std::size_t>(order.size(), 12));
             for (std::size_t row = 0; row < report.rows.size(); ++row) {
                 ASSERT_TRUE(report.rows[row] ==
-                            candidates[order[report.first_visible + row]]);
+                            candidates[order[report.firstVisible + row]]);
             }
         }
     }

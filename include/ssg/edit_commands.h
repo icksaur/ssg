@@ -55,11 +55,11 @@ private:
 editCommandSuiteCommandSet();
 
 struct EditCommandSettings {
-    IndentStyle indent_style;
-    std::uint32_t indent_width;
-    std::uint32_t tab_width;
-    LineEnding line_ending;
-    std::string line_comment_token;
+    IndentStyle indentStyle;
+    std::uint32_t indentWidth;
+    std::uint32_t tabWidth;
+    LineEnding lineEnding;
+    std::string lineCommentToken;
 
     bool operator==(const EditCommandSettings&) const = default;
 };
@@ -77,7 +77,7 @@ struct EditCommandResult {
     EditCommandError error;
     std::optional<EditTransaction> transaction;
     std::optional<SelectionSet> selections;
-    std::string resulting_text;
+    std::string resultingText;
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {

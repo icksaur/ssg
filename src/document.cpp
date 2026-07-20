@@ -128,7 +128,7 @@ DocumentSnapshot Document::snapshot() const {
 
 TransactionResult Document::apply(EditTransaction const& transaction) {
     const auto currentRevision = impl_->revision;
-    if (transaction.base_revision != currentRevision) {
+    if (transaction.baseRevision != currentRevision) {
         return failure(DocumentError::StaleRevision, currentRevision,
                        "transaction base revision is stale");
     }
@@ -154,16 +154,16 @@ TransactionResult Document::apply(EditTransaction const& transaction) {
     std::vector<TextEdit const*> ordered;
     ordered.reserve(transaction.edits.size());
     for (auto const& edit : transaction.edits) {
-        if (edit.erased_bytes == 0 && edit.inserted_text.empty()) {
+        if (edit.erasedBytes == 0 && edit.insertedText.empty()) {
             return failure(DocumentError::EmptyTransaction, currentRevision,
                            "transaction contains an empty edit");
         }
-        if (!validUtf8WithoutNul(edit.inserted_text)) {
+        if (!validUtf8WithoutNul(edit.insertedText)) {
             return failure(DocumentError::InvalidUtf8, currentRevision,
                            "inserted text must be well-formed UTF-8 without NUL bytes");
         }
         if (edit.offset.value() > original.size() ||
-            edit.erased_bytes >
+            edit.erasedBytes >
                 original.size() -
                     static_cast<std::size_t>(edit.offset.value())) {
             return failure(DocumentError::InvalidRange, currentRevision,
@@ -172,7 +172,7 @@ TransactionResult Document::apply(EditTransaction const& transaction) {
 
         const auto begin = static_cast<std::size_t>(edit.offset.value());
         const auto end =
-            begin + static_cast<std::size_t>(edit.erased_bytes);
+            begin + static_cast<std::size_t>(edit.erasedBytes);
         if (!isUtf8Boundary(original, begin) ||
             !isUtf8Boundary(original, end)) {
             return failure(DocumentError::InvalidUtf8Boundary,
@@ -190,7 +190,7 @@ TransactionResult Document::apply(EditTransaction const& transaction) {
         const auto& previous = *ordered[index - 1];
         const auto& current = *ordered[index];
         const auto previousEnd =
-            previous.offset.value() + previous.erased_bytes;
+            previous.offset.value() + previous.erasedBytes;
         if (current.offset == previous.offset ||
             current.offset.value() < previousEnd) {
             return failure(DocumentError::OverlappingEdits,
@@ -203,12 +203,12 @@ TransactionResult Document::apply(EditTransaction const& transaction) {
          ++iterator) {
         const auto& edit = **iterator;
         const auto offset = static_cast<std::size_t>(edit.offset.value());
-        const auto erased = static_cast<std::size_t>(edit.erased_bytes);
+        const auto erased = static_cast<std::size_t>(edit.erasedBytes);
         if (erased != 0) {
             impl_->tree.erase(offset, erased);
         }
-        if (!edit.inserted_text.empty()) {
-            impl_->tree.insert(offset, edit.inserted_text);
+        if (!edit.insertedText.empty()) {
+            impl_->tree.insert(offset, edit.insertedText);
         }
     }
 

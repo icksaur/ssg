@@ -155,7 +155,7 @@ struct EditOp {
     size_t      hi;
     std::string replacement;
     // Where the cursor lands after this op.  SIZE_MAX means lo+replacement.size().
-    size_t      cursor_at = ~size_t{0};
+    size_t      cursorAt = ~size_t{0};
 };
 
 // Apply ops to ed.text (does NOT push undo — caller must do that first).
@@ -176,9 +176,9 @@ static void doApplyOps(Editor& ed, std::vector<EditOp> ops) {
     for (auto const& op : ops) {
         ed.text.replace(op.lo, op.hi - op.lo, op.replacement);
 
-        size_t raw = (op.cursor_at == ~size_t{0})
+        size_t raw = (op.cursorAt == ~size_t{0})
                          ? op.lo + op.replacement.size()
-                         : op.lo + op.cursor_at;
+                         : op.lo + op.cursorAt;
 
         ptrdiff_t delta = static_cast<ptrdiff_t>(op.replacement.size()) -
                           static_cast<ptrdiff_t>(op.hi - op.lo);
@@ -211,8 +211,8 @@ static void applyOps(Editor& ed, std::vector<EditOp> ops) {
 // Ops are sorted descending internally.
 struct AdjOp {
     size_t      pos;       // byte position
-    size_t      del_len;   // bytes to delete at pos
-    std::string ins_text;  // text to insert at pos
+    size_t      delLen;   // bytes to delete at pos
+    std::string insText;  // text to insert at pos
 };
 
 static void adjustApply(Editor& ed, std::vector<AdjOp> ops) {
@@ -223,20 +223,20 @@ static void adjustApply(Editor& ed, std::vector<AdjOp> ops) {
     });
 
     for (auto const& op : ops) {
-        ed.text.replace(op.pos, op.del_len, op.ins_text);
-        ptrdiff_t delta = static_cast<ptrdiff_t>(op.ins_text.size()) -
-                          static_cast<ptrdiff_t>(op.del_len);
+        ed.text.replace(op.pos, op.delLen, op.insText);
+        ptrdiff_t delta = static_cast<ptrdiff_t>(op.insText.size()) -
+                          static_cast<ptrdiff_t>(op.delLen);
         if (delta == 0) continue;
 
         for (auto& s : ed.selections) {
             auto adjust = [&](size_t& ep) {
-                size_t endOfDel = op.pos + op.del_len;
+                size_t endOfDel = op.pos + op.delLen;
                 if (ep >= endOfDel) {
                     // After the deleted region: shift
                     ep = static_cast<size_t>(static_cast<ptrdiff_t>(ep) + delta);
                 } else if (ep > op.pos) {
                     // Inside deleted region: clamp to insertion end
-                    ep = op.pos + op.ins_text.size();
+                    ep = op.pos + op.insText.size();
                 }
                 // ep <= op.pos: unchanged
             };

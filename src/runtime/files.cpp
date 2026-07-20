@@ -67,7 +67,7 @@ CommandHandlerResult bindFile(EditorRuntime::Impl& runtime,
         case FileCommand::OpenDroppedContent: {
             auto const* dropped = payloadAs<DroppedContentArguments>(payload);
             if (dropped == nullptr) return failure("file.open_dropped_content requires dropped content payload");
-            result = runtime.workspace.openDroppedContent(principal, dropped->bytes, dropped->suggested_label);
+            result = runtime.workspace.openDroppedContent(principal, dropped->bytes, dropped->suggestedLabel);
             return openDocumentResult(runtime, result);
         }
         case FileCommand::Save: {
@@ -195,13 +195,13 @@ CommandHandlerResult bindEncoding(EditorRuntime::Impl& runtime,
         if (arguments == nullptr) {
             return failure("file.set_line_ending requires a line-ending payload");
         }
-        result = runtime.workspace.setLineEnding(*document, arguments->line_ending);
+        result = runtime.workspace.setLineEnding(*document, arguments->lineEnding);
     } else if (id == "file.set_final_newline") {
         auto const* arguments = payloadAs<SetFinalNewlineArguments>(payload);
         if (arguments == nullptr) {
             return failure("file.set_final_newline requires a final-newline payload");
         }
-        result = runtime.workspace.setFinalNewline(*document, arguments->final_newline);
+        result = runtime.workspace.setFinalNewline(*document, arguments->finalNewline);
     } else {
         return failure("unknown encoding command");
     }
@@ -223,7 +223,7 @@ CommandHandlerResult EditorRuntime::Impl::updateTabsFor(FileDocumentId document)
 CommandHandlerResult EditorRuntime::Impl::activateDocument(FileDocumentId document) {
     auto state = workspace.state(document);
     if (!state) return failure("workspace document does not exist");
-    auto result = tabs.openDocument(document, state->key, state->display_label,
+    auto result = tabs.openDocument(document, state->key, state->displayLabel,
                                      workspace.document(document).mode(), state->dirty,
                                      badgeFor(scratch.durabilityState()));
     if (!result.accepted()) return failure(tabMessage(result));

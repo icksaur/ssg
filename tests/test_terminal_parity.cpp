@@ -239,8 +239,8 @@ fs::path makeFixture() {
 std::unique_ptr<ssg::EditorRuntime> makeHeadless(fs::path const& root) {
     ssg::EditorRuntimeConfig config;
     config.cwd = root / "workspace";
-    config.scratch_root = root / "scratch";
-    config.recovery_root = root / "recovery";
+    config.scratchRoot = root / "scratch";
+    config.recoveryRoot = root / "recovery";
     auto created = ssg::EditorRuntime::create(config);
     if (!created.accepted()) return nullptr;
     auto runtime = std::move(created.runtime);

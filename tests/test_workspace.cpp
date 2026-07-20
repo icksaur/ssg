@@ -151,9 +151,9 @@ TEST(renameDeleteAndWorkspaceReplaceAreCompensatable) {
     const auto replaced = workspace.openDirectory(second.path());
     ASSERT_TRUE(replaced.accepted());
     ASSERT_EQ(workspace.root(), std::filesystem::canonical(second.path()));
-    ASSERT_TRUE(replaced.workspace_compensation.has_value());
+    ASSERT_TRUE(replaced.workspaceCompensation.has_value());
     ASSERT_TRUE(
-        workspace.restoreWorkspace(*replaced.workspace_compensation).accepted());
+        workspace.restoreWorkspace(*replaced.workspaceCompensation).accepted());
     ASSERT_EQ(workspace.root(), std::filesystem::canonical(first.path()));
 }
 

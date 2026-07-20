@@ -39,9 +39,9 @@ void applyToReference(ref::Editor& editor,
               });
     for (auto const& replacement : ordered) {
         const auto begin = static_cast<std::size_t>(replacement.offset.value());
-        const auto end = begin + static_cast<std::size_t>(replacement.erased_bytes);
+        const auto end = begin + static_cast<std::size_t>(replacement.erasedBytes);
         ref::select_set_range(editor, begin, end);
-        ref::text_insert(editor, replacement.inserted_text);
+        ref::text_insert(editor, replacement.insertedText);
     }
 }
 

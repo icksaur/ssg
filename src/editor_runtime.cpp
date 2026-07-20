@@ -43,7 +43,7 @@ ThemeSnapshot defaultTheme() {
     }
 
     auto role = [&](SemanticRole which, std::uint8_t index) {
-        snapshot.semantic_indices[static_cast<std::size_t>(which)] = index;
+        snapshot.semanticIndices[static_cast<std::size_t>(which)] = index;
     };
     role(SemanticRole::Foreground, 1);
     role(SemanticRole::Background, 0);
@@ -79,7 +79,7 @@ ThemeSnapshot defaultTheme() {
     role(SemanticRole::DiffModified, 10);
 
     auto syntax = [&](SyntaxScope scope, std::uint8_t index) {
-        snapshot.syntax_indices[static_cast<std::size_t>(scope)] = index;
+        snapshot.syntaxIndices[static_cast<std::size_t>(scope)] = index;
     };
     syntax(SyntaxScope::PlainText, 1);
     syntax(SyntaxScope::Comment, 3);
@@ -280,8 +280,8 @@ EditorRuntime::Impl::Impl(std::filesystem::path canonicalCwd,
                           std::filesystem::path recoveryRoot,
                           bool deferEnrichment)
     : root{std::move(canonicalCwd)},
-      scratch_root{std::filesystem::weakly_canonical(scratchRoot)},
-      recovery_root{std::filesystem::weakly_canonical(recoveryRoot)},
+      scratchRoot{std::filesystem::weakly_canonical(scratchRoot)},
+      recoveryRoot{std::filesystem::weakly_canonical(recoveryRoot)},
       recovery{RecoveryActions::create(recoveryRoot)},
       scratch{ScratchStore::create(scratchRoot, root)},
       workspace{Workspace::create(root, recovery)},
@@ -293,7 +293,7 @@ EditorRuntime::Impl::Impl(std::filesystem::path canonicalCwd,
       syntax{},
       search{*this, *this},
       theme{defaultTheme()},
-      deferring_enrichment{deferEnrichment} {
+      deferringEnrichment{deferEnrichment} {
     refreshTree();
     refreshSyntax();
 }
@@ -355,8 +355,8 @@ WorkspaceSnapshot EditorRuntime::Impl::snapshot(Revision revision) const {
     for (; it != end; ++it) {
         auto const& entry = *it;
         if (entry.is_directory() &&
-            (pathContains(scratch_root, entry.path()) ||
-             pathContains(recovery_root, entry.path()))) {
+            (pathContains(scratchRoot, entry.path()) ||
+             pathContains(recoveryRoot, entry.path()))) {
             it.disable_recursion_pending();
             continue;
         }
@@ -400,12 +400,12 @@ WorkspaceApplyResult EditorRuntime::Impl::apply(
         auto path = workspaceChangePath(root, change.path, message);
         if (!path) {
             return {FindReplaceError::WorkspaceRejected,
-                    preview.source_revision, std::move(message)};
+                    preview.sourceRevision, std::move(message)};
         }
-        if (pathContains(scratch_root, *path) ||
-            pathContains(recovery_root, *path)) {
+        if (pathContains(scratchRoot, *path) ||
+            pathContains(recoveryRoot, *path)) {
             return {FindReplaceError::WorkspaceRejected,
-                    preview.source_revision,
+                    preview.sourceRevision,
                     "workspace replacement path targets runtime state"};
         }
         auto normalized =
@@ -426,20 +426,20 @@ WorkspaceApplyResult EditorRuntime::Impl::apply(
             current = readFileText(*path);
         }
         if (current != change.before) {
-            return {FindReplaceError::StaleRevision, preview.source_revision,
+            return {FindReplaceError::StaleRevision, preview.sourceRevision,
                     "workspace replacement preview is stale"};
         }
         paths.push_back(std::move(*path));
         normalizedPaths.push_back(std::move(normalized));
     }
-    WorkspaceRecoveryRecord record{preview.source_revision, Revision{preview.source_revision.value() + 1}, preview.changes};
+    WorkspaceRecoveryRecord record{preview.sourceRevision, Revision{preview.sourceRevision.value() + 1}, preview.changes};
     if (!recoverySink.store(record)) {
-        return {FindReplaceError::RecoveryRejected, preview.source_revision, "workspace replacement recovery rejected"};
+        return {FindReplaceError::RecoveryRejected, preview.sourceRevision, "workspace replacement recovery rejected"};
     }
     for (std::size_t index = 0; index < preview.changes.size(); ++index) {
         auto const& change = preview.changes[index];
         std::ofstream output{paths[index], std::ios::binary | std::ios::trunc};
-        if (!output) return {FindReplaceError::WorkspaceRejected, preview.source_revision, "failed to write workspace file"};
+        if (!output) return {FindReplaceError::WorkspaceRejected, preview.sourceRevision, "failed to write workspace file"};
         output << change.after;
     }
     for (std::size_t index = 0; index < preview.changes.size(); ++index) {
@@ -453,21 +453,21 @@ WorkspaceApplyResult EditorRuntime::Impl::apply(
             auto reloaded = workspace.reload(id);
             if (!reloaded.accepted()) {
                 return {FindReplaceError::WorkspaceRejected,
-                        preview.source_revision, workspaceMessage(reloaded)};
+                        preview.sourceRevision, workspaceMessage(reloaded)};
             }
             (void)updateTabsFor(id);
         }
     }
-    return {FindReplaceError::None, record.applied_revision, {}};
+    return {FindReplaceError::None, record.appliedRevision, {}};
 }
 
 WorkspaceApplyResult EditorRuntime::Impl::recover(const WorkspaceRecoveryRecord& record) {
     for (auto const& change : record.changes) {
         std::ofstream output{root / change.path, std::ios::binary | std::ios::trunc};
-        if (!output) return {FindReplaceError::WorkspaceRejected, record.applied_revision, "failed to recover workspace file"};
+        if (!output) return {FindReplaceError::WorkspaceRejected, record.appliedRevision, "failed to recover workspace file"};
         output << change.before;
     }
-    return {FindReplaceError::None, record.applied_revision, {}};
+    return {FindReplaceError::None, record.appliedRevision, {}};
 }
 
 bool EditorRuntime::Impl::store(const WorkspaceRecoveryRecord&) { return true; }
@@ -611,12 +611,12 @@ std::string EditorRuntime::Impl::activeText() const {
 
 void EditorRuntime::Impl::resetSelectionForActiveDocument() {
     selection = initialSelection();
-    requested_first_visual_row = 0;
+    requestedFirstVisualRow = 0;
 }
 
 void EditorRuntime::Impl::clampSelectionToActiveDocument() {
     auto text = activeText();
-    auto offset = selection.selections.primary().active.byte_offset.value();
+    auto offset = selection.selections.primary().active.byteOffset.value();
     if (offset > text.size()) offset = text.size();
     auto position = resolveDocumentPosition(text, ByteOffset{offset}).value_or(zeroPosition());
     selection.selections = SelectionSet{std::vector<Selection>{Selection{position, position}}};
@@ -640,7 +640,7 @@ std::vector<CellRun> EditorRuntime::Impl::activeCellRuns() const {
 ViewportViewState EditorRuntime::Impl::computeEditorViewport(
     ViewportDimensions dimensions, std::uint32_t firstRow,
     std::uint32_t firstColumn) const {
-    if (word_wrap) {
+    if (wordWrap) {
         auto runs = activeCellRuns();
         return computeViewport(runs, dimensions, firstRow);
     }
@@ -651,18 +651,18 @@ ViewportViewState EditorRuntime::Impl::computeEditorViewport(
 }
 
 ViewportViewState EditorRuntime::Impl::viewport(ViewportDimensions dimensions) const {
-    return computeEditorViewport(dimensions, requested_first_visual_row,
-                                   requested_first_visual_column);
+    return computeEditorViewport(dimensions, requestedFirstVisualRow,
+                                   requestedFirstVisualColumn);
 }
 
 void EditorRuntime::Impl::refreshTree() {
-    if (deferring_enrichment) {
-        pending_tree_refresh = true;
+    if (deferringEnrichment) {
+        pendingTreeRefresh = true;
         return;
     }
-    ++tree_scan_count;
+    ++treeScanCount;
     tree.replaceProvider(filesystemTreeSnapshot(
-        TreeProviderId{"filesystem"}, root, TreeRevision{next_tree_revision++}));
+        TreeProviderId{"filesystem"}, root, TreeRevision{nextTreeRevision++}));
 }
 
 void EditorRuntime::Impl::reconcilePromptFocus() {
@@ -674,33 +674,33 @@ void EditorRuntime::Impl::reconcilePromptFocus() {
 }
 
 void EditorRuntime::Impl::reconcileFindDocument() {
-    if (!find_replace.viewState().open) {
-        find_document_id.reset();
+    if (!findReplace.viewState().open) {
+        findDocumentId.reset();
         return;
     }
     auto const active = activeDocumentId();
     auto const* document = activeDocument();
     bool const stale =
-        !active || active != find_document_id || document == nullptr ||
-        document->snapshot().revision != find_replace.viewState().source_revision;
+        !active || active != findDocumentId || document == nullptr ||
+        document->snapshot().revision != findReplace.viewState().sourceRevision;
     if (!stale) return;
     // The document the find evaluated against is gone, changed, or was edited:
     // close the controller and dismiss its prompt so no stale match is navigable.
-    find_replace.close();
+    findReplace.close();
     if (auto const& request = prompt.request();
         request && (request->kind == PromptKind::Find ||
                     request->kind == PromptKind::Replace)) {
         (void)prompt.cancel();
     }
-    find_document_id.reset();
+    findDocumentId.reset();
 }
 
 void EditorRuntime::Impl::refreshSyntax() {
-    if (deferring_enrichment) {
-        pending_syntax_refresh = true;
+    if (deferringEnrichment) {
+        pendingSyntaxRefresh = true;
         return;
     }
-    ++syntax_run_count;
+    ++syntaxRunCount;
     auto const* document = activeDocument();
     auto text = document ? document->snapshot().text : std::string{};
     auto revision = document ? document->revision() : Revision{0};
@@ -712,19 +712,19 @@ void EditorRuntime::Impl::refreshSyntax() {
 }
 
 void EditorRuntime::Impl::primeDeferred() {
-    if (!deferring_enrichment) return;
-    deferring_enrichment = false;
+    if (!deferringEnrichment) return;
+    deferringEnrichment = false;
     // Run whichever scans were requested while deferring, now that the first
     // frame is drawn.  Order: tree then syntax (independent; both publish through
     // the normal snapshot channel on the next snapshot).
     bool ran = false;
-    if (pending_tree_refresh) {
-        pending_tree_refresh = false;
+    if (pendingTreeRefresh) {
+        pendingTreeRefresh = false;
         refreshTree();
         ran = true;
     }
-    if (pending_syntax_refresh) {
-        pending_syntax_refresh = false;
+    if (pendingSyntaxRefresh) {
+        pendingSyntaxRefresh = false;
         refreshSyntax();
         ran = true;
     }
@@ -735,7 +735,7 @@ void EditorRuntime::Impl::primeDeferred() {
 }
 
 void EditorRuntime::Impl::enqueueStatus(StatusPriority priority, std::string text) {
-    auto value = next_status_id++;
+    auto value = nextStatusId++;
     (void)status.enqueue(StatusItem{StatusId{value}, priority, std::move(text), {}});
 }
 
@@ -746,13 +746,13 @@ EditorRuntime::~EditorRuntime() = default;
 EditorRuntimeCreateResult EditorRuntime::create(EditorRuntimeConfig config) {
     try {
         auto cwd = canonicalDirectory(config.cwd);
-        if (config.scratch_root.empty()) config.scratch_root = cwd / ".ssg" / "scratch";
-        if (config.recovery_root.empty()) config.recovery_root = cwd / ".ssg" / "recovery";
-        std::filesystem::create_directories(config.scratch_root);
-        std::filesystem::create_directories(config.recovery_root);
-        auto impl = std::make_unique<Impl>(cwd, config.scratch_root,
-                                           config.recovery_root,
-                                           config.defer_enrichment);
+        if (config.scratchRoot.empty()) config.scratchRoot = cwd / ".ssg" / "scratch";
+        if (config.recoveryRoot.empty()) config.recoveryRoot = cwd / ".ssg" / "recovery";
+        std::filesystem::create_directories(config.scratchRoot);
+        std::filesystem::create_directories(config.recoveryRoot);
+        auto impl = std::make_unique<Impl>(cwd, config.scratchRoot,
+                                           config.recoveryRoot,
+                                           config.deferEnrichment);
         impl->keymap = defaultTerminalKeymap();
         if (auto errors = validateKeymap(impl->keymap, {}); !errors.empty()) {
             return {nullptr, "default keymap is invalid: " + errors.front().message};
@@ -792,7 +792,7 @@ bool EditorRuntime::detach(ClientId clientId) {
 void EditorRuntime::primeDeferred() { impl_->primeDeferred(); }
 
 EditorRuntime::DeferredWorkCounts EditorRuntime::deferredWorkCounts() const {
-    return {impl_->syntax_run_count, impl_->tree_scan_count};
+    return {impl_->syntaxRunCount, impl_->treeScanCount};
 }
 
 CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& command) {
@@ -802,9 +802,9 @@ CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& co
     // palette.execute validates the selected candidate then defers execution to
     // here so the target runs through the registry (with its own capability and
     // revision checks) outside the non-reentrant session lock.
-    if (result.accepted() && impl_->pending_palette_target) {
-        auto target = std::move(*impl_->pending_palette_target);
-        impl_->pending_palette_target.reset();
+    if (result.accepted() && impl_->pendingPaletteTarget) {
+        auto target = std::move(*impl_->pendingPaletteTarget);
+        impl_->pendingPaletteTarget.reset();
         auto targetResult = impl_->session->dispatch(
             clientId, {target, impl_->session->revision(), {}});
         impl_->reconcileFindDocument();
@@ -822,7 +822,7 @@ std::optional<SessionSnapshot> EditorRuntime::snapshot(ClientId clientId, Viewpo
     auto client = impl_->session->attachedClient(clientId);
     if (!client) return std::nullopt;
     return assembleSessionSnapshot(impl_->session->revision(), impl_->session->topology(),
-                                     client->principal, client->view_id,
+                                     client->principal, client->viewId,
                                      impl_->viewport(dimensions),
                                      impl_->sections(dimensions, leaderPending, paletteReport));
 }

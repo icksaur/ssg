@@ -52,7 +52,7 @@ TEST(editorCellMapsToItsDocumentByteOffset) {
     ASSERT_FALSE(shell.panes.empty());
     if (shell.panes.empty()) return;
     auto const content = shell.panes.front().content;
-    auto const& targets = snapshot->client().viewport.hit_targets;
+    auto const& targets = snapshot->client().viewport.hitTargets;
     ASSERT_FALSE(targets.empty());
     if (targets.empty()) return;
 
@@ -63,19 +63,19 @@ TEST(editorCellMapsToItsDocumentByteOffset) {
     // cells resolve to line 0 and fails here immediately.
     bool sawSecondLine = false;
     for (auto const& target : targets) {
-        int const column = content.x + static_cast<int>(target.viewport_column);
-        int const row = content.y + static_cast<int>(target.viewport_row);
+        int const column = content.x + static_cast<int>(target.viewportColumn);
+        int const row = content.y + static_cast<int>(target.viewportRow);
         auto hit = ssg::hitTest(*snapshot, column, row);
         ASSERT_EQ(hit.region, ssg::HitRegion::Editor);
-        ASSERT_EQ(hit.byte_offset, target.byte_offset);
+        ASSERT_EQ(hit.byteOffset, target.byteOffset);
         auto position =
-            ssg::resolveDocumentPosition(text, ssg::ByteOffset{hit.byte_offset});
+            ssg::resolveDocumentPosition(text, ssg::ByteOffset{hit.byteOffset});
         ASSERT_TRUE(position.has_value());
         if (position) {
             ASSERT_EQ(position->line.value(),
-                      static_cast<std::uint64_t>(target.logical_line));
+                      static_cast<std::uint64_t>(target.logicalLine));
         }
-        if (target.logical_line > 0) sawSecondLine = true;
+        if (target.logicalLine > 0) sawSecondLine = true;
     }
     // The document has three lines, so the targets must reach past line 0 (the
     // property above is only meaningful if we actually exercised later lines).
@@ -84,14 +84,14 @@ TEST(editorCellMapsToItsDocumentByteOffset) {
     // Column 0 of a later visual row resolves to that line's first byte.
     ssg::CellHitTarget const* lineOneStart = nullptr;
     for (auto const& target : targets) {
-        if (target.logical_line == 1 && target.viewport_column == 0) {
+        if (target.logicalLine == 1 && target.viewportColumn == 0) {
             lineOneStart = &target;
             break;
         }
     }
     ASSERT_TRUE(lineOneStart != nullptr);
     if (lineOneStart) {
-        ASSERT_EQ(lineOneStart->byte_offset, std::uint32_t{6});  // after "alpha\n"
+        ASSERT_EQ(lineOneStart->byteOffset, std::uint32_t{6});  // after "alpha\n"
     }
 
     // A cell far past the end of the short first line ("alpha", 5 cells) now
@@ -99,11 +99,11 @@ TEST(editorCellMapsToItsDocumentByteOffset) {
     // byte after "alpha" (offset 5), zero-width.
     auto pastEol = ssg::hitTest(*snapshot, content.right() - 2, content.y);
     ASSERT_EQ(pastEol.region, ssg::HitRegion::Editor);
-    ASSERT_EQ(pastEol.byte_offset, std::uint32_t{5});
-    ASSERT_EQ(pastEol.byte_len, std::uint32_t{0});
+    ASSERT_EQ(pastEol.byteOffset, std::uint32_t{5});
+    ASSERT_EQ(pastEol.byteLen, std::uint32_t{0});
     {
         auto position = ssg::resolveDocumentPosition(
-            text, ssg::ByteOffset{pastEol.byte_offset});
+            text, ssg::ByteOffset{pastEol.byteOffset});
         ASSERT_TRUE(position.has_value());
         if (position) ASSERT_EQ(position->line.value(), std::uint64_t{0});
     }
@@ -138,36 +138,36 @@ TEST(clickPastEolBlankLineAndBelowDocumentClampToLineEnd) {
     // Exact cell unchanged: 'a' at row 0 col 0 -> offset 0.
     auto exact = ssg::hitTest(*snapshot, content.x, content.y);
     ASSERT_EQ(exact.region, ssg::HitRegion::Editor);
-    ASSERT_EQ(exact.byte_offset, std::uint32_t{0});
-    ASSERT_TRUE(exact.byte_len > 0);
+    ASSERT_EQ(exact.byteOffset, std::uint32_t{0});
+    ASSERT_TRUE(exact.byteLen > 0);
 
     // Past the end of line 0 ("ab") -> the newline at offset 2, on line 0.
     auto past0 = ssg::hitTest(*snapshot, content.x + 30, content.y);
     ASSERT_EQ(past0.region, ssg::HitRegion::Editor);
-    ASSERT_EQ(past0.byte_offset, std::uint32_t{2});
-    ASSERT_EQ(past0.byte_len, std::uint32_t{0});
-    ASSERT_EQ(resolveLine(past0.byte_offset), std::uint64_t{0});
+    ASSERT_EQ(past0.byteOffset, std::uint32_t{2});
+    ASSERT_EQ(past0.byteLen, std::uint32_t{0});
+    ASSERT_EQ(resolveLine(past0.byteOffset), std::uint64_t{0});
 
     // The blank line (row 1) — anywhere on it, including column 0 — resolves to the
     // blank line's own offset (3), on line 1. A blank row has no hit targets, so
     // this is purely the clamp.
     auto blank = ssg::hitTest(*snapshot, content.x + 5, content.y + 1);
     ASSERT_EQ(blank.region, ssg::HitRegion::Editor);
-    ASSERT_EQ(blank.byte_offset, std::uint32_t{3});
-    ASSERT_EQ(blank.byte_len, std::uint32_t{0});
-    ASSERT_EQ(resolveLine(blank.byte_offset), std::uint64_t{1});
+    ASSERT_EQ(blank.byteOffset, std::uint32_t{3});
+    ASSERT_EQ(blank.byteLen, std::uint32_t{0});
+    ASSERT_EQ(resolveLine(blank.byteOffset), std::uint64_t{1});
 
     // A row BELOW the last line (Decision B) clamps to the LAST visible row's end.
     // The document's last visual row is the trailing empty line (offset 8 == the
     // text end after "cde\n").
     auto const lastRowEnd =
-        snapshot->client().viewport.visible_rows.back().end_byte_offset;
+        snapshot->client().viewport.visibleRows.back().endByteOffset;
     auto below = ssg::hitTest(*snapshot, content.x + 10, content.bottom() - 1);
     ASSERT_EQ(below.region, ssg::HitRegion::Editor);
-    ASSERT_EQ(below.byte_offset, lastRowEnd);
-    ASSERT_EQ(below.byte_len, std::uint32_t{0});
+    ASSERT_EQ(below.byteOffset, lastRowEnd);
+    ASSERT_EQ(below.byteLen, std::uint32_t{0});
     auto belowPos =
-        ssg::resolveDocumentPosition(text, ssg::ByteOffset{below.byte_offset});
+        ssg::resolveDocumentPosition(text, ssg::ByteOffset{below.byteOffset});
     ASSERT_TRUE(belowPos.has_value());
 }
 
@@ -190,7 +190,7 @@ TEST(clickPastEolIntegrationLandsCaretAtLineEnd) {
         auto const content = snapshot->sections().shell.panes.front().content;
         auto hit = ssg::hitTest(*snapshot, column, row);
         if (hit.region != ssg::HitRegion::Editor) return 9999;
-        auto pos = ssg::resolveDocumentPosition(text, ssg::ByteOffset{hit.byte_offset});
+        auto pos = ssg::resolveDocumentPosition(text, ssg::ByteOffset{hit.byteOffset});
         if (!pos) return 9999;
         (void)runtime->dispatch(
             ssg::ClientId{1},
@@ -200,7 +200,7 @@ TEST(clickPastEolIntegrationLandsCaretAtLineEnd) {
         if (!after) return 9999;
         return after->sections()
             .selection.selections.primary()
-            .active.byte_offset.value();
+            .active.byteOffset.value();
     };
 
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
@@ -237,8 +237,8 @@ TEST(panelRowMapsToItsTreeNodeId) {
     ASSERT_TRUE(shell.panel.has_value());
     if (!shell.panel) return;
     auto const& provider = snapshot->sections().tree.providers.front();
-    ASSERT_FALSE(provider.visible_node_ids.empty());
-    if (provider.visible_node_ids.empty()) return;
+    ASSERT_FALSE(provider.visibleNodeIds.empty());
+    if (provider.visibleNodeIds.empty()) return;
 
     // The provider-label row (panel.y) is not a node.
     auto label = ssg::hitTest(*snapshot, shell.panel->x, shell.panel->y);
@@ -247,8 +247,8 @@ TEST(panelRowMapsToItsTreeNodeId) {
     // The first content row maps to the first visible node id.
     auto hit = ssg::hitTest(*snapshot, shell.panel->x, shell.panel->y + 1);
     ASSERT_EQ(hit.region, ssg::HitRegion::Panel);
-    ASSERT_TRUE(hit.node_id.has_value());
-    if (hit.node_id) ASSERT_EQ(*hit.node_id, provider.visible_node_ids.front());
+    ASSERT_TRUE(hit.nodeId.has_value());
+    if (hit.nodeId) ASSERT_EQ(*hit.nodeId, provider.visibleNodeIds.front());
 
     // A row below the last visible node is empty.
     auto empty = ssg::hitTest(*snapshot, shell.panel->x, shell.panel->bottom() - 1);
@@ -276,8 +276,8 @@ TEST(paletteRowMapsToItsAbsoluteRankIndex) {
     std::uint32_t const rows = static_cast<std::uint32_t>(pane.content.height);
     ssg::PaletteProjection projection;
     projection.rect = pane.content;
-    projection.scrollbar_rect = pane.scrollbar;
-    projection.first_visible = 20;
+    projection.scrollbarRect = pane.scrollbar;
+    projection.firstVisible = 20;
     projection.selected = std::uint32_t{25};
     projection.scrollbar = ssg::scrollbarMetrics(40, rows, 20);
     for (std::uint32_t i = 0; i < rows; ++i) {
@@ -289,12 +289,12 @@ TEST(paletteRowMapsToItsAbsoluteRankIndex) {
 
     auto hit = ssg::hitTest(projected, pane.content.x, pane.content.y + 3);
     ASSERT_EQ(hit.region, ssg::HitRegion::Palette);
-    ASSERT_EQ(hit.item_index, std::uint32_t{23});
+    ASSERT_EQ(hit.itemIndex, std::uint32_t{23});
 
     // The palette overlays the pane: a document cell is inert while it is open.
     auto overDoc = ssg::hitTest(projected, pane.content.x, pane.content.y);
     ASSERT_EQ(overDoc.region, ssg::HitRegion::Palette);
-    ASSERT_EQ(overDoc.item_index, std::uint32_t{20});
+    ASSERT_EQ(overDoc.itemIndex, std::uint32_t{20});
 }
 
 TEST(paletteScrollbarAndEmptyAreaClassifyCorrectly) {
@@ -314,8 +314,8 @@ TEST(paletteScrollbarAndEmptyAreaClassifyCorrectly) {
 
     ssg::PaletteProjection projection;
     projection.rect = pane.content;
-    projection.scrollbar_rect = pane.scrollbar;
-    projection.first_visible = 0;
+    projection.scrollbarRect = pane.scrollbar;
+    projection.firstVisible = 0;
     projection.selected = std::uint32_t{0};
     projection.scrollbar = ssg::scrollbarMetrics(100, rows, 0);
     for (std::uint32_t i = 0; i < rows; ++i) {  // exactly fills the window
@@ -328,10 +328,10 @@ TEST(paletteScrollbarAndEmptyAreaClassifyCorrectly) {
     // Top of the palette gutter -> fraction 0; bottom -> fraction ~1.
     auto top = ssg::hitTest(projected, pane.scrollbar.x, pane.scrollbar.y);
     ASSERT_EQ(top.region, ssg::HitRegion::PaletteScrollbar);
-    ASSERT_EQ(top.scroll_numerator, std::uint32_t{0});
+    ASSERT_EQ(top.scrollNumerator, std::uint32_t{0});
     auto bottom = ssg::hitTest(projected, pane.scrollbar.x, pane.scrollbar.bottom() - 1);
     ASSERT_EQ(bottom.region, ssg::HitRegion::PaletteScrollbar);
-    ASSERT_EQ(bottom.scroll_numerator, bottom.scroll_denominator);
+    ASSERT_EQ(bottom.scrollNumerator, bottom.scrollDenominator);
 }
 
 TEST(editorScrollbarFractionFeedsScrollToFraction) {
@@ -356,19 +356,19 @@ TEST(editorScrollbarFractionFeedsScrollToFraction) {
     // Top of the gutter -> numerator 0 (scroll to the document top).
     auto top = ssg::hitTest(*snapshot, gutter.x, gutter.y);
     ASSERT_EQ(top.region, ssg::HitRegion::EditorScrollbar);
-    ASSERT_EQ(top.scroll_numerator, std::uint32_t{0});
-    ASSERT_EQ(top.scroll_denominator,
+    ASSERT_EQ(top.scrollNumerator, std::uint32_t{0});
+    ASSERT_EQ(top.scrollDenominator,
               static_cast<std::uint32_t>(gutter.height - 1));
 
     // Bottom of the gutter -> numerator == denominator (fraction 1.0), which
     // view.scroll_to_fraction turns into maximum_first_row (the document end).
     auto bottom = ssg::hitTest(*snapshot, gutter.x, gutter.bottom() - 1);
     ASSERT_EQ(bottom.region, ssg::HitRegion::EditorScrollbar);
-    ASSERT_EQ(bottom.scroll_numerator, bottom.scroll_denominator);
-    auto const maxFirst = snapshot->client().viewport.scrollbar.maximum_first_row;
+    ASSERT_EQ(bottom.scrollNumerator, bottom.scrollDenominator);
+    auto const maxFirst = snapshot->client().viewport.scrollbar.maximumFirstRow;
     auto const resolved = static_cast<std::uint32_t>(
-        (static_cast<std::uint64_t>(maxFirst) * bottom.scroll_numerator) /
-        bottom.scroll_denominator);
+        (static_cast<std::uint64_t>(maxFirst) * bottom.scrollNumerator) /
+        bottom.scrollDenominator);
     ASSERT_EQ(resolved, maxFirst);
 }
 
@@ -389,18 +389,18 @@ TEST(tabBarCellMapsToItsTabIndex) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto const& shell = snapshot->sections().shell;
-    ASSERT_TRUE(shell.tab_hits.size() >= 2);
-    if (shell.tab_hits.size() < 2) return;
+    ASSERT_TRUE(shell.tabHits.size() >= 2);
+    if (shell.tabHits.size() < 2) return;
 
     // A cell inside each published tab rect resolves to that tab's index.
-    for (auto const& tab : shell.tab_hits) {
+    for (auto const& tab : shell.tabHits) {
         auto hit = ssg::hitTest(*snapshot, tab.rect.x, tab.rect.y);
         ASSERT_EQ(hit.region, ssg::HitRegion::Tab);
-        ASSERT_EQ(hit.tab_index, tab.index);
+        ASSERT_EQ(hit.tabIndex, tab.index);
     }
 
     // The tab-bar row past the last tab is padding, not a tab.
-    auto const& last = shell.tab_hits.back();
+    auto const& last = shell.tabHits.back();
     ASSERT_TRUE(last.rect.right() < shell.viewport.columns);
     auto pad = ssg::hitTest(*snapshot, last.rect.right(), last.rect.y);
     ASSERT_TRUE(pad.region != ssg::HitRegion::Tab);

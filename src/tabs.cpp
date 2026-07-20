@@ -17,9 +17,9 @@ bool sameIdentity(const TabState& left, const TabState& right) {
         return false;
     }
     if (left.kind == TabKind::Document) {
-        return left.document_key == right.document_key;
+        return left.documentKey == right.documentKey;
     }
-    return left.content_identity == right.content_identity;
+    return left.contentIdentity == right.contentIdentity;
 }
 
 std::optional<std::string> invalidState(const TabViewState& state) {
@@ -35,12 +35,12 @@ std::optional<std::string> invalidState(const TabViewState& state) {
             return "tab label must be non-empty";
         }
         if (tab.kind == TabKind::Document) {
-            if (!tab.document || !tab.document_key ||
-                tab.document->value() == 0 || !tab.content_identity.empty()) {
+            if (!tab.document || !tab.documentKey ||
+                tab.document->value() == 0 || !tab.contentIdentity.empty()) {
                 return "document tab identity is incomplete";
             }
-        } else if (tab.document || tab.document_key ||
-                   tab.content_identity.empty()) {
+        } else if (tab.document || tab.documentKey ||
+                   tab.contentIdentity.empty()) {
             return "non-document tab identity is incomplete";
         }
         for (std::size_t other = 0; other < index; ++other) {
@@ -89,7 +89,7 @@ struct TabManager::Impl {
 
     Impl(TabLifecycle& tabLifecycle, TabManagerConfig managerConfig)
         : lifecycle{tabLifecycle}, config{managerConfig} {
-        if (config.maximum_recently_closed == 0) {
+        if (config.maximumRecentlyClosed == 0) {
             throw std::invalid_argument(
                 "maximum recently-closed tabs must be greater than zero");
         }
@@ -134,10 +134,10 @@ struct TabManager::Impl {
                            "dirty close did not become durable");
         }
 
-        recently_closed.push_back(
+        recentlyClosed.push_back(
             {tab, recordedIndex.value_or(index), *result.compensation});
-        if (recently_closed.size() > config.maximum_recently_closed) {
-            recently_closed.erase(recently_closed.begin());
+        if (recentlyClosed.size() > config.maximumRecentlyClosed) {
+            recentlyClosed.erase(recentlyClosed.begin());
         }
 
         const auto wasActive = view.active == tab.id;
@@ -217,8 +217,8 @@ struct TabManager::Impl {
     TabLifecycle& lifecycle;
     TabManagerConfig config;
     TabViewState view;
-    std::vector<ClosedTab> recently_closed;
-    std::uint64_t next_id = 1;
+    std::vector<ClosedTab> recentlyClosed;
+    std::uint64_t nextId = 1;
 };
 
 TabManager::TabManager(TabLifecycle& lifecycle, TabManagerConfig config)
@@ -233,7 +233,7 @@ const TabViewState& TabManager::viewState() const noexcept {
 }
 
 std::size_t TabManager::recentlyClosedCount() const noexcept {
-    return impl_->recently_closed.size();
+    return impl_->recentlyClosed.size();
 }
 
 TabResult TabManager::openDocument(FileDocumentId document,
@@ -250,7 +250,7 @@ TabResult TabManager::openDocument(FileDocumentId document,
         impl_->view.tabs.begin(), impl_->view.tabs.end(),
         [&](const TabState& tab) {
             return tab.kind == TabKind::Document &&
-                   tab.document_key == identity;
+                   tab.documentKey == identity;
         });
     if (duplicate != impl_->view.tabs.end()) {
         impl_->view.active = duplicate->id;
@@ -273,7 +273,7 @@ TabResult TabManager::openDocument(FileDocumentId document,
                        "tab label must be non-empty");
     }
 
-    const auto id = TabId{impl_->next_id++};
+    const auto id = TabId{impl_->nextId++};
     impl_->view.tabs.push_back(
         {id, TabKind::Document, document, std::move(identity), {},
          std::move(resolvedLabel), mode, dirty, recovery});
@@ -293,14 +293,14 @@ TabResult TabManager::openContent(TabKind kind,
         impl_->view.tabs.begin(), impl_->view.tabs.end(),
         [&](const TabState& tab) {
             return tab.kind == kind &&
-                   tab.content_identity == contentIdentity;
+                   tab.contentIdentity == contentIdentity;
         });
     if (duplicate != impl_->view.tabs.end()) {
         impl_->view.active = duplicate->id;
         return {TabError::None, {}, duplicate->id, {}};
     }
 
-    const auto id = TabId{impl_->next_id++};
+    const auto id = TabId{impl_->nextId++};
     impl_->view.tabs.push_back(
         {id, kind, {}, {}, std::string{contentIdentity}, std::string{label},
          mode, false, TabRecoveryBadge::None});
@@ -414,18 +414,18 @@ TabResult TabManager::closeAll(
 }
 
 TabResult TabManager::reopenClosed() {
-    if (impl_->recently_closed.empty()) {
+    if (impl_->recentlyClosed.empty()) {
         return failure(TabError::NoRecentlyClosed,
                        "no recently closed tab is available");
     }
-    auto& closed = impl_->recently_closed.back();
+    auto& closed = impl_->recentlyClosed.back();
     const auto existing = std::find_if(
         impl_->view.tabs.begin(), impl_->view.tabs.end(),
         [&](const TabState& tab) { return sameIdentity(tab, closed.state); });
     if (existing != impl_->view.tabs.end()) {
         const auto id = existing->id;
         impl_->view.active = id;
-        impl_->recently_closed.pop_back();
+        impl_->recentlyClosed.pop_back();
         return {TabError::None, {}, id, {}};
     }
     auto restored =
@@ -439,7 +439,7 @@ TabResult TabManager::reopenClosed() {
         impl_->view.tabs.begin() + static_cast<std::ptrdiff_t>(index),
         std::move(closed.state));
     impl_->view.active = id;
-    impl_->recently_closed.pop_back();
+    impl_->recentlyClosed.pop_back();
     return {TabError::None, {}, id, {}};
 }
 

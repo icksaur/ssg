@@ -11,7 +11,7 @@ DocumentViewState EditorRuntime::Impl::documentView() const {
     auto const* document = activeDocument();
     if (document == nullptr) return {Revision{0}, {}, ByteOffset{0}};
     auto snapshot = document->snapshot();
-    auto caret = selection.selections.primary().active.byte_offset;
+    auto caret = selection.selections.primary().active.byteOffset;
     if (caret.value() > snapshot.text.size()) caret = ByteOffset{snapshot.text.size()};
     return {snapshot.revision, std::move(snapshot.text), caret};
 }
@@ -23,7 +23,7 @@ TextEncodingViewState EditorRuntime::Impl::textEncodingView() const {
 
 std::string EditorRuntime::Impl::currentPathLabel() const {
     auto state = activeWorkspaceState();
-    return state ? state->display_label : root.filename().string();
+    return state ? state->displayLabel : root.filename().string();
 }
 
 PromptStatusViewState EditorRuntime::Impl::promptStatusView(ViewportDimensions dimensions) const {
@@ -44,7 +44,7 @@ void EditorRuntime::Impl::projectFindReplacePrompt(PromptViewState& promptView) 
     if (promptView.kind != PromptKind::Find && promptView.kind != PromptKind::Replace) {
         return;
     }
-    auto const& findState = find_replace.viewState();
+    auto const& findState = findReplace.viewState();
     for (auto& control : promptView.controls) {
         switch (control.kind) {
             case PromptControlKind::Input:
@@ -53,16 +53,16 @@ void EditorRuntime::Impl::projectFindReplacePrompt(PromptViewState& promptView) 
                     control.value = findState.replacement;
                 break;
             case PromptControlKind::Count: {
-                auto position = findState.active_match ? *findState.active_match + 1 : 0;
+                auto position = findState.activeMatch ? *findState.activeMatch + 1 : 0;
                 control.value = std::to_string(position) + "/" +
                                 std::to_string(findState.matches.size());
                 break;
             }
             case PromptControlKind::Toggle:
                 if (control.id == "find.toggle_case")
-                    control.checked = findState.options.case_sensitive;
+                    control.checked = findState.options.caseSensitive;
                 else if (control.id == "find.toggle_whole_word")
-                    control.checked = findState.options.whole_word;
+                    control.checked = findState.options.wholeWord;
                 else if (control.id == "find.toggle_regex")
                     control.checked = findState.options.regex;
                 break;
@@ -82,14 +82,14 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
     auto followProjection = follow.footerProjection();
     ShellLayoutRequest request;
     request.viewport = {static_cast<int>(dimensions.columns), static_cast<int>(dimensions.rows)};
-    request.reserved_prompt_rows = prompt.active() ? promptRowCount(prompt.request()->kind) : 0;
-    request.empty_state = activeDocument() == nullptr;
-    request.panel_provider_label = std::string{shell.activePanelProvider()};
-    request.header_fields = {{"cwd", "Workspace", root.string(), 0},
+    request.reservedPromptRows = prompt.active() ? promptRowCount(prompt.request()->kind) : 0;
+    request.emptyState = activeDocument() == nullptr;
+    request.panelProviderLabel = std::string{shell.activePanelProvider()};
+    request.headerFields = {{"cwd", "Workspace", root.string(), 0},
                              {"file", "File", currentPathLabel(), 1}};
-    request.footer_fields = {{"status", "Status", statusProjection.value, 0},
+    request.footerFields = {{"status", "Status", statusProjection.value, 0},
                              {"follow", "Follow edits", followProjection.mode, 1}};
-    request.footer_actions = statusProjection.actions;
+    request.footerActions = statusProjection.actions;
     request.tabs = std::move(labels);
     if (!leaderPending.empty()) {
         std::string hint = "leader:";
@@ -97,14 +97,14 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
             hint += ' ';
             hint += formatKeyStroke(stroke);
         }
-        request.leader_hint = std::move(hint);
+        request.leaderHint = std::move(hint);
     }
     bool const paletteOpen = prompt.active() && prompt.request() &&
                               prompt.request()->kind == PromptKind::Palette;
     if (paletteOpen) {
-        request.palette_active = true;
-        request.palette_query = paletteReport.query;
-        request.palette_ghost = paletteReport.ghost;
+        request.paletteActive = true;
+        request.paletteQuery = paletteReport.query;
+        request.paletteGhost = paletteReport.ghost;
     }
     auto result = computeShellLayout(request, shell);
     if (!result.accepted()) return {};
@@ -112,22 +112,22 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
 
     if (!view.panes.empty()) {
         auto const& content = view.panes.front().content;
-        last_pane_content_rows = static_cast<std::uint32_t>(std::max(content.height, 1));
-        last_pane_content_columns = static_cast<std::uint32_t>(std::max(content.width, 1));
-        last_reserved_prompt_rows = static_cast<std::uint32_t>(request.reserved_prompt_rows);
+        lastPaneContentRows = static_cast<std::uint32_t>(std::max(content.height, 1));
+        lastPaneContentColumns = static_cast<std::uint32_t>(std::max(content.width, 1));
+        lastReservedPromptRows = static_cast<std::uint32_t>(request.reservedPromptRows);
     }
     // Cache the tree content height (panel height minus the provider-label row)
     // so tree_view can resolve the scroll offset against the real panel size.
-    last_panel_content_rows =
+    lastPanelContentRows =
         view.panel ? static_cast<std::uint32_t>(std::max(view.panel->height - 1, 0))
                    : 0;
 
     if (paletteOpen && !view.panes.empty()) {
         PaletteProjection projection;
         projection.rect = view.panes.front().content;
-        projection.scrollbar_rect = view.panes.front().scrollbar;
+        projection.scrollbarRect = view.panes.front().scrollbar;
         projection.selected = paletteReport.selected;
-        projection.first_visible = paletteReport.first_visible;
+        projection.firstVisible = paletteReport.firstVisible;
         projection.scrollbar = paletteReport.scrollbar;
         for (auto const& candidate : paletteReport.rows) {
             projection.rows.push_back({candidate.label, candidate.detail});
@@ -156,7 +156,7 @@ SessionSnapshotSections EditorRuntime::Impl::sections(ViewportDimensions dimensi
             clipboard.viewState(),
             promptStatusView(dimensions),
             search.viewState(),
-            find_replace.viewState(),
+            findReplace.viewState(),
             settings.viewState(),
             keymap,
             textEncodingView(),
@@ -166,8 +166,8 @@ SessionSnapshotSections EditorRuntime::Impl::sections(ViewportDimensions dimensi
             follow.viewState(),
             std::move(treeSection),
             syntax.viewState(),
-            lsp_sync,
-            lsp_features,
+            lspSync,
+            lspFeatures,
             theme,
             std::move(shell),
             paletteView()};
@@ -193,15 +193,15 @@ TreeViewState EditorRuntime::Impl::treeView() const {
     }
     auto scroll = computeListScrollView(
         static_cast<std::uint32_t>(provider.nodes.size()),
-        last_panel_content_rows, tree_first_visible, selectedIndex,
+        lastPanelContentRows, treeFirstVisible, selectedIndex,
         /*keep_selection_visible=*/false);
-    provider.first_visible = scroll.first_visible;
+    provider.firstVisible = scroll.firstVisible;
     provider.scrollbar = scroll.scrollbar;
-    provider.visible_node_ids.clear();
-    provider.visible_node_ids.reserve(scroll.visible_count);
-    for (std::uint32_t row = 0; row < scroll.visible_count; ++row) {
-        provider.visible_node_ids.push_back(
-            provider.nodes[scroll.first_visible + row].node.id);
+    provider.visibleNodeIds.clear();
+    provider.visibleNodeIds.reserve(scroll.visibleCount);
+    for (std::uint32_t row = 0; row < scroll.visibleCount; ++row) {
+        provider.visibleNodeIds.push_back(
+            provider.nodes[scroll.firstVisible + row].node.id);
     }
     return view;
 }
@@ -221,9 +221,9 @@ void EditorRuntime::Impl::revealTreeSelection() {
     if (!selectedIndex) return;
     auto scroll = computeListScrollView(
         static_cast<std::uint32_t>(provider.nodes.size()),
-        last_panel_content_rows, tree_first_visible, selectedIndex,
+        lastPanelContentRows, treeFirstVisible, selectedIndex,
         /*keep_selection_visible=*/true);
-    tree_first_visible = scroll.first_visible;
+    treeFirstVisible = scroll.firstVisible;
 }
 
 void EditorRuntime::Impl::scrollTree(std::int64_t rows) {
@@ -235,13 +235,13 @@ void EditorRuntime::Impl::scrollTree(std::int64_t rows) {
     // the viewport, not the selection (a later reveal_tree_selection re-snaps).
     auto scroll = computeListScrollView(
         static_cast<std::uint32_t>(provider.nodes.size()),
-        last_panel_content_rows, tree_first_visible, std::nullopt,
+        lastPanelContentRows, treeFirstVisible, std::nullopt,
         /*keep_selection_visible=*/false);
     // Saturating add-then-clamp: `rows` is a wire-decoded int64 and may be huge,
     // so guard the extremes before the add to avoid signed overflow. Within the
     // guarded range |rows| < maximum <= UINT32_MAX, so cur + rows cannot overflow.
-    auto const maximum = static_cast<std::int64_t>(scroll.scrollbar.maximum_first_row);
-    auto const current = static_cast<std::int64_t>(tree_first_visible);
+    auto const maximum = static_cast<std::int64_t>(scroll.scrollbar.maximumFirstRow);
+    auto const current = static_cast<std::int64_t>(treeFirstVisible);
     std::int64_t next;
     if (rows >= maximum) {
         next = maximum;
@@ -250,7 +250,7 @@ void EditorRuntime::Impl::scrollTree(std::int64_t rows) {
     } else {
         next = std::clamp<std::int64_t>(current + rows, 0, maximum);
     }
-    tree_first_visible = static_cast<std::uint32_t>(next);
+    treeFirstVisible = static_cast<std::uint32_t>(next);
 }
 
 PaletteViewState EditorRuntime::Impl::paletteView() const {

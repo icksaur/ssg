@@ -35,7 +35,7 @@ enum class PathError {
 
 struct PathValidation {
     PathError error = PathError::None;
-    std::size_t component_index = 0;
+    std::size_t componentIndex = 0;
 
     [[nodiscard]] constexpr bool valid() const noexcept {
         return error == PathError::None;
@@ -70,7 +70,7 @@ private:
     friend std::optional<ExclusiveFileLock> tryLockFile(
         const std::filesystem::path&);
 
-    std::intptr_t native_handle_ = -1;
+    std::intptr_t nativeHandle_ = -1;
 };
 
 // Returns no value only when another live handle owns the lock. Other failures

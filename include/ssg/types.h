@@ -67,7 +67,7 @@ private:
 // All three coordinates must be consistent for the same revision; stale or
 // inconsistent positions produce a typed protocol error, not a guessed result.
 struct DocumentPosition {
-    ByteOffset byte_offset;
+    ByteOffset byteOffset;
     LineIndex  line;
     CellIndex  cell;
 

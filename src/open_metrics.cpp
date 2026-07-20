@@ -22,11 +22,11 @@ thread_local std::uint64_t gPieceTreeTextCalls = 0;
 }  // namespace
 
 OpenPhaseTimer::OpenPhaseTimer(OpenPhase phase) noexcept
-    : phase_(phase), start_ns_(monotonicNs()) {}
+    : phase_(phase), startNs_(monotonicNs()) {}
 
 OpenPhaseTimer::~OpenPhaseTimer() {
     gPhaseNs[static_cast<std::size_t>(phase_)] +=
-        static_cast<std::uint64_t>(monotonicNs() - start_ns_);
+        static_cast<std::uint64_t>(monotonicNs() - startNs_);
 }
 
 std::uint64_t openPhaseNs(OpenPhase phase) {

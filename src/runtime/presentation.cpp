@@ -17,19 +17,19 @@ bool boolSetting(SettingsModel const& settings, SettingKey key, bool fallback) {
 }
 
 CommandHandlerResult setWordWrap(EditorRuntime::Impl& runtime) {
-    bool next = !boolSetting(runtime.settings, SettingKey::WordWrap, runtime.word_wrap);
+    bool next = !boolSetting(runtime.settings, SettingKey::WordWrap, runtime.wordWrap);
     auto mutation = runtime.settings.set(SettingScope::Workspace, SettingKey::WordWrap, next);
     if (!mutation.accepted()) return failure(mutation.error->message);
-    runtime.word_wrap = next;
+    runtime.wordWrap = next;
     return success();
 }
 
 CommandHandlerResult scrollLines(EditorRuntime::Impl& runtime, std::any const& payload) {
     auto const* arguments = payloadAs<ScrollLinesArguments>(payload);
     if (arguments == nullptr) return failure("view.scroll_lines requires scroll-lines payload");
-    auto rows = static_cast<std::int64_t>(runtime.requested_first_visual_row) + arguments->rows;
-    runtime.requested_first_visual_row = rows < 0 ? 0U : static_cast<std::uint32_t>(rows);
-    runtime.selection.first_visual_row = runtime.requested_first_visual_row;
+    auto rows = static_cast<std::int64_t>(runtime.requestedFirstVisualRow) + arguments->rows;
+    runtime.requestedFirstVisualRow = rows < 0 ? 0U : static_cast<std::uint32_t>(rows);
+    runtime.selection.firstVisualRow = runtime.requestedFirstVisualRow;
     return success();
 }
 
@@ -38,10 +38,10 @@ CommandHandlerResult scrollPages(EditorRuntime::Impl& runtime, std::any const& p
     if (arguments == nullptr) return failure("view.scroll_pages requires scroll-pages payload");
     // A page is the real pane height cached from the last snapshot, not a fake 24.
     auto const pageRows = static_cast<std::int64_t>(
-        std::max<std::uint32_t>(runtime.last_pane_content_rows, 1));
-    auto rows = static_cast<std::int64_t>(runtime.requested_first_visual_row) + arguments->pages * pageRows;
-    runtime.requested_first_visual_row = rows < 0 ? 0U : static_cast<std::uint32_t>(rows);
-    runtime.selection.first_visual_row = runtime.requested_first_visual_row;
+        std::max<std::uint32_t>(runtime.lastPaneContentRows, 1));
+    auto rows = static_cast<std::int64_t>(runtime.requestedFirstVisualRow) + arguments->pages * pageRows;
+    runtime.requestedFirstVisualRow = rows < 0 ? 0U : static_cast<std::uint32_t>(rows);
+    runtime.selection.firstVisualRow = runtime.requestedFirstVisualRow;
     return success();
 }
 
@@ -54,12 +54,12 @@ CommandHandlerResult scrollFraction(EditorRuntime::Impl& runtime, std::any const
     // the same wrap-gated viewport the snapshot uses so the drag maps to the same
     // total the scrollbar thumb was drawn from (M12).
     ViewportDimensions const viewport{
-        std::max<std::uint32_t>(runtime.last_pane_content_columns, 1),
-        std::max<std::uint32_t>(runtime.last_pane_content_rows, 1)};
+        std::max<std::uint32_t>(runtime.lastPaneContentColumns, 1),
+        std::max<std::uint32_t>(runtime.lastPaneContentRows, 1)};
     auto view = runtime.computeEditorViewport(viewport, 0, 0);
-    runtime.requested_first_visual_row = arguments->denominator == 0 ? 0 :
-        static_cast<std::uint32_t>((static_cast<std::uint64_t>(view.scrollbar.maximum_first_row) * arguments->numerator) / arguments->denominator);
-    runtime.selection.first_visual_row = runtime.requested_first_visual_row;
+    runtime.requestedFirstVisualRow = arguments->denominator == 0 ? 0 :
+        static_cast<std::uint32_t>((static_cast<std::uint64_t>(view.scrollbar.maximumFirstRow) * arguments->numerator) / arguments->denominator);
+    runtime.selection.firstVisualRow = runtime.requestedFirstVisualRow;
     return success();
 }
 
@@ -108,8 +108,8 @@ std::string settingMessage(SettingMutation const& mutation) {
 }
 
 void syncRuntimeSettings(EditorRuntime::Impl& runtime) {
-    runtime.word_wrap = boolSetting(runtime.settings, SettingKey::WordWrap,
-                                     runtime.word_wrap);
+    runtime.wordWrap = boolSetting(runtime.settings, SettingKey::WordWrap,
+                                     runtime.wordWrap);
 }
 
 CommandHandlerResult settingsCommand(EditorRuntime::Impl& runtime, std::string_view id, std::any const& payload) {

@@ -170,7 +170,7 @@ void drainNonblocking(int fd) {
 
 struct SpanStats {
     std::string name;
-    std::vector<double> samples_ms;
+    std::vector<double> samplesMs;
 };
 
 // A phase span's start/end mark, and the special total from t0.
@@ -179,14 +179,14 @@ void accumulate(std::vector<Trace> const& traces,
     auto ms = [](long long ns) { return static_cast<double>(ns) / 1'000'000.0; };
     for (auto const& trace : traces) {
         // spawn+exec+link: t0 -> main_entry.
-        spans[0].samples_ms.push_back(ms(trace.marks.at("main_entry") - trace.t0));
+        spans[0].samplesMs.push_back(ms(trace.marks.at("main_entry") - trace.t0));
         // Between consecutive marks.
         for (std::size_t i = 1; i < kPhaseMarks.size(); ++i) {
-            spans[i].samples_ms.push_back(
+            spans[i].samplesMs.push_back(
                 ms(trace.marks.at(kPhaseMarks[i]) - trace.marks.at(kPhaseMarks[i - 1])));
         }
         // Total: t0 -> first_content_frame.
-        spans[kPhaseMarks.size()].samples_ms.push_back(
+        spans[kPhaseMarks.size()].samplesMs.push_back(
             ms(trace.marks.at("first_content_frame") - trace.t0));
     }
 }
@@ -194,7 +194,7 @@ void accumulate(std::vector<Trace> const& traces,
 struct Fixture {
     std::string name;
     std::string cwd;
-    std::string file_arg;
+    std::string fileArg;
 };
 
 // Build the fixtures under `root`: a small file, a 10 MiB file, and a deep tree.
@@ -251,8 +251,8 @@ void reportFixture(std::ostream& out, Fixture const& fixture,
     for (auto const& span : spans) {
         out << std::fixed << std::setprecision(3) << "  " << std::left
             << std::setw(22) << span.name
-            << " p50=" << percentile(span.samples_ms, 0.50) << "ms"
-            << " p99=" << percentile(span.samples_ms, 0.99) << "ms\n";
+            << " p50=" << percentile(span.samplesMs, 0.50) << "ms"
+            << " p99=" << percentile(span.samplesMs, 0.99) << "ms\n";
     }
 }
 
@@ -260,8 +260,8 @@ void reportFixture(std::ostream& out, Fixture const& fixture,
 // trace file appeared and whether the child failed to exec (exit 127).  Shared
 // by --verify-clean's negative case and its positive control.
 struct TraceProbeResult {
-    bool trace_written = false;
-    bool exec_failed = false;
+    bool traceWritten = false;
+    bool execFailed = false;
 };
 
 [[nodiscard]] TraceProbeResult runTraceProbe(std::string const& binary,
@@ -318,12 +318,12 @@ struct TraceProbeResult {
     { std::ofstream out{root / "note.txt"}; out << "hi\n"; }
 
     auto const control = runTraceProbe(probeBinary, root, "note.txt");
-    if (control.exec_failed) {
+    if (control.execFailed) {
         std::cerr << "FAIL: could not exec the instrumented probe\n";
         std::error_code ec; fs::remove_all(root, ec);
         return 1;
     }
-    if (!control.trace_written) {
+    if (!control.traceWritten) {
         std::cerr << "FAIL: positive control did not write a trace; the harness "
                      "setup cannot capture one, so the clean check is meaningless\n";
         std::error_code ec; fs::remove_all(root, ec);
@@ -333,11 +333,11 @@ struct TraceProbeResult {
     auto const clean = runTraceProbe(cleanBinary, root, "note.txt");
     std::error_code ec;
     fs::remove_all(root, ec);
-    if (clean.exec_failed) {
+    if (clean.execFailed) {
         std::cerr << "FAIL: could not exec the shipped ssg\n";
         return 1;
     }
-    if (clean.trace_written) {
+    if (clean.traceWritten) {
         std::cerr << "FAIL: shipped ssg wrote a startup trace; instrumentation "
                      "is NOT compiled out\n";
         return 1;
@@ -373,7 +373,7 @@ constexpr double kSmallFileBudgetMs = 250.0;
     for (auto const& fixture : fixtures) {
         std::vector<Trace> traces;
         for (std::size_t rep = 0; rep < kRepetitions; ++rep) {
-            auto trace = runOnce(probe, fixture.file_arg, fixture.cwd);
+            auto trace = runOnce(probe, fixture.fileArg, fixture.cwd);
             if (trace && rep >= kDiscard) traces.push_back(*trace);
         }
         result.emplace(fixture.name, std::move(traces));

@@ -57,7 +57,7 @@ std::string apply(Document& document, const ssg::EditCommandResult& result) {
     if (result.transaction) {
         ASSERT_TRUE(document.apply(*result.transaction).accepted());
     }
-    ASSERT_EQ(document.snapshot().text, result.resulting_text);
+    ASSERT_EQ(document.snapshot().text, result.resultingText);
     return document.snapshot().text;
 }
 
@@ -66,7 +66,7 @@ struct Fixture {
     std::string input;
     std::vector<std::pair<std::uint64_t, std::uint64_t>> ranges;
     EditCommand command;
-    EditCommandSettings command_settings;
+    EditCommandSettings commandSettings;
     std::string expected;
 };
 
@@ -83,7 +83,7 @@ void runFixture(const Fixture& fixture) {
     Document document{fixture.input};
     const auto result = ssg::applyEditCommand(
         document.snapshot(), fixtureSelections(fixture),
-        fixture.command_settings, fixture.command);
+        fixture.commandSettings, fixture.command);
     ASSERT_EQ(apply(document, result), fixture.expected);
 }
 
@@ -204,16 +204,16 @@ TEST(resultSelectionsAreResolvedAgainstResultingText) {
         document.snapshot(), selections("a\nb", {{0, 0}, {2, 2}}),
         settings(), EditCommand::Indent);
     ASSERT_EQ(apply(document, result), std::string{"  a\n  b"});
-    ASSERT_EQ(result.selections->items()[0].active.byte_offset,
+    ASSERT_EQ(result.selections->items()[0].active.byteOffset,
               ByteOffset{2});
-    ASSERT_EQ(result.selections->items()[1].active.byte_offset,
+    ASSERT_EQ(result.selections->items()[1].active.byteOffset,
               ByteOffset{6});
 }
 
 TEST(displayTabWidthIsIndependentOfIndentWidth) {
     Document document{"\tabc"};
     auto commandSettings = settings(IndentStyle::Spaces, 2);
-    commandSettings.tab_width = 4;
+    commandSettings.tabWidth = 4;
     const auto result = ssg::applyEditCommand(
         document.snapshot(), selections("\tabc", {{1, 1}}, 4),
         commandSettings, EditCommand::Indent);
@@ -248,14 +248,14 @@ TEST(nonEditModesAndInvalidInputsFailAtomically) {
 
     Document document{"abc"};
     auto badSettings = settings();
-    badSettings.indent_width = 0;
+    badSettings.indentWidth = 0;
     auto result = ssg::applyEditCommand(
         document.snapshot(), selections("abc", {{0, 0}}), badSettings,
         EditCommand::Indent);
     ASSERT_EQ(result.error, ssg::EditCommandError::InvalidSettings);
 
     badSettings = settings();
-    badSettings.line_comment_token = "\n";
+    badSettings.lineCommentToken = "\n";
     result = ssg::applyEditCommand(
         document.snapshot(), selections("abc", {{0, 0}}), badSettings,
         EditCommand::ToggleComment);

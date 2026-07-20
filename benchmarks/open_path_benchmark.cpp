@@ -116,8 +116,8 @@ std::string readWhole(const fs::path& file) {
 }
 
 struct Sample {
-    std::array<double, kPhaseNames.size()> phase_ms{};
-    double wall_ms = 0.0;
+    std::array<double, kPhaseNames.size()> phaseMs{};
+    double wallMs = 0.0;
 };
 
 Sample openOnce(const fs::path& root, const std::string& name) {
@@ -134,9 +134,9 @@ Sample openOnce(const fs::path& root, const std::string& name) {
     auto const wall = Clock::now() - start;
 
     Sample sample;
-    sample.wall_ms = std::chrono::duration<double, std::milli>(wall).count();
+    sample.wallMs = std::chrono::duration<double, std::milli>(wall).count();
     for (std::size_t i = 0; i < kPhaseNames.size(); ++i)
-        sample.phase_ms[i] =
+        sample.phaseMs[i] =
             ms(ssg::openPhaseNs(static_cast<ssg::OpenPhase>(i)));
     return sample;
 }
@@ -182,9 +182,9 @@ int main() {
         std::array<std::vector<double>, kPhaseNames.size()> phaseSamples;
         std::vector<double> wallSamples;
         for (auto const& sample : samples) {
-            wallSamples.push_back(sample.wall_ms);
+            wallSamples.push_back(sample.wallMs);
             for (std::size_t i = 0; i < kPhaseNames.size(); ++i)
-                phaseSamples[i].push_back(sample.phase_ms[i]);
+                phaseSamples[i].push_back(sample.phaseMs[i]);
         }
 
         std::size_t dominant = 0;

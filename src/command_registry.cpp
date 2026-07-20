@@ -17,7 +17,7 @@ CapabilityId::CapabilityId(std::string value) : value_{std::move(value)} {
 InvocationPrincipal::InvocationPrincipal(
     ClientId clientId, InvocationOrigin origin,
     std::vector<CapabilityId> capabilities)
-    : client_id_{clientId},
+    : clientId_{clientId},
       origin_{origin},
       capabilities_{std::move(capabilities)} {
     std::sort(capabilities_.begin(), capabilities_.end());
@@ -33,13 +33,13 @@ bool InvocationPrincipal::hasCapability(
 }
 
 void CommandContext::setActiveWorkspace(WorkspaceId workspace) noexcept {
-    workspace_changed_ = true;
-    active_workspace_ = workspace;
+    workspaceChanged_ = true;
+    activeWorkspace_ = workspace;
 }
 
 void CommandContext::setActiveView(ViewId view) noexcept {
-    view_changed_ = true;
-    active_view_ = view;
+    viewChanged_ = true;
+    activeView_ = view;
 }
 
 CommandHandlerResult CommandHandlerResult::success() {

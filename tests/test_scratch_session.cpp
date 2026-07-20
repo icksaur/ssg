@@ -146,7 +146,7 @@ TEST(concurrentProcessIsHiddenUntilCrashReleasesLock) {
     ASSERT_TRUE(crashed.has_value());
     ASSERT_EQ(crashed->id().value(), childId);
     const auto replayedCrash = crashed->replay();
-    ASSERT_EQ(replayedCrash.recovery.documents.front().utf8_content,
+    ASSERT_EQ(replayedCrash.recovery.documents.front().utf8Content,
               std::string{"child"});
 }
 
@@ -175,7 +175,7 @@ TEST(newestUnlockedRemnantIsClaimedOnce) {
     ASSERT_TRUE(newest.has_value());
     ASSERT_EQ(newest->id().value(), newId);
     const auto replayedNewest = newest->replay();
-    ASSERT_EQ(replayedNewest.recovery.documents.front().utf8_content,
+    ASSERT_EQ(replayedNewest.recovery.documents.front().utf8Content,
               std::string{"new"});
     auto older = selectorB.claimNewestRestorable();
     ASSERT_TRUE(older.has_value());

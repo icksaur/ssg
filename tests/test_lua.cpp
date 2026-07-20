@@ -44,7 +44,7 @@ std::vector<std::pair<std::string, bool>> parseCatalog(std::string const& json) 
 
 LuaCommandHostOptions options(std::vector<LuaCommand> commands = {}) {
     LuaCommandHostOptions result;
-    result.plugin_id = ClientId{81};
+    result.pluginId = ClientId{81};
     result.commands = std::move(commands);
     return result;
 }
@@ -64,7 +64,7 @@ TEST(requiredCatalogMinusExclusionsIsCallable) {
     LuaCommandHost host{options(std::move(commands)),
         [&](LuaInvocation const& invocation) {
             ASSERT_EQ(invocation.principal.origin(), InvocationOrigin::Lua);
-            called.emplace(invocation.command_id);
+            called.emplace(invocation.commandId);
             return CommandHandlerResult::success();
         }};
 
@@ -116,8 +116,8 @@ TEST(generationalHandlesRejectStaleAccessAfterReuse) {
 
 TEST(instructionAndWallClockBudgetsIsolateCallbacks) {
     auto configured = options();
-    configured.instruction_budget = 2'000;
-    configured.time_budget = std::chrono::milliseconds{5};
+    configured.instructionBudget = 2'000;
+    configured.timeBudget = std::chrono::milliseconds{5};
     LuaCommandHost host{std::move(configured), [](LuaInvocation const&) {
         return CommandHandlerResult::success();
     }};
@@ -129,8 +129,8 @@ TEST(instructionAndWallClockBudgetsIsolateCallbacks) {
 TEST(reentrantCallsRestoreTheEnclosingBudget) {
     LuaCommandHost* reentrant = nullptr;
     auto configured = options({{"reenter", {}}});
-    configured.instruction_budget = 2'000;
-    configured.time_budget = std::chrono::milliseconds{5};
+    configured.instructionBudget = 2'000;
+    configured.timeBudget = std::chrono::milliseconds{5};
     LuaCommandHost host{std::move(configured),
         [&](LuaInvocation const&) {
             ASSERT_TRUE(reentrant->evaluate("return 1").accepted());

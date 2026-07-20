@@ -14,8 +14,8 @@
 namespace ssg {
 
 struct LspFrameConfig {
-    std::size_t maximum_header_bytes = 8 * 1024;
-    std::size_t maximum_message_bytes = 4 * 1024 * 1024;
+    std::size_t maximumHeaderBytes = 8 * 1024;
+    std::size_t maximumMessageBytes = 4 * 1024 * 1024;
 };
 
 enum class LspFrameError : std::uint8_t {
@@ -123,7 +123,7 @@ struct LspSyncViewState {
 };
 
 struct LspSyncDelta {
-    Revision base_revision{0};
+    Revision baseRevision{0};
     Revision revision{0};
     std::optional<LspSyncViewState> state;
     friend bool operator==(const LspSyncDelta&, const LspSyncDelta&) = default;
@@ -169,12 +169,12 @@ public:
 
 struct LspSyncConfig {
     LspFrameConfig framing;
-    std::size_t maximum_read_bytes = 64 * 1024;
-    std::size_t maximum_documents = 256;
-    std::size_t maximum_pending_requests = 256;
-    std::size_t maximum_diagnostics_per_document = 1000;
-    std::size_t maximum_diagnostic_message_bytes = 1024 * 1024;
-    std::size_t maximum_json_depth = 64;
+    std::size_t maximumReadBytes = 64 * 1024;
+    std::size_t maximumDocuments = 256;
+    std::size_t maximumPendingRequests = 256;
+    std::size_t maximumDiagnosticsPerDocument = 1000;
+    std::size_t maximumDiagnosticMessageBytes = 1024 * 1024;
+    std::size_t maximumJsonDepth = 64;
 };
 
 enum class LspLifecycleState : std::uint8_t {
@@ -237,7 +237,7 @@ enum class LspCompletedResponseStatus : std::uint8_t {
 struct LspCompletedResponse {
     std::uint64_t id = 0;
     LspCompletedResponseStatus status = LspCompletedResponseStatus::Result;
-    std::string payload_json;
+    std::string payloadJson;
     std::string message;
     friend bool operator==(const LspCompletedResponse&,
                            const LspCompletedResponse&) = default;

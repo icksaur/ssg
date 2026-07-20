@@ -42,22 +42,22 @@ struct LuaResult {
 
 struct LuaCommand {
     std::string id;
-    std::vector<CapabilityId> required_capabilities;
+    std::vector<CapabilityId> requiredCapabilities;
 };
 
 struct LuaInvocation {
-    std::string_view command_id;
+    std::string_view commandId;
     InvocationPrincipal const& principal;
 };
 
 using LuaDispatcher = std::function<CommandHandlerResult(LuaInvocation const&)>;
 
 struct LuaCommandHostOptions {
-    ClientId plugin_id;
+    ClientId pluginId;
     std::vector<CapabilityId> capabilities;
     std::vector<LuaCommand> commands;
-    std::uint64_t instruction_budget{100'000};
-    std::chrono::milliseconds time_budget{50};
+    std::uint64_t instructionBudget{100'000};
+    std::chrono::milliseconds timeBudget{50};
 };
 
 class LuaCommandHost {

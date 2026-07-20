@@ -49,13 +49,13 @@ std::vector<VisualRow> wrapRows(std::span<const CellRun> lines,
                 CellIndex{startCell},
                 contentCells,
                 std::min(contentCells, columns),
-                last.byte_offset + last.byte_len,
+                last.byteOffset + last.byteLen,
             });
         };
 
         for (std::size_t spanIndex = 0; spanIndex < line.spans.size();
              ++spanIndex) {
-            const auto width = line.spans[spanIndex].cell_width;
+            const auto width = line.spans[spanIndex].cellWidth;
             if (width > 0 && contentCells > 0 &&
                 width > columns - std::min(contentCells, columns)) {
                 finishRow();
@@ -179,7 +179,7 @@ ViewportViewState computeViewport(std::span<const CellRun> logicalLines,
                 checkedU32(documentByte, "viewport byte offset exceeds uint32");
             uint64_t contentBytes = 0;
             for (const auto& span : logicalLines[line].spans) {
-                contentBytes += span.byte_len;
+                contentBytes += span.byteLen;
             }
             documentByte += contentBytes + 1;  // +1 for the '\n' separator
         }
@@ -195,29 +195,29 @@ ViewportViewState computeViewport(std::span<const CellRun> logicalLines,
          ++viewportRow) {
         auto row = allRows[firstRow + viewportRow];
         // wrap_rows stored a LINE-RELATIVE end offset; make it document-absolute.
-        row.end_byte_offset += lineDocumentStart[row.logical_line];
+        row.endByteOffset += lineDocumentStart[row.logicalLine];
         visibleRows.push_back(row);
-        const auto& line = logicalLines[row.logical_line];
+        const auto& line = logicalLines[row.logicalLine];
         uint32_t viewportColumn = 0;
-        uint64_t logicalCell = row.start_cell.value();
-        const uint32_t endSpan = row.first_span + row.span_count;
-        for (uint32_t spanIndex = row.first_span; spanIndex < endSpan;
+        uint64_t logicalCell = row.startCell.value();
+        const uint32_t endSpan = row.firstSpan + row.spanCount;
+        for (uint32_t spanIndex = row.firstSpan; spanIndex < endSpan;
              ++spanIndex) {
             const auto& span = line.spans[spanIndex];
             const auto available = dimensions.columns - viewportColumn;
-            const auto visibleWidth = std::min(span.cell_width, available);
+            const auto visibleWidth = std::min(span.cellWidth, available);
             for (uint32_t cell = 0; cell < visibleWidth; ++cell) {
                 hitTargets.push_back(CellHitTarget{
                     viewportRow,
                     viewportColumn + cell,
-                    row.logical_line,
+                    row.logicalLine,
                     CellIndex{logicalCell},
-                    lineDocumentStart[row.logical_line] + span.byte_offset,
-                    span.byte_len,
+                    lineDocumentStart[row.logicalLine] + span.byteOffset,
+                    span.byteLen,
                 });
             }
             viewportColumn += visibleWidth;
-            logicalCell += span.cell_width;
+            logicalCell += span.cellWidth;
         }
     }
 
@@ -297,14 +297,14 @@ ViewportViewState computeViewportUnwrapped(
         uint32_t startCell = 0;
         for (; firstSpan < run.spans.size(); ++firstSpan) {
             if (startCell >= requestedFirstVisualColumn) break;
-            startCell += run.spans[firstSpan].cell_width;
+            startCell += run.spans[firstSpan].cellWidth;
         }
 
         if (firstSpan >= run.spans.size()) {
             // Empty line, or the whole line scrolled off to the left.
             visibleRows.push_back(
                 VisualRow{logicalLine, firstSpan, 0, CellIndex{startCell},
-                          run.total_cells, 0, endByteOffset});
+                          run.totalCells, 0, endByteOffset});
             continue;
         }
 
@@ -316,26 +316,26 @@ ViewportViewState computeViewportUnwrapped(
             const auto& span = run.spans[spanIndex];
             const auto available = dimensions.columns - viewportColumn;
             if (available == 0) break;
-            const auto visibleWidth = std::min(span.cell_width, available);
+            const auto visibleWidth = std::min(span.cellWidth, available);
             for (uint32_t cell = 0; cell < visibleWidth; ++cell) {
                 hitTargets.push_back(CellHitTarget{
                     viewportRow,
                     viewportColumn + cell,
                     logicalLine,
                     CellIndex{logicalCell},
-                    documentStart + span.byte_offset,
-                    span.byte_len,
+                    documentStart + span.byteOffset,
+                    span.byteLen,
                 });
             }
             viewportColumn += visibleWidth;
-            logicalCell += span.cell_width;
+            logicalCell += span.cellWidth;
             ++spanCount;
         }
         const uint32_t contentFromOffset =
-            run.total_cells > startCell ? run.total_cells - startCell : 0;
+            run.totalCells > startCell ? run.totalCells - startCell : 0;
         visibleRows.push_back(
             VisualRow{logicalLine, firstSpan, spanCount, CellIndex{startCell},
-                      run.total_cells,
+                      run.totalCells,
                       std::min(contentFromOffset, dimensions.columns),
                       endByteOffset});
     }

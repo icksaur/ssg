@@ -47,8 +47,8 @@ struct TabState {
     TabId id;
     TabKind kind = TabKind::Document;
     std::optional<FileDocumentId> document;
-    std::optional<JournalDocumentKey> document_key;
-    std::string content_identity;
+    std::optional<JournalDocumentKey> documentKey;
+    std::string contentIdentity;
     std::string label;
     DocumentMode mode = DocumentMode::Edit;
     bool dirty = false;
@@ -175,7 +175,7 @@ public:
 };
 
 struct TabManagerConfig {
-    std::size_t maximum_recently_closed = 32;
+    std::size_t maximumRecentlyClosed = 32;
 };
 
 class TabManager {

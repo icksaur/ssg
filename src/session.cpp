@@ -74,7 +74,7 @@ CommandResult EditorSession::dispatch(ClientId clientId,
     }
 
     for (auto const& capability :
-         registration->descriptor.required_capabilities) {
+         registration->descriptor.requiredCapabilities) {
         if (!client->second.principal.hasCapability(capability)) {
             return rejected(
                 CommandError::CapabilityDenied, currentRevision,
@@ -85,7 +85,7 @@ CommandResult EditorSession::dispatch(ClientId clientId,
 
     bool const mutates =
         registration->descriptor.effect == CommandEffect::Mutation;
-    if (mutates && command.base_revision != currentRevision) {
+    if (mutates && command.baseRevision != currentRevision) {
         return rejected(CommandError::StaleRevision, currentRevision,
                         "mutation base revision does not match session revision");
     }
@@ -116,11 +116,11 @@ CommandResult EditorSession::dispatch(ClientId clientId,
     }
 
     if (mutates) {
-        if (context.workspace_changed_) {
-            impl_->topology.active_workspace = context.active_workspace_;
+        if (context.workspaceChanged_) {
+            impl_->topology.activeWorkspace = context.activeWorkspace_;
         }
-        if (context.view_changed_) {
-            impl_->topology.active_view = context.active_view_;
+        if (context.viewChanged_) {
+            impl_->topology.activeView = context.activeView_;
         }
         impl_->revision = Revision{currentRevision.value() + 1};
     }

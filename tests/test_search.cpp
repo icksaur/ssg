@@ -178,20 +178,20 @@ TEST(navigationHistoryMatchesTransitionTable) {
 
     const auto visitA = history.visit(a, NavigationOrigin::User);
     const NavigationTransition toA{.target = a,
-                                    .pause_follow_edits = true,
-                                    .reveal_primary_caret = true};
+                                    .pauseFollowEdits = true,
+                                    .revealPrimaryCaret = true};
     const NavigationTransition toB{.target = b,
-                                    .pause_follow_edits = true,
-                                    .reveal_primary_caret = true};
+                                    .pauseFollowEdits = true,
+                                    .revealPrimaryCaret = true};
     ASSERT_EQ(visitA, toA);
     const auto visitB = history.visit(b, NavigationOrigin::Programmatic);
-    ASSERT_FALSE(visitB.pause_follow_edits);
+    ASSERT_FALSE(visitB.pauseFollowEdits);
     ASSERT_EQ(history.back(), toA);
     ASSERT_EQ(history.forward(), toB);
     const auto ignoredBack = history.back();
     const auto visitC = history.visit(c, NavigationOrigin::User);
     ASSERT_TRUE(ignoredBack.target.has_value());
-    ASSERT_TRUE(visitC.pause_follow_edits);
+    ASSERT_TRUE(visitC.pauseFollowEdits);
     ASSERT_FALSE(history.forward().target.has_value());
     ASSERT_EQ(history.back().target, std::optional<NavigationTarget>{a});
     ASSERT_FALSE(history.back().target.has_value());
@@ -215,7 +215,7 @@ TEST(paletteUsesInjectedCatalogAndDispatch) {
 
     controller.openPalette(Revision{11});
     controller.updatePaletteQuery("open f", Revision{12});
-    ASSERT_TRUE(controller.viewState().palette_open);
+    ASSERT_TRUE(controller.viewState().paletteOpen);
     ASSERT_EQ(labels(controller.viewState().results),
               std::vector<std::string>{"Open File"});
     ASSERT_EQ(controller.executePalette().accepted, true);
@@ -256,7 +256,7 @@ TEST(viewDeltaReplayAndCommandExportsAreExact) {
     std::vector<std::string_view> actual;
     for (const auto& descriptor : set.descriptors()) {
         actual.push_back(descriptor.id);
-        ASSERT_TRUE(descriptor.user_navigation ==
+        ASSERT_TRUE(descriptor.userNavigation ==
                         (descriptor.id.starts_with("goto.") ||
                          descriptor.id.starts_with("search.results_")));
     }

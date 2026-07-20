@@ -10,7 +10,7 @@ namespace {
 
 struct Scalar {
     char32_t value;
-    std::size_t utf8_offset;
+    std::size_t utf8Offset;
 };
 
 struct ScalarResult {
@@ -198,37 +198,37 @@ DecodeTextResult normalized(ScalarResult scalarResult,
     OpenPhaseTimer timer{OpenPhase::EolScan};
     DecodedText text;
     text.status.encoding = encoding;
-    text.status.had_bom = hadBom;
+    text.status.hadBom = hadBom;
     for (std::size_t index = 0; index < scalarResult.scalars.size(); ++index) {
         const auto value = scalarResult.scalars[index].value;
         if (value == 0) {
             return {std::nullopt,
-                    invalidInput(scalarResult.scalars[index].utf8_offset,
+                    invalidInput(scalarResult.scalars[index].utf8Offset,
                                   "NUL byte is not valid document text")};
         }
         if (value == U'\r') {
             if (index + 1 < scalarResult.scalars.size() &&
                 scalarResult.scalars[index + 1].value == U'\n') {
                 ++index;
-                text.line_terminators.push_back(LineTerminator::Crlf);
+                text.lineTerminators.push_back(LineTerminator::Crlf);
             } else {
-                text.line_terminators.push_back(LineTerminator::Cr);
+                text.lineTerminators.push_back(LineTerminator::Cr);
             }
             text.utf8.push_back('\n');
         } else if (value == U'\n') {
-            text.line_terminators.push_back(LineTerminator::Lf);
+            text.lineTerminators.push_back(LineTerminator::Lf);
             text.utf8.push_back('\n');
         } else {
             appendUtf8(text.utf8, value);
         }
     }
     if (!text.utf8.empty() && text.utf8.back() != '\n') {
-        text.line_terminators.push_back(LineTerminator::None);
+        text.lineTerminators.push_back(LineTerminator::None);
     }
-    text.status.line_ending = detectedLineEnding(text.line_terminators);
-    text.status.final_newline =
-        !text.line_terminators.empty() &&
-        text.line_terminators.back() != LineTerminator::None;
+    text.status.lineEnding = detectedLineEnding(text.lineTerminators);
+    text.status.finalNewline =
+        !text.lineTerminators.empty() &&
+        text.lineTerminators.back() != LineTerminator::None;
     return {std::move(text), std::nullopt};
 }
 
@@ -251,7 +251,7 @@ DecodeTextResult decodeUtf8Fused(std::span<const std::uint8_t> input,
     noteUtf8Validation();
     DecodedText text;
     text.status.encoding = encoding;
-    text.status.had_bom = hadBom;
+    text.status.hadBom = hadBom;
     text.utf8.reserve(input.size());
     const std::size_t n = input.size();
     std::size_t index = 0;
@@ -264,17 +264,17 @@ DecodeTextResult decodeUtf8Fused(std::span<const std::uint8_t> input,
         }
         if (first == '\r') {
             if (index + 1 < n && input[index + 1] == '\n') {
-                text.line_terminators.push_back(LineTerminator::Crlf);
+                text.lineTerminators.push_back(LineTerminator::Crlf);
                 index += 2;
             } else {
-                text.line_terminators.push_back(LineTerminator::Cr);
+                text.lineTerminators.push_back(LineTerminator::Cr);
                 index += 1;
             }
             text.utf8.push_back('\n');
             continue;
         }
         if (first == '\n') {
-            text.line_terminators.push_back(LineTerminator::Lf);
+            text.lineTerminators.push_back(LineTerminator::Lf);
             text.utf8.push_back('\n');
             index += 1;
             continue;
@@ -329,12 +329,12 @@ DecodeTextResult decodeUtf8Fused(std::span<const std::uint8_t> input,
         index += continuationCount + 1;
     }
     if (!text.utf8.empty() && text.utf8.back() != '\n') {
-        text.line_terminators.push_back(LineTerminator::None);
+        text.lineTerminators.push_back(LineTerminator::None);
     }
-    text.status.line_ending = detectedLineEnding(text.line_terminators);
-    text.status.final_newline =
-        !text.line_terminators.empty() &&
-        text.line_terminators.back() != LineTerminator::None;
+    text.status.lineEnding = detectedLineEnding(text.lineTerminators);
+    text.status.finalNewline =
+        !text.lineTerminators.empty() &&
+        text.lineTerminators.back() != LineTerminator::None;
     return {std::move(text), std::nullopt};
 }
 
@@ -421,7 +421,7 @@ std::vector<Scalar> outputScalars(const DecodedText& text,
     if (!decoded.scalars.empty() && decoded.scalars.back().value != U'\n') {
         ++expectedTerminators;
     }
-    if (expectedTerminators != text.line_terminators.size()) {
+    if (expectedTerminators != text.lineTerminators.size()) {
         error = {TextEncodingErrorCode::InvalidMetadata, 0,
                  "line terminator metadata does not match text"};
         return {};
@@ -435,43 +435,43 @@ std::vector<Scalar> outputScalars(const DecodedText& text,
             output.push_back(scalar);
             continue;
         }
-        const auto stored = text.line_terminators[terminatorIndex++];
+        const auto stored = text.lineTerminators[terminatorIndex++];
         if (stored == LineTerminator::None) {
             error = {TextEncodingErrorCode::InvalidMetadata,
-                     scalar.utf8_offset, "newline has no terminator metadata"};
+                     scalar.utf8Offset, "newline has no terminator metadata"};
             return {};
         }
         const bool final = index + 1 == decoded.scalars.size();
         if (final &&
-            options.final_newline == FinalNewlinePolicy::EnsureAbsent) {
+            options.finalNewline == FinalNewlinePolicy::EnsureAbsent) {
             continue;
         }
         const auto selected =
-            options.line_ending == LineEnding::Mixed
+            options.lineEnding == LineEnding::Mixed
                 ? stored
-                : toTerminator(options.line_ending);
+                : toTerminator(options.lineEnding);
         if (selected == LineTerminator::Crlf) {
-            output.push_back({U'\r', scalar.utf8_offset});
-            output.push_back({U'\n', scalar.utf8_offset});
+            output.push_back({U'\r', scalar.utf8Offset});
+            output.push_back({U'\n', scalar.utf8Offset});
         } else if (selected == LineTerminator::Cr) {
-            output.push_back({U'\r', scalar.utf8_offset});
+            output.push_back({U'\r', scalar.utf8Offset});
         } else {
-            output.push_back({U'\n', scalar.utf8_offset});
+            output.push_back({U'\n', scalar.utf8Offset});
         }
     }
     if (!decoded.scalars.empty() && decoded.scalars.back().value != U'\n') {
-        if (text.line_terminators[terminatorIndex] != LineTerminator::None) {
+        if (text.lineTerminators[terminatorIndex] != LineTerminator::None) {
             error = {TextEncodingErrorCode::InvalidMetadata,
-                     decoded.scalars.back().utf8_offset,
+                     decoded.scalars.back().utf8Offset,
                      "unterminated line has terminator metadata"};
             return {};
         }
-        if (options.final_newline == FinalNewlinePolicy::EnsurePresent) {
-            auto ending = options.line_ending;
+        if (options.finalNewline == FinalNewlinePolicy::EnsurePresent) {
+            auto ending = options.lineEnding;
             if (ending == LineEnding::Mixed) {
-                ending = text.status.line_ending == LineEnding::Mixed
+                ending = text.status.lineEnding == LineEnding::Mixed
                              ? LineEnding::Lf
-                             : text.status.line_ending;
+                             : text.status.lineEnding;
             }
             const auto selected = toTerminator(ending);
             if (selected == LineTerminator::Crlf) {
@@ -552,7 +552,7 @@ EncodeTextResult encodeText(const DecodedText& text,
                 return {{},
                         TextEncodingError{
                             TextEncodingErrorCode::LossyConversion,
-                            scalar.utf8_offset,
+                            scalar.utf8Offset,
                             "text is not representable in selected encoding"}};
             }
             result.bytes.push_back(*encoded);

@@ -102,7 +102,7 @@ class LinuxFilesystemWatcher final : public FilesystemWatcher {
 public:
     LinuxFilesystemWatcher(std::filesystem::path root, WatcherConfig config)
         : root_(std::filesystem::canonical(std::move(root))),
-          max_rescan_entries_(config.max_rescan_entries) {
+          maxRescanEntries_(config.maxRescanEntries) {
         noteOptionalConstruction(OptionalSubsystem::FilesystemWatcher);
         descriptor_ = ::inotify_init1(IN_NONBLOCK | IN_CLOEXEC);
         if (descriptor_ == -1) {
@@ -111,7 +111,7 @@ public:
         }
         try {
             addWatchTree(root_);
-            const auto initial = scanWorkspace(root_, config.max_rescan_entries);
+            const auto initial = scanWorkspace(root_, config.maxRescanEntries);
             if (!initial.complete) {
                 throw std::runtime_error(
                     "failed to seed bounded filesystem watcher snapshot");
@@ -287,7 +287,7 @@ private:
             try {
                 addWatchTree(absolute);
                 const auto subtree =
-                    scanWorkspace(absolute, max_rescan_entries_);
+                    scanWorkspace(absolute, maxRescanEntries_);
                 if (!subtree.complete) {
                     normalizer_->push(
                         {NativeWatchAction::Overflow, {}, 0, {}}, now);
@@ -335,7 +335,7 @@ private:
     int descriptor_ = -1;
     std::map<int, std::filesystem::path> directories_;
     std::unique_ptr<WatchEventNormalizer> normalizer_;
-    std::size_t max_rescan_entries_;
+    std::size_t maxRescanEntries_;
 };
 
 } // namespace

@@ -491,14 +491,14 @@ struct StoredRecord {
     std::vector<SnapshotKind> snapshots;
     SnapshotKind replacement = SnapshotKind::Missing;
     std::filesystem::path directory;
-    bool restored_in_memory = false;
+    bool restoredInMemory = false;
 };
 
 std::vector<std::byte> encodeManifest(const StoredRecord& stored) {
     ByteWriter writer;
     writer.raw(kManifestMagic);
     writer.u8(static_cast<std::uint8_t>(stored.record.kind));
-    writer.u64(stored.record.stored_bytes);
+    writer.u64(stored.record.storedBytes);
 
     if (stored.document) {
         writer.u8(1);
@@ -514,15 +514,15 @@ std::vector<std::byte> encodeManifest(const StoredRecord& stored) {
         writer.u8(0);
     }
 
-    if (stored.record.affected_paths.size() >
+    if (stored.record.affectedPaths.size() >
         std::numeric_limits<std::uint32_t>::max()) {
         throw std::length_error("too many recovery paths");
     }
     writer.u32(
-        static_cast<std::uint32_t>(stored.record.affected_paths.size()));
+        static_cast<std::uint32_t>(stored.record.affectedPaths.size()));
     for (std::size_t index = 0;
-         index != stored.record.affected_paths.size(); ++index) {
-        writer.string(pathToUtf8(stored.record.affected_paths[index]));
+         index != stored.record.affectedPaths.size(); ++index) {
+        writer.string(pathToUtf8(stored.record.affectedPaths[index]));
         writer.u8(static_cast<std::uint8_t>(stored.snapshots[index]));
     }
     writer.u8(static_cast<std::uint8_t>(stored.replacement));
@@ -557,8 +557,8 @@ StoredRecord decodeManifest(const RecoveryRecordId& id,
             throw std::runtime_error("truncated recovery document");
         }
         const auto replayed = replayJournal(documentBytes);
-        if (replayed.discarded_tail ||
-            replayed.valid_bytes != documentBytes.size() ||
+        if (replayed.discardedTail ||
+            replayed.validBytes != documentBytes.size() ||
             replayed.recovery.documents.size() != 1) {
             throw std::runtime_error("invalid recovery document");
         }
@@ -622,21 +622,21 @@ public:
     Impl(std::filesystem::path recoveryRoot,
          RecoveryConfig config,
          RecoveryFaultInjector* faultInjector)
-        : recovery_root_(
+        : recoveryRoot_(
               std::filesystem::absolute(std::move(recoveryRoot))
                   .lexically_normal()),
           config_(config),
-          fault_injector_(faultInjector) {
-        if (config_.maximum_records == 0) {
+          faultInjector_(faultInjector) {
+        if (config_.maximumRecords == 0) {
             throw std::invalid_argument(
                 "recovery maximum record count must be greater than zero");
         }
-        if (config_.maximum_bytes == 0) {
+        if (config_.maximumBytes == 0) {
             throw std::invalid_argument(
                 "recovery maximum byte count must be greater than zero");
         }
-        std::filesystem::create_directories(recovery_root_);
-        setOwnerOnlyPermissions(recovery_root_);
+        std::filesystem::create_directories(recoveryRoot_);
+        setOwnerOnlyPermissions(recoveryRoot_);
         loadRecords();
     }
 
@@ -828,7 +828,7 @@ public:
                 before(RecoveryStep::MutateFilesystem);
                 removeNode(workspace);
                 before(RecoveryStep::MutateFilesystem);
-                const auto installed = records_under_preparation_;
+                const auto installed = recordsUnderPreparation_;
                 if (installed == nullptr) {
                     throw std::logic_error(
                         "workspace replacement record is unavailable");
@@ -879,7 +879,7 @@ public:
             return {error(RecoveryErrorCode::RecordKindMismatch,
                           "recovery record does not restore filesystem state")};
         }
-        if (!found->restored_in_memory &&
+        if (!found->restoredInMemory &&
             !std::filesystem::exists(restoredMarker(*found))) {
             try {
                 before(RecoveryStep::RestoreFilesystem);
@@ -900,12 +900,12 @@ private:
     using RecordIterator = std::vector<StoredRecord>::iterator;
 
     void before(RecoveryStep step) {
-        if (fault_injector_ != nullptr) fault_injector_->beforeStep(step);
+        if (faultInjector_ != nullptr) faultInjector_->beforeStep(step);
     }
 
     void loadRecords() {
         for (const auto& entry :
-             std::filesystem::directory_iterator(recovery_root_)) {
+             std::filesystem::directory_iterator(recoveryRoot_)) {
             if (!entry.is_directory()) continue;
             const auto name = entry.path().filename().string();
             if (name.rfind(".staging-", 0) == 0) {
@@ -950,7 +950,7 @@ private:
                 std::from_chars(name.data(), name.data() + name.size(), numeric);
             if (parsed.ec == std::errc{} &&
                 parsed.ptr == name.data() + name.size()) {
-                next_id_ = std::max(next_id_, numeric);
+                nextId_ = std::max(nextId_, numeric);
             }
         }
         std::sort(records_.begin(), records_.end(),
@@ -958,8 +958,8 @@ private:
                       return left.record.id.value() <
                              right.record.id.value();
                   });
-        while (records_.size() > config_.maximum_records ||
-               totalStoredBytes() > config_.maximum_bytes) {
+        while (records_.size() > config_.maximumRecords ||
+               totalStoredBytes() > config_.maximumBytes) {
             evictOldest();
         }
     }
@@ -969,20 +969,20 @@ private:
             std::chrono::duration_cast<std::chrono::nanoseconds>(
                 std::chrono::system_clock::now().time_since_epoch())
                 .count());
-        next_id_ = std::max(next_id_ + 1, now);
+        nextId_ = std::max(nextId_ + 1, now);
         std::ostringstream encoded;
-        encoded << std::setfill('0') << std::setw(20) << next_id_;
+        encoded << std::setfill('0') << std::setw(20) << nextId_;
         return RecoveryRecordId{encoded.str()};
     }
 
     std::uintmax_t totalStoredBytes() const {
         std::uintmax_t total = 0;
         for (const auto& record : records_) {
-            if (record.record.stored_bytes >
+            if (record.record.storedBytes >
                 std::numeric_limits<std::uintmax_t>::max() - total) {
                 return std::numeric_limits<std::uintmax_t>::max();
             }
-            total += record.record.stored_bytes;
+            total += record.record.storedBytes;
         }
         return total;
     }
@@ -991,15 +991,15 @@ private:
         const std::vector<std::filesystem::path>& paths,
         const std::optional<std::filesystem::path>& replacement) const {
         for (const auto& path : paths) {
-            if (pathContains(path, recovery_root_) ||
-                pathContains(recovery_root_, path)) {
+            if (pathContains(path, recoveryRoot_) ||
+                pathContains(recoveryRoot_, path)) {
                 throw std::invalid_argument(
                     "recovery root and action path must not overlap");
             }
         }
         if (replacement &&
-            (pathContains(*replacement, recovery_root_) ||
-             pathContains(recovery_root_, *replacement))) {
+            (pathContains(*replacement, recoveryRoot_) ||
+             pathContains(recoveryRoot_, *replacement))) {
             throw std::invalid_argument(
                 "recovery root and replacement path must not overlap");
         }
@@ -1015,8 +1015,8 @@ private:
 
         const auto id = makeId();
         const auto staging =
-            recovery_root_ / (".staging-" + std::string{id.value()});
-        const auto installed = recovery_root_ / std::string{id.value()};
+            recoveryRoot_ / (".staging-" + std::string{id.value()});
+        const auto installed = recoveryRoot_ / std::string{id.value()};
         removeNode(staging);
         std::filesystem::create_directories(staging / "artifacts");
 
@@ -1036,11 +1036,11 @@ private:
 
         try {
             for (std::size_t index = 0;
-                 index != stored.record.affected_paths.size(); ++index) {
+                 index != stored.record.affectedPaths.size(); ++index) {
                 const auto kind =
-                    snapshotKind(stored.record.affected_paths[index]);
+                    snapshotKind(stored.record.affectedPaths[index]);
                 stored.snapshots.push_back(kind);
-                copyNode(stored.record.affected_paths[index],
+                copyNode(stored.record.affectedPaths[index],
                           staging / "artifacts" / std::to_string(index), kind);
             }
             if (replacement) {
@@ -1057,7 +1057,7 @@ private:
                     kRecordLifecycleMetadataBytes) {
                 throw std::overflow_error("recovery byte accounting overflow");
             }
-            stored.record.stored_bytes =
+            stored.record.storedBytes =
                 payloadBytes + kRecordLifecycleMetadataBytes;
             manifest = encodeManifest(stored);
             writeBytes(staging / "manifest.bin", manifest);
@@ -1065,14 +1065,14 @@ private:
             syncTree(staging);
 
             before(RecoveryStep::InstallRecord);
-            installDirectoryDurably(staging, installed, recovery_root_);
+            installDirectoryDurably(staging, installed, recoveryRoot_);
         } catch (...) {
             std::error_code ignored;
             std::filesystem::remove_all(staging, ignored);
             throw;
         }
 
-        if (stored.record.stored_bytes > config_.maximum_bytes) {
+        if (stored.record.storedBytes > config_.maximumBytes) {
             removeNode(installed);
             throw BudgetExceeded(
                 "recovery record exceeds the configured byte budget");
@@ -1114,7 +1114,7 @@ private:
                               exceptionMessage(std::current_exception()))};
         }
 
-        records_under_preparation_ = &*prepared;
+        recordsUnderPreparation_ = &*prepared;
         std::exception_ptr actionFailure;
         try {
             mutation();
@@ -1127,7 +1127,7 @@ private:
         } catch (...) {
             actionFailure = std::current_exception();
         }
-        records_under_preparation_ = nullptr;
+        recordsUnderPreparation_ = nullptr;
 
         if (!actionFailure) {
             const auto id = prepared->record.id;
@@ -1193,8 +1193,8 @@ private:
     }
 
     std::optional<std::string> enforceBudgets() {
-        while (records_.size() > config_.maximum_records ||
-               totalStoredBytes() > config_.maximum_bytes) {
+        while (records_.size() > config_.maximumRecords ||
+               totalStoredBytes() > config_.maximumBytes) {
             try {
                 evictOldest();
             } catch (...) {
@@ -1251,13 +1251,13 @@ private:
     }
 
     void markRestored(StoredRecord& stored) {
-        replaceFileAtomically(restoredMarker(stored), instance_id_);
+        replaceFileAtomically(restoredMarker(stored), instanceId_);
         setOwnerOnlyPermissions(restoredMarker(stored));
-        stored.restored_in_memory = true;
+        stored.restoredInMemory = true;
     }
 
     bool restoredInThisInstance(const StoredRecord& stored) const {
-        if (stored.restored_in_memory) return true;
+        if (stored.restoredInMemory) return true;
         std::error_code error;
         if (!std::filesystem::exists(restoredMarker(stored), error)) {
             if (error) {
@@ -1268,13 +1268,13 @@ private:
             return false;
         }
         return readBytes(restoredMarker(stored)) ==
-               std::vector<std::byte>(instance_id_.begin(),
-                                      instance_id_.end());
+               std::vector<std::byte>(instanceId_.begin(),
+                                      instanceId_.end());
     }
 
     void restoreRename(const StoredRecord& stored) {
-        const auto& source = stored.record.affected_paths[0];
-        const auto& destination = stored.record.affected_paths[1];
+        const auto& source = stored.record.affectedPaths[0];
+        const auto& destination = stored.record.affectedPaths[1];
         const auto sourceNow = snapshotKind(source);
         const auto destinationNow = snapshotKind(destination);
         if (sourceNow == SnapshotKind::Missing &&
@@ -1297,7 +1297,7 @@ private:
         case RecoveryRecordKind::FileOverwrite:
         case RecoveryRecordKind::PathDelete:
         case RecoveryRecordKind::WorkspaceReplace:
-            restoreSnapshot(stored.record.affected_paths[0],
+            restoreSnapshot(stored.record.affectedPaths[0],
                              artifactPath(stored, 0), stored.snapshots[0]);
             return;
         case RecoveryRecordKind::PathRename:
@@ -1311,7 +1311,7 @@ private:
     }
 
     static void syncFilesystemState(const StoredRecord& stored) {
-        for (const auto& path : stored.record.affected_paths) {
+        for (const auto& path : stored.record.affectedPaths) {
             const auto kind = snapshotKind(path);
             if (kind == SnapshotKind::RegularFile) {
                 syncPath(path, false);
@@ -1342,14 +1342,14 @@ private:
         }
     }
 
-    std::filesystem::path recovery_root_;
+    std::filesystem::path recoveryRoot_;
     RecoveryConfig config_;
-    RecoveryFaultInjector* fault_injector_;
+    RecoveryFaultInjector* faultInjector_;
     std::vector<StoredRecord> records_;
-    std::uint64_t next_id_ = 0;
-    std::array<std::byte, 16> instance_id_ =
+    std::uint64_t nextId_ = 0;
+    std::array<std::byte, 16> instanceId_ =
         UntitledDocumentId::generate().bytes();
-    StoredRecord* records_under_preparation_ = nullptr;
+    StoredRecord* recordsUnderPreparation_ = nullptr;
 };
 
 RecoveryActions RecoveryActions::create(

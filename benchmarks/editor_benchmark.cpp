@@ -42,14 +42,14 @@ struct Operation {
     bool insert;
     std::uint64_t offset;
     std::string text;
-    std::uint64_t erased_bytes;
+    std::uint64_t erasedBytes;
 };
 
 struct Timings {
-    std::vector<double> edit_microseconds;
-    std::vector<double> command_delta_microseconds;
-    std::vector<double> open_viewport_milliseconds;
-    double idle_cpu_milliseconds{};
+    std::vector<double> editMicroseconds;
+    std::vector<double> commandDeltaMicroseconds;
+    std::vector<double> openViewportMilliseconds;
+    double idleCpuMilliseconds{};
 };
 
 [[nodiscard]] double processCpuMilliseconds() {
@@ -212,7 +212,7 @@ struct Timings {
     return document.apply(
         {document.revision(),
          {{ssg::ByteOffset{operation.offset},
-           operation.insert ? 0U : operation.erased_bytes,
+           operation.insert ? 0U : operation.erasedBytes,
            operation.insert ? operation.text : std::string{}}}});
 }
 
@@ -264,8 +264,8 @@ void verifyCorrectness(std::string const& base,
         ssg::CommandRegistry{std::vector<ssg::CommandSet>{}}};
     double const cpuStart = processCpuMilliseconds();
     std::this_thread::sleep_for(std::chrono::milliseconds{100});
-    timings.idle_cpu_milliseconds = processCpuMilliseconds() - cpuStart;
-    if (timings.idle_cpu_milliseconds > 10.0)
+    timings.idleCpuMilliseconds = processCpuMilliseconds() - cpuStart;
+    if (timings.idleCpuMilliseconds > 10.0)
         throw std::runtime_error{"idle session consumed polling CPU"};
 }
 
@@ -280,7 +280,7 @@ void measureEdits(std::string const& base,
             auto const elapsed = Clock::now() - start;
             if (!result.accepted()) throw std::runtime_error{result.message};
             if (i >= kWarmupCount)
-                timings.edit_microseconds.push_back(
+                timings.editMicroseconds.push_back(
                     std::chrono::duration<double, std::micro>(elapsed).count());
         }
         if (document.snapshot().text != base)
@@ -327,7 +327,7 @@ void measureCommandDelta(std::vector<Operation> const& operations,
                 throw std::runtime_error{"command-to-delta cycle failed"};
             view = std::move(after);
             if (i >= kWarmupCount)
-                timings.command_delta_microseconds.push_back(
+                timings.commandDeltaMicroseconds.push_back(
                     std::chrono::duration<double, std::micro>(elapsed).count());
         }
         if (view.text != initial)
@@ -343,9 +343,9 @@ void measureOpenViewport(std::string const& base, Timings& timings) {
         auto runs = firstViewportRuns(snapshot.text);
         auto view =
             ssg::computeViewport(runs, ssg::ViewportDimensions{120, 40});
-        if (view.visible_rows.empty())
+        if (view.visibleRows.empty())
             throw std::runtime_error{"first viewport is empty"};
-        timings.open_viewport_milliseconds.push_back(
+        timings.openViewportMilliseconds.push_back(
             std::chrono::duration<double, std::milli>(Clock::now() - start)
                 .count());
     }
@@ -373,29 +373,29 @@ void printReport(Timings const& timings) {
               << " flags=\"" << SSG_BENCHMARK_BUILD_FLAGS << "\"\n"
               << "protocol operations=10000 warmup=1000 repetitions=5"
                  " aggregate_samples="
-              << timings.edit_microseconds.size() << '\n'
-              << "edit_us p50=" << percentile(timings.edit_microseconds, 0.50)
-              << " p99=" << percentile(timings.edit_microseconds, 0.99) << '\n'
+              << timings.editMicroseconds.size() << '\n'
+              << "edit_us p50=" << percentile(timings.editMicroseconds, 0.50)
+              << " p99=" << percentile(timings.editMicroseconds, 0.99) << '\n'
               << "command_delta_us p50="
-              << percentile(timings.command_delta_microseconds, 0.50)
+              << percentile(timings.commandDeltaMicroseconds, 0.50)
               << " p99="
-              << percentile(timings.command_delta_microseconds, 0.99) << '\n'
+              << percentile(timings.commandDeltaMicroseconds, 0.99) << '\n'
               << "open_viewport_ms max="
-              << *std::max_element(timings.open_viewport_milliseconds.begin(),
-                                   timings.open_viewport_milliseconds.end())
+              << *std::max_element(timings.openViewportMilliseconds.begin(),
+                                   timings.openViewportMilliseconds.end())
               << '\n'
-              << "idle_cpu_ms=" << timings.idle_cpu_milliseconds << '\n';
+              << "idle_cpu_ms=" << timings.idleCpuMilliseconds << '\n';
 }
 
 void enforce(Timings const& timings) {
-    if (percentile(timings.edit_microseconds, 0.50) >= 1'000.0 ||
-        percentile(timings.edit_microseconds, 0.99) >= 4'000.0)
+    if (percentile(timings.editMicroseconds, 0.50) >= 1'000.0 ||
+        percentile(timings.editMicroseconds, 0.99) >= 4'000.0)
         throw std::runtime_error{"edit latency budget exceeded"};
-    if (percentile(timings.command_delta_microseconds, 0.50) >= 2'000.0 ||
-        percentile(timings.command_delta_microseconds, 0.99) >= 8'000.0)
+    if (percentile(timings.commandDeltaMicroseconds, 0.50) >= 2'000.0 ||
+        percentile(timings.commandDeltaMicroseconds, 0.99) >= 8'000.0)
         throw std::runtime_error{"command-to-delta latency budget exceeded"};
-    if (*std::max_element(timings.open_viewport_milliseconds.begin(),
-                          timings.open_viewport_milliseconds.end()) >= 250.0)
+    if (*std::max_element(timings.openViewportMilliseconds.begin(),
+                          timings.openViewportMilliseconds.end()) >= 250.0)
         throw std::runtime_error{"10 MiB first-viewport budget exceeded"};
 }
 

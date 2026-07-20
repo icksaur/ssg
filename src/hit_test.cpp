@@ -18,11 +18,11 @@ RegionHit scrollbarHit(HitRegion region, Rect const& gutter, int row) {
     hit.region = region;
     auto const relative = static_cast<std::uint32_t>(
         std::clamp(row - gutter.y, 0, std::max(gutter.height - 1, 0)));
-    hit.scroll_numerator = relative;
-    hit.scroll_denominator =
+    hit.scrollNumerator = relative;
+    hit.scrollDenominator =
         static_cast<std::uint32_t>(std::max(gutter.height - 1, 1));
-    hit.scrollbar_fraction =
-        static_cast<double>(hit.scroll_numerator) / hit.scroll_denominator;
+    hit.scrollbarFraction =
+        static_cast<double>(hit.scrollNumerator) / hit.scrollDenominator;
     return hit;
 }
 
@@ -31,13 +31,13 @@ RegionHit editorHit(SessionSnapshot const& snapshot, Rect const& content,
     auto const& viewport = snapshot.client().viewport;
     auto const viewportRow = static_cast<std::uint32_t>(row - content.y);
     auto const viewportColumn = static_cast<std::uint32_t>(column - content.x);
-    for (auto const& target : viewport.hit_targets) {
-        if (target.viewport_row == viewportRow &&
-            target.viewport_column == viewportColumn) {
+    for (auto const& target : viewport.hitTargets) {
+        if (target.viewportRow == viewportRow &&
+            target.viewportColumn == viewportColumn) {
             RegionHit hit;
             hit.region = HitRegion::Editor;
-            hit.byte_offset = target.byte_offset;
-            hit.byte_len = target.byte_len;
+            hit.byteOffset = target.byteOffset;
+            hit.byteLen = target.byteLen;
             return hit;
         }
     }
@@ -47,21 +47,21 @@ RegionHit editorHit(SessionSnapshot const& snapshot, Rect const& content,
     // short document) clamps to the LAST visible row's end (Decision B), so
     // clicking/dragging below the text reaches the last line. An empty viewport
     // (no visible rows) has nowhere to place the caret -> none.
-    if (viewport.visible_rows.empty()) return {};
+    if (viewport.visibleRows.empty()) return {};
     auto const& targetRow =
-        viewportRow < viewport.visible_rows.size()
-            ? viewport.visible_rows[viewportRow]
-            : viewport.visible_rows.back();
+        viewportRow < viewport.visibleRows.size()
+            ? viewport.visibleRows[viewportRow]
+            : viewport.visibleRows.back();
     RegionHit hit;
     hit.region = HitRegion::Editor;
-    hit.byte_offset = targetRow.end_byte_offset;
-    hit.byte_len = 0;
+    hit.byteOffset = targetRow.endByteOffset;
+    hit.byteLen = 0;
     return hit;
 }
 
 RegionHit paletteHit(PaletteProjection const& palette, int column, int row) {
-    if (contains(palette.scrollbar_rect, column, row)) {
-        return scrollbarHit(HitRegion::PaletteScrollbar, palette.scrollbar_rect,
+    if (contains(palette.scrollbarRect, column, row)) {
+        return scrollbarHit(HitRegion::PaletteScrollbar, palette.scrollbarRect,
                              row);
     }
     if (!contains(palette.rect, column, row)) return {};
@@ -69,8 +69,8 @@ RegionHit paletteHit(PaletteProjection const& palette, int column, int row) {
     if (windowIndex >= palette.rows.size()) return {};
     RegionHit hit;
     hit.region = HitRegion::Palette;
-    hit.item_index =
-        palette.first_visible + static_cast<std::uint32_t>(windowIndex);
+    hit.itemIndex =
+        palette.firstVisible + static_cast<std::uint32_t>(windowIndex);
     return hit;
 }
 
@@ -84,10 +84,10 @@ RegionHit panelHit(SessionSnapshot const& snapshot, Rect const& panel,
     if (tree.providers.empty()) return {};
     auto const& provider = tree.providers.front();
     auto const viewportRow = static_cast<std::size_t>(row - (panel.y + 1));
-    if (viewportRow >= provider.visible_node_ids.size()) return {};
+    if (viewportRow >= provider.visibleNodeIds.size()) return {};
     RegionHit hit;
     hit.region = HitRegion::Panel;
-    hit.node_id = provider.visible_node_ids[viewportRow];
+    hit.nodeId = provider.visibleNodeIds[viewportRow];
     return hit;
 }
 
@@ -103,18 +103,18 @@ RegionHit hitTest(SessionSnapshot const& snapshot, int column, int row) {
     // The side panel and its gutter occupy the leftmost columns, disjoint from
     // the editor/palette pane.
     if (shell.panel && contains(*shell.panel, column, row)) {
-        return panelHit(snapshot, *shell.panel, shell.panel_scrollbar, column,
+        return panelHit(snapshot, *shell.panel, shell.panelScrollbar, column,
                          row);
     }
 
     // The tab bar sits above the editor pane (disjoint from the panel and the
     // pane content), so a tab click resolves here even while the palette
     // overlays the pane below.
-    for (auto const& tab : shell.tab_hits) {
+    for (auto const& tab : shell.tabHits) {
         if (contains(tab.rect, column, row)) {
             RegionHit hit;
             hit.region = HitRegion::Tab;
-            hit.tab_index = tab.index;
+            hit.tabIndex = tab.index;
             return hit;
         }
     }
@@ -127,7 +127,7 @@ RegionHit hitTest(SessionSnapshot const& snapshot, int column, int row) {
         // A pane cell not on a palette row or its gutter is inert while the
         // palette is open (the document is not interactive underneath).
         if (contains(shell.palette->rect, column, row) ||
-            contains(shell.palette->scrollbar_rect, column, row)) {
+            contains(shell.palette->scrollbarRect, column, row)) {
             return {};
         }
     }

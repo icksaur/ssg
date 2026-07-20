@@ -223,17 +223,17 @@ public:
             auto ch = static_cast<std::uint8_t>(i * 16);
             theme.palette[i] = ssg::SrgbColor::fromSerializedChannels(
                 ch, static_cast<std::uint8_t>(255 - ch), ch);
-            if (i < theme.semantic_indices.size())
-                theme.semantic_indices[i] = static_cast<std::uint8_t>(i);
-            if (i < theme.syntax_indices.size())
-                theme.syntax_indices[i] = static_cast<std::uint8_t>(i);
+            if (i < theme.semanticIndices.size())
+                theme.semanticIndices[i] = static_cast<std::uint8_t>(i);
+            if (i < theme.syntaxIndices.size())
+                theme.syntaxIndices[i] = static_cast<std::uint8_t>(i);
         }
 
         ssg::ShellViewState shell;
         shell.viewport = {80, 24};
         shell.header = ssg::Rect{0, 0, 80, 1};
         shell.footer = ssg::Rect{0, 23, 80, 1};
-        shell.tab_bar = ssg::Rect{18, 1, 62, 1};
+        shell.tabBar = ssg::Rect{18, 1, 62, 1};
         shell.panel = ssg::Rect{0, 1, 18, 22};
         shell.prompt = state_.prompt_open
                            ? std::optional<ssg::Rect>{ssg::Rect{18, 2, 61, 1}}
@@ -241,7 +241,7 @@ public:
         shell.panes.push_back(
             {ssg::PaneId{1}, {18, 2, 62, 21}, {18, 2, 61, 21},
              {79, 2, 1, 21}});
-        shell.accessibility_nodes = {
+        shell.accessibilityNodes = {
             {ssg::ShellNodeKind::Header, "header", "Workspace /fixture",
              *shell.header, ssg::SemanticRole::Header},
             {ssg::ShellNodeKind::HeaderField, "path",
@@ -251,7 +251,7 @@ public:
              ssg::SemanticRole::Footer},
             {ssg::ShellNodeKind::FooterAction, "reopen", "Reopen closed tab",
              *shell.footer, ssg::SemanticRole::StatusInfo},
-            {ssg::ShellNodeKind::TabBar, "tabs", "Open tabs", *shell.tab_bar,
+            {ssg::ShellNodeKind::TabBar, "tabs", "Open tabs", *shell.tabBar,
              ssg::SemanticRole::TabActive},
             {ssg::ShellNodeKind::Pane, "pane-1", "Editor pane",
              shell.panes.front().content, ssg::SemanticRole::Background},
@@ -259,12 +259,12 @@ public:
              shell.panes.front().scrollbar, ssg::SemanticRole::ScrollbarThumb},
         };
         if (state_.prompt_open) {
-            shell.accessibility_nodes.push_back(
+            shell.accessibilityNodes.push_back(
                 {ssg::ShellNodeKind::PromptReservation, "prompt",
                  "Open a workspace path", *shell.prompt,
                  ssg::SemanticRole::Prompt});
         }
-        shell.accessibility_nodes.push_back(
+        shell.accessibilityNodes.push_back(
             {ssg::ShellNodeKind::FooterField, "wrap",
              state_.word_wrap ? "Word wrap on" : "Word wrap off", *shell.footer,
              ssg::SemanticRole::Footer});
@@ -362,7 +362,7 @@ public:
                                   ssg::ClientId clientId) override {
         auto attached = scenario_.session->attachedClient(clientId);
         if (!attached) throw std::logic_error{"snapshot for detached client"};
-        return scenario_.snapshot(attached->principal, attached->view_id);
+        return scenario_.snapshot(attached->principal, attached->viewId);
     }
 
     void clipboardResponse(ssg::SessionId const&, ssg::ClientId,
@@ -478,12 +478,12 @@ TEST(directApiLoopbackWebsocketTuiCanonicalStateMatchesPerStep) {
 
 class ConcurrentFixtureModel {
 public:
-    ConcurrentFixtureModel() : follow_model_{{.queue_capacity = 4}} {}
+    ConcurrentFixtureModel() : followModel_{{.queueCapacity = 4}} {}
 
     void registerClient(ssg::ClientId client,
                          ssg::ViewportDimensions dims) {
         std::lock_guard lock{mutex_};
-        (void)follow_model_.attachClient(client, dims);
+        (void)followModel_.attachClient(client, dims);
     }
 
     ssg::CommandHandlerResult apply(std::string_view id,
@@ -494,17 +494,17 @@ public:
         if (id == "view.scroll_lines") {
             auto rows =
                 std::any_cast<ssg::ScrollLinesArguments const&>(payload).rows;
-            per_client_row_[client] = static_cast<std::uint32_t>(
+            perClientRow_[client] = static_cast<std::uint32_t>(
                 std::clamp<std::int64_t>(
-                    static_cast<std::int64_t>(per_client_row_[client]) + rows,
+                    static_cast<std::int64_t>(perClientRow_[client]) + rows,
                     0, 80));
-            (void)follow_model_.applyNavigation(
+            (void)followModel_.applyNavigation(
                 {client, ssg::NavigationClass::User, ssg::PaneId{1},
-                 ssg::FollowScrollOffset{per_client_row_[client], 0}});
+                 ssg::FollowScrollOffset{perClientRow_[client], 0}});
         } else if (id == "follow_edits.pause") {
-            (void)follow_model_.pause();
+            (void)followModel_.pause();
         } else if (id == "follow_edits.resume") {
-            (void)follow_model_.resume(current_diff_);
+            (void)followModel_.resume(currentDiff_);
         }
         return ssg::CommandHandlerResult::success();
     }
@@ -516,26 +516,26 @@ public:
         ssg::DiffFileView file{ssg::DiffFileId{fileId}};
         file.path = std::move(path);
         file.hunks.push_back(
-            {.baseline_start = 10,
-             .target_start = 10,
-             .baseline_lines = {"old line\n"},
-             .target_lines = {"new line\n"}});
-        current_diff_.revision = sourceRev;
-        current_diff_.files.push_back(file);
-        (void)follow_model_.acceptExternalChange(
-            current_diff_.files.back(), sourceRev);
+            {.baselineStart = 10,
+             .targetStart = 10,
+             .baselineLines = {"old line\n"},
+             .targetLines = {"new line\n"}});
+        currentDiff_.revision = sourceRev;
+        currentDiff_.files.push_back(file);
+        (void)followModel_.acceptExternalChange(
+            currentDiff_.files.back(), sourceRev);
     }
 
     ssg::FollowEditsViewState followViewState() const {
         std::lock_guard lock{mutex_};
-        return follow_model_.viewState();
+        return followModel_.viewState();
     }
 
     ssg::SessionSnapshotSections sections(ssg::Revision revision,
                                           ssg::ClientId client) const {
         std::lock_guard lock{mutex_};
-        auto firstRow = per_client_row_.count(client)
-                             ? per_client_row_.at(client)
+        auto firstRow = perClientRow_.count(client)
+                             ? perClientRow_.at(client)
                              : std::uint32_t{0};
         ssg::DocumentPosition const pos{
             ssg::ByteOffset{0}, ssg::LineIndex{0}, ssg::CellIndex{0}};
@@ -560,7 +560,7 @@ public:
             {{}, std::nullopt},
             {revision, {}},
             {revision, {}},
-            follow_model_.viewState(),
+            followModel_.viewState(),
             {ssg::TreeRevision{revision.value()}, {}},
             ssg::plainTextSyntaxViewState(
                 revision, ssg::LanguageId{"plain"}, "concurrent", 4),
@@ -573,8 +573,8 @@ public:
 
     ssg::ViewportViewState viewport(ssg::ClientId client) const {
         std::lock_guard lock{mutex_};
-        auto firstRow = per_client_row_.count(client)
-                             ? per_client_row_.at(client)
+        auto firstRow = perClientRow_.count(client)
+                             ? perClientRow_.at(client)
                              : std::uint32_t{0};
         return {ssg::ViewportDimensions{80, 20}, firstRow, 0, 100, {},
                 {{0, 0, 0, ssg::CellIndex{0}, 0, 1}},
@@ -583,9 +583,9 @@ public:
 
 private:
     mutable std::mutex mutex_;
-    ssg::FollowEditsModel follow_model_;
-    ssg::DiffViewState current_diff_;
-    std::map<ssg::ClientId, std::uint32_t> per_client_row_;
+    ssg::FollowEditsModel followModel_;
+    ssg::DiffViewState currentDiff_;
+    std::map<ssg::ClientId, std::uint32_t> perClientRow_;
 };
 
 struct ConcurrentScenario {
@@ -631,7 +631,7 @@ public:
                                   ssg::ClientId clientId) override {
         auto attached = scenario_.session->attachedClient(clientId);
         if (!attached) throw std::logic_error{"snapshot for detached client"};
-        return scenario_.snapshot(attached->principal, attached->view_id);
+        return scenario_.snapshot(attached->principal, attached->viewId);
     }
 
     void clipboardResponse(ssg::SessionId const&, ssg::ClientId,
@@ -707,8 +707,8 @@ TEST(concurrentTuiAndWebsocketClientsShareFollowInterruption) {
     bool foundDiff = false;
     if (followStateBefore.clients.size() == 2) {
         foundDiff =
-            followStateBefore.clients[0].offset.first_row !=
-            followStateBefore.clients[1].offset.first_row;
+            followStateBefore.clients[0].offset.firstRow !=
+            followStateBefore.clients[1].offset.firstRow;
     }
     // Viewport-independent: per-client offsets diverged from independent navigation.
     ASSERT_TRUE(foundDiff);
@@ -717,7 +717,7 @@ TEST(concurrentTuiAndWebsocketClientsShareFollowInterruption) {
     // with NavigationClass::user transitions the shared FollowEditsModel to paused).
     auto directSnapAfterScroll =
         scenario.snapshot(directPrincipal, ssg::ViewId{41});
-    ASSERT_EQ(directSnapAfterScroll.sections().follow_edits.mode,
+    ASSERT_EQ(directSnapAfterScroll.sections().followEdits.mode,
               ssg::FollowMode::Paused);
 
     // Accept changes to two watched files while paused; resume must choose the
@@ -731,7 +731,7 @@ TEST(concurrentTuiAndWebsocketClientsShareFollowInterruption) {
 
     auto queuedState = scenario.model.followViewState();
     ASSERT_EQ(queuedState.mode, ssg::FollowMode::Paused);
-    ASSERT_EQ(queuedState.queued_targets.size(), std::size_t{2});
+    ASSERT_EQ(queuedState.queuedTargets.size(), std::size_t{2});
 
     // Explicit pause dispatch is idempotent from the already-paused state.
     auto pauseResult = scenario.session->dispatch(
@@ -744,7 +744,7 @@ TEST(concurrentTuiAndWebsocketClientsShareFollowInterruption) {
     // Direct snapshot confirms paused.
     auto directSnapPaused =
         scenario.snapshot(directPrincipal, ssg::ViewId{41});
-    ASSERT_EQ(directSnapPaused.sections().follow_edits.mode,
+    ASSERT_EQ(directSnapPaused.sections().followEdits.mode,
               ssg::FollowMode::Paused);
 
     // WebSocket client resumes follow: shared state transitions both clients.
@@ -758,20 +758,20 @@ TEST(concurrentTuiAndWebsocketClientsShareFollowInterruption) {
     // Both clients now see following: the global mode is shared across paths.
     auto directSnapResumed =
         scenario.snapshot(directPrincipal, ssg::ViewId{41});
-    ASSERT_EQ(directSnapResumed.sections().follow_edits.mode,
+    ASSERT_EQ(directSnapResumed.sections().followEdits.mode,
               ssg::FollowMode::Following);
     auto followStateAfter = scenario.model.followViewState();
     ASSERT_EQ(followStateAfter.mode, ssg::FollowMode::Following);
-    ASSERT_TRUE(followStateAfter.active_target.has_value());
-    ASSERT_EQ(followStateAfter.active_target->id,
+    ASSERT_TRUE(followStateAfter.activeTarget.has_value());
+    ASSERT_EQ(followStateAfter.activeTarget->id,
               ssg::DiffFileId{"watched-file-b"});
 
     // After resume+activate, both clients jump to the same hunk position
     // (designed behavior: activate() resets offsets to the newest hunk line).
     // The independence property was already verified in follow_state_before above.
     if (followStateAfter.clients.size() == 2) {
-        ASSERT_EQ(followStateAfter.clients[0].offset.first_row,
-                  followStateAfter.clients[1].offset.first_row);
+        ASSERT_EQ(followStateAfter.clients[0].offset.firstRow,
+                  followStateAfter.clients[1].offset.firstRow);
     }
 
     concServer.stop();

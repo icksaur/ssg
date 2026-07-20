@@ -17,8 +17,8 @@
 namespace ssg {
 
 struct RecoveryConfig {
-    std::size_t maximum_records = 32;
-    std::uintmax_t maximum_bytes = 64U * 1024U * 1024U;
+    std::size_t maximumRecords = 32;
+    std::uintmax_t maximumBytes = 64U * 1024U * 1024U;
 };
 
 enum class RecoveryRecordKind : std::uint8_t {
@@ -46,9 +46,9 @@ private:
 struct RecoveryRecord {
     RecoveryRecordId id;
     RecoveryRecordKind kind;
-    std::uintmax_t stored_bytes;
+    std::uintmax_t storedBytes;
     std::optional<JournalDocumentKey> document;
-    std::vector<std::filesystem::path> affected_paths;
+    std::vector<std::filesystem::path> affectedPaths;
 
     friend bool operator==(const RecoveryRecord&, const RecoveryRecord&) =
         default;
@@ -69,7 +69,7 @@ enum class RecoveryErrorCode : std::uint8_t {
 struct RecoveryError {
     RecoveryErrorCode code;
     std::string message;
-    std::string rollback_failure;
+    std::string rollbackFailure;
 
     friend bool operator==(const RecoveryError&, const RecoveryError&) =
         default;

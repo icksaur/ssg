@@ -1278,7 +1278,7 @@ enum class GB11State : uint8_t { None, ExtPic, Zwj };
 
 struct DecodeResult {
     uint32_t codepoint; // Decoded code point (0 when invalid)
-    uint32_t byte_len; // Bytes this result consumed (always >= 1)
+    uint32_t byteLen; // Bytes this result consumed (always >= 1)
     bool valid; // True when a well-formed sequence was decoded
 };
 
@@ -1343,7 +1343,7 @@ CellRun computeCellRun(std::string_view lineUtf8, int tabWidth) {
     ++gCellRunCalls;
 
     CellRun result;
-    result.total_cells = 0;
+    result.totalCells = 0;
 
     const auto* data = reinterpret_cast<const uint8_t*>(lineUtf8.data());
     const size_t end  = lineUtf8.size();
@@ -1360,14 +1360,14 @@ CellRun computeCellRun(std::string_view lineUtf8, int tabWidth) {
                 static_cast<uint32_t>(clusterStart), 1u, 1u,
                 CellKind::InvalidUtf8
             });
-            result.total_cells += 1;
+            result.totalCells += 1;
             curCell            += 1;
             pos                 += 1;
             continue;
         }
 
         const uint32_t cp = base.codepoint;
-        pos += base.byte_len;
+        pos += base.byteLen;
 
         // Tab: advance to next tab stop, minimum 1 column
         if (cp == 0x09u) {
@@ -1376,7 +1376,7 @@ CellRun computeCellRun(std::string_view lineUtf8, int tabWidth) {
             result.spans.push_back({
                 static_cast<uint32_t>(clusterStart), 1u, advance, CellKind::Tab
             });
-            result.total_cells += advance;
+            result.totalCells += advance;
             curCell            += advance;
             continue; // Tab is never extended
         }
@@ -1391,10 +1391,10 @@ CellRun computeCellRun(std::string_view lineUtf8, int tabWidth) {
             const uint32_t ctrlWidth = (cp <= 0x009Fu) ? 1u : 0u;
             result.spans.push_back({
                 static_cast<uint32_t>(clusterStart),
-                static_cast<uint32_t>(base.byte_len),
+                static_cast<uint32_t>(base.byteLen),
                 ctrlWidth, CellKind::Control
             });
-            result.total_cells += ctrlWidth;
+            result.totalCells += ctrlWidth;
             curCell            += ctrlWidth;
             continue; // Control chars are never extended
         }
@@ -1426,7 +1426,7 @@ CellRun computeCellRun(std::string_view lineUtf8, int tabWidth) {
         // Extend/ZWJ/SpacingMark absorptions reset this to GcbProp::Other.
         GcbProp lastGcb = gcb;
 
-        uint32_t clusterLen = base.byte_len;
+        uint32_t clusterLen = base.byteLen;
         GB11State gb11 = isExtendedPictographic(cp)
             ? GB11State::ExtPic
             : GB11State::None;
@@ -1498,8 +1498,8 @@ CellRun computeCellRun(std::string_view lineUtf8, int tabWidth) {
             }
 
             if (!extends) break;
-            clusterLen += ext.byte_len;
-            pos         += ext.byte_len;
+            clusterLen += ext.byteLen;
+            pos         += ext.byteLen;
         }
 
         // VS-16 emoji presentation sequence upgrade:
@@ -1516,7 +1516,7 @@ CellRun computeCellRun(std::string_view lineUtf8, int tabWidth) {
             baseWidth,
             kind
         });
-        result.total_cells += baseWidth;
+        result.totalCells += baseWidth;
         curCell            += baseWidth;
     }
 

@@ -14,14 +14,14 @@ namespace ssg {
 
 struct EditorRuntimeConfig {
     std::filesystem::path cwd;
-    std::filesystem::path scratch_root;
-    std::filesystem::path recovery_root;
+    std::filesystem::path scratchRoot;
+    std::filesystem::path recoveryRoot;
     // M10 fast startup: when true, deferrable enrichment (workspace tree scan,
     // syntax highlighting) is NOT run during construction or the initial
     // file.open; it runs when the client calls prime_deferred() after drawing its
     // first frame.  Default false preserves the eager, fully-populated behavior
     // every non-startup caller (tests, in-process embedders) already relies on.
-    bool defer_enrichment = false;
+    bool deferEnrichment = false;
 };
 
 class EditorRuntime;
@@ -63,8 +63,8 @@ public:
     // so the startup oracle can assert deferred enrichment does not run before
     // prime_deferred() (doc/spec-fast-startup.md).
     struct DeferredWorkCounts {
-        std::uint64_t syntax_runs = 0;
-        std::uint64_t tree_scans = 0;
+        std::uint64_t syntaxRuns = 0;
+        std::uint64_t treeScans = 0;
     };
     [[nodiscard]] DeferredWorkCounts deferredWorkCounts() const;
     [[nodiscard]] std::optional<SessionSnapshot> snapshot(

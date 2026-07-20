@@ -109,14 +109,14 @@ PaletteReport derivePaletteReport(
                       : std::optional<std::uint32_t>{
                             static_cast<std::uint32_t>(window.selected)};
     auto const scroll = computeListScrollView(
-        static_cast<std::uint32_t>(order.size()), window.pane_rows,
-        window.first_visible, selected,
+        static_cast<std::uint32_t>(order.size()), window.paneRows,
+        window.firstVisible, selected,
         /*keep_selection_visible=*/selectionClamped);
-    window.first_visible = scroll.first_visible;
-    report.first_visible = scroll.first_visible;
+    window.firstVisible = scroll.firstVisible;
+    report.firstVisible = scroll.firstVisible;
     report.scrollbar = scroll.scrollbar;
-    for (std::uint32_t row = 0; row < scroll.visible_count; ++row) {
-        report.rows.push_back(candidates[order[scroll.first_visible + row]]);
+    for (std::uint32_t row = 0; row < scroll.visibleCount; ++row) {
+        report.rows.push_back(candidates[order[scroll.firstVisible + row]]);
     }
     report.selected = selected;
     return report;

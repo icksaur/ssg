@@ -56,9 +56,9 @@ enum class CellKind : uint8_t {
 
 // One grapheme cluster mapped to its display columns.
 struct CellSpan {
-    uint32_t byte_offset;  // Start byte offset within the input line
-    uint32_t byte_len;     // Byte length of this grapheme cluster (>= 1)
-    uint32_t cell_width;   // Display columns consumed by this cluster:
+    uint32_t byteOffset;  // Start byte offset within the input line
+    uint32_t byteLen;     // Byte length of this grapheme cluster (>= 1)
+    uint32_t cellWidth;   // Display columns consumed by this cluster:
                            //   0  for CellKind::combining
                            //   1  for narrow text, control, invalid_utf8
                            //   2  for wide text
@@ -69,7 +69,7 @@ struct CellSpan {
 // Cell run for one logical line.  Contains one CellSpan per grapheme cluster.
 struct CellRun {
     std::vector<CellSpan> spans;
-    uint32_t total_cells;  // Sum of all span.cell_width values
+    uint32_t totalCells;  // Sum of all span.cell_width values
 };
 
 // Compute the cell run for one logical line of UTF-8 text.

@@ -76,7 +76,7 @@ enum class NodeKind {
 };
 
 struct TreeNode {
-    std::string relative_path;
+    std::string relativePath;
     NodeKind kind;
     std::string value;
 
@@ -118,7 +118,7 @@ std::vector<TreeNode> snapshotTree(const std::filesystem::path& root) {
     }
     std::sort(result.begin(), result.end(),
               [](const TreeNode& left, const TreeNode& right) {
-                  return left.relative_path < right.relative_path;
+                  return left.relativePath < right.relativePath;
               });
     return result;
 }
@@ -148,11 +148,11 @@ ssg::RecoveryConfig recoveryConfig(
 
 ssg::ScratchStoreConfig scratchConfig() {
     ssg::ScratchStoreConfig result;
-    result.maximum_bytes = std::numeric_limits<std::uintmax_t>::max();
-    result.maximum_age = std::chrono::hours{24 * 365};
-    result.compaction_threshold_bytes =
+    result.maximumBytes = std::numeric_limits<std::uintmax_t>::max();
+    result.maximumAge = std::chrono::hours{24 * 365};
+    result.compactionThresholdBytes =
         std::numeric_limits<std::uintmax_t>::max();
-    result.durability_target = 100ms;
+    result.durabilityTarget = 100ms;
     return result;
 }
 
@@ -352,7 +352,7 @@ TEST(renameRoundTripRestoresBothPathsAndSourceIdentity) {
     actions = ssg::RecoveryActions::create(
         temporary.path() / "recovery", recoveryConfig());
     const auto reconstructedRecords = actions.records();
-    ASSERT_EQ(reconstructedRecords.front().affected_paths,
+    ASSERT_EQ(reconstructedRecords.front().affectedPaths,
               (std::vector<std::filesystem::path>{source, destination}));
     ASSERT_TRUE(
         actions.restoreFilesystem(*renamed.compensation).accepted());
@@ -592,7 +592,7 @@ TEST(partialWorkspaceMutationFailureRollsBackToExactTree) {
 
     ASSERT_FALSE(replaced.accepted());
     ASSERT_EQ(replaced.error->code, ssg::RecoveryErrorCode::ActionFailed);
-    ASSERT_TRUE(replaced.error->rollback_failure.empty());
+    ASSERT_TRUE(replaced.error->rollbackFailure.empty());
     ASSERT_FALSE(replaced.compensation.has_value());
     ASSERT_EQ(snapshotTree(workspace), before);
     ASSERT_TRUE(actions.records().empty());
@@ -618,7 +618,7 @@ TEST(actionAndRollbackFailureRetainsRecordForSuccessfulRetry) {
     ASSERT_EQ(replaced.error->code,
               ssg::RecoveryErrorCode::ActionAndRollbackFailed);
     ASSERT_FALSE(replaced.error->message.empty());
-    ASSERT_FALSE(replaced.error->rollback_failure.empty());
+    ASSERT_FALSE(replaced.error->rollbackFailure.empty());
     ASSERT_TRUE(replaced.compensation.has_value());
     ASSERT_EQ(actions.records().size(), std::size_t{1});
 
@@ -913,7 +913,7 @@ TEST(byteBudgetEvictsOldestWhenNewRecordFitsAfterEviction) {
     ASSERT_TRUE(second.accepted());
     const auto initialRecords = actions.records();
     const auto twoRecordBudget =
-        initialRecords[0].stored_bytes + initialRecords[1].stored_bytes;
+        initialRecords[0].storedBytes + initialRecords[1].storedBytes;
     actions = ssg::RecoveryActions::create(
         recoveryRoot, recoveryConfig(8, twoRecordBudget));
 

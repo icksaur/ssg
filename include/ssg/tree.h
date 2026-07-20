@@ -55,14 +55,14 @@ struct TreeNodeCommand {
 
 struct TreeNode {
     TreeNodeId id;
-    std::optional<TreeNodeId> parent_id;
+    std::optional<TreeNodeId> parentId;
     std::string label;
     TreeNodeKind kind;
     std::optional<std::string> icon;
     std::vector<TreeNodeCommand> commands;
-    std::optional<GitTreeStatus> git_status;
-    std::optional<std::string> workspace_path;
-    std::optional<std::uint32_t> source_line;
+    std::optional<GitTreeStatus> gitStatus;
+    std::optional<std::string> workspacePath;
+    std::optional<std::uint32_t> sourceLine;
     bool expandable = false;
     bool operator==(const TreeNode&) const = default;
 };
@@ -72,31 +72,31 @@ public:
     TreeProviderSnapshot(TreeProviderId providerId, TreeProviderKind kind,
                          TreeRevision revision, std::vector<TreeNode> nodes);
 
-    const TreeProviderId& providerId() const noexcept { return provider_id_; }
+    const TreeProviderId& providerId() const noexcept { return providerId_; }
     TreeProviderKind kind() const noexcept { return kind_; }
     TreeRevision revision() const noexcept { return revision_; }
     const std::vector<TreeNode>& nodes() const noexcept { return nodes_; }
 
 private:
-    TreeProviderId provider_id_;
+    TreeProviderId providerId_;
     TreeProviderKind kind_;
     TreeRevision revision_;
     std::vector<TreeNode> nodes_;
 };
 
 struct GitTreeRecord {
-    std::string workspace_path;
+    std::string workspacePath;
     std::string label;
     GitTreeStatus status = GitTreeStatus::Modified;
     std::vector<TreeNodeCommand> commands;
 };
 
 struct SymbolTreeRecord {
-    std::string stable_key;
-    std::optional<std::string> parent_key;
+    std::string stableKey;
+    std::optional<std::string> parentKey;
     std::string label;
-    std::optional<std::string> workspace_path;
-    std::optional<std::uint32_t> source_line;
+    std::optional<std::string> workspacePath;
+    std::optional<std::uint32_t> sourceLine;
     std::vector<TreeNodeCommand> commands;
 };
 
@@ -139,7 +139,7 @@ struct TreeNodeView {
 };
 
 struct TreeProviderView {
-    TreeProviderId provider_id;
+    TreeProviderId providerId;
     TreeProviderKind kind;
     std::vector<TreeNodeView> nodes;
     std::optional<TreeNodeId> selected;
@@ -149,9 +149,9 @@ struct TreeProviderView {
     // is the bounded viewport_row -> node id hit map for the visible window only
     // (empty when the panel is hidden). `nodes` still carries the full expanded
     // list; render and hit-testing window it with `first_visible`.
-    std::uint32_t first_visible = 0;
+    std::uint32_t firstVisible = 0;
     ScrollbarMetrics scrollbar{};
-    std::vector<TreeNodeId> visible_node_ids;
+    std::vector<TreeNodeId> visibleNodeIds;
     bool operator==(const TreeProviderView&) const = default;
 };
 
@@ -162,9 +162,9 @@ struct TreeViewState {
 };
 
 struct TreeCommandInvocation {
-    TreeProviderId provider_id;
-    TreeNodeId node_id;
-    std::string command_id;
+    TreeProviderId providerId;
+    TreeNodeId nodeId;
+    std::string commandId;
     bool operator==(const TreeCommandInvocation&) const = default;
 };
 
@@ -172,7 +172,7 @@ struct TreeCommandInvocation {
 // A dedicated payload (rather than the TreeCommandInvocation triple) keeps a
 // click's argument minimal -- a pointer click needs only the node id.
 struct TreeSelectArguments {
-    TreeNodeId node_id;
+    TreeNodeId nodeId;
     bool operator==(const TreeSelectArguments&) const = default;
 };
 
@@ -215,26 +215,26 @@ private:
 };
 
 struct TreeProviderDelta {
-    TreeProviderId provider_id;
+    TreeProviderId providerId;
     TreeProviderKind kind;
-    bool remove_provider = false;
+    bool removeProvider = false;
     std::size_t start = 0;
-    std::size_t erase_count = 0;
+    std::size_t eraseCount = 0;
     std::vector<TreeNodeView> insert;
     // Resolved scroll state carried so a delta reproduces the provider view even
     // when only the panel-height-resolved scroll state changed (e.g. showing the
     // panel) with no node edit or tree-revision bump.  Ignored for removals.
     std::optional<TreeNodeId> selected;
-    std::uint32_t first_visible = 0;
+    std::uint32_t firstVisible = 0;
     ScrollbarMetrics scrollbar{};
-    std::vector<TreeNodeId> visible_node_ids;
+    std::vector<TreeNodeId> visibleNodeIds;
     bool operator==(const TreeProviderDelta&) const = default;
 };
 
 struct TreeDelta {
-    TreeRevision base_revision{0};
+    TreeRevision baseRevision{0};
     TreeRevision revision{0};
-    bool snapshot_required = false;
+    bool snapshotRequired = false;
     std::vector<TreeProviderDelta> providers;
 
     std::size_t operationCount() const noexcept;

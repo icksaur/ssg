@@ -133,7 +133,7 @@ TEST(requiredCatalogEqualsAssembledRegistryExactly) {
     for (auto const& descriptor : descriptors) {
         ASSERT_EQ(descriptor.effect, ssg::CommandEffect::Mutation);
         std::vector<std::string> actualCapabilities;
-        for (auto const& capability : descriptor.required_capabilities) {
+        for (auto const& capability : descriptor.requiredCapabilities) {
             actualCapabilities.emplace_back(capability.value());
         }
         ASSERT_EQ(actualCapabilities, expectedCapabilities.at(descriptor.id));
@@ -264,19 +264,19 @@ TEST(perClientCapabilitiesAndViewportsAreIsolated) {
 
     ASSERT_EQ(first.client().capabilities.size(), std::size_t{1});
     ASSERT_TRUE(second.client().capabilities.empty());
-    ASSERT_EQ(first.client().viewport.first_visual_row, std::uint32_t{2});
-    ASSERT_EQ(second.client().viewport.first_visual_row, std::uint32_t{7});
+    ASSERT_EQ(first.client().viewport.firstVisualRow, std::uint32_t{2});
+    ASSERT_EQ(second.client().viewport.firstVisualRow, std::uint32_t{7});
     ASSERT_EQ(first.sections(), second.sections());
 }
 
 TEST(shellDeltaDetectsAPanelScrollbarOnlyChange) {
     auto oldSections = sections(ssg::Revision{4}, "same");
     oldSections.shell.panel = ssg::Rect{0, 1, 24, 10};
-    oldSections.shell.panel_scrollbar = ssg::Rect{23, 2, 1, 9};
+    oldSections.shell.panelScrollbar = ssg::Rect{23, 2, 1, 9};
     auto newSections = oldSections;
     // Only the gutter geometry differs (e.g. a taller panel): the shell delta
     // must not treat this as unchanged.
-    newSections.shell.panel_scrollbar = ssg::Rect{23, 2, 1, 12};
+    newSections.shell.panelScrollbar = ssg::Rect{23, 2, 1, 12};
 
     auto before = ssg::assembleSessionSnapshot(
         ssg::Revision{4}, {},
@@ -297,11 +297,11 @@ TEST(shellDeltaDetectsAPanelScrollbarOnlyChange) {
 
 TEST(shellDeltaDetectsATabHitOnlyChange) {
     auto oldSections = sections(ssg::Revision{4}, "same");
-    oldSections.shell.tab_hits = {ssg::TabHit{ssg::Rect{24, 0, 10, 1}, 0}};
+    oldSections.shell.tabHits = {ssg::TabHit{ssg::Rect{24, 0, 10, 1}, 0}};
     auto newSections = oldSections;
     // A second tab opens: only the tab hit map differs. The shell delta must not
     // treat this as unchanged (or pointer hit-testing would target a stale map).
-    newSections.shell.tab_hits = {ssg::TabHit{ssg::Rect{24, 0, 10, 1}, 0},
+    newSections.shell.tabHits = {ssg::TabHit{ssg::Rect{24, 0, 10, 1}, 0},
                                    ssg::TabHit{ssg::Rect{34, 0, 8, 1}, 1}};
 
     auto before = ssg::assembleSessionSnapshot(

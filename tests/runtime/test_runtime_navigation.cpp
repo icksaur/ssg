@@ -34,7 +34,7 @@ TEST(searchTreeDiffAndFollowSectionsUseRuntimeState) {
     ASSERT_TRUE(snapshot.has_value());
     ASSERT_FALSE(snapshot->sections().search.results.empty());
     ASSERT_FALSE(snapshot->sections().tree.providers.empty());
-    ASSERT_EQ(snapshot->sections().follow_edits.mode, ssg::FollowMode::Paused);
+    ASSERT_EQ(snapshot->sections().followEdits.mode, ssg::FollowMode::Paused);
 }
 
 TEST(paletteOpenEntersPromptFocusAndPublishesCandidates) {
@@ -156,12 +156,12 @@ TEST(treeScrollsToKeepSelectionVisibleInAShortPanel) {
         if (!snap) return;
         auto const& p = snap->sections().tree.providers.front();
         ASSERT_TRUE(p.nodes.size() >= 40);
-        ASSERT_EQ(p.first_visible, std::uint32_t{0});
-        ASSERT_TRUE(p.scrollbar.maximum_first_row > 0);          // scrollable
-        ASSERT_TRUE(p.scrollbar.thumb_size < p.scrollbar.viewport_rows);
-        ASSERT_EQ(p.visible_node_ids.size(),
-                  std::size_t{p.scrollbar.viewport_rows});       // window bound
-        ASSERT_EQ(p.visible_node_ids.front(), p.nodes.front().node.id);
+        ASSERT_EQ(p.firstVisible, std::uint32_t{0});
+        ASSERT_TRUE(p.scrollbar.maximumFirstRow > 0);          // scrollable
+        ASSERT_TRUE(p.scrollbar.thumbSize < p.scrollbar.viewportRows);
+        ASSERT_EQ(p.visibleNodeIds.size(),
+                  std::size_t{p.scrollbar.viewportRows});       // window bound
+        ASSERT_EQ(p.visibleNodeIds.front(), p.nodes.front().node.id);
     }
 
     // Move the selection to the bottom: the window scrolls to keep it shown.
@@ -181,15 +181,15 @@ TEST(treeScrollsToKeepSelectionVisibleInAShortPanel) {
             if (p.nodes[i].node.id == *p.selected) { selIndex = i; break; }
         }
         ASSERT_TRUE(selIndex.has_value());
-        ASSERT_TRUE(p.first_visible > 0);
-        ASSERT_TRUE(*selIndex >= p.first_visible &&
-                    *selIndex < p.first_visible + p.visible_node_ids.size());
+        ASSERT_TRUE(p.firstVisible > 0);
+        ASSERT_TRUE(*selIndex >= p.firstVisible &&
+                    *selIndex < p.firstVisible + p.visibleNodeIds.size());
         // The hit map maps each viewport row to the correct on-screen node id.
-        for (std::size_t row = 0; row < p.visible_node_ids.size(); ++row) {
-            ASSERT_EQ(p.visible_node_ids[row],
-                      p.nodes[p.first_visible + row].node.id);
+        for (std::size_t row = 0; row < p.visibleNodeIds.size(); ++row) {
+            ASSERT_EQ(p.visibleNodeIds[row],
+                      p.nodes[p.firstVisible + row].node.id);
         }
-        deepFirst = p.first_visible;
+        deepFirst = p.firstVisible;
     }
     ASSERT_TRUE(deepFirst > 0);
 
@@ -201,7 +201,7 @@ TEST(treeScrollsToKeepSelectionVisibleInAShortPanel) {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
         ASSERT_TRUE(snap.has_value());
         if (!snap) return;
-        ASSERT_EQ(snap->sections().tree.providers.front().first_visible, std::uint32_t{0});
+        ASSERT_EQ(snap->sections().tree.providers.front().firstVisible, std::uint32_t{0});
     }
     std::filesystem::remove_all(root);
 }
@@ -296,7 +296,7 @@ TEST(treeSelectFocusesThePanelAndTheClickPairNetsExpectedFocus) {
     std::optional<ssg::TreeNodeId> fileId;
     for (auto const& view : snap->sections().tree.providers.front().nodes) {
         if (view.node.expandable && !dirId) dirId = view.node.id;
-        if (!view.node.expandable && view.node.workspace_path && !fileId) fileId = view.node.id;
+        if (!view.node.expandable && view.node.workspacePath && !fileId) fileId = view.node.id;
     }
     ASSERT_TRUE(dirId.has_value());
     ASSERT_TRUE(fileId.has_value());
@@ -348,8 +348,8 @@ TEST(treeScrollMovesTheViewportWithoutMovingTheSelection) {
     ASSERT_TRUE(baseline.has_value());
     if (!baseline) return;
     auto const& p0 = baseline->sections().tree.providers.front();
-    ASSERT_EQ(p0.first_visible, std::uint32_t{0});
-    ASSERT_TRUE(p0.scrollbar.maximum_first_row > 0);
+    ASSERT_EQ(p0.firstVisible, std::uint32_t{0});
+    ASSERT_TRUE(p0.scrollbar.maximumFirstRow > 0);
     auto const selectedBefore = p0.selected;
 
     // Wheel down: the viewport offset advances, but the selection does not move.
@@ -360,7 +360,7 @@ TEST(treeScrollMovesTheViewportWithoutMovingTheSelection) {
     ASSERT_TRUE(scrolled.has_value());
     if (!scrolled) return;
     auto const& p1 = scrolled->sections().tree.providers.front();
-    ASSERT_EQ(p1.first_visible, std::uint32_t{3});
+    ASSERT_EQ(p1.firstVisible, std::uint32_t{3});
     ASSERT_EQ(p1.selected, selectedBefore);  // selection unchanged
 
     // Wheel up past the top clamps at 0.
@@ -370,7 +370,7 @@ TEST(treeScrollMovesTheViewportWithoutMovingTheSelection) {
     auto topped = runtime.snapshot(ssg::ClientId{1}, dims);
     ASSERT_TRUE(topped.has_value());
     if (!topped) return;
-    ASSERT_EQ(topped->sections().tree.providers.front().first_visible, std::uint32_t{0});
+    ASSERT_EQ(topped->sections().tree.providers.front().firstVisible, std::uint32_t{0});
 
     // Wheel down past the bottom clamps at maximum_first_row.
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
@@ -380,7 +380,7 @@ TEST(treeScrollMovesTheViewportWithoutMovingTheSelection) {
     ASSERT_TRUE(bottomed.has_value());
     if (!bottomed) return;
     auto const& p3 = bottomed->sections().tree.providers.front();
-    ASSERT_EQ(p3.first_visible, p3.scrollbar.maximum_first_row);
+    ASSERT_EQ(p3.firstVisible, p3.scrollbar.maximumFirstRow);
 
     // A missing payload is rejected.
     ASSERT_FALSE(runtime.dispatch(ssg::ClientId{1},
@@ -419,7 +419,7 @@ TEST(wordWrapOffRevealsCaretHorizontally) {
     auto primed = runtime.snapshot(ssg::ClientId{1}, dims);
     ASSERT_TRUE(primed.has_value());
     if (!primed) return;
-    ASSERT_EQ(primed->client().viewport.first_visual_column, std::uint32_t{0});
+    ASSERT_EQ(primed->client().viewport.firstVisualColumn, std::uint32_t{0});
 
     // Move the caret to the end of the long line: it is past the pane width, so
     // the viewport scrolls horizontally to keep it visible.
@@ -429,7 +429,7 @@ TEST(wordWrapOffRevealsCaretHorizontally) {
     auto scrolled = runtime.snapshot(ssg::ClientId{1}, dims);
     ASSERT_TRUE(scrolled.has_value());
     if (!scrolled) return;
-    auto const offset = scrolled->client().viewport.first_visual_column;
+    auto const offset = scrolled->client().viewport.firstVisualColumn;
     ASSERT_TRUE(offset > 0);
     // The caret's cell (60) is within the visible horizontal window.
     ASSERT_TRUE(60u >= offset);
@@ -442,7 +442,7 @@ TEST(wordWrapOffRevealsCaretHorizontally) {
     auto reset = runtime.snapshot(ssg::ClientId{1}, dims);
     ASSERT_TRUE(reset.has_value());
     if (!reset) return;
-    ASSERT_EQ(reset->client().viewport.first_visual_column, std::uint32_t{0});
+    ASSERT_EQ(reset->client().viewport.firstVisualColumn, std::uint32_t{0});
     std::filesystem::remove_all(root);
 }
 
@@ -477,10 +477,10 @@ TEST(wordWrapOnWrapsLongLinesOffClipsThem) {
     auto off = runtime.snapshot(ssg::ClientId{1}, dims);
     ASSERT_TRUE(off.has_value());
     if (!off) return;
-    ASSERT_EQ(off->client().viewport.total_visual_rows, std::uint32_t{3});
+    ASSERT_EQ(off->client().viewport.totalVisualRows, std::uint32_t{3});
     std::uint32_t offRowsForLine0 = 0;
-    for (auto const& row : off->client().viewport.visible_rows) {
-        if (row.logical_line == 0) ++offRowsForLine0;
+    for (auto const& row : off->client().viewport.visibleRows) {
+        if (row.logicalLine == 0) ++offRowsForLine0;
     }
     ASSERT_EQ(offRowsForLine0, std::uint32_t{1});  // clipped, not wrapped
 
@@ -492,10 +492,10 @@ TEST(wordWrapOnWrapsLongLinesOffClipsThem) {
     auto on = runtime.snapshot(ssg::ClientId{1}, dims);
     ASSERT_TRUE(on.has_value());
     if (!on) return;
-    ASSERT_TRUE(on->client().viewport.total_visual_rows > 3u);  // wrapped
+    ASSERT_TRUE(on->client().viewport.totalVisualRows > 3u);  // wrapped
     std::uint32_t onRowsForLine0 = 0;
-    for (auto const& row : on->client().viewport.visible_rows) {
-        if (row.logical_line == 0) ++onRowsForLine0;
+    for (auto const& row : on->client().viewport.visibleRows) {
+        if (row.logicalLine == 0) ++onRowsForLine0;
     }
     ASSERT_EQ(onRowsForLine0, std::uint32_t{3});  // 200 cells / 80 -> 3 rows
     // Wrapped lines never scroll horizontally.
@@ -505,7 +505,7 @@ TEST(wordWrapOnWrapsLongLinesOffClipsThem) {
     auto wrappedEnd = runtime.snapshot(ssg::ClientId{1}, dims);
     ASSERT_TRUE(wrappedEnd.has_value());
     if (!wrappedEnd) return;
-    ASSERT_EQ(wrappedEnd->client().viewport.first_visual_column, std::uint32_t{0});
+    ASSERT_EQ(wrappedEnd->client().viewport.firstVisualColumn, std::uint32_t{0});
     std::filesystem::remove_all(root);
 }
 

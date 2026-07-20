@@ -18,10 +18,10 @@ thread_local std::uint64_t gRenderSegmentationCalls = 0;
 
 std::uint8_t semanticIndex(ThemeSnapshot const& theme, SemanticRole role) {
     auto const roleIndex = static_cast<std::size_t>(role);
-    if (roleIndex >= theme.semantic_indices.size()) {
+    if (roleIndex >= theme.semanticIndices.size()) {
         throw std::invalid_argument{"grid contains an unknown semantic role"};
     }
-    auto const paletteIndex = theme.semantic_indices[roleIndex];
+    auto const paletteIndex = theme.semanticIndices[roleIndex];
     if (paletteIndex >= kThemePaletteSize) {
         throw std::invalid_argument{
             "semantic role references a color outside the 16-color palette"};
@@ -31,10 +31,10 @@ std::uint8_t semanticIndex(ThemeSnapshot const& theme, SemanticRole role) {
 
 std::uint8_t syntaxIndex(ThemeSnapshot const& theme, SyntaxScope scope) {
     auto const scopeIndex = static_cast<std::size_t>(scope);
-    if (scopeIndex >= theme.syntax_indices.size()) {
+    if (scopeIndex >= theme.syntaxIndices.size()) {
         throw std::invalid_argument{"grid contains an unknown syntax scope"};
     }
-    auto const paletteIndex = theme.syntax_indices[scopeIndex];
+    auto const paletteIndex = theme.syntaxIndices[scopeIndex];
     if (paletteIndex >= kThemePaletteSize) {
         throw std::invalid_argument{
             "syntax scope references a color outside the 16-color palette"};
@@ -67,7 +67,7 @@ std::string escaped(std::string_view text) {
 
 struct LogicalLine {
     std::string_view text;
-    std::uint64_t document_offset;
+    std::uint64_t documentOffset;
     CellRun cells;
 };
 
@@ -87,8 +87,8 @@ std::unordered_map<std::uint32_t, LogicalLine> visibleLogicalLines(
     std::unordered_set<std::uint32_t> referenced;
     std::uint32_t maxLine = 0;
     for (auto const& row : visibleRows) {
-        referenced.insert(row.logical_line);
-        maxLine = std::max(maxLine, row.logical_line);
+        referenced.insert(row.logicalLine);
+        maxLine = std::max(maxLine, row.logicalLine);
     }
     std::uint32_t index = 0;
     std::size_t begin = 0;
@@ -134,14 +134,14 @@ void paintText(CellGrid& grid, int x, int y, int right, std::string_view text,
     int column = x;
     bool truncated = false;
     for (auto const& span : run.spans) {
-        auto const width = std::max<std::uint32_t>(span.cell_width, 1);
+        auto const width = std::max<std::uint32_t>(span.cellWidth, 1);
         if (column + static_cast<int>(width) > right) {
             truncated = true;
             break;
         }
-        auto piece = std::string{text.substr(span.byte_offset, span.byte_len)};
+        auto piece = std::string{text.substr(span.byteOffset, span.byteLen)};
         if (span.kind == CellKind::Tab) {
-            piece.assign(span.cell_width, ' ');
+            piece.assign(span.cellWidth, ' ');
         } else if (span.kind == CellKind::Control ||
                    span.kind == CellKind::InvalidUtf8) {
             piece = "\xef\xbf\xbd";
@@ -161,7 +161,7 @@ void paintText(CellGrid& grid, int x, int y, int right, std::string_view text,
 void paintShellLeaves(CellGrid& grid, ShellViewState const& shell,
                         ThemeSnapshot const& theme, std::uint8_t background,
                         std::uint8_t panelBackground) {
-    for (auto const& node : shell.accessibility_nodes) {
+    for (auto const& node : shell.accessibilityNodes) {
         std::uint8_t nodeBackground = background;
         switch (node.kind) {
         case ShellNodeKind::PanelProvider:
@@ -193,7 +193,7 @@ void paintScrollGutter(CellGrid& grid, int x, int y, int height,
                          ThemeSnapshot const& theme, std::uint8_t background) {
     auto const track = semanticIndex(theme, SemanticRole::ScrollbarTrack);
     auto const thumb = semanticIndex(theme, SemanticRole::ScrollbarThumb);
-    bool const scrollable = metrics.maximum_first_row > 0;
+    bool const scrollable = metrics.maximumFirstRow > 0;
     for (int row = 0; row < height; ++row) {
         if (!scrollable) {
             put(grid, x, y + row, " ", track, background,
@@ -201,8 +201,8 @@ void paintScrollGutter(CellGrid& grid, int x, int y, int height,
             continue;
         }
         bool const isThumb =
-            row >= static_cast<int>(metrics.thumb_start) &&
-            row < static_cast<int>(metrics.thumb_start + metrics.thumb_size);
+            row >= static_cast<int>(metrics.thumbStart) &&
+            row < static_cast<int>(metrics.thumbStart + metrics.thumbSize);
         put(grid, x, y + row, isThumb ? "#" : "|", isThumb ? thumb : track,
             background,
             isThumb ? SemanticRole::ScrollbarThumb
@@ -227,7 +227,7 @@ void paintPanelTree(CellGrid& grid, Rect const& panel,
     // Window the visible nodes at the resolved scroll offset.
     for (int row = 0; row < rows; ++row) {
         std::size_t const index =
-            static_cast<std::size_t>(provider.first_visible) +
+            static_cast<std::size_t>(provider.firstVisible) +
             static_cast<std::size_t>(row);
         if (index >= provider.nodes.size()) break;
         auto const& view = provider.nodes[index];
@@ -276,7 +276,7 @@ void paintPalette(CellGrid& grid, PaletteProjection const& palette,
         int const y = rect.y + static_cast<int>(index);
         bool const isSelected =
             palette.selected &&
-            *palette.selected == palette.first_visible + index;
+            *palette.selected == palette.firstVisible + index;
         auto const rowBackground = isSelected ? selectedBg : background;
         auto const rowRole =
             isSelected ? SemanticRole::Selection : SemanticRole::Background;
@@ -292,7 +292,7 @@ void paintPalette(CellGrid& grid, PaletteProjection const& palette,
             auto const run = computeCellRun(row.detail);
             int width = 0;
             for (auto const& span : run.spans) {
-                width += static_cast<int>(std::max<std::uint32_t>(span.cell_width, 1));
+                width += static_cast<int>(std::max<std::uint32_t>(span.cellWidth, 1));
             }
             int const start = std::max(rect.x, rect.right() - width);
             paintText(grid, start, y, rect.right(), row.detail, detailColor,
@@ -300,10 +300,10 @@ void paintPalette(CellGrid& grid, PaletteProjection const& palette,
         }
     }
     // Paint the reserved gutter (blank when the ranked list fits).
-    if (palette.scrollbar_rect.width > 0 && palette.scrollbar_rect.height > 0) {
-        paintScrollGutter(grid, palette.scrollbar_rect.x,
-                            palette.scrollbar_rect.y,
-                            palette.scrollbar_rect.height, palette.scrollbar,
+    if (palette.scrollbarRect.width > 0 && palette.scrollbarRect.height > 0) {
+        paintScrollGutter(grid, palette.scrollbarRect.x,
+                            palette.scrollbarRect.y,
+                            palette.scrollbarRect.height, palette.scrollbar,
                             theme, background);
     }
 }
@@ -314,8 +314,8 @@ bool offsetInSelection(SelectionViewState const& selection,
                          std::uint64_t offset) {
     for (auto const& item : selection.selections.items()) {
         if (item.isCaret()) continue;
-        auto const lo = item.lower().byte_offset.value();
-        auto const hi = item.upper().byte_offset.value();
+        auto const lo = item.lower().byteOffset.value();
+        auto const hi = item.upper().byteOffset.value();
         if (offset >= lo && offset < hi) return true;
     }
     return false;
@@ -333,7 +333,7 @@ std::optional<SemanticRole> findMatchRole(FindReplaceViewState const& find,
         auto const lo = match.begin.value();
         auto const hi = match.end.value();
         if (offset < lo || offset >= hi) continue;
-        bool const active = find.active_match && *find.active_match == index;
+        bool const active = find.activeMatch && *find.activeMatch == index;
         return active ? SemanticRole::Selection : SemanticRole::SearchMatch;
     }
     return std::nullopt;
@@ -347,11 +347,11 @@ std::optional<GridPosition> screenCellFor(ViewportViewState const& viewport,
                                             std::uint32_t caretLine,
                                             std::uint32_t caretCell) {
     std::optional<GridPosition> boundary;  // A match landing at the row's edge.
-    for (std::size_t index = 0; index < viewport.visible_rows.size(); ++index) {
-        auto const& row = viewport.visible_rows[index];
-        if (row.logical_line != caretLine) continue;
-        auto const start = row.start_cell.value();
-        auto const end = start + row.content_cells;
+    for (std::size_t index = 0; index < viewport.visibleRows.size(); ++index) {
+        auto const& row = viewport.visibleRows[index];
+        if (row.logicalLine != caretLine) continue;
+        auto const start = row.startCell.value();
+        auto const end = start + row.contentCells;
         if (caretCell < start || caretCell > end) continue;
         int const column = content.x + static_cast<int>(caretCell - start);
         int const screenRow = content.y + static_cast<int>(index);
@@ -375,16 +375,16 @@ void paintDocument(CellGrid& grid, SessionSnapshot const& snapshot,
                     std::uint8_t background) {
     auto const& viewport = snapshot.client().viewport;
     auto lines = visibleLogicalLines(snapshot.sections().document.text,
-                                       viewport.visible_rows);
+                                       viewport.visibleRows);
     auto const& selection = snapshot.sections().selection;
-    auto const& findState = snapshot.sections().find_replace;
+    auto const& findState = snapshot.sections().findReplace;
     // Find matches are byte offsets into a specific document revision; only paint
     // them when that revision still matches the document being rendered.  A
     // global undo/redo or tab switch during prompt focus moves the document out
     // from under stale offsets, which must not highlight unrelated cells.
     bool const findMatchesCurrent =
         findState.open &&
-        findState.source_revision == snapshot.sections().document.revision;
+        findState.sourceRevision == snapshot.sections().document.revision;
     auto const matchRoleAt =
         [&](std::uint64_t offset) -> std::optional<SemanticRole> {
         if (!findMatchesCurrent) return std::nullopt;
@@ -392,10 +392,10 @@ void paintDocument(CellGrid& grid, SessionSnapshot const& snapshot,
     };
     auto const selectionBg = semanticIndex(theme, SemanticRole::Selection);
     auto const searchMatchBg = semanticIndex(theme, SemanticRole::SearchMatch);
-    for (std::size_t rowIndex = 0; rowIndex < viewport.visible_rows.size();
+    for (std::size_t rowIndex = 0; rowIndex < viewport.visibleRows.size();
          ++rowIndex) {
-        auto const& row = viewport.visible_rows[rowIndex];
-        auto const lineIt = lines.find(row.logical_line);
+        auto const& row = viewport.visibleRows[rowIndex];
+        auto const lineIt = lines.find(row.logicalLine);
         if (lineIt == lines.end() ||
             rowIndex >= static_cast<std::size_t>(content.height)) {
             continue;
@@ -404,19 +404,19 @@ void paintDocument(CellGrid& grid, SessionSnapshot const& snapshot,
         int column = content.x;
         auto const lastSpan = std::min<std::size_t>(
             line.cells.spans.size(),
-            static_cast<std::size_t>(row.first_span) + row.span_count);
-        for (std::size_t spanIndex = row.first_span;
+            static_cast<std::size_t>(row.firstSpan) + row.spanCount);
+        for (std::size_t spanIndex = row.firstSpan;
              spanIndex < lastSpan && column < content.right(); ++spanIndex) {
             auto const& span = line.cells.spans[spanIndex];
             auto text =
-                std::string{line.text.substr(span.byte_offset, span.byte_len)};
+                std::string{line.text.substr(span.byteOffset, span.byteLen)};
             if (span.kind == CellKind::Tab) {
-                text.assign(span.cell_width, ' ');
+                text.assign(span.cellWidth, ' ');
             } else if (span.kind == CellKind::Control ||
                        span.kind == CellKind::InvalidUtf8) {
                 text = "\xef\xbf\xbd";
             }
-            auto const documentOffset = line.document_offset + span.byte_offset;
+            auto const documentOffset = line.documentOffset + span.byteOffset;
             auto const scope =
                 scopeAt(snapshot.sections().syntax, ByteOffset{documentOffset});
             auto const foreground = syntaxIndex(theme, scope);
@@ -431,7 +431,7 @@ void paintDocument(CellGrid& grid, SessionSnapshot const& snapshot,
                 cellBg = *matchRole == SemanticRole::Selection ? selectionBg
                                                                  : searchMatchBg;
             }
-            auto const width = std::max<std::uint32_t>(span.cell_width, 1);
+            auto const width = std::max<std::uint32_t>(span.cellWidth, 1);
             put(grid, column, content.y + static_cast<int>(rowIndex),
                 std::move(text), foreground, cellBg, cellRole);
             for (std::uint32_t offset = 1;
@@ -452,7 +452,7 @@ void paintDocument(CellGrid& grid, SessionSnapshot const& snapshot,
         // rows must not fill their trailing padding.
         bool const isFinalVisualRow =
             lastSpan >= line.cells.spans.size();
-        auto const lineEnd = line.document_offset + line.text.size();
+        auto const lineEnd = line.documentOffset + line.text.size();
         // A find match (or text selection) that spans the newline highlights the
         // end-of-line: fill the trailing columns, giving find-role precedence.
         if (isFinalVisualRow) {
@@ -498,14 +498,14 @@ std::optional<GridPosition> paintPrompt(CellGrid& grid,
         std::string text;
         switch (control.kind) {
             case PromptControlKind::Input:
-                text = control.accessible_label + ": " + control.value;
+                text = control.accessibleLabel + ": " + control.value;
                 break;
             case PromptControlKind::Count:
                 text = control.value;
                 break;
             case PromptControlKind::Toggle:
                 text = std::string{control.checked ? "[x] " : "[ ] "} +
-                       control.accessible_label;
+                       control.accessibleLabel;
                 break;
         }
         // Clear the row region first so a shrinking value does not leave stale
@@ -525,10 +525,10 @@ std::optional<GridPosition> paintPrompt(CellGrid& grid,
                 : !caret;
         if (control.kind == PromptControlKind::Input && activeInput && !caret) {
             auto const labelWidth =
-                static_cast<int>(computeCellRun(control.accessible_label + ": ")
-                                     .total_cells);
+                static_cast<int>(computeCellRun(control.accessibleLabel + ": ")
+                                     .totalCells);
             auto const valueWidth =
-                static_cast<int>(computeCellRun(control.value).total_cells);
+                static_cast<int>(computeCellRun(control.value).totalCells);
             auto const cursorColumn =
                 std::min(control.rect.x + labelWidth + valueWidth,
                          control.rect.right() - 1);
@@ -556,7 +556,7 @@ CellGrid renderTooSmall(GridSize size, ThemeSnapshot const& theme) {
     if (size.columns <= 0 || size.rows <= 0) return grid;
     std::string_view const message = "terminal too small";
     auto const messageCells =
-        static_cast<int>(computeCellRun(message).total_cells);
+        static_cast<int>(computeCellRun(message).totalCells);
     int const row = size.rows / 2;
     int const start = std::max(0, (size.columns - messageCells) / 2);
     paintText(grid, start, row, size.columns, message, foreground, background,
@@ -605,13 +605,13 @@ std::string CellGrid::canonical() const {
 CellGrid render(SessionSnapshot const& snapshot) {
     auto const& shell = snapshot.sections().shell;
     auto const& theme = snapshot.sections().theme;
-    for (auto index : theme.semantic_indices) {
+    for (auto index : theme.semanticIndices) {
         if (index >= kThemePaletteSize) {
             throw std::invalid_argument{
                 "semantic role references a color outside the 16-color palette"};
         }
     }
-    for (auto index : theme.syntax_indices) {
+    for (auto index : theme.syntaxIndices) {
         if (index >= kThemePaletteSize) {
             throw std::invalid_argument{
                 "syntax scope references a color outside the 16-color palette"};
@@ -649,7 +649,7 @@ CellGrid render(SessionSnapshot const& snapshot) {
     paintShellLeaves(grid, shell, theme, background, panelBackground);
 
     if (shell.panel) {
-        paintPanelTree(grid, *shell.panel, shell.panel_scrollbar,
+        paintPanelTree(grid, *shell.panel, shell.panelScrollbar,
                          snapshot.sections().tree, theme,
                          panelBackground, shell.focus == FocusTarget::Panel);
     }
@@ -664,7 +664,7 @@ CellGrid render(SessionSnapshot const& snapshot) {
 
             // Paint the reserved prompt rows (find/replace/settings) and place
             // the hardware cursor at the query when the prompt is focused.
-            auto const& prompt = snapshot.sections().prompt_status.prompt;
+            auto const& prompt = snapshot.sections().promptStatus.prompt;
             if (prompt) {
                 auto promptCaret = paintPrompt(grid, *prompt, theme, background);
                 if (shell.focus == FocusTarget::Prompt && promptCaret) {

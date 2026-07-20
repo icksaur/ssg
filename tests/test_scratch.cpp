@@ -107,11 +107,11 @@ private:
 
 ssg::ScratchStoreConfig configuration() {
     ssg::ScratchStoreConfig result;
-    result.maximum_bytes = std::numeric_limits<std::uintmax_t>::max();
-    result.maximum_age = std::chrono::hours{24 * 365};
-    result.compaction_threshold_bytes =
+    result.maximumBytes = std::numeric_limits<std::uintmax_t>::max();
+    result.maximumAge = std::chrono::hours{24 * 365};
+    result.compactionThresholdBytes =
         std::numeric_limits<std::uintmax_t>::max();
-    result.durability_target = 100ms;
+    result.durabilityTarget = 100ms;
     return result;
 }
 
@@ -130,8 +130,8 @@ TEST(compactionPreservesReplayAndLeavesOneAtomicCheckpoint) {
     ASSERT_TRUE(store.waitUntilDurable(2s));
     const auto after = ssg::ScratchJournal{store.journalPath()}.replay();
     ASSERT_EQ(after.recovery, before.recovery);
-    ASSERT_FALSE(after.discarded_tail);
-    ASSERT_EQ(after.valid_bytes,
+    ASSERT_FALSE(after.discardedTail);
+    ASSERT_EQ(after.validBytes,
               ssg::encodeCheckpointRecord(after.recovery).size());
 }
 
@@ -190,7 +190,7 @@ TEST(quotaEvictsOnlyRestoredRemnantsOldestFirst) {
     ASSERT_TRUE(std::is_sorted(ids.begin(), ids.end()));
 
     auto config = configuration();
-    config.maximum_bytes = 0;
+    config.maximumBytes = 0;
     auto store =
         ssg::ScratchStore::create(temporary.path(), workspacePath, config);
     {
@@ -200,8 +200,8 @@ TEST(quotaEvictsOnlyRestoredRemnantsOldestFirst) {
             document("protected.txt", "unrestored quota state"));
     }
     const auto result = store.applyQuotas();
-    ASSERT_EQ(result.evicted_session_ids, ids);
-    ASSERT_FALSE(result.within_byte_quota);
+    ASSERT_EQ(result.evictedSessionIds, ids);
+    ASSERT_FALSE(result.withinByteQuota);
     ASSERT_TRUE(std::filesystem::exists(store.sessionPath()));
 }
 
@@ -238,8 +238,8 @@ TEST(writeFailureIsActionableAndNeverReportsDurable) {
     ASSERT_FALSE(store.waitUntilDurable(2s));
     const auto state = store.durabilityState();
     ASSERT_EQ(state.kind, ssg::ScratchDurability::Failed);
-    ASSERT_EQ(state.accepted_generation, std::uint64_t{1});
-    ASSERT_EQ(state.durable_generation, std::uint64_t{0});
+    ASSERT_EQ(state.acceptedGeneration, std::uint64_t{1});
+    ASSERT_EQ(state.durableGeneration, std::uint64_t{0});
     ASSERT_FALSE(state.failure.empty());
 }
 

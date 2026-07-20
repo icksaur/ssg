@@ -58,7 +58,7 @@ TEST(openingAFileRevealsTheCaretResettingAStaleScroll) {
     const ssg::ViewportDimensions dims{80, 24};
     auto firstRow = [&] {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
-        return snap ? snap->client().viewport.first_visual_row : 0U;
+        return snap ? snap->client().viewport.firstVisualRow : 0U;
     };
 
     // Open A and scroll far down (free scroll leaves the caret off-screen above).
@@ -126,11 +126,11 @@ TEST(encodingDispatchMatchesEncodeOracleAndSavedBytes) {
     auto decoded = ssg::decodeText(original);
     ASSERT_TRUE(decoded.accepted());
     decoded.text->utf8 = "one\ntwo\n";
-    decoded.text->line_terminators = {ssg::LineTerminator::Crlf, ssg::LineTerminator::Crlf};
+    decoded.text->lineTerminators = {ssg::LineTerminator::Crlf, ssg::LineTerminator::Crlf};
     decoded.text->status.encoding = ssg::TextEncoding::Utf8Bom;
-    decoded.text->status.had_bom = true;
-    decoded.text->status.line_ending = ssg::LineEnding::Crlf;
-    decoded.text->status.final_newline = true;
+    decoded.text->status.hadBom = true;
+    decoded.text->status.lineEnding = ssg::LineEnding::Crlf;
+    decoded.text->status.finalNewline = true;
     auto expected = ssg::encodeText(*decoded.text);
     ASSERT_TRUE(expected.accepted());
 
@@ -146,7 +146,7 @@ TEST(encodingDispatchMatchesEncodeOracleAndSavedBytes) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.set_final_newline", runtime.revision(), ssg::SetFinalNewlineArguments{true}}).accepted());
     auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
-    ASSERT_EQ(snapshot->sections().text_encoding.status, decoded.text->status);
+    ASSERT_EQ(snapshot->sections().textEncoding.status, decoded.text->status);
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.save", runtime.revision(), {}}).accepted());
     ASSERT_EQ(readBytes(root / "workspace" / "note.txt"), expected.bytes);
@@ -168,8 +168,8 @@ TEST(reopenWithEncodingDispatchRedecodesRealFileBytes) {
     ASSERT_EQ(runtime.activeDocumentText(), std::string{"\xC3\xA9\n"});
     auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
-    ASSERT_EQ(snapshot->sections().text_encoding.status.encoding, ssg::TextEncoding::Iso88591);
-    ASSERT_EQ(snapshot->sections().text_encoding.status.line_ending, ssg::LineEnding::Cr);
+    ASSERT_EQ(snapshot->sections().textEncoding.status.encoding, ssg::TextEncoding::Iso88591);
+    ASSERT_EQ(snapshot->sections().textEncoding.status.lineEnding, ssg::LineEnding::Cr);
 }
 
 TEST(closingTheLastTabClearsTheEditorDocument) {
@@ -253,7 +253,7 @@ TEST(switchingTabsRevealsTheNewDocumentsCaret) {
     const ssg::ViewportDimensions dims{80, 24};
     auto firstRow = [&] {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
-        return snap ? snap->client().viewport.first_visual_row : 0U;
+        return snap ? snap->client().viewport.firstVisualRow : 0U;
     };
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"a.txt"}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"b.txt"}}).accepted());

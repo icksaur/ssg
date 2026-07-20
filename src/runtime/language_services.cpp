@@ -8,22 +8,22 @@ T const* payloadAs(std::any const& payload) { return std::any_cast<T>(&payload);
 
 CommandHandlerResult lspFeatureCommand(EditorRuntime::Impl& runtime, std::string_view id) {
     if (id == "completion.dismiss") {
-        runtime.lsp_features.completion.visible = false;
+        runtime.lspFeatures.completion.visible = false;
         return success();
     }
     if (id == "hover.dismiss") {
-        runtime.lsp_features.hover.reset();
+        runtime.lspFeatures.hover.reset();
         return success();
     }
-    runtime.lsp_features.status = "LSP is not configured";
-    return failure(runtime.lsp_features.status);
+    runtime.lspFeatures.status = "LSP is not configured";
+    return failure(runtime.lspFeatures.status);
 }
 
 CommandHandlerResult lspWorkspaceCommand(EditorRuntime::Impl& runtime, std::any const& payload) {
     auto const* name = payloadAs<std::string>(payload);
     if (name == nullptr || name->empty()) return failure("rename.symbol requires a new-name payload");
-    runtime.lsp_features.status = "LSP rename is not configured";
-    return failure(runtime.lsp_features.status);
+    runtime.lspFeatures.status = "LSP rename is not configured";
+    return failure(runtime.lspFeatures.status);
 }
 
 } // namespace

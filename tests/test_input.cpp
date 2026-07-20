@@ -154,11 +154,11 @@ TEST(resolveKeySequenceMapsSameKeyPerContext) {
 
     const auto inEditor = ssg::resolveKeySequence(keymap, down, "editor");
     ASSERT_EQ(inEditor.kind, ssg::KeymapMatchKind::Resolved);
-    ASSERT_EQ(inEditor.command_id, std::string{"cursor.line_down"});
+    ASSERT_EQ(inEditor.commandId, std::string{"cursor.line_down"});
 
     const auto inPanel = ssg::resolveKeySequence(keymap, down, "panel");
     ASSERT_EQ(inPanel.kind, ssg::KeymapMatchKind::Resolved);
-    ASSERT_EQ(inPanel.command_id, std::string{"tree.select_next"});
+    ASSERT_EQ(inPanel.commandId, std::string{"tree.select_next"});
 
     // No eligible binding in prompt context.
     ASSERT_EQ(ssg::resolveKeySequence(keymap, down, "prompt").kind,
@@ -177,7 +177,7 @@ TEST(resolveKeySequenceStarBeatsFocusAndResolvesEverywhere) {
         for (const auto context : {"editor", "panel", "prompt"}) {
             const auto r = ssg::resolveKeySequence(*keymap, save, context);
             ASSERT_EQ(r.kind, ssg::KeymapMatchKind::Resolved);
-            ASSERT_EQ(r.command_id, std::string{"file.save"});
+            ASSERT_EQ(r.commandId, std::string{"file.save"});
         }
     }
 }
@@ -252,7 +252,7 @@ TEST(resolverAndHasGlobalBindingAgreeOnDuplicateGlobals) {
         const auto resolved = ssg::resolveKeySequence(keymap, seq, "editor");
         ASSERT_EQ(resolved.kind, ssg::KeymapMatchKind::Resolved);
         // First "*" binding wins in both functions.
-        ASSERT_EQ(resolved.command_id, first);
+        ASSERT_EQ(resolved.commandId, first);
         ASSERT_EQ(ssg::hasGlobalBinding(keymap, first, {}), true);
         ASSERT_EQ(ssg::hasGlobalBinding(keymap, second, {}), false);
     }
@@ -264,7 +264,7 @@ TEST(imeAcceptsOnlyCommittedUtf8Text) {
     ASSERT_TRUE(committed.has_value());
     if (committed) {
         const auto semantic = ssg::semanticInput(*committed);
-        ASSERT_EQ(semantic.command_id, std::string{"text.insert"});
+        ASSERT_EQ(semantic.commandId, std::string{"text.insert"});
         ASSERT_EQ(std::get<ssg::TextInputArguments>(semantic.arguments).text,
                   committed->utf8());
     }
@@ -291,7 +291,7 @@ TEST(hitTargetsRoundTripTypedSemanticArguments) {
         std::get<ssg::SelectionCommandArguments>(target.command.arguments);
     ASSERT_TRUE(arguments.position.has_value());
     if (arguments.position) {
-        ASSERT_EQ(arguments.position->byte_offset, ssg::ByteOffset{7});
+        ASSERT_EQ(arguments.position->byteOffset, ssg::ByteOffset{7});
         ASSERT_EQ(arguments.position->line, ssg::LineIndex{2});
         ASSERT_EQ(arguments.position->cell, ssg::CellIndex{4});
     }

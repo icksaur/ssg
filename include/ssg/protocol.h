@@ -23,16 +23,16 @@ struct ProtocolLimits {
     // Aggregate snapshots can contain the bounded text and binary values below;
     // keep the default envelope large enough to decode messages emitted by the
     // default encoder.
-    std::size_t max_message_bytes{32 * 1024 * 1024};
-    std::size_t max_insert_bytes{32 * 1024};
+    std::size_t maxMessageBytes{32 * 1024 * 1024};
+    std::size_t maxInsertBytes{32 * 1024};
 
     // Bounds enforced by the complete codec (Plan 6): a `ProtocolValue` wire
     // value tree is rejected rather than grown without limit.
-    std::size_t max_value_depth{32};
-    std::size_t max_collection_length{65536};
-    std::size_t max_text_bytes{8 * 1024 * 1024};
-    std::size_t max_bytes_length{16 * 1024 * 1024};
-    std::size_t max_binary_frame_bytes{16 * 1024 * 1024};
+    std::size_t maxValueDepth{32};
+    std::size_t maxCollectionLength{65536};
+    std::size_t maxTextBytes{8 * 1024 * 1024};
+    std::size_t maxBytesLength{16 * 1024 * 1024};
+    std::size_t maxBinaryFrameBytes{16 * 1024 * 1024};
 };
 
 enum class ProtocolError : std::uint8_t {
@@ -49,7 +49,7 @@ enum class ProtocolError : std::uint8_t {
 };
 
 struct InsertRequest {
-    Revision base_revision;
+    Revision baseRevision;
     std::string text;
 
     bool operator==(InsertRequest const&) const = default;
@@ -66,15 +66,15 @@ struct DecodeInsertResult {
 };
 
 struct SliceResponse {
-    ProtocolError protocol_error;
-    CommandError command_error;
+    ProtocolError protocolError;
+    CommandError commandError;
     DocumentViewState snapshot;
     std::optional<DocumentDelta> delta;
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return protocol_error == ProtocolError::None &&
-               command_error == CommandError::None;
+        return protocolError == ProtocolError::None &&
+               commandError == CommandError::None;
     }
     bool operator==(SliceResponse const&) const = default;
 };
@@ -354,7 +354,7 @@ enum class BinaryPayloadKind : std::uint8_t {
 struct BinaryFrame {
     std::uint8_t version;
     BinaryPayloadKind kind;
-    std::uint64_t request_id;
+    std::uint64_t requestId;
     std::vector<std::uint8_t> bytes;
 
     bool operator==(BinaryFrame const&) const = default;

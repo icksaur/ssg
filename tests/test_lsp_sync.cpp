@@ -133,7 +133,7 @@ TEST(scriptedServerCoversInitializeSyncAndShutdownLifecycle) {
 TEST(diagnosticsAreVersionCheckedBoundedCoalescedAndReplayable) {
     FakeLspServer server;
     LspSyncConfig config;
-    config.maximum_diagnostics_per_document = 2;
+    config.maximumDiagnosticsPerDocument = 2;
     LspSyncClient client{server, config, kTimeout};
     ASSERT_EQ(errorOf(client.initialize("file:///workspace")), LspSyncError::None);
     server.queue_payload(ssg::test::response(1));

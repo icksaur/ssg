@@ -50,7 +50,7 @@ TEST(commandSetOwnsEveryNormativeFileCommand) {
     }
     const auto& drop = commands.descriptors()[4];
     ASSERT_FALSE(drop.lua);
-    ASSERT_EQ(drop.required_capability,
+    ASSERT_EQ(drop.requiredCapability,
               std::optional<std::string_view>{"local_file_drop"});
 }
 
@@ -61,7 +61,7 @@ TEST(pathCommandsOpenNonModalPathPrompts) {
         const auto request = ssg::filePathPrompt(command);
         ASSERT_EQ(request.kind, ssg::PromptKind::Path);
         ASSERT_EQ(request.inputs.size(), std::size_t{1});
-        ASSERT_FALSE(request.inputs[0].accessible_label.empty());
+        ASSERT_FALSE(request.inputs[0].accessibleLabel.empty());
     }
 }
 
@@ -85,7 +85,7 @@ TEST(localDropRequiresHostCapabilityAndSanitizesLabel) {
     ASSERT_TRUE(accepted.accepted());
     const auto state = workspace.state(*accepted.document);
     ASSERT_EQ(state->key.kind(), ssg::JournalDocumentKeyKind::Untitled);
-    ASSERT_EQ(state->display_label, std::string{"name.txt"});
+    ASSERT_EQ(state->displayLabel, std::string{"name.txt"});
     ASSERT_EQ(workspace.document(*accepted.document).snapshot().text,
               std::string{"hi\n!"});
 
@@ -116,8 +116,8 @@ TEST(binaryAndInvalidTextDropsOpenReadOnlyWithoutPathAuthority) {
     ASSERT_TRUE(invalidResult.accepted());
     const auto binaryState = workspace.state(*binaryResult.document);
     const auto invalidState = workspace.state(*invalidResult.document);
-    ASSERT_EQ(binaryState->content_kind, ssg::FileContentKind::Binary);
-    ASSERT_EQ(invalidState->content_kind,
+    ASSERT_EQ(binaryState->contentKind, ssg::FileContentKind::Binary);
+    ASSERT_EQ(invalidState->contentKind,
               ssg::FileContentKind::DecodeFailure);
     ASSERT_EQ(workspace.document(*binaryResult.document).mode(),
               ssg::DocumentMode::ReadOnly);

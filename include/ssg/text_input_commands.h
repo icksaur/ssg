@@ -46,10 +46,10 @@ private:
 [[nodiscard]] TextInputCommandSet textInputCommandSet();
 
 struct TextInputSettings {
-    IndentStyle indent_style;
-    std::uint32_t indent_width;
-    bool auto_indent;
-    LineEnding line_ending;
+    IndentStyle indentStyle;
+    std::uint32_t indentWidth;
+    bool autoIndent;
+    LineEnding lineEnding;
 
     bool operator==(const TextInputSettings&) const noexcept = default;
 };
@@ -74,7 +74,7 @@ struct TextInputResult {
     TextInputError error;
     std::optional<EditTransaction> transaction;
     std::optional<SelectionSet> selections;
-    std::string resulting_text;
+    std::string resultingText;
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {

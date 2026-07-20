@@ -85,12 +85,12 @@ private:
                    ExclusiveFileLock lock)
         : id_(std::move(id)),
           path_(std::move(path)),
-          sessions_path_(std::move(sessionsPath)),
+          sessionsPath_(std::move(sessionsPath)),
           lock_(std::move(lock)) {}
 
     ScratchSessionId id_;
     std::filesystem::path path_;
-    std::filesystem::path sessions_path_;
+    std::filesystem::path sessionsPath_;
     ExclusiveFileLock lock_;
 };
 

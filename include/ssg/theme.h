@@ -169,22 +169,22 @@ inline constexpr std::array kCoVisibleRolePairs{
 
 struct RoleMapping {
     SemanticRole role = SemanticRole::Foreground;
-    std::uint8_t palette_index = 0;
+    std::uint8_t paletteIndex = 0;
 
     friend bool operator==(const RoleMapping&, const RoleMapping&) = default;
 };
 
 struct SyntaxMapping {
     SyntaxScope scope = SyntaxScope::PlainText;
-    std::uint8_t palette_index = 0;
+    std::uint8_t paletteIndex = 0;
 
     friend bool operator==(const SyntaxMapping&, const SyntaxMapping&) = default;
 };
 
 struct ThemeSnapshot {
     std::array<SrgbColor, kThemePaletteSize> palette;
-    std::array<std::uint8_t, kSemanticRoleCount> semantic_indices;
-    std::array<std::uint8_t, kSyntaxScopeCount> syntax_indices;
+    std::array<std::uint8_t, kSemanticRoleCount> semanticIndices;
+    std::array<std::uint8_t, kSyntaxScopeCount> syntaxIndices;
 
     friend bool operator==(const ThemeSnapshot&, const ThemeSnapshot&) = default;
 };
@@ -213,8 +213,8 @@ public:
 private:
     std::string name_;
     std::array<SrgbColor, kThemePaletteSize> palette_{};
-    std::array<std::uint8_t, kSemanticRoleCount> semantic_indices_{};
-    std::array<std::uint8_t, kSyntaxScopeCount> syntax_indices_{};
+    std::array<std::uint8_t, kSemanticRoleCount> semanticIndices_{};
+    std::array<std::uint8_t, kSyntaxScopeCount> syntaxIndices_{};
 };
 
 } // namespace ssg

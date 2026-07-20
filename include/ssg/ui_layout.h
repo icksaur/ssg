@@ -74,36 +74,36 @@ struct AccessibilityNode {
 
 struct StatusField {
     std::string id;
-    std::string accessible_label;
+    std::string accessibleLabel;
     std::string value;
-    std::uint8_t collapse_rank = 0;
+    std::uint8_t collapseRank = 0;
 };
 
 struct ShellLabel {
     std::string id;
-    std::string accessible_label;
+    std::string accessibleLabel;
 };
 
 struct TabLabel {
     std::string title;
-    std::string accessible_label;
+    std::string accessibleLabel;
     bool active = false;
     bool dirty = false;
 };
 
 struct ShellLayoutRequest {
     GridSize viewport;
-    std::uint8_t reserved_prompt_rows = 0;
-    bool empty_state = false;
-    std::string panel_provider_label = "Panel";
-    std::vector<StatusField> header_fields;
-    std::vector<StatusField> footer_fields;
-    std::vector<ShellLabel> footer_actions;
+    std::uint8_t reservedPromptRows = 0;
+    bool emptyState = false;
+    std::string panelProviderLabel = "Panel";
+    std::vector<StatusField> headerFields;
+    std::vector<StatusField> footerFields;
+    std::vector<ShellLabel> footerActions;
     std::vector<TabLabel> tabs;
-    std::string leader_hint;  // Non-empty when a client is mid-chord.
-    bool palette_active = false;  // The palette prompt is open on this client.
-    std::string palette_query;    // The client's current palette query text.
-    std::string palette_ghost;    // Fish-style completion of the top candidate.
+    std::string leaderHint;  // Non-empty when a client is mid-chord.
+    bool paletteActive = false;  // The palette prompt is open on this client.
+    std::string paletteQuery;    // The client's current palette query text.
+    std::string paletteGhost;    // Fish-style completion of the top candidate.
 };
 
 struct PaneGeometry {
@@ -138,14 +138,14 @@ struct PaletteProjection {
     Rect rect;
     // The reserved 1-column scrollbar gutter (the pane's gutter column), always
     // present so the palette content width is stable as the list grows/shrinks.
-    Rect scrollbar_rect;
+    Rect scrollbarRect;
     std::vector<PaletteRow> rows;
     // `selected` and `first_visible` are ABSOLUTE indices into the full ranked
     // order; `rows` is the windowed subset, so the on-screen row for the
     // selection is `selected - first_visible`. `scrollbar` drives the gutter
     // thumb (hidden when the list fits).
     std::optional<std::uint32_t> selected;
-    std::uint32_t first_visible = 0;
+    std::uint32_t firstVisible = 0;
     ScrollbarMetrics scrollbar{};
 
     friend bool operator==(const PaletteProjection&, const PaletteProjection&) = default;
@@ -155,18 +155,18 @@ struct ShellViewState {
     GridSize viewport;
     std::optional<Rect> header;
     std::optional<Rect> footer;
-    std::optional<Rect> tab_bar;
+    std::optional<Rect> tabBar;
     std::optional<Rect> panel;
     // The reserved 1-column scrollbar gutter for the side panel (the tree). Set
     // whenever `panel` is set; the panel content is the panel minus this column,
     // so the content width is stable whether or not a thumb is shown.
-    std::optional<Rect> panel_scrollbar;
+    std::optional<Rect> panelScrollbar;
     std::optional<Rect> prompt;
     std::vector<PaneGeometry> panes;
     // One entry per visible tab (in tab-bar order), each carrying the tab's
     // rectangle and its index into `sections().tabs.tabs`.
-    std::vector<TabHit> tab_hits;
-    std::vector<AccessibilityNode> accessibility_nodes;
+    std::vector<TabHit> tabHits;
+    std::vector<AccessibilityNode> accessibilityNodes;
     FocusTarget focus = FocusTarget::Editor;
     std::optional<PaletteProjection> palette;
 

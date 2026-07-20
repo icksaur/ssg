@@ -37,12 +37,12 @@ private:
 
 struct SelectionViewState {
     SelectionSet selections;
-    std::uint32_t first_visual_row;
+    std::uint32_t firstVisualRow;
     // Horizontal scroll offset in cells (word wrap OFF only; VP-H / M12). Reveal
     // keeps the primary caret's cell column within [first_visual_column,
     // first_visual_column + pane_width). Always 0 when word wrap is on.
-    std::uint32_t first_visual_column = 0;
-    std::optional<CellIndex> desired_cell;
+    std::uint32_t firstVisualColumn = 0;
+    std::optional<CellIndex> desiredCell;
 
     bool operator==(const SelectionViewState&) const noexcept = default;
 };

@@ -40,9 +40,9 @@ fs::path makeWorkspace(std::string const& name) {
 ssg::EditorRuntimeConfig configFor(fs::path const& root, bool defer) {
     ssg::EditorRuntimeConfig config;
     config.cwd = root / "workspace";
-    config.scratch_root = root / "scratch";
-    config.recovery_root = root / "recovery";
-    config.defer_enrichment = defer;
+    config.scratchRoot = root / "scratch";
+    config.recoveryRoot = root / "recovery";
+    config.deferEnrichment = defer;
     return config;
 }
 
@@ -65,15 +65,15 @@ TEST(deferredEnrichmentSkipsSyntaxAndTreeUntilPrimed) {
     // O(document) syntax pass or the O(workspace) tree scan.
     (void)runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     auto before = runtime.deferredWorkCounts();
-    ASSERT_EQ(before.syntax_runs, std::uint64_t{0});
-    ASSERT_EQ(before.tree_scans, std::uint64_t{0});
+    ASSERT_EQ(before.syntaxRuns, std::uint64_t{0});
+    ASSERT_EQ(before.treeScans, std::uint64_t{0});
 
     // Priming runs the deferred work; it must actually arrive.
     auto const revisionBeforePrime = runtime.revision();
     runtime.primeDeferred();
     auto after = runtime.deferredWorkCounts();
-    ASSERT_TRUE(after.syntax_runs >= 1);
-    ASSERT_TRUE(after.tree_scans >= 1);
+    ASSERT_TRUE(after.syntaxRuns >= 1);
+    ASSERT_TRUE(after.treeScans >= 1);
     // The session revision advances so delta-based clients observe the primed
     // enrichment (a same-revision snapshot pair yields no delta).
     ASSERT_TRUE(runtime.revision().value() > revisionBeforePrime.value());
@@ -83,8 +83,8 @@ TEST(deferredEnrichmentSkipsSyntaxAndTreeUntilPrimed) {
     auto const revisionAfterPrime = runtime.revision();
     runtime.primeDeferred();
     auto again = runtime.deferredWorkCounts();
-    ASSERT_EQ(again.syntax_runs, after.syntax_runs);
-    ASSERT_EQ(again.tree_scans, after.tree_scans);
+    ASSERT_EQ(again.syntaxRuns, after.syntaxRuns);
+    ASSERT_EQ(again.treeScans, after.treeScans);
     ASSERT_EQ(runtime.revision().value(), revisionAfterPrime.value());
 
     fs::remove_all(root);
@@ -106,14 +106,14 @@ TEST(eagerConstructionRunsEnrichmentImmediately) {
     // Default (eager) behavior: the tree scan ran at construction and syntax ran
     // at construction and again on open — all before any prime_deferred call.
     auto counts = runtime.deferredWorkCounts();
-    ASSERT_TRUE(counts.tree_scans >= 1);
-    ASSERT_TRUE(counts.syntax_runs >= 1);
+    ASSERT_TRUE(counts.treeScans >= 1);
+    ASSERT_TRUE(counts.syntaxRuns >= 1);
 
     // prime_deferred is a harmless no-op when nothing was deferred.
     runtime.primeDeferred();
     auto after = runtime.deferredWorkCounts();
-    ASSERT_EQ(after.tree_scans, counts.tree_scans);
-    ASSERT_EQ(after.syntax_runs, counts.syntax_runs);
+    ASSERT_EQ(after.treeScans, counts.treeScans);
+    ASSERT_EQ(after.syntaxRuns, counts.syntaxRuns);
 
     fs::remove_all(root);
 }

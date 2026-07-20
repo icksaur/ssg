@@ -32,21 +32,21 @@ enum class HitRegion : std::uint8_t {
 struct RegionHit {
     HitRegion region = HitRegion::None;
     // Editor content: the document byte span of the hit cell.
-    std::uint32_t byte_offset = 0;
-    std::uint32_t byte_len = 0;
+    std::uint32_t byteOffset = 0;
+    std::uint32_t byteLen = 0;
     // Panel content: the tree node under the cell.
-    std::optional<TreeNodeId> node_id;
+    std::optional<TreeNodeId> nodeId;
     // Palette content: the ABSOLUTE index into the full ranked order
     // (first_visible + on-screen row).
-    std::uint32_t item_index = 0;
+    std::uint32_t itemIndex = 0;
     // Tab content: the index into sections().tabs.tabs of the clicked tab.
-    std::uint32_t tab_index = 0;
+    std::uint32_t tabIndex = 0;
     // Scrollbar regions: the position as a numerator/denominator pair ready to
     // feed view.scroll_to_fraction (first_row = maximum_first_row * numerator /
     // denominator), plus the equivalent [0, 1] fraction for display.
-    std::uint32_t scroll_numerator = 0;
-    std::uint32_t scroll_denominator = 1;
-    double scrollbar_fraction = 0.0;
+    std::uint32_t scrollNumerator = 0;
+    std::uint32_t scrollDenominator = 1;
+    double scrollbarFraction = 0.0;
 
     [[nodiscard]] bool hit() const noexcept { return region != HitRegion::None; }
     bool operator==(const RegionHit&) const = default;

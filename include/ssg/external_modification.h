@@ -57,7 +57,7 @@ struct ExternalDocumentView {
     std::filesystem::path path;
     ExternalDocumentStatus status =
         ExternalDocumentStatus::ExternallyModified;
-    std::string accessible_status;
+    std::string accessibleStatus;
     std::vector<ExternalAction> actions;
 
     friend bool operator==(const ExternalDocumentView&,
@@ -73,7 +73,7 @@ struct ExternalModificationViewState {
 };
 
 struct ExternalModificationDelta {
-    Revision base_revision{0};
+    Revision baseRevision{0};
     Revision revision{0};
     std::vector<ExternalDocumentView> upserted;
     std::vector<DiffFileId> removed;
@@ -104,7 +104,7 @@ struct ExternalDeltaReplayResult {
 struct ExternalEventInput {
     WatchEvent event;
     DiffFileId id;
-    std::optional<std::string> disk_content;
+    std::optional<std::string> diskContent;
 };
 
 enum class ExternalModificationError : std::uint8_t {
@@ -121,8 +121,8 @@ enum class ExternalModificationError : std::uint8_t {
 
 struct ExternalModificationResult {
     ExternalModificationError error = ExternalModificationError::None;
-    bool status_published = false;
-    bool diff_routed = true;
+    bool statusPublished = false;
+    bool diffRouted = true;
     std::optional<RecoveryRecordId> compensation;
     [[nodiscard]] bool accepted() const noexcept {
         return error == ExternalModificationError::None;

@@ -28,17 +28,17 @@ enum class DiffLineKind { Added, Removed, Modified };
 
 struct DiffLineChange {
     DiffLineKind kind = DiffLineKind::Modified;
-    std::optional<std::size_t> baseline_line;
-    std::optional<std::size_t> target_line;
+    std::optional<std::size_t> baselineLine;
+    std::optional<std::size_t> targetLine;
 
     friend bool operator==(const DiffLineChange&, const DiffLineChange&) = default;
 };
 
 struct DiffHunk {
-    std::size_t baseline_start = 0;
-    std::size_t target_start = 0;
-    std::vector<std::string> baseline_lines;
-    std::vector<std::string> target_lines;
+    std::size_t baselineStart = 0;
+    std::size_t targetStart = 0;
+    std::vector<std::string> baselineLines;
+    std::vector<std::string> targetLines;
 
     friend bool operator==(const DiffHunk&, const DiffHunk&) = default;
 };
@@ -46,12 +46,12 @@ struct DiffHunk {
 struct DiffFileView {
     DiffFileId id;
     std::filesystem::path path;
-    std::optional<std::filesystem::path> previous_path;
+    std::optional<std::filesystem::path> previousPath;
     bool deleted = false;
-    std::string baseline_identity;
-    std::string current_content;
+    std::string baselineIdentity;
+    std::string currentContent;
     std::vector<DiffHunk> hunks;
-    std::vector<DiffLineChange> changed_lines;
+    std::vector<DiffLineChange> changedLines;
 
     friend bool operator==(const DiffFileView&, const DiffFileView&) = default;
 };
@@ -64,8 +64,8 @@ struct DiffViewState {
 };
 
 struct DiffConfig {
-    std::size_t maximum_line_count = 200'000;
-    std::size_t maximum_matrix_cells = 4'000'000;
+    std::size_t maximumLineCount = 200'000;
+    std::size_t maximumMatrixCells = 4'000'000;
 };
 
 enum class DiffError {
@@ -88,10 +88,10 @@ struct DiffMutationResult {
 struct GitDiffFile {
     DiffFileId id;
     std::filesystem::path path;
-    std::optional<std::filesystem::path> previous_path;
-    std::optional<std::string> index_content;
-    std::optional<std::string> working_content;
-    std::string index_identity;
+    std::optional<std::filesystem::path> previousPath;
+    std::optional<std::string> indexContent;
+    std::optional<std::string> workingContent;
+    std::string indexIdentity;
 };
 
 struct SeededDiffFile {
@@ -106,7 +106,7 @@ struct NonGitDiffEvent {
     NonGitDiffEventKind kind = NonGitDiffEventKind::Modify;
     DiffFileId id;
     std::filesystem::path path;
-    std::optional<std::filesystem::path> previous_path;
+    std::optional<std::filesystem::path> previousPath;
     std::optional<std::string> content;
 };
 
@@ -131,7 +131,7 @@ private:
     struct Entry {
         DiffFileView view;
         Source source = Source::Git;
-        std::string acknowledged_content;
+        std::string acknowledgedContent;
     };
 
     DiffConfig config_;
@@ -179,7 +179,7 @@ struct DiffOpenTarget {
 [[nodiscard]] DiffOpenTarget diffOpenFile(const DiffFileView& file);
 
 struct DiffDelta {
-    Revision base_revision{0};
+    Revision baseRevision{0};
     Revision revision{0};
     std::vector<DiffFileView> upserted;
     std::vector<DiffFileId> removed;

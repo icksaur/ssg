@@ -58,7 +58,7 @@ WatchEvent eventFrom(NativeWatchAction action,
     if (state) {
         result.identity = state->identity;
         result.size = state->size;
-        result.modification_time = state->modification_time;
+        result.modificationTime = state->modificationTime;
     }
     return result;
 }
@@ -69,44 +69,44 @@ class WatchEventNormalizer::Impl {
 public:
     struct PendingEvent {
         WatchEvent event;
-        WatchTimePoint ready_at;
+        WatchTimePoint readyAt;
     };
 
     struct RenamePair {
         std::optional<NativeWatchEvent> from;
         std::optional<NativeWatchEvent> to;
-        WatchTimePoint ready_at;
+        WatchTimePoint readyAt;
     };
 
     Impl(WatcherConfig requested,
          std::vector<WorkspaceEntry> initialEntries,
          WorkspaceScanner requestedScanner)
-        : config(requested),
-          cache(entryMap(initialEntries)),
-          scanner(std::move(requestedScanner)) {
-        if (config.debounce.count() < 0 || config.max_queued_events == 0 ||
-            config.rescan_retry.count() <= 0 ||
-            config.max_pending_renames == 0 ||
-            config.max_save_expectations == 0 ||
-            config.max_rescan_entries == 0) {
+        : config_(requested),
+          cache_(entryMap(initialEntries)),
+          scanner_(std::move(requestedScanner)) {
+        if (config_.debounce.count() < 0 || config_.maxQueuedEvents == 0 ||
+            config_.rescanRetry.count() <= 0 ||
+            config_.maxPendingRenames == 0 ||
+            config_.maxSaveExpectations == 0 ||
+            config_.maxRescanEntries == 0) {
             throw std::invalid_argument(
                 "watcher debounce must be non-negative and all bounds must be positive");
         }
-        if (!scanner) {
+        if (!scanner_) {
             throw std::invalid_argument("watcher scanner must be provided");
         }
     }
 
     void registerSave(SaveExpectation expectation) {
         expectation.path = normalizePath(std::move(expectation.path));
-        if (save_expectations.size() == config.max_save_expectations) {
-            save_expectations.pop_front();
+        if (saveExpectations_.size() == config_.maxSaveExpectations) {
+            saveExpectations_.pop_front();
         }
-        save_expectations.push_back(std::move(expectation));
+        saveExpectations_.push_back(std::move(expectation));
     }
 
     void push(NativeWatchEvent native, WatchTimePoint observedAt) {
-        if (overflow_requested) {
+        if (overflowRequested_) {
             return;
         }
         if (native.action == NativeWatchAction::Overflow) {
@@ -121,7 +121,7 @@ public:
         }
 
         if (native.action == NativeWatchAction::Remove && !native.observed) {
-            native.observed = stateFor(cache, native.path);
+            native.observed = stateFor(cache_, native.path);
         }
         auto event = eventFrom(native.action, native.path, native.observed);
         updateCache(native.action, native.path, native.observed);
@@ -129,28 +129,28 @@ public:
     }
 
     std::vector<WatchEvent> takeReady(WatchTimePoint now) {
-        if (overflow_requested) {
-            if (now < next_rescan_at) {
+        if (overflowRequested_) {
+            if (now < nextRescanAt_) {
                 return {};
             }
             return rescan(now);
         }
         expireRenames(now);
-        if (overflow_requested) {
+        if (overflowRequested_) {
             return rescan(now);
         }
 
         std::vector<WatchEvent> result;
-        auto current = pending.begin();
-        while (current != pending.end()) {
-            if (current->ready_at > now) {
+        auto current = pending_.begin();
+        while (current != pending_.end()) {
+            if (current->readyAt > now) {
                 ++current;
                 continue;
             }
             correlateSave(current->event);
-            current->event.sequence = next_sequence++;
+            current->event.sequence = nextSequence_++;
             result.push_back(std::move(current->event));
-            current = pending.erase(current);
+            current = pending_.erase(current);
         }
         return result;
     }
@@ -175,17 +175,17 @@ private:
                       const std::filesystem::path& path,
                       const std::optional<WatchFileState>& observed) {
         if (action == NativeWatchAction::Remove) {
-            cache.erase(path);
+            cache_.erase(path);
         } else if (observed) {
-            cache[path] = *observed;
+            cache_[path] = *observed;
         }
     }
 
     void pushRename(NativeWatchEvent native, WatchTimePoint observedAt) {
-        if (native.rename_token == 0) {
+        if (native.renameToken == 0) {
             if (native.action == NativeWatchAction::RenameFrom &&
                 !native.observed) {
-                native.observed = stateFor(cache, native.path);
+                native.observed = stateFor(cache_, native.path);
             }
             auto boundary = eventFrom(
                 native.action == NativeWatchAction::RenameFrom
@@ -201,20 +201,20 @@ private:
             return;
         }
 
-        auto found = renames.find(native.rename_token);
-        if (found == renames.end()) {
-            if (renames.size() == config.max_pending_renames) {
+        auto found = renames_.find(native.renameToken);
+        if (found == renames_.end()) {
+            if (renames_.size() == config_.maxPendingRenames) {
                 requestOverflow();
                 return;
             }
-            found = renames.emplace(
-                native.rename_token,
-                RenamePair{{}, {}, observedAt + config.debounce}).first;
+            found = renames_.emplace(
+                native.renameToken,
+                RenamePair{{}, {}, observedAt + config_.debounce}).first;
         }
-        found->second.ready_at = observedAt + config.debounce;
+        found->second.readyAt = observedAt + config_.debounce;
         if (native.action == NativeWatchAction::RenameFrom) {
             if (!native.observed) {
-                native.observed = stateFor(cache, native.path);
+                native.observed = stateFor(cache_, native.path);
             }
             found->second.from = std::move(native);
         } else {
@@ -223,7 +223,7 @@ private:
 
         if (found->second.from && found->second.to) {
             emitRename(found->second, observedAt);
-            renames.erase(found);
+            renames_.erase(found);
         }
     }
 
@@ -233,36 +233,36 @@ private:
             observed = pair.from->observed;
         }
         const auto sourcePending = std::find_if(
-            pending.rbegin(), pending.rend(),
+            pending_.rbegin(), pending_.rend(),
             [&pair](const PendingEvent& candidate) {
                 return candidate.event.path == pair.from->path;
             });
         const auto sourceWasNew =
-            sourcePending != pending.rend() &&
+            sourcePending != pending_.rend() &&
             sourcePending->event.kind == WatchEventKind::Create;
-        if (sourcePending != pending.rend()) {
-            pending.erase(std::next(sourcePending).base());
+        if (sourcePending != pending_.rend()) {
+            pending_.erase(std::next(sourcePending).base());
         }
         WatchEvent event = eventFrom(
             NativeWatchAction::Modify, pair.to->path, observed);
         if (sourceWasNew) {
-            event.kind = cache.contains(pair.to->path)
+            event.kind = cache_.contains(pair.to->path)
                 ? WatchEventKind::Modify
                 : WatchEventKind::Create;
         } else {
             event.kind = WatchEventKind::Rename;
-            event.previous_path = pair.from->path;
+            event.previousPath = pair.from->path;
         }
-        cache.erase(pair.from->path);
+        cache_.erase(pair.from->path);
         if (observed) {
-            cache[pair.to->path] = *observed;
+            cache_[pair.to->path] = *observed;
         }
         enqueue(std::move(event), observedAt);
     }
 
     void expireRenames(WatchTimePoint now) {
-        for (auto current = renames.begin(); current != renames.end();) {
-            if (current->second.ready_at > now) {
+        for (auto current = renames_.begin(); current != renames_.end();) {
+            if (current->second.readyAt > now) {
                 ++current;
                 continue;
             }
@@ -270,18 +270,18 @@ private:
             if (half.from) {
                 auto event = eventFrom(NativeWatchAction::Remove,
                                         half.from->path, half.from->observed);
-                cache.erase(half.from->path);
-                enqueue(std::move(event), now - config.debounce);
+                cache_.erase(half.from->path);
+                enqueue(std::move(event), now - config_.debounce);
             } else if (half.to) {
                 auto event = eventFrom(NativeWatchAction::Create,
                                         half.to->path, half.to->observed);
                 if (half.to->observed) {
-                    cache[half.to->path] = *half.to->observed;
+                    cache_[half.to->path] = *half.to->observed;
                 }
-                enqueue(std::move(event), now - config.debounce);
+                enqueue(std::move(event), now - config_.debounce);
             }
-            current = renames.erase(current);
-            if (overflow_requested) {
+            current = renames_.erase(current);
+            if (overflowRequested_) {
                 return;
             }
         }
@@ -289,11 +289,11 @@ private:
 
     void enqueue(WatchEvent event, WatchTimePoint observedAt) {
         const auto same = std::find_if(
-            pending.rbegin(), pending.rend(),
+            pending_.rbegin(), pending_.rend(),
             [&event](const PendingEvent& candidate) {
                 return sameEventKey(candidate.event, event);
             });
-        if (same != pending.rend()) {
+        if (same != pending_.rend()) {
             const auto distinctReplacement =
                 same->event.kind == WatchEventKind::Remove &&
                 event.kind == WatchEventKind::Create &&
@@ -301,18 +301,18 @@ private:
                  same->event.identity != event.identity);
             if (!distinctReplacement) {
                 if (coalesce(same->event, event)) {
-                    same->ready_at = observedAt + config.debounce;
+                    same->readyAt = observedAt + config_.debounce;
                 } else {
-                    pending.erase(std::next(same).base());
+                    pending_.erase(std::next(same).base());
                 }
                 return;
             }
         }
-        if (pending.size() == config.max_queued_events) {
+        if (pending_.size() == config_.maxQueuedEvents) {
             requestOverflow();
             return;
         }
-        pending.push_back({std::move(event), observedAt + config.debounce});
+        pending_.push_back({std::move(event), observedAt + config_.debounce});
     }
 
     static bool coalesce(WatchEvent& current, const WatchEvent& next) {
@@ -324,7 +324,7 @@ private:
             next.kind == WatchEventKind::Modify) {
             current.identity = next.identity;
             current.size = next.size;
-            current.modification_time = next.modification_time;
+            current.modificationTime = next.modificationTime;
             return true;
         }
         if (current.kind == WatchEventKind::Modify &&
@@ -340,10 +340,10 @@ private:
         }
         if (current.kind == WatchEventKind::Rename &&
             next.kind == WatchEventKind::Remove) {
-            const auto originalPath = *current.previous_path;
+            const auto originalPath = *current.previousPath;
             current = next;
             current.path = originalPath;
-            current.previous_path.reset();
+            current.previousPath.reset();
             return true;
         }
         if (current.kind == WatchEventKind::Rename &&
@@ -351,7 +351,7 @@ private:
             current.path = next.path;
             current.identity = next.identity;
             current.size = next.size;
-            current.modification_time = next.modification_time;
+            current.modificationTime = next.modificationTime;
             return true;
         }
         current = next;
@@ -359,105 +359,105 @@ private:
     }
 
     void requestOverflow() {
-        overflow_requested = true;
-        overflow_announced = false;
-        next_rescan_at = WatchTimePoint::min();
-        pending.clear();
+        overflowRequested_ = true;
+        overflowAnnounced_ = false;
+        nextRescanAt_ = WatchTimePoint::min();
+        pending_.clear();
     }
 
     std::vector<WatchEvent> rescan(WatchTimePoint now) {
-        renames.clear();
+        renames_.clear();
         std::vector<WatchEvent> result;
-        if (!overflow_announced) {
+        if (!overflowAnnounced_) {
             WatchEvent overflow;
             overflow.kind = WatchEventKind::Overflow;
-            overflow.sequence = next_sequence++;
+            overflow.sequence = nextSequence_++;
             result.push_back(std::move(overflow));
-            overflow_announced = true;
+            overflowAnnounced_ = true;
         }
 
-        const auto snapshot = scanner(config.max_rescan_entries);
+        const auto snapshot = scanner_(config_.maxRescanEntries);
         if (!snapshot.complete) {
-            overflow_requested = true;
-            next_rescan_at = now + config.rescan_retry;
+            overflowRequested_ = true;
+            nextRescanAt_ = now + config_.rescanRetry;
             return result;
         }
-        overflow_requested = false;
-        overflow_announced = false;
+        overflowRequested_ = false;
+        overflowAnnounced_ = false;
         const auto scanned = entryMap(snapshot.entries);
         std::multimap<
             std::tuple<std::uint64_t, std::uint64_t, std::uint64_t>,
             std::filesystem::path> oldPathsByIdentity;
-        for (const auto& [path, state] : cache) {
+        for (const auto& [path, state] : cache_) {
             if (!scanned.contains(path)) {
                 oldPathsByIdentity.emplace(identityKey(state.identity), path);
             }
         }
         std::vector<std::filesystem::path> renamedFrom;
         for (const auto& [path, state] : scanned) {
-            const auto previous = cache.find(path);
-            if (previous == cache.end()) {
+            const auto previous = cache_.find(path);
+            if (previous == cache_.end()) {
                 auto event = eventFrom(NativeWatchAction::Create, path, state);
                 const auto old =
                     oldPathsByIdentity.find(identityKey(state.identity));
                 if (old != oldPathsByIdentity.end()) {
                     event.kind = WatchEventKind::Rename;
-                    event.previous_path = old->second;
+                    event.previousPath = old->second;
                     renamedFrom.push_back(old->second);
                     oldPathsByIdentity.erase(old);
                 }
-                event.sequence = next_sequence++;
+                event.sequence = nextSequence_++;
                 correlateSave(event);
                 result.push_back(std::move(event));
             } else if (previous->second != state) {
                 auto event = eventFrom(NativeWatchAction::Modify, path, state);
-                event.sequence = next_sequence++;
+                event.sequence = nextSequence_++;
                 correlateSave(event);
                 result.push_back(std::move(event));
             }
         }
-        for (const auto& [path, state] : cache) {
+        for (const auto& [path, state] : cache_) {
             if (!scanned.contains(path) &&
                 std::find(renamedFrom.begin(), renamedFrom.end(), path) ==
                     renamedFrom.end()) {
                 auto event = eventFrom(NativeWatchAction::Remove, path, state);
-                event.sequence = next_sequence++;
+                event.sequence = nextSequence_++;
                 correlateSave(event);
                 result.push_back(std::move(event));
             }
         }
-        cache = scanned;
+        cache_ = scanned;
         return result;
     }
 
     void correlateSave(WatchEvent& event) {
-        if (!event.identity || !event.size || !event.modification_time) {
+        if (!event.identity || !event.size || !event.modificationTime) {
             return;
         }
         const WatchFileState state{
-            *event.identity, *event.size, *event.modification_time};
+            *event.identity, *event.size, *event.modificationTime};
         const auto found = std::find_if(
-            save_expectations.begin(), save_expectations.end(),
+            saveExpectations_.begin(), saveExpectations_.end(),
             [&event, &state](const SaveExpectation& expectation) {
                 return expectation.path == event.path &&
                        expectation.state == state;
             });
-        if (found != save_expectations.end()) {
+        if (found != saveExpectations_.end()) {
             event.origin = WatchEventOrigin::SsgSave;
-            save_expectations.erase(found);
+            saveExpectations_.erase(found);
         }
     }
 
-    WatcherConfig config;
-    EntryMap cache;
-    WorkspaceScanner scanner;
-    std::vector<PendingEvent> pending;
-    std::map<std::uint64_t, RenamePair> renames;
-    std::deque<SaveExpectation> save_expectations;
-    std::uint64_t next_sequence = 1;
-    bool overflow_requested = false;
-    bool overflow_announced = false;
-    WatchTimePoint next_rescan_at = WatchTimePoint::min();
+    WatcherConfig config_;
+    EntryMap cache_;
+    WorkspaceScanner scanner_;
+    std::vector<PendingEvent> pending_;
+    std::map<std::uint64_t, RenamePair> renames_;
+    std::deque<SaveExpectation> saveExpectations_;
+    std::uint64_t nextSequence_ = 1;
+    bool overflowRequested_ = false;
+    bool overflowAnnounced_ = false;
+    WatchTimePoint nextRescanAt_ = WatchTimePoint::min();
 };
 
 WatchEventNormalizer::WatchEventNormalizer(

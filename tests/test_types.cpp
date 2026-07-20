@@ -85,11 +85,11 @@ TEST(cellIndexRoundTrip) {
 
 TEST(documentPositionRoundTrip) {
     ssg::DocumentPosition pos{
-        .byte_offset = ssg::ByteOffset{10},
+        .byteOffset = ssg::ByteOffset{10},
         .line        = ssg::LineIndex{1},
         .cell        = ssg::CellIndex{2},
     };
-    ASSERT_EQ(pos.byte_offset.value(), uint64_t{10});
+    ASSERT_EQ(pos.byteOffset.value(), uint64_t{10});
     ASSERT_EQ(pos.line.value(), uint64_t{1});
     ASSERT_EQ(pos.cell.value(), uint64_t{2});
 }
@@ -161,23 +161,23 @@ TEST(tabWidthEquality) {
 
 TEST(historyConfigDefaults) {
     auto cfg = ssg::HistoryConfig::defaults();
-    ASSERT_EQ(cfg.byte_budget, uint64_t{16u * 1024u * 1024u});
-    ASSERT_EQ(cfg.coalesce_ms, uint32_t{750});
+    ASSERT_EQ(cfg.byteBudget, uint64_t{16u * 1024u * 1024u});
+    ASSERT_EQ(cfg.coalesceMs, uint32_t{750});
 }
 
 TEST(historyConfigRoundTrip) {
     ssg::HistoryConfig cfg;
-    cfg.byte_budget = 1024;
-    cfg.coalesce_ms = 500;
-    ASSERT_EQ(cfg.byte_budget, uint64_t{1024});
-    ASSERT_EQ(cfg.coalesce_ms, uint32_t{500});
+    cfg.byteBudget = 1024;
+    cfg.coalesceMs = 500;
+    ASSERT_EQ(cfg.byteBudget, uint64_t{1024});
+    ASSERT_EQ(cfg.coalesceMs, uint32_t{500});
 }
 
 TEST(historyConfigEquality) {
     ssg::HistoryConfig a;
     ssg::HistoryConfig b;
     ASSERT_TRUE(a == b);
-    b.byte_budget = 1;
+    b.byteBudget = 1;
     ASSERT_TRUE(a != b);
 }
 
@@ -188,18 +188,18 @@ TEST(indentConfigDefaults) {
     ssg::IndentConfig cfg;
     ASSERT_EQ(cfg.style, ssg::IndentStyle::Spaces);
     ASSERT_EQ(cfg.width.value(), 4);
-    ASSERT_TRUE(cfg.auto_detect);
+    ASSERT_TRUE(cfg.autoDetect);
 }
 
 TEST(indentConfigCustomTabs) {
     ssg::IndentConfig cfg{
         .style       = ssg::IndentStyle::Tabs,
         .width       = ssg::TabWidth{2},
-        .auto_detect = false,
+        .autoDetect = false,
     };
     ASSERT_EQ(cfg.style, ssg::IndentStyle::Tabs);
     ASSERT_EQ(cfg.width.value(), 2);
-    ASSERT_FALSE(cfg.auto_detect);
+    ASSERT_FALSE(cfg.autoDetect);
 }
 
 TEST(indentStyleDistinctValues) {

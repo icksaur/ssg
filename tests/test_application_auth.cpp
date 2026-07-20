@@ -55,7 +55,7 @@ TEST(applicationAuthAcceptsOnlyCurrentBearerWithExactCapability) {
     ASSERT_EQ(accepted->principal.capabilities().size(), std::size_t{1});
     ASSERT_EQ(accepted->principal.capabilities().front(),
               ssg::CapabilityId{"local_file_drop"});
-    ASSERT_EQ(accepted->view_id, ssg::ViewId{42});
+    ASSERT_EQ(accepted->viewId, ssg::ViewId{42});
 }
 
 }  // namespace

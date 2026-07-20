@@ -13,8 +13,8 @@ bool validItem(const StatusItem& item) {
     return std::all_of(item.actions.begin(), item.actions.end(),
                        [](const StatusAction& action) {
                            return !action.id.empty() &&
-                                  !action.accessible_label.empty() &&
-                                  !action.command_id.empty();
+                                  !action.accessibleLabel.empty() &&
+                                  !action.commandId.empty();
                        });
 }
 
@@ -48,7 +48,7 @@ StatusEnqueueResult StatusQueue::enqueue(StatusItem item) {
         entries_.erase(worst);
     }
 
-    const std::uint64_t generation = next_generation_++;
+    const std::uint64_t generation = nextGeneration_++;
     entries_.push_back({std::move(item), generation});
     std::sort(entries_.begin(), entries_.end(),
               [](const Entry& left, const Entry& right) {
@@ -92,19 +92,19 @@ StatusActionResult StatusQueue::invokeAction(
         return {StatusActionError::Stale, std::nullopt};
     }
     const auto& selected = entries_[selected_];
-    if (selected.item.id != invocation.status_id ||
+    if (selected.item.id != invocation.statusId ||
         selected.generation != invocation.generation) {
         return {StatusActionError::Stale, std::nullopt};
     }
     const auto action = std::find_if(
         selected.item.actions.begin(), selected.item.actions.end(),
         [&](const StatusAction& candidate) {
-            return candidate.id == invocation.action_id;
+            return candidate.id == invocation.actionId;
         });
     if (action == selected.item.actions.end()) {
         return {StatusActionError::UnknownAction, std::nullopt};
     }
-    return {StatusActionError::None, action->command_id};
+    return {StatusActionError::None, action->commandId};
 }
 
 StatusViewState StatusQueue::viewState() const {
@@ -130,7 +130,7 @@ StatusFooterProjection StatusQueue::footerProjection() const {
         std::to_string(entries_.size());
     projection.actions.reserve(selected.item.actions.size());
     for (const auto& action : selected.item.actions) {
-        projection.actions.push_back({action.id, action.accessible_label});
+        projection.actions.push_back({action.id, action.accessibleLabel});
     }
     return projection;
 }

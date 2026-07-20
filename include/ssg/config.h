@@ -57,8 +57,8 @@ private:
 // byte_budget = 0 disables history.
 // coalesce_ms is the typing-coalescing window (spec §Design, default 750 ms).
 struct HistoryConfig {
-    uint64_t byte_budget{16u * 1024u * 1024u};
-    uint32_t coalesce_ms{750u};
+    uint64_t byteBudget{16u * 1024u * 1024u};
+    uint32_t coalesceMs{750u};
 
     bool operator==(HistoryConfig const&) const noexcept = default;
 
@@ -70,7 +70,7 @@ struct HistoryConfig {
 struct IndentConfig {
     IndentStyle style{IndentStyle::Spaces};
     TabWidth width{4};
-    bool auto_detect{true};
+    bool autoDetect{true};
 
     bool operator==(IndentConfig const&) const noexcept = default;
 };

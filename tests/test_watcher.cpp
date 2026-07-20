@@ -39,11 +39,11 @@ NativeWatchEvent raw(NativeWatchAction action, std::string path,
 WatcherConfig config(std::size_t maxEvents = 16) {
     WatcherConfig result;
     result.debounce = 10ms;
-    result.rescan_retry = 100ms;
-    result.max_queued_events = maxEvents;
-    result.max_pending_renames = 4;
-    result.max_save_expectations = 4;
-    result.max_rescan_entries = 16;
+    result.rescanRetry = 100ms;
+    result.maxQueuedEvents = maxEvents;
+    result.maxPendingRenames = 4;
+    result.maxSaveExpectations = 4;
+    result.maxRescanEntries = 16;
     return result;
 }
 
@@ -94,7 +94,7 @@ TEST(renamePairingPreservesIdentityAndFinalPath) {
     const auto events = normalizer.takeReady(kStart + 13ms);
     ASSERT_EQ(events.size(), std::size_t{1});
     ASSERT_EQ(events[0].kind, WatchEventKind::Rename);
-    ASSERT_EQ(events[0].previous_path,
+    ASSERT_EQ(events[0].previousPath,
               std::optional<std::filesystem::path>{"before.txt"});
     ASSERT_EQ(events[0].path, std::filesystem::path{"after.txt"});
     ASSERT_EQ(events[0].identity, std::optional<FileIdentity>{state(7).identity});
@@ -114,7 +114,7 @@ TEST(renameThenDeleteReportsTheOriginalPath) {
     ASSERT_EQ(events.size(), std::size_t{1});
     ASSERT_EQ(events[0].kind, WatchEventKind::Remove);
     ASSERT_EQ(events[0].path, std::filesystem::path{"before.txt"});
-    ASSERT_FALSE(events[0].previous_path.has_value());
+    ASSERT_FALSE(events[0].previousPath.has_value());
 }
 
 TEST(newSourceRenamedToExistingPathIsOneModify) {
@@ -315,7 +315,7 @@ TEST(rescanUsesStableIdentityToRecoverRename) {
     ASSERT_EQ(events.size(), std::size_t{2});
     ASSERT_EQ(events[1].kind, WatchEventKind::Rename);
     ASSERT_EQ(events[1].path, std::filesystem::path{"after.txt"});
-    ASSERT_EQ(events[1].previous_path,
+    ASSERT_EQ(events[1].previousPath,
               std::optional<std::filesystem::path>{"before.txt"});
 }
 
@@ -383,7 +383,7 @@ TEST(expiringRenameQueueOverflowDoesNotInvalidateIteration) {
 
 TEST(invalidBoundsAreRejectedAtConstruction) {
     auto invalid = config();
-    invalid.max_queued_events = 0;
+    invalid.maxQueuedEvents = 0;
     ASSERT_THROWS(WatchEventNormalizer(invalid, {}, unchangedScan),
                   std::invalid_argument);
 }
@@ -438,7 +438,7 @@ TEST(platformAdapterReportsRecursiveNormalizedEvents) {
             sawRename = sawRename ||
                 (event.kind == WatchEventKind::Rename &&
                  event.path == std::filesystem::path{"sub/renamed.txt"} &&
-                 event.previous_path ==
+                 event.previousPath ==
                      std::optional<std::filesystem::path>{"sub/file.txt"});
         }
         ASSERT_TRUE(sawRename);

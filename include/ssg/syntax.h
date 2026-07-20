@@ -30,7 +30,7 @@ private:
 
 struct SyntaxPoint {
     LineIndex row;
-    std::uint64_t column_byte = 0;
+    std::uint64_t columnByte = 0;
 
     friend bool operator==(const SyntaxPoint&, const SyntaxPoint&) = default;
 };
@@ -38,12 +38,12 @@ struct SyntaxPoint {
 struct SyntaxEdit {
     // Records are non-overlapping and sorted by start_byte in the prior text.
     // Applying them to an incremental parse tree therefore proceeds in reverse.
-    ByteOffset start_byte;
-    ByteOffset old_end_byte;
-    ByteOffset new_end_byte;
-    SyntaxPoint start_position;
-    SyntaxPoint old_end_position;
-    SyntaxPoint new_end_position;
+    ByteOffset startByte;
+    ByteOffset oldEndByte;
+    ByteOffset newEndByte;
+    SyntaxPoint startPosition;
+    SyntaxPoint oldEndPosition;
+    SyntaxPoint newEndPosition;
 
     friend bool operator==(const SyntaxEdit&, const SyntaxEdit&) = default;
 };
@@ -116,8 +116,8 @@ struct CommentRange {
 
 struct LineIndentation {
     LineIndex line;
-    ByteOffset line_start;
-    ByteOffset content_start;
+    ByteOffset lineStart;
+    ByteOffset contentStart;
     std::uint32_t spaces = 0;
     std::uint32_t tabs = 0;
     std::uint32_t columns = 0;
@@ -147,8 +147,8 @@ struct SyntaxParseOutput {
     SyntaxParseHandle parse;
     std::vector<SyntaxSpan> spans;
     std::vector<BracketToken> brackets;
-    std::vector<CommentToken> comment_tokens;
-    std::vector<CommentRange> comment_ranges;
+    std::vector<CommentToken> commentTokens;
+    std::vector<CommentRange> commentRanges;
 };
 
 class SyntaxModel;
@@ -161,7 +161,7 @@ public:
     }
     [[nodiscard]] const std::string& text() const noexcept { return text_; }
     [[nodiscard]] const SyntaxParseHandle& priorParse() const noexcept {
-        return prior_parse_;
+        return priorParse_;
     }
     [[nodiscard]] const std::vector<SyntaxEdit>& edits() const noexcept {
         return edits_;
@@ -179,7 +179,7 @@ private:
     Revision revision_;
     LanguageId language_;
     std::string text_;
-    SyntaxParseHandle prior_parse_;
+    SyntaxParseHandle priorParse_;
     std::vector<SyntaxEdit> edits_;
     std::shared_ptr<std::atomic_bool> cancelled_;
 };
@@ -193,8 +193,8 @@ public:
 };
 
 struct SyntaxConfig {
-    std::uint32_t tab_width = 4;
-    std::size_t maximum_document_bytes = 64 * 1024 * 1024;
+    std::uint32_t tabWidth = 4;
+    std::size_t maximumDocumentBytes = 64 * 1024 * 1024;
 };
 
 class SyntaxViewState {
@@ -212,25 +212,25 @@ public:
         return language_;
     }
     [[nodiscard]] std::uint64_t textBytes() const noexcept {
-        return text_bytes_;
+        return textBytes_;
     }
     [[nodiscard]] const std::vector<SyntaxSpan>& spans() const noexcept {
         return spans_;
     }
     [[nodiscard]] const std::vector<SyntaxBracketPair>& bracketPairs() const noexcept {
-        return bracket_pairs_;
+        return bracketPairs_;
     }
     [[nodiscard]] const std::vector<UnmatchedBracket>& unmatchedBrackets()
         const noexcept {
-        return unmatched_brackets_;
+        return unmatchedBrackets_;
     }
     [[nodiscard]] const std::vector<CommentToken>& commentTokens()
         const noexcept {
-        return comment_tokens_;
+        return commentTokens_;
     }
     [[nodiscard]] const std::vector<CommentRange>& commentRanges()
         const noexcept {
-        return comment_ranges_;
+        return commentRanges_;
     }
     [[nodiscard]] const std::vector<LineIndentation>& indentation()
         const noexcept {
@@ -243,12 +243,12 @@ public:
 private:
     Revision revision_;
     LanguageId language_;
-    std::uint64_t text_bytes_;
+    std::uint64_t textBytes_;
     std::vector<SyntaxSpan> spans_;
-    std::vector<SyntaxBracketPair> bracket_pairs_;
-    std::vector<UnmatchedBracket> unmatched_brackets_;
-    std::vector<CommentToken> comment_tokens_;
-    std::vector<CommentRange> comment_ranges_;
+    std::vector<SyntaxBracketPair> bracketPairs_;
+    std::vector<UnmatchedBracket> unmatchedBrackets_;
+    std::vector<CommentToken> commentTokens_;
+    std::vector<CommentRange> commentRanges_;
     std::vector<LineIndentation> indentation_;
 };
 
@@ -277,7 +277,7 @@ public:
         std::optional<std::vector<LineIndentation>> indentation);
 
     [[nodiscard]] Revision baseRevision() const noexcept {
-        return base_revision_;
+        return baseRevision_;
     }
     [[nodiscard]] Revision revision() const noexcept { return revision_; }
     [[nodiscard]] const std::optional<LanguageId>& language() const noexcept {
@@ -285,7 +285,7 @@ public:
     }
     [[nodiscard]] const std::optional<std::uint64_t>& textBytes()
         const noexcept {
-        return text_bytes_;
+        return textBytes_;
     }
     [[nodiscard]] const std::optional<std::vector<SyntaxSpan>>& spans()
         const noexcept {
@@ -293,19 +293,19 @@ public:
     }
     [[nodiscard]] const std::optional<std::vector<SyntaxBracketPair>>& bracketPairs()
         const noexcept {
-        return bracket_pairs_;
+        return bracketPairs_;
     }
     [[nodiscard]] const std::optional<std::vector<UnmatchedBracket>>&
     unmatchedBrackets() const noexcept {
-        return unmatched_brackets_;
+        return unmatchedBrackets_;
     }
     [[nodiscard]] const std::optional<std::vector<CommentToken>>&
     commentTokens() const noexcept {
-        return comment_tokens_;
+        return commentTokens_;
     }
     [[nodiscard]] const std::optional<std::vector<CommentRange>>&
     commentRanges() const noexcept {
-        return comment_ranges_;
+        return commentRanges_;
     }
     [[nodiscard]] const std::optional<std::vector<LineIndentation>>&
     indentation() const noexcept {
@@ -316,15 +316,15 @@ public:
     friend bool operator==(const SyntaxDelta&, const SyntaxDelta&) = default;
 
 private:
-    Revision base_revision_;
+    Revision baseRevision_;
     Revision revision_;
     std::optional<LanguageId> language_;
-    std::optional<std::uint64_t> text_bytes_;
+    std::optional<std::uint64_t> textBytes_;
     std::optional<std::vector<SyntaxSpan>> spans_;
-    std::optional<std::vector<SyntaxBracketPair>> bracket_pairs_;
-    std::optional<std::vector<UnmatchedBracket>> unmatched_brackets_;
-    std::optional<std::vector<CommentToken>> comment_tokens_;
-    std::optional<std::vector<CommentRange>> comment_ranges_;
+    std::optional<std::vector<SyntaxBracketPair>> bracketPairs_;
+    std::optional<std::vector<UnmatchedBracket>> unmatchedBrackets_;
+    std::optional<std::vector<CommentToken>> commentTokens_;
+    std::optional<std::vector<CommentRange>> commentRanges_;
     std::optional<std::vector<LineIndentation>> indentation_;
 };
 
@@ -373,7 +373,7 @@ enum class SyntaxAcceptError : std::uint8_t {
 
 struct SyntaxAcceptResult {
     SyntaxAcceptError error = SyntaxAcceptError::None;
-    bool used_fallback = false;
+    bool usedFallback = false;
 
     [[nodiscard]] bool accepted() const noexcept {
         return error == SyntaxAcceptError::None;
@@ -400,15 +400,15 @@ public:
     void cancelPending() noexcept;
 
     [[nodiscard]] const SyntaxViewState& viewState() const noexcept {
-        return view_state_;
+        return viewState_;
     }
 
 private:
     std::shared_ptr<SyntaxParser> parser_;
     SyntaxConfig config_;
-    SyntaxViewState view_state_;
-    SyntaxParseHandle accepted_parse_;
-    std::string accepted_text_;
+    SyntaxViewState viewState_;
+    SyntaxParseHandle acceptedParse_;
+    std::string acceptedText_;
     std::shared_ptr<const SyntaxParseRequest> pending_;
 };
 

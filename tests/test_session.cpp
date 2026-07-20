@@ -120,8 +120,8 @@ TEST(clientIdentityAndPrincipalAreIsolated) {
 
     auto client7 = session.attachedClient(ssg::ClientId{7});
     auto client8 = session.attachedClient(ssg::ClientId{8});
-    ASSERT_EQ(client7->view_id, ssg::ViewId{70});
-    ASSERT_EQ(client8->view_id, ssg::ViewId{80});
+    ASSERT_EQ(client7->viewId, ssg::ViewId{70});
+    ASSERT_EQ(client8->viewId, ssg::ViewId{80});
     ASSERT_FALSE(session.attach(principal(7), ssg::ViewId{71}).accepted());
 
     ASSERT_TRUE(
@@ -168,25 +168,25 @@ TEST(handlerFailureIsAtomic) {
     ASSERT_EQ(rejectedResult.error, ssg::CommandError::HandlerFailed);
     ASSERT_EQ(session.revision(), ssg::Revision{1});
     auto topology = session.topology();
-    ASSERT_FALSE(topology.active_workspace.has_value());
-    ASSERT_FALSE(topology.active_view.has_value());
+    ASSERT_FALSE(topology.activeWorkspace.has_value());
+    ASSERT_FALSE(topology.activeView.has_value());
 
     auto threw =
         session.dispatch(ssg::ClientId{1}, request("topology.throw", 1));
     ASSERT_EQ(threw.error, ssg::CommandError::HandlerFailed);
     ASSERT_EQ(session.revision(), ssg::Revision{1});
     topology = session.topology();
-    ASSERT_FALSE(topology.active_workspace.has_value());
-    ASSERT_FALSE(topology.active_view.has_value());
+    ASSERT_FALSE(topology.activeWorkspace.has_value());
+    ASSERT_FALSE(topology.activeView.has_value());
 
     auto committed =
         session.dispatch(ssg::ClientId{1}, request("topology.commit", 1));
     ASSERT_TRUE(committed.accepted());
     ASSERT_EQ(session.revision(), ssg::Revision{2});
     topology = session.topology();
-    ASSERT_EQ(topology.active_workspace,
+    ASSERT_EQ(topology.activeWorkspace,
               std::optional<ssg::WorkspaceId>{ssg::WorkspaceId{2}});
-    ASSERT_EQ(topology.active_view,
+    ASSERT_EQ(topology.activeView,
               std::optional<ssg::ViewId>{ssg::ViewId{3}});
 }
 

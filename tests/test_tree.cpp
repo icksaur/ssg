@@ -81,9 +81,9 @@ TEST(filesystemSnapshotIsStableSortedAndDoesNotFollowSymlinks) {
 TEST(gitAndSymbolSnapshotsAreDeterministicAndUseStableKeys) {
     const auto git = gitTreeSnapshot(
         TreeProviderId{"git"}, TreeRevision{7},
-        {{.workspace_path = "z.cpp", .label = "renamed label",
+        {{.workspacePath = "z.cpp", .label = "renamed label",
           .status = GitTreeStatus::Modified},
-         {.workspace_path = "a.cpp", .label = "a.cpp",
+         {.workspacePath = "a.cpp", .label = "a.cpp",
           .status = GitTreeStatus::Added}});
     ASSERT_EQ(nodeIds(git),
               (std::vector<std::string>{"git:a.cpp", "git:z.cpp"}));
@@ -91,9 +91,9 @@ TEST(gitAndSymbolSnapshotsAreDeterministicAndUseStableKeys) {
 
     const auto symbols = symbolTreeSnapshot(
         TreeProviderId{"symbols"}, TreeRevision{8},
-        {{.stable_key = "type/Z", .label = "renamed Z"},
-         {.stable_key = "type/A", .label = "A"},
-         {.stable_key = "type/A/member", .parent_key = "type/A",
+        {{.stableKey = "type/Z", .label = "renamed Z"},
+         {.stableKey = "type/A", .label = "A"},
+         {.stableKey = "type/A/member", .parentKey = "type/A",
           .label = "member"}});
     ASSERT_EQ(nodeIds(symbols),
               (std::vector<std::string>{"symbols:type/A",
@@ -105,8 +105,8 @@ TEST(expansionSurvivesRefreshByIdentityAndDisappearingNodesArePruned) {
     TreeModel model;
     model.replaceProvider(symbolTreeSnapshot(
         TreeProviderId{"symbols"}, TreeRevision{1},
-        {{.stable_key = "type/A", .label = "A"},
-         {.stable_key = "type/A/member", .parent_key = "type/A",
+        {{.stableKey = "type/A", .label = "A"},
+         {.stableKey = "type/A/member", .parentKey = "type/A",
           .label = "member"}}));
 
     ASSERT_TRUE(model.toggleExpanded(TreeProviderId{"symbols"},
@@ -115,15 +115,15 @@ TEST(expansionSurvivesRefreshByIdentityAndDisappearingNodesArePruned) {
 
     model.replaceProvider(symbolTreeSnapshot(
         TreeProviderId{"symbols"}, TreeRevision{2},
-        {{.stable_key = "type/A", .label = "renamed A"},
-         {.stable_key = "type/A/member", .parent_key = "type/A",
+        {{.stableKey = "type/A", .label = "renamed A"},
+         {.stableKey = "type/A/member", .parentKey = "type/A",
           .label = "renamed member"}}));
     ASSERT_TRUE(onlyProvider(model.viewState()).nodes.front().expanded);
     ASSERT_EQ(onlyProvider(model.viewState()).nodes.size(), std::size_t{2});
 
     model.replaceProvider(symbolTreeSnapshot(
         TreeProviderId{"symbols"}, TreeRevision{3},
-        {{.stable_key = "type/B", .label = "B"}}));
+        {{.stableKey = "type/B", .label = "B"}}));
     ASSERT_FALSE(model.isExpanded(TreeProviderId{"symbols"},
                                    TreeNodeId{"symbols:type/A"}));
 }
@@ -144,13 +144,13 @@ TEST(commandSetIsExactAndInvocationIsProviderDataOnly) {
     TreeModel model;
     model.replaceProvider(symbolTreeSnapshot(
         TreeProviderId{"symbols"}, TreeRevision{1},
-        {{.stable_key = "type/A",
+        {{.stableKey = "type/A",
           .label = "A",
           .commands = {{.id = "symbol.open", .label = "Open symbol"}}}}));
     const auto invocation = model.invokeNodeCommand(
         TreeProviderId{"symbols"}, TreeNodeId{"symbols:type/A"}, "symbol.open");
     ASSERT_TRUE(invocation.has_value());
-    ASSERT_EQ(invocation->command_id, std::string{"symbol.open"});
+    ASSERT_EQ(invocation->commandId, std::string{"symbol.open"});
     ASSERT_FALSE(model.invokeNodeCommand(
         TreeProviderId{"symbols"}, TreeNodeId{"symbols:type/A"}, "missing")
                      .has_value());
@@ -160,9 +160,9 @@ TEST(selectionNavigatesExpandsAndReportsSelectedNode) {
     TreeModel model;
     model.replaceProvider(symbolTreeSnapshot(
         TreeProviderId{"symbols"}, TreeRevision{1},
-        {{.stable_key = "A", .label = "A"},
-         {.stable_key = "A/one", .parent_key = "A", .label = "one"},
-         {.stable_key = "B", .label = "B"}}));
+        {{.stableKey = "A", .label = "A"},
+         {.stableKey = "A/one", .parentKey = "A", .label = "one"},
+         {.stableKey = "B", .label = "B"}}));
 
     // Populating the provider auto-selects its first visible node.
     auto selected = model.selectedNode();
@@ -204,9 +204,9 @@ TEST(selectByIdSetsVisibleSelectionAndRejectsUnknownOrHiddenNodes) {
     TreeModel model;
     model.replaceProvider(symbolTreeSnapshot(
         TreeProviderId{"symbols"}, TreeRevision{1},
-        {{.stable_key = "A", .label = "A"},
-         {.stable_key = "A/one", .parent_key = "A", .label = "one"},
-         {.stable_key = "B", .label = "B"}}));
+        {{.stableKey = "A", .label = "A"},
+         {.stableKey = "A/one", .parentKey = "A", .label = "one"},
+         {.stableKey = "B", .label = "B"}}));
 
     // A is auto-selected; select B directly by id.
     ASSERT_TRUE(model.select(TreeNodeId{"symbols:B"}));
@@ -233,19 +233,19 @@ TEST(boundedDeltaReplaysToIndependentViewAndRejectsStaleBase) {
     TreeModel model;
     model.replaceProvider(symbolTreeSnapshot(
         TreeProviderId{"symbols"}, TreeRevision{1},
-        {{.stable_key = "A", .label = "A"},
-         {.stable_key = "A/one", .parent_key = "A", .label = "one"}}));
+        {{.stableKey = "A", .label = "A"},
+         {.stableKey = "A/one", .parentKey = "A", .label = "one"}}));
     model.toggleExpanded(TreeProviderId{"symbols"}, TreeNodeId{"symbols:A"});
     const auto base = model.viewState();
 
     model.replaceProvider(symbolTreeSnapshot(
         TreeProviderId{"symbols"}, TreeRevision{2},
-        {{.stable_key = "A", .label = "A"},
-         {.stable_key = "A/one", .parent_key = "A", .label = "renamed one"},
-         {.stable_key = "A/two", .parent_key = "A", .label = "two"}}));
+        {{.stableKey = "A", .label = "A"},
+         {.stableKey = "A/one", .parentKey = "A", .label = "renamed one"},
+         {.stableKey = "A/two", .parentKey = "A", .label = "two"}}));
     const auto target = model.viewState();
     const auto delta = deriveTreeDelta(base, target, 8);
-    ASSERT_FALSE(delta.snapshot_required);
+    ASSERT_FALSE(delta.snapshotRequired);
     ASSERT_TRUE(delta.operationCount() <= std::size_t{8});
 
     const auto replay = replayTreeDelta(base, delta);
@@ -263,17 +263,17 @@ TEST(overBudgetDeltaRequiresSnapshotWithoutPartialOperations) {
     TreeModel model;
     model.replaceProvider(symbolTreeSnapshot(
         TreeProviderId{"symbols"}, TreeRevision{1},
-        {{.stable_key = "A", .label = "A"}}));
+        {{.stableKey = "A", .label = "A"}}));
     const auto base = model.viewState();
     model.replaceProvider(symbolTreeSnapshot(
         TreeProviderId{"symbols"}, TreeRevision{2},
-        {{.stable_key = "A", .label = "A"},
-         {.stable_key = "B", .label = "B"},
-         {.stable_key = "C", .label = "C"}}));
+        {{.stableKey = "A", .label = "A"},
+         {.stableKey = "B", .label = "B"},
+         {.stableKey = "C", .label = "C"}}));
     const auto target = model.viewState();
 
     const auto delta = deriveTreeDelta(base, target, 1);
-    ASSERT_TRUE(delta.snapshot_required);
+    ASSERT_TRUE(delta.snapshotRequired);
     ASSERT_TRUE(delta.providers.empty());
     ASSERT_EQ(delta.operationCount(), std::size_t{0});
     const auto replay = replayTreeDelta(base, delta);

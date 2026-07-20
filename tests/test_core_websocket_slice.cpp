@@ -134,7 +134,7 @@ TEST(codecRoundTripAndMalformedCorpus) {
         ssg::encodeInsertRequest({ssg::Revision{9}, "a b\n\xC3\xA9"});
     auto const decoded = ssg::decodeInsertRequest(wire, limits);
     ASSERT_TRUE(decoded.accepted());
-    ASSERT_EQ(decoded.request->base_revision, ssg::Revision{9});
+    ASSERT_EQ(decoded.request->baseRevision, ssg::Revision{9});
     ASSERT_EQ(decoded.request->text, std::string{"a b\n\xC3\xA9"});
 
     for (auto const& malformed :
@@ -181,7 +181,7 @@ TEST(staleAndMalformedRequestsAreFailureAtomic) {
         direct.execute(ssg::ClientId{1}, {ssg::Revision{1}, "first"});
     auto const stale =
         direct.execute(ssg::ClientId{1}, {ssg::Revision{1}, "stale"});
-    ASSERT_EQ(stale.command_error, ssg::CommandError::StaleRevision);
+    ASSERT_EQ(stale.commandError, ssg::CommandError::StaleRevision);
     ASSERT_EQ(stale.snapshot, accepted.snapshot);
     ASSERT_FALSE(stale.delta.has_value());
 

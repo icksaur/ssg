@@ -9,13 +9,13 @@ namespace {
 
 bool shellEqual(ShellViewState const& left, ShellViewState const& right) {
     return left.viewport == right.viewport && left.header == right.header &&
-           left.footer == right.footer && left.tab_bar == right.tab_bar &&
+           left.footer == right.footer && left.tabBar == right.tabBar &&
            left.panel == right.panel &&
-           left.panel_scrollbar == right.panel_scrollbar &&
+           left.panelScrollbar == right.panelScrollbar &&
            left.prompt == right.prompt &&
            left.panes == right.panes &&
-           left.tab_hits == right.tab_hits &&
-           left.accessibility_nodes == right.accessibility_nodes;
+           left.tabHits == right.tabHits &&
+           left.accessibilityNodes == right.accessibilityNodes;
 }
 
 SelectionViewDelta selectionDelta(SelectionViewState const& before,
@@ -74,17 +74,17 @@ bool operator==(SessionSnapshotSections const& left,
     return left.document == right.document &&
            left.selection == right.selection && left.history == right.history &&
            left.clipboard == right.clipboard &&
-           left.prompt_status == right.prompt_status &&
+           left.promptStatus == right.promptStatus &&
            left.search == right.search &&
-           left.find_replace == right.find_replace &&
+           left.findReplace == right.findReplace &&
            left.settings == right.settings && left.keymap == right.keymap &&
-           left.text_encoding == right.text_encoding &&
+           left.textEncoding == right.textEncoding &&
            left.tabs == right.tabs && left.diff == right.diff &&
-           left.external_modification == right.external_modification &&
-           left.follow_edits == right.follow_edits &&
+           left.externalModification == right.externalModification &&
+           left.followEdits == right.followEdits &&
            left.tree == right.tree && left.syntax == right.syntax &&
-           left.lsp_sync == right.lsp_sync &&
-           left.lsp_features == right.lsp_features &&
+           left.lspSync == right.lspSync &&
+           left.lspFeatures == right.lspFeatures &&
            left.theme == right.theme && shellEqual(left.shell, right.shell) &&
            left.palette == right.palette;
 }
@@ -117,31 +117,31 @@ SessionDelta::SessionDelta(
     FollowEditsDelta followEdits, TreeDelta tree, SyntaxDelta syntax,
     LspSyncDelta lspSync, LspFeatureDelta lspFeatures,
     ThemeSectionDelta theme, ShellSectionDelta shell, ViewportDelta viewport)
-    : base_revision_{baseRevision},
+    : baseRevision_{baseRevision},
       revision_{revision},
-      client_id_{clientId},
-      view_id_{viewId},
+      clientId_{clientId},
+      viewId_{viewId},
       capabilities_{std::move(capabilities)},
       topology_{std::move(topology)},
       document_{std::move(document)},
-      document_caret_{documentCaret},
+      documentCaret_{documentCaret},
       selection_{std::move(selection)},
       history_{std::move(history)},
       clipboard_{std::move(clipboard)},
-      prompt_status_{std::move(promptStatus)},
+      promptStatus_{std::move(promptStatus)},
       search_{std::move(search)},
-      find_replace_{std::move(findReplace)},
+      findReplace_{std::move(findReplace)},
       settings_{std::move(settings)},
       keymap_{std::move(keymap)},
-      text_encoding_{std::move(textEncoding)},
+      textEncoding_{std::move(textEncoding)},
       tabs_{std::move(tabs)},
       diff_{std::move(diff)},
-      external_modification_{std::move(externalModification)},
-      follow_edits_{std::move(followEdits)},
+      externalModification_{std::move(externalModification)},
+      followEdits_{std::move(followEdits)},
       tree_{std::move(tree)},
       syntax_{std::move(syntax)},
-      lsp_sync_{std::move(lspSync)},
-      lsp_features_{std::move(lspFeatures)},
+      lspSync_{std::move(lspSync)},
+      lspFeatures_{std::move(lspFeatures)},
       theme_{std::move(theme)},
       shell_{std::move(shell)},
       viewport_{std::move(viewport)} {}
@@ -159,8 +159,8 @@ SessionSnapshot assembleSessionSnapshot(
 
 SessionDelta deriveSessionDelta(SessionSnapshot const& before,
                                   SessionSnapshot const& after) {
-    if (before.client().client_id != after.client().client_id ||
-        before.client().view_id != after.client().view_id ||
+    if (before.client().clientId != after.client().clientId ||
+        before.client().viewId != after.client().viewId ||
         before.client().capabilities != after.client().capabilities) {
         throw std::invalid_argument{
             "session deltas require one immutable client attachment"};
@@ -183,8 +183,8 @@ SessionDelta deriveSessionDelta(SessionSnapshot const& before,
     return {
         before.revision(),
         after.revision(),
-        before.client().client_id,
-        before.client().view_id,
+        before.client().clientId,
+        before.client().viewId,
         before.client().capabilities,
         before.topology() == after.topology()
             ? std::nullopt
@@ -196,21 +196,21 @@ SessionDelta deriveSessionDelta(SessionSnapshot const& before,
         selectionDelta(old.selection, next.selection),
         deriveHistoryDelta(old.history, next.history),
         deriveClipboardDelta(old.clipboard, next.clipboard),
-        derivePromptStatusDelta(old.prompt_status, next.prompt_status),
+        derivePromptStatusDelta(old.promptStatus, next.promptStatus),
         deriveSearchDelta(old.search, next.search),
-        deriveFindReplaceDelta(old.find_replace, next.find_replace),
+        deriveFindReplaceDelta(old.findReplace, next.findReplace),
         settingsDelta(old.settings, next.settings),
         deriveKeymapDelta(old.keymap, next.keymap),
-        deriveTextEncodingDelta(old.text_encoding, next.text_encoding),
+        deriveTextEncodingDelta(old.textEncoding, next.textEncoding),
         deriveTabDelta(old.tabs, next.tabs),
         deriveDiffDelta(old.diff, next.diff),
-        deriveExternalModificationDelta(old.external_modification,
-                                            next.external_modification),
-        deriveFollowEditsDelta(old.follow_edits, next.follow_edits),
+        deriveExternalModificationDelta(old.externalModification,
+                                            next.externalModification),
+        deriveFollowEditsDelta(old.followEdits, next.followEdits),
         deriveTreeDelta(old.tree, next.tree, 4096),
         deriveSyntaxDelta(old.syntax, next.syntax),
-        deriveLspSyncDelta(old.lsp_sync, next.lsp_sync),
-        deriveLspFeatureDelta(old.lsp_features, next.lsp_features),
+        deriveLspSyncDelta(old.lspSync, next.lspSync),
+        deriveLspFeatureDelta(old.lspFeatures, next.lspFeatures),
         {old.theme == next.theme ? std::nullopt
                                  : std::optional{next.theme}},
         {shellEqual(old.shell, next.shell)
@@ -223,10 +223,10 @@ SessionDelta deriveSessionDelta(SessionSnapshot const& before,
 
 SessionReplayResult replaySessionDelta(SessionSnapshot const& base,
                                          SessionDelta const& delta) {
-    if (base.revision() != delta.base_revision_ ||
-        delta.revision_ <= delta.base_revision_ ||
-        base.client().client_id != delta.client_id_ ||
-        base.client().view_id != delta.view_id_ ||
+    if (base.revision() != delta.baseRevision_ ||
+        delta.revision_ <= delta.baseRevision_ ||
+        base.client().clientId != delta.clientId_ ||
+        base.client().viewId != delta.viewId_ ||
         base.client().capabilities != delta.capabilities_) {
         return {std::nullopt, "session delta base revision mismatch"};
     }
@@ -235,36 +235,36 @@ SessionReplayResult replaySessionDelta(SessionSnapshot const& base,
     if (delta.document_) {
         document = replayDocumentDelta(
             base.sections().document, *delta.document_,
-            delta.document_caret_.value_or(base.sections().document.caret));
-    } else if (delta.document_caret_) {
-        if (delta.document_caret_->value() > document->text.size()) {
+            delta.documentCaret_.value_or(base.sections().document.caret));
+    } else if (delta.documentCaret_) {
+        if (delta.documentCaret_->value() > document->text.size()) {
             return {std::nullopt, "document caret is out of bounds"};
         }
-        document->caret = *delta.document_caret_;
+        document->caret = *delta.documentCaret_;
     }
     auto selection = replayReplacement(base.sections().selection,
                                         delta.selection_);
     auto history = replayReplacement(base.sections().history, delta.history_);
     auto clipboard =
         replayReplacement(base.sections().clipboard, delta.clipboard_);
-    auto promptStatus = replayReplacement(base.sections().prompt_status,
-                                            delta.prompt_status_);
+    auto promptStatus = replayReplacement(base.sections().promptStatus,
+                                            delta.promptStatus_);
     auto search = replaySearchDelta(base.sections().search, delta.search_);
-    auto findReplace = replayFindReplaceDelta(base.sections().find_replace,
-                                                  delta.find_replace_);
+    auto findReplace = replayFindReplaceDelta(base.sections().findReplace,
+                                                  delta.findReplace_);
     auto settings = replaySettings(base.sections().settings, delta.settings_);
     auto keymap = replayReplacement(base.sections().keymap, delta.keymap_);
     auto tabs = replayTabDelta(base.sections().tabs, delta.tabs_);
     auto diff = replayDiffDelta(base.sections().diff, delta.diff_);
     auto external = replayExternalModificationDelta(
-        base.sections().external_modification,
-        delta.external_modification_);
+        base.sections().externalModification,
+        delta.externalModification_);
     auto tree = replayTreeDelta(base.sections().tree, delta.tree_);
     auto syntax = replaySyntaxDelta(base.sections().syntax, delta.syntax_);
     auto lspSync =
-        replayLspSyncDelta(base.sections().lsp_sync, delta.lsp_sync_);
+        replayLspSyncDelta(base.sections().lspSync, delta.lspSync_);
     auto lspFeatures = replayLspFeatureDelta(
-        base.sections().lsp_features, delta.lsp_features_);
+        base.sections().lspFeatures, delta.lspFeatures_);
 
     if (!document || !selection || !history || !clipboard || !promptStatus ||
         !search.accepted() ||
@@ -275,28 +275,28 @@ SessionReplayResult replaySessionDelta(SessionSnapshot const& base,
         return {std::nullopt, "malformed feature delta"};
     }
 
-    auto textEncoding = base.sections().text_encoding;
-    if (delta.text_encoding_) {
-        if (delta.text_encoding_->before != textEncoding) {
+    auto textEncoding = base.sections().textEncoding;
+    if (delta.textEncoding_) {
+        if (delta.textEncoding_->before != textEncoding) {
             return {std::nullopt, "text encoding delta base mismatch"};
         }
-        textEncoding = delta.text_encoding_->after;
+        textEncoding = delta.textEncoding_->after;
     }
 
-    auto followEdits = base.sections().follow_edits;
-    if (delta.follow_edits_.base_generation != followEdits.generation ||
-        (delta.follow_edits_.replacement &&
-         (delta.follow_edits_.replacement->generation !=
-              delta.follow_edits_.generation ||
-          delta.follow_edits_.generation <
-              delta.follow_edits_.base_generation)) ||
-        (!delta.follow_edits_.replacement &&
-         delta.follow_edits_.generation !=
-             delta.follow_edits_.base_generation)) {
+    auto followEdits = base.sections().followEdits;
+    if (delta.followEdits_.baseGeneration != followEdits.generation ||
+        (delta.followEdits_.replacement &&
+         (delta.followEdits_.replacement->generation !=
+              delta.followEdits_.generation ||
+          delta.followEdits_.generation <
+              delta.followEdits_.baseGeneration)) ||
+        (!delta.followEdits_.replacement &&
+         delta.followEdits_.generation !=
+             delta.followEdits_.baseGeneration)) {
         return {std::nullopt, "follow-edits delta base mismatch"};
     }
-    if (delta.follow_edits_.replacement) {
-        followEdits = *delta.follow_edits_.replacement;
+    if (delta.followEdits_.replacement) {
+        followEdits = *delta.followEdits_.replacement;
     }
 
     auto theme = delta.theme_.replacement.value_or(base.sections().theme);

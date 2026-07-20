@@ -49,8 +49,8 @@ private:
 
     [[nodiscard]] std::string_view pieceText(const Node& node) const noexcept;
 
-    SharedBytes original_buffer_;
-    std::string add_buffer_;
+    SharedBytes originalBuffer_;
+    std::string addBuffer_;
     NodePtr root_;
 };
 

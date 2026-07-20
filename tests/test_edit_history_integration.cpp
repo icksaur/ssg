@@ -94,7 +94,7 @@ TEST(noopAndRejectedCommandsDoNotCreateHistory) {
     ASSERT_FALSE(rejected.accepted());
     ASSERT_EQ(rejected.error,
               ssg::EditHistoryIntegrationError::TextInputRejected);
-    ASSERT_EQ(rejected.text_input_error,
+    ASSERT_EQ(rejected.textInputError,
               std::optional{ssg::TextInputError::ReadOnly});
     ASSERT_EQ(readOnly.snapshot().text, std::string{"x"});
     ASSERT_FALSE(history.canUndo());

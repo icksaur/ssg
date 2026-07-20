@@ -39,15 +39,15 @@ public:
 };
 
 void validateConfig(const ScratchStoreConfig& config) {
-    if (config.maximum_age < std::chrono::seconds::zero()) {
+    if (config.maximumAge < std::chrono::seconds::zero()) {
         throw std::invalid_argument(
             "scratch maximum age must not be negative");
     }
-    if (config.compaction_threshold_bytes == 0) {
+    if (config.compactionThresholdBytes == 0) {
         throw std::invalid_argument(
             "scratch compaction threshold must be greater than zero");
     }
-    if (config.durability_target <= std::chrono::milliseconds::zero()) {
+    if (config.durabilityTarget <= std::chrono::milliseconds::zero()) {
         throw std::invalid_argument(
             "scratch durability target must be greater than zero");
     }
@@ -106,7 +106,7 @@ std::uintmax_t directoryBytes(const std::filesystem::path& root) {
 struct Remnant {
     std::string id;
     std::filesystem::path path;
-    std::filesystem::path workspace_path;
+    std::filesystem::path workspacePath;
 };
 
 std::vector<Remnant> restoredRemnants(
@@ -196,11 +196,11 @@ public:
          JournalRecoverySet recovery,
          std::unique_ptr<ScratchStorage> ownedStorage,
          ScratchStorage& storage)
-        : scratch_root_(std::move(scratchRoot)),
+        : scratchRoot_(std::move(scratchRoot)),
           config_(config),
           session_(std::move(session)),
           recovery_(std::move(recovery)),
-          owned_storage_(std::move(ownedStorage)),
+          ownedStorage_(std::move(ownedStorage)),
           storage_(storage),
           worker_([this] { run(); }) {}
 
@@ -210,7 +210,7 @@ public:
         std::lock_guard lock{mutex_};
         requireAccepting();
         applyDocument(recovery_, document);
-        enqueueLocked({JobKind::Document, ++accepted_generation_, recovery_,
+        enqueueLocked({JobKind::Document, ++acceptedGeneration_, recovery_,
                         std::move(document), std::nullopt});
     }
 
@@ -218,14 +218,14 @@ public:
         std::lock_guard lock{mutex_};
         requireAccepting();
         applyRemove(recovery_, key);
-        enqueueLocked({JobKind::Remove, ++accepted_generation_, recovery_,
+        enqueueLocked({JobKind::Remove, ++acceptedGeneration_, recovery_,
                         std::nullopt, std::move(key)});
     }
 
     void compact() {
         std::lock_guard lock{mutex_};
         requireAccepting();
-        enqueueLocked({JobKind::Checkpoint, ++accepted_generation_, recovery_,
+        enqueueLocked({JobKind::Checkpoint, ++acceptedGeneration_, recovery_,
                         std::nullopt, std::nullopt});
     }
 
@@ -237,57 +237,57 @@ public:
     ScratchDurabilityState durabilityState() const {
         std::lock_guard lock{mutex_};
         ScratchDurabilityState result;
-        result.accepted_generation = accepted_generation_;
-        result.durable_generation = durable_generation_;
+        result.acceptedGeneration = acceptedGeneration_;
+        result.durableGeneration = durableGeneration_;
         result.failure = failure_;
         if (!failure_.empty()) {
             result.kind = ScratchDurability::Failed;
-        } else if (durable_generation_ < accepted_generation_) {
+        } else if (durableGeneration_ < acceptedGeneration_) {
             result.kind = ScratchDurability::Pending;
             result.overdue =
-                pending_since_.has_value() &&
-                std::chrono::steady_clock::now() - *pending_since_ >
-                    config_.durability_target;
+                pendingSince_.has_value() &&
+                std::chrono::steady_clock::now() - *pendingSince_ >
+                    config_.durabilityTarget;
         }
         return result;
     }
 
     bool waitUntilDurable(std::chrono::milliseconds timeout) const {
         std::unique_lock lock{mutex_};
-        const auto target = accepted_generation_;
+        const auto target = acceptedGeneration_;
         condition_.wait_for(lock, timeout, [&] {
-            return !failure_.empty() || durable_generation_ >= target;
+            return !failure_.empty() || durableGeneration_ >= target;
         });
-        return failure_.empty() && durable_generation_ >= target;
+        return failure_.empty() && durableGeneration_ >= target;
     }
 
     ScratchQuotaResult applyQuotas() {
         ScratchQuotaResult result;
-        auto remnants = restoredRemnants(scratch_root_);
+        auto remnants = restoredRemnants(scratchRoot_);
         const auto now = std::chrono::system_clock::now();
         for (const auto& remnant : remnants) {
-            if (!olderThan(remnant, config_.maximum_age, now)) continue;
+            if (!olderThan(remnant, config_.maximumAge, now)) continue;
             removeRemnant(remnant);
-            result.evicted_session_ids.push_back(remnant.id);
+            result.evictedSessionIds.push_back(remnant.id);
         }
 
-        auto remaining = restoredRemnants(scratch_root_);
-        result.remaining_bytes = directoryBytes(scratch_root_);
+        auto remaining = restoredRemnants(scratchRoot_);
+        result.remainingBytes = directoryBytes(scratchRoot_);
         for (const auto& remnant : remaining) {
-            if (result.remaining_bytes <= config_.maximum_bytes) break;
+            if (result.remainingBytes <= config_.maximumBytes) break;
             removeRemnant(remnant);
-            result.evicted_session_ids.push_back(remnant.id);
-            result.remaining_bytes = directoryBytes(scratch_root_);
+            result.evictedSessionIds.push_back(remnant.id);
+            result.remainingBytes = directoryBytes(scratchRoot_);
         }
-        result.within_byte_quota =
-            result.remaining_bytes <= config_.maximum_bytes;
+        result.withinByteQuota =
+            result.remainingBytes <= config_.maximumBytes;
         return result;
     }
 
     std::size_t purgeWorkspace() {
         const auto currentWorkspace = session_.path().parent_path().parent_path();
         return purge([&](const Remnant& remnant) {
-            return remnant.workspace_path == currentWorkspace;
+            return remnant.workspacePath == currentWorkspace;
         });
     }
 
@@ -313,7 +313,7 @@ private:
     template <typename Predicate>
     std::size_t purge(Predicate predicate) {
         std::size_t count = 0;
-        for (const auto& remnant : restoredRemnants(scratch_root_)) {
+        for (const auto& remnant : restoredRemnants(scratchRoot_)) {
             if (!predicate(remnant)) continue;
             removeRemnant(remnant);
             ++count;
@@ -331,7 +331,7 @@ private:
     }
 
     void enqueueLocked(Job job) {
-        if (!pending_since_) pending_since_ = std::chrono::steady_clock::now();
+        if (!pendingSince_) pendingSince_ = std::chrono::steady_clock::now();
         jobs_.push_back(std::move(job));
         condition_.notify_all();
     }
@@ -369,7 +369,7 @@ private:
                         std::filesystem::file_size(session_.journalPath(),
                                                    error);
                     if (!error &&
-                        bytes >= config_.compaction_threshold_bytes) {
+                        bytes >= config_.compactionThresholdBytes) {
                         storage_.replaceCheckpoint(session_.journalPath(),
                                                     job.snapshot);
                     }
@@ -389,28 +389,28 @@ private:
             }
 
             std::lock_guard lock{mutex_};
-            durable_generation_ = job.generation;
-            if (durable_generation_ == accepted_generation_) {
-                pending_since_.reset();
+            durableGeneration_ = job.generation;
+            if (durableGeneration_ == acceptedGeneration_) {
+                pendingSince_.reset();
             }
             condition_.notify_all();
         }
     }
 
-    std::filesystem::path scratch_root_;
+    std::filesystem::path scratchRoot_;
     ScratchStoreConfig config_;
     ScratchSession session_;
     mutable std::mutex mutex_;
     mutable std::condition_variable condition_;
     JournalRecoverySet recovery_;
     std::deque<Job> jobs_;
-    std::uint64_t accepted_generation_ = 0;
-    std::uint64_t durable_generation_ = 0;
-    std::optional<std::chrono::steady_clock::time_point> pending_since_;
+    std::uint64_t acceptedGeneration_ = 0;
+    std::uint64_t durableGeneration_ = 0;
+    std::optional<std::chrono::steady_clock::time_point> pendingSince_;
     std::string failure_;
     bool accepting_ = true;
     bool stopping_ = false;
-    std::unique_ptr<ScratchStorage> owned_storage_;
+    std::unique_ptr<ScratchStorage> ownedStorage_;
     ScratchStorage& storage_;
     std::thread worker_;
 };

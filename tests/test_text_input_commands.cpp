@@ -57,7 +57,7 @@ std::vector<std::uint64_t> caretOffsets(const SelectionSet& value) {
     std::vector<std::uint64_t> offsets;
     for (const auto& selection : value.items()) {
         ASSERT_TRUE(selection.isCaret());
-        offsets.push_back(selection.active.byte_offset.value());
+        offsets.push_back(selection.active.byteOffset.value());
     }
     return offsets;
 }
@@ -70,7 +70,7 @@ std::string applyResult(Document& document,
         const auto applied = document.apply(*result.transaction);
         ASSERT_TRUE(applied.accepted());
     }
-    ASSERT_EQ(document.snapshot().text, result.resulting_text);
+    ASSERT_EQ(document.snapshot().text, result.resultingText);
     return document.snapshot().text;
 }
 

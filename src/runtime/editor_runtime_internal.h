@@ -58,8 +58,8 @@ struct EditorRuntime::Impl final : CommandServices,
          bool deferEnrichment = false);
 
     std::filesystem::path root;
-    std::filesystem::path scratch_root;
-    std::filesystem::path recovery_root;
+    std::filesystem::path scratchRoot;
+    std::filesystem::path recoveryRoot;
     RecoveryActions recovery;
     ScratchStore scratch;
     Workspace workspace;
@@ -67,12 +67,12 @@ struct EditorRuntime::Impl final : CommandServices,
     std::map<std::uint64_t, DocumentHistory> histories;
     ClipboardRegister clipboard;
     SettingsModel settings;
-    FindReplaceController find_replace;
+    FindReplaceController findReplace;
     // The document the find/replace controller last evaluated against.  Find
     // matches are byte offsets into one specific document; when the active
     // document identity or revision drifts from this, the controller is stale and
     // must be dismissed (see reconcile_find_document).
-    std::optional<FileDocumentId> find_document_id;
+    std::optional<FileDocumentId> findDocumentId;
     PromptSurface prompt;
     StatusQueue status;
     ShellState shell;
@@ -84,29 +84,29 @@ struct EditorRuntime::Impl final : CommandServices,
     SyntaxModel syntax;
     SearchController search;
     NavigationHistory navigation{64};
-    LspSyncViewState lsp_sync;
-    LspFeatureViewState lsp_features;
+    LspSyncViewState lspSync;
+    LspFeatureViewState lspFeatures;
     KeymapViewState keymap{"default", {}};
     ThemeSnapshot theme{};
-    std::optional<WorkspaceReplacePreview> workspace_replace_preview;
+    std::optional<WorkspaceReplacePreview> workspaceReplacePreview;
     std::unique_ptr<EditorSession> session;
     // Set by palette.execute after validating the selected candidate; the
     // EditorRuntime dispatch wrapper runs it through the registry once the
     // palette.execute transaction's session lock releases (the session mutex is
     // non-reentrant, so a handler cannot re-enter dispatch).
-    std::optional<std::string> pending_palette_target;
-    std::uint32_t requested_first_visual_row = 0;
+    std::optional<std::string> pendingPaletteTarget;
+    std::uint32_t requestedFirstVisualRow = 0;
     // Horizontal scroll offset in cells (word wrap OFF only; VP-H). Reveal and the
     // horizontal scroll command update it; the viewport path passes it through.
-    std::uint32_t requested_first_visual_column = 0;
+    std::uint32_t requestedFirstVisualColumn = 0;
     // The document pane geometry from the most recent snapshot, plus the prompt
     // rows that snapshot reserved.  Used to reveal find matches against the real
     // pane height (not a fixed 24) so a match never lands behind the prompt rows.
     // Adding the reserved rows back yields a prompt-agnostic pane height, from
     // which the reveal subtracts the find prompt's rows deterministically.
-    mutable std::uint32_t last_pane_content_rows = 24;
-    mutable std::uint32_t last_pane_content_columns = 80;
-    mutable std::uint32_t last_reserved_prompt_rows = 0;
+    mutable std::uint32_t lastPaneContentRows = 24;
+    mutable std::uint32_t lastPaneContentColumns = 80;
+    mutable std::uint32_t lastReservedPromptRows = 0;
     // The side-panel (tree) content height from the most recent snapshot (a
     // read-only layout cache, like last_pane_content_rows), and the server-owned
     // tree scroll offset. The offset is written on the command path only
@@ -114,11 +114,11 @@ struct EditorRuntime::Impl final : CommandServices,
     // for a wheel) using the last cached height, so snapshot generation never
     // mutates it — one client's snapshot cannot move another client's scroll
     // (see doc/spec-scroll.md R2).
-    mutable std::uint32_t last_panel_content_rows = 0;
-    std::uint32_t tree_first_visible = 0;
-    bool word_wrap = false;
-    std::uint64_t next_status_id = 1;
-    std::uint64_t next_tree_revision = 1;
+    mutable std::uint32_t lastPanelContentRows = 0;
+    std::uint32_t treeFirstVisible = 0;
+    bool wordWrap = false;
+    std::uint64_t nextStatusId = 1;
+    std::uint64_t nextTreeRevision = 1;
 
     [[nodiscard]] CommandHandlerResult runTransaction(
         std::function<CommandHandlerResult()> operation) override;
@@ -222,11 +222,11 @@ struct EditorRuntime::Impl final : CommandServices,
     // pending scan.  The run counters exist for the startup oracle to assert no
     // scan happened before priming.
     void primeDeferred();
-    bool deferring_enrichment = false;
-    bool pending_tree_refresh = false;
-    bool pending_syntax_refresh = false;
-    std::uint64_t tree_scan_count = 0;
-    std::uint64_t syntax_run_count = 0;
+    bool deferringEnrichment = false;
+    bool pendingTreeRefresh = false;
+    bool pendingSyntaxRefresh = false;
+    std::uint64_t treeScanCount = 0;
+    std::uint64_t syntaxRunCount = 0;
     void enqueueStatus(StatusPriority priority, std::string text);
 };
 

@@ -22,10 +22,10 @@ struct ByteRange {
 };
 
 struct FindOptions {
-    bool case_sensitive = false;
-    bool whole_word = false;
+    bool caseSensitive = false;
+    bool wholeWord = false;
     bool regex = false;
-    bool selection_only = false;
+    bool selectionOnly = false;
     bool operator==(const FindOptions&) const noexcept = default;
 };
 
@@ -53,7 +53,7 @@ struct FindRequest {
     std::string query;
     FindOptions options;
     std::optional<ByteRange> selection;
-    std::uint64_t work_budget = 1'000'000;
+    std::uint64_t workBudget = 1'000'000;
     const std::atomic_bool* cancelled = nullptr;
 };
 
@@ -118,13 +118,13 @@ private:
 struct FindReplaceViewState {
     std::uint64_t generation = 0;
     bool open = false;
-    bool replace_mode = false;
-    Revision source_revision{0};
+    bool replaceMode = false;
+    Revision sourceRevision{0};
     std::string query;
     std::string replacement;
     FindOptions options;
     std::vector<FindMatch> matches;
-    std::optional<std::size_t> active_match;
+    std::optional<std::size_t> activeMatch;
     FindReplaceError error = FindReplaceError::None;
     std::string message;
     bool operator==(const FindReplaceViewState&) const = default;
@@ -132,7 +132,7 @@ struct FindReplaceViewState {
 
 struct FindReplaceDelta {
     bool changed = false;
-    std::uint64_t base_generation = 0;
+    std::uint64_t baseGeneration = 0;
     std::optional<FindReplaceViewState> replacement;
     bool operator==(const FindReplaceDelta&) const = default;
 };
@@ -208,7 +208,7 @@ struct WorkspaceFileReplacement {
 };
 
 struct WorkspaceReplacePreview {
-    Revision source_revision{0};
+    Revision sourceRevision{0};
     std::string query;
     std::string replacement;
     FindOptions options;
@@ -224,8 +224,8 @@ struct WorkspaceReplaceArguments {
 };
 
 struct WorkspaceRecoveryRecord {
-    Revision source_revision{0};
-    Revision applied_revision{0};
+    Revision sourceRevision{0};
+    Revision appliedRevision{0};
     std::vector<WorkspaceFileReplacement> changes;
     bool operator==(const WorkspaceRecoveryRecord&) const = default;
 };
