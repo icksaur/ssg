@@ -201,6 +201,11 @@ DecodeTextResult normalized(ScalarResult scalar_result,
     text.status.had_bom = had_bom;
     for (std::size_t index = 0; index < scalar_result.scalars.size(); ++index) {
         const auto value = scalar_result.scalars[index].value;
+        if (value == 0) {
+            return {std::nullopt,
+                    invalid_input(scalar_result.scalars[index].utf8_offset,
+                                  "NUL byte is not valid document text")};
+        }
         if (value == U'\r') {
             if (index + 1 < scalar_result.scalars.size() &&
                 scalar_result.scalars[index + 1].value == U'\n') {
@@ -252,6 +257,11 @@ DecodeTextResult decode_utf8_fused(std::span<const std::uint8_t> input,
     std::size_t index = 0;
     while (index < n) {
         const std::uint8_t first = input[index];
+        if (first == 0x00) {
+            return {std::nullopt,
+                    invalid_input(base_offset + index,
+                                  "NUL byte is not valid document text")};
+        }
         if (first == '\r') {
             if (index + 1 < n && input[index + 1] == '\n') {
                 text.line_terminators.push_back(LineTerminator::crlf);

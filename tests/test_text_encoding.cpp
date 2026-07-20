@@ -258,6 +258,12 @@ TEST(fused_decode_preserves_malformed_offsets) {
     const auto bom_relative = decode({0xef, 0xbb, 0xbf, 'a', 0xc0});
     ASSERT_FALSE(bom_relative.accepted());
     ASSERT_EQ(bom_relative.error->utf8_offset, std::size_t{4});
+
+    // A NUL byte is not valid document text; decode rejects it so ValidatedUtf8
+    // cannot carry NUL and Document's no-NUL invariant cannot be bypassed.
+    const auto nul = decode({'a', 0x00, 'b'});
+    ASSERT_FALSE(nul.accepted());
+    ASSERT_EQ(nul.error->utf8_offset, std::size_t{1});
 }
 
 } // namespace
