@@ -19,7 +19,7 @@ struct Selection {
 
     [[nodiscard]] const DocumentPosition& lower() const noexcept;
     [[nodiscard]] const DocumentPosition& upper() const noexcept;
-    [[nodiscard]] bool is_caret() const noexcept;
+    [[nodiscard]] bool isCaret() const noexcept;
     bool operator==(const Selection&) const noexcept = default;
 };
 
@@ -37,12 +37,12 @@ private:
 
 struct SelectionViewState {
     SelectionSet selections;
-    std::uint32_t first_visual_row;
+    std::uint32_t firstVisualRow;
     // Horizontal scroll offset in cells (word wrap OFF only; VP-H / M12). Reveal
     // keeps the primary caret's cell column within [first_visual_column,
     // first_visual_column + pane_width). Always 0 when word wrap is on.
-    std::uint32_t first_visual_column = 0;
-    std::optional<CellIndex> desired_cell;
+    std::uint32_t firstVisualColumn = 0;
+    std::optional<CellIndex> desiredCell;
 
     bool operator==(const SelectionViewState&) const noexcept = default;
 };
@@ -62,42 +62,42 @@ struct BracketPair {
 };
 
 enum class SelectionCommand : std::uint8_t {
-    cursor_set_position,
-    cursor_left,
-    cursor_right,
-    cursor_word_left,
-    cursor_word_right,
-    cursor_line_up,
-    cursor_line_down,
-    cursor_line_start,
-    cursor_line_end,
-    cursor_page_up,
-    cursor_page_down,
-    cursor_document_start,
-    cursor_document_end,
-    select_set_range,
-    select_add_range,
-    select_left,
-    select_right,
-    select_word_left,
-    select_word_right,
-    select_line_up,
-    select_line_down,
-    select_line_start,
-    select_line_end,
-    select_page_up,
-    select_page_down,
-    select_document_start,
-    select_document_end,
-    select_all,
-    select_add_next_occurrence,
-    select_add_cursor_up,
-    select_add_cursor_down,
-    select_split_into_lines,
-    select_to_matching_bracket,
-    goto_matching_bracket,
-    view_reveal_caret,
-    view_center_caret,
+    CursorSetPosition,
+    CursorLeft,
+    CursorRight,
+    CursorWordLeft,
+    CursorWordRight,
+    CursorLineUp,
+    CursorLineDown,
+    CursorLineStart,
+    CursorLineEnd,
+    CursorPageUp,
+    CursorPageDown,
+    CursorDocumentStart,
+    CursorDocumentEnd,
+    SelectSetRange,
+    SelectAddRange,
+    SelectLeft,
+    SelectRight,
+    SelectWordLeft,
+    SelectWordRight,
+    SelectLineUp,
+    SelectLineDown,
+    SelectLineStart,
+    SelectLineEnd,
+    SelectPageUp,
+    SelectPageDown,
+    SelectDocumentStart,
+    SelectDocumentEnd,
+    SelectAll,
+    SelectAddNextOccurrence,
+    SelectAddCursorUp,
+    SelectAddCursorDown,
+    SelectSplitIntoLines,
+    SelectToMatchingBracket,
+    GotoMatchingBracket,
+    ViewRevealCaret,
+    ViewCenterCaret,
 };
 
 struct SelectionCommandDescriptor {
@@ -118,14 +118,14 @@ public:
     descriptors() const noexcept;
 
 private:
-    friend SelectionNavigationCommandSet selection_navigation_command_set();
+    friend SelectionNavigationCommandSet selectionNavigationCommandSet();
     SelectionNavigationCommandSet();
 
     const std::array<SelectionCommandDescriptor, 36> descriptors_;
 };
 
 [[nodiscard]] SelectionNavigationCommandSet
-selection_navigation_command_set();
+selectionNavigationCommandSet();
 
 struct SelectionCommandArguments {
     std::optional<DocumentPosition> position;
@@ -133,11 +133,11 @@ struct SelectionCommandArguments {
 };
 
 enum class SelectionNavigationError : std::uint8_t {
-    none,
-    missing_argument,
-    invalid_position,
-    invalid_bracket_pairs,
-    invalid_tab_width,
+    None,
+    MissingArgument,
+    InvalidPosition,
+    InvalidBracketPairs,
+    InvalidTabWidth,
 };
 
 struct SelectionNavigationResult {
@@ -146,18 +146,18 @@ struct SelectionNavigationResult {
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == SelectionNavigationError::none;
+        return error == SelectionNavigationError::None;
     }
 };
 
-[[nodiscard]] std::optional<DocumentPosition> resolve_document_position(
-    std::string_view text, ByteOffset byte_offset, int tab_width = 4);
+[[nodiscard]] std::optional<DocumentPosition> resolveDocumentPosition(
+    std::string_view text, ByteOffset byteOffset, int tabWidth = 4);
 
-[[nodiscard]] SelectionNavigationResult apply_selection_navigation(
+[[nodiscard]] SelectionNavigationResult applySelectionNavigation(
     std::string_view text, const SelectionViewState& before,
     SelectionCommand command, ViewportDimensions viewport,
     SelectionCommandArguments arguments = {},
-    std::span<const BracketPair> bracket_pairs = {}, int tab_width = 4,
-    bool word_wrap = true);
+    std::span<const BracketPair> bracketPairs = {}, int tabWidth = 4,
+    bool wordWrap = true);
 
 } // namespace ssg

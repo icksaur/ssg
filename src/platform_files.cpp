@@ -11,10 +11,10 @@ namespace {
 
 struct Utf8Length {
     bool valid = true;
-    std::size_t utf16_units = 0;
+    std::size_t utf16Units = 0;
 };
 
-Utf8Length utf8_length(std::string_view text) noexcept {
+Utf8Length utf8Length(std::string_view text) noexcept {
     Utf8Length result;
     for (std::size_t i = 0; i < text.size();) {
         const auto lead = static_cast<unsigned char>(text[i]);
@@ -55,13 +55,13 @@ Utf8Length utf8_length(std::string_view text) noexcept {
             result.valid = false;
             return result;
         }
-        result.utf16_units += codepoint > 0xffff ? 2 : 1;
+        result.utf16Units += codepoint > 0xffff ? 2 : 1;
         i += length;
     }
     return result;
 }
 
-bool is_windows_reserved(std::string_view component) {
+bool isWindowsReserved(std::string_view component) {
     const auto dot = component.find('.');
     component = component.substr(0, dot);
     std::string base(component);
@@ -78,24 +78,24 @@ bool is_windows_reserved(std::string_view component) {
     return false;
 }
 
-PathValidation validate_component(std::string_view component,
+PathValidation validateComponent(std::string_view component,
                                   PathSyntax syntax,
                                   std::size_t index) noexcept {
     if (component.empty() || component == "." || component == "..") {
-        return {PathError::traversal, index};
+        return {PathError::Traversal, index};
     }
 
-    const auto length = utf8_length(component);
+    const auto length = utf8Length(component);
     if (!length.valid) {
-        return {PathError::invalid_utf8, index};
+        return {PathError::InvalidUtf8, index};
     }
 
-    if (syntax == PathSyntax::linux) {
+    if (syntax == PathSyntax::Linux) {
         if (component.find('\0') != std::string_view::npos) {
-            return {PathError::invalid_character, index};
+            return {PathError::InvalidCharacter, index};
         }
         if (component.size() > 255) {
-            return {PathError::component_too_long, index};
+            return {PathError::ComponentTooLong, index};
         }
         return {};
     }
@@ -104,69 +104,69 @@ PathValidation validate_component(std::string_view component,
         if (value < 32 || value == '<' || value == '>' || value == ':' ||
             value == '"' || value == '|' || value == '?' || value == '*' ||
             value == '\0') {
-            return {PathError::invalid_character, index};
+            return {PathError::InvalidCharacter, index};
         }
     }
     if (component.back() == '.' || component.back() == ' ') {
-        return {PathError::trailing_dot_or_space, index};
+        return {PathError::TrailingDotOrSpace, index};
     }
-    if (is_windows_reserved(component)) {
-        return {PathError::reserved_name, index};
+    if (isWindowsReserved(component)) {
+        return {PathError::ReservedName, index};
     }
-    if (length.utf16_units > 255) {
-        return {PathError::component_too_long, index};
+    if (length.utf16Units > 255) {
+        return {PathError::ComponentTooLong, index};
     }
     return {};
 }
 
 } // namespace
 
-PathValidation validate_workspace_relative_path(std::string_view path,
+PathValidation validateWorkspaceRelativePath(std::string_view path,
                                                 PathSyntax syntax,
-                                                LongPathPolicy long_paths) noexcept {
+                                                LongPathPolicy longPaths) noexcept {
     if (path.empty()) {
-        return {PathError::empty, 0};
+        return {PathError::Empty, 0};
     }
     if (path.front() == '/' ||
-        (syntax == PathSyntax::windows &&
+        (syntax == PathSyntax::Windows &&
          (path.front() == '\\' ||
           (path.size() >= 2 &&
            std::isalpha(static_cast<unsigned char>(path.front())) &&
            path[1] == ':')))) {
-        return {PathError::absolute, 0};
+        return {PathError::Absolute, 0};
     }
 
-    const auto is_separator = [syntax](char value) {
-        return value == '/' || (syntax == PathSyntax::windows && value == '\\');
+    const auto isSeparator = [syntax](char value) {
+        return value == '/' || (syntax == PathSyntax::Windows && value == '\\');
     };
-    std::size_t component_start = 0;
-    std::size_t component_index = 0;
+    std::size_t componentStart = 0;
+    std::size_t componentIndex = 0;
     for (std::size_t i = 0; i <= path.size(); ++i) {
-        if (i != path.size() && !is_separator(path[i])) {
+        if (i != path.size() && !isSeparator(path[i])) {
             continue;
         }
         const auto validation =
-            validate_component(path.substr(component_start, i - component_start),
-                               syntax, component_index);
+            validateComponent(path.substr(componentStart, i - componentStart),
+                               syntax, componentIndex);
         if (!validation.valid()) {
             return validation;
         }
-        component_start = i + 1;
-        ++component_index;
+        componentStart = i + 1;
+        ++componentIndex;
     }
 
-    const auto total_length = utf8_length(path);
-    if (!total_length.valid) {
-        return {PathError::invalid_utf8, 0};
+    const auto totalLength = utf8Length(path);
+    if (!totalLength.valid) {
+        return {PathError::InvalidUtf8, 0};
     }
     const std::size_t maximum =
-        syntax == PathSyntax::linux
+        syntax == PathSyntax::Linux
             ? 4095
-            : (long_paths == LongPathPolicy::legacy ? 259 : 32766);
+            : (longPaths == LongPathPolicy::Legacy ? 259 : 32766);
     const std::size_t measured =
-        syntax == PathSyntax::linux ? path.size() : total_length.utf16_units;
+        syntax == PathSyntax::Linux ? path.size() : totalLength.utf16Units;
     if (measured > maximum) {
-        return {PathError::path_too_long, 0};
+        return {PathError::PathTooLong, 0};
     }
     return {};
 }

@@ -22,8 +22,8 @@ CommandResult rejected(CommandError error, Revision revision,
 }  // namespace
 
 struct EditorSession::Impl {
-    explicit Impl(CommandRegistry command_registry, CommandServices* services)
-        : registry{std::move(command_registry)}, services{services} {}
+    explicit Impl(CommandRegistry commandRegistry, CommandServices* services)
+        : registry{std::move(commandRegistry)}, services{services} {}
 
     mutable std::mutex mutex;
     CommandRegistry registry;
@@ -39,92 +39,92 @@ EditorSession::EditorSession(CommandRegistry registry, CommandServices* services
 EditorSession::~EditorSession() = default;
 
 AttachResult EditorSession::attach(InvocationPrincipal principal,
-                                   ViewId view_id) {
+                                   ViewId viewId) {
     std::lock_guard lock{impl_->mutex};
-    ClientId const client_id = principal.client_id();
+    ClientId const clientId = principal.clientId();
     auto [unused, inserted] = impl_->clients.emplace(
-        client_id, AttachedClient{std::move(principal), view_id});
+        clientId, AttachedClient{std::move(principal), viewId});
     if (!inserted) {
-        return {AttachError::duplicate_client,
+        return {AttachError::DuplicateClient,
                 "client ID is already attached"};
     }
-    return {AttachError::none, {}};
+    return {AttachError::None, {}};
 }
 
-bool EditorSession::detach(ClientId client_id) {
+bool EditorSession::detach(ClientId clientId) {
     std::lock_guard lock{impl_->mutex};
-    return impl_->clients.erase(client_id) != 0;
+    return impl_->clients.erase(clientId) != 0;
 }
 
-CommandResult EditorSession::dispatch(ClientId client_id,
+CommandResult EditorSession::dispatch(ClientId clientId,
                                       ClientCommand const& command) {
     std::lock_guard lock{impl_->mutex};
-    Revision const current_revision = impl_->revision;
+    Revision const currentRevision = impl_->revision;
 
-    auto const client = impl_->clients.find(client_id);
+    auto const client = impl_->clients.find(clientId);
     if (client == impl_->clients.end()) {
-        return rejected(CommandError::unknown_client, current_revision,
+        return rejected(CommandError::UnknownClient, currentRevision,
                         "client ID is not attached");
     }
 
     auto const* registration = impl_->registry.find(command.id);
     if (registration == nullptr) {
-        return rejected(CommandError::unknown_command, current_revision,
+        return rejected(CommandError::UnknownCommand, currentRevision,
                         "command is not registered: " + command.id);
     }
 
     for (auto const& capability :
-         registration->descriptor.required_capabilities) {
-        if (!client->second.principal.has_capability(capability)) {
+         registration->descriptor.requiredCapabilities) {
+        if (!client->second.principal.hasCapability(capability)) {
             return rejected(
-                CommandError::capability_denied, current_revision,
+                CommandError::CapabilityDenied, currentRevision,
                 "principal lacks required capability: " +
                     std::string{capability.value()});
         }
     }
 
     bool const mutates =
-        registration->descriptor.effect == CommandEffect::mutation;
-    if (mutates && command.base_revision != current_revision) {
-        return rejected(CommandError::stale_revision, current_revision,
+        registration->descriptor.effect == CommandEffect::Mutation;
+    if (mutates && command.baseRevision != currentRevision) {
+        return rejected(CommandError::StaleRevision, currentRevision,
                         "mutation base revision does not match session revision");
     }
     if (mutates &&
-        current_revision.value() ==
+        currentRevision.value() ==
             std::numeric_limits<std::uint64_t>::max()) {
-        return rejected(CommandError::revision_exhausted, current_revision,
+        return rejected(CommandError::RevisionExhausted, currentRevision,
                         "session revision is exhausted");
     }
 
-    CommandContext context{current_revision, client->second.principal,
+    CommandContext context{currentRevision, client->second.principal,
                            impl_->services};
-    CommandHandlerResult handler_result;
+    CommandHandlerResult handlerResult;
     try {
-        handler_result = registration->handler(context, command.payload);
+        handlerResult = registration->handler(context, command.payload);
     } catch (std::exception const& exception) {
-        return rejected(CommandError::handler_failed, current_revision,
+        return rejected(CommandError::HandlerFailed, currentRevision,
                         "command handler threw: " +
                             std::string{exception.what()});
     } catch (...) {
-        return rejected(CommandError::handler_failed, current_revision,
+        return rejected(CommandError::HandlerFailed, currentRevision,
                         "command handler threw an unknown exception");
     }
 
-    if (!handler_result.accepted) {
-        return rejected(CommandError::handler_failed, current_revision,
-                        std::move(handler_result.message));
+    if (!handlerResult.accepted) {
+        return rejected(CommandError::HandlerFailed, currentRevision,
+                        std::move(handlerResult.message));
     }
 
     if (mutates) {
-        if (context.workspace_changed_) {
-            impl_->topology.active_workspace = context.active_workspace_;
+        if (context.workspaceChanged_) {
+            impl_->topology.activeWorkspace = context.activeWorkspace_;
         }
-        if (context.view_changed_) {
-            impl_->topology.active_view = context.active_view_;
+        if (context.viewChanged_) {
+            impl_->topology.activeView = context.activeView_;
         }
-        impl_->revision = Revision{current_revision.value() + 1};
+        impl_->revision = Revision{currentRevision.value() + 1};
     }
-    return {CommandError::none, impl_->revision, {}};
+    return {CommandError::None, impl_->revision, {}};
 }
 
 Revision EditorSession::revision() const {
@@ -132,7 +132,7 @@ Revision EditorSession::revision() const {
     return impl_->revision;
 }
 
-Revision EditorSession::advance_revision() {
+Revision EditorSession::advanceRevision() {
     std::lock_guard lock{impl_->mutex};
     if (impl_->revision.value() == std::numeric_limits<std::uint64_t>::max()) {
         throw std::overflow_error{"session revision is exhausted"};
@@ -146,10 +146,10 @@ SessionTopology EditorSession::topology() const {
     return impl_->topology;
 }
 
-std::optional<AttachedClient> EditorSession::attached_client(
-    ClientId client_id) const {
+std::optional<AttachedClient> EditorSession::attachedClient(
+    ClientId clientId) const {
     std::lock_guard lock{impl_->mutex};
-    auto const found = impl_->clients.find(client_id);
+    auto const found = impl_->clients.find(clientId);
     if (found == impl_->clients.end()) {
         return std::nullopt;
     }

@@ -47,13 +47,13 @@ public:
             selections.push_back({start, start});
         }
 
-        ssg::PromptStatusViewState prompt_status;
+        ssg::PromptStatusViewState promptStatus;
         if (state_.prompt_open) {
-            prompt_status.prompt = ssg::PromptViewState{
-                ssg::PromptKind::path, "Open workspace", {0, 2, 24, 1}, {}};
+            promptStatus.prompt = ssg::PromptViewState{
+                ssg::PromptKind::Path, "Open workspace", {0, 2, 24, 1}, {}};
         }
-        prompt_status.status.items.push_back(
-            {ssg::StatusId{7}, ssg::StatusPriority::information, 3,
+        promptStatus.status.items.push_back(
+            {ssg::StatusId{7}, ssg::StatusPriority::Information, 3,
              "Recovery ready",
              {{"reopen", "Reopen closed tab", "tab.reopen_closed"}}});
 
@@ -77,43 +77,43 @@ public:
         ssg::ThemeSnapshot theme{};
         for (std::size_t index = 0; index < theme.palette.size(); ++index) {
             auto channel = static_cast<std::uint8_t>(index * 16);
-            theme.palette[index] = ssg::SrgbColor::from_serialized_channels(
+            theme.palette[index] = ssg::SrgbColor::fromSerializedChannels(
                 channel, channel, channel);
         }
-        for (std::size_t index = 0; index < theme.semantic_indices.size();
+        for (std::size_t index = 0; index < theme.semanticIndices.size();
              ++index) {
-            theme.semantic_indices[index] =
-                static_cast<std::uint8_t>(index % ssg::theme_palette_size);
+            theme.semanticIndices[index] =
+                static_cast<std::uint8_t>(index % ssg::kThemePaletteSize);
         }
-        for (std::size_t index = 0; index < theme.syntax_indices.size();
+        for (std::size_t index = 0; index < theme.syntaxIndices.size();
              ++index) {
-            theme.syntax_indices[index] =
+            theme.syntaxIndices[index] =
                 static_cast<std::uint8_t>((index + 1) %
-                                          ssg::theme_palette_size);
+                                          ssg::kThemePaletteSize);
         }
 
         ssg::ShellViewState shell;
         shell.viewport = {24, 8};
         shell.header = ssg::Rect{0, 0, 24, 1};
         shell.footer = ssg::Rect{0, 7, 24, 1};
-        shell.tab_bar = ssg::Rect{6, 1, 18, 1};
+        shell.tabBar = ssg::Rect{6, 1, 18, 1};
         shell.panel = ssg::Rect{0, 1, 6, 6};
         shell.panes.push_back(
             {ssg::PaneId{1}, {6, 2, 18, 5}, {6, 2, 17, 5}, {23, 2, 1, 5}});
-        shell.accessibility_nodes = {
-            {ssg::ShellNodeKind::header, "header", "Workspace /fixture",
-             *shell.header, ssg::SemanticRole::header},
-            {ssg::ShellNodeKind::panel, "panel", "Files", *shell.panel,
-             ssg::SemanticRole::panel_active},
-            {ssg::ShellNodeKind::tab_bar, "tabs", state_.label, *shell.tab_bar,
-             ssg::SemanticRole::tab_active},
-            {ssg::ShellNodeKind::pane, "pane", "Editor",
-             shell.panes.front().content, ssg::SemanticRole::background},
-            {ssg::ShellNodeKind::scrollbar, "scrollbar", "Scroll",
+        shell.accessibilityNodes = {
+            {ssg::ShellNodeKind::Header, "header", "Workspace /fixture",
+             *shell.header, ssg::SemanticRole::Header},
+            {ssg::ShellNodeKind::Panel, "panel", "Files", *shell.panel,
+             ssg::SemanticRole::PanelActive},
+            {ssg::ShellNodeKind::TabBar, "tabs", state_.label, *shell.tabBar,
+             ssg::SemanticRole::TabActive},
+            {ssg::ShellNodeKind::Pane, "pane", "Editor",
+             shell.panes.front().content, ssg::SemanticRole::Background},
+            {ssg::ShellNodeKind::Scrollbar, "scrollbar", "Scroll",
              shell.panes.front().scrollbar,
-             ssg::SemanticRole::scrollbar_track},
-            {ssg::ShellNodeKind::footer, "footer", "Recovery ready",
-             *shell.footer, ssg::SemanticRole::footer},
+             ssg::SemanticRole::ScrollbarTrack},
+            {ssg::ShellNodeKind::Footer, "footer", "Recovery ready",
+             *shell.footer, ssg::SemanticRole::Footer},
         };
 
         return {
@@ -123,21 +123,21 @@ public:
             {!state_.undo_text.empty(), !state_.redo_text.empty(),
              state_.undo_text.size() + state_.redo_text.size()},
             {{state_.clipboard}, state_.clipboard, std::nullopt, std::nullopt},
-            std::move(prompt_status),
-            {revision, false, {}, ssg::SearchMode::file, {}, std::nullopt, 0,
+            std::move(promptStatus),
+            {revision, false, {}, ssg::SearchMode::File, {}, std::nullopt, 0,
              false},
             {0, false, false, revision, {}, {}, {}, {}, std::nullopt,
-             ssg::FindReplaceError::none, {}},
+             ssg::FindReplaceError::None, {}},
             std::move(settings),
             std::move(keymap),
-            {{ssg::TextEncoding::utf8, ssg::LineEnding::lf, false, false}},
+            {{ssg::TextEncoding::Utf8, ssg::LineEnding::Lf, false, false}},
             std::move(tabs),
             {revision, {}},
             {revision, {}},
             {state_.follow_generation, state_.follow_mode, ssg::PaneId{1},
              std::nullopt, {}, {}},
             {ssg::TreeRevision{revision.value()}, {}},
-            ssg::plain_text_syntax_view_state(
+            ssg::plainTextSyntaxViewState(
                 revision, ssg::LanguageId{"plain"}, state_.text, 4),
             {revision, {}},
             {revision, {}, std::nullopt, {}, {}},
@@ -147,8 +147,8 @@ public:
     }
 
     ssg::ViewportViewState viewport() const {
-        auto run = ssg::compute_cell_run(state_.text);
-        return ssg::compute_viewport(
+        auto run = ssg::computeCellRun(state_.text);
+        return ssg::computeViewport(
             std::span<const ssg::CellRun>{&run, 1},
             ssg::ViewportDimensions{17, 5}, state_.first_row);
     }
@@ -160,7 +160,7 @@ private:
 class Scenario {
 public:
     Scenario() {
-        for (auto const& descriptor : ssg::p0_command_descriptors()) {
+        for (auto const& descriptor : ssg::p0CommandDescriptors()) {
             auto id = descriptor.id;
             builder_.bind(id, [this, id](ssg::CommandContext&,
                                          std::any const& value) {
@@ -172,7 +172,7 @@ public:
 
     ssg::SessionSnapshot snapshot(ssg::InvocationPrincipal const& principal,
                                   ssg::ViewId view) const {
-        return ssg::assemble_session_snapshot(
+        return ssg::assembleSessionSnapshot(
             session->revision(), session->topology(), principal, view,
             model.viewport(), model.sections(session->revision()));
     }
@@ -184,80 +184,80 @@ private:
     ssg::EditorSessionBuilder builder_;
 };
 
-TEST(terminal_events_resolve_only_through_snapshot_input_models) {
+TEST(terminalEventsResolveOnlyThroughSnapshotInputModels) {
     Scenario scenario;
     ssg::InvocationPrincipal const principal{
-        ssg::ClientId{9}, ssg::InvocationOrigin::in_process};
+        ssg::ClientId{9}, ssg::InvocationOrigin::InProcess};
     ssg::tui::TuiClient client{
         *scenario.session, principal, ssg::ViewId{9},
         [&] { return scenario.snapshot(principal, ssg::ViewId{9}); }};
     auto keymap = client.snapshot().sections().keymap;
     ssg::tui::TerminalInputCapture capture;
 
-    auto text = ssg::CommittedText::from_utf8("hello");
+    auto text = ssg::CommittedText::fromUtf8("hello");
     ASSERT_TRUE(text.has_value());
-    auto text_command = capture.capture(*text, keymap, "editor");
-    ASSERT_TRUE(text_command.has_value());
-    ASSERT_EQ(text_command->command_id, std::string{"text.insert"});
-    ASSERT_TRUE(client.submit(*text_command).accepted());
+    auto textCommand = capture.capture(*text, keymap, "editor");
+    ASSERT_TRUE(textCommand.has_value());
+    ASSERT_EQ(textCommand->commandId, std::string{"text.insert"});
+    ASSERT_TRUE(client.submit(*textCommand).accepted());
     ASSERT_EQ(scenario.model.canonical().text, std::string{"alphahello"});
 
-    auto chord_start = capture.capture(
+    auto chordStart = capture.capture(
         ssg::KeyStroke{"KeyK", true, false, false, false}, keymap, "editor");
-    ASSERT_FALSE(chord_start.has_value());
-    auto chord_end = capture.capture(
+    ASSERT_FALSE(chordStart.has_value());
+    auto chordEnd = capture.capture(
         ssg::KeyStroke{"KeyW", true, false, false, false}, keymap, "editor");
-    ASSERT_TRUE(chord_end.has_value());
-    ASSERT_EQ(chord_end->command_id, std::string{"tab.close"});
-    ASSERT_TRUE(client.submit(*chord_end).accepted());
+    ASSERT_TRUE(chordEnd.has_value());
+    ASSERT_EQ(chordEnd->commandId, std::string{"tab.close"});
+    ASSERT_TRUE(client.submit(*chordEnd).accepted());
     ASSERT_FALSE(scenario.model.canonical().tab_open);
 
     ssg::SemanticHitTarget target{
-        9, ssg::HitTargetKind::status_action, "Reopen",
+        9, ssg::HitTargetKind::StatusAction, "Reopen",
         {"tab.reopen_closed", {}}};
     auto hit = capture.capture(target, keymap, "editor");
     ASSERT_TRUE(hit.has_value());
-    ASSERT_EQ(hit->command_id, std::string{"tab.reopen_closed"});
+    ASSERT_EQ(hit->commandId, std::string{"tab.reopen_closed"});
     ASSERT_TRUE(client.submit(*hit).accepted());
     ASSERT_TRUE(scenario.model.canonical().tab_open);
 }
 
-TEST(scripted_tui_commands_match_direct_api_after_every_step) {
+TEST(scriptedTuiCommandsMatchDirectApiAfterEveryStep) {
     Scenario direct;
     Scenario tui;
-    ssg::InvocationPrincipal const direct_principal{
-        ssg::ClientId{1}, ssg::InvocationOrigin::in_process,
+    ssg::InvocationPrincipal const directPrincipal{
+        ssg::ClientId{1}, ssg::InvocationOrigin::InProcess,
         {ssg::CapabilityId{"local_file_drop"}}};
-    ssg::InvocationPrincipal const tui_principal{
-        ssg::ClientId{2}, ssg::InvocationOrigin::in_process,
+    ssg::InvocationPrincipal const tuiPrincipal{
+        ssg::ClientId{2}, ssg::InvocationOrigin::InProcess,
         {ssg::CapabilityId{"local_file_drop"}}};
-    ASSERT_TRUE(direct.session->attach(direct_principal, ssg::ViewId{1})
+    ASSERT_TRUE(direct.session->attach(directPrincipal, ssg::ViewId{1})
                     .accepted());
     ssg::tui::TuiClient client{
-        *tui.session, tui_principal, ssg::ViewId{2},
-        [&] { return tui.snapshot(tui_principal, ssg::ViewId{2}); }};
+        *tui.session, tuiPrincipal, ssg::ViewId{2},
+        [&] { return tui.snapshot(tuiPrincipal, ssg::ViewId{2}); }};
 
     for (auto const& step : workflow()) {
-        auto direct_result = direct.session->dispatch(
-            direct_principal.client_id(),
+        auto directResult = direct.session->dispatch(
+            directPrincipal.clientId(),
             {step.command_id, direct.session->revision(), step.payload});
-        auto tui_result = client.submit(step.command_id, step.payload);
-        ASSERT_EQ(direct_result.accepted(), step.expected_accepted);
-        ASSERT_EQ(tui_result.accepted(), step.expected_accepted);
+        auto tuiResult = client.submit(step.command_id, step.payload);
+        ASSERT_EQ(directResult.accepted(), step.expected_accepted);
+        ASSERT_EQ(tuiResult.accepted(), step.expected_accepted);
         ASSERT_EQ(direct.model.canonical(), tui.model.canonical());
     }
 }
 
-std::string read_all(char const* path) {
+std::string readAll(char const* path) {
     std::ifstream input{path};
     return {std::istreambuf_iterator<char>{input},
             std::istreambuf_iterator<char>{}};
 }
 
-TEST(final_workflow_screen_matches_hand_authored_16_color_golden) {
+TEST(finalWorkflowScreenMatchesHandAuthored16ColorGolden) {
     Scenario scenario;
     ssg::InvocationPrincipal const principal{
-        ssg::ClientId{3}, ssg::InvocationOrigin::in_process,
+        ssg::ClientId{3}, ssg::InvocationOrigin::InProcess,
         {ssg::CapabilityId{"local_file_drop"}}};
     ssg::tui::TuiClient client{
         *scenario.session, principal, ssg::ViewId{3},
@@ -268,13 +268,13 @@ TEST(final_workflow_screen_matches_hand_authored_16_color_golden) {
     }
 
     auto screen = ssg::render(client.snapshot());
-    ASSERT_EQ(screen.palette.size(), ssg::theme_palette_size);
+    ASSERT_EQ(screen.palette.size(), ssg::kThemePaletteSize);
     for (auto const& cell : screen.cells) {
-        ASSERT_TRUE(cell.foreground < ssg::theme_palette_size);
-        ASSERT_TRUE(cell.background < ssg::theme_palette_size);
+        ASSERT_TRUE(cell.foreground < ssg::kThemePaletteSize);
+        ASSERT_TRUE(cell.background < ssg::kThemePaletteSize);
     }
     auto actual = screen.canonical();
-    auto expected = read_all(SSG_TUI_SCREEN_PATH);
+    auto expected = readAll(SSG_TUI_SCREEN_PATH);
     if (actual != expected) std::cerr << actual;
     ASSERT_EQ(actual, expected);
 }
@@ -282,8 +282,8 @@ TEST(final_workflow_screen_matches_hand_authored_16_color_golden) {
 }  // namespace
 
 int main() {
-    RUN(terminal_events_resolve_only_through_snapshot_input_models);
-    RUN(scripted_tui_commands_match_direct_api_after_every_step);
-    RUN(final_workflow_screen_matches_hand_authored_16_color_golden);
+    RUN(terminalEventsResolveOnlyThroughSnapshotInputModels);
+    RUN(scriptedTuiCommandsMatchDirectApiAfterEveryStep);
+    RUN(finalWorkflowScreenMatchesHandAuthored16ColorGolden);
     return failed == 0 ? 0 : 1;
 }

@@ -15,14 +15,14 @@
 namespace ssg {
 
 enum class ExternalAction : std::uint8_t {
-    reload,
-    keep_buffer,
-    open_diff,
+    Reload,
+    KeepBuffer,
+    OpenDiff,
 };
 
 enum class ExternalDocumentStatus : std::uint8_t {
-    externally_modified,
-    externally_removed,
+    ExternallyModified,
+    ExternallyRemoved,
 };
 
 struct ExternalModificationCommandDescriptor {
@@ -43,21 +43,21 @@ public:
 
 private:
     const std::array<ExternalModificationCommandDescriptor, 3> descriptors_{{
-        {"external.reload", ExternalAction::reload},
-        {"external.keep_buffer", ExternalAction::keep_buffer},
-        {"external.open_diff", ExternalAction::open_diff},
+        {"external.reload", ExternalAction::Reload},
+        {"external.keep_buffer", ExternalAction::KeepBuffer},
+        {"external.open_diff", ExternalAction::OpenDiff},
     }};
 };
 
 [[nodiscard]] ExternalModificationCommandSet
-external_modification_command_set();
+externalModificationCommandSet();
 
 struct ExternalDocumentView {
     DiffFileId id;
     std::filesystem::path path;
     ExternalDocumentStatus status =
-        ExternalDocumentStatus::externally_modified;
-    std::string accessible_status;
+        ExternalDocumentStatus::ExternallyModified;
+    std::string accessibleStatus;
     std::vector<ExternalAction> actions;
 
     friend bool operator==(const ExternalDocumentView&,
@@ -73,7 +73,7 @@ struct ExternalModificationViewState {
 };
 
 struct ExternalModificationDelta {
-    Revision base_revision{0};
+    Revision baseRevision{0};
     Revision revision{0};
     std::vector<ExternalDocumentView> upserted;
     std::vector<DiffFileId> removed;
@@ -83,57 +83,57 @@ struct ExternalModificationDelta {
 };
 
 enum class ExternalDeltaError : std::uint8_t {
-    none,
-    stale_revision,
-    malformed_delta,
+    None,
+    StaleRevision,
+    MalformedDelta,
 };
 
 struct ExternalDeltaReplayResult {
     std::optional<ExternalModificationViewState> state;
-    ExternalDeltaError error = ExternalDeltaError::none;
+    ExternalDeltaError error = ExternalDeltaError::None;
     [[nodiscard]] bool accepted() const noexcept { return state.has_value(); }
 };
 
-[[nodiscard]] ExternalModificationDelta derive_external_modification_delta(
+[[nodiscard]] ExternalModificationDelta deriveExternalModificationDelta(
     const ExternalModificationViewState& base,
     const ExternalModificationViewState& target);
-[[nodiscard]] ExternalDeltaReplayResult replay_external_modification_delta(
+[[nodiscard]] ExternalDeltaReplayResult replayExternalModificationDelta(
     const ExternalModificationViewState& base,
     const ExternalModificationDelta& delta);
 
 struct ExternalEventInput {
     WatchEvent event;
     DiffFileId id;
-    std::optional<std::string> disk_content;
+    std::optional<std::string> diskContent;
 };
 
 enum class ExternalModificationError : std::uint8_t {
-    none,
-    stale_event,
-    unsupported_event,
-    invalid_event,
-    document_missing,
-    content_required,
-    diff_rejected,
-    no_external_change,
-    recovery_failed,
+    None,
+    StaleEvent,
+    UnsupportedEvent,
+    InvalidEvent,
+    DocumentMissing,
+    ContentRequired,
+    DiffRejected,
+    NoExternalChange,
+    RecoveryFailed,
 };
 
 struct ExternalModificationResult {
-    ExternalModificationError error = ExternalModificationError::none;
-    bool status_published = false;
-    bool diff_routed = true;
+    ExternalModificationError error = ExternalModificationError::None;
+    bool statusPublished = false;
+    bool diffRouted = true;
     std::optional<RecoveryRecordId> compensation;
     [[nodiscard]] bool accepted() const noexcept {
-        return error == ExternalModificationError::none;
+        return error == ExternalModificationError::None;
     }
 };
 
 struct ExternalOpenDiffResult {
-    ExternalModificationError error = ExternalModificationError::none;
+    ExternalModificationError error = ExternalModificationError::None;
     std::optional<DiffOpenTarget> target;
     [[nodiscard]] bool accepted() const noexcept {
-        return error == ExternalModificationError::none && target.has_value();
+        return error == ExternalModificationError::None && target.has_value();
     }
 };
 
@@ -147,14 +147,14 @@ public:
     ExternalModificationFlow& operator=(const ExternalModificationFlow&) =
         delete;
 
-    [[nodiscard]] ExternalModificationResult process_event(
+    [[nodiscard]] ExternalModificationResult processEvent(
         ExternalEventInput input,
         std::optional<JournalDocument>& document);
     [[nodiscard]] ExternalModificationResult reload(
         const DiffFileId& id, std::optional<JournalDocument>& document);
-    [[nodiscard]] ExternalModificationResult keep_buffer(const DiffFileId& id);
-    [[nodiscard]] ExternalOpenDiffResult open_diff(const DiffFileId& id) const;
-    [[nodiscard]] ExternalModificationViewState view_state() const;
+    [[nodiscard]] ExternalModificationResult keepBuffer(const DiffFileId& id);
+    [[nodiscard]] ExternalOpenDiffResult openDiff(const DiffFileId& id) const;
+    [[nodiscard]] ExternalModificationViewState viewState() const;
 
 private:
     class Impl;

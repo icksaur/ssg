@@ -18,31 +18,31 @@ namespace ssg {
 // one std::any-held type to bind the command to a wire converter.
 struct DroppedContentArguments {
     std::vector<std::uint8_t> bytes;
-    std::string suggested_label;
+    std::string suggestedLabel;
 
     bool operator==(const DroppedContentArguments&) const = default;
 };
 
 enum class FileCommand : std::uint8_t {
-    open_directory,
-    create,
-    open,
-    open_recent,
-    open_dropped_content,
-    save,
-    save_all,
-    save_as,
-    reload,
-    rename,
-    remove,
-    new_directory,
+    OpenDirectory,
+    Create,
+    Open,
+    OpenRecent,
+    OpenDroppedContent,
+    Save,
+    SaveAll,
+    SaveAs,
+    Reload,
+    Rename,
+    Remove,
+    NewDirectory,
 };
 
 struct FileCommandDescriptor {
     std::string_view id;
     FileCommand command;
     bool lua = true;
-    std::optional<std::string_view> required_capability;
+    std::optional<std::string_view> requiredCapability;
 
     friend bool operator==(const FileCommandDescriptor&,
                            const FileCommandDescriptor&) = default;
@@ -57,23 +57,23 @@ public:
 
 private:
     const std::array<FileCommandDescriptor, 12> descriptors_{{
-        {"workspace.open_directory", FileCommand::open_directory},
-        {"file.new", FileCommand::create},
-        {"file.open", FileCommand::open},
-        {"file.open_recent", FileCommand::open_recent},
-        {"file.open_dropped_content", FileCommand::open_dropped_content, false,
+        {"workspace.open_directory", FileCommand::OpenDirectory},
+        {"file.new", FileCommand::Create},
+        {"file.open", FileCommand::Open},
+        {"file.open_recent", FileCommand::OpenRecent},
+        {"file.open_dropped_content", FileCommand::OpenDroppedContent, false,
          std::string_view{"local_file_drop"}},
-        {"file.save", FileCommand::save},
-        {"file.save_all", FileCommand::save_all},
-        {"file.save_as", FileCommand::save_as},
-        {"file.reload", FileCommand::reload},
-        {"file.rename", FileCommand::rename},
-        {"file.delete", FileCommand::remove},
-        {"file.new_directory", FileCommand::new_directory},
+        {"file.save", FileCommand::Save},
+        {"file.save_all", FileCommand::SaveAll},
+        {"file.save_as", FileCommand::SaveAs},
+        {"file.reload", FileCommand::Reload},
+        {"file.rename", FileCommand::Rename},
+        {"file.delete", FileCommand::Remove},
+        {"file.new_directory", FileCommand::NewDirectory},
     }};
 };
 
-[[nodiscard]] FileCommandsCommandSet file_commands_command_set();
-[[nodiscard]] PromptRequest file_path_prompt(FileCommand command);
+[[nodiscard]] FileCommandsCommandSet fileCommandsCommandSet();
+[[nodiscard]] PromptRequest filePathPrompt(FileCommand command);
 
 }  // namespace ssg

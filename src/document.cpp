@@ -17,12 +17,12 @@
 namespace ssg {
 namespace {
 
-bool is_continuation(unsigned char byte) {
+bool isContinuation(unsigned char byte) {
     return (byte & 0xC0U) == 0x80U;
 }
 
-bool valid_utf8_without_nul(std::string_view text) {
-    note_utf8_validation();
+bool validUtf8WithoutNul(std::string_view text) {
+    noteUtf8Validation();
     std::size_t offset = 0;
     while (offset < text.size()) {
         const auto first = static_cast<unsigned char>(text[offset]);
@@ -49,7 +49,7 @@ bool valid_utf8_without_nul(std::string_view text) {
         }
 
         const auto second = static_cast<unsigned char>(text[offset + 1]);
-        if (!is_continuation(second)) {
+        if (!isContinuation(second)) {
             return false;
         }
         if ((first == 0xE0U && second < 0xA0U) ||
@@ -59,7 +59,7 @@ bool valid_utf8_without_nul(std::string_view text) {
             return false;
         }
         for (std::size_t index = 2; index < length; ++index) {
-            if (!is_continuation(
+            if (!isContinuation(
                     static_cast<unsigned char>(text[offset + index]))) {
                 return false;
             }
@@ -69,9 +69,9 @@ bool valid_utf8_without_nul(std::string_view text) {
     return true;
 }
 
-bool is_utf8_boundary(std::string_view text, std::size_t offset) {
+bool isUtf8Boundary(std::string_view text, std::size_t offset) {
     return offset == text.size() ||
-           !is_continuation(static_cast<unsigned char>(text[offset]));
+           !isContinuation(static_cast<unsigned char>(text[offset]));
 }
 
 TransactionResult failure(DocumentError error, Revision revision,
@@ -82,10 +82,10 @@ TransactionResult failure(DocumentError error, Revision revision,
 }  // namespace
 
 struct Document::Impl {
-    explicit Impl(std::string_view text, DocumentMode document_mode)
-        : tree(text), mode(document_mode) {}
-    explicit Impl(SharedBytes text, DocumentMode document_mode)
-        : tree(std::move(text)), mode(document_mode) {}
+    explicit Impl(std::string_view text, DocumentMode documentMode)
+        : tree(text), mode(documentMode) {}
+    explicit Impl(SharedBytes text, DocumentMode documentMode)
+        : tree(std::move(text)), mode(documentMode) {}
 
     detail::PieceTree tree;
     Revision revision{1};
@@ -93,12 +93,12 @@ struct Document::Impl {
     bool dirty{false};
 };
 
-Document::Document(std::string_view initial_text, DocumentMode mode) {
-    if (!valid_utf8_without_nul(initial_text)) {
+Document::Document(std::string_view initialText, DocumentMode mode) {
+    if (!validUtf8WithoutNul(initialText)) {
         throw std::invalid_argument(
             "document text must be well-formed UTF-8 without NUL bytes");
     }
-    impl_ = std::make_unique<Impl>(initial_text, mode);
+    impl_ = std::make_unique<Impl>(initialText, mode);
 }
 
 Document::Document(ValidatedUtf8 validated, DocumentMode mode) {
@@ -127,26 +127,26 @@ DocumentSnapshot Document::snapshot() const {
 }
 
 TransactionResult Document::apply(EditTransaction const& transaction) {
-    const auto current_revision = impl_->revision;
-    if (transaction.base_revision != current_revision) {
-        return failure(DocumentError::stale_revision, current_revision,
+    const auto currentRevision = impl_->revision;
+    if (transaction.baseRevision != currentRevision) {
+        return failure(DocumentError::StaleRevision, currentRevision,
                        "transaction base revision is stale");
     }
-    if (impl_->mode == DocumentMode::read_only) {
-        return failure(DocumentError::read_only, current_revision,
+    if (impl_->mode == DocumentMode::ReadOnly) {
+        return failure(DocumentError::ReadOnly, currentRevision,
                        "read-only documents cannot be edited");
     }
-    if (impl_->mode == DocumentMode::diff) {
-        return failure(DocumentError::diff, current_revision,
+    if (impl_->mode == DocumentMode::Diff) {
+        return failure(DocumentError::Diff, currentRevision,
                        "diff documents cannot be edited");
     }
     if (transaction.edits.empty()) {
-        return failure(DocumentError::empty_transaction, current_revision,
+        return failure(DocumentError::EmptyTransaction, currentRevision,
                        "transaction must contain at least one edit");
     }
-    if (current_revision.value() ==
+    if (currentRevision.value() ==
         std::numeric_limits<std::uint64_t>::max()) {
-        return failure(DocumentError::revision_exhausted, current_revision,
+        return failure(DocumentError::RevisionExhausted, currentRevision,
                        "document revision is exhausted");
     }
 
@@ -154,29 +154,29 @@ TransactionResult Document::apply(EditTransaction const& transaction) {
     std::vector<TextEdit const*> ordered;
     ordered.reserve(transaction.edits.size());
     for (auto const& edit : transaction.edits) {
-        if (edit.erased_bytes == 0 && edit.inserted_text.empty()) {
-            return failure(DocumentError::empty_transaction, current_revision,
+        if (edit.erasedBytes == 0 && edit.insertedText.empty()) {
+            return failure(DocumentError::EmptyTransaction, currentRevision,
                            "transaction contains an empty edit");
         }
-        if (!valid_utf8_without_nul(edit.inserted_text)) {
-            return failure(DocumentError::invalid_utf8, current_revision,
+        if (!validUtf8WithoutNul(edit.insertedText)) {
+            return failure(DocumentError::InvalidUtf8, currentRevision,
                            "inserted text must be well-formed UTF-8 without NUL bytes");
         }
         if (edit.offset.value() > original.size() ||
-            edit.erased_bytes >
+            edit.erasedBytes >
                 original.size() -
                     static_cast<std::size_t>(edit.offset.value())) {
-            return failure(DocumentError::invalid_range, current_revision,
+            return failure(DocumentError::InvalidRange, currentRevision,
                            "edit range is outside the document");
         }
 
         const auto begin = static_cast<std::size_t>(edit.offset.value());
         const auto end =
-            begin + static_cast<std::size_t>(edit.erased_bytes);
-        if (!is_utf8_boundary(original, begin) ||
-            !is_utf8_boundary(original, end)) {
-            return failure(DocumentError::invalid_utf8_boundary,
-                           current_revision,
+            begin + static_cast<std::size_t>(edit.erasedBytes);
+        if (!isUtf8Boundary(original, begin) ||
+            !isUtf8Boundary(original, end)) {
+            return failure(DocumentError::InvalidUtf8Boundary,
+                           currentRevision,
                            "edit range splits a UTF-8 code point");
         }
         ordered.push_back(&edit);
@@ -189,12 +189,12 @@ TransactionResult Document::apply(EditTransaction const& transaction) {
     for (std::size_t index = 1; index < ordered.size(); ++index) {
         const auto& previous = *ordered[index - 1];
         const auto& current = *ordered[index];
-        const auto previous_end =
-            previous.offset.value() + previous.erased_bytes;
+        const auto previousEnd =
+            previous.offset.value() + previous.erasedBytes;
         if (current.offset == previous.offset ||
-            current.offset.value() < previous_end) {
-            return failure(DocumentError::overlapping_edits,
-                           current_revision,
+            current.offset.value() < previousEnd) {
+            return failure(DocumentError::OverlappingEdits,
+                           currentRevision,
                            "edit ranges must be distinct and non-overlapping");
         }
     }
@@ -203,18 +203,18 @@ TransactionResult Document::apply(EditTransaction const& transaction) {
          ++iterator) {
         const auto& edit = **iterator;
         const auto offset = static_cast<std::size_t>(edit.offset.value());
-        const auto erased = static_cast<std::size_t>(edit.erased_bytes);
+        const auto erased = static_cast<std::size_t>(edit.erasedBytes);
         if (erased != 0) {
             impl_->tree.erase(offset, erased);
         }
-        if (!edit.inserted_text.empty()) {
-            impl_->tree.insert(offset, edit.inserted_text);
+        if (!edit.insertedText.empty()) {
+            impl_->tree.insert(offset, edit.insertedText);
         }
     }
 
-    impl_->revision = Revision{current_revision.value() + 1};
+    impl_->revision = Revision{currentRevision.value() + 1};
     impl_->dirty = true;
-    return TransactionResult{DocumentError::none, impl_->revision, {}};
+    return TransactionResult{DocumentError::None, impl_->revision, {}};
 }
 
 }  // namespace ssg

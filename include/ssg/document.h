@@ -14,30 +14,30 @@ class ValidatedUtf8;
 
 struct TextEdit {
     ByteOffset offset;
-    std::uint64_t erased_bytes;
-    std::string inserted_text;
+    std::uint64_t erasedBytes;
+    std::string insertedText;
 
     bool operator==(TextEdit const&) const = default;
 };
 
 struct EditTransaction {
-    Revision base_revision;
+    Revision baseRevision;
     std::vector<TextEdit> edits;
 
     bool operator==(EditTransaction const&) const = default;
 };
 
 enum class DocumentError : std::uint8_t {
-    none,
-    read_only,
-    diff,
-    stale_revision,
-    empty_transaction,
-    invalid_range,
-    overlapping_edits,
-    invalid_utf8,
-    invalid_utf8_boundary,
-    revision_exhausted,
+    None,
+    ReadOnly,
+    Diff,
+    StaleRevision,
+    EmptyTransaction,
+    InvalidRange,
+    OverlappingEdits,
+    InvalidUtf8,
+    InvalidUtf8Boundary,
+    RevisionExhausted,
 };
 
 struct TransactionResult {
@@ -46,7 +46,7 @@ struct TransactionResult {
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == DocumentError::none;
+        return error == DocumentError::None;
     }
 
     bool operator==(TransactionResult const&) const = default;
@@ -63,12 +63,12 @@ struct DocumentSnapshot {
 
 class Document {
 public:
-    explicit Document(std::string_view initial_text = {},
-                      DocumentMode mode = DocumentMode::edit);
+    explicit Document(std::string_view initialText = {},
+                      DocumentMode mode = DocumentMode::Edit);
     // Construct from decoder-validated UTF-8 WITHOUT re-validating (open path).
     // The bytes are moved into the piece tree, not copied.
     explicit Document(ValidatedUtf8 validated,
-                      DocumentMode mode = DocumentMode::edit);
+                      DocumentMode mode = DocumentMode::Edit);
     ~Document();
 
     Document(Document const&) = delete;

@@ -13,12 +13,12 @@
 namespace ssg {
 
 enum class TextInputCommand : std::uint8_t {
-    insert,
-    newline,
-    delete_backward,
-    delete_forward,
-    delete_word_backward,
-    delete_word_forward,
+    Insert,
+    Newline,
+    DeleteBackward,
+    DeleteForward,
+    DeleteWordBackward,
+    DeleteWordForward,
 };
 
 struct TextInputCommandDescriptor {
@@ -37,19 +37,19 @@ public:
     descriptors() const noexcept;
 
 private:
-    friend TextInputCommandSet text_input_command_set();
+    friend TextInputCommandSet textInputCommandSet();
     TextInputCommandSet();
 
     const std::array<TextInputCommandDescriptor, 6> descriptors_;
 };
 
-[[nodiscard]] TextInputCommandSet text_input_command_set();
+[[nodiscard]] TextInputCommandSet textInputCommandSet();
 
 struct TextInputSettings {
-    IndentStyle indent_style;
-    std::uint32_t indent_width;
-    bool auto_indent;
-    LineEnding line_ending;
+    IndentStyle indentStyle;
+    std::uint32_t indentWidth;
+    bool autoIndent;
+    LineEnding lineEnding;
 
     bool operator==(const TextInputSettings&) const noexcept = default;
 };
@@ -61,28 +61,28 @@ struct TextInputArguments {
 };
 
 enum class TextInputError : std::uint8_t {
-    none,
-    read_only,
-    diff,
-    invalid_selection,
-    invalid_utf8,
-    invalid_settings,
-    unknown_command,
+    None,
+    ReadOnly,
+    Diff,
+    InvalidSelection,
+    InvalidUtf8,
+    InvalidSettings,
+    UnknownCommand,
 };
 
 struct TextInputResult {
     TextInputError error;
     std::optional<EditTransaction> transaction;
     std::optional<SelectionSet> selections;
-    std::string resulting_text;
+    std::string resultingText;
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == TextInputError::none;
+        return error == TextInputError::None;
     }
 };
 
-[[nodiscard]] TextInputResult apply_text_input(
+[[nodiscard]] TextInputResult applyTextInput(
     const DocumentSnapshot& document, const SelectionSet& selections,
     TextInputSettings settings, TextInputCommand command,
     TextInputArguments arguments = {});

@@ -15,9 +15,9 @@ CapabilityId::CapabilityId(std::string value) : value_{std::move(value)} {
 }
 
 InvocationPrincipal::InvocationPrincipal(
-    ClientId client_id, InvocationOrigin origin,
+    ClientId clientId, InvocationOrigin origin,
     std::vector<CapabilityId> capabilities)
-    : client_id_{client_id},
+    : clientId_{clientId},
       origin_{origin},
       capabilities_{std::move(capabilities)} {
     std::sort(capabilities_.begin(), capabilities_.end());
@@ -26,20 +26,20 @@ InvocationPrincipal::InvocationPrincipal(
         capabilities_.end());
 }
 
-bool InvocationPrincipal::has_capability(
+bool InvocationPrincipal::hasCapability(
     CapabilityId const& capability) const {
     return std::binary_search(capabilities_.begin(), capabilities_.end(),
                               capability);
 }
 
-void CommandContext::set_active_workspace(WorkspaceId workspace) noexcept {
-    workspace_changed_ = true;
-    active_workspace_ = workspace;
+void CommandContext::setActiveWorkspace(WorkspaceId workspace) noexcept {
+    workspaceChanged_ = true;
+    activeWorkspace_ = workspace;
 }
 
-void CommandContext::set_active_view(ViewId view) noexcept {
-    view_changed_ = true;
-    active_view_ = view;
+void CommandContext::setActiveView(ViewId view) noexcept {
+    viewChanged_ = true;
+    activeView_ = view;
 }
 
 CommandHandlerResult CommandHandlerResult::success() {
@@ -72,10 +72,10 @@ struct CommandRegistry::Impl {
     std::unordered_map<std::string, CommandRegistration> commands;
 };
 
-CommandRegistry::CommandRegistry(std::vector<CommandSet> command_sets)
+CommandRegistry::CommandRegistry(std::vector<CommandSet> commandSets)
     : impl_{std::make_unique<Impl>()} {
-    for (auto& command_set : command_sets) {
-        for (auto const& command : command_set.commands()) {
+    for (auto& commandSet : commandSets) {
+        for (auto const& command : commandSet.commands()) {
             auto [unused, inserted] =
                 impl_->commands.emplace(command.descriptor.id, command);
             if (!inserted) {
@@ -93,8 +93,8 @@ CommandRegistry& CommandRegistry::operator=(CommandRegistry&&) noexcept =
     default;
 
 CommandRegistration const* CommandRegistry::find(
-    std::string_view command_id) const {
-    auto found = impl_->commands.find(std::string{command_id});
+    std::string_view commandId) const {
+    auto found = impl_->commands.find(std::string{commandId});
     return found == impl_->commands.end() ? nullptr : &found->second;
 }
 

@@ -18,35 +18,35 @@ using WatchClock = std::chrono::steady_clock;
 using WatchTimePoint = WatchClock::time_point;
 
 enum class WatchEventKind {
-    create,
-    modify,
-    rename,
-    remove,
-    overflow,
+    Create,
+    Modify,
+    Rename,
+    Remove,
+    Overflow,
 };
 
 enum class WatchEventOrigin {
-    external,
-    ssg_save,
+    External,
+    SsgSave,
 };
 
 struct WatchFileState {
     FileIdentity identity;
     std::uint64_t size = 0;
-    std::int64_t modification_time = 0;
+    std::int64_t modificationTime = 0;
 
     friend bool operator==(const WatchFileState&, const WatchFileState&) = default;
 };
 
 struct WatchEvent {
-    WatchEventKind kind = WatchEventKind::overflow;
+    WatchEventKind kind = WatchEventKind::Overflow;
     std::filesystem::path path;
-    std::optional<std::filesystem::path> previous_path;
+    std::optional<std::filesystem::path> previousPath;
     std::optional<FileIdentity> identity;
     std::uint64_t sequence = 0;
     std::optional<std::uint64_t> size;
-    std::optional<std::int64_t> modification_time;
-    WatchEventOrigin origin = WatchEventOrigin::external;
+    std::optional<std::int64_t> modificationTime;
+    WatchEventOrigin origin = WatchEventOrigin::External;
 
     friend bool operator==(const WatchEvent&, const WatchEvent&) = default;
 };
@@ -60,26 +60,26 @@ struct SaveExpectation {
 
 struct WatcherConfig {
     std::chrono::milliseconds debounce{50};
-    std::chrono::milliseconds rescan_retry{1000};
-    std::size_t max_queued_events = 1024;
-    std::size_t max_pending_renames = 256;
-    std::size_t max_save_expectations = 256;
-    std::size_t max_rescan_entries = 100'000;
+    std::chrono::milliseconds rescanRetry{1000};
+    std::size_t maxQueuedEvents = 1024;
+    std::size_t maxPendingRenames = 256;
+    std::size_t maxSaveExpectations = 256;
+    std::size_t maxRescanEntries = 100'000;
 };
 
 enum class NativeWatchAction {
-    create,
-    modify,
-    remove,
-    rename_from,
-    rename_to,
-    overflow,
+    Create,
+    Modify,
+    Remove,
+    RenameFrom,
+    RenameTo,
+    Overflow,
 };
 
 struct NativeWatchEvent {
-    NativeWatchAction action = NativeWatchAction::overflow;
+    NativeWatchAction action = NativeWatchAction::Overflow;
     std::filesystem::path path;
-    std::uint64_t rename_token = 0;
+    std::uint64_t renameToken = 0;
     std::optional<WatchFileState> observed;
 };
 
@@ -95,12 +95,12 @@ struct WorkspaceScan {
     bool complete = true;
 };
 
-using WorkspaceScanner = std::function<WorkspaceScan(std::size_t max_entries)>;
+using WorkspaceScanner = std::function<WorkspaceScan(std::size_t maxEntries)>;
 
 class WatchEventNormalizer {
 public:
     WatchEventNormalizer(WatcherConfig config,
-                         std::vector<WorkspaceEntry> initial_entries,
+                         std::vector<WorkspaceEntry> initialEntries,
                          WorkspaceScanner scanner);
     ~WatchEventNormalizer();
     WatchEventNormalizer(WatchEventNormalizer&&) noexcept;
@@ -109,9 +109,9 @@ public:
     WatchEventNormalizer(const WatchEventNormalizer&) = delete;
     WatchEventNormalizer& operator=(const WatchEventNormalizer&) = delete;
 
-    void register_save(SaveExpectation expectation);
-    void push(NativeWatchEvent event, WatchTimePoint observed_at);
-    [[nodiscard]] std::vector<WatchEvent> take_ready(WatchTimePoint now);
+    void registerSave(SaveExpectation expectation);
+    void push(NativeWatchEvent event, WatchTimePoint observedAt);
+    [[nodiscard]] std::vector<WatchEvent> takeReady(WatchTimePoint now);
 
 private:
     class Impl;
@@ -122,13 +122,13 @@ class FilesystemWatcher {
 public:
     virtual ~FilesystemWatcher() = default;
 
-    virtual void register_save(SaveExpectation expectation) = 0;
+    virtual void registerSave(SaveExpectation expectation) = 0;
     [[nodiscard]] virtual std::vector<WatchEvent> poll(
         std::chrono::milliseconds timeout) = 0;
 };
 
 [[nodiscard]] std::unique_ptr<FilesystemWatcher>
-make_platform_filesystem_watcher(const std::filesystem::path& canonical_root,
+makePlatformFilesystemWatcher(const std::filesystem::path& canonicalRoot,
                                  WatcherConfig config = {});
 
 } // namespace ssg

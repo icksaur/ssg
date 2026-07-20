@@ -40,7 +40,7 @@ private:
     std::filesystem::path path_;
 };
 
-std::vector<std::byte> bytes_from_hex(std::string_view text) {
+std::vector<std::byte> bytesFromHex(std::string_view text) {
     auto nibble = [](char value) -> unsigned {
         if (value >= '0' && value <= '9') return value - '0';
         if (value >= 'a' && value <= 'f') return value - 'a' + 10;
@@ -50,34 +50,34 @@ std::vector<std::byte> bytes_from_hex(std::string_view text) {
 
     std::vector<std::byte> result;
     unsigned high = 0;
-    bool have_high = false;
+    bool haveHigh = false;
     for (const char value : text) {
         if (value == '\n' || value == '\r' || value == ' ' || value == '\t') {
             continue;
         }
-        if (!have_high) {
+        if (!haveHigh) {
             high = nibble(value);
-            have_high = true;
+            haveHigh = true;
         } else {
             result.push_back(
                 static_cast<std::byte>((high << 4U) | nibble(value)));
-            have_high = false;
+            haveHigh = false;
         }
     }
-    if (have_high) throw std::invalid_argument("odd fixture hex length");
+    if (haveHigh) throw std::invalid_argument("odd fixture hex length");
     return result;
 }
 
-std::vector<std::byte> read_hex_fixture(std::string_view name) {
+std::vector<std::byte> readHexFixture(std::string_view name) {
     const auto path =
         std::filesystem::path{SSG_SCRATCH_JOURNAL_FIXTURE_DIR} / name;
     std::ifstream input(path, std::ios::binary);
     const std::string text{std::istreambuf_iterator<char>(input),
                            std::istreambuf_iterator<char>()};
-    return bytes_from_hex(text);
+    return bytesFromHex(text);
 }
 
-ssg::UntitledDocumentId fixture_untitled_id() {
+ssg::UntitledDocumentId fixtureUntitledId() {
     std::array<std::byte, 16> value{};
     for (std::size_t index = 0; index < value.size(); ++index) {
         value[index] = static_cast<std::byte>(index);
@@ -85,107 +85,107 @@ ssg::UntitledDocumentId fixture_untitled_id() {
     return ssg::UntitledDocumentId{value};
 }
 
-ssg::JournalDocument saved_document(std::string content = "hello\n") {
+ssg::JournalDocument savedDocument(std::string content = "hello\n") {
     return {
         ssg::JournalDocumentKey::saved("notes.txt"),
-        ssg::DocumentMode::edit,
+        ssg::DocumentMode::Edit,
         true,
         std::move(content),
     };
 }
 
-ssg::JournalDocument untitled_document(std::string content = "draft") {
+ssg::JournalDocument untitledDocument(std::string content = "draft") {
     return {
-        ssg::JournalDocumentKey::untitled(fixture_untitled_id()),
-        ssg::DocumentMode::read_only,
+        ssg::JournalDocumentKey::untitled(fixtureUntitledId()),
+        ssg::DocumentMode::ReadOnly,
         false,
         std::move(content),
     };
 }
 
-TEST(checkpoint_encoding_matches_cross_platform_byte_fixture) {
+TEST(checkpointEncodingMatchesCrossPlatformByteFixture) {
     const ssg::JournalRecoverySet recovery{
-        {saved_document(), untitled_document()}};
+        {savedDocument(), untitledDocument()}};
 
-    ASSERT_EQ(ssg::encode_checkpoint_record(recovery),
-              read_hex_fixture("checkpoint.hex"));
+    ASSERT_EQ(ssg::encodeCheckpointRecord(recovery),
+              readHexFixture("checkpoint.hex"));
 }
 
-TEST(replay_applies_checkpoint_updates_and_removals) {
+TEST(replayAppliesCheckpointUpdatesAndRemovals) {
     std::vector<std::byte> journal =
-        ssg::encode_checkpoint_record({{saved_document(), untitled_document()}});
+        ssg::encodeCheckpointRecord({{savedDocument(), untitledDocument()}});
     const auto updated =
-        ssg::encode_document_record(untitled_document("new draft"));
+        ssg::encodeDocumentRecord(untitledDocument("new draft"));
     journal.insert(journal.end(), updated.begin(), updated.end());
     const auto removed =
-        ssg::encode_remove_record(ssg::JournalDocumentKey::saved("notes.txt"));
+        ssg::encodeRemoveRecord(ssg::JournalDocumentKey::saved("notes.txt"));
     journal.insert(journal.end(), removed.begin(), removed.end());
 
-    const auto replayed = ssg::replay_journal(journal);
-    ASSERT_FALSE(replayed.discarded_tail);
-    ASSERT_EQ(replayed.valid_bytes, journal.size());
+    const auto replayed = ssg::replayJournal(journal);
+    ASSERT_FALSE(replayed.discardedTail);
+    ASSERT_EQ(replayed.validBytes, journal.size());
     ASSERT_EQ(replayed.recovery.documents.size(), std::size_t{1});
     ASSERT_EQ(replayed.recovery.documents.front(),
-              untitled_document("new draft"));
+              untitledDocument("new draft"));
 }
 
-TEST(replay_starts_from_newest_checkpoint) {
+TEST(replayStartsFromNewestCheckpoint) {
     std::vector<std::byte> journal =
-        ssg::encode_checkpoint_record({{saved_document("old")}});
-    const auto update = ssg::encode_document_record(saved_document("ignored"));
+        ssg::encodeCheckpointRecord({{savedDocument("old")}});
+    const auto update = ssg::encodeDocumentRecord(savedDocument("ignored"));
     journal.insert(journal.end(), update.begin(), update.end());
     const auto checkpoint =
-        ssg::encode_checkpoint_record({{untitled_document("new base")}});
+        ssg::encodeCheckpointRecord({{untitledDocument("new base")}});
     journal.insert(journal.end(), checkpoint.begin(), checkpoint.end());
 
-    const auto replayed = ssg::replay_journal(journal);
+    const auto replayed = ssg::replayJournal(journal);
     ASSERT_EQ(replayed.recovery.documents,
               std::vector<ssg::JournalDocument>{
-                  untitled_document("new base")});
+                  untitledDocument("new base")});
 }
 
-TEST(corrupt_or_truncated_tail_stops_at_last_valid_record) {
+TEST(corruptOrTruncatedTailStopsAtLastValidRecord) {
     const auto checkpoint =
-        ssg::encode_checkpoint_record({{saved_document("base")}});
-    const auto update = ssg::encode_document_record(saved_document("changed"));
+        ssg::encodeCheckpointRecord({{savedDocument("base")}});
+    const auto update = ssg::encodeDocumentRecord(savedDocument("changed"));
     std::vector<std::byte> complete = checkpoint;
     complete.insert(complete.end(), update.begin(), update.end());
 
     auto corrupt = complete;
     corrupt.back() ^= std::byte{0x80};
-    const auto corrupt_replay = ssg::replay_journal(corrupt);
-    ASSERT_TRUE(corrupt_replay.discarded_tail);
-    ASSERT_EQ(corrupt_replay.valid_bytes, checkpoint.size());
-    ASSERT_EQ(corrupt_replay.recovery.documents,
-              std::vector<ssg::JournalDocument>{saved_document("base")});
+    const auto corruptReplay = ssg::replayJournal(corrupt);
+    ASSERT_TRUE(corruptReplay.discardedTail);
+    ASSERT_EQ(corruptReplay.validBytes, checkpoint.size());
+    ASSERT_EQ(corruptReplay.recovery.documents,
+              std::vector<ssg::JournalDocument>{savedDocument("base")});
 
     for (std::size_t cut = checkpoint.size() + 1; cut < complete.size();
          ++cut) {
         const auto truncated =
-            ssg::replay_journal(std::span{complete}.first(cut));
-        ASSERT_TRUE(truncated.discarded_tail);
-        ASSERT_EQ(truncated.valid_bytes, checkpoint.size());
+            ssg::replayJournal(std::span{complete}.first(cut));
+        ASSERT_TRUE(truncated.discardedTail);
+        ASSERT_EQ(truncated.validBytes, checkpoint.size());
         ASSERT_EQ(truncated.recovery.documents,
-                  std::vector<ssg::JournalDocument>{saved_document("base")});
+                  std::vector<ssg::JournalDocument>{savedDocument("base")});
     }
 }
 
-TEST(malformed_input_fails_closed_without_allocation_or_state) {
+TEST(malformedInputFailsClosedWithoutAllocationOrState) {
     std::vector<std::byte> malformed(16, std::byte{0xff});
-    const auto replayed = ssg::replay_journal(malformed);
-    ASSERT_TRUE(replayed.discarded_tail);
-    ASSERT_EQ(replayed.valid_bytes, std::size_t{0});
+    const auto replayed = ssg::replayJournal(malformed);
+    ASSERT_TRUE(replayed.discardedTail);
+    ASSERT_EQ(replayed.validBytes, std::size_t{0});
     ASSERT_TRUE(replayed.recovery.documents.empty());
 
-    auto oversized = ssg::encode_checkpoint_record({{}});
+    auto oversized = ssg::encodeCheckpointRecord({{}});
     oversized[6] = std::byte{0xff};
     oversized[7] = std::byte{0xff};
     oversized[8] = std::byte{0xff};
     oversized[9] = std::byte{0x7f};
-    ASSERT_TRUE(ssg::replay_journal(oversized).recovery.documents.empty());
+    ASSERT_TRUE(ssg::replayJournal(oversized).recovery.documents.empty());
 }
 
-TEST(untitled_ids_are_nonzero_unique_and_stable_values) {
+TEST(untitledIdsAreNonzeroUniqueAndStableValues) {
     const auto first = ssg::UntitledDocumentId::generate();
     const auto second = ssg::UntitledDocumentId::generate();
     ASSERT_NE(first, second);
@@ -193,57 +193,57 @@ TEST(untitled_ids_are_nonzero_unique_and_stable_values) {
                              [](std::byte value) {
                                  return value == std::byte{0};
                              }));
-    ASSERT_EQ(ssg::JournalDocumentKey::untitled(first).untitled_id(), first);
+    ASSERT_EQ(ssg::JournalDocumentKey::untitled(first).untitledId(), first);
 }
 
-TEST(durable_append_survives_close_and_restart_replay) {
+TEST(durableAppendSurvivesCloseAndRestartReplay) {
     TemporaryDirectory temporary;
     const auto path = temporary.path() / "document.journal";
     {
         ssg::ScratchJournal journal{path};
-        journal.append_checkpoint({{saved_document("base")}});
-        journal.append_document(saved_document("after restart"));
+        journal.appendCheckpoint({{savedDocument("base")}});
+        journal.appendDocument(savedDocument("after restart"));
     }
 
     const ssg::ScratchJournal reopened{path};
     const auto replayed = reopened.replay();
-    ASSERT_FALSE(replayed.discarded_tail);
+    ASSERT_FALSE(replayed.discardedTail);
     ASSERT_EQ(replayed.recovery.documents,
               std::vector<ssg::JournalDocument>{
-                  saved_document("after restart")});
+                  savedDocument("after restart")});
 }
 
-TEST(append_requires_session_layer_to_create_parent_directory) {
+TEST(appendRequiresSessionLayerToCreateParentDirectory) {
     TemporaryDirectory temporary;
     const ssg::ScratchJournal journal{
         temporary.path() / "missing" / "document.journal"};
-    ASSERT_THROWS(journal.append_checkpoint({{saved_document()}}),
+    ASSERT_THROWS(journal.appendCheckpoint({{savedDocument()}}),
                   std::invalid_argument);
 }
 
-TEST(append_rejects_invalid_saved_identity_and_invalid_utf8) {
+TEST(appendRejectsInvalidSavedIdentityAndInvalidUtf8) {
     ASSERT_THROWS(ssg::JournalDocumentKey::saved("../escape"),
                   std::invalid_argument);
     ASSERT_THROWS(ssg::JournalDocumentKey::saved(""), std::invalid_argument);
     ASSERT_THROWS(
-        ssg::encode_document_record(
+        ssg::encodeDocumentRecord(
             {ssg::JournalDocumentKey::saved("valid"),
-             ssg::DocumentMode::edit, true, std::string{"bad\xff", 4}}),
+             ssg::DocumentMode::Edit, true, std::string{"bad\xff", 4}}),
         std::invalid_argument);
 }
 
 } // namespace
 
 int main() {
-    RUN(checkpoint_encoding_matches_cross_platform_byte_fixture);
-    RUN(replay_applies_checkpoint_updates_and_removals);
-    RUN(replay_starts_from_newest_checkpoint);
-    RUN(corrupt_or_truncated_tail_stops_at_last_valid_record);
-    RUN(malformed_input_fails_closed_without_allocation_or_state);
-    RUN(untitled_ids_are_nonzero_unique_and_stable_values);
-    RUN(durable_append_survives_close_and_restart_replay);
-    RUN(append_requires_session_layer_to_create_parent_directory);
-    RUN(append_rejects_invalid_saved_identity_and_invalid_utf8);
+    RUN(checkpointEncodingMatchesCrossPlatformByteFixture);
+    RUN(replayAppliesCheckpointUpdatesAndRemovals);
+    RUN(replayStartsFromNewestCheckpoint);
+    RUN(corruptOrTruncatedTailStopsAtLastValidRecord);
+    RUN(malformedInputFailsClosedWithoutAllocationOrState);
+    RUN(untitledIdsAreNonzeroUniqueAndStableValues);
+    RUN(durableAppendSurvivesCloseAndRestartReplay);
+    RUN(appendRequiresSessionLayerToCreateParentDirectory);
+    RUN(appendRejectsInvalidSavedIdentityAndInvalidUtf8);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;

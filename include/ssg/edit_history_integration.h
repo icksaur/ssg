@@ -11,43 +11,43 @@
 namespace ssg {
 
 enum class EditHistoryIntegrationError : std::uint8_t {
-    none,
-    text_input_rejected,
-    edit_command_rejected,
-    invalid_command_result,
-    history_rejected,
+    None,
+    TextInputRejected,
+    EditCommandRejected,
+    InvalidCommandResult,
+    HistoryRejected,
 };
 
 struct EditHistoryIntegrationResult {
     EditHistoryIntegrationError error;
-    std::optional<TextInputError> text_input_error;
-    std::optional<EditCommandError> edit_command_error;
-    std::optional<HistoryResult> history_result;
+    std::optional<TextInputError> textInputError;
+    std::optional<EditCommandError> editCommandError;
+    std::optional<HistoryResult> historyResult;
     std::optional<SelectionSet> selections;
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == EditHistoryIntegrationError::none;
+        return error == EditHistoryIntegrationError::None;
     }
 
-    [[nodiscard]] bool document_changed() const noexcept {
-        return history_result.has_value() && history_result->accepted();
+    [[nodiscard]] bool documentChanged() const noexcept {
+        return historyResult.has_value() && historyResult->accepted();
     }
 };
 
-[[nodiscard]] HistoryEditKind history_edit_kind(
+[[nodiscard]] HistoryEditKind historyEditKind(
     TextInputCommand command) noexcept;
-[[nodiscard]] HistoryEditKind history_edit_kind(EditCommand command) noexcept;
+[[nodiscard]] HistoryEditKind historyEditKind(EditCommand command) noexcept;
 
-[[nodiscard]] EditHistoryIntegrationResult apply_text_input_with_history(
+[[nodiscard]] EditHistoryIntegrationResult applyTextInputWithHistory(
     Document& document, DocumentHistory& history,
     const SelectionSet& selections, TextInputSettings settings,
     TextInputCommand command, TextInputArguments arguments,
-    std::uint64_t timestamp_ms);
+    std::uint64_t timestampMs);
 
-[[nodiscard]] EditHistoryIntegrationResult apply_edit_command_with_history(
+[[nodiscard]] EditHistoryIntegrationResult applyEditCommandWithHistory(
     Document& document, DocumentHistory& history,
     const SelectionSet& selections, EditCommandSettings settings,
-    EditCommand command, std::uint64_t timestamp_ms);
+    EditCommand command, std::uint64_t timestampMs);
 
 }  // namespace ssg

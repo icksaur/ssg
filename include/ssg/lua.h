@@ -21,43 +21,43 @@ struct LuaHandle {
 };
 
 enum class LuaError : std::uint8_t {
-    none,
-    invalid_script,
-    runtime_fault,
-    budget_exhausted,
-    stale_handle,
-    duplicate_command,
-    unknown_command,
-    capability_denied,
-    dispatch_failed,
+    None,
+    InvalidScript,
+    RuntimeFault,
+    BudgetExhausted,
+    StaleHandle,
+    DuplicateCommand,
+    UnknownCommand,
+    CapabilityDenied,
+    DispatchFailed,
 };
 
 struct LuaResult {
-    LuaError error{LuaError::none};
+    LuaError error{LuaError::None};
     std::string message;
     [[nodiscard]] bool accepted() const noexcept {
-        return error == LuaError::none;
+        return error == LuaError::None;
     }
 };
 
 struct LuaCommand {
     std::string id;
-    std::vector<CapabilityId> required_capabilities;
+    std::vector<CapabilityId> requiredCapabilities;
 };
 
 struct LuaInvocation {
-    std::string_view command_id;
+    std::string_view commandId;
     InvocationPrincipal const& principal;
 };
 
 using LuaDispatcher = std::function<CommandHandlerResult(LuaInvocation const&)>;
 
 struct LuaCommandHostOptions {
-    ClientId plugin_id;
+    ClientId pluginId;
     std::vector<CapabilityId> capabilities;
     std::vector<LuaCommand> commands;
-    std::uint64_t instruction_budget{100'000};
-    std::chrono::milliseconds time_budget{50};
+    std::uint64_t instructionBudget{100'000};
+    std::chrono::milliseconds timeBudget{50};
 };
 
 class LuaCommandHost {
@@ -71,8 +71,8 @@ public:
     LuaCommandHost& operator=(LuaCommandHost&&) noexcept;
 
     [[nodiscard]] LuaResult evaluate(std::string_view script);
-    [[nodiscard]] LuaResult invoke(std::string_view plugin_command);
-    [[nodiscard]] bool has_command(std::string_view plugin_command) const;
+    [[nodiscard]] LuaResult invoke(std::string_view pluginCommand);
+    [[nodiscard]] bool hasCommand(std::string_view pluginCommand) const;
 
     [[nodiscard]] LuaHandle expose(void* object);
     void invalidate(LuaHandle handle);

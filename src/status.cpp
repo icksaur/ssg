@@ -6,33 +6,33 @@
 namespace ssg {
 namespace {
 
-bool valid_item(const StatusItem& item) {
+bool validItem(const StatusItem& item) {
     if (item.id.value() == 0 || item.text.empty()) {
         return false;
     }
     return std::all_of(item.actions.begin(), item.actions.end(),
                        [](const StatusAction& action) {
                            return !action.id.empty() &&
-                                  !action.accessible_label.empty() &&
-                                  !action.command_id.empty();
+                                  !action.accessibleLabel.empty() &&
+                                  !action.commandId.empty();
                        });
 }
 
 } // namespace
 
 StatusEnqueueResult StatusQueue::enqueue(StatusItem item) {
-    if (!valid_item(item)) {
+    if (!validItem(item)) {
         return {};
     }
 
     std::optional<StatusId> evicted;
-    const auto same_id = std::find_if(
+    const auto sameId = std::find_if(
         entries_.begin(), entries_.end(), [&](const Entry& entry) {
             return entry.item.id == item.id;
         });
-    if (same_id != entries_.end()) {
-        entries_.erase(same_id);
-    } else if (entries_.size() == capacity) {
+    if (sameId != entries_.end()) {
+        entries_.erase(sameId);
+    } else if (entries_.size() == kCapacity) {
         const auto worst = std::max_element(
             entries_.begin(), entries_.end(),
             [](const Entry& left, const Entry& right) {
@@ -48,7 +48,7 @@ StatusEnqueueResult StatusQueue::enqueue(StatusItem item) {
         entries_.erase(worst);
     }
 
-    const std::uint64_t generation = next_generation_++;
+    const std::uint64_t generation = nextGeneration_++;
     entries_.push_back({std::move(item), generation});
     std::sort(entries_.begin(), entries_.end(),
               [](const Entry& left, const Entry& right) {
@@ -86,28 +86,28 @@ void StatusQueue::dismiss() noexcept {
     }
 }
 
-StatusActionResult StatusQueue::invoke_action(
+StatusActionResult StatusQueue::invokeAction(
     const StatusActionInvocation& invocation) const {
     if (entries_.empty()) {
-        return {StatusActionError::stale, std::nullopt};
+        return {StatusActionError::Stale, std::nullopt};
     }
     const auto& selected = entries_[selected_];
-    if (selected.item.id != invocation.status_id ||
+    if (selected.item.id != invocation.statusId ||
         selected.generation != invocation.generation) {
-        return {StatusActionError::stale, std::nullopt};
+        return {StatusActionError::Stale, std::nullopt};
     }
     const auto action = std::find_if(
         selected.item.actions.begin(), selected.item.actions.end(),
         [&](const StatusAction& candidate) {
-            return candidate.id == invocation.action_id;
+            return candidate.id == invocation.actionId;
         });
     if (action == selected.item.actions.end()) {
-        return {StatusActionError::unknown_action, std::nullopt};
+        return {StatusActionError::UnknownAction, std::nullopt};
     }
-    return {StatusActionError::none, action->command_id};
+    return {StatusActionError::None, action->commandId};
 }
 
-StatusViewState StatusQueue::view_state() const {
+StatusViewState StatusQueue::viewState() const {
     StatusViewState view;
     view.selected = selected_;
     view.items.reserve(entries_.size());
@@ -119,7 +119,7 @@ StatusViewState StatusQueue::view_state() const {
     return view;
 }
 
-StatusFooterProjection StatusQueue::footer_projection() const {
+StatusFooterProjection StatusQueue::footerProjection() const {
     StatusFooterProjection projection;
     if (entries_.empty()) {
         return projection;
@@ -130,12 +130,12 @@ StatusFooterProjection StatusQueue::footer_projection() const {
         std::to_string(entries_.size());
     projection.actions.reserve(selected.item.actions.size());
     for (const auto& action : selected.item.actions) {
-        projection.actions.push_back({action.id, action.accessible_label});
+        projection.actions.push_back({action.id, action.accessibleLabel});
     }
     return projection;
 }
 
-PromptStatusDelta derive_prompt_status_delta(
+PromptStatusDelta derivePromptStatusDelta(
     const PromptStatusViewState& before, const PromptStatusViewState& after) {
     if (before == after) {
         return {};

@@ -28,20 +28,20 @@ struct KeyStroke {
 
 using KeySequence = std::vector<KeyStroke>;
 
-[[nodiscard]] std::optional<KeyStroke> parse_key_stroke(
+[[nodiscard]] std::optional<KeyStroke> parseKeyStroke(
     std::string_view encoded);
-[[nodiscard]] std::string format_key_stroke(const KeyStroke& stroke);
-[[nodiscard]] std::optional<KeySequence> parse_key_sequence(
+[[nodiscard]] std::string formatKeyStroke(const KeyStroke& stroke);
+[[nodiscard]] std::optional<KeySequence> parseKeySequence(
     std::initializer_list<std::string_view> encoded);
 
 // A compact human display form of a key sequence, e.g. {Escape, KeyS} -> "Esc S"
 // and {ArrowDown} -> "Down".  Modifiers are prefixed (Ctrl+/Alt+/Shift+/Meta+);
 // strokes are space-joined.  Used for palette key-sequence detail (K7).
-[[nodiscard]] std::string format_key_sequence(const KeySequence& sequence);
+[[nodiscard]] std::string formatKeySequence(const KeySequence& sequence);
 
 struct KeyBinding {
     KeySequence sequence;
-    std::string command_id;
+    std::string commandId;
     std::string context;
 
     bool operator==(const KeyBinding&) const = default;
@@ -62,30 +62,30 @@ struct KeymapDelta {
 };
 
 enum class KeymapErrorCode : std::uint8_t {
-    empty_name,
-    empty_sequence,
-    invalid_stroke,
-    empty_command,
-    empty_context,
-    duplicate_binding,
-    unreachable_binding,
-    reserved_binding,
-    unknown_context,
-    ambiguous_prefix,
+    EmptyName,
+    EmptySequence,
+    InvalidStroke,
+    EmptyCommand,
+    EmptyContext,
+    DuplicateBinding,
+    UnreachableBinding,
+    ReservedBinding,
+    UnknownContext,
+    AmbiguousPrefix,
 };
 
 struct KeymapError {
     KeymapErrorCode code;
-    std::size_t binding_index;
+    std::size_t bindingIndex;
     std::string message;
 
     bool operator==(const KeymapError&) const = default;
 };
 
-[[nodiscard]] std::vector<KeymapError> validate_keymap(
+[[nodiscard]] std::vector<KeymapError> validateKeymap(
     const KeymapViewState& keymap,
-    std::span<const KeySequence> reserved_sequences);
-[[nodiscard]] KeymapDelta derive_keymap_delta(const KeymapViewState& previous,
+    std::span<const KeySequence> reservedSequences);
+[[nodiscard]] KeymapDelta deriveKeymapDelta(const KeymapViewState& previous,
                                               const KeymapViewState& current);
 
 // The canonical keymap contexts: "*" plus every FocusTarget name (see
@@ -95,11 +95,11 @@ struct KeymapError {
 // Whether a binding is eligible in the given resolution context: its context is
 // "*" (global) or equals the context (a FocusTarget name).  See
 // doc/spec-keymap.md.
-enum class KeymapMatchKind : std::uint8_t { none, pending, resolved };
+enum class KeymapMatchKind : std::uint8_t { None, Pending, Resolved };
 
 struct KeymapResolution {
-    KeymapMatchKind kind = KeymapMatchKind::none;
-    std::string command_id;  // Set iff kind == resolved.
+    KeymapMatchKind kind = KeymapMatchKind::None;
+    std::string commandId;  // Set iff kind == resolved.
 
     bool operator==(const KeymapResolution&) const = default;
 };
@@ -114,34 +114,34 @@ struct KeymapResolution {
 //   none     - neither; the caller clears the pending sequence.
 // Prefix-freeness (validate_keymap ambiguous_prefix) makes resolved and pending
 // mutually exclusive.
-[[nodiscard]] KeymapResolution resolve_key_sequence(
+[[nodiscard]] KeymapResolution resolveKeySequence(
     const KeymapViewState& keymap, const KeySequence& pending,
     std::string_view context);
 
 // Where committed text (with no pending chord) is routed in a focus context
 // (doc/spec-keymap.md).  Committed text is never a keymap binding.
-enum class TextRouting : std::uint8_t { insert, prompt_query, ignore };
+enum class TextRouting : std::uint8_t { Insert, PromptQuery, Ignore };
 
-[[nodiscard]] TextRouting text_routing(std::string_view context) noexcept;
+[[nodiscard]] TextRouting textRouting(std::string_view context) noexcept;
 
 // Whether the keymap has a usable global binding for `command_id`: some
 // "*"-context binding names it, is not browser-reserved (checked against
 // `reserved_sequences`), and is not shadowed by an earlier "*" binding of the
 // same sequence.  Used to enforce the settings.open escape hatch (I24, K6).
-[[nodiscard]] bool has_global_binding(
-    const KeymapViewState& keymap, std::string_view command_id,
-    std::span<const KeySequence> reserved_sequences);
+[[nodiscard]] bool hasGlobalBinding(
+    const KeymapViewState& keymap, std::string_view commandId,
+    std::span<const KeySequence> reservedSequences);
 
 // The preferred key sequence bound to `command_id` for display, chosen
 // deterministically (independent of binding order): the shortest sequence, then
 // the lexicographically least display form (K7).  Empty if the command is
 // unbound.
-[[nodiscard]] std::optional<KeySequence> preferred_binding(
-    const KeymapViewState& keymap, std::string_view command_id);
+[[nodiscard]] std::optional<KeySequence> preferredBinding(
+    const KeymapViewState& keymap, std::string_view commandId);
 
 class CommittedText {
 public:
-    [[nodiscard]] static std::optional<CommittedText> from_utf8(
+    [[nodiscard]] static std::optional<CommittedText> fromUtf8(
         std::string text);
     [[nodiscard]] const std::string& utf8() const noexcept { return text_; }
     bool operator==(const CommittedText&) const = default;
@@ -176,33 +176,33 @@ using SemanticInputArguments =
                  ScrollFractionArguments>;
 
 struct SemanticCommand {
-    std::string command_id;
+    std::string commandId;
     SemanticInputArguments arguments;
 
     bool operator==(const SemanticCommand& other) const;
 };
 
-[[nodiscard]] SemanticCommand semantic_input(const CommittedText& committed);
+[[nodiscard]] SemanticCommand semanticInput(const CommittedText& committed);
 
 enum class HitTargetKind : std::uint8_t {
-    editor_cell,
-    scrollbar,
-    tab,
-    splitter,
-    panel_node,
-    status_action,
+    EditorCell,
+    Scrollbar,
+    Tab,
+    Splitter,
+    PanelNode,
+    StatusAction,
 };
 
 struct SemanticHitTarget {
     std::uint64_t id;
     HitTargetKind kind;
-    std::string accessible_label;
+    std::string accessibleLabel;
     SemanticCommand command;
 
     bool operator==(const SemanticHitTarget& other) const = default;
 };
 
-[[nodiscard]] const SemanticCommand& activate_hit_target(
+[[nodiscard]] const SemanticCommand& activateHitTarget(
     const SemanticHitTarget& target) noexcept;
 
 } // namespace ssg

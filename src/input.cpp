@@ -9,7 +9,7 @@
 namespace ssg {
 namespace {
 
-bool valid_code(std::string_view code) {
+bool validCode(std::string_view code) {
     if (code.size() == 4 && code.starts_with("Key") &&
         code[3] >= 'A' && code[3] <= 'Z') {
         return true;
@@ -38,7 +38,7 @@ bool valid_code(std::string_view code) {
     return std::ranges::find(named, code) != named.end();
 }
 
-bool valid_utf8_without_nul(std::string_view text) {
+bool validUtf8WithoutNul(std::string_view text) {
     for (std::size_t i = 0; i < text.size();) {
         const auto lead = static_cast<unsigned char>(text[i]);
         if (lead == 0) {
@@ -87,34 +87,34 @@ bool valid_utf8_without_nul(std::string_view text) {
     return true;
 }
 
-bool valid_stroke(const KeyStroke& stroke) {
-    return valid_code(stroke.code);
+bool validStroke(const KeyStroke& stroke) {
+    return validCode(stroke.code);
 }
 
-bool starts_with_sequence(const KeySequence& sequence,
+bool startsWithSequence(const KeySequence& sequence,
                           const KeySequence& prefix) {
     return prefix.size() <= sequence.size() &&
            std::equal(prefix.begin(), prefix.end(), sequence.begin());
 }
 
-bool is_strict_prefix(const KeySequence& shorter, const KeySequence& longer) {
+bool isStrictPrefix(const KeySequence& shorter, const KeySequence& longer) {
     return shorter.size() < longer.size() &&
            std::equal(shorter.begin(), shorter.end(), longer.begin());
 }
 
-bool known_context(std::string_view context) {
-    const auto contexts = keymap_contexts();
+bool knownContext(std::string_view context) {
+    const auto contexts = keymapContexts();
     return std::ranges::find(contexts, context) != contexts.end();
 }
 
 // Two bindings can both apply during resolution when their contexts overlap:
 // either shares "*", or they name the same context.  A "*" binding is eligible
 // in every context, so it overlaps every binding.
-bool contexts_overlap(std::string_view left, std::string_view right) {
+bool contextsOverlap(std::string_view left, std::string_view right) {
     return left == "*" || right == "*" || left == right;
 }
 
-bool selection_arguments_equal(const SelectionCommandArguments& left,
+bool selectionArgumentsEqual(const SelectionCommandArguments& left,
                                const SelectionCommandArguments& right) {
     return left.position == right.position &&
            left.selection == right.selection;
@@ -122,7 +122,7 @@ bool selection_arguments_equal(const SelectionCommandArguments& left,
 
 } // namespace
 
-std::optional<KeyStroke> parse_key_stroke(std::string_view encoded) {
+std::optional<KeyStroke> parseKeyStroke(std::string_view encoded) {
     if (encoded.empty()) {
         return std::nullopt;
     }
@@ -154,14 +154,14 @@ std::optional<KeyStroke> parse_key_stroke(std::string_view encoded) {
         begin = separator == std::string_view::npos ? encoded.size()
                                                     : separator + 1;
     }
-    if (!valid_stroke(result)) {
+    if (!validStroke(result)) {
         return std::nullopt;
     }
     return result;
 }
 
-std::string format_key_stroke(const KeyStroke& stroke) {
-    if (!valid_stroke(stroke)) {
+std::string formatKeyStroke(const KeyStroke& stroke) {
+    if (!validStroke(stroke)) {
         return {};
     }
     std::string result;
@@ -187,7 +187,7 @@ std::string format_key_stroke(const KeyStroke& stroke) {
     return result;
 }
 
-std::optional<KeySequence> parse_key_sequence(
+std::optional<KeySequence> parseKeySequence(
     std::initializer_list<std::string_view> encoded) {
     if (encoded.size() == 0) {
         return std::nullopt;
@@ -195,7 +195,7 @@ std::optional<KeySequence> parse_key_sequence(
     KeySequence result;
     result.reserve(encoded.size());
     for (const auto item : encoded) {
-        const auto stroke = parse_key_stroke(item);
+        const auto stroke = parseKeyStroke(item);
         if (!stroke) {
             return std::nullopt;
         }
@@ -206,8 +206,7 @@ std::optional<KeySequence> parse_key_sequence(
 
 namespace {
 
-// The compact display name for a single key code (no modifiers).
-std::string key_display(std::string_view code) {
+std::string keyDisplay(std::string_view code) {
     if (code.size() == 4 && code.starts_with("Key")) {
         return std::string{code.substr(3)};
     }
@@ -236,7 +235,7 @@ std::string key_display(std::string_view code) {
 
 }  // namespace
 
-std::string format_key_sequence(const KeySequence& sequence) {
+std::string formatKeySequence(const KeySequence& sequence) {
     std::string result;
     for (const auto& stroke : sequence) {
         if (!result.empty()) result += ' ';
@@ -244,48 +243,48 @@ std::string format_key_sequence(const KeySequence& sequence) {
         if (stroke.alt) result += "Alt+";
         if (stroke.shift) result += "Shift+";
         if (stroke.meta) result += "Meta+";
-        result += key_display(stroke.code);
+        result += keyDisplay(stroke.code);
     }
     return result;
 }
 
-std::vector<KeymapError> validate_keymap(
+std::vector<KeymapError> validateKeymap(
     const KeymapViewState& keymap,
-    std::span<const KeySequence> reserved_sequences) {
+    std::span<const KeySequence> reservedSequences) {
     std::vector<KeymapError> errors;
     if (keymap.name.empty()) {
         errors.push_back(
-            {KeymapErrorCode::empty_name, 0, "keymap name is empty"});
+            {KeymapErrorCode::EmptyName, 0, "keymap name is empty"});
     }
     for (std::size_t index = 0; index < keymap.bindings.size(); ++index) {
         const auto& binding = keymap.bindings[index];
         if (binding.sequence.empty()) {
-            errors.push_back({KeymapErrorCode::empty_sequence, index,
+            errors.push_back({KeymapErrorCode::EmptySequence, index,
                               "binding sequence is empty"});
         }
         if (std::ranges::any_of(binding.sequence,
                                 [](const auto& stroke) {
-                                    return !valid_stroke(stroke);
+                                    return !validStroke(stroke);
                                 })) {
-            errors.push_back({KeymapErrorCode::invalid_stroke, index,
+            errors.push_back({KeymapErrorCode::InvalidStroke, index,
                               "binding contains an invalid key stroke"});
         }
-        if (binding.command_id.empty()) {
-            errors.push_back({KeymapErrorCode::empty_command, index,
+        if (binding.commandId.empty()) {
+            errors.push_back({KeymapErrorCode::EmptyCommand, index,
                               "binding command is empty"});
         }
         if (binding.context.empty()) {
-            errors.push_back({KeymapErrorCode::empty_context, index,
+            errors.push_back({KeymapErrorCode::EmptyContext, index,
                               "binding context is empty"});
-        } else if (!known_context(binding.context)) {
-            errors.push_back({KeymapErrorCode::unknown_context, index,
+        } else if (!knownContext(binding.context)) {
+            errors.push_back({KeymapErrorCode::UnknownContext, index,
                               "binding context is not '*' or a focus target"});
         }
         if (std::ranges::any_of(
-                reserved_sequences, [&](const auto& reserved) {
-                    return starts_with_sequence(binding.sequence, reserved);
+                reservedSequences, [&](const auto& reserved) {
+                    return startsWithSequence(binding.sequence, reserved);
                 })) {
-            errors.push_back({KeymapErrorCode::reserved_binding, index,
+            errors.push_back({KeymapErrorCode::ReservedBinding, index,
                               "binding uses a browser-reserved sequence"});
         }
         for (std::size_t previous = 0; previous < index; ++previous) {
@@ -294,7 +293,7 @@ std::vector<KeymapError> validate_keymap(
                 continue;
             }
             if (earlier.context == binding.context) {
-                errors.push_back({KeymapErrorCode::duplicate_binding, index,
+                errors.push_back({KeymapErrorCode::DuplicateBinding, index,
                                   "binding duplicates an earlier binding"});
                 break;
             }
@@ -304,13 +303,13 @@ std::vector<KeymapError> validate_keymap(
         // Checked against all indices so the error does not depend on which of
         // the two is declared first (reported once, on the focus binding).
         if (binding.context != "*" && !binding.context.empty()) {
-            const bool globally_shadowed = std::ranges::any_of(
+            const bool globallyShadowed = std::ranges::any_of(
                 keymap.bindings, [&](const KeyBinding& other) {
                     return other.context == "*" &&
                            other.sequence == binding.sequence;
                 });
-            if (globally_shadowed) {
-                errors.push_back({KeymapErrorCode::unreachable_binding, index,
+            if (globallyShadowed) {
+                errors.push_back({KeymapErrorCode::UnreachableBinding, index,
                                   "a global binding shadows this binding"});
             }
         }
@@ -321,13 +320,13 @@ std::vector<KeymapError> validate_keymap(
         // higher-indexed binding once).
         for (std::size_t other = 0; other < index; ++other) {
             const auto& earlier = keymap.bindings[other];
-            if (!contexts_overlap(earlier.context, binding.context)) {
+            if (!contextsOverlap(earlier.context, binding.context)) {
                 continue;
             }
-            if (is_strict_prefix(earlier.sequence, binding.sequence) ||
-                is_strict_prefix(binding.sequence, earlier.sequence)) {
+            if (isStrictPrefix(earlier.sequence, binding.sequence) ||
+                isStrictPrefix(binding.sequence, earlier.sequence)) {
                 errors.push_back(
-                    {KeymapErrorCode::ambiguous_prefix, index,
+                    {KeymapErrorCode::AmbiguousPrefix, index,
                      "binding sequence is a prefix of another eligible binding"});
                 break;
             }
@@ -336,7 +335,7 @@ std::vector<KeymapError> validate_keymap(
     return errors;
 }
 
-KeymapDelta derive_keymap_delta(const KeymapViewState& previous,
+KeymapDelta deriveKeymapDelta(const KeymapViewState& previous,
                                 const KeymapViewState& current) {
     if (previous == current) {
         return {false, std::nullopt};
@@ -346,22 +345,22 @@ KeymapDelta derive_keymap_delta(const KeymapViewState& previous,
 
 namespace {
 
-bool eligible_in(const KeyBinding& binding, std::string_view context) {
+bool eligibleIn(const KeyBinding& binding, std::string_view context) {
     return binding.context == "*" || binding.context == context;
 }
 
 }  // namespace
 
-KeymapResolution resolve_key_sequence(const KeymapViewState& keymap,
+KeymapResolution resolveKeySequence(const KeymapViewState& keymap,
                                       const KeySequence& pending,
                                       std::string_view context) {
     if (pending.empty()) {
-        return {KeymapMatchKind::none, {}};
+        return {KeymapMatchKind::None, {}};
     }
     const KeyBinding* match = nullptr;
-    bool has_pending = false;
+    bool hasPending = false;
     for (const auto& binding : keymap.bindings) {
-        if (!eligible_in(binding, context)) {
+        if (!eligibleIn(binding, context)) {
             continue;
         }
         if (binding.sequence == pending) {
@@ -374,36 +373,36 @@ KeymapResolution resolve_key_sequence(const KeymapViewState& keymap,
             } else if (binding.context == "*" && match->context != "*") {
                 match = &binding;
             }
-        } else if (is_strict_prefix(pending, binding.sequence)) {
-            has_pending = true;
+        } else if (isStrictPrefix(pending, binding.sequence)) {
+            hasPending = true;
         }
     }
     if (match != nullptr) {
-        return {KeymapMatchKind::resolved, match->command_id};
+        return {KeymapMatchKind::Resolved, match->commandId};
     }
-    return {has_pending ? KeymapMatchKind::pending : KeymapMatchKind::none, {}};
+    return {hasPending ? KeymapMatchKind::Pending : KeymapMatchKind::None, {}};
 }
 
-TextRouting text_routing(std::string_view context) noexcept {
-    if (context == focus_target_name(FocusTarget::editor)) {
-        return TextRouting::insert;
+TextRouting textRouting(std::string_view context) noexcept {
+    if (context == focusTargetName(FocusTarget::Editor)) {
+        return TextRouting::Insert;
     }
-    if (context == focus_target_name(FocusTarget::prompt)) {
-        return TextRouting::prompt_query;
+    if (context == focusTargetName(FocusTarget::Prompt)) {
+        return TextRouting::PromptQuery;
     }
-    return TextRouting::ignore;
+    return TextRouting::Ignore;
 }
 
-bool has_global_binding(const KeymapViewState& keymap,
-                        std::string_view command_id,
-                        std::span<const KeySequence> reserved_sequences) {
+bool hasGlobalBinding(const KeymapViewState& keymap,
+                        std::string_view commandId,
+                        std::span<const KeySequence> reservedSequences) {
     for (std::size_t index = 0; index < keymap.bindings.size(); ++index) {
         const auto& binding = keymap.bindings[index];
-        if (binding.context != "*" || binding.command_id != command_id) {
+        if (binding.context != "*" || binding.commandId != commandId) {
             continue;
         }
-        if (std::ranges::any_of(reserved_sequences, [&](const auto& reserved) {
-                return starts_with_sequence(binding.sequence, reserved);
+        if (std::ranges::any_of(reservedSequences, [&](const auto& reserved) {
+                return startsWithSequence(binding.sequence, reserved);
             })) {
             continue;
         }
@@ -412,7 +411,7 @@ bool has_global_binding(const KeymapViewState& keymap,
             [&](const KeyBinding& earlier) {
                 return earlier.context == "*" &&
                        earlier.sequence == binding.sequence &&
-                       earlier.command_id != binding.command_id;
+                       earlier.commandId != binding.commandId;
             });
         if (!shadowed) {
             return true;
@@ -421,22 +420,22 @@ bool has_global_binding(const KeymapViewState& keymap,
     return false;
 }
 
-std::optional<KeySequence> preferred_binding(const KeymapViewState& keymap,
-                                             std::string_view command_id) {
+std::optional<KeySequence> preferredBinding(const KeymapViewState& keymap,
+                                             std::string_view commandId) {
     const KeySequence* best = nullptr;
-    std::string best_display;
+    std::string bestDisplay;
     for (const auto& binding : keymap.bindings) {
-        if (binding.command_id != command_id) continue;
+        if (binding.commandId != commandId) continue;
         if (best == nullptr || binding.sequence.size() < best->size()) {
             best = &binding.sequence;
-            best_display = format_key_sequence(binding.sequence);
+            bestDisplay = formatKeySequence(binding.sequence);
             continue;
         }
         if (binding.sequence.size() == best->size()) {
-            auto display = format_key_sequence(binding.sequence);
-            if (display < best_display) {
+            auto display = formatKeySequence(binding.sequence);
+            if (display < bestDisplay) {
                 best = &binding.sequence;
-                best_display = std::move(display);
+                bestDisplay = std::move(display);
             }
         }
     }
@@ -444,16 +443,16 @@ std::optional<KeySequence> preferred_binding(const KeymapViewState& keymap,
     return *best;
 }
 
-std::optional<CommittedText> CommittedText::from_utf8(std::string text) {
-    if (text.empty() || !valid_utf8_without_nul(text)) {
+std::optional<CommittedText> CommittedText::fromUtf8(std::string text) {
+    if (text.empty() || !validUtf8WithoutNul(text)) {
         return std::nullopt;
     }
     return CommittedText{std::move(text)};
 }
 
 ScrollFractionArguments::ScrollFractionArguments(
-    std::uint32_t numerator_value, std::uint32_t denominator_value)
-    : numerator{numerator_value}, denominator{denominator_value} {
+    std::uint32_t numeratorValue, std::uint32_t denominatorValue)
+    : numerator{numeratorValue}, denominator{denominatorValue} {
     if (denominator == 0 || numerator > denominator) {
         throw std::invalid_argument(
             "scroll fraction requires 0 <= numerator <= denominator");
@@ -461,7 +460,7 @@ ScrollFractionArguments::ScrollFractionArguments(
 }
 
 bool SemanticCommand::operator==(const SemanticCommand& other) const {
-    if (command_id != other.command_id ||
+    if (commandId != other.commandId ||
         arguments.index() != other.arguments.index()) {
         return false;
     }
@@ -473,7 +472,7 @@ bool SemanticCommand::operator==(const SemanticCommand& other) const {
                 return false;
             } else if constexpr (
                 std::is_same_v<Left, SelectionCommandArguments>) {
-                return selection_arguments_equal(left, right);
+                return selectionArgumentsEqual(left, right);
             } else {
                 return left == right;
             }
@@ -481,11 +480,11 @@ bool SemanticCommand::operator==(const SemanticCommand& other) const {
         arguments, other.arguments);
 }
 
-SemanticCommand semantic_input(const CommittedText& committed) {
+SemanticCommand semanticInput(const CommittedText& committed) {
     return {"text.insert", TextInputArguments{committed.utf8()}};
 }
 
-const SemanticCommand& activate_hit_target(
+const SemanticCommand& activateHitTarget(
     const SemanticHitTarget& target) noexcept {
     return target.command;
 }

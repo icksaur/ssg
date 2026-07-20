@@ -12,41 +12,41 @@
 namespace ssg {
 
 struct ScratchStoreConfig {
-    std::uintmax_t maximum_bytes = 256U * 1024U * 1024U;
-    std::chrono::seconds maximum_age = std::chrono::hours{24 * 30};
-    std::uintmax_t compaction_threshold_bytes = 4U * 1024U * 1024U;
-    std::chrono::milliseconds durability_target{100};
+    std::uintmax_t maximumBytes = 256U * 1024U * 1024U;
+    std::chrono::seconds maximumAge = std::chrono::hours{24 * 30};
+    std::uintmax_t compactionThresholdBytes = 4U * 1024U * 1024U;
+    std::chrono::milliseconds durabilityTarget{100};
 };
 
 enum class ScratchDurability {
-    durable,
-    pending,
-    failed,
+    Durable,
+    Pending,
+    Failed,
 };
 
 struct ScratchDurabilityState {
-    ScratchDurability kind = ScratchDurability::durable;
-    std::uint64_t accepted_generation = 0;
-    std::uint64_t durable_generation = 0;
+    ScratchDurability kind = ScratchDurability::Durable;
+    std::uint64_t acceptedGeneration = 0;
+    std::uint64_t durableGeneration = 0;
     bool overdue = false;
     std::string failure;
 };
 
 struct ScratchQuotaResult {
-    std::vector<std::string> evicted_session_ids;
-    std::uintmax_t remaining_bytes = 0;
-    bool within_byte_quota = true;
+    std::vector<std::string> evictedSessionIds;
+    std::uintmax_t remainingBytes = 0;
+    bool withinByteQuota = true;
 };
 
 class ScratchStorage {
 public:
     virtual ~ScratchStorage() = default;
 
-    virtual void append_document(const std::filesystem::path& path,
+    virtual void appendDocument(const std::filesystem::path& path,
                                  const JournalDocument& document) = 0;
-    virtual void append_remove(const std::filesystem::path& path,
+    virtual void appendRemove(const std::filesystem::path& path,
                                const JournalDocumentKey& key) = 0;
-    virtual void replace_checkpoint(
+    virtual void replaceCheckpoint(
         const std::filesystem::path& path,
         const JournalRecoverySet& recovery) = 0;
 };
@@ -54,12 +54,12 @@ public:
 class ScratchStore {
 public:
     [[nodiscard]] static ScratchStore create(
-        const std::filesystem::path& scratch_root,
-        const std::filesystem::path& canonical_workspace,
+        const std::filesystem::path& scratchRoot,
+        const std::filesystem::path& canonicalWorkspace,
         ScratchStoreConfig config = {});
     [[nodiscard]] static ScratchStore create(
-        const std::filesystem::path& scratch_root,
-        const std::filesystem::path& canonical_workspace,
+        const std::filesystem::path& scratchRoot,
+        const std::filesystem::path& canonicalWorkspace,
         ScratchStoreConfig config,
         ScratchStorage& storage);
 
@@ -70,30 +70,30 @@ public:
     ScratchStore& operator=(const ScratchStore&) = delete;
 
     [[nodiscard]] JournalRecoverySet recovery() const;
-    [[nodiscard]] std::filesystem::path session_path() const;
-    [[nodiscard]] std::filesystem::path journal_path() const;
+    [[nodiscard]] std::filesystem::path sessionPath() const;
+    [[nodiscard]] std::filesystem::path journalPath() const;
 
-    void update_document(JournalDocument document);
-    void remove_document(JournalDocumentKey key);
+    void updateDocument(JournalDocument document);
+    void removeDocument(JournalDocumentKey key);
     void compact();
 
-    [[nodiscard]] ScratchDurabilityState durability_state() const;
-    [[nodiscard]] bool wait_until_durable(
+    [[nodiscard]] ScratchDurabilityState durabilityState() const;
+    [[nodiscard]] bool waitUntilDurable(
         std::chrono::milliseconds timeout) const;
 
-    [[nodiscard]] ScratchQuotaResult apply_quotas();
-    [[nodiscard]] std::size_t purge_workspace();
-    [[nodiscard]] std::size_t purge_all();
+    [[nodiscard]] ScratchQuotaResult applyQuotas();
+    [[nodiscard]] std::size_t purgeWorkspace();
+    [[nodiscard]] std::size_t purgeAll();
     void shutdown();
 
 private:
     class Impl;
     explicit ScratchStore(std::unique_ptr<Impl> implementation) noexcept;
-    [[nodiscard]] static ScratchStore create_with_storage(
-        const std::filesystem::path& scratch_root,
-        const std::filesystem::path& canonical_workspace,
+    [[nodiscard]] static ScratchStore createWithStorage(
+        const std::filesystem::path& scratchRoot,
+        const std::filesystem::path& canonicalWorkspace,
         ScratchStoreConfig config,
-        std::unique_ptr<ScratchStorage> owned_storage,
+        std::unique_ptr<ScratchStorage> ownedStorage,
         ScratchStorage& storage);
 
     std::unique_ptr<Impl> impl_;

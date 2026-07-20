@@ -7,7 +7,7 @@
 namespace ssg {
 namespace {
 
-std::string workspace_key(std::string_view workspace) {
+std::string workspaceKey(std::string_view workspace) {
     std::uint64_t hash = 14695981039346656037ull;
     for (unsigned char byte : workspace) {
         if (byte == '\\') byte = '/';
@@ -22,16 +22,16 @@ std::string workspace_key(std::string_view workspace) {
 
 } // namespace
 
-SettingsPaths windows_settings_paths(
-    const std::filesystem::path& user_configuration_root,
-    const std::filesystem::path& workspace_storage_root,
-    std::string_view canonical_workspace) {
-    if (user_configuration_root.empty() || workspace_storage_root.empty() ||
-        canonical_workspace.empty()) {
+SettingsPaths windowsSettingsPaths(
+    const std::filesystem::path& userConfigurationRoot,
+    const std::filesystem::path& workspaceStorageRoot,
+    std::string_view canonicalWorkspace) {
+    if (userConfigurationRoot.empty() || workspaceStorageRoot.empty() ||
+        canonicalWorkspace.empty()) {
         throw std::invalid_argument("Windows settings roots and workspace must not be empty");
     }
-    return {user_configuration_root / "settings.v1",
-            workspace_storage_root / workspace_key(canonical_workspace) / "settings.v1"};
+    return {userConfigurationRoot / "settings.v1",
+            workspaceStorageRoot / workspaceKey(canonicalWorkspace) / "settings.v1"};
 }
 
 } // namespace ssg

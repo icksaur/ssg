@@ -17,17 +17,17 @@
 namespace ssg {
 
 struct RecoveryConfig {
-    std::size_t maximum_records = 32;
-    std::uintmax_t maximum_bytes = 64U * 1024U * 1024U;
+    std::size_t maximumRecords = 32;
+    std::uintmax_t maximumBytes = 64U * 1024U * 1024U;
 };
 
 enum class RecoveryRecordKind : std::uint8_t {
-    document_close,
-    document_reload,
-    file_overwrite,
-    path_rename,
-    path_delete,
-    workspace_replace,
+    DocumentClose,
+    DocumentReload,
+    FileOverwrite,
+    PathRename,
+    PathDelete,
+    WorkspaceReplace,
 };
 
 class RecoveryRecordId {
@@ -46,30 +46,30 @@ private:
 struct RecoveryRecord {
     RecoveryRecordId id;
     RecoveryRecordKind kind;
-    std::uintmax_t stored_bytes;
+    std::uintmax_t storedBytes;
     std::optional<JournalDocumentKey> document;
-    std::vector<std::filesystem::path> affected_paths;
+    std::vector<std::filesystem::path> affectedPaths;
 
     friend bool operator==(const RecoveryRecord&, const RecoveryRecord&) =
         default;
 };
 
 enum class RecoveryErrorCode : std::uint8_t {
-    durability_failed,
-    budget_exceeded,
-    preparation_failed,
-    action_failed,
-    action_and_rollback_failed,
-    restoration_failed,
-    cleanup_failed,
-    record_not_found,
-    record_kind_mismatch,
+    DurabilityFailed,
+    BudgetExceeded,
+    PreparationFailed,
+    ActionFailed,
+    ActionAndRollbackFailed,
+    RestorationFailed,
+    CleanupFailed,
+    RecordNotFound,
+    RecordKindMismatch,
 };
 
 struct RecoveryError {
     RecoveryErrorCode code;
     std::string message;
-    std::string rollback_failure;
+    std::string rollbackFailure;
 
     friend bool operator==(const RecoveryError&, const RecoveryError&) =
         default;
@@ -89,16 +89,16 @@ struct RecoveryRestoreResult {
 };
 
 enum class RecoveryStep : std::uint8_t {
-    prepare_artifact,
-    install_record,
-    publish_record,
-    mutate_document,
-    mutate_filesystem,
-    rollback_document,
-    rollback_filesystem,
-    restore_document,
-    restore_filesystem,
-    cleanup_record,
+    PrepareArtifact,
+    InstallRecord,
+    PublishRecord,
+    MutateDocument,
+    MutateFilesystem,
+    RollbackDocument,
+    RollbackFilesystem,
+    RestoreDocument,
+    RestoreFilesystem,
+    CleanupRecord,
 };
 
 class RecoveryFaultInjector {
@@ -108,18 +108,18 @@ public:
     // A repeated step denotes another independently fallible part of the same
     // action. Throwing injects failure before that part begins.
     // The injector must outlive RecoveryActions.
-    virtual void before_step(RecoveryStep step) = 0;
+    virtual void beforeStep(RecoveryStep step) = 0;
 };
 
 class RecoveryActions {
 public:
     [[nodiscard]] static RecoveryActions create(
-        const std::filesystem::path& recovery_root,
+        const std::filesystem::path& recoveryRoot,
         RecoveryConfig config = {});
     [[nodiscard]] static RecoveryActions create(
-        const std::filesystem::path& recovery_root,
+        const std::filesystem::path& recoveryRoot,
         RecoveryConfig config,
-        RecoveryFaultInjector& fault_injector);
+        RecoveryFaultInjector& faultInjector);
 
     ~RecoveryActions();
     RecoveryActions(RecoveryActions&&) noexcept;
@@ -129,32 +129,32 @@ public:
 
     [[nodiscard]] std::vector<RecoveryRecord> records() const;
 
-    [[nodiscard]] RecoveryActionResult close_document(
+    [[nodiscard]] RecoveryActionResult closeDocument(
         std::optional<JournalDocument>& document,
         ScratchStore& scratch,
-        std::chrono::milliseconds durability_timeout);
-    [[nodiscard]] RecoveryActionResult reload_document(
+        std::chrono::milliseconds durabilityTimeout);
+    [[nodiscard]] RecoveryActionResult reloadDocument(
         std::optional<JournalDocument>& document,
         JournalDocument replacement);
-    [[nodiscard]] RecoveryActionResult overwrite_file(
+    [[nodiscard]] RecoveryActionResult overwriteFile(
         const std::filesystem::path& path,
         std::span<const std::byte> replacement);
-    [[nodiscard]] RecoveryActionResult rename_path(
+    [[nodiscard]] RecoveryActionResult renamePath(
         const std::filesystem::path& source,
         const std::filesystem::path& destination);
-    [[nodiscard]] RecoveryActionResult delete_path(
+    [[nodiscard]] RecoveryActionResult deletePath(
         const std::filesystem::path& path);
 
     // Replaces the workspace with a copy of replacement while leaving
     // replacement itself unchanged.
-    [[nodiscard]] RecoveryActionResult replace_workspace(
+    [[nodiscard]] RecoveryActionResult replaceWorkspace(
         const std::filesystem::path& workspace,
         const std::filesystem::path& replacement);
 
-    [[nodiscard]] RecoveryRestoreResult restore_document(
+    [[nodiscard]] RecoveryRestoreResult restoreDocument(
         const RecoveryRecordId& record,
         std::optional<JournalDocument>& document);
-    [[nodiscard]] RecoveryRestoreResult restore_filesystem(
+    [[nodiscard]] RecoveryRestoreResult restoreFilesystem(
         const RecoveryRecordId& record);
 
 private:

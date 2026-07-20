@@ -27,7 +27,7 @@ private:
     std::uint64_t state_;
 };
 
-std::string random_text(Random& random) {
+std::string randomText(Random& random) {
     static constexpr std::string_view bytes =
         "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 \n"
         "\t\xc3\xa9\xe4\xb8\xad";
@@ -40,11 +40,11 @@ std::string random_text(Random& random) {
     return result;
 }
 
-std::size_t oracle_line_count(std::string_view text) {
+std::size_t oracleLineCount(std::string_view text) {
     return 1 + static_cast<std::size_t>(std::count(text.begin(), text.end(), '\n'));
 }
 
-std::size_t oracle_line_start(std::string_view text, std::size_t line) {
+std::size_t oracleLineStart(std::string_view text, std::size_t line) {
     if (line == 0) {
         return 0;
     }
@@ -57,27 +57,27 @@ std::size_t oracle_line_start(std::string_view text, std::size_t line) {
     throw std::out_of_range("line");
 }
 
-std::size_t oracle_line_of_offset(std::string_view text, std::size_t offset) {
+std::size_t oracleLineOfOffset(std::string_view text, std::size_t offset) {
     return static_cast<std::size_t>(
         std::count(text.begin(), text.begin() + static_cast<std::ptrdiff_t>(offset), '\n'));
 }
 
-TEST(original_buffer_and_boundary_queries) {
+TEST(originalBufferAndBoundaryQueries) {
     PieceTree tree("alpha\nbeta\n");
 
     ASSERT_EQ(tree.text(), std::string("alpha\nbeta\n"));
     ASSERT_EQ(tree.size(), std::size_t{11});
-    ASSERT_EQ(tree.line_count(), std::size_t{3});
-    ASSERT_EQ(tree.line_start(0), std::size_t{0});
-    ASSERT_EQ(tree.line_start(1), std::size_t{6});
-    ASSERT_EQ(tree.line_start(2), std::size_t{11});
-    ASSERT_EQ(tree.line_of_offset(5), std::size_t{0});
-    ASSERT_EQ(tree.line_of_offset(6), std::size_t{1});
+    ASSERT_EQ(tree.lineCount(), std::size_t{3});
+    ASSERT_EQ(tree.lineStart(0), std::size_t{0});
+    ASSERT_EQ(tree.lineStart(1), std::size_t{6});
+    ASSERT_EQ(tree.lineStart(2), std::size_t{11});
+    ASSERT_EQ(tree.lineOfOffset(5), std::size_t{0});
+    ASSERT_EQ(tree.lineOfOffset(6), std::size_t{1});
     ASSERT_EQ(tree.substr(2, 7), std::string("pha\nbet"));
     ASSERT_EQ(tree.validate(), true);
 }
 
-TEST(randomized_std_string_oracle_and_invariants) {
+TEST(randomizedStdStringOracleAndInvariants) {
     Random random(0x9e3779b97f4a7c15ULL);
     std::string oracle = "original\ntext";
     PieceTree tree(oracle);
@@ -86,7 +86,7 @@ TEST(randomized_std_string_oracle_and_invariants) {
         switch (random.below(5)) {
         case 0: {
             const auto offset = random.below(oracle.size() + 1);
-            const auto inserted = random_text(random);
+            const auto inserted = randomText(random);
             oracle.insert(offset, inserted);
             tree.insert(offset, inserted);
             break;
@@ -105,44 +105,44 @@ TEST(randomized_std_string_oracle_and_invariants) {
             break;
         }
         case 3: {
-            const auto line = random.below(oracle_line_count(oracle));
-            ASSERT_EQ(tree.line_start(line), oracle_line_start(oracle, line));
+            const auto line = random.below(oracleLineCount(oracle));
+            ASSERT_EQ(tree.lineStart(line), oracleLineStart(oracle, line));
             break;
         }
         default: {
             const auto offset = random.below(oracle.size() + 1);
-            ASSERT_EQ(tree.line_of_offset(offset), oracle_line_of_offset(oracle, offset));
+            ASSERT_EQ(tree.lineOfOffset(offset), oracleLineOfOffset(oracle, offset));
             break;
         }
         }
 
         ASSERT_EQ(tree.size(), oracle.size());
-        ASSERT_EQ(tree.line_count(), oracle_line_count(oracle));
+        ASSERT_EQ(tree.lineCount(), oracleLineCount(oracle));
         ASSERT_EQ(tree.text(), oracle);
         ASSERT_EQ(tree.validate(), true);
     }
 }
 
-TEST(rejects_out_of_range_operations_without_mutation) {
+TEST(rejectsOutOfRangeOperationsWithoutMutation) {
     PieceTree tree("abc");
     const auto before = tree.text();
-    bool insert_failed = false;
-    bool erase_failed = false;
-    bool read_failed = false;
-    bool line_failed = false;
-    bool offset_failed = false;
+    bool insertFailed = false;
+    bool eraseFailed = false;
+    bool readFailed = false;
+    bool lineFailed = false;
+    bool offsetFailed = false;
 
-    try { tree.insert(4, "x"); } catch (const std::out_of_range&) { insert_failed = true; }
-    try { tree.erase(2, 2); } catch (const std::out_of_range&) { erase_failed = true; }
-    try { static_cast<void>(tree.substr(3, 1)); } catch (const std::out_of_range&) { read_failed = true; }
-    try { static_cast<void>(tree.line_start(1)); } catch (const std::out_of_range&) { line_failed = true; }
-    try { static_cast<void>(tree.line_of_offset(4)); } catch (const std::out_of_range&) { offset_failed = true; }
+    try { tree.insert(4, "x"); } catch (const std::out_of_range&) { insertFailed = true; }
+    try { tree.erase(2, 2); } catch (const std::out_of_range&) { eraseFailed = true; }
+    try { static_cast<void>(tree.substr(3, 1)); } catch (const std::out_of_range&) { readFailed = true; }
+    try { static_cast<void>(tree.lineStart(1)); } catch (const std::out_of_range&) { lineFailed = true; }
+    try { static_cast<void>(tree.lineOfOffset(4)); } catch (const std::out_of_range&) { offsetFailed = true; }
 
-    ASSERT_EQ(insert_failed, true);
-    ASSERT_EQ(erase_failed, true);
-    ASSERT_EQ(read_failed, true);
-    ASSERT_EQ(line_failed, true);
-    ASSERT_EQ(offset_failed, true);
+    ASSERT_EQ(insertFailed, true);
+    ASSERT_EQ(eraseFailed, true);
+    ASSERT_EQ(readFailed, true);
+    ASSERT_EQ(lineFailed, true);
+    ASSERT_EQ(offsetFailed, true);
     ASSERT_EQ(tree.text(), before);
     ASSERT_EQ(tree.validate(), true);
 }
@@ -150,8 +150,8 @@ TEST(rejects_out_of_range_operations_without_mutation) {
 } // namespace
 
 int main() {
-    RUN(original_buffer_and_boundary_queries);
-    RUN(randomized_std_string_oracle_and_invariants);
-    RUN(rejects_out_of_range_operations_without_mutation);
+    RUN(originalBufferAndBoundaryQueries);
+    RUN(randomizedStdStringOracleAndInvariants);
+    RUN(rejectsOutOfRangeOperationsWithoutMutation);
     return failed == 0 ? 0 : 1;
 }

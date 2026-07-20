@@ -15,9 +15,9 @@
 namespace ssg {
 
 enum class ClipboardCommand : std::uint8_t {
-    copy,
-    cut,
-    paste,
+    Copy,
+    Cut,
+    Paste,
 };
 
 struct ClipboardCommandDescriptor {
@@ -36,39 +36,39 @@ public:
     descriptors() const noexcept;
 
 private:
-    friend ClipboardCommandSet clipboard_command_set();
+    friend ClipboardCommandSet clipboardCommandSet();
     ClipboardCommandSet();
 
     const std::array<ClipboardCommandDescriptor, 3> descriptors_;
 };
 
-[[nodiscard]] ClipboardCommandSet clipboard_command_set();
+[[nodiscard]] ClipboardCommandSet clipboardCommandSet();
 
 enum class ClipboardRequestKind : std::uint8_t {
-    write,
-    read,
+    Write,
+    Read,
 };
 
 struct ClipboardRequest {
     std::uint64_t id;
     ClipboardRequestKind kind;
-    Revision request_revision;
+    Revision requestRevision;
     std::string text;
 
     bool operator==(const ClipboardRequest&) const = default;
 };
 
 enum class ClipboardResponseStatus : std::uint8_t {
-    success,
-    denied,
-    unavailable,
-    disconnected,
+    Success,
+    Denied,
+    Unavailable,
+    Disconnected,
 };
 
 struct ClipboardResponse {
     std::uint64_t id;
-    Revision request_revision;
-    Revision observed_document_revision;
+    Revision requestRevision;
+    Revision observedDocumentRevision;
     ClipboardResponseStatus status;
     std::string text;
 
@@ -76,51 +76,51 @@ struct ClipboardResponse {
 };
 
 enum class ClipboardPasteMode : std::uint8_t {
-    internal_only,
-    system_first,
+    InternalOnly,
+    SystemFirst,
 };
 
 enum class ClipboardSystemStatus : std::uint8_t {
-    not_requested,
-    pending,
-    succeeded,
-    denied,
-    unavailable,
-    disconnected,
-    stale,
+    NotRequested,
+    Pending,
+    Succeeded,
+    Denied,
+    Unavailable,
+    Disconnected,
+    Stale,
 };
 
 enum class ClipboardError : std::uint8_t {
-    none,
-    read_only,
-    diff,
-    invalid_selection,
-    invalid_utf8,
-    stale_response,
-    no_request,
-    request_exhausted,
-    document_rejected,
+    None,
+    ReadOnly,
+    Diff,
+    InvalidSelection,
+    InvalidUtf8,
+    StaleResponse,
+    NoRequest,
+    RequestExhausted,
+    DocumentRejected,
 };
 
 struct ClipboardResult {
     ClipboardError error;
-    ClipboardSystemStatus system_status;
+    ClipboardSystemStatus systemStatus;
     Revision revision;
     std::optional<SelectionSet> selections;
     std::optional<ClipboardRequest> request;
-    bool document_changed;
+    bool documentChanged;
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == ClipboardError::none;
+        return error == ClipboardError::None;
     }
 };
 
 struct ClipboardViewState {
     std::vector<std::string> fragments;
-    std::string plain_text;
-    std::optional<ClipboardRequest> pending_read;
-    std::optional<ClipboardRequest> pending_write;
+    std::string plainText;
+    std::optional<ClipboardRequest> pendingRead;
+    std::optional<ClipboardRequest> pendingWrite;
 
     bool operator==(const ClipboardViewState&) const = default;
 };
@@ -132,12 +132,12 @@ struct ClipboardDelta {
     bool operator==(const ClipboardDelta&) const = default;
 };
 
-[[nodiscard]] ClipboardDelta derive_clipboard_delta(
+[[nodiscard]] ClipboardDelta deriveClipboardDelta(
     const ClipboardViewState& before, const ClipboardViewState& after);
 
 class ClipboardRegister {
 public:
-    explicit ClipboardRegister(int tab_width = 4);
+    explicit ClipboardRegister(int tabWidth = 4);
     ~ClipboardRegister();
 
     ClipboardRegister(const ClipboardRegister&) = delete;
@@ -149,17 +149,17 @@ public:
         const DocumentSnapshot& document, const SelectionSet& selections);
     [[nodiscard]] ClipboardResult cut(
         Document& document, DocumentHistory& history,
-        const SelectionSet& selections, std::uint64_t timestamp_ms);
+        const SelectionSet& selections, std::uint64_t timestampMs);
     [[nodiscard]] ClipboardResult paste(
         Document& document, DocumentHistory& history,
         const SelectionSet& selections, ClipboardPasteMode mode,
-        std::uint64_t timestamp_ms);
-    [[nodiscard]] ClipboardResult handle_response(
+        std::uint64_t timestampMs);
+    [[nodiscard]] ClipboardResult handleResponse(
         Document& document, DocumentHistory& history,
-        const SelectionSet& current_selections,
-        const ClipboardResponse& response, std::uint64_t timestamp_ms);
+        const SelectionSet& currentSelections,
+        const ClipboardResponse& response, std::uint64_t timestampMs);
 
-    [[nodiscard]] ClipboardViewState view_state() const;
+    [[nodiscard]] ClipboardViewState viewState() const;
 
 private:
     struct Impl;

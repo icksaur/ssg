@@ -13,7 +13,7 @@ namespace {
 
 using EntryMap = std::map<std::filesystem::path, WatchFileState>;
 
-EntryMap entry_map(const std::vector<WorkspaceEntry>& entries) {
+EntryMap entryMap(const std::vector<WorkspaceEntry>& entries) {
     EntryMap result;
     for (const auto& entry : entries) {
         if (entry.path.empty() || entry.path.is_absolute()) {
@@ -27,7 +27,7 @@ EntryMap entry_map(const std::vector<WorkspaceEntry>& entries) {
     return result;
 }
 
-std::optional<WatchFileState> state_for(const EntryMap& entries,
+std::optional<WatchFileState> stateFor(const EntryMap& entries,
                                         const std::filesystem::path& path) {
     const auto found = entries.find(path);
     if (found == entries.end()) {
@@ -36,29 +36,29 @@ std::optional<WatchFileState> state_for(const EntryMap& entries,
     return found->second;
 }
 
-bool same_event_key(const WatchEvent& left, const WatchEvent& right) {
+bool sameEventKey(const WatchEvent& left, const WatchEvent& right) {
     return left.path == right.path;
 }
 
-auto identity_key(const FileIdentity& identity) {
+auto identityKey(const FileIdentity& identity) {
     return std::tuple{
         identity.volume, identity.file[0], identity.file[1]};
 }
 
-WatchEvent event_from(NativeWatchAction action,
+WatchEvent eventFrom(NativeWatchAction action,
                       const std::filesystem::path& path,
                       const std::optional<WatchFileState>& state) {
     WatchEvent result;
     result.path = path;
-    result.kind = action == NativeWatchAction::create
-        ? WatchEventKind::create
-        : action == NativeWatchAction::remove
-            ? WatchEventKind::remove
-            : WatchEventKind::modify;
+    result.kind = action == NativeWatchAction::Create
+        ? WatchEventKind::Create
+        : action == NativeWatchAction::Remove
+            ? WatchEventKind::Remove
+            : WatchEventKind::Modify;
     if (state) {
         result.identity = state->identity;
         result.size = state->size;
-        result.modification_time = state->modification_time;
+        result.modificationTime = state->modificationTime;
     }
     return result;
 }
@@ -69,94 +69,94 @@ class WatchEventNormalizer::Impl {
 public:
     struct PendingEvent {
         WatchEvent event;
-        WatchTimePoint ready_at;
+        WatchTimePoint readyAt;
     };
 
     struct RenamePair {
         std::optional<NativeWatchEvent> from;
         std::optional<NativeWatchEvent> to;
-        WatchTimePoint ready_at;
+        WatchTimePoint readyAt;
     };
 
     Impl(WatcherConfig requested,
-         std::vector<WorkspaceEntry> initial_entries,
-         WorkspaceScanner requested_scanner)
-        : config(requested),
-          cache(entry_map(initial_entries)),
-          scanner(std::move(requested_scanner)) {
-        if (config.debounce.count() < 0 || config.max_queued_events == 0 ||
-            config.rescan_retry.count() <= 0 ||
-            config.max_pending_renames == 0 ||
-            config.max_save_expectations == 0 ||
-            config.max_rescan_entries == 0) {
+         std::vector<WorkspaceEntry> initialEntries,
+         WorkspaceScanner requestedScanner)
+        : config_(requested),
+          cache_(entryMap(initialEntries)),
+          scanner_(std::move(requestedScanner)) {
+        if (config_.debounce.count() < 0 || config_.maxQueuedEvents == 0 ||
+            config_.rescanRetry.count() <= 0 ||
+            config_.maxPendingRenames == 0 ||
+            config_.maxSaveExpectations == 0 ||
+            config_.maxRescanEntries == 0) {
             throw std::invalid_argument(
                 "watcher debounce must be non-negative and all bounds must be positive");
         }
-        if (!scanner) {
+        if (!scanner_) {
             throw std::invalid_argument("watcher scanner must be provided");
         }
     }
 
-    void register_save(SaveExpectation expectation) {
-        expectation.path = normalize_path(std::move(expectation.path));
-        if (save_expectations.size() == config.max_save_expectations) {
-            save_expectations.pop_front();
+    void registerSave(SaveExpectation expectation) {
+        expectation.path = normalizePath(std::move(expectation.path));
+        if (saveExpectations_.size() == config_.maxSaveExpectations) {
+            saveExpectations_.pop_front();
         }
-        save_expectations.push_back(std::move(expectation));
+        saveExpectations_.push_back(std::move(expectation));
     }
 
-    void push(NativeWatchEvent native, WatchTimePoint observed_at) {
-        if (overflow_requested) {
+    void push(NativeWatchEvent native, WatchTimePoint observedAt) {
+        if (overflowRequested_) {
             return;
         }
-        if (native.action == NativeWatchAction::overflow) {
-            request_overflow();
+        if (native.action == NativeWatchAction::Overflow) {
+            requestOverflow();
             return;
         }
-        native.path = normalize_path(std::move(native.path));
-        if (native.action == NativeWatchAction::rename_from ||
-            native.action == NativeWatchAction::rename_to) {
-            push_rename(std::move(native), observed_at);
+        native.path = normalizePath(std::move(native.path));
+        if (native.action == NativeWatchAction::RenameFrom ||
+            native.action == NativeWatchAction::RenameTo) {
+            pushRename(std::move(native), observedAt);
             return;
         }
 
-        if (native.action == NativeWatchAction::remove && !native.observed) {
-            native.observed = state_for(cache, native.path);
+        if (native.action == NativeWatchAction::Remove && !native.observed) {
+            native.observed = stateFor(cache_, native.path);
         }
-        auto event = event_from(native.action, native.path, native.observed);
-        update_cache(native.action, native.path, native.observed);
-        enqueue(std::move(event), observed_at);
+        auto event = eventFrom(native.action, native.path, native.observed);
+        updateCache(native.action, native.path, native.observed);
+        enqueue(std::move(event), observedAt);
     }
 
-    std::vector<WatchEvent> take_ready(WatchTimePoint now) {
-        if (overflow_requested) {
-            if (now < next_rescan_at) {
+    std::vector<WatchEvent> takeReady(WatchTimePoint now) {
+        if (overflowRequested_) {
+            if (now < nextRescanAt_) {
                 return {};
             }
             return rescan(now);
         }
-        expire_renames(now);
-        if (overflow_requested) {
+        expireRenames(now);
+        if (overflowRequested_) {
             return rescan(now);
         }
 
         std::vector<WatchEvent> result;
-        auto current = pending.begin();
-        while (current != pending.end()) {
-            if (current->ready_at > now) {
+        auto current = pending_.begin();
+        while (current != pending_.end()) {
+            if (current->readyAt > now) {
                 ++current;
                 continue;
             }
-            correlate_save(current->event);
-            current->event.sequence = next_sequence++;
+            correlateSave(current->event);
+            current->event.sequence = nextSequence_++;
             result.push_back(std::move(current->event));
-            current = pending.erase(current);
+            current = pending_.erase(current);
         }
         return result;
     }
 
 private:
-    static std::filesystem::path normalize_path(std::filesystem::path path) {
+    static std::filesystem::path normalizePath(std::filesystem::path path) {
         path = path.lexically_normal();
         if (path.empty() || path == "." || path.is_absolute()) {
             throw std::invalid_argument(
@@ -171,50 +171,50 @@ private:
         return path;
     }
 
-    void update_cache(NativeWatchAction action,
+    void updateCache(NativeWatchAction action,
                       const std::filesystem::path& path,
                       const std::optional<WatchFileState>& observed) {
-        if (action == NativeWatchAction::remove) {
-            cache.erase(path);
+        if (action == NativeWatchAction::Remove) {
+            cache_.erase(path);
         } else if (observed) {
-            cache[path] = *observed;
+            cache_[path] = *observed;
         }
     }
 
-    void push_rename(NativeWatchEvent native, WatchTimePoint observed_at) {
-        if (native.rename_token == 0) {
-            if (native.action == NativeWatchAction::rename_from &&
+    void pushRename(NativeWatchEvent native, WatchTimePoint observedAt) {
+        if (native.renameToken == 0) {
+            if (native.action == NativeWatchAction::RenameFrom &&
                 !native.observed) {
-                native.observed = state_for(cache, native.path);
+                native.observed = stateFor(cache_, native.path);
             }
-            auto boundary = event_from(
-                native.action == NativeWatchAction::rename_from
-                    ? NativeWatchAction::remove
-                    : NativeWatchAction::create,
+            auto boundary = eventFrom(
+                native.action == NativeWatchAction::RenameFrom
+                    ? NativeWatchAction::Remove
+                    : NativeWatchAction::Create,
                 native.path, native.observed);
-            update_cache(
-                native.action == NativeWatchAction::rename_from
-                    ? NativeWatchAction::remove
-                    : NativeWatchAction::create,
+            updateCache(
+                native.action == NativeWatchAction::RenameFrom
+                    ? NativeWatchAction::Remove
+                    : NativeWatchAction::Create,
                 native.path, native.observed);
-            enqueue(std::move(boundary), observed_at);
+            enqueue(std::move(boundary), observedAt);
             return;
         }
 
-        auto found = renames.find(native.rename_token);
-        if (found == renames.end()) {
-            if (renames.size() == config.max_pending_renames) {
-                request_overflow();
+        auto found = renames_.find(native.renameToken);
+        if (found == renames_.end()) {
+            if (renames_.size() == config_.maxPendingRenames) {
+                requestOverflow();
                 return;
             }
-            found = renames.emplace(
-                native.rename_token,
-                RenamePair{{}, {}, observed_at + config.debounce}).first;
+            found = renames_.emplace(
+                native.renameToken,
+                RenamePair{{}, {}, observedAt + config_.debounce}).first;
         }
-        found->second.ready_at = observed_at + config.debounce;
-        if (native.action == NativeWatchAction::rename_from) {
+        found->second.readyAt = observedAt + config_.debounce;
+        if (native.action == NativeWatchAction::RenameFrom) {
             if (!native.observed) {
-                native.observed = state_for(cache, native.path);
+                native.observed = stateFor(cache_, native.path);
             }
             found->second.from = std::move(native);
         } else {
@@ -222,249 +222,249 @@ private:
         }
 
         if (found->second.from && found->second.to) {
-            emit_rename(found->second, observed_at);
-            renames.erase(found);
+            emitRename(found->second, observedAt);
+            renames_.erase(found);
         }
     }
 
-    void emit_rename(const RenamePair& pair, WatchTimePoint observed_at) {
+    void emitRename(const RenamePair& pair, WatchTimePoint observedAt) {
         auto observed = pair.to->observed;
         if (!observed) {
             observed = pair.from->observed;
         }
-        const auto source_pending = std::find_if(
-            pending.rbegin(), pending.rend(),
+        const auto sourcePending = std::find_if(
+            pending_.rbegin(), pending_.rend(),
             [&pair](const PendingEvent& candidate) {
                 return candidate.event.path == pair.from->path;
             });
-        const auto source_was_new =
-            source_pending != pending.rend() &&
-            source_pending->event.kind == WatchEventKind::create;
-        if (source_pending != pending.rend()) {
-            pending.erase(std::next(source_pending).base());
+        const auto sourceWasNew =
+            sourcePending != pending_.rend() &&
+            sourcePending->event.kind == WatchEventKind::Create;
+        if (sourcePending != pending_.rend()) {
+            pending_.erase(std::next(sourcePending).base());
         }
-        WatchEvent event = event_from(
-            NativeWatchAction::modify, pair.to->path, observed);
-        if (source_was_new) {
-            event.kind = cache.contains(pair.to->path)
-                ? WatchEventKind::modify
-                : WatchEventKind::create;
+        WatchEvent event = eventFrom(
+            NativeWatchAction::Modify, pair.to->path, observed);
+        if (sourceWasNew) {
+            event.kind = cache_.contains(pair.to->path)
+                ? WatchEventKind::Modify
+                : WatchEventKind::Create;
         } else {
-            event.kind = WatchEventKind::rename;
-            event.previous_path = pair.from->path;
+            event.kind = WatchEventKind::Rename;
+            event.previousPath = pair.from->path;
         }
-        cache.erase(pair.from->path);
+        cache_.erase(pair.from->path);
         if (observed) {
-            cache[pair.to->path] = *observed;
+            cache_[pair.to->path] = *observed;
         }
-        enqueue(std::move(event), observed_at);
+        enqueue(std::move(event), observedAt);
     }
 
-    void expire_renames(WatchTimePoint now) {
-        for (auto current = renames.begin(); current != renames.end();) {
-            if (current->second.ready_at > now) {
+    void expireRenames(WatchTimePoint now) {
+        for (auto current = renames_.begin(); current != renames_.end();) {
+            if (current->second.readyAt > now) {
                 ++current;
                 continue;
             }
             const auto& half = current->second;
             if (half.from) {
-                auto event = event_from(NativeWatchAction::remove,
+                auto event = eventFrom(NativeWatchAction::Remove,
                                         half.from->path, half.from->observed);
-                cache.erase(half.from->path);
-                enqueue(std::move(event), now - config.debounce);
+                cache_.erase(half.from->path);
+                enqueue(std::move(event), now - config_.debounce);
             } else if (half.to) {
-                auto event = event_from(NativeWatchAction::create,
+                auto event = eventFrom(NativeWatchAction::Create,
                                         half.to->path, half.to->observed);
                 if (half.to->observed) {
-                    cache[half.to->path] = *half.to->observed;
+                    cache_[half.to->path] = *half.to->observed;
                 }
-                enqueue(std::move(event), now - config.debounce);
+                enqueue(std::move(event), now - config_.debounce);
             }
-            current = renames.erase(current);
-            if (overflow_requested) {
+            current = renames_.erase(current);
+            if (overflowRequested_) {
                 return;
             }
         }
     }
 
-    void enqueue(WatchEvent event, WatchTimePoint observed_at) {
+    void enqueue(WatchEvent event, WatchTimePoint observedAt) {
         const auto same = std::find_if(
-            pending.rbegin(), pending.rend(),
+            pending_.rbegin(), pending_.rend(),
             [&event](const PendingEvent& candidate) {
-                return same_event_key(candidate.event, event);
+                return sameEventKey(candidate.event, event);
             });
-        if (same != pending.rend()) {
-            const auto distinct_replacement =
-                same->event.kind == WatchEventKind::remove &&
-                event.kind == WatchEventKind::create &&
+        if (same != pending_.rend()) {
+            const auto distinctReplacement =
+                same->event.kind == WatchEventKind::Remove &&
+                event.kind == WatchEventKind::Create &&
                 (!same->event.identity || !event.identity ||
                  same->event.identity != event.identity);
-            if (!distinct_replacement) {
+            if (!distinctReplacement) {
                 if (coalesce(same->event, event)) {
-                    same->ready_at = observed_at + config.debounce;
+                    same->readyAt = observedAt + config_.debounce;
                 } else {
-                    pending.erase(std::next(same).base());
+                    pending_.erase(std::next(same).base());
                 }
                 return;
             }
         }
-        if (pending.size() == config.max_queued_events) {
-            request_overflow();
+        if (pending_.size() == config_.maxQueuedEvents) {
+            requestOverflow();
             return;
         }
-        pending.push_back({std::move(event), observed_at + config.debounce});
+        pending_.push_back({std::move(event), observedAt + config_.debounce});
     }
 
     static bool coalesce(WatchEvent& current, const WatchEvent& next) {
-        if (current.kind == WatchEventKind::create &&
-            next.kind == WatchEventKind::remove) {
+        if (current.kind == WatchEventKind::Create &&
+            next.kind == WatchEventKind::Remove) {
             return false;
         }
-        if (current.kind == WatchEventKind::create &&
-            next.kind == WatchEventKind::modify) {
+        if (current.kind == WatchEventKind::Create &&
+            next.kind == WatchEventKind::Modify) {
             current.identity = next.identity;
             current.size = next.size;
-            current.modification_time = next.modification_time;
+            current.modificationTime = next.modificationTime;
             return true;
         }
-        if (current.kind == WatchEventKind::modify &&
-            next.kind == WatchEventKind::remove) {
+        if (current.kind == WatchEventKind::Modify &&
+            next.kind == WatchEventKind::Remove) {
             current = next;
             return true;
         }
-        if (current.kind == WatchEventKind::remove &&
-            next.kind == WatchEventKind::create) {
+        if (current.kind == WatchEventKind::Remove &&
+            next.kind == WatchEventKind::Create) {
             current = next;
-            current.kind = WatchEventKind::modify;
+            current.kind = WatchEventKind::Modify;
             return true;
         }
-        if (current.kind == WatchEventKind::rename &&
-            next.kind == WatchEventKind::remove) {
-            const auto original_path = *current.previous_path;
+        if (current.kind == WatchEventKind::Rename &&
+            next.kind == WatchEventKind::Remove) {
+            const auto originalPath = *current.previousPath;
             current = next;
-            current.path = original_path;
-            current.previous_path.reset();
+            current.path = originalPath;
+            current.previousPath.reset();
             return true;
         }
-        if (current.kind == WatchEventKind::rename &&
-            next.kind == WatchEventKind::modify) {
+        if (current.kind == WatchEventKind::Rename &&
+            next.kind == WatchEventKind::Modify) {
             current.path = next.path;
             current.identity = next.identity;
             current.size = next.size;
-            current.modification_time = next.modification_time;
+            current.modificationTime = next.modificationTime;
             return true;
         }
         current = next;
         return true;
     }
 
-    void request_overflow() {
-        overflow_requested = true;
-        overflow_announced = false;
-        next_rescan_at = WatchTimePoint::min();
-        pending.clear();
+    void requestOverflow() {
+        overflowRequested_ = true;
+        overflowAnnounced_ = false;
+        nextRescanAt_ = WatchTimePoint::min();
+        pending_.clear();
     }
 
     std::vector<WatchEvent> rescan(WatchTimePoint now) {
-        renames.clear();
+        renames_.clear();
         std::vector<WatchEvent> result;
-        if (!overflow_announced) {
+        if (!overflowAnnounced_) {
             WatchEvent overflow;
-            overflow.kind = WatchEventKind::overflow;
-            overflow.sequence = next_sequence++;
+            overflow.kind = WatchEventKind::Overflow;
+            overflow.sequence = nextSequence_++;
             result.push_back(std::move(overflow));
-            overflow_announced = true;
+            overflowAnnounced_ = true;
         }
 
-        const auto snapshot = scanner(config.max_rescan_entries);
+        const auto snapshot = scanner_(config_.maxRescanEntries);
         if (!snapshot.complete) {
-            overflow_requested = true;
-            next_rescan_at = now + config.rescan_retry;
+            overflowRequested_ = true;
+            nextRescanAt_ = now + config_.rescanRetry;
             return result;
         }
-        overflow_requested = false;
-        overflow_announced = false;
-        const auto scanned = entry_map(snapshot.entries);
+        overflowRequested_ = false;
+        overflowAnnounced_ = false;
+        const auto scanned = entryMap(snapshot.entries);
         std::multimap<
             std::tuple<std::uint64_t, std::uint64_t, std::uint64_t>,
-            std::filesystem::path> old_paths_by_identity;
-        for (const auto& [path, state] : cache) {
+            std::filesystem::path> oldPathsByIdentity;
+        for (const auto& [path, state] : cache_) {
             if (!scanned.contains(path)) {
-                old_paths_by_identity.emplace(identity_key(state.identity), path);
+                oldPathsByIdentity.emplace(identityKey(state.identity), path);
             }
         }
-        std::vector<std::filesystem::path> renamed_from;
+        std::vector<std::filesystem::path> renamedFrom;
         for (const auto& [path, state] : scanned) {
-            const auto previous = cache.find(path);
-            if (previous == cache.end()) {
-                auto event = event_from(NativeWatchAction::create, path, state);
+            const auto previous = cache_.find(path);
+            if (previous == cache_.end()) {
+                auto event = eventFrom(NativeWatchAction::Create, path, state);
                 const auto old =
-                    old_paths_by_identity.find(identity_key(state.identity));
-                if (old != old_paths_by_identity.end()) {
-                    event.kind = WatchEventKind::rename;
-                    event.previous_path = old->second;
-                    renamed_from.push_back(old->second);
-                    old_paths_by_identity.erase(old);
+                    oldPathsByIdentity.find(identityKey(state.identity));
+                if (old != oldPathsByIdentity.end()) {
+                    event.kind = WatchEventKind::Rename;
+                    event.previousPath = old->second;
+                    renamedFrom.push_back(old->second);
+                    oldPathsByIdentity.erase(old);
                 }
-                event.sequence = next_sequence++;
-                correlate_save(event);
+                event.sequence = nextSequence_++;
+                correlateSave(event);
                 result.push_back(std::move(event));
             } else if (previous->second != state) {
-                auto event = event_from(NativeWatchAction::modify, path, state);
-                event.sequence = next_sequence++;
-                correlate_save(event);
+                auto event = eventFrom(NativeWatchAction::Modify, path, state);
+                event.sequence = nextSequence_++;
+                correlateSave(event);
                 result.push_back(std::move(event));
             }
         }
-        for (const auto& [path, state] : cache) {
+        for (const auto& [path, state] : cache_) {
             if (!scanned.contains(path) &&
-                std::find(renamed_from.begin(), renamed_from.end(), path) ==
-                    renamed_from.end()) {
-                auto event = event_from(NativeWatchAction::remove, path, state);
-                event.sequence = next_sequence++;
-                correlate_save(event);
+                std::find(renamedFrom.begin(), renamedFrom.end(), path) ==
+                    renamedFrom.end()) {
+                auto event = eventFrom(NativeWatchAction::Remove, path, state);
+                event.sequence = nextSequence_++;
+                correlateSave(event);
                 result.push_back(std::move(event));
             }
         }
-        cache = scanned;
+        cache_ = scanned;
         return result;
     }
 
-    void correlate_save(WatchEvent& event) {
-        if (!event.identity || !event.size || !event.modification_time) {
+    void correlateSave(WatchEvent& event) {
+        if (!event.identity || !event.size || !event.modificationTime) {
             return;
         }
         const WatchFileState state{
-            *event.identity, *event.size, *event.modification_time};
+            *event.identity, *event.size, *event.modificationTime};
         const auto found = std::find_if(
-            save_expectations.begin(), save_expectations.end(),
+            saveExpectations_.begin(), saveExpectations_.end(),
             [&event, &state](const SaveExpectation& expectation) {
                 return expectation.path == event.path &&
                        expectation.state == state;
             });
-        if (found != save_expectations.end()) {
-            event.origin = WatchEventOrigin::ssg_save;
-            save_expectations.erase(found);
+        if (found != saveExpectations_.end()) {
+            event.origin = WatchEventOrigin::SsgSave;
+            saveExpectations_.erase(found);
         }
     }
 
-    WatcherConfig config;
-    EntryMap cache;
-    WorkspaceScanner scanner;
-    std::vector<PendingEvent> pending;
-    std::map<std::uint64_t, RenamePair> renames;
-    std::deque<SaveExpectation> save_expectations;
-    std::uint64_t next_sequence = 1;
-    bool overflow_requested = false;
-    bool overflow_announced = false;
-    WatchTimePoint next_rescan_at = WatchTimePoint::min();
+    WatcherConfig config_;
+    EntryMap cache_;
+    WorkspaceScanner scanner_;
+    std::vector<PendingEvent> pending_;
+    std::map<std::uint64_t, RenamePair> renames_;
+    std::deque<SaveExpectation> saveExpectations_;
+    std::uint64_t nextSequence_ = 1;
+    bool overflowRequested_ = false;
+    bool overflowAnnounced_ = false;
+    WatchTimePoint nextRescanAt_ = WatchTimePoint::min();
 };
 
 WatchEventNormalizer::WatchEventNormalizer(
-    WatcherConfig config, std::vector<WorkspaceEntry> initial_entries,
+    WatcherConfig config, std::vector<WorkspaceEntry> initialEntries,
     WorkspaceScanner scanner)
     : impl_(std::make_unique<Impl>(
-          config, std::move(initial_entries), std::move(scanner))) {}
+          config, std::move(initialEntries), std::move(scanner))) {}
 
 WatchEventNormalizer::~WatchEventNormalizer() = default;
 WatchEventNormalizer::WatchEventNormalizer(WatchEventNormalizer&&) noexcept =
@@ -472,17 +472,17 @@ WatchEventNormalizer::WatchEventNormalizer(WatchEventNormalizer&&) noexcept =
 WatchEventNormalizer& WatchEventNormalizer::operator=(
     WatchEventNormalizer&&) noexcept = default;
 
-void WatchEventNormalizer::register_save(SaveExpectation expectation) {
-    impl_->register_save(std::move(expectation));
+void WatchEventNormalizer::registerSave(SaveExpectation expectation) {
+    impl_->registerSave(std::move(expectation));
 }
 
 void WatchEventNormalizer::push(NativeWatchEvent event,
-                                WatchTimePoint observed_at) {
-    impl_->push(std::move(event), observed_at);
+                                WatchTimePoint observedAt) {
+    impl_->push(std::move(event), observedAt);
 }
 
-std::vector<WatchEvent> WatchEventNormalizer::take_ready(WatchTimePoint now) {
-    return impl_->take_ready(now);
+std::vector<WatchEvent> WatchEventNormalizer::takeReady(WatchTimePoint now) {
+    return impl_->takeReady(now);
 }
 
 } // namespace ssg

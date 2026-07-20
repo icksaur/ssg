@@ -35,11 +35,11 @@ namespace {
 namespace fs = std::filesystem;
 using Clock = std::chrono::steady_clock;
 
-constexpr std::size_t repetitions = 12;
-constexpr std::size_t discard = 2;
-constexpr std::size_t target_bytes = 10U * 1024U * 1024U;
+constexpr std::size_t kRepetitions = 12;
+constexpr std::size_t kDiscard = 2;
+constexpr std::size_t kTargetBytes = 10U * 1024U * 1024U;
 
-constexpr std::array<const char*, 6> phase_names{
+constexpr std::array<const char*, 6> kPhaseNames{
     "read", "nul_scan", "decode_validate", "eol_scan", "document_build",
     "state_dirty_check"};
 
@@ -53,14 +53,14 @@ double percentile(std::vector<double> values, double p) {
 
 double ms(std::uint64_t ns) { return static_cast<double>(ns) / 1'000'000.0; }
 
-fs::path make_fixture(const fs::path& root) {
+fs::path makeFixture(const fs::path& root) {
     fs::create_directories(root);
     auto file = root / "big.txt";
     std::ofstream out{file, std::ios::binary};
     std::string line(80, 'a');
     line.push_back('\n');
     std::size_t written = 0;
-    while (written < target_bytes) {
+    while (written < kTargetBytes) {
         out << line;
         written += line.size();
     }
@@ -69,7 +69,7 @@ fs::path make_fixture(const fs::path& root) {
 
 // Isolated size-hinted buffered read: stat the size, read the whole file in one
 // sized pass.  This is the intrinsic-read term the SLO formula retains.
-double calibrated_read_ms(const fs::path& file) {
+double calibratedReadMs(const fs::path& file) {
     auto const size = fs::file_size(file);
     auto const start = Clock::now();
     std::ifstream stream{file, std::ios::binary};
@@ -85,7 +85,7 @@ double calibrated_read_ms(const fs::path& file) {
 // Isolated "validate UTF-8 + copy" single pass: the intrinsic decode floor the
 // fused LF-2b decoder approaches (one walk that checks lead bytes and copies each
 // sequence straight through).  Representative, not a full validator.
-double calibrated_validate_copy_ms(const std::string& bytes) {
+double calibratedValidateCopyMs(const std::string& bytes) {
     auto const start = Clock::now();
     std::string out;
     out.reserve(bytes.size());
@@ -109,35 +109,35 @@ double calibrated_validate_copy_ms(const std::string& bytes) {
     return std::chrono::duration<double, std::milli>(elapsed).count();
 }
 
-std::string read_whole(const fs::path& file) {
+std::string readWhole(const fs::path& file) {
     std::ifstream stream{file, std::ios::binary};
     return {std::istreambuf_iterator<char>{stream},
             std::istreambuf_iterator<char>{}};
 }
 
 struct Sample {
-    std::array<double, phase_names.size()> phase_ms{};
-    double wall_ms = 0.0;
+    std::array<double, kPhaseNames.size()> phaseMs{};
+    double wallMs = 0.0;
 };
 
-Sample open_once(const fs::path& root, const std::string& name) {
+Sample openOnce(const fs::path& root, const std::string& name) {
     // A fresh workspace per rep so open_file does not de-duplicate the path.
     auto recovery = ssg::RecoveryActions::create(root / ".recovery");
     auto workspace = ssg::Workspace::create(root, recovery);
 
-    ssg::reset_open_phase_timing();
+    ssg::resetOpenPhaseTiming();
     auto const start = Clock::now();
-    auto opened = workspace.open_file(name);
+    auto opened = workspace.openFile(name);
     if (!opened.accepted()) throw std::runtime_error{"open failed"};
     auto state = workspace.state(*opened.document);
     if (!state.has_value()) throw std::runtime_error{"state failed"};
     auto const wall = Clock::now() - start;
 
     Sample sample;
-    sample.wall_ms = std::chrono::duration<double, std::milli>(wall).count();
-    for (std::size_t i = 0; i < phase_names.size(); ++i)
-        sample.phase_ms[i] =
-            ms(ssg::open_phase_ns(static_cast<ssg::OpenPhase>(i)));
+    sample.wallMs = std::chrono::duration<double, std::milli>(wall).count();
+    for (std::size_t i = 0; i < kPhaseNames.size(); ++i)
+        sample.phaseMs[i] =
+            ms(ssg::openPhaseNs(static_cast<ssg::OpenPhase>(i)));
     return sample;
 }
 
@@ -149,50 +149,50 @@ int main() {
                     ("ssg-open-bench-" + std::to_string(::getpid()));
         std::error_code ec;
         fs::remove_all(root, ec);
-        auto const file = make_fixture(root);
+        auto const file = makeFixture(root);
         auto const name = std::string{"big.txt"};
 
         std::vector<double> calib;
-        for (std::size_t rep = 0; rep < repetitions; ++rep) {
-            auto const value = calibrated_read_ms(file);
-            if (rep >= discard) calib.push_back(value);
+        for (std::size_t rep = 0; rep < kRepetitions; ++rep) {
+            auto const value = calibratedReadMs(file);
+            if (rep >= kDiscard) calib.push_back(value);
         }
 
-        const std::string whole = read_whole(file);
-        std::vector<double> calib_decode;
-        for (std::size_t rep = 0; rep < repetitions; ++rep) {
-            auto const value = calibrated_validate_copy_ms(whole);
-            if (rep >= discard) calib_decode.push_back(value);
+        const std::string whole = readWhole(file);
+        std::vector<double> calibDecode;
+        for (std::size_t rep = 0; rep < kRepetitions; ++rep) {
+            auto const value = calibratedValidateCopyMs(whole);
+            if (rep >= kDiscard) calibDecode.push_back(value);
         }
 
         std::vector<Sample> samples;
-        std::uint64_t validation_calls = 0;
-        std::uint64_t tree_text_calls = 0;
-        for (std::size_t rep = 0; rep < repetitions; ++rep) {
-            ssg::reset_utf8_validation_calls();
-            ssg::reset_piece_tree_text_calls();
-            auto sample = open_once(root, name);
-            if (rep == discard) {
-                validation_calls = ssg::utf8_validation_calls();
-                tree_text_calls = ssg::piece_tree_text_calls();
+        std::uint64_t validationCalls = 0;
+        std::uint64_t treeTextCalls = 0;
+        for (std::size_t rep = 0; rep < kRepetitions; ++rep) {
+            ssg::resetUtf8ValidationCalls();
+            ssg::resetPieceTreeTextCalls();
+            auto sample = openOnce(root, name);
+            if (rep == kDiscard) {
+                validationCalls = ssg::utf8ValidationCalls();
+                treeTextCalls = ssg::pieceTreeTextCalls();
             }
-            if (rep >= discard) samples.push_back(sample);
+            if (rep >= kDiscard) samples.push_back(sample);
         }
 
-        std::array<std::vector<double>, phase_names.size()> phase_samples;
-        std::vector<double> wall_samples;
+        std::array<std::vector<double>, kPhaseNames.size()> phaseSamples;
+        std::vector<double> wallSamples;
         for (auto const& sample : samples) {
-            wall_samples.push_back(sample.wall_ms);
-            for (std::size_t i = 0; i < phase_names.size(); ++i)
-                phase_samples[i].push_back(sample.phase_ms[i]);
+            wallSamples.push_back(sample.wallMs);
+            for (std::size_t i = 0; i < kPhaseNames.size(); ++i)
+                phaseSamples[i].push_back(sample.phaseMs[i]);
         }
 
         std::size_t dominant = 0;
-        double dominant_p50 = 0.0;
-        for (std::size_t i = 0; i < phase_names.size(); ++i) {
-            auto const p50 = percentile(phase_samples[i], 0.50);
-            if (p50 > dominant_p50) {
-                dominant_p50 = p50;
+        double dominantP50 = 0.0;
+        for (std::size_t i = 0; i < kPhaseNames.size(); ++i) {
+            auto const p50 = percentile(phaseSamples[i], 0.50);
+            if (p50 > dominantP50) {
+                dominantP50 = p50;
                 dominant = i;
             }
         }
@@ -200,29 +200,29 @@ int main() {
         std::ostringstream report;
         report << std::fixed << std::setprecision(3)
                << "fixture big_10MiB samples=" << samples.size() << "\n"
-               << "  open_wall            p50=" << percentile(wall_samples, 0.50)
-               << "ms p99=" << percentile(wall_samples, 0.99) << "ms\n";
-        for (std::size_t i = 0; i < phase_names.size(); ++i) {
-            report << "  " << std::left << std::setw(20) << phase_names[i]
-                   << " p50=" << percentile(phase_samples[i], 0.50) << "ms"
-                   << " p99=" << percentile(phase_samples[i], 0.99) << "ms\n";
+               << "  open_wall            p50=" << percentile(wallSamples, 0.50)
+               << "ms p99=" << percentile(wallSamples, 0.99) << "ms\n";
+        for (std::size_t i = 0; i < kPhaseNames.size(); ++i) {
+            report << "  " << std::left << std::setw(20) << kPhaseNames[i]
+                   << " p50=" << percentile(phaseSamples[i], 0.50) << "ms"
+                   << " p99=" << percentile(phaseSamples[i], 0.99) << "ms\n";
         }
-        report << "  dominant_phase=" << phase_names[dominant]
-               << " (p50=" << dominant_p50 << "ms)\n"
+        report << "  dominant_phase=" << kPhaseNames[dominant]
+               << " (p50=" << dominantP50 << "ms)\n"
                << "  calibrated_buffered_read p50=" << percentile(calib, 0.50)
                << "ms p99=" << percentile(calib, 0.99) << "ms\n"
-               << "  calibrated_validate_copy p50=" << percentile(calib_decode, 0.50)
-               << "ms p99=" << percentile(calib_decode, 0.99) << "ms\n"
-               << "  utf8_validation_calls=" << validation_calls
-               << " piece_tree_text_calls_on_state=" << tree_text_calls << "\n";
+               << "  calibrated_validate_copy p50=" << percentile(calibDecode, 0.50)
+               << "ms p99=" << percentile(calibDecode, 0.99) << "ms\n"
+               << "  utf8_validation_calls=" << validationCalls
+               << " piece_tree_text_calls_on_state=" << treeTextCalls << "\n";
 
         fs::remove_all(root, ec);
 
         std::cout << report.str();
-        if (char const* out_path = std::getenv("SSG_OPEN_REPORT")) {
-            std::ofstream out{out_path};
+        if (char const* outPath = std::getenv("SSG_OPEN_REPORT")) {
+            std::ofstream out{outPath};
             out << report.str();
-            std::cout << "open-path baseline written to " << out_path << "\n";
+            std::cout << "open-path baseline written to " << outPath << "\n";
         }
         return 0;
     } catch (std::exception const& error) {

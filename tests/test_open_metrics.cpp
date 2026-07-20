@@ -23,7 +23,7 @@ namespace {
 
 namespace fs = std::filesystem;
 
-fs::path unique_root() {
+fs::path uniqueRoot() {
     auto base = fs::temp_directory_path() /
                 ("ssg-open-metrics-" +
                  std::to_string(
@@ -33,36 +33,36 @@ fs::path unique_root() {
     return base;
 }
 
-TEST(direct_utf8_open_validates_once) {
-    auto root = unique_root();
+TEST(directUtf8OpenValidatesOnce) {
+    auto root = uniqueRoot();
     { std::ofstream{root / "a.txt", std::ios::binary} << "hello\nworld\n"; }
     auto recovery = ssg::RecoveryActions::create(root / ".recovery");
     auto workspace = ssg::Workspace::create(root, recovery);
 
-    ssg::reset_utf8_validation_calls();
-    auto opened = workspace.open_file("a.txt");
+    ssg::resetUtf8ValidationCalls();
+    auto opened = workspace.openFile("a.txt");
     ASSERT_TRUE(opened.accepted());
     // The fused decoder's single scan; the Document consumes ValidatedUtf8 and
     // does NOT re-validate (LF-3a removed the redundant second scan).
-    ASSERT_EQ(ssg::utf8_validation_calls(), std::uint64_t{1});
+    ASSERT_EQ(ssg::utf8ValidationCalls(), std::uint64_t{1});
 
     fs::remove_all(root);
 }
 
-TEST(fresh_open_state_materializes_tree_once_today) {
-    auto root = unique_root();
+TEST(freshOpenStateMaterializesTreeOnceToday) {
+    auto root = uniqueRoot();
     { std::ofstream{root / "a.txt", std::ios::binary} << "hello\nworld\n"; }
     auto recovery = ssg::RecoveryActions::create(root / ".recovery");
     auto workspace = ssg::Workspace::create(root, recovery);
-    auto opened = workspace.open_file("a.txt");
+    auto opened = workspace.openFile("a.txt");
     ASSERT_TRUE(opened.accepted());
 
-    ssg::reset_piece_tree_text_calls();
+    ssg::resetPieceTreeTextCalls();
     auto state = workspace.state(*opened.document);
     ASSERT_TRUE(state.has_value());
     // Pass I: state() walks the just-built tree back into a std::string to
     // dirty-check.  LF-4b removes this for a fresh open.
-    ASSERT_EQ(ssg::piece_tree_text_calls(), std::uint64_t{1});
+    ASSERT_EQ(ssg::pieceTreeTextCalls(), std::uint64_t{1});
 
     fs::remove_all(root);
 }
@@ -70,8 +70,8 @@ TEST(fresh_open_state_materializes_tree_once_today) {
 }  // namespace
 
 int main() {
-    RUN(direct_utf8_open_validates_once);
-    RUN(fresh_open_state_materializes_tree_once_today);
+    RUN(directUtf8OpenValidatesOnce);
+    RUN(freshOpenStateMaterializesTreeOnceToday);
     std::cout << passed << " passed, " << failed << " failed\n";
     return failed == 0 ? 0 : 1;
 }

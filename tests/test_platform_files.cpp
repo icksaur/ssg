@@ -43,17 +43,17 @@ private:
     std::filesystem::path path_;
 };
 
-void write_text(const std::filesystem::path& path, std::string_view text) {
+void writeText(const std::filesystem::path& path, std::string_view text) {
     std::ofstream output(path, std::ios::binary);
     output.write(text.data(), static_cast<std::streamsize>(text.size()));
 }
 
-std::string read_text(const std::filesystem::path& path) {
+std::string readText(const std::filesystem::path& path) {
     std::ifstream input(path, std::ios::binary);
     return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
 }
 
-std::optional<std::string> try_read_text(const std::filesystem::path& path) {
+std::optional<std::string> tryReadText(const std::filesystem::path& path) {
 #ifdef _WIN32
     const HANDLE handle =
         CreateFileW(path.c_str(), GENERIC_READ,
@@ -93,92 +93,92 @@ std::span<const std::byte> bytes(std::string_view text) {
     return {reinterpret_cast<const std::byte*>(text.data()), text.size()};
 }
 
-TEST(path_policy_decision_table) {
+TEST(pathPolicyDecisionTable) {
     using enum ssg::PathError;
     using enum ssg::PathSyntax;
 
     struct Case {
         std::string path;
         ssg::PathSyntax syntax;
-        ssg::LongPathPolicy long_paths;
+        ssg::LongPathPolicy longPaths;
         ssg::PathError expected;
     };
 
     const std::array cases{
-        Case{"src/main.cpp", linux, ssg::LongPathPolicy::legacy, none},
-        Case{"dir\\name", linux, ssg::LongPathPolicy::legacy, none},
-        Case{"", linux, ssg::LongPathPolicy::legacy, empty},
-        Case{"/etc/passwd", linux, ssg::LongPathPolicy::legacy, absolute},
-        Case{"a/../b", linux, ssg::LongPathPolicy::legacy, traversal},
-        Case{std::string{"bad\0name", 8}, linux, ssg::LongPathPolicy::legacy,
-             invalid_character},
-        Case{std::string{"bad\xff", 4}, linux, ssg::LongPathPolicy::legacy,
-             invalid_utf8},
-        Case{"src\\main.cpp", windows, ssg::LongPathPolicy::legacy, none},
-        Case{"CON", windows, ssg::LongPathPolicy::legacy, reserved_name},
-        Case{"aux.txt", windows, ssg::LongPathPolicy::legacy, reserved_name},
-        Case{"COM9.log", windows, ssg::LongPathPolicy::legacy, reserved_name},
-        Case{"COM10.log", windows, ssg::LongPathPolicy::legacy, none},
-        Case{"bad<name", windows, ssg::LongPathPolicy::legacy, invalid_character},
-        Case{"name.", windows, ssg::LongPathPolicy::legacy, trailing_dot_or_space},
-        Case{"name ", windows, ssg::LongPathPolicy::legacy, trailing_dot_or_space},
-        Case{"..\\name", windows, ssg::LongPathPolicy::legacy, traversal},
-        Case{"C:\\name", windows, ssg::LongPathPolicy::legacy, absolute},
-        Case{std::string(260, 'a'), windows, ssg::LongPathPolicy::legacy,
-             component_too_long},
+        Case{"src/main.cpp", Linux, ssg::LongPathPolicy::Legacy, None},
+        Case{"dir\\name", Linux, ssg::LongPathPolicy::Legacy, None},
+        Case{"", Linux, ssg::LongPathPolicy::Legacy, Empty},
+        Case{"/etc/passwd", Linux, ssg::LongPathPolicy::Legacy, Absolute},
+        Case{"a/../b", Linux, ssg::LongPathPolicy::Legacy, Traversal},
+        Case{std::string{"bad\0name", 8}, Linux, ssg::LongPathPolicy::Legacy,
+             InvalidCharacter},
+        Case{std::string{"bad\xff", 4}, Linux, ssg::LongPathPolicy::Legacy,
+             InvalidUtf8},
+        Case{"src\\main.cpp", Windows, ssg::LongPathPolicy::Legacy, None},
+        Case{"CON", Windows, ssg::LongPathPolicy::Legacy, ReservedName},
+        Case{"aux.txt", Windows, ssg::LongPathPolicy::Legacy, ReservedName},
+        Case{"COM9.log", Windows, ssg::LongPathPolicy::Legacy, ReservedName},
+        Case{"COM10.log", Windows, ssg::LongPathPolicy::Legacy, None},
+        Case{"bad<name", Windows, ssg::LongPathPolicy::Legacy, InvalidCharacter},
+        Case{"name.", Windows, ssg::LongPathPolicy::Legacy, TrailingDotOrSpace},
+        Case{"name ", Windows, ssg::LongPathPolicy::Legacy, TrailingDotOrSpace},
+        Case{"..\\name", Windows, ssg::LongPathPolicy::Legacy, Traversal},
+        Case{"C:\\name", Windows, ssg::LongPathPolicy::Legacy, Absolute},
+        Case{std::string(260, 'a'), Windows, ssg::LongPathPolicy::Legacy,
+             ComponentTooLong},
     };
 
     for (const auto& test : cases) {
-        ASSERT_EQ(ssg::validate_workspace_relative_path(
-                      test.path, test.syntax, test.long_paths)
+        ASSERT_EQ(ssg::validateWorkspaceRelativePath(
+                      test.path, test.syntax, test.longPaths)
                       .error,
                   test.expected);
     }
 
-    const std::string long_path = std::string(130, 'a') + "\\" +
+    const std::string longPath = std::string(130, 'a') + "\\" +
                                   std::string(130, 'b');
-    ASSERT_EQ(ssg::validate_workspace_relative_path(
-                  long_path, windows, ssg::LongPathPolicy::legacy)
+    ASSERT_EQ(ssg::validateWorkspaceRelativePath(
+                  longPath, Windows, ssg::LongPathPolicy::Legacy)
                   .error,
-              path_too_long);
-    ASSERT_EQ(ssg::validate_workspace_relative_path(
-                  long_path, windows, ssg::LongPathPolicy::extended)
+              PathTooLong);
+    ASSERT_EQ(ssg::validateWorkspaceRelativePath(
+                  longPath, Windows, ssg::LongPathPolicy::Extended)
                   .error,
-              none);
+              None);
 }
 
-TEST(identity_is_stable_across_reopen_and_rename) {
+TEST(identityIsStableAcrossReopenAndRename) {
     TemporaryDirectory temporary;
     const auto original = temporary.path() / "original";
     const auto renamed = temporary.path() / "renamed";
-    write_text(original, "content");
+    writeText(original, "content");
 
-    const auto before = ssg::file_identity(original);
-    ASSERT_EQ(ssg::file_identity(original), before);
+    const auto before = ssg::fileIdentity(original);
+    ASSERT_EQ(ssg::fileIdentity(original), before);
     std::filesystem::rename(original, renamed);
-    ASSERT_EQ(ssg::file_identity(renamed), before);
+    ASSERT_EQ(ssg::fileIdentity(renamed), before);
 
     const auto other = temporary.path() / "other";
-    write_text(other, "content");
-    ASSERT_NE(ssg::file_identity(other), before);
+    writeText(other, "content");
+    ASSERT_NE(ssg::fileIdentity(other), before);
 }
 
-TEST(lock_contention_and_release_follow_raii) {
+TEST(lockContentionAndReleaseFollowRaii) {
     TemporaryDirectory temporary;
-    const auto lock_path = temporary.path() / "session.lock";
+    const auto lockPath = temporary.path() / "session.lock";
 
-    auto first = ssg::try_lock_file(lock_path);
+    auto first = ssg::tryLockFile(lockPath);
     ASSERT_TRUE(first.has_value());
-    ASSERT_FALSE(ssg::try_lock_file(lock_path).has_value());
+    ASSERT_FALSE(ssg::tryLockFile(lockPath).has_value());
     first.reset();
-    ASSERT_TRUE(ssg::try_lock_file(lock_path).has_value());
+    ASSERT_TRUE(ssg::tryLockFile(lockPath).has_value());
 }
 
-TEST(owner_only_permissions_are_applied) {
+TEST(ownerOnlyPermissionsAreApplied) {
     TemporaryDirectory temporary;
     const auto file = temporary.path() / "private";
-    write_text(file, "secret");
-    ssg::set_owner_only_permissions(file);
+    writeText(file, "secret");
+    ssg::setOwnerOnlyPermissions(file);
 
 #ifdef _WIN32
     PACL acl = nullptr;
@@ -225,48 +225,48 @@ TEST(owner_only_permissions_are_applied) {
 #endif
 }
 
-TEST(cache_root_contains_validated_application_component) {
-    const auto root = ssg::user_cache_root("ssg-test");
+TEST(cacheRootContainsValidatedApplicationComponent) {
+    const auto root = ssg::userCacheRoot("ssg-test");
     ASSERT_FALSE(root.empty());
     ASSERT_EQ(root.filename(), std::filesystem::path{"ssg-test"});
-    ASSERT_THROWS(ssg::user_cache_root("../escape"), std::invalid_argument);
+    ASSERT_THROWS(ssg::userCacheRoot("../escape"), std::invalid_argument);
 }
 
-TEST(atomic_replacement_publishes_complete_bytes) {
+TEST(atomicReplacementPublishesCompleteBytes) {
     TemporaryDirectory temporary;
     const auto target = temporary.path() / "document";
-    write_text(target, "old");
+    writeText(target, "old");
 
     const std::string replacement(64 * 1024, 'n');
-    ssg::replace_file_atomically(target, bytes(replacement));
-    ASSERT_EQ(read_text(target), replacement);
+    ssg::replaceFileAtomically(target, bytes(replacement));
+    ASSERT_EQ(readText(target), replacement);
 
     for (const auto& entry : std::filesystem::directory_iterator(temporary.path())) {
         ASSERT_EQ(entry.path().filename(), target.filename());
     }
 }
 
-TEST(atomic_replacement_never_exposes_partial_bytes) {
+TEST(atomicReplacementNeverExposesPartialBytes) {
     TemporaryDirectory temporary;
     const auto target = temporary.path() / "document";
-    const std::string old_contents(64 * 1024, 'o');
-    const std::string new_contents(64 * 1024, 'n');
-    write_text(target, old_contents);
+    const std::string oldContents(64 * 1024, 'o');
+    const std::string newContents(64 * 1024, 'n');
+    writeText(target, oldContents);
 
     std::atomic<bool> stop = false;
     std::atomic<bool> partial = false;
     std::thread reader([&] {
         while (!stop.load()) {
-            const auto observed = try_read_text(target);
-            if (observed.has_value() && *observed != old_contents &&
-                *observed != new_contents) {
+            const auto observed = tryReadText(target);
+            if (observed.has_value() && *observed != oldContents &&
+                *observed != newContents) {
                 partial = true;
             }
         }
     });
     for (int iteration = 0; iteration < 50; ++iteration) {
-        const auto& contents = iteration % 2 == 0 ? new_contents : old_contents;
-        ssg::replace_file_atomically(target, bytes(contents));
+        const auto& contents = iteration % 2 == 0 ? newContents : oldContents;
+        ssg::replaceFileAtomically(target, bytes(contents));
     }
     stop = true;
     reader.join();
@@ -276,13 +276,13 @@ TEST(atomic_replacement_never_exposes_partial_bytes) {
 } // namespace
 
 int main() {
-    RUN(path_policy_decision_table);
-    RUN(identity_is_stable_across_reopen_and_rename);
-    RUN(lock_contention_and_release_follow_raii);
-    RUN(owner_only_permissions_are_applied);
-    RUN(cache_root_contains_validated_application_component);
-    RUN(atomic_replacement_publishes_complete_bytes);
-    RUN(atomic_replacement_never_exposes_partial_bytes);
+    RUN(pathPolicyDecisionTable);
+    RUN(identityIsStableAcrossReopenAndRename);
+    RUN(lockContentionAndReleaseFollowRaii);
+    RUN(ownerOnlyPermissionsAreApplied);
+    RUN(cacheRootContainsValidatedApplicationComponent);
+    RUN(atomicReplacementPublishesCompleteBytes);
+    RUN(atomicReplacementNeverExposesPartialBytes);
     std::cout << "Passed: " << passed << " Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

@@ -25,29 +25,29 @@ public:
     [[nodiscard]] std::string_view value() const noexcept { return value_; }
 
 private:
-    friend BearerCredential generate_bearer_credential(SecureRandomSource&);
+    friend BearerCredential generateBearerCredential(SecureRandomSource&);
     explicit BearerCredential(std::string value) : value_{std::move(value)} {}
 
     std::string value_;
 };
 
-[[nodiscard]] BearerCredential generate_bearer_credential(
+[[nodiscard]] BearerCredential generateBearerCredential(
     SecureRandomSource& source);
-[[nodiscard]] BearerCredential generate_bearer_credential();
+[[nodiscard]] BearerCredential generateBearerCredential();
 
 class ApplicationAuthentication {
 public:
-    ApplicationAuthentication(BearerCredential credential, SessionId session_id,
-                              ClientId client_id, ViewId view_id);
+    ApplicationAuthentication(BearerCredential credential, SessionId sessionId,
+                              ClientId clientId, ViewId viewId);
 
     [[nodiscard]] std::optional<AuthenticatedSession> authenticate(
-        std::string_view presented_credential) const;
+        std::string_view presentedCredential) const;
 
 private:
     BearerCredential credential_;
-    SessionId session_id_;
-    ClientId client_id_;
-    ViewId view_id_;
+    SessionId sessionId_;
+    ClientId clientId_;
+    ViewId viewId_;
 };
 
 }  // namespace ssg

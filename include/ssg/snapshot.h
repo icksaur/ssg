@@ -17,19 +17,19 @@ struct DocumentViewState {
 };
 
 struct DocumentDelta {
-    Revision base_revision;
+    Revision baseRevision;
     Revision revision;
     ByteOffset start;
-    std::uint64_t erased_bytes;
-    std::string inserted_text;
+    std::uint64_t erasedBytes;
+    std::string insertedText;
 
     bool operator==(DocumentDelta const&) const = default;
 };
 
-[[nodiscard]] std::optional<DocumentDelta> derive_document_delta(
+[[nodiscard]] std::optional<DocumentDelta> deriveDocumentDelta(
     DocumentViewState const& before, DocumentViewState const& after);
-[[nodiscard]] std::optional<DocumentViewState> replay_document_delta(
+[[nodiscard]] std::optional<DocumentViewState> replayDocumentDelta(
     DocumentViewState const& before, DocumentDelta const& delta,
-    ByteOffset target_caret);
+    ByteOffset targetCaret);
 
 }  // namespace ssg

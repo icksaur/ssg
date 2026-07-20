@@ -21,7 +21,7 @@ struct CellGridCell {
     std::string text{" "};
     std::uint8_t foreground{0};
     std::uint8_t background{0};
-    SemanticRole role{SemanticRole::background};
+    SemanticRole role{SemanticRole::Background};
     bool continuation{false};
 
     bool operator==(CellGridCell const&) const = default;
@@ -37,7 +37,7 @@ struct GridPosition {
 
 struct CellGrid {
     GridSize size;
-    std::array<SrgbColor, theme_palette_size> palette{};
+    std::array<SrgbColor, kThemePaletteSize> palette{};
     std::vector<CellGridCell> cells;
     std::optional<GridPosition> caret;
 
@@ -53,7 +53,7 @@ struct CellGrid {
 // segments only the logical lines the viewport shows (<= viewport rows), never the
 // whole document — so a regression to whole-document segmentation fails the count
 // oracle.  Not thread-safe across concurrent render() calls (per-thread counter).
-[[nodiscard]] std::uint64_t render_segmentation_calls();
-void reset_render_segmentation_calls();
+[[nodiscard]] std::uint64_t renderSegmentationCalls();
+void resetRenderSegmentationCalls();
 
 }  // namespace ssg

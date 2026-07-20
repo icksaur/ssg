@@ -25,8 +25,8 @@ private:
     std::string value_;
 };
 
-[[nodiscard]] std::string scratch_workspace_key(
-    const std::filesystem::path& canonical_workspace);
+[[nodiscard]] std::string scratchWorkspaceKey(
+    const std::filesystem::path& canonicalWorkspace);
 
 class ScratchRemnantClaim {
 public:
@@ -39,11 +39,11 @@ public:
     [[nodiscard]] const std::filesystem::path& path() const noexcept {
         return path_;
     }
-    [[nodiscard]] std::filesystem::path journal_path() const {
+    [[nodiscard]] std::filesystem::path journalPath() const {
         return path_ / "journal.bin";
     }
     [[nodiscard]] JournalReplayResult replay() const;
-    void mark_restored();
+    void markRestored();
 
 private:
     ScratchRemnantClaim(ScratchSessionId id,
@@ -60,8 +60,8 @@ private:
 class ScratchSession {
 public:
     [[nodiscard]] static ScratchSession create(
-        const std::filesystem::path& scratch_root,
-        const std::filesystem::path& canonical_workspace);
+        const std::filesystem::path& scratchRoot,
+        const std::filesystem::path& canonicalWorkspace);
 
     ScratchSession(ScratchSession&&) noexcept = default;
     ScratchSession& operator=(ScratchSession&&) noexcept = default;
@@ -72,25 +72,25 @@ public:
     [[nodiscard]] const std::filesystem::path& path() const noexcept {
         return path_;
     }
-    [[nodiscard]] std::filesystem::path journal_path() const {
+    [[nodiscard]] std::filesystem::path journalPath() const {
         return path_ / "journal.bin";
     }
     [[nodiscard]] std::optional<ScratchRemnantClaim>
-    claim_newest_restorable() const;
+    claimNewestRestorable() const;
 
 private:
     ScratchSession(ScratchSessionId id,
                    std::filesystem::path path,
-                   std::filesystem::path sessions_path,
+                   std::filesystem::path sessionsPath,
                    ExclusiveFileLock lock)
         : id_(std::move(id)),
           path_(std::move(path)),
-          sessions_path_(std::move(sessions_path)),
+          sessionsPath_(std::move(sessionsPath)),
           lock_(std::move(lock)) {}
 
     ScratchSessionId id_;
     std::filesystem::path path_;
-    std::filesystem::path sessions_path_;
+    std::filesystem::path sessionsPath_;
     ExclusiveFileLock lock_;
 };
 

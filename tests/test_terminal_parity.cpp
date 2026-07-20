@@ -77,7 +77,7 @@ struct DecodedScreen {
     }
 };
 
-std::size_t utf8_length(unsigned char lead) {
+std::size_t utf8Length(unsigned char lead) {
     if (lead < 0x80) return 1;
     if (lead >= 0xF0) return 4;
     if (lead >= 0xE0) return 3;
@@ -85,9 +85,9 @@ std::size_t utf8_length(unsigned char lead) {
     return 1;
 }
 
-std::uint32_t utf8_codepoint(std::string_view text) {
+std::uint32_t utf8Codepoint(std::string_view text) {
     auto const lead = static_cast<unsigned char>(text[0]);
-    std::size_t const length = utf8_length(lead);
+    std::size_t const length = utf8Length(lead);
     if (length == 1) return lead;
     std::uint32_t cp = lead & (0xFF >> (length + 1));
     for (std::size_t k = 1; k < length && k < text.size(); ++k) {
@@ -100,7 +100,7 @@ std::uint32_t utf8_codepoint(std::string_view text) {
 // two for the East Asian Wide/Fullwidth ranges the renderer treats as wide, one
 // otherwise.  (The parity fixture is ASCII, so only the width-1 path runs here,
 // but the model honors the full emitted vocabulary.)
-int codepoint_width(std::uint32_t cp) {
+int codepointWidth(std::uint32_t cp) {
     if (cp == 0) return 0;
     if ((cp >= 0x1100 && cp <= 0x115F) || cp == 0x2329 || cp == 0x232A ||
         (cp >= 0x2E80 && cp <= 0xA4CF && cp != 0x303F) ||
@@ -113,7 +113,7 @@ int codepoint_width(std::uint32_t cp) {
     return 1;
 }
 
-std::vector<int> split_params(std::string_view params) {
+std::vector<int> splitParams(std::string_view params) {
     std::vector<int> out;
     int value = 0;
     bool any = false;
@@ -141,8 +141,8 @@ DecodedScreen decode(std::string_view bytes, int columns, int rows) {
     screen.rows = rows;
     screen.cells.assign(static_cast<std::size_t>(columns) * rows, DecodedCell{});
 
-    int cursor_row = 0;
-    int cursor_column = 0;
+    int cursorRow = 0;
+    int cursorColumn = 0;
     Rgb fg{};
     Rgb bg{};
 
@@ -162,16 +162,16 @@ DecodedScreen decode(std::string_view bytes, int columns, int rows) {
             if (j >= n) break;  // Incomplete CSI.
             char const final = bytes[j];
             std::string_view const params = bytes.substr(i + 2, j - (i + 2));
-            bool const private_mode = !params.empty() && params.front() == '?';
+            bool const privateMode = !params.empty() && params.front() == '?';
 
             if (final == 'H' || final == 'f') {
-                auto values = split_params(params);
+                auto values = splitParams(params);
                 int const r = values.size() > 0 ? values[0] : 1;
                 int const c = values.size() > 1 ? values[1] : 1;
-                cursor_row = r > 0 ? r - 1 : 0;
-                cursor_column = c > 0 ? c - 1 : 0;
+                cursorRow = r > 0 ? r - 1 : 0;
+                cursorColumn = c > 0 ? c - 1 : 0;
             } else if (final == 'm') {
-                auto values = split_params(params);
+                auto values = splitParams(params);
                 for (std::size_t k = 0; k < values.size(); ++k) {
                     if (values[k] == 0) {
                         fg = Rgb{};
@@ -185,10 +185,10 @@ DecodedScreen decode(std::string_view bytes, int columns, int rows) {
                         k += 4;
                     }
                 }
-            } else if (private_mode && (final == 'h' || final == 'l') &&
+            } else if (privateMode && (final == 'h' || final == 'l') &&
                        params == "?25") {
                 if (final == 'h') {
-                    screen.cursor = std::pair<int, int>{cursor_row, cursor_column};
+                    screen.cursor = std::pair<int, int>{cursorRow, cursorColumn};
                 } else {
                     screen.cursor.reset();
                 }
@@ -199,24 +199,24 @@ DecodedScreen decode(std::string_view bytes, int columns, int rows) {
         }
         if (ch < 0x20) { ++i; continue; }  // Bare control byte: ignore.
 
-        std::size_t const length = utf8_length(ch);
+        std::size_t const length = utf8Length(ch);
         if (i + length > n) break;
         std::string_view const glyph = bytes.substr(i, length);
-        int const width = codepoint_width(utf8_codepoint(glyph));
-        if (cursor_row >= 0 && cursor_row < rows && cursor_column >= 0 &&
-            cursor_column < columns && width > 0) {
-            auto& cell = screen.at(cursor_row, cursor_column);
+        int const width = codepointWidth(utf8Codepoint(glyph));
+        if (cursorRow >= 0 && cursorRow < rows && cursorColumn >= 0 &&
+            cursorColumn < columns && width > 0) {
+            auto& cell = screen.at(cursorRow, cursorColumn);
             cell.text = std::string{glyph};
             cell.foreground = fg;
             cell.background = bg;
         }
-        cursor_column += width == 0 ? 0 : width;
+        cursorColumn += width == 0 ? 0 : width;
         i += length;
     }
     return screen;
 }
 
-bool color_eq(Rgb const& a, ssg::SrgbColor const& b) {
+bool colorEq(Rgb const& a, ssg::SrgbColor const& b) {
     return a.red == b.red && a.green == b.green && a.blue == b.blue;
 }
 
@@ -224,7 +224,7 @@ bool color_eq(Rgb const& a, ssg::SrgbColor const& b) {
 // Fixtures.
 // ---------------------------------------------------------------------------
 
-fs::path make_fixture() {
+fs::path makeFixture() {
     auto root = fs::temp_directory_path() /
                 ("ssg-parity-" + std::to_string(::getpid()));
     fs::remove_all(root);
@@ -236,15 +236,15 @@ fs::path make_fixture() {
 
 // A headless production runtime over the fixture workspace, fully enriched (tree
 // scanned), matching the app's FINAL frame after it primes deferred enrichment.
-std::unique_ptr<ssg::EditorRuntime> make_headless(fs::path const& root) {
+std::unique_ptr<ssg::EditorRuntime> makeHeadless(fs::path const& root) {
     ssg::EditorRuntimeConfig config;
     config.cwd = root / "workspace";
-    config.scratch_root = root / "scratch";
-    config.recovery_root = root / "recovery";
+    config.scratchRoot = root / "scratch";
+    config.recoveryRoot = root / "recovery";
     auto created = ssg::EditorRuntime::create(config);
     if (!created.accepted()) return nullptr;
     auto runtime = std::move(created.runtime);
-    (void)runtime->attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process},
+    (void)runtime->attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                           ssg::ViewId{1});
     return runtime;
 }
@@ -252,7 +252,7 @@ std::unique_ptr<ssg::EditorRuntime> make_headless(fs::path const& root) {
 // Launch the real `ssg` binary over `launch_path` (a workspace dir or a file)
 // under a pty and capture its output until it settles (frames drawn, blocked on
 // input).
-std::string capture_frames(std::string const& binary, fs::path const& launch_path) {
+std::string captureFrames(std::string const& binary, fs::path const& launchPath) {
     winsize ws{};
     ws.ws_col = 80;
     ws.ws_row = 24;
@@ -262,18 +262,18 @@ std::string capture_frames(std::string const& binary, fs::path const& launch_pat
     if (pid == 0) {
         setenv("COLORTERM", "truecolor", 1);
         setenv("TERM", "xterm-256color", 1);
-        execl(binary.c_str(), binary.c_str(), launch_path.c_str(),
+        execl(binary.c_str(), binary.c_str(), launchPath.c_str(),
               static_cast<char*>(nullptr));
         _exit(127);
     }
     ::fcntl(master, F_SETFL, ::fcntl(master, F_GETFL, 0) | O_NONBLOCK);
 
     std::string output;
-    auto const hard_deadline =
+    auto const hardDeadline =
         std::chrono::steady_clock::now() + std::chrono::seconds{4};
-    auto last_data = std::chrono::steady_clock::now();
+    auto lastData = std::chrono::steady_clock::now();
     char buffer[4096];
-    while (std::chrono::steady_clock::now() < hard_deadline) {
+    while (std::chrono::steady_clock::now() < hardDeadline) {
         pollfd pfd{master, POLLIN, 0};
         ::poll(&pfd, 1, 50);
         bool got = false;
@@ -287,9 +287,9 @@ std::string capture_frames(std::string const& binary, fs::path const& launch_pat
             }
         }
         auto const now = std::chrono::steady_clock::now();
-        if (got) last_data = now;
+        if (got) lastData = now;
         // Settled: both frames drawn and quiet for a spell.
-        else if (!output.empty() && now - last_data > std::chrono::milliseconds{400}) {
+        else if (!output.empty() && now - lastData > std::chrono::milliseconds{400}) {
             break;
         }
     }
@@ -304,7 +304,7 @@ std::string capture_frames(std::string const& binary, fs::path const& launch_pat
 // matches text + resolved color, and every continuation cell decodes to a blank
 // (the wide glyph advanced the cursor past it — this locks wide-glyph handling).
 // Returns the number of content cells compared.
-int compare_screen(DecodedScreen const& screen, ssg::CellGrid const& grid) {
+int compareScreen(DecodedScreen const& screen, ssg::CellGrid const& grid) {
     ASSERT_EQ(screen.columns, grid.size.columns);
     ASSERT_EQ(screen.rows, grid.size.rows);
     int compared = 0;
@@ -320,8 +320,8 @@ int compare_screen(DecodedScreen const& screen, ssg::CellGrid const& grid) {
             }
             std::string const expected = cell.text.empty() ? " " : cell.text;
             ASSERT_EQ(decoded.text, expected);
-            ASSERT_TRUE(color_eq(decoded.foreground, grid.palette[cell.foreground]));
-            ASSERT_TRUE(color_eq(decoded.background, grid.palette[cell.background]));
+            ASSERT_TRUE(colorEq(decoded.foreground, grid.palette[cell.foreground]));
+            ASSERT_TRUE(colorEq(decoded.background, grid.palette[cell.background]));
             ++compared;
         }
     }
@@ -334,9 +334,9 @@ int compare_screen(DecodedScreen const& screen, ssg::CellGrid const& grid) {
 // the decoder faithfully models the renderer's output vocabulary before it is
 // trusted against the real binary.  (This uses the encoder only as a decoder
 // self-test, never as the parity oracle.)
-TEST(decoder_roundtrips_the_encoded_frame) {
-    auto root = make_fixture();
-    auto runtime = make_headless(root);
+TEST(decoderRoundtripsTheEncodedFrame) {
+    auto root = makeFixture();
+    auto runtime = makeHeadless(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     ASSERT_TRUE(runtime->dispatch(ssg::ClientId{1},
@@ -349,25 +349,25 @@ TEST(decoder_roundtrips_the_encoded_frame) {
     auto grid = ssg::render(*snapshot);
 
     auto encoded =
-        ssg::app::encode_ansi_frame(grid, ssg::ColorDepth::truecolor);
+        ssg::app::encode_ansi_frame(grid, ssg::ColorDepth::Truecolor);
     auto screen = decode(encoded, grid.size.columns, grid.size.rows);
-    compare_screen(screen, grid);
+    compareScreen(screen, grid);
     fs::remove_all(root);
 }
 
 // M11-2a: the real `ssg` binary's pty output, decoded independently, equals
 // render(snapshot) for the same headless session — text, resolved color, and
 // cursor.  The app adds no screen content.
-TEST(real_binary_output_matches_render_snapshot) {
-    auto root = make_fixture();
+TEST(realBinaryOutputMatchesRenderSnapshot) {
+    auto root = makeFixture();
     auto workspace = root / "workspace";
 
-    auto output = capture_frames(SSG_APP_BINARY, workspace);
+    auto output = captureFrames(SSG_APP_BINARY, workspace);
     ASSERT_TRUE(!output.empty());
     if (output.empty()) { fs::remove_all(root); return; }
     auto screen = decode(output, 80, 24);
 
-    auto runtime = make_headless(root);
+    auto runtime = makeHeadless(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) { fs::remove_all(root); return; }
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
@@ -375,7 +375,7 @@ TEST(real_binary_output_matches_render_snapshot) {
     if (!snapshot) { fs::remove_all(root); return; }
     auto grid = ssg::render(*snapshot);
 
-    ASSERT_TRUE(compare_screen(screen, grid) > 0);
+    ASSERT_TRUE(compareScreen(screen, grid) > 0);
 
     // The captured hardware cursor equals the rendered caret.
     ASSERT_EQ(screen.cursor.has_value(), grid.caret.has_value());
@@ -390,19 +390,19 @@ TEST(real_binary_output_matches_render_snapshot) {
 // assert the decoded screen still equals render(snapshot).  This exercises the
 // decoder's wide-glyph advance and the encoder's continuation-cell handling
 // end-to-end (the ASCII case above never advances the cursor by two).
-TEST(real_binary_wide_glyph_output_matches_render) {
-    auto root = make_fixture();
+TEST(realBinaryWideGlyphOutputMatchesRender) {
+    auto root = makeFixture();
     auto wide = root / "workspace" / "wide.txt";
     std::ofstream{wide, std::ios::binary}
         << "\xe6\xbc\xa2\xe5\xad\x97\xe6\x97\xa5\xe6\x9c\xac\xe8\xaa\x9e ascii\n"
         << "second line\n";  // U+6F22 U+5B57 U+65E5 U+672C U+8A9E ("漢字日本語")
 
-    auto output = capture_frames(SSG_APP_BINARY, wide);
+    auto output = captureFrames(SSG_APP_BINARY, wide);
     ASSERT_TRUE(!output.empty());
     if (output.empty()) { fs::remove_all(root); return; }
     auto screen = decode(output, 80, 24);
 
-    auto runtime = make_headless(root);
+    auto runtime = makeHeadless(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) { fs::remove_all(root); return; }
     ASSERT_TRUE(runtime->dispatch(ssg::ClientId{1},
@@ -416,20 +416,20 @@ TEST(real_binary_wide_glyph_output_matches_render) {
 
     // Sanity: the rendered document actually contains wide (continuation) cells,
     // so this case genuinely exercises wide-glyph handling.
-    bool has_continuation = false;
+    bool hasContinuation = false;
     for (auto const& cell : grid.cells) {
-        if (cell.continuation) { has_continuation = true; break; }
+        if (cell.continuation) { hasContinuation = true; break; }
     }
-    ASSERT_TRUE(has_continuation);
+    ASSERT_TRUE(hasContinuation);
 
-    ASSERT_TRUE(compare_screen(screen, grid) > 0);
+    ASSERT_TRUE(compareScreen(screen, grid) > 0);
     fs::remove_all(root);
 }
 
 int main() {
-    RUN(decoder_roundtrips_the_encoded_frame);
-    RUN(real_binary_output_matches_render_snapshot);
-    RUN(real_binary_wide_glyph_output_matches_render);
+    RUN(decoderRoundtripsTheEncodedFrame);
+    RUN(realBinaryOutputMatchesRenderSnapshot);
+    RUN(realBinaryWideGlyphOutputMatchesRender);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

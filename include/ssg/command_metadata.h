@@ -13,6 +13,6 @@ namespace ssg {
 // The human-readable label for a command id.  Curated ids get an authored label;
 // any other id is humanized from its segments (e.g. "cursor.line_down" ->
 // "Cursor Line Down") so a palette candidate never shows a raw dotted id.
-[[nodiscard]] std::string command_label(std::string_view command_id);
+[[nodiscard]] std::string commandLabel(std::string_view commandId);
 
 }  // namespace ssg

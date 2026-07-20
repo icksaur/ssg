@@ -67,7 +67,7 @@ private:
 // All three coordinates must be consistent for the same revision; stale or
 // inconsistent positions produce a typed protocol error, not a guessed result.
 struct DocumentPosition {
-    ByteOffset byte_offset;
+    ByteOffset byteOffset;
     LineIndex  line;
     CellIndex  cell;
 
@@ -77,9 +77,9 @@ struct DocumentPosition {
 // Document editing mode (spec §Design, DocumentMode).
 // The set of modes is closed; all values are always valid.
 enum class DocumentMode : uint8_t {
-    edit,       // Normal mutable editing.
-    read_only,  // Mutations rejected; commands report actionable status.
-    diff,       // Live diff view; mutations rejected.
+    Edit,
+    ReadOnly,
+    Diff,
 };
 
 }  // namespace ssg

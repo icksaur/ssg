@@ -13,19 +13,19 @@
 namespace ssg {
 
 enum class EditCommand : std::uint8_t {
-    indent,
-    outdent,
-    duplicate_line,
-    move_line_up,
-    move_line_down,
-    delete_line,
-    join_lines,
-    uppercase,
-    lowercase,
-    swap_case,
-    sort_lines,
-    transpose,
-    toggle_comment,
+    Indent,
+    Outdent,
+    DuplicateLine,
+    MoveLineUp,
+    MoveLineDown,
+    DeleteLine,
+    JoinLines,
+    Uppercase,
+    Lowercase,
+    SwapCase,
+    SortLines,
+    Transpose,
+    ToggleComment,
 };
 
 struct EditCommandDescriptor {
@@ -45,47 +45,47 @@ public:
     descriptors() const noexcept;
 
 private:
-    friend EditCommandSuiteCommandSet edit_command_suite_command_set();
+    friend EditCommandSuiteCommandSet editCommandSuiteCommandSet();
     EditCommandSuiteCommandSet();
 
     const std::array<EditCommandDescriptor, 13> descriptors_;
 };
 
 [[nodiscard]] EditCommandSuiteCommandSet
-edit_command_suite_command_set();
+editCommandSuiteCommandSet();
 
 struct EditCommandSettings {
-    IndentStyle indent_style;
-    std::uint32_t indent_width;
-    std::uint32_t tab_width;
-    LineEnding line_ending;
-    std::string line_comment_token;
+    IndentStyle indentStyle;
+    std::uint32_t indentWidth;
+    std::uint32_t tabWidth;
+    LineEnding lineEnding;
+    std::string lineCommentToken;
 
     bool operator==(const EditCommandSettings&) const = default;
 };
 
 enum class EditCommandError : std::uint8_t {
-    none,
-    read_only,
-    diff,
-    invalid_selection,
-    invalid_settings,
-    unknown_command,
+    None,
+    ReadOnly,
+    Diff,
+    InvalidSelection,
+    InvalidSettings,
+    UnknownCommand,
 };
 
 struct EditCommandResult {
     EditCommandError error;
     std::optional<EditTransaction> transaction;
     std::optional<SelectionSet> selections;
-    std::string resulting_text;
+    std::string resultingText;
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == EditCommandError::none;
+        return error == EditCommandError::None;
     }
 };
 
-[[nodiscard]] EditCommandResult apply_edit_command(
+[[nodiscard]] EditCommandResult applyEditCommand(
     const DocumentSnapshot& document, const SelectionSet& selections,
     EditCommandSettings settings, EditCommand command);
 

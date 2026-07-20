@@ -27,13 +27,13 @@ struct ExpectedCommand {
 struct CatalogCommand {
     std::string id;
     std::string owner;
-    std::vector<std::string> required_capabilities;
+    std::vector<std::string> requiredCapabilities;
     bool lua{};
     bool keymap{};
     bool palette{};
 };
 
-constexpr auto expected_commands = std::to_array<ExpectedCommand>({
+constexpr auto kExpectedCommands = std::to_array<ExpectedCommand>({
     {"text.insert", "text-input-commands"},
     {"text.newline", "text-input-commands"},
     {"text.delete_backward", "text-input-commands"},
@@ -204,7 +204,7 @@ constexpr auto expected_commands = std::to_array<ExpectedCommand>({
     {"diff.open_file", "diff-model"},
 });
 
-constexpr auto expected_category_counts =
+constexpr auto kExpectedCategoryCounts =
     std::to_array<std::pair<std::string_view, std::size_t>>({
         {"text", 6},       {"cursor", 13},   {"select", 20},
         {"edit", 15},      {"clipboard", 3}, {"view", 7},
@@ -218,7 +218,7 @@ constexpr auto expected_category_counts =
         {"settings", 6},   {"follow_edits", 2}, {"diff", 3},
     });
 
-static_assert(expected_commands.size() == 168);
+static_assert(kExpectedCommands.size() == 168);
 
 std::optional<std::string> field(const std::string& object,
                                  const std::string& name) {
@@ -231,7 +231,7 @@ std::optional<std::string> field(const std::string& object,
     return match[1].str();
 }
 
-std::optional<bool> boolean_field(const std::string& object,
+std::optional<bool> booleanField(const std::string& object,
                                   const std::string& name) {
     const std::regex expression{"\"" + name + R"("\s*:\s*(true|false))"};
     std::smatch match;
@@ -241,7 +241,7 @@ std::optional<bool> boolean_field(const std::string& object,
     return match[1].str() == "true";
 }
 
-std::optional<std::vector<std::string>> capabilities_field(
+std::optional<std::vector<std::string>> capabilitiesField(
     const std::string& object) {
     const std::regex expression{R"("required_capabilities"\s*:\s*\[([^\]]*)\])"};
     std::smatch match;
@@ -250,16 +250,16 @@ std::optional<std::vector<std::string>> capabilities_field(
     }
     std::vector<std::string> capabilities;
     const std::string contents = match[1].str();
-    const std::regex value_expression{R"regex("([^"]+)")regex"};
+    const std::regex valueExpression{R"regex("([^"]+)")regex"};
     for (auto it = std::sregex_iterator(contents.begin(), contents.end(),
-                                        value_expression);
+                                        valueExpression);
          it != std::sregex_iterator(); ++it) {
         capabilities.push_back((*it)[1].str());
     }
     return capabilities;
 }
 
-std::optional<std::vector<CatalogCommand>> load_catalog() {
+std::optional<std::vector<CatalogCommand>> loadCatalog() {
     std::ifstream input{SSG_REQUIRED_COMMANDS_PATH};
     if (!input) {
         return std::nullopt;
@@ -269,9 +269,9 @@ std::optional<std::vector<CatalogCommand>> load_catalog() {
     const auto json = buffer.str();
 
     std::vector<CatalogCommand> commands;
-    const std::regex object_expression{R"(\{([^{}]*)\})"};
+    const std::regex objectExpression{R"(\{([^{}]*)\})"};
     for (auto it = std::sregex_iterator(json.begin(), json.end(),
-                                        object_expression);
+                                        objectExpression);
          it != std::sregex_iterator(); ++it) {
         const auto object = (*it)[1].str();
         const auto id = field(object, "id");
@@ -279,10 +279,10 @@ std::optional<std::vector<CatalogCommand>> load_catalog() {
             continue;
         }
         const auto owner = field(object, "owner");
-        const auto capabilities = capabilities_field(object);
-        const auto lua = boolean_field(object, "lua");
-        const auto keymap = boolean_field(object, "keymap");
-        const auto palette = boolean_field(object, "palette");
+        const auto capabilities = capabilitiesField(object);
+        const auto lua = booleanField(object, "lua");
+        const auto keymap = booleanField(object, "keymap");
+        const auto palette = booleanField(object, "palette");
         if (!owner || !capabilities || !lua || !keymap || !palette) {
             return std::nullopt;
         }
@@ -290,26 +290,26 @@ std::optional<std::vector<CatalogCommand>> load_catalog() {
             {*id, *owner, *capabilities, *lua, *keymap, *palette});
     }
 
-    const std::regex id_token{R"("id"\s*:)"};
-    const auto id_count = static_cast<std::size_t>(
-        std::distance(std::sregex_iterator(json.begin(), json.end(), id_token),
+    const std::regex idToken{R"("id"\s*:)"};
+    const auto idCount = static_cast<std::size_t>(
+        std::distance(std::sregex_iterator(json.begin(), json.end(), idToken),
                       std::sregex_iterator()));
-    if (id_count != commands.size()) {
+    if (idCount != commands.size()) {
         return std::nullopt;
     }
     return commands;
 }
 
-std::map<std::string, ExpectedCommand> expected_by_id() {
+std::map<std::string, ExpectedCommand> expectedById() {
     std::map<std::string, ExpectedCommand> expected;
-    for (const auto& command : expected_commands) {
+    for (const auto& command : kExpectedCommands) {
         expected.emplace(std::string{command.id}, command);
     }
     return expected;
 }
 
-std::set<std::string> feature_spec_commands() {
-    const std::regex command_id{
+std::set<std::string> featureSpecCommands() {
+    const std::regex commandId{
         R"(^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$)"};
     const std::regex backticked{
         R"(`([^`]+)`)"};
@@ -327,7 +327,7 @@ std::set<std::string> feature_spec_commands() {
                                                backticked};
              match != std::sregex_iterator{}; ++match) {
             const auto token = (*match)[1].str();
-            if (std::regex_match(token, command_id) && !token.ends_with(".h")) {
+            if (std::regex_match(token, commandId) && !token.ends_with(".h")) {
                 result.insert(token);
             }
         }
@@ -335,47 +335,47 @@ std::set<std::string> feature_spec_commands() {
     return result;
 }
 
-TEST(catalog_exactly_matches_independent_id_and_owner_oracle) {
-    const auto catalog = load_catalog();
+TEST(catalogExactlyMatchesIndependentIdAndOwnerOracle) {
+    const auto catalog = loadCatalog();
     ASSERT_TRUE(catalog.has_value());
     if (!catalog) {
         return;
     }
 
-    const auto expected = expected_by_id();
-    ASSERT_EQ(expected.size(), expected_commands.size());
-    ASSERT_EQ(catalog->size(), expected_commands.size());
+    const auto expected = expectedById();
+    ASSERT_EQ(expected.size(), kExpectedCommands.size());
+    ASSERT_EQ(catalog->size(), kExpectedCommands.size());
 
     std::set<std::string> seen;
     for (const auto& command : *catalog) {
-        const auto expected_command = expected.find(command.id);
-        ASSERT_TRUE(expected_command != expected.end());
-        if (expected_command != expected.end()) {
+        const auto expectedCommand = expected.find(command.id);
+        ASSERT_TRUE(expectedCommand != expected.end());
+        if (expectedCommand != expected.end()) {
             ASSERT_EQ(command.owner,
-                      std::string{expected_command->second.owner});
+                      std::string{expectedCommand->second.owner});
         }
         ASSERT_TRUE(seen.insert(command.id).second);
         ASSERT_FALSE(command.owner.empty());
     }
-    ASSERT_EQ(seen.size(), expected_commands.size());
+    ASSERT_EQ(seen.size(), kExpectedCommands.size());
 }
 
-TEST(feature_spec_command_union_exactly_matches_catalog) {
-    const auto catalog = load_catalog();
+TEST(featureSpecCommandUnionExactlyMatchesCatalog) {
+    const auto catalog = loadCatalog();
     ASSERT_TRUE(catalog.has_value());
     if (!catalog) {
         return;
     }
 
-    std::set<std::string> catalog_ids;
+    std::set<std::string> catalogIds;
     for (const auto& command : *catalog) {
-        catalog_ids.insert(command.id);
+        catalogIds.insert(command.id);
     }
-    ASSERT_EQ(feature_spec_commands(), catalog_ids);
+    ASSERT_EQ(featureSpecCommands(), catalogIds);
 }
 
-TEST(category_counts_are_independently_fixed) {
-    const auto catalog = load_catalog();
+TEST(categoryCountsAreIndependentlyFixed) {
+    const auto catalog = loadCatalog();
     ASSERT_TRUE(catalog.has_value());
     if (!catalog) {
         return;
@@ -390,31 +390,31 @@ TEST(category_counts_are_independently_fixed) {
         }
     }
 
-    ASSERT_EQ(actual.size(), expected_category_counts.size());
-    for (const auto& [category, count] : expected_category_counts) {
+    ASSERT_EQ(actual.size(), kExpectedCategoryCounts.size());
+    for (const auto& [category, count] : kExpectedCategoryCounts) {
         ASSERT_EQ(actual[std::string{category}], count);
     }
 }
 
-TEST(ids_are_exact_not_fuzzy_and_all_fields_are_owned) {
-    const auto catalog = load_catalog();
+TEST(idsAreExactNotFuzzyAndAllFieldsAreOwned) {
+    const auto catalog = loadCatalog();
     ASSERT_TRUE(catalog.has_value());
     if (!catalog) {
         return;
     }
 
-    const auto expected = expected_by_id();
-    const std::regex valid_id{
+    const auto expected = expectedById();
+    const std::regex validId{
         R"(^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$)"};
     for (const auto& command : *catalog) {
-        ASSERT_TRUE(std::regex_match(command.id, valid_id));
+        ASSERT_TRUE(std::regex_match(command.id, validId));
         ASSERT_TRUE(expected.contains(command.id));
         ASSERT_FALSE(command.owner.empty());
     }
 }
 
-TEST(capability_and_surface_exclusions_are_exact) {
-    const auto catalog = load_catalog();
+TEST(capabilityAndSurfaceExclusionsAreExact) {
+    const auto catalog = loadCatalog();
     ASSERT_TRUE(catalog.has_value());
     if (!catalog) {
         return;
@@ -422,7 +422,7 @@ TEST(capability_and_surface_exclusions_are_exact) {
 
     for (const auto& command : *catalog) {
         if (command.id == "file.open_dropped_content") {
-            ASSERT_EQ(command.required_capabilities,
+            ASSERT_EQ(command.requiredCapabilities,
                       std::vector<std::string>{"local_file_drop"});
             ASSERT_FALSE(command.lua);
             ASSERT_FALSE(command.keymap);
@@ -432,7 +432,7 @@ TEST(capability_and_surface_exclusions_are_exact) {
             // Client-fulfilment commands: the client edits the query/replacement
             // and reports the full next string, so each carries a payload and is
             // neither keymap- nor palette-reachable, but remains Lua-scriptable.
-            ASSERT_TRUE(command.required_capabilities.empty());
+            ASSERT_TRUE(command.requiredCapabilities.empty());
             ASSERT_TRUE(command.lua);
             ASSERT_FALSE(command.keymap);
             ASSERT_FALSE(command.palette);
@@ -441,7 +441,7 @@ TEST(capability_and_surface_exclusions_are_exact) {
             // by id, so it carries a node-id payload and is neither keymap- nor
             // palette-reachable (the keyboard selects via next/previous), but
             // remains Lua-scriptable.
-            ASSERT_TRUE(command.required_capabilities.empty());
+            ASSERT_TRUE(command.requiredCapabilities.empty());
             ASSERT_TRUE(command.lua);
             ASSERT_FALSE(command.keymap);
             ASSERT_FALSE(command.palette);
@@ -450,12 +450,12 @@ TEST(capability_and_surface_exclusions_are_exact) {
             // so it carries a scroll-lines payload and is neither keymap- nor
             // palette-reachable (the keyboard scrolls via next/previous, which
             // move the selection), but remains Lua-scriptable.
-            ASSERT_TRUE(command.required_capabilities.empty());
+            ASSERT_TRUE(command.requiredCapabilities.empty());
             ASSERT_TRUE(command.lua);
             ASSERT_FALSE(command.keymap);
             ASSERT_FALSE(command.palette);
         } else {
-            ASSERT_TRUE(command.required_capabilities.empty());
+            ASSERT_TRUE(command.requiredCapabilities.empty());
             ASSERT_TRUE(command.lua);
             ASSERT_TRUE(command.keymap);
             ASSERT_TRUE(command.palette);
@@ -466,11 +466,11 @@ TEST(capability_and_surface_exclusions_are_exact) {
 } // namespace
 
 int main() {
-    RUN(catalog_exactly_matches_independent_id_and_owner_oracle);
-    RUN(feature_spec_command_union_exactly_matches_catalog);
-    RUN(category_counts_are_independently_fixed);
-    RUN(ids_are_exact_not_fuzzy_and_all_fields_are_owned);
-    RUN(capability_and_surface_exclusions_are_exact);
+    RUN(catalogExactlyMatchesIndependentIdAndOwnerOracle);
+    RUN(featureSpecCommandUnionExactlyMatchesCatalog);
+    RUN(categoryCountsAreIndependentlyFixed);
+    RUN(idsAreExactNotFuzzyAndAllFieldsAreOwned);
+    RUN(capabilityAndSurfaceExclusionsAreExact);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

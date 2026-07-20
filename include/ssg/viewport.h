@@ -20,41 +20,41 @@ struct ViewportDimensions {
 };
 
 struct VisualRow {
-    uint32_t logical_line;
-    uint32_t first_span;
-    uint32_t span_count;
-    CellIndex start_cell;
-    uint32_t content_cells;
-    uint32_t visible_cells;
+    uint32_t logicalLine;
+    uint32_t firstSpan;
+    uint32_t spanCount;
+    CellIndex startCell;
+    uint32_t contentCells;
+    uint32_t visibleCells;
     // Document-absolute byte offset of this VISUAL row's end — the position a
     // click at/past the row's last content cell takes (M8 click-past-EOL).  For a
     // final/unwrapped visual row this is the logical end-of-line (the newline byte,
     // or text.size() for the last line without a trailing newline); for an interior
     // wrapped row it is the wrap boundary; for an empty line it is the line start.
     // Always a valid document position.
-    uint32_t end_byte_offset;
+    uint32_t endByteOffset;
 
     bool operator==(const VisualRow&) const noexcept = default;
 };
 
 struct CellHitTarget {
-    uint32_t viewport_row;
-    uint32_t viewport_column;
-    uint32_t logical_line;
+    uint32_t viewportRow;
+    uint32_t viewportColumn;
+    uint32_t logicalLine;
     CellIndex cell;
-    uint32_t byte_offset;
-    uint32_t byte_len;
+    uint32_t byteOffset;
+    uint32_t byteLen;
 
     bool operator==(const CellHitTarget&) const noexcept = default;
 };
 
 struct ScrollbarMetrics {
-    uint32_t total_rows;
-    uint32_t viewport_rows;
-    uint32_t first_row;
-    uint32_t maximum_first_row;
-    uint32_t thumb_start;
-    uint32_t thumb_size;
+    uint32_t totalRows;
+    uint32_t viewportRows;
+    uint32_t firstRow;
+    uint32_t maximumFirstRow;
+    uint32_t thumbStart;
+    uint32_t thumbSize;
 
     bool operator==(const ScrollbarMetrics&) const noexcept = default;
 };
@@ -65,16 +65,16 @@ struct ScrollbarMetrics {
 // `thumb_start`, and `thumb_size` collapse to a no-thumb sentinel.  Shared by
 // every scrollable region (editor, tree, palette) so thumb math lives in one
 // place (see doc/spec-scroll.md).
-ScrollbarMetrics scrollbar_metrics(uint32_t total_rows, uint32_t viewport_rows,
-                                   uint32_t first_row);
+ScrollbarMetrics scrollbarMetrics(uint32_t totalRows, uint32_t viewportRows,
+                                   uint32_t firstRow);
 
 // A resolved scroll view for a simple list region: the clamped first visible
 // item, how many items are visible, and the scrollbar geometry.  This is the
 // generalized primitive the tree and palette use, mirroring what
 // `compute_viewport` produces for the editor.
 struct ListScrollView {
-    uint32_t first_visible;
-    uint32_t visible_count;
+    uint32_t firstVisible;
+    uint32_t visibleCount;
     ScrollbarMetrics scrollbar;
 
     bool operator==(const ListScrollView&) const noexcept = default;
@@ -88,25 +88,25 @@ struct ListScrollView {
 // `keep_selection_visible == false` the (clamped) `first_visible` is honored
 // verbatim and the selection may fall outside the window, exactly as the editor
 // caret can.  `selected` is an absolute item index.
-ListScrollView compute_list_scroll_view(uint32_t total_items,
-                                        uint32_t viewport_rows,
-                                        uint32_t first_visible,
+ListScrollView computeListScrollView(uint32_t totalItems,
+                                        uint32_t viewportRows,
+                                        uint32_t firstVisible,
                                         std::optional<uint32_t> selected,
-                                        bool keep_selection_visible);
+                                        bool keepSelectionVisible);
 
 
 struct ViewportViewState {
     ViewportDimensions dimensions;
-    uint32_t first_visual_row;
+    uint32_t firstVisualRow;
     // The horizontal scroll offset in cells (word wrap OFF only; always 0 when
     // word wrap is on, since wrapped lines never scroll horizontally).  All
     // visible rows share this single per-pane offset.  It snaps to a grapheme
     // boundary: the leftmost visible cell is the first span start >= the requested
     // offset, so a wide cluster is never split (M12 VP-H / Decision A / H0).
-    uint32_t first_visual_column;
-    uint32_t total_visual_rows;
-    std::vector<VisualRow> visible_rows;
-    std::vector<CellHitTarget> hit_targets;
+    uint32_t firstVisualColumn;
+    uint32_t totalVisualRows;
+    std::vector<VisualRow> visibleRows;
+    std::vector<CellHitTarget> hitTargets;
     ScrollbarMetrics scrollbar;
 
     bool operator==(const ViewportViewState&) const noexcept = default;
@@ -119,10 +119,10 @@ struct ViewportDelta {
     bool operator==(const ViewportDelta&) const noexcept = default;
 };
 
-ViewportViewState compute_viewport(
-    std::span<const CellRun> logical_lines,
+ViewportViewState computeViewport(
+    std::span<const CellRun> logicalLines,
     ViewportDimensions dimensions,
-    uint32_t requested_first_visual_row = 0);
+    uint32_t requestedFirstVisualRow = 0);
 
 // Word-wrap-OFF viewport projection.  Builds the SAME ViewportViewState shape as
 // compute_viewport for a NON-wrapping document, but in O(visible rows) grapheme
@@ -134,20 +134,20 @@ ViewportViewState compute_viewport(
 // compute_viewport(active_cell_runs(document_text), dimensions, first_row) — the
 // reference oracle (INV-projection-equivalence).  `tab_width` must match the full
 // path's (4 today).  Hit-target byte offsets are document-absolute.
-ViewportViewState compute_viewport_unwrapped(
-    std::string_view document_text,
+ViewportViewState computeViewportUnwrapped(
+    std::string_view documentText,
     ViewportDimensions dimensions,
-    uint32_t requested_first_visual_row,
-    uint32_t requested_first_visual_column,
-    int tab_width);
+    uint32_t requestedFirstVisualRow,
+    uint32_t requestedFirstVisualColumn,
+    int tabWidth);
 
-ViewportViewState scroll_viewport_by(
-    std::span<const CellRun> logical_lines,
+ViewportViewState scrollViewportBy(
+    std::span<const CellRun> logicalLines,
     ViewportDimensions dimensions,
-    uint32_t current_first_visual_row,
-    int64_t row_delta);
+    uint32_t currentFirstVisualRow,
+    int64_t rowDelta);
 
-ViewportDelta derive_viewport_delta(const ViewportViewState& previous,
+ViewportDelta deriveViewportDelta(const ViewportViewState& previous,
                                     const ViewportViewState& current);
 
 }  // namespace ssg

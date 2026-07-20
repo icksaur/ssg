@@ -14,30 +14,30 @@
 namespace ssg {
 
 struct LspFrameConfig {
-    std::size_t maximum_header_bytes = 8 * 1024;
-    std::size_t maximum_message_bytes = 4 * 1024 * 1024;
+    std::size_t maximumHeaderBytes = 8 * 1024;
+    std::size_t maximumMessageBytes = 4 * 1024 * 1024;
 };
 
 enum class LspFrameError : std::uint8_t {
-    none,
-    header_too_large,
-    missing_content_length,
-    duplicate_content_length,
-    invalid_content_length,
-    message_too_large,
-    decoder_failed,
+    None,
+    HeaderTooLarge,
+    MissingContentLength,
+    DuplicateContentLength,
+    InvalidContentLength,
+    MessageTooLarge,
+    DecoderFailed,
 };
 
 struct LspFrameResult {
     std::vector<std::string> messages;
-    LspFrameError error = LspFrameError::none;
+    LspFrameError error = LspFrameError::None;
     std::string message;
     [[nodiscard]] bool accepted() const noexcept {
-        return error == LspFrameError::none;
+        return error == LspFrameError::None;
     }
 };
 
-[[nodiscard]] std::string encode_lsp_frame(std::string_view payload);
+[[nodiscard]] std::string encodeLspFrame(std::string_view payload);
 
 class LspFrameDecoder {
 public:
@@ -57,33 +57,33 @@ struct LspPosition {
 };
 
 enum class LspPositionError : std::uint8_t {
-    none,
-    invalid_utf8,
-    invalid_utf8_boundary,
-    line_out_of_range,
-    character_out_of_range,
-    split_surrogate,
+    None,
+    InvalidUtf8,
+    InvalidUtf8Boundary,
+    LineOutOfRange,
+    CharacterOutOfRange,
+    SplitSurrogate,
 };
 
 struct LspPositionResult {
     LspPosition position;
-    LspPositionError error = LspPositionError::none;
+    LspPositionError error = LspPositionError::None;
     [[nodiscard]] bool accepted() const noexcept {
-        return error == LspPositionError::none;
+        return error == LspPositionError::None;
     }
 };
 
 struct LspByteOffsetResult {
     ByteOffset offset;
-    LspPositionError error = LspPositionError::none;
+    LspPositionError error = LspPositionError::None;
     [[nodiscard]] bool accepted() const noexcept {
-        return error == LspPositionError::none;
+        return error == LspPositionError::None;
     }
 };
 
-[[nodiscard]] LspPositionResult byte_offset_to_lsp_position(
+[[nodiscard]] LspPositionResult byteOffsetToLspPosition(
     std::string_view utf8, ByteOffset offset);
-[[nodiscard]] LspByteOffsetResult lsp_position_to_byte_offset(
+[[nodiscard]] LspByteOffsetResult lspPositionToByteOffset(
     std::string_view utf8, LspPosition position);
 
 struct LspRange {
@@ -93,10 +93,10 @@ struct LspRange {
 };
 
 enum class LspDiagnosticSeverity : std::uint8_t {
-    error = 1,
-    warning = 2,
-    information = 3,
-    hint = 4,
+    Error = 1,
+    Warning = 2,
+    Information = 3,
+    Hint = 4,
 };
 
 struct LspDiagnostic {
@@ -123,37 +123,37 @@ struct LspSyncViewState {
 };
 
 struct LspSyncDelta {
-    Revision base_revision{0};
+    Revision baseRevision{0};
     Revision revision{0};
     std::optional<LspSyncViewState> state;
     friend bool operator==(const LspSyncDelta&, const LspSyncDelta&) = default;
 };
 
-[[nodiscard]] LspSyncDelta derive_lsp_sync_delta(
+[[nodiscard]] LspSyncDelta deriveLspSyncDelta(
     const LspSyncViewState& base, const LspSyncViewState& target);
 
 enum class LspSyncReplayError : std::uint8_t {
-    none,
-    stale_revision,
-    malformed_delta,
+    None,
+    StaleRevision,
+    MalformedDelta,
 };
 
 struct LspSyncReplayResult {
     std::optional<LspSyncViewState> state;
-    LspSyncReplayError error = LspSyncReplayError::none;
+    LspSyncReplayError error = LspSyncReplayError::None;
     [[nodiscard]] bool accepted() const noexcept { return state.has_value(); }
 };
 
-[[nodiscard]] LspSyncReplayResult replay_lsp_sync_delta(
+[[nodiscard]] LspSyncReplayResult replayLspSyncDelta(
     const LspSyncViewState& base, const LspSyncDelta& delta);
 
-enum class LspIoStatus : std::uint8_t { ok, timeout, closed, error };
+enum class LspIoStatus : std::uint8_t { Ok, Timeout, Closed, Error };
 
 struct LspIoResult {
-    LspIoStatus status = LspIoStatus::ok;
+    LspIoStatus status = LspIoStatus::Ok;
     std::string message;
     [[nodiscard]] bool accepted() const noexcept {
-        return status == LspIoStatus::ok;
+        return status == LspIoStatus::Ok;
     }
 };
 
@@ -163,59 +163,59 @@ public:
     [[nodiscard]] virtual LspIoResult write(
         std::string_view bytes, std::chrono::milliseconds timeout) = 0;
     [[nodiscard]] virtual LspIoResult read(
-        std::string& bytes, std::size_t maximum_bytes,
+        std::string& bytes, std::size_t maximumBytes,
         std::chrono::milliseconds timeout) = 0;
 };
 
 struct LspSyncConfig {
     LspFrameConfig framing;
-    std::size_t maximum_read_bytes = 64 * 1024;
-    std::size_t maximum_documents = 256;
-    std::size_t maximum_pending_requests = 256;
-    std::size_t maximum_diagnostics_per_document = 1000;
-    std::size_t maximum_diagnostic_message_bytes = 1024 * 1024;
-    std::size_t maximum_json_depth = 64;
+    std::size_t maximumReadBytes = 64 * 1024;
+    std::size_t maximumDocuments = 256;
+    std::size_t maximumPendingRequests = 256;
+    std::size_t maximumDiagnosticsPerDocument = 1000;
+    std::size_t maximumDiagnosticMessageBytes = 1024 * 1024;
+    std::size_t maximumJsonDepth = 64;
 };
 
 enum class LspLifecycleState : std::uint8_t {
-    stopped,
-    initializing,
-    ready,
-    shutting_down,
-    failed,
+    Stopped,
+    Initializing,
+    Ready,
+    ShuttingDown,
+    Failed,
 };
 
 enum class LspSyncError : std::uint8_t {
-    none,
-    invalid_state,
-    invalid_argument,
-    timeout,
-    stream_closed,
-    stream_error,
-    malformed_message,
-    stale_document,
-    unknown_document,
-    stale_diagnostics,
-    diagnostic_limit_exceeded,
-    request_limit_exceeded,
-    unknown_request,
-    server_error,
+    None,
+    InvalidState,
+    InvalidArgument,
+    Timeout,
+    StreamClosed,
+    StreamError,
+    MalformedMessage,
+    StaleDocument,
+    UnknownDocument,
+    StaleDiagnostics,
+    DiagnosticLimitExceeded,
+    RequestLimitExceeded,
+    UnknownRequest,
+    ServerError,
 };
 
 struct LspSyncResult {
-    LspSyncError error = LspSyncError::none;
+    LspSyncError error = LspSyncError::None;
     std::string message;
     [[nodiscard]] bool accepted() const noexcept {
-        return error == LspSyncError::none;
+        return error == LspSyncError::None;
     }
 };
 
 struct LspRequestResult {
     std::uint64_t id = 0;
-    LspSyncError error = LspSyncError::none;
+    LspSyncError error = LspSyncError::None;
     std::string message;
     [[nodiscard]] bool accepted() const noexcept {
-        return id != 0 && error == LspSyncError::none;
+        return id != 0 && error == LspSyncError::None;
     }
 };
 
@@ -229,15 +229,15 @@ struct LspDocumentSnapshot {
 };
 
 enum class LspCompletedResponseStatus : std::uint8_t {
-    result,
-    cancelled,
-    server_error,
+    Result,
+    Cancelled,
+    ServerError,
 };
 
 struct LspCompletedResponse {
     std::uint64_t id = 0;
-    LspCompletedResponseStatus status = LspCompletedResponseStatus::result;
-    std::string payload_json;
+    LspCompletedResponseStatus status = LspCompletedResponseStatus::Result;
+    std::string payloadJson;
     std::string message;
     friend bool operator==(const LspCompletedResponse&,
                            const LspCompletedResponse&) = default;
@@ -246,7 +246,7 @@ struct LspCompletedResponse {
 class LspSyncClient {
 public:
     LspSyncClient(LspByteStream& stream, LspSyncConfig config = {},
-                  std::chrono::milliseconds io_timeout =
+                  std::chrono::milliseconds ioTimeout =
                       std::chrono::milliseconds{100});
     ~LspSyncClient();
     LspSyncClient(const LspSyncClient&) = delete;
@@ -254,29 +254,29 @@ public:
     LspSyncClient(LspSyncClient&&) noexcept;
     LspSyncClient& operator=(LspSyncClient&&) noexcept;
 
-    [[nodiscard]] LspSyncResult initialize(std::string root_uri);
+    [[nodiscard]] LspSyncResult initialize(std::string rootUri);
     [[nodiscard]] LspSyncResult shutdown();
     [[nodiscard]] LspSyncResult poll();
 
-    [[nodiscard]] LspSyncResult open_document(
-        std::string uri, std::string language_id, Revision revision,
+    [[nodiscard]] LspSyncResult openDocument(
+        std::string uri, std::string languageId, Revision revision,
         std::string text);
-    [[nodiscard]] LspSyncResult change_document(
+    [[nodiscard]] LspSyncResult changeDocument(
         std::string_view uri, Revision revision, std::string text);
-    [[nodiscard]] LspSyncResult close_document(std::string_view uri);
-    [[nodiscard]] std::optional<std::int64_t> document_version(
+    [[nodiscard]] LspSyncResult closeDocument(std::string_view uri);
+    [[nodiscard]] std::optional<std::int64_t> documentVersion(
         std::string_view uri) const;
-    [[nodiscard]] std::optional<LspDocumentSnapshot> document_snapshot(
+    [[nodiscard]] std::optional<LspDocumentSnapshot> documentSnapshot(
         std::string_view uri) const;
 
     [[nodiscard]] LspRequestResult request(std::string method,
-                                           std::string params_json);
-    [[nodiscard]] LspSyncResult cancel(std::uint64_t request_id);
+                                           std::string paramsJson);
+    [[nodiscard]] LspSyncResult cancel(std::uint64_t requestId);
     [[nodiscard]] std::vector<LspCompletedResponse>
-    take_completed_responses();
+    takeCompletedResponses();
 
     [[nodiscard]] LspLifecycleState state() const noexcept;
-    [[nodiscard]] const LspSyncViewState& view_state() const noexcept;
+    [[nodiscard]] const LspSyncViewState& viewState() const noexcept;
 
 private:
     struct Impl;

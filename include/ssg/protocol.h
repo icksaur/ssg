@@ -23,33 +23,33 @@ struct ProtocolLimits {
     // Aggregate snapshots can contain the bounded text and binary values below;
     // keep the default envelope large enough to decode messages emitted by the
     // default encoder.
-    std::size_t max_message_bytes{32 * 1024 * 1024};
-    std::size_t max_insert_bytes{32 * 1024};
+    std::size_t maxMessageBytes{32 * 1024 * 1024};
+    std::size_t maxInsertBytes{32 * 1024};
 
     // Bounds enforced by the complete codec (Plan 6): a `ProtocolValue` wire
     // value tree is rejected rather than grown without limit.
-    std::size_t max_value_depth{32};
-    std::size_t max_collection_length{65536};
-    std::size_t max_text_bytes{8 * 1024 * 1024};
-    std::size_t max_bytes_length{16 * 1024 * 1024};
-    std::size_t max_binary_frame_bytes{16 * 1024 * 1024};
+    std::size_t maxValueDepth{32};
+    std::size_t maxCollectionLength{65536};
+    std::size_t maxTextBytes{8 * 1024 * 1024};
+    std::size_t maxBytesLength{16 * 1024 * 1024};
+    std::size_t maxBinaryFrameBytes{16 * 1024 * 1024};
 };
 
 enum class ProtocolError : std::uint8_t {
-    none,
-    message_too_large,
-    malformed_message,
-    unsupported_version,
-    unsupported_command,
-    insert_too_large,
-    truncated_message,
-    value_bounds_exceeded,
-    unsupported_message_kind,
-    binary_frame_too_large,
+    None,
+    MessageTooLarge,
+    MalformedMessage,
+    UnsupportedVersion,
+    UnsupportedCommand,
+    InsertTooLarge,
+    TruncatedMessage,
+    ValueBoundsExceeded,
+    UnsupportedMessageKind,
+    BinaryFrameTooLarge,
 };
 
 struct InsertRequest {
-    Revision base_revision;
+    Revision baseRevision;
     std::string text;
 
     bool operator==(InsertRequest const&) const = default;
@@ -61,30 +61,30 @@ struct DecodeInsertResult {
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == ProtocolError::none;
+        return error == ProtocolError::None;
     }
 };
 
 struct SliceResponse {
-    ProtocolError protocol_error;
-    CommandError command_error;
+    ProtocolError protocolError;
+    CommandError commandError;
     DocumentViewState snapshot;
     std::optional<DocumentDelta> delta;
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return protocol_error == ProtocolError::none &&
-               command_error == CommandError::none;
+        return protocolError == ProtocolError::None &&
+               commandError == CommandError::None;
     }
     bool operator==(SliceResponse const&) const = default;
 };
 
-[[nodiscard]] std::string encode_insert_request(InsertRequest const& request);
-[[nodiscard]] DecodeInsertResult decode_insert_request(
+[[nodiscard]] std::string encodeInsertRequest(InsertRequest const& request);
+[[nodiscard]] DecodeInsertResult decodeInsertRequest(
     std::string_view message, ProtocolLimits limits = {});
-[[nodiscard]] std::string encode_slice_response(
+[[nodiscard]] std::string encodeSliceResponse(
     SliceResponse const& response);
-[[nodiscard]] SliceResponse decode_slice_response(
+[[nodiscard]] SliceResponse decodeSliceResponse(
     std::string_view message, ProtocolLimits limits = {});
 
 class CoreEditorSlice {
@@ -96,8 +96,8 @@ public:
     CoreEditorSlice& operator=(CoreEditorSlice const&) = delete;
 
     [[nodiscard]] bool attach(InvocationPrincipal principal);
-    [[nodiscard]] bool detach(ClientId client_id);
-    [[nodiscard]] SliceResponse execute(ClientId client_id,
+    [[nodiscard]] bool detach(ClientId clientId);
+    [[nodiscard]] SliceResponse execute(ClientId clientId,
                                         InsertRequest const& request);
     [[nodiscard]] DocumentViewState snapshot() const;
 
@@ -106,7 +106,6 @@ private:
     std::unique_ptr<Impl> impl_;
 };
 
-// ---------------------------------------------------------------------------
 // Complete protocol codec (Plan 6): a bounded, versioned wire value tree, a
 // typed command-argument registry over it, aggregate snapshot/delta
 // reconstruction, clipboard/status messages, and a binary-frame envelope.
@@ -121,14 +120,14 @@ private:
 class ProtocolValue {
 public:
     enum class Kind : std::uint8_t {
-        null_value,
-        boolean,
-        integer,
-        unsigned_integer,
-        text,
-        bytes,
-        array,
-        object,
+        NullValue,
+        Boolean,
+        Integer,
+        UnsignedInteger,
+        Text,
+        Bytes,
+        Array,
+        Object,
     };
 
     using Array = std::vector<ProtocolValue>;
@@ -137,24 +136,24 @@ public:
 
     ProtocolValue();
 
-    [[nodiscard]] static ProtocolValue make_null();
-    [[nodiscard]] static ProtocolValue make_bool(bool value);
-    [[nodiscard]] static ProtocolValue make_int(std::int64_t value);
-    [[nodiscard]] static ProtocolValue make_uint(std::uint64_t value);
-    [[nodiscard]] static ProtocolValue make_text(std::string value);
-    [[nodiscard]] static ProtocolValue make_bytes(
+    [[nodiscard]] static ProtocolValue makeNull();
+    [[nodiscard]] static ProtocolValue makeBool(bool value);
+    [[nodiscard]] static ProtocolValue makeInt(std::int64_t value);
+    [[nodiscard]] static ProtocolValue makeUint(std::uint64_t value);
+    [[nodiscard]] static ProtocolValue makeText(std::string value);
+    [[nodiscard]] static ProtocolValue makeBytes(
         std::vector<std::uint8_t> value);
-    [[nodiscard]] static ProtocolValue make_array(Array items);
-    [[nodiscard]] static ProtocolValue make_object(Object fields);
+    [[nodiscard]] static ProtocolValue makeArray(Array items);
+    [[nodiscard]] static ProtocolValue makeObject(Object fields);
 
     [[nodiscard]] Kind kind() const noexcept;
-    [[nodiscard]] std::optional<bool> as_bool() const;
-    [[nodiscard]] std::optional<std::int64_t> as_int() const;
-    [[nodiscard]] std::optional<std::uint64_t> as_uint() const;
-    [[nodiscard]] std::string const* as_text() const;
-    [[nodiscard]] std::vector<std::uint8_t> const* as_bytes() const;
-    [[nodiscard]] Array const* as_array() const;
-    [[nodiscard]] Object const* as_object() const;
+    [[nodiscard]] std::optional<bool> asBool() const;
+    [[nodiscard]] std::optional<std::int64_t> asInt() const;
+    [[nodiscard]] std::optional<std::uint64_t> asUint() const;
+    [[nodiscard]] std::string const* asText() const;
+    [[nodiscard]] std::vector<std::uint8_t> const* asBytes() const;
+    [[nodiscard]] Array const* asArray() const;
+    [[nodiscard]] Object const* asObject() const;
     // Looks up a field by key when kind() == object; nullptr if absent or
     // this value is not an object.
     [[nodiscard]] ProtocolValue const* field(std::string_view key) const;
@@ -168,7 +167,6 @@ private:
     explicit ProtocolValue(std::shared_ptr<Storage> storage);
 };
 
-// ---------------------------------------------------------------------------
 // Command argument codec registry: binds every assembled P0 command ID
 // (`p0_command_descriptors()`) to a converter between its typed std::any
 // payload and `ProtocolValue`. There is no untyped fallback; construction
@@ -199,12 +197,12 @@ public:
     CommandArgumentCodecRegistry& operator=(
         CommandArgumentCodecRegistry&&) noexcept;
 
-    [[nodiscard]] bool contains(std::string_view command_id) const;
+    [[nodiscard]] bool contains(std::string_view commandId) const;
     // Throws std::invalid_argument for an unknown command_id.
-    [[nodiscard]] ProtocolValue encode_argument(std::string_view command_id,
+    [[nodiscard]] ProtocolValue encodeArgument(std::string_view commandId,
                                                 std::any const& payload) const;
-    [[nodiscard]] std::optional<std::any> decode_argument(
-        std::string_view command_id, ProtocolValue const& value) const;
+    [[nodiscard]] std::optional<std::any> decodeArgument(
+        std::string_view commandId, ProtocolValue const& value) const;
 
 private:
     struct Impl;
@@ -216,24 +214,23 @@ private:
 // SelectionCommandArguments, ScrollLinesArguments, ScrollPagesArguments,
 // ScrollFractionArguments, DroppedContentArguments) stay in their feature
 // headers; this registry owns only their wire adapters.
-[[nodiscard]] CommandArgumentCodecRegistry build_command_argument_codec_registry();
+[[nodiscard]] CommandArgumentCodecRegistry buildCommandArgumentCodecRegistry();
 
-// ---------------------------------------------------------------------------
 // Versioned message kinds. Each carries a distinct payload; there is no
 // client-asserted capability message (capabilities live in the per-client
 // snapshot/delta).
 
 enum class ProtocolMessageKind : std::uint8_t {
-    command_request,
-    session_snapshot,
-    session_delta,
-    clipboard_request,
-    clipboard_response,
-    status_action_invocation,
-    command_result,
+    CommandRequest,
+    SessionSnapshot,
+    SessionDelta,
+    ClipboardRequest,
+    ClipboardResponse,
+    StatusActionInvocation,
+    CommandResult,
 };
 
-[[nodiscard]] std::string encode_command_request(
+[[nodiscard]] std::string encodeCommandRequest(
     ClientCommand const& command, CommandArgumentCodecRegistry const& registry);
 
 struct DecodeCommandRequestResult {
@@ -242,15 +239,15 @@ struct DecodeCommandRequestResult {
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == ProtocolError::none;
+        return error == ProtocolError::None;
     }
 };
 
-[[nodiscard]] DecodeCommandRequestResult decode_command_request(
+[[nodiscard]] DecodeCommandRequestResult decodeCommandRequest(
     std::string_view bytes, CommandArgumentCodecRegistry const& registry,
     ProtocolLimits limits = {});
 
-[[nodiscard]] std::string encode_command_result(CommandResult const& result);
+[[nodiscard]] std::string encodeCommandResult(CommandResult const& result);
 
 struct DecodeCommandResultResult {
     ProtocolError error;
@@ -258,14 +255,14 @@ struct DecodeCommandResultResult {
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == ProtocolError::none;
+        return error == ProtocolError::None;
     }
 };
 
-[[nodiscard]] DecodeCommandResultResult decode_command_result(
+[[nodiscard]] DecodeCommandResultResult decodeCommandResult(
     std::string_view bytes, ProtocolLimits limits = {});
 
-[[nodiscard]] std::string encode_session_snapshot(
+[[nodiscard]] std::string encodeSessionSnapshot(
     SessionSnapshot const& snapshot);
 
 struct DecodeSessionSnapshotResult {
@@ -274,14 +271,14 @@ struct DecodeSessionSnapshotResult {
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == ProtocolError::none;
+        return error == ProtocolError::None;
     }
 };
 
-[[nodiscard]] DecodeSessionSnapshotResult decode_session_snapshot(
+[[nodiscard]] DecodeSessionSnapshotResult decodeSessionSnapshot(
     std::string_view bytes, ProtocolLimits limits = {});
 
-[[nodiscard]] std::string encode_session_delta(SessionDelta const& delta);
+[[nodiscard]] std::string encodeSessionDelta(SessionDelta const& delta);
 
 struct DecodeSessionDeltaResult {
     ProtocolError error;
@@ -289,14 +286,14 @@ struct DecodeSessionDeltaResult {
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == ProtocolError::none;
+        return error == ProtocolError::None;
     }
 };
 
-[[nodiscard]] DecodeSessionDeltaResult decode_session_delta(
+[[nodiscard]] DecodeSessionDeltaResult decodeSessionDelta(
     std::string_view bytes, ProtocolLimits limits = {});
 
-[[nodiscard]] std::string encode_clipboard_request(
+[[nodiscard]] std::string encodeClipboardRequest(
     ClipboardRequest const& request);
 
 struct DecodeClipboardRequestResult {
@@ -305,14 +302,14 @@ struct DecodeClipboardRequestResult {
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == ProtocolError::none;
+        return error == ProtocolError::None;
     }
 };
 
-[[nodiscard]] DecodeClipboardRequestResult decode_clipboard_request(
+[[nodiscard]] DecodeClipboardRequestResult decodeClipboardRequest(
     std::string_view bytes, ProtocolLimits limits = {});
 
-[[nodiscard]] std::string encode_clipboard_response(
+[[nodiscard]] std::string encodeClipboardResponse(
     ClipboardResponse const& response);
 
 struct DecodeClipboardResponseResult {
@@ -321,14 +318,14 @@ struct DecodeClipboardResponseResult {
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == ProtocolError::none;
+        return error == ProtocolError::None;
     }
 };
 
-[[nodiscard]] DecodeClipboardResponseResult decode_clipboard_response(
+[[nodiscard]] DecodeClipboardResponseResult decodeClipboardResponse(
     std::string_view bytes, ProtocolLimits limits = {});
 
-[[nodiscard]] std::string encode_status_action_invocation(
+[[nodiscard]] std::string encodeStatusActionInvocation(
     StatusActionInvocation const& invocation);
 
 struct DecodeStatusActionInvocationResult {
@@ -337,34 +334,33 @@ struct DecodeStatusActionInvocationResult {
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == ProtocolError::none;
+        return error == ProtocolError::None;
     }
 };
 
 [[nodiscard]] DecodeStatusActionInvocationResult
-decode_status_action_invocation(std::string_view bytes,
+decodeStatusActionInvocation(std::string_view bytes,
                                 ProtocolLimits limits = {});
 
-// ---------------------------------------------------------------------------
 // Binary-frame envelope: the only P0 binary-payload support. Producing
 // streaming-output or image payloads remains stretch work; this envelope
 // exists so ingress commands (e.g. `file.open_dropped_content`) can carry
 // raw bytes with bounded, validated framing.
 
 enum class BinaryPayloadKind : std::uint8_t {
-    dropped_content,
+    DroppedContent,
 };
 
 struct BinaryFrame {
     std::uint8_t version;
     BinaryPayloadKind kind;
-    std::uint64_t request_id;
+    std::uint64_t requestId;
     std::vector<std::uint8_t> bytes;
 
     bool operator==(BinaryFrame const&) const = default;
 };
 
-[[nodiscard]] std::string encode_binary_frame(BinaryFrame const& frame);
+[[nodiscard]] std::string encodeBinaryFrame(BinaryFrame const& frame);
 
 struct DecodeBinaryFrameResult {
     ProtocolError error;
@@ -374,11 +370,11 @@ struct DecodeBinaryFrameResult {
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == ProtocolError::none;
+        return error == ProtocolError::None;
     }
 };
 
-[[nodiscard]] DecodeBinaryFrameResult decode_binary_frame(
+[[nodiscard]] DecodeBinaryFrameResult decodeBinaryFrame(
     std::string_view bytes, ProtocolLimits limits = {});
 
 }  // namespace ssg

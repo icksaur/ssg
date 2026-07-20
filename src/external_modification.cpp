@@ -8,36 +8,36 @@
 namespace ssg {
 namespace {
 
-NonGitDiffEventKind diff_kind(WatchEventKind kind) {
+NonGitDiffEventKind diffKind(WatchEventKind kind) {
     switch (kind) {
-        case WatchEventKind::create:
-            return NonGitDiffEventKind::create;
-        case WatchEventKind::modify:
-            return NonGitDiffEventKind::modify;
-        case WatchEventKind::rename:
-            return NonGitDiffEventKind::rename;
-        case WatchEventKind::remove:
-            return NonGitDiffEventKind::remove;
-        case WatchEventKind::overflow:
+        case WatchEventKind::Create:
+            return NonGitDiffEventKind::Create;
+        case WatchEventKind::Modify:
+            return NonGitDiffEventKind::Modify;
+        case WatchEventKind::Rename:
+            return NonGitDiffEventKind::Rename;
+        case WatchEventKind::Remove:
+            return NonGitDiffEventKind::Remove;
+        case WatchEventKind::Overflow:
             break;
     }
     throw std::invalid_argument("overflow has no diff event kind");
 }
 
-bool requires_content(WatchEventKind kind) {
-    return kind == WatchEventKind::create ||
-           kind == WatchEventKind::modify ||
-           kind == WatchEventKind::rename;
+bool requiresContent(WatchEventKind kind) {
+    return kind == WatchEventKind::Create ||
+           kind == WatchEventKind::Modify ||
+           kind == WatchEventKind::Rename;
 }
 
-auto find_file(std::vector<ExternalDocumentView>& files,
+auto findFile(std::vector<ExternalDocumentView>& files,
                const DiffFileId& id) {
     return std::find_if(files.begin(), files.end(), [&](const auto& file) {
         return file.id == id;
     });
 }
 
-auto find_file(const std::vector<ExternalDocumentView>& files,
+auto findFile(const std::vector<ExternalDocumentView>& files,
                const DiffFileId& id) {
     return std::find_if(files.begin(), files.end(), [&](const auto& file) {
         return file.id == id;
@@ -46,48 +46,48 @@ auto find_file(const std::vector<ExternalDocumentView>& files,
 
 }  // namespace
 
-ExternalModificationCommandSet external_modification_command_set() {
+ExternalModificationCommandSet externalModificationCommandSet() {
     return {};
 }
 
-ExternalModificationDelta derive_external_modification_delta(
+ExternalModificationDelta deriveExternalModificationDelta(
     const ExternalModificationViewState& base,
     const ExternalModificationViewState& target) {
     ExternalModificationDelta delta{base.revision, target.revision};
-    for (const auto& target_file : target.files) {
-        const auto base_file = find_file(base.files, target_file.id);
-        if (base_file == base.files.end() || *base_file != target_file) {
-            delta.upserted.push_back(target_file);
+    for (const auto& targetFile : target.files) {
+        const auto baseFile = findFile(base.files, targetFile.id);
+        if (baseFile == base.files.end() || *baseFile != targetFile) {
+            delta.upserted.push_back(targetFile);
         }
     }
-    for (const auto& base_file : base.files) {
-        if (find_file(target.files, base_file.id) == target.files.end()) {
-            delta.removed.push_back(base_file.id);
+    for (const auto& baseFile : base.files) {
+        if (findFile(target.files, baseFile.id) == target.files.end()) {
+            delta.removed.push_back(baseFile.id);
         }
     }
     return delta;
 }
 
-ExternalDeltaReplayResult replay_external_modification_delta(
+ExternalDeltaReplayResult replayExternalModificationDelta(
     const ExternalModificationViewState& base,
     const ExternalModificationDelta& delta) {
-    if (base.revision != delta.base_revision) {
-        return {std::nullopt, ExternalDeltaError::stale_revision};
+    if (base.revision != delta.baseRevision) {
+        return {std::nullopt, ExternalDeltaError::StaleRevision};
     }
-    if (delta.revision < delta.base_revision) {
-        return {std::nullopt, ExternalDeltaError::malformed_delta};
+    if (delta.revision < delta.baseRevision) {
+        return {std::nullopt, ExternalDeltaError::MalformedDelta};
     }
 
     auto files = base.files;
     for (const auto& removed : delta.removed) {
-        const auto found = find_file(files, removed);
+        const auto found = findFile(files, removed);
         if (found == files.end()) {
-            return {std::nullopt, ExternalDeltaError::malformed_delta};
+            return {std::nullopt, ExternalDeltaError::MalformedDelta};
         }
         files.erase(found);
     }
     for (const auto& upserted : delta.upserted) {
-        const auto found = find_file(files, upserted.id);
+        const auto found = findFile(files, upserted.id);
         if (found == files.end()) {
             files.push_back(upserted);
         } else {
@@ -95,165 +95,165 @@ ExternalDeltaReplayResult replay_external_modification_delta(
         }
     }
     return {ExternalModificationViewState{delta.revision, std::move(files)},
-            ExternalDeltaError::none};
+            ExternalDeltaError::None};
 }
 
 class ExternalModificationFlow::Impl {
 public:
     struct PendingChange {
         ExternalDocumentView view;
-        std::optional<std::string> disk_content;
+        std::optional<std::string> diskContent;
     };
 
     Impl(RecoveryActions& recovery, DiffModel& diff)
         : recovery_{recovery}, diff_{diff} {}
 
-    ExternalModificationResult process_event(
+    ExternalModificationResult processEvent(
         ExternalEventInput input,
         std::optional<JournalDocument>& document) {
-        if (input.event.sequence <= last_watcher_sequence_) {
-            return failure(ExternalModificationError::stale_event);
+        if (input.event.sequence <= lastWatcherSequence_) {
+            return failure(ExternalModificationError::StaleEvent);
         }
-        if (input.event.kind == WatchEventKind::overflow) {
-            return failure(ExternalModificationError::unsupported_event);
+        if (input.event.kind == WatchEventKind::Overflow) {
+            return failure(ExternalModificationError::UnsupportedEvent);
         }
         if (input.event.path.empty() ||
-            (input.event.kind == WatchEventKind::rename &&
-             !input.event.previous_path.has_value())) {
-            return failure(ExternalModificationError::invalid_event);
+            (input.event.kind == WatchEventKind::Rename &&
+             !input.event.previousPath.has_value())) {
+            return failure(ExternalModificationError::InvalidEvent);
         }
         if (!document.has_value()) {
-            return failure(ExternalModificationError::document_missing);
+            return failure(ExternalModificationError::DocumentMissing);
         }
-        if (requires_content(input.event.kind) &&
-            !input.disk_content.has_value()) {
-            return failure(ExternalModificationError::content_required);
+        if (requiresContent(input.event.kind) &&
+            !input.diskContent.has_value()) {
+            return failure(ExternalModificationError::ContentRequired);
         }
 
-        auto staged_pending = pending_;
-        auto staged_document = *document;
-        const bool save_event =
-            input.event.origin == WatchEventOrigin::ssg_save;
-        const bool removed = input.event.kind == WatchEventKind::remove;
-        bool publish_status = false;
+        auto stagedPending = pending_;
+        auto stagedDocument = *document;
+        const bool saveEvent =
+            input.event.origin == WatchEventOrigin::SsgSave;
+        const bool removed = input.event.kind == WatchEventKind::Remove;
+        bool publishStatus = false;
 
         const auto existing = std::find_if(
-            staged_pending.begin(), staged_pending.end(), [&](const auto& item) {
+            stagedPending.begin(), stagedPending.end(), [&](const auto& item) {
                 return item.view.id == input.id;
             });
 
-        if (save_event) {
-            if (existing != staged_pending.end()) {
-                staged_pending.erase(existing);
+        if (saveEvent) {
+            if (existing != stagedPending.end()) {
+                stagedPending.erase(existing);
             }
-        } else if (!staged_document.dirty && !removed) {
-            staged_document.utf8_content = *input.disk_content;
-            staged_document.dirty = false;
-            if (input.event.kind == WatchEventKind::rename) {
-                staged_document.key = JournalDocumentKey::saved(
+        } else if (!stagedDocument.dirty && !removed) {
+            stagedDocument.utf8Content = *input.diskContent;
+            stagedDocument.dirty = false;
+            if (input.event.kind == WatchEventKind::Rename) {
+                stagedDocument.key = JournalDocumentKey::saved(
                     input.event.path.generic_string());
             }
-            if (existing != staged_pending.end()) {
-                staged_pending.erase(existing);
+            if (existing != stagedPending.end()) {
+                stagedPending.erase(existing);
             }
         } else {
             ExternalDocumentView view{
                 input.id,
                 input.event.path,
-                removed ? ExternalDocumentStatus::externally_removed
-                        : ExternalDocumentStatus::externally_modified,
+                removed ? ExternalDocumentStatus::ExternallyRemoved
+                        : ExternalDocumentStatus::ExternallyModified,
                 removed ? "File was removed outside SSG"
                         : "File was modified outside SSG",
                 removed ? std::vector<ExternalAction>{
-                              ExternalAction::keep_buffer,
-                              ExternalAction::open_diff}
+                              ExternalAction::KeepBuffer,
+                              ExternalAction::OpenDiff}
                         : std::vector<ExternalAction>{
-                              ExternalAction::reload,
-                              ExternalAction::keep_buffer,
-                              ExternalAction::open_diff}};
-            PendingChange change{std::move(view), input.disk_content};
-            if (existing == staged_pending.end()) {
-                staged_pending.push_back(std::move(change));
+                              ExternalAction::Reload,
+                              ExternalAction::KeepBuffer,
+                              ExternalAction::OpenDiff}};
+            PendingChange change{std::move(view), input.diskContent};
+            if (existing == stagedPending.end()) {
+                stagedPending.push_back(std::move(change));
             } else {
                 *existing = std::move(change);
             }
-            publish_status = true;
+            publishStatus = true;
         }
 
-        NonGitDiffEvent diff_event{
-            diff_kind(input.event.kind),
+        NonGitDiffEvent diffEvent{
+            diffKind(input.event.kind),
             input.id,
             input.event.path,
-            input.event.previous_path,
-            input.disk_content};
-        const auto diff_result = diff_.apply_non_git_event(
-            std::move(diff_event), Revision{input.event.sequence});
+            input.event.previousPath,
+            input.diskContent};
+        const auto diffResult = diff_.applyNonGitEvent(
+            std::move(diffEvent), Revision{input.event.sequence});
 
-        if (!save_event && !document->dirty && !removed) {
-            document->key = std::move(staged_document.key);
-            document->utf8_content.swap(staged_document.utf8_content);
+        if (!saveEvent && !document->dirty && !removed) {
+            document->key = std::move(stagedDocument.key);
+            document->utf8Content.swap(stagedDocument.utf8Content);
             document->dirty = false;
         }
-        pending_.swap(staged_pending);
-        last_watcher_sequence_ = input.event.sequence;
-        advance_revision();
-        return {ExternalModificationError::none, publish_status,
-                diff_result.accepted(), std::nullopt};
+        pending_.swap(stagedPending);
+        lastWatcherSequence_ = input.event.sequence;
+        advanceRevision();
+        return {ExternalModificationError::None, publishStatus,
+                diffResult.accepted(), std::nullopt};
     }
 
     ExternalModificationResult reload(
         const DiffFileId& id, std::optional<JournalDocument>& document) {
-        const auto pending = find_pending(id);
+        const auto pending = findPending(id);
         if (pending == pending_.end()) {
-            return failure(ExternalModificationError::no_external_change);
+            return failure(ExternalModificationError::NoExternalChange);
         }
-        if (!pending->disk_content.has_value()) {
-            return failure(ExternalModificationError::content_required);
+        if (!pending->diskContent.has_value()) {
+            return failure(ExternalModificationError::ContentRequired);
         }
         if (!document.has_value()) {
-            return failure(ExternalModificationError::document_missing);
+            return failure(ExternalModificationError::DocumentMissing);
         }
 
         JournalDocument replacement{
             JournalDocumentKey::saved(pending->view.path.generic_string()),
             document->mode,
             false,
-            *pending->disk_content};
+            *pending->diskContent};
         auto result =
-            recovery_.reload_document(document, std::move(replacement));
+            recovery_.reloadDocument(document, std::move(replacement));
         if (!result.accepted()) {
-            return failure(ExternalModificationError::recovery_failed);
+            return failure(ExternalModificationError::RecoveryFailed);
         }
         pending_.erase(pending);
-        advance_revision();
-        return {ExternalModificationError::none, false, true,
+        advanceRevision();
+        return {ExternalModificationError::None, false, true,
                 std::move(result.compensation)};
     }
 
-    ExternalModificationResult keep_buffer(const DiffFileId& id) {
-        const auto pending = find_pending(id);
+    ExternalModificationResult keepBuffer(const DiffFileId& id) {
+        const auto pending = findPending(id);
         if (pending == pending_.end()) {
-            return failure(ExternalModificationError::no_external_change);
+            return failure(ExternalModificationError::NoExternalChange);
         }
         pending_.erase(pending);
-        advance_revision();
+        advanceRevision();
         return {};
     }
 
-    ExternalOpenDiffResult open_diff(const DiffFileId& id) const {
-        if (find_pending(id) == pending_.end()) {
-            return {ExternalModificationError::no_external_change,
+    ExternalOpenDiffResult openDiff(const DiffFileId& id) const {
+        if (findPending(id) == pending_.end()) {
+            return {ExternalModificationError::NoExternalChange,
                     std::nullopt};
         }
         const auto file = diff_.file(id);
         if (!file.has_value()) {
-            return {ExternalModificationError::diff_rejected, std::nullopt};
+            return {ExternalModificationError::DiffRejected, std::nullopt};
         }
-        return {ExternalModificationError::none,
-                diff_open_file(file->get())};
+        return {ExternalModificationError::None,
+                diffOpenFile(file->get())};
     }
 
-    ExternalModificationViewState view_state() const {
+    ExternalModificationViewState viewState() const {
         ExternalModificationViewState state{revision_};
         state.files.reserve(pending_.size());
         for (const auto& pending : pending_) {
@@ -268,14 +268,14 @@ private:
         return {error, false, false, std::nullopt};
     }
 
-    std::vector<PendingChange>::iterator find_pending(const DiffFileId& id) {
+    std::vector<PendingChange>::iterator findPending(const DiffFileId& id) {
         return std::find_if(pending_.begin(), pending_.end(),
                             [&](const auto& pending) {
                                 return pending.view.id == id;
                             });
     }
 
-    std::vector<PendingChange>::const_iterator find_pending(
+    std::vector<PendingChange>::const_iterator findPending(
         const DiffFileId& id) const {
         return std::find_if(pending_.begin(), pending_.end(),
                             [&](const auto& pending) {
@@ -283,7 +283,7 @@ private:
                             });
     }
 
-    void advance_revision() {
+    void advanceRevision() {
         if (revision_.value() == std::numeric_limits<std::uint64_t>::max()) {
             throw std::overflow_error("external modification revision exhausted");
         }
@@ -292,7 +292,7 @@ private:
 
     RecoveryActions& recovery_;
     DiffModel& diff_;
-    std::uint64_t last_watcher_sequence_ = 0;
+    std::uint64_t lastWatcherSequence_ = 0;
     Revision revision_{0};
     std::vector<PendingChange> pending_;
 };
@@ -307,9 +307,9 @@ ExternalModificationFlow::ExternalModificationFlow(
 ExternalModificationFlow& ExternalModificationFlow::operator=(
     ExternalModificationFlow&&) noexcept = default;
 
-ExternalModificationResult ExternalModificationFlow::process_event(
+ExternalModificationResult ExternalModificationFlow::processEvent(
     ExternalEventInput input, std::optional<JournalDocument>& document) {
-    return impl_->process_event(std::move(input), document);
+    return impl_->processEvent(std::move(input), document);
 }
 
 ExternalModificationResult ExternalModificationFlow::reload(
@@ -317,18 +317,18 @@ ExternalModificationResult ExternalModificationFlow::reload(
     return impl_->reload(id, document);
 }
 
-ExternalModificationResult ExternalModificationFlow::keep_buffer(
+ExternalModificationResult ExternalModificationFlow::keepBuffer(
     const DiffFileId& id) {
-    return impl_->keep_buffer(id);
+    return impl_->keepBuffer(id);
 }
 
-ExternalOpenDiffResult ExternalModificationFlow::open_diff(
+ExternalOpenDiffResult ExternalModificationFlow::openDiff(
     const DiffFileId& id) const {
-    return impl_->open_diff(id);
+    return impl_->openDiff(id);
 }
 
-ExternalModificationViewState ExternalModificationFlow::view_state() const {
-    return impl_->view_state();
+ExternalModificationViewState ExternalModificationFlow::viewState() const {
+    return impl_->viewState();
 }
 
 }  // namespace ssg

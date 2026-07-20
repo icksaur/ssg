@@ -8,46 +8,46 @@ LspIoResult FakeLspServer::write(std::string_view bytes,
                                  std::chrono::milliseconds) {
     if (write_timeout_) {
         write_timeout_ = false;
-        return {LspIoStatus::timeout, "scripted write timeout"};
+        return {LspIoStatus::Timeout, "scripted write timeout"};
     }
     auto decoded = client_decoder_.feed(bytes);
     if (!decoded.accepted()) {
-        return {LspIoStatus::error, decoded.message};
+        return {LspIoStatus::Error, decoded.message};
     }
     for (auto& payload : decoded.messages) {
         received_payloads_.push_back(std::move(payload));
     }
-    return {LspIoStatus::ok, {}};
+    return {LspIoStatus::Ok, {}};
 }
 
-LspIoResult FakeLspServer::read(std::string& bytes, std::size_t maximum_bytes,
+LspIoResult FakeLspServer::read(std::string& bytes, std::size_t maximumBytes,
                                 std::chrono::milliseconds) {
     bytes.clear();
     if (read_timeout_) {
         read_timeout_ = false;
-        return {LspIoStatus::timeout, "scripted read timeout"};
+        return {LspIoStatus::Timeout, "scripted read timeout"};
     }
     if (reads_.empty()) {
-        return {LspIoStatus::timeout, "no scripted server bytes"};
+        return {LspIoStatus::Timeout, "no scripted server bytes"};
     }
     auto& front = reads_.front();
-    const auto count = std::min(maximum_bytes, front.size());
+    const auto count = std::min(maximumBytes, front.size());
     bytes.assign(front.data(), count);
     front.erase(0, count);
     if (front.empty()) {
         reads_.pop_front();
     }
-    return {LspIoStatus::ok, {}};
+    return {LspIoStatus::Ok, {}};
 }
 
-void FakeLspServer::queue_payload(std::string payload, std::size_t chunk_bytes) {
-    auto frame = encode_lsp_frame(payload);
-    if (chunk_bytes == 0) {
+void FakeLspServer::queue_payload(std::string payload, std::size_t chunkBytes) {
+    auto frame = encodeLspFrame(payload);
+    if (chunkBytes == 0) {
         reads_.push_back(std::move(frame));
         return;
     }
     while (!frame.empty()) {
-        const auto count = std::min(chunk_bytes, frame.size());
+        const auto count = std::min(chunkBytes, frame.size());
         reads_.push_back(frame.substr(0, count));
         frame.erase(0, count);
     }
@@ -60,14 +60,14 @@ void FakeLspServer::queue_raw(std::string bytes) {
 void FakeLspServer::timeout_next_read() noexcept { read_timeout_ = true; }
 void FakeLspServer::timeout_next_write() noexcept { write_timeout_ = true; }
 
-std::string response(std::uint64_t id, std::string_view result_json) {
+std::string response(std::uint64_t id, std::string_view resultJson) {
     return "{\"jsonrpc\":\"2.0\",\"id\":" + std::to_string(id) +
-           ",\"result\":" + std::string(result_json) + "}";
+           ",\"result\":" + std::string(resultJson) + "}";
 }
 
 std::string diagnostics(std::string_view uri,
                         std::optional<std::int64_t> version,
-                        std::string_view diagnostics_json) {
+                        std::string_view diagnosticsJson) {
     std::string value =
         "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\","
         "\"params\":{\"uri\":\"" +
@@ -75,7 +75,7 @@ std::string diagnostics(std::string_view uri,
     if (version) {
         value += "\"version\":" + std::to_string(*version) + ",";
     }
-    value += "\"diagnostics\":" + std::string(diagnostics_json) + "}}";
+    value += "\"diagnostics\":" + std::string(diagnosticsJson) + "}}";
     return value;
 }
 

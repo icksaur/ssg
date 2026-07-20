@@ -95,7 +95,7 @@ struct Decoded {
 // 30-37/90-97).  Continuation cells (the trailing half of a wide glyph) emit
 // nothing because the wide glyph already advanced the cursor.
 [[nodiscard]] std::string encode_ansi_frame(
-    ssg::CellGrid const& screen, ssg::ColorDepth depth = ssg::ColorDepth::truecolor);
+    ssg::CellGrid const& screen, ssg::ColorDepth depth = ssg::ColorDepth::Truecolor);
 
 // Detect the terminal's color capability from the environment (M9-C2): COLORTERM
 // of "truecolor"/"24bit" -> truecolor; else a TERM containing "256color" ->

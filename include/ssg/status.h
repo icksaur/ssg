@@ -25,22 +25,22 @@ private:
 };
 
 enum class StatusPriority : std::uint8_t {
-    error,
-    warning,
-    information,
-    progress,
+    Error,
+    Warning,
+    Information,
+    Progress,
 };
 
 struct StatusAction {
     std::string id;
-    std::string accessible_label;
-    std::string command_id;
+    std::string accessibleLabel;
+    std::string commandId;
     friend bool operator==(const StatusAction&, const StatusAction&) = default;
 };
 
 struct StatusItem {
     StatusId id;
-    StatusPriority priority = StatusPriority::information;
+    StatusPriority priority = StatusPriority::Information;
     std::string text;
     std::vector<StatusAction> actions;
     friend bool operator==(const StatusItem&, const StatusItem&) = default;
@@ -48,9 +48,9 @@ struct StatusItem {
 
 struct StatusItemView {
     StatusId id;
-    StatusPriority priority = StatusPriority::information;
+    StatusPriority priority = StatusPriority::Information;
     std::uint64_t generation = 0;
-    std::string accessible_label;
+    std::string accessibleLabel;
     std::vector<StatusAction> actions;
     friend bool operator==(const StatusItemView&,
                            const StatusItemView&) = default;
@@ -70,22 +70,22 @@ struct StatusEnqueueResult {
 };
 
 struct StatusActionInvocation {
-    StatusId status_id;
-    std::string action_id;
+    StatusId statusId;
+    std::string actionId;
     std::uint64_t generation = 0;
 };
 
 enum class StatusActionError : std::uint8_t {
-    none,
-    stale,
-    unknown_action,
+    None,
+    Stale,
+    UnknownAction,
 };
 
 struct StatusActionResult {
-    StatusActionError error = StatusActionError::none;
-    std::optional<std::string> command_id;
+    StatusActionError error = StatusActionError::None;
+    std::optional<std::string> commandId;
     [[nodiscard]] bool accepted() const noexcept {
-        return error == StatusActionError::none && command_id.has_value();
+        return error == StatusActionError::None && commandId.has_value();
     }
 };
 
@@ -98,16 +98,16 @@ struct StatusFooterProjection {
 
 class StatusQueue {
 public:
-    static constexpr std::size_t capacity = 16;
+    static constexpr std::size_t kCapacity = 16;
 
     [[nodiscard]] StatusEnqueueResult enqueue(StatusItem item);
     void next() noexcept;
     void previous() noexcept;
     void dismiss() noexcept;
-    [[nodiscard]] StatusActionResult invoke_action(
+    [[nodiscard]] StatusActionResult invokeAction(
         const StatusActionInvocation& invocation) const;
-    [[nodiscard]] StatusViewState view_state() const;
-    [[nodiscard]] StatusFooterProjection footer_projection() const;
+    [[nodiscard]] StatusViewState viewState() const;
+    [[nodiscard]] StatusFooterProjection footerProjection() const;
 
 private:
     struct Entry {
@@ -117,7 +117,7 @@ private:
 
     std::vector<Entry> entries_;
     std::size_t selected_ = 0;
-    std::uint64_t next_generation_ = 1;
+    std::uint64_t nextGeneration_ = 1;
 };
 
 struct PromptStatusViewState {
@@ -134,7 +134,7 @@ struct PromptStatusDelta {
                            const PromptStatusDelta&) = default;
 };
 
-[[nodiscard]] PromptStatusDelta derive_prompt_status_delta(
+[[nodiscard]] PromptStatusDelta derivePromptStatusDelta(
     const PromptStatusViewState& before, const PromptStatusViewState& after);
 
 } // namespace ssg

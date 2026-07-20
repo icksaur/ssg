@@ -33,20 +33,20 @@ private:
 };
 
 enum class JournalDocumentKeyKind {
-    saved,
-    untitled,
+    Saved,
+    Untitled,
 };
 
 class JournalDocumentKey {
 public:
     [[nodiscard]] static JournalDocumentKey saved(
-        std::string_view workspace_relative_path);
+        std::string_view workspaceRelativePath);
     [[nodiscard]] static JournalDocumentKey untitled(
         UntitledDocumentId id);
 
     [[nodiscard]] JournalDocumentKeyKind kind() const noexcept { return kind_; }
-    [[nodiscard]] const std::string& saved_path() const;
-    [[nodiscard]] UntitledDocumentId untitled_id() const;
+    [[nodiscard]] const std::string& savedPath() const;
+    [[nodiscard]] UntitledDocumentId untitledId() const;
 
     friend bool operator==(const JournalDocumentKey&,
                            const JournalDocumentKey&) = default;
@@ -64,9 +64,9 @@ private:
 
 struct JournalDocument {
     JournalDocumentKey key;
-    DocumentMode mode = DocumentMode::edit;
+    DocumentMode mode = DocumentMode::Edit;
     bool dirty = false;
-    std::string utf8_content;
+    std::string utf8Content;
 
     friend bool operator==(const JournalDocument&,
                            const JournalDocument&) = default;
@@ -81,17 +81,17 @@ struct JournalRecoverySet {
 
 struct JournalReplayResult {
     JournalRecoverySet recovery;
-    std::size_t valid_bytes = 0;
-    bool discarded_tail = false;
+    std::size_t validBytes = 0;
+    bool discardedTail = false;
 };
 
-[[nodiscard]] std::vector<std::byte> encode_checkpoint_record(
+[[nodiscard]] std::vector<std::byte> encodeCheckpointRecord(
     const JournalRecoverySet& recovery);
-[[nodiscard]] std::vector<std::byte> encode_document_record(
+[[nodiscard]] std::vector<std::byte> encodeDocumentRecord(
     const JournalDocument& document);
-[[nodiscard]] std::vector<std::byte> encode_remove_record(
+[[nodiscard]] std::vector<std::byte> encodeRemoveRecord(
     const JournalDocumentKey& key);
-[[nodiscard]] JournalReplayResult replay_journal(
+[[nodiscard]] JournalReplayResult replayJournal(
     std::span<const std::byte> bytes);
 
 class ScratchJournal {
@@ -102,9 +102,9 @@ public:
         return path_;
     }
 
-    void append_checkpoint(const JournalRecoverySet& recovery) const;
-    void append_document(const JournalDocument& document) const;
-    void append_remove(const JournalDocumentKey& key) const;
+    void appendCheckpoint(const JournalRecoverySet& recovery) const;
+    void appendDocument(const JournalDocument& document) const;
+    void appendRemove(const JournalDocumentKey& key) const;
     [[nodiscard]] JournalReplayResult replay() const;
 
 private:

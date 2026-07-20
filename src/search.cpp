@@ -14,7 +14,7 @@ char folded(char value) {
     return static_cast<char>(std::tolower(static_cast<unsigned char>(value)));
 }
 
-std::optional<int> fuzzy_score(std::string_view candidate,
+std::optional<int> fuzzyScore(std::string_view candidate,
                                std::string_view query) {
     if (query.empty()) {
         return 0;
@@ -50,7 +50,7 @@ std::optional<int> fuzzy_score(std::string_view candidate,
     return score;
 }
 
-std::vector<SearchResult> rank_files(const WorkspaceSnapshot& workspace,
+std::vector<SearchResult> rankFiles(const WorkspaceSnapshot& workspace,
                                      std::string_view query,
                                      const SearchCancellationToken& token) {
     std::vector<SearchResult> results;
@@ -58,9 +58,9 @@ std::vector<SearchResult> rank_files(const WorkspaceSnapshot& workspace,
         if (token.cancelled()) {
             return {};
         }
-        const auto score = fuzzy_score(file.path, query);
+        const auto score = fuzzyScore(file.path, query);
         if (score) {
-            results.push_back({.mode = SearchMode::file,
+            results.push_back({.mode = SearchMode::File,
                                .path = file.path,
                                .label = file.path,
                                .score = *score});
@@ -75,7 +75,7 @@ std::vector<SearchResult> rank_files(const WorkspaceSnapshot& workspace,
     return results;
 }
 
-std::vector<SearchResult> rank_symbols(const WorkspaceSnapshot& workspace,
+std::vector<SearchResult> rankSymbols(const WorkspaceSnapshot& workspace,
                                        std::string_view query,
                                        const SearchCancellationToken& token) {
     std::vector<SearchResult> results;
@@ -83,10 +83,10 @@ std::vector<SearchResult> rank_symbols(const WorkspaceSnapshot& workspace,
         if (token.cancelled()) {
             return {};
         }
-        const auto score = fuzzy_score(symbol.name, query);
+        const auto score = fuzzyScore(symbol.name, query);
         if (score) {
             results.push_back(
-                {.mode = SearchMode::symbol,
+                {.mode = SearchMode::Symbol,
                  .path = symbol.path,
                  .label = symbol.path + ":" + symbol.name,
                  .line = LineIndex{symbol.line == 0 ? 0 : symbol.line - 1},
@@ -98,17 +98,17 @@ std::vector<SearchResult> rank_symbols(const WorkspaceSnapshot& workspace,
         if (left.score != right.score) {
             return left.score > right.score;
         }
-        const auto left_name = left.label.substr(left.label.find(':') + 1);
-        const auto right_name = right.label.substr(right.label.find(':') + 1);
-        if (left_name != right_name) {
-            return left_name < right_name;
+        const auto leftName = left.label.substr(left.label.find(':') + 1);
+        const auto rightName = right.label.substr(right.label.find(':') + 1);
+        if (leftName != rightName) {
+            return leftName < rightName;
         }
         return left.path < right.path;
     });
     return results;
 }
 
-std::vector<SearchResult> rank_text(const WorkspaceSnapshot& workspace,
+std::vector<SearchResult> rankText(const WorkspaceSnapshot& workspace,
                                     std::string_view query,
                                     const SearchCancellationToken& token) {
     std::vector<SearchResult> results;
@@ -116,32 +116,32 @@ std::vector<SearchResult> rank_text(const WorkspaceSnapshot& workspace,
         return results;
     }
     for (const auto& file : workspace.files) {
-        std::size_t line_start = 0;
-        std::size_t line_number = 0;
-        while (line_start <= file.text.size()) {
+        std::size_t lineStart = 0;
+        std::size_t lineNumber = 0;
+        while (lineStart <= file.text.size()) {
             if (token.cancelled()) {
                 return {};
             }
-            const auto line_end = file.text.find('\n', line_start);
+            const auto lineEnd = file.text.find('\n', lineStart);
             const auto line = std::string_view{file.text}.substr(
-                line_start, line_end == std::string::npos
-                                ? file.text.size() - line_start
-                                : line_end - line_start);
+                lineStart, lineEnd == std::string::npos
+                                ? file.text.size() - lineStart
+                                : lineEnd - lineStart);
             const auto match = line.find(query);
             if (match != std::string_view::npos) {
                 results.push_back(
-                    {.mode = SearchMode::text,
+                    {.mode = SearchMode::Text,
                      .path = file.path,
-                     .label = file.path + ":" + std::to_string(line_number + 1),
-                     .line = LineIndex{line_number},
+                     .label = file.path + ":" + std::to_string(lineNumber + 1),
+                     .line = LineIndex{lineNumber},
                      .column = match + 1,
                      .score = 0});
             }
-            if (line_end == std::string::npos) {
+            if (lineEnd == std::string::npos) {
                 break;
             }
-            line_start = line_end + 1;
-            ++line_number;
+            lineStart = lineEnd + 1;
+            ++lineNumber;
         }
     }
     std::ranges::sort(results, [](const auto& left, const auto& right) {
@@ -153,36 +153,36 @@ std::vector<SearchResult> rank_text(const WorkspaceSnapshot& workspace,
     return results;
 }
 
-NavigationTransition empty_transition() { return {}; }
+NavigationTransition emptyTransition() { return {}; }
 
 } // namespace
 
-ParsedSearchQuery parse_search_query(std::string_view query) {
+ParsedSearchQuery parseSearchQuery(std::string_view query) {
     ParsedSearchQuery result;
     if (query.empty()) {
         return result;
     }
     switch (query.front()) {
     case '@':
-        result.mode = SearchMode::symbol;
+        result.mode = SearchMode::Symbol;
         result.text = query.substr(1);
         return result;
     case '#':
-        result.mode = SearchMode::text;
+        result.mode = SearchMode::Text;
         result.text = query.substr(1);
         return result;
     case ':': {
-        result.mode = SearchMode::line;
+        result.mode = SearchMode::Line;
         result.text = query.substr(1);
-        std::size_t one_based = 0;
+        std::size_t oneBased = 0;
         const auto [end, error] = std::from_chars(
-            result.text.data(), result.text.data() + result.text.size(), one_based);
+            result.text.data(), result.text.data() + result.text.size(), oneBased);
         if (result.text.empty() || error != std::errc{} ||
-            end != result.text.data() + result.text.size() || one_based == 0) {
-            result.error = SearchQueryError::invalid_line;
+            end != result.text.data() + result.text.size() || oneBased == 0) {
+            result.error = SearchQueryError::InvalidLine;
             return result;
         }
-        result.line = LineIndex{one_based - 1};
+        result.line = LineIndex{oneBased - 1};
         return result;
     }
     default:
@@ -202,61 +202,61 @@ void SearchCancellationToken::cancel() const noexcept {
     cancelled_->store(true, std::memory_order_relaxed);
 }
 
-std::vector<SearchResult> rank_workspace(
+std::vector<SearchResult> rankWorkspace(
     const WorkspaceSnapshot& workspace, const ParsedSearchQuery& query,
     const SearchCancellationToken& cancellation) {
-    if (query.error != SearchQueryError::none || cancellation.cancelled()) {
+    if (query.error != SearchQueryError::None || cancellation.cancelled()) {
         return {};
     }
     switch (query.mode) {
-    case SearchMode::file:
-        return rank_files(workspace, query.text, cancellation);
-    case SearchMode::symbol:
-        return rank_symbols(workspace, query.text, cancellation);
-    case SearchMode::text:
-        return rank_text(workspace, query.text, cancellation);
-    case SearchMode::line:
-    case SearchMode::command:
+    case SearchMode::File:
+        return rankFiles(workspace, query.text, cancellation);
+    case SearchMode::Symbol:
+        return rankSymbols(workspace, query.text, cancellation);
+    case SearchMode::Text:
+        return rankText(workspace, query.text, cancellation);
+    case SearchMode::Line:
+    case SearchMode::Command:
         return {};
     }
     return {};
 }
 
-WorkspaceSearchBatch evaluate_workspace_search(
+WorkspaceSearchBatch evaluateWorkspaceSearch(
     const SearchWorkspaceSource& source,
     const WorkspaceSearchRequest& request) {
     WorkspaceSearchBatch batch{.generation = request.generation,
-                               .source_revision = request.source_revision};
+                               .sourceRevision = request.sourceRevision};
     if (request.cancellation.cancelled()) {
         batch.cancelled = true;
         return batch;
     }
-    const auto workspace = source.snapshot(request.source_revision);
-    batch.source_revision = workspace.revision;
+    const auto workspace = source.snapshot(request.sourceRevision);
+    batch.sourceRevision = workspace.revision;
     batch.results =
-        rank_workspace(workspace, request.query, request.cancellation);
+        rankWorkspace(workspace, request.query, request.cancellation);
     batch.cancelled = request.cancellation.cancelled();
     return batch;
 }
 
-std::optional<NavigationTarget> navigation_target(const SearchResult& result) {
+std::optional<NavigationTarget> navigationTarget(const SearchResult& result) {
     if (result.path.empty()) {
         return std::nullopt;
     }
     return NavigationTarget{.path = result.path,
                             .line = result.line.value_or(LineIndex{0}),
                             .column = result.column,
-                            .symbol = result.mode == SearchMode::symbol
+                            .symbol = result.mode == SearchMode::Symbol
                                           ? std::optional<std::string>{
                                                 result.label.substr(
                                                     result.label.find(':') + 1)}
                                           : std::nullopt};
 }
 
-std::optional<NavigationTarget> goto_line(
+std::optional<NavigationTarget> gotoLine(
     std::string path, const ParsedSearchQuery& query) {
-    if (path.empty() || query.mode != SearchMode::line ||
-        query.error != SearchQueryError::none || !query.line) {
+    if (path.empty() || query.mode != SearchMode::Line ||
+        query.error != SearchQueryError::None || !query.line) {
         return std::nullopt;
     }
     return NavigationTarget{
@@ -273,8 +273,8 @@ NavigationHistory::NavigationHistory(std::size_t capacity)
 NavigationTransition NavigationHistory::transition(
     const NavigationTarget& target, NavigationOrigin origin) {
     return {.target = target,
-            .pause_follow_edits = origin == NavigationOrigin::user,
-            .reveal_primary_caret = true};
+            .pauseFollowEdits = origin == NavigationOrigin::User,
+            .revealPrimaryCaret = true};
 }
 
 NavigationTransition NavigationHistory::visit(
@@ -296,65 +296,65 @@ NavigationTransition NavigationHistory::visit(
 
 NavigationTransition NavigationHistory::back() {
     if (!cursor_ || *cursor_ == 0) {
-        return empty_transition();
+        return emptyTransition();
     }
     --*cursor_;
-    return transition(entries_[*cursor_], NavigationOrigin::user);
+    return transition(entries_[*cursor_], NavigationOrigin::User);
 }
 
 NavigationTransition NavigationHistory::forward() {
     if (!cursor_ || *cursor_ + 1 >= entries_.size()) {
-        return empty_transition();
+        return emptyTransition();
     }
     ++*cursor_;
-    return transition(entries_[*cursor_], NavigationOrigin::user);
+    return transition(entries_[*cursor_], NavigationOrigin::User);
 }
 
 SearchController::SearchController(const SearchWorkspaceSource& workspace,
                                    SearchCommandSource& commands) noexcept
     : workspace_{workspace}, commands_{commands} {}
 
-void SearchController::open_palette(Revision revision) {
-    state_.palette_open = true;
+void SearchController::openPalette(Revision revision) {
+    state_.paletteOpen = true;
     state_.revision = revision;
     state_.query.clear();
-    state_.mode = SearchMode::command;
-    rank_palette();
+    state_.mode = SearchMode::Command;
+    rankPalette();
 }
 
-void SearchController::close_palette(Revision revision) {
-    state_.palette_open = false;
+void SearchController::closePalette(Revision revision) {
+    state_.paletteOpen = false;
     state_.revision = revision;
     state_.query.clear();
     state_.results.clear();
-    state_.selected_index.reset();
+    state_.selectedIndex.reset();
 }
 
-void SearchController::update_palette_query(std::string query,
+void SearchController::updatePaletteQuery(std::string query,
                                             Revision revision) {
-    if (!state_.palette_open) {
+    if (!state_.paletteOpen) {
         return;
     }
     state_.query = std::move(query);
     state_.revision = revision;
-    rank_palette();
+    rankPalette();
 }
 
-void SearchController::rank_palette() {
-    state_.mode = SearchMode::command;
+void SearchController::rankPalette() {
+    state_.mode = SearchMode::Command;
     state_.results.clear();
     for (const auto& command : commands_.descriptors()) {
-        const auto label_score = fuzzy_score(command.label, state_.query);
-        const auto id_score = fuzzy_score(command.id, state_.query);
-        if (!label_score && !id_score) {
+        const auto labelScore = fuzzyScore(command.label, state_.query);
+        const auto idScore = fuzzyScore(command.id, state_.query);
+        if (!labelScore && !idScore) {
             continue;
         }
         state_.results.push_back(
-            {.mode = SearchMode::command,
+            {.mode = SearchMode::Command,
              .path = command.id,
              .label = command.label,
-             .score = std::max(label_score.value_or(std::numeric_limits<int>::min()),
-                               id_score.value_or(std::numeric_limits<int>::min()))});
+             .score = std::max(labelScore.value_or(std::numeric_limits<int>::min()),
+                               idScore.value_or(std::numeric_limits<int>::min()))});
     }
     std::ranges::sort(state_.results, [](const auto& left, const auto& right) {
         if (left.score != right.score) {
@@ -365,107 +365,107 @@ void SearchController::rank_palette() {
         }
         return left.path < right.path;  // Mirror palette_rank's stable id tiebreak.
     });
-    state_.selected_index =
+    state_.selectedIndex =
         state_.results.empty() ? std::nullopt : std::optional<std::size_t>{0};
 }
 
-void SearchController::select_next() {
-    if (!state_.selected_index || state_.results.empty()) {
+void SearchController::selectNext() {
+    if (!state_.selectedIndex || state_.results.empty()) {
         return;
     }
-    *state_.selected_index = (*state_.selected_index + 1) % state_.results.size();
+    *state_.selectedIndex = (*state_.selectedIndex + 1) % state_.results.size();
 }
 
-void SearchController::select_previous() {
-    if (!state_.selected_index || state_.results.empty()) {
+void SearchController::selectPrevious() {
+    if (!state_.selectedIndex || state_.results.empty()) {
         return;
     }
-    *state_.selected_index =
-        (*state_.selected_index + state_.results.size() - 1) %
+    *state_.selectedIndex =
+        (*state_.selectedIndex + state_.results.size() - 1) %
         state_.results.size();
 }
 
-PaletteExecutionResult SearchController::execute_palette() {
-    if (!state_.palette_open || !state_.selected_index ||
-        *state_.selected_index >= state_.results.size()) {
+PaletteExecutionResult SearchController::executePalette() {
+    if (!state_.paletteOpen || !state_.selectedIndex ||
+        *state_.selectedIndex >= state_.results.size()) {
         return {.accepted = false, .message = "no palette command selected"};
     }
-    return commands_.execute(state_.results[*state_.selected_index].path);
+    return commands_.execute(state_.results[*state_.selectedIndex].path);
 }
 
-WorkspaceSearchRequest SearchController::begin_workspace_search(
-    std::string query, Revision source_revision) {
-    cancel_workspace_search();
+WorkspaceSearchRequest SearchController::beginWorkspaceSearch(
+    std::string query, Revision sourceRevision) {
+    cancelWorkspaceSearch();
     WorkspaceSearchRequest request{
-        .generation = state_.search_generation + 1,
-        .source_revision = source_revision,
-        .query = parse_search_query(query)};
-    state_.revision = source_revision;
+        .generation = state_.searchGeneration + 1,
+        .sourceRevision = sourceRevision,
+        .query = parseSearchQuery(query)};
+    state_.revision = sourceRevision;
     state_.query = std::move(query);
     state_.mode = request.query.mode;
     state_.results.clear();
-    state_.selected_index.reset();
-    state_.search_generation = request.generation;
+    state_.selectedIndex.reset();
+    state_.searchGeneration = request.generation;
     state_.searching = true;
-    active_request_ = request;
+    activeRequest_ = request;
     return request;
 }
 
 WorkspaceSearchBatch SearchController::evaluate(
     const WorkspaceSearchRequest& request) const {
-    return evaluate_workspace_search(workspace_, request);
+    return evaluateWorkspaceSearch(workspace_, request);
 }
 
-void SearchController::cancel_workspace_search() noexcept {
-    if (active_request_) {
-        active_request_->cancellation.cancel();
+void SearchController::cancelWorkspaceSearch() noexcept {
+    if (activeRequest_) {
+        activeRequest_->cancellation.cancel();
         state_.searching = false;
     }
 }
 
 SearchPublishResult SearchController::publish(
-    const WorkspaceSearchBatch& batch, Revision current_revision) {
+    const WorkspaceSearchBatch& batch, Revision currentRevision) {
     if (batch.cancelled) {
-        return SearchPublishResult::cancelled;
+        return SearchPublishResult::Cancelled;
     }
-    if (!active_request_ || batch.generation != active_request_->generation) {
-        return SearchPublishResult::superseded;
+    if (!activeRequest_ || batch.generation != activeRequest_->generation) {
+        return SearchPublishResult::Superseded;
     }
-    if (batch.source_revision != active_request_->source_revision ||
-        batch.source_revision != current_revision) {
-        return SearchPublishResult::stale_revision;
+    if (batch.sourceRevision != activeRequest_->sourceRevision ||
+        batch.sourceRevision != currentRevision) {
+        return SearchPublishResult::StaleRevision;
     }
     state_.results = batch.results;
-    state_.selected_index =
+    state_.selectedIndex =
         state_.results.empty() ? std::nullopt : std::optional<std::size_t>{0};
     state_.searching = false;
-    active_request_.reset();
-    return SearchPublishResult::accepted;
+    activeRequest_.reset();
+    return SearchPublishResult::Accepted;
 }
 
-SearchCommandSet search_command_set() { return {}; }
+SearchCommandSet searchCommandSet() { return {}; }
 
-SearchDelta derive_search_delta(const SearchViewState& base,
+SearchDelta deriveSearchDelta(const SearchViewState& base,
                                 const SearchViewState& target) {
-    return {.base_revision = base.revision,
+    return {.baseRevision = base.revision,
             .revision = target.revision,
             .state = base == target ? std::nullopt
                                     : std::optional<SearchViewState>{target}};
 }
 
-SearchReplayResult replay_search_delta(const SearchViewState& base,
+SearchReplayResult replaySearchDelta(const SearchViewState& base,
                                        const SearchDelta& delta) {
-    if (base.revision != delta.base_revision) {
-        return {.error = SearchReplayError::stale_revision};
+    if (base.revision != delta.baseRevision) {
+        return {.error = SearchReplayError::StaleRevision};
     }
     if (!delta.state) {
         if (delta.revision == base.revision) {
             return {.state = base};
         }
-        return {.error = SearchReplayError::malformed_delta};
+        return {.error = SearchReplayError::MalformedDelta};
     }
     if (delta.state->revision != delta.revision) {
-        return {.error = SearchReplayError::malformed_delta};
+        return {.error = SearchReplayError::MalformedDelta};
     }
     return {.state = delta.state};
 }

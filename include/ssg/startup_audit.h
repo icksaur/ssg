@@ -19,43 +19,43 @@
 namespace ssg {
 
 enum class OptionalSubsystem : std::uint8_t {
-    lua,
-    lsp,
-    tree_sitter_grammar,
-    filesystem_watcher,
-    http,
-    count_,  // sentinel; keep last. Ties optional_subsystem_count to the enum.
+    Lua,
+    Lsp,
+    TreeSitterGrammar,
+    FilesystemWatcher,
+    Http,
+    Count,  // sentinel; keep last. Ties optional_subsystem_count to the enum.
 };
 
-inline constexpr std::size_t optional_subsystem_count =
-    static_cast<std::size_t>(OptionalSubsystem::count_);
+inline constexpr std::size_t kOptionalSubsystemCount =
+    static_cast<std::size_t>(OptionalSubsystem::Count);
 
 // Independently sized (deduced from its initializers), then checked against the
 // enum-derived count: adding an OptionalSubsystem without listing it here fails
 // the static_assert, so the audit stays exhaustive.
-inline constexpr auto all_optional_subsystems = std::to_array({
-    OptionalSubsystem::lua,
-    OptionalSubsystem::lsp,
-    OptionalSubsystem::tree_sitter_grammar,
-    OptionalSubsystem::filesystem_watcher,
-    OptionalSubsystem::http,
+inline constexpr auto kAllOptionalSubsystems = std::to_array({
+    OptionalSubsystem::Lua,
+    OptionalSubsystem::Lsp,
+    OptionalSubsystem::TreeSitterGrammar,
+    OptionalSubsystem::FilesystemWatcher,
+    OptionalSubsystem::Http,
 });
-static_assert(all_optional_subsystems.size() == optional_subsystem_count,
+static_assert(kAllOptionalSubsystems.size() == kOptionalSubsystemCount,
               "every OptionalSubsystem (before the count_ sentinel) must appear "
               "in all_optional_subsystems so the audit is exhaustive");
 
-[[nodiscard]] std::string_view optional_subsystem_name(OptionalSubsystem) noexcept;
+[[nodiscard]] std::string_view optionalSubsystemName(OptionalSubsystem) noexcept;
 
 // Record that an optional subsystem has just constructed its heavy resource.
-void note_optional_construction(OptionalSubsystem subsystem) noexcept;
+void noteOptionalConstruction(OptionalSubsystem subsystem) noexcept;
 
 // How many times a subsystem (or all subsystems) has been constructed since the
 // last reset / process start.
-[[nodiscard]] std::uint64_t optional_construction_count(
+[[nodiscard]] std::uint64_t optionalConstructionCount(
     OptionalSubsystem subsystem) noexcept;
-[[nodiscard]] std::uint64_t optional_construction_total() noexcept;
+[[nodiscard]] std::uint64_t optionalConstructionTotal() noexcept;
 
 // Zero the ledger (for a test measuring one first-frame path in isolation).
-void reset_optional_construction_audit() noexcept;
+void resetOptionalConstructionAudit() noexcept;
 
 }  // namespace ssg

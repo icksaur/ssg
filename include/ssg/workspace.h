@@ -48,52 +48,52 @@ private:
 };
 
 enum class FileContentKind : std::uint8_t {
-    text,
-    binary,
-    decode_failure,
+    Text,
+    Binary,
+    DecodeFailure,
 };
 
 enum class WorkspaceError : std::uint8_t {
-    none,
-    invalid_workspace,
-    invalid_path,
-    path_outside_workspace,
-    not_found,
-    already_open,
-    read_only,
-    capability_denied,
-    decode_failed,
-    io_failed,
-    recovery_failed,
-    partial_failure,
+    None,
+    InvalidWorkspace,
+    InvalidPath,
+    PathOutsideWorkspace,
+    NotFound,
+    AlreadyOpen,
+    ReadOnly,
+    CapabilityDenied,
+    DecodeFailed,
+    IoFailed,
+    RecoveryFailed,
+    PartialFailure,
 };
 
 struct WorkspaceFailure {
     std::optional<FileDocumentId> document;
-    WorkspaceError error = WorkspaceError::none;
+    WorkspaceError error = WorkspaceError::None;
     std::string message;
     friend bool operator==(const WorkspaceFailure&,
                            const WorkspaceFailure&) = default;
 };
 
 struct WorkspaceResult {
-    WorkspaceError error = WorkspaceError::none;
+    WorkspaceError error = WorkspaceError::None;
     std::string message;
     std::optional<FileDocumentId> document;
     std::optional<RecoveryRecordId> compensation;
-    std::optional<WorkspaceReplacementId> workspace_compensation;
+    std::optional<WorkspaceReplacementId> workspaceCompensation;
     std::vector<WorkspaceFailure> failures;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == WorkspaceError::none;
+        return error == WorkspaceError::None;
     }
 };
 
 struct WorkspaceDocumentState {
     FileDocumentId id;
     JournalDocumentKey key;
-    std::string display_label;
-    FileContentKind content_kind = FileContentKind::text;
+    std::string displayLabel;
+    FileContentKind contentKind = FileContentKind::Text;
     TextEncodingStatus encoding;
     bool dirty = false;
 
@@ -119,39 +119,39 @@ public:
     [[nodiscard]] const Document& document(FileDocumentId document) const;
     [[nodiscard]] TransactionResult apply(
         FileDocumentId document, const EditTransaction& transaction);
-    [[nodiscard]] std::vector<std::string> recent_files() const;
+    [[nodiscard]] std::vector<std::string> recentFiles() const;
 
-    [[nodiscard]] WorkspaceResult open_directory(
+    [[nodiscard]] WorkspaceResult openDirectory(
         const std::filesystem::path& path);
-    [[nodiscard]] WorkspaceResult restore_workspace(
+    [[nodiscard]] WorkspaceResult restoreWorkspace(
         WorkspaceReplacementId replacement);
 
-    [[nodiscard]] WorkspaceResult new_document(
-        std::string_view suggested_label = {});
-    [[nodiscard]] WorkspaceResult open_file(std::string_view path);
-    [[nodiscard]] WorkspaceResult open_recent(std::size_t index);
-    [[nodiscard]] WorkspaceResult open_dropped_content(
+    [[nodiscard]] WorkspaceResult newDocument(
+        std::string_view suggestedLabel = {});
+    [[nodiscard]] WorkspaceResult openFile(std::string_view path);
+    [[nodiscard]] WorkspaceResult openRecent(std::size_t index);
+    [[nodiscard]] WorkspaceResult openDroppedContent(
         const InvocationPrincipal& principal,
         std::span<const std::uint8_t> bytes,
-        std::string_view suggested_label);
+        std::string_view suggestedLabel);
 
     [[nodiscard]] WorkspaceResult save(FileDocumentId document);
-    [[nodiscard]] WorkspaceResult save_all();
-    [[nodiscard]] WorkspaceResult save_as(FileDocumentId document,
+    [[nodiscard]] WorkspaceResult saveAll();
+    [[nodiscard]] WorkspaceResult saveAs(FileDocumentId document,
                                           std::string_view path);
     [[nodiscard]] WorkspaceResult reload(FileDocumentId document);
-    [[nodiscard]] WorkspaceResult reopen_with_encoding(
+    [[nodiscard]] WorkspaceResult reopenWithEncoding(
         FileDocumentId document, TextEncoding encoding);
-    [[nodiscard]] WorkspaceResult set_encoding(
+    [[nodiscard]] WorkspaceResult setEncoding(
         FileDocumentId document, TextEncoding encoding);
-    [[nodiscard]] WorkspaceResult set_line_ending(
-        FileDocumentId document, LineEnding line_ending);
-    [[nodiscard]] WorkspaceResult set_final_newline(
-        FileDocumentId document, bool final_newline);
-    [[nodiscard]] WorkspaceResult rename_file(FileDocumentId document,
+    [[nodiscard]] WorkspaceResult setLineEnding(
+        FileDocumentId document, LineEnding lineEnding);
+    [[nodiscard]] WorkspaceResult setFinalNewline(
+        FileDocumentId document, bool finalNewline);
+    [[nodiscard]] WorkspaceResult renameFile(FileDocumentId document,
                                               std::string_view path);
-    [[nodiscard]] WorkspaceResult delete_file(FileDocumentId document);
-    [[nodiscard]] WorkspaceResult new_directory(std::string_view path);
+    [[nodiscard]] WorkspaceResult deleteFile(FileDocumentId document);
+    [[nodiscard]] WorkspaceResult newDirectory(std::string_view path);
     [[nodiscard]] WorkspaceResult restore(
         const RecoveryRecordId& compensation);
 

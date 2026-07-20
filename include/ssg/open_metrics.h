@@ -15,13 +15,13 @@ namespace ssg {
 // The ordered whole-document passes on the open path (the audit A-J collapsed to
 // the phases the LF-1 cross-layer seam brackets).  Phases are non-overlapping.
 enum class OpenPhase : unsigned {
-    read,               // disk read into the raw byte buffer
-    nul_scan,           // whole-raw-byte NUL detection
-    decode_validate,    // UTF-8/UTF-16 validating scan -> scalars
-    eol_scan,           // EOL normalization -> line_terminators + utf8
-    document_build,     // Document + PieceTree construction
-    state_dirty_check,  // Workspace::state() snapshot-materialize + compare
-    count
+    Read,               // disk read into the raw byte buffer
+    NulScan,           // whole-raw-byte NUL detection
+    DecodeValidate,    // UTF-8/UTF-16 validating scan -> scalars
+    EolScan,           // EOL normalization -> line_terminators + utf8
+    DocumentBuild,     // Document + PieceTree construction
+    StateDirtyCheck,  // Workspace::state() snapshot-materialize + compare
+    Count
 };
 
 // Accumulates elapsed steady-clock nanoseconds into the current thread's total
@@ -36,24 +36,24 @@ public:
 
 private:
     OpenPhase phase_;
-    std::int64_t start_ns_;
+    std::int64_t startNs_;
 };
 
-[[nodiscard]] std::uint64_t open_phase_ns(OpenPhase phase);
-void reset_open_phase_timing();
+[[nodiscard]] std::uint64_t openPhaseNs(OpenPhase phase);
+void resetOpenPhaseTiming();
 
 // Counts UTF-8 *validating scans* on the current thread (the decoder's scan plus
 // any Document-ctor re-validation).  A direct-UTF-8 open is 2 today and 1 after
 // LF-3a; a transcoded/binary open is 0 validating UTF-8 scans.
-void note_utf8_validation();
-[[nodiscard]] std::uint64_t utf8_validation_calls();
-void reset_utf8_validation_calls();
+void noteUtf8Validation();
+[[nodiscard]] std::uint64_t utf8ValidationCalls();
+void resetUtf8ValidationCalls();
 
 // Counts whole-document PieceTree::text() materializations on the current
 // thread.  A fresh open attributes 1 to Workspace::state() today and 0 after
 // LF-4b.
-void note_piece_tree_text();
-[[nodiscard]] std::uint64_t piece_tree_text_calls();
-void reset_piece_tree_text_calls();
+void notePieceTreeText();
+[[nodiscard]] std::uint64_t pieceTreeTextCalls();
+void resetPieceTreeTextCalls();
 
 }  // namespace ssg

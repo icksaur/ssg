@@ -6,7 +6,7 @@
 namespace ssg {
 namespace {
 
-constexpr std::array semantic_names{
+constexpr std::array kSemanticNames{
     std::string_view{"foreground"},
     std::string_view{"background"},
     std::string_view{"caret"},
@@ -40,9 +40,9 @@ constexpr std::array semantic_names{
     std::string_view{"diff_removed"},
     std::string_view{"diff_modified"},
 };
-static_assert(semantic_names.size() == semantic_role_count);
+static_assert(kSemanticNames.size() == kSemanticRoleCount);
 
-constexpr std::array syntax_names{
+constexpr std::array kSyntaxNames{
     std::string_view{"plain_text"},
     std::string_view{"comment"},
     std::string_view{"keyword"},
@@ -55,7 +55,7 @@ constexpr std::array syntax_names{
     std::string_view{"punctuation"},
     std::string_view{"invalid"},
 };
-static_assert(syntax_names.size() == syntax_scope_count);
+static_assert(kSyntaxNames.size() == kSyntaxScopeCount);
 
 constexpr std::size_t position(SemanticRole role) noexcept {
     return static_cast<std::size_t>(role);
@@ -66,126 +66,126 @@ constexpr std::size_t position(SyntaxScope scope) noexcept {
 }
 
 constexpr bool valid(SemanticRole role) noexcept {
-    return position(role) < semantic_role_count;
+    return position(role) < kSemanticRoleCount;
 }
 
 constexpr bool valid(SyntaxScope scope) noexcept {
-    return position(scope) < syntax_scope_count;
+    return position(scope) < kSyntaxScopeCount;
 }
 
-void validate_palette_index(std::uint8_t index) {
-    if (index >= theme_palette_size) {
+void validatePaletteIndex(std::uint8_t index) {
+    if (index >= kThemePaletteSize) {
         throw std::invalid_argument("theme mapping palette index must be in [0, 15]");
     }
 }
 
 } // namespace
 
-std::string_view semantic_role_name(SemanticRole role) {
+std::string_view semanticRoleName(SemanticRole role) {
     if (!valid(role)) throw std::invalid_argument("semantic role is not recognized");
-    return semantic_names[position(role)];
+    return kSemanticNames[position(role)];
 }
 
-std::optional<SemanticRole> semantic_role_from_name(std::string_view name) {
-    for (std::size_t index = 0; index < semantic_names.size(); ++index) {
-        if (semantic_names[index] == name) return all_semantic_roles[index];
+std::optional<SemanticRole> semanticRoleFromName(std::string_view name) {
+    for (std::size_t index = 0; index < kSemanticNames.size(); ++index) {
+        if (kSemanticNames[index] == name) return kAllSemanticRoles[index];
     }
     return std::nullopt;
 }
 
-std::string_view syntax_scope_name(SyntaxScope scope) {
+std::string_view syntaxScopeName(SyntaxScope scope) {
     if (!valid(scope)) throw std::invalid_argument("syntax scope is not recognized");
-    return syntax_names[position(scope)];
+    return kSyntaxNames[position(scope)];
 }
 
-std::optional<SyntaxScope> syntax_scope_from_name(std::string_view name) {
-    for (std::size_t index = 0; index < syntax_names.size(); ++index) {
-        if (syntax_names[index] == name) return all_syntax_scopes[index];
+std::optional<SyntaxScope> syntaxScopeFromName(std::string_view name) {
+    for (std::size_t index = 0; index < kSyntaxNames.size(); ++index) {
+        if (kSyntaxNames[index] == name) return kAllSyntaxScopes[index];
     }
     return std::nullopt;
 }
 
 Theme::Theme(std::string name,
              std::span<const IndexedColor> palette,
-             std::span<const RoleMapping> semantic_mappings,
-             std::span<const SyntaxMapping> syntax_mappings)
+             std::span<const RoleMapping> semanticMappings,
+             std::span<const SyntaxMapping> syntaxMappings)
     : name_(std::move(name)) {
     if (name_.empty()) throw std::invalid_argument("theme name must not be empty");
-    if (palette.size() != theme_palette_size) {
+    if (palette.size() != kThemePaletteSize) {
         throw std::invalid_argument("theme palette must contain exactly 16 indexed colors");
     }
-    std::array<bool, theme_palette_size> seen_palette{};
+    std::array<bool, kThemePaletteSize> seenPalette{};
     for (const auto& entry : palette) {
-        if (entry.index >= theme_palette_size) {
+        if (entry.index >= kThemePaletteSize) {
             throw std::invalid_argument("theme palette index must be in [0, 15]");
         }
-        if (seen_palette[entry.index]) {
+        if (seenPalette[entry.index]) {
             throw std::invalid_argument("theme palette contains a duplicate index");
         }
-        seen_palette[entry.index] = true;
+        seenPalette[entry.index] = true;
         palette_[entry.index] = entry.color;
     }
 
-    if (semantic_mappings.size() != semantic_role_count) {
+    if (semanticMappings.size() != kSemanticRoleCount) {
         throw std::invalid_argument("theme must map every semantic role exactly once");
     }
-    std::array<bool, semantic_role_count> seen_roles{};
-    for (const auto& mapping : semantic_mappings) {
+    std::array<bool, kSemanticRoleCount> seenRoles{};
+    for (const auto& mapping : semanticMappings) {
         if (!valid(mapping.role)) {
             throw std::invalid_argument("theme contains an unknown semantic role");
         }
-        validate_palette_index(mapping.palette_index);
+        validatePaletteIndex(mapping.paletteIndex);
         const auto index = position(mapping.role);
-        if (seen_roles[index]) {
+        if (seenRoles[index]) {
             throw std::invalid_argument("theme contains a duplicate semantic role");
         }
-        seen_roles[index] = true;
-        semantic_indices_[index] = mapping.palette_index;
+        seenRoles[index] = true;
+        semanticIndices_[index] = mapping.paletteIndex;
     }
 
-    if (syntax_mappings.size() != syntax_scope_count) {
+    if (syntaxMappings.size() != kSyntaxScopeCount) {
         throw std::invalid_argument("theme must map every syntax scope exactly once");
     }
-    std::array<bool, syntax_scope_count> seen_scopes{};
-    for (const auto& mapping : syntax_mappings) {
+    std::array<bool, kSyntaxScopeCount> seenScopes{};
+    for (const auto& mapping : syntaxMappings) {
         if (!valid(mapping.scope)) {
             throw std::invalid_argument("theme contains an unknown syntax scope");
         }
-        validate_palette_index(mapping.palette_index);
+        validatePaletteIndex(mapping.paletteIndex);
         const auto index = position(mapping.scope);
-        if (seen_scopes[index]) {
+        if (seenScopes[index]) {
             throw std::invalid_argument("theme contains a duplicate syntax scope");
         }
-        seen_scopes[index] = true;
-        syntax_indices_[index] = mapping.palette_index;
+        seenScopes[index] = true;
+        syntaxIndices_[index] = mapping.paletteIndex;
     }
 
-    for (const auto& pair : co_visible_role_pairs) {
-        if (semantic_indices_[position(pair.first)] ==
-            semantic_indices_[position(pair.second)]) {
+    for (const auto& pair : kCoVisibleRolePairs) {
+        if (semanticIndices_[position(pair.first)] ==
+            semanticIndices_[position(pair.second)]) {
             throw std::invalid_argument(
                 "co-visible semantic roles must use distinct palette indices");
         }
     }
 }
 
-std::uint8_t Theme::index_for(SemanticRole role) const {
+std::uint8_t Theme::indexFor(SemanticRole role) const {
     if (!valid(role)) throw std::invalid_argument("semantic role is not recognized");
-    return semantic_indices_[position(role)];
+    return semanticIndices_[position(role)];
 }
 
-std::uint8_t Theme::index_for(SyntaxScope scope) const {
+std::uint8_t Theme::indexFor(SyntaxScope scope) const {
     if (!valid(scope)) throw std::invalid_argument("syntax scope is not recognized");
-    return syntax_indices_[position(scope)];
+    return syntaxIndices_[position(scope)];
 }
 
-std::uint8_t Theme::index_for_syntax(std::string_view scope) const noexcept {
-    const auto recognized = syntax_scope_from_name(scope);
-    return syntax_indices_[position(recognized.value_or(SyntaxScope::plain_text))];
+std::uint8_t Theme::indexForSyntax(std::string_view scope) const noexcept {
+    const auto recognized = syntaxScopeFromName(scope);
+    return syntaxIndices_[position(recognized.value_or(SyntaxScope::PlainText))];
 }
 
 ThemeSnapshot Theme::snapshot() const noexcept {
-    return {palette_, semantic_indices_, syntax_indices_};
+    return {palette_, semanticIndices_, syntaxIndices_};
 }
 
 } // namespace ssg

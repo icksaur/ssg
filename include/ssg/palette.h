@@ -19,9 +19,6 @@
 
 namespace ssg {
 
-// One actionable palette entry.  `id` is the command id (or navigation target)
-// dispatched on execution; `label` is the display/fuzzy-match text; `detail` is
-// optional secondary text (e.g. a bound key sequence or a file's directory).
 struct PaletteCandidate {
     std::string id;
     std::string label;
@@ -31,7 +28,7 @@ struct PaletteCandidate {
 };
 
 struct PaletteViewState {
-    SearchMode mode = SearchMode::command;
+    SearchMode mode = SearchMode::Command;
     std::vector<PaletteCandidate> candidates;
 
     friend bool operator==(const PaletteViewState&, const PaletteViewState&) = default;
@@ -42,7 +39,7 @@ struct PaletteViewState {
 // index) lets the server validate membership in the published candidate set and
 // keeps the command's argument shape explicit on the wire (see spec-palette.md).
 struct PaletteExecuteArguments {
-    std::string command_id;
+    std::string commandId;
 
     friend bool operator==(const PaletteExecuteArguments&, const PaletteExecuteArguments&) = default;
 };
@@ -58,14 +55,9 @@ struct PaletteExecuteArguments {
 struct PaletteReport {
     std::string query;
     std::string ghost;
-    // The client windows its ranked list (client-owned fuzzy find) and reports
-    // only the visible rows, the ABSOLUTE selected index into the full ranked
-    // order, the absolute first visible index, and the scrollbar geometry it
-    // resolved with the shared list-scroll primitive. In-process only (see
-    // doc/spec-scroll.md R3).
     std::vector<PaletteCandidate> rows;
     std::optional<std::uint32_t> selected;
-    std::uint32_t first_visible = 0;
+    std::uint32_t firstVisible = 0;
     ScrollbarMetrics scrollbar{};
 
     friend bool operator==(const PaletteReport&, const PaletteReport&) = default;
@@ -77,13 +69,13 @@ struct PaletteReport {
 // then id ascending).  An empty query keeps every candidate in `label`/`id`
 // order.  This is the single scoring algorithm every client shares so no two
 // rankers diverge (spec P5); the TUI reports a window of this order.
-[[nodiscard]] std::vector<std::size_t> palette_rank(
+[[nodiscard]] std::vector<std::size_t> paletteRank(
     std::vector<PaletteCandidate> const& candidates, std::string_view query);
 
 // The fish-style ghost completion for `query` given the top-ranked candidate's
 // label: the label's remaining characters when the label starts with `query`
 // (case-insensitively), else empty.  Presentation-only; never mutates state.
-[[nodiscard]] std::string palette_ghost(std::string_view top_label,
+[[nodiscard]] std::string paletteGhost(std::string_view topLabel,
                                         std::string_view query);
 
 // The client-owned palette window: the local query, the desired absolute
@@ -93,8 +85,8 @@ struct PaletteReport {
 struct PaletteWindowState {
     std::string query;
     std::size_t selected = 0;
-    std::uint32_t first_visible = 0;
-    std::uint32_t pane_rows = 1;
+    std::uint32_t firstVisible = 0;
+    std::uint32_t paneRows = 1;
 };
 
 // The library's canonical palette projection, and the single seam every client
@@ -107,7 +99,7 @@ struct PaletteWindowState {
 // doc/spec-library-contract.md).  When the ranked set shrank under the selection,
 // the selection is clamped and re-centered; the resolved `selected` and
 // `first_visible` are written back to `window`.
-[[nodiscard]] PaletteReport derive_palette_report(
+[[nodiscard]] PaletteReport derivePaletteReport(
     std::vector<PaletteCandidate> const& candidates, PaletteWindowState& window);
 
 }  // namespace ssg

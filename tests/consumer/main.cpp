@@ -17,7 +17,7 @@ int main() {
     // Verify values are reachable (prevents the compiler optimising everything
     // away and gives a concrete return value in case of UB).
     return (r.value() == 42 && o.value() == 100 && w.value() == 4 &&
-            h.coalesce_ms == 750)
+            h.coalesceMs == 750)
                ? 0
                : 1;
 }

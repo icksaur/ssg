@@ -17,7 +17,7 @@ namespace {
 
 struct Line {
     std::size_t start;
-    std::size_t content_end;
+    std::size_t contentEnd;
     std::size_t end;
 };
 
@@ -30,7 +30,7 @@ EditCommandResult failure(EditCommandError error, std::string message) {
     return {error, std::nullopt, std::nullopt, {}, std::move(message)};
 }
 
-bool valid_utf8(std::string_view text) {
+bool validUtf8(std::string_view text) {
     for (std::size_t index = 0; index < text.size();) {
         const auto first = static_cast<unsigned char>(text[index]);
         std::size_t length = 0;
@@ -71,16 +71,16 @@ bool valid_utf8(std::string_view text) {
     return true;
 }
 
-std::vector<Line> lines_of(std::string_view text) {
+std::vector<Line> linesOf(std::string_view text) {
     std::vector<Line> lines;
     std::size_t start = 0;
     while (start < text.size()) {
-        std::size_t content_end = start;
-        while (content_end < text.size() && text[content_end] != '\r' &&
-               text[content_end] != '\n') {
-            ++content_end;
+        std::size_t contentEnd = start;
+        while (contentEnd < text.size() && text[contentEnd] != '\r' &&
+               text[contentEnd] != '\n') {
+            ++contentEnd;
         }
-        std::size_t end = content_end;
+        std::size_t end = contentEnd;
         if (end < text.size()) {
             if (text[end] == '\r' && end + 1 < text.size() &&
                 text[end + 1] == '\n') {
@@ -89,40 +89,40 @@ std::vector<Line> lines_of(std::string_view text) {
                 ++end;
             }
         }
-        lines.push_back({start, content_end, end});
+        lines.push_back({start, contentEnd, end});
         start = end;
     }
     if (lines.empty() || lines.back().end == text.size() &&
-                             lines.back().content_end != lines.back().end) {
+                             lines.back().contentEnd != lines.back().end) {
         lines.push_back({text.size(), text.size(), text.size()});
     }
     return lines;
 }
 
-std::size_t line_for_offset(const std::vector<Line>& lines,
+std::size_t lineForOffset(const std::vector<Line>& lines,
                             std::size_t offset) {
     for (std::size_t index = 0; index < lines.size(); ++index) {
         if (offset < lines[index].end ||
-            (offset == lines[index].content_end &&
-             lines[index].content_end < lines[index].end)) {
+            (offset == lines[index].contentEnd &&
+             lines[index].contentEnd < lines[index].end)) {
             return index;
         }
     }
     return lines.size() - 1;
 }
 
-std::vector<std::size_t> touched_lines(
+std::vector<std::size_t> touchedLines(
     const SelectionSet& selections, const std::vector<Line>& lines) {
     std::vector<std::size_t> touched;
     for (const auto& selection : selections.items()) {
         const auto lower =
-            static_cast<std::size_t>(selection.lower().byte_offset.value());
+            static_cast<std::size_t>(selection.lower().byteOffset.value());
         const auto upper =
-            static_cast<std::size_t>(selection.upper().byte_offset.value());
-        const auto first = line_for_offset(lines, lower);
+            static_cast<std::size_t>(selection.upper().byteOffset.value());
+        const auto first = lineForOffset(lines, lower);
         std::size_t last = first;
         if (upper != lower) {
-            last = line_for_offset(lines, upper);
+            last = lineForOffset(lines, upper);
             if (last > first && upper == lines[last].start) {
                 --last;
             }
@@ -136,7 +136,7 @@ std::vector<std::size_t> touched_lines(
     return touched;
 }
 
-std::vector<LineRun> runs_of(const std::vector<std::size_t>& touched) {
+std::vector<LineRun> runsOf(const std::vector<std::size_t>& touched) {
     std::vector<LineRun> runs;
     for (const auto line : touched) {
         if (runs.empty() || line != runs.back().last + 1) {
@@ -148,29 +148,29 @@ std::vector<LineRun> runs_of(const std::vector<std::size_t>& touched) {
     return runs;
 }
 
-std::string preferred_ending(LineEnding ending) {
+std::string preferredEnding(LineEnding ending) {
     switch (ending) {
-    case LineEnding::crlf:
+    case LineEnding::Crlf:
         return "\r\n";
-    case LineEnding::cr:
+    case LineEnding::Cr:
         return "\r";
-    case LineEnding::lf:
-    case LineEnding::mixed:
+    case LineEnding::Lf:
+    case LineEnding::Mixed:
         return "\n";
     }
     return "\n";
 }
 
 std::string content(std::string_view text, const Line& line) {
-    return std::string{text.substr(line.start, line.content_end - line.start)};
+    return std::string{text.substr(line.start, line.contentEnd - line.start)};
 }
 
 std::string terminator(std::string_view text, const Line& line) {
     return std::string{
-        text.substr(line.content_end, line.end - line.content_end)};
+        text.substr(line.contentEnd, line.end - line.contentEnd)};
 }
 
-std::string reordered_lines(std::string_view text,
+std::string reorderedLines(std::string_view text,
                             const std::vector<Line>& lines,
                             std::size_t first,
                             const std::vector<std::string>& contents) {
@@ -182,11 +182,11 @@ std::string reordered_lines(std::string_view text,
     return replacement;
 }
 
-bool edit_less(const TextEdit& left, const TextEdit& right) {
+bool editLess(const TextEdit& left, const TextEdit& right) {
     return left.offset.value() < right.offset.value();
 }
 
-void add_edit(std::vector<TextEdit>& edits, std::size_t offset,
+void addEdit(std::vector<TextEdit>& edits, std::size_t offset,
               std::size_t erased, std::string inserted,
               std::string_view original) {
     if (erased == inserted.size() &&
@@ -201,28 +201,28 @@ void add_edit(std::vector<TextEdit>& edits, std::size_t offset,
          static_cast<std::uint64_t>(erased), std::move(inserted)});
 }
 
-std::string apply_edits(std::string text, std::vector<TextEdit> edits) {
-    std::sort(edits.begin(), edits.end(), edit_less);
+std::string applyEdits(std::string text, std::vector<TextEdit> edits) {
+    std::sort(edits.begin(), edits.end(), editLess);
     for (auto iterator = edits.rbegin(); iterator != edits.rend(); ++iterator) {
         text.replace(
             static_cast<std::size_t>(iterator->offset.value()),
-            static_cast<std::size_t>(iterator->erased_bytes),
-            iterator->inserted_text);
+            static_cast<std::size_t>(iterator->erasedBytes),
+            iterator->insertedText);
     }
     return text;
 }
 
-std::uint64_t remap_offset(std::uint64_t offset,
+std::uint64_t remapOffset(std::uint64_t offset,
                            const std::vector<TextEdit>& edits) {
     std::int64_t delta = 0;
     for (const auto& edit : edits) {
         const auto start = edit.offset.value();
-        const auto end = start + edit.erased_bytes;
+        const auto end = start + edit.erasedBytes;
         if (offset < start) {
             break;
         }
-        if (edit.erased_bytes == 0 && offset == start) {
-            delta += static_cast<std::int64_t>(edit.inserted_text.size());
+        if (edit.erasedBytes == 0 && offset == start) {
+            delta += static_cast<std::int64_t>(edit.insertedText.size());
             continue;
         }
         if (offset <= end) {
@@ -230,35 +230,35 @@ std::uint64_t remap_offset(std::uint64_t offset,
             return static_cast<std::uint64_t>(
                 static_cast<std::int64_t>(start) + delta) +
                    std::min<std::uint64_t>(relative,
-                                           edit.inserted_text.size());
+                                           edit.insertedText.size());
         }
-        delta += static_cast<std::int64_t>(edit.inserted_text.size()) -
-                 static_cast<std::int64_t>(edit.erased_bytes);
+        delta += static_cast<std::int64_t>(edit.insertedText.size()) -
+                 static_cast<std::int64_t>(edit.erasedBytes);
     }
     return static_cast<std::uint64_t>(
         static_cast<std::int64_t>(offset) + delta);
 }
 
-std::optional<SelectionSet> remap_selections(
+std::optional<SelectionSet> remapSelections(
     const SelectionSet& before, const std::vector<TextEdit>& edits,
-    std::string_view resulting_text, int tab_width) {
+    std::string_view resultingText, int tabWidth) {
     std::vector<Selection> values;
     values.reserve(before.items().size());
-    const auto resolve_mapped = [&](std::uint64_t offset) {
-        auto resolved = resolve_document_position(
-            resulting_text, ByteOffset{offset}, tab_width);
-        while (!resolved && offset < resulting_text.size()) {
+    const auto resolveMapped = [&](std::uint64_t offset) {
+        auto resolved = resolveDocumentPosition(
+            resultingText, ByteOffset{offset}, tabWidth);
+        while (!resolved && offset < resultingText.size()) {
             ++offset;
-            resolved = resolve_document_position(
-                resulting_text, ByteOffset{offset}, tab_width);
+            resolved = resolveDocumentPosition(
+                resultingText, ByteOffset{offset}, tabWidth);
         }
         return resolved;
     };
     for (const auto& selection : before.items()) {
-        const auto anchor = resolve_mapped(
-            remap_offset(selection.anchor.byte_offset.value(), edits));
-        const auto active = resolve_mapped(
-            remap_offset(selection.active.byte_offset.value(), edits));
+        const auto anchor = resolveMapped(
+            remapOffset(selection.anchor.byteOffset.value(), edits));
+        const auto active = resolveMapped(
+            remapOffset(selection.active.byteOffset.value(), edits));
         if (!anchor || !active) {
             return std::nullopt;
         }
@@ -267,12 +267,12 @@ std::optional<SelectionSet> remap_selections(
     return SelectionSet{std::move(values)};
 }
 
-bool validate_selections(std::string_view text,
-                         const SelectionSet& selections, int tab_width) {
+bool validateSelections(std::string_view text,
+                         const SelectionSet& selections, int tabWidth) {
     for (const auto& selection : selections.items()) {
         for (const auto* endpoint : {&selection.anchor, &selection.active}) {
-            const auto resolved = resolve_document_position(
-                text, endpoint->byte_offset, tab_width);
+            const auto resolved = resolveDocumentPosition(
+                text, endpoint->byteOffset, tabWidth);
             if (!resolved || *resolved != *endpoint) {
                 return false;
             }
@@ -281,49 +281,49 @@ bool validate_selections(std::string_view text,
     return true;
 }
 
-std::vector<TextEdit> line_edits(
+std::vector<TextEdit> lineEdits(
     const DocumentSnapshot& document, const SelectionSet& selections,
     const EditCommandSettings& settings, EditCommand command) {
     const auto& text = document.text;
-    const auto lines = lines_of(text);
-    const auto touched = touched_lines(selections, lines);
-    const auto runs = runs_of(touched);
+    const auto lines = linesOf(text);
+    const auto touched = touchedLines(selections, lines);
+    const auto runs = runsOf(touched);
     std::vector<TextEdit> edits;
 
-    if (command == EditCommand::indent) {
+    if (command == EditCommand::Indent) {
         const std::string unit =
-            settings.indent_style == IndentStyle::tabs
+            settings.indentStyle == IndentStyle::Tabs
                 ? "\t"
-                : std::string(settings.indent_width, ' ');
+                : std::string(settings.indentWidth, ' ');
         for (const auto index : touched) {
-            add_edit(edits, lines[index].start, 0, unit, text);
+            addEdit(edits, lines[index].start, 0, unit, text);
         }
-    } else if (command == EditCommand::outdent) {
+    } else if (command == EditCommand::Outdent) {
         for (const auto index : touched) {
             const auto& line = lines[index];
             std::size_t erased = 0;
-            if (line.start < line.content_end && text[line.start] == '\t') {
+            if (line.start < line.contentEnd && text[line.start] == '\t') {
                 erased = 1;
             } else {
-                while (erased < settings.indent_width &&
-                       line.start + erased < line.content_end &&
+                while (erased < settings.indentWidth &&
+                       line.start + erased < line.contentEnd &&
                        text[line.start + erased] == ' ') {
                     ++erased;
                 }
             }
-            add_edit(edits, line.start, erased, {}, text);
+            addEdit(edits, line.start, erased, {}, text);
         }
-    } else if (command == EditCommand::duplicate_line) {
+    } else if (command == EditCommand::DuplicateLine) {
         for (const auto& run : runs) {
             const auto start = lines[run.first].start;
             const auto end = lines[run.last].end;
             std::string copy = text.substr(start, end - start);
-            if (lines[run.last].content_end == lines[run.last].end) {
-                copy = preferred_ending(settings.line_ending) + copy;
+            if (lines[run.last].contentEnd == lines[run.last].end) {
+                copy = preferredEnding(settings.lineEnding) + copy;
             }
-            add_edit(edits, end, 0, std::move(copy), text);
+            addEdit(edits, end, 0, std::move(copy), text);
         }
-    } else if (command == EditCommand::move_line_up) {
+    } else if (command == EditCommand::MoveLineUp) {
         for (const auto& run : runs) {
             if (run.first == 0) {
                 continue;
@@ -335,12 +335,12 @@ std::vector<TextEdit> line_edits(
             }
             contents.push_back(content(text, lines[first]));
             const auto replacement =
-                reordered_lines(text, lines, first, contents);
-            add_edit(edits, lines[first].start,
+                reorderedLines(text, lines, first, contents);
+            addEdit(edits, lines[first].start,
                      lines[run.last].end - lines[first].start,
                      replacement, text);
         }
-    } else if (command == EditCommand::move_line_down) {
+    } else if (command == EditCommand::MoveLineDown) {
         for (const auto& run : runs) {
             if (run.last + 1 >= lines.size()) {
                 continue;
@@ -352,31 +352,31 @@ std::vector<TextEdit> line_edits(
                 contents.push_back(content(text, lines[index]));
             }
             const auto replacement =
-                reordered_lines(text, lines, run.first, contents);
-            add_edit(edits, lines[run.first].start,
+                reorderedLines(text, lines, run.first, contents);
+            addEdit(edits, lines[run.first].start,
                      lines[last].end - lines[run.first].start,
                      replacement, text);
         }
-    } else if (command == EditCommand::delete_line) {
+    } else if (command == EditCommand::DeleteLine) {
         for (const auto& run : runs) {
             std::size_t start = lines[run.first].start;
             std::size_t end = lines[run.last].end;
             if (run.last + 1 == lines.size() &&
-                lines[run.last].content_end == lines[run.last].end &&
+                lines[run.last].contentEnd == lines[run.last].end &&
                 run.first > 0) {
-                start = lines[run.first - 1].content_end;
+                start = lines[run.first - 1].contentEnd;
             }
-            add_edit(edits, start, end - start, {}, text);
+            addEdit(edits, start, end - start, {}, text);
         }
-    } else if (command == EditCommand::join_lines) {
+    } else if (command == EditCommand::JoinLines) {
         for (const auto index : touched) {
             if (index + 1 >= lines.size()) {
                 continue;
             }
-            add_edit(edits, lines[index].content_end,
-                     lines[index].end - lines[index].content_end, " ", text);
+            addEdit(edits, lines[index].contentEnd,
+                     lines[index].end - lines[index].contentEnd, " ", text);
         }
-    } else if (command == EditCommand::sort_lines) {
+    } else if (command == EditCommand::SortLines) {
         for (const auto& run : runs) {
             if (run.first == run.last) {
                 continue;
@@ -396,45 +396,45 @@ std::vector<TextEdit> line_edits(
                                      });
                              });
             const auto replacement =
-                reordered_lines(text, lines, run.first, contents);
-            add_edit(edits, lines[run.first].start,
+                reorderedLines(text, lines, run.first, contents);
+            addEdit(edits, lines[run.first].start,
                      lines[run.last].end - lines[run.first].start,
                      replacement, text);
         }
-    } else if (command == EditCommand::toggle_comment) {
-        bool all_commented = true;
-        bool any_nonblank = false;
+    } else if (command == EditCommand::ToggleComment) {
+        bool allCommented = true;
+        bool anyNonblank = false;
         for (const auto index : touched) {
             std::size_t offset = lines[index].start;
-            while (offset < lines[index].content_end &&
+            while (offset < lines[index].contentEnd &&
                    (text[offset] == ' ' || text[offset] == '\t')) {
                 ++offset;
             }
-            if (offset == lines[index].content_end) {
+            if (offset == lines[index].contentEnd) {
                 continue;
             }
-            any_nonblank = true;
-            if (text.substr(offset, settings.line_comment_token.size()) !=
-                settings.line_comment_token) {
-                all_commented = false;
+            anyNonblank = true;
+            if (text.substr(offset, settings.lineCommentToken.size()) !=
+                settings.lineCommentToken) {
+                allCommented = false;
             }
         }
-        if (any_nonblank) {
+        if (anyNonblank) {
             for (const auto index : touched) {
                 std::size_t offset = lines[index].start;
-                while (offset < lines[index].content_end &&
+                while (offset < lines[index].contentEnd &&
                        (text[offset] == ' ' || text[offset] == '\t')) {
                     ++offset;
                 }
-                if (offset == lines[index].content_end) {
+                if (offset == lines[index].contentEnd) {
                     continue;
                 }
-                add_edit(edits, offset,
-                         all_commented
-                             ? settings.line_comment_token.size()
+                addEdit(edits, offset,
+                         allCommented
+                             ? settings.lineCommentToken.size()
                              : 0,
-                         all_commented ? std::string{}
-                                       : settings.line_comment_token,
+                         allCommented ? std::string{}
+                                       : settings.lineCommentToken,
                          text);
             }
         }
@@ -442,26 +442,26 @@ std::vector<TextEdit> line_edits(
     return edits;
 }
 
-std::vector<TextEdit> case_edits(const DocumentSnapshot& document,
+std::vector<TextEdit> caseEdits(const DocumentSnapshot& document,
                                  const SelectionSet& selections,
                                  EditCommand command) {
     std::vector<TextEdit> edits;
     for (const auto& selection : selections.items()) {
-        if (selection.is_caret()) {
+        if (selection.isCaret()) {
             continue;
         }
         const auto start =
-            static_cast<std::size_t>(selection.lower().byte_offset.value());
+            static_cast<std::size_t>(selection.lower().byteOffset.value());
         const auto end =
-            static_cast<std::size_t>(selection.upper().byte_offset.value());
+            static_cast<std::size_t>(selection.upper().byteOffset.value());
         std::string replacement = document.text.substr(start, end - start);
         for (char& character : replacement) {
             const auto value = static_cast<unsigned char>(character);
-            if (command == EditCommand::uppercase) {
+            if (command == EditCommand::Uppercase) {
                 if (value >= 'a' && value <= 'z') {
                     character = static_cast<char>(value - 'a' + 'A');
                 }
-            } else if (command == EditCommand::lowercase) {
+            } else if (command == EditCommand::Lowercase) {
                 if (value >= 'A' && value <= 'Z') {
                     character = static_cast<char>(value - 'A' + 'a');
                 }
@@ -471,72 +471,72 @@ std::vector<TextEdit> case_edits(const DocumentSnapshot& document,
                 character = static_cast<char>(value - 'a' + 'A');
             }
         }
-        add_edit(edits, start, end - start, std::move(replacement),
+        addEdit(edits, start, end - start, std::move(replacement),
                  document.text);
     }
     return edits;
 }
 
-std::vector<TextEdit> transpose_edits(const DocumentSnapshot& document,
+std::vector<TextEdit> transposeEdits(const DocumentSnapshot& document,
                                       const SelectionSet& selections) {
-    const auto lines = lines_of(document.text);
+    const auto lines = linesOf(document.text);
     std::vector<TextEdit> edits;
     for (const auto& selection : selections.items()) {
-        if (!selection.is_caret()) {
+        if (!selection.isCaret()) {
             continue;
         }
         const auto caret =
-            static_cast<std::size_t>(selection.active.byte_offset.value());
-        auto line_index = line_for_offset(lines, caret);
-        const bool at_document_end = caret == document.text.size();
-        if (at_document_end && line_index > 0 &&
-            lines[line_index].start == lines[line_index].end) {
-            --line_index;
+            static_cast<std::size_t>(selection.active.byteOffset.value());
+        auto lineIndex = lineForOffset(lines, caret);
+        const bool atDocumentEnd = caret == document.text.size();
+        if (atDocumentEnd && lineIndex > 0 &&
+            lines[lineIndex].start == lines[lineIndex].end) {
+            --lineIndex;
         }
-        const auto& line = lines[line_index];
-        const auto run = compute_cell_run(
+        const auto& line = lines[lineIndex];
+        const auto run = computeCellRun(
             std::string_view{document.text}.substr(
-                line.start, line.content_end - line.start));
+                line.start, line.contentEnd - line.start));
         if (run.spans.size() < 2) {
             continue;
         }
-        std::size_t left_index = run.spans.size();
-        if (at_document_end) {
-            left_index = run.spans.size() - 2;
+        std::size_t leftIndex = run.spans.size();
+        if (atDocumentEnd) {
+            leftIndex = run.spans.size() - 2;
         } else {
             for (std::size_t index = 0; index + 1 < run.spans.size();
                  ++index) {
-                if (line.start + run.spans[index].byte_offset +
-                        run.spans[index].byte_len ==
+                if (line.start + run.spans[index].byteOffset +
+                        run.spans[index].byteLen ==
                     caret) {
-                    left_index = index;
+                    leftIndex = index;
                     break;
                 }
             }
         }
-        if (left_index + 1 >= run.spans.size()) {
+        if (leftIndex + 1 >= run.spans.size()) {
             continue;
         }
-        const auto& left = run.spans[left_index];
-        const auto& right = run.spans[left_index + 1];
-        const auto start = line.start + left.byte_offset;
-        const auto end = line.start + right.byte_offset + right.byte_len;
+        const auto& left = run.spans[leftIndex];
+        const auto& right = run.spans[leftIndex + 1];
+        const auto start = line.start + left.byteOffset;
+        const auto end = line.start + right.byteOffset + right.byteLen;
         bool overlaps = false;
         for (const auto& edit : edits) {
-            const auto other_start =
+            const auto otherStart =
                 static_cast<std::size_t>(edit.offset.value());
-            const auto other_end =
-                other_start + static_cast<std::size_t>(edit.erased_bytes);
+            const auto otherEnd =
+                otherStart + static_cast<std::size_t>(edit.erasedBytes);
             overlaps = overlaps ||
-                       (start < other_end && other_start < end);
+                       (start < otherEnd && otherStart < end);
         }
         if (overlaps) {
             continue;
         }
         std::string replacement = document.text.substr(
-            line.start + right.byte_offset, right.byte_len);
-        replacement += document.text.substr(start, left.byte_len);
-        add_edit(edits, start, end - start, std::move(replacement),
+            line.start + right.byteOffset, right.byteLen);
+        replacement += document.text.substr(start, left.byteLen);
+        addEdit(edits, start, end - start, std::move(replacement),
                  document.text);
     }
     return edits;
@@ -546,19 +546,19 @@ std::vector<TextEdit> transpose_edits(const DocumentSnapshot& document,
 
 EditCommandSuiteCommandSet::EditCommandSuiteCommandSet()
     : descriptors_{{
-          {"edit.indent", EditCommand::indent},
-          {"edit.outdent", EditCommand::outdent},
-          {"edit.duplicate_line", EditCommand::duplicate_line},
-          {"edit.move_line_up", EditCommand::move_line_up},
-          {"edit.move_line_down", EditCommand::move_line_down},
-          {"edit.delete_line", EditCommand::delete_line},
-          {"edit.join_lines", EditCommand::join_lines},
-          {"edit.uppercase", EditCommand::uppercase},
-          {"edit.lowercase", EditCommand::lowercase},
-          {"edit.swap_case", EditCommand::swap_case},
-          {"edit.sort_lines", EditCommand::sort_lines},
-          {"edit.transpose", EditCommand::transpose},
-          {"edit.toggle_comment", EditCommand::toggle_comment},
+          {"edit.indent", EditCommand::Indent},
+          {"edit.outdent", EditCommand::Outdent},
+          {"edit.duplicate_line", EditCommand::DuplicateLine},
+          {"edit.move_line_up", EditCommand::MoveLineUp},
+          {"edit.move_line_down", EditCommand::MoveLineDown},
+          {"edit.delete_line", EditCommand::DeleteLine},
+          {"edit.join_lines", EditCommand::JoinLines},
+          {"edit.uppercase", EditCommand::Uppercase},
+          {"edit.lowercase", EditCommand::Lowercase},
+          {"edit.swap_case", EditCommand::SwapCase},
+          {"edit.sort_lines", EditCommand::SortLines},
+          {"edit.transpose", EditCommand::Transpose},
+          {"edit.toggle_comment", EditCommand::ToggleComment},
       }} {}
 
 const std::array<EditCommandDescriptor, 13>&
@@ -566,91 +566,91 @@ EditCommandSuiteCommandSet::descriptors() const noexcept {
     return descriptors_;
 }
 
-EditCommandSuiteCommandSet edit_command_suite_command_set() {
+EditCommandSuiteCommandSet editCommandSuiteCommandSet() {
     return EditCommandSuiteCommandSet{};
 }
 
-EditCommandResult apply_edit_command(
+EditCommandResult applyEditCommand(
     const DocumentSnapshot& document, const SelectionSet& selections,
     EditCommandSettings settings, EditCommand command) {
-    if (document.mode == DocumentMode::read_only) {
-        return failure(EditCommandError::read_only,
+    if (document.mode == DocumentMode::ReadOnly) {
+        return failure(EditCommandError::ReadOnly,
                        "edit command requires an editable document");
     }
-    if (document.mode == DocumentMode::diff) {
-        return failure(EditCommandError::diff,
+    if (document.mode == DocumentMode::Diff) {
+        return failure(EditCommandError::Diff,
                        "edit command cannot mutate a diff document");
     }
-    const bool valid_indent_style =
-        settings.indent_style == IndentStyle::spaces ||
-        settings.indent_style == IndentStyle::tabs;
-    const bool valid_line_ending =
-        settings.line_ending == LineEnding::lf ||
-        settings.line_ending == LineEnding::crlf ||
-        settings.line_ending == LineEnding::cr ||
-        settings.line_ending == LineEnding::mixed;
-    if (!valid_indent_style || !valid_line_ending ||
-        settings.indent_width < 1 || settings.indent_width > 16 ||
-        settings.tab_width < 1 || settings.tab_width > 16 ||
-        settings.line_comment_token.empty() ||
-        !valid_utf8(settings.line_comment_token) ||
-        settings.line_comment_token.find('\0') != std::string::npos ||
-        settings.line_comment_token.find_first_of("\r\n") !=
+    const bool validIndentStyle =
+        settings.indentStyle == IndentStyle::Spaces ||
+        settings.indentStyle == IndentStyle::Tabs;
+    const bool validLineEnding =
+        settings.lineEnding == LineEnding::Lf ||
+        settings.lineEnding == LineEnding::Crlf ||
+        settings.lineEnding == LineEnding::Cr ||
+        settings.lineEnding == LineEnding::Mixed;
+    if (!validIndentStyle || !validLineEnding ||
+        settings.indentWidth < 1 || settings.indentWidth > 16 ||
+        settings.tabWidth < 1 || settings.tabWidth > 16 ||
+        settings.lineCommentToken.empty() ||
+        !validUtf8(settings.lineCommentToken) ||
+        settings.lineCommentToken.find('\0') != std::string::npos ||
+        settings.lineCommentToken.find_first_of("\r\n") !=
             std::string::npos) {
         return failure(
-            EditCommandError::invalid_settings,
+            EditCommandError::InvalidSettings,
             "indent width must be 1..16 and comment token must be non-empty UTF-8 without line endings");
     }
-    if (!validate_selections(document.text, selections,
-                             static_cast<int>(settings.tab_width))) {
-        return failure(EditCommandError::invalid_selection,
+    if (!validateSelections(document.text, selections,
+                             static_cast<int>(settings.tabWidth))) {
+        return failure(EditCommandError::InvalidSelection,
                        "selection position is stale or inconsistent");
     }
 
     std::vector<TextEdit> edits;
     switch (command) {
-    case EditCommand::indent:
-    case EditCommand::outdent:
-    case EditCommand::duplicate_line:
-    case EditCommand::move_line_up:
-    case EditCommand::move_line_down:
-    case EditCommand::delete_line:
-    case EditCommand::join_lines:
-    case EditCommand::sort_lines:
-    case EditCommand::toggle_comment:
-        edits = line_edits(document, selections, settings, command);
+    case EditCommand::Indent:
+    case EditCommand::Outdent:
+    case EditCommand::DuplicateLine:
+    case EditCommand::MoveLineUp:
+    case EditCommand::MoveLineDown:
+    case EditCommand::DeleteLine:
+    case EditCommand::JoinLines:
+    case EditCommand::SortLines:
+    case EditCommand::ToggleComment:
+        edits = lineEdits(document, selections, settings, command);
         break;
-    case EditCommand::uppercase:
-    case EditCommand::lowercase:
-    case EditCommand::swap_case:
-        edits = case_edits(document, selections, command);
+    case EditCommand::Uppercase:
+    case EditCommand::Lowercase:
+    case EditCommand::SwapCase:
+        edits = caseEdits(document, selections, command);
         break;
-    case EditCommand::transpose:
-        edits = transpose_edits(document, selections);
+    case EditCommand::Transpose:
+        edits = transposeEdits(document, selections);
         break;
     default:
-        return failure(EditCommandError::unknown_command,
+        return failure(EditCommandError::UnknownCommand,
                        "unknown edit command");
     }
 
-    std::sort(edits.begin(), edits.end(), edit_less);
-    const auto resulting_text = apply_edits(document.text, edits);
-    if (resulting_text == document.text) {
-        return {EditCommandError::none, std::nullopt, selections,
+    std::sort(edits.begin(), edits.end(), editLess);
+    const auto resultingText = applyEdits(document.text, edits);
+    if (resultingText == document.text) {
+        return {EditCommandError::None, std::nullopt, selections,
                 document.text, {}};
     }
-    const auto remapped = remap_selections(
-        selections, edits, resulting_text,
-        static_cast<int>(settings.tab_width));
+    const auto remapped = remapSelections(
+        selections, edits, resultingText,
+        static_cast<int>(settings.tabWidth));
     if (!remapped) {
-        return failure(EditCommandError::invalid_selection,
+        return failure(EditCommandError::InvalidSelection,
                        "edit result could not resolve selection positions");
     }
     return {
-        EditCommandError::none,
+        EditCommandError::None,
         EditTransaction{document.revision, edits},
         std::move(remapped),
-        resulting_text,
+        resultingText,
         {},
     };
 }

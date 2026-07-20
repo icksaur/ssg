@@ -14,41 +14,41 @@
 namespace ssg {
 
 enum class SettingScope : std::uint8_t {
-    defaults,
-    user,
-    workspace,
-    language,
-    document,
+    Defaults,
+    User,
+    Workspace,
+    Language,
+    Document,
 };
 
 enum class SettingKey : std::uint8_t {
-    indent_width,
-    indent_style,
-    indent_detection,
-    auto_indent,
-    line_ending,
-    final_newline,
-    encoding,
-    word_wrap,
-    theme,
-    keymap,
-    search_case_sensitive,
-    search_whole_word,
-    search_regular_expression,
-    undo_byte_budget,
-    recovery_byte_budget,
-    typing_coalescing_ms,
+    IndentWidth,
+    IndentStyle,
+    IndentDetection,
+    AutoIndent,
+    LineEnding,
+    FinalNewline,
+    Encoding,
+    WordWrap,
+    Theme,
+    Keymap,
+    SearchCaseSensitive,
+    SearchWholeWord,
+    SearchRegularExpression,
+    UndoByteBudget,
+    RecoveryByteBudget,
+    TypingCoalescingMs,
 };
 
-inline constexpr std::size_t setting_key_count = 16;
+inline constexpr std::size_t kSettingKeyCount = 16;
 
 enum class TextEncoding : std::uint8_t {
-    utf8,
-    utf8_bom,
-    utf16le,
-    utf16be,
-    windows1252,
-    iso88591,
+    Utf8,
+    Utf8Bom,
+    Utf16le,
+    Utf16be,
+    Windows1252,
+    Iso88591,
 };
 
 using SettingValue =
@@ -57,59 +57,59 @@ using SettingValue =
 
 struct EffectiveSetting {
     SettingValue value;
-    SettingScope source = SettingScope::defaults;
+    SettingScope source = SettingScope::Defaults;
 
     friend bool operator==(const EffectiveSetting&, const EffectiveSetting&) = default;
 };
 
 struct SettingViewEntry {
-    SettingKey key = SettingKey::indent_width;
-    EffectiveSetting effective{std::uint32_t{4}, SettingScope::defaults};
+    SettingKey key = SettingKey::IndentWidth;
+    EffectiveSetting effective{std::uint32_t{4}, SettingScope::Defaults};
 
     friend bool operator==(const SettingViewEntry&, const SettingViewEntry&) = default;
 };
 
 struct SettingsViewState {
-    std::array<SettingViewEntry, setting_key_count> entries{};
+    std::array<SettingViewEntry, kSettingKeyCount> entries{};
 
     [[nodiscard]] const SettingViewEntry* find(SettingKey key) const noexcept;
     friend bool operator==(const SettingsViewState&, const SettingsViewState&) = default;
 };
 
 struct SettingsDelta {
-    SettingKey key = SettingKey::indent_width;
-    EffectiveSetting before{std::uint32_t{4}, SettingScope::defaults};
-    EffectiveSetting after{std::uint32_t{4}, SettingScope::defaults};
+    SettingKey key = SettingKey::IndentWidth;
+    EffectiveSetting before{std::uint32_t{4}, SettingScope::Defaults};
+    EffectiveSetting after{std::uint32_t{4}, SettingScope::Defaults};
 
     friend bool operator==(const SettingsDelta&, const SettingsDelta&) = default;
 };
 
 enum class SettingErrorCode : std::uint8_t {
-    unknown_key,
-    wrong_value_type,
-    out_of_range,
-    empty_identity,
-    immutable_scope,
-    stale_compensation,
-    invalid_schema,
-    invalid_record,
-    io_failure,
+    UnknownKey,
+    WrongValueType,
+    OutOfRange,
+    EmptyIdentity,
+    ImmutableScope,
+    StaleCompensation,
+    InvalidSchema,
+    InvalidRecord,
+    IoFailure,
 };
 
 struct SettingError {
-    SettingErrorCode code = SettingErrorCode::invalid_record;
-    SettingKey key = SettingKey::indent_width;
+    SettingErrorCode code = SettingErrorCode::InvalidRecord;
+    SettingKey key = SettingKey::IndentWidth;
     std::string message;
 
     friend bool operator==(const SettingError&, const SettingError&) = default;
 };
 
 struct SettingCompensation {
-    SettingScope scope = SettingScope::user;
-    SettingKey key = SettingKey::indent_width;
+    SettingScope scope = SettingScope::User;
+    SettingKey key = SettingKey::IndentWidth;
     std::optional<SettingValue> expected;
     std::optional<SettingValue> restore;
-    std::uint64_t expected_generation = 0;
+    std::uint64_t expectedGeneration = 0;
 
     friend bool operator==(const SettingCompensation&, const SettingCompensation&) = default;
 };
@@ -143,22 +143,22 @@ struct SettingsCommandSet {
 };
 
 struct SettingSetArguments {
-    SettingScope scope = SettingScope::user;
-    SettingKey key = SettingKey::indent_width;
+    SettingScope scope = SettingScope::User;
+    SettingKey key = SettingKey::IndentWidth;
     SettingValue value = std::uint32_t{4};
 
     bool operator==(const SettingSetArguments&) const = default;
 };
 
 struct SettingResetArguments {
-    SettingScope scope = SettingScope::user;
-    SettingKey key = SettingKey::indent_width;
+    SettingScope scope = SettingScope::User;
+    SettingKey key = SettingKey::IndentWidth;
 
     bool operator==(const SettingResetArguments&) const = default;
 };
 
 struct SettingResetScopeArguments {
-    SettingScope scope = SettingScope::user;
+    SettingScope scope = SettingScope::User;
 
     bool operator==(const SettingResetScopeArguments&) const = default;
 };
@@ -168,43 +168,43 @@ public:
     SettingsModel();
 
     [[nodiscard]] EffectiveSetting resolve(SettingKey key) const;
-    [[nodiscard]] std::optional<SettingValue> scoped_value(
+    [[nodiscard]] std::optional<SettingValue> scopedValue(
         SettingScope scope, SettingKey key) const;
-    [[nodiscard]] SettingsViewState view_state() const;
+    [[nodiscard]] SettingsViewState viewState() const;
 
     [[nodiscard]] SettingMutation set(
         SettingScope scope, SettingKey key, SettingValue value);
     [[nodiscard]] SettingMutation reset(SettingScope scope, SettingKey key);
     [[nodiscard]] SettingMutation apply(const SettingCompensation& compensation);
 
-    [[nodiscard]] std::string export_scope(SettingScope scope) const;
-    [[nodiscard]] SettingsIoResult import_scope(
+    [[nodiscard]] std::string exportScope(SettingScope scope) const;
+    [[nodiscard]] SettingsIoResult importScope(
         SettingScope scope, std::string_view document);
 
 private:
     struct ScopeData {
-        std::array<std::optional<SettingValue>, setting_key_count> values;
-        std::array<std::uint64_t, setting_key_count> generations{};
-        std::vector<std::string> unknown_fields;
+        std::array<std::optional<SettingValue>, kSettingKeyCount> values;
+        std::array<std::uint64_t, kSettingKeyCount> generations{};
+        std::vector<std::string> unknownFields;
     };
 
     std::array<ScopeData, 5> scopes_;
 };
 
 struct SettingsPaths {
-    std::filesystem::path user_file;
-    std::filesystem::path workspace_file;
+    std::filesystem::path userFile;
+    std::filesystem::path workspaceFile;
 };
 
-[[nodiscard]] SettingsPaths linux_settings_paths(
-    const std::filesystem::path& user_configuration_root,
-    const std::filesystem::path& workspace_storage_root,
-    std::string_view canonical_workspace);
+[[nodiscard]] SettingsPaths linuxSettingsPaths(
+    const std::filesystem::path& userConfigurationRoot,
+    const std::filesystem::path& workspaceStorageRoot,
+    std::string_view canonicalWorkspace);
 
-[[nodiscard]] SettingsPaths windows_settings_paths(
-    const std::filesystem::path& user_configuration_root,
-    const std::filesystem::path& workspace_storage_root,
-    std::string_view canonical_workspace);
+[[nodiscard]] SettingsPaths windowsSettingsPaths(
+    const std::filesystem::path& userConfigurationRoot,
+    const std::filesystem::path& workspaceStorageRoot,
+    std::string_view canonicalWorkspace);
 
 class SettingsPersistence {
 public:

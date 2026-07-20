@@ -19,17 +19,17 @@ namespace ssg {
 
 // The color capability a terminal advertises.
 enum class ColorDepth : std::uint8_t {
-    ansi16,       // 16 base ANSI colors (SGR 30-37/90-97).
-    indexed256,   // xterm 256-color (SGR 38;5;n) — the 6x6x6 cube and gray ramp.
-    truecolor,    // 24-bit direct color (SGR 38;2;r;g;b).
+    Ansi16,       // 16 base ANSI colors (SGR 30-37/90-97).
+    Indexed256,   // xterm 256-color (SGR 38;5;n) — the 6x6x6 cube and gray ramp.
+    Truecolor,    // 24-bit direct color (SGR 38;2;r;g;b).
 };
 
 struct ResolvedColor {
-    enum class Encoding : std::uint8_t { ansi16, indexed256, truecolor };
+    enum class Encoding : std::uint8_t { Ansi16, Indexed256, Truecolor };
 
-    Encoding     encoding = Encoding::truecolor;
+    Encoding encoding = Encoding::Truecolor;
     std::uint8_t index = 0;   // ansi16: 0..15; indexed256: 16..255; unused for truecolor.
-    SrgbColor    rgb;         // truecolor: the exact channels; else the swatch's channels.
+    SrgbColor rgb; // truecolor: the exact channels; else the swatch's channels.
 
     friend bool operator==(ResolvedColor const&, ResolvedColor const&) = default;
 };
@@ -46,12 +46,12 @@ struct ResolvedColor {
 // Ties break to the lowest index, so the result is a pure function with a single
 // answer.  `rgb` on a reduced result carries the chosen swatch's canonical
 // channels (for index-less clients and tests).
-[[nodiscard]] ResolvedColor resolve_color(SrgbColor color, ColorDepth depth);
+[[nodiscard]] ResolvedColor resolveColor(SrgbColor color, ColorDepth depth);
 
 // The canonical sRGB channels of xterm palette index `index` (0..255): the 16
 // base colors (0..15), the 6x6x6 cube (16..231), and the 24-step gray ramp
 // (232..255).  Exposed for clients and tests that need the swatch behind an
 // index.
-[[nodiscard]] SrgbColor xterm256_color(std::uint8_t index);
+[[nodiscard]] SrgbColor xterm256Color(std::uint8_t index);
 
 }  // namespace ssg

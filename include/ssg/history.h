@@ -14,8 +14,8 @@
 namespace ssg {
 
 enum class HistoryCommand : std::uint8_t {
-    undo,
-    redo,
+    Undo,
+    Redo,
 };
 
 struct HistoryCommandDescriptor {
@@ -34,46 +34,46 @@ public:
     descriptors() const noexcept;
 
 private:
-    friend HistoryCommandSet history_command_set();
+    friend HistoryCommandSet historyCommandSet();
     HistoryCommandSet();
 
     const std::array<HistoryCommandDescriptor, 2> descriptors_;
 };
 
-[[nodiscard]] HistoryCommandSet history_command_set();
+[[nodiscard]] HistoryCommandSet historyCommandSet();
 
 enum class HistoryEditKind : std::uint8_t {
-    typing,
-    delete_backward,
-    delete_forward,
-    other,
+    Typing,
+    DeleteBackward,
+    DeleteForward,
+    Other,
 };
 
 enum class HistoryError : std::uint8_t {
-    none,
-    no_undo,
-    no_redo,
-    stale_document,
-    revision_exhausted,
-    document_rejected,
+    None,
+    NoUndo,
+    NoRedo,
+    StaleDocument,
+    RevisionExhausted,
+    DocumentRejected,
 };
 
 struct HistoryResult {
     HistoryError error;
-    DocumentError document_error;
+    DocumentError documentError;
     Revision revision;
     std::optional<SelectionSet> selections;
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == HistoryError::none;
+        return error == HistoryError::None;
     }
 };
 
 struct HistoryViewState {
-    bool can_undo;
-    bool can_redo;
-    std::uint64_t retained_bytes;
+    bool canUndo;
+    bool canRedo;
+    std::uint64_t retainedBytes;
 
     bool operator==(const HistoryViewState&) const noexcept = default;
 };
@@ -85,7 +85,7 @@ struct HistoryDelta {
     bool operator==(const HistoryDelta&) const noexcept = default;
 };
 
-[[nodiscard]] HistoryDelta derive_history_delta(
+[[nodiscard]] HistoryDelta deriveHistoryDelta(
     const HistoryViewState& before, const HistoryViewState& after);
 
 class DocumentHistory {
@@ -98,20 +98,20 @@ public:
     DocumentHistory(DocumentHistory&&) noexcept;
     DocumentHistory& operator=(DocumentHistory&&) noexcept;
 
-    [[nodiscard]] HistoryResult apply_edit(
+    [[nodiscard]] HistoryResult applyEdit(
         Document& document, const EditTransaction& transaction,
-        const SelectionSet& selections_before,
-        const SelectionSet& selections_after, HistoryEditKind kind,
-        std::uint64_t timestamp_ms);
+        const SelectionSet& selectionsBefore,
+        const SelectionSet& selectionsAfter, HistoryEditKind kind,
+        std::uint64_t timestampMs);
     [[nodiscard]] HistoryResult undo(Document& document);
     [[nodiscard]] HistoryResult redo(Document& document);
 
-    void break_coalescing() noexcept;
+    void breakCoalescing() noexcept;
 
-    [[nodiscard]] bool can_undo() const noexcept;
-    [[nodiscard]] bool can_redo() const noexcept;
-    [[nodiscard]] std::uint64_t retained_bytes() const noexcept;
-    [[nodiscard]] HistoryViewState view_state() const noexcept;
+    [[nodiscard]] bool canUndo() const noexcept;
+    [[nodiscard]] bool canRedo() const noexcept;
+    [[nodiscard]] std::uint64_t retainedBytes() const noexcept;
+    [[nodiscard]] HistoryViewState viewState() const noexcept;
 
 private:
     struct Impl;

@@ -20,22 +20,22 @@
 // ---------------------------------------------------------------------------
 // Revision
 
-TEST(revision_default_is_zero) {
+TEST(revisionDefaultIsZero) {
     ssg::Revision r;
     ASSERT_EQ(r.value(), uint64_t{0});
 }
 
-TEST(revision_round_trip) {
+TEST(revisionRoundTrip) {
     ssg::Revision r{42};
     ASSERT_EQ(r.value(), uint64_t{42});
 }
 
-TEST(revision_equality) {
+TEST(revisionEquality) {
     ASSERT_TRUE(ssg::Revision{1} == ssg::Revision{1});
     ASSERT_TRUE(ssg::Revision{1} != ssg::Revision{2});
 }
 
-TEST(revision_ordering) {
+TEST(revisionOrdering) {
     ASSERT_TRUE(ssg::Revision{1} < ssg::Revision{2});
     ASSERT_TRUE(ssg::Revision{2} > ssg::Revision{1});
     ASSERT_TRUE(ssg::Revision{1} <= ssg::Revision{1});
@@ -44,17 +44,17 @@ TEST(revision_ordering) {
 // ---------------------------------------------------------------------------
 // ByteOffset
 
-TEST(byte_offset_default_is_zero) {
+TEST(byteOffsetDefaultIsZero) {
     ssg::ByteOffset o;
     ASSERT_EQ(o.value(), uint64_t{0});
 }
 
-TEST(byte_offset_round_trip) {
+TEST(byteOffsetRoundTrip) {
     ssg::ByteOffset o{100};
     ASSERT_EQ(o.value(), uint64_t{100});
 }
 
-TEST(byte_offset_ordering) {
+TEST(byteOffsetOrdering) {
     ASSERT_TRUE(ssg::ByteOffset{5} < ssg::ByteOffset{10});
     ASSERT_TRUE(ssg::ByteOffset{10} > ssg::ByteOffset{5});
 }
@@ -62,12 +62,12 @@ TEST(byte_offset_ordering) {
 // ---------------------------------------------------------------------------
 // LineIndex
 
-TEST(line_index_round_trip) {
+TEST(lineIndexRoundTrip) {
     ssg::LineIndex l{5};
     ASSERT_EQ(l.value(), uint64_t{5});
 }
 
-TEST(line_index_zero_based) {
+TEST(lineIndexZeroBased) {
     ssg::LineIndex l{0};
     ASSERT_EQ(l.value(), uint64_t{0});
 }
@@ -75,7 +75,7 @@ TEST(line_index_zero_based) {
 // ---------------------------------------------------------------------------
 // CellIndex
 
-TEST(cell_index_round_trip) {
+TEST(cellIndexRoundTrip) {
     ssg::CellIndex c{3};
     ASSERT_EQ(c.value(), uint64_t{3});
 }
@@ -83,18 +83,18 @@ TEST(cell_index_round_trip) {
 // ---------------------------------------------------------------------------
 // DocumentPosition
 
-TEST(document_position_round_trip) {
+TEST(documentPositionRoundTrip) {
     ssg::DocumentPosition pos{
-        .byte_offset = ssg::ByteOffset{10},
+        .byteOffset = ssg::ByteOffset{10},
         .line        = ssg::LineIndex{1},
         .cell        = ssg::CellIndex{2},
     };
-    ASSERT_EQ(pos.byte_offset.value(), uint64_t{10});
+    ASSERT_EQ(pos.byteOffset.value(), uint64_t{10});
     ASSERT_EQ(pos.line.value(), uint64_t{1});
     ASSERT_EQ(pos.cell.value(), uint64_t{2});
 }
 
-TEST(document_position_equality) {
+TEST(documentPositionEquality) {
     ssg::DocumentPosition a{ssg::ByteOffset{0}, ssg::LineIndex{0}, ssg::CellIndex{0}};
     ssg::DocumentPosition b{ssg::ByteOffset{0}, ssg::LineIndex{0}, ssg::CellIndex{0}};
     ASSERT_TRUE(a == b);
@@ -105,50 +105,50 @@ TEST(document_position_equality) {
 // ---------------------------------------------------------------------------
 // DocumentMode (scoped enum — no operator<<; ASSERT_EQ must not stream values)
 
-TEST(document_mode_distinct_values) {
-    ASSERT_TRUE(ssg::DocumentMode::edit      != ssg::DocumentMode::read_only);
-    ASSERT_TRUE(ssg::DocumentMode::read_only != ssg::DocumentMode::diff);
-    ASSERT_TRUE(ssg::DocumentMode::edit      != ssg::DocumentMode::diff);
+TEST(documentModeDistinctValues) {
+    ASSERT_TRUE(ssg::DocumentMode::Edit      != ssg::DocumentMode::ReadOnly);
+    ASSERT_TRUE(ssg::DocumentMode::ReadOnly != ssg::DocumentMode::Diff);
+    ASSERT_TRUE(ssg::DocumentMode::Edit      != ssg::DocumentMode::Diff);
 }
 
-TEST(document_mode_equality) {
-    ASSERT_EQ(ssg::DocumentMode::edit, ssg::DocumentMode::edit);
+TEST(documentModeEquality) {
+    ASSERT_EQ(ssg::DocumentMode::Edit, ssg::DocumentMode::Edit);
 }
 
 // ---------------------------------------------------------------------------
 // TabWidth
 
-TEST(tab_width_valid_boundary_low) {
+TEST(tabWidthValidBoundaryLow) {
     ASSERT_NO_THROW(ssg::TabWidth{1});
 }
 
-TEST(tab_width_valid_boundary_high) {
+TEST(tabWidthValidBoundaryHigh) {
     ASSERT_NO_THROW(ssg::TabWidth{16});
 }
 
-TEST(tab_width_valid_typical) {
+TEST(tabWidthValidTypical) {
     ASSERT_NO_THROW(ssg::TabWidth{4});
     ASSERT_NO_THROW(ssg::TabWidth{8});
 }
 
-TEST(tab_width_round_trip) {
+TEST(tabWidthRoundTrip) {
     ssg::TabWidth w{4};
     ASSERT_EQ(w.value(), 4);
 }
 
-TEST(tab_width_invalid_zero) {
+TEST(tabWidthInvalidZero) {
     ASSERT_THROWS(ssg::TabWidth{0}, std::invalid_argument);
 }
 
-TEST(tab_width_invalid_too_large) {
+TEST(tabWidthInvalidTooLarge) {
     ASSERT_THROWS(ssg::TabWidth{17}, std::invalid_argument);
 }
 
-TEST(tab_width_invalid_negative) {
+TEST(tabWidthInvalidNegative) {
     ASSERT_THROWS(ssg::TabWidth{-1}, std::invalid_argument);
 }
 
-TEST(tab_width_equality) {
+TEST(tabWidthEquality) {
     ssg::TabWidth a{4};
     ssg::TabWidth b{4};
     ssg::TabWidth c{2};
@@ -159,60 +159,60 @@ TEST(tab_width_equality) {
 // ---------------------------------------------------------------------------
 // HistoryConfig
 
-TEST(history_config_defaults) {
+TEST(historyConfigDefaults) {
     auto cfg = ssg::HistoryConfig::defaults();
-    ASSERT_EQ(cfg.byte_budget, uint64_t{16u * 1024u * 1024u});
-    ASSERT_EQ(cfg.coalesce_ms, uint32_t{750});
+    ASSERT_EQ(cfg.byteBudget, uint64_t{16u * 1024u * 1024u});
+    ASSERT_EQ(cfg.coalesceMs, uint32_t{750});
 }
 
-TEST(history_config_round_trip) {
+TEST(historyConfigRoundTrip) {
     ssg::HistoryConfig cfg;
-    cfg.byte_budget = 1024;
-    cfg.coalesce_ms = 500;
-    ASSERT_EQ(cfg.byte_budget, uint64_t{1024});
-    ASSERT_EQ(cfg.coalesce_ms, uint32_t{500});
+    cfg.byteBudget = 1024;
+    cfg.coalesceMs = 500;
+    ASSERT_EQ(cfg.byteBudget, uint64_t{1024});
+    ASSERT_EQ(cfg.coalesceMs, uint32_t{500});
 }
 
-TEST(history_config_equality) {
+TEST(historyConfigEquality) {
     ssg::HistoryConfig a;
     ssg::HistoryConfig b;
     ASSERT_TRUE(a == b);
-    b.byte_budget = 1;
+    b.byteBudget = 1;
     ASSERT_TRUE(a != b);
 }
 
 // ---------------------------------------------------------------------------
 // IndentConfig
 
-TEST(indent_config_defaults) {
+TEST(indentConfigDefaults) {
     ssg::IndentConfig cfg;
-    ASSERT_EQ(cfg.style, ssg::IndentStyle::spaces);
+    ASSERT_EQ(cfg.style, ssg::IndentStyle::Spaces);
     ASSERT_EQ(cfg.width.value(), 4);
-    ASSERT_TRUE(cfg.auto_detect);
+    ASSERT_TRUE(cfg.autoDetect);
 }
 
-TEST(indent_config_custom_tabs) {
+TEST(indentConfigCustomTabs) {
     ssg::IndentConfig cfg{
-        .style       = ssg::IndentStyle::tabs,
+        .style       = ssg::IndentStyle::Tabs,
         .width       = ssg::TabWidth{2},
-        .auto_detect = false,
+        .autoDetect = false,
     };
-    ASSERT_EQ(cfg.style, ssg::IndentStyle::tabs);
+    ASSERT_EQ(cfg.style, ssg::IndentStyle::Tabs);
     ASSERT_EQ(cfg.width.value(), 2);
-    ASSERT_FALSE(cfg.auto_detect);
+    ASSERT_FALSE(cfg.autoDetect);
 }
 
-TEST(indent_style_distinct_values) {
-    ASSERT_TRUE(ssg::IndentStyle::spaces != ssg::IndentStyle::tabs);
+TEST(indentStyleDistinctValues) {
+    ASSERT_TRUE(ssg::IndentStyle::Spaces != ssg::IndentStyle::Tabs);
 }
 
 // ---------------------------------------------------------------------------
 // LineEnding (scoped enum)
 
-TEST(line_ending_distinct_values) {
-    ASSERT_TRUE(ssg::LineEnding::lf   != ssg::LineEnding::crlf);
-    ASSERT_TRUE(ssg::LineEnding::crlf != ssg::LineEnding::cr);
-    ASSERT_TRUE(ssg::LineEnding::cr   != ssg::LineEnding::mixed);
+TEST(lineEndingDistinctValues) {
+    ASSERT_TRUE(ssg::LineEnding::Lf   != ssg::LineEnding::Crlf);
+    ASSERT_TRUE(ssg::LineEnding::Crlf != ssg::LineEnding::Cr);
+    ASSERT_TRUE(ssg::LineEnding::Cr   != ssg::LineEnding::Mixed);
 }
 
 // ---------------------------------------------------------------------------
@@ -220,44 +220,44 @@ TEST(line_ending_distinct_values) {
 int main() {
     std::cout << "=== SSG types tests ===" << "\n";
 
-    RUN(revision_default_is_zero);
-    RUN(revision_round_trip);
-    RUN(revision_equality);
-    RUN(revision_ordering);
+    RUN(revisionDefaultIsZero);
+    RUN(revisionRoundTrip);
+    RUN(revisionEquality);
+    RUN(revisionOrdering);
 
-    RUN(byte_offset_default_is_zero);
-    RUN(byte_offset_round_trip);
-    RUN(byte_offset_ordering);
+    RUN(byteOffsetDefaultIsZero);
+    RUN(byteOffsetRoundTrip);
+    RUN(byteOffsetOrdering);
 
-    RUN(line_index_round_trip);
-    RUN(line_index_zero_based);
+    RUN(lineIndexRoundTrip);
+    RUN(lineIndexZeroBased);
 
-    RUN(cell_index_round_trip);
+    RUN(cellIndexRoundTrip);
 
-    RUN(document_position_round_trip);
-    RUN(document_position_equality);
+    RUN(documentPositionRoundTrip);
+    RUN(documentPositionEquality);
 
-    RUN(document_mode_distinct_values);
-    RUN(document_mode_equality);
+    RUN(documentModeDistinctValues);
+    RUN(documentModeEquality);
 
-    RUN(tab_width_valid_boundary_low);
-    RUN(tab_width_valid_boundary_high);
-    RUN(tab_width_valid_typical);
-    RUN(tab_width_round_trip);
-    RUN(tab_width_invalid_zero);
-    RUN(tab_width_invalid_too_large);
-    RUN(tab_width_invalid_negative);
-    RUN(tab_width_equality);
+    RUN(tabWidthValidBoundaryLow);
+    RUN(tabWidthValidBoundaryHigh);
+    RUN(tabWidthValidTypical);
+    RUN(tabWidthRoundTrip);
+    RUN(tabWidthInvalidZero);
+    RUN(tabWidthInvalidTooLarge);
+    RUN(tabWidthInvalidNegative);
+    RUN(tabWidthEquality);
 
-    RUN(history_config_defaults);
-    RUN(history_config_round_trip);
-    RUN(history_config_equality);
+    RUN(historyConfigDefaults);
+    RUN(historyConfigRoundTrip);
+    RUN(historyConfigEquality);
 
-    RUN(indent_config_defaults);
-    RUN(indent_config_custom_tabs);
-    RUN(indent_style_distinct_values);
+    RUN(indentConfigDefaults);
+    RUN(indentConfigCustomTabs);
+    RUN(indentStyleDistinctValues);
 
-    RUN(line_ending_distinct_values);
+    RUN(lineEndingDistinctValues);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;

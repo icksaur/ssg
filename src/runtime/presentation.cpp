@@ -8,45 +8,45 @@ namespace ssg {
 namespace {
 
 template <typename T>
-T const* payload_as(std::any const& payload) { return std::any_cast<T>(&payload); }
+T const* payloadAs(std::any const& payload) { return std::any_cast<T>(&payload); }
 
-bool bool_setting(SettingsModel const& settings, SettingKey key, bool fallback) {
+bool boolSetting(SettingsModel const& settings, SettingKey key, bool fallback) {
     auto value = settings.resolve(key).value;
     if (auto const* typed = std::get_if<bool>(&value)) return *typed;
     return fallback;
 }
 
-CommandHandlerResult set_word_wrap(EditorRuntime::Impl& runtime) {
-    bool next = !bool_setting(runtime.settings, SettingKey::word_wrap, runtime.word_wrap);
-    auto mutation = runtime.settings.set(SettingScope::workspace, SettingKey::word_wrap, next);
+CommandHandlerResult setWordWrap(EditorRuntime::Impl& runtime) {
+    bool next = !boolSetting(runtime.settings, SettingKey::WordWrap, runtime.wordWrap);
+    auto mutation = runtime.settings.set(SettingScope::Workspace, SettingKey::WordWrap, next);
     if (!mutation.accepted()) return failure(mutation.error->message);
-    runtime.word_wrap = next;
+    runtime.wordWrap = next;
     return success();
 }
 
-CommandHandlerResult scroll_lines(EditorRuntime::Impl& runtime, std::any const& payload) {
-    auto const* arguments = payload_as<ScrollLinesArguments>(payload);
+CommandHandlerResult scrollLines(EditorRuntime::Impl& runtime, std::any const& payload) {
+    auto const* arguments = payloadAs<ScrollLinesArguments>(payload);
     if (arguments == nullptr) return failure("view.scroll_lines requires scroll-lines payload");
-    auto rows = static_cast<std::int64_t>(runtime.requested_first_visual_row) + arguments->rows;
-    runtime.requested_first_visual_row = rows < 0 ? 0U : static_cast<std::uint32_t>(rows);
-    runtime.selection.first_visual_row = runtime.requested_first_visual_row;
+    auto rows = static_cast<std::int64_t>(runtime.requestedFirstVisualRow) + arguments->rows;
+    runtime.requestedFirstVisualRow = rows < 0 ? 0U : static_cast<std::uint32_t>(rows);
+    runtime.selection.firstVisualRow = runtime.requestedFirstVisualRow;
     return success();
 }
 
-CommandHandlerResult scroll_pages(EditorRuntime::Impl& runtime, std::any const& payload) {
-    auto const* arguments = payload_as<ScrollPagesArguments>(payload);
+CommandHandlerResult scrollPages(EditorRuntime::Impl& runtime, std::any const& payload) {
+    auto const* arguments = payloadAs<ScrollPagesArguments>(payload);
     if (arguments == nullptr) return failure("view.scroll_pages requires scroll-pages payload");
     // A page is the real pane height cached from the last snapshot, not a fake 24.
-    auto const page_rows = static_cast<std::int64_t>(
-        std::max<std::uint32_t>(runtime.last_pane_content_rows, 1));
-    auto rows = static_cast<std::int64_t>(runtime.requested_first_visual_row) + arguments->pages * page_rows;
-    runtime.requested_first_visual_row = rows < 0 ? 0U : static_cast<std::uint32_t>(rows);
-    runtime.selection.first_visual_row = runtime.requested_first_visual_row;
+    auto const pageRows = static_cast<std::int64_t>(
+        std::max<std::uint32_t>(runtime.lastPaneContentRows, 1));
+    auto rows = static_cast<std::int64_t>(runtime.requestedFirstVisualRow) + arguments->pages * pageRows;
+    runtime.requestedFirstVisualRow = rows < 0 ? 0U : static_cast<std::uint32_t>(rows);
+    runtime.selection.firstVisualRow = runtime.requestedFirstVisualRow;
     return success();
 }
 
-CommandHandlerResult scroll_fraction(EditorRuntime::Impl& runtime, std::any const& payload) {
-    auto const* arguments = payload_as<ScrollFractionArguments>(payload);
+CommandHandlerResult scrollFraction(EditorRuntime::Impl& runtime, std::any const& payload) {
+    auto const* arguments = payloadAs<ScrollFractionArguments>(payload);
     if (arguments == nullptr) return failure("view.scroll_to_fraction requires scroll-fraction payload");
     // Resolve maximum_first_row against the REAL pane cached from the last
     // snapshot, so a scrollbar drag to the bottom reaches the true last line on a
@@ -54,35 +54,35 @@ CommandHandlerResult scroll_fraction(EditorRuntime::Impl& runtime, std::any cons
     // the same wrap-gated viewport the snapshot uses so the drag maps to the same
     // total the scrollbar thumb was drawn from (M12).
     ViewportDimensions const viewport{
-        std::max<std::uint32_t>(runtime.last_pane_content_columns, 1),
-        std::max<std::uint32_t>(runtime.last_pane_content_rows, 1)};
-    auto view = runtime.compute_editor_viewport(viewport, 0, 0);
-    runtime.requested_first_visual_row = arguments->denominator == 0 ? 0 :
-        static_cast<std::uint32_t>((static_cast<std::uint64_t>(view.scrollbar.maximum_first_row) * arguments->numerator) / arguments->denominator);
-    runtime.selection.first_visual_row = runtime.requested_first_visual_row;
+        std::max<std::uint32_t>(runtime.lastPaneContentColumns, 1),
+        std::max<std::uint32_t>(runtime.lastPaneContentRows, 1)};
+    auto view = runtime.computeEditorViewport(viewport, 0, 0);
+    runtime.requestedFirstVisualRow = arguments->denominator == 0 ? 0 :
+        static_cast<std::uint32_t>((static_cast<std::uint64_t>(view.scrollbar.maximumFirstRow) * arguments->numerator) / arguments->denominator);
+    runtime.selection.firstVisualRow = runtime.requestedFirstVisualRow;
     return success();
 }
 
-CommandHandlerResult shell_command(EditorRuntime::Impl& runtime, std::string_view id) {
-    if (id == "pane.split_horizontal") runtime.shell.split_active(SplitAxis::horizontal);
-    else if (id == "pane.split_vertical") runtime.shell.split_active(SplitAxis::vertical);
-    else if (id == "pane.close") (void)runtime.shell.close_active_pane();
-    else if (id == "pane.next") runtime.shell.next_pane();
-    else if (id == "pane.previous") runtime.shell.previous_pane();
-    else if (id == "pane.focus_left") (void)runtime.shell.focus_pane(PaneDirection::left, runtime.shell_view(ViewportDimensions{80, 24}));
-    else if (id == "pane.focus_right") (void)runtime.shell.focus_pane(PaneDirection::right, runtime.shell_view(ViewportDimensions{80, 24}));
-    else if (id == "pane.focus_up") (void)runtime.shell.focus_pane(PaneDirection::up, runtime.shell_view(ViewportDimensions{80, 24}));
-    else if (id == "pane.focus_down") (void)runtime.shell.focus_pane(PaneDirection::down, runtime.shell_view(ViewportDimensions{80, 24}));
-    else if (id == "panel.toggle") runtime.shell.toggle_panel();
-    else if (id == "panel.focus") (void)runtime.shell.focus_panel();
-    else if (id == "panel.next_provider") runtime.shell.next_panel_provider();
-    else if (id == "panel.previous_provider") runtime.shell.previous_panel_provider();
-    else if (id == "view.toggle_distraction_free") runtime.shell.toggle_distraction_free();
+CommandHandlerResult shellCommand(EditorRuntime::Impl& runtime, std::string_view id) {
+    if (id == "pane.split_horizontal") runtime.shell.splitActive(SplitAxis::Horizontal);
+    else if (id == "pane.split_vertical") runtime.shell.splitActive(SplitAxis::Vertical);
+    else if (id == "pane.close") (void)runtime.shell.closeActivePane();
+    else if (id == "pane.next") runtime.shell.nextPane();
+    else if (id == "pane.previous") runtime.shell.previousPane();
+    else if (id == "pane.focus_left") (void)runtime.shell.focusPane(PaneDirection::Left, runtime.shellView(ViewportDimensions{80, 24}));
+    else if (id == "pane.focus_right") (void)runtime.shell.focusPane(PaneDirection::Right, runtime.shellView(ViewportDimensions{80, 24}));
+    else if (id == "pane.focus_up") (void)runtime.shell.focusPane(PaneDirection::Up, runtime.shellView(ViewportDimensions{80, 24}));
+    else if (id == "pane.focus_down") (void)runtime.shell.focusPane(PaneDirection::Down, runtime.shellView(ViewportDimensions{80, 24}));
+    else if (id == "panel.toggle") runtime.shell.togglePanel();
+    else if (id == "panel.focus") (void)runtime.shell.focusPanel();
+    else if (id == "panel.next_provider") runtime.shell.nextPanelProvider();
+    else if (id == "panel.previous_provider") runtime.shell.previousPanelProvider();
+    else if (id == "view.toggle_distraction_free") runtime.shell.toggleDistractionFree();
     else return failure("unknown shell command");
     return success();
 }
 
-CommandHandlerResult prompt_status_command(EditorRuntime::Impl& runtime, std::string_view id, std::any const& payload) {
+CommandHandlerResult promptStatusCommand(EditorRuntime::Impl& runtime, std::string_view id, std::any const& payload) {
     if (id == "prompt.submit") {
         auto result = runtime.prompt.submit();
         return result.accepted() ? success() : failure(result.error->message);
@@ -95,77 +95,77 @@ CommandHandlerResult prompt_status_command(EditorRuntime::Impl& runtime, std::st
     else if (id == "status.previous") runtime.status.previous();
     else if (id == "status.dismiss") runtime.status.dismiss();
     else if (id == "status.invoke_action") {
-        auto const* invocation = payload_as<StatusActionInvocation>(payload);
+        auto const* invocation = payloadAs<StatusActionInvocation>(payload);
         if (invocation == nullptr) return failure("status.invoke_action requires an action payload");
-        auto result = runtime.status.invoke_action(*invocation);
+        auto result = runtime.status.invokeAction(*invocation);
         return result.accepted() ? success() : failure("status action is unavailable");
     }
     return success();
 }
 
-std::string setting_message(SettingMutation const& mutation) {
+std::string settingMessage(SettingMutation const& mutation) {
     return mutation.error ? mutation.error->message : "setting mutation failed";
 }
 
-void sync_runtime_settings(EditorRuntime::Impl& runtime) {
-    runtime.word_wrap = bool_setting(runtime.settings, SettingKey::word_wrap,
-                                     runtime.word_wrap);
+void syncRuntimeSettings(EditorRuntime::Impl& runtime) {
+    runtime.wordWrap = boolSetting(runtime.settings, SettingKey::WordWrap,
+                                     runtime.wordWrap);
 }
 
-CommandHandlerResult settings_command(EditorRuntime::Impl& runtime, std::string_view id, std::any const& payload) {
+CommandHandlerResult settingsCommand(EditorRuntime::Impl& runtime, std::string_view id, std::any const& payload) {
     if (id == "settings.open") {
         (void)runtime.prompt.open(PromptRequest{
-            PromptKind::settings, "Settings",
+            PromptKind::Settings, "Settings",
             {{"settings.query", "Settings query", ""}}, {}, std::nullopt});
         return success();
     }
     if (id == "settings.export_workspace") {
-        runtime.enqueue_status(StatusPriority::information, runtime.settings.export_scope(SettingScope::workspace));
+        runtime.enqueueStatus(StatusPriority::Information, runtime.settings.exportScope(SettingScope::Workspace));
         return success();
     }
     if (id == "settings.import_workspace") {
-        auto const* document = payload_as<std::string>(payload);
+        auto const* document = payloadAs<std::string>(payload);
         if (document == nullptr) return failure("settings.import_workspace requires a document payload");
-        auto result = runtime.settings.import_scope(SettingScope::workspace, *document);
-        sync_runtime_settings(runtime);
+        auto result = runtime.settings.importScope(SettingScope::Workspace, *document);
+        syncRuntimeSettings(runtime);
         return result.ok ? success() : failure(result.message);
     }
     if (id == "settings.set") {
-        auto const* arguments = payload_as<SettingSetArguments>(payload);
+        auto const* arguments = payloadAs<SettingSetArguments>(payload);
         if (arguments == nullptr) {
             return failure("settings.set requires a typed settings payload");
         }
         auto mutation = runtime.settings.set(arguments->scope, arguments->key,
                                              arguments->value);
-        if (!mutation.accepted()) return failure(setting_message(mutation));
-        sync_runtime_settings(runtime);
+        if (!mutation.accepted()) return failure(settingMessage(mutation));
+        syncRuntimeSettings(runtime);
         return success();
     }
     if (id == "settings.reset") {
-        auto const* arguments = payload_as<SettingResetArguments>(payload);
+        auto const* arguments = payloadAs<SettingResetArguments>(payload);
         if (arguments == nullptr) {
             return failure("settings.reset requires a typed settings payload");
         }
         auto mutation = runtime.settings.reset(arguments->scope, arguments->key);
-        if (!mutation.accepted()) return failure(setting_message(mutation));
-        sync_runtime_settings(runtime);
+        if (!mutation.accepted()) return failure(settingMessage(mutation));
+        syncRuntimeSettings(runtime);
         return success();
     }
     if (id == "settings.reset_scope") {
-        auto const* arguments = payload_as<SettingResetScopeArguments>(payload);
+        auto const* arguments = payloadAs<SettingResetScopeArguments>(payload);
         if (arguments == nullptr) {
             return failure("settings.reset_scope requires a typed settings payload");
         }
         try {
-            for (auto const& entry : runtime.settings.view_state().entries) {
-                if (!runtime.settings.scoped_value(arguments->scope, entry.key)) continue;
+            for (auto const& entry : runtime.settings.viewState().entries) {
+                if (!runtime.settings.scopedValue(arguments->scope, entry.key)) continue;
                 auto mutation = runtime.settings.reset(arguments->scope, entry.key);
-                if (!mutation.accepted()) return failure(setting_message(mutation));
+                if (!mutation.accepted()) return failure(settingMessage(mutation));
             }
         } catch (std::invalid_argument const& error) {
             return failure(error.what());
         }
-        sync_runtime_settings(runtime);
+        syncRuntimeSettings(runtime);
         return success();
     }
     return failure(std::string{id} + " requires a typed settings payload");
@@ -173,32 +173,32 @@ CommandHandlerResult settings_command(EditorRuntime::Impl& runtime, std::string_
 
 } // namespace
 
-void bind_runtime_presentation(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime) {
+void bindRuntimePresentation(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime) {
     builder.bind("view.toggle_word_wrap", [&runtime](CommandContext&, std::any const&) {
-        return runtime.run_transaction([&] { return set_word_wrap(runtime); });
+        return runtime.runTransaction([&] { return setWordWrap(runtime); });
     });
     builder.bind("view.scroll_lines", [&runtime](CommandContext&, std::any const& payload) {
-        return runtime.run_transaction([&] { return scroll_lines(runtime, payload); });
+        return runtime.runTransaction([&] { return scrollLines(runtime, payload); });
     });
     builder.bind("view.scroll_pages", [&runtime](CommandContext&, std::any const& payload) {
-        return runtime.run_transaction([&] { return scroll_pages(runtime, payload); });
+        return runtime.runTransaction([&] { return scrollPages(runtime, payload); });
     });
     builder.bind("view.scroll_to_fraction", [&runtime](CommandContext&, std::any const& payload) {
-        return runtime.run_transaction([&] { return scroll_fraction(runtime, payload); });
+        return runtime.runTransaction([&] { return scrollFraction(runtime, payload); });
     });
     for (auto const& descriptor : ShellCommandSet{}.descriptors) {
         builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const&) {
-            return runtime.run_transaction([&] { return shell_command(runtime, descriptor.id); });
+            return runtime.runTransaction([&] { return shellCommand(runtime, descriptor.id); });
         });
     }
     for (auto const& descriptor : PromptStatusCommandSet{}.descriptors) {
         builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const& payload) {
-            return runtime.run_transaction([&] { return prompt_status_command(runtime, descriptor.id, payload); });
+            return runtime.runTransaction([&] { return promptStatusCommand(runtime, descriptor.id, payload); });
         });
     }
     for (auto const& descriptor : SettingsCommandSet{}.descriptors) {
         builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const& payload) {
-            return runtime.run_transaction([&] { return settings_command(runtime, descriptor.id, payload); });
+            return runtime.runTransaction([&] { return settingsCommand(runtime, descriptor.id, payload); });
         });
     }
 }

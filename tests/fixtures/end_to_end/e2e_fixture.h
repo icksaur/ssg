@@ -41,7 +41,7 @@ inline CanonicalState canonical(ssg::SessionSnapshot const& snapshot) {
         sections.tabs.tabs.empty() ? nullptr : &sections.tabs.tabs.front();
     bool workspace_open = false;
     bool word_wrap = false;
-    for (auto const& node : sections.shell.accessibility_nodes) {
+    for (auto const& node : sections.shell.accessibilityNodes) {
         workspace_open =
             workspace_open || node.label.starts_with("Workspace ");
         word_wrap = word_wrap || node.label == "Word wrap on";
@@ -49,13 +49,13 @@ inline CanonicalState canonical(ssg::SessionSnapshot const& snapshot) {
     return {
         snapshot.revision(),
         sections.document.text,
-        sections.clipboard.plain_text,
+        sections.clipboard.plainText,
         tab ? tab->label : std::string{},
         sections.selection.selections.items().size(),
-        sections.selection.first_visual_row,
-        tab ? tab->mode : ssg::DocumentMode::edit,
-        tab ? tab->kind : ssg::TabKind::document,
-        sections.follow_edits.mode,
+        sections.selection.firstVisualRow,
+        tab ? tab->mode : ssg::DocumentMode::Edit,
+        tab ? tab->kind : ssg::TabKind::Document,
+        sections.followEdits.mode,
         workspace_open,
         tab ? tab->dirty : false,
         tab != nullptr,
@@ -64,38 +64,38 @@ inline CanonicalState canonical(ssg::SessionSnapshot const& snapshot) {
 }
 
 inline void apply(CanonicalState& state, ssg::SessionDelta const& delta) {
-    if (delta.base_revision() != state.revision)
+    if (delta.baseRevision() != state.revision)
         throw std::runtime_error{"canonical delta base revision mismatch"};
     if (delta.document()) {
         auto const& document = *delta.document();
         auto const start = static_cast<std::size_t>(document.start.value());
         state.text.replace(start,
-                           static_cast<std::size_t>(document.erased_bytes),
-                           document.inserted_text);
+                           static_cast<std::size_t>(document.erasedBytes),
+                           document.insertedText);
     }
     if (delta.selection().replacement) {
         auto const& selection = *delta.selection().replacement;
         state.selection_count = selection.selections.items().size();
-        state.first_row = selection.first_visual_row;
+        state.first_row = selection.firstVisualRow;
     }
     if (delta.clipboard().replacement)
-        state.clipboard = delta.clipboard().replacement->plain_text;
+        state.clipboard = delta.clipboard().replacement->plainText;
     if (delta.tabs().state) {
         auto const& tabs = *delta.tabs().state;
         auto const* tab = tabs.tabs.empty() ? nullptr : &tabs.tabs.front();
         state.label = tab ? tab->label : std::string{};
-        state.mode = tab ? tab->mode : ssg::DocumentMode::edit;
-        state.tab_kind = tab ? tab->kind : ssg::TabKind::document;
+        state.mode = tab ? tab->mode : ssg::DocumentMode::Edit;
+        state.tab_kind = tab ? tab->kind : ssg::TabKind::Document;
         state.dirty = tab ? tab->dirty : false;
         state.tab_open = tab != nullptr;
     }
-    if (delta.follow_edits().replacement)
-        state.follow_mode = delta.follow_edits().replacement->mode;
+    if (delta.followEdits().replacement)
+        state.follow_mode = delta.followEdits().replacement->mode;
     if (delta.shell().replacement) {
         state.workspace_open = false;
         state.word_wrap = false;
         for (auto const& node :
-             delta.shell().replacement->accessibility_nodes) {
+             delta.shell().replacement->accessibilityNodes) {
             state.workspace_open =
                 state.workspace_open || node.label.starts_with("Workspace ");
             state.word_wrap = state.word_wrap || node.label == "Word wrap on";
@@ -117,10 +117,10 @@ struct FixtureState {
     std::size_t selection_count{1};
     std::uint32_t first_row{0};
     std::uint64_t follow_generation{0};
-    ssg::FollowMode follow_mode{ssg::FollowMode::following};
-    ssg::DocumentMode mode{ssg::DocumentMode::edit};
-    ssg::TabKind tab_kind{ssg::TabKind::document};
-    ssg::TabRecoveryBadge recovery{ssg::TabRecoveryBadge::none};
+    ssg::FollowMode follow_mode{ssg::FollowMode::Following};
+    ssg::DocumentMode mode{ssg::DocumentMode::Edit};
+    ssg::TabKind tab_kind{ssg::TabKind::Document};
+    ssg::TabRecoveryBadge recovery{ssg::TabRecoveryBadge::None};
     bool workspace_open{false};
     bool dirty{false};
     bool tab_open{true};
@@ -140,9 +140,9 @@ struct FixtureState {
             workspace_open = true;
         } else if (id == "file.open") {
             tab_open = true;
-            mode = ssg::DocumentMode::edit;
+            mode = ssg::DocumentMode::Edit;
         } else if (id == "text.insert") {
-            if (mode != ssg::DocumentMode::edit)
+            if (mode != ssg::DocumentMode::Edit)
                 return ssg::CommandHandlerResult::failure(
                     "document is not editable");
             undo_text = text;
@@ -186,19 +186,19 @@ struct FixtureState {
             dirty = false;
         } else if (id == "tab.close") {
             tab_open = false;
-            recovery = ssg::TabRecoveryBadge::durable;
+            recovery = ssg::TabRecoveryBadge::Durable;
         } else if (id == "tab.reopen_closed") {
             tab_open = true;
         } else if (id == "file.reload") {
-            mode = ssg::DocumentMode::read_only;
+            mode = ssg::DocumentMode::ReadOnly;
         } else if (id == "external.open_diff") {
-            mode = ssg::DocumentMode::diff;
-            tab_kind = ssg::TabKind::live_diff;
+            mode = ssg::DocumentMode::Diff;
+            tab_kind = ssg::TabKind::LiveDiff;
         } else if (id == "follow_edits.pause") {
-            follow_mode = ssg::FollowMode::paused;
+            follow_mode = ssg::FollowMode::Paused;
             ++follow_generation;
         } else if (id == "follow_edits.resume") {
-            follow_mode = ssg::FollowMode::following;
+            follow_mode = ssg::FollowMode::Following;
             ++follow_generation;
         } else if (id == "prompt.submit") {
             prompt_open = false;
@@ -206,9 +206,9 @@ struct FixtureState {
             auto const& dropped =
                 std::any_cast<ssg::DroppedContentArguments const&>(payload);
             text.assign(dropped.bytes.begin(), dropped.bytes.end());
-            label = dropped.suggested_label;
-            mode = ssg::DocumentMode::edit;
-            tab_kind = ssg::TabKind::document;
+            label = dropped.suggestedLabel;
+            mode = ssg::DocumentMode::Edit;
+            tab_kind = ssg::TabKind::Document;
             tab_open = true;
             dirty = true;
         }

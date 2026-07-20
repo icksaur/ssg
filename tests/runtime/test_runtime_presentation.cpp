@@ -12,7 +12,7 @@
 
 namespace {
 
-std::filesystem::path unique_root() {
+std::filesystem::path uniqueRoot() {
     auto root = std::filesystem::current_path() / "runtime_presentation";
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
@@ -23,80 +23,80 @@ std::filesystem::path unique_root() {
     return root;
 }
 
-TEST(viewport_shell_settings_and_theme_are_live_sections) {
-    auto root = unique_root();
+TEST(viewportShellSettingsAndThemeAreLiveSections) {
+    auto root = uniqueRoot();
     auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"long.txt"}}).accepted());
 
     auto before = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(before.has_value());
-    ASSERT_EQ(before->client().viewport.first_visual_row, 0U);
-    ASSERT_EQ(before->sections().theme.palette.size(), ssg::theme_palette_size);
+    ASSERT_EQ(before->client().viewport.firstVisualRow, 0U);
+    ASSERT_EQ(before->sections().theme.palette.size(), ssg::kThemePaletteSize);
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{5}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"panel.toggle", runtime.revision(), {}}).accepted());
     auto after = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(after.has_value());
-    ASSERT_EQ(after->client().viewport.first_visual_row, 5U);
+    ASSERT_EQ(after->client().viewport.firstVisualRow, 5U);
     ASSERT_TRUE(after->sections().shell.panel.has_value());
 }
 
-TEST(settings_dispatch_matches_settings_model_oracle_snapshot) {
-    auto root = unique_root();
+TEST(settingsDispatchMatchesSettingsModelOracleSnapshot) {
+    auto root = uniqueRoot();
     auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
     ssg::SettingsModel oracle;
-    auto set_theme = ssg::SettingSetArguments{
-        ssg::SettingScope::workspace, ssg::SettingKey::theme,
+    auto setTheme = ssg::SettingSetArguments{
+        ssg::SettingScope::Workspace, ssg::SettingKey::Theme,
         ssg::SettingValue{std::string{"dark"}}};
-    ASSERT_TRUE(oracle.set(set_theme.scope, set_theme.key, set_theme.value).accepted());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"settings.set", runtime.revision(), set_theme}).accepted());
+    ASSERT_TRUE(oracle.set(setTheme.scope, setTheme.key, setTheme.value).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"settings.set", runtime.revision(), setTheme}).accepted());
     auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
-    auto expected = oracle.view_state();
+    auto expected = oracle.viewState();
     ASSERT_TRUE(snapshot.has_value());
     ASSERT_EQ(snapshot->sections().settings, expected);
 
-    auto set_wrap = ssg::SettingSetArguments{
-        ssg::SettingScope::user, ssg::SettingKey::word_wrap,
+    auto setWrap = ssg::SettingSetArguments{
+        ssg::SettingScope::User, ssg::SettingKey::WordWrap,
         ssg::SettingValue{true}};
-    ASSERT_TRUE(oracle.set(set_wrap.scope, set_wrap.key, set_wrap.value).accepted());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"settings.set", runtime.revision(), set_wrap}).accepted());
+    ASSERT_TRUE(oracle.set(setWrap.scope, setWrap.key, setWrap.value).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"settings.set", runtime.revision(), setWrap}).accepted());
     snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
-    expected = oracle.view_state();
+    expected = oracle.viewState();
     ASSERT_TRUE(snapshot.has_value());
     ASSERT_EQ(snapshot->sections().settings, expected);
 
-    auto reset_theme = ssg::SettingResetArguments{
-        ssg::SettingScope::workspace, ssg::SettingKey::theme};
-    ASSERT_TRUE(oracle.reset(reset_theme.scope, reset_theme.key).accepted());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"settings.reset", runtime.revision(), reset_theme}).accepted());
+    auto resetTheme = ssg::SettingResetArguments{
+        ssg::SettingScope::Workspace, ssg::SettingKey::Theme};
+    ASSERT_TRUE(oracle.reset(resetTheme.scope, resetTheme.key).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"settings.reset", runtime.revision(), resetTheme}).accepted());
     snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
-    expected = oracle.view_state();
+    expected = oracle.viewState();
     ASSERT_TRUE(snapshot.has_value());
     ASSERT_EQ(snapshot->sections().settings, expected);
 
-    auto set_keymap = ssg::SettingSetArguments{
-        ssg::SettingScope::workspace, ssg::SettingKey::keymap,
+    auto setKeymap = ssg::SettingSetArguments{
+        ssg::SettingScope::Workspace, ssg::SettingKey::Keymap,
         ssg::SettingValue{std::string{"vim"}}};
-    ASSERT_TRUE(oracle.set(set_keymap.scope, set_keymap.key, set_keymap.value).accepted());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"settings.set", runtime.revision(), set_keymap}).accepted());
-    ASSERT_TRUE(oracle.reset(ssg::SettingScope::workspace, ssg::SettingKey::keymap).accepted());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"settings.reset_scope", runtime.revision(), ssg::SettingResetScopeArguments{ssg::SettingScope::workspace}}).accepted());
+    ASSERT_TRUE(oracle.set(setKeymap.scope, setKeymap.key, setKeymap.value).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"settings.set", runtime.revision(), setKeymap}).accepted());
+    ASSERT_TRUE(oracle.reset(ssg::SettingScope::Workspace, ssg::SettingKey::Keymap).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"settings.reset_scope", runtime.revision(), ssg::SettingResetScopeArguments{ssg::SettingScope::Workspace}}).accepted());
     snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
-    expected = oracle.view_state();
+    expected = oracle.viewState();
     ASSERT_TRUE(snapshot.has_value());
     ASSERT_EQ(snapshot->sections().settings, expected);
 }
 
-TEST(editor_scroll_uses_the_real_pane_height_not_a_hardcoded_24) {
+TEST(editorScrollUsesTheRealPaneHeightNotAHardcoded24) {
     auto root = std::filesystem::current_path() / "runtime_presentation_scroll";
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
@@ -109,7 +109,7 @@ TEST(editor_scroll_uses_the_real_pane_height_not_a_hardcoded_24) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"tall.txt"}}).accepted());
 
     // A 40-row terminal (NOT 24): a page is the real pane content height.
@@ -117,92 +117,92 @@ TEST(editor_scroll_uses_the_real_pane_height_not_a_hardcoded_24) {
     auto snap0 = runtime.snapshot(ssg::ClientId{1}, dims);  // populate the cache
     ASSERT_TRUE(snap0.has_value());
     if (!snap0) return;
-    auto const pane_rows = static_cast<std::uint32_t>(snap0->sections().shell.panes.front().content.height);
-    ASSERT_TRUE(pane_rows != 24);  // the whole point: not the hardcoded value
+    auto const paneRows = static_cast<std::uint32_t>(snap0->sections().shell.panes.front().content.height);
+    ASSERT_TRUE(paneRows != 24);  // the whole point: not the hardcoded value
 
     // PageDown advances by the real pane height, not 24.
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_pages", runtime.revision(), ssg::ScrollPagesArguments{1}}).accepted());
-    auto after_page = runtime.snapshot(ssg::ClientId{1}, dims);
-    ASSERT_TRUE(after_page.has_value());
-    if (!after_page) return;
-    ASSERT_EQ(after_page->client().viewport.first_visual_row, pane_rows);
+    auto afterPage = runtime.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(afterPage.has_value());
+    if (!afterPage) return;
+    ASSERT_EQ(afterPage->client().viewport.firstVisualRow, paneRows);
 
     // Scroll-to-fraction(1/1) reaches the REAL maximum for this terminal (the last
     // line becomes visible), not the 24-row-derived maximum.
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_to_fraction", runtime.revision(), ssg::ScrollFractionArguments{1, 1}}).accepted());
-    auto after_bottom = runtime.snapshot(ssg::ClientId{1}, dims);
-    ASSERT_TRUE(after_bottom.has_value());
-    if (!after_bottom) return;
-    ASSERT_EQ(after_bottom->client().viewport.first_visual_row,
-              after_bottom->client().viewport.scrollbar.maximum_first_row);
+    auto afterBottom = runtime.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(afterBottom.has_value());
+    if (!afterBottom) return;
+    ASSERT_EQ(afterBottom->client().viewport.firstVisualRow,
+              afterBottom->client().viewport.scrollbar.maximumFirstRow);
     std::filesystem::remove_all(root);
 }
 
 } // namespace
 
 
-TEST(reported_leader_sequence_renders_a_per_snapshot_hint) {
-    auto root = unique_root();
+TEST(reportedLeaderSequenceRendersAPerSnapshotHint) {
+    auto root = uniqueRoot();
     auto created = ssg::EditorRuntime::create(
         {root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
-    const auto leader_content = [](ssg::SessionSnapshot const& snapshot) {
-        for (auto const& node : snapshot.sections().shell.accessibility_nodes) {
+    const auto leaderContent = [](ssg::SessionSnapshot const& snapshot) {
+        for (auto const& node : snapshot.sections().shell.accessibilityNodes) {
             if (node.id == "leader") return node.content;
         }
         return std::string{};
     };
 
     // A snapshot with a reported leader sequence carries the hint.
-    auto with_leader = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12},
+    auto withLeader = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12},
                                         ssg::KeySequence{ssg::KeyStroke{"Escape"}});
-    ASSERT_TRUE(with_leader.has_value());
-    if (with_leader) ASSERT_EQ(leader_content(*with_leader), std::string{"leader: Escape"});
+    ASSERT_TRUE(withLeader.has_value());
+    if (withLeader) ASSERT_EQ(leaderContent(*withLeader), std::string{"leader: Escape"});
 
     // A snapshot with no reported sequence (a second client, or the same client
     // not in leader mode) carries no hint -- the state is per snapshot call.
-    auto without_leader = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
-    ASSERT_TRUE(without_leader.has_value());
-    if (without_leader) ASSERT_TRUE(leader_content(*without_leader).empty());
+    auto withoutLeader = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    ASSERT_TRUE(withoutLeader.has_value());
+    if (withoutLeader) ASSERT_TRUE(leaderContent(*withoutLeader).empty());
 }
 
-TEST(palette_candidates_match_the_command_registry) {
-    auto root = unique_root();
+TEST(paletteCandidatesMatchTheCommandRegistry) {
+    auto root = uniqueRoot();
     auto created = ssg::EditorRuntime::create(
         {root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
 
     auto const& palette = snapshot->sections().palette;
-    ASSERT_TRUE(palette.mode == ssg::SearchMode::command);
+    ASSERT_TRUE(palette.mode == ssg::SearchMode::Command);
     // Every registered P0 command appears exactly once as a candidate.
-    auto const descriptors = ssg::p0_command_descriptors();
+    auto const descriptors = ssg::p0CommandDescriptors();
     ASSERT_EQ(palette.candidates.size(), descriptors.size());
-    std::set<std::string> candidate_ids;
+    std::set<std::string> candidateIds;
     for (auto const& candidate : palette.candidates) {
         ASSERT_FALSE(candidate.label.empty());
-        candidate_ids.insert(candidate.id);
+        candidateIds.insert(candidate.id);
     }
     for (auto const& descriptor : descriptors) {
-        ASSERT_TRUE(candidate_ids.contains(descriptor.id));
+        ASSERT_TRUE(candidateIds.contains(descriptor.id));
     }
 }
 
 int main() {
-    RUN(viewport_shell_settings_and_theme_are_live_sections);
-    RUN(settings_dispatch_matches_settings_model_oracle_snapshot);
-    RUN(reported_leader_sequence_renders_a_per_snapshot_hint);
-    RUN(palette_candidates_match_the_command_registry);
-    RUN(editor_scroll_uses_the_real_pane_height_not_a_hardcoded_24);
+    RUN(viewportShellSettingsAndThemeAreLiveSections);
+    RUN(settingsDispatchMatchesSettingsModelOracleSnapshot);
+    RUN(reportedLeaderSequenceRendersAPerSnapshotHint);
+    RUN(paletteCandidatesMatchTheCommandRegistry);
+    RUN(editorScrollUsesTheRealPaneHeightNotAHardcoded24);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

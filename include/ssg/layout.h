@@ -33,32 +33,32 @@ enum class CellKind : uint8_t {
     // point (GCB=Extend/ZWJ/SpacingMark) that has nonzero display width (e.g.
     // a standalone wide emoji modifier such as U+1F3FB–U+1F3FF with EAW=W).
     // cell_width is 1 (narrow) or 2 (wide per UAX #11 / Emoji_Presentation).
-    text,
+    Text,
 
     // Zero-width combining cluster.  The base code point is a combining,
     // variation-selector, or zero-width extending character with no prior base
     // in the logical line, and its display width is 0.
     // cell_width is always 0.
-    combining,
+    Combining,
 
     // Horizontal tab (U+0009).
     // cell_width advances to the next tab stop (1..tab_width columns).
-    tab,
+    Tab,
 
     // GCB=Control cluster. C0, DEL, and C1 controls render as a visible
     // 1-cell replacement glyph; zero-width format controls consume 0 cells.
-    control,
+    Control,
 
     // Invalid UTF-8 byte.  Each individual invalid byte yields one span with
     // cell_width 1 (rendered as a visible replacement glyph).
-    invalid_utf8,
+    InvalidUtf8,
 };
 
 // One grapheme cluster mapped to its display columns.
 struct CellSpan {
-    uint32_t byte_offset;  // Start byte offset within the input line
-    uint32_t byte_len;     // Byte length of this grapheme cluster (>= 1)
-    uint32_t cell_width;   // Display columns consumed by this cluster:
+    uint32_t byteOffset;  // Start byte offset within the input line
+    uint32_t byteLen;     // Byte length of this grapheme cluster (>= 1)
+    uint32_t cellWidth;   // Display columns consumed by this cluster:
                            //   0  for CellKind::combining
                            //   1  for narrow text, control, invalid_utf8
                            //   2  for wide text
@@ -69,7 +69,7 @@ struct CellSpan {
 // Cell run for one logical line.  Contains one CellSpan per grapheme cluster.
 struct CellRun {
     std::vector<CellSpan> spans;
-    uint32_t total_cells;  // Sum of all span.cell_width values
+    uint32_t totalCells;  // Sum of all span.cell_width values
 };
 
 // Compute the cell run for one logical line of UTF-8 text.
@@ -84,14 +84,14 @@ struct CellRun {
 // Grapheme cluster extensions (combining marks, variation selectors, ZWJ
 // sequences, regional-indicator flag pairs) are absorbed into the preceding
 // cluster's byte_len; they do not produce additional spans.
-CellRun compute_cell_run(std::string_view line_utf8, int tab_width = 4);
+CellRun computeCellRun(std::string_view lineUtf8, int tabWidth = 4);
 
 // Test instrumentation (M12 INV-viewport-bounded-work).  Counts the
 // compute_cell_run (grapheme-segmentation) calls made on the current thread since
 // the last reset.  Diagnostic only, not production state; it lets a test assert
 // that a no-wrap navigation/reveal segments only the caret + target lines
 // (bounded, document-length independent) rather than the whole document.
-[[nodiscard]] std::uint64_t cell_run_calls();
-void reset_cell_run_calls();
+[[nodiscard]] std::uint64_t cellRunCalls();
+void resetCellRunCalls();
 
 }  // namespace ssg

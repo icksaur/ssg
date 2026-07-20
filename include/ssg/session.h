@@ -12,18 +12,18 @@ namespace ssg {
 
 struct ClientCommand {
     std::string id;
-    Revision base_revision;
+    Revision baseRevision;
     std::any payload;
 };
 
 enum class CommandError : std::uint8_t {
-    none,
-    unknown_client,
-    unknown_command,
-    stale_revision,
-    capability_denied,
-    handler_failed,
-    revision_exhausted,
+    None,
+    UnknownClient,
+    UnknownCommand,
+    StaleRevision,
+    CapabilityDenied,
+    HandlerFailed,
+    RevisionExhausted,
 };
 
 struct CommandResult {
@@ -32,13 +32,13 @@ struct CommandResult {
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == CommandError::none;
+        return error == CommandError::None;
     }
 };
 
 enum class AttachError : std::uint8_t {
-    none,
-    duplicate_client,
+    None,
+    DuplicateClient,
 };
 
 struct AttachResult {
@@ -46,18 +46,18 @@ struct AttachResult {
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == AttachError::none;
+        return error == AttachError::None;
     }
 };
 
 struct AttachedClient {
     InvocationPrincipal principal;
-    ViewId view_id;
+    ViewId viewId;
 };
 
 struct SessionTopology {
-    std::optional<WorkspaceId> active_workspace;
-    std::optional<ViewId> active_view;
+    std::optional<WorkspaceId> activeWorkspace;
+    std::optional<ViewId> activeView;
 
     bool operator==(SessionTopology const&) const = default;
 };
@@ -74,10 +74,10 @@ public:
     EditorSession& operator=(EditorSession&&) = delete;
 
     [[nodiscard]] AttachResult attach(InvocationPrincipal principal,
-                                      ViewId view_id);
-    [[nodiscard]] bool detach(ClientId client_id);
+                                      ViewId viewId);
+    [[nodiscard]] bool detach(ClientId clientId);
 
-    [[nodiscard]] CommandResult dispatch(ClientId client_id,
+    [[nodiscard]] CommandResult dispatch(ClientId clientId,
                                          ClientCommand const& command);
 
     [[nodiscard]] Revision revision() const;
@@ -87,10 +87,10 @@ public:
     // prime_deferred after the first frame).  Client commands still advance the
     // revision only through dispatch; this is the runtime's seam for its own
     // authoritative mutations so delta clients observe them.  Throws on overflow.
-    Revision advance_revision();
+    Revision advanceRevision();
     [[nodiscard]] SessionTopology topology() const;
-    [[nodiscard]] std::optional<AttachedClient> attached_client(
-        ClientId client_id) const;
+    [[nodiscard]] std::optional<AttachedClient> attachedClient(
+        ClientId clientId) const;
 
 private:
     struct Impl;

@@ -15,13 +15,13 @@
 namespace ssg {
 namespace {
 
-[[noreturn]] void throw_errno(std::string_view operation,
+[[noreturn]] void throwErrno(std::string_view operation,
                               const std::filesystem::path& path) {
     throw std::system_error(errno, std::generic_category(),
                             std::string(operation) + ": " + path.string());
 }
 
-void close_noexcept(std::intptr_t& handle) noexcept {
+void closeNoexcept(std::intptr_t& handle) noexcept {
     if (handle >= 0) {
         const auto fd = static_cast<int>(handle);
         flock(fd, LOCK_UN);
@@ -40,7 +40,7 @@ public:
         storage_.push_back('\0');
         descriptor_ = mkstemp(storage_.data());
         if (descriptor_ < 0) {
-            throw_errno("create replacement temporary file", target);
+            throwErrno("create replacement temporary file", target);
         }
         path_ = storage_.data();
         if (fchmod(descriptor_, mode) != 0) {
@@ -49,7 +49,7 @@ public:
             descriptor_ = -1;
             unlink(path_.c_str());
             errno = saved;
-            throw_errno("set replacement permissions", target);
+            throwErrno("set replacement permissions", target);
         }
     }
 
@@ -65,10 +65,10 @@ public:
     int descriptor() const noexcept { return descriptor_; }
     const std::filesystem::path& path() const noexcept { return path_; }
 
-    void close_for_publish() {
+    void closeForPublish() {
         if (close(descriptor_) != 0) {
             descriptor_ = -1;
-            throw_errno("close replacement temporary file", path_);
+            throwErrno("close replacement temporary file", path_);
         }
         descriptor_ = -1;
     }
@@ -83,44 +83,44 @@ private:
 
 } // namespace
 
-FileIdentity file_identity(const std::filesystem::path& path) {
+FileIdentity fileIdentity(const std::filesystem::path& path) {
     struct stat status {};
     if (stat(path.c_str(), &status) != 0) {
-        throw_errno("read file identity", path);
+        throwErrno("read file identity", path);
     }
     return {static_cast<std::uint64_t>(status.st_dev),
             {static_cast<std::uint64_t>(status.st_ino), 0}};
 }
 
-ExclusiveFileLock::ExclusiveFileLock(std::intptr_t native_handle) noexcept
-    : native_handle_(native_handle) {}
+ExclusiveFileLock::ExclusiveFileLock(std::intptr_t nativeHandle) noexcept
+    : nativeHandle_(nativeHandle) {}
 
 ExclusiveFileLock::~ExclusiveFileLock() {
-    close_noexcept(native_handle_);
+    closeNoexcept(nativeHandle_);
 }
 
 ExclusiveFileLock::ExclusiveFileLock(ExclusiveFileLock&& other) noexcept
-    : native_handle_(std::exchange(other.native_handle_, -1)) {}
+    : nativeHandle_(std::exchange(other.nativeHandle_, -1)) {}
 
 ExclusiveFileLock& ExclusiveFileLock::operator=(ExclusiveFileLock&& other) noexcept {
     if (this != &other) {
-        close_noexcept(native_handle_);
-        native_handle_ = std::exchange(other.native_handle_, -1);
+        closeNoexcept(nativeHandle_);
+        nativeHandle_ = std::exchange(other.nativeHandle_, -1);
     }
     return *this;
 }
 
-std::optional<ExclusiveFileLock> try_lock_file(
+std::optional<ExclusiveFileLock> tryLockFile(
     const std::filesystem::path& path) {
     const int descriptor = open(path.c_str(), O_CREAT | O_RDWR | O_CLOEXEC, 0600);
     if (descriptor < 0) {
-        throw_errno("open lock file", path);
+        throwErrno("open lock file", path);
     }
     if (fchmod(descriptor, 0600) != 0) {
         const int saved = errno;
         close(descriptor);
         errno = saved;
-        throw_errno("set lock permissions", path);
+        throwErrno("set lock permissions", path);
     }
     if (flock(descriptor, LOCK_EX | LOCK_NB) == 0) {
         return ExclusiveFileLock{descriptor};
@@ -131,24 +131,24 @@ std::optional<ExclusiveFileLock> try_lock_file(
         return std::nullopt;
     }
     errno = saved;
-    throw_errno("acquire file lock", path);
+    throwErrno("acquire file lock", path);
 }
 
-void set_owner_only_permissions(const std::filesystem::path& path) {
+void setOwnerOnlyPermissions(const std::filesystem::path& path) {
     struct stat status {};
     if (stat(path.c_str(), &status) != 0) {
-        throw_errno("read permissions", path);
+        throwErrno("read permissions", path);
     }
     const mode_t mode = S_ISDIR(status.st_mode) ? 0700 : 0600;
     if (chmod(path.c_str(), mode) != 0) {
-        throw_errno("set owner-only permissions", path);
+        throwErrno("set owner-only permissions", path);
     }
 }
 
-std::filesystem::path user_cache_root(std::string_view application_name) {
-    const auto validation = validate_workspace_relative_path(
-        application_name, PathSyntax::linux);
-    if (!validation.valid() || application_name.find('/') != std::string_view::npos) {
+std::filesystem::path userCacheRoot(std::string_view applicationName) {
+    const auto validation = validateWorkspaceRelativePath(
+        applicationName, PathSyntax::Linux);
+    if (!validation.valid() || applicationName.find('/') != std::string_view::npos) {
         throw std::invalid_argument("cache application name must be one valid component");
     }
 
@@ -162,17 +162,17 @@ std::filesystem::path user_cache_root(std::string_view application_name) {
     } else {
         throw std::runtime_error("cannot resolve user cache root: HOME is unset");
     }
-    return base / std::filesystem::path{application_name};
+    return base / std::filesystem::path{applicationName};
 }
 
-void replace_file_atomically(const std::filesystem::path& target,
+void replaceFileAtomically(const std::filesystem::path& target,
                              std::span<const std::byte> contents) {
     mode_t mode = 0600;
     struct stat status {};
     if (stat(target.c_str(), &status) == 0) {
         mode = status.st_mode & 0777;
     } else if (errno != ENOENT) {
-        throw_errno("read replacement target permissions", target);
+        throwErrno("read replacement target permissions", target);
     }
 
     TemporaryFile temporary(target, mode);
@@ -185,7 +185,7 @@ void replace_file_atomically(const std::filesystem::path& target,
             if (errno == EINTR) {
                 continue;
             }
-            throw_errno("write replacement temporary file", target);
+            throwErrno("write replacement temporary file", target);
         }
         if (count == 0) {
             throw std::runtime_error("replacement write made no progress: " +
@@ -194,11 +194,11 @@ void replace_file_atomically(const std::filesystem::path& target,
         written += static_cast<std::size_t>(count);
     }
     if (fsync(temporary.descriptor()) != 0) {
-        throw_errno("flush replacement temporary file", target);
+        throwErrno("flush replacement temporary file", target);
     }
-    temporary.close_for_publish();
+    temporary.closeForPublish();
     if (rename(temporary.path().c_str(), target.c_str()) != 0) {
-        throw_errno("publish replacement file", target);
+        throwErrno("publish replacement file", target);
     }
     temporary.published();
 
@@ -208,13 +208,13 @@ void replace_file_atomically(const std::filesystem::path& target,
     const int directory =
         open(parent.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
     if (directory < 0) {
-        throw_errno("open replacement directory", parent);
+        throwErrno("open replacement directory", parent);
     }
     if (fsync(directory) != 0) {
         const int saved = errno;
         close(directory);
         errno = saved;
-        throw_errno("flush replacement directory", parent);
+        throwErrno("flush replacement directory", parent);
     }
     close(directory);
 }

@@ -15,40 +15,40 @@
 namespace ssg {
 
 enum class HitRegion : std::uint8_t {
-    none,               // out of bounds, chrome, or a reserved-but-empty cell
-    editor,             // a document cell: byte_offset / byte_len are set.  A click
+    None,               // out of bounds, chrome, or a reserved-but-empty cell
+    Editor,             // a document cell: byte_offset / byte_len are set.  A click
                         // past a row's content, on a blank row, or below the last
                         // line resolves to a zero-width END-OF-LINE position
                         // (byte_offset = the row's end, byte_len = 0), so clicking
                         // anywhere on an editor row places the caret at the line end.
-    panel,              // a tree row: node_id is set
-    palette,            // a palette row: item_index is the absolute rank index
-    tab,                // a tab-bar tab: tab_index selects sections().tabs.tabs
-    editor_scrollbar,   // the editor pane gutter: scroll_* are set
-    panel_scrollbar,    // the side-panel gutter: scroll_* are set
-    palette_scrollbar,  // the palette gutter: scroll_* are set
+    Panel,              // a tree row: node_id is set
+    Palette,            // a palette row: item_index is the absolute rank index
+    Tab,                // a tab-bar tab: tab_index selects sections().tabs.tabs
+    EditorScrollbar,   // the editor pane gutter: scroll_* are set
+    PanelScrollbar,    // the side-panel gutter: scroll_* are set
+    PaletteScrollbar,  // the palette gutter: scroll_* are set
 };
 
 struct RegionHit {
-    HitRegion region = HitRegion::none;
+    HitRegion region = HitRegion::None;
     // Editor content: the document byte span of the hit cell.
-    std::uint32_t byte_offset = 0;
-    std::uint32_t byte_len = 0;
+    std::uint32_t byteOffset = 0;
+    std::uint32_t byteLen = 0;
     // Panel content: the tree node under the cell.
-    std::optional<TreeNodeId> node_id;
+    std::optional<TreeNodeId> nodeId;
     // Palette content: the ABSOLUTE index into the full ranked order
     // (first_visible + on-screen row).
-    std::uint32_t item_index = 0;
+    std::uint32_t itemIndex = 0;
     // Tab content: the index into sections().tabs.tabs of the clicked tab.
-    std::uint32_t tab_index = 0;
+    std::uint32_t tabIndex = 0;
     // Scrollbar regions: the position as a numerator/denominator pair ready to
     // feed view.scroll_to_fraction (first_row = maximum_first_row * numerator /
     // denominator), plus the equivalent [0, 1] fraction for display.
-    std::uint32_t scroll_numerator = 0;
-    std::uint32_t scroll_denominator = 1;
-    double scrollbar_fraction = 0.0;
+    std::uint32_t scrollNumerator = 0;
+    std::uint32_t scrollDenominator = 1;
+    double scrollbarFraction = 0.0;
 
-    [[nodiscard]] bool hit() const noexcept { return region != HitRegion::none; }
+    [[nodiscard]] bool hit() const noexcept { return region != HitRegion::None; }
     bool operator==(const RegionHit&) const = default;
 };
 
@@ -58,7 +58,7 @@ struct RegionHit {
 // side panel, editor pane, and their gutters occupy disjoint columns, so their
 // order does not matter. A cell outside every region, on the tree provider-label
 // row, or in a reserved-but-empty gutter/list area returns HitRegion::none.
-[[nodiscard]] RegionHit hit_test(SessionSnapshot const& snapshot, int column,
+[[nodiscard]] RegionHit hitTest(SessionSnapshot const& snapshot, int column,
                                  int row);
 
 }  // namespace ssg

@@ -16,27 +16,27 @@
 namespace ssg {
 
 enum class LineTerminator : std::uint8_t {
-    none,
-    lf,
-    crlf,
-    cr,
+    None,
+    Lf,
+    Crlf,
+    Cr,
 };
 
 enum class FinalNewlinePolicy : std::uint8_t {
-    preserve,
-    ensure_present,
-    ensure_absent,
+    Preserve,
+    EnsurePresent,
+    EnsureAbsent,
 };
 
 enum class TextEncodingErrorCode : std::uint8_t {
-    invalid_input,
-    invalid_metadata,
-    lossy_conversion,
+    InvalidInput,
+    InvalidMetadata,
+    LossyConversion,
 };
 
 struct TextEncodingError {
-    TextEncodingErrorCode code = TextEncodingErrorCode::invalid_input;
-    std::size_t utf8_offset = 0;
+    TextEncodingErrorCode code = TextEncodingErrorCode::InvalidInput;
+    std::size_t utf8Offset = 0;
     std::string message;
 
     friend bool operator==(const TextEncodingError&,
@@ -44,10 +44,10 @@ struct TextEncodingError {
 };
 
 struct TextEncodingStatus {
-    TextEncoding encoding = TextEncoding::utf8;
-    LineEnding line_ending = LineEnding::lf;
-    bool had_bom = false;
-    bool final_newline = false;
+    TextEncoding encoding = TextEncoding::Utf8;
+    LineEnding lineEnding = LineEnding::Lf;
+    bool hadBom = false;
+    bool finalNewline = false;
 
     friend bool operator==(const TextEncodingStatus&,
                            const TextEncodingStatus&) = default;
@@ -55,7 +55,7 @@ struct TextEncodingStatus {
 
 struct DecodedText {
     std::string utf8;
-    std::vector<LineTerminator> line_terminators;
+    std::vector<LineTerminator> lineTerminators;
     TextEncodingStatus status;
 
     friend bool operator==(const DecodedText&, const DecodedText&) = default;
@@ -108,9 +108,9 @@ struct DecodeTextResult {
 };
 
 struct EncodeTextOptions {
-    TextEncoding encoding = TextEncoding::utf8;
-    LineEnding line_ending = LineEnding::mixed;
-    FinalNewlinePolicy final_newline = FinalNewlinePolicy::preserve;
+    TextEncoding encoding = TextEncoding::Utf8;
+    LineEnding lineEnding = LineEnding::Mixed;
+    FinalNewlinePolicy finalNewline = FinalNewlinePolicy::Preserve;
 };
 
 struct EncodeTextResult {
@@ -120,12 +120,12 @@ struct EncodeTextResult {
     [[nodiscard]] bool accepted() const noexcept { return !error.has_value(); }
 };
 
-[[nodiscard]] DecodeTextResult decode_text(
+[[nodiscard]] DecodeTextResult decodeText(
     std::span<const std::uint8_t> bytes);
-[[nodiscard]] DecodeTextResult decode_text(
+[[nodiscard]] DecodeTextResult decodeText(
     std::span<const std::uint8_t> bytes, TextEncoding encoding);
-[[nodiscard]] EncodeTextResult encode_text(const DecodedText& text);
-[[nodiscard]] EncodeTextResult encode_text(
+[[nodiscard]] EncodeTextResult encodeText(const DecodedText& text);
+[[nodiscard]] EncodeTextResult encodeText(
     const DecodedText& text, EncodeTextOptions options);
 
 struct TextEncodingViewState {
@@ -143,9 +143,9 @@ struct TextEncodingDelta {
                            const TextEncodingDelta&) = default;
 };
 
-[[nodiscard]] TextEncodingViewState make_text_encoding_view_state(
+[[nodiscard]] TextEncodingViewState makeTextEncodingViewState(
     const DecodedText& text) noexcept;
-[[nodiscard]] std::optional<TextEncodingDelta> derive_text_encoding_delta(
+[[nodiscard]] std::optional<TextEncodingDelta> deriveTextEncodingDelta(
     const TextEncodingViewState& before,
     const TextEncodingViewState& after);
 
@@ -158,26 +158,26 @@ struct TextEncodingCommandSet {
 };
 
 struct ReopenWithEncodingArguments {
-    TextEncoding encoding = TextEncoding::utf8;
+    TextEncoding encoding = TextEncoding::Utf8;
     bool operator==(const ReopenWithEncodingArguments&) const = default;
 };
 
 struct SetEncodingArguments {
-    TextEncoding encoding = TextEncoding::utf8;
+    TextEncoding encoding = TextEncoding::Utf8;
     bool operator==(const SetEncodingArguments&) const = default;
 };
 
 struct SetLineEndingArguments {
-    LineEnding line_ending = LineEnding::lf;
+    LineEnding lineEnding = LineEnding::Lf;
     bool operator==(const SetLineEndingArguments&) const = default;
 };
 
 struct SetFinalNewlineArguments {
-    bool final_newline = false;
+    bool finalNewline = false;
     bool operator==(const SetFinalNewlineArguments&) const = default;
 };
 
-inline constexpr TextEncodingCommandSet text_encoding_command_set{{
+inline constexpr TextEncodingCommandSet kTextEncodingCommandSet{{
     TextEncodingCommandDescriptor{"file.reopen_with_encoding"},
     TextEncodingCommandDescriptor{"file.set_encoding"},
     TextEncodingCommandDescriptor{"file.set_line_ending"},

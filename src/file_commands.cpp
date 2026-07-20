@@ -4,36 +4,36 @@
 
 namespace ssg {
 
-FileCommandsCommandSet file_commands_command_set() {
+FileCommandsCommandSet fileCommandsCommandSet() {
     return {};
 }
 
-PromptRequest file_path_prompt(FileCommand command) {
+PromptRequest filePathPrompt(FileCommand command) {
     std::string label;
     switch (command) {
-        case FileCommand::open_directory:
+        case FileCommand::OpenDirectory:
             label = "Open directory";
             break;
-        case FileCommand::create:
+        case FileCommand::Create:
             label = "New file path";
             break;
-        case FileCommand::open:
+        case FileCommand::Open:
             label = "Open file";
             break;
-        case FileCommand::save_as:
+        case FileCommand::SaveAs:
             label = "Save file as";
             break;
-        case FileCommand::rename:
+        case FileCommand::Rename:
             label = "Rename file";
             break;
-        case FileCommand::new_directory:
+        case FileCommand::NewDirectory:
             label = "New directory path";
             break;
         default:
             throw std::invalid_argument(
                 "file command does not accept a path prompt");
     }
-    return {PromptKind::path, label, {{"path", label, {}}}, {}, std::nullopt};
+    return {PromptKind::Path, label, {{"path", label, {}}}, {}, std::nullopt};
 }
 
 }  // namespace ssg

@@ -12,86 +12,86 @@
 namespace ssg {
 namespace {
 
-ThemeSnapshot default_theme() {
+ThemeSnapshot defaultTheme() {
     // Readable dark theme derived from the VSCode-style palette in
     // caco/public/themes/dark.css.  Low indices are dark fills, high indices
     // are light text, hues sit in the middle.  Role assignments keep every
     // co_visible_role_pairs member on a distinct palette index.
     ThemeSnapshot snapshot{};
-    constexpr std::array<std::array<std::uint8_t, 3>, theme_palette_size>
+    constexpr std::array<std::array<std::uint8_t, 3>, kThemePaletteSize>
         palette{{
-            {30, 30, 30},     // 0  background
-            {212, 212, 212},  // 1  foreground
-            {62, 62, 66},     // 2  chrome fill / scrollbar track
-            {133, 133, 133},  // 3  muted: line numbers, comments, inactive
-            {77, 170, 252},   // 4  blue: functions, focus, active
-            {229, 192, 123},  // 5  yellow: operators, warnings
-            {239, 74, 74},    // 6  red: errors, deletions
-            {76, 175, 80},    // 7  green: strings, additions
-            {171, 71, 188},   // 8  purple: keywords, prompt, hints
-            {38, 192, 192},   // 9  cyan: types, info
-            {212, 149, 106},  // 10 orange: numbers, modifications, search
-            {209, 109, 158},  // 11 pink: conflicts
-            {187, 187, 187},  // 12 chrome text: header, footer
-            {106, 106, 106},  // 13 dim: inactive tab, scrollbar thumb
-            {232, 232, 232},  // 14 bright: active line number, punctuation
-            {255, 255, 255},  // 15 caret
+            {30, 30, 30},
+            {212, 212, 212},
+            {62, 62, 66},
+            {133, 133, 133},
+            {77, 170, 252},
+            {229, 192, 123},
+            {239, 74, 74},
+            {76, 175, 80},
+            {171, 71, 188},
+            {38, 192, 192},
+            {212, 149, 106},
+            {209, 109, 158},
+            {187, 187, 187},
+            {106, 106, 106},
+            {232, 232, 232},
+            {255, 255, 255},
         }};
     for (std::size_t index = 0; index < snapshot.palette.size(); ++index) {
-        snapshot.palette[index] = SrgbColor::from_serialized_channels(
+        snapshot.palette[index] = SrgbColor::fromSerializedChannels(
             palette[index][0], palette[index][1], palette[index][2]);
     }
 
     auto role = [&](SemanticRole which, std::uint8_t index) {
-        snapshot.semantic_indices[static_cast<std::size_t>(which)] = index;
+        snapshot.semanticIndices[static_cast<std::size_t>(which)] = index;
     };
-    role(SemanticRole::foreground, 1);
-    role(SemanticRole::background, 0);
-    role(SemanticRole::caret, 15);
-    role(SemanticRole::selection, 4);
-    role(SemanticRole::diagnostic_error, 6);
-    role(SemanticRole::diagnostic_warning, 5);
-    role(SemanticRole::diagnostic_info, 9);
-    role(SemanticRole::diagnostic_hint, 8);
-    role(SemanticRole::git_added, 7);
-    role(SemanticRole::git_modified, 10);
-    role(SemanticRole::git_deleted, 6);
-    role(SemanticRole::git_conflict, 11);
-    role(SemanticRole::tree_background, 2);
-    role(SemanticRole::tree_focus, 4);
-    role(SemanticRole::tab_active, 4);
-    role(SemanticRole::tab_inactive, 13);
-    role(SemanticRole::panel_active, 9);
-    role(SemanticRole::panel_inactive, 3);
-    role(SemanticRole::header, 12);
-    role(SemanticRole::footer, 12);
-    role(SemanticRole::status_info, 9);
-    role(SemanticRole::status_warning, 5);
-    role(SemanticRole::status_error, 6);
-    role(SemanticRole::line_number, 3);
-    role(SemanticRole::active_line_number, 14);
-    role(SemanticRole::search_match, 10);
-    role(SemanticRole::prompt, 8);
-    role(SemanticRole::scrollbar_track, 2);
-    role(SemanticRole::scrollbar_thumb, 13);
-    role(SemanticRole::diff_added, 7);
-    role(SemanticRole::diff_removed, 6);
-    role(SemanticRole::diff_modified, 10);
+    role(SemanticRole::Foreground, 1);
+    role(SemanticRole::Background, 0);
+    role(SemanticRole::Caret, 15);
+    role(SemanticRole::Selection, 4);
+    role(SemanticRole::DiagnosticError, 6);
+    role(SemanticRole::DiagnosticWarning, 5);
+    role(SemanticRole::DiagnosticInfo, 9);
+    role(SemanticRole::DiagnosticHint, 8);
+    role(SemanticRole::GitAdded, 7);
+    role(SemanticRole::GitModified, 10);
+    role(SemanticRole::GitDeleted, 6);
+    role(SemanticRole::GitConflict, 11);
+    role(SemanticRole::TreeBackground, 2);
+    role(SemanticRole::TreeFocus, 4);
+    role(SemanticRole::TabActive, 4);
+    role(SemanticRole::TabInactive, 13);
+    role(SemanticRole::PanelActive, 9);
+    role(SemanticRole::PanelInactive, 3);
+    role(SemanticRole::Header, 12);
+    role(SemanticRole::Footer, 12);
+    role(SemanticRole::StatusInfo, 9);
+    role(SemanticRole::StatusWarning, 5);
+    role(SemanticRole::StatusError, 6);
+    role(SemanticRole::LineNumber, 3);
+    role(SemanticRole::ActiveLineNumber, 14);
+    role(SemanticRole::SearchMatch, 10);
+    role(SemanticRole::Prompt, 8);
+    role(SemanticRole::ScrollbarTrack, 2);
+    role(SemanticRole::ScrollbarThumb, 13);
+    role(SemanticRole::DiffAdded, 7);
+    role(SemanticRole::DiffRemoved, 6);
+    role(SemanticRole::DiffModified, 10);
 
     auto syntax = [&](SyntaxScope scope, std::uint8_t index) {
-        snapshot.syntax_indices[static_cast<std::size_t>(scope)] = index;
+        snapshot.syntaxIndices[static_cast<std::size_t>(scope)] = index;
     };
-    syntax(SyntaxScope::plain_text, 1);
-    syntax(SyntaxScope::comment, 3);
-    syntax(SyntaxScope::keyword, 8);
-    syntax(SyntaxScope::string, 7);
-    syntax(SyntaxScope::number, 10);
-    syntax(SyntaxScope::type, 9);
-    syntax(SyntaxScope::function, 4);
-    syntax(SyntaxScope::variable, 1);
-    syntax(SyntaxScope::operator_token, 5);
-    syntax(SyntaxScope::punctuation, 14);
-    syntax(SyntaxScope::invalid, 6);
+    syntax(SyntaxScope::PlainText, 1);
+    syntax(SyntaxScope::Comment, 3);
+    syntax(SyntaxScope::Keyword, 8);
+    syntax(SyntaxScope::String, 7);
+    syntax(SyntaxScope::Number, 10);
+    syntax(SyntaxScope::Type, 9);
+    syntax(SyntaxScope::Function, 4);
+    syntax(SyntaxScope::Variable, 1);
+    syntax(SyntaxScope::OperatorToken, 5);
+    syntax(SyntaxScope::Punctuation, 14);
+    syntax(SyntaxScope::Invalid, 6);
     return snapshot;
 }
 
@@ -100,9 +100,9 @@ ThemeSnapshot default_theme() {
 // keys.  Only argument-free-usable commands are bound (a bare chord dispatches
 // with no payload); exhaustive reachability is the palette's job.  Global (*)
 // chords are Escape-led and prefix-free; single strokes differ per focus.
-KeymapViewState default_terminal_keymap() {
+KeymapViewState defaultTerminalKeymap() {
     auto seq = [](std::initializer_list<std::string_view> strokes) {
-        auto parsed = parse_key_sequence(strokes);
+        auto parsed = parseKeySequence(strokes);
         if (!parsed) throw std::logic_error{"curated keymap has an invalid stroke"};
         return *parsed;
     };
@@ -174,16 +174,16 @@ KeymapViewState default_terminal_keymap() {
     return keymap;
 }
 
-DocumentPosition zero_position() {
+DocumentPosition zeroPosition() {
     return {ByteOffset{0}, LineIndex{0}, CellIndex{0}};
 }
 
-SelectionViewState initial_selection() {
-    auto zero = zero_position();
+SelectionViewState initialSelection() {
+    auto zero = zeroPosition();
     return {SelectionSet{std::vector<Selection>{Selection{zero, zero}}}, 0, 0, std::nullopt};
 }
 
-std::filesystem::path canonical_directory(std::filesystem::path const& path) {
+std::filesystem::path canonicalDirectory(std::filesystem::path const& path) {
     std::error_code code;
     auto canonical = std::filesystem::canonical(path, code);
     if (code || !std::filesystem::is_directory(canonical)) {
@@ -192,22 +192,22 @@ std::filesystem::path canonical_directory(std::filesystem::path const& path) {
     return canonical;
 }
 
-std::string read_file_text(std::filesystem::path const& path) {
+std::string readFileText(std::filesystem::path const& path) {
     std::ifstream input{path, std::ios::binary};
     return {std::istreambuf_iterator<char>{input}, std::istreambuf_iterator<char>{}};
 }
 
-std::optional<std::filesystem::path> path_from_uri(std::string_view uri) {
+std::optional<std::filesystem::path> pathFromUri(std::string_view uri) {
     constexpr std::string_view prefix{"file://"};
     if (uri.rfind(prefix, 0) != 0) return std::nullopt;
     return std::filesystem::path{std::string{uri.substr(prefix.size())}};
 }
 
-std::string uri_from_path(std::filesystem::path const& path) {
+std::string uriFromPath(std::filesystem::path const& path) {
     return "file://" + path.generic_string();
 }
 
-std::optional<std::string> relative_to_root(std::filesystem::path const& root,
+std::optional<std::string> relativeToRoot(std::filesystem::path const& root,
                                             std::filesystem::path const& path) {
     auto relative = path.lexically_relative(root);
     if (relative.empty()) return std::nullopt;
@@ -217,23 +217,23 @@ std::optional<std::string> relative_to_root(std::filesystem::path const& root,
     return relative.generic_string();
 }
 
-bool path_contains(std::filesystem::path const& root,
+bool pathContains(std::filesystem::path const& root,
                    std::filesystem::path const& candidate) {
-    auto root_it = root.begin();
-    auto candidate_it = candidate.begin();
-    for (; root_it != root.end(); ++root_it, ++candidate_it) {
-        if (candidate_it == candidate.end() || *root_it != *candidate_it) {
+    auto rootIt = root.begin();
+    auto candidateIt = candidate.begin();
+    for (; rootIt != root.end(); ++rootIt, ++candidateIt) {
+        if (candidateIt == candidate.end() || *rootIt != *candidateIt) {
             return false;
         }
     }
     return true;
 }
 
-std::optional<std::filesystem::path> workspace_change_path(
-    std::filesystem::path const& root, std::string_view raw_path,
+std::optional<std::filesystem::path> workspaceChangePath(
+    std::filesystem::path const& root, std::string_view rawPath,
     std::string& message) {
-    auto supplied = std::filesystem::path{raw_path};
-    if (raw_path.empty() || supplied.is_absolute()) {
+    auto supplied = std::filesystem::path{rawPath};
+    if (rawPath.empty() || supplied.is_absolute()) {
         message = "workspace replacement path must be relative";
         return std::nullopt;
     }
@@ -249,7 +249,7 @@ std::optional<std::filesystem::path> workspace_change_path(
         message = code.message();
         return std::nullopt;
     }
-    if (!path_contains(root, candidate)) {
+    if (!pathContains(root, candidate)) {
         message = "workspace replacement path resolves outside the workspace";
         return std::nullopt;
     }
@@ -263,81 +263,81 @@ CommandHandlerResult failure(std::string message) {
     return CommandHandlerResult::failure(std::move(message));
 }
 
-std::string wrong_payload(std::string_view command_id) {
-    return std::string{command_id} + " payload has the wrong type";
+std::string wrongPayload(std::string_view commandId) {
+    return std::string{commandId} + " payload has the wrong type";
 }
 
-std::string workspace_message(WorkspaceResult const& result) {
+std::string workspaceMessage(WorkspaceResult const& result) {
     return result.message.empty() ? "workspace operation failed" : result.message;
 }
 
-std::string tab_message(TabResult const& result) {
+std::string tabMessage(TabResult const& result) {
     return result.message.empty() ? "tab operation failed" : result.message;
 }
 
-EditorRuntime::Impl::Impl(std::filesystem::path canonical_cwd,
-                          std::filesystem::path scratch_root,
-                          std::filesystem::path recovery_root,
-                          bool defer_enrichment)
-    : root{std::move(canonical_cwd)},
-      scratch_root{std::filesystem::weakly_canonical(scratch_root)},
-      recovery_root{std::filesystem::weakly_canonical(recovery_root)},
-      recovery{RecoveryActions::create(recovery_root)},
-      scratch{ScratchStore::create(scratch_root, root)},
+EditorRuntime::Impl::Impl(std::filesystem::path canonicalCwd,
+                          std::filesystem::path scratchRoot,
+                          std::filesystem::path recoveryRoot,
+                          bool deferEnrichment)
+    : root{std::move(canonicalCwd)},
+      scratchRoot{std::filesystem::weakly_canonical(scratchRoot)},
+      recoveryRoot{std::filesystem::weakly_canonical(recoveryRoot)},
+      recovery{RecoveryActions::create(recoveryRoot)},
+      scratch{ScratchStore::create(scratchRoot, root)},
       workspace{Workspace::create(root, recovery)},
-      selection{initial_selection()},
+      selection{initialSelection()},
       clipboard{4},
       shell{{"Files", "Git", "Symbols"}},
       tabs{*this},
       external{recovery, diff},
       syntax{},
       search{*this, *this},
-      theme{default_theme()},
-      deferring_enrichment{defer_enrichment} {
-    refresh_tree();
-    refresh_syntax();
+      theme{defaultTheme()},
+      deferringEnrichment{deferEnrichment} {
+    refreshTree();
+    refreshSyntax();
 }
 
-CommandHandlerResult EditorRuntime::Impl::run_transaction(
+CommandHandlerResult EditorRuntime::Impl::runTransaction(
     std::function<CommandHandlerResult()> operation) {
     return operation();
 }
 
-std::any& EditorRuntime::Impl::feature_state_value(std::type_index) {
+std::any& EditorRuntime::Impl::featureStateValue(std::type_index) {
     throw std::logic_error{"EditorRuntime exposes feature state through snapshots"};
 }
 
-void EditorRuntime::Impl::publish_status_value(std::type_index, std::any status_value) {
-    if (auto const* item = std::any_cast<StatusItem>(&status_value)) {
+void EditorRuntime::Impl::publishStatusValue(std::type_index, std::any statusValue) {
+    if (auto const* item = std::any_cast<StatusItem>(&statusValue)) {
         (void)status.enqueue(*item);
     }
 }
 
-void EditorRuntime::Impl::publish_delta_value(std::type_index, std::any) {}
+void EditorRuntime::Impl::publishDeltaValue(std::type_index, std::any) {}
 
 TabLifecycleResult EditorRuntime::Impl::close(
-    const TabState& tab, std::chrono::milliseconds durability_timeout) {
+    const TabState& tab, std::chrono::milliseconds durabilityTimeout) {
     if (!tab.document) return {};
     auto state = workspace.state(*tab.document);
-    if (!state) return {TabError::not_found, "tab document does not exist", std::nullopt, false};
+    if (!state) return {TabError::NotFound, "tab document does not exist", std::nullopt, false};
     std::optional<JournalDocument> document;
-    if (auto const* current = active_document(); current != nullptr) {
+    if (auto const* current = activeDocument(); current != nullptr) {
         document = JournalDocument{state->key, current->mode(), state->dirty,
                                    current->snapshot().text};
     }
-    auto closed = recovery.close_document(document, scratch, durability_timeout);
+    auto closed = recovery.closeDocument(document, scratch, durabilityTimeout);
     if (!closed.accepted()) {
-        return {TabError::lifecycle_failed, closed.error->message, std::nullopt, false};
+        return {TabError::LifecycleFailed, closed.error->message, std::nullopt, false};
     }
-    if (document) scratch.remove_document(state->key);
-    return {TabError::none, {}, closed.compensation, scratch.wait_until_durable(durability_timeout)};
+    if (document) scratch.removeDocument(state->key);
+    return {TabError::None, {}, closed.compensation, scratch.waitUntilDurable(durabilityTimeout)};
 }
 
 TabLifecycleResult EditorRuntime::Impl::reopen(
     const TabState&, const RecoveryRecordId& compensation) {
     auto restored = workspace.restore(compensation);
     if (!restored.accepted()) {
-        return {TabError::lifecycle_failed, workspace_message(restored), std::nullopt, false};
+        return {TabError::LifecycleFailed, workspaceMessage(restored), std::nullopt, false};
     }
     return {};
 }
@@ -347,138 +347,138 @@ WorkspaceSnapshot EditorRuntime::Impl::snapshot(Revision revision) const {
     result.revision = revision;
     for (auto const id : workspace.documents()) {
         auto state = workspace.state(id);
-        if (!state || state->key.kind() != JournalDocumentKeyKind::saved) continue;
-        result.files.push_back({state->key.saved_path(), workspace.document(id).snapshot().text});
+        if (!state || state->key.kind() != JournalDocumentKeyKind::Saved) continue;
+        result.files.push_back({state->key.savedPath(), workspace.document(id).snapshot().text});
     }
     std::filesystem::recursive_directory_iterator it{root};
     std::filesystem::recursive_directory_iterator end;
     for (; it != end; ++it) {
         auto const& entry = *it;
         if (entry.is_directory() &&
-            (path_contains(scratch_root, entry.path()) ||
-             path_contains(recovery_root, entry.path()))) {
+            (pathContains(scratchRoot, entry.path()) ||
+             pathContains(recoveryRoot, entry.path()))) {
             it.disable_recursion_pending();
             continue;
         }
         if (!entry.is_regular_file()) continue;
-        auto relative = relative_to_root(root, entry.path());
+        auto relative = relativeToRoot(root, entry.path());
         if (!relative) continue;
         if (std::find_if(result.files.begin(), result.files.end(), [&](WorkspaceFile const& file) {
                 return file.path == *relative;
             }) != result.files.end()) {
             continue;
         }
-        result.files.push_back({*relative, read_file_text(entry.path())});
+        result.files.push_back({*relative, readFileText(entry.path())});
     }
     return result;
 }
 
 std::vector<SearchCommandDescriptor> EditorRuntime::Impl::descriptors() const {
     std::vector<SearchCommandDescriptor> result;
-    for (auto const& descriptor : p0_command_descriptors()) {
+    for (auto const& descriptor : p0CommandDescriptors()) {
         result.push_back({descriptor.id, descriptor.id});
     }
     return result;
 }
 
-PaletteExecutionResult EditorRuntime::Impl::execute(std::string_view command_id) {
-    auto descriptors = p0_command_descriptors();
+PaletteExecutionResult EditorRuntime::Impl::execute(std::string_view commandId) {
+    auto descriptors = p0CommandDescriptors();
     return {std::find_if(descriptors.begin(), descriptors.end(),
-                         [&](CommandDescriptor const& descriptor) { return descriptor.id == command_id; }) !=
+                         [&](CommandDescriptor const& descriptor) { return descriptor.id == commandId; }) !=
                 descriptors.end(),
             {}};
 }
 
 WorkspaceApplyResult EditorRuntime::Impl::apply(
-    const WorkspaceReplacePreview& preview, WorkspaceRecoverySink& recovery_sink) {
+    const WorkspaceReplacePreview& preview, WorkspaceRecoverySink& recoverySink) {
     std::vector<std::filesystem::path> paths;
-    std::vector<std::string> normalized_paths;
+    std::vector<std::string> normalizedPaths;
     paths.reserve(preview.changes.size());
-    normalized_paths.reserve(preview.changes.size());
+    normalizedPaths.reserve(preview.changes.size());
     for (auto const& change : preview.changes) {
         std::string message;
-        auto path = workspace_change_path(root, change.path, message);
+        auto path = workspaceChangePath(root, change.path, message);
         if (!path) {
-            return {FindReplaceError::workspace_rejected,
-                    preview.source_revision, std::move(message)};
+            return {FindReplaceError::WorkspaceRejected,
+                    preview.sourceRevision, std::move(message)};
         }
-        if (path_contains(scratch_root, *path) ||
-            path_contains(recovery_root, *path)) {
-            return {FindReplaceError::workspace_rejected,
-                    preview.source_revision,
+        if (pathContains(scratchRoot, *path) ||
+            pathContains(recoveryRoot, *path)) {
+            return {FindReplaceError::WorkspaceRejected,
+                    preview.sourceRevision,
                     "workspace replacement path targets runtime state"};
         }
         auto normalized =
             std::filesystem::path{change.path}.lexically_normal().generic_string();
         std::string current;
-        bool found_open_document = false;
+        bool foundOpenDocument = false;
         for (auto const id : workspace.documents()) {
             auto state = workspace.state(id);
-            if (!state || state->key.kind() != JournalDocumentKeyKind::saved ||
-                state->key.saved_path() != normalized) {
+            if (!state || state->key.kind() != JournalDocumentKeyKind::Saved ||
+                state->key.savedPath() != normalized) {
                 continue;
             }
             current = workspace.document(id).snapshot().text;
-            found_open_document = true;
+            foundOpenDocument = true;
             break;
         }
-        if (!found_open_document) {
-            current = read_file_text(*path);
+        if (!foundOpenDocument) {
+            current = readFileText(*path);
         }
         if (current != change.before) {
-            return {FindReplaceError::stale_revision, preview.source_revision,
+            return {FindReplaceError::StaleRevision, preview.sourceRevision,
                     "workspace replacement preview is stale"};
         }
         paths.push_back(std::move(*path));
-        normalized_paths.push_back(std::move(normalized));
+        normalizedPaths.push_back(std::move(normalized));
     }
-    WorkspaceRecoveryRecord record{preview.source_revision, Revision{preview.source_revision.value() + 1}, preview.changes};
-    if (!recovery_sink.store(record)) {
-        return {FindReplaceError::recovery_rejected, preview.source_revision, "workspace replacement recovery rejected"};
+    WorkspaceRecoveryRecord record{preview.sourceRevision, Revision{preview.sourceRevision.value() + 1}, preview.changes};
+    if (!recoverySink.store(record)) {
+        return {FindReplaceError::RecoveryRejected, preview.sourceRevision, "workspace replacement recovery rejected"};
     }
     for (std::size_t index = 0; index < preview.changes.size(); ++index) {
         auto const& change = preview.changes[index];
         std::ofstream output{paths[index], std::ios::binary | std::ios::trunc};
-        if (!output) return {FindReplaceError::workspace_rejected, preview.source_revision, "failed to write workspace file"};
+        if (!output) return {FindReplaceError::WorkspaceRejected, preview.sourceRevision, "failed to write workspace file"};
         output << change.after;
     }
     for (std::size_t index = 0; index < preview.changes.size(); ++index) {
         auto const& change = preview.changes[index];
         for (auto const id : workspace.documents()) {
             auto state = workspace.state(id);
-            if (!state || state->key.kind() != JournalDocumentKeyKind::saved ||
-                state->key.saved_path() != normalized_paths[index]) {
+            if (!state || state->key.kind() != JournalDocumentKeyKind::Saved ||
+                state->key.savedPath() != normalizedPaths[index]) {
                 continue;
             }
             auto reloaded = workspace.reload(id);
             if (!reloaded.accepted()) {
-                return {FindReplaceError::workspace_rejected,
-                        preview.source_revision, workspace_message(reloaded)};
+                return {FindReplaceError::WorkspaceRejected,
+                        preview.sourceRevision, workspaceMessage(reloaded)};
             }
-            (void)update_tabs_for(id);
+            (void)updateTabsFor(id);
         }
     }
-    return {FindReplaceError::none, record.applied_revision, {}};
+    return {FindReplaceError::None, record.appliedRevision, {}};
 }
 
 WorkspaceApplyResult EditorRuntime::Impl::recover(const WorkspaceRecoveryRecord& record) {
     for (auto const& change : record.changes) {
         std::ofstream output{root / change.path, std::ios::binary | std::ios::trunc};
-        if (!output) return {FindReplaceError::workspace_rejected, record.applied_revision, "failed to recover workspace file"};
+        if (!output) return {FindReplaceError::WorkspaceRejected, record.appliedRevision, "failed to recover workspace file"};
         output << change.before;
     }
-    return {FindReplaceError::none, record.applied_revision, {}};
+    return {FindReplaceError::None, record.appliedRevision, {}};
 }
 
 bool EditorRuntime::Impl::store(const WorkspaceRecoveryRecord&) { return true; }
 
 std::optional<LspDocumentSnapshot> EditorRuntime::Impl::snapshot(std::string_view uri) const {
-    auto path = path_from_uri(uri);
+    auto path = pathFromUri(uri);
     if (!path) return std::nullopt;
     for (auto const id : workspace.documents()) {
         auto state = workspace.state(id);
-        if (!state || state->key.kind() != JournalDocumentKeyKind::saved) continue;
-        if (uri_from_path(root / state->key.saved_path()) == uri) {
+        if (!state || state->key.kind() != JournalDocumentKeyKind::Saved) continue;
+        if (uriFromPath(root / state->key.savedPath()) == uri) {
             return LspDocumentSnapshot{std::string{uri}, workspace.document(id).revision(), 1,
                                        workspace.document(id).snapshot().text};
         }
@@ -487,95 +487,95 @@ std::optional<LspDocumentSnapshot> EditorRuntime::Impl::snapshot(std::string_vie
 }
 
 LspWorkspaceDocumentWriteResult EditorRuntime::Impl::apply(
-    std::string uri, Revision expected_revision, std::string text) {
+    std::string uri, Revision expectedRevision, std::string text) {
     for (auto const id : workspace.documents()) {
         auto state = workspace.state(id);
-        if (!state || state->key.kind() != JournalDocumentKeyKind::saved) continue;
-        if (uri_from_path(root / state->key.saved_path()) != uri) continue;
+        if (!state || state->key.kind() != JournalDocumentKeyKind::Saved) continue;
+        if (uriFromPath(root / state->key.savedPath()) != uri) continue;
         auto& document = const_cast<Document&>(workspace.document(id));
-        if (document.revision() != expected_revision) {
-            return {document.revision(), LspWorkspaceDocumentError::stale_revision, "document revision is stale"};
+        if (document.revision() != expectedRevision) {
+            return {document.revision(), LspWorkspaceDocumentError::StaleRevision, "document revision is stale"};
         }
         auto snapshot = document.snapshot();
         auto result = document.apply({snapshot.revision, {{ByteOffset{0}, snapshot.text.size(), std::move(text)}}});
-        if (!result.accepted()) return {document.revision(), LspWorkspaceDocumentError::write_failed, result.message};
-        return {result.revision, LspWorkspaceDocumentError::none, {}};
+        if (!result.accepted()) return {document.revision(), LspWorkspaceDocumentError::WriteFailed, result.message};
+        return {result.revision, LspWorkspaceDocumentError::None, {}};
     }
-    return {Revision{0}, LspWorkspaceDocumentError::unknown_document, "document URI is not open"};
+    return {Revision{0}, LspWorkspaceDocumentError::UnknownDocument, "document URI is not open"};
 }
 
 LspWorkspaceFileResult EditorRuntime::Impl::snapshot(std::string_view uri, LspWorkspaceFileNode& node) const {
-    auto path = path_from_uri(uri);
-    if (!path) return {LspWorkspaceFileError::not_found, "URI is not a file URI"};
+    auto path = pathFromUri(uri);
+    if (!path) return {LspWorkspaceFileError::NotFound, "URI is not a file URI"};
     if (!std::filesystem::exists(*path)) {
-        node.kind = LspWorkspaceFileNodeKind::missing;
+        node.kind = LspWorkspaceFileNodeKind::Missing;
     } else if (std::filesystem::is_directory(*path)) {
-        node.kind = LspWorkspaceFileNodeKind::directory;
+        node.kind = LspWorkspaceFileNodeKind::Directory;
     } else {
-        node.kind = LspWorkspaceFileNodeKind::file;
-        node.content = read_file_text(*path);
+        node.kind = LspWorkspaceFileNodeKind::File;
+        node.content = readFileText(*path);
     }
     return {};
 }
 
-LspWorkspaceFileResult EditorRuntime::Impl::create_file(std::string uri, bool overwrite) {
-    auto path = path_from_uri(uri);
-    if (!path) return {LspWorkspaceFileError::io_error, "URI is not a file URI"};
-    if (std::filesystem::exists(*path) && !overwrite) return {LspWorkspaceFileError::already_exists, "file already exists"};
+LspWorkspaceFileResult EditorRuntime::Impl::createFile(std::string uri, bool overwrite) {
+    auto path = pathFromUri(uri);
+    if (!path) return {LspWorkspaceFileError::IoError, "URI is not a file URI"};
+    if (std::filesystem::exists(*path) && !overwrite) return {LspWorkspaceFileError::AlreadyExists, "file already exists"};
     std::ofstream output{*path, std::ios::binary | std::ios::trunc};
-    return output ? LspWorkspaceFileResult{} : LspWorkspaceFileResult{LspWorkspaceFileError::io_error, "failed to create file"};
+    return output ? LspWorkspaceFileResult{} : LspWorkspaceFileResult{LspWorkspaceFileError::IoError, "failed to create file"};
 }
 
-LspWorkspaceFileResult EditorRuntime::Impl::write_file(std::string uri, std::string content) {
-    auto path = path_from_uri(uri);
-    if (!path) return {LspWorkspaceFileError::io_error, "URI is not a file URI"};
+LspWorkspaceFileResult EditorRuntime::Impl::writeFile(std::string uri, std::string content) {
+    auto path = pathFromUri(uri);
+    if (!path) return {LspWorkspaceFileError::IoError, "URI is not a file URI"};
     std::ofstream output{*path, std::ios::binary | std::ios::trunc};
-    if (!output) return {LspWorkspaceFileError::io_error, "failed to write file"};
+    if (!output) return {LspWorkspaceFileError::IoError, "failed to write file"};
     output << content;
     return {};
 }
 
-LspWorkspaceFileResult EditorRuntime::Impl::rename_path(std::string old_uri, std::string new_uri, bool overwrite) {
-    auto old_path = path_from_uri(old_uri);
-    auto new_path = path_from_uri(new_uri);
-    if (!old_path || !new_path) return {LspWorkspaceFileError::io_error, "URI is not a file URI"};
-    if (std::filesystem::exists(*new_path) && !overwrite) return {LspWorkspaceFileError::already_exists, "destination exists"};
+LspWorkspaceFileResult EditorRuntime::Impl::renamePath(std::string oldUri, std::string newUri, bool overwrite) {
+    auto oldPath = pathFromUri(oldUri);
+    auto newPath = pathFromUri(newUri);
+    if (!oldPath || !newPath) return {LspWorkspaceFileError::IoError, "URI is not a file URI"};
+    if (std::filesystem::exists(*newPath) && !overwrite) return {LspWorkspaceFileError::AlreadyExists, "destination exists"};
     std::error_code code;
-    std::filesystem::rename(*old_path, *new_path, code);
-    return code ? LspWorkspaceFileResult{LspWorkspaceFileError::io_error, code.message()} : LspWorkspaceFileResult{};
+    std::filesystem::rename(*oldPath, *newPath, code);
+    return code ? LspWorkspaceFileResult{LspWorkspaceFileError::IoError, code.message()} : LspWorkspaceFileResult{};
 }
 
-LspWorkspaceFileResult EditorRuntime::Impl::delete_path(std::string uri, bool recursive) {
-    auto path = path_from_uri(uri);
-    if (!path) return {LspWorkspaceFileError::io_error, "URI is not a file URI"};
+LspWorkspaceFileResult EditorRuntime::Impl::deletePath(std::string uri, bool recursive) {
+    auto path = pathFromUri(uri);
+    if (!path) return {LspWorkspaceFileError::IoError, "URI is not a file URI"};
     std::error_code code;
     if (recursive) std::filesystem::remove_all(*path, code);
     else std::filesystem::remove(*path, code);
-    return code ? LspWorkspaceFileResult{LspWorkspaceFileError::io_error, code.message()} : LspWorkspaceFileResult{};
+    return code ? LspWorkspaceFileResult{LspWorkspaceFileError::IoError, code.message()} : LspWorkspaceFileResult{};
 }
 
-LspWorkspaceFileResult EditorRuntime::Impl::restore_path(std::string uri, const LspWorkspaceFileNode& node) {
-    auto path = path_from_uri(uri);
-    if (!path) return {LspWorkspaceFileError::io_error, "URI is not a file URI"};
-    if (node.kind == LspWorkspaceFileNodeKind::missing) {
+LspWorkspaceFileResult EditorRuntime::Impl::restorePath(std::string uri, const LspWorkspaceFileNode& node) {
+    auto path = pathFromUri(uri);
+    if (!path) return {LspWorkspaceFileError::IoError, "URI is not a file URI"};
+    if (node.kind == LspWorkspaceFileNodeKind::Missing) {
         std::error_code code;
         std::filesystem::remove_all(*path, code);
-        return code ? LspWorkspaceFileResult{LspWorkspaceFileError::io_error, code.message()} : LspWorkspaceFileResult{};
+        return code ? LspWorkspaceFileResult{LspWorkspaceFileError::IoError, code.message()} : LspWorkspaceFileResult{};
     }
-    if (node.kind == LspWorkspaceFileNodeKind::directory) {
+    if (node.kind == LspWorkspaceFileNodeKind::Directory) {
         std::error_code code;
         std::filesystem::create_directories(*path, code);
-        return code ? LspWorkspaceFileResult{LspWorkspaceFileError::io_error, code.message()} : LspWorkspaceFileResult{};
+        return code ? LspWorkspaceFileResult{LspWorkspaceFileError::IoError, code.message()} : LspWorkspaceFileResult{};
     }
-    return write_file(std::move(uri), node.content);
+    return writeFile(std::move(uri), node.content);
 }
 
-std::optional<FileDocumentId> EditorRuntime::Impl::active_document_id() const {
+std::optional<FileDocumentId> EditorRuntime::Impl::activeDocumentId() const {
     // The active tab is the single source of truth for the active editor
     // document.  With no active tab (e.g. the last tab was closed) there is no
     // active document and the shell renders its empty state; the editor view
     // never shows a document that has no tab.
-    auto const& view = tabs.view_state();
+    auto const& view = tabs.viewState();
     if (!view.active) return std::nullopt;
     auto found = std::find_if(view.tabs.begin(), view.tabs.end(), [&](TabState const& tab) {
         return tab.id == *view.active;
@@ -584,158 +584,158 @@ std::optional<FileDocumentId> EditorRuntime::Impl::active_document_id() const {
     return std::nullopt;
 }
 
-Document const* EditorRuntime::Impl::active_document() const {
-    auto id = active_document_id();
+Document const* EditorRuntime::Impl::activeDocument() const {
+    auto id = activeDocumentId();
     return id ? &workspace.document(*id) : nullptr;
 }
 
-Document* EditorRuntime::Impl::active_document() {
-    auto id = active_document_id();
+Document* EditorRuntime::Impl::activeDocument() {
+    auto id = activeDocumentId();
     return id ? const_cast<Document*>(&workspace.document(*id)) : nullptr;
 }
 
-DocumentHistory& EditorRuntime::Impl::history_for(FileDocumentId document) {
+DocumentHistory& EditorRuntime::Impl::historyFor(FileDocumentId document) {
     auto [it, inserted] = histories.try_emplace(document.value(), HistoryConfig::defaults());
     return it->second;
 }
 
-std::optional<WorkspaceDocumentState> EditorRuntime::Impl::active_workspace_state() const {
-    auto id = active_document_id();
+std::optional<WorkspaceDocumentState> EditorRuntime::Impl::activeWorkspaceState() const {
+    auto id = activeDocumentId();
     return id ? workspace.state(*id) : std::nullopt;
 }
 
-std::string EditorRuntime::Impl::active_text() const {
-    auto const* document = active_document();
+std::string EditorRuntime::Impl::activeText() const {
+    auto const* document = activeDocument();
     return document ? document->snapshot().text : std::string{};
 }
 
-void EditorRuntime::Impl::reset_selection_for_active_document() {
-    selection = initial_selection();
-    requested_first_visual_row = 0;
+void EditorRuntime::Impl::resetSelectionForActiveDocument() {
+    selection = initialSelection();
+    requestedFirstVisualRow = 0;
 }
 
-void EditorRuntime::Impl::clamp_selection_to_active_document() {
-    auto text = active_text();
-    auto offset = selection.selections.primary().active.byte_offset.value();
+void EditorRuntime::Impl::clampSelectionToActiveDocument() {
+    auto text = activeText();
+    auto offset = selection.selections.primary().active.byteOffset.value();
     if (offset > text.size()) offset = text.size();
-    auto position = resolve_document_position(text, ByteOffset{offset}).value_or(zero_position());
+    auto position = resolveDocumentPosition(text, ByteOffset{offset}).value_or(zeroPosition());
     selection.selections = SelectionSet{std::vector<Selection>{Selection{position, position}}};
 }
 
-std::vector<CellRun> EditorRuntime::Impl::active_cell_runs() const {
+std::vector<CellRun> EditorRuntime::Impl::activeCellRuns() const {
     std::vector<CellRun> runs;
-    std::string const text = active_text();
+    std::string const text = activeText();
     std::size_t start = 0;
     while (start <= text.size()) {
         auto end = text.find('\n', start);
         auto line = text.substr(start, end == std::string::npos ? end : end - start);
-        runs.push_back(compute_cell_run(line, 4));
+        runs.push_back(computeCellRun(line, 4));
         if (end == std::string::npos) break;
         start = end + 1;
     }
-    if (runs.empty()) runs.push_back(compute_cell_run("", 4));
+    if (runs.empty()) runs.push_back(computeCellRun("", 4));
     return runs;
 }
 
-ViewportViewState EditorRuntime::Impl::compute_editor_viewport(
-    ViewportDimensions dimensions, std::uint32_t first_row,
-    std::uint32_t first_column) const {
-    if (word_wrap) {
-        auto runs = active_cell_runs();
-        return compute_viewport(runs, dimensions, first_row);
+ViewportViewState EditorRuntime::Impl::computeEditorViewport(
+    ViewportDimensions dimensions, std::uint32_t firstRow,
+    std::uint32_t firstColumn) const {
+    if (wordWrap) {
+        auto runs = activeCellRuns();
+        return computeViewport(runs, dimensions, firstRow);
     }
     // Word wrap off (default): one logical line is one visual row; only the
     // visible lines are segmented, so this is O(visible rows), not O(document).
-    return compute_viewport_unwrapped(active_text(), dimensions, first_row,
-                                      first_column, 4);
+    return computeViewportUnwrapped(activeText(), dimensions, firstRow,
+                                      firstColumn, 4);
 }
 
 ViewportViewState EditorRuntime::Impl::viewport(ViewportDimensions dimensions) const {
-    return compute_editor_viewport(dimensions, requested_first_visual_row,
-                                   requested_first_visual_column);
+    return computeEditorViewport(dimensions, requestedFirstVisualRow,
+                                   requestedFirstVisualColumn);
 }
 
-void EditorRuntime::Impl::refresh_tree() {
-    if (deferring_enrichment) {
-        pending_tree_refresh = true;
+void EditorRuntime::Impl::refreshTree() {
+    if (deferringEnrichment) {
+        pendingTreeRefresh = true;
         return;
     }
-    ++tree_scan_count;
-    tree.replace_provider(filesystem_tree_snapshot(
-        TreeProviderId{"filesystem"}, root, TreeRevision{next_tree_revision++}));
+    ++treeScanCount;
+    tree.replaceProvider(filesystemTreeSnapshot(
+        TreeProviderId{"filesystem"}, root, TreeRevision{nextTreeRevision++}));
 }
 
-void EditorRuntime::Impl::reconcile_prompt_focus() {
-    if (prompt.active() && shell.focus() != FocusTarget::prompt) {
-        shell.enter_prompt_focus();
-    } else if (!prompt.active() && shell.focus() == FocusTarget::prompt) {
-        shell.exit_prompt_focus();
+void EditorRuntime::Impl::reconcilePromptFocus() {
+    if (prompt.active() && shell.focus() != FocusTarget::Prompt) {
+        shell.enterPromptFocus();
+    } else if (!prompt.active() && shell.focus() == FocusTarget::Prompt) {
+        shell.exitPromptFocus();
     }
 }
 
-void EditorRuntime::Impl::reconcile_find_document() {
-    if (!find_replace.view_state().open) {
-        find_document_id.reset();
+void EditorRuntime::Impl::reconcileFindDocument() {
+    if (!findReplace.viewState().open) {
+        findDocumentId.reset();
         return;
     }
-    auto const active = active_document_id();
-    auto const* document = active_document();
+    auto const active = activeDocumentId();
+    auto const* document = activeDocument();
     bool const stale =
-        !active || active != find_document_id || document == nullptr ||
-        document->snapshot().revision != find_replace.view_state().source_revision;
+        !active || active != findDocumentId || document == nullptr ||
+        document->snapshot().revision != findReplace.viewState().sourceRevision;
     if (!stale) return;
     // The document the find evaluated against is gone, changed, or was edited:
     // close the controller and dismiss its prompt so no stale match is navigable.
-    find_replace.close();
+    findReplace.close();
     if (auto const& request = prompt.request();
-        request && (request->kind == PromptKind::find ||
-                    request->kind == PromptKind::replace)) {
+        request && (request->kind == PromptKind::Find ||
+                    request->kind == PromptKind::Replace)) {
         (void)prompt.cancel();
     }
-    find_document_id.reset();
+    findDocumentId.reset();
 }
 
-void EditorRuntime::Impl::refresh_syntax() {
-    if (deferring_enrichment) {
-        pending_syntax_refresh = true;
+void EditorRuntime::Impl::refreshSyntax() {
+    if (deferringEnrichment) {
+        pendingSyntaxRefresh = true;
         return;
     }
-    ++syntax_run_count;
-    auto const* document = active_document();
+    ++syntaxRunCount;
+    auto const* document = activeDocument();
     auto text = document ? document->snapshot().text : std::string{};
     auto revision = document ? document->revision() : Revision{0};
-    auto request = syntax.request(revision, LanguageId::plain_text(), std::move(text));
+    auto request = syntax.request(revision, LanguageId::plainText(), std::move(text));
     if (request.accepted()) {
         auto output = syntax.run(*request.request);
         (void)syntax.accept(request.request, output);
     }
 }
 
-void EditorRuntime::Impl::prime_deferred() {
-    if (!deferring_enrichment) return;
-    deferring_enrichment = false;
+void EditorRuntime::Impl::primeDeferred() {
+    if (!deferringEnrichment) return;
+    deferringEnrichment = false;
     // Run whichever scans were requested while deferring, now that the first
     // frame is drawn.  Order: tree then syntax (independent; both publish through
     // the normal snapshot channel on the next snapshot).
     bool ran = false;
-    if (pending_tree_refresh) {
-        pending_tree_refresh = false;
-        refresh_tree();
+    if (pendingTreeRefresh) {
+        pendingTreeRefresh = false;
+        refreshTree();
         ran = true;
     }
-    if (pending_syntax_refresh) {
-        pending_syntax_refresh = false;
-        refresh_syntax();
+    if (pendingSyntaxRefresh) {
+        pendingSyntaxRefresh = false;
+        refreshSyntax();
         ran = true;
     }
     // Advance the session revision so delta-based clients observe the primed
     // enrichment; a same-revision snapshot pair yields no delta (derive_session_
     // delta rejects it), so without this a WebSocket client would miss it.
-    if (ran && session) session->advance_revision();
+    if (ran && session) session->advanceRevision();
 }
 
-void EditorRuntime::Impl::enqueue_status(StatusPriority priority, std::string text) {
-    auto value = next_status_id++;
+void EditorRuntime::Impl::enqueueStatus(StatusPriority priority, std::string text) {
+    auto value = nextStatusId++;
     (void)status.enqueue(StatusItem{StatusId{value}, priority, std::move(text), {}});
 }
 
@@ -745,29 +745,29 @@ EditorRuntime::~EditorRuntime() = default;
 
 EditorRuntimeCreateResult EditorRuntime::create(EditorRuntimeConfig config) {
     try {
-        auto cwd = canonical_directory(config.cwd);
-        if (config.scratch_root.empty()) config.scratch_root = cwd / ".ssg" / "scratch";
-        if (config.recovery_root.empty()) config.recovery_root = cwd / ".ssg" / "recovery";
-        std::filesystem::create_directories(config.scratch_root);
-        std::filesystem::create_directories(config.recovery_root);
-        auto impl = std::make_unique<Impl>(cwd, config.scratch_root,
-                                           config.recovery_root,
-                                           config.defer_enrichment);
-        impl->keymap = default_terminal_keymap();
-        if (auto errors = validate_keymap(impl->keymap, {}); !errors.empty()) {
+        auto cwd = canonicalDirectory(config.cwd);
+        if (config.scratchRoot.empty()) config.scratchRoot = cwd / ".ssg" / "scratch";
+        if (config.recoveryRoot.empty()) config.recoveryRoot = cwd / ".ssg" / "recovery";
+        std::filesystem::create_directories(config.scratchRoot);
+        std::filesystem::create_directories(config.recoveryRoot);
+        auto impl = std::make_unique<Impl>(cwd, config.scratchRoot,
+                                           config.recoveryRoot,
+                                           config.deferEnrichment);
+        impl->keymap = defaultTerminalKeymap();
+        if (auto errors = validateKeymap(impl->keymap, {}); !errors.empty()) {
             return {nullptr, "default keymap is invalid: " + errors.front().message};
         }
-        if (!has_global_binding(impl->keymap, "settings.open", {})) {
+        if (!hasGlobalBinding(impl->keymap, "settings.open", {})) {
             return {nullptr,
                     "default keymap lacks a global settings.open escape hatch"};
         }
         EditorSessionBuilder builder;
         builder.services(*impl);
-        bind_runtime_editing(builder, *impl);
-        bind_runtime_files(builder, *impl);
-        bind_runtime_presentation(builder, *impl);
-        bind_runtime_navigation(builder, *impl);
-        bind_runtime_language_services(builder, *impl);
+        bindRuntimeEditing(builder, *impl);
+        bindRuntimeFiles(builder, *impl);
+        bindRuntimePresentation(builder, *impl);
+        bindRuntimeNavigation(builder, *impl);
+        bindRuntimeLanguageServices(builder, *impl);
         impl->session = builder.build();
         return {std::unique_ptr<EditorRuntime>{new EditorRuntime{std::move(impl)}}, {}};
     } catch (std::exception const& exception) {
@@ -775,58 +775,58 @@ EditorRuntimeCreateResult EditorRuntime::create(EditorRuntimeConfig config) {
     }
 }
 
-AttachResult EditorRuntime::attach(InvocationPrincipal principal, ViewId view_id) {
-    auto client_id = principal.client_id();
-    auto result = impl_->session->attach(std::move(principal), view_id);
+AttachResult EditorRuntime::attach(InvocationPrincipal principal, ViewId viewId) {
+    auto clientId = principal.clientId();
+    auto result = impl_->session->attach(std::move(principal), viewId);
     if (result.accepted()) {
-        (void)impl_->follow.attach_client(client_id, ViewportDimensions{80, 24});
+        (void)impl_->follow.attachClient(clientId, ViewportDimensions{80, 24});
     }
     return result;
 }
 
-bool EditorRuntime::detach(ClientId client_id) {
-    (void)impl_->follow.detach_client(client_id);
-    return impl_->session->detach(client_id);
+bool EditorRuntime::detach(ClientId clientId) {
+    (void)impl_->follow.detachClient(clientId);
+    return impl_->session->detach(clientId);
 }
 
-void EditorRuntime::prime_deferred() { impl_->prime_deferred(); }
+void EditorRuntime::primeDeferred() { impl_->primeDeferred(); }
 
-EditorRuntime::DeferredWorkCounts EditorRuntime::deferred_work_counts() const {
-    return {impl_->syntax_run_count, impl_->tree_scan_count};
+EditorRuntime::DeferredWorkCounts EditorRuntime::deferredWorkCounts() const {
+    return {impl_->syntaxRunCount, impl_->treeScanCount};
 }
 
-CommandResult EditorRuntime::dispatch(ClientId client_id, ClientCommand const& command) {
-    auto result = impl_->session->dispatch(client_id, command);
-    impl_->reconcile_find_document();
-    impl_->reconcile_prompt_focus();
+CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& command) {
+    auto result = impl_->session->dispatch(clientId, command);
+    impl_->reconcileFindDocument();
+    impl_->reconcilePromptFocus();
     // palette.execute validates the selected candidate then defers execution to
     // here so the target runs through the registry (with its own capability and
     // revision checks) outside the non-reentrant session lock.
-    if (result.accepted() && impl_->pending_palette_target) {
-        auto target = std::move(*impl_->pending_palette_target);
-        impl_->pending_palette_target.reset();
-        auto target_result = impl_->session->dispatch(
-            client_id, {target, impl_->session->revision(), {}});
-        impl_->reconcile_find_document();
-        impl_->reconcile_prompt_focus();
-        return target_result;
+    if (result.accepted() && impl_->pendingPaletteTarget) {
+        auto target = std::move(*impl_->pendingPaletteTarget);
+        impl_->pendingPaletteTarget.reset();
+        auto targetResult = impl_->session->dispatch(
+            clientId, {target, impl_->session->revision(), {}});
+        impl_->reconcileFindDocument();
+        impl_->reconcilePromptFocus();
+        return targetResult;
     }
     return result;
 }
 
 Revision EditorRuntime::revision() const { return impl_->session->revision(); }
-std::filesystem::path const& EditorRuntime::workspace_root() const noexcept { return impl_->root; }
-std::optional<SessionSnapshot> EditorRuntime::snapshot(ClientId client_id, ViewportDimensions dimensions,
-                                                       KeySequence leader_pending,
-                                                       PaletteReport palette_report) const {
-    auto client = impl_->session->attached_client(client_id);
+std::filesystem::path const& EditorRuntime::workspaceRoot() const noexcept { return impl_->root; }
+std::optional<SessionSnapshot> EditorRuntime::snapshot(ClientId clientId, ViewportDimensions dimensions,
+                                                       KeySequence leaderPending,
+                                                       PaletteReport paletteReport) const {
+    auto client = impl_->session->attachedClient(clientId);
     if (!client) return std::nullopt;
-    return assemble_session_snapshot(impl_->session->revision(), impl_->session->topology(),
-                                     client->principal, client->view_id,
+    return assembleSessionSnapshot(impl_->session->revision(), impl_->session->topology(),
+                                     client->principal, client->viewId,
                                      impl_->viewport(dimensions),
-                                     impl_->sections(dimensions, leader_pending, palette_report));
+                                     impl_->sections(dimensions, leaderPending, paletteReport));
 }
 
-std::string EditorRuntime::active_document_text() const { return impl_->active_text(); }
+std::string EditorRuntime::activeDocumentText() const { return impl_->activeText(); }
 
 } // namespace ssg

@@ -1,0 +1,201 @@
+C++ LIBRARY CLEANUP PRINCIPLES
+==============================
+
+Goal: a library that is correct by construction, hard to misuse, and small
+enough to read end-to-end. Comments are a last resort.
+
+
+CORE PRINCIPLES
+---------------
+
+1.  Public surface lives in include/, implementation in src/.
+    src/ may contain private headers (e.g. src/dsp/) that the public surface
+    must never expose. If a type is only used by *Node implementations, it
+    does not belong in include/.
+
+2.  One umbrella header (e.g. Audio.h) for application use.
+    Application code writes one #include and gets everything. The umbrella
+    pulls in the facet headers; the facet headers stay independently
+    includable for callers that want a smaller footprint.
+
+3.  Names are nouns. Names must be accurate.
+    All classes, structs, members, files are nouns. If you wrote a comment
+    explaining what something IS, the name is wrong — rename instead. If a
+    type’s purpose drifted (e.g. Synth that no longer synthesizes), rename
+    to match what it does today.
+
+4.  Objects are valid at construction. RAII at every sensible opportunity.
+    No two-phase construction. No "create then call init() / setBank() / 
+    populate fields" paths. If a resource needs cleanup, its destructor
+    must release it; non-trivial ctors should take what they need.
+
+5.  Builders produce guaranteed-valid objects.
+    A builder that returns an empty or half-populated object is a worse
+    API than no builder at all. Prefer "factory function returns valid T
+    or throws" over "default-construct, then mutate".
+
+6.  Use std::vector and other simple standard containers.
+    Don't hand-roll a fixed-size array, a SOA, or a custom allocator unless
+    profiling demands it. std::vector / std::array / std::span are the
+    defaults. Custom containers must justify themselves in code review.
+
+7.  Helper functions live in .cpp files, not headers.
+    Headers expose API; they do not expose helpers. If a helper is only
+    called by one .cpp, it goes in that .cpp as a static or anonymous-
+    namespace function. Header weight is a tax on every translation unit
+    that includes them.
+
+8.  Type safety over runtime checks.
+    Prefer templated overloads, enum-class arguments, friend access, and
+    private ctors over "throws if wrong, comment says don't do this".
+    Encode contracts in signatures and access modifiers; resort to asserts
+    and comments only when the type system cannot express the rule.
+
+9.  Delete dead code.
+    Public-API types that no caller references are not "available" — they
+    are obstacles. Delete them. `git log --follow` retrieves them if ever
+    needed.
+
+10. No vertical alignment of types and variable names.
+    One space between type and name. Vertical alignment churns on every
+    rename and obscures diffs.
+
+
+COMMENTS
+--------
+
+Default: delete. A comment that adds nothing is an obstacle: it lies as
+soon as the code around it changes.
+
+Keep a comment ONLY if it says something the code cannot:
+
+  - Threading contract           (UI thread vs audio thread vs callback)
+  - Magic-number rationale       ("0.15f ~10ms slew at 64-sample blocks")
+  - Algorithm reference          ("Padé (3,3) tanh", "Bhaskara I sine")
+  - Lifecycle / ordering rule    ("attach only while graph is stopped")
+  - Non-obvious construction     ("3 paths: default / from file / raw data")
+  - Why we hand-rolled something ("std::atomic isn't movable; vector<T>
+                                  needs the move ctor")
+
+Delete on sight:
+
+  - "Forward declarations"       — readers know
+  - Section headings inside a class — use blank lines
+  - "XNode — does X" preambles   — class name says it
+  - Field comments restating the field name
+  - "Non-copyable, non-movable"  — = delete says it
+  - History notes                — git log says it
+  - "TODO" comments older than a month — fix or delete
+
+
+PROCESS — APPLYING THIS TO AN EXISTING PROJECT
+----------------------------------------------
+
+Work bottom-up, in small commits, with a green test suite at every step.
+Each step must:
+
+  - Be one identifiable change in the commit subject.
+  - Build cleanly (no new warnings).
+  - Pass the existing test suite.
+  - Pass any demo smoke test (an `./app` run that exercises the code).
+
+Order of operations:
+
+  1. Move public headers to include/. Adjust the build. No content changes.
+     Add `include/` to the include path; keep `src/` in the include path so
+     transitional `#include "Foo.h"` still resolves.
+
+  2. Merge tightly-coupled headers that the user never uses separately
+     (e.g. WavIO + OggIO + AudioIO → AudioFile). One header per concept,
+     not per format.
+
+  3. Move private implementation headers out of include/ into src/<area>/.
+     If a public *Node uses a struct as a member field, the struct can stay
+     in include/ — that's a real public dependency. Otherwise it's internal.
+
+  4. Delete dead code: unused public types, unused free functions, dead
+     fields.
+
+  5. Add RAII constructors that produce valid objects. Keep the old
+     default-ctor + setter path if existing tests depend on it; new
+     callers (demo, application code) use the RAII path.
+
+  6. Move ownership of components peer-to-peer rather than nested.
+     If A "has-a B" only to delegate B's API, B should be a peer that
+     registers with A. A's interface shrinks; B is independently usable.
+
+  7. Convert single-instance addNode<T>()-style APIs into named singleton
+     accessors (e.g. `graph.audioInput()` instead of
+     `graph.addNode<AudioInputNode>()` plus a runtime "only one allowed"
+     check).
+
+  8. Add type-safe templated overloads to APIs that take int. The original
+     int overload stays; the new overload accepts a scoped enum and forwards.
+     Mechanically sed-strip (int)Enum::X casts from call sites.
+
+  9. Rename misleading types and members. Each rename retires at least one
+     comment. Use `git mv` for files so blame is preserved.
+
+  10. Walk every public header and apply the COMMENTS rules above.
+      Prefer renaming the noun over keeping the comment.
+
+Between steps: run the build, run the tests, smoke-test the demo.
+Commit each step alone. If anything regresses, revert that one commit.
+
+
+METRICS THAT MATTER
+-------------------
+
+  - Public header count                          (smaller = better)
+  - Total public header line count               (smaller = better)
+  - Comment count in public headers              (smaller = better, after
+                                                  applying the rules)
+  - (int) casts at call sites                    (zero is the target)
+  - Public types with no caller                  (zero is the target)
+  - Types with two-phase construction            (zero is the target)
+  - Calls of form `x.method()` where method just delegates to a member
+                                                 (zero is the target)
+
+
+WORKED EXAMPLES (audio library, May 2026)
+-----------------------------------------
+
+Synth class that owned audio device, all nodes, all instruments, all
+sequencers, all sample banks — renamed to AudioGraph. SynthNode to
+AudioNode. Comment "Main synth class that owns the audio graph" deleted;
+the new name is the documentation.
+
+Patch (synth-jargon for a preset, but the class was a polyphonic voice
+pool) renamed to Instrument. Field `patches` renamed to `instruments`.
+Comment "// Patches for voice management" deleted.
+
+Recorder that combined output capture, dub playback, and file save
+split into OutputCapture + DubPlayback. OutputCapture::arm() replaced
+Recorder::startRecording(). The classes' verbs (arm, start, save, dub)
+match their roles.
+
+LowPassFilterNode = MoogFilterNode typedef deleted — the alias was a
+lie after setFilterType(High).
+
+WindNode renamed to WoodwindNode — it was a flute/clarinet/brass
+waveguide, but SFXNode's "wind" mode was a different gust-of-air sound.
+The collision was a real source of confusion.
+
+SampleBank gained `SampleBank(path, rootSemitone)` ctor. Eighteen lines
+of "create empty, load file, populate buffer, push zone" in main.cpp
+became one.
+
+addNode<AudioInputNode>() replaced by graph.audioInput(). The runtime
+"only one input node allowed" check became impossible to violate.
+
+`(int)NodeType::Input::X` casts at ~900 call sites replaced with
+typed overloads `graph.connect(src, tgt, NodeType::Input::X)`. Wrong
+enum + target combo now fails to compile.
+
+graphBuildMutex → mutationLock. removeNodeImpl → removeNodeLocked.
+audioCallbackBuffer → renderScratch. synth_ → graph_. Each rename
+retired a comment.
+
+Public surface: 16 headers → 8. Public header lines: ~1700 → ~1500.
+Comments in public headers: ~200 → ~40. (int) casts in public code:
+~900 → 0. Tests: 204/204 before, 204/204 after.

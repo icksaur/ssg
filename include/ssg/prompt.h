@@ -12,26 +12,26 @@
 namespace ssg {
 
 enum class PromptKind : std::uint8_t {
-    path,
-    find,
-    replace,
-    settings,
-    command_argument,
-    palette,
+    Path,
+    Find,
+    Replace,
+    Settings,
+    CommandArgument,
+    Palette,
 };
 
-enum class PromptControlKind : std::uint8_t { input, toggle, count };
+enum class PromptControlKind : std::uint8_t { Input, Toggle, Count };
 
 struct PromptInput {
     std::string id;
-    std::string accessible_label;
+    std::string accessibleLabel;
     std::string value;
     friend bool operator==(const PromptInput&, const PromptInput&) = default;
 };
 
 struct PromptToggle {
     std::string id;
-    std::string accessible_label;
+    std::string accessibleLabel;
     bool value = false;
     int width = 0;
     friend bool operator==(const PromptToggle&, const PromptToggle&) = default;
@@ -39,23 +39,23 @@ struct PromptToggle {
 
 struct PromptMatchCount {
     std::string id;
-    std::string accessible_label;
+    std::string accessibleLabel;
     std::string value;
     friend bool operator==(const PromptMatchCount&,
                            const PromptMatchCount&) = default;
 };
 
 struct PromptRequest {
-    PromptKind kind = PromptKind::command_argument;
-    std::string accessible_label;
+    PromptKind kind = PromptKind::CommandArgument;
+    std::string accessibleLabel;
     std::vector<PromptInput> inputs;
     std::vector<PromptToggle> toggles;
-    std::optional<PromptMatchCount> match_count;
+    std::optional<PromptMatchCount> matchCount;
     friend bool operator==(const PromptRequest&, const PromptRequest&) = default;
 };
 
 struct PromptSubmission {
-    PromptKind kind = PromptKind::command_argument;
+    PromptKind kind = PromptKind::CommandArgument;
     std::vector<std::string> values;
     std::vector<bool> toggles;
     friend bool operator==(const PromptSubmission&,
@@ -63,13 +63,13 @@ struct PromptSubmission {
 };
 
 enum class PromptErrorCode : std::uint8_t {
-    invalid_request,
-    invalid_reservation,
-    no_active_prompt,
+    InvalidRequest,
+    InvalidReservation,
+    NoActivePrompt,
 };
 
 struct PromptError {
-    PromptErrorCode code = PromptErrorCode::invalid_request;
+    PromptErrorCode code = PromptErrorCode::InvalidRequest;
     std::string message;
     friend bool operator==(const PromptError&, const PromptError&) = default;
 };
@@ -82,9 +82,9 @@ struct PromptCommandResult {
 };
 
 struct PromptControlView {
-    PromptControlKind kind = PromptControlKind::input;
+    PromptControlKind kind = PromptControlKind::Input;
     std::string id;
-    std::string accessible_label;
+    std::string accessibleLabel;
     std::string value;
     bool checked = false;
     Rect rect;
@@ -93,8 +93,8 @@ struct PromptControlView {
 };
 
 struct PromptViewState {
-    PromptKind kind = PromptKind::command_argument;
-    std::string accessible_label;
+    PromptKind kind = PromptKind::CommandArgument;
+    std::string accessibleLabel;
     Rect rect;
     std::vector<PromptControlView> controls;
     friend bool operator==(const PromptViewState&,
@@ -139,8 +139,8 @@ private:
     std::optional<PromptRequest> request_;
 };
 
-[[nodiscard]] std::uint8_t prompt_row_count(PromptKind kind) noexcept;
-[[nodiscard]] PromptLayoutResult compute_prompt_layout(
+[[nodiscard]] std::uint8_t promptRowCount(PromptKind kind) noexcept;
+[[nodiscard]] PromptLayoutResult computePromptLayout(
     const PromptSurface& surface, Rect reservation);
 
 } // namespace ssg

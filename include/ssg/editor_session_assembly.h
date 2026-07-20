@@ -10,7 +10,7 @@
 
 namespace ssg {
 
-[[nodiscard]] std::vector<CommandDescriptor> p0_command_descriptors();
+[[nodiscard]] std::vector<CommandDescriptor> p0CommandDescriptors();
 
 class EditorSessionBuilder {
 public:
@@ -22,7 +22,7 @@ public:
     EditorSessionBuilder(EditorSessionBuilder&&) noexcept;
     EditorSessionBuilder& operator=(EditorSessionBuilder&&) noexcept;
 
-    EditorSessionBuilder& bind(std::string command_id,
+    EditorSessionBuilder& bind(std::string commandId,
                                CommandHandler handler);
     EditorSessionBuilder& services(CommandServices& services) noexcept;
     [[nodiscard]] std::unique_ptr<EditorSession> build();

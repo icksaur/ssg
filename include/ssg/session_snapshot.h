@@ -35,20 +35,20 @@ struct SessionSnapshotSections {
     SelectionViewState selection;
     HistoryViewState history;
     ClipboardViewState clipboard;
-    PromptStatusViewState prompt_status;
+    PromptStatusViewState promptStatus;
     SearchViewState search;
-    FindReplaceViewState find_replace;
+    FindReplaceViewState findReplace;
     SettingsViewState settings;
     KeymapViewState keymap;
-    TextEncodingViewState text_encoding;
+    TextEncodingViewState textEncoding;
     TabViewState tabs;
     DiffViewState diff;
-    ExternalModificationViewState external_modification;
-    FollowEditsViewState follow_edits;
+    ExternalModificationViewState externalModification;
+    FollowEditsViewState followEdits;
     TreeViewState tree;
     SyntaxViewState syntax;
-    LspSyncViewState lsp_sync;
-    LspFeatureViewState lsp_features;
+    LspSyncViewState lspSync;
+    LspFeatureViewState lspFeatures;
     ThemeSnapshot theme;
     ShellViewState shell;
     PaletteViewState palette;
@@ -58,8 +58,8 @@ struct SessionSnapshotSections {
                               SessionSnapshotSections const& right);
 
 struct ClientSnapshotState {
-    ClientId client_id;
-    ViewId view_id;
+    ClientId clientId;
+    ViewId viewId;
     std::vector<CapabilityId> capabilities;
     ViewportViewState viewport;
 
@@ -118,12 +118,12 @@ public:
     SessionDelta(SessionDelta&&) noexcept = default;
     SessionDelta& operator=(SessionDelta&&) noexcept = default;
 
-    [[nodiscard]] Revision base_revision() const noexcept {
-        return base_revision_;
+    [[nodiscard]] Revision baseRevision() const noexcept {
+        return baseRevision_;
     }
     [[nodiscard]] Revision revision() const noexcept { return revision_; }
-    [[nodiscard]] ClientId client_id() const noexcept { return client_id_; }
-    [[nodiscard]] ViewId view_id() const noexcept { return view_id_; }
+    [[nodiscard]] ClientId clientId() const noexcept { return clientId_; }
+    [[nodiscard]] ViewId viewId() const noexcept { return viewId_; }
     [[nodiscard]] std::vector<CapabilityId> const& capabilities() const noexcept {
         return capabilities_;
     }
@@ -133,9 +133,9 @@ public:
     [[nodiscard]] std::optional<DocumentDelta> const& document() const noexcept {
         return document_;
     }
-    [[nodiscard]] std::optional<ByteOffset> const& document_caret()
+    [[nodiscard]] std::optional<ByteOffset> const& documentCaret()
         const noexcept {
-        return document_caret_;
+        return documentCaret_;
     }
     [[nodiscard]] SelectionViewDelta const& selection() const noexcept {
         return selection_;
@@ -146,37 +146,37 @@ public:
     [[nodiscard]] ClipboardDelta const& clipboard() const noexcept {
         return clipboard_;
     }
-    [[nodiscard]] PromptStatusDelta const& prompt_status() const noexcept {
-        return prompt_status_;
+    [[nodiscard]] PromptStatusDelta const& promptStatus() const noexcept {
+        return promptStatus_;
     }
     [[nodiscard]] SearchDelta const& search() const noexcept { return search_; }
-    [[nodiscard]] FindReplaceDelta const& find_replace() const noexcept {
-        return find_replace_;
+    [[nodiscard]] FindReplaceDelta const& findReplace() const noexcept {
+        return findReplace_;
     }
     [[nodiscard]] SettingsSectionDelta const& settings() const noexcept {
         return settings_;
     }
     [[nodiscard]] KeymapDelta const& keymap() const noexcept { return keymap_; }
-    [[nodiscard]] std::optional<TextEncodingDelta> const& text_encoding()
+    [[nodiscard]] std::optional<TextEncodingDelta> const& textEncoding()
         const noexcept {
-        return text_encoding_;
+        return textEncoding_;
     }
     [[nodiscard]] TabDelta const& tabs() const noexcept { return tabs_; }
     [[nodiscard]] DiffDelta const& diff() const noexcept { return diff_; }
-    [[nodiscard]] ExternalModificationDelta const& external_modification()
+    [[nodiscard]] ExternalModificationDelta const& externalModification()
         const noexcept {
-        return external_modification_;
+        return externalModification_;
     }
-    [[nodiscard]] FollowEditsDelta const& follow_edits() const noexcept {
-        return follow_edits_;
+    [[nodiscard]] FollowEditsDelta const& followEdits() const noexcept {
+        return followEdits_;
     }
     [[nodiscard]] TreeDelta const& tree() const noexcept { return tree_; }
     [[nodiscard]] SyntaxDelta const& syntax() const noexcept { return syntax_; }
-    [[nodiscard]] LspSyncDelta const& lsp_sync() const noexcept {
-        return lsp_sync_;
+    [[nodiscard]] LspSyncDelta const& lspSync() const noexcept {
+        return lspSync_;
     }
-    [[nodiscard]] LspFeatureDelta const& lsp_features() const noexcept {
-        return lsp_features_;
+    [[nodiscard]] LspFeatureDelta const& lspFeatures() const noexcept {
+        return lspFeatures_;
     }
     [[nodiscard]] ThemeSectionDelta const& theme() const noexcept {
         return theme_;
@@ -189,72 +189,72 @@ public:
     }
 
 private:
-    friend SessionDelta derive_session_delta(SessionSnapshot const&,
+    friend SessionDelta deriveSessionDelta(SessionSnapshot const&,
                                              SessionSnapshot const&);
-    friend SessionReplayResult replay_session_delta(SessionSnapshot const&,
+    friend SessionReplayResult replaySessionDelta(SessionSnapshot const&,
                                                      SessionDelta const&);
     // The protocol codec reconstructs a SessionDelta from decoded wire
     // fields; this factory is the only non-derivation construction path so
     // normal in-process construction remains through derive_session_delta.
-    friend SessionDelta decode_wire_session_delta(
-        Revision base_revision, Revision revision, ClientId client_id,
-        ViewId view_id, std::vector<CapabilityId> capabilities,
+    friend SessionDelta decodeWireSessionDelta(
+        Revision baseRevision, Revision revision, ClientId clientId,
+        ViewId viewId, std::vector<CapabilityId> capabilities,
         std::optional<SessionTopology> topology,
         std::optional<DocumentDelta> document,
-        std::optional<ByteOffset> document_caret,
+        std::optional<ByteOffset> documentCaret,
         SelectionViewDelta selection, HistoryDelta history,
-        ClipboardDelta clipboard, PromptStatusDelta prompt_status,
-        SearchDelta search, FindReplaceDelta find_replace,
+        ClipboardDelta clipboard, PromptStatusDelta promptStatus,
+        SearchDelta search, FindReplaceDelta findReplace,
         SettingsSectionDelta settings, KeymapDelta keymap,
-        std::optional<TextEncodingDelta> text_encoding, TabDelta tabs,
-        DiffDelta diff, ExternalModificationDelta external_modification,
-        FollowEditsDelta follow_edits, TreeDelta tree, SyntaxDelta syntax,
-        LspSyncDelta lsp_sync, LspFeatureDelta lsp_features,
+        std::optional<TextEncodingDelta> textEncoding, TabDelta tabs,
+        DiffDelta diff, ExternalModificationDelta externalModification,
+        FollowEditsDelta followEdits, TreeDelta tree, SyntaxDelta syntax,
+        LspSyncDelta lspSync, LspFeatureDelta lspFeatures,
         ThemeSectionDelta theme, ShellSectionDelta shell,
         ViewportDelta viewport);
 
     SessionDelta(
-        Revision base_revision, Revision revision, ClientId client_id,
-        ViewId view_id, std::vector<CapabilityId> capabilities,
+        Revision baseRevision, Revision revision, ClientId clientId,
+        ViewId viewId, std::vector<CapabilityId> capabilities,
         std::optional<SessionTopology> topology,
         std::optional<DocumentDelta> document,
-        std::optional<ByteOffset> document_caret,
+        std::optional<ByteOffset> documentCaret,
         SelectionViewDelta selection, HistoryDelta history,
-        ClipboardDelta clipboard, PromptStatusDelta prompt_status,
-        SearchDelta search, FindReplaceDelta find_replace,
+        ClipboardDelta clipboard, PromptStatusDelta promptStatus,
+        SearchDelta search, FindReplaceDelta findReplace,
         SettingsSectionDelta settings, KeymapDelta keymap,
-        std::optional<TextEncodingDelta> text_encoding, TabDelta tabs,
-        DiffDelta diff, ExternalModificationDelta external_modification,
-        FollowEditsDelta follow_edits, TreeDelta tree, SyntaxDelta syntax,
-        LspSyncDelta lsp_sync, LspFeatureDelta lsp_features,
+        std::optional<TextEncodingDelta> textEncoding, TabDelta tabs,
+        DiffDelta diff, ExternalModificationDelta externalModification,
+        FollowEditsDelta followEdits, TreeDelta tree, SyntaxDelta syntax,
+        LspSyncDelta lspSync, LspFeatureDelta lspFeatures,
         ThemeSectionDelta theme, ShellSectionDelta shell,
         ViewportDelta viewport);
 
-    Revision base_revision_;
+    Revision baseRevision_;
     Revision revision_;
-    ClientId client_id_;
-    ViewId view_id_;
+    ClientId clientId_;
+    ViewId viewId_;
     std::vector<CapabilityId> capabilities_;
     std::optional<SessionTopology> topology_;
     std::optional<DocumentDelta> document_;
-    std::optional<ByteOffset> document_caret_;
+    std::optional<ByteOffset> documentCaret_;
     SelectionViewDelta selection_;
     HistoryDelta history_;
     ClipboardDelta clipboard_;
-    PromptStatusDelta prompt_status_;
+    PromptStatusDelta promptStatus_;
     SearchDelta search_;
-    FindReplaceDelta find_replace_;
+    FindReplaceDelta findReplace_;
     SettingsSectionDelta settings_;
     KeymapDelta keymap_;
-    std::optional<TextEncodingDelta> text_encoding_;
+    std::optional<TextEncodingDelta> textEncoding_;
     TabDelta tabs_;
     DiffDelta diff_;
-    ExternalModificationDelta external_modification_;
-    FollowEditsDelta follow_edits_;
+    ExternalModificationDelta externalModification_;
+    FollowEditsDelta followEdits_;
     TreeDelta tree_;
     SyntaxDelta syntax_;
-    LspSyncDelta lsp_sync_;
-    LspFeatureDelta lsp_features_;
+    LspSyncDelta lspSync_;
+    LspFeatureDelta lspFeatures_;
     ThemeSectionDelta theme_;
     ShellSectionDelta shell_;
     ViewportDelta viewport_;
@@ -269,32 +269,32 @@ struct SessionReplayResult {
     }
 };
 
-[[nodiscard]] SessionSnapshot assemble_session_snapshot(
+[[nodiscard]] SessionSnapshot assembleSessionSnapshot(
     Revision revision, SessionTopology topology,
-    InvocationPrincipal const& principal, ViewId view_id,
+    InvocationPrincipal const& principal, ViewId viewId,
     ViewportViewState viewport, SessionSnapshotSections sections);
-[[nodiscard]] SessionDelta derive_session_delta(SessionSnapshot const& before,
+[[nodiscard]] SessionDelta deriveSessionDelta(SessionSnapshot const& before,
                                                 SessionSnapshot const& after);
-[[nodiscard]] SessionReplayResult replay_session_delta(
+[[nodiscard]] SessionReplayResult replaySessionDelta(
     SessionSnapshot const& base, SessionDelta const& delta);
 
 // Reconstructs a SessionDelta from already-validated wire fields (protocol
 // codec use only; see the friend declaration above). Ordinary code derives
 // deltas through derive_session_delta instead.
-[[nodiscard]] SessionDelta decode_wire_session_delta(
-    Revision base_revision, Revision revision, ClientId client_id,
-    ViewId view_id, std::vector<CapabilityId> capabilities,
+[[nodiscard]] SessionDelta decodeWireSessionDelta(
+    Revision baseRevision, Revision revision, ClientId clientId,
+    ViewId viewId, std::vector<CapabilityId> capabilities,
     std::optional<SessionTopology> topology,
     std::optional<DocumentDelta> document,
-    std::optional<ByteOffset> document_caret, SelectionViewDelta selection,
+    std::optional<ByteOffset> documentCaret, SelectionViewDelta selection,
     HistoryDelta history, ClipboardDelta clipboard,
-    PromptStatusDelta prompt_status, SearchDelta search,
-    FindReplaceDelta find_replace, SettingsSectionDelta settings,
-    KeymapDelta keymap, std::optional<TextEncodingDelta> text_encoding,
+    PromptStatusDelta promptStatus, SearchDelta search,
+    FindReplaceDelta findReplace, SettingsSectionDelta settings,
+    KeymapDelta keymap, std::optional<TextEncodingDelta> textEncoding,
     TabDelta tabs, DiffDelta diff,
-    ExternalModificationDelta external_modification,
-    FollowEditsDelta follow_edits, TreeDelta tree, SyntaxDelta syntax,
-    LspSyncDelta lsp_sync, LspFeatureDelta lsp_features,
+    ExternalModificationDelta externalModification,
+    FollowEditsDelta followEdits, TreeDelta tree, SyntaxDelta syntax,
+    LspSyncDelta lspSync, LspFeatureDelta lspFeatures,
     ThemeSectionDelta theme, ShellSectionDelta shell, ViewportDelta viewport);
 
 }  // namespace ssg

@@ -8,7 +8,7 @@
 namespace ssg {
 namespace {
 
-bool valid_workspace_path(const std::filesystem::path& path) {
+bool validWorkspacePath(const std::filesystem::path& path) {
     if (path.empty() || path.is_absolute() || path.has_root_name()) {
         return false;
     }
@@ -25,86 +25,86 @@ struct ComputedDiff {
     std::vector<DiffLineChange> changes;
 };
 
-std::optional<ComputedDiff> compute_diff(std::string_view baseline,
+std::optional<ComputedDiff> computeDiff(std::string_view baseline,
                                          std::string_view target,
                                          const DiffConfig& config) {
-    const auto old_lines = split_diff_lines(baseline);
-    const auto new_lines = split_diff_lines(target);
-    if (old_lines.size() > config.maximum_line_count ||
-        new_lines.size() > config.maximum_line_count) {
+    const auto oldLines = splitDiffLines(baseline);
+    const auto newLines = splitDiffLines(target);
+    if (oldLines.size() > config.maximumLineCount ||
+        newLines.size() > config.maximumLineCount) {
         return std::nullopt;
     }
 
-    const auto rows = old_lines.size() + 1;
-    const auto columns = new_lines.size() + 1;
+    const auto rows = oldLines.size() + 1;
+    const auto columns = newLines.size() + 1;
     if (rows > std::numeric_limits<std::size_t>::max() / columns ||
-        rows * columns > config.maximum_matrix_cells) {
+        rows * columns > config.maximumMatrixCells) {
         return std::nullopt;
     }
 
     std::vector<std::size_t> lcs(rows * columns);
-    const auto at = [&](std::size_t old_index, std::size_t new_index) -> std::size_t& {
-        return lcs[old_index * columns + new_index];
+    const auto at = [&](std::size_t oldIndex, std::size_t newIndex) -> std::size_t& {
+        return lcs[oldIndex * columns + newIndex];
     };
-    for (std::size_t old_index = old_lines.size(); old_index-- > 0;) {
-        for (std::size_t new_index = new_lines.size(); new_index-- > 0;) {
-            at(old_index, new_index) =
-                old_lines[old_index] == new_lines[new_index]
-                    ? at(old_index + 1, new_index + 1) + 1
-                    : std::max(at(old_index + 1, new_index),
-                               at(old_index, new_index + 1));
+    for (std::size_t oldIndex = oldLines.size(); oldIndex-- > 0;) {
+        for (std::size_t newIndex = newLines.size(); newIndex-- > 0;) {
+            at(oldIndex, newIndex) =
+                oldLines[oldIndex] == newLines[newIndex]
+                    ? at(oldIndex + 1, newIndex + 1) + 1
+                    : std::max(at(oldIndex + 1, newIndex),
+                               at(oldIndex, newIndex + 1));
         }
     }
 
     ComputedDiff result;
-    std::size_t old_index = 0;
-    std::size_t new_index = 0;
+    std::size_t oldIndex = 0;
+    std::size_t newIndex = 0;
     std::optional<DiffHunk> pending;
     const auto flush = [&] {
         if (!pending) {
             return;
         }
         const auto paired =
-            std::min(pending->baseline_lines.size(), pending->target_lines.size());
+            std::min(pending->baselineLines.size(), pending->targetLines.size());
         for (std::size_t index = 0; index < paired; ++index) {
             result.changes.push_back(
-                {DiffLineKind::modified, pending->baseline_start + index,
-                 pending->target_start + index});
+                {DiffLineKind::Modified, pending->baselineStart + index,
+                 pending->targetStart + index});
         }
-        for (std::size_t index = paired; index < pending->baseline_lines.size();
+        for (std::size_t index = paired; index < pending->baselineLines.size();
              ++index) {
             result.changes.push_back(
-                {DiffLineKind::removed, pending->baseline_start + index,
+                {DiffLineKind::Removed, pending->baselineStart + index,
                  std::nullopt});
         }
-        for (std::size_t index = paired; index < pending->target_lines.size();
+        for (std::size_t index = paired; index < pending->targetLines.size();
              ++index) {
             result.changes.push_back(
-                {DiffLineKind::added, std::nullopt,
-                 pending->target_start + index});
+                {DiffLineKind::Added, std::nullopt,
+                 pending->targetStart + index});
         }
         result.hunks.push_back(std::move(*pending));
         pending.reset();
     };
 
-    while (old_index < old_lines.size() || new_index < new_lines.size()) {
-        if (old_index < old_lines.size() && new_index < new_lines.size() &&
-            old_lines[old_index] == new_lines[new_index]) {
+    while (oldIndex < oldLines.size() || newIndex < newLines.size()) {
+        if (oldIndex < oldLines.size() && newIndex < newLines.size() &&
+            oldLines[oldIndex] == newLines[newIndex]) {
             flush();
-            ++old_index;
-            ++new_index;
+            ++oldIndex;
+            ++newIndex;
             continue;
         }
         if (!pending) {
-            pending = DiffHunk{.baseline_start = old_index,
-                               .target_start = new_index};
+            pending = DiffHunk{.baselineStart = oldIndex,
+                               .targetStart = newIndex};
         }
-        if (old_index < old_lines.size() &&
-            (new_index == new_lines.size() ||
-             at(old_index + 1, new_index) >= at(old_index, new_index + 1))) {
-            pending->baseline_lines.push_back(old_lines[old_index++]);
+        if (oldIndex < oldLines.size() &&
+            (newIndex == newLines.size() ||
+             at(oldIndex + 1, newIndex) >= at(oldIndex, newIndex + 1))) {
+            pending->baselineLines.push_back(oldLines[oldIndex++]);
         } else {
-            pending->target_lines.push_back(new_lines[new_index++]);
+            pending->targetLines.push_back(newLines[newIndex++]);
         }
     }
     flush();
@@ -112,12 +112,12 @@ std::optional<ComputedDiff> compute_diff(std::string_view baseline,
 }
 
 template <typename Entries>
-auto find_entry(Entries& entries, const DiffFileId& id) {
+auto findEntry(Entries& entries, const DiffFileId& id) {
     return std::find_if(entries.begin(), entries.end(),
                         [&](const auto& entry) { return entry.view.id == id; });
 }
 
-bool contains_id(const std::vector<DiffFileId>& ids, const DiffFileId& id) {
+bool containsId(const std::vector<DiffFileId>& ids, const DiffFileId& id) {
     return std::find(ids.begin(), ids.end(), id) != ids.end();
 }
 
@@ -129,7 +129,7 @@ DiffFileId::DiffFileId(std::string value) : value_(std::move(value)) {
     }
 }
 
-std::vector<std::string> split_diff_lines(std::string_view content) {
+std::vector<std::string> splitDiffLines(std::string_view content) {
     std::vector<std::string> lines;
     std::size_t start = 0;
     while (start < content.size()) {
@@ -143,79 +143,79 @@ std::vector<std::string> split_diff_lines(std::string_view content) {
 }
 
 DiffModel::DiffModel(DiffConfig config) : config_(config) {
-    if (config_.maximum_line_count == 0 ||
-        config_.maximum_matrix_cells == 0) {
+    if (config_.maximumLineCount == 0 ||
+        config_.maximumMatrixCells == 0) {
         throw std::invalid_argument("diff work limits must be greater than zero");
     }
 }
 
-DiffMutationResult DiffModel::update_git_file(GitDiffFile file,
+DiffMutationResult DiffModel::updateGitFile(GitDiffFile file,
                                                Revision revision) {
     if (revision <= revision_) {
-        return {DiffError::stale_revision};
+        return {DiffError::StaleRevision};
     }
-    if (!valid_workspace_path(file.path) ||
-        (file.previous_path && !valid_workspace_path(*file.previous_path))) {
-        return {DiffError::invalid_path};
+    if (!validWorkspacePath(file.path) ||
+        (file.previousPath && !validWorkspacePath(*file.previousPath))) {
+        return {DiffError::InvalidPath};
     }
-    if (file.index_identity.empty()) {
-        return {DiffError::baseline_identity_required};
+    if (file.indexIdentity.empty()) {
+        return {DiffError::BaselineIdentityRequired};
     }
-    const auto existing = find_entry(entries_, file.id);
-    if (existing != entries_.end() && existing->source != Source::git) {
-        return {DiffError::duplicate_file};
+    const auto existing = findEntry(entries_, file.id);
+    if (existing != entries_.end() && existing->source != Source::Git) {
+        return {DiffError::DuplicateFile};
     }
 
-    const std::string baseline = file.index_content.value_or("");
-    const std::string target = file.working_content.value_or("");
-    auto computed = compute_diff(baseline, target, config_);
+    const std::string baseline = file.indexContent.value_or("");
+    const std::string target = file.workingContent.value_or("");
+    auto computed = computeDiff(baseline, target, config_);
     if (!computed) {
-        return {DiffError::work_limit_exceeded};
+        return {DiffError::WorkLimitExceeded};
     }
 
     DiffFileView view{.id = file.id,
                       .path = std::move(file.path),
-                      .previous_path = std::move(file.previous_path),
-                      .deleted = !file.working_content.has_value(),
-                      .baseline_identity = std::move(file.index_identity),
-                      .current_content = target,
+                      .previousPath = std::move(file.previousPath),
+                      .deleted = !file.workingContent.has_value(),
+                      .baselineIdentity = std::move(file.indexIdentity),
+                      .currentContent = target,
                       .hunks = std::move(computed->hunks),
-                      .changed_lines = std::move(computed->changes)};
+                      .changedLines = std::move(computed->changes)};
     if (existing == entries_.end()) {
-        entries_.push_back({std::move(view), Source::git, {}});
+        entries_.push_back({std::move(view), Source::Git, {}});
     } else {
         existing->view = std::move(view);
-        existing->source = Source::git;
-        existing->acknowledged_content.clear();
+        existing->source = Source::Git;
+        existing->acknowledgedContent.clear();
     }
     revision_ = revision;
     return {};
 }
 
-DiffMutationResult DiffModel::seed_non_git(std::vector<SeededDiffFile> files,
+DiffMutationResult DiffModel::seedNonGit(std::vector<SeededDiffFile> files,
                                            Revision revision) {
     if (revision <= revision_) {
-        return {DiffError::stale_revision};
+        return {DiffError::StaleRevision};
     }
 
     std::vector<Entry> seeded;
     seeded.reserve(files.size());
     for (auto& file : files) {
-        if (!valid_workspace_path(file.path)) {
-            return {DiffError::invalid_path};
+        if (!validWorkspacePath(file.path)) {
+            return {DiffError::InvalidPath};
         }
-        if (find_entry(entries_, file.id) != entries_.end() ||
-            find_entry(seeded, file.id) != seeded.end()) {
-            return {DiffError::duplicate_file};
+        if (findEntry(entries_, file.id) != entries_.end() ||
+            findEntry(seeded, file.id) != seeded.end()) {
+            return {DiffError::DuplicateFile};
         }
-        if (split_diff_lines(file.content).size() > config_.maximum_line_count) {
-            return {DiffError::work_limit_exceeded};
+        if (splitDiffLines(file.content).size() > config_.maximumLineCount) {
+            return {DiffError::WorkLimitExceeded};
         }
         seeded.push_back(
             {DiffFileView{.id = file.id,
                           .path = std::move(file.path),
-                          .current_content = file.content},
-             Source::non_git, std::move(file.content)});
+                          .currentContent = file.content},
+             Source::NonGit, std::move(file.content)});
     }
 
     entries_.insert(entries_.end(),
@@ -225,67 +225,67 @@ DiffMutationResult DiffModel::seed_non_git(std::vector<SeededDiffFile> files,
     return {};
 }
 
-DiffMutationResult DiffModel::apply_non_git_event(NonGitDiffEvent event,
+DiffMutationResult DiffModel::applyNonGitEvent(NonGitDiffEvent event,
                                                   Revision revision) {
     if (revision <= revision_) {
-        return {DiffError::stale_revision};
+        return {DiffError::StaleRevision};
     }
-    if (!valid_workspace_path(event.path) ||
-        (event.previous_path && !valid_workspace_path(*event.previous_path))) {
-        return {DiffError::invalid_path};
+    if (!validWorkspacePath(event.path) ||
+        (event.previousPath && !validWorkspacePath(*event.previousPath))) {
+        return {DiffError::InvalidPath};
     }
-    const bool removed = event.kind == NonGitDiffEventKind::remove;
+    const bool removed = event.kind == NonGitDiffEventKind::Remove;
     if (removed && event.content) {
-        return {DiffError::content_forbidden};
+        return {DiffError::ContentForbidden};
     }
     if (!removed && !event.content) {
-        return {DiffError::content_required};
+        return {DiffError::ContentRequired};
     }
 
-    auto existing = find_entry(entries_, event.id);
-    if (existing != entries_.end() && existing->source != Source::non_git) {
-        return {DiffError::duplicate_file};
+    auto existing = findEntry(entries_, event.id);
+    if (existing != entries_.end() && existing->source != Source::NonGit) {
+        return {DiffError::DuplicateFile};
     }
     if (existing == entries_.end()) {
-        if (event.kind != NonGitDiffEventKind::create) {
-            return {DiffError::unknown_file};
+        if (event.kind != NonGitDiffEventKind::Create) {
+            return {DiffError::UnknownFile};
         }
         const std::string target = *event.content;
-        auto computed = compute_diff("", target, config_);
+        auto computed = computeDiff("", target, config_);
         if (!computed) {
-            return {DiffError::work_limit_exceeded};
+            return {DiffError::WorkLimitExceeded};
         }
         entries_.push_back(
             {DiffFileView{.id = event.id,
                           .path = std::move(event.path),
-                          .previous_path = std::move(event.previous_path),
-                          .current_content = target,
+                          .previousPath = std::move(event.previousPath),
+                          .currentContent = target,
                           .hunks = std::move(computed->hunks),
-                          .changed_lines = std::move(computed->changes)},
-             Source::non_git, target});
+                          .changedLines = std::move(computed->changes)},
+             Source::NonGit, target});
         revision_ = revision;
         return {};
     }
 
     const std::string target = event.content.value_or("");
     auto computed =
-        compute_diff(existing->acknowledged_content, target, config_);
+        computeDiff(existing->acknowledgedContent, target, config_);
     if (!computed) {
-        return {DiffError::work_limit_exceeded};
+        return {DiffError::WorkLimitExceeded};
     }
     existing->view.path = std::move(event.path);
-    existing->view.previous_path = std::move(event.previous_path);
+    existing->view.previousPath = std::move(event.previousPath);
     existing->view.deleted = removed;
-    existing->view.baseline_identity.clear();
-    existing->view.current_content = target;
+    existing->view.baselineIdentity.clear();
+    existing->view.currentContent = target;
     existing->view.hunks = std::move(computed->hunks);
-    existing->view.changed_lines = std::move(computed->changes);
-    existing->acknowledged_content = target;
+    existing->view.changedLines = std::move(computed->changes);
+    existing->acknowledgedContent = target;
     revision_ = revision;
     return {};
 }
 
-DiffViewState DiffModel::view_state() const {
+DiffViewState DiffModel::viewState() const {
     DiffViewState result{.revision = revision_};
     result.files.reserve(entries_.size());
     for (const auto& entry : entries_) {
@@ -300,28 +300,28 @@ DiffViewState DiffModel::view_state() const {
 
 std::optional<std::reference_wrapper<const DiffFileView>>
 DiffModel::file(const DiffFileId& id) const {
-    const auto found = find_entry(entries_, id);
+    const auto found = findEntry(entries_, id);
     if (found == entries_.end()) {
         return std::nullopt;
     }
     return std::cref(found->view);
 }
 
-DiffCommandSet diff_command_set() {
+DiffCommandSet diffCommandSet() {
     return {};
 }
 
-std::optional<std::size_t> next_diff_hunk(
-    const DiffFileView& file, std::optional<std::size_t> current_target_line) {
+std::optional<std::size_t> nextDiffHunk(
+    const DiffFileView& file, std::optional<std::size_t> currentTargetLine) {
     if (file.hunks.empty()) {
         return std::nullopt;
     }
-    if (!current_target_line) {
+    if (!currentTargetLine) {
         return 0;
     }
     const auto found = std::find_if(
         file.hunks.begin(), file.hunks.end(), [&](const auto& hunk) {
-            return hunk.target_start > *current_target_line;
+            return hunk.targetStart > *currentTargetLine;
         });
     return found == file.hunks.end()
                ? std::optional<std::size_t>{0}
@@ -329,74 +329,74 @@ std::optional<std::size_t> next_diff_hunk(
                      static_cast<std::size_t>(found - file.hunks.begin())};
 }
 
-std::optional<std::size_t> previous_diff_hunk(
-    const DiffFileView& file, std::optional<std::size_t> current_target_line) {
+std::optional<std::size_t> previousDiffHunk(
+    const DiffFileView& file, std::optional<std::size_t> currentTargetLine) {
     if (file.hunks.empty()) {
         return std::nullopt;
     }
-    if (!current_target_line) {
+    if (!currentTargetLine) {
         return file.hunks.size() - 1;
     }
     for (std::size_t index = file.hunks.size(); index-- > 0;) {
-        if (file.hunks[index].target_start < *current_target_line) {
+        if (file.hunks[index].targetStart < *currentTargetLine) {
             return index;
         }
     }
     return file.hunks.size() - 1;
 }
 
-DiffOpenTarget diff_open_file(const DiffFileView& file) {
+DiffOpenTarget diffOpenFile(const DiffFileView& file) {
     return {file.id,
-            file.deleted && file.previous_path ? *file.previous_path : file.path,
+            file.deleted && file.previousPath ? *file.previousPath : file.path,
             file.deleted};
 }
 
-DiffDelta derive_diff_delta(const DiffViewState& base,
+DiffDelta deriveDiffDelta(const DiffViewState& base,
                             const DiffViewState& target) {
-    DiffDelta delta{.base_revision = base.revision,
+    DiffDelta delta{.baseRevision = base.revision,
                     .revision = target.revision};
-    for (const auto& target_file : target.files) {
-        const auto base_file = std::find_if(
+    for (const auto& targetFile : target.files) {
+        const auto baseFile = std::find_if(
             base.files.begin(), base.files.end(),
-            [&](const auto& candidate) { return candidate.id == target_file.id; });
-        if (base_file == base.files.end() || *base_file != target_file) {
-            delta.upserted.push_back(target_file);
+            [&](const auto& candidate) { return candidate.id == targetFile.id; });
+        if (baseFile == base.files.end() || *baseFile != targetFile) {
+            delta.upserted.push_back(targetFile);
         }
     }
-    for (const auto& base_file : base.files) {
-        const auto target_file = std::find_if(
+    for (const auto& baseFile : base.files) {
+        const auto targetFile = std::find_if(
             target.files.begin(), target.files.end(),
-            [&](const auto& candidate) { return candidate.id == base_file.id; });
-        if (target_file == target.files.end()) {
-            delta.removed.push_back(base_file.id);
+            [&](const auto& candidate) { return candidate.id == baseFile.id; });
+        if (targetFile == target.files.end()) {
+            delta.removed.push_back(baseFile.id);
         }
     }
     return delta;
 }
 
-DiffReplayResult replay_diff_delta(const DiffViewState& base,
+DiffReplayResult replayDiffDelta(const DiffViewState& base,
                                    const DiffDelta& delta) {
-    if (base.revision != delta.base_revision) {
-        return {std::nullopt, DiffReplayError::stale_revision};
+    if (base.revision != delta.baseRevision) {
+        return {std::nullopt, DiffReplayError::StaleRevision};
     }
     DiffViewState result = base;
     for (const auto& id : delta.removed) {
-        if (contains_id(delta.removed, id) &&
+        if (containsId(delta.removed, id) &&
             std::count(delta.removed.begin(), delta.removed.end(), id) != 1) {
-            return {std::nullopt, DiffReplayError::malformed_delta};
+            return {std::nullopt, DiffReplayError::MalformedDelta};
         }
         result.files.erase(
             std::remove_if(result.files.begin(), result.files.end(),
                            [&](const auto& file) { return file.id == id; }),
             result.files.end());
     }
-    std::vector<DiffFileId> upserted_ids;
+    std::vector<DiffFileId> upsertedIds;
     for (const auto& file : delta.upserted) {
-        if (contains_id(upserted_ids, file.id) ||
-            contains_id(delta.removed, file.id)) {
-            return {std::nullopt, DiffReplayError::malformed_delta};
+        if (containsId(upsertedIds, file.id) ||
+            containsId(delta.removed, file.id)) {
+            return {std::nullopt, DiffReplayError::MalformedDelta};
         }
-        upserted_ids.push_back(file.id);
+        upsertedIds.push_back(file.id);
         const auto existing = std::find_if(
             result.files.begin(), result.files.end(),
             [&](const auto& candidate) { return candidate.id == file.id; });
@@ -411,7 +411,7 @@ DiffReplayResult replay_diff_delta(const DiffViewState& base,
                   return left.id < right.id;
               });
     result.revision = delta.revision;
-    return {std::move(result), DiffReplayError::none};
+    return {std::move(result), DiffReplayError::None};
 }
 
 } // namespace ssg

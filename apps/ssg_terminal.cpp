@@ -40,14 +40,14 @@ ssg::ColorDepth detect_color_depth(char const* colorterm, char const* term) {
     if (colorterm != nullptr) {
         std::string_view const value{colorterm};
         if (value == "truecolor" || value == "24bit") {
-            return ssg::ColorDepth::truecolor;
+            return ssg::ColorDepth::Truecolor;
         }
     }
     if (term != nullptr &&
         std::string_view{term}.find("256color") != std::string_view::npos) {
-        return ssg::ColorDepth::indexed256;
+        return ssg::ColorDepth::Indexed256;
     }
-    return ssg::ColorDepth::ansi16;
+    return ssg::ColorDepth::Ansi16;
 }
 
 LaunchTarget resolve_launch(fs::path const& argument) {
@@ -65,23 +65,23 @@ LaunchTarget resolve_launch(fs::path const& argument) {
 }
 
 std::string encode_ansi_frame(ssg::CellGrid const& screen, ssg::ColorDepth depth) {
-    constexpr std::size_t max_index = ssg::theme_palette_size - 1;
+    constexpr std::size_t maxIndex = ssg::kThemePaletteSize - 1;
     // Format one SGR color for palette entry `index`, adapted to the terminal's
     // depth.  `kind` is '3' for foreground, '4' for background (SGR selectors),
     // which also selects the ANSI-16 base ('3'/'4' -> 30/40) vs bright
     // ('9'/'10' -> 90/100) prefix.
     auto color = [&](std::uint8_t index, char kind) -> std::string {
-        auto const& c = screen.palette[std::min<std::size_t>(index, max_index)];
-        auto const resolved = ssg::resolve_color(c, depth);
+        auto const& c = screen.palette[std::min<std::size_t>(index, maxIndex)];
+        auto const resolved = ssg::resolveColor(c, depth);
         switch (resolved.encoding) {
-            case ssg::ResolvedColor::Encoding::truecolor:
+            case ssg::ResolvedColor::Encoding::Truecolor:
                 return "\x1b[" + std::string{kind} + "8;2;" +
                        std::to_string(c.red) + ";" + std::to_string(c.green) +
                        ";" + std::to_string(c.blue) + "m";
-            case ssg::ResolvedColor::Encoding::indexed256:
+            case ssg::ResolvedColor::Encoding::Indexed256:
                 return "\x1b[" + std::string{kind} + "8;5;" +
                        std::to_string(resolved.index) + "m";
-            case ssg::ResolvedColor::Encoding::ansi16: {
+            case ssg::ResolvedColor::Encoding::Ansi16: {
                 int const base = kind == '3' ? 30 : 40;
                 int const bright = kind == '3' ? 90 : 100;
                 int const code = resolved.index < 8
@@ -123,7 +123,7 @@ namespace {
 // The accumulator saturates at a safe bound so a maliciously long parameter
 // cannot overflow the signed integer (undefined behavior); all digits are still
 // consumed so `pos` (and the caller's `consumed`) stays correct.
-std::int64_t parse_decimal(std::string_view text, std::size_t& pos) {
+std::int64_t parseDecimal(std::string_view text, std::size_t& pos) {
     constexpr std::int64_t saturation = 1'000'000'000;
     std::int64_t value = 0;
     while (pos < text.size() && text[pos] >= '0' && text[pos] <= '9') {
@@ -136,7 +136,7 @@ std::int64_t parse_decimal(std::string_view text, std::size_t& pos) {
 // The named KeyStroke code for a single printable ASCII byte, or "" if the byte
 // has no keycode we bind or route as a chord.  Letters fold to KeyA..KeyZ with a
 // shift flag; the code carries no shift itself (the caller sets it).
-std::string ascii_key_code(unsigned char byte) {
+std::string asciiKeyCode(unsigned char byte) {
     if (byte >= 'a' && byte <= 'z') return std::string{"Key"} + static_cast<char>(byte - 'a' + 'A');
     if (byte >= 'A' && byte <= 'Z') return std::string{"Key"} + static_cast<char>(byte);
     if (byte >= '0' && byte <= '9') return std::string{"Digit"} + static_cast<char>(byte);
@@ -159,7 +159,7 @@ std::string ascii_key_code(unsigned char byte) {
 
 // Length of the UTF-8 sequence introduced by `lead`, or 0 for a continuation or
 // invalid lead byte.
-std::size_t utf8_length(unsigned char lead) {
+std::size_t utf8Length(unsigned char lead) {
     if (lead < 0x80) return 1;
     if (lead >= 0xF0) return 4;
     if (lead >= 0xE0) return 3;
@@ -169,7 +169,7 @@ std::size_t utf8_length(unsigned char lead) {
 
 }  // namespace
 
-Decoded decode_input(std::string_view bytes, bool input_exhausted,
+Decoded decode_input(std::string_view bytes, bool inputExhausted,
                      std::size_t& consumed) {
     consumed = 0;
     if (bytes.empty()) return {};
@@ -192,7 +192,7 @@ Decoded decode_input(std::string_view bytes, bool input_exhausted,
         if (bytes.size() < 2) {
             // A lone ESC: a complete Escape stroke only once input is exhausted;
             // otherwise wait for the byte that disambiguates CSI vs. chord.
-            if (input_exhausted) {
+            if (inputExhausted) {
                 consumed = 1;
                 return {DecodeStatus::key, ssg::KeyStroke{"Escape"}, {}, 0};
             }
@@ -218,7 +218,7 @@ Decoded decode_input(std::string_view bytes, bool input_exhausted,
                 return {DecodeStatus::none, {}, {}, 0};
             }
             std::size_t pos = 4;
-            auto const modifier = parse_decimal(bytes, pos);
+            auto const modifier = parseDecimal(bytes, pos);
             if (pos == 4 || pos >= bytes.size()) {
                 return {DecodeStatus::incomplete, {}, {}, 0};  // Await digits/final.
             }
@@ -269,7 +269,7 @@ Decoded decode_input(std::string_view bytes, bool input_exhausted,
                 return {DecodeStatus::none, {}, {}, 0};
             }
             std::size_t pos = 4;
-            auto const modifier = parse_decimal(bytes, pos);
+            auto const modifier = parseDecimal(bytes, pos);
             if (pos == 4 || pos >= bytes.size()) {
                 return {DecodeStatus::incomplete, {}, {}, 0};  // Await digits/final.
             }
@@ -295,28 +295,28 @@ Decoded decode_input(std::string_view bytes, bool input_exhausted,
             std::size_t end = 3;
             while (end < bytes.size() && bytes[end] != 'M' && bytes[end] != 'm') ++end;
             if (end >= bytes.size()) return {DecodeStatus::incomplete, {}, {}, 0};
-            char const final_byte = bytes[end];
+            char const finalByte = bytes[end];
             consumed = end + 1;  // A malformed-but-terminated sequence is consumed.
             std::size_t pos = 3;
             // Each of Cb/Cx/Cy must be a non-empty run of digits followed by its
             // delimiter; Cy must end exactly at the final byte (no trailing junk).
             // Otherwise the sequence is malformed and dropped rather than
             // dispatching a command from garbage bytes.
-            auto parse_field = [&](std::int64_t& out) {
+            auto parseField = [&](std::int64_t& out) {
                 std::size_t const start = pos;
-                out = parse_decimal(bytes, pos);
+                out = parseDecimal(bytes, pos);
                 return pos > start;
             };
             std::int64_t cb = 0;
             std::int64_t cx = 0;
             std::int64_t cy = 0;
-            if (!parse_field(cb)) return {DecodeStatus::none, {}, {}, 0};
+            if (!parseField(cb)) return {DecodeStatus::none, {}, {}, 0};
             if (pos >= bytes.size() || bytes[pos] != ';') return {DecodeStatus::none, {}, {}, 0};
             ++pos;
-            if (!parse_field(cx)) return {DecodeStatus::none, {}, {}, 0};
+            if (!parseField(cx)) return {DecodeStatus::none, {}, {}, 0};
             if (pos >= bytes.size() || bytes[pos] != ';') return {DecodeStatus::none, {}, {}, 0};
             ++pos;
-            if (!parse_field(cy)) return {DecodeStatus::none, {}, {}, 0};
+            if (!parseField(cy)) return {DecodeStatus::none, {}, {}, 0};
             if (pos != end) return {DecodeStatus::none, {}, {}, 0};
             if (cb == 64 || cb == 65) {
                 Decoded decoded;
@@ -333,12 +333,12 @@ Decoded decode_input(std::string_view bytes, bool input_exhausted,
             PointerEvent event;
             event.column = static_cast<int>(cx > 0 ? cx - 1 : 0);
             event.row = static_cast<int>(cy > 0 ? cy - 1 : 0);
-            auto const button_bits = cb & 3;
-            event.button = button_bits == 0   ? PointerButton::left
-                           : button_bits == 1 ? PointerButton::middle
-                           : button_bits == 2 ? PointerButton::right
+            auto const buttonBits = cb & 3;
+            event.button = buttonBits == 0   ? PointerButton::left
+                           : buttonBits == 1 ? PointerButton::middle
+                           : buttonBits == 2 ? PointerButton::right
                                               : PointerButton::other;
-            event.kind = final_byte == 'm' ? PointerKind::release
+            event.kind = finalByte == 'm' ? PointerKind::release
                          : (cb & 32) != 0  ? PointerKind::drag
                                            : PointerKind::press;
             Decoded decoded;
@@ -361,7 +361,7 @@ Decoded decode_input(std::string_view bytes, bool input_exhausted,
         }
     }
     if (first >= 0x20) {
-        auto const length = utf8_length(first);
+        auto const length = utf8Length(first);
         if (length == 0) {
             consumed = 1;  // Stray UTF-8 continuation byte; skip.
             return {DecodeStatus::none, {}, {}, 0};
@@ -371,7 +371,7 @@ Decoded decode_input(std::string_view bytes, bool input_exhausted,
         consumed = length;
         ssg::KeyStroke stroke;
         if (length == 1) {
-            stroke.code = ascii_key_code(first);
+            stroke.code = asciiKeyCode(first);
             stroke.shift = first >= 'A' && first <= 'Z';
         }
         // A printable commits text and, when it has a keycode, also carries a

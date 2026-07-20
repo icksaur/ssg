@@ -22,10 +22,10 @@ struct ByteRange {
 };
 
 struct FindOptions {
-    bool case_sensitive = false;
-    bool whole_word = false;
+    bool caseSensitive = false;
+    bool wholeWord = false;
     bool regex = false;
-    bool selection_only = false;
+    bool selectionOnly = false;
     bool operator==(const FindOptions&) const noexcept = default;
 };
 
@@ -36,55 +36,55 @@ struct FindMatch {
 };
 
 enum class FindReplaceError : std::uint8_t {
-    none,
-    invalid_pattern,
-    invalid_utf8,
-    invalid_selection,
-    budget_exhausted,
-    cancelled,
-    no_match,
-    stale_revision,
-    document_rejected,
-    workspace_rejected,
-    recovery_rejected,
+    None,
+    InvalidPattern,
+    InvalidUtf8,
+    InvalidSelection,
+    BudgetExhausted,
+    Cancelled,
+    NoMatch,
+    StaleRevision,
+    DocumentRejected,
+    WorkspaceRejected,
+    RecoveryRejected,
 };
 
 struct FindRequest {
     std::string query;
     FindOptions options;
     std::optional<ByteRange> selection;
-    std::uint64_t work_budget = 1'000'000;
+    std::uint64_t workBudget = 1'000'000;
     const std::atomic_bool* cancelled = nullptr;
 };
 
 struct FindResult {
-    FindReplaceError error = FindReplaceError::none;
+    FindReplaceError error = FindReplaceError::None;
     std::vector<FindMatch> matches;
     std::string message;
     [[nodiscard]] bool accepted() const noexcept {
-        return error == FindReplaceError::none;
+        return error == FindReplaceError::None;
     }
 };
 
-[[nodiscard]] FindResult find_matches(std::string_view text,
+[[nodiscard]] FindResult findMatches(std::string_view text,
                                       const FindRequest& request);
 
 enum class FindReplaceCommand : std::uint8_t {
-    find_open,
-    find_close,
-    find_next,
-    find_previous,
-    find_update_query,
-    find_toggle_case,
-    find_toggle_whole_word,
-    find_toggle_regex,
-    find_toggle_selection,
-    replace_open,
-    replace_update_replacement,
-    replace_current,
-    replace_all,
-    replace_workspace_preview,
-    replace_workspace_apply,
+    FindOpen,
+    FindClose,
+    FindNext,
+    FindPrevious,
+    FindUpdateQuery,
+    FindToggleCase,
+    FindToggleWholeWord,
+    FindToggleRegex,
+    FindToggleSelection,
+    ReplaceOpen,
+    ReplaceUpdateReplacement,
+    ReplaceCurrent,
+    ReplaceAll,
+    ReplaceWorkspacePreview,
+    ReplaceWorkspaceApply,
 };
 
 // The typed argument for find.update_query / replace.update_replacement: the full
@@ -108,90 +108,90 @@ public:
     descriptors() const noexcept;
 
 private:
-    friend FindReplaceCommandSet find_replace_command_set();
+    friend FindReplaceCommandSet findReplaceCommandSet();
     FindReplaceCommandSet();
     const std::array<FindReplaceCommandDescriptor, 15> descriptors_;
 };
 
-[[nodiscard]] FindReplaceCommandSet find_replace_command_set();
+[[nodiscard]] FindReplaceCommandSet findReplaceCommandSet();
 
 struct FindReplaceViewState {
     std::uint64_t generation = 0;
     bool open = false;
-    bool replace_mode = false;
-    Revision source_revision{0};
+    bool replaceMode = false;
+    Revision sourceRevision{0};
     std::string query;
     std::string replacement;
     FindOptions options;
     std::vector<FindMatch> matches;
-    std::optional<std::size_t> active_match;
-    FindReplaceError error = FindReplaceError::none;
+    std::optional<std::size_t> activeMatch;
+    FindReplaceError error = FindReplaceError::None;
     std::string message;
     bool operator==(const FindReplaceViewState&) const = default;
 };
 
 struct FindReplaceDelta {
     bool changed = false;
-    std::uint64_t base_generation = 0;
+    std::uint64_t baseGeneration = 0;
     std::optional<FindReplaceViewState> replacement;
     bool operator==(const FindReplaceDelta&) const = default;
 };
 
 enum class FindReplaceReplayError : std::uint8_t {
-    none,
-    base_mismatch,
-    malformed_delta,
+    None,
+    BaseMismatch,
+    MalformedDelta,
 };
 
 struct FindReplaceReplayResult {
-    FindReplaceReplayError error = FindReplaceReplayError::none;
+    FindReplaceReplayError error = FindReplaceReplayError::None;
     FindReplaceViewState state;
 };
 
-[[nodiscard]] FindReplaceDelta derive_find_replace_delta(
+[[nodiscard]] FindReplaceDelta deriveFindReplaceDelta(
     const FindReplaceViewState& before, const FindReplaceViewState& after);
-[[nodiscard]] FindReplaceReplayResult replay_find_replace_delta(
+[[nodiscard]] FindReplaceReplayResult replayFindReplaceDelta(
     const FindReplaceViewState& base, const FindReplaceDelta& delta);
 
 struct FindReplaceOperationResult {
-    FindReplaceError error = FindReplaceError::none;
+    FindReplaceError error = FindReplaceError::None;
     Revision revision{0};
     std::string message;
     [[nodiscard]] bool accepted() const noexcept {
-        return error == FindReplaceError::none;
+        return error == FindReplaceError::None;
     }
 };
 
 class FindReplaceController {
 public:
     void open(const DocumentSnapshot& document, FindRequest request);
-    void open_replace(const DocumentSnapshot& document, FindRequest request);
+    void openReplace(const DocumentSnapshot& document, FindRequest request);
     void close();
-    void update_query(const DocumentSnapshot& document, std::string query,
+    void updateQuery(const DocumentSnapshot& document, std::string query,
                       std::optional<ByteRange> selection);
-    void update_replacement(std::string replacement);
-    void toggle_case(const DocumentSnapshot& document);
-    void toggle_whole_word(const DocumentSnapshot& document);
-    void toggle_regex(const DocumentSnapshot& document);
-    void toggle_selection(const DocumentSnapshot& document,
+    void updateReplacement(std::string replacement);
+    void toggleCase(const DocumentSnapshot& document);
+    void toggleWholeWord(const DocumentSnapshot& document);
+    void toggleRegex(const DocumentSnapshot& document);
+    void toggleSelection(const DocumentSnapshot& document,
                           std::optional<ByteRange> selection);
     void refresh(const DocumentSnapshot& document,
                  std::optional<ByteRange> selection);
     void next();
     void previous();
 
-    [[nodiscard]] FindReplaceOperationResult replace_current(
+    [[nodiscard]] FindReplaceOperationResult replaceCurrent(
         Document& document, DocumentHistory& history,
-        const SelectionSet& selections_before,
-        const SelectionSet& selections_after, std::string replacement,
-        std::uint64_t timestamp_ms);
-    [[nodiscard]] FindReplaceOperationResult replace_all(
+        const SelectionSet& selectionsBefore,
+        const SelectionSet& selectionsAfter, std::string replacement,
+        std::uint64_t timestampMs);
+    [[nodiscard]] FindReplaceOperationResult replaceAll(
         Document& document, DocumentHistory& history,
-        const SelectionSet& selections_before,
-        const SelectionSet& selections_after, std::string replacement,
-        std::uint64_t timestamp_ms);
+        const SelectionSet& selectionsBefore,
+        const SelectionSet& selectionsAfter, std::string replacement,
+        std::uint64_t timestampMs);
 
-    [[nodiscard]] const FindReplaceViewState& view_state() const noexcept;
+    [[nodiscard]] const FindReplaceViewState& viewState() const noexcept;
 
 private:
     void evaluate(const DocumentSnapshot& document);
@@ -208,7 +208,7 @@ struct WorkspaceFileReplacement {
 };
 
 struct WorkspaceReplacePreview {
-    Revision source_revision{0};
+    Revision sourceRevision{0};
     std::string query;
     std::string replacement;
     FindOptions options;
@@ -224,8 +224,8 @@ struct WorkspaceReplaceArguments {
 };
 
 struct WorkspaceRecoveryRecord {
-    Revision source_revision{0};
-    Revision applied_revision{0};
+    Revision sourceRevision{0};
+    Revision appliedRevision{0};
     std::vector<WorkspaceFileReplacement> changes;
     bool operator==(const WorkspaceRecoveryRecord&) const = default;
 };
@@ -237,11 +237,11 @@ public:
 };
 
 struct WorkspaceApplyResult {
-    FindReplaceError error = FindReplaceError::none;
+    FindReplaceError error = FindReplaceError::None;
     Revision revision{0};
     std::string message;
     [[nodiscard]] bool accepted() const noexcept {
-        return error == FindReplaceError::none;
+        return error == FindReplaceError::None;
     }
 };
 
@@ -252,27 +252,27 @@ public:
         Revision revision) const = 0;
     [[nodiscard]] virtual WorkspaceApplyResult apply(
         const WorkspaceReplacePreview& preview,
-        WorkspaceRecoverySink& recovery_sink) = 0;
+        WorkspaceRecoverySink& recoverySink) = 0;
     [[nodiscard]] virtual WorkspaceApplyResult recover(
         const WorkspaceRecoveryRecord& record) = 0;
 };
 
 struct WorkspacePreviewResult {
-    FindReplaceError error = FindReplaceError::none;
+    FindReplaceError error = FindReplaceError::None;
     std::optional<WorkspaceReplacePreview> preview;
     std::string message;
     [[nodiscard]] bool accepted() const noexcept {
-        return error == FindReplaceError::none;
+        return error == FindReplaceError::None;
     }
 };
 
-[[nodiscard]] WorkspacePreviewResult preview_workspace_replace(
-    const FindReplaceWorkspace& workspace, Revision source_revision,
+[[nodiscard]] WorkspacePreviewResult previewWorkspaceReplace(
+    const FindReplaceWorkspace& workspace, Revision sourceRevision,
     const FindRequest& request, std::string replacement);
-[[nodiscard]] WorkspaceApplyResult apply_workspace_replace(
+[[nodiscard]] WorkspaceApplyResult applyWorkspaceReplace(
     FindReplaceWorkspace& workspace, const WorkspaceReplacePreview& preview,
-    WorkspaceRecoverySink& recovery_sink);
-[[nodiscard]] WorkspaceApplyResult recover_workspace_replace(
+    WorkspaceRecoverySink& recoverySink);
+[[nodiscard]] WorkspaceApplyResult recoverWorkspaceReplace(
     FindReplaceWorkspace& workspace, const WorkspaceRecoveryRecord& record);
 
 }  // namespace ssg

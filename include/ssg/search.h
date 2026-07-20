@@ -14,19 +14,19 @@
 
 namespace ssg {
 
-enum class SearchMode : std::uint8_t { file, line, symbol, text, command };
-enum class SearchQueryError : std::uint8_t { none, invalid_line };
+enum class SearchMode : std::uint8_t { File, Line, Symbol, Text, Command };
+enum class SearchQueryError : std::uint8_t { None, InvalidLine };
 
 struct ParsedSearchQuery {
-    SearchMode mode = SearchMode::file;
+    SearchMode mode = SearchMode::File;
     std::string text;
     std::optional<LineIndex> line;
-    SearchQueryError error = SearchQueryError::none;
+    SearchQueryError error = SearchQueryError::None;
     friend bool operator==(const ParsedSearchQuery&,
                            const ParsedSearchQuery&) = default;
 };
 
-[[nodiscard]] ParsedSearchQuery parse_search_query(std::string_view query);
+[[nodiscard]] ParsedSearchQuery parseSearchQuery(std::string_view query);
 
 struct WorkspaceFile {
     std::string path;
@@ -77,7 +77,7 @@ public:
     virtual ~SearchCommandSource() = default;
     [[nodiscard]] virtual std::vector<SearchCommandDescriptor> descriptors()
         const = 0;
-    virtual PaletteExecutionResult execute(std::string_view command_id) = 0;
+    virtual PaletteExecutionResult execute(std::string_view commandId) = 0;
 };
 
 class SearchCancellationToken {
@@ -91,7 +91,7 @@ private:
 };
 
 struct SearchResult {
-    SearchMode mode = SearchMode::file;
+    SearchMode mode = SearchMode::File;
     std::string path;
     std::string label;
     std::optional<LineIndex> line;
@@ -100,29 +100,29 @@ struct SearchResult {
     friend bool operator==(const SearchResult&, const SearchResult&) = default;
 };
 
-[[nodiscard]] std::vector<SearchResult> rank_workspace(
+[[nodiscard]] std::vector<SearchResult> rankWorkspace(
     const WorkspaceSnapshot& workspace, const ParsedSearchQuery& query,
     const SearchCancellationToken& cancellation);
 
 struct WorkspaceSearchRequest {
     std::uint64_t generation = 0;
-    Revision source_revision{0};
+    Revision sourceRevision{0};
     ParsedSearchQuery query;
     SearchCancellationToken cancellation;
 };
 
 struct WorkspaceSearchBatch {
     std::uint64_t generation = 0;
-    Revision source_revision{0};
+    Revision sourceRevision{0};
     std::vector<SearchResult> results;
     bool cancelled = false;
 };
 
-[[nodiscard]] WorkspaceSearchBatch evaluate_workspace_search(
+[[nodiscard]] WorkspaceSearchBatch evaluateWorkspaceSearch(
     const SearchWorkspaceSource& source,
     const WorkspaceSearchRequest& request);
 
-enum class NavigationOrigin : std::uint8_t { user, programmatic };
+enum class NavigationOrigin : std::uint8_t { User, Programmatic };
 
 struct NavigationTarget {
     std::string path;
@@ -135,15 +135,15 @@ struct NavigationTarget {
 
 struct NavigationTransition {
     std::optional<NavigationTarget> target;
-    bool pause_follow_edits = false;
-    bool reveal_primary_caret = false;
+    bool pauseFollowEdits = false;
+    bool revealPrimaryCaret = false;
     friend bool operator==(const NavigationTransition&,
                            const NavigationTransition&) = default;
 };
 
-[[nodiscard]] std::optional<NavigationTarget> navigation_target(
+[[nodiscard]] std::optional<NavigationTarget> navigationTarget(
     const SearchResult& result);
-[[nodiscard]] std::optional<NavigationTarget> goto_line(
+[[nodiscard]] std::optional<NavigationTarget> gotoLine(
     std::string path, const ParsedSearchQuery& query);
 
 class NavigationHistory {
@@ -165,22 +165,22 @@ private:
 
 struct SearchViewState {
     Revision revision{0};
-    bool palette_open = false;
+    bool paletteOpen = false;
     std::string query;
-    SearchMode mode = SearchMode::file;
+    SearchMode mode = SearchMode::File;
     std::vector<SearchResult> results;
-    std::optional<std::size_t> selected_index;
-    std::uint64_t search_generation = 0;
+    std::optional<std::size_t> selectedIndex;
+    std::uint64_t searchGeneration = 0;
     bool searching = false;
     friend bool operator==(const SearchViewState&,
                            const SearchViewState&) = default;
 };
 
 enum class SearchPublishResult : std::uint8_t {
-    accepted,
-    cancelled,
-    superseded,
-    stale_revision,
+    Accepted,
+    Cancelled,
+    Superseded,
+    StaleRevision,
 };
 
 class SearchController {
@@ -188,37 +188,37 @@ public:
     SearchController(const SearchWorkspaceSource& workspace,
                      SearchCommandSource& commands) noexcept;
 
-    void open_palette(Revision revision);
-    void close_palette(Revision revision);
-    void update_palette_query(std::string query, Revision revision);
-    void select_next();
-    void select_previous();
-    [[nodiscard]] PaletteExecutionResult execute_palette();
+    void openPalette(Revision revision);
+    void closePalette(Revision revision);
+    void updatePaletteQuery(std::string query, Revision revision);
+    void selectNext();
+    void selectPrevious();
+    [[nodiscard]] PaletteExecutionResult executePalette();
 
-    [[nodiscard]] WorkspaceSearchRequest begin_workspace_search(
-        std::string query, Revision source_revision);
+    [[nodiscard]] WorkspaceSearchRequest beginWorkspaceSearch(
+        std::string query, Revision sourceRevision);
     [[nodiscard]] WorkspaceSearchBatch evaluate(
         const WorkspaceSearchRequest& request) const;
-    void cancel_workspace_search() noexcept;
+    void cancelWorkspaceSearch() noexcept;
     [[nodiscard]] SearchPublishResult publish(
-        const WorkspaceSearchBatch& batch, Revision current_revision);
+        const WorkspaceSearchBatch& batch, Revision currentRevision);
 
-    [[nodiscard]] const SearchViewState& view_state() const noexcept {
+    [[nodiscard]] const SearchViewState& viewState() const noexcept {
         return state_;
     }
 
 private:
-    void rank_palette();
+    void rankPalette();
 
     const SearchWorkspaceSource& workspace_;
     SearchCommandSource& commands_;
     SearchViewState state_;
-    std::optional<WorkspaceSearchRequest> active_request_;
+    std::optional<WorkspaceSearchRequest> activeRequest_;
 };
 
 struct SearchCommandDescriptorExport {
     std::string_view id;
-    bool user_navigation = false;
+    bool userNavigation = false;
     friend bool operator==(const SearchCommandDescriptorExport&,
                            const SearchCommandDescriptorExport&) = default;
 };
@@ -248,31 +248,31 @@ private:
     }};
 };
 
-[[nodiscard]] SearchCommandSet search_command_set();
+[[nodiscard]] SearchCommandSet searchCommandSet();
 
 struct SearchDelta {
-    Revision base_revision{0};
+    Revision baseRevision{0};
     Revision revision{0};
     std::optional<SearchViewState> state;
     friend bool operator==(const SearchDelta&, const SearchDelta&) = default;
 };
 
-[[nodiscard]] SearchDelta derive_search_delta(const SearchViewState& base,
+[[nodiscard]] SearchDelta deriveSearchDelta(const SearchViewState& base,
                                               const SearchViewState& target);
 
 enum class SearchReplayError : std::uint8_t {
-    none,
-    stale_revision,
-    malformed_delta,
+    None,
+    StaleRevision,
+    MalformedDelta,
 };
 
 struct SearchReplayResult {
     std::optional<SearchViewState> state;
-    SearchReplayError error = SearchReplayError::none;
+    SearchReplayError error = SearchReplayError::None;
     [[nodiscard]] bool accepted() const noexcept { return state.has_value(); }
 };
 
-[[nodiscard]] SearchReplayResult replay_search_delta(
+[[nodiscard]] SearchReplayResult replaySearchDelta(
     const SearchViewState& base, const SearchDelta& delta);
 
 } // namespace ssg
