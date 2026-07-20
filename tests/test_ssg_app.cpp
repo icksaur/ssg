@@ -3,7 +3,7 @@
 
 #include <ssg/editor_runtime.h>
 #include <ssg/hit_tester.h>
-#include <ssg/render.h>
+#include <ssg/renderer.h>
 #include <ssg/selection.h>
 
 #include "test_helpers.h"
@@ -166,7 +166,7 @@ TEST(unicodeEndToEndGridAndEncoding) {
     auto snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snap.has_value());
     if (!snap.has_value()) return;
-    auto grid = ssg::render(*snap);
+    auto grid = ssg::Renderer{}.render(*snap);
 
     // Locate the content row: the first cell run "a","b".
     int row = -1, startx = -1;
@@ -209,7 +209,7 @@ TEST(unicodeEndToEndGridAndEncoding) {
                                 ssg::SelectionCommandArguments{pos, std::nullopt}});
         auto s = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
         if (!s) return -1;
-        auto g = ssg::render(*s);
+        auto g = ssg::Renderer{}.render(*s);
         return g.caret ? g.caret->column : -1;
     };
     int const columnBefore = caretColumnAt(before);

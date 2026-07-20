@@ -8,7 +8,7 @@
 // grid into terminal bytes.
 
 #include <ssg/color.h>
-#include <ssg/render.h>
+#include <ssg/renderer.h>
 
 #include <cstddef>
 #include <cstdint>

@@ -1,4 +1,4 @@
-#include <ssg/render.h>
+#include <ssg/renderer.h>
 
 #include <ssg/layout.h>
 #include <ssg/syntax.h>
@@ -602,7 +602,7 @@ std::string CellGrid::canonical() const {
     return output.str();
 }
 
-CellGrid render(SessionSnapshot const& snapshot) {
+CellGrid Renderer::render(SessionSnapshot const& snapshot) const {
     auto const& shell = snapshot.sections().shell;
     auto const& theme = snapshot.sections().theme;
     for (auto index : theme.semanticIndices) {
@@ -713,7 +713,10 @@ CellGrid render(SessionSnapshot const& snapshot) {
     return grid;
 }
 
-std::uint64_t renderSegmentationCalls() { return gRenderSegmentationCalls; }
-void resetRenderSegmentationCalls() { gRenderSegmentationCalls = 0; }
+std::uint64_t Renderer::renderSegmentationCalls() {
+    return gRenderSegmentationCalls;
+}
+
+void Renderer::resetRenderSegmentationCalls() { gRenderSegmentationCalls = 0; }
 
 }  // namespace ssg
