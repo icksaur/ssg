@@ -57,9 +57,9 @@ public:
         };
     }
 
-    PaletteExecutionResult execute(std::string_view command_id) override {
-        executed.emplace_back(command_id);
-        if (command_id == "file.open") {
+    PaletteExecutionResult execute(std::string_view commandId) override {
+        executed.emplace_back(commandId);
+        if (commandId == "file.open") {
             return {.accepted = true};
         }
         return {.accepted = false, .message = "command rejected"};
@@ -176,33 +176,33 @@ TEST(navigationHistoryMatchesTransitionTable) {
     const NavigationTarget c{.path = "c.cpp", .line = LineIndex{3}};
     NavigationHistory history{3};
 
-    const auto visit_a = history.visit(a, NavigationOrigin::User);
-    const NavigationTransition to_a{.target = a,
+    const auto visitA = history.visit(a, NavigationOrigin::User);
+    const NavigationTransition toA{.target = a,
                                     .pause_follow_edits = true,
                                     .reveal_primary_caret = true};
-    const NavigationTransition to_b{.target = b,
+    const NavigationTransition toB{.target = b,
                                     .pause_follow_edits = true,
                                     .reveal_primary_caret = true};
-    ASSERT_EQ(visit_a, to_a);
-    const auto visit_b = history.visit(b, NavigationOrigin::Programmatic);
-    ASSERT_FALSE(visit_b.pause_follow_edits);
-    ASSERT_EQ(history.back(), to_a);
-    ASSERT_EQ(history.forward(), to_b);
-    const auto ignored_back = history.back();
-    const auto visit_c = history.visit(c, NavigationOrigin::User);
-    ASSERT_TRUE(ignored_back.target.has_value());
-    ASSERT_TRUE(visit_c.pause_follow_edits);
+    ASSERT_EQ(visitA, toA);
+    const auto visitB = history.visit(b, NavigationOrigin::Programmatic);
+    ASSERT_FALSE(visitB.pause_follow_edits);
+    ASSERT_EQ(history.back(), toA);
+    ASSERT_EQ(history.forward(), toB);
+    const auto ignoredBack = history.back();
+    const auto visitC = history.visit(c, NavigationOrigin::User);
+    ASSERT_TRUE(ignoredBack.target.has_value());
+    ASSERT_TRUE(visitC.pause_follow_edits);
     ASSERT_FALSE(history.forward().target.has_value());
     ASSERT_EQ(history.back().target, std::optional<NavigationTarget>{a});
     ASSERT_FALSE(history.back().target.has_value());
 
     NavigationHistory bounded{2};
-    const auto ignored_a = bounded.visit(a, NavigationOrigin::User);
-    const auto ignored_b = bounded.visit(b, NavigationOrigin::User);
-    const auto ignored_c = bounded.visit(c, NavigationOrigin::User);
-    ASSERT_TRUE(ignored_a.target.has_value());
-    ASSERT_TRUE(ignored_b.target.has_value());
-    ASSERT_TRUE(ignored_c.target.has_value());
+    const auto ignoredA = bounded.visit(a, NavigationOrigin::User);
+    const auto ignoredB = bounded.visit(b, NavigationOrigin::User);
+    const auto ignoredC = bounded.visit(c, NavigationOrigin::User);
+    ASSERT_TRUE(ignoredA.target.has_value());
+    ASSERT_TRUE(ignoredB.target.has_value());
+    ASSERT_TRUE(ignoredC.target.has_value());
     ASSERT_EQ(bounded.back().target, std::optional<NavigationTarget>{b});
     ASSERT_FALSE(bounded.back().target.has_value());
     ASSERT_THROWS(NavigationHistory{0}, std::invalid_argument);
@@ -236,10 +236,10 @@ TEST(viewDeltaReplayAndCommandExportsAreExact) {
     const auto replay = replaySearchDelta(base, delta);
     ASSERT_TRUE(replay.accepted());
     ASSERT_EQ(*replay.state, target);
-    const auto no_change = replaySearchDelta(target,
+    const auto noChange = replaySearchDelta(target,
                                                deriveSearchDelta(target, target));
-    ASSERT_TRUE(no_change.accepted());
-    ASSERT_EQ(*no_change.state, target);
+    ASSERT_TRUE(noChange.accepted());
+    ASSERT_EQ(*noChange.state, target);
 
     auto stale = base;
     stale.revision = Revision{99};

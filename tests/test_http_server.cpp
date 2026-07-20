@@ -37,20 +37,20 @@ constexpr TestSocket invalid_test_socket = INVALID_SOCKET;
 void close_test_socket(TestSocket socket) { closesocket(socket); }
 #else
 using TestSocket = int;
-constexpr TestSocket invalid_test_socket = -1;
+constexpr TestSocket kInvalidTestSocket = -1;
 void closeTestSocket(TestSocket socket) { close(socket); }
 #endif
 
 struct SocketOwner {
-    TestSocket socket{invalid_test_socket};
+    TestSocket socket{kInvalidTestSocket};
     explicit SocketOwner(TestSocket value) : socket{value} {}
     ~SocketOwner() {
-        if (socket != invalid_test_socket) closeTestSocket(socket);
+        if (socket != kInvalidTestSocket) closeTestSocket(socket);
     }
     SocketOwner(SocketOwner const&) = delete;
     SocketOwner& operator=(SocketOwner const&) = delete;
     SocketOwner(SocketOwner&& other) noexcept : socket{other.socket} {
-        other.socket = invalid_test_socket;
+        other.socket = kInvalidTestSocket;
     }
 };
 
@@ -127,7 +127,7 @@ SocketOwner connectWebsocket(std::uint16_t port) {
     }
 #endif
     SocketOwner owner{socket(AF_INET, SOCK_STREAM, 0)};
-    if (owner.socket == invalid_test_socket) {
+    if (owner.socket == kInvalidTestSocket) {
         throw std::runtime_error{"socket creation failed"};
     }
     sockaddr_in address{};
@@ -158,7 +158,7 @@ SocketOwner connectLoopback(std::uint16_t port) {
     }
 #endif
     SocketOwner owner{socket(AF_INET, SOCK_STREAM, 0)};
-    if (owner.socket == invalid_test_socket) {
+    if (owner.socket == kInvalidTestSocket) {
         throw std::runtime_error{"socket creation failed"};
     }
     sockaddr_in address{};
@@ -242,8 +242,8 @@ public:
     }
 
     ssg::SessionSnapshot snapshot(ssg::SessionId const&,
-                                  ssg::ClientId client_id) override {
-        auto attached = session_.attachedClient(client_id);
+                                  ssg::ClientId clientId) override {
+        auto attached = session_.attachedClient(clientId);
         if (!attached) throw std::logic_error{"snapshot for detached client"};
         return ssg::assembleSessionSnapshot(
             session_.revision(), session_.topology(), attached->principal,
@@ -327,17 +327,17 @@ TEST(externallyOwnedRouteSharesOneServerLifecycle) {
         *fixture.host, {"/session", 8, 8, 250ms}};
 
     server.start();
-    auto const bound_port = server.boundPort();
-    ASSERT_TRUE(bound_port.has_value());
+    auto const boundPort = server.boundPort();
+    ASSERT_TRUE(boundPort.has_value());
 
-    auto http = connectLoopback(static_cast<std::uint16_t>(*bound_port));
+    auto http = connectLoopback(static_cast<std::uint16_t>(*boundPort));
     sendAll(http.socket, "GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
     auto const response = receiveSome(http.socket);
     ASSERT_TRUE(response.find("200 OK") != std::string::npos);
     ASSERT_TRUE(response.find("browser asset") != std::string::npos);
 
     auto websocket =
-        connectWebsocket(static_cast<std::uint16_t>(*bound_port));
+        connectWebsocket(static_cast<std::uint16_t>(*boundPort));
     FrameReader reader{websocket.socket};
     attach(websocket.socket, "local");
     auto decoded = ssg::decodeSessionSnapshot(reader.next().payload);
@@ -352,8 +352,8 @@ TEST(applicationRouteRejectsWrongAndStaleBearersBeforeAttach) {
     Fixture fixture;
     auto stale = ssg::generateBearerCredential();
     auto current = ssg::generateBearerCredential();
-    auto const stale_value = std::string{stale.value()};
-    auto const current_value = std::string{current.value()};
+    auto const staleValue = std::string{stale.value()};
+    auto const currentValue = std::string{current.value()};
     ApplicationHost host{
         *fixture.session,
         ssg::ApplicationAuthentication{
@@ -372,7 +372,7 @@ TEST(applicationRouteRejectsWrongAndStaleBearersBeforeAttach) {
     }
     {
         auto socket = connectWebsocket(port);
-        attach(socket.socket, stale_value);
+        attach(socket.socket, staleValue);
     }
     std::this_thread::sleep_for(20ms);
     ASSERT_FALSE(
@@ -380,7 +380,7 @@ TEST(applicationRouteRejectsWrongAndStaleBearersBeforeAttach) {
 
     auto socket = connectWebsocket(port);
     FrameReader reader{socket.socket};
-    attach(socket.socket, current_value);
+    attach(socket.socket, currentValue);
     auto decoded = ssg::decodeSessionSnapshot(reader.next().payload);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_EQ(decoded.snapshot->client().client_id, ssg::ClientId{51});

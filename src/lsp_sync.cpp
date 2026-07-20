@@ -162,8 +162,8 @@ struct Json {
 
 class JsonParser {
 public:
-    JsonParser(std::string_view input, std::size_t maximum_depth)
-        : input_(input), maximum_depth_(maximum_depth) {}
+    JsonParser(std::string_view input, std::size_t maximumDepth)
+        : input_(input), maximum_depth_(maximumDepth) {}
 
     std::optional<Json> parse() {
         auto value = parseValue(0);
@@ -376,14 +376,14 @@ std::optional<LspPosition> jsonPosition(const Json& value) {
     const auto* line = value.member("line");
     const auto* character = value.member("character");
     if (!line || !character) return std::nullopt;
-    const auto line_value = line->integer();
-    const auto character_value = character->integer();
-    if (!line_value || !character_value || *line_value < 0 ||
-        *character_value < 0) {
+    const auto lineValue = line->integer();
+    const auto characterValue = character->integer();
+    if (!lineValue || !characterValue || *lineValue < 0 ||
+        *characterValue < 0) {
         return std::nullopt;
     }
-    return LspPosition{static_cast<std::uint64_t>(*line_value),
-                       static_cast<std::uint64_t>(*character_value)};
+    return LspPosition{static_cast<std::uint64_t>(*lineValue),
+                       static_cast<std::uint64_t>(*characterValue)};
 }
 
 LspSyncResult ioFailure(const LspIoResult& result) {
@@ -437,12 +437,12 @@ LspFrameResult LspFrameDecoder::feed(std::string_view bytes) {
                                  "LSP header exceeds configured limit");
         }
         std::optional<std::size_t> length;
-        std::size_t line_start = 0;
-        while (line_start < end) {
-            const auto line_end = buffer_.find("\r\n", line_start);
-            const auto stop = line_end == std::string::npos ? end : line_end;
-            const std::string_view line{buffer_.data() + line_start,
-                                        stop - line_start};
+        std::size_t lineStart = 0;
+        while (lineStart < end) {
+            const auto lineEnd = buffer_.find("\r\n", lineStart);
+            const auto stop = lineEnd == std::string::npos ? end : lineEnd;
+            const std::string_view line{buffer_.data() + lineStart,
+                                        stop - lineStart};
             const auto colon = line.find(':');
             if (colon == std::string_view::npos) {
                 failed_ = true;
@@ -473,7 +473,7 @@ LspFrameResult LspFrameDecoder::feed(std::string_view bytes) {
                 }
                 length = parsed;
             }
-            line_start = stop + 2;
+            lineStart = stop + 2;
         }
         if (!length) {
             failed_ = true;
@@ -495,11 +495,11 @@ LspFrameResult LspFrameDecoder::feed(std::string_view bytes) {
 }
 
 LspPositionResult byteOffsetToLspPosition(std::string_view text,
-                                              ByteOffset byte_offset) {
+                                              ByteOffset byteOffset) {
     if (!validUtf8(text)) {
         return {{}, LspPositionError::InvalidUtf8};
     }
-    const auto requested = byte_offset.value();
+    const auto requested = byteOffset.value();
     if (requested > text.size()) {
         return {{}, LspPositionError::InvalidUtf8Boundary};
     }
@@ -631,8 +631,8 @@ struct LspSyncClient::Impl {
     std::uint64_t shutdown_id = 0;
 
     Impl(LspByteStream& source, LspSyncConfig limits,
-         std::chrono::milliseconds io_timeout)
-        : stream(&source), config(limits), timeout(io_timeout),
+         std::chrono::milliseconds ioTimeout)
+        : stream(&source), config(limits), timeout(ioTimeout),
           decoder(config.framing) {
         noteOptionalConstruction(OptionalSubsystem::Lsp);
         if (timeout.count() < 0 || config.maximum_read_bytes == 0 ||
@@ -649,7 +649,7 @@ struct LspSyncClient::Impl {
     }
 
     LspRequestResult sendRequest(std::string method,
-                                  std::string params_json) {
+                                  std::string paramsJson) {
         if (pending.size() >= config.maximum_pending_requests) {
             return {0, LspSyncError::RequestLimitExceeded,
                     "LSP pending request limit exceeded"};
@@ -662,7 +662,7 @@ struct LspSyncClient::Impl {
         const auto payload =
             "{\"jsonrpc\":\"2.0\",\"id\":" + std::to_string(id) +
             ",\"method\":" + jsonEscape(method) + ",\"params\":" +
-            params_json + "}";
+            paramsJson + "}";
         const auto sent = send(payload);
         if (!sent.accepted()) {
             return {0, sent.error, sent.message};
@@ -685,14 +685,14 @@ struct LspSyncClient::Impl {
         if (params.kind != Json::Kind::Object) {
             return rejectDiagnostics("diagnostic params must be an object");
         }
-        const auto* uri_value = params.member("uri");
+        const auto* uriValue = params.member("uri");
         const auto* items = params.member("diagnostics");
-        if (!uri_value || uri_value->kind != Json::Kind::String || !items ||
+        if (!uriValue || uriValue->kind != Json::Kind::String || !items ||
             items->kind != Json::Kind::Array) {
             return rejectDiagnostics(
                 "diagnostic params are missing uri or diagnostics");
         }
-        const auto document = documents.find(uri_value->scalar);
+        const auto document = documents.find(uriValue->scalar);
         if (document == documents.end()) {
             return {LspSyncError::UnknownDocument,
                     "diagnostics target an unknown document"};
@@ -710,7 +710,7 @@ struct LspSyncClient::Impl {
         }
         std::vector<LspDiagnostic> parsed;
         parsed.reserve(items->array.size());
-        std::size_t message_bytes = 0;
+        std::size_t messageBytes = 0;
         for (const auto& item : items->array) {
             if (item.kind != Json::Kind::Object) {
                 return rejectDiagnostics(
@@ -728,32 +728,32 @@ struct LspSyncClient::Impl {
             if (!start || !end) {
                 return rejectDiagnostics("diagnostic range is incomplete");
             }
-            auto start_position = jsonPosition(*start);
-            auto end_position = jsonPosition(*end);
-            const auto start_offset = start_position
+            auto startPosition = jsonPosition(*start);
+            auto endPosition = jsonPosition(*end);
+            const auto startOffset = startPosition
                                           ? lspPositionToByteOffset(
                                                 document->second.text,
-                                                *start_position)
+                                                *startPosition)
                                           : LspByteOffsetResult{
                                                 ByteOffset{0},
                                                 LspPositionError::InvalidUtf8};
-            const auto end_offset =
-                end_position
+            const auto endOffset =
+                endPosition
                     ? lspPositionToByteOffset(document->second.text,
-                                                  *end_position)
+                                                  *endPosition)
                     : LspByteOffsetResult{ByteOffset{0},
                                           LspPositionError::InvalidUtf8};
-            if (!start_position || !end_position || !start_offset.accepted() ||
-                !end_offset.accepted() ||
-                end_offset.offset < start_offset.offset) {
+            if (!startPosition || !endPosition || !startOffset.accepted() ||
+                !endOffset.accepted() ||
+                endOffset.offset < startOffset.offset) {
                 return rejectDiagnostics(
                     "diagnostic range is outside the document");
             }
             LspDiagnostic diagnostic;
-            diagnostic.range = {*start_position, *end_position};
+            diagnostic.range = {*startPosition, *endPosition};
             diagnostic.message = message->scalar;
-            message_bytes += diagnostic.message.size();
-            if (message_bytes > config.maximum_diagnostic_message_bytes) {
+            messageBytes += diagnostic.message.size();
+            if (messageBytes > config.maximum_diagnostic_message_bytes) {
                 return {LspSyncError::DiagnosticLimitExceeded,
                         "diagnostic messages exceed configured limit"};
             }
@@ -778,15 +778,15 @@ struct LspSyncClient::Impl {
         auto updated = view;
         auto found = std::lower_bound(
             updated.documents.begin(), updated.documents.end(),
-            uri_value->scalar,
+            uriValue->scalar,
             [](const LspDocumentDiagnostics& left, const std::string& right) {
                 return left.uri < right;
             });
-        LspDocumentDiagnostics replacement{uri_value->scalar,
+        LspDocumentDiagnostics replacement{uriValue->scalar,
                                            document->second.revision,
                                            std::move(parsed)};
         if (found != updated.documents.end() &&
-            found->uri == uri_value->scalar) {
+            found->uri == uriValue->scalar) {
             *found = std::move(replacement);
         } else {
             updated.documents.insert(found, std::move(replacement));
@@ -796,7 +796,7 @@ struct LspSyncClient::Impl {
         return {};
     }
 
-    LspSyncResult process(const Json& message, std::string_view payload_json) {
+    LspSyncResult process(const Json& message, std::string_view payloadJson) {
         if (message.kind != Json::Kind::Object) {
             return failMalformed("LSP message must be an object");
         }
@@ -824,31 +824,31 @@ struct LspSyncClient::Impl {
         if (!number || *number <= 0) {
             return failMalformed("LSP response id is invalid");
         }
-        const auto request_id = static_cast<std::uint64_t>(*number);
-        if (cancelled.erase(request_id) != 0) {
-            pending.erase(request_id);
+        const auto requestId = static_cast<std::uint64_t>(*number);
+        if (cancelled.erase(requestId) != 0) {
+            pending.erase(requestId);
             completed.push_back(
-                {request_id, LspCompletedResponseStatus::Cancelled, {}, {}});
+                {requestId, LspCompletedResponseStatus::Cancelled, {}, {}});
             return {};
         }
-        if (pending.erase(request_id) == 0) {
+        if (pending.erase(requestId) == 0) {
             return failMalformed("LSP response id is unknown");
         }
         if (message.member("error")) {
-            if (request_id == initialize_id) lifecycle = LspLifecycleState::Failed;
-            if (request_id == initialize_id || request_id == shutdown_id) {
+            if (requestId == initialize_id) lifecycle = LspLifecycleState::Failed;
+            if (requestId == initialize_id || requestId == shutdown_id) {
                 return {LspSyncError::ServerError,
                         "LSP server returned an error"};
             }
             completed.push_back(
-                {request_id, LspCompletedResponseStatus::ServerError,
-                 std::string{payload_json}, "LSP server returned an error"});
+                {requestId, LspCompletedResponseStatus::ServerError,
+                 std::string{payloadJson}, "LSP server returned an error"});
             return {};
         }
         if (!message.member("result")) {
             return failMalformed("LSP response has neither result nor error");
         }
-        if (request_id == initialize_id &&
+        if (requestId == initialize_id &&
             lifecycle == LspLifecycleState::Initializing) {
             const auto initialized = send(
                 "{\"jsonrpc\":\"2.0\",\"method\":\"initialized\","
@@ -858,7 +858,7 @@ struct LspSyncClient::Impl {
                 return initialized;
             }
             lifecycle = LspLifecycleState::Ready;
-        } else if (request_id == shutdown_id &&
+        } else if (requestId == shutdown_id &&
                    lifecycle == LspLifecycleState::ShuttingDown) {
             const auto exited =
                 send("{\"jsonrpc\":\"2.0\",\"method\":\"exit\",\"params\":null}");
@@ -869,28 +869,28 @@ struct LspSyncClient::Impl {
             lifecycle = LspLifecycleState::Stopped;
         } else {
             completed.push_back(
-                {request_id, LspCompletedResponseStatus::Result,
-                 std::string{payload_json}, {}});
+                {requestId, LspCompletedResponseStatus::Result,
+                 std::string{payloadJson}, {}});
         }
         return {};
     }
 };
 
 LspSyncClient::LspSyncClient(LspByteStream& stream, LspSyncConfig config,
-                             std::chrono::milliseconds io_timeout)
-    : impl_(std::make_unique<Impl>(stream, config, io_timeout)) {}
+                             std::chrono::milliseconds ioTimeout)
+    : impl_(std::make_unique<Impl>(stream, config, ioTimeout)) {}
 LspSyncClient::~LspSyncClient() = default;
 LspSyncClient::LspSyncClient(LspSyncClient&&) noexcept = default;
 LspSyncClient& LspSyncClient::operator=(LspSyncClient&&) noexcept = default;
 
-LspSyncResult LspSyncClient::initialize(std::string root_uri) {
-    if (impl_->lifecycle != LspLifecycleState::Stopped || root_uri.empty()) {
+LspSyncResult LspSyncClient::initialize(std::string rootUri) {
+    if (impl_->lifecycle != LspLifecycleState::Stopped || rootUri.empty()) {
         return {LspSyncError::InvalidState,
                 "LSP initialize requires a stopped client and root URI"};
     }
     const auto result = impl_->sendRequest(
         "initialize",
-        "{\"processId\":null,\"rootUri\":" + jsonEscape(root_uri) +
+        "{\"processId\":null,\"rootUri\":" + jsonEscape(rootUri) +
             ",\"capabilities\":{}}");
     if (!result.accepted()) {
         return {result.error, result.message};
@@ -944,27 +944,27 @@ LspSyncResult LspSyncClient::poll() {
         }
         messages.emplace_back(std::move(*parsed), payload);
     }
-    LspSyncResult first_error;
+    LspSyncResult firstError;
     for (const auto& [message, payload] : messages) {
         auto result = impl_->process(message, payload);
         if (impl_->lifecycle == LspLifecycleState::Failed) {
             return result;
         }
-        if (!result.accepted() && first_error.accepted()) {
-            first_error = std::move(result);
+        if (!result.accepted() && firstError.accepted()) {
+            firstError = std::move(result);
         }
     }
-    return first_error;
+    return firstError;
 }
 
 LspSyncResult LspSyncClient::openDocument(
-    std::string uri, std::string language_id, Revision revision,
+    std::string uri, std::string languageId, Revision revision,
     std::string text) {
     if (impl_->lifecycle != LspLifecycleState::Ready) {
         return {LspSyncError::InvalidState,
                 "opening an LSP document requires a ready client"};
     }
-    if (uri.empty() || language_id.empty() || revision.value() == 0 ||
+    if (uri.empty() || languageId.empty() || revision.value() == 0 ||
         !validUtf8(text)) {
         return {LspSyncError::InvalidArgument,
                 "LSP document URI, language, revision, or UTF-8 is invalid"};
@@ -979,13 +979,13 @@ LspSyncResult LspSyncClient::openDocument(
     const auto payload =
         "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\","
         "\"params\":{\"textDocument\":{\"uri\":" +
-        jsonEscape(uri) + ",\"languageId\":" + jsonEscape(language_id) +
+        jsonEscape(uri) + ",\"languageId\":" + jsonEscape(languageId) +
         ",\"version\":1,\"text\":" + jsonEscape(text) + "}}}";
     auto sent = impl_->send(payload);
     if (!sent.accepted()) return sent;
     impl_->documents.emplace(
         std::move(uri),
-        Impl::DocumentState{std::move(language_id), 1, revision, std::move(text)});
+        Impl::DocumentState{std::move(languageId), 1, revision, std::move(text)});
     return {};
 }
 
@@ -1066,7 +1066,7 @@ std::optional<LspDocumentSnapshot> LspSyncClient::documentSnapshot(
 }
 
 LspRequestResult LspSyncClient::request(std::string method,
-                                        std::string params_json) {
+                                        std::string paramsJson) {
     if (impl_->lifecycle != LspLifecycleState::Ready) {
         return {0, LspSyncError::InvalidState,
                 "LSP request requires a ready client"};
@@ -1076,30 +1076,30 @@ LspRequestResult LspSyncClient::request(std::string method,
                 "LSP request method must not be empty"};
     }
     auto params =
-        JsonParser{params_json, impl_->config.maximum_json_depth}.parse();
+        JsonParser{paramsJson, impl_->config.maximum_json_depth}.parse();
     if (!params || (params->kind != Json::Kind::Object &&
                     params->kind != Json::Kind::Array &&
                     params->kind != Json::Kind::NullValue)) {
         return {0, LspSyncError::InvalidArgument,
                 "LSP request params must be valid JSON parameters"};
     }
-    return impl_->sendRequest(std::move(method), std::move(params_json));
+    return impl_->sendRequest(std::move(method), std::move(paramsJson));
 }
 
-LspSyncResult LspSyncClient::cancel(std::uint64_t request_id) {
-    if (!impl_->pending.contains(request_id) ||
-        impl_->cancelled.contains(request_id) ||
-        request_id == impl_->initialize_id || request_id == impl_->shutdown_id) {
+LspSyncResult LspSyncClient::cancel(std::uint64_t requestId) {
+    if (!impl_->pending.contains(requestId) ||
+        impl_->cancelled.contains(requestId) ||
+        requestId == impl_->initialize_id || requestId == impl_->shutdown_id) {
         return {LspSyncError::UnknownRequest,
                 "LSP cancellation targets an unknown request"};
     }
     const auto payload =
         "{\"jsonrpc\":\"2.0\",\"method\":\"$/cancelRequest\","
         "\"params\":{\"id\":" +
-        std::to_string(request_id) + "}}";
+        std::to_string(requestId) + "}}";
     auto sent = impl_->send(payload);
     if (!sent.accepted()) return sent;
-    impl_->cancelled.insert(request_id);
+    impl_->cancelled.insert(requestId);
     return {};
 }
 

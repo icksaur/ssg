@@ -15,9 +15,9 @@ CapabilityId::CapabilityId(std::string value) : value_{std::move(value)} {
 }
 
 InvocationPrincipal::InvocationPrincipal(
-    ClientId client_id, InvocationOrigin origin,
+    ClientId clientId, InvocationOrigin origin,
     std::vector<CapabilityId> capabilities)
-    : client_id_{client_id},
+    : client_id_{clientId},
       origin_{origin},
       capabilities_{std::move(capabilities)} {
     std::sort(capabilities_.begin(), capabilities_.end());
@@ -72,10 +72,10 @@ struct CommandRegistry::Impl {
     std::unordered_map<std::string, CommandRegistration> commands;
 };
 
-CommandRegistry::CommandRegistry(std::vector<CommandSet> command_sets)
+CommandRegistry::CommandRegistry(std::vector<CommandSet> commandSets)
     : impl_{std::make_unique<Impl>()} {
-    for (auto& command_set : command_sets) {
-        for (auto const& command : command_set.commands()) {
+    for (auto& commandSet : commandSets) {
+        for (auto const& command : commandSet.commands()) {
             auto [unused, inserted] =
                 impl_->commands.emplace(command.descriptor.id, command);
             if (!inserted) {
@@ -93,8 +93,8 @@ CommandRegistry& CommandRegistry::operator=(CommandRegistry&&) noexcept =
     default;
 
 CommandRegistration const* CommandRegistry::find(
-    std::string_view command_id) const {
-    auto found = impl_->commands.find(std::string{command_id});
+    std::string_view commandId) const {
+    auto found = impl_->commands.find(std::string{commandId});
     return found == impl_->commands.end() ? nullptr : &found->second;
 }
 

@@ -128,9 +128,9 @@ TEST(encodeAnsiFrameSkipsWideGlyphContinuation) {
     auto frame = ssg::app::encode_ansi_frame(screen);
     ASSERT_TRUE(frame.find("\xe4\xb8\xad") != std::string::npos);
     // The wide glyph occupies both columns; the continuation adds no glyph.
-    auto row_start = frame.find("\x1b[1;1H");
-    ASSERT_TRUE(row_start != std::string::npos);
-    auto glyph = frame.find("\xe4\xb8\xad", row_start);
+    auto rowStart = frame.find("\x1b[1;1H");
+    ASSERT_TRUE(rowStart != std::string::npos);
+    auto glyph = frame.find("\xe4\xb8\xad", rowStart);
     ASSERT_TRUE(frame.find(' ', glyph + 3) == std::string::npos ||
                 frame.find("\x1b[0m", glyph) < frame.find(' ', glyph + 3));
 }
@@ -203,7 +203,7 @@ TEST(unicodeEndToEndGridAndEncoding) {
     auto after = ssg::resolveDocumentPosition(line, ssg::ByteOffset{5});
     ASSERT_TRUE(before.has_value());
     ASSERT_TRUE(after.has_value());
-    auto caret_column_at = [&](std::optional<ssg::DocumentPosition> pos) -> int {
+    auto caretColumnAt = [&](std::optional<ssg::DocumentPosition> pos) -> int {
         (void)runtime.dispatch(ssg::ClientId{1},
                                {"cursor.set_position", runtime.revision(),
                                 ssg::SelectionCommandArguments{pos, std::nullopt}});
@@ -212,11 +212,11 @@ TEST(unicodeEndToEndGridAndEncoding) {
         auto g = ssg::render(*s);
         return g.caret ? g.caret->column : -1;
     };
-    int const column_before = caret_column_at(before);
-    int const column_after = caret_column_at(after);
-    ASSERT_EQ(column_before, startx + 2);
-    ASSERT_EQ(column_after, startx + 4);
-    ASSERT_EQ(column_after - column_before, 2);
+    int const columnBefore = caretColumnAt(before);
+    int const columnAfter = caretColumnAt(after);
+    ASSERT_EQ(columnBefore, startx + 2);
+    ASSERT_EQ(columnAfter, startx + 4);
+    ASSERT_EQ(columnAfter - columnBefore, 2);
 
     // Encoding: each wide cluster emits exactly one glyph and continuation cells
     // emit nothing, so the CJK and emoji byte sequences each appear exactly once.
@@ -322,39 +322,39 @@ TEST(decodeInputMapsPrintablesAndNamedKeys) {
 TEST(decodeInputModifiedArrows) {
     std::size_t consumed = 0;
     // Shift+ArrowUp: ESC [ 1 ; 2 A (modifier 2 -> bitmask 1 = Shift).
-    auto shift_up = ssg::app::decode_input("\x1b[1;2A", true, consumed);
+    auto shiftUp = ssg::app::decode_input("\x1b[1;2A", true, consumed);
     ASSERT_EQ(consumed, std::size_t{6});
-    ASSERT_TRUE(shift_up.status == ssg::app::DecodeStatus::key);
-    ASSERT_EQ(shift_up.stroke.code, std::string{"ArrowUp"});
-    ASSERT_TRUE(shift_up.stroke.shift);
-    ASSERT_FALSE(shift_up.stroke.alt);
-    ASSERT_FALSE(shift_up.stroke.control);
+    ASSERT_TRUE(shiftUp.status == ssg::app::DecodeStatus::key);
+    ASSERT_EQ(shiftUp.stroke.code, std::string{"ArrowUp"});
+    ASSERT_TRUE(shiftUp.stroke.shift);
+    ASSERT_FALSE(shiftUp.stroke.alt);
+    ASSERT_FALSE(shiftUp.stroke.control);
 
     // Ctrl+ArrowRight: modifier 5 -> bitmask 4 = Ctrl.
-    auto ctrl_right = ssg::app::decode_input("\x1b[1;5C", true, consumed);
-    ASSERT_EQ(ctrl_right.stroke.code, std::string{"ArrowRight"});
-    ASSERT_TRUE(ctrl_right.stroke.control);
-    ASSERT_FALSE(ctrl_right.stroke.shift);
+    auto ctrlRight = ssg::app::decode_input("\x1b[1;5C", true, consumed);
+    ASSERT_EQ(ctrlRight.stroke.code, std::string{"ArrowRight"});
+    ASSERT_TRUE(ctrlRight.stroke.control);
+    ASSERT_FALSE(ctrlRight.stroke.shift);
 
     // Alt+ArrowLeft: modifier 3 -> bitmask 2 = Alt.
-    auto alt_left = ssg::app::decode_input("\x1b[1;3D", true, consumed);
-    ASSERT_EQ(alt_left.stroke.code, std::string{"ArrowLeft"});
-    ASSERT_TRUE(alt_left.stroke.alt);
+    auto altLeft = ssg::app::decode_input("\x1b[1;3D", true, consumed);
+    ASSERT_EQ(altLeft.stroke.code, std::string{"ArrowLeft"});
+    ASSERT_TRUE(altLeft.stroke.alt);
 
     // Ctrl+Shift+ArrowDown: modifier 6 -> bitmask 5 = Shift|Ctrl.
-    auto cs_down = ssg::app::decode_input("\x1b[1;6B", true, consumed);
-    ASSERT_EQ(cs_down.stroke.code, std::string{"ArrowDown"});
-    ASSERT_TRUE(cs_down.stroke.shift);
-    ASSERT_TRUE(cs_down.stroke.control);
-    ASSERT_FALSE(cs_down.stroke.alt);
+    auto csDown = ssg::app::decode_input("\x1b[1;6B", true, consumed);
+    ASSERT_EQ(csDown.stroke.code, std::string{"ArrowDown"});
+    ASSERT_TRUE(csDown.stroke.shift);
+    ASSERT_TRUE(csDown.stroke.control);
+    ASSERT_FALSE(csDown.stroke.alt);
 
     // Shift+Home / Shift+End.
-    auto shift_home = ssg::app::decode_input("\x1b[1;2H", true, consumed);
-    ASSERT_EQ(shift_home.stroke.code, std::string{"Home"});
-    ASSERT_TRUE(shift_home.stroke.shift);
-    auto shift_end = ssg::app::decode_input("\x1b[1;2F", true, consumed);
-    ASSERT_EQ(shift_end.stroke.code, std::string{"End"});
-    ASSERT_TRUE(shift_end.stroke.shift);
+    auto shiftHome = ssg::app::decode_input("\x1b[1;2H", true, consumed);
+    ASSERT_EQ(shiftHome.stroke.code, std::string{"Home"});
+    ASSERT_TRUE(shiftHome.stroke.shift);
+    auto shiftEnd = ssg::app::decode_input("\x1b[1;2F", true, consumed);
+    ASSERT_EQ(shiftEnd.stroke.code, std::string{"End"});
+    ASSERT_TRUE(shiftEnd.stroke.shift);
 
     // Plain arrow still decodes unmodified.
     auto plain = ssg::app::decode_input("\x1b[A", true, consumed);
@@ -371,11 +371,11 @@ TEST(decodeInputModifiedArrows) {
     ASSERT_FALSE(meta.stroke.control);
 
     // Ctrl+Alt+ArrowRight: modifier 7 -> bitmask 6 = Alt|Ctrl.
-    auto ctrl_alt = ssg::app::decode_input("\x1b[1;7C", true, consumed);
-    ASSERT_EQ(ctrl_alt.stroke.code, std::string{"ArrowRight"});
-    ASSERT_TRUE(ctrl_alt.stroke.alt);
-    ASSERT_TRUE(ctrl_alt.stroke.control);
-    ASSERT_FALSE(ctrl_alt.stroke.shift);
+    auto ctrlAlt = ssg::app::decode_input("\x1b[1;7C", true, consumed);
+    ASSERT_EQ(ctrlAlt.stroke.code, std::string{"ArrowRight"});
+    ASSERT_TRUE(ctrlAlt.stroke.alt);
+    ASSERT_TRUE(ctrlAlt.stroke.control);
+    ASSERT_FALSE(ctrlAlt.stroke.shift);
 
     // A multi-digit modifier parses; m=16 -> bitmask 15 includes the unsupported
     // Meta bit, so it falls back to the plain arrow (consuming all 7 bytes).
@@ -419,33 +419,33 @@ TEST(decodeInputModifiedArrowSplitReadsAreIncomplete) {
 TEST(decodeInputPageKeysPlainAndModified) {
     std::size_t consumed = 0;
     // Plain PageUp / PageDown: ESC [ 5 ~ / ESC [ 6 ~.
-    auto page_up = ssg::app::decode_input("\x1b[5~", true, consumed);
+    auto pageUp = ssg::app::decode_input("\x1b[5~", true, consumed);
     ASSERT_EQ(consumed, std::size_t{4});
-    ASSERT_TRUE(page_up.status == ssg::app::DecodeStatus::key);
-    ASSERT_EQ(page_up.stroke.code, std::string{"PageUp"});
-    ASSERT_FALSE(page_up.stroke.shift);
-    auto page_down = ssg::app::decode_input("\x1b[6~", true, consumed);
+    ASSERT_TRUE(pageUp.status == ssg::app::DecodeStatus::key);
+    ASSERT_EQ(pageUp.stroke.code, std::string{"PageUp"});
+    ASSERT_FALSE(pageUp.stroke.shift);
+    auto pageDown = ssg::app::decode_input("\x1b[6~", true, consumed);
     ASSERT_EQ(consumed, std::size_t{4});
-    ASSERT_EQ(page_down.stroke.code, std::string{"PageDown"});
+    ASSERT_EQ(pageDown.stroke.code, std::string{"PageDown"});
 
     // Modified form ESC [ 5 ; m ~ (m = 1 + bitmask). Shift+PageUp: m=2 -> Shift.
-    auto shift_pgup = ssg::app::decode_input("\x1b[5;2~", true, consumed);
+    auto shiftPgup = ssg::app::decode_input("\x1b[5;2~", true, consumed);
     ASSERT_EQ(consumed, std::size_t{6});
-    ASSERT_EQ(shift_pgup.stroke.code, std::string{"PageUp"});
-    ASSERT_TRUE(shift_pgup.stroke.shift);
-    ASSERT_FALSE(shift_pgup.stroke.control);
-    ASSERT_FALSE(shift_pgup.stroke.alt);
+    ASSERT_EQ(shiftPgup.stroke.code, std::string{"PageUp"});
+    ASSERT_TRUE(shiftPgup.stroke.shift);
+    ASSERT_FALSE(shiftPgup.stroke.control);
+    ASSERT_FALSE(shiftPgup.stroke.alt);
 
     // Shift+PageDown.
-    auto shift_pgdn = ssg::app::decode_input("\x1b[6;2~", true, consumed);
-    ASSERT_EQ(shift_pgdn.stroke.code, std::string{"PageDown"});
-    ASSERT_TRUE(shift_pgdn.stroke.shift);
+    auto shiftPgdn = ssg::app::decode_input("\x1b[6;2~", true, consumed);
+    ASSERT_EQ(shiftPgdn.stroke.code, std::string{"PageDown"});
+    ASSERT_TRUE(shiftPgdn.stroke.shift);
 
     // Ctrl+PageUp: m=5 -> bitmask 4 = Ctrl.
-    auto ctrl_pgup = ssg::app::decode_input("\x1b[5;5~", true, consumed);
-    ASSERT_EQ(ctrl_pgup.stroke.code, std::string{"PageUp"});
-    ASSERT_TRUE(ctrl_pgup.stroke.control);
-    ASSERT_FALSE(ctrl_pgup.stroke.shift);
+    auto ctrlPgup = ssg::app::decode_input("\x1b[5;5~", true, consumed);
+    ASSERT_EQ(ctrlPgup.stroke.code, std::string{"PageUp"});
+    ASSERT_TRUE(ctrlPgup.stroke.control);
+    ASSERT_FALSE(ctrlPgup.stroke.shift);
 
     // Split reads of the modified form are incomplete until the '~' arrives.
     for (auto const* partial : {"\x1b[5", "\x1b[5;", "\x1b[5;2"}) {
@@ -485,9 +485,9 @@ TEST(decodeInputEscapeBoundaryIsBounded) {
 
     // ESC followed by a non-CSI byte: ESC is a standalone Escape stroke consuming
     // only itself, so the next byte (the chord continuation) decodes separately.
-    auto esc_then = ssg::app::decode_input("\x1bs", false, consumed);
+    auto escThen = ssg::app::decode_input("\x1bs", false, consumed);
     ASSERT_EQ(consumed, std::size_t{1});
-    ASSERT_EQ(esc_then.stroke.code, std::string{"Escape"});
+    ASSERT_EQ(escThen.stroke.code, std::string{"Escape"});
 
     // A lone ESC with more input possibly coming: incomplete, consume nothing.
     auto pending = ssg::app::decode_input("\x1b", false, consumed);
@@ -542,11 +542,11 @@ TEST(decodeInputPointerPressReleaseDrag) {
     ASSERT_TRUE(right.pointer.button == ssg::app::PointerButton::right);
 
     // The wheel stays a scroll event, not a pointer event.
-    auto wheel_up = ssg::app::decode_input("\x1b[<64;10;5M", true, consumed);
-    ASSERT_TRUE(wheel_up.status == ssg::app::DecodeStatus::scroll);
-    ASSERT_EQ(wheel_up.scroll, std::int64_t{-3});
-    ASSERT_EQ(wheel_up.pointer.column, 9);
-    ASSERT_EQ(wheel_up.pointer.row, 4);
+    auto wheelUp = ssg::app::decode_input("\x1b[<64;10;5M", true, consumed);
+    ASSERT_TRUE(wheelUp.status == ssg::app::DecodeStatus::scroll);
+    ASSERT_EQ(wheelUp.scroll, std::int64_t{-3});
+    ASSERT_EQ(wheelUp.pointer.column, 9);
+    ASSERT_EQ(wheelUp.pointer.row, 4);
 }
 
 TEST(decodeInputPointerSplitReadsAreIncomplete) {
@@ -598,37 +598,37 @@ TEST(routePointerIgnoresNonEditorAndNonLeft) {
     ssg::app::PointerTargets const empty;
 
     // A press on nothing (out of bounds / chrome) dispatches no command.
-    ssg::RegionHit none_hit;  // region defaults to HitRegion::none
-    auto none_plan = ssg::app::route_pointer(
-        none_hit, ssg::app::PointerButton::left, ssg::app::PointerKind::press,
+    ssg::RegionHit noneHit;  // region defaults to HitRegion::none
+    auto nonePlan = ssg::app::route_pointer(
+        noneHit, ssg::app::PointerButton::left, ssg::app::PointerKind::press,
         false, std::nullopt, empty);
-    ASSERT_TRUE(none_plan.commands.empty());
-    ASSERT_FALSE(none_plan.begins_drag);
+    ASSERT_TRUE(nonePlan.commands.empty());
+    ASSERT_FALSE(nonePlan.begins_drag);
 
     // A left press on a non-editor region (e.g. the panel) is not handled by
     // M8-C: no editor command, no drag.
-    ssg::RegionHit panel_hit;
-    panel_hit.region = ssg::HitRegion::Panel;
-    auto panel_plan = ssg::app::route_pointer(
-        panel_hit, ssg::app::PointerButton::left, ssg::app::PointerKind::press,
+    ssg::RegionHit panelHit;
+    panelHit.region = ssg::HitRegion::Panel;
+    auto panelPlan = ssg::app::route_pointer(
+        panelHit, ssg::app::PointerButton::left, ssg::app::PointerKind::press,
         false, std::nullopt, empty);
-    ASSERT_TRUE(panel_plan.commands.empty());
+    ASSERT_TRUE(panelPlan.commands.empty());
 
     // A right/middle press on the editor is a no-op in M8.
-    ssg::RegionHit editor_hit;
-    editor_hit.region = ssg::HitRegion::Editor;
+    ssg::RegionHit editorHit;
+    editorHit.region = ssg::HitRegion::Editor;
     ssg::app::PointerTargets targets;
     targets.document_position =
         ssg::DocumentPosition{ssg::ByteOffset{0}, ssg::LineIndex{0}, ssg::CellIndex{0}};
-    auto right_plan = ssg::app::route_pointer(
-        editor_hit, ssg::app::PointerButton::right, ssg::app::PointerKind::press,
+    auto rightPlan = ssg::app::route_pointer(
+        editorHit, ssg::app::PointerButton::right, ssg::app::PointerKind::press,
         false, std::nullopt, targets);
-    ASSERT_TRUE(right_plan.commands.empty());
+    ASSERT_TRUE(rightPlan.commands.empty());
 
     // A left press on the editor with no resolved position (e.g. a blank cell)
     // dispatches nothing.
     auto unresolved = ssg::app::route_pointer(
-        editor_hit, ssg::app::PointerButton::left, ssg::app::PointerKind::press,
+        editorHit, ssg::app::PointerButton::left, ssg::app::PointerKind::press,
         false, std::nullopt, empty);
     ASSERT_TRUE(unresolved.commands.empty());
     ASSERT_FALSE(unresolved.begins_drag);
@@ -686,52 +686,52 @@ TEST(routePointerDragExtendsSelectionFromAnchor) {
 TEST(routePointerDragWithoutAnchorOrTargetIsANoOp) {
     auto const anchor =
         ssg::DocumentPosition{ssg::ByteOffset{3}, ssg::LineIndex{0}, ssg::CellIndex{3}};
-    ssg::RegionHit editor_hit;
-    editor_hit.region = ssg::HitRegion::Editor;
+    ssg::RegionHit editorHit;
+    editorHit.region = ssg::HitRegion::Editor;
     ssg::app::PointerTargets targets;
     targets.document_position =
         ssg::DocumentPosition{ssg::ByteOffset{5}, ssg::LineIndex{0}, ssg::CellIndex{5}};
 
     // Not dragging (no prior press) -> no command even over the editor.
-    auto not_dragging = ssg::app::route_pointer(
-        editor_hit, ssg::app::PointerButton::left, ssg::app::PointerKind::drag,
+    auto notDragging = ssg::app::route_pointer(
+        editorHit, ssg::app::PointerButton::left, ssg::app::PointerKind::drag,
         false, anchor, targets);
-    ASSERT_TRUE(not_dragging.commands.empty());
+    ASSERT_TRUE(notDragging.commands.empty());
 
     // Dragging but the pointer is over a cell with no document target (past a
     // short line's end / beyond the viewport edge) -> no command, selection holds.
-    ssg::app::PointerTargets const no_target;
-    auto off_content = ssg::app::route_pointer(
-        editor_hit, ssg::app::PointerButton::left, ssg::app::PointerKind::drag,
-        true, anchor, no_target);
-    ASSERT_TRUE(off_content.commands.empty());
+    ssg::app::PointerTargets const noTarget;
+    auto offContent = ssg::app::route_pointer(
+        editorHit, ssg::app::PointerButton::left, ssg::app::PointerKind::drag,
+        true, anchor, noTarget);
+    ASSERT_TRUE(offContent.commands.empty());
 
     // Dragging over a non-editor region (e.g. the panel) -> no command.
-    ssg::RegionHit panel_hit;
-    panel_hit.region = ssg::HitRegion::Panel;
-    auto off_editor = ssg::app::route_pointer(
-        panel_hit, ssg::app::PointerButton::left, ssg::app::PointerKind::drag,
+    ssg::RegionHit panelHit;
+    panelHit.region = ssg::HitRegion::Panel;
+    auto offEditor = ssg::app::route_pointer(
+        panelHit, ssg::app::PointerButton::left, ssg::app::PointerKind::drag,
         true, anchor, targets);
-    ASSERT_TRUE(off_editor.commands.empty());
+    ASSERT_TRUE(offEditor.commands.empty());
 }
 
 TEST(routePointerReleaseEndsDragWithoutACommand) {
-    ssg::RegionHit editor_hit;
-    editor_hit.region = ssg::HitRegion::Editor;
+    ssg::RegionHit editorHit;
+    editorHit.region = ssg::HitRegion::Editor;
     ssg::app::PointerTargets targets;
     targets.document_position =
         ssg::DocumentPosition{ssg::ByteOffset{5}, ssg::LineIndex{0}, ssg::CellIndex{5}};
 
     // Release while dragging ends the drag and dispatches nothing.
     auto ending = ssg::app::route_pointer(
-        editor_hit, ssg::app::PointerButton::left, ssg::app::PointerKind::release,
+        editorHit, ssg::app::PointerButton::left, ssg::app::PointerKind::release,
         true, targets.document_position, targets);
     ASSERT_TRUE(ending.commands.empty());
     ASSERT_TRUE(ending.ends_drag);
 
     // A release when not dragging is inert.
     auto stray = ssg::app::route_pointer(
-        editor_hit, ssg::app::PointerButton::left, ssg::app::PointerKind::release,
+        editorHit, ssg::app::PointerButton::left, ssg::app::PointerKind::release,
         false, std::nullopt, targets);
     ASSERT_TRUE(stray.commands.empty());
     ASSERT_FALSE(stray.ends_drag);
@@ -742,7 +742,7 @@ TEST(routePointerEditorScrollbarScrollsToFraction) {
     // reported, independent of the selection drag state. The bottom of the
     // gutter reports numerator == denominator (-> maximum_first_row); the top
     // reports numerator 0 (-> first_row 0).
-    auto scroll_args = [](ssg::app::PointerDispatch const& plan)
+    auto scrollArgs = [](ssg::app::PointerDispatch const& plan)
         -> ssg::ScrollFractionArguments const* {
         if (plan.commands.size() != 1) return nullptr;
         if (plan.commands[0].command_id != "view.scroll_to_fraction") return nullptr;
@@ -758,7 +758,7 @@ TEST(routePointerEditorScrollbarScrollsToFraction) {
     for (auto kind : {ssg::app::PointerKind::press, ssg::app::PointerKind::drag}) {
         auto plan = ssg::app::route_pointer(
             bottom, ssg::app::PointerButton::left, kind, false, std::nullopt, empty);
-        auto const* args = scroll_args(plan);
+        auto const* args = scrollArgs(plan);
         ASSERT_TRUE(args != nullptr);
         if (args) {
             ASSERT_EQ(args->numerator, std::uint32_t{7});
@@ -772,14 +772,14 @@ TEST(routePointerEditorScrollbarScrollsToFraction) {
     top.region = ssg::HitRegion::EditorScrollbar;
     top.scroll_numerator = 0;
     top.scroll_denominator = 7;
-    auto top_plan = ssg::app::route_pointer(
+    auto topPlan = ssg::app::route_pointer(
         top, ssg::app::PointerButton::left, ssg::app::PointerKind::press, false,
         std::nullopt, empty);
-    auto const* top_args = scroll_args(top_plan);
-    ASSERT_TRUE(top_args != nullptr);
-    if (top_args) {
-        ASSERT_EQ(top_args->numerator, std::uint32_t{0});
-        ASSERT_EQ(top_args->denominator, std::uint32_t{7});
+    auto const* topArgs = scrollArgs(topPlan);
+    ASSERT_TRUE(topArgs != nullptr);
+    if (topArgs) {
+        ASSERT_EQ(topArgs->numerator, std::uint32_t{0});
+        ASSERT_EQ(topArgs->denominator, std::uint32_t{7});
     }
 
     // A mid-drag onto the editor gutter scrolls even while a selection drag is
@@ -789,7 +789,7 @@ TEST(routePointerEditorScrollbarScrollsToFraction) {
     auto mid = ssg::app::route_pointer(bottom, ssg::app::PointerButton::left,
                                        ssg::app::PointerKind::drag, true, anchor,
                                        empty);
-    ASSERT_TRUE(scroll_args(mid) != nullptr);
+    ASSERT_TRUE(scrollArgs(mid) != nullptr);
 }
 
 TEST(routePointerPanelAndPaletteScrollbarsAreNoOps) {
@@ -889,10 +889,10 @@ TEST(routePointerPanelPressSelectsAndActivatesTheNode) {
     ASSERT_FALSE(plan.ends_drag);
 
     // A panel hit with no node id (the provider-label row / empty area) is inert.
-    ssg::RegionHit no_node;
-    no_node.region = ssg::HitRegion::Panel;
+    ssg::RegionHit noNode;
+    noNode.region = ssg::HitRegion::Panel;
     auto inert = ssg::app::route_pointer(
-        no_node, ssg::app::PointerButton::left, ssg::app::PointerKind::press,
+        noNode, ssg::app::PointerButton::left, ssg::app::PointerKind::press,
         false, std::nullopt, empty);
     ASSERT_TRUE(inert.commands.empty());
 }
@@ -929,9 +929,9 @@ TEST(edgeScrollDecidesDirectionAtTheContentEdges) {
     if (up) ASSERT_EQ(*up, -1);
 
     // At or below the bottom -> scroll down.
-    auto at_bottom = ssg::app::edge_scroll(true, 23, content);  // == bottom()
-    ASSERT_TRUE(at_bottom.has_value());
-    if (at_bottom) ASSERT_EQ(*at_bottom, 1);
+    auto atBottom = ssg::app::edge_scroll(true, 23, content);  // == bottom()
+    ASSERT_TRUE(atBottom.has_value());
+    if (atBottom) ASSERT_EQ(*atBottom, 1);
     auto below = ssg::app::edge_scroll(true, 60, content);
     ASSERT_TRUE(below.has_value());
     if (below) ASSERT_EQ(*below, 1);

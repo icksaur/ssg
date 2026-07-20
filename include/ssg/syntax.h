@@ -173,7 +173,7 @@ private:
     friend class SyntaxModel;
 
     SyntaxParseRequest(Revision revision, LanguageId language, std::string text,
-                       SyntaxParseHandle prior_parse,
+                       SyntaxParseHandle priorParse,
                        std::vector<SyntaxEdit> edits);
 
     Revision revision_;
@@ -200,11 +200,11 @@ struct SyntaxConfig {
 class SyntaxViewState {
 public:
     SyntaxViewState(Revision revision, LanguageId language,
-                    std::uint64_t text_bytes, std::vector<SyntaxSpan> spans,
-                    std::vector<SyntaxBracketPair> bracket_pairs,
-                    std::vector<UnmatchedBracket> unmatched_brackets,
-                    std::vector<CommentToken> comment_tokens,
-                    std::vector<CommentRange> comment_ranges,
+                    std::uint64_t textBytes, std::vector<SyntaxSpan> spans,
+                    std::vector<SyntaxBracketPair> bracketPairs,
+                    std::vector<UnmatchedBracket> unmatchedBrackets,
+                    std::vector<CommentToken> commentTokens,
+                    std::vector<CommentRange> commentRanges,
                     std::vector<LineIndentation> indentation);
 
     [[nodiscard]] Revision revision() const noexcept { return revision_; }
@@ -254,7 +254,7 @@ private:
 
 [[nodiscard]] SyntaxViewState plainTextSyntaxViewState(
     Revision revision, LanguageId language, std::string_view text,
-    std::uint32_t tab_width);
+    std::uint32_t tabWidth);
 [[nodiscard]] SyntaxViewState buildSyntaxViewState(
     Revision revision, LanguageId language, std::string_view text,
     const SyntaxParseOutput& output, const SyntaxConfig& config);
@@ -266,14 +266,14 @@ private:
 class SyntaxDelta {
 public:
     SyntaxDelta(
-        Revision base_revision, Revision revision,
+        Revision baseRevision, Revision revision,
         std::optional<LanguageId> language,
-        std::optional<std::uint64_t> text_bytes,
+        std::optional<std::uint64_t> textBytes,
         std::optional<std::vector<SyntaxSpan>> spans,
-        std::optional<std::vector<SyntaxBracketPair>> bracket_pairs,
-        std::optional<std::vector<UnmatchedBracket>> unmatched_brackets,
-        std::optional<std::vector<CommentToken>> comment_tokens,
-        std::optional<std::vector<CommentRange>> comment_ranges,
+        std::optional<std::vector<SyntaxBracketPair>> bracketPairs,
+        std::optional<std::vector<UnmatchedBracket>> unmatchedBrackets,
+        std::optional<std::vector<CommentToken>> commentTokens,
+        std::optional<std::vector<CommentRange>> commentRanges,
         std::optional<std::vector<LineIndentation>> indentation);
 
     [[nodiscard]] Revision baseRevision() const noexcept {

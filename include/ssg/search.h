@@ -77,7 +77,7 @@ public:
     virtual ~SearchCommandSource() = default;
     [[nodiscard]] virtual std::vector<SearchCommandDescriptor> descriptors()
         const = 0;
-    virtual PaletteExecutionResult execute(std::string_view command_id) = 0;
+    virtual PaletteExecutionResult execute(std::string_view commandId) = 0;
 };
 
 class SearchCancellationToken {
@@ -196,12 +196,12 @@ public:
     [[nodiscard]] PaletteExecutionResult executePalette();
 
     [[nodiscard]] WorkspaceSearchRequest beginWorkspaceSearch(
-        std::string query, Revision source_revision);
+        std::string query, Revision sourceRevision);
     [[nodiscard]] WorkspaceSearchBatch evaluate(
         const WorkspaceSearchRequest& request) const;
     void cancelWorkspaceSearch() noexcept;
     [[nodiscard]] SearchPublishResult publish(
-        const WorkspaceSearchBatch& batch, Revision current_revision);
+        const WorkspaceSearchBatch& batch, Revision currentRevision);
 
     [[nodiscard]] const SearchViewState& viewState() const noexcept {
         return state_;

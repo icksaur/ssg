@@ -29,11 +29,11 @@ RegionHit scrollbarHit(HitRegion region, Rect const& gutter, int row) {
 RegionHit editorHit(SessionSnapshot const& snapshot, Rect const& content,
                      int column, int row) {
     auto const& viewport = snapshot.client().viewport;
-    auto const viewport_row = static_cast<std::uint32_t>(row - content.y);
-    auto const viewport_column = static_cast<std::uint32_t>(column - content.x);
+    auto const viewportRow = static_cast<std::uint32_t>(row - content.y);
+    auto const viewportColumn = static_cast<std::uint32_t>(column - content.x);
     for (auto const& target : viewport.hit_targets) {
-        if (target.viewport_row == viewport_row &&
-            target.viewport_column == viewport_column) {
+        if (target.viewport_row == viewportRow &&
+            target.viewport_column == viewportColumn) {
             RegionHit hit;
             hit.region = HitRegion::Editor;
             hit.byte_offset = target.byte_offset;
@@ -48,13 +48,13 @@ RegionHit editorHit(SessionSnapshot const& snapshot, Rect const& content,
     // clicking/dragging below the text reaches the last line. An empty viewport
     // (no visible rows) has nowhere to place the caret -> none.
     if (viewport.visible_rows.empty()) return {};
-    auto const& target_row =
-        viewport_row < viewport.visible_rows.size()
-            ? viewport.visible_rows[viewport_row]
+    auto const& targetRow =
+        viewportRow < viewport.visible_rows.size()
+            ? viewport.visible_rows[viewportRow]
             : viewport.visible_rows.back();
     RegionHit hit;
     hit.region = HitRegion::Editor;
-    hit.byte_offset = target_row.end_byte_offset;
+    hit.byte_offset = targetRow.end_byte_offset;
     hit.byte_len = 0;
     return hit;
 }
@@ -65,12 +65,12 @@ RegionHit paletteHit(PaletteProjection const& palette, int column, int row) {
                              row);
     }
     if (!contains(palette.rect, column, row)) return {};
-    auto const window_index = static_cast<std::size_t>(row - palette.rect.y);
-    if (window_index >= palette.rows.size()) return {};
+    auto const windowIndex = static_cast<std::size_t>(row - palette.rect.y);
+    if (windowIndex >= palette.rows.size()) return {};
     RegionHit hit;
     hit.region = HitRegion::Palette;
     hit.item_index =
-        palette.first_visible + static_cast<std::uint32_t>(window_index);
+        palette.first_visible + static_cast<std::uint32_t>(windowIndex);
     return hit;
 }
 
@@ -83,11 +83,11 @@ RegionHit panelHit(SessionSnapshot const& snapshot, Rect const& panel,
     auto const& tree = snapshot.sections().tree;
     if (tree.providers.empty()) return {};
     auto const& provider = tree.providers.front();
-    auto const viewport_row = static_cast<std::size_t>(row - (panel.y + 1));
-    if (viewport_row >= provider.visible_node_ids.size()) return {};
+    auto const viewportRow = static_cast<std::size_t>(row - (panel.y + 1));
+    if (viewportRow >= provider.visible_node_ids.size()) return {};
     RegionHit hit;
     hit.region = HitRegion::Panel;
-    hit.node_id = provider.visible_node_ids[viewport_row];
+    hit.node_id = provider.visible_node_ids[viewportRow];
     return hit;
 }
 

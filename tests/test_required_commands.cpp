@@ -33,7 +33,7 @@ struct CatalogCommand {
     bool palette{};
 };
 
-constexpr auto expected_commands = std::to_array<ExpectedCommand>({
+constexpr auto kExpectedCommands = std::to_array<ExpectedCommand>({
     {"text.insert", "text-input-commands"},
     {"text.newline", "text-input-commands"},
     {"text.delete_backward", "text-input-commands"},
@@ -204,7 +204,7 @@ constexpr auto expected_commands = std::to_array<ExpectedCommand>({
     {"diff.open_file", "diff-model"},
 });
 
-constexpr auto expected_category_counts =
+constexpr auto kExpectedCategoryCounts =
     std::to_array<std::pair<std::string_view, std::size_t>>({
         {"text", 6},       {"cursor", 13},   {"select", 20},
         {"edit", 15},      {"clipboard", 3}, {"view", 7},
@@ -218,7 +218,7 @@ constexpr auto expected_category_counts =
         {"settings", 6},   {"follow_edits", 2}, {"diff", 3},
     });
 
-static_assert(expected_commands.size() == 168);
+static_assert(kExpectedCommands.size() == 168);
 
 std::optional<std::string> field(const std::string& object,
                                  const std::string& name) {
@@ -250,9 +250,9 @@ std::optional<std::vector<std::string>> capabilitiesField(
     }
     std::vector<std::string> capabilities;
     const std::string contents = match[1].str();
-    const std::regex value_expression{R"regex("([^"]+)")regex"};
+    const std::regex valueExpression{R"regex("([^"]+)")regex"};
     for (auto it = std::sregex_iterator(contents.begin(), contents.end(),
-                                        value_expression);
+                                        valueExpression);
          it != std::sregex_iterator(); ++it) {
         capabilities.push_back((*it)[1].str());
     }
@@ -269,9 +269,9 @@ std::optional<std::vector<CatalogCommand>> loadCatalog() {
     const auto json = buffer.str();
 
     std::vector<CatalogCommand> commands;
-    const std::regex object_expression{R"(\{([^{}]*)\})"};
+    const std::regex objectExpression{R"(\{([^{}]*)\})"};
     for (auto it = std::sregex_iterator(json.begin(), json.end(),
-                                        object_expression);
+                                        objectExpression);
          it != std::sregex_iterator(); ++it) {
         const auto object = (*it)[1].str();
         const auto id = field(object, "id");
@@ -290,11 +290,11 @@ std::optional<std::vector<CatalogCommand>> loadCatalog() {
             {*id, *owner, *capabilities, *lua, *keymap, *palette});
     }
 
-    const std::regex id_token{R"("id"\s*:)"};
-    const auto id_count = static_cast<std::size_t>(
-        std::distance(std::sregex_iterator(json.begin(), json.end(), id_token),
+    const std::regex idToken{R"("id"\s*:)"};
+    const auto idCount = static_cast<std::size_t>(
+        std::distance(std::sregex_iterator(json.begin(), json.end(), idToken),
                       std::sregex_iterator()));
-    if (id_count != commands.size()) {
+    if (idCount != commands.size()) {
         return std::nullopt;
     }
     return commands;
@@ -302,14 +302,14 @@ std::optional<std::vector<CatalogCommand>> loadCatalog() {
 
 std::map<std::string, ExpectedCommand> expectedById() {
     std::map<std::string, ExpectedCommand> expected;
-    for (const auto& command : expected_commands) {
+    for (const auto& command : kExpectedCommands) {
         expected.emplace(std::string{command.id}, command);
     }
     return expected;
 }
 
 std::set<std::string> featureSpecCommands() {
-    const std::regex command_id{
+    const std::regex commandId{
         R"(^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$)"};
     const std::regex backticked{
         R"(`([^`]+)`)"};
@@ -327,7 +327,7 @@ std::set<std::string> featureSpecCommands() {
                                                backticked};
              match != std::sregex_iterator{}; ++match) {
             const auto token = (*match)[1].str();
-            if (std::regex_match(token, command_id) && !token.ends_with(".h")) {
+            if (std::regex_match(token, commandId) && !token.ends_with(".h")) {
                 result.insert(token);
             }
         }
@@ -343,21 +343,21 @@ TEST(catalogExactlyMatchesIndependentIdAndOwnerOracle) {
     }
 
     const auto expected = expectedById();
-    ASSERT_EQ(expected.size(), expected_commands.size());
-    ASSERT_EQ(catalog->size(), expected_commands.size());
+    ASSERT_EQ(expected.size(), kExpectedCommands.size());
+    ASSERT_EQ(catalog->size(), kExpectedCommands.size());
 
     std::set<std::string> seen;
     for (const auto& command : *catalog) {
-        const auto expected_command = expected.find(command.id);
-        ASSERT_TRUE(expected_command != expected.end());
-        if (expected_command != expected.end()) {
+        const auto expectedCommand = expected.find(command.id);
+        ASSERT_TRUE(expectedCommand != expected.end());
+        if (expectedCommand != expected.end()) {
             ASSERT_EQ(command.owner,
-                      std::string{expected_command->second.owner});
+                      std::string{expectedCommand->second.owner});
         }
         ASSERT_TRUE(seen.insert(command.id).second);
         ASSERT_FALSE(command.owner.empty());
     }
-    ASSERT_EQ(seen.size(), expected_commands.size());
+    ASSERT_EQ(seen.size(), kExpectedCommands.size());
 }
 
 TEST(featureSpecCommandUnionExactlyMatchesCatalog) {
@@ -367,11 +367,11 @@ TEST(featureSpecCommandUnionExactlyMatchesCatalog) {
         return;
     }
 
-    std::set<std::string> catalog_ids;
+    std::set<std::string> catalogIds;
     for (const auto& command : *catalog) {
-        catalog_ids.insert(command.id);
+        catalogIds.insert(command.id);
     }
-    ASSERT_EQ(featureSpecCommands(), catalog_ids);
+    ASSERT_EQ(featureSpecCommands(), catalogIds);
 }
 
 TEST(categoryCountsAreIndependentlyFixed) {
@@ -390,8 +390,8 @@ TEST(categoryCountsAreIndependentlyFixed) {
         }
     }
 
-    ASSERT_EQ(actual.size(), expected_category_counts.size());
-    for (const auto& [category, count] : expected_category_counts) {
+    ASSERT_EQ(actual.size(), kExpectedCategoryCounts.size());
+    for (const auto& [category, count] : kExpectedCategoryCounts) {
         ASSERT_EQ(actual[std::string{category}], count);
     }
 }
@@ -404,10 +404,10 @@ TEST(idsAreExactNotFuzzyAndAllFieldsAreOwned) {
     }
 
     const auto expected = expectedById();
-    const std::regex valid_id{
+    const std::regex validId{
         R"(^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$)"};
     for (const auto& command : *catalog) {
-        ASSERT_TRUE(std::regex_match(command.id, valid_id));
+        ASSERT_TRUE(std::regex_match(command.id, validId));
         ASSERT_TRUE(expected.contains(command.id));
         ASSERT_FALSE(command.owner.empty());
     }

@@ -21,14 +21,14 @@ constexpr std::size_t index(SettingScope scope) noexcept {
 }
 
 constexpr bool valid(SettingKey key) noexcept {
-    return index(key) < setting_key_count;
+    return index(key) < kSettingKeyCount;
 }
 
 constexpr bool valid(SettingScope scope) noexcept {
     return index(scope) <= index(SettingScope::Document);
 }
 
-constexpr std::array all_keys{
+constexpr std::array kAllKeys{
     SettingKey::IndentWidth,
     SettingKey::IndentStyle,
     SettingKey::IndentDetection,
@@ -47,7 +47,7 @@ constexpr std::array all_keys{
     SettingKey::TypingCoalescingMs,
 };
 
-constexpr std::array<std::string_view, setting_key_count> key_names{
+constexpr std::array<std::string_view, kSettingKeyCount> kEyNames{
     "indent_width",
     "indent_style",
     "indent_detection",
@@ -89,14 +89,14 @@ SettingValue defaultValue(SettingKey key) {
 }
 
 std::optional<SettingError> validate(SettingKey key, const SettingValue& value) {
-    const auto wrong_type = [key] {
+    const auto wrongType = [key] {
         return SettingError{SettingErrorCode::WrongValueType, key,
                             "setting value has the wrong type for its key"};
     };
     switch (key) {
     case SettingKey::IndentWidth: {
         const auto* width = std::get_if<std::uint32_t>(&value);
-        if (width == nullptr) return wrong_type();
+        if (width == nullptr) return wrongType();
         if (*width < 1 || *width > 16) {
             return SettingError{SettingErrorCode::OutOfRange, key,
                                 "indent width must be in [1, 16]"};
@@ -104,7 +104,7 @@ std::optional<SettingError> validate(SettingKey key, const SettingValue& value) 
         return std::nullopt;
     }
     case SettingKey::IndentStyle:
-        if (!std::holds_alternative<IndentStyle>(value)) return wrong_type();
+        if (!std::holds_alternative<IndentStyle>(value)) return wrongType();
         if (const auto style = std::get<IndentStyle>(value);
             style != IndentStyle::Spaces && style != IndentStyle::Tabs) {
             return SettingError{SettingErrorCode::OutOfRange, key,
@@ -113,7 +113,7 @@ std::optional<SettingError> validate(SettingKey key, const SettingValue& value) 
         return std::nullopt;
     case SettingKey::LineEnding: {
         const auto* ending = std::get_if<LineEnding>(&value);
-        if (ending == nullptr) return wrong_type();
+        if (ending == nullptr) return wrongType();
         if (*ending != LineEnding::Lf && *ending != LineEnding::Crlf &&
             *ending != LineEnding::Cr) {
             return SettingError{SettingErrorCode::OutOfRange, key,
@@ -122,7 +122,7 @@ std::optional<SettingError> validate(SettingKey key, const SettingValue& value) 
         return std::nullopt;
     }
     case SettingKey::Encoding:
-        if (!std::holds_alternative<TextEncoding>(value)) return wrong_type();
+        if (!std::holds_alternative<TextEncoding>(value)) return wrongType();
         if (static_cast<std::uint8_t>(std::get<TextEncoding>(value)) >
             static_cast<std::uint8_t>(TextEncoding::Iso88591)) {
             return SettingError{SettingErrorCode::OutOfRange, key,
@@ -132,7 +132,7 @@ std::optional<SettingError> validate(SettingKey key, const SettingValue& value) 
     case SettingKey::Theme:
     case SettingKey::Keymap: {
         const auto* identity = std::get_if<std::string>(&value);
-        if (identity == nullptr) return wrong_type();
+        if (identity == nullptr) return wrongType();
         if (identity->empty()) {
             return SettingError{SettingErrorCode::EmptyIdentity, key,
                                 "setting identity must not be empty"};
@@ -141,10 +141,10 @@ std::optional<SettingError> validate(SettingKey key, const SettingValue& value) 
     }
     case SettingKey::UndoByteBudget:
     case SettingKey::RecoveryByteBudget:
-        if (!std::holds_alternative<std::uint64_t>(value)) return wrong_type();
+        if (!std::holds_alternative<std::uint64_t>(value)) return wrongType();
         return std::nullopt;
     case SettingKey::TypingCoalescingMs:
-        if (!std::holds_alternative<std::uint32_t>(value)) return wrong_type();
+        if (!std::holds_alternative<std::uint32_t>(value)) return wrongType();
         return std::nullopt;
     case SettingKey::IndentDetection:
     case SettingKey::AutoIndent:
@@ -153,7 +153,7 @@ std::optional<SettingError> validate(SettingKey key, const SettingValue& value) 
     case SettingKey::SearchCaseSensitive:
     case SettingKey::SearchWholeWord:
     case SettingKey::SearchRegularExpression:
-        if (!std::holds_alternative<bool>(value)) return wrong_type();
+        if (!std::holds_alternative<bool>(value)) return wrongType();
         return std::nullopt;
     }
     throw std::logic_error("unknown setting key");
@@ -288,17 +288,17 @@ std::optional<SettingValue> decodeValue(std::string_view encoded) {
 }
 
 std::optional<SettingKey> keyFromName(std::string_view name) {
-    for (const auto key : all_keys) {
-        if (key_names[index(key)] == name) return key;
+    for (const auto key : kAllKeys) {
+        if (kEyNames[index(key)] == name) return key;
     }
     return std::nullopt;
 }
 
 std::optional<std::string> readIfPresent(const std::filesystem::path& path,
                                            std::string& error) {
-    std::error_code exists_error;
-    if (!std::filesystem::exists(path, exists_error)) {
-        if (exists_error) error = exists_error.message();
+    std::error_code existsError;
+    if (!std::filesystem::exists(path, existsError)) {
+        if (existsError) error = existsError.message();
         return std::nullopt;
     }
     std::ifstream input(path, std::ios::binary);
@@ -325,7 +325,7 @@ const SettingViewEntry* SettingsViewState::find(SettingKey key) const noexcept {
 }
 
 SettingsModel::SettingsModel() {
-    for (const auto key : all_keys) {
+    for (const auto key : kAllKeys) {
         scopes_[index(SettingScope::Defaults)].values[index(key)] = defaultValue(key);
     }
 }
@@ -349,7 +349,7 @@ std::optional<SettingValue> SettingsModel::scopedValue(
 
 SettingsViewState SettingsModel::viewState() const {
     SettingsViewState state;
-    for (const auto key : all_keys) {
+    for (const auto key : kAllKeys) {
         state.entries[index(key)] = {key, resolve(key)};
     }
     return state;
@@ -451,10 +451,10 @@ std::string SettingsModel::exportScope(SettingScope scope) const {
     if (!valid(scope)) throw std::invalid_argument("setting scope is not recognized");
     std::string document{"schema=1\n"};
     const auto& data = scopes_[index(scope)];
-    for (const auto key : all_keys) {
+    for (const auto key : kAllKeys) {
         const auto& value = data.values[index(key)];
         if (value) {
-            document += key_names[index(key)];
+            document += kEyNames[index(key)];
             document += '=';
             document += encodeValue(*value);
             document += '\n';
@@ -474,7 +474,7 @@ SettingsIoResult SettingsModel::importScope(
         return {false, "default settings are immutable"};
     }
     ScopeData parsed;
-    bool saw_schema = false;
+    bool sawSchema = false;
     std::size_t start = 0;
     while (start < document.size()) {
         const auto end = document.find('\n', start);
@@ -483,9 +483,9 @@ SettingsIoResult SettingsModel::importScope(
         if (!line.empty() && line.back() == '\r') line.remove_suffix(1);
         start = end == std::string_view::npos ? document.size() : end + 1;
         if (line.empty()) continue;
-        if (!saw_schema) {
+        if (!sawSchema) {
             if (line != "schema=1") return {false, "unsupported settings schema"};
-            saw_schema = true;
+            sawSchema = true;
             continue;
         }
         const auto separator = line.find('=');
@@ -505,9 +505,9 @@ SettingsIoResult SettingsModel::importScope(
         if (const auto error = validate(*key, *value)) return {false, error->message};
         slot = *value;
     }
-    if (!saw_schema) return {false, "settings schema header is missing"};
+    if (!sawSchema) return {false, "settings schema header is missing"};
     const auto& current = scopes_[index(scope)];
-    for (std::size_t key = 0; key < setting_key_count; ++key) {
+    for (std::size_t key = 0; key < kSettingKeyCount; ++key) {
         parsed.generations[key] = current.generations[key] + 1;
     }
     scopes_[index(scope)] = std::move(parsed);

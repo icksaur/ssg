@@ -163,7 +163,7 @@ public:
     [[nodiscard]] virtual LspIoResult write(
         std::string_view bytes, std::chrono::milliseconds timeout) = 0;
     [[nodiscard]] virtual LspIoResult read(
-        std::string& bytes, std::size_t maximum_bytes,
+        std::string& bytes, std::size_t maximumBytes,
         std::chrono::milliseconds timeout) = 0;
 };
 
@@ -246,7 +246,7 @@ struct LspCompletedResponse {
 class LspSyncClient {
 public:
     LspSyncClient(LspByteStream& stream, LspSyncConfig config = {},
-                  std::chrono::milliseconds io_timeout =
+                  std::chrono::milliseconds ioTimeout =
                       std::chrono::milliseconds{100});
     ~LspSyncClient();
     LspSyncClient(const LspSyncClient&) = delete;
@@ -254,12 +254,12 @@ public:
     LspSyncClient(LspSyncClient&&) noexcept;
     LspSyncClient& operator=(LspSyncClient&&) noexcept;
 
-    [[nodiscard]] LspSyncResult initialize(std::string root_uri);
+    [[nodiscard]] LspSyncResult initialize(std::string rootUri);
     [[nodiscard]] LspSyncResult shutdown();
     [[nodiscard]] LspSyncResult poll();
 
     [[nodiscard]] LspSyncResult openDocument(
-        std::string uri, std::string language_id, Revision revision,
+        std::string uri, std::string languageId, Revision revision,
         std::string text);
     [[nodiscard]] LspSyncResult changeDocument(
         std::string_view uri, Revision revision, std::string text);
@@ -270,8 +270,8 @@ public:
         std::string_view uri) const;
 
     [[nodiscard]] LspRequestResult request(std::string method,
-                                           std::string params_json);
-    [[nodiscard]] LspSyncResult cancel(std::uint64_t request_id);
+                                           std::string paramsJson);
+    [[nodiscard]] LspSyncResult cancel(std::uint64_t requestId);
     [[nodiscard]] std::vector<LspCompletedResponse>
     takeCompletedResponses();
 

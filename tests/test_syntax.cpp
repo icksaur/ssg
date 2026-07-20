@@ -62,13 +62,13 @@ public:
         }
 
         output.status = SyntaxParseStatus::Parsed;
-        const auto parsed_text = applyIncrementalInput(request);
-        if (!parsed_text || *parsed_text != request.text()) {
+        const auto parsedText = applyIncrementalInput(request);
+        if (!parsedText || *parsedText != request.text()) {
             output.status = SyntaxParseStatus::Failed;
             return output;
         }
-        output.parse = std::make_shared<FakeParse>(*parsed_text);
-        scan(*parsed_text, output);
+        output.parse = std::make_shared<FakeParse>(*parsedText);
+        scan(*parsedText, output);
         return output;
     }
 
@@ -87,24 +87,24 @@ private:
         auto result = prior->text();
         std::vector<std::string> inserted;
         inserted.reserve(request.edits().size());
-        std::int64_t preceding_delta = 0;
+        std::int64_t precedingDelta = 0;
         for (const auto& edit : request.edits()) {
-            const auto final_start = static_cast<std::int64_t>(
+            const auto finalStart = static_cast<std::int64_t>(
                                          edit.start_byte.value()) +
-                                     preceding_delta;
-            const auto inserted_size =
+                                     precedingDelta;
+            const auto insertedSize =
                 edit.new_end_byte.value() - edit.start_byte.value();
-            if (final_start < 0 ||
-                static_cast<std::uint64_t>(final_start) >
+            if (finalStart < 0 ||
+                static_cast<std::uint64_t>(finalStart) >
                     request.text().size() ||
-                inserted_size >
+                insertedSize >
                     request.text().size() -
-                        static_cast<std::uint64_t>(final_start)) {
+                        static_cast<std::uint64_t>(finalStart)) {
                 return std::nullopt;
             }
             inserted.push_back(request.text().substr(
-                static_cast<std::size_t>(final_start), inserted_size));
-            preceding_delta += static_cast<std::int64_t>(inserted_size) -
+                static_cast<std::size_t>(finalStart), insertedSize));
+            precedingDelta += static_cast<std::int64_t>(insertedSize) -
                                static_cast<std::int64_t>(
                                    edit.old_end_byte.value() -
                                    edit.start_byte.value());
@@ -129,13 +129,13 @@ private:
         if (!startsWith(text, at, word)) {
             return false;
         }
-        const auto word_character = [](char value) {
+        const auto wordCharacter = [](char value) {
             return std::isalnum(static_cast<unsigned char>(value)) != 0 ||
                    value == '_';
         };
-        return (at == 0 || !word_character(text[at - 1])) &&
+        return (at == 0 || !wordCharacter(text[at - 1])) &&
                (at + word.size() == text.size() ||
-                !word_character(text[at + word.size()]));
+                !wordCharacter(text[at + word.size()]));
     }
 
     static void scan(std::string_view text, SyntaxParseOutput& output) {
@@ -143,23 +143,23 @@ private:
         while (index < text.size()) {
             if (startsWith(text, index, "//")) {
                 const auto end = text.find('\n', index);
-                const auto range_end =
+                const auto rangeEnd =
                     end == std::string_view::npos ? text.size() : end;
                 output.spans.push_back(
-                    {byte(index), byte(range_end), SyntaxScope::Comment});
+                    {byte(index), byte(rangeEnd), SyntaxScope::Comment});
                 output.comment_tokens.push_back(
                     {{byte(index), byte(index + 2)}, CommentTokenRole::Line});
                 output.comment_ranges.push_back(
-                    {{byte(index), byte(range_end)}, CommentKind::Line});
-                index = range_end;
+                    {{byte(index), byte(rangeEnd)}, CommentKind::Line});
+                index = rangeEnd;
                 continue;
             }
             if (startsWith(text, index, "/*")) {
                 const auto close = text.find("*/", index + 2);
-                const auto range_end =
+                const auto rangeEnd =
                     close == std::string_view::npos ? text.size() : close + 2;
                 output.spans.push_back(
-                    {byte(index), byte(range_end), SyntaxScope::Comment});
+                    {byte(index), byte(rangeEnd), SyntaxScope::Comment});
                 output.comment_tokens.push_back(
                     {{byte(index), byte(index + 2)},
                      CommentTokenRole::BlockOpen});
@@ -169,8 +169,8 @@ private:
                          CommentTokenRole::BlockClose});
                 }
                 output.comment_ranges.push_back(
-                    {{byte(index), byte(range_end)}, CommentKind::Block});
-                index = range_end;
+                    {{byte(index), byte(rangeEnd)}, CommentKind::Block});
+                index = rangeEnd;
                 continue;
             }
             if (text[index] == '"') {
@@ -350,13 +350,13 @@ TEST(handComputedMetadataGoldenCoversAllExportedSections) {
 }
 
 TEST(injectedParserReceivesPriorParseAndEditsAndMatchesFullParse) {
-    auto incremental_parser = std::make_shared<DeterministicParser>();
-    SyntaxModel incremental{incremental_parser};
+    auto incrementalParser = std::make_shared<DeterministicParser>();
+    SyntaxModel incremental{incrementalParser};
     const std::string before = "fn main() {\n  let x = [1];\n}\n";
     const auto initial = requestFor(incremental, Revision{1}, before);
     ASSERT_TRUE(parseAndAccept(incremental, initial).accepted());
-    const auto accepted_parse = incremental_parser->last_prior;
-    ASSERT_FALSE(accepted_parse != nullptr);
+    const auto acceptedParse = incrementalParser->last_prior;
+    ASSERT_FALSE(acceptedParse != nullptr);
 
     const auto number = before.find('1');
     std::string after = before;
@@ -376,14 +376,14 @@ TEST(injectedParserReceivesPriorParseAndEditsAndMatchesFullParse) {
     ASSERT_TRUE(updated.request->priorParse() != nullptr);
     ASSERT_EQ(updated.request->edits(), (std::vector<SyntaxEdit>{edit}));
     ASSERT_TRUE(parseAndAccept(incremental, updated).accepted());
-    ASSERT_TRUE(incremental_parser->last_prior != nullptr);
-    ASSERT_EQ(incremental_parser->last_edits,
+    ASSERT_TRUE(incrementalParser->last_prior != nullptr);
+    ASSERT_EQ(incrementalParser->last_edits,
               (std::vector<SyntaxEdit>{edit}));
 
-    auto full_parser = std::make_shared<DeterministicParser>();
-    SyntaxModel full{full_parser};
-    const auto full_request = requestFor(full, Revision{2}, after);
-    ASSERT_TRUE(parseAndAccept(full, full_request).accepted());
+    auto fullParser = std::make_shared<DeterministicParser>();
+    SyntaxModel full{fullParser};
+    const auto fullRequest = requestFor(full, Revision{2}, after);
+    ASSERT_TRUE(parseAndAccept(full, fullRequest).accepted());
     ASSERT_EQ(incremental.viewState(), full.viewState());
 }
 
@@ -417,19 +417,19 @@ TEST(immutableDeltaDerivesOnlyChangedSectionsAndReplaysExactly) {
     ASSERT_EQ(replaySyntaxDelta(after, identical).state,
               std::optional<SyntaxViewState>{after});
 
-    const auto revision_only_target = plainTextSyntaxViewState(
+    const auto revisionOnlyTarget = plainTextSyntaxViewState(
         Revision{5}, LanguageId{"toy"}, "alpha\n", 4);
-    const auto revision_only =
-        deriveSyntaxDelta(before, revision_only_target);
-    ASSERT_TRUE(revision_only.empty());
-    const auto revision_only_replay =
-        replaySyntaxDelta(before, revision_only);
-    ASSERT_TRUE(revision_only_replay.accepted());
-    ASSERT_EQ(*revision_only_replay.state, revision_only_target);
+    const auto revisionOnly =
+        deriveSyntaxDelta(before, revisionOnlyTarget);
+    ASSERT_TRUE(revisionOnly.empty());
+    const auto revisionOnlyReplay =
+        replaySyntaxDelta(before, revisionOnly);
+    ASSERT_TRUE(revisionOnlyReplay.accepted());
+    ASSERT_EQ(*revisionOnlyReplay.state, revisionOnlyTarget);
 
-    const auto stale_base = plainTextSyntaxViewState(
+    const auto staleBase = plainTextSyntaxViewState(
         Revision{3}, LanguageId{"toy"}, "alpha\n", 4);
-    ASSERT_EQ(replaySyntaxDelta(stale_base, delta).error,
+    ASSERT_EQ(replaySyntaxDelta(staleBase, delta).error,
               SyntaxReplayError::StaleRevision);
 
     const SyntaxDelta malformed{
@@ -450,7 +450,7 @@ TEST(immutableDeltaDerivesOnlyChangedSectionsAndReplaysExactly) {
     ASSERT_EQ(replaySyntaxDelta(before, malformed).error,
               SyntaxReplayError::MalformedDelta);
 
-    const SyntaxDelta same_revision_change{
+    const SyntaxDelta sameRevisionChange{
         Revision{4},
         Revision{4},
         std::nullopt,
@@ -464,7 +464,7 @@ TEST(immutableDeltaDerivesOnlyChangedSectionsAndReplaysExactly) {
         std::nullopt,
         std::nullopt,
     };
-    ASSERT_EQ(replaySyntaxDelta(before, same_revision_change).error,
+    ASSERT_EQ(replaySyntaxDelta(before, sameRevisionChange).error,
               SyntaxReplayError::MalformedDelta);
 }
 
@@ -477,12 +477,12 @@ TEST(supersededAndCancelledResultsNeverReplaceNewerState) {
 
     const auto second = requestFor(model, Revision{2}, "let a = 2;\n");
     ASSERT_TRUE(second.accepted());
-    const auto completed_second = model.run(*second.request);
+    const auto completedSecond = model.run(*second.request);
     const auto third = requestFor(model, Revision{3}, "let a = 3;\n");
     ASSERT_TRUE(third.accepted());
     ASSERT_TRUE(second.request->cancelled());
 
-    ASSERT_EQ(model.accept(second.request, completed_second).error,
+    ASSERT_EQ(model.accept(second.request, completedSecond).error,
               SyntaxAcceptError::Cancelled);
     ASSERT_EQ(model.viewState(), accepted);
 
@@ -502,49 +502,49 @@ TEST(supersededAndCancelledResultsNeverReplaceNewerState) {
 TEST(noParserUnavailableGrammarAndFailedParseShareFallbackSnapshot) {
     const std::string text = "\tplain\n";
 
-    SyntaxModel no_parser;
-    const auto absent = requestFor(no_parser, Revision{1}, text);
-    const auto absent_result = parseAndAccept(no_parser, absent);
-    ASSERT_TRUE(absent_result.accepted());
-    ASSERT_TRUE(absent_result.used_fallback);
+    SyntaxModel noParser;
+    const auto absent = requestFor(noParser, Revision{1}, text);
+    const auto absentResult = parseAndAccept(noParser, absent);
+    ASSERT_TRUE(absentResult.accepted());
+    ASSERT_TRUE(absentResult.used_fallback);
 
-    auto unavailable_parser = std::make_shared<DeterministicParser>();
-    unavailable_parser->grammar_available = false;
-    SyntaxModel unavailable{unavailable_parser};
-    const auto unavailable_request =
+    auto unavailableParser = std::make_shared<DeterministicParser>();
+    unavailableParser->grammar_available = false;
+    SyntaxModel unavailable{unavailableParser};
+    const auto unavailableRequest =
         requestFor(unavailable, Revision{1}, text);
-    const auto unavailable_result =
-        parseAndAccept(unavailable, unavailable_request);
-    ASSERT_TRUE(unavailable_result.accepted());
-    ASSERT_TRUE(unavailable_result.used_fallback);
-    ASSERT_EQ(unavailable_parser->parse_calls, std::size_t{0});
+    const auto unavailableResult =
+        parseAndAccept(unavailable, unavailableRequest);
+    ASSERT_TRUE(unavailableResult.accepted());
+    ASSERT_TRUE(unavailableResult.used_fallback);
+    ASSERT_EQ(unavailableParser->parse_calls, std::size_t{0});
 
-    auto failed_parser = std::make_shared<DeterministicParser>();
-    failed_parser->fail_parse = true;
-    SyntaxModel failed_model{failed_parser};
-    const auto failed_request = requestFor(failed_model, Revision{1}, text);
-    const auto failed_result =
-        parseAndAccept(failed_model, failed_request);
-    ASSERT_TRUE(failed_result.accepted());
-    ASSERT_TRUE(failed_result.used_fallback);
-    ASSERT_EQ(failed_parser->parse_calls, std::size_t{1});
+    auto failedParser = std::make_shared<DeterministicParser>();
+    failedParser->fail_parse = true;
+    SyntaxModel failedModel{failedParser};
+    const auto failedRequest = requestFor(failedModel, Revision{1}, text);
+    const auto failedResult =
+        parseAndAccept(failedModel, failedRequest);
+    ASSERT_TRUE(failedResult.accepted());
+    ASSERT_TRUE(failedResult.used_fallback);
+    ASSERT_EQ(failedParser->parse_calls, std::size_t{1});
 
-    auto plain_parser = std::make_shared<DeterministicParser>();
-    SyntaxModel explicit_plain{plain_parser};
-    const auto plain_request = explicit_plain.request(
+    auto plainParser = std::make_shared<DeterministicParser>();
+    SyntaxModel explicitPlain{plainParser};
+    const auto plainRequest = explicitPlain.request(
         Revision{1}, LanguageId::plainText(), text);
-    ASSERT_TRUE(parseAndAccept(explicit_plain, plain_request).accepted());
-    ASSERT_EQ(plain_parser->parse_calls, std::size_t{0});
+    ASSERT_TRUE(parseAndAccept(explicitPlain, plainRequest).accepted());
+    ASSERT_EQ(plainParser->parse_calls, std::size_t{0});
 
-    ASSERT_EQ(no_parser.viewState(), unavailable.viewState());
-    ASSERT_EQ(unavailable.viewState(), failed_model.viewState());
-    ASSERT_EQ(no_parser.viewState().spans(),
+    ASSERT_EQ(noParser.viewState(), unavailable.viewState());
+    ASSERT_EQ(unavailable.viewState(), failedModel.viewState());
+    ASSERT_EQ(noParser.viewState().spans(),
               (std::vector<SyntaxSpan>{
                   {byte(0), byte(text.size()), SyntaxScope::PlainText},
               }));
-    ASSERT_TRUE(no_parser.viewState().bracketPairs().empty());
-    ASSERT_TRUE(no_parser.viewState().commentRanges().empty());
-    ASSERT_EQ(no_parser.viewState().indentation().at(0).columns,
+    ASSERT_TRUE(noParser.viewState().bracketPairs().empty());
+    ASSERT_TRUE(noParser.viewState().commentRanges().empty());
+    ASSERT_EQ(noParser.viewState().indentation().at(0).columns,
               std::uint32_t{4});
 }
 
@@ -565,9 +565,9 @@ TEST(requestAndResultValidationIsFailureAtomic) {
         .old_end_position = {line(0), 3},
         .new_end_position = {line(0), 4},
     };
-    const auto malformed_request =
+    const auto malformedRequest =
         requestFor(model, Revision{1}, "abc", {malformed});
-    ASSERT_EQ(malformed_request.error, SyntaxRequestError::MalformedEdits);
+    ASSERT_EQ(malformedRequest.error, SyntaxRequestError::MalformedEdits);
     ASSERT_EQ(model.viewState().revision(), Revision{0});
 
     const auto valid = requestFor(model, Revision{1}, "let 1\n");
@@ -583,17 +583,17 @@ TEST(requestAndResultValidationIsFailureAtomic) {
     ASSERT_EQ(stale.error, SyntaxRequestError::StaleRevision);
     ASSERT_EQ(model.viewState().revision(), Revision{1});
 
-    const auto switched_language = model.request(
+    const auto switchedLanguage = model.request(
         Revision{2}, LanguageId{"other"}, "let 1\n");
-    ASSERT_TRUE(switched_language.accepted());
-    ASSERT_TRUE(switched_language.request->priorParse() == nullptr);
-    const auto completed_switch = model.run(*switched_language.request);
+    ASSERT_TRUE(switchedLanguage.accepted());
+    ASSERT_TRUE(switchedLanguage.request->priorParse() == nullptr);
+    const auto completedSwitch = model.run(*switchedLanguage.request);
 
-    const auto rejected_newer =
+    const auto rejectedNewer =
         requestFor(model, Revision{3}, "123456789");
-    ASSERT_EQ(rejected_newer.error, SyntaxRequestError::DocumentTooLarge);
-    ASSERT_TRUE(switched_language.request->cancelled());
-    ASSERT_EQ(model.accept(switched_language.request, completed_switch).error,
+    ASSERT_EQ(rejectedNewer.error, SyntaxRequestError::DocumentTooLarge);
+    ASSERT_TRUE(switchedLanguage.request->cancelled());
+    ASSERT_EQ(model.accept(switchedLanguage.request, completedSwitch).error,
               SyntaxAcceptError::Cancelled);
     ASSERT_EQ(model.viewState().revision(), Revision{1});
 }

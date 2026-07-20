@@ -169,7 +169,7 @@ class TabLifecycle {
 public:
     virtual ~TabLifecycle() = default;
     [[nodiscard]] virtual TabLifecycleResult close(
-        const TabState& tab, std::chrono::milliseconds durability_timeout) = 0;
+        const TabState& tab, std::chrono::milliseconds durabilityTimeout) = 0;
     [[nodiscard]] virtual TabLifecycleResult reopen(
         const TabState& tab, const RecoveryRecordId& compensation) = 0;
 };
@@ -197,7 +197,7 @@ public:
         std::string_view label, DocumentMode mode, bool dirty,
         TabRecoveryBadge recovery = TabRecoveryBadge::None);
     [[nodiscard]] TabResult openContent(TabKind kind,
-                                         std::string_view content_identity,
+                                         std::string_view contentIdentity,
                                          std::string_view label,
                                          DocumentMode mode);
     [[nodiscard]] TabResult updateDocument(
@@ -211,11 +211,11 @@ public:
     [[nodiscard]] TabResult moveRight(TabId tab);
 
     [[nodiscard]] TabResult close(
-        TabId tab, std::chrono::milliseconds durability_timeout);
+        TabId tab, std::chrono::milliseconds durabilityTimeout);
     [[nodiscard]] TabResult closeOthers(
-        TabId tab, std::chrono::milliseconds durability_timeout);
+        TabId tab, std::chrono::milliseconds durabilityTimeout);
     [[nodiscard]] TabResult closeAll(
-        std::chrono::milliseconds durability_timeout);
+        std::chrono::milliseconds durabilityTimeout);
     [[nodiscard]] TabResult reopenClosed();
 
 private:

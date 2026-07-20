@@ -56,7 +56,7 @@ public:
     [[nodiscard]] virtual std::optional<LspDocumentSnapshot> snapshot(
         std::string_view uri) const = 0;
     [[nodiscard]] virtual LspWorkspaceDocumentWriteResult apply(
-        std::string uri, Revision expected_revision, std::string text) = 0;
+        std::string uri, Revision expectedRevision, std::string text) = 0;
 };
 
 enum class LspWorkspaceFileNodeKind : std::uint8_t {
@@ -98,7 +98,7 @@ public:
     [[nodiscard]] virtual LspWorkspaceFileResult writeFile(
         std::string uri, std::string content) = 0;
     [[nodiscard]] virtual LspWorkspaceFileResult renamePath(
-        std::string old_uri, std::string new_uri, bool overwrite) = 0;
+        std::string oldUri, std::string newUri, bool overwrite) = 0;
     [[nodiscard]] virtual LspWorkspaceFileResult deletePath(
         std::string uri, bool recursive) = 0;
     [[nodiscard]] virtual LspWorkspaceFileResult restorePath(
@@ -165,7 +165,7 @@ public:
                             LspWorkspaceEditConfig config = {});
 
     [[nodiscard]] LspWorkspaceEditApplyResult apply(
-        std::string_view workspace_edit_json);
+        std::string_view workspaceEditJson);
     [[nodiscard]] LspWorkspaceEditApplyResult recover(
         const LspWorkspaceEditRecoveryRecord& recovery);
 
@@ -228,8 +228,8 @@ public:
 
     [[nodiscard]] LspRenameRequestResult requestRename(
         std::string uri, Revision revision, ByteOffset position,
-        std::string new_name);
-    [[nodiscard]] LspRenamePollResult poll(Revision current_revision);
+        std::string newName);
+    [[nodiscard]] LspRenamePollResult poll(Revision currentRevision);
 
 private:
     enum class Disposition : std::uint8_t { Active, Cancelled, Superseded };

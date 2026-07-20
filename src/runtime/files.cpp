@@ -141,7 +141,7 @@ CommandHandlerResult bindTab(EditorRuntime::Impl& runtime,
     // command actually switches to a different document (activate/next/previous/
     // a close that changes the active tab / reopen). move_left/move_right and
     // close_others keep the same active document and must NOT snap the scroll.
-    auto const document_before = runtime.activeDocumentId();
+    auto const documentBefore = runtime.activeDocumentId();
     TabResult result;
     switch (command) {
         case TabCommand::Close: result = runtime.tabs.close(tab, std::chrono::milliseconds{100}); break;
@@ -159,7 +159,7 @@ CommandHandlerResult bindTab(EditorRuntime::Impl& runtime,
     // Reveal the caret when switching to a different document, so the newly
     // active tab's caret is on-screen instead of inheriting the previous tab's
     // scroll offset (doc/spec-scroll.md reveal policy).
-    if (runtime.activeDocumentId() != document_before) {
+    if (runtime.activeDocumentId() != documentBefore) {
         runtime.revealPrimaryCaret();
     }
     runtime.refreshSyntax();
@@ -233,25 +233,25 @@ CommandHandlerResult EditorRuntime::Impl::activateDocument(FileDocumentId docume
 }
 
 void bindRuntimeFiles(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime) {
-    auto file_commands = fileCommandsCommandSet();
-    auto tab_commands = tabManagementCommandSet();
-    auto external_commands = externalModificationCommandSet();
-    for (auto const& descriptor : file_commands.descriptors()) {
+    auto fileCommands = fileCommandsCommandSet();
+    auto tabCommands = tabManagementCommandSet();
+    auto externalCommands = externalModificationCommandSet();
+    for (auto const& descriptor : fileCommands.descriptors()) {
         builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext& context, std::any const& payload) {
             return runtime.runTransaction([&] { return bindFile(runtime, context.principal(), descriptor.command, payload); });
         });
     }
-    for (auto const& descriptor : tab_commands.descriptors()) {
+    for (auto const& descriptor : tabCommands.descriptors()) {
         builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const& payload) {
             return runtime.runTransaction([&] { return bindTab(runtime, descriptor.command, payload); });
         });
     }
-    for (auto const& descriptor : text_encoding_command_set.descriptors) {
+    for (auto const& descriptor : kTextEncodingCommandSet.descriptors) {
         builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const& payload) {
             return runtime.runTransaction([&] { return bindEncoding(runtime, descriptor.id, payload); });
         });
     }
-    for (auto const& descriptor : external_commands.descriptors()) {
+    for (auto const& descriptor : externalCommands.descriptors()) {
         builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const& payload) {
             return runtime.runTransaction([&] {
                 auto const* id = payloadAs<DiffFileId>(payload);

@@ -14,13 +14,13 @@ namespace {
 using namespace ssg;
 
 DiffFileView changedFile(std::string id, std::filesystem::path path,
-                          std::size_t newest_line, bool deleted = false) {
+                          std::size_t newestLine, bool deleted = false) {
     DiffFileView view{DiffFileId{std::move(id)}};
     view.path = std::move(path);
     view.deleted = deleted;
     view.hunks.push_back(
-        {.baseline_start = newest_line,
-         .target_start = newest_line,
+        {.baseline_start = newestLine,
+         .target_start = newestLine,
          .baseline_lines = {"old\n"},
          .target_lines = deleted ? std::vector<std::string>{}
                                  : std::vector<std::string>{"new\n"}});
@@ -93,11 +93,11 @@ TEST(independentTransitionTableCoversSharedFollowPolicy) {
         } else if (operation == "change") {
             const auto separator = fields[1].find(':');
             const auto id = fields[1].substr(0, separator);
-            const auto line_number =
+            const auto lineNumber =
                 std::stoull(fields[1].substr(separator + 1));
             ASSERT_TRUE(model
                             .acceptExternalChange(
-                                changedFile(id, id + ".txt", line_number),
+                                changedFile(id, id + ".txt", lineNumber),
                                 Revision{std::stoull(fields[2])})
                             .accepted());
         } else if (operation == "navigate_user" ||

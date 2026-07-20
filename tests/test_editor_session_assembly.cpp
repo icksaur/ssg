@@ -23,9 +23,9 @@ std::vector<std::string> catalogIds() {
     std::ifstream input{SSG_REQUIRED_COMMANDS_PATH};
     std::string json{std::istreambuf_iterator<char>{input},
                      std::istreambuf_iterator<char>{}};
-    std::regex const id_pattern{R"json("id"\s*:\s*"([^"]+)")json"};
+    std::regex const idPattern{R"json("id"\s*:\s*"([^"]+)")json"};
     std::vector<std::string> ids;
-    for (std::sregex_iterator it{json.begin(), json.end(), id_pattern}, end;
+    for (std::sregex_iterator it{json.begin(), json.end(), idPattern}, end;
          it != end; ++it) {
         ids.push_back((*it)[1].str());
     }
@@ -36,18 +36,18 @@ std::map<std::string, std::vector<std::string>> catalogCapabilities() {
     std::ifstream input{SSG_REQUIRED_COMMANDS_PATH};
     std::string json{std::istreambuf_iterator<char>{input},
                      std::istreambuf_iterator<char>{}};
-    std::regex const command_pattern{
+    std::regex const commandPattern{
         R"json(\{"id":"([^"]+)","owner":"[^"]+","required_capabilities":\[([^\]]*)\])json"};
-    std::regex const value_pattern{R"json("([^"]+)")json"};
+    std::regex const valuePattern{R"json("([^"]+)")json"};
     std::map<std::string, std::vector<std::string>> result;
-    for (std::sregex_iterator it{json.begin(), json.end(), command_pattern}, end;
+    for (std::sregex_iterator it{json.begin(), json.end(), commandPattern}, end;
          it != end; ++it) {
         std::vector<std::string> capabilities;
         std::string const values = (*it)[2].str();
         for (std::sregex_iterator value{values.begin(), values.end(),
-                                        value_pattern},
-             value_end;
-             value != value_end; ++value) {
+                                        valuePattern},
+             valueEnd;
+             value != valueEnd; ++value) {
             capabilities.push_back((*value)[1].str());
         }
         result.emplace((*it)[1].str(), std::move(capabilities));
@@ -56,11 +56,11 @@ std::map<std::string, std::vector<std::string>> catalogCapabilities() {
 }
 
 ssg::SelectionViewState selection(std::uint64_t byte,
-                                  std::uint32_t first_row) {
+                                  std::uint32_t firstRow) {
     ssg::DocumentPosition const position{
         ssg::ByteOffset{byte}, ssg::LineIndex{0}, ssg::CellIndex{byte}};
     return {ssg::SelectionSet{{ssg::Selection{position, position}}},
-            first_row, 0, std::nullopt};
+            firstRow, 0, std::nullopt};
 }
 
 ssg::SessionSnapshotSections sections(ssg::Revision revision,
@@ -108,20 +108,20 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision,
     };
 }
 
-ssg::ViewportViewState clientView(std::uint32_t first_row) {
+ssg::ViewportViewState clientView(std::uint32_t firstRow) {
     return {ssg::ViewportDimensions{20, 8},
-            first_row,
+            firstRow,
             0,
-            first_row + 8,
+            firstRow + 8,
             {},
             {},
-            {first_row + 8, 8, first_row, first_row, 0, 8}};
+            {firstRow + 8, 8, firstRow, firstRow, 0, 8}};
 }
 
 TEST(requiredCatalogEqualsAssembledRegistryExactly) {
     auto expected = catalogIds();
     auto descriptors = ssg::p0CommandDescriptors();
-    auto expected_capabilities = catalogCapabilities();
+    auto expectedCapabilities = catalogCapabilities();
     std::vector<std::string> actual;
     for (auto const& descriptor : descriptors) {
         actual.push_back(descriptor.id);
@@ -129,14 +129,14 @@ TEST(requiredCatalogEqualsAssembledRegistryExactly) {
     std::sort(expected.begin(), expected.end());
     std::sort(actual.begin(), actual.end());
     ASSERT_EQ(actual, expected);
-    ASSERT_EQ(expected_capabilities.size(), descriptors.size());
+    ASSERT_EQ(expectedCapabilities.size(), descriptors.size());
     for (auto const& descriptor : descriptors) {
         ASSERT_EQ(descriptor.effect, ssg::CommandEffect::Mutation);
-        std::vector<std::string> actual_capabilities;
+        std::vector<std::string> actualCapabilities;
         for (auto const& capability : descriptor.required_capabilities) {
-            actual_capabilities.emplace_back(capability.value());
+            actualCapabilities.emplace_back(capability.value());
         }
-        ASSERT_EQ(actual_capabilities, expected_capabilities.at(descriptor.id));
+        ASSERT_EQ(actualCapabilities, expectedCapabilities.at(descriptor.id));
     }
 }
 
@@ -219,33 +219,33 @@ TEST(fullSnapshotMatchesReplayedAggregateDelta) {
 }
 
 TEST(nonDocumentTransitionReplaysAndRejectsADifferentClient) {
-    auto old_sections = sections(ssg::Revision{4}, "same");
-    auto new_sections = old_sections;
-    new_sections.tabs.tabs.front().label = "new label";
+    auto oldSections = sections(ssg::Revision{4}, "same");
+    auto newSections = oldSections;
+    newSections.tabs.tabs.front().label = "new label";
 
     auto before = ssg::assembleSessionSnapshot(
         ssg::Revision{4}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
-        ssg::ViewId{9}, clientView(1), std::move(old_sections));
+        ssg::ViewId{9}, clientView(1), std::move(oldSections));
     auto after = ssg::assembleSessionSnapshot(
         ssg::Revision{5}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
-        ssg::ViewId{9}, clientView(1), std::move(new_sections));
+        ssg::ViewId{9}, clientView(1), std::move(newSections));
     auto delta = ssg::deriveSessionDelta(before, after);
     ASSERT_FALSE(delta.document().has_value());
     auto replayed = ssg::replaySessionDelta(before, delta);
     ASSERT_TRUE(replayed.accepted());
     ASSERT_EQ(*replayed.snapshot, after);
 
-    auto other_client = ssg::assembleSessionSnapshot(
+    auto otherClient = ssg::assembleSessionSnapshot(
         ssg::Revision{4}, {},
         ssg::InvocationPrincipal{ssg::ClientId{8},
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{10}, clientView(1),
         sections(ssg::Revision{4}, "same"));
-    ASSERT_FALSE(ssg::replaySessionDelta(other_client, delta).accepted());
+    ASSERT_FALSE(ssg::replaySessionDelta(otherClient, delta).accepted());
 }
 
 TEST(perClientCapabilitiesAndViewportsAreIsolated) {
@@ -270,24 +270,24 @@ TEST(perClientCapabilitiesAndViewportsAreIsolated) {
 }
 
 TEST(shellDeltaDetectsAPanelScrollbarOnlyChange) {
-    auto old_sections = sections(ssg::Revision{4}, "same");
-    old_sections.shell.panel = ssg::Rect{0, 1, 24, 10};
-    old_sections.shell.panel_scrollbar = ssg::Rect{23, 2, 1, 9};
-    auto new_sections = old_sections;
+    auto oldSections = sections(ssg::Revision{4}, "same");
+    oldSections.shell.panel = ssg::Rect{0, 1, 24, 10};
+    oldSections.shell.panel_scrollbar = ssg::Rect{23, 2, 1, 9};
+    auto newSections = oldSections;
     // Only the gutter geometry differs (e.g. a taller panel): the shell delta
     // must not treat this as unchanged.
-    new_sections.shell.panel_scrollbar = ssg::Rect{23, 2, 1, 12};
+    newSections.shell.panel_scrollbar = ssg::Rect{23, 2, 1, 12};
 
     auto before = ssg::assembleSessionSnapshot(
         ssg::Revision{4}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
-        ssg::ViewId{9}, clientView(1), std::move(old_sections));
+        ssg::ViewId{9}, clientView(1), std::move(oldSections));
     auto after = ssg::assembleSessionSnapshot(
         ssg::Revision{5}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
-        ssg::ViewId{9}, clientView(1), std::move(new_sections));
+        ssg::ViewId{9}, clientView(1), std::move(newSections));
     auto delta = ssg::deriveSessionDelta(before, after);
     ASSERT_TRUE(delta.shell().replacement.has_value());
     auto replayed = ssg::replaySessionDelta(before, delta);
@@ -296,24 +296,24 @@ TEST(shellDeltaDetectsAPanelScrollbarOnlyChange) {
 }
 
 TEST(shellDeltaDetectsATabHitOnlyChange) {
-    auto old_sections = sections(ssg::Revision{4}, "same");
-    old_sections.shell.tab_hits = {ssg::TabHit{ssg::Rect{24, 0, 10, 1}, 0}};
-    auto new_sections = old_sections;
+    auto oldSections = sections(ssg::Revision{4}, "same");
+    oldSections.shell.tab_hits = {ssg::TabHit{ssg::Rect{24, 0, 10, 1}, 0}};
+    auto newSections = oldSections;
     // A second tab opens: only the tab hit map differs. The shell delta must not
     // treat this as unchanged (or pointer hit-testing would target a stale map).
-    new_sections.shell.tab_hits = {ssg::TabHit{ssg::Rect{24, 0, 10, 1}, 0},
+    newSections.shell.tab_hits = {ssg::TabHit{ssg::Rect{24, 0, 10, 1}, 0},
                                    ssg::TabHit{ssg::Rect{34, 0, 8, 1}, 1}};
 
     auto before = ssg::assembleSessionSnapshot(
         ssg::Revision{4}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
-        ssg::ViewId{9}, clientView(1), std::move(old_sections));
+        ssg::ViewId{9}, clientView(1), std::move(oldSections));
     auto after = ssg::assembleSessionSnapshot(
         ssg::Revision{5}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
-        ssg::ViewId{9}, clientView(1), std::move(new_sections));
+        ssg::ViewId{9}, clientView(1), std::move(newSections));
     auto delta = ssg::deriveSessionDelta(before, after);
     ASSERT_TRUE(delta.shell().replacement.has_value());
     auto replayed = ssg::replaySessionDelta(before, delta);

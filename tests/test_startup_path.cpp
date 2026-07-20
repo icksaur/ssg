@@ -69,23 +69,23 @@ TEST(deferredEnrichmentSkipsSyntaxAndTreeUntilPrimed) {
     ASSERT_EQ(before.tree_scans, std::uint64_t{0});
 
     // Priming runs the deferred work; it must actually arrive.
-    auto const revision_before_prime = runtime.revision();
+    auto const revisionBeforePrime = runtime.revision();
     runtime.primeDeferred();
     auto after = runtime.deferredWorkCounts();
     ASSERT_TRUE(after.syntax_runs >= 1);
     ASSERT_TRUE(after.tree_scans >= 1);
     // The session revision advances so delta-based clients observe the primed
     // enrichment (a same-revision snapshot pair yields no delta).
-    ASSERT_TRUE(runtime.revision().value() > revision_before_prime.value());
+    ASSERT_TRUE(runtime.revision().value() > revisionBeforePrime.value());
 
     // Idempotent: a second prime does no additional deferred work and does not
     // advance the revision again.
-    auto const revision_after_prime = runtime.revision();
+    auto const revisionAfterPrime = runtime.revision();
     runtime.primeDeferred();
     auto again = runtime.deferredWorkCounts();
     ASSERT_EQ(again.syntax_runs, after.syntax_runs);
     ASSERT_EQ(again.tree_scans, after.tree_scans);
-    ASSERT_EQ(runtime.revision().value(), revision_after_prime.value());
+    ASSERT_EQ(runtime.revision().value(), revisionAfterPrime.value());
 
     fs::remove_all(root);
 }
@@ -138,7 +138,7 @@ TEST(firstFrameConstructsNoOptionalSubsystem) {
 
     // Exhaustive over the enumerated subsystems (a missing enum entry fails the
     // static_assert in startup_audit.h, so the list cannot silently omit one).
-    for (auto subsystem : ssg::all_optional_subsystems) {
+    for (auto subsystem : ssg::kAllOptionalSubsystems) {
         ASSERT_EQ(ssg::optionalConstructionCount(subsystem), std::uint64_t{0});
     }
     ASSERT_EQ(ssg::optionalConstructionTotal(), std::uint64_t{0});

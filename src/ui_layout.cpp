@@ -9,11 +9,11 @@
 namespace ssg {
 namespace {
 
-constexpr int minimum_columns = 20;
-constexpr int minimum_rows = 4;
-constexpr int panel_target_width = 24;
-constexpr int panel_minimum_width = 12;
-constexpr int editor_minimum_width = 20;
+constexpr int kMinimumColumns = 20;
+constexpr int kMinimumRows = 4;
+constexpr int kPanelTargetWidth = 24;
+constexpr int kPanelMinimumWidth = 12;
+constexpr int kEditorMinimumWidth = 20;
 
 struct PaneNode {
     PaneId id;
@@ -55,17 +55,17 @@ bool removeLeaf(std::unique_ptr<PaneNode>& node, PaneId id) {
 bool canLayout(const PaneNode& node, Rect rect) {
     if (node.leaf()) return rect.width >= 2 && rect.height >= 1;
     if (node.axis == SplitAxis::Vertical) {
-        const int first_width = rect.width / 2;
-        return canLayout(*node.first, {rect.x, rect.y, first_width, rect.height}) &&
+        const int firstWidth = rect.width / 2;
+        return canLayout(*node.first, {rect.x, rect.y, firstWidth, rect.height}) &&
                canLayout(*node.second,
-                          {rect.x + first_width, rect.y,
-                           rect.width - first_width, rect.height});
+                          {rect.x + firstWidth, rect.y,
+                           rect.width - firstWidth, rect.height});
     }
-    const int first_height = rect.height / 2;
-    return canLayout(*node.first, {rect.x, rect.y, rect.width, first_height}) &&
+    const int firstHeight = rect.height / 2;
+    return canLayout(*node.first, {rect.x, rect.y, rect.width, firstHeight}) &&
            canLayout(*node.second,
-                      {rect.x, rect.y + first_height, rect.width,
-                       rect.height - first_height});
+                      {rect.x, rect.y + firstHeight, rect.width,
+                       rect.height - firstHeight});
 }
 
 void layoutPanes(const PaneNode& node, Rect rect,
@@ -80,21 +80,21 @@ void layoutPanes(const PaneNode& node, Rect rect,
         return;
     }
     if (node.axis == SplitAxis::Vertical) {
-        const int first_width = rect.width / 2;
-        layoutPanes(*node.first, {rect.x, rect.y, first_width, rect.height},
+        const int firstWidth = rect.width / 2;
+        layoutPanes(*node.first, {rect.x, rect.y, firstWidth, rect.height},
                      output);
         layoutPanes(*node.second,
-                     {rect.x + first_width, rect.y,
-                      rect.width - first_width, rect.height},
+                     {rect.x + firstWidth, rect.y,
+                      rect.width - firstWidth, rect.height},
                      output);
         return;
     }
-    const int first_height = rect.height / 2;
-    layoutPanes(*node.first, {rect.x, rect.y, rect.width, first_height},
+    const int firstHeight = rect.height / 2;
+    layoutPanes(*node.first, {rect.x, rect.y, rect.width, firstHeight},
                  output);
     layoutPanes(*node.second,
-                 {rect.x, rect.y + first_height, rect.width,
-                  rect.height - first_height},
+                 {rect.x, rect.y + firstHeight, rect.width,
+                  rect.height - firstHeight},
                  output);
 }
 
@@ -163,9 +163,9 @@ struct ShellState::Impl {
     bool distraction_free = false;
 };
 
-ShellState::ShellState(std::vector<std::string> panel_providers)
+ShellState::ShellState(std::vector<std::string> panelProviders)
     : impl_(std::make_unique<Impl>()) {
-    impl_->providers = std::move(panel_providers);
+    impl_->providers = std::move(panelProviders);
 }
 
 ShellState::~ShellState() = default;
@@ -221,14 +221,14 @@ bool ShellState::focusPane(PaneDirection direction,
                             const ShellViewState& view) noexcept {
     const auto* current = paneGeometry(view, impl_->active);
     if (!current) return false;
-    const double current_x = centerX(current->frame);
-    const double current_y = centerY(current->frame);
+    const double currentX = centerX(current->frame);
+    const double currentY = centerY(current->frame);
     const PaneGeometry* best = nullptr;
-    double best_distance = std::numeric_limits<double>::max();
+    double bestDistance = std::numeric_limits<double>::max();
     for (const auto& candidate : view.panes) {
         if (candidate.id == impl_->active) continue;
-        const double dx = centerX(candidate.frame) - current_x;
-        const double dy = centerY(candidate.frame) - current_y;
+        const double dx = centerX(candidate.frame) - currentX;
+        const double dy = centerY(candidate.frame) - currentY;
         const bool eligible =
             (direction == PaneDirection::Left && dx < 0) ||
             (direction == PaneDirection::Right && dx > 0) ||
@@ -236,9 +236,9 @@ bool ShellState::focusPane(PaneDirection direction,
             (direction == PaneDirection::Down && dy > 0);
         if (!eligible) continue;
         const double distance = dx * dx + dy * dy;
-        if (distance < best_distance) {
+        if (distance < bestDistance) {
             best = &candidate;
-            best_distance = distance;
+            bestDistance = distance;
         }
     }
     if (!best) return false;
@@ -337,8 +337,8 @@ bool ShellState::distractionFree() const noexcept {
 
 ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
                                        const ShellState& state) {
-    if (request.viewport.columns < minimum_columns ||
-        request.viewport.rows < minimum_rows) {
+    if (request.viewport.columns < kMinimumColumns ||
+        request.viewport.rows < kMinimumRows) {
         return {ShellLayoutError{ShellLayoutErrorCode::ViewportTooSmall,
                                  "viewport must be at least 20 columns by 4 rows"},
                 std::nullopt};
@@ -352,10 +352,10 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
     ShellViewState view;
     view.viewport = request.viewport;
     view.focus = state.focus();
-    const bool distraction_free = state.impl_->distraction_free;
+    const bool distractionFree = state.impl_->distraction_free;
     Rect editor{0, 0, request.viewport.columns, request.viewport.rows};
 
-    if (!distraction_free) {
+    if (!distractionFree) {
         view.header = Rect{0, 0, request.viewport.columns, 1};
         view.footer =
             Rect{0, request.viewport.rows - 1, request.viewport.columns, 1};
@@ -363,69 +363,69 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
                  *view.header, SemanticRole::Header);
         addNode(view, ShellNodeKind::Footer, "footer", "Status footer",
                  *view.footer, SemanticRole::Footer);
-        int header_x = view.header->x;
+        int headerX = view.header->x;
         if (request.palette_active) {
             // The palette owns the header while open: its query renders in the
             // prompt role, the ghost completion trails it dim.  Palette focus
             // and leader-chord entry are mutually exclusive, so they never
             // compete for the header start.
             std::string query = "> " + request.palette_query;
-            const int query_width =
+            const int queryWidth =
                 std::min(view.header->width, static_cast<int>(query.size()));
             addNode(view, ShellNodeKind::HeaderField, "palette_query",
-                     "Palette query", {header_x, view.header->y, query_width, 1},
+                     "Palette query", {headerX, view.header->y, queryWidth, 1},
                      SemanticRole::Prompt, std::move(query));
-            header_x += query_width;
+            headerX += queryWidth;
             if (!request.palette_ghost.empty() &&
-                header_x < view.header->right()) {
-                const int ghost_width =
-                    std::min(view.header->right() - header_x,
+                headerX < view.header->right()) {
+                const int ghostWidth =
+                    std::min(view.header->right() - headerX,
                              static_cast<int>(request.palette_ghost.size()));
                 addNode(view, ShellNodeKind::HeaderField, "palette_ghost",
                          "Palette completion",
-                         {header_x, view.header->y, ghost_width, 1},
+                         {headerX, view.header->y, ghostWidth, 1},
                          SemanticRole::LineNumber, request.palette_ghost);
-                header_x += ghost_width;
+                headerX += ghostWidth;
             }
         } else if (!request.leader_hint.empty()) {
             const int width = std::min(
                 view.header->width,
                 static_cast<int>(request.leader_hint.size()) + 1);
             addNode(view, ShellNodeKind::HeaderField, "leader", "Leader hint",
-                     {header_x, view.header->y, width, 1}, SemanticRole::Prompt,
+                     {headerX, view.header->y, width, 1}, SemanticRole::Prompt,
                      request.leader_hint);
-            header_x += width;
+            headerX += width;
         }
         addFields(view, request.header_fields,
-                   {header_x, view.header->y,
-                    view.header->right() - header_x, view.header->height},
+                   {headerX, view.header->y,
+                    view.header->right() - headerX, view.header->height},
                    ShellNodeKind::HeaderField, SemanticRole::Header);
-        int action_x = view.footer->right();
+        int actionX = view.footer->right();
         for (auto action = request.footer_actions.rbegin();
              action != request.footer_actions.rend(); ++action) {
             const int width =
-                std::min(action_x, static_cast<int>(action->accessible_label.size()) + 2);
+                std::min(actionX, static_cast<int>(action->accessible_label.size()) + 2);
             if (width <= 0 || action->accessible_label.empty()) continue;
-            action_x -= width;
+            actionX -= width;
             addNode(view, ShellNodeKind::FooterAction, action->id,
                      action->accessible_label,
-                     {action_x, view.footer->y, width, 1},
+                     {actionX, view.footer->y, width, 1},
                      SemanticRole::StatusInfo, action->accessible_label);
         }
         addFields(view, request.footer_fields,
                    {view.footer->x, view.footer->y,
-                    action_x - view.footer->x, view.footer->height},
+                    actionX - view.footer->x, view.footer->height},
                    ShellNodeKind::FooterField, SemanticRole::Footer);
 
-        const bool panel_requested = state.impl_->panel_requested;
-        int panel_width = 0;
-        if (panel_requested &&
+        const bool panelRequested = state.impl_->panel_requested;
+        int panelWidth = 0;
+        if (panelRequested &&
             request.viewport.columns >=
-                editor_minimum_width + panel_minimum_width) {
-            panel_width = std::min(
-                panel_target_width,
-                request.viewport.columns - editor_minimum_width);
-            view.panel = Rect{0, 1, panel_width, request.viewport.rows - 2};
+                kEditorMinimumWidth + kPanelMinimumWidth) {
+            panelWidth = std::min(
+                kPanelTargetWidth,
+                request.viewport.columns - kEditorMinimumWidth);
+            view.panel = Rect{0, 1, panelWidth, request.viewport.rows - 2};
             addNode(view, ShellNodeKind::Panel, "panel", "Side panel",
                      *view.panel, SemanticRole::PanelInactive);
             addNode(view, ShellNodeKind::PanelProvider, "panel.provider",
@@ -436,8 +436,8 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
             // Reserve the tree's scrollbar gutter: the right column over the tree
             // content rows (below the provider-label row). Content is the panel
             // minus this column, so tree text width never changes with the thumb.
-            if (panel_width > 1 && view.panel->height > 1) {
-                view.panel_scrollbar = Rect{panel_width - 1, view.panel->y + 1, 1,
+            if (panelWidth > 1 && view.panel->height > 1) {
+                view.panel_scrollbar = Rect{panelWidth - 1, view.panel->y + 1, 1,
                                             view.panel->height - 1};
                 addNode(view, ShellNodeKind::Scrollbar, "panel.scrollbar",
                          "Panel scrollbar", *view.panel_scrollbar,
@@ -445,30 +445,30 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
             }
         }
 
-        editor = {panel_width, 1, request.viewport.columns - panel_width,
+        editor = {panelWidth, 1, request.viewport.columns - panelWidth,
                   request.viewport.rows - 2};
         view.tab_bar = Rect{editor.x, editor.y, editor.width, 1};
         addNode(view, ShellNodeKind::TabBar, "tabs", "Open tabs",
                  *view.tab_bar, SemanticRole::TabInactive);
-        int tab_x = view.tab_bar->x;
+        int tabX = view.tab_bar->x;
         for (std::size_t i = 0; i < request.tabs.size(); ++i) {
             const auto& tab = request.tabs[i];
             const std::string display =
                 tab.dirty ? tab.title + " *" : tab.title;
             const int width =
-                std::min(view.tab_bar->right() - tab_x,
+                std::min(view.tab_bar->right() - tabX,
                          std::max(1, static_cast<int>(display.size()) + 2));
             if (width <= 0 || tab.accessible_label.empty()) break;
             addNode(view, ShellNodeKind::Tab, "tab." + std::to_string(i),
                      tab.accessible_label,
-                     {tab_x, view.tab_bar->y, width, 1},
+                     {tabX, view.tab_bar->y, width, 1},
                      tab.active ? SemanticRole::TabActive :
                                   SemanticRole::TabInactive,
                      display);
             view.tab_hits.push_back(
-                TabHit{{tab_x, view.tab_bar->y, width, 1},
+                TabHit{{tabX, view.tab_bar->y, width, 1},
                        static_cast<std::uint32_t>(i)});
-            tab_x += width;
+            tabX += width;
         }
 
         editor.y += 1;

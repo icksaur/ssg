@@ -16,27 +16,27 @@ EditHistoryIntegrationResult invalidResult(std::string message) {
 
 EditHistoryIntegrationResult applyDerivedEdit(
     Document& document, DocumentHistory& history,
-    const SelectionSet& selections_before, const EditTransaction& transaction,
-    const SelectionSet& selections_after, HistoryEditKind kind,
-    std::uint64_t timestamp_ms) {
-    auto history_result =
-        history.applyEdit(document, transaction, selections_before,
-                           selections_after, kind, timestamp_ms);
-    if (!history_result.accepted()) {
-        auto message = history_result.message;
+    const SelectionSet& selectionsBefore, const EditTransaction& transaction,
+    const SelectionSet& selectionsAfter, HistoryEditKind kind,
+    std::uint64_t timestampMs) {
+    auto historyResult =
+        history.applyEdit(document, transaction, selectionsBefore,
+                           selectionsAfter, kind, timestampMs);
+    if (!historyResult.accepted()) {
+        auto message = historyResult.message;
         return {EditHistoryIntegrationError::HistoryRejected,
                 std::nullopt,
                 std::nullopt,
-                std::move(history_result),
+                std::move(historyResult),
                 std::nullopt,
                 std::move(message)};
     }
 
-    auto restored = history_result.selections;
+    auto restored = historyResult.selections;
     return {EditHistoryIntegrationError::None,
             std::nullopt,
             std::nullopt,
-            std::move(history_result),
+            std::move(historyResult),
             std::move(restored),
             {}};
 }
@@ -67,7 +67,7 @@ EditHistoryIntegrationResult applyTextInputWithHistory(
     Document& document, DocumentHistory& history,
     const SelectionSet& selections, TextInputSettings settings,
     TextInputCommand command, TextInputArguments arguments,
-    std::uint64_t timestamp_ms) {
+    std::uint64_t timestampMs) {
     auto result =
         applyTextInput(document.snapshot(), selections, std::move(settings),
                          command, std::move(arguments));
@@ -94,13 +94,13 @@ EditHistoryIntegrationResult applyTextInputWithHistory(
     }
     return applyDerivedEdit(document, history, selections,
                               *result.transaction, *result.selections,
-                              historyEditKind(command), timestamp_ms);
+                              historyEditKind(command), timestampMs);
 }
 
 EditHistoryIntegrationResult applyEditCommandWithHistory(
     Document& document, DocumentHistory& history,
     const SelectionSet& selections, EditCommandSettings settings,
-    EditCommand command, std::uint64_t timestamp_ms) {
+    EditCommand command, std::uint64_t timestampMs) {
     auto result =
         applyEditCommand(document.snapshot(), selections, std::move(settings),
                            command);
@@ -127,7 +127,7 @@ EditHistoryIntegrationResult applyEditCommandWithHistory(
     }
     return applyDerivedEdit(document, history, selections,
                               *result.transaction, *result.selections,
-                              historyEditKind(command), timestamp_ms);
+                              historyEditKind(command), timestampMs);
 }
 
 }  // namespace ssg

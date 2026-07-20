@@ -139,15 +139,15 @@ struct HttpEditorRoute::Impl {
 
     using ReplayKey = std::pair<std::string, std::uint64_t>;
 
-    Impl(Http::Server& http_server, EditorSession& editor_session,
-         CommandArgumentCodecRegistry command_argument_codecs,
-         HttpEditorSessionHost& session_host,
-         HttpEditorRouteConfig route_config)
-        : session{editor_session},
-          argument_codecs{std::move(command_argument_codecs)},
-          host{session_host},
-          config{std::move(route_config)},
-          server{http_server} {
+    Impl(Http::Server& httpServer, EditorSession& editorSession,
+         CommandArgumentCodecRegistry commandArgumentCodecs,
+         HttpEditorSessionHost& sessionHost,
+         HttpEditorRouteConfig routeConfig)
+        : session{editorSession},
+          argument_codecs{std::move(commandArgumentCodecs)},
+          host{sessionHost},
+          config{std::move(routeConfig)},
+          server{httpServer} {
         if (config.route.empty() || config.route.front() != '/') {
             throw std::invalid_argument{
                 "WebSocket route must start with a slash"};
@@ -185,7 +185,7 @@ struct HttpEditorRoute::Impl {
         auto connection = find(handle);
         if (!connection) return;
 
-        std::lock_guard process_lock{processing_mutex};
+        std::lock_guard processLock{processing_mutex};
         if (!connection->binding) {
             if (message.opcode != 0x1 ||
                 !attach(handle, connection, message.data)) {
@@ -265,20 +265,20 @@ struct HttpEditorRoute::Impl {
         if (authenticated->principal.origin() != InvocationOrigin::Websocket) {
             return false;
         }
-        auto const client_id = authenticated->principal.clientId();
+        auto const clientId = authenticated->principal.clientId();
         auto const attached =
             session.attach(authenticated->principal, authenticated->view_id);
         if (!attached.accepted()) return false;
 
         connection->binding.emplace(std::move(*authenticated));
         connection->snapshot.emplace(host.snapshot(
-            connection->binding->session_id, client_id));
-        auto const current_revision = connection->snapshot->revision();
+            connection->binding->session_id, clientId));
+        auto const currentRevision = connection->snapshot->revision();
 
         bool replayed = false;
         if (request.request->last_applied_revision) {
             auto next = *request.request->last_applied_revision;
-            if (next == current_revision) {
+            if (next == currentRevision) {
                 replayed = true;
             } else {
                 auto const key = replayKey(*connection->binding);
@@ -292,7 +292,7 @@ struct HttpEditorRoute::Impl {
                         }
                     }
                 }
-                if (next == current_revision && !chain.empty() &&
+                if (next == currentRevision && !chain.empty() &&
                     chain.size() <= config.outbound_queue_messages) {
                     for (auto& encoded : chain) {
                         enqueue(handle, connection,
@@ -309,16 +309,16 @@ struct HttpEditorRoute::Impl {
         return true;
     }
 
-    void publishSession(SessionId const& session_id) {
+    void publishSession(SessionId const& sessionId) {
         std::vector<std::pair<Http::WebSocketHandle,
                               std::shared_ptr<Connection>>>
             targets;
         {
             std::lock_guard lock{connections_mutex};
             for (auto const& [handle, connection] : connections) {
-                std::lock_guard connection_lock{connection->mutex};
+                std::lock_guard connectionLock{connection->mutex};
                 if (connection->binding && !connection->stopping &&
-                    connection->binding->session_id == session_id) {
+                    connection->binding->session_id == sessionId) {
                     targets.emplace_back(handle, connection);
                 }
             }
@@ -400,7 +400,7 @@ struct HttpEditorRoute::Impl {
         }
         connection->ready.notify_one();
         {
-            std::lock_guard process_lock{processing_mutex};
+            std::lock_guard processLock{processing_mutex};
             if (connection->binding && !connection->detached) {
                 (void)session.detach(
                     connection->binding->principal.clientId());
@@ -428,7 +428,7 @@ struct HttpEditorRoute::Impl {
             connection->writer.get_id() != std::this_thread::get_id()) {
             connection->writer.join();
         }
-        std::lock_guard process_lock{processing_mutex};
+        std::lock_guard processLock{processing_mutex};
         if (connection->binding && !connection->detached) {
             (void)session.detach(connection->binding->principal.clientId());
             connection->detached = true;
@@ -441,23 +441,23 @@ struct HttpEditorRoute::Impl {
         return found == connections.end() ? nullptr : found->second;
     }
 
-    std::shared_ptr<Connection> find(ClientId client_id) {
+    std::shared_ptr<Connection> find(ClientId clientId) {
         std::lock_guard lock{connections_mutex};
         for (auto const& [handle, connection] : connections) {
             (void)handle;
-            std::lock_guard connection_lock{connection->mutex};
+            std::lock_guard connectionLock{connection->mutex};
             if (connection->binding &&
                 !connection->stopping &&
-                connection->binding->principal.clientId() == client_id) {
+                connection->binding->principal.clientId() == clientId) {
                 return connection;
             }
         }
         return nullptr;
     }
 
-    bool sendTo(ClientId client_id, std::string payload) {
-        std::lock_guard process_lock{processing_mutex};
-        auto connection = find(client_id);
+    bool sendTo(ClientId clientId, std::string payload) {
+        std::lock_guard processLock{processing_mutex};
+        auto connection = find(clientId);
         if (!connection) return false;
         Http::WebSocketHandle handle = 0;
         {
@@ -487,29 +487,29 @@ struct HttpEditorRoute::Impl {
 
 HttpEditorRoute::HttpEditorRoute(
     Http::Server& server, EditorSession& session,
-    CommandArgumentCodecRegistry argument_codecs,
+    CommandArgumentCodecRegistry argumentCodecs,
     HttpEditorSessionHost& host, HttpEditorRouteConfig config)
-    : impl_{std::make_unique<Impl>(server, session, std::move(argument_codecs),
+    : impl_{std::make_unique<Impl>(server, session, std::move(argumentCodecs),
                                   host, std::move(config))} {}
 
 HttpEditorRoute::~HttpEditorRoute() = default;
 
 bool HttpEditorRoute::sendClipboardRequest(
-    ClientId client_id, ClipboardRequest const& request) {
-    return impl_->sendTo(client_id, encodeClipboardRequest(request));
+    ClientId clientId, ClipboardRequest const& request) {
+    return impl_->sendTo(clientId, encodeClipboardRequest(request));
 }
 
-bool HttpEditorRoute::sendBinary(ClientId client_id,
+bool HttpEditorRoute::sendBinary(ClientId clientId,
                                   BinaryFrame const& frame) {
-    return impl_->sendTo(client_id, encodeBinaryFrame(frame));
+    return impl_->sendTo(clientId, encodeBinaryFrame(frame));
 }
 
 struct HttpEditorServer::Impl {
     Impl(EditorSession& session,
-         CommandArgumentCodecRegistry argument_codecs,
+         CommandArgumentCodecRegistry argumentCodecs,
          HttpEditorSessionHost& host, HttpEditorServerConfig config)
         : server{config.port},
-          route{server, session, std::move(argument_codecs), host,
+          route{server, session, std::move(argumentCodecs), host,
                 {std::move(config.route), config.outbound_queue_messages,
                  config.replay_deltas, config.write_timeout,
                  config.protocol_limits}} {
@@ -538,10 +538,10 @@ struct HttpEditorServer::Impl {
 };
 
 HttpEditorServer::HttpEditorServer(
-    EditorSession& session, CommandArgumentCodecRegistry argument_codecs,
+    EditorSession& session, CommandArgumentCodecRegistry argumentCodecs,
     HttpEditorSessionHost& host, HttpEditorServerConfig config)
     : impl_{std::make_unique<Impl>(
-          session, std::move(argument_codecs), host, std::move(config))} {}
+          session, std::move(argumentCodecs), host, std::move(config))} {}
 
 HttpEditorServer::~HttpEditorServer() = default;
 
@@ -549,13 +549,13 @@ void HttpEditorServer::start() { impl_->start(); }
 void HttpEditorServer::stop() { impl_->stop(); }
 
 bool HttpEditorServer::sendClipboardRequest(
-    ClientId client_id, ClipboardRequest const& request) {
-    return impl_->route.sendClipboardRequest(client_id, request);
+    ClientId clientId, ClipboardRequest const& request) {
+    return impl_->route.sendClipboardRequest(clientId, request);
 }
 
-bool HttpEditorServer::sendBinary(ClientId client_id,
+bool HttpEditorServer::sendBinary(ClientId clientId,
                                    BinaryFrame const& frame) {
-    return impl_->route.sendBinary(client_id, frame);
+    return impl_->route.sendBinary(clientId, frame);
 }
 
 }  // namespace ssg

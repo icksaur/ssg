@@ -12,7 +12,7 @@ class TemporaryDirectory {
 public:
     TemporaryDirectory()
         : path_{std::filesystem::temp_directory_path() /
-                ("ssg-external-" + std::to_string(++next_))} {
+                ("ssg-external-" + std::to_string(++next))} {
         std::filesystem::remove_all(path_);
         std::filesystem::create_directories(path_);
     }
@@ -22,7 +22,7 @@ public:
     const std::filesystem::path& path() const { return path_; }
 
 private:
-    inline static std::uint64_t next_ = 0;
+    inline static std::uint64_t next = 0;
     std::filesystem::path path_;
 };
 

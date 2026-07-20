@@ -189,7 +189,7 @@ public:
         std::string uri, Revision revision, ByteOffset position);
     [[nodiscard]] LspFeatureRequestResult requestReferences(
         std::string uri, Revision revision, ByteOffset position);
-    [[nodiscard]] LspFeaturePollResult poll(Revision current_revision);
+    [[nodiscard]] LspFeaturePollResult poll(Revision currentRevision);
 
     void selectNextCompletion();
     void selectPreviousCompletion();

@@ -86,8 +86,8 @@ std::string fixture(std::string_view name) {
 void assertGolden(std::string_view name,
                    const std::vector<CellRun>& lines,
                    ViewportDimensions dimensions,
-                   uint32_t first_row) {
-    ASSERT_EQ(serialize(ssg::computeViewport(lines, dimensions, first_row)),
+                   uint32_t firstRow) {
+    ASSERT_EQ(serialize(ssg::computeViewport(lines, dimensions, firstRow)),
               fixture(name));
 }
 
@@ -169,21 +169,21 @@ TEST(viewportBoundsProperties) {
 }
 
 TEST(invalidDimensionsAreActionable) {
-    bool columns_threw = false;
+    bool columnsThrew = false;
     try {
         (void)ViewportDimensions{0, 1};
     } catch (const std::invalid_argument&) {
-        columns_threw = true;
+        columnsThrew = true;
     }
-    ASSERT_TRUE(columns_threw);
+    ASSERT_TRUE(columnsThrew);
 
-    bool rows_threw = false;
+    bool rowsThrew = false;
     try {
         (void)ViewportDimensions{1, 0};
     } catch (const std::invalid_argument&) {
-        rows_threw = true;
+        rowsThrew = true;
     }
-    ASSERT_TRUE(rows_threw);
+    ASSERT_TRUE(rowsThrew);
 }
 
 TEST(listScrollViewClampsAndHidesThumbWhenContentFits) {
@@ -339,11 +339,11 @@ TEST(unwrappedClipsLongLinesToOneRow) {
     ASSERT_EQ(proj.visible_rows[0].content_cells, 6u);  // full line width
     ASSERT_EQ(proj.visible_rows[0].visible_cells, 3u);  // clipped to the width
 
-    int row0_hits = 0;
+    int row0Hits = 0;
     for (const auto& hit : proj.hit_targets) {
-        if (hit.viewport_row == 0) ++row0_hits;
+        if (hit.viewport_row == 0) ++row0Hits;
     }
-    ASSERT_EQ(row0_hits, 3);  // only the visible cols 0,1,2 are hit targets
+    ASSERT_EQ(row0Hits, 3);  // only the visible cols 0,1,2 are hit targets
 
     // "xy" begins at document byte 7 (6 content bytes + one '\n').
     for (const auto& hit : proj.hit_targets) {
@@ -436,13 +436,13 @@ TEST(unwrappedEndByteOffsetIsTheTrueLineEnd) {
     const std::string doc = "ab\n\ncde\n";
     // Expected end offset per logical line: newline byte, or text.size() for the
     // final (trailing-newline) empty line.
-    const std::array<std::uint32_t, 4> want_end{2, 3, 7, 8};
+    const std::array<std::uint32_t, 4> wantEnd{2, 3, 7, 8};
     for (uint32_t columns : {1u, 3u, 80u}) {          // incl. a clipping width
-        for (uint32_t first_col : {0u, 1u, 5u}) {      // incl. horizontal offset
+        for (uint32_t firstCol : {0u, 1u, 5u}) {      // incl. horizontal offset
             const auto proj = ssg::computeViewportUnwrapped(
-                doc, ViewportDimensions{columns, 8}, 0, first_col, 4);
+                doc, ViewportDimensions{columns, 8}, 0, firstCol, 4);
             for (const auto& row : proj.visible_rows) {
-                ASSERT_EQ(row.end_byte_offset, want_end[row.logical_line]);
+                ASSERT_EQ(row.end_byte_offset, wantEnd[row.logical_line]);
                 auto pos = ssg::resolveDocumentPosition(
                     doc, ssg::ByteOffset{row.end_byte_offset});
                 ASSERT_TRUE(pos.has_value());

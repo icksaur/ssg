@@ -107,21 +107,21 @@ TEST(binaryAndInvalidTextDropsOpenReadOnlyWithoutPathAuthority) {
     const std::array<std::uint8_t, 3> binary{{'a', 0, 'b'}};
     const std::array<std::uint8_t, 2> invalid{{0xc3, 0x28}};
 
-    const auto binary_result =
+    const auto binaryResult =
         workspace.openDroppedContent(local, binary, "/tmp/a.bin");
-    const auto invalid_result =
+    const auto invalidResult =
         workspace.openDroppedContent(local, invalid, "bad.txt");
 
-    ASSERT_TRUE(binary_result.accepted());
-    ASSERT_TRUE(invalid_result.accepted());
-    const auto binary_state = workspace.state(*binary_result.document);
-    const auto invalid_state = workspace.state(*invalid_result.document);
-    ASSERT_EQ(binary_state->content_kind, ssg::FileContentKind::Binary);
-    ASSERT_EQ(invalid_state->content_kind,
+    ASSERT_TRUE(binaryResult.accepted());
+    ASSERT_TRUE(invalidResult.accepted());
+    const auto binaryState = workspace.state(*binaryResult.document);
+    const auto invalidState = workspace.state(*invalidResult.document);
+    ASSERT_EQ(binaryState->content_kind, ssg::FileContentKind::Binary);
+    ASSERT_EQ(invalidState->content_kind,
               ssg::FileContentKind::DecodeFailure);
-    ASSERT_EQ(workspace.document(*binary_result.document).mode(),
+    ASSERT_EQ(workspace.document(*binaryResult.document).mode(),
               ssg::DocumentMode::ReadOnly);
-    ASSERT_EQ(workspace.document(*invalid_result.document).mode(),
+    ASSERT_EQ(workspace.document(*invalidResult.document).mode(),
               ssg::DocumentMode::ReadOnly);
 }
 
@@ -149,10 +149,10 @@ TEST(saveAllAttemptsEveryDocumentAndReportsFailures) {
 
     ASSERT_FALSE(result.accepted());
     ASSERT_EQ(result.failures.size(), std::size_t{1});
-    const auto one_state = workspace.state(one);
-    const auto two_state = workspace.state(two);
-    ASSERT_FALSE(one_state->dirty);
-    ASSERT_TRUE(two_state->dirty);
+    const auto oneState = workspace.state(one);
+    const auto twoState = workspace.state(two);
+    ASSERT_FALSE(oneState->dirty);
+    ASSERT_TRUE(twoState->dirty);
 }
 
 TEST(saveAllIgnoresUntitledDocuments) {

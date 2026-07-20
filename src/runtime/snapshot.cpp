@@ -31,55 +31,55 @@ PromptStatusViewState EditorRuntime::Impl::promptStatusView(ViewportDimensions d
     auto rows = promptRowCount(prompt.request() ? prompt.request()->kind : PromptKind::CommandArgument);
     Rect reservation{0, static_cast<int>(dimensions.rows > rows ? dimensions.rows - rows : 0),
                      static_cast<int>(dimensions.columns), static_cast<int>(rows)};
-    auto prompt_layout = computePromptLayout(prompt, reservation);
-    if (prompt_layout.accepted()) {
-        view.prompt = prompt_layout.view;
+    auto promptLayout = computePromptLayout(prompt, reservation);
+    if (promptLayout.accepted()) {
+        view.prompt = promptLayout.view;
         projectFindReplacePrompt(*view.prompt);
     }
     view.status = status.viewState();
     return view;
 }
 
-void EditorRuntime::Impl::projectFindReplacePrompt(PromptViewState& prompt_view) const {
-    if (prompt_view.kind != PromptKind::Find && prompt_view.kind != PromptKind::Replace) {
+void EditorRuntime::Impl::projectFindReplacePrompt(PromptViewState& promptView) const {
+    if (promptView.kind != PromptKind::Find && promptView.kind != PromptKind::Replace) {
         return;
     }
-    auto const& find_state = find_replace.viewState();
-    for (auto& control : prompt_view.controls) {
+    auto const& findState = find_replace.viewState();
+    for (auto& control : promptView.controls) {
         switch (control.kind) {
             case PromptControlKind::Input:
-                if (control.id == "find.query") control.value = find_state.query;
+                if (control.id == "find.query") control.value = findState.query;
                 else if (control.id == "replace.replacement")
-                    control.value = find_state.replacement;
+                    control.value = findState.replacement;
                 break;
             case PromptControlKind::Count: {
-                auto position = find_state.active_match ? *find_state.active_match + 1 : 0;
+                auto position = findState.active_match ? *findState.active_match + 1 : 0;
                 control.value = std::to_string(position) + "/" +
-                                std::to_string(find_state.matches.size());
+                                std::to_string(findState.matches.size());
                 break;
             }
             case PromptControlKind::Toggle:
                 if (control.id == "find.toggle_case")
-                    control.checked = find_state.options.case_sensitive;
+                    control.checked = findState.options.case_sensitive;
                 else if (control.id == "find.toggle_whole_word")
-                    control.checked = find_state.options.whole_word;
+                    control.checked = findState.options.whole_word;
                 else if (control.id == "find.toggle_regex")
-                    control.checked = find_state.options.regex;
+                    control.checked = findState.options.regex;
                 break;
         }
     }
 }
 
 ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
-                                               KeySequence const& leader_pending,
-                                               PaletteReport const& palette_report) const {
+                                               KeySequence const& leaderPending,
+                                               PaletteReport const& paletteReport) const {
     std::vector<TabLabel> labels;
     for (auto const& tab : tabs.viewState().tabs) {
         labels.push_back({tab.label, tab.label,
                           tabs.viewState().active == tab.id, tab.dirty});
     }
-    auto status_projection = status.footerProjection();
-    auto follow_projection = follow.footerProjection();
+    auto statusProjection = status.footerProjection();
+    auto followProjection = follow.footerProjection();
     ShellLayoutRequest request;
     request.viewport = {static_cast<int>(dimensions.columns), static_cast<int>(dimensions.rows)};
     request.reserved_prompt_rows = prompt.active() ? promptRowCount(prompt.request()->kind) : 0;
@@ -87,24 +87,24 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
     request.panel_provider_label = std::string{shell.activePanelProvider()};
     request.header_fields = {{"cwd", "Workspace", root.string(), 0},
                              {"file", "File", currentPathLabel(), 1}};
-    request.footer_fields = {{"status", "Status", status_projection.value, 0},
-                             {"follow", "Follow edits", follow_projection.mode, 1}};
-    request.footer_actions = status_projection.actions;
+    request.footer_fields = {{"status", "Status", statusProjection.value, 0},
+                             {"follow", "Follow edits", followProjection.mode, 1}};
+    request.footer_actions = statusProjection.actions;
     request.tabs = std::move(labels);
-    if (!leader_pending.empty()) {
+    if (!leaderPending.empty()) {
         std::string hint = "leader:";
-        for (auto const& stroke : leader_pending) {
+        for (auto const& stroke : leaderPending) {
             hint += ' ';
             hint += formatKeyStroke(stroke);
         }
         request.leader_hint = std::move(hint);
     }
-    bool const palette_open = prompt.active() && prompt.request() &&
+    bool const paletteOpen = prompt.active() && prompt.request() &&
                               prompt.request()->kind == PromptKind::Palette;
-    if (palette_open) {
+    if (paletteOpen) {
         request.palette_active = true;
-        request.palette_query = palette_report.query;
-        request.palette_ghost = palette_report.ghost;
+        request.palette_query = paletteReport.query;
+        request.palette_ghost = paletteReport.ghost;
     }
     auto result = computeShellLayout(request, shell);
     if (!result.accepted()) return {};
@@ -122,14 +122,14 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
         view.panel ? static_cast<std::uint32_t>(std::max(view.panel->height - 1, 0))
                    : 0;
 
-    if (palette_open && !view.panes.empty()) {
+    if (paletteOpen && !view.panes.empty()) {
         PaletteProjection projection;
         projection.rect = view.panes.front().content;
         projection.scrollbar_rect = view.panes.front().scrollbar;
-        projection.selected = palette_report.selected;
-        projection.first_visible = palette_report.first_visible;
-        projection.scrollbar = palette_report.scrollbar;
-        for (auto const& candidate : palette_report.rows) {
+        projection.selected = paletteReport.selected;
+        projection.first_visible = paletteReport.first_visible;
+        projection.scrollbar = paletteReport.scrollbar;
+        for (auto const& candidate : paletteReport.rows) {
             projection.rows.push_back({candidate.label, candidate.detail});
         }
         view.palette = std::move(projection);
@@ -138,21 +138,21 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
 }
 
 SessionSnapshotSections EditorRuntime::Impl::sections(ViewportDimensions dimensions,
-                                                     KeySequence const& leader_pending,
-                                                     PaletteReport const& palette_report) const {
-    auto current_history = HistoryViewState{false, false, 0};
+                                                     KeySequence const& leaderPending,
+                                                     PaletteReport const& paletteReport) const {
+    auto currentHistory = HistoryViewState{false, false, 0};
     if (auto id = activeDocumentId()) {
         auto found = histories.find(id->value());
-        if (found != histories.end()) current_history = found->second.viewState();
+        if (found != histories.end()) currentHistory = found->second.viewState();
     }
     // Compute the shell layout first: it caches the panel height that tree_view
     // resolves the tree scroll offset against (the aggregate below does not
     // guarantee evaluation order).
-    auto shell = shellView(dimensions, leader_pending, palette_report);
-    auto tree_section = treeView();
+    auto shell = shellView(dimensions, leaderPending, paletteReport);
+    auto treeSection = treeView();
     return {documentView(),
             selection,
-            current_history,
+            currentHistory,
             clipboard.viewState(),
             promptStatusView(dimensions),
             search.viewState(),
@@ -164,7 +164,7 @@ SessionSnapshotSections EditorRuntime::Impl::sections(ViewportDimensions dimensi
             diff.viewState(),
             external.viewState(),
             follow.viewState(),
-            std::move(tree_section),
+            std::move(treeSection),
             syntax.viewState(),
             lsp_sync,
             lsp_features,
@@ -182,18 +182,18 @@ TreeViewState EditorRuntime::Impl::treeView() const {
     // clamp the offset to this height and window the nodes. This keeps snapshot
     // generation a pure read (no cross-client scroll interference).
     auto& provider = view.providers.front();
-    std::optional<std::uint32_t> selected_index;
+    std::optional<std::uint32_t> selectedIndex;
     if (provider.selected) {
         for (std::size_t i = 0; i < provider.nodes.size(); ++i) {
             if (provider.nodes[i].node.id == *provider.selected) {
-                selected_index = static_cast<std::uint32_t>(i);
+                selectedIndex = static_cast<std::uint32_t>(i);
                 break;
             }
         }
     }
     auto scroll = computeListScrollView(
         static_cast<std::uint32_t>(provider.nodes.size()),
-        last_panel_content_rows, tree_first_visible, selected_index,
+        last_panel_content_rows, tree_first_visible, selectedIndex,
         /*keep_selection_visible=*/false);
     provider.first_visible = scroll.first_visible;
     provider.scrollbar = scroll.scrollbar;
@@ -211,17 +211,17 @@ void EditorRuntime::Impl::revealTreeSelection() {
     if (view.providers.empty()) return;
     auto const& provider = view.providers.front();
     if (!provider.selected) return;
-    std::optional<std::uint32_t> selected_index;
+    std::optional<std::uint32_t> selectedIndex;
     for (std::size_t i = 0; i < provider.nodes.size(); ++i) {
         if (provider.nodes[i].node.id == *provider.selected) {
-            selected_index = static_cast<std::uint32_t>(i);
+            selectedIndex = static_cast<std::uint32_t>(i);
             break;
         }
     }
-    if (!selected_index) return;
+    if (!selectedIndex) return;
     auto scroll = computeListScrollView(
         static_cast<std::uint32_t>(provider.nodes.size()),
-        last_panel_content_rows, tree_first_visible, selected_index,
+        last_panel_content_rows, tree_first_visible, selectedIndex,
         /*keep_selection_visible=*/true);
     tree_first_visible = scroll.first_visible;
 }

@@ -9,8 +9,8 @@ namespace {
 // Process-wide construction counts, one per OptionalSubsystem.  Atomic so a
 // subsystem constructed on a background thread (e.g. a watcher) is still counted
 // correctly; relaxed ordering is enough for a diagnostic tally.
-std::array<std::atomic<std::uint64_t>, optional_subsystem_count>& ledger() {
-    static std::array<std::atomic<std::uint64_t>, optional_subsystem_count>
+std::array<std::atomic<std::uint64_t>, kOptionalSubsystemCount>& ledger() {
+    static std::array<std::atomic<std::uint64_t>, kOptionalSubsystemCount>
         counts{};
     return counts;
 }

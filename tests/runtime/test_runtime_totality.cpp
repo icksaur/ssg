@@ -23,8 +23,8 @@ namespace {
 
 namespace fs = std::filesystem;
 
-constexpr int minimum_columns = 20;
-constexpr int minimum_rows = 4;
+constexpr int kMinimumColumns = 20;
+constexpr int kMinimumRows = 4;
 
 fs::path makeRoot(const std::string& name) {
     auto root = fs::current_path() / ("runtime_totality_" + name);
@@ -123,16 +123,16 @@ void runState(const UiState& state) {
         if (!snapshot.has_value()) continue;
         auto const& shell = snapshot->sections().shell;
 
-        bool const below_minimum =
-            static_cast<int>(dims.columns) < minimum_columns ||
-            static_cast<int>(dims.rows) < minimum_rows;
-        bool const laid_out =
+        bool const belowMinimum =
+            static_cast<int>(dims.columns) < kMinimumColumns ||
+            static_cast<int>(dims.rows) < kMinimumRows;
+        bool const laidOut =
             shell.viewport.columns > 0 && shell.viewport.rows > 0;
 
         // Hard boundary: any viewport below 20x4 is ALWAYS too small, regardless
         // of UI state.
-        if (below_minimum) {
-            ASSERT_FALSE(laid_out);
+        if (belowMinimum) {
+            ASSERT_FALSE(laidOut);
             ASSERT_EQ(shell.viewport.columns, 0);
             ASSERT_EQ(shell.viewport.rows, 0);
         }
@@ -142,13 +142,13 @@ void runState(const UiState& state) {
         // the negative checks alone.
         if (static_cast<int>(dims.columns) >= 80 &&
             static_cast<int>(dims.rows) >= 24) {
-            ASSERT_TRUE(laid_out);
+            ASSERT_TRUE(laidOut);
         }
 
         // A too-small snapshot (e.g. a prompt-open state at a height that leaves
         // no content row) is a valid typed outcome: the app shows a placeholder
         // and must NOT call render(), which requires a positive viewport.
-        if (!laid_out) {
+        if (!laidOut) {
             ASSERT_EQ(shell.viewport.columns, 0);
             ASSERT_EQ(shell.viewport.rows, 0);
             continue;

@@ -54,7 +54,7 @@ TEST(everyMutatingCommandHasTheSpecifiedHistoryKind) {
     ASSERT_EQ(ssg::historyEditKind(ssg::TextInputCommand::Newline),
               ssg::HistoryEditKind::Other);
 
-    constexpr std::array edit_commands{
+    constexpr std::array editCommands{
         ssg::EditCommand::Indent,
         ssg::EditCommand::Outdent,
         ssg::EditCommand::DuplicateLine,
@@ -69,7 +69,7 @@ TEST(everyMutatingCommandHasTheSpecifiedHistoryKind) {
         ssg::EditCommand::Transpose,
         ssg::EditCommand::ToggleComment,
     };
-    for (const auto command : edit_commands) {
+    for (const auto command : editCommands) {
         ASSERT_EQ(ssg::historyEditKind(command),
                   ssg::HistoryEditKind::Other);
     }
@@ -78,25 +78,25 @@ TEST(everyMutatingCommandHasTheSpecifiedHistoryKind) {
 TEST(noopAndRejectedCommandsDoNotCreateHistory) {
     ssg::Document document{"x"};
     ssg::DocumentHistory history;
-    const auto at_start = selections("x", {{0, 0}});
+    const auto atStart = selections("x", {{0, 0}});
     const auto noop = ssg::applyTextInputWithHistory(
-        document, history, at_start, textSettings(),
+        document, history, atStart, textSettings(),
         ssg::TextInputCommand::DeleteBackward, {}, 100);
     ASSERT_TRUE(noop.accepted());
     ASSERT_FALSE(noop.documentChanged());
-    ASSERT_EQ(noop.selections, std::optional{at_start});
+    ASSERT_EQ(noop.selections, std::optional{atStart});
     ASSERT_FALSE(history.canUndo());
 
-    ssg::Document read_only{"x", ssg::DocumentMode::ReadOnly};
+    ssg::Document readOnly{"x", ssg::DocumentMode::ReadOnly};
     const auto rejected = ssg::applyTextInputWithHistory(
-        read_only, history, at_start, textSettings(),
+        readOnly, history, atStart, textSettings(),
         ssg::TextInputCommand::Insert, {"y"}, 200);
     ASSERT_FALSE(rejected.accepted());
     ASSERT_EQ(rejected.error,
               ssg::EditHistoryIntegrationError::TextInputRejected);
     ASSERT_EQ(rejected.text_input_error,
               std::optional{ssg::TextInputError::ReadOnly});
-    ASSERT_EQ(read_only.snapshot().text, std::string{"x"});
+    ASSERT_EQ(readOnly.snapshot().text, std::string{"x"});
     ASSERT_FALSE(history.canUndo());
 }
 
@@ -201,17 +201,17 @@ TEST(clipboardAndReplaceAreDistinctNoncoalescingUnits) {
 
     ssg::FindReplaceController find;
     find.openReplace(document.snapshot(), {"cat", {}, std::nullopt});
-    const auto before_replace = *paste.selections;
-    const auto after_replace = selections("dog cat", {{3, 3}});
+    const auto beforeReplace = *paste.selections;
+    const auto afterReplace = selections("dog cat", {{3, 3}});
     const auto replaced = find.replaceCurrent(
-        document, history, before_replace, after_replace, "dog", 300);
+        document, history, beforeReplace, afterReplace, "dog", 300);
     ASSERT_TRUE(replaced.accepted());
     ASSERT_EQ(document.snapshot().text, std::string{"dog cat"});
 
     auto undone = history.undo(document);
     ASSERT_TRUE(undone.accepted());
     ASSERT_EQ(document.snapshot().text, std::string{"cat cat"});
-    ASSERT_EQ(undone.selections, std::optional{before_replace});
+    ASSERT_EQ(undone.selections, std::optional{beforeReplace});
     undone = history.undo(document);
     ASSERT_TRUE(undone.accepted());
     ASSERT_EQ(document.snapshot().text, std::string{" cat"});

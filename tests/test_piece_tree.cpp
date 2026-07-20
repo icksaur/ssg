@@ -126,23 +126,23 @@ TEST(randomizedStdStringOracleAndInvariants) {
 TEST(rejectsOutOfRangeOperationsWithoutMutation) {
     PieceTree tree("abc");
     const auto before = tree.text();
-    bool insert_failed = false;
-    bool erase_failed = false;
-    bool read_failed = false;
-    bool line_failed = false;
-    bool offset_failed = false;
+    bool insertFailed = false;
+    bool eraseFailed = false;
+    bool readFailed = false;
+    bool lineFailed = false;
+    bool offsetFailed = false;
 
-    try { tree.insert(4, "x"); } catch (const std::out_of_range&) { insert_failed = true; }
-    try { tree.erase(2, 2); } catch (const std::out_of_range&) { erase_failed = true; }
-    try { static_cast<void>(tree.substr(3, 1)); } catch (const std::out_of_range&) { read_failed = true; }
-    try { static_cast<void>(tree.lineStart(1)); } catch (const std::out_of_range&) { line_failed = true; }
-    try { static_cast<void>(tree.lineOfOffset(4)); } catch (const std::out_of_range&) { offset_failed = true; }
+    try { tree.insert(4, "x"); } catch (const std::out_of_range&) { insertFailed = true; }
+    try { tree.erase(2, 2); } catch (const std::out_of_range&) { eraseFailed = true; }
+    try { static_cast<void>(tree.substr(3, 1)); } catch (const std::out_of_range&) { readFailed = true; }
+    try { static_cast<void>(tree.lineStart(1)); } catch (const std::out_of_range&) { lineFailed = true; }
+    try { static_cast<void>(tree.lineOfOffset(4)); } catch (const std::out_of_range&) { offsetFailed = true; }
 
-    ASSERT_EQ(insert_failed, true);
-    ASSERT_EQ(erase_failed, true);
-    ASSERT_EQ(read_failed, true);
-    ASSERT_EQ(line_failed, true);
-    ASSERT_EQ(offset_failed, true);
+    ASSERT_EQ(insertFailed, true);
+    ASSERT_EQ(eraseFailed, true);
+    ASSERT_EQ(readFailed, true);
+    ASSERT_EQ(lineFailed, true);
+    ASSERT_EQ(offsetFailed, true);
     ASSERT_EQ(tree.text(), before);
     ASSERT_EQ(tree.validate(), true);
 }

@@ -20,9 +20,9 @@ public:
 
     ssg::TabLifecycleResult close(
         const ssg::TabState& tab,
-        std::chrono::milliseconds durability_timeout) override {
+        std::chrono::milliseconds durabilityTimeout) override {
         ++close_calls;
-        if (durability_timeout <= 0ms) {
+        if (durabilityTimeout <= 0ms) {
             return {ssg::TabError::DurabilityFailed, "invalid timeout"};
         }
         if (std::find(fail_close.begin(), fail_close.end(), tab.id) !=
@@ -123,8 +123,8 @@ TEST(activeClosePrefersRightThenLeftAndDirtyFailureIsAtomic) {
     lifecycle.fail_close.push_back(b);
     const auto before = tabs.viewState();
 
-    const auto close_failure = tabs.close(b, 100ms);
-    ASSERT_EQ(close_failure.error, ssg::TabError::DurabilityFailed);
+    const auto closeFailure = tabs.close(b, 100ms);
+    ASSERT_EQ(closeFailure.error, ssg::TabError::DurabilityFailed);
     ASSERT_EQ(tabs.viewState(), before);
     ASSERT_EQ(tabs.recentlyClosedCount(), std::size_t{0});
 

@@ -37,11 +37,11 @@ private:
 
 class ApplicationAuthentication {
 public:
-    ApplicationAuthentication(BearerCredential credential, SessionId session_id,
-                              ClientId client_id, ViewId view_id);
+    ApplicationAuthentication(BearerCredential credential, SessionId sessionId,
+                              ClientId clientId, ViewId viewId);
 
     [[nodiscard]] std::optional<AuthenticatedSession> authenticate(
-        std::string_view presented_credential) const;
+        std::string_view presentedCredential) const;
 
 private:
     BearerCredential credential_;

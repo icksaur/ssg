@@ -92,8 +92,8 @@ FileIdentity fileIdentity(const std::filesystem::path& path) {
             {static_cast<std::uint64_t>(status.st_ino), 0}};
 }
 
-ExclusiveFileLock::ExclusiveFileLock(std::intptr_t native_handle) noexcept
-    : native_handle_(native_handle) {}
+ExclusiveFileLock::ExclusiveFileLock(std::intptr_t nativeHandle) noexcept
+    : native_handle_(nativeHandle) {}
 
 ExclusiveFileLock::~ExclusiveFileLock() {
     closeNoexcept(native_handle_);
@@ -145,10 +145,10 @@ void setOwnerOnlyPermissions(const std::filesystem::path& path) {
     }
 }
 
-std::filesystem::path userCacheRoot(std::string_view application_name) {
+std::filesystem::path userCacheRoot(std::string_view applicationName) {
     const auto validation = validateWorkspaceRelativePath(
-        application_name, PathSyntax::Linux);
-    if (!validation.valid() || application_name.find('/') != std::string_view::npos) {
+        applicationName, PathSyntax::Linux);
+    if (!validation.valid() || applicationName.find('/') != std::string_view::npos) {
         throw std::invalid_argument("cache application name must be one valid component");
     }
 
@@ -162,7 +162,7 @@ std::filesystem::path userCacheRoot(std::string_view application_name) {
     } else {
         throw std::runtime_error("cannot resolve user cache root: HOME is unset");
     }
-    return base / std::filesystem::path{application_name};
+    return base / std::filesystem::path{applicationName};
 }
 
 void replaceFileAtomically(const std::filesystem::path& target,

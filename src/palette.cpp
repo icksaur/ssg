@@ -58,13 +58,13 @@ std::vector<std::size_t> paletteRank(
     ranked.reserve(candidates.size());
     for (std::size_t index = 0; index < candidates.size(); ++index) {
         auto const& candidate = candidates[index];
-        auto const label_score = fuzzyScore(candidate.label, query);
-        auto const id_score = fuzzyScore(candidate.id, query);
-        if (!label_score && !id_score) continue;
+        auto const labelScore = fuzzyScore(candidate.label, query);
+        auto const idScore = fuzzyScore(candidate.id, query);
+        if (!labelScore && !idScore) continue;
         ranked.push_back(
             {index,
-             std::max(label_score.value_or(std::numeric_limits<int>::min()),
-                      id_score.value_or(std::numeric_limits<int>::min()))});
+             std::max(labelScore.value_or(std::numeric_limits<int>::min()),
+                      idScore.value_or(std::numeric_limits<int>::min()))});
     }
     std::ranges::stable_sort(ranked, [&](Ranked const& left, Ranked const& right) {
         if (left.score != right.score) return left.score > right.score;
@@ -79,12 +79,12 @@ std::vector<std::size_t> paletteRank(
     return order;
 }
 
-std::string paletteGhost(std::string_view top_label, std::string_view query) {
-    if (query.empty() || query.size() >= top_label.size()) return {};
+std::string paletteGhost(std::string_view topLabel, std::string_view query) {
+    if (query.empty() || query.size() >= topLabel.size()) return {};
     for (std::size_t index = 0; index < query.size(); ++index) {
-        if (folded(top_label[index]) != folded(query[index])) return {};
+        if (folded(topLabel[index]) != folded(query[index])) return {};
     }
-    return std::string{top_label.substr(query.size())};
+    return std::string{topLabel.substr(query.size())};
 }
 
 PaletteReport derivePaletteReport(
@@ -99,10 +99,10 @@ PaletteReport derivePaletteReport(
     // Clamp the selection into the (possibly shrunken) ranked set; only when the
     // clamp actually moves it do we re-center the window on it, so a free wheel
     // scroll otherwise persists (see doc/spec-scroll.md, spec-m8.md M8-P).
-    bool selection_clamped = false;
+    bool selectionClamped = false;
     if (window.selected >= order.size()) {
         window.selected = order.empty() ? 0 : order.size() - 1;
-        selection_clamped = true;
+        selectionClamped = true;
     }
     std::optional<std::uint32_t> const selected =
         order.empty() ? std::nullopt
@@ -111,7 +111,7 @@ PaletteReport derivePaletteReport(
     auto const scroll = computeListScrollView(
         static_cast<std::uint32_t>(order.size()), window.pane_rows,
         window.first_visible, selected,
-        /*keep_selection_visible=*/selection_clamped);
+        /*keep_selection_visible=*/selectionClamped);
     window.first_visible = scroll.first_visible;
     report.first_visible = scroll.first_visible;
     report.scrollbar = scroll.scrollbar;

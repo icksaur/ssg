@@ -43,11 +43,11 @@ struct EditHistoryIntegrationResult {
     Document& document, DocumentHistory& history,
     const SelectionSet& selections, TextInputSettings settings,
     TextInputCommand command, TextInputArguments arguments,
-    std::uint64_t timestamp_ms);
+    std::uint64_t timestampMs);
 
 [[nodiscard]] EditHistoryIntegrationResult applyEditCommandWithHistory(
     Document& document, DocumentHistory& history,
     const SelectionSet& selections, EditCommandSettings settings,
-    EditCommand command, std::uint64_t timestamp_ms);
+    EditCommand command, std::uint64_t timestampMs);
 
 }  // namespace ssg

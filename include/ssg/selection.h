@@ -151,13 +151,13 @@ struct SelectionNavigationResult {
 };
 
 [[nodiscard]] std::optional<DocumentPosition> resolveDocumentPosition(
-    std::string_view text, ByteOffset byte_offset, int tab_width = 4);
+    std::string_view text, ByteOffset byteOffset, int tabWidth = 4);
 
 [[nodiscard]] SelectionNavigationResult applySelectionNavigation(
     std::string_view text, const SelectionViewState& before,
     SelectionCommand command, ViewportDimensions viewport,
     SelectionCommandArguments arguments = {},
-    std::span<const BracketPair> bracket_pairs = {}, int tab_width = 4,
-    bool word_wrap = true);
+    std::span<const BracketPair> bracketPairs = {}, int tabWidth = 4,
+    bool wordWrap = true);
 
 } // namespace ssg

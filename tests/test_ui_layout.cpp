@@ -52,46 +52,46 @@ TEST(handAuthoredGeometryGoldens) {
 
     auto minimum = request(20, 4);
     state.togglePanel();
-    auto minimum_result = computeShellLayout(minimum, state);
-    ASSERT_TRUE(minimum_result.accepted());
-    ASSERT_FALSE(minimum_result.view->panel.has_value());
-    assertRect(*minimum_result.view->header, {0, 0, 20, 1});
-    assertRect(*minimum_result.view->tab_bar, {0, 1, 20, 1});
-    assertRect(minimum_result.view->panes[0].content, {0, 2, 19, 1});
-    assertRect(minimum_result.view->panes[0].scrollbar, {19, 2, 1, 1});
-    assertRect(*minimum_result.view->footer, {0, 3, 20, 1});
-    const auto has_header_field = [&](std::string_view id) {
+    auto minimumResult = computeShellLayout(minimum, state);
+    ASSERT_TRUE(minimumResult.accepted());
+    ASSERT_FALSE(minimumResult.view->panel.has_value());
+    assertRect(*minimumResult.view->header, {0, 0, 20, 1});
+    assertRect(*minimumResult.view->tab_bar, {0, 1, 20, 1});
+    assertRect(minimumResult.view->panes[0].content, {0, 2, 19, 1});
+    assertRect(minimumResult.view->panes[0].scrollbar, {19, 2, 1, 1});
+    assertRect(*minimumResult.view->footer, {0, 3, 20, 1});
+    const auto hasHeaderField = [&](std::string_view id) {
         return std::ranges::any_of(
-            minimum_result.view->accessibility_nodes, [&](const auto& node) {
+            minimumResult.view->accessibility_nodes, [&](const auto& node) {
                 return node.kind == ShellNodeKind::HeaderField &&
                        node.id == id;
             });
     };
-    ASSERT_TRUE(has_header_field("active_command"));
-    ASSERT_FALSE(has_header_field("current_path"));
-    ASSERT_FALSE(has_header_field("mode"));
+    ASSERT_TRUE(hasHeaderField("active_command"));
+    ASSERT_FALSE(hasHeaderField("current_path"));
+    ASSERT_FALSE(hasHeaderField("mode"));
 
     auto wide = request(80, 12);
     wide.reserved_prompt_rows = 2;
-    auto wide_result = computeShellLayout(wide, state);
-    ASSERT_TRUE(wide_result.accepted());
-    assertRect(*wide_result.view->header, {0, 0, 80, 1});
-    assertRect(*wide_result.view->panel, {0, 1, 24, 10});
-    assertRect(*wide_result.view->tab_bar, {24, 1, 56, 1});
-    assertRect(*wide_result.view->prompt, {24, 2, 56, 2});
-    assertRect(wide_result.view->panes[0].content, {24, 4, 55, 7});
-    assertRect(wide_result.view->panes[0].scrollbar, {79, 4, 1, 7});
-    assertRect(*wide_result.view->footer, {0, 11, 80, 1});
+    auto wideResult = computeShellLayout(wide, state);
+    ASSERT_TRUE(wideResult.accepted());
+    assertRect(*wideResult.view->header, {0, 0, 80, 1});
+    assertRect(*wideResult.view->panel, {0, 1, 24, 10});
+    assertRect(*wideResult.view->tab_bar, {24, 1, 56, 1});
+    assertRect(*wideResult.view->prompt, {24, 2, 56, 2});
+    assertRect(wideResult.view->panes[0].content, {24, 4, 55, 7});
+    assertRect(wideResult.view->panes[0].scrollbar, {79, 4, 1, 7});
+    assertRect(*wideResult.view->footer, {0, 11, 80, 1});
 
     auto focused = request(20, 4);
     state.toggleDistractionFree();
-    auto focused_result = computeShellLayout(focused, state);
-    ASSERT_TRUE(focused_result.accepted());
-    ASSERT_FALSE(focused_result.view->header.has_value());
-    ASSERT_FALSE(focused_result.view->footer.has_value());
-    ASSERT_FALSE(focused_result.view->tab_bar.has_value());
-    assertRect(focused_result.view->panes[0].content, {0, 0, 19, 4});
-    assertRect(focused_result.view->panes[0].scrollbar, {19, 0, 1, 4});
+    auto focusedResult = computeShellLayout(focused, state);
+    ASSERT_TRUE(focusedResult.accepted());
+    ASSERT_FALSE(focusedResult.view->header.has_value());
+    ASSERT_FALSE(focusedResult.view->footer.has_value());
+    ASSERT_FALSE(focusedResult.view->tab_bar.has_value());
+    assertRect(focusedResult.view->panes[0].content, {0, 0, 19, 4});
+    assertRect(focusedResult.view->panes[0].scrollbar, {19, 0, 1, 4});
 }
 
 TEST(viewportAndPromptErrorsAreTyped) {
@@ -101,21 +101,21 @@ TEST(viewportAndPromptErrorsAreTyped) {
     ASSERT_EQ(narrow.error->code, ShellLayoutErrorCode::ViewportTooSmall);
     ASSERT_FALSE(narrow.view.has_value());
 
-    auto short_view = computeShellLayout(request(20, 3), state);
-    ASSERT_FALSE(short_view.accepted());
-    ASSERT_EQ(short_view.error->code, ShellLayoutErrorCode::ViewportTooSmall);
+    auto shortView = computeShellLayout(request(20, 3), state);
+    ASSERT_FALSE(shortView.accepted());
+    ASSERT_EQ(shortView.error->code, ShellLayoutErrorCode::ViewportTooSmall);
 
-    auto invalid_prompt = request(80, 12);
-    invalid_prompt.reserved_prompt_rows = 4;
-    auto invalid = computeShellLayout(invalid_prompt, state);
+    auto invalidPrompt = request(80, 12);
+    invalidPrompt.reserved_prompt_rows = 4;
+    auto invalid = computeShellLayout(invalidPrompt, state);
     ASSERT_FALSE(invalid.accepted());
     ASSERT_EQ(invalid.error->code, ShellLayoutErrorCode::InvalidPromptRows);
 
-    auto no_room = request(20, 4);
-    no_room.reserved_prompt_rows = 2;
-    auto no_room_result = computeShellLayout(no_room, state);
-    ASSERT_FALSE(no_room_result.accepted());
-    ASSERT_EQ(no_room_result.error->code, ShellLayoutErrorCode::ViewportTooSmall);
+    auto noRoom = request(20, 4);
+    noRoom.reserved_prompt_rows = 2;
+    auto noRoomResult = computeShellLayout(noRoom, state);
+    ASSERT_FALSE(noRoomResult.accepted());
+    ASSERT_EQ(noRoomResult.error->code, ShellLayoutErrorCode::ViewportTooSmall);
 }
 
 TEST(paneCommandsPreserveTopologyAndOrder) {
@@ -206,20 +206,20 @@ TEST(accessibilityNodesHaveLabelsAndRoles) {
         ASSERT_TRUE(node.rect.width > 0);
         ASSERT_TRUE(node.rect.height > 0);
     }
-    const auto has_kind = [&](ShellNodeKind kind) {
+    const auto hasKind = [&](ShellNodeKind kind) {
         return std::ranges::any_of(nodes, [=](const auto& node) {
             return node.kind == kind;
         });
     };
-    ASSERT_TRUE(has_kind(ShellNodeKind::Header));
-    ASSERT_TRUE(has_kind(ShellNodeKind::Footer));
-    ASSERT_TRUE(has_kind(ShellNodeKind::FooterAction));
-    ASSERT_TRUE(has_kind(ShellNodeKind::Tab));
-    ASSERT_TRUE(has_kind(ShellNodeKind::PanelProvider));
-    ASSERT_TRUE(has_kind(ShellNodeKind::Pane));
-    ASSERT_TRUE(has_kind(ShellNodeKind::Scrollbar));
-    ASSERT_TRUE(has_kind(ShellNodeKind::PromptReservation));
-    ASSERT_TRUE(has_kind(ShellNodeKind::EmptyState));
+    ASSERT_TRUE(hasKind(ShellNodeKind::Header));
+    ASSERT_TRUE(hasKind(ShellNodeKind::Footer));
+    ASSERT_TRUE(hasKind(ShellNodeKind::FooterAction));
+    ASSERT_TRUE(hasKind(ShellNodeKind::Tab));
+    ASSERT_TRUE(hasKind(ShellNodeKind::PanelProvider));
+    ASSERT_TRUE(hasKind(ShellNodeKind::Pane));
+    ASSERT_TRUE(hasKind(ShellNodeKind::Scrollbar));
+    ASSERT_TRUE(hasKind(ShellNodeKind::PromptReservation));
+    ASSERT_TRUE(hasKind(ShellNodeKind::EmptyState));
     for (const auto& field : nodes) {
         if (field.kind != ShellNodeKind::FooterField) continue;
         for (const auto& action : nodes) {
@@ -410,10 +410,10 @@ TEST(leaderHintRendersInTheHeaderWhenPresent) {
     // No hint node when the request carries no leader sequence.
     auto plain = computeShellLayout(request(80, 12), state);
     ASSERT_TRUE(plain.accepted());
-    const bool has_leader = std::ranges::any_of(
+    const bool hasLeader = std::ranges::any_of(
         plain.view->accessibility_nodes,
         [](const auto& node) { return node.id == "leader"; });
-    ASSERT_FALSE(has_leader);
+    ASSERT_FALSE(hasLeader);
 }
 
 int main() {

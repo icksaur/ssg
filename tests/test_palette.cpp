@@ -22,7 +22,7 @@ std::vector<std::string> idsInRankOrder(
 // A hand-authored reference set: the expected order is derived independently of
 // the implementation from the documented scoring (word-boundary and contiguity
 // bonuses, length penalty, label/id-ascending tiebreak).
-const std::vector<ssg::PaletteCandidate> catalog{
+const std::vector<ssg::PaletteCandidate> kCatalog{
     {"file.save", "Save File", ""},
     {"file.save_all", "Save All Files", ""},
     {"file.open", "Open File", ""},
@@ -32,7 +32,7 @@ const std::vector<ssg::PaletteCandidate> catalog{
 };
 
 TEST(emptyQueryKeepsAllInLabelOrder) {
-    auto const ids = idsInRankOrder(catalog, "");
+    auto const ids = idsInRankOrder(kCatalog, "");
     ASSERT_EQ(ids.size(), std::size_t{6});
     // Empty query scores 0 for every candidate, so the tiebreak (label asc)
     // fully determines order.
@@ -45,18 +45,18 @@ TEST(prefixQueryRanksWordBoundaryMatchesFirst) {
     // "save" matches the label "Save File"/"Save All Files" at a word boundary
     // and the id "file.save"/"file.save_all"; both share the boundary bonus, so
     // the shorter candidate (less length penalty) wins, tiebreak label asc.
-    auto const ids = idsInRankOrder(catalog, "save");
+    auto const ids = idsInRankOrder(kCatalog, "save");
     ASSERT_EQ(ids, (std::vector<std::string>{"file.save", "file.save_all"}));
 }
 
 TEST(nonSubsequenceQueryIsFilteredOut) {
-    auto const ids = idsInRankOrder(catalog, "zzz");
+    auto const ids = idsInRankOrder(kCatalog, "zzz");
     ASSERT_TRUE(ids.empty());
 }
 
 TEST(subsequenceMatchesAcrossSeparators) {
     // "fs" is a subsequence of id "file.save" (f...s) and "file.save_all".
-    auto const ids = idsInRankOrder(catalog, "fs");
+    auto const ids = idsInRankOrder(kCatalog, "fs");
     ASSERT_EQ(ids, (std::vector<std::string>{"file.save", "file.save_all"}));
 }
 

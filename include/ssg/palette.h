@@ -75,7 +75,7 @@ struct PaletteReport {
 // The fish-style ghost completion for `query` given the top-ranked candidate's
 // label: the label's remaining characters when the label starts with `query`
 // (case-insensitively), else empty.  Presentation-only; never mutates state.
-[[nodiscard]] std::string paletteGhost(std::string_view top_label,
+[[nodiscard]] std::string paletteGhost(std::string_view topLabel,
                                         std::string_view query);
 
 // The client-owned palette window: the local query, the desired absolute

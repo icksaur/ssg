@@ -96,8 +96,8 @@ public:
     CoreEditorSlice& operator=(CoreEditorSlice const&) = delete;
 
     [[nodiscard]] bool attach(InvocationPrincipal principal);
-    [[nodiscard]] bool detach(ClientId client_id);
-    [[nodiscard]] SliceResponse execute(ClientId client_id,
+    [[nodiscard]] bool detach(ClientId clientId);
+    [[nodiscard]] SliceResponse execute(ClientId clientId,
                                         InsertRequest const& request);
     [[nodiscard]] DocumentViewState snapshot() const;
 
@@ -197,12 +197,12 @@ public:
     CommandArgumentCodecRegistry& operator=(
         CommandArgumentCodecRegistry&&) noexcept;
 
-    [[nodiscard]] bool contains(std::string_view command_id) const;
+    [[nodiscard]] bool contains(std::string_view commandId) const;
     // Throws std::invalid_argument for an unknown command_id.
-    [[nodiscard]] ProtocolValue encodeArgument(std::string_view command_id,
+    [[nodiscard]] ProtocolValue encodeArgument(std::string_view commandId,
                                                 std::any const& payload) const;
     [[nodiscard]] std::optional<std::any> decodeArgument(
-        std::string_view command_id, ProtocolValue const& value) const;
+        std::string_view commandId, ProtocolValue const& value) const;
 
 private:
     struct Impl;

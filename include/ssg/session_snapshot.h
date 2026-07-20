@@ -197,36 +197,36 @@ private:
     // fields; this factory is the only non-derivation construction path so
     // normal in-process construction remains through derive_session_delta.
     friend SessionDelta decodeWireSessionDelta(
-        Revision base_revision, Revision revision, ClientId client_id,
-        ViewId view_id, std::vector<CapabilityId> capabilities,
+        Revision baseRevision, Revision revision, ClientId clientId,
+        ViewId viewId, std::vector<CapabilityId> capabilities,
         std::optional<SessionTopology> topology,
         std::optional<DocumentDelta> document,
-        std::optional<ByteOffset> document_caret,
+        std::optional<ByteOffset> documentCaret,
         SelectionViewDelta selection, HistoryDelta history,
-        ClipboardDelta clipboard, PromptStatusDelta prompt_status,
-        SearchDelta search, FindReplaceDelta find_replace,
+        ClipboardDelta clipboard, PromptStatusDelta promptStatus,
+        SearchDelta search, FindReplaceDelta findReplace,
         SettingsSectionDelta settings, KeymapDelta keymap,
-        std::optional<TextEncodingDelta> text_encoding, TabDelta tabs,
-        DiffDelta diff, ExternalModificationDelta external_modification,
-        FollowEditsDelta follow_edits, TreeDelta tree, SyntaxDelta syntax,
-        LspSyncDelta lsp_sync, LspFeatureDelta lsp_features,
+        std::optional<TextEncodingDelta> textEncoding, TabDelta tabs,
+        DiffDelta diff, ExternalModificationDelta externalModification,
+        FollowEditsDelta followEdits, TreeDelta tree, SyntaxDelta syntax,
+        LspSyncDelta lspSync, LspFeatureDelta lspFeatures,
         ThemeSectionDelta theme, ShellSectionDelta shell,
         ViewportDelta viewport);
 
     SessionDelta(
-        Revision base_revision, Revision revision, ClientId client_id,
-        ViewId view_id, std::vector<CapabilityId> capabilities,
+        Revision baseRevision, Revision revision, ClientId clientId,
+        ViewId viewId, std::vector<CapabilityId> capabilities,
         std::optional<SessionTopology> topology,
         std::optional<DocumentDelta> document,
-        std::optional<ByteOffset> document_caret,
+        std::optional<ByteOffset> documentCaret,
         SelectionViewDelta selection, HistoryDelta history,
-        ClipboardDelta clipboard, PromptStatusDelta prompt_status,
-        SearchDelta search, FindReplaceDelta find_replace,
+        ClipboardDelta clipboard, PromptStatusDelta promptStatus,
+        SearchDelta search, FindReplaceDelta findReplace,
         SettingsSectionDelta settings, KeymapDelta keymap,
-        std::optional<TextEncodingDelta> text_encoding, TabDelta tabs,
-        DiffDelta diff, ExternalModificationDelta external_modification,
-        FollowEditsDelta follow_edits, TreeDelta tree, SyntaxDelta syntax,
-        LspSyncDelta lsp_sync, LspFeatureDelta lsp_features,
+        std::optional<TextEncodingDelta> textEncoding, TabDelta tabs,
+        DiffDelta diff, ExternalModificationDelta externalModification,
+        FollowEditsDelta followEdits, TreeDelta tree, SyntaxDelta syntax,
+        LspSyncDelta lspSync, LspFeatureDelta lspFeatures,
         ThemeSectionDelta theme, ShellSectionDelta shell,
         ViewportDelta viewport);
 
@@ -271,7 +271,7 @@ struct SessionReplayResult {
 
 [[nodiscard]] SessionSnapshot assembleSessionSnapshot(
     Revision revision, SessionTopology topology,
-    InvocationPrincipal const& principal, ViewId view_id,
+    InvocationPrincipal const& principal, ViewId viewId,
     ViewportViewState viewport, SessionSnapshotSections sections);
 [[nodiscard]] SessionDelta deriveSessionDelta(SessionSnapshot const& before,
                                                 SessionSnapshot const& after);
@@ -282,19 +282,19 @@ struct SessionReplayResult {
 // codec use only; see the friend declaration above). Ordinary code derives
 // deltas through derive_session_delta instead.
 [[nodiscard]] SessionDelta decodeWireSessionDelta(
-    Revision base_revision, Revision revision, ClientId client_id,
-    ViewId view_id, std::vector<CapabilityId> capabilities,
+    Revision baseRevision, Revision revision, ClientId clientId,
+    ViewId viewId, std::vector<CapabilityId> capabilities,
     std::optional<SessionTopology> topology,
     std::optional<DocumentDelta> document,
-    std::optional<ByteOffset> document_caret, SelectionViewDelta selection,
+    std::optional<ByteOffset> documentCaret, SelectionViewDelta selection,
     HistoryDelta history, ClipboardDelta clipboard,
-    PromptStatusDelta prompt_status, SearchDelta search,
-    FindReplaceDelta find_replace, SettingsSectionDelta settings,
-    KeymapDelta keymap, std::optional<TextEncodingDelta> text_encoding,
+    PromptStatusDelta promptStatus, SearchDelta search,
+    FindReplaceDelta findReplace, SettingsSectionDelta settings,
+    KeymapDelta keymap, std::optional<TextEncodingDelta> textEncoding,
     TabDelta tabs, DiffDelta diff,
-    ExternalModificationDelta external_modification,
-    FollowEditsDelta follow_edits, TreeDelta tree, SyntaxDelta syntax,
-    LspSyncDelta lsp_sync, LspFeatureDelta lsp_features,
+    ExternalModificationDelta externalModification,
+    FollowEditsDelta followEdits, TreeDelta tree, SyntaxDelta syntax,
+    LspSyncDelta lspSync, LspFeatureDelta lspFeatures,
     ThemeSectionDelta theme, ShellSectionDelta shell, ViewportDelta viewport);
 
 }  // namespace ssg

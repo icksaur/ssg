@@ -54,15 +54,15 @@ ExternalModificationDelta deriveExternalModificationDelta(
     const ExternalModificationViewState& base,
     const ExternalModificationViewState& target) {
     ExternalModificationDelta delta{base.revision, target.revision};
-    for (const auto& target_file : target.files) {
-        const auto base_file = findFile(base.files, target_file.id);
-        if (base_file == base.files.end() || *base_file != target_file) {
-            delta.upserted.push_back(target_file);
+    for (const auto& targetFile : target.files) {
+        const auto baseFile = findFile(base.files, targetFile.id);
+        if (baseFile == base.files.end() || *baseFile != targetFile) {
+            delta.upserted.push_back(targetFile);
         }
     }
-    for (const auto& base_file : base.files) {
-        if (findFile(target.files, base_file.id) == target.files.end()) {
-            delta.removed.push_back(base_file.id);
+    for (const auto& baseFile : base.files) {
+        if (findFile(target.files, baseFile.id) == target.files.end()) {
+            delta.removed.push_back(baseFile.id);
         }
     }
     return delta;
@@ -130,31 +130,31 @@ public:
             return failure(ExternalModificationError::ContentRequired);
         }
 
-        auto staged_pending = pending_;
-        auto staged_document = *document;
-        const bool save_event =
+        auto stagedPending = pending_;
+        auto stagedDocument = *document;
+        const bool saveEvent =
             input.event.origin == WatchEventOrigin::SsgSave;
         const bool removed = input.event.kind == WatchEventKind::Remove;
-        bool publish_status = false;
+        bool publishStatus = false;
 
         const auto existing = std::find_if(
-            staged_pending.begin(), staged_pending.end(), [&](const auto& item) {
+            stagedPending.begin(), stagedPending.end(), [&](const auto& item) {
                 return item.view.id == input.id;
             });
 
-        if (save_event) {
-            if (existing != staged_pending.end()) {
-                staged_pending.erase(existing);
+        if (saveEvent) {
+            if (existing != stagedPending.end()) {
+                stagedPending.erase(existing);
             }
-        } else if (!staged_document.dirty && !removed) {
-            staged_document.utf8_content = *input.disk_content;
-            staged_document.dirty = false;
+        } else if (!stagedDocument.dirty && !removed) {
+            stagedDocument.utf8_content = *input.disk_content;
+            stagedDocument.dirty = false;
             if (input.event.kind == WatchEventKind::Rename) {
-                staged_document.key = JournalDocumentKey::saved(
+                stagedDocument.key = JournalDocumentKey::saved(
                     input.event.path.generic_string());
             }
-            if (existing != staged_pending.end()) {
-                staged_pending.erase(existing);
+            if (existing != stagedPending.end()) {
+                stagedPending.erase(existing);
             }
         } else {
             ExternalDocumentView view{
@@ -172,33 +172,33 @@ public:
                               ExternalAction::KeepBuffer,
                               ExternalAction::OpenDiff}};
             PendingChange change{std::move(view), input.disk_content};
-            if (existing == staged_pending.end()) {
-                staged_pending.push_back(std::move(change));
+            if (existing == stagedPending.end()) {
+                stagedPending.push_back(std::move(change));
             } else {
                 *existing = std::move(change);
             }
-            publish_status = true;
+            publishStatus = true;
         }
 
-        NonGitDiffEvent diff_event{
+        NonGitDiffEvent diffEvent{
             diffKind(input.event.kind),
             input.id,
             input.event.path,
             input.event.previous_path,
             input.disk_content};
-        const auto diff_result = diff_.applyNonGitEvent(
-            std::move(diff_event), Revision{input.event.sequence});
+        const auto diffResult = diff_.applyNonGitEvent(
+            std::move(diffEvent), Revision{input.event.sequence});
 
-        if (!save_event && !document->dirty && !removed) {
-            document->key = std::move(staged_document.key);
-            document->utf8_content.swap(staged_document.utf8_content);
+        if (!saveEvent && !document->dirty && !removed) {
+            document->key = std::move(stagedDocument.key);
+            document->utf8_content.swap(stagedDocument.utf8_content);
             document->dirty = false;
         }
-        pending_.swap(staged_pending);
+        pending_.swap(stagedPending);
         last_watcher_sequence_ = input.event.sequence;
         advanceRevision();
-        return {ExternalModificationError::None, publish_status,
-                diff_result.accepted(), std::nullopt};
+        return {ExternalModificationError::None, publishStatus,
+                diffResult.accepted(), std::nullopt};
     }
 
     ExternalModificationResult reload(

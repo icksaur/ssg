@@ -34,7 +34,7 @@ std::optional<DocumentDelta> deriveDocumentDelta(
 
 std::optional<DocumentViewState> replayDocumentDelta(
     DocumentViewState const& before, DocumentDelta const& delta,
-    ByteOffset target_caret) {
+    ByteOffset targetCaret) {
     if (before.revision != delta.base_revision ||
         delta.revision == delta.base_revision ||
         delta.start.value() > before.text.size() ||
@@ -43,10 +43,10 @@ std::optional<DocumentViewState> replayDocumentDelta(
     }
     std::string text = before.text;
     text.replace(delta.start.value(), delta.erased_bytes, delta.inserted_text);
-    if (target_caret.value() > text.size()) {
+    if (targetCaret.value() > text.size()) {
         return std::nullopt;
     }
-    return DocumentViewState{delta.revision, std::move(text), target_caret};
+    return DocumentViewState{delta.revision, std::move(text), targetCaret};
 }
 
 }  // namespace ssg

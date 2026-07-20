@@ -87,8 +87,8 @@ struct TabManager::Impl {
         RecoveryRecordId compensation;
     };
 
-    Impl(TabLifecycle& tab_lifecycle, TabManagerConfig manager_config)
-        : lifecycle{tab_lifecycle}, config{manager_config} {
+    Impl(TabLifecycle& tabLifecycle, TabManagerConfig managerConfig)
+        : lifecycle{tabLifecycle}, config{managerConfig} {
         if (config.maximum_recently_closed == 0) {
             throw std::invalid_argument(
                 "maximum recently-closed tabs must be greater than zero");
@@ -118,10 +118,10 @@ struct TabManager::Impl {
     }
 
     [[nodiscard]] TabResult closeAt(
-        std::size_t index, std::chrono::milliseconds durability_timeout,
-        std::optional<std::size_t> recorded_index = {}) {
+        std::size_t index, std::chrono::milliseconds durabilityTimeout,
+        std::optional<std::size_t> recordedIndex = {}) {
         const auto tab = view.tabs[index];
-        auto result = lifecycle.close(tab, durability_timeout);
+        auto result = lifecycle.close(tab, durabilityTimeout);
         if (!result.accepted()) {
             return failure(result.error, std::move(result.message));
         }
@@ -135,16 +135,16 @@ struct TabManager::Impl {
         }
 
         recently_closed.push_back(
-            {tab, recorded_index.value_or(index), *result.compensation});
+            {tab, recordedIndex.value_or(index), *result.compensation});
         if (recently_closed.size() > config.maximum_recently_closed) {
             recently_closed.erase(recently_closed.begin());
         }
 
-        const auto was_active = view.active == tab.id;
+        const auto wasActive = view.active == tab.id;
         view.tabs.erase(view.tabs.begin() + static_cast<std::ptrdiff_t>(index));
         if (view.tabs.empty()) {
             view.active.reset();
-        } else if (was_active) {
+        } else if (wasActive) {
             const auto replacement = std::min(index, view.tabs.size() - 1);
             view.active = view.tabs[replacement].id;
         }
@@ -153,8 +153,8 @@ struct TabManager::Impl {
 
     [[nodiscard]] TabResult closeBatch(
         std::optional<TabId> keep,
-        std::chrono::milliseconds durability_timeout) {
-        if (durability_timeout <= std::chrono::milliseconds::zero()) {
+        std::chrono::milliseconds durabilityTimeout) {
+        if (durabilityTimeout <= std::chrono::milliseconds::zero()) {
             return failure(TabError::InvalidArgument,
                            "durability timeout must be positive");
         }
@@ -163,24 +163,24 @@ struct TabManager::Impl {
         }
 
         const auto original = view.tabs;
-        const auto original_active = view.active;
-        const auto active_position = static_cast<std::size_t>(std::distance(
+        const auto originalActive = view.active;
+        const auto activePosition = static_cast<std::size_t>(std::distance(
             original.begin(),
             std::find_if(original.begin(), original.end(), [&](const TabState& tab) {
-                return tab.id == original_active;
+                return tab.id == originalActive;
             })));
 
         TabResult aggregate;
-        for (std::size_t original_index = 0; original_index < original.size();
-             ++original_index) {
-            const auto id = original[original_index].id;
+        for (std::size_t originalIndex = 0; originalIndex < original.size();
+             ++originalIndex) {
+            const auto id = original[originalIndex].id;
             if (keep == id) {
                 continue;
             }
             const auto current = find(id);
             const auto index =
                 static_cast<std::size_t>(std::distance(view.tabs.begin(), current));
-            auto result = closeAt(index, durability_timeout, original_index);
+            auto result = closeAt(index, durabilityTimeout, originalIndex);
             if (!result.accepted()) {
                 aggregate.failures.push_back(
                     {id, result.error, std::move(result.message)});
@@ -188,24 +188,24 @@ struct TabManager::Impl {
         }
 
         if (!view.tabs.empty()) {
-            const auto active_survives =
-                original_active &&
+            const auto activeSurvives =
+                originalActive &&
                 std::any_of(view.tabs.begin(), view.tabs.end(),
                             [&](const TabState& tab) {
-                                return tab.id == original_active;
+                                return tab.id == originalActive;
                             });
-            if (active_survives) {
-                view.active = original_active;
+            if (activeSurvives) {
+                view.active = originalActive;
             } else {
-                const auto at_or_right = std::find_if(
+                const auto atOrRight = std::find_if(
                     original.begin() +
                         static_cast<std::ptrdiff_t>(
-                            std::min(active_position, original.size())),
+                            std::min(activePosition, original.size())),
                     original.end(), [&](const TabState& candidate) {
                         return find(candidate.id) != view.tabs.end();
                     });
-                if (at_or_right != original.end()) {
-                    view.active = at_or_right->id;
+                if (atOrRight != original.end()) {
+                    view.active = atOrRight->id;
                 } else {
                     view.active = view.tabs.back().id;
                 }
@@ -257,18 +257,18 @@ TabResult TabManager::openDocument(FileDocumentId document,
         return {TabError::None, {}, duplicate->id, {}};
     }
 
-    std::string resolved_label{label};
-    if (resolved_label.empty()) {
+    std::string resolvedLabel{label};
+    if (resolvedLabel.empty()) {
         if (identity.kind() == JournalDocumentKeyKind::Untitled) {
-            resolved_label = impl_->untitledLabel();
+            resolvedLabel = impl_->untitledLabel();
         } else {
             const auto& path = identity.savedPath();
             const auto separator = path.find_last_of("/\\");
-            resolved_label = path.substr(
+            resolvedLabel = path.substr(
                 separator == std::string::npos ? 0 : separator + 1);
         }
     }
-    if (resolved_label.empty()) {
+    if (resolvedLabel.empty()) {
         return failure(TabError::InvalidArgument,
                        "tab label must be non-empty");
     }
@@ -276,16 +276,16 @@ TabResult TabManager::openDocument(FileDocumentId document,
     const auto id = TabId{impl_->next_id++};
     impl_->view.tabs.push_back(
         {id, TabKind::Document, document, std::move(identity), {},
-         std::move(resolved_label), mode, dirty, recovery});
+         std::move(resolvedLabel), mode, dirty, recovery});
     impl_->view.active = id;
     return {TabError::None, {}, id, {}};
 }
 
 TabResult TabManager::openContent(TabKind kind,
-                                   std::string_view content_identity,
+                                   std::string_view contentIdentity,
                                    std::string_view label,
                                    DocumentMode mode) {
-    if (kind == TabKind::Document || content_identity.empty() || label.empty()) {
+    if (kind == TabKind::Document || contentIdentity.empty() || label.empty()) {
         return failure(TabError::InvalidArgument,
                        "non-document tabs require kind, identity, and label");
     }
@@ -293,7 +293,7 @@ TabResult TabManager::openContent(TabKind kind,
         impl_->view.tabs.begin(), impl_->view.tabs.end(),
         [&](const TabState& tab) {
             return tab.kind == kind &&
-                   tab.content_identity == content_identity;
+                   tab.content_identity == contentIdentity;
         });
     if (duplicate != impl_->view.tabs.end()) {
         impl_->view.active = duplicate->id;
@@ -302,7 +302,7 @@ TabResult TabManager::openContent(TabKind kind,
 
     const auto id = TabId{impl_->next_id++};
     impl_->view.tabs.push_back(
-        {id, kind, {}, {}, std::string{content_identity}, std::string{label},
+        {id, kind, {}, {}, std::string{contentIdentity}, std::string{label},
          mode, false, TabRecoveryBadge::None});
     impl_->view.active = id;
     return {TabError::None, {}, id, {}};
@@ -385,8 +385,8 @@ TabResult TabManager::moveRight(TabId tab) {
 }
 
 TabResult TabManager::close(
-    TabId tab, std::chrono::milliseconds durability_timeout) {
-    if (durability_timeout <= std::chrono::milliseconds::zero()) {
+    TabId tab, std::chrono::milliseconds durabilityTimeout) {
+    if (durabilityTimeout <= std::chrono::milliseconds::zero()) {
         return failure(TabError::InvalidArgument,
                        "durability timeout must be positive");
     }
@@ -397,20 +397,20 @@ TabResult TabManager::close(
     return impl_->closeAt(
         static_cast<std::size_t>(
             std::distance(impl_->view.tabs.begin(), found)),
-        durability_timeout);
+        durabilityTimeout);
 }
 
 TabResult TabManager::closeOthers(
-    TabId tab, std::chrono::milliseconds durability_timeout) {
+    TabId tab, std::chrono::milliseconds durabilityTimeout) {
     if (impl_->find(tab) == impl_->view.tabs.end()) {
         return failure(TabError::NotFound, "tab is not open");
     }
-    return impl_->closeBatch(tab, durability_timeout);
+    return impl_->closeBatch(tab, durabilityTimeout);
 }
 
 TabResult TabManager::closeAll(
-    std::chrono::milliseconds durability_timeout) {
-    return impl_->closeBatch({}, durability_timeout);
+    std::chrono::milliseconds durabilityTimeout) {
+    return impl_->closeBatch({}, durabilityTimeout);
 }
 
 TabResult TabManager::reopenClosed() {

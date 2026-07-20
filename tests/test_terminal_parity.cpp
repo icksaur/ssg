@@ -141,8 +141,8 @@ DecodedScreen decode(std::string_view bytes, int columns, int rows) {
     screen.rows = rows;
     screen.cells.assign(static_cast<std::size_t>(columns) * rows, DecodedCell{});
 
-    int cursor_row = 0;
-    int cursor_column = 0;
+    int cursorRow = 0;
+    int cursorColumn = 0;
     Rgb fg{};
     Rgb bg{};
 
@@ -162,14 +162,14 @@ DecodedScreen decode(std::string_view bytes, int columns, int rows) {
             if (j >= n) break;  // Incomplete CSI.
             char const final = bytes[j];
             std::string_view const params = bytes.substr(i + 2, j - (i + 2));
-            bool const private_mode = !params.empty() && params.front() == '?';
+            bool const privateMode = !params.empty() && params.front() == '?';
 
             if (final == 'H' || final == 'f') {
                 auto values = splitParams(params);
                 int const r = values.size() > 0 ? values[0] : 1;
                 int const c = values.size() > 1 ? values[1] : 1;
-                cursor_row = r > 0 ? r - 1 : 0;
-                cursor_column = c > 0 ? c - 1 : 0;
+                cursorRow = r > 0 ? r - 1 : 0;
+                cursorColumn = c > 0 ? c - 1 : 0;
             } else if (final == 'm') {
                 auto values = splitParams(params);
                 for (std::size_t k = 0; k < values.size(); ++k) {
@@ -185,10 +185,10 @@ DecodedScreen decode(std::string_view bytes, int columns, int rows) {
                         k += 4;
                     }
                 }
-            } else if (private_mode && (final == 'h' || final == 'l') &&
+            } else if (privateMode && (final == 'h' || final == 'l') &&
                        params == "?25") {
                 if (final == 'h') {
-                    screen.cursor = std::pair<int, int>{cursor_row, cursor_column};
+                    screen.cursor = std::pair<int, int>{cursorRow, cursorColumn};
                 } else {
                     screen.cursor.reset();
                 }
@@ -203,14 +203,14 @@ DecodedScreen decode(std::string_view bytes, int columns, int rows) {
         if (i + length > n) break;
         std::string_view const glyph = bytes.substr(i, length);
         int const width = codepointWidth(utf8Codepoint(glyph));
-        if (cursor_row >= 0 && cursor_row < rows && cursor_column >= 0 &&
-            cursor_column < columns && width > 0) {
-            auto& cell = screen.at(cursor_row, cursor_column);
+        if (cursorRow >= 0 && cursorRow < rows && cursorColumn >= 0 &&
+            cursorColumn < columns && width > 0) {
+            auto& cell = screen.at(cursorRow, cursorColumn);
             cell.text = std::string{glyph};
             cell.foreground = fg;
             cell.background = bg;
         }
-        cursor_column += width == 0 ? 0 : width;
+        cursorColumn += width == 0 ? 0 : width;
         i += length;
     }
     return screen;
@@ -252,7 +252,7 @@ std::unique_ptr<ssg::EditorRuntime> makeHeadless(fs::path const& root) {
 // Launch the real `ssg` binary over `launch_path` (a workspace dir or a file)
 // under a pty and capture its output until it settles (frames drawn, blocked on
 // input).
-std::string captureFrames(std::string const& binary, fs::path const& launch_path) {
+std::string captureFrames(std::string const& binary, fs::path const& launchPath) {
     winsize ws{};
     ws.ws_col = 80;
     ws.ws_row = 24;
@@ -262,18 +262,18 @@ std::string captureFrames(std::string const& binary, fs::path const& launch_path
     if (pid == 0) {
         setenv("COLORTERM", "truecolor", 1);
         setenv("TERM", "xterm-256color", 1);
-        execl(binary.c_str(), binary.c_str(), launch_path.c_str(),
+        execl(binary.c_str(), binary.c_str(), launchPath.c_str(),
               static_cast<char*>(nullptr));
         _exit(127);
     }
     ::fcntl(master, F_SETFL, ::fcntl(master, F_GETFL, 0) | O_NONBLOCK);
 
     std::string output;
-    auto const hard_deadline =
+    auto const hardDeadline =
         std::chrono::steady_clock::now() + std::chrono::seconds{4};
-    auto last_data = std::chrono::steady_clock::now();
+    auto lastData = std::chrono::steady_clock::now();
     char buffer[4096];
-    while (std::chrono::steady_clock::now() < hard_deadline) {
+    while (std::chrono::steady_clock::now() < hardDeadline) {
         pollfd pfd{master, POLLIN, 0};
         ::poll(&pfd, 1, 50);
         bool got = false;
@@ -287,9 +287,9 @@ std::string captureFrames(std::string const& binary, fs::path const& launch_path
             }
         }
         auto const now = std::chrono::steady_clock::now();
-        if (got) last_data = now;
+        if (got) lastData = now;
         // Settled: both frames drawn and quiet for a spell.
-        else if (!output.empty() && now - last_data > std::chrono::milliseconds{400}) {
+        else if (!output.empty() && now - lastData > std::chrono::milliseconds{400}) {
             break;
         }
     }
@@ -416,11 +416,11 @@ TEST(realBinaryWideGlyphOutputMatchesRender) {
 
     // Sanity: the rendered document actually contains wide (continuation) cells,
     // so this case genuinely exercises wide-glyph handling.
-    bool has_continuation = false;
+    bool hasContinuation = false;
     for (auto const& cell : grid.cells) {
-        if (cell.continuation) { has_continuation = true; break; }
+        if (cell.continuation) { hasContinuation = true; break; }
     }
-    ASSERT_TRUE(has_continuation);
+    ASSERT_TRUE(hasContinuation);
 
     ASSERT_TRUE(compareScreen(screen, grid) > 0);
     fs::remove_all(root);

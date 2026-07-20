@@ -44,101 +44,101 @@ SyntaxPoint advancePoint(SyntaxPoint point, std::string_view text) {
 }
 
 bool validEdits(const std::vector<SyntaxEdit>& edits,
-                 std::string_view current_text,
-                 std::string_view previous_text) {
-    std::uint64_t previous_old_end = 0;
-    std::uint64_t previous_cursor = 0;
-    std::uint64_t current_cursor = 0;
+                 std::string_view currentText,
+                 std::string_view previousText) {
+    std::uint64_t previousOldEnd = 0;
+    std::uint64_t previousCursor = 0;
+    std::uint64_t currentCursor = 0;
     bool first = true;
     for (const auto& edit : edits) {
         const auto start = edit.start_byte.value();
-        const auto old_end = edit.old_end_byte.value();
-        const auto new_end = edit.new_end_byte.value();
+        const auto oldEnd = edit.old_end_byte.value();
+        const auto newEnd = edit.new_end_byte.value();
         if (edit.start_byte > edit.old_end_byte ||
             edit.start_byte > edit.new_end_byte ||
-            old_end > previous_text.size() ||
+            oldEnd > previousText.size() ||
             !pointBeforeOrEqual(edit.start_position,
                                    edit.old_end_position) ||
             !pointBeforeOrEqual(edit.start_position,
                                    edit.new_end_position) ||
-            (!first && start < previous_old_end) ||
-            edit.start_position != pointAt(previous_text, start) ||
-            edit.old_end_position != pointAt(previous_text, old_end)) {
+            (!first && start < previousOldEnd) ||
+            edit.start_position != pointAt(previousText, start) ||
+            edit.old_end_position != pointAt(previousText, oldEnd)) {
             return false;
         }
 
-        const auto unchanged_bytes = start - previous_cursor;
-        const auto inserted_bytes = new_end - start;
-        if (unchanged_bytes > current_text.size() - current_cursor ||
-            previous_text.substr(previous_cursor, unchanged_bytes) !=
-                current_text.substr(current_cursor, unchanged_bytes)) {
+        const auto unchangedBytes = start - previousCursor;
+        const auto insertedBytes = newEnd - start;
+        if (unchangedBytes > currentText.size() - currentCursor ||
+            previousText.substr(previousCursor, unchangedBytes) !=
+                currentText.substr(currentCursor, unchangedBytes)) {
             return false;
         }
-        current_cursor += unchanged_bytes;
-        if (inserted_bytes > current_text.size() - current_cursor ||
+        currentCursor += unchangedBytes;
+        if (insertedBytes > currentText.size() - currentCursor ||
             edit.new_end_position !=
                 advancePoint(edit.start_position,
-                              current_text.substr(current_cursor,
-                                                  inserted_bytes))) {
+                              currentText.substr(currentCursor,
+                                                  insertedBytes))) {
             return false;
         }
-        current_cursor += inserted_bytes;
-        previous_cursor = old_end;
-        previous_old_end = old_end;
+        currentCursor += insertedBytes;
+        previousCursor = oldEnd;
+        previousOldEnd = oldEnd;
         first = false;
     }
-    return previous_text.substr(previous_cursor) ==
-           current_text.substr(current_cursor);
+    return previousText.substr(previousCursor) ==
+           currentText.substr(currentCursor);
 }
 
 std::vector<LineIndentation> deriveIndentation(std::string_view text,
-                                                std::uint32_t tab_width) {
+                                                std::uint32_t tabWidth) {
     std::vector<LineIndentation> result;
-    std::size_t line_start = 0;
+    std::size_t lineStart = 0;
     std::uint64_t line = 0;
-    while (line_start <= text.size()) {
-        const auto newline = text.find('\n', line_start);
-        const auto line_end =
+    while (lineStart <= text.size()) {
+        const auto newline = text.find('\n', lineStart);
+        const auto lineEnd =
             newline == std::string_view::npos ? text.size() : newline;
-        auto content = line_start;
+        auto content = lineStart;
         std::uint32_t spaces = 0;
         std::uint32_t tabs = 0;
         std::uint32_t columns = 0;
-        while (content < line_end &&
+        while (content < lineEnd &&
                (text[content] == ' ' || text[content] == '\t')) {
             if (text[content] == ' ') {
                 ++spaces;
                 ++columns;
             } else {
                 ++tabs;
-                columns += tab_width - columns % tab_width;
+                columns += tabWidth - columns % tabWidth;
             }
             ++content;
         }
         result.push_back(
-            {LineIndex{line}, ByteOffset{line_start}, ByteOffset{content},
-             spaces, tabs, columns, content == line_end});
+            {LineIndex{line}, ByteOffset{lineStart}, ByteOffset{content},
+             spaces, tabs, columns, content == lineEnd});
         if (newline == std::string_view::npos) {
             break;
         }
-        line_start = newline + 1;
+        lineStart = newline + 1;
         ++line;
     }
     return result;
 }
 
-std::vector<SyntaxSpan> canonicalSpans(std::uint64_t text_bytes,
+std::vector<SyntaxSpan> canonicalSpans(std::uint64_t textBytes,
                                         std::vector<SyntaxSpan> spans) {
     spans.erase(
         std::remove_if(spans.begin(), spans.end(),
-                       [text_bytes](const SyntaxSpan& span) {
+                       [textBytes](const SyntaxSpan& span) {
                            return span.begin >= span.end ||
-                                  span.begin.value() >= text_bytes;
+                                  span.begin.value() >= textBytes;
                        }),
         spans.end());
     for (auto& span : spans) {
-        if (span.end.value() > text_bytes) {
-            span.end = ByteOffset{text_bytes};
+        if (span.end.value() > textBytes) {
+            span.end = ByteOffset{textBytes};
         }
     }
     std::sort(spans.begin(), spans.end(),
@@ -162,8 +162,8 @@ std::vector<SyntaxSpan> canonicalSpans(std::uint64_t text_bytes,
             {ByteOffset{cursor}, span.end, span.scope});
         cursor = span.end.value();
     }
-    if (cursor < text_bytes) {
-        result.push_back({ByteOffset{cursor}, ByteOffset{text_bytes},
+    if (cursor < textBytes) {
+        result.push_back({ByteOffset{cursor}, ByteOffset{textBytes},
                           SyntaxScope::PlainText});
     }
 
@@ -180,12 +180,12 @@ std::vector<SyntaxSpan> canonicalSpans(std::uint64_t text_bytes,
 }
 
 std::vector<CommentToken> canonicalCommentTokens(
-    std::uint64_t text_bytes, std::vector<CommentToken> tokens) {
+    std::uint64_t textBytes, std::vector<CommentToken> tokens) {
     tokens.erase(
         std::remove_if(tokens.begin(), tokens.end(),
-                       [text_bytes](const CommentToken& token) {
+                       [textBytes](const CommentToken& token) {
                            return token.range.begin >= token.range.end ||
-                                  token.range.end.value() > text_bytes;
+                                  token.range.end.value() > textBytes;
                        }),
         tokens.end());
     std::sort(tokens.begin(), tokens.end(),
@@ -204,12 +204,12 @@ std::vector<CommentToken> canonicalCommentTokens(
 }
 
 std::vector<CommentRange> canonicalCommentRanges(
-    std::uint64_t text_bytes, std::vector<CommentRange> ranges) {
+    std::uint64_t textBytes, std::vector<CommentRange> ranges) {
     ranges.erase(
         std::remove_if(ranges.begin(), ranges.end(),
-                       [text_bytes](const CommentRange& range) {
+                       [textBytes](const CommentRange& range) {
                            return range.range.begin >= range.range.end ||
-                                  range.range.end.value() > text_bytes;
+                                  range.range.end.value() > textBytes;
                        }),
         ranges.end());
     std::sort(ranges.begin(), ranges.end(),
@@ -236,12 +236,12 @@ struct ResolvedBrackets {
     std::vector<UnmatchedBracket> unmatched;
 };
 
-ResolvedBrackets resolveBrackets(std::uint64_t text_bytes,
+ResolvedBrackets resolveBrackets(std::uint64_t textBytes,
                                   std::vector<BracketToken> tokens) {
     tokens.erase(
         std::remove_if(tokens.begin(), tokens.end(),
-                       [text_bytes](const BracketToken& token) {
-                           return token.offset.value() >= text_bytes;
+                       [textBytes](const BracketToken& token) {
+                           return token.offset.value() >= textBytes;
                        }),
         tokens.end());
     std::sort(tokens.begin(), tokens.end(),
@@ -315,51 +315,51 @@ bool validState(const SyntaxViewState& state) {
         return false;
     }
 
-    ByteOffset previous_open{0};
-    bool first_pair = true;
+    ByteOffset previousOpen{0};
+    bool firstPair = true;
     for (const auto& pair : state.bracketPairs()) {
         if (pair.open >= pair.close ||
             pair.close.value() >= state.textBytes() ||
-            (!first_pair && pair.open <= previous_open)) {
+            (!firstPair && pair.open <= previousOpen)) {
             return false;
         }
-        previous_open = pair.open;
-        first_pair = false;
+        previousOpen = pair.open;
+        firstPair = false;
     }
 
-    ByteOffset previous_unmatched{0};
-    bool first_unmatched = true;
+    ByteOffset previousUnmatched{0};
+    bool firstUnmatched = true;
     for (const auto& bracket : state.unmatchedBrackets()) {
         if (bracket.offset.value() >= state.textBytes() ||
-            (!first_unmatched && bracket.offset <= previous_unmatched)) {
+            (!firstUnmatched && bracket.offset <= previousUnmatched)) {
             return false;
         }
-        previous_unmatched = bracket.offset;
-        first_unmatched = false;
+        previousUnmatched = bracket.offset;
+        firstUnmatched = false;
     }
 
-    SyntaxRange previous_token{ByteOffset{0}, ByteOffset{0}};
-    bool first_token = true;
+    SyntaxRange previousToken{ByteOffset{0}, ByteOffset{0}};
+    bool firstToken = true;
     for (const auto& token : state.commentTokens()) {
         if (token.range.begin >= token.range.end ||
             token.range.end.value() > state.textBytes() ||
-            (!first_token &&
+            (!firstToken &&
              std::tie(token.range.begin, token.range.end) <=
-                 std::tie(previous_token.begin, previous_token.end))) {
+                 std::tie(previousToken.begin, previousToken.end))) {
             return false;
         }
-        previous_token = token.range;
-        first_token = false;
+        previousToken = token.range;
+        firstToken = false;
     }
 
-    ByteOffset previous_range_end{0};
+    ByteOffset previousRangeEnd{0};
     for (const auto& range : state.commentRanges()) {
-        if (range.range.begin < previous_range_end ||
+        if (range.range.begin < previousRangeEnd ||
             range.range.begin >= range.range.end ||
             range.range.end.value() > state.textBytes()) {
             return false;
         }
-        previous_range_end = range.range.end;
+        previousRangeEnd = range.range.end;
     }
 
     if (state.indentation().empty()) {
@@ -396,11 +396,11 @@ bool LanguageId::isPlainText() const noexcept {
 
 SyntaxParseRequest::SyntaxParseRequest(
     Revision revision, LanguageId language, std::string text,
-    SyntaxParseHandle prior_parse, std::vector<SyntaxEdit> edits)
+    SyntaxParseHandle priorParse, std::vector<SyntaxEdit> edits)
     : revision_(revision),
       language_(std::move(language)),
       text_(std::move(text)),
-      prior_parse_(std::move(prior_parse)),
+      prior_parse_(std::move(priorParse)),
       edits_(std::move(edits)),
       cancelled_(std::make_shared<std::atomic_bool>(false)) {}
 
@@ -413,26 +413,26 @@ void SyntaxParseRequest::cancel() const noexcept {
 }
 
 SyntaxViewState::SyntaxViewState(
-    Revision revision, LanguageId language, std::uint64_t text_bytes,
-    std::vector<SyntaxSpan> spans, std::vector<SyntaxBracketPair> bracket_pairs,
-    std::vector<UnmatchedBracket> unmatched_brackets,
-    std::vector<CommentToken> comment_tokens,
-    std::vector<CommentRange> comment_ranges,
+    Revision revision, LanguageId language, std::uint64_t textBytes,
+    std::vector<SyntaxSpan> spans, std::vector<SyntaxBracketPair> bracketPairs,
+    std::vector<UnmatchedBracket> unmatchedBrackets,
+    std::vector<CommentToken> commentTokens,
+    std::vector<CommentRange> commentRanges,
     std::vector<LineIndentation> indentation)
     : revision_(revision),
       language_(std::move(language)),
-      text_bytes_(text_bytes),
+      text_bytes_(textBytes),
       spans_(std::move(spans)),
-      bracket_pairs_(std::move(bracket_pairs)),
-      unmatched_brackets_(std::move(unmatched_brackets)),
-      comment_tokens_(std::move(comment_tokens)),
-      comment_ranges_(std::move(comment_ranges)),
+      bracket_pairs_(std::move(bracketPairs)),
+      unmatched_brackets_(std::move(unmatchedBrackets)),
+      comment_tokens_(std::move(commentTokens)),
+      comment_ranges_(std::move(commentRanges)),
       indentation_(std::move(indentation)) {}
 
 SyntaxViewState plainTextSyntaxViewState(
     Revision revision, LanguageId language, std::string_view text,
-    std::uint32_t tab_width) {
-    if (tab_width == 0) {
+    std::uint32_t tabWidth) {
+    if (tabWidth == 0) {
         throw std::invalid_argument{"tab width must be positive"};
     }
     std::vector<SyntaxSpan> spans;
@@ -448,7 +448,7 @@ SyntaxViewState plainTextSyntaxViewState(
             {},
             {},
             {},
-            deriveIndentation(text, tab_width)};
+            deriveIndentation(text, tabWidth)};
 }
 
 SyntaxViewState buildSyntaxViewState(
@@ -504,24 +504,24 @@ SyntaxScope scopeAt(const SyntaxViewState& state, ByteOffset offset) {
 }
 
 SyntaxDelta::SyntaxDelta(
-    Revision base_revision, Revision revision,
+    Revision baseRevision, Revision revision,
     std::optional<LanguageId> language,
-    std::optional<std::uint64_t> text_bytes,
+    std::optional<std::uint64_t> textBytes,
     std::optional<std::vector<SyntaxSpan>> spans,
-    std::optional<std::vector<SyntaxBracketPair>> bracket_pairs,
-    std::optional<std::vector<UnmatchedBracket>> unmatched_brackets,
-    std::optional<std::vector<CommentToken>> comment_tokens,
-    std::optional<std::vector<CommentRange>> comment_ranges,
+    std::optional<std::vector<SyntaxBracketPair>> bracketPairs,
+    std::optional<std::vector<UnmatchedBracket>> unmatchedBrackets,
+    std::optional<std::vector<CommentToken>> commentTokens,
+    std::optional<std::vector<CommentRange>> commentRanges,
     std::optional<std::vector<LineIndentation>> indentation)
-    : base_revision_(base_revision),
+    : base_revision_(baseRevision),
       revision_(revision),
       language_(std::move(language)),
-      text_bytes_(std::move(text_bytes)),
+      text_bytes_(std::move(textBytes)),
       spans_(std::move(spans)),
-      bracket_pairs_(std::move(bracket_pairs)),
-      unmatched_brackets_(std::move(unmatched_brackets)),
-      comment_tokens_(std::move(comment_tokens)),
-      comment_ranges_(std::move(comment_ranges)),
+      bracket_pairs_(std::move(bracketPairs)),
+      unmatched_brackets_(std::move(unmatchedBrackets)),
+      comment_tokens_(std::move(commentTokens)),
+      comment_ranges_(std::move(commentRanges)),
       indentation_(std::move(indentation)) {}
 
 bool SyntaxDelta::empty() const noexcept {
@@ -612,20 +612,20 @@ SyntaxParseRequestResult SyntaxModel::request(
     if (text.size() > config_.maximum_document_bytes) {
         return {nullptr, SyntaxRequestError::DocumentTooLarge};
     }
-    const auto prior_parse =
+    const auto priorParse =
         language == view_state_.language() ? accepted_parse_ : nullptr;
     if (!edits.empty() &&
-        (!prior_parse || !validEdits(edits, text, accepted_text_))) {
+        (!priorParse || !validEdits(edits, text, accepted_text_))) {
         return {nullptr, SyntaxRequestError::MalformedEdits};
     }
 
-    const auto request_prior =
-        prior_parse && (text == accepted_text_ || !edits.empty())
-            ? prior_parse
+    const auto requestPrior =
+        priorParse && (text == accepted_text_ || !edits.empty())
+            ? priorParse
             : nullptr;
     pending_ = std::shared_ptr<const SyntaxParseRequest>(
         new SyntaxParseRequest{revision, std::move(language), std::move(text),
-                               request_prior, std::move(edits)});
+                               requestPrior, std::move(edits)});
     return {pending_, SyntaxRequestError::None};
 }
 

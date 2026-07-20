@@ -71,8 +71,8 @@ public:
     LuaCommandHost& operator=(LuaCommandHost&&) noexcept;
 
     [[nodiscard]] LuaResult evaluate(std::string_view script);
-    [[nodiscard]] LuaResult invoke(std::string_view plugin_command);
-    [[nodiscard]] bool hasCommand(std::string_view plugin_command) const;
+    [[nodiscard]] LuaResult invoke(std::string_view pluginCommand);
+    [[nodiscard]] bool hasCommand(std::string_view pluginCommand) const;
 
     [[nodiscard]] LuaHandle expose(void* object);
     void invalidate(LuaHandle handle);

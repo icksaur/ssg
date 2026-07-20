@@ -16,7 +16,7 @@
 namespace ssg {
 namespace {
 
-constexpr std::array<std::uint32_t, 64> sha256_constants{
+constexpr std::array<std::uint32_t, 64> kSha256Constants{
     0x428a2f98U, 0x71374491U, 0xb5c0fbcfU, 0xe9b5dba5U, 0x3956c25bU,
     0x59f111f1U, 0x923f82a4U, 0xab1c5ed5U, 0xd807aa98U, 0x12835b01U,
     0x243185beU, 0x550c7dc3U, 0x72be5d74U, 0x80deb1feU, 0x9bdc06a7U,
@@ -40,10 +40,10 @@ std::array<std::byte, 32> sha256(std::span<const std::byte> input) {
     while (padded.size() % 64 != 56) {
         padded.push_back(std::byte{0});
     }
-    const auto bit_count = static_cast<std::uint64_t>(input.size()) * 8U;
+    const auto bitCount = static_cast<std::uint64_t>(input.size()) * 8U;
     for (int shift = 56; shift >= 0; shift -= 8) {
         padded.push_back(
-            static_cast<std::byte>((bit_count >> shift) & 0xffU));
+            static_cast<std::byte>((bitCount >> shift) & 0xffU));
     }
 
     for (std::size_t block = 0; block < padded.size(); block += 64) {
@@ -80,7 +80,7 @@ std::array<std::byte, 32> sha256(std::span<const std::byte> input) {
                               std::rotr(e, 25);
             const auto choice = (e & f) ^ (~e & g);
             const auto temporary1 =
-                h + sum1 + choice + sha256_constants[index] + words[index];
+                h + sum1 + choice + kSha256Constants[index] + words[index];
             const auto sum0 = std::rotr(a, 2) ^ std::rotr(a, 13) ^
                               std::rotr(a, 22);
             const auto majority = (a & b) ^ (a & c) ^ (b & c);
@@ -126,9 +126,9 @@ std::string lowercaseHex(std::span<const std::byte> bytes) {
 }
 
 void requireCanonicalAbsolute(
-    const std::filesystem::path& canonical_workspace) {
-    if (!canonical_workspace.is_absolute() ||
-        canonical_workspace.lexically_normal() != canonical_workspace) {
+    const std::filesystem::path& canonicalWorkspace) {
+    if (!canonicalWorkspace.is_absolute() ||
+        canonicalWorkspace.lexically_normal() != canonicalWorkspace) {
         throw std::invalid_argument(
             "scratch workspace path must be canonical and absolute");
     }
@@ -151,15 +151,15 @@ std::string generateSessionId() {
     if (now < 0) {
         throw std::runtime_error("system clock predates the Unix epoch");
     }
-    std::array<std::byte, 16> random_bytes{};
+    std::array<std::byte, 16> randomBytes{};
     std::random_device source;
-    for (auto& byte : random_bytes) {
+    for (auto& byte : randomBytes) {
         byte = static_cast<std::byte>(source() & 0xffU);
     }
     std::ostringstream result;
     result << std::setw(20) << std::setfill('0')
            << static_cast<std::uint64_t>(now) << '-'
-           << lowercaseHex(random_bytes);
+           << lowercaseHex(randomBytes);
     return result.str();
 }
 
@@ -178,10 +178,10 @@ bool validSessionId(std::string_view id) {
 } // namespace
 
 std::string scratchWorkspaceKey(
-    const std::filesystem::path& canonical_workspace) {
-    requireCanonicalAbsolute(canonical_workspace);
-    const auto path_bytes = canonical_workspace.u8string();
-    const auto bytes = std::as_bytes(std::span{path_bytes});
+    const std::filesystem::path& canonicalWorkspace) {
+    requireCanonicalAbsolute(canonicalWorkspace);
+    const auto pathBytes = canonicalWorkspace.u8string();
+    const auto bytes = std::as_bytes(std::span{pathBytes});
     return lowercaseHex(sha256(bytes));
 }
 
@@ -198,25 +198,25 @@ void ScratchRemnantClaim::markRestored() {
 }
 
 ScratchSession ScratchSession::create(
-    const std::filesystem::path& scratch_root,
-    const std::filesystem::path& canonical_workspace) {
-    requireCanonicalAbsolute(canonical_workspace);
-    if (scratch_root.empty()) {
+    const std::filesystem::path& scratchRoot,
+    const std::filesystem::path& canonicalWorkspace) {
+    requireCanonicalAbsolute(canonicalWorkspace);
+    if (scratchRoot.empty()) {
         throw std::invalid_argument("scratch root must not be empty");
     }
 
-    makePrivateDirectory(scratch_root);
-    const auto workspaces = scratch_root / "workspaces";
+    makePrivateDirectory(scratchRoot);
+    const auto workspaces = scratchRoot / "workspaces";
     makePrivateDirectory(workspaces);
-    const auto workspace_path =
-        workspaces / scratchWorkspaceKey(canonical_workspace);
-    makePrivateDirectory(workspace_path);
-    const auto sessions_path = workspace_path / "sessions";
-    makePrivateDirectory(sessions_path);
+    const auto workspacePath =
+        workspaces / scratchWorkspaceKey(canonicalWorkspace);
+    makePrivateDirectory(workspacePath);
+    const auto sessionsPath = workspacePath / "sessions";
+    makePrivateDirectory(sessionsPath);
 
     for (int attempt = 0; attempt < 100; ++attempt) {
         auto id = generateSessionId();
-        const auto path = sessions_path / id;
+        const auto path = sessionsPath / id;
         std::error_code error;
         const bool created = std::filesystem::create_directory(path, error);
         if (error) {
@@ -233,7 +233,7 @@ ScratchSession ScratchSession::create(
                 "new scratch session lock unexpectedly contended");
         }
         return ScratchSession{ScratchSessionId{std::move(id)}, path,
-                              sessions_path, std::move(*lock)};
+                              sessionsPath, std::move(*lock)};
     }
     throw std::runtime_error("cannot allocate a unique scratch session ID");
 }
@@ -242,16 +242,16 @@ std::optional<ScratchRemnantClaim>
 ScratchSession::claimNewestRestorable() const {
     std::vector<std::filesystem::path> candidates;
     for (const auto& entry : std::filesystem::directory_iterator(sessions_path_)) {
-        std::error_code status_error;
-        const bool is_directory = entry.is_directory(status_error);
-        if (status_error == std::errc::no_such_file_or_directory) {
+        std::error_code statusError;
+        const bool isDirectory = entry.is_directory(statusError);
+        if (statusError == std::errc::no_such_file_or_directory) {
             continue;
         }
-        if (status_error) {
+        if (statusError) {
             throw std::filesystem::filesystem_error(
-                "inspect scratch session directory", entry.path(), status_error);
+                "inspect scratch session directory", entry.path(), statusError);
         }
-        if (is_directory &&
+        if (isDirectory &&
             validSessionId(entry.path().filename().string()) &&
             entry.path().filename().string() != id_.value()) {
             candidates.push_back(entry.path());

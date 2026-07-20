@@ -55,17 +55,17 @@ std::filesystem::path workspace(const TemporaryDirectory& temporary,
 }
 
 std::string makeRestoredRemnant(const std::filesystem::path& root,
-                                  const std::filesystem::path& workspace_path,
+                                  const std::filesystem::path& workspacePath,
                                   std::string contents) {
     std::string id;
     {
-        auto remnant = ssg::ScratchSession::create(root, workspace_path);
+        auto remnant = ssg::ScratchSession::create(root, workspacePath);
         id = std::string{remnant.id().value()};
         ssg::ScratchJournal{remnant.journalPath()}.appendDocument(
             document("file.txt", std::move(contents)));
     }
     {
-        auto selector = ssg::ScratchSession::create(root, workspace_path);
+        auto selector = ssg::ScratchSession::create(root, workspacePath);
         auto claim = selector.claimNewestRestorable();
         if (!claim) throw std::runtime_error("failed to create test remnant");
         claim->markRestored();
@@ -137,34 +137,34 @@ TEST(compactionPreservesReplayAndLeavesOneAtomicCheckpoint) {
 
 TEST(startupImportsBeforeMarkingRemnantRestored) {
     TemporaryDirectory temporary;
-    const auto workspace_path = workspace(temporary);
-    std::filesystem::path remnant_path;
+    const auto workspacePath = workspace(temporary);
+    std::filesystem::path remnantPath;
     {
         auto remnant =
-            ssg::ScratchSession::create(temporary.path(), workspace_path);
-        remnant_path = remnant.path();
+            ssg::ScratchSession::create(temporary.path(), workspacePath);
+        remnantPath = remnant.path();
         ssg::ScratchJournal{remnant.journalPath()}.appendDocument(
             document("draft.txt", "recover me"));
     }
 
     auto store = ssg::ScratchStore::create(
-        temporary.path(), workspace_path, configuration());
+        temporary.path(), workspacePath, configuration());
     ASSERT_EQ(store.recovery().documents,
               std::vector<ssg::JournalDocument>{
                   document("draft.txt", "recover me")});
-    ASSERT_TRUE(std::filesystem::exists(remnant_path / "restored"));
+    ASSERT_TRUE(std::filesystem::exists(remnantPath / "restored"));
     ASSERT_EQ(ssg::ScratchJournal{store.journalPath()}.replay().recovery,
               store.recovery());
 }
 
 TEST(failedImportKeepsRemnantRetryable) {
     TemporaryDirectory temporary;
-    const auto workspace_path = workspace(temporary);
-    std::filesystem::path remnant_path;
+    const auto workspacePath = workspace(temporary);
+    std::filesystem::path remnantPath;
     {
         auto remnant =
-            ssg::ScratchSession::create(temporary.path(), workspace_path);
-        remnant_path = remnant.path();
+            ssg::ScratchSession::create(temporary.path(), workspacePath);
+        remnantPath = remnant.path();
         ssg::ScratchJournal{remnant.journalPath()}.appendDocument(
             document("draft.txt", "retry me"));
     }
@@ -172,31 +172,31 @@ TEST(failedImportKeepsRemnantRetryable) {
     storage.fail = true;
 
     ASSERT_THROWS(ssg::ScratchStore::create(
-                      temporary.path(), workspace_path, configuration(), storage),
+                      temporary.path(), workspacePath, configuration(), storage),
                   std::runtime_error);
-    ASSERT_FALSE(std::filesystem::exists(remnant_path / "restored"));
+    ASSERT_FALSE(std::filesystem::exists(remnantPath / "restored"));
 }
 
 TEST(quotaEvictsOnlyRestoredRemnantsOldestFirst) {
     TemporaryDirectory temporary;
-    const auto workspace_path = workspace(temporary);
+    const auto workspacePath = workspace(temporary);
     std::vector<std::string> ids;
     ids.push_back(
-        makeRestoredRemnant(temporary.path(), workspace_path, "oldest"));
+        makeRestoredRemnant(temporary.path(), workspacePath, "oldest"));
     ids.push_back(
-        makeRestoredRemnant(temporary.path(), workspace_path, "middle"));
+        makeRestoredRemnant(temporary.path(), workspacePath, "middle"));
     ids.push_back(
-        makeRestoredRemnant(temporary.path(), workspace_path, "newest"));
+        makeRestoredRemnant(temporary.path(), workspacePath, "newest"));
     ASSERT_TRUE(std::is_sorted(ids.begin(), ids.end()));
 
     auto config = configuration();
     config.maximum_bytes = 0;
     auto store =
-        ssg::ScratchStore::create(temporary.path(), workspace_path, config);
+        ssg::ScratchStore::create(temporary.path(), workspacePath, config);
     {
-        auto protected_remnant =
-            ssg::ScratchSession::create(temporary.path(), workspace_path);
-        ssg::ScratchJournal{protected_remnant.journalPath()}.appendDocument(
+        auto protectedRemnant =
+            ssg::ScratchSession::create(temporary.path(), workspacePath);
+        ssg::ScratchJournal{protectedRemnant.journalPath()}.appendDocument(
             document("protected.txt", "unrestored quota state"));
     }
     const auto result = store.applyQuotas();
@@ -207,24 +207,24 @@ TEST(quotaEvictsOnlyRestoredRemnantsOldestFirst) {
 
 TEST(purgeWorkspaceAndAllLeaveUnrestoredState) {
     TemporaryDirectory temporary;
-    const auto workspace_a = workspace(temporary, "a");
-    const auto workspace_b = workspace(temporary, "b");
-    makeRestoredRemnant(temporary.path(), workspace_a, "a");
-    makeRestoredRemnant(temporary.path(), workspace_b, "b");
-    std::filesystem::path protected_path;
+    const auto workspaceA = workspace(temporary, "a");
+    const auto workspaceB = workspace(temporary, "b");
+    makeRestoredRemnant(temporary.path(), workspaceA, "a");
+    makeRestoredRemnant(temporary.path(), workspaceB, "b");
+    std::filesystem::path protectedPath;
     {
-        auto protected_remnant =
-            ssg::ScratchSession::create(temporary.path(), workspace_b);
-        protected_path = protected_remnant.path();
-        ssg::ScratchJournal{protected_remnant.journalPath()}.appendDocument(
+        auto protectedRemnant =
+            ssg::ScratchSession::create(temporary.path(), workspaceB);
+        protectedPath = protectedRemnant.path();
+        ssg::ScratchJournal{protectedRemnant.journalPath()}.appendDocument(
             document("protected.txt", "unrestored"));
     }
 
     auto store = ssg::ScratchStore::create(
-        temporary.path(), workspace_a, configuration());
+        temporary.path(), workspaceA, configuration());
     ASSERT_EQ(store.purgeWorkspace(), std::size_t{1});
     ASSERT_EQ(store.purgeAll(), std::size_t{1});
-    ASSERT_TRUE(std::filesystem::exists(protected_path));
+    ASSERT_TRUE(std::filesystem::exists(protectedPath));
 }
 
 TEST(writeFailureIsActionableAndNeverReportsDurable) {

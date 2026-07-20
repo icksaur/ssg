@@ -26,13 +26,13 @@ StatusEnqueueResult StatusQueue::enqueue(StatusItem item) {
     }
 
     std::optional<StatusId> evicted;
-    const auto same_id = std::find_if(
+    const auto sameId = std::find_if(
         entries_.begin(), entries_.end(), [&](const Entry& entry) {
             return entry.item.id == item.id;
         });
-    if (same_id != entries_.end()) {
-        entries_.erase(same_id);
-    } else if (entries_.size() == capacity) {
+    if (sameId != entries_.end()) {
+        entries_.erase(sameId);
+    } else if (entries_.size() == kCapacity) {
         const auto worst = std::max_element(
             entries_.begin(), entries_.end(),
             [](const Entry& left, const Entry& right) {

@@ -157,13 +157,13 @@ public:
     }
 
 private:
-    static constexpr std::uint32_t watch_mask =
+    static constexpr std::uint32_t kWatchMask =
         IN_CREATE | IN_MODIFY | IN_ATTRIB | IN_CLOSE_WRITE | IN_DELETE |
         IN_MOVED_FROM | IN_MOVED_TO | IN_DELETE_SELF | IN_MOVE_SELF;
 
     void addWatch(const std::filesystem::path& directory) {
         const auto descriptor =
-            ::inotify_add_watch(descriptor_, directory.c_str(), watch_mask);
+            ::inotify_add_watch(descriptor_, directory.c_str(), kWatchMask);
         if (descriptor == -1) {
             throw std::system_error(errno, std::generic_category(),
                                     "failed to add inotify directory watch");
@@ -341,8 +341,8 @@ private:
 } // namespace
 
 std::unique_ptr<FilesystemWatcher> makePlatformFilesystemWatcher(
-    const std::filesystem::path& canonical_root, WatcherConfig config) {
-    return std::make_unique<LinuxFilesystemWatcher>(canonical_root, config);
+    const std::filesystem::path& canonicalRoot, WatcherConfig config) {
+    return std::make_unique<LinuxFilesystemWatcher>(canonicalRoot, config);
 }
 
 } // namespace ssg

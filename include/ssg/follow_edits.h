@@ -136,18 +136,18 @@ public:
         ClientId client, ViewportDimensions dimensions);
     [[nodiscard]] FollowEditsResult detachClient(ClientId client);
     [[nodiscard]] FollowEditsResult acceptExternalChange(
-        const DiffFileView& file, Revision source_revision);
+        const DiffFileView& file, Revision sourceRevision);
     [[nodiscard]] FollowEditsResult applyNavigation(
         const FollowNavigation& navigation);
     [[nodiscard]] FollowEditsResult pause();
-    [[nodiscard]] FollowEditsResult resume(const DiffViewState& current_diff);
+    [[nodiscard]] FollowEditsResult resume(const DiffViewState& currentDiff);
 
     [[nodiscard]] FollowEditsViewState viewState() const;
     [[nodiscard]] FollowEditsFooterProjection footerProjection() const;
 
 private:
     [[nodiscard]] FollowTarget targetFor(const DiffFileView& file,
-                                          Revision source_revision) const;
+                                          Revision sourceRevision) const;
     void activate(const FollowTarget& target);
     void advanceGeneration() noexcept;
 

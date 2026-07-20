@@ -29,17 +29,17 @@ struct HistoryUnit {
 
 HistoryResult failure(HistoryError error, Revision revision,
                       std::string message,
-                      DocumentError document_error = DocumentError::None) {
-    return {error, document_error, revision, std::nullopt, std::move(message)};
+                      DocumentError documentError = DocumentError::None) {
+    return {error, documentError, revision, std::nullopt, std::move(message)};
 }
 
 std::uint64_t selectionCharge(const SelectionSet& selections) {
     const auto count = static_cast<std::uint64_t>(selections.items().size());
-    constexpr auto item_size = static_cast<std::uint64_t>(sizeof(Selection));
-    if (count > std::numeric_limits<std::uint64_t>::max() / item_size) {
+    constexpr auto itemSize = static_cast<std::uint64_t>(sizeof(Selection));
+    if (count > std::numeric_limits<std::uint64_t>::max() / itemSize) {
         return std::numeric_limits<std::uint64_t>::max();
     }
-    return count * item_size;
+    return count * itemSize;
 }
 
 std::uint64_t saturatedAdd(std::uint64_t left, std::uint64_t right) {
@@ -130,12 +130,12 @@ HistoryStep makeStep(const DocumentSnapshot& before,
     step.inverse.reserve(ordered.size());
     for (const auto* edit : ordered) {
         const auto offset = static_cast<std::int64_t>(edit->offset.value());
-        const auto output_offset = offset + displacement;
+        const auto outputOffset = offset + displacement;
         const auto erased = before.text.substr(
             static_cast<std::size_t>(edit->offset.value()),
             static_cast<std::size_t>(edit->erased_bytes));
         step.inverse.push_back(
-            {ByteOffset{static_cast<std::uint64_t>(output_offset)},
+            {ByteOffset{static_cast<std::uint64_t>(outputOffset)},
              static_cast<std::uint64_t>(edit->inserted_text.size()), erased});
         step.payload_bytes = saturatedAdd(
             step.payload_bytes,
@@ -159,7 +159,7 @@ std::uint64_t unitCharge(const HistoryStep& step,
 }  // namespace
 
 struct DocumentHistory::Impl {
-    explicit Impl(HistoryConfig history_config) : config(history_config) {}
+    explicit Impl(HistoryConfig historyConfig) : config(historyConfig) {}
 
     HistoryConfig config;
     std::vector<HistoryUnit> undo;
@@ -194,14 +194,14 @@ struct DocumentHistory::Impl {
 
     bool canCoalesce(const HistoryUnit& unit, const HistoryStep& step,
                       const SelectionSet& before, HistoryEditKind kind,
-                      std::uint64_t timestamp_ms,
-                      bool step_coalescible) const {
+                      std::uint64_t timestampMs,
+                      bool stepCoalescible) const {
         (void)step;
-        return !barrier && unit.coalescible && step_coalescible &&
+        return !barrier && unit.coalescible && stepCoalescible &&
                unit.kind == kind &&
                unit.selections_after == before &&
-               timestamp_ms >= unit.last_timestamp_ms &&
-               timestamp_ms - unit.last_timestamp_ms <= config.coalesce_ms;
+               timestampMs >= unit.last_timestamp_ms &&
+               timestampMs - unit.last_timestamp_ms <= config.coalesce_ms;
     }
 };
 
@@ -236,9 +236,9 @@ DocumentHistory& DocumentHistory::operator=(DocumentHistory&&) noexcept =
 
 HistoryResult DocumentHistory::applyEdit(
     Document& document, const EditTransaction& transaction,
-    const SelectionSet& selections_before,
-    const SelectionSet& selections_after, HistoryEditKind kind,
-    std::uint64_t timestamp_ms) {
+    const SelectionSet& selectionsBefore,
+    const SelectionSet& selectionsAfter, HistoryEditKind kind,
+    std::uint64_t timestampMs) {
     const auto before = document.snapshot();
     const bool bypassed =
         impl_->expected_revision &&
@@ -262,16 +262,16 @@ HistoryResult DocumentHistory::applyEdit(
     }
     impl_->clearRedo();
 
-    const bool step_coalescible =
-        editShapeMatches(transaction, selections_before, kind);
+    const bool stepCoalescible =
+        editShapeMatches(transaction, selectionsBefore, kind);
     if (!impl_->undo.empty() &&
-        impl_->canCoalesce(impl_->undo.back(), step, selections_before, kind,
-                            timestamp_ms, step_coalescible)) {
+        impl_->canCoalesce(impl_->undo.back(), step, selectionsBefore, kind,
+                            timestampMs, stepCoalescible)) {
         auto& unit = impl_->undo.back();
         impl_->retained -= unit.charged_bytes;
         unit.steps.push_back(std::move(step));
-        unit.selections_after = selections_after;
-        unit.last_timestamp_ms = timestamp_ms;
+        unit.selections_after = selectionsAfter;
+        unit.last_timestamp_ms = timestampMs;
         unit.charged_bytes = saturatedAdd(
             unit.charged_bytes,
             unit.steps.back().payload_bytes);
@@ -279,10 +279,10 @@ HistoryResult DocumentHistory::applyEdit(
             saturatedAdd(impl_->retained, unit.charged_bytes);
     } else {
         const auto charge =
-            unitCharge(step, selections_before, selections_after);
+            unitCharge(step, selectionsBefore, selectionsAfter);
         impl_->undo.push_back(
-            {{std::move(step)}, selections_before, selections_after, kind,
-             timestamp_ms, charge, step_coalescible});
+            {{std::move(step)}, selectionsBefore, selectionsAfter, kind,
+             timestampMs, charge, stepCoalescible});
         impl_->retained = saturatedAdd(impl_->retained, charge);
     }
 
@@ -290,7 +290,7 @@ HistoryResult DocumentHistory::applyEdit(
     impl_->expected_revision = result.revision;
     impl_->barrier = false;
     return {HistoryError::None, DocumentError::None, result.revision,
-            selections_after, {}};
+            selectionsAfter, {}};
 }
 
 HistoryResult DocumentHistory::undo(Document& document) {

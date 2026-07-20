@@ -127,13 +127,13 @@ public:
         WorkspaceReplacementId replacement);
 
     [[nodiscard]] WorkspaceResult newDocument(
-        std::string_view suggested_label = {});
+        std::string_view suggestedLabel = {});
     [[nodiscard]] WorkspaceResult openFile(std::string_view path);
     [[nodiscard]] WorkspaceResult openRecent(std::size_t index);
     [[nodiscard]] WorkspaceResult openDroppedContent(
         const InvocationPrincipal& principal,
         std::span<const std::uint8_t> bytes,
-        std::string_view suggested_label);
+        std::string_view suggestedLabel);
 
     [[nodiscard]] WorkspaceResult save(FileDocumentId document);
     [[nodiscard]] WorkspaceResult saveAll();
@@ -145,9 +145,9 @@ public:
     [[nodiscard]] WorkspaceResult setEncoding(
         FileDocumentId document, TextEncoding encoding);
     [[nodiscard]] WorkspaceResult setLineEnding(
-        FileDocumentId document, LineEnding line_ending);
+        FileDocumentId document, LineEnding lineEnding);
     [[nodiscard]] WorkspaceResult setFinalNewline(
-        FileDocumentId document, bool final_newline);
+        FileDocumentId document, bool finalNewline);
     [[nodiscard]] WorkspaceResult renameFile(FileDocumentId document,
                                               std::string_view path);
     [[nodiscard]] WorkspaceResult deleteFile(FileDocumentId document);

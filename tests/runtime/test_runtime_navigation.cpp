@@ -168,7 +168,7 @@ TEST(treeScrollsToKeepSelectionVisibleInAShortPanel) {
     for (int i = 0; i < 60; ++i) {
         ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select_next", runtime.revision(), {}}).accepted());
     }
-    std::uint32_t deep_first = 0;
+    std::uint32_t deepFirst = 0;
     {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
         ASSERT_TRUE(snap.has_value());
@@ -176,22 +176,22 @@ TEST(treeScrollsToKeepSelectionVisibleInAShortPanel) {
         auto const& p = snap->sections().tree.providers.front();
         ASSERT_TRUE(p.selected.has_value());
         // The selected node's absolute index lies within the visible window.
-        std::optional<std::uint32_t> sel_index;
+        std::optional<std::uint32_t> selIndex;
         for (std::uint32_t i = 0; i < p.nodes.size(); ++i) {
-            if (p.nodes[i].node.id == *p.selected) { sel_index = i; break; }
+            if (p.nodes[i].node.id == *p.selected) { selIndex = i; break; }
         }
-        ASSERT_TRUE(sel_index.has_value());
+        ASSERT_TRUE(selIndex.has_value());
         ASSERT_TRUE(p.first_visible > 0);
-        ASSERT_TRUE(*sel_index >= p.first_visible &&
-                    *sel_index < p.first_visible + p.visible_node_ids.size());
+        ASSERT_TRUE(*selIndex >= p.first_visible &&
+                    *selIndex < p.first_visible + p.visible_node_ids.size());
         // The hit map maps each viewport row to the correct on-screen node id.
         for (std::size_t row = 0; row < p.visible_node_ids.size(); ++row) {
             ASSERT_EQ(p.visible_node_ids[row],
                       p.nodes[p.first_visible + row].node.id);
         }
-        deep_first = p.first_visible;
+        deepFirst = p.first_visible;
     }
-    ASSERT_TRUE(deep_first > 0);
+    ASSERT_TRUE(deepFirst > 0);
 
     // Move back up to the top: the window scrolls back to first_visible == 0.
     for (int i = 0; i < 40; ++i) {
@@ -292,29 +292,29 @@ TEST(treeSelectFocusesThePanelAndTheClickPairNetsExpectedFocus) {
     auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
     ASSERT_TRUE(snap.has_value());
     if (!snap) return;
-    std::optional<ssg::TreeNodeId> dir_id;
-    std::optional<ssg::TreeNodeId> file_id;
+    std::optional<ssg::TreeNodeId> dirId;
+    std::optional<ssg::TreeNodeId> fileId;
     for (auto const& view : snap->sections().tree.providers.front().nodes) {
-        if (view.node.expandable && !dir_id) dir_id = view.node.id;
-        if (!view.node.expandable && view.node.workspace_path && !file_id) file_id = view.node.id;
+        if (view.node.expandable && !dirId) dirId = view.node.id;
+        if (!view.node.expandable && view.node.workspace_path && !fileId) fileId = view.node.id;
     }
-    ASSERT_TRUE(dir_id.has_value());
-    ASSERT_TRUE(file_id.has_value());
-    if (!dir_id || !file_id) return;
+    ASSERT_TRUE(dirId.has_value());
+    ASSERT_TRUE(fileId.has_value());
+    if (!dirId || !fileId) return;
 
     // The file click pair [tree.select, tree.activate] ends on the editor (the
     // file opens, so tree.activate's focus_editor wins over tree.select's panel).
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select", runtime.revision(), ssg::TreeSelectArguments{*file_id}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select", runtime.revision(), ssg::TreeSelectArguments{*fileId}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.activate", runtime.revision(), {}}).accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Editor);
 
     // From editor focus, tree.select alone moves keyboard focus to the panel.
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select", runtime.revision(), ssg::TreeSelectArguments{*file_id}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select", runtime.revision(), ssg::TreeSelectArguments{*fileId}}).accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
 
     // The directory click pair ends on the panel (tree.select focuses the panel,
     // tree.activate toggles the directory and leaves focus alone).
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select", runtime.revision(), ssg::TreeSelectArguments{*dir_id}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select", runtime.revision(), ssg::TreeSelectArguments{*dirId}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.activate", runtime.revision(), {}}).accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
     std::filesystem::remove_all(root);
@@ -350,7 +350,7 @@ TEST(treeScrollMovesTheViewportWithoutMovingTheSelection) {
     auto const& p0 = baseline->sections().tree.providers.front();
     ASSERT_EQ(p0.first_visible, std::uint32_t{0});
     ASSERT_TRUE(p0.scrollbar.maximum_first_row > 0);
-    auto const selected_before = p0.selected;
+    auto const selectedBefore = p0.selected;
 
     // Wheel down: the viewport offset advances, but the selection does not move.
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
@@ -361,7 +361,7 @@ TEST(treeScrollMovesTheViewportWithoutMovingTheSelection) {
     if (!scrolled) return;
     auto const& p1 = scrolled->sections().tree.providers.front();
     ASSERT_EQ(p1.first_visible, std::uint32_t{3});
-    ASSERT_EQ(p1.selected, selected_before);  // selection unchanged
+    ASSERT_EQ(p1.selected, selectedBefore);  // selection unchanged
 
     // Wheel up past the top clamps at 0.
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
@@ -478,11 +478,11 @@ TEST(wordWrapOnWrapsLongLinesOffClipsThem) {
     ASSERT_TRUE(off.has_value());
     if (!off) return;
     ASSERT_EQ(off->client().viewport.total_visual_rows, std::uint32_t{3});
-    std::uint32_t off_rows_for_line0 = 0;
+    std::uint32_t offRowsForLine0 = 0;
     for (auto const& row : off->client().viewport.visible_rows) {
-        if (row.logical_line == 0) ++off_rows_for_line0;
+        if (row.logical_line == 0) ++offRowsForLine0;
     }
-    ASSERT_EQ(off_rows_for_line0, std::uint32_t{1});  // clipped, not wrapped
+    ASSERT_EQ(offRowsForLine0, std::uint32_t{1});  // clipped, not wrapped
 
     // Word wrap ON: the 200-cell line wraps into ceil(200/80) = 3 visual rows, so
     // the total exceeds the OFF total and logical line 0 spans >1 row.
@@ -493,19 +493,19 @@ TEST(wordWrapOnWrapsLongLinesOffClipsThem) {
     ASSERT_TRUE(on.has_value());
     if (!on) return;
     ASSERT_TRUE(on->client().viewport.total_visual_rows > 3u);  // wrapped
-    std::uint32_t on_rows_for_line0 = 0;
+    std::uint32_t onRowsForLine0 = 0;
     for (auto const& row : on->client().viewport.visible_rows) {
-        if (row.logical_line == 0) ++on_rows_for_line0;
+        if (row.logical_line == 0) ++onRowsForLine0;
     }
-    ASSERT_EQ(on_rows_for_line0, std::uint32_t{3});  // 200 cells / 80 -> 3 rows
+    ASSERT_EQ(onRowsForLine0, std::uint32_t{3});  // 200 cells / 80 -> 3 rows
     // Wrapped lines never scroll horizontally.
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"cursor.line_end", runtime.revision(), {}})
                     .accepted());
-    auto wrapped_end = runtime.snapshot(ssg::ClientId{1}, dims);
-    ASSERT_TRUE(wrapped_end.has_value());
-    if (!wrapped_end) return;
-    ASSERT_EQ(wrapped_end->client().viewport.first_visual_column, std::uint32_t{0});
+    auto wrappedEnd = runtime.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(wrappedEnd.has_value());
+    if (!wrappedEnd) return;
+    ASSERT_EQ(wrappedEnd->client().viewport.first_visual_column, std::uint32_t{0});
     std::filesystem::remove_all(root);
 }
 
@@ -519,15 +519,15 @@ TEST(wordWrapOffNavigationIsViewportBounded) {
     std::filesystem::create_directories(root / "workspace");
     std::filesystem::create_directories(root / "scratch");
     std::filesystem::create_directories(root / "recovery");
-    auto make_doc = [](std::size_t lines) {
+    auto makeDoc = [](std::size_t lines) {
         std::string text;
         for (std::size_t i = 0; i < lines; ++i) {
             text += "line " + std::to_string(i) + " content\n";
         }
         return text;
     };
-    std::ofstream{root / "workspace" / "small.txt"} << make_doc(50);
-    std::ofstream{root / "workspace" / "big.txt"} << make_doc(20000);
+    std::ofstream{root / "workspace" / "small.txt"} << makeDoc(50);
+    std::ofstream{root / "workspace" / "big.txt"} << makeDoc(20000);
     auto created = ssg::EditorRuntime::create(
         {root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
@@ -537,7 +537,7 @@ TEST(wordWrapOffNavigationIsViewportBounded) {
                                ssg::ViewId{1}).accepted());
     ssg::ViewportDimensions const dims{80, 24};
 
-    auto nav_segmentations = [&](std::string const& file) -> std::uint64_t {
+    auto navSegmentations = [&](std::string const& file) -> std::uint64_t {
         (void)runtime.dispatch(
             ssg::ClientId{1}, {"file.open", runtime.revision(), file});
         (void)runtime.snapshot(ssg::ClientId{1}, dims);  // prime pane cache
@@ -550,14 +550,14 @@ TEST(wordWrapOffNavigationIsViewportBounded) {
         return ssg::cellRunCalls();
     };
 
-    auto const small_calls = nav_segmentations("small.txt");
-    auto const big_calls = nav_segmentations("big.txt");
+    auto const smallCalls = navSegmentations("small.txt");
+    auto const bigCalls = navSegmentations("big.txt");
 
-    ASSERT_TRUE(small_calls > 0);
+    ASSERT_TRUE(smallCalls > 0);
     // Bounded (~ per move: visible rows + the moved line), and NOT proportional to
     // the 400x-larger document.
-    ASSERT_TRUE(small_calls < 200);
-    ASSERT_EQ(small_calls, big_calls);
+    ASSERT_TRUE(smallCalls < 200);
+    ASSERT_EQ(smallCalls, bigCalls);
     std::filesystem::remove_all(root);
 }
 

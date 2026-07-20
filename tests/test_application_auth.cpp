@@ -40,15 +40,15 @@ TEST(randomFailureIsNotReplacedWithAWeakCredential) {
 TEST(applicationAuthAcceptsOnlyCurrentBearerWithExactCapability) {
     auto stale = ssg::generateBearerCredential();
     auto current = ssg::generateBearerCredential();
-    auto const stale_value = std::string{stale.value()};
-    auto const current_value = std::string{current.value()};
+    auto const staleValue = std::string{stale.value()};
+    auto const currentValue = std::string{current.value()};
     ssg::ApplicationAuthentication authentication{
         std::move(current), ssg::SessionId{"application-session"},
         ssg::ClientId{41}, ssg::ViewId{42}};
 
     ASSERT_FALSE(authentication.authenticate("wrong").has_value());
-    ASSERT_FALSE(authentication.authenticate(stale_value).has_value());
-    auto accepted = authentication.authenticate(current_value);
+    ASSERT_FALSE(authentication.authenticate(staleValue).has_value());
+    auto accepted = authentication.authenticate(currentValue);
     ASSERT_TRUE(accepted.has_value());
     ASSERT_EQ(accepted->principal.clientId(), ssg::ClientId{41});
     ASSERT_EQ(accepted->principal.origin(), ssg::InvocationOrigin::Websocket);

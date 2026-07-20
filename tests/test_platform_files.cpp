@@ -135,14 +135,14 @@ TEST(pathPolicyDecisionTable) {
                   test.expected);
     }
 
-    const std::string long_path = std::string(130, 'a') + "\\" +
+    const std::string longPath = std::string(130, 'a') + "\\" +
                                   std::string(130, 'b');
     ASSERT_EQ(ssg::validateWorkspaceRelativePath(
-                  long_path, Windows, ssg::LongPathPolicy::Legacy)
+                  longPath, Windows, ssg::LongPathPolicy::Legacy)
                   .error,
               PathTooLong);
     ASSERT_EQ(ssg::validateWorkspaceRelativePath(
-                  long_path, Windows, ssg::LongPathPolicy::Extended)
+                  longPath, Windows, ssg::LongPathPolicy::Extended)
                   .error,
               None);
 }
@@ -165,13 +165,13 @@ TEST(identityIsStableAcrossReopenAndRename) {
 
 TEST(lockContentionAndReleaseFollowRaii) {
     TemporaryDirectory temporary;
-    const auto lock_path = temporary.path() / "session.lock";
+    const auto lockPath = temporary.path() / "session.lock";
 
-    auto first = ssg::tryLockFile(lock_path);
+    auto first = ssg::tryLockFile(lockPath);
     ASSERT_TRUE(first.has_value());
-    ASSERT_FALSE(ssg::tryLockFile(lock_path).has_value());
+    ASSERT_FALSE(ssg::tryLockFile(lockPath).has_value());
     first.reset();
-    ASSERT_TRUE(ssg::tryLockFile(lock_path).has_value());
+    ASSERT_TRUE(ssg::tryLockFile(lockPath).has_value());
 }
 
 TEST(ownerOnlyPermissionsAreApplied) {
@@ -249,23 +249,23 @@ TEST(atomicReplacementPublishesCompleteBytes) {
 TEST(atomicReplacementNeverExposesPartialBytes) {
     TemporaryDirectory temporary;
     const auto target = temporary.path() / "document";
-    const std::string old_contents(64 * 1024, 'o');
-    const std::string new_contents(64 * 1024, 'n');
-    writeText(target, old_contents);
+    const std::string oldContents(64 * 1024, 'o');
+    const std::string newContents(64 * 1024, 'n');
+    writeText(target, oldContents);
 
     std::atomic<bool> stop = false;
     std::atomic<bool> partial = false;
     std::thread reader([&] {
         while (!stop.load()) {
             const auto observed = tryReadText(target);
-            if (observed.has_value() && *observed != old_contents &&
-                *observed != new_contents) {
+            if (observed.has_value() && *observed != oldContents &&
+                *observed != newContents) {
                 partial = true;
             }
         }
     });
     for (int iteration = 0; iteration < 50; ++iteration) {
-        const auto& contents = iteration % 2 == 0 ? new_contents : old_contents;
+        const auto& contents = iteration % 2 == 0 ? newContents : oldContents;
         ssg::replaceFileAtomically(target, bytes(contents));
     }
     stop = true;

@@ -79,8 +79,8 @@ struct Json {
 
 class JsonParser {
 public:
-    JsonParser(std::string_view input, std::size_t maximum_depth)
-        : input_(input), maximum_depth_(maximum_depth) {}
+    JsonParser(std::string_view input, std::size_t maximumDepth)
+        : input_(input), maximum_depth_(maximumDepth) {}
 
     [[nodiscard]] std::optional<Json> parse() {
         auto value = parseValue(0);
@@ -255,10 +255,10 @@ std::optional<LspPosition> parsePosition(const Json& value) {
     const auto* line = value.member("line");
     const auto* character = value.member("character");
     if (!line || !character) return std::nullopt;
-    const auto line_value = line->unsignedInteger();
-    const auto character_value = character->unsignedInteger();
-    if (!line_value || !character_value) return std::nullopt;
-    return LspPosition{*line_value, *character_value};
+    const auto lineValue = line->unsignedInteger();
+    const auto characterValue = character->unsignedInteger();
+    if (!lineValue || !characterValue) return std::nullopt;
+    return LspPosition{*lineValue, *characterValue};
 }
 
 std::optional<LspRange> parseRange(const Json& value) {
@@ -266,15 +266,15 @@ std::optional<LspRange> parseRange(const Json& value) {
     const auto* start = value.member("start");
     const auto* end = value.member("end");
     if (!start || !end) return std::nullopt;
-    const auto parsed_start = parsePosition(*start);
-    const auto parsed_end = parsePosition(*end);
-    if (!parsed_start || !parsed_end ||
-        parsed_end->line < parsed_start->line ||
-        (parsed_end->line == parsed_start->line &&
-         parsed_end->character < parsed_start->character)) {
+    const auto parsedStart = parsePosition(*start);
+    const auto parsedEnd = parsePosition(*end);
+    if (!parsedStart || !parsedEnd ||
+        parsedEnd->line < parsedStart->line ||
+        (parsedEnd->line == parsedStart->line &&
+         parsedEnd->character < parsedStart->character)) {
         return std::nullopt;
     }
-    return LspRange{*parsed_start, *parsed_end};
+    return LspRange{*parsedStart, *parsedEnd};
 }
 
 const Json* responseResult(const Json& root) {
@@ -282,14 +282,14 @@ const Json* responseResult(const Json& root) {
 }
 
 std::optional<std::vector<LspCompletionItem>> parseCompletion(
-    const Json& result, std::size_t maximum_items) {
+    const Json& result, std::size_t maximumItems) {
     if (result.kind == Json::Kind::NullValue) {
         return std::vector<LspCompletionItem>{};
     }
     const Json* values = &result;
     if (result.kind == Json::Kind::Object) values = result.member("items");
     if (!values || values->kind != Json::Kind::Array ||
-        values->array.size() > maximum_items) {
+        values->array.size() > maximumItems) {
         return std::nullopt;
     }
     std::vector<LspCompletionItem> items;
@@ -365,19 +365,19 @@ std::optional<LspNavigationTarget> parseLocation(const Json& value) {
     if (!uri || uri->kind != Json::Kind::String || !range) {
         return std::nullopt;
     }
-    auto parsed_range = parseRange(*range);
-    if (!parsed_range) return std::nullopt;
-    return LspNavigationTarget{uri->scalar, *parsed_range};
+    auto parsedRange = parseRange(*range);
+    if (!parsedRange) return std::nullopt;
+    return LspNavigationTarget{uri->scalar, *parsedRange};
 }
 
 std::optional<std::vector<LspNavigationTarget>> parseLocations(
-    const Json& result, std::size_t maximum_targets) {
+    const Json& result, std::size_t maximumTargets) {
     if (result.kind == Json::Kind::NullValue) {
         return std::vector<LspNavigationTarget>{};
     }
     std::vector<LspNavigationTarget> targets;
     if (result.kind == Json::Kind::Array) {
-        if (result.array.size() > maximum_targets) return std::nullopt;
+        if (result.array.size() > maximumTargets) return std::nullopt;
         targets.reserve(result.array.size());
         for (const auto& value : result.array) {
             auto target = parseLocation(value);
@@ -386,7 +386,7 @@ std::optional<std::vector<LspNavigationTarget>> parseLocations(
         }
     } else {
         auto target = parseLocation(result);
-        if (!target || maximum_targets == 0) return std::nullopt;
+        if (!target || maximumTargets == 0) return std::nullopt;
         targets.push_back(std::move(*target));
     }
     return targets;
@@ -456,9 +456,9 @@ LspFeatureRequestResult LspFeatureController::request(
         return {0, LspFeatureError::StaleRevision,
                 "LSP feature request carries a stale revision"};
     }
-    const auto lsp_position =
+    const auto lspPosition =
         byteOffsetToLspPosition(snapshot->text, position);
-    if (!lsp_position.accepted()) {
+    if (!lspPosition.accepted()) {
         return {0, LspFeatureError::InvalidPosition,
                 "LSP feature request position is invalid"};
     }
@@ -473,8 +473,8 @@ LspFeatureRequestResult LspFeatureController::request(
     auto params =
         "{\"textDocument\":{\"uri\":" + jsonEscape(uri) +
         "},\"position\":{\"line\":" +
-        std::to_string(lsp_position.position.line) + ",\"character\":" +
-        std::to_string(lsp_position.position.character) + "}";
+        std::to_string(lspPosition.position.line) + ",\"character\":" +
+        std::to_string(lspPosition.position.character) + "}";
     if (kind == Kind::References) {
         params += ",\"context\":{\"includeDeclaration\":true}";
     }
@@ -513,7 +513,7 @@ void LspFeatureController::cancel(Kind kind, Disposition disposition) {
     id = 0;
 }
 
-LspFeaturePollResult LspFeatureController::poll(Revision current_revision) {
+LspFeaturePollResult LspFeatureController::poll(Revision currentRevision) {
     const auto transport = client_.poll();
     if (!transport.accepted()) {
         return {transport.error, transport.message, {}};
@@ -539,7 +539,7 @@ LspFeaturePollResult LspFeatureController::poll(Revision current_revision) {
             outcome = LspFeaturePublishResult::ServerError;
         } else {
             const auto snapshot = client_.documentSnapshot(pending.uri);
-            if (current_revision != pending.revision || !snapshot ||
+            if (currentRevision != pending.revision || !snapshot ||
                 snapshot->revision != pending.revision) {
                 outcome = LspFeaturePublishResult::StaleRevision;
             } else {

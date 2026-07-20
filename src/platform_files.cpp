@@ -123,7 +123,7 @@ PathValidation validateComponent(std::string_view component,
 
 PathValidation validateWorkspaceRelativePath(std::string_view path,
                                                 PathSyntax syntax,
-                                                LongPathPolicy long_paths) noexcept {
+                                                LongPathPolicy longPaths) noexcept {
     if (path.empty()) {
         return {PathError::Empty, 0};
     }
@@ -136,35 +136,35 @@ PathValidation validateWorkspaceRelativePath(std::string_view path,
         return {PathError::Absolute, 0};
     }
 
-    const auto is_separator = [syntax](char value) {
+    const auto isSeparator = [syntax](char value) {
         return value == '/' || (syntax == PathSyntax::Windows && value == '\\');
     };
-    std::size_t component_start = 0;
-    std::size_t component_index = 0;
+    std::size_t componentStart = 0;
+    std::size_t componentIndex = 0;
     for (std::size_t i = 0; i <= path.size(); ++i) {
-        if (i != path.size() && !is_separator(path[i])) {
+        if (i != path.size() && !isSeparator(path[i])) {
             continue;
         }
         const auto validation =
-            validateComponent(path.substr(component_start, i - component_start),
-                               syntax, component_index);
+            validateComponent(path.substr(componentStart, i - componentStart),
+                               syntax, componentIndex);
         if (!validation.valid()) {
             return validation;
         }
-        component_start = i + 1;
-        ++component_index;
+        componentStart = i + 1;
+        ++componentIndex;
     }
 
-    const auto total_length = utf8Length(path);
-    if (!total_length.valid) {
+    const auto totalLength = utf8Length(path);
+    if (!totalLength.valid) {
         return {PathError::InvalidUtf8, 0};
     }
     const std::size_t maximum =
         syntax == PathSyntax::Linux
             ? 4095
-            : (long_paths == LongPathPolicy::Legacy ? 259 : 32766);
+            : (longPaths == LongPathPolicy::Legacy ? 259 : 32766);
     const std::size_t measured =
-        syntax == PathSyntax::Linux ? path.size() : total_length.utf16_units;
+        syntax == PathSyntax::Linux ? path.size() : totalLength.utf16_units;
     if (measured > maximum) {
         return {PathError::PathTooLong, 0};
     }

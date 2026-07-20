@@ -164,9 +164,9 @@ private:
 
 [[nodiscard]] DiffCommandSet diffCommandSet();
 [[nodiscard]] std::optional<std::size_t> nextDiffHunk(
-    const DiffFileView& file, std::optional<std::size_t> current_target_line);
+    const DiffFileView& file, std::optional<std::size_t> currentTargetLine);
 [[nodiscard]] std::optional<std::size_t> previousDiffHunk(
-    const DiffFileView& file, std::optional<std::size_t> current_target_line);
+    const DiffFileView& file, std::optional<std::size_t> currentTargetLine);
 
 struct DiffOpenTarget {
     DiffFileId id;

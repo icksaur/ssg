@@ -31,7 +31,7 @@
 namespace ssg {
 namespace {
 
-constexpr std::string_view prefix = "SSG1";
+constexpr std::string_view kPrefix = "SSG1";
 
 std::string hexEncode(std::string_view bytes) {
     constexpr char digits[] = "0123456789abcdef";
@@ -182,7 +182,7 @@ CommandError parseCommandError(std::string_view value) {
 }  // namespace
 
 std::string encodeInsertRequest(InsertRequest const& request) {
-    return std::string{prefix} + " INSERT " +
+    return std::string{kPrefix} + " INSERT " +
            std::to_string(request.base_revision.value()) + " " +
            hexEncode(request.text);
 }
@@ -198,7 +198,7 @@ DecodeInsertResult decodeInsertRequest(std::string_view message,
         return decodeFailure(ProtocolError::MalformedMessage,
                               "insert message must contain four fields");
     }
-    if (parts[0] != prefix) {
+    if (parts[0] != kPrefix) {
         return decodeFailure(ProtocolError::UnsupportedVersion,
                               "unsupported protocol version");
     }
@@ -230,7 +230,7 @@ DecodeInsertResult decodeInsertRequest(std::string_view message,
 
 std::string encodeSliceResponse(SliceResponse const& response) {
     std::string encoded =
-        std::string{prefix} + " RESPONSE " +
+        std::string{kPrefix} + " RESPONSE " +
         std::string{protocolErrorName(response.protocol_error)} + " " +
         std::string{commandErrorName(response.command_error)} + " " +
         std::to_string(response.snapshot.revision.value()) + " " +
@@ -254,7 +254,7 @@ SliceResponse decodeSliceResponse(std::string_view message,
         throw std::invalid_argument{"response exceeds configured byte limit"};
     }
     auto const parts = fields(message);
-    if (parts.size() != 9 || parts[0] != prefix || parts[1] != "RESPONSE") {
+    if (parts.size() != 9 || parts[0] != kPrefix || parts[1] != "RESPONSE") {
         throw std::invalid_argument{"malformed slice response"};
     }
     std::uint64_t revision = 0;
@@ -264,8 +264,8 @@ SliceResponse decodeSliceResponse(std::string_view message,
         throw std::invalid_argument{"malformed response revision or caret"};
     }
     auto text = hexDecode(parts[6]);
-    auto error_message = hexDecode(parts[7]);
-    if (!text || !error_message) {
+    auto errorMessage = hexDecode(parts[7]);
+    if (!text || !errorMessage) {
         throw std::invalid_argument{"malformed response hexadecimal field"};
     }
     std::optional<DocumentDelta> delta;
@@ -294,7 +294,7 @@ SliceResponse decodeSliceResponse(std::string_view message,
     }
     return {parseProtocolError(parts[2]), parseCommandError(parts[3]),
             {Revision{revision}, std::move(*text), ByteOffset{caret}},
-            std::move(delta), std::move(*error_message)};
+            std::move(delta), std::move(*errorMessage)};
 }
 
 struct CoreEditorSlice::Impl {
@@ -333,8 +333,8 @@ struct CoreEditorSlice::Impl {
                   }}}}}}} {}
 
     DocumentViewState snapshotUnlocked() const {
-        auto document_snapshot = document.snapshot();
-        return {document_snapshot.revision, std::move(document_snapshot.text),
+        auto documentSnapshot = document.snapshot();
+        return {documentSnapshot.revision, std::move(documentSnapshot.text),
                 selections.primary().active.byte_offset};
     }
 
@@ -352,17 +352,17 @@ bool CoreEditorSlice::attach(InvocationPrincipal principal) {
     return impl_->session.attach(std::move(principal), ViewId{1}).accepted();
 }
 
-bool CoreEditorSlice::detach(ClientId client_id) {
+bool CoreEditorSlice::detach(ClientId clientId) {
     std::lock_guard lock{impl_->mutex};
-    return impl_->session.detach(client_id);
+    return impl_->session.detach(clientId);
 }
 
-SliceResponse CoreEditorSlice::execute(ClientId client_id,
+SliceResponse CoreEditorSlice::execute(ClientId clientId,
                                        InsertRequest const& request) {
     std::lock_guard lock{impl_->mutex};
     auto const before = impl_->snapshotUnlocked();
     auto result = impl_->session.dispatch(
-        client_id,
+        clientId,
         ClientCommand{"text.insert", request.base_revision,
                       TextInputArguments{request.text}});
     auto const after = impl_->snapshotUnlocked();
@@ -762,23 +762,23 @@ ValueReadStatus readValue(ByteReader& reader, ProtocolValue& out,
             ProtocolValue::Object fields;
             fields.reserve(count);
             for (std::uint32_t index = 0; index < count; ++index) {
-                std::uint32_t key_length = 0;
-                if (!reader.readU32(key_length)) {
+                std::uint32_t keyLength = 0;
+                if (!reader.readU32(keyLength)) {
                     return ValueReadStatus::Truncated;
                 }
-                if (key_length > limits.max_text_bytes) {
+                if (keyLength > limits.max_text_bytes) {
                     return ValueReadStatus::BoundsExceeded;
                 }
-                std::string_view key_bytes;
-                if (!reader.readBytes(key_length, key_bytes)) {
+                std::string_view keyBytes;
+                if (!reader.readBytes(keyLength, keyBytes)) {
                     return ValueReadStatus::Truncated;
                 }
-                ProtocolValue field_value;
-                auto status = readValue(reader, field_value, depth + 1, limits);
+                ProtocolValue fieldValue;
+                auto status = readValue(reader, fieldValue, depth + 1, limits);
                 if (status != ValueReadStatus::Ok) {
                     return status;
                 }
-                fields.emplace_back(std::string{key_bytes}, std::move(field_value));
+                fields.emplace_back(std::string{keyBytes}, std::move(fieldValue));
             }
             out = ProtocolValue::makeObject(std::move(fields));
             return ValueReadStatus::Ok;
@@ -820,7 +820,7 @@ struct DecodedMessage {
 };
 
 DecodedMessage decodeMessage(std::string_view bytes,
-                              ProtocolMessageKind expected_kind,
+                              ProtocolMessageKind expectedKind,
                               ProtocolLimits const& limits) {
     if (bytes.size() > limits.max_message_bytes) {
         return {ProtocolError::MessageTooLarge, std::nullopt,
@@ -836,12 +836,12 @@ DecodedMessage decodeMessage(std::string_view bytes,
         return {ProtocolError::UnsupportedVersion, std::nullopt,
                 "message declares an unsupported protocol version"};
     }
-    std::uint8_t kind_byte = 0;
-    if (!reader.readU8(kind_byte)) {
+    std::uint8_t kindByte = 0;
+    if (!reader.readU8(kindByte)) {
         return {ProtocolError::TruncatedMessage, std::nullopt,
                 "message is missing its kind byte"};
     }
-    if (kind_byte != static_cast<std::uint8_t>(expected_kind)) {
+    if (kindByte != static_cast<std::uint8_t>(expectedKind)) {
         return {ProtocolError::UnsupportedMessageKind, std::nullopt,
                 "message kind does not match the requested decoder"};
     }
@@ -1464,23 +1464,23 @@ template <typename T>
 // as absence and rejects malformed data. Unlike require_field(), a
 // genuinely-absent field is not an error here.
 template <typename T>
-[[nodiscard]] bool decodeOptionalField(ProtocolValue const* field_value,
+[[nodiscard]] bool decodeOptionalField(ProtocolValue const* fieldValue,
                                          std::optional<T>& out) {
-    if (field_value == nullptr) {
+    if (fieldValue == nullptr) {
         out.reset();
         return true;
     }
-    return fromValue(*field_value, out);
+    return fromValue(*fieldValue, out);
 }
 
 template <typename Enum, std::size_t N>
 [[nodiscard]] bool decodeEnum(ProtocolValue const& value, std::optional<Enum>& out,
-                               std::array<Enum, N> const& valid_values) {
+                               std::array<Enum, N> const& validValues) {
     auto raw = value.asUint();
     if (!raw) {
         return false;
     }
-    for (Enum candidate : valid_values) {
+    for (Enum candidate : validValues) {
         if (static_cast<std::uint64_t>(
                 static_cast<std::underlying_type_t<Enum>>(candidate)) ==
             *raw) {
@@ -1651,7 +1651,7 @@ bool decode_present(ProtocolValue const& value, std::optional<GitTreeStatus>& ou
 }
 
 bool decode_present(ProtocolValue const& value, std::optional<SyntaxScope>& out) {
-    return decodeEnum(value, out, all_syntax_scopes);
+    return decodeEnum(value, out, kAllSyntaxScopes);
 }
 
 bool decode_present(ProtocolValue const& value, std::optional<BracketKind>& out) {
@@ -1700,7 +1700,7 @@ bool decodePresent(ProtocolValue const& value, std::optional<FocusTarget>& out) 
 }
 
 bool decode_present(ProtocolValue const& value, std::optional<SemanticRole>& out) {
-    return decodeEnum(value, out, all_semantic_roles);
+    return decodeEnum(value, out, kAllSemanticRoles);
 }
 
 // Strong-id toValue()/decode_present() definitions.
@@ -1935,11 +1935,11 @@ ProtocolValue toValue(DocumentPosition const& value) {
 bool decode_present(ProtocolValue const& value, std::optional<DocumentPosition>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
-    auto byte_offset = requireField<ByteOffset>(value.field("byte_offset"));
+    auto byteOffset = requireField<ByteOffset>(value.field("byte_offset"));
     auto line = requireField<LineIndex>(value.field("line"));
     auto cell = requireField<CellIndex>(value.field("cell"));
-    if (!byte_offset || !line || !cell) return false;
-    out.emplace(DocumentPosition{*byte_offset, *line, *cell});
+    if (!byteOffset || !line || !cell) return false;
+    out.emplace(DocumentPosition{*byteOffset, *line, *cell});
     return true;
 }
 
@@ -1973,16 +1973,16 @@ ProtocolValue toValue(DocumentDelta const& value) {
 bool decode_present(ProtocolValue const& value, std::optional<DocumentDelta>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
-    auto base_revision = requireField<Revision>(value.field("base_revision"));
+    auto baseRevision = requireField<Revision>(value.field("base_revision"));
     auto revision = requireField<Revision>(value.field("revision"));
     auto start = requireField<ByteOffset>(value.field("start"));
-    auto erased_bytes = requireField<std::uint64_t>(value.field("erased_bytes"));
-    auto inserted_text = requireField<std::string>(value.field("inserted_text"));
-    if (!base_revision || !revision || !start || !erased_bytes || !inserted_text) {
+    auto erasedBytes = requireField<std::uint64_t>(value.field("erased_bytes"));
+    auto insertedText = requireField<std::string>(value.field("inserted_text"));
+    if (!baseRevision || !revision || !start || !erasedBytes || !insertedText) {
         return false;
     }
-    out.emplace(DocumentDelta{*base_revision, *revision, *start, *erased_bytes,
-                              *inserted_text});
+    out.emplace(DocumentDelta{*baseRevision, *revision, *start, *erasedBytes,
+                              *insertedText});
     return true;
 }
 
@@ -2029,15 +2029,15 @@ bool decode_present(ProtocolValue const& value, std::optional<SelectionViewState
     auto const* object = value.asObject();
     if (!object) return false;
     auto selections = requireField<SelectionSet>(value.field("selections"));
-    auto first_visual_row =
+    auto firstVisualRow =
         requireField<std::uint32_t>(value.field("first_visual_row"));
-    auto first_visual_column =
+    auto firstVisualColumn =
         requireField<std::uint32_t>(value.field("first_visual_column"));
-    if (!selections || !first_visual_row || !first_visual_column) return false;
-    std::optional<CellIndex> desired_cell;
-    if (!decodeOptionalField(value.field("desired_cell"), desired_cell)) return false;
-    out.emplace(SelectionViewState{*selections, *first_visual_row,
-                                   *first_visual_column, desired_cell});
+    if (!selections || !firstVisualRow || !firstVisualColumn) return false;
+    std::optional<CellIndex> desiredCell;
+    if (!decodeOptionalField(value.field("desired_cell"), desiredCell)) return false;
+    out.emplace(SelectionViewState{*selections, *firstVisualRow,
+                                   *firstVisualColumn, desiredCell});
     return true;
 }
 
@@ -2068,11 +2068,11 @@ ProtocolValue toValue(HistoryViewState const& value) {
 bool decode_present(ProtocolValue const& value, std::optional<HistoryViewState>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
-    auto can_undo = requireField<bool>(value.field("can_undo"));
-    auto can_redo = requireField<bool>(value.field("can_redo"));
-    auto retained_bytes = requireField<std::uint64_t>(value.field("retained_bytes"));
-    if (!can_undo || !can_redo || !retained_bytes) return false;
-    out.emplace(HistoryViewState{*can_undo, *can_redo, *retained_bytes});
+    auto canUndo = requireField<bool>(value.field("can_undo"));
+    auto canRedo = requireField<bool>(value.field("can_redo"));
+    auto retainedBytes = requireField<std::uint64_t>(value.field("retained_bytes"));
+    if (!canUndo || !canRedo || !retainedBytes) return false;
+    out.emplace(HistoryViewState{*canUndo, *canRedo, *retainedBytes});
     return true;
 }
 
@@ -2140,9 +2140,9 @@ bool decodePresent(ProtocolValue const& value, std::optional<ShellLabel>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto id = requireField<std::string>(value.field("id"));
-    auto accessible_label = requireField<std::string>(value.field("accessible_label"));
-    if (!id || !accessible_label) return false;
-    out.emplace(ShellLabel{*id, *accessible_label});
+    auto accessibleLabel = requireField<std::string>(value.field("accessible_label"));
+    if (!id || !accessibleLabel) return false;
+    out.emplace(ShellLabel{*id, *accessibleLabel});
     return true;
 }
 
@@ -2226,15 +2226,15 @@ bool decode_present(ProtocolValue const& value, std::optional<ShellViewState>& o
     if (!object) return false;
     auto viewport = requireField<GridSize>(value.field("viewport"));
     auto panes = requireField<std::vector<PaneGeometry>>(value.field("panes"));
-    auto tab_hits = requireField<std::vector<TabHit>>(value.field("tab_hits"));
-    auto accessibility_nodes =
+    auto tabHits = requireField<std::vector<TabHit>>(value.field("tab_hits"));
+    auto accessibilityNodes =
         requireField<std::vector<AccessibilityNode>>(value.field("accessibility_nodes"));
-    if (!viewport || !panes || !tab_hits || !accessibility_nodes) return false;
+    if (!viewport || !panes || !tabHits || !accessibilityNodes) return false;
     ShellViewState result;
     result.viewport = *viewport;
-    if (auto const* focus_field = value.field("focus")) {
+    if (auto const* focusField = value.field("focus")) {
         std::optional<FocusTarget> focus;
-        if (!decodePresent(*focus_field, focus) || !focus) return false;
+        if (!decodePresent(*focusField, focus) || !focus) return false;
         result.focus = *focus;
     }
     if (!decodeOptionalField(value.field("header"), result.header)) return false;
@@ -2244,8 +2244,8 @@ bool decode_present(ProtocolValue const& value, std::optional<ShellViewState>& o
     if (!decodeOptionalField(value.field("panel_scrollbar"), result.panel_scrollbar)) return false;
     if (!decodeOptionalField(value.field("prompt"), result.prompt)) return false;
     result.panes = *panes;
-    result.tab_hits = *tab_hits;
-    result.accessibility_nodes = *accessibility_nodes;
+    result.tab_hits = *tabHits;
+    result.accessibility_nodes = *accessibilityNodes;
     out.emplace(std::move(result));
     return true;
 }
@@ -2262,10 +2262,10 @@ bool decodePresent(ProtocolValue const& value, std::optional<PromptInput>& out) 
     auto const* object = value.asObject();
     if (!object) return false;
     auto id = requireField<std::string>(value.field("id"));
-    auto accessible_label = requireField<std::string>(value.field("accessible_label"));
-    auto text_value = requireField<std::string>(value.field("value"));
-    if (!id || !accessible_label || !text_value) return false;
-    out.emplace(PromptInput{*id, *accessible_label, *text_value});
+    auto accessibleLabel = requireField<std::string>(value.field("accessible_label"));
+    auto textValue = requireField<std::string>(value.field("value"));
+    if (!id || !accessibleLabel || !textValue) return false;
+    out.emplace(PromptInput{*id, *accessibleLabel, *textValue});
     return true;
 }
 
@@ -2281,11 +2281,11 @@ bool decodePresent(ProtocolValue const& value, std::optional<PromptToggle>& out)
     auto const* object = value.asObject();
     if (!object) return false;
     auto id = requireField<std::string>(value.field("id"));
-    auto accessible_label = requireField<std::string>(value.field("accessible_label"));
-    auto toggle_value = requireField<bool>(value.field("value"));
+    auto accessibleLabel = requireField<std::string>(value.field("accessible_label"));
+    auto toggleValue = requireField<bool>(value.field("value"));
     auto width = requireField<int>(value.field("width"));
-    if (!id || !accessible_label || !toggle_value || !width) return false;
-    out.emplace(PromptToggle{*id, *accessible_label, *toggle_value, *width});
+    if (!id || !accessibleLabel || !toggleValue || !width) return false;
+    out.emplace(PromptToggle{*id, *accessibleLabel, *toggleValue, *width});
     return true;
 }
 
@@ -2300,10 +2300,10 @@ bool decodePresent(ProtocolValue const& value, std::optional<PromptMatchCount>& 
     auto const* object = value.asObject();
     if (!object) return false;
     auto id = requireField<std::string>(value.field("id"));
-    auto accessible_label = requireField<std::string>(value.field("accessible_label"));
-    auto text_value = requireField<std::string>(value.field("value"));
-    if (!id || !accessible_label || !text_value) return false;
-    out.emplace(PromptMatchCount{*id, *accessible_label, *text_value});
+    auto accessibleLabel = requireField<std::string>(value.field("accessible_label"));
+    auto textValue = requireField<std::string>(value.field("value"));
+    if (!id || !accessibleLabel || !textValue) return false;
+    out.emplace(PromptMatchCount{*id, *accessibleLabel, *textValue});
     return true;
 }
 
@@ -2322,14 +2322,14 @@ bool decode_present(ProtocolValue const& value, std::optional<PromptControlView>
     if (!object) return false;
     auto kind = requireField<PromptControlKind>(value.field("kind"));
     auto id = requireField<std::string>(value.field("id"));
-    auto accessible_label = requireField<std::string>(value.field("accessible_label"));
-    auto text_value = requireField<std::string>(value.field("value"));
+    auto accessibleLabel = requireField<std::string>(value.field("accessible_label"));
+    auto textValue = requireField<std::string>(value.field("value"));
     auto checked = requireField<bool>(value.field("checked"));
     auto rect = requireField<Rect>(value.field("rect"));
-    if (!kind || !id || !accessible_label || !text_value || !checked || !rect) {
+    if (!kind || !id || !accessibleLabel || !textValue || !checked || !rect) {
         return false;
     }
-    out.emplace(PromptControlView{*kind, *id, *accessible_label, *text_value,
+    out.emplace(PromptControlView{*kind, *id, *accessibleLabel, *textValue,
                                   *checked, *rect});
     return true;
 }
@@ -2346,11 +2346,11 @@ bool decode_present(ProtocolValue const& value, std::optional<PromptViewState>& 
     auto const* object = value.asObject();
     if (!object) return false;
     auto kind = requireField<PromptKind>(value.field("kind"));
-    auto accessible_label = requireField<std::string>(value.field("accessible_label"));
+    auto accessibleLabel = requireField<std::string>(value.field("accessible_label"));
     auto rect = requireField<Rect>(value.field("rect"));
     auto controls = requireField<std::vector<PromptControlView>>(value.field("controls"));
-    if (!kind || !accessible_label || !rect || !controls) return false;
-    out.emplace(PromptViewState{*kind, *accessible_label, *rect, *controls});
+    if (!kind || !accessibleLabel || !rect || !controls) return false;
+    out.emplace(PromptViewState{*kind, *accessibleLabel, *rect, *controls});
     return true;
 }
 
@@ -2366,10 +2366,10 @@ bool decode_present(ProtocolValue const& value, std::optional<StatusAction>& out
     auto const* object = value.asObject();
     if (!object) return false;
     auto id = requireField<std::string>(value.field("id"));
-    auto accessible_label = requireField<std::string>(value.field("accessible_label"));
-    auto command_id = requireField<std::string>(value.field("command_id"));
-    if (!id || !accessible_label || !command_id) return false;
-    out.emplace(StatusAction{*id, *accessible_label, *command_id});
+    auto accessibleLabel = requireField<std::string>(value.field("accessible_label"));
+    auto commandId = requireField<std::string>(value.field("command_id"));
+    if (!id || !accessibleLabel || !commandId) return false;
+    out.emplace(StatusAction{*id, *accessibleLabel, *commandId});
     return true;
 }
 
@@ -2388,12 +2388,12 @@ bool decode_present(ProtocolValue const& value, std::optional<StatusItemView>& o
     auto id = requireField<StatusId>(value.field("id"));
     auto priority = requireField<StatusPriority>(value.field("priority"));
     auto generation = requireField<std::uint64_t>(value.field("generation"));
-    auto accessible_label = requireField<std::string>(value.field("accessible_label"));
+    auto accessibleLabel = requireField<std::string>(value.field("accessible_label"));
     auto actions = requireField<std::vector<StatusAction>>(value.field("actions"));
-    if (!id || !priority || !generation || !accessible_label || !actions) {
+    if (!id || !priority || !generation || !accessibleLabel || !actions) {
         return false;
     }
-    out.emplace(StatusItemView{*id, *priority, *generation, *accessible_label,
+    out.emplace(StatusItemView{*id, *priority, *generation, *accessibleLabel,
                                *actions});
     return true;
 }
@@ -2424,11 +2424,11 @@ ProtocolValue toValue(StatusActionInvocation const& value) {
 bool decode_present(ProtocolValue const& value, std::optional<StatusActionInvocation>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
-    auto status_id = requireField<StatusId>(value.field("status_id"));
-    auto action_id = requireField<std::string>(value.field("action_id"));
+    auto statusId = requireField<StatusId>(value.field("status_id"));
+    auto actionId = requireField<std::string>(value.field("action_id"));
     auto generation = requireField<std::uint64_t>(value.field("generation"));
-    if (!status_id || !action_id || !generation) return false;
-    out.emplace(StatusActionInvocation{*status_id, *action_id, *generation});
+    if (!statusId || !actionId || !generation) return false;
+    out.emplace(StatusActionInvocation{*statusId, *actionId, *generation});
     return true;
 }
 
@@ -2480,10 +2480,10 @@ bool decode_present(ProtocolValue const& value, std::optional<ClipboardRequest>&
     if (!object) return false;
     auto id = requireField<std::uint64_t>(value.field("id"));
     auto kind = requireField<ClipboardRequestKind>(value.field("kind"));
-    auto request_revision = requireField<Revision>(value.field("request_revision"));
+    auto requestRevision = requireField<Revision>(value.field("request_revision"));
     auto text = requireField<std::string>(value.field("text"));
-    if (!id || !kind || !request_revision || !text) return false;
-    out.emplace(ClipboardRequest{*id, *kind, *request_revision, *text});
+    if (!id || !kind || !requestRevision || !text) return false;
+    out.emplace(ClipboardRequest{*id, *kind, *requestRevision, *text});
     return true;
 }
 
@@ -2501,16 +2501,16 @@ bool decode_present(ProtocolValue const& value, std::optional<ClipboardResponse>
     auto const* object = value.asObject();
     if (!object) return false;
     auto id = requireField<std::uint64_t>(value.field("id"));
-    auto request_revision = requireField<Revision>(value.field("request_revision"));
-    auto observed_document_revision =
+    auto requestRevision = requireField<Revision>(value.field("request_revision"));
+    auto observedDocumentRevision =
         requireField<Revision>(value.field("observed_document_revision"));
     auto status = requireField<ClipboardResponseStatus>(value.field("status"));
     auto text = requireField<std::string>(value.field("text"));
-    if (!id || !request_revision || !observed_document_revision || !status || !text) {
+    if (!id || !requestRevision || !observedDocumentRevision || !status || !text) {
         return false;
     }
-    out.emplace(ClipboardResponse{*id, *request_revision,
-                                  *observed_document_revision, *status, *text});
+    out.emplace(ClipboardResponse{*id, *requestRevision,
+                                  *observedDocumentRevision, *status, *text});
     return true;
 }
 
@@ -2526,11 +2526,11 @@ bool decode_present(ProtocolValue const& value, std::optional<ClipboardViewState
     auto const* object = value.asObject();
     if (!object) return false;
     auto fragments = requireField<std::vector<std::string>>(value.field("fragments"));
-    auto plain_text = requireField<std::string>(value.field("plain_text"));
-    if (!fragments || !plain_text) return false;
+    auto plainText = requireField<std::string>(value.field("plain_text"));
+    if (!fragments || !plainText) return false;
     ClipboardViewState result;
     result.fragments = *fragments;
-    result.plain_text = *plain_text;
+    result.plain_text = *plainText;
     if (!decodeOptionalField(value.field("pending_read"), result.pending_read)) {
         return false;
     }
@@ -2610,30 +2610,30 @@ bool decode_present(ProtocolValue const& value, std::optional<SearchViewState>& 
     auto const* object = value.asObject();
     if (!object) return false;
     auto revision = requireField<Revision>(value.field("revision"));
-    auto palette_open = requireField<bool>(value.field("palette_open"));
+    auto paletteOpen = requireField<bool>(value.field("palette_open"));
     auto query = requireField<std::string>(value.field("query"));
     auto mode = requireField<SearchMode>(value.field("mode"));
     auto results = requireField<std::vector<SearchResult>>(value.field("results"));
-    auto search_generation = requireField<std::uint64_t>(value.field("search_generation"));
+    auto searchGeneration = requireField<std::uint64_t>(value.field("search_generation"));
     auto searching = requireField<bool>(value.field("searching"));
-    if (!revision || !palette_open || !query || !mode || !results ||
-        !search_generation || !searching) {
+    if (!revision || !paletteOpen || !query || !mode || !results ||
+        !searchGeneration || !searching) {
         return false;
     }
     SearchViewState result;
     result.revision = *revision;
-    result.palette_open = *palette_open;
+    result.palette_open = *paletteOpen;
     result.query = *query;
     result.mode = *mode;
     result.results = *results;
-    std::optional<std::uint64_t> selected_index;
-    if (!decodeOptionalField(value.field("selected_index"), selected_index)) {
+    std::optional<std::uint64_t> selectedIndex;
+    if (!decodeOptionalField(value.field("selected_index"), selectedIndex)) {
         return false;
     }
-    if (selected_index) {
-        result.selected_index = static_cast<std::size_t>(*selected_index);
+    if (selectedIndex) {
+        result.selected_index = static_cast<std::size_t>(*selectedIndex);
     }
-    result.search_generation = *search_generation;
+    result.search_generation = *searchGeneration;
     result.searching = *searching;
     out.emplace(std::move(result));
     return true;
@@ -2649,11 +2649,11 @@ ProtocolValue toValue(SearchDelta const& value) {
 bool decode_present(ProtocolValue const& value, std::optional<SearchDelta>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
-    auto base_revision = requireField<Revision>(value.field("base_revision"));
+    auto baseRevision = requireField<Revision>(value.field("base_revision"));
     auto revision = requireField<Revision>(value.field("revision"));
-    if (!base_revision || !revision) return false;
+    if (!baseRevision || !revision) return false;
     SearchDelta result;
-    result.base_revision = *base_revision;
+    result.base_revision = *baseRevision;
     result.revision = *revision;
     if (!decodeOptionalField(value.field("state"), result.state)) return false;
     out.emplace(std::move(result));
@@ -2688,12 +2688,12 @@ ProtocolValue toValue(FindOptions const& value) {
 bool decode_present(ProtocolValue const& value, std::optional<FindOptions>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
-    auto case_sensitive = requireField<bool>(value.field("case_sensitive"));
-    auto whole_word = requireField<bool>(value.field("whole_word"));
+    auto caseSensitive = requireField<bool>(value.field("case_sensitive"));
+    auto wholeWord = requireField<bool>(value.field("whole_word"));
     auto regex = requireField<bool>(value.field("regex"));
-    auto selection_only = requireField<bool>(value.field("selection_only"));
-    if (!case_sensitive || !whole_word || !regex || !selection_only) return false;
-    out.emplace(FindOptions{*case_sensitive, *whole_word, *regex, *selection_only});
+    auto selectionOnly = requireField<bool>(value.field("selection_only"));
+    if (!caseSensitive || !wholeWord || !regex || !selectionOnly) return false;
+    out.emplace(FindOptions{*caseSensitive, *wholeWord, *regex, *selectionOnly});
     return true;
 }
 
@@ -2711,14 +2711,14 @@ bool decode_present(ProtocolValue const& value, std::optional<FindRequest>& out)
     auto query = requireField<std::string>(value.field("query"));
     auto options = requireField<FindOptions>(value.field("options"));
     std::optional<ByteRange> selection;
-    auto work_budget = requireField<std::uint64_t>(value.field("work_budget"));
+    auto workBudget = requireField<std::uint64_t>(value.field("work_budget"));
     if (!query || !options ||
         !decodeOptionalField(value.field("selection"), selection) ||
-        !work_budget) {
+        !workBudget) {
         return false;
     }
     out.emplace(FindRequest{*query, *options, std::move(selection),
-                            *work_budget, nullptr});
+                            *workBudget, nullptr});
     return true;
 }
 
@@ -2770,13 +2770,13 @@ ProtocolValue toValue(WorkspaceReplacePreview const& value) {
 bool decode_present(ProtocolValue const& value, std::optional<WorkspaceReplacePreview>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
-    auto source_revision = requireField<Revision>(value.field("source_revision"));
+    auto sourceRevision = requireField<Revision>(value.field("source_revision"));
     auto query = requireField<std::string>(value.field("query"));
     auto replacement = requireField<std::string>(value.field("replacement"));
     auto options = requireField<FindOptions>(value.field("options"));
     auto changes = requireField<std::vector<WorkspaceFileReplacement>>(value.field("changes"));
-    if (!source_revision || !query || !replacement || !options || !changes) return false;
-    out.emplace(WorkspaceReplacePreview{*source_revision, *query,
+    if (!sourceRevision || !query || !replacement || !options || !changes) return false;
+    out.emplace(WorkspaceReplacePreview{*sourceRevision, *query,
                                         *replacement, *options, *changes});
     return true;
 }
@@ -2806,32 +2806,32 @@ bool decode_present(ProtocolValue const& value, std::optional<FindReplaceViewSta
     if (!object) return false;
     auto generation = requireField<std::uint64_t>(value.field("generation"));
     auto open = requireField<bool>(value.field("open"));
-    auto replace_mode = requireField<bool>(value.field("replace_mode"));
-    auto source_revision = requireField<Revision>(value.field("source_revision"));
+    auto replaceMode = requireField<bool>(value.field("replace_mode"));
+    auto sourceRevision = requireField<Revision>(value.field("source_revision"));
     auto query = requireField<std::string>(value.field("query"));
     auto replacement = requireField<std::string>(value.field("replacement"));
     auto options = requireField<FindOptions>(value.field("options"));
     auto matches = requireField<std::vector<FindMatch>>(value.field("matches"));
     auto error = requireField<FindReplaceError>(value.field("error"));
     auto message = requireField<std::string>(value.field("message"));
-    if (!generation || !open || !replace_mode || !source_revision || !query ||
+    if (!generation || !open || !replaceMode || !sourceRevision || !query ||
         !replacement || !options || !matches || !error || !message) {
         return false;
     }
     FindReplaceViewState result;
     result.generation = *generation;
     result.open = *open;
-    result.replace_mode = *replace_mode;
-    result.source_revision = *source_revision;
+    result.replace_mode = *replaceMode;
+    result.source_revision = *sourceRevision;
     result.query = *query;
     result.replacement = *replacement;
     result.options = *options;
     result.matches = *matches;
-    std::optional<std::uint64_t> active_match;
-    if (!decodeOptionalField(value.field("active_match"), active_match)) {
+    std::optional<std::uint64_t> activeMatch;
+    if (!decodeOptionalField(value.field("active_match"), activeMatch)) {
         return false;
     }
-    if (active_match) result.active_match = static_cast<std::size_t>(*active_match);
+    if (activeMatch) result.active_match = static_cast<std::size_t>(*activeMatch);
     result.error = *error;
     result.message = *message;
     out.emplace(std::move(result));
@@ -2849,11 +2849,11 @@ bool decode_present(ProtocolValue const& value, std::optional<FindReplaceDelta>&
     auto const* object = value.asObject();
     if (!object) return false;
     auto changed = requireField<bool>(value.field("changed"));
-    auto base_generation = requireField<std::uint64_t>(value.field("base_generation"));
-    if (!changed || !base_generation) return false;
+    auto baseGeneration = requireField<std::uint64_t>(value.field("base_generation"));
+    if (!changed || !baseGeneration) return false;
     FindReplaceDelta result;
     result.changed = *changed;
-    result.base_generation = *base_generation;
+    result.base_generation = *baseGeneration;
     if (!decodeOptionalField(value.field("replacement"), result.replacement)) {
         return false;
     }
@@ -2875,47 +2875,47 @@ bool decode_present(ProtocolValue const& value, std::optional<SettingValue>& out
     if (!object) return false;
     auto index = requireField<std::uint64_t>(value.field("index"));
     if (!index) return false;
-    auto const* alt_value = value.field("value");
-    if (!alt_value) return false;
+    auto const* altValue = value.field("value");
+    if (!altValue) return false;
     switch (*index) {
         case 0: {
-            auto decoded = requireField<bool>(alt_value);
+            auto decoded = requireField<bool>(altValue);
             if (!decoded) return false;
             out.emplace(SettingValue{std::in_place_index<0>, *decoded});
             return true;
         }
         case 1: {
-            auto decoded = requireField<std::uint32_t>(alt_value);
+            auto decoded = requireField<std::uint32_t>(altValue);
             if (!decoded) return false;
             out.emplace(SettingValue{std::in_place_index<1>, *decoded});
             return true;
         }
         case 2: {
-            auto decoded = requireField<std::uint64_t>(alt_value);
+            auto decoded = requireField<std::uint64_t>(altValue);
             if (!decoded) return false;
             out.emplace(SettingValue{std::in_place_index<2>, *decoded});
             return true;
         }
         case 3: {
-            auto decoded = requireField<IndentStyle>(alt_value);
+            auto decoded = requireField<IndentStyle>(altValue);
             if (!decoded) return false;
             out.emplace(SettingValue{std::in_place_index<3>, *decoded});
             return true;
         }
         case 4: {
-            auto decoded = requireField<LineEnding>(alt_value);
+            auto decoded = requireField<LineEnding>(altValue);
             if (!decoded) return false;
             out.emplace(SettingValue{std::in_place_index<4>, *decoded});
             return true;
         }
         case 5: {
-            auto decoded = requireField<TextEncoding>(alt_value);
+            auto decoded = requireField<TextEncoding>(altValue);
             if (!decoded) return false;
             out.emplace(SettingValue{std::in_place_index<5>, *decoded});
             return true;
         }
         case 6: {
-            auto decoded = requireField<std::string>(alt_value);
+            auto decoded = requireField<std::string>(altValue);
             if (!decoded) return false;
             out.emplace(SettingValue{std::in_place_index<6>, *decoded});
             return true;
@@ -2934,10 +2934,10 @@ ProtocolValue toValue(EffectiveSetting const& value) {
 bool decode_present(ProtocolValue const& value, std::optional<EffectiveSetting>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
-    auto setting_value = requireField<SettingValue>(value.field("value"));
+    auto settingValue = requireField<SettingValue>(value.field("value"));
     auto source = requireField<SettingScope>(value.field("source"));
-    if (!setting_value || !source) return false;
-    out.emplace(EffectiveSetting{*setting_value, *source});
+    if (!settingValue || !source) return false;
+    out.emplace(EffectiveSetting{*settingValue, *source});
     return true;
 }
 
@@ -2966,7 +2966,7 @@ bool decode_present(ProtocolValue const& value, std::optional<SettingsViewState>
     auto const* object = value.asObject();
     if (!object) return false;
     auto entries =
-        requireField<std::array<SettingViewEntry, setting_key_count>>(
+        requireField<std::array<SettingViewEntry, kSettingKeyCount>>(
             value.field("entries"));
     if (!entries) return false;
     SettingsViewState result;
@@ -3041,10 +3041,10 @@ bool decode_present(ProtocolValue const& value, std::optional<KeyBinding>& out) 
     auto const* object = value.asObject();
     if (!object) return false;
     auto sequence = requireField<std::vector<KeyStroke>>(value.field("sequence"));
-    auto command_id = requireField<std::string>(value.field("command_id"));
+    auto commandId = requireField<std::string>(value.field("command_id"));
     auto context = requireField<std::string>(value.field("context"));
-    if (!sequence || !command_id || !context) return false;
-    out.emplace(KeyBinding{*sequence, *command_id, *context});
+    if (!sequence || !commandId || !context) return false;
+    out.emplace(KeyBinding{*sequence, *commandId, *context});
     return true;
 }
 
@@ -3094,11 +3094,11 @@ bool decode_present(ProtocolValue const& value, std::optional<TextEncodingStatus
     auto const* object = value.asObject();
     if (!object) return false;
     auto encoding = requireField<TextEncoding>(value.field("encoding"));
-    auto line_ending = requireField<LineEnding>(value.field("line_ending"));
-    auto had_bom = requireField<bool>(value.field("had_bom"));
-    auto final_newline = requireField<bool>(value.field("final_newline"));
-    if (!encoding || !line_ending || !had_bom || !final_newline) return false;
-    out.emplace(TextEncodingStatus{*encoding, *line_ending, *had_bom, *final_newline});
+    auto lineEnding = requireField<LineEnding>(value.field("line_ending"));
+    auto hadBom = requireField<bool>(value.field("had_bom"));
+    auto finalNewline = requireField<bool>(value.field("final_newline"));
+    if (!encoding || !lineEnding || !hadBom || !finalNewline) return false;
+    out.emplace(TextEncodingStatus{*encoding, *lineEnding, *hadBom, *finalNewline});
     return true;
 }
 
@@ -3151,12 +3151,12 @@ bool decode_present(ProtocolValue const& value, std::optional<TabState>& out) {
     if (!object) return false;
     auto id = requireField<TabId>(value.field("id"));
     auto kind = requireField<TabKind>(value.field("kind"));
-    auto content_identity = requireField<std::string>(value.field("content_identity"));
+    auto contentIdentity = requireField<std::string>(value.field("content_identity"));
     auto label = requireField<std::string>(value.field("label"));
     auto mode = requireField<DocumentMode>(value.field("mode"));
     auto dirty = requireField<bool>(value.field("dirty"));
     auto recovery = requireField<TabRecoveryBadge>(value.field("recovery"));
-    if (!id || !kind || !content_identity || !label || !mode || !dirty || !recovery) {
+    if (!id || !kind || !contentIdentity || !label || !mode || !dirty || !recovery) {
         return false;
     }
     TabState result;
@@ -3166,7 +3166,7 @@ bool decode_present(ProtocolValue const& value, std::optional<TabState>& out) {
     if (!decodeOptionalField(value.field("document_key"), result.document_key)) {
         return false;
     }
-    result.content_identity = *content_identity;
+    result.content_identity = *contentIdentity;
     result.label = *label;
     result.mode = *mode;
     result.dirty = *dirty;
@@ -3232,12 +3232,12 @@ bool decode_present(ProtocolValue const& value, std::optional<DiffLineChange>& o
     if (!kind) return false;
     DiffLineChange result;
     result.kind = *kind;
-    std::optional<std::uint64_t> baseline_line;
-    if (!decodeOptionalField(value.field("baseline_line"), baseline_line)) return false;
-    if (baseline_line) result.baseline_line = static_cast<std::size_t>(*baseline_line);
-    std::optional<std::uint64_t> target_line;
-    if (!decodeOptionalField(value.field("target_line"), target_line)) return false;
-    if (target_line) result.target_line = static_cast<std::size_t>(*target_line);
+    std::optional<std::uint64_t> baselineLine;
+    if (!decodeOptionalField(value.field("baseline_line"), baselineLine)) return false;
+    if (baselineLine) result.baseline_line = static_cast<std::size_t>(*baselineLine);
+    std::optional<std::uint64_t> targetLine;
+    if (!decodeOptionalField(value.field("target_line"), targetLine)) return false;
+    if (targetLine) result.target_line = static_cast<std::size_t>(*targetLine);
     out.emplace(result);
     return true;
 }
@@ -3255,18 +3255,18 @@ ProtocolValue toValue(DiffHunk const& value) {
 bool decode_present(ProtocolValue const& value, std::optional<DiffHunk>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
-    auto baseline_start = requireField<std::uint64_t>(value.field("baseline_start"));
-    auto target_start = requireField<std::uint64_t>(value.field("target_start"));
-    auto baseline_lines = requireField<std::vector<std::string>>(value.field("baseline_lines"));
-    auto target_lines = requireField<std::vector<std::string>>(value.field("target_lines"));
-    if (!baseline_start || !target_start || !baseline_lines || !target_lines) {
+    auto baselineStart = requireField<std::uint64_t>(value.field("baseline_start"));
+    auto targetStart = requireField<std::uint64_t>(value.field("target_start"));
+    auto baselineLines = requireField<std::vector<std::string>>(value.field("baseline_lines"));
+    auto targetLines = requireField<std::vector<std::string>>(value.field("target_lines"));
+    if (!baselineStart || !targetStart || !baselineLines || !targetLines) {
         return false;
     }
     DiffHunk result;
-    result.baseline_start = static_cast<std::size_t>(*baseline_start);
-    result.target_start = static_cast<std::size_t>(*target_start);
-    result.baseline_lines = *baseline_lines;
-    result.target_lines = *target_lines;
+    result.baseline_start = static_cast<std::size_t>(*baselineStart);
+    result.target_start = static_cast<std::size_t>(*targetStart);
+    result.baseline_lines = *baselineLines;
+    result.target_lines = *targetLines;
     out.emplace(std::move(result));
     return true;
 }
@@ -3289,21 +3289,21 @@ bool decode_present(ProtocolValue const& value, std::optional<DiffFileView>& out
     auto id = requireField<DiffFileId>(value.field("id"));
     auto path = requireField<std::filesystem::path>(value.field("path"));
     auto deleted = requireField<bool>(value.field("deleted"));
-    auto baseline_identity = requireField<std::string>(value.field("baseline_identity"));
-    auto current_content = requireField<std::string>(value.field("current_content"));
+    auto baselineIdentity = requireField<std::string>(value.field("baseline_identity"));
+    auto currentContent = requireField<std::string>(value.field("current_content"));
     auto hunks = requireField<std::vector<DiffHunk>>(value.field("hunks"));
-    auto changed_lines = requireField<std::vector<DiffLineChange>>(value.field("changed_lines"));
-    if (!id || !path || !deleted || !baseline_identity || !current_content || !hunks ||
-        !changed_lines) {
+    auto changedLines = requireField<std::vector<DiffLineChange>>(value.field("changed_lines"));
+    if (!id || !path || !deleted || !baselineIdentity || !currentContent || !hunks ||
+        !changedLines) {
         return false;
     }
-    std::optional<std::filesystem::path> previous_path;
-    if (!decodeOptionalField(value.field("previous_path"), previous_path)) {
+    std::optional<std::filesystem::path> previousPath;
+    if (!decodeOptionalField(value.field("previous_path"), previousPath)) {
         return false;
     }
-    out.emplace(DiffFileView{*id, *path, std::move(previous_path), *deleted,
-                            *baseline_identity, *current_content, *hunks,
-                            *changed_lines});
+    out.emplace(DiffFileView{*id, *path, std::move(previousPath), *deleted,
+                            *baselineIdentity, *currentContent, *hunks,
+                            *changedLines});
     return true;
 }
 
@@ -3334,12 +3334,12 @@ ProtocolValue toValue(DiffDelta const& value) {
 bool decode_present(ProtocolValue const& value, std::optional<DiffDelta>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
-    auto base_revision = requireField<Revision>(value.field("base_revision"));
+    auto baseRevision = requireField<Revision>(value.field("base_revision"));
     auto revision = requireField<Revision>(value.field("revision"));
     auto upserted = requireField<std::vector<DiffFileView>>(value.field("upserted"));
     auto removed = requireField<std::vector<DiffFileId>>(value.field("removed"));
-    if (!base_revision || !revision || !upserted || !removed) return false;
-    out.emplace(DiffDelta{*base_revision, *revision, *upserted, *removed});
+    if (!baseRevision || !revision || !upserted || !removed) return false;
+    out.emplace(DiffDelta{*baseRevision, *revision, *upserted, *removed});
     return true;
 }
 
@@ -3359,10 +3359,10 @@ bool decode_present(ProtocolValue const& value, std::optional<ExternalDocumentVi
     auto id = requireField<DiffFileId>(value.field("id"));
     auto path = requireField<std::filesystem::path>(value.field("path"));
     auto status = requireField<ExternalDocumentStatus>(value.field("status"));
-    auto accessible_status = requireField<std::string>(value.field("accessible_status"));
+    auto accessibleStatus = requireField<std::string>(value.field("accessible_status"));
     auto actions = requireField<std::vector<ExternalAction>>(value.field("actions"));
-    if (!id || !path || !status || !accessible_status || !actions) return false;
-    out.emplace(ExternalDocumentView{*id, *path, *status, *accessible_status, *actions});
+    if (!id || !path || !status || !accessibleStatus || !actions) return false;
+    out.emplace(ExternalDocumentView{*id, *path, *status, *accessibleStatus, *actions});
     return true;
 }
 
@@ -3393,12 +3393,12 @@ ProtocolValue toValue(ExternalModificationDelta const& value) {
 bool decode_present(ProtocolValue const& value, std::optional<ExternalModificationDelta>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
-    auto base_revision = requireField<Revision>(value.field("base_revision"));
+    auto baseRevision = requireField<Revision>(value.field("base_revision"));
     auto revision = requireField<Revision>(value.field("revision"));
     auto upserted = requireField<std::vector<ExternalDocumentView>>(value.field("upserted"));
     auto removed = requireField<std::vector<DiffFileId>>(value.field("removed"));
-    if (!base_revision || !revision || !upserted || !removed) return false;
-    out.emplace(ExternalModificationDelta{*base_revision, *revision, *upserted, *removed});
+    if (!baseRevision || !revision || !upserted || !removed) return false;
+    out.emplace(ExternalModificationDelta{*baseRevision, *revision, *upserted, *removed});
     return true;
 }
 
@@ -3433,19 +3433,19 @@ ProtocolValue toValue(VisualRow const& value) {
 bool decode_present(ProtocolValue const& value, std::optional<VisualRow>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
-    auto logical_line = requireField<std::uint32_t>(value.field("logical_line"));
-    auto first_span = requireField<std::uint32_t>(value.field("first_span"));
-    auto span_count = requireField<std::uint32_t>(value.field("span_count"));
-    auto start_cell = requireField<CellIndex>(value.field("start_cell"));
-    auto content_cells = requireField<std::uint32_t>(value.field("content_cells"));
-    auto visible_cells = requireField<std::uint32_t>(value.field("visible_cells"));
-    auto end_byte_offset = requireField<std::uint32_t>(value.field("end_byte_offset"));
-    if (!logical_line || !first_span || !span_count || !start_cell || !content_cells ||
-        !visible_cells || !end_byte_offset) {
+    auto logicalLine = requireField<std::uint32_t>(value.field("logical_line"));
+    auto firstSpan = requireField<std::uint32_t>(value.field("first_span"));
+    auto spanCount = requireField<std::uint32_t>(value.field("span_count"));
+    auto startCell = requireField<CellIndex>(value.field("start_cell"));
+    auto contentCells = requireField<std::uint32_t>(value.field("content_cells"));
+    auto visibleCells = requireField<std::uint32_t>(value.field("visible_cells"));
+    auto endByteOffset = requireField<std::uint32_t>(value.field("end_byte_offset"));
+    if (!logicalLine || !firstSpan || !spanCount || !startCell || !contentCells ||
+        !visibleCells || !endByteOffset) {
         return false;
     }
-    out.emplace(VisualRow{*logical_line, *first_span, *span_count, *start_cell,
-                          *content_cells, *visible_cells, *end_byte_offset});
+    out.emplace(VisualRow{*logicalLine, *firstSpan, *spanCount, *startCell,
+                          *contentCells, *visibleCells, *endByteOffset});
     return true;
 }
 
@@ -3462,18 +3462,18 @@ ProtocolValue toValue(CellHitTarget const& value) {
 bool decode_present(ProtocolValue const& value, std::optional<CellHitTarget>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
-    auto viewport_row = requireField<std::uint32_t>(value.field("viewport_row"));
-    auto viewport_column = requireField<std::uint32_t>(value.field("viewport_column"));
-    auto logical_line = requireField<std::uint32_t>(value.field("logical_line"));
+    auto viewportRow = requireField<std::uint32_t>(value.field("viewport_row"));
+    auto viewportColumn = requireField<std::uint32_t>(value.field("viewport_column"));
+    auto logicalLine = requireField<std::uint32_t>(value.field("logical_line"));
     auto cell = requireField<CellIndex>(value.field("cell"));
-    auto byte_offset = requireField<std::uint32_t>(value.field("byte_offset"));
-    auto byte_len = requireField<std::uint32_t>(value.field("byte_len"));
-    if (!viewport_row || !viewport_column || !logical_line || !cell || !byte_offset ||
-        !byte_len) {
+    auto byteOffset = requireField<std::uint32_t>(value.field("byte_offset"));
+    auto byteLen = requireField<std::uint32_t>(value.field("byte_len"));
+    if (!viewportRow || !viewportColumn || !logicalLine || !cell || !byteOffset ||
+        !byteLen) {
         return false;
     }
-    out.emplace(CellHitTarget{*viewport_row, *viewport_column, *logical_line, *cell,
-                              *byte_offset, *byte_len});
+    out.emplace(CellHitTarget{*viewportRow, *viewportColumn, *logicalLine, *cell,
+                              *byteOffset, *byteLen});
     return true;
 }
 
@@ -3490,18 +3490,18 @@ ProtocolValue toValue(ScrollbarMetrics const& value) {
 bool decode_present(ProtocolValue const& value, std::optional<ScrollbarMetrics>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
-    auto total_rows = requireField<std::uint32_t>(value.field("total_rows"));
-    auto viewport_rows = requireField<std::uint32_t>(value.field("viewport_rows"));
-    auto first_row = requireField<std::uint32_t>(value.field("first_row"));
-    auto maximum_first_row = requireField<std::uint32_t>(value.field("maximum_first_row"));
-    auto thumb_start = requireField<std::uint32_t>(value.field("thumb_start"));
-    auto thumb_size = requireField<std::uint32_t>(value.field("thumb_size"));
-    if (!total_rows || !viewport_rows || !first_row || !maximum_first_row || !thumb_start ||
-        !thumb_size) {
+    auto totalRows = requireField<std::uint32_t>(value.field("total_rows"));
+    auto viewportRows = requireField<std::uint32_t>(value.field("viewport_rows"));
+    auto firstRow = requireField<std::uint32_t>(value.field("first_row"));
+    auto maximumFirstRow = requireField<std::uint32_t>(value.field("maximum_first_row"));
+    auto thumbStart = requireField<std::uint32_t>(value.field("thumb_start"));
+    auto thumbSize = requireField<std::uint32_t>(value.field("thumb_size"));
+    if (!totalRows || !viewportRows || !firstRow || !maximumFirstRow || !thumbStart ||
+        !thumbSize) {
         return false;
     }
-    out.emplace(ScrollbarMetrics{*total_rows, *viewport_rows, *first_row,
-                                 *maximum_first_row, *thumb_start, *thumb_size});
+    out.emplace(ScrollbarMetrics{*totalRows, *viewportRows, *firstRow,
+                                 *maximumFirstRow, *thumbStart, *thumbSize});
     return true;
 }
 
@@ -3520,19 +3520,19 @@ bool decode_present(ProtocolValue const& value, std::optional<ViewportViewState>
     auto const* object = value.asObject();
     if (!object) return false;
     auto dimensions = requireField<ViewportDimensions>(value.field("dimensions"));
-    auto first_visual_row = requireField<std::uint32_t>(value.field("first_visual_row"));
-    auto first_visual_column = requireField<std::uint32_t>(value.field("first_visual_column"));
-    auto total_visual_rows = requireField<std::uint32_t>(value.field("total_visual_rows"));
-    auto visible_rows = requireField<std::vector<VisualRow>>(value.field("visible_rows"));
-    auto hit_targets = requireField<std::vector<CellHitTarget>>(value.field("hit_targets"));
+    auto firstVisualRow = requireField<std::uint32_t>(value.field("first_visual_row"));
+    auto firstVisualColumn = requireField<std::uint32_t>(value.field("first_visual_column"));
+    auto totalVisualRows = requireField<std::uint32_t>(value.field("total_visual_rows"));
+    auto visibleRows = requireField<std::vector<VisualRow>>(value.field("visible_rows"));
+    auto hitTargets = requireField<std::vector<CellHitTarget>>(value.field("hit_targets"));
     auto scrollbar = requireField<ScrollbarMetrics>(value.field("scrollbar"));
-    if (!dimensions || !first_visual_row || !first_visual_column ||
-        !total_visual_rows || !visible_rows || !hit_targets || !scrollbar) {
+    if (!dimensions || !firstVisualRow || !firstVisualColumn ||
+        !totalVisualRows || !visibleRows || !hitTargets || !scrollbar) {
         return false;
     }
-    out.emplace(ViewportViewState{*dimensions, *first_visual_row,
-                                  *first_visual_column, *total_visual_rows,
-                                  *visible_rows, *hit_targets, *scrollbar});
+    out.emplace(ViewportViewState{*dimensions, *firstVisualRow,
+                                  *firstVisualColumn, *totalVisualRows,
+                                  *visibleRows, *hitTargets, *scrollbar});
     return true;
 }
 
@@ -3563,10 +3563,10 @@ ProtocolValue toValue(FollowScrollOffset const& value) {
 bool decode_present(ProtocolValue const& value, std::optional<FollowScrollOffset>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
-    auto first_row = requireField<std::uint64_t>(value.field("first_row"));
-    auto first_column = requireField<std::uint64_t>(value.field("first_column"));
-    if (!first_row || !first_column) return false;
-    out.emplace(FollowScrollOffset{*first_row, *first_column});
+    auto firstRow = requireField<std::uint64_t>(value.field("first_row"));
+    auto firstColumn = requireField<std::uint64_t>(value.field("first_column"));
+    if (!firstRow || !firstColumn) return false;
+    out.emplace(FollowScrollOffset{*firstRow, *firstColumn});
     return true;
 }
 
@@ -3586,12 +3586,12 @@ bool decode_present(ProtocolValue const& value, std::optional<FollowTarget>& out
     auto id = requireField<DiffFileId>(value.field("id"));
     auto path = requireField<std::filesystem::path>(value.field("path"));
     auto deleted = requireField<bool>(value.field("deleted"));
-    auto newest_hunk_line = requireField<std::uint64_t>(value.field("newest_hunk_line"));
-    auto source_revision = requireField<Revision>(value.field("source_revision"));
-    if (!id || !path || !deleted || !newest_hunk_line || !source_revision) return false;
+    auto newestHunkLine = requireField<std::uint64_t>(value.field("newest_hunk_line"));
+    auto sourceRevision = requireField<Revision>(value.field("source_revision"));
+    if (!id || !path || !deleted || !newestHunkLine || !sourceRevision) return false;
     out.emplace(FollowTarget{*id, *path, *deleted,
-                             static_cast<std::size_t>(*newest_hunk_line),
-                             *source_revision});
+                             static_cast<std::size_t>(*newestHunkLine),
+                             *sourceRevision});
     return true;
 }
 
@@ -3628,18 +3628,18 @@ bool decode_present(ProtocolValue const& value, std::optional<FollowEditsViewSta
     if (!object) return false;
     auto generation = requireField<std::uint64_t>(value.field("generation"));
     auto mode = requireField<FollowMode>(value.field("mode"));
-    auto active_pane = requireField<PaneId>(value.field("active_pane"));
-    auto queued_targets = requireField<std::vector<FollowTarget>>(value.field("queued_targets"));
+    auto activePane = requireField<PaneId>(value.field("active_pane"));
+    auto queuedTargets = requireField<std::vector<FollowTarget>>(value.field("queued_targets"));
     auto clients = requireField<std::vector<FollowClientView>>(value.field("clients"));
-    if (!generation || !mode || !active_pane || !queued_targets || !clients) return false;
+    if (!generation || !mode || !activePane || !queuedTargets || !clients) return false;
     FollowEditsViewState result;
     result.generation = *generation;
     result.mode = *mode;
-    result.active_pane = *active_pane;
+    result.active_pane = *activePane;
     if (!decodeOptionalField(value.field("active_target"), result.active_target)) {
         return false;
     }
-    result.queued_targets = *queued_targets;
+    result.queued_targets = *queuedTargets;
     result.clients = *clients;
     out.emplace(std::move(result));
     return true;
@@ -3655,11 +3655,11 @@ ProtocolValue toValue(FollowEditsDelta const& value) {
 bool decode_present(ProtocolValue const& value, std::optional<FollowEditsDelta>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
-    auto base_generation = requireField<std::uint64_t>(value.field("base_generation"));
+    auto baseGeneration = requireField<std::uint64_t>(value.field("base_generation"));
     auto generation = requireField<std::uint64_t>(value.field("generation"));
-    if (!base_generation || !generation) return false;
+    if (!baseGeneration || !generation) return false;
     FollowEditsDelta result;
-    result.base_generation = *base_generation;
+    result.base_generation = *baseGeneration;
     result.generation = *generation;
     if (!decodeOptionalField(value.field("replacement"), result.replacement)) {
         return false;
@@ -3712,19 +3712,19 @@ bool decode_present(ProtocolValue const& value, std::optional<TreeNode>& out) {
     auto commands = requireField<std::vector<TreeNodeCommand>>(value.field("commands"));
     auto expandable = requireField<bool>(value.field("expandable"));
     if (!id || !label || !kind || !commands || !expandable) return false;
-    std::optional<TreeNodeId> parent_id;
-    if (!decodeOptionalField(value.field("parent_id"), parent_id)) return false;
+    std::optional<TreeNodeId> parentId;
+    if (!decodeOptionalField(value.field("parent_id"), parentId)) return false;
     std::optional<std::string> icon;
     if (!decodeOptionalField(value.field("icon"), icon)) return false;
-    std::optional<GitTreeStatus> git_status;
-    if (!decodeOptionalField(value.field("git_status"), git_status)) return false;
-    std::optional<std::string> workspace_path;
-    if (!decodeOptionalField(value.field("workspace_path"), workspace_path)) return false;
-    std::optional<std::uint32_t> source_line;
-    if (!decodeOptionalField(value.field("source_line"), source_line)) return false;
-    out.emplace(TreeNode{*id, std::move(parent_id), *label, *kind, std::move(icon),
-                         *commands, std::move(git_status), std::move(workspace_path),
-                         std::move(source_line), *expandable});
+    std::optional<GitTreeStatus> gitStatus;
+    if (!decodeOptionalField(value.field("git_status"), gitStatus)) return false;
+    std::optional<std::string> workspacePath;
+    if (!decodeOptionalField(value.field("workspace_path"), workspacePath)) return false;
+    std::optional<std::uint32_t> sourceLine;
+    if (!decodeOptionalField(value.field("source_line"), sourceLine)) return false;
+    out.emplace(TreeNode{*id, std::move(parentId), *label, *kind, std::move(icon),
+                         *commands, std::move(gitStatus), std::move(workspacePath),
+                         std::move(sourceLine), *expandable});
     return true;
 }
 
@@ -3760,20 +3760,20 @@ ProtocolValue toValue(TreeProviderView const& value) {
 bool decode_present(ProtocolValue const& value, std::optional<TreeProviderView>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
-    auto provider_id = requireField<TreeProviderId>(value.field("provider_id"));
+    auto providerId = requireField<TreeProviderId>(value.field("provider_id"));
     auto kind = requireField<TreeProviderKind>(value.field("kind"));
     auto nodes = requireField<std::vector<TreeNodeView>>(value.field("nodes"));
     std::optional<TreeNodeId> selected;
-    if (!provider_id || !kind || !nodes) return false;
+    if (!providerId || !kind || !nodes) return false;
     if (!decodeOptionalField(value.field("selected"), selected)) return false;
-    auto first_visible = requireField<std::uint32_t>(value.field("first_visible"));
+    auto firstVisible = requireField<std::uint32_t>(value.field("first_visible"));
     auto scrollbar = requireField<ScrollbarMetrics>(value.field("scrollbar"));
-    auto visible_node_ids =
+    auto visibleNodeIds =
         requireField<std::vector<TreeNodeId>>(value.field("visible_node_ids"));
-    if (!first_visible || !scrollbar || !visible_node_ids) return false;
-    out.emplace(TreeProviderView{*provider_id, *kind, *nodes, selected,
-                                 *first_visible, *scrollbar,
-                                 std::move(*visible_node_ids)});
+    if (!firstVisible || !scrollbar || !visibleNodeIds) return false;
+    out.emplace(TreeProviderView{*providerId, *kind, *nodes, selected,
+                                 *firstVisible, *scrollbar,
+                                 std::move(*visibleNodeIds)});
     return true;
 }
 
@@ -3810,27 +3810,27 @@ ProtocolValue toValue(TreeProviderDelta const& value) {
 bool decode_present(ProtocolValue const& value, std::optional<TreeProviderDelta>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
-    auto provider_id = requireField<TreeProviderId>(value.field("provider_id"));
+    auto providerId = requireField<TreeProviderId>(value.field("provider_id"));
     auto kind = requireField<TreeProviderKind>(value.field("kind"));
-    auto remove_provider = requireField<bool>(value.field("remove_provider"));
+    auto removeProvider = requireField<bool>(value.field("remove_provider"));
     auto start = requireField<std::uint64_t>(value.field("start"));
-    auto erase_count = requireField<std::uint64_t>(value.field("erase_count"));
+    auto eraseCount = requireField<std::uint64_t>(value.field("erase_count"));
     auto insert = requireField<std::vector<TreeNodeView>>(value.field("insert"));
-    if (!provider_id || !kind || !remove_provider || !start || !erase_count || !insert) {
+    if (!providerId || !kind || !removeProvider || !start || !eraseCount || !insert) {
         return false;
     }
     std::optional<TreeNodeId> selected;
     if (!decodeOptionalField(value.field("selected"), selected)) return false;
-    auto first_visible = requireField<std::uint32_t>(value.field("first_visible"));
+    auto firstVisible = requireField<std::uint32_t>(value.field("first_visible"));
     auto scrollbar = requireField<ScrollbarMetrics>(value.field("scrollbar"));
-    auto visible_node_ids =
+    auto visibleNodeIds =
         requireField<std::vector<TreeNodeId>>(value.field("visible_node_ids"));
-    if (!first_visible || !scrollbar || !visible_node_ids) return false;
-    out.emplace(TreeProviderDelta{*provider_id, *kind, *remove_provider,
+    if (!firstVisible || !scrollbar || !visibleNodeIds) return false;
+    out.emplace(TreeProviderDelta{*providerId, *kind, *removeProvider,
                                   static_cast<std::size_t>(*start),
-                                  static_cast<std::size_t>(*erase_count), *insert,
-                                  selected, *first_visible, *scrollbar,
-                                  std::move(*visible_node_ids)});
+                                  static_cast<std::size_t>(*eraseCount), *insert,
+                                  selected, *firstVisible, *scrollbar,
+                                  std::move(*visibleNodeIds)});
     return true;
 }
 
@@ -3845,12 +3845,12 @@ ProtocolValue toValue(TreeDelta const& value) {
 bool decode_present(ProtocolValue const& value, std::optional<TreeDelta>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
-    auto base_revision = requireField<TreeRevision>(value.field("base_revision"));
+    auto baseRevision = requireField<TreeRevision>(value.field("base_revision"));
     auto revision = requireField<TreeRevision>(value.field("revision"));
-    auto snapshot_required = requireField<bool>(value.field("snapshot_required"));
+    auto snapshotRequired = requireField<bool>(value.field("snapshot_required"));
     auto providers = requireField<std::vector<TreeProviderDelta>>(value.field("providers"));
-    if (!base_revision || !revision || !snapshot_required || !providers) return false;
-    out.emplace(TreeDelta{*base_revision, *revision, *snapshot_required, *providers});
+    if (!baseRevision || !revision || !snapshotRequired || !providers) return false;
+    out.emplace(TreeDelta{*baseRevision, *revision, *snapshotRequired, *providers});
     return true;
 }
 
@@ -3974,16 +3974,16 @@ bool decode_present(ProtocolValue const& value, std::optional<LineIndentation>& 
     auto const* object = value.asObject();
     if (!object) return false;
     auto line = requireField<LineIndex>(value.field("line"));
-    auto line_start = requireField<ByteOffset>(value.field("line_start"));
-    auto content_start = requireField<ByteOffset>(value.field("content_start"));
+    auto lineStart = requireField<ByteOffset>(value.field("line_start"));
+    auto contentStart = requireField<ByteOffset>(value.field("content_start"));
     auto spaces = requireField<std::uint32_t>(value.field("spaces"));
     auto tabs = requireField<std::uint32_t>(value.field("tabs"));
     auto columns = requireField<std::uint32_t>(value.field("columns"));
     auto blank = requireField<bool>(value.field("blank"));
-    if (!line || !line_start || !content_start || !spaces || !tabs || !columns || !blank) {
+    if (!line || !lineStart || !contentStart || !spaces || !tabs || !columns || !blank) {
         return false;
     }
-    out.emplace(LineIndentation{*line, *line_start, *content_start, *spaces, *tabs,
+    out.emplace(LineIndentation{*line, *lineStart, *contentStart, *spaces, *tabs,
                                 *columns, *blank});
     return true;
 }
@@ -4006,20 +4006,20 @@ bool decode_present(ProtocolValue const& value, std::optional<SyntaxViewState>& 
     if (!object) return false;
     auto revision = requireField<Revision>(value.field("revision"));
     auto language = requireField<LanguageId>(value.field("language"));
-    auto text_bytes = requireField<std::uint64_t>(value.field("text_bytes"));
+    auto textBytes = requireField<std::uint64_t>(value.field("text_bytes"));
     auto spans = requireField<std::vector<SyntaxSpan>>(value.field("spans"));
-    auto bracket_pairs = requireField<std::vector<SyntaxBracketPair>>(value.field("bracket_pairs"));
-    auto unmatched_brackets =
+    auto bracketPairs = requireField<std::vector<SyntaxBracketPair>>(value.field("bracket_pairs"));
+    auto unmatchedBrackets =
         requireField<std::vector<UnmatchedBracket>>(value.field("unmatched_brackets"));
-    auto comment_tokens = requireField<std::vector<CommentToken>>(value.field("comment_tokens"));
-    auto comment_ranges = requireField<std::vector<CommentRange>>(value.field("comment_ranges"));
+    auto commentTokens = requireField<std::vector<CommentToken>>(value.field("comment_tokens"));
+    auto commentRanges = requireField<std::vector<CommentRange>>(value.field("comment_ranges"));
     auto indentation = requireField<std::vector<LineIndentation>>(value.field("indentation"));
-    if (!revision || !language || !text_bytes || !spans || !bracket_pairs ||
-        !unmatched_brackets || !comment_tokens || !comment_ranges || !indentation) {
+    if (!revision || !language || !textBytes || !spans || !bracketPairs ||
+        !unmatchedBrackets || !commentTokens || !commentRanges || !indentation) {
         return false;
     }
-    out.emplace(*revision, *language, *text_bytes, *spans, *bracket_pairs,
-               *unmatched_brackets, *comment_tokens, *comment_ranges, *indentation);
+    out.emplace(*revision, *language, *textBytes, *spans, *bracketPairs,
+               *unmatchedBrackets, *commentTokens, *commentRanges, *indentation);
     return true;
 }
 
@@ -4040,30 +4040,30 @@ ProtocolValue toValue(SyntaxDelta const& value) {
 bool decode_present(ProtocolValue const& value, std::optional<SyntaxDelta>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
-    auto base_revision = requireField<Revision>(value.field("base_revision"));
+    auto baseRevision = requireField<Revision>(value.field("base_revision"));
     auto revision = requireField<Revision>(value.field("revision"));
-    if (!base_revision || !revision) return false;
+    if (!baseRevision || !revision) return false;
     std::optional<LanguageId> language;
     if (!decodeOptionalField(value.field("language"), language)) return false;
-    std::optional<std::uint64_t> text_bytes;
-    if (!decodeOptionalField(value.field("text_bytes"), text_bytes)) return false;
+    std::optional<std::uint64_t> textBytes;
+    if (!decodeOptionalField(value.field("text_bytes"), textBytes)) return false;
     std::optional<std::vector<SyntaxSpan>> spans;
     if (!decodeOptionalField(value.field("spans"), spans)) return false;
-    std::optional<std::vector<SyntaxBracketPair>> bracket_pairs;
-    if (!decodeOptionalField(value.field("bracket_pairs"), bracket_pairs)) return false;
-    std::optional<std::vector<UnmatchedBracket>> unmatched_brackets;
-    if (!decodeOptionalField(value.field("unmatched_brackets"), unmatched_brackets)) {
+    std::optional<std::vector<SyntaxBracketPair>> bracketPairs;
+    if (!decodeOptionalField(value.field("bracket_pairs"), bracketPairs)) return false;
+    std::optional<std::vector<UnmatchedBracket>> unmatchedBrackets;
+    if (!decodeOptionalField(value.field("unmatched_brackets"), unmatchedBrackets)) {
         return false;
     }
-    std::optional<std::vector<CommentToken>> comment_tokens;
-    if (!decodeOptionalField(value.field("comment_tokens"), comment_tokens)) return false;
-    std::optional<std::vector<CommentRange>> comment_ranges;
-    if (!decodeOptionalField(value.field("comment_ranges"), comment_ranges)) return false;
+    std::optional<std::vector<CommentToken>> commentTokens;
+    if (!decodeOptionalField(value.field("comment_tokens"), commentTokens)) return false;
+    std::optional<std::vector<CommentRange>> commentRanges;
+    if (!decodeOptionalField(value.field("comment_ranges"), commentRanges)) return false;
     std::optional<std::vector<LineIndentation>> indentation;
     if (!decodeOptionalField(value.field("indentation"), indentation)) return false;
-    out.emplace(*base_revision, *revision, std::move(language), std::move(text_bytes),
-               std::move(spans), std::move(bracket_pairs), std::move(unmatched_brackets),
-               std::move(comment_tokens), std::move(comment_ranges), std::move(indentation));
+    out.emplace(*baseRevision, *revision, std::move(language), std::move(textBytes),
+               std::move(spans), std::move(bracketPairs), std::move(unmatchedBrackets),
+               std::move(commentTokens), std::move(commentRanges), std::move(indentation));
     return true;
 }
 
@@ -4168,11 +4168,11 @@ ProtocolValue toValue(LspSyncDelta const& value) {
 bool decode_present(ProtocolValue const& value, std::optional<LspSyncDelta>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
-    auto base_revision = requireField<Revision>(value.field("base_revision"));
+    auto baseRevision = requireField<Revision>(value.field("base_revision"));
     auto revision = requireField<Revision>(value.field("revision"));
-    if (!base_revision || !revision) return false;
+    if (!baseRevision || !revision) return false;
     LspSyncDelta result;
-    result.base_revision = *base_revision;
+    result.base_revision = *baseRevision;
     result.revision = *revision;
     if (!decodeOptionalField(value.field("state"), result.state)) return false;
     out.emplace(std::move(result));
@@ -4194,14 +4194,14 @@ bool decode_present(ProtocolValue const& value, std::optional<LspCompletionItem>
     if (!object) return false;
     auto label = requireField<std::string>(value.field("label"));
     auto detail = requireField<std::string>(value.field("detail"));
-    auto sort_text = requireField<std::string>(value.field("sort_text"));
-    auto insert_text = requireField<std::string>(value.field("insert_text"));
-    if (!label || !detail || !sort_text || !insert_text) return false;
+    auto sortText = requireField<std::string>(value.field("sort_text"));
+    auto insertText = requireField<std::string>(value.field("insert_text"));
+    if (!label || !detail || !sortText || !insertText) return false;
     LspCompletionItem result;
     result.label = *label;
     result.detail = *detail;
-    result.sort_text = *sort_text;
-    result.insert_text = *insert_text;
+    result.sort_text = *sortText;
+    result.insert_text = *insertText;
     if (!decodeOptionalField(value.field("replacement_range"), result.replacement_range)) {
         return false;
     }
@@ -4233,9 +4233,9 @@ bool decode_present(ProtocolValue const& value, std::optional<LspCompletionViewS
     result.visible = *visible;
     result.loading = *loading;
     result.items = *items;
-    std::optional<std::uint64_t> selected_index;
-    if (!decodeOptionalField(value.field("selected_index"), selected_index)) return false;
-    if (selected_index) result.selected_index = static_cast<std::size_t>(*selected_index);
+    std::optional<std::uint64_t> selectedIndex;
+    if (!decodeOptionalField(value.field("selected_index"), selectedIndex)) return false;
+    if (selectedIndex) result.selected_index = static_cast<std::size_t>(*selectedIndex);
     out.emplace(std::move(result));
     return true;
 }
@@ -4291,16 +4291,16 @@ bool decode_present(ProtocolValue const& value, std::optional<LspNavigationViewS
     auto const* object = value.asObject();
     if (!object) return false;
     auto targets = requireField<std::vector<LspNavigationTarget>>(value.field("targets"));
-    auto user_navigation = requireField<bool>(value.field("user_navigation"));
-    auto reveal_primary_caret = requireField<bool>(value.field("reveal_primary_caret"));
-    if (!targets || !user_navigation || !reveal_primary_caret) return false;
+    auto userNavigation = requireField<bool>(value.field("user_navigation"));
+    auto revealPrimaryCaret = requireField<bool>(value.field("reveal_primary_caret"));
+    if (!targets || !userNavigation || !revealPrimaryCaret) return false;
     LspNavigationViewState result;
     result.targets = *targets;
-    std::optional<std::uint64_t> selected_index;
-    if (!decodeOptionalField(value.field("selected_index"), selected_index)) return false;
-    if (selected_index) result.selected_index = static_cast<std::size_t>(*selected_index);
-    result.user_navigation = *user_navigation;
-    result.reveal_primary_caret = *reveal_primary_caret;
+    std::optional<std::uint64_t> selectedIndex;
+    if (!decodeOptionalField(value.field("selected_index"), selectedIndex)) return false;
+    if (selectedIndex) result.selected_index = static_cast<std::size_t>(*selectedIndex);
+    result.user_navigation = *userNavigation;
+    result.reveal_primary_caret = *revealPrimaryCaret;
     out.emplace(std::move(result));
     return true;
 }
@@ -4342,11 +4342,11 @@ ProtocolValue toValue(LspFeatureDelta const& value) {
 bool decode_present(ProtocolValue const& value, std::optional<LspFeatureDelta>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
-    auto base_revision = requireField<Revision>(value.field("base_revision"));
+    auto baseRevision = requireField<Revision>(value.field("base_revision"));
     auto revision = requireField<Revision>(value.field("revision"));
-    if (!base_revision || !revision) return false;
+    if (!baseRevision || !revision) return false;
     LspFeatureDelta result;
-    result.base_revision = *base_revision;
+    result.base_revision = *baseRevision;
     result.revision = *revision;
     if (!decodeOptionalField(value.field("state"), result.state)) return false;
     out.emplace(std::move(result));
@@ -4384,13 +4384,13 @@ bool decode_present(ProtocolValue const& value, std::optional<ThemeSnapshot>& ou
     auto const* object = value.asObject();
     if (!object) return false;
     auto palette =
-        requireField<std::array<SrgbColor, theme_palette_size>>(value.field("palette"));
-    auto semantic_indices = requireField<std::array<std::uint8_t, semantic_role_count>>(
+        requireField<std::array<SrgbColor, kThemePaletteSize>>(value.field("palette"));
+    auto semanticIndices = requireField<std::array<std::uint8_t, kSemanticRoleCount>>(
         value.field("semantic_indices"));
-    auto syntax_indices = requireField<std::array<std::uint8_t, syntax_scope_count>>(
+    auto syntaxIndices = requireField<std::array<std::uint8_t, kSyntaxScopeCount>>(
         value.field("syntax_indices"));
-    if (!palette || !semantic_indices || !syntax_indices) return false;
-    out.emplace(ThemeSnapshot{*palette, *semantic_indices, *syntax_indices});
+    if (!palette || !semanticIndices || !syntaxIndices) return false;
+    out.emplace(ThemeSnapshot{*palette, *semanticIndices, *syntaxIndices});
     return true;
 }
 
@@ -4427,12 +4427,12 @@ ProtocolValue toValue(ClientSnapshotState const& value) {
 bool decode_present(ProtocolValue const& value, std::optional<ClientSnapshotState>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
-    auto client_id = requireField<ClientId>(value.field("client_id"));
-    auto view_id = requireField<ViewId>(value.field("view_id"));
+    auto clientId = requireField<ClientId>(value.field("client_id"));
+    auto viewId = requireField<ViewId>(value.field("view_id"));
     auto capabilities = requireField<std::vector<CapabilityId>>(value.field("capabilities"));
     auto viewport = requireField<ViewportViewState>(value.field("viewport"));
-    if (!client_id || !view_id || !capabilities || !viewport) return false;
-    out.emplace(ClientSnapshotState{*client_id, *view_id, *capabilities, *viewport});
+    if (!clientId || !viewId || !capabilities || !viewport) return false;
+    out.emplace(ClientSnapshotState{*clientId, *viewId, *capabilities, *viewport});
     return true;
 }
 
@@ -4467,34 +4467,34 @@ bool decode_present(ProtocolValue const& value, std::optional<SessionSnapshotSec
     auto selection = requireField<SelectionViewState>(value.field("selection"));
     auto history = requireField<HistoryViewState>(value.field("history"));
     auto clipboard = requireField<ClipboardViewState>(value.field("clipboard"));
-    auto prompt_status = requireField<PromptStatusViewState>(value.field("prompt_status"));
+    auto promptStatus = requireField<PromptStatusViewState>(value.field("prompt_status"));
     auto search = requireField<SearchViewState>(value.field("search"));
-    auto find_replace = requireField<FindReplaceViewState>(value.field("find_replace"));
+    auto findReplace = requireField<FindReplaceViewState>(value.field("find_replace"));
     auto settings = requireField<SettingsViewState>(value.field("settings"));
     auto keymap = requireField<KeymapViewState>(value.field("keymap"));
-    auto text_encoding = requireField<TextEncodingViewState>(value.field("text_encoding"));
+    auto textEncoding = requireField<TextEncodingViewState>(value.field("text_encoding"));
     auto tabs = requireField<TabViewState>(value.field("tabs"));
     auto diff = requireField<DiffViewState>(value.field("diff"));
-    auto external_modification =
+    auto externalModification =
         requireField<ExternalModificationViewState>(value.field("external_modification"));
-    auto follow_edits = requireField<FollowEditsViewState>(value.field("follow_edits"));
+    auto followEdits = requireField<FollowEditsViewState>(value.field("follow_edits"));
     auto tree = requireField<TreeViewState>(value.field("tree"));
     auto syntax = requireField<SyntaxViewState>(value.field("syntax"));
-    auto lsp_sync = requireField<LspSyncViewState>(value.field("lsp_sync"));
-    auto lsp_features = requireField<LspFeatureViewState>(value.field("lsp_features"));
+    auto lspSync = requireField<LspSyncViewState>(value.field("lsp_sync"));
+    auto lspFeatures = requireField<LspFeatureViewState>(value.field("lsp_features"));
     auto theme = requireField<ThemeSnapshot>(value.field("theme"));
     auto shell = requireField<ShellViewState>(value.field("shell"));
-    if (!document || !selection || !history || !clipboard || !prompt_status || !search ||
-        !find_replace || !settings || !keymap || !text_encoding || !tabs || !diff ||
-        !external_modification || !follow_edits || !tree || !syntax || !lsp_sync ||
-        !lsp_features || !theme || !shell) {
+    if (!document || !selection || !history || !clipboard || !promptStatus || !search ||
+        !findReplace || !settings || !keymap || !textEncoding || !tabs || !diff ||
+        !externalModification || !followEdits || !tree || !syntax || !lspSync ||
+        !lspFeatures || !theme || !shell) {
         return false;
     }
     out.emplace(SessionSnapshotSections{
-        *document, *selection, *history, *clipboard, *prompt_status, *search,
-        *find_replace, *settings, *keymap, *text_encoding, *tabs, *diff,
-        *external_modification, *follow_edits, *tree, std::move(*syntax), *lsp_sync,
-        *lsp_features, *theme, *shell});
+        *document, *selection, *history, *clipboard, *promptStatus, *search,
+        *findReplace, *settings, *keymap, *textEncoding, *tabs, *diff,
+        *externalModification, *followEdits, *tree, std::move(*syntax), *lspSync,
+        *lspFeatures, *theme, *shell});
     return true;
 }
 
@@ -4521,9 +4521,9 @@ ProtocolValue toValue(PaletteExecuteArguments const& value) {
 bool decode_present(ProtocolValue const& value, std::optional<PaletteExecuteArguments>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
-    auto command_id = requireField<std::string>(value.field("command_id"));
-    if (!command_id) return false;
-    out.emplace(PaletteExecuteArguments{*command_id});
+    auto commandId = requireField<std::string>(value.field("command_id"));
+    if (!commandId) return false;
+    out.emplace(PaletteExecuteArguments{*commandId});
     return true;
 }
 
@@ -4535,9 +4535,9 @@ ProtocolValue toValue(TreeSelectArguments const& value) {
 bool decode_present(ProtocolValue const& value, std::optional<TreeSelectArguments>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
-    auto node_id = requireField<TreeNodeId>(value.field("node_id"));
-    if (!node_id) return false;
-    out.emplace(TreeSelectArguments{*node_id});
+    auto nodeId = requireField<TreeNodeId>(value.field("node_id"));
+    if (!nodeId) return false;
+    out.emplace(TreeSelectArguments{*nodeId});
     return true;
 }
 
@@ -4625,9 +4625,9 @@ bool decode_present(ProtocolValue const& value, std::optional<DroppedContentArgu
     auto const* object = value.asObject();
     if (!object) return false;
     auto bytes = requireField<std::vector<std::uint8_t>>(value.field("bytes"));
-    auto suggested_label = requireField<std::string>(value.field("suggested_label"));
-    if (!bytes || !suggested_label) return false;
-    out.emplace(DroppedContentArguments{*bytes, *suggested_label});
+    auto suggestedLabel = requireField<std::string>(value.field("suggested_label"));
+    if (!bytes || !suggestedLabel) return false;
+    out.emplace(DroppedContentArguments{*bytes, *suggestedLabel});
     return true;
 }
 
@@ -4667,9 +4667,9 @@ ProtocolValue toValue(SetLineEndingArguments const& value) {
 bool decode_present(ProtocolValue const& value, std::optional<SetLineEndingArguments>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
-    auto line_ending = requireField<LineEnding>(value.field("line_ending"));
-    if (!line_ending) return false;
-    out.emplace(SetLineEndingArguments{*line_ending});
+    auto lineEnding = requireField<LineEnding>(value.field("line_ending"));
+    if (!lineEnding) return false;
+    out.emplace(SetLineEndingArguments{*lineEnding});
     return true;
 }
 
@@ -4681,9 +4681,9 @@ ProtocolValue toValue(SetFinalNewlineArguments const& value) {
 bool decode_present(ProtocolValue const& value, std::optional<SetFinalNewlineArguments>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
-    auto final_newline = requireField<bool>(value.field("final_newline"));
-    if (!final_newline) return false;
-    out.emplace(SetFinalNewlineArguments{*final_newline});
+    auto finalNewline = requireField<bool>(value.field("final_newline"));
+    if (!finalNewline) return false;
+    out.emplace(SetFinalNewlineArguments{*finalNewline});
     return true;
 }
 
@@ -4699,9 +4699,9 @@ bool decode_present(ProtocolValue const& value, std::optional<SettingSetArgument
     if (!object) return false;
     auto scope = requireField<SettingScope>(value.field("scope"));
     auto key = requireField<SettingKey>(value.field("key"));
-    auto setting_value = requireField<SettingValue>(value.field("value"));
-    if (!scope || !key || !setting_value) return false;
-    out.emplace(SettingSetArguments{*scope, *key, *setting_value});
+    auto settingValue = requireField<SettingValue>(value.field("value"));
+    if (!scope || !key || !settingValue) return false;
+    out.emplace(SettingSetArguments{*scope, *key, *settingValue});
     return true;
 }
 
@@ -4822,27 +4822,27 @@ CommandArgumentCodecRegistry& CommandArgumentCodecRegistry::operator=(
     CommandArgumentCodecRegistry&&) noexcept = default;
 
 bool CommandArgumentCodecRegistry::contains(
-    std::string_view command_id) const {
-    return impl_->codecs.find(std::string{command_id}) !=
+    std::string_view commandId) const {
+    return impl_->codecs.find(std::string{commandId}) !=
            impl_->codecs.end();
 }
 
 ProtocolValue CommandArgumentCodecRegistry::encodeArgument(
-    std::string_view command_id, std::any const& payload) const {
-    auto found = impl_->codecs.find(std::string{command_id});
+    std::string_view commandId, std::any const& payload) const {
+    auto found = impl_->codecs.find(std::string{commandId});
     if (found == impl_->codecs.end()) {
         throw std::invalid_argument{"unknown command id: " +
-                                    std::string{command_id}};
+                                    std::string{commandId}};
     }
     return found->second.encode(payload);
 }
 
 std::optional<std::any> CommandArgumentCodecRegistry::decodeArgument(
-    std::string_view command_id, ProtocolValue const& value) const {
-    auto found = impl_->codecs.find(std::string{command_id});
+    std::string_view commandId, ProtocolValue const& value) const {
+    auto found = impl_->codecs.find(std::string{commandId});
     if (found == impl_->codecs.end()) {
         throw std::invalid_argument{"unknown command id: " +
-                                    std::string{command_id}};
+                                    std::string{commandId}};
     }
     return found->second.decode(value);
 }
@@ -4896,89 +4896,89 @@ CommandArgumentCodec makeWorkspaceApplyCodec() {
 }  // namespace
 
 CommandArgumentCodecRegistry buildCommandArgumentCodecRegistry() {
-    auto const text_input_commands = textInputCommandSet();
-    std::unordered_set<std::string> text_input_ids;
-    for (auto const& descriptor : text_input_commands.descriptors()) {
-        text_input_ids.emplace(descriptor.id);
+    auto const textInputCommands = textInputCommandSet();
+    std::unordered_set<std::string> textInputIds;
+    for (auto const& descriptor : textInputCommands.descriptors()) {
+        textInputIds.emplace(descriptor.id);
     }
-    auto const selection_commands = selectionNavigationCommandSet();
-    std::unordered_set<std::string> selection_ids;
-    for (auto const& descriptor : selection_commands.descriptors()) {
-        selection_ids.emplace(descriptor.id);
+    auto const selectionCommands = selectionNavigationCommandSet();
+    std::unordered_set<std::string> selectionIds;
+    for (auto const& descriptor : selectionCommands.descriptors()) {
+        selectionIds.emplace(descriptor.id);
     }
 
-    auto const none_codec = makeNoneCodec();
-    auto const text_input_codec = makeTypedCodec<TextInputArguments>();
-    auto const palette_execute_codec = makeTypedCodec<PaletteExecuteArguments>();
-    auto const tree_select_codec = makeTypedCodec<TreeSelectArguments>();
-    auto const find_query_codec = makeTypedCodec<FindQueryArguments>();
-    auto const selection_codec =
+    auto const noneCodec = makeNoneCodec();
+    auto const textInputCodec = makeTypedCodec<TextInputArguments>();
+    auto const paletteExecuteCodec = makeTypedCodec<PaletteExecuteArguments>();
+    auto const treeSelectCodec = makeTypedCodec<TreeSelectArguments>();
+    auto const findQueryCodec = makeTypedCodec<FindQueryArguments>();
+    auto const selectionCodec =
         makeTypedCodec<SelectionCommandArguments>();
-    auto const scroll_lines_codec = makeTypedCodec<ScrollLinesArguments>();
-    auto const scroll_pages_codec = makeTypedCodec<ScrollPagesArguments>();
-    auto const scroll_fraction_codec =
+    auto const scrollLinesCodec = makeTypedCodec<ScrollLinesArguments>();
+    auto const scrollPagesCodec = makeTypedCodec<ScrollPagesArguments>();
+    auto const scrollFractionCodec =
         makeTypedCodec<ScrollFractionArguments>();
-    auto const dropped_content_codec =
+    auto const droppedContentCodec =
         makeTypedCodec<DroppedContentArguments>();
-    auto const reopen_with_encoding_codec =
+    auto const reopenWithEncodingCodec =
         makeTypedCodec<ReopenWithEncodingArguments>();
-    auto const set_encoding_codec = makeTypedCodec<SetEncodingArguments>();
-    auto const set_line_ending_codec =
+    auto const setEncodingCodec = makeTypedCodec<SetEncodingArguments>();
+    auto const setLineEndingCodec =
         makeTypedCodec<SetLineEndingArguments>();
-    auto const set_final_newline_codec =
+    auto const setFinalNewlineCodec =
         makeTypedCodec<SetFinalNewlineArguments>();
-    auto const setting_set_codec = makeTypedCodec<SettingSetArguments>();
-    auto const setting_reset_codec = makeTypedCodec<SettingResetArguments>();
-    auto const setting_reset_scope_codec =
+    auto const settingSetCodec = makeTypedCodec<SettingSetArguments>();
+    auto const settingResetCodec = makeTypedCodec<SettingResetArguments>();
+    auto const settingResetScopeCodec =
         makeTypedCodec<SettingResetScopeArguments>();
-    auto const workspace_replace_codec =
+    auto const workspaceReplaceCodec =
         makeTypedCodec<WorkspaceReplaceArguments>();
-    auto const workspace_apply_codec = makeWorkspaceApplyCodec();
+    auto const workspaceApplyCodec = makeWorkspaceApplyCodec();
 
     std::vector<std::pair<std::string, CommandArgumentCodec>> entries;
     for (auto const& descriptor : p0CommandDescriptors()) {
         if (descriptor.id == "view.scroll_lines") {
-            entries.emplace_back(descriptor.id, scroll_lines_codec);
+            entries.emplace_back(descriptor.id, scrollLinesCodec);
         } else if (descriptor.id == "tree.scroll") {
-            entries.emplace_back(descriptor.id, scroll_lines_codec);
+            entries.emplace_back(descriptor.id, scrollLinesCodec);
         } else if (descriptor.id == "view.scroll_pages") {
-            entries.emplace_back(descriptor.id, scroll_pages_codec);
+            entries.emplace_back(descriptor.id, scrollPagesCodec);
         } else if (descriptor.id == "view.scroll_to_fraction") {
-            entries.emplace_back(descriptor.id, scroll_fraction_codec);
+            entries.emplace_back(descriptor.id, scrollFractionCodec);
         } else if (descriptor.id == "file.open_dropped_content") {
-            entries.emplace_back(descriptor.id, dropped_content_codec);
+            entries.emplace_back(descriptor.id, droppedContentCodec);
         } else if (descriptor.id == "file.reopen_with_encoding") {
-            entries.emplace_back(descriptor.id, reopen_with_encoding_codec);
+            entries.emplace_back(descriptor.id, reopenWithEncodingCodec);
         } else if (descriptor.id == "file.set_encoding") {
-            entries.emplace_back(descriptor.id, set_encoding_codec);
+            entries.emplace_back(descriptor.id, setEncodingCodec);
         } else if (descriptor.id == "file.set_line_ending") {
-            entries.emplace_back(descriptor.id, set_line_ending_codec);
+            entries.emplace_back(descriptor.id, setLineEndingCodec);
         } else if (descriptor.id == "file.set_final_newline") {
-            entries.emplace_back(descriptor.id, set_final_newline_codec);
+            entries.emplace_back(descriptor.id, setFinalNewlineCodec);
         } else if (descriptor.id == "settings.set") {
-            entries.emplace_back(descriptor.id, setting_set_codec);
+            entries.emplace_back(descriptor.id, settingSetCodec);
         } else if (descriptor.id == "settings.reset") {
-            entries.emplace_back(descriptor.id, setting_reset_codec);
+            entries.emplace_back(descriptor.id, settingResetCodec);
         } else if (descriptor.id == "settings.reset_scope") {
-            entries.emplace_back(descriptor.id, setting_reset_scope_codec);
+            entries.emplace_back(descriptor.id, settingResetScopeCodec);
         } else if (descriptor.id == "replace.workspace_preview") {
-            entries.emplace_back(descriptor.id, workspace_replace_codec);
+            entries.emplace_back(descriptor.id, workspaceReplaceCodec);
         } else if (descriptor.id == "replace.workspace_apply") {
-            entries.emplace_back(descriptor.id, workspace_apply_codec);
+            entries.emplace_back(descriptor.id, workspaceApplyCodec);
         } else if (descriptor.id == "palette.execute") {
-            entries.emplace_back(descriptor.id, palette_execute_codec);
+            entries.emplace_back(descriptor.id, paletteExecuteCodec);
         } else if (descriptor.id == "tree.select") {
-            entries.emplace_back(descriptor.id, tree_select_codec);
+            entries.emplace_back(descriptor.id, treeSelectCodec);
         } else if (descriptor.id == "find.update_query") {
-            entries.emplace_back(descriptor.id, find_query_codec);
+            entries.emplace_back(descriptor.id, findQueryCodec);
         } else if (descriptor.id == "replace.update_replacement") {
-            entries.emplace_back(descriptor.id, find_query_codec);
-        } else if (text_input_ids.contains(descriptor.id)) {
-            entries.emplace_back(descriptor.id, text_input_codec);
-        } else if (selection_ids.contains(descriptor.id)) {
-            entries.emplace_back(descriptor.id, selection_codec);
+            entries.emplace_back(descriptor.id, findQueryCodec);
+        } else if (textInputIds.contains(descriptor.id)) {
+            entries.emplace_back(descriptor.id, textInputCodec);
+        } else if (selectionIds.contains(descriptor.id)) {
+            entries.emplace_back(descriptor.id, selectionCodec);
         } else {
-            entries.emplace_back(descriptor.id, none_codec);
+            entries.emplace_back(descriptor.id, noneCodec);
         }
     }
     return CommandArgumentCodecRegistry{std::move(entries)};
@@ -5010,8 +5010,8 @@ DecodeCommandRequestResult decodeCommandRequest(
                 "command request payload is not an object"};
     }
     auto id = requireField<std::string>(payload.field("id"));
-    auto base_revision = requireField<Revision>(payload.field("base_revision"));
-    if (!id || !base_revision) {
+    auto baseRevision = requireField<Revision>(payload.field("base_revision"));
+    if (!id || !baseRevision) {
         return {ProtocolError::MalformedMessage, std::nullopt,
                 "command request payload is malformed"};
     }
@@ -5019,18 +5019,18 @@ DecodeCommandRequestResult decodeCommandRequest(
         return {ProtocolError::UnsupportedCommand, std::nullopt,
                 "command request references an unknown command id"};
     }
-    auto const* payload_field = payload.field("payload");
-    if (payload_field == nullptr) {
+    auto const* payloadField = payload.field("payload");
+    if (payloadField == nullptr) {
         return {ProtocolError::MalformedMessage, std::nullopt,
                 "command request is missing its payload field"};
     }
-    auto argument = registry.decodeArgument(*id, *payload_field);
+    auto argument = registry.decodeArgument(*id, *payloadField);
     if (!argument) {
         return {ProtocolError::MalformedMessage, std::nullopt,
                 "command request payload does not match its command id"};
     }
     return {ProtocolError::None,
-            ClientCommand{std::move(*id), *base_revision,
+            ClientCommand{std::move(*id), *baseRevision,
                           std::move(*argument)},
             {}};
 }
@@ -5158,54 +5158,54 @@ DecodeSessionDeltaResult decodeSessionDelta(std::string_view bytes,
                 "session delta payload is not an object"};
     }
 
-    auto base_revision = requireField<Revision>(payload.field("base_revision"));
+    auto baseRevision = requireField<Revision>(payload.field("base_revision"));
     auto revision = requireField<Revision>(payload.field("revision"));
-    auto client_id = requireField<ClientId>(payload.field("client_id"));
-    auto view_id = requireField<ViewId>(payload.field("view_id"));
+    auto clientId = requireField<ClientId>(payload.field("client_id"));
+    auto viewId = requireField<ViewId>(payload.field("view_id"));
     auto capabilities =
         requireField<std::vector<CapabilityId>>(payload.field("capabilities"));
 
     std::optional<SessionTopology> topology;
     std::optional<DocumentDelta> document;
-    std::optional<ByteOffset> document_caret;
-    std::optional<TextEncodingDelta> text_encoding;
-    bool const optional_ok =
+    std::optional<ByteOffset> documentCaret;
+    std::optional<TextEncodingDelta> textEncoding;
+    bool const optionalOk =
         decodeOptionalField(payload.field("topology"), topology) &&
         decodeOptionalField(payload.field("document"), document) &&
-        decodeOptionalField(payload.field("document_caret"), document_caret) &&
-        decodeOptionalField(payload.field("text_encoding"), text_encoding);
+        decodeOptionalField(payload.field("document_caret"), documentCaret) &&
+        decodeOptionalField(payload.field("text_encoding"), textEncoding);
 
     auto selection = requireField<SelectionViewDelta>(payload.field("selection"));
     auto history = requireField<HistoryDelta>(payload.field("history"));
     auto clipboard = requireField<ClipboardDelta>(payload.field("clipboard"));
-    auto prompt_status =
+    auto promptStatus =
         requireField<PromptStatusDelta>(payload.field("prompt_status"));
     auto search = requireField<SearchDelta>(payload.field("search"));
-    auto find_replace =
+    auto findReplace =
         requireField<FindReplaceDelta>(payload.field("find_replace"));
     auto settings =
         requireField<SettingsSectionDelta>(payload.field("settings"));
     auto keymap = requireField<KeymapDelta>(payload.field("keymap"));
     auto tabs = requireField<TabDelta>(payload.field("tabs"));
     auto diff = requireField<DiffDelta>(payload.field("diff"));
-    auto external_modification = requireField<ExternalModificationDelta>(
+    auto externalModification = requireField<ExternalModificationDelta>(
         payload.field("external_modification"));
-    auto follow_edits =
+    auto followEdits =
         requireField<FollowEditsDelta>(payload.field("follow_edits"));
     auto tree = requireField<TreeDelta>(payload.field("tree"));
     auto syntax = requireField<SyntaxDelta>(payload.field("syntax"));
-    auto lsp_sync = requireField<LspSyncDelta>(payload.field("lsp_sync"));
-    auto lsp_features =
+    auto lspSync = requireField<LspSyncDelta>(payload.field("lsp_sync"));
+    auto lspFeatures =
         requireField<LspFeatureDelta>(payload.field("lsp_features"));
     auto theme = requireField<ThemeSectionDelta>(payload.field("theme"));
     auto shell = requireField<ShellSectionDelta>(payload.field("shell"));
     auto viewport = requireField<ViewportDelta>(payload.field("viewport"));
 
-    if (!optional_ok || !base_revision || !revision || !client_id || !view_id ||
+    if (!optionalOk || !baseRevision || !revision || !clientId || !viewId ||
         !capabilities || !selection || !history || !clipboard ||
-        !prompt_status || !search || !find_replace || !settings || !keymap ||
-        !tabs || !diff || !external_modification || !follow_edits || !tree ||
-        !syntax || !lsp_sync || !lsp_features || !theme || !shell ||
+        !promptStatus || !search || !findReplace || !settings || !keymap ||
+        !tabs || !diff || !externalModification || !followEdits || !tree ||
+        !syntax || !lspSync || !lspFeatures || !theme || !shell ||
         !viewport) {
         return {ProtocolError::MalformedMessage, std::nullopt,
                 "session delta payload is malformed"};
@@ -5213,17 +5213,17 @@ DecodeSessionDeltaResult decodeSessionDelta(std::string_view bytes,
 
     return {ProtocolError::None,
             decodeWireSessionDelta(
-                *base_revision, *revision, *client_id, *view_id,
+                *baseRevision, *revision, *clientId, *viewId,
                 std::move(*capabilities), std::move(topology),
-                std::move(document), std::move(document_caret),
+                std::move(document), std::move(documentCaret),
                 std::move(*selection), std::move(*history),
-                std::move(*clipboard), std::move(*prompt_status),
-                std::move(*search), std::move(*find_replace),
+                std::move(*clipboard), std::move(*promptStatus),
+                std::move(*search), std::move(*findReplace),
                 std::move(*settings), std::move(*keymap),
-                std::move(text_encoding), std::move(*tabs), std::move(*diff),
-                std::move(*external_modification), std::move(*follow_edits),
-                std::move(*tree), std::move(*syntax), std::move(*lsp_sync),
-                std::move(*lsp_features), std::move(*theme),
+                std::move(textEncoding), std::move(*tabs), std::move(*diff),
+                std::move(*externalModification), std::move(*followEdits),
+                std::move(*tree), std::move(*syntax), std::move(*lspSync),
+                std::move(*lspFeatures), std::move(*theme),
                 std::move(*shell), std::move(*viewport)),
             {}};
 }
@@ -5314,31 +5314,31 @@ DecodeBinaryFrameResult decodeBinaryFrame(std::string_view bytes,
         return {ProtocolError::TruncatedMessage, std::nullopt,
                 "binary frame is missing its version byte"};
     }
-    std::uint8_t kind_byte = 0;
-    if (!reader.readU8(kind_byte)) {
+    std::uint8_t kindByte = 0;
+    if (!reader.readU8(kindByte)) {
         return {ProtocolError::TruncatedMessage, std::nullopt,
                 "binary frame is missing its kind byte"};
     }
-    if (kind_byte != static_cast<std::uint8_t>(BinaryPayloadKind::DroppedContent)) {
+    if (kindByte != static_cast<std::uint8_t>(BinaryPayloadKind::DroppedContent)) {
         return {ProtocolError::MalformedMessage, std::nullopt,
                 "binary frame declares an unsupported payload kind"};
     }
-    std::uint64_t request_id = 0;
-    if (!reader.readU64(request_id)) {
+    std::uint64_t requestId = 0;
+    if (!reader.readU64(requestId)) {
         return {ProtocolError::TruncatedMessage, std::nullopt,
                 "binary frame is missing its request id"};
     }
-    std::uint32_t declared_length = 0;
-    if (!reader.readU32(declared_length)) {
+    std::uint32_t declaredLength = 0;
+    if (!reader.readU32(declaredLength)) {
         return {ProtocolError::TruncatedMessage, std::nullopt,
                 "binary frame is missing its length prefix"};
     }
-    if (declared_length > limits.max_binary_frame_bytes) {
+    if (declaredLength > limits.max_binary_frame_bytes) {
         return {ProtocolError::BinaryFrameTooLarge, std::nullopt,
                 "binary frame payload exceeds the configured byte limit"};
     }
-    std::string_view raw_payload;
-    if (!reader.readBytes(declared_length, raw_payload)) {
+    std::string_view rawPayload;
+    if (!reader.readBytes(declaredLength, rawPayload)) {
         return {ProtocolError::TruncatedMessage, std::nullopt,
                 "binary frame payload is truncated"};
     }
@@ -5346,10 +5346,10 @@ DecodeBinaryFrameResult decodeBinaryFrame(std::string_view bytes,
         return {ProtocolError::MalformedMessage, std::nullopt,
                 "binary frame has unexpected trailing bytes"};
     }
-    std::vector<std::uint8_t> owned_bytes{raw_payload.begin(), raw_payload.end()};
+    std::vector<std::uint8_t> ownedBytes{rawPayload.begin(), rawPayload.end()};
     return {ProtocolError::None,
-            BinaryFrame{version, static_cast<BinaryPayloadKind>(kind_byte),
-                       request_id, std::move(owned_bytes)},
+            BinaryFrame{version, static_cast<BinaryPayloadKind>(kindByte),
+                       requestId, std::move(ownedBytes)},
             {}};
 }
 

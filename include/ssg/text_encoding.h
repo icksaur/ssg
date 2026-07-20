@@ -177,7 +177,7 @@ struct SetFinalNewlineArguments {
     bool operator==(const SetFinalNewlineArguments&) const = default;
 };
 
-inline constexpr TextEncodingCommandSet text_encoding_command_set{{
+inline constexpr TextEncodingCommandSet kTextEncodingCommandSet{{
     TextEncodingCommandDescriptor{"file.reopen_with_encoding"},
     TextEncodingCommandDescriptor{"file.set_encoding"},
     TextEncodingCommandDescriptor{"file.set_line_ending"},

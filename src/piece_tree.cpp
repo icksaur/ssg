@@ -146,29 +146,29 @@ void appendRange(
         return;
     }
 
-    const auto left_bytes = bytes(node->left);
-    if (offset < left_bytes) {
-        const auto from_left = std::min(count, left_bytes - offset);
-        appendRange(node->left, original, add, offset, from_left, output);
-        count -= from_left;
-        offset = left_bytes;
+    const auto leftBytes = bytes(node->left);
+    if (offset < leftBytes) {
+        const auto fromLeft = std::min(count, leftBytes - offset);
+        appendRange(node->left, original, add, offset, fromLeft, output);
+        count -= fromLeft;
+        offset = leftBytes;
     }
     if (count == 0) {
         return;
     }
 
-    const auto piece_end = left_bytes + node->length;
-    if (offset < piece_end) {
-        const auto piece_offset = offset > left_bytes ? offset - left_bytes : 0;
-        const auto from_piece = std::min(count, node->length - piece_offset);
+    const auto pieceEnd = leftBytes + node->length;
+    if (offset < pieceEnd) {
+        const auto pieceOffset = offset > leftBytes ? offset - leftBytes : 0;
+        const auto fromPiece = std::min(count, node->length - pieceOffset);
         const auto& buffer = node->add_buffer ? add : original;
-        output.append(buffer, node->start + piece_offset, from_piece);
-        count -= from_piece;
-        offset = piece_end;
+        output.append(buffer, node->start + pieceOffset, fromPiece);
+        count -= fromPiece;
+        offset = pieceEnd;
     }
     if (count != 0) {
         appendRange(
-            node->right, original, add, offset - piece_end, count, output);
+            node->right, original, add, offset - pieceEnd, count, output);
     }
 }
 
@@ -181,47 +181,47 @@ std::size_t countNewlinesBefore(
         return 0;
     }
 
-    const auto left_bytes = bytes(node->left);
-    if (offset <= left_bytes) {
+    const auto leftBytes = bytes(node->left);
+    if (offset <= leftBytes) {
         return countNewlinesBefore(
             node->left, original, add, offset);
     }
 
     auto result = newlines(node->left);
-    const auto in_piece = std::min(offset - left_bytes, node->length);
+    const auto inPiece = std::min(offset - leftBytes, node->length);
     const auto& buffer = node->add_buffer ? add : original;
     result += static_cast<std::size_t>(std::count(
         buffer.begin() + static_cast<std::ptrdiff_t>(node->start),
-        buffer.begin() + static_cast<std::ptrdiff_t>(node->start + in_piece),
+        buffer.begin() + static_cast<std::ptrdiff_t>(node->start + inPiece),
         '\n'));
-    if (offset <= left_bytes + node->length) {
+    if (offset <= leftBytes + node->length) {
         return result;
     }
     return result + countNewlinesBefore(
-        node->right, original, add, offset - left_bytes - node->length);
+        node->right, original, add, offset - leftBytes - node->length);
 }
 
 std::size_t nthNewlineOffset(
     const NodePtr& node,
     std::string_view original,
     const std::string& add,
-    std::size_t newline_index,
+    std::size_t newlineIndex,
     std::size_t base) {
-    const auto left_newlines = newlines(node->left);
-    if (newline_index < left_newlines) {
+    const auto leftNewlines = newlines(node->left);
+    if (newlineIndex < leftNewlines) {
         return nthNewlineOffset(
-            node->left, original, add, newline_index, base);
+            node->left, original, add, newlineIndex, base);
     }
 
-    const auto left_bytes = bytes(node->left);
-    newline_index -= left_newlines;
-    if (newline_index < node->piece_newlines) {
+    const auto leftBytes = bytes(node->left);
+    newlineIndex -= leftNewlines;
+    if (newlineIndex < node->piece_newlines) {
         const auto& buffer = node->add_buffer ? add : original;
         auto begin = buffer.begin() + static_cast<std::ptrdiff_t>(node->start);
         const auto end = begin + static_cast<std::ptrdiff_t>(node->length);
         while (begin != end) {
-            if (*begin == '\n' && newline_index-- == 0) {
-                return base + left_bytes
+            if (*begin == '\n' && newlineIndex-- == 0) {
+                return base + leftBytes
                     + static_cast<std::size_t>(
                         begin - buffer.begin()
                         - static_cast<std::ptrdiff_t>(node->start));
@@ -233,8 +233,8 @@ std::size_t nthNewlineOffset(
         node->right,
         original,
         add,
-        newline_index - node->piece_newlines,
-        base + left_bytes + node->length);
+        newlineIndex - node->piece_newlines,
+        base + leftBytes + node->length);
 }
 
 struct Validation {
@@ -254,31 +254,31 @@ Validation validateNode(
     const auto left = validateNode(node->left, original, add);
     const auto right = validateNode(node->right, original, add);
     const auto& buffer = node->add_buffer ? add : original;
-    const auto range_valid =
+    const auto rangeValid =
         node->start <= buffer.size()
         && node->length <= buffer.size() - node->start;
-    std::size_t piece_newlines = 0;
-    if (range_valid) {
-        piece_newlines = static_cast<std::size_t>(std::count(
+    std::size_t pieceNewlines = 0;
+    if (rangeValid) {
+        pieceNewlines = static_cast<std::size_t>(std::count(
             buffer.begin() + static_cast<std::ptrdiff_t>(node->start),
             buffer.begin()
                 + static_cast<std::ptrdiff_t>(node->start + node->length),
             '\n'));
     }
-    const auto expected_bytes = left.bytes + node->length + right.bytes;
-    const auto expected_newlines =
-        left.newlines + piece_newlines + right.newlines;
-    const auto expected_height = 1 + std::max(left.height, right.height);
+    const auto expectedBytes = left.bytes + node->length + right.bytes;
+    const auto expectedNewlines =
+        left.newlines + pieceNewlines + right.newlines;
+    const auto expectedHeight = 1 + std::max(left.height, right.height);
     const auto balanced = std::abs(left.height - right.height) <= 1;
     return {
-        left.valid && right.valid && range_valid && node->length != 0
-            && node->piece_newlines == piece_newlines
-            && node->subtree_bytes == expected_bytes
-            && node->subtree_newlines == expected_newlines
-            && node->height == expected_height && balanced,
-        expected_bytes,
-        expected_newlines,
-        expected_height,
+        left.valid && right.valid && rangeValid && node->length != 0
+            && node->piece_newlines == pieceNewlines
+            && node->subtree_bytes == expectedBytes
+            && node->subtree_newlines == expectedNewlines
+            && node->height == expectedHeight && balanced,
+        expectedBytes,
+        expectedNewlines,
+        expectedHeight,
     };
 }
 
@@ -339,10 +339,10 @@ void PieceTree::insert(std::size_t offset, std::string_view inserted) {
 
     const auto start = add_buffer_.size();
     add_buffer_.append(inserted);
-    auto inserted_node = makeNode(true, start, inserted.size());
+    auto insertedNode = makeNode(true, start, inserted.size());
     auto [left, right] = split(std::move(root_), offset);
     root_ = concatenate(
-        concatenate(std::move(left), std::move(inserted_node)),
+        concatenate(std::move(left), std::move(insertedNode)),
         std::move(right));
 }
 
@@ -387,11 +387,11 @@ bool PieceTree::validate() const noexcept {
 }
 
 PieceTree::NodePtr PieceTree::makeNode(
-    bool add_buffer,
+    bool addBuffer,
     std::size_t start,
     std::size_t length) const {
     auto node = std::make_unique<Node>();
-    node->add_buffer = add_buffer;
+    node->add_buffer = addBuffer;
     node->start = start;
     node->length = length;
     const auto source = pieceText(*node);
@@ -408,67 +408,67 @@ std::pair<PieceTree::NodePtr, PieceTree::NodePtr> PieceTree::split(
         return {};
     }
 
-    const auto left_bytes = bytes(root->left);
-    if (offset < left_bytes) {
-        auto left_tree = std::move(root->left);
-        auto right_tree = std::move(root->right);
+    const auto leftBytes = bytes(root->left);
+    if (offset < leftBytes) {
+        auto leftTree = std::move(root->left);
+        auto rightTree = std::move(root->right);
         root->left.reset();
         root->right.reset();
         update(*root);
-        auto [left, middle] = split(std::move(left_tree), offset);
-        auto root_and_right =
-            concatenate(std::move(root), std::move(right_tree));
+        auto [left, middle] = split(std::move(leftTree), offset);
+        auto rootAndRight =
+            concatenate(std::move(root), std::move(rightTree));
         return {
             std::move(left),
-            concatenate(std::move(middle), std::move(root_and_right)),
+            concatenate(std::move(middle), std::move(rootAndRight)),
         };
     }
 
-    const auto piece_end = left_bytes + root->length;
-    if (offset > piece_end) {
-        auto left_tree = std::move(root->left);
-        auto right_tree = std::move(root->right);
+    const auto pieceEnd = leftBytes + root->length;
+    if (offset > pieceEnd) {
+        auto leftTree = std::move(root->left);
+        auto rightTree = std::move(root->right);
         root->left.reset();
         root->right.reset();
         update(*root);
         auto [middle, right] =
-            split(std::move(right_tree), offset - piece_end);
-        auto left_and_root =
-            concatenate(std::move(left_tree), std::move(root));
+            split(std::move(rightTree), offset - pieceEnd);
+        auto leftAndRoot =
+            concatenate(std::move(leftTree), std::move(root));
         return {
-            concatenate(std::move(left_and_root), std::move(middle)),
+            concatenate(std::move(leftAndRoot), std::move(middle)),
             std::move(right),
         };
     }
 
-    auto left_tree = std::move(root->left);
-    auto right_tree = std::move(root->right);
+    auto leftTree = std::move(root->left);
+    auto rightTree = std::move(root->right);
     root->left.reset();
     root->right.reset();
     update(*root);
-    if (offset == left_bytes) {
+    if (offset == leftBytes) {
         return {
-            std::move(left_tree),
-            concatenate(std::move(root), std::move(right_tree)),
+            std::move(leftTree),
+            concatenate(std::move(root), std::move(rightTree)),
         };
     }
-    if (offset == piece_end) {
+    if (offset == pieceEnd) {
         return {
-            concatenate(std::move(left_tree), std::move(root)),
-            std::move(right_tree),
+            concatenate(std::move(leftTree), std::move(root)),
+            std::move(rightTree),
         };
     }
 
-    const auto piece_offset = offset - left_bytes;
-    auto left_piece =
-        makeNode(root->add_buffer, root->start, piece_offset);
-    auto right_piece = makeNode(
+    const auto pieceOffset = offset - leftBytes;
+    auto leftPiece =
+        makeNode(root->add_buffer, root->start, pieceOffset);
+    auto rightPiece = makeNode(
         root->add_buffer,
-        root->start + piece_offset,
-        root->length - piece_offset);
+        root->start + pieceOffset,
+        root->length - pieceOffset);
     return {
-        concatenate(std::move(left_tree), std::move(left_piece)),
-        concatenate(std::move(right_piece), std::move(right_tree)),
+        concatenate(std::move(leftTree), std::move(leftPiece)),
+        concatenate(std::move(rightPiece), std::move(rightTree)),
     };
 }
 

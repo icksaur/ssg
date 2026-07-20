@@ -74,10 +74,10 @@ public:
     EditorSession& operator=(EditorSession&&) = delete;
 
     [[nodiscard]] AttachResult attach(InvocationPrincipal principal,
-                                      ViewId view_id);
-    [[nodiscard]] bool detach(ClientId client_id);
+                                      ViewId viewId);
+    [[nodiscard]] bool detach(ClientId clientId);
 
-    [[nodiscard]] CommandResult dispatch(ClientId client_id,
+    [[nodiscard]] CommandResult dispatch(ClientId clientId,
                                          ClientCommand const& command);
 
     [[nodiscard]] Revision revision() const;
@@ -90,7 +90,7 @@ public:
     Revision advanceRevision();
     [[nodiscard]] SessionTopology topology() const;
     [[nodiscard]] std::optional<AttachedClient> attachedClient(
-        ClientId client_id) const;
+        ClientId clientId) const;
 
 private:
     struct Impl;

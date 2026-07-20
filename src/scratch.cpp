@@ -110,29 +110,29 @@ struct Remnant {
 };
 
 std::vector<Remnant> restoredRemnants(
-    const std::filesystem::path& scratch_root) {
+    const std::filesystem::path& scratchRoot) {
     std::vector<Remnant> result;
-    const auto workspaces = scratch_root / "workspaces";
+    const auto workspaces = scratchRoot / "workspaces";
     std::error_code error;
-    for (std::filesystem::directory_iterator workspace_iterator{workspaces,
+    for (std::filesystem::directory_iterator workspaceIterator{workspaces,
                                                                  error},
-         workspace_end;
-         !error && workspace_iterator != workspace_end;
-         workspace_iterator.increment(error)) {
-        if (!workspace_iterator->is_directory()) continue;
-        const auto sessions = workspace_iterator->path() / "sessions";
-        std::error_code session_error;
-        for (std::filesystem::directory_iterator session_iterator{sessions,
-                                                                   session_error},
-             session_end;
-             !session_error && session_iterator != session_end;
-             session_iterator.increment(session_error)) {
-            if (!session_iterator->is_directory()) continue;
-            const auto marker = session_iterator->path() / "restored";
+         workspaceEnd;
+         !error && workspaceIterator != workspaceEnd;
+         workspaceIterator.increment(error)) {
+        if (!workspaceIterator->is_directory()) continue;
+        const auto sessions = workspaceIterator->path() / "sessions";
+        std::error_code sessionError;
+        for (std::filesystem::directory_iterator sessionIterator{sessions,
+                                                                   sessionError},
+             sessionEnd;
+             !sessionError && sessionIterator != sessionEnd;
+             sessionIterator.increment(sessionError)) {
+            if (!sessionIterator->is_directory()) continue;
+            const auto marker = sessionIterator->path() / "restored";
             if (!std::filesystem::is_regular_file(marker)) continue;
-            result.push_back({session_iterator->path().filename().string(),
-                              session_iterator->path(),
-                              workspace_iterator->path()});
+            result.push_back({sessionIterator->path().filename().string(),
+                              sessionIterator->path(),
+                              workspaceIterator->path()});
         }
     }
     std::sort(result.begin(), result.end(),
@@ -143,7 +143,7 @@ std::vector<Remnant> restoredRemnants(
 }
 
 bool olderThan(const Remnant& remnant,
-                std::chrono::seconds maximum_age,
+                std::chrono::seconds maximumAge,
                 std::chrono::system_clock::time_point now) {
     if (remnant.id.size() < 20) return false;
     std::uint64_t nanoseconds = 0;
@@ -160,7 +160,7 @@ bool olderThan(const Remnant& remnant,
     const auto created =
         std::chrono::system_clock::time_point{std::chrono::nanoseconds{
             nanoseconds}};
-    return now - created > maximum_age;
+    return now - created > maximumAge;
 }
 
 void removeRemnant(const Remnant& remnant) {
@@ -190,17 +190,17 @@ public:
         std::optional<JournalDocumentKey> key;
     };
 
-    Impl(std::filesystem::path scratch_root,
+    Impl(std::filesystem::path scratchRoot,
          ScratchStoreConfig config,
          ScratchSession session,
          JournalRecoverySet recovery,
-         std::unique_ptr<ScratchStorage> owned_storage,
+         std::unique_ptr<ScratchStorage> ownedStorage,
          ScratchStorage& storage)
-        : scratch_root_(std::move(scratch_root)),
+        : scratch_root_(std::move(scratchRoot)),
           config_(config),
           session_(std::move(session)),
           recovery_(std::move(recovery)),
-          owned_storage_(std::move(owned_storage)),
+          owned_storage_(std::move(ownedStorage)),
           storage_(storage),
           worker_([this] { run(); }) {}
 
@@ -285,9 +285,9 @@ public:
     }
 
     std::size_t purgeWorkspace() {
-        const auto current_workspace = session_.path().parent_path().parent_path();
+        const auto currentWorkspace = session_.path().parent_path().parent_path();
         return purge([&](const Remnant& remnant) {
-            return remnant.workspace_path == current_workspace;
+            return remnant.workspace_path == currentWorkspace;
         });
     }
 
@@ -416,13 +416,13 @@ private:
 };
 
 ScratchStore ScratchStore::createWithStorage(
-    const std::filesystem::path& scratch_root,
-    const std::filesystem::path& canonical_workspace,
+    const std::filesystem::path& scratchRoot,
+    const std::filesystem::path& canonicalWorkspace,
     ScratchStoreConfig config,
-    std::unique_ptr<ScratchStorage> owned_storage,
+    std::unique_ptr<ScratchStorage> ownedStorage,
     ScratchStorage& storage) {
     validateConfig(config);
-    auto session = ScratchSession::create(scratch_root, canonical_workspace);
+    auto session = ScratchSession::create(scratchRoot, canonicalWorkspace);
     JournalRecoverySet recovery;
     if (auto remnant = session.claimNewestRestorable()) {
         recovery = remnant->replay().recovery;
@@ -431,26 +431,26 @@ ScratchStore ScratchStore::createWithStorage(
         remnant->markRestored();
     }
     return ScratchStore{std::make_unique<ScratchStore::Impl>(
-        scratch_root, config, std::move(session), std::move(recovery),
-        std::move(owned_storage), storage)};
+        scratchRoot, config, std::move(session), std::move(recovery),
+        std::move(ownedStorage), storage)};
 }
 
 ScratchStore ScratchStore::create(
-    const std::filesystem::path& scratch_root,
-    const std::filesystem::path& canonical_workspace,
+    const std::filesystem::path& scratchRoot,
+    const std::filesystem::path& canonicalWorkspace,
     ScratchStoreConfig config) {
     auto storage = std::make_unique<FilesystemScratchStorage>();
     auto& reference = *storage;
-    return createWithStorage(scratch_root, canonical_workspace, config,
+    return createWithStorage(scratchRoot, canonicalWorkspace, config,
                                std::move(storage), reference);
 }
 
 ScratchStore ScratchStore::create(
-    const std::filesystem::path& scratch_root,
-    const std::filesystem::path& canonical_workspace,
+    const std::filesystem::path& scratchRoot,
+    const std::filesystem::path& canonicalWorkspace,
     ScratchStoreConfig config,
     ScratchStorage& storage) {
-    return createWithStorage(scratch_root, canonical_workspace, config,
+    return createWithStorage(scratchRoot, canonicalWorkspace, config,
                                nullptr, storage);
 }
 

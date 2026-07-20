@@ -10,7 +10,7 @@
 
 namespace ssg {
 
-inline constexpr std::size_t theme_palette_size = 16;
+inline constexpr std::size_t kThemePaletteSize = 16;
 
 struct SrgbColor {
     std::uint8_t red = 0;
@@ -70,8 +70,8 @@ enum class SemanticRole : std::uint8_t {
     DiffModified,
 };
 
-inline constexpr std::size_t semantic_role_count = 32;
-inline constexpr std::array all_semantic_roles{
+inline constexpr std::size_t kSemanticRoleCount = 32;
+inline constexpr std::array kAllSemanticRoles{
     SemanticRole::Foreground,
     SemanticRole::Background,
     SemanticRole::Caret,
@@ -105,7 +105,7 @@ inline constexpr std::array all_semantic_roles{
     SemanticRole::DiffRemoved,
     SemanticRole::DiffModified,
 };
-static_assert(all_semantic_roles.size() == semantic_role_count);
+static_assert(kAllSemanticRoles.size() == kSemanticRoleCount);
 
 enum class SyntaxScope : std::uint8_t {
     PlainText,
@@ -121,8 +121,8 @@ enum class SyntaxScope : std::uint8_t {
     Invalid,
 };
 
-inline constexpr std::size_t syntax_scope_count = 11;
-inline constexpr std::array all_syntax_scopes{
+inline constexpr std::size_t kSyntaxScopeCount = 11;
+inline constexpr std::array kAllSyntaxScopes{
     SyntaxScope::PlainText,
     SyntaxScope::Comment,
     SyntaxScope::Keyword,
@@ -135,7 +135,7 @@ inline constexpr std::array all_syntax_scopes{
     SyntaxScope::Punctuation,
     SyntaxScope::Invalid,
 };
-static_assert(all_syntax_scopes.size() == syntax_scope_count);
+static_assert(kAllSyntaxScopes.size() == kSyntaxScopeCount);
 
 struct RolePair {
     SemanticRole first;
@@ -144,7 +144,7 @@ struct RolePair {
     friend bool operator==(const RolePair&, const RolePair&) = default;
 };
 
-inline constexpr std::array co_visible_role_pairs{
+inline constexpr std::array kCoVisibleRolePairs{
     RolePair{SemanticRole::Caret, SemanticRole::Selection},
     RolePair{SemanticRole::DiagnosticError, SemanticRole::DiagnosticWarning},
     RolePair{SemanticRole::DiagnosticError, SemanticRole::DiagnosticInfo},
@@ -182,9 +182,9 @@ struct SyntaxMapping {
 };
 
 struct ThemeSnapshot {
-    std::array<SrgbColor, theme_palette_size> palette;
-    std::array<std::uint8_t, semantic_role_count> semantic_indices;
-    std::array<std::uint8_t, syntax_scope_count> syntax_indices;
+    std::array<SrgbColor, kThemePaletteSize> palette;
+    std::array<std::uint8_t, kSemanticRoleCount> semantic_indices;
+    std::array<std::uint8_t, kSyntaxScopeCount> syntax_indices;
 
     friend bool operator==(const ThemeSnapshot&, const ThemeSnapshot&) = default;
 };
@@ -198,11 +198,11 @@ class Theme {
 public:
     Theme(std::string name,
           std::span<const IndexedColor> palette,
-          std::span<const RoleMapping> semantic_mappings,
-          std::span<const SyntaxMapping> syntax_mappings);
+          std::span<const RoleMapping> semanticMappings,
+          std::span<const SyntaxMapping> syntaxMappings);
 
     [[nodiscard]] const std::string& name() const noexcept { return name_; }
-    [[nodiscard]] const std::array<SrgbColor, theme_palette_size>& palette() const noexcept {
+    [[nodiscard]] const std::array<SrgbColor, kThemePaletteSize>& palette() const noexcept {
         return palette_;
     }
     [[nodiscard]] std::uint8_t indexFor(SemanticRole role) const;
@@ -212,9 +212,9 @@ public:
 
 private:
     std::string name_;
-    std::array<SrgbColor, theme_palette_size> palette_{};
-    std::array<std::uint8_t, semantic_role_count> semantic_indices_{};
-    std::array<std::uint8_t, syntax_scope_count> syntax_indices_{};
+    std::array<SrgbColor, kThemePaletteSize> palette_{};
+    std::array<std::uint8_t, kSemanticRoleCount> semantic_indices_{};
+    std::array<std::uint8_t, kSyntaxScopeCount> syntax_indices_{};
 };
 
 } // namespace ssg

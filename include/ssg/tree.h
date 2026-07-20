@@ -69,7 +69,7 @@ struct TreeNode {
 
 class TreeProviderSnapshot {
 public:
-    TreeProviderSnapshot(TreeProviderId provider_id, TreeProviderKind kind,
+    TreeProviderSnapshot(TreeProviderId providerId, TreeProviderKind kind,
                          TreeRevision revision, std::vector<TreeNode> nodes);
 
     const TreeProviderId& providerId() const noexcept { return provider_id_; }
@@ -101,13 +101,13 @@ struct SymbolTreeRecord {
 };
 
 TreeProviderSnapshot filesystemTreeSnapshot(
-    TreeProviderId provider_id, const std::filesystem::path& canonical_cwd,
+    TreeProviderId providerId, const std::filesystem::path& canonicalCwd,
     TreeRevision revision);
-TreeProviderSnapshot gitTreeSnapshot(TreeProviderId provider_id,
+TreeProviderSnapshot gitTreeSnapshot(TreeProviderId providerId,
                                        TreeRevision revision,
                                        std::vector<GitTreeRecord> records);
 TreeProviderSnapshot symbolTreeSnapshot(
-    TreeProviderId provider_id, TreeRevision revision,
+    TreeProviderId providerId, TreeRevision revision,
     std::vector<SymbolTreeRecord> records);
 
 struct TreeCommandDescriptor {
@@ -179,13 +179,13 @@ struct TreeSelectArguments {
 class TreeModel {
 public:
     void replaceProvider(TreeProviderSnapshot snapshot);
-    bool toggleExpanded(const TreeProviderId& provider_id,
-                         const TreeNodeId& node_id);
-    bool isExpanded(const TreeProviderId& provider_id,
-                     const TreeNodeId& node_id) const;
+    bool toggleExpanded(const TreeProviderId& providerId,
+                         const TreeNodeId& nodeId);
+    bool isExpanded(const TreeProviderId& providerId,
+                     const TreeNodeId& nodeId) const;
     std::optional<TreeCommandInvocation> invokeNodeCommand(
-        const TreeProviderId& provider_id, const TreeNodeId& node_id,
-        std::string_view command_id) const;
+        const TreeProviderId& providerId, const TreeNodeId& nodeId,
+        std::string_view commandId) const;
 
     // Selection navigation over the active provider's visible nodes.  Selection
     // is library-owned UI state so every client presents the same focus.
@@ -194,7 +194,7 @@ public:
     // Set the active provider's selection to `node_id`. Returns false (leaving
     // the selection unchanged) when no provider is active or the id is not among
     // the active provider's visible nodes.
-    bool select(const TreeNodeId& node_id);
+    bool select(const TreeNodeId& nodeId);
     bool toggleSelected();
     [[nodiscard]] std::optional<TreeNode> selectedNode() const;
 
@@ -243,7 +243,7 @@ struct TreeDelta {
 
 TreeDelta deriveTreeDelta(const TreeViewState& base,
                             const TreeViewState& target,
-                            std::size_t maximum_operations);
+                            std::size_t maximumOperations);
 
 enum class TreeReplayError { None, StaleRevision, SnapshotRequired, MalformedDelta };
 

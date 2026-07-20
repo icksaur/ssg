@@ -61,7 +61,7 @@ TEST(editorCellMapsToItsDocumentByteOffset) {
     // (resolve_document_position / TextModel), which the app uses to turn a hit
     // into a caret. A regression to line-relative offsets makes every line's
     // cells resolve to line 0 and fails here immediately.
-    bool saw_second_line = false;
+    bool sawSecondLine = false;
     for (auto const& target : targets) {
         int const column = content.x + static_cast<int>(target.viewport_column);
         int const row = content.y + static_cast<int>(target.viewport_row);
@@ -75,35 +75,35 @@ TEST(editorCellMapsToItsDocumentByteOffset) {
             ASSERT_EQ(position->line.value(),
                       static_cast<std::uint64_t>(target.logical_line));
         }
-        if (target.logical_line > 0) saw_second_line = true;
+        if (target.logical_line > 0) sawSecondLine = true;
     }
     // The document has three lines, so the targets must reach past line 0 (the
     // property above is only meaningful if we actually exercised later lines).
-    ASSERT_TRUE(saw_second_line);
+    ASSERT_TRUE(sawSecondLine);
 
     // Column 0 of a later visual row resolves to that line's first byte.
-    ssg::CellHitTarget const* line_one_start = nullptr;
+    ssg::CellHitTarget const* lineOneStart = nullptr;
     for (auto const& target : targets) {
         if (target.logical_line == 1 && target.viewport_column == 0) {
-            line_one_start = &target;
+            lineOneStart = &target;
             break;
         }
     }
-    ASSERT_TRUE(line_one_start != nullptr);
-    if (line_one_start) {
-        ASSERT_EQ(line_one_start->byte_offset, std::uint32_t{6});  // after "alpha\n"
+    ASSERT_TRUE(lineOneStart != nullptr);
+    if (lineOneStart) {
+        ASSERT_EQ(lineOneStart->byte_offset, std::uint32_t{6});  // after "alpha\n"
     }
 
     // A cell far past the end of the short first line ("alpha", 5 cells) now
     // clamps to that line's end (M8 click-past-EOL): an editor hit at the newline
     // byte after "alpha" (offset 5), zero-width.
-    auto past_eol = ssg::hitTest(*snapshot, content.right() - 2, content.y);
-    ASSERT_EQ(past_eol.region, ssg::HitRegion::Editor);
-    ASSERT_EQ(past_eol.byte_offset, std::uint32_t{5});
-    ASSERT_EQ(past_eol.byte_len, std::uint32_t{0});
+    auto pastEol = ssg::hitTest(*snapshot, content.right() - 2, content.y);
+    ASSERT_EQ(pastEol.region, ssg::HitRegion::Editor);
+    ASSERT_EQ(pastEol.byte_offset, std::uint32_t{5});
+    ASSERT_EQ(pastEol.byte_len, std::uint32_t{0});
     {
         auto position = ssg::resolveDocumentPosition(
-            text, ssg::ByteOffset{past_eol.byte_offset});
+            text, ssg::ByteOffset{pastEol.byte_offset});
         ASSERT_TRUE(position.has_value());
         if (position) ASSERT_EQ(position->line.value(), std::uint64_t{0});
     }
@@ -130,7 +130,7 @@ TEST(clickPastEolBlankLineAndBelowDocumentClampToLineEnd) {
     if (shell.panes.empty()) return;
     auto const content = shell.panes.front().content;
 
-    auto resolve_line = [&](std::uint32_t offset) -> std::uint64_t {
+    auto resolveLine = [&](std::uint32_t offset) -> std::uint64_t {
         auto p = ssg::resolveDocumentPosition(text, ssg::ByteOffset{offset});
         return p ? p->line.value() : 9999;
     };
@@ -146,7 +146,7 @@ TEST(clickPastEolBlankLineAndBelowDocumentClampToLineEnd) {
     ASSERT_EQ(past0.region, ssg::HitRegion::Editor);
     ASSERT_EQ(past0.byte_offset, std::uint32_t{2});
     ASSERT_EQ(past0.byte_len, std::uint32_t{0});
-    ASSERT_EQ(resolve_line(past0.byte_offset), std::uint64_t{0});
+    ASSERT_EQ(resolveLine(past0.byte_offset), std::uint64_t{0});
 
     // The blank line (row 1) — anywhere on it, including column 0 — resolves to the
     // blank line's own offset (3), on line 1. A blank row has no hit targets, so
@@ -155,20 +155,20 @@ TEST(clickPastEolBlankLineAndBelowDocumentClampToLineEnd) {
     ASSERT_EQ(blank.region, ssg::HitRegion::Editor);
     ASSERT_EQ(blank.byte_offset, std::uint32_t{3});
     ASSERT_EQ(blank.byte_len, std::uint32_t{0});
-    ASSERT_EQ(resolve_line(blank.byte_offset), std::uint64_t{1});
+    ASSERT_EQ(resolveLine(blank.byte_offset), std::uint64_t{1});
 
     // A row BELOW the last line (Decision B) clamps to the LAST visible row's end.
     // The document's last visual row is the trailing empty line (offset 8 == the
     // text end after "cde\n").
-    auto const last_row_end =
+    auto const lastRowEnd =
         snapshot->client().viewport.visible_rows.back().end_byte_offset;
     auto below = ssg::hitTest(*snapshot, content.x + 10, content.bottom() - 1);
     ASSERT_EQ(below.region, ssg::HitRegion::Editor);
-    ASSERT_EQ(below.byte_offset, last_row_end);
+    ASSERT_EQ(below.byte_offset, lastRowEnd);
     ASSERT_EQ(below.byte_len, std::uint32_t{0});
-    auto below_pos =
+    auto belowPos =
         ssg::resolveDocumentPosition(text, ssg::ByteOffset{below.byte_offset});
-    ASSERT_TRUE(below_pos.has_value());
+    ASSERT_TRUE(belowPos.has_value());
 }
 
 TEST(clickPastEolIntegrationLandsCaretAtLineEnd) {
@@ -184,7 +184,7 @@ TEST(clickPastEolIntegrationLandsCaretAtLineEnd) {
     (void)runtime->dispatch(ssg::ClientId{1},
                             {"file.open", runtime->revision(), std::string{"doc.txt"}});
 
-    auto caret_offset_after_click = [&](int column, int row) -> std::uint64_t {
+    auto caretOffsetAfterClick = [&](int column, int row) -> std::uint64_t {
         auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
         if (!snapshot) return 9999;
         auto const content = snapshot->sections().shell.panes.front().content;
@@ -209,11 +209,11 @@ TEST(clickPastEolIntegrationLandsCaretAtLineEnd) {
     auto const content = snapshot->sections().shell.panes.front().content;
 
     // Click far right of line 0 ("ab") -> caret at its end (offset 2).
-    ASSERT_EQ(caret_offset_after_click(content.x + 40, content.y), std::uint64_t{2});
+    ASSERT_EQ(caretOffsetAfterClick(content.x + 40, content.y), std::uint64_t{2});
     // Click on the blank line -> caret on the blank line (offset 3).
-    ASSERT_EQ(caret_offset_after_click(content.x + 5, content.y + 1), std::uint64_t{3});
+    ASSERT_EQ(caretOffsetAfterClick(content.x + 5, content.y + 1), std::uint64_t{3});
     // Click below the last line -> caret at the last visual row's end (offset 8).
-    ASSERT_EQ(caret_offset_after_click(content.x + 10, content.bottom() - 1),
+    ASSERT_EQ(caretOffsetAfterClick(content.x + 10, content.bottom() - 1),
               std::uint64_t{8});
 }
 
@@ -292,9 +292,9 @@ TEST(paletteRowMapsToItsAbsoluteRankIndex) {
     ASSERT_EQ(hit.item_index, std::uint32_t{23});
 
     // The palette overlays the pane: a document cell is inert while it is open.
-    auto over_doc = ssg::hitTest(projected, pane.content.x, pane.content.y);
-    ASSERT_EQ(over_doc.region, ssg::HitRegion::Palette);
-    ASSERT_EQ(over_doc.item_index, std::uint32_t{20});
+    auto overDoc = ssg::hitTest(projected, pane.content.x, pane.content.y);
+    ASSERT_EQ(overDoc.region, ssg::HitRegion::Palette);
+    ASSERT_EQ(overDoc.item_index, std::uint32_t{20});
 }
 
 TEST(paletteScrollbarAndEmptyAreaClassifyCorrectly) {
@@ -365,11 +365,11 @@ TEST(editorScrollbarFractionFeedsScrollToFraction) {
     auto bottom = ssg::hitTest(*snapshot, gutter.x, gutter.bottom() - 1);
     ASSERT_EQ(bottom.region, ssg::HitRegion::EditorScrollbar);
     ASSERT_EQ(bottom.scroll_numerator, bottom.scroll_denominator);
-    auto const max_first = snapshot->client().viewport.scrollbar.maximum_first_row;
+    auto const maxFirst = snapshot->client().viewport.scrollbar.maximum_first_row;
     auto const resolved = static_cast<std::uint32_t>(
-        (static_cast<std::uint64_t>(max_first) * bottom.scroll_numerator) /
+        (static_cast<std::uint64_t>(maxFirst) * bottom.scroll_numerator) /
         bottom.scroll_denominator);
-    ASSERT_EQ(resolved, max_first);
+    ASSERT_EQ(resolved, maxFirst);
 }
 
 TEST(tabBarCellMapsToItsTabIndex) {

@@ -63,9 +63,9 @@ TEST(pathsCannotEscapeWorkspaceBeforeMutation) {
     TemporaryDirectory temporary;
     TemporaryDirectory outside;
     writeBytes(outside.path() / "secret.txt", "secret");
-    std::error_code symlink_error;
+    std::error_code symlinkError;
     std::filesystem::create_directory_symlink(
-        outside.path(), temporary.path() / "escape", symlink_error);
+        outside.path(), temporary.path() / "escape", symlinkError);
     auto recovery =
         ssg::RecoveryActions::create(temporary.path() / ".recovery");
     auto workspace = ssg::Workspace::create(temporary.path(), recovery);
@@ -74,7 +74,7 @@ TEST(pathsCannotEscapeWorkspaceBeforeMutation) {
               ssg::WorkspaceError::InvalidPath);
     ASSERT_EQ(workspace.openFile(outside.path().string()).error,
               ssg::WorkspaceError::InvalidPath);
-    if (!symlink_error) {
+    if (!symlinkError) {
         ASSERT_EQ(workspace.openFile("escape/secret.txt").error,
                   ssg::WorkspaceError::PathOutsideWorkspace);
     }
@@ -92,18 +92,18 @@ TEST(untitledIdentityChangesOnlyAfterSuccessfulSave) {
     ASSERT_EQ(before->key.kind(), ssg::JournalDocumentKeyKind::Untitled);
 
     std::filesystem::create_directories(temporary.path() / "blocked");
-    const auto failed_save = workspace.saveAs(id, "blocked");
-    ASSERT_FALSE(failed_save.accepted());
-    const auto after_failure = workspace.state(id);
-    ASSERT_EQ(after_failure->key, before->key);
-    ASSERT_TRUE(after_failure->dirty);
+    const auto failedSave = workspace.saveAs(id, "blocked");
+    ASSERT_FALSE(failedSave.accepted());
+    const auto afterFailure = workspace.state(id);
+    ASSERT_EQ(afterFailure->key, before->key);
+    ASSERT_TRUE(afterFailure->dirty);
 
     const auto saved = workspace.saveAs(id, "named.txt");
     ASSERT_TRUE(saved.accepted());
-    const auto after_save = workspace.state(id);
-    ASSERT_EQ(after_save->key.kind(), ssg::JournalDocumentKeyKind::Saved);
-    ASSERT_EQ(after_save->key.savedPath(), std::string{"named.txt"});
-    ASSERT_FALSE(after_save->dirty);
+    const auto afterSave = workspace.state(id);
+    ASSERT_EQ(afterSave->key.kind(), ssg::JournalDocumentKeyKind::Saved);
+    ASSERT_EQ(afterSave->key.savedPath(), std::string{"named.txt"});
+    ASSERT_FALSE(afterSave->dirty);
 }
 
 TEST(recentFilesAreBoundedMruAndDropMissingEntries) {
@@ -123,8 +123,8 @@ TEST(recentFilesAreBoundedMruAndDropMissingEntries) {
 
     std::filesystem::remove(temporary.path() / "33.txt");
     ASSERT_EQ(workspace.openRecent(0).error, ssg::WorkspaceError::NotFound);
-    const auto after_missing = workspace.recentFiles();
-    ASSERT_EQ(after_missing.front(), std::string{"32.txt"});
+    const auto afterMissing = workspace.recentFiles();
+    ASSERT_EQ(afterMissing.front(), std::string{"32.txt"});
 }
 
 TEST(renameDeleteAndWorkspaceReplaceAreCompensatable) {
@@ -175,8 +175,8 @@ TEST(saveOverwriteAndReloadCompensationsRestoreGroundTruth) {
               std::string{"disk-edited"});
     ASSERT_TRUE(workspace.restore(*saved.compensation).accepted());
     ASSERT_EQ(readBytes(temporary.path() / "file.txt"), std::string{"disk"});
-    const auto after_save_restore = workspace.state(id);
-    ASSERT_TRUE(after_save_restore->dirty);
+    const auto afterSaveRestore = workspace.state(id);
+    ASSERT_TRUE(afterSaveRestore->dirty);
 
     writeBytes(temporary.path() / "file.txt", "external");
     const auto reloaded = workspace.reload(id);
@@ -185,8 +185,8 @@ TEST(saveOverwriteAndReloadCompensationsRestoreGroundTruth) {
     ASSERT_TRUE(workspace.restore(*reloaded.compensation).accepted());
     ASSERT_EQ(workspace.document(id).snapshot().text,
               std::string{"disk-edited"});
-    const auto after_reload_restore = workspace.state(id);
-    ASSERT_TRUE(after_reload_restore->dirty);
+    const auto afterReloadRestore = workspace.state(id);
+    ASSERT_TRUE(afterReloadRestore->dirty);
 }
 
 TEST(newDirectoryRejectsEscapeAndCreatesOnlyInsideRoot) {

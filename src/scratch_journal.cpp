@@ -29,11 +29,11 @@
 namespace ssg {
 namespace {
 
-constexpr std::array<std::byte, 4> magic{
+constexpr std::array<std::byte, 4> kMagic{
     std::byte{'S'}, std::byte{'S'}, std::byte{'G'}, std::byte{'J'}};
-constexpr std::uint16_t format_version = 1;
-constexpr std::size_t header_size = 14;
-constexpr std::uint32_t maximum_payload_size = 64U * 1024U * 1024U;
+constexpr std::uint16_t kFormatVersion = 1;
+constexpr std::size_t kHeaderSize = 14;
+constexpr std::uint32_t kMaximumPayloadSize = 64U * 1024U * 1024U;
 
 enum class RecordKind : std::uint8_t {
     Checkpoint = 1,
@@ -230,18 +230,18 @@ void encodeDocument(Writer& writer, const JournalDocument& document) {
 }
 
 std::vector<std::byte> frame(RecordKind kind, Writer body) {
-    Writer payload_writer;
-    payload_writer.u8(static_cast<std::uint8_t>(kind));
-    const auto body_bytes = std::move(body).take();
-    payload_writer.raw(body_bytes);
-    const auto payload = std::move(payload_writer).take();
-    if (payload.size() > maximum_payload_size) {
+    Writer payloadWriter;
+    payloadWriter.u8(static_cast<std::uint8_t>(kind));
+    const auto bodyBytes = std::move(body).take();
+    payloadWriter.raw(bodyBytes);
+    const auto payload = std::move(payloadWriter).take();
+    if (payload.size() > kMaximumPayloadSize) {
         throw std::length_error("journal record exceeds maximum payload size");
     }
 
     Writer result;
-    result.raw(magic);
-    result.u16(format_version);
+    result.raw(kMagic);
+    result.u16(kFormatVersion);
     result.u32(static_cast<std::uint32_t>(payload.size()));
     result.u32(crc32c(payload));
     result.raw(payload);
@@ -304,9 +304,9 @@ void upsert(std::vector<JournalDocument>& documents,
 bool applyPayload(std::span<const std::byte> payload,
                    JournalRecoverySet& recovery) {
     Reader reader{payload};
-    std::uint8_t raw_kind = 0;
-    if (!reader.u8(raw_kind)) return false;
-    const auto kind = static_cast<RecordKind>(raw_kind);
+    std::uint8_t rawKind = 0;
+    if (!reader.u8(rawKind)) return false;
+    const auto kind = static_cast<RecordKind>(rawKind);
 
     if (kind == RecordKind::Checkpoint) {
         std::uint32_t count = 0;
@@ -403,19 +403,19 @@ UntitledDocumentId UntitledDocumentId::generate() {
 }
 
 JournalDocumentKey JournalDocumentKey::saved(
-    std::string_view workspace_relative_path) {
-    if (workspace_relative_path.empty() ||
-        workspace_relative_path.front() == '/' ||
-        workspace_relative_path.front() == '\\' ||
-        workspace_relative_path.find('\0') != std::string_view::npos ||
-        !validUtf8(workspace_relative_path)) {
+    std::string_view workspaceRelativePath) {
+    if (workspaceRelativePath.empty() ||
+        workspaceRelativePath.front() == '/' ||
+        workspaceRelativePath.front() == '\\' ||
+        workspaceRelativePath.find('\0') != std::string_view::npos ||
+        !validUtf8(workspaceRelativePath)) {
         throw std::invalid_argument(
             "saved journal identity must be a valid workspace-relative path");
     }
     std::size_t start = 0;
-    while (start <= workspace_relative_path.size()) {
-        const auto end = workspace_relative_path.find_first_of("/\\", start);
-        const auto component = workspace_relative_path.substr(
+    while (start <= workspaceRelativePath.size()) {
+        const auto end = workspaceRelativePath.find_first_of("/\\", start);
+        const auto component = workspaceRelativePath.substr(
             start, end == std::string_view::npos
                        ? std::string_view::npos
                        : end - start);
@@ -427,7 +427,7 @@ JournalDocumentKey JournalDocumentKey::saved(
         start = end + 1;
     }
     return {JournalDocumentKeyKind::Saved,
-            std::string{workspace_relative_path}, UntitledDocumentId{{}}};
+            std::string{workspaceRelativePath}, UntitledDocumentId{{}}};
 }
 
 JournalDocumentKey JournalDocumentKey::untitled(UntitledDocumentId id) {
@@ -486,36 +486,36 @@ JournalReplayResult replayJournal(std::span<const std::byte> bytes) {
     JournalReplayResult result;
     std::size_t position = 0;
     while (position < bytes.size()) {
-        if (bytes.size() - position < header_size ||
-            !std::equal(magic.begin(), magic.end(), bytes.begin() + position)) {
+        if (bytes.size() - position < kHeaderSize ||
+            !std::equal(kMagic.begin(), kMagic.end(), bytes.begin() + position)) {
             result.discarded_tail = true;
             break;
         }
-        Reader header{bytes.subspan(position + magic.size(),
-                                    header_size - magic.size())};
-        std::uint8_t version_low = 0;
-        std::uint8_t version_high = 0;
-        std::uint32_t payload_size = 0;
-        std::uint32_t expected_crc = 0;
-        if (!header.u8(version_low) || !header.u8(version_high) ||
-            (static_cast<std::uint16_t>(version_low) |
-             (static_cast<std::uint16_t>(version_high) << 8U)) !=
-                format_version ||
-            !header.u32(payload_size) ||
-            payload_size > maximum_payload_size ||
-            !header.u32(expected_crc) ||
-            payload_size > bytes.size() - position - header_size) {
+        Reader header{bytes.subspan(position + kMagic.size(),
+                                    kHeaderSize - kMagic.size())};
+        std::uint8_t versionLow = 0;
+        std::uint8_t versionHigh = 0;
+        std::uint32_t payloadSize = 0;
+        std::uint32_t expectedCrc = 0;
+        if (!header.u8(versionLow) || !header.u8(versionHigh) ||
+            (static_cast<std::uint16_t>(versionLow) |
+             (static_cast<std::uint16_t>(versionHigh) << 8U)) !=
+                kFormatVersion ||
+            !header.u32(payloadSize) ||
+            payloadSize > kMaximumPayloadSize ||
+            !header.u32(expectedCrc) ||
+            payloadSize > bytes.size() - position - kHeaderSize) {
             result.discarded_tail = true;
             break;
         }
         const auto payload =
-            bytes.subspan(position + header_size, payload_size);
-        if (crc32c(payload) != expected_crc ||
+            bytes.subspan(position + kHeaderSize, payloadSize);
+        if (crc32c(payload) != expectedCrc ||
             !applyPayload(payload, result.recovery)) {
             result.discarded_tail = true;
             break;
         }
-        position += header_size + payload_size;
+        position += kHeaderSize + payloadSize;
         result.valid_bytes = position;
     }
     return result;
@@ -605,11 +605,11 @@ void ScratchJournal::append(std::span<const std::byte> record) const {
     if (descriptor < 0) throwErrno("open scratch journal for append");
 
     try {
-        std::size_t written_total = 0;
-        while (written_total < record.size()) {
+        std::size_t writtenTotal = 0;
+        while (writtenTotal < record.size()) {
             const auto written =
-                ::write(descriptor, record.data() + written_total,
-                        record.size() - written_total);
+                ::write(descriptor, record.data() + writtenTotal,
+                        record.size() - writtenTotal);
             if (written < 0) {
                 if (errno == EINTR) continue;
                 throwErrno("write scratch journal record");
@@ -618,7 +618,7 @@ void ScratchJournal::append(std::span<const std::byte> record) const {
                 throw std::system_error(EIO, std::generic_category(),
                                         "write scratch journal record");
             }
-            written_total += static_cast<std::size_t>(written);
+            writtenTotal += static_cast<std::size_t>(written);
         }
         if (::fsync(descriptor) != 0) {
             throwErrno("flush scratch journal record");

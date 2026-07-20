@@ -54,12 +54,12 @@ public:
 class ScratchStore {
 public:
     [[nodiscard]] static ScratchStore create(
-        const std::filesystem::path& scratch_root,
-        const std::filesystem::path& canonical_workspace,
+        const std::filesystem::path& scratchRoot,
+        const std::filesystem::path& canonicalWorkspace,
         ScratchStoreConfig config = {});
     [[nodiscard]] static ScratchStore create(
-        const std::filesystem::path& scratch_root,
-        const std::filesystem::path& canonical_workspace,
+        const std::filesystem::path& scratchRoot,
+        const std::filesystem::path& canonicalWorkspace,
         ScratchStoreConfig config,
         ScratchStorage& storage);
 
@@ -90,10 +90,10 @@ private:
     class Impl;
     explicit ScratchStore(std::unique_ptr<Impl> implementation) noexcept;
     [[nodiscard]] static ScratchStore createWithStorage(
-        const std::filesystem::path& scratch_root,
-        const std::filesystem::path& canonical_workspace,
+        const std::filesystem::path& scratchRoot,
+        const std::filesystem::path& canonicalWorkspace,
         ScratchStoreConfig config,
-        std::unique_ptr<ScratchStorage> owned_storage,
+        std::unique_ptr<ScratchStorage> ownedStorage,
         ScratchStorage& storage);
 
     std::unique_ptr<Impl> impl_;

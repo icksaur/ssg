@@ -31,14 +31,14 @@ constexpr TestSocket invalid_test_socket = INVALID_SOCKET;
 void close_test_socket(TestSocket socket) { closesocket(socket); }
 #else
 using TestSocket = int;
-constexpr TestSocket invalid_test_socket = -1;
+constexpr TestSocket kInvalidTestSocket = -1;
 void closeTestSocket(TestSocket socket) { close(socket); }
 #endif
 
 struct SocketOwner {
-    TestSocket socket{invalid_test_socket};
+    TestSocket socket{kInvalidTestSocket};
     ~SocketOwner() {
-        if (socket != invalid_test_socket) {
+        if (socket != kInvalidTestSocket) {
             closeTestSocket(socket);
         }
     }
@@ -92,7 +92,7 @@ SocketOwner connectWebsocket(std::uint16_t port) {
     }
 #endif
     SocketOwner owner{socket(AF_INET, SOCK_STREAM, 0)};
-    if (owner.socket == invalid_test_socket) {
+    if (owner.socket == kInvalidTestSocket) {
         throw std::runtime_error{"socket creation failed"};
     }
     sockaddr_in address{};
@@ -158,17 +158,17 @@ TEST(directAndCodecScriptsHaveIdenticalSnapshots) {
     ssg::Revision revision{1};
     for (auto const& text : std::vector<std::string>{"hello", " ", "world"}) {
         ssg::InsertRequest const request{revision, text};
-        auto const direct_result = direct.execute(ssg::ClientId{1}, request);
+        auto const directResult = direct.execute(ssg::ClientId{1}, request);
         auto const decoded =
             ssg::decodeInsertRequest(ssg::encodeInsertRequest(request));
         ASSERT_TRUE(decoded.accepted());
-        auto const remote_result =
+        auto const remoteResult =
             ssg::decodeSliceResponse(
-                ssg::encodeSliceResponse(direct_result));
-        ASSERT_TRUE(direct_result.accepted());
-        ASSERT_EQ(remote_result, direct_result);
-        ASSERT_TRUE(direct_result.delta.has_value());
-        revision = direct_result.snapshot.revision;
+                ssg::encodeSliceResponse(directResult));
+        ASSERT_TRUE(directResult.accepted());
+        ASSERT_EQ(remoteResult, directResult);
+        ASSERT_TRUE(directResult.delta.has_value());
+        revision = directResult.snapshot.revision;
     }
     ASSERT_EQ(direct.snapshot().text, std::string{"hello world"});
 }

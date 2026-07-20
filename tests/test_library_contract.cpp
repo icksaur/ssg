@@ -83,9 +83,9 @@ bool matchesGolden(std::string const& actual, char const* path) {
 // product data or substitute a private ranker — the projection is library code.
 ssg::PaletteReport projectReport(
     std::vector<ssg::PaletteCandidate> const& candidates, std::string const& query,
-    std::uint32_t pane_rows, std::uint32_t first_visible,
-    std::size_t selected_index) {
-    ssg::PaletteWindowState window{query, selected_index, first_visible, pane_rows};
+    std::uint32_t paneRows, std::uint32_t firstVisible,
+    std::size_t selectedIndex) {
+    ssg::PaletteWindowState window{query, selectedIndex, firstVisible, paneRows};
     return ssg::derivePaletteReport(candidates, window);
 }
 

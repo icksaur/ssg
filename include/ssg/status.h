@@ -98,7 +98,7 @@ struct StatusFooterProjection {
 
 class StatusQueue {
 public:
-    static constexpr std::size_t capacity = 16;
+    static constexpr std::size_t kCapacity = 16;
 
     [[nodiscard]] StatusEnqueueResult enqueue(StatusItem item);
     void next() noexcept;

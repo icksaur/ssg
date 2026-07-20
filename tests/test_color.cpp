@@ -13,7 +13,7 @@
 namespace {
 
 // Independent literal copy of the 16 xterm base colors.
-constexpr std::array<ssg::SrgbColor, 16> ref_base16{{
+constexpr std::array<ssg::SrgbColor, 16> kRefBase16{{
     {0, 0, 0},       {128, 0, 0},     {0, 128, 0},     {128, 128, 0},
     {0, 0, 128},     {128, 0, 128},   {0, 128, 128},   {192, 192, 192},
     {128, 128, 128}, {255, 0, 0},     {0, 255, 0},     {255, 255, 0},
@@ -26,7 +26,7 @@ std::uint8_t refCubeChannel(int level) {
 }
 
 ssg::SrgbColor refXterm(int index) {
-    if (index < 16) return ref_base16[static_cast<std::size_t>(index)];
+    if (index < 16) return kRefBase16[static_cast<std::size_t>(index)];
     if (index < 232) {
         int const offset = index - 16;
         return {refCubeChannel(offset / 36), refCubeChannel((offset / 6) % 6),
@@ -45,12 +45,12 @@ long refDistance(ssg::SrgbColor a, ssg::SrgbColor b) {
 
 int refNearest(ssg::SrgbColor color, int first, int last) {
     int best = first;
-    long best_distance = refDistance(color, refXterm(first));
+    long bestDistance = refDistance(color, refXterm(first));
     for (int index = first + 1; index <= last; ++index) {
         long const distance = refDistance(color, refXterm(index));
-        if (distance < best_distance) {  // strict: ties keep the lower index
+        if (distance < bestDistance) {  // strict: ties keep the lower index
             best = index;
-            best_distance = distance;
+            bestDistance = distance;
         }
     }
     return best;

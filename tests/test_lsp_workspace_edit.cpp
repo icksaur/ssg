@@ -75,7 +75,7 @@ public:
                                               found->second};
     }
 
-    LspWorkspaceDocumentWriteResult apply(std::string uri, Revision expected_revision,
+    LspWorkspaceDocumentWriteResult apply(std::string uri, Revision expectedRevision,
                                           std::string text) override {
         ++apply_calls;
         const auto found = documents.find(uri);
@@ -84,7 +84,7 @@ public:
                     ssg::LspWorkspaceDocumentError::UnknownDocument,
                     "unknown document"};
         }
-        if (found->second.revision != expected_revision) {
+        if (found->second.revision != expectedRevision) {
             return {found->second.revision,
                     ssg::LspWorkspaceDocumentError::StaleRevision,
                     "stale revision"};
@@ -156,32 +156,32 @@ public:
         return {};
     }
 
-    LspWorkspaceFileResult renamePath(std::string old_uri, std::string new_uri,
+    LspWorkspaceFileResult renamePath(std::string oldUri, std::string newUri,
                                        bool overwrite) override {
         if (shouldFail("rename")) {
             return {ssg::LspWorkspaceFileError::IoError,
                     "injected rename failure"};
         }
-        const auto source_file = files.find(old_uri);
-        const bool source_directory = directories.contains(old_uri);
-        if (source_file == files.end() && !source_directory) {
+        const auto sourceFile = files.find(oldUri);
+        const bool sourceDirectory = directories.contains(oldUri);
+        if (sourceFile == files.end() && !sourceDirectory) {
             return {ssg::LspWorkspaceFileError::NotFound,
                     "rename source is missing"};
         }
-        const bool destination_exists =
-            files.contains(new_uri) || directories.contains(new_uri);
-        if (destination_exists && !overwrite) {
+        const bool destinationExists =
+            files.contains(newUri) || directories.contains(newUri);
+        if (destinationExists && !overwrite) {
             return {ssg::LspWorkspaceFileError::AlreadyExists,
                     "rename destination already exists"};
         }
-        files.erase(new_uri);
-        directories.erase(new_uri);
-        if (source_directory) {
-            directories.erase(old_uri);
-            directories.insert(new_uri);
+        files.erase(newUri);
+        directories.erase(newUri);
+        if (sourceDirectory) {
+            directories.erase(oldUri);
+            directories.insert(newUri);
         } else {
-            files[new_uri] = source_file->second;
-            files.erase(source_file);
+            files[newUri] = sourceFile->second;
+            files.erase(sourceFile);
         }
         return {};
     }
@@ -278,15 +278,15 @@ TEST(validationRejectsMalformedRangesBeforeAnyMutation) {
     FakeFiles files;
     files.files["file:///workspace/file.txt"] = "payload";
     LspWorkspaceEditApplier applier{documents, files};
-    const auto before_docs = documents.documents;
-    const auto before_files = files.files;
+    const auto beforeDocs = documents.documents;
+    const auto beforeFiles = files.files;
 
     const auto result = applier.apply(fixture("validation_failure.json"));
 
     ASSERT_FALSE(result.accepted());
     ASSERT_EQ(result.error, ssg::LspWorkspaceEditError::InvalidPosition);
-    ASSERT_EQ(documents.documents, before_docs);
-    ASSERT_EQ(files.files, before_files);
+    ASSERT_EQ(documents.documents, beforeDocs);
+    ASSERT_EQ(files.files, beforeFiles);
     ASSERT_EQ(documents.apply_calls, 0);
     ASSERT_EQ(files.operation_calls, 0);
 }
@@ -427,15 +427,15 @@ TEST(fileOperationFailureRollsBackDocumentsAndPaths) {
     files.fail_operation = "rename";
     files.fail_call = 2;
     LspWorkspaceEditApplier applier{documents, files};
-    const auto before_docs = documentTexts(documents.documents);
-    const auto before_files = files.files;
+    const auto beforeDocs = documentTexts(documents.documents);
+    const auto beforeFiles = files.files;
 
     const auto result = applier.apply(fixture("file_ops_with_text_edit.json"));
 
     ASSERT_FALSE(result.accepted());
     ASSERT_EQ(result.error, ssg::LspWorkspaceEditError::ApplyFailed);
-    ASSERT_EQ(documentTexts(documents.documents), before_docs);
-    ASSERT_EQ(files.files, before_files);
+    ASSERT_EQ(documentTexts(documents.documents), beforeDocs);
+    ASSERT_EQ(files.files, beforeFiles);
 }
 
 TEST(directoryResourceOperationsApplyAndRecover) {

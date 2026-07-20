@@ -114,12 +114,12 @@ public:
 class RecoveryActions {
 public:
     [[nodiscard]] static RecoveryActions create(
-        const std::filesystem::path& recovery_root,
+        const std::filesystem::path& recoveryRoot,
         RecoveryConfig config = {});
     [[nodiscard]] static RecoveryActions create(
-        const std::filesystem::path& recovery_root,
+        const std::filesystem::path& recoveryRoot,
         RecoveryConfig config,
-        RecoveryFaultInjector& fault_injector);
+        RecoveryFaultInjector& faultInjector);
 
     ~RecoveryActions();
     RecoveryActions(RecoveryActions&&) noexcept;
@@ -132,7 +132,7 @@ public:
     [[nodiscard]] RecoveryActionResult closeDocument(
         std::optional<JournalDocument>& document,
         ScratchStore& scratch,
-        std::chrono::milliseconds durability_timeout);
+        std::chrono::milliseconds durabilityTimeout);
     [[nodiscard]] RecoveryActionResult reloadDocument(
         std::optional<JournalDocument>& document,
         JournalDocument replacement);

@@ -45,8 +45,8 @@ public:
     // (O(visible/moved lines)), not the whole document (M12 INV-viewport-bounded-
     // work).  The wrap-ON path still faults in every line via wrapped_rows /
     // all_runs, which is the accepted O(document) cost for exact wrapped geometry.
-    TextModel(std::string_view text, int tab_width)
-        : text_(text), tab_width_(tab_width) {
+    TextModel(std::string_view text, int tabWidth)
+        : text_(text), tab_width_(tabWidth) {
         line_starts_.push_back(0);
         for (std::size_t newline = text.find('\n');
              newline != std::string_view::npos;
@@ -106,45 +106,45 @@ public:
     }
 
     [[nodiscard]] DocumentPosition vertical(
-        const DocumentPosition& position, bool down, std::size_t line_count,
-        CellIndex desired_cell) const {
+        const DocumentPosition& position, bool down, std::size_t lineCount,
+        CellIndex desiredCell) const {
         const auto current = static_cast<std::size_t>(position.line.value());
-        const auto last_line = line_starts_.size() - 1;
+        const auto lastLine = line_starts_.size() - 1;
         std::size_t target = current;
         if (down) {
-            target = line_count > last_line - current ? last_line
-                                                       : current + line_count;
+            target = lineCount > lastLine - current ? lastLine
+                                                       : current + lineCount;
             if (target == current) {
                 return lineData(current).line.boundaries.back();
             }
         } else {
-            target = line_count > current ? 0 : current - line_count;
+            target = lineCount > current ? 0 : current - lineCount;
             if (target == current) {
                 return lineData(current).line.boundaries.front();
             }
         }
-        return positionForCell(target, desired_cell);
+        return positionForCell(target, desiredCell);
     }
 
     [[nodiscard]] DocumentPosition verticalVisual(
-        const DocumentPosition& position, bool down, std::size_t row_count,
-        CellIndex desired_cell, std::uint32_t columns) const {
+        const DocumentPosition& position, bool down, std::size_t rowCount,
+        CellIndex desiredCell, std::uint32_t columns) const {
         // No wrap: a visual row IS a logical line, so vertical-visual movement is
         // exactly logical-line movement — no whole-document wrapped rows.
         if (columns == kNoWrap) {
-            return vertical(position, down, row_count, desired_cell);
+            return vertical(position, down, rowCount, desiredCell);
         }
         const auto rows = wrappedRows(columns);
         const auto current = wrappedRowIndex(rows, position);
         const auto target =
-            down ? std::min(current + row_count, rows.size() - 1)
-                 : (row_count > current ? 0 : current - row_count);
+            down ? std::min(current + rowCount, rows.size() - 1)
+                 : (rowCount > current ? 0 : current - rowCount);
         if (target == current) {
             return *resolve(ByteOffset{
                 down ? rows[current].end_byte
                      : rows[current].start_byte});
         }
-        return positionForWrappedCell(rows[target], desired_cell);
+        return positionForWrappedCell(rows[target], desiredCell);
     }
 
     [[nodiscard]] CellIndex visualColumn(
@@ -205,9 +205,9 @@ public:
 
     [[nodiscard]] ViewportViewState viewportState(
         ViewportDimensions dimensions,
-        std::uint32_t requested_first_visual_row) const {
+        std::uint32_t requestedFirstVisualRow) const {
         return computeViewport(allRuns(), dimensions,
-                                requested_first_visual_row);
+                                requestedFirstVisualRow);
     }
 
     [[nodiscard]] std::uint32_t visualRow(
@@ -256,11 +256,11 @@ private:
     }
 
     [[nodiscard]] DocumentPosition positionForCell(
-        std::size_t line_index, CellIndex desired_cell) const {
-        const auto& boundaries = lineData(line_index).line.boundaries;
+        std::size_t lineIndex, CellIndex desiredCell) const {
+        const auto& boundaries = lineData(lineIndex).line.boundaries;
         const DocumentPosition* chosen = &boundaries.front();
         for (const auto& boundary : boundaries) {
-            if (boundary.cell > desired_cell) {
+            if (boundary.cell > desiredCell) {
                 break;
             }
             if (boundary.cell > chosen->cell) {
@@ -273,50 +273,50 @@ private:
     [[nodiscard]] std::vector<WrappedRow> wrappedRows(
         std::uint32_t columns) const {
         std::vector<WrappedRow> rows;
-        for (std::size_t line_index = 0; line_index < line_starts_.size();
-             ++line_index) {
-            const auto& data = lineData(line_index);
+        for (std::size_t lineIndex = 0; lineIndex < line_starts_.size();
+             ++lineIndex) {
+            const auto& data = lineData(lineIndex);
             const auto& line = data.line;
             const auto& run = data.run;
             if (run.spans.empty()) {
                 rows.push_back(WrappedRow{
-                    line_index, line.start, line.end, 0, 0});
+                    lineIndex, line.start, line.end, 0, 0});
                 continue;
             }
 
-            std::size_t first_span = 0;
-            std::size_t span_count = 0;
-            std::uint64_t start_cell = 0;
-            std::uint32_t content_cells = 0;
-            const auto finish_row = [&] {
-                const auto& first = run.spans[first_span];
+            std::size_t firstSpan = 0;
+            std::size_t spanCount = 0;
+            std::uint64_t startCell = 0;
+            std::uint32_t contentCells = 0;
+            const auto finishRow = [&] {
+                const auto& first = run.spans[firstSpan];
                 const auto& last =
-                    run.spans[first_span + span_count - 1];
+                    run.spans[firstSpan + spanCount - 1];
                 rows.push_back(WrappedRow{
-                    line_index,
+                    lineIndex,
                     line.start + first.byte_offset,
                     line.start + last.byte_offset + last.byte_len,
-                    start_cell,
-                    start_cell + content_cells,
+                    startCell,
+                    startCell + contentCells,
                 });
             };
 
-            for (std::size_t span_index = 0;
-                 span_index < run.spans.size(); ++span_index) {
-                const auto width = run.spans[span_index].cell_width;
-                if (width > 0 && content_cells > 0 &&
+            for (std::size_t spanIndex = 0;
+                 spanIndex < run.spans.size(); ++spanIndex) {
+                const auto width = run.spans[spanIndex].cell_width;
+                if (width > 0 && contentCells > 0 &&
                     width >
-                        columns - std::min(content_cells, columns)) {
-                    finish_row();
-                    first_span = span_index;
-                    span_count = 0;
-                    start_cell += content_cells;
-                    content_cells = 0;
+                        columns - std::min(contentCells, columns)) {
+                    finishRow();
+                    firstSpan = spanIndex;
+                    spanCount = 0;
+                    startCell += contentCells;
+                    contentCells = 0;
                 }
-                ++span_count;
-                content_cells += width;
+                ++spanCount;
+                contentCells += width;
             }
-            finish_row();
+            finishRow();
         }
         return rows;
     }
@@ -324,21 +324,21 @@ private:
     [[nodiscard]] std::size_t wrappedRowIndex(
         const std::vector<WrappedRow>& rows,
         const DocumentPosition& position) const {
-        const auto byte_offset =
+        const auto byteOffset =
             static_cast<std::size_t>(position.byte_offset.value());
-        const auto logical_line =
+        const auto logicalLine =
             static_cast<std::size_t>(position.line.value());
         for (std::size_t index = 0; index < rows.size(); ++index) {
             const auto& row = rows[index];
-            if (row.logical_line != logical_line ||
-                byte_offset < row.start_byte) {
+            if (row.logical_line != logicalLine ||
+                byteOffset < row.start_byte) {
                 continue;
             }
-            const bool final_row =
+            const bool finalRow =
                 index + 1 == rows.size() ||
-                rows[index + 1].logical_line != logical_line;
-            if (byte_offset < row.end_byte ||
-                (final_row && byte_offset == row.end_byte)) {
+                rows[index + 1].logical_line != logicalLine;
+            if (byteOffset < row.end_byte ||
+                (finalRow && byteOffset == row.end_byte)) {
                 return index;
             }
         }
@@ -347,18 +347,18 @@ private:
     }
 
     [[nodiscard]] DocumentPosition positionForWrappedCell(
-        const WrappedRow& row, CellIndex desired_cell) const {
+        const WrappedRow& row, CellIndex desiredCell) const {
         const auto target =
-            std::min(row.start_cell + desired_cell.value(),
+            std::min(row.start_cell + desiredCell.value(),
                      row.end_cell);
         const auto& boundaries = lineData(row.logical_line).line.boundaries;
         const DocumentPosition* chosen = nullptr;
         for (const auto& boundary : boundaries) {
-            const auto byte_offset = boundary.byte_offset.value();
-            if (byte_offset < row.start_byte) {
+            const auto byteOffset = boundary.byte_offset.value();
+            if (byteOffset < row.start_byte) {
                 continue;
             }
-            if (byte_offset > row.end_byte ||
+            if (byteOffset > row.end_byte ||
                 boundary.cell.value() > target) {
                 break;
             }
@@ -472,8 +472,8 @@ bool isValidPosition(const TextModel& model,
 std::uint32_t revealedFirstRow(const TextModel& model,
                                  const SelectionViewState& state,
                                  ViewportDimensions dimensions,
-                                 bool center, bool word_wrap) {
-    if (word_wrap) {
+                                 bool center, bool wordWrap) {
+    if (wordWrap) {
         const auto viewport =
             model.viewportState(dimensions, state.first_visual_row);
         const auto target =
@@ -488,10 +488,10 @@ std::uint32_t revealedFirstRow(const TextModel& model,
         if (target < viewport.first_visual_row) {
             return target;
         }
-        const auto visible_end =
+        const auto visibleEnd =
             static_cast<std::uint64_t>(viewport.first_visual_row) +
             viewport.visible_rows.size();
-        if (target >= visible_end) {
+        if (target >= visibleEnd) {
             const auto requested =
                 target - static_cast<std::uint32_t>(
                              viewport.visible_rows.size()) +
@@ -507,7 +507,7 @@ std::uint32_t revealedFirstRow(const TextModel& model,
     const auto total = static_cast<std::uint32_t>(model.lineCount());
     const std::uint32_t maximum =
         total > dimensions.rows ? total - dimensions.rows : 0;
-    const std::uint32_t current_first =
+    const std::uint32_t currentFirst =
         std::min(state.first_visual_row, maximum);
     const auto target = static_cast<std::uint32_t>(
         state.selections.primary().active.line.value());
@@ -516,13 +516,13 @@ std::uint32_t revealedFirstRow(const TextModel& model,
         const auto requested = target > half ? target - half : 0;
         return std::min(requested, maximum);
     }
-    if (target < current_first) {
+    if (target < currentFirst) {
         return target;
     }
-    if (target >= current_first + dimensions.rows) {
+    if (target >= currentFirst + dimensions.rows) {
         return std::min(target - dimensions.rows + 1, maximum);
     }
-    return current_first;
+    return currentFirst;
 }
 
 // The horizontal scroll offset (word wrap OFF only) that keeps the primary
@@ -531,15 +531,15 @@ std::uint32_t revealedFirstRow(const TextModel& model,
 // this needs no document scan.  Returns 0 when word wrap is on.
 std::uint32_t revealedFirstColumn(const SelectionViewState& state,
                                     ViewportDimensions dimensions,
-                                    bool word_wrap) {
-    if (word_wrap) return 0;
-    const auto caret_cell = static_cast<std::uint32_t>(
+                                    bool wordWrap) {
+    if (wordWrap) return 0;
+    const auto caretCell = static_cast<std::uint32_t>(
         state.selections.primary().active.cell.value());
     std::uint32_t first = state.first_visual_column;
-    if (caret_cell < first) {
-        first = caret_cell;
-    } else if (caret_cell >= first + dimensions.columns) {
-        first = caret_cell - dimensions.columns + 1;
+    if (caretCell < first) {
+        first = caretCell;
+    } else if (caretCell >= first + dimensions.columns) {
+        first = caretCell - dimensions.columns + 1;
     }
     return first;
 }
@@ -750,25 +750,25 @@ SelectionNavigationCommandSet selectionNavigationCommandSet() {
 }
 
 std::optional<DocumentPosition> resolveDocumentPosition(
-    std::string_view text, ByteOffset byte_offset, int tab_width) {
-    if (tab_width < 1 || tab_width > 16) {
+    std::string_view text, ByteOffset byteOffset, int tabWidth) {
+    if (tabWidth < 1 || tabWidth > 16) {
         return std::nullopt;
     }
-    return TextModel{text, tab_width}.resolve(byte_offset);
+    return TextModel{text, tabWidth}.resolve(byteOffset);
 }
 
 SelectionNavigationResult applySelectionNavigation(
     std::string_view text, const SelectionViewState& before,
     SelectionCommand command, ViewportDimensions viewport,
     SelectionCommandArguments arguments,
-    std::span<const BracketPair> bracket_pairs, int tab_width, bool word_wrap) {
-    if (tab_width < 1 || tab_width > 16) {
+    std::span<const BracketPair> bracketPairs, int tabWidth, bool wordWrap) {
+    if (tabWidth < 1 || tabWidth > 16) {
         return rejected(SelectionNavigationError::InvalidTabWidth,
                         "tab width must be between 1 and 16");
     }
-    const TextModel model{text, tab_width};
-    const std::uint32_t nav_columns =
-        word_wrap ? viewport.columns : std::numeric_limits<std::uint32_t>::max();
+    const TextModel model{text, tabWidth};
+    const std::uint32_t navColumns =
+        wordWrap ? viewport.columns : std::numeric_limits<std::uint32_t>::max();
     for (const auto& selection : before.selections.items()) {
         if (!isValidPosition(model, selection.anchor) ||
             !isValidPosition(model, selection.active)) {
@@ -779,26 +779,26 @@ SelectionNavigationResult applySelectionNavigation(
     }
 
     auto selections = before.selections.items();
-    auto desired_cell = before.desired_cell;
+    auto desiredCell = before.desired_cell;
     // The current viewport supplies the page size (visible row count) and the base
     // scroll row.  Under no-wrap, use the O(visible rows) unwrapped projection so
     // this does NOT segment the whole document (M12 VP-2b); the wrap-ON path keeps
     // the exact wrapped viewport.
-    const auto current_viewport =
-        word_wrap ? model.viewportState(viewport, before.first_visual_row)
+    const auto currentViewport =
+        wordWrap ? model.viewportState(viewport, before.first_visual_row)
                   : computeViewportUnwrapped(text, viewport,
                                                before.first_visual_row, 0,
-                                               tab_width);
-    std::uint32_t first_visual_row =
-        current_viewport.first_visual_row;
+                                               tabWidth);
+    std::uint32_t firstVisualRow =
+        currentViewport.first_visual_row;
 
-    const auto replace_with_carets = [&](auto&& destination) {
+    const auto replaceWithCarets = [&](auto&& destination) {
         for (auto& selection : selections) {
             const auto position = destination(selection);
             selection = Selection{position, position};
         }
     };
-    const auto extend_active = [&](auto&& destination) {
+    const auto extendActive = [&](auto&& destination) {
         for (auto& selection : selections) {
             selection.active = destination(selection);
         }
@@ -816,51 +816,51 @@ SelectionNavigationResult applySelectionNavigation(
         }
         selections = {
             Selection{*arguments.position, *arguments.position}};
-        desired_cell.reset();
+        desiredCell.reset();
         break;
 
     case SelectionCommand::CursorLeft:
-        replace_with_carets([&](const Selection& selection) {
+        replaceWithCarets([&](const Selection& selection) {
             return selection.isCaret() ? model.previous(selection.active)
                                         : selection.lower();
         });
-        desired_cell.reset();
+        desiredCell.reset();
         break;
 
     case SelectionCommand::CursorRight:
-        replace_with_carets([&](const Selection& selection) {
+        replaceWithCarets([&](const Selection& selection) {
             return selection.isCaret() ? model.next(selection.active)
                                         : selection.upper();
         });
-        desired_cell.reset();
+        desiredCell.reset();
         break;
 
     case SelectionCommand::CursorWordLeft:
-        replace_with_carets([&](const Selection& selection) {
+        replaceWithCarets([&](const Selection& selection) {
             return model.wordLeft(selection.lower());
         });
-        desired_cell.reset();
+        desiredCell.reset();
         break;
 
     case SelectionCommand::CursorWordRight:
-        replace_with_carets([&](const Selection& selection) {
+        replaceWithCarets([&](const Selection& selection) {
             return model.wordRight(selection.upper());
         });
-        desired_cell.reset();
+        desiredCell.reset();
         break;
 
     case SelectionCommand::CursorLineStart:
-        replace_with_carets([&](const Selection& selection) {
+        replaceWithCarets([&](const Selection& selection) {
             return model.lineStart(selection.lower());
         });
-        desired_cell.reset();
+        desiredCell.reset();
         break;
 
     case SelectionCommand::CursorLineEnd:
-        replace_with_carets([&](const Selection& selection) {
+        replaceWithCarets([&](const Selection& selection) {
             return model.lineEnd(selection.upper());
         });
-        desired_cell.reset();
+        desiredCell.reset();
         break;
 
     case SelectionCommand::CursorLineUp:
@@ -874,8 +874,8 @@ SelectionNavigationResult applySelectionNavigation(
             command == SelectionCommand::CursorPageUp ||
             command == SelectionCommand::CursorPageDown;
         const auto count =
-            page ? current_viewport.visible_rows.size() : 1;
-        std::optional<CellIndex> primary_desired;
+            page ? currentViewport.visible_rows.size() : 1;
+        std::optional<CellIndex> primaryDesired;
         for (std::size_t index = 0; index < selections.size(); ++index) {
             auto& selection = selections[index];
             const auto origin = down ? selection.upper()
@@ -883,35 +883,35 @@ SelectionNavigationResult applySelectionNavigation(
             const auto desired =
                 index + 1 == selections.size() && before.desired_cell
                     ? *before.desired_cell
-                    : model.visualColumn(origin, nav_columns);
+                    : model.visualColumn(origin, navColumns);
             const auto destination =
                 model.verticalVisual(origin, down, count, desired,
-                                      nav_columns);
+                                      navColumns);
             selection = Selection{destination, destination};
             if (index + 1 == selections.size()) {
-                primary_desired =
-                    model.visualRow(destination, nav_columns) ==
-                            model.visualRow(origin, nav_columns)
+                primaryDesired =
+                    model.visualRow(destination, navColumns) ==
+                            model.visualRow(origin, navColumns)
                         ? model.visualColumn(destination,
-                                              nav_columns)
+                                              navColumns)
                         : desired;
             }
         }
-        desired_cell = primary_desired;
+        desiredCell = primaryDesired;
         break;
     }
 
     case SelectionCommand::CursorDocumentStart: {
         const auto destination = model.documentStart();
         selections = {Selection{destination, destination}};
-        desired_cell.reset();
+        desiredCell.reset();
         break;
     }
 
     case SelectionCommand::CursorDocumentEnd: {
         const auto destination = model.documentEnd();
         selections = {Selection{destination, destination}};
-        desired_cell.reset();
+        desiredCell.reset();
         break;
     }
 
@@ -935,49 +935,49 @@ SelectionNavigationResult applySelectionNavigation(
         } else {
             selections.push_back(*arguments.selection);
         }
-        desired_cell.reset();
+        desiredCell.reset();
         break;
 
     case SelectionCommand::SelectLeft:
-        extend_active([&](const Selection& selection) {
+        extendActive([&](const Selection& selection) {
             return model.previous(selection.active);
         });
-        desired_cell.reset();
+        desiredCell.reset();
         break;
 
     case SelectionCommand::SelectRight:
-        extend_active([&](const Selection& selection) {
+        extendActive([&](const Selection& selection) {
             return model.next(selection.active);
         });
-        desired_cell.reset();
+        desiredCell.reset();
         break;
 
     case SelectionCommand::SelectWordLeft:
-        extend_active([&](const Selection& selection) {
+        extendActive([&](const Selection& selection) {
             return model.wordLeft(selection.active);
         });
-        desired_cell.reset();
+        desiredCell.reset();
         break;
 
     case SelectionCommand::SelectWordRight:
-        extend_active([&](const Selection& selection) {
+        extendActive([&](const Selection& selection) {
             return model.wordRight(selection.active);
         });
-        desired_cell.reset();
+        desiredCell.reset();
         break;
 
     case SelectionCommand::SelectLineStart:
-        extend_active([&](const Selection& selection) {
+        extendActive([&](const Selection& selection) {
             return model.lineStart(selection.active);
         });
-        desired_cell.reset();
+        desiredCell.reset();
         break;
 
     case SelectionCommand::SelectLineEnd:
-        extend_active([&](const Selection& selection) {
+        extendActive([&](const Selection& selection) {
             return model.lineEnd(selection.active);
         });
-        desired_cell.reset();
+        desiredCell.reset();
         break;
 
     case SelectionCommand::SelectLineUp:
@@ -991,50 +991,50 @@ SelectionNavigationResult applySelectionNavigation(
             command == SelectionCommand::SelectPageUp ||
             command == SelectionCommand::SelectPageDown;
         const auto count =
-            page ? current_viewport.visible_rows.size() : 1;
-        std::optional<CellIndex> primary_desired;
+            page ? currentViewport.visible_rows.size() : 1;
+        std::optional<CellIndex> primaryDesired;
         for (std::size_t index = 0; index < selections.size(); ++index) {
             auto& selection = selections[index];
             const auto origin = selection.active;
             const auto desired =
                 index + 1 == selections.size() && before.desired_cell
                     ? *before.desired_cell
-                    : model.visualColumn(origin, nav_columns);
+                    : model.visualColumn(origin, navColumns);
             selection.active =
                 model.verticalVisual(origin, down, count, desired,
-                                      nav_columns);
+                                      navColumns);
             if (index + 1 == selections.size()) {
-                primary_desired =
+                primaryDesired =
                     model.visualRow(selection.active,
-                                     nav_columns) ==
-                            model.visualRow(origin, nav_columns)
+                                     navColumns) ==
+                            model.visualRow(origin, navColumns)
                         ? model.visualColumn(selection.active,
-                                              nav_columns)
+                                              navColumns)
                         : desired;
             }
         }
-        desired_cell = primary_desired;
+        desiredCell = primaryDesired;
         break;
     }
 
     case SelectionCommand::SelectDocumentStart:
-        extend_active([&](const Selection&) {
+        extendActive([&](const Selection&) {
             return model.documentStart();
         });
-        desired_cell.reset();
+        desiredCell.reset();
         break;
 
     case SelectionCommand::SelectDocumentEnd:
-        extend_active([&](const Selection&) {
+        extendActive([&](const Selection&) {
             return model.documentEnd();
         });
-        desired_cell.reset();
+        desiredCell.reset();
         break;
 
     case SelectionCommand::SelectAll:
         selections = {Selection{model.documentStart(),
                                 model.documentEnd()}};
-        desired_cell.reset();
+        desiredCell.reset();
         break;
 
     case SelectionCommand::SelectAddNextOccurrence: {
@@ -1045,7 +1045,7 @@ SelectionNavigationResult applySelectionNavigation(
             const auto high = static_cast<std::size_t>(
                 source.upper().byte_offset.value());
             const auto needle = text.substr(low, high - low);
-            const auto find_valid =
+            const auto findValid =
                 [&](std::size_t start,
                     std::size_t limit) -> std::optional<Selection> {
                 auto found = text.find(needle, start);
@@ -1065,15 +1065,15 @@ SelectionNavigationResult applySelectionNavigation(
                 }
                 return std::nullopt;
             };
-            auto occurrence = find_valid(high, text.size());
+            auto occurrence = findValid(high, text.size());
             if (!occurrence) {
-                occurrence = find_valid(0, low);
+                occurrence = findValid(0, low);
             }
             if (occurrence) {
                 selections.push_back(*occurrence);
             }
         }
-        desired_cell.reset();
+        desiredCell.reset();
         break;
     }
 
@@ -1094,7 +1094,7 @@ SelectionNavigationResult applySelectionNavigation(
             added.push_back(Selection{destination, destination});
         }
         selections.insert(selections.end(), added.begin(), added.end());
-        desired_cell.reset();
+        desiredCell.reset();
         break;
     }
 
@@ -1109,34 +1109,34 @@ SelectionNavigationResult applySelectionNavigation(
                 selection.lower().byte_offset.value());
             const auto high = static_cast<std::size_t>(
                 selection.upper().byte_offset.value());
-            for (std::size_t line_index = 0;
-                 line_index < model.lineCount(); ++line_index) {
-                const auto& line = model.line(line_index);
-                const auto segment_start = std::max(low, line.start);
-                const auto segment_end = std::min(high, line.end);
-                if (segment_start < segment_end) {
+            for (std::size_t lineIndex = 0;
+                 lineIndex < model.lineCount(); ++lineIndex) {
+                const auto& line = model.line(lineIndex);
+                const auto segmentStart = std::max(low, line.start);
+                const auto segmentEnd = std::min(high, line.end);
+                if (segmentStart < segmentEnd) {
                     split.push_back(Selection{
-                        *model.resolve(ByteOffset{segment_start}),
-                        *model.resolve(ByteOffset{segment_end})});
+                        *model.resolve(ByteOffset{segmentStart}),
+                        *model.resolve(ByteOffset{segmentEnd})});
                 }
             }
         }
         if (!split.empty()) {
             selections = std::move(split);
         }
-        desired_cell.reset();
+        desiredCell.reset();
         break;
     }
 
     case SelectionCommand::SelectToMatchingBracket:
     case SelectionCommand::GotoMatchingBracket: {
-        if (!validBracketPairs(bracket_pairs)) {
+        if (!validBracketPairs(bracketPairs)) {
             return rejected(
                 SelectionNavigationError::InvalidBracketPairs,
                 "bracket tokens must be non-empty, distinct, and unambiguous");
         }
         const auto matches =
-            bracketMatches(text, model, bracket_pairs);
+            bracketMatches(text, model, bracketPairs);
         for (auto& selection : selections) {
             const auto found = matches.find(
                 static_cast<std::size_t>(
@@ -1159,7 +1159,7 @@ SelectionNavigationResult applySelectionNavigation(
                 selection.active = destination;
             }
         }
-        desired_cell.reset();
+        desiredCell.reset();
         break;
     }
 
@@ -1169,13 +1169,13 @@ SelectionNavigationResult applySelectionNavigation(
     }
 
     SelectionViewState after{
-        SelectionSet{std::move(selections)}, first_visual_row,
-        before.first_visual_column, desired_cell};
+        SelectionSet{std::move(selections)}, firstVisualRow,
+        before.first_visual_column, desiredCell};
     after.first_visual_row = revealedFirstRow(
         model, after, viewport,
-        command == SelectionCommand::ViewCenterCaret, word_wrap);
+        command == SelectionCommand::ViewCenterCaret, wordWrap);
     after.first_visual_column =
-        revealedFirstColumn(after, viewport, word_wrap);
+        revealedFirstColumn(after, viewport, wordWrap);
     return accepted(before, std::move(after));
 }
 

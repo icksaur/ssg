@@ -4,6 +4,6 @@
 
 namespace ssg {
 
-inline constexpr std::string_view libraryName = "ssg";
+inline constexpr std::string_view kLibraryName = "ssg";
 
 }

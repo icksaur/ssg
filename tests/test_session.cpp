@@ -25,8 +25,8 @@ ssg::CommandRegistration command(
     std::string id,
     ssg::CommandEffect effect,
     ssg::CommandHandler handler,
-    std::vector<ssg::CapabilityId> required_capabilities = {}) {
-    return {{std::move(id), effect, std::move(required_capabilities)},
+    std::vector<ssg::CapabilityId> requiredCapabilities = {}) {
+    return {{std::move(id), effect, std::move(requiredCapabilities)},
             std::move(handler)};
 }
 
@@ -92,23 +92,23 @@ TEST(staleRejectionAppliesOnlyToMutations) {
     ASSERT_TRUE(
         session.dispatch(ssg::ClientId{1}, request("state.advance", 1)).accepted());
 
-    auto stale_mutation =
+    auto staleMutation =
         session.dispatch(ssg::ClientId{1}, request("state.advance", 1));
-    auto stale_observation =
+    auto staleObservation =
         session.dispatch(ssg::ClientId{1}, request("state.inspect", 1));
 
-    ASSERT_EQ(stale_mutation.error, ssg::CommandError::StaleRevision);
-    ASSERT_TRUE(stale_observation.accepted());
+    ASSERT_EQ(staleMutation.error, ssg::CommandError::StaleRevision);
+    ASSERT_TRUE(staleObservation.accepted());
     ASSERT_EQ(observations, 1);
     ASSERT_EQ(session.revision(), ssg::Revision{2});
 }
 
 TEST(clientIdentityAndPrincipalAreIsolated) {
-    std::vector<std::uint64_t> observed_clients;
+    std::vector<std::uint64_t> observedClients;
     ssg::CommandSet commands{{command(
         "identity.inspect", ssg::CommandEffect::Observation,
         [&](ssg::CommandContext& context, std::any const&) {
-            observed_clients.push_back(context.principal().clientId().value());
+            observedClients.push_back(context.principal().clientId().value());
             return ssg::CommandHandlerResult::success();
         })}};
     ssg::EditorSession session{
@@ -130,7 +130,7 @@ TEST(clientIdentityAndPrincipalAreIsolated) {
     ASSERT_TRUE(
         session.dispatch(ssg::ClientId{7}, request("identity.inspect", 0))
             .accepted());
-    ASSERT_EQ(observed_clients, (std::vector<std::uint64_t>{8, 7}));
+    ASSERT_EQ(observedClients, (std::vector<std::uint64_t>{8, 7}));
 
     auto unattached =
         session.dispatch(ssg::ClientId{9}, request("identity.inspect", 0));
@@ -163,9 +163,9 @@ TEST(handlerFailureIsAtomic) {
         ssg::CommandRegistry{{std::move(commands)}}};
     ASSERT_TRUE(session.attach(principal(1), ssg::ViewId{1}).accepted());
 
-    auto rejected_result =
+    auto rejectedResult =
         session.dispatch(ssg::ClientId{1}, request("topology.fail", 1));
-    ASSERT_EQ(rejected_result.error, ssg::CommandError::HandlerFailed);
+    ASSERT_EQ(rejectedResult.error, ssg::CommandError::HandlerFailed);
     ASSERT_EQ(session.revision(), ssg::Revision{1});
     auto topology = session.topology();
     ASSERT_FALSE(topology.active_workspace.has_value());
@@ -191,22 +191,22 @@ TEST(handlerFailureIsAtomic) {
 }
 
 TEST(duplicateRegistrationIsRejectedEagerly) {
-    auto no_op = [](ssg::CommandContext&, std::any const&) {
+    auto noOp = [](ssg::CommandContext&, std::any const&) {
         return ssg::CommandHandlerResult::success();
     };
 
     ASSERT_THROWS(
         ssg::CommandSet({
-            command("duplicate", ssg::CommandEffect::Observation, no_op),
-            command("duplicate", ssg::CommandEffect::Mutation, no_op),
+            command("duplicate", ssg::CommandEffect::Observation, noOp),
+            command("duplicate", ssg::CommandEffect::Mutation, noOp),
         }),
         std::invalid_argument);
 
     ssg::CommandSet first{{
-        command("duplicate", ssg::CommandEffect::Observation, no_op),
+        command("duplicate", ssg::CommandEffect::Observation, noOp),
     }};
     ssg::CommandSet second{{
-        command("duplicate", ssg::CommandEffect::Observation, no_op),
+        command("duplicate", ssg::CommandEffect::Observation, noOp),
     }};
     ASSERT_THROWS(
         ssg::CommandRegistry(
@@ -277,13 +277,13 @@ TEST(executorSerializesConcurrentHandlers) {
     ASSERT_TRUE(session.attach(principal(2), ssg::ViewId{2}).accepted());
 
     std::vector<std::thread> threads;
-    std::atomic<int> dispatch_failures{0};
+    std::atomic<int> dispatchFailures{0};
     for (std::uint64_t i = 0; i < 12; ++i) {
         threads.emplace_back([&, i] {
             auto client = ssg::ClientId{(i % 2) + 1};
             if (!session.dispatch(client, request("executor.observe", 0))
                      .accepted()) {
-                dispatch_failures.fetch_add(1);
+                dispatchFailures.fetch_add(1);
             }
         });
     }
@@ -292,7 +292,7 @@ TEST(executorSerializesConcurrentHandlers) {
     }
 
     ASSERT_EQ(maximum.load(), 1);
-    ASSERT_EQ(dispatch_failures.load(), 0);
+    ASSERT_EQ(dispatchFailures.load(), 0);
 }
 
 }  // namespace

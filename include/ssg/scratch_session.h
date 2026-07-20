@@ -26,7 +26,7 @@ private:
 };
 
 [[nodiscard]] std::string scratchWorkspaceKey(
-    const std::filesystem::path& canonical_workspace);
+    const std::filesystem::path& canonicalWorkspace);
 
 class ScratchRemnantClaim {
 public:
@@ -60,8 +60,8 @@ private:
 class ScratchSession {
 public:
     [[nodiscard]] static ScratchSession create(
-        const std::filesystem::path& scratch_root,
-        const std::filesystem::path& canonical_workspace);
+        const std::filesystem::path& scratchRoot,
+        const std::filesystem::path& canonicalWorkspace);
 
     ScratchSession(ScratchSession&&) noexcept = default;
     ScratchSession& operator=(ScratchSession&&) noexcept = default;
@@ -81,11 +81,11 @@ public:
 private:
     ScratchSession(ScratchSessionId id,
                    std::filesystem::path path,
-                   std::filesystem::path sessions_path,
+                   std::filesystem::path sessionsPath,
                    ExclusiveFileLock lock)
         : id_(std::move(id)),
           path_(std::move(path)),
-          sessions_path_(std::move(sessions_path)),
+          sessions_path_(std::move(sessionsPath)),
           lock_(std::move(lock)) {}
 
     ScratchSessionId id_;

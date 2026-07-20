@@ -30,32 +30,32 @@ using ssg::SelectionSet;
 using ssg::SelectionViewState;
 using ssg::ViewportDimensions;
 
-DocumentPosition position(std::string_view text, std::uint64_t byte_offset,
-                          int tab_width = 4) {
+DocumentPosition position(std::string_view text, std::uint64_t byteOffset,
+                          int tabWidth = 4) {
     const auto resolved =
-        ssg::resolveDocumentPosition(text, ByteOffset{byte_offset}, tab_width);
+        ssg::resolveDocumentPosition(text, ByteOffset{byteOffset}, tabWidth);
     ASSERT_TRUE(resolved.has_value());
     return resolved.value_or(
         DocumentPosition{ByteOffset{0}, ssg::LineIndex{0}, CellIndex{0}});
 }
 
 Selection selection(std::string_view text, std::uint64_t anchor,
-                    std::uint64_t active, int tab_width = 4) {
-    return Selection{position(text, anchor, tab_width),
-                     position(text, active, tab_width)};
+                    std::uint64_t active, int tabWidth = 4) {
+    return Selection{position(text, anchor, tabWidth),
+                     position(text, active, tabWidth)};
 }
 
 SelectionViewState state(
     std::string_view text,
     std::initializer_list<std::pair<std::uint64_t, std::uint64_t>> ranges,
-    std::uint32_t first_visual_row = 0, int tab_width = 4,
-    std::optional<CellIndex> desired_cell = std::nullopt) {
+    std::uint32_t firstVisualRow = 0, int tabWidth = 4,
+    std::optional<CellIndex> desiredCell = std::nullopt) {
     std::vector<Selection> selections;
     for (const auto [anchor, active] : ranges) {
-        selections.push_back(selection(text, anchor, active, tab_width));
+        selections.push_back(selection(text, anchor, active, tabWidth));
     }
     return SelectionViewState{SelectionSet{std::move(selections)},
-                              first_visual_row, 0, desired_cell};
+                              firstVisualRow, 0, desiredCell};
 }
 
 SelectionViewState resultingState(const SelectionViewState& before,
@@ -77,23 +77,23 @@ std::vector<std::pair<std::uint64_t, std::uint64_t>> byteRanges(
 void assertMatchesReference(const SelectionViewState& actual,
                               const ref::Editor& expected,
                               std::string_view context = {}) {
-    std::vector<std::pair<std::uint64_t, std::uint64_t>> expected_ranges;
+    std::vector<std::pair<std::uint64_t, std::uint64_t>> expectedRanges;
     for (const auto& item : expected.selections) {
-        expected_ranges.emplace_back(item.anchor, item.active);
+        expectedRanges.emplace_back(item.anchor, item.active);
     }
-    if (byteRanges(actual) != expected_ranges && !context.empty()) {
+    if (byteRanges(actual) != expectedRanges && !context.empty()) {
         std::cerr << "  oracle mismatch after " << context << "\n";
         std::cerr << "    actual:";
         for (const auto& [anchor, active] : byteRanges(actual)) {
             std::cerr << " (" << anchor << "," << active << ")";
         }
         std::cerr << "\n    expected:";
-        for (const auto& [anchor, active] : expected_ranges) {
+        for (const auto& [anchor, active] : expectedRanges) {
             std::cerr << " (" << anchor << "," << active << ")";
         }
         std::cerr << "\n";
     }
-    ASSERT_EQ(byteRanges(actual), expected_ranges);
+    ASSERT_EQ(byteRanges(actual), expectedRanges);
 }
 
 TEST(commandSetIsExactAndImmutable) {
@@ -397,14 +397,14 @@ TEST(multicursorOccurrenceAndLineSplittingMatchOracles) {
     auto view = state(occurrences, {{0, 3}});
     auto expected = ref::make_editor(occurrences, 0, 3);
 
-    for (const auto expected_count : {2u, 3u, 3u}) {
+    for (const auto expectedCount : {2u, 3u, 3u}) {
         ref::select_add_next_occurrence(expected);
         view = resultingState(
             view, ssg::applySelectionNavigation(
                       occurrences, view,
                       SelectionCommand::SelectAddNextOccurrence,
                       dimensions));
-        ASSERT_EQ(view.selections.items().size(), expected_count);
+        ASSERT_EQ(view.selections.items().size(), expectedCount);
         assertMatchesReference(view, expected);
     }
     ASSERT_EQ(byteRanges(view),
@@ -462,12 +462,12 @@ TEST(injectedBracketsMatchWithNesting) {
               (std::vector<std::pair<std::uint64_t, std::uint64_t>>{{0, 8}}));
 
     const std::string injected = "<%a<%b%>c%>";
-    const std::array custom_pairs{BracketPair{"<%", "%>"}};
+    const std::array customPairs{BracketPair{"<%", "%>"}};
     view = state(injected, {{0, 0}});
     view = resultingState(
         view, ssg::applySelectionNavigation(
                   injected, view, SelectionCommand::GotoMatchingBracket,
-                  dimensions, {}, custom_pairs));
+                  dimensions, {}, customPairs));
     ASSERT_EQ(view.selections.primary().active.byte_offset, ByteOffset{9});
 }
 

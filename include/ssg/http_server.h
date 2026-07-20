@@ -59,14 +59,14 @@ public:
 
     [[nodiscard]] virtual std::optional<AuthenticatedSession> authenticate(
         std::string_view credential) = 0;
-    [[nodiscard]] virtual SessionSnapshot snapshot(SessionId const& session_id,
-                                                   ClientId client_id) = 0;
-    virtual void clipboardResponse(SessionId const& session_id,
-                                    ClientId client_id,
+    [[nodiscard]] virtual SessionSnapshot snapshot(SessionId const& sessionId,
+                                                   ClientId clientId) = 0;
+    virtual void clipboardResponse(SessionId const& sessionId,
+                                    ClientId clientId,
                                     ClipboardResponse const& response) = 0;
-    virtual void statusAction(SessionId const& session_id, ClientId client_id,
+    virtual void statusAction(SessionId const& sessionId, ClientId clientId,
                                StatusActionInvocation const& invocation) = 0;
-    virtual void binary(SessionId const& session_id, ClientId client_id,
+    virtual void binary(SessionId const& sessionId, ClientId clientId,
                         BinaryFrame const& frame) = 0;
 };
 
@@ -92,7 +92,7 @@ public:
     // The referenced server must outlive this route and must be stopped before
     // route destruction so no registered callback can outlive its state.
     HttpEditorRoute(Http::Server& server, EditorSession& session,
-                    CommandArgumentCodecRegistry argument_codecs,
+                    CommandArgumentCodecRegistry argumentCodecs,
                     HttpEditorSessionHost& host,
                     HttpEditorRouteConfig config = {});
     ~HttpEditorRoute();
@@ -101,8 +101,8 @@ public:
     HttpEditorRoute& operator=(HttpEditorRoute const&) = delete;
 
     [[nodiscard]] bool sendClipboardRequest(
-        ClientId client_id, ClipboardRequest const& request);
-    [[nodiscard]] bool sendBinary(ClientId client_id,
+        ClientId clientId, ClipboardRequest const& request);
+    [[nodiscard]] bool sendBinary(ClientId clientId,
                                    BinaryFrame const& frame);
 
 private:
@@ -113,7 +113,7 @@ private:
 class HttpEditorServer {
 public:
     HttpEditorServer(EditorSession& session,
-                     CommandArgumentCodecRegistry argument_codecs,
+                     CommandArgumentCodecRegistry argumentCodecs,
                      HttpEditorSessionHost& host,
                      HttpEditorServerConfig config);
     ~HttpEditorServer();
@@ -125,8 +125,8 @@ public:
     void stop();
 
     [[nodiscard]] bool sendClipboardRequest(
-        ClientId client_id, ClipboardRequest const& request);
-    [[nodiscard]] bool sendBinary(ClientId client_id,
+        ClientId clientId, ClipboardRequest const& request);
+    [[nodiscard]] bool sendBinary(ClientId clientId,
                                    BinaryFrame const& frame);
 
 private:

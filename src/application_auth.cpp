@@ -51,16 +51,16 @@ BearerCredential generateBearerCredential() {
 }
 
 ApplicationAuthentication::ApplicationAuthentication(
-    BearerCredential credential, SessionId session_id, ClientId client_id,
-    ViewId view_id)
+    BearerCredential credential, SessionId sessionId, ClientId clientId,
+    ViewId viewId)
     : credential_{std::move(credential)},
-      session_id_{std::move(session_id)},
-      client_id_{client_id},
-      view_id_{view_id} {}
+      session_id_{std::move(sessionId)},
+      client_id_{clientId},
+      view_id_{viewId} {}
 
 std::optional<AuthenticatedSession> ApplicationAuthentication::authenticate(
-    std::string_view presented_credential) const {
-    if (!credentialsEqual(credential_.value(), presented_credential)) {
+    std::string_view presentedCredential) const {
+    if (!credentialsEqual(credential_.value(), presentedCredential)) {
         return std::nullopt;
     }
     return AuthenticatedSession{

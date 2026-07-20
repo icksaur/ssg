@@ -85,9 +85,9 @@ TEST(completionResultsAreSortedAndAcceptTheSelectedEdit) {
     const auto acceptance = features.acceptCompletion();
     ASSERT_TRUE(acceptance.accepted);
     ASSERT_EQ(acceptance.text, std::string{"alpha"});
-    const auto expected_range = std::optional<LspRange>{
+    const auto expectedRange = std::optional<LspRange>{
         LspRange{LspPosition{0, 1}, LspPosition{0, 3}}};
-    ASSERT_EQ(acceptance.range, expected_range);
+    ASSERT_EQ(acceptance.range, expectedRange);
     ASSERT_FALSE(features.viewState().completion.visible);
 }
 
@@ -169,23 +169,23 @@ TEST(malformedAndServerErrorResponsesAreCorrelatedAndBounded) {
     ready(client, server);
     LspFeatureController features{client};
 
-    const auto malformed_request = features.requestCompletion(
+    const auto malformedRequest = features.requestCompletion(
         "file:///workspace/main.cpp", Revision{1}, ByteOffset{0});
-    ASSERT_TRUE(malformed_request.accepted());
+    ASSERT_TRUE(malformedRequest.accepted());
     server.queue_payload(ssg::test::response(
-        malformed_request.request_id, R"({"items":[{"detail":"no label"}]})"));
+        malformedRequest.request_id, R"({"items":[{"detail":"no label"}]})"));
     const auto malformed = features.poll(Revision{1});
     ASSERT_EQ(malformed.publications.front().result,
               LspFeaturePublishResult::MalformedResponse);
     ASSERT_FALSE(features.viewState().completion.loading);
     ASSERT_TRUE(features.viewState().completion.items.empty());
 
-    const auto error_request = features.requestHover(
+    const auto errorRequest = features.requestHover(
         "file:///workspace/main.cpp", Revision{1}, ByteOffset{0});
-    ASSERT_TRUE(error_request.accepted());
+    ASSERT_TRUE(errorRequest.accepted());
     server.queue_payload(
         "{\"jsonrpc\":\"2.0\",\"id\":" +
-        std::to_string(error_request.request_id) +
+        std::to_string(errorRequest.request_id) +
         ",\"error\":{\"code\":-32603,\"message\":\"failed\"}}");
     const auto error = features.poll(Revision{1});
     ASSERT_TRUE(error.accepted());

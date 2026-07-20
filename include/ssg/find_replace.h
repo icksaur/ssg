@@ -182,14 +182,14 @@ public:
 
     [[nodiscard]] FindReplaceOperationResult replaceCurrent(
         Document& document, DocumentHistory& history,
-        const SelectionSet& selections_before,
-        const SelectionSet& selections_after, std::string replacement,
-        std::uint64_t timestamp_ms);
+        const SelectionSet& selectionsBefore,
+        const SelectionSet& selectionsAfter, std::string replacement,
+        std::uint64_t timestampMs);
     [[nodiscard]] FindReplaceOperationResult replaceAll(
         Document& document, DocumentHistory& history,
-        const SelectionSet& selections_before,
-        const SelectionSet& selections_after, std::string replacement,
-        std::uint64_t timestamp_ms);
+        const SelectionSet& selectionsBefore,
+        const SelectionSet& selectionsAfter, std::string replacement,
+        std::uint64_t timestampMs);
 
     [[nodiscard]] const FindReplaceViewState& viewState() const noexcept;
 
@@ -252,7 +252,7 @@ public:
         Revision revision) const = 0;
     [[nodiscard]] virtual WorkspaceApplyResult apply(
         const WorkspaceReplacePreview& preview,
-        WorkspaceRecoverySink& recovery_sink) = 0;
+        WorkspaceRecoverySink& recoverySink) = 0;
     [[nodiscard]] virtual WorkspaceApplyResult recover(
         const WorkspaceRecoveryRecord& record) = 0;
 };
@@ -267,11 +267,11 @@ struct WorkspacePreviewResult {
 };
 
 [[nodiscard]] WorkspacePreviewResult previewWorkspaceReplace(
-    const FindReplaceWorkspace& workspace, Revision source_revision,
+    const FindReplaceWorkspace& workspace, Revision sourceRevision,
     const FindRequest& request, std::string replacement);
 [[nodiscard]] WorkspaceApplyResult applyWorkspaceReplace(
     FindReplaceWorkspace& workspace, const WorkspaceReplacePreview& preview,
-    WorkspaceRecoverySink& recovery_sink);
+    WorkspaceRecoverySink& recoverySink);
 [[nodiscard]] WorkspaceApplyResult recoverWorkspaceReplace(
     FindReplaceWorkspace& workspace, const WorkspaceRecoveryRecord& record);
 

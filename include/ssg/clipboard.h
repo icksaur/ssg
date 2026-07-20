@@ -137,7 +137,7 @@ struct ClipboardDelta {
 
 class ClipboardRegister {
 public:
-    explicit ClipboardRegister(int tab_width = 4);
+    explicit ClipboardRegister(int tabWidth = 4);
     ~ClipboardRegister();
 
     ClipboardRegister(const ClipboardRegister&) = delete;
@@ -149,15 +149,15 @@ public:
         const DocumentSnapshot& document, const SelectionSet& selections);
     [[nodiscard]] ClipboardResult cut(
         Document& document, DocumentHistory& history,
-        const SelectionSet& selections, std::uint64_t timestamp_ms);
+        const SelectionSet& selections, std::uint64_t timestampMs);
     [[nodiscard]] ClipboardResult paste(
         Document& document, DocumentHistory& history,
         const SelectionSet& selections, ClipboardPasteMode mode,
-        std::uint64_t timestamp_ms);
+        std::uint64_t timestampMs);
     [[nodiscard]] ClipboardResult handleResponse(
         Document& document, DocumentHistory& history,
-        const SelectionSet& current_selections,
-        const ClipboardResponse& response, std::uint64_t timestamp_ms);
+        const SelectionSet& currentSelections,
+        const ClipboardResponse& response, std::uint64_t timestampMs);
 
     [[nodiscard]] ClipboardViewState viewState() const;
 

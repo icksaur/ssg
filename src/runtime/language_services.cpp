@@ -29,14 +29,14 @@ CommandHandlerResult lspWorkspaceCommand(EditorRuntime::Impl& runtime, std::any 
 } // namespace
 
 void bindRuntimeLanguageServices(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime) {
-    auto feature_commands = lspFeatureCommandSet();
-    auto workspace_commands = lspWorkspaceEditCommandSet();
-    for (auto const& descriptor : feature_commands.descriptors()) {
+    auto featureCommands = lspFeatureCommandSet();
+    auto workspaceCommands = lspWorkspaceEditCommandSet();
+    for (auto const& descriptor : featureCommands.descriptors()) {
         builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const&) {
             return runtime.runTransaction([&] { return lspFeatureCommand(runtime, descriptor.id); });
         });
     }
-    for (auto const& descriptor : workspace_commands.descriptors()) {
+    for (auto const& descriptor : workspaceCommands.descriptors()) {
         builder.bind(std::string{descriptor.id}, [&runtime](CommandContext&, std::any const& payload) {
             return runtime.runTransaction([&] { return lspWorkspaceCommand(runtime, payload); });
         });

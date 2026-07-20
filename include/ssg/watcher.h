@@ -95,12 +95,12 @@ struct WorkspaceScan {
     bool complete = true;
 };
 
-using WorkspaceScanner = std::function<WorkspaceScan(std::size_t max_entries)>;
+using WorkspaceScanner = std::function<WorkspaceScan(std::size_t maxEntries)>;
 
 class WatchEventNormalizer {
 public:
     WatchEventNormalizer(WatcherConfig config,
-                         std::vector<WorkspaceEntry> initial_entries,
+                         std::vector<WorkspaceEntry> initialEntries,
                          WorkspaceScanner scanner);
     ~WatchEventNormalizer();
     WatchEventNormalizer(WatchEventNormalizer&&) noexcept;
@@ -110,7 +110,7 @@ public:
     WatchEventNormalizer& operator=(const WatchEventNormalizer&) = delete;
 
     void registerSave(SaveExpectation expectation);
-    void push(NativeWatchEvent event, WatchTimePoint observed_at);
+    void push(NativeWatchEvent event, WatchTimePoint observedAt);
     [[nodiscard]] std::vector<WatchEvent> takeReady(WatchTimePoint now);
 
 private:
@@ -128,7 +128,7 @@ public:
 };
 
 [[nodiscard]] std::unique_ptr<FilesystemWatcher>
-makePlatformFilesystemWatcher(const std::filesystem::path& canonical_root,
+makePlatformFilesystemWatcher(const std::filesystem::path& canonicalRoot,
                                  WatcherConfig config = {});
 
 } // namespace ssg

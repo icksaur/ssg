@@ -18,7 +18,7 @@ extern "C" {
 namespace ssg {
 namespace {
 
-constexpr char host_registry_key[] = "ssg.command_host";
+constexpr char kHostRegistryKey[] = "ssg.command_host";
 
 struct RegisteredCommand {
     std::string id;
@@ -45,10 +45,10 @@ struct BudgetFrame {
 }  // namespace
 
 struct LuaCommandHost::Impl {
-    Impl(LuaCommandHostOptions configured_options,
-         LuaDispatcher configured_dispatcher)
-        : options{std::move(configured_options)},
-          dispatcher{std::move(configured_dispatcher)},
+    Impl(LuaCommandHostOptions configuredOptions,
+         LuaDispatcher configuredDispatcher)
+        : options{std::move(configuredOptions)},
+          dispatcher{std::move(configuredDispatcher)},
           principal{options.plugin_id, InvocationOrigin::Lua,
                     options.capabilities} {
         noteOptionalConstruction(OptionalSubsystem::Lua);
@@ -116,7 +116,7 @@ struct LuaCommandHost::Impl {
 
     void installApi() {
         lua_pushlightuserdata(state, this);
-        lua_setfield(state, LUA_REGISTRYINDEX, host_registry_key);
+        lua_setfield(state, LUA_REGISTRYINDEX, kHostRegistryKey);
 
         lua_newtable(state);
         lua_pushlightuserdata(state, this);
@@ -128,25 +128,25 @@ struct LuaCommandHost::Impl {
         lua_setglobal(state, "ssg");
     }
 
-    static Impl& callbackHost(lua_State* callback_state) {
+    static Impl& callbackHost(lua_State* callbackState) {
         return *static_cast<Impl*>(lua_touserdata(
-            callback_state, lua_upvalueindex(1)));
+            callbackState, lua_upvalueindex(1)));
     }
 
-    static int commandCallback(lua_State* callback_state) noexcept {
-        auto& host = callbackHost(callback_state);
-        bool raise_error = false;
+    static int commandCallback(lua_State* callbackState) noexcept {
+        auto& host = callbackHost(callbackState);
+        bool raiseError = false;
         {
             try {
                 std::size_t length = 0;
-                char const* id_data =
-                    luaL_checklstring(callback_state, 1, &length);
-                std::string id{id_data, length};
+                char const* idData =
+                    luaL_checklstring(callbackState, 1, &length);
+                std::string id{idData, length};
                 auto const found = host.catalog.find(id);
                 if (found == host.catalog.end()) {
                     host.pending_error = LuaError::UnknownCommand;
                     host.callback_message = "unknown Lua command: " + id;
-                    raise_error = true;
+                    raiseError = true;
                 } else {
                     for (auto const& capability :
                          found->second.required_capabilities) {
@@ -155,13 +155,13 @@ struct LuaCommandHost::Impl {
                             host.callback_message =
                                 "Lua plugin lacks capability: " +
                                 std::string{capability.value()};
-                            raise_error = true;
+                            raiseError = true;
                             break;
                         }
                     }
                 }
 
-                if (!raise_error) {
+                if (!raiseError) {
                     try {
                         auto result =
                             host.dispatcher(LuaInvocation{id, host.principal});
@@ -169,62 +169,62 @@ struct LuaCommandHost::Impl {
                             host.pending_error = LuaError::DispatchFailed;
                             host.callback_message =
                                 "Lua dispatch failed: " + result.message;
-                            raise_error = true;
+                            raiseError = true;
                         }
                     } catch (std::exception const& exception) {
                         host.pending_error = LuaError::DispatchFailed;
                         host.callback_message =
                             "Lua dispatch threw: " +
                             std::string{exception.what()};
-                        raise_error = true;
+                        raiseError = true;
                     } catch (...) {
                         host.pending_error = LuaError::DispatchFailed;
                         host.callback_message =
                             "Lua dispatch threw an unknown exception";
-                        raise_error = true;
+                        raiseError = true;
                     }
                 }
             } catch (std::exception const& exception) {
                 host.pending_error = LuaError::RuntimeFault;
                 host.callback_message =
                     "Lua command fault: " + std::string{exception.what()};
-                raise_error = true;
+                raiseError = true;
             } catch (...) {
                 host.pending_error = LuaError::RuntimeFault;
                 host.callback_message =
                     "Lua command fault: unknown exception";
-                raise_error = true;
+                raiseError = true;
             }
         }
-        if (!raise_error) {
+        if (!raiseError) {
             return 0;
         }
-        lua_pushlstring(callback_state, host.callback_message.data(),
+        lua_pushlstring(callbackState, host.callback_message.data(),
                         host.callback_message.size());
-        return lua_error(callback_state);
+        return lua_error(callbackState);
     }
 
-    static int registerCallback(lua_State* callback_state) noexcept {
-        auto& host = callbackHost(callback_state);
-        bool raise_error = false;
-        bool store_function = false;
+    static int registerCallback(lua_State* callbackState) noexcept {
+        auto& host = callbackHost(callbackState);
+        bool raiseError = false;
+        bool storeFunction = false;
         {
             try {
                 std::size_t length = 0;
-                char const* id_data =
-                    luaL_checklstring(callback_state, 1, &length);
-                luaL_checktype(callback_state, 2, LUA_TFUNCTION);
-                std::string id{id_data, length};
+                char const* idData =
+                    luaL_checklstring(callbackState, 1, &length);
+                luaL_checktype(callbackState, 2, LUA_TFUNCTION);
+                std::string id{idData, length};
                 if (id.empty()) {
                     host.pending_error = LuaError::RuntimeFault;
                     host.callback_message =
                         "plugin command ID must not be empty";
-                    raise_error = true;
+                    raiseError = true;
                 } else if (host.registration_stack.empty()) {
                     host.pending_error = LuaError::RuntimeFault;
                     host.callback_message =
                         "plugin commands may only be registered while evaluating";
-                    raise_error = true;
+                    raiseError = true;
                 } else {
                     auto& transaction = host.registration_stack.back();
                     if (host.plugin_commands.contains(id) ||
@@ -232,11 +232,11 @@ struct LuaCommandHost::Impl {
                         host.pending_error = LuaError::DuplicateCommand;
                         host.callback_message =
                             "duplicate plugin command: " + id;
-                        raise_error = true;
+                        raiseError = true;
                     } else {
                         transaction.commands.push_back(
                             RegisteredCommand{std::move(id), LUA_NOREF});
-                        store_function = true;
+                        storeFunction = true;
                     }
                 }
             } catch (std::exception const& exception) {
@@ -244,37 +244,37 @@ struct LuaCommandHost::Impl {
                 host.callback_message =
                     "registration fault: " +
                     std::string{exception.what()};
-                raise_error = true;
+                raiseError = true;
             } catch (...) {
                 host.pending_error = LuaError::RuntimeFault;
                 host.callback_message =
                     "registration fault: unknown exception";
-                raise_error = true;
+                raiseError = true;
             }
         }
-        if (raise_error) {
-            lua_pushlstring(callback_state, host.callback_message.data(),
+        if (raiseError) {
+            lua_pushlstring(callbackState, host.callback_message.data(),
                             host.callback_message.size());
-            return lua_error(callback_state);
+            return lua_error(callbackState);
         }
-        if (store_function) {
-            lua_pushvalue(callback_state, 2);
+        if (storeFunction) {
+            lua_pushvalue(callbackState, 2);
             int const reference =
-                luaL_ref(callback_state, LUA_REGISTRYINDEX);
+                luaL_ref(callbackState, LUA_REGISTRYINDEX);
             host.registration_stack.back().commands.back().function_reference =
                 reference;
         }
         return 0;
     }
 
-    static void budgetHook(lua_State* callback_state,
+    static void budgetHook(lua_State* callbackState,
                             lua_Debug*) noexcept {
-        lua_getfield(callback_state, LUA_REGISTRYINDEX, host_registry_key);
+        lua_getfield(callbackState, LUA_REGISTRYINDEX, kHostRegistryKey);
         auto* host =
-            static_cast<Impl*>(lua_touserdata(callback_state, -1));
-        lua_pop(callback_state, 1);
+            static_cast<Impl*>(lua_touserdata(callbackState, -1));
+        lua_pop(callbackState, 1);
         if (host == nullptr) {
-            luaL_error(callback_state, "Lua host is unavailable");
+            luaL_error(callbackState, "Lua host is unavailable");
             return;
         }
         auto const consumed =
@@ -283,7 +283,7 @@ struct LuaCommandHost::Impl {
         if (host->instructions_remaining == 0 ||
             std::chrono::steady_clock::now() >= host->deadline) {
             host->pending_error = LuaError::BudgetExhausted;
-            luaL_error(callback_state, "Lua execution budget exhausted");
+            luaL_error(callbackState, "Lua execution budget exhausted");
         }
     }
 
@@ -303,8 +303,8 @@ struct LuaCommandHost::Impl {
                     static_cast<int>(hook_interval));
     }
 
-    LuaResult finishCall(int status, bool started, int stack_base) {
-        LuaError const call_error = pending_error;
+    LuaResult finishCall(int status, bool started, int stackBase) {
+        LuaError const callError = pending_error;
         if (started) {
             if (budget_stack.empty()) {
                 call_active = false;
@@ -321,16 +321,16 @@ struct LuaCommandHost::Impl {
             }
         }
         if (status == LUA_OK) {
-            lua_settop(state, stack_base);
+            lua_settop(state, stackBase);
             return {};
         }
         std::string message = "unknown Lua error";
         if (char const* error = lua_tostring(state, -1); error != nullptr) {
             message = error;
         }
-        lua_settop(state, stack_base);
-        return {call_error == LuaError::None ? LuaError::RuntimeFault
-                                            : call_error,
+        lua_settop(state, stackBase);
+        return {callError == LuaError::None ? LuaError::RuntimeFault
+                                            : callError,
                 std::move(message)};
     }
 
@@ -377,7 +377,7 @@ LuaCommandHost::LuaCommandHost(LuaCommandHost&&) noexcept = default;
 LuaCommandHost& LuaCommandHost::operator=(LuaCommandHost&&) noexcept = default;
 
 LuaResult LuaCommandHost::evaluate(std::string_view script) {
-    int const stack_base = lua_gettop(impl_->state);
+    int const stackBase = lua_gettop(impl_->state);
     impl_->registration_stack.emplace_back();
     impl_->pending_error = LuaError::None;
     bool started = false;
@@ -388,7 +388,7 @@ LuaResult LuaCommandHost::evaluate(std::string_view script) {
         started = true;
         status = lua_pcall(impl_->state, 0, 0, 0);
     }
-    auto result = impl_->finishCall(status, started, stack_base);
+    auto result = impl_->finishCall(status, started, stackBase);
     auto transaction = std::move(impl_->registration_stack.back());
     impl_->registration_stack.pop_back();
     if (result.accepted()) {
@@ -402,23 +402,23 @@ LuaResult LuaCommandHost::evaluate(std::string_view script) {
     return result;
 }
 
-LuaResult LuaCommandHost::invoke(std::string_view plugin_command) {
+LuaResult LuaCommandHost::invoke(std::string_view pluginCommand) {
     auto const found =
-        impl_->plugin_commands.find(std::string{plugin_command});
+        impl_->plugin_commands.find(std::string{pluginCommand});
     if (found == impl_->plugin_commands.end()) {
         return {LuaError::UnknownCommand,
                 "plugin command is not registered: " +
-                    std::string{plugin_command}};
+                    std::string{pluginCommand}};
     }
-    int const stack_base = lua_gettop(impl_->state);
+    int const stackBase = lua_gettop(impl_->state);
     lua_rawgeti(impl_->state, LUA_REGISTRYINDEX, found->second);
     impl_->beginCall();
     return impl_->finishCall(lua_pcall(impl_->state, 0, 0, 0), true,
-                              stack_base);
+                              stackBase);
 }
 
-bool LuaCommandHost::hasCommand(std::string_view plugin_command) const {
-    return impl_->plugin_commands.contains(std::string{plugin_command});
+bool LuaCommandHost::hasCommand(std::string_view pluginCommand) const {
+    return impl_->plugin_commands.contains(std::string{pluginCommand});
 }
 
 LuaHandle LuaCommandHost::expose(void* object) {

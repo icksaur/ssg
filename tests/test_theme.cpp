@@ -22,7 +22,7 @@ using ssg::SrgbColor;
 using ssg::SyntaxMapping;
 using ssg::SyntaxScope;
 
-std::vector<IndexedColor> palette(std::size_t count = ssg::theme_palette_size) {
+std::vector<IndexedColor> palette(std::size_t count = ssg::kThemePaletteSize) {
     std::vector<IndexedColor> result;
     for (std::size_t index = 0; index < count; ++index) {
         result.push_back({static_cast<std::uint8_t>(index),
@@ -35,11 +35,11 @@ std::vector<IndexedColor> palette(std::size_t count = ssg::theme_palette_size) {
 
 std::vector<RoleMapping> roles() {
     std::vector<RoleMapping> result;
-    for (std::size_t index = 0; index < ssg::all_semantic_roles.size(); ++index) {
+    for (std::size_t index = 0; index < ssg::kAllSemanticRoles.size(); ++index) {
         result.push_back(
-            {ssg::all_semantic_roles[index], static_cast<std::uint8_t>(index % 16)});
+            {ssg::kAllSemanticRoles[index], static_cast<std::uint8_t>(index % 16)});
     }
-    for (const auto& pair : ssg::co_visible_role_pairs) {
+    for (const auto& pair : ssg::kCoVisibleRolePairs) {
         const auto left = static_cast<std::size_t>(pair.first);
         const auto right = static_cast<std::size_t>(pair.second);
         if (result[left].palette_index == result[right].palette_index) {
@@ -52,18 +52,18 @@ std::vector<RoleMapping> roles() {
 
 std::vector<SyntaxMapping> syntax() {
     std::vector<SyntaxMapping> result;
-    for (std::size_t index = 0; index < ssg::all_syntax_scopes.size(); ++index) {
+    for (std::size_t index = 0; index < ssg::kAllSyntaxScopes.size(); ++index) {
         result.push_back(
-            {ssg::all_syntax_scopes[index], static_cast<std::uint8_t>(index % 16)});
+            {ssg::kAllSyntaxScopes[index], static_cast<std::uint8_t>(index % 16)});
     }
     return result;
 }
 
 ssg::Theme validTheme() {
     const auto colors = palette();
-    const auto role_mappings = roles();
-    const auto syntax_mappings = syntax();
-    return {"test", colors, role_mappings, syntax_mappings};
+    const auto roleMappings = roles();
+    const auto syntaxMappings = syntax();
+    return {"test", colors, roleMappings, syntaxMappings};
 }
 
 std::string readFile(const std::filesystem::path& path) {
@@ -73,115 +73,115 @@ std::string readFile(const std::filesystem::path& path) {
 }
 
 TEST(rejectsMissingDuplicateAndExtraPaletteIndices) {
-    const auto role_mappings = roles();
-    const auto syntax_mappings = syntax();
+    const auto roleMappings = roles();
+    const auto syntaxMappings = syntax();
 
     auto missing = palette(15);
-    ASSERT_THROWS(ssg::Theme("missing", missing, role_mappings, syntax_mappings),
+    ASSERT_THROWS(ssg::Theme("missing", missing, roleMappings, syntaxMappings),
                   std::invalid_argument);
 
     auto extra = palette(17);
-    ASSERT_THROWS(ssg::Theme("extra", extra, role_mappings, syntax_mappings),
+    ASSERT_THROWS(ssg::Theme("extra", extra, roleMappings, syntaxMappings),
                   std::invalid_argument);
 
     auto duplicate = palette();
     duplicate.back().index = 0;
-    ASSERT_THROWS(ssg::Theme("duplicate", duplicate, role_mappings, syntax_mappings),
+    ASSERT_THROWS(ssg::Theme("duplicate", duplicate, roleMappings, syntaxMappings),
                   std::invalid_argument);
 }
 
 TEST(requiresEverySemanticRoleAndSyntaxScopeExactlyOnce) {
     const auto colors = palette();
-    auto role_mappings = roles();
-    auto syntax_mappings = syntax();
+    auto roleMappings = roles();
+    auto syntaxMappings = syntax();
 
-    role_mappings.pop_back();
-    ASSERT_THROWS(ssg::Theme("missing role", colors, role_mappings, syntax_mappings),
+    roleMappings.pop_back();
+    ASSERT_THROWS(ssg::Theme("missing role", colors, roleMappings, syntaxMappings),
                   std::invalid_argument);
-    role_mappings = roles();
-    role_mappings.back().role = role_mappings.front().role;
-    ASSERT_THROWS(ssg::Theme("duplicate role", colors, role_mappings, syntax_mappings),
+    roleMappings = roles();
+    roleMappings.back().role = roleMappings.front().role;
+    ASSERT_THROWS(ssg::Theme("duplicate role", colors, roleMappings, syntaxMappings),
                   std::invalid_argument);
-    role_mappings = roles();
-    role_mappings.front().role = static_cast<SemanticRole>(255);
-    ASSERT_THROWS(ssg::Theme("unknown role", colors, role_mappings, syntax_mappings),
+    roleMappings = roles();
+    roleMappings.front().role = static_cast<SemanticRole>(255);
+    ASSERT_THROWS(ssg::Theme("unknown role", colors, roleMappings, syntaxMappings),
                   std::invalid_argument);
 
-    role_mappings = roles();
-    syntax_mappings.pop_back();
-    ASSERT_THROWS(ssg::Theme("missing syntax", colors, role_mappings, syntax_mappings),
+    roleMappings = roles();
+    syntaxMappings.pop_back();
+    ASSERT_THROWS(ssg::Theme("missing syntax", colors, roleMappings, syntaxMappings),
                   std::invalid_argument);
-    syntax_mappings = syntax();
-    syntax_mappings.back().scope = syntax_mappings.front().scope;
-    ASSERT_THROWS(ssg::Theme("duplicate syntax", colors, role_mappings, syntax_mappings),
+    syntaxMappings = syntax();
+    syntaxMappings.back().scope = syntaxMappings.front().scope;
+    ASSERT_THROWS(ssg::Theme("duplicate syntax", colors, roleMappings, syntaxMappings),
                   std::invalid_argument);
-    syntax_mappings = syntax();
-    syntax_mappings.front().scope = static_cast<SyntaxScope>(255);
-    ASSERT_THROWS(ssg::Theme("unknown syntax", colors, role_mappings, syntax_mappings),
+    syntaxMappings = syntax();
+    syntaxMappings.front().scope = static_cast<SyntaxScope>(255);
+    ASSERT_THROWS(ssg::Theme("unknown syntax", colors, roleMappings, syntaxMappings),
                   std::invalid_argument);
 }
 
 TEST(sharedFixtureRolesAreDistinctForEveryTheme) {
     const auto fixture = readFile(SSG_THEME_ROLES_PATH);
-    const std::regex quoted_name{"\"([a-z_]+)\""};
-    std::vector<SemanticRole> fixture_roles;
-    for (std::sregex_iterator it(fixture.begin(), fixture.end(), quoted_name), end;
+    const std::regex quotedName{"\"([a-z_]+)\""};
+    std::vector<SemanticRole> fixtureRoles;
+    for (std::sregex_iterator it(fixture.begin(), fixture.end(), quotedName), end;
          it != end; ++it) {
         const auto name = (*it)[1].str();
         if (name == "co_visible_role_classes") continue;
         const auto role = ssg::semanticRoleFromName(name);
         ASSERT_TRUE(role.has_value());
-        fixture_roles.push_back(*role);
+        fixtureRoles.push_back(*role);
     }
-    std::set<std::pair<SemanticRole, SemanticRole>> expected_pairs;
+    std::set<std::pair<SemanticRole, SemanticRole>> expectedPairs;
     std::size_t cursor = 0;
-    constexpr std::array class_sizes{2u, 4u, 4u, 2u, 4u};
-    for (const auto size : class_sizes) {
+    constexpr std::array classSizes{2u, 4u, 4u, 2u, 4u};
+    for (const auto size : classSizes) {
         for (std::size_t left = 0; left < size; ++left) {
             for (std::size_t right = left + 1; right < size; ++right) {
-                expected_pairs.emplace(fixture_roles[cursor + left],
-                                       fixture_roles[cursor + right]);
+                expectedPairs.emplace(fixtureRoles[cursor + left],
+                                       fixtureRoles[cursor + right]);
             }
         }
         cursor += size;
     }
-    ASSERT_EQ(cursor, fixture_roles.size());
-    ASSERT_EQ(expected_pairs.size(), ssg::co_visible_role_pairs.size());
-    for (const auto& pair : ssg::co_visible_role_pairs) {
-        ASSERT_TRUE(expected_pairs.contains({pair.first, pair.second}));
+    ASSERT_EQ(cursor, fixtureRoles.size());
+    ASSERT_EQ(expectedPairs.size(), ssg::kCoVisibleRolePairs.size());
+    for (const auto& pair : ssg::kCoVisibleRolePairs) {
+        ASSERT_TRUE(expectedPairs.contains({pair.first, pair.second}));
     }
 
     const auto theme = validTheme();
-    for (const auto& pair : expected_pairs) {
+    for (const auto& pair : expectedPairs) {
         ASSERT_NE(theme.indexFor(pair.first), theme.indexFor(pair.second));
     }
 
-    auto invalid_roles = roles();
-    const auto first_pair = ssg::co_visible_role_pairs.front();
-    invalid_roles[static_cast<std::size_t>(first_pair.second)].palette_index =
-        invalid_roles[static_cast<std::size_t>(first_pair.first)].palette_index;
+    auto invalidRoles = roles();
+    const auto firstPair = ssg::kCoVisibleRolePairs.front();
+    invalidRoles[static_cast<std::size_t>(firstPair.second)].palette_index =
+        invalidRoles[static_cast<std::size_t>(firstPair.first)].palette_index;
     const auto colors = palette();
-    const auto syntax_mappings = syntax();
-    ASSERT_THROWS(ssg::Theme("collision", colors, invalid_roles, syntax_mappings),
+    const auto syntaxMappings = syntax();
+    ASSERT_THROWS(ssg::Theme("collision", colors, invalidRoles, syntaxMappings),
                   std::invalid_argument);
 }
 
 TEST(snapshotIsCompleteAndDeterministic) {
     const auto first = validTheme();
     const auto second = validTheme();
-    const auto first_snapshot = first.snapshot();
-    const auto second_snapshot = second.snapshot();
+    const auto firstSnapshot = first.snapshot();
+    const auto secondSnapshot = second.snapshot();
 
-    ASSERT_EQ(first_snapshot, second_snapshot);
-    ASSERT_EQ(first_snapshot.palette.size(), ssg::theme_palette_size);
-    ASSERT_EQ(first_snapshot.semantic_indices.size(), ssg::semantic_role_count);
-    ASSERT_EQ(first_snapshot.syntax_indices.size(), ssg::syntax_scope_count);
-    for (std::size_t index = 0; index < first_snapshot.palette.size(); ++index) {
-        ASSERT_EQ(first_snapshot.palette[index], first.palette()[index]);
+    ASSERT_EQ(firstSnapshot, secondSnapshot);
+    ASSERT_EQ(firstSnapshot.palette.size(), ssg::kThemePaletteSize);
+    ASSERT_EQ(firstSnapshot.semantic_indices.size(), ssg::kSemanticRoleCount);
+    ASSERT_EQ(firstSnapshot.syntax_indices.size(), ssg::kSyntaxScopeCount);
+    for (std::size_t index = 0; index < firstSnapshot.palette.size(); ++index) {
+        ASSERT_EQ(firstSnapshot.palette[index], first.palette()[index]);
     }
-    for (std::size_t index = 0; index < ssg::all_semantic_roles.size(); ++index) {
-        ASSERT_EQ(first_snapshot.semantic_indices[index],
-                  first.indexFor(ssg::all_semantic_roles[index]));
+    for (std::size_t index = 0; index < ssg::kAllSemanticRoles.size(); ++index) {
+        ASSERT_EQ(firstSnapshot.semantic_indices[index],
+                  first.indexFor(ssg::kAllSemanticRoles[index]));
     }
     ASSERT_EQ(first.indexForSyntax("not.a.known.scope"),
               first.indexFor(SyntaxScope::PlainText));
@@ -192,8 +192,8 @@ TEST(bundledThemeDataIsCompleteAndConstructible) {
     ASSERT_TRUE(input.good());
     std::string name;
     std::vector<IndexedColor> colors;
-    std::vector<RoleMapping> role_mappings;
-    std::vector<SyntaxMapping> syntax_mappings;
+    std::vector<RoleMapping> roleMappings;
+    std::vector<SyntaxMapping> syntaxMappings;
     std::string kind;
     while (input >> kind) {
         if (kind == "name") {
@@ -209,24 +209,24 @@ TEST(bundledThemeDataIsCompleteAndConstructible) {
                                static_cast<std::uint8_t>(green),
                                static_cast<std::uint8_t>(blue)}});
         } else if (kind == "role") {
-            std::string role_name;
+            std::string roleName;
             unsigned index = 0;
-            input >> role_name >> index;
-            const auto role = ssg::semanticRoleFromName(role_name);
+            input >> roleName >> index;
+            const auto role = ssg::semanticRoleFromName(roleName);
             ASSERT_TRUE(role.has_value());
-            role_mappings.push_back({*role, static_cast<std::uint8_t>(index)});
+            roleMappings.push_back({*role, static_cast<std::uint8_t>(index)});
         } else if (kind == "syntax") {
-            std::string scope_name;
+            std::string scopeName;
             unsigned index = 0;
-            input >> scope_name >> index;
-            const auto scope = ssg::syntaxScopeFromName(scope_name);
+            input >> scopeName >> index;
+            const auto scope = ssg::syntaxScopeFromName(scopeName);
             ASSERT_TRUE(scope.has_value());
-            syntax_mappings.push_back({*scope, static_cast<std::uint8_t>(index)});
+            syntaxMappings.push_back({*scope, static_cast<std::uint8_t>(index)});
         } else {
             throw std::runtime_error("unknown bundled theme record");
         }
     }
-    ASSERT_NO_THROW(ssg::Theme(name, colors, role_mappings, syntax_mappings));
+    ASSERT_NO_THROW(ssg::Theme(name, colors, roleMappings, syntaxMappings));
 }
 
 TEST(sourceAndConfigHaveNoIndependentColorSources) {
@@ -237,7 +237,7 @@ TEST(sourceAndConfigHaveNoIndependentColorSources) {
         std::regex{R"(\b(lighten|darken|shade|tint|blend|gradient)\s*\()"},
         std::regex{R"(\bSrgbColor\s*[\{\(])"},
     };
-    const std::set<std::string> scanned_extensions{
+    const std::set<std::string> scannedExtensions{
         ".h",    ".hpp",  ".cpp", ".cc",   ".cxx", ".json", ".cmake",
         ".css",  ".scss", ".sass", ".html", ".js",  ".jsx",  ".ts",
         ".tsx",  ".lua"};
@@ -260,7 +260,7 @@ TEST(sourceAndConfigHaveNoIndependentColorSources) {
             relative == "tests/test_theme.cpp") {
             continue;
         }
-        if (!scanned_extensions.contains(entry.path().extension().string())) continue;
+        if (!scannedExtensions.contains(entry.path().extension().string())) continue;
         const auto contents = readFile(entry.path());
         for (const auto& pattern : forbidden) {
             if (std::regex_search(contents, pattern)) {

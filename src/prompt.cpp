@@ -17,9 +17,9 @@ bool validRequest(const PromptRequest& request) {
     if (request.accessible_label.empty()) {
         return false;
     }
-    const std::size_t expected_inputs =
+    const std::size_t expectedInputs =
         request.kind == PromptKind::Replace ? 2U : 1U;
-    if (request.inputs.size() != expected_inputs) {
+    if (request.inputs.size() != expectedInputs) {
         return false;
     }
     for (const auto& input : request.inputs) {
@@ -28,13 +28,13 @@ bool validRequest(const PromptRequest& request) {
         }
     }
 
-    const bool has_options =
+    const bool hasOptions =
         request.kind == PromptKind::Find ||
         request.kind == PromptKind::Replace;
-    if (has_options != request.match_count.has_value()) {
+    if (hasOptions != request.match_count.has_value()) {
         return false;
     }
-    if (!has_options && !request.toggles.empty()) {
+    if (!hasOptions && !request.toggles.empty()) {
         return false;
     }
     for (const auto& toggle : request.toggles) {
@@ -123,7 +123,7 @@ PromptLayoutResult computePromptLayout(const PromptSurface& surface,
     }
 
     if (request.match_count) {
-        const int options_y = reservation.bottom() - 1;
+        const int optionsY = reservation.bottom() - 1;
         int x = reservation.x;
         for (const auto& toggle : request.toggles) {
             if (toggle.width > reservation.right() - x) {
@@ -134,7 +134,7 @@ PromptLayoutResult computePromptLayout(const PromptSurface& surface,
             view.controls.push_back(
                 {PromptControlKind::Toggle, toggle.id,
                  toggle.accessible_label, {}, toggle.value,
-                 Rect{x, options_y, toggle.width, 1}});
+                 Rect{x, optionsY, toggle.width, 1}});
             x += toggle.width;
         }
         const int remaining = reservation.right() - x;
@@ -147,7 +147,7 @@ PromptLayoutResult computePromptLayout(const PromptSurface& surface,
             {PromptControlKind::Count, request.match_count->id,
              request.match_count->accessible_label,
              request.match_count->value, false,
-             Rect{x, options_y, remaining, 1}});
+             Rect{x, optionsY, remaining, 1}});
     }
     return {std::nullopt, std::move(view)};
 }

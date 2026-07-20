@@ -27,20 +27,20 @@ enum class OptionalSubsystem : std::uint8_t {
     Count,  // sentinel; keep last. Ties optional_subsystem_count to the enum.
 };
 
-inline constexpr std::size_t optional_subsystem_count =
+inline constexpr std::size_t kOptionalSubsystemCount =
     static_cast<std::size_t>(OptionalSubsystem::Count);
 
 // Independently sized (deduced from its initializers), then checked against the
 // enum-derived count: adding an OptionalSubsystem without listing it here fails
 // the static_assert, so the audit stays exhaustive.
-inline constexpr auto all_optional_subsystems = std::to_array({
+inline constexpr auto kAllOptionalSubsystems = std::to_array({
     OptionalSubsystem::Lua,
     OptionalSubsystem::Lsp,
     OptionalSubsystem::TreeSitterGrammar,
     OptionalSubsystem::FilesystemWatcher,
     OptionalSubsystem::Http,
 });
-static_assert(all_optional_subsystems.size() == optional_subsystem_count,
+static_assert(kAllOptionalSubsystems.size() == kOptionalSubsystemCount,
               "every OptionalSubsystem (before the count_ sentinel) must appear "
               "in all_optional_subsystems so the audit is exhaustive");
 

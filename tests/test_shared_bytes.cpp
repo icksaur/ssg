@@ -39,11 +39,11 @@ TEST(copiesShareOneBufferNotASecondAllocation) {
 // interface admits an alternate backing behind the same data()/size() contract.
 class ArrayBacking final : public ssg::SharedBytes::Backing {
 public:
-    const char* data() const noexcept override { return storage.data(); }
-    std::size_t size() const noexcept override { return storage.size(); }
-    static constexpr std::array<char, 3> storage{'a', 'b', 'c'};
+    const char* data() const noexcept override { return kStorage.data(); }
+    std::size_t size() const noexcept override { return kStorage.size(); }
+    static constexpr std::array<char, 3> kStorage{'a', 'b', 'c'};
 };
-constexpr std::array<char, 3> ArrayBacking::storage;
+constexpr std::array<char, 3> ArrayBacking::kStorage;
 
 TEST(alternateBackingWorksThroughTheSameInterface) {
     ssg::SharedBytes bytes{std::make_shared<const ArrayBacking>()};

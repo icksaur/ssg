@@ -50,21 +50,21 @@ std::vector<std::byte> bytesFromHex(std::string_view text) {
 
     std::vector<std::byte> result;
     unsigned high = 0;
-    bool have_high = false;
+    bool haveHigh = false;
     for (const char value : text) {
         if (value == '\n' || value == '\r' || value == ' ' || value == '\t') {
             continue;
         }
-        if (!have_high) {
+        if (!haveHigh) {
             high = nibble(value);
-            have_high = true;
+            haveHigh = true;
         } else {
             result.push_back(
                 static_cast<std::byte>((high << 4U) | nibble(value)));
-            have_high = false;
+            haveHigh = false;
         }
     }
-    if (have_high) throw std::invalid_argument("odd fixture hex length");
+    if (haveHigh) throw std::invalid_argument("odd fixture hex length");
     return result;
 }
 
@@ -153,10 +153,10 @@ TEST(corruptOrTruncatedTailStopsAtLastValidRecord) {
 
     auto corrupt = complete;
     corrupt.back() ^= std::byte{0x80};
-    const auto corrupt_replay = ssg::replayJournal(corrupt);
-    ASSERT_TRUE(corrupt_replay.discarded_tail);
-    ASSERT_EQ(corrupt_replay.valid_bytes, checkpoint.size());
-    ASSERT_EQ(corrupt_replay.recovery.documents,
+    const auto corruptReplay = ssg::replayJournal(corrupt);
+    ASSERT_TRUE(corruptReplay.discarded_tail);
+    ASSERT_EQ(corruptReplay.valid_bytes, checkpoint.size());
+    ASSERT_EQ(corruptReplay.recovery.documents,
               std::vector<ssg::JournalDocument>{savedDocument("base")});
 
     for (std::size_t cut = checkpoint.size() + 1; cut < complete.size();

@@ -52,10 +52,10 @@ struct EditorRuntime::Impl final : CommandServices,
                                    WorkspaceRecoverySink,
                                    LspWorkspaceEditDocuments,
                                    LspWorkspaceFileOperations {
-    Impl(std::filesystem::path canonical_cwd,
-         std::filesystem::path scratch_root,
-         std::filesystem::path recovery_root,
-         bool defer_enrichment = false);
+    Impl(std::filesystem::path canonicalCwd,
+         std::filesystem::path scratchRoot,
+         std::filesystem::path recoveryRoot,
+         bool deferEnrichment = false);
 
     std::filesystem::path root;
     std::filesystem::path scratch_root;
@@ -128,17 +128,17 @@ struct EditorRuntime::Impl final : CommandServices,
     void publishDeltaValue(std::type_index type, std::any delta) override;
 
     [[nodiscard]] TabLifecycleResult close(
-        const TabState& tab, std::chrono::milliseconds durability_timeout) override;
+        const TabState& tab, std::chrono::milliseconds durabilityTimeout) override;
     [[nodiscard]] TabLifecycleResult reopen(
         const TabState& tab, const RecoveryRecordId& compensation) override;
 
     [[nodiscard]] WorkspaceSnapshot snapshot(Revision revision) const override;
     [[nodiscard]] std::vector<SearchCommandDescriptor> descriptors() const override;
-    PaletteExecutionResult execute(std::string_view command_id) override;
+    PaletteExecutionResult execute(std::string_view commandId) override;
 
     [[nodiscard]] WorkspaceApplyResult apply(
         const WorkspaceReplacePreview& preview,
-        WorkspaceRecoverySink& recovery_sink) override;
+        WorkspaceRecoverySink& recoverySink) override;
     [[nodiscard]] WorkspaceApplyResult recover(
         const WorkspaceRecoveryRecord& record) override;
     bool store(const WorkspaceRecoveryRecord& record) override;
@@ -146,7 +146,7 @@ struct EditorRuntime::Impl final : CommandServices,
     [[nodiscard]] std::optional<LspDocumentSnapshot> snapshot(
         std::string_view uri) const override;
     [[nodiscard]] LspWorkspaceDocumentWriteResult apply(
-        std::string uri, Revision expected_revision, std::string text) override;
+        std::string uri, Revision expectedRevision, std::string text) override;
     [[nodiscard]] LspWorkspaceFileResult snapshot(
         std::string_view uri, LspWorkspaceFileNode& node) const override;
     [[nodiscard]] LspWorkspaceFileResult createFile(
@@ -154,7 +154,7 @@ struct EditorRuntime::Impl final : CommandServices,
     [[nodiscard]] LspWorkspaceFileResult writeFile(
         std::string uri, std::string content) override;
     [[nodiscard]] LspWorkspaceFileResult renamePath(
-        std::string old_uri, std::string new_uri, bool overwrite) override;
+        std::string oldUri, std::string newUri, bool overwrite) override;
     [[nodiscard]] LspWorkspaceFileResult deletePath(
         std::string uri, bool recursive) override;
     [[nodiscard]] LspWorkspaceFileResult restorePath(
@@ -173,21 +173,21 @@ struct EditorRuntime::Impl final : CommandServices,
     // wrap is on; O(visible rows) unwrapped projection (compute_viewport_unwrapped)
     // when off, so a large document's first frame is viewport-bounded (M12).
     [[nodiscard]] ViewportViewState computeEditorViewport(
-        ViewportDimensions dimensions, std::uint32_t first_row,
-        std::uint32_t first_column) const;
+        ViewportDimensions dimensions, std::uint32_t firstRow,
+        std::uint32_t firstColumn) const;
     [[nodiscard]] ViewportViewState viewport(ViewportDimensions dimensions) const;
     [[nodiscard]] SessionSnapshotSections sections(ViewportDimensions dimensions,
-                                                   KeySequence const& leader_pending = {},
-                                                   PaletteReport const& palette_report = {}) const;
+                                                   KeySequence const& leaderPending = {},
+                                                   PaletteReport const& paletteReport = {}) const;
     [[nodiscard]] PromptStatusViewState promptStatusView(ViewportDimensions dimensions) const;
-    void projectFindReplacePrompt(PromptViewState& prompt_view) const;
+    void projectFindReplacePrompt(PromptViewState& promptView) const;
     // Dismiss the find/replace controller (and its prompt) when the active
     // document identity or revision no longer matches what it evaluated against,
     // so stale matches are never navigable or projected.
     void reconcileFindDocument();
     [[nodiscard]] ShellViewState shellView(ViewportDimensions dimensions,
-                                            KeySequence const& leader_pending = {},
-                                            PaletteReport const& palette_report = {}) const;
+                                            KeySequence const& leaderPending = {},
+                                            PaletteReport const& paletteReport = {}) const;
     [[nodiscard]] PaletteViewState paletteView() const;
     // The tree view state with its scroll offset, scrollbar, and visible-window
     // hit map resolved against the last panel height (keep-selection-visible).
@@ -234,6 +234,6 @@ struct EditorRuntime::Impl final : CommandServices,
 [[nodiscard]] CommandHandlerResult failure(std::string message);
 [[nodiscard]] std::string workspaceMessage(WorkspaceResult const& result);
 [[nodiscard]] std::string tabMessage(TabResult const& result);
-[[nodiscard]] std::string wrongPayload(std::string_view command_id);
+[[nodiscard]] std::string wrongPayload(std::string_view commandId);
 
 } // namespace ssg

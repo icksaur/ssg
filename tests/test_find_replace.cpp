@@ -151,9 +151,9 @@ TEST(literalCaseWordAndSelectionMatchIndependentOracle) {
     const std::vector<std::string> queries = {"a", "A", "cat", "na"};
     for (const auto& text : texts) {
         for (const auto& query : queries) {
-            for (const bool case_sensitive : {false, true}) {
-                for (const bool whole_word : {false, true}) {
-                    FindOptions options{case_sensitive, whole_word, false, false};
+            for (const bool caseSensitive : {false, true}) {
+                for (const bool wholeWord : {false, true}) {
+                    FindOptions options{caseSensitive, wholeWord, false, false};
                     FindRequest request{query, options, std::nullopt, 100000,
                                         nullptr};
                     ASSERT_EQ(findMatches(text, request).matches,

@@ -75,12 +75,12 @@ std::vector<Line> linesOf(std::string_view text) {
     std::vector<Line> lines;
     std::size_t start = 0;
     while (start < text.size()) {
-        std::size_t content_end = start;
-        while (content_end < text.size() && text[content_end] != '\r' &&
-               text[content_end] != '\n') {
-            ++content_end;
+        std::size_t contentEnd = start;
+        while (contentEnd < text.size() && text[contentEnd] != '\r' &&
+               text[contentEnd] != '\n') {
+            ++contentEnd;
         }
-        std::size_t end = content_end;
+        std::size_t end = contentEnd;
         if (end < text.size()) {
             if (text[end] == '\r' && end + 1 < text.size() &&
                 text[end + 1] == '\n') {
@@ -89,7 +89,7 @@ std::vector<Line> linesOf(std::string_view text) {
                 ++end;
             }
         }
-        lines.push_back({start, content_end, end});
+        lines.push_back({start, contentEnd, end});
         start = end;
     }
     if (lines.empty() || lines.back().end == text.size() &&
@@ -241,23 +241,23 @@ std::uint64_t remapOffset(std::uint64_t offset,
 
 std::optional<SelectionSet> remapSelections(
     const SelectionSet& before, const std::vector<TextEdit>& edits,
-    std::string_view resulting_text, int tab_width) {
+    std::string_view resultingText, int tabWidth) {
     std::vector<Selection> values;
     values.reserve(before.items().size());
-    const auto resolve_mapped = [&](std::uint64_t offset) {
+    const auto resolveMapped = [&](std::uint64_t offset) {
         auto resolved = resolveDocumentPosition(
-            resulting_text, ByteOffset{offset}, tab_width);
-        while (!resolved && offset < resulting_text.size()) {
+            resultingText, ByteOffset{offset}, tabWidth);
+        while (!resolved && offset < resultingText.size()) {
             ++offset;
             resolved = resolveDocumentPosition(
-                resulting_text, ByteOffset{offset}, tab_width);
+                resultingText, ByteOffset{offset}, tabWidth);
         }
         return resolved;
     };
     for (const auto& selection : before.items()) {
-        const auto anchor = resolve_mapped(
+        const auto anchor = resolveMapped(
             remapOffset(selection.anchor.byte_offset.value(), edits));
-        const auto active = resolve_mapped(
+        const auto active = resolveMapped(
             remapOffset(selection.active.byte_offset.value(), edits));
         if (!anchor || !active) {
             return std::nullopt;
@@ -268,11 +268,11 @@ std::optional<SelectionSet> remapSelections(
 }
 
 bool validateSelections(std::string_view text,
-                         const SelectionSet& selections, int tab_width) {
+                         const SelectionSet& selections, int tabWidth) {
     for (const auto& selection : selections.items()) {
         for (const auto* endpoint : {&selection.anchor, &selection.active}) {
             const auto resolved = resolveDocumentPosition(
-                text, endpoint->byte_offset, tab_width);
+                text, endpoint->byte_offset, tabWidth);
             if (!resolved || *resolved != *endpoint) {
                 return false;
             }
@@ -402,8 +402,8 @@ std::vector<TextEdit> lineEdits(
                      replacement, text);
         }
     } else if (command == EditCommand::ToggleComment) {
-        bool all_commented = true;
-        bool any_nonblank = false;
+        bool allCommented = true;
+        bool anyNonblank = false;
         for (const auto index : touched) {
             std::size_t offset = lines[index].start;
             while (offset < lines[index].content_end &&
@@ -413,13 +413,13 @@ std::vector<TextEdit> lineEdits(
             if (offset == lines[index].content_end) {
                 continue;
             }
-            any_nonblank = true;
+            anyNonblank = true;
             if (text.substr(offset, settings.line_comment_token.size()) !=
                 settings.line_comment_token) {
-                all_commented = false;
+                allCommented = false;
             }
         }
-        if (any_nonblank) {
+        if (anyNonblank) {
             for (const auto index : touched) {
                 std::size_t offset = lines[index].start;
                 while (offset < lines[index].content_end &&
@@ -430,10 +430,10 @@ std::vector<TextEdit> lineEdits(
                     continue;
                 }
                 addEdit(edits, offset,
-                         all_commented
+                         allCommented
                              ? settings.line_comment_token.size()
                              : 0,
-                         all_commented ? std::string{}
+                         allCommented ? std::string{}
                                        : settings.line_comment_token,
                          text);
             }
@@ -487,48 +487,48 @@ std::vector<TextEdit> transposeEdits(const DocumentSnapshot& document,
         }
         const auto caret =
             static_cast<std::size_t>(selection.active.byte_offset.value());
-        auto line_index = lineForOffset(lines, caret);
-        const bool at_document_end = caret == document.text.size();
-        if (at_document_end && line_index > 0 &&
-            lines[line_index].start == lines[line_index].end) {
-            --line_index;
+        auto lineIndex = lineForOffset(lines, caret);
+        const bool atDocumentEnd = caret == document.text.size();
+        if (atDocumentEnd && lineIndex > 0 &&
+            lines[lineIndex].start == lines[lineIndex].end) {
+            --lineIndex;
         }
-        const auto& line = lines[line_index];
+        const auto& line = lines[lineIndex];
         const auto run = computeCellRun(
             std::string_view{document.text}.substr(
                 line.start, line.content_end - line.start));
         if (run.spans.size() < 2) {
             continue;
         }
-        std::size_t left_index = run.spans.size();
-        if (at_document_end) {
-            left_index = run.spans.size() - 2;
+        std::size_t leftIndex = run.spans.size();
+        if (atDocumentEnd) {
+            leftIndex = run.spans.size() - 2;
         } else {
             for (std::size_t index = 0; index + 1 < run.spans.size();
                  ++index) {
                 if (line.start + run.spans[index].byte_offset +
                         run.spans[index].byte_len ==
                     caret) {
-                    left_index = index;
+                    leftIndex = index;
                     break;
                 }
             }
         }
-        if (left_index + 1 >= run.spans.size()) {
+        if (leftIndex + 1 >= run.spans.size()) {
             continue;
         }
-        const auto& left = run.spans[left_index];
-        const auto& right = run.spans[left_index + 1];
+        const auto& left = run.spans[leftIndex];
+        const auto& right = run.spans[leftIndex + 1];
         const auto start = line.start + left.byte_offset;
         const auto end = line.start + right.byte_offset + right.byte_len;
         bool overlaps = false;
         for (const auto& edit : edits) {
-            const auto other_start =
+            const auto otherStart =
                 static_cast<std::size_t>(edit.offset.value());
-            const auto other_end =
-                other_start + static_cast<std::size_t>(edit.erased_bytes);
+            const auto otherEnd =
+                otherStart + static_cast<std::size_t>(edit.erased_bytes);
             overlaps = overlaps ||
-                       (start < other_end && other_start < end);
+                       (start < otherEnd && otherStart < end);
         }
         if (overlaps) {
             continue;
@@ -581,15 +581,15 @@ EditCommandResult applyEditCommand(
         return failure(EditCommandError::Diff,
                        "edit command cannot mutate a diff document");
     }
-    const bool valid_indent_style =
+    const bool validIndentStyle =
         settings.indent_style == IndentStyle::Spaces ||
         settings.indent_style == IndentStyle::Tabs;
-    const bool valid_line_ending =
+    const bool validLineEnding =
         settings.line_ending == LineEnding::Lf ||
         settings.line_ending == LineEnding::Crlf ||
         settings.line_ending == LineEnding::Cr ||
         settings.line_ending == LineEnding::Mixed;
-    if (!valid_indent_style || !valid_line_ending ||
+    if (!validIndentStyle || !validLineEnding ||
         settings.indent_width < 1 || settings.indent_width > 16 ||
         settings.tab_width < 1 || settings.tab_width > 16 ||
         settings.line_comment_token.empty() ||
@@ -634,13 +634,13 @@ EditCommandResult applyEditCommand(
     }
 
     std::sort(edits.begin(), edits.end(), editLess);
-    const auto resulting_text = applyEdits(document.text, edits);
-    if (resulting_text == document.text) {
+    const auto resultingText = applyEdits(document.text, edits);
+    if (resultingText == document.text) {
         return {EditCommandError::None, std::nullopt, selections,
                 document.text, {}};
     }
     const auto remapped = remapSelections(
-        selections, edits, resulting_text,
+        selections, edits, resultingText,
         static_cast<int>(settings.tab_width));
     if (!remapped) {
         return failure(EditCommandError::InvalidSelection,
@@ -650,7 +650,7 @@ EditCommandResult applyEditCommand(
         EditCommandError::None,
         EditTransaction{document.revision, edits},
         std::move(remapped),
-        resulting_text,
+        resultingText,
         {},
     };
 }

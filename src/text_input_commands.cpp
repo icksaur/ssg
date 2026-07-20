@@ -77,31 +77,31 @@ bool validUtf8(std::string_view text) {
 }
 
 std::vector<std::size_t> graphemeBoundaries(std::string_view text,
-                                             int tab_width) {
+                                             int tabWidth) {
     std::vector<std::size_t> boundaries{0};
-    std::size_t line_start = 0;
-    while (line_start < text.size()) {
-        auto line_end = line_start;
-        while (line_end < text.size() && text[line_end] != '\r' &&
-               text[line_end] != '\n') {
-            ++line_end;
+    std::size_t lineStart = 0;
+    while (lineStart < text.size()) {
+        auto lineEnd = lineStart;
+        while (lineEnd < text.size() && text[lineEnd] != '\r' &&
+               text[lineEnd] != '\n') {
+            ++lineEnd;
         }
         const auto run =
-            computeCellRun(text.substr(line_start, line_end - line_start),
-                             tab_width);
+            computeCellRun(text.substr(lineStart, lineEnd - lineStart),
+                             tabWidth);
         for (const auto& span : run.spans) {
-            boundaries.push_back(line_start + span.byte_offset + span.byte_len);
+            boundaries.push_back(lineStart + span.byte_offset + span.byte_len);
         }
-        if (line_end == text.size()) {
+        if (lineEnd == text.size()) {
             break;
         }
-        if (text[line_end] == '\r' && line_end + 1 < text.size() &&
-            text[line_end + 1] == '\n') {
-            line_start = line_end + 2;
+        if (text[lineEnd] == '\r' && lineEnd + 1 < text.size() &&
+            text[lineEnd + 1] == '\n') {
+            lineStart = lineEnd + 2;
         } else {
-            line_start = line_end + 1;
+            lineStart = lineEnd + 1;
         }
-        boundaries.push_back(line_start);
+        boundaries.push_back(lineStart);
     }
     return boundaries;
 }
@@ -232,9 +232,9 @@ std::string indentationFor(std::string_view text, std::size_t offset,
 }
 
 bool validPosition(std::string_view text, const DocumentPosition& position,
-                    int tab_width) {
+                    int tabWidth) {
     const auto resolved =
-        resolveDocumentPosition(text, position.byte_offset, tab_width);
+        resolveDocumentPosition(text, position.byte_offset, tabWidth);
     return resolved.has_value() && *resolved == position;
 }
 
@@ -309,10 +309,10 @@ TextInputResult applyTextInput(const DocumentSnapshot& document,
         return failure(TextInputError::InvalidSettings,
                        "text input settings are outside their valid range");
     }
-    const auto tab_width = static_cast<int>(settings.indent_width);
+    const auto tabWidth = static_cast<int>(settings.indent_width);
     for (const auto& selection : selections.items()) {
-        if (!validPosition(document.text, selection.anchor, tab_width) ||
-            !validPosition(document.text, selection.active, tab_width)) {
+        if (!validPosition(document.text, selection.anchor, tabWidth) ||
+            !validPosition(document.text, selection.active, tabWidth)) {
             return failure(TextInputError::InvalidSelection,
                            "selection position is inconsistent with document");
         }
@@ -327,7 +327,7 @@ TextInputResult applyTextInput(const DocumentSnapshot& document,
                        "text input command is not recognized");
     }
 
-    const auto boundaries = graphemeBoundaries(document.text, tab_width);
+    const auto boundaries = graphemeBoundaries(document.text, tabWidth);
     for (const auto& selection : selections.items()) {
         const auto anchor =
             static_cast<std::size_t>(selection.anchor.byte_offset.value());
@@ -341,8 +341,8 @@ TextInputResult applyTextInput(const DocumentSnapshot& document,
     }
     std::vector<PendingEdit> edits;
     edits.reserve(selections.items().size());
-    std::vector<std::size_t> action_targets;
-    action_targets.reserve(selections.items().size());
+    std::vector<std::size_t> actionTargets;
+    actionTargets.reserve(selections.items().size());
     for (std::size_t action = 0; action < selections.items().size(); ++action) {
         const auto& selection = selections.items()[action];
         auto start =
@@ -381,7 +381,7 @@ TextInputResult applyTextInput(const DocumentSnapshot& document,
             edits.push_back(
                 PendingEdit{start, end, std::move(inserted), action});
         }
-        action_targets.push_back(start);
+        actionTargets.push_back(start);
     }
 
     const bool deletion =
@@ -396,28 +396,28 @@ TextInputResult applyTextInput(const DocumentSnapshot& document,
                                document.text, {}};
     }
 
-    std::string resulting_text = document.text;
+    std::string resultingText = document.text;
     for (auto edit = edits.rbegin(); edit != edits.rend(); ++edit) {
-        resulting_text.replace(edit->start, edit->end - edit->start,
+        resultingText.replace(edit->start, edit->end - edit->start,
                                edit->inserted);
     }
 
-    std::vector<Selection> resulting_selections;
-    resulting_selections.reserve(action_targets.size());
-    std::vector<std::optional<std::size_t>> own_carets(
-        action_targets.size());
-    std::int64_t prior_delta = 0;
+    std::vector<Selection> resultingSelections;
+    resultingSelections.reserve(actionTargets.size());
+    std::vector<std::optional<std::size_t>> ownCarets(
+        actionTargets.size());
+    std::int64_t priorDelta = 0;
     for (const auto& edit : edits) {
-        const auto caret = static_cast<std::int64_t>(edit.start) + prior_delta +
+        const auto caret = static_cast<std::int64_t>(edit.start) + priorDelta +
                            static_cast<std::int64_t>(edit.inserted.size());
         if (!deletion) {
-            own_carets[edit.action] = static_cast<std::size_t>(caret);
+            ownCarets[edit.action] = static_cast<std::size_t>(caret);
         }
-        prior_delta +=
+        priorDelta +=
             static_cast<std::int64_t>(edit.inserted.size()) -
             static_cast<std::int64_t>(edit.end - edit.start);
     }
-    const auto map_target = [&](std::size_t target) {
+    const auto mapTarget = [&](std::size_t target) {
         std::int64_t delta = 0;
         for (const auto& edit : edits) {
             if (target < edit.start) {
@@ -434,31 +434,31 @@ TextInputResult applyTextInput(const DocumentSnapshot& document,
         return static_cast<std::size_t>(
             static_cast<std::int64_t>(target) + delta);
     };
-    for (std::size_t action = 0; action < action_targets.size(); ++action) {
+    for (std::size_t action = 0; action < actionTargets.size(); ++action) {
         const auto caret =
-            own_carets[action].value_or(map_target(action_targets[action]));
+            ownCarets[action].value_or(mapTarget(actionTargets[action]));
         const auto resolved = resolveDocumentPosition(
-            resulting_text, ByteOffset{caret}, tab_width);
+            resultingText, ByteOffset{caret}, tabWidth);
         if (!resolved.has_value()) {
             return failure(TextInputError::InvalidSelection,
                            "resulting caret is not a document boundary");
         }
-        resulting_selections.push_back(Selection{*resolved, *resolved});
+        resultingSelections.push_back(Selection{*resolved, *resolved});
     }
 
-    std::vector<TextEdit> transaction_edits;
-    transaction_edits.reserve(edits.size());
+    std::vector<TextEdit> transactionEdits;
+    transactionEdits.reserve(edits.size());
     for (auto& edit : edits) {
-        transaction_edits.push_back(TextEdit{
+        transactionEdits.push_back(TextEdit{
             ByteOffset{edit.start},
             static_cast<std::uint64_t>(edit.end - edit.start),
             std::move(edit.inserted)});
     }
     return TextInputResult{
         TextInputError::None,
-        EditTransaction{document.revision, std::move(transaction_edits)},
-        SelectionSet{std::move(resulting_selections)},
-        std::move(resulting_text),
+        EditTransaction{document.revision, std::move(transactionEdits)},
+        SelectionSet{std::move(resultingSelections)},
+        std::move(resultingText),
         {}};
 }
 

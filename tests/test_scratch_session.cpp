@@ -136,7 +136,7 @@ TEST(concurrentProcessIsHiddenUntilCrashReleasesLock) {
     const auto ready = temporary.path() / "ready";
     ChildProcess child{std::filesystem::absolute("test_scratch_session"),
                        temporary.path(), workspace, ready};
-    const auto child_id = waitForReady(ready);
+    const auto childId = waitForReady(ready);
 
     auto current = ssg::ScratchSession::create(temporary.path(), workspace);
     ASSERT_FALSE(current.claimNewestRestorable().has_value());
@@ -144,9 +144,9 @@ TEST(concurrentProcessIsHiddenUntilCrashReleasesLock) {
     child.terminate();
     auto crashed = current.claimNewestRestorable();
     ASSERT_TRUE(crashed.has_value());
-    ASSERT_EQ(crashed->id().value(), child_id);
-    const auto replayed_crash = crashed->replay();
-    ASSERT_EQ(replayed_crash.recovery.documents.front().utf8_content,
+    ASSERT_EQ(crashed->id().value(), childId);
+    const auto replayedCrash = crashed->replay();
+    ASSERT_EQ(replayedCrash.recovery.documents.front().utf8_content,
               std::string{"child"});
 }
 
@@ -155,59 +155,59 @@ TEST(newestUnlockedRemnantIsClaimedOnce) {
     const auto workspace =
         std::filesystem::absolute(temporary.path() / "workspace").lexically_normal();
 
-    std::string old_id;
+    std::string oldId;
     {
         auto old = ssg::ScratchSession::create(temporary.path(), workspace);
-        old_id = old.id().value();
+        oldId = old.id().value();
         makeRestorable(old, "old");
     }
     std::this_thread::sleep_for(2ms);
-    std::string new_id;
+    std::string newId;
     {
         auto recent = ssg::ScratchSession::create(temporary.path(), workspace);
-        new_id = recent.id().value();
+        newId = recent.id().value();
         makeRestorable(recent, "new");
     }
 
-    auto selector_a = ssg::ScratchSession::create(temporary.path(), workspace);
-    auto selector_b = ssg::ScratchSession::create(temporary.path(), workspace);
-    auto newest = selector_a.claimNewestRestorable();
+    auto selectorA = ssg::ScratchSession::create(temporary.path(), workspace);
+    auto selectorB = ssg::ScratchSession::create(temporary.path(), workspace);
+    auto newest = selectorA.claimNewestRestorable();
     ASSERT_TRUE(newest.has_value());
-    ASSERT_EQ(newest->id().value(), new_id);
-    const auto replayed_newest = newest->replay();
-    ASSERT_EQ(replayed_newest.recovery.documents.front().utf8_content,
+    ASSERT_EQ(newest->id().value(), newId);
+    const auto replayedNewest = newest->replay();
+    ASSERT_EQ(replayedNewest.recovery.documents.front().utf8_content,
               std::string{"new"});
-    auto older = selector_b.claimNewestRestorable();
+    auto older = selectorB.claimNewestRestorable();
     ASSERT_TRUE(older.has_value());
-    ASSERT_EQ(older->id().value(), old_id);
+    ASSERT_EQ(older->id().value(), oldId);
     older.reset();
 
     newest->markRestored();
     newest.reset();
-    auto remaining = selector_a.claimNewestRestorable();
+    auto remaining = selectorA.claimNewestRestorable();
     ASSERT_TRUE(remaining.has_value());
-    ASSERT_EQ(remaining->id().value(), old_id);
+    ASSERT_EQ(remaining->id().value(), oldId);
 }
 
 TEST(staleEmptyAndOtherWorkspaceSessionsAreNotRestored) {
     TemporaryDirectory temporary;
-    const auto workspace_a =
+    const auto workspaceA =
         std::filesystem::absolute(temporary.path() / "a").lexically_normal();
-    const auto workspace_b =
+    const auto workspaceB =
         std::filesystem::absolute(temporary.path() / "b").lexically_normal();
     {
-        auto empty = ssg::ScratchSession::create(temporary.path(), workspace_a);
+        auto empty = ssg::ScratchSession::create(temporary.path(), workspaceA);
     }
     {
-        auto other = ssg::ScratchSession::create(temporary.path(), workspace_b);
+        auto other = ssg::ScratchSession::create(temporary.path(), workspaceB);
         makeRestorable(other, "other");
     }
 
-    auto current = ssg::ScratchSession::create(temporary.path(), workspace_a);
+    auto current = ssg::ScratchSession::create(temporary.path(), workspaceA);
     makeRestorable(current, "live");
     ASSERT_FALSE(current.claimNewestRestorable().has_value());
-    ASSERT_NE(ssg::scratchWorkspaceKey(workspace_a),
-              ssg::scratchWorkspaceKey(workspace_b));
+    ASSERT_NE(ssg::scratchWorkspaceKey(workspaceA),
+              ssg::scratchWorkspaceKey(workspaceB));
 }
 
 int childMain(const std::filesystem::path& root,

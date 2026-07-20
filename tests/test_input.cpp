@@ -45,33 +45,33 @@ TEST(validateKeymapFlagsDuplicateUnreachableAndReservedBindings) {
     ssg::KeymapViewState duplicate{
         "bad", {{sequence, "cursor.left", "editor"},
                 {sequence, "cursor.right", "editor"}}};
-    const auto duplicate_errors = ssg::validateKeymap(duplicate, {});
-    ASSERT_TRUE(std::ranges::any_of(duplicate_errors, [](const auto& error) {
+    const auto duplicateErrors = ssg::validateKeymap(duplicate, {});
+    ASSERT_TRUE(std::ranges::any_of(duplicateErrors, [](const auto& error) {
         return error.code == ssg::KeymapErrorCode::DuplicateBinding;
     }));
 
     ssg::KeymapViewState unreachable{
         "bad", {{sequence, "cursor.left", "*"},
                 {sequence, "cursor.right", "editor"}}};
-    const auto unreachable_errors = ssg::validateKeymap(unreachable, {});
-    ASSERT_TRUE(std::ranges::any_of(unreachable_errors, [](const auto& error) {
+    const auto unreachableErrors = ssg::validateKeymap(unreachable, {});
+    ASSERT_TRUE(std::ranges::any_of(unreachableErrors, [](const auto& error) {
         return error.code == ssg::KeymapErrorCode::UnreachableBinding;
     }));
 
     const auto reserved = *ssg::parseKeySequence({"Ctrl+KeyL"});
-    ssg::KeymapViewState reserved_map{
+    ssg::KeymapViewState reservedMap{
         "bad", {{reserved, "cursor.left", "*"}}};
-    const auto reserved_errors =
-        ssg::validateKeymap(reserved_map, {&reserved, 1});
-    ASSERT_TRUE(std::ranges::any_of(reserved_errors, [](const auto& error) {
+    const auto reservedErrors =
+        ssg::validateKeymap(reservedMap, {&reserved, 1});
+    ASSERT_TRUE(std::ranges::any_of(reservedErrors, [](const auto& error) {
         return error.code == ssg::KeymapErrorCode::ReservedBinding;
     }));
     const auto longer = *ssg::parseKeySequence({"Ctrl+KeyL", "KeyA"});
-    ssg::KeymapViewState reserved_prefix_map{
+    ssg::KeymapViewState reservedPrefixMap{
         "bad", {{longer, "cursor.left", "*"}}};
-    const auto prefix_errors =
-        ssg::validateKeymap(reserved_prefix_map, {&reserved, 1});
-    ASSERT_TRUE(std::ranges::any_of(prefix_errors, [](const auto& error) {
+    const auto prefixErrors =
+        ssg::validateKeymap(reservedPrefixMap, {&reserved, 1});
+    ASSERT_TRUE(std::ranges::any_of(prefixErrors, [](const auto& error) {
         return error.code == ssg::KeymapErrorCode::ReservedBinding;
     }));
 }
@@ -113,34 +113,34 @@ TEST(validateKeymapRejectsUnknownContext) {
 }
 
 TEST(validateKeymapRejectsAmbiguousPrefixOrderIndependently) {
-    const auto esc_f = *ssg::parseKeySequence({"Escape", "KeyF"});
-    const auto esc_f_t = *ssg::parseKeySequence({"Escape", "KeyF", "KeyT"});
+    const auto escF = *ssg::parseKeySequence({"Escape", "KeyF"});
+    const auto escFT = *ssg::parseKeySequence({"Escape", "KeyF", "KeyT"});
 
     // Same context (both "*"): a strict prefix pair is ambiguous, in either order.
     ssg::KeymapViewState forward{
-        "m", {{esc_f, "a", "*"}, {esc_f_t, "b", "*"}}};
+        "m", {{escF, "a", "*"}, {escFT, "b", "*"}}};
     ssg::KeymapViewState reversed{
-        "m", {{esc_f_t, "b", "*"}, {esc_f, "a", "*"}}};
+        "m", {{escFT, "b", "*"}, {escF, "a", "*"}}};
     ASSERT_TRUE(hasError(ssg::validateKeymap(forward, {}),
                           ssg::KeymapErrorCode::AmbiguousPrefix));
     ASSERT_TRUE(hasError(ssg::validateKeymap(reversed, {}),
                           ssg::KeymapErrorCode::AmbiguousPrefix));
 
     // "*"/focus overlap: a global prefix and a focus continuation collide.
-    ssg::KeymapViewState star_focus{
-        "m", {{esc_f, "a", "*"}, {esc_f_t, "b", "editor"}}};
-    ASSERT_TRUE(hasError(ssg::validateKeymap(star_focus, {}),
+    ssg::KeymapViewState starFocus{
+        "m", {{escF, "a", "*"}, {escFT, "b", "editor"}}};
+    ASSERT_TRUE(hasError(ssg::validateKeymap(starFocus, {}),
                           ssg::KeymapErrorCode::AmbiguousPrefix));
 
     // focus/focus in the SAME context collide.
-    ssg::KeymapViewState focus_focus{
-        "m", {{esc_f, "a", "editor"}, {esc_f_t, "b", "editor"}}};
-    ASSERT_TRUE(hasError(ssg::validateKeymap(focus_focus, {}),
+    ssg::KeymapViewState focusFocus{
+        "m", {{escF, "a", "editor"}, {escFT, "b", "editor"}}};
+    ASSERT_TRUE(hasError(ssg::validateKeymap(focusFocus, {}),
                           ssg::KeymapErrorCode::AmbiguousPrefix));
 
     // DIFFERENT focus contexts do not overlap, so a prefix pair is allowed.
     ssg::KeymapViewState disjoint{
-        "m", {{esc_f, "a", "editor"}, {esc_f_t, "b", "panel"}}};
+        "m", {{escF, "a", "editor"}, {escFT, "b", "panel"}}};
     ASSERT_FALSE(hasError(ssg::validateKeymap(disjoint, {}),
                            ssg::KeymapErrorCode::AmbiguousPrefix));
 }
@@ -152,13 +152,13 @@ TEST(resolveKeySequenceMapsSameKeyPerContext) {
         {{down, "cursor.line_down", "editor"},
          {down, "tree.select_next", "panel"}}};
 
-    const auto in_editor = ssg::resolveKeySequence(keymap, down, "editor");
-    ASSERT_EQ(in_editor.kind, ssg::KeymapMatchKind::Resolved);
-    ASSERT_EQ(in_editor.command_id, std::string{"cursor.line_down"});
+    const auto inEditor = ssg::resolveKeySequence(keymap, down, "editor");
+    ASSERT_EQ(inEditor.kind, ssg::KeymapMatchKind::Resolved);
+    ASSERT_EQ(inEditor.command_id, std::string{"cursor.line_down"});
 
-    const auto in_panel = ssg::resolveKeySequence(keymap, down, "panel");
-    ASSERT_EQ(in_panel.kind, ssg::KeymapMatchKind::Resolved);
-    ASSERT_EQ(in_panel.command_id, std::string{"tree.select_next"});
+    const auto inPanel = ssg::resolveKeySequence(keymap, down, "panel");
+    ASSERT_EQ(inPanel.kind, ssg::KeymapMatchKind::Resolved);
+    ASSERT_EQ(inPanel.command_id, std::string{"tree.select_next"});
 
     // No eligible binding in prompt context.
     ASSERT_EQ(ssg::resolveKeySequence(keymap, down, "prompt").kind,
@@ -169,11 +169,11 @@ TEST(resolveKeySequenceStarBeatsFocusAndResolvesEverywhere) {
     const auto save = *ssg::parseKeySequence({"Escape", "KeyS"});
     // A "*" binding and a same-sequence focus binding; "*" must win regardless of
     // which is listed first, and resolve in every context.
-    ssg::KeymapViewState focus_first{
+    ssg::KeymapViewState focusFirst{
         "m", {{save, "focus.only", "editor"}, {save, "file.save", "*"}}};
-    ssg::KeymapViewState star_first{
+    ssg::KeymapViewState starFirst{
         "m", {{save, "file.save", "*"}, {save, "focus.only", "editor"}}};
-    for (const auto* keymap : {&focus_first, &star_first}) {
+    for (const auto* keymap : {&focusFirst, &starFirst}) {
         for (const auto context : {"editor", "panel", "prompt"}) {
             const auto r = ssg::resolveKeySequence(*keymap, save, context);
             ASSERT_EQ(r.kind, ssg::KeymapMatchKind::Resolved);
@@ -184,15 +184,15 @@ TEST(resolveKeySequenceStarBeatsFocusAndResolvesEverywhere) {
 
 TEST(resolveKeySequenceReportsPendingAndNone) {
     const auto esc = *ssg::parseKeySequence({"Escape"});
-    const auto esc_s = *ssg::parseKeySequence({"Escape", "KeyS"});
-    const auto esc_x = *ssg::parseKeySequence({"Escape", "KeyX"});
-    ssg::KeymapViewState keymap{"m", {{esc_s, "file.save", "*"}}};
+    const auto escS = *ssg::parseKeySequence({"Escape", "KeyS"});
+    const auto escX = *ssg::parseKeySequence({"Escape", "KeyX"});
+    ssg::KeymapViewState keymap{"m", {{escS, "file.save", "*"}}};
 
     ASSERT_EQ(ssg::resolveKeySequence(keymap, esc, "editor").kind,
               ssg::KeymapMatchKind::Pending);
-    ASSERT_EQ(ssg::resolveKeySequence(keymap, esc_s, "editor").kind,
+    ASSERT_EQ(ssg::resolveKeySequence(keymap, escS, "editor").kind,
               ssg::KeymapMatchKind::Resolved);
-    ASSERT_EQ(ssg::resolveKeySequence(keymap, esc_x, "editor").kind,
+    ASSERT_EQ(ssg::resolveKeySequence(keymap, escX, "editor").kind,
               ssg::KeymapMatchKind::None);
     ASSERT_EQ(ssg::resolveKeySequence(keymap, {}, "editor").kind,
               ssg::KeymapMatchKind::None);
@@ -230,13 +230,13 @@ TEST(hasGlobalBindingRequiresUnreservedUnshadowedStar) {
 TEST(validateKeymapFlagsGlobalShadowRegardlessOfOrder) {
     const auto seq = *ssg::parseKeySequence({"Escape", "KeyS"});
     // Global-then-focus and focus-then-global must both flag the focus binding.
-    ssg::KeymapViewState global_first{
+    ssg::KeymapViewState globalFirst{
         "m", {{seq, "file.save", "*"}, {seq, "focus.only", "editor"}}};
-    ssg::KeymapViewState focus_first{
+    ssg::KeymapViewState focusFirst{
         "m", {{seq, "focus.only", "editor"}, {seq, "file.save", "*"}}};
-    ASSERT_TRUE(hasError(ssg::validateKeymap(global_first, {}),
+    ASSERT_TRUE(hasError(ssg::validateKeymap(globalFirst, {}),
                           ssg::KeymapErrorCode::UnreachableBinding));
-    ASSERT_TRUE(hasError(ssg::validateKeymap(focus_first, {}),
+    ASSERT_TRUE(hasError(ssg::validateKeymap(focusFirst, {}),
                           ssg::KeymapErrorCode::UnreachableBinding));
 }
 

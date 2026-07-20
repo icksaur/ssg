@@ -37,7 +37,7 @@ struct GridPosition {
 
 struct CellGrid {
     GridSize size;
-    std::array<SrgbColor, theme_palette_size> palette{};
+    std::array<SrgbColor, kThemePaletteSize> palette{};
     std::vector<CellGridCell> cells;
     std::optional<GridPosition> caret;
 

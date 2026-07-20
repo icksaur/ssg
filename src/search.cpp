@@ -98,10 +98,10 @@ std::vector<SearchResult> rankSymbols(const WorkspaceSnapshot& workspace,
         if (left.score != right.score) {
             return left.score > right.score;
         }
-        const auto left_name = left.label.substr(left.label.find(':') + 1);
-        const auto right_name = right.label.substr(right.label.find(':') + 1);
-        if (left_name != right_name) {
-            return left_name < right_name;
+        const auto leftName = left.label.substr(left.label.find(':') + 1);
+        const auto rightName = right.label.substr(right.label.find(':') + 1);
+        if (leftName != rightName) {
+            return leftName < rightName;
         }
         return left.path < right.path;
     });
@@ -116,32 +116,32 @@ std::vector<SearchResult> rankText(const WorkspaceSnapshot& workspace,
         return results;
     }
     for (const auto& file : workspace.files) {
-        std::size_t line_start = 0;
-        std::size_t line_number = 0;
-        while (line_start <= file.text.size()) {
+        std::size_t lineStart = 0;
+        std::size_t lineNumber = 0;
+        while (lineStart <= file.text.size()) {
             if (token.cancelled()) {
                 return {};
             }
-            const auto line_end = file.text.find('\n', line_start);
+            const auto lineEnd = file.text.find('\n', lineStart);
             const auto line = std::string_view{file.text}.substr(
-                line_start, line_end == std::string::npos
-                                ? file.text.size() - line_start
-                                : line_end - line_start);
+                lineStart, lineEnd == std::string::npos
+                                ? file.text.size() - lineStart
+                                : lineEnd - lineStart);
             const auto match = line.find(query);
             if (match != std::string_view::npos) {
                 results.push_back(
                     {.mode = SearchMode::Text,
                      .path = file.path,
-                     .label = file.path + ":" + std::to_string(line_number + 1),
-                     .line = LineIndex{line_number},
+                     .label = file.path + ":" + std::to_string(lineNumber + 1),
+                     .line = LineIndex{lineNumber},
                      .column = match + 1,
                      .score = 0});
             }
-            if (line_end == std::string::npos) {
+            if (lineEnd == std::string::npos) {
                 break;
             }
-            line_start = line_end + 1;
-            ++line_number;
+            lineStart = lineEnd + 1;
+            ++lineNumber;
         }
     }
     std::ranges::sort(results, [](const auto& left, const auto& right) {
@@ -174,15 +174,15 @@ ParsedSearchQuery parseSearchQuery(std::string_view query) {
     case ':': {
         result.mode = SearchMode::Line;
         result.text = query.substr(1);
-        std::size_t one_based = 0;
+        std::size_t oneBased = 0;
         const auto [end, error] = std::from_chars(
-            result.text.data(), result.text.data() + result.text.size(), one_based);
+            result.text.data(), result.text.data() + result.text.size(), oneBased);
         if (result.text.empty() || error != std::errc{} ||
-            end != result.text.data() + result.text.size() || one_based == 0) {
+            end != result.text.data() + result.text.size() || oneBased == 0) {
             result.error = SearchQueryError::InvalidLine;
             return result;
         }
-        result.line = LineIndex{one_based - 1};
+        result.line = LineIndex{oneBased - 1};
         return result;
     }
     default:
@@ -344,17 +344,17 @@ void SearchController::rankPalette() {
     state_.mode = SearchMode::Command;
     state_.results.clear();
     for (const auto& command : commands_.descriptors()) {
-        const auto label_score = fuzzyScore(command.label, state_.query);
-        const auto id_score = fuzzyScore(command.id, state_.query);
-        if (!label_score && !id_score) {
+        const auto labelScore = fuzzyScore(command.label, state_.query);
+        const auto idScore = fuzzyScore(command.id, state_.query);
+        if (!labelScore && !idScore) {
             continue;
         }
         state_.results.push_back(
             {.mode = SearchMode::Command,
              .path = command.id,
              .label = command.label,
-             .score = std::max(label_score.value_or(std::numeric_limits<int>::min()),
-                               id_score.value_or(std::numeric_limits<int>::min()))});
+             .score = std::max(labelScore.value_or(std::numeric_limits<int>::min()),
+                               idScore.value_or(std::numeric_limits<int>::min()))});
     }
     std::ranges::sort(state_.results, [](const auto& left, const auto& right) {
         if (left.score != right.score) {
@@ -394,13 +394,13 @@ PaletteExecutionResult SearchController::executePalette() {
 }
 
 WorkspaceSearchRequest SearchController::beginWorkspaceSearch(
-    std::string query, Revision source_revision) {
+    std::string query, Revision sourceRevision) {
     cancelWorkspaceSearch();
     WorkspaceSearchRequest request{
         .generation = state_.search_generation + 1,
-        .source_revision = source_revision,
+        .source_revision = sourceRevision,
         .query = parseSearchQuery(query)};
-    state_.revision = source_revision;
+    state_.revision = sourceRevision;
     state_.query = std::move(query);
     state_.mode = request.query.mode;
     state_.results.clear();
@@ -424,7 +424,7 @@ void SearchController::cancelWorkspaceSearch() noexcept {
 }
 
 SearchPublishResult SearchController::publish(
-    const WorkspaceSearchBatch& batch, Revision current_revision) {
+    const WorkspaceSearchBatch& batch, Revision currentRevision) {
     if (batch.cancelled) {
         return SearchPublishResult::Cancelled;
     }
@@ -432,7 +432,7 @@ SearchPublishResult SearchController::publish(
         return SearchPublishResult::Superseded;
     }
     if (batch.source_revision != active_request_->source_revision ||
-        batch.source_revision != current_revision) {
+        batch.source_revision != currentRevision) {
         return SearchPublishResult::StaleRevision;
     }
     state_.results = batch.results;

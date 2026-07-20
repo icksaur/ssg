@@ -40,7 +40,7 @@ enum class SettingKey : std::uint8_t {
     TypingCoalescingMs,
 };
 
-inline constexpr std::size_t setting_key_count = 16;
+inline constexpr std::size_t kSettingKeyCount = 16;
 
 enum class TextEncoding : std::uint8_t {
     Utf8,
@@ -70,7 +70,7 @@ struct SettingViewEntry {
 };
 
 struct SettingsViewState {
-    std::array<SettingViewEntry, setting_key_count> entries{};
+    std::array<SettingViewEntry, kSettingKeyCount> entries{};
 
     [[nodiscard]] const SettingViewEntry* find(SettingKey key) const noexcept;
     friend bool operator==(const SettingsViewState&, const SettingsViewState&) = default;
@@ -183,8 +183,8 @@ public:
 
 private:
     struct ScopeData {
-        std::array<std::optional<SettingValue>, setting_key_count> values;
-        std::array<std::uint64_t, setting_key_count> generations{};
+        std::array<std::optional<SettingValue>, kSettingKeyCount> values;
+        std::array<std::uint64_t, kSettingKeyCount> generations{};
         std::vector<std::string> unknown_fields;
     };
 
@@ -197,14 +197,14 @@ struct SettingsPaths {
 };
 
 [[nodiscard]] SettingsPaths linuxSettingsPaths(
-    const std::filesystem::path& user_configuration_root,
-    const std::filesystem::path& workspace_storage_root,
-    std::string_view canonical_workspace);
+    const std::filesystem::path& userConfigurationRoot,
+    const std::filesystem::path& workspaceStorageRoot,
+    std::string_view canonicalWorkspace);
 
 [[nodiscard]] SettingsPaths windowsSettingsPaths(
-    const std::filesystem::path& user_configuration_root,
-    const std::filesystem::path& workspace_storage_root,
-    std::string_view canonical_workspace);
+    const std::filesystem::path& userConfigurationRoot,
+    const std::filesystem::path& workspaceStorageRoot,
+    std::string_view canonicalWorkspace);
 
 class SettingsPersistence {
 public:

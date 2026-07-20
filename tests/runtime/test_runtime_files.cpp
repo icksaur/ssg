@@ -56,7 +56,7 @@ TEST(openingAFileRevealsTheCaretResettingAStaleScroll) {
     auto& runtime = *created.runtime;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     const ssg::ViewportDimensions dims{80, 24};
-    auto first_row = [&] {
+    auto firstRow = [&] {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
         return snap ? snap->client().viewport.first_visual_row : 0U;
     };
@@ -64,12 +64,12 @@ TEST(openingAFileRevealsTheCaretResettingAStaleScroll) {
     // Open A and scroll far down (free scroll leaves the caret off-screen above).
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"a.txt"}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{50}}).accepted());
-    ASSERT_EQ(first_row(), 50U);
+    ASSERT_EQ(firstRow(), 50U);
 
     // Opening B resets the view so B's caret (its document start) is visible: the
     // stale offset of 50 must not carry over.
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"b.txt"}}).accepted());
-    ASSERT_EQ(first_row(), 0U);
+    ASSERT_EQ(firstRow(), 0U);
 }
 
 TEST(openEditSaveRoundTripsRealDiskBytes) {
@@ -183,25 +183,25 @@ TEST(closingTheLastTabClearsTheEditorDocument) {
     auto& runtime = *created.runtime;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
-    auto tab_count = [&] {
+    auto tabCount = [&] {
         return runtime.snapshot(ssg::ClientId{1}, {80, 24})->sections().tabs.tabs.size();
     };
 
     // Open two files: two tabs, the active document shows content.
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"a.txt"}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"b.txt"}}).accepted());
-    ASSERT_EQ(tab_count(), std::size_t{2});
+    ASSERT_EQ(tabCount(), std::size_t{2});
     ASSERT_EQ(runtime.activeDocumentText(), std::string{"beta"});
 
     // Closing one tab switches to the remaining tab's document (still shown).
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tab.close", runtime.revision(), {}}).accepted());
-    ASSERT_EQ(tab_count(), std::size_t{1});
+    ASSERT_EQ(tabCount(), std::size_t{1});
     ASSERT_EQ(runtime.activeDocumentText(), std::string{"alpha"});
 
     // Closing the last tab must clear the editor document (empty state), not
     // leave a phantom document with no tab.
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tab.close", runtime.revision(), {}}).accepted());
-    ASSERT_EQ(tab_count(), std::size_t{0});
+    ASSERT_EQ(tabCount(), std::size_t{0});
     ASSERT_TRUE(runtime.activeDocumentText().empty());
     auto snapshot = runtime.snapshot(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
@@ -251,7 +251,7 @@ TEST(switchingTabsRevealsTheNewDocumentsCaret) {
     auto& runtime = *created.runtime;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     const ssg::ViewportDimensions dims{80, 24};
-    auto first_row = [&] {
+    auto firstRow = [&] {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
         return snap ? snap->client().viewport.first_visual_row : 0U;
     };
@@ -259,19 +259,19 @@ TEST(switchingTabsRevealsTheNewDocumentsCaret) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"b.txt"}}).accepted());
     // B is active; scroll it far down (free scroll leaves B's caret off-screen).
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{50}}).accepted());
-    ASSERT_EQ(first_row(), 50U);
+    ASSERT_EQ(firstRow(), 50U);
 
     // Switch to A (previous tab): its caret (top) is revealed, not B's stale 50.
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tab.previous", runtime.revision(), {}}).accepted());
-    ASSERT_EQ(first_row(), 0U);
+    ASSERT_EQ(firstRow(), 0U);
 
     // Moving a tab keeps the SAME active document and must NOT snap the scroll:
     // switch back to B, scroll away, move the tab, and the offset stays put.
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tab.next", runtime.revision(), {}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{50}}).accepted());
-    ASSERT_EQ(first_row(), 50U);
+    ASSERT_EQ(firstRow(), 50U);
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tab.move_left", runtime.revision(), {}}).accepted());
-    ASSERT_EQ(first_row(), 50U);  // same document -> no reveal snap
+    ASSERT_EQ(firstRow(), 50U);  // same document -> no reveal snap
 }
 
 } // namespace

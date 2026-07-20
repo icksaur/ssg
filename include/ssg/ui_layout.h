@@ -219,7 +219,7 @@ struct ShellCommandSet {
 
 class ShellState {
 public:
-    explicit ShellState(std::vector<std::string> panel_providers = {});
+    explicit ShellState(std::vector<std::string> panelProviders = {});
     ~ShellState();
     ShellState(ShellState&&) noexcept;
     ShellState& operator=(ShellState&&) noexcept;

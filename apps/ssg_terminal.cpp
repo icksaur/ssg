@@ -65,13 +65,13 @@ LaunchTarget resolve_launch(fs::path const& argument) {
 }
 
 std::string encode_ansi_frame(ssg::CellGrid const& screen, ssg::ColorDepth depth) {
-    constexpr std::size_t max_index = ssg::theme_palette_size - 1;
+    constexpr std::size_t maxIndex = ssg::kThemePaletteSize - 1;
     // Format one SGR color for palette entry `index`, adapted to the terminal's
     // depth.  `kind` is '3' for foreground, '4' for background (SGR selectors),
     // which also selects the ANSI-16 base ('3'/'4' -> 30/40) vs bright
     // ('9'/'10' -> 90/100) prefix.
     auto color = [&](std::uint8_t index, char kind) -> std::string {
-        auto const& c = screen.palette[std::min<std::size_t>(index, max_index)];
+        auto const& c = screen.palette[std::min<std::size_t>(index, maxIndex)];
         auto const resolved = ssg::resolveColor(c, depth);
         switch (resolved.encoding) {
             case ssg::ResolvedColor::Encoding::Truecolor:
@@ -169,7 +169,7 @@ std::size_t utf8Length(unsigned char lead) {
 
 }  // namespace
 
-Decoded decode_input(std::string_view bytes, bool input_exhausted,
+Decoded decode_input(std::string_view bytes, bool inputExhausted,
                      std::size_t& consumed) {
     consumed = 0;
     if (bytes.empty()) return {};
@@ -192,7 +192,7 @@ Decoded decode_input(std::string_view bytes, bool input_exhausted,
         if (bytes.size() < 2) {
             // A lone ESC: a complete Escape stroke only once input is exhausted;
             // otherwise wait for the byte that disambiguates CSI vs. chord.
-            if (input_exhausted) {
+            if (inputExhausted) {
                 consumed = 1;
                 return {DecodeStatus::key, ssg::KeyStroke{"Escape"}, {}, 0};
             }
@@ -295,14 +295,14 @@ Decoded decode_input(std::string_view bytes, bool input_exhausted,
             std::size_t end = 3;
             while (end < bytes.size() && bytes[end] != 'M' && bytes[end] != 'm') ++end;
             if (end >= bytes.size()) return {DecodeStatus::incomplete, {}, {}, 0};
-            char const final_byte = bytes[end];
+            char const finalByte = bytes[end];
             consumed = end + 1;  // A malformed-but-terminated sequence is consumed.
             std::size_t pos = 3;
             // Each of Cb/Cx/Cy must be a non-empty run of digits followed by its
             // delimiter; Cy must end exactly at the final byte (no trailing junk).
             // Otherwise the sequence is malformed and dropped rather than
             // dispatching a command from garbage bytes.
-            auto parse_field = [&](std::int64_t& out) {
+            auto parseField = [&](std::int64_t& out) {
                 std::size_t const start = pos;
                 out = parseDecimal(bytes, pos);
                 return pos > start;
@@ -310,13 +310,13 @@ Decoded decode_input(std::string_view bytes, bool input_exhausted,
             std::int64_t cb = 0;
             std::int64_t cx = 0;
             std::int64_t cy = 0;
-            if (!parse_field(cb)) return {DecodeStatus::none, {}, {}, 0};
+            if (!parseField(cb)) return {DecodeStatus::none, {}, {}, 0};
             if (pos >= bytes.size() || bytes[pos] != ';') return {DecodeStatus::none, {}, {}, 0};
             ++pos;
-            if (!parse_field(cx)) return {DecodeStatus::none, {}, {}, 0};
+            if (!parseField(cx)) return {DecodeStatus::none, {}, {}, 0};
             if (pos >= bytes.size() || bytes[pos] != ';') return {DecodeStatus::none, {}, {}, 0};
             ++pos;
-            if (!parse_field(cy)) return {DecodeStatus::none, {}, {}, 0};
+            if (!parseField(cy)) return {DecodeStatus::none, {}, {}, 0};
             if (pos != end) return {DecodeStatus::none, {}, {}, 0};
             if (cb == 64 || cb == 65) {
                 Decoded decoded;
@@ -333,12 +333,12 @@ Decoded decode_input(std::string_view bytes, bool input_exhausted,
             PointerEvent event;
             event.column = static_cast<int>(cx > 0 ? cx - 1 : 0);
             event.row = static_cast<int>(cy > 0 ? cy - 1 : 0);
-            auto const button_bits = cb & 3;
-            event.button = button_bits == 0   ? PointerButton::left
-                           : button_bits == 1 ? PointerButton::middle
-                           : button_bits == 2 ? PointerButton::right
+            auto const buttonBits = cb & 3;
+            event.button = buttonBits == 0   ? PointerButton::left
+                           : buttonBits == 1 ? PointerButton::middle
+                           : buttonBits == 2 ? PointerButton::right
                                               : PointerButton::other;
-            event.kind = final_byte == 'm' ? PointerKind::release
+            event.kind = finalByte == 'm' ? PointerKind::release
                          : (cb & 32) != 0  ? PointerKind::drag
                                            : PointerKind::press;
             Decoded decoded;

@@ -45,7 +45,7 @@ struct PathValidation {
 [[nodiscard]] PathValidation validateWorkspaceRelativePath(
     std::string_view path,
     PathSyntax syntax,
-    LongPathPolicy long_paths = LongPathPolicy::Legacy) noexcept;
+    LongPathPolicy longPaths = LongPathPolicy::Legacy) noexcept;
 
 struct FileIdentity {
     std::uint64_t volume = 0;
@@ -66,7 +66,7 @@ public:
     ExclusiveFileLock& operator=(const ExclusiveFileLock&) = delete;
 
 private:
-    explicit ExclusiveFileLock(std::intptr_t native_handle) noexcept;
+    explicit ExclusiveFileLock(std::intptr_t nativeHandle) noexcept;
     friend std::optional<ExclusiveFileLock> tryLockFile(
         const std::filesystem::path&);
 
@@ -81,7 +81,7 @@ private:
 void setOwnerOnlyPermissions(const std::filesystem::path& path);
 
 [[nodiscard]] std::filesystem::path userCacheRoot(
-    std::string_view application_name);
+    std::string_view applicationName);
 
 void replaceFileAtomically(
     const std::filesystem::path& target,

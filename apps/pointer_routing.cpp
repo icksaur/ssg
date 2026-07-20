@@ -8,7 +8,7 @@ namespace ssg::app {
 
 PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
                               PointerKind kind, bool dragging,
-                              std::optional<ssg::DocumentPosition> drag_anchor,
+                              std::optional<ssg::DocumentPosition> dragAnchor,
                               PointerTargets const& targets) {
     PointerDispatch dispatch;
     // Only the left button drives editing actions in M8; other buttons are a
@@ -78,13 +78,13 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
             // cell with no document target (short line, blank row, or beyond the
             // viewport edge) dispatches nothing, so the selection holds at the
             // last in-viewport position (edge auto-scroll is M8-S2).
-            if (dragging && drag_anchor && hit.region == ssg::HitRegion::Editor &&
+            if (dragging && dragAnchor && hit.region == ssg::HitRegion::Editor &&
                 targets.document_position) {
                 dispatch.commands.push_back(
                     {"select.set_range",
                      ssg::SelectionCommandArguments{
                          std::nullopt,
-                         ssg::Selection{*drag_anchor, *targets.document_position}}});
+                         ssg::Selection{*dragAnchor, *targets.document_position}}});
             }
             return dispatch;
         case PointerKind::release:
@@ -112,11 +112,11 @@ WheelTarget route_wheel(ssg::HitRegion region) {
     }
 }
 
-std::optional<int> edge_scroll(bool dragging, int pointer_row,
+std::optional<int> edge_scroll(bool dragging, int pointerRow,
                                ssg::Rect const& content) {
     if (!dragging || content.height <= 0) return std::nullopt;
-    if (pointer_row < content.y) return -1;
-    if (pointer_row >= content.bottom()) return 1;
+    if (pointerRow < content.y) return -1;
+    if (pointerRow >= content.bottom()) return 1;
     return std::nullopt;
 }
 

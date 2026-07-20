@@ -10,7 +10,7 @@ namespace {
 // The 16 standard xterm base colors (indices 0..15).  These are the canonical
 // xterm defaults; a terminal may re-theme them, which is the accepted limitation
 // of reducing to 16 colors.
-constexpr std::array<SrgbColor, 16> k_base16{{
+constexpr std::array<SrgbColor, 16> kBase16{{
     {0, 0, 0},       {128, 0, 0},     {0, 128, 0},     {128, 128, 0},
     {0, 0, 128},     {128, 0, 128},   {0, 128, 128},   {192, 192, 192},
     {128, 128, 128}, {255, 0, 0},     {0, 255, 0},     {255, 255, 0},
@@ -34,15 +34,15 @@ std::uint32_t squaredDistance(SrgbColor a, SrgbColor b) {
 // `color`; ties break to the lowest index so the result is deterministic.
 std::uint8_t nearestIndex(SrgbColor color, int first, int last) {
     std::uint8_t best = static_cast<std::uint8_t>(first);
-    std::uint32_t best_distance =
+    std::uint32_t bestDistance =
         squaredDistance(color, xterm256Color(best));
     for (int index = first + 1; index <= last; ++index) {
         auto const candidate = static_cast<std::uint8_t>(index);
         std::uint32_t const distance =
             squaredDistance(color, xterm256Color(candidate));
-        if (distance < best_distance) {
+        if (distance < bestDistance) {
             best = candidate;
-            best_distance = distance;
+            bestDistance = distance;
         }
     }
     return best;
@@ -52,7 +52,7 @@ std::uint8_t nearestIndex(SrgbColor color, int first, int last) {
 
 SrgbColor xterm256Color(std::uint8_t index) {
     if (index < 16) {
-        return k_base16[index];
+        return kBase16[index];
     }
     if (index < 232) {
         int const offset = index - 16;

@@ -55,15 +55,15 @@ std::string reconstruct(std::string_view baseline,
 std::vector<std::string> normalized(const DiffFileView& view) {
     std::vector<std::string> result;
     for (const auto& change : view.changed_lines) {
-        const auto old_line = change.baseline_line
+        const auto oldLine = change.baseline_line
                                   ? std::to_string(*change.baseline_line)
                                   : "-";
-        const auto new_line =
+        const auto newLine =
             change.target_line ? std::to_string(*change.target_line) : "-";
         const char kind = change.kind == DiffLineKind::Modified
                               ? 'M'
                               : change.kind == DiffLineKind::Removed ? 'R' : 'A';
-        result.push_back(std::string{kind} + " " + old_line + " " + new_line);
+        result.push_back(std::string{kind} + " " + oldLine + " " + newLine);
     }
     return result;
 }

@@ -84,7 +84,7 @@ struct KeymapError {
 
 [[nodiscard]] std::vector<KeymapError> validateKeymap(
     const KeymapViewState& keymap,
-    std::span<const KeySequence> reserved_sequences);
+    std::span<const KeySequence> reservedSequences);
 [[nodiscard]] KeymapDelta deriveKeymapDelta(const KeymapViewState& previous,
                                               const KeymapViewState& current);
 
@@ -129,15 +129,15 @@ enum class TextRouting : std::uint8_t { Insert, PromptQuery, Ignore };
 // `reserved_sequences`), and is not shadowed by an earlier "*" binding of the
 // same sequence.  Used to enforce the settings.open escape hatch (I24, K6).
 [[nodiscard]] bool hasGlobalBinding(
-    const KeymapViewState& keymap, std::string_view command_id,
-    std::span<const KeySequence> reserved_sequences);
+    const KeymapViewState& keymap, std::string_view commandId,
+    std::span<const KeySequence> reservedSequences);
 
 // The preferred key sequence bound to `command_id` for display, chosen
 // deterministically (independent of binding order): the shortest sequence, then
 // the lexicographically least display form (K7).  Empty if the command is
 // unbound.
 [[nodiscard]] std::optional<KeySequence> preferredBinding(
-    const KeymapViewState& keymap, std::string_view command_id);
+    const KeymapViewState& keymap, std::string_view commandId);
 
 class CommittedText {
 public:

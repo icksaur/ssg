@@ -22,8 +22,8 @@ CommandResult rejected(CommandError error, Revision revision,
 }  // namespace
 
 struct EditorSession::Impl {
-    explicit Impl(CommandRegistry command_registry, CommandServices* services)
-        : registry{std::move(command_registry)}, services{services} {}
+    explicit Impl(CommandRegistry commandRegistry, CommandServices* services)
+        : registry{std::move(commandRegistry)}, services{services} {}
 
     mutable std::mutex mutex;
     CommandRegistry registry;
@@ -39,11 +39,11 @@ EditorSession::EditorSession(CommandRegistry registry, CommandServices* services
 EditorSession::~EditorSession() = default;
 
 AttachResult EditorSession::attach(InvocationPrincipal principal,
-                                   ViewId view_id) {
+                                   ViewId viewId) {
     std::lock_guard lock{impl_->mutex};
-    ClientId const client_id = principal.clientId();
+    ClientId const clientId = principal.clientId();
     auto [unused, inserted] = impl_->clients.emplace(
-        client_id, AttachedClient{std::move(principal), view_id});
+        clientId, AttachedClient{std::move(principal), viewId});
     if (!inserted) {
         return {AttachError::DuplicateClient,
                 "client ID is already attached"};
@@ -51,25 +51,25 @@ AttachResult EditorSession::attach(InvocationPrincipal principal,
     return {AttachError::None, {}};
 }
 
-bool EditorSession::detach(ClientId client_id) {
+bool EditorSession::detach(ClientId clientId) {
     std::lock_guard lock{impl_->mutex};
-    return impl_->clients.erase(client_id) != 0;
+    return impl_->clients.erase(clientId) != 0;
 }
 
-CommandResult EditorSession::dispatch(ClientId client_id,
+CommandResult EditorSession::dispatch(ClientId clientId,
                                       ClientCommand const& command) {
     std::lock_guard lock{impl_->mutex};
-    Revision const current_revision = impl_->revision;
+    Revision const currentRevision = impl_->revision;
 
-    auto const client = impl_->clients.find(client_id);
+    auto const client = impl_->clients.find(clientId);
     if (client == impl_->clients.end()) {
-        return rejected(CommandError::UnknownClient, current_revision,
+        return rejected(CommandError::UnknownClient, currentRevision,
                         "client ID is not attached");
     }
 
     auto const* registration = impl_->registry.find(command.id);
     if (registration == nullptr) {
-        return rejected(CommandError::UnknownCommand, current_revision,
+        return rejected(CommandError::UnknownCommand, currentRevision,
                         "command is not registered: " + command.id);
     }
 
@@ -77,7 +77,7 @@ CommandResult EditorSession::dispatch(ClientId client_id,
          registration->descriptor.required_capabilities) {
         if (!client->second.principal.hasCapability(capability)) {
             return rejected(
-                CommandError::CapabilityDenied, current_revision,
+                CommandError::CapabilityDenied, currentRevision,
                 "principal lacks required capability: " +
                     std::string{capability.value()});
         }
@@ -85,34 +85,34 @@ CommandResult EditorSession::dispatch(ClientId client_id,
 
     bool const mutates =
         registration->descriptor.effect == CommandEffect::Mutation;
-    if (mutates && command.base_revision != current_revision) {
-        return rejected(CommandError::StaleRevision, current_revision,
+    if (mutates && command.base_revision != currentRevision) {
+        return rejected(CommandError::StaleRevision, currentRevision,
                         "mutation base revision does not match session revision");
     }
     if (mutates &&
-        current_revision.value() ==
+        currentRevision.value() ==
             std::numeric_limits<std::uint64_t>::max()) {
-        return rejected(CommandError::RevisionExhausted, current_revision,
+        return rejected(CommandError::RevisionExhausted, currentRevision,
                         "session revision is exhausted");
     }
 
-    CommandContext context{current_revision, client->second.principal,
+    CommandContext context{currentRevision, client->second.principal,
                            impl_->services};
-    CommandHandlerResult handler_result;
+    CommandHandlerResult handlerResult;
     try {
-        handler_result = registration->handler(context, command.payload);
+        handlerResult = registration->handler(context, command.payload);
     } catch (std::exception const& exception) {
-        return rejected(CommandError::HandlerFailed, current_revision,
+        return rejected(CommandError::HandlerFailed, currentRevision,
                         "command handler threw: " +
                             std::string{exception.what()});
     } catch (...) {
-        return rejected(CommandError::HandlerFailed, current_revision,
+        return rejected(CommandError::HandlerFailed, currentRevision,
                         "command handler threw an unknown exception");
     }
 
-    if (!handler_result.accepted) {
-        return rejected(CommandError::HandlerFailed, current_revision,
-                        std::move(handler_result.message));
+    if (!handlerResult.accepted) {
+        return rejected(CommandError::HandlerFailed, currentRevision,
+                        std::move(handlerResult.message));
     }
 
     if (mutates) {
@@ -122,7 +122,7 @@ CommandResult EditorSession::dispatch(ClientId client_id,
         if (context.view_changed_) {
             impl_->topology.active_view = context.active_view_;
         }
-        impl_->revision = Revision{current_revision.value() + 1};
+        impl_->revision = Revision{currentRevision.value() + 1};
     }
     return {CommandError::None, impl_->revision, {}};
 }
@@ -147,9 +147,9 @@ SessionTopology EditorSession::topology() const {
 }
 
 std::optional<AttachedClient> EditorSession::attachedClient(
-    ClientId client_id) const {
+    ClientId clientId) const {
     std::lock_guard lock{impl_->mutex};
-    auto const found = impl_->clients.find(client_id);
+    auto const found = impl_->clients.find(clientId);
     if (found == impl_->clients.end()) {
         return std::nullopt;
     }

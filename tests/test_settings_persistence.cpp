@@ -78,17 +78,17 @@ TEST(linuxAndWindowsSeamsRestartWithTheSameSemantics) {
 
 TEST(workspaceKeysFollowPlatformIdentityRules) {
     TemporaryDirectory root{"identity"};
-    const auto linux_upper = ssg::linuxSettingsPaths(
+    const auto linuxUpper = ssg::linuxSettingsPaths(
         root.path() / "u", root.path() / "w", "/work/Project");
-    const auto linux_lower = ssg::linuxSettingsPaths(
+    const auto linuxLower = ssg::linuxSettingsPaths(
         root.path() / "u", root.path() / "w", "/work/project");
-    ASSERT_NE(linux_upper.workspace_file, linux_lower.workspace_file);
+    ASSERT_NE(linuxUpper.workspace_file, linuxLower.workspace_file);
 
-    const auto windows_upper = ssg::windowsSettingsPaths(
+    const auto windowsUpper = ssg::windowsSettingsPaths(
         root.path() / "u", root.path() / "w", R"(C:\Work\Project)");
-    const auto windows_lower = ssg::windowsSettingsPaths(
+    const auto windowsLower = ssg::windowsSettingsPaths(
         root.path() / "u", root.path() / "w", "c:/work/project");
-    ASSERT_EQ(windows_upper.workspace_file, windows_lower.workspace_file);
+    ASSERT_EQ(windowsUpper.workspace_file, windowsLower.workspace_file);
 }
 
 TEST(unknownFutureFieldSurvivesWithoutBecomingASetting) {
@@ -125,13 +125,13 @@ TEST(invalidSchemaOrKnownValueIsLoadAtomic) {
 
     writeText(paths.user_file, "schema=1\nindent_width=u32:99\n");
     const ssg::SettingsPersistence persistence{paths};
-    const auto invalid_value = persistence.load(settings);
-    ASSERT_FALSE(invalid_value.ok);
+    const auto invalidValue = persistence.load(settings);
+    ASSERT_FALSE(invalidValue.ok);
     ASSERT_EQ(settings.viewState(), before);
 
     writeText(paths.user_file, "schema=2\ntheme=s:future\n");
-    const auto invalid_schema = persistence.load(settings);
-    ASSERT_FALSE(invalid_schema.ok);
+    const auto invalidSchema = persistence.load(settings);
+    ASSERT_FALSE(invalidSchema.ok);
     ASSERT_EQ(settings.viewState(), before);
 }
 

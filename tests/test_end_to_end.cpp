@@ -46,20 +46,20 @@ constexpr TestSocket invalid_test_socket = INVALID_SOCKET;
 void close_test_socket(TestSocket s) { closesocket(s); }
 #else
 using TestSocket = int;
-constexpr TestSocket invalid_test_socket = -1;
+constexpr TestSocket kInvalidTestSocket = -1;
 void closeTestSocket(TestSocket s) { close(s); }
 #endif
 
 struct SocketOwner {
-    TestSocket socket{invalid_test_socket};
+    TestSocket socket{kInvalidTestSocket};
     explicit SocketOwner(TestSocket s) : socket{s} {}
     ~SocketOwner() {
-        if (socket != invalid_test_socket) closeTestSocket(socket);
+        if (socket != kInvalidTestSocket) closeTestSocket(socket);
     }
     SocketOwner(SocketOwner const&) = delete;
     SocketOwner& operator=(SocketOwner const&) = delete;
     SocketOwner(SocketOwner&& other) noexcept : socket{other.socket} {
-        other.socket = invalid_test_socket;
+        other.socket = kInvalidTestSocket;
     }
 };
 
@@ -130,7 +130,7 @@ SocketOwner connectWebsocket(std::uint16_t port) {
         throw std::runtime_error{"WSAStartup failed"};
 #endif
     SocketOwner owner{socket(AF_INET, SOCK_STREAM, 0)};
-    if (owner.socket == invalid_test_socket)
+    if (owner.socket == kInvalidTestSocket)
         throw std::runtime_error{"socket creation failed"};
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
@@ -191,15 +191,15 @@ public:
             sels.push_back({start, start});
         }
 
-        ssg::PromptStatusViewState prompt_status;
+        ssg::PromptStatusViewState promptStatus;
         if (state_.prompt_open) {
-            prompt_status.prompt = ssg::PromptViewState{
+            promptStatus.prompt = ssg::PromptViewState{
                 ssg::PromptKind::Path, "Open a workspace path",
                 {0, 2, 80, 1},
                 {{ssg::PromptControlKind::Input, "path", "Workspace path", "",
                   false, {0, 2, 80, 1}}}};
         }
-        prompt_status.status.items.push_back(
+        promptStatus.status.items.push_back(
             {ssg::StatusId{7}, ssg::StatusPriority::Information, 3,
              "Recovery is ready",
              {{"reopen", "Reopen closed tab", "tab.reopen_closed"}}});
@@ -275,7 +275,7 @@ public:
             {!state_.undo_text.empty(), !state_.redo_text.empty(),
              state_.undo_text.size() + state_.redo_text.size()},
             {{state_.clipboard}, state_.clipboard, std::nullopt, std::nullopt},
-            std::move(prompt_status),
+            std::move(promptStatus),
             {revision, false, {}, ssg::SearchMode::File, {}, std::nullopt, 0,
              false},
             {0, false, false, revision, {}, {}, {}, {}, std::nullopt,
@@ -333,9 +333,9 @@ struct EndToEndScenario {
     }
 
     ssg::SessionSnapshot snapshot(ssg::InvocationPrincipal const& principal,
-                                  ssg::ViewId view_id) const {
+                                  ssg::ViewId viewId) const {
         return ssg::assembleSessionSnapshot(
-            session->revision(), session->topology(), principal, view_id,
+            session->revision(), session->topology(), principal, viewId,
             model.viewport(), model.sections(session->revision()));
     }
 
@@ -359,8 +359,8 @@ public:
     }
 
     ssg::SessionSnapshot snapshot(ssg::SessionId const&,
-                                  ssg::ClientId client_id) override {
-        auto attached = scenario_.session->attachedClient(client_id);
+                                  ssg::ClientId clientId) override {
+        auto attached = scenario_.session->attachedClient(clientId);
         if (!attached) throw std::logic_error{"snapshot for detached client"};
         return scenario_.snapshot(attached->principal, attached->view_id);
     }
@@ -390,86 +390,86 @@ TEST(directApiLoopbackWebsocketTuiCanonicalStateMatchesPerStep) {
 
     // ── Direct API scenario ──
     EndToEndScenario direct;
-    ssg::InvocationPrincipal const direct_principal{
+    ssg::InvocationPrincipal const directPrincipal{
         ssg::ClientId{21}, ssg::InvocationOrigin::InProcess,
         {ssg::CapabilityId{"local_file_drop"}}};
-    ASSERT_TRUE(direct.session->attach(direct_principal, ssg::ViewId{21})
+    ASSERT_TRUE(direct.session->attach(directPrincipal, ssg::ViewId{21})
                     .accepted());
 
     // ── TUI scenario ──
-    EndToEndScenario tui_scenario;
-    ssg::InvocationPrincipal const tui_principal{
+    EndToEndScenario tuiScenario;
+    ssg::InvocationPrincipal const tuiPrincipal{
         ssg::ClientId{22}, ssg::InvocationOrigin::InProcess,
         {ssg::CapabilityId{"local_file_drop"}}};
-    ssg::tui::TuiClient tui_client{
-        *tui_scenario.session, tui_principal, ssg::ViewId{22},
+    ssg::tui::TuiClient tuiClient{
+        *tuiScenario.session, tuiPrincipal, ssg::ViewId{22},
         [&] {
-            return tui_scenario.snapshot(tui_principal, ssg::ViewId{22});
+            return tuiScenario.snapshot(tuiPrincipal, ssg::ViewId{22});
         }};
 
     // ── WebSocket scenario ──
-    EndToEndScenario ws_scenario;
-    ssg::InvocationPrincipal const ws_peer_principal{
+    EndToEndScenario wsScenario;
+    ssg::InvocationPrincipal const wsPeerPrincipal{
         ssg::ClientId{31}, ssg::InvocationOrigin::Websocket,
         {ssg::CapabilityId{"local_file_drop"}}};
-    PeerHost ws_host{ws_scenario, ws_peer_principal};
-    constexpr std::uint16_t ws_port = 18800;
-    ssg::HttpEditorServer ws_server{
-        *ws_scenario.session, ssg::buildCommandArgumentCodecRegistry(),
-        ws_host, {ws_port, "/session", 64, 128, 500ms}};
-    ws_server.start();
+    PeerHost wsHost{wsScenario, wsPeerPrincipal};
+    constexpr std::uint16_t wsPort = 18800;
+    ssg::HttpEditorServer wsServer{
+        *wsScenario.session, ssg::buildCommandArgumentCodecRegistry(),
+        wsHost, {wsPort, "/session", 64, 128, 500ms}};
+    wsServer.start();
     std::this_thread::sleep_for(30ms);
 
-    auto ws = connectWebsocket(ws_port);
-    FrameReader ws_reader{ws.socket};
+    auto ws = connectWebsocket(wsPort);
+    FrameReader wsReader{ws.socket};
     wsAttach(ws.socket, "ws-peer");
-    auto initial_snap = ssg::decodeSessionSnapshot(ws_reader.next().payload);
-    ASSERT_TRUE(initial_snap.accepted());
-    auto ws_snapshot = std::move(*initial_snap.snapshot);
-    auto ws_state = e2e::canonical(ws_snapshot);
-    ssg::Revision ws_revision = ws_snapshot.revision();
+    auto initialSnap = ssg::decodeSessionSnapshot(wsReader.next().payload);
+    ASSERT_TRUE(initialSnap.accepted());
+    auto wsSnapshot = std::move(*initialSnap.snapshot);
+    auto wsState = e2e::canonical(wsSnapshot);
+    ssg::Revision wsRevision = wsSnapshot.revision();
 
     auto const codec = ssg::buildCommandArgumentCodecRegistry();
 
     for (auto const& step : steps) {
         // Direct dispatch
-        auto direct_result = direct.session->dispatch(
-            direct_principal.clientId(),
+        auto directResult = direct.session->dispatch(
+            directPrincipal.clientId(),
             {step.command_id, direct.session->revision(), step.payload});
-        ASSERT_EQ(direct_result.accepted(), step.expected_accepted);
+        ASSERT_EQ(directResult.accepted(), step.expected_accepted);
 
         // TUI dispatch
-        auto tui_result =
-            tui_client.submit(step.command_id, step.payload);
-        ASSERT_EQ(tui_result.accepted(), step.expected_accepted);
+        auto tuiResult =
+            tuiClient.submit(step.command_id, step.payload);
+        ASSERT_EQ(tuiResult.accepted(), step.expected_accepted);
 
         // WebSocket dispatch
-        auto ws_encoded = ssg::encodeCommandRequest(
-            {step.command_id, ws_revision, step.payload}, codec);
-        sendAll(ws.socket, maskedFrame(0x2, ws_encoded));
-        auto ws_frame = ws_reader.next();
+        auto wsEncoded = ssg::encodeCommandRequest(
+            {step.command_id, wsRevision, step.payload}, codec);
+        sendAll(ws.socket, maskedFrame(0x2, wsEncoded));
+        auto wsFrame = wsReader.next();
         if (step.expected_accepted) {
-            auto ws_delta =
-                ssg::decodeSessionDelta(ws_frame.payload);
-            ASSERT_TRUE(ws_delta.accepted());
-            e2e::apply(ws_state, *ws_delta.delta);
-            ws_revision = ws_state.revision;
+            auto wsDelta =
+                ssg::decodeSessionDelta(wsFrame.payload);
+            ASSERT_TRUE(wsDelta.accepted());
+            e2e::apply(wsState, *wsDelta.delta);
+            wsRevision = wsState.revision;
         } else {
-            auto ws_cmd_result =
-                ssg::decodeCommandResult(ws_frame.payload);
-            ASSERT_TRUE(ws_cmd_result.accepted());
-            ASSERT_FALSE(ws_cmd_result.result->accepted());
+            auto wsCmdResult =
+                ssg::decodeCommandResult(wsFrame.payload);
+            ASSERT_TRUE(wsCmdResult.accepted());
+            ASSERT_FALSE(wsCmdResult.result->accepted());
         }
 
         // All paths project state from the snapshots each client observes.
-        auto direct_state =
-            e2e::canonical(direct.snapshot(direct_principal, ssg::ViewId{11}));
-        auto tui_state = e2e::canonical(tui_client.snapshot());
-        ASSERT_EQ(direct_state, tui_state);
-        ASSERT_EQ(direct_state, ws_state);
+        auto directState =
+            e2e::canonical(direct.snapshot(directPrincipal, ssg::ViewId{11}));
+        auto tuiState = e2e::canonical(tuiClient.snapshot());
+        ASSERT_EQ(directState, tuiState);
+        ASSERT_EQ(directState, wsState);
     }
 
-    ws_server.stop();
+    wsServer.stop();
 }
 
 // ─── Concurrent fixture model with real FollowEditsModel ─────────────────────
@@ -509,21 +509,21 @@ public:
         return ssg::CommandHandlerResult::success();
     }
 
-    void acceptExternalChange(std::string const& file_id,
+    void acceptExternalChange(std::string const& fileId,
                                 std::filesystem::path path,
-                                ssg::Revision source_rev) {
+                                ssg::Revision sourceRev) {
         std::lock_guard lock{mutex_};
-        ssg::DiffFileView file{ssg::DiffFileId{file_id}};
+        ssg::DiffFileView file{ssg::DiffFileId{fileId}};
         file.path = std::move(path);
         file.hunks.push_back(
             {.baseline_start = 10,
              .target_start = 10,
              .baseline_lines = {"old line\n"},
              .target_lines = {"new line\n"}});
-        current_diff_.revision = source_rev;
+        current_diff_.revision = sourceRev;
         current_diff_.files.push_back(file);
         (void)follow_model_.acceptExternalChange(
-            current_diff_.files.back(), source_rev);
+            current_diff_.files.back(), sourceRev);
     }
 
     ssg::FollowEditsViewState followViewState() const {
@@ -534,7 +534,7 @@ public:
     ssg::SessionSnapshotSections sections(ssg::Revision revision,
                                           ssg::ClientId client) const {
         std::lock_guard lock{mutex_};
-        auto first_row = per_client_row_.count(client)
+        auto firstRow = per_client_row_.count(client)
                              ? per_client_row_.at(client)
                              : std::uint32_t{0};
         ssg::DocumentPosition const pos{
@@ -545,7 +545,7 @@ public:
         shell.viewport = {80, 24};
         return {
             {revision, "concurrent", ssg::ByteOffset{0}},
-            {ssg::SelectionSet{{ssg::Selection{pos, pos}}}, first_row,
+            {ssg::SelectionSet{{ssg::Selection{pos, pos}}}, firstRow,
              0, std::nullopt},
             {false, false, 0},
             {{}, {}, std::nullopt, std::nullopt},
@@ -573,12 +573,12 @@ public:
 
     ssg::ViewportViewState viewport(ssg::ClientId client) const {
         std::lock_guard lock{mutex_};
-        auto first_row = per_client_row_.count(client)
+        auto firstRow = per_client_row_.count(client)
                              ? per_client_row_.at(client)
                              : std::uint32_t{0};
-        return {ssg::ViewportDimensions{80, 20}, first_row, 0, 100, {},
+        return {ssg::ViewportDimensions{80, 20}, firstRow, 0, 100, {},
                 {{0, 0, 0, ssg::CellIndex{0}, 0, 1}},
-                {100, 20, first_row, 80, first_row, 4}};
+                {100, 20, firstRow, 80, firstRow, 4}};
     }
 
 private:
@@ -602,9 +602,9 @@ struct ConcurrentScenario {
     }
 
     ssg::SessionSnapshot snapshot(ssg::InvocationPrincipal const& principal,
-                                  ssg::ViewId view_id) const {
+                                  ssg::ViewId viewId) const {
         return ssg::assembleSessionSnapshot(
-            session->revision(), session->topology(), principal, view_id,
+            session->revision(), session->topology(), principal, viewId,
             model.viewport(principal.clientId()),
             model.sections(session->revision(), principal.clientId()));
     }
@@ -628,8 +628,8 @@ public:
     }
 
     ssg::SessionSnapshot snapshot(ssg::SessionId const&,
-                                  ssg::ClientId client_id) override {
-        auto attached = scenario_.session->attachedClient(client_id);
+                                  ssg::ClientId clientId) override {
+        auto attached = scenario_.session->attachedClient(clientId);
         if (!attached) throw std::logic_error{"snapshot for detached client"};
         return scenario_.snapshot(attached->principal, attached->view_id);
     }
@@ -653,31 +653,31 @@ private:
 
 TEST(concurrentTuiAndWebsocketClientsShareFollowInterruption) {
     ConcurrentScenario scenario;
-    ssg::InvocationPrincipal const direct_principal{
+    ssg::InvocationPrincipal const directPrincipal{
         ssg::ClientId{41}, ssg::InvocationOrigin::InProcess};
-    ssg::InvocationPrincipal const ws_peer_principal{
+    ssg::InvocationPrincipal const wsPeerPrincipal{
         ssg::ClientId{42}, ssg::InvocationOrigin::Websocket};
 
     scenario.model.registerClient(ssg::ClientId{41},
                                    ssg::ViewportDimensions{80, 20});
 
     ASSERT_TRUE(
-        scenario.session->attach(direct_principal, ssg::ViewId{41}).accepted());
+        scenario.session->attach(directPrincipal, ssg::ViewId{41}).accepted());
 
-    constexpr std::uint16_t conc_port = 18801;
-    ConcurrentHost conc_host{scenario, ws_peer_principal};
-    ssg::HttpEditorServer conc_server{
+    constexpr std::uint16_t concPort = 18801;
+    ConcurrentHost concHost{scenario, wsPeerPrincipal};
+    ssg::HttpEditorServer concServer{
         *scenario.session, ssg::buildCommandArgumentCodecRegistry(),
-        conc_host, {conc_port, "/session", 64, 128, 500ms}};
-    conc_server.start();
+        concHost, {concPort, "/session", 64, 128, 500ms}};
+    concServer.start();
     std::this_thread::sleep_for(30ms);
 
-    auto ws = connectWebsocket(conc_port);
-    FrameReader ws_reader{ws.socket};
+    auto ws = connectWebsocket(concPort);
+    FrameReader wsReader{ws.socket};
     wsAttach(ws.socket, "conc-ws");
-    auto initial_ws = ssg::decodeSessionSnapshot(ws_reader.next().payload);
-    ASSERT_TRUE(initial_ws.accepted());
-    ssg::Revision ws_rev = initial_ws.snapshot->revision();
+    auto initialWs = ssg::decodeSessionSnapshot(wsReader.next().payload);
+    ASSERT_TRUE(initialWs.accepted());
+    ssg::Revision wsRev = initialWs.snapshot->revision();
 
     // Register WS client in the follow model now that we know it attached.
     scenario.model.registerClient(ssg::ClientId{42},
@@ -687,37 +687,37 @@ TEST(concurrentTuiAndWebsocketClientsShareFollowInterruption) {
 
     // Navigate direct client to row 3 and WS client to row 10 to establish
     // independent viewport offsets.
-    auto direct_scroll_result = scenario.session->dispatch(
-        direct_principal.clientId(),
+    auto directScrollResult = scenario.session->dispatch(
+        directPrincipal.clientId(),
         {"view.scroll_lines", scenario.session->revision(),
          ssg::ScrollLinesArguments{3}});
-    ASSERT_TRUE(direct_scroll_result.accepted());
+    ASSERT_TRUE(directScrollResult.accepted());
     // Sync ws_rev: direct dispatch advanced the session revision.
-    ws_rev = direct_scroll_result.revision;
+    wsRev = directScrollResult.revision;
 
-    auto ws_scroll = ssg::encodeCommandRequest(
-        {"view.scroll_lines", ws_rev, ssg::ScrollLinesArguments{10}}, codec);
-    sendAll(ws.socket, maskedFrame(0x2, ws_scroll));
-    auto scroll_delta = ssg::decodeSessionDelta(ws_reader.next().payload);
-    ASSERT_TRUE(scroll_delta.accepted());
-    ws_rev = scroll_delta.delta->revision();
+    auto wsScroll = ssg::encodeCommandRequest(
+        {"view.scroll_lines", wsRev, ssg::ScrollLinesArguments{10}}, codec);
+    sendAll(ws.socket, maskedFrame(0x2, wsScroll));
+    auto scrollDelta = ssg::decodeSessionDelta(wsReader.next().payload);
+    ASSERT_TRUE(scrollDelta.accepted());
+    wsRev = scrollDelta.delta->revision();
 
     // Both clients have different scroll offsets in the follow model.
-    auto follow_state_before = scenario.model.followViewState();
-    bool found_diff = false;
-    if (follow_state_before.clients.size() == 2) {
-        found_diff =
-            follow_state_before.clients[0].offset.first_row !=
-            follow_state_before.clients[1].offset.first_row;
+    auto followStateBefore = scenario.model.followViewState();
+    bool foundDiff = false;
+    if (followStateBefore.clients.size() == 2) {
+        foundDiff =
+            followStateBefore.clients[0].offset.first_row !=
+            followStateBefore.clients[1].offset.first_row;
     }
     // Viewport-independent: per-client offsets diverged from independent navigation.
-    ASSERT_TRUE(found_diff);
+    ASSERT_TRUE(foundDiff);
 
     // After user navigation both clients are now in paused mode (apply_navigation
     // with NavigationClass::user transitions the shared FollowEditsModel to paused).
-    auto direct_snap_after_scroll =
-        scenario.snapshot(direct_principal, ssg::ViewId{41});
-    ASSERT_EQ(direct_snap_after_scroll.sections().follow_edits.mode,
+    auto directSnapAfterScroll =
+        scenario.snapshot(directPrincipal, ssg::ViewId{41});
+    ASSERT_EQ(directSnapAfterScroll.sections().follow_edits.mode,
               ssg::FollowMode::Paused);
 
     // Accept changes to two watched files while paused; resume must choose the
@@ -729,52 +729,52 @@ TEST(concurrentTuiAndWebsocketClientsShareFollowInterruption) {
         "watched-file-b", std::filesystem::path{"/workspace/watched-b.txt"},
         ssg::Revision{scenario.session->revision().value() + 2});
 
-    auto queued_state = scenario.model.followViewState();
-    ASSERT_EQ(queued_state.mode, ssg::FollowMode::Paused);
-    ASSERT_EQ(queued_state.queued_targets.size(), std::size_t{2});
+    auto queuedState = scenario.model.followViewState();
+    ASSERT_EQ(queuedState.mode, ssg::FollowMode::Paused);
+    ASSERT_EQ(queuedState.queued_targets.size(), std::size_t{2});
 
     // Explicit pause dispatch is idempotent from the already-paused state.
-    auto pause_result = scenario.session->dispatch(
-        direct_principal.clientId(),
+    auto pauseResult = scenario.session->dispatch(
+        directPrincipal.clientId(),
         {"follow_edits.pause", scenario.session->revision(), {}});
-    ASSERT_TRUE(pause_result.accepted());
+    ASSERT_TRUE(pauseResult.accepted());
     // Sync ws_rev: direct pause advanced the session revision.
-    ws_rev = pause_result.revision;
+    wsRev = pauseResult.revision;
 
     // Direct snapshot confirms paused.
-    auto direct_snap_paused =
-        scenario.snapshot(direct_principal, ssg::ViewId{41});
-    ASSERT_EQ(direct_snap_paused.sections().follow_edits.mode,
+    auto directSnapPaused =
+        scenario.snapshot(directPrincipal, ssg::ViewId{41});
+    ASSERT_EQ(directSnapPaused.sections().follow_edits.mode,
               ssg::FollowMode::Paused);
 
     // WebSocket client resumes follow: shared state transitions both clients.
-    auto ws_resume = ssg::encodeCommandRequest(
-        {"follow_edits.resume", ws_rev, std::any{}}, codec);
-    sendAll(ws.socket, maskedFrame(0x2, ws_resume));
-    auto resume_delta = ssg::decodeSessionDelta(ws_reader.next().payload);
-    ASSERT_TRUE(resume_delta.accepted());
-    ws_rev = resume_delta.delta->revision();
+    auto wsResume = ssg::encodeCommandRequest(
+        {"follow_edits.resume", wsRev, std::any{}}, codec);
+    sendAll(ws.socket, maskedFrame(0x2, wsResume));
+    auto resumeDelta = ssg::decodeSessionDelta(wsReader.next().payload);
+    ASSERT_TRUE(resumeDelta.accepted());
+    wsRev = resumeDelta.delta->revision();
 
     // Both clients now see following: the global mode is shared across paths.
-    auto direct_snap_resumed =
-        scenario.snapshot(direct_principal, ssg::ViewId{41});
-    ASSERT_EQ(direct_snap_resumed.sections().follow_edits.mode,
+    auto directSnapResumed =
+        scenario.snapshot(directPrincipal, ssg::ViewId{41});
+    ASSERT_EQ(directSnapResumed.sections().follow_edits.mode,
               ssg::FollowMode::Following);
-    auto follow_state_after = scenario.model.followViewState();
-    ASSERT_EQ(follow_state_after.mode, ssg::FollowMode::Following);
-    ASSERT_TRUE(follow_state_after.active_target.has_value());
-    ASSERT_EQ(follow_state_after.active_target->id,
+    auto followStateAfter = scenario.model.followViewState();
+    ASSERT_EQ(followStateAfter.mode, ssg::FollowMode::Following);
+    ASSERT_TRUE(followStateAfter.active_target.has_value());
+    ASSERT_EQ(followStateAfter.active_target->id,
               ssg::DiffFileId{"watched-file-b"});
 
     // After resume+activate, both clients jump to the same hunk position
     // (designed behavior: activate() resets offsets to the newest hunk line).
     // The independence property was already verified in follow_state_before above.
-    if (follow_state_after.clients.size() == 2) {
-        ASSERT_EQ(follow_state_after.clients[0].offset.first_row,
-                  follow_state_after.clients[1].offset.first_row);
+    if (followStateAfter.clients.size() == 2) {
+        ASSERT_EQ(followStateAfter.clients[0].offset.first_row,
+                  followStateAfter.clients[1].offset.first_row);
     }
 
-    conc_server.stop();
+    concServer.stop();
 }
 
 }  // namespace

@@ -23,26 +23,26 @@ PromptRequest palettePromptRequest() {
 // (see doc/spec-palette.md P1).
 CommandHandlerResult validatePaletteTarget(EditorRuntime::Impl& runtime,
                                              CommandContext& context,
-                                             std::string const& command_id) {
-    bool const palette_open = runtime.prompt.active() && runtime.prompt.request() &&
+                                             std::string const& commandId) {
+    bool const paletteOpen = runtime.prompt.active() && runtime.prompt.request() &&
                               runtime.prompt.request()->kind == PromptKind::Palette;
-    if (!palette_open) return failure("palette.execute requires the palette to be open");
+    if (!paletteOpen) return failure("palette.execute requires the palette to be open");
     auto const candidates = runtime.descriptors();
     bool const published =
         std::any_of(candidates.begin(), candidates.end(),
-                    [&](auto const& candidate) { return candidate.id == command_id; });
+                    [&](auto const& candidate) { return candidate.id == commandId; });
     if (!published) {
-        return failure("command is not in the palette candidate set: " + command_id);
+        return failure("command is not in the palette candidate set: " + commandId);
     }
     auto const descriptors = p0CommandDescriptors();
     auto const found = std::find_if(
         descriptors.begin(), descriptors.end(),
-        [&](CommandDescriptor const& descriptor) { return descriptor.id == command_id; });
+        [&](CommandDescriptor const& descriptor) { return descriptor.id == commandId; });
     if (found != descriptors.end()) {
         for (auto const& capability : found->required_capabilities) {
             if (!context.principal().hasCapability(capability)) {
                 return failure("principal lacks capability for palette command: " +
-                               command_id);
+                               commandId);
             }
         }
     }
@@ -127,9 +127,9 @@ CommandHandlerResult treeCommand(EditorRuntime::Impl& runtime, std::string_view 
 }
 
 CommandHandlerResult diffCommand(EditorRuntime::Impl& runtime, std::string_view id, std::any const& payload) {
-    auto const* file_id = payloadAs<DiffFileId>(payload);
-    if (file_id == nullptr) return failure(std::string{id} + " requires a diff file ID payload");
-    auto file = runtime.diff.file(*file_id);
+    auto const* fileId = payloadAs<DiffFileId>(payload);
+    if (fileId == nullptr) return failure(std::string{id} + " requires a diff file ID payload");
+    auto file = runtime.diff.file(*fileId);
     if (!file) return failure("diff file does not exist");
     if (id == "diff.next_hunk") (void)nextDiffHunk(file->get(), std::nullopt);
     else if (id == "diff.previous_hunk") (void)previousDiffHunk(file->get(), std::nullopt);
@@ -146,26 +146,26 @@ CommandHandlerResult followCommand(EditorRuntime::Impl& runtime, std::string_vie
 } // namespace
 
 void bindRuntimeNavigation(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime) {
-    auto search_commands = searchCommandSet();
-    auto tree_commands = treeCommandSet();
-    auto diff_commands = diffCommandSet();
-    auto follow_commands = followEditsCommandSet();
-    for (auto const& descriptor : search_commands.descriptors()) {
+    auto searchCommands = searchCommandSet();
+    auto treeCommands = treeCommandSet();
+    auto diffCommands = diffCommandSet();
+    auto followCommands = followEditsCommandSet();
+    for (auto const& descriptor : searchCommands.descriptors()) {
         builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext& context, std::any const& payload) {
             return runtime.runTransaction([&] { return searchCommand(runtime, context, descriptor.id, payload); });
         });
     }
-    for (auto const& descriptor : tree_commands.descriptors()) {
+    for (auto const& descriptor : treeCommands.descriptors()) {
         builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const& payload) {
             return runtime.runTransaction([&] { return treeCommand(runtime, descriptor.id, payload); });
         });
     }
-    for (auto const& descriptor : diff_commands.descriptors()) {
+    for (auto const& descriptor : diffCommands.descriptors()) {
         builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const& payload) {
             return runtime.runTransaction([&] { return diffCommand(runtime, descriptor.id, payload); });
         });
     }
-    for (auto const& descriptor : follow_commands.descriptors()) {
+    for (auto const& descriptor : followCommands.descriptors()) {
         builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const&) {
             return runtime.runTransaction([&] { return followCommand(runtime, descriptor.id); });
         });

@@ -63,7 +63,7 @@ struct DocumentSnapshot {
 
 class Document {
 public:
-    explicit Document(std::string_view initial_text = {},
+    explicit Document(std::string_view initialText = {},
                       DocumentMode mode = DocumentMode::Edit);
     // Construct from decoder-validated UTF-8 WITHOUT re-validating (open path).
     // The bytes are moved into the piece tree, not copied.

@@ -26,18 +26,18 @@ std::vector<std::pair<std::string, bool>> parseCatalog(std::string const& json) 
     std::vector<std::pair<std::string, bool>> entries;
     std::size_t position = 0;
     while ((position = json.find("\"id\"", position)) != std::string::npos) {
-        auto const value_begin = json.find('"', json.find(':', position) + 1) + 1;
-        auto const value_end = json.find('"', value_begin);
-        auto const object_end = json.find('}', value_end);
-        auto const lua_key = json.find("\"lua\"", value_end);
-        ASSERT_TRUE(value_begin != std::string::npos);
-        ASSERT_TRUE(value_end != std::string::npos);
-        ASSERT_TRUE(lua_key < object_end);
-        auto const lua_value = json.find_first_not_of(" \t\r\n:",
-            lua_key + std::string_view{"\"lua\""}.size());
-        entries.emplace_back(json.substr(value_begin, value_end - value_begin),
-                             json.compare(lua_value, 4, "true") == 0);
-        position = object_end;
+        auto const valueBegin = json.find('"', json.find(':', position) + 1) + 1;
+        auto const valueEnd = json.find('"', valueBegin);
+        auto const objectEnd = json.find('}', valueEnd);
+        auto const luaKey = json.find("\"lua\"", valueEnd);
+        ASSERT_TRUE(valueBegin != std::string::npos);
+        ASSERT_TRUE(valueEnd != std::string::npos);
+        ASSERT_TRUE(luaKey < objectEnd);
+        auto const luaValue = json.find_first_not_of(" \t\r\n:",
+            luaKey + std::string_view{"\"lua\""}.size());
+        entries.emplace_back(json.substr(valueBegin, valueEnd - valueBegin),
+                             json.compare(luaValue, 4, "true") == 0);
+        position = objectEnd;
     }
     return entries;
 }

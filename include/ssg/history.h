@@ -100,9 +100,9 @@ public:
 
     [[nodiscard]] HistoryResult applyEdit(
         Document& document, const EditTransaction& transaction,
-        const SelectionSet& selections_before,
-        const SelectionSet& selections_after, HistoryEditKind kind,
-        std::uint64_t timestamp_ms);
+        const SelectionSet& selectionsBefore,
+        const SelectionSet& selectionsAfter, HistoryEditKind kind,
+        std::uint64_t timestampMs);
     [[nodiscard]] HistoryResult undo(Document& document);
     [[nodiscard]] HistoryResult redo(Document& document);
 

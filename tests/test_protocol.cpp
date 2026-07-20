@@ -32,20 +32,20 @@ std::vector<std::string> catalogIds() {
     std::ifstream input{SSG_REQUIRED_COMMANDS_PATH};
     std::string json{std::istreambuf_iterator<char>{input},
                      std::istreambuf_iterator<char>{}};
-    std::regex const id_pattern{R"json("id"\s*:\s*"([^"]+)")json"};
+    std::regex const idPattern{R"json("id"\s*:\s*"([^"]+)")json"};
     std::vector<std::string> ids;
-    for (std::sregex_iterator it{json.begin(), json.end(), id_pattern}, end;
+    for (std::sregex_iterator it{json.begin(), json.end(), idPattern}, end;
          it != end; ++it) {
         ids.push_back((*it)[1].str());
     }
     return ids;
 }
 
-ssg::SelectionViewState selection(std::uint64_t byte, std::uint32_t first_row) {
+ssg::SelectionViewState selection(std::uint64_t byte, std::uint32_t firstRow) {
     ssg::DocumentPosition const position{
         ssg::ByteOffset{byte}, ssg::LineIndex{0}, ssg::CellIndex{byte}};
     return {ssg::SelectionSet{{ssg::Selection{position, position}}},
-            first_row, 0, std::nullopt};
+            firstRow, 0, std::nullopt};
 }
 
 ssg::SessionSnapshotSections sections(ssg::Revision revision, std::string marker) {
@@ -92,14 +92,14 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision, std::string marker
     };
 }
 
-ssg::ViewportViewState clientView(std::uint32_t first_row) {
+ssg::ViewportViewState clientView(std::uint32_t firstRow) {
     return {ssg::ViewportDimensions{20, 8},
-            first_row,
+            firstRow,
             0,  // first_visual_column
-            first_row + 8,
+            firstRow + 8,
             {},
             {},
-            {first_row + 8, 8, first_row, first_row, 0, 8}};
+            {firstRow + 8, 8, firstRow, firstRow, 0, 8}};
 }
 
 // ---------------------------------------------------------------------------
@@ -362,14 +362,14 @@ void appendFieldKey(std::string& out, std::string const& key) {
 // public encode_command_request() itself throws before producing bytes for
 // an id the registry does not recognize.
 std::string buildCommandRequestMessage(std::string const& id,
-                                          std::uint64_t base_revision) {
+                                          std::uint64_t baseRevision) {
     std::string body;
     body += wireU8(7);
     appendU32(body, 3);
     appendFieldKey(body, "id");
     appendTextValue(body, id);
     appendFieldKey(body, "base_revision");
-    appendUintValue(body, base_revision);
+    appendUintValue(body, baseRevision);
     appendFieldKey(body, "payload");
     appendNullValue(body);
 
@@ -494,50 +494,50 @@ TEST(twoClientCapabilityAndViewportIsolationSurvivesTheWire) {
                                  ssg::InvocationOrigin::Websocket},
         ssg::ViewId{11}, clientView(7), std::move(shared));
 
-    auto const first_decoded =
+    auto const firstDecoded =
         ssg::decodeSessionSnapshot(ssg::encodeSessionSnapshot(first));
-    auto const second_decoded =
+    auto const secondDecoded =
         ssg::decodeSessionSnapshot(ssg::encodeSessionSnapshot(second));
-    ASSERT_TRUE(first_decoded.accepted());
-    ASSERT_TRUE(second_decoded.accepted());
+    ASSERT_TRUE(firstDecoded.accepted());
+    ASSERT_TRUE(secondDecoded.accepted());
 
-    ASSERT_EQ(first_decoded.snapshot->client().capabilities.size(),
+    ASSERT_EQ(firstDecoded.snapshot->client().capabilities.size(),
              std::size_t{1});
-    ASSERT_TRUE(second_decoded.snapshot->client().capabilities.empty());
-    ASSERT_EQ(first_decoded.snapshot->client().viewport.first_visual_row,
+    ASSERT_TRUE(secondDecoded.snapshot->client().capabilities.empty());
+    ASSERT_EQ(firstDecoded.snapshot->client().viewport.first_visual_row,
              std::uint32_t{2});
-    ASSERT_EQ(second_decoded.snapshot->client().viewport.first_visual_row,
+    ASSERT_EQ(secondDecoded.snapshot->client().viewport.first_visual_row,
              std::uint32_t{7});
-    ASSERT_EQ(first_decoded.snapshot->sections(), second_decoded.snapshot->sections());
+    ASSERT_EQ(firstDecoded.snapshot->sections(), secondDecoded.snapshot->sections());
 }
 
 TEST(sessionSnapshotRoundTripsTreeScrollFields) {
-    auto sections_value = sections(ssg::Revision{4}, "alpha");
-    ssg::TreeNode node_a{ssg::TreeNodeId{"files:a"}, std::nullopt, "a.txt",
+    auto sectionsValue = sections(ssg::Revision{4}, "alpha");
+    ssg::TreeNode nodeA{ssg::TreeNodeId{"files:a"}, std::nullopt, "a.txt",
                          ssg::TreeNodeKind::File};
-    ssg::TreeNode node_b{ssg::TreeNodeId{"files:b"}, std::nullopt, "b.txt",
+    ssg::TreeNode nodeB{ssg::TreeNodeId{"files:b"}, std::nullopt, "b.txt",
                          ssg::TreeNodeKind::File};
     ssg::TreeProviderView provider{
         ssg::TreeProviderId{"files"}, ssg::TreeProviderKind::Filesystem,
-        {ssg::TreeNodeView{node_a, 0, false}, ssg::TreeNodeView{node_b, 0, false}},
+        {ssg::TreeNodeView{nodeA, 0, false}, ssg::TreeNodeView{nodeB, 0, false}},
         ssg::TreeNodeId{"files:b"}};
     provider.first_visible = 3;
     provider.scrollbar = ssg::scrollbarMetrics(40, 9, 3);
     provider.visible_node_ids = {ssg::TreeNodeId{"files:a"},
                                  ssg::TreeNodeId{"files:b"}};
-    sections_value.tree = ssg::TreeViewState{ssg::TreeRevision{7}, {provider}};
+    sectionsValue.tree = ssg::TreeViewState{ssg::TreeRevision{7}, {provider}};
     // Also exercise the shell panel scrollbar gutter geometry on the wire.
-    sections_value.shell.panel = ssg::Rect{0, 1, 24, 10};
-    sections_value.shell.panel_scrollbar = ssg::Rect{23, 2, 1, 9};
+    sectionsValue.shell.panel = ssg::Rect{0, 1, 24, 10};
+    sectionsValue.shell.panel_scrollbar = ssg::Rect{23, 2, 1, 9};
     // And the typed per-tab hit map.
-    sections_value.shell.tab_hits = {ssg::TabHit{ssg::Rect{24, 0, 10, 1}, 0},
+    sectionsValue.shell.tab_hits = {ssg::TabHit{ssg::Rect{24, 0, 10, 1}, 0},
                                      ssg::TabHit{ssg::Rect{34, 0, 8, 1}, 1}};
 
     auto snapshot = ssg::assembleSessionSnapshot(
         ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
-        ssg::ViewId{9}, clientView(3), std::move(sections_value));
+        ssg::ViewId{9}, clientView(3), std::move(sectionsValue));
     auto const decoded =
         ssg::decodeSessionSnapshot(ssg::encodeSessionSnapshot(snapshot));
     ASSERT_TRUE(decoded.accepted());
@@ -618,21 +618,21 @@ TEST(binaryFrameRoundTripsThroughTheWire) {
 }
 
 TEST(binaryFrameDecodedBytesOutliveTheInputBuffer) {
-    std::optional<ssg::BinaryFrame> surviving_frame;
+    std::optional<ssg::BinaryFrame> survivingFrame;
     {
         std::string bytes = ssg::encodeBinaryFrame(ssg::BinaryFrame{
             1, ssg::BinaryPayloadKind::DroppedContent, 7, {1, 2, 3, 4, 5, 6}});
         auto decoded = ssg::decodeBinaryFrame(bytes);
         ASSERT_TRUE(decoded.accepted());
-        surviving_frame = std::move(decoded.frame);
+        survivingFrame = std::move(decoded.frame);
         // bytes (the input buffer) is destroyed at the end of this scope;
         // surviving_frame must not reference it.
         bytes.assign(bytes.size(), '\0');
     }
-    ASSERT_TRUE(surviving_frame.has_value());
-    ASSERT_EQ(surviving_frame->bytes,
+    ASSERT_TRUE(survivingFrame.has_value());
+    ASSERT_EQ(survivingFrame->bytes,
              (std::vector<std::uint8_t>{1, 2, 3, 4, 5, 6}));
-    ASSERT_EQ(surviving_frame->request_id, std::uint64_t{7});
+    ASSERT_EQ(survivingFrame->request_id, std::uint64_t{7});
 }
 
 TEST(binaryFrameRejectsAnUnsupportedPayloadKind) {
@@ -941,7 +941,7 @@ TEST(commandRequestRoundTripsWithReplaceReplacementArguments) {
 TEST(findReplaceViewStateRoundTripsReplacementThroughTheWire) {
     // A snapshot carrying a non-empty replacement must preserve it through the
     // snapshot codec and a delta replay (F2a).
-    auto with_replacement = [](ssg::Revision revision, std::string marker,
+    auto withReplacement = [](ssg::Revision revision, std::string marker,
                                std::string replacement) {
         auto s = sections(revision, std::move(marker));
         s.find_replace.replacement = std::move(replacement);
@@ -952,7 +952,7 @@ TEST(findReplaceViewStateRoundTripsReplacementThroughTheWire) {
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(3),
-        with_replacement(ssg::Revision{4}, "alpha", "dog"));
+        withReplacement(ssg::Revision{4}, "alpha", "dog"));
     auto const decoded =
         ssg::decodeSessionSnapshot(ssg::encodeSessionSnapshot(snapshot));
     ASSERT_TRUE(decoded.accepted());
@@ -967,19 +967,19 @@ TEST(findReplaceViewStateRoundTripsReplacementThroughTheWire) {
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(1),
-        with_replacement(ssg::Revision{4}, "a", ""));
+        withReplacement(ssg::Revision{4}, "a", ""));
     auto after = ssg::assembleSessionSnapshot(
         ssg::Revision{5}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(1),
-        with_replacement(ssg::Revision{4}, "a", "dog"));
+        withReplacement(ssg::Revision{4}, "a", "dog"));
     auto const delta = ssg::deriveSessionDelta(before, after);
-    auto decoded_delta =
+    auto decodedDelta =
         ssg::decodeSessionDelta(ssg::encodeSessionDelta(delta));
-    ASSERT_TRUE(decoded_delta.accepted());
-    ASSERT_TRUE(decoded_delta.delta.has_value());
-    auto replayed = ssg::replaySessionDelta(before, *decoded_delta.delta);
+    ASSERT_TRUE(decodedDelta.accepted());
+    ASSERT_TRUE(decodedDelta.delta.has_value());
+    auto replayed = ssg::replaySessionDelta(before, *decodedDelta.delta);
     ASSERT_TRUE(replayed.accepted());
     ASSERT_TRUE(replayed.snapshot.has_value());
     if (replayed.snapshot) {

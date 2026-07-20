@@ -65,8 +65,8 @@ struct ScrollbarMetrics {
 // `thumb_start`, and `thumb_size` collapse to a no-thumb sentinel.  Shared by
 // every scrollable region (editor, tree, palette) so thumb math lives in one
 // place (see doc/spec-scroll.md).
-ScrollbarMetrics scrollbarMetrics(uint32_t total_rows, uint32_t viewport_rows,
-                                   uint32_t first_row);
+ScrollbarMetrics scrollbarMetrics(uint32_t totalRows, uint32_t viewportRows,
+                                   uint32_t firstRow);
 
 // A resolved scroll view for a simple list region: the clamped first visible
 // item, how many items are visible, and the scrollbar geometry.  This is the
@@ -88,11 +88,11 @@ struct ListScrollView {
 // `keep_selection_visible == false` the (clamped) `first_visible` is honored
 // verbatim and the selection may fall outside the window, exactly as the editor
 // caret can.  `selected` is an absolute item index.
-ListScrollView computeListScrollView(uint32_t total_items,
-                                        uint32_t viewport_rows,
-                                        uint32_t first_visible,
+ListScrollView computeListScrollView(uint32_t totalItems,
+                                        uint32_t viewportRows,
+                                        uint32_t firstVisible,
                                         std::optional<uint32_t> selected,
-                                        bool keep_selection_visible);
+                                        bool keepSelectionVisible);
 
 
 struct ViewportViewState {
@@ -120,9 +120,9 @@ struct ViewportDelta {
 };
 
 ViewportViewState computeViewport(
-    std::span<const CellRun> logical_lines,
+    std::span<const CellRun> logicalLines,
     ViewportDimensions dimensions,
-    uint32_t requested_first_visual_row = 0);
+    uint32_t requestedFirstVisualRow = 0);
 
 // Word-wrap-OFF viewport projection.  Builds the SAME ViewportViewState shape as
 // compute_viewport for a NON-wrapping document, but in O(visible rows) grapheme
@@ -135,17 +135,17 @@ ViewportViewState computeViewport(
 // reference oracle (INV-projection-equivalence).  `tab_width` must match the full
 // path's (4 today).  Hit-target byte offsets are document-absolute.
 ViewportViewState computeViewportUnwrapped(
-    std::string_view document_text,
+    std::string_view documentText,
     ViewportDimensions dimensions,
-    uint32_t requested_first_visual_row,
-    uint32_t requested_first_visual_column,
-    int tab_width);
+    uint32_t requestedFirstVisualRow,
+    uint32_t requestedFirstVisualColumn,
+    int tabWidth);
 
 ViewportViewState scrollViewportBy(
-    std::span<const CellRun> logical_lines,
+    std::span<const CellRun> logicalLines,
     ViewportDimensions dimensions,
-    uint32_t current_first_visual_row,
-    int64_t row_delta);
+    uint32_t currentFirstVisualRow,
+    int64_t rowDelta);
 
 ViewportDelta deriveViewportDelta(const ViewportViewState& previous,
                                     const ViewportViewState& current);

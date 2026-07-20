@@ -36,25 +36,25 @@ TEST(formatKeySequenceIsCompactAndHuman) {
 }
 
 TEST(preferredBindingIsDeterministic) {
-    const auto short_seq = *ssg::parseKeySequence({"Escape", "KeyS"});
-    const auto long_seq = *ssg::parseKeySequence({"Escape", "KeyF", "KeyT"});
+    const auto shortSeq = *ssg::parseKeySequence({"Escape", "KeyS"});
+    const auto longSeq = *ssg::parseKeySequence({"Escape", "KeyF", "KeyT"});
     // Two bindings for one command: the shorter wins regardless of order.
-    ssg::KeymapViewState a{"m", {{long_seq, "cmd", "*"}, {short_seq, "cmd", "*"}}};
-    ssg::KeymapViewState b{"m", {{short_seq, "cmd", "*"}, {long_seq, "cmd", "*"}}};
-    auto a_pref = ssg::preferredBinding(a, "cmd");
-    auto b_pref = ssg::preferredBinding(b, "cmd");
-    ASSERT_TRUE(a_pref.has_value());
-    ASSERT_TRUE(b_pref.has_value());
-    ASSERT_EQ(*a_pref, short_seq);
-    ASSERT_EQ(*b_pref, short_seq);
+    ssg::KeymapViewState a{"m", {{longSeq, "cmd", "*"}, {shortSeq, "cmd", "*"}}};
+    ssg::KeymapViewState b{"m", {{shortSeq, "cmd", "*"}, {longSeq, "cmd", "*"}}};
+    auto aPref = ssg::preferredBinding(a, "cmd");
+    auto bPref = ssg::preferredBinding(b, "cmd");
+    ASSERT_TRUE(aPref.has_value());
+    ASSERT_TRUE(bPref.has_value());
+    ASSERT_EQ(*aPref, shortSeq);
+    ASSERT_EQ(*bPref, shortSeq);
 
     // Equal length: the lexicographically least display form wins.
-    const auto esc_a = *ssg::parseKeySequence({"Escape", "KeyA"});
-    const auto esc_b = *ssg::parseKeySequence({"Escape", "KeyB"});
-    ssg::KeymapViewState c{"m", {{esc_b, "cmd", "*"}, {esc_a, "cmd", "*"}}};
-    auto c_pref = ssg::preferredBinding(c, "cmd");
-    ASSERT_TRUE(c_pref.has_value());
-    ASSERT_EQ(*c_pref, esc_a);
+    const auto escA = *ssg::parseKeySequence({"Escape", "KeyA"});
+    const auto escB = *ssg::parseKeySequence({"Escape", "KeyB"});
+    ssg::KeymapViewState c{"m", {{escB, "cmd", "*"}, {escA, "cmd", "*"}}};
+    auto cPref = ssg::preferredBinding(c, "cmd");
+    ASSERT_TRUE(cPref.has_value());
+    ASSERT_EQ(*cPref, escA);
 
     // Unbound command -> no preferred binding.
     ASSERT_FALSE(ssg::preferredBinding(a, "other").has_value());

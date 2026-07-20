@@ -250,7 +250,7 @@ std::string formatKeySequence(const KeySequence& sequence) {
 
 std::vector<KeymapError> validateKeymap(
     const KeymapViewState& keymap,
-    std::span<const KeySequence> reserved_sequences) {
+    std::span<const KeySequence> reservedSequences) {
     std::vector<KeymapError> errors;
     if (keymap.name.empty()) {
         errors.push_back(
@@ -281,7 +281,7 @@ std::vector<KeymapError> validateKeymap(
                               "binding context is not '*' or a focus target"});
         }
         if (std::ranges::any_of(
-                reserved_sequences, [&](const auto& reserved) {
+                reservedSequences, [&](const auto& reserved) {
                     return startsWithSequence(binding.sequence, reserved);
                 })) {
             errors.push_back({KeymapErrorCode::ReservedBinding, index,
@@ -303,12 +303,12 @@ std::vector<KeymapError> validateKeymap(
         // Checked against all indices so the error does not depend on which of
         // the two is declared first (reported once, on the focus binding).
         if (binding.context != "*" && !binding.context.empty()) {
-            const bool globally_shadowed = std::ranges::any_of(
+            const bool globallyShadowed = std::ranges::any_of(
                 keymap.bindings, [&](const KeyBinding& other) {
                     return other.context == "*" &&
                            other.sequence == binding.sequence;
                 });
-            if (globally_shadowed) {
+            if (globallyShadowed) {
                 errors.push_back({KeymapErrorCode::UnreachableBinding, index,
                                   "a global binding shadows this binding"});
             }
@@ -358,7 +358,7 @@ KeymapResolution resolveKeySequence(const KeymapViewState& keymap,
         return {KeymapMatchKind::None, {}};
     }
     const KeyBinding* match = nullptr;
-    bool has_pending = false;
+    bool hasPending = false;
     for (const auto& binding : keymap.bindings) {
         if (!eligibleIn(binding, context)) {
             continue;
@@ -374,13 +374,13 @@ KeymapResolution resolveKeySequence(const KeymapViewState& keymap,
                 match = &binding;
             }
         } else if (isStrictPrefix(pending, binding.sequence)) {
-            has_pending = true;
+            hasPending = true;
         }
     }
     if (match != nullptr) {
         return {KeymapMatchKind::Resolved, match->command_id};
     }
-    return {has_pending ? KeymapMatchKind::Pending : KeymapMatchKind::None, {}};
+    return {hasPending ? KeymapMatchKind::Pending : KeymapMatchKind::None, {}};
 }
 
 TextRouting textRouting(std::string_view context) noexcept {
@@ -394,14 +394,14 @@ TextRouting textRouting(std::string_view context) noexcept {
 }
 
 bool hasGlobalBinding(const KeymapViewState& keymap,
-                        std::string_view command_id,
-                        std::span<const KeySequence> reserved_sequences) {
+                        std::string_view commandId,
+                        std::span<const KeySequence> reservedSequences) {
     for (std::size_t index = 0; index < keymap.bindings.size(); ++index) {
         const auto& binding = keymap.bindings[index];
-        if (binding.context != "*" || binding.command_id != command_id) {
+        if (binding.context != "*" || binding.command_id != commandId) {
             continue;
         }
-        if (std::ranges::any_of(reserved_sequences, [&](const auto& reserved) {
+        if (std::ranges::any_of(reservedSequences, [&](const auto& reserved) {
                 return startsWithSequence(binding.sequence, reserved);
             })) {
             continue;
@@ -421,21 +421,21 @@ bool hasGlobalBinding(const KeymapViewState& keymap,
 }
 
 std::optional<KeySequence> preferredBinding(const KeymapViewState& keymap,
-                                             std::string_view command_id) {
+                                             std::string_view commandId) {
     const KeySequence* best = nullptr;
-    std::string best_display;
+    std::string bestDisplay;
     for (const auto& binding : keymap.bindings) {
-        if (binding.command_id != command_id) continue;
+        if (binding.command_id != commandId) continue;
         if (best == nullptr || binding.sequence.size() < best->size()) {
             best = &binding.sequence;
-            best_display = formatKeySequence(binding.sequence);
+            bestDisplay = formatKeySequence(binding.sequence);
             continue;
         }
         if (binding.sequence.size() == best->size()) {
             auto display = formatKeySequence(binding.sequence);
-            if (display < best_display) {
+            if (display < bestDisplay) {
                 best = &binding.sequence;
-                best_display = std::move(display);
+                bestDisplay = std::move(display);
             }
         }
     }
@@ -451,8 +451,8 @@ std::optional<CommittedText> CommittedText::fromUtf8(std::string text) {
 }
 
 ScrollFractionArguments::ScrollFractionArguments(
-    std::uint32_t numerator_value, std::uint32_t denominator_value)
-    : numerator{numerator_value}, denominator{denominator_value} {
+    std::uint32_t numeratorValue, std::uint32_t denominatorValue)
+    : numerator{numeratorValue}, denominator{denominatorValue} {
     if (denominator == 0 || numerator > denominator) {
         throw std::invalid_argument(
             "scroll fraction requires 0 <= numerator <= denominator");

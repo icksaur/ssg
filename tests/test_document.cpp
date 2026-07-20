@@ -198,7 +198,7 @@ TEST(utf8TextAndBoundariesAreValidatedAtomically) {
     ASSERT_EQ(document.snapshot().text, std::string("a\xE4\xB8\xADz"));
 
     Document rejected("a\xC3\xA9z");
-    const auto rejected_before = rejected.snapshot();
+    const auto rejectedBefore = rejected.snapshot();
     ASSERT_EQ(document.apply(transaction(
                   document.revision(), {edit(2, 0, "x")}))
                   .error,
@@ -215,7 +215,7 @@ TEST(utf8TextAndBoundariesAreValidatedAtomically) {
                   rejected.revision(), {edit(1, 2, std::string("x\0y", 3))}))
                   .error,
               DocumentError::InvalidUtf8);
-    ASSERT_EQ(rejected.snapshot(), rejected_before);
+    ASSERT_EQ(rejected.snapshot(), rejectedBefore);
 }
 
 TEST(invalidConstructionIsActionable) {
@@ -238,7 +238,7 @@ TEST(emptyAndNoopTransactionsAreRejected) {
 
 TEST(snapshotIsOwningAndRevisionAdvancesOncePerTransaction) {
     Document document("abc");
-    const auto old_snapshot = document.snapshot();
+    const auto oldSnapshot = document.snapshot();
 
     const auto result = document.apply(transaction(
         document.revision(), {edit(0, 1, "A"), edit(3, 0, "!")}));
@@ -246,8 +246,8 @@ TEST(snapshotIsOwningAndRevisionAdvancesOncePerTransaction) {
     ASSERT_TRUE(result.accepted());
     ASSERT_EQ(result.revision, Revision{2});
     ASSERT_EQ(document.revision(), Revision{2});
-    ASSERT_EQ(old_snapshot.text, std::string("abc"));
-    ASSERT_FALSE(old_snapshot.dirty);
+    ASSERT_EQ(oldSnapshot.text, std::string("abc"));
+    ASSERT_FALSE(oldSnapshot.dirty);
     ASSERT_EQ(document.snapshot().text, std::string("Abc!"));
     ASSERT_TRUE(document.snapshot().dirty);
 }

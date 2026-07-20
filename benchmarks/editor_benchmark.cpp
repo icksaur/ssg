@@ -33,10 +33,10 @@
 namespace {
 
 using Clock = std::chrono::steady_clock;
-constexpr std::size_t target_bytes = 10U * 1024U * 1024U;
-constexpr std::size_t operation_count = 10'000;
-constexpr std::size_t warmup_count = 1'000;
-constexpr std::size_t repetitions = 5;
+constexpr std::size_t kTargetBytes = 10U * 1024U * 1024U;
+constexpr std::size_t kOperationCount = 10'000;
+constexpr std::size_t kWarmupCount = 1'000;
+constexpr std::size_t kRepetitions = 5;
 
 struct Operation {
     bool insert;
@@ -99,11 +99,11 @@ struct Timings {
         0x682e6ff3, 0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
         0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2};
     std::vector<std::uint8_t> bytes(input.begin(), input.end());
-    auto const bit_length = static_cast<std::uint64_t>(bytes.size()) * 8U;
+    auto const bitLength = static_cast<std::uint64_t>(bytes.size()) * 8U;
     bytes.push_back(0x80);
     while ((bytes.size() % 64U) != 56U) bytes.push_back(0);
     for (int shift = 56; shift >= 0; shift -= 8)
-        bytes.push_back(static_cast<std::uint8_t>(bit_length >> shift));
+        bytes.push_back(static_cast<std::uint8_t>(bitLength >> shift));
 
     std::array<std::uint32_t, 8> h{
         0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
@@ -193,17 +193,17 @@ struct Timings {
 [[nodiscard]] std::string expandCorpus(std::string const& seed) {
     if (seed.empty()) throw std::runtime_error{"empty benchmark corpus"};
     std::string result;
-    result.reserve(target_bytes);
-    while (result.size() + seed.size() <= target_bytes)
+    result.reserve(kTargetBytes);
+    while (result.size() + seed.size() <= kTargetBytes)
         result.append(seed);
-    auto const remaining = target_bytes - result.size();
+    auto const remaining = kTargetBytes - result.size();
     std::size_t prefix = remaining;
     while (prefix < seed.size() &&
            (static_cast<unsigned char>(seed[prefix]) & 0xc0U) == 0x80U) {
         --prefix;
     }
     result.append(seed.data(), prefix);
-    result.append(target_bytes - result.size(), ' ');
+    result.append(kTargetBytes - result.size(), ' ');
     return result;
 }
 
@@ -240,9 +240,9 @@ void verifyInputs(std::string const& seed, std::string const& script) {
 void verifyCorrectness(std::string const& base,
                         std::vector<Operation> const& operations,
                         Timings& timings) {
-    if (base.size() != target_bytes)
+    if (base.size() != kTargetBytes)
         throw std::runtime_error{"expanded corpus is not exactly 10 MiB"};
-    if (operations.size() != operation_count)
+    if (operations.size() != kOperationCount)
         throw std::runtime_error{"operation script must contain exactly 10000 operations"};
 
     ssg::Document document{base};
@@ -262,9 +262,9 @@ void verifyCorrectness(std::string const& base,
 
     ssg::EditorSession idle{
         ssg::CommandRegistry{std::vector<ssg::CommandSet>{}}};
-    double const cpu_start = processCpuMilliseconds();
+    double const cpuStart = processCpuMilliseconds();
     std::this_thread::sleep_for(std::chrono::milliseconds{100});
-    timings.idle_cpu_milliseconds = processCpuMilliseconds() - cpu_start;
+    timings.idle_cpu_milliseconds = processCpuMilliseconds() - cpuStart;
     if (timings.idle_cpu_milliseconds > 10.0)
         throw std::runtime_error{"idle session consumed polling CPU"};
 }
@@ -272,14 +272,14 @@ void verifyCorrectness(std::string const& base,
 void measureEdits(std::string const& base,
                    std::vector<Operation> const& operations,
                    Timings& timings) {
-    for (std::size_t repetition = 0; repetition < repetitions; ++repetition) {
+    for (std::size_t repetition = 0; repetition < kRepetitions; ++repetition) {
         ssg::Document document{base};
         for (std::size_t i = 0; i < operations.size(); ++i) {
             auto const start = Clock::now();
             auto result = apply(document, operations[i]);
             auto const elapsed = Clock::now() - start;
             if (!result.accepted()) throw std::runtime_error{result.message};
-            if (i >= warmup_count)
+            if (i >= kWarmupCount)
                 timings.edit_microseconds.push_back(
                     std::chrono::duration<double, std::micro>(elapsed).count());
         }
@@ -291,7 +291,7 @@ void measureEdits(std::string const& base,
 void measureCommandDelta(std::vector<Operation> const& operations,
                            Timings& timings) {
     std::string const initial(16U * 1024U, 'a');
-    for (std::size_t repetition = 0; repetition < repetitions; ++repetition) {
+    for (std::size_t repetition = 0; repetition < kRepetitions; ++repetition) {
         ssg::Document document{initial};
         ssg::CommandSet commands{{{
             {"benchmark.edit", ssg::CommandEffect::Mutation, {}},
@@ -326,7 +326,7 @@ void measureCommandDelta(std::vector<Operation> const& operations,
             if (!result.accepted() || !delta.has_value())
                 throw std::runtime_error{"command-to-delta cycle failed"};
             view = std::move(after);
-            if (i >= warmup_count)
+            if (i >= kWarmupCount)
                 timings.command_delta_microseconds.push_back(
                     std::chrono::duration<double, std::micro>(elapsed).count());
         }
@@ -336,7 +336,7 @@ void measureCommandDelta(std::vector<Operation> const& operations,
 }
 
 void measureOpenViewport(std::string const& base, Timings& timings) {
-    for (std::size_t repetition = 0; repetition < repetitions; ++repetition) {
+    for (std::size_t repetition = 0; repetition < kRepetitions; ++repetition) {
         auto const start = Clock::now();
         ssg::Document document{base};
         auto snapshot = document.snapshot();
@@ -403,11 +403,11 @@ void enforce(Timings const& timings) {
 
 int main(int argc, char** argv) {
     try {
-        bool const verify_only =
+        bool const verifyOnly =
             argc == 2 && std::string_view{argv[1]} == "--verify-only";
-        bool const enforce_limits =
+        bool const enforceLimits =
             argc == 2 && std::string_view{argv[1]} == "--enforce";
-        if (argc > 2 || (argc == 2 && !verify_only && !enforce_limits))
+        if (argc > 2 || (argc == 2 && !verifyOnly && !enforceLimits))
             throw std::runtime_error{"usage: editor_benchmark [--verify-only|--enforce]"};
 
         auto const seed = readFile(SSG_PERFORMANCE_CORPUS);
@@ -417,7 +417,7 @@ int main(int argc, char** argv) {
         auto const base = expandCorpus(seed);
         Timings timings;
         verifyCorrectness(base, operations, timings);
-        if (verify_only) {
+        if (verifyOnly) {
             std::cout << "performance correctness verified\n";
             return 0;
         }
@@ -425,7 +425,7 @@ int main(int argc, char** argv) {
         measureCommandDelta(operations, timings);
         measureOpenViewport(base, timings);
         printReport(timings);
-        if (enforce_limits) enforce(timings);
+        if (enforceLimits) enforce(timings);
         return 0;
     } catch (std::exception const& error) {
         std::cerr << "editor_benchmark: " << error.what() << '\n';

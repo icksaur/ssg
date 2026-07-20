@@ -52,17 +52,17 @@ constexpr std::array<std::pair<std::string_view, std::string_view>, 34> kLabels{
 // Down".  Underscores become spaces; each word's first letter is uppercased.
 std::string humanizeSegment(std::string_view segment) {
     std::string result;
-    bool word_start = true;
+    bool wordStart = true;
     for (char raw : segment) {
         if (raw == '_') {
             result += ' ';
-            word_start = true;
+            wordStart = true;
             continue;
         }
         auto ch = static_cast<unsigned char>(raw);
-        if (word_start) {
+        if (wordStart) {
             result += static_cast<char>(std::toupper(ch));
-            word_start = false;
+            wordStart = false;
         } else {
             result += static_cast<char>(ch);
         }
@@ -70,14 +70,14 @@ std::string humanizeSegment(std::string_view segment) {
     return result;
 }
 
-std::string humanize(std::string_view command_id) {
+std::string humanize(std::string_view commandId) {
     std::string result;
     std::size_t begin = 0;
-    while (begin <= command_id.size()) {
-        auto dot = command_id.find('.', begin);
-        auto end = dot == std::string_view::npos ? command_id.size() : dot;
+    while (begin <= commandId.size()) {
+        auto dot = commandId.find('.', begin);
+        auto end = dot == std::string_view::npos ? commandId.size() : dot;
         if (!result.empty()) result += ' ';
-        result += humanizeSegment(command_id.substr(begin, end - begin));
+        result += humanizeSegment(commandId.substr(begin, end - begin));
         if (dot == std::string_view::npos) break;
         begin = dot + 1;
     }
@@ -86,11 +86,11 @@ std::string humanize(std::string_view command_id) {
 
 }  // namespace
 
-std::string commandLabel(std::string_view command_id) {
+std::string commandLabel(std::string_view commandId) {
     for (const auto& [id, label] : kLabels) {
-        if (id == command_id) return std::string{label};
+        if (id == commandId) return std::string{label};
     }
-    return humanize(command_id);
+    return humanize(commandId);
 }
 
 }  // namespace ssg

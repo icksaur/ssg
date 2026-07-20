@@ -37,9 +37,9 @@ CommandHandlerResult scrollPages(EditorRuntime::Impl& runtime, std::any const& p
     auto const* arguments = payloadAs<ScrollPagesArguments>(payload);
     if (arguments == nullptr) return failure("view.scroll_pages requires scroll-pages payload");
     // A page is the real pane height cached from the last snapshot, not a fake 24.
-    auto const page_rows = static_cast<std::int64_t>(
+    auto const pageRows = static_cast<std::int64_t>(
         std::max<std::uint32_t>(runtime.last_pane_content_rows, 1));
-    auto rows = static_cast<std::int64_t>(runtime.requested_first_visual_row) + arguments->pages * page_rows;
+    auto rows = static_cast<std::int64_t>(runtime.requested_first_visual_row) + arguments->pages * pageRows;
     runtime.requested_first_visual_row = rows < 0 ? 0U : static_cast<std::uint32_t>(rows);
     runtime.selection.first_visual_row = runtime.requested_first_visual_row;
     return success();

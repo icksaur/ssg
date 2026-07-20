@@ -63,8 +63,8 @@ bool decodeUtf8(std::string_view text, ScalarText& out) {
     return true;
 }
 
-char32_t folded(char32_t value, bool case_sensitive) {
-    if (!case_sensitive && value >= U'A' && value <= U'Z') {
+char32_t folded(char32_t value, bool caseSensitive) {
+    if (!caseSensitive && value >= U'A' && value <= U'Z') {
         return value + (U'a' - U'A');
     }
     return value;
@@ -519,14 +519,14 @@ std::string replacedText(std::string_view original,
 }  // namespace
 
 FindResult findMatches(std::string_view text, const FindRequest& request) {
-    ScalarText decoded_text;
-    ScalarText decoded_query;
-    if (!decodeUtf8(text, decoded_text) ||
-        !decodeUtf8(request.query, decoded_query)) {
+    ScalarText decodedText;
+    ScalarText decodedQuery;
+    if (!decodeUtf8(text, decodedText) ||
+        !decodeUtf8(request.query, decodedQuery)) {
         return {FindReplaceError::InvalidUtf8, {}, "input is not valid UTF-8"};
     }
     std::size_t lower = 0;
-    std::size_t upper = decoded_text.values.size();
+    std::size_t upper = decodedText.values.size();
     if (request.options.selection_only) {
         if (!request.selection ||
             request.selection->begin > request.selection->end) {
@@ -534,9 +534,9 @@ FindResult findMatches(std::string_view text, const FindRequest& request) {
                     "selection-limited find requires an ordered selection"};
         }
         const auto begin =
-            scalarIndex(decoded_text, request.selection->begin.value());
+            scalarIndex(decodedText, request.selection->begin.value());
         const auto end =
-            scalarIndex(decoded_text, request.selection->end.value());
+            scalarIndex(decodedText, request.selection->end.value());
         if (!begin || !end) {
             return {FindReplaceError::InvalidSelection, {},
                     "selection must use UTF-8 boundaries"};
@@ -545,32 +545,32 @@ FindResult findMatches(std::string_view text, const FindRequest& request) {
         upper = *end;
     }
     if (!request.options.regex) {
-        return literalMatches(decoded_text, decoded_query, request, lower,
+        return literalMatches(decodedText, decodedQuery, request, lower,
                                upper);
     }
-    if (decoded_query.values.empty()) {
+    if (decodedQuery.values.empty()) {
         return {};
     }
-    if (decoded_query.values.size() > 4096) {
+    if (decodedQuery.values.size() > 4096) {
         return {FindReplaceError::InvalidPattern, {},
                 "regex pattern exceeds the complexity limit"};
     }
-    if (decoded_query.values.size() > request.work_budget) {
+    if (decodedQuery.values.size() > request.work_budget) {
         return {FindReplaceError::BudgetExhausted, {},
                 "regex work budget exhausted while parsing"};
     }
 
-    RegexParser parser{decoded_query.values};
+    RegexParser parser{decodedQuery.values};
     const auto root = parser.parse();
     if (!root) {
         return {FindReplaceError::InvalidPattern, {},
                 "regex pattern is invalid"};
     }
-    MatchContext context{decoded_text,
+    MatchContext context{decodedText,
                          request.options.case_sensitive,
                          lower,
                          upper,
-                         request.work_budget - decoded_query.values.size(),
+                         request.work_budget - decodedQuery.values.size(),
                          request.cancelled};
     FindResult result;
     std::size_t at = lower;
@@ -585,15 +585,15 @@ FindResult findMatches(std::string_view text, const FindRequest& request) {
         if (!ends.empty()) {
             if (request.options.whole_word) {
                 std::erase_if(ends, [&](std::size_t end) {
-                    return !wholeWordMatch(decoded_text, at, end, lower,
+                    return !wholeWordMatch(decodedText, at, end, lower,
                                              upper);
                 });
             }
             if (!ends.empty()) {
                 const auto end = *std::max_element(ends.begin(), ends.end());
                 result.matches.push_back(
-                    {ByteOffset{decoded_text.bytes[at]},
-                     ByteOffset{decoded_text.bytes[end]}});
+                    {ByteOffset{decodedText.bytes[at]},
+                     ByteOffset{decodedText.bytes[end]}});
                 if (end > at) {
                     at = end;
                     continue;
@@ -771,9 +771,9 @@ void FindReplaceController::previous() {
 
 FindReplaceOperationResult FindReplaceController::replaceCurrent(
     Document& document, DocumentHistory& history,
-    const SelectionSet& selections_before,
-    const SelectionSet& selections_after, std::string replacement,
-    std::uint64_t timestamp_ms) {
+    const SelectionSet& selectionsBefore,
+    const SelectionSet& selectionsAfter, std::string replacement,
+    std::uint64_t timestampMs) {
     if (document.revision() != state_.source_revision) {
         return operationFailure(FindReplaceError::StaleRevision,
                                  document.revision(),
@@ -793,15 +793,15 @@ FindReplaceOperationResult FindReplaceController::replaceCurrent(
         state_.source_revision,
         {{match.begin, match.end.value() - match.begin.value(),
           std::move(replacement)}}};
-    auto history_result = history.applyEdit(
-        document, transaction, selections_before, selections_after,
-        HistoryEditKind::Other, timestamp_ms);
-    if (!history_result.accepted()) {
+    auto historyResult = history.applyEdit(
+        document, transaction, selectionsBefore, selectionsAfter,
+        HistoryEditKind::Other, timestampMs);
+    if (!historyResult.accepted()) {
         return operationFailure(
-            history_result.error == HistoryError::StaleDocument
+            historyResult.error == HistoryError::StaleDocument
                 ? FindReplaceError::StaleRevision
                 : FindReplaceError::DocumentRejected,
-            history_result.revision, history_result.message);
+            historyResult.revision, historyResult.message);
     }
     ++state_.generation;
     evaluate(document.snapshot());
@@ -810,9 +810,9 @@ FindReplaceOperationResult FindReplaceController::replaceCurrent(
 
 FindReplaceOperationResult FindReplaceController::replaceAll(
     Document& document, DocumentHistory& history,
-    const SelectionSet& selections_before,
-    const SelectionSet& selections_after, std::string replacement,
-    std::uint64_t timestamp_ms) {
+    const SelectionSet& selectionsBefore,
+    const SelectionSet& selectionsAfter, std::string replacement,
+    std::uint64_t timestampMs) {
     if (document.revision() != state_.source_revision) {
         return operationFailure(FindReplaceError::StaleRevision,
                                  document.revision(),
@@ -837,15 +837,15 @@ FindReplaceOperationResult FindReplaceController::replaceAll(
                                  document.revision(),
                                  "replacement would not change the document");
     }
-    auto history_result = history.applyEdit(
-        document, transaction, selections_before, selections_after,
-        HistoryEditKind::Other, timestamp_ms);
-    if (!history_result.accepted()) {
+    auto historyResult = history.applyEdit(
+        document, transaction, selectionsBefore, selectionsAfter,
+        HistoryEditKind::Other, timestampMs);
+    if (!historyResult.accepted()) {
         return operationFailure(
-            history_result.error == HistoryError::StaleDocument
+            historyResult.error == HistoryError::StaleDocument
                 ? FindReplaceError::StaleRevision
                 : FindReplaceError::DocumentRejected,
-            history_result.revision, history_result.message);
+            historyResult.revision, historyResult.message);
     }
     ++state_.generation;
     evaluate(document.snapshot());
@@ -857,31 +857,31 @@ const FindReplaceViewState& FindReplaceController::viewState() const noexcept {
 }
 
 WorkspacePreviewResult previewWorkspaceReplace(
-    const FindReplaceWorkspace& workspace, Revision source_revision,
+    const FindReplaceWorkspace& workspace, Revision sourceRevision,
     const FindRequest& request, std::string replacement) {
     if (request.options.selection_only) {
         return {FindReplaceError::InvalidSelection, std::nullopt,
                 "workspace replace cannot use a document selection"};
     }
-    const auto snapshot = workspace.snapshot(source_revision);
-    if (snapshot.revision != source_revision) {
+    const auto snapshot = workspace.snapshot(sourceRevision);
+    if (snapshot.revision != sourceRevision) {
         return {FindReplaceError::StaleRevision, std::nullopt,
                 "workspace snapshot revision is stale"};
     }
-    WorkspaceReplacePreview preview{source_revision,
+    WorkspaceReplacePreview preview{sourceRevision,
                                     request.query,
                                     std::move(replacement),
                                     request.options,
                                     {}};
-    const auto per_file_budget =
+    const auto perFileBudget =
         snapshot.files.empty()
             ? request.work_budget
             : request.work_budget /
                   static_cast<std::uint64_t>(snapshot.files.size());
     for (const auto& file : snapshot.files) {
-        auto file_request = request;
-        file_request.work_budget = per_file_budget;
-        auto result = findMatches(file.text, file_request);
+        auto fileRequest = request;
+        fileRequest.work_budget = perFileBudget;
+        auto result = findMatches(file.text, fileRequest);
         if (!result.accepted()) {
             return {result.error, std::nullopt, std::move(result.message)};
         }
@@ -898,8 +898,8 @@ WorkspacePreviewResult previewWorkspaceReplace(
 
 WorkspaceApplyResult applyWorkspaceReplace(
     FindReplaceWorkspace& workspace, const WorkspaceReplacePreview& preview,
-    WorkspaceRecoverySink& recovery_sink) {
-    return workspace.apply(preview, recovery_sink);
+    WorkspaceRecoverySink& recoverySink) {
+    return workspace.apply(preview, recoverySink);
 }
 
 WorkspaceApplyResult recoverWorkspaceReplace(

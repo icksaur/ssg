@@ -3,7 +3,7 @@
 #include "test_helpers.h"
 
 TEST(testLibraryName) {
-    ASSERT_EQ(ssg::libraryName, "ssg");
+    ASSERT_EQ(ssg::kLibraryName, "ssg");
 }
 
 int main() {

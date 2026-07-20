@@ -71,7 +71,7 @@ enum class InvocationOrigin : std::uint8_t {
 
 class InvocationPrincipal {
 public:
-    InvocationPrincipal(ClientId client_id, InvocationOrigin origin,
+    InvocationPrincipal(ClientId clientId, InvocationOrigin origin,
                         std::vector<CapabilityId> capabilities = {});
     InvocationPrincipal(InvocationPrincipal const&) = default;
     InvocationPrincipal(InvocationPrincipal&&) noexcept = default;
@@ -196,7 +196,7 @@ private:
 
 class CommandRegistry {
 public:
-    explicit CommandRegistry(std::vector<CommandSet> command_sets);
+    explicit CommandRegistry(std::vector<CommandSet> commandSets);
     ~CommandRegistry();
 
     CommandRegistry(CommandRegistry const&) = delete;
@@ -205,7 +205,7 @@ public:
     CommandRegistry& operator=(CommandRegistry&&) noexcept;
 
     [[nodiscard]] CommandRegistration const* find(
-        std::string_view command_id) const;
+        std::string_view commandId) const;
 
 private:
     struct Impl;

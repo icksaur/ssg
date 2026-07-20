@@ -30,6 +30,6 @@ struct DocumentDelta {
     DocumentViewState const& before, DocumentViewState const& after);
 [[nodiscard]] std::optional<DocumentViewState> replayDocumentDelta(
     DocumentViewState const& before, DocumentDelta const& delta,
-    ByteOffset target_caret);
+    ByteOffset targetCaret);
 
 }  // namespace ssg

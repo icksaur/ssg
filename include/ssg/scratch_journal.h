@@ -40,7 +40,7 @@ enum class JournalDocumentKeyKind {
 class JournalDocumentKey {
 public:
     [[nodiscard]] static JournalDocumentKey saved(
-        std::string_view workspace_relative_path);
+        std::string_view workspaceRelativePath);
     [[nodiscard]] static JournalDocumentKey untitled(
         UntitledDocumentId id);
 

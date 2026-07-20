@@ -15,7 +15,7 @@ class TemporaryDirectory {
 public:
     TemporaryDirectory()
         : path_(std::filesystem::temp_directory_path() /
-                ("ssg-tree-" + std::to_string(++sequence_))) {
+                ("ssg-tree-" + std::to_string(++sequence))) {
         std::filesystem::remove_all(path_);
         std::filesystem::create_directories(path_);
     }
@@ -25,7 +25,7 @@ public:
     const std::filesystem::path& path() const { return path_; }
 
 private:
-    inline static unsigned sequence_ = 0;
+    inline static unsigned sequence = 0;
     std::filesystem::path path_;
 };
 
@@ -49,9 +49,9 @@ TEST(filesystemSnapshotIsStableSortedAndDoesNotFollowSymlinks) {
     std::ofstream(temporary.path() / "z-dir" / "child.txt") << "child";
     std::ofstream(temporary.path() / "b.txt") << "b";
     std::ofstream(temporary.path() / "a.txt") << "a";
-    std::error_code symlink_error;
+    std::error_code symlinkError;
     std::filesystem::create_directory_symlink(
-        temporary.path() / "z-dir", temporary.path() / "a-link", symlink_error);
+        temporary.path() / "z-dir", temporary.path() / "a-link", symlinkError);
 
     const auto first = filesystemTreeSnapshot(
         TreeProviderId{"files"}, temporary.path(), TreeRevision{1});
@@ -63,18 +63,18 @@ TEST(filesystemSnapshotIsStableSortedAndDoesNotFollowSymlinks) {
     std::vector<std::string> expected{
         "files:.", "files:a-dir", "files:a-link", "files:a.txt", "files:b.txt",
         "files:z-dir", "files:z-dir/child.txt"};
-    if (symlink_error) {
+    if (symlinkError) {
         expected.erase(expected.begin() + 2);
     }
-    const auto first_ids = nodeIds(first);
-    const auto second_ids = nodeIds(second);
-    ASSERT_EQ(first_ids, expected);
-    ASSERT_TRUE(std::find(first_ids.begin(), first_ids.end(),
-                          "files:a-link/child.txt") == first_ids.end());
-    ASSERT_TRUE(std::find(second_ids.begin(), second_ids.end(),
-                          "files:a.txt") == second_ids.end());
-    ASSERT_TRUE(std::find(second_ids.begin(), second_ids.end(),
-                          "files:renamed.txt") != second_ids.end());
+    const auto firstIds = nodeIds(first);
+    const auto secondIds = nodeIds(second);
+    ASSERT_EQ(firstIds, expected);
+    ASSERT_TRUE(std::find(firstIds.begin(), firstIds.end(),
+                          "files:a-link/child.txt") == firstIds.end());
+    ASSERT_TRUE(std::find(secondIds.begin(), secondIds.end(),
+                          "files:a.txt") == secondIds.end());
+    ASSERT_TRUE(std::find(secondIds.begin(), secondIds.end(),
+                          "files:renamed.txt") != secondIds.end());
     ASSERT_EQ(first.nodes().front().id, second.nodes().front().id);
 }
 
@@ -254,9 +254,9 @@ TEST(boundedDeltaReplaysToIndependentViewAndRejectsStaleBase) {
 
     auto stale = base;
     stale.revision = TreeRevision{base.revision.value() + 1};
-    const auto stale_replay = replayTreeDelta(stale, delta);
-    ASSERT_FALSE(stale_replay.accepted());
-    ASSERT_EQ(stale_replay.error, TreeReplayError::StaleRevision);
+    const auto staleReplay = replayTreeDelta(stale, delta);
+    ASSERT_FALSE(staleReplay.accepted());
+    ASSERT_EQ(staleReplay.error, TreeReplayError::StaleRevision);
 }
 
 TEST(overBudgetDeltaRequiresSnapshotWithoutPartialOperations) {

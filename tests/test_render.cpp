@@ -81,20 +81,20 @@ TEST(renderSegmentsOnlyVisibleLinesNotWholeDocument) {
     // INV-render-projection (M12): render() runs compute_cell_run only for the
     // logical lines the viewport shows (<= rows), independent of document length.
     auto root = uniqueRoot();
-    auto make_doc = [](std::size_t line_count) {
+    auto makeDoc = [](std::size_t lineCount) {
         std::string text;
-        for (std::size_t i = 0; i < line_count; ++i) {
+        for (std::size_t i = 0; i < lineCount; ++i) {
             text += "line " + std::to_string(i) + "\n";
         }
         return text;
     };
-    std::ofstream{root / "small.txt"} << make_doc(50);
-    std::ofstream{root / "big.txt"} << make_doc(5000);
+    std::ofstream{root / "small.txt"} << makeDoc(50);
+    std::ofstream{root / "big.txt"} << makeDoc(5000);
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
 
-    auto segment_count_for = [&](std::string const& file) -> std::uint64_t {
+    auto segmentCountFor = [&](std::string const& file) -> std::uint64_t {
         (void)runtime->dispatch(
             ssg::ClientId{1}, {"file.open", runtime->revision(), file});
         auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
@@ -106,15 +106,15 @@ TEST(renderSegmentsOnlyVisibleLinesNotWholeDocument) {
         return ssg::renderSegmentationCalls();
     };
 
-    auto const small_calls = segment_count_for("small.txt");
-    auto const big_calls = segment_count_for("big.txt");
+    auto const smallCalls = segmentCountFor("small.txt");
+    auto const bigCalls = segmentCountFor("big.txt");
 
     // At most one segmentation per visible editor row (24-tall terminal, minus
     // the chrome rows), and NOT proportional to the 100x-larger document.
-    ASSERT_TRUE(small_calls > 0);
-    ASSERT_TRUE(small_calls <= 24);
-    ASSERT_TRUE(big_calls <= 24);
-    ASSERT_EQ(small_calls, big_calls);
+    ASSERT_TRUE(smallCalls > 0);
+    ASSERT_TRUE(smallCalls <= 24);
+    ASSERT_TRUE(bigCalls <= 24);
+    ASSERT_EQ(smallCalls, bigCalls);
 }
 
 
@@ -159,14 +159,14 @@ TEST(renderColorsArePaletteIndices) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto grid = ssg::render(*snapshot);
-    bool all_in_palette = true;
+    bool allInPalette = true;
     for (auto const& cell : grid.cells) {
-        if (cell.foreground >= ssg::theme_palette_size ||
-            cell.background >= ssg::theme_palette_size) {
-            all_in_palette = false;
+        if (cell.foreground >= ssg::kThemePaletteSize ||
+            cell.background >= ssg::kThemePaletteSize) {
+            allInPalette = false;
         }
     }
-    ASSERT_TRUE(all_in_palette);
+    ASSERT_TRUE(allInPalette);
 }
 
 TEST(renderIsDeterministic) {
@@ -218,9 +218,9 @@ TEST(renderProjectsPaletteResultsIntoActivePane) {
 
     // The selected row is painted with the selection role, including on the
     // label's glyph cells (not only trailing filler).
-    int const selected_row = projection.rect.y + 1;
-    ASSERT_EQ(grid.at(projection.rect.x, selected_row).text, std::string{"f"});
-    ASSERT_EQ(grid.at(projection.rect.x, selected_row).role,
+    int const selectedRow = projection.rect.y + 1;
+    ASSERT_EQ(grid.at(projection.rect.x, selectedRow).text, std::string{"f"});
+    ASSERT_EQ(grid.at(projection.rect.x, selectedRow).role,
               ssg::SemanticRole::Selection);
     // The unselected row must not carry the selection role.
     ASSERT_FALSE(grid.at(projection.rect.x, projection.rect.y).role ==
@@ -254,19 +254,19 @@ TEST(renderShowsPaletteQueryAndGhostInHeader) {
     ASSERT_TRUE(gridContains(grid, "> sa"));
     ASSERT_TRUE(gridContains(grid, "ve File"));
 
-    bool query_prompt_role = false;
-    bool ghost_dim_role = false;
+    bool queryPromptRole = false;
+    bool ghostDimRole = false;
     for (int column = 0; column < grid.size.columns; ++column) {
         auto const& cell = grid.at(column, 0);
         if (cell.text == "s" && cell.role == ssg::SemanticRole::Prompt) {
-            query_prompt_role = true;
+            queryPromptRole = true;
         }
         if (cell.text == "v" && cell.role == ssg::SemanticRole::LineNumber) {
-            ghost_dim_role = true;
+            ghostDimRole = true;
         }
     }
-    ASSERT_TRUE(query_prompt_role);
-    ASSERT_TRUE(ghost_dim_role);
+    ASSERT_TRUE(queryPromptRole);
+    ASSERT_TRUE(ghostDimRole);
 }
 
 TEST(renderPaintsSelectionHighlightAndSecondaryCarets) {
@@ -285,15 +285,15 @@ TEST(renderPaintsSelectionHighlightAndSecondaryCarets) {
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) return;
         auto grid = ssg::render(*snapshot);
-        bool any_selection = false;
+        bool anySelection = false;
         for (int row = 0; row < grid.size.rows; ++row) {
             for (int col = 0; col < grid.size.columns; ++col) {
                 if (grid.at(col, row).role == ssg::SemanticRole::Selection) {
-                    any_selection = true;
+                    anySelection = true;
                 }
             }
         }
-        ASSERT_FALSE(any_selection);
+        ASSERT_FALSE(anySelection);
     }
 
     // Select to end of the first line: "alpha" cells carry the selection role.
@@ -304,35 +304,35 @@ TEST(renderPaintsSelectionHighlightAndSecondaryCarets) {
     if (!snapshot) return;
     auto grid = ssg::render(*snapshot);
 
-    int alpha_row = -1;
+    int alphaRow = -1;
     for (int row = 0; row < grid.size.rows; ++row) {
-        if (rowText(grid, row).find("alpha") != std::string::npos) alpha_row = row;
+        if (rowText(grid, row).find("alpha") != std::string::npos) alphaRow = row;
     }
-    ASSERT_TRUE(alpha_row >= 0);
-    if (alpha_row < 0) return;
+    ASSERT_TRUE(alphaRow >= 0);
+    if (alphaRow < 0) return;
 
     // Find the first column of "alpha" on that row.
-    int alpha_col = -1;
+    int alphaCol = -1;
     for (int col = 0; col + 5 <= grid.size.columns; ++col) {
         std::string window;
-        for (int k = 0; k < 5; ++k) window += grid.at(col + k, alpha_row).text;
-        if (window == "alpha") { alpha_col = col; break; }
+        for (int k = 0; k < 5; ++k) window += grid.at(col + k, alphaRow).text;
+        if (window == "alpha") { alphaCol = col; break; }
     }
-    ASSERT_TRUE(alpha_col >= 0);
-    if (alpha_col < 0) return;
+    ASSERT_TRUE(alphaCol >= 0);
+    if (alphaCol < 0) return;
     for (int k = 0; k < 5; ++k) {
-        ASSERT_EQ(grid.at(alpha_col + k, alpha_row).role,
+        ASSERT_EQ(grid.at(alphaCol + k, alphaRow).role,
                   ssg::SemanticRole::Selection);
     }
     // The end-of-line past "alpha" is NOT filled: the selection ends at the line
     // end and does not span into the next line.
-    ASSERT_NE(grid.at(alpha_col + 5, alpha_row).role,
+    ASSERT_NE(grid.at(alphaCol + 5, alphaRow).role,
               ssg::SemanticRole::Selection);
     // The hardware caret sits at the primary active position (end of "alpha").
     ASSERT_TRUE(grid.caret.has_value());
     if (grid.caret) {
-        ASSERT_EQ(grid.caret->row, alpha_row);
-        ASSERT_EQ(grid.caret->column, alpha_col + 5);
+        ASSERT_EQ(grid.caret->row, alphaRow);
+        ASSERT_EQ(grid.caret->column, alphaCol + 5);
     }
 }
 
@@ -354,20 +354,20 @@ TEST(renderFillsEndOfLineForMultilineSelection) {
     if (!snapshot) return;
     auto grid = ssg::render(*snapshot);
 
-    int alpha_row = -1, alpha_col = -1;
-    for (int row = 0; row < grid.size.rows && alpha_row < 0; ++row) {
+    int alphaRow = -1, alphaCol = -1;
+    for (int row = 0; row < grid.size.rows && alphaRow < 0; ++row) {
         for (int col = 0; col + 5 <= grid.size.columns; ++col) {
             std::string window;
             for (int k = 0; k < 5; ++k) window += grid.at(col + k, row).text;
-            if (window == "alpha") { alpha_row = row; alpha_col = col; break; }
+            if (window == "alpha") { alphaRow = row; alphaCol = col; break; }
         }
     }
-    ASSERT_TRUE(alpha_row >= 0);
-    if (alpha_row < 0) return;
+    ASSERT_TRUE(alphaRow >= 0);
+    if (alphaRow < 0) return;
     // "alpha" is highlighted AND the cells past it to the pane's right edge are
     // the end-of-line fill (all selection role).
-    for (int col = alpha_col; col < grid.size.columns - 1; ++col) {
-        ASSERT_EQ(grid.at(col, alpha_row).role, ssg::SemanticRole::Selection);
+    for (int col = alphaCol; col < grid.size.columns - 1; ++col) {
+        ASSERT_EQ(grid.at(col, alphaRow).role, ssg::SemanticRole::Selection);
     }
 }
 
@@ -423,22 +423,22 @@ TEST(renderPaintsSecondaryRangedSelectionCaret) {
     if (!snapshot) return;
     auto const& items = snapshot->sections().selection.selections.items();
     if (items.size() < 2) return;  // Ranker may not find a second; skip if so.
-    bool all_ranged = true;
-    for (auto const& item : items) if (item.isCaret()) all_ranged = false;
-    ASSERT_TRUE(all_ranged);
+    bool allRanged = true;
+    for (auto const& item : items) if (item.isCaret()) allRanged = false;
+    ASSERT_TRUE(allRanged);
     auto grid = ssg::render(*snapshot);
-    int painted_secondary = 0;
+    int paintedSecondary = 0;
     for (int row = 0; row < grid.size.rows; ++row) {
         for (int col = 0; col < grid.size.columns; ++col) {
-            bool const is_primary = grid.caret && grid.caret->row == row &&
+            bool const isPrimary = grid.caret && grid.caret->row == row &&
                                     grid.caret->column == col;
-            if (grid.at(col, row).role == ssg::SemanticRole::Caret && !is_primary) {
-                ++painted_secondary;
+            if (grid.at(col, row).role == ssg::SemanticRole::Caret && !isPrimary) {
+                ++paintedSecondary;
             }
         }
     }
     // One painted caret for the secondary ranged selection's active position.
-    ASSERT_EQ(painted_secondary, 1);
+    ASSERT_EQ(paintedSecondary, 1);
 }
 
 TEST(renderPaintsSecondaryCaretAsACell) {
@@ -463,18 +463,18 @@ TEST(renderPaintsSecondaryCaretAsACell) {
     auto grid = ssg::render(*snapshot);
     ASSERT_TRUE(grid.caret.has_value());
 
-    int painted_secondary = 0;
+    int paintedSecondary = 0;
     for (int row = 0; row < grid.size.rows; ++row) {
         for (int col = 0; col < grid.size.columns; ++col) {
-            bool const is_primary = grid.caret && grid.caret->row == row &&
+            bool const isPrimary = grid.caret && grid.caret->row == row &&
                                     grid.caret->column == col;
-            if (grid.at(col, row).role == ssg::SemanticRole::Caret && !is_primary) {
-                ++painted_secondary;
+            if (grid.at(col, row).role == ssg::SemanticRole::Caret && !isPrimary) {
+                ++paintedSecondary;
             }
         }
     }
     // Exactly one caret is painted as a cell; the other is the hardware cursor.
-    ASSERT_EQ(painted_secondary, 1);
+    ASSERT_EQ(paintedSecondary, 1);
 }
 
 TEST(renderPaintsFindMatchesAndActiveMatch) {
@@ -550,15 +550,15 @@ TEST(renderHidesFindMatchesAfterDocumentRevisionChanges) {
     if (!snapshot) return;
     ASSERT_FALSE(snapshot->sections().find_replace.open);
     auto grid = ssg::render(*snapshot);
-    bool any_match = false;
+    bool anyMatch = false;
     for (int row = 0; row < grid.size.rows; ++row) {
         for (int col = 0; col < grid.size.columns; ++col) {
             if (grid.at(col, row).role == ssg::SemanticRole::SearchMatch) {
-                any_match = true;
+                anyMatch = true;
             }
         }
     }
-    ASSERT_FALSE(any_match);
+    ASSERT_FALSE(anyMatch);
 }
 
 TEST(renderReplacePromptShowsQueryAndReplacementWithCursorOnReplacement) {
@@ -659,12 +659,12 @@ TEST(renderPanelTreeWindowsAndDrawsAThumbWhenTallerThanThePanel) {
 
     // A thumb ('#') is drawn in the reserved gutter column.
     int const gx = shell.panel_scrollbar->x;
-    bool has_thumb = false;
+    bool hasThumb = false;
     for (int y = shell.panel_scrollbar->y;
          y < shell.panel_scrollbar->y + shell.panel_scrollbar->height; ++y) {
-        if (grid.at(gx, y).text == "#") has_thumb = true;
+        if (grid.at(gx, y).text == "#") hasThumb = true;
     }
-    ASSERT_TRUE(has_thumb);
+    ASSERT_TRUE(hasThumb);
     // The window scrolled to the end: the first file is off-screen, the last is
     // visible.
     ASSERT_FALSE(gridContains(grid, "file-00.txt"));
@@ -739,19 +739,19 @@ TEST(renderPaletteWindowsRowsAndDrawsAThumbWithAbsoluteSelection) {
     // at window row 5.
     ASSERT_TRUE(gridContains(grid, "cmd-20"));
     ASSERT_FALSE(gridContains(grid, "cmd-00"));
-    int const selected_row = projection.rect.y + 5;
-    ASSERT_EQ(grid.at(projection.rect.x, selected_row).role,
+    int const selectedRow = projection.rect.y + 5;
+    ASSERT_EQ(grid.at(projection.rect.x, selectedRow).role,
               ssg::SemanticRole::Selection);
     // Row 0 (absolute 20) is not selected.
     ASSERT_FALSE(grid.at(projection.rect.x, projection.rect.y).role ==
                  ssg::SemanticRole::Selection);
     // A thumb is drawn in the reserved gutter column.
-    bool has_thumb = false;
+    bool hasThumb = false;
     for (int y = projection.scrollbar_rect.y;
          y < projection.scrollbar_rect.y + projection.scrollbar_rect.height; ++y) {
-        if (grid.at(projection.scrollbar_rect.x, y).text == "#") has_thumb = true;
+        if (grid.at(projection.scrollbar_rect.x, y).text == "#") hasThumb = true;
     }
-    ASSERT_TRUE(has_thumb);
+    ASSERT_TRUE(hasThumb);
 }
 
 TEST(renderPaletteReservesAnEmptyGutterWhenTheListFits) {

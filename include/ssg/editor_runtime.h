@@ -45,9 +45,9 @@ public:
     EditorRuntime& operator=(EditorRuntime&&) = delete;
 
     [[nodiscard]] AttachResult attach(InvocationPrincipal principal,
-                                      ViewId view_id);
-    [[nodiscard]] bool detach(ClientId client_id);
-    [[nodiscard]] CommandResult dispatch(ClientId client_id,
+                                      ViewId viewId);
+    [[nodiscard]] bool detach(ClientId clientId);
+    [[nodiscard]] CommandResult dispatch(ClientId clientId,
                                          ClientCommand const& command);
 
     [[nodiscard]] Revision revision() const;
@@ -68,9 +68,9 @@ public:
     };
     [[nodiscard]] DeferredWorkCounts deferredWorkCounts() const;
     [[nodiscard]] std::optional<SessionSnapshot> snapshot(
-        ClientId client_id, ViewportDimensions dimensions,
-        KeySequence leader_pending = {},
-        PaletteReport palette_report = {}) const;
+        ClientId clientId, ViewportDimensions dimensions,
+        KeySequence leaderPending = {},
+        PaletteReport paletteReport = {}) const;
     [[nodiscard]] std::string activeDocumentText() const;
 
     struct Impl;

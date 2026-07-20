@@ -31,11 +31,11 @@
         ASSERT_EQ((run).spans[(idx)].kind, (k));                   \
     } while (0)
 
-static constexpr auto T   = ssg::CellKind::Text;
-static constexpr auto C   = ssg::CellKind::Combining;
-static constexpr auto TAB = ssg::CellKind::Tab;
-static constexpr auto CTL = ssg::CellKind::Control;
-static constexpr auto INV = ssg::CellKind::InvalidUtf8;
+static constexpr auto kT   = ssg::CellKind::Text;
+static constexpr auto kC   = ssg::CellKind::Combining;
+static constexpr auto kTab = ssg::CellKind::Tab;
+static constexpr auto kCtl = ssg::CellKind::Control;
+static constexpr auto kInv = ssg::CellKind::InvalidUtf8;
 
 // ---------------------------------------------------------------------------
 // ASCII fixtures (ascii.txt)
@@ -50,7 +50,7 @@ TEST(asciiSingleSpace) {
     auto run = ssg::computeCellRun(" ");
     ASSERT_EQ(run.total_cells, 1u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 1, 1, T);
+    CHECK_SPAN(run, 0, 0, 1, 1, kT);
 }
 
 TEST(asciiHello) {
@@ -58,7 +58,7 @@ TEST(asciiHello) {
     ASSERT_EQ(run.total_cells, 5u);
     ASSERT_EQ(run.spans.size(), 5u);
     for (std::size_t i = 0; i < 5; ++i) {
-        CHECK_SPAN(run, i, i, 1, 1, T);
+        CHECK_SPAN(run, i, i, 1, 1, kT);
     }
 }
 
@@ -67,7 +67,7 @@ TEST(asciiTildeBoundary) {
     auto run = ssg::computeCellRun("~");
     ASSERT_EQ(run.total_cells, 1u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 1, 1, T);
+    CHECK_SPAN(run, 0, 0, 1, 1, kT);
 }
 
 // ---------------------------------------------------------------------------
@@ -81,7 +81,7 @@ TEST(combiningLatinAAcute) {
     auto run = ssg::computeCellRun("a\xCC\x81");
     ASSERT_EQ(run.total_cells, 1u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 3, 1, T);
+    CHECK_SPAN(run, 0, 0, 3, 1, kT);
 }
 
 TEST(combiningLatinEMacron) {
@@ -89,7 +89,7 @@ TEST(combiningLatinEMacron) {
     auto run = ssg::computeCellRun("e\xCC\x84");
     ASSERT_EQ(run.total_cells, 1u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 3, 1, T);
+    CHECK_SPAN(run, 0, 0, 3, 1, kT);
 }
 
 TEST(combiningLatinATwoCombining) {
@@ -98,7 +98,7 @@ TEST(combiningLatinATwoCombining) {
     auto run = ssg::computeCellRun("a\xCC\x80\xCC\x83");
     ASSERT_EQ(run.total_cells, 1u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 5, 1, T);
+    CHECK_SPAN(run, 0, 0, 5, 1, kT);
 }
 
 TEST(combiningLoneAcute) {
@@ -106,7 +106,7 @@ TEST(combiningLoneAcute) {
     auto run = ssg::computeCellRun("\xCC\x81");
     ASSERT_EQ(run.total_cells, 0u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 2, 0, C);
+    CHECK_SPAN(run, 0, 0, 2, 0, kC);
 }
 
 TEST(combiningTwoLone) {
@@ -117,7 +117,7 @@ TEST(combiningTwoLone) {
     auto run = ssg::computeCellRun("\xCC\x81\xCC\x80");
     ASSERT_EQ(run.total_cells, 0u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 4, 0, C);
+    CHECK_SPAN(run, 0, 0, 4, 0, kC);
 }
 
 TEST(combiningNTilde) {
@@ -125,7 +125,7 @@ TEST(combiningNTilde) {
     auto run = ssg::computeCellRun("n\xCC\x83");
     ASSERT_EQ(run.total_cells, 1u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 3, 1, T);
+    CHECK_SPAN(run, 0, 0, 3, 1, kT);
 }
 
 TEST(combiningWideBase) {
@@ -134,7 +134,7 @@ TEST(combiningWideBase) {
     auto run = ssg::computeCellRun("\xE4\xB8\xAD\xCC\x81");
     ASSERT_EQ(run.total_cells, 2u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 5, 2, T);
+    CHECK_SPAN(run, 0, 0, 5, 2, kT);
 }
 
 // ---------------------------------------------------------------------------
@@ -145,7 +145,7 @@ TEST(doubleWidthCjkZhong) {
     auto run = ssg::computeCellRun("\xE4\xB8\xAD");
     ASSERT_EQ(run.total_cells, 2u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 3, 2, T);
+    CHECK_SPAN(run, 0, 0, 3, 2, kT);
 }
 
 TEST(doubleWidthFullwidthA) {
@@ -153,7 +153,7 @@ TEST(doubleWidthFullwidthA) {
     auto run = ssg::computeCellRun("\xEF\xBC\xA1");
     ASSERT_EQ(run.total_cells, 2u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 3, 2, T);
+    CHECK_SPAN(run, 0, 0, 3, 2, kT);
 }
 
 TEST(doubleWidthHangulGa) {
@@ -161,7 +161,7 @@ TEST(doubleWidthHangulGa) {
     auto run = ssg::computeCellRun("\xEA\xB0\x80");
     ASSERT_EQ(run.total_cells, 2u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 3, 2, T);
+    CHECK_SPAN(run, 0, 0, 3, 2, kT);
 }
 
 TEST(doubleWidthTwoCjk) {
@@ -169,8 +169,8 @@ TEST(doubleWidthTwoCjk) {
     auto run = ssg::computeCellRun("\xE4\xB8\xAD\xE6\x96\x87");
     ASSERT_EQ(run.total_cells, 4u);
     ASSERT_EQ(run.spans.size(), 2u);
-    CHECK_SPAN(run, 0, 0, 3, 2, T);
-    CHECK_SPAN(run, 1, 3, 3, 2, T);
+    CHECK_SPAN(run, 0, 0, 3, 2, kT);
+    CHECK_SPAN(run, 1, 3, 3, 2, kT);
 }
 
 TEST(doubleWidthMixedNarrowWide) {
@@ -179,9 +179,9 @@ TEST(doubleWidthMixedNarrowWide) {
     auto run = ssg::computeCellRun("a\xE4\xB8\xAD" "b");
     ASSERT_EQ(run.total_cells, 4u);
     ASSERT_EQ(run.spans.size(), 3u);
-    CHECK_SPAN(run, 0, 0, 1, 1, T);
-    CHECK_SPAN(run, 1, 1, 3, 2, T);
-    CHECK_SPAN(run, 2, 4, 1, 1, T);
+    CHECK_SPAN(run, 0, 0, 1, 1, kT);
+    CHECK_SPAN(run, 1, 1, 3, 2, kT);
+    CHECK_SPAN(run, 2, 4, 1, 1, kT);
 }
 
 TEST(doubleWidthHiraganaA) {
@@ -189,7 +189,7 @@ TEST(doubleWidthHiraganaA) {
     auto run = ssg::computeCellRun("\xE3\x81\x82");
     ASSERT_EQ(run.total_cells, 2u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 3, 2, T);
+    CHECK_SPAN(run, 0, 0, 3, 2, kT);
 }
 
 TEST(doubleWidthFullwidthBang) {
@@ -197,7 +197,7 @@ TEST(doubleWidthFullwidthBang) {
     auto run = ssg::computeCellRun("\xEF\xBC\x81");
     ASSERT_EQ(run.total_cells, 2u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 3, 2, T);
+    CHECK_SPAN(run, 0, 0, 3, 2, kT);
 }
 
 // ---------------------------------------------------------------------------
@@ -208,7 +208,7 @@ TEST(emojiGrinningFace) {
     auto run = ssg::computeCellRun("\xF0\x9F\x98\x80");
     ASSERT_EQ(run.total_cells, 2u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 4, 2, T);
+    CHECK_SPAN(run, 0, 0, 4, 2, kT);
 }
 
 TEST(emojiSlightSmile) {
@@ -216,7 +216,7 @@ TEST(emojiSlightSmile) {
     auto run = ssg::computeCellRun("\xF0\x9F\x99\x82");
     ASSERT_EQ(run.total_cells, 2u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 4, 2, T);
+    CHECK_SPAN(run, 0, 0, 4, 2, kT);
 }
 
 TEST(emojiManStandalone) {
@@ -224,7 +224,7 @@ TEST(emojiManStandalone) {
     auto run = ssg::computeCellRun("\xF0\x9F\x91\xA8");
     ASSERT_EQ(run.total_cells, 2u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 4, 2, T);
+    CHECK_SPAN(run, 0, 0, 4, 2, kT);
 }
 
 TEST(emojiManZwjWoman) {
@@ -235,7 +235,7 @@ TEST(emojiManZwjWoman) {
     auto run = ssg::computeCellRun(seq);
     ASSERT_EQ(run.total_cells, 2u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 11, 2, T);
+    CHECK_SPAN(run, 0, 0, 11, 2, kT);
 }
 
 TEST(emojiUsFlag) {
@@ -245,7 +245,7 @@ TEST(emojiUsFlag) {
     auto run = ssg::computeCellRun(seq);
     ASSERT_EQ(run.total_cells, 2u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 8, 2, T);
+    CHECK_SPAN(run, 0, 0, 8, 2, kT);
 }
 
 TEST(emojiThenAscii) {
@@ -254,8 +254,8 @@ TEST(emojiThenAscii) {
     auto run = ssg::computeCellRun(seq);
     ASSERT_EQ(run.total_cells, 3u);
     ASSERT_EQ(run.spans.size(), 2u);
-    CHECK_SPAN(run, 0, 0, 4, 2, T);
-    CHECK_SPAN(run, 1, 4, 1, 1, T);
+    CHECK_SPAN(run, 0, 0, 4, 2, kT);
+    CHECK_SPAN(run, 1, 4, 1, 1, kT);
 }
 
 TEST(emojiManZwjFullwidthA) {
@@ -267,8 +267,8 @@ TEST(emojiManZwjFullwidthA) {
     auto run = ssg::computeCellRun(seq);
     ASSERT_EQ(run.total_cells, 4u);
     ASSERT_EQ(run.spans.size(), 2u);
-    CHECK_SPAN(run, 0, 0, 7, 2, T);
-    CHECK_SPAN(run, 1, 7, 3, 2, T);
+    CHECK_SPAN(run, 0, 0, 7, 2, kT);
+    CHECK_SPAN(run, 1, 7, 3, 2, kT);
 }
 
 TEST(emojiThumbsSkinTone) {
@@ -279,7 +279,7 @@ TEST(emojiThumbsSkinTone) {
     auto run = ssg::computeCellRun(seq);
     ASSERT_EQ(run.total_cells, 2u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 8, 2, T);
+    CHECK_SPAN(run, 0, 0, 8, 2, kT);
 }
 
 TEST(emojiTwo) {
@@ -288,8 +288,8 @@ TEST(emojiTwo) {
     auto run = ssg::computeCellRun(seq);
     ASSERT_EQ(run.total_cells, 4u);
     ASSERT_EQ(run.spans.size(), 2u);
-    CHECK_SPAN(run, 0, 0, 4, 2, T);
-    CHECK_SPAN(run, 1, 4, 4, 2, T);
+    CHECK_SPAN(run, 0, 0, 4, 2, kT);
+    CHECK_SPAN(run, 1, 4, 4, 2, kT);
 }
 
 // ---------------------------------------------------------------------------
@@ -301,28 +301,28 @@ TEST(tabCol0W4) {
     auto run = ssg::computeCellRun("\t", 4);
     ASSERT_EQ(run.total_cells, 4u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 1, 4, TAB);
+    CHECK_SPAN(run, 0, 0, 1, 4, kTab);
 }
 
 TEST(tabCol0W8) {
     auto run = ssg::computeCellRun("\t", 8);
     ASSERT_EQ(run.total_cells, 8u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 1, 8, TAB);
+    CHECK_SPAN(run, 0, 0, 1, 8, kTab);
 }
 
 TEST(tabCol0W1) {
     auto run = ssg::computeCellRun("\t", 1);
     ASSERT_EQ(run.total_cells, 1u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 1, 1, TAB);
+    CHECK_SPAN(run, 0, 0, 1, 1, kTab);
 }
 
 TEST(tabCol0W2) {
     auto run = ssg::computeCellRun("\t", 2);
     ASSERT_EQ(run.total_cells, 2u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 1, 2, TAB);
+    CHECK_SPAN(run, 0, 0, 1, 2, kTab);
 }
 
 TEST(tabAbTabW4) {
@@ -331,9 +331,9 @@ TEST(tabAbTabW4) {
     auto run = ssg::computeCellRun("ab\t", 4);
     ASSERT_EQ(run.total_cells, 4u);
     ASSERT_EQ(run.spans.size(), 3u);
-    CHECK_SPAN(run, 0, 0, 1, 1, T);
-    CHECK_SPAN(run, 1, 1, 1, 1, T);
-    CHECK_SPAN(run, 2, 2, 1, 2, TAB);
+    CHECK_SPAN(run, 0, 0, 1, 1, kT);
+    CHECK_SPAN(run, 1, 1, 1, 1, kT);
+    CHECK_SPAN(run, 2, 2, 1, 2, kTab);
 }
 
 TEST(tabAbcdTabW4) {
@@ -342,7 +342,7 @@ TEST(tabAbcdTabW4) {
     auto run = ssg::computeCellRun("abcd\t", 4);
     ASSERT_EQ(run.total_cells, 8u);
     ASSERT_EQ(run.spans.size(), 5u);
-    CHECK_SPAN(run, 4, 4, 1, 4, TAB);
+    CHECK_SPAN(run, 4, 4, 1, 4, kTab);
 }
 
 TEST(tabATabBW4) {
@@ -351,9 +351,9 @@ TEST(tabATabBW4) {
     auto run = ssg::computeCellRun("a\tb", 4);
     ASSERT_EQ(run.total_cells, 5u);
     ASSERT_EQ(run.spans.size(), 3u);
-    CHECK_SPAN(run, 0, 0, 1, 1, T);
-    CHECK_SPAN(run, 1, 1, 1, 3, TAB);
-    CHECK_SPAN(run, 2, 2, 1, 1, T);
+    CHECK_SPAN(run, 0, 0, 1, 1, kT);
+    CHECK_SPAN(run, 1, 1, 1, 3, kTab);
+    CHECK_SPAN(run, 2, 2, 1, 1, kT);
 }
 
 TEST(tabTwoTabsW4) {
@@ -362,8 +362,8 @@ TEST(tabTwoTabsW4) {
     auto run = ssg::computeCellRun("\t\t", 4);
     ASSERT_EQ(run.total_cells, 8u);
     ASSERT_EQ(run.spans.size(), 2u);
-    CHECK_SPAN(run, 0, 0, 1, 4, TAB);
-    CHECK_SPAN(run, 1, 1, 1, 4, TAB);
+    CHECK_SPAN(run, 0, 0, 1, 4, kTab);
+    CHECK_SPAN(run, 1, 1, 1, 4, kTab);
 }
 
 TEST(tabWidthInvalidZero) {
@@ -388,21 +388,21 @@ TEST(controlNul) {
     auto run = ssg::computeCellRun(std::string_view("\x00", 1));
     ASSERT_EQ(run.total_cells, 1u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 1, 1, CTL);
+    CHECK_SPAN(run, 0, 0, 1, 1, kCtl);
 }
 
 TEST(controlSoh) {
     auto run = ssg::computeCellRun("\x01");
     ASSERT_EQ(run.total_cells, 1u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 1, 1, CTL);
+    CHECK_SPAN(run, 0, 0, 1, 1, kCtl);
 }
 
 TEST(controlBel) {
     auto run = ssg::computeCellRun("\x07");
     ASSERT_EQ(run.total_cells, 1u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 1, 1, CTL);
+    CHECK_SPAN(run, 0, 0, 1, 1, kCtl);
 }
 
 TEST(controlLf) {
@@ -410,14 +410,14 @@ TEST(controlLf) {
     auto run = ssg::computeCellRun("\x0A");
     ASSERT_EQ(run.total_cells, 1u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 1, 1, CTL);
+    CHECK_SPAN(run, 0, 0, 1, 1, kCtl);
 }
 
 TEST(controlEsc) {
     auto run = ssg::computeCellRun("\x1B");
     ASSERT_EQ(run.total_cells, 1u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 1, 1, CTL);
+    CHECK_SPAN(run, 0, 0, 1, 1, kCtl);
 }
 
 TEST(controlUs) {
@@ -425,7 +425,7 @@ TEST(controlUs) {
     auto run = ssg::computeCellRun("\x1F");
     ASSERT_EQ(run.total_cells, 1u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 1, 1, CTL);
+    CHECK_SPAN(run, 0, 0, 1, 1, kCtl);
 }
 
 TEST(controlDel) {
@@ -433,7 +433,7 @@ TEST(controlDel) {
     auto run = ssg::computeCellRun("\x7F");
     ASSERT_EQ(run.total_cells, 1u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 1, 1, CTL);
+    CHECK_SPAN(run, 0, 0, 1, 1, kCtl);
 }
 
 TEST(controlC1Pad) {
@@ -441,7 +441,7 @@ TEST(controlC1Pad) {
     auto run = ssg::computeCellRun("\xC2\x80");
     ASSERT_EQ(run.total_cells, 1u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 2, 1, CTL);
+    CHECK_SPAN(run, 0, 0, 2, 1, kCtl);
 }
 
 TEST(controlC1Apc) {
@@ -449,31 +449,31 @@ TEST(controlC1Apc) {
     auto run = ssg::computeCellRun("\xC2\x9F");
     ASSERT_EQ(run.total_cells, 1u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 2, 1, CTL);
+    CHECK_SPAN(run, 0, 0, 2, 1, kCtl);
 }
 
 TEST(controlTwoControls) {
     auto run = ssg::computeCellRun("\x07\x1B");
     ASSERT_EQ(run.total_cells, 2u);
     ASSERT_EQ(run.spans.size(), 2u);
-    CHECK_SPAN(run, 0, 0, 1, 1, CTL);
-    CHECK_SPAN(run, 1, 1, 1, 1, CTL);
+    CHECK_SPAN(run, 0, 0, 1, 1, kCtl);
+    CHECK_SPAN(run, 1, 1, 1, 1, kCtl);
 }
 
 TEST(controlCtlThenText) {
     auto run = ssg::computeCellRun("\x07" "A");
     ASSERT_EQ(run.total_cells, 2u);
     ASSERT_EQ(run.spans.size(), 2u);
-    CHECK_SPAN(run, 0, 0, 1, 1, CTL);
-    CHECK_SPAN(run, 1, 1, 1, 1, T);
+    CHECK_SPAN(run, 0, 0, 1, 1, kCtl);
+    CHECK_SPAN(run, 1, 1, 1, 1, kT);
 }
 
 TEST(controlTextThenCtl) {
     auto run = ssg::computeCellRun("A\x07");
     ASSERT_EQ(run.total_cells, 2u);
     ASSERT_EQ(run.spans.size(), 2u);
-    CHECK_SPAN(run, 0, 0, 1, 1, T);
-    CHECK_SPAN(run, 1, 1, 1, 1, CTL);
+    CHECK_SPAN(run, 0, 0, 1, 1, kT);
+    CHECK_SPAN(run, 1, 1, 1, 1, kCtl);
 }
 
 // ---------------------------------------------------------------------------
@@ -485,14 +485,14 @@ TEST(invalidLoneFf) {
     auto run = ssg::computeCellRun("\xFF");
     ASSERT_EQ(run.total_cells, 1u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 1, 1, INV);
+    CHECK_SPAN(run, 0, 0, 1, 1, kInv);
 }
 
 TEST(invalidLoneFe) {
     auto run = ssg::computeCellRun("\xFE");
     ASSERT_EQ(run.total_cells, 1u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 1, 1, INV);
+    CHECK_SPAN(run, 0, 0, 1, 1, kInv);
 }
 
 TEST(invalidLoneContinuation80) {
@@ -500,7 +500,7 @@ TEST(invalidLoneContinuation80) {
     auto run = ssg::computeCellRun("\x80");
     ASSERT_EQ(run.total_cells, 1u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 1, 1, INV);
+    CHECK_SPAN(run, 0, 0, 1, 1, kInv);
 }
 
 TEST(invalidLoneContinuationBf) {
@@ -508,7 +508,7 @@ TEST(invalidLoneContinuationBf) {
     auto run = ssg::computeCellRun("\xBF");
     ASSERT_EQ(run.total_cells, 1u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 1, 1, INV);
+    CHECK_SPAN(run, 0, 0, 1, 1, kInv);
 }
 
 TEST(invalidOverlongC080) {
@@ -516,8 +516,8 @@ TEST(invalidOverlongC080) {
     auto run = ssg::computeCellRun("\xC0\x80");
     ASSERT_EQ(run.total_cells, 2u);
     ASSERT_EQ(run.spans.size(), 2u);
-    CHECK_SPAN(run, 0, 0, 1, 1, INV);
-    CHECK_SPAN(run, 1, 1, 1, 1, INV);
+    CHECK_SPAN(run, 0, 0, 1, 1, kInv);
+    CHECK_SPAN(run, 1, 1, 1, 1, kInv);
 }
 
 TEST(invalidOverlongC180) {
@@ -525,16 +525,16 @@ TEST(invalidOverlongC180) {
     auto run = ssg::computeCellRun("\xC1\x80");
     ASSERT_EQ(run.total_cells, 2u);
     ASSERT_EQ(run.spans.size(), 2u);
-    CHECK_SPAN(run, 0, 0, 1, 1, INV);
-    CHECK_SPAN(run, 1, 1, 1, 1, INV);
+    CHECK_SPAN(run, 0, 0, 1, 1, kInv);
+    CHECK_SPAN(run, 1, 1, 1, 1, kInv);
 }
 
 TEST(invalidTwoFf) {
     auto run = ssg::computeCellRun("\xFF\xFF");
     ASSERT_EQ(run.total_cells, 2u);
     ASSERT_EQ(run.spans.size(), 2u);
-    CHECK_SPAN(run, 0, 0, 1, 1, INV);
-    CHECK_SPAN(run, 1, 1, 1, 1, INV);
+    CHECK_SPAN(run, 0, 0, 1, 1, kInv);
+    CHECK_SPAN(run, 1, 1, 1, 1, kInv);
 }
 
 TEST(invalidTruncatedE4) {
@@ -542,7 +542,7 @@ TEST(invalidTruncatedE4) {
     auto run = ssg::computeCellRun("\xE4");
     ASSERT_EQ(run.total_cells, 1u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 1, 1, INV);
+    CHECK_SPAN(run, 0, 0, 1, 1, kInv);
 }
 
 TEST(invalidTruncatedE4B8) {
@@ -551,8 +551,8 @@ TEST(invalidTruncatedE4B8) {
     auto run = ssg::computeCellRun("\xE4\xB8");
     ASSERT_EQ(run.total_cells, 2u);
     ASSERT_EQ(run.spans.size(), 2u);
-    CHECK_SPAN(run, 0, 0, 1, 1, INV);
-    CHECK_SPAN(run, 1, 1, 1, 1, INV);
+    CHECK_SPAN(run, 0, 0, 1, 1, kInv);
+    CHECK_SPAN(run, 1, 1, 1, 1, kInv);
 }
 
 TEST(invalidTruncatedF09f) {
@@ -560,24 +560,24 @@ TEST(invalidTruncatedF09f) {
     auto run = ssg::computeCellRun("\xF0\x9F");
     ASSERT_EQ(run.total_cells, 2u);
     ASSERT_EQ(run.spans.size(), 2u);
-    CHECK_SPAN(run, 0, 0, 1, 1, INV);
-    CHECK_SPAN(run, 1, 1, 1, 1, INV);
+    CHECK_SPAN(run, 0, 0, 1, 1, kInv);
+    CHECK_SPAN(run, 1, 1, 1, 1, kInv);
 }
 
 TEST(invalidValidThenFf) {
     auto run = ssg::computeCellRun("A\xFF");
     ASSERT_EQ(run.total_cells, 2u);
     ASSERT_EQ(run.spans.size(), 2u);
-    CHECK_SPAN(run, 0, 0, 1, 1, T);
-    CHECK_SPAN(run, 1, 1, 1, 1, INV);
+    CHECK_SPAN(run, 0, 0, 1, 1, kT);
+    CHECK_SPAN(run, 1, 1, 1, 1, kInv);
 }
 
 TEST(invalidFfThenValid) {
     auto run = ssg::computeCellRun("\xFF" "A");
     ASSERT_EQ(run.total_cells, 2u);
     ASSERT_EQ(run.spans.size(), 2u);
-    CHECK_SPAN(run, 0, 0, 1, 1, INV);
-    CHECK_SPAN(run, 1, 1, 1, 1, T);
+    CHECK_SPAN(run, 0, 0, 1, 1, kInv);
+    CHECK_SPAN(run, 1, 1, 1, 1, kT);
 }
 
 TEST(invalidBadContinuationE4B841) {
@@ -588,9 +588,9 @@ TEST(invalidBadContinuationE4B841) {
     auto run = ssg::computeCellRun("\xE4\xB8\x41");
     ASSERT_EQ(run.total_cells, 3u);
     ASSERT_EQ(run.spans.size(), 3u);
-    CHECK_SPAN(run, 0, 0, 1, 1, INV);
-    CHECK_SPAN(run, 1, 1, 1, 1, INV);
-    CHECK_SPAN(run, 2, 2, 1, 1, T);
+    CHECK_SPAN(run, 0, 0, 1, 1, kInv);
+    CHECK_SPAN(run, 1, 1, 1, 1, kInv);
+    CHECK_SPAN(run, 2, 2, 1, 1, kT);
 }
 
 TEST(invalidOverlongE08080) {
@@ -599,9 +599,9 @@ TEST(invalidOverlongE08080) {
     auto run = ssg::computeCellRun("\xE0\x80\x80");
     ASSERT_EQ(run.total_cells, 3u);
     ASSERT_EQ(run.spans.size(), 3u);
-    CHECK_SPAN(run, 0, 0, 1, 1, INV);
-    CHECK_SPAN(run, 1, 1, 1, 1, INV);
-    CHECK_SPAN(run, 2, 2, 1, 1, INV);
+    CHECK_SPAN(run, 0, 0, 1, 1, kInv);
+    CHECK_SPAN(run, 1, 1, 1, 1, kInv);
+    CHECK_SPAN(run, 2, 2, 1, 1, kInv);
 }
 
 TEST(invalidSurrogateHigh) {
@@ -610,9 +610,9 @@ TEST(invalidSurrogateHigh) {
     auto run = ssg::computeCellRun("\xED\xA0\x80");
     ASSERT_EQ(run.total_cells, 3u);
     ASSERT_EQ(run.spans.size(), 3u);
-    CHECK_SPAN(run, 0, 0, 1, 1, INV);
-    CHECK_SPAN(run, 1, 1, 1, 1, INV);
-    CHECK_SPAN(run, 2, 2, 1, 1, INV);
+    CHECK_SPAN(run, 0, 0, 1, 1, kInv);
+    CHECK_SPAN(run, 1, 1, 1, 1, kInv);
+    CHECK_SPAN(run, 2, 2, 1, 1, kInv);
 }
 
 // ---------------------------------------------------------------------------
@@ -624,7 +624,7 @@ TEST(hangulLV) {
     auto run = ssg::computeCellRun("\xE1\x84\x80\xE1\x85\xA1");
     ASSERT_EQ(run.total_cells, 2u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 6, 2, T);
+    CHECK_SPAN(run, 0, 0, 6, 2, kT);
 }
 
 TEST(hangulLVT) {
@@ -632,7 +632,7 @@ TEST(hangulLVT) {
     auto run = ssg::computeCellRun("\xE1\x84\x80\xE1\x85\xA1\xE1\x86\xA8");
     ASSERT_EQ(run.total_cells, 2u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 9, 2, T);
+    CHECK_SPAN(run, 0, 0, 9, 2, kT);
 }
 
 TEST(hangulLvT) {
@@ -641,7 +641,7 @@ TEST(hangulLvT) {
     auto run = ssg::computeCellRun("\xEA\xB0\x80\xE1\x86\xA8");
     ASSERT_EQ(run.total_cells, 2u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 6, 2, T);
+    CHECK_SPAN(run, 0, 0, 6, 2, kT);
 }
 
 TEST(hangulLvtT) {
@@ -649,7 +649,7 @@ TEST(hangulLvtT) {
     auto run = ssg::computeCellRun("\xEA\xB0\x81\xE1\x86\xA8");
     ASSERT_EQ(run.total_cells, 2u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 6, 2, T);
+    CHECK_SPAN(run, 0, 0, 6, 2, kT);
 }
 
 TEST(hangulLExtendVNoCompose) {
@@ -660,8 +660,8 @@ TEST(hangulLExtendVNoCompose) {
     auto run = ssg::computeCellRun("\xE1\x84\x80\xCC\x88\xE1\x85\xA1");
     ASSERT_EQ(run.total_cells, 3u);
     ASSERT_EQ(run.spans.size(), 2u);
-    CHECK_SPAN(run, 0, 0, 5, 2, T);
-    CHECK_SPAN(run, 1, 5, 3, 1, T);
+    CHECK_SPAN(run, 0, 0, 5, 2, kT);
+    CHECK_SPAN(run, 1, 5, 3, 1, kT);
 }
 
 TEST(hangulLAsciiNoCompose) {
@@ -670,8 +670,8 @@ TEST(hangulLAsciiNoCompose) {
     auto run = ssg::computeCellRun("\xE1\x84\x80\x41");
     ASSERT_EQ(run.total_cells, 3u);
     ASSERT_EQ(run.spans.size(), 2u);
-    CHECK_SPAN(run, 0, 0, 3, 2, T);
-    CHECK_SPAN(run, 1, 3, 1, 1, T);
+    CHECK_SPAN(run, 0, 0, 3, 2, kT);
+    CHECK_SPAN(run, 1, 3, 1, 1, kT);
 }
 
 TEST(hangulLvAlone) {
@@ -679,7 +679,7 @@ TEST(hangulLvAlone) {
     auto run = ssg::computeCellRun("\xEA\xB0\x80");
     ASSERT_EQ(run.total_cells, 2u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 3, 2, T);
+    CHECK_SPAN(run, 0, 0, 3, 2, kT);
 }
 
 // ---------------------------------------------------------------------------
@@ -692,7 +692,7 @@ TEST(spacingMarkDevanagariKaa) {
     auto run = ssg::computeCellRun("\xE0\xA4\x95\xE0\xA4\xBE");
     ASSERT_EQ(run.total_cells, 1u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 6, 1, T);
+    CHECK_SPAN(run, 0, 0, 6, 1, kT);
 }
 
 TEST(spacingMarkDevanagariKo) {
@@ -700,7 +700,7 @@ TEST(spacingMarkDevanagariKo) {
     auto run = ssg::computeCellRun("\xE0\xA4\x95\xE0\xA5\x8B");
     ASSERT_EQ(run.total_cells, 1u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 6, 1, T);
+    CHECK_SPAN(run, 0, 0, 6, 1, kT);
 }
 
 TEST(spacingMarkLone) {
@@ -708,7 +708,7 @@ TEST(spacingMarkLone) {
     auto run = ssg::computeCellRun("\xE0\xA4\xBE");
     ASSERT_EQ(run.total_cells, 0u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 3, 0, C);
+    CHECK_SPAN(run, 0, 0, 3, 0, kC);
 }
 
 TEST(spacingMarkBengaliKaa) {
@@ -716,7 +716,7 @@ TEST(spacingMarkBengaliKaa) {
     auto run = ssg::computeCellRun("\xE0\xA6\x95\xE0\xA6\xBE");
     ASSERT_EQ(run.total_cells, 1u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 6, 1, T);
+    CHECK_SPAN(run, 0, 0, 6, 1, kT);
 }
 
 // ---------------------------------------------------------------------------
@@ -728,7 +728,7 @@ TEST(prepend0600Digit) {
     auto run = ssg::computeCellRun("\xD8\x80\x31");
     ASSERT_EQ(run.total_cells, 1u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 3, 1, T);
+    CHECK_SPAN(run, 0, 0, 3, 1, kT);
 }
 
 TEST(prependAThenPrependDigit) {
@@ -738,8 +738,8 @@ TEST(prependAThenPrependDigit) {
     auto run = ssg::computeCellRun("a\xD8\x80\x31");
     ASSERT_EQ(run.total_cells, 2u);
     ASSERT_EQ(run.spans.size(), 2u);
-    CHECK_SPAN(run, 0, 0, 1, 1, T);
-    CHECK_SPAN(run, 1, 1, 3, 1, T);
+    CHECK_SPAN(run, 0, 0, 1, 1, kT);
+    CHECK_SPAN(run, 1, 1, 3, 1, kT);
 }
 
 TEST(prependLoneAtEol) {
@@ -747,7 +747,7 @@ TEST(prependLoneAtEol) {
     auto run = ssg::computeCellRun("\xD8\x80");
     ASSERT_EQ(run.total_cells, 0u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 2, 0, C);
+    CHECK_SPAN(run, 0, 0, 2, 0, kC);
 }
 
 TEST(prependBeforeControl) {
@@ -756,8 +756,8 @@ TEST(prependBeforeControl) {
     auto run = ssg::computeCellRun("\xD8\x80\x07");
     ASSERT_EQ(run.total_cells, 1u);
     ASSERT_EQ(run.spans.size(), 2u);
-    CHECK_SPAN(run, 0, 0, 2, 0, C);
-    CHECK_SPAN(run, 1, 2, 1, 1, CTL);
+    CHECK_SPAN(run, 0, 0, 2, 0, kC);
+    CHECK_SPAN(run, 1, 2, 1, 1, kCtl);
 }
 
 // ---------------------------------------------------------------------------
@@ -769,8 +769,8 @@ TEST(edgeTabThenCombining) {
     auto run = ssg::computeCellRun("\ta\xCC\x81", 4);
     ASSERT_EQ(run.total_cells, 5u);
     ASSERT_EQ(run.spans.size(), 2u);
-    CHECK_SPAN(run, 0, 0, 1, 4, TAB);
-    CHECK_SPAN(run, 1, 1, 3, 1, T);
+    CHECK_SPAN(run, 0, 0, 1, 4, kTab);
+    CHECK_SPAN(run, 1, 1, 3, 1, kT);
 }
 
 TEST(edgeValid3byteCjk) {
@@ -787,7 +787,7 @@ TEST(edgeVariationSelector) {
     auto run = ssg::computeCellRun("#\xEF\xB8\x8F");
     ASSERT_EQ(run.total_cells, 2u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 4, 2, T);
+    CHECK_SPAN(run, 0, 0, 4, 2, kT);
 }
 
 TEST(emojiScissorsAlone) {
@@ -795,7 +795,7 @@ TEST(emojiScissorsAlone) {
     // Text-default emoji; alone → 1 cell (was INCORRECTLY 2 in old k_wide[])
     auto run = ssg::computeCellRun("\xE2\x9C\x82");
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 3, 1, T);
+    CHECK_SPAN(run, 0, 0, 3, 1, kT);
     ASSERT_EQ(run.total_cells, 1u);
 }
 
@@ -804,7 +804,7 @@ TEST(emojiScissorsVs16) {
     // Emoji=Yes + VS-16 absorbed → upgrade to 2 cells
     auto run = ssg::computeCellRun("\xE2\x9C\x82\xEF\xB8\x8F");
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 6, 2, T);
+    CHECK_SPAN(run, 0, 0, 6, 2, kT);
     ASSERT_EQ(run.total_cells, 2u);
 }
 
@@ -813,7 +813,7 @@ TEST(edgeSpaceIsPrintable) {
     auto run = ssg::computeCellRun(" ");
     ASSERT_EQ(run.total_cells, 1u);
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 1, 1, T);
+    CHECK_SPAN(run, 0, 0, 1, 1, kT);
 }
 
 // ---------------------------------------------------------------------------
@@ -829,8 +829,8 @@ TEST(advLoneZwjBeforeExtpic) {
     // Expected: 2 clusters — [ZWJ] {0,3,0,C} and [😀] {3,4,2,T}
     auto run = ssg::computeCellRun("\xE2\x80\x8D\xF0\x9F\x98\x80");
     ASSERT_EQ(run.spans.size(), 2u);
-    CHECK_SPAN(run, 0, 0, 3, 0, C);  // ZWJ: combining, 0 cells
-    CHECK_SPAN(run, 1, 3, 4, 2, T);  // 😀: text, 2 cells
+    CHECK_SPAN(run, 0, 0, 3, 0, kC);  // ZWJ: combining, 0 cells
+    CHECK_SPAN(run, 1, 3, 4, 2, kT);  // 😀: text, 2 cells
     ASSERT_EQ(run.total_cells, 2u);
 }
 
@@ -844,8 +844,8 @@ TEST(advExtpicZwjZwjExtpic) {
     auto run = ssg::computeCellRun(
         "\xF0\x9F\x98\x80\xE2\x80\x8D\xE2\x80\x8D\xF0\x9F\x98\x80");
     ASSERT_EQ(run.spans.size(), 2u);
-    CHECK_SPAN(run, 0, 0,  10, 2, T);  // 😀+ZWJ+ZWJ absorbed via GB9, no GB11
-    CHECK_SPAN(run, 1, 10, 4,  2, T);  // 😀 in its own cluster
+    CHECK_SPAN(run, 0, 0,  10, 2, kT);  // 😀+ZWJ+ZWJ absorbed via GB9, no GB11
+    CHECK_SPAN(run, 1, 10, 4,  2, kT);  // 😀 in its own cluster
     ASSERT_EQ(run.total_cells, 4u);
 }
 
@@ -854,7 +854,7 @@ TEST(advSoftHyphenOwnCluster) {
     // Non-C0/C1 Cf format control → own cluster with kind=control, width=0.
     auto run = ssg::computeCellRun("\xC2\xAD");
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 2, 0, CTL);
+    CHECK_SPAN(run, 0, 0, 2, 0, kCtl);
     ASSERT_EQ(run.total_cells, 0u);
 }
 
@@ -863,7 +863,7 @@ TEST(advZwspOwnCluster) {
     // Non-C0/C1 Cf format control → own cluster with kind=control, width=0.
     auto run = ssg::computeCellRun("\xE2\x80\x8B");
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 3, 0, CTL);
+    CHECK_SPAN(run, 0, 0, 3, 0, kCtl);
     ASSERT_EQ(run.total_cells, 0u);
 }
 
@@ -874,8 +874,8 @@ TEST(advThreeRegionalIndicators) {
     auto run = ssg::computeCellRun(
         "\xF0\x9F\x87\xBA\xF0\x9F\x87\xB8\xF0\x9F\x87\xA6");
     ASSERT_EQ(run.spans.size(), 2u);
-    CHECK_SPAN(run, 0, 0, 8, 2, T);   // 🇺🇸 flag pair
-    CHECK_SPAN(run, 1, 8, 4, 2, T);   // 🇦 lone RI
+    CHECK_SPAN(run, 0, 0, 8, 2, kT);   // 🇺🇸 flag pair
+    CHECK_SPAN(run, 1, 8, 4, 2, kT);   // 🇦 lone RI
     ASSERT_EQ(run.total_cells, 4u);
 }
 
@@ -888,8 +888,8 @@ TEST(advExtpicZwjExtendNoGb11) {
     auto run = ssg::computeCellRun(
         "\xF0\x9F\x98\x80\xE2\x80\x8D\xF0\x9F\x8F\xBB\xF0\x9F\x98\x80");
     ASSERT_EQ(run.spans.size(), 2u);
-    CHECK_SPAN(run, 0, 0,  11, 2, T);
-    CHECK_SPAN(run, 1, 11, 4,  2, T);
+    CHECK_SPAN(run, 0, 0,  11, 2, kT);
+    CHECK_SPAN(run, 1, 11, 4,  2, kT);
     ASSERT_EQ(run.total_cells, 4u);
 }
 
@@ -900,7 +900,7 @@ TEST(advExtpicExtendZwjExtpicGb11) {
     auto run = ssg::computeCellRun(
         "\xF0\x9F\x98\x80\xEF\xB8\x8F\xE2\x80\x8D\xF0\x9F\x98\x80");
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 14, 2, T);  // 4+3+3+4 bytes
+    CHECK_SPAN(run, 0, 0, 14, 2, kT);  // 4+3+3+4 bytes
     ASSERT_EQ(run.total_cells, 2u);
 }
 
@@ -911,7 +911,7 @@ TEST(advLoneEmojiModifier) {
     // as a 2-cell wide glyph — base_width=2, kind=text (wide lone Extend).
     auto run = ssg::computeCellRun("\xF0\x9F\x8F\xBB");
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 4, 2, T);
+    CHECK_SPAN(run, 0, 0, 4, 2, kT);
     ASSERT_EQ(run.total_cells, 2u);
 }
 
@@ -920,7 +920,7 @@ TEST(advBidiControlOwnCluster) {
     // Non-C0/C1 Cf format control → own cluster with kind=control, width=0.
     auto run = ssg::computeCellRun("\xE2\x80\xAA");
     ASSERT_EQ(run.spans.size(), 1u);
-    CHECK_SPAN(run, 0, 0, 3, 0, CTL);
+    CHECK_SPAN(run, 0, 0, 3, 0, kCtl);
     ASSERT_EQ(run.total_cells, 0u);
 }
 
@@ -932,8 +932,8 @@ TEST(advPrependExtendBreaksGb9b) {
     // D8 80 = U+0600, CC 88 = U+0308, 41 = 'A'
     auto run = ssg::computeCellRun("\xD8\x80\xCC\x88\x41");
     ASSERT_EQ(run.spans.size(), 2u);
-    CHECK_SPAN(run, 0, 0, 4, 0, C);  // Prepend+Extend: no visible base absorbed
-    CHECK_SPAN(run, 1, 4, 1, 1, T);  // 'A': separate cluster
+    CHECK_SPAN(run, 0, 0, 4, 0, kC);  // Prepend+Extend: no visible base absorbed
+    CHECK_SPAN(run, 1, 4, 1, 1, kT);  // 'A': separate cluster
     ASSERT_EQ(run.total_cells, 1u);
 }
 

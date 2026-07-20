@@ -36,16 +36,16 @@ EditCommandSettings editSettings(EditorRuntime::Impl const&) {
 
 CommandHandlerResult applyTransaction(EditorRuntime::Impl& runtime,
                                        EditTransaction const& transaction,
-                                       SelectionSet const& selections_after,
+                                       SelectionSet const& selectionsAfter,
                                        HistoryEditKind kind) {
     auto id = runtime.activeDocumentId();
     auto* document = runtime.activeDocument();
     if (!id || document == nullptr) return failure("no active document");
     auto before = runtime.selection.selections;
     auto result = runtime.historyFor(*id).applyEdit(*document, transaction, before,
-                                                       selections_after, kind, 0);
+                                                       selectionsAfter, kind, 0);
     if (!result.accepted()) return failure(result.message);
-    runtime.selection.selections = result.selections.value_or(selections_after);
+    runtime.selection.selections = result.selections.value_or(selectionsAfter);
     runtime.clampSelectionToActiveDocument();
     runtime.revealPrimaryCaret();
     (void)runtime.updateTabsFor(*id);
@@ -208,16 +208,16 @@ void revealActiveFindMatch(EditorRuntime::Impl& runtime) {
     // margin) guarantees the match lands above the prompt whether or not it was
     // open last snapshot.
     auto const reserved = promptRowCount(PromptKind::Find) + 1;
-    auto const base_rows = runtime.last_pane_content_rows +
+    auto const baseRows = runtime.last_pane_content_rows +
                            runtime.last_reserved_prompt_rows;
-    auto const reveal_rows = base_rows > reserved
-                                 ? base_rows - reserved
+    auto const revealRows = baseRows > reserved
+                                 ? baseRows - reserved
                                  : std::uint32_t{1};
-    ViewportDimensions reveal_viewport{runtime.last_pane_content_columns,
-                                       reveal_rows};
+    ViewportDimensions revealViewport{runtime.last_pane_content_columns,
+                                       revealRows};
     auto result = applySelectionNavigation(
         text, runtime.selection, SelectionCommand::ViewRevealCaret,
-        reveal_viewport, {}, {}, 4, runtime.word_wrap);
+        revealViewport, {}, {}, 4, runtime.word_wrap);
     if (result.accepted() && result.delta.replacement) {
         runtime.selection = *result.delta.replacement;
     }
@@ -375,7 +375,7 @@ CommandHandlerResult bindFindReplace(EditorRuntime::Impl& runtime,
                 : runtime.find_replace.replaceAll(*document, runtime.historyFor(*id), before, after, replacement, 0);
             if (!result.accepted()) return failure(result.message);
             runtime.refreshSyntax();
-            auto tabs_result = runtime.updateTabsFor(*id);
+            auto tabsResult = runtime.updateTabsFor(*id);
             revealActiveFindMatch(runtime);
             // If no match remains to reveal (common after replace.all), still
             // reveal the primary caret so a replace with the caret off-screen
@@ -387,7 +387,7 @@ CommandHandlerResult bindFindReplace(EditorRuntime::Impl& runtime,
                 *fr.active_match >= fr.matches.size()) {
                 runtime.revealPrimaryCaret();
             }
-            return tabs_result;
+            return tabsResult;
         }
         case FindReplaceCommand::ReplaceWorkspacePreview:
         {
@@ -403,8 +403,8 @@ CommandHandlerResult bindFindReplace(EditorRuntime::Impl& runtime,
             return success();
         }
         case FindReplaceCommand::ReplaceWorkspaceApply: {
-            auto const* explicit_preview = payloadAs<WorkspaceReplacePreview>(payload);
-            if (payload.has_value() && explicit_preview == nullptr) {
+            auto const* explicitPreview = payloadAs<WorkspaceReplacePreview>(payload);
+            if (payload.has_value() && explicitPreview == nullptr) {
                 return failure("replace.workspace_apply payload has the wrong type");
             }
             auto const* preview = runtime.workspace_replace_preview
@@ -413,7 +413,7 @@ CommandHandlerResult bindFindReplace(EditorRuntime::Impl& runtime,
             if (preview == nullptr) {
                 return failure("replace.workspace_apply requires a workspace replace preview payload");
             }
-            if (explicit_preview != nullptr && *explicit_preview != *preview) {
+            if (explicitPreview != nullptr && *explicitPreview != *preview) {
                 return failure("replace.workspace_apply payload does not match the current workspace preview");
             }
             auto result = applyWorkspaceReplace(runtime, *preview, runtime);
@@ -434,12 +434,12 @@ void EditorRuntime::Impl::revealPrimaryCaret() {
     // adjustment is needed (unlike reveal_active_find_match, which runs while the
     // find prompt is open). The offset is re-clamped in compute_viewport, so a
     // one-frame-stale cache can never place it out of range.
-    ViewportDimensions reveal_viewport{
+    ViewportDimensions revealViewport{
         std::max<std::uint32_t>(last_pane_content_columns, 1),
         std::max<std::uint32_t>(last_pane_content_rows, 1)};
     auto result = applySelectionNavigation(
         activeText(), selection, SelectionCommand::ViewRevealCaret,
-        reveal_viewport, {}, {}, 4, word_wrap);
+        revealViewport, {}, {}, 4, word_wrap);
     if (result.accepted() && result.delta.replacement) {
         selection = *result.delta.replacement;
     }
@@ -448,38 +448,38 @@ void EditorRuntime::Impl::revealPrimaryCaret() {
 }
 
 void bindRuntimeEditing(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime) {
-    auto text_commands = textInputCommandSet();
-    auto selection_commands = selectionNavigationCommandSet();
-    auto history_commands = historyCommandSet();
-    auto edit_commands = editCommandSuiteCommandSet();
-    auto clipboard_commands = clipboardCommandSet();
-    auto find_replace_commands = findReplaceCommandSet();
-    for (auto const& descriptor : text_commands.descriptors()) {
+    auto textCommands = textInputCommandSet();
+    auto selectionCommands = selectionNavigationCommandSet();
+    auto historyCommands = historyCommandSet();
+    auto editCommands = editCommandSuiteCommandSet();
+    auto clipboardCommands = clipboardCommandSet();
+    auto findReplaceCommands = findReplaceCommandSet();
+    for (auto const& descriptor : textCommands.descriptors()) {
         builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const& payload) {
             return runtime.runTransaction([&] { return bindText(runtime, descriptor.command, descriptor.id, payload); });
         });
     }
-    for (auto const& descriptor : selection_commands.descriptors()) {
+    for (auto const& descriptor : selectionCommands.descriptors()) {
         builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const& payload) {
             return runtime.runTransaction([&] { return bindSelection(runtime, descriptor.command, payload); });
         });
     }
-    for (auto const& descriptor : history_commands.descriptors()) {
+    for (auto const& descriptor : historyCommands.descriptors()) {
         builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const&) {
             return runtime.runTransaction([&] { return bindHistory(runtime, descriptor.command); });
         });
     }
-    for (auto const& descriptor : edit_commands.descriptors()) {
+    for (auto const& descriptor : editCommands.descriptors()) {
         builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const&) {
             return runtime.runTransaction([&] { return bindEdit(runtime, descriptor.command); });
         });
     }
-    for (auto const& descriptor : clipboard_commands.descriptors()) {
+    for (auto const& descriptor : clipboardCommands.descriptors()) {
         builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const&) {
             return runtime.runTransaction([&] { return bindClipboard(runtime, descriptor.command); });
         });
     }
-    for (auto const& descriptor : find_replace_commands.descriptors()) {
+    for (auto const& descriptor : findReplaceCommands.descriptors()) {
         builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext& context, std::any const& payload) {
             return runtime.runTransaction([&] { return bindFindReplace(runtime, context.revision(), descriptor.command, payload); });
         });

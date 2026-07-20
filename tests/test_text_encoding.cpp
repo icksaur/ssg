@@ -67,8 +67,8 @@ TEST(autoDetectsUtf8BomAndPreservesCrlfWithoutFinalNewline) {
 }
 
 TEST(roundTripsUtf16EndiannessBomAndMixedEndings) {
-    const auto little_bytes = fixture("utf16le-mixed");
-    const auto little = ssg::decodeText(little_bytes);
+    const auto littleBytes = fixture("utf16le-mixed");
+    const auto little = ssg::decodeText(littleBytes);
     ASSERT_TRUE(little.accepted());
     ASSERT_EQ(little.text->utf8, bytes({
         0x41, 0x0a, 0xe2, 0x82, 0xac, 0x0a, 0x5a, 0x0a}));
@@ -77,16 +77,16 @@ TEST(roundTripsUtf16EndiannessBomAndMixedEndings) {
     ASSERT_EQ(little.text->line_terminators,
               (std::vector{LineTerminator::Crlf, LineTerminator::Cr,
                            LineTerminator::Lf}));
-    ASSERT_EQ(ssg::encodeText(*little.text).bytes, little_bytes);
+    ASSERT_EQ(ssg::encodeText(*little.text).bytes, littleBytes);
 
-    const auto big_bytes = fixture("utf16be-cr");
-    const auto big = ssg::decodeText(big_bytes);
+    const auto bigBytes = fixture("utf16be-cr");
+    const auto big = ssg::decodeText(bigBytes);
     ASSERT_TRUE(big.accepted());
     ASSERT_EQ(big.text->utf8, bytes({0x41, 0x0a, 0xce, 0xa9, 0x0a}));
     ASSERT_EQ(big.text->status.encoding, TextEncoding::Utf16be);
     ASSERT_EQ(big.text->status.line_ending, LineEnding::Cr);
     ASSERT_TRUE(big.text->status.final_newline);
-    ASSERT_EQ(ssg::encodeText(*big.text).bytes, big_bytes);
+    ASSERT_EQ(ssg::encodeText(*big.text).bytes, bigBytes);
 }
 
 TEST(manualSingleByteDecodesAreByteExact) {
@@ -108,14 +108,14 @@ TEST(manualSingleByteDecodesAreByteExact) {
 }
 
 TEST(refusesInvalidInputWithoutReplacement) {
-    const auto invalid_utf8 = ssg::decodeText(fixture("invalid-utf8"));
-    ASSERT_FALSE(invalid_utf8.accepted());
-    ASSERT_EQ(invalid_utf8.error->code, ssg::TextEncodingErrorCode::InvalidInput);
-    ASSERT_EQ(invalid_utf8.error->utf8_offset, std::size_t{0});
+    const auto invalidUtf8 = ssg::decodeText(fixture("invalid-utf8"));
+    ASSERT_FALSE(invalidUtf8.accepted());
+    ASSERT_EQ(invalidUtf8.error->code, ssg::TextEncodingErrorCode::InvalidInput);
+    ASSERT_EQ(invalidUtf8.error->utf8_offset, std::size_t{0});
 
-    const auto invalid_utf16 = ssg::decodeText(fixture("invalid-utf16le"));
-    ASSERT_FALSE(invalid_utf16.accepted());
-    ASSERT_EQ(invalid_utf16.error->code,
+    const auto invalidUtf16 = ssg::decodeText(fixture("invalid-utf16le"));
+    ASSERT_FALSE(invalidUtf16.accepted());
+    ASSERT_EQ(invalidUtf16.error->code,
               ssg::TextEncodingErrorCode::InvalidInput);
 }
 
@@ -162,21 +162,21 @@ TEST(exportsExactImmutableCommandSetAndTypedViewDelta) {
         std::string_view{"file.set_line_ending"},
         std::string_view{"file.set_final_newline"},
     };
-    static_assert(ssg::text_encoding_command_set.descriptors.size() == 4);
+    static_assert(ssg::kTextEncodingCommandSet.descriptors.size() == 4);
     for (std::size_t index = 0; index < expected.size(); ++index) {
-        ASSERT_EQ(ssg::text_encoding_command_set.descriptors[index].id,
+        ASSERT_EQ(ssg::kTextEncodingCommandSet.descriptors[index].id,
                   expected[index]);
     }
 
     const auto before = ssg::decodeText(fixture("utf8-lf"));
     const auto after = ssg::decodeText(fixture("utf8-bom-crlf"));
-    const auto before_view = ssg::makeTextEncodingViewState(*before.text);
-    const auto after_view = ssg::makeTextEncodingViewState(*after.text);
-    const auto delta = ssg::deriveTextEncodingDelta(before_view, after_view);
+    const auto beforeView = ssg::makeTextEncodingViewState(*before.text);
+    const auto afterView = ssg::makeTextEncodingViewState(*after.text);
+    const auto delta = ssg::deriveTextEncodingDelta(beforeView, afterView);
     ASSERT_TRUE(delta.has_value());
-    ASSERT_EQ(delta->before, before_view);
-    ASSERT_EQ(delta->after, after_view);
-    ASSERT_FALSE(ssg::deriveTextEncodingDelta(after_view, after_view).has_value());
+    ASSERT_EQ(delta->before, beforeView);
+    ASSERT_EQ(delta->after, afterView);
+    ASSERT_FALSE(ssg::deriveTextEncodingDelta(afterView, afterView).has_value());
 }
 
 } // namespace
@@ -191,13 +191,13 @@ ssg::DecodeTextResult decode(std::initializer_list<std::uint8_t> values) {
 }
 
 TEST(fusedDecodeRecordsEveryLineTerminator) {
-    const auto lone_cr = decode({'a', 0x0d, 'b'});
-    ASSERT_TRUE(lone_cr.accepted());
-    ASSERT_EQ(lone_cr.text->utf8, std::string{"a\nb"});
-    ASSERT_EQ(lone_cr.text->line_terminators,
+    const auto loneCr = decode({'a', 0x0d, 'b'});
+    ASSERT_TRUE(loneCr.accepted());
+    ASSERT_EQ(loneCr.text->utf8, std::string{"a\nb"});
+    ASSERT_EQ(loneCr.text->line_terminators,
               (std::vector{LineTerminator::Cr, LineTerminator::None}));
-    ASSERT_EQ(lone_cr.text->status.line_ending, LineEnding::Cr);
-    ASSERT_FALSE(lone_cr.text->status.final_newline);
+    ASSERT_EQ(loneCr.text->status.line_ending, LineEnding::Cr);
+    ASSERT_FALSE(loneCr.text->status.final_newline);
 
     const auto crlf = decode({'a', 0x0d, 0x0a});
     ASSERT_EQ(crlf.text->utf8, std::string{"a\n"});
@@ -217,10 +217,10 @@ TEST(fusedDecodeRecordsEveryLineTerminator) {
     ASSERT_EQ(mixed.text->status.line_ending, LineEnding::Mixed);
     ASSERT_TRUE(mixed.text->status.final_newline);
 
-    const auto no_final = decode({'a', 'b', 'c'});
-    ASSERT_EQ(no_final.text->line_terminators,
+    const auto noFinal = decode({'a', 'b', 'c'});
+    ASSERT_EQ(noFinal.text->line_terminators,
               (std::vector{LineTerminator::None}));
-    ASSERT_FALSE(no_final.text->status.final_newline);
+    ASSERT_FALSE(noFinal.text->status.final_newline);
 
     // A multibyte scalar copies straight through, byte-identical.
     const auto multibyte = decode({0xce, 0xb2, 0x0a});  // U+03B2 + LF
@@ -255,9 +255,9 @@ TEST(fusedDecodePreservesMalformedOffsets) {
     ASSERT_EQ(surrogate.error->utf8_offset, std::size_t{0});
 
     // BOM-relative: the offset counts from the original file, not post-BOM.
-    const auto bom_relative = decode({0xef, 0xbb, 0xbf, 'a', 0xc0});
-    ASSERT_FALSE(bom_relative.accepted());
-    ASSERT_EQ(bom_relative.error->utf8_offset, std::size_t{4});
+    const auto bomRelative = decode({0xef, 0xbb, 0xbf, 'a', 0xc0});
+    ASSERT_FALSE(bomRelative.accepted());
+    ASSERT_EQ(bomRelative.error->utf8_offset, std::size_t{4});
 
     // A NUL byte is not valid document text; decode rejects it so ValidatedUtf8
     // cannot carry NUL and Document's no-NUL invariant cannot be bypassed.

@@ -42,8 +42,8 @@ enum class LineEnding : uint8_t {
 
 class TabWidth {
 public:
-    static constexpr int min_value = 1;
-    static constexpr int max_value = 16;
+    static constexpr int kMinValue = 1;
+    static constexpr int kMaxValue = 16;
 
     explicit TabWidth(int w);
 

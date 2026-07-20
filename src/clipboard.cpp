@@ -46,19 +46,19 @@ ClipboardSystemStatus systemStatus(ClipboardResponseStatus status) {
 }
 
 bool positionIsValid(std::string_view text, const DocumentPosition& position,
-                       int tab_width) {
+                       int tabWidth) {
     const auto resolved =
-        resolveDocumentPosition(text, position.byte_offset, tab_width);
+        resolveDocumentPosition(text, position.byte_offset, tabWidth);
     return resolved.has_value() && *resolved == position;
 }
 
 bool selectionsAreValid(std::string_view text,
-                          const SelectionSet& selections, int tab_width) {
+                          const SelectionSet& selections, int tabWidth) {
     return std::all_of(
         selections.items().begin(), selections.items().end(),
         [&](const Selection& selection) {
-            return positionIsValid(text, selection.anchor, tab_width) &&
-                   positionIsValid(text, selection.active, tab_width);
+            return positionIsValid(text, selection.anchor, tabWidth) &&
+                   positionIsValid(text, selection.active, tabWidth);
         });
 }
 
@@ -149,49 +149,49 @@ std::string applyReplacements(
 }
 
 std::optional<SelectionSet> cutSelections(
-    std::string_view resulting_text, const std::vector<ByteRange>& ranges,
-    int tab_width) {
+    std::string_view resultingText, const std::vector<ByteRange>& ranges,
+    int tabWidth) {
     std::vector<Selection> selections;
     selections.reserve(ranges.size());
-    std::uint64_t erased_before = 0;
+    std::uint64_t erasedBefore = 0;
     for (const auto range : ranges) {
-        const auto offset = range.begin - erased_before;
+        const auto offset = range.begin - erasedBefore;
         const auto position = resolveDocumentPosition(
-            resulting_text, ByteOffset{offset}, tab_width);
+            resultingText, ByteOffset{offset}, tabWidth);
         if (!position) {
             return std::nullopt;
         }
         selections.push_back({*position, *position});
-        erased_before += range.end - range.begin;
+        erasedBefore += range.end - range.begin;
     }
     return SelectionSet{std::move(selections)};
 }
 
 std::optional<SelectionSet> pasteSelections(
-    std::string_view resulting_text, const SelectionSet& before,
-    const std::vector<std::string>& insertions, int tab_width) {
+    std::string_view resultingText, const SelectionSet& before,
+    const std::vector<std::string>& insertions, int tabWidth) {
     std::vector<Selection> selections;
     selections.reserve(before.items().size());
-    std::int64_t delta_before = 0;
+    std::int64_t deltaBefore = 0;
     for (std::size_t index = 0; index < before.items().size(); ++index) {
         const auto& selection = before.items()[index];
         const auto begin = selection.lower().byte_offset.value();
         const auto erased =
             selection.upper().byte_offset.value() - begin;
-        const auto signed_offset =
-            static_cast<std::int64_t>(begin) + delta_before +
+        const auto signedOffset =
+            static_cast<std::int64_t>(begin) + deltaBefore +
             static_cast<std::int64_t>(insertions[index].size());
-        if (signed_offset < 0) {
+        if (signedOffset < 0) {
             return std::nullopt;
         }
         const auto position = resolveDocumentPosition(
-            resulting_text, ByteOffset{static_cast<std::uint64_t>(signed_offset)},
-            tab_width);
+            resultingText, ByteOffset{static_cast<std::uint64_t>(signedOffset)},
+            tabWidth);
         if (!position) {
             return std::nullopt;
         }
         selections.push_back({*position, *position});
-        delta_before += static_cast<std::int64_t>(insertions[index].size()) -
+        deltaBefore += static_cast<std::int64_t>(insertions[index].size()) -
                         static_cast<std::int64_t>(erased);
     }
     return SelectionSet{std::move(selections)};
@@ -250,7 +250,7 @@ struct ClipboardRegister::Impl {
     ClipboardResult pasteData(Document& document, DocumentHistory& history,
                                const SelectionSet& selections,
                                const RegisterData& data,
-                               std::uint64_t timestamp_ms,
+                               std::uint64_t timestampMs,
                                ClipboardSystemStatus status) {
         const auto snapshot = document.snapshot();
         if (const auto error = modeError(snapshot.mode);
@@ -286,13 +286,13 @@ struct ClipboardRegister::Impl {
                  selection.upper().byte_offset.value() - begin,
                  insertions[index]});
         }
-        const auto resulting_text =
+        const auto resultingText =
             applyReplacements(snapshot.text, edits);
-        if (resulting_text == snapshot.text) {
+        if (resultingText == snapshot.text) {
             return {ClipboardError::None, status, snapshot.revision, selections,
                     std::nullopt, false, {}};
         }
-        const auto after = pasteSelections(resulting_text, selections,
+        const auto after = pasteSelections(resultingText, selections,
                                             insertions, tab_width);
         if (!after) {
             return failure(ClipboardError::InvalidUtf8, snapshot.revision,
@@ -300,15 +300,15 @@ struct ClipboardRegister::Impl {
                            "clipboard text is not well-formed UTF-8");
         }
 
-        const auto history_result = history.applyEdit(
+        const auto historyResult = history.applyEdit(
             document, EditTransaction{snapshot.revision, std::move(edits)},
-            selections, *after, HistoryEditKind::Other, timestamp_ms);
-        if (!history_result.accepted()) {
-            return failure(documentError(history_result.document_error),
-                           document.revision(), status, history_result.message);
+            selections, *after, HistoryEditKind::Other, timestampMs);
+        if (!historyResult.accepted()) {
+            return failure(documentError(historyResult.document_error),
+                           document.revision(), status, historyResult.message);
         }
-        return {ClipboardError::None, status, history_result.revision,
-                history_result.selections, std::nullopt, true, {}};
+        return {ClipboardError::None, status, historyResult.revision,
+                historyResult.selections, std::nullopt, true, {}};
     }
 };
 
@@ -334,9 +334,9 @@ ClipboardDelta deriveClipboardDelta(const ClipboardViewState& before,
     return {true, after};
 }
 
-ClipboardRegister::ClipboardRegister(int tab_width)
-    : impl_(std::make_unique<Impl>(tab_width)) {
-    if (tab_width < 1 || tab_width > 16) {
+ClipboardRegister::ClipboardRegister(int tabWidth)
+    : impl_(std::make_unique<Impl>(tabWidth)) {
+    if (tabWidth < 1 || tabWidth > 16) {
         throw std::invalid_argument(
             "clipboard tab width must be in the inclusive range [1, 16]");
     }
@@ -371,7 +371,7 @@ ClipboardResult ClipboardRegister::copy(const DocumentSnapshot& document,
 ClipboardResult ClipboardRegister::cut(Document& document,
                                        DocumentHistory& history,
                                        const SelectionSet& selections,
-                                       std::uint64_t timestamp_ms) {
+                                       std::uint64_t timestampMs) {
     const auto snapshot = document.snapshot();
     if (const auto error = modeError(snapshot.mode);
         error != ClipboardError::None) {
@@ -387,7 +387,7 @@ ClipboardResult ClipboardRegister::cut(Document& document,
 
     auto captured = capture(snapshot.text, selections);
     const auto ranges = mergedCutRanges(snapshot.text, selections);
-    auto resulting_text = snapshot.text;
+    auto resultingText = snapshot.text;
     std::optional<SelectionSet> after = selections;
     bool changed = !ranges.empty();
     Revision revision = snapshot.revision;
@@ -399,25 +399,25 @@ ClipboardResult ClipboardRegister::cut(Document& document,
             edits.push_back(
                 {ByteOffset{range.begin}, range.end - range.begin, {}});
         }
-        resulting_text = applyReplacements(snapshot.text, edits);
-        after = cutSelections(resulting_text, ranges, impl_->tab_width);
+        resultingText = applyReplacements(snapshot.text, edits);
+        after = cutSelections(resultingText, ranges, impl_->tab_width);
         if (!after) {
             return failure(ClipboardError::DocumentRejected,
                            snapshot.revision,
                            ClipboardSystemStatus::NotRequested,
                            "clipboard cut could not resolve its selections");
         }
-        const auto history_result = history.applyEdit(
+        const auto historyResult = history.applyEdit(
             document, EditTransaction{snapshot.revision, std::move(edits)},
-            selections, *after, HistoryEditKind::Other, timestamp_ms);
-        if (!history_result.accepted()) {
-            return failure(documentError(history_result.document_error),
+            selections, *after, HistoryEditKind::Other, timestampMs);
+        if (!historyResult.accepted()) {
+            return failure(documentError(historyResult.document_error),
                            document.revision(),
                            ClipboardSystemStatus::NotRequested,
-                           history_result.message);
+                           historyResult.message);
         }
-        revision = history_result.revision;
-        after = history_result.selections;
+        revision = historyResult.revision;
+        after = historyResult.selections;
     }
 
     auto request = impl_->request(ClipboardRequestKind::Write, revision,
@@ -437,7 +437,7 @@ ClipboardResult ClipboardRegister::paste(Document& document,
                                          DocumentHistory& history,
                                          const SelectionSet& selections,
                                          ClipboardPasteMode mode,
-                                         std::uint64_t timestamp_ms) {
+                                         std::uint64_t timestampMs) {
     const auto snapshot = document.snapshot();
     if (const auto error = modeError(snapshot.mode);
         error != ClipboardError::None) {
@@ -452,7 +452,7 @@ ClipboardResult ClipboardRegister::paste(Document& document,
     }
     if (mode == ClipboardPasteMode::InternalOnly) {
         return impl_->pasteData(document, history, selections,
-                                 impl_->register_data, timestamp_ms,
+                                 impl_->register_data, timestampMs,
                                  ClipboardSystemStatus::NotRequested);
     }
 
@@ -471,24 +471,24 @@ ClipboardResult ClipboardRegister::paste(Document& document,
 
 ClipboardResult ClipboardRegister::handleResponse(
     Document& document, DocumentHistory& history,
-    const SelectionSet& current_selections, const ClipboardResponse& response,
-    std::uint64_t timestamp_ms) {
-    const auto current_revision = document.revision();
+    const SelectionSet& currentSelections, const ClipboardResponse& response,
+    std::uint64_t timestampMs) {
+    const auto currentRevision = document.revision();
     if (impl_->pending_write && impl_->pending_write->id == response.id) {
         const auto request = *impl_->pending_write;
         impl_->pending_write.reset();
         if (response.request_revision != request.request_revision ||
             response.observed_document_revision != request.request_revision) {
-            return failure(ClipboardError::StaleResponse, current_revision,
+            return failure(ClipboardError::StaleResponse, currentRevision,
                            ClipboardSystemStatus::Stale,
                            "stale clipboard write response");
         }
         return {ClipboardError::None, systemStatus(response.status),
-                current_revision, current_selections, std::nullopt, false, {}};
+                currentRevision, currentSelections, std::nullopt, false, {}};
     }
 
     if (!impl_->pending_read || impl_->pending_read->request.id != response.id) {
-        return failure(ClipboardError::NoRequest, current_revision,
+        return failure(ClipboardError::NoRequest, currentRevision,
                        ClipboardSystemStatus::Stale,
                        "clipboard response does not match an outstanding request");
     }
@@ -497,21 +497,21 @@ ClipboardResult ClipboardRegister::handleResponse(
     if (response.request_revision != pending.request.request_revision ||
         response.observed_document_revision !=
             pending.request.request_revision ||
-        current_revision != pending.request.request_revision ||
-        current_selections != pending.selections) {
-        return failure(ClipboardError::StaleResponse, current_revision,
+        currentRevision != pending.request.request_revision ||
+        currentSelections != pending.selections) {
+        return failure(ClipboardError::StaleResponse, currentRevision,
                        ClipboardSystemStatus::Stale,
                        "stale clipboard read response");
     }
 
     const auto status = systemStatus(response.status);
     if (response.status == ClipboardResponseStatus::Success) {
-        RegisterData system_data{{response.text}, response.text};
-        return impl_->pasteData(document, history, current_selections,
-                                 system_data, timestamp_ms, status);
+        RegisterData systemData{{response.text}, response.text};
+        return impl_->pasteData(document, history, currentSelections,
+                                 systemData, timestampMs, status);
     }
-    return impl_->pasteData(document, history, current_selections,
-                             pending.fallback, timestamp_ms, status);
+    return impl_->pasteData(document, history, currentSelections,
+                             pending.fallback, timestampMs, status);
 }
 
 ClipboardViewState ClipboardRegister::viewState() const {

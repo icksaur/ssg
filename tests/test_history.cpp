@@ -172,44 +172,44 @@ TEST(windowKindAndBarrierSplitUnits) {
     ASSERT_EQ(document.snapshot().text, std::string{"ab"});
 
     ssg::Document directions{"abc"};
-    ssg::DocumentHistory direction_history{{4096, 750}};
-    auto direction_selection = caret(1);
-    input(direction_history, directions, direction_selection,
+    ssg::DocumentHistory directionHistory{{4096, 750}};
+    auto directionSelection = caret(1);
+    input(directionHistory, directions, directionSelection,
           ssg::TextInputCommand::DeleteBackward,
           ssg::HistoryEditKind::DeleteBackward, 950);
-    input(direction_history, directions, direction_selection,
+    input(directionHistory, directions, directionSelection,
           ssg::TextInputCommand::DeleteForward,
           ssg::HistoryEditKind::DeleteForward, 951);
-    direction_selection = *direction_history.undo(directions).selections;
+    directionSelection = *directionHistory.undo(directions).selections;
     ASSERT_EQ(directions.snapshot().text, std::string{"bc"});
 }
 
 TEST(sameDirectionDeletionsCoalesce) {
-    ssg::Document backward_document{"abc"};
-    ssg::DocumentHistory backward_history{{4096, 750}};
-    auto backward_selection = caret(3);
-    input(backward_history, backward_document, backward_selection,
+    ssg::Document backwardDocument{"abc"};
+    ssg::DocumentHistory backwardHistory{{4096, 750}};
+    auto backwardSelection = caret(3);
+    input(backwardHistory, backwardDocument, backwardSelection,
           ssg::TextInputCommand::DeleteBackward,
           ssg::HistoryEditKind::DeleteBackward, 10);
-    input(backward_history, backward_document, backward_selection,
+    input(backwardHistory, backwardDocument, backwardSelection,
           ssg::TextInputCommand::DeleteBackward,
           ssg::HistoryEditKind::DeleteBackward, 20);
-    backward_selection = *backward_history.undo(backward_document).selections;
-    ASSERT_EQ(backward_document.snapshot().text, std::string{"abc"});
-    ASSERT_EQ(backward_selection, caret(3));
+    backwardSelection = *backwardHistory.undo(backwardDocument).selections;
+    ASSERT_EQ(backwardDocument.snapshot().text, std::string{"abc"});
+    ASSERT_EQ(backwardSelection, caret(3));
 
-    ssg::Document forward_document{"abc"};
-    ssg::DocumentHistory forward_history{{4096, 750}};
-    auto forward_selection = caret(0);
-    input(forward_history, forward_document, forward_selection,
+    ssg::Document forwardDocument{"abc"};
+    ssg::DocumentHistory forwardHistory{{4096, 750}};
+    auto forwardSelection = caret(0);
+    input(forwardHistory, forwardDocument, forwardSelection,
           ssg::TextInputCommand::DeleteForward,
           ssg::HistoryEditKind::DeleteForward, 10);
-    input(forward_history, forward_document, forward_selection,
+    input(forwardHistory, forwardDocument, forwardSelection,
           ssg::TextInputCommand::DeleteForward,
           ssg::HistoryEditKind::DeleteForward, 20);
-    forward_selection = *forward_history.undo(forward_document).selections;
-    ASSERT_EQ(forward_document.snapshot().text, std::string{"abc"});
-    ASSERT_EQ(forward_selection, caret(0));
+    forwardSelection = *forwardHistory.undo(forwardDocument).selections;
+    ASSERT_EQ(forwardDocument.snapshot().text, std::string{"abc"});
+    ASSERT_EQ(forwardSelection, caret(0));
 }
 
 TEST(selectionRestorationAndRedoInvalidation) {
@@ -233,34 +233,34 @@ TEST(selectionRestorationAndRedoInvalidation) {
 }
 
 TEST(byteBudgetEvictsOldestAndRejectsOversizeUnits) {
-    const auto one_insert_charge =
+    const auto oneInsertCharge =
         std::uint64_t{1} + 2 * sizeof(ssg::Selection);
     ssg::Document document;
-    ssg::DocumentHistory history{{one_insert_charge, 750}};
+    ssg::DocumentHistory history{{oneInsertCharge, 750}};
     auto selections = caret(0);
 
     input(history, document, selections, ssg::TextInputCommand::Insert,
           ssg::HistoryEditKind::Other, 0, "a");
-    ASSERT_EQ(history.retainedBytes(), one_insert_charge);
+    ASSERT_EQ(history.retainedBytes(), oneInsertCharge);
     input(history, document, selections, ssg::TextInputCommand::Insert,
           ssg::HistoryEditKind::Other, 1, "b");
-    ASSERT_EQ(history.retainedBytes(), one_insert_charge);
+    ASSERT_EQ(history.retainedBytes(), oneInsertCharge);
     selections = *history.undo(document).selections;
     ASSERT_EQ(document.snapshot().text, std::string{"a"});
     ASSERT_FALSE(history.canUndo());
 
-    ssg::Document oversized_document;
-    ssg::DocumentHistory oversized{{one_insert_charge - 1, 750}};
-    auto oversized_selection = caret(0);
-    input(oversized, oversized_document, oversized_selection,
+    ssg::Document oversizedDocument;
+    ssg::DocumentHistory oversized{{oneInsertCharge - 1, 750}};
+    auto oversizedSelection = caret(0);
+    input(oversized, oversizedDocument, oversizedSelection,
           ssg::TextInputCommand::Insert, ssg::HistoryEditKind::Other, 0, "x");
     ASSERT_FALSE(oversized.canUndo());
     ASSERT_EQ(oversized.retainedBytes(), std::uint64_t{0});
 
-    ssg::Document disabled_document;
+    ssg::Document disabledDocument;
     ssg::DocumentHistory disabled{{0, 750}};
-    auto disabled_selection = caret(0);
-    input(disabled, disabled_document, disabled_selection,
+    auto disabledSelection = caret(0);
+    input(disabled, disabledDocument, disabledSelection,
           ssg::TextInputCommand::Insert, ssg::HistoryEditKind::Other, 0, "x");
     ASSERT_FALSE(disabled.canUndo());
 }
@@ -297,13 +297,13 @@ TEST(undoRedoAdvanceRevisionAndKeepDirty) {
     auto selections = caret(0);
     input(history, document, selections, ssg::TextInputCommand::Insert,
           ssg::HistoryEditKind::Other, 0, "a");
-    const auto after_edit = document.revision();
+    const auto afterEdit = document.revision();
     selections = *history.undo(document).selections;
-    ASSERT_TRUE(document.revision() > after_edit);
+    ASSERT_TRUE(document.revision() > afterEdit);
     ASSERT_TRUE(document.dirty());
-    const auto after_undo = document.revision();
+    const auto afterUndo = document.revision();
     selections = *history.redo(document).selections;
-    ASSERT_TRUE(document.revision() > after_undo);
+    ASSERT_TRUE(document.revision() > afterUndo);
     ASSERT_TRUE(document.dirty());
 }
 

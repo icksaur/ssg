@@ -169,7 +169,7 @@ TEST(statusPriorityAndNavigationTransitionTable) {
 
 TEST(statusCapacityAdmissionAndEvictionTable) {
     StatusQueue queue;
-    for (std::uint64_t id = 1; id <= StatusQueue::capacity; ++id) {
+    for (std::uint64_t id = 1; id <= StatusQueue::kCapacity; ++id) {
         ASSERT_TRUE(queue.enqueue(
             status(id, StatusPriority::Information, std::to_string(id))).accepted);
     }
@@ -177,7 +177,7 @@ TEST(statusCapacityAdmissionAndEvictionTable) {
         queue.enqueue(status(17, StatusPriority::Progress, "rejected"));
     ASSERT_FALSE(rejected.accepted);
     auto view = queue.viewState();
-    ASSERT_EQ(view.items.size(), StatusQueue::capacity);
+    ASSERT_EQ(view.items.size(), StatusQueue::kCapacity);
 
     const auto admitted =
         queue.enqueue(status(18, StatusPriority::Error, "admitted"));
@@ -230,8 +230,8 @@ TEST(footerProjectionAndAccessibilityMatchGolden) {
         actual += controlKindText(control.kind) + "|" +
                   control.accessible_label + "\n";
     }
-    const auto status_view = queue.viewState();
-    actual += "status|" + status_view.items[0].accessible_label + "\n";
+    const auto statusView = queue.viewState();
+    actual += "status|" + statusView.items[0].accessible_label + "\n";
     for (const auto& action : footer.actions) {
         actual += "action|" + action.accessible_label + "\n";
     }

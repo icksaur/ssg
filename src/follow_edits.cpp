@@ -23,10 +23,10 @@ auto findClient(const std::vector<FollowClientView>& clients, ClientId client) {
                         });
 }
 
-FollowScrollOffset offsetFor(std::size_t target_line,
+FollowScrollOffset offsetFor(std::size_t targetLine,
                               const ViewportDimensions& dimensions) {
     const auto rows = static_cast<std::uint64_t>(dimensions.rows);
-    const auto line = static_cast<std::uint64_t>(target_line);
+    const auto line = static_cast<std::uint64_t>(targetLine);
     return {line >= rows ? line - rows + 1 : 0, 0};
 }
 
@@ -81,18 +81,18 @@ FollowEditsResult FollowEditsModel::detachClient(ClientId client) {
 }
 
 FollowEditsResult FollowEditsModel::acceptExternalChange(
-    const DiffFileView& file, Revision source_revision) {
-    if (source_revision <= latest_source_revision_) {
+    const DiffFileView& file, Revision sourceRevision) {
+    if (sourceRevision <= latest_source_revision_) {
         return {FollowEditsError::StaleRevision};
     }
 
-    latest_source_revision_ = source_revision;
+    latest_source_revision_ = sourceRevision;
     std::erase_if(state_.queued_targets, [&file](const FollowTarget& target) {
         return target.id == file.id;
     });
 
     if (!file.hunks.empty()) {
-        auto target = targetFor(file, source_revision);
+        auto target = targetFor(file, sourceRevision);
         state_.queued_targets.push_back(target);
         if (state_.queued_targets.size() > config_.queue_capacity) {
             state_.queued_targets.erase(state_.queued_targets.begin());
@@ -132,8 +132,8 @@ FollowEditsResult FollowEditsModel::pause() {
     return {};
 }
 
-FollowEditsResult FollowEditsModel::resume(const DiffViewState& current_diff) {
-    if (current_diff.revision < latest_source_revision_) {
+FollowEditsResult FollowEditsModel::resume(const DiffViewState& currentDiff) {
+    if (currentDiff.revision < latest_source_revision_) {
         return {FollowEditsError::StaleRevision};
     }
 
@@ -141,11 +141,11 @@ FollowEditsResult FollowEditsModel::resume(const DiffViewState& current_diff) {
     for (auto queued = state_.queued_targets.rbegin();
          queued != state_.queued_targets.rend(); ++queued) {
         const auto current =
-            std::find_if(current_diff.files.begin(), current_diff.files.end(),
+            std::find_if(currentDiff.files.begin(), currentDiff.files.end(),
                          [&queued](const DiffFileView& file) {
                              return file.id == queued->id && !file.hunks.empty();
                          });
-        if (current != current_diff.files.end()) {
+        if (current != currentDiff.files.end()) {
             resolved = targetFor(*current, queued->source_revision);
             break;
         }
@@ -172,10 +172,10 @@ FollowEditsFooterProjection FollowEditsModel::footerProjection() const {
 }
 
 FollowTarget FollowEditsModel::targetFor(const DiffFileView& file,
-                                          Revision source_revision) const {
+                                          Revision sourceRevision) const {
     const auto opened = diffOpenFile(file);
     return {file.id, opened.path, file.deleted, file.hunks.back().target_start,
-            source_revision};
+            sourceRevision};
 }
 
 void FollowEditsModel::activate(const FollowTarget& target) {

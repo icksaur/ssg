@@ -36,10 +36,10 @@
 namespace ssg {
 namespace {
 
-constexpr std::array<std::byte, 8> manifest_magic{
+constexpr std::array<std::byte, 8> kManifestMagic{
     std::byte{'S'}, std::byte{'S'}, std::byte{'G'}, std::byte{'R'},
     std::byte{'E'}, std::byte{'C'}, std::byte{1},   std::byte{0}};
-constexpr std::uintmax_t record_lifecycle_metadata_bytes = 17;
+constexpr std::uintmax_t kRecordLifecycleMetadataBytes = 17;
 
 enum class SnapshotKind : std::uint8_t {
     Missing,
@@ -271,12 +271,12 @@ void renameDurably(const std::filesystem::path& source,
 #else
     std::filesystem::rename(source, destination);
     syncPath(std::filesystem::absolute(source).parent_path(), true);
-    const auto source_parent =
+    const auto sourceParent =
         std::filesystem::absolute(source).parent_path().lexically_normal();
-    const auto destination_parent =
+    const auto destinationParent =
         std::filesystem::absolute(destination).parent_path().lexically_normal();
-    if (destination_parent != source_parent) {
-        syncPath(destination_parent, true);
+    if (destinationParent != sourceParent) {
+        syncPath(destinationParent, true);
     }
 #endif
 }
@@ -335,12 +335,12 @@ void copyNode(const std::filesystem::path& source,
     case SnapshotKind::Symlink: {
         std::filesystem::create_directories(destination.parent_path());
         const auto target = std::filesystem::read_symlink(source);
-        std::error_code status_error;
-        const bool directory_target =
+        std::error_code statusError;
+        const bool directoryTarget =
             std::filesystem::is_directory(
-                std::filesystem::status(source, status_error)) &&
-            !status_error;
-        if (directory_target) {
+                std::filesystem::status(source, statusError)) &&
+            !statusError;
+        if (directoryTarget) {
             std::filesystem::create_directory_symlink(target, destination);
         } else {
             std::filesystem::create_symlink(target, destination);
@@ -350,9 +350,9 @@ void copyNode(const std::filesystem::path& source,
     case SnapshotKind::Directory:
         std::filesystem::create_directories(destination);
         for (const auto& entry : std::filesystem::directory_iterator(source)) {
-            const auto child_kind = snapshotKind(entry.path());
+            const auto childKind = snapshotKind(entry.path());
             copyNode(entry.path(), destination / entry.path().filename(),
-                      child_kind);
+                      childKind);
         }
         return;
     }
@@ -378,7 +378,7 @@ void restoreSnapshot(const std::filesystem::path& destination,
 
 std::uintmax_t storedTreeBytes(const std::filesystem::path& root) {
     std::uintmax_t total = 0;
-    const auto add_node = [&](const std::filesystem::path& path) {
+    const auto addNode = [&](const std::filesystem::path& path) {
         const auto kind = snapshotKind(path);
         if (kind == SnapshotKind::RegularFile) {
             const auto size = std::filesystem::file_size(path);
@@ -396,11 +396,11 @@ std::uintmax_t storedTreeBytes(const std::filesystem::path& root) {
         }
     };
 
-    add_node(root);
+    addNode(root);
     if (snapshotKind(root) == SnapshotKind::Directory) {
         for (const auto& entry :
              std::filesystem::recursive_directory_iterator(root)) {
-            add_node(entry.path());
+            addNode(entry.path());
         }
     }
     return total;
@@ -438,16 +438,16 @@ bool pathComponentEqual(const std::filesystem::path& left,
 
 bool pathContains(const std::filesystem::path& parent,
                    const std::filesystem::path& child) {
-    const auto normalized_parent =
+    const auto normalizedParent =
         std::filesystem::absolute(parent).lexically_normal();
-    const auto normalized_child =
+    const auto normalizedChild =
         std::filesystem::absolute(child).lexically_normal();
-    auto parent_part = normalized_parent.begin();
-    auto child_part = normalized_child.begin();
-    for (; parent_part != normalized_parent.end();
-         ++parent_part, ++child_part) {
-        if (child_part == normalized_child.end() ||
-            !pathComponentEqual(*parent_part, *child_part)) {
+    auto parentPart = normalizedParent.begin();
+    auto childPart = normalizedChild.begin();
+    for (; parentPart != normalizedParent.end();
+         ++parentPart, ++childPart) {
+        if (childPart == normalizedChild.end() ||
+            !pathComponentEqual(*parentPart, *childPart)) {
             return false;
         }
     }
@@ -496,7 +496,7 @@ struct StoredRecord {
 
 std::vector<std::byte> encodeManifest(const StoredRecord& stored) {
     ByteWriter writer;
-    writer.raw(manifest_magic);
+    writer.raw(kManifestMagic);
     writer.u8(static_cast<std::uint8_t>(stored.record.kind));
     writer.u64(stored.record.stored_bytes);
 
@@ -534,46 +534,46 @@ StoredRecord decodeManifest(const RecoveryRecordId& id,
     const auto encoded = readBytes(directory / "manifest.bin");
     ByteReader reader(encoded);
     std::span<const std::byte> magic;
-    if (!reader.raw(manifest_magic.size(), magic) ||
-        !std::equal(magic.begin(), magic.end(), manifest_magic.begin())) {
+    if (!reader.raw(kManifestMagic.size(), magic) ||
+        !std::equal(magic.begin(), magic.end(), kManifestMagic.begin())) {
         throw std::runtime_error("invalid recovery manifest magic");
     }
 
-    std::uint8_t encoded_kind = 0;
-    std::uint64_t stored_bytes = 0;
-    std::uint8_t has_document = 0;
-    if (!reader.u8(encoded_kind) || !validRecordKind(encoded_kind) ||
-        !reader.u64(stored_bytes) || !reader.u8(has_document) ||
-        has_document > 1) {
+    std::uint8_t encodedKind = 0;
+    std::uint64_t storedBytes = 0;
+    std::uint8_t hasDocument = 0;
+    if (!reader.u8(encodedKind) || !validRecordKind(encodedKind) ||
+        !reader.u64(storedBytes) || !reader.u8(hasDocument) ||
+        hasDocument > 1) {
         throw std::runtime_error("invalid recovery manifest header");
     }
 
     std::optional<JournalDocument> document;
-    if (has_document != 0) {
-        std::uint32_t document_size = 0;
-        std::span<const std::byte> document_bytes;
-        if (!reader.u32(document_size) ||
-            !reader.raw(document_size, document_bytes)) {
+    if (hasDocument != 0) {
+        std::uint32_t documentSize = 0;
+        std::span<const std::byte> documentBytes;
+        if (!reader.u32(documentSize) ||
+            !reader.raw(documentSize, documentBytes)) {
             throw std::runtime_error("truncated recovery document");
         }
-        const auto replayed = replayJournal(document_bytes);
+        const auto replayed = replayJournal(documentBytes);
         if (replayed.discarded_tail ||
-            replayed.valid_bytes != document_bytes.size() ||
+            replayed.valid_bytes != documentBytes.size() ||
             replayed.recovery.documents.size() != 1) {
             throw std::runtime_error("invalid recovery document");
         }
         document = replayed.recovery.documents.front();
     }
 
-    std::uint32_t path_count = 0;
-    if (!reader.u32(path_count)) {
+    std::uint32_t pathCount = 0;
+    if (!reader.u32(pathCount)) {
         throw std::runtime_error("truncated recovery path list");
     }
     std::vector<std::filesystem::path> paths;
     std::vector<SnapshotKind> snapshots;
-    paths.reserve(path_count);
-    snapshots.reserve(path_count);
-    for (std::uint32_t index = 0; index != path_count; ++index) {
+    paths.reserve(pathCount);
+    snapshots.reserve(pathCount);
+    for (std::uint32_t index = 0; index != pathCount; ++index) {
         std::string path;
         std::uint8_t kind = 0;
         if (!reader.string(path) || !reader.u8(kind) ||
@@ -590,13 +590,13 @@ StoredRecord decodeManifest(const RecoveryRecordId& id,
         throw std::runtime_error("invalid recovery manifest tail");
     }
 
-    const auto kind = static_cast<RecoveryRecordKind>(encoded_kind);
+    const auto kind = static_cast<RecoveryRecordKind>(encodedKind);
     if (documentKind(kind) != document.has_value()) {
         throw std::runtime_error("recovery record payload does not match kind");
     }
     return {{id,
              kind,
-             stored_bytes,
+             storedBytes,
              document ? std::optional<JournalDocumentKey>{document->key}
                       : std::nullopt,
              std::move(paths)},
@@ -619,14 +619,14 @@ RecoveryRecordId::RecoveryRecordId(std::string value) : value_(std::move(value))
 
 class RecoveryActions::Impl {
 public:
-    Impl(std::filesystem::path recovery_root,
+    Impl(std::filesystem::path recoveryRoot,
          RecoveryConfig config,
-         RecoveryFaultInjector* fault_injector)
+         RecoveryFaultInjector* faultInjector)
         : recovery_root_(
-              std::filesystem::absolute(std::move(recovery_root))
+              std::filesystem::absolute(std::move(recoveryRoot))
                   .lexically_normal()),
           config_(config),
-          fault_injector_(fault_injector) {
+          fault_injector_(faultInjector) {
         if (config_.maximum_records == 0) {
             throw std::invalid_argument(
                 "recovery maximum record count must be greater than zero");
@@ -650,13 +650,13 @@ public:
     RecoveryActionResult closeDocument(
         std::optional<JournalDocument>& document,
         ScratchStore& scratch,
-        std::chrono::milliseconds durability_timeout) {
+        std::chrono::milliseconds durabilityTimeout) {
         if (!document) {
             return {{},
                     error(RecoveryErrorCode::PreparationFailed,
                           "cannot close an absent document")};
         }
-        if (durability_timeout <= std::chrono::milliseconds::zero()) {
+        if (durabilityTimeout <= std::chrono::milliseconds::zero()) {
             return {{},
                     error(RecoveryErrorCode::DurabilityFailed,
                           "dirty close requires a finite positive durability "
@@ -665,7 +665,7 @@ public:
         if (document->dirty) {
             try {
                 scratch.updateDocument(*document);
-                if (!scratch.waitUntilDurable(durability_timeout)) {
+                if (!scratch.waitUntilDurable(durabilityTimeout)) {
                     const auto state = scratch.durabilityState();
                     const auto detail =
                         state.failure.empty() ? "durability timed out"
@@ -720,14 +720,14 @@ public:
     RecoveryActionResult overwriteFile(
         const std::filesystem::path& path,
         std::span<const std::byte> replacement) {
-        const std::vector<std::byte> owned_replacement(replacement.begin(),
+        const std::vector<std::byte> ownedReplacement(replacement.begin(),
                                                        replacement.end());
         return prepareAndPerform(
             RecoveryRecordKind::FileOverwrite, std::nullopt, {path},
             std::nullopt,
             [&] {
                 before(RecoveryStep::MutateFilesystem);
-                replaceFileAtomically(path, owned_replacement);
+                replaceFileAtomically(path, ownedReplacement);
             },
             [&](const StoredRecord& stored) {
                 before(RecoveryStep::RollbackFilesystem);
@@ -1051,14 +1051,14 @@ private:
 
             auto manifest = encodeManifest(stored);
             writeBytes(staging / "manifest.bin", manifest);
-            const auto payload_bytes = storedTreeBytes(staging);
-            if (payload_bytes >
+            const auto payloadBytes = storedTreeBytes(staging);
+            if (payloadBytes >
                 std::numeric_limits<std::uintmax_t>::max() -
-                    record_lifecycle_metadata_bytes) {
+                    kRecordLifecycleMetadataBytes) {
                 throw std::overflow_error("recovery byte accounting overflow");
             }
             stored.record.stored_bytes =
-                payload_bytes + record_lifecycle_metadata_bytes;
+                payloadBytes + kRecordLifecycleMetadataBytes;
             manifest = encodeManifest(stored);
             writeBytes(staging / "manifest.bin", manifest);
             protectTree(staging);
@@ -1115,7 +1115,7 @@ private:
         }
 
         records_under_preparation_ = &*prepared;
-        std::exception_ptr action_failure;
+        std::exception_ptr actionFailure;
         try {
             mutation();
             if (!documentKind(prepared->record.kind)) {
@@ -1125,19 +1125,19 @@ private:
             markRecordState(*prepared, RecordState::Published);
             before(RecoveryStep::PublishRecord);
         } catch (...) {
-            action_failure = std::current_exception();
+            actionFailure = std::current_exception();
         }
         records_under_preparation_ = nullptr;
 
-        if (!action_failure) {
+        if (!actionFailure) {
             const auto id = prepared->record.id;
             records_.push_back(std::move(*prepared));
-            if (const auto cleanup_failure = enforceBudgets()) {
+            if (const auto cleanupFailure = enforceBudgets()) {
                 return {id,
                         error(RecoveryErrorCode::CleanupFailed,
                               "recovery action succeeded, but old record "
                               "eviction failed: " +
-                                  *cleanup_failure)};
+                                  *cleanupFailure)};
             }
             return {id, {}};
         }
@@ -1149,19 +1149,19 @@ private:
                 syncFilesystemState(*prepared);
             }
         } catch (...) {
-            const auto rollback_failure = std::current_exception();
+            const auto rollbackFailure = std::current_exception();
             const auto id = prepared->record.id;
             records_.push_back(std::move(*prepared));
-            auto rollback_message = exceptionMessage(rollback_failure);
-            if (const auto cleanup_failure = enforceBudgets()) {
-                rollback_message +=
-                    "; old record eviction failed: " + *cleanup_failure;
+            auto rollbackMessage = exceptionMessage(rollbackFailure);
+            if (const auto cleanupFailure = enforceBudgets()) {
+                rollbackMessage +=
+                    "; old record eviction failed: " + *cleanupFailure;
             }
             return {id,
                     error(RecoveryErrorCode::ActionAndRollbackFailed,
                           "recovery action failed: " +
-                              exceptionMessage(action_failure),
-                          std::move(rollback_message))};
+                              exceptionMessage(actionFailure),
+                          std::move(rollbackMessage))};
         }
 
         try {
@@ -1171,7 +1171,7 @@ private:
             return {{},
                     error(RecoveryErrorCode::ActionFailed,
                           "recovery action failed: " +
-                              exceptionMessage(action_failure))};
+                              exceptionMessage(actionFailure))};
         } catch (...) {
             const auto id = prepared->record.id;
             records_.push_back(std::move(*prepared));
@@ -1275,14 +1275,14 @@ private:
     void restoreRename(const StoredRecord& stored) {
         const auto& source = stored.record.affected_paths[0];
         const auto& destination = stored.record.affected_paths[1];
-        const auto source_now = snapshotKind(source);
-        const auto destination_now = snapshotKind(destination);
-        if (source_now == SnapshotKind::Missing &&
-            destination_now != SnapshotKind::Missing) {
+        const auto sourceNow = snapshotKind(source);
+        const auto destinationNow = snapshotKind(destination);
+        if (sourceNow == SnapshotKind::Missing &&
+            destinationNow != SnapshotKind::Missing) {
             removeNode(source);
             std::filesystem::create_directories(source.parent_path());
             renameDurably(destination, source);
-        } else if (source_now == SnapshotKind::Missing) {
+        } else if (sourceNow == SnapshotKind::Missing) {
             restoreSnapshot(source, artifactPath(stored, 0),
                              stored.snapshots[0]);
         }
@@ -1353,18 +1353,18 @@ private:
 };
 
 RecoveryActions RecoveryActions::create(
-    const std::filesystem::path& recovery_root,
+    const std::filesystem::path& recoveryRoot,
     RecoveryConfig config) {
     return RecoveryActions{
-        std::make_unique<Impl>(recovery_root, config, nullptr)};
+        std::make_unique<Impl>(recoveryRoot, config, nullptr)};
 }
 
 RecoveryActions RecoveryActions::create(
-    const std::filesystem::path& recovery_root,
+    const std::filesystem::path& recoveryRoot,
     RecoveryConfig config,
-    RecoveryFaultInjector& fault_injector) {
+    RecoveryFaultInjector& faultInjector) {
     return RecoveryActions{
-        std::make_unique<Impl>(recovery_root, config, &fault_injector)};
+        std::make_unique<Impl>(recoveryRoot, config, &faultInjector)};
 }
 
 RecoveryActions::RecoveryActions(
@@ -1383,8 +1383,8 @@ std::vector<RecoveryRecord> RecoveryActions::records() const {
 RecoveryActionResult RecoveryActions::closeDocument(
     std::optional<JournalDocument>& document,
     ScratchStore& scratch,
-    std::chrono::milliseconds durability_timeout) {
-    return impl_->closeDocument(document, scratch, durability_timeout);
+    std::chrono::milliseconds durabilityTimeout) {
+    return impl_->closeDocument(document, scratch, durabilityTimeout);
 }
 
 RecoveryActionResult RecoveryActions::reloadDocument(

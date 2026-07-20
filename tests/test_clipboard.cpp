@@ -88,33 +88,33 @@ TEST(fragmentDistributionAndPlainPayloadFallbackRoundTrip) {
                     .accepted());
 
     ssg::Document distributed{"xx"};
-    ssg::DocumentHistory distributed_history;
-    const auto distributed_before = selections("xx", {{0, 0}, {2, 2}});
+    ssg::DocumentHistory distributedHistory;
+    const auto distributedBefore = selections("xx", {{0, 0}, {2, 2}});
     const auto paste = clipboard.paste(
-        distributed, distributed_history, distributed_before,
+        distributed, distributedHistory, distributedBefore,
         ssg::ClipboardPasteMode::InternalOnly, 10);
     ASSERT_TRUE(paste.accepted());
     ASSERT_EQ(distributed.snapshot().text, std::string{"AxxB"});
     ASSERT_TRUE(paste.document_changed);
-    auto undone = distributed_history.undo(distributed);
+    auto undone = distributedHistory.undo(distributed);
     ASSERT_TRUE(undone.accepted());
     ASSERT_EQ(distributed.snapshot().text, std::string{"xx"});
-    ASSERT_EQ(*undone.selections, distributed_before);
-    auto redone = distributed_history.redo(distributed);
+    ASSERT_EQ(*undone.selections, distributedBefore);
+    auto redone = distributedHistory.redo(distributed);
     ASSERT_TRUE(redone.accepted());
     ASSERT_EQ(distributed.snapshot().text, std::string{"AxxB"});
 
     ssg::Document fallback{"xyz"};
-    ssg::DocumentHistory fallback_history;
-    const auto fallback_before = selections("xyz", {{0, 0}, {1, 1}, {3, 3}});
-    const auto fallback_paste = clipboard.paste(
-        fallback, fallback_history, fallback_before,
+    ssg::DocumentHistory fallbackHistory;
+    const auto fallbackBefore = selections("xyz", {{0, 0}, {1, 1}, {3, 3}});
+    const auto fallbackPaste = clipboard.paste(
+        fallback, fallbackHistory, fallbackBefore,
         ssg::ClipboardPasteMode::InternalOnly, 20);
-    ASSERT_TRUE(fallback_paste.accepted());
+    ASSERT_TRUE(fallbackPaste.accepted());
     ASSERT_EQ(fallback.snapshot().text, std::string{"ABxAByzAB"});
-    const auto fallback_undo = fallback_history.undo(fallback);
-    ASSERT_TRUE(fallback_undo.accepted());
-    ASSERT_EQ(*fallback_undo.selections, fallback_before);
+    const auto fallbackUndo = fallbackHistory.undo(fallback);
+    ASSERT_TRUE(fallbackUndo.accepted());
+    ASSERT_EQ(*fallbackUndo.selections, fallbackBefore);
     ASSERT_EQ(fallback.snapshot().text, std::string{"xyz"});
 }
 
@@ -142,7 +142,7 @@ TEST(lineCutMergesDuplicateRangesAndIsUndoable) {
 }
 
 void assertFallbackResponse(ssg::ClipboardResponseStatus status,
-                              ssg::ClipboardSystemStatus expected_status) {
+                              ssg::ClipboardSystemStatus expectedStatus) {
     ssg::ClipboardRegister clipboard;
     ssg::Document source{"fallback"};
     ASSERT_TRUE(clipboard
@@ -161,7 +161,7 @@ void assertFallbackResponse(ssg::ClipboardResponseStatus status,
         target, history, before, responseFor(*pending.request, status), 20);
 
     ASSERT_TRUE(handled.accepted());
-    ASSERT_EQ(handled.system_status, expected_status);
+    ASSERT_EQ(handled.system_status, expectedStatus);
     ASSERT_EQ(target.snapshot().text, std::string{"xfallback"});
     ASSERT_TRUE(history.undo(target).accepted());
     ASSERT_EQ(target.snapshot().text, std::string{"x"});
@@ -267,14 +267,14 @@ TEST(invalidSystemTextAndNonEditModesAreAtomic) {
     for (const auto mode :
          {ssg::DocumentMode::ReadOnly, ssg::DocumentMode::Diff}) {
         ssg::Document blocked{"x", mode};
-        ssg::DocumentHistory blocked_history;
-        const auto blocked_before = selections("x", {{0, 1}});
+        ssg::DocumentHistory blockedHistory;
+        const auto blockedBefore = selections("x", {{0, 1}});
         const auto cut =
-            clipboard.cut(blocked, blocked_history, blocked_before, 30);
+            clipboard.cut(blocked, blockedHistory, blockedBefore, 30);
         ASSERT_FALSE(cut.accepted());
         ASSERT_EQ(blocked.snapshot().text, std::string{"x"});
         const auto paste = clipboard.paste(
-            blocked, blocked_history, blocked_before,
+            blocked, blockedHistory, blockedBefore,
             ssg::ClipboardPasteMode::InternalOnly, 40);
         ASSERT_FALSE(paste.accepted());
         ASSERT_EQ(blocked.snapshot().text, std::string{"x"});
@@ -287,8 +287,8 @@ TEST(writeFailureDoesNotRollBackCopyOrCut) {
     ssg::DocumentHistory history;
     const auto before = selections("line\n", {{0, 0}});
     const auto cut = clipboard.cut(document, history, before, 10);
-    const auto state_after_cut = clipboard.viewState();
-    const auto text_after_cut = document.snapshot().text;
+    const auto stateAfterCut = clipboard.viewState();
+    const auto textAfterCut = document.snapshot().text;
 
     const auto failure = clipboard.handleResponse(
         document, history, *cut.selections,
@@ -296,8 +296,8 @@ TEST(writeFailureDoesNotRollBackCopyOrCut) {
 
     ASSERT_TRUE(failure.accepted());
     ASSERT_EQ(failure.system_status, ssg::ClipboardSystemStatus::Denied);
-    ASSERT_EQ(clipboard.viewState().fragments, state_after_cut.fragments);
-    ASSERT_EQ(document.snapshot().text, text_after_cut);
+    ASSERT_EQ(clipboard.viewState().fragments, stateAfterCut.fragments);
+    ASSERT_EQ(document.snapshot().text, textAfterCut);
     ASSERT_TRUE(history.canUndo());
 }
 
@@ -331,13 +331,13 @@ TEST(viewDeltaReportsRegisterAndRequestChanges) {
     ASSERT_FALSE(ssg::deriveClipboardDelta(empty, empty).changed);
 
     ssg::Document document{"a"};
-    const auto copy_result =
+    const auto copyResult =
         clipboard.copy(document.snapshot(), selections("a", {{0, 1}}));
-    ASSERT_TRUE(copy_result.accepted());
-    const auto copied_state = clipboard.viewState();
-    const auto delta = ssg::deriveClipboardDelta(empty, copied_state);
+    ASSERT_TRUE(copyResult.accepted());
+    const auto copiedState = clipboard.viewState();
+    const auto delta = ssg::deriveClipboardDelta(empty, copiedState);
     ASSERT_TRUE(delta.changed);
-    ASSERT_EQ(*delta.replacement, copied_state);
+    ASSERT_EQ(*delta.replacement, copiedState);
 }
 
 }  // namespace

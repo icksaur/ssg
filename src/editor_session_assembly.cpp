@@ -61,22 +61,22 @@ std::vector<CommandDescriptor> p0CommandDescriptors() {
     appendIds(result, treeCommandSet().descriptors());
     appendIds(result, PromptStatusCommandSet{}.descriptors);
     appendIds(result, fileCommandsCommandSet().descriptors());
-    appendIds(result, text_encoding_command_set.descriptors);
+    appendIds(result, kTextEncodingCommandSet.descriptors);
     appendIds(result, tabManagementCommandSet().descriptors());
     appendIds(result, externalModificationCommandSet().descriptors());
     appendIds(result, SettingsCommandSet{}.descriptors);
     appendIds(result, followEditsCommandSet().descriptors());
     appendIds(result, diffCommandSet().descriptors());
 
-    constexpr std::array<std::string_view, 4> viewport_commands{
+    constexpr std::array<std::string_view, 4> viewportCommands{
         "view.toggle_word_wrap", "view.scroll_lines", "view.scroll_pages",
         "view.scroll_to_fraction"};
     struct ViewportDescriptor {
         std::string_view id;
     };
-    std::array<ViewportDescriptor, viewport_commands.size()> viewport{};
+    std::array<ViewportDescriptor, viewportCommands.size()> viewport{};
     for (std::size_t index = 0; index < viewport.size(); ++index) {
-        viewport[index].id = viewport_commands[index];
+        viewport[index].id = viewportCommands[index];
     }
     appendIds(result, viewport);
 
@@ -102,13 +102,13 @@ EditorSessionBuilder::EditorSessionBuilder(EditorSessionBuilder&&) noexcept =
 EditorSessionBuilder& EditorSessionBuilder::operator=(
     EditorSessionBuilder&&) noexcept = default;
 
-EditorSessionBuilder& EditorSessionBuilder::bind(std::string command_id,
+EditorSessionBuilder& EditorSessionBuilder::bind(std::string commandId,
                                                  CommandHandler handler) {
-    if (command_id.empty() || !handler) {
+    if (commandId.empty() || !handler) {
         throw std::invalid_argument{"command binding must have an ID and handler"};
     }
 
-    if (!impl_->handlers.emplace(std::move(command_id), std::move(handler))
+    if (!impl_->handlers.emplace(std::move(commandId), std::move(handler))
              .second) {
         throw std::invalid_argument{"duplicate command binding"};
     }

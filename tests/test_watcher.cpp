@@ -23,7 +23,7 @@ using ssg::WatcherConfig;
 using ssg::WorkspaceEntry;
 using ssg::WorkspaceScan;
 
-const auto start = ssg::WatchTimePoint{};
+const auto kStart = ssg::WatchTimePoint{};
 
 WatchFileState state(std::uint64_t id, std::uint64_t size = 1,
                      std::int64_t modified = 1) {
@@ -32,15 +32,15 @@ WatchFileState state(std::uint64_t id, std::uint64_t size = 1,
 
 NativeWatchEvent raw(NativeWatchAction action, std::string path,
                      std::optional<WatchFileState> observed = std::nullopt,
-                     std::uint64_t rename_token = 0) {
-    return {action, std::move(path), rename_token, observed};
+                     std::uint64_t renameToken = 0) {
+    return {action, std::move(path), renameToken, observed};
 }
 
-WatcherConfig config(std::size_t max_events = 16) {
+WatcherConfig config(std::size_t maxEvents = 16) {
     WatcherConfig result;
     result.debounce = 10ms;
     result.rescan_retry = 100ms;
-    result.max_queued_events = max_events;
+    result.max_queued_events = maxEvents;
     result.max_pending_renames = 4;
     result.max_save_expectations = 4;
     result.max_rescan_entries = 16;
@@ -52,13 +52,13 @@ WorkspaceScan unchangedScan(std::size_t) {
 }
 
 std::vector<WatchEvent> finish(WatchEventNormalizer& normalizer) {
-    return normalizer.takeReady(start + 11ms);
+    return normalizer.takeReady(kStart + 11ms);
 }
 
 TEST(createModifyDeleteScriptsAreDeterministic) {
     WatchEventNormalizer normalizer(config(), {}, unchangedScan);
-    normalizer.push(raw(NativeWatchAction::Create, "new.txt", state(1)), start);
-    normalizer.push(raw(NativeWatchAction::Modify, "new.txt", state(1, 2)), start + 1ms);
+    normalizer.push(raw(NativeWatchAction::Create, "new.txt", state(1)), kStart);
+    normalizer.push(raw(NativeWatchAction::Modify, "new.txt", state(1, 2)), kStart + 1ms);
 
     auto events = finish(normalizer);
     ASSERT_EQ(events.size(), std::size_t{1});
@@ -67,14 +67,14 @@ TEST(createModifyDeleteScriptsAreDeterministic) {
     ASSERT_EQ(events[0].size, std::optional<std::uint64_t>{2});
 
     WatchEventNormalizer vanished(config(), {}, unchangedScan);
-    vanished.push(raw(NativeWatchAction::Create, "gone.txt", state(2)), start);
-    vanished.push(raw(NativeWatchAction::Remove, "gone.txt"), start + 1ms);
+    vanished.push(raw(NativeWatchAction::Create, "gone.txt", state(2)), kStart);
+    vanished.push(raw(NativeWatchAction::Remove, "gone.txt"), kStart + 1ms);
     ASSERT_TRUE(finish(vanished).empty());
 
     WatchEventNormalizer deleted(
         config(), {WorkspaceEntry{"old.txt", state(3, 4)}}, unchangedScan);
-    deleted.push(raw(NativeWatchAction::Modify, "old.txt", state(3, 5)), start);
-    deleted.push(raw(NativeWatchAction::Remove, "old.txt"), start + 1ms);
+    deleted.push(raw(NativeWatchAction::Modify, "old.txt", state(3, 5)), kStart);
+    deleted.push(raw(NativeWatchAction::Remove, "old.txt"), kStart + 1ms);
     events = finish(deleted);
     ASSERT_EQ(events.size(), std::size_t{1});
     ASSERT_EQ(events[0].kind, WatchEventKind::Remove);
@@ -85,13 +85,13 @@ TEST(renamePairingPreservesIdentityAndFinalPath) {
     WatchEventNormalizer normalizer(
         config(), {WorkspaceEntry{"before.txt", state(7, 3)}}, unchangedScan);
     normalizer.push(raw(NativeWatchAction::RenameFrom, "before.txt",
-                        std::nullopt, 42), start);
+                        std::nullopt, 42), kStart);
     normalizer.push(raw(NativeWatchAction::RenameTo, "after.txt",
-                        state(7, 3), 42), start + 1ms);
+                        state(7, 3), 42), kStart + 1ms);
     normalizer.push(raw(NativeWatchAction::Modify, "after.txt",
-                        state(7, 8)), start + 2ms);
+                        state(7, 8)), kStart + 2ms);
 
-    const auto events = normalizer.takeReady(start + 13ms);
+    const auto events = normalizer.takeReady(kStart + 13ms);
     ASSERT_EQ(events.size(), std::size_t{1});
     ASSERT_EQ(events[0].kind, WatchEventKind::Rename);
     ASSERT_EQ(events[0].previous_path,
@@ -105,12 +105,12 @@ TEST(renameThenDeleteReportsTheOriginalPath) {
     WatchEventNormalizer normalizer(
         config(), {WorkspaceEntry{"before.txt", state(8)}}, unchangedScan);
     normalizer.push(raw(NativeWatchAction::RenameFrom, "before.txt",
-                        std::nullopt, 50), start);
+                        std::nullopt, 50), kStart);
     normalizer.push(raw(NativeWatchAction::RenameTo, "after.txt",
-                        state(8), 50), start + 1ms);
+                        state(8), 50), kStart + 1ms);
     normalizer.push(
-        raw(NativeWatchAction::Remove, "after.txt"), start + 2ms);
-    const auto events = normalizer.takeReady(start + 13ms);
+        raw(NativeWatchAction::Remove, "after.txt"), kStart + 2ms);
+    const auto events = normalizer.takeReady(kStart + 13ms);
     ASSERT_EQ(events.size(), std::size_t{1});
     ASSERT_EQ(events[0].kind, WatchEventKind::Remove);
     ASSERT_EQ(events[0].path, std::filesystem::path{"before.txt"});
@@ -122,13 +122,13 @@ TEST(newSourceRenamedToExistingPathIsOneModify) {
         config(), {WorkspaceEntry{"target.txt", state(30, 1)}}, unchangedScan);
     normalizer.registerSave({"target.txt", state(31, 8, 4)});
     normalizer.push(
-        raw(NativeWatchAction::Create, "temp.txt", state(31, 8, 4)), start);
+        raw(NativeWatchAction::Create, "temp.txt", state(31, 8, 4)), kStart);
     normalizer.push(raw(NativeWatchAction::RenameFrom, "temp.txt",
-                        std::nullopt, 60), start + 1ms);
+                        std::nullopt, 60), kStart + 1ms);
     normalizer.push(raw(NativeWatchAction::RenameTo, "target.txt",
-                        state(31, 8, 4), 60), start + 2ms);
+                        state(31, 8, 4), 60), kStart + 2ms);
 
-    const auto events = normalizer.takeReady(start + 13ms);
+    const auto events = normalizer.takeReady(kStart + 13ms);
     ASSERT_EQ(events.size(), std::size_t{1});
     ASSERT_EQ(events[0].kind, WatchEventKind::Modify);
     ASSERT_EQ(events[0].path, std::filesystem::path{"target.txt"});
@@ -138,13 +138,13 @@ TEST(newSourceRenamedToExistingPathIsOneModify) {
 TEST(newSourceRenamedToNewPathIsOneCreate) {
     WatchEventNormalizer normalizer(config(), {}, unchangedScan);
     normalizer.push(
-        raw(NativeWatchAction::Create, "temp.txt", state(32)), start);
+        raw(NativeWatchAction::Create, "temp.txt", state(32)), kStart);
     normalizer.push(raw(NativeWatchAction::RenameFrom, "temp.txt",
-                        std::nullopt, 61), start + 1ms);
+                        std::nullopt, 61), kStart + 1ms);
     normalizer.push(raw(NativeWatchAction::RenameTo, "target.txt",
-                        state(32), 61), start + 2ms);
+                        state(32), 61), kStart + 2ms);
 
-    const auto events = normalizer.takeReady(start + 13ms);
+    const auto events = normalizer.takeReady(kStart + 13ms);
     ASSERT_EQ(events.size(), std::size_t{1});
     ASSERT_EQ(events[0].kind, WatchEventKind::Create);
     ASSERT_EQ(events[0].path, std::filesystem::path{"target.txt"});
@@ -153,10 +153,10 @@ TEST(newSourceRenamedToNewPathIsOneCreate) {
 TEST(identityReuseAtAnotherPathKeepsBothEvents) {
     WatchEventNormalizer normalizer(
         config(), {WorkspaceEntry{"old.txt", state(12)}}, unchangedScan);
-    normalizer.push(raw(NativeWatchAction::Remove, "old.txt"), start);
+    normalizer.push(raw(NativeWatchAction::Remove, "old.txt"), kStart);
     normalizer.push(
-        raw(NativeWatchAction::Create, "new.txt", state(12)), start + 1ms);
-    const auto events = normalizer.takeReady(start + 12ms);
+        raw(NativeWatchAction::Create, "new.txt", state(12)), kStart + 1ms);
+    const auto events = normalizer.takeReady(kStart + 12ms);
     ASSERT_EQ(events.size(), std::size_t{2});
     ASSERT_EQ(events[0].kind, WatchEventKind::Remove);
     ASSERT_EQ(events[1].kind, WatchEventKind::Create);
@@ -165,10 +165,10 @@ TEST(identityReuseAtAnotherPathKeepsBothEvents) {
 TEST(samePathReplacementRequiresMatchingIdentityToCoalesce) {
     WatchEventNormalizer replaced(
         config(), {WorkspaceEntry{"file.txt", state(40)}}, unchangedScan);
-    replaced.push(raw(NativeWatchAction::Remove, "file.txt"), start);
+    replaced.push(raw(NativeWatchAction::Remove, "file.txt"), kStart);
     replaced.push(
-        raw(NativeWatchAction::Create, "file.txt", state(41)), start + 1ms);
-    auto events = replaced.takeReady(start + 12ms);
+        raw(NativeWatchAction::Create, "file.txt", state(41)), kStart + 1ms);
+    auto events = replaced.takeReady(kStart + 12ms);
     ASSERT_EQ(events.size(), std::size_t{2});
     ASSERT_EQ(events[0].kind, WatchEventKind::Remove);
     ASSERT_EQ(events[0].identity,
@@ -179,10 +179,10 @@ TEST(samePathReplacementRequiresMatchingIdentityToCoalesce) {
 
     WatchEventNormalizer recreated(
         config(), {WorkspaceEntry{"file.txt", state(42)}}, unchangedScan);
-    recreated.push(raw(NativeWatchAction::Remove, "file.txt"), start);
+    recreated.push(raw(NativeWatchAction::Remove, "file.txt"), kStart);
     recreated.push(
-        raw(NativeWatchAction::Create, "file.txt", state(42, 2)), start + 1ms);
-    events = recreated.takeReady(start + 12ms);
+        raw(NativeWatchAction::Create, "file.txt", state(42, 2)), kStart + 1ms);
+    events = recreated.takeReady(kStart + 12ms);
     ASSERT_EQ(events.size(), std::size_t{1});
     ASSERT_EQ(events[0].kind, WatchEventKind::Modify);
 }
@@ -190,12 +190,12 @@ TEST(samePathReplacementRequiresMatchingIdentityToCoalesce) {
 TEST(samePathReplacementCoalescesFollowupsWithNewIdentity) {
     WatchEventNormalizer modified(
         config(), {WorkspaceEntry{"file.txt", state(43)}}, unchangedScan);
-    modified.push(raw(NativeWatchAction::Remove, "file.txt"), start);
+    modified.push(raw(NativeWatchAction::Remove, "file.txt"), kStart);
     modified.push(
-        raw(NativeWatchAction::Create, "file.txt", state(44, 1)), start + 1ms);
+        raw(NativeWatchAction::Create, "file.txt", state(44, 1)), kStart + 1ms);
     modified.push(
-        raw(NativeWatchAction::Modify, "file.txt", state(44, 3)), start + 2ms);
-    auto events = modified.takeReady(start + 13ms);
+        raw(NativeWatchAction::Modify, "file.txt", state(44, 3)), kStart + 2ms);
+    auto events = modified.takeReady(kStart + 13ms);
     ASSERT_EQ(events.size(), std::size_t{2});
     ASSERT_EQ(events[0].kind, WatchEventKind::Remove);
     ASSERT_EQ(events[0].identity,
@@ -207,12 +207,12 @@ TEST(samePathReplacementCoalescesFollowupsWithNewIdentity) {
 
     WatchEventNormalizer vanished(
         config(), {WorkspaceEntry{"file.txt", state(45)}}, unchangedScan);
-    vanished.push(raw(NativeWatchAction::Remove, "file.txt"), start);
+    vanished.push(raw(NativeWatchAction::Remove, "file.txt"), kStart);
     vanished.push(
-        raw(NativeWatchAction::Create, "file.txt", state(46)), start + 1ms);
+        raw(NativeWatchAction::Create, "file.txt", state(46)), kStart + 1ms);
     vanished.push(
-        raw(NativeWatchAction::Remove, "file.txt"), start + 2ms);
-    events = vanished.takeReady(start + 13ms);
+        raw(NativeWatchAction::Remove, "file.txt"), kStart + 2ms);
+    events = vanished.takeReady(kStart + 13ms);
     ASSERT_EQ(events.size(), std::size_t{1});
     ASSERT_EQ(events[0].kind, WatchEventKind::Remove);
     ASSERT_EQ(events[0].identity,
@@ -220,27 +220,27 @@ TEST(samePathReplacementCoalescesFollowupsWithNewIdentity) {
 }
 
 TEST(unmatchedRenameHalvesBecomeBoundaryEvents) {
-    WatchEventNormalizer moved_out(
+    WatchEventNormalizer movedOut(
         config(), {WorkspaceEntry{"out.txt", state(9)}}, unchangedScan);
-    moved_out.push(raw(NativeWatchAction::RenameFrom, "out.txt",
-                       std::nullopt, 10), start);
-    auto events = finish(moved_out);
+    movedOut.push(raw(NativeWatchAction::RenameFrom, "out.txt",
+                       std::nullopt, 10), kStart);
+    auto events = finish(movedOut);
     ASSERT_EQ(events.size(), std::size_t{1});
     ASSERT_EQ(events[0].kind, WatchEventKind::Remove);
 
-    WatchEventNormalizer moved_in(config(), {}, unchangedScan);
-    moved_in.push(raw(NativeWatchAction::RenameTo, "in.txt", state(10),
-                      11), start);
-    events = finish(moved_in);
+    WatchEventNormalizer movedIn(config(), {}, unchangedScan);
+    movedIn.push(raw(NativeWatchAction::RenameTo, "in.txt", state(10),
+                      11), kStart);
+    events = finish(movedIn);
     ASSERT_EQ(events.size(), std::size_t{1});
     ASSERT_EQ(events[0].kind, WatchEventKind::Create);
 }
 
 TEST(debounceReleasesOnlyAfterTheWindow) {
     WatchEventNormalizer normalizer(config(), {}, unchangedScan);
-    normalizer.push(raw(NativeWatchAction::Create, "later.txt", state(1)), start);
-    ASSERT_TRUE(normalizer.takeReady(start + 9ms).empty());
-    ASSERT_EQ(normalizer.takeReady(start + 10ms).size(), std::size_t{1});
+    normalizer.push(raw(NativeWatchAction::Create, "later.txt", state(1)), kStart);
+    ASSERT_TRUE(normalizer.takeReady(kStart + 9ms).empty());
+    ASSERT_EQ(normalizer.takeReady(kStart + 10ms).size(), std::size_t{1});
 }
 
 TEST(exactSaveResultIsCorrelatedOnce) {
@@ -248,14 +248,14 @@ TEST(exactSaveResultIsCorrelatedOnce) {
     const ssg::SaveExpectation saved{"saved.txt", state(20, 12, 99)};
     normalizer.registerSave(saved);
     normalizer.push(raw(NativeWatchAction::Modify, "saved.txt",
-                        state(20, 12, 99)), start);
-    auto first = normalizer.takeReady(start + 11ms);
+                        state(20, 12, 99)), kStart);
+    auto first = normalizer.takeReady(kStart + 11ms);
     ASSERT_EQ(first.size(), std::size_t{1});
     ASSERT_EQ(first[0].origin, WatchEventOrigin::SsgSave);
 
     normalizer.push(raw(NativeWatchAction::Modify, "saved.txt",
-                        state(20, 13, 100)), start + 20ms);
-    auto second = normalizer.takeReady(start + 31ms);
+                        state(20, 13, 100)), kStart + 20ms);
+    auto second = normalizer.takeReady(kStart + 31ms);
     ASSERT_EQ(second.size(), std::size_t{1});
     ASSERT_EQ(second[0].origin, WatchEventOrigin::External);
 }
@@ -271,9 +271,9 @@ TEST(overflowRescansAndEmitsSyntheticChanges) {
         }, true};
     };
     WatchEventNormalizer normalizer(config(), initial, scan);
-    normalizer.push(raw(NativeWatchAction::Overflow, ""), start);
+    normalizer.push(raw(NativeWatchAction::Overflow, ""), kStart);
 
-    const auto events = normalizer.takeReady(start);
+    const auto events = normalizer.takeReady(kStart);
     ASSERT_EQ(events.size(), std::size_t{4});
     ASSERT_EQ(events[0].kind, WatchEventKind::Overflow);
     ASSERT_EQ(events[1].kind, WatchEventKind::Modify);
@@ -291,14 +291,14 @@ TEST(partialRescanNeverPublishesPartialTruth) {
         return WorkspaceScan{{{"complete.txt", state(5)}}, true};
     };
     WatchEventNormalizer normalizer(config(), {}, partial);
-    normalizer.push(raw(NativeWatchAction::Overflow, ""), start);
-    auto events = normalizer.takeReady(start);
+    normalizer.push(raw(NativeWatchAction::Overflow, ""), kStart);
+    auto events = normalizer.takeReady(kStart);
     ASSERT_EQ(events.size(), std::size_t{1});
     ASSERT_EQ(events[0].kind, WatchEventKind::Overflow);
-    normalizer.push(raw(NativeWatchAction::Overflow, ""), start + 1ms);
-    ASSERT_TRUE(normalizer.takeReady(start + 99ms).empty());
+    normalizer.push(raw(NativeWatchAction::Overflow, ""), kStart + 1ms);
+    ASSERT_TRUE(normalizer.takeReady(kStart + 99ms).empty());
     ASSERT_EQ(scans, 1);
-    events = normalizer.takeReady(start + 100ms);
+    events = normalizer.takeReady(kStart + 100ms);
     ASSERT_EQ(events.size(), std::size_t{1});
     ASSERT_EQ(events[0].kind, WatchEventKind::Create);
     ASSERT_EQ(scans, 2);
@@ -310,8 +310,8 @@ TEST(rescanUsesStableIdentityToRecoverRename) {
     };
     WatchEventNormalizer normalizer(
         config(), {WorkspaceEntry{"before.txt", state(15, 2)}}, scan);
-    normalizer.push(raw(NativeWatchAction::Overflow, ""), start);
-    const auto events = normalizer.takeReady(start);
+    normalizer.push(raw(NativeWatchAction::Overflow, ""), kStart);
+    const auto events = normalizer.takeReady(kStart);
     ASSERT_EQ(events.size(), std::size_t{2});
     ASSERT_EQ(events[1].kind, WatchEventKind::Rename);
     ASSERT_EQ(events[1].path, std::filesystem::path{"after.txt"});
@@ -330,11 +330,11 @@ TEST(queueExhaustionCollapsesToOverflowAndRescan) {
         }, true};
     };
     WatchEventNormalizer normalizer(config(2), {}, scan);
-    normalizer.push(raw(NativeWatchAction::Create, "a", state(1)), start);
-    normalizer.push(raw(NativeWatchAction::Create, "b", state(2)), start);
-    normalizer.push(raw(NativeWatchAction::Create, "c", state(3)), start);
+    normalizer.push(raw(NativeWatchAction::Create, "a", state(1)), kStart);
+    normalizer.push(raw(NativeWatchAction::Create, "b", state(2)), kStart);
+    normalizer.push(raw(NativeWatchAction::Create, "c", state(3)), kStart);
 
-    const auto events = normalizer.takeReady(start);
+    const auto events = normalizer.takeReady(kStart);
     ASSERT_EQ(scans, 1);
     ASSERT_EQ(events.size(), std::size_t{1});
     ASSERT_EQ(events[0].kind, WatchEventKind::Overflow);
@@ -351,13 +351,13 @@ TEST(renameQueueOverflowDoesNotInvalidateActivePair) {
     WatchEventNormalizer normalizer(
         small, {WorkspaceEntry{"before.txt", state(51)}}, scan);
     normalizer.push(
-        raw(NativeWatchAction::Create, "occupied.txt", state(50)), start);
+        raw(NativeWatchAction::Create, "occupied.txt", state(50)), kStart);
     normalizer.push(raw(NativeWatchAction::RenameFrom, "before.txt",
-                        std::nullopt, 70), start + 1ms);
+                        std::nullopt, 70), kStart + 1ms);
     normalizer.push(raw(NativeWatchAction::RenameTo, "after.txt",
-                        state(51), 70), start + 2ms);
+                        state(51), 70), kStart + 2ms);
 
-    const auto events = normalizer.takeReady(start + 2ms);
+    const auto events = normalizer.takeReady(kStart + 2ms);
     ASSERT_EQ(events.size(), std::size_t{1});
     ASSERT_EQ(events[0].kind, WatchEventKind::Overflow);
 }
@@ -372,11 +372,11 @@ TEST(expiringRenameQueueOverflowDoesNotInvalidateIteration) {
     WatchEventNormalizer normalizer(
         small, {WorkspaceEntry{"before.txt", state(53)}}, scan);
     normalizer.push(
-        raw(NativeWatchAction::Create, "occupied.txt", state(52)), start);
+        raw(NativeWatchAction::Create, "occupied.txt", state(52)), kStart);
     normalizer.push(raw(NativeWatchAction::RenameFrom, "before.txt",
-                        std::nullopt, 71), start);
+                        std::nullopt, 71), kStart);
 
-    const auto events = normalizer.takeReady(start + 10ms);
+    const auto events = normalizer.takeReady(kStart + 10ms);
     ASSERT_EQ(events.size(), std::size_t{1});
     ASSERT_EQ(events[0].kind, WatchEventKind::Overflow);
 }
@@ -422,26 +422,26 @@ TEST(platformAdapterReportsRecursiveNormalizedEvents) {
         std::ofstream(root / "sub" / "file.txt") << "one";
 
         auto events = pollUntil(*watcher, WatchEventKind::Create);
-        bool saw_file = false;
+        bool sawFile = false;
         for (const auto& event : events) {
-            saw_file = saw_file ||
+            sawFile = sawFile ||
                 (event.kind == WatchEventKind::Create &&
                  event.path == std::filesystem::path{"sub/file.txt"});
         }
-        ASSERT_TRUE(saw_file);
+        ASSERT_TRUE(sawFile);
 
         std::filesystem::rename(root / "sub" / "file.txt",
                                 root / "sub" / "renamed.txt");
         events = pollUntil(*watcher, WatchEventKind::Rename);
-        bool saw_rename = false;
+        bool sawRename = false;
         for (const auto& event : events) {
-            saw_rename = saw_rename ||
+            sawRename = sawRename ||
                 (event.kind == WatchEventKind::Rename &&
                  event.path == std::filesystem::path{"sub/renamed.txt"} &&
                  event.previous_path ==
                      std::optional<std::filesystem::path>{"sub/file.txt"});
         }
-        ASSERT_TRUE(saw_rename);
+        ASSERT_TRUE(sawRename);
     }
     std::filesystem::remove_all(root);
 }

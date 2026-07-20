@@ -40,7 +40,7 @@ public:
 
 private:
     [[nodiscard]] NodePtr makeNode(
-        bool add_buffer,
+        bool addBuffer,
         std::size_t start,
         std::size_t length) const;
     [[nodiscard]] std::pair<NodePtr, NodePtr> split(

@@ -28,37 +28,37 @@ struct ComputedDiff {
 std::optional<ComputedDiff> computeDiff(std::string_view baseline,
                                          std::string_view target,
                                          const DiffConfig& config) {
-    const auto old_lines = splitDiffLines(baseline);
-    const auto new_lines = splitDiffLines(target);
-    if (old_lines.size() > config.maximum_line_count ||
-        new_lines.size() > config.maximum_line_count) {
+    const auto oldLines = splitDiffLines(baseline);
+    const auto newLines = splitDiffLines(target);
+    if (oldLines.size() > config.maximum_line_count ||
+        newLines.size() > config.maximum_line_count) {
         return std::nullopt;
     }
 
-    const auto rows = old_lines.size() + 1;
-    const auto columns = new_lines.size() + 1;
+    const auto rows = oldLines.size() + 1;
+    const auto columns = newLines.size() + 1;
     if (rows > std::numeric_limits<std::size_t>::max() / columns ||
         rows * columns > config.maximum_matrix_cells) {
         return std::nullopt;
     }
 
     std::vector<std::size_t> lcs(rows * columns);
-    const auto at = [&](std::size_t old_index, std::size_t new_index) -> std::size_t& {
-        return lcs[old_index * columns + new_index];
+    const auto at = [&](std::size_t oldIndex, std::size_t newIndex) -> std::size_t& {
+        return lcs[oldIndex * columns + newIndex];
     };
-    for (std::size_t old_index = old_lines.size(); old_index-- > 0;) {
-        for (std::size_t new_index = new_lines.size(); new_index-- > 0;) {
-            at(old_index, new_index) =
-                old_lines[old_index] == new_lines[new_index]
-                    ? at(old_index + 1, new_index + 1) + 1
-                    : std::max(at(old_index + 1, new_index),
-                               at(old_index, new_index + 1));
+    for (std::size_t oldIndex = oldLines.size(); oldIndex-- > 0;) {
+        for (std::size_t newIndex = newLines.size(); newIndex-- > 0;) {
+            at(oldIndex, newIndex) =
+                oldLines[oldIndex] == newLines[newIndex]
+                    ? at(oldIndex + 1, newIndex + 1) + 1
+                    : std::max(at(oldIndex + 1, newIndex),
+                               at(oldIndex, newIndex + 1));
         }
     }
 
     ComputedDiff result;
-    std::size_t old_index = 0;
-    std::size_t new_index = 0;
+    std::size_t oldIndex = 0;
+    std::size_t newIndex = 0;
     std::optional<DiffHunk> pending;
     const auto flush = [&] {
         if (!pending) {
@@ -87,24 +87,24 @@ std::optional<ComputedDiff> computeDiff(std::string_view baseline,
         pending.reset();
     };
 
-    while (old_index < old_lines.size() || new_index < new_lines.size()) {
-        if (old_index < old_lines.size() && new_index < new_lines.size() &&
-            old_lines[old_index] == new_lines[new_index]) {
+    while (oldIndex < oldLines.size() || newIndex < newLines.size()) {
+        if (oldIndex < oldLines.size() && newIndex < newLines.size() &&
+            oldLines[oldIndex] == newLines[newIndex]) {
             flush();
-            ++old_index;
-            ++new_index;
+            ++oldIndex;
+            ++newIndex;
             continue;
         }
         if (!pending) {
-            pending = DiffHunk{.baseline_start = old_index,
-                               .target_start = new_index};
+            pending = DiffHunk{.baseline_start = oldIndex,
+                               .target_start = newIndex};
         }
-        if (old_index < old_lines.size() &&
-            (new_index == new_lines.size() ||
-             at(old_index + 1, new_index) >= at(old_index, new_index + 1))) {
-            pending->baseline_lines.push_back(old_lines[old_index++]);
+        if (oldIndex < oldLines.size() &&
+            (newIndex == newLines.size() ||
+             at(oldIndex + 1, newIndex) >= at(oldIndex, newIndex + 1))) {
+            pending->baseline_lines.push_back(oldLines[oldIndex++]);
         } else {
-            pending->target_lines.push_back(new_lines[new_index++]);
+            pending->target_lines.push_back(newLines[newIndex++]);
         }
     }
     flush();
@@ -312,16 +312,16 @@ DiffCommandSet diffCommandSet() {
 }
 
 std::optional<std::size_t> nextDiffHunk(
-    const DiffFileView& file, std::optional<std::size_t> current_target_line) {
+    const DiffFileView& file, std::optional<std::size_t> currentTargetLine) {
     if (file.hunks.empty()) {
         return std::nullopt;
     }
-    if (!current_target_line) {
+    if (!currentTargetLine) {
         return 0;
     }
     const auto found = std::find_if(
         file.hunks.begin(), file.hunks.end(), [&](const auto& hunk) {
-            return hunk.target_start > *current_target_line;
+            return hunk.target_start > *currentTargetLine;
         });
     return found == file.hunks.end()
                ? std::optional<std::size_t>{0}
@@ -330,15 +330,15 @@ std::optional<std::size_t> nextDiffHunk(
 }
 
 std::optional<std::size_t> previousDiffHunk(
-    const DiffFileView& file, std::optional<std::size_t> current_target_line) {
+    const DiffFileView& file, std::optional<std::size_t> currentTargetLine) {
     if (file.hunks.empty()) {
         return std::nullopt;
     }
-    if (!current_target_line) {
+    if (!currentTargetLine) {
         return file.hunks.size() - 1;
     }
     for (std::size_t index = file.hunks.size(); index-- > 0;) {
-        if (file.hunks[index].target_start < *current_target_line) {
+        if (file.hunks[index].target_start < *currentTargetLine) {
             return index;
         }
     }
@@ -355,20 +355,20 @@ DiffDelta deriveDiffDelta(const DiffViewState& base,
                             const DiffViewState& target) {
     DiffDelta delta{.base_revision = base.revision,
                     .revision = target.revision};
-    for (const auto& target_file : target.files) {
-        const auto base_file = std::find_if(
+    for (const auto& targetFile : target.files) {
+        const auto baseFile = std::find_if(
             base.files.begin(), base.files.end(),
-            [&](const auto& candidate) { return candidate.id == target_file.id; });
-        if (base_file == base.files.end() || *base_file != target_file) {
-            delta.upserted.push_back(target_file);
+            [&](const auto& candidate) { return candidate.id == targetFile.id; });
+        if (baseFile == base.files.end() || *baseFile != targetFile) {
+            delta.upserted.push_back(targetFile);
         }
     }
-    for (const auto& base_file : base.files) {
-        const auto target_file = std::find_if(
+    for (const auto& baseFile : base.files) {
+        const auto targetFile = std::find_if(
             target.files.begin(), target.files.end(),
-            [&](const auto& candidate) { return candidate.id == base_file.id; });
-        if (target_file == target.files.end()) {
-            delta.removed.push_back(base_file.id);
+            [&](const auto& candidate) { return candidate.id == baseFile.id; });
+        if (targetFile == target.files.end()) {
+            delta.removed.push_back(baseFile.id);
         }
     }
     return delta;
@@ -390,13 +390,13 @@ DiffReplayResult replayDiffDelta(const DiffViewState& base,
                            [&](const auto& file) { return file.id == id; }),
             result.files.end());
     }
-    std::vector<DiffFileId> upserted_ids;
+    std::vector<DiffFileId> upsertedIds;
     for (const auto& file : delta.upserted) {
-        if (containsId(upserted_ids, file.id) ||
+        if (containsId(upsertedIds, file.id) ||
             containsId(delta.removed, file.id)) {
             return {std::nullopt, DiffReplayError::MalformedDelta};
         }
-        upserted_ids.push_back(file.id);
+        upsertedIds.push_back(file.id);
         const auto existing = std::find_if(
             result.files.begin(), result.files.end(),
             [&](const auto& candidate) { return candidate.id == file.id; });
