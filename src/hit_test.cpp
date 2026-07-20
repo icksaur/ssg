@@ -66,7 +66,7 @@ RegionHit palette_hit(PaletteProjection const& palette, int column, int row) {
     }
     if (!contains(palette.rect, column, row)) return {};
     auto const window_index = static_cast<std::size_t>(row - palette.rect.y);
-    if (window_index >= palette.rows.size()) return {};  // reserved-but-empty
+    if (window_index >= palette.rows.size()) return {};
     RegionHit hit;
     hit.region = HitRegion::palette;
     hit.item_index =
@@ -79,7 +79,7 @@ RegionHit panel_hit(SessionSnapshot const& snapshot, Rect const& panel,
     if (gutter && contains(*gutter, column, row)) {
         return scrollbar_hit(HitRegion::panel_scrollbar, *gutter, row);
     }
-    if (row == panel.y) return {};  // the provider-label row is not a node
+    if (row == panel.y) return {};
     auto const& tree = snapshot.sections().tree;
     if (tree.providers.empty()) return {};
     auto const& provider = tree.providers.front();

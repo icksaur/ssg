@@ -27,9 +27,9 @@ enum class ColorDepth : std::uint8_t {
 struct ResolvedColor {
     enum class Encoding : std::uint8_t { ansi16, indexed256, truecolor };
 
-    Encoding     encoding = Encoding::truecolor;
+    Encoding encoding = Encoding::truecolor;
     std::uint8_t index = 0;   // ansi16: 0..15; indexed256: 16..255; unused for truecolor.
-    SrgbColor    rgb;         // truecolor: the exact channels; else the swatch's channels.
+    SrgbColor rgb; // truecolor: the exact channels; else the swatch's channels.
 
     friend bool operator==(ResolvedColor const&, ResolvedColor const&) = default;
 };

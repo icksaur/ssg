@@ -184,7 +184,6 @@ void paint_shell_leaves(CellGrid& grid, ShellViewState const& shell,
     }
 }
 
-// Paints the active filesystem provider's visible nodes below the provider row.
 // Paint a scrollbar into a reserved 1-column gutter from resolved metrics.  When
 // the content fits (`maximum_first_row == 0`) the gutter is left blank (the thumb
 // is hidden), so a thumb appearing or vanishing never changes the content width
@@ -220,7 +219,7 @@ void paint_panel_tree(CellGrid& grid, Rect const& panel,
     auto const foreground = semantic_index(theme, SemanticRole::foreground);
     auto const directory = semantic_index(theme, SemanticRole::panel_active);
     auto const selected_bg = semantic_index(theme, SemanticRole::tree_focus);
-    int const top = panel.y + 1;  // Row 0 shows the provider name.
+    int const top = panel.y + 1;
     int const rows = panel.height - 1;
     // Content stops before the reserved scrollbar gutter so text width is stable.
     int const content_right =
@@ -243,7 +242,7 @@ void paint_panel_tree(CellGrid& grid, Rect const& panel,
         }
         std::string line(view.depth * 2, ' ');
         if (view.node.expandable) {
-            line += view.expanded ? "\xe2\x96\xbe " : "\xe2\x96\xb8 ";  // v / >
+            line += view.expanded ? "\xe2\x96\xbe " : "\xe2\x96\xb8 ";
         }
         line += view.node.label;
         auto const color =
@@ -695,7 +694,7 @@ CellGrid render(SessionSnapshot const& snapshot) {
                 // new constraint (the primary caret uses the hardware cursor).
                 auto const caret_fg = semantic_index(theme, SemanticRole::selection);
                 for (auto const& item : selections.items()) {
-                    if (&item == &primary) continue;  // Primary uses grid.caret.
+                    if (&item == &primary) continue;
                     // Every non-primary selection (ranged or a bare caret) has an
                     // active caret position that renders as a caret cell; only the
                     // primary uses the single hardware cursor.
