@@ -388,7 +388,7 @@ private:
                                     ? lineStarts_[index + 1] - 1
                                     : text_.size();
         auto run =
-            computeCellRun(text_.substr(start, end - start), tabWidth_);
+            GraphemeLayout{}.computeRun(text_.substr(start, end - start), tabWidth_);
         std::vector<DocumentPosition> boundaries;
         boundaries.reserve(run.spans.size() + 1);
         std::uint64_t cell = 0;

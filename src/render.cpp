@@ -1,6 +1,6 @@
 #include <ssg/render.h>
 
-#include <ssg/layout.h>
+#include <ssg/grapheme_layout.h>
 #include <ssg/syntax.h>
 
 #include <algorithm>
@@ -99,7 +99,7 @@ std::unordered_map<std::uint32_t, LogicalLine> visibleLogicalLines(
         if (referenced.contains(index)) {
             auto const line = std::string_view{text}.substr(begin, length);
             ++gRenderSegmentationCalls;
-            lines.emplace(index, LogicalLine{line, begin, computeCellRun(line)});
+            lines.emplace(index, LogicalLine{line, begin, GraphemeLayout{}.computeRun(line)});
         }
         if (end == std::string::npos || index >= maxLine) break;
         begin = end + 1;
@@ -130,7 +130,7 @@ void paintText(CellGrid& grid, int x, int y, int right, std::string_view text,
                 std::uint8_t foreground, std::uint8_t background,
                 SemanticRole role) {
     if (right <= x) return;
-    auto run = computeCellRun(text);
+    auto run = GraphemeLayout{}.computeRun(text);
     int column = x;
     bool truncated = false;
     for (auto const& span : run.spans) {
@@ -289,7 +289,7 @@ void paintPalette(CellGrid& grid, PaletteProjection const& palette,
         paintText(grid, rect.x, y, rect.right(), row.label, foreground,
                    rowBackground, labelRole);
         if (!row.detail.empty()) {
-            auto const run = computeCellRun(row.detail);
+            auto const run = GraphemeLayout{}.computeRun(row.detail);
             int width = 0;
             for (auto const& span : run.spans) {
                 width += static_cast<int>(std::max<std::uint32_t>(span.cellWidth, 1));
@@ -525,10 +525,10 @@ std::optional<GridPosition> paintPrompt(CellGrid& grid,
                 : !caret;
         if (control.kind == PromptControlKind::Input && activeInput && !caret) {
             auto const labelWidth =
-                static_cast<int>(computeCellRun(control.accessibleLabel + ": ")
+                static_cast<int>(GraphemeLayout{}.computeRun(control.accessibleLabel + ": ")
                                      .totalCells);
             auto const valueWidth =
-                static_cast<int>(computeCellRun(control.value).totalCells);
+                static_cast<int>(GraphemeLayout{}.computeRun(control.value).totalCells);
             auto const cursorColumn =
                 std::min(control.rect.x + labelWidth + valueWidth,
                          control.rect.right() - 1);
@@ -556,7 +556,7 @@ CellGrid renderTooSmall(GridSize size, ThemeSnapshot const& theme) {
     if (size.columns <= 0 || size.rows <= 0) return grid;
     std::string_view const message = "terminal too small";
     auto const messageCells =
-        static_cast<int>(computeCellRun(message).totalCells);
+        static_cast<int>(GraphemeLayout{}.computeRun(message).totalCells);
     int const row = size.rows / 2;
     int const start = std::max(0, (size.columns - messageCells) / 2);
     paintText(grid, start, row, size.columns, message, foreground, background,

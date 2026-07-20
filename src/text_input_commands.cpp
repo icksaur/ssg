@@ -1,6 +1,6 @@
 #include <ssg/text_input_commands.h>
 
-#include <ssg/layout.h>
+#include <ssg/grapheme_layout.h>
 
 #include <algorithm>
 #include <cstddef>
@@ -87,7 +87,7 @@ std::vector<std::size_t> graphemeBoundaries(std::string_view text,
             ++lineEnd;
         }
         const auto run =
-            computeCellRun(text.substr(lineStart, lineEnd - lineStart),
+            GraphemeLayout{}.computeRun(text.substr(lineStart, lineEnd - lineStart),
                              tabWidth);
         for (const auto& span : run.spans) {
             boundaries.push_back(lineStart + span.byteOffset + span.byteLen);

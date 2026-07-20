@@ -8,7 +8,7 @@ Output is written to stdout.  LV and LVT syllable entries are excluded
 (they are computed by (cp - 0xAC00) % 28 in gcb_prop_of()).
 
 The output is a sorted, non-overlapping array of GcbRange entries suitable
-for embedding directly in src/layout.cpp.
+for embedding directly in src/grapheme_layout.cpp.
 """
 
 import re

@@ -257,7 +257,7 @@ These must not be conflated.
 
 The `compute_cell_run` function is a **pure function** taking a `std::string_view` (one logical line, must not contain `\n` or `\r`) and an `int tab_width` in `[1, 16]`. It returns a `CellRun` containing one `CellSpan` per grapheme cluster. `CellIndex` (from `types.h`) identifies a zero-based column in the unwrapped logical line. No `LayoutViewState`, `LayoutDelta`, or viewport type is introduced by this step; those belong to the `viewport-wrap-scrollbar` task (Wave 2).
 
-`include/ssg/layout.h` and `src/layout.cpp` are owned by `unicode-cell-layout`
+`include/ssg/grapheme_layout.h` and `src/grapheme_layout.cpp` are owned by `unicode-cell-layout`
 (Wave 1). `viewport-wrap-scrollbar` (Wave 2) consumes that API from the
 separate `include/ssg/viewport.h` and `src/viewport.cpp` component. This keeps
 the Unicode cell-run implementation unchanged while making the dependency
@@ -314,7 +314,7 @@ replacement payload; changed states carry one complete replacement state.
 
 | # | Step | Task | Files | Oracle | Invariants |
 |---|------|------|-------|--------|------------|
-| 1a | Implement grapheme segmentation and per-logical-line cell runs (no wrapping, no scrollbar, no viewport) | `unicode-cell-layout` (Wave 1) | `include/ssg/layout.h`, `src/layout.cpp`, `data/unicode/`, `tests/fixtures/layout/cells/`, `tests/test_cell_layout.cpp`, `tests/test_gcb_oracle.cpp`, `cmake/components/unicode-cell-layout.cmake` | Official Unicode 15.0.0 `GraphemeBreakTest.txt` corpus plus hand-authored combining, emoji, double-width, tab, control, and invalid-UTF-8 cell-run goldens | I7 |
+| 1a | Implement grapheme segmentation and per-logical-line cell runs (no wrapping, no scrollbar, no viewport) | `unicode-cell-layout` (Wave 1) | `include/ssg/grapheme_layout.h`, `src/grapheme_layout.cpp`, `data/unicode/`, `tests/fixtures/layout/cells/`, `tests/test_cell_layout.cpp`, `tests/test_gcb_oracle.cpp`, `cmake/components/unicode-cell-layout.cmake` | Official Unicode 15.0.0 `GraphemeBreakTest.txt` corpus plus hand-authored combining, emoji, double-width, tab, control, and invalid-UTF-8 cell-run goldens | I7 |
 | 1b | Implement visual-row wrapping, viewport slicing, scrolling, scrollbar metrics, and cell hit targets atop cell runs | `viewport-wrap-scrollbar` (Wave 2) | `include/ssg/viewport.h`, `src/viewport.cpp`, `tests/fixtures/layout/viewports/`, `tests/test_viewport.cpp`, `cmake/components/viewport-wrap-scrollbar.cmake` | Hand-authored empty/short/wide/wrapped/tiny viewport, scrollbar, and hit-target goldens plus bounds properties | I7 |
 | 2 | Implement the fixed shell, opaque prompt reservation, footer field/action rectangles, accessible shell labels, and keyboard/server-ownership checks | `shell-layout` (Wave 2) | `include/ssg/ui_layout.h`, `src/ui_layout.cpp`, `data/ui/status_fields.json`, `tests/test_ui_layout.cpp`, `tests/browser/client/*`, `cmake/components/shell-layout.cmake` | normal and distraction-free shell rectangle goldens, collapse-priority and accessibility goldens, exact rendered-control command/keymap coverage, supplemented by a client-default source scan | I15, I17, UI1, UI2, UI3 |
 | 2a | Implement non-modal prompt contents and the bounded actionable status queue | `prompt-status-surface` (Wave 3) | `include/ssg/prompt.h`, `include/ssg/status.h`, `src/prompt.cpp`, `src/status.cpp`, `tests/test_prompt_status.cpp`, `cmake/components/prompt-status-surface.cmake` | prompt geometry goldens, priority/queue transition tables, stale-action rejection, and accessible-label snapshots | I15, I17, I19 |

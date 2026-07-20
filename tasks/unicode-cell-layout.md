@@ -11,7 +11,7 @@ without wrapping, scrolling, shell geometry, or rendering.
 
 ## Files
 
-`include/ssg/layout.h`, `src/layout.cpp`, `data/unicode/`,
+`include/ssg/grapheme_layout.h`, `src/grapheme_layout.cpp`, `data/unicode/`,
 `tests/fixtures/layout/cells/`, `tests/test_cell_layout.cpp`,
 `cmake/components/unicode-cell-layout.cmake`
 

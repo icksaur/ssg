@@ -1,6 +1,6 @@
 // UTF-8 grapheme segmentation and terminal cell layout.
 //
-// See include/ssg/layout.h for the public contract and
+// See include/ssg/grapheme_layout.h for the public contract and
 // doc/features/presentation-shell.md §Cell-width rules for the normative spec.
 //
 // Unicode version: 15.0.0 (released 2022-09-13).
@@ -31,7 +31,7 @@
 //   Emoji + VS-16 absorbed (is_emoji + saw_vs16) → 2 cells (emoji presentation seq)
 //   All other printable code points        → 1 cell
 
-#include <ssg/layout.h>
+#include <ssg/grapheme_layout.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -1336,7 +1336,7 @@ static DecodeResult decodeUtf8(const uint8_t* data,
             4, true};
 }
 
-CellRun computeCellRun(std::string_view lineUtf8, int tabWidth) {
+CellRun GraphemeLayout::computeRun(std::string_view lineUtf8, int tabWidth) const {
     if (tabWidth < 1 || tabWidth > 16) {
         throw std::invalid_argument("tab width must be between 1 and 16");
     }
@@ -1386,7 +1386,8 @@ CellRun computeCellRun(std::string_view lineUtf8, int tabWidth) {
         // GCB=Control breaks as its own cluster.  C0/DEL/C1 (cp ≤ U+009F) are
         // visible replacement glyphs (width=1); non-C0/C1 GCB=Control are Unicode
         // Cf format characters (soft hyphen, ZWSP, bidi controls) with width=0.
-        // CR and LF do not appear in input by precondition (layout.h contract).
+        // CR and LF do not appear in input by precondition
+        // (grapheme_layout.h contract).
         if (gcb == GcbProp::Control || gcb == GcbProp::CR || gcb == GcbProp::LF) {
             const uint32_t ctrlWidth = (cp <= 0x009Fu) ? 1u : 0u;
             result.spans.push_back({
@@ -1523,7 +1524,7 @@ CellRun computeCellRun(std::string_view lineUtf8, int tabWidth) {
     return result;
 }
 
-std::uint64_t cellRunCalls() { return gCellRunCalls; }
-void resetCellRunCalls() { gCellRunCalls = 0; }
+std::uint64_t GraphemeLayout::cellRunCalls() { return gCellRunCalls; }
+void GraphemeLayout::resetCellRunCalls() { gCellRunCalls = 0; }
 
 }  // namespace ssg

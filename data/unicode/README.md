@@ -6,9 +6,9 @@ Pinned Unicode version: **15.0.0** (released 2022-09-13).
 
 | File | Source URL | Used by |
 |---|---|---|
-| `east_asian_width.txt` | `https://unicode.org/Public/15.0.0/ucd/EastAsianWidth.txt` | `src/layout.cpp:k_wide[]` via `tools/gen_eaw_table.py` |
-| `GraphemeBreakProperty.txt` | `https://unicode.org/Public/15.0.0/ucd/auxiliary/GraphemeBreakProperty.txt` | `src/layout.cpp:k_gcb[]` via `tools/gen_gcb_table.py` |
-| `emoji-data.txt` | `https://unicode.org/Public/15.0.0/ucd/emoji/emoji-data.txt` | `src/layout.cpp:k_extpic[]`, `k_emoji_pres[]`, `k_emoji[]` via `tools/gen_extpic_table.py`, `tools/gen_emoji_props_table.py` |
+| `east_asian_width.txt` | `https://unicode.org/Public/15.0.0/ucd/EastAsianWidth.txt` | `src/grapheme_layout.cpp:k_wide[]` via `tools/gen_eaw_table.py` |
+| `GraphemeBreakProperty.txt` | `https://unicode.org/Public/15.0.0/ucd/auxiliary/GraphemeBreakProperty.txt` | `src/grapheme_layout.cpp:k_gcb[]` via `tools/gen_gcb_table.py` |
+| `emoji-data.txt` | `https://unicode.org/Public/15.0.0/ucd/emoji/emoji-data.txt` | `src/grapheme_layout.cpp:k_extpic[]`, `k_emoji_pres[]`, `k_emoji[]` via `tools/gen_extpic_table.py`, `tools/gen_emoji_props_table.py` |
 | `GraphemeBreakTest.txt` | `https://unicode.org/Public/15.0.0/ucd/auxiliary/GraphemeBreakTest.txt` | `tests/test_gcb_oracle.cpp` (segmentation oracle) |
 
 Official-file SHA-256 pins:
@@ -21,7 +21,7 @@ Official-file SHA-256 pins:
 ## Pinning contract
 
 The C++ arrays `k_wide`, `k_emoji_pres`, `k_emoji`, `k_extpic`, and `k_gcb` in
-`src/layout.cpp` are the authoritative data for the running binary.  The text
+`src/grapheme_layout.cpp` are the authoritative data for the running binary.  The text
 files here are the pinned official Unicode 15.0.0 source files so that a future
 Unicode-version upgrade can diff the new files against these and update the C++
 arrays and fixture goldens together.
@@ -75,15 +75,15 @@ and `Emoji` (151 ranges) properties respectively.
    `emoji-data.txt`, and `GraphemeBreakTest.txt` from
    `https://unicode.org/Public/<version>/ucd/`.
 2. Run `tools/gen_eaw_table.py data/unicode/east_asian_width.txt` and
-   update `k_wide[]` in `src/layout.cpp` with the output.
+   update `k_wide[]` in `src/grapheme_layout.cpp` with the output.
 3. Run `tools/gen_gcb_table.py data/unicode/GraphemeBreakProperty.txt` and
-   update `k_gcb[]` in `src/layout.cpp` with the output.
+   update `k_gcb[]` in `src/grapheme_layout.cpp` with the output.
 4. Run `tools/gen_extpic_table.py data/unicode/emoji-data.txt` and
-   update `k_extpic[]` in `src/layout.cpp` with the output.
+   update `k_extpic[]` in `src/grapheme_layout.cpp` with the output.
 5. Run `tools/gen_emoji_props_table.py data/unicode/emoji-data.txt` and
-   update `k_emoji_pres[]` and `k_emoji[]` in `src/layout.cpp` with the output.
+   update `k_emoji_pres[]` and `k_emoji[]` in `src/grapheme_layout.cpp` with the output.
 6. Update the pinned SHA-256 hashes in this file and the version comment in
-   `src/layout.cpp`.
+   `src/grapheme_layout.cpp`.
 7. Re-run all test gates: `cmake --build build && ctest --test-dir build`.
 8. The `test_gcb_oracle` test validates against `GraphemeBreakTest.txt`
    automatically; check for any new failures.
