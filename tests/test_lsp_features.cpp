@@ -255,14 +255,14 @@ TEST(viewDeltaRoundTripAndStaleReplay) {
     auto after = before;
     after.revision = Revision{8};
     after.status = "ready";
-    const auto delta = ssg::deriveLspFeatureDelta(before, after);
-    const auto replayed = ssg::replayLspFeatureDelta(before, delta);
+    const auto delta = ssg::LspFeatureDeltaCodec{}.derive(before, after);
+    const auto replayed = ssg::LspFeatureDeltaCodec{}.replay(before, delta);
     ASSERT_TRUE(replayed.accepted());
     ASSERT_EQ(*replayed.state, after);
 
     auto wrong = before;
     wrong.revision = Revision{6};
-    ASSERT_FALSE(ssg::replayLspFeatureDelta(wrong, delta).accepted());
+    ASSERT_FALSE(ssg::LspFeatureDeltaCodec{}.replay(wrong, delta).accepted());
 }
 
 } // namespace
