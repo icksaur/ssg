@@ -326,7 +326,7 @@ ClipboardCommandSet clipboardCommandSet() {
     return ClipboardCommandSet{};
 }
 
-ClipboardDelta deriveClipboardDelta(const ClipboardViewState& before,
+ClipboardDelta ClipboardDeltaCodec::derive(const ClipboardViewState& before,
                                       const ClipboardViewState& after) {
     if (before == after) {
         return {false, std::nullopt};
