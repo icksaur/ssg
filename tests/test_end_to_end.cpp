@@ -415,7 +415,7 @@ TEST(directApiLoopbackWebsocketTuiCanonicalStateMatchesPerStep) {
     PeerHost wsHost{wsScenario, wsPeerPrincipal};
     constexpr std::uint16_t wsPort = 18800;
     ssg::HttpEditorServer wsServer{
-        *wsScenario.session, ssg::buildCommandArgumentCodecRegistry(),
+        *wsScenario.session, ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry(),
         wsHost, {wsPort, "/session", 64, 128, 500ms}};
     wsServer.start();
     std::this_thread::sleep_for(30ms);
@@ -423,13 +423,13 @@ TEST(directApiLoopbackWebsocketTuiCanonicalStateMatchesPerStep) {
     auto ws = connectWebsocket(wsPort);
     FrameReader wsReader{ws.socket};
     wsAttach(ws.socket, "ws-peer");
-    auto initialSnap = ssg::decodeSessionSnapshot(wsReader.next().payload);
+    auto initialSnap = ssg::ProtocolCodec{}.decodeSessionSnapshot(wsReader.next().payload);
     ASSERT_TRUE(initialSnap.accepted());
     auto wsSnapshot = std::move(*initialSnap.snapshot);
     auto wsState = e2e::canonical(wsSnapshot);
     ssg::Revision wsRevision = wsSnapshot.revision();
 
-    auto const codec = ssg::buildCommandArgumentCodecRegistry();
+    auto const codec = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
 
     for (auto const& step : steps) {
         // Direct dispatch
@@ -444,19 +444,19 @@ TEST(directApiLoopbackWebsocketTuiCanonicalStateMatchesPerStep) {
         ASSERT_EQ(tuiResult.accepted(), step.expected_accepted);
 
         // WebSocket dispatch
-        auto wsEncoded = ssg::encodeCommandRequest(
+        auto wsEncoded = ssg::ProtocolCodec{}.encodeCommandRequest(
             {step.command_id, wsRevision, step.payload}, codec);
         sendAll(ws.socket, maskedFrame(0x2, wsEncoded));
         auto wsFrame = wsReader.next();
         if (step.expected_accepted) {
             auto wsDelta =
-                ssg::decodeSessionDelta(wsFrame.payload);
+                ssg::ProtocolCodec{}.decodeSessionDelta(wsFrame.payload);
             ASSERT_TRUE(wsDelta.accepted());
             e2e::apply(wsState, *wsDelta.delta);
             wsRevision = wsState.revision;
         } else {
             auto wsCmdResult =
-                ssg::decodeCommandResult(wsFrame.payload);
+                ssg::ProtocolCodec{}.decodeCommandResult(wsFrame.payload);
             ASSERT_TRUE(wsCmdResult.accepted());
             ASSERT_FALSE(wsCmdResult.result->accepted());
         }
@@ -667,7 +667,7 @@ TEST(concurrentTuiAndWebsocketClientsShareFollowInterruption) {
     constexpr std::uint16_t concPort = 18801;
     ConcurrentHost concHost{scenario, wsPeerPrincipal};
     ssg::HttpEditorServer concServer{
-        *scenario.session, ssg::buildCommandArgumentCodecRegistry(),
+        *scenario.session, ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry(),
         concHost, {concPort, "/session", 64, 128, 500ms}};
     concServer.start();
     std::this_thread::sleep_for(30ms);
@@ -675,7 +675,7 @@ TEST(concurrentTuiAndWebsocketClientsShareFollowInterruption) {
     auto ws = connectWebsocket(concPort);
     FrameReader wsReader{ws.socket};
     wsAttach(ws.socket, "conc-ws");
-    auto initialWs = ssg::decodeSessionSnapshot(wsReader.next().payload);
+    auto initialWs = ssg::ProtocolCodec{}.decodeSessionSnapshot(wsReader.next().payload);
     ASSERT_TRUE(initialWs.accepted());
     ssg::Revision wsRev = initialWs.snapshot->revision();
 
@@ -683,7 +683,7 @@ TEST(concurrentTuiAndWebsocketClientsShareFollowInterruption) {
     scenario.model.registerClient(ssg::ClientId{42},
                                    ssg::ViewportDimensions{80, 20});
 
-    auto const codec = ssg::buildCommandArgumentCodecRegistry();
+    auto const codec = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
 
     // Navigate direct client to row 3 and WS client to row 10 to establish
     // independent viewport offsets.
@@ -695,10 +695,10 @@ TEST(concurrentTuiAndWebsocketClientsShareFollowInterruption) {
     // Sync ws_rev: direct dispatch advanced the session revision.
     wsRev = directScrollResult.revision;
 
-    auto wsScroll = ssg::encodeCommandRequest(
+    auto wsScroll = ssg::ProtocolCodec{}.encodeCommandRequest(
         {"view.scroll_lines", wsRev, ssg::ScrollLinesArguments{10}}, codec);
     sendAll(ws.socket, maskedFrame(0x2, wsScroll));
-    auto scrollDelta = ssg::decodeSessionDelta(wsReader.next().payload);
+    auto scrollDelta = ssg::ProtocolCodec{}.decodeSessionDelta(wsReader.next().payload);
     ASSERT_TRUE(scrollDelta.accepted());
     wsRev = scrollDelta.delta->revision();
 
@@ -748,10 +748,10 @@ TEST(concurrentTuiAndWebsocketClientsShareFollowInterruption) {
               ssg::FollowMode::Paused);
 
     // WebSocket client resumes follow: shared state transitions both clients.
-    auto wsResume = ssg::encodeCommandRequest(
+    auto wsResume = ssg::ProtocolCodec{}.encodeCommandRequest(
         {"follow_edits.resume", wsRev, std::any{}}, codec);
     sendAll(ws.socket, maskedFrame(0x2, wsResume));
-    auto resumeDelta = ssg::decodeSessionDelta(wsReader.next().payload);
+    auto resumeDelta = ssg::ProtocolCodec{}.decodeSessionDelta(wsReader.next().payload);
     ASSERT_TRUE(resumeDelta.accepted());
     wsRev = resumeDelta.delta->revision();
 
