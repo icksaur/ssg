@@ -15,7 +15,7 @@
 #include <ssg/selection.h>
 #include <ssg/settings.h>
 #include <ssg/tabs.h>
-#include <ssg/text_encoding.h>
+#include <ssg/text_codec.h>
 #include <ssg/text_input_commands.h>
 #include <ssg/tree.h>
 #include <ssg/ui_layout.h>

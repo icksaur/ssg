@@ -1,4 +1,4 @@
-#include "ssg/text_encoding.h"
+#include "ssg/text_codec.h"
 
 #include <ssg/open_metrics.h>
 
@@ -489,7 +489,7 @@ std::vector<Scalar> outputScalars(const DecodedText& text,
 
 } // namespace
 
-DecodeTextResult decodeText(std::span<const std::uint8_t> bytes) {
+DecodeTextResult TextCodec::decode(std::span<const std::uint8_t> bytes) const {
     if (bytes.size() >= 3 && bytes[0] == 0xef &&
         bytes[1] == 0xbb && bytes[2] == 0xbf) {
         return decodeSelected(bytes, TextEncoding::Utf8Bom);
@@ -503,19 +503,19 @@ DecodeTextResult decodeText(std::span<const std::uint8_t> bytes) {
     return decodeSelected(bytes, TextEncoding::Utf8);
 }
 
-DecodeTextResult decodeText(std::span<const std::uint8_t> bytes,
-                             TextEncoding encoding) {
+DecodeTextResult TextCodec::decode(std::span<const std::uint8_t> bytes,
+                                   TextEncoding encoding) const {
     return decodeSelected(bytes, encoding);
 }
 
-EncodeTextResult encodeText(const DecodedText& text) {
-    return encodeText(
+EncodeTextResult TextCodec::encode(const DecodedText& text) const {
+    return encode(
         text, {text.status.encoding, LineEnding::Mixed,
                FinalNewlinePolicy::Preserve});
 }
 
-EncodeTextResult encodeText(const DecodedText& text,
-                             EncodeTextOptions options) {
+EncodeTextResult TextCodec::encode(const DecodedText& text,
+                                   EncodeTextOptions options) const {
     TextEncodingError error;
     const auto scalars = outputScalars(text, options, error);
     if (!error.message.empty()) return {{}, std::move(error)};
@@ -561,14 +561,14 @@ EncodeTextResult encodeText(const DecodedText& text,
     return result;
 }
 
-TextEncodingViewState makeTextEncodingViewState(
-    const DecodedText& text) noexcept {
+TextEncodingViewState TextCodec::viewState(
+    const DecodedText& text) const noexcept {
     return {text.status};
 }
 
-std::optional<TextEncodingDelta> deriveTextEncodingDelta(
+std::optional<TextEncodingDelta> TextCodec::deriveDelta(
     const TextEncodingViewState& before,
-    const TextEncodingViewState& after) {
+    const TextEncodingViewState& after) const {
     if (before == after) return std::nullopt;
     return TextEncodingDelta{before, after};
 }

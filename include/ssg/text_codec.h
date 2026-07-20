@@ -120,14 +120,6 @@ struct EncodeTextResult {
     [[nodiscard]] bool accepted() const noexcept { return !error.has_value(); }
 };
 
-[[nodiscard]] DecodeTextResult decodeText(
-    std::span<const std::uint8_t> bytes);
-[[nodiscard]] DecodeTextResult decodeText(
-    std::span<const std::uint8_t> bytes, TextEncoding encoding);
-[[nodiscard]] EncodeTextResult encodeText(const DecodedText& text);
-[[nodiscard]] EncodeTextResult encodeText(
-    const DecodedText& text, EncodeTextOptions options);
-
 struct TextEncodingViewState {
     TextEncodingStatus status;
 
@@ -143,11 +135,21 @@ struct TextEncodingDelta {
                            const TextEncodingDelta&) = default;
 };
 
-[[nodiscard]] TextEncodingViewState makeTextEncodingViewState(
-    const DecodedText& text) noexcept;
-[[nodiscard]] std::optional<TextEncodingDelta> deriveTextEncodingDelta(
-    const TextEncodingViewState& before,
-    const TextEncodingViewState& after);
+class TextCodec {
+public:
+    [[nodiscard]] DecodeTextResult decode(
+        std::span<const std::uint8_t> bytes) const;
+    [[nodiscard]] DecodeTextResult decode(
+        std::span<const std::uint8_t> bytes, TextEncoding encoding) const;
+    [[nodiscard]] EncodeTextResult encode(const DecodedText& text) const;
+    [[nodiscard]] EncodeTextResult encode(
+        const DecodedText& text, EncodeTextOptions options) const;
+    [[nodiscard]] TextEncodingViewState viewState(
+        const DecodedText& text) const noexcept;
+    [[nodiscard]] std::optional<TextEncodingDelta> deriveDelta(
+        const TextEncodingViewState& before,
+        const TextEncodingViewState& after) const;
+};
 
 struct TextEncodingCommandDescriptor {
     std::string_view id;
