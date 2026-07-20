@@ -85,8 +85,11 @@ struct HistoryDelta {
     bool operator==(const HistoryDelta&) const noexcept = default;
 };
 
-[[nodiscard]] HistoryDelta deriveHistoryDelta(
-    const HistoryViewState& before, const HistoryViewState& after);
+class HistoryDeltaCodec {
+public:
+    [[nodiscard]] HistoryDelta derive(const HistoryViewState& before,
+                                      const HistoryViewState& after);
+};
 
 class DocumentHistory {
 public:

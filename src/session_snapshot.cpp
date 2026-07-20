@@ -195,7 +195,7 @@ SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
             ? std::nullopt
             : std::optional{next.document.caret},
         selectionDelta(old.selection, next.selection),
-        deriveHistoryDelta(old.history, next.history),
+        HistoryDeltaCodec{}.derive(old.history, next.history),
         ClipboardDeltaCodec{}.derive(old.clipboard, next.clipboard),
         derivePromptStatusDelta(old.promptStatus, next.promptStatus),
         SearchDeltaCodec{}.derive(old.search, next.search),
