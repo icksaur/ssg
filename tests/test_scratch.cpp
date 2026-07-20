@@ -91,7 +91,7 @@ public:
         const std::filesystem::path& path,
         const ssg::JournalRecoverySet& recovery) override {
         beforeWrite();
-        const auto bytes = ssg::encodeCheckpointRecord(recovery);
+        const auto bytes = ssg::JournalCodec{}.encodeCheckpoint(recovery);
         ssg::replaceFileAtomically(path, bytes);
     }
 
@@ -132,7 +132,7 @@ TEST(compactionPreservesReplayAndLeavesOneAtomicCheckpoint) {
     ASSERT_EQ(after.recovery, before.recovery);
     ASSERT_FALSE(after.discardedTail);
     ASSERT_EQ(after.validBytes,
-              ssg::encodeCheckpointRecord(after.recovery).size());
+              ssg::JournalCodec{}.encodeCheckpoint(after.recovery).size());
 }
 
 TEST(startupImportsBeforeMarkingRemnantRestored) {

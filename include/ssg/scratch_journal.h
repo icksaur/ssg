@@ -85,14 +85,17 @@ struct JournalReplayResult {
     bool discardedTail = false;
 };
 
-[[nodiscard]] std::vector<std::byte> encodeCheckpointRecord(
-    const JournalRecoverySet& recovery);
-[[nodiscard]] std::vector<std::byte> encodeDocumentRecord(
-    const JournalDocument& document);
-[[nodiscard]] std::vector<std::byte> encodeRemoveRecord(
-    const JournalDocumentKey& key);
-[[nodiscard]] JournalReplayResult replayJournal(
-    std::span<const std::byte> bytes);
+class JournalCodec {
+public:
+    [[nodiscard]] std::vector<std::byte> encodeCheckpoint(
+        const JournalRecoverySet& recovery) const;
+    [[nodiscard]] std::vector<std::byte> encodeDocument(
+        const JournalDocument& document) const;
+    [[nodiscard]] std::vector<std::byte> encodeRemove(
+        const JournalDocumentKey& key) const;
+    [[nodiscard]] JournalReplayResult replay(std::span<const std::byte> bytes)
+        const;
+};
 
 class ScratchJournal {
 public:
