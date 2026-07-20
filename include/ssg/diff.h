@@ -187,9 +187,6 @@ struct DiffDelta {
     friend bool operator==(const DiffDelta&, const DiffDelta&) = default;
 };
 
-[[nodiscard]] DiffDelta deriveDiffDelta(const DiffViewState& base,
-                                          const DiffViewState& target);
-
 enum class DiffReplayError { None, StaleRevision, MalformedDelta };
 
 struct DiffReplayResult {
@@ -198,7 +195,12 @@ struct DiffReplayResult {
     [[nodiscard]] bool accepted() const noexcept { return state.has_value(); }
 };
 
-[[nodiscard]] DiffReplayResult replayDiffDelta(const DiffViewState& base,
-                                                 const DiffDelta& delta);
+class DiffDeltaCodec {
+public:
+    [[nodiscard]] DiffDelta derive(const DiffViewState& base,
+                                   const DiffViewState& target);
+    [[nodiscard]] DiffReplayResult replay(const DiffViewState& base,
+                                          const DiffDelta& delta);
+};
 
 } // namespace ssg
