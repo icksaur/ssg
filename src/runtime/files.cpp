@@ -52,7 +52,8 @@ CommandHandlerResult bindFile(EditorRuntime::Impl& runtime,
         case FileCommand::Open: {
             auto path = stringPayload(payload);
             if (!path) {
-                (void)runtime.prompt.open(filePathPrompt(command));
+                (void)runtime.prompt.open(
+                    fileCommandsCommandSet().pathPrompt(command));
                 return success();
             }
             result = runtime.workspace.openFile(*path);

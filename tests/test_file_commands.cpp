@@ -58,7 +58,7 @@ TEST(pathCommandsOpenNonModalPathPrompts) {
     for (const auto command :
          {ssg::FileCommand::Open, ssg::FileCommand::SaveAs,
           ssg::FileCommand::Rename, ssg::FileCommand::NewDirectory}) {
-        const auto request = ssg::filePathPrompt(command);
+        const auto request = ssg::fileCommandsCommandSet().pathPrompt(command);
         ASSERT_EQ(request.kind, ssg::PromptKind::Path);
         ASSERT_EQ(request.inputs.size(), std::size_t{1});
         ASSERT_FALSE(request.inputs[0].accessibleLabel.empty());
