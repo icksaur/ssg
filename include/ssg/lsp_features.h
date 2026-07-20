@@ -102,9 +102,6 @@ struct LspFeatureDelta {
                            const LspFeatureDelta&) = default;
 };
 
-[[nodiscard]] LspFeatureDelta deriveLspFeatureDelta(
-    const LspFeatureViewState& base, const LspFeatureViewState& target);
-
 enum class LspFeatureReplayError : std::uint8_t {
     None,
     StaleRevision,
@@ -117,8 +114,13 @@ struct LspFeatureReplayResult {
     [[nodiscard]] bool accepted() const noexcept { return state.has_value(); }
 };
 
-[[nodiscard]] LspFeatureReplayResult replayLspFeatureDelta(
-    const LspFeatureViewState& base, const LspFeatureDelta& delta);
+class LspFeatureDeltaCodec {
+public:
+    [[nodiscard]] LspFeatureDelta derive(const LspFeatureViewState& base,
+                                         const LspFeatureViewState& target);
+    [[nodiscard]] LspFeatureReplayResult replay(
+        const LspFeatureViewState& base, const LspFeatureDelta& delta);
+};
 
 enum class LspFeatureError : std::uint8_t {
     None,

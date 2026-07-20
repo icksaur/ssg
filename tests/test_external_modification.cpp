@@ -222,12 +222,12 @@ TEST(viewDeltaReplaysAsTargetState) {
     ASSERT_TRUE(fixture.flow.processEvent(input(2, "disk\n"), open).accepted());
     const auto target = fixture.flow.viewState();
 
-    const auto delta = ssg::deriveExternalModificationDelta(base, target);
-    const auto replayed = ssg::replayExternalModificationDelta(base, delta);
+    const auto delta = ssg::ExternalModificationDeltaCodec{}.derive(base, target);
+    const auto replayed = ssg::ExternalModificationDeltaCodec{}.replay(base, delta);
 
     ASSERT_TRUE(replayed.accepted());
     ASSERT_EQ(*replayed.state, target);
-    const auto stale = ssg::replayExternalModificationDelta(target, delta);
+    const auto stale = ssg::ExternalModificationDeltaCodec{}.replay(target, delta);
     ASSERT_FALSE(stale.accepted());
     ASSERT_EQ(stale.error, ssg::ExternalDeltaError::StaleRevision);
 }

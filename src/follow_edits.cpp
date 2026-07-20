@@ -32,7 +32,7 @@ FollowScrollOffset offsetFor(std::size_t targetLine,
 
 }  // namespace
 
-FollowEditsDelta deriveFollowEditsDelta(const FollowEditsViewState& base,
+FollowEditsDelta FollowEditsDeltaCodec::derive(const FollowEditsViewState& base,
                                            const FollowEditsViewState& target) {
     FollowEditsDelta delta{base.generation, target.generation, std::nullopt};
     if (base != target) {

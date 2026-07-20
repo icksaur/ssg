@@ -530,7 +530,7 @@ bool SyntaxDelta::empty() const noexcept {
            !indentation_;
 }
 
-SyntaxDelta deriveSyntaxDelta(const SyntaxViewState& base,
+SyntaxDelta SyntaxDeltaCodec::derive(const SyntaxViewState& base,
                                 const SyntaxViewState& target) {
     return {
         base.revision(),
@@ -546,7 +546,7 @@ SyntaxDelta deriveSyntaxDelta(const SyntaxViewState& base,
     };
 }
 
-SyntaxReplayResult replaySyntaxDelta(const SyntaxViewState& base,
+SyntaxReplayResult SyntaxDeltaCodec::replay(const SyntaxViewState& base,
                                        const SyntaxDelta& delta) {
     if (base.revision() != delta.baseRevision()) {
         return {std::nullopt, SyntaxReplayError::StaleRevision};

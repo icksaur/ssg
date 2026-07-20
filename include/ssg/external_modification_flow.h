@@ -94,12 +94,15 @@ struct ExternalDeltaReplayResult {
     [[nodiscard]] bool accepted() const noexcept { return state.has_value(); }
 };
 
-[[nodiscard]] ExternalModificationDelta deriveExternalModificationDelta(
-    const ExternalModificationViewState& base,
-    const ExternalModificationViewState& target);
-[[nodiscard]] ExternalDeltaReplayResult replayExternalModificationDelta(
-    const ExternalModificationViewState& base,
-    const ExternalModificationDelta& delta);
+class ExternalModificationDeltaCodec {
+public:
+    [[nodiscard]] ExternalModificationDelta derive(
+        const ExternalModificationViewState& base,
+        const ExternalModificationViewState& target);
+    [[nodiscard]] ExternalDeltaReplayResult replay(
+        const ExternalModificationViewState& base,
+        const ExternalModificationDelta& delta);
+};
 
 struct ExternalEventInput {
     WatchEvent event;

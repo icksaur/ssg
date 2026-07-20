@@ -396,14 +396,14 @@ std::optional<std::vector<LspNavigationTarget>> parseLocations(
 
 LspFeatureCommandSet lspFeatureCommandSet() { return {}; }
 
-LspFeatureDelta deriveLspFeatureDelta(const LspFeatureViewState& base,
+LspFeatureDelta LspFeatureDeltaCodec::derive(const LspFeatureViewState& base,
                                          const LspFeatureViewState& target) {
     LspFeatureDelta delta{base.revision, target.revision, std::nullopt};
     if (base != target) delta.state = target;
     return delta;
 }
 
-LspFeatureReplayResult replayLspFeatureDelta(
+LspFeatureReplayResult LspFeatureDeltaCodec::replay(
     const LspFeatureViewState& base, const LspFeatureDelta& delta) {
     if (delta.baseRevision != base.revision) {
         return {std::nullopt, LspFeatureReplayError::StaleRevision};

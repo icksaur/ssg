@@ -62,12 +62,12 @@ std::optional<std::string> invalidState(const TabViewState& state) {
 
 }  // namespace
 
-TabDelta deriveTabDelta(const TabViewState& base,
+TabDelta TabDeltaCodec::derive(const TabViewState& base,
                           const TabViewState& target) {
     return base == target ? TabDelta{} : TabDelta{target};
 }
 
-TabReplayResult replayTabDelta(const TabViewState& base,
+TabReplayResult TabDeltaCodec::replay(const TabViewState& base,
                                  const TabDelta& delta) {
     const auto& target = delta.state ? *delta.state : base;
     if (const auto error = invalidState(target)) {

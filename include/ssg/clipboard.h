@@ -132,8 +132,11 @@ struct ClipboardDelta {
     bool operator==(const ClipboardDelta&) const = default;
 };
 
-[[nodiscard]] ClipboardDelta deriveClipboardDelta(
-    const ClipboardViewState& before, const ClipboardViewState& after);
+class ClipboardDeltaCodec {
+public:
+    [[nodiscard]] ClipboardDelta derive(const ClipboardViewState& before,
+                                        const ClipboardViewState& after);
+};
 
 class ClipboardRegister {
 public:

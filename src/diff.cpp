@@ -351,7 +351,7 @@ DiffOpenTarget diffOpenFile(const DiffFileView& file) {
             file.deleted};
 }
 
-DiffDelta deriveDiffDelta(const DiffViewState& base,
+DiffDelta DiffDeltaCodec::derive(const DiffViewState& base,
                             const DiffViewState& target) {
     DiffDelta delta{.baseRevision = base.revision,
                     .revision = target.revision};
@@ -374,7 +374,7 @@ DiffDelta deriveDiffDelta(const DiffViewState& base,
     return delta;
 }
 
-DiffReplayResult replayDiffDelta(const DiffViewState& base,
+DiffReplayResult DiffDeltaCodec::replay(const DiffViewState& base,
                                    const DiffDelta& delta) {
     if (base.revision != delta.baseRevision) {
         return {std::nullopt, DiffReplayError::StaleRevision};

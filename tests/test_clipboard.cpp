@@ -328,14 +328,14 @@ TEST(writeFailureReportsStatusAfterDocumentAdvances) {
 TEST(viewDeltaReportsRegisterAndRequestChanges) {
     ssg::ClipboardRegister clipboard;
     const auto empty = clipboard.viewState();
-    ASSERT_FALSE(ssg::deriveClipboardDelta(empty, empty).changed);
+    ASSERT_FALSE(ssg::ClipboardDeltaCodec{}.derive(empty, empty).changed);
 
     ssg::Document document{"a"};
     const auto copyResult =
         clipboard.copy(document.snapshot(), selections("a", {{0, 1}}));
     ASSERT_TRUE(copyResult.accepted());
     const auto copiedState = clipboard.viewState();
-    const auto delta = ssg::deriveClipboardDelta(empty, copiedState);
+    const auto delta = ssg::ClipboardDeltaCodec{}.derive(empty, copiedState);
     ASSERT_TRUE(delta.changed);
     ASSERT_EQ(*delta.replacement, copiedState);
 }

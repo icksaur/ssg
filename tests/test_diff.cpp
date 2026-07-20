@@ -286,14 +286,14 @@ TEST(deltaReplayAndExactCommandNavigationContract) {
                         Revision{1})
                     .accepted());
     const auto target = model.viewState();
-    const auto delta = deriveDiffDelta(base, target);
-    const auto replay = replayDiffDelta(base, delta);
+    const auto delta = DiffDeltaCodec{}.derive(base, target);
+    const auto replay = DiffDeltaCodec{}.replay(base, delta);
     ASSERT_TRUE(replay.accepted());
     ASSERT_EQ(*replay.state, target);
 
     auto stale = base;
     stale.revision = Revision{99};
-    ASSERT_EQ(replayDiffDelta(stale, delta).error,
+    ASSERT_EQ(DiffDeltaCodec{}.replay(stale, delta).error,
               DiffReplayError::StaleRevision);
 
     const auto commands = diffCommandSet();

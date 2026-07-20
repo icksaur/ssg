@@ -249,13 +249,13 @@ TEST(commandCatalogAndDeltaAreExact) {
     }
 
     const PromptStatusViewState before{};
-    const auto unchanged = derivePromptStatusDelta(before, before);
+    const auto unchanged = PromptStatusDeltaCodec{}.derive(before, before);
     ASSERT_FALSE(unchanged.changed);
     ASSERT_FALSE(unchanged.replacement.has_value());
     PromptStatusViewState after{};
     after.status.items.push_back(
         StatusItemView{StatusId{1}, StatusPriority::Information, 1, "ready"});
-    const auto changed = derivePromptStatusDelta(before, after);
+    const auto changed = PromptStatusDeltaCodec{}.derive(before, after);
     ASSERT_TRUE(changed.changed);
     ASSERT_EQ(changed.replacement, std::optional<PromptStatusViewState>{after});
 }

@@ -218,7 +218,7 @@ HistoryCommandSet historyCommandSet() {
     return HistoryCommandSet{};
 }
 
-HistoryDelta deriveHistoryDelta(const HistoryViewState& before,
+HistoryDelta HistoryDeltaCodec::derive(const HistoryViewState& before,
                                   const HistoryViewState& after) {
     if (before == after) {
         return {false, std::nullopt};

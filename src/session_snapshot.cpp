@@ -195,23 +195,23 @@ SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
             ? std::nullopt
             : std::optional{next.document.caret},
         selectionDelta(old.selection, next.selection),
-        deriveHistoryDelta(old.history, next.history),
-        deriveClipboardDelta(old.clipboard, next.clipboard),
-        derivePromptStatusDelta(old.promptStatus, next.promptStatus),
+        HistoryDeltaCodec{}.derive(old.history, next.history),
+        ClipboardDeltaCodec{}.derive(old.clipboard, next.clipboard),
+        PromptStatusDeltaCodec{}.derive(old.promptStatus, next.promptStatus),
         SearchDeltaCodec{}.derive(old.search, next.search),
         FindReplaceDeltaCodec{}.derive(old.findReplace, next.findReplace),
         settingsDelta(old.settings, next.settings),
         KeymapMatcher::deriveDelta(old.keymap, next.keymap),
         TextCodec{}.deriveDelta(old.textEncoding, next.textEncoding),
-        deriveTabDelta(old.tabs, next.tabs),
-        deriveDiffDelta(old.diff, next.diff),
-        deriveExternalModificationDelta(old.externalModification,
-                                            next.externalModification),
-        deriveFollowEditsDelta(old.followEdits, next.followEdits),
+        TabDeltaCodec{}.derive(old.tabs, next.tabs),
+        DiffDeltaCodec{}.derive(old.diff, next.diff),
+        ExternalModificationDeltaCodec{}.derive(old.externalModification,
+                                                    next.externalModification),
+        FollowEditsDeltaCodec{}.derive(old.followEdits, next.followEdits),
         TreeDeltaCodec{}.derive(old.tree, next.tree, 4096),
-        deriveSyntaxDelta(old.syntax, next.syntax),
-        deriveLspSyncDelta(old.lspSync, next.lspSync),
-        deriveLspFeatureDelta(old.lspFeatures, next.lspFeatures),
+        SyntaxDeltaCodec{}.derive(old.syntax, next.syntax),
+        LspSyncDeltaCodec{}.derive(old.lspSync, next.lspSync),
+        LspFeatureDeltaCodec{}.derive(old.lspFeatures, next.lspFeatures),
         {old.theme == next.theme ? std::nullopt
                                  : std::optional{next.theme}},
         {shellEqual(old.shell, next.shell)
@@ -256,16 +256,16 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
                                                   delta.findReplace_);
     auto settings = replaySettings(base.sections().settings, delta.settings_);
     auto keymap = replayReplacement(base.sections().keymap, delta.keymap_);
-    auto tabs = replayTabDelta(base.sections().tabs, delta.tabs_);
-    auto diff = replayDiffDelta(base.sections().diff, delta.diff_);
-    auto external = replayExternalModificationDelta(
+    auto tabs = TabDeltaCodec{}.replay(base.sections().tabs, delta.tabs_);
+    auto diff = DiffDeltaCodec{}.replay(base.sections().diff, delta.diff_);
+    auto external = ExternalModificationDeltaCodec{}.replay(
         base.sections().externalModification,
         delta.externalModification_);
     auto tree = TreeDeltaCodec{}.replay(base.sections().tree, delta.tree_);
-    auto syntax = replaySyntaxDelta(base.sections().syntax, delta.syntax_);
+    auto syntax = SyntaxDeltaCodec{}.replay(base.sections().syntax, delta.syntax_);
     auto lspSync =
-        replayLspSyncDelta(base.sections().lspSync, delta.lspSync_);
-    auto lspFeatures = replayLspFeatureDelta(
+        LspSyncDeltaCodec{}.replay(base.sections().lspSync, delta.lspSync_);
+    auto lspFeatures = LspFeatureDeltaCodec{}.replay(
         base.sections().lspFeatures, delta.lspFeatures_);
 
     if (!document || !selection || !history || !clipboard || !promptStatus ||

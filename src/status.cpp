@@ -135,7 +135,7 @@ StatusFooterProjection StatusQueue::footerProjection() const {
     return projection;
 }
 
-PromptStatusDelta derivePromptStatusDelta(
+PromptStatusDelta PromptStatusDeltaCodec::derive(
     const PromptStatusViewState& before, const PromptStatusViewState& after) {
     if (before == after) {
         return {};

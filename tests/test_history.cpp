@@ -313,13 +313,13 @@ TEST(viewStateAndDeltaTrackHistoryAvailability) {
     const auto empty = history.viewState();
     ASSERT_FALSE(empty.canUndo);
     ASSERT_FALSE(empty.canRedo);
-    ASSERT_FALSE(ssg::deriveHistoryDelta(empty, empty).changed);
+    ASSERT_FALSE(ssg::HistoryDeltaCodec{}.derive(empty, empty).changed);
 
     auto selections = caret(0);
     input(history, document, selections, ssg::TextInputCommand::Insert,
           ssg::HistoryEditKind::Other, 0, "a");
     const auto edited = history.viewState();
-    const auto delta = ssg::deriveHistoryDelta(empty, edited);
+    const auto delta = ssg::HistoryDeltaCodec{}.derive(empty, edited);
     ASSERT_TRUE(delta.changed);
     ASSERT_EQ(*delta.replacement, edited);
     ASSERT_TRUE(edited.canUndo);
