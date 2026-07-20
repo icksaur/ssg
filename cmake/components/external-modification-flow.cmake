@@ -1,5 +1,5 @@
 target_sources(ssg PRIVATE
-    ${SSG_SOURCE_DIR}/src/external_modification.cpp
+    ${SSG_SOURCE_DIR}/src/external_modification_flow.cpp
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
