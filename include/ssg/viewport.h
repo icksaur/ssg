@@ -1,6 +1,6 @@
 #pragma once
 
-#include <ssg/layout.h>
+#include <ssg/grapheme_layout.h>
 #include <ssg/types.h>
 
 #include <cstdint>

@@ -15,7 +15,7 @@
 //
 // The oracle does NOT check CellKind or width; those are implementation details.
 
-#include <ssg/layout.h>
+#include <ssg/grapheme_layout.h>
 
 #include <cassert>
 #include <cstdint>
@@ -148,7 +148,7 @@ int main() {
             utf8 += encodeUtf8(e.cp);
 
         // Run compute_cell_run
-        const auto run = ssg::computeCellRun(utf8);
+        const auto run = ssg::GraphemeLayout{}.computeRun(utf8);
 
         // Expected clusters = number of ÷-separated segments
         // break_bytes has the byte offsets where breaks occur (between spans)

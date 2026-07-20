@@ -282,7 +282,7 @@ ViewportViewState Viewport::computeUnwrapped(
         const std::size_t end = logicalLine + 1 < lineStart.size()
                                     ? lineStart[logicalLine + 1] - 1
                                     : documentText.size();
-        const auto run = computeCellRun(
+        const auto run = GraphemeLayout{}.computeRun(
             documentText.substr(start, end - start), tabWidth);
         const auto documentStart =
             checkedU32(start, "viewport byte offset exceeds uint32");

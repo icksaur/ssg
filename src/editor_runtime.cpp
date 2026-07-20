@@ -1,6 +1,6 @@
 #include "runtime/editor_runtime_internal.h"
 
-#include <ssg/layout.h>
+#include <ssg/grapheme_layout.h>
 
 #include <algorithm>
 #include <array>
@@ -629,11 +629,11 @@ std::vector<CellRun> EditorRuntime::Impl::activeCellRuns() const {
     while (start <= text.size()) {
         auto end = text.find('\n', start);
         auto line = text.substr(start, end == std::string::npos ? end : end - start);
-        runs.push_back(computeCellRun(line, 4));
+        runs.push_back(GraphemeLayout{}.computeRun(line, 4));
         if (end == std::string::npos) break;
         start = end + 1;
     }
-    if (runs.empty()) runs.push_back(computeCellRun("", 4));
+    if (runs.empty()) runs.push_back(GraphemeLayout{}.computeRun("", 4));
     return runs;
 }
 

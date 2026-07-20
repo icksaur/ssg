@@ -147,7 +147,7 @@ public:
     }
 
     ssg::ViewportViewState viewport() const {
-        auto run = ssg::computeCellRun(state_.text);
+        auto run = ssg::GraphemeLayout{}.computeRun(state_.text);
         return ssg::Viewport{}.compute(
             std::span<const ssg::CellRun>{&run, 1},
             ssg::ViewportDimensions{17, 5}, state_.first_row);

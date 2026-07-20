@@ -7,7 +7,7 @@ Usage:
 Output is written to stdout.  Only EAW=W (Wide) and EAW=F (Fullwidth) entries
 are emitted.  Adjacent ranges with the same effective property are merged into
 a minimal sorted non-overlapping URange array suitable for embedding directly
-in src/layout.cpp.
+in src/grapheme_layout.cpp.
 """
 
 import re

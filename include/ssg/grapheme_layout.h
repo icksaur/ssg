@@ -72,26 +72,30 @@ struct CellRun {
     uint32_t totalCells;  // Sum of all span.cell_width values
 };
 
-// Compute the cell run for one logical line of UTF-8 text.
-//
-// Precondition: line_utf8 must not contain '\n' or '\r'.
-// Throws std::invalid_argument when tab_width is outside [1, 16].
-//
-// Each invalid UTF-8 byte (lone continuation, overlong lead, truncated
-// multi-byte sequence, or byte > U+10FFFF encoding range) yields exactly one
-// CellSpan with kind=invalid_utf8 and cell_width=1.
-//
-// Grapheme cluster extensions (combining marks, variation selectors, ZWJ
-// sequences, regional-indicator flag pairs) are absorbed into the preceding
-// cluster's byte_len; they do not produce additional spans.
-CellRun computeCellRun(std::string_view lineUtf8, int tabWidth = 4);
+class GraphemeLayout {
+public:
+    // Compute the cell run for one logical line of UTF-8 text.
+    //
+    // Precondition: line_utf8 must not contain '\n' or '\r'.
+    // Throws std::invalid_argument when tab_width is outside [1, 16].
+    //
+    // Each invalid UTF-8 byte (lone continuation, overlong lead, truncated
+    // multi-byte sequence, or byte > U+10FFFF encoding range) yields exactly one
+    // CellSpan with kind=invalid_utf8 and cell_width=1.
+    //
+    // Grapheme cluster extensions (combining marks, variation selectors, ZWJ
+    // sequences, regional-indicator flag pairs) are absorbed into the preceding
+    // cluster's byte_len; they do not produce additional spans.
+    CellRun computeRun(std::string_view lineUtf8, int tabWidth = 4) const;
 
-// Test instrumentation (M12 INV-viewport-bounded-work).  Counts the
-// compute_cell_run (grapheme-segmentation) calls made on the current thread since
-// the last reset.  Diagnostic only, not production state; it lets a test assert
-// that a no-wrap navigation/reveal segments only the caret + target lines
-// (bounded, document-length independent) rather than the whole document.
-[[nodiscard]] std::uint64_t cellRunCalls();
-void resetCellRunCalls();
+    // Test instrumentation (M12 INV-viewport-bounded-work).  Counts the
+    // compute_cell_run (grapheme-segmentation) calls made on the current thread
+    // since the last reset.  Diagnostic only, not production state; it lets a
+    // test assert that a no-wrap navigation/reveal segments only the caret +
+    // target lines (bounded, document-length independent) rather than the whole
+    // document.
+    [[nodiscard]] static std::uint64_t cellRunCalls();
+    static void resetCellRunCalls();
+};
 
 }  // namespace ssg

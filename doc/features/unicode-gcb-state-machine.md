@@ -2,7 +2,7 @@
 
 ## Goals
 
-Replace the ad-hoc property predicates in `src/layout.cpp` with an exact Unicode 15.0.0
+Replace the ad-hoc property predicates in `src/grapheme_layout.cpp` with an exact Unicode 15.0.0
 UAX #29 Grapheme_Cluster_Break (GCB) property state machine derived from the official
 `GraphemeBreakProperty.txt`. Fix two known GB11 bugs exposed by the oracle. Pin the
 three canonical Unicode 15.0.0 data files (`GraphemeBreakProperty.txt`,
@@ -152,7 +152,7 @@ generator script.
 
 `tools/gen_gcb_table.py` reads `data/unicode/GraphemeBreakProperty.txt` and outputs
 the `k_gcb[]` C++ array to stdout. LV and LVT are excluded from the output. Running the
-script reproduces the table currently embedded in `src/layout.cpp`.
+script reproduces the table currently embedded in `src/grapheme_layout.cpp`.
 
 ## Invariants
 
@@ -204,9 +204,9 @@ The public `compute_cell_run` signature is unchanged.
 |---|------|-------|--------|------------|
 | 1 | Download and pin official Unicode 15.0.0 data files | `data/unicode/GraphemeBreakProperty.txt`, `data/unicode/emoji-data.txt`, `data/unicode/GraphemeBreakTest.txt`, `data/unicode/README.md` | File sizes and SHA-256 hashes consistent with unicode.org CDN | I7 |
 | 2 | Write gen_gcb_table.py; generate k_gcb table | `tools/gen_gcb_table.py` | Script runs without error; output is valid C++ with expected range count | - |
-| 3 | Refactor layout.cpp: GcbProp enum + k_gcb table + gcb_prop_of(); handle GCB=Control outside C0/C1; separated display_width_of() | `src/layout.cpp` | All existing test_cell_layout goldens still pass | I7 |
+| 3 | Refactor layout.cpp: GcbProp enum + k_gcb table + gcb_prop_of(); handle GCB=Control outside C0/C1; separated display_width_of() | `src/grapheme_layout.cpp` | All existing test_cell_layout goldens still pass | I7 |
 | 4a | Add failing adversarial fixtures for the two GB11 bugs | `tests/test_cell_layout.cpp` | New fixtures FAIL against step-3 code (verify before step 4b) | I7 |
-| 4b | Fix GB11 state machine (GB11State enum) | `src/layout.cpp` | The step-4a fixtures now pass; all prior goldens still pass | I7 |
+| 4b | Fix GB11 state machine (GB11State enum) | `src/grapheme_layout.cpp` | The step-4a fixtures now pass; all prior goldens still pass | I7 |
 | 5 | Add remaining adversarial fixtures (GCB=Control chars, 3+ RI, Prepend edge cases, ZWJ chains) | `tests/test_cell_layout.cpp` | Each new fixture passes | I7 |
 | 6 | Add GraphemeBreakTest oracle test and CMake manifest entry | `tests/test_gcb_oracle.cpp`, `cmake/components/unicode-cell-layout.cmake` | Oracle passes all applicable test lines (lines not containing 000D or 000A) | I7 |
 | 7 | Run normal, sanitizer, nested consumer, and diff-check | build artifacts | All gates green; zero sanitizer findings | I7 |

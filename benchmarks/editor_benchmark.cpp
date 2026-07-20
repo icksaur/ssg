@@ -1,6 +1,6 @@
 #include <ssg/command_registry.h>
 #include <ssg/document.h>
-#include <ssg/layout.h>
+#include <ssg/grapheme_layout.h>
 #include <ssg/session.h>
 #include <ssg/snapshot.h>
 #include <ssg/viewport.h>
@@ -231,7 +231,7 @@ void verifyInputs(std::string const& seed, std::string const& script) {
     while (runs.size() < 80 && begin < text.size()) {
         auto end = text.find('\n', begin);
         if (end == std::string_view::npos) end = text.size();
-        runs.push_back(ssg::computeCellRun(text.substr(begin, end - begin)));
+        runs.push_back(ssg::GraphemeLayout{}.computeRun(text.substr(begin, end - begin)));
         begin = end + (end < text.size() ? 1U : 0U);
     }
     return runs;

@@ -1,6 +1,6 @@
 #include <ssg/edit_commands.h>
 
-#include <ssg/layout.h>
+#include <ssg/grapheme_layout.h>
 
 #include <algorithm>
 #include <cctype>
@@ -494,7 +494,7 @@ std::vector<TextEdit> transposeEdits(const DocumentSnapshot& document,
             --lineIndex;
         }
         const auto& line = lines[lineIndex];
-        const auto run = computeCellRun(
+        const auto run = GraphemeLayout{}.computeRun(
             std::string_view{document.text}.substr(
                 line.start, line.contentEnd - line.start));
         if (run.spans.size() < 2) {

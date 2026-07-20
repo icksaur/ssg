@@ -1,4 +1,4 @@
-#include <ssg/layout.h>
+#include <ssg/grapheme_layout.h>
 #include <ssg/selection.h>
 #include <ssg/viewport.h>
 
@@ -27,7 +27,7 @@ std::vector<CellRun> runs(std::initializer_list<std::string_view> lines) {
     std::vector<CellRun> result;
     result.reserve(lines.size());
     for (const auto line : lines) {
-        result.push_back(ssg::computeCellRun(line));
+        result.push_back(ssg::GraphemeLayout{}.computeRun(line));
     }
     return result;
 }
@@ -43,11 +43,11 @@ std::vector<CellRun> cellRunsFromText(std::string_view text, int tab) {
         auto end = text.find('\n', start);
         auto line = text.substr(
             start, end == std::string_view::npos ? end : end - start);
-        result.push_back(ssg::computeCellRun(line, tab));
+        result.push_back(ssg::GraphemeLayout{}.computeRun(line, tab));
         if (end == std::string_view::npos) break;
         start = end + 1;
     }
-    if (result.empty()) result.push_back(ssg::computeCellRun("", tab));
+    if (result.empty()) result.push_back(ssg::GraphemeLayout{}.computeRun("", tab));
     return result;
 }
 
@@ -276,7 +276,7 @@ TEST(listScrollViewMatchesComputeViewportMetrics) {
     // editor's compute_viewport already does for the same (total, viewport,
     // first) — no regression in the reused thumb math.
     std::vector<CellRun> lines;
-    for (int i = 0; i < 40; ++i) lines.push_back(ssg::computeCellRun("line", 4));
+    for (int i = 0; i < 40; ++i) lines.push_back(ssg::GraphemeLayout{}.computeRun("line", 4));
     auto viewport = ssg::Viewport{}.compute(lines, ssg::ViewportDimensions{20, 10}, 7);
     auto list = ssg::Viewport{}.listScrollView(
         viewport.totalVisualRows, 10, 7, std::nullopt, false);
