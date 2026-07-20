@@ -367,7 +367,7 @@ SliceResponse CoreEditorSlice::execute(ClientId clientId,
                       TextInputArguments{request.text}});
     auto const after = impl_->snapshotUnlocked();
     return {ProtocolError::None, result.error, after,
-            result.accepted() ? deriveDocumentDelta(before, after)
+            result.accepted() ? DocumentSnapshotCodec{}.deriveDelta(before, after)
                               : std::nullopt,
             std::move(result.message)};
 }

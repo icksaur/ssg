@@ -26,10 +26,13 @@ struct DocumentDelta {
     bool operator==(DocumentDelta const&) const = default;
 };
 
-[[nodiscard]] std::optional<DocumentDelta> deriveDocumentDelta(
-    DocumentViewState const& before, DocumentViewState const& after);
-[[nodiscard]] std::optional<DocumentViewState> replayDocumentDelta(
-    DocumentViewState const& before, DocumentDelta const& delta,
-    ByteOffset targetCaret);
+class DocumentSnapshotCodec {
+public:
+    [[nodiscard]] std::optional<DocumentDelta> deriveDelta(
+        DocumentViewState const& before, DocumentViewState const& after) const;
+    [[nodiscard]] std::optional<DocumentViewState> replay(
+        DocumentViewState const& before, DocumentDelta const& delta,
+        ByteOffset targetCaret) const;
+};
 
 }  // namespace ssg

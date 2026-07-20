@@ -321,7 +321,7 @@ void measureCommandDelta(std::vector<Operation> const& operations,
             ssg::DocumentViewState after{
                 snapshot.revision, std::move(snapshot.text),
                 ssg::ByteOffset{normalized.insert ? 1U : 0U}};
-            auto delta = ssg::deriveDocumentDelta(view, after);
+            auto delta = ssg::DocumentSnapshotCodec{}.deriveDelta(view, after);
             auto const elapsed = Clock::now() - start;
             if (!result.accepted() || !delta.has_value())
                 throw std::runtime_error{"command-to-delta cycle failed"};

@@ -171,7 +171,7 @@ SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
         throw std::invalid_argument{"session delta revisions must advance"};
     }
     auto document =
-        deriveDocumentDelta(before.sections().document,
+        DocumentSnapshotCodec{}.deriveDelta(before.sections().document,
                                            after.sections().document);
     auto const& old = before.sections();
     auto const& next = after.sections();
@@ -235,7 +235,7 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
 
     auto document = std::optional<DocumentViewState>{base.sections().document};
     if (delta.document_) {
-        document = replayDocumentDelta(
+        document = DocumentSnapshotCodec{}.replay(
             base.sections().document, *delta.document_,
             delta.documentCaret_.value_or(base.sections().document.caret));
     } else if (delta.documentCaret_) {
