@@ -1,5 +1,5 @@
 #include "test_helpers.h"
-#include <ssg/application_auth.h>
+#include <ssg/application_authentication.h>
 #include <ssg/editor_session_builder.h>
 #include <ssg/http_server.h>
 #include <ssg/protocol.h>
