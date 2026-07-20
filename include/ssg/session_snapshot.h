@@ -18,7 +18,7 @@
 #include <ssg/status.h>
 #include <ssg/syntax.h>
 #include <ssg/tabs.h>
-#include <ssg/text_encoding.h>
+#include <ssg/text_codec.h>
 #include <ssg/theme.h>
 #include <ssg/tree.h>
 #include <ssg/ui_layout.h>

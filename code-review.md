@@ -490,3 +490,11 @@ distinguishes binary from decode_failure). Added a decode NUL-rejection test; th
 only golden changes are the two NUL fixtures' independent terminator-summary/save
 fields (now reporting the NUL decode error) — the actual open records
 (kind/dirty/status/texthash) are unchanged. All 71 tests pass.
+
+## TextCodec objectification (obj-utf8)
+
+Reviewer: code-review agent (`code-quality.md` standard).
+
+No material findings. Reviewed rename/objectification scope:
+`include/ssg/text_codec.h`, `src/text_codec.cpp`, call-site migrations,
+include path migration, and CMake source path update.

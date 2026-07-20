@@ -2,7 +2,7 @@
 
 #include <ssg/document.h>
 #include <ssg/recovery.h>
-#include <ssg/text_encoding.h>
+#include <ssg/text_codec.h>
 #include <ssg/workspace.h>
 
 #include <chrono>
@@ -102,7 +102,7 @@ std::string modeName(ssg::DocumentMode m) {
 // The per-line terminator summary, computed independently of the workspace via
 // the public decoder, so the record captures mixed-EOL fidelity directly.
 std::string terminatorSummary(std::string_view bytes) {
-    auto decoded = ssg::decodeText(std::span<const std::uint8_t>{
+    auto decoded = ssg::TextCodec{}.decode(std::span<const std::uint8_t>{
         reinterpret_cast<const std::uint8_t*>(bytes.data()), bytes.size()});
     if (!decoded.accepted()) {
         std::ostringstream out;
@@ -128,10 +128,10 @@ std::string terminatorSummary(std::string_view bytes) {
 // public encode path, hashed — captures encode round-trip fidelity independent
 // of the workspace's save machinery.
 std::string saveHash(std::string_view bytes) {
-    auto decoded = ssg::decodeText(std::span<const std::uint8_t>{
+    auto decoded = ssg::TextCodec{}.decode(std::span<const std::uint8_t>{
         reinterpret_cast<const std::uint8_t*>(bytes.data()), bytes.size()});
     if (!decoded.accepted()) return "n/a";
-    auto encoded = ssg::encodeText(*decoded.text);
+    auto encoded = ssg::TextCodec{}.encode(*decoded.text);
     if (!encoded.accepted()) return "encode_err";
     return hashHex(std::string_view{
         reinterpret_cast<const char*>(encoded.bytes.data()),

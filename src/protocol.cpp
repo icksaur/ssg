@@ -7,7 +7,7 @@
 #include <ssg/keymap.h>
 #include <ssg/selection.h>
 #include <ssg/settings.h>
-#include <ssg/text_encoding.h>
+#include <ssg/text_codec.h>
 #include <ssg/text_input_commands.h>
 
 #include <any>

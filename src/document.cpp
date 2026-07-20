@@ -3,7 +3,7 @@
 #include "piece_tree.h"
 
 #include <ssg/open_metrics.h>
-#include <ssg/text_encoding.h>
+#include <ssg/text_codec.h>
 
 #include <algorithm>
 #include <cstddef>

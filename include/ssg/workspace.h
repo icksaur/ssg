@@ -5,7 +5,7 @@
 #include "ssg/platform_files.h"
 #include "ssg/recovery.h"
 #include "ssg/scratch_journal.h"
-#include "ssg/text_encoding.h"
+#include "ssg/text_codec.h"
 
 #include <compare>
 #include <cstdint>
