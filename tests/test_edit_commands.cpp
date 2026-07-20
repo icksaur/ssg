@@ -27,7 +27,7 @@ using ssg::SelectionSet;
 DocumentPosition position(std::string_view text, std::uint64_t offset,
                           int tabWidth = 4) {
     const auto value =
-        ssg::resolveDocumentPosition(text, ByteOffset{offset}, tabWidth);
+        ssg::SelectionNavigator::resolvePosition(text, ByteOffset{offset}, tabWidth);
     ASSERT_TRUE(value.has_value());
     return *value;
 }

@@ -749,7 +749,7 @@ SelectionNavigationCommandSet selectionNavigationCommandSet() {
     return SelectionNavigationCommandSet{};
 }
 
-std::optional<DocumentPosition> resolveDocumentPosition(
+std::optional<DocumentPosition> SelectionNavigator::resolvePosition(
     std::string_view text, ByteOffset byteOffset, int tabWidth) {
     if (tabWidth < 1 || tabWidth > 16) {
         return std::nullopt;
@@ -757,11 +757,12 @@ std::optional<DocumentPosition> resolveDocumentPosition(
     return TextModel{text, tabWidth}.resolve(byteOffset);
 }
 
-SelectionNavigationResult applySelectionNavigation(
+SelectionNavigationResult SelectionNavigator::apply(
     std::string_view text, const SelectionViewState& before,
     SelectionCommand command, ViewportDimensions viewport,
     SelectionCommandArguments arguments,
-    std::span<const BracketPair> bracketPairs, int tabWidth, bool wordWrap) {
+    std::span<const BracketPair> bracketPairs, int tabWidth,
+    bool wordWrap) const {
     if (tabWidth < 1 || tabWidth > 16) {
         return rejected(SelectionNavigationError::InvalidTabWidth,
                         "tab width must be between 1 and 16");
