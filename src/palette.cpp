@@ -108,7 +108,7 @@ PaletteReport derivePaletteReport(
         order.empty() ? std::nullopt
                       : std::optional<std::uint32_t>{
                             static_cast<std::uint32_t>(window.selected)};
-    auto const scroll = computeListScrollView(
+    auto const scroll = Viewport{}.listScrollView(
         static_cast<std::uint32_t>(order.size()), window.paneRows,
         window.firstVisible, selected,
         /*keep_selection_visible=*/selectionClamped);

@@ -642,11 +642,11 @@ ViewportViewState EditorRuntime::Impl::computeEditorViewport(
     std::uint32_t firstColumn) const {
     if (wordWrap) {
         auto runs = activeCellRuns();
-        return computeViewport(runs, dimensions, firstRow);
+        return Viewport{}.compute(runs, dimensions, firstRow);
     }
     // Word wrap off (default): one logical line is one visual row; only the
     // visible lines are segmented, so this is O(visible rows), not O(document).
-    return computeViewportUnwrapped(activeText(), dimensions, firstRow,
+    return Viewport{}.computeUnwrapped(activeText(), dimensions, firstRow,
                                       firstColumn, 4);
 }
 

@@ -255,8 +255,8 @@ void verifyCorrectness(std::string const& base,
         throw std::runtime_error{"operation script does not restore canonical text"};
 
     auto runs = firstViewportRuns(base);
-    auto view = ssg::computeViewport(runs, ssg::ViewportDimensions{120, 40});
-    auto unchanged = ssg::deriveViewportDelta(view, view);
+    auto view = ssg::Viewport{}.compute(runs, ssg::ViewportDimensions{120, 40});
+    auto unchanged = ssg::Viewport{}.deriveDelta(view, view);
     if (unchanged.changed || unchanged.replacement.has_value())
         throw std::runtime_error{"unchanged viewport emitted a payload"};
 
@@ -342,7 +342,7 @@ void measureOpenViewport(std::string const& base, Timings& timings) {
         auto snapshot = document.snapshot();
         auto runs = firstViewportRuns(snapshot.text);
         auto view =
-            ssg::computeViewport(runs, ssg::ViewportDimensions{120, 40});
+            ssg::Viewport{}.compute(runs, ssg::ViewportDimensions{120, 40});
         if (view.visibleRows.empty())
             throw std::runtime_error{"first viewport is empty"};
         timings.openViewportMilliseconds.push_back(

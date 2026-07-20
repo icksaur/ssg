@@ -725,7 +725,7 @@ TEST(renderPaletteWindowsRowsAndDrawsAThumbWithAbsoluteSelection) {
     projection.scrollbarRect = pane.scrollbar;
     projection.firstVisible = 20;
     projection.selected = std::uint32_t{25};
-    projection.scrollbar = ssg::scrollbarMetrics(40, rows, 20);
+    projection.scrollbar = ssg::Viewport{}.scrollbarMetrics(40, rows, 20);
     for (std::uint32_t i = 0; i < rows; ++i) {
         projection.rows.push_back(
             {"cmd-" + std::to_string(20 + i), ""});
@@ -774,7 +774,7 @@ TEST(renderPaletteReservesAnEmptyGutterWhenTheListFits) {
     projection.firstVisible = 0;
     projection.selected = std::uint32_t{0};
     projection.scrollbar =
-        ssg::scrollbarMetrics(2, static_cast<std::uint32_t>(pane.content.height), 0);
+        ssg::Viewport{}.scrollbarMetrics(2, static_cast<std::uint32_t>(pane.content.height), 0);
     projection.rows = {{"a", ""}, {"b", ""}};
     sections.shell.palette = projection;
     ssg::SessionSnapshot projected{snapshot->revision(), snapshot->topology(),

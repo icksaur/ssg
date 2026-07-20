@@ -522,7 +522,7 @@ TEST(sessionSnapshotRoundTripsTreeScrollFields) {
         {ssg::TreeNodeView{nodeA, 0, false}, ssg::TreeNodeView{nodeB, 0, false}},
         ssg::TreeNodeId{"files:b"}};
     provider.firstVisible = 3;
-    provider.scrollbar = ssg::scrollbarMetrics(40, 9, 3);
+    provider.scrollbar = ssg::Viewport{}.scrollbarMetrics(40, 9, 3);
     provider.visibleNodeIds = {ssg::TreeNodeId{"files:a"},
                                  ssg::TreeNodeId{"files:b"}};
     sectionsValue.tree = ssg::TreeViewState{ssg::TreeRevision{7}, {provider}};
@@ -547,7 +547,7 @@ TEST(sessionSnapshotRoundTripsTreeScrollFields) {
     ASSERT_EQ(decoded.snapshot->sections().tree, snapshot.sections().tree);
     auto const& p = decoded.snapshot->sections().tree.providers.front();
     ASSERT_EQ(p.firstVisible, std::uint32_t{3});
-    ASSERT_EQ(p.scrollbar, ssg::scrollbarMetrics(40, 9, 3));
+    ASSERT_EQ(p.scrollbar, ssg::Viewport{}.scrollbarMetrics(40, 9, 3));
     ASSERT_EQ(p.visibleNodeIds.size(), std::size_t{2});
     ASSERT_TRUE(decoded.snapshot->sections().shell.panelScrollbar.has_value());
     ASSERT_EQ(decoded.snapshot->sections().shell.panelScrollbar,
