@@ -205,8 +205,8 @@ SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
         TextCodec{}.deriveDelta(old.textEncoding, next.textEncoding),
         deriveTabDelta(old.tabs, next.tabs),
         DiffDeltaCodec{}.derive(old.diff, next.diff),
-        deriveExternalModificationDelta(old.externalModification,
-                                            next.externalModification),
+        ExternalModificationDeltaCodec{}.derive(old.externalModification,
+                                                    next.externalModification),
         deriveFollowEditsDelta(old.followEdits, next.followEdits),
         TreeDeltaCodec{}.derive(old.tree, next.tree, 4096),
         deriveSyntaxDelta(old.syntax, next.syntax),
@@ -258,7 +258,7 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
     auto keymap = replayReplacement(base.sections().keymap, delta.keymap_);
     auto tabs = replayTabDelta(base.sections().tabs, delta.tabs_);
     auto diff = DiffDeltaCodec{}.replay(base.sections().diff, delta.diff_);
-    auto external = replayExternalModificationDelta(
+    auto external = ExternalModificationDeltaCodec{}.replay(
         base.sections().externalModification,
         delta.externalModification_);
     auto tree = TreeDeltaCodec{}.replay(base.sections().tree, delta.tree_);

@@ -50,7 +50,7 @@ ExternalModificationCommandSet externalModificationCommandSet() {
     return {};
 }
 
-ExternalModificationDelta deriveExternalModificationDelta(
+ExternalModificationDelta ExternalModificationDeltaCodec::derive(
     const ExternalModificationViewState& base,
     const ExternalModificationViewState& target) {
     ExternalModificationDelta delta{base.revision, target.revision};
@@ -68,7 +68,7 @@ ExternalModificationDelta deriveExternalModificationDelta(
     return delta;
 }
 
-ExternalDeltaReplayResult replayExternalModificationDelta(
+ExternalDeltaReplayResult ExternalModificationDeltaCodec::replay(
     const ExternalModificationViewState& base,
     const ExternalModificationDelta& delta) {
     if (base.revision != delta.baseRevision) {
