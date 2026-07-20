@@ -77,10 +77,13 @@ struct TabReplayResult {
     [[nodiscard]] bool accepted() const noexcept { return error.empty(); }
 };
 
-[[nodiscard]] TabDelta deriveTabDelta(const TabViewState& base,
-                                        const TabViewState& target);
-[[nodiscard]] TabReplayResult replayTabDelta(const TabViewState& base,
-                                               const TabDelta& delta);
+class TabDeltaCodec {
+public:
+    [[nodiscard]] TabDelta derive(const TabViewState& base,
+                                  const TabViewState& target);
+    [[nodiscard]] TabReplayResult replay(const TabViewState& base,
+                                         const TabDelta& delta);
+};
 
 enum class TabCommand : std::uint8_t {
     Close,

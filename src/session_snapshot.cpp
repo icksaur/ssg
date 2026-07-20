@@ -203,7 +203,7 @@ SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
         settingsDelta(old.settings, next.settings),
         KeymapMatcher::deriveDelta(old.keymap, next.keymap),
         TextCodec{}.deriveDelta(old.textEncoding, next.textEncoding),
-        deriveTabDelta(old.tabs, next.tabs),
+        TabDeltaCodec{}.derive(old.tabs, next.tabs),
         DiffDeltaCodec{}.derive(old.diff, next.diff),
         ExternalModificationDeltaCodec{}.derive(old.externalModification,
                                                     next.externalModification),
@@ -256,7 +256,7 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
                                                   delta.findReplace_);
     auto settings = replaySettings(base.sections().settings, delta.settings_);
     auto keymap = replayReplacement(base.sections().keymap, delta.keymap_);
-    auto tabs = replayTabDelta(base.sections().tabs, delta.tabs_);
+    auto tabs = TabDeltaCodec{}.replay(base.sections().tabs, delta.tabs_);
     auto diff = DiffDeltaCodec{}.replay(base.sections().diff, delta.diff_);
     auto external = ExternalModificationDeltaCodec{}.replay(
         base.sections().externalModification,

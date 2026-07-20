@@ -206,8 +206,8 @@ TEST(reopenActivatesAnIdentityAlreadyOpenedByAnotherPath) {
     ASSERT_EQ(tabs.viewState().active, std::optional{replacement});
     ASSERT_EQ(tabs.recentlyClosedCount(), std::size_t{0});
     ASSERT_EQ(lifecycle.reopenCalls, 0);
-    const auto delta = ssg::deriveTabDelta({}, tabs.viewState());
-    ASSERT_TRUE(ssg::replayTabDelta({}, delta).accepted());
+    const auto delta = ssg::TabDeltaCodec{}.derive({}, tabs.viewState());
+    ASSERT_TRUE(ssg::TabDeltaCodec{}.replay({}, delta).accepted());
 }
 
 TEST(untitledLabelsAreSmallestAvailableAndReopenIsStable) {
@@ -250,14 +250,14 @@ TEST(badgesUpdateAndDeltaReplayIsExact) {
                         ssg::TabRecoveryBadge::Pending)
                     .accepted());
     const auto target = tabs.viewState();
-    const auto delta = ssg::deriveTabDelta(base, target);
-    const auto replay = ssg::replayTabDelta(base, delta);
+    const auto delta = ssg::TabDeltaCodec{}.derive(base, target);
+    const auto replay = ssg::TabDeltaCodec{}.replay(base, delta);
     ASSERT_TRUE(replay.accepted());
     ASSERT_EQ(replay.state, std::optional{target});
     ASSERT_EQ(target.tabs[0].mode, ssg::DocumentMode::ReadOnly);
     ASSERT_TRUE(target.tabs[0].dirty);
     ASSERT_EQ(target.tabs[0].recovery, ssg::TabRecoveryBadge::Pending);
-    ASSERT_FALSE(ssg::deriveTabDelta(target, target).state.has_value());
+    ASSERT_FALSE(ssg::TabDeltaCodec{}.derive(target, target).state.has_value());
 }
 
 }  // namespace
