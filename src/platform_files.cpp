@@ -14,7 +14,7 @@ struct Utf8Length {
     std::size_t utf16_units = 0;
 };
 
-Utf8Length utf8_length(std::string_view text) noexcept {
+Utf8Length utf8Length(std::string_view text) noexcept {
     Utf8Length result;
     for (std::size_t i = 0; i < text.size();) {
         const auto lead = static_cast<unsigned char>(text[i]);
@@ -61,7 +61,7 @@ Utf8Length utf8_length(std::string_view text) noexcept {
     return result;
 }
 
-bool is_windows_reserved(std::string_view component) {
+bool isWindowsReserved(std::string_view component) {
     const auto dot = component.find('.');
     component = component.substr(0, dot);
     std::string base(component);
@@ -78,14 +78,14 @@ bool is_windows_reserved(std::string_view component) {
     return false;
 }
 
-PathValidation validate_component(std::string_view component,
+PathValidation validateComponent(std::string_view component,
                                   PathSyntax syntax,
                                   std::size_t index) noexcept {
     if (component.empty() || component == "." || component == "..") {
         return {PathError::Traversal, index};
     }
 
-    const auto length = utf8_length(component);
+    const auto length = utf8Length(component);
     if (!length.valid) {
         return {PathError::InvalidUtf8, index};
     }
@@ -110,7 +110,7 @@ PathValidation validate_component(std::string_view component,
     if (component.back() == '.' || component.back() == ' ') {
         return {PathError::TrailingDotOrSpace, index};
     }
-    if (is_windows_reserved(component)) {
+    if (isWindowsReserved(component)) {
         return {PathError::ReservedName, index};
     }
     if (length.utf16_units > 255) {
@@ -121,7 +121,7 @@ PathValidation validate_component(std::string_view component,
 
 } // namespace
 
-PathValidation validate_workspace_relative_path(std::string_view path,
+PathValidation validateWorkspaceRelativePath(std::string_view path,
                                                 PathSyntax syntax,
                                                 LongPathPolicy long_paths) noexcept {
     if (path.empty()) {
@@ -146,7 +146,7 @@ PathValidation validate_workspace_relative_path(std::string_view path,
             continue;
         }
         const auto validation =
-            validate_component(path.substr(component_start, i - component_start),
+            validateComponent(path.substr(component_start, i - component_start),
                                syntax, component_index);
         if (!validation.valid()) {
             return validation;
@@ -155,7 +155,7 @@ PathValidation validate_workspace_relative_path(std::string_view path,
         ++component_index;
     }
 
-    const auto total_length = utf8_length(path);
+    const auto total_length = utf8Length(path);
     if (!total_length.valid) {
         return {PathError::InvalidUtf8, 0};
     }

@@ -87,9 +87,9 @@ public:
     // prime_deferred after the first frame).  Client commands still advance the
     // revision only through dispatch; this is the runtime's seam for its own
     // authoritative mutations so delta clients observe them.  Throws on overflow.
-    Revision advance_revision();
+    Revision advanceRevision();
     [[nodiscard]] SessionTopology topology() const;
-    [[nodiscard]] std::optional<AttachedClient> attached_client(
+    [[nodiscard]] std::optional<AttachedClient> attachedClient(
         ClientId client_id) const;
 
 private:

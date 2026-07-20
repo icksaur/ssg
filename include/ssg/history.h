@@ -34,13 +34,13 @@ public:
     descriptors() const noexcept;
 
 private:
-    friend HistoryCommandSet history_command_set();
+    friend HistoryCommandSet historyCommandSet();
     HistoryCommandSet();
 
     const std::array<HistoryCommandDescriptor, 2> descriptors_;
 };
 
-[[nodiscard]] HistoryCommandSet history_command_set();
+[[nodiscard]] HistoryCommandSet historyCommandSet();
 
 enum class HistoryEditKind : std::uint8_t {
     Typing,
@@ -85,7 +85,7 @@ struct HistoryDelta {
     bool operator==(const HistoryDelta&) const noexcept = default;
 };
 
-[[nodiscard]] HistoryDelta derive_history_delta(
+[[nodiscard]] HistoryDelta deriveHistoryDelta(
     const HistoryViewState& before, const HistoryViewState& after);
 
 class DocumentHistory {
@@ -98,7 +98,7 @@ public:
     DocumentHistory(DocumentHistory&&) noexcept;
     DocumentHistory& operator=(DocumentHistory&&) noexcept;
 
-    [[nodiscard]] HistoryResult apply_edit(
+    [[nodiscard]] HistoryResult applyEdit(
         Document& document, const EditTransaction& transaction,
         const SelectionSet& selections_before,
         const SelectionSet& selections_after, HistoryEditKind kind,
@@ -106,12 +106,12 @@ public:
     [[nodiscard]] HistoryResult undo(Document& document);
     [[nodiscard]] HistoryResult redo(Document& document);
 
-    void break_coalescing() noexcept;
+    void breakCoalescing() noexcept;
 
-    [[nodiscard]] bool can_undo() const noexcept;
-    [[nodiscard]] bool can_redo() const noexcept;
-    [[nodiscard]] std::uint64_t retained_bytes() const noexcept;
-    [[nodiscard]] HistoryViewState view_state() const noexcept;
+    [[nodiscard]] bool canUndo() const noexcept;
+    [[nodiscard]] bool canRedo() const noexcept;
+    [[nodiscard]] std::uint64_t retainedBytes() const noexcept;
+    [[nodiscard]] HistoryViewState viewState() const noexcept;
 
 private:
     struct Impl;

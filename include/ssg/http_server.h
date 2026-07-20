@@ -42,9 +42,9 @@ struct DecodeSessionAttachRequestResult {
     }
 };
 
-[[nodiscard]] std::string encode_session_attach_request(
+[[nodiscard]] std::string encodeSessionAttachRequest(
     SessionAttachRequest const& request);
-[[nodiscard]] DecodeSessionAttachRequestResult decode_session_attach_request(
+[[nodiscard]] DecodeSessionAttachRequestResult decodeSessionAttachRequest(
     std::string_view message, ProtocolLimits limits = {});
 
 struct AuthenticatedSession {
@@ -61,10 +61,10 @@ public:
         std::string_view credential) = 0;
     [[nodiscard]] virtual SessionSnapshot snapshot(SessionId const& session_id,
                                                    ClientId client_id) = 0;
-    virtual void clipboard_response(SessionId const& session_id,
+    virtual void clipboardResponse(SessionId const& session_id,
                                     ClientId client_id,
                                     ClipboardResponse const& response) = 0;
-    virtual void status_action(SessionId const& session_id, ClientId client_id,
+    virtual void statusAction(SessionId const& session_id, ClientId client_id,
                                StatusActionInvocation const& invocation) = 0;
     virtual void binary(SessionId const& session_id, ClientId client_id,
                         BinaryFrame const& frame) = 0;
@@ -100,9 +100,9 @@ public:
     HttpEditorRoute(HttpEditorRoute const&) = delete;
     HttpEditorRoute& operator=(HttpEditorRoute const&) = delete;
 
-    [[nodiscard]] bool send_clipboard_request(
+    [[nodiscard]] bool sendClipboardRequest(
         ClientId client_id, ClipboardRequest const& request);
-    [[nodiscard]] bool send_binary(ClientId client_id,
+    [[nodiscard]] bool sendBinary(ClientId client_id,
                                    BinaryFrame const& frame);
 
 private:
@@ -124,9 +124,9 @@ public:
     void start();
     void stop();
 
-    [[nodiscard]] bool send_clipboard_request(
+    [[nodiscard]] bool sendClipboardRequest(
         ClientId client_id, ClipboardRequest const& request);
-    [[nodiscard]] bool send_binary(ClientId client_id,
+    [[nodiscard]] bool sendBinary(ClientId client_id,
                                    BinaryFrame const& frame);
 
 private:

@@ -51,7 +51,7 @@ struct LuaCommandHost::Impl {
           dispatcher{std::move(configured_dispatcher)},
           principal{options.plugin_id, InvocationOrigin::Lua,
                     options.capabilities} {
-        note_optional_construction(OptionalSubsystem::Lua);
+        noteOptionalConstruction(OptionalSubsystem::Lua);
         if (!dispatcher) {
             throw std::invalid_argument{"Lua dispatcher must not be empty"};
         }
@@ -78,8 +78,8 @@ struct LuaCommandHost::Impl {
             throw std::runtime_error{"failed to create Lua state"};
         }
         try {
-            open_libraries();
-            install_api();
+            openLibraries();
+            installApi();
         } catch (...) {
             lua_close(state);
             state = nullptr;
@@ -96,7 +96,7 @@ struct LuaCommandHost::Impl {
     Impl(Impl const&) = delete;
     Impl& operator=(Impl const&) = delete;
 
-    void open_libraries() {
+    void openLibraries() {
         luaL_requiref(state, LUA_GNAME, luaopen_base, 1);
         lua_pop(state, 1);
         for (char const* name :
@@ -114,27 +114,27 @@ struct LuaCommandHost::Impl {
         lua_pop(state, 1);
     }
 
-    void install_api() {
+    void installApi() {
         lua_pushlightuserdata(state, this);
         lua_setfield(state, LUA_REGISTRYINDEX, host_registry_key);
 
         lua_newtable(state);
         lua_pushlightuserdata(state, this);
-        lua_pushcclosure(state, &Impl::command_callback, 1);
+        lua_pushcclosure(state, &Impl::commandCallback, 1);
         lua_setfield(state, -2, "command");
         lua_pushlightuserdata(state, this);
-        lua_pushcclosure(state, &Impl::register_callback, 1);
+        lua_pushcclosure(state, &Impl::registerCallback, 1);
         lua_setfield(state, -2, "register_command");
         lua_setglobal(state, "ssg");
     }
 
-    static Impl& callback_host(lua_State* callback_state) {
+    static Impl& callbackHost(lua_State* callback_state) {
         return *static_cast<Impl*>(lua_touserdata(
             callback_state, lua_upvalueindex(1)));
     }
 
-    static int command_callback(lua_State* callback_state) noexcept {
-        auto& host = callback_host(callback_state);
+    static int commandCallback(lua_State* callback_state) noexcept {
+        auto& host = callbackHost(callback_state);
         bool raise_error = false;
         {
             try {
@@ -150,7 +150,7 @@ struct LuaCommandHost::Impl {
                 } else {
                     for (auto const& capability :
                          found->second.required_capabilities) {
-                        if (!host.principal.has_capability(capability)) {
+                        if (!host.principal.hasCapability(capability)) {
                             host.pending_error = LuaError::CapabilityDenied;
                             host.callback_message =
                                 "Lua plugin lacks capability: " +
@@ -204,8 +204,8 @@ struct LuaCommandHost::Impl {
         return lua_error(callback_state);
     }
 
-    static int register_callback(lua_State* callback_state) noexcept {
-        auto& host = callback_host(callback_state);
+    static int registerCallback(lua_State* callback_state) noexcept {
+        auto& host = callbackHost(callback_state);
         bool raise_error = false;
         bool store_function = false;
         {
@@ -267,7 +267,7 @@ struct LuaCommandHost::Impl {
         return 0;
     }
 
-    static void budget_hook(lua_State* callback_state,
+    static void budgetHook(lua_State* callback_state,
                             lua_Debug*) noexcept {
         lua_getfield(callback_state, LUA_REGISTRYINDEX, host_registry_key);
         auto* host =
@@ -287,7 +287,7 @@ struct LuaCommandHost::Impl {
         }
     }
 
-    void begin_call() {
+    void beginCall() {
         if (call_active) {
             budget_stack.push_back(
                 {pending_error, instructions_remaining, hook_interval,
@@ -299,11 +299,11 @@ struct LuaCommandHost::Impl {
         hook_interval =
             std::min<std::uint64_t>(instructions_remaining, 100);
         deadline = std::chrono::steady_clock::now() + options.time_budget;
-        lua_sethook(state, &Impl::budget_hook, LUA_MASKCOUNT,
+        lua_sethook(state, &Impl::budgetHook, LUA_MASKCOUNT,
                     static_cast<int>(hook_interval));
     }
 
-    LuaResult finish_call(int status, bool started, int stack_base) {
+    LuaResult finishCall(int status, bool started, int stack_base) {
         LuaError const call_error = pending_error;
         if (started) {
             if (budget_stack.empty()) {
@@ -316,7 +316,7 @@ struct LuaCommandHost::Impl {
                 instructions_remaining = frame.instructions_remaining;
                 hook_interval = frame.hook_interval;
                 deadline = frame.deadline;
-                lua_sethook(state, &Impl::budget_hook, LUA_MASKCOUNT,
+                lua_sethook(state, &Impl::budgetHook, LUA_MASKCOUNT,
                             static_cast<int>(hook_interval));
             }
         }
@@ -334,7 +334,7 @@ struct LuaCommandHost::Impl {
                 std::move(message)};
     }
 
-    void rollback_staged(RegistrationTransaction& transaction) {
+    void rollbackStaged(RegistrationTransaction& transaction) {
         for (auto const& command : transaction.commands) {
             if (command.function_reference != LUA_NOREF) {
                 luaL_unref(state, LUA_REGISTRYINDEX,
@@ -343,7 +343,7 @@ struct LuaCommandHost::Impl {
         }
     }
 
-    void publish_staged(RegistrationTransaction& transaction) {
+    void publishStaged(RegistrationTransaction& transaction) {
         for (auto& command : transaction.commands) {
             plugin_commands.emplace(command.id,
                                     command.function_reference);
@@ -384,17 +384,17 @@ LuaResult LuaCommandHost::evaluate(std::string_view script) {
     int status = luaL_loadbuffer(impl_->state, script.data(), script.size(),
                                  "ssg-plugin");
     if (status == LUA_OK) {
-        impl_->begin_call();
+        impl_->beginCall();
         started = true;
         status = lua_pcall(impl_->state, 0, 0, 0);
     }
-    auto result = impl_->finish_call(status, started, stack_base);
+    auto result = impl_->finishCall(status, started, stack_base);
     auto transaction = std::move(impl_->registration_stack.back());
     impl_->registration_stack.pop_back();
     if (result.accepted()) {
-        impl_->publish_staged(transaction);
+        impl_->publishStaged(transaction);
     } else {
-        impl_->rollback_staged(transaction);
+        impl_->rollbackStaged(transaction);
         if (status == LUA_ERRSYNTAX) {
             result.error = LuaError::InvalidScript;
         }
@@ -412,12 +412,12 @@ LuaResult LuaCommandHost::invoke(std::string_view plugin_command) {
     }
     int const stack_base = lua_gettop(impl_->state);
     lua_rawgeti(impl_->state, LUA_REGISTRYINDEX, found->second);
-    impl_->begin_call();
-    return impl_->finish_call(lua_pcall(impl_->state, 0, 0, 0), true,
+    impl_->beginCall();
+    return impl_->finishCall(lua_pcall(impl_->state, 0, 0, 0), true,
                               stack_base);
 }
 
-bool LuaCommandHost::has_command(std::string_view plugin_command) const {
+bool LuaCommandHost::hasCommand(std::string_view plugin_command) const {
     return impl_->plugin_commands.contains(std::string{plugin_command});
 }
 

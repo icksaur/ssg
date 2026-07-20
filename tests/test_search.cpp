@@ -93,26 +93,26 @@ std::vector<std::string> labels(const std::vector<SearchResult>& results) {
     return values;
 }
 
-TEST(query_modes_are_unambiguous_and_lines_are_validated) {
+TEST(queryModesAreUnambiguousAndLinesAreValidated) {
     const ParsedSearchQuery file{.mode = SearchMode::File, .text = "file"};
     const ParsedSearchQuery symbol{.mode = SearchMode::Symbol, .text = "Widget"};
     const ParsedSearchQuery text{.mode = SearchMode::Text, .text = "needle"};
     const ParsedSearchQuery line{
         .mode = SearchMode::Line, .text = "42", .line = LineIndex{41}};
-    ASSERT_EQ(parse_search_query("file"), file);
-    ASSERT_EQ(parse_search_query("@Widget"), symbol);
-    ASSERT_EQ(parse_search_query("#needle"), text);
-    ASSERT_EQ(parse_search_query(":42"), line);
-    ASSERT_EQ(parse_search_query(":0").error, SearchQueryError::InvalidLine);
-    ASSERT_EQ(parse_search_query(":no").error, SearchQueryError::InvalidLine);
+    ASSERT_EQ(parseSearchQuery("file"), file);
+    ASSERT_EQ(parseSearchQuery("@Widget"), symbol);
+    ASSERT_EQ(parseSearchQuery("#needle"), text);
+    ASSERT_EQ(parseSearchQuery(":42"), line);
+    ASSERT_EQ(parseSearchQuery(":0").error, SearchQueryError::InvalidLine);
+    ASSERT_EQ(parseSearchQuery(":no").error, SearchQueryError::InvalidLine);
 
-    const auto target = goto_line("src/search.cpp", parse_search_query(":42"));
+    const auto target = gotoLine("src/search.cpp", parseSearchQuery(":42"));
     ASSERT_TRUE(target.has_value());
     ASSERT_EQ(target->line, LineIndex{41});
-    ASSERT_FALSE(goto_line({}, parse_search_query(":42")).has_value());
+    ASSERT_FALSE(gotoLine({}, parseSearchQuery(":42")).has_value());
 }
 
-TEST(accepted_ranking_goldens_match) {
+TEST(acceptedRankingGoldensMatch) {
     FixtureWorkspace workspace;
     const auto snapshot = workspace.snapshot(Revision{7});
     std::ifstream fixture{
@@ -136,19 +136,19 @@ TEST(accepted_ranking_goldens_match) {
             query.insert(query.begin(), '#');
         }
         const auto results =
-            rank_workspace(snapshot, parse_search_query(query),
+            rankWorkspace(snapshot, parseSearchQuery(query),
                            SearchCancellationToken{});
         ASSERT_EQ(labels(results), split(fields[2], ','));
     }
 }
 
-TEST(cancellation_supersession_and_stale_revision_are_rejected) {
+TEST(cancellationSupersessionAndStaleRevisionAreRejected) {
     FixtureWorkspace workspace;
     FixtureCommands commands;
     SearchController controller{workspace, commands};
 
-    const auto first = controller.begin_workspace_search("#search", Revision{8});
-    const auto second = controller.begin_workspace_search("#cancel", Revision{8});
+    const auto first = controller.beginWorkspaceSearch("#search", Revision{8});
+    const auto second = controller.beginWorkspaceSearch("#cancel", Revision{8});
     ASSERT_TRUE(first.cancellation.cancelled());
 
     const auto cancelled = controller.evaluate(first);
@@ -166,11 +166,11 @@ TEST(cancellation_supersession_and_stale_revision_are_rejected) {
               SearchPublishResult::StaleRevision);
     ASSERT_EQ(controller.publish(completed, Revision{8}),
               SearchPublishResult::Accepted);
-    ASSERT_EQ(labels(controller.view_state().results),
+    ASSERT_EQ(labels(controller.viewState().results),
               std::vector<std::string>{"src/search.cpp:3"});
 }
 
-TEST(navigation_history_matches_transition_table) {
+TEST(navigationHistoryMatchesTransitionTable) {
     const NavigationTarget a{.path = "a.cpp", .line = LineIndex{1}};
     const NavigationTarget b{.path = "b.cpp", .line = LineIndex{2}};
     const NavigationTarget c{.path = "c.cpp", .line = LineIndex{3}};
@@ -208,45 +208,45 @@ TEST(navigation_history_matches_transition_table) {
     ASSERT_THROWS(NavigationHistory{0}, std::invalid_argument);
 }
 
-TEST(palette_uses_injected_catalog_and_dispatch) {
+TEST(paletteUsesInjectedCatalogAndDispatch) {
     FixtureWorkspace workspace;
     FixtureCommands commands;
     SearchController controller{workspace, commands};
 
-    controller.open_palette(Revision{11});
-    controller.update_palette_query("open f", Revision{12});
-    ASSERT_TRUE(controller.view_state().palette_open);
-    ASSERT_EQ(labels(controller.view_state().results),
+    controller.openPalette(Revision{11});
+    controller.updatePaletteQuery("open f", Revision{12});
+    ASSERT_TRUE(controller.viewState().palette_open);
+    ASSERT_EQ(labels(controller.viewState().results),
               std::vector<std::string>{"Open File"});
-    ASSERT_EQ(controller.execute_palette().accepted, true);
+    ASSERT_EQ(controller.executePalette().accepted, true);
     ASSERT_EQ(commands.executed, std::vector<std::string>{"file.open"});
 
-    controller.close_palette(Revision{13});
-    ASSERT_FALSE(controller.execute_palette().accepted);
+    controller.closePalette(Revision{13});
+    ASSERT_FALSE(controller.executePalette().accepted);
 }
 
-TEST(view_delta_replay_and_command_exports_are_exact) {
+TEST(viewDeltaReplayAndCommandExportsAreExact) {
     FixtureWorkspace workspace;
     FixtureCommands commands;
     SearchController controller{workspace, commands};
-    const auto base = controller.view_state();
-    controller.open_palette(Revision{20});
-    const auto target = controller.view_state();
-    const auto delta = derive_search_delta(base, target);
-    const auto replay = replay_search_delta(base, delta);
+    const auto base = controller.viewState();
+    controller.openPalette(Revision{20});
+    const auto target = controller.viewState();
+    const auto delta = deriveSearchDelta(base, target);
+    const auto replay = replaySearchDelta(base, delta);
     ASSERT_TRUE(replay.accepted());
     ASSERT_EQ(*replay.state, target);
-    const auto no_change = replay_search_delta(target,
-                                               derive_search_delta(target, target));
+    const auto no_change = replaySearchDelta(target,
+                                               deriveSearchDelta(target, target));
     ASSERT_TRUE(no_change.accepted());
     ASSERT_EQ(*no_change.state, target);
 
     auto stale = base;
     stale.revision = Revision{99};
-    ASSERT_EQ(replay_search_delta(stale, delta).error,
+    ASSERT_EQ(replaySearchDelta(stale, delta).error,
               SearchReplayError::StaleRevision);
 
-    const auto set = search_command_set();
+    const auto set = searchCommandSet();
     const std::vector<std::string_view> expected{
         "palette.open",          "palette.close",        "palette.next",
         "palette.previous",      "palette.execute",      "goto.file",
@@ -266,11 +266,11 @@ TEST(view_delta_replay_and_command_exports_are_exact) {
 } // namespace
 
 int main() {
-    RUN(query_modes_are_unambiguous_and_lines_are_validated);
-    RUN(accepted_ranking_goldens_match);
-    RUN(cancellation_supersession_and_stale_revision_are_rejected);
-    RUN(navigation_history_matches_transition_table);
-    RUN(palette_uses_injected_catalog_and_dispatch);
-    RUN(view_delta_replay_and_command_exports_are_exact);
+    RUN(queryModesAreUnambiguousAndLinesAreValidated);
+    RUN(acceptedRankingGoldensMatch);
+    RUN(cancellationSupersessionAndStaleRevisionAreRejected);
+    RUN(navigationHistoryMatchesTransitionTable);
+    RUN(paletteUsesInjectedCatalogAndDispatch);
+    RUN(viewDeltaReplayAndCommandExportsAreExact);
     return failed == 0 ? 0 : 1;
 }

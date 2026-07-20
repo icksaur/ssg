@@ -41,12 +41,12 @@ ssg::ClientCommand request(std::string id, std::uint64_t revision) {
     return {std::move(id), ssg::Revision{revision}, std::any{}};
 }
 
-TEST(total_order_and_registered_dispatch) {
+TEST(totalOrderAndRegisteredDispatch) {
     std::vector<std::uint64_t> clients;
     ssg::CommandSet commands{{command(
         "state.advance", ssg::CommandEffect::Mutation,
         [&](ssg::CommandContext& context, std::any const&) {
-            clients.push_back(context.principal().client_id().value());
+            clients.push_back(context.principal().clientId().value());
             return ssg::CommandHandlerResult::success();
         })}};
     ssg::EditorSession session{
@@ -73,7 +73,7 @@ TEST(total_order_and_registered_dispatch) {
     ASSERT_EQ(session.revision(), ssg::Revision{4});
 }
 
-TEST(stale_rejection_applies_only_to_mutations) {
+TEST(staleRejectionAppliesOnlyToMutations) {
     int observations = 0;
     ssg::CommandSet commands{{
         command("state.advance", ssg::CommandEffect::Mutation,
@@ -103,12 +103,12 @@ TEST(stale_rejection_applies_only_to_mutations) {
     ASSERT_EQ(session.revision(), ssg::Revision{2});
 }
 
-TEST(client_identity_and_principal_are_isolated) {
+TEST(clientIdentityAndPrincipalAreIsolated) {
     std::vector<std::uint64_t> observed_clients;
     ssg::CommandSet commands{{command(
         "identity.inspect", ssg::CommandEffect::Observation,
         [&](ssg::CommandContext& context, std::any const&) {
-            observed_clients.push_back(context.principal().client_id().value());
+            observed_clients.push_back(context.principal().clientId().value());
             return ssg::CommandHandlerResult::success();
         })}};
     ssg::EditorSession session{
@@ -118,8 +118,8 @@ TEST(client_identity_and_principal_are_isolated) {
         principal(8, ssg::InvocationOrigin::Websocket), ssg::ViewId{80})
                     .accepted());
 
-    auto client7 = session.attached_client(ssg::ClientId{7});
-    auto client8 = session.attached_client(ssg::ClientId{8});
+    auto client7 = session.attachedClient(ssg::ClientId{7});
+    auto client8 = session.attachedClient(ssg::ClientId{8});
     ASSERT_EQ(client7->view_id, ssg::ViewId{70});
     ASSERT_EQ(client8->view_id, ssg::ViewId{80});
     ASSERT_FALSE(session.attach(principal(7), ssg::ViewId{71}).accepted());
@@ -137,25 +137,25 @@ TEST(client_identity_and_principal_are_isolated) {
     ASSERT_EQ(unattached.error, ssg::CommandError::UnknownClient);
 }
 
-TEST(handler_failure_is_atomic) {
+TEST(handlerFailureIsAtomic) {
     ssg::CommandSet commands{{
         command("topology.fail", ssg::CommandEffect::Mutation,
                 [](ssg::CommandContext& context, std::any const&) {
-                    context.set_active_workspace(ssg::WorkspaceId{5});
-                    context.set_active_view(ssg::ViewId{6});
+                    context.setActiveWorkspace(ssg::WorkspaceId{5});
+                    context.setActiveView(ssg::ViewId{6});
                     return ssg::CommandHandlerResult::failure("injected");
                 }),
         command("topology.throw", ssg::CommandEffect::Mutation,
                 [](ssg::CommandContext& context, std::any const&)
                     -> ssg::CommandHandlerResult {
-                    context.set_active_workspace(ssg::WorkspaceId{8});
-                    context.set_active_view(ssg::ViewId{9});
+                    context.setActiveWorkspace(ssg::WorkspaceId{8});
+                    context.setActiveView(ssg::ViewId{9});
                     throw std::runtime_error{"injected"};
                 }),
         command("topology.commit", ssg::CommandEffect::Mutation,
                 [](ssg::CommandContext& context, std::any const&) {
-                    context.set_active_workspace(ssg::WorkspaceId{2});
-                    context.set_active_view(ssg::ViewId{3});
+                    context.setActiveWorkspace(ssg::WorkspaceId{2});
+                    context.setActiveView(ssg::ViewId{3});
                     return ssg::CommandHandlerResult::success();
                 }),
     }};
@@ -190,7 +190,7 @@ TEST(handler_failure_is_atomic) {
               std::optional<ssg::ViewId>{ssg::ViewId{3}});
 }
 
-TEST(duplicate_registration_is_rejected_eagerly) {
+TEST(duplicateRegistrationIsRejectedEagerly) {
     auto no_op = [](ssg::CommandContext&, std::any const&) {
         return ssg::CommandHandlerResult::success();
     };
@@ -214,7 +214,7 @@ TEST(duplicate_registration_is_rejected_eagerly) {
         std::invalid_argument);
 }
 
-TEST(principal_capability_enforcement_has_origin_parity) {
+TEST(principalCapabilityEnforcementHasOriginParity) {
     int calls = 0;
     ssg::CommandSet commands{{command(
         "local.ingress", ssg::CommandEffect::Observation,
@@ -256,7 +256,7 @@ TEST(principal_capability_enforcement_has_origin_parity) {
     ASSERT_EQ(calls, 2);
 }
 
-TEST(executor_serializes_concurrent_handlers) {
+TEST(executorSerializesConcurrentHandlers) {
     std::atomic<int> active{0};
     std::atomic<int> maximum{0};
     ssg::CommandSet commands{{command(
@@ -298,13 +298,13 @@ TEST(executor_serializes_concurrent_handlers) {
 }  // namespace
 
 int main() {
-    RUN(total_order_and_registered_dispatch);
-    RUN(stale_rejection_applies_only_to_mutations);
-    RUN(client_identity_and_principal_are_isolated);
-    RUN(handler_failure_is_atomic);
-    RUN(duplicate_registration_is_rejected_eagerly);
-    RUN(principal_capability_enforcement_has_origin_parity);
-    RUN(executor_serializes_concurrent_handlers);
+    RUN(totalOrderAndRegisteredDispatch);
+    RUN(staleRejectionAppliesOnlyToMutations);
+    RUN(clientIdentityAndPrincipalAreIsolated);
+    RUN(handlerFailureIsAtomic);
+    RUN(duplicateRegistrationIsRejectedEagerly);
+    RUN(principalCapabilityEnforcementHasOriginParity);
+    RUN(executorSerializesConcurrentHandlers);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;

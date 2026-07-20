@@ -120,12 +120,12 @@ struct EncodeTextResult {
     [[nodiscard]] bool accepted() const noexcept { return !error.has_value(); }
 };
 
-[[nodiscard]] DecodeTextResult decode_text(
+[[nodiscard]] DecodeTextResult decodeText(
     std::span<const std::uint8_t> bytes);
-[[nodiscard]] DecodeTextResult decode_text(
+[[nodiscard]] DecodeTextResult decodeText(
     std::span<const std::uint8_t> bytes, TextEncoding encoding);
-[[nodiscard]] EncodeTextResult encode_text(const DecodedText& text);
-[[nodiscard]] EncodeTextResult encode_text(
+[[nodiscard]] EncodeTextResult encodeText(const DecodedText& text);
+[[nodiscard]] EncodeTextResult encodeText(
     const DecodedText& text, EncodeTextOptions options);
 
 struct TextEncodingViewState {
@@ -143,9 +143,9 @@ struct TextEncodingDelta {
                            const TextEncodingDelta&) = default;
 };
 
-[[nodiscard]] TextEncodingViewState make_text_encoding_view_state(
+[[nodiscard]] TextEncodingViewState makeTextEncodingViewState(
     const DecodedText& text) noexcept;
-[[nodiscard]] std::optional<TextEncodingDelta> derive_text_encoding_delta(
+[[nodiscard]] std::optional<TextEncodingDelta> deriveTextEncodingDelta(
     const TextEncodingViewState& before,
     const TextEncodingViewState& after);
 

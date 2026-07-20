@@ -28,7 +28,7 @@ namespace {
 // SessionSnapshotSections fixture so this file exercises the same complete,
 // every-section-populated snapshot shape through the wire codec.
 
-std::vector<std::string> catalog_ids() {
+std::vector<std::string> catalogIds() {
     std::ifstream input{SSG_REQUIRED_COMMANDS_PATH};
     std::string json{std::istreambuf_iterator<char>{input},
                      std::istreambuf_iterator<char>{}};
@@ -83,7 +83,7 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision, std::string marker
         {marker.size(), ssg::FollowMode::Following, ssg::PaneId{},
          std::nullopt, {}, {}},
         {ssg::TreeRevision{marker.size()}, {}},
-        ssg::plain_text_syntax_view_state(revision, ssg::LanguageId{"plain"},
+        ssg::plainTextSyntaxViewState(revision, ssg::LanguageId{"plain"},
                                           marker, 4),
         {revision, {}},
         {revision, {}, std::nullopt, {}, marker},
@@ -92,7 +92,7 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision, std::string marker
     };
 }
 
-ssg::ViewportViewState client_view(std::uint32_t first_row) {
+ssg::ViewportViewState clientView(std::uint32_t first_row) {
     return {ssg::ViewportDimensions{20, 8},
             first_row,
             0,  // first_visual_column
@@ -105,51 +105,51 @@ ssg::ViewportViewState client_view(std::uint32_t first_row) {
 // ---------------------------------------------------------------------------
 // Registry coverage and construction validation.
 
-TEST(registry_covers_every_p0_command_and_rejects_unknown_ids) {
-    auto registry = ssg::build_command_argument_codec_registry();
-    for (auto const& id : catalog_ids()) {
+TEST(registryCoversEveryP0CommandAndRejectsUnknownIds) {
+    auto registry = ssg::buildCommandArgumentCodecRegistry();
+    for (auto const& id : catalogIds()) {
         ASSERT_TRUE(registry.contains(id));
     }
     ASSERT_FALSE(registry.contains("not.a.command"));
-    ASSERT_THROWS(registry.encode_argument("not.a.command", std::any{}),
+    ASSERT_THROWS(registry.encodeArgument("not.a.command", std::any{}),
                  std::invalid_argument);
 }
 
-ssg::CommandArgumentCodec make_probe_codec() {
+ssg::CommandArgumentCodec makeProbeCodec() {
     return ssg::CommandArgumentCodec{
-        [](std::any const&) { return ssg::ProtocolValue::make_null(); },
+        [](std::any const&) { return ssg::ProtocolValue::makeNull(); },
         [](ssg::ProtocolValue const&) -> std::optional<std::any> {
             return std::any{};
         }};
 }
 
-TEST(registry_rejects_missing_entries) {
+TEST(registryRejectsMissingEntries) {
     std::vector<std::pair<std::string, ssg::CommandArgumentCodec>> entries;
-    auto const ids = ssg::p0_command_descriptors();
+    auto const ids = ssg::p0CommandDescriptors();
     for (std::size_t index = 1; index < ids.size(); ++index) {
-        entries.emplace_back(ids[index].id, make_probe_codec());
+        entries.emplace_back(ids[index].id, makeProbeCodec());
     }
     ASSERT_THROWS(ssg::CommandArgumentCodecRegistry{std::move(entries)},
                  std::invalid_argument);
 }
 
-TEST(registry_rejects_extra_entries) {
+TEST(registryRejectsExtraEntries) {
     std::vector<std::pair<std::string, ssg::CommandArgumentCodec>> entries;
-    for (auto const& descriptor : ssg::p0_command_descriptors()) {
-        entries.emplace_back(descriptor.id, make_probe_codec());
+    for (auto const& descriptor : ssg::p0CommandDescriptors()) {
+        entries.emplace_back(descriptor.id, makeProbeCodec());
     }
-    entries.emplace_back("not.p0", make_probe_codec());
+    entries.emplace_back("not.p0", makeProbeCodec());
     ASSERT_THROWS(ssg::CommandArgumentCodecRegistry{std::move(entries)},
                  std::invalid_argument);
 }
 
-TEST(registry_rejects_duplicate_entries) {
+TEST(registryRejectsDuplicateEntries) {
     std::vector<std::pair<std::string, ssg::CommandArgumentCodec>> entries;
-    auto const ids = ssg::p0_command_descriptors();
+    auto const ids = ssg::p0CommandDescriptors();
     for (auto const& descriptor : ids) {
-        entries.emplace_back(descriptor.id, make_probe_codec());
+        entries.emplace_back(descriptor.id, makeProbeCodec());
     }
-    entries.emplace_back(ids.front().id, make_probe_codec());
+    entries.emplace_back(ids.front().id, makeProbeCodec());
     ASSERT_THROWS(ssg::CommandArgumentCodecRegistry{std::move(entries)},
                  std::invalid_argument);
 }
@@ -157,13 +157,13 @@ TEST(registry_rejects_duplicate_entries) {
 // ---------------------------------------------------------------------------
 // Command request round trips: one canonical fixture per argument shape.
 
-TEST(command_request_round_trips_with_palette_execute_arguments) {
-    auto const registry = ssg::build_command_argument_codec_registry();
+TEST(commandRequestRoundTripsWithPaletteExecuteArguments) {
+    auto const registry = ssg::buildCommandArgumentCodecRegistry();
     ssg::ClientCommand const command{
         "palette.execute", ssg::Revision{4},
         ssg::PaletteExecuteArguments{"file.save"}};
-    auto const bytes = ssg::encode_command_request(command, registry);
-    auto const decoded = ssg::decode_command_request(bytes, registry);
+    auto const bytes = ssg::encodeCommandRequest(command, registry);
+    auto const decoded = ssg::decodeCommandRequest(bytes, registry);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_EQ(decoded.command->id, command.id);
     auto const* arguments =
@@ -173,13 +173,13 @@ TEST(command_request_round_trips_with_palette_execute_arguments) {
               std::any_cast<ssg::PaletteExecuteArguments>(command.payload));
 }
 
-TEST(command_request_round_trips_with_find_query_arguments) {
-    auto const registry = ssg::build_command_argument_codec_registry();
+TEST(commandRequestRoundTripsWithFindQueryArguments) {
+    auto const registry = ssg::buildCommandArgumentCodecRegistry();
     ssg::ClientCommand const command{
         "find.update_query", ssg::Revision{7},
         ssg::FindQueryArguments{"cat"}};
-    auto const bytes = ssg::encode_command_request(command, registry);
-    auto const decoded = ssg::decode_command_request(bytes, registry);
+    auto const bytes = ssg::encodeCommandRequest(command, registry);
+    auto const decoded = ssg::decodeCommandRequest(bytes, registry);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_EQ(decoded.command->id, command.id);
     auto const* arguments =
@@ -190,13 +190,13 @@ TEST(command_request_round_trips_with_find_query_arguments) {
 }
 
 
-TEST(command_request_round_trips_with_tree_select_arguments) {
-    auto const registry = ssg::build_command_argument_codec_registry();
+TEST(commandRequestRoundTripsWithTreeSelectArguments) {
+    auto const registry = ssg::buildCommandArgumentCodecRegistry();
     ssg::ClientCommand const command{
         "tree.select", ssg::Revision{9},
         ssg::TreeSelectArguments{ssg::TreeNodeId{"files:src/main.cpp"}}};
-    auto const bytes = ssg::encode_command_request(command, registry);
-    auto const decoded = ssg::decode_command_request(bytes, registry);
+    auto const bytes = ssg::encodeCommandRequest(command, registry);
+    auto const decoded = ssg::decodeCommandRequest(bytes, registry);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_EQ(decoded.command->id, command.id);
     auto const* arguments =
@@ -206,11 +206,11 @@ TEST(command_request_round_trips_with_tree_select_arguments) {
               std::any_cast<ssg::TreeSelectArguments>(command.payload));
 }
 
-TEST(command_request_round_trips_with_no_payload) {
-    auto const registry = ssg::build_command_argument_codec_registry();
+TEST(commandRequestRoundTripsWithNoPayload) {
+    auto const registry = ssg::buildCommandArgumentCodecRegistry();
     ssg::ClientCommand const command{"edit.undo", ssg::Revision{3}, {}};
-    auto const bytes = ssg::encode_command_request(command, registry);
-    auto const decoded = ssg::decode_command_request(bytes, registry);
+    auto const bytes = ssg::encodeCommandRequest(command, registry);
+    auto const decoded = ssg::decodeCommandRequest(bytes, registry);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.command.has_value());
     ASSERT_EQ(decoded.command->id, command.id);
@@ -218,13 +218,13 @@ TEST(command_request_round_trips_with_no_payload) {
     ASSERT_FALSE(decoded.command->payload.has_value());
 }
 
-TEST(command_request_round_trips_with_text_input_arguments) {
-    auto const registry = ssg::build_command_argument_codec_registry();
+TEST(commandRequestRoundTripsWithTextInputArguments) {
+    auto const registry = ssg::buildCommandArgumentCodecRegistry();
     ssg::ClientCommand const command{
         "text.insert", ssg::Revision{5},
         ssg::TextInputArguments{"hello world"}};
-    auto const bytes = ssg::encode_command_request(command, registry);
-    auto const decoded = ssg::decode_command_request(bytes, registry);
+    auto const bytes = ssg::encodeCommandRequest(command, registry);
+    auto const decoded = ssg::decodeCommandRequest(bytes, registry);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_EQ(decoded.command->id, command.id);
     auto const* arguments =
@@ -233,16 +233,16 @@ TEST(command_request_round_trips_with_text_input_arguments) {
     ASSERT_EQ(*arguments, std::any_cast<ssg::TextInputArguments>(command.payload));
 }
 
-TEST(command_request_round_trips_with_selection_command_arguments) {
-    auto const registry = ssg::build_command_argument_codec_registry();
+TEST(commandRequestRoundTripsWithSelectionCommandArguments) {
+    auto const registry = ssg::buildCommandArgumentCodecRegistry();
     ssg::DocumentPosition const position{ssg::ByteOffset{4}, ssg::LineIndex{0},
                                          ssg::CellIndex{4}};
     ssg::SelectionCommandArguments const original{
         position, ssg::Selection{position, position}};
     ssg::ClientCommand const command{"cursor.set_position", ssg::Revision{2},
                                      original};
-    auto const bytes = ssg::encode_command_request(command, registry);
-    auto const decoded = ssg::decode_command_request(bytes, registry);
+    auto const bytes = ssg::encodeCommandRequest(command, registry);
+    auto const decoded = ssg::decodeCommandRequest(bytes, registry);
     ASSERT_TRUE(decoded.accepted());
     auto const* arguments = std::any_cast<ssg::SelectionCommandArguments>(
         &decoded.command->payload);
@@ -251,12 +251,12 @@ TEST(command_request_round_trips_with_selection_command_arguments) {
     ASSERT_EQ(arguments->selection, original.selection);
 }
 
-TEST(command_request_round_trips_with_empty_selection_command_arguments) {
-    auto const registry = ssg::build_command_argument_codec_registry();
+TEST(commandRequestRoundTripsWithEmptySelectionCommandArguments) {
+    auto const registry = ssg::buildCommandArgumentCodecRegistry();
     ssg::SelectionCommandArguments const original{std::nullopt, std::nullopt};
     ssg::ClientCommand const command{"cursor.left", ssg::Revision{2}, original};
-    auto const bytes = ssg::encode_command_request(command, registry);
-    auto const decoded = ssg::decode_command_request(bytes, registry);
+    auto const bytes = ssg::encodeCommandRequest(command, registry);
+    auto const decoded = ssg::decodeCommandRequest(bytes, registry);
     ASSERT_TRUE(decoded.accepted());
     auto const* arguments = std::any_cast<ssg::SelectionCommandArguments>(
         &decoded.command->payload);
@@ -265,12 +265,12 @@ TEST(command_request_round_trips_with_empty_selection_command_arguments) {
     ASSERT_FALSE(arguments->selection.has_value());
 }
 
-TEST(command_request_round_trips_with_scroll_lines_arguments) {
-    auto const registry = ssg::build_command_argument_codec_registry();
+TEST(commandRequestRoundTripsWithScrollLinesArguments) {
+    auto const registry = ssg::buildCommandArgumentCodecRegistry();
     ssg::ClientCommand const command{"view.scroll_lines", ssg::Revision{1},
                                      ssg::ScrollLinesArguments{-7}};
-    auto const bytes = ssg::encode_command_request(command, registry);
-    auto const decoded = ssg::decode_command_request(bytes, registry);
+    auto const bytes = ssg::encodeCommandRequest(command, registry);
+    auto const decoded = ssg::decodeCommandRequest(bytes, registry);
     ASSERT_TRUE(decoded.accepted());
     auto const* arguments =
         std::any_cast<ssg::ScrollLinesArguments>(&decoded.command->payload);
@@ -278,12 +278,12 @@ TEST(command_request_round_trips_with_scroll_lines_arguments) {
     ASSERT_EQ(arguments->rows, std::int64_t{-7});
 }
 
-TEST(command_request_round_trips_with_scroll_pages_arguments) {
-    auto const registry = ssg::build_command_argument_codec_registry();
+TEST(commandRequestRoundTripsWithScrollPagesArguments) {
+    auto const registry = ssg::buildCommandArgumentCodecRegistry();
     ssg::ClientCommand const command{"view.scroll_pages", ssg::Revision{1},
                                      ssg::ScrollPagesArguments{3}};
-    auto const bytes = ssg::encode_command_request(command, registry);
-    auto const decoded = ssg::decode_command_request(bytes, registry);
+    auto const bytes = ssg::encodeCommandRequest(command, registry);
+    auto const decoded = ssg::decodeCommandRequest(bytes, registry);
     ASSERT_TRUE(decoded.accepted());
     auto const* arguments =
         std::any_cast<ssg::ScrollPagesArguments>(&decoded.command->payload);
@@ -291,12 +291,12 @@ TEST(command_request_round_trips_with_scroll_pages_arguments) {
     ASSERT_EQ(arguments->pages, std::int64_t{3});
 }
 
-TEST(command_request_round_trips_with_scroll_fraction_arguments) {
-    auto const registry = ssg::build_command_argument_codec_registry();
+TEST(commandRequestRoundTripsWithScrollFractionArguments) {
+    auto const registry = ssg::buildCommandArgumentCodecRegistry();
     ssg::ClientCommand const command{"view.scroll_to_fraction", ssg::Revision{1},
                                      ssg::ScrollFractionArguments{3, 4}};
-    auto const bytes = ssg::encode_command_request(command, registry);
-    auto const decoded = ssg::decode_command_request(bytes, registry);
+    auto const bytes = ssg::encodeCommandRequest(command, registry);
+    auto const decoded = ssg::decodeCommandRequest(bytes, registry);
     ASSERT_TRUE(decoded.accepted());
     auto const* arguments =
         std::any_cast<ssg::ScrollFractionArguments>(&decoded.command->payload);
@@ -305,13 +305,13 @@ TEST(command_request_round_trips_with_scroll_fraction_arguments) {
     ASSERT_EQ(arguments->denominator, std::uint32_t{4});
 }
 
-TEST(command_request_round_trips_with_dropped_content_arguments) {
-    auto const registry = ssg::build_command_argument_codec_registry();
+TEST(commandRequestRoundTripsWithDroppedContentArguments) {
+    auto const registry = ssg::buildCommandArgumentCodecRegistry();
     ssg::ClientCommand const command{
         "file.open_dropped_content", ssg::Revision{1},
         ssg::DroppedContentArguments{{1, 2, 3, 4}, "dropped.txt"}};
-    auto const bytes = ssg::encode_command_request(command, registry);
-    auto const decoded = ssg::decode_command_request(bytes, registry);
+    auto const bytes = ssg::encodeCommandRequest(command, registry);
+    auto const decoded = ssg::decodeCommandRequest(bytes, registry);
     ASSERT_TRUE(decoded.accepted());
     auto const* arguments =
         std::any_cast<ssg::DroppedContentArguments>(&decoded.command->payload);
@@ -321,37 +321,37 @@ TEST(command_request_round_trips_with_dropped_content_arguments) {
     ASSERT_EQ(arguments->suggested_label, std::string{"dropped.txt"});
 }
 
-std::string wire_u8(std::uint8_t value) {
+std::string wireU8(std::uint8_t value) {
     return std::string(1, static_cast<char>(value));
 }
 
-void append_u32(std::string& out, std::uint32_t value) {
+void appendU32(std::string& out, std::uint32_t value) {
     for (int index = 0; index < 4; ++index) {
         out.push_back(static_cast<char>((value >> (8 * index)) & 0xFF));
     }
 }
 
-void append_u64(std::string& out, std::uint64_t value) {
+void appendU64(std::string& out, std::uint64_t value) {
     for (int index = 0; index < 8; ++index) {
         out.push_back(static_cast<char>((value >> (8 * index)) & 0xFF));
     }
 }
 
-void append_text_value(std::string& out, std::string const& text) {
-    out += wire_u8(4);
-    append_u32(out, static_cast<std::uint32_t>(text.size()));
+void appendTextValue(std::string& out, std::string const& text) {
+    out += wireU8(4);
+    appendU32(out, static_cast<std::uint32_t>(text.size()));
     out += text;
 }
 
-void append_uint_value(std::string& out, std::uint64_t value) {
-    out += wire_u8(3);
-    append_u64(out, value);
+void appendUintValue(std::string& out, std::uint64_t value) {
+    out += wireU8(3);
+    appendU64(out, value);
 }
 
-void append_null_value(std::string& out) { out += wire_u8(0); }
+void appendNullValue(std::string& out) { out += wireU8(0); }
 
-void append_field_key(std::string& out, std::string const& key) {
-    append_u32(out, static_cast<std::uint32_t>(key.size()));
+void appendFieldKey(std::string& out, std::string const& key) {
+    appendU32(out, static_cast<std::uint32_t>(key.size()));
     out += key;
 }
 
@@ -361,78 +361,78 @@ void append_field_key(std::string& out, std::string const& key) {
 // way to exercise decode_command_request's unknown-command-id rejection: the
 // public encode_command_request() itself throws before producing bytes for
 // an id the registry does not recognize.
-std::string build_command_request_message(std::string const& id,
+std::string buildCommandRequestMessage(std::string const& id,
                                           std::uint64_t base_revision) {
     std::string body;
-    body += wire_u8(7);
-    append_u32(body, 3);
-    append_field_key(body, "id");
-    append_text_value(body, id);
-    append_field_key(body, "base_revision");
-    append_uint_value(body, base_revision);
-    append_field_key(body, "payload");
-    append_null_value(body);
+    body += wireU8(7);
+    appendU32(body, 3);
+    appendFieldKey(body, "id");
+    appendTextValue(body, id);
+    appendFieldKey(body, "base_revision");
+    appendUintValue(body, base_revision);
+    appendFieldKey(body, "payload");
+    appendNullValue(body);
 
     std::string message;
-    message += wire_u8(1);
-    message += wire_u8(
+    message += wireU8(1);
+    message += wireU8(
         static_cast<std::uint8_t>(ssg::ProtocolMessageKind::CommandRequest));
     message += body;
     return message;
 }
 
-std::string build_invalid_scroll_fraction_message() {
+std::string buildInvalidScrollFractionMessage() {
     std::string payload;
-    payload += wire_u8(7);
-    append_u32(payload, 2);
-    append_field_key(payload, "numerator");
-    append_uint_value(payload, 0);
-    append_field_key(payload, "denominator");
-    append_uint_value(payload, 0);
+    payload += wireU8(7);
+    appendU32(payload, 2);
+    appendFieldKey(payload, "numerator");
+    appendUintValue(payload, 0);
+    appendFieldKey(payload, "denominator");
+    appendUintValue(payload, 0);
 
     std::string body;
-    body += wire_u8(7);
-    append_u32(body, 3);
-    append_field_key(body, "id");
-    append_text_value(body, "view.scroll_to_fraction");
-    append_field_key(body, "base_revision");
-    append_uint_value(body, 1);
-    append_field_key(body, "payload");
+    body += wireU8(7);
+    appendU32(body, 3);
+    appendFieldKey(body, "id");
+    appendTextValue(body, "view.scroll_to_fraction");
+    appendFieldKey(body, "base_revision");
+    appendUintValue(body, 1);
+    appendFieldKey(body, "payload");
     body += payload;
 
-    return wire_u8(1) +
-           wire_u8(static_cast<std::uint8_t>(
+    return wireU8(1) +
+           wireU8(static_cast<std::uint8_t>(
                ssg::ProtocolMessageKind::CommandRequest)) +
            body;
 }
 
-TEST(decode_command_request_rejects_unknown_command_id) {
-    auto const registry = ssg::build_command_argument_codec_registry();
-    ASSERT_THROWS(registry.encode_argument("not.a.command", std::any{}),
+TEST(decodeCommandRequestRejectsUnknownCommandId) {
+    auto const registry = ssg::buildCommandArgumentCodecRegistry();
+    ASSERT_THROWS(registry.encodeArgument("not.a.command", std::any{}),
                  std::invalid_argument);
 
-    auto const bytes = build_command_request_message("not.a.command", 1);
-    auto const decoded = ssg::decode_command_request(bytes, registry);
+    auto const bytes = buildCommandRequestMessage("not.a.command", 1);
+    auto const decoded = ssg::decodeCommandRequest(bytes, registry);
     ASSERT_FALSE(decoded.accepted());
     ASSERT_EQ(decoded.error, ssg::ProtocolError::UnsupportedCommand);
 }
 
-TEST(decode_command_request_rejects_malformed_payload) {
-    auto const registry = ssg::build_command_argument_codec_registry();
+TEST(decodeCommandRequestRejectsMalformedPayload) {
+    auto const registry = ssg::buildCommandArgumentCodecRegistry();
     ssg::ClientCommand const command{"text.insert", ssg::Revision{1},
                                      ssg::TextInputArguments{"x"}};
-    auto bytes = ssg::encode_command_request(command, registry);
+    auto bytes = ssg::encodeCommandRequest(command, registry);
     // Truncate the trailing bytes so the payload's "text" field is cut off,
     // producing a structurally-truncated command request.
     bytes.resize(bytes.size() - 2);
-    auto const decoded = ssg::decode_command_request(bytes, registry);
+    auto const decoded = ssg::decodeCommandRequest(bytes, registry);
     ASSERT_FALSE(decoded.accepted());
 }
 
-TEST(decode_command_request_maps_domain_invariant_failures_to_malformed) {
-    auto const registry = ssg::build_command_argument_codec_registry();
-    auto const decoded = ssg::decode_command_request(
-        build_invalid_scroll_fraction_message(), registry);
+TEST(decodeCommandRequestMapsDomainInvariantFailuresToMalformed) {
+    auto const registry = ssg::buildCommandArgumentCodecRegistry();
+    auto const decoded = ssg::decodeCommandRequest(
+        buildInvalidScrollFractionMessage(), registry);
     ASSERT_FALSE(decoded.accepted());
     ASSERT_EQ(decoded.error, ssg::ProtocolError::MalformedMessage);
 }
@@ -441,63 +441,63 @@ TEST(decode_command_request_maps_domain_invariant_failures_to_malformed) {
 // Session snapshot / delta round trips, including replay-vs-decoded
 // equivalence and two-client isolation.
 
-TEST(session_snapshot_round_trips_through_the_wire) {
-    auto snapshot = ssg::assemble_session_snapshot(
+TEST(sessionSnapshotRoundTripsThroughTheWire) {
+    auto snapshot = ssg::assembleSessionSnapshot(
         ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{
             ssg::ClientId{7}, ssg::InvocationOrigin::InProcess,
             {ssg::CapabilityId{"local_file_drop"}}},
-        ssg::ViewId{9}, client_view(3), sections(ssg::Revision{4}, "alpha"));
+        ssg::ViewId{9}, clientView(3), sections(ssg::Revision{4}, "alpha"));
 
-    auto const bytes = ssg::encode_session_snapshot(snapshot);
-    auto const decoded = ssg::decode_session_snapshot(bytes);
+    auto const bytes = ssg::encodeSessionSnapshot(snapshot);
+    auto const decoded = ssg::decodeSessionSnapshot(bytes);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.snapshot.has_value());
     ASSERT_EQ(*decoded.snapshot, snapshot);
 }
 
-TEST(session_delta_round_trips_and_replay_matches_the_decoded_delta) {
-    auto before = ssg::assemble_session_snapshot(
+TEST(sessionDeltaRoundTripsAndReplayMatchesTheDecodedDelta) {
+    auto before = ssg::assembleSessionSnapshot(
         ssg::Revision{4}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
-        ssg::ViewId{9}, client_view(1), sections(ssg::Revision{4}, "a"));
-    auto after = ssg::assemble_session_snapshot(
+        ssg::ViewId{9}, clientView(1), sections(ssg::Revision{4}, "a"));
+    auto after = ssg::assembleSessionSnapshot(
         ssg::Revision{5}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
-        ssg::ViewId{9}, client_view(5), sections(ssg::Revision{5}, "changed"));
+        ssg::ViewId{9}, clientView(5), sections(ssg::Revision{5}, "changed"));
 
-    auto const delta = ssg::derive_session_delta(before, after);
-    auto const bytes = ssg::encode_session_delta(delta);
-    auto decoded = ssg::decode_session_delta(bytes);
+    auto const delta = ssg::deriveSessionDelta(before, after);
+    auto const bytes = ssg::encodeSessionDelta(delta);
+    auto decoded = ssg::decodeSessionDelta(bytes);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.delta.has_value());
 
-    auto replayed = ssg::replay_session_delta(before, *decoded.delta);
+    auto replayed = ssg::replaySessionDelta(before, *decoded.delta);
     ASSERT_TRUE(replayed.accepted());
     ASSERT_TRUE(replayed.snapshot.has_value());
     ASSERT_EQ(*replayed.snapshot, after);
 }
 
-TEST(two_client_capability_and_viewport_isolation_survives_the_wire) {
+TEST(twoClientCapabilityAndViewportIsolationSurvivesTheWire) {
     auto shared = sections(ssg::Revision{8}, "shared");
-    auto first = ssg::assemble_session_snapshot(
+    auto first = ssg::assembleSessionSnapshot(
         ssg::Revision{8}, {},
         ssg::InvocationPrincipal{
             ssg::ClientId{1}, ssg::InvocationOrigin::Websocket,
             {ssg::CapabilityId{"local_file_drop"}}},
-        ssg::ViewId{10}, client_view(2), shared);
-    auto second = ssg::assemble_session_snapshot(
+        ssg::ViewId{10}, clientView(2), shared);
+    auto second = ssg::assembleSessionSnapshot(
         ssg::Revision{8}, {},
         ssg::InvocationPrincipal{ssg::ClientId{2},
                                  ssg::InvocationOrigin::Websocket},
-        ssg::ViewId{11}, client_view(7), std::move(shared));
+        ssg::ViewId{11}, clientView(7), std::move(shared));
 
     auto const first_decoded =
-        ssg::decode_session_snapshot(ssg::encode_session_snapshot(first));
+        ssg::decodeSessionSnapshot(ssg::encodeSessionSnapshot(first));
     auto const second_decoded =
-        ssg::decode_session_snapshot(ssg::encode_session_snapshot(second));
+        ssg::decodeSessionSnapshot(ssg::encodeSessionSnapshot(second));
     ASSERT_TRUE(first_decoded.accepted());
     ASSERT_TRUE(second_decoded.accepted());
 
@@ -511,7 +511,7 @@ TEST(two_client_capability_and_viewport_isolation_survives_the_wire) {
     ASSERT_EQ(first_decoded.snapshot->sections(), second_decoded.snapshot->sections());
 }
 
-TEST(session_snapshot_round_trips_tree_scroll_fields) {
+TEST(sessionSnapshotRoundTripsTreeScrollFields) {
     auto sections_value = sections(ssg::Revision{4}, "alpha");
     ssg::TreeNode node_a{ssg::TreeNodeId{"files:a"}, std::nullopt, "a.txt",
                          ssg::TreeNodeKind::File};
@@ -522,7 +522,7 @@ TEST(session_snapshot_round_trips_tree_scroll_fields) {
         {ssg::TreeNodeView{node_a, 0, false}, ssg::TreeNodeView{node_b, 0, false}},
         ssg::TreeNodeId{"files:b"}};
     provider.first_visible = 3;
-    provider.scrollbar = ssg::scrollbar_metrics(40, 9, 3);
+    provider.scrollbar = ssg::scrollbarMetrics(40, 9, 3);
     provider.visible_node_ids = {ssg::TreeNodeId{"files:a"},
                                  ssg::TreeNodeId{"files:b"}};
     sections_value.tree = ssg::TreeViewState{ssg::TreeRevision{7}, {provider}};
@@ -533,13 +533,13 @@ TEST(session_snapshot_round_trips_tree_scroll_fields) {
     sections_value.shell.tab_hits = {ssg::TabHit{ssg::Rect{24, 0, 10, 1}, 0},
                                      ssg::TabHit{ssg::Rect{34, 0, 8, 1}, 1}};
 
-    auto snapshot = ssg::assemble_session_snapshot(
+    auto snapshot = ssg::assembleSessionSnapshot(
         ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
-        ssg::ViewId{9}, client_view(3), std::move(sections_value));
+        ssg::ViewId{9}, clientView(3), std::move(sections_value));
     auto const decoded =
-        ssg::decode_session_snapshot(ssg::encode_session_snapshot(snapshot));
+        ssg::decodeSessionSnapshot(ssg::encodeSessionSnapshot(snapshot));
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.snapshot.has_value());
     if (!decoded.snapshot) return;
@@ -547,7 +547,7 @@ TEST(session_snapshot_round_trips_tree_scroll_fields) {
     ASSERT_EQ(decoded.snapshot->sections().tree, snapshot.sections().tree);
     auto const& p = decoded.snapshot->sections().tree.providers.front();
     ASSERT_EQ(p.first_visible, std::uint32_t{3});
-    ASSERT_EQ(p.scrollbar, ssg::scrollbar_metrics(40, 9, 3));
+    ASSERT_EQ(p.scrollbar, ssg::scrollbarMetrics(40, 9, 3));
     ASSERT_EQ(p.visible_node_ids.size(), std::size_t{2});
     ASSERT_TRUE(decoded.snapshot->sections().shell.panel_scrollbar.has_value());
     ASSERT_EQ(decoded.snapshot->sections().shell.panel_scrollbar,
@@ -559,12 +559,12 @@ TEST(session_snapshot_round_trips_tree_scroll_fields) {
 // ---------------------------------------------------------------------------
 // Clipboard and status-action message kinds.
 
-TEST(command_result_round_trips_through_the_wire) {
+TEST(commandResultRoundTripsThroughTheWire) {
     ssg::CommandResult const result{
         ssg::CommandError::StaleRevision, ssg::Revision{17},
         "base revision is stale"};
     auto const decoded =
-        ssg::decode_command_result(ssg::encode_command_result(result));
+        ssg::decodeCommandResult(ssg::encodeCommandResult(result));
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.result.has_value());
     ASSERT_EQ(decoded.result->error, result.error);
@@ -572,31 +572,31 @@ TEST(command_result_round_trips_through_the_wire) {
     ASSERT_EQ(decoded.result->message, result.message);
 }
 
-TEST(clipboard_request_round_trips_through_the_wire) {
+TEST(clipboardRequestRoundTripsThroughTheWire) {
     ssg::ClipboardRequest const request{
         42, ssg::ClipboardRequestKind::Write, ssg::Revision{6}, "copied text"};
-    auto const bytes = ssg::encode_clipboard_request(request);
-    auto const decoded = ssg::decode_clipboard_request(bytes);
+    auto const bytes = ssg::encodeClipboardRequest(request);
+    auto const decoded = ssg::decodeClipboardRequest(bytes);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.request.has_value());
     ASSERT_EQ(*decoded.request, request);
 }
 
-TEST(clipboard_response_round_trips_through_the_wire) {
+TEST(clipboardResponseRoundTripsThroughTheWire) {
     ssg::ClipboardResponse const response{
         42, ssg::Revision{6}, ssg::Revision{7},
         ssg::ClipboardResponseStatus::Success, "pasted text"};
-    auto const bytes = ssg::encode_clipboard_response(response);
-    auto const decoded = ssg::decode_clipboard_response(bytes);
+    auto const bytes = ssg::encodeClipboardResponse(response);
+    auto const decoded = ssg::decodeClipboardResponse(bytes);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.response.has_value());
     ASSERT_EQ(*decoded.response, response);
 }
 
-TEST(status_action_invocation_round_trips_through_the_wire) {
+TEST(statusActionInvocationRoundTripsThroughTheWire) {
     ssg::StatusActionInvocation const invocation{ssg::StatusId{9}, "dismiss", 3};
-    auto const bytes = ssg::encode_status_action_invocation(invocation);
-    auto const decoded = ssg::decode_status_action_invocation(bytes);
+    auto const bytes = ssg::encodeStatusActionInvocation(invocation);
+    auto const decoded = ssg::decodeStatusActionInvocation(bytes);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.invocation.has_value());
     ASSERT_EQ(decoded.invocation->status_id, invocation.status_id);
@@ -607,22 +607,22 @@ TEST(status_action_invocation_round_trips_through_the_wire) {
 // ---------------------------------------------------------------------------
 // Binary-frame envelope: round trip plus decoded-byte-lifetime independence.
 
-TEST(binary_frame_round_trips_through_the_wire) {
+TEST(binaryFrameRoundTripsThroughTheWire) {
     ssg::BinaryFrame const frame{
         1, ssg::BinaryPayloadKind::DroppedContent, 99, {9, 8, 7, 6, 5}};
-    auto const bytes = ssg::encode_binary_frame(frame);
-    auto const decoded = ssg::decode_binary_frame(bytes);
+    auto const bytes = ssg::encodeBinaryFrame(frame);
+    auto const decoded = ssg::decodeBinaryFrame(bytes);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.frame.has_value());
     ASSERT_EQ(*decoded.frame, frame);
 }
 
-TEST(binary_frame_decoded_bytes_outlive_the_input_buffer) {
+TEST(binaryFrameDecodedBytesOutliveTheInputBuffer) {
     std::optional<ssg::BinaryFrame> surviving_frame;
     {
-        std::string bytes = ssg::encode_binary_frame(ssg::BinaryFrame{
+        std::string bytes = ssg::encodeBinaryFrame(ssg::BinaryFrame{
             1, ssg::BinaryPayloadKind::DroppedContent, 7, {1, 2, 3, 4, 5, 6}});
-        auto decoded = ssg::decode_binary_frame(bytes);
+        auto decoded = ssg::decodeBinaryFrame(bytes);
         ASSERT_TRUE(decoded.accepted());
         surviving_frame = std::move(decoded.frame);
         // bytes (the input buffer) is destroyed at the end of this scope;
@@ -635,30 +635,30 @@ TEST(binary_frame_decoded_bytes_outlive_the_input_buffer) {
     ASSERT_EQ(surviving_frame->request_id, std::uint64_t{7});
 }
 
-TEST(binary_frame_rejects_an_unsupported_payload_kind) {
-    std::string bytes = ssg::encode_binary_frame(ssg::BinaryFrame{
+TEST(binaryFrameRejectsAnUnsupportedPayloadKind) {
+    std::string bytes = ssg::encodeBinaryFrame(ssg::BinaryFrame{
         1, ssg::BinaryPayloadKind::DroppedContent, 1, {1}});
     bytes[1] = static_cast<char>(0xEE);
-    auto const decoded = ssg::decode_binary_frame(bytes);
+    auto const decoded = ssg::decodeBinaryFrame(bytes);
     ASSERT_FALSE(decoded.accepted());
     ASSERT_EQ(decoded.error, ssg::ProtocolError::MalformedMessage);
 }
 
-TEST(binary_frame_rejects_oversized_declared_length_and_frame) {
+TEST(binaryFrameRejectsOversizedDeclaredLengthAndFrame) {
     ssg::ProtocolLimits limits;
     limits.max_binary_frame_bytes = 4;
-    auto const bytes = ssg::encode_binary_frame(ssg::BinaryFrame{
+    auto const bytes = ssg::encodeBinaryFrame(ssg::BinaryFrame{
         1, ssg::BinaryPayloadKind::DroppedContent, 1, {1, 2, 3, 4, 5}});
-    auto const decoded = ssg::decode_binary_frame(bytes, limits);
+    auto const decoded = ssg::decodeBinaryFrame(bytes, limits);
     ASSERT_FALSE(decoded.accepted());
     ASSERT_EQ(decoded.error, ssg::ProtocolError::BinaryFrameTooLarge);
 }
 
-TEST(binary_frame_rejects_truncated_input) {
-    auto bytes = ssg::encode_binary_frame(ssg::BinaryFrame{
+TEST(binaryFrameRejectsTruncatedInput) {
+    auto bytes = ssg::encodeBinaryFrame(ssg::BinaryFrame{
         1, ssg::BinaryPayloadKind::DroppedContent, 1, {1, 2, 3}});
     bytes.resize(bytes.size() - 1);
-    auto const decoded = ssg::decode_binary_frame(bytes);
+    auto const decoded = ssg::decodeBinaryFrame(bytes);
     ASSERT_FALSE(decoded.accepted());
     ASSERT_EQ(decoded.error, ssg::ProtocolError::TruncatedMessage);
 }
@@ -667,15 +667,15 @@ TEST(binary_frame_rejects_truncated_input) {
 // Malformed / truncated / oversized / unknown-version / unknown-kind corpus,
 // exercised against a representative message from each of the six kinds.
 
-TEST(malformed_and_truncated_and_oversized_and_unknown_version_corpus) {
+TEST(malformedAndTruncatedAndOversizedAndUnknownVersionCorpus) {
     ssg::ClipboardRequest const request{
         1, ssg::ClipboardRequestKind::Read, ssg::Revision{1}, "x"};
-    auto const canonical = ssg::encode_clipboard_request(request);
+    auto const canonical = ssg::encodeClipboardRequest(request);
     ASSERT_TRUE(canonical.size() > 3);
 
     // Empty buffer: missing version byte.
     {
-        auto const decoded = ssg::decode_clipboard_request(std::string_view{});
+        auto const decoded = ssg::decodeClipboardRequest(std::string_view{});
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::TruncatedMessage);
     }
@@ -683,7 +683,7 @@ TEST(malformed_and_truncated_and_oversized_and_unknown_version_corpus) {
     // Single byte: missing kind byte.
     {
         auto const decoded =
-            ssg::decode_clipboard_request(canonical.substr(0, 1));
+            ssg::decodeClipboardRequest(canonical.substr(0, 1));
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::TruncatedMessage);
     }
@@ -692,14 +692,14 @@ TEST(malformed_and_truncated_and_oversized_and_unknown_version_corpus) {
     {
         auto corrupted = canonical;
         corrupted[0] = static_cast<char>(0xFF);
-        auto const decoded = ssg::decode_clipboard_request(corrupted);
+        auto const decoded = ssg::decodeClipboardRequest(corrupted);
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::UnsupportedVersion);
     }
 
     // Wrong kind byte (decoded with the wrong expected-kind decoder).
     {
-        auto const decoded = ssg::decode_clipboard_response(canonical);
+        auto const decoded = ssg::decodeClipboardResponse(canonical);
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::UnsupportedMessageKind);
     }
@@ -708,14 +708,14 @@ TEST(malformed_and_truncated_and_oversized_and_unknown_version_corpus) {
     {
         ssg::ProtocolLimits limits;
         limits.max_message_bytes = canonical.size() - 1;
-        auto const decoded = ssg::decode_clipboard_request(canonical, limits);
+        auto const decoded = ssg::decodeClipboardRequest(canonical, limits);
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::MessageTooLarge);
     }
 
     // Truncated payload: valid header, body cut short.
     {
-        auto const decoded = ssg::decode_clipboard_request(
+        auto const decoded = ssg::decodeClipboardRequest(
             canonical.substr(0, canonical.size() - 2));
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::TruncatedMessage);
@@ -725,34 +725,34 @@ TEST(malformed_and_truncated_and_oversized_and_unknown_version_corpus) {
     {
         auto padded = canonical;
         padded.push_back('\x7f');
-        auto const decoded = ssg::decode_clipboard_request(padded);
+        auto const decoded = ssg::decodeClipboardRequest(padded);
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::MalformedMessage);
     }
 }
 
-TEST(value_bounds_are_enforced_on_decode) {
+TEST(valueBoundsAreEnforcedOnDecode) {
     ssg::StatusActionInvocation const invocation{ssg::StatusId{1}, "a", 1};
-    auto const bytes = ssg::encode_status_action_invocation(invocation);
+    auto const bytes = ssg::encodeStatusActionInvocation(invocation);
 
     {
         ssg::ProtocolLimits limits;
         limits.max_collection_length = 0;
-        auto const decoded = ssg::decode_status_action_invocation(bytes, limits);
+        auto const decoded = ssg::decodeStatusActionInvocation(bytes, limits);
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::ValueBoundsExceeded);
     }
     {
         ssg::ProtocolLimits limits;
         limits.max_text_bytes = 0;
-        auto const decoded = ssg::decode_status_action_invocation(bytes, limits);
+        auto const decoded = ssg::decodeStatusActionInvocation(bytes, limits);
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::ValueBoundsExceeded);
     }
     {
         ssg::ProtocolLimits limits;
         limits.max_value_depth = 0;
-        auto const decoded = ssg::decode_status_action_invocation(bytes, limits);
+        auto const decoded = ssg::decodeStatusActionInvocation(bytes, limits);
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::ValueBoundsExceeded);
     }
@@ -764,7 +764,7 @@ TEST(value_bounds_are_enforced_on_decode) {
 // to decode, or decoding to different values than recorded here, signals an
 // unintended wire-format change.
 
-std::string read_fixture_bytes(std::string const& name) {
+std::string readFixtureBytes(std::string const& name) {
     std::ifstream input{std::string{SSG_PROTOCOL_FIXTURES_DIR} + "/" + name};
     std::string hex{std::istreambuf_iterator<char>{input},
                     std::istreambuf_iterator<char>{}};
@@ -780,7 +780,7 @@ std::string read_fixture_bytes(std::string const& name) {
     return bytes;
 }
 
-void write_fixture_hex(std::string const& name, std::string const& bytes) {
+void writeFixtureHex(std::string const& name, std::string const& bytes) {
     std::string hex;
     hex.reserve(bytes.size() * 2);
     char const* digits = "0123456789abcdef";
@@ -797,45 +797,45 @@ void write_fixture_hex(std::string const& name, std::string const& bytes) {
 // same objects the round-trip tests build.  Gated on SSG_REGEN_PROTOCOL_FIXTURES
 // so a wire-format change (e.g. a new ViewportViewState field) can re-lock the
 // goldens: `SSG_REGEN_PROTOCOL_FIXTURES=1 ./build/test_protocol`.
-TEST(regenerate_canonical_fixtures) {
+TEST(regenerateCanonicalFixtures) {
     if (std::getenv("SSG_REGEN_PROTOCOL_FIXTURES") == nullptr) return;
-    auto snapshot = ssg::assemble_session_snapshot(
+    auto snapshot = ssg::assembleSessionSnapshot(
         ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{
             ssg::ClientId{7}, ssg::InvocationOrigin::InProcess,
             {ssg::CapabilityId{"local_file_drop"}}},
-        ssg::ViewId{9}, client_view(3), sections(ssg::Revision{4}, "alpha"));
-    write_fixture_hex("session_snapshot.hex",
-                      ssg::encode_session_snapshot(snapshot));
+        ssg::ViewId{9}, clientView(3), sections(ssg::Revision{4}, "alpha"));
+    writeFixtureHex("session_snapshot.hex",
+                      ssg::encodeSessionSnapshot(snapshot));
 
-    auto before = ssg::assemble_session_snapshot(
+    auto before = ssg::assembleSessionSnapshot(
         ssg::Revision{4}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
-        ssg::ViewId{9}, client_view(1), sections(ssg::Revision{4}, "a"));
-    auto after = ssg::assemble_session_snapshot(
+        ssg::ViewId{9}, clientView(1), sections(ssg::Revision{4}, "a"));
+    auto after = ssg::assembleSessionSnapshot(
         ssg::Revision{5}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
-        ssg::ViewId{9}, client_view(5), sections(ssg::Revision{5}, "changed"));
-    write_fixture_hex("session_delta.hex",
-                      ssg::encode_session_delta(ssg::derive_session_delta(before, after)));
+        ssg::ViewId{9}, clientView(5), sections(ssg::Revision{5}, "changed"));
+    writeFixtureHex("session_delta.hex",
+                      ssg::encodeSessionDelta(ssg::deriveSessionDelta(before, after)));
 }
 
-TEST(canonical_fixtures_decode_to_the_expected_values) {
-    auto const registry = ssg::build_command_argument_codec_registry();
+TEST(canonicalFixturesDecodeToTheExpectedValues) {
+    auto const registry = ssg::buildCommandArgumentCodecRegistry();
 
     {
-        auto decoded = ssg::decode_command_request(
-            read_fixture_bytes("command_request_no_payload.hex"), registry);
+        auto decoded = ssg::decodeCommandRequest(
+            readFixtureBytes("command_request_no_payload.hex"), registry);
         ASSERT_TRUE(decoded.accepted());
         ASSERT_EQ(decoded.command->id, std::string{"edit.undo"});
         ASSERT_EQ(decoded.command->base_revision, ssg::Revision{3});
         ASSERT_FALSE(decoded.command->payload.has_value());
     }
     {
-        auto decoded = ssg::decode_command_request(
-            read_fixture_bytes("command_request_text_input.hex"), registry);
+        auto decoded = ssg::decodeCommandRequest(
+            readFixtureBytes("command_request_text_input.hex"), registry);
         ASSERT_TRUE(decoded.accepted());
         ASSERT_EQ(decoded.command->id, std::string{"text.insert"});
         auto const* arguments =
@@ -844,8 +844,8 @@ TEST(canonical_fixtures_decode_to_the_expected_values) {
         ASSERT_EQ(arguments->text, std::string{"hello"});
     }
     {
-        auto decoded = ssg::decode_command_result(
-            read_fixture_bytes("command_result.hex"));
+        auto decoded = ssg::decodeCommandResult(
+            readFixtureBytes("command_result.hex"));
         ASSERT_TRUE(decoded.accepted());
         ASSERT_EQ(decoded.result->error,
                   ssg::CommandError::StaleRevision);
@@ -854,8 +854,8 @@ TEST(canonical_fixtures_decode_to_the_expected_values) {
                   std::string{"base revision is stale"});
     }
     {
-        auto decoded = ssg::decode_session_snapshot(
-            read_fixture_bytes("session_snapshot.hex"));
+        auto decoded = ssg::decodeSessionSnapshot(
+            readFixtureBytes("session_snapshot.hex"));
         ASSERT_TRUE(decoded.accepted());
         ASSERT_EQ(decoded.snapshot->revision(), ssg::Revision{4});
         ASSERT_EQ(decoded.snapshot->client().client_id, ssg::ClientId{7});
@@ -864,36 +864,36 @@ TEST(canonical_fixtures_decode_to_the_expected_values) {
     }
     {
         auto decoded =
-            ssg::decode_session_delta(read_fixture_bytes("session_delta.hex"));
+            ssg::decodeSessionDelta(readFixtureBytes("session_delta.hex"));
         ASSERT_TRUE(decoded.accepted());
-        ASSERT_EQ(decoded.delta->base_revision(), ssg::Revision{4});
+        ASSERT_EQ(decoded.delta->baseRevision(), ssg::Revision{4});
         ASSERT_EQ(decoded.delta->revision(), ssg::Revision{5});
-        ASSERT_EQ(decoded.delta->client_id(), ssg::ClientId{7});
+        ASSERT_EQ(decoded.delta->clientId(), ssg::ClientId{7});
     }
     {
-        auto decoded = ssg::decode_clipboard_request(
-            read_fixture_bytes("clipboard_request.hex"));
+        auto decoded = ssg::decodeClipboardRequest(
+            readFixtureBytes("clipboard_request.hex"));
         ASSERT_TRUE(decoded.accepted());
         ASSERT_EQ(decoded.request->id, std::uint64_t{42});
         ASSERT_EQ(decoded.request->text, std::string{"copied text"});
     }
     {
-        auto decoded = ssg::decode_clipboard_response(
-            read_fixture_bytes("clipboard_response.hex"));
+        auto decoded = ssg::decodeClipboardResponse(
+            readFixtureBytes("clipboard_response.hex"));
         ASSERT_TRUE(decoded.accepted());
         ASSERT_EQ(decoded.response->id, std::uint64_t{42});
         ASSERT_EQ(decoded.response->text, std::string{"pasted text"});
     }
     {
-        auto decoded = ssg::decode_status_action_invocation(
-            read_fixture_bytes("status_action_invocation.hex"));
+        auto decoded = ssg::decodeStatusActionInvocation(
+            readFixtureBytes("status_action_invocation.hex"));
         ASSERT_TRUE(decoded.accepted());
         ASSERT_EQ(decoded.invocation->status_id, ssg::StatusId{9});
         ASSERT_EQ(decoded.invocation->action_id, std::string{"dismiss"});
     }
     {
         auto decoded =
-            ssg::decode_binary_frame(read_fixture_bytes("binary_frame.hex"));
+            ssg::decodeBinaryFrame(readFixtureBytes("binary_frame.hex"));
         ASSERT_TRUE(decoded.accepted());
         ASSERT_EQ(decoded.frame->request_id, std::uint64_t{99});
         ASSERT_EQ(decoded.frame->bytes,
@@ -903,17 +903,17 @@ TEST(canonical_fixtures_decode_to_the_expected_values) {
 
 }  // namespace
 
-TEST(viewport_first_visual_column_survives_the_wire) {
+TEST(viewportFirstVisualColumnSurvivesTheWire) {
     // VP-H (M12): the horizontal scroll offset is a wire field and must round-trip.
-    auto view = client_view(3);
+    auto view = clientView(3);
     view.first_visual_column = 7;
-    auto snapshot = ssg::assemble_session_snapshot(
+    auto snapshot = ssg::assembleSessionSnapshot(
         ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, view, sections(ssg::Revision{4}, "alpha"));
     auto const decoded =
-        ssg::decode_session_snapshot(ssg::encode_session_snapshot(snapshot));
+        ssg::decodeSessionSnapshot(ssg::encodeSessionSnapshot(snapshot));
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.snapshot.has_value());
     if (!decoded.snapshot) return;
@@ -922,13 +922,13 @@ TEST(viewport_first_visual_column_survives_the_wire) {
     ASSERT_EQ(*decoded.snapshot, snapshot);
 }
 
-TEST(command_request_round_trips_with_replace_replacement_arguments) {
-    auto const registry = ssg::build_command_argument_codec_registry();
+TEST(commandRequestRoundTripsWithReplaceReplacementArguments) {
+    auto const registry = ssg::buildCommandArgumentCodecRegistry();
     ssg::ClientCommand const command{
         "replace.update_replacement", ssg::Revision{9},
         ssg::FindQueryArguments{"dog"}};
-    auto const bytes = ssg::encode_command_request(command, registry);
-    auto const decoded = ssg::decode_command_request(bytes, registry);
+    auto const bytes = ssg::encodeCommandRequest(command, registry);
+    auto const decoded = ssg::decodeCommandRequest(bytes, registry);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_EQ(decoded.command->id, command.id);
     auto const* arguments =
@@ -938,7 +938,7 @@ TEST(command_request_round_trips_with_replace_replacement_arguments) {
               std::any_cast<ssg::FindQueryArguments>(command.payload));
 }
 
-TEST(find_replace_view_state_round_trips_replacement_through_the_wire) {
+TEST(findReplaceViewStateRoundTripsReplacementThroughTheWire) {
     // A snapshot carrying a non-empty replacement must preserve it through the
     // snapshot codec and a delta replay (F2a).
     auto with_replacement = [](ssg::Revision revision, std::string marker,
@@ -947,14 +947,14 @@ TEST(find_replace_view_state_round_trips_replacement_through_the_wire) {
         s.find_replace.replacement = std::move(replacement);
         return s;
     };
-    auto snapshot = ssg::assemble_session_snapshot(
+    auto snapshot = ssg::assembleSessionSnapshot(
         ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
-        ssg::ViewId{9}, client_view(3),
+        ssg::ViewId{9}, clientView(3),
         with_replacement(ssg::Revision{4}, "alpha", "dog"));
     auto const decoded =
-        ssg::decode_session_snapshot(ssg::encode_session_snapshot(snapshot));
+        ssg::decodeSessionSnapshot(ssg::encodeSessionSnapshot(snapshot));
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.snapshot.has_value());
     if (decoded.snapshot) {
@@ -962,24 +962,24 @@ TEST(find_replace_view_state_round_trips_replacement_through_the_wire) {
                   std::string{"dog"});
     }
 
-    auto before = ssg::assemble_session_snapshot(
+    auto before = ssg::assembleSessionSnapshot(
         ssg::Revision{4}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
-        ssg::ViewId{9}, client_view(1),
+        ssg::ViewId{9}, clientView(1),
         with_replacement(ssg::Revision{4}, "a", ""));
-    auto after = ssg::assemble_session_snapshot(
+    auto after = ssg::assembleSessionSnapshot(
         ssg::Revision{5}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
-        ssg::ViewId{9}, client_view(1),
+        ssg::ViewId{9}, clientView(1),
         with_replacement(ssg::Revision{4}, "a", "dog"));
-    auto const delta = ssg::derive_session_delta(before, after);
+    auto const delta = ssg::deriveSessionDelta(before, after);
     auto decoded_delta =
-        ssg::decode_session_delta(ssg::encode_session_delta(delta));
+        ssg::decodeSessionDelta(ssg::encodeSessionDelta(delta));
     ASSERT_TRUE(decoded_delta.accepted());
     ASSERT_TRUE(decoded_delta.delta.has_value());
-    auto replayed = ssg::replay_session_delta(before, *decoded_delta.delta);
+    auto replayed = ssg::replaySessionDelta(before, *decoded_delta.delta);
     ASSERT_TRUE(replayed.accepted());
     ASSERT_TRUE(replayed.snapshot.has_value());
     if (replayed.snapshot) {
@@ -989,42 +989,42 @@ TEST(find_replace_view_state_round_trips_replacement_through_the_wire) {
 }
 
 int main() {
-    RUN(registry_covers_every_p0_command_and_rejects_unknown_ids);
-    RUN(registry_rejects_missing_entries);
-    RUN(registry_rejects_extra_entries);
-    RUN(registry_rejects_duplicate_entries);
-    RUN(command_request_round_trips_with_no_payload);
-    RUN(command_request_round_trips_with_palette_execute_arguments);
-    RUN(command_request_round_trips_with_tree_select_arguments);
-    RUN(viewport_first_visual_column_survives_the_wire);
-    RUN(command_request_round_trips_with_replace_replacement_arguments);
-    RUN(find_replace_view_state_round_trips_replacement_through_the_wire);
-    RUN(command_request_round_trips_with_text_input_arguments);
-    RUN(command_request_round_trips_with_selection_command_arguments);
-    RUN(command_request_round_trips_with_empty_selection_command_arguments);
-    RUN(command_request_round_trips_with_scroll_lines_arguments);
-    RUN(command_request_round_trips_with_scroll_pages_arguments);
-    RUN(command_request_round_trips_with_scroll_fraction_arguments);
-    RUN(command_request_round_trips_with_dropped_content_arguments);
-    RUN(decode_command_request_rejects_unknown_command_id);
-    RUN(decode_command_request_rejects_malformed_payload);
-    RUN(decode_command_request_maps_domain_invariant_failures_to_malformed);
-    RUN(session_snapshot_round_trips_through_the_wire);
-    RUN(session_delta_round_trips_and_replay_matches_the_decoded_delta);
-    RUN(two_client_capability_and_viewport_isolation_survives_the_wire);
-    RUN(session_snapshot_round_trips_tree_scroll_fields);
-    RUN(clipboard_request_round_trips_through_the_wire);
-    RUN(command_result_round_trips_through_the_wire);
-    RUN(clipboard_response_round_trips_through_the_wire);
-    RUN(status_action_invocation_round_trips_through_the_wire);
-    RUN(binary_frame_round_trips_through_the_wire);
-    RUN(binary_frame_decoded_bytes_outlive_the_input_buffer);
-    RUN(binary_frame_rejects_an_unsupported_payload_kind);
-    RUN(binary_frame_rejects_oversized_declared_length_and_frame);
-    RUN(binary_frame_rejects_truncated_input);
-    RUN(malformed_and_truncated_and_oversized_and_unknown_version_corpus);
-    RUN(value_bounds_are_enforced_on_decode);
-    RUN(regenerate_canonical_fixtures);
-    RUN(canonical_fixtures_decode_to_the_expected_values);
+    RUN(registryCoversEveryP0CommandAndRejectsUnknownIds);
+    RUN(registryRejectsMissingEntries);
+    RUN(registryRejectsExtraEntries);
+    RUN(registryRejectsDuplicateEntries);
+    RUN(commandRequestRoundTripsWithNoPayload);
+    RUN(commandRequestRoundTripsWithPaletteExecuteArguments);
+    RUN(commandRequestRoundTripsWithTreeSelectArguments);
+    RUN(viewportFirstVisualColumnSurvivesTheWire);
+    RUN(commandRequestRoundTripsWithReplaceReplacementArguments);
+    RUN(findReplaceViewStateRoundTripsReplacementThroughTheWire);
+    RUN(commandRequestRoundTripsWithTextInputArguments);
+    RUN(commandRequestRoundTripsWithSelectionCommandArguments);
+    RUN(commandRequestRoundTripsWithEmptySelectionCommandArguments);
+    RUN(commandRequestRoundTripsWithScrollLinesArguments);
+    RUN(commandRequestRoundTripsWithScrollPagesArguments);
+    RUN(commandRequestRoundTripsWithScrollFractionArguments);
+    RUN(commandRequestRoundTripsWithDroppedContentArguments);
+    RUN(decodeCommandRequestRejectsUnknownCommandId);
+    RUN(decodeCommandRequestRejectsMalformedPayload);
+    RUN(decodeCommandRequestMapsDomainInvariantFailuresToMalformed);
+    RUN(sessionSnapshotRoundTripsThroughTheWire);
+    RUN(sessionDeltaRoundTripsAndReplayMatchesTheDecodedDelta);
+    RUN(twoClientCapabilityAndViewportIsolationSurvivesTheWire);
+    RUN(sessionSnapshotRoundTripsTreeScrollFields);
+    RUN(clipboardRequestRoundTripsThroughTheWire);
+    RUN(commandResultRoundTripsThroughTheWire);
+    RUN(clipboardResponseRoundTripsThroughTheWire);
+    RUN(statusActionInvocationRoundTripsThroughTheWire);
+    RUN(binaryFrameRoundTripsThroughTheWire);
+    RUN(binaryFrameDecodedBytesOutliveTheInputBuffer);
+    RUN(binaryFrameRejectsAnUnsupportedPayloadKind);
+    RUN(binaryFrameRejectsOversizedDeclaredLengthAndFrame);
+    RUN(binaryFrameRejectsTruncatedInput);
+    RUN(malformedAndTruncatedAndOversizedAndUnknownVersionCorpus);
+    RUN(valueBoundsAreEnforcedOnDecode);
+    RUN(regenerateCanonicalFixtures);
+    RUN(canonicalFixturesDecodeToTheExpectedValues);
     return failed == 0 ? 0 : 1;
 }

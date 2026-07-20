@@ -114,14 +114,14 @@ class DiffModel {
 public:
     explicit DiffModel(DiffConfig config = {});
 
-    [[nodiscard]] DiffMutationResult update_git_file(GitDiffFile file,
+    [[nodiscard]] DiffMutationResult updateGitFile(GitDiffFile file,
                                                       Revision revision);
-    [[nodiscard]] DiffMutationResult seed_non_git(
+    [[nodiscard]] DiffMutationResult seedNonGit(
         std::vector<SeededDiffFile> files, Revision revision);
-    [[nodiscard]] DiffMutationResult apply_non_git_event(
+    [[nodiscard]] DiffMutationResult applyNonGitEvent(
         NonGitDiffEvent event, Revision revision);
 
-    [[nodiscard]] DiffViewState view_state() const;
+    [[nodiscard]] DiffViewState viewState() const;
     [[nodiscard]] std::optional<std::reference_wrapper<const DiffFileView>>
     file(const DiffFileId& id) const;
 
@@ -139,7 +139,7 @@ private:
     std::vector<Entry> entries_;
 };
 
-[[nodiscard]] std::vector<std::string> split_diff_lines(std::string_view content);
+[[nodiscard]] std::vector<std::string> splitDiffLines(std::string_view content);
 
 struct DiffCommandDescriptor {
     std::string_view id;
@@ -162,10 +162,10 @@ private:
     }};
 };
 
-[[nodiscard]] DiffCommandSet diff_command_set();
-[[nodiscard]] std::optional<std::size_t> next_diff_hunk(
+[[nodiscard]] DiffCommandSet diffCommandSet();
+[[nodiscard]] std::optional<std::size_t> nextDiffHunk(
     const DiffFileView& file, std::optional<std::size_t> current_target_line);
-[[nodiscard]] std::optional<std::size_t> previous_diff_hunk(
+[[nodiscard]] std::optional<std::size_t> previousDiffHunk(
     const DiffFileView& file, std::optional<std::size_t> current_target_line);
 
 struct DiffOpenTarget {
@@ -176,7 +176,7 @@ struct DiffOpenTarget {
     friend bool operator==(const DiffOpenTarget&, const DiffOpenTarget&) = default;
 };
 
-[[nodiscard]] DiffOpenTarget diff_open_file(const DiffFileView& file);
+[[nodiscard]] DiffOpenTarget diffOpenFile(const DiffFileView& file);
 
 struct DiffDelta {
     Revision base_revision{0};
@@ -187,7 +187,7 @@ struct DiffDelta {
     friend bool operator==(const DiffDelta&, const DiffDelta&) = default;
 };
 
-[[nodiscard]] DiffDelta derive_diff_delta(const DiffViewState& base,
+[[nodiscard]] DiffDelta deriveDiffDelta(const DiffViewState& base,
                                           const DiffViewState& target);
 
 enum class DiffReplayError { None, StaleRevision, MalformedDelta };
@@ -198,7 +198,7 @@ struct DiffReplayResult {
     [[nodiscard]] bool accepted() const noexcept { return state.has_value(); }
 };
 
-[[nodiscard]] DiffReplayResult replay_diff_delta(const DiffViewState& base,
+[[nodiscard]] DiffReplayResult replayDiffDelta(const DiffViewState& base,
                                                  const DiffDelta& delta);
 
 } // namespace ssg

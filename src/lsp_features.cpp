@@ -10,7 +10,7 @@
 namespace ssg {
 namespace {
 
-std::string json_escape(std::string_view value) {
+std::string jsonEscape(std::string_view value) {
     static constexpr char hex[] = "0123456789abcdef";
     std::string result{"\""};
     for (const unsigned char byte : value) {
@@ -36,7 +36,7 @@ std::string json_escape(std::string_view value) {
     return result;
 }
 
-void append_utf8(std::string& target, std::uint32_t value) {
+void appendUtf8(std::string& target, std::uint32_t value) {
     if (value <= 0x7f) {
         target.push_back(static_cast<char>(value));
     } else if (value <= 0x7ff) {
@@ -65,7 +65,7 @@ struct Json {
         const auto found = object.find(std::string{name});
         return found == object.end() ? nullptr : &found->second;
     }
-    [[nodiscard]] std::optional<std::uint64_t> unsigned_integer() const {
+    [[nodiscard]] std::optional<std::uint64_t> unsignedInteger() const {
         if (kind != Kind::Number) return std::nullopt;
         std::uint64_t value = 0;
         const auto parsed =
@@ -83,13 +83,13 @@ public:
         : input_(input), maximum_depth_(maximum_depth) {}
 
     [[nodiscard]] std::optional<Json> parse() {
-        auto value = parse_value(0);
-        skip_space();
+        auto value = parseValue(0);
+        skipSpace();
         return value && offset_ == input_.size() ? value : std::nullopt;
     }
 
 private:
-    void skip_space() {
+    void skipSpace() {
         while (offset_ < input_.size() &&
                (input_[offset_] == ' ' || input_[offset_] == '\t' ||
                 input_[offset_] == '\r' || input_[offset_] == '\n')) {
@@ -97,7 +97,7 @@ private:
         }
     }
     bool consume(char expected) {
-        skip_space();
+        skipSpace();
         if (offset_ >= input_.size() || input_[offset_] != expected) {
             return false;
         }
@@ -117,7 +117,7 @@ private:
         }
         return value;
     }
-    std::optional<std::string> parse_string() {
+    std::optional<std::string> parseString() {
         if (!consume('"')) return std::nullopt;
         std::string result;
         while (offset_ < input_.size()) {
@@ -158,7 +158,7 @@ private:
                 } else if (value >= 0xdc00 && value <= 0xdfff) {
                     return std::nullopt;
                 }
-                append_utf8(result, value);
+                appendUtf8(result, value);
                 break;
             }
             default: return std::nullopt;
@@ -166,13 +166,13 @@ private:
         }
         return std::nullopt;
     }
-    std::optional<Json> parse_value(std::size_t depth) {
-        skip_space();
+    std::optional<Json> parseValue(std::size_t depth) {
+        skipSpace();
         if (depth > maximum_depth_ || offset_ >= input_.size()) {
             return std::nullopt;
         }
         if (input_[offset_] == '"') {
-            auto text = parse_string();
+            auto text = parseString();
             if (!text) return std::nullopt;
             Json value;
             value.kind = Json::Kind::String;
@@ -185,9 +185,9 @@ private:
             value.kind = Json::Kind::Object;
             if (consume('}')) return value;
             while (true) {
-                auto key = parse_string();
+                auto key = parseString();
                 if (!key || !consume(':')) return std::nullopt;
-                auto child = parse_value(depth + 1);
+                auto child = parseValue(depth + 1);
                 if (!child ||
                     !value.object.emplace(std::move(*key), std::move(*child))
                          .second) {
@@ -203,7 +203,7 @@ private:
             value.kind = Json::Kind::Array;
             if (consume(']')) return value;
             while (true) {
-                auto child = parse_value(depth + 1);
+                auto child = parseValue(depth + 1);
                 if (!child) return std::nullopt;
                 value.array.push_back(std::move(*child));
                 if (consume(']')) return value;
@@ -250,24 +250,24 @@ private:
     std::size_t offset_ = 0;
 };
 
-std::optional<LspPosition> parse_position(const Json& value) {
+std::optional<LspPosition> parsePosition(const Json& value) {
     if (value.kind != Json::Kind::Object) return std::nullopt;
     const auto* line = value.member("line");
     const auto* character = value.member("character");
     if (!line || !character) return std::nullopt;
-    const auto line_value = line->unsigned_integer();
-    const auto character_value = character->unsigned_integer();
+    const auto line_value = line->unsignedInteger();
+    const auto character_value = character->unsignedInteger();
     if (!line_value || !character_value) return std::nullopt;
     return LspPosition{*line_value, *character_value};
 }
 
-std::optional<LspRange> parse_range(const Json& value) {
+std::optional<LspRange> parseRange(const Json& value) {
     if (value.kind != Json::Kind::Object) return std::nullopt;
     const auto* start = value.member("start");
     const auto* end = value.member("end");
     if (!start || !end) return std::nullopt;
-    const auto parsed_start = parse_position(*start);
-    const auto parsed_end = parse_position(*end);
+    const auto parsed_start = parsePosition(*start);
+    const auto parsed_end = parsePosition(*end);
     if (!parsed_start || !parsed_end ||
         parsed_end->line < parsed_start->line ||
         (parsed_end->line == parsed_start->line &&
@@ -277,11 +277,11 @@ std::optional<LspRange> parse_range(const Json& value) {
     return LspRange{*parsed_start, *parsed_end};
 }
 
-const Json* response_result(const Json& root) {
+const Json* responseResult(const Json& root) {
     return root.kind == Json::Kind::Object ? root.member("result") : nullptr;
 }
 
-std::optional<std::vector<LspCompletionItem>> parse_completion(
+std::optional<std::vector<LspCompletionItem>> parseCompletion(
     const Json& result, std::size_t maximum_items) {
     if (result.kind == Json::Kind::NullValue) {
         return std::vector<LspCompletionItem>{};
@@ -321,7 +321,7 @@ std::optional<std::vector<LspCompletionItem>> parse_completion(
             if (!range || !text || text->kind != Json::Kind::String) {
                 return std::nullopt;
             }
-            item.replacement_range = parse_range(*range);
+            item.replacement_range = parseRange(*range);
             if (!item.replacement_range) return std::nullopt;
             item.insert_text = text->scalar;
         }
@@ -334,7 +334,7 @@ std::optional<std::vector<LspCompletionItem>> parse_completion(
     return items;
 }
 
-std::optional<LspHover> parse_hover(const Json& result) {
+std::optional<LspHover> parseHover(const Json& result) {
     if (result.kind == Json::Kind::NullValue) return LspHover{};
     if (result.kind != Json::Kind::Object) return std::nullopt;
     const auto* contents = result.member("contents");
@@ -350,13 +350,13 @@ std::optional<LspHover> parse_hover(const Json& result) {
         return std::nullopt;
     }
     if (const auto* range = result.member("range")) {
-        hover.range = parse_range(*range);
+        hover.range = parseRange(*range);
         if (!hover.range) return std::nullopt;
     }
     return hover;
 }
 
-std::optional<LspNavigationTarget> parse_location(const Json& value) {
+std::optional<LspNavigationTarget> parseLocation(const Json& value) {
     if (value.kind != Json::Kind::Object) return std::nullopt;
     const auto* uri = value.member("uri");
     const auto* range = value.member("range");
@@ -365,12 +365,12 @@ std::optional<LspNavigationTarget> parse_location(const Json& value) {
     if (!uri || uri->kind != Json::Kind::String || !range) {
         return std::nullopt;
     }
-    auto parsed_range = parse_range(*range);
+    auto parsed_range = parseRange(*range);
     if (!parsed_range) return std::nullopt;
     return LspNavigationTarget{uri->scalar, *parsed_range};
 }
 
-std::optional<std::vector<LspNavigationTarget>> parse_locations(
+std::optional<std::vector<LspNavigationTarget>> parseLocations(
     const Json& result, std::size_t maximum_targets) {
     if (result.kind == Json::Kind::NullValue) {
         return std::vector<LspNavigationTarget>{};
@@ -380,12 +380,12 @@ std::optional<std::vector<LspNavigationTarget>> parse_locations(
         if (result.array.size() > maximum_targets) return std::nullopt;
         targets.reserve(result.array.size());
         for (const auto& value : result.array) {
-            auto target = parse_location(value);
+            auto target = parseLocation(value);
             if (!target) return std::nullopt;
             targets.push_back(std::move(*target));
         }
     } else {
-        auto target = parse_location(result);
+        auto target = parseLocation(result);
         if (!target || maximum_targets == 0) return std::nullopt;
         targets.push_back(std::move(*target));
     }
@@ -394,16 +394,16 @@ std::optional<std::vector<LspNavigationTarget>> parse_locations(
 
 } // namespace
 
-LspFeatureCommandSet lsp_feature_command_set() { return {}; }
+LspFeatureCommandSet lspFeatureCommandSet() { return {}; }
 
-LspFeatureDelta derive_lsp_feature_delta(const LspFeatureViewState& base,
+LspFeatureDelta deriveLspFeatureDelta(const LspFeatureViewState& base,
                                          const LspFeatureViewState& target) {
     LspFeatureDelta delta{base.revision, target.revision, std::nullopt};
     if (base != target) delta.state = target;
     return delta;
 }
 
-LspFeatureReplayResult replay_lsp_feature_delta(
+LspFeatureReplayResult replayLspFeatureDelta(
     const LspFeatureViewState& base, const LspFeatureDelta& delta) {
     if (delta.base_revision != base.revision) {
         return {std::nullopt, LspFeatureReplayError::StaleRevision};
@@ -428,26 +428,26 @@ LspFeatureController::LspFeatureController(LspSyncClient& client,
     }
 }
 
-LspFeatureRequestResult LspFeatureController::request_completion(
+LspFeatureRequestResult LspFeatureController::requestCompletion(
     std::string uri, Revision revision, ByteOffset position) {
     return request(Kind::Completion, std::move(uri), revision, position);
 }
-LspFeatureRequestResult LspFeatureController::request_hover(
+LspFeatureRequestResult LspFeatureController::requestHover(
     std::string uri, Revision revision, ByteOffset position) {
     return request(Kind::Hover, std::move(uri), revision, position);
 }
-LspFeatureRequestResult LspFeatureController::request_definition(
+LspFeatureRequestResult LspFeatureController::requestDefinition(
     std::string uri, Revision revision, ByteOffset position) {
     return request(Kind::Definition, std::move(uri), revision, position);
 }
-LspFeatureRequestResult LspFeatureController::request_references(
+LspFeatureRequestResult LspFeatureController::requestReferences(
     std::string uri, Revision revision, ByteOffset position) {
     return request(Kind::References, std::move(uri), revision, position);
 }
 
 LspFeatureRequestResult LspFeatureController::request(
     Kind kind, std::string uri, Revision revision, ByteOffset position) {
-    const auto snapshot = client_.document_snapshot(uri);
+    const auto snapshot = client_.documentSnapshot(uri);
     if (!snapshot) {
         return {0, LspFeatureError::UnknownDocument,
                 "LSP feature request targets an unknown document"};
@@ -457,7 +457,7 @@ LspFeatureRequestResult LspFeatureController::request(
                 "LSP feature request carries a stale revision"};
     }
     const auto lsp_position =
-        byte_offset_to_lsp_position(snapshot->text, position);
+        byteOffsetToLspPosition(snapshot->text, position);
     if (!lsp_position.accepted()) {
         return {0, LspFeatureError::InvalidPosition,
                 "LSP feature request position is invalid"};
@@ -471,7 +471,7 @@ LspFeatureRequestResult LspFeatureController::request(
     case Kind::References: method = "textDocument/references"; break;
     }
     auto params =
-        "{\"textDocument\":{\"uri\":" + json_escape(uri) +
+        "{\"textDocument\":{\"uri\":" + jsonEscape(uri) +
         "},\"position\":{\"line\":" +
         std::to_string(lsp_position.position.line) + ",\"character\":" +
         std::to_string(lsp_position.position.character) + "}";
@@ -519,7 +519,7 @@ LspFeaturePollResult LspFeatureController::poll(Revision current_revision) {
         return {transport.error, transport.message, {}};
     }
     LspFeaturePollResult result;
-    for (auto& response : client_.take_completed_responses()) {
+    for (auto& response : client_.takeCompletedResponses()) {
         const auto found = pending_.find(response.id);
         if (found == pending_.end()) continue;
         const auto pending = found->second;
@@ -538,7 +538,7 @@ LspFeaturePollResult LspFeatureController::poll(Revision current_revision) {
                    LspCompletedResponseStatus::ServerError) {
             outcome = LspFeaturePublishResult::ServerError;
         } else {
-            const auto snapshot = client_.document_snapshot(pending.uri);
+            const auto snapshot = client_.documentSnapshot(pending.uri);
             if (current_revision != pending.revision || !snapshot ||
                 snapshot->revision != pending.revision) {
                 outcome = LspFeaturePublishResult::StaleRevision;
@@ -546,11 +546,11 @@ LspFeaturePollResult LspFeatureController::poll(Revision current_revision) {
                 const auto root =
                     JsonParser{response.payload_json, config_.maximum_json_depth}
                         .parse();
-                const auto* payload = root ? response_result(*root) : nullptr;
+                const auto* payload = root ? responseResult(*root) : nullptr;
                 bool accepted = false;
                 if (payload && pending.kind == Kind::Completion) {
                     auto items =
-                        parse_completion(*payload,
+                        parseCompletion(*payload,
                                          config_.maximum_completion_items);
                     if (items) {
                         state_.completion.items = std::move(*items);
@@ -564,7 +564,7 @@ LspFeaturePollResult LspFeatureController::poll(Revision current_revision) {
                         accepted = true;
                     }
                 } else if (payload && pending.kind == Kind::Hover) {
-                    auto hover = parse_hover(*payload);
+                    auto hover = parseHover(*payload);
                     if (hover) {
                         state_.hover =
                             hover->contents.empty()
@@ -573,7 +573,7 @@ LspFeaturePollResult LspFeatureController::poll(Revision current_revision) {
                         accepted = true;
                     }
                 } else if (payload) {
-                    auto locations = parse_locations(
+                    auto locations = parseLocations(
                         *payload, config_.maximum_navigation_targets);
                     if (locations) {
                         state_.navigation.targets = std::move(*locations);
@@ -622,7 +622,7 @@ LspFeaturePollResult LspFeatureController::poll(Revision current_revision) {
     return result;
 }
 
-void LspFeatureController::select_next_completion() {
+void LspFeatureController::selectNextCompletion() {
     auto& completion = state_.completion;
     if (!completion.selected_index || completion.items.empty()) return;
     completion.selected_index =
@@ -630,7 +630,7 @@ void LspFeatureController::select_next_completion() {
     changed();
 }
 
-void LspFeatureController::select_previous_completion() {
+void LspFeatureController::selectPreviousCompletion() {
     auto& completion = state_.completion;
     if (!completion.selected_index || completion.items.empty()) return;
     completion.selected_index =
@@ -639,7 +639,7 @@ void LspFeatureController::select_previous_completion() {
     changed();
 }
 
-LspCompletionAcceptance LspFeatureController::accept_completion() {
+LspCompletionAcceptance LspFeatureController::acceptCompletion() {
     const auto selected = state_.completion.selected_index;
     if (!selected || *selected >= state_.completion.items.size()) {
         return {false, {}, std::nullopt, "no completion is selected"};
@@ -651,14 +651,14 @@ LspCompletionAcceptance LspFeatureController::accept_completion() {
     return {true, item.insert_text, item.replacement_range, {}};
 }
 
-void LspFeatureController::dismiss_completion() {
+void LspFeatureController::dismissCompletion() {
     cancel(Kind::Completion, Disposition::Cancelled);
     state_.completion = {};
     state_.status = "completion dismissed";
     changed();
 }
 
-void LspFeatureController::dismiss_hover() {
+void LspFeatureController::dismissHover() {
     cancel(Kind::Hover, Disposition::Cancelled);
     state_.hover.reset();
     state_.status = "hover dismissed";

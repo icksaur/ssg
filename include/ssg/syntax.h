@@ -19,9 +19,9 @@ class LanguageId {
 public:
     explicit LanguageId(std::string value);
 
-    [[nodiscard]] static LanguageId plain_text();
+    [[nodiscard]] static LanguageId plainText();
     [[nodiscard]] const std::string& value() const noexcept { return value_; }
-    [[nodiscard]] bool is_plain_text() const noexcept;
+    [[nodiscard]] bool isPlainText() const noexcept;
     auto operator<=>(const LanguageId&) const = default;
 
 private:
@@ -160,7 +160,7 @@ public:
         return language_;
     }
     [[nodiscard]] const std::string& text() const noexcept { return text_; }
-    [[nodiscard]] const SyntaxParseHandle& prior_parse() const noexcept {
+    [[nodiscard]] const SyntaxParseHandle& priorParse() const noexcept {
         return prior_parse_;
     }
     [[nodiscard]] const std::vector<SyntaxEdit>& edits() const noexcept {
@@ -187,7 +187,7 @@ private:
 class SyntaxParser {
 public:
     virtual ~SyntaxParser() = default;
-    [[nodiscard]] virtual bool has_grammar(const LanguageId& language) const = 0;
+    [[nodiscard]] virtual bool hasGrammar(const LanguageId& language) const = 0;
     [[nodiscard]] virtual SyntaxParseOutput parse(
         const SyntaxParseRequest& request) = 0;
 };
@@ -211,24 +211,24 @@ public:
     [[nodiscard]] const LanguageId& language() const noexcept {
         return language_;
     }
-    [[nodiscard]] std::uint64_t text_bytes() const noexcept {
+    [[nodiscard]] std::uint64_t textBytes() const noexcept {
         return text_bytes_;
     }
     [[nodiscard]] const std::vector<SyntaxSpan>& spans() const noexcept {
         return spans_;
     }
-    [[nodiscard]] const std::vector<SyntaxBracketPair>& bracket_pairs() const noexcept {
+    [[nodiscard]] const std::vector<SyntaxBracketPair>& bracketPairs() const noexcept {
         return bracket_pairs_;
     }
-    [[nodiscard]] const std::vector<UnmatchedBracket>& unmatched_brackets()
+    [[nodiscard]] const std::vector<UnmatchedBracket>& unmatchedBrackets()
         const noexcept {
         return unmatched_brackets_;
     }
-    [[nodiscard]] const std::vector<CommentToken>& comment_tokens()
+    [[nodiscard]] const std::vector<CommentToken>& commentTokens()
         const noexcept {
         return comment_tokens_;
     }
-    [[nodiscard]] const std::vector<CommentRange>& comment_ranges()
+    [[nodiscard]] const std::vector<CommentRange>& commentRanges()
         const noexcept {
         return comment_ranges_;
     }
@@ -252,15 +252,15 @@ private:
     std::vector<LineIndentation> indentation_;
 };
 
-[[nodiscard]] SyntaxViewState plain_text_syntax_view_state(
+[[nodiscard]] SyntaxViewState plainTextSyntaxViewState(
     Revision revision, LanguageId language, std::string_view text,
     std::uint32_t tab_width);
-[[nodiscard]] SyntaxViewState build_syntax_view_state(
+[[nodiscard]] SyntaxViewState buildSyntaxViewState(
     Revision revision, LanguageId language, std::string_view text,
     const SyntaxParseOutput& output, const SyntaxConfig& config);
-[[nodiscard]] std::optional<ByteOffset> matching_bracket(
+[[nodiscard]] std::optional<ByteOffset> matchingBracket(
     const SyntaxViewState& state, ByteOffset offset);
-[[nodiscard]] SyntaxScope scope_at(const SyntaxViewState& state,
+[[nodiscard]] SyntaxScope scopeAt(const SyntaxViewState& state,
                                    ByteOffset offset);
 
 class SyntaxDelta {
@@ -276,14 +276,14 @@ public:
         std::optional<std::vector<CommentRange>> comment_ranges,
         std::optional<std::vector<LineIndentation>> indentation);
 
-    [[nodiscard]] Revision base_revision() const noexcept {
+    [[nodiscard]] Revision baseRevision() const noexcept {
         return base_revision_;
     }
     [[nodiscard]] Revision revision() const noexcept { return revision_; }
     [[nodiscard]] const std::optional<LanguageId>& language() const noexcept {
         return language_;
     }
-    [[nodiscard]] const std::optional<std::uint64_t>& text_bytes()
+    [[nodiscard]] const std::optional<std::uint64_t>& textBytes()
         const noexcept {
         return text_bytes_;
     }
@@ -291,20 +291,20 @@ public:
         const noexcept {
         return spans_;
     }
-    [[nodiscard]] const std::optional<std::vector<SyntaxBracketPair>>& bracket_pairs()
+    [[nodiscard]] const std::optional<std::vector<SyntaxBracketPair>>& bracketPairs()
         const noexcept {
         return bracket_pairs_;
     }
     [[nodiscard]] const std::optional<std::vector<UnmatchedBracket>>&
-    unmatched_brackets() const noexcept {
+    unmatchedBrackets() const noexcept {
         return unmatched_brackets_;
     }
     [[nodiscard]] const std::optional<std::vector<CommentToken>>&
-    comment_tokens() const noexcept {
+    commentTokens() const noexcept {
         return comment_tokens_;
     }
     [[nodiscard]] const std::optional<std::vector<CommentRange>>&
-    comment_ranges() const noexcept {
+    commentRanges() const noexcept {
         return comment_ranges_;
     }
     [[nodiscard]] const std::optional<std::vector<LineIndentation>>&
@@ -328,7 +328,7 @@ private:
     std::optional<std::vector<LineIndentation>> indentation_;
 };
 
-[[nodiscard]] SyntaxDelta derive_syntax_delta(const SyntaxViewState& base,
+[[nodiscard]] SyntaxDelta deriveSyntaxDelta(const SyntaxViewState& base,
                                               const SyntaxViewState& target);
 
 enum class SyntaxReplayError : std::uint8_t {
@@ -344,7 +344,7 @@ struct SyntaxReplayResult {
     [[nodiscard]] bool accepted() const noexcept { return state.has_value(); }
 };
 
-[[nodiscard]] SyntaxReplayResult replay_syntax_delta(
+[[nodiscard]] SyntaxReplayResult replaySyntaxDelta(
     const SyntaxViewState& base, const SyntaxDelta& delta);
 
 enum class SyntaxRequestError : std::uint8_t {
@@ -385,10 +385,10 @@ public:
     explicit SyntaxModel(std::shared_ptr<SyntaxParser> parser = nullptr,
                          SyntaxConfig config = {});
 
-    [[nodiscard]] bool has_parser() const noexcept {
+    [[nodiscard]] bool hasParser() const noexcept {
         return parser_ != nullptr;
     }
-    [[nodiscard]] bool has_grammar(const LanguageId& language) const noexcept;
+    [[nodiscard]] bool hasGrammar(const LanguageId& language) const noexcept;
     [[nodiscard]] SyntaxParseRequestResult request(
         Revision revision, LanguageId language, std::string text,
         std::vector<SyntaxEdit> edits = {});
@@ -397,9 +397,9 @@ public:
     [[nodiscard]] SyntaxAcceptResult accept(
         const std::shared_ptr<const SyntaxParseRequest>& request,
         const SyntaxParseOutput& output);
-    void cancel_pending() noexcept;
+    void cancelPending() noexcept;
 
-    [[nodiscard]] const SyntaxViewState& view_state() const noexcept {
+    [[nodiscard]] const SyntaxViewState& viewState() const noexcept {
         return view_state_;
     }
 

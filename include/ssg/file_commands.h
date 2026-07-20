@@ -73,7 +73,7 @@ private:
     }};
 };
 
-[[nodiscard]] FileCommandsCommandSet file_commands_command_set();
-[[nodiscard]] PromptRequest file_path_prompt(FileCommand command);
+[[nodiscard]] FileCommandsCommandSet fileCommandsCommandSet();
+[[nodiscard]] PromptRequest filePathPrompt(FileCommand command);
 
 }  // namespace ssg

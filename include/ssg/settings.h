@@ -168,17 +168,17 @@ public:
     SettingsModel();
 
     [[nodiscard]] EffectiveSetting resolve(SettingKey key) const;
-    [[nodiscard]] std::optional<SettingValue> scoped_value(
+    [[nodiscard]] std::optional<SettingValue> scopedValue(
         SettingScope scope, SettingKey key) const;
-    [[nodiscard]] SettingsViewState view_state() const;
+    [[nodiscard]] SettingsViewState viewState() const;
 
     [[nodiscard]] SettingMutation set(
         SettingScope scope, SettingKey key, SettingValue value);
     [[nodiscard]] SettingMutation reset(SettingScope scope, SettingKey key);
     [[nodiscard]] SettingMutation apply(const SettingCompensation& compensation);
 
-    [[nodiscard]] std::string export_scope(SettingScope scope) const;
-    [[nodiscard]] SettingsIoResult import_scope(
+    [[nodiscard]] std::string exportScope(SettingScope scope) const;
+    [[nodiscard]] SettingsIoResult importScope(
         SettingScope scope, std::string_view document);
 
 private:
@@ -196,12 +196,12 @@ struct SettingsPaths {
     std::filesystem::path workspace_file;
 };
 
-[[nodiscard]] SettingsPaths linux_settings_paths(
+[[nodiscard]] SettingsPaths linuxSettingsPaths(
     const std::filesystem::path& user_configuration_root,
     const std::filesystem::path& workspace_storage_root,
     std::string_view canonical_workspace);
 
-[[nodiscard]] SettingsPaths windows_settings_paths(
+[[nodiscard]] SettingsPaths windowsSettingsPaths(
     const std::filesystem::path& user_configuration_root,
     const std::filesystem::path& workspace_storage_root,
     std::string_view canonical_workspace);

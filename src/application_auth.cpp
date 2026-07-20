@@ -8,18 +8,18 @@
 
 namespace ssg {
 
-void platform_secure_random(std::span<std::byte> bytes);
+void platformSecureRandom(std::span<std::byte> bytes);
 
 namespace {
 
 class PlatformSecureRandom final : public SecureRandomSource {
 public:
     void fill(std::span<std::byte> bytes) override {
-        platform_secure_random(bytes);
+        platformSecureRandom(bytes);
     }
 };
 
-bool credentials_equal(std::string_view left, std::string_view right) {
+bool credentialsEqual(std::string_view left, std::string_view right) {
     std::uint8_t difference =
         static_cast<std::uint8_t>(left.size() ^ right.size());
     auto const common = std::min(left.size(), right.size());
@@ -31,7 +31,7 @@ bool credentials_equal(std::string_view left, std::string_view right) {
 
 }  // namespace
 
-BearerCredential generate_bearer_credential(SecureRandomSource& source) {
+BearerCredential generateBearerCredential(SecureRandomSource& source) {
     std::array<std::byte, 32> random{};
     source.fill(random);
     constexpr char digits[] = "0123456789abcdef";
@@ -45,9 +45,9 @@ BearerCredential generate_bearer_credential(SecureRandomSource& source) {
     return BearerCredential{std::move(encoded)};
 }
 
-BearerCredential generate_bearer_credential() {
+BearerCredential generateBearerCredential() {
     PlatformSecureRandom source;
-    return generate_bearer_credential(source);
+    return generateBearerCredential(source);
 }
 
 ApplicationAuthentication::ApplicationAuthentication(
@@ -60,7 +60,7 @@ ApplicationAuthentication::ApplicationAuthentication(
 
 std::optional<AuthenticatedSession> ApplicationAuthentication::authenticate(
     std::string_view presented_credential) const {
-    if (!credentials_equal(credential_.value(), presented_credential)) {
+    if (!credentialsEqual(credential_.value(), presented_credential)) {
         return std::nullopt;
     }
     return AuthenticatedSession{

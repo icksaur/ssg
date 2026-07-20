@@ -26,7 +26,7 @@ struct ParsedSearchQuery {
                            const ParsedSearchQuery&) = default;
 };
 
-[[nodiscard]] ParsedSearchQuery parse_search_query(std::string_view query);
+[[nodiscard]] ParsedSearchQuery parseSearchQuery(std::string_view query);
 
 struct WorkspaceFile {
     std::string path;
@@ -100,7 +100,7 @@ struct SearchResult {
     friend bool operator==(const SearchResult&, const SearchResult&) = default;
 };
 
-[[nodiscard]] std::vector<SearchResult> rank_workspace(
+[[nodiscard]] std::vector<SearchResult> rankWorkspace(
     const WorkspaceSnapshot& workspace, const ParsedSearchQuery& query,
     const SearchCancellationToken& cancellation);
 
@@ -118,7 +118,7 @@ struct WorkspaceSearchBatch {
     bool cancelled = false;
 };
 
-[[nodiscard]] WorkspaceSearchBatch evaluate_workspace_search(
+[[nodiscard]] WorkspaceSearchBatch evaluateWorkspaceSearch(
     const SearchWorkspaceSource& source,
     const WorkspaceSearchRequest& request);
 
@@ -141,9 +141,9 @@ struct NavigationTransition {
                            const NavigationTransition&) = default;
 };
 
-[[nodiscard]] std::optional<NavigationTarget> navigation_target(
+[[nodiscard]] std::optional<NavigationTarget> navigationTarget(
     const SearchResult& result);
-[[nodiscard]] std::optional<NavigationTarget> goto_line(
+[[nodiscard]] std::optional<NavigationTarget> gotoLine(
     std::string path, const ParsedSearchQuery& query);
 
 class NavigationHistory {
@@ -188,27 +188,27 @@ public:
     SearchController(const SearchWorkspaceSource& workspace,
                      SearchCommandSource& commands) noexcept;
 
-    void open_palette(Revision revision);
-    void close_palette(Revision revision);
-    void update_palette_query(std::string query, Revision revision);
-    void select_next();
-    void select_previous();
-    [[nodiscard]] PaletteExecutionResult execute_palette();
+    void openPalette(Revision revision);
+    void closePalette(Revision revision);
+    void updatePaletteQuery(std::string query, Revision revision);
+    void selectNext();
+    void selectPrevious();
+    [[nodiscard]] PaletteExecutionResult executePalette();
 
-    [[nodiscard]] WorkspaceSearchRequest begin_workspace_search(
+    [[nodiscard]] WorkspaceSearchRequest beginWorkspaceSearch(
         std::string query, Revision source_revision);
     [[nodiscard]] WorkspaceSearchBatch evaluate(
         const WorkspaceSearchRequest& request) const;
-    void cancel_workspace_search() noexcept;
+    void cancelWorkspaceSearch() noexcept;
     [[nodiscard]] SearchPublishResult publish(
         const WorkspaceSearchBatch& batch, Revision current_revision);
 
-    [[nodiscard]] const SearchViewState& view_state() const noexcept {
+    [[nodiscard]] const SearchViewState& viewState() const noexcept {
         return state_;
     }
 
 private:
-    void rank_palette();
+    void rankPalette();
 
     const SearchWorkspaceSource& workspace_;
     SearchCommandSource& commands_;
@@ -248,7 +248,7 @@ private:
     }};
 };
 
-[[nodiscard]] SearchCommandSet search_command_set();
+[[nodiscard]] SearchCommandSet searchCommandSet();
 
 struct SearchDelta {
     Revision base_revision{0};
@@ -257,7 +257,7 @@ struct SearchDelta {
     friend bool operator==(const SearchDelta&, const SearchDelta&) = default;
 };
 
-[[nodiscard]] SearchDelta derive_search_delta(const SearchViewState& base,
+[[nodiscard]] SearchDelta deriveSearchDelta(const SearchViewState& base,
                                               const SearchViewState& target);
 
 enum class SearchReplayError : std::uint8_t {
@@ -272,7 +272,7 @@ struct SearchReplayResult {
     [[nodiscard]] bool accepted() const noexcept { return state.has_value(); }
 };
 
-[[nodiscard]] SearchReplayResult replay_search_delta(
+[[nodiscard]] SearchReplayResult replaySearchDelta(
     const SearchViewState& base, const SearchDelta& delta);
 
 } // namespace ssg

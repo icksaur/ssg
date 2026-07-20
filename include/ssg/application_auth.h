@@ -25,15 +25,15 @@ public:
     [[nodiscard]] std::string_view value() const noexcept { return value_; }
 
 private:
-    friend BearerCredential generate_bearer_credential(SecureRandomSource&);
+    friend BearerCredential generateBearerCredential(SecureRandomSource&);
     explicit BearerCredential(std::string value) : value_{std::move(value)} {}
 
     std::string value_;
 };
 
-[[nodiscard]] BearerCredential generate_bearer_credential(
+[[nodiscard]] BearerCredential generateBearerCredential(
     SecureRandomSource& source);
-[[nodiscard]] BearerCredential generate_bearer_credential();
+[[nodiscard]] BearerCredential generateBearerCredential();
 
 class ApplicationAuthentication {
 public:

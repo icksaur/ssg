@@ -18,7 +18,7 @@ bool overlaps(const Rect& a, const Rect& b) {
            a.y < b.y + b.height && b.y < a.y + a.height;
 }
 
-void assert_rect(Rect actual, Rect expected) {
+void assertRect(Rect actual, Rect expected) {
     ASSERT_EQ(actual, expected);
 }
 
@@ -47,19 +47,19 @@ ShellLayoutRequest request(int columns, int rows) {
     return value;
 }
 
-TEST(hand_authored_geometry_goldens) {
+TEST(handAuthoredGeometryGoldens) {
     ShellState state;
 
     auto minimum = request(20, 4);
-    state.toggle_panel();
-    auto minimum_result = compute_shell_layout(minimum, state);
+    state.togglePanel();
+    auto minimum_result = computeShellLayout(minimum, state);
     ASSERT_TRUE(minimum_result.accepted());
     ASSERT_FALSE(minimum_result.view->panel.has_value());
-    assert_rect(*minimum_result.view->header, {0, 0, 20, 1});
-    assert_rect(*minimum_result.view->tab_bar, {0, 1, 20, 1});
-    assert_rect(minimum_result.view->panes[0].content, {0, 2, 19, 1});
-    assert_rect(minimum_result.view->panes[0].scrollbar, {19, 2, 1, 1});
-    assert_rect(*minimum_result.view->footer, {0, 3, 20, 1});
+    assertRect(*minimum_result.view->header, {0, 0, 20, 1});
+    assertRect(*minimum_result.view->tab_bar, {0, 1, 20, 1});
+    assertRect(minimum_result.view->panes[0].content, {0, 2, 19, 1});
+    assertRect(minimum_result.view->panes[0].scrollbar, {19, 2, 1, 1});
+    assertRect(*minimum_result.view->footer, {0, 3, 20, 1});
     const auto has_header_field = [&](std::string_view id) {
         return std::ranges::any_of(
             minimum_result.view->accessibility_nodes, [&](const auto& node) {
@@ -73,100 +73,100 @@ TEST(hand_authored_geometry_goldens) {
 
     auto wide = request(80, 12);
     wide.reserved_prompt_rows = 2;
-    auto wide_result = compute_shell_layout(wide, state);
+    auto wide_result = computeShellLayout(wide, state);
     ASSERT_TRUE(wide_result.accepted());
-    assert_rect(*wide_result.view->header, {0, 0, 80, 1});
-    assert_rect(*wide_result.view->panel, {0, 1, 24, 10});
-    assert_rect(*wide_result.view->tab_bar, {24, 1, 56, 1});
-    assert_rect(*wide_result.view->prompt, {24, 2, 56, 2});
-    assert_rect(wide_result.view->panes[0].content, {24, 4, 55, 7});
-    assert_rect(wide_result.view->panes[0].scrollbar, {79, 4, 1, 7});
-    assert_rect(*wide_result.view->footer, {0, 11, 80, 1});
+    assertRect(*wide_result.view->header, {0, 0, 80, 1});
+    assertRect(*wide_result.view->panel, {0, 1, 24, 10});
+    assertRect(*wide_result.view->tab_bar, {24, 1, 56, 1});
+    assertRect(*wide_result.view->prompt, {24, 2, 56, 2});
+    assertRect(wide_result.view->panes[0].content, {24, 4, 55, 7});
+    assertRect(wide_result.view->panes[0].scrollbar, {79, 4, 1, 7});
+    assertRect(*wide_result.view->footer, {0, 11, 80, 1});
 
     auto focused = request(20, 4);
-    state.toggle_distraction_free();
-    auto focused_result = compute_shell_layout(focused, state);
+    state.toggleDistractionFree();
+    auto focused_result = computeShellLayout(focused, state);
     ASSERT_TRUE(focused_result.accepted());
     ASSERT_FALSE(focused_result.view->header.has_value());
     ASSERT_FALSE(focused_result.view->footer.has_value());
     ASSERT_FALSE(focused_result.view->tab_bar.has_value());
-    assert_rect(focused_result.view->panes[0].content, {0, 0, 19, 4});
-    assert_rect(focused_result.view->panes[0].scrollbar, {19, 0, 1, 4});
+    assertRect(focused_result.view->panes[0].content, {0, 0, 19, 4});
+    assertRect(focused_result.view->panes[0].scrollbar, {19, 0, 1, 4});
 }
 
-TEST(viewport_and_prompt_errors_are_typed) {
+TEST(viewportAndPromptErrorsAreTyped) {
     ShellState state;
-    auto narrow = compute_shell_layout(request(19, 4), state);
+    auto narrow = computeShellLayout(request(19, 4), state);
     ASSERT_FALSE(narrow.accepted());
     ASSERT_EQ(narrow.error->code, ShellLayoutErrorCode::ViewportTooSmall);
     ASSERT_FALSE(narrow.view.has_value());
 
-    auto short_view = compute_shell_layout(request(20, 3), state);
+    auto short_view = computeShellLayout(request(20, 3), state);
     ASSERT_FALSE(short_view.accepted());
     ASSERT_EQ(short_view.error->code, ShellLayoutErrorCode::ViewportTooSmall);
 
     auto invalid_prompt = request(80, 12);
     invalid_prompt.reserved_prompt_rows = 4;
-    auto invalid = compute_shell_layout(invalid_prompt, state);
+    auto invalid = computeShellLayout(invalid_prompt, state);
     ASSERT_FALSE(invalid.accepted());
     ASSERT_EQ(invalid.error->code, ShellLayoutErrorCode::InvalidPromptRows);
 
     auto no_room = request(20, 4);
     no_room.reserved_prompt_rows = 2;
-    auto no_room_result = compute_shell_layout(no_room, state);
+    auto no_room_result = computeShellLayout(no_room, state);
     ASSERT_FALSE(no_room_result.accepted());
     ASSERT_EQ(no_room_result.error->code, ShellLayoutErrorCode::ViewportTooSmall);
 }
 
-TEST(pane_commands_preserve_topology_and_order) {
+TEST(paneCommandsPreserveTopologyAndOrder) {
     ShellState state;
-    const auto first = state.active_pane();
-    const auto second = state.split_active(SplitAxis::Vertical);
-    const auto third = state.split_active(SplitAxis::Horizontal);
-    ASSERT_EQ(state.pane_count(), std::size_t{3});
-    ASSERT_EQ(state.active_pane(), third);
+    const auto first = state.activePane();
+    const auto second = state.splitActive(SplitAxis::Vertical);
+    const auto third = state.splitActive(SplitAxis::Horizontal);
+    ASSERT_EQ(state.paneCount(), std::size_t{3});
+    ASSERT_EQ(state.activePane(), third);
 
-    state.previous_pane();
-    ASSERT_EQ(state.active_pane(), second);
-    state.previous_pane();
-    ASSERT_EQ(state.active_pane(), first);
-    state.next_pane();
-    ASSERT_EQ(state.active_pane(), second);
+    state.previousPane();
+    ASSERT_EQ(state.activePane(), second);
+    state.previousPane();
+    ASSERT_EQ(state.activePane(), first);
+    state.nextPane();
+    ASSERT_EQ(state.activePane(), second);
 
-    auto view = compute_shell_layout(request(80, 20), state);
+    auto view = computeShellLayout(request(80, 20), state);
     ASSERT_TRUE(view.accepted());
     ASSERT_EQ(view.view->panes.size(), std::size_t{3});
-    ASSERT_TRUE(state.focus_pane(PaneDirection::Down, *view.view));
-    ASSERT_NE(state.active_pane(), first);
-    ASSERT_TRUE(state.close_active_pane());
-    ASSERT_EQ(state.pane_count(), std::size_t{2});
-    ASSERT_TRUE(state.close_active_pane());
-    ASSERT_FALSE(state.close_active_pane());
+    ASSERT_TRUE(state.focusPane(PaneDirection::Down, *view.view));
+    ASSERT_NE(state.activePane(), first);
+    ASSERT_TRUE(state.closeActivePane());
+    ASSERT_EQ(state.paneCount(), std::size_t{2});
+    ASSERT_TRUE(state.closeActivePane());
+    ASSERT_FALSE(state.closeActivePane());
 }
 
-TEST(panel_commands_preserve_provider_state_when_hidden) {
+TEST(panelCommandsPreserveProviderStateWhenHidden) {
     ShellState state({"Files", "Git", "Symbols"});
-    ASSERT_FALSE(state.panel_requested());
-    state.toggle_panel();
-    ASSERT_TRUE(state.panel_requested());
-    ASSERT_TRUE(state.focus_panel());
-    ASSERT_EQ(state.active_panel_provider(), std::string_view{"Files"});
-    state.next_panel_provider();
-    ASSERT_EQ(state.active_panel_provider(), std::string_view{"Git"});
-    state.previous_panel_provider();
-    ASSERT_EQ(state.active_panel_provider(), std::string_view{"Files"});
-    state.toggle_panel();
-    ASSERT_FALSE(state.panel_requested());
-    ASSERT_FALSE(state.panel_focused());
-    ASSERT_EQ(state.active_panel_provider(), std::string_view{"Files"});
-    state.toggle_panel();
-    ASSERT_TRUE(state.focus_panel());
-    state.toggle_distraction_free();
-    state.toggle_distraction_free();
-    ASSERT_TRUE(state.panel_focused());
+    ASSERT_FALSE(state.panelRequested());
+    state.togglePanel();
+    ASSERT_TRUE(state.panelRequested());
+    ASSERT_TRUE(state.focusPanel());
+    ASSERT_EQ(state.activePanelProvider(), std::string_view{"Files"});
+    state.nextPanelProvider();
+    ASSERT_EQ(state.activePanelProvider(), std::string_view{"Git"});
+    state.previousPanelProvider();
+    ASSERT_EQ(state.activePanelProvider(), std::string_view{"Files"});
+    state.togglePanel();
+    ASSERT_FALSE(state.panelRequested());
+    ASSERT_FALSE(state.panelFocused());
+    ASSERT_EQ(state.activePanelProvider(), std::string_view{"Files"});
+    state.togglePanel();
+    ASSERT_TRUE(state.focusPanel());
+    state.toggleDistractionFree();
+    state.toggleDistractionFree();
+    ASSERT_TRUE(state.panelFocused());
 }
 
-TEST(exact_owned_command_set) {
+TEST(exactOwnedCommandSet) {
     constexpr std::array expected{
         std::string_view{"pane.split_horizontal"},
         std::string_view{"pane.split_vertical"},
@@ -190,13 +190,13 @@ TEST(exact_owned_command_set) {
     }
 }
 
-TEST(accessibility_nodes_have_labels_and_roles) {
+TEST(accessibilityNodesHaveLabelsAndRoles) {
     ShellState state({"Files"});
     auto input = request(80, 12);
-    state.toggle_panel();
+    state.togglePanel();
     input.reserved_prompt_rows = 1;
     input.empty_state = true;
-    auto result = compute_shell_layout(input, state);
+    auto result = computeShellLayout(input, state);
     ASSERT_TRUE(result.accepted());
 
     const auto& nodes = result.view->accessibility_nodes;
@@ -247,19 +247,19 @@ TEST(accessibility_nodes_have_labels_and_roles) {
     ASSERT_EQ(actual.str(), expected);
 }
 
-TEST(non_overlap_and_cardinality_properties) {
+TEST(nonOverlapAndCardinalityProperties) {
     for (int columns = 20; columns <= 100; ++columns) {
         for (int rows = 4; rows <= 20; ++rows) {
             ShellState state;
-            state.split_active(SplitAxis::Vertical);
-            state.split_active(SplitAxis::Horizontal);
-            state.toggle_panel();
+            state.splitActive(SplitAxis::Vertical);
+            state.splitActive(SplitAxis::Horizontal);
+            state.togglePanel();
             auto input = request(columns, rows);
-            auto result = compute_shell_layout(input, state);
+            auto result = computeShellLayout(input, state);
             ASSERT_TRUE(result.accepted());
             const auto& view = *result.view;
             ASSERT_TRUE(view.panes.size() == 1 || view.panes.size() == 3);
-            ASSERT_EQ(view.scrollbar_count(), view.panes.size());
+            ASSERT_EQ(view.scrollbarCount(), view.panes.size());
 
             std::vector<Rect> leaves;
             leaves.push_back(*view.header);
@@ -282,7 +282,7 @@ TEST(non_overlap_and_cardinality_properties) {
     }
 }
 
-TEST(status_field_manifest_has_exact_order_and_labels) {
+TEST(statusFieldManifestHasExactOrderAndLabels) {
     std::ifstream input(std::string{SSG_SOURCE_DIR} + "/data/ui/status_fields.json");
     const std::string json((std::istreambuf_iterator<char>(input)),
                            std::istreambuf_iterator<char>());
@@ -303,10 +303,10 @@ TEST(status_field_manifest_has_exact_order_and_labels) {
 
 } // namespace
 
-TEST(accessibility_leaf_nodes_carry_display_content) {
+TEST(accessibilityLeafNodesCarryDisplayContent) {
     ShellState state;
-    state.toggle_panel();
-    auto result = compute_shell_layout(request(80, 12), state);
+    state.togglePanel();
+    auto result = computeShellLayout(request(80, 12), state);
     ASSERT_TRUE(result.accepted());
     const auto find = [&](ShellNodeKind kind,
                           std::string_view id) -> const AccessibilityNode* {
@@ -330,11 +330,11 @@ TEST(accessibility_leaf_nodes_carry_display_content) {
     if (header) ASSERT_TRUE(header->content.empty());
 }
 
-TEST(dirty_tab_content_shows_marker) {
+TEST(dirtyTabContentShowsMarker) {
     auto value = request(80, 12);
     value.tabs = {{"a.cpp", "a.cpp tab", true, true}};
     ShellState state;
-    auto result = compute_shell_layout(value, state);
+    auto result = computeShellLayout(value, state);
     ASSERT_TRUE(result.accepted());
     const AccessibilityNode* tab = nullptr;
     for (const auto& node : result.view->accessibility_nodes) {
@@ -344,56 +344,56 @@ TEST(dirty_tab_content_shows_marker) {
     if (tab) ASSERT_EQ(tab->content, std::string{"a.cpp *"});
 }
 
-TEST(focus_transitions_follow_the_navigation_table) {
+TEST(focusTransitionsFollowTheNavigationTable) {
     ShellState state{{"filesystem"}};
     ASSERT_TRUE(state.focus() == FocusTarget::Editor);
     // The panel cannot be focused while hidden.
-    ASSERT_FALSE(state.focus_panel());
+    ASSERT_FALSE(state.focusPanel());
     ASSERT_TRUE(state.focus() == FocusTarget::Editor);
     // Showing the panel focuses it (no explicit focus_panel needed).
-    state.toggle_panel();  // show
+    state.togglePanel();  // show
     ASSERT_TRUE(state.focus() == FocusTarget::Panel);
-    ASSERT_TRUE(state.panel_focused());
+    ASSERT_TRUE(state.panelFocused());
     // A prompt pushes the current focus and restores it on close.
-    state.enter_prompt_focus();
+    state.enterPromptFocus();
     ASSERT_TRUE(state.focus() == FocusTarget::Prompt);
-    state.exit_prompt_focus();
+    state.exitPromptFocus();
     ASSERT_TRUE(state.focus() == FocusTarget::Panel);
     // Hiding the focused panel restores the focus present when it was shown (the
     // editor here).
-    state.toggle_panel();  // hide
+    state.togglePanel();  // hide
     ASSERT_TRUE(state.focus() == FocusTarget::Editor);
     // A prompt over a panel that is hidden before close restores to editor.
-    state.toggle_panel();  // show (focuses the panel)
+    state.togglePanel();  // show (focuses the panel)
     ASSERT_TRUE(state.focus() == FocusTarget::Panel);
-    state.enter_prompt_focus();
-    state.toggle_panel();  // hide the panel while the prompt is focused
-    state.exit_prompt_focus();
+    state.enterPromptFocus();
+    state.togglePanel();  // hide the panel while the prompt is focused
+    state.exitPromptFocus();
     ASSERT_TRUE(state.focus() == FocusTarget::Editor);
 }
 
-TEST(hiding_an_unfocused_panel_leaves_focus_untouched) {
+TEST(hidingAnUnfocusedPanelLeavesFocusUntouched) {
     ShellState state{{"filesystem"}};
     // Show (focuses the panel), then move focus to the editor while the panel is
     // still shown; hiding it must NOT yank focus (it isn't the focused surface).
-    state.toggle_panel();  // show -> panel focused
+    state.togglePanel();  // show -> panel focused
     ASSERT_TRUE(state.focus() == FocusTarget::Panel);
-    state.focus_editor();
+    state.focusEditor();
     ASSERT_TRUE(state.focus() == FocusTarget::Editor);
-    state.toggle_panel();  // hide while editor-focused
+    state.togglePanel();  // hide while editor-focused
     ASSERT_TRUE(state.focus() == FocusTarget::Editor);
     // Re-showing focuses the panel again; hiding restores the editor.
-    state.toggle_panel();  // show
+    state.togglePanel();  // show
     ASSERT_TRUE(state.focus() == FocusTarget::Panel);
-    state.toggle_panel();  // hide
+    state.togglePanel();  // hide
     ASSERT_TRUE(state.focus() == FocusTarget::Editor);
 }
 
-TEST(leader_hint_renders_in_the_header_when_present) {
+TEST(leaderHintRendersInTheHeaderWhenPresent) {
     auto value = request(80, 12);
     value.leader_hint = "leader: Escape";
     ShellState state;
-    auto result = compute_shell_layout(value, state);
+    auto result = computeShellLayout(value, state);
     ASSERT_TRUE(result.accepted());
     const AccessibilityNode* leader = nullptr;
     for (const auto& node : result.view->accessibility_nodes) {
@@ -408,7 +408,7 @@ TEST(leader_hint_renders_in_the_header_when_present) {
         ASSERT_EQ(leader->rect.y, 0);
     }
     // No hint node when the request carries no leader sequence.
-    auto plain = compute_shell_layout(request(80, 12), state);
+    auto plain = computeShellLayout(request(80, 12), state);
     ASSERT_TRUE(plain.accepted());
     const bool has_leader = std::ranges::any_of(
         plain.view->accessibility_nodes,
@@ -417,19 +417,19 @@ TEST(leader_hint_renders_in_the_header_when_present) {
 }
 
 int main() {
-    RUN(hand_authored_geometry_goldens);
-    RUN(viewport_and_prompt_errors_are_typed);
-    RUN(pane_commands_preserve_topology_and_order);
-    RUN(panel_commands_preserve_provider_state_when_hidden);
-    RUN(exact_owned_command_set);
-    RUN(accessibility_nodes_have_labels_and_roles);
-    RUN(accessibility_leaf_nodes_carry_display_content);
-    RUN(dirty_tab_content_shows_marker);
-    RUN(focus_transitions_follow_the_navigation_table);
-    RUN(hiding_an_unfocused_panel_leaves_focus_untouched);
-    RUN(leader_hint_renders_in_the_header_when_present);
-    RUN(non_overlap_and_cardinality_properties);
-    RUN(status_field_manifest_has_exact_order_and_labels);
+    RUN(handAuthoredGeometryGoldens);
+    RUN(viewportAndPromptErrorsAreTyped);
+    RUN(paneCommandsPreserveTopologyAndOrder);
+    RUN(panelCommandsPreserveProviderStateWhenHidden);
+    RUN(exactOwnedCommandSet);
+    RUN(accessibilityNodesHaveLabelsAndRoles);
+    RUN(accessibilityLeafNodesCarryDisplayContent);
+    RUN(dirtyTabContentShowsMarker);
+    RUN(focusTransitionsFollowTheNavigationTable);
+    RUN(hidingAnUnfocusedPanelLeavesFocusUntouched);
+    RUN(leaderHintRendersInTheHeaderWhenPresent);
+    RUN(nonOverlapAndCardinalityProperties);
+    RUN(statusFieldManifestHasExactOrderAndLabels);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << '\n';
     return failed == 0 ? 0 : 1;
 }

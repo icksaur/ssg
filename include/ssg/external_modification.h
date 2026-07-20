@@ -50,7 +50,7 @@ private:
 };
 
 [[nodiscard]] ExternalModificationCommandSet
-external_modification_command_set();
+externalModificationCommandSet();
 
 struct ExternalDocumentView {
     DiffFileId id;
@@ -94,10 +94,10 @@ struct ExternalDeltaReplayResult {
     [[nodiscard]] bool accepted() const noexcept { return state.has_value(); }
 };
 
-[[nodiscard]] ExternalModificationDelta derive_external_modification_delta(
+[[nodiscard]] ExternalModificationDelta deriveExternalModificationDelta(
     const ExternalModificationViewState& base,
     const ExternalModificationViewState& target);
-[[nodiscard]] ExternalDeltaReplayResult replay_external_modification_delta(
+[[nodiscard]] ExternalDeltaReplayResult replayExternalModificationDelta(
     const ExternalModificationViewState& base,
     const ExternalModificationDelta& delta);
 
@@ -147,14 +147,14 @@ public:
     ExternalModificationFlow& operator=(const ExternalModificationFlow&) =
         delete;
 
-    [[nodiscard]] ExternalModificationResult process_event(
+    [[nodiscard]] ExternalModificationResult processEvent(
         ExternalEventInput input,
         std::optional<JournalDocument>& document);
     [[nodiscard]] ExternalModificationResult reload(
         const DiffFileId& id, std::optional<JournalDocument>& document);
-    [[nodiscard]] ExternalModificationResult keep_buffer(const DiffFileId& id);
-    [[nodiscard]] ExternalOpenDiffResult open_diff(const DiffFileId& id) const;
-    [[nodiscard]] ExternalModificationViewState view_state() const;
+    [[nodiscard]] ExternalModificationResult keepBuffer(const DiffFileId& id);
+    [[nodiscard]] ExternalOpenDiffResult openDiff(const DiffFileId& id) const;
+    [[nodiscard]] ExternalModificationViewState viewState() const;
 
 private:
     class Impl;

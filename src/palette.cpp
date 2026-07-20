@@ -17,7 +17,7 @@ char folded(char value) {
 // scorer: contiguous runs and word-boundary hits are rewarded, exact-case hits
 // nudged, and longer candidates lightly penalized.  std::nullopt means the
 // query is not a subsequence of the candidate.
-std::optional<int> fuzzy_score(std::string_view candidate,
+std::optional<int> fuzzyScore(std::string_view candidate,
                                std::string_view query) {
     if (query.empty()) return 0;
     int score = 0;
@@ -48,7 +48,7 @@ std::optional<int> fuzzy_score(std::string_view candidate,
 
 }  // namespace
 
-std::vector<std::size_t> palette_rank(
+std::vector<std::size_t> paletteRank(
     std::vector<PaletteCandidate> const& candidates, std::string_view query) {
     struct Ranked {
         std::size_t index;
@@ -58,8 +58,8 @@ std::vector<std::size_t> palette_rank(
     ranked.reserve(candidates.size());
     for (std::size_t index = 0; index < candidates.size(); ++index) {
         auto const& candidate = candidates[index];
-        auto const label_score = fuzzy_score(candidate.label, query);
-        auto const id_score = fuzzy_score(candidate.id, query);
+        auto const label_score = fuzzyScore(candidate.label, query);
+        auto const id_score = fuzzyScore(candidate.id, query);
         if (!label_score && !id_score) continue;
         ranked.push_back(
             {index,
@@ -79,7 +79,7 @@ std::vector<std::size_t> palette_rank(
     return order;
 }
 
-std::string palette_ghost(std::string_view top_label, std::string_view query) {
+std::string paletteGhost(std::string_view top_label, std::string_view query) {
     if (query.empty() || query.size() >= top_label.size()) return {};
     for (std::size_t index = 0; index < query.size(); ++index) {
         if (folded(top_label[index]) != folded(query[index])) return {};
@@ -87,14 +87,14 @@ std::string palette_ghost(std::string_view top_label, std::string_view query) {
     return std::string{top_label.substr(query.size())};
 }
 
-PaletteReport derive_palette_report(
+PaletteReport derivePaletteReport(
     std::vector<PaletteCandidate> const& candidates, PaletteWindowState& window) {
     PaletteReport report;
-    auto const order = palette_rank(candidates, window.query);
+    auto const order = paletteRank(candidates, window.query);
     report.query = window.query;
     if (!order.empty()) {
         report.ghost =
-            palette_ghost(candidates[order.front()].label, window.query);
+            paletteGhost(candidates[order.front()].label, window.query);
     }
     // Clamp the selection into the (possibly shrunken) ranked set; only when the
     // clamp actually moves it do we re-center the window on it, so a free wheel
@@ -108,7 +108,7 @@ PaletteReport derive_palette_report(
         order.empty() ? std::nullopt
                       : std::optional<std::uint32_t>{
                             static_cast<std::uint32_t>(window.selected)};
-    auto const scroll = compute_list_scroll_view(
+    auto const scroll = computeListScrollView(
         static_cast<std::uint32_t>(order.size()), window.pane_rows,
         window.first_visible, selected,
         /*keep_selection_visible=*/selection_clamped);

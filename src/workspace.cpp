@@ -26,7 +26,7 @@ WorkspaceResult failure(WorkspaceError error, std::string message) {
     return result;
 }
 
-std::vector<std::uint8_t> read_file(const std::filesystem::path& path) {
+std::vector<std::uint8_t> readFile(const std::filesystem::path& path) {
     std::ifstream stream(path, std::ios::binary);
     if (!stream) {
         throw std::runtime_error("failed to open file for reading: " +
@@ -53,17 +53,17 @@ std::vector<std::uint8_t> read_file(const std::filesystem::path& path) {
     return bytes;
 }
 
-std::span<const std::byte> as_bytes(
+std::span<const std::byte> asBytes(
     const std::vector<std::uint8_t>& bytes) noexcept {
     return {reinterpret_cast<const std::byte*>(bytes.data()), bytes.size()};
 }
 
-std::span<const std::uint8_t> as_unsigned_bytes(
+std::span<const std::uint8_t> asUnsignedBytes(
     const std::vector<std::uint8_t>& bytes) noexcept {
     return {bytes.data(), bytes.size()};
 }
 
-std::vector<std::byte> to_bytes(
+std::vector<std::byte> toBytes(
     const std::vector<std::uint8_t>& bytes) {
     std::vector<std::byte> result(bytes.size());
     std::transform(bytes.begin(), bytes.end(), result.begin(),
@@ -73,12 +73,12 @@ std::vector<std::byte> to_bytes(
     return result;
 }
 
-bool contains_nul(std::span<const std::uint8_t> bytes) {
+bool containsNul(std::span<const std::uint8_t> bytes) {
     return std::find(bytes.begin(), bytes.end(), std::uint8_t{0}) !=
            bytes.end();
 }
 
-bool is_beneath(const std::filesystem::path& root,
+bool isBeneath(const std::filesystem::path& root,
                 const std::filesystem::path& candidate) {
     auto root_it = root.begin();
     auto candidate_it = candidate.begin();
@@ -90,7 +90,7 @@ bool is_beneath(const std::filesystem::path& root,
     return true;
 }
 
-PathSyntax native_syntax() noexcept {
+PathSyntax nativeSyntax() noexcept {
 #ifdef _WIN32
     return PathSyntax::windows;
 #else
@@ -98,11 +98,11 @@ PathSyntax native_syntax() noexcept {
 #endif
 }
 
-std::string normalized_relative(std::string_view path) {
+std::string normalizedRelative(std::string_view path) {
     return std::filesystem::path{path}.lexically_normal().generic_string();
 }
 
-LineTerminator default_terminator(const TextEncodingStatus& status) {
+LineTerminator defaultTerminator(const TextEncodingStatus& status) {
     switch (status.line_ending) {
         case LineEnding::Crlf:
             return LineTerminator::Crlf;
@@ -115,7 +115,7 @@ LineTerminator default_terminator(const TextEncodingStatus& status) {
     return LineTerminator::Lf;
 }
 
-LineTerminator line_ending_terminator(LineEnding line_ending) {
+LineTerminator lineEndingTerminator(LineEnding line_ending) {
     switch (line_ending) {
         case LineEnding::Crlf:
             return LineTerminator::Crlf;
@@ -128,7 +128,7 @@ LineTerminator line_ending_terminator(LineEnding line_ending) {
     return LineTerminator::Lf;
 }
 
-DecodedText text_for_save(const DecodedText& original,
+DecodedText textForSave(const DecodedText& original,
                           std::string current_text) {
     if (current_text == original.utf8) {
         return original;
@@ -142,7 +142,7 @@ DecodedText text_for_save(const DecodedText& original,
         if (value != '\n') {
             continue;
         }
-        auto terminator = default_terminator(result.status);
+        auto terminator = defaultTerminator(result.status);
         if (line < original.line_terminators.size() &&
             original.line_terminators[line] != LineTerminator::None) {
             terminator = original.line_terminators[line];
@@ -158,7 +158,7 @@ DecodedText text_for_save(const DecodedText& original,
     return result;
 }
 
-void apply_terminator_edits(DecodedText& decoded,
+void applyTerminatorEdits(DecodedText& decoded,
                             const EditTransaction& transaction) {
     struct AnnotatedByte {
         char value;
@@ -174,7 +174,7 @@ void apply_terminator_edits(DecodedText& decoded,
         }
         bytes.push_back({value, terminator});
     }
-    const auto inserted_terminator = default_terminator(decoded.status);
+    const auto inserted_terminator = defaultTerminator(decoded.status);
     std::vector<const TextEdit*> ordered;
     ordered.reserve(transaction.edits.size());
     for (const auto& edit : transaction.edits) {
@@ -238,7 +238,7 @@ void apply_terminator_edits(DecodedText& decoded,
     }
 }
 
-std::string sanitize_label(std::string_view suggested) {
+std::string sanitizeLabel(std::string_view suggested) {
     auto label = std::filesystem::path{suggested}.filename().string();
     label.erase(std::remove_if(label.begin(), label.end(), [](char value) {
                     const auto byte = static_cast<unsigned char>(value);
@@ -314,13 +314,13 @@ public:
         return const_cast<Impl*>(this)->find(id);
     }
 
-    Entry* find_path(std::string_view path) {
+    Entry* findPath(std::string_view path) {
         const auto found = std::find_if(entries.begin(), entries.end(),
                                         [path](const Entry& entry) {
                                             return entry.key.kind() ==
                                                        JournalDocumentKeyKind::
                                                            Saved &&
-                                                   entry.key.saved_path() ==
+                                                   entry.key.savedPath() ==
                                                        path;
                                         });
         return found == entries.end() ? nullptr : &*found;
@@ -333,9 +333,9 @@ public:
         const auto traverses = std::find(supplied.begin(), supplied.end(),
                                          std::filesystem::path{".."}) !=
                                 supplied.end();
-        const auto normalized = normalized_relative(raw);
+        const auto normalized = normalizedRelative(raw);
         const auto validation =
-            validate_workspace_relative_path(normalized, native_syntax());
+            validateWorkspaceRelativePath(normalized, nativeSyntax());
         if (supplied.is_absolute() || traverses || !validation.valid()) {
             error = failure(WorkspaceError::InvalidPath,
                             "path must be workspace-relative and contain no "
@@ -354,7 +354,7 @@ public:
             error = failure(WorkspaceError::IoFailed, code.message());
             return std::nullopt;
         }
-        if (!is_beneath(root, candidate)) {
+        if (!isBeneath(root, candidate)) {
             error = failure(WorkspaceError::PathOutsideWorkspace,
                             "path resolves outside the workspace");
             return std::nullopt;
@@ -366,7 +366,7 @@ public:
         return candidate;
     }
 
-    void touch_recent(std::string path) {
+    void touchRecent(std::string path) {
         recent.erase(std::remove(recent.begin(), recent.end(), path),
                      recent.end());
         recent.insert(recent.begin(), std::move(path));
@@ -375,7 +375,7 @@ public:
         }
     }
 
-    WorkspaceResult add_bytes(std::vector<std::uint8_t> bytes,
+    WorkspaceResult addBytes(std::vector<std::uint8_t> bytes,
                               JournalDocumentKey key,
                               std::string label,
                               bool dirty) {
@@ -383,14 +383,14 @@ public:
         bool has_nul;
         {
             OpenPhaseTimer timer{OpenPhase::NulScan};
-            has_nul = contains_nul(as_unsigned_bytes(bytes));
+            has_nul = containsNul(asUnsignedBytes(bytes));
         }
         if (has_nul) {
             entries.push_back({id, std::move(key), std::move(label),
                                FileContentKind::Binary, {}, std::move(bytes),
                                Document{"", DocumentMode::ReadOnly}, {}, {}});
         } else {
-            auto decoded = decode_text(as_unsigned_bytes(bytes));
+            auto decoded = decodeText(asUnsignedBytes(bytes));
             if (!decoded.accepted()) {
                 entries.push_back(
                     {id, std::move(key), std::move(label),
@@ -417,15 +417,15 @@ public:
         return result;
     }
 
-    WorkspaceResult save_to(Entry& entry, std::string path,
+    WorkspaceResult saveTo(Entry& entry, std::string path,
                             const std::filesystem::path& absolute) {
         if (entry.content_kind != FileContentKind::Text) {
             return failure(WorkspaceError::ReadOnly,
                            "read-only content cannot be saved");
         }
         const auto current = entry.document.snapshot().text;
-        auto decoded = text_for_save(entry.decoded, current);
-        const auto encoded = encode_text(decoded);
+        auto decoded = textForSave(entry.decoded, current);
+        const auto encoded = encodeText(decoded);
         if (!encoded.accepted()) {
             return failure(WorkspaceError::DecodeFailed,
                            encoded.error->message);
@@ -434,9 +434,9 @@ public:
             WorkspaceResult result;
             if (std::filesystem::exists(absolute)) {
                 const auto prior_persisted = entry.persisted_text;
-                const auto replacement = to_bytes(encoded.bytes);
+                const auto replacement = toBytes(encoded.bytes);
                 const auto action =
-                    recovery.overwrite_file(absolute, replacement);
+                    recovery.overwriteFile(absolute, replacement);
                 if (!action.accepted()) {
                     return failure(WorkspaceError::RecoveryFailed,
                                    action.error->message);
@@ -453,7 +453,7 @@ public:
                         std::move(state));
                 }
             } else {
-                replace_file_atomically(absolute, as_bytes(encoded.bytes));
+                replaceFileAtomically(absolute, asBytes(encoded.bytes));
             }
             entry.key = JournalDocumentKey::saved(path);
             entry.display_label =
@@ -462,7 +462,7 @@ public:
             entry.raw_bytes = encoded.bytes;
             entry.persisted_text = SharedBytes::owning(current);
             entry.persisted_status = entry.decoded.status;
-            touch_recent(std::move(path));
+            touchRecent(std::move(path));
             result.document = entry.id;
             return result;
         } catch (const std::exception& exception) {
@@ -540,16 +540,16 @@ TransactionResult Workspace::apply(
     }
     const auto result = entry->document.apply(transaction);
     if (result.accepted()) {
-        apply_terminator_edits(entry->decoded, transaction);
+        applyTerminatorEdits(entry->decoded, transaction);
     }
     return result;
 }
 
-std::vector<std::string> Workspace::recent_files() const {
+std::vector<std::string> Workspace::recentFiles() const {
     return impl_->recent;
 }
 
-WorkspaceResult Workspace::open_directory(
+WorkspaceResult Workspace::openDirectory(
     const std::filesystem::path& path) {
     std::error_code code;
     const auto canonical = std::filesystem::canonical(path, code);
@@ -570,7 +570,7 @@ WorkspaceResult Workspace::open_directory(
     return result;
 }
 
-WorkspaceResult Workspace::restore_workspace(
+WorkspaceResult Workspace::restoreWorkspace(
     WorkspaceReplacementId replacement) {
     if (!impl_->replaced_workspace ||
         impl_->replaced_workspace->id != replacement) {
@@ -584,24 +584,24 @@ WorkspaceResult Workspace::restore_workspace(
     return {};
 }
 
-WorkspaceResult Workspace::new_document(std::string_view suggested_label) {
-    return impl_->add_bytes(
+WorkspaceResult Workspace::newDocument(std::string_view suggested_label) {
+    return impl_->addBytes(
         {}, JournalDocumentKey::untitled(UntitledDocumentId::generate()),
-        suggested_label.empty() ? "Untitled" : sanitize_label(suggested_label),
+        suggested_label.empty() ? "Untitled" : sanitizeLabel(suggested_label),
         true);
 }
 
-WorkspaceResult Workspace::open_file(std::string_view raw_path) {
+WorkspaceResult Workspace::openFile(std::string_view raw_path) {
     WorkspaceResult path_error;
     const auto absolute = impl_->resolve(raw_path, true, path_error);
     if (!absolute) {
         return path_error;
     }
-    const auto path = normalized_relative(raw_path);
-    if (auto* existing = impl_->find_path(path)) {
+    const auto path = normalizedRelative(raw_path);
+    if (auto* existing = impl_->findPath(path)) {
         WorkspaceResult result;
         result.document = existing->id;
-        impl_->touch_recent(path);
+        impl_->touchRecent(path);
         return result;
     }
     if (!std::filesystem::is_regular_file(*absolute)) {
@@ -609,23 +609,23 @@ WorkspaceResult Workspace::open_file(std::string_view raw_path) {
                        "path is not a regular file");
     }
     try {
-        auto result = impl_->add_bytes(
-            read_file(*absolute), JournalDocumentKey::saved(path),
+        auto result = impl_->addBytes(
+            readFile(*absolute), JournalDocumentKey::saved(path),
             absolute->filename().string(), false);
-        impl_->touch_recent(path);
+        impl_->touchRecent(path);
         return result;
     } catch (const std::exception& exception) {
         return failure(WorkspaceError::IoFailed, exception.what());
     }
 }
 
-WorkspaceResult Workspace::open_recent(std::size_t index) {
+WorkspaceResult Workspace::openRecent(std::size_t index) {
     if (index >= impl_->recent.size()) {
         return failure(WorkspaceError::NotFound,
                        "recent-file index does not exist");
     }
     const auto path = impl_->recent[index];
-    const auto result = open_file(path);
+    const auto result = openFile(path);
     if (result.error == WorkspaceError::NotFound ||
         result.error == WorkspaceError::IoFailed) {
         impl_->recent.erase(
@@ -635,19 +635,19 @@ WorkspaceResult Workspace::open_recent(std::size_t index) {
     return result;
 }
 
-WorkspaceResult Workspace::open_dropped_content(
+WorkspaceResult Workspace::openDroppedContent(
     const InvocationPrincipal& principal,
     std::span<const std::uint8_t> bytes,
     std::string_view suggested_label) {
     if (principal.origin() == InvocationOrigin::Lua ||
-        !principal.has_capability(CapabilityId{"local_file_drop"})) {
+        !principal.hasCapability(CapabilityId{"local_file_drop"})) {
         return failure(WorkspaceError::CapabilityDenied,
                        "local file drop capability is required");
     }
-    return impl_->add_bytes(
+    return impl_->addBytes(
         {bytes.begin(), bytes.end()},
         JournalDocumentKey::untitled(UntitledDocumentId::generate()),
-        sanitize_label(suggested_label), true);
+        sanitizeLabel(suggested_label), true);
 }
 
 WorkspaceResult Workspace::save(FileDocumentId id) {
@@ -662,14 +662,14 @@ WorkspaceResult Workspace::save(FileDocumentId id) {
     }
     WorkspaceResult path_error;
     const auto absolute =
-        impl_->resolve(entry->key.saved_path(), false, path_error);
+        impl_->resolve(entry->key.savedPath(), false, path_error);
     if (!absolute) {
         return path_error;
     }
-    return impl_->save_to(*entry, entry->key.saved_path(), *absolute);
+    return impl_->saveTo(*entry, entry->key.savedPath(), *absolute);
 }
 
-WorkspaceResult Workspace::save_all() {
+WorkspaceResult Workspace::saveAll() {
     WorkspaceResult aggregate;
     const auto ids = documents();
     for (const auto id : ids) {
@@ -691,7 +691,7 @@ WorkspaceResult Workspace::save_all() {
     return aggregate;
 }
 
-WorkspaceResult Workspace::save_as(FileDocumentId id,
+WorkspaceResult Workspace::saveAs(FileDocumentId id,
                                    std::string_view raw_path) {
     auto* entry = impl_->find(id);
     if (!entry) {
@@ -703,13 +703,13 @@ WorkspaceResult Workspace::save_as(FileDocumentId id,
     if (!absolute) {
         return path_error;
     }
-    const auto path = normalized_relative(raw_path);
-    if (const auto* duplicate = impl_->find_path(path);
+    const auto path = normalizedRelative(raw_path);
+    if (const auto* duplicate = impl_->findPath(path);
         duplicate && duplicate->id != id) {
         return failure(WorkspaceError::AlreadyOpen,
                        "destination is already open");
     }
-    return impl_->save_to(*entry, path, *absolute);
+    return impl_->saveTo(*entry, path, *absolute);
 }
 
 WorkspaceResult Workspace::reload(FileDocumentId id) {
@@ -720,17 +720,17 @@ WorkspaceResult Workspace::reload(FileDocumentId id) {
     }
     WorkspaceResult path_error;
     const auto absolute =
-        impl_->resolve(entry->key.saved_path(), true, path_error);
+        impl_->resolve(entry->key.savedPath(), true, path_error);
     if (!absolute) {
         return path_error;
     }
     try {
-        const auto bytes = read_file(*absolute);
-        if (contains_nul(as_unsigned_bytes(bytes))) {
+        const auto bytes = readFile(*absolute);
+        if (containsNul(asUnsignedBytes(bytes))) {
             return failure(WorkspaceError::DecodeFailed,
                            "binary file cannot replace an editable document");
         }
-        auto decoded = decode_text(as_unsigned_bytes(bytes));
+        auto decoded = decodeText(asUnsignedBytes(bytes));
         if (!decoded.accepted()) {
             return failure(WorkspaceError::DecodeFailed,
                            decoded.error->message);
@@ -741,7 +741,7 @@ WorkspaceResult Workspace::reload(FileDocumentId id) {
         const JournalDocument replacement{
             entry->key, entry->document.mode(), false, decoded.text->utf8};
         const auto action =
-            impl_->recovery.reload_document(document_before, replacement);
+            impl_->recovery.reloadDocument(document_before, replacement);
         if (!action.accepted()) {
             return failure(WorkspaceError::RecoveryFailed,
                            action.error->message);
@@ -771,7 +771,7 @@ WorkspaceResult Workspace::reload(FileDocumentId id) {
     }
 }
 
-WorkspaceResult Workspace::reopen_with_encoding(FileDocumentId id,
+WorkspaceResult Workspace::reopenWithEncoding(FileDocumentId id,
                                                TextEncoding encoding) {
     auto* entry = impl_->find(id);
     if (!entry) {
@@ -782,11 +782,11 @@ WorkspaceResult Workspace::reopen_with_encoding(FileDocumentId id,
         return failure(WorkspaceError::ReadOnly,
                        "dirty document cannot be reopened with encoding");
     }
-    if (contains_nul(as_unsigned_bytes(entry->raw_bytes))) {
+    if (containsNul(asUnsignedBytes(entry->raw_bytes))) {
         return failure(WorkspaceError::DecodeFailed,
                        "binary file cannot be reopened with encoding");
     }
-    auto decoded = decode_text(as_unsigned_bytes(entry->raw_bytes), encoding);
+    auto decoded = decodeText(asUnsignedBytes(entry->raw_bytes), encoding);
     if (!decoded.accepted()) {
         return failure(WorkspaceError::DecodeFailed, decoded.error->message);
     }
@@ -800,7 +800,7 @@ WorkspaceResult Workspace::reopen_with_encoding(FileDocumentId id,
     return result;
 }
 
-WorkspaceResult Workspace::set_encoding(FileDocumentId id,
+WorkspaceResult Workspace::setEncoding(FileDocumentId id,
                                        TextEncoding encoding) {
     auto* entry = impl_->find(id);
     if (!entry) {
@@ -826,7 +826,7 @@ WorkspaceResult Workspace::set_encoding(FileDocumentId id,
     return result;
 }
 
-WorkspaceResult Workspace::set_line_ending(FileDocumentId id,
+WorkspaceResult Workspace::setLineEnding(FileDocumentId id,
                                           LineEnding line_ending) {
     auto* entry = impl_->find(id);
     if (!entry) {
@@ -841,7 +841,7 @@ WorkspaceResult Workspace::set_line_ending(FileDocumentId id,
         return failure(WorkspaceError::DecodeFailed,
                        "line ending must be lf, crlf, or cr");
     }
-    const auto terminator = line_ending_terminator(line_ending);
+    const auto terminator = lineEndingTerminator(line_ending);
     for (auto& stored : entry->decoded.line_terminators) {
         if (stored != LineTerminator::None) stored = terminator;
     }
@@ -851,7 +851,7 @@ WorkspaceResult Workspace::set_line_ending(FileDocumentId id,
     return result;
 }
 
-WorkspaceResult Workspace::set_final_newline(FileDocumentId id,
+WorkspaceResult Workspace::setFinalNewline(FileDocumentId id,
                                             bool final_newline) {
     auto* entry = impl_->find(id);
     if (!entry) {
@@ -889,7 +889,7 @@ WorkspaceResult Workspace::set_final_newline(FileDocumentId id,
     return result;
 }
 
-WorkspaceResult Workspace::rename_file(FileDocumentId id,
+WorkspaceResult Workspace::renameFile(FileDocumentId id,
                                       std::string_view raw_path) {
     auto* entry = impl_->find(id);
     if (!entry || entry->key.kind() != JournalDocumentKeyKind::Saved) {
@@ -898,7 +898,7 @@ WorkspaceResult Workspace::rename_file(FileDocumentId id,
     }
     WorkspaceResult source_error;
     const auto source =
-        impl_->resolve(entry->key.saved_path(), true, source_error);
+        impl_->resolve(entry->key.savedPath(), true, source_error);
     if (!source) {
         return source_error;
     }
@@ -908,13 +908,13 @@ WorkspaceResult Workspace::rename_file(FileDocumentId id,
     if (!destination) {
         return destination_error;
     }
-    const auto path = normalized_relative(raw_path);
-    if (const auto* duplicate = impl_->find_path(path);
+    const auto path = normalizedRelative(raw_path);
+    if (const auto* duplicate = impl_->findPath(path);
         duplicate && duplicate->id != id) {
         return failure(WorkspaceError::AlreadyOpen,
                        "destination is already open");
     }
-    const auto action = impl_->recovery.rename_path(*source, *destination);
+    const auto action = impl_->recovery.renamePath(*source, *destination);
     if (!action.accepted()) {
         return failure(WorkspaceError::RecoveryFailed,
                        action.error->message);
@@ -926,14 +926,14 @@ WorkspaceResult Workspace::rename_file(FileDocumentId id,
     }
     entry->key = JournalDocumentKey::saved(path);
     entry->display_label = destination->filename().string();
-    impl_->touch_recent(path);
+    impl_->touchRecent(path);
     WorkspaceResult result;
     result.document = id;
     result.compensation = action.compensation;
     return result;
 }
 
-WorkspaceResult Workspace::delete_file(FileDocumentId id) {
+WorkspaceResult Workspace::deleteFile(FileDocumentId id) {
     auto* entry = impl_->find(id);
     if (!entry || entry->key.kind() != JournalDocumentKeyKind::Saved) {
         return failure(WorkspaceError::NotFound,
@@ -941,11 +941,11 @@ WorkspaceResult Workspace::delete_file(FileDocumentId id) {
     }
     WorkspaceResult path_error;
     const auto path =
-        impl_->resolve(entry->key.saved_path(), true, path_error);
+        impl_->resolve(entry->key.savedPath(), true, path_error);
     if (!path) {
         return path_error;
     }
-    const auto action = impl_->recovery.delete_path(*path);
+    const auto action = impl_->recovery.deletePath(*path);
     if (!action.accepted()) {
         return failure(WorkspaceError::RecoveryFailed,
                        action.error->message);
@@ -967,7 +967,7 @@ WorkspaceResult Workspace::delete_file(FileDocumentId id) {
     return result;
 }
 
-WorkspaceResult Workspace::new_directory(std::string_view raw_path) {
+WorkspaceResult Workspace::newDirectory(std::string_view raw_path) {
     WorkspaceResult path_error;
     const auto path = impl_->resolve(raw_path, false, path_error);
     if (!path) {
@@ -995,7 +995,7 @@ WorkspaceResult Workspace::restore(
         std::optional<JournalDocument> restored_document{
             JournalDocument{entry->key, entry->document.mode(), false,
                             entry->document.snapshot().text}};
-        const auto restored = impl_->recovery.restore_document(
+        const auto restored = impl_->recovery.restoreDocument(
             compensation, restored_document);
         if (!restored.accepted()) {
             return failure(WorkspaceError::RecoveryFailed,
@@ -1014,7 +1014,7 @@ WorkspaceResult Workspace::restore(
         impl_->compensations.erase(found);
         return {};
     }
-    const auto restored = impl_->recovery.restore_filesystem(compensation);
+    const auto restored = impl_->recovery.restoreFilesystem(compensation);
     if (!restored.accepted()) {
         return failure(WorkspaceError::RecoveryFailed,
                        restored.error->message);

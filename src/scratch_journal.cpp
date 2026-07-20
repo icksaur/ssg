@@ -41,7 +41,7 @@ enum class RecordKind : std::uint8_t {
     Remove = 3,
 };
 
-bool valid_utf8(std::string_view value) noexcept {
+bool validUtf8(std::string_view value) noexcept {
     std::size_t index = 0;
     while (index < value.size()) {
         const auto first = static_cast<unsigned char>(value[index]);
@@ -81,8 +81,8 @@ bool valid_utf8(std::string_view value) noexcept {
     return true;
 }
 
-void require_valid_text(std::string_view value, std::string_view field) {
-    if (!valid_utf8(value)) {
+void requireValidText(std::string_view value, std::string_view field) {
+    if (!validUtf8(value)) {
         throw std::invalid_argument(std::string{field} +
                                     " must contain valid UTF-8");
     }
@@ -211,19 +211,19 @@ std::uint32_t crc32c(std::span<const std::byte> bytes) noexcept {
     return ~crc;
 }
 
-void encode_key(Writer& writer, const JournalDocumentKey& key) {
+void encodeKey(Writer& writer, const JournalDocumentKey& key) {
     if (key.kind() == JournalDocumentKeyKind::Saved) {
         writer.u8(0);
-        writer.string32(key.saved_path());
+        writer.string32(key.savedPath());
         return;
     }
     writer.u8(1);
-    writer.raw(key.untitled_id().bytes());
+    writer.raw(key.untitledId().bytes());
 }
 
-void encode_document(Writer& writer, const JournalDocument& document) {
-    require_valid_text(document.utf8_content, "journal document content");
-    encode_key(writer, document.key);
+void encodeDocument(Writer& writer, const JournalDocument& document) {
+    requireValidText(document.utf8_content, "journal document content");
+    encodeKey(writer, document.key);
     writer.u8(static_cast<std::uint8_t>(document.mode));
     writer.u8(document.dirty ? 1 : 0);
     writer.string64(document.utf8_content);
@@ -248,7 +248,7 @@ std::vector<std::byte> frame(RecordKind kind, Writer body) {
     return std::move(result).take();
 }
 
-bool decode_key(Reader& reader, JournalDocumentKey& key) {
+bool decodeKey(Reader& reader, JournalDocumentKey& key) {
     std::uint8_t kind = 0;
     if (!reader.u8(kind)) return false;
     try {
@@ -272,15 +272,15 @@ bool decode_key(Reader& reader, JournalDocumentKey& key) {
     return false;
 }
 
-bool decode_document(Reader& reader, JournalDocument& document) {
+bool decodeDocument(Reader& reader, JournalDocument& document) {
     JournalDocumentKey key =
         JournalDocumentKey::untitled(UntitledDocumentId{{}});
     std::uint8_t mode = 0;
     std::uint8_t dirty = 0;
     std::string content;
-    if (!decode_key(reader, key) || !reader.u8(mode) || mode > 2 ||
+    if (!decodeKey(reader, key) || !reader.u8(mode) || mode > 2 ||
         !reader.u8(dirty) || dirty > 1 || !reader.string64(content) ||
-        !valid_utf8(content)) {
+        !validUtf8(content)) {
         return false;
     }
     document = {std::move(key), static_cast<DocumentMode>(mode), dirty != 0,
@@ -301,7 +301,7 @@ void upsert(std::vector<JournalDocument>& documents,
     }
 }
 
-bool apply_payload(std::span<const std::byte> payload,
+bool applyPayload(std::span<const std::byte> payload,
                    JournalRecoverySet& recovery) {
     Reader reader{payload};
     std::uint8_t raw_kind = 0;
@@ -316,7 +316,7 @@ bool apply_payload(std::span<const std::byte> payload,
         for (std::uint32_t index = 0; index < count; ++index) {
             JournalDocument document{
                 JournalDocumentKey::untitled(UntitledDocumentId{{}})};
-            if (!decode_document(reader, document) ||
+            if (!decodeDocument(reader, document) ||
                 std::any_of(documents.begin(), documents.end(),
                             [&](const auto& existing) {
                                 return existing.key == document.key;
@@ -333,7 +333,7 @@ bool apply_payload(std::span<const std::byte> payload,
     if (kind == RecordKind::Document) {
         JournalDocument document{
             JournalDocumentKey::untitled(UntitledDocumentId{{}})};
-        if (!decode_document(reader, document) || reader.remaining() != 0) {
+        if (!decodeDocument(reader, document) || reader.remaining() != 0) {
             return false;
         }
         upsert(recovery.documents, std::move(document));
@@ -343,7 +343,7 @@ bool apply_payload(std::span<const std::byte> payload,
     if (kind == RecordKind::Remove) {
         JournalDocumentKey key =
             JournalDocumentKey::untitled(UntitledDocumentId{{}});
-        if (!decode_key(reader, key) || reader.remaining() != 0) return false;
+        if (!decodeKey(reader, key) || reader.remaining() != 0) return false;
         std::erase_if(recovery.documents,
                       [&](const auto& document) { return document.key == key; });
         return true;
@@ -351,7 +351,7 @@ bool apply_payload(std::span<const std::byte> payload,
     return false;
 }
 
-std::vector<std::byte> read_file(const std::filesystem::path& path) {
+std::vector<std::byte> readFile(const std::filesystem::path& path) {
     std::ifstream input(path, std::ios::binary);
     if (!input) {
         if (!std::filesystem::exists(path)) return {};
@@ -366,25 +366,25 @@ std::vector<std::byte> read_file(const std::filesystem::path& path) {
 }
 
 #ifndef _WIN32
-void throw_errno(std::string_view operation) {
+void throwErrno(std::string_view operation) {
     throw std::system_error(errno, std::generic_category(),
                             std::string{operation});
 }
 
-void sync_parent_directory(const std::filesystem::path& path) {
+void syncParentDirectory(const std::filesystem::path& path) {
     const auto parent = path.parent_path().empty()
                             ? std::filesystem::path{"."}
                             : path.parent_path();
     const int descriptor = ::open(parent.c_str(), O_RDONLY | O_DIRECTORY);
-    if (descriptor < 0) throw_errno("open scratch journal parent directory");
+    if (descriptor < 0) throwErrno("open scratch journal parent directory");
     if (::fsync(descriptor) != 0) {
         const int failure = errno;
         ::close(descriptor);
         errno = failure;
-        throw_errno("flush scratch journal parent directory");
+        throwErrno("flush scratch journal parent directory");
     }
     if (::close(descriptor) != 0) {
-        throw_errno("close scratch journal parent directory");
+        throwErrno("close scratch journal parent directory");
     }
 }
 #endif
@@ -408,7 +408,7 @@ JournalDocumentKey JournalDocumentKey::saved(
         workspace_relative_path.front() == '/' ||
         workspace_relative_path.front() == '\\' ||
         workspace_relative_path.find('\0') != std::string_view::npos ||
-        !valid_utf8(workspace_relative_path)) {
+        !validUtf8(workspace_relative_path)) {
         throw std::invalid_argument(
             "saved journal identity must be a valid workspace-relative path");
     }
@@ -434,21 +434,21 @@ JournalDocumentKey JournalDocumentKey::untitled(UntitledDocumentId id) {
     return {JournalDocumentKeyKind::Untitled, {}, id};
 }
 
-const std::string& JournalDocumentKey::saved_path() const {
+const std::string& JournalDocumentKey::savedPath() const {
     if (kind_ != JournalDocumentKeyKind::Saved) {
         throw std::logic_error("untitled journal key has no saved path");
     }
     return path_;
 }
 
-UntitledDocumentId JournalDocumentKey::untitled_id() const {
+UntitledDocumentId JournalDocumentKey::untitledId() const {
     if (kind_ != JournalDocumentKeyKind::Untitled) {
         throw std::logic_error("saved journal key has no untitled ID");
     }
     return id_;
 }
 
-std::vector<std::byte> encode_checkpoint_record(
+std::vector<std::byte> encodeCheckpointRecord(
     const JournalRecoverySet& recovery) {
     if (recovery.documents.size() >
         std::numeric_limits<std::uint32_t>::max()) {
@@ -464,25 +464,25 @@ std::vector<std::byte> encode_checkpoint_record(
                 "journal checkpoint contains duplicate document identity");
         }
         keys.push_back(document.key);
-        encode_document(body, document);
+        encodeDocument(body, document);
     }
     return frame(RecordKind::Checkpoint, std::move(body));
 }
 
-std::vector<std::byte> encode_document_record(
+std::vector<std::byte> encodeDocumentRecord(
     const JournalDocument& document) {
     Writer body;
-    encode_document(body, document);
+    encodeDocument(body, document);
     return frame(RecordKind::Document, std::move(body));
 }
 
-std::vector<std::byte> encode_remove_record(const JournalDocumentKey& key) {
+std::vector<std::byte> encodeRemoveRecord(const JournalDocumentKey& key) {
     Writer body;
-    encode_key(body, key);
+    encodeKey(body, key);
     return frame(RecordKind::Remove, std::move(body));
 }
 
-JournalReplayResult replay_journal(std::span<const std::byte> bytes) {
+JournalReplayResult replayJournal(std::span<const std::byte> bytes) {
     JournalReplayResult result;
     std::size_t position = 0;
     while (position < bytes.size()) {
@@ -511,7 +511,7 @@ JournalReplayResult replay_journal(std::span<const std::byte> bytes) {
         const auto payload =
             bytes.subspan(position + header_size, payload_size);
         if (crc32c(payload) != expected_crc ||
-            !apply_payload(payload, result.recovery)) {
+            !applyPayload(payload, result.recovery)) {
             result.discarded_tail = true;
             break;
         }
@@ -528,24 +528,24 @@ ScratchJournal::ScratchJournal(std::filesystem::path path)
     }
 }
 
-void ScratchJournal::append_checkpoint(
+void ScratchJournal::appendCheckpoint(
     const JournalRecoverySet& recovery) const {
-    const auto record = encode_checkpoint_record(recovery);
+    const auto record = encodeCheckpointRecord(recovery);
     append(record);
 }
 
-void ScratchJournal::append_document(const JournalDocument& document) const {
-    const auto record = encode_document_record(document);
+void ScratchJournal::appendDocument(const JournalDocument& document) const {
+    const auto record = encodeDocumentRecord(document);
     append(record);
 }
 
-void ScratchJournal::append_remove(const JournalDocumentKey& key) const {
-    const auto record = encode_remove_record(key);
+void ScratchJournal::appendRemove(const JournalDocumentKey& key) const {
+    const auto record = encodeRemoveRecord(key);
     append(record);
 }
 
 JournalReplayResult ScratchJournal::replay() const {
-    return replay_journal(read_file(path_));
+    return replayJournal(readFile(path_));
 }
 
 void ScratchJournal::append(std::span<const std::byte> record) const {
@@ -602,7 +602,7 @@ void ScratchJournal::append(std::span<const std::byte> record) const {
     } else if (errno == EEXIST) {
         descriptor = ::open(path_.c_str(), O_WRONLY | O_APPEND);
     }
-    if (descriptor < 0) throw_errno("open scratch journal for append");
+    if (descriptor < 0) throwErrno("open scratch journal for append");
 
     try {
         std::size_t written_total = 0;
@@ -612,7 +612,7 @@ void ScratchJournal::append(std::span<const std::byte> record) const {
                         record.size() - written_total);
             if (written < 0) {
                 if (errno == EINTR) continue;
-                throw_errno("write scratch journal record");
+                throwErrno("write scratch journal record");
             }
             if (written == 0) {
                 throw std::system_error(EIO, std::generic_category(),
@@ -621,14 +621,14 @@ void ScratchJournal::append(std::span<const std::byte> record) const {
             written_total += static_cast<std::size_t>(written);
         }
         if (::fsync(descriptor) != 0) {
-            throw_errno("flush scratch journal record");
+            throwErrno("flush scratch journal record");
         }
         if (::close(descriptor) != 0) {
             descriptor = -1;
-            throw_errno("close scratch journal");
+            throwErrno("close scratch journal");
         }
         descriptor = -1;
-        if (created) sync_parent_directory(path_);
+        if (created) syncParentDirectory(path_);
     } catch (...) {
         if (descriptor >= 0) ::close(descriptor);
         throw;

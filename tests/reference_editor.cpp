@@ -57,7 +57,7 @@ size_t next_line_start(std::string_view text, size_t pos) {
 
 // ── Word boundary helpers ──────────────────────────────────────────────────
 
-static bool is_word_char(char c) {
+static bool isWordChar(char c) {
     auto b = static_cast<uint8_t>(c);
     return b > 127 ||
            (c >= 'a' && c <= 'z') ||
@@ -66,41 +66,41 @@ static bool is_word_char(char c) {
            c == '_';
 }
 
-static bool is_space_char(char c) {
+static bool isSpaceChar(char c) {
     return c == ' ' || c == '\t' || c == '\n' || c == '\r';
 }
 
 // Advance pos one "word group" to the right.
-static size_t word_right_pos(std::string_view text, size_t pos) {
+static size_t wordRightPos(std::string_view text, size_t pos) {
     if (pos >= text.size()) return pos;
-    if (is_word_char(text[pos])) {
-        while (pos < text.size() && is_word_char(text[pos]))
+    if (isWordChar(text[pos])) {
+        while (pos < text.size() && isWordChar(text[pos]))
             pos = utf8_next(text, pos);
-    } else if (is_space_char(text[pos])) {
-        while (pos < text.size() && is_space_char(text[pos]))
+    } else if (isSpaceChar(text[pos])) {
+        while (pos < text.size() && isSpaceChar(text[pos]))
             pos = utf8_next(text, pos);
     } else {
         pos = utf8_next(text, pos);
-        while (pos < text.size() && !is_word_char(text[pos]) && !is_space_char(text[pos]))
+        while (pos < text.size() && !isWordChar(text[pos]) && !isSpaceChar(text[pos]))
             pos = utf8_next(text, pos);
     }
     return pos;
 }
 
 // Retreat pos one "word group" to the left.
-static size_t word_left_pos(std::string_view text, size_t pos) {
+static size_t wordLeftPos(std::string_view text, size_t pos) {
     if (pos == 0) return 0;
     size_t p = utf8_prev(text, pos);
-    if (is_word_char(text[p])) {
+    if (isWordChar(text[p])) {
         while (p > 0) {
             size_t prev = utf8_prev(text, p);
-            if (!is_word_char(text[prev])) break;
+            if (!isWordChar(text[prev])) break;
             p = prev;
         }
-    } else if (is_space_char(text[p])) {
+    } else if (isSpaceChar(text[p])) {
         while (p > 0) {
             size_t prev = utf8_prev(text, p);
-            if (!is_space_char(text[prev])) break;
+            if (!isSpaceChar(text[prev])) break;
             p = prev;
         }
     }
@@ -142,7 +142,7 @@ void normalize_selections(std::vector<Sel>& sels) {
 
 // Save current state to undo stack and clear redo stack.
 // Must be called before any mutation that should be undoable.
-static void push_undo(Editor& ed) {
+static void pushUndo(Editor& ed) {
     ed.undo_stack.push_back({ed.text, ed.selections});
     ed.redo_stack.clear();
 }
@@ -162,7 +162,7 @@ struct EditOp {
 // Ops are sorted descending by lo internally so lower positions remain valid.
 // ed.selections is rebuilt as carets at the computed cursor positions, then
 // normalized.
-static void do_apply_ops(Editor& ed, std::vector<EditOp> ops) {
+static void doApplyOps(Editor& ed, std::vector<EditOp> ops) {
     if (ops.empty()) return;
 
     std::sort(ops.begin(), ops.end(), [](EditOp const& a, EditOp const& b) {
@@ -198,10 +198,10 @@ static void do_apply_ops(Editor& ed, std::vector<EditOp> ops) {
 }
 
 // push_undo then do_apply_ops.
-static void apply_ops(Editor& ed, std::vector<EditOp> ops) {
+static void applyOps(Editor& ed, std::vector<EditOp> ops) {
     if (ops.empty()) return;
-    push_undo(ed);
-    do_apply_ops(ed, std::move(ops));
+    pushUndo(ed);
+    doApplyOps(ed, std::move(ops));
 }
 
 // ── Adjust-in-place helper for indent/outdent and similar structural ops ───
@@ -215,7 +215,7 @@ struct AdjOp {
     std::string ins_text;  // text to insert at pos
 };
 
-static void adjust_apply(Editor& ed, std::vector<AdjOp> ops) {
+static void adjustApply(Editor& ed, std::vector<AdjOp> ops) {
     if (ops.empty()) return;
 
     std::sort(ops.begin(), ops.end(), [](AdjOp const& a, AdjOp const& b) {
@@ -250,7 +250,7 @@ static void adjust_apply(Editor& ed, std::vector<AdjOp> ops) {
 
 // Return the sorted, deduplicated set of line-start byte positions for every
 // line that intersects at least one selection.
-static std::vector<size_t> touched_line_starts(Editor const& ed) {
+static std::vector<size_t> touchedLineStarts(Editor const& ed) {
     std::vector<size_t> ls;
     for (auto const& s : ed.selections) {
         size_t lo = s.lo();
@@ -296,7 +296,7 @@ bool text_insert(Editor& ed, std::string_view s) {
     ops.reserve(ed.selections.size());
     for (auto const& sel : ed.selections)
         ops.push_back({sel.lo(), sel.hi(), std::string(s)});
-    apply_ops(ed, std::move(ops));
+    applyOps(ed, std::move(ops));
     return true;
 }
 
@@ -319,7 +319,7 @@ bool text_delete_backward(Editor& ed) {
             ops.push_back({0, 0, ""});
         }
     }
-    apply_ops(ed, std::move(ops));
+    applyOps(ed, std::move(ops));
     return true;
 }
 
@@ -337,7 +337,7 @@ bool text_delete_forward(Editor& ed) {
             ops.push_back({ed.text.size(), ed.text.size(), ""});
         }
     }
-    apply_ops(ed, std::move(ops));
+    applyOps(ed, std::move(ops));
     return true;
 }
 
@@ -349,11 +349,11 @@ bool text_delete_word_backward(Editor& ed) {
         if (!sel.is_caret()) {
             ops.push_back({sel.lo(), sel.hi(), ""});
         } else {
-            size_t prev = word_left_pos(ed.text, sel.active);
+            size_t prev = wordLeftPos(ed.text, sel.active);
             ops.push_back({prev, sel.active, ""});
         }
     }
-    apply_ops(ed, std::move(ops));
+    applyOps(ed, std::move(ops));
     return true;
 }
 
@@ -365,11 +365,11 @@ bool text_delete_word_forward(Editor& ed) {
         if (!sel.is_caret()) {
             ops.push_back({sel.lo(), sel.hi(), ""});
         } else {
-            size_t next = word_right_pos(ed.text, sel.active);
+            size_t next = wordRightPos(ed.text, sel.active);
             ops.push_back({sel.active, next, ""});
         }
     }
-    apply_ops(ed, std::move(ops));
+    applyOps(ed, std::move(ops));
     return true;
 }
 
@@ -406,7 +406,7 @@ void cursor_right(Editor& ed) {
 
 void cursor_word_left(Editor& ed) {
     for (auto& s : ed.selections) {
-        size_t p = word_left_pos(ed.text, s.lo());
+        size_t p = wordLeftPos(ed.text, s.lo());
         s = Sel{p, p};
     }
     normalize_selections(ed.selections);
@@ -414,7 +414,7 @@ void cursor_word_left(Editor& ed) {
 
 void cursor_word_right(Editor& ed) {
     for (auto& s : ed.selections) {
-        size_t p = word_right_pos(ed.text, s.hi());
+        size_t p = wordRightPos(ed.text, s.hi());
         s = Sel{p, p};
     }
     normalize_selections(ed.selections);
@@ -517,13 +517,13 @@ void select_right(Editor& ed) {
 
 void select_word_left(Editor& ed) {
     for (auto& s : ed.selections)
-        s.active = word_left_pos(ed.text, s.active);
+        s.active = wordLeftPos(ed.text, s.active);
     normalize_selections(ed.selections);
 }
 
 void select_word_right(Editor& ed) {
     for (auto& s : ed.selections)
-        s.active = word_right_pos(ed.text, s.active);
+        s.active = wordRightPos(ed.text, s.active);
     normalize_selections(ed.selections);
 }
 
@@ -711,7 +711,7 @@ bool clipboard_cut(Editor& ed) {
         }
     }
     // apply_ops pushes undo; clipboard was already set above
-    apply_ops(ed, std::move(ops));
+    applyOps(ed, std::move(ops));
     return true;
 }
 
@@ -737,7 +737,7 @@ bool clipboard_paste(Editor& ed) {
                                       : plain_text;
         ops.push_back({s.lo(), s.hi(), frag});
     }
-    apply_ops(ed, std::move(ops));
+    applyOps(ed, std::move(ops));
     return true;
 }
 
@@ -767,23 +767,23 @@ bool edit_redo(Editor& ed) {
 
 bool edit_indent(Editor& ed, int tab_width, bool use_spaces) {
     if (ed.mode != Mode::edit) return false;
-    auto lines = touched_line_starts(ed);
+    auto lines = touchedLineStarts(ed);
     if (lines.empty()) return true;
-    push_undo(ed);
+    pushUndo(ed);
     std::string ins = use_spaces ? std::string(static_cast<size_t>(tab_width), ' ') : "\t";
     std::vector<AdjOp> ops;
     ops.reserve(lines.size());
     for (size_t ls : lines)
         ops.push_back({ls, 0, ins});
-    adjust_apply(ed, std::move(ops));
+    adjustApply(ed, std::move(ops));
     return true;
 }
 
 bool edit_outdent(Editor& ed, int tab_width, bool use_spaces) {
     if (ed.mode != Mode::edit) return false;
-    auto lines = touched_line_starts(ed);
+    auto lines = touchedLineStarts(ed);
     if (lines.empty()) return true;
-    push_undo(ed);
+    pushUndo(ed);
     std::vector<AdjOp> ops;
     ops.reserve(lines.size());
     for (size_t ls : lines) {
@@ -800,13 +800,13 @@ bool edit_outdent(Editor& ed, int tab_width, bool use_spaces) {
         if (del > 0)
             ops.push_back({ls, del, ""});
     }
-    adjust_apply(ed, std::move(ops));
+    adjustApply(ed, std::move(ops));
     return true;
 }
 
 bool edit_duplicate_line(Editor& ed) {
     if (ed.mode != Mode::edit) return false;
-    push_undo(ed);
+    pushUndo(ed);
 
     // Collect unique line-end positions from cursor positions (high→low).
     std::vector<std::pair<size_t, size_t>> le_to_si; // (line_end, sel_index)
@@ -866,11 +866,11 @@ bool edit_duplicate_line(Editor& ed) {
 bool edit_move_line_up(Editor& ed) {
     if (ed.mode != Mode::edit) return false;
     // Collect unique line starts for each cursor's line; skip first line.
-    std::vector<size_t> lines = touched_line_starts(ed);
+    std::vector<size_t> lines = touchedLineStarts(ed);
     // Remove lines that are already the first line
     lines.erase(std::remove(lines.begin(), lines.end(), size_t{0}), lines.end());
     if (lines.empty()) return true;
-    push_undo(ed);
+    pushUndo(ed);
 
     // For each line (process low→high to avoid invalidation issues):
     // swap line with the line above it.
@@ -917,9 +917,9 @@ bool edit_move_line_up(Editor& ed) {
 
 bool edit_move_line_down(Editor& ed) {
     if (ed.mode != Mode::edit) return false;
-    std::vector<size_t> lines = touched_line_starts(ed);
+    std::vector<size_t> lines = touchedLineStarts(ed);
     if (lines.empty()) return true;
-    push_undo(ed);
+    pushUndo(ed);
 
     // Process in descending order to avoid invalidation
     std::sort(lines.begin(), lines.end(), std::greater<size_t>());
@@ -956,7 +956,7 @@ bool edit_move_line_down(Editor& ed) {
 
 bool edit_delete_line(Editor& ed) {
     if (ed.mode != Mode::edit) return false;
-    auto lines = touched_line_starts(ed);
+    auto lines = touchedLineStarts(ed);
     if (lines.empty()) return true;
 
     // Build one delete op per touched line (high→low via apply_ops).
@@ -976,7 +976,7 @@ bool edit_delete_line(Editor& ed) {
             ops.push_back({del_start, ed.text.size(), ""});
         }
     }
-    apply_ops(ed, std::move(ops));
+    applyOps(ed, std::move(ops));
     return true;
 }
 
@@ -993,7 +993,7 @@ bool edit_join_lines(Editor& ed) {
         // else on last line: no-op for this cursor
     }
     if (!ops.empty())
-        apply_ops(ed, std::move(ops));
+        applyOps(ed, std::move(ops));
     return true;
 }
 
@@ -1011,7 +1011,7 @@ bool edit_uppercase(Editor& ed) {
         ops.push_back({s.lo(), s.hi(), std::move(upper)});
     }
     if (!ops.empty())
-        apply_ops(ed, std::move(ops));
+        applyOps(ed, std::move(ops));
     return true;
 }
 
@@ -1026,7 +1026,7 @@ bool edit_lowercase(Editor& ed) {
         ops.push_back({s.lo(), s.hi(), std::move(lower)});
     }
     if (!ops.empty())
-        apply_ops(ed, std::move(ops));
+        applyOps(ed, std::move(ops));
     return true;
 }
 
@@ -1046,16 +1046,16 @@ bool edit_swap_case(Editor& ed) {
         ops.push_back({s.lo(), s.hi(), std::move(swapped)});
     }
     if (!ops.empty())
-        apply_ops(ed, std::move(ops));
+        applyOps(ed, std::move(ops));
     return true;
 }
 
 bool edit_sort_lines(Editor& ed) {
     if (ed.mode != Mode::edit) return false;
-    auto line_starts = touched_line_starts(ed);
+    auto line_starts = touchedLineStarts(ed);
     if (line_starts.size() < 2) return true;
 
-    push_undo(ed);
+    pushUndo(ed);
 
     // Group touched line starts into contiguous runs.  Two successive entries
     // are contiguous when the second equals next_line_start of the first.
@@ -1095,7 +1095,7 @@ bool edit_sort_lines(Editor& ed) {
         ops.push_back({first_ls, last_le - first_ls, replacement});
     }
 
-    adjust_apply(ed, std::move(ops));
+    adjustApply(ed, std::move(ops));
     return true;
 }
 
@@ -1133,7 +1133,7 @@ bool edit_transpose(Editor& ed) {
         }
     }
     if (!ops.empty())
-        apply_ops(ed, std::move(ops));
+        applyOps(ed, std::move(ops));
     return true;
 }
 
@@ -1141,7 +1141,7 @@ bool edit_toggle_comment(Editor& ed, std::string_view line_comment_token) {
     if (ed.mode != Mode::edit) return false;
     if (line_comment_token.empty()) return true;
 
-    auto lines = touched_line_starts(ed);
+    auto lines = touchedLineStarts(ed);
     if (lines.empty()) return true;
 
     // Determine whether ALL touched lines start with the token.
@@ -1153,7 +1153,7 @@ bool edit_toggle_comment(Editor& ed, std::string_view line_comment_token) {
         }
     }
 
-    push_undo(ed);
+    pushUndo(ed);
 
     if (all_commented) {
         // Remove token from each line start
@@ -1161,7 +1161,7 @@ bool edit_toggle_comment(Editor& ed, std::string_view line_comment_token) {
         ops.reserve(lines.size());
         for (size_t ls : lines)
             ops.push_back({ls, line_comment_token.size(), ""});
-        adjust_apply(ed, std::move(ops));
+        adjustApply(ed, std::move(ops));
     } else {
         // Add token to each line start
         std::vector<AdjOp> ops;
@@ -1169,7 +1169,7 @@ bool edit_toggle_comment(Editor& ed, std::string_view line_comment_token) {
         std::string token_str(line_comment_token);
         for (size_t ls : lines)
             ops.push_back({ls, 0, token_str});
-        adjust_apply(ed, std::move(ops));
+        adjustApply(ed, std::move(ops));
     }
     return true;
 }

@@ -12,7 +12,7 @@ enum class FocusTarget : std::uint8_t { Editor, Panel, Prompt };
 
 // The lowercase keymap-context name for a focus target.  A keymap binding's
 // context is this name (or "*"); see keymap_contexts() and doc/spec-keymap.md.
-[[nodiscard]] constexpr std::string_view focus_target_name(
+[[nodiscard]] constexpr std::string_view focusTargetName(
     FocusTarget target) noexcept {
     switch (target) {
     case FocusTarget::Editor:
@@ -30,10 +30,10 @@ enum class FocusTarget : std::uint8_t { Editor, Panel, Prompt };
 // whose context is outside this set is rejected by validate_keymap
 // (KeymapErrorCode::unknown_context).
 [[nodiscard]] constexpr std::array<std::string_view, 4>
-keymap_contexts() noexcept {
-    return {"*", focus_target_name(FocusTarget::Editor),
-            focus_target_name(FocusTarget::Panel),
-            focus_target_name(FocusTarget::Prompt)};
+keymapContexts() noexcept {
+    return {"*", focusTargetName(FocusTarget::Editor),
+            focusTargetName(FocusTarget::Panel),
+            focusTargetName(FocusTarget::Prompt)};
 }
 
 }  // namespace ssg

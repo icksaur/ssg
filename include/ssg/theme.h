@@ -20,7 +20,7 @@ struct SrgbColor {
     // Reconstructs channels already owned by an authoritative Theme snapshot.
     // This is not a second color-definition path: callers must not derive or
     // substitute channels outside theme data.
-    [[nodiscard]] static constexpr SrgbColor from_serialized_channels(
+    [[nodiscard]] static constexpr SrgbColor fromSerializedChannels(
         std::uint8_t red, std::uint8_t green, std::uint8_t blue) noexcept {
         return SrgbColor{red, green, blue};
     }
@@ -189,10 +189,10 @@ struct ThemeSnapshot {
     friend bool operator==(const ThemeSnapshot&, const ThemeSnapshot&) = default;
 };
 
-[[nodiscard]] std::string_view semantic_role_name(SemanticRole role);
-[[nodiscard]] std::optional<SemanticRole> semantic_role_from_name(std::string_view name);
-[[nodiscard]] std::string_view syntax_scope_name(SyntaxScope scope);
-[[nodiscard]] std::optional<SyntaxScope> syntax_scope_from_name(std::string_view name);
+[[nodiscard]] std::string_view semanticRoleName(SemanticRole role);
+[[nodiscard]] std::optional<SemanticRole> semanticRoleFromName(std::string_view name);
+[[nodiscard]] std::string_view syntaxScopeName(SyntaxScope scope);
+[[nodiscard]] std::optional<SyntaxScope> syntaxScopeFromName(std::string_view name);
 
 class Theme {
 public:
@@ -205,9 +205,9 @@ public:
     [[nodiscard]] const std::array<SrgbColor, theme_palette_size>& palette() const noexcept {
         return palette_;
     }
-    [[nodiscard]] std::uint8_t index_for(SemanticRole role) const;
-    [[nodiscard]] std::uint8_t index_for(SyntaxScope scope) const;
-    [[nodiscard]] std::uint8_t index_for_syntax(std::string_view scope) const noexcept;
+    [[nodiscard]] std::uint8_t indexFor(SemanticRole role) const;
+    [[nodiscard]] std::uint8_t indexFor(SyntaxScope scope) const;
+    [[nodiscard]] std::uint8_t indexForSyntax(std::string_view scope) const noexcept;
     [[nodiscard]] ThemeSnapshot snapshot() const noexcept;
 
 private:

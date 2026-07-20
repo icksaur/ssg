@@ -27,7 +27,7 @@ namespace {
 
 namespace fs = std::filesystem;
 
-fs::path unique_root(std::string const& name) {
+fs::path uniqueRoot(std::string const& name) {
     // A FIXED path (not pid-based): the rendered screen includes the workspace
     // CWD in the header, so the golden must be produced against a deterministic
     // path.  Linux-first (temp_directory_path() is /tmp on CI and dev); the
@@ -42,7 +42,7 @@ fs::path unique_root(std::string const& name) {
 
 // A production runtime over a workspace with exactly one known file, so the
 // rendered screen (including any filesystem tree) is deterministic.
-std::unique_ptr<ssg::EditorRuntime> make_runtime(fs::path const& root) {
+std::unique_ptr<ssg::EditorRuntime> makeRuntime(fs::path const& root) {
     std::ofstream{root / "workspace" / "alpha.txt", std::ios::binary}
         << "first line\nsecond line\nthird line\n";
     auto created = ssg::EditorRuntime::create(
@@ -54,7 +54,7 @@ std::unique_ptr<ssg::EditorRuntime> make_runtime(fs::path const& root) {
     return runtime;
 }
 
-std::string read_file(char const* path) {
+std::string readFile(char const* path) {
     std::ifstream input{path, std::ios::binary};
     return {std::istreambuf_iterator<char>{input},
             std::istreambuf_iterator<char>{}};
@@ -62,12 +62,12 @@ std::string read_file(char const* path) {
 
 // Compare `actual` to the golden at `path`, or rewrite the golden when
 // SSG_REGEN_GOLDEN is set.  Returns true on match.
-bool matches_golden(std::string const& actual, char const* path) {
+bool matchesGolden(std::string const& actual, char const* path) {
     if (std::getenv("SSG_REGEN_GOLDEN") != nullptr) {
         std::ofstream{path, std::ios::binary} << actual;
         return true;
     }
-    auto expected = read_file(path);
+    auto expected = readFile(path);
     if (actual != expected) {
         std::cerr << "  golden mismatch for " << path << "\n--- actual ---\n"
                   << actual << "--- end ---\n";
@@ -81,16 +81,16 @@ bool matches_golden(std::string const& actual, char const* path) {
 // plus the local query/selection/window.  The app (apps/ssg_main.cpp build_report)
 // uses this exact seam, so exercising it here proves the client cannot invent
 // product data or substitute a private ranker — the projection is library code.
-ssg::PaletteReport project_report(
+ssg::PaletteReport projectReport(
     std::vector<ssg::PaletteCandidate> const& candidates, std::string const& query,
     std::uint32_t pane_rows, std::uint32_t first_visible,
     std::size_t selected_index) {
     ssg::PaletteWindowState window{query, selected_index, first_visible, pane_rows};
-    return ssg::derive_palette_report(candidates, window);
+    return ssg::derivePaletteReport(candidates, window);
 }
 
 // The published candidate list for an open palette, straight from the runtime.
-std::vector<ssg::PaletteCandidate> published_candidates(
+std::vector<ssg::PaletteCandidate> publishedCandidates(
     ssg::EditorRuntime& runtime) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"palette.open", runtime.revision(), {}})
@@ -102,7 +102,7 @@ std::vector<ssg::PaletteCandidate> published_candidates(
 
 // Reconstruct grid row `row` as a plain string (continuation cells contribute no
 // text), for tracing rendered palette labels back to published candidates.
-std::string grid_line(ssg::CellGrid const& grid, int row) {
+std::string gridLine(ssg::CellGrid const& grid, int row) {
     std::string line;
     for (int column = 0; column < grid.size.columns; ++column) {
         auto const& cell = grid.at(column, row);
@@ -113,29 +113,29 @@ std::string grid_line(ssg::CellGrid const& grid, int row) {
 
 }  // namespace
 
-TEST(palette_report_is_a_pure_function_of_candidates_and_query) {
-    auto root = unique_root("derived");
-    auto runtime = make_runtime(root);
+TEST(paletteReportIsAPureFunctionOfCandidatesAndQuery) {
+    auto root = uniqueRoot("derived");
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    auto candidates = published_candidates(*runtime);
+    auto candidates = publishedCandidates(*runtime);
     ASSERT_TRUE(!candidates.empty());
     if (candidates.empty()) return;
 
     // A representative match, the empty (keep-all) query, and a no-match query.
     for (std::string const& query : {std::string{}, std::string{"sa"},
                                      std::string{"zzq-no-such-command"}}) {
-        auto report = project_report(candidates, query, 12, 0, 0);
+        auto report = projectReport(candidates, query, 12, 0, 0);
 
         // Pure function: identical inputs reproduce an identical report.
-        ASSERT_TRUE(project_report(candidates, query, 12, 0, 0) == report);
+        ASSERT_TRUE(projectReport(candidates, query, 12, 0, 0) == report);
 
         // The query is echoed verbatim; it is not server-derived.
         ASSERT_EQ(report.query, query);
 
         // Invents no product data: every reported row is a published candidate,
         // and the ghost is derived solely from the top candidate's label.
-        auto order = ssg::palette_rank(candidates, query);
+        auto order = ssg::paletteRank(candidates, query);
         for (auto const& shown : report.rows) {
             bool member = false;
             for (auto const& candidate : candidates) {
@@ -148,7 +148,7 @@ TEST(palette_report_is_a_pure_function_of_candidates_and_query) {
             ASSERT_EQ(report.ghost, std::string{});
         } else {
             ASSERT_EQ(report.ghost,
-                      ssg::palette_ghost(candidates[order.front()].label, query));
+                      ssg::paletteGhost(candidates[order.front()].label, query));
             // The reported rows are exactly the window of the shared ranker's
             // order — the client uses no private ranking.
             ASSERT_EQ(report.rows.size(),
@@ -162,16 +162,16 @@ TEST(palette_report_is_a_pure_function_of_candidates_and_query) {
     fs::remove_all(root);
 }
 
-TEST(rendered_palette_labels_trace_to_published_candidates) {
-    auto root = unique_root("derived-render");
-    auto runtime = make_runtime(root);
+TEST(renderedPaletteLabelsTraceToPublishedCandidates) {
+    auto root = uniqueRoot("derived-render");
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
-    auto candidates = published_candidates(*runtime);
+    auto candidates = publishedCandidates(*runtime);
     ASSERT_TRUE(!candidates.empty());
     if (candidates.empty()) return;
 
-    auto report = project_report(candidates, "sa", 12, 0, 0);
+    auto report = projectReport(candidates, "sa", 12, 0, 0);
     ASSERT_TRUE(!report.rows.empty());
     if (report.rows.empty()) return;
 
@@ -192,7 +192,7 @@ TEST(rendered_palette_labels_trace_to_published_candidates) {
 
         bool rendered = false;
         for (int row = 0; row < grid.size.rows; ++row) {
-            if (grid_line(grid, row).rfind(shown.label, 0) == 0) {
+            if (gridLine(grid, row).rfind(shown.label, 0) == 0) {
                 rendered = true;
                 break;
             }
@@ -202,9 +202,9 @@ TEST(rendered_palette_labels_trace_to_published_candidates) {
     fs::remove_all(root);
 }
 
-TEST(production_runtime_normal_screen_matches_golden) {
-    auto root = unique_root("normal");
-    auto runtime = make_runtime(root);
+TEST(productionRuntimeNormalScreenMatchesGolden) {
+    auto root = uniqueRoot("normal");
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     ASSERT_TRUE(runtime->dispatch(ssg::ClientId{1},
@@ -215,15 +215,15 @@ TEST(production_runtime_normal_screen_matches_golden) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto grid = ssg::render(*snapshot);
-    ASSERT_TRUE(matches_golden(grid.canonical(), SSG_CONTRACT_NORMAL_GOLDEN));
+    ASSERT_TRUE(matchesGolden(grid.canonical(), SSG_CONTRACT_NORMAL_GOLDEN));
     // The screen is a pure function of the snapshot: a second render is identical.
     ASSERT_EQ(ssg::render(*snapshot).canonical(), grid.canonical());
     fs::remove_all(root);
 }
 
-TEST(production_runtime_palette_screen_matches_golden) {
-    auto root = unique_root("palette");
-    auto runtime = make_runtime(root);
+TEST(productionRuntimePaletteScreenMatchesGolden) {
+    auto root = uniqueRoot("palette");
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     ASSERT_TRUE(runtime->dispatch(ssg::ClientId{1},
@@ -245,14 +245,14 @@ TEST(production_runtime_palette_screen_matches_golden) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto grid = ssg::render(*snapshot);
-    ASSERT_TRUE(matches_golden(grid.canonical(), SSG_CONTRACT_PALETTE_GOLDEN));
+    ASSERT_TRUE(matchesGolden(grid.canonical(), SSG_CONTRACT_PALETTE_GOLDEN));
     ASSERT_EQ(ssg::render(*snapshot).canonical(), grid.canonical());
     fs::remove_all(root);
 }
 
-TEST(production_runtime_too_small_screen_matches_golden) {
-    auto root = unique_root("small");
-    auto runtime = make_runtime(root);
+TEST(productionRuntimeTooSmallScreenMatchesGolden) {
+    auto root = uniqueRoot("small");
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     ASSERT_TRUE(runtime->dispatch(ssg::ClientId{1},
@@ -263,17 +263,17 @@ TEST(production_runtime_too_small_screen_matches_golden) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto grid = ssg::render(*snapshot);
-    ASSERT_TRUE(matches_golden(grid.canonical(), SSG_CONTRACT_TOO_SMALL_GOLDEN));
+    ASSERT_TRUE(matchesGolden(grid.canonical(), SSG_CONTRACT_TOO_SMALL_GOLDEN));
     fs::remove_all(root);
 }
 
-TEST(delta_replay_reconstructs_the_same_snapshot_and_grid) {
+TEST(deltaReplayReconstructsTheSameSnapshotAndGrid) {
     // M11-3: the "delta" leg of the command/snapshot/delta contract. After every
     // command, the delta between the prior and current production snapshots,
     // replayed onto the prior snapshot, reconstructs the SAME authoritative
     // snapshot as a fresh one — and renders to an identical grid.
-    auto root = unique_root("delta");
-    auto runtime = make_runtime(root);
+    auto root = uniqueRoot("delta");
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     ssg::ViewportDimensions const dims{80, 24};
@@ -309,8 +309,8 @@ TEST(delta_replay_reconstructs_the_same_snapshot_and_grid) {
             continue;
         }
 
-        auto delta = ssg::derive_session_delta(*previous, *fresh);
-        auto replayed = ssg::replay_session_delta(*previous, delta);
+        auto delta = ssg::deriveSessionDelta(*previous, *fresh);
+        auto replayed = ssg::replaySessionDelta(*previous, delta);
         ASSERT_TRUE(replayed.accepted());
         if (!replayed.accepted()) break;
 
@@ -326,12 +326,12 @@ TEST(delta_replay_reconstructs_the_same_snapshot_and_grid) {
 }
 
 int main() {
-    RUN(production_runtime_normal_screen_matches_golden);
-    RUN(production_runtime_palette_screen_matches_golden);
-    RUN(production_runtime_too_small_screen_matches_golden);
-    RUN(delta_replay_reconstructs_the_same_snapshot_and_grid);
-    RUN(palette_report_is_a_pure_function_of_candidates_and_query);
-    RUN(rendered_palette_labels_trace_to_published_candidates);
+    RUN(productionRuntimeNormalScreenMatchesGolden);
+    RUN(productionRuntimePaletteScreenMatchesGolden);
+    RUN(productionRuntimeTooSmallScreenMatchesGolden);
+    RUN(deltaReplayReconstructsTheSameSnapshotAndGrid);
+    RUN(paletteReportIsAPureFunctionOfCandidatesAndQuery);
+    RUN(renderedPaletteLabelsTraceToPublishedCandidates);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

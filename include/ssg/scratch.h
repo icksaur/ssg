@@ -42,11 +42,11 @@ class ScratchStorage {
 public:
     virtual ~ScratchStorage() = default;
 
-    virtual void append_document(const std::filesystem::path& path,
+    virtual void appendDocument(const std::filesystem::path& path,
                                  const JournalDocument& document) = 0;
-    virtual void append_remove(const std::filesystem::path& path,
+    virtual void appendRemove(const std::filesystem::path& path,
                                const JournalDocumentKey& key) = 0;
-    virtual void replace_checkpoint(
+    virtual void replaceCheckpoint(
         const std::filesystem::path& path,
         const JournalRecoverySet& recovery) = 0;
 };
@@ -70,26 +70,26 @@ public:
     ScratchStore& operator=(const ScratchStore&) = delete;
 
     [[nodiscard]] JournalRecoverySet recovery() const;
-    [[nodiscard]] std::filesystem::path session_path() const;
-    [[nodiscard]] std::filesystem::path journal_path() const;
+    [[nodiscard]] std::filesystem::path sessionPath() const;
+    [[nodiscard]] std::filesystem::path journalPath() const;
 
-    void update_document(JournalDocument document);
-    void remove_document(JournalDocumentKey key);
+    void updateDocument(JournalDocument document);
+    void removeDocument(JournalDocumentKey key);
     void compact();
 
-    [[nodiscard]] ScratchDurabilityState durability_state() const;
-    [[nodiscard]] bool wait_until_durable(
+    [[nodiscard]] ScratchDurabilityState durabilityState() const;
+    [[nodiscard]] bool waitUntilDurable(
         std::chrono::milliseconds timeout) const;
 
-    [[nodiscard]] ScratchQuotaResult apply_quotas();
-    [[nodiscard]] std::size_t purge_workspace();
-    [[nodiscard]] std::size_t purge_all();
+    [[nodiscard]] ScratchQuotaResult applyQuotas();
+    [[nodiscard]] std::size_t purgeWorkspace();
+    [[nodiscard]] std::size_t purgeAll();
     void shutdown();
 
 private:
     class Impl;
     explicit ScratchStore(std::unique_ptr<Impl> implementation) noexcept;
-    [[nodiscard]] static ScratchStore create_with_storage(
+    [[nodiscard]] static ScratchStore createWithStorage(
         const std::filesystem::path& scratch_root,
         const std::filesystem::path& canonical_workspace,
         ScratchStoreConfig config,

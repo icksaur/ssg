@@ -25,7 +25,7 @@ private:
     std::string value_;
 };
 
-[[nodiscard]] std::string scratch_workspace_key(
+[[nodiscard]] std::string scratchWorkspaceKey(
     const std::filesystem::path& canonical_workspace);
 
 class ScratchRemnantClaim {
@@ -39,11 +39,11 @@ public:
     [[nodiscard]] const std::filesystem::path& path() const noexcept {
         return path_;
     }
-    [[nodiscard]] std::filesystem::path journal_path() const {
+    [[nodiscard]] std::filesystem::path journalPath() const {
         return path_ / "journal.bin";
     }
     [[nodiscard]] JournalReplayResult replay() const;
-    void mark_restored();
+    void markRestored();
 
 private:
     ScratchRemnantClaim(ScratchSessionId id,
@@ -72,11 +72,11 @@ public:
     [[nodiscard]] const std::filesystem::path& path() const noexcept {
         return path_;
     }
-    [[nodiscard]] std::filesystem::path journal_path() const {
+    [[nodiscard]] std::filesystem::path journalPath() const {
         return path_ / "journal.bin";
     }
     [[nodiscard]] std::optional<ScratchRemnantClaim>
-    claim_newest_restorable() const;
+    claimNewestRestorable() const;
 
 private:
     ScratchSession(ScratchSessionId id,

@@ -7,8 +7,8 @@
 
 namespace ssg {
 
-DocumentViewState EditorRuntime::Impl::document_view() const {
-    auto const* document = active_document();
+DocumentViewState EditorRuntime::Impl::documentView() const {
+    auto const* document = activeDocument();
     if (document == nullptr) return {Revision{0}, {}, ByteOffset{0}};
     auto snapshot = document->snapshot();
     auto caret = selection.selections.primary().active.byte_offset;
@@ -16,35 +16,35 @@ DocumentViewState EditorRuntime::Impl::document_view() const {
     return {snapshot.revision, std::move(snapshot.text), caret};
 }
 
-TextEncodingViewState EditorRuntime::Impl::text_encoding_view() const {
-    auto state = active_workspace_state();
+TextEncodingViewState EditorRuntime::Impl::textEncodingView() const {
+    auto state = activeWorkspaceState();
     return {state ? state->encoding : TextEncodingStatus{}};
 }
 
-std::string EditorRuntime::Impl::current_path_label() const {
-    auto state = active_workspace_state();
+std::string EditorRuntime::Impl::currentPathLabel() const {
+    auto state = activeWorkspaceState();
     return state ? state->display_label : root.filename().string();
 }
 
-PromptStatusViewState EditorRuntime::Impl::prompt_status_view(ViewportDimensions dimensions) const {
+PromptStatusViewState EditorRuntime::Impl::promptStatusView(ViewportDimensions dimensions) const {
     PromptStatusViewState view;
-    auto rows = prompt_row_count(prompt.request() ? prompt.request()->kind : PromptKind::CommandArgument);
+    auto rows = promptRowCount(prompt.request() ? prompt.request()->kind : PromptKind::CommandArgument);
     Rect reservation{0, static_cast<int>(dimensions.rows > rows ? dimensions.rows - rows : 0),
                      static_cast<int>(dimensions.columns), static_cast<int>(rows)};
-    auto prompt_layout = compute_prompt_layout(prompt, reservation);
+    auto prompt_layout = computePromptLayout(prompt, reservation);
     if (prompt_layout.accepted()) {
         view.prompt = prompt_layout.view;
-        project_find_replace_prompt(*view.prompt);
+        projectFindReplacePrompt(*view.prompt);
     }
-    view.status = status.view_state();
+    view.status = status.viewState();
     return view;
 }
 
-void EditorRuntime::Impl::project_find_replace_prompt(PromptViewState& prompt_view) const {
+void EditorRuntime::Impl::projectFindReplacePrompt(PromptViewState& prompt_view) const {
     if (prompt_view.kind != PromptKind::Find && prompt_view.kind != PromptKind::Replace) {
         return;
     }
-    auto const& find_state = find_replace.view_state();
+    auto const& find_state = find_replace.viewState();
     for (auto& control : prompt_view.controls) {
         switch (control.kind) {
             case PromptControlKind::Input:
@@ -70,23 +70,23 @@ void EditorRuntime::Impl::project_find_replace_prompt(PromptViewState& prompt_vi
     }
 }
 
-ShellViewState EditorRuntime::Impl::shell_view(ViewportDimensions dimensions,
+ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
                                                KeySequence const& leader_pending,
                                                PaletteReport const& palette_report) const {
     std::vector<TabLabel> labels;
-    for (auto const& tab : tabs.view_state().tabs) {
+    for (auto const& tab : tabs.viewState().tabs) {
         labels.push_back({tab.label, tab.label,
-                          tabs.view_state().active == tab.id, tab.dirty});
+                          tabs.viewState().active == tab.id, tab.dirty});
     }
-    auto status_projection = status.footer_projection();
-    auto follow_projection = follow.footer_projection();
+    auto status_projection = status.footerProjection();
+    auto follow_projection = follow.footerProjection();
     ShellLayoutRequest request;
     request.viewport = {static_cast<int>(dimensions.columns), static_cast<int>(dimensions.rows)};
-    request.reserved_prompt_rows = prompt.active() ? prompt_row_count(prompt.request()->kind) : 0;
-    request.empty_state = active_document() == nullptr;
-    request.panel_provider_label = std::string{shell.active_panel_provider()};
+    request.reserved_prompt_rows = prompt.active() ? promptRowCount(prompt.request()->kind) : 0;
+    request.empty_state = activeDocument() == nullptr;
+    request.panel_provider_label = std::string{shell.activePanelProvider()};
     request.header_fields = {{"cwd", "Workspace", root.string(), 0},
-                             {"file", "File", current_path_label(), 1}};
+                             {"file", "File", currentPathLabel(), 1}};
     request.footer_fields = {{"status", "Status", status_projection.value, 0},
                              {"follow", "Follow edits", follow_projection.mode, 1}};
     request.footer_actions = status_projection.actions;
@@ -95,7 +95,7 @@ ShellViewState EditorRuntime::Impl::shell_view(ViewportDimensions dimensions,
         std::string hint = "leader:";
         for (auto const& stroke : leader_pending) {
             hint += ' ';
-            hint += format_key_stroke(stroke);
+            hint += formatKeyStroke(stroke);
         }
         request.leader_hint = std::move(hint);
     }
@@ -106,7 +106,7 @@ ShellViewState EditorRuntime::Impl::shell_view(ViewportDimensions dimensions,
         request.palette_query = palette_report.query;
         request.palette_ghost = palette_report.ghost;
     }
-    auto result = compute_shell_layout(request, shell);
+    auto result = computeShellLayout(request, shell);
     if (!result.accepted()) return {};
     auto view = *result.view;
 
@@ -141,40 +141,40 @@ SessionSnapshotSections EditorRuntime::Impl::sections(ViewportDimensions dimensi
                                                      KeySequence const& leader_pending,
                                                      PaletteReport const& palette_report) const {
     auto current_history = HistoryViewState{false, false, 0};
-    if (auto id = active_document_id()) {
+    if (auto id = activeDocumentId()) {
         auto found = histories.find(id->value());
-        if (found != histories.end()) current_history = found->second.view_state();
+        if (found != histories.end()) current_history = found->second.viewState();
     }
     // Compute the shell layout first: it caches the panel height that tree_view
     // resolves the tree scroll offset against (the aggregate below does not
     // guarantee evaluation order).
-    auto shell = shell_view(dimensions, leader_pending, palette_report);
-    auto tree_section = tree_view();
-    return {document_view(),
+    auto shell = shellView(dimensions, leader_pending, palette_report);
+    auto tree_section = treeView();
+    return {documentView(),
             selection,
             current_history,
-            clipboard.view_state(),
-            prompt_status_view(dimensions),
-            search.view_state(),
-            find_replace.view_state(),
-            settings.view_state(),
+            clipboard.viewState(),
+            promptStatusView(dimensions),
+            search.viewState(),
+            find_replace.viewState(),
+            settings.viewState(),
             keymap,
-            text_encoding_view(),
-            tabs.view_state(),
-            diff.view_state(),
-            external.view_state(),
-            follow.view_state(),
+            textEncodingView(),
+            tabs.viewState(),
+            diff.viewState(),
+            external.viewState(),
+            follow.viewState(),
             std::move(tree_section),
-            syntax.view_state(),
+            syntax.viewState(),
             lsp_sync,
             lsp_features,
             theme,
             std::move(shell),
-            palette_view()};
+            paletteView()};
 }
 
-TreeViewState EditorRuntime::Impl::tree_view() const {
-    auto view = tree.view_state();
+TreeViewState EditorRuntime::Impl::treeView() const {
+    auto view = tree.viewState();
     if (view.providers.empty()) return view;
     // Only the active (front) provider is rendered. Resolve a display window from
     // the command-set offset and the current client's panel height WITHOUT
@@ -191,7 +191,7 @@ TreeViewState EditorRuntime::Impl::tree_view() const {
             }
         }
     }
-    auto scroll = compute_list_scroll_view(
+    auto scroll = computeListScrollView(
         static_cast<std::uint32_t>(provider.nodes.size()),
         last_panel_content_rows, tree_first_visible, selected_index,
         /*keep_selection_visible=*/false);
@@ -206,8 +206,8 @@ TreeViewState EditorRuntime::Impl::tree_view() const {
     return view;
 }
 
-void EditorRuntime::Impl::reveal_tree_selection() {
-    auto view = tree.view_state();
+void EditorRuntime::Impl::revealTreeSelection() {
+    auto view = tree.viewState();
     if (view.providers.empty()) return;
     auto const& provider = view.providers.front();
     if (!provider.selected) return;
@@ -219,21 +219,21 @@ void EditorRuntime::Impl::reveal_tree_selection() {
         }
     }
     if (!selected_index) return;
-    auto scroll = compute_list_scroll_view(
+    auto scroll = computeListScrollView(
         static_cast<std::uint32_t>(provider.nodes.size()),
         last_panel_content_rows, tree_first_visible, selected_index,
         /*keep_selection_visible=*/true);
     tree_first_visible = scroll.first_visible;
 }
 
-void EditorRuntime::Impl::scroll_tree(std::int64_t rows) {
-    auto view = tree.view_state();
+void EditorRuntime::Impl::scrollTree(std::int64_t rows) {
+    auto view = tree.viewState();
     if (view.providers.empty()) return;
     auto const& provider = view.providers.front();
     // Resolve the current scroll geometry (read-only) to bound the offset, then
     // shift it by `rows`. keep_selection_visible is false: a wheel scroll moves
     // the viewport, not the selection (a later reveal_tree_selection re-snaps).
-    auto scroll = compute_list_scroll_view(
+    auto scroll = computeListScrollView(
         static_cast<std::uint32_t>(provider.nodes.size()),
         last_panel_content_rows, tree_first_visible, std::nullopt,
         /*keep_selection_visible=*/false);
@@ -253,16 +253,16 @@ void EditorRuntime::Impl::scroll_tree(std::int64_t rows) {
     tree_first_visible = static_cast<std::uint32_t>(next);
 }
 
-PaletteViewState EditorRuntime::Impl::palette_view() const {
+PaletteViewState EditorRuntime::Impl::paletteView() const {
     PaletteViewState view;
     view.mode = SearchMode::Command;
     for (auto const& descriptor : descriptors()) {
         std::string detail;
-        if (auto sequence = preferred_binding(keymap, descriptor.id)) {
-            detail = format_key_sequence(*sequence);
+        if (auto sequence = preferredBinding(keymap, descriptor.id)) {
+            detail = formatKeySequence(*sequence);
         }
         view.candidates.push_back(
-            {descriptor.id, command_label(descriptor.id), std::move(detail)});
+            {descriptor.id, commandLabel(descriptor.id), std::move(detail)});
     }
     return view;
 }

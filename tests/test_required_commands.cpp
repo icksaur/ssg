@@ -231,7 +231,7 @@ std::optional<std::string> field(const std::string& object,
     return match[1].str();
 }
 
-std::optional<bool> boolean_field(const std::string& object,
+std::optional<bool> booleanField(const std::string& object,
                                   const std::string& name) {
     const std::regex expression{"\"" + name + R"("\s*:\s*(true|false))"};
     std::smatch match;
@@ -241,7 +241,7 @@ std::optional<bool> boolean_field(const std::string& object,
     return match[1].str() == "true";
 }
 
-std::optional<std::vector<std::string>> capabilities_field(
+std::optional<std::vector<std::string>> capabilitiesField(
     const std::string& object) {
     const std::regex expression{R"("required_capabilities"\s*:\s*\[([^\]]*)\])"};
     std::smatch match;
@@ -259,7 +259,7 @@ std::optional<std::vector<std::string>> capabilities_field(
     return capabilities;
 }
 
-std::optional<std::vector<CatalogCommand>> load_catalog() {
+std::optional<std::vector<CatalogCommand>> loadCatalog() {
     std::ifstream input{SSG_REQUIRED_COMMANDS_PATH};
     if (!input) {
         return std::nullopt;
@@ -279,10 +279,10 @@ std::optional<std::vector<CatalogCommand>> load_catalog() {
             continue;
         }
         const auto owner = field(object, "owner");
-        const auto capabilities = capabilities_field(object);
-        const auto lua = boolean_field(object, "lua");
-        const auto keymap = boolean_field(object, "keymap");
-        const auto palette = boolean_field(object, "palette");
+        const auto capabilities = capabilitiesField(object);
+        const auto lua = booleanField(object, "lua");
+        const auto keymap = booleanField(object, "keymap");
+        const auto palette = booleanField(object, "palette");
         if (!owner || !capabilities || !lua || !keymap || !palette) {
             return std::nullopt;
         }
@@ -300,7 +300,7 @@ std::optional<std::vector<CatalogCommand>> load_catalog() {
     return commands;
 }
 
-std::map<std::string, ExpectedCommand> expected_by_id() {
+std::map<std::string, ExpectedCommand> expectedById() {
     std::map<std::string, ExpectedCommand> expected;
     for (const auto& command : expected_commands) {
         expected.emplace(std::string{command.id}, command);
@@ -308,7 +308,7 @@ std::map<std::string, ExpectedCommand> expected_by_id() {
     return expected;
 }
 
-std::set<std::string> feature_spec_commands() {
+std::set<std::string> featureSpecCommands() {
     const std::regex command_id{
         R"(^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$)"};
     const std::regex backticked{
@@ -335,14 +335,14 @@ std::set<std::string> feature_spec_commands() {
     return result;
 }
 
-TEST(catalog_exactly_matches_independent_id_and_owner_oracle) {
-    const auto catalog = load_catalog();
+TEST(catalogExactlyMatchesIndependentIdAndOwnerOracle) {
+    const auto catalog = loadCatalog();
     ASSERT_TRUE(catalog.has_value());
     if (!catalog) {
         return;
     }
 
-    const auto expected = expected_by_id();
+    const auto expected = expectedById();
     ASSERT_EQ(expected.size(), expected_commands.size());
     ASSERT_EQ(catalog->size(), expected_commands.size());
 
@@ -360,8 +360,8 @@ TEST(catalog_exactly_matches_independent_id_and_owner_oracle) {
     ASSERT_EQ(seen.size(), expected_commands.size());
 }
 
-TEST(feature_spec_command_union_exactly_matches_catalog) {
-    const auto catalog = load_catalog();
+TEST(featureSpecCommandUnionExactlyMatchesCatalog) {
+    const auto catalog = loadCatalog();
     ASSERT_TRUE(catalog.has_value());
     if (!catalog) {
         return;
@@ -371,11 +371,11 @@ TEST(feature_spec_command_union_exactly_matches_catalog) {
     for (const auto& command : *catalog) {
         catalog_ids.insert(command.id);
     }
-    ASSERT_EQ(feature_spec_commands(), catalog_ids);
+    ASSERT_EQ(featureSpecCommands(), catalog_ids);
 }
 
-TEST(category_counts_are_independently_fixed) {
-    const auto catalog = load_catalog();
+TEST(categoryCountsAreIndependentlyFixed) {
+    const auto catalog = loadCatalog();
     ASSERT_TRUE(catalog.has_value());
     if (!catalog) {
         return;
@@ -396,14 +396,14 @@ TEST(category_counts_are_independently_fixed) {
     }
 }
 
-TEST(ids_are_exact_not_fuzzy_and_all_fields_are_owned) {
-    const auto catalog = load_catalog();
+TEST(idsAreExactNotFuzzyAndAllFieldsAreOwned) {
+    const auto catalog = loadCatalog();
     ASSERT_TRUE(catalog.has_value());
     if (!catalog) {
         return;
     }
 
-    const auto expected = expected_by_id();
+    const auto expected = expectedById();
     const std::regex valid_id{
         R"(^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$)"};
     for (const auto& command : *catalog) {
@@ -413,8 +413,8 @@ TEST(ids_are_exact_not_fuzzy_and_all_fields_are_owned) {
     }
 }
 
-TEST(capability_and_surface_exclusions_are_exact) {
-    const auto catalog = load_catalog();
+TEST(capabilityAndSurfaceExclusionsAreExact) {
+    const auto catalog = loadCatalog();
     ASSERT_TRUE(catalog.has_value());
     if (!catalog) {
         return;
@@ -466,11 +466,11 @@ TEST(capability_and_surface_exclusions_are_exact) {
 } // namespace
 
 int main() {
-    RUN(catalog_exactly_matches_independent_id_and_owner_oracle);
-    RUN(feature_spec_command_union_exactly_matches_catalog);
-    RUN(category_counts_are_independently_fixed);
-    RUN(ids_are_exact_not_fuzzy_and_all_fields_are_owned);
-    RUN(capability_and_surface_exclusions_are_exact);
+    RUN(catalogExactlyMatchesIndependentIdAndOwnerOracle);
+    RUN(featureSpecCommandUnionExactlyMatchesCatalog);
+    RUN(categoryCountsAreIndependentlyFixed);
+    RUN(idsAreExactNotFuzzyAndAllFieldsAreOwned);
+    RUN(capabilityAndSurfaceExclusionsAreExact);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

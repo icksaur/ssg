@@ -41,7 +41,7 @@ private:
     }};
 };
 
-[[nodiscard]] LspFeatureCommandSet lsp_feature_command_set();
+[[nodiscard]] LspFeatureCommandSet lspFeatureCommandSet();
 
 struct LspCompletionItem {
     std::string label;
@@ -102,7 +102,7 @@ struct LspFeatureDelta {
                            const LspFeatureDelta&) = default;
 };
 
-[[nodiscard]] LspFeatureDelta derive_lsp_feature_delta(
+[[nodiscard]] LspFeatureDelta deriveLspFeatureDelta(
     const LspFeatureViewState& base, const LspFeatureViewState& target);
 
 enum class LspFeatureReplayError : std::uint8_t {
@@ -117,7 +117,7 @@ struct LspFeatureReplayResult {
     [[nodiscard]] bool accepted() const noexcept { return state.has_value(); }
 };
 
-[[nodiscard]] LspFeatureReplayResult replay_lsp_feature_delta(
+[[nodiscard]] LspFeatureReplayResult replayLspFeatureDelta(
     const LspFeatureViewState& base, const LspFeatureDelta& delta);
 
 enum class LspFeatureError : std::uint8_t {
@@ -181,23 +181,23 @@ public:
     explicit LspFeatureController(LspSyncClient& client,
                                   LspFeatureConfig config = {});
 
-    [[nodiscard]] LspFeatureRequestResult request_completion(
+    [[nodiscard]] LspFeatureRequestResult requestCompletion(
         std::string uri, Revision revision, ByteOffset position);
-    [[nodiscard]] LspFeatureRequestResult request_hover(
+    [[nodiscard]] LspFeatureRequestResult requestHover(
         std::string uri, Revision revision, ByteOffset position);
-    [[nodiscard]] LspFeatureRequestResult request_definition(
+    [[nodiscard]] LspFeatureRequestResult requestDefinition(
         std::string uri, Revision revision, ByteOffset position);
-    [[nodiscard]] LspFeatureRequestResult request_references(
+    [[nodiscard]] LspFeatureRequestResult requestReferences(
         std::string uri, Revision revision, ByteOffset position);
     [[nodiscard]] LspFeaturePollResult poll(Revision current_revision);
 
-    void select_next_completion();
-    void select_previous_completion();
-    [[nodiscard]] LspCompletionAcceptance accept_completion();
-    void dismiss_completion();
-    void dismiss_hover();
+    void selectNextCompletion();
+    void selectPreviousCompletion();
+    [[nodiscard]] LspCompletionAcceptance acceptCompletion();
+    void dismissCompletion();
+    void dismissHover();
 
-    [[nodiscard]] const LspFeatureViewState& view_state() const noexcept {
+    [[nodiscard]] const LspFeatureViewState& viewState() const noexcept {
         return state_;
     }
 

@@ -53,8 +53,8 @@ ssg::JournalDocument document(std::string path, std::string contents) {
             std::move(contents)};
 }
 
-void make_restorable(ssg::ScratchSession& session, std::string contents) {
-    ssg::ScratchJournal{session.journal_path()}.append_document(
+void makeRestorable(ssg::ScratchSession& session, std::string contents) {
+    ssg::ScratchJournal{session.journalPath()}.appendDocument(
         document("file.txt", std::move(contents)));
 }
 
@@ -117,7 +117,7 @@ private:
 #endif
 };
 
-std::string wait_for_ready(const std::filesystem::path& path) {
+std::string waitForReady(const std::filesystem::path& path) {
     for (int attempt = 0; attempt < 500; ++attempt) {
         std::ifstream input(path);
         std::string value;
@@ -129,20 +129,20 @@ std::string wait_for_ready(const std::filesystem::path& path) {
     throw std::runtime_error("child did not become ready");
 }
 
-TEST(concurrent_process_is_hidden_until_crash_releases_lock) {
+TEST(concurrentProcessIsHiddenUntilCrashReleasesLock) {
     TemporaryDirectory temporary;
     const auto workspace =
         std::filesystem::absolute(temporary.path() / "workspace").lexically_normal();
     const auto ready = temporary.path() / "ready";
     ChildProcess child{std::filesystem::absolute("test_scratch_session"),
                        temporary.path(), workspace, ready};
-    const auto child_id = wait_for_ready(ready);
+    const auto child_id = waitForReady(ready);
 
     auto current = ssg::ScratchSession::create(temporary.path(), workspace);
-    ASSERT_FALSE(current.claim_newest_restorable().has_value());
+    ASSERT_FALSE(current.claimNewestRestorable().has_value());
 
     child.terminate();
-    auto crashed = current.claim_newest_restorable();
+    auto crashed = current.claimNewestRestorable();
     ASSERT_TRUE(crashed.has_value());
     ASSERT_EQ(crashed->id().value(), child_id);
     const auto replayed_crash = crashed->replay();
@@ -150,7 +150,7 @@ TEST(concurrent_process_is_hidden_until_crash_releases_lock) {
               std::string{"child"});
 }
 
-TEST(newest_unlocked_remnant_is_claimed_once) {
+TEST(newestUnlockedRemnantIsClaimedOnce) {
     TemporaryDirectory temporary;
     const auto workspace =
         std::filesystem::absolute(temporary.path() / "workspace").lexically_normal();
@@ -159,37 +159,37 @@ TEST(newest_unlocked_remnant_is_claimed_once) {
     {
         auto old = ssg::ScratchSession::create(temporary.path(), workspace);
         old_id = old.id().value();
-        make_restorable(old, "old");
+        makeRestorable(old, "old");
     }
     std::this_thread::sleep_for(2ms);
     std::string new_id;
     {
         auto recent = ssg::ScratchSession::create(temporary.path(), workspace);
         new_id = recent.id().value();
-        make_restorable(recent, "new");
+        makeRestorable(recent, "new");
     }
 
     auto selector_a = ssg::ScratchSession::create(temporary.path(), workspace);
     auto selector_b = ssg::ScratchSession::create(temporary.path(), workspace);
-    auto newest = selector_a.claim_newest_restorable();
+    auto newest = selector_a.claimNewestRestorable();
     ASSERT_TRUE(newest.has_value());
     ASSERT_EQ(newest->id().value(), new_id);
     const auto replayed_newest = newest->replay();
     ASSERT_EQ(replayed_newest.recovery.documents.front().utf8_content,
               std::string{"new"});
-    auto older = selector_b.claim_newest_restorable();
+    auto older = selector_b.claimNewestRestorable();
     ASSERT_TRUE(older.has_value());
     ASSERT_EQ(older->id().value(), old_id);
     older.reset();
 
-    newest->mark_restored();
+    newest->markRestored();
     newest.reset();
-    auto remaining = selector_a.claim_newest_restorable();
+    auto remaining = selector_a.claimNewestRestorable();
     ASSERT_TRUE(remaining.has_value());
     ASSERT_EQ(remaining->id().value(), old_id);
 }
 
-TEST(stale_empty_and_other_workspace_sessions_are_not_restored) {
+TEST(staleEmptyAndOtherWorkspaceSessionsAreNotRestored) {
     TemporaryDirectory temporary;
     const auto workspace_a =
         std::filesystem::absolute(temporary.path() / "a").lexically_normal();
@@ -200,21 +200,21 @@ TEST(stale_empty_and_other_workspace_sessions_are_not_restored) {
     }
     {
         auto other = ssg::ScratchSession::create(temporary.path(), workspace_b);
-        make_restorable(other, "other");
+        makeRestorable(other, "other");
     }
 
     auto current = ssg::ScratchSession::create(temporary.path(), workspace_a);
-    make_restorable(current, "live");
-    ASSERT_FALSE(current.claim_newest_restorable().has_value());
-    ASSERT_NE(ssg::scratch_workspace_key(workspace_a),
-              ssg::scratch_workspace_key(workspace_b));
+    makeRestorable(current, "live");
+    ASSERT_FALSE(current.claimNewestRestorable().has_value());
+    ASSERT_NE(ssg::scratchWorkspaceKey(workspace_a),
+              ssg::scratchWorkspaceKey(workspace_b));
 }
 
-int child_main(const std::filesystem::path& root,
+int childMain(const std::filesystem::path& root,
                const std::filesystem::path& workspace,
                const std::filesystem::path& ready) {
     auto session = ssg::ScratchSession::create(root, workspace);
-    make_restorable(session, "child");
+    makeRestorable(session, "child");
     {
         std::ofstream output(ready);
         output << session.id().value() << '\n';
@@ -228,13 +228,13 @@ int child_main(const std::filesystem::path& root,
 
 int main(int argc, char** argv) {
     if (argc == 5 && std::string_view{argv[1]} == "--hold") {
-        return child_main(argv[2], argv[3], argv[4]);
+        return childMain(argv[2], argv[3], argv[4]);
     }
 
     std::cout << "=== Scratch session locking ===\n";
-    RUN(concurrent_process_is_hidden_until_crash_releases_lock);
-    RUN(newest_unlocked_remnant_is_claimed_once);
-    RUN(stale_empty_and_other_workspace_sessions_are_not_restored);
+    RUN(concurrentProcessIsHiddenUntilCrashReleasesLock);
+    RUN(newestUnlockedRemnantIsClaimedOnce);
+    RUN(staleEmptyAndOtherWorkspaceSessionsAreNotRestored);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

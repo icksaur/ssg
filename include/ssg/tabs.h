@@ -77,9 +77,9 @@ struct TabReplayResult {
     [[nodiscard]] bool accepted() const noexcept { return error.empty(); }
 };
 
-[[nodiscard]] TabDelta derive_tab_delta(const TabViewState& base,
+[[nodiscard]] TabDelta deriveTabDelta(const TabViewState& base,
                                         const TabViewState& target);
-[[nodiscard]] TabReplayResult replay_tab_delta(const TabViewState& base,
+[[nodiscard]] TabReplayResult replayTabDelta(const TabViewState& base,
                                                const TabDelta& delta);
 
 enum class TabCommand : std::uint8_t {
@@ -123,7 +123,7 @@ private:
     }};
 };
 
-[[nodiscard]] TabManagementCommandSet tab_management_command_set();
+[[nodiscard]] TabManagementCommandSet tabManagementCommandSet();
 
 enum class TabError : std::uint8_t {
     None,
@@ -189,34 +189,34 @@ public:
     TabManager(TabManager&&) noexcept;
     TabManager& operator=(TabManager&&) noexcept;
 
-    [[nodiscard]] const TabViewState& view_state() const noexcept;
-    [[nodiscard]] std::size_t recently_closed_count() const noexcept;
+    [[nodiscard]] const TabViewState& viewState() const noexcept;
+    [[nodiscard]] std::size_t recentlyClosedCount() const noexcept;
 
-    [[nodiscard]] TabResult open_document(
+    [[nodiscard]] TabResult openDocument(
         FileDocumentId document, JournalDocumentKey identity,
         std::string_view label, DocumentMode mode, bool dirty,
         TabRecoveryBadge recovery = TabRecoveryBadge::None);
-    [[nodiscard]] TabResult open_content(TabKind kind,
+    [[nodiscard]] TabResult openContent(TabKind kind,
                                          std::string_view content_identity,
                                          std::string_view label,
                                          DocumentMode mode);
-    [[nodiscard]] TabResult update_document(
+    [[nodiscard]] TabResult updateDocument(
         FileDocumentId document, DocumentMode mode, bool dirty,
         TabRecoveryBadge recovery);
 
     [[nodiscard]] TabResult activate(TabId tab);
     [[nodiscard]] TabResult next();
     [[nodiscard]] TabResult previous();
-    [[nodiscard]] TabResult move_left(TabId tab);
-    [[nodiscard]] TabResult move_right(TabId tab);
+    [[nodiscard]] TabResult moveLeft(TabId tab);
+    [[nodiscard]] TabResult moveRight(TabId tab);
 
     [[nodiscard]] TabResult close(
         TabId tab, std::chrono::milliseconds durability_timeout);
-    [[nodiscard]] TabResult close_others(
+    [[nodiscard]] TabResult closeOthers(
         TabId tab, std::chrono::milliseconds durability_timeout);
-    [[nodiscard]] TabResult close_all(
+    [[nodiscard]] TabResult closeAll(
         std::chrono::milliseconds durability_timeout);
-    [[nodiscard]] TabResult reopen_closed();
+    [[nodiscard]] TabResult reopenClosed();
 
 private:
     struct Impl;

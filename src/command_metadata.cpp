@@ -50,7 +50,7 @@ constexpr std::array<std::pair<std::string_view, std::string_view>, 34> kLabels{
 
 // Title-case a lowercase segment in place-friendly form: "line_down" -> "Line
 // Down".  Underscores become spaces; each word's first letter is uppercased.
-std::string humanize_segment(std::string_view segment) {
+std::string humanizeSegment(std::string_view segment) {
     std::string result;
     bool word_start = true;
     for (char raw : segment) {
@@ -77,7 +77,7 @@ std::string humanize(std::string_view command_id) {
         auto dot = command_id.find('.', begin);
         auto end = dot == std::string_view::npos ? command_id.size() : dot;
         if (!result.empty()) result += ' ';
-        result += humanize_segment(command_id.substr(begin, end - begin));
+        result += humanizeSegment(command_id.substr(begin, end - begin));
         if (dot == std::string_view::npos) break;
         begin = dot + 1;
     }
@@ -86,7 +86,7 @@ std::string humanize(std::string_view command_id) {
 
 }  // namespace
 
-std::string command_label(std::string_view command_id) {
+std::string commandLabel(std::string_view command_id) {
     for (const auto& [id, label] : kLabels) {
         if (id == command_id) return std::string{label};
     }

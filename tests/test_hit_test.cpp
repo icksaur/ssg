@@ -16,7 +16,7 @@ namespace {
 
 namespace fs = std::filesystem;
 
-fs::path unique_root() {
+fs::path uniqueRoot() {
     auto root = fs::current_path() / "hit_test_root";
     fs::remove_all(root);
     fs::create_directories(root / "scratch");
@@ -24,7 +24,7 @@ fs::path unique_root() {
     return root;
 }
 
-std::unique_ptr<ssg::EditorRuntime> make_runtime(fs::path const& root) {
+std::unique_ptr<ssg::EditorRuntime> makeRuntime(fs::path const& root) {
     auto created = ssg::EditorRuntime::create(
         {root, root / "scratch", root / "recovery"});
     if (!created.accepted()) return nullptr;
@@ -36,11 +36,11 @@ std::unique_ptr<ssg::EditorRuntime> make_runtime(fs::path const& root) {
 
 // ---------------------------------------------------------------------------
 
-TEST(editor_cell_maps_to_its_document_byte_offset) {
-    auto root = unique_root();
+TEST(editorCellMapsToItsDocumentByteOffset) {
+    auto root = uniqueRoot();
     std::string const text = "alpha\nbeta\ngamma\n";
     std::ofstream{root / "doc.txt"} << text;
-    auto runtime = make_runtime(root);
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)runtime->dispatch(ssg::ClientId{1},
@@ -65,11 +65,11 @@ TEST(editor_cell_maps_to_its_document_byte_offset) {
     for (auto const& target : targets) {
         int const column = content.x + static_cast<int>(target.viewport_column);
         int const row = content.y + static_cast<int>(target.viewport_row);
-        auto hit = ssg::hit_test(*snapshot, column, row);
+        auto hit = ssg::hitTest(*snapshot, column, row);
         ASSERT_EQ(hit.region, ssg::HitRegion::Editor);
         ASSERT_EQ(hit.byte_offset, target.byte_offset);
         auto position =
-            ssg::resolve_document_position(text, ssg::ByteOffset{hit.byte_offset});
+            ssg::resolveDocumentPosition(text, ssg::ByteOffset{hit.byte_offset});
         ASSERT_TRUE(position.has_value());
         if (position) {
             ASSERT_EQ(position->line.value(),
@@ -97,27 +97,27 @@ TEST(editor_cell_maps_to_its_document_byte_offset) {
     // A cell far past the end of the short first line ("alpha", 5 cells) now
     // clamps to that line's end (M8 click-past-EOL): an editor hit at the newline
     // byte after "alpha" (offset 5), zero-width.
-    auto past_eol = ssg::hit_test(*snapshot, content.right() - 2, content.y);
+    auto past_eol = ssg::hitTest(*snapshot, content.right() - 2, content.y);
     ASSERT_EQ(past_eol.region, ssg::HitRegion::Editor);
     ASSERT_EQ(past_eol.byte_offset, std::uint32_t{5});
     ASSERT_EQ(past_eol.byte_len, std::uint32_t{0});
     {
-        auto position = ssg::resolve_document_position(
+        auto position = ssg::resolveDocumentPosition(
             text, ssg::ByteOffset{past_eol.byte_offset});
         ASSERT_TRUE(position.has_value());
         if (position) ASSERT_EQ(position->line.value(), std::uint64_t{0});
     }
 }
 
-TEST(click_past_eol_blank_line_and_below_document_clamp_to_line_end) {
+TEST(clickPastEolBlankLineAndBelowDocumentClampToLineEnd) {
     // M8 click-past-EOL: a document with a blank (newline-only) line and short
     // lines. Clicking past content, on the blank line, and below the last line all
     // place the caret at the appropriate line end.
-    auto root = unique_root();
+    auto root = uniqueRoot();
     //             offsets: a=0 b=1 \n=2 | (blank) \n=3 | c=4 d=5 e=6 \n=7
     std::string const text = "ab\n\ncde\n";
     std::ofstream{root / "doc.txt"} << text;
-    auto runtime = make_runtime(root);
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)runtime->dispatch(ssg::ClientId{1},
@@ -131,18 +131,18 @@ TEST(click_past_eol_blank_line_and_below_document_clamp_to_line_end) {
     auto const content = shell.panes.front().content;
 
     auto resolve_line = [&](std::uint32_t offset) -> std::uint64_t {
-        auto p = ssg::resolve_document_position(text, ssg::ByteOffset{offset});
+        auto p = ssg::resolveDocumentPosition(text, ssg::ByteOffset{offset});
         return p ? p->line.value() : 9999;
     };
 
     // Exact cell unchanged: 'a' at row 0 col 0 -> offset 0.
-    auto exact = ssg::hit_test(*snapshot, content.x, content.y);
+    auto exact = ssg::hitTest(*snapshot, content.x, content.y);
     ASSERT_EQ(exact.region, ssg::HitRegion::Editor);
     ASSERT_EQ(exact.byte_offset, std::uint32_t{0});
     ASSERT_TRUE(exact.byte_len > 0);
 
     // Past the end of line 0 ("ab") -> the newline at offset 2, on line 0.
-    auto past0 = ssg::hit_test(*snapshot, content.x + 30, content.y);
+    auto past0 = ssg::hitTest(*snapshot, content.x + 30, content.y);
     ASSERT_EQ(past0.region, ssg::HitRegion::Editor);
     ASSERT_EQ(past0.byte_offset, std::uint32_t{2});
     ASSERT_EQ(past0.byte_len, std::uint32_t{0});
@@ -151,7 +151,7 @@ TEST(click_past_eol_blank_line_and_below_document_clamp_to_line_end) {
     // The blank line (row 1) — anywhere on it, including column 0 — resolves to the
     // blank line's own offset (3), on line 1. A blank row has no hit targets, so
     // this is purely the clamp.
-    auto blank = ssg::hit_test(*snapshot, content.x + 5, content.y + 1);
+    auto blank = ssg::hitTest(*snapshot, content.x + 5, content.y + 1);
     ASSERT_EQ(blank.region, ssg::HitRegion::Editor);
     ASSERT_EQ(blank.byte_offset, std::uint32_t{3});
     ASSERT_EQ(blank.byte_len, std::uint32_t{0});
@@ -162,23 +162,23 @@ TEST(click_past_eol_blank_line_and_below_document_clamp_to_line_end) {
     // text end after "cde\n").
     auto const last_row_end =
         snapshot->client().viewport.visible_rows.back().end_byte_offset;
-    auto below = ssg::hit_test(*snapshot, content.x + 10, content.bottom() - 1);
+    auto below = ssg::hitTest(*snapshot, content.x + 10, content.bottom() - 1);
     ASSERT_EQ(below.region, ssg::HitRegion::Editor);
     ASSERT_EQ(below.byte_offset, last_row_end);
     ASSERT_EQ(below.byte_len, std::uint32_t{0});
     auto below_pos =
-        ssg::resolve_document_position(text, ssg::ByteOffset{below.byte_offset});
+        ssg::resolveDocumentPosition(text, ssg::ByteOffset{below.byte_offset});
     ASSERT_TRUE(below_pos.has_value());
 }
 
-TEST(click_past_eol_integration_lands_caret_at_line_end) {
+TEST(clickPastEolIntegrationLandsCaretAtLineEnd) {
     // CE-2 (reproducible headless integration): a click past a line's content, on
     // a blank line, and below the document flows hit_test -> resolve_document_
     // position -> cursor.set_position and lands the caret at the row's end.
-    auto root = unique_root();
+    auto root = uniqueRoot();
     std::string const text = "ab\n\ncde\n";  // ends: line0=2, blank=3, line2=7, tail=8
     std::ofstream{root / "doc.txt"} << text;
-    auto runtime = make_runtime(root);
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)runtime->dispatch(ssg::ClientId{1},
@@ -188,9 +188,9 @@ TEST(click_past_eol_integration_lands_caret_at_line_end) {
         auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
         if (!snapshot) return 9999;
         auto const content = snapshot->sections().shell.panes.front().content;
-        auto hit = ssg::hit_test(*snapshot, column, row);
+        auto hit = ssg::hitTest(*snapshot, column, row);
         if (hit.region != ssg::HitRegion::Editor) return 9999;
-        auto pos = ssg::resolve_document_position(text, ssg::ByteOffset{hit.byte_offset});
+        auto pos = ssg::resolveDocumentPosition(text, ssg::ByteOffset{hit.byte_offset});
         if (!pos) return 9999;
         (void)runtime->dispatch(
             ssg::ClientId{1},
@@ -217,14 +217,14 @@ TEST(click_past_eol_integration_lands_caret_at_line_end) {
               std::uint64_t{8});
 }
 
-TEST(panel_row_maps_to_its_tree_node_id) {
-    auto root = unique_root();
+TEST(panelRowMapsToItsTreeNodeId) {
+    auto root = uniqueRoot();
     for (int i = 0; i < 6; ++i) {
         char name[32];
         std::snprintf(name, sizeof name, "file-%02d.txt", i);
         std::ofstream{root / name} << "x";
     }
-    auto runtime = make_runtime(root);
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)runtime->dispatch(ssg::ClientId{1}, {"panel.toggle", runtime->revision(), {}});
@@ -241,24 +241,24 @@ TEST(panel_row_maps_to_its_tree_node_id) {
     if (provider.visible_node_ids.empty()) return;
 
     // The provider-label row (panel.y) is not a node.
-    auto label = ssg::hit_test(*snapshot, shell.panel->x, shell.panel->y);
+    auto label = ssg::hitTest(*snapshot, shell.panel->x, shell.panel->y);
     ASSERT_EQ(label.region, ssg::HitRegion::None);
 
     // The first content row maps to the first visible node id.
-    auto hit = ssg::hit_test(*snapshot, shell.panel->x, shell.panel->y + 1);
+    auto hit = ssg::hitTest(*snapshot, shell.panel->x, shell.panel->y + 1);
     ASSERT_EQ(hit.region, ssg::HitRegion::Panel);
     ASSERT_TRUE(hit.node_id.has_value());
     if (hit.node_id) ASSERT_EQ(*hit.node_id, provider.visible_node_ids.front());
 
     // A row below the last visible node is empty.
-    auto empty = ssg::hit_test(*snapshot, shell.panel->x, shell.panel->bottom() - 1);
+    auto empty = ssg::hitTest(*snapshot, shell.panel->x, shell.panel->bottom() - 1);
     ASSERT_EQ(empty.region, ssg::HitRegion::None);
 }
 
-TEST(palette_row_maps_to_its_absolute_rank_index) {
-    auto root = unique_root();
+TEST(paletteRowMapsToItsAbsoluteRankIndex) {
+    auto root = uniqueRoot();
     std::ofstream{root / "doc.txt"} << "alpha\n";
-    auto runtime = make_runtime(root);
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)runtime->dispatch(ssg::ClientId{1},
@@ -279,7 +279,7 @@ TEST(palette_row_maps_to_its_absolute_rank_index) {
     projection.scrollbar_rect = pane.scrollbar;
     projection.first_visible = 20;
     projection.selected = std::uint32_t{25};
-    projection.scrollbar = ssg::scrollbar_metrics(40, rows, 20);
+    projection.scrollbar = ssg::scrollbarMetrics(40, rows, 20);
     for (std::uint32_t i = 0; i < rows; ++i) {
         projection.rows.push_back({"cmd-" + std::to_string(20 + i), ""});
     }
@@ -287,20 +287,20 @@ TEST(palette_row_maps_to_its_absolute_rank_index) {
     ssg::SessionSnapshot projected{snapshot->revision(), snapshot->topology(),
                                    snapshot->client(), std::move(sections)};
 
-    auto hit = ssg::hit_test(projected, pane.content.x, pane.content.y + 3);
+    auto hit = ssg::hitTest(projected, pane.content.x, pane.content.y + 3);
     ASSERT_EQ(hit.region, ssg::HitRegion::Palette);
     ASSERT_EQ(hit.item_index, std::uint32_t{23});
 
     // The palette overlays the pane: a document cell is inert while it is open.
-    auto over_doc = ssg::hit_test(projected, pane.content.x, pane.content.y);
+    auto over_doc = ssg::hitTest(projected, pane.content.x, pane.content.y);
     ASSERT_EQ(over_doc.region, ssg::HitRegion::Palette);
     ASSERT_EQ(over_doc.item_index, std::uint32_t{20});
 }
 
-TEST(palette_scrollbar_and_empty_area_classify_correctly) {
-    auto root = unique_root();
+TEST(paletteScrollbarAndEmptyAreaClassifyCorrectly) {
+    auto root = uniqueRoot();
     std::ofstream{root / "doc.txt"} << "alpha\n";
-    auto runtime = make_runtime(root);
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)runtime->dispatch(ssg::ClientId{1},
@@ -317,7 +317,7 @@ TEST(palette_scrollbar_and_empty_area_classify_correctly) {
     projection.scrollbar_rect = pane.scrollbar;
     projection.first_visible = 0;
     projection.selected = std::uint32_t{0};
-    projection.scrollbar = ssg::scrollbar_metrics(100, rows, 0);
+    projection.scrollbar = ssg::scrollbarMetrics(100, rows, 0);
     for (std::uint32_t i = 0; i < rows; ++i) {  // exactly fills the window
         projection.rows.push_back({"cmd-" + std::to_string(i), ""});
     }
@@ -326,20 +326,20 @@ TEST(palette_scrollbar_and_empty_area_classify_correctly) {
                                    snapshot->client(), std::move(sections)};
 
     // Top of the palette gutter -> fraction 0; bottom -> fraction ~1.
-    auto top = ssg::hit_test(projected, pane.scrollbar.x, pane.scrollbar.y);
+    auto top = ssg::hitTest(projected, pane.scrollbar.x, pane.scrollbar.y);
     ASSERT_EQ(top.region, ssg::HitRegion::PaletteScrollbar);
     ASSERT_EQ(top.scroll_numerator, std::uint32_t{0});
-    auto bottom = ssg::hit_test(projected, pane.scrollbar.x, pane.scrollbar.bottom() - 1);
+    auto bottom = ssg::hitTest(projected, pane.scrollbar.x, pane.scrollbar.bottom() - 1);
     ASSERT_EQ(bottom.region, ssg::HitRegion::PaletteScrollbar);
     ASSERT_EQ(bottom.scroll_numerator, bottom.scroll_denominator);
 }
 
-TEST(editor_scrollbar_fraction_feeds_scroll_to_fraction) {
-    auto root = unique_root();
+TEST(editorScrollbarFractionFeedsScrollToFraction) {
+    auto root = uniqueRoot();
     std::string text;
     for (int i = 0; i < 100; ++i) text += "line " + std::to_string(i) + "\n";
     std::ofstream{root / "tall.txt"} << text;
-    auto runtime = make_runtime(root);
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)runtime->dispatch(ssg::ClientId{1},
@@ -354,7 +354,7 @@ TEST(editor_scrollbar_fraction_feeds_scroll_to_fraction) {
     ASSERT_TRUE(gutter.height > 1);
 
     // Top of the gutter -> numerator 0 (scroll to the document top).
-    auto top = ssg::hit_test(*snapshot, gutter.x, gutter.y);
+    auto top = ssg::hitTest(*snapshot, gutter.x, gutter.y);
     ASSERT_EQ(top.region, ssg::HitRegion::EditorScrollbar);
     ASSERT_EQ(top.scroll_numerator, std::uint32_t{0});
     ASSERT_EQ(top.scroll_denominator,
@@ -362,7 +362,7 @@ TEST(editor_scrollbar_fraction_feeds_scroll_to_fraction) {
 
     // Bottom of the gutter -> numerator == denominator (fraction 1.0), which
     // view.scroll_to_fraction turns into maximum_first_row (the document end).
-    auto bottom = ssg::hit_test(*snapshot, gutter.x, gutter.bottom() - 1);
+    auto bottom = ssg::hitTest(*snapshot, gutter.x, gutter.bottom() - 1);
     ASSERT_EQ(bottom.region, ssg::HitRegion::EditorScrollbar);
     ASSERT_EQ(bottom.scroll_numerator, bottom.scroll_denominator);
     auto const max_first = snapshot->client().viewport.scrollbar.maximum_first_row;
@@ -372,11 +372,11 @@ TEST(editor_scrollbar_fraction_feeds_scroll_to_fraction) {
     ASSERT_EQ(resolved, max_first);
 }
 
-TEST(tab_bar_cell_maps_to_its_tab_index) {
-    auto root = unique_root();
+TEST(tabBarCellMapsToItsTabIndex) {
+    auto root = uniqueRoot();
     std::ofstream{root / "alpha.txt"} << "a\n";
     std::ofstream{root / "beta.txt"} << "b\n";
-    auto runtime = make_runtime(root);
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)runtime->dispatch(
@@ -394,7 +394,7 @@ TEST(tab_bar_cell_maps_to_its_tab_index) {
 
     // A cell inside each published tab rect resolves to that tab's index.
     for (auto const& tab : shell.tab_hits) {
-        auto hit = ssg::hit_test(*snapshot, tab.rect.x, tab.rect.y);
+        auto hit = ssg::hitTest(*snapshot, tab.rect.x, tab.rect.y);
         ASSERT_EQ(hit.region, ssg::HitRegion::Tab);
         ASSERT_EQ(hit.tab_index, tab.index);
     }
@@ -402,14 +402,14 @@ TEST(tab_bar_cell_maps_to_its_tab_index) {
     // The tab-bar row past the last tab is padding, not a tab.
     auto const& last = shell.tab_hits.back();
     ASSERT_TRUE(last.rect.right() < shell.viewport.columns);
-    auto pad = ssg::hit_test(*snapshot, last.rect.right(), last.rect.y);
+    auto pad = ssg::hitTest(*snapshot, last.rect.right(), last.rect.y);
     ASSERT_TRUE(pad.region != ssg::HitRegion::Tab);
 }
 
-TEST(out_of_bounds_and_chrome_return_no_target) {
-    auto root = unique_root();
+TEST(outOfBoundsAndChromeReturnNoTarget) {
+    auto root = uniqueRoot();
     std::ofstream{root / "doc.txt"} << "alpha\n";
-    auto runtime = make_runtime(root);
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)runtime->dispatch(ssg::ClientId{1},
@@ -418,26 +418,26 @@ TEST(out_of_bounds_and_chrome_return_no_target) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
 
-    ASSERT_EQ(ssg::hit_test(*snapshot, -1, 5).region, ssg::HitRegion::None);
-    ASSERT_EQ(ssg::hit_test(*snapshot, 5, -1).region, ssg::HitRegion::None);
-    ASSERT_EQ(ssg::hit_test(*snapshot, 9999, 5).region, ssg::HitRegion::None);
-    ASSERT_EQ(ssg::hit_test(*snapshot, 5, 9999).region, ssg::HitRegion::None);
+    ASSERT_EQ(ssg::hitTest(*snapshot, -1, 5).region, ssg::HitRegion::None);
+    ASSERT_EQ(ssg::hitTest(*snapshot, 5, -1).region, ssg::HitRegion::None);
+    ASSERT_EQ(ssg::hitTest(*snapshot, 9999, 5).region, ssg::HitRegion::None);
+    ASSERT_EQ(ssg::hitTest(*snapshot, 5, 9999).region, ssg::HitRegion::None);
     // The header row (row 0) is chrome, not a region.
-    ASSERT_EQ(ssg::hit_test(*snapshot, 0, 0).region, ssg::HitRegion::None);
+    ASSERT_EQ(ssg::hitTest(*snapshot, 0, 0).region, ssg::HitRegion::None);
 }
 
 }  // namespace
 
 int main() {
-    RUN(editor_cell_maps_to_its_document_byte_offset);
-    RUN(click_past_eol_blank_line_and_below_document_clamp_to_line_end);
-    RUN(click_past_eol_integration_lands_caret_at_line_end);
-    RUN(panel_row_maps_to_its_tree_node_id);
-    RUN(palette_row_maps_to_its_absolute_rank_index);
-    RUN(palette_scrollbar_and_empty_area_classify_correctly);
-    RUN(editor_scrollbar_fraction_feeds_scroll_to_fraction);
-    RUN(tab_bar_cell_maps_to_its_tab_index);
-    RUN(out_of_bounds_and_chrome_return_no_target);
+    RUN(editorCellMapsToItsDocumentByteOffset);
+    RUN(clickPastEolBlankLineAndBelowDocumentClampToLineEnd);
+    RUN(clickPastEolIntegrationLandsCaretAtLineEnd);
+    RUN(panelRowMapsToItsTreeNodeId);
+    RUN(paletteRowMapsToItsAbsoluteRankIndex);
+    RUN(paletteScrollbarAndEmptyAreaClassifyCorrectly);
+    RUN(editorScrollbarFractionFeedsScrollToFraction);
+    RUN(tabBarCellMapsToItsTabIndex);
+    RUN(outOfBoundsAndChromeReturnNoTarget);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;
 }

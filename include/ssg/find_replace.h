@@ -66,7 +66,7 @@ struct FindResult {
     }
 };
 
-[[nodiscard]] FindResult find_matches(std::string_view text,
+[[nodiscard]] FindResult findMatches(std::string_view text,
                                       const FindRequest& request);
 
 enum class FindReplaceCommand : std::uint8_t {
@@ -108,12 +108,12 @@ public:
     descriptors() const noexcept;
 
 private:
-    friend FindReplaceCommandSet find_replace_command_set();
+    friend FindReplaceCommandSet findReplaceCommandSet();
     FindReplaceCommandSet();
     const std::array<FindReplaceCommandDescriptor, 15> descriptors_;
 };
 
-[[nodiscard]] FindReplaceCommandSet find_replace_command_set();
+[[nodiscard]] FindReplaceCommandSet findReplaceCommandSet();
 
 struct FindReplaceViewState {
     std::uint64_t generation = 0;
@@ -148,9 +148,9 @@ struct FindReplaceReplayResult {
     FindReplaceViewState state;
 };
 
-[[nodiscard]] FindReplaceDelta derive_find_replace_delta(
+[[nodiscard]] FindReplaceDelta deriveFindReplaceDelta(
     const FindReplaceViewState& before, const FindReplaceViewState& after);
-[[nodiscard]] FindReplaceReplayResult replay_find_replace_delta(
+[[nodiscard]] FindReplaceReplayResult replayFindReplaceDelta(
     const FindReplaceViewState& base, const FindReplaceDelta& delta);
 
 struct FindReplaceOperationResult {
@@ -165,33 +165,33 @@ struct FindReplaceOperationResult {
 class FindReplaceController {
 public:
     void open(const DocumentSnapshot& document, FindRequest request);
-    void open_replace(const DocumentSnapshot& document, FindRequest request);
+    void openReplace(const DocumentSnapshot& document, FindRequest request);
     void close();
-    void update_query(const DocumentSnapshot& document, std::string query,
+    void updateQuery(const DocumentSnapshot& document, std::string query,
                       std::optional<ByteRange> selection);
-    void update_replacement(std::string replacement);
-    void toggle_case(const DocumentSnapshot& document);
-    void toggle_whole_word(const DocumentSnapshot& document);
-    void toggle_regex(const DocumentSnapshot& document);
-    void toggle_selection(const DocumentSnapshot& document,
+    void updateReplacement(std::string replacement);
+    void toggleCase(const DocumentSnapshot& document);
+    void toggleWholeWord(const DocumentSnapshot& document);
+    void toggleRegex(const DocumentSnapshot& document);
+    void toggleSelection(const DocumentSnapshot& document,
                           std::optional<ByteRange> selection);
     void refresh(const DocumentSnapshot& document,
                  std::optional<ByteRange> selection);
     void next();
     void previous();
 
-    [[nodiscard]] FindReplaceOperationResult replace_current(
+    [[nodiscard]] FindReplaceOperationResult replaceCurrent(
         Document& document, DocumentHistory& history,
         const SelectionSet& selections_before,
         const SelectionSet& selections_after, std::string replacement,
         std::uint64_t timestamp_ms);
-    [[nodiscard]] FindReplaceOperationResult replace_all(
+    [[nodiscard]] FindReplaceOperationResult replaceAll(
         Document& document, DocumentHistory& history,
         const SelectionSet& selections_before,
         const SelectionSet& selections_after, std::string replacement,
         std::uint64_t timestamp_ms);
 
-    [[nodiscard]] const FindReplaceViewState& view_state() const noexcept;
+    [[nodiscard]] const FindReplaceViewState& viewState() const noexcept;
 
 private:
     void evaluate(const DocumentSnapshot& document);
@@ -266,13 +266,13 @@ struct WorkspacePreviewResult {
     }
 };
 
-[[nodiscard]] WorkspacePreviewResult preview_workspace_replace(
+[[nodiscard]] WorkspacePreviewResult previewWorkspaceReplace(
     const FindReplaceWorkspace& workspace, Revision source_revision,
     const FindRequest& request, std::string replacement);
-[[nodiscard]] WorkspaceApplyResult apply_workspace_replace(
+[[nodiscard]] WorkspaceApplyResult applyWorkspaceReplace(
     FindReplaceWorkspace& workspace, const WorkspaceReplacePreview& preview,
     WorkspaceRecoverySink& recovery_sink);
-[[nodiscard]] WorkspaceApplyResult recover_workspace_replace(
+[[nodiscard]] WorkspaceApplyResult recoverWorkspaceReplace(
     FindReplaceWorkspace& workspace, const WorkspaceRecoveryRecord& record);
 
 }  // namespace ssg

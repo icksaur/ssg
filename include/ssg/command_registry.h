@@ -78,12 +78,12 @@ public:
     InvocationPrincipal& operator=(InvocationPrincipal const&) = delete;
     InvocationPrincipal& operator=(InvocationPrincipal&&) = delete;
 
-    [[nodiscard]] ClientId client_id() const noexcept { return client_id_; }
+    [[nodiscard]] ClientId clientId() const noexcept { return client_id_; }
     [[nodiscard]] InvocationOrigin origin() const noexcept { return origin_; }
     [[nodiscard]] std::vector<CapabilityId> const& capabilities() const noexcept {
         return capabilities_;
     }
-    [[nodiscard]] bool has_capability(CapabilityId const& capability) const;
+    [[nodiscard]] bool hasCapability(CapabilityId const& capability) const;
 
 private:
     ClientId client_id_;
@@ -99,29 +99,29 @@ public:
     virtual ~CommandServices() = default;
 
     template <typename State>
-    [[nodiscard]] State& feature_state() {
-        return std::any_cast<State&>(feature_state_value(typeid(State)));
+    [[nodiscard]] State& featureState() {
+        return std::any_cast<State&>(featureStateValue(typeid(State)));
     }
 
     template <typename Status>
-    void publish_status(Status status) {
-        publish_status_value(typeid(Status), std::any{std::move(status)});
+    void publishStatus(Status status) {
+        publishStatusValue(typeid(Status), std::any{std::move(status)});
     }
 
     template <typename Delta>
-    void publish_delta(Delta delta) {
-        publish_delta_value(typeid(Delta), std::any{std::move(delta)});
+    void publishDelta(Delta delta) {
+        publishDeltaValue(typeid(Delta), std::any{std::move(delta)});
     }
 
-    [[nodiscard]] virtual CommandHandlerResult run_transaction(
+    [[nodiscard]] virtual CommandHandlerResult runTransaction(
         std::function<CommandHandlerResult()> operation) = 0;
 
 private:
-    [[nodiscard]] virtual std::any& feature_state_value(
+    [[nodiscard]] virtual std::any& featureStateValue(
         std::type_index type) = 0;
-    virtual void publish_status_value(std::type_index type,
+    virtual void publishStatusValue(std::type_index type,
                                       std::any status) = 0;
-    virtual void publish_delta_value(std::type_index type,
+    virtual void publishDeltaValue(std::type_index type,
                                      std::any delta) = 0;
 };
 
@@ -135,8 +135,8 @@ public:
         return services_;
     }
 
-    void set_active_workspace(WorkspaceId workspace) noexcept;
-    void set_active_view(ViewId view) noexcept;
+    void setActiveWorkspace(WorkspaceId workspace) noexcept;
+    void setActiveView(ViewId view) noexcept;
 
 private:
     friend class EditorSession;

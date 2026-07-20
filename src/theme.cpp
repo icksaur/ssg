@@ -73,7 +73,7 @@ constexpr bool valid(SyntaxScope scope) noexcept {
     return position(scope) < syntax_scope_count;
 }
 
-void validate_palette_index(std::uint8_t index) {
+void validatePaletteIndex(std::uint8_t index) {
     if (index >= theme_palette_size) {
         throw std::invalid_argument("theme mapping palette index must be in [0, 15]");
     }
@@ -81,24 +81,24 @@ void validate_palette_index(std::uint8_t index) {
 
 } // namespace
 
-std::string_view semantic_role_name(SemanticRole role) {
+std::string_view semanticRoleName(SemanticRole role) {
     if (!valid(role)) throw std::invalid_argument("semantic role is not recognized");
     return semantic_names[position(role)];
 }
 
-std::optional<SemanticRole> semantic_role_from_name(std::string_view name) {
+std::optional<SemanticRole> semanticRoleFromName(std::string_view name) {
     for (std::size_t index = 0; index < semantic_names.size(); ++index) {
         if (semantic_names[index] == name) return all_semantic_roles[index];
     }
     return std::nullopt;
 }
 
-std::string_view syntax_scope_name(SyntaxScope scope) {
+std::string_view syntaxScopeName(SyntaxScope scope) {
     if (!valid(scope)) throw std::invalid_argument("syntax scope is not recognized");
     return syntax_names[position(scope)];
 }
 
-std::optional<SyntaxScope> syntax_scope_from_name(std::string_view name) {
+std::optional<SyntaxScope> syntaxScopeFromName(std::string_view name) {
     for (std::size_t index = 0; index < syntax_names.size(); ++index) {
         if (syntax_names[index] == name) return all_syntax_scopes[index];
     }
@@ -134,7 +134,7 @@ Theme::Theme(std::string name,
         if (!valid(mapping.role)) {
             throw std::invalid_argument("theme contains an unknown semantic role");
         }
-        validate_palette_index(mapping.palette_index);
+        validatePaletteIndex(mapping.palette_index);
         const auto index = position(mapping.role);
         if (seen_roles[index]) {
             throw std::invalid_argument("theme contains a duplicate semantic role");
@@ -151,7 +151,7 @@ Theme::Theme(std::string name,
         if (!valid(mapping.scope)) {
             throw std::invalid_argument("theme contains an unknown syntax scope");
         }
-        validate_palette_index(mapping.palette_index);
+        validatePaletteIndex(mapping.palette_index);
         const auto index = position(mapping.scope);
         if (seen_scopes[index]) {
             throw std::invalid_argument("theme contains a duplicate syntax scope");
@@ -169,18 +169,18 @@ Theme::Theme(std::string name,
     }
 }
 
-std::uint8_t Theme::index_for(SemanticRole role) const {
+std::uint8_t Theme::indexFor(SemanticRole role) const {
     if (!valid(role)) throw std::invalid_argument("semantic role is not recognized");
     return semantic_indices_[position(role)];
 }
 
-std::uint8_t Theme::index_for(SyntaxScope scope) const {
+std::uint8_t Theme::indexFor(SyntaxScope scope) const {
     if (!valid(scope)) throw std::invalid_argument("syntax scope is not recognized");
     return syntax_indices_[position(scope)];
 }
 
-std::uint8_t Theme::index_for_syntax(std::string_view scope) const noexcept {
-    const auto recognized = syntax_scope_from_name(scope);
+std::uint8_t Theme::indexForSyntax(std::string_view scope) const noexcept {
+    const auto recognized = syntaxScopeFromName(scope);
     return syntax_indices_[position(recognized.value_or(SyntaxScope::PlainText))];
 }
 

@@ -7,7 +7,7 @@
 namespace ssg {
 namespace {
 
-bool shell_equal(ShellViewState const& left, ShellViewState const& right) {
+bool shellEqual(ShellViewState const& left, ShellViewState const& right) {
     return left.viewport == right.viewport && left.header == right.header &&
            left.footer == right.footer && left.tab_bar == right.tab_bar &&
            left.panel == right.panel &&
@@ -18,13 +18,13 @@ bool shell_equal(ShellViewState const& left, ShellViewState const& right) {
            left.accessibility_nodes == right.accessibility_nodes;
 }
 
-SelectionViewDelta selection_delta(SelectionViewState const& before,
+SelectionViewDelta selectionDelta(SelectionViewState const& before,
                                    SelectionViewState const& after) {
     bool const changed = before != after;
     return {changed, changed ? std::optional{after} : std::nullopt};
 }
 
-SettingsSectionDelta settings_delta(SettingsViewState const& before,
+SettingsSectionDelta settingsDelta(SettingsViewState const& before,
                                     SettingsViewState const& after) {
     SettingsSectionDelta result;
     for (std::size_t index = 0; index < before.entries.size(); ++index) {
@@ -42,7 +42,7 @@ SettingsSectionDelta settings_delta(SettingsViewState const& before,
     return result;
 }
 
-std::optional<SettingsViewState> replay_settings(
+std::optional<SettingsViewState> replaySettings(
     SettingsViewState state, SettingsSectionDelta const& delta) {
     for (auto const& change : delta.changes) {
         auto found = std::find_if(
@@ -59,7 +59,7 @@ std::optional<SettingsViewState> replay_settings(
 }
 
 template <typename State, typename Delta>
-std::optional<State> replay_replacement(State const& state,
+std::optional<State> replayReplacement(State const& state,
                                         Delta const& delta) {
     if (delta.changed != delta.replacement.has_value()) {
         return std::nullopt;
@@ -85,7 +85,7 @@ bool operator==(SessionSnapshotSections const& left,
            left.tree == right.tree && left.syntax == right.syntax &&
            left.lsp_sync == right.lsp_sync &&
            left.lsp_features == right.lsp_features &&
-           left.theme == right.theme && shell_equal(left.shell, right.shell) &&
+           left.theme == right.theme && shellEqual(left.shell, right.shell) &&
            left.palette == right.palette;
 }
 
@@ -146,18 +146,18 @@ SessionDelta::SessionDelta(
       shell_{std::move(shell)},
       viewport_{std::move(viewport)} {}
 
-SessionSnapshot assemble_session_snapshot(
+SessionSnapshot assembleSessionSnapshot(
     Revision revision, SessionTopology topology,
     InvocationPrincipal const& principal, ViewId view_id,
     ViewportViewState viewport, SessionSnapshotSections sections) {
     return {revision,
             std::move(topology),
-            {principal.client_id(), view_id, principal.capabilities(),
+            {principal.clientId(), view_id, principal.capabilities(),
              std::move(viewport)},
             std::move(sections)};
 }
 
-SessionDelta derive_session_delta(SessionSnapshot const& before,
+SessionDelta deriveSessionDelta(SessionSnapshot const& before,
                                   SessionSnapshot const& after) {
     if (before.client().client_id != after.client().client_id ||
         before.client().view_id != after.client().view_id ||
@@ -170,7 +170,7 @@ SessionDelta derive_session_delta(SessionSnapshot const& before,
         throw std::invalid_argument{"session delta revisions must advance"};
     }
     auto document =
-        derive_document_delta(before.sections().document,
+        deriveDocumentDelta(before.sections().document,
                               after.sections().document);
     auto const& old = before.sections();
     auto const& next = after.sections();
@@ -193,35 +193,35 @@ SessionDelta derive_session_delta(SessionSnapshot const& before,
         old.document.caret == next.document.caret
             ? std::nullopt
             : std::optional{next.document.caret},
-        selection_delta(old.selection, next.selection),
-        derive_history_delta(old.history, next.history),
-        derive_clipboard_delta(old.clipboard, next.clipboard),
-        derive_prompt_status_delta(old.prompt_status, next.prompt_status),
-        derive_search_delta(old.search, next.search),
-        derive_find_replace_delta(old.find_replace, next.find_replace),
-        settings_delta(old.settings, next.settings),
-        derive_keymap_delta(old.keymap, next.keymap),
-        derive_text_encoding_delta(old.text_encoding, next.text_encoding),
-        derive_tab_delta(old.tabs, next.tabs),
-        derive_diff_delta(old.diff, next.diff),
-        derive_external_modification_delta(old.external_modification,
+        selectionDelta(old.selection, next.selection),
+        deriveHistoryDelta(old.history, next.history),
+        deriveClipboardDelta(old.clipboard, next.clipboard),
+        derivePromptStatusDelta(old.prompt_status, next.prompt_status),
+        deriveSearchDelta(old.search, next.search),
+        deriveFindReplaceDelta(old.find_replace, next.find_replace),
+        settingsDelta(old.settings, next.settings),
+        deriveKeymapDelta(old.keymap, next.keymap),
+        deriveTextEncodingDelta(old.text_encoding, next.text_encoding),
+        deriveTabDelta(old.tabs, next.tabs),
+        deriveDiffDelta(old.diff, next.diff),
+        deriveExternalModificationDelta(old.external_modification,
                                             next.external_modification),
-        derive_follow_edits_delta(old.follow_edits, next.follow_edits),
-        derive_tree_delta(old.tree, next.tree, 4096),
-        derive_syntax_delta(old.syntax, next.syntax),
-        derive_lsp_sync_delta(old.lsp_sync, next.lsp_sync),
-        derive_lsp_feature_delta(old.lsp_features, next.lsp_features),
+        deriveFollowEditsDelta(old.follow_edits, next.follow_edits),
+        deriveTreeDelta(old.tree, next.tree, 4096),
+        deriveSyntaxDelta(old.syntax, next.syntax),
+        deriveLspSyncDelta(old.lsp_sync, next.lsp_sync),
+        deriveLspFeatureDelta(old.lsp_features, next.lsp_features),
         {old.theme == next.theme ? std::nullopt
                                  : std::optional{next.theme}},
-        {shell_equal(old.shell, next.shell)
+        {shellEqual(old.shell, next.shell)
              ? std::nullopt
              : std::optional{next.shell}},
-        derive_viewport_delta(before.client().viewport,
+        deriveViewportDelta(before.client().viewport,
                               after.client().viewport),
     };
 }
 
-SessionReplayResult replay_session_delta(SessionSnapshot const& base,
+SessionReplayResult replaySessionDelta(SessionSnapshot const& base,
                                          SessionDelta const& delta) {
     if (base.revision() != delta.base_revision_ ||
         delta.revision_ <= delta.base_revision_ ||
@@ -233,7 +233,7 @@ SessionReplayResult replay_session_delta(SessionSnapshot const& base,
 
     auto document = std::optional<DocumentViewState>{base.sections().document};
     if (delta.document_) {
-        document = replay_document_delta(
+        document = replayDocumentDelta(
             base.sections().document, *delta.document_,
             delta.document_caret_.value_or(base.sections().document.caret));
     } else if (delta.document_caret_) {
@@ -242,28 +242,28 @@ SessionReplayResult replay_session_delta(SessionSnapshot const& base,
         }
         document->caret = *delta.document_caret_;
     }
-    auto selection = replay_replacement(base.sections().selection,
+    auto selection = replayReplacement(base.sections().selection,
                                         delta.selection_);
-    auto history = replay_replacement(base.sections().history, delta.history_);
+    auto history = replayReplacement(base.sections().history, delta.history_);
     auto clipboard =
-        replay_replacement(base.sections().clipboard, delta.clipboard_);
-    auto prompt_status = replay_replacement(base.sections().prompt_status,
+        replayReplacement(base.sections().clipboard, delta.clipboard_);
+    auto prompt_status = replayReplacement(base.sections().prompt_status,
                                             delta.prompt_status_);
-    auto search = replay_search_delta(base.sections().search, delta.search_);
-    auto find_replace = replay_find_replace_delta(base.sections().find_replace,
+    auto search = replaySearchDelta(base.sections().search, delta.search_);
+    auto find_replace = replayFindReplaceDelta(base.sections().find_replace,
                                                   delta.find_replace_);
-    auto settings = replay_settings(base.sections().settings, delta.settings_);
-    auto keymap = replay_replacement(base.sections().keymap, delta.keymap_);
-    auto tabs = replay_tab_delta(base.sections().tabs, delta.tabs_);
-    auto diff = replay_diff_delta(base.sections().diff, delta.diff_);
-    auto external = replay_external_modification_delta(
+    auto settings = replaySettings(base.sections().settings, delta.settings_);
+    auto keymap = replayReplacement(base.sections().keymap, delta.keymap_);
+    auto tabs = replayTabDelta(base.sections().tabs, delta.tabs_);
+    auto diff = replayDiffDelta(base.sections().diff, delta.diff_);
+    auto external = replayExternalModificationDelta(
         base.sections().external_modification,
         delta.external_modification_);
-    auto tree = replay_tree_delta(base.sections().tree, delta.tree_);
-    auto syntax = replay_syntax_delta(base.sections().syntax, delta.syntax_);
+    auto tree = replayTreeDelta(base.sections().tree, delta.tree_);
+    auto syntax = replaySyntaxDelta(base.sections().syntax, delta.syntax_);
     auto lsp_sync =
-        replay_lsp_sync_delta(base.sections().lsp_sync, delta.lsp_sync_);
-    auto lsp_features = replay_lsp_feature_delta(
+        replayLspSyncDelta(base.sections().lsp_sync, delta.lsp_sync_);
+    auto lsp_features = replayLspFeatureDelta(
         base.sections().lsp_features, delta.lsp_features_);
 
     if (!document || !selection || !history || !clipboard || !prompt_status ||
@@ -343,7 +343,7 @@ SessionReplayResult replay_session_delta(SessionSnapshot const& base,
             {}};
 }
 
-SessionDelta decode_wire_session_delta(
+SessionDelta decodeWireSessionDelta(
     Revision base_revision, Revision revision, ClientId client_id,
     ViewId view_id, std::vector<CapabilityId> capabilities,
     std::optional<SessionTopology> topology,

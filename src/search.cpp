@@ -14,7 +14,7 @@ char folded(char value) {
     return static_cast<char>(std::tolower(static_cast<unsigned char>(value)));
 }
 
-std::optional<int> fuzzy_score(std::string_view candidate,
+std::optional<int> fuzzyScore(std::string_view candidate,
                                std::string_view query) {
     if (query.empty()) {
         return 0;
@@ -50,7 +50,7 @@ std::optional<int> fuzzy_score(std::string_view candidate,
     return score;
 }
 
-std::vector<SearchResult> rank_files(const WorkspaceSnapshot& workspace,
+std::vector<SearchResult> rankFiles(const WorkspaceSnapshot& workspace,
                                      std::string_view query,
                                      const SearchCancellationToken& token) {
     std::vector<SearchResult> results;
@@ -58,7 +58,7 @@ std::vector<SearchResult> rank_files(const WorkspaceSnapshot& workspace,
         if (token.cancelled()) {
             return {};
         }
-        const auto score = fuzzy_score(file.path, query);
+        const auto score = fuzzyScore(file.path, query);
         if (score) {
             results.push_back({.mode = SearchMode::File,
                                .path = file.path,
@@ -75,7 +75,7 @@ std::vector<SearchResult> rank_files(const WorkspaceSnapshot& workspace,
     return results;
 }
 
-std::vector<SearchResult> rank_symbols(const WorkspaceSnapshot& workspace,
+std::vector<SearchResult> rankSymbols(const WorkspaceSnapshot& workspace,
                                        std::string_view query,
                                        const SearchCancellationToken& token) {
     std::vector<SearchResult> results;
@@ -83,7 +83,7 @@ std::vector<SearchResult> rank_symbols(const WorkspaceSnapshot& workspace,
         if (token.cancelled()) {
             return {};
         }
-        const auto score = fuzzy_score(symbol.name, query);
+        const auto score = fuzzyScore(symbol.name, query);
         if (score) {
             results.push_back(
                 {.mode = SearchMode::Symbol,
@@ -108,7 +108,7 @@ std::vector<SearchResult> rank_symbols(const WorkspaceSnapshot& workspace,
     return results;
 }
 
-std::vector<SearchResult> rank_text(const WorkspaceSnapshot& workspace,
+std::vector<SearchResult> rankText(const WorkspaceSnapshot& workspace,
                                     std::string_view query,
                                     const SearchCancellationToken& token) {
     std::vector<SearchResult> results;
@@ -153,11 +153,11 @@ std::vector<SearchResult> rank_text(const WorkspaceSnapshot& workspace,
     return results;
 }
 
-NavigationTransition empty_transition() { return {}; }
+NavigationTransition emptyTransition() { return {}; }
 
 } // namespace
 
-ParsedSearchQuery parse_search_query(std::string_view query) {
+ParsedSearchQuery parseSearchQuery(std::string_view query) {
     ParsedSearchQuery result;
     if (query.empty()) {
         return result;
@@ -202,7 +202,7 @@ void SearchCancellationToken::cancel() const noexcept {
     cancelled_->store(true, std::memory_order_relaxed);
 }
 
-std::vector<SearchResult> rank_workspace(
+std::vector<SearchResult> rankWorkspace(
     const WorkspaceSnapshot& workspace, const ParsedSearchQuery& query,
     const SearchCancellationToken& cancellation) {
     if (query.error != SearchQueryError::None || cancellation.cancelled()) {
@@ -210,11 +210,11 @@ std::vector<SearchResult> rank_workspace(
     }
     switch (query.mode) {
     case SearchMode::File:
-        return rank_files(workspace, query.text, cancellation);
+        return rankFiles(workspace, query.text, cancellation);
     case SearchMode::Symbol:
-        return rank_symbols(workspace, query.text, cancellation);
+        return rankSymbols(workspace, query.text, cancellation);
     case SearchMode::Text:
-        return rank_text(workspace, query.text, cancellation);
+        return rankText(workspace, query.text, cancellation);
     case SearchMode::Line:
     case SearchMode::Command:
         return {};
@@ -222,7 +222,7 @@ std::vector<SearchResult> rank_workspace(
     return {};
 }
 
-WorkspaceSearchBatch evaluate_workspace_search(
+WorkspaceSearchBatch evaluateWorkspaceSearch(
     const SearchWorkspaceSource& source,
     const WorkspaceSearchRequest& request) {
     WorkspaceSearchBatch batch{.generation = request.generation,
@@ -234,12 +234,12 @@ WorkspaceSearchBatch evaluate_workspace_search(
     const auto workspace = source.snapshot(request.source_revision);
     batch.source_revision = workspace.revision;
     batch.results =
-        rank_workspace(workspace, request.query, request.cancellation);
+        rankWorkspace(workspace, request.query, request.cancellation);
     batch.cancelled = request.cancellation.cancelled();
     return batch;
 }
 
-std::optional<NavigationTarget> navigation_target(const SearchResult& result) {
+std::optional<NavigationTarget> navigationTarget(const SearchResult& result) {
     if (result.path.empty()) {
         return std::nullopt;
     }
@@ -253,7 +253,7 @@ std::optional<NavigationTarget> navigation_target(const SearchResult& result) {
                                           : std::nullopt};
 }
 
-std::optional<NavigationTarget> goto_line(
+std::optional<NavigationTarget> gotoLine(
     std::string path, const ParsedSearchQuery& query) {
     if (path.empty() || query.mode != SearchMode::Line ||
         query.error != SearchQueryError::None || !query.line) {
@@ -296,7 +296,7 @@ NavigationTransition NavigationHistory::visit(
 
 NavigationTransition NavigationHistory::back() {
     if (!cursor_ || *cursor_ == 0) {
-        return empty_transition();
+        return emptyTransition();
     }
     --*cursor_;
     return transition(entries_[*cursor_], NavigationOrigin::User);
@@ -304,7 +304,7 @@ NavigationTransition NavigationHistory::back() {
 
 NavigationTransition NavigationHistory::forward() {
     if (!cursor_ || *cursor_ + 1 >= entries_.size()) {
-        return empty_transition();
+        return emptyTransition();
     }
     ++*cursor_;
     return transition(entries_[*cursor_], NavigationOrigin::User);
@@ -314,15 +314,15 @@ SearchController::SearchController(const SearchWorkspaceSource& workspace,
                                    SearchCommandSource& commands) noexcept
     : workspace_{workspace}, commands_{commands} {}
 
-void SearchController::open_palette(Revision revision) {
+void SearchController::openPalette(Revision revision) {
     state_.palette_open = true;
     state_.revision = revision;
     state_.query.clear();
     state_.mode = SearchMode::Command;
-    rank_palette();
+    rankPalette();
 }
 
-void SearchController::close_palette(Revision revision) {
+void SearchController::closePalette(Revision revision) {
     state_.palette_open = false;
     state_.revision = revision;
     state_.query.clear();
@@ -330,22 +330,22 @@ void SearchController::close_palette(Revision revision) {
     state_.selected_index.reset();
 }
 
-void SearchController::update_palette_query(std::string query,
+void SearchController::updatePaletteQuery(std::string query,
                                             Revision revision) {
     if (!state_.palette_open) {
         return;
     }
     state_.query = std::move(query);
     state_.revision = revision;
-    rank_palette();
+    rankPalette();
 }
 
-void SearchController::rank_palette() {
+void SearchController::rankPalette() {
     state_.mode = SearchMode::Command;
     state_.results.clear();
     for (const auto& command : commands_.descriptors()) {
-        const auto label_score = fuzzy_score(command.label, state_.query);
-        const auto id_score = fuzzy_score(command.id, state_.query);
+        const auto label_score = fuzzyScore(command.label, state_.query);
+        const auto id_score = fuzzyScore(command.id, state_.query);
         if (!label_score && !id_score) {
             continue;
         }
@@ -369,14 +369,14 @@ void SearchController::rank_palette() {
         state_.results.empty() ? std::nullopt : std::optional<std::size_t>{0};
 }
 
-void SearchController::select_next() {
+void SearchController::selectNext() {
     if (!state_.selected_index || state_.results.empty()) {
         return;
     }
     *state_.selected_index = (*state_.selected_index + 1) % state_.results.size();
 }
 
-void SearchController::select_previous() {
+void SearchController::selectPrevious() {
     if (!state_.selected_index || state_.results.empty()) {
         return;
     }
@@ -385,7 +385,7 @@ void SearchController::select_previous() {
         state_.results.size();
 }
 
-PaletteExecutionResult SearchController::execute_palette() {
+PaletteExecutionResult SearchController::executePalette() {
     if (!state_.palette_open || !state_.selected_index ||
         *state_.selected_index >= state_.results.size()) {
         return {.accepted = false, .message = "no palette command selected"};
@@ -393,13 +393,13 @@ PaletteExecutionResult SearchController::execute_palette() {
     return commands_.execute(state_.results[*state_.selected_index].path);
 }
 
-WorkspaceSearchRequest SearchController::begin_workspace_search(
+WorkspaceSearchRequest SearchController::beginWorkspaceSearch(
     std::string query, Revision source_revision) {
-    cancel_workspace_search();
+    cancelWorkspaceSearch();
     WorkspaceSearchRequest request{
         .generation = state_.search_generation + 1,
         .source_revision = source_revision,
-        .query = parse_search_query(query)};
+        .query = parseSearchQuery(query)};
     state_.revision = source_revision;
     state_.query = std::move(query);
     state_.mode = request.query.mode;
@@ -413,10 +413,10 @@ WorkspaceSearchRequest SearchController::begin_workspace_search(
 
 WorkspaceSearchBatch SearchController::evaluate(
     const WorkspaceSearchRequest& request) const {
-    return evaluate_workspace_search(workspace_, request);
+    return evaluateWorkspaceSearch(workspace_, request);
 }
 
-void SearchController::cancel_workspace_search() noexcept {
+void SearchController::cancelWorkspaceSearch() noexcept {
     if (active_request_) {
         active_request_->cancellation.cancel();
         state_.searching = false;
@@ -443,9 +443,9 @@ SearchPublishResult SearchController::publish(
     return SearchPublishResult::Accepted;
 }
 
-SearchCommandSet search_command_set() { return {}; }
+SearchCommandSet searchCommandSet() { return {}; }
 
-SearchDelta derive_search_delta(const SearchViewState& base,
+SearchDelta deriveSearchDelta(const SearchViewState& base,
                                 const SearchViewState& target) {
     return {.base_revision = base.revision,
             .revision = target.revision,
@@ -453,7 +453,7 @@ SearchDelta derive_search_delta(const SearchViewState& base,
                                     : std::optional<SearchViewState>{target}};
 }
 
-SearchReplayResult replay_search_delta(const SearchViewState& base,
+SearchReplayResult replaySearchDelta(const SearchViewState& base,
                                        const SearchDelta& delta) {
     if (base.revision != delta.base_revision) {
         return {.error = SearchReplayError::StaleRevision};

@@ -72,7 +72,7 @@ public:
     TreeProviderSnapshot(TreeProviderId provider_id, TreeProviderKind kind,
                          TreeRevision revision, std::vector<TreeNode> nodes);
 
-    const TreeProviderId& provider_id() const noexcept { return provider_id_; }
+    const TreeProviderId& providerId() const noexcept { return provider_id_; }
     TreeProviderKind kind() const noexcept { return kind_; }
     TreeRevision revision() const noexcept { return revision_; }
     const std::vector<TreeNode>& nodes() const noexcept { return nodes_; }
@@ -100,13 +100,13 @@ struct SymbolTreeRecord {
     std::vector<TreeNodeCommand> commands;
 };
 
-TreeProviderSnapshot filesystem_tree_snapshot(
+TreeProviderSnapshot filesystemTreeSnapshot(
     TreeProviderId provider_id, const std::filesystem::path& canonical_cwd,
     TreeRevision revision);
-TreeProviderSnapshot git_tree_snapshot(TreeProviderId provider_id,
+TreeProviderSnapshot gitTreeSnapshot(TreeProviderId provider_id,
                                        TreeRevision revision,
                                        std::vector<GitTreeRecord> records);
-TreeProviderSnapshot symbol_tree_snapshot(
+TreeProviderSnapshot symbolTreeSnapshot(
     TreeProviderId provider_id, TreeRevision revision,
     std::vector<SymbolTreeRecord> records);
 
@@ -124,12 +124,12 @@ public:
     }
 
 private:
-    friend TreeCommandSet tree_command_set();
+    friend TreeCommandSet treeCommandSet();
     TreeCommandSet();
     const std::array<TreeCommandDescriptor, 7> descriptors_;
 };
 
-TreeCommandSet tree_command_set();
+TreeCommandSet treeCommandSet();
 
 struct TreeNodeView {
     TreeNode node;
@@ -178,27 +178,27 @@ struct TreeSelectArguments {
 
 class TreeModel {
 public:
-    void replace_provider(TreeProviderSnapshot snapshot);
-    bool toggle_expanded(const TreeProviderId& provider_id,
+    void replaceProvider(TreeProviderSnapshot snapshot);
+    bool toggleExpanded(const TreeProviderId& provider_id,
                          const TreeNodeId& node_id);
-    bool is_expanded(const TreeProviderId& provider_id,
+    bool isExpanded(const TreeProviderId& provider_id,
                      const TreeNodeId& node_id) const;
-    std::optional<TreeCommandInvocation> invoke_node_command(
+    std::optional<TreeCommandInvocation> invokeNodeCommand(
         const TreeProviderId& provider_id, const TreeNodeId& node_id,
         std::string_view command_id) const;
 
     // Selection navigation over the active provider's visible nodes.  Selection
     // is library-owned UI state so every client presents the same focus.
-    bool select_next();
-    bool select_previous();
+    bool selectNext();
+    bool selectPrevious();
     // Set the active provider's selection to `node_id`. Returns false (leaving
     // the selection unchanged) when no provider is active or the id is not among
     // the active provider's visible nodes.
     bool select(const TreeNodeId& node_id);
-    bool toggle_selected();
-    [[nodiscard]] std::optional<TreeNode> selected_node() const;
+    bool toggleSelected();
+    [[nodiscard]] std::optional<TreeNode> selectedNode() const;
 
-    TreeViewState view_state() const;
+    TreeViewState viewState() const;
 
 private:
     struct ProviderState {
@@ -206,8 +206,8 @@ private:
         std::vector<TreeNodeId> expanded;
     };
 
-    [[nodiscard]] ProviderState* active_provider();
-    [[nodiscard]] const ProviderState* active_provider() const;
+    [[nodiscard]] ProviderState* activeProvider();
+    [[nodiscard]] const ProviderState* activeProvider() const;
 
     TreeRevision revision_{0};
     std::vector<ProviderState> providers_;
@@ -237,11 +237,11 @@ struct TreeDelta {
     bool snapshot_required = false;
     std::vector<TreeProviderDelta> providers;
 
-    std::size_t operation_count() const noexcept;
+    std::size_t operationCount() const noexcept;
     bool operator==(const TreeDelta&) const = default;
 };
 
-TreeDelta derive_tree_delta(const TreeViewState& base,
+TreeDelta deriveTreeDelta(const TreeViewState& base,
                             const TreeViewState& target,
                             std::size_t maximum_operations);
 
@@ -253,7 +253,7 @@ struct TreeReplayResult {
     bool accepted() const noexcept { return state.has_value(); }
 };
 
-TreeReplayResult replay_tree_delta(const TreeViewState& base,
+TreeReplayResult replayTreeDelta(const TreeViewState& base,
                                    const TreeDelta& delta);
 
 } // namespace ssg

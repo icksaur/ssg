@@ -32,14 +32,14 @@ public:
     void insert(std::size_t offset, std::string_view text);
     void erase(std::size_t offset, std::size_t count);
 
-    [[nodiscard]] std::size_t line_count() const noexcept;
-    [[nodiscard]] std::size_t line_start(std::size_t line) const;
-    [[nodiscard]] std::size_t line_of_offset(std::size_t offset) const;
+    [[nodiscard]] std::size_t lineCount() const noexcept;
+    [[nodiscard]] std::size_t lineStart(std::size_t line) const;
+    [[nodiscard]] std::size_t lineOfOffset(std::size_t offset) const;
 
     [[nodiscard]] bool validate() const noexcept;
 
 private:
-    [[nodiscard]] NodePtr make_node(
+    [[nodiscard]] NodePtr makeNode(
         bool add_buffer,
         std::size_t start,
         std::size_t length) const;
@@ -47,7 +47,7 @@ private:
         NodePtr root,
         std::size_t offset) const;
 
-    [[nodiscard]] std::string_view piece_text(const Node& node) const noexcept;
+    [[nodiscard]] std::string_view pieceText(const Node& node) const noexcept;
 
     SharedBytes original_buffer_;
     std::string add_buffer_;

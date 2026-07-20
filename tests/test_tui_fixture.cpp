@@ -77,7 +77,7 @@ public:
         ssg::ThemeSnapshot theme{};
         for (std::size_t index = 0; index < theme.palette.size(); ++index) {
             auto channel = static_cast<std::uint8_t>(index * 16);
-            theme.palette[index] = ssg::SrgbColor::from_serialized_channels(
+            theme.palette[index] = ssg::SrgbColor::fromSerializedChannels(
                 channel, channel, channel);
         }
         for (std::size_t index = 0; index < theme.semantic_indices.size();
@@ -137,7 +137,7 @@ public:
             {state_.follow_generation, state_.follow_mode, ssg::PaneId{1},
              std::nullopt, {}, {}},
             {ssg::TreeRevision{revision.value()}, {}},
-            ssg::plain_text_syntax_view_state(
+            ssg::plainTextSyntaxViewState(
                 revision, ssg::LanguageId{"plain"}, state_.text, 4),
             {revision, {}},
             {revision, {}, std::nullopt, {}, {}},
@@ -147,8 +147,8 @@ public:
     }
 
     ssg::ViewportViewState viewport() const {
-        auto run = ssg::compute_cell_run(state_.text);
-        return ssg::compute_viewport(
+        auto run = ssg::computeCellRun(state_.text);
+        return ssg::computeViewport(
             std::span<const ssg::CellRun>{&run, 1},
             ssg::ViewportDimensions{17, 5}, state_.first_row);
     }
@@ -160,7 +160,7 @@ private:
 class Scenario {
 public:
     Scenario() {
-        for (auto const& descriptor : ssg::p0_command_descriptors()) {
+        for (auto const& descriptor : ssg::p0CommandDescriptors()) {
             auto id = descriptor.id;
             builder_.bind(id, [this, id](ssg::CommandContext&,
                                          std::any const& value) {
@@ -172,7 +172,7 @@ public:
 
     ssg::SessionSnapshot snapshot(ssg::InvocationPrincipal const& principal,
                                   ssg::ViewId view) const {
-        return ssg::assemble_session_snapshot(
+        return ssg::assembleSessionSnapshot(
             session->revision(), session->topology(), principal, view,
             model.viewport(), model.sections(session->revision()));
     }
@@ -184,7 +184,7 @@ private:
     ssg::EditorSessionBuilder builder_;
 };
 
-TEST(terminal_events_resolve_only_through_snapshot_input_models) {
+TEST(terminalEventsResolveOnlyThroughSnapshotInputModels) {
     Scenario scenario;
     ssg::InvocationPrincipal const principal{
         ssg::ClientId{9}, ssg::InvocationOrigin::InProcess};
@@ -194,7 +194,7 @@ TEST(terminal_events_resolve_only_through_snapshot_input_models) {
     auto keymap = client.snapshot().sections().keymap;
     ssg::tui::TerminalInputCapture capture;
 
-    auto text = ssg::CommittedText::from_utf8("hello");
+    auto text = ssg::CommittedText::fromUtf8("hello");
     ASSERT_TRUE(text.has_value());
     auto text_command = capture.capture(*text, keymap, "editor");
     ASSERT_TRUE(text_command.has_value());
@@ -222,7 +222,7 @@ TEST(terminal_events_resolve_only_through_snapshot_input_models) {
     ASSERT_TRUE(scenario.model.canonical().tab_open);
 }
 
-TEST(scripted_tui_commands_match_direct_api_after_every_step) {
+TEST(scriptedTuiCommandsMatchDirectApiAfterEveryStep) {
     Scenario direct;
     Scenario tui;
     ssg::InvocationPrincipal const direct_principal{
@@ -239,7 +239,7 @@ TEST(scripted_tui_commands_match_direct_api_after_every_step) {
 
     for (auto const& step : workflow()) {
         auto direct_result = direct.session->dispatch(
-            direct_principal.client_id(),
+            direct_principal.clientId(),
             {step.command_id, direct.session->revision(), step.payload});
         auto tui_result = client.submit(step.command_id, step.payload);
         ASSERT_EQ(direct_result.accepted(), step.expected_accepted);
@@ -248,13 +248,13 @@ TEST(scripted_tui_commands_match_direct_api_after_every_step) {
     }
 }
 
-std::string read_all(char const* path) {
+std::string readAll(char const* path) {
     std::ifstream input{path};
     return {std::istreambuf_iterator<char>{input},
             std::istreambuf_iterator<char>{}};
 }
 
-TEST(final_workflow_screen_matches_hand_authored_16_color_golden) {
+TEST(finalWorkflowScreenMatchesHandAuthored16ColorGolden) {
     Scenario scenario;
     ssg::InvocationPrincipal const principal{
         ssg::ClientId{3}, ssg::InvocationOrigin::InProcess,
@@ -274,7 +274,7 @@ TEST(final_workflow_screen_matches_hand_authored_16_color_golden) {
         ASSERT_TRUE(cell.background < ssg::theme_palette_size);
     }
     auto actual = screen.canonical();
-    auto expected = read_all(SSG_TUI_SCREEN_PATH);
+    auto expected = readAll(SSG_TUI_SCREEN_PATH);
     if (actual != expected) std::cerr << actual;
     ASSERT_EQ(actual, expected);
 }
@@ -282,8 +282,8 @@ TEST(final_workflow_screen_matches_hand_authored_16_color_golden) {
 }  // namespace
 
 int main() {
-    RUN(terminal_events_resolve_only_through_snapshot_input_models);
-    RUN(scripted_tui_commands_match_direct_api_after_every_step);
-    RUN(final_workflow_screen_matches_hand_authored_16_color_golden);
+    RUN(terminalEventsResolveOnlyThroughSnapshotInputModels);
+    RUN(scriptedTuiCommandsMatchDirectApiAfterEveryStep);
+    RUN(finalWorkflowScreenMatchesHandAuthored16ColorGolden);
     return failed == 0 ? 0 : 1;
 }

@@ -32,7 +32,7 @@ TextInputResult failure(TextInputError error, std::string message) {
                            std::move(message)};
 }
 
-bool valid_utf8(std::string_view text) {
+bool validUtf8(std::string_view text) {
     for (std::size_t index = 0; index < text.size();) {
         const auto first = static_cast<unsigned char>(text[index]);
         if (first == 0) {
@@ -76,7 +76,7 @@ bool valid_utf8(std::string_view text) {
     return true;
 }
 
-std::vector<std::size_t> grapheme_boundaries(std::string_view text,
+std::vector<std::size_t> graphemeBoundaries(std::string_view text,
                                              int tab_width) {
     std::vector<std::size_t> boundaries{0};
     std::size_t line_start = 0;
@@ -87,7 +87,7 @@ std::vector<std::size_t> grapheme_boundaries(std::string_view text,
             ++line_end;
         }
         const auto run =
-            compute_cell_run(text.substr(line_start, line_end - line_start),
+            computeCellRun(text.substr(line_start, line_end - line_start),
                              tab_width);
         for (const auto& span : run.spans) {
             boundaries.push_back(line_start + span.byte_offset + span.byte_len);
@@ -106,14 +106,14 @@ std::vector<std::size_t> grapheme_boundaries(std::string_view text,
     return boundaries;
 }
 
-std::size_t previous_boundary(const std::vector<std::size_t>& boundaries,
+std::size_t previousBoundary(const std::vector<std::size_t>& boundaries,
                               std::size_t offset) {
     const auto found = std::lower_bound(boundaries.begin(), boundaries.end(),
                                         offset);
     return found == boundaries.begin() ? 0 : *std::prev(found);
 }
 
-std::size_t next_boundary(const std::vector<std::size_t>& boundaries,
+std::size_t nextBoundary(const std::vector<std::size_t>& boundaries,
                           std::size_t offset) {
     const auto found =
         std::upper_bound(boundaries.begin(), boundaries.end(), offset);
@@ -133,19 +133,19 @@ SegmentCategory category(std::string_view text, std::size_t start) {
     return SegmentCategory::Punctuation;
 }
 
-std::size_t word_left(std::string_view text,
+std::size_t wordLeft(std::string_view text,
                       const std::vector<std::size_t>& boundaries,
                       std::size_t offset) {
     if (offset == 0) {
         return 0;
     }
-    auto position = previous_boundary(boundaries, offset);
+    auto position = previousBoundary(boundaries, offset);
     const auto target = category(text, position);
     if (target == SegmentCategory::Punctuation) {
         return position;
     }
     while (position > 0) {
-        const auto before = previous_boundary(boundaries, position);
+        const auto before = previousBoundary(boundaries, position);
         if (category(text, before) != target) {
             break;
         }
@@ -154,21 +154,21 @@ std::size_t word_left(std::string_view text,
     return position;
 }
 
-std::size_t word_right(std::string_view text,
+std::size_t wordRight(std::string_view text,
                        const std::vector<std::size_t>& boundaries,
                        std::size_t offset) {
     if (offset >= text.size()) {
         return offset;
     }
     const auto target = category(text, offset);
-    auto position = next_boundary(boundaries, offset);
+    auto position = nextBoundary(boundaries, offset);
     while (position < text.size() && category(text, position) == target) {
-        position = next_boundary(boundaries, position);
+        position = nextBoundary(boundaries, position);
     }
     return position;
 }
 
-std::pair<std::size_t, std::size_t> line_bounds(std::string_view text,
+std::pair<std::size_t, std::size_t> lineBounds(std::string_view text,
                                                 std::size_t offset) {
     auto start = offset;
     while (start > 0 && text[start - 1] != '\r' && text[start - 1] != '\n') {
@@ -181,14 +181,14 @@ std::pair<std::size_t, std::size_t> line_bounds(std::string_view text,
     return {start, end};
 }
 
-std::string terminator_for(std::string_view text, std::size_t offset,
+std::string terminatorFor(std::string_view text, std::size_t offset,
                            LineEnding configured) {
     switch (configured) {
     case LineEnding::Lf: return "\n";
     case LineEnding::Crlf: return "\r\n";
     case LineEnding::Cr: return "\r";
     case LineEnding::Mixed: {
-        const auto end = line_bounds(text, offset).second;
+        const auto end = lineBounds(text, offset).second;
         if (end == text.size()) {
             return "\n";
         }
@@ -202,12 +202,12 @@ std::string terminator_for(std::string_view text, std::size_t offset,
     return {};
 }
 
-std::string indentation_for(std::string_view text, std::size_t offset,
+std::string indentationFor(std::string_view text, std::size_t offset,
                             TextInputSettings settings) {
     if (!settings.auto_indent) {
         return {};
     }
-    const auto start = line_bounds(text, offset).first;
+    const auto start = lineBounds(text, offset).first;
     std::uint64_t columns = 0;
     auto cursor = start;
     while (cursor < text.size()) {
@@ -231,14 +231,14 @@ std::string indentation_for(std::string_view text, std::size_t offset,
            std::string(static_cast<std::size_t>(spaces), ' ');
 }
 
-bool valid_position(std::string_view text, const DocumentPosition& position,
+bool validPosition(std::string_view text, const DocumentPosition& position,
                     int tab_width) {
     const auto resolved =
-        resolve_document_position(text, position.byte_offset, tab_width);
+        resolveDocumentPosition(text, position.byte_offset, tab_width);
     return resolved.has_value() && *resolved == position;
 }
 
-void normalize_edits(std::vector<PendingEdit>& edits) {
+void normalizeEdits(std::vector<PendingEdit>& edits) {
     std::sort(edits.begin(), edits.end(),
               [](const PendingEdit& left, const PendingEdit& right) {
                   if (left.start != right.start) {
@@ -284,11 +284,11 @@ TextInputCommandSet::descriptors() const noexcept {
     return descriptors_;
 }
 
-TextInputCommandSet text_input_command_set() {
+TextInputCommandSet textInputCommandSet() {
     return TextInputCommandSet{};
 }
 
-TextInputResult apply_text_input(const DocumentSnapshot& document,
+TextInputResult applyTextInput(const DocumentSnapshot& document,
                                  const SelectionSet& selections,
                                  TextInputSettings settings,
                                  TextInputCommand command,
@@ -311,13 +311,13 @@ TextInputResult apply_text_input(const DocumentSnapshot& document,
     }
     const auto tab_width = static_cast<int>(settings.indent_width);
     for (const auto& selection : selections.items()) {
-        if (!valid_position(document.text, selection.anchor, tab_width) ||
-            !valid_position(document.text, selection.active, tab_width)) {
+        if (!validPosition(document.text, selection.anchor, tab_width) ||
+            !validPosition(document.text, selection.active, tab_width)) {
             return failure(TextInputError::InvalidSelection,
                            "selection position is inconsistent with document");
         }
     }
-    if (command == TextInputCommand::Insert && !valid_utf8(arguments.text)) {
+    if (command == TextInputCommand::Insert && !validUtf8(arguments.text)) {
         return failure(TextInputError::InvalidUtf8,
                        "inserted text must be well-formed UTF-8 without NUL");
     }
@@ -327,7 +327,7 @@ TextInputResult apply_text_input(const DocumentSnapshot& document,
                        "text input command is not recognized");
     }
 
-    const auto boundaries = grapheme_boundaries(document.text, tab_width);
+    const auto boundaries = graphemeBoundaries(document.text, tab_width);
     for (const auto& selection : selections.items()) {
         const auto anchor =
             static_cast<std::size_t>(selection.anchor.byte_offset.value());
@@ -356,22 +356,22 @@ TextInputResult apply_text_input(const DocumentSnapshot& document,
         } else if (command == TextInputCommand::Newline) {
             const auto active =
                 static_cast<std::size_t>(selection.active.byte_offset.value());
-            inserted = terminator_for(document.text, active,
+            inserted = terminatorFor(document.text, active,
                                       settings.line_ending) +
-                       indentation_for(document.text, active, settings);
-        } else if (selection.is_caret()) {
+                       indentationFor(document.text, active, settings);
+        } else if (selection.isCaret()) {
             switch (command) {
             case TextInputCommand::DeleteBackward:
-                start = previous_boundary(boundaries, start);
+                start = previousBoundary(boundaries, start);
                 break;
             case TextInputCommand::DeleteForward:
-                end = next_boundary(boundaries, end);
+                end = nextBoundary(boundaries, end);
                 break;
             case TextInputCommand::DeleteWordBackward:
-                start = word_left(document.text, boundaries, start);
+                start = wordLeft(document.text, boundaries, start);
                 break;
             case TextInputCommand::DeleteWordForward:
-                end = word_right(document.text, boundaries, end);
+                end = wordRight(document.text, boundaries, end);
                 break;
             case TextInputCommand::Insert:
             case TextInputCommand::Newline: break;
@@ -389,7 +389,7 @@ TextInputResult apply_text_input(const DocumentSnapshot& document,
         command == TextInputCommand::DeleteForward ||
         command == TextInputCommand::DeleteWordBackward ||
         command == TextInputCommand::DeleteWordForward;
-    normalize_edits(edits);
+    normalizeEdits(edits);
 
     if (edits.empty()) {
         return TextInputResult{TextInputError::None, std::nullopt, selections,
@@ -437,7 +437,7 @@ TextInputResult apply_text_input(const DocumentSnapshot& document,
     for (std::size_t action = 0; action < action_targets.size(); ++action) {
         const auto caret =
             own_carets[action].value_or(map_target(action_targets[action]));
-        const auto resolved = resolve_document_position(
+        const auto resolved = resolveDocumentPosition(
             resulting_text, ByteOffset{caret}, tab_width);
         if (!resolved.has_value()) {
             return failure(TextInputError::InvalidSelection,

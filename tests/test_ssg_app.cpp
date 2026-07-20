@@ -16,13 +16,13 @@
 
 namespace fs = std::filesystem;
 
-TEST(resolve_launch_no_argument_opens_cwd) {
+TEST(resolveLaunchNoArgumentOpensCwd) {
     auto target = ssg::app::resolve_launch({});
     ASSERT_EQ(target.cwd, fs::current_path());
     ASSERT_FALSE(target.file.has_value());
 }
 
-TEST(resolve_launch_directory_opens_that_directory) {
+TEST(resolveLaunchDirectoryOpensThatDirectory) {
     auto dir = fs::temp_directory_path() / "ssg-app-dir-case";
     fs::create_directories(dir);
     auto target = ssg::app::resolve_launch(dir);
@@ -30,7 +30,7 @@ TEST(resolve_launch_directory_opens_that_directory) {
     ASSERT_FALSE(target.file.has_value());
 }
 
-TEST(resolve_launch_file_opens_parent_directory_and_file) {
+TEST(resolveLaunchFileOpensParentDirectoryAndFile) {
     auto dir = fs::temp_directory_path() / "ssg-app-file-case";
     fs::create_directories(dir);
     auto file = dir / "hello.txt";
@@ -41,7 +41,7 @@ TEST(resolve_launch_file_opens_parent_directory_and_file) {
     ASSERT_EQ(*target.file, std::string{"hello.txt"});
 }
 
-TEST(encode_ansi_frame_adapts_to_color_depth) {
+TEST(encodeAnsiFrameAdaptsToColorDepth) {
     ssg::CellGrid screen;
     screen.size = {1, 1};
     // Foreground pure red (theme index 1), background pure black (index 0).
@@ -73,7 +73,7 @@ TEST(encode_ansi_frame_adapts_to_color_depth) {
     ASSERT_TRUE(ansi.find(";2;") == std::string::npos);
 }
 
-TEST(detect_color_depth_reads_environment) {
+TEST(detectColorDepthReadsEnvironment) {
     using ssg::ColorDepth;
     ASSERT_TRUE(ssg::app::detect_color_depth("truecolor", "xterm") == ColorDepth::Truecolor);
     ASSERT_TRUE(ssg::app::detect_color_depth("24bit", nullptr) == ColorDepth::Truecolor);
@@ -87,7 +87,7 @@ TEST(detect_color_depth_reads_environment) {
     ASSERT_TRUE(ssg::app::detect_color_depth(nullptr, nullptr) == ColorDepth::Ansi16);
 }
 
-TEST(encode_ansi_frame_addresses_rows_and_emits_palette_colors) {
+TEST(encodeAnsiFrameAddressesRowsAndEmitsPaletteColors) {
     ssg::CellGrid screen;
     screen.size = {2, 1};
     screen.palette[0] = {10, 20, 30};
@@ -114,7 +114,7 @@ TEST(encode_ansi_frame_addresses_rows_and_emits_palette_colors) {
                 std::string::npos);
 }
 
-TEST(encode_ansi_frame_skips_wide_glyph_continuation) {
+TEST(encodeAnsiFrameSkipsWideGlyphContinuation) {
     ssg::CellGrid screen;
     screen.size = {2, 1};
     screen.palette[0] = {0, 0, 0};
@@ -135,7 +135,7 @@ TEST(encode_ansi_frame_skips_wide_glyph_continuation) {
                 frame.find("\x1b[0m", glyph) < frame.find(' ', glyph + 3));
 }
 
-TEST(unicode_end_to_end_grid_and_encoding) {
+TEST(unicodeEndToEndGridAndEncoding) {
     // text -> snapshot -> render -> encode, locking the client Unicode path:
     // a wide CJG glyph occupies a cell + continuation, a combining mark folds
     // into its base grapheme (width 1), a ZWJ emoji sequence is one wide cluster,
@@ -199,8 +199,8 @@ TEST(unicode_end_to_end_grid_and_encoding) {
     // The caret advances by exactly 2 columns across the wide CJK glyph: byte
     // offset 2 (before the glyph) resolves to column startx+2, and offset 5 (just
     // after it, at 'e') to column startx+4 — a literal +2.
-    auto before = ssg::resolve_document_position(line, ssg::ByteOffset{2});
-    auto after = ssg::resolve_document_position(line, ssg::ByteOffset{5});
+    auto before = ssg::resolveDocumentPosition(line, ssg::ByteOffset{2});
+    auto after = ssg::resolveDocumentPosition(line, ssg::ByteOffset{5});
     ASSERT_TRUE(before.has_value());
     ASSERT_TRUE(after.has_value());
     auto caret_column_at = [&](std::optional<ssg::DocumentPosition> pos) -> int {
@@ -233,7 +233,7 @@ TEST(unicode_end_to_end_grid_and_encoding) {
     fs::remove_all(root);
 }
 
-TEST(terminal_sequences_are_inverse_control_strings) {
+TEST(terminalSequencesAreInverseControlStrings) {
     auto setup = ssg::app::terminal_setup_sequence();
     auto restore = ssg::app::terminal_restore_sequence();
 
@@ -250,7 +250,7 @@ TEST(terminal_sequences_are_inverse_control_strings) {
     ASSERT_TRUE(restore.find("\x1b[?1000l") != std::string::npos);
 }
 
-TEST(classify_signal_tags_maps_signal_numbers) {
+TEST(classifySignalTagsMapsSignalNumbers) {
     // Empty drain: no events.
     auto none = ssg::app::classify_signal_tags({});
     ASSERT_FALSE(none.resize);
@@ -290,7 +290,7 @@ TEST(classify_signal_tags_maps_signal_numbers) {
     ASSERT_FALSE(ignored.terminate.has_value());
 }
 
-TEST(decode_input_maps_printables_and_named_keys) {
+TEST(decodeInputMapsPrintablesAndNamedKeys) {
     std::size_t consumed = 0;
     // Lowercase letter: KeyA stroke (no shift) plus committed text.
     auto a = ssg::app::decode_input("a", true, consumed);
@@ -319,7 +319,7 @@ TEST(decode_input_maps_printables_and_named_keys) {
     ASSERT_EQ(back.stroke.code, std::string{"Backspace"});
 }
 
-TEST(decode_input_modified_arrows) {
+TEST(decodeInputModifiedArrows) {
     std::size_t consumed = 0;
     // Shift+ArrowUp: ESC [ 1 ; 2 A (modifier 2 -> bitmask 1 = Shift).
     auto shift_up = ssg::app::decode_input("\x1b[1;2A", true, consumed);
@@ -387,7 +387,7 @@ TEST(decode_input_modified_arrows) {
     ASSERT_FALSE(multi.stroke.shift);
 }
 
-TEST(decode_input_modified_arrow_split_reads_are_incomplete) {
+TEST(decodeInputModifiedArrowSplitReadsAreIncomplete) {
     std::size_t consumed = 0;
     // Every partial-parameter prefix is incomplete and consumes nothing until the
     // final letter arrives.
@@ -416,7 +416,7 @@ TEST(decode_input_modified_arrow_split_reads_are_incomplete) {
     ASSERT_FALSE(overflow.stroke.control);
 }
 
-TEST(decode_input_page_keys_plain_and_modified) {
+TEST(decodeInputPageKeysPlainAndModified) {
     std::size_t consumed = 0;
     // Plain PageUp / PageDown: ESC [ 5 ~ / ESC [ 6 ~.
     auto page_up = ssg::app::decode_input("\x1b[5~", true, consumed);
@@ -460,7 +460,7 @@ TEST(decode_input_page_keys_plain_and_modified) {
     ASSERT_TRUE(junk.status == ssg::app::DecodeStatus::none);
 }
 
-TEST(decode_input_arrows_and_mouse) {
+TEST(decodeInputArrowsAndMouse) {
     std::size_t consumed = 0;
     auto up = ssg::app::decode_input("\x1b[A", true, consumed);
     ASSERT_EQ(consumed, std::size_t{3});
@@ -477,7 +477,7 @@ TEST(decode_input_arrows_and_mouse) {
     ASSERT_EQ(wheel.pointer.row, 4);
 }
 
-TEST(decode_input_escape_boundary_is_bounded) {
+TEST(decodeInputEscapeBoundaryIsBounded) {
     std::size_t consumed = 0;
     // A buffered CSI introducer disambiguates to an arrow, not an Escape stroke.
     auto arrow = ssg::app::decode_input("\x1b[A", false, consumed);
@@ -506,7 +506,7 @@ TEST(decode_input_escape_boundary_is_bounded) {
     ASSERT_TRUE(partial.status == ssg::app::DecodeStatus::incomplete);
 }
 
-TEST(decode_input_pointer_press_release_drag) {
+TEST(decodeInputPointerPressReleaseDrag) {
     std::size_t consumed = 0;
 
     // Left press at SGR (1,1) -> grid (0,0). Button bits 0, final 'M'.
@@ -549,7 +549,7 @@ TEST(decode_input_pointer_press_release_drag) {
     ASSERT_EQ(wheel_up.pointer.row, 4);
 }
 
-TEST(decode_input_pointer_split_reads_are_incomplete) {
+TEST(decodeInputPointerSplitReadsAreIncomplete) {
     std::size_t consumed = 0;
     // Every truncation before the final M/m byte is incomplete and consumes
     // nothing, so the loop waits for more bytes.
@@ -566,7 +566,7 @@ TEST(decode_input_pointer_split_reads_are_incomplete) {
     ASSERT_TRUE(complete.status == ssg::app::DecodeStatus::pointer);
 }
 
-TEST(route_pointer_left_press_on_editor_places_caret) {
+TEST(routePointerLeftPressOnEditorPlacesCaret) {
     ssg::RegionHit hit;
     hit.region = ssg::HitRegion::Editor;
     hit.byte_offset = 3;
@@ -594,7 +594,7 @@ TEST(route_pointer_left_press_on_editor_places_caret) {
     ASSERT_FALSE(plan.ends_drag);
 }
 
-TEST(route_pointer_ignores_non_editor_and_non_left) {
+TEST(routePointerIgnoresNonEditorAndNonLeft) {
     ssg::app::PointerTargets const empty;
 
     // A press on nothing (out of bounds / chrome) dispatches no command.
@@ -634,7 +634,7 @@ TEST(route_pointer_ignores_non_editor_and_non_left) {
     ASSERT_FALSE(unresolved.begins_drag);
 }
 
-TEST(decode_input_pointer_rejects_malformed_but_terminated_payloads) {
+TEST(decodeInputPointerRejectsMalformedButTerminatedPayloads) {
     std::size_t consumed = 0;
     // Empty Cb, empty Cx, empty Cy, and non-digit Cy each terminate with M/m but
     // are malformed: they are consumed and dropped (none), never dispatched as a
@@ -649,7 +649,7 @@ TEST(decode_input_pointer_rejects_malformed_but_terminated_payloads) {
     }
 }
 
-TEST(route_pointer_drag_extends_selection_from_anchor) {
+TEST(routePointerDragExtendsSelectionFromAnchor) {
     auto const anchor =
         ssg::DocumentPosition{ssg::ByteOffset{3}, ssg::LineIndex{0}, ssg::CellIndex{3}};
     ssg::RegionHit hit;
@@ -683,7 +683,7 @@ TEST(route_pointer_drag_extends_selection_from_anchor) {
     ASSERT_FALSE(plan.ends_drag);
 }
 
-TEST(route_pointer_drag_without_anchor_or_target_is_a_no_op) {
+TEST(routePointerDragWithoutAnchorOrTargetIsANoOp) {
     auto const anchor =
         ssg::DocumentPosition{ssg::ByteOffset{3}, ssg::LineIndex{0}, ssg::CellIndex{3}};
     ssg::RegionHit editor_hit;
@@ -715,7 +715,7 @@ TEST(route_pointer_drag_without_anchor_or_target_is_a_no_op) {
     ASSERT_TRUE(off_editor.commands.empty());
 }
 
-TEST(route_pointer_release_ends_drag_without_a_command) {
+TEST(routePointerReleaseEndsDragWithoutACommand) {
     ssg::RegionHit editor_hit;
     editor_hit.region = ssg::HitRegion::Editor;
     ssg::app::PointerTargets targets;
@@ -737,7 +737,7 @@ TEST(route_pointer_release_ends_drag_without_a_command) {
     ASSERT_FALSE(stray.ends_drag);
 }
 
-TEST(route_pointer_editor_scrollbar_scrolls_to_fraction) {
+TEST(routePointerEditorScrollbarScrollsToFraction) {
     // A press or drag on the editor gutter scrolls to the fraction hit_test
     // reported, independent of the selection drag state. The bottom of the
     // gutter reports numerator == denominator (-> maximum_first_row); the top
@@ -792,7 +792,7 @@ TEST(route_pointer_editor_scrollbar_scrolls_to_fraction) {
     ASSERT_TRUE(scroll_args(mid) != nullptr);
 }
 
-TEST(route_pointer_panel_and_palette_scrollbars_are_no_ops) {
+TEST(routePointerPanelAndPaletteScrollbarsAreNoOps) {
     // Panel/palette gutter drag is not wired in M8; those hits dispatch nothing.
     ssg::app::PointerTargets const empty;
     for (auto region : {ssg::HitRegion::PanelScrollbar,
@@ -809,7 +809,7 @@ TEST(route_pointer_panel_and_palette_scrollbars_are_no_ops) {
     }
 }
 
-TEST(route_pointer_tab_press_activates_the_tab) {
+TEST(routePointerTabPressActivatesTheTab) {
     ssg::RegionHit hit;
     hit.region = ssg::HitRegion::Tab;
     hit.tab_index = 2;
@@ -837,7 +837,7 @@ TEST(route_pointer_tab_press_activates_the_tab) {
     ASSERT_TRUE(unresolved.commands.empty());
 }
 
-TEST(route_pointer_palette_press_executes_the_candidate) {
+TEST(routePointerPalettePressExecutesTheCandidate) {
     ssg::RegionHit hit;
     hit.region = ssg::HitRegion::Palette;
     hit.item_index = 4;
@@ -865,7 +865,7 @@ TEST(route_pointer_palette_press_executes_the_candidate) {
     ASSERT_TRUE(unresolved.commands.empty());
 }
 
-TEST(route_pointer_panel_press_selects_and_activates_the_node) {
+TEST(routePointerPanelPressSelectsAndActivatesTheNode) {
     ssg::RegionHit hit;
     hit.region = ssg::HitRegion::Panel;
     hit.node_id = ssg::TreeNodeId{"files:src/main.cpp"};
@@ -897,7 +897,7 @@ TEST(route_pointer_panel_press_selects_and_activates_the_node) {
     ASSERT_TRUE(inert.commands.empty());
 }
 
-TEST(route_wheel_maps_region_to_scroll_target) {
+TEST(routeWheelMapsRegionToScrollTarget) {
     using ssg::app::WheelTarget;
     // The side panel and its gutter scroll the tree.
     ASSERT_TRUE(ssg::app::route_wheel(ssg::HitRegion::Panel) == WheelTarget::tree);
@@ -915,7 +915,7 @@ TEST(route_wheel_maps_region_to_scroll_target) {
     }
 }
 
-TEST(edge_scroll_decides_direction_at_the_content_edges) {
+TEST(edgeScrollDecidesDirectionAtTheContentEdges) {
     // Editor content occupying rows [2, 23): y=2, height=21, bottom=23.
     ssg::Rect const content{0, 2, 79, 21};
 
@@ -947,37 +947,37 @@ TEST(edge_scroll_decides_direction_at_the_content_edges) {
 }
 
 int main() {
-    RUN(resolve_launch_no_argument_opens_cwd);
-    RUN(resolve_launch_directory_opens_that_directory);
-    RUN(resolve_launch_file_opens_parent_directory_and_file);
-    RUN(terminal_sequences_are_inverse_control_strings);
-    RUN(unicode_end_to_end_grid_and_encoding);
-    RUN(classify_signal_tags_maps_signal_numbers);
-    RUN(encode_ansi_frame_adapts_to_color_depth);
-    RUN(detect_color_depth_reads_environment);
-    RUN(encode_ansi_frame_addresses_rows_and_emits_palette_colors);
-    RUN(encode_ansi_frame_skips_wide_glyph_continuation);
-    RUN(decode_input_maps_printables_and_named_keys);
-    RUN(decode_input_modified_arrows);
-    RUN(decode_input_modified_arrow_split_reads_are_incomplete);
-    RUN(decode_input_page_keys_plain_and_modified);
-    RUN(decode_input_arrows_and_mouse);
-    RUN(decode_input_pointer_press_release_drag);
-    RUN(decode_input_pointer_split_reads_are_incomplete);
-    RUN(decode_input_pointer_rejects_malformed_but_terminated_payloads);
-    RUN(route_pointer_left_press_on_editor_places_caret);
-    RUN(route_pointer_ignores_non_editor_and_non_left);
-    RUN(route_pointer_drag_extends_selection_from_anchor);
-    RUN(route_pointer_drag_without_anchor_or_target_is_a_no_op);
-    RUN(route_pointer_release_ends_drag_without_a_command);
-    RUN(route_pointer_editor_scrollbar_scrolls_to_fraction);
-    RUN(route_pointer_panel_and_palette_scrollbars_are_no_ops);
-    RUN(route_pointer_tab_press_activates_the_tab);
-    RUN(route_pointer_palette_press_executes_the_candidate);
-    RUN(route_pointer_panel_press_selects_and_activates_the_node);
-    RUN(route_wheel_maps_region_to_scroll_target);
-    RUN(edge_scroll_decides_direction_at_the_content_edges);
-    RUN(decode_input_escape_boundary_is_bounded);
+    RUN(resolveLaunchNoArgumentOpensCwd);
+    RUN(resolveLaunchDirectoryOpensThatDirectory);
+    RUN(resolveLaunchFileOpensParentDirectoryAndFile);
+    RUN(terminalSequencesAreInverseControlStrings);
+    RUN(unicodeEndToEndGridAndEncoding);
+    RUN(classifySignalTagsMapsSignalNumbers);
+    RUN(encodeAnsiFrameAdaptsToColorDepth);
+    RUN(detectColorDepthReadsEnvironment);
+    RUN(encodeAnsiFrameAddressesRowsAndEmitsPaletteColors);
+    RUN(encodeAnsiFrameSkipsWideGlyphContinuation);
+    RUN(decodeInputMapsPrintablesAndNamedKeys);
+    RUN(decodeInputModifiedArrows);
+    RUN(decodeInputModifiedArrowSplitReadsAreIncomplete);
+    RUN(decodeInputPageKeysPlainAndModified);
+    RUN(decodeInputArrowsAndMouse);
+    RUN(decodeInputPointerPressReleaseDrag);
+    RUN(decodeInputPointerSplitReadsAreIncomplete);
+    RUN(decodeInputPointerRejectsMalformedButTerminatedPayloads);
+    RUN(routePointerLeftPressOnEditorPlacesCaret);
+    RUN(routePointerIgnoresNonEditorAndNonLeft);
+    RUN(routePointerDragExtendsSelectionFromAnchor);
+    RUN(routePointerDragWithoutAnchorOrTargetIsANoOp);
+    RUN(routePointerReleaseEndsDragWithoutACommand);
+    RUN(routePointerEditorScrollbarScrollsToFraction);
+    RUN(routePointerPanelAndPaletteScrollbarsAreNoOps);
+    RUN(routePointerTabPressActivatesTheTab);
+    RUN(routePointerPalettePressExecutesTheCandidate);
+    RUN(routePointerPanelPressSelectsAndActivatesTheNode);
+    RUN(routeWheelMapsRegionToScrollTarget);
+    RUN(edgeScrollDecidesDirectionAtTheContentEdges);
+    RUN(decodeInputEscapeBoundaryIsBounded);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;

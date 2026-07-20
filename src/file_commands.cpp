@@ -4,11 +4,11 @@
 
 namespace ssg {
 
-FileCommandsCommandSet file_commands_command_set() {
+FileCommandsCommandSet fileCommandsCommandSet() {
     return {};
 }
 
-PromptRequest file_path_prompt(FileCommand command) {
+PromptRequest filePathPrompt(FileCommand command) {
     std::string label;
     switch (command) {
         case FileCommand::OpenDirectory:

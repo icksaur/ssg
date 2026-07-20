@@ -51,13 +51,13 @@ public:
                                          ClientCommand const& command);
 
     [[nodiscard]] Revision revision() const;
-    [[nodiscard]] std::filesystem::path const& workspace_root() const noexcept;
+    [[nodiscard]] std::filesystem::path const& workspaceRoot() const noexcept;
     // M10 fast startup: run the enrichment work that was deferred when the
     // runtime was created with defer_enrichment=true (the workspace tree scan and
     // syntax highlighting), then publish it through the normal snapshot/delta
     // channel.  Idempotent and a no-op when nothing was deferred; the client
     // calls it once after drawing its first frame.
-    void prime_deferred();
+    void primeDeferred();
     // M10 startup instrumentation: how many times the O(document) syntax
     // highlight pass and the O(workspace) tree scan have actually run.  Exposed
     // so the startup oracle can assert deferred enrichment does not run before
@@ -66,12 +66,12 @@ public:
         std::uint64_t syntax_runs = 0;
         std::uint64_t tree_scans = 0;
     };
-    [[nodiscard]] DeferredWorkCounts deferred_work_counts() const;
+    [[nodiscard]] DeferredWorkCounts deferredWorkCounts() const;
     [[nodiscard]] std::optional<SessionSnapshot> snapshot(
         ClientId client_id, ViewportDimensions dimensions,
         KeySequence leader_pending = {},
         PaletteReport palette_report = {}) const;
-    [[nodiscard]] std::string active_document_text() const;
+    [[nodiscard]] std::string activeDocumentText() const;
 
     struct Impl;
 

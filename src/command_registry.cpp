@@ -26,18 +26,18 @@ InvocationPrincipal::InvocationPrincipal(
         capabilities_.end());
 }
 
-bool InvocationPrincipal::has_capability(
+bool InvocationPrincipal::hasCapability(
     CapabilityId const& capability) const {
     return std::binary_search(capabilities_.begin(), capabilities_.end(),
                               capability);
 }
 
-void CommandContext::set_active_workspace(WorkspaceId workspace) noexcept {
+void CommandContext::setActiveWorkspace(WorkspaceId workspace) noexcept {
     workspace_changed_ = true;
     active_workspace_ = workspace;
 }
 
-void CommandContext::set_active_view(ViewId view) noexcept {
+void CommandContext::setActiveView(ViewId view) noexcept {
     view_changed_ = true;
     active_view_ = view;
 }

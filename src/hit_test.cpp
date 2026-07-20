@@ -13,7 +13,7 @@ bool contains(Rect const& rect, int column, int row) {
 // Map a cell inside a scrollbar gutter to a RegionHit for that gutter. The
 // vertical position becomes numerator/denominator for view.scroll_to_fraction
 // (top of the gutter -> 0, bottom -> 1), so a click maps directly to a scroll.
-RegionHit scrollbar_hit(HitRegion region, Rect const& gutter, int row) {
+RegionHit scrollbarHit(HitRegion region, Rect const& gutter, int row) {
     RegionHit hit;
     hit.region = region;
     auto const relative = static_cast<std::uint32_t>(
@@ -26,7 +26,7 @@ RegionHit scrollbar_hit(HitRegion region, Rect const& gutter, int row) {
     return hit;
 }
 
-RegionHit editor_hit(SessionSnapshot const& snapshot, Rect const& content,
+RegionHit editorHit(SessionSnapshot const& snapshot, Rect const& content,
                      int column, int row) {
     auto const& viewport = snapshot.client().viewport;
     auto const viewport_row = static_cast<std::uint32_t>(row - content.y);
@@ -59,9 +59,9 @@ RegionHit editor_hit(SessionSnapshot const& snapshot, Rect const& content,
     return hit;
 }
 
-RegionHit palette_hit(PaletteProjection const& palette, int column, int row) {
+RegionHit paletteHit(PaletteProjection const& palette, int column, int row) {
     if (contains(palette.scrollbar_rect, column, row)) {
-        return scrollbar_hit(HitRegion::PaletteScrollbar, palette.scrollbar_rect,
+        return scrollbarHit(HitRegion::PaletteScrollbar, palette.scrollbar_rect,
                              row);
     }
     if (!contains(palette.rect, column, row)) return {};
@@ -74,10 +74,10 @@ RegionHit palette_hit(PaletteProjection const& palette, int column, int row) {
     return hit;
 }
 
-RegionHit panel_hit(SessionSnapshot const& snapshot, Rect const& panel,
+RegionHit panelHit(SessionSnapshot const& snapshot, Rect const& panel,
                     std::optional<Rect> const& gutter, int column, int row) {
     if (gutter && contains(*gutter, column, row)) {
-        return scrollbar_hit(HitRegion::PanelScrollbar, *gutter, row);
+        return scrollbarHit(HitRegion::PanelScrollbar, *gutter, row);
     }
     if (row == panel.y) return {};
     auto const& tree = snapshot.sections().tree;
@@ -93,7 +93,7 @@ RegionHit panel_hit(SessionSnapshot const& snapshot, Rect const& panel,
 
 }  // namespace
 
-RegionHit hit_test(SessionSnapshot const& snapshot, int column, int row) {
+RegionHit hitTest(SessionSnapshot const& snapshot, int column, int row) {
     auto const& shell = snapshot.sections().shell;
     if (column < 0 || row < 0 || column >= shell.viewport.columns ||
         row >= shell.viewport.rows) {
@@ -103,7 +103,7 @@ RegionHit hit_test(SessionSnapshot const& snapshot, int column, int row) {
     // The side panel and its gutter occupy the leftmost columns, disjoint from
     // the editor/palette pane.
     if (shell.panel && contains(*shell.panel, column, row)) {
-        return panel_hit(snapshot, *shell.panel, shell.panel_scrollbar, column,
+        return panelHit(snapshot, *shell.panel, shell.panel_scrollbar, column,
                          row);
     }
 
@@ -122,7 +122,7 @@ RegionHit hit_test(SessionSnapshot const& snapshot, int column, int row) {
     // The palette overlays the editor pane while it is open, so it takes
     // precedence over the editor content in the same rectangle.
     if (shell.palette) {
-        auto hit = palette_hit(*shell.palette, column, row);
+        auto hit = paletteHit(*shell.palette, column, row);
         if (hit.hit()) return hit;
         // A pane cell not on a palette row or its gutter is inert while the
         // palette is open (the document is not interactive underneath).
@@ -135,11 +135,11 @@ RegionHit hit_test(SessionSnapshot const& snapshot, int column, int row) {
     if (!shell.panes.empty()) {
         auto const& pane = shell.panes.front();
         if (contains(pane.scrollbar, column, row)) {
-            return scrollbar_hit(HitRegion::EditorScrollbar, pane.scrollbar,
+            return scrollbarHit(HitRegion::EditorScrollbar, pane.scrollbar,
                                  row);
         }
         if (contains(pane.content, column, row)) {
-            return editor_hit(snapshot, pane.content, column, row);
+            return editorHit(snapshot, pane.content, column, row);
         }
     }
 

@@ -29,7 +29,7 @@
 #  error "UNICODE_DATA_DIR must be defined (path to data/unicode/)"
 #endif
 
-static std::string encode_utf8(uint32_t cp) {
+static std::string encodeUtf8(uint32_t cp) {
     std::string out;
     if (cp < 0x80u) {
         out += static_cast<char>(cp);
@@ -53,7 +53,7 @@ static std::string encode_utf8(uint32_t cp) {
 // Returns false if line should be skipped (blank, comment, or contains CR/LF).
 struct Entry { uint32_t cp; bool break_after; };
 
-static bool parse_line(const std::string& line,
+static bool parseLine(const std::string& line,
                         std::vector<Entry>& out_entries,
                         std::vector<size_t>& out_break_bytes) {
     out_entries.clear();
@@ -114,7 +114,7 @@ static bool parse_line(const std::string& line,
         if (i > 0 && out_entries[i - 1].break_after) {
             out_break_bytes.push_back(byte_pos);
         }
-        byte_pos += encode_utf8(out_entries[i].cp).size();
+        byte_pos += encodeUtf8(out_entries[i].cp).size();
     }
 
     return !out_entries.empty();
@@ -137,7 +137,7 @@ int main() {
         std::vector<Entry> entries;
         std::vector<size_t> break_bytes;
 
-        if (!parse_line(line, entries, break_bytes)) {
+        if (!parseLine(line, entries, break_bytes)) {
             ++skipped;
             continue;
         }
@@ -145,10 +145,10 @@ int main() {
         // Build UTF-8 string
         std::string utf8;
         for (const auto& e : entries)
-            utf8 += encode_utf8(e.cp);
+            utf8 += encodeUtf8(e.cp);
 
         // Run compute_cell_run
-        const auto run = ssg::compute_cell_run(utf8);
+        const auto run = ssg::computeCellRun(utf8);
 
         // Expected clusters = number of ÷-separated segments
         // break_bytes has the byte offsets where breaks occur (between spans)

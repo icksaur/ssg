@@ -9,21 +9,21 @@ namespace ssg {
 
 namespace {
 
-auto find_client(std::vector<FollowClientView>& clients, ClientId client) {
+auto findClient(std::vector<FollowClientView>& clients, ClientId client) {
     return std::find_if(clients.begin(), clients.end(),
                         [client](const FollowClientView& view) {
                             return view.client == client;
                         });
 }
 
-auto find_client(const std::vector<FollowClientView>& clients, ClientId client) {
+auto findClient(const std::vector<FollowClientView>& clients, ClientId client) {
     return std::find_if(clients.begin(), clients.end(),
                         [client](const FollowClientView& view) {
                             return view.client == client;
                         });
 }
 
-FollowScrollOffset offset_for(std::size_t target_line,
+FollowScrollOffset offsetFor(std::size_t target_line,
                               const ViewportDimensions& dimensions) {
     const auto rows = static_cast<std::uint64_t>(dimensions.rows);
     const auto line = static_cast<std::uint64_t>(target_line);
@@ -32,7 +32,7 @@ FollowScrollOffset offset_for(std::size_t target_line,
 
 }  // namespace
 
-FollowEditsDelta derive_follow_edits_delta(const FollowEditsViewState& base,
+FollowEditsDelta deriveFollowEditsDelta(const FollowEditsViewState& base,
                                            const FollowEditsViewState& target) {
     FollowEditsDelta delta{base.generation, target.generation, std::nullopt};
     if (base != target) {
@@ -41,7 +41,7 @@ FollowEditsDelta derive_follow_edits_delta(const FollowEditsViewState& base,
     return delta;
 }
 
-FollowEditsCommandSet follow_edits_command_set() {
+FollowEditsCommandSet followEditsCommandSet() {
     return {};
 }
 
@@ -52,35 +52,35 @@ FollowEditsModel::FollowEditsModel(FollowEditsConfig config)
     }
 }
 
-FollowEditsResult FollowEditsModel::attach_client(
+FollowEditsResult FollowEditsModel::attachClient(
     ClientId client, ViewportDimensions dimensions) {
     if (dimensions.columns == 0 || dimensions.rows == 0) {
         return {FollowEditsError::InvalidViewport};
     }
-    if (find_client(state_.clients, client) != state_.clients.end()) {
+    if (findClient(state_.clients, client) != state_.clients.end()) {
         return {FollowEditsError::DuplicateClient};
     }
 
     FollowScrollOffset offset;
     if (state_.active_target) {
-        offset = offset_for(state_.active_target->newest_hunk_line, dimensions);
+        offset = offsetFor(state_.active_target->newest_hunk_line, dimensions);
     }
     state_.clients.push_back({client, dimensions, offset});
-    advance_generation();
+    advanceGeneration();
     return {};
 }
 
-FollowEditsResult FollowEditsModel::detach_client(ClientId client) {
-    const auto found = find_client(state_.clients, client);
+FollowEditsResult FollowEditsModel::detachClient(ClientId client) {
+    const auto found = findClient(state_.clients, client);
     if (found == state_.clients.end()) {
         return {FollowEditsError::UnknownClient};
     }
     state_.clients.erase(found);
-    advance_generation();
+    advanceGeneration();
     return {};
 }
 
-FollowEditsResult FollowEditsModel::accept_external_change(
+FollowEditsResult FollowEditsModel::acceptExternalChange(
     const DiffFileView& file, Revision source_revision) {
     if (source_revision <= latest_source_revision_) {
         return {FollowEditsError::StaleRevision};
@@ -92,7 +92,7 @@ FollowEditsResult FollowEditsModel::accept_external_change(
     });
 
     if (!file.hunks.empty()) {
-        auto target = target_for(file, source_revision);
+        auto target = targetFor(file, source_revision);
         state_.queued_targets.push_back(target);
         if (state_.queued_targets.size() > config_.queue_capacity) {
             state_.queued_targets.erase(state_.queued_targets.begin());
@@ -102,13 +102,13 @@ FollowEditsResult FollowEditsModel::accept_external_change(
         }
     }
 
-    advance_generation();
+    advanceGeneration();
     return {};
 }
 
-FollowEditsResult FollowEditsModel::apply_navigation(
+FollowEditsResult FollowEditsModel::applyNavigation(
     const FollowNavigation& navigation) {
-    const auto client = find_client(state_.clients, navigation.client);
+    const auto client = findClient(state_.clients, navigation.client);
     if (client == state_.clients.end()) {
         return {FollowEditsError::UnknownClient};
     }
@@ -122,13 +122,13 @@ FollowEditsResult FollowEditsModel::apply_navigation(
     if (navigation.offset) {
         client->offset = *navigation.offset;
     }
-    advance_generation();
+    advanceGeneration();
     return {};
 }
 
 FollowEditsResult FollowEditsModel::pause() {
     state_.mode = FollowMode::Paused;
-    advance_generation();
+    advanceGeneration();
     return {};
 }
 
@@ -146,7 +146,7 @@ FollowEditsResult FollowEditsModel::resume(const DiffViewState& current_diff) {
                              return file.id == queued->id && !file.hunks.empty();
                          });
         if (current != current_diff.files.end()) {
-            resolved = target_for(*current, queued->source_revision);
+            resolved = targetFor(*current, queued->source_revision);
             break;
         }
     }
@@ -156,24 +156,24 @@ FollowEditsResult FollowEditsModel::resume(const DiffViewState& current_diff) {
     if (resolved) {
         activate(*resolved);
     }
-    advance_generation();
+    advanceGeneration();
     return {};
 }
 
-FollowEditsViewState FollowEditsModel::view_state() const {
+FollowEditsViewState FollowEditsModel::viewState() const {
     return state_;
 }
 
-FollowEditsFooterProjection FollowEditsModel::footer_projection() const {
+FollowEditsFooterProjection FollowEditsModel::footerProjection() const {
     if (state_.mode == FollowMode::Paused) {
         return {"paused", config_.resume_binding, "follow_edits.resume"};
     }
     return {"following", std::nullopt, std::nullopt};
 }
 
-FollowTarget FollowEditsModel::target_for(const DiffFileView& file,
+FollowTarget FollowEditsModel::targetFor(const DiffFileView& file,
                                           Revision source_revision) const {
-    const auto opened = diff_open_file(file);
+    const auto opened = diffOpenFile(file);
     return {file.id, opened.path, file.deleted, file.hunks.back().target_start,
             source_revision};
 }
@@ -181,11 +181,11 @@ FollowTarget FollowEditsModel::target_for(const DiffFileView& file,
 void FollowEditsModel::activate(const FollowTarget& target) {
     state_.active_target = target;
     for (auto& client : state_.clients) {
-        client.offset = offset_for(target.newest_hunk_line, client.dimensions);
+        client.offset = offsetFor(target.newest_hunk_line, client.dimensions);
     }
 }
 
-void FollowEditsModel::advance_generation() noexcept {
+void FollowEditsModel::advanceGeneration() noexcept {
     if (state_.generation != std::numeric_limits<std::uint64_t>::max()) {
         ++state_.generation;
     }

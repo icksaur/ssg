@@ -31,7 +31,7 @@ namespace ssg {
 namespace {
 
 template <typename Range>
-void append_ids(std::vector<CommandDescriptor>& output, Range const& range) {
+void appendIds(std::vector<CommandDescriptor>& output, Range const& range) {
     for (auto const& descriptor : range) {
         std::vector<CapabilityId> capabilities;
         if (descriptor.id == std::string_view{"file.open_dropped_content"}) {
@@ -44,29 +44,29 @@ void append_ids(std::vector<CommandDescriptor>& output, Range const& range) {
 
 }  // namespace
 
-std::vector<CommandDescriptor> p0_command_descriptors() {
+std::vector<CommandDescriptor> p0CommandDescriptors() {
     std::vector<CommandDescriptor> result;
     result.reserve(164);
 
-    append_ids(result, text_input_command_set().descriptors());
-    append_ids(result, selection_navigation_command_set().descriptors());
-    append_ids(result, history_command_set().descriptors());
-    append_ids(result, edit_command_suite_command_set().descriptors());
-    append_ids(result, clipboard_command_set().descriptors());
-    append_ids(result, search_command_set().descriptors());
-    append_ids(result, lsp_feature_command_set().descriptors());
-    append_ids(result, lsp_workspace_edit_command_set().descriptors());
-    append_ids(result, find_replace_command_set().descriptors());
-    append_ids(result, ShellCommandSet{}.descriptors);
-    append_ids(result, tree_command_set().descriptors());
-    append_ids(result, PromptStatusCommandSet{}.descriptors);
-    append_ids(result, file_commands_command_set().descriptors());
-    append_ids(result, text_encoding_command_set.descriptors);
-    append_ids(result, tab_management_command_set().descriptors());
-    append_ids(result, external_modification_command_set().descriptors());
-    append_ids(result, SettingsCommandSet{}.descriptors);
-    append_ids(result, follow_edits_command_set().descriptors());
-    append_ids(result, diff_command_set().descriptors());
+    appendIds(result, textInputCommandSet().descriptors());
+    appendIds(result, selectionNavigationCommandSet().descriptors());
+    appendIds(result, historyCommandSet().descriptors());
+    appendIds(result, editCommandSuiteCommandSet().descriptors());
+    appendIds(result, clipboardCommandSet().descriptors());
+    appendIds(result, searchCommandSet().descriptors());
+    appendIds(result, lspFeatureCommandSet().descriptors());
+    appendIds(result, lspWorkspaceEditCommandSet().descriptors());
+    appendIds(result, findReplaceCommandSet().descriptors());
+    appendIds(result, ShellCommandSet{}.descriptors);
+    appendIds(result, treeCommandSet().descriptors());
+    appendIds(result, PromptStatusCommandSet{}.descriptors);
+    appendIds(result, fileCommandsCommandSet().descriptors());
+    appendIds(result, text_encoding_command_set.descriptors);
+    appendIds(result, tabManagementCommandSet().descriptors());
+    appendIds(result, externalModificationCommandSet().descriptors());
+    appendIds(result, SettingsCommandSet{}.descriptors);
+    appendIds(result, followEditsCommandSet().descriptors());
+    appendIds(result, diffCommandSet().descriptors());
 
     constexpr std::array<std::string_view, 4> viewport_commands{
         "view.toggle_word_wrap", "view.scroll_lines", "view.scroll_pages",
@@ -78,7 +78,7 @@ std::vector<CommandDescriptor> p0_command_descriptors() {
     for (std::size_t index = 0; index < viewport.size(); ++index) {
         viewport[index].id = viewport_commands[index];
     }
-    append_ids(result, viewport);
+    appendIds(result, viewport);
 
     std::unordered_set<std::string> unique;
     for (auto const& descriptor : result) {
@@ -122,7 +122,7 @@ EditorSessionBuilder& EditorSessionBuilder::services(
 }
 
 std::unique_ptr<EditorSession> EditorSessionBuilder::build() {
-    auto descriptors = p0_command_descriptors();
+    auto descriptors = p0CommandDescriptors();
     if (impl_->handlers.size() != descriptors.size()) {
         throw std::invalid_argument{
             "command bindings must equal the complete P0 catalog"};

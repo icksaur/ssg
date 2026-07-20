@@ -5,7 +5,7 @@
 
 namespace ssg {
 
-std::optional<DocumentDelta> derive_document_delta(
+std::optional<DocumentDelta> deriveDocumentDelta(
     DocumentViewState const& before, DocumentViewState const& after) {
     if (before.revision == after.revision) {
         return std::nullopt;
@@ -32,7 +32,7 @@ std::optional<DocumentDelta> derive_document_delta(
         after.text.substr(prefix, after.text.size() - prefix - suffix)};
 }
 
-std::optional<DocumentViewState> replay_document_delta(
+std::optional<DocumentViewState> replayDocumentDelta(
     DocumentViewState const& before, DocumentDelta const& delta,
     ByteOffset target_caret) {
     if (before.revision != delta.base_revision ||

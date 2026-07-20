@@ -21,7 +21,7 @@
 namespace ssg {
 namespace {
 
-std::int64_t modification_time(const std::filesystem::path& path,
+std::int64_t modificationTime(const std::filesystem::path& path,
                                std::error_code& error) {
     const auto value = std::filesystem::last_write_time(path, error);
     if (error) {
@@ -44,12 +44,12 @@ std::optional<WatchFileState> observe(const std::filesystem::path& path) {
             return std::nullopt;
         }
     }
-    const auto modified = modification_time(path, error);
+    const auto modified = modificationTime(path, error);
     if (error) {
         return std::nullopt;
     }
     try {
-        return WatchFileState{file_identity(path), size, modified};
+        return WatchFileState{fileIdentity(path), size, modified};
     } catch (const std::filesystem::filesystem_error&) {
         return std::nullopt;
     } catch (const std::system_error&) {
@@ -57,7 +57,7 @@ std::optional<WatchFileState> observe(const std::filesystem::path& path) {
     }
 }
 
-WorkspaceScan scan_workspace(const std::filesystem::path& root,
+WorkspaceScan scanWorkspace(const std::filesystem::path& root,
                              std::size_t maximum) {
     WorkspaceScan result;
     std::error_code error;
@@ -103,15 +103,15 @@ public:
     LinuxFilesystemWatcher(std::filesystem::path root, WatcherConfig config)
         : root_(std::filesystem::canonical(std::move(root))),
           max_rescan_entries_(config.max_rescan_entries) {
-        note_optional_construction(OptionalSubsystem::FilesystemWatcher);
+        noteOptionalConstruction(OptionalSubsystem::FilesystemWatcher);
         descriptor_ = ::inotify_init1(IN_NONBLOCK | IN_CLOEXEC);
         if (descriptor_ == -1) {
             throw std::system_error(errno, std::generic_category(),
                                     "failed to create inotify watcher");
         }
         try {
-            add_watch_tree(root_);
-            const auto initial = scan_workspace(root_, config.max_rescan_entries);
+            addWatchTree(root_);
+            const auto initial = scanWorkspace(root_, config.max_rescan_entries);
             if (!initial.complete) {
                 throw std::runtime_error(
                     "failed to seed bounded filesystem watcher snapshot");
@@ -119,7 +119,7 @@ public:
             normalizer_ = std::make_unique<WatchEventNormalizer>(
                 config, initial.entries,
                 [this](std::size_t maximum) {
-                    return rescan_workspace(maximum);
+                    return rescanWorkspace(maximum);
                 });
         } catch (...) {
             ::close(descriptor_);
@@ -134,8 +134,8 @@ public:
         }
     }
 
-    void register_save(SaveExpectation expectation) override {
-        normalizer_->register_save(std::move(expectation));
+    void registerSave(SaveExpectation expectation) override {
+        normalizer_->registerSave(std::move(expectation));
     }
 
     std::vector<WatchEvent> poll(std::chrono::milliseconds timeout) override {
@@ -151,9 +151,9 @@ public:
                                     "failed to poll inotify watcher");
         }
         if (ready > 0) {
-            read_native_events();
+            readNativeEvents();
         }
-        return normalizer_->take_ready(WatchClock::now());
+        return normalizer_->takeReady(WatchClock::now());
     }
 
 private:
@@ -161,7 +161,7 @@ private:
         IN_CREATE | IN_MODIFY | IN_ATTRIB | IN_CLOSE_WRITE | IN_DELETE |
         IN_MOVED_FROM | IN_MOVED_TO | IN_DELETE_SELF | IN_MOVE_SELF;
 
-    void add_watch(const std::filesystem::path& directory) {
+    void addWatch(const std::filesystem::path& directory) {
         const auto descriptor =
             ::inotify_add_watch(descriptor_, directory.c_str(), watch_mask);
         if (descriptor == -1) {
@@ -171,8 +171,8 @@ private:
         directories_[descriptor] = directory;
     }
 
-    void add_watch_tree(const std::filesystem::path& directory) {
-        add_watch(directory);
+    void addWatchTree(const std::filesystem::path& directory) {
+        addWatch(directory);
         std::error_code error;
         std::filesystem::recursive_directory_iterator current(
             directory,
@@ -195,12 +195,12 @@ private:
             if (std::filesystem::is_symlink(status)) {
                 current.disable_recursion_pending();
             } else if (std::filesystem::is_directory(status)) {
-                add_watch(current->path());
+                addWatch(current->path());
             }
         }
     }
 
-    WorkspaceScan rescan_workspace(std::size_t maximum) {
+    WorkspaceScan rescanWorkspace(std::size_t maximum) {
         for (const auto& [descriptor, path] : directories_) {
             (void)path;
             if (::inotify_rm_watch(descriptor_, descriptor) == -1 &&
@@ -210,16 +210,16 @@ private:
         }
         directories_.clear();
         try {
-            add_watch_tree(root_);
+            addWatchTree(root_);
         } catch (const std::filesystem::filesystem_error&) {
             return {{}, false};
         } catch (const std::system_error&) {
             return {{}, false};
         }
-        return scan_workspace(root_, maximum);
+        return scanWorkspace(root_, maximum);
     }
 
-    void read_native_events() {
+    void readNativeEvents() {
         alignas(inotify_event) std::byte buffer[64 * 1024];
         for (;;) {
             const auto count = ::read(descriptor_, buffer, sizeof(buffer));
@@ -285,9 +285,9 @@ private:
                     {NativeWatchAction::Create, relative, 0, observed}, now);
             }
             try {
-                add_watch_tree(absolute);
+                addWatchTree(absolute);
                 const auto subtree =
-                    scan_workspace(absolute, max_rescan_entries_);
+                    scanWorkspace(absolute, max_rescan_entries_);
                 if (!subtree.complete) {
                     normalizer_->push(
                         {NativeWatchAction::Overflow, {}, 0, {}}, now);
@@ -340,7 +340,7 @@ private:
 
 } // namespace
 
-std::unique_ptr<FilesystemWatcher> make_platform_filesystem_watcher(
+std::unique_ptr<FilesystemWatcher> makePlatformFilesystemWatcher(
     const std::filesystem::path& canonical_root, WatcherConfig config) {
     return std::make_unique<LinuxFilesystemWatcher>(canonical_root, config);
 }

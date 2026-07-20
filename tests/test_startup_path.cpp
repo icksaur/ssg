@@ -20,7 +20,7 @@ namespace {
 
 namespace fs = std::filesystem;
 
-fs::path make_workspace(std::string const& name) {
+fs::path makeWorkspace(std::string const& name) {
     auto root = fs::current_path() / ("startup_path_" + name);
     fs::remove_all(root);
     fs::create_directories(root / "workspace");
@@ -37,7 +37,7 @@ fs::path make_workspace(std::string const& name) {
     return root;
 }
 
-ssg::EditorRuntimeConfig config_for(fs::path const& root, bool defer) {
+ssg::EditorRuntimeConfig configFor(fs::path const& root, bool defer) {
     ssg::EditorRuntimeConfig config;
     config.cwd = root / "workspace";
     config.scratch_root = root / "scratch";
@@ -48,9 +48,9 @@ ssg::EditorRuntimeConfig config_for(fs::path const& root, bool defer) {
 
 }  // namespace
 
-TEST(deferred_enrichment_skips_syntax_and_tree_until_primed) {
-    auto root = make_workspace("deferred");
-    auto created = ssg::EditorRuntime::create(config_for(root, /*defer=*/true));
+TEST(deferredEnrichmentSkipsSyntaxAndTreeUntilPrimed) {
+    auto root = makeWorkspace("deferred");
+    auto created = ssg::EditorRuntime::create(configFor(root, /*defer=*/true));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
@@ -64,14 +64,14 @@ TEST(deferred_enrichment_skips_syntax_and_tree_until_primed) {
     // Producing the first frame (a snapshot) must not have run the deferrable
     // O(document) syntax pass or the O(workspace) tree scan.
     (void)runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
-    auto before = runtime.deferred_work_counts();
+    auto before = runtime.deferredWorkCounts();
     ASSERT_EQ(before.syntax_runs, std::uint64_t{0});
     ASSERT_EQ(before.tree_scans, std::uint64_t{0});
 
     // Priming runs the deferred work; it must actually arrive.
     auto const revision_before_prime = runtime.revision();
-    runtime.prime_deferred();
-    auto after = runtime.deferred_work_counts();
+    runtime.primeDeferred();
+    auto after = runtime.deferredWorkCounts();
     ASSERT_TRUE(after.syntax_runs >= 1);
     ASSERT_TRUE(after.tree_scans >= 1);
     // The session revision advances so delta-based clients observe the primed
@@ -81,8 +81,8 @@ TEST(deferred_enrichment_skips_syntax_and_tree_until_primed) {
     // Idempotent: a second prime does no additional deferred work and does not
     // advance the revision again.
     auto const revision_after_prime = runtime.revision();
-    runtime.prime_deferred();
-    auto again = runtime.deferred_work_counts();
+    runtime.primeDeferred();
+    auto again = runtime.deferredWorkCounts();
     ASSERT_EQ(again.syntax_runs, after.syntax_runs);
     ASSERT_EQ(again.tree_scans, after.tree_scans);
     ASSERT_EQ(runtime.revision().value(), revision_after_prime.value());
@@ -90,9 +90,9 @@ TEST(deferred_enrichment_skips_syntax_and_tree_until_primed) {
     fs::remove_all(root);
 }
 
-TEST(eager_construction_runs_enrichment_immediately) {
-    auto root = make_workspace("eager");
-    auto created = ssg::EditorRuntime::create(config_for(root, /*defer=*/false));
+TEST(eagerConstructionRunsEnrichmentImmediately) {
+    auto root = makeWorkspace("eager");
+    auto created = ssg::EditorRuntime::create(configFor(root, /*defer=*/false));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
@@ -105,26 +105,26 @@ TEST(eager_construction_runs_enrichment_immediately) {
 
     // Default (eager) behavior: the tree scan ran at construction and syntax ran
     // at construction and again on open — all before any prime_deferred call.
-    auto counts = runtime.deferred_work_counts();
+    auto counts = runtime.deferredWorkCounts();
     ASSERT_TRUE(counts.tree_scans >= 1);
     ASSERT_TRUE(counts.syntax_runs >= 1);
 
     // prime_deferred is a harmless no-op when nothing was deferred.
-    runtime.prime_deferred();
-    auto after = runtime.deferred_work_counts();
+    runtime.primeDeferred();
+    auto after = runtime.deferredWorkCounts();
     ASSERT_EQ(after.tree_scans, counts.tree_scans);
     ASSERT_EQ(after.syntax_runs, counts.syntax_runs);
 
     fs::remove_all(root);
 }
 
-TEST(first_frame_constructs_no_optional_subsystem) {
+TEST(firstFrameConstructsNoOptionalSubsystem) {
     // M10-2 (doc/spec-fast-startup.md): producing the first frame must construct
     // no optional subsystem (Lua, LSP, a real Tree-sitter grammar, a filesystem
     // watcher, HTTP) — project invariant I12.
-    ssg::reset_optional_construction_audit();
-    auto root = make_workspace("no_optional");
-    auto created = ssg::EditorRuntime::create(config_for(root, /*defer=*/true));
+    ssg::resetOptionalConstructionAudit();
+    auto root = makeWorkspace("no_optional");
+    auto created = ssg::EditorRuntime::create(configFor(root, /*defer=*/true));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
@@ -139,31 +139,31 @@ TEST(first_frame_constructs_no_optional_subsystem) {
     // Exhaustive over the enumerated subsystems (a missing enum entry fails the
     // static_assert in startup_audit.h, so the list cannot silently omit one).
     for (auto subsystem : ssg::all_optional_subsystems) {
-        ASSERT_EQ(ssg::optional_construction_count(subsystem), std::uint64_t{0});
+        ASSERT_EQ(ssg::optionalConstructionCount(subsystem), std::uint64_t{0});
     }
-    ASSERT_EQ(ssg::optional_construction_total(), std::uint64_t{0});
+    ASSERT_EQ(ssg::optionalConstructionTotal(), std::uint64_t{0});
 
     // Priming (post-first-frame enrichment) also constructs nothing optional:
     // the plain-text syntax pass uses no Tree-sitter grammar.
-    runtime.prime_deferred();
-    ASSERT_EQ(ssg::optional_construction_total(), std::uint64_t{0});
+    runtime.primeDeferred();
+    ASSERT_EQ(ssg::optionalConstructionTotal(), std::uint64_t{0});
 
     fs::remove_all(root);
 }
 
-TEST(optional_construction_audit_is_wired_positive_control) {
+TEST(optionalConstructionAuditIsWiredPositiveControl) {
     // Guards against a false pass from broken instrumentation: constructing a
     // real optional subsystem (a filesystem watcher) MUST increment its counter.
-    ssg::reset_optional_construction_audit();
-    ASSERT_EQ(ssg::optional_construction_count(ssg::OptionalSubsystem::FilesystemWatcher),
+    ssg::resetOptionalConstructionAudit();
+    ASSERT_EQ(ssg::optionalConstructionCount(ssg::OptionalSubsystem::FilesystemWatcher),
               std::uint64_t{0});
-    auto root = make_workspace("positive_control");
+    auto root = makeWorkspace("positive_control");
     {
-        auto watcher = ssg::make_platform_filesystem_watcher(
+        auto watcher = ssg::makePlatformFilesystemWatcher(
             std::filesystem::canonical(root / "workspace"));
         ASSERT_TRUE(watcher != nullptr);
     }
-    ASSERT_TRUE(ssg::optional_construction_count(
+    ASSERT_TRUE(ssg::optionalConstructionCount(
                     ssg::OptionalSubsystem::FilesystemWatcher) >= 1);
     fs::remove_all(root);
 }
@@ -171,15 +171,15 @@ TEST(optional_construction_audit_is_wired_positive_control) {
 int main() {
     // M10-2 static-init probe: nothing optional may construct before main (no
     // self-registering globals); the ledger must be empty at process entry.
-    if (ssg::optional_construction_total() != 0) {
+    if (ssg::optionalConstructionTotal() != 0) {
         std::cerr << "  FAIL: an optional subsystem constructed before main "
                      "(static-init side effect)\n";
         ++failed;
     }
-    RUN(deferred_enrichment_skips_syntax_and_tree_until_primed);
-    RUN(eager_construction_runs_enrichment_immediately);
-    RUN(first_frame_constructs_no_optional_subsystem);
-    RUN(optional_construction_audit_is_wired_positive_control);
+    RUN(deferredEnrichmentSkipsSyntaxAndTreeUntilPrimed);
+    RUN(eagerConstructionRunsEnrichmentImmediately);
+    RUN(firstFrameConstructsNoOptionalSubsystem);
+    RUN(optionalConstructionAuditIsWiredPositiveControl);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

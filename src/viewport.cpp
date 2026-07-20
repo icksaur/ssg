@@ -10,19 +10,19 @@
 namespace ssg {
 namespace {
 
-uint32_t checked_u32(std::size_t value, const char* what) {
+uint32_t checkedU32(std::size_t value, const char* what) {
     if (value > std::numeric_limits<uint32_t>::max()) {
         throw std::length_error(what);
     }
     return static_cast<uint32_t>(value);
 }
 
-std::vector<VisualRow> wrap_rows(std::span<const CellRun> lines,
+std::vector<VisualRow> wrapRows(std::span<const CellRun> lines,
                                  uint32_t columns) {
     std::vector<VisualRow> rows;
     for (std::size_t line_index = 0; line_index < lines.size(); ++line_index) {
         const auto logical_line =
-            checked_u32(line_index, "viewport logical line count exceeds uint32");
+            checkedU32(line_index, "viewport logical line count exceeds uint32");
         const auto& line = lines[line_index];
         if (line.spans.empty()) {
             // Empty line: the row end is the line start (line-relative offset 0);
@@ -59,7 +59,7 @@ std::vector<VisualRow> wrap_rows(std::span<const CellRun> lines,
             if (width > 0 && content_cells > 0 &&
                 width > columns - std::min(content_cells, columns)) {
                 finish_row();
-                first_span = checked_u32(
+                first_span = checkedU32(
                     span_index, "viewport span count exceeds uint32");
                 span_count = 0;
                 start_cell += content_cells;
@@ -76,7 +76,7 @@ std::vector<VisualRow> wrap_rows(std::span<const CellRun> lines,
     return rows;
 }
 
-ScrollbarMetrics scrollbar_metrics_impl(uint32_t total_rows,
+ScrollbarMetrics scrollbarMetricsImpl(uint32_t total_rows,
                                         uint32_t viewport_rows,
                                         uint32_t first_row) {
     const uint32_t maximum_first =
@@ -103,18 +103,18 @@ ScrollbarMetrics scrollbar_metrics_impl(uint32_t total_rows,
 
 }  // namespace
 
-ScrollbarMetrics scrollbar_metrics(uint32_t total_rows, uint32_t viewport_rows,
+ScrollbarMetrics scrollbarMetrics(uint32_t total_rows, uint32_t viewport_rows,
                                    uint32_t first_row) {
-    return scrollbar_metrics_impl(total_rows, viewport_rows, first_row);
+    return scrollbarMetricsImpl(total_rows, viewport_rows, first_row);
 }
 
-ListScrollView compute_list_scroll_view(uint32_t total_items,
+ListScrollView computeListScrollView(uint32_t total_items,
                                         uint32_t viewport_rows,
                                         uint32_t first_visible,
                                         std::optional<uint32_t> selected,
                                         bool keep_selection_visible) {
     if (viewport_rows == 0) {
-        return ListScrollView{0, 0, scrollbar_metrics_impl(total_items, 0, 0)};
+        return ListScrollView{0, 0, scrollbarMetricsImpl(total_items, 0, 0)};
     }
     const uint32_t maximum_first =
         total_items > viewport_rows ? total_items - viewport_rows : 0;
@@ -137,7 +137,7 @@ ListScrollView compute_list_scroll_view(uint32_t total_items,
     const uint32_t visible_count =
         std::min(viewport_rows, total_items - first);
     return ListScrollView{first, visible_count,
-                          scrollbar_metrics_impl(total_items, viewport_rows,
+                          scrollbarMetricsImpl(total_items, viewport_rows,
                                                  first)};
 }
 
@@ -153,12 +153,12 @@ ViewportDimensions::ViewportDimensions(uint32_t column_count,
     }
 }
 
-ViewportViewState compute_viewport(std::span<const CellRun> logical_lines,
+ViewportViewState computeViewport(std::span<const CellRun> logical_lines,
                                    ViewportDimensions dimensions,
                                    uint32_t requested_first_visual_row) {
-    const auto all_rows = wrap_rows(logical_lines, dimensions.columns);
+    const auto all_rows = wrapRows(logical_lines, dimensions.columns);
     const auto total_rows =
-        checked_u32(all_rows.size(), "viewport visual row count exceeds uint32");
+        checkedU32(all_rows.size(), "viewport visual row count exceeds uint32");
     const uint32_t maximum_first =
         total_rows > dimensions.rows ? total_rows - dimensions.rows : 0;
     const uint32_t first_row =
@@ -176,7 +176,7 @@ ViewportViewState compute_viewport(std::span<const CellRun> logical_lines,
         uint64_t document_byte = 0;
         for (std::size_t line = 0; line < logical_lines.size(); ++line) {
             line_document_start[line] =
-                checked_u32(document_byte, "viewport byte offset exceeds uint32");
+                checkedU32(document_byte, "viewport byte offset exceeds uint32");
             uint64_t content_bytes = 0;
             for (const auto& span : logical_lines[line].spans) {
                 content_bytes += span.byte_len;
@@ -228,11 +228,11 @@ ViewportViewState compute_viewport(std::span<const CellRun> logical_lines,
         total_rows,
         std::move(visible_rows),
         std::move(hit_targets),
-        scrollbar_metrics(total_rows, dimensions.rows, first_row),
+        scrollbarMetrics(total_rows, dimensions.rows, first_row),
     };
 }
 
-ViewportViewState compute_viewport_unwrapped(
+ViewportViewState computeViewportUnwrapped(
     std::string_view document_text, ViewportDimensions dimensions,
     uint32_t requested_first_visual_row, uint32_t requested_first_visual_column,
     int tab_width) {
@@ -253,7 +253,7 @@ ViewportViewState compute_viewport_unwrapped(
         line_start.push_back(newline + 1);
     }
     const auto total_rows =
-        checked_u32(line_start.size(), "viewport line count exceeds uint32");
+        checkedU32(line_start.size(), "viewport line count exceeds uint32");
     const uint32_t maximum_first =
         total_rows > dimensions.rows ? total_rows - dimensions.rows : 0;
     const uint32_t first_row =
@@ -281,14 +281,14 @@ ViewportViewState compute_viewport_unwrapped(
         const std::size_t end = logical_line + 1 < line_start.size()
                                     ? line_start[logical_line + 1] - 1
                                     : document_text.size();
-        const auto run = compute_cell_run(
+        const auto run = computeCellRun(
             document_text.substr(start, end - start), tab_width);
         const auto document_start =
-            checked_u32(start, "viewport byte offset exceeds uint32");
+            checkedU32(start, "viewport byte offset exceeds uint32");
         // The row's end is the line's TRUE end (newline byte, or text.size() for
         // the last line) — the FULL line, independent of the horizontal clip.
         const auto end_byte_offset =
-            checked_u32(end, "viewport byte offset exceeds uint32");
+            checkedU32(end, "viewport byte offset exceeds uint32");
 
         // Locate the first span at or past the requested horizontal offset; its
         // start cell is this row's visible origin.  A row shorter than the offset
@@ -347,11 +347,11 @@ ViewportViewState compute_viewport_unwrapped(
         total_rows,
         std::move(visible_rows),
         std::move(hit_targets),
-        scrollbar_metrics(total_rows, dimensions.rows, first_row),
+        scrollbarMetrics(total_rows, dimensions.rows, first_row),
     };
 }
 
-ViewportViewState scroll_viewport_by(
+ViewportViewState scrollViewportBy(
     std::span<const CellRun> logical_lines,
     ViewportDimensions dimensions,
     uint32_t current_first_visual_row,
@@ -369,10 +369,10 @@ ViewportViewState scroll_viewport_by(
                         ? 0
                         : requested - static_cast<uint32_t>(magnitude);
     }
-    return compute_viewport(logical_lines, dimensions, requested);
+    return computeViewport(logical_lines, dimensions, requested);
 }
 
-ViewportDelta derive_viewport_delta(const ViewportViewState& previous,
+ViewportDelta deriveViewportDelta(const ViewportViewState& previous,
                                     const ViewportViewState& current) {
     if (previous == current) {
         return ViewportDelta{false, std::nullopt};

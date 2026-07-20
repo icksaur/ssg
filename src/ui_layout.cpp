@@ -24,22 +24,22 @@ struct PaneNode {
     [[nodiscard]] bool leaf() const noexcept { return !first; }
 };
 
-void collect_ids(const PaneNode& node, std::vector<PaneId>& ids) {
+void collectIds(const PaneNode& node, std::vector<PaneId>& ids) {
     if (node.leaf()) {
         ids.push_back(node.id);
         return;
     }
-    collect_ids(*node.first, ids);
-    collect_ids(*node.second, ids);
+    collectIds(*node.first, ids);
+    collectIds(*node.second, ids);
 }
 
-PaneNode* find_leaf(PaneNode& node, PaneId id) {
+PaneNode* findLeaf(PaneNode& node, PaneId id) {
     if (node.leaf()) return node.id == id ? &node : nullptr;
-    if (auto* found = find_leaf(*node.first, id)) return found;
-    return find_leaf(*node.second, id);
+    if (auto* found = findLeaf(*node.first, id)) return found;
+    return findLeaf(*node.second, id);
 }
 
-bool remove_leaf(std::unique_ptr<PaneNode>& node, PaneId id) {
+bool removeLeaf(std::unique_ptr<PaneNode>& node, PaneId id) {
     if (!node || node->leaf()) return false;
     if (node->first->leaf() && node->first->id == id) {
         node = std::move(node->second);
@@ -49,26 +49,26 @@ bool remove_leaf(std::unique_ptr<PaneNode>& node, PaneId id) {
         node = std::move(node->first);
         return true;
     }
-    return remove_leaf(node->first, id) || remove_leaf(node->second, id);
+    return removeLeaf(node->first, id) || removeLeaf(node->second, id);
 }
 
-bool can_layout(const PaneNode& node, Rect rect) {
+bool canLayout(const PaneNode& node, Rect rect) {
     if (node.leaf()) return rect.width >= 2 && rect.height >= 1;
     if (node.axis == SplitAxis::Vertical) {
         const int first_width = rect.width / 2;
-        return can_layout(*node.first, {rect.x, rect.y, first_width, rect.height}) &&
-               can_layout(*node.second,
+        return canLayout(*node.first, {rect.x, rect.y, first_width, rect.height}) &&
+               canLayout(*node.second,
                           {rect.x + first_width, rect.y,
                            rect.width - first_width, rect.height});
     }
     const int first_height = rect.height / 2;
-    return can_layout(*node.first, {rect.x, rect.y, rect.width, first_height}) &&
-           can_layout(*node.second,
+    return canLayout(*node.first, {rect.x, rect.y, rect.width, first_height}) &&
+           canLayout(*node.second,
                       {rect.x, rect.y + first_height, rect.width,
                        rect.height - first_height});
 }
 
-void layout_panes(const PaneNode& node, Rect rect,
+void layoutPanes(const PaneNode& node, Rect rect,
                   std::vector<PaneGeometry>& output) {
     if (node.leaf()) {
         output.push_back({
@@ -81,31 +81,31 @@ void layout_panes(const PaneNode& node, Rect rect,
     }
     if (node.axis == SplitAxis::Vertical) {
         const int first_width = rect.width / 2;
-        layout_panes(*node.first, {rect.x, rect.y, first_width, rect.height},
+        layoutPanes(*node.first, {rect.x, rect.y, first_width, rect.height},
                      output);
-        layout_panes(*node.second,
+        layoutPanes(*node.second,
                      {rect.x + first_width, rect.y,
                       rect.width - first_width, rect.height},
                      output);
         return;
     }
     const int first_height = rect.height / 2;
-    layout_panes(*node.first, {rect.x, rect.y, rect.width, first_height},
+    layoutPanes(*node.first, {rect.x, rect.y, rect.width, first_height},
                  output);
-    layout_panes(*node.second,
+    layoutPanes(*node.second,
                  {rect.x, rect.y + first_height, rect.width,
                   rect.height - first_height},
                  output);
 }
 
-void add_node(ShellViewState& view, ShellNodeKind kind, std::string id,
+void addNode(ShellViewState& view, ShellNodeKind kind, std::string id,
               std::string label, Rect rect, SemanticRole role,
               std::string content = {}) {
     view.accessibility_nodes.push_back(
         {kind, std::move(id), std::move(label), rect, role, std::move(content)});
 }
 
-void add_fields(ShellViewState& view, const std::vector<StatusField>& fields,
+void addFields(ShellViewState& view, const std::vector<StatusField>& fields,
                 Rect row, ShellNodeKind kind, SemanticRole role) {
     std::vector<const StatusField*> prioritized;
     prioritized.reserve(fields.size());
@@ -130,19 +130,19 @@ void add_fields(ShellViewState& view, const std::vector<StatusField>& fields,
     for (const auto* field : retained) {
         if (x != row.x) ++x;
         const int width = static_cast<int>(field->value.size()) + 2;
-        add_node(view, kind, field->id, field->accessible_label,
+        addNode(view, kind, field->id, field->accessible_label,
                  {x, row.y, width, 1}, role, field->value);
         x += width;
     }
 }
 
-const PaneGeometry* pane_geometry(const ShellViewState& view, PaneId id) {
+const PaneGeometry* paneGeometry(const ShellViewState& view, PaneId id) {
     const auto found = std::ranges::find(view.panes, id, &PaneGeometry::id);
     return found == view.panes.end() ? nullptr : &*found;
 }
 
-double center_x(const Rect& rect) { return rect.x + rect.width / 2.0; }
-double center_y(const Rect& rect) { return rect.y + rect.height / 2.0; }
+double centerX(const Rect& rect) { return rect.x + rect.width / 2.0; }
+double centerY(const Rect& rect) { return rect.y + rect.height / 2.0; }
 
 } // namespace
 
@@ -172,16 +172,16 @@ ShellState::~ShellState() = default;
 ShellState::ShellState(ShellState&&) noexcept = default;
 ShellState& ShellState::operator=(ShellState&&) noexcept = default;
 
-PaneId ShellState::active_pane() const noexcept { return impl_->active; }
+PaneId ShellState::activePane() const noexcept { return impl_->active; }
 
-std::size_t ShellState::pane_count() const noexcept {
+std::size_t ShellState::paneCount() const noexcept {
     std::vector<PaneId> ids;
-    collect_ids(*impl_->root, ids);
+    collectIds(*impl_->root, ids);
     return ids.size();
 }
 
-PaneId ShellState::split_active(SplitAxis axis) {
-    auto* leaf = find_leaf(*impl_->root, impl_->active);
+PaneId ShellState::splitActive(SplitAxis axis) {
+    auto* leaf = findLeaf(*impl_->root, impl_->active);
     const PaneId original = leaf->id;
     const PaneId created{impl_->next_id++};
     leaf->axis = axis;
@@ -191,44 +191,44 @@ PaneId ShellState::split_active(SplitAxis axis) {
     return created;
 }
 
-bool ShellState::close_active_pane() {
-    if (pane_count() == 1) return false;
+bool ShellState::closeActivePane() {
+    if (paneCount() == 1) return false;
     std::vector<PaneId> ids;
-    collect_ids(*impl_->root, ids);
+    collectIds(*impl_->root, ids);
     const auto active = std::ranges::find(ids, impl_->active);
     const PaneId replacement =
         active + 1 != ids.end() ? *(active + 1) : *(active - 1);
-    const bool removed = remove_leaf(impl_->root, impl_->active);
+    const bool removed = removeLeaf(impl_->root, impl_->active);
     if (removed) impl_->active = replacement;
     return removed;
 }
 
-void ShellState::next_pane() noexcept {
+void ShellState::nextPane() noexcept {
     std::vector<PaneId> ids;
-    collect_ids(*impl_->root, ids);
+    collectIds(*impl_->root, ids);
     const auto active = std::ranges::find(ids, impl_->active);
     impl_->active = *(active + 1 == ids.end() ? ids.begin() : active + 1);
 }
 
-void ShellState::previous_pane() noexcept {
+void ShellState::previousPane() noexcept {
     std::vector<PaneId> ids;
-    collect_ids(*impl_->root, ids);
+    collectIds(*impl_->root, ids);
     const auto active = std::ranges::find(ids, impl_->active);
     impl_->active = active == ids.begin() ? ids.back() : *(active - 1);
 }
 
-bool ShellState::focus_pane(PaneDirection direction,
+bool ShellState::focusPane(PaneDirection direction,
                             const ShellViewState& view) noexcept {
-    const auto* current = pane_geometry(view, impl_->active);
+    const auto* current = paneGeometry(view, impl_->active);
     if (!current) return false;
-    const double current_x = center_x(current->frame);
-    const double current_y = center_y(current->frame);
+    const double current_x = centerX(current->frame);
+    const double current_y = centerY(current->frame);
     const PaneGeometry* best = nullptr;
     double best_distance = std::numeric_limits<double>::max();
     for (const auto& candidate : view.panes) {
         if (candidate.id == impl_->active) continue;
-        const double dx = center_x(candidate.frame) - current_x;
-        const double dy = center_y(candidate.frame) - current_y;
+        const double dx = centerX(candidate.frame) - current_x;
+        const double dy = centerY(candidate.frame) - current_y;
         const bool eligible =
             (direction == PaneDirection::Left && dx < 0) ||
             (direction == PaneDirection::Right && dx > 0) ||
@@ -247,7 +247,7 @@ bool ShellState::focus_pane(PaneDirection direction,
     return true;
 }
 
-void ShellState::toggle_panel() noexcept {
+void ShellState::togglePanel() noexcept {
     const bool showing = !impl_->panel_requested;
     impl_->panel_requested = showing;
     if (showing) {
@@ -270,23 +270,23 @@ void ShellState::toggle_panel() noexcept {
     }
 }
 
-bool ShellState::focus_panel() noexcept {
+bool ShellState::focusPanel() noexcept {
     if (!impl_->panel_requested || impl_->providers.empty()) return false;
     impl_->focus = FocusTarget::Panel;
     return true;
 }
 
-void ShellState::focus_editor() noexcept {
+void ShellState::focusEditor() noexcept {
     impl_->focus = FocusTarget::Editor;
     impl_->focus_stack.clear();
 }
 
-void ShellState::enter_prompt_focus() noexcept {
+void ShellState::enterPromptFocus() noexcept {
     impl_->focus_stack.push_back(impl_->focus);
     impl_->focus = FocusTarget::Prompt;
 }
 
-void ShellState::exit_prompt_focus() noexcept {
+void ShellState::exitPromptFocus() noexcept {
     FocusTarget restored = FocusTarget::Editor;
     if (!impl_->focus_stack.empty()) {
         restored = impl_->focus_stack.back();
@@ -300,13 +300,13 @@ void ShellState::exit_prompt_focus() noexcept {
 
 FocusTarget ShellState::focus() const noexcept { return impl_->focus; }
 
-void ShellState::next_panel_provider() noexcept {
+void ShellState::nextPanelProvider() noexcept {
     if (!impl_->providers.empty()) {
         impl_->provider_index = (impl_->provider_index + 1) % impl_->providers.size();
     }
 }
 
-void ShellState::previous_panel_provider() noexcept {
+void ShellState::previousPanelProvider() noexcept {
     if (!impl_->providers.empty()) {
         impl_->provider_index =
             (impl_->provider_index + impl_->providers.size() - 1) %
@@ -314,28 +314,28 @@ void ShellState::previous_panel_provider() noexcept {
     }
 }
 
-bool ShellState::panel_requested() const noexcept {
+bool ShellState::panelRequested() const noexcept {
     return impl_->panel_requested;
 }
 
-bool ShellState::panel_focused() const noexcept {
+bool ShellState::panelFocused() const noexcept {
     return impl_->focus == FocusTarget::Panel;
 }
 
-std::string_view ShellState::active_panel_provider() const noexcept {
+std::string_view ShellState::activePanelProvider() const noexcept {
     return impl_->providers.empty() ? std::string_view{} :
                                      impl_->providers[impl_->provider_index];
 }
 
-void ShellState::toggle_distraction_free() noexcept {
+void ShellState::toggleDistractionFree() noexcept {
     impl_->distraction_free = !impl_->distraction_free;
 }
 
-bool ShellState::distraction_free() const noexcept {
+bool ShellState::distractionFree() const noexcept {
     return impl_->distraction_free;
 }
 
-ShellLayoutResult compute_shell_layout(const ShellLayoutRequest& request,
+ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
                                        const ShellState& state) {
     if (request.viewport.columns < minimum_columns ||
         request.viewport.rows < minimum_rows) {
@@ -359,9 +359,9 @@ ShellLayoutResult compute_shell_layout(const ShellLayoutRequest& request,
         view.header = Rect{0, 0, request.viewport.columns, 1};
         view.footer =
             Rect{0, request.viewport.rows - 1, request.viewport.columns, 1};
-        add_node(view, ShellNodeKind::Header, "header", "Status header",
+        addNode(view, ShellNodeKind::Header, "header", "Status header",
                  *view.header, SemanticRole::Header);
-        add_node(view, ShellNodeKind::Footer, "footer", "Status footer",
+        addNode(view, ShellNodeKind::Footer, "footer", "Status footer",
                  *view.footer, SemanticRole::Footer);
         int header_x = view.header->x;
         if (request.palette_active) {
@@ -372,7 +372,7 @@ ShellLayoutResult compute_shell_layout(const ShellLayoutRequest& request,
             std::string query = "> " + request.palette_query;
             const int query_width =
                 std::min(view.header->width, static_cast<int>(query.size()));
-            add_node(view, ShellNodeKind::HeaderField, "palette_query",
+            addNode(view, ShellNodeKind::HeaderField, "palette_query",
                      "Palette query", {header_x, view.header->y, query_width, 1},
                      SemanticRole::Prompt, std::move(query));
             header_x += query_width;
@@ -381,7 +381,7 @@ ShellLayoutResult compute_shell_layout(const ShellLayoutRequest& request,
                 const int ghost_width =
                     std::min(view.header->right() - header_x,
                              static_cast<int>(request.palette_ghost.size()));
-                add_node(view, ShellNodeKind::HeaderField, "palette_ghost",
+                addNode(view, ShellNodeKind::HeaderField, "palette_ghost",
                          "Palette completion",
                          {header_x, view.header->y, ghost_width, 1},
                          SemanticRole::LineNumber, request.palette_ghost);
@@ -391,12 +391,12 @@ ShellLayoutResult compute_shell_layout(const ShellLayoutRequest& request,
             const int width = std::min(
                 view.header->width,
                 static_cast<int>(request.leader_hint.size()) + 1);
-            add_node(view, ShellNodeKind::HeaderField, "leader", "Leader hint",
+            addNode(view, ShellNodeKind::HeaderField, "leader", "Leader hint",
                      {header_x, view.header->y, width, 1}, SemanticRole::Prompt,
                      request.leader_hint);
             header_x += width;
         }
-        add_fields(view, request.header_fields,
+        addFields(view, request.header_fields,
                    {header_x, view.header->y,
                     view.header->right() - header_x, view.header->height},
                    ShellNodeKind::HeaderField, SemanticRole::Header);
@@ -407,12 +407,12 @@ ShellLayoutResult compute_shell_layout(const ShellLayoutRequest& request,
                 std::min(action_x, static_cast<int>(action->accessible_label.size()) + 2);
             if (width <= 0 || action->accessible_label.empty()) continue;
             action_x -= width;
-            add_node(view, ShellNodeKind::FooterAction, action->id,
+            addNode(view, ShellNodeKind::FooterAction, action->id,
                      action->accessible_label,
                      {action_x, view.footer->y, width, 1},
                      SemanticRole::StatusInfo, action->accessible_label);
         }
-        add_fields(view, request.footer_fields,
+        addFields(view, request.footer_fields,
                    {view.footer->x, view.footer->y,
                     action_x - view.footer->x, view.footer->height},
                    ShellNodeKind::FooterField, SemanticRole::Footer);
@@ -426,9 +426,9 @@ ShellLayoutResult compute_shell_layout(const ShellLayoutRequest& request,
                 panel_target_width,
                 request.viewport.columns - editor_minimum_width);
             view.panel = Rect{0, 1, panel_width, request.viewport.rows - 2};
-            add_node(view, ShellNodeKind::Panel, "panel", "Side panel",
+            addNode(view, ShellNodeKind::Panel, "panel", "Side panel",
                      *view.panel, SemanticRole::PanelInactive);
-            add_node(view, ShellNodeKind::PanelProvider, "panel.provider",
+            addNode(view, ShellNodeKind::PanelProvider, "panel.provider",
                      request.panel_provider_label, *view.panel,
                      state.impl_->focus == FocusTarget::Panel ? SemanticRole::PanelActive :
                                                   SemanticRole::PanelInactive,
@@ -439,7 +439,7 @@ ShellLayoutResult compute_shell_layout(const ShellLayoutRequest& request,
             if (panel_width > 1 && view.panel->height > 1) {
                 view.panel_scrollbar = Rect{panel_width - 1, view.panel->y + 1, 1,
                                             view.panel->height - 1};
-                add_node(view, ShellNodeKind::Scrollbar, "panel.scrollbar",
+                addNode(view, ShellNodeKind::Scrollbar, "panel.scrollbar",
                          "Panel scrollbar", *view.panel_scrollbar,
                          SemanticRole::ScrollbarTrack);
             }
@@ -448,7 +448,7 @@ ShellLayoutResult compute_shell_layout(const ShellLayoutRequest& request,
         editor = {panel_width, 1, request.viewport.columns - panel_width,
                   request.viewport.rows - 2};
         view.tab_bar = Rect{editor.x, editor.y, editor.width, 1};
-        add_node(view, ShellNodeKind::TabBar, "tabs", "Open tabs",
+        addNode(view, ShellNodeKind::TabBar, "tabs", "Open tabs",
                  *view.tab_bar, SemanticRole::TabInactive);
         int tab_x = view.tab_bar->x;
         for (std::size_t i = 0; i < request.tabs.size(); ++i) {
@@ -459,7 +459,7 @@ ShellLayoutResult compute_shell_layout(const ShellLayoutRequest& request,
                 std::min(view.tab_bar->right() - tab_x,
                          std::max(1, static_cast<int>(display.size()) + 2));
             if (width <= 0 || tab.accessible_label.empty()) break;
-            add_node(view, ShellNodeKind::Tab, "tab." + std::to_string(i),
+            addNode(view, ShellNodeKind::Tab, "tab." + std::to_string(i),
                      tab.accessible_label,
                      {tab_x, view.tab_bar->y, width, 1},
                      tab.active ? SemanticRole::TabActive :
@@ -482,15 +482,15 @@ ShellLayoutResult compute_shell_layout(const ShellLayoutRequest& request,
         if (request.reserved_prompt_rows > 0) {
             view.prompt = Rect{editor.x, editor.y, editor.width,
                                request.reserved_prompt_rows};
-            add_node(view, ShellNodeKind::PromptReservation, "prompt",
+            addNode(view, ShellNodeKind::PromptReservation, "prompt",
                      "Prompt surface", *view.prompt, SemanticRole::Prompt);
             editor.y += request.reserved_prompt_rows;
             editor.height -= request.reserved_prompt_rows;
         }
     }
 
-    if (can_layout(*state.impl_->root, editor)) {
-        layout_panes(*state.impl_->root, editor, view.panes);
+    if (canLayout(*state.impl_->root, editor)) {
+        layoutPanes(*state.impl_->root, editor, view.panes);
     } else {
         view.panes.push_back({
             state.impl_->active,
@@ -502,13 +502,13 @@ ShellLayoutResult compute_shell_layout(const ShellLayoutRequest& request,
 
     for (const auto& pane : view.panes) {
         const auto suffix = std::to_string(pane.id.value());
-        add_node(view, ShellNodeKind::Pane, "pane." + suffix,
+        addNode(view, ShellNodeKind::Pane, "pane." + suffix,
                  "Editor pane " + suffix, pane.frame, SemanticRole::Background);
-        add_node(view, ShellNodeKind::Scrollbar, "pane." + suffix + ".scrollbar",
+        addNode(view, ShellNodeKind::Scrollbar, "pane." + suffix + ".scrollbar",
                  "Scrollbar for editor pane " + suffix, pane.scrollbar,
                  SemanticRole::ScrollbarTrack);
         if (request.empty_state) {
-            add_node(view, ShellNodeKind::EmptyState,
+            addNode(view, ShellNodeKind::EmptyState,
                      "pane." + suffix + ".empty", "Empty editor",
                      pane.content, SemanticRole::Background, "Empty editor");
         }

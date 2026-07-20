@@ -31,7 +31,7 @@ namespace {
 
 namespace fs = std::filesystem;
 
-fs::path unique_root() {
+fs::path uniqueRoot() {
     auto base = fs::temp_directory_path() /
                 ("ssg-open-equiv-" +
                  std::to_string(
@@ -41,14 +41,14 @@ fs::path unique_root() {
     return base;
 }
 
-void write_bytes(const fs::path& path, std::string_view bytes) {
+void writeBytes(const fs::path& path, std::string_view bytes) {
     std::ofstream stream(path, std::ios::binary);
     stream.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
 }
 
 // FNV-1a 64-bit: a deterministic content hash for the equivalence oracle (change
 // detection, not a cryptographic guarantee).
-std::string hash_hex(std::string_view bytes) {
+std::string hashHex(std::string_view bytes) {
     std::uint64_t h = 14695981039346656037ULL;
     for (unsigned char c : bytes) {
         h ^= c;
@@ -59,7 +59,7 @@ std::string hash_hex(std::string_view bytes) {
     return out.str();
 }
 
-std::string encoding_name(ssg::TextEncoding e) {
+std::string encodingName(ssg::TextEncoding e) {
     switch (e) {
     case ssg::TextEncoding::Utf8: return "utf8";
     case ssg::TextEncoding::Utf8Bom: return "utf8_bom";
@@ -71,7 +71,7 @@ std::string encoding_name(ssg::TextEncoding e) {
     return "?";
 }
 
-std::string ending_name(ssg::LineEnding e) {
+std::string endingName(ssg::LineEnding e) {
     switch (e) {
     case ssg::LineEnding::Lf: return "lf";
     case ssg::LineEnding::Crlf: return "crlf";
@@ -81,7 +81,7 @@ std::string ending_name(ssg::LineEnding e) {
     return "?";
 }
 
-std::string kind_name(ssg::FileContentKind k) {
+std::string kindName(ssg::FileContentKind k) {
     switch (k) {
     case ssg::FileContentKind::Text: return "text";
     case ssg::FileContentKind::Binary: return "binary";
@@ -90,7 +90,7 @@ std::string kind_name(ssg::FileContentKind k) {
     return "?";
 }
 
-std::string mode_name(ssg::DocumentMode m) {
+std::string modeName(ssg::DocumentMode m) {
     switch (m) {
     case ssg::DocumentMode::Edit: return "edit";
     case ssg::DocumentMode::ReadOnly: return "read_only";
@@ -101,8 +101,8 @@ std::string mode_name(ssg::DocumentMode m) {
 
 // The per-line terminator summary, computed independently of the workspace via
 // the public decoder, so the record captures mixed-EOL fidelity directly.
-std::string terminator_summary(std::string_view bytes) {
-    auto decoded = ssg::decode_text(std::span<const std::uint8_t>{
+std::string terminatorSummary(std::string_view bytes) {
+    auto decoded = ssg::decodeText(std::span<const std::uint8_t>{
         reinterpret_cast<const std::uint8_t*>(bytes.data()), bytes.size()});
     if (!decoded.accepted()) {
         std::ostringstream out;
@@ -127,13 +127,13 @@ std::string terminator_summary(std::string_view bytes) {
 // The bytes a save of a freshly opened (non-dirty) file would produce, via the
 // public encode path, hashed — captures encode round-trip fidelity independent
 // of the workspace's save machinery.
-std::string save_hash(std::string_view bytes) {
-    auto decoded = ssg::decode_text(std::span<const std::uint8_t>{
+std::string saveHash(std::string_view bytes) {
+    auto decoded = ssg::decodeText(std::span<const std::uint8_t>{
         reinterpret_cast<const std::uint8_t*>(bytes.data()), bytes.size()});
     if (!decoded.accepted()) return "n/a";
-    auto encoded = ssg::encode_text(*decoded.text);
+    auto encoded = ssg::encodeText(*decoded.text);
     if (!encoded.accepted()) return "encode_err";
-    return hash_hex(std::string_view{
+    return hashHex(std::string_view{
         reinterpret_cast<const char*>(encoded.bytes.data()),
         encoded.bytes.size()});
 }
@@ -164,14 +164,14 @@ std::vector<Entry> corpus() {
 }
 
 std::string capture() {
-    auto root = unique_root();
+    auto root = uniqueRoot();
     auto recovery = ssg::RecoveryActions::create(root / ".recovery");
     auto workspace = ssg::Workspace::create(root, recovery);
 
     std::ostringstream out;
     for (const auto& entry : corpus()) {
-        write_bytes(root / entry.name, entry.bytes);
-        auto opened = workspace.open_file(entry.name);
+        writeBytes(root / entry.name, entry.bytes);
+        auto opened = workspace.openFile(entry.name);
         out << "name=" << entry.name;
         if (!opened.accepted()) {
             out << " open_error=" << static_cast<int>(opened.error) << "\n";
@@ -180,29 +180,29 @@ std::string capture() {
         auto id = *opened.document;
         auto state = workspace.state(id);
         auto snapshot = workspace.document(id).snapshot();
-        out << " kind=" << kind_name(state->content_kind)
-            << " encoding=" << encoding_name(state->encoding.encoding)
+        out << " kind=" << kindName(state->content_kind)
+            << " encoding=" << encodingName(state->encoding.encoding)
             << " bom=" << (state->encoding.had_bom ? 1 : 0)
-            << " eol=" << ending_name(state->encoding.line_ending)
+            << " eol=" << endingName(state->encoding.line_ending)
             << " final_nl=" << (state->encoding.final_newline ? 1 : 0)
             << " dirty=" << (state->dirty ? 1 : 0)
             << " revision=" << snapshot.revision.value()
-            << " mode=" << mode_name(snapshot.mode)
-            << " texthash=" << hash_hex(snapshot.text)
-            << " terms=" << terminator_summary(entry.bytes)
-            << " save=" << save_hash(entry.bytes) << "\n";
+            << " mode=" << modeName(snapshot.mode)
+            << " texthash=" << hashHex(snapshot.text)
+            << " terms=" << terminatorSummary(entry.bytes)
+            << " save=" << saveHash(entry.bytes) << "\n";
     }
     fs::remove_all(root);
     return out.str();
 }
 
-std::string read_file(const char* path) {
+std::string readFile(const char* path) {
     std::ifstream input{path, std::ios::binary};
     return {std::istreambuf_iterator<char>{input},
             std::istreambuf_iterator<char>{}};
 }
 
-TEST(open_equivalence_matches_golden) {
+TEST(openEquivalenceMatchesGolden) {
     const std::string actual = capture();
     const char* path = SSG_OPEN_GOLDEN;
     if (std::getenv("SSG_REGEN_GOLDEN") != nullptr) {
@@ -211,7 +211,7 @@ TEST(open_equivalence_matches_golden) {
         ++passed;
         return;
     }
-    const std::string expected = read_file(path);
+    const std::string expected = readFile(path);
     if (actual != expected) {
         std::cerr << "  open-equivalence golden mismatch\n--- actual ---\n"
                   << actual << "--- expected ---\n"
@@ -225,7 +225,7 @@ TEST(open_equivalence_matches_golden) {
 }  // namespace
 
 int main() {
-    RUN(open_equivalence_matches_golden);
+    RUN(openEquivalenceMatchesGolden);
     std::cout << passed << " passed, " << failed << " failed\n";
     return failed == 0 ? 0 : 1;
 }

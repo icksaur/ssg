@@ -27,7 +27,7 @@ using ssg::SelectionSet;
 DocumentPosition position(std::string_view text, std::uint64_t offset,
                           int tab_width = 4) {
     const auto value =
-        ssg::resolve_document_position(text, ByteOffset{offset}, tab_width);
+        ssg::resolveDocumentPosition(text, ByteOffset{offset}, tab_width);
     ASSERT_TRUE(value.has_value());
     return *value;
 }
@@ -70,7 +70,7 @@ struct Fixture {
     std::string expected;
 };
 
-SelectionSet fixture_selections(const Fixture& fixture) {
+SelectionSet fixtureSelections(const Fixture& fixture) {
     std::vector<Selection> values;
     for (const auto [anchor, active] : fixture.ranges) {
         values.push_back({position(fixture.input, anchor),
@@ -79,15 +79,15 @@ SelectionSet fixture_selections(const Fixture& fixture) {
     return SelectionSet{std::move(values)};
 }
 
-void run_fixture(const Fixture& fixture) {
+void runFixture(const Fixture& fixture) {
     Document document{fixture.input};
-    const auto result = ssg::apply_edit_command(
-        document.snapshot(), fixture_selections(fixture),
+    const auto result = ssg::applyEditCommand(
+        document.snapshot(), fixtureSelections(fixture),
         fixture.command_settings, fixture.command);
     ASSERT_EQ(apply(document, result), fixture.expected);
 }
 
-TEST(command_set_is_exact_and_immutable) {
+TEST(commandSetIsExactAndImmutable) {
     static_assert(!std::is_copy_assignable_v<ssg::EditCommandSuiteCommandSet>);
     constexpr std::array<std::string_view, 13> expected{{
         "edit.indent",         "edit.outdent",
@@ -98,14 +98,14 @@ TEST(command_set_is_exact_and_immutable) {
         "edit.sort_lines",     "edit.transpose",
         "edit.toggle_comment",
     }};
-    const auto commands = ssg::edit_command_suite_command_set();
+    const auto commands = ssg::editCommandSuiteCommandSet();
     ASSERT_EQ(commands.descriptors().size(), expected.size());
     for (std::size_t index = 0; index < expected.size(); ++index) {
         ASSERT_EQ(commands.descriptors()[index].id, expected[index]);
     }
 }
 
-TEST(single_selection_hand_fixtures_cover_every_transform) {
+TEST(singleSelectionHandFixturesCoverEveryTransform) {
     const std::string combining = "e\xCC\x81x";
     const std::vector<Fixture> fixtures{
         {"indent", "a\nb", {{0, 0}}, EditCommand::Indent, settings(),
@@ -136,11 +136,11 @@ TEST(single_selection_hand_fixtures_cover_every_transform) {
          EditCommand::ToggleComment, settings(), "  //a\n  //b"},
     };
     for (const auto& fixture : fixtures) {
-        run_fixture(fixture);
+        runFixture(fixture);
     }
 }
 
-TEST(multiple_selection_hand_fixtures_cover_every_transform) {
+TEST(multipleSelectionHandFixturesCoverEveryTransform) {
     const std::vector<Fixture> fixtures{
         {"indent-tabs-cr", "a\rb\rc", {{0, 0}, {4, 4}},
          EditCommand::Indent,
@@ -171,36 +171,36 @@ TEST(multiple_selection_hand_fixtures_cover_every_transform) {
          EditCommand::ToggleComment, settings(), "  //a\nb\n  //c"},
     };
     for (const auto& fixture : fixtures) {
-        run_fixture(fixture);
+        runFixture(fixture);
     }
 }
 
-TEST(comment_toggle_removes_only_when_all_nonblank_lines_are_commented) {
+TEST(commentToggleRemovesOnlyWhenAllNonblankLinesAreCommented) {
     Document document{"  //a\n  \n\t//b"};
-    auto result = ssg::apply_edit_command(
+    auto result = ssg::applyEditCommand(
         document.snapshot(),
         selections(document.snapshot().text, {{0, 13}}, 2),
         settings(), EditCommand::ToggleComment);
     ASSERT_EQ(apply(document, result), std::string{"  a\n  \n\tb"});
 
     Document mixed{"//a\nb"};
-    result = ssg::apply_edit_command(
+    result = ssg::applyEditCommand(
         mixed.snapshot(), selections(mixed.snapshot().text, {{0, 5}}),
         settings(), EditCommand::ToggleComment);
     ASSERT_EQ(apply(mixed, result), std::string{"////a\n//b"});
 }
 
-TEST(selection_end_at_line_start_does_not_touch_next_line) {
+TEST(selectionEndAtLineStartDoesNotTouchNextLine) {
     Document document{"a\nb"};
-    const auto result = ssg::apply_edit_command(
+    const auto result = ssg::applyEditCommand(
         document.snapshot(), selections("a\nb", {{0, 2}}), settings(),
         EditCommand::Indent);
     ASSERT_EQ(apply(document, result), std::string{"  a\nb"});
 }
 
-TEST(result_selections_are_resolved_against_resulting_text) {
+TEST(resultSelectionsAreResolvedAgainstResultingText) {
     Document document{"a\nb"};
-    const auto result = ssg::apply_edit_command(
+    const auto result = ssg::applyEditCommand(
         document.snapshot(), selections("a\nb", {{0, 0}, {2, 2}}),
         settings(), EditCommand::Indent);
     ASSERT_EQ(apply(document, result), std::string{"  a\n  b"});
@@ -210,11 +210,11 @@ TEST(result_selections_are_resolved_against_resulting_text) {
               ByteOffset{6});
 }
 
-TEST(display_tab_width_is_independent_of_indent_width) {
+TEST(displayTabWidthIsIndependentOfIndentWidth) {
     Document document{"\tabc"};
     auto command_settings = settings(IndentStyle::Spaces, 2);
     command_settings.tab_width = 4;
-    const auto result = ssg::apply_edit_command(
+    const auto result = ssg::applyEditCommand(
         document.snapshot(), selections("\tabc", {{1, 1}}, 4),
         command_settings, EditCommand::Indent);
     ASSERT_EQ(apply(document, result), std::string{"  \tabc"});
@@ -222,10 +222,10 @@ TEST(display_tab_width_is_independent_of_indent_width) {
               ssg::CellIndex{4});
 }
 
-TEST(transpose_at_document_end_ignores_trailing_terminator) {
+TEST(transposeAtDocumentEndIgnoresTrailingTerminator) {
     for (const std::string text : {"ab\n", "ab\r\n", "ab\r"}) {
         Document document{text};
-        const auto result = ssg::apply_edit_command(
+        const auto result = ssg::applyEditCommand(
             document.snapshot(),
             selections(text, {{text.size(), text.size()}}), settings(),
             EditCommand::Transpose);
@@ -234,11 +234,11 @@ TEST(transpose_at_document_end_ignores_trailing_terminator) {
     }
 }
 
-TEST(non_edit_modes_and_invalid_inputs_fail_atomically) {
+TEST(nonEditModesAndInvalidInputsFailAtomically) {
     for (const auto mode : {DocumentMode::ReadOnly, DocumentMode::Diff}) {
         Document document{"abc", mode};
         const auto before = document.snapshot();
-        const auto result = ssg::apply_edit_command(
+        const auto result = ssg::applyEditCommand(
             before, selections("abc", {{0, 0}}), settings(),
             EditCommand::Indent);
         ASSERT_FALSE(result.accepted());
@@ -249,21 +249,21 @@ TEST(non_edit_modes_and_invalid_inputs_fail_atomically) {
     Document document{"abc"};
     auto bad_settings = settings();
     bad_settings.indent_width = 0;
-    auto result = ssg::apply_edit_command(
+    auto result = ssg::applyEditCommand(
         document.snapshot(), selections("abc", {{0, 0}}), bad_settings,
         EditCommand::Indent);
     ASSERT_EQ(result.error, ssg::EditCommandError::InvalidSettings);
 
     bad_settings = settings();
     bad_settings.line_comment_token = "\n";
-    result = ssg::apply_edit_command(
+    result = ssg::applyEditCommand(
         document.snapshot(), selections("abc", {{0, 0}}), bad_settings,
         EditCommand::ToggleComment);
     ASSERT_EQ(result.error, ssg::EditCommandError::InvalidSettings);
 
     const DocumentPosition inconsistent{
         ByteOffset{1}, ssg::LineIndex{8}, ssg::CellIndex{8}};
-    result = ssg::apply_edit_command(
+    result = ssg::applyEditCommand(
         document.snapshot(),
         SelectionSet{{Selection{inconsistent, inconsistent}}}, settings(),
         EditCommand::Indent);
@@ -271,7 +271,7 @@ TEST(non_edit_modes_and_invalid_inputs_fail_atomically) {
     ASSERT_EQ(document.snapshot().text, std::string{"abc"});
 }
 
-TEST(unchanged_transforms_are_explicit_noops) {
+TEST(unchangedTransformsAreExplicitNoops) {
     struct Noop {
         std::string text;
         std::pair<std::uint64_t, std::uint64_t> range;
@@ -290,7 +290,7 @@ TEST(unchanged_transforms_are_explicit_noops) {
     };
     for (const auto& test : cases) {
         Document document{test.text};
-        const auto result = ssg::apply_edit_command(
+        const auto result = ssg::applyEditCommand(
             document.snapshot(), selections(test.text, {test.range}),
             settings(), test.command);
         ASSERT_TRUE(result.accepted());
@@ -303,15 +303,15 @@ TEST(unchanged_transforms_are_explicit_noops) {
 }  // namespace
 
 int main() {
-    RUN(command_set_is_exact_and_immutable);
-    RUN(single_selection_hand_fixtures_cover_every_transform);
-    RUN(multiple_selection_hand_fixtures_cover_every_transform);
-    RUN(comment_toggle_removes_only_when_all_nonblank_lines_are_commented);
-    RUN(selection_end_at_line_start_does_not_touch_next_line);
-    RUN(result_selections_are_resolved_against_resulting_text);
-    RUN(display_tab_width_is_independent_of_indent_width);
-    RUN(transpose_at_document_end_ignores_trailing_terminator);
-    RUN(non_edit_modes_and_invalid_inputs_fail_atomically);
-    RUN(unchanged_transforms_are_explicit_noops);
+    RUN(commandSetIsExactAndImmutable);
+    RUN(singleSelectionHandFixturesCoverEveryTransform);
+    RUN(multipleSelectionHandFixturesCoverEveryTransform);
+    RUN(commentToggleRemovesOnlyWhenAllNonblankLinesAreCommented);
+    RUN(selectionEndAtLineStartDoesNotTouchNextLine);
+    RUN(resultSelectionsAreResolvedAgainstResultingText);
+    RUN(displayTabWidthIsIndependentOfIndentWidth);
+    RUN(transposeAtDocumentEndIgnoresTrailingTerminator);
+    RUN(nonEditModesAndInvalidInputsFailAtomically);
+    RUN(unchangedTransformsAreExplicitNoops);
     return failed == 0 ? 0 : 1;
 }

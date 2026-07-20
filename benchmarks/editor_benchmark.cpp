@@ -52,7 +52,7 @@ struct Timings {
     double idle_cpu_milliseconds{};
 };
 
-[[nodiscard]] double process_cpu_milliseconds() {
+[[nodiscard]] double processCpuMilliseconds() {
 #ifdef _WIN32
     FILETIME created{};
     FILETIME exited{};
@@ -74,7 +74,7 @@ struct Timings {
 #endif
 }
 
-[[nodiscard]] std::string read_file(std::string const& path) {
+[[nodiscard]] std::string readFile(std::string const& path) {
     std::ifstream input{path, std::ios::binary};
     if (!input) throw std::runtime_error{"cannot read " + path};
     return {std::istreambuf_iterator<char>{input},
@@ -153,7 +153,7 @@ struct Timings {
     return result.str();
 }
 
-[[nodiscard]] std::string manifest_hash(std::string const& manifest,
+[[nodiscard]] std::string manifestHash(std::string const& manifest,
                                         std::string const& path) {
     std::regex pattern{"\"path\"\\s*:\\s*\"" + path +
                        "\"[^}]*\"sha256\"\\s*:\\s*\"([0-9a-f]{64})\""};
@@ -163,7 +163,7 @@ struct Timings {
     return match[1].str();
 }
 
-[[nodiscard]] std::vector<Operation> load_operations(std::string const& path) {
+[[nodiscard]] std::vector<Operation> loadOperations(std::string const& path) {
     std::ifstream input{path};
     if (!input) throw std::runtime_error{"cannot read " + path};
     std::vector<Operation> operations;
@@ -190,7 +190,7 @@ struct Timings {
     return operations;
 }
 
-[[nodiscard]] std::string expand_corpus(std::string const& seed) {
+[[nodiscard]] std::string expandCorpus(std::string const& seed) {
     if (seed.empty()) throw std::runtime_error{"empty benchmark corpus"};
     std::string result;
     result.reserve(target_bytes);
@@ -216,28 +216,28 @@ struct Timings {
            operation.insert ? operation.text : std::string{}}}});
 }
 
-void verify_inputs(std::string const& seed, std::string const& script) {
-    auto const manifest = read_file(SSG_PERFORMANCE_MANIFEST);
-    if (sha256(seed) != manifest_hash(manifest, "mixed-code.txt"))
+void verifyInputs(std::string const& seed, std::string const& script) {
+    auto const manifest = readFile(SSG_PERFORMANCE_MANIFEST);
+    if (sha256(seed) != manifestHash(manifest, "mixed-code.txt"))
         throw std::runtime_error{"mixed-code.txt SHA-256 mismatch"};
-    if (sha256(script) != manifest_hash(manifest, "operations.tsv"))
+    if (sha256(script) != manifestHash(manifest, "operations.tsv"))
         throw std::runtime_error{"operations.tsv SHA-256 mismatch"};
 }
 
-[[nodiscard]] std::vector<ssg::CellRun> first_viewport_runs(
+[[nodiscard]] std::vector<ssg::CellRun> firstViewportRuns(
     std::string_view text) {
     std::vector<ssg::CellRun> runs;
     std::size_t begin = 0;
     while (runs.size() < 80 && begin < text.size()) {
         auto end = text.find('\n', begin);
         if (end == std::string_view::npos) end = text.size();
-        runs.push_back(ssg::compute_cell_run(text.substr(begin, end - begin)));
+        runs.push_back(ssg::computeCellRun(text.substr(begin, end - begin)));
         begin = end + (end < text.size() ? 1U : 0U);
     }
     return runs;
 }
 
-void verify_correctness(std::string const& base,
+void verifyCorrectness(std::string const& base,
                         std::vector<Operation> const& operations,
                         Timings& timings) {
     if (base.size() != target_bytes)
@@ -254,22 +254,22 @@ void verify_correctness(std::string const& base,
     if (document.snapshot().text != base)
         throw std::runtime_error{"operation script does not restore canonical text"};
 
-    auto runs = first_viewport_runs(base);
-    auto view = ssg::compute_viewport(runs, ssg::ViewportDimensions{120, 40});
-    auto unchanged = ssg::derive_viewport_delta(view, view);
+    auto runs = firstViewportRuns(base);
+    auto view = ssg::computeViewport(runs, ssg::ViewportDimensions{120, 40});
+    auto unchanged = ssg::deriveViewportDelta(view, view);
     if (unchanged.changed || unchanged.replacement.has_value())
         throw std::runtime_error{"unchanged viewport emitted a payload"};
 
     ssg::EditorSession idle{
         ssg::CommandRegistry{std::vector<ssg::CommandSet>{}}};
-    double const cpu_start = process_cpu_milliseconds();
+    double const cpu_start = processCpuMilliseconds();
     std::this_thread::sleep_for(std::chrono::milliseconds{100});
-    timings.idle_cpu_milliseconds = process_cpu_milliseconds() - cpu_start;
+    timings.idle_cpu_milliseconds = processCpuMilliseconds() - cpu_start;
     if (timings.idle_cpu_milliseconds > 10.0)
         throw std::runtime_error{"idle session consumed polling CPU"};
 }
 
-void measure_edits(std::string const& base,
+void measureEdits(std::string const& base,
                    std::vector<Operation> const& operations,
                    Timings& timings) {
     for (std::size_t repetition = 0; repetition < repetitions; ++repetition) {
@@ -288,7 +288,7 @@ void measure_edits(std::string const& base,
     }
 }
 
-void measure_command_delta(std::vector<Operation> const& operations,
+void measureCommandDelta(std::vector<Operation> const& operations,
                            Timings& timings) {
     std::string const initial(16U * 1024U, 'a');
     for (std::size_t repetition = 0; repetition < repetitions; ++repetition) {
@@ -315,13 +315,13 @@ void measure_command_delta(std::vector<Operation> const& operations,
             normalized.offset = 0;
             auto const start = Clock::now();
             auto result = session.dispatch(
-                principal.client_id(),
+                principal.clientId(),
                 {"benchmark.edit", session.revision(), normalized});
             auto snapshot = document.snapshot();
             ssg::DocumentViewState after{
                 snapshot.revision, std::move(snapshot.text),
                 ssg::ByteOffset{normalized.insert ? 1U : 0U}};
-            auto delta = ssg::derive_document_delta(view, after);
+            auto delta = ssg::deriveDocumentDelta(view, after);
             auto const elapsed = Clock::now() - start;
             if (!result.accepted() || !delta.has_value())
                 throw std::runtime_error{"command-to-delta cycle failed"};
@@ -335,14 +335,14 @@ void measure_command_delta(std::vector<Operation> const& operations,
     }
 }
 
-void measure_open_viewport(std::string const& base, Timings& timings) {
+void measureOpenViewport(std::string const& base, Timings& timings) {
     for (std::size_t repetition = 0; repetition < repetitions; ++repetition) {
         auto const start = Clock::now();
         ssg::Document document{base};
         auto snapshot = document.snapshot();
-        auto runs = first_viewport_runs(snapshot.text);
+        auto runs = firstViewportRuns(snapshot.text);
         auto view =
-            ssg::compute_viewport(runs, ssg::ViewportDimensions{120, 40});
+            ssg::computeViewport(runs, ssg::ViewportDimensions{120, 40});
         if (view.visible_rows.empty())
             throw std::runtime_error{"first viewport is empty"};
         timings.open_viewport_milliseconds.push_back(
@@ -359,7 +359,7 @@ void measure_open_viewport(std::string const& base, Timings& timings) {
     return values[std::min(index, values.size() - 1)];
 }
 
-void print_report(Timings const& timings) {
+void printReport(Timings const& timings) {
     std::cout << std::fixed << std::setprecision(3)
               << "provenance platform="
 #ifdef _WIN32
@@ -410,21 +410,21 @@ int main(int argc, char** argv) {
         if (argc > 2 || (argc == 2 && !verify_only && !enforce_limits))
             throw std::runtime_error{"usage: editor_benchmark [--verify-only|--enforce]"};
 
-        auto const seed = read_file(SSG_PERFORMANCE_CORPUS);
-        auto const script = read_file(SSG_PERFORMANCE_OPERATIONS);
-        verify_inputs(seed, script);
-        auto const operations = load_operations(SSG_PERFORMANCE_OPERATIONS);
-        auto const base = expand_corpus(seed);
+        auto const seed = readFile(SSG_PERFORMANCE_CORPUS);
+        auto const script = readFile(SSG_PERFORMANCE_OPERATIONS);
+        verifyInputs(seed, script);
+        auto const operations = loadOperations(SSG_PERFORMANCE_OPERATIONS);
+        auto const base = expandCorpus(seed);
         Timings timings;
-        verify_correctness(base, operations, timings);
+        verifyCorrectness(base, operations, timings);
         if (verify_only) {
             std::cout << "performance correctness verified\n";
             return 0;
         }
-        measure_edits(base, operations, timings);
-        measure_command_delta(operations, timings);
-        measure_open_viewport(base, timings);
-        print_report(timings);
+        measureEdits(base, operations, timings);
+        measureCommandDelta(operations, timings);
+        measureOpenViewport(base, timings);
+        printReport(timings);
         if (enforce_limits) enforce(timings);
         return 0;
     } catch (std::exception const& error) {

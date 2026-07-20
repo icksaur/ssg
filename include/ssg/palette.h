@@ -69,13 +69,13 @@ struct PaletteReport {
 // then id ascending).  An empty query keeps every candidate in `label`/`id`
 // order.  This is the single scoring algorithm every client shares so no two
 // rankers diverge (spec P5); the TUI reports a window of this order.
-[[nodiscard]] std::vector<std::size_t> palette_rank(
+[[nodiscard]] std::vector<std::size_t> paletteRank(
     std::vector<PaletteCandidate> const& candidates, std::string_view query);
 
 // The fish-style ghost completion for `query` given the top-ranked candidate's
 // label: the label's remaining characters when the label starts with `query`
 // (case-insensitively), else empty.  Presentation-only; never mutates state.
-[[nodiscard]] std::string palette_ghost(std::string_view top_label,
+[[nodiscard]] std::string paletteGhost(std::string_view top_label,
                                         std::string_view query);
 
 // The client-owned palette window: the local query, the desired absolute
@@ -99,7 +99,7 @@ struct PaletteWindowState {
 // doc/spec-library-contract.md).  When the ranked set shrank under the selection,
 // the selection is clamped and re-centered; the resolved `selected` and
 // `first_visible` are written back to `window`.
-[[nodiscard]] PaletteReport derive_palette_report(
+[[nodiscard]] PaletteReport derivePaletteReport(
     std::vector<PaletteCandidate> const& candidates, PaletteWindowState& window);
 
 }  // namespace ssg

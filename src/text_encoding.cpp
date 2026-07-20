@@ -18,11 +18,11 @@ struct ScalarResult {
     std::optional<TextEncodingError> error;
 };
 
-TextEncodingError invalid_input(std::size_t offset, std::string message) {
+TextEncodingError invalidInput(std::size_t offset, std::string message) {
     return {TextEncodingErrorCode::InvalidInput, offset, std::move(message)};
 }
 
-void append_utf8(std::string& output, char32_t value) {
+void appendUtf8(std::string& output, char32_t value) {
     if (value <= 0x7f) {
         output.push_back(static_cast<char>(value));
     } else if (value <= 0x7ff) {
@@ -40,10 +40,10 @@ void append_utf8(std::string& output, char32_t value) {
     }
 }
 
-ScalarResult decode_utf8(std::span<const std::uint8_t> input,
+ScalarResult decodeUtf8(std::span<const std::uint8_t> input,
                          std::size_t base_offset = 0) {
     OpenPhaseTimer timer{OpenPhase::DecodeValidate};
-    note_utf8_validation();
+    noteUtf8Validation();
     ScalarResult result;
     for (std::size_t index = 0; index < input.size();) {
         const auto start = index;
@@ -66,19 +66,19 @@ ScalarResult decode_utf8(std::span<const std::uint8_t> input,
             continuation_count = 3;
             minimum = 0x10000;
         } else {
-            result.error = invalid_input(
+            result.error = invalidInput(
                 base_offset + start, "invalid UTF-8 leading byte");
             return result;
         }
         if (index + continuation_count > input.size()) {
-            result.error = invalid_input(
+            result.error = invalidInput(
                 base_offset + start, "truncated UTF-8 sequence");
             return result;
         }
         for (std::size_t count = 0; count < continuation_count; ++count) {
             const auto byte = input[index++];
             if ((byte & 0xc0) != 0x80) {
-                result.error = invalid_input(
+                result.error = invalidInput(
                     base_offset + index - 1, "invalid UTF-8 continuation byte");
                 return result;
             }
@@ -86,7 +86,7 @@ ScalarResult decode_utf8(std::span<const std::uint8_t> input,
         }
         if ((continuation_count != 0 && value < minimum) ||
             (value >= 0xd800 && value <= 0xdfff) || value > 0x10ffff) {
-            result.error = invalid_input(
+            result.error = invalidInput(
                 base_offset + start, "invalid UTF-8 scalar value");
             return result;
         }
@@ -95,12 +95,12 @@ ScalarResult decode_utf8(std::span<const std::uint8_t> input,
     return result;
 }
 
-ScalarResult decode_utf16(std::span<const std::uint8_t> input,
+ScalarResult decodeUtf16(std::span<const std::uint8_t> input,
                           bool little_endian, std::size_t base_offset) {
     OpenPhaseTimer timer{OpenPhase::DecodeValidate};
     ScalarResult result;
     if (input.size() % 2 != 0) {
-        result.error = invalid_input(
+        result.error = invalidInput(
             base_offset + input.size() - 1, "odd UTF-16 byte count");
         return result;
     }
@@ -114,13 +114,13 @@ ScalarResult decode_utf16(std::span<const std::uint8_t> input,
         char32_t value = first;
         if (first >= 0xd800 && first <= 0xdbff) {
             if (index + 3 >= input.size()) {
-                result.error = invalid_input(
+                result.error = invalidInput(
                     base_offset + index, "unpaired UTF-16 high surrogate");
                 return result;
             }
             const auto second = unit(input[index + 2], input[index + 3]);
             if (second < 0xdc00 || second > 0xdfff) {
-                result.error = invalid_input(
+                result.error = invalidInput(
                     base_offset + index, "unpaired UTF-16 high surrogate");
                 return result;
             }
@@ -129,7 +129,7 @@ ScalarResult decode_utf16(std::span<const std::uint8_t> input,
                     (static_cast<char32_t>(second) - 0xdc00);
             index += 2;
         } else if (first >= 0xdc00 && first <= 0xdfff) {
-            result.error = invalid_input(
+            result.error = invalidInput(
                 base_offset + index, "unpaired UTF-16 low surrogate");
             return result;
         }
@@ -145,7 +145,7 @@ constexpr std::array<char32_t, 32> windows1252_high{
     0x02dc, 0x2122, 0x0161, 0x203a, 0x0153, 0x009d, 0x017e, 0x0178,
 };
 
-ScalarResult decode_single_byte(std::span<const std::uint8_t> input,
+ScalarResult decodeSingleByte(std::span<const std::uint8_t> input,
                                 TextEncoding encoding) {
     OpenPhaseTimer timer{OpenPhase::DecodeValidate};
     ScalarResult result;
@@ -162,7 +162,7 @@ ScalarResult decode_single_byte(std::span<const std::uint8_t> input,
     return result;
 }
 
-LineTerminator to_terminator(LineEnding ending) {
+LineTerminator toTerminator(LineEnding ending) {
     switch (ending) {
     case LineEnding::Lf: return LineTerminator::Lf;
     case LineEnding::Crlf: return LineTerminator::Crlf;
@@ -172,7 +172,7 @@ LineTerminator to_terminator(LineEnding ending) {
     return LineTerminator::Lf;
 }
 
-LineEnding detected_line_ending(
+LineEnding detectedLineEnding(
     const std::vector<LineTerminator>& terminators) {
     std::optional<LineTerminator> first;
     for (const auto terminator : terminators) {
@@ -203,7 +203,7 @@ DecodeTextResult normalized(ScalarResult scalar_result,
         const auto value = scalar_result.scalars[index].value;
         if (value == 0) {
             return {std::nullopt,
-                    invalid_input(scalar_result.scalars[index].utf8_offset,
+                    invalidInput(scalar_result.scalars[index].utf8_offset,
                                   "NUL byte is not valid document text")};
         }
         if (value == U'\r') {
@@ -219,13 +219,13 @@ DecodeTextResult normalized(ScalarResult scalar_result,
             text.line_terminators.push_back(LineTerminator::Lf);
             text.utf8.push_back('\n');
         } else {
-            append_utf8(text.utf8, value);
+            appendUtf8(text.utf8, value);
         }
     }
     if (!text.utf8.empty() && text.utf8.back() != '\n') {
         text.line_terminators.push_back(LineTerminator::None);
     }
-    text.status.line_ending = detected_line_ending(text.line_terminators);
+    text.status.line_ending = detectedLineEnding(text.line_terminators);
     text.status.final_newline =
         !text.line_terminators.empty() &&
         text.line_terminators.back() != LineTerminator::None;
@@ -244,11 +244,11 @@ std::span<const std::uint8_t> skip(
 // ONE walk with no std::vector<Scalar> intermediate. Malformed-byte offsets and
 // classification are identical to decode_utf8 + normalized (see the offset parity
 // tests in test_text_encoding.cpp); `base_offset` makes them BOM-relative.
-DecodeTextResult decode_utf8_fused(std::span<const std::uint8_t> input,
+DecodeTextResult decodeUtf8Fused(std::span<const std::uint8_t> input,
                                    std::size_t base_offset,
                                    TextEncoding encoding, bool had_bom) {
     OpenPhaseTimer timer{OpenPhase::DecodeValidate};
-    note_utf8_validation();
+    noteUtf8Validation();
     DecodedText text;
     text.status.encoding = encoding;
     text.status.had_bom = had_bom;
@@ -259,7 +259,7 @@ DecodeTextResult decode_utf8_fused(std::span<const std::uint8_t> input,
         const std::uint8_t first = input[index];
         if (first == 0x00) {
             return {std::nullopt,
-                    invalid_input(base_offset + index,
+                    invalidInput(base_offset + index,
                                   "NUL byte is not valid document text")};
         }
         if (first == '\r') {
@@ -301,19 +301,19 @@ DecodeTextResult decode_utf8_fused(std::span<const std::uint8_t> input,
             minimum = 0x10000;
         } else {
             return {std::nullopt,
-                    invalid_input(base_offset + index,
+                    invalidInput(base_offset + index,
                                   "invalid UTF-8 leading byte")};
         }
         if (index + 1 + continuation_count > n) {
             return {std::nullopt,
-                    invalid_input(base_offset + index,
+                    invalidInput(base_offset + index,
                                   "truncated UTF-8 sequence")};
         }
         for (std::size_t count = 1; count <= continuation_count; ++count) {
             const std::uint8_t byte = input[index + count];
             if ((byte & 0xc0) != 0x80) {
                 return {std::nullopt,
-                        invalid_input(base_offset + index + count,
+                        invalidInput(base_offset + index + count,
                                       "invalid UTF-8 continuation byte")};
             }
             value = (value << 6) | (byte & 0x3f);
@@ -321,7 +321,7 @@ DecodeTextResult decode_utf8_fused(std::span<const std::uint8_t> input,
         if (value < minimum || (value >= 0xd800 && value <= 0xdfff) ||
             value > 0x10ffff) {
             return {std::nullopt,
-                    invalid_input(base_offset + index,
+                    invalidInput(base_offset + index,
                                   "invalid UTF-8 scalar value")};
         }
         text.utf8.append(reinterpret_cast<const char*>(input.data() + index),
@@ -331,21 +331,21 @@ DecodeTextResult decode_utf8_fused(std::span<const std::uint8_t> input,
     if (!text.utf8.empty() && text.utf8.back() != '\n') {
         text.line_terminators.push_back(LineTerminator::None);
     }
-    text.status.line_ending = detected_line_ending(text.line_terminators);
+    text.status.line_ending = detectedLineEnding(text.line_terminators);
     text.status.final_newline =
         !text.line_terminators.empty() &&
         text.line_terminators.back() != LineTerminator::None;
     return {std::move(text), std::nullopt};
 }
 
-DecodeTextResult decode_selected(std::span<const std::uint8_t> bytes,
+DecodeTextResult decodeSelected(std::span<const std::uint8_t> bytes,
                                  TextEncoding encoding) {
     switch (encoding) {
     case TextEncoding::Utf8:
     case TextEncoding::Utf8Bom: {
         const bool bom = bytes.size() >= 3 && bytes[0] == 0xef &&
                          bytes[1] == 0xbb && bytes[2] == 0xbf;
-        return decode_utf8_fused(
+        return decodeUtf8Fused(
             bom ? skip(bytes, 3) : bytes, bom ? 3 : 0,
             bom ? TextEncoding::Utf8Bom : encoding, bom);
     }
@@ -362,21 +362,21 @@ DecodeTextResult decode_selected(std::span<const std::uint8_t> bytes,
              (!little && bytes[0] == 0xff && bytes[1] == 0xfe));
         if (opposite_bom) {
             return {std::nullopt,
-                    invalid_input(0, "UTF-16 BOM does not match encoding")};
+                    invalidInput(0, "UTF-16 BOM does not match encoding")};
         }
         return normalized(
-            decode_utf16(matching_bom ? skip(bytes, 2) : bytes,
+            decodeUtf16(matching_bom ? skip(bytes, 2) : bytes,
                          little, matching_bom ? 2 : 0),
             encoding, matching_bom);
     }
     case TextEncoding::Windows1252:
     case TextEncoding::Iso88591:
-        return normalized(decode_single_byte(bytes, encoding), encoding, false);
+        return normalized(decodeSingleByte(bytes, encoding), encoding, false);
     }
-    return {std::nullopt, invalid_input(0, "unsupported encoding")};
+    return {std::nullopt, invalidInput(0, "unsupported encoding")};
 }
 
-std::optional<std::uint8_t> windows1252_byte(char32_t value) {
+std::optional<std::uint8_t> windows1252Byte(char32_t value) {
     if (value <= 0x7f || (value >= 0xa0 && value <= 0xff)) {
         return static_cast<std::uint8_t>(value);
     }
@@ -387,7 +387,7 @@ std::optional<std::uint8_t> windows1252_byte(char32_t value) {
         0x80 + std::distance(windows1252_high.begin(), found));
 }
 
-void append_utf16(std::vector<std::uint8_t>& output, char32_t value,
+void appendUtf16(std::vector<std::uint8_t>& output, char32_t value,
                   bool little_endian) {
     const auto append_unit = [&output, little_endian](std::uint16_t unit) {
         const auto low = static_cast<std::uint8_t>(unit & 0xff);
@@ -404,10 +404,10 @@ void append_utf16(std::vector<std::uint8_t>& output, char32_t value,
     }
 }
 
-std::vector<Scalar> output_scalars(const DecodedText& text,
+std::vector<Scalar> outputScalars(const DecodedText& text,
                                    EncodeTextOptions options,
                                    TextEncodingError& error) {
-    const auto decoded = decode_utf8(std::span{
+    const auto decoded = decodeUtf8(std::span{
         reinterpret_cast<const std::uint8_t*>(text.utf8.data()),
         text.utf8.size()});
     if (decoded.error.has_value()) {
@@ -449,7 +449,7 @@ std::vector<Scalar> output_scalars(const DecodedText& text,
         const auto selected =
             options.line_ending == LineEnding::Mixed
                 ? stored
-                : to_terminator(options.line_ending);
+                : toTerminator(options.line_ending);
         if (selected == LineTerminator::Crlf) {
             output.push_back({U'\r', scalar.utf8_offset});
             output.push_back({U'\n', scalar.utf8_offset});
@@ -473,7 +473,7 @@ std::vector<Scalar> output_scalars(const DecodedText& text,
                              ? LineEnding::Lf
                              : text.status.line_ending;
             }
-            const auto selected = to_terminator(ending);
+            const auto selected = toTerminator(ending);
             if (selected == LineTerminator::Crlf) {
                 output.push_back({U'\r', text.utf8.size()});
                 output.push_back({U'\n', text.utf8.size()});
@@ -489,35 +489,35 @@ std::vector<Scalar> output_scalars(const DecodedText& text,
 
 } // namespace
 
-DecodeTextResult decode_text(std::span<const std::uint8_t> bytes) {
+DecodeTextResult decodeText(std::span<const std::uint8_t> bytes) {
     if (bytes.size() >= 3 && bytes[0] == 0xef &&
         bytes[1] == 0xbb && bytes[2] == 0xbf) {
-        return decode_selected(bytes, TextEncoding::Utf8Bom);
+        return decodeSelected(bytes, TextEncoding::Utf8Bom);
     }
     if (bytes.size() >= 2 && bytes[0] == 0xff && bytes[1] == 0xfe) {
-        return decode_selected(bytes, TextEncoding::Utf16le);
+        return decodeSelected(bytes, TextEncoding::Utf16le);
     }
     if (bytes.size() >= 2 && bytes[0] == 0xfe && bytes[1] == 0xff) {
-        return decode_selected(bytes, TextEncoding::Utf16be);
+        return decodeSelected(bytes, TextEncoding::Utf16be);
     }
-    return decode_selected(bytes, TextEncoding::Utf8);
+    return decodeSelected(bytes, TextEncoding::Utf8);
 }
 
-DecodeTextResult decode_text(std::span<const std::uint8_t> bytes,
+DecodeTextResult decodeText(std::span<const std::uint8_t> bytes,
                              TextEncoding encoding) {
-    return decode_selected(bytes, encoding);
+    return decodeSelected(bytes, encoding);
 }
 
-EncodeTextResult encode_text(const DecodedText& text) {
-    return encode_text(
+EncodeTextResult encodeText(const DecodedText& text) {
+    return encodeText(
         text, {text.status.encoding, LineEnding::Mixed,
                FinalNewlinePolicy::Preserve});
 }
 
-EncodeTextResult encode_text(const DecodedText& text,
+EncodeTextResult encodeText(const DecodedText& text,
                              EncodeTextOptions options) {
     TextEncodingError error;
-    const auto scalars = output_scalars(text, options, error);
+    const auto scalars = outputScalars(text, options, error);
     if (!error.message.empty()) return {{}, std::move(error)};
 
     EncodeTextResult result;
@@ -533,11 +533,11 @@ EncodeTextResult encode_text(const DecodedText& text,
         if (options.encoding == TextEncoding::Utf8 ||
             options.encoding == TextEncoding::Utf8Bom) {
             std::string encoded;
-            append_utf8(encoded, scalar.value);
+            appendUtf8(encoded, scalar.value);
             result.bytes.insert(result.bytes.end(), encoded.begin(), encoded.end());
         } else if (options.encoding == TextEncoding::Utf16le ||
                    options.encoding == TextEncoding::Utf16be) {
-            append_utf16(result.bytes, scalar.value,
+            appendUtf16(result.bytes, scalar.value,
                          options.encoding == TextEncoding::Utf16le);
         } else {
             std::optional<std::uint8_t> encoded;
@@ -546,7 +546,7 @@ EncodeTextResult encode_text(const DecodedText& text,
                     encoded = static_cast<std::uint8_t>(scalar.value);
                 }
             } else {
-                encoded = windows1252_byte(scalar.value);
+                encoded = windows1252Byte(scalar.value);
             }
             if (!encoded.has_value()) {
                 return {{},
@@ -561,12 +561,12 @@ EncodeTextResult encode_text(const DecodedText& text,
     return result;
 }
 
-TextEncodingViewState make_text_encoding_view_state(
+TextEncodingViewState makeTextEncodingViewState(
     const DecodedText& text) noexcept {
     return {text.status};
 }
 
-std::optional<TextEncodingDelta> derive_text_encoding_delta(
+std::optional<TextEncodingDelta> deriveTextEncodingDelta(
     const TextEncodingViewState& before,
     const TextEncodingViewState& after) {
     if (before == after) return std::nullopt;

@@ -26,7 +26,7 @@ namespace fs = std::filesystem;
 constexpr int minimum_columns = 20;
 constexpr int minimum_rows = 4;
 
-fs::path make_root(const std::string& name) {
+fs::path makeRoot(const std::string& name) {
     auto root = fs::current_path() / ("runtime_totality_" + name);
     fs::remove_all(root);
     fs::create_directories(root / "workspace");
@@ -54,7 +54,7 @@ bool within(const ssg::Rect& rect, int cols, int rows) {
 }
 
 // Assert every published region rectangle lies inside the viewport.
-void assert_regions_in_bounds(const ssg::ShellViewState& shell) {
+void assertRegionsInBounds(const ssg::ShellViewState& shell) {
     int const cols = shell.viewport.columns;
     int const rows = shell.viewport.rows;
     if (shell.header) ASSERT_TRUE(within(*shell.header, cols, rows));
@@ -82,7 +82,7 @@ struct UiState {
     bool open_document;
 };
 
-const std::vector<UiState>& ui_states() {
+const std::vector<UiState>& uiStates() {
     static const std::vector<UiState> states{
         {"default_empty", {}, false},
         {"default_doc", {}, true},
@@ -97,8 +97,8 @@ const std::vector<UiState>& ui_states() {
     return states;
 }
 
-void run_state(const UiState& state) {
-    auto root = make_root(state.name);
+void runState(const UiState& state) {
+    auto root = makeRoot(state.name);
     auto created = ssg::EditorRuntime::create(
         {root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
@@ -157,7 +157,7 @@ void run_state(const UiState& state) {
         // Laid out: geometry is well-formed and render() is total.
         ASSERT_EQ(shell.viewport.columns, static_cast<int>(dims.columns));
         ASSERT_EQ(shell.viewport.rows, static_cast<int>(dims.rows));
-        assert_regions_in_bounds(shell);
+        assertRegionsInBounds(shell);
 
         ASSERT_NO_THROW(ssg::render(*snapshot));
         auto grid = ssg::render(*snapshot);
@@ -177,14 +177,14 @@ void run_state(const UiState& state) {
 
 }  // namespace
 
-TEST(layout_is_total_across_sizes_and_ui_states) {
-    for (auto const& state : ui_states()) {
-        run_state(state);
+TEST(layoutIsTotalAcrossSizesAndUiStates) {
+    for (auto const& state : uiStates()) {
+        runState(state);
     }
 }
 
 int main() {
-    RUN(layout_is_total_across_sizes_and_ui_states);
+    RUN(layoutIsTotalAcrossSizesAndUiStates);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

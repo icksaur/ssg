@@ -33,7 +33,7 @@ HistoryResult failure(HistoryError error, Revision revision,
     return {error, document_error, revision, std::nullopt, std::move(message)};
 }
 
-std::uint64_t selection_charge(const SelectionSet& selections) {
+std::uint64_t selectionCharge(const SelectionSet& selections) {
     const auto count = static_cast<std::uint64_t>(selections.items().size());
     constexpr auto item_size = static_cast<std::uint64_t>(sizeof(Selection));
     if (count > std::numeric_limits<std::uint64_t>::max() / item_size) {
@@ -42,21 +42,21 @@ std::uint64_t selection_charge(const SelectionSet& selections) {
     return count * item_size;
 }
 
-std::uint64_t saturated_add(std::uint64_t left, std::uint64_t right) {
+std::uint64_t saturatedAdd(std::uint64_t left, std::uint64_t right) {
     if (right > std::numeric_limits<std::uint64_t>::max() - left) {
         return std::numeric_limits<std::uint64_t>::max();
     }
     return left + right;
 }
 
-bool all_carets(const SelectionSet& selections) {
+bool allCarets(const SelectionSet& selections) {
     return std::all_of(selections.items().begin(), selections.items().end(),
                        [](const Selection& selection) {
-                           return selection.is_caret();
+                           return selection.isCaret();
                        });
 }
 
-std::vector<const TextEdit*> ordered_edits(
+std::vector<const TextEdit*> orderedEdits(
     const std::vector<TextEdit>& edits) {
     std::vector<const TextEdit*> ordered;
     ordered.reserve(edits.size());
@@ -70,14 +70,14 @@ std::vector<const TextEdit*> ordered_edits(
     return ordered;
 }
 
-bool edit_shape_matches(const EditTransaction& transaction,
+bool editShapeMatches(const EditTransaction& transaction,
                         const SelectionSet& selections,
                         HistoryEditKind kind) {
-    if (kind == HistoryEditKind::Other || !all_carets(selections) ||
+    if (kind == HistoryEditKind::Other || !allCarets(selections) ||
         transaction.edits.size() != selections.items().size()) {
         return false;
     }
-    const auto ordered = ordered_edits(transaction.edits);
+    const auto ordered = orderedEdits(transaction.edits);
     for (std::size_t index = 0; index < ordered.size(); ++index) {
         const auto& edit = *ordered[index];
         const auto caret =
@@ -108,7 +108,7 @@ bool edit_shape_matches(const EditTransaction& transaction,
     return true;
 }
 
-bool ranges_are_capturable(const DocumentSnapshot& before,
+bool rangesAreCapturable(const DocumentSnapshot& before,
                            const EditTransaction& transaction) {
     for (const auto& edit : transaction.edits) {
         if (edit.offset.value() > before.text.size() ||
@@ -121,11 +121,11 @@ bool ranges_are_capturable(const DocumentSnapshot& before,
     return true;
 }
 
-HistoryStep make_step(const DocumentSnapshot& before,
+HistoryStep makeStep(const DocumentSnapshot& before,
                       const EditTransaction& transaction) {
     HistoryStep step{{}, {}, 0};
     step.forward = transaction.edits;
-    const auto ordered = ordered_edits(transaction.edits);
+    const auto ordered = orderedEdits(transaction.edits);
     std::int64_t displacement = 0;
     step.inverse.reserve(ordered.size());
     for (const auto* edit : ordered) {
@@ -137,9 +137,9 @@ HistoryStep make_step(const DocumentSnapshot& before,
         step.inverse.push_back(
             {ByteOffset{static_cast<std::uint64_t>(output_offset)},
              static_cast<std::uint64_t>(edit->inserted_text.size()), erased});
-        step.payload_bytes = saturated_add(
+        step.payload_bytes = saturatedAdd(
             step.payload_bytes,
-            saturated_add(static_cast<std::uint64_t>(edit->inserted_text.size()),
+            saturatedAdd(static_cast<std::uint64_t>(edit->inserted_text.size()),
                           edit->erased_bytes));
         displacement +=
             static_cast<std::int64_t>(edit->inserted_text.size()) -
@@ -148,12 +148,12 @@ HistoryStep make_step(const DocumentSnapshot& before,
     return step;
 }
 
-std::uint64_t unit_charge(const HistoryStep& step,
+std::uint64_t unitCharge(const HistoryStep& step,
                           const SelectionSet& before,
                           const SelectionSet& after) {
-    return saturated_add(
+    return saturatedAdd(
         step.payload_bytes,
-        saturated_add(selection_charge(before), selection_charge(after)));
+        saturatedAdd(selectionCharge(before), selectionCharge(after)));
 }
 
 }  // namespace
@@ -168,31 +168,31 @@ struct DocumentHistory::Impl {
     std::uint64_t retained{0};
     bool barrier{true};
 
-    void remove_charge(const HistoryUnit& unit) noexcept {
+    void removeCharge(const HistoryUnit& unit) noexcept {
         retained -= unit.charged_bytes;
     }
 
-    void clear_redo() noexcept {
+    void clearRedo() noexcept {
         for (const auto& unit : redo) {
-            remove_charge(unit);
+            removeCharge(unit);
         }
         redo.clear();
     }
 
-    void clear_all() noexcept {
+    void clearAll() noexcept {
         undo.clear();
         redo.clear();
         retained = 0;
     }
 
-    void enforce_budget() {
+    void enforceBudget() {
         while (retained > config.byte_budget && !undo.empty()) {
-            remove_charge(undo.front());
+            removeCharge(undo.front());
             undo.erase(undo.begin());
         }
     }
 
-    bool can_coalesce(const HistoryUnit& unit, const HistoryStep& step,
+    bool canCoalesce(const HistoryUnit& unit, const HistoryStep& step,
                       const SelectionSet& before, HistoryEditKind kind,
                       std::uint64_t timestamp_ms,
                       bool step_coalescible) const {
@@ -214,11 +214,11 @@ HistoryCommandSet::descriptors() const noexcept {
     return descriptors_;
 }
 
-HistoryCommandSet history_command_set() {
+HistoryCommandSet historyCommandSet() {
     return HistoryCommandSet{};
 }
 
-HistoryDelta derive_history_delta(const HistoryViewState& before,
+HistoryDelta deriveHistoryDelta(const HistoryViewState& before,
                                   const HistoryViewState& after) {
     if (before == after) {
         return {false, std::nullopt};
@@ -234,7 +234,7 @@ DocumentHistory::DocumentHistory(DocumentHistory&&) noexcept = default;
 DocumentHistory& DocumentHistory::operator=(DocumentHistory&&) noexcept =
     default;
 
-HistoryResult DocumentHistory::apply_edit(
+HistoryResult DocumentHistory::applyEdit(
     Document& document, const EditTransaction& transaction,
     const SelectionSet& selections_before,
     const SelectionSet& selections_after, HistoryEditKind kind,
@@ -243,13 +243,13 @@ HistoryResult DocumentHistory::apply_edit(
     const bool bypassed =
         impl_->expected_revision &&
         *impl_->expected_revision != before.revision;
-    if (!ranges_are_capturable(before, transaction)) {
+    if (!rangesAreCapturable(before, transaction)) {
         const auto result = document.apply(transaction);
         return failure(HistoryError::DocumentRejected, result.revision,
                        result.message, result.error);
     }
 
-    auto step = make_step(before, transaction);
+    auto step = makeStep(before, transaction);
     const auto result = document.apply(transaction);
     if (!result.accepted()) {
         return failure(HistoryError::DocumentRejected, result.revision,
@@ -257,36 +257,36 @@ HistoryResult DocumentHistory::apply_edit(
     }
 
     if (bypassed) {
-        impl_->clear_all();
+        impl_->clearAll();
         impl_->barrier = true;
     }
-    impl_->clear_redo();
+    impl_->clearRedo();
 
     const bool step_coalescible =
-        edit_shape_matches(transaction, selections_before, kind);
+        editShapeMatches(transaction, selections_before, kind);
     if (!impl_->undo.empty() &&
-        impl_->can_coalesce(impl_->undo.back(), step, selections_before, kind,
+        impl_->canCoalesce(impl_->undo.back(), step, selections_before, kind,
                             timestamp_ms, step_coalescible)) {
         auto& unit = impl_->undo.back();
         impl_->retained -= unit.charged_bytes;
         unit.steps.push_back(std::move(step));
         unit.selections_after = selections_after;
         unit.last_timestamp_ms = timestamp_ms;
-        unit.charged_bytes = saturated_add(
+        unit.charged_bytes = saturatedAdd(
             unit.charged_bytes,
             unit.steps.back().payload_bytes);
         impl_->retained =
-            saturated_add(impl_->retained, unit.charged_bytes);
+            saturatedAdd(impl_->retained, unit.charged_bytes);
     } else {
         const auto charge =
-            unit_charge(step, selections_before, selections_after);
+            unitCharge(step, selections_before, selections_after);
         impl_->undo.push_back(
             {{std::move(step)}, selections_before, selections_after, kind,
              timestamp_ms, charge, step_coalescible});
-        impl_->retained = saturated_add(impl_->retained, charge);
+        impl_->retained = saturatedAdd(impl_->retained, charge);
     }
 
-    impl_->enforce_budget();
+    impl_->enforceBudget();
     impl_->expected_revision = result.revision;
     impl_->barrier = false;
     return {HistoryError::None, DocumentError::None, result.revision,
@@ -370,24 +370,24 @@ HistoryResult DocumentHistory::redo(Document& document) {
             selections, {}};
 }
 
-void DocumentHistory::break_coalescing() noexcept {
+void DocumentHistory::breakCoalescing() noexcept {
     impl_->barrier = true;
 }
 
-bool DocumentHistory::can_undo() const noexcept {
+bool DocumentHistory::canUndo() const noexcept {
     return !impl_->undo.empty();
 }
 
-bool DocumentHistory::can_redo() const noexcept {
+bool DocumentHistory::canRedo() const noexcept {
     return !impl_->redo.empty();
 }
 
-std::uint64_t DocumentHistory::retained_bytes() const noexcept {
+std::uint64_t DocumentHistory::retainedBytes() const noexcept {
     return impl_->retained;
 }
 
-HistoryViewState DocumentHistory::view_state() const noexcept {
-    return {can_undo(), can_redo(), retained_bytes()};
+HistoryViewState DocumentHistory::viewState() const noexcept {
+    return {canUndo(), canRedo(), retainedBytes()};
 }
 
 }  // namespace ssg

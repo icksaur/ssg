@@ -35,9 +35,9 @@ std::string bytes(std::initializer_list<std::uint8_t> values) {
     return {reinterpret_cast<const char*>(values.begin()), values.size()};
 }
 
-TEST(auto_detects_utf8_and_preserves_lf_and_final_newline) {
+TEST(autoDetectsUtf8AndPreservesLfAndFinalNewline) {
     const auto original = fixture("utf8-lf");
-    const auto decoded = ssg::decode_text(original);
+    const auto decoded = ssg::decodeText(original);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_EQ(decoded.text->utf8, bytes({
         0x61, 0x6c, 0x70, 0x68, 0x61, 0x0a, 0xce, 0xb2, 0x0a}));
@@ -47,12 +47,12 @@ TEST(auto_detects_utf8_and_preserves_lf_and_final_newline) {
     ASSERT_TRUE(decoded.text->status.final_newline);
     ASSERT_EQ(decoded.text->line_terminators,
               (std::vector{LineTerminator::Lf, LineTerminator::Lf}));
-    ASSERT_EQ(ssg::encode_text(*decoded.text).bytes, original);
+    ASSERT_EQ(ssg::encodeText(*decoded.text).bytes, original);
 }
 
-TEST(auto_detects_utf8_bom_and_preserves_crlf_without_final_newline) {
+TEST(autoDetectsUtf8BomAndPreservesCrlfWithoutFinalNewline) {
     const auto original = fixture("utf8-bom-crlf");
-    const auto decoded = ssg::decode_text(original);
+    const auto decoded = ssg::decodeText(original);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_EQ(decoded.text->utf8, bytes({
         0x63, 0x61, 0x66, 0xc3, 0xa9, 0x0a,
@@ -63,12 +63,12 @@ TEST(auto_detects_utf8_bom_and_preserves_crlf_without_final_newline) {
     ASSERT_FALSE(decoded.text->status.final_newline);
     ASSERT_EQ(decoded.text->line_terminators,
               (std::vector{LineTerminator::Crlf, LineTerminator::None}));
-    ASSERT_EQ(ssg::encode_text(*decoded.text).bytes, original);
+    ASSERT_EQ(ssg::encodeText(*decoded.text).bytes, original);
 }
 
-TEST(round_trips_utf16_endianness_bom_and_mixed_endings) {
+TEST(roundTripsUtf16EndiannessBomAndMixedEndings) {
     const auto little_bytes = fixture("utf16le-mixed");
-    const auto little = ssg::decode_text(little_bytes);
+    const auto little = ssg::decodeText(little_bytes);
     ASSERT_TRUE(little.accepted());
     ASSERT_EQ(little.text->utf8, bytes({
         0x41, 0x0a, 0xe2, 0x82, 0xac, 0x0a, 0x5a, 0x0a}));
@@ -77,77 +77,77 @@ TEST(round_trips_utf16_endianness_bom_and_mixed_endings) {
     ASSERT_EQ(little.text->line_terminators,
               (std::vector{LineTerminator::Crlf, LineTerminator::Cr,
                            LineTerminator::Lf}));
-    ASSERT_EQ(ssg::encode_text(*little.text).bytes, little_bytes);
+    ASSERT_EQ(ssg::encodeText(*little.text).bytes, little_bytes);
 
     const auto big_bytes = fixture("utf16be-cr");
-    const auto big = ssg::decode_text(big_bytes);
+    const auto big = ssg::decodeText(big_bytes);
     ASSERT_TRUE(big.accepted());
     ASSERT_EQ(big.text->utf8, bytes({0x41, 0x0a, 0xce, 0xa9, 0x0a}));
     ASSERT_EQ(big.text->status.encoding, TextEncoding::Utf16be);
     ASSERT_EQ(big.text->status.line_ending, LineEnding::Cr);
     ASSERT_TRUE(big.text->status.final_newline);
-    ASSERT_EQ(ssg::encode_text(*big.text).bytes, big_bytes);
+    ASSERT_EQ(ssg::encodeText(*big.text).bytes, big_bytes);
 }
 
-TEST(manual_single_byte_decodes_are_byte_exact) {
-    const auto windows = ssg::decode_text(
+TEST(manualSingleByteDecodesAreByteExact) {
+    const auto windows = ssg::decodeText(
         fixture("windows1252"), TextEncoding::Windows1252);
     ASSERT_TRUE(windows.accepted());
     ASSERT_EQ(windows.text->utf8, bytes({
         0xe2, 0x82, 0xac, 0x20, 0xe2, 0x80, 0x9c, 0x78,
         0xe2, 0x80, 0x9d, 0x0a}));
     ASSERT_EQ(windows.text->status.line_ending, LineEnding::Crlf);
-    ASSERT_EQ(ssg::encode_text(*windows.text).bytes, fixture("windows1252"));
+    ASSERT_EQ(ssg::encodeText(*windows.text).bytes, fixture("windows1252"));
 
-    const auto latin = ssg::decode_text(
+    const auto latin = ssg::decodeText(
         fixture("iso88591"), TextEncoding::Iso88591);
     ASSERT_TRUE(latin.accepted());
     ASSERT_EQ(latin.text->utf8, bytes({0xc3, 0xa9, 0x0a}));
     ASSERT_EQ(latin.text->status.line_ending, LineEnding::Cr);
-    ASSERT_EQ(ssg::encode_text(*latin.text).bytes, fixture("iso88591"));
+    ASSERT_EQ(ssg::encodeText(*latin.text).bytes, fixture("iso88591"));
 }
 
-TEST(refuses_invalid_input_without_replacement) {
-    const auto invalid_utf8 = ssg::decode_text(fixture("invalid-utf8"));
+TEST(refusesInvalidInputWithoutReplacement) {
+    const auto invalid_utf8 = ssg::decodeText(fixture("invalid-utf8"));
     ASSERT_FALSE(invalid_utf8.accepted());
     ASSERT_EQ(invalid_utf8.error->code, ssg::TextEncodingErrorCode::InvalidInput);
     ASSERT_EQ(invalid_utf8.error->utf8_offset, std::size_t{0});
 
-    const auto invalid_utf16 = ssg::decode_text(fixture("invalid-utf16le"));
+    const auto invalid_utf16 = ssg::decodeText(fixture("invalid-utf16le"));
     ASSERT_FALSE(invalid_utf16.accepted());
     ASSERT_EQ(invalid_utf16.error->code,
               ssg::TextEncodingErrorCode::InvalidInput);
 }
 
-TEST(refuses_lossy_single_byte_encoding_at_the_offending_offset) {
-    const auto decoded = ssg::decode_text(fixture("lossy-utf8"));
+TEST(refusesLossySingleByteEncodingAtTheOffendingOffset) {
+    const auto decoded = ssg::decodeText(fixture("lossy-utf8"));
     ASSERT_TRUE(decoded.accepted());
 
-    const auto windows = ssg::encode_text(
+    const auto windows = ssg::encodeText(
         *decoded.text, {TextEncoding::Windows1252, LineEnding::Mixed,
                         FinalNewlinePolicy::Preserve});
     ASSERT_FALSE(windows.accepted());
     ASSERT_EQ(windows.error->code, ssg::TextEncodingErrorCode::LossyConversion);
     ASSERT_EQ(windows.error->utf8_offset, std::size_t{0});
 
-    const auto latin = ssg::encode_text(
+    const auto latin = ssg::encodeText(
         *decoded.text, {TextEncoding::Iso88591, LineEnding::Mixed,
                         FinalNewlinePolicy::Preserve});
     ASSERT_FALSE(latin.accepted());
 }
 
-TEST(normalizes_requested_endings_and_applies_final_newline_policy) {
-    const auto decoded = ssg::decode_text(fixture("no-final-newline"));
+TEST(normalizesRequestedEndingsAndAppliesFinalNewlinePolicy) {
+    const auto decoded = ssg::decodeText(fixture("no-final-newline"));
     ASSERT_TRUE(decoded.accepted());
 
-    const auto crlf = ssg::encode_text(
+    const auto crlf = ssg::encodeText(
         *decoded.text, {TextEncoding::Utf8, LineEnding::Crlf,
                         FinalNewlinePolicy::EnsurePresent});
     ASSERT_TRUE(crlf.accepted());
     ASSERT_EQ(crlf.bytes, (std::vector<std::uint8_t>{
         0x6f, 0x6e, 0x65, 0x0d, 0x0a, 0x74, 0x77, 0x6f, 0x0d, 0x0a}));
 
-    const auto absent = ssg::encode_text(
+    const auto absent = ssg::encodeText(
         *decoded.text, {TextEncoding::Utf8, LineEnding::Cr,
                         FinalNewlinePolicy::EnsureAbsent});
     ASSERT_TRUE(absent.accepted());
@@ -155,7 +155,7 @@ TEST(normalizes_requested_endings_and_applies_final_newline_policy) {
         0x6f, 0x6e, 0x65, 0x0d, 0x74, 0x77, 0x6f}));
 }
 
-TEST(exports_exact_immutable_command_set_and_typed_view_delta) {
+TEST(exportsExactImmutableCommandSetAndTypedViewDelta) {
     constexpr std::array expected{
         std::string_view{"file.reopen_with_encoding"},
         std::string_view{"file.set_encoding"},
@@ -168,15 +168,15 @@ TEST(exports_exact_immutable_command_set_and_typed_view_delta) {
                   expected[index]);
     }
 
-    const auto before = ssg::decode_text(fixture("utf8-lf"));
-    const auto after = ssg::decode_text(fixture("utf8-bom-crlf"));
-    const auto before_view = ssg::make_text_encoding_view_state(*before.text);
-    const auto after_view = ssg::make_text_encoding_view_state(*after.text);
-    const auto delta = ssg::derive_text_encoding_delta(before_view, after_view);
+    const auto before = ssg::decodeText(fixture("utf8-lf"));
+    const auto after = ssg::decodeText(fixture("utf8-bom-crlf"));
+    const auto before_view = ssg::makeTextEncodingViewState(*before.text);
+    const auto after_view = ssg::makeTextEncodingViewState(*after.text);
+    const auto delta = ssg::deriveTextEncodingDelta(before_view, after_view);
     ASSERT_TRUE(delta.has_value());
     ASSERT_EQ(delta->before, before_view);
     ASSERT_EQ(delta->after, after_view);
-    ASSERT_FALSE(ssg::derive_text_encoding_delta(after_view, after_view).has_value());
+    ASSERT_FALSE(ssg::deriveTextEncodingDelta(after_view, after_view).has_value());
 }
 
 } // namespace
@@ -187,10 +187,10 @@ namespace {
 
 ssg::DecodeTextResult decode(std::initializer_list<std::uint8_t> values) {
     const std::vector<std::uint8_t> buffer{values};
-    return ssg::decode_text(buffer);
+    return ssg::decodeText(buffer);
 }
 
-TEST(fused_decode_records_every_line_terminator) {
+TEST(fusedDecodeRecordsEveryLineTerminator) {
     const auto lone_cr = decode({'a', 0x0d, 'b'});
     ASSERT_TRUE(lone_cr.accepted());
     ASSERT_EQ(lone_cr.text->utf8, std::string{"a\nb"});
@@ -228,7 +228,7 @@ TEST(fused_decode_records_every_line_terminator) {
               bytes({0xce, 0xb2, 0x0a}));
 }
 
-TEST(fused_decode_preserves_malformed_offsets) {
+TEST(fusedDecodePreservesMalformedOffsets) {
     // invalid lead byte (0xC0 < 0xC2) at offset 2.
     const auto lead = decode({'a', 'b', 0xc0});
     ASSERT_FALSE(lead.accepted());
@@ -269,15 +269,15 @@ TEST(fused_decode_preserves_malformed_offsets) {
 } // namespace
 
 int main() {
-    RUN(auto_detects_utf8_and_preserves_lf_and_final_newline);
-    RUN(auto_detects_utf8_bom_and_preserves_crlf_without_final_newline);
-    RUN(round_trips_utf16_endianness_bom_and_mixed_endings);
-    RUN(manual_single_byte_decodes_are_byte_exact);
-    RUN(refuses_invalid_input_without_replacement);
-    RUN(refuses_lossy_single_byte_encoding_at_the_offending_offset);
-    RUN(normalizes_requested_endings_and_applies_final_newline_policy);
-    RUN(exports_exact_immutable_command_set_and_typed_view_delta);
-    RUN(fused_decode_records_every_line_terminator);
-    RUN(fused_decode_preserves_malformed_offsets);
+    RUN(autoDetectsUtf8AndPreservesLfAndFinalNewline);
+    RUN(autoDetectsUtf8BomAndPreservesCrlfWithoutFinalNewline);
+    RUN(roundTripsUtf16EndiannessBomAndMixedEndings);
+    RUN(manualSingleByteDecodesAreByteExact);
+    RUN(refusesInvalidInputWithoutReplacement);
+    RUN(refusesLossySingleByteEncodingAtTheOffendingOffset);
+    RUN(normalizesRequestedEndingsAndAppliesFinalNewlinePolicy);
+    RUN(exportsExactImmutableCommandSetAndTypedViewDelta);
+    RUN(fusedDecodeRecordsEveryLineTerminator);
+    RUN(fusedDecodePreservesMalformedOffsets);
     return failed == 0 ? 0 : 1;
 }

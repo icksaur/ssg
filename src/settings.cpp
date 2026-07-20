@@ -66,7 +66,7 @@ constexpr std::array<std::string_view, setting_key_count> key_names{
     "typing_coalescing_ms",
 };
 
-SettingValue default_value(SettingKey key) {
+SettingValue defaultValue(SettingKey key) {
     switch (key) {
     case SettingKey::IndentWidth: return std::uint32_t{4};
     case SettingKey::IndentStyle: return IndentStyle::Spaces;
@@ -159,7 +159,7 @@ std::optional<SettingError> validate(SettingKey key, const SettingValue& value) 
     throw std::logic_error("unknown setting key");
 }
 
-std::string encode_string(std::string_view value) {
+std::string encodeString(std::string_view value) {
     constexpr char hex[] = "0123456789ABCDEF";
     std::string encoded;
     for (const unsigned char byte : value) {
@@ -178,14 +178,14 @@ std::string encode_string(std::string_view value) {
     return encoded;
 }
 
-int hex_value(char value) noexcept {
+int hexValue(char value) noexcept {
     if (value >= '0' && value <= '9') return value - '0';
     if (value >= 'A' && value <= 'F') return value - 'A' + 10;
     if (value >= 'a' && value <= 'f') return value - 'a' + 10;
     return -1;
 }
 
-std::optional<std::string> decode_string(std::string_view value) {
+std::optional<std::string> decodeString(std::string_view value) {
     std::string decoded;
     for (std::size_t i = 0; i < value.size(); ++i) {
         if (value[i] != '%') {
@@ -193,8 +193,8 @@ std::optional<std::string> decode_string(std::string_view value) {
             continue;
         }
         if (i + 2 >= value.size()) return std::nullopt;
-        const int high = hex_value(value[i + 1]);
-        const int low = hex_value(value[i + 2]);
+        const int high = hexValue(value[i + 1]);
+        const int low = hexValue(value[i + 2]);
         if (high < 0 || low < 0) return std::nullopt;
         decoded.push_back(static_cast<char>((high << 4) | low));
         i += 2;
@@ -203,7 +203,7 @@ std::optional<std::string> decode_string(std::string_view value) {
 }
 
 template <class Integer>
-std::optional<Integer> parse_integer(std::string_view value) {
+std::optional<Integer> parseInteger(std::string_view value) {
     Integer result{};
     const auto [end, error] =
         std::from_chars(value.data(), value.data() + value.size(), result);
@@ -211,7 +211,7 @@ std::optional<Integer> parse_integer(std::string_view value) {
     return result;
 }
 
-std::string encode_value(const SettingValue& value) {
+std::string encodeValue(const SettingValue& value) {
     if (const auto* boolean = std::get_if<bool>(&value)) {
         return *boolean ? "b:1" : "b:0";
     }
@@ -237,10 +237,10 @@ std::string encode_value(const SettingValue& value) {
             "utf8", "utf8_bom", "utf16le", "utf16be", "windows1252", "iso88591"};
         return "encoding:" + std::string{names[static_cast<std::size_t>(*encoding)]};
     }
-    return "s:" + encode_string(std::get<std::string>(value));
+    return "s:" + encodeString(std::get<std::string>(value));
 }
 
-std::optional<SettingValue> decode_value(std::string_view encoded) {
+std::optional<SettingValue> decodeValue(std::string_view encoded) {
     const auto separator = encoded.find(':');
     if (separator == std::string_view::npos) return std::nullopt;
     const auto type = encoded.substr(0, separator);
@@ -251,12 +251,12 @@ std::optional<SettingValue> decode_value(std::string_view encoded) {
         return std::nullopt;
     }
     if (type == "u32") {
-        const auto parsed = parse_integer<std::uint32_t>(value);
+        const auto parsed = parseInteger<std::uint32_t>(value);
         if (parsed) return SettingValue{*parsed};
         return std::nullopt;
     }
     if (type == "u64") {
-        const auto parsed = parse_integer<std::uint64_t>(value);
+        const auto parsed = parseInteger<std::uint64_t>(value);
         if (parsed) return SettingValue{*parsed};
         return std::nullopt;
     }
@@ -281,20 +281,20 @@ std::optional<SettingValue> decode_value(std::string_view encoded) {
         return std::nullopt;
     }
     if (type == "s") {
-        const auto decoded = decode_string(value);
+        const auto decoded = decodeString(value);
         if (decoded) return SettingValue{*decoded};
     }
     return std::nullopt;
 }
 
-std::optional<SettingKey> key_from_name(std::string_view name) {
+std::optional<SettingKey> keyFromName(std::string_view name) {
     for (const auto key : all_keys) {
         if (key_names[index(key)] == name) return key;
     }
     return std::nullopt;
 }
 
-std::optional<std::string> read_if_present(const std::filesystem::path& path,
+std::optional<std::string> readIfPresent(const std::filesystem::path& path,
                                            std::string& error) {
     std::error_code exists_error;
     if (!std::filesystem::exists(path, exists_error)) {
@@ -310,10 +310,10 @@ std::optional<std::string> read_if_present(const std::filesystem::path& path,
                        std::istreambuf_iterator<char>()};
 }
 
-void write_document(const std::filesystem::path& path, std::string_view document) {
+void writeDocument(const std::filesystem::path& path, std::string_view document) {
     std::filesystem::create_directories(path.parent_path());
     const auto bytes = std::as_bytes(std::span{document.data(), document.size()});
-    replace_file_atomically(path, bytes);
+    replaceFileAtomically(path, bytes);
 }
 
 } // namespace
@@ -326,7 +326,7 @@ const SettingViewEntry* SettingsViewState::find(SettingKey key) const noexcept {
 
 SettingsModel::SettingsModel() {
     for (const auto key : all_keys) {
-        scopes_[index(SettingScope::Defaults)].values[index(key)] = default_value(key);
+        scopes_[index(SettingScope::Defaults)].values[index(key)] = defaultValue(key);
     }
 }
 
@@ -340,14 +340,14 @@ EffectiveSetting SettingsModel::resolve(SettingKey key) const {
     throw std::logic_error("setting defaults are incomplete");
 }
 
-std::optional<SettingValue> SettingsModel::scoped_value(
+std::optional<SettingValue> SettingsModel::scopedValue(
     SettingScope scope, SettingKey key) const {
     if (!valid(scope)) throw std::invalid_argument("setting scope is not recognized");
     if (!valid(key)) throw std::invalid_argument("setting key is not recognized");
     return scopes_[index(scope)].values[index(key)];
 }
 
-SettingsViewState SettingsModel::view_state() const {
+SettingsViewState SettingsModel::viewState() const {
     SettingsViewState state;
     for (const auto key : all_keys) {
         state.entries[index(key)] = {key, resolve(key)};
@@ -447,7 +447,7 @@ SettingMutation SettingsModel::apply(const SettingCompensation& compensation) {
                                 generation}};
 }
 
-std::string SettingsModel::export_scope(SettingScope scope) const {
+std::string SettingsModel::exportScope(SettingScope scope) const {
     if (!valid(scope)) throw std::invalid_argument("setting scope is not recognized");
     std::string document{"schema=1\n"};
     const auto& data = scopes_[index(scope)];
@@ -456,7 +456,7 @@ std::string SettingsModel::export_scope(SettingScope scope) const {
         if (value) {
             document += key_names[index(key)];
             document += '=';
-            document += encode_value(*value);
+            document += encodeValue(*value);
             document += '\n';
         }
     }
@@ -467,7 +467,7 @@ std::string SettingsModel::export_scope(SettingScope scope) const {
     return document;
 }
 
-SettingsIoResult SettingsModel::import_scope(
+SettingsIoResult SettingsModel::importScope(
     SettingScope scope, std::string_view document) {
     if (!valid(scope)) return {false, "setting scope is not recognized"};
     if (scope == SettingScope::Defaults) {
@@ -493,14 +493,14 @@ SettingsIoResult SettingsModel::import_scope(
             return {false, "settings record is missing '='"};
         }
         const auto name = line.substr(0, separator);
-        const auto key = key_from_name(name);
+        const auto key = keyFromName(name);
         if (!key) {
             parsed.unknown_fields.emplace_back(line);
             continue;
         }
         auto& slot = parsed.values[index(*key)];
         if (slot) return {false, "duplicate setting key: " + std::string{name}};
-        const auto value = decode_value(line.substr(separator + 1));
+        const auto value = decodeValue(line.substr(separator + 1));
         if (!value) return {false, "invalid encoded value for setting: " + std::string{name}};
         if (const auto error = validate(*key, *value)) return {false, error->message};
         slot = *value;
@@ -524,16 +524,16 @@ SettingsPersistence::SettingsPersistence(SettingsPaths paths)
 SettingsIoResult SettingsPersistence::load(SettingsModel& settings) const {
     SettingsModel candidate = settings;
     std::string error;
-    const auto user = read_if_present(paths_.user_file, error);
+    const auto user = readIfPresent(paths_.user_file, error);
     if (!error.empty()) return {false, error};
     if (user) {
-        const auto result = candidate.import_scope(SettingScope::User, *user);
+        const auto result = candidate.importScope(SettingScope::User, *user);
         if (!result.ok) return result;
     }
-    const auto workspace = read_if_present(paths_.workspace_file, error);
+    const auto workspace = readIfPresent(paths_.workspace_file, error);
     if (!error.empty()) return {false, error};
     if (workspace) {
-        const auto result = candidate.import_scope(SettingScope::Workspace, *workspace);
+        const auto result = candidate.importScope(SettingScope::Workspace, *workspace);
         if (!result.ok) return result;
     }
     settings = std::move(candidate);
@@ -542,9 +542,9 @@ SettingsIoResult SettingsPersistence::load(SettingsModel& settings) const {
 
 SettingsIoResult SettingsPersistence::save(const SettingsModel& settings) const {
     try {
-        write_document(paths_.user_file, settings.export_scope(SettingScope::User));
-        write_document(paths_.workspace_file,
-                       settings.export_scope(SettingScope::Workspace));
+        writeDocument(paths_.user_file, settings.exportScope(SettingScope::User));
+        writeDocument(paths_.workspace_file,
+                       settings.exportScope(SettingScope::Workspace));
         return {};
     } catch (const std::exception& error) {
         return {false, error.what()};

@@ -104,10 +104,10 @@ public:
     void next() noexcept;
     void previous() noexcept;
     void dismiss() noexcept;
-    [[nodiscard]] StatusActionResult invoke_action(
+    [[nodiscard]] StatusActionResult invokeAction(
         const StatusActionInvocation& invocation) const;
-    [[nodiscard]] StatusViewState view_state() const;
-    [[nodiscard]] StatusFooterProjection footer_projection() const;
+    [[nodiscard]] StatusViewState viewState() const;
+    [[nodiscard]] StatusFooterProjection footerProjection() const;
 
 private:
     struct Entry {
@@ -134,7 +134,7 @@ struct PromptStatusDelta {
                            const PromptStatusDelta&) = default;
 };
 
-[[nodiscard]] PromptStatusDelta derive_prompt_status_delta(
+[[nodiscard]] PromptStatusDelta derivePromptStatusDelta(
     const PromptStatusViewState& before, const PromptStatusViewState& after);
 
 } // namespace ssg

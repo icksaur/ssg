@@ -63,7 +63,7 @@ struct GcbRange {
 
 // Binary search: true when cp falls in any URange range in ranges[0..n).
 // Requires ranges to be sorted by lo and non-overlapping.
-static bool in_ranges(const URange* ranges, int n, uint32_t cp) noexcept {
+static bool inRanges(const URange* ranges, int n, uint32_t cp) noexcept {
     int lo = 0, hi = n - 1;
     while (lo <= hi) {
         int mid = (lo + hi) >> 1;
@@ -75,7 +75,7 @@ static bool in_ranges(const URange* ranges, int n, uint32_t cp) noexcept {
 }
 
 // Binary search in a sorted GcbRange array; returns Other if not found.
-static GcbProp gcb_lookup(const GcbRange* ranges, int n, uint32_t cp) noexcept {
+static GcbProp gcbLookup(const GcbRange* ranges, int n, uint32_t cp) noexcept {
     int lo = 0, hi = n - 1;
     while (lo <= hi) {
         int mid = (lo + hi) >> 1;
@@ -1182,34 +1182,34 @@ static constexpr int k_gcb_n =
     static_cast<int>(sizeof(k_gcb) / sizeof(k_gcb[0]));
 
 // EAW=W or EAW=F: code point occupies 2 terminal columns by East Asian Width.
-static bool is_eaw_wide(uint32_t cp) noexcept {
-    return in_ranges(k_wide, k_wide_n, cp);
+static bool isEawWide(uint32_t cp) noexcept {
+    return inRanges(k_wide, k_wide_n, cp);
 }
 
 // Emoji_Presentation=Yes: code point defaults to emoji presentation (2 cells).
 // Covers all Emoji_Presentation characters, including Regional Indicators
 // (U+1F1E6..U+1F1FF) which have EAW=N but are visually 2 cells.
-static bool is_emoji_pres(uint32_t cp) noexcept {
-    return in_ranges(k_emoji_pres, k_emoji_pres_n, cp);
+static bool isEmojiPres(uint32_t cp) noexcept {
+    return inRanges(k_emoji_pres, k_emoji_pres_n, cp);
 }
 
 // Emoji=Yes: code point is in the Unicode Emoji property set.
 // Used to detect emoji presentation sequences (Emoji + U+FE0F → 2 cells).
-static bool is_emoji(uint32_t cp) noexcept {
-    return in_ranges(k_emoji, k_emoji_n, cp);
+static bool isEmoji(uint32_t cp) noexcept {
+    return inRanges(k_emoji, k_emoji_n, cp);
 }
 
-static bool is_extended_pictographic(uint32_t cp) noexcept {
-    return in_ranges(k_extpic, k_extpic_n, cp);
+static bool isExtendedPictographic(uint32_t cp) noexcept {
+    return inRanges(k_extpic, k_extpic_n, cp);
 }
 
 // Returns the GCB property of cp per GraphemeBreakProperty.txt.
 // LV syllables (cp in AC00..D7A3 where (cp-AC00)%28==0) and LVT syllables
 // ((cp-AC00)%28!=0) are computed directly; all others use the k_gcb table.
-static GcbProp gcb_prop_of(uint32_t cp) noexcept {
+static GcbProp gcbPropOf(uint32_t cp) noexcept {
     if (cp >= 0xAC00u && cp <= 0xD7A3u)
         return ((cp - 0xAC00u) % 28u == 0u) ? GcbProp::LV : GcbProp::LVT;
-    return gcb_lookup(k_gcb, k_gcb_n, cp);
+    return gcbLookup(k_gcb, k_gcb_n, cp);
 }
 
 // Returns the display width of a code point when it is the base of a new
@@ -1226,10 +1226,10 @@ static GcbProp gcb_prop_of(uint32_t cp) noexcept {
 //   Emoji_Presentation=No) is applied in compute_cell_run() after absorption,
 //   not here, because it depends on whether U+FE0F was absorbed into the cluster.
 // NOTE: Control/CR/LF are short-circuited before this function in compute_cell_run.
-static uint32_t display_width_of(uint32_t cp, GcbProp gcb) noexcept {
+static uint32_t displayWidthOf(uint32_t cp, GcbProp gcb) noexcept {
     switch (gcb) {
     case GcbProp::Extend:
-        return (is_eaw_wide(cp) || is_emoji_pres(cp)) ? 2u : 0u;
+        return (isEawWide(cp) || isEmojiPres(cp)) ? 2u : 0u;
     case GcbProp::ZWJ:
     case GcbProp::SpacingMark:
     case GcbProp::Prepend:
@@ -1239,7 +1239,7 @@ static uint32_t display_width_of(uint32_t cp, GcbProp gcb) noexcept {
     case GcbProp::LF:
         return (cp <= 0x009Fu) ? 1u : 0u;
     default:
-        return (is_eaw_wide(cp) || is_emoji_pres(cp)) ? 2u : 1u;
+        return (isEawWide(cp) || isEmojiPres(cp)) ? 2u : 1u;
     }
 }
 
@@ -1247,7 +1247,7 @@ static uint32_t display_width_of(uint32_t cp, GcbProp gcb) noexcept {
 // whose most-recently-added non-Extend Hangul code point had type `last`.
 // Only the Hangul GCB types (L, V, T, LV, LVT) are meaningful; all other GcbProp
 // values return false so callers need not pre-filter.
-static bool hangul_extends(GcbProp last, GcbProp next) noexcept {
+static bool hangulExtends(GcbProp last, GcbProp next) noexcept {
     switch (last) {
     case GcbProp::L:
         // GB6: L × (L | V | LV | LVT)
@@ -1290,7 +1290,7 @@ struct DecodeResult {
 // leads, 0xE0 requiring second byte < 0xA0, 0xF0 requiring second byte <
 // 0x90), surrogates (0xED second byte >= 0xA0), out-of-range leads (> 0xF4),
 // and truncated sequences (not enough continuation bytes before end).
-static DecodeResult decode_utf8(const uint8_t* data,
+static DecodeResult decodeUtf8(const uint8_t* data,
                                 size_t pos,
                                 size_t end) noexcept {
     const uint8_t b0 = data[pos];
@@ -1336,7 +1336,7 @@ static DecodeResult decode_utf8(const uint8_t* data,
             4, true};
 }
 
-CellRun compute_cell_run(std::string_view line_utf8, int tab_width) {
+CellRun computeCellRun(std::string_view line_utf8, int tab_width) {
     if (tab_width < 1 || tab_width > 16) {
         throw std::invalid_argument("tab width must be between 1 and 16");
     }
@@ -1353,7 +1353,7 @@ CellRun compute_cell_run(std::string_view line_utf8, int tab_width) {
     while (pos < end) {
         const size_t cluster_start = pos;
 
-        const DecodeResult base = decode_utf8(data, pos, end);
+        const DecodeResult base = decodeUtf8(data, pos, end);
 
         if (!base.valid) {
             result.spans.push_back({
@@ -1381,7 +1381,7 @@ CellRun compute_cell_run(std::string_view line_utf8, int tab_width) {
             continue; // Tab is never extended
         }
 
-        const GcbProp gcb = gcb_prop_of(cp);
+        const GcbProp gcb = gcbPropOf(cp);
 
         // GCB=Control breaks as its own cluster.  C0/DEL/C1 (cp ≤ U+009F) are
         // visible replacement glyphs (width=1); non-C0/C1 GCB=Control are Unicode
@@ -1413,10 +1413,10 @@ CellRun compute_cell_run(std::string_view line_utf8, int tab_width) {
             // Wide Extend code points (e.g. emoji modifiers U+1F3FB–U+1F3FF, EAW=W)
             // render as 2-cell glyphs even without a base; those get kind=text.
             // Zero-width Extend/ZWJ/SpacingMark alone get kind=combining, width=0.
-            base_width = display_width_of(cp, gcb);
+            base_width = displayWidthOf(cp, gcb);
             kind       = (base_width == 0u) ? CellKind::Combining : CellKind::Text;
         } else {
-            base_width = display_width_of(cp, gcb);
+            base_width = displayWidthOf(cp, gcb);
             kind       = CellKind::Text;
         }
 
@@ -1427,7 +1427,7 @@ CellRun compute_cell_run(std::string_view line_utf8, int tab_width) {
         GcbProp last_gcb = gcb;
 
         uint32_t cluster_len = base.byte_len;
-        GB11State gb11 = is_extended_pictographic(cp)
+        GB11State gb11 = isExtendedPictographic(cp)
             ? GB11State::ExtPic
             : GB11State::None;
         bool ri_paired = false;
@@ -1437,11 +1437,11 @@ CellRun compute_cell_run(std::string_view line_utf8, int tab_width) {
         // Absorb extending code points into this grapheme cluster.
         // Rules are checked in UAX #29 priority order.
         while (pos < end) {
-            const DecodeResult ext = decode_utf8(data, pos, end);
+            const DecodeResult ext = decodeUtf8(data, pos, end);
             if (!ext.valid) break; // Invalid byte starts its own cluster
 
             const uint32_t ext_cp = ext.codepoint;
-            const GcbProp ext_gcb = gcb_prop_of(ext_cp);
+            const GcbProp ext_gcb = gcbPropOf(ext_cp);
             bool extends = false;
 
             if (ext_gcb == GcbProp::Extend || ext_gcb == GcbProp::ZWJ) {
@@ -1462,7 +1462,7 @@ CellRun compute_cell_run(std::string_view line_utf8, int tab_width) {
                 gb11     = GB11State::None; // SpacingMark breaks ExtPic chain
                 last_gcb = GcbProp::Other;
             } else if (gb11 == GB11State::Zwj &&
-                       is_extended_pictographic(ext_cp)) {
+                       isExtendedPictographic(ext_cp)) {
                 // GB11: ExtPic Extend* ZWJ × ExtPic
                 extends  = true;
                 gb11     = GB11State::ExtPic;
@@ -1474,7 +1474,7 @@ CellRun compute_cell_run(std::string_view line_utf8, int tab_width) {
                 ri_paired = true;
                 gb11      = GB11State::None;
                 last_gcb  = ext_gcb;
-            } else if (hangul_extends(last_gcb, ext_gcb)) {
+            } else if (hangulExtends(last_gcb, ext_gcb)) {
                 // GB6–GB8: Hangul jamo/syllable composition
                 extends  = true;
                 gb11     = GB11State::None;
@@ -1488,10 +1488,10 @@ CellRun compute_cell_run(std::string_view line_utf8, int tab_width) {
                 if (ext_gcb != GcbProp::Prepend) {
                     // Absorbed a real base: finalise cluster width.
                     effective_base_cp = ext_cp;
-                    base_width = display_width_of(ext_cp, ext_gcb);
+                    base_width = displayWidthOf(ext_cp, ext_gcb);
                     kind = (base_width == 0u)
                            ? CellKind::Combining : CellKind::Text;
-                    gb11 = is_extended_pictographic(ext_cp)
+                    gb11 = isExtendedPictographic(ext_cp)
                            ? GB11State::ExtPic : GB11State::None;
                 }
                 last_gcb = ext_gcb;
@@ -1505,7 +1505,7 @@ CellRun compute_cell_run(std::string_view line_utf8, int tab_width) {
         // VS-16 emoji presentation sequence upgrade:
         // If U+FE0F was absorbed and the effective base is an Emoji character
         // that did not already get 2 cells, upgrade to 2.
-        if (saw_vs16 && base_width < 2u && is_emoji(effective_base_cp)) {
+        if (saw_vs16 && base_width < 2u && isEmoji(effective_base_cp)) {
             base_width = 2u;
             kind = CellKind::Text;
         }
@@ -1523,7 +1523,7 @@ CellRun compute_cell_run(std::string_view line_utf8, int tab_width) {
     return result;
 }
 
-std::uint64_t cell_run_calls() { return g_cell_run_calls; }
-void reset_cell_run_calls() { g_cell_run_calls = 0; }
+std::uint64_t cellRunCalls() { return g_cell_run_calls; }
+void resetCellRunCalls() { g_cell_run_calls = 0; }
 
 }  // namespace ssg

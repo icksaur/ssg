@@ -14,7 +14,7 @@
 namespace ssg {
 namespace {
 
-std::vector<FindMatch> reference_literal(std::string_view text,
+std::vector<FindMatch> referenceLiteral(std::string_view text,
                                          std::string_view query,
                                          FindOptions options,
                                          std::optional<ByteRange> selection) {
@@ -145,7 +145,7 @@ private:
     std::vector<WorkspaceFile> files_;
 };
 
-TEST(literal_case_word_and_selection_match_independent_oracle) {
+TEST(literalCaseWordAndSelectionMatchIndependentOracle) {
     const std::vector<std::string> texts = {
         "", "a", "Aa aA", "cat scatter cat_cat cat", "na\xC3\xAFve na"};
     const std::vector<std::string> queries = {"a", "A", "cat", "na"};
@@ -156,16 +156,16 @@ TEST(literal_case_word_and_selection_match_independent_oracle) {
                     FindOptions options{case_sensitive, whole_word, false, false};
                     FindRequest request{query, options, std::nullopt, 100000,
                                         nullptr};
-                    ASSERT_EQ(find_matches(text, request).matches,
-                              reference_literal(text, query, options,
+                    ASSERT_EQ(findMatches(text, request).matches,
+                              referenceLiteral(text, query, options,
                                                 std::nullopt));
                     if (text.size() >= 2) {
                         request.options.selection_only = true;
                         request.selection =
                             ByteRange{ByteOffset{1},
                                       ByteOffset{text.size() - 1}};
-                        ASSERT_EQ(find_matches(text, request).matches,
-                                  reference_literal(text, query, options,
+                        ASSERT_EQ(findMatches(text, request).matches,
+                                  referenceLiteral(text, query, options,
                                                     request.selection));
                     }
                 }
@@ -174,73 +174,73 @@ TEST(literal_case_word_and_selection_match_independent_oracle) {
     }
 }
 
-TEST(regex_oracle_covers_grammar_case_word_and_invalid_pattern) {
+TEST(regexOracleCoversGrammarCaseWordAndInvalidPattern) {
     FindRequest request{"(ab|cd)+", FindOptions{true, false, true, false},
                         std::nullopt, 100000, nullptr};
-    ASSERT_EQ(find_matches("xxabcdcd yy ab", request).matches,
+    ASSERT_EQ(findMatches("xxabcdcd yy ab", request).matches,
               (std::vector<FindMatch>{{ByteOffset{2}, ByteOffset{8}},
                                       {ByteOffset{12}, ByteOffset{14}}}));
 
     request.query = "h[ae]llo";
     request.options.case_sensitive = false;
-    ASSERT_EQ(find_matches("HELLO hallo hxllo", request).matches,
+    ASSERT_EQ(findMatches("HELLO hallo hxllo", request).matches,
               (std::vector<FindMatch>{{ByteOffset{0}, ByteOffset{5}},
                                       {ByteOffset{6}, ByteOffset{11}}}));
 
     request.query = "cat";
     request.options.whole_word = true;
-    ASSERT_EQ(find_matches("cat scatter cat", request).matches,
+    ASSERT_EQ(findMatches("cat scatter cat", request).matches,
               (std::vector<FindMatch>{{ByteOffset{0}, ByteOffset{3}},
                                       {ByteOffset{12}, ByteOffset{15}}}));
 
     request.query = "a-?";
-    ASSERT_EQ(find_matches("a-b", request).matches,
+    ASSERT_EQ(findMatches("a-b", request).matches,
               (std::vector<FindMatch>{{ByteOffset{0}, ByteOffset{1}}}));
 
     request.query.clear();
-    ASSERT_TRUE(find_matches("abc", request).matches.empty());
+    ASSERT_TRUE(findMatches("abc", request).matches.empty());
 
     request.query = "(unterminated";
-    ASSERT_EQ(find_matches("text", request).error,
+    ASSERT_EQ(findMatches("text", request).error,
               FindReplaceError::InvalidPattern);
 }
 
-TEST(zero_width_advances_one_unicode_scalar_and_budget_cancels) {
+TEST(zeroWidthAdvancesOneUnicodeScalarAndBudgetCancels) {
     FindRequest request{"a*", FindOptions{true, false, true, false},
                         std::nullopt, 100000, nullptr};
-    ASSERT_EQ(find_matches("a\xC3\xA9", request).matches,
+    ASSERT_EQ(findMatches("a\xC3\xA9", request).matches,
               (std::vector<FindMatch>{{ByteOffset{0}, ByteOffset{1}},
                                       {ByteOffset{1}, ByteOffset{1}},
                                       {ByteOffset{3}, ByteOffset{3}}}));
 
     request.query = "(a|aa)*b";
     request.work_budget = 1;
-    ASSERT_EQ(find_matches(std::string(200, 'a'), request).error,
+    ASSERT_EQ(findMatches(std::string(200, 'a'), request).error,
               FindReplaceError::BudgetExhausted);
 
     request.query = "z";
     request.options.regex = false;
     request.work_budget = 3;
-    ASSERT_EQ(find_matches("aaaaaaaa", request).error,
+    ASSERT_EQ(findMatches("aaaaaaaa", request).error,
               FindReplaceError::BudgetExhausted);
 
     std::atomic_bool cancelled{true};
     request.work_budget = 100000;
     request.cancelled = &cancelled;
-    ASSERT_EQ(find_matches("ab", request).error,
+    ASSERT_EQ(findMatches("ab", request).error,
               FindReplaceError::Cancelled);
 }
 
-TEST(current_replace_is_atomic_one_undo_unit_and_stale_safe) {
+TEST(currentReplaceIsAtomicOneUndoUnitAndStaleSafe) {
     Document document{"one two one"};
     DocumentHistory history;
     FindReplaceController controller;
     controller.open(document.snapshot(),
                     FindRequest{"one", {}, std::nullopt, 100000, nullptr});
-    ASSERT_EQ(controller.view_state().matches.size(), std::size_t{2});
+    ASSERT_EQ(controller.viewState().matches.size(), std::size_t{2});
     controller.next();
     auto replaced =
-        controller.replace_current(document, history, caret(0), caret(9), "1",
+        controller.replaceCurrent(document, history, caret(0), caret(9), "1",
                                    10);
     ASSERT_TRUE(replaced.accepted());
     ASSERT_EQ(document.snapshot().text, std::string{"one two 1"});
@@ -254,7 +254,7 @@ TEST(current_replace_is_atomic_one_undo_unit_and_stale_safe) {
 
     controller.refresh(document.snapshot(), std::nullopt);
     auto all =
-        controller.replace_all(document, history, caret(0), caret(7), "1", 20);
+        controller.replaceAll(document, history, caret(0), caret(7), "1", 20);
     ASSERT_TRUE(all.accepted());
     ASSERT_EQ(document.snapshot().text, std::string{"1 two 1"});
     ASSERT_TRUE(history.undo(document).accepted());
@@ -267,18 +267,18 @@ TEST(current_replace_is_atomic_one_undo_unit_and_stale_safe) {
     ASSERT_TRUE(external.accepted());
     const auto before = document.snapshot();
     auto stale =
-        controller.replace_all(document, history, caret(0), caret(12), "z", 30);
+        controller.replaceAll(document, history, caret(0), caret(12), "z", 30);
     ASSERT_EQ(stale.error, FindReplaceError::StaleRevision);
     ASSERT_EQ(document.snapshot(), before);
 }
 
-TEST(workspace_preview_apply_recover_and_failures_round_trip) {
+TEST(workspacePreviewApplyRecoverAndFailuresRoundTrip) {
     MemoryWorkspace workspace{{{"a.txt", "cat cat"},
                                {"b.txt", "dog cat"},
                                {"c.txt", "none"}}};
     FindRequest request{"cat", {}, std::nullopt, 100000, nullptr};
     auto preview =
-        preview_workspace_replace(workspace, workspace.revision(), request, "x");
+        previewWorkspaceReplace(workspace, workspace.revision(), request, "x");
     ASSERT_TRUE(preview.accepted());
     ASSERT_EQ(preview.preview->changes.size(), std::size_t{2});
     ASSERT_EQ(preview.preview->changes[0].after, std::string{"x x"});
@@ -286,25 +286,25 @@ TEST(workspace_preview_apply_recover_and_failures_round_trip) {
     RecordingSink rejecting;
     rejecting.accept = false;
     const auto original = workspace.files();
-    auto rejected = apply_workspace_replace(workspace, *preview.preview, rejecting);
+    auto rejected = applyWorkspaceReplace(workspace, *preview.preview, rejecting);
     ASSERT_EQ(rejected.error, FindReplaceError::RecoveryRejected);
     ASSERT_EQ(workspace.files(), original);
 
     RecordingSink sink;
-    auto applied = apply_workspace_replace(workspace, *preview.preview, sink);
+    auto applied = applyWorkspaceReplace(workspace, *preview.preview, sink);
     ASSERT_TRUE(applied.accepted());
     ASSERT_TRUE(sink.record.has_value());
     ASSERT_EQ(workspace.files()[0].text, std::string{"x x"});
-    ASSERT_TRUE(recover_workspace_replace(workspace, *sink.record).accepted());
+    ASSERT_TRUE(recoverWorkspaceReplace(workspace, *sink.record).accepted());
     ASSERT_EQ(workspace.files(), original);
 
-    auto stale = apply_workspace_replace(workspace, *preview.preview, sink);
+    auto stale = applyWorkspaceReplace(workspace, *preview.preview, sink);
     ASSERT_EQ(stale.error, FindReplaceError::StaleRevision);
     ASSERT_EQ(workspace.files(), original);
 }
 
-TEST(view_delta_replay_and_command_exports_are_exact) {
-    const auto commands = find_replace_command_set();
+TEST(viewDeltaReplayAndCommandExportsAreExact) {
+    const auto commands = findReplaceCommandSet();
     ASSERT_EQ(commands.descriptors().size(), std::size_t{15});
     ASSERT_EQ(commands.descriptors().front().id, std::string_view{"find.open"});
     ASSERT_EQ(commands.descriptors().back().id,
@@ -312,23 +312,23 @@ TEST(view_delta_replay_and_command_exports_are_exact) {
 
     Document document{"alpha alpha"};
     FindReplaceController controller;
-    const auto closed = controller.view_state();
+    const auto closed = controller.viewState();
     controller.open(document.snapshot(),
                     FindRequest{"alpha", {}, std::nullopt, 100000, nullptr});
-    const auto open = controller.view_state();
+    const auto open = controller.viewState();
     ASSERT_FALSE(open.replace_mode);
-    controller.toggle_case(document.snapshot());
-    ASSERT_TRUE(controller.view_state().options.case_sensitive);
-    controller.update_query(document.snapshot(), "ALPHA", std::nullopt);
-    ASSERT_EQ(controller.view_state().matches.size(), std::size_t{0});
-    controller.open_replace(
+    controller.toggleCase(document.snapshot());
+    ASSERT_TRUE(controller.viewState().options.case_sensitive);
+    controller.updateQuery(document.snapshot(), "ALPHA", std::nullopt);
+    ASSERT_EQ(controller.viewState().matches.size(), std::size_t{0});
+    controller.openReplace(
         document.snapshot(),
         FindRequest{"alpha", {}, std::nullopt, 100000, nullptr});
-    ASSERT_TRUE(controller.view_state().replace_mode);
-    const auto delta = derive_find_replace_delta(closed, open);
+    ASSERT_TRUE(controller.viewState().replace_mode);
+    const auto delta = deriveFindReplaceDelta(closed, open);
     ASSERT_TRUE(delta.changed);
-    ASSERT_EQ(replay_find_replace_delta(closed, delta).state, open);
-    ASSERT_EQ(replay_find_replace_delta(open, delta).error,
+    ASSERT_EQ(replayFindReplaceDelta(closed, delta).state, open);
+    ASSERT_EQ(replayFindReplaceDelta(open, delta).error,
               FindReplaceReplayError::BaseMismatch);
 }
 
@@ -336,12 +336,12 @@ TEST(view_delta_replay_and_command_exports_are_exact) {
 }  // namespace ssg
 
 int main() {
-    RUN(ssg::literal_case_word_and_selection_match_independent_oracle);
-    RUN(ssg::regex_oracle_covers_grammar_case_word_and_invalid_pattern);
-    RUN(ssg::zero_width_advances_one_unicode_scalar_and_budget_cancels);
-    RUN(ssg::current_replace_is_atomic_one_undo_unit_and_stale_safe);
-    RUN(ssg::workspace_preview_apply_recover_and_failures_round_trip);
-    RUN(ssg::view_delta_replay_and_command_exports_are_exact);
+    RUN(ssg::literalCaseWordAndSelectionMatchIndependentOracle);
+    RUN(ssg::regexOracleCoversGrammarCaseWordAndInvalidPattern);
+    RUN(ssg::zeroWidthAdvancesOneUnicodeScalarAndBudgetCancels);
+    RUN(ssg::currentReplaceIsAtomicOneUndoUnitAndStaleSafe);
+    RUN(ssg::workspacePreviewApplyRecoverAndFailuresRoundTrip);
+    RUN(ssg::viewDeltaReplayAndCommandExportsAreExact);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

@@ -72,7 +72,7 @@ std::string encode_ansi_frame(ssg::CellGrid const& screen, ssg::ColorDepth depth
     // ('9'/'10' -> 90/100) prefix.
     auto color = [&](std::uint8_t index, char kind) -> std::string {
         auto const& c = screen.palette[std::min<std::size_t>(index, max_index)];
-        auto const resolved = ssg::resolve_color(c, depth);
+        auto const resolved = ssg::resolveColor(c, depth);
         switch (resolved.encoding) {
             case ssg::ResolvedColor::Encoding::Truecolor:
                 return "\x1b[" + std::string{kind} + "8;2;" +
@@ -123,7 +123,7 @@ namespace {
 // The accumulator saturates at a safe bound so a maliciously long parameter
 // cannot overflow the signed integer (undefined behavior); all digits are still
 // consumed so `pos` (and the caller's `consumed`) stays correct.
-std::int64_t parse_decimal(std::string_view text, std::size_t& pos) {
+std::int64_t parseDecimal(std::string_view text, std::size_t& pos) {
     constexpr std::int64_t saturation = 1'000'000'000;
     std::int64_t value = 0;
     while (pos < text.size() && text[pos] >= '0' && text[pos] <= '9') {
@@ -136,7 +136,7 @@ std::int64_t parse_decimal(std::string_view text, std::size_t& pos) {
 // The named KeyStroke code for a single printable ASCII byte, or "" if the byte
 // has no keycode we bind or route as a chord.  Letters fold to KeyA..KeyZ with a
 // shift flag; the code carries no shift itself (the caller sets it).
-std::string ascii_key_code(unsigned char byte) {
+std::string asciiKeyCode(unsigned char byte) {
     if (byte >= 'a' && byte <= 'z') return std::string{"Key"} + static_cast<char>(byte - 'a' + 'A');
     if (byte >= 'A' && byte <= 'Z') return std::string{"Key"} + static_cast<char>(byte);
     if (byte >= '0' && byte <= '9') return std::string{"Digit"} + static_cast<char>(byte);
@@ -159,7 +159,7 @@ std::string ascii_key_code(unsigned char byte) {
 
 // Length of the UTF-8 sequence introduced by `lead`, or 0 for a continuation or
 // invalid lead byte.
-std::size_t utf8_length(unsigned char lead) {
+std::size_t utf8Length(unsigned char lead) {
     if (lead < 0x80) return 1;
     if (lead >= 0xF0) return 4;
     if (lead >= 0xE0) return 3;
@@ -218,7 +218,7 @@ Decoded decode_input(std::string_view bytes, bool input_exhausted,
                 return {DecodeStatus::none, {}, {}, 0};
             }
             std::size_t pos = 4;
-            auto const modifier = parse_decimal(bytes, pos);
+            auto const modifier = parseDecimal(bytes, pos);
             if (pos == 4 || pos >= bytes.size()) {
                 return {DecodeStatus::incomplete, {}, {}, 0};  // Await digits/final.
             }
@@ -269,7 +269,7 @@ Decoded decode_input(std::string_view bytes, bool input_exhausted,
                 return {DecodeStatus::none, {}, {}, 0};
             }
             std::size_t pos = 4;
-            auto const modifier = parse_decimal(bytes, pos);
+            auto const modifier = parseDecimal(bytes, pos);
             if (pos == 4 || pos >= bytes.size()) {
                 return {DecodeStatus::incomplete, {}, {}, 0};  // Await digits/final.
             }
@@ -304,7 +304,7 @@ Decoded decode_input(std::string_view bytes, bool input_exhausted,
             // dispatching a command from garbage bytes.
             auto parse_field = [&](std::int64_t& out) {
                 std::size_t const start = pos;
-                out = parse_decimal(bytes, pos);
+                out = parseDecimal(bytes, pos);
                 return pos > start;
             };
             std::int64_t cb = 0;
@@ -361,7 +361,7 @@ Decoded decode_input(std::string_view bytes, bool input_exhausted,
         }
     }
     if (first >= 0x20) {
-        auto const length = utf8_length(first);
+        auto const length = utf8Length(first);
         if (length == 0) {
             consumed = 1;  // Stray UTF-8 continuation byte; skip.
             return {DecodeStatus::none, {}, {}, 0};
@@ -371,7 +371,7 @@ Decoded decode_input(std::string_view bytes, bool input_exhausted,
         consumed = length;
         ssg::KeyStroke stroke;
         if (length == 1) {
-            stroke.code = ascii_key_code(first);
+            stroke.code = asciiKeyCode(first);
             stroke.shift = first >= 'A' && first <= 'Z';
         }
         // A printable commits text and, when it has a keycode, also carries a

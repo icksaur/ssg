@@ -10,7 +10,7 @@
 
 namespace {
 
-std::filesystem::path unique_root() {
+std::filesystem::path uniqueRoot() {
     auto root = std::filesystem::current_path() / "runtime_navigation";
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
@@ -20,8 +20,8 @@ std::filesystem::path unique_root() {
     return root;
 }
 
-TEST(search_tree_diff_and_follow_sections_use_runtime_state) {
-    auto root = unique_root();
+TEST(searchTreeDiffAndFollowSectionsUseRuntimeState) {
+    auto root = uniqueRoot();
     auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
@@ -37,8 +37,8 @@ TEST(search_tree_diff_and_follow_sections_use_runtime_state) {
     ASSERT_EQ(snapshot->sections().follow_edits.mode, ssg::FollowMode::Paused);
 }
 
-TEST(palette_open_enters_prompt_focus_and_publishes_candidates) {
-    auto root = unique_root();
+TEST(paletteOpenEntersPromptFocusAndPublishesCandidates) {
+    auto root = uniqueRoot();
     auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
@@ -59,8 +59,8 @@ TEST(palette_open_enters_prompt_focus_and_publishes_candidates) {
     ASSERT_EQ(closed->sections().shell.focus, ssg::FocusTarget::Editor);
 }
 
-TEST(palette_execute_validates_candidate_membership) {
-    auto root = unique_root();
+TEST(paletteExecuteValidatesCandidateMembership) {
+    auto root = uniqueRoot();
     auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
@@ -82,8 +82,8 @@ TEST(palette_execute_validates_candidate_membership) {
     ASSERT_EQ(snapshot->sections().shell.focus, ssg::FocusTarget::Editor);
 }
 
-TEST(palette_candidates_carry_labels_and_key_detail) {
-    auto root = unique_root();
+TEST(paletteCandidatesCarryLabelsAndKeyDetail) {
+    auto root = uniqueRoot();
     auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
@@ -124,7 +124,7 @@ TEST(palette_candidates_carry_labels_and_key_detail) {
     if (unbound) ASSERT_TRUE(unbound->detail.empty());
 }
 
-TEST(tree_scrolls_to_keep_selection_visible_in_a_short_panel) {
+TEST(treeScrollsToKeepSelectionVisibleInAShortPanel) {
     auto root = std::filesystem::current_path() / "runtime_nav_treescroll";
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
@@ -206,7 +206,7 @@ TEST(tree_scrolls_to_keep_selection_visible_in_a_short_panel) {
     std::filesystem::remove_all(root);
 }
 
-TEST(tree_select_sets_selection_to_a_node_and_rejects_unknown_ids) {
+TEST(treeSelectSetsSelectionToANodeAndRejectsUnknownIds) {
     auto root = std::filesystem::current_path() / "runtime_nav_treeselect";
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
@@ -262,7 +262,7 @@ TEST(tree_select_sets_selection_to_a_node_and_rejects_unknown_ids) {
     std::filesystem::remove_all(root);
 }
 
-TEST(tree_select_focuses_the_panel_and_the_click_pair_nets_expected_focus) {
+TEST(treeSelectFocusesThePanelAndTheClickPairNetsExpectedFocus) {
     auto root = std::filesystem::current_path() / "runtime_nav_treefocus";
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace" / "dir");
@@ -320,7 +320,7 @@ TEST(tree_select_focuses_the_panel_and_the_click_pair_nets_expected_focus) {
     std::filesystem::remove_all(root);
 }
 
-TEST(tree_scroll_moves_the_viewport_without_moving_the_selection) {
+TEST(treeScrollMovesTheViewportWithoutMovingTheSelection) {
     auto root = std::filesystem::current_path() / "runtime_nav_treescroll_wheel";
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
@@ -395,7 +395,7 @@ namespace {
 // M12 VP-H: word-wrap-off horizontal caret reveal. A long line whose caret moves
 // past the pane width scrolls horizontally so the caret stays visible; returning
 // to the line start resets the offset. A short (fitting) line never scrolls.
-TEST(word_wrap_off_reveals_caret_horizontally) {
+TEST(wordWrapOffRevealsCaretHorizontally) {
     auto root = std::filesystem::current_path() / "runtime_hscroll";
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
@@ -450,7 +450,7 @@ TEST(word_wrap_off_reveals_caret_horizontally) {
 // multiple visual rows through the runtime — while word-wrap-OFF clips it to one
 // row and scrolls horizontally.  Locks both directions of the wrap gate so the
 // M12 projection can never silently disable wrapping.
-TEST(word_wrap_on_wraps_long_lines_off_clips_them) {
+TEST(wordWrapOnWrapsLongLinesOffClipsThem) {
     auto root = std::filesystem::current_path() / "runtime_wrap_gate";
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
@@ -513,7 +513,7 @@ TEST(word_wrap_on_wraps_long_lines_off_clips_them) {
 // segments only the visible + moved lines — bounded and INDEPENDENT of document
 // length — not the whole document. Proven by the compute_cell_run counter: the
 // per-move segmentation count is identical for a 50-line and a 20000-line file.
-TEST(word_wrap_off_navigation_is_viewport_bounded) {
+TEST(wordWrapOffNavigationIsViewportBounded) {
     auto root = std::filesystem::current_path() / "runtime_navbound";
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
@@ -541,13 +541,13 @@ TEST(word_wrap_off_navigation_is_viewport_bounded) {
         (void)runtime.dispatch(
             ssg::ClientId{1}, {"file.open", runtime.revision(), file});
         (void)runtime.snapshot(ssg::ClientId{1}, dims);  // prime pane cache
-        ssg::reset_cell_run_calls();
+        ssg::resetCellRunCalls();
         for (int i = 0; i < 4; ++i) {
             (void)runtime.dispatch(
                 ssg::ClientId{1},
                 {"cursor.line_down", runtime.revision(), {}});
         }
-        return ssg::cell_run_calls();
+        return ssg::cellRunCalls();
     };
 
     auto const small_calls = nav_segmentations("small.txt");
@@ -564,17 +564,17 @@ TEST(word_wrap_off_navigation_is_viewport_bounded) {
 } // namespace
 
 int main() {
-    RUN(search_tree_diff_and_follow_sections_use_runtime_state);
-    RUN(palette_open_enters_prompt_focus_and_publishes_candidates);
-    RUN(palette_execute_validates_candidate_membership);
-    RUN(palette_candidates_carry_labels_and_key_detail);
-    RUN(tree_scrolls_to_keep_selection_visible_in_a_short_panel);
-    RUN(tree_select_sets_selection_to_a_node_and_rejects_unknown_ids);
-    RUN(tree_scroll_moves_the_viewport_without_moving_the_selection);
-    RUN(tree_select_focuses_the_panel_and_the_click_pair_nets_expected_focus);
-    RUN(word_wrap_off_reveals_caret_horizontally);
-    RUN(word_wrap_on_wraps_long_lines_off_clips_them);
-    RUN(word_wrap_off_navigation_is_viewport_bounded);
+    RUN(searchTreeDiffAndFollowSectionsUseRuntimeState);
+    RUN(paletteOpenEntersPromptFocusAndPublishesCandidates);
+    RUN(paletteExecuteValidatesCandidateMembership);
+    RUN(paletteCandidatesCarryLabelsAndKeyDetail);
+    RUN(treeScrollsToKeepSelectionVisibleInAShortPanel);
+    RUN(treeSelectSetsSelectionToANodeAndRejectsUnknownIds);
+    RUN(treeScrollMovesTheViewportWithoutMovingTheSelection);
+    RUN(treeSelectFocusesThePanelAndTheClickPairNetsExpectedFocus);
+    RUN(wordWrapOffRevealsCaretHorizontally);
+    RUN(wordWrapOnWrapsLongLinesOffClipsThem);
+    RUN(wordWrapOffNavigationIsViewportBounded);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

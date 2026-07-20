@@ -59,20 +59,20 @@ std::vector<SyntaxMapping> syntax() {
     return result;
 }
 
-ssg::Theme valid_theme() {
+ssg::Theme validTheme() {
     const auto colors = palette();
     const auto role_mappings = roles();
     const auto syntax_mappings = syntax();
     return {"test", colors, role_mappings, syntax_mappings};
 }
 
-std::string read_file(const std::filesystem::path& path) {
+std::string readFile(const std::filesystem::path& path) {
     std::ifstream input(path, std::ios::binary);
     if (!input) throw std::runtime_error("failed to open fixture: " + path.string());
     return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
 }
 
-TEST(rejects_missing_duplicate_and_extra_palette_indices) {
+TEST(rejectsMissingDuplicateAndExtraPaletteIndices) {
     const auto role_mappings = roles();
     const auto syntax_mappings = syntax();
 
@@ -90,7 +90,7 @@ TEST(rejects_missing_duplicate_and_extra_palette_indices) {
                   std::invalid_argument);
 }
 
-TEST(requires_every_semantic_role_and_syntax_scope_exactly_once) {
+TEST(requiresEverySemanticRoleAndSyntaxScopeExactlyOnce) {
     const auto colors = palette();
     auto role_mappings = roles();
     auto syntax_mappings = syntax();
@@ -121,15 +121,15 @@ TEST(requires_every_semantic_role_and_syntax_scope_exactly_once) {
                   std::invalid_argument);
 }
 
-TEST(shared_fixture_roles_are_distinct_for_every_theme) {
-    const auto fixture = read_file(SSG_THEME_ROLES_PATH);
+TEST(sharedFixtureRolesAreDistinctForEveryTheme) {
+    const auto fixture = readFile(SSG_THEME_ROLES_PATH);
     const std::regex quoted_name{"\"([a-z_]+)\""};
     std::vector<SemanticRole> fixture_roles;
     for (std::sregex_iterator it(fixture.begin(), fixture.end(), quoted_name), end;
          it != end; ++it) {
         const auto name = (*it)[1].str();
         if (name == "co_visible_role_classes") continue;
-        const auto role = ssg::semantic_role_from_name(name);
+        const auto role = ssg::semanticRoleFromName(name);
         ASSERT_TRUE(role.has_value());
         fixture_roles.push_back(*role);
     }
@@ -151,9 +151,9 @@ TEST(shared_fixture_roles_are_distinct_for_every_theme) {
         ASSERT_TRUE(expected_pairs.contains({pair.first, pair.second}));
     }
 
-    const auto theme = valid_theme();
+    const auto theme = validTheme();
     for (const auto& pair : expected_pairs) {
-        ASSERT_NE(theme.index_for(pair.first), theme.index_for(pair.second));
+        ASSERT_NE(theme.indexFor(pair.first), theme.indexFor(pair.second));
     }
 
     auto invalid_roles = roles();
@@ -166,9 +166,9 @@ TEST(shared_fixture_roles_are_distinct_for_every_theme) {
                   std::invalid_argument);
 }
 
-TEST(snapshot_is_complete_and_deterministic) {
-    const auto first = valid_theme();
-    const auto second = valid_theme();
+TEST(snapshotIsCompleteAndDeterministic) {
+    const auto first = validTheme();
+    const auto second = validTheme();
     const auto first_snapshot = first.snapshot();
     const auto second_snapshot = second.snapshot();
 
@@ -181,13 +181,13 @@ TEST(snapshot_is_complete_and_deterministic) {
     }
     for (std::size_t index = 0; index < ssg::all_semantic_roles.size(); ++index) {
         ASSERT_EQ(first_snapshot.semantic_indices[index],
-                  first.index_for(ssg::all_semantic_roles[index]));
+                  first.indexFor(ssg::all_semantic_roles[index]));
     }
-    ASSERT_EQ(first.index_for_syntax("not.a.known.scope"),
-              first.index_for(SyntaxScope::PlainText));
+    ASSERT_EQ(first.indexForSyntax("not.a.known.scope"),
+              first.indexFor(SyntaxScope::PlainText));
 }
 
-TEST(bundled_theme_data_is_complete_and_constructible) {
+TEST(bundledThemeDataIsCompleteAndConstructible) {
     std::ifstream input(SSG_THEME_PATH);
     ASSERT_TRUE(input.good());
     std::string name;
@@ -212,14 +212,14 @@ TEST(bundled_theme_data_is_complete_and_constructible) {
             std::string role_name;
             unsigned index = 0;
             input >> role_name >> index;
-            const auto role = ssg::semantic_role_from_name(role_name);
+            const auto role = ssg::semanticRoleFromName(role_name);
             ASSERT_TRUE(role.has_value());
             role_mappings.push_back({*role, static_cast<std::uint8_t>(index)});
         } else if (kind == "syntax") {
             std::string scope_name;
             unsigned index = 0;
             input >> scope_name >> index;
-            const auto scope = ssg::syntax_scope_from_name(scope_name);
+            const auto scope = ssg::syntaxScopeFromName(scope_name);
             ASSERT_TRUE(scope.has_value());
             syntax_mappings.push_back({*scope, static_cast<std::uint8_t>(index)});
         } else {
@@ -229,7 +229,7 @@ TEST(bundled_theme_data_is_complete_and_constructible) {
     ASSERT_NO_THROW(ssg::Theme(name, colors, role_mappings, syntax_mappings));
 }
 
-TEST(source_and_config_have_no_independent_color_sources) {
+TEST(sourceAndConfigHaveNoIndependentColorSources) {
     const std::filesystem::path root = SSG_SOURCE_ROOT;
     const std::array forbidden{
         std::regex{R"(#([[:xdigit:]]{8}|[[:xdigit:]]{6}|[[:xdigit:]]{4}|[[:xdigit:]]{3})\b)"},
@@ -261,7 +261,7 @@ TEST(source_and_config_have_no_independent_color_sources) {
             continue;
         }
         if (!scanned_extensions.contains(entry.path().extension().string())) continue;
-        const auto contents = read_file(entry.path());
+        const auto contents = readFile(entry.path());
         for (const auto& pattern : forbidden) {
             if (std::regex_search(contents, pattern)) {
                 violations.push_back(relative);
@@ -275,12 +275,12 @@ TEST(source_and_config_have_no_independent_color_sources) {
 } // namespace
 
 int main() {
-    RUN(rejects_missing_duplicate_and_extra_palette_indices);
-    RUN(requires_every_semantic_role_and_syntax_scope_exactly_once);
-    RUN(shared_fixture_roles_are_distinct_for_every_theme);
-    RUN(snapshot_is_complete_and_deterministic);
-    RUN(bundled_theme_data_is_complete_and_constructible);
-    RUN(source_and_config_have_no_independent_color_sources);
+    RUN(rejectsMissingDuplicateAndExtraPaletteIndices);
+    RUN(requiresEverySemanticRoleAndSyntaxScopeExactlyOnce);
+    RUN(sharedFixtureRolesAreDistinctForEveryTheme);
+    RUN(snapshotIsCompleteAndDeterministic);
+    RUN(bundledThemeDataIsCompleteAndConstructible);
+    RUN(sourceAndConfigHaveNoIndependentColorSources);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

@@ -29,18 +29,18 @@ private:
     std::filesystem::path path_;
 };
 
-std::string read_text(const std::filesystem::path& path) {
+std::string readText(const std::filesystem::path& path) {
     std::ifstream input(path, std::ios::binary);
     return {std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
 }
 
-void write_text(const std::filesystem::path& path, std::string_view text) {
+void writeText(const std::filesystem::path& path, std::string_view text) {
     std::filesystem::create_directories(path.parent_path());
     std::ofstream output(path, std::ios::binary | std::ios::trunc);
     output << text;
 }
 
-void restart_round_trip(const ssg::SettingsPaths& paths) {
+void restartRoundTrip(const ssg::SettingsPaths& paths) {
     ssg::SettingsModel original;
     ASSERT_TRUE(original
                     .set(ssg::SettingScope::User, ssg::SettingKey::Theme,
@@ -67,75 +67,75 @@ void restart_round_trip(const ssg::SettingsPaths& paths) {
     ASSERT_EQ(std::get<std::uint32_t>(width.value), 2u);
 }
 
-TEST(linux_and_windows_seams_restart_with_the_same_semantics) {
+TEST(linuxAndWindowsSeamsRestartWithTheSameSemantics) {
     TemporaryDirectory root{"restart"};
-    restart_round_trip(ssg::linux_settings_paths(
+    restartRoundTrip(ssg::linuxSettingsPaths(
         root.path() / "linux-user", root.path() / "linux-workspaces", "/work/Project"));
-    restart_round_trip(ssg::windows_settings_paths(
+    restartRoundTrip(ssg::windowsSettingsPaths(
         root.path() / "windows-user", root.path() / "windows-workspaces",
         R"(C:\Work\Project)"));
 }
 
-TEST(workspace_keys_follow_platform_identity_rules) {
+TEST(workspaceKeysFollowPlatformIdentityRules) {
     TemporaryDirectory root{"identity"};
-    const auto linux_upper = ssg::linux_settings_paths(
+    const auto linux_upper = ssg::linuxSettingsPaths(
         root.path() / "u", root.path() / "w", "/work/Project");
-    const auto linux_lower = ssg::linux_settings_paths(
+    const auto linux_lower = ssg::linuxSettingsPaths(
         root.path() / "u", root.path() / "w", "/work/project");
     ASSERT_NE(linux_upper.workspace_file, linux_lower.workspace_file);
 
-    const auto windows_upper = ssg::windows_settings_paths(
+    const auto windows_upper = ssg::windowsSettingsPaths(
         root.path() / "u", root.path() / "w", R"(C:\Work\Project)");
-    const auto windows_lower = ssg::windows_settings_paths(
+    const auto windows_lower = ssg::windowsSettingsPaths(
         root.path() / "u", root.path() / "w", "c:/work/project");
     ASSERT_EQ(windows_upper.workspace_file, windows_lower.workspace_file);
 }
 
-TEST(unknown_future_field_survives_without_becoming_a_setting) {
+TEST(unknownFutureFieldSurvivesWithoutBecomingASetting) {
     TemporaryDirectory root{"unknown"};
     const auto paths =
-        ssg::linux_settings_paths(root.path() / "u", root.path() / "w", "/workspace");
+        ssg::linuxSettingsPaths(root.path() / "u", root.path() / "w", "/workspace");
     ssg::SettingsPersistence persistence{paths};
     ssg::SettingsModel initial;
     ASSERT_TRUE(persistence.save(initial).ok);
 
-    auto contents = read_text(paths.user_file);
+    auto contents = readText(paths.user_file);
     contents += "future.setting=s:opaque%20value\n";
-    write_text(paths.user_file, contents);
+    writeText(paths.user_file, contents);
 
     ssg::SettingsModel restarted;
     ASSERT_TRUE(persistence.load(restarted).ok);
     ASSERT_EQ(restarted.resolve(ssg::SettingKey::Theme).value,
               initial.resolve(ssg::SettingKey::Theme).value);
     ASSERT_TRUE(persistence.save(restarted).ok);
-    ASSERT_TRUE(read_text(paths.user_file).find(
+    ASSERT_TRUE(readText(paths.user_file).find(
                     "future.setting=s:opaque%20value\n") != std::string::npos);
 }
 
-TEST(invalid_schema_or_known_value_is_load_atomic) {
+TEST(invalidSchemaOrKnownValueIsLoadAtomic) {
     TemporaryDirectory root{"invalid"};
     const auto paths =
-        ssg::linux_settings_paths(root.path() / "u", root.path() / "w", "/workspace");
+        ssg::linuxSettingsPaths(root.path() / "u", root.path() / "w", "/workspace");
     ssg::SettingsModel settings;
     ASSERT_TRUE(settings
                     .set(ssg::SettingScope::User, ssg::SettingKey::Theme,
                          ssg::SettingValue{std::string{"retained"}})
                     .accepted());
-    const auto before = settings.view_state();
+    const auto before = settings.viewState();
 
-    write_text(paths.user_file, "schema=1\nindent_width=u32:99\n");
+    writeText(paths.user_file, "schema=1\nindent_width=u32:99\n");
     const ssg::SettingsPersistence persistence{paths};
     const auto invalid_value = persistence.load(settings);
     ASSERT_FALSE(invalid_value.ok);
-    ASSERT_EQ(settings.view_state(), before);
+    ASSERT_EQ(settings.viewState(), before);
 
-    write_text(paths.user_file, "schema=2\ntheme=s:future\n");
+    writeText(paths.user_file, "schema=2\ntheme=s:future\n");
     const auto invalid_schema = persistence.load(settings);
     ASSERT_FALSE(invalid_schema.ok);
-    ASSERT_EQ(settings.view_state(), before);
+    ASSERT_EQ(settings.viewState(), before);
 }
 
-TEST(language_and_document_records_round_trip_for_recovery_owner) {
+TEST(languageAndDocumentRecordsRoundTripForRecoveryOwner) {
     ssg::SettingsModel original;
     ASSERT_TRUE(original
                     .set(ssg::SettingScope::Language, ssg::SettingKey::AutoIndent,
@@ -148,12 +148,12 @@ TEST(language_and_document_records_round_trip_for_recovery_owner) {
 
     ssg::SettingsModel restored;
     ASSERT_TRUE(restored
-                    .import_scope(ssg::SettingScope::Language,
-                                  original.export_scope(ssg::SettingScope::Language))
+                    .importScope(ssg::SettingScope::Language,
+                                  original.exportScope(ssg::SettingScope::Language))
                     .ok);
     ASSERT_TRUE(restored
-                    .import_scope(ssg::SettingScope::Document,
-                                  original.export_scope(ssg::SettingScope::Document))
+                    .importScope(ssg::SettingScope::Document,
+                                  original.exportScope(ssg::SettingScope::Document))
                     .ok);
     ASSERT_EQ(restored.resolve(ssg::SettingKey::AutoIndent).value,
               ssg::SettingValue{false});
@@ -164,11 +164,11 @@ TEST(language_and_document_records_round_trip_for_recovery_owner) {
 } // namespace
 
 int main() {
-    RUN(linux_and_windows_seams_restart_with_the_same_semantics);
-    RUN(workspace_keys_follow_platform_identity_rules);
-    RUN(unknown_future_field_survives_without_becoming_a_setting);
-    RUN(invalid_schema_or_known_value_is_load_atomic);
-    RUN(language_and_document_records_round_trip_for_recovery_owner);
+    RUN(linuxAndWindowsSeamsRestartWithTheSameSemantics);
+    RUN(workspaceKeysFollowPlatformIdentityRules);
+    RUN(unknownFutureFieldSurvivesWithoutBecomingASetting);
+    RUN(invalidSchemaOrKnownValueIsLoadAtomic);
+    RUN(languageAndDocumentRecordsRoundTripForRecoveryOwner);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

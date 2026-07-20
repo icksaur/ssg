@@ -109,9 +109,9 @@ public:
     WatchEventNormalizer(const WatchEventNormalizer&) = delete;
     WatchEventNormalizer& operator=(const WatchEventNormalizer&) = delete;
 
-    void register_save(SaveExpectation expectation);
+    void registerSave(SaveExpectation expectation);
     void push(NativeWatchEvent event, WatchTimePoint observed_at);
-    [[nodiscard]] std::vector<WatchEvent> take_ready(WatchTimePoint now);
+    [[nodiscard]] std::vector<WatchEvent> takeReady(WatchTimePoint now);
 
 private:
     class Impl;
@@ -122,13 +122,13 @@ class FilesystemWatcher {
 public:
     virtual ~FilesystemWatcher() = default;
 
-    virtual void register_save(SaveExpectation expectation) = 0;
+    virtual void registerSave(SaveExpectation expectation) = 0;
     [[nodiscard]] virtual std::vector<WatchEvent> poll(
         std::chrono::milliseconds timeout) = 0;
 };
 
 [[nodiscard]] std::unique_ptr<FilesystemWatcher>
-make_platform_filesystem_watcher(const std::filesystem::path& canonical_root,
+makePlatformFilesystemWatcher(const std::filesystem::path& canonical_root,
                                  WatcherConfig config = {});
 
 } // namespace ssg

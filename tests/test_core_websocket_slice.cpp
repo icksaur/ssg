@@ -32,19 +32,19 @@ void close_test_socket(TestSocket socket) { closesocket(socket); }
 #else
 using TestSocket = int;
 constexpr TestSocket invalid_test_socket = -1;
-void close_test_socket(TestSocket socket) { close(socket); }
+void closeTestSocket(TestSocket socket) { close(socket); }
 #endif
 
 struct SocketOwner {
     TestSocket socket{invalid_test_socket};
     ~SocketOwner() {
         if (socket != invalid_test_socket) {
-            close_test_socket(socket);
+            closeTestSocket(socket);
         }
     }
 };
 
-void send_all(TestSocket socket, std::string const& bytes) {
+void sendAll(TestSocket socket, std::string const& bytes) {
     std::size_t sent = 0;
     while (sent < bytes.size()) {
         auto const count =
@@ -57,7 +57,7 @@ void send_all(TestSocket socket, std::string const& bytes) {
     }
 }
 
-std::string receive_some(TestSocket socket) {
+std::string receiveSome(TestSocket socket) {
     std::array<char, 8192> bytes{};
     auto const count = recv(socket, bytes.data(), static_cast<int>(bytes.size()), 0);
     if (count <= 0) {
@@ -66,7 +66,7 @@ std::string receive_some(TestSocket socket) {
     return {bytes.data(), static_cast<std::size_t>(count)};
 }
 
-std::string masked_text_frame(std::string const& payload) {
+std::string maskedTextFrame(std::string const& payload) {
     if (payload.size() > 125) {
         throw std::runtime_error{"test payload exceeds short frame"};
     }
@@ -84,7 +84,7 @@ std::string masked_text_frame(std::string const& payload) {
     return frame;
 }
 
-SocketOwner connect_websocket(std::uint16_t port) {
+SocketOwner connectWebsocket(std::uint16_t port) {
 #ifdef _WIN32
     WSADATA data{};
     if (WSAStartup(MAKEWORD(2, 2), &data) != 0) {
@@ -103,36 +103,36 @@ SocketOwner connect_websocket(std::uint16_t port) {
                 sizeof(address)) != 0) {
         throw std::runtime_error{"loopback connect failed"};
     }
-    send_all(owner.socket,
+    sendAll(owner.socket,
              "GET /session HTTP/1.1\r\nHost: 127.0.0.1\r\n"
              "Upgrade: websocket\r\nConnection: Upgrade\r\n"
              "Sec-WebSocket-Version: 13\r\n"
              "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n");
-    auto const response = receive_some(owner.socket);
+    auto const response = receiveSome(owner.socket);
     if (response.find("101 Switching Protocols") == std::string::npos) {
         throw std::runtime_error{"WebSocket upgrade failed"};
     }
     return owner;
 }
 
-ssg::SliceResponse websocket_command(TestSocket socket,
+ssg::SliceResponse websocketCommand(TestSocket socket,
                                      ssg::InsertRequest const& request) {
-    send_all(socket, masked_text_frame(ssg::encode_insert_request(request)));
+    sendAll(socket, maskedTextFrame(ssg::encodeInsertRequest(request)));
     std::string bytes;
     std::size_t consumed = 0;
     Http::WebSocketFrame frame;
     do {
-        bytes += receive_some(socket);
+        bytes += receiveSome(socket);
         frame = Http::parseWebSocketFrame(bytes, consumed);
     } while (consumed == 0);
-    return ssg::decode_slice_response(frame.payload);
+    return ssg::decodeSliceResponse(frame.payload);
 }
 
-TEST(codec_round_trip_and_malformed_corpus) {
+TEST(codecRoundTripAndMalformedCorpus) {
     ssg::ProtocolLimits const limits{256, 32};
     auto const wire =
-        ssg::encode_insert_request({ssg::Revision{9}, "a b\n\xC3\xA9"});
-    auto const decoded = ssg::decode_insert_request(wire, limits);
+        ssg::encodeInsertRequest({ssg::Revision{9}, "a b\n\xC3\xA9"});
+    auto const decoded = ssg::decodeInsertRequest(wire, limits);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_EQ(decoded.request->base_revision, ssg::Revision{9});
     ASSERT_EQ(decoded.request->text, std::string{"a b\n\xC3\xA9"});
@@ -141,16 +141,16 @@ TEST(codec_round_trip_and_malformed_corpus) {
          std::vector<std::string>{"", "SSG0 INSERT 1 61", "SSG1 DELETE 1 61",
                                   "SSG1 INSERT x 61", "SSG1 INSERT 1 6",
                                   "SSG1 INSERT 1 zz", "SSG1 INSERT 1 6100"}) {
-        auto const result = ssg::decode_insert_request(malformed, limits);
+        auto const result = ssg::decodeInsertRequest(malformed, limits);
         ASSERT_FALSE(result.accepted());
     }
-    ASSERT_EQ(ssg::decode_insert_request(std::string(257, 'x'), limits).error,
+    ASSERT_EQ(ssg::decodeInsertRequest(std::string(257, 'x'), limits).error,
               ssg::ProtocolError::MessageTooLarge);
-    ASSERT_EQ(ssg::decode_insert_request("SSG1 INSERT 1 616263", {256, 2}).error,
+    ASSERT_EQ(ssg::decodeInsertRequest("SSG1 INSERT 1 616263", {256, 2}).error,
               ssg::ProtocolError::InsertTooLarge);
 }
 
-TEST(direct_and_codec_scripts_have_identical_snapshots) {
+TEST(directAndCodecScriptsHaveIdenticalSnapshots) {
     ssg::CoreEditorSlice direct;
     ASSERT_TRUE(direct.attach({ssg::ClientId{1},
                                ssg::InvocationOrigin::InProcess}));
@@ -160,11 +160,11 @@ TEST(direct_and_codec_scripts_have_identical_snapshots) {
         ssg::InsertRequest const request{revision, text};
         auto const direct_result = direct.execute(ssg::ClientId{1}, request);
         auto const decoded =
-            ssg::decode_insert_request(ssg::encode_insert_request(request));
+            ssg::decodeInsertRequest(ssg::encodeInsertRequest(request));
         ASSERT_TRUE(decoded.accepted());
         auto const remote_result =
-            ssg::decode_slice_response(
-                ssg::encode_slice_response(direct_result));
+            ssg::decodeSliceResponse(
+                ssg::encodeSliceResponse(direct_result));
         ASSERT_TRUE(direct_result.accepted());
         ASSERT_EQ(remote_result, direct_result);
         ASSERT_TRUE(direct_result.delta.has_value());
@@ -173,7 +173,7 @@ TEST(direct_and_codec_scripts_have_identical_snapshots) {
     ASSERT_EQ(direct.snapshot().text, std::string{"hello world"});
 }
 
-TEST(stale_and_malformed_requests_are_failure_atomic) {
+TEST(staleAndMalformedRequestsAreFailureAtomic) {
     ssg::CoreEditorSlice direct;
     ASSERT_TRUE(direct.attach({ssg::ClientId{1},
                                ssg::InvocationOrigin::InProcess}));
@@ -185,7 +185,7 @@ TEST(stale_and_malformed_requests_are_failure_atomic) {
     ASSERT_EQ(stale.snapshot, accepted.snapshot);
     ASSERT_FALSE(stale.delta.has_value());
 
-    auto const malformed = ssg::decode_insert_request("not a command");
+    auto const malformed = ssg::decodeInsertRequest("not a command");
     ASSERT_EQ(malformed.error, ssg::ProtocolError::MalformedMessage);
     ASSERT_EQ(direct.snapshot(), accepted.snapshot);
 }
@@ -194,9 +194,9 @@ TEST(stale_and_malformed_requests_are_failure_atomic) {
 
 int main() {
     std::cout << "=== Core WebSocket slice ===\n";
-    RUN(codec_round_trip_and_malformed_corpus);
-    RUN(direct_and_codec_scripts_have_identical_snapshots);
-    RUN(stale_and_malformed_requests_are_failure_atomic);
+    RUN(codecRoundTripAndMalformedCorpus);
+    RUN(directAndCodecScriptsHaveIdenticalSnapshots);
+    RUN(staleAndMalformedRequestsAreFailureAtomic);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

@@ -64,7 +64,7 @@ inline CanonicalState canonical(ssg::SessionSnapshot const& snapshot) {
 }
 
 inline void apply(CanonicalState& state, ssg::SessionDelta const& delta) {
-    if (delta.base_revision() != state.revision)
+    if (delta.baseRevision() != state.revision)
         throw std::runtime_error{"canonical delta base revision mismatch"};
     if (delta.document()) {
         auto const& document = *delta.document();
@@ -89,8 +89,8 @@ inline void apply(CanonicalState& state, ssg::SessionDelta const& delta) {
         state.dirty = tab ? tab->dirty : false;
         state.tab_open = tab != nullptr;
     }
-    if (delta.follow_edits().replacement)
-        state.follow_mode = delta.follow_edits().replacement->mode;
+    if (delta.followEdits().replacement)
+        state.follow_mode = delta.followEdits().replacement->mode;
     if (delta.shell().replacement) {
         state.workspace_open = false;
         state.word_wrap = false;

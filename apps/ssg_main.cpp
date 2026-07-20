@@ -68,7 +68,7 @@ void startup_mark_impl(char const* phase) {
 #define STARTUP_MARK(phase) ((void)0)
 #endif
 
-void write_all(std::string_view bytes) {
+void writeAll(std::string_view bytes) {
     std::size_t offset = 0;
     while (offset < bytes.size()) {
         auto written =
@@ -95,7 +95,7 @@ public:
         raw.c_cc[VTIME] = 0;
         if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) != 0) return;
         active_ = true;
-        write_all(ssg::app::terminal_setup_sequence());
+        writeAll(ssg::app::terminal_setup_sequence());
     }
 
     ~TerminalMode() { restore(); }
@@ -105,7 +105,7 @@ public:
     void restore() noexcept {
         if (!active_) return;
         active_ = false;
-        write_all(ssg::app::terminal_restore_sequence());
+        writeAll(ssg::app::terminal_restore_sequence());
         tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_);
     }
 
@@ -119,7 +119,7 @@ private:
     bool active_ = false;
 };
 
-ssg::ViewportDimensions terminal_size() {
+ssg::ViewportDimensions terminalSize() {
     winsize size{};
     if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &size) == 0 && size.ws_col > 0 &&
         size.ws_row > 0) {
@@ -137,7 +137,7 @@ struct FdReadiness {
     bool signal = false;  // The signal self-pipe has pending tags.
 };
 
-FdReadiness wait_readiness(int timeout_ms, int signal_fd) {
+FdReadiness waitReadiness(int timeout_ms, int signal_fd) {
     fd_set set;
     FD_ZERO(&set);
     FD_SET(STDIN_FILENO, &set);
@@ -167,7 +167,7 @@ volatile std::sig_atomic_t g_signal_pipe_write = -1;
 // one tag byte to the self-pipe so the event loop wakes and handles it in normal
 // context.  A full pipe (EAGAIN) already means "wake pending", so the result is
 // ignored; write() is async-signal-safe.
-extern "C" void signal_tag_handler(int signo) {
+extern "C" void signalTagHandler(int signo) {
     int const fd = g_signal_pipe_write;
     if (fd < 0) return;
     unsigned char const tag = static_cast<unsigned char>(signo);
@@ -177,16 +177,16 @@ extern "C" void signal_tag_handler(int signo) {
 
 // Install the tag-writing handler for a signal, restarting interrupted syscalls
 // (the self-pipe select() is the reliable wake, independent of SA_RESTART).
-void install_signal_tag_handler(int signo) {
+void installSignalTagHandler(int signo) {
     struct sigaction action{};
-    action.sa_handler = signal_tag_handler;
+    action.sa_handler = signalTagHandler;
     sigemptyset(&action.sa_mask);
     action.sa_flags = SA_RESTART;
     sigaction(signo, &action, nullptr);
 }
 
 // Delete one UTF-8 code point from the end of a client-local query string.
-void pop_code_point(std::string& text) {
+void popCodePoint(std::string& text) {
     while (!text.empty() &&
            (static_cast<unsigned char>(text.back()) & 0xC0) == 0x80) {
         text.pop_back();
@@ -257,9 +257,9 @@ int main(int argc, char** argv) {
     ::fcntl(signal_pipe[1], F_SETFL,
             ::fcntl(signal_pipe[1], F_GETFL, 0) | O_NONBLOCK);
     g_signal_pipe_write = signal_pipe[1];
-    install_signal_tag_handler(SIGWINCH);
-    install_signal_tag_handler(SIGTERM);
-    install_signal_tag_handler(SIGHUP);
+    installSignalTagHandler(SIGWINCH);
+    installSignalTagHandler(SIGTERM);
+    installSignalTagHandler(SIGHUP);
 
     // Detect the terminal color depth once at startup (M9-C2); the frame encoder
     // adapts the theme's 16 colors to it via the library's resolve_color.
@@ -336,7 +336,7 @@ int main(int argc, char** argv) {
     // free offset so a wheel scroll persists (see doc/spec-m8.md M8-P). Mirrors
     // the tree's reveal_tree_selection.
     auto reveal_palette_selection = [&] {
-        auto order = ssg::palette_rank(candidates, palette_query);
+        auto order = ssg::paletteRank(candidates, palette_query);
         if (palette_selected >= order.size()) {
             palette_selected = order.empty() ? 0 : order.size() - 1;
         }
@@ -344,7 +344,7 @@ int main(int argc, char** argv) {
             order.empty() ? std::nullopt
                           : std::optional<std::uint32_t>{
                                 static_cast<std::uint32_t>(palette_selected)};
-        auto scroll = ssg::compute_list_scroll_view(
+        auto scroll = ssg::computeListScrollView(
             static_cast<std::uint32_t>(order.size()), palette_pane_rows,
             palette_first_visible, selected, /*keep_selection_visible=*/true);
         palette_first_visible = scroll.first_visible;
@@ -354,8 +354,8 @@ int main(int argc, char** argv) {
     // Saturating: `delta` is a decoded int64, so guard the extremes before adding.
     auto scroll_palette = [&](std::int64_t delta) {
         if (!palette_open) return;
-        auto order = ssg::palette_rank(candidates, palette_query);
-        auto probe = ssg::compute_list_scroll_view(
+        auto order = ssg::paletteRank(candidates, palette_query);
+        auto probe = ssg::computeListScrollView(
             static_cast<std::uint32_t>(order.size()), palette_pane_rows,
             palette_first_visible, std::nullopt, /*keep_selection_visible=*/false);
         auto const maximum =
@@ -372,7 +372,7 @@ int main(int argc, char** argv) {
         palette_first_visible = static_cast<std::uint32_t>(next);
     };
     auto execute_selected_candidate = [&] {
-        auto order = ssg::palette_rank(candidates, palette_query);
+        auto order = ssg::paletteRank(candidates, palette_query);
         if (!order.empty() && palette_selected < order.size()) {
             dispatch("palette.execute",
                      ssg::PaletteExecuteArguments{candidates[order[palette_selected]].id});
@@ -412,7 +412,7 @@ int main(int argc, char** argv) {
         }
     };
     auto route_text = [&](std::string const& text) {
-        switch (ssg::text_routing(ssg::focus_target_name(focus))) {
+        switch (ssg::textRouting(ssg::focusTargetName(focus))) {
         case ssg::TextRouting::Insert:
             dispatch("text.insert", ssg::TextInputArguments{text});
             break;
@@ -437,7 +437,7 @@ int main(int argc, char** argv) {
             ssg::PaletteWindowState window{palette_query, palette_selected,
                                            palette_first_visible,
                                            palette_pane_rows};
-            report = ssg::derive_palette_report(candidates, window);
+            report = ssg::derivePaletteReport(candidates, window);
             palette_selected = window.selected;
             palette_first_visible = window.first_visible;
         }
@@ -448,7 +448,7 @@ int main(int argc, char** argv) {
     // coalesced input after a focus-changing command routes against the new
     // focus rather than a stale one.
     auto refresh = [&]() -> std::optional<ssg::SessionSnapshot> {
-        auto snapshot = runtime.snapshot(client, terminal_size(), chord, build_report());
+        auto snapshot = runtime.snapshot(client, terminalSize(), chord, build_report());
         if (snapshot) {
             focus = snapshot->sections().shell.focus;
             keymap = snapshot->sections().keymap;
@@ -507,14 +507,14 @@ int main(int argc, char** argv) {
                 // payload), not the earlier terminal-setup bytes.
                 STARTUP_MARK("first_content_frame");
                 first_frame_marked = true;
-                write_all(frame);
+                writeAll(frame);
                 // M10-3/M10-4: the first frame is on screen; now run the
                 // enrichment (tree scan, syntax) deferred off the startup
                 // path.  It publishes on the next snapshot at the loop top.
-                runtime.prime_deferred();
+                runtime.primeDeferred();
                 continue;
             }
-            write_all(frame);
+            writeAll(frame);
         }
 
         char bytes[64];
@@ -529,7 +529,7 @@ int main(int argc, char** argv) {
                 snapshot->sections().shell.panes.front().content);
         }
         if (drag_edge) {
-            auto const ready = wait_readiness(kEdgeScrollIntervalMs, signal_pipe[0]);
+            auto const ready = waitReadiness(kEdgeScrollIntervalMs, signal_pipe[0]);
             if (ready.signal) {
                 // A resize/terminate signal arrived mid-drag: drain it now rather
                 // than deferring until the drag releases.  Terminate does not
@@ -548,9 +548,9 @@ int main(int argc, char** argv) {
                         *drag_edge < 0 ? content.y : content.bottom() - 1;
                     int const column = std::clamp(last_pointer_column, content.x,
                                                   content.right() - 1);
-                    auto hit = ssg::hit_test(*scrolled, column, edge_row);
+                    auto hit = ssg::hitTest(*scrolled, column, edge_row);
                     if (hit.region == ssg::HitRegion::Editor) {
-                        auto active = ssg::resolve_document_position(
+                        auto active = ssg::resolveDocumentPosition(
                             scrolled->sections().document.text,
                             ssg::ByteOffset{hit.byte_offset});
                         if (active) {
@@ -568,7 +568,7 @@ int main(int argc, char** argv) {
         // Block until keyboard input OR a signal-driven self-pipe wake (M9-W).
         // A bare read() could not be interrupted reliably by a resize/terminate
         // signal; selecting on both fds makes the wake deterministic.
-        auto const wait = wait_readiness(-1, signal_pipe[0]);
+        auto const wait = waitReadiness(-1, signal_pipe[0]);
         if (wait.signal) {
             // Terminate does not return (restore + re-raise); a resize just
             // re-snapshots at the loop top.
@@ -589,7 +589,7 @@ int main(int argc, char** argv) {
                 // briefly for the disambiguating bytes; if none arrive, force the
                 // bounded-Escape resolution.  The wait also watches the signal
                 // pipe so a resize/terminate is not deferred by a lone ESC.
-                auto const ready = wait_readiness(kEscapeTimeoutMs, signal_pipe[0]);
+                auto const ready = waitReadiness(kEscapeTimeoutMs, signal_pipe[0]);
                 if (ready.signal) drain_signals();
                 if (ready.input) {
                     auto more = ::read(STDIN_FILENO, bytes, sizeof bytes);
@@ -619,10 +619,10 @@ int main(int argc, char** argv) {
                 ssg::RegionHit hit;
                 ssg::app::PointerTargets targets;
                 if (snapshot) {
-                    hit = ssg::hit_test(*snapshot, decoded.pointer.column,
+                    hit = ssg::hitTest(*snapshot, decoded.pointer.column,
                                         decoded.pointer.row);
                     if (hit.region == ssg::HitRegion::Editor) {
-                        targets.document_position = ssg::resolve_document_position(
+                        targets.document_position = ssg::resolveDocumentPosition(
                             snapshot->sections().document.text,
                             ssg::ByteOffset{hit.byte_offset});
                     } else if (hit.region == ssg::HitRegion::Tab) {
@@ -633,7 +633,7 @@ int main(int argc, char** argv) {
                     } else if (hit.region == ssg::HitRegion::Palette) {
                         // Map the absolute rank index to its candidate id using
                         // the same ranked order the client renders.
-                        auto order = ssg::palette_rank(candidates, palette_query);
+                        auto order = ssg::paletteRank(candidates, palette_query);
                         if (hit.item_index < order.size()) {
                             targets.palette_command_id =
                                 candidates[order[hit.item_index]].id;
@@ -665,7 +665,7 @@ int main(int argc, char** argv) {
                 // window, everything else scrolls the editor document.
                 ssg::HitRegion region = ssg::HitRegion::None;
                 if (snapshot) {
-                    region = ssg::hit_test(*snapshot, decoded.pointer.column,
+                    region = ssg::hitTest(*snapshot, decoded.pointer.column,
                                            decoded.pointer.row).region;
                 }
                 switch (ssg::app::route_wheel(region)) {
@@ -702,8 +702,8 @@ int main(int argc, char** argv) {
             }
 
             chord.push_back(decoded.stroke);
-            auto resolution = ssg::resolve_key_sequence(
-                keymap, chord, ssg::focus_target_name(focus));
+            auto resolution = ssg::resolveKeySequence(
+                keymap, chord, ssg::focusTargetName(focus));
             if (resolution.kind == ssg::KeymapMatchKind::Resolved) {
                 dispatch_resolved(resolution.command_id);
                 chord.clear();
@@ -722,18 +722,18 @@ int main(int argc, char** argv) {
                     quit = true;
                 } else if (palette_open && focus == ssg::FocusTarget::Prompt &&
                            stroke.code == "Backspace") {
-                    pop_code_point(palette_query);
+                    popCodePoint(palette_query);
                     palette_selected = 0;
                     reveal_palette_selection();
                 } else if (find_open && focus == ssg::FocusTarget::Prompt &&
                            stroke.code == "Backspace") {
                     auto next = find_query;
-                    pop_code_point(next);
+                    popCodePoint(next);
                     dispatch("find.update_query", ssg::FindQueryArguments{next});
                 } else if (replace_open && focus == ssg::FocusTarget::Prompt &&
                            stroke.code == "Backspace") {
                     auto next = replace_replacement;
-                    pop_code_point(next);
+                    popCodePoint(next);
                     dispatch("replace.update_replacement", ssg::FindQueryArguments{next});
                 } else if (!decoded.text.empty()) {
                     route_text(decoded.text);

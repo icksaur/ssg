@@ -11,27 +11,27 @@
 namespace ssg {
 namespace {
 
-void validate_provider_id(std::string_view value) {
+void validateProviderId(std::string_view value) {
     if (value.empty() || value.find(':') != std::string_view::npos) {
         throw std::invalid_argument(
             "tree provider ID must be non-empty and must not contain ':'");
     }
 }
 
-void validate_node_id(std::string_view value) {
+void validateNodeId(std::string_view value) {
     if (value.empty()) {
         throw std::invalid_argument("tree node ID must be non-empty");
     }
 }
 
-void validate_command(const TreeNodeCommand& command) {
+void validateCommand(const TreeNodeCommand& command) {
     if (command.id.empty() || command.label.empty()) {
         throw std::invalid_argument(
             "tree node commands require non-empty IDs and labels");
     }
 }
 
-std::string normalize_workspace_path(std::string path) {
+std::string normalizeWorkspacePath(std::string path) {
     std::replace(path.begin(), path.end(), '\\', '/');
     const std::filesystem::path parsed{path};
     if (path.empty() || parsed.is_absolute() || parsed.has_root_name()) {
@@ -52,7 +52,7 @@ std::string normalize_workspace_path(std::string path) {
     return normalized.generic_string();
 }
 
-TreeNodeId node_id(const TreeProviderId& provider_id,
+TreeNodeId nodeId(const TreeProviderId& provider_id,
                    std::string_view stable_key) {
     if (stable_key.empty()) {
         throw std::invalid_argument("tree stable key must be non-empty");
@@ -60,7 +60,7 @@ TreeNodeId node_id(const TreeProviderId& provider_id,
     return TreeNodeId{provider_id.value() + ":" + std::string{stable_key}};
 }
 
-void validate_and_sort_nodes(const TreeProviderId& provider_id,
+void validateAndSortNodes(const TreeProviderId& provider_id,
                              std::vector<TreeNode>& nodes) {
     std::sort(nodes.begin(), nodes.end(),
               [](const TreeNode& left, const TreeNode& right) {
@@ -77,7 +77,7 @@ void validate_and_sort_nodes(const TreeProviderId& provider_id,
             throw std::invalid_argument("tree snapshot contains a duplicate node ID");
         }
         for (const auto& command : node.commands) {
-            validate_command(command);
+            validateCommand(command);
         }
     }
     for (auto& node : nodes) {
@@ -112,7 +112,7 @@ void validate_and_sort_nodes(const TreeProviderId& provider_id,
     }
 }
 
-const TreeNode* find_node(const TreeProviderSnapshot& snapshot,
+const TreeNode* findNode(const TreeProviderSnapshot& snapshot,
                           const TreeNodeId& id) {
     const auto iterator = std::lower_bound(
         snapshot.nodes().begin(), snapshot.nodes().end(), id,
@@ -124,7 +124,7 @@ const TreeNode* find_node(const TreeProviderSnapshot& snapshot,
                : nullptr;
 }
 
-std::vector<TreeNodeView> visible_nodes(
+std::vector<TreeNodeView> visibleNodes(
     const TreeProviderSnapshot& snapshot,
     const std::vector<TreeNodeId>& expanded) {
     std::vector<TreeNodeView> result;
@@ -151,18 +151,18 @@ std::vector<TreeNodeView> visible_nodes(
     return result;
 }
 
-std::size_t provider_delta_cost(const TreeProviderDelta& delta) {
+std::size_t providerDeltaCost(const TreeProviderDelta& delta) {
     return 1 + delta.erase_count + delta.insert.size();
 }
 
 } // namespace
 
 TreeProviderId::TreeProviderId(std::string value) : value_(std::move(value)) {
-    validate_provider_id(value_);
+    validateProviderId(value_);
 }
 
 TreeNodeId::TreeNodeId(std::string value) : value_(std::move(value)) {
-    validate_node_id(value_);
+    validateNodeId(value_);
 }
 
 TreeProviderSnapshot::TreeProviderSnapshot(
@@ -172,10 +172,10 @@ TreeProviderSnapshot::TreeProviderSnapshot(
       kind_(kind),
       revision_(revision),
       nodes_(std::move(nodes)) {
-    validate_and_sort_nodes(provider_id_, nodes_);
+    validateAndSortNodes(provider_id_, nodes_);
 }
 
-TreeProviderSnapshot filesystem_tree_snapshot(
+TreeProviderSnapshot filesystemTreeSnapshot(
     TreeProviderId provider_id, const std::filesystem::path& canonical_cwd,
     TreeRevision revision) {
     std::error_code error;
@@ -186,7 +186,7 @@ TreeProviderSnapshot filesystem_tree_snapshot(
     }
 
     std::vector<TreeNode> nodes;
-    nodes.push_back(TreeNode{node_id(provider_id, "."),
+    nodes.push_back(TreeNode{nodeId(provider_id, "."),
                              std::nullopt,
                              root.filename().string(),
                              TreeNodeKind::Root,
@@ -216,8 +216,8 @@ TreeProviderSnapshot filesystem_tree_snapshot(
         const auto parent_path =
             std::filesystem::path{relative}.parent_path().generic_string();
         nodes.push_back(TreeNode{
-            node_id(provider_id, relative),
-            node_id(provider_id, parent_path.empty() ? "." : parent_path),
+            nodeId(provider_id, relative),
+            nodeId(provider_id, parent_path.empty() ? "." : parent_path),
             entry.path().filename().string(),
             symlink ? TreeNodeKind::Symlink
                     : (directory ? TreeNodeKind::Directory : TreeNodeKind::File),
@@ -237,17 +237,17 @@ TreeProviderSnapshot filesystem_tree_snapshot(
                                 std::move(nodes)};
 }
 
-TreeProviderSnapshot git_tree_snapshot(TreeProviderId provider_id,
+TreeProviderSnapshot gitTreeSnapshot(TreeProviderId provider_id,
                                        TreeRevision revision,
                                        std::vector<GitTreeRecord> records) {
     std::vector<TreeNode> nodes;
     nodes.reserve(records.size());
     for (auto& record : records) {
-        const auto path = normalize_workspace_path(std::move(record.workspace_path));
+        const auto path = normalizeWorkspacePath(std::move(record.workspace_path));
         if (record.label.empty()) {
             throw std::invalid_argument("Git tree labels must be non-empty");
         }
-        nodes.push_back(TreeNode{node_id(provider_id, path),
+        nodes.push_back(TreeNode{nodeId(provider_id, path),
                                  std::nullopt,
                                  std::move(record.label),
                                  TreeNodeKind::GitEntry,
@@ -261,7 +261,7 @@ TreeProviderSnapshot git_tree_snapshot(TreeProviderId provider_id,
                                 revision, std::move(nodes)};
 }
 
-TreeProviderSnapshot symbol_tree_snapshot(
+TreeProviderSnapshot symbolTreeSnapshot(
     TreeProviderId provider_id, TreeRevision revision,
     std::vector<SymbolTreeRecord> records) {
     std::vector<TreeNode> nodes;
@@ -273,13 +273,13 @@ TreeProviderSnapshot symbol_tree_snapshot(
         }
         std::optional<TreeNodeId> parent;
         if (record.parent_key) {
-            parent = node_id(provider_id, *record.parent_key);
+            parent = nodeId(provider_id, *record.parent_key);
         }
         std::optional<std::string> path;
         if (record.workspace_path) {
-            path = normalize_workspace_path(std::move(*record.workspace_path));
+            path = normalizeWorkspacePath(std::move(*record.workspace_path));
         }
-        nodes.push_back(TreeNode{node_id(provider_id, record.stable_key),
+        nodes.push_back(TreeNode{nodeId(provider_id, record.stable_key),
                                  std::move(parent),
                                  std::move(record.label),
                                  TreeNodeKind::Symbol,
@@ -303,22 +303,22 @@ TreeCommandSet::TreeCommandSet()
                     {"tree.activate"},
                     {"tree.scroll"}}} {}
 
-TreeCommandSet tree_command_set() { return TreeCommandSet{}; }
+TreeCommandSet treeCommandSet() { return TreeCommandSet{}; }
 
-void TreeModel::replace_provider(TreeProviderSnapshot snapshot) {
+void TreeModel::replaceProvider(TreeProviderSnapshot snapshot) {
     auto iterator = std::lower_bound(
-        providers_.begin(), providers_.end(), snapshot.provider_id(),
+        providers_.begin(), providers_.end(), snapshot.providerId(),
         [](const ProviderState& state, const TreeProviderId& id) {
-            return state.snapshot.provider_id() < id;
+            return state.snapshot.providerId() < id;
         });
     if (iterator != providers_.end() &&
-        iterator->snapshot.provider_id() == snapshot.provider_id()) {
+        iterator->snapshot.providerId() == snapshot.providerId()) {
         if (snapshot.revision() <= iterator->snapshot.revision()) {
             throw std::invalid_argument(
                 "replacement tree snapshot revision must increase");
         }
         std::erase_if(iterator->expanded, [&](const TreeNodeId& id) {
-            return find_node(snapshot, id) == nullptr;
+            return findNode(snapshot, id) == nullptr;
         });
         iterator->snapshot = std::move(snapshot);
     } else {
@@ -329,12 +329,12 @@ void TreeModel::replace_provider(TreeProviderSnapshot snapshot) {
 
     // Keep the selection valid against the active provider; default to its
     // first visible node so the tree always has a focus once populated.
-    auto* active = active_provider();
+    auto* active = activeProvider();
     if (active == nullptr) {
         selected_.reset();
         return;
     }
-    auto visible = visible_nodes(active->snapshot, active->expanded);
+    auto visible = visibleNodes(active->snapshot, active->expanded);
     const bool still_valid =
         selected_ && std::any_of(visible.begin(), visible.end(),
                                  [&](const TreeNodeView& view) {
@@ -347,18 +347,18 @@ void TreeModel::replace_provider(TreeProviderSnapshot snapshot) {
     }
 }
 
-TreeModel::ProviderState* TreeModel::active_provider() {
+TreeModel::ProviderState* TreeModel::activeProvider() {
     return providers_.empty() ? nullptr : &providers_.front();
 }
 
-const TreeModel::ProviderState* TreeModel::active_provider() const {
+const TreeModel::ProviderState* TreeModel::activeProvider() const {
     return providers_.empty() ? nullptr : &providers_.front();
 }
 
-bool TreeModel::select_next() {
-    auto* provider = active_provider();
+bool TreeModel::selectNext() {
+    auto* provider = activeProvider();
     if (provider == nullptr) return false;
-    auto visible = visible_nodes(provider->snapshot, provider->expanded);
+    auto visible = visibleNodes(provider->snapshot, provider->expanded);
     if (visible.empty()) {
         selected_.reset();
         return false;
@@ -377,10 +377,10 @@ bool TreeModel::select_next() {
     return true;
 }
 
-bool TreeModel::select_previous() {
-    auto* provider = active_provider();
+bool TreeModel::selectPrevious() {
+    auto* provider = activeProvider();
     if (provider == nullptr) return false;
-    auto visible = visible_nodes(provider->snapshot, provider->expanded);
+    auto visible = visibleNodes(provider->snapshot, provider->expanded);
     if (visible.empty()) {
         selected_.reset();
         return false;
@@ -400,9 +400,9 @@ bool TreeModel::select_previous() {
 }
 
 bool TreeModel::select(const TreeNodeId& node_id) {
-    auto* provider = active_provider();
+    auto* provider = activeProvider();
     if (provider == nullptr) return false;
-    auto visible = visible_nodes(provider->snapshot, provider->expanded);
+    auto visible = visibleNodes(provider->snapshot, provider->expanded);
     const bool present =
         std::any_of(visible.begin(), visible.end(), [&](const TreeNodeView& view) {
             return view.node.id == node_id;
@@ -414,31 +414,31 @@ bool TreeModel::select(const TreeNodeId& node_id) {
     return true;
 }
 
-bool TreeModel::toggle_selected() {
-    auto* provider = active_provider();
+bool TreeModel::toggleSelected() {
+    auto* provider = activeProvider();
     if (provider == nullptr || !selected_) return false;
-    return toggle_expanded(provider->snapshot.provider_id(), *selected_);
+    return toggleExpanded(provider->snapshot.providerId(), *selected_);
 }
 
-std::optional<TreeNode> TreeModel::selected_node() const {
-    const auto* provider = active_provider();
+std::optional<TreeNode> TreeModel::selectedNode() const {
+    const auto* provider = activeProvider();
     if (provider == nullptr || !selected_) return std::nullopt;
-    const auto* node = find_node(provider->snapshot, *selected_);
+    const auto* node = findNode(provider->snapshot, *selected_);
     return node ? std::optional<TreeNode>{*node} : std::nullopt;
 }
 
-bool TreeModel::toggle_expanded(const TreeProviderId& provider_id,
+bool TreeModel::toggleExpanded(const TreeProviderId& provider_id,
                                 const TreeNodeId& node_id) {
     const auto provider = std::lower_bound(
         providers_.begin(), providers_.end(), provider_id,
         [](const ProviderState& state, const TreeProviderId& id) {
-            return state.snapshot.provider_id() < id;
+            return state.snapshot.providerId() < id;
         });
     if (provider == providers_.end() ||
-        provider->snapshot.provider_id() != provider_id) {
+        provider->snapshot.providerId() != provider_id) {
         return false;
     }
-    const auto* node = find_node(provider->snapshot, node_id);
+    const auto* node = findNode(provider->snapshot, node_id);
     if (node == nullptr || !node->expandable) {
         return false;
     }
@@ -453,32 +453,32 @@ bool TreeModel::toggle_expanded(const TreeProviderId& provider_id,
     return true;
 }
 
-bool TreeModel::is_expanded(const TreeProviderId& provider_id,
+bool TreeModel::isExpanded(const TreeProviderId& provider_id,
                             const TreeNodeId& node_id) const {
     const auto provider = std::lower_bound(
         providers_.begin(), providers_.end(), provider_id,
         [](const ProviderState& state, const TreeProviderId& id) {
-            return state.snapshot.provider_id() < id;
+            return state.snapshot.providerId() < id;
         });
     return provider != providers_.end() &&
-           provider->snapshot.provider_id() == provider_id &&
+           provider->snapshot.providerId() == provider_id &&
            std::binary_search(provider->expanded.begin(),
                               provider->expanded.end(), node_id);
 }
 
-std::optional<TreeCommandInvocation> TreeModel::invoke_node_command(
+std::optional<TreeCommandInvocation> TreeModel::invokeNodeCommand(
     const TreeProviderId& provider_id, const TreeNodeId& node_id,
     std::string_view command_id) const {
     const auto provider = std::lower_bound(
         providers_.begin(), providers_.end(), provider_id,
         [](const ProviderState& state, const TreeProviderId& id) {
-            return state.snapshot.provider_id() < id;
+            return state.snapshot.providerId() < id;
         });
     if (provider == providers_.end() ||
-        provider->snapshot.provider_id() != provider_id) {
+        provider->snapshot.providerId() != provider_id) {
         return std::nullopt;
     }
-    const auto* node = find_node(provider->snapshot, node_id);
+    const auto* node = findNode(provider->snapshot, node_id);
     if (node == nullptr) {
         return std::nullopt;
     }
@@ -494,33 +494,33 @@ std::optional<TreeCommandInvocation> TreeModel::invoke_node_command(
                                  std::string{command_id}};
 }
 
-TreeViewState TreeModel::view_state() const {
+TreeViewState TreeModel::viewState() const {
     TreeViewState result{revision_, {}};
     result.providers.reserve(providers_.size());
     for (const auto& provider : providers_) {
         std::optional<TreeNodeId> provider_selected;
         if (selected_ &&
             selected_->value().starts_with(
-                provider.snapshot.provider_id().value() + ":")) {
+                provider.snapshot.providerId().value() + ":")) {
             provider_selected = selected_;
         }
         result.providers.push_back(TreeProviderView{
-            provider.snapshot.provider_id(), provider.snapshot.kind(),
-            visible_nodes(provider.snapshot, provider.expanded),
+            provider.snapshot.providerId(), provider.snapshot.kind(),
+            visibleNodes(provider.snapshot, provider.expanded),
             provider_selected});
     }
     return result;
 }
 
-std::size_t TreeDelta::operation_count() const noexcept {
+std::size_t TreeDelta::operationCount() const noexcept {
     std::size_t result = 0;
     for (const auto& provider : providers) {
-        result += provider_delta_cost(provider);
+        result += providerDeltaCost(provider);
     }
     return result;
 }
 
-TreeDelta derive_tree_delta(const TreeViewState& base,
+TreeDelta deriveTreeDelta(const TreeViewState& base,
                             const TreeViewState& target,
                             std::size_t maximum_operations) {
     TreeDelta result{base.revision, target.revision, false, {}};
@@ -584,14 +584,14 @@ TreeDelta derive_tree_delta(const TreeViewState& base,
         ++target_index;
     }
 
-    if (result.operation_count() > maximum_operations) {
+    if (result.operationCount() > maximum_operations) {
         result.snapshot_required = true;
         result.providers.clear();
     }
     return result;
 }
 
-TreeReplayResult replay_tree_delta(const TreeViewState& base,
+TreeReplayResult replayTreeDelta(const TreeViewState& base,
                                    const TreeDelta& delta) {
     if (base.revision != delta.base_revision) {
         return {std::nullopt, TreeReplayError::StaleRevision};

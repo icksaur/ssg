@@ -36,13 +36,13 @@ public:
     descriptors() const noexcept;
 
 private:
-    friend ClipboardCommandSet clipboard_command_set();
+    friend ClipboardCommandSet clipboardCommandSet();
     ClipboardCommandSet();
 
     const std::array<ClipboardCommandDescriptor, 3> descriptors_;
 };
 
-[[nodiscard]] ClipboardCommandSet clipboard_command_set();
+[[nodiscard]] ClipboardCommandSet clipboardCommandSet();
 
 enum class ClipboardRequestKind : std::uint8_t {
     Write,
@@ -132,7 +132,7 @@ struct ClipboardDelta {
     bool operator==(const ClipboardDelta&) const = default;
 };
 
-[[nodiscard]] ClipboardDelta derive_clipboard_delta(
+[[nodiscard]] ClipboardDelta deriveClipboardDelta(
     const ClipboardViewState& before, const ClipboardViewState& after);
 
 class ClipboardRegister {
@@ -154,12 +154,12 @@ public:
         Document& document, DocumentHistory& history,
         const SelectionSet& selections, ClipboardPasteMode mode,
         std::uint64_t timestamp_ms);
-    [[nodiscard]] ClipboardResult handle_response(
+    [[nodiscard]] ClipboardResult handleResponse(
         Document& document, DocumentHistory& history,
         const SelectionSet& current_selections,
         const ClipboardResponse& response, std::uint64_t timestamp_ms);
 
-    [[nodiscard]] ClipboardViewState view_state() const;
+    [[nodiscard]] ClipboardViewState viewState() const;
 
 private:
     struct Impl;

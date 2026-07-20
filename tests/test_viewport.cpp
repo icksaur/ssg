@@ -27,7 +27,7 @@ std::vector<CellRun> runs(std::initializer_list<std::string_view> lines) {
     std::vector<CellRun> result;
     result.reserve(lines.size());
     for (const auto line : lines) {
-        result.push_back(ssg::compute_cell_run(line));
+        result.push_back(ssg::computeCellRun(line));
     }
     return result;
 }
@@ -36,18 +36,18 @@ std::vector<CellRun> runs(std::initializer_list<std::string_view> lines) {
 // (split on '\n', one CellRun per logical line, an empty document -> one empty
 // run).  compute_viewport over these runs is the oracle compute_viewport_unwrapped
 // must match for fitting lines.
-std::vector<CellRun> cell_runs_from_text(std::string_view text, int tab) {
+std::vector<CellRun> cellRunsFromText(std::string_view text, int tab) {
     std::vector<CellRun> result;
     std::size_t start = 0;
     while (start <= text.size()) {
         auto end = text.find('\n', start);
         auto line = text.substr(
             start, end == std::string_view::npos ? end : end - start);
-        result.push_back(ssg::compute_cell_run(line, tab));
+        result.push_back(ssg::computeCellRun(line, tab));
         if (end == std::string_view::npos) break;
         start = end + 1;
     }
-    if (result.empty()) result.push_back(ssg::compute_cell_run("", tab));
+    if (result.empty()) result.push_back(ssg::computeCellRun("", tab));
     return result;
 }
 
@@ -83,67 +83,67 @@ std::string fixture(std::string_view name) {
     return contents.str();
 }
 
-void assert_golden(std::string_view name,
+void assertGolden(std::string_view name,
                    const std::vector<CellRun>& lines,
                    ViewportDimensions dimensions,
                    uint32_t first_row) {
-    ASSERT_EQ(serialize(ssg::compute_viewport(lines, dimensions, first_row)),
+    ASSERT_EQ(serialize(ssg::computeViewport(lines, dimensions, first_row)),
               fixture(name));
 }
 
 }  // namespace
 
-TEST(empty_viewport_golden) {
-    assert_golden("empty.txt", {}, ViewportDimensions{4, 2}, 0);
+TEST(emptyViewportGolden) {
+    assertGolden("empty.txt", {}, ViewportDimensions{4, 2}, 0);
 }
 
-TEST(short_viewport_golden) {
-    assert_golden("short.txt", runs({"abc"}), ViewportDimensions{5, 2}, 0);
+TEST(shortViewportGolden) {
+    assertGolden("short.txt", runs({"abc"}), ViewportDimensions{5, 2}, 0);
 }
 
-TEST(wide_boundary_golden) {
-    assert_golden("wide.txt", runs({"A\xE4\xB8\xAD" "B"}),
+TEST(wideBoundaryGolden) {
+    assertGolden("wide.txt", runs({"A\xE4\xB8\xAD" "B"}),
                   ViewportDimensions{3, 2}, 0);
 }
 
-TEST(wrapped_scrolled_golden) {
-    assert_golden("wrapped.txt", runs({"abcdef", "xy", "12345"}),
+TEST(wrappedScrolledGolden) {
+    assertGolden("wrapped.txt", runs({"abcdef", "xy", "12345"}),
                   ViewportDimensions{3, 2}, 2);
 }
 
-TEST(tiny_clipped_golden) {
-    assert_golden("tiny.txt", runs({"\xE4\xB8\xAD" "a"}),
+TEST(tinyClippedGolden) {
+    assertGolden("tiny.txt", runs({"\xE4\xB8\xAD" "a"}),
                   ViewportDimensions{1, 1}, 0);
 }
 
-TEST(scroll_saturates_and_delta_suppresses_equal_payload) {
+TEST(scrollSaturatesAndDeltaSuppressesEqualPayload) {
     const auto lines = runs({"abcdef", "xy"});
     const auto initial =
-        ssg::compute_viewport(lines, ViewportDimensions{2, 2}, 0);
+        ssg::computeViewport(lines, ViewportDimensions{2, 2}, 0);
     const auto bottom =
-        ssg::scroll_viewport_by(lines, ViewportDimensions{2, 2}, 0, 99);
+        ssg::scrollViewportBy(lines, ViewportDimensions{2, 2}, 0, 99);
     ASSERT_EQ(bottom.first_visual_row, bottom.scrollbar.maximum_first_row);
-    const auto top = ssg::scroll_viewport_by(
+    const auto top = ssg::scrollViewportBy(
         lines, ViewportDimensions{2, 2}, bottom.first_visual_row, -99);
     ASSERT_EQ(top.first_visual_row, 0u);
 
-    const auto same = ssg::derive_viewport_delta(initial, initial);
+    const auto same = ssg::deriveViewportDelta(initial, initial);
     ASSERT_FALSE(same.changed);
     ASSERT_FALSE(same.replacement.has_value());
-    const auto changed = ssg::derive_viewport_delta(initial, bottom);
+    const auto changed = ssg::deriveViewportDelta(initial, bottom);
     ASSERT_TRUE(changed.changed);
     ASSERT_TRUE(changed.replacement.has_value());
     ASSERT_EQ(*changed.replacement, bottom);
 }
 
-TEST(viewport_bounds_properties) {
+TEST(viewportBoundsProperties) {
     const auto lines =
         runs({"", "abcdef", "A\xE4\xB8\xAD" "B", "\tZ",
               "\xCC\x81" "x"});
     for (uint32_t columns = 1; columns <= 8; ++columns) {
         for (uint32_t rows = 1; rows <= 5; ++rows) {
             for (uint32_t requested = 0; requested <= 40; ++requested) {
-                const auto state = ssg::compute_viewport(
+                const auto state = ssg::computeViewport(
                     lines, ViewportDimensions{columns, rows}, requested);
                 ASSERT_TRUE(state.first_visual_row <=
                             state.scrollbar.maximum_first_row);
@@ -168,7 +168,7 @@ TEST(viewport_bounds_properties) {
     }
 }
 
-TEST(invalid_dimensions_are_actionable) {
+TEST(invalidDimensionsAreActionable) {
     bool columns_threw = false;
     try {
         (void)ViewportDimensions{0, 1};
@@ -186,99 +186,99 @@ TEST(invalid_dimensions_are_actionable) {
     ASSERT_TRUE(rows_threw);
 }
 
-TEST(list_scroll_view_clamps_and_hides_thumb_when_content_fits) {
+TEST(listScrollViewClampsAndHidesThumbWhenContentFits) {
     // Shorter than the viewport: first pinned to 0, all items visible, no thumb.
-    auto view = ssg::compute_list_scroll_view(3, 10, 5, std::nullopt, false);
+    auto view = ssg::computeListScrollView(3, 10, 5, std::nullopt, false);
     ASSERT_EQ(view.first_visible, std::uint32_t{0});
     ASSERT_EQ(view.visible_count, std::uint32_t{3});
     ASSERT_EQ(view.scrollbar.maximum_first_row, std::uint32_t{0});
     ASSERT_EQ(view.scrollbar.thumb_start, std::uint32_t{0});
-    ASSERT_EQ(view.scrollbar, ssg::scrollbar_metrics(3, 10, 0));
+    ASSERT_EQ(view.scrollbar, ssg::scrollbarMetrics(3, 10, 0));
 
     // Exactly full: still no scrolling room.
-    auto full = ssg::compute_list_scroll_view(10, 10, 4, std::nullopt, false);
+    auto full = ssg::computeListScrollView(10, 10, 4, std::nullopt, false);
     ASSERT_EQ(full.first_visible, std::uint32_t{0});
     ASSERT_EQ(full.visible_count, std::uint32_t{10});
     ASSERT_EQ(full.scrollbar.maximum_first_row, std::uint32_t{0});
 }
 
-TEST(list_scroll_view_empty_list) {
-    auto view = ssg::compute_list_scroll_view(0, 8, 3, std::nullopt, false);
+TEST(listScrollViewEmptyList) {
+    auto view = ssg::computeListScrollView(0, 8, 3, std::nullopt, false);
     ASSERT_EQ(view.first_visible, std::uint32_t{0});
     ASSERT_EQ(view.visible_count, std::uint32_t{0});
-    ASSERT_EQ(view.scrollbar, ssg::scrollbar_metrics(0, 8, 0));
+    ASSERT_EQ(view.scrollbar, ssg::scrollbarMetrics(0, 8, 0));
 }
 
-TEST(list_scroll_view_zero_viewport_is_inert) {
-    auto view = ssg::compute_list_scroll_view(20, 0, 5, std::optional<std::uint32_t>{7}, true);
+TEST(listScrollViewZeroViewportIsInert) {
+    auto view = ssg::computeListScrollView(20, 0, 5, std::optional<std::uint32_t>{7}, true);
     ASSERT_EQ(view.first_visible, std::uint32_t{0});
     ASSERT_EQ(view.visible_count, std::uint32_t{0});
-    ASSERT_EQ(view.scrollbar, ssg::scrollbar_metrics(20, 0, 0));
+    ASSERT_EQ(view.scrollbar, ssg::scrollbarMetrics(20, 0, 0));
 }
 
-TEST(list_scroll_view_clamps_over_scroll_to_maximum) {
+TEST(listScrollViewClampsOverScrollToMaximum) {
     // 100 items, 10-tall window: maximum first is 90.  A larger request clamps.
-    auto view = ssg::compute_list_scroll_view(100, 10, 500, std::nullopt, false);
+    auto view = ssg::computeListScrollView(100, 10, 500, std::nullopt, false);
     ASSERT_EQ(view.scrollbar.maximum_first_row, std::uint32_t{90});
     ASSERT_EQ(view.first_visible, std::uint32_t{90});
     ASSERT_EQ(view.visible_count, std::uint32_t{10});
-    ASSERT_EQ(view.scrollbar, ssg::scrollbar_metrics(100, 10, 90));
+    ASSERT_EQ(view.scrollbar, ssg::scrollbarMetrics(100, 10, 90));
 }
 
-TEST(list_scroll_view_free_scroll_ignores_selection) {
+TEST(listScrollViewFreeScrollIgnoresSelection) {
     // keep=false: the clamped request is honored even though the selection (0)
     // is far above the window, and even though a selection is present.
-    auto view = ssg::compute_list_scroll_view(100, 10, 40,
+    auto view = ssg::computeListScrollView(100, 10, 40,
                                               std::optional<std::uint32_t>{0}, false);
     ASSERT_EQ(view.first_visible, std::uint32_t{40});
     ASSERT_EQ(view.visible_count, std::uint32_t{10});
-    ASSERT_EQ(view.scrollbar, ssg::scrollbar_metrics(100, 10, 40));
+    ASSERT_EQ(view.scrollbar, ssg::scrollbarMetrics(100, 10, 40));
 }
 
-TEST(list_scroll_view_keep_visible_scrolls_down_to_selection) {
+TEST(listScrollViewKeepVisibleScrollsDownToSelection) {
     // Selection below the window forces the minimal downward shift so it lands
     // on the last visible row: first = selected - viewport + 1.
-    auto view = ssg::compute_list_scroll_view(100, 10, 0,
+    auto view = ssg::computeListScrollView(100, 10, 0,
                                               std::optional<std::uint32_t>{25}, true);
     ASSERT_EQ(view.first_visible, std::uint32_t{16});
     ASSERT_TRUE(25 >= view.first_visible &&
                 25 < view.first_visible + view.visible_count);
-    ASSERT_EQ(view.scrollbar, ssg::scrollbar_metrics(100, 10, 16));
+    ASSERT_EQ(view.scrollbar, ssg::scrollbarMetrics(100, 10, 16));
 }
 
-TEST(list_scroll_view_keep_visible_scrolls_up_to_selection) {
+TEST(listScrollViewKeepVisibleScrollsUpToSelection) {
     // Selection above the window forces first = selected.
-    auto view = ssg::compute_list_scroll_view(100, 10, 50,
+    auto view = ssg::computeListScrollView(100, 10, 50,
                                               std::optional<std::uint32_t>{12}, true);
     ASSERT_EQ(view.first_visible, std::uint32_t{12});
     ASSERT_TRUE(12 >= view.first_visible &&
                 12 < view.first_visible + view.visible_count);
 }
 
-TEST(list_scroll_view_keep_visible_leaves_in_window_selection_untouched) {
+TEST(listScrollViewKeepVisibleLeavesInWindowSelectionUntouched) {
     // Selection already inside the window: no shift.
-    auto view = ssg::compute_list_scroll_view(100, 10, 20,
+    auto view = ssg::computeListScrollView(100, 10, 20,
                                               std::optional<std::uint32_t>{25}, true);
     ASSERT_EQ(view.first_visible, std::uint32_t{20});
 }
 
-TEST(list_scroll_view_keep_visible_clamps_selection_to_last_item) {
+TEST(listScrollViewKeepVisibleClampsSelectionToLastItem) {
     // An out-of-range selection is clamped to the last item, which still forces
     // a valid in-range window that never exceeds maximum_first_row.
-    auto view = ssg::compute_list_scroll_view(100, 10, 0,
+    auto view = ssg::computeListScrollView(100, 10, 0,
                                               std::optional<std::uint32_t>{999}, true);
     ASSERT_EQ(view.first_visible, std::uint32_t{90});
     ASSERT_EQ(view.scrollbar.maximum_first_row, std::uint32_t{90});
 }
 
-TEST(list_scroll_view_matches_compute_viewport_metrics) {
+TEST(listScrollViewMatchesComputeViewportMetrics) {
     // The generalized primitive must produce the same scrollbar metrics the
     // editor's compute_viewport already does for the same (total, viewport,
     // first) — no regression in the reused thumb math.
     std::vector<CellRun> lines;
-    for (int i = 0; i < 40; ++i) lines.push_back(ssg::compute_cell_run("line", 4));
-    auto viewport = ssg::compute_viewport(lines, ssg::ViewportDimensions{20, 10}, 7);
-    auto list = ssg::compute_list_scroll_view(
+    for (int i = 0; i < 40; ++i) lines.push_back(ssg::computeCellRun("line", 4));
+    auto viewport = ssg::computeViewport(lines, ssg::ViewportDimensions{20, 10}, 7);
+    auto list = ssg::computeListScrollView(
         viewport.total_visual_rows, 10, 7, std::nullopt, false);
     ASSERT_EQ(list.scrollbar, viewport.scrollbar);
     ASSERT_EQ(list.first_visible, viewport.first_visual_row);
@@ -288,7 +288,7 @@ TEST(list_scroll_view_matches_compute_viewport_metrics) {
 // width, compute_viewport_unwrapped is field-for-field equal to the full path
 // compute_viewport(active_cell_runs(text), ...).  Reference oracle over a
 // generated corpus crossed with dimensions, first_row, and tab width.
-TEST(unwrapped_matches_full_path_for_fitting_lines) {
+TEST(unwrappedMatchesFullPathForFittingLines) {
     const std::vector<std::string> corpus = {
         "",                                        // empty document
         "abc",                                     // single line, no newline
@@ -302,7 +302,7 @@ TEST(unwrapped_matches_full_path_for_fitting_lines) {
     };
     for (int tab : {2, 4, 8}) {
         for (const auto& doc : corpus) {
-            const auto lines = cell_runs_from_text(doc, tab);
+            const auto lines = cellRunsFromText(doc, tab);
             uint32_t maxwidth = 0;
             for (const auto& r : lines) {
                 maxwidth = std::max(maxwidth, r.total_cells);
@@ -312,8 +312,8 @@ TEST(unwrapped_matches_full_path_for_fitting_lines) {
                 for (uint32_t rows = 1; rows <= 6; ++rows) {
                     for (uint32_t first = 0; first <= 12; ++first) {
                         ViewportDimensions dims{columns, rows};
-                        const auto full = ssg::compute_viewport(lines, dims, first);
-                        const auto proj = ssg::compute_viewport_unwrapped(
+                        const auto full = ssg::computeViewport(lines, dims, first);
+                        const auto proj = ssg::computeViewportUnwrapped(
                             doc, dims, first, 0, tab);
                         ASSERT_EQ(serialize(proj), serialize(full));
                         ASSERT_TRUE(proj == full);
@@ -326,10 +326,10 @@ TEST(unwrapped_matches_full_path_for_fitting_lines) {
 
 // VP-1 (no-wrap clipping): a line wider than the pane is ONE visual row clipped
 // to the width, not multiple wrapped rows; hit offsets are document-absolute.
-TEST(unwrapped_clips_long_lines_to_one_row) {
+TEST(unwrappedClipsLongLinesToOneRow) {
     const std::string doc = "abcdef\nxy";  // line 0 is 6 cells wide
     const ViewportDimensions dims{3, 2};
-    const auto proj = ssg::compute_viewport_unwrapped(doc, dims, 0, 0, 4);
+    const auto proj = ssg::computeViewportUnwrapped(doc, dims, 0, 0, 4);
 
     ASSERT_EQ(proj.total_visual_rows, 2u);  // two logical lines, NOT wrapped
     ASSERT_EQ(proj.visible_rows.size(), 2u);
@@ -355,11 +355,11 @@ TEST(unwrapped_clips_long_lines_to_one_row) {
 
 // VP-1: the same long-line document wraps into MORE rows on the full path and
 // clips to fewer on the unwrapped path — the intended wrap-on vs wrap-off split.
-TEST(unwrapped_vs_wrapped_row_count_differs_for_long_lines) {
+TEST(unwrappedVsWrappedRowCountDiffersForLongLines) {
     const std::string doc = "abcdef\nxy";
     const ViewportDimensions dims{3, 8};
-    const auto wrapped = ssg::compute_viewport(cell_runs_from_text(doc, 4), dims, 0);
-    const auto proj = ssg::compute_viewport_unwrapped(doc, dims, 0, 0, 4);
+    const auto wrapped = ssg::computeViewport(cellRunsFromText(doc, 4), dims, 0);
+    const auto proj = ssg::computeViewportUnwrapped(doc, dims, 0, 0, 4);
     ASSERT_EQ(proj.total_visual_rows, 2u);
     ASSERT_EQ(wrapped.total_visual_rows, 3u);  // "abcdef" -> 2 rows, "xy" -> 1
     ASSERT_TRUE(wrapped.total_visual_rows > proj.total_visual_rows);
@@ -367,10 +367,10 @@ TEST(unwrapped_vs_wrapped_row_count_differs_for_long_lines) {
 
 // VP-1 (INV-scrollbar-total): total rows is the line count, and first_row clamps
 // against it exactly as the full path clamps against its total.
-TEST(unwrapped_clamps_first_row_to_line_count) {
+TEST(unwrappedClampsFirstRowToLineCount) {
     const std::string doc = "a\nb\nc\nd\ne";  // 5 logical lines
     const ViewportDimensions dims{4, 2};
-    const auto proj = ssg::compute_viewport_unwrapped(doc, dims, 99, 0, 4);
+    const auto proj = ssg::computeViewportUnwrapped(doc, dims, 99, 0, 4);
     ASSERT_EQ(proj.total_visual_rows, 5u);
     ASSERT_EQ(proj.scrollbar.maximum_first_row, 3u);  // 5 - 2
     ASSERT_EQ(proj.first_visual_row, 3u);
@@ -380,11 +380,11 @@ TEST(unwrapped_clamps_first_row_to_line_count) {
 
 // VP-H (H0): a horizontal offset windows each row from that cell, snapping to a
 // grapheme boundary, with document-absolute hit offsets.
-TEST(unwrapped_horizontal_offset_windows_each_row) {
+TEST(unwrappedHorizontalOffsetWindowsEachRow) {
     const std::string doc = "abcdefghij\nkl";  // line 0 is 10 cells wide
     const ViewportDimensions dims{4, 2};
     // Scroll right by 3 cells: the row shows cells [3, 7) = "defg".
-    const auto proj = ssg::compute_viewport_unwrapped(doc, dims, 0, 3, 4);
+    const auto proj = ssg::computeViewportUnwrapped(doc, dims, 0, 3, 4);
 
     ASSERT_EQ(proj.first_visual_column, 3u);
     ASSERT_EQ(proj.total_visual_rows, 2u);
@@ -410,14 +410,14 @@ TEST(unwrapped_horizontal_offset_windows_each_row) {
 
 // VP-H (H0): the offset snaps to a grapheme boundary — a wide cluster straddling
 // the requested column scrolls fully off rather than splitting.
-TEST(unwrapped_horizontal_offset_snaps_to_grapheme_boundary) {
+TEST(unwrappedHorizontalOffsetSnapsToGraphemeBoundary) {
     // "A" + U+4E2D (wide, 2 cells) + "B" -> cells: A@0, 中@1-2, B@3.
     const std::string doc = "A\xE4\xB8\xAD" "B";
     const ViewportDimensions dims{4, 1};
     // Requesting offset 2 lands inside the wide cluster (cells 1-2); the pane
     // offset is the requested value (2), while the row's own origin snaps to the
     // first span at/after cell 2 — "B" at cell 3 — recorded in start_cell.
-    const auto proj = ssg::compute_viewport_unwrapped(doc, dims, 0, 2, 4);
+    const auto proj = ssg::computeViewportUnwrapped(doc, dims, 0, 2, 4);
     ASSERT_EQ(proj.first_visual_column, 2u);
     ASSERT_EQ(proj.visible_rows[0].start_cell.value(), 3u);
     ASSERT_EQ(proj.visible_rows[0].span_count, 1u);  // just "B"
@@ -431,7 +431,7 @@ TEST(unwrapped_horizontal_offset_snaps_to_grapheme_boundary) {
 // newline byte, or text.size() for the last line) — and is INDEPENDENT of the
 // horizontal offset. Verified against a hand-computed line-end table and
 // resolve_document_position.
-TEST(unwrapped_end_byte_offset_is_the_true_line_end) {
+TEST(unwrappedEndByteOffsetIsTheTrueLineEnd) {
     // Lines: "ab"(0..2) | ""(3) blank | "cde"(4..7) | ""(8) trailing.
     const std::string doc = "ab\n\ncde\n";
     // Expected end offset per logical line: newline byte, or text.size() for the
@@ -439,11 +439,11 @@ TEST(unwrapped_end_byte_offset_is_the_true_line_end) {
     const std::array<std::uint32_t, 4> want_end{2, 3, 7, 8};
     for (uint32_t columns : {1u, 3u, 80u}) {          // incl. a clipping width
         for (uint32_t first_col : {0u, 1u, 5u}) {      // incl. horizontal offset
-            const auto proj = ssg::compute_viewport_unwrapped(
+            const auto proj = ssg::computeViewportUnwrapped(
                 doc, ViewportDimensions{columns, 8}, 0, first_col, 4);
             for (const auto& row : proj.visible_rows) {
                 ASSERT_EQ(row.end_byte_offset, want_end[row.logical_line]);
-                auto pos = ssg::resolve_document_position(
+                auto pos = ssg::resolveDocumentPosition(
                     doc, ssg::ByteOffset{row.end_byte_offset});
                 ASSERT_TRUE(pos.has_value());
                 if (pos) {
@@ -457,12 +457,12 @@ TEST(unwrapped_end_byte_offset_is_the_true_line_end) {
 
 // CE-1: for the WRAPPED builder, end_byte_offset is the VISUAL row's end — the
 // wrap boundary for an interior row, the logical EOL for the final row of a line.
-TEST(wrapped_end_byte_offset_is_the_visual_row_end) {
+TEST(wrappedEndByteOffsetIsTheVisualRowEnd) {
     // "abcdef"(0..6) wraps at width 3 into "abc"(rel 0..3) + "def"(rel 3..6);
     // then "xy"(7..9). Document ends after "xy" with no trailing newline.
     const std::string doc = "abcdef\nxy";
-    const auto lines = cell_runs_from_text(doc, 4);
-    const auto proj = ssg::compute_viewport(lines, ViewportDimensions{3, 8}, 0);
+    const auto lines = cellRunsFromText(doc, 4);
+    const auto proj = ssg::computeViewport(lines, ViewportDimensions{3, 8}, 0);
     // Rows: 0="abc" end=3 (wrap boundary), 1="def" end=6 (logical EOL / newline),
     // 2="xy" end=9 (text.size()).
     ASSERT_EQ(proj.visible_rows.size(), std::size_t{3});
@@ -475,32 +475,32 @@ TEST(wrapped_end_byte_offset_is_the_visual_row_end) {
 }
 
 int main() {
-    RUN(empty_viewport_golden);
-    RUN(short_viewport_golden);
-    RUN(wide_boundary_golden);
-    RUN(wrapped_scrolled_golden);
-    RUN(tiny_clipped_golden);
-    RUN(scroll_saturates_and_delta_suppresses_equal_payload);
-    RUN(unwrapped_matches_full_path_for_fitting_lines);
-    RUN(unwrapped_clips_long_lines_to_one_row);
-    RUN(unwrapped_vs_wrapped_row_count_differs_for_long_lines);
-    RUN(unwrapped_clamps_first_row_to_line_count);
-    RUN(unwrapped_end_byte_offset_is_the_true_line_end);
-    RUN(wrapped_end_byte_offset_is_the_visual_row_end);
-    RUN(unwrapped_horizontal_offset_windows_each_row);
-    RUN(unwrapped_horizontal_offset_snaps_to_grapheme_boundary);
-    RUN(viewport_bounds_properties);
-    RUN(invalid_dimensions_are_actionable);
-    RUN(list_scroll_view_clamps_and_hides_thumb_when_content_fits);
-    RUN(list_scroll_view_empty_list);
-    RUN(list_scroll_view_zero_viewport_is_inert);
-    RUN(list_scroll_view_clamps_over_scroll_to_maximum);
-    RUN(list_scroll_view_free_scroll_ignores_selection);
-    RUN(list_scroll_view_keep_visible_scrolls_down_to_selection);
-    RUN(list_scroll_view_keep_visible_scrolls_up_to_selection);
-    RUN(list_scroll_view_keep_visible_leaves_in_window_selection_untouched);
-    RUN(list_scroll_view_keep_visible_clamps_selection_to_last_item);
-    RUN(list_scroll_view_matches_compute_viewport_metrics);
+    RUN(emptyViewportGolden);
+    RUN(shortViewportGolden);
+    RUN(wideBoundaryGolden);
+    RUN(wrappedScrolledGolden);
+    RUN(tinyClippedGolden);
+    RUN(scrollSaturatesAndDeltaSuppressesEqualPayload);
+    RUN(unwrappedMatchesFullPathForFittingLines);
+    RUN(unwrappedClipsLongLinesToOneRow);
+    RUN(unwrappedVsWrappedRowCountDiffersForLongLines);
+    RUN(unwrappedClampsFirstRowToLineCount);
+    RUN(unwrappedEndByteOffsetIsTheTrueLineEnd);
+    RUN(wrappedEndByteOffsetIsTheVisualRowEnd);
+    RUN(unwrappedHorizontalOffsetWindowsEachRow);
+    RUN(unwrappedHorizontalOffsetSnapsToGraphemeBoundary);
+    RUN(viewportBoundsProperties);
+    RUN(invalidDimensionsAreActionable);
+    RUN(listScrollViewClampsAndHidesThumbWhenContentFits);
+    RUN(listScrollViewEmptyList);
+    RUN(listScrollViewZeroViewportIsInert);
+    RUN(listScrollViewClampsOverScrollToMaximum);
+    RUN(listScrollViewFreeScrollIgnoresSelection);
+    RUN(listScrollViewKeepVisibleScrollsDownToSelection);
+    RUN(listScrollViewKeepVisibleScrollsUpToSelection);
+    RUN(listScrollViewKeepVisibleLeavesInWindowSelectionUntouched);
+    RUN(listScrollViewKeepVisibleClampsSelectionToLastItem);
+    RUN(listScrollViewMatchesComputeViewportMetrics);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;
 }

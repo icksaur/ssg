@@ -118,12 +118,12 @@ public:
     SessionDelta(SessionDelta&&) noexcept = default;
     SessionDelta& operator=(SessionDelta&&) noexcept = default;
 
-    [[nodiscard]] Revision base_revision() const noexcept {
+    [[nodiscard]] Revision baseRevision() const noexcept {
         return base_revision_;
     }
     [[nodiscard]] Revision revision() const noexcept { return revision_; }
-    [[nodiscard]] ClientId client_id() const noexcept { return client_id_; }
-    [[nodiscard]] ViewId view_id() const noexcept { return view_id_; }
+    [[nodiscard]] ClientId clientId() const noexcept { return client_id_; }
+    [[nodiscard]] ViewId viewId() const noexcept { return view_id_; }
     [[nodiscard]] std::vector<CapabilityId> const& capabilities() const noexcept {
         return capabilities_;
     }
@@ -133,7 +133,7 @@ public:
     [[nodiscard]] std::optional<DocumentDelta> const& document() const noexcept {
         return document_;
     }
-    [[nodiscard]] std::optional<ByteOffset> const& document_caret()
+    [[nodiscard]] std::optional<ByteOffset> const& documentCaret()
         const noexcept {
         return document_caret_;
     }
@@ -146,36 +146,36 @@ public:
     [[nodiscard]] ClipboardDelta const& clipboard() const noexcept {
         return clipboard_;
     }
-    [[nodiscard]] PromptStatusDelta const& prompt_status() const noexcept {
+    [[nodiscard]] PromptStatusDelta const& promptStatus() const noexcept {
         return prompt_status_;
     }
     [[nodiscard]] SearchDelta const& search() const noexcept { return search_; }
-    [[nodiscard]] FindReplaceDelta const& find_replace() const noexcept {
+    [[nodiscard]] FindReplaceDelta const& findReplace() const noexcept {
         return find_replace_;
     }
     [[nodiscard]] SettingsSectionDelta const& settings() const noexcept {
         return settings_;
     }
     [[nodiscard]] KeymapDelta const& keymap() const noexcept { return keymap_; }
-    [[nodiscard]] std::optional<TextEncodingDelta> const& text_encoding()
+    [[nodiscard]] std::optional<TextEncodingDelta> const& textEncoding()
         const noexcept {
         return text_encoding_;
     }
     [[nodiscard]] TabDelta const& tabs() const noexcept { return tabs_; }
     [[nodiscard]] DiffDelta const& diff() const noexcept { return diff_; }
-    [[nodiscard]] ExternalModificationDelta const& external_modification()
+    [[nodiscard]] ExternalModificationDelta const& externalModification()
         const noexcept {
         return external_modification_;
     }
-    [[nodiscard]] FollowEditsDelta const& follow_edits() const noexcept {
+    [[nodiscard]] FollowEditsDelta const& followEdits() const noexcept {
         return follow_edits_;
     }
     [[nodiscard]] TreeDelta const& tree() const noexcept { return tree_; }
     [[nodiscard]] SyntaxDelta const& syntax() const noexcept { return syntax_; }
-    [[nodiscard]] LspSyncDelta const& lsp_sync() const noexcept {
+    [[nodiscard]] LspSyncDelta const& lspSync() const noexcept {
         return lsp_sync_;
     }
-    [[nodiscard]] LspFeatureDelta const& lsp_features() const noexcept {
+    [[nodiscard]] LspFeatureDelta const& lspFeatures() const noexcept {
         return lsp_features_;
     }
     [[nodiscard]] ThemeSectionDelta const& theme() const noexcept {
@@ -189,14 +189,14 @@ public:
     }
 
 private:
-    friend SessionDelta derive_session_delta(SessionSnapshot const&,
+    friend SessionDelta deriveSessionDelta(SessionSnapshot const&,
                                              SessionSnapshot const&);
-    friend SessionReplayResult replay_session_delta(SessionSnapshot const&,
+    friend SessionReplayResult replaySessionDelta(SessionSnapshot const&,
                                                      SessionDelta const&);
     // The protocol codec reconstructs a SessionDelta from decoded wire
     // fields; this factory is the only non-derivation construction path so
     // normal in-process construction remains through derive_session_delta.
-    friend SessionDelta decode_wire_session_delta(
+    friend SessionDelta decodeWireSessionDelta(
         Revision base_revision, Revision revision, ClientId client_id,
         ViewId view_id, std::vector<CapabilityId> capabilities,
         std::optional<SessionTopology> topology,
@@ -269,19 +269,19 @@ struct SessionReplayResult {
     }
 };
 
-[[nodiscard]] SessionSnapshot assemble_session_snapshot(
+[[nodiscard]] SessionSnapshot assembleSessionSnapshot(
     Revision revision, SessionTopology topology,
     InvocationPrincipal const& principal, ViewId view_id,
     ViewportViewState viewport, SessionSnapshotSections sections);
-[[nodiscard]] SessionDelta derive_session_delta(SessionSnapshot const& before,
+[[nodiscard]] SessionDelta deriveSessionDelta(SessionSnapshot const& before,
                                                 SessionSnapshot const& after);
-[[nodiscard]] SessionReplayResult replay_session_delta(
+[[nodiscard]] SessionReplayResult replaySessionDelta(
     SessionSnapshot const& base, SessionDelta const& delta);
 
 // Reconstructs a SessionDelta from already-validated wire fields (protocol
 // codec use only; see the friend declaration above). Ordinary code derives
 // deltas through derive_session_delta instead.
-[[nodiscard]] SessionDelta decode_wire_session_delta(
+[[nodiscard]] SessionDelta decodeWireSessionDelta(
     Revision base_revision, Revision revision, ClientId client_id,
     ViewId view_id, std::vector<CapabilityId> capabilities,
     std::optional<SessionTopology> topology,

@@ -45,14 +45,14 @@ public:
     descriptors() const noexcept;
 
 private:
-    friend EditCommandSuiteCommandSet edit_command_suite_command_set();
+    friend EditCommandSuiteCommandSet editCommandSuiteCommandSet();
     EditCommandSuiteCommandSet();
 
     const std::array<EditCommandDescriptor, 13> descriptors_;
 };
 
 [[nodiscard]] EditCommandSuiteCommandSet
-edit_command_suite_command_set();
+editCommandSuiteCommandSet();
 
 struct EditCommandSettings {
     IndentStyle indent_style;
@@ -85,7 +85,7 @@ struct EditCommandResult {
     }
 };
 
-[[nodiscard]] EditCommandResult apply_edit_command(
+[[nodiscard]] EditCommandResult applyEditCommand(
     const DocumentSnapshot& document, const SelectionSet& selections,
     EditCommandSettings settings, EditCommand command);
 

@@ -12,7 +12,7 @@ TabResult failure(TabError error, std::string message) {
     return {error, std::move(message), {}, {}};
 }
 
-bool same_identity(const TabState& left, const TabState& right) {
+bool sameIdentity(const TabState& left, const TabState& right) {
     if (left.kind != right.kind) {
         return false;
     }
@@ -22,7 +22,7 @@ bool same_identity(const TabState& left, const TabState& right) {
     return left.content_identity == right.content_identity;
 }
 
-std::optional<std::string> invalid_state(const TabViewState& state) {
+std::optional<std::string> invalidState(const TabViewState& state) {
     if (state.tabs.empty() != !state.active.has_value()) {
         return "active tab must be present exactly when tabs are present";
     }
@@ -47,7 +47,7 @@ std::optional<std::string> invalid_state(const TabViewState& state) {
             if (state.tabs[other].id == tab.id) {
                 return "tab ids must be unique";
             }
-            if (same_identity(state.tabs[other], tab)) {
+            if (sameIdentity(state.tabs[other], tab)) {
                 return "tab content identities must be unique";
             }
         }
@@ -62,21 +62,21 @@ std::optional<std::string> invalid_state(const TabViewState& state) {
 
 }  // namespace
 
-TabDelta derive_tab_delta(const TabViewState& base,
+TabDelta deriveTabDelta(const TabViewState& base,
                           const TabViewState& target) {
     return base == target ? TabDelta{} : TabDelta{target};
 }
 
-TabReplayResult replay_tab_delta(const TabViewState& base,
+TabReplayResult replayTabDelta(const TabViewState& base,
                                  const TabDelta& delta) {
     const auto& target = delta.state ? *delta.state : base;
-    if (const auto error = invalid_state(target)) {
+    if (const auto error = invalidState(target)) {
         return {{}, *error};
     }
     return {target, {}};
 }
 
-TabManagementCommandSet tab_management_command_set() {
+TabManagementCommandSet tabManagementCommandSet() {
     return {};
 }
 
@@ -105,7 +105,7 @@ struct TabManager::Impl {
                             [id](const TabState& tab) { return tab.id == id; });
     }
 
-    [[nodiscard]] std::string untitled_label() const {
+    [[nodiscard]] std::string untitledLabel() const {
         for (std::size_t number = 1;; ++number) {
             const auto candidate = "Untitled " + std::to_string(number);
             if (std::none_of(view.tabs.begin(), view.tabs.end(),
@@ -117,7 +117,7 @@ struct TabManager::Impl {
         }
     }
 
-    [[nodiscard]] TabResult close_at(
+    [[nodiscard]] TabResult closeAt(
         std::size_t index, std::chrono::milliseconds durability_timeout,
         std::optional<std::size_t> recorded_index = {}) {
         const auto tab = view.tabs[index];
@@ -151,7 +151,7 @@ struct TabManager::Impl {
         return {TabError::None, {}, tab.id, {}};
     }
 
-    [[nodiscard]] TabResult close_batch(
+    [[nodiscard]] TabResult closeBatch(
         std::optional<TabId> keep,
         std::chrono::milliseconds durability_timeout) {
         if (durability_timeout <= std::chrono::milliseconds::zero()) {
@@ -180,7 +180,7 @@ struct TabManager::Impl {
             const auto current = find(id);
             const auto index =
                 static_cast<std::size_t>(std::distance(view.tabs.begin(), current));
-            auto result = close_at(index, durability_timeout, original_index);
+            auto result = closeAt(index, durability_timeout, original_index);
             if (!result.accepted()) {
                 aggregate.failures.push_back(
                     {id, result.error, std::move(result.message)});
@@ -228,15 +228,15 @@ TabManager::~TabManager() = default;
 TabManager::TabManager(TabManager&&) noexcept = default;
 TabManager& TabManager::operator=(TabManager&&) noexcept = default;
 
-const TabViewState& TabManager::view_state() const noexcept {
+const TabViewState& TabManager::viewState() const noexcept {
     return impl_->view;
 }
 
-std::size_t TabManager::recently_closed_count() const noexcept {
+std::size_t TabManager::recentlyClosedCount() const noexcept {
     return impl_->recently_closed.size();
 }
 
-TabResult TabManager::open_document(FileDocumentId document,
+TabResult TabManager::openDocument(FileDocumentId document,
                                     JournalDocumentKey identity,
                                     std::string_view label,
                                     DocumentMode mode,
@@ -260,9 +260,9 @@ TabResult TabManager::open_document(FileDocumentId document,
     std::string resolved_label{label};
     if (resolved_label.empty()) {
         if (identity.kind() == JournalDocumentKeyKind::Untitled) {
-            resolved_label = impl_->untitled_label();
+            resolved_label = impl_->untitledLabel();
         } else {
-            const auto& path = identity.saved_path();
+            const auto& path = identity.savedPath();
             const auto separator = path.find_last_of("/\\");
             resolved_label = path.substr(
                 separator == std::string::npos ? 0 : separator + 1);
@@ -281,7 +281,7 @@ TabResult TabManager::open_document(FileDocumentId document,
     return {TabError::None, {}, id, {}};
 }
 
-TabResult TabManager::open_content(TabKind kind,
+TabResult TabManager::openContent(TabKind kind,
                                    std::string_view content_identity,
                                    std::string_view label,
                                    DocumentMode mode) {
@@ -308,7 +308,7 @@ TabResult TabManager::open_content(TabKind kind,
     return {TabError::None, {}, id, {}};
 }
 
-TabResult TabManager::update_document(FileDocumentId document,
+TabResult TabManager::updateDocument(FileDocumentId document,
                                       DocumentMode mode,
                                       bool dirty,
                                       TabRecoveryBadge recovery) {
@@ -360,7 +360,7 @@ TabResult TabManager::previous() {
     return {TabError::None, {}, impl_->view.active, {}};
 }
 
-TabResult TabManager::move_left(TabId tab) {
+TabResult TabManager::moveLeft(TabId tab) {
     const auto found = impl_->find(tab);
     if (found == impl_->view.tabs.end()) {
         return failure(TabError::NotFound, "tab is not open");
@@ -373,7 +373,7 @@ TabResult TabManager::move_left(TabId tab) {
     return {TabError::None, {}, tab, {}};
 }
 
-TabResult TabManager::move_right(TabId tab) {
+TabResult TabManager::moveRight(TabId tab) {
     const auto found = impl_->find(tab);
     if (found == impl_->view.tabs.end()) {
         return failure(TabError::NotFound, "tab is not open");
@@ -394,26 +394,26 @@ TabResult TabManager::close(
     if (found == impl_->view.tabs.end()) {
         return failure(TabError::NotFound, "tab is not open");
     }
-    return impl_->close_at(
+    return impl_->closeAt(
         static_cast<std::size_t>(
             std::distance(impl_->view.tabs.begin(), found)),
         durability_timeout);
 }
 
-TabResult TabManager::close_others(
+TabResult TabManager::closeOthers(
     TabId tab, std::chrono::milliseconds durability_timeout) {
     if (impl_->find(tab) == impl_->view.tabs.end()) {
         return failure(TabError::NotFound, "tab is not open");
     }
-    return impl_->close_batch(tab, durability_timeout);
+    return impl_->closeBatch(tab, durability_timeout);
 }
 
-TabResult TabManager::close_all(
+TabResult TabManager::closeAll(
     std::chrono::milliseconds durability_timeout) {
-    return impl_->close_batch({}, durability_timeout);
+    return impl_->closeBatch({}, durability_timeout);
 }
 
-TabResult TabManager::reopen_closed() {
+TabResult TabManager::reopenClosed() {
     if (impl_->recently_closed.empty()) {
         return failure(TabError::NoRecentlyClosed,
                        "no recently closed tab is available");
@@ -421,7 +421,7 @@ TabResult TabManager::reopen_closed() {
     auto& closed = impl_->recently_closed.back();
     const auto existing = std::find_if(
         impl_->view.tabs.begin(), impl_->view.tabs.end(),
-        [&](const TabState& tab) { return same_identity(tab, closed.state); });
+        [&](const TabState& tab) { return sameIdentity(tab, closed.state); });
     if (existing != impl_->view.tabs.end()) {
         const auto id = existing->id;
         impl_->view.active = id;

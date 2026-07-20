@@ -26,9 +26,9 @@ struct DocumentDelta {
     bool operator==(DocumentDelta const&) const = default;
 };
 
-[[nodiscard]] std::optional<DocumentDelta> derive_document_delta(
+[[nodiscard]] std::optional<DocumentDelta> deriveDocumentDelta(
     DocumentViewState const& before, DocumentViewState const& after);
-[[nodiscard]] std::optional<DocumentViewState> replay_document_delta(
+[[nodiscard]] std::optional<DocumentViewState> replayDocumentDelta(
     DocumentViewState const& before, DocumentDelta const& delta,
     ByteOffset target_caret);
 

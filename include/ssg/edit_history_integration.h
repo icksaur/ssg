@@ -30,22 +30,22 @@ struct EditHistoryIntegrationResult {
         return error == EditHistoryIntegrationError::None;
     }
 
-    [[nodiscard]] bool document_changed() const noexcept {
+    [[nodiscard]] bool documentChanged() const noexcept {
         return history_result.has_value() && history_result->accepted();
     }
 };
 
-[[nodiscard]] HistoryEditKind history_edit_kind(
+[[nodiscard]] HistoryEditKind historyEditKind(
     TextInputCommand command) noexcept;
-[[nodiscard]] HistoryEditKind history_edit_kind(EditCommand command) noexcept;
+[[nodiscard]] HistoryEditKind historyEditKind(EditCommand command) noexcept;
 
-[[nodiscard]] EditHistoryIntegrationResult apply_text_input_with_history(
+[[nodiscard]] EditHistoryIntegrationResult applyTextInputWithHistory(
     Document& document, DocumentHistory& history,
     const SelectionSet& selections, TextInputSettings settings,
     TextInputCommand command, TextInputArguments arguments,
     std::uint64_t timestamp_ms);
 
-[[nodiscard]] EditHistoryIntegrationResult apply_edit_command_with_history(
+[[nodiscard]] EditHistoryIntegrationResult applyEditCommandWithHistory(
     Document& document, DocumentHistory& history,
     const SelectionSet& selections, EditCommandSettings settings,
     EditCommand command, std::uint64_t timestamp_ms);

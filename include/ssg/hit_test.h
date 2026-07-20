@@ -58,7 +58,7 @@ struct RegionHit {
 // side panel, editor pane, and their gutters occupy disjoint columns, so their
 // order does not matter. A cell outside every region, on the tree provider-label
 // row, or in a reserved-but-empty gutter/list area returns HitRegion::none.
-[[nodiscard]] RegionHit hit_test(SessionSnapshot const& snapshot, int column,
+[[nodiscard]] RegionHit hitTest(SessionSnapshot const& snapshot, int column,
                                  int row);
 
 }  // namespace ssg

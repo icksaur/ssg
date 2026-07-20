@@ -13,7 +13,7 @@ namespace {
 
 using namespace ssg;
 
-DiffFileView changed_file(std::string id, std::filesystem::path path,
+DiffFileView changedFile(std::string id, std::filesystem::path path,
                           std::size_t newest_line, bool deleted = false) {
     DiffFileView view{DiffFileId{std::move(id)}};
     view.path = std::move(path);
@@ -27,7 +27,7 @@ DiffFileView changed_file(std::string id, std::filesystem::path path,
     return view;
 }
 
-DiffViewState current_diff(std::initializer_list<DiffFileView> files,
+DiffViewState currentDiff(std::initializer_list<DiffFileView> files,
                            std::uint64_t revision) {
     return {Revision{revision}, files};
 }
@@ -41,11 +41,11 @@ std::vector<std::string> split(std::string_view line) {
     return fields;
 }
 
-std::string target_id(const std::optional<FollowTarget>& target) {
+std::string targetId(const std::optional<FollowTarget>& target) {
     return target ? target->id.value() : "-";
 }
 
-std::string queue_ids(const FollowEditsViewState& state) {
+std::string queueIds(const FollowEditsViewState& state) {
     if (state.queued_targets.empty()) {
         return "-";
     }
@@ -59,7 +59,7 @@ std::string queue_ids(const FollowEditsViewState& state) {
     return result;
 }
 
-std::string row_for(const FollowEditsViewState& state, std::uint64_t client) {
+std::string rowFor(const FollowEditsViewState& state, std::uint64_t client) {
     for (const auto& view : state.clients) {
         if (view.client == ClientId{client}) {
             return std::to_string(view.offset.first_row);
@@ -68,7 +68,7 @@ std::string row_for(const FollowEditsViewState& state, std::uint64_t client) {
     return "-";
 }
 
-TEST(independent_transition_table_covers_shared_follow_policy) {
+TEST(independentTransitionTableCoversSharedFollowPolicy) {
     std::ifstream input{
         std::filesystem::path{SSG_FOLLOW_EDITS_FIXTURE_DIR} / "transitions.tsv"};
     ASSERT_TRUE(input.good());
@@ -84,7 +84,7 @@ TEST(independent_transition_table_covers_shared_follow_policy) {
         ASSERT_EQ(fields.size(), std::size_t{8});
         const auto& operation = fields[0];
         if (operation == "attach") {
-            ASSERT_TRUE(model.attach_client(
+            ASSERT_TRUE(model.attachClient(
                                  ClientId{std::stoull(fields[1])},
                                  ViewportDimensions{80,
                                      static_cast<std::uint32_t>(
@@ -96,8 +96,8 @@ TEST(independent_transition_table_covers_shared_follow_policy) {
             const auto line_number =
                 std::stoull(fields[1].substr(separator + 1));
             ASSERT_TRUE(model
-                            .accept_external_change(
-                                changed_file(id, id + ".txt", line_number),
+                            .acceptExternalChange(
+                                changedFile(id, id + ".txt", line_number),
                                 Revision{std::stoull(fields[2])})
                             .accepted());
         } else if (operation == "navigate_user" ||
@@ -110,7 +110,7 @@ TEST(independent_transition_table_covers_shared_follow_policy) {
                 classification = NavigationClass::NonNavigation;
             }
             ASSERT_TRUE(model
-                            .apply_navigation(
+                            .applyNavigation(
                                 {.client = ClientId{std::stoull(fields[1])},
                                  .classification = classification,
                                  .offset = FollowScrollOffset{
@@ -118,9 +118,9 @@ TEST(independent_transition_table_covers_shared_follow_policy) {
                             .accepted());
         } else if (operation == "resume") {
             ASSERT_TRUE(model
-                            .resume(current_diff(
-                                {changed_file("a", "a.txt", 20),
-                                 changed_file("b", "b.txt", 30)},
+                            .resume(currentDiff(
+                                {changedFile("a", "a.txt", 20),
+                                 changedFile("b", "b.txt", 30)},
                                 3))
                             .accepted());
         } else if (operation == "pause") {
@@ -129,147 +129,147 @@ TEST(independent_transition_table_covers_shared_follow_policy) {
             throw std::runtime_error{"unknown transition operation"};
         }
 
-        const auto state = model.view_state();
+        const auto state = model.viewState();
         ASSERT_EQ(state.mode == FollowMode::Following ? "following" : "paused",
                   fields[3]);
-        ASSERT_EQ(target_id(state.active_target), fields[4]);
-        ASSERT_EQ(queue_ids(state), fields[5]);
-        ASSERT_EQ(row_for(state, 1), fields[6]);
-        ASSERT_EQ(row_for(state, 2), fields[7]);
+        ASSERT_EQ(targetId(state.active_target), fields[4]);
+        ASSERT_EQ(queueIds(state), fields[5]);
+        ASSERT_EQ(rowFor(state, 1), fields[6]);
+        ASSERT_EQ(rowFor(state, 2), fields[7]);
     }
 }
 
-TEST(dirty_conflict_uses_disk_diff_target_without_buffer_policy) {
+TEST(dirtyConflictUsesDiskDiffTargetWithoutBufferPolicy) {
     FollowEditsModel model;
     ASSERT_TRUE(model
-                    .accept_external_change(
-                        changed_file("dirty", "dirty.txt", 6), Revision{1})
+                    .acceptExternalChange(
+                        changedFile("dirty", "dirty.txt", 6), Revision{1})
                     .accepted());
-    ASSERT_EQ(target_id(model.view_state().active_target), "dirty");
+    ASSERT_EQ(targetId(model.viewState().active_target), "dirty");
 }
 
-TEST(queue_is_bounded_and_same_file_replaces_in_place) {
+TEST(queueIsBoundedAndSameFileReplacesInPlace) {
     FollowEditsModel model{{.queue_capacity = 2,
                             .resume_binding = "Ctrl+Shift+F"}};
     ASSERT_TRUE(model.pause().accepted());
     ASSERT_TRUE(model
-                    .accept_external_change(changed_file("a", "a", 1),
+                    .acceptExternalChange(changedFile("a", "a", 1),
                                             Revision{1})
                     .accepted());
     ASSERT_TRUE(model
-                    .accept_external_change(changed_file("b", "b", 2),
+                    .acceptExternalChange(changedFile("b", "b", 2),
                                             Revision{2})
                     .accepted());
     ASSERT_TRUE(model
-                    .accept_external_change(changed_file("a", "renamed-a", 9),
+                    .acceptExternalChange(changedFile("a", "renamed-a", 9),
                                             Revision{3})
                     .accepted());
 
-    const auto state = model.view_state();
-    ASSERT_EQ(queue_ids(state), "b,a");
+    const auto state = model.viewState();
+    ASSERT_EQ(queueIds(state), "b,a");
     ASSERT_EQ(state.queued_targets.back().path,
               std::filesystem::path{"renamed-a"});
 
     ASSERT_TRUE(model
-                    .accept_external_change(changed_file("c", "c", 4),
+                    .acceptExternalChange(changedFile("c", "c", 4),
                                             Revision{4})
                     .accepted());
-    ASSERT_EQ(queue_ids(model.view_state()), "a,c");
+    ASSERT_EQ(queueIds(model.viewState()), "a,c");
 }
 
-TEST(resume_resolves_rename_delete_and_skips_reverted_or_missing_targets) {
+TEST(resumeResolvesRenameDeleteAndSkipsRevertedOrMissingTargets) {
     FollowEditsModel model;
     ASSERT_TRUE(model.pause().accepted());
     ASSERT_TRUE(model
-                    .accept_external_change(changed_file("rename", "old", 1),
+                    .acceptExternalChange(changedFile("rename", "old", 1),
                                             Revision{1})
                     .accepted());
     ASSERT_TRUE(model
-                    .accept_external_change(changed_file("revert", "revert", 2),
+                    .acceptExternalChange(changedFile("revert", "revert", 2),
                                             Revision{2})
                     .accepted());
     ASSERT_TRUE(model
-                    .accept_external_change(changed_file("delete", "gone", 3),
+                    .acceptExternalChange(changedFile("delete", "gone", 3),
                                             Revision{3})
                     .accepted());
 
-    auto renamed = changed_file("rename", "new", 7);
+    auto renamed = changedFile("rename", "new", 7);
     renamed.previous_path = "old";
-    auto deleted = changed_file("delete", "gone", 8, true);
+    auto deleted = changedFile("delete", "gone", 8, true);
     deleted.previous_path = "gone";
     ASSERT_TRUE(
-        model.resume(current_diff({renamed, deleted}, 4)).accepted());
-    ASSERT_EQ(target_id(model.view_state().active_target), "delete");
-    ASSERT_TRUE(model.view_state().active_target->deleted);
+        model.resume(currentDiff({renamed, deleted}, 4)).accepted());
+    ASSERT_EQ(targetId(model.viewState().active_target), "delete");
+    ASSERT_TRUE(model.viewState().active_target->deleted);
 
     ASSERT_TRUE(model.pause().accepted());
     ASSERT_TRUE(model
-                    .accept_external_change(changed_file("missing", "x", 1),
+                    .acceptExternalChange(changedFile("missing", "x", 1),
                                             Revision{4})
                     .accepted());
-    const auto before = model.view_state();
-    ASSERT_TRUE(model.resume(current_diff({}, 5)).accepted());
-    const auto after = model.view_state();
+    const auto before = model.viewState();
+    ASSERT_TRUE(model.resume(currentDiff({}, 5)).accepted());
+    const auto after = model.viewState();
     ASSERT_EQ(after.mode, FollowMode::Following);
     ASSERT_EQ(after.active_target, before.active_target);
     ASSERT_EQ(after.clients, before.clients);
     ASSERT_TRUE(after.queued_targets.empty());
 }
 
-TEST(stale_changes_and_invalid_clients_are_failure_atomic) {
+TEST(staleChangesAndInvalidClientsAreFailureAtomic) {
     FollowEditsModel model;
     ASSERT_TRUE(model
-                    .accept_external_change(changed_file("a", "a", 1),
+                    .acceptExternalChange(changedFile("a", "a", 1),
                                             Revision{2})
                     .accepted());
-    const auto before = model.view_state();
+    const auto before = model.viewState();
     ASSERT_EQ(model
-                  .accept_external_change(changed_file("b", "b", 2),
+                  .acceptExternalChange(changedFile("b", "b", 2),
                                           Revision{2})
                   .error,
               FollowEditsError::StaleRevision);
-    ASSERT_EQ(model.view_state(), before);
+    ASSERT_EQ(model.viewState(), before);
 
     ASSERT_EQ(model
-                  .apply_navigation(
+                  .applyNavigation(
                       {.client = ClientId{99},
                        .classification = NavigationClass::User,
                        .offset = FollowScrollOffset{3, 0}})
                   .error,
               FollowEditsError::UnknownClient);
-    ASSERT_EQ(model.view_state(), before);
+    ASSERT_EQ(model.viewState(), before);
 
     ASSERT_TRUE(model.pause().accepted());
-    const auto paused = model.view_state();
-    ASSERT_EQ(model.resume(current_diff({}, 1)).error,
+    const auto paused = model.viewState();
+    ASSERT_EQ(model.resume(currentDiff({}, 1)).error,
               FollowEditsError::StaleRevision);
-    ASSERT_EQ(model.view_state(), paused);
+    ASSERT_EQ(model.viewState(), paused);
 }
 
-TEST(command_view_delta_and_footer_are_complete) {
-    const auto commands = follow_edits_command_set().descriptors();
+TEST(commandViewDeltaAndFooterAreComplete) {
+    const auto commands = followEditsCommandSet().descriptors();
     ASSERT_EQ(commands.size(), std::size_t{2});
     ASSERT_EQ(commands[0].id, "follow_edits.resume");
     ASSERT_EQ(commands[1].id, "follow_edits.pause");
 
     FollowEditsModel model{{.queue_capacity = 2,
                             .resume_binding = "Ctrl+Shift+F"}};
-    const auto before = model.view_state();
+    const auto before = model.viewState();
     ASSERT_TRUE(model.pause().accepted());
-    const auto after = model.view_state();
-    const auto delta = derive_follow_edits_delta(before, after);
+    const auto after = model.viewState();
+    const auto delta = deriveFollowEditsDelta(before, after);
     ASSERT_EQ(delta.base_generation, before.generation);
     ASSERT_EQ(delta.generation, after.generation);
     ASSERT_EQ(delta.replacement, after);
 
-    const auto footer = model.footer_projection();
+    const auto footer = model.footerProjection();
     ASSERT_EQ(footer.mode, "paused");
     ASSERT_EQ(footer.resume_binding, std::optional<std::string>{"Ctrl+Shift+F"});
     ASSERT_EQ(footer.resume_command,
               std::optional<std::string>{"follow_edits.resume"});
 }
 
-TEST(configuration_rejects_invalid_queue_capacity) {
+TEST(configurationRejectsInvalidQueueCapacity) {
     ASSERT_THROWS(FollowEditsModel(
                       {.queue_capacity = 0,
                        .resume_binding = "Ctrl+Shift+F"}),
@@ -279,12 +279,12 @@ TEST(configuration_rejects_invalid_queue_capacity) {
 }  // namespace
 
 int main() {
-    RUN(independent_transition_table_covers_shared_follow_policy);
-    RUN(dirty_conflict_uses_disk_diff_target_without_buffer_policy);
-    RUN(queue_is_bounded_and_same_file_replaces_in_place);
-    RUN(resume_resolves_rename_delete_and_skips_reverted_or_missing_targets);
-    RUN(stale_changes_and_invalid_clients_are_failure_atomic);
-    RUN(command_view_delta_and_footer_are_complete);
-    RUN(configuration_rejects_invalid_queue_capacity);
+    RUN(independentTransitionTableCoversSharedFollowPolicy);
+    RUN(dirtyConflictUsesDiskDiffTargetWithoutBufferPolicy);
+    RUN(queueIsBoundedAndSameFileReplacesInPlace);
+    RUN(resumeResolvesRenameDeleteAndSkipsRevertedOrMissingTargets);
+    RUN(staleChangesAndInvalidClientsAreFailureAtomic);
+    RUN(commandViewDeltaAndFooterAreComplete);
+    RUN(configurationRejectsInvalidQueueCapacity);
     return failed == 0 ? 0 : 1;
 }

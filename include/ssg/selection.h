@@ -19,7 +19,7 @@ struct Selection {
 
     [[nodiscard]] const DocumentPosition& lower() const noexcept;
     [[nodiscard]] const DocumentPosition& upper() const noexcept;
-    [[nodiscard]] bool is_caret() const noexcept;
+    [[nodiscard]] bool isCaret() const noexcept;
     bool operator==(const Selection&) const noexcept = default;
 };
 
@@ -118,14 +118,14 @@ public:
     descriptors() const noexcept;
 
 private:
-    friend SelectionNavigationCommandSet selection_navigation_command_set();
+    friend SelectionNavigationCommandSet selectionNavigationCommandSet();
     SelectionNavigationCommandSet();
 
     const std::array<SelectionCommandDescriptor, 36> descriptors_;
 };
 
 [[nodiscard]] SelectionNavigationCommandSet
-selection_navigation_command_set();
+selectionNavigationCommandSet();
 
 struct SelectionCommandArguments {
     std::optional<DocumentPosition> position;
@@ -150,10 +150,10 @@ struct SelectionNavigationResult {
     }
 };
 
-[[nodiscard]] std::optional<DocumentPosition> resolve_document_position(
+[[nodiscard]] std::optional<DocumentPosition> resolveDocumentPosition(
     std::string_view text, ByteOffset byte_offset, int tab_width = 4);
 
-[[nodiscard]] SelectionNavigationResult apply_selection_navigation(
+[[nodiscard]] SelectionNavigationResult applySelectionNavigation(
     std::string_view text, const SelectionViewState& before,
     SelectionCommand command, ViewportDimensions viewport,
     SelectionCommandArguments arguments = {},

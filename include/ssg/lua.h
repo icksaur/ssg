@@ -72,7 +72,7 @@ public:
 
     [[nodiscard]] LuaResult evaluate(std::string_view script);
     [[nodiscard]] LuaResult invoke(std::string_view plugin_command);
-    [[nodiscard]] bool has_command(std::string_view plugin_command) const;
+    [[nodiscard]] bool hasCommand(std::string_view plugin_command) const;
 
     [[nodiscard]] LuaHandle expose(void* object);
     void invalidate(LuaHandle handle);

@@ -67,7 +67,7 @@ struct FollowEditsDelta {
                            const FollowEditsDelta&) = default;
 };
 
-[[nodiscard]] FollowEditsDelta derive_follow_edits_delta(
+[[nodiscard]] FollowEditsDelta deriveFollowEditsDelta(
     const FollowEditsViewState& base, const FollowEditsViewState& target);
 
 struct FollowEditsFooterProjection {
@@ -99,7 +99,7 @@ private:
     }};
 };
 
-[[nodiscard]] FollowEditsCommandSet follow_edits_command_set();
+[[nodiscard]] FollowEditsCommandSet followEditsCommandSet();
 
 struct FollowEditsConfig {
     std::size_t queue_capacity = 16;
@@ -132,24 +132,24 @@ class FollowEditsModel {
 public:
     explicit FollowEditsModel(FollowEditsConfig config = {});
 
-    [[nodiscard]] FollowEditsResult attach_client(
+    [[nodiscard]] FollowEditsResult attachClient(
         ClientId client, ViewportDimensions dimensions);
-    [[nodiscard]] FollowEditsResult detach_client(ClientId client);
-    [[nodiscard]] FollowEditsResult accept_external_change(
+    [[nodiscard]] FollowEditsResult detachClient(ClientId client);
+    [[nodiscard]] FollowEditsResult acceptExternalChange(
         const DiffFileView& file, Revision source_revision);
-    [[nodiscard]] FollowEditsResult apply_navigation(
+    [[nodiscard]] FollowEditsResult applyNavigation(
         const FollowNavigation& navigation);
     [[nodiscard]] FollowEditsResult pause();
     [[nodiscard]] FollowEditsResult resume(const DiffViewState& current_diff);
 
-    [[nodiscard]] FollowEditsViewState view_state() const;
-    [[nodiscard]] FollowEditsFooterProjection footer_projection() const;
+    [[nodiscard]] FollowEditsViewState viewState() const;
+    [[nodiscard]] FollowEditsFooterProjection footerProjection() const;
 
 private:
-    [[nodiscard]] FollowTarget target_for(const DiffFileView& file,
+    [[nodiscard]] FollowTarget targetFor(const DiffFileView& file,
                                           Revision source_revision) const;
     void activate(const FollowTarget& target);
-    void advance_generation() noexcept;
+    void advanceGeneration() noexcept;
 
     FollowEditsConfig config_;
     FollowEditsViewState state_;

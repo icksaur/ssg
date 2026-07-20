@@ -170,7 +170,7 @@ struct ShellViewState {
     FocusTarget focus = FocusTarget::Editor;
     std::optional<PaletteProjection> palette;
 
-    [[nodiscard]] std::size_t scrollbar_count() const noexcept {
+    [[nodiscard]] std::size_t scrollbarCount() const noexcept {
         return panes.size();
     }
 };
@@ -226,39 +226,39 @@ public:
     ShellState(const ShellState&) = delete;
     ShellState& operator=(const ShellState&) = delete;
 
-    [[nodiscard]] PaneId active_pane() const noexcept;
-    [[nodiscard]] std::size_t pane_count() const noexcept;
-    PaneId split_active(SplitAxis axis);
-    [[nodiscard]] bool close_active_pane();
-    void next_pane() noexcept;
-    void previous_pane() noexcept;
-    [[nodiscard]] bool focus_pane(PaneDirection direction,
+    [[nodiscard]] PaneId activePane() const noexcept;
+    [[nodiscard]] std::size_t paneCount() const noexcept;
+    PaneId splitActive(SplitAxis axis);
+    [[nodiscard]] bool closeActivePane();
+    void nextPane() noexcept;
+    void previousPane() noexcept;
+    [[nodiscard]] bool focusPane(PaneDirection direction,
                                   const ShellViewState& view) noexcept;
 
-    void toggle_panel() noexcept;
-    [[nodiscard]] bool focus_panel() noexcept;
-    void focus_editor() noexcept;
-    void enter_prompt_focus() noexcept;
-    void exit_prompt_focus() noexcept;
+    void togglePanel() noexcept;
+    [[nodiscard]] bool focusPanel() noexcept;
+    void focusEditor() noexcept;
+    void enterPromptFocus() noexcept;
+    void exitPromptFocus() noexcept;
     [[nodiscard]] FocusTarget focus() const noexcept;
-    void next_panel_provider() noexcept;
-    void previous_panel_provider() noexcept;
-    [[nodiscard]] bool panel_requested() const noexcept;
-    [[nodiscard]] bool panel_focused() const noexcept;
-    [[nodiscard]] std::string_view active_panel_provider() const noexcept;
+    void nextPanelProvider() noexcept;
+    void previousPanelProvider() noexcept;
+    [[nodiscard]] bool panelRequested() const noexcept;
+    [[nodiscard]] bool panelFocused() const noexcept;
+    [[nodiscard]] std::string_view activePanelProvider() const noexcept;
 
-    void toggle_distraction_free() noexcept;
-    [[nodiscard]] bool distraction_free() const noexcept;
+    void toggleDistractionFree() noexcept;
+    [[nodiscard]] bool distractionFree() const noexcept;
 
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
 
-    friend ShellLayoutResult compute_shell_layout(const ShellLayoutRequest&,
+    friend ShellLayoutResult computeShellLayout(const ShellLayoutRequest&,
                                                   const ShellState&);
 };
 
-[[nodiscard]] ShellLayoutResult compute_shell_layout(
+[[nodiscard]] ShellLayoutResult computeShellLayout(
     const ShellLayoutRequest& request, const ShellState& state);
 
 } // namespace ssg

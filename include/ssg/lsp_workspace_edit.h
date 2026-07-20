@@ -32,7 +32,7 @@ private:
         {{"rename.symbol", false}}};
 };
 
-[[nodiscard]] LspWorkspaceEditCommandSet lsp_workspace_edit_command_set();
+[[nodiscard]] LspWorkspaceEditCommandSet lspWorkspaceEditCommandSet();
 
 enum class LspWorkspaceDocumentError : std::uint8_t {
     None,
@@ -93,15 +93,15 @@ public:
     virtual ~LspWorkspaceFileOperations() = default;
     [[nodiscard]] virtual LspWorkspaceFileResult snapshot(
         std::string_view uri, LspWorkspaceFileNode& node) const = 0;
-    [[nodiscard]] virtual LspWorkspaceFileResult create_file(
+    [[nodiscard]] virtual LspWorkspaceFileResult createFile(
         std::string uri, bool overwrite) = 0;
-    [[nodiscard]] virtual LspWorkspaceFileResult write_file(
+    [[nodiscard]] virtual LspWorkspaceFileResult writeFile(
         std::string uri, std::string content) = 0;
-    [[nodiscard]] virtual LspWorkspaceFileResult rename_path(
+    [[nodiscard]] virtual LspWorkspaceFileResult renamePath(
         std::string old_uri, std::string new_uri, bool overwrite) = 0;
-    [[nodiscard]] virtual LspWorkspaceFileResult delete_path(
+    [[nodiscard]] virtual LspWorkspaceFileResult deletePath(
         std::string uri, bool recursive) = 0;
-    [[nodiscard]] virtual LspWorkspaceFileResult restore_path(
+    [[nodiscard]] virtual LspWorkspaceFileResult restorePath(
         std::string uri, const LspWorkspaceFileNode& node) = 0;
 };
 
@@ -226,7 +226,7 @@ public:
     LspWorkspaceEditController(LspSyncClient& client,
                                LspWorkspaceEditApplier& applier);
 
-    [[nodiscard]] LspRenameRequestResult request_rename(
+    [[nodiscard]] LspRenameRequestResult requestRename(
         std::string uri, Revision revision, ByteOffset position,
         std::string new_name);
     [[nodiscard]] LspRenamePollResult poll(Revision current_revision);

@@ -44,18 +44,18 @@ static_assert(all_optional_subsystems.size() == optional_subsystem_count,
               "every OptionalSubsystem (before the count_ sentinel) must appear "
               "in all_optional_subsystems so the audit is exhaustive");
 
-[[nodiscard]] std::string_view optional_subsystem_name(OptionalSubsystem) noexcept;
+[[nodiscard]] std::string_view optionalSubsystemName(OptionalSubsystem) noexcept;
 
 // Record that an optional subsystem has just constructed its heavy resource.
-void note_optional_construction(OptionalSubsystem subsystem) noexcept;
+void noteOptionalConstruction(OptionalSubsystem subsystem) noexcept;
 
 // How many times a subsystem (or all subsystems) has been constructed since the
 // last reset / process start.
-[[nodiscard]] std::uint64_t optional_construction_count(
+[[nodiscard]] std::uint64_t optionalConstructionCount(
     OptionalSubsystem subsystem) noexcept;
-[[nodiscard]] std::uint64_t optional_construction_total() noexcept;
+[[nodiscard]] std::uint64_t optionalConstructionTotal() noexcept;
 
 // Zero the ledger (for a test measuring one first-frame path in isolation).
-void reset_optional_construction_audit() noexcept;
+void resetOptionalConstructionAudit() noexcept;
 
 }  // namespace ssg

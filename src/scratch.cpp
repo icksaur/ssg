@@ -19,26 +19,26 @@ namespace {
 
 class FilesystemScratchStorage final : public ScratchStorage {
 public:
-    void append_document(const std::filesystem::path& path,
+    void appendDocument(const std::filesystem::path& path,
                          const JournalDocument& document) override {
-        ScratchJournal{path}.append_document(document);
+        ScratchJournal{path}.appendDocument(document);
     }
 
-    void append_remove(const std::filesystem::path& path,
+    void appendRemove(const std::filesystem::path& path,
                        const JournalDocumentKey& key) override {
-        ScratchJournal{path}.append_remove(key);
+        ScratchJournal{path}.appendRemove(key);
     }
 
-    void replace_checkpoint(
+    void replaceCheckpoint(
         const std::filesystem::path& path,
         const JournalRecoverySet& recovery) override {
-        const auto record = encode_checkpoint_record(recovery);
-        replace_file_atomically(path, record);
-        set_owner_only_permissions(path);
+        const auto record = encodeCheckpointRecord(recovery);
+        replaceFileAtomically(path, record);
+        setOwnerOnlyPermissions(path);
     }
 };
 
-void validate_config(const ScratchStoreConfig& config) {
+void validateConfig(const ScratchStoreConfig& config) {
     if (config.maximum_age < std::chrono::seconds::zero()) {
         throw std::invalid_argument(
             "scratch maximum age must not be negative");
@@ -53,7 +53,7 @@ void validate_config(const ScratchStoreConfig& config) {
     }
 }
 
-void apply_document(JournalRecoverySet& recovery,
+void applyDocument(JournalRecoverySet& recovery,
                     JournalDocument document) {
     const auto existing = std::find_if(
         recovery.documents.begin(), recovery.documents.end(),
@@ -67,14 +67,14 @@ void apply_document(JournalRecoverySet& recovery,
     }
 }
 
-void apply_remove(JournalRecoverySet& recovery,
+void applyRemove(JournalRecoverySet& recovery,
                   const JournalDocumentKey& key) {
     std::erase_if(recovery.documents, [&](const JournalDocument& document) {
         return document.key == key;
     });
 }
 
-std::uintmax_t directory_bytes(const std::filesystem::path& root) {
+std::uintmax_t directoryBytes(const std::filesystem::path& root) {
     std::uintmax_t result = 0;
     std::error_code error;
     if (!std::filesystem::exists(root, error)) return 0;
@@ -109,7 +109,7 @@ struct Remnant {
     std::filesystem::path workspace_path;
 };
 
-std::vector<Remnant> restored_remnants(
+std::vector<Remnant> restoredRemnants(
     const std::filesystem::path& scratch_root) {
     std::vector<Remnant> result;
     const auto workspaces = scratch_root / "workspaces";
@@ -142,7 +142,7 @@ std::vector<Remnant> restored_remnants(
     return result;
 }
 
-bool older_than(const Remnant& remnant,
+bool olderThan(const Remnant& remnant,
                 std::chrono::seconds maximum_age,
                 std::chrono::system_clock::time_point now) {
     if (remnant.id.size() < 20) return false;
@@ -163,7 +163,7 @@ bool older_than(const Remnant& remnant,
     return now - created > maximum_age;
 }
 
-void remove_remnant(const Remnant& remnant) {
+void removeRemnant(const Remnant& remnant) {
     std::error_code error;
     std::filesystem::remove_all(remnant.path, error);
     if (error) {
@@ -206,26 +206,26 @@ public:
 
     ~Impl() { shutdown(); }
 
-    void update_document(JournalDocument document) {
+    void updateDocument(JournalDocument document) {
         std::lock_guard lock{mutex_};
-        require_accepting();
-        apply_document(recovery_, document);
-        enqueue_locked({JobKind::Document, ++accepted_generation_, recovery_,
+        requireAccepting();
+        applyDocument(recovery_, document);
+        enqueueLocked({JobKind::Document, ++accepted_generation_, recovery_,
                         std::move(document), std::nullopt});
     }
 
-    void remove_document(JournalDocumentKey key) {
+    void removeDocument(JournalDocumentKey key) {
         std::lock_guard lock{mutex_};
-        require_accepting();
-        apply_remove(recovery_, key);
-        enqueue_locked({JobKind::Remove, ++accepted_generation_, recovery_,
+        requireAccepting();
+        applyRemove(recovery_, key);
+        enqueueLocked({JobKind::Remove, ++accepted_generation_, recovery_,
                         std::nullopt, std::move(key)});
     }
 
     void compact() {
         std::lock_guard lock{mutex_};
-        require_accepting();
-        enqueue_locked({JobKind::Checkpoint, ++accepted_generation_, recovery_,
+        requireAccepting();
+        enqueueLocked({JobKind::Checkpoint, ++accepted_generation_, recovery_,
                         std::nullopt, std::nullopt});
     }
 
@@ -234,7 +234,7 @@ public:
         return recovery_;
     }
 
-    ScratchDurabilityState durability_state() const {
+    ScratchDurabilityState durabilityState() const {
         std::lock_guard lock{mutex_};
         ScratchDurabilityState result;
         result.accepted_generation = accepted_generation_;
@@ -252,7 +252,7 @@ public:
         return result;
     }
 
-    bool wait_until_durable(std::chrono::milliseconds timeout) const {
+    bool waitUntilDurable(std::chrono::milliseconds timeout) const {
         std::unique_lock lock{mutex_};
         const auto target = accepted_generation_;
         condition_.wait_for(lock, timeout, [&] {
@@ -261,37 +261,37 @@ public:
         return failure_.empty() && durable_generation_ >= target;
     }
 
-    ScratchQuotaResult apply_quotas() {
+    ScratchQuotaResult applyQuotas() {
         ScratchQuotaResult result;
-        auto remnants = restored_remnants(scratch_root_);
+        auto remnants = restoredRemnants(scratch_root_);
         const auto now = std::chrono::system_clock::now();
         for (const auto& remnant : remnants) {
-            if (!older_than(remnant, config_.maximum_age, now)) continue;
-            remove_remnant(remnant);
+            if (!olderThan(remnant, config_.maximum_age, now)) continue;
+            removeRemnant(remnant);
             result.evicted_session_ids.push_back(remnant.id);
         }
 
-        auto remaining = restored_remnants(scratch_root_);
-        result.remaining_bytes = directory_bytes(scratch_root_);
+        auto remaining = restoredRemnants(scratch_root_);
+        result.remaining_bytes = directoryBytes(scratch_root_);
         for (const auto& remnant : remaining) {
             if (result.remaining_bytes <= config_.maximum_bytes) break;
-            remove_remnant(remnant);
+            removeRemnant(remnant);
             result.evicted_session_ids.push_back(remnant.id);
-            result.remaining_bytes = directory_bytes(scratch_root_);
+            result.remaining_bytes = directoryBytes(scratch_root_);
         }
         result.within_byte_quota =
             result.remaining_bytes <= config_.maximum_bytes;
         return result;
     }
 
-    std::size_t purge_workspace() {
+    std::size_t purgeWorkspace() {
         const auto current_workspace = session_.path().parent_path().parent_path();
         return purge([&](const Remnant& remnant) {
             return remnant.workspace_path == current_workspace;
         });
     }
 
-    std::size_t purge_all() {
+    std::size_t purgeAll() {
         return purge([](const Remnant&) { return true; });
     }
 
@@ -306,22 +306,22 @@ public:
         if (worker_.joinable()) worker_.join();
     }
 
-    std::filesystem::path session_path() const { return session_.path(); }
-    std::filesystem::path journal_path() const { return session_.journal_path(); }
+    std::filesystem::path sessionPath() const { return session_.path(); }
+    std::filesystem::path journalPath() const { return session_.journalPath(); }
 
 private:
     template <typename Predicate>
     std::size_t purge(Predicate predicate) {
         std::size_t count = 0;
-        for (const auto& remnant : restored_remnants(scratch_root_)) {
+        for (const auto& remnant : restoredRemnants(scratch_root_)) {
             if (!predicate(remnant)) continue;
-            remove_remnant(remnant);
+            removeRemnant(remnant);
             ++count;
         }
         return count;
     }
 
-    void require_accepting() const {
+    void requireAccepting() const {
         if (!accepting_) {
             throw std::logic_error("scratch store is shut down");
         }
@@ -330,7 +330,7 @@ private:
         }
     }
 
-    void enqueue_locked(Job job) {
+    void enqueueLocked(Job job) {
         if (!pending_since_) pending_since_ = std::chrono::steady_clock::now();
         jobs_.push_back(std::move(job));
         condition_.notify_all();
@@ -352,25 +352,25 @@ private:
             try {
                 switch (job.kind) {
                 case JobKind::Document:
-                    storage_.append_document(session_.journal_path(),
+                    storage_.appendDocument(session_.journalPath(),
                                              *job.document);
                     break;
                 case JobKind::Remove:
-                    storage_.append_remove(session_.journal_path(), *job.key);
+                    storage_.appendRemove(session_.journalPath(), *job.key);
                     break;
                 case JobKind::Checkpoint:
-                    storage_.replace_checkpoint(session_.journal_path(),
+                    storage_.replaceCheckpoint(session_.journalPath(),
                                                 job.snapshot);
                     break;
                 }
                 if (job.kind != JobKind::Checkpoint) {
                     std::error_code error;
                     const auto bytes =
-                        std::filesystem::file_size(session_.journal_path(),
+                        std::filesystem::file_size(session_.journalPath(),
                                                    error);
                     if (!error &&
                         bytes >= config_.compaction_threshold_bytes) {
-                        storage_.replace_checkpoint(session_.journal_path(),
+                        storage_.replaceCheckpoint(session_.journalPath(),
                                                     job.snapshot);
                     }
                 }
@@ -415,20 +415,20 @@ private:
     std::thread worker_;
 };
 
-ScratchStore ScratchStore::create_with_storage(
+ScratchStore ScratchStore::createWithStorage(
     const std::filesystem::path& scratch_root,
     const std::filesystem::path& canonical_workspace,
     ScratchStoreConfig config,
     std::unique_ptr<ScratchStorage> owned_storage,
     ScratchStorage& storage) {
-    validate_config(config);
+    validateConfig(config);
     auto session = ScratchSession::create(scratch_root, canonical_workspace);
     JournalRecoverySet recovery;
-    if (auto remnant = session.claim_newest_restorable()) {
+    if (auto remnant = session.claimNewestRestorable()) {
         recovery = remnant->replay().recovery;
-        storage.replace_checkpoint(session.journal_path(), recovery);
-        set_owner_only_permissions(session.journal_path());
-        remnant->mark_restored();
+        storage.replaceCheckpoint(session.journalPath(), recovery);
+        setOwnerOnlyPermissions(session.journalPath());
+        remnant->markRestored();
     }
     return ScratchStore{std::make_unique<ScratchStore::Impl>(
         scratch_root, config, std::move(session), std::move(recovery),
@@ -441,7 +441,7 @@ ScratchStore ScratchStore::create(
     ScratchStoreConfig config) {
     auto storage = std::make_unique<FilesystemScratchStorage>();
     auto& reference = *storage;
-    return create_with_storage(scratch_root, canonical_workspace, config,
+    return createWithStorage(scratch_root, canonical_workspace, config,
                                std::move(storage), reference);
 }
 
@@ -450,7 +450,7 @@ ScratchStore ScratchStore::create(
     const std::filesystem::path& canonical_workspace,
     ScratchStoreConfig config,
     ScratchStorage& storage) {
-    return create_with_storage(scratch_root, canonical_workspace, config,
+    return createWithStorage(scratch_root, canonical_workspace, config,
                                nullptr, storage);
 }
 
@@ -462,33 +462,33 @@ ScratchStore::ScratchStore(ScratchStore&&) noexcept = default;
 ScratchStore& ScratchStore::operator=(ScratchStore&&) noexcept = default;
 
 JournalRecoverySet ScratchStore::recovery() const { return impl_->recovery(); }
-std::filesystem::path ScratchStore::session_path() const {
-    return impl_->session_path();
+std::filesystem::path ScratchStore::sessionPath() const {
+    return impl_->sessionPath();
 }
-std::filesystem::path ScratchStore::journal_path() const {
-    return impl_->journal_path();
+std::filesystem::path ScratchStore::journalPath() const {
+    return impl_->journalPath();
 }
-void ScratchStore::update_document(JournalDocument document) {
-    impl_->update_document(std::move(document));
+void ScratchStore::updateDocument(JournalDocument document) {
+    impl_->updateDocument(std::move(document));
 }
-void ScratchStore::remove_document(JournalDocumentKey key) {
-    impl_->remove_document(std::move(key));
+void ScratchStore::removeDocument(JournalDocumentKey key) {
+    impl_->removeDocument(std::move(key));
 }
 void ScratchStore::compact() { impl_->compact(); }
-ScratchDurabilityState ScratchStore::durability_state() const {
-    return impl_->durability_state();
+ScratchDurabilityState ScratchStore::durabilityState() const {
+    return impl_->durabilityState();
 }
-bool ScratchStore::wait_until_durable(
+bool ScratchStore::waitUntilDurable(
     std::chrono::milliseconds timeout) const {
-    return impl_->wait_until_durable(timeout);
+    return impl_->waitUntilDurable(timeout);
 }
-ScratchQuotaResult ScratchStore::apply_quotas() {
-    return impl_->apply_quotas();
+ScratchQuotaResult ScratchStore::applyQuotas() {
+    return impl_->applyQuotas();
 }
-std::size_t ScratchStore::purge_workspace() {
-    return impl_->purge_workspace();
+std::size_t ScratchStore::purgeWorkspace() {
+    return impl_->purgeWorkspace();
 }
-std::size_t ScratchStore::purge_all() { return impl_->purge_all(); }
+std::size_t ScratchStore::purgeAll() { return impl_->purgeAll(); }
 void ScratchStore::shutdown() { impl_->shutdown(); }
 
 } // namespace ssg

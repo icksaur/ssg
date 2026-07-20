@@ -11,13 +11,13 @@
 namespace ssg {
 namespace {
 
-bool point_before_or_equal(const SyntaxPoint& left,
+bool pointBeforeOrEqual(const SyntaxPoint& left,
                            const SyntaxPoint& right) {
     return std::tie(left.row, left.column_byte) <=
            std::tie(right.row, right.column_byte);
 }
 
-SyntaxPoint point_at(std::string_view text, std::uint64_t offset) {
+SyntaxPoint pointAt(std::string_view text, std::uint64_t offset) {
     std::uint64_t row = 0;
     std::uint64_t column = 0;
     for (std::uint64_t index = 0; index < offset; ++index) {
@@ -31,7 +31,7 @@ SyntaxPoint point_at(std::string_view text, std::uint64_t offset) {
     return {LineIndex{row}, column};
 }
 
-SyntaxPoint advance_point(SyntaxPoint point, std::string_view text) {
+SyntaxPoint advancePoint(SyntaxPoint point, std::string_view text) {
     for (const char value : text) {
         if (value == '\n') {
             point.row = LineIndex{point.row.value() + 1};
@@ -43,7 +43,7 @@ SyntaxPoint advance_point(SyntaxPoint point, std::string_view text) {
     return point;
 }
 
-bool valid_edits(const std::vector<SyntaxEdit>& edits,
+bool validEdits(const std::vector<SyntaxEdit>& edits,
                  std::string_view current_text,
                  std::string_view previous_text) {
     std::uint64_t previous_old_end = 0;
@@ -57,13 +57,13 @@ bool valid_edits(const std::vector<SyntaxEdit>& edits,
         if (edit.start_byte > edit.old_end_byte ||
             edit.start_byte > edit.new_end_byte ||
             old_end > previous_text.size() ||
-            !point_before_or_equal(edit.start_position,
+            !pointBeforeOrEqual(edit.start_position,
                                    edit.old_end_position) ||
-            !point_before_or_equal(edit.start_position,
+            !pointBeforeOrEqual(edit.start_position,
                                    edit.new_end_position) ||
             (!first && start < previous_old_end) ||
-            edit.start_position != point_at(previous_text, start) ||
-            edit.old_end_position != point_at(previous_text, old_end)) {
+            edit.start_position != pointAt(previous_text, start) ||
+            edit.old_end_position != pointAt(previous_text, old_end)) {
             return false;
         }
 
@@ -77,7 +77,7 @@ bool valid_edits(const std::vector<SyntaxEdit>& edits,
         current_cursor += unchanged_bytes;
         if (inserted_bytes > current_text.size() - current_cursor ||
             edit.new_end_position !=
-                advance_point(edit.start_position,
+                advancePoint(edit.start_position,
                               current_text.substr(current_cursor,
                                                   inserted_bytes))) {
             return false;
@@ -91,7 +91,7 @@ bool valid_edits(const std::vector<SyntaxEdit>& edits,
            current_text.substr(current_cursor);
 }
 
-std::vector<LineIndentation> derive_indentation(std::string_view text,
+std::vector<LineIndentation> deriveIndentation(std::string_view text,
                                                 std::uint32_t tab_width) {
     std::vector<LineIndentation> result;
     std::size_t line_start = 0;
@@ -127,7 +127,7 @@ std::vector<LineIndentation> derive_indentation(std::string_view text,
     return result;
 }
 
-std::vector<SyntaxSpan> canonical_spans(std::uint64_t text_bytes,
+std::vector<SyntaxSpan> canonicalSpans(std::uint64_t text_bytes,
                                         std::vector<SyntaxSpan> spans) {
     spans.erase(
         std::remove_if(spans.begin(), spans.end(),
@@ -179,7 +179,7 @@ std::vector<SyntaxSpan> canonical_spans(std::uint64_t text_bytes,
     return merged;
 }
 
-std::vector<CommentToken> canonical_comment_tokens(
+std::vector<CommentToken> canonicalCommentTokens(
     std::uint64_t text_bytes, std::vector<CommentToken> tokens) {
     tokens.erase(
         std::remove_if(tokens.begin(), tokens.end(),
@@ -203,7 +203,7 @@ std::vector<CommentToken> canonical_comment_tokens(
     return tokens;
 }
 
-std::vector<CommentRange> canonical_comment_ranges(
+std::vector<CommentRange> canonicalCommentRanges(
     std::uint64_t text_bytes, std::vector<CommentRange> ranges) {
     ranges.erase(
         std::remove_if(ranges.begin(), ranges.end(),
@@ -236,7 +236,7 @@ struct ResolvedBrackets {
     std::vector<UnmatchedBracket> unmatched;
 };
 
-ResolvedBrackets resolve_brackets(std::uint64_t text_bytes,
+ResolvedBrackets resolveBrackets(std::uint64_t text_bytes,
                                   std::vector<BracketToken> tokens) {
     tokens.erase(
         std::remove_if(tokens.begin(), tokens.end(),
@@ -302,24 +302,24 @@ std::optional<T> changed(const T& before, const T& after) {
     return after;
 }
 
-bool valid_state(const SyntaxViewState& state) {
+bool validState(const SyntaxViewState& state) {
     std::uint64_t cursor = 0;
     for (const auto& span : state.spans()) {
         if (span.begin.value() != cursor || span.begin >= span.end ||
-            span.end.value() > state.text_bytes()) {
+            span.end.value() > state.textBytes()) {
             return false;
         }
         cursor = span.end.value();
     }
-    if (cursor != state.text_bytes()) {
+    if (cursor != state.textBytes()) {
         return false;
     }
 
     ByteOffset previous_open{0};
     bool first_pair = true;
-    for (const auto& pair : state.bracket_pairs()) {
+    for (const auto& pair : state.bracketPairs()) {
         if (pair.open >= pair.close ||
-            pair.close.value() >= state.text_bytes() ||
+            pair.close.value() >= state.textBytes() ||
             (!first_pair && pair.open <= previous_open)) {
             return false;
         }
@@ -329,8 +329,8 @@ bool valid_state(const SyntaxViewState& state) {
 
     ByteOffset previous_unmatched{0};
     bool first_unmatched = true;
-    for (const auto& bracket : state.unmatched_brackets()) {
-        if (bracket.offset.value() >= state.text_bytes() ||
+    for (const auto& bracket : state.unmatchedBrackets()) {
+        if (bracket.offset.value() >= state.textBytes() ||
             (!first_unmatched && bracket.offset <= previous_unmatched)) {
             return false;
         }
@@ -340,9 +340,9 @@ bool valid_state(const SyntaxViewState& state) {
 
     SyntaxRange previous_token{ByteOffset{0}, ByteOffset{0}};
     bool first_token = true;
-    for (const auto& token : state.comment_tokens()) {
+    for (const auto& token : state.commentTokens()) {
         if (token.range.begin >= token.range.end ||
-            token.range.end.value() > state.text_bytes() ||
+            token.range.end.value() > state.textBytes() ||
             (!first_token &&
              std::tie(token.range.begin, token.range.end) <=
                  std::tie(previous_token.begin, previous_token.end))) {
@@ -353,10 +353,10 @@ bool valid_state(const SyntaxViewState& state) {
     }
 
     ByteOffset previous_range_end{0};
-    for (const auto& range : state.comment_ranges()) {
+    for (const auto& range : state.commentRanges()) {
         if (range.range.begin < previous_range_end ||
             range.range.begin >= range.range.end ||
-            range.range.end.value() > state.text_bytes()) {
+            range.range.end.value() > state.textBytes()) {
             return false;
         }
         previous_range_end = range.range.end;
@@ -369,7 +369,7 @@ bool valid_state(const SyntaxViewState& state) {
         const auto& line = state.indentation()[index];
         if (line.line != LineIndex{index} ||
             line.line_start > line.content_start ||
-            line.content_start.value() > state.text_bytes() ||
+            line.content_start.value() > state.textBytes() ||
             (index != 0 &&
              line.line_start <= state.indentation()[index - 1].line_start)) {
             return false;
@@ -386,11 +386,11 @@ LanguageId::LanguageId(std::string value) : value_(std::move(value)) {
     }
 }
 
-LanguageId LanguageId::plain_text() {
+LanguageId LanguageId::plainText() {
     return LanguageId{"plain_text"};
 }
 
-bool LanguageId::is_plain_text() const noexcept {
+bool LanguageId::isPlainText() const noexcept {
     return value_ == "plain_text";
 }
 
@@ -429,7 +429,7 @@ SyntaxViewState::SyntaxViewState(
       comment_ranges_(std::move(comment_ranges)),
       indentation_(std::move(indentation)) {}
 
-SyntaxViewState plain_text_syntax_view_state(
+SyntaxViewState plainTextSyntaxViewState(
     Revision revision, LanguageId language, std::string_view text,
     std::uint32_t tab_width) {
     if (tab_width == 0) {
@@ -448,36 +448,36 @@ SyntaxViewState plain_text_syntax_view_state(
             {},
             {},
             {},
-            derive_indentation(text, tab_width)};
+            deriveIndentation(text, tab_width)};
 }
 
-SyntaxViewState build_syntax_view_state(
+SyntaxViewState buildSyntaxViewState(
     Revision revision, LanguageId language, std::string_view text,
     const SyntaxParseOutput& output, const SyntaxConfig& config) {
     if (config.tab_width == 0) {
         throw std::invalid_argument{"tab width must be positive"};
     }
     if (output.status != SyntaxParseStatus::Parsed || !output.parse) {
-        return plain_text_syntax_view_state(
+        return plainTextSyntaxViewState(
             revision, std::move(language), text, config.tab_width);
     }
-    auto brackets = resolve_brackets(text.size(), output.brackets);
+    auto brackets = resolveBrackets(text.size(), output.brackets);
     return {
         revision,
         std::move(language),
         text.size(),
-        canonical_spans(text.size(), output.spans),
+        canonicalSpans(text.size(), output.spans),
         std::move(brackets.pairs),
         std::move(brackets.unmatched),
-        canonical_comment_tokens(text.size(), output.comment_tokens),
-        canonical_comment_ranges(text.size(), output.comment_ranges),
-        derive_indentation(text, config.tab_width),
+        canonicalCommentTokens(text.size(), output.comment_tokens),
+        canonicalCommentRanges(text.size(), output.comment_ranges),
+        deriveIndentation(text, config.tab_width),
     };
 }
 
-std::optional<ByteOffset> matching_bracket(const SyntaxViewState& state,
+std::optional<ByteOffset> matchingBracket(const SyntaxViewState& state,
                                           ByteOffset offset) {
-    for (const auto& pair : state.bracket_pairs()) {
+    for (const auto& pair : state.bracketPairs()) {
         if (pair.open == offset) {
             return pair.close;
         }
@@ -488,8 +488,8 @@ std::optional<ByteOffset> matching_bracket(const SyntaxViewState& state,
     return std::nullopt;
 }
 
-SyntaxScope scope_at(const SyntaxViewState& state, ByteOffset offset) {
-    if (offset.value() >= state.text_bytes()) {
+SyntaxScope scopeAt(const SyntaxViewState& state, ByteOffset offset) {
+    if (offset.value() >= state.textBytes()) {
         return SyntaxScope::PlainText;
     }
     const auto span = std::upper_bound(
@@ -530,44 +530,44 @@ bool SyntaxDelta::empty() const noexcept {
            !indentation_;
 }
 
-SyntaxDelta derive_syntax_delta(const SyntaxViewState& base,
+SyntaxDelta deriveSyntaxDelta(const SyntaxViewState& base,
                                 const SyntaxViewState& target) {
     return {
         base.revision(),
         target.revision(),
         changed(base.language(), target.language()),
-        changed(base.text_bytes(), target.text_bytes()),
+        changed(base.textBytes(), target.textBytes()),
         changed(base.spans(), target.spans()),
-        changed(base.bracket_pairs(), target.bracket_pairs()),
-        changed(base.unmatched_brackets(), target.unmatched_brackets()),
-        changed(base.comment_tokens(), target.comment_tokens()),
-        changed(base.comment_ranges(), target.comment_ranges()),
+        changed(base.bracketPairs(), target.bracketPairs()),
+        changed(base.unmatchedBrackets(), target.unmatchedBrackets()),
+        changed(base.commentTokens(), target.commentTokens()),
+        changed(base.commentRanges(), target.commentRanges()),
         changed(base.indentation(), target.indentation()),
     };
 }
 
-SyntaxReplayResult replay_syntax_delta(const SyntaxViewState& base,
+SyntaxReplayResult replaySyntaxDelta(const SyntaxViewState& base,
                                        const SyntaxDelta& delta) {
-    if (base.revision() != delta.base_revision()) {
+    if (base.revision() != delta.baseRevision()) {
         return {std::nullopt, SyntaxReplayError::StaleRevision};
     }
-    if (delta.revision() < delta.base_revision() ||
-        (delta.revision() == delta.base_revision() && !delta.empty())) {
+    if (delta.revision() < delta.baseRevision() ||
+        (delta.revision() == delta.baseRevision() && !delta.empty())) {
         return {std::nullopt, SyntaxReplayError::MalformedDelta};
     }
 
     SyntaxViewState result{
         delta.revision(),
         delta.language().value_or(base.language()),
-        delta.text_bytes().value_or(base.text_bytes()),
+        delta.textBytes().value_or(base.textBytes()),
         delta.spans().value_or(base.spans()),
-        delta.bracket_pairs().value_or(base.bracket_pairs()),
-        delta.unmatched_brackets().value_or(base.unmatched_brackets()),
-        delta.comment_tokens().value_or(base.comment_tokens()),
-        delta.comment_ranges().value_or(base.comment_ranges()),
+        delta.bracketPairs().value_or(base.bracketPairs()),
+        delta.unmatchedBrackets().value_or(base.unmatchedBrackets()),
+        delta.commentTokens().value_or(base.commentTokens()),
+        delta.commentRanges().value_or(base.commentRanges()),
         delta.indentation().value_or(base.indentation()),
     };
-    if (!valid_state(result)) {
+    if (!validState(result)) {
         return {std::nullopt, SyntaxReplayError::MalformedDelta};
     }
     return {std::move(result), SyntaxReplayError::None};
@@ -577,25 +577,25 @@ SyntaxModel::SyntaxModel(std::shared_ptr<SyntaxParser> parser,
                          SyntaxConfig config)
     : parser_(std::move(parser)),
       config_(config),
-      view_state_(plain_text_syntax_view_state(
-          Revision{0}, LanguageId::plain_text(), {}, config.tab_width)) {
+      view_state_(plainTextSyntaxViewState(
+          Revision{0}, LanguageId::plainText(), {}, config.tab_width)) {
     // A real Tree-sitter grammar is only present when a parser is injected; the
     // plain-text fallback (parser == nullptr) constructs no grammar, so it is not
     // counted by the startup audit (I12 / doc/spec-fast-startup.md M10-2).
     if (parser_ != nullptr) {
-        note_optional_construction(OptionalSubsystem::TreeSitterGrammar);
+        noteOptionalConstruction(OptionalSubsystem::TreeSitterGrammar);
     }
     if (config_.tab_width == 0) {
         throw std::invalid_argument{"tab width must be positive"};
     }
 }
 
-bool SyntaxModel::has_grammar(const LanguageId& language) const noexcept {
-    if (!parser_ || language.is_plain_text()) {
+bool SyntaxModel::hasGrammar(const LanguageId& language) const noexcept {
+    if (!parser_ || language.isPlainText()) {
         return false;
     }
     try {
-        return parser_->has_grammar(language);
+        return parser_->hasGrammar(language);
     } catch (...) {
         return false;
     }
@@ -608,14 +608,14 @@ SyntaxParseRequestResult SyntaxModel::request(
         (pending_ && revision <= pending_->revision())) {
         return {nullptr, SyntaxRequestError::StaleRevision};
     }
-    cancel_pending();
+    cancelPending();
     if (text.size() > config_.maximum_document_bytes) {
         return {nullptr, SyntaxRequestError::DocumentTooLarge};
     }
     const auto prior_parse =
         language == view_state_.language() ? accepted_parse_ : nullptr;
     if (!edits.empty() &&
-        (!prior_parse || !valid_edits(edits, text, accepted_text_))) {
+        (!prior_parse || !validEdits(edits, text, accepted_text_))) {
         return {nullptr, SyntaxRequestError::MalformedEdits};
     }
 
@@ -635,7 +635,7 @@ SyntaxParseOutput SyntaxModel::run(
         return {.revision = request.revision(),
                 .status = SyntaxParseStatus::Cancelled};
     }
-    if (!has_grammar(request.language())) {
+    if (!hasGrammar(request.language())) {
         return {.revision = request.revision(),
                 .status = SyntaxParseStatus::GrammarUnavailable};
     }
@@ -672,10 +672,10 @@ SyntaxAcceptResult SyntaxModel::accept(
     const bool fallback =
         output.status != SyntaxParseStatus::Parsed || !output.parse;
     auto next = fallback
-                    ? plain_text_syntax_view_state(
+                    ? plainTextSyntaxViewState(
                           request->revision(), request->language(),
                           request->text(), config_.tab_width)
-                    : build_syntax_view_state(
+                    : buildSyntaxViewState(
                           request->revision(), request->language(),
                           request->text(), output, config_);
     view_state_ = std::move(next);
@@ -685,7 +685,7 @@ SyntaxAcceptResult SyntaxModel::accept(
     return {SyntaxAcceptError::None, fallback};
 }
 
-void SyntaxModel::cancel_pending() noexcept {
+void SyntaxModel::cancelPending() noexcept {
     if (pending_) {
         pending_->cancel();
     }

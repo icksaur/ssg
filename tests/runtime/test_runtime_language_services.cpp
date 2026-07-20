@@ -9,7 +9,7 @@
 
 namespace {
 
-std::filesystem::path unique_root() {
+std::filesystem::path uniqueRoot() {
     auto root = std::filesystem::current_path() / "runtime_language";
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
@@ -19,8 +19,8 @@ std::filesystem::path unique_root() {
     return root;
 }
 
-TEST(syntax_and_lsp_sections_are_runtime_owned_without_transport) {
-    auto root = unique_root();
+TEST(syntaxAndLspSectionsAreRuntimeOwnedWithoutTransport) {
+    auto root = uniqueRoot();
     auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
@@ -40,7 +40,7 @@ TEST(syntax_and_lsp_sections_are_runtime_owned_without_transport) {
 } // namespace
 
 int main() {
-    RUN(syntax_and_lsp_sections_are_runtime_owned_without_transport);
+    RUN(syntaxAndLspSectionsAreRuntimeOwnedWithoutTransport);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

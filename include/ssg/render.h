@@ -53,7 +53,7 @@ struct CellGrid {
 // segments only the logical lines the viewport shows (<= viewport rows), never the
 // whole document — so a regression to whole-document segmentation fails the count
 // oracle.  Not thread-safe across concurrent render() calls (per-thread counter).
-[[nodiscard]] std::uint64_t render_segmentation_calls();
-void reset_render_segmentation_calls();
+[[nodiscard]] std::uint64_t renderSegmentationCalls();
+void resetRenderSegmentationCalls();
 
 }  // namespace ssg

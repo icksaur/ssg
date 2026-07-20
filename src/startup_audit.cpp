@@ -17,7 +17,7 @@ std::array<std::atomic<std::uint64_t>, optional_subsystem_count>& ledger() {
 
 }  // namespace
 
-std::string_view optional_subsystem_name(OptionalSubsystem subsystem) noexcept {
+std::string_view optionalSubsystemName(OptionalSubsystem subsystem) noexcept {
     switch (subsystem) {
         case OptionalSubsystem::Lua: return "lua";
         case OptionalSubsystem::Lsp: return "lsp";
@@ -29,23 +29,23 @@ std::string_view optional_subsystem_name(OptionalSubsystem subsystem) noexcept {
     return "unknown";
 }
 
-void note_optional_construction(OptionalSubsystem subsystem) noexcept {
+void noteOptionalConstruction(OptionalSubsystem subsystem) noexcept {
     ledger()[static_cast<std::size_t>(subsystem)].fetch_add(
         1, std::memory_order_relaxed);
 }
 
-std::uint64_t optional_construction_count(OptionalSubsystem subsystem) noexcept {
+std::uint64_t optionalConstructionCount(OptionalSubsystem subsystem) noexcept {
     return ledger()[static_cast<std::size_t>(subsystem)].load(
         std::memory_order_relaxed);
 }
 
-std::uint64_t optional_construction_total() noexcept {
+std::uint64_t optionalConstructionTotal() noexcept {
     std::uint64_t total = 0;
     for (auto const& count : ledger()) total += count.load(std::memory_order_relaxed);
     return total;
 }
 
-void reset_optional_construction_audit() noexcept {
+void resetOptionalConstructionAudit() noexcept {
     for (auto& count : ledger()) count.store(0, std::memory_order_relaxed);
 }
 

@@ -16,7 +16,7 @@ namespace fs = std::filesystem;
 
 namespace {
 
-fs::path unique_root() {
+fs::path uniqueRoot() {
     auto base = fs::temp_directory_path() /
                 ("ssg-render-" + std::to_string(::rand()));
     fs::create_directories(base / "scratch");
@@ -24,7 +24,7 @@ fs::path unique_root() {
     return base;
 }
 
-std::unique_ptr<ssg::EditorRuntime> make_runtime(fs::path const& root) {
+std::unique_ptr<ssg::EditorRuntime> makeRuntime(fs::path const& root) {
     auto created = ssg::EditorRuntime::create(
         {root, root / "scratch", root / "recovery"});
     if (!created.accepted()) return nullptr;
@@ -38,7 +38,7 @@ std::unique_ptr<ssg::EditorRuntime> make_runtime(fs::path const& root) {
 
 namespace {
 
-std::string row_text(ssg::CellGrid const& grid, int row) {
+std::string rowText(ssg::CellGrid const& grid, int row) {
     std::string line;
     for (int column = 0; column < grid.size.columns; ++column) {
         auto const& cell = grid.at(column, row);
@@ -47,19 +47,19 @@ std::string row_text(ssg::CellGrid const& grid, int row) {
     return line;
 }
 
-bool grid_contains(ssg::CellGrid const& grid, std::string_view needle) {
+bool gridContains(ssg::CellGrid const& grid, std::string_view needle) {
     for (int row = 0; row < grid.size.rows; ++row) {
-        if (row_text(grid, row).find(needle) != std::string::npos) return true;
+        if (rowText(grid, row).find(needle) != std::string::npos) return true;
     }
     return false;
 }
 
 }  // namespace
 
-TEST(render_paints_content_not_accessibility_labels) {
-    auto root = unique_root();
+TEST(renderPaintsContentNotAccessibilityLabels) {
+    auto root = uniqueRoot();
     std::ofstream{root / "hello.txt"} << "alpha\nbeta\n";
-    auto runtime = make_runtime(root);
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)runtime->dispatch(
@@ -70,17 +70,17 @@ TEST(render_paints_content_not_accessibility_labels) {
     if (!snapshot) return;
     auto grid = ssg::render(*snapshot);
     // Container accessibility labels must never be painted.
-    ASSERT_FALSE(grid_contains(grid, "Status header"));
-    ASSERT_FALSE(grid_contains(grid, "Open tabs"));
-    ASSERT_FALSE(grid_contains(grid, "Workspace"));
+    ASSERT_FALSE(gridContains(grid, "Status header"));
+    ASSERT_FALSE(gridContains(grid, "Open tabs"));
+    ASSERT_FALSE(gridContains(grid, "Workspace"));
     // The open document's real content is painted.
-    ASSERT_TRUE(grid_contains(grid, "alpha"));
+    ASSERT_TRUE(gridContains(grid, "alpha"));
 }
 
-TEST(render_segments_only_visible_lines_not_whole_document) {
+TEST(renderSegmentsOnlyVisibleLinesNotWholeDocument) {
     // INV-render-projection (M12): render() runs compute_cell_run only for the
     // logical lines the viewport shows (<= rows), independent of document length.
-    auto root = unique_root();
+    auto root = uniqueRoot();
     auto make_doc = [](std::size_t line_count) {
         std::string text;
         for (std::size_t i = 0; i < line_count; ++i) {
@@ -90,7 +90,7 @@ TEST(render_segments_only_visible_lines_not_whole_document) {
     };
     std::ofstream{root / "small.txt"} << make_doc(50);
     std::ofstream{root / "big.txt"} << make_doc(5000);
-    auto runtime = make_runtime(root);
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
 
@@ -100,10 +100,10 @@ TEST(render_segments_only_visible_lines_not_whole_document) {
         auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) return 0;
-        ssg::reset_render_segmentation_calls();
+        ssg::resetRenderSegmentationCalls();
         auto grid = ssg::render(*snapshot);
         (void)grid;
-        return ssg::render_segmentation_calls();
+        return ssg::renderSegmentationCalls();
     };
 
     auto const small_calls = segment_count_for("small.txt");
@@ -118,16 +118,16 @@ TEST(render_segments_only_visible_lines_not_whole_document) {
 }
 
 
-TEST(word_wrap_off_renders_horizontally_scrolled_content) {
+TEST(wordWrapOffRendersHorizontallyScrolledContent) {
     // M12 VP-H: with the caret at the end of a long line (word wrap off), the
     // editor paints the horizontally-scrolled window — the line's END is visible
     // and its START has scrolled off — proving render honors first_visual_column.
-    auto root = unique_root();
+    auto root = uniqueRoot();
     std::string line = "STARTmarker";
     line += std::string(120, '.');
     line += "ENDmarker";
     std::ofstream{root / "long.txt"} << line << "\nsecond\n";
-    auto runtime = make_runtime(root);
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)runtime->dispatch(
@@ -145,14 +145,14 @@ TEST(word_wrap_off_renders_horizontally_scrolled_content) {
     auto grid = ssg::render(*snapshot);
 
     // The end of the line is on screen; the start has scrolled off.
-    ASSERT_TRUE(grid_contains(grid, "ENDmarker"));
-    ASSERT_FALSE(grid_contains(grid, "STARTmarker"));
+    ASSERT_TRUE(gridContains(grid, "ENDmarker"));
+    ASSERT_FALSE(gridContains(grid, "STARTmarker"));
 }
 
 
-TEST(render_colors_are_palette_indices) {
-    auto root = unique_root();
-    auto runtime = make_runtime(root);
+TEST(renderColorsArePaletteIndices) {
+    auto root = uniqueRoot();
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
@@ -169,10 +169,10 @@ TEST(render_colors_are_palette_indices) {
     ASSERT_TRUE(all_in_palette);
 }
 
-TEST(render_is_deterministic) {
-    auto root = unique_root();
+TEST(renderIsDeterministic) {
+    auto root = uniqueRoot();
     std::ofstream{root / "file.txt"} << "content\n";
-    auto runtime = make_runtime(root);
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     auto first = runtime->snapshot(ssg::ClientId{1}, {80, 24});
@@ -182,10 +182,10 @@ TEST(render_is_deterministic) {
     ASSERT_EQ(ssg::render(*first).canonical(), ssg::render(*second).canonical());
 }
 
-TEST(render_projects_palette_results_into_active_pane) {
-    auto root = unique_root();
+TEST(renderProjectsPaletteResultsIntoActivePane) {
+    auto root = uniqueRoot();
     std::ofstream{root / "hello.txt"} << "alpha\nbeta\n";
-    auto runtime = make_runtime(root);
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)runtime->dispatch(
@@ -196,7 +196,7 @@ TEST(render_projects_palette_results_into_active_pane) {
     if (!snapshot) return;
 
     // Without a palette projection the document content is painted.
-    ASSERT_TRUE(grid_contains(ssg::render(*snapshot), "alpha"));
+    ASSERT_TRUE(gridContains(ssg::render(*snapshot), "alpha"));
 
     auto sections = snapshot->sections();
     ASSERT_FALSE(sections.shell.panes.empty());
@@ -212,9 +212,9 @@ TEST(render_projects_palette_results_into_active_pane) {
     auto grid = ssg::render(projected);
 
     // Results replace the document text in the pane.
-    ASSERT_TRUE(grid_contains(grid, "file.save"));
-    ASSERT_TRUE(grid_contains(grid, "ESC q"));
-    ASSERT_FALSE(grid_contains(grid, "alpha"));
+    ASSERT_TRUE(gridContains(grid, "file.save"));
+    ASSERT_TRUE(gridContains(grid, "ESC q"));
+    ASSERT_FALSE(gridContains(grid, "alpha"));
 
     // The selected row is painted with the selection role, including on the
     // label's glyph cells (not only trailing filler).
@@ -227,10 +227,10 @@ TEST(render_projects_palette_results_into_active_pane) {
                  ssg::SemanticRole::Selection);
 }
 
-TEST(render_shows_palette_query_and_ghost_in_header) {
-    auto root = unique_root();
+TEST(renderShowsPaletteQueryAndGhostInHeader) {
+    auto root = uniqueRoot();
     std::ofstream{root / "hello.txt"} << "alpha\n";
-    auto runtime = make_runtime(root);
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)runtime->dispatch(
@@ -251,8 +251,8 @@ TEST(render_shows_palette_query_and_ghost_in_header) {
     auto grid = ssg::render(*snapshot);
 
     // The header shows the query (prompt role) and the dim ghost completion.
-    ASSERT_TRUE(grid_contains(grid, "> sa"));
-    ASSERT_TRUE(grid_contains(grid, "ve File"));
+    ASSERT_TRUE(gridContains(grid, "> sa"));
+    ASSERT_TRUE(gridContains(grid, "ve File"));
 
     bool query_prompt_role = false;
     bool ghost_dim_role = false;
@@ -269,10 +269,10 @@ TEST(render_shows_palette_query_and_ghost_in_header) {
     ASSERT_TRUE(ghost_dim_role);
 }
 
-TEST(render_paints_selection_highlight_and_secondary_carets) {
-    auto root = unique_root();
+TEST(renderPaintsSelectionHighlightAndSecondaryCarets) {
+    auto root = uniqueRoot();
     std::ofstream{root / "sel.txt"} << "alpha\nbeta\n";
-    auto runtime = make_runtime(root);
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)runtime->dispatch(
@@ -306,7 +306,7 @@ TEST(render_paints_selection_highlight_and_secondary_carets) {
 
     int alpha_row = -1;
     for (int row = 0; row < grid.size.rows; ++row) {
-        if (row_text(grid, row).find("alpha") != std::string::npos) alpha_row = row;
+        if (rowText(grid, row).find("alpha") != std::string::npos) alpha_row = row;
     }
     ASSERT_TRUE(alpha_row >= 0);
     if (alpha_row < 0) return;
@@ -336,10 +336,10 @@ TEST(render_paints_selection_highlight_and_secondary_carets) {
     }
 }
 
-TEST(render_fills_end_of_line_for_multiline_selection) {
-    auto root = unique_root();
+TEST(renderFillsEndOfLineForMultilineSelection) {
+    auto root = uniqueRoot();
     std::ofstream{root / "ml.txt"} << "alpha\nbeta\n";
-    auto runtime = make_runtime(root);
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)runtime->dispatch(
@@ -371,11 +371,11 @@ TEST(render_fills_end_of_line_for_multiline_selection) {
     }
 }
 
-TEST(render_highlights_wide_glyph_cells) {
-    auto root = unique_root();
+TEST(renderHighlightsWideGlyphCells) {
+    auto root = uniqueRoot();
     // A CJK wide glyph occupies two cells; selecting it must highlight both.
     std::ofstream{root / "w.txt"} << "a\xe4\xb8\x80""b\n";  // "a一b"
-    auto runtime = make_runtime(root);
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)runtime->dispatch(
@@ -402,10 +402,10 @@ TEST(render_highlights_wide_glyph_cells) {
     ASSERT_EQ(grid.at(col + 1, row).role, ssg::SemanticRole::Selection);
 }
 
-TEST(render_paints_secondary_ranged_selection_caret) {
-    auto root = unique_root();
+TEST(renderPaintsSecondaryRangedSelectionCaret) {
+    auto root = uniqueRoot();
     std::ofstream{root / "rc.txt"} << "cat cat\n";
-    auto runtime = make_runtime(root);
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)runtime->dispatch(
@@ -424,7 +424,7 @@ TEST(render_paints_secondary_ranged_selection_caret) {
     auto const& items = snapshot->sections().selection.selections.items();
     if (items.size() < 2) return;  // Ranker may not find a second; skip if so.
     bool all_ranged = true;
-    for (auto const& item : items) if (item.is_caret()) all_ranged = false;
+    for (auto const& item : items) if (item.isCaret()) all_ranged = false;
     ASSERT_TRUE(all_ranged);
     auto grid = ssg::render(*snapshot);
     int painted_secondary = 0;
@@ -441,10 +441,10 @@ TEST(render_paints_secondary_ranged_selection_caret) {
     ASSERT_EQ(painted_secondary, 1);
 }
 
-TEST(render_paints_secondary_caret_as_a_cell) {
-    auto root = unique_root();
+TEST(renderPaintsSecondaryCaretAsACell) {
+    auto root = uniqueRoot();
     std::ofstream{root / "car.txt"} << "alpha\nbeta\n";
-    auto runtime = make_runtime(root);
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)runtime->dispatch(
@@ -477,10 +477,10 @@ TEST(render_paints_secondary_caret_as_a_cell) {
     ASSERT_EQ(painted_secondary, 1);
 }
 
-TEST(render_paints_find_matches_and_active_match) {
-    auto root = unique_root();
+TEST(renderPaintsFindMatchesAndActiveMatch) {
+    auto root = uniqueRoot();
     std::ofstream{root / "find.txt"} << "cat cat cat\n";
-    auto runtime = make_runtime(root);
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)runtime->dispatch(
@@ -499,7 +499,7 @@ TEST(render_paints_find_matches_and_active_match) {
 
     int row = -1;
     for (int r = 0; r < grid.size.rows; ++r) {
-        if (row_text(grid, r).find("cat cat cat") != std::string::npos) row = r;
+        if (rowText(grid, r).find("cat cat cat") != std::string::npos) row = r;
     }
     ASSERT_TRUE(row >= 0);
     if (row < 0) return;
@@ -525,10 +525,10 @@ TEST(render_paints_find_matches_and_active_match) {
     }
 }
 
-TEST(render_hides_find_matches_after_document_revision_changes) {
-    auto root = unique_root();
+TEST(renderHidesFindMatchesAfterDocumentRevisionChanges) {
+    auto root = uniqueRoot();
     std::ofstream{root / "stale.txt"} << "cat cat cat\n";
-    auto runtime = make_runtime(root);
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)runtime->dispatch(
@@ -561,10 +561,10 @@ TEST(render_hides_find_matches_after_document_revision_changes) {
     ASSERT_FALSE(any_match);
 }
 
-TEST(render_replace_prompt_shows_query_and_replacement_with_cursor_on_replacement) {
-    auto root = unique_root();
+TEST(renderReplacePromptShowsQueryAndReplacementWithCursorOnReplacement) {
+    auto root = uniqueRoot();
     std::ofstream{root / "rep.txt"} << "cat cat cat\n";
-    auto runtime = make_runtime(root);
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)runtime->dispatch(
@@ -584,19 +584,19 @@ TEST(render_replace_prompt_shows_query_and_replacement_with_cursor_on_replacemen
     auto grid = ssg::render(*snapshot);
 
     // The reserved replace rows show the query and the replacement.
-    ASSERT_TRUE(grid_contains(grid, "cat"));
-    ASSERT_TRUE(grid_contains(grid, "dog"));
+    ASSERT_TRUE(gridContains(grid, "cat"));
+    ASSERT_TRUE(gridContains(grid, "dog"));
     // The hardware cursor sits on the replacement row (the one containing "dog").
     ASSERT_TRUE(grid.caret.has_value());
     if (grid.caret) {
-        ASSERT_TRUE(row_text(grid, grid.caret->row).find("dog") != std::string::npos);
+        ASSERT_TRUE(rowText(grid, grid.caret->row).find("dog") != std::string::npos);
     }
 }
 
-TEST(render_find_prompt_shows_option_indicators) {
-    auto root = unique_root();
+TEST(renderFindPromptShowsOptionIndicators) {
+    auto root = uniqueRoot();
     std::ofstream{root / "opt.txt"} << "Cat cat CAT\n";
-    auto runtime = make_runtime(root);
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)runtime->dispatch(
@@ -614,9 +614,9 @@ TEST(render_find_prompt_shows_option_indicators) {
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) return;
         auto grid = ssg::render(*snapshot);
-        ASSERT_TRUE(grid_contains(grid, "[ ] Case"));
-        ASSERT_TRUE(grid_contains(grid, "[ ] Word"));
-        ASSERT_TRUE(grid_contains(grid, "[ ] Regex"));
+        ASSERT_TRUE(gridContains(grid, "[ ] Case"));
+        ASSERT_TRUE(gridContains(grid, "[ ] Word"));
+        ASSERT_TRUE(gridContains(grid, "[ ] Regex"));
     }
 
     // Toggling case flips its indicator to checked.
@@ -626,18 +626,18 @@ TEST(render_find_prompt_shows_option_indicators) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto grid = ssg::render(*snapshot);
-    ASSERT_TRUE(grid_contains(grid, "[x] Case"));
-    ASSERT_TRUE(grid_contains(grid, "[ ] Word"));
+    ASSERT_TRUE(gridContains(grid, "[x] Case"));
+    ASSERT_TRUE(gridContains(grid, "[ ] Word"));
 }
 
-TEST(render_panel_tree_windows_and_draws_a_thumb_when_taller_than_the_panel) {
-    auto root = unique_root();
+TEST(renderPanelTreeWindowsAndDrawsAThumbWhenTallerThanThePanel) {
+    auto root = uniqueRoot();
     for (int i = 0; i < 40; ++i) {
         char name[32];
         std::snprintf(name, sizeof name, "file-%02d.txt", i);
         std::ofstream{root / name} << "x";
     }
-    auto runtime = make_runtime(root);
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)runtime->dispatch(ssg::ClientId{1}, {"panel.toggle", runtime->revision(), {}});
@@ -667,15 +667,15 @@ TEST(render_panel_tree_windows_and_draws_a_thumb_when_taller_than_the_panel) {
     ASSERT_TRUE(has_thumb);
     // The window scrolled to the end: the first file is off-screen, the last is
     // visible.
-    ASSERT_FALSE(grid_contains(grid, "file-00.txt"));
-    ASSERT_TRUE(grid_contains(grid, "file-39.txt"));
+    ASSERT_FALSE(gridContains(grid, "file-00.txt"));
+    ASSERT_TRUE(gridContains(grid, "file-39.txt"));
 }
 
-TEST(render_panel_tree_reserves_an_empty_gutter_when_it_fits) {
-    auto root = unique_root();
+TEST(renderPanelTreeReservesAnEmptyGutterWhenItFits) {
+    auto root = uniqueRoot();
     std::ofstream{root / "a.txt"} << "x";
     std::ofstream{root / "b.txt"} << "x";
-    auto runtime = make_runtime(root);
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)runtime->dispatch(ssg::ClientId{1}, {"panel.toggle", runtime->revision(), {}});
@@ -697,13 +697,13 @@ TEST(render_panel_tree_reserves_an_empty_gutter_when_it_fits) {
         ASSERT_NE(grid.at(gx, y).text, std::string{"#"});
         ASSERT_NE(grid.at(gx, y).text, std::string{"|"});
     }
-    ASSERT_TRUE(grid_contains(grid, "a.txt"));
+    ASSERT_TRUE(gridContains(grid, "a.txt"));
 }
 
-TEST(render_palette_windows_rows_and_draws_a_thumb_with_absolute_selection) {
-    auto root = unique_root();
+TEST(renderPaletteWindowsRowsAndDrawsAThumbWithAbsoluteSelection) {
+    auto root = uniqueRoot();
     std::ofstream{root / "hello.txt"} << "alpha\nbeta\n";
-    auto runtime = make_runtime(root);
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)runtime->dispatch(
@@ -725,7 +725,7 @@ TEST(render_palette_windows_rows_and_draws_a_thumb_with_absolute_selection) {
     projection.scrollbar_rect = pane.scrollbar;
     projection.first_visible = 20;
     projection.selected = std::uint32_t{25};
-    projection.scrollbar = ssg::scrollbar_metrics(40, rows, 20);
+    projection.scrollbar = ssg::scrollbarMetrics(40, rows, 20);
     for (std::uint32_t i = 0; i < rows; ++i) {
         projection.rows.push_back(
             {"cmd-" + std::to_string(20 + i), ""});
@@ -737,8 +737,8 @@ TEST(render_palette_windows_rows_and_draws_a_thumb_with_absolute_selection) {
 
     // The window shows cmd-20.. (not cmd-00), and the absolute-25 selection lands
     // at window row 5.
-    ASSERT_TRUE(grid_contains(grid, "cmd-20"));
-    ASSERT_FALSE(grid_contains(grid, "cmd-00"));
+    ASSERT_TRUE(gridContains(grid, "cmd-20"));
+    ASSERT_FALSE(gridContains(grid, "cmd-00"));
     int const selected_row = projection.rect.y + 5;
     ASSERT_EQ(grid.at(projection.rect.x, selected_row).role,
               ssg::SemanticRole::Selection);
@@ -754,10 +754,10 @@ TEST(render_palette_windows_rows_and_draws_a_thumb_with_absolute_selection) {
     ASSERT_TRUE(has_thumb);
 }
 
-TEST(render_palette_reserves_an_empty_gutter_when_the_list_fits) {
-    auto root = unique_root();
+TEST(renderPaletteReservesAnEmptyGutterWhenTheListFits) {
+    auto root = uniqueRoot();
     std::ofstream{root / "hello.txt"} << "alpha\n";
-    auto runtime = make_runtime(root);
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     (void)runtime->dispatch(
@@ -774,7 +774,7 @@ TEST(render_palette_reserves_an_empty_gutter_when_the_list_fits) {
     projection.first_visible = 0;
     projection.selected = std::uint32_t{0};
     projection.scrollbar =
-        ssg::scrollbar_metrics(2, static_cast<std::uint32_t>(pane.content.height), 0);
+        ssg::scrollbarMetrics(2, static_cast<std::uint32_t>(pane.content.height), 0);
     projection.rows = {{"a", ""}, {"b", ""}};
     sections.shell.palette = projection;
     ssg::SessionSnapshot projected{snapshot->revision(), snapshot->topology(),
@@ -788,11 +788,11 @@ TEST(render_palette_reserves_an_empty_gutter_when_the_list_fits) {
     }
 }
 
-TEST(render_too_small_viewport_produces_library_placeholder) {
+TEST(renderTooSmallViewportProducesLibraryPlaceholder) {
     // M11-L: below the 20x4 minimum the library (not the app) renders the
     // placeholder screen, sized to the terminal, so no app code authors cells.
-    auto root = unique_root();
-    auto runtime = make_runtime(root);
+    auto root = uniqueRoot();
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
 
@@ -809,15 +809,15 @@ TEST(render_too_small_viewport_produces_library_placeholder) {
     ASSERT_EQ(grid.cells.size(), std::size_t{50});
     // The message is centered on the middle row (rows/2 = 2) and clipped with an
     // ellipsis to the 10-column width.
-    ASSERT_EQ(row_text(grid, 2), std::string("terminal \xe2\x80\xa6"));
-    ASSERT_EQ(row_text(grid, 0), std::string(10, ' '));
+    ASSERT_EQ(rowText(grid, 2), std::string("terminal \xe2\x80\xa6"));
+    ASSERT_EQ(rowText(grid, 0), std::string(10, ' '));
 
     std::filesystem::remove_all(root);
 }
 
-TEST(render_too_small_matches_hand_authored_golden) {
-    auto root = unique_root();
-    auto runtime = make_runtime(root);
+TEST(renderTooSmallMatchesHandAuthoredGolden) {
+    auto root = uniqueRoot();
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     // A 24-wide, 3-row terminal fits the whole 18-cell message, centered.
@@ -829,18 +829,18 @@ TEST(render_too_small_matches_hand_authored_golden) {
     ASSERT_EQ(grid.size.rows, 3);
     // 18-cell message centered in 24 columns -> start column (24-18)/2 = 3, on
     // the middle row (3/2 = 1).
-    ASSERT_EQ(row_text(grid, 0), std::string(24, ' '));
-    ASSERT_EQ(row_text(grid, 1),
+    ASSERT_EQ(rowText(grid, 0), std::string(24, ' '));
+    ASSERT_EQ(rowText(grid, 1),
               std::string("   terminal too small   "));
-    ASSERT_EQ(row_text(grid, 2), std::string(24, ' '));
+    ASSERT_EQ(rowText(grid, 2), std::string(24, ' '));
     // Determinism.
     ASSERT_EQ(ssg::render(*snapshot).canonical(), grid.canonical());
     std::filesystem::remove_all(root);
 }
 
-TEST(render_too_small_is_safe_at_one_by_one) {
-    auto root = unique_root();
-    auto runtime = make_runtime(root);
+TEST(renderTooSmallIsSafeAtOneByOne) {
+    auto root = uniqueRoot();
+    auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, {1, 1});
@@ -855,29 +855,29 @@ TEST(render_too_small_is_safe_at_one_by_one) {
 }
 
 int main() {
-    RUN(render_paints_content_not_accessibility_labels);
-    RUN(render_segments_only_visible_lines_not_whole_document);
-    RUN(word_wrap_off_renders_horizontally_scrolled_content);
-    RUN(render_colors_are_palette_indices);
-    RUN(render_is_deterministic);
-    RUN(render_projects_palette_results_into_active_pane);
-    RUN(render_shows_palette_query_and_ghost_in_header);
-    RUN(render_paints_selection_highlight_and_secondary_carets);
-    RUN(render_fills_end_of_line_for_multiline_selection);
-    RUN(render_highlights_wide_glyph_cells);
-    RUN(render_paints_secondary_ranged_selection_caret);
-    RUN(render_paints_secondary_caret_as_a_cell);
-    RUN(render_paints_find_matches_and_active_match);
-    RUN(render_hides_find_matches_after_document_revision_changes);
-    RUN(render_replace_prompt_shows_query_and_replacement_with_cursor_on_replacement);
-    RUN(render_find_prompt_shows_option_indicators);
-    RUN(render_panel_tree_windows_and_draws_a_thumb_when_taller_than_the_panel);
-    RUN(render_panel_tree_reserves_an_empty_gutter_when_it_fits);
-    RUN(render_palette_windows_rows_and_draws_a_thumb_with_absolute_selection);
-    RUN(render_palette_reserves_an_empty_gutter_when_the_list_fits);
-    RUN(render_too_small_viewport_produces_library_placeholder);
-    RUN(render_too_small_matches_hand_authored_golden);
-    RUN(render_too_small_is_safe_at_one_by_one);
+    RUN(renderPaintsContentNotAccessibilityLabels);
+    RUN(renderSegmentsOnlyVisibleLinesNotWholeDocument);
+    RUN(wordWrapOffRendersHorizontallyScrolledContent);
+    RUN(renderColorsArePaletteIndices);
+    RUN(renderIsDeterministic);
+    RUN(renderProjectsPaletteResultsIntoActivePane);
+    RUN(renderShowsPaletteQueryAndGhostInHeader);
+    RUN(renderPaintsSelectionHighlightAndSecondaryCarets);
+    RUN(renderFillsEndOfLineForMultilineSelection);
+    RUN(renderHighlightsWideGlyphCells);
+    RUN(renderPaintsSecondaryRangedSelectionCaret);
+    RUN(renderPaintsSecondaryCaretAsACell);
+    RUN(renderPaintsFindMatchesAndActiveMatch);
+    RUN(renderHidesFindMatchesAfterDocumentRevisionChanges);
+    RUN(renderReplacePromptShowsQueryAndReplacementWithCursorOnReplacement);
+    RUN(renderFindPromptShowsOptionIndicators);
+    RUN(renderPanelTreeWindowsAndDrawsAThumbWhenTallerThanThePanel);
+    RUN(renderPanelTreeReservesAnEmptyGutterWhenItFits);
+    RUN(renderPaletteWindowsRowsAndDrawsAThumbWithAbsoluteSelection);
+    RUN(renderPaletteReservesAnEmptyGutterWhenTheListFits);
+    RUN(renderTooSmallViewportProducesLibraryPlaceholder);
+    RUN(renderTooSmallMatchesHandAuthoredGolden);
+    RUN(renderTooSmallIsSafeAtOneByOne);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;

@@ -56,43 +56,43 @@ struct Fixture {
     ssg::ExternalModificationFlow flow{recovery, diff};
 
     Fixture() {
-        ASSERT_TRUE(diff.seed_non_git(
+        ASSERT_TRUE(diff.seedNonGit(
                             {{ssg::DiffFileId{"note"}, "note.txt", "base\n"}},
                             ssg::Revision{1})
                         .accepted());
     }
 };
 
-TEST(command_set_is_complete_and_ordered) {
-    const auto descriptors = ssg::external_modification_command_set().descriptors();
+TEST(commandSetIsCompleteAndOrdered) {
+    const auto descriptors = ssg::externalModificationCommandSet().descriptors();
     ASSERT_EQ(descriptors.size(), 3U);
     ASSERT_EQ(descriptors[0].id, "external.reload");
     ASSERT_EQ(descriptors[1].id, "external.keep_buffer");
     ASSERT_EQ(descriptors[2].id, "external.open_diff");
 }
 
-TEST(clean_external_edit_auto_reloads_without_recovery_status) {
+TEST(cleanExternalEditAutoReloadsWithoutRecoveryStatus) {
     Fixture fixture;
     std::optional<ssg::JournalDocument> open{document("base\n", false)};
 
     const auto result =
-        fixture.flow.process_event(input(2, "disk\n"), open);
+        fixture.flow.processEvent(input(2, "disk\n"), open);
 
     ASSERT_TRUE(result.accepted());
     ASSERT_FALSE(result.status_published);
     ASSERT_EQ(open->utf8_content, "disk\n");
     ASSERT_FALSE(open->dirty);
     ASSERT_TRUE(fixture.recovery.records().empty());
-    ASSERT_TRUE(fixture.flow.view_state().files.empty());
+    ASSERT_TRUE(fixture.flow.viewState().files.empty());
 }
 
-TEST(dirty_external_edit_preserves_buffer_and_publishes_actions) {
+TEST(dirtyExternalEditPreservesBufferAndPublishesActions) {
     Fixture fixture;
     std::optional<ssg::JournalDocument> open{document("buffer\n", true)};
 
     const auto result =
-        fixture.flow.process_event(input(2, "disk\n"), open);
-    const auto state = fixture.flow.view_state();
+        fixture.flow.processEvent(input(2, "disk\n"), open);
+    const auto state = fixture.flow.viewState();
 
     ASSERT_TRUE(result.accepted());
     ASSERT_TRUE(result.status_published);
@@ -107,29 +107,29 @@ TEST(dirty_external_edit_preserves_buffer_and_publishes_actions) {
     ASSERT_EQ(state.files[0].actions[2], ssg::ExternalAction::OpenDiff);
 }
 
-TEST(open_diff_is_observational_and_keep_buffer_acknowledges_disk) {
+TEST(openDiffIsObservationalAndKeepBufferAcknowledgesDisk) {
     Fixture fixture;
     std::optional<ssg::JournalDocument> open{document("buffer\n", true)};
-    ASSERT_TRUE(fixture.flow.process_event(input(2, "disk\n"), open).accepted());
-    const auto before = fixture.flow.view_state();
+    ASSERT_TRUE(fixture.flow.processEvent(input(2, "disk\n"), open).accepted());
+    const auto before = fixture.flow.viewState();
 
-    const auto target = fixture.flow.open_diff(ssg::DiffFileId{"note"});
+    const auto target = fixture.flow.openDiff(ssg::DiffFileId{"note"});
     ASSERT_TRUE(target.accepted());
     ASSERT_EQ(target.target->path, std::filesystem::path{"note.txt"});
-    ASSERT_EQ(fixture.flow.view_state(), before);
+    ASSERT_EQ(fixture.flow.viewState(), before);
 
-    const auto kept = fixture.flow.keep_buffer(ssg::DiffFileId{"note"});
+    const auto kept = fixture.flow.keepBuffer(ssg::DiffFileId{"note"});
     ASSERT_TRUE(kept.accepted());
     ASSERT_EQ(open->utf8_content, "buffer\n");
     ASSERT_TRUE(open->dirty);
-    ASSERT_TRUE(fixture.flow.view_state().files.empty());
+    ASSERT_TRUE(fixture.flow.viewState().files.empty());
     ASSERT_TRUE(fixture.recovery.records().empty());
 }
 
-TEST(reload_is_reversible_and_record_precedes_buffer_replacement) {
+TEST(reloadIsReversibleAndRecordPrecedesBufferReplacement) {
     Fixture fixture;
     std::optional<ssg::JournalDocument> open{document("buffer\n", true)};
-    ASSERT_TRUE(fixture.flow.process_event(input(2, "disk\n"), open).accepted());
+    ASSERT_TRUE(fixture.flow.processEvent(input(2, "disk\n"), open).accepted());
 
     const auto reloaded =
         fixture.flow.reload(ssg::DiffFileId{"note"}, open);
@@ -138,66 +138,66 @@ TEST(reload_is_reversible_and_record_precedes_buffer_replacement) {
     ASSERT_TRUE(reloaded.compensation.has_value());
     ASSERT_EQ(open->utf8_content, "disk\n");
     ASSERT_FALSE(open->dirty);
-    ASSERT_TRUE(fixture.flow.view_state().files.empty());
+    ASSERT_TRUE(fixture.flow.viewState().files.empty());
     ASSERT_EQ(fixture.recovery.records().size(), 1U);
 
     const auto restored =
-        fixture.recovery.restore_document(*reloaded.compensation, open);
+        fixture.recovery.restoreDocument(*reloaded.compensation, open);
     ASSERT_TRUE(restored.accepted());
     ASSERT_EQ(open->utf8_content, "buffer\n");
     ASSERT_TRUE(open->dirty);
 }
 
-TEST(ssg_save_advances_baseline_without_duplicate_status) {
+TEST(ssgSaveAdvancesBaselineWithoutDuplicateStatus) {
     Fixture fixture;
     std::optional<ssg::JournalDocument> open{document("saved\n", false)};
 
-    const auto saved = fixture.flow.process_event(
+    const auto saved = fixture.flow.processEvent(
         input(2, "saved\n", ssg::WatchEventOrigin::SsgSave), open);
 
     ASSERT_TRUE(saved.accepted());
     ASSERT_FALSE(saved.status_published);
-    ASSERT_TRUE(fixture.flow.view_state().files.empty());
+    ASSERT_TRUE(fixture.flow.viewState().files.empty());
     ASSERT_EQ(open->utf8_content, "saved\n");
 }
 
-TEST(genuine_external_edit_is_not_consumed_by_save_correlation) {
+TEST(genuineExternalEditIsNotConsumedBySaveCorrelation) {
     Fixture fixture;
     std::optional<ssg::JournalDocument> open{document("buffer\n", true)};
     ASSERT_TRUE(fixture.flow
-                    .process_event(
+                    .processEvent(
                         input(2, "saved\n", ssg::WatchEventOrigin::SsgSave),
                         open)
                     .accepted());
 
     const auto external =
-        fixture.flow.process_event(input(3, "other\n"), open);
+        fixture.flow.processEvent(input(3, "other\n"), open);
 
     ASSERT_TRUE(external.accepted());
     ASSERT_TRUE(external.status_published);
     ASSERT_EQ(open->utf8_content, "buffer\n");
-    ASSERT_EQ(fixture.flow.view_state().files.size(), 1U);
+    ASSERT_EQ(fixture.flow.viewState().files.size(), 1U);
 }
 
-TEST(stale_event_is_failure_atomic) {
+TEST(staleEventIsFailureAtomic) {
     Fixture fixture;
     std::optional<ssg::JournalDocument> open{document("buffer\n", true)};
-    ASSERT_TRUE(fixture.flow.process_event(input(2, "disk\n"), open).accepted());
-    const auto state = fixture.flow.view_state();
-    const auto diff = fixture.diff.view_state();
+    ASSERT_TRUE(fixture.flow.processEvent(input(2, "disk\n"), open).accepted());
+    const auto state = fixture.flow.viewState();
+    const auto diff = fixture.diff.viewState();
     const auto before = open;
 
     const auto stale =
-        fixture.flow.process_event(input(2, "stale\n"), open);
+        fixture.flow.processEvent(input(2, "stale\n"), open);
 
     ASSERT_FALSE(stale.accepted());
     ASSERT_EQ(stale.error, ssg::ExternalModificationError::StaleEvent);
     ASSERT_EQ(open, before);
-    ASSERT_EQ(fixture.flow.view_state(), state);
-    ASSERT_EQ(fixture.diff.view_state(), diff);
+    ASSERT_EQ(fixture.flow.viewState(), state);
+    ASSERT_EQ(fixture.diff.viewState(), diff);
 }
 
-TEST(diff_rejection_does_not_suppress_dirty_buffer_safety_status) {
+TEST(diffRejectionDoesNotSuppressDirtyBufferSafetyStatus) {
     TemporaryDirectory temporary;
     auto recovery =
         ssg::RecoveryActions::create(temporary.path() / "recovery");
@@ -205,29 +205,29 @@ TEST(diff_rejection_does_not_suppress_dirty_buffer_safety_status) {
     ssg::ExternalModificationFlow flow{recovery, diff};
     std::optional<ssg::JournalDocument> open{document("buffer\n", true)};
 
-    const auto result = flow.process_event(input(2, "disk\n"), open);
+    const auto result = flow.processEvent(input(2, "disk\n"), open);
 
     ASSERT_TRUE(result.accepted());
     ASSERT_FALSE(result.diff_routed);
     ASSERT_TRUE(result.status_published);
     ASSERT_EQ(open->utf8_content, "buffer\n");
     ASSERT_TRUE(open->dirty);
-    ASSERT_EQ(flow.view_state().files.size(), 1U);
+    ASSERT_EQ(flow.viewState().files.size(), 1U);
 }
 
-TEST(view_delta_replays_as_target_state) {
+TEST(viewDeltaReplaysAsTargetState) {
     Fixture fixture;
     std::optional<ssg::JournalDocument> open{document("buffer\n", true)};
-    const auto base = fixture.flow.view_state();
-    ASSERT_TRUE(fixture.flow.process_event(input(2, "disk\n"), open).accepted());
-    const auto target = fixture.flow.view_state();
+    const auto base = fixture.flow.viewState();
+    ASSERT_TRUE(fixture.flow.processEvent(input(2, "disk\n"), open).accepted());
+    const auto target = fixture.flow.viewState();
 
-    const auto delta = ssg::derive_external_modification_delta(base, target);
-    const auto replayed = ssg::replay_external_modification_delta(base, delta);
+    const auto delta = ssg::deriveExternalModificationDelta(base, target);
+    const auto replayed = ssg::replayExternalModificationDelta(base, delta);
 
     ASSERT_TRUE(replayed.accepted());
     ASSERT_EQ(*replayed.state, target);
-    const auto stale = ssg::replay_external_modification_delta(target, delta);
+    const auto stale = ssg::replayExternalModificationDelta(target, delta);
     ASSERT_FALSE(stale.accepted());
     ASSERT_EQ(stale.error, ssg::ExternalDeltaError::StaleRevision);
 }
@@ -235,15 +235,15 @@ TEST(view_delta_replays_as_target_state) {
 }  // namespace
 
 int main() {
-    RUN(command_set_is_complete_and_ordered);
-    RUN(clean_external_edit_auto_reloads_without_recovery_status);
-    RUN(dirty_external_edit_preserves_buffer_and_publishes_actions);
-    RUN(open_diff_is_observational_and_keep_buffer_acknowledges_disk);
-    RUN(reload_is_reversible_and_record_precedes_buffer_replacement);
-    RUN(ssg_save_advances_baseline_without_duplicate_status);
-    RUN(genuine_external_edit_is_not_consumed_by_save_correlation);
-    RUN(stale_event_is_failure_atomic);
-    RUN(diff_rejection_does_not_suppress_dirty_buffer_safety_status);
-    RUN(view_delta_replays_as_target_state);
+    RUN(commandSetIsCompleteAndOrdered);
+    RUN(cleanExternalEditAutoReloadsWithoutRecoveryStatus);
+    RUN(dirtyExternalEditPreservesBufferAndPublishesActions);
+    RUN(openDiffIsObservationalAndKeepBufferAcknowledgesDisk);
+    RUN(reloadIsReversibleAndRecordPrecedesBufferReplacement);
+    RUN(ssgSaveAdvancesBaselineWithoutDuplicateStatus);
+    RUN(genuineExternalEditIsNotConsumedBySaveCorrelation);
+    RUN(staleEventIsFailureAtomic);
+    RUN(diffRejectionDoesNotSuppressDirtyBufferSafetyStatus);
+    RUN(viewDeltaReplaysAsTargetState);
     return failed == 0 ? 0 : 1;
 }

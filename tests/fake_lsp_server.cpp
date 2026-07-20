@@ -41,7 +41,7 @@ LspIoResult FakeLspServer::read(std::string& bytes, std::size_t maximum_bytes,
 }
 
 void FakeLspServer::queue_payload(std::string payload, std::size_t chunk_bytes) {
-    auto frame = encode_lsp_frame(payload);
+    auto frame = encodeLspFrame(payload);
     if (chunk_bytes == 0) {
         reads_.push_back(std::move(frame));
         return;

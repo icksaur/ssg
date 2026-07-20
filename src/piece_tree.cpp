@@ -46,7 +46,7 @@ void update(Node& node) noexcept {
     node.height = 1 + std::max(height(node.left), height(node.right));
 }
 
-NodePtr rotate_left(NodePtr root) noexcept {
+NodePtr rotateLeft(NodePtr root) noexcept {
     auto result = std::move(root->right);
     root->right = std::move(result->left);
     update(*root);
@@ -55,7 +55,7 @@ NodePtr rotate_left(NodePtr root) noexcept {
     return result;
 }
 
-NodePtr rotate_right(NodePtr root) noexcept {
+NodePtr rotateRight(NodePtr root) noexcept {
     auto result = std::move(root->left);
     root->left = std::move(result->right);
     update(*root);
@@ -69,15 +69,15 @@ NodePtr rebalance(NodePtr root) noexcept {
     const auto balance = height(root->left) - height(root->right);
     if (balance > 1) {
         if (height(root->left->left) < height(root->left->right)) {
-            root->left = rotate_left(std::move(root->left));
+            root->left = rotateLeft(std::move(root->left));
         }
-        return rotate_right(std::move(root));
+        return rotateRight(std::move(root));
     }
     if (balance < -1) {
         if (height(root->right->right) < height(root->right->left)) {
-            root->right = rotate_right(std::move(root->right));
+            root->right = rotateRight(std::move(root->right));
         }
-        return rotate_left(std::move(root));
+        return rotateLeft(std::move(root));
     }
     return root;
 }
@@ -98,14 +98,14 @@ NodePtr join(NodePtr left, NodePtr pivot, NodePtr right) noexcept {
     return rebalance(std::move(pivot));
 }
 
-std::pair<NodePtr, NodePtr> detach_min(NodePtr root) noexcept {
+std::pair<NodePtr, NodePtr> detachMin(NodePtr root) noexcept {
     if (!root->left) {
         auto remainder = std::move(root->right);
         root->right.reset();
         update(*root);
         return {std::move(root), std::move(remainder)};
     }
-    auto [minimum, left_remainder] = detach_min(std::move(root->left));
+    auto [minimum, left_remainder] = detachMin(std::move(root->left));
     root->left = std::move(left_remainder);
     return {std::move(minimum), rebalance(std::move(root))};
 }
@@ -117,11 +117,11 @@ NodePtr concatenate(NodePtr left, NodePtr right) noexcept {
     if (!right) {
         return left;
     }
-    auto [pivot, remainder] = detach_min(std::move(right));
+    auto [pivot, remainder] = detachMin(std::move(right));
     return join(std::move(left), std::move(pivot), std::move(remainder));
 }
 
-void append_text(
+void appendText(
     const NodePtr& node,
     std::string_view original,
     const std::string& add,
@@ -129,13 +129,13 @@ void append_text(
     if (!node) {
         return;
     }
-    append_text(node->left, original, add, output);
+    appendText(node->left, original, add, output);
     const auto& buffer = node->add_buffer ? add : original;
     output.append(buffer, node->start, node->length);
-    append_text(node->right, original, add, output);
+    appendText(node->right, original, add, output);
 }
 
-void append_range(
+void appendRange(
     const NodePtr& node,
     std::string_view original,
     const std::string& add,
@@ -149,7 +149,7 @@ void append_range(
     const auto left_bytes = bytes(node->left);
     if (offset < left_bytes) {
         const auto from_left = std::min(count, left_bytes - offset);
-        append_range(node->left, original, add, offset, from_left, output);
+        appendRange(node->left, original, add, offset, from_left, output);
         count -= from_left;
         offset = left_bytes;
     }
@@ -167,12 +167,12 @@ void append_range(
         offset = piece_end;
     }
     if (count != 0) {
-        append_range(
+        appendRange(
             node->right, original, add, offset - piece_end, count, output);
     }
 }
 
-std::size_t count_newlines_before(
+std::size_t countNewlinesBefore(
     const NodePtr& node,
     std::string_view original,
     const std::string& add,
@@ -183,7 +183,7 @@ std::size_t count_newlines_before(
 
     const auto left_bytes = bytes(node->left);
     if (offset <= left_bytes) {
-        return count_newlines_before(
+        return countNewlinesBefore(
             node->left, original, add, offset);
     }
 
@@ -197,11 +197,11 @@ std::size_t count_newlines_before(
     if (offset <= left_bytes + node->length) {
         return result;
     }
-    return result + count_newlines_before(
+    return result + countNewlinesBefore(
         node->right, original, add, offset - left_bytes - node->length);
 }
 
-std::size_t nth_newline_offset(
+std::size_t nthNewlineOffset(
     const NodePtr& node,
     std::string_view original,
     const std::string& add,
@@ -209,7 +209,7 @@ std::size_t nth_newline_offset(
     std::size_t base) {
     const auto left_newlines = newlines(node->left);
     if (newline_index < left_newlines) {
-        return nth_newline_offset(
+        return nthNewlineOffset(
             node->left, original, add, newline_index, base);
     }
 
@@ -229,7 +229,7 @@ std::size_t nth_newline_offset(
             ++begin;
         }
     }
-    return nth_newline_offset(
+    return nthNewlineOffset(
         node->right,
         original,
         add,
@@ -244,15 +244,15 @@ struct Validation {
     int height = 0;
 };
 
-Validation validate_node(
+Validation validateNode(
     const NodePtr& node,
     std::string_view original,
     const std::string& add) noexcept {
     if (!node) {
         return {};
     }
-    const auto left = validate_node(node->left, original, add);
-    const auto right = validate_node(node->right, original, add);
+    const auto left = validateNode(node->left, original, add);
+    const auto right = validateNode(node->right, original, add);
     const auto& buffer = node->add_buffer ? add : original;
     const auto range_valid =
         node->start <= buffer.size()
@@ -287,14 +287,14 @@ Validation validate_node(
 PieceTree::PieceTree(std::string_view original)
     : original_buffer_(SharedBytes::owning(std::string{original})) {
     if (!original_buffer_.empty()) {
-        root_ = make_node(false, 0, original_buffer_.size());
+        root_ = makeNode(false, 0, original_buffer_.size());
     }
 }
 
 PieceTree::PieceTree(SharedBytes original)
     : original_buffer_(std::move(original)) {
     if (!original_buffer_.empty()) {
-        root_ = make_node(false, 0, original_buffer_.size());
+        root_ = makeNode(false, 0, original_buffer_.size());
     }
 }
 
@@ -311,10 +311,10 @@ bool PieceTree::empty() const noexcept {
 }
 
 std::string PieceTree::text() const {
-    note_piece_tree_text();
+    notePieceTreeText();
     std::string result;
     result.reserve(size());
-    append_text(root_, original_buffer_.view(), add_buffer_, result);
+    appendText(root_, original_buffer_.view(), add_buffer_, result);
     return result;
 }
 
@@ -324,7 +324,7 @@ std::string PieceTree::substr(std::size_t offset, std::size_t count) const {
     }
     std::string result;
     result.reserve(count);
-    append_range(
+    appendRange(
         root_, original_buffer_.view(), add_buffer_, offset, count, result);
     return result;
 }
@@ -339,7 +339,7 @@ void PieceTree::insert(std::size_t offset, std::string_view inserted) {
 
     const auto start = add_buffer_.size();
     add_buffer_.append(inserted);
-    auto inserted_node = make_node(true, start, inserted.size());
+    auto inserted_node = makeNode(true, start, inserted.size());
     auto [left, right] = split(std::move(root_), offset);
     root_ = concatenate(
         concatenate(std::move(left), std::move(inserted_node)),
@@ -359,34 +359,34 @@ void PieceTree::erase(std::size_t offset, std::size_t count) {
     root_ = concatenate(std::move(left), std::move(right));
 }
 
-std::size_t PieceTree::line_count() const noexcept {
+std::size_t PieceTree::lineCount() const noexcept {
     return newlines(root_) + 1;
 }
 
-std::size_t PieceTree::line_start(std::size_t line) const {
-    if (line >= line_count()) {
+std::size_t PieceTree::lineStart(std::size_t line) const {
+    if (line >= lineCount()) {
         throw std::out_of_range("piece tree line exceeds line count");
     }
     if (line == 0) {
         return 0;
     }
-    return nth_newline_offset(
+    return nthNewlineOffset(
         root_, original_buffer_.view(), add_buffer_, line - 1, 0) + 1;
 }
 
-std::size_t PieceTree::line_of_offset(std::size_t offset) const {
+std::size_t PieceTree::lineOfOffset(std::size_t offset) const {
     if (offset > size()) {
         throw std::out_of_range("piece tree line offset exceeds text size");
     }
-    return count_newlines_before(
+    return countNewlinesBefore(
         root_, original_buffer_.view(), add_buffer_, offset);
 }
 
 bool PieceTree::validate() const noexcept {
-    return validate_node(root_, original_buffer_.view(), add_buffer_).valid;
+    return validateNode(root_, original_buffer_.view(), add_buffer_).valid;
 }
 
-PieceTree::NodePtr PieceTree::make_node(
+PieceTree::NodePtr PieceTree::makeNode(
     bool add_buffer,
     std::size_t start,
     std::size_t length) const {
@@ -394,7 +394,7 @@ PieceTree::NodePtr PieceTree::make_node(
     node->add_buffer = add_buffer;
     node->start = start;
     node->length = length;
-    const auto source = piece_text(*node);
+    const auto source = pieceText(*node);
     node->piece_newlines =
         static_cast<std::size_t>(std::count(source.begin(), source.end(), '\n'));
     update(*node);
@@ -461,8 +461,8 @@ std::pair<PieceTree::NodePtr, PieceTree::NodePtr> PieceTree::split(
 
     const auto piece_offset = offset - left_bytes;
     auto left_piece =
-        make_node(root->add_buffer, root->start, piece_offset);
-    auto right_piece = make_node(
+        makeNode(root->add_buffer, root->start, piece_offset);
+    auto right_piece = makeNode(
         root->add_buffer,
         root->start + piece_offset,
         root->length - piece_offset);
@@ -472,7 +472,7 @@ std::pair<PieceTree::NodePtr, PieceTree::NodePtr> PieceTree::split(
     };
 }
 
-std::string_view PieceTree::piece_text(const Node& node) const noexcept {
+std::string_view PieceTree::pieceText(const Node& node) const noexcept {
     const std::string_view buffer =
         node.add_buffer ? std::string_view{add_buffer_} : original_buffer_.view();
     return buffer.substr(node.start, node.length);

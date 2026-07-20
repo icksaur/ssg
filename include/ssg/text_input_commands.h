@@ -37,13 +37,13 @@ public:
     descriptors() const noexcept;
 
 private:
-    friend TextInputCommandSet text_input_command_set();
+    friend TextInputCommandSet textInputCommandSet();
     TextInputCommandSet();
 
     const std::array<TextInputCommandDescriptor, 6> descriptors_;
 };
 
-[[nodiscard]] TextInputCommandSet text_input_command_set();
+[[nodiscard]] TextInputCommandSet textInputCommandSet();
 
 struct TextInputSettings {
     IndentStyle indent_style;
@@ -82,7 +82,7 @@ struct TextInputResult {
     }
 };
 
-[[nodiscard]] TextInputResult apply_text_input(
+[[nodiscard]] TextInputResult applyTextInput(
     const DocumentSnapshot& document, const SelectionSet& selections,
     TextInputSettings settings, TextInputCommand command,
     TextInputArguments arguments = {});

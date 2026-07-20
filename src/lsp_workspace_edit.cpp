@@ -14,7 +14,7 @@
 namespace ssg {
 namespace {
 
-std::string json_escape(std::string_view value) {
+std::string jsonEscape(std::string_view value) {
     static constexpr char hex[] = "0123456789abcdef";
     std::string result{"\""};
     for (const unsigned char byte : value) {
@@ -40,7 +40,7 @@ std::string json_escape(std::string_view value) {
     return result;
 }
 
-void append_utf8(std::string& target, std::uint32_t value) {
+void appendUtf8(std::string& target, std::uint32_t value) {
     if (value <= 0x7f) {
         target.push_back(static_cast<char>(value));
     } else if (value <= 0x7ff) {
@@ -90,13 +90,13 @@ public:
         : input_(input), maximum_depth_(maximum_depth) {}
 
     [[nodiscard]] std::optional<Json> parse() {
-        auto value = parse_value(0);
-        skip_space();
+        auto value = parseValue(0);
+        skipSpace();
         return value && offset_ == input_.size() ? value : std::nullopt;
     }
 
 private:
-    void skip_space() {
+    void skipSpace() {
         while (offset_ < input_.size() &&
                (input_[offset_] == ' ' || input_[offset_] == '\t' ||
                 input_[offset_] == '\r' || input_[offset_] == '\n')) {
@@ -105,7 +105,7 @@ private:
     }
 
     bool consume(char expected) {
-        skip_space();
+        skipSpace();
         if (offset_ >= input_.size() || input_[offset_] != expected) {
             return false;
         }
@@ -127,7 +127,7 @@ private:
         return value;
     }
 
-    [[nodiscard]] std::optional<std::string> parse_string() {
+    [[nodiscard]] std::optional<std::string> parseString() {
         if (!consume('"')) return std::nullopt;
         std::string result;
         while (offset_ < input_.size()) {
@@ -167,7 +167,7 @@ private:
                 } else if (value >= 0xdc00 && value <= 0xdfff) {
                     return std::nullopt;
                 }
-                append_utf8(result, value);
+                appendUtf8(result, value);
                 break;
             }
             default: return std::nullopt;
@@ -176,13 +176,13 @@ private:
         return std::nullopt;
     }
 
-    [[nodiscard]] std::optional<Json> parse_value(std::size_t depth) {
-        skip_space();
+    [[nodiscard]] std::optional<Json> parseValue(std::size_t depth) {
+        skipSpace();
         if (depth > maximum_depth_ || offset_ >= input_.size()) {
             return std::nullopt;
         }
         if (input_[offset_] == '"') {
-            auto text = parse_string();
+            auto text = parseString();
             if (!text) return std::nullopt;
             Json value;
             value.kind = Json::Kind::String;
@@ -195,9 +195,9 @@ private:
             value.kind = Json::Kind::Object;
             if (consume('}')) return value;
             while (true) {
-                auto key = parse_string();
+                auto key = parseString();
                 if (!key || !consume(':')) return std::nullopt;
-                auto child = parse_value(depth + 1);
+                auto child = parseValue(depth + 1);
                 if (!child ||
                     !value.object.emplace(std::move(*key), std::move(*child))
                          .second) {
@@ -213,7 +213,7 @@ private:
             value.kind = Json::Kind::Array;
             if (consume(']')) return value;
             while (true) {
-                auto child = parse_value(depth + 1);
+                auto child = parseValue(depth + 1);
                 if (!child) return std::nullopt;
                 value.array.push_back(std::move(*child));
                 if (consume(']')) return value;
@@ -285,17 +285,17 @@ private:
     std::size_t offset_ = 0;
 };
 
-std::string json_stringify(const Json& value) {
+std::string jsonStringify(const Json& value) {
     switch (value.kind) {
     case Json::Kind::NullValue: return "null";
     case Json::Kind::Boolean: return value.boolean ? "true" : "false";
     case Json::Kind::Number: return value.scalar;
-    case Json::Kind::String: return json_escape(value.scalar);
+    case Json::Kind::String: return jsonEscape(value.scalar);
     case Json::Kind::Array: {
         std::string out{"["};
         for (std::size_t index = 0; index < value.array.size(); ++index) {
             if (index != 0) out.push_back(',');
-            out += json_stringify(value.array[index]);
+            out += jsonStringify(value.array[index]);
         }
         out.push_back(']');
         return out;
@@ -305,9 +305,9 @@ std::string json_stringify(const Json& value) {
         std::size_t index = 0;
         for (const auto& [key, child] : value.object) {
             if (index++ != 0) out.push_back(',');
-            out += json_escape(key);
+            out += jsonEscape(key);
             out.push_back(':');
-            out += json_stringify(child);
+            out += jsonStringify(child);
         }
         out.push_back('}');
         return out;
@@ -316,7 +316,7 @@ std::string json_stringify(const Json& value) {
     return {};
 }
 
-std::optional<LspPosition> parse_position(const Json& value) {
+std::optional<LspPosition> parsePosition(const Json& value) {
     if (value.kind != Json::Kind::Object) return std::nullopt;
     const auto* line = value.member("line");
     const auto* character = value.member("character");
@@ -331,13 +331,13 @@ std::optional<LspPosition> parse_position(const Json& value) {
                        static_cast<std::uint64_t>(*parsed_character)};
 }
 
-std::optional<LspRange> parse_range(const Json& value) {
+std::optional<LspRange> parseRange(const Json& value) {
     if (value.kind != Json::Kind::Object) return std::nullopt;
     const auto* start = value.member("start");
     const auto* end = value.member("end");
     if (!start || !end) return std::nullopt;
-    const auto parsed_start = parse_position(*start);
-    const auto parsed_end = parse_position(*end);
+    const auto parsed_start = parsePosition(*start);
+    const auto parsed_end = parsePosition(*end);
     if (!parsed_start || !parsed_end ||
         parsed_end->line < parsed_start->line ||
         (parsed_end->line == parsed_start->line &&
@@ -352,14 +352,14 @@ struct ParsedTextEdit {
     std::string new_text;
 };
 
-std::optional<ParsedTextEdit> parse_text_edit(const Json& value) {
+std::optional<ParsedTextEdit> parseTextEdit(const Json& value) {
     if (value.kind != Json::Kind::Object) return std::nullopt;
     const auto* range = value.member("range");
     const auto* text = value.member("newText");
     if (!range || !text || text->kind != Json::Kind::String) {
         return std::nullopt;
     }
-    const auto parsed_range = parse_range(*range);
+    const auto parsed_range = parseRange(*range);
     if (!parsed_range) return std::nullopt;
     return ParsedTextEdit{*parsed_range, text->scalar};
 }
@@ -384,7 +384,7 @@ struct ParsedFileOperation {
 
 using ParsedOperation = std::variant<ParsedDocumentEdit, ParsedFileOperation>;
 
-std::optional<ParsedDocumentEdit> parse_document_edit_entry(const Json& value) {
+std::optional<ParsedDocumentEdit> parseDocumentEditEntry(const Json& value) {
     if (value.kind != Json::Kind::Object) return std::nullopt;
     const auto* text_document = value.member("textDocument");
     const auto* edits = value.member("edits");
@@ -409,14 +409,14 @@ std::optional<ParsedDocumentEdit> parse_document_edit_entry(const Json& value) {
     }
     parsed.edits.reserve(edits->array.size());
     for (const auto& edit : edits->array) {
-        auto parsed_edit = parse_text_edit(edit);
+        auto parsed_edit = parseTextEdit(edit);
         if (!parsed_edit) return std::nullopt;
         parsed.edits.push_back(std::move(*parsed_edit));
     }
     return parsed;
 }
 
-std::optional<ParsedFileOperation> parse_file_operation_entry(const Json& value) {
+std::optional<ParsedFileOperation> parseFileOperationEntry(const Json& value) {
     if (value.kind != Json::Kind::Object) return std::nullopt;
     const auto* kind = value.member("kind");
     if (!kind || kind->kind != Json::Kind::String) return std::nullopt;
@@ -483,7 +483,7 @@ std::optional<ParsedFileOperation> parse_file_operation_entry(const Json& value)
     return std::nullopt;
 }
 
-std::optional<std::vector<ParsedOperation>> parse_workspace_edit(
+std::optional<std::vector<ParsedOperation>> parseWorkspaceEdit(
     const Json& value) {
     if (value.kind != Json::Kind::Object) return std::nullopt;
     std::vector<ParsedOperation> operations;
@@ -498,7 +498,7 @@ std::optional<std::vector<ParsedOperation>> parse_workspace_edit(
             parsed.uri = uri;
             parsed.edits.reserve(entries.array.size());
             for (const auto& entry : entries.array) {
-                auto edit = parse_text_edit(entry);
+                auto edit = parseTextEdit(entry);
                 if (!edit) return std::nullopt;
                 parsed.edits.push_back(std::move(*edit));
             }
@@ -509,11 +509,11 @@ std::optional<std::vector<ParsedOperation>> parse_workspace_edit(
         for (const auto& entry : document_changes->array) {
             if (entry.kind != Json::Kind::Object) return std::nullopt;
             if (entry.member("textDocument")) {
-                auto parsed = parse_document_edit_entry(entry);
+                auto parsed = parseDocumentEditEntry(entry);
                 if (!parsed) return std::nullopt;
                 operations.emplace_back(std::move(*parsed));
             } else {
-                auto parsed = parse_file_operation_entry(entry);
+                auto parsed = parseFileOperationEntry(entry);
                 if (!parsed) return std::nullopt;
                 operations.emplace_back(std::move(*parsed));
             }
@@ -543,14 +543,14 @@ struct ResolvedEditRange {
     std::string replacement;
 };
 
-std::optional<std::vector<ResolvedEditRange>> resolve_ranges(
+std::optional<std::vector<ResolvedEditRange>> resolveRanges(
     std::string_view text, const std::vector<ParsedTextEdit>& edits,
     std::string& message) {
     std::vector<ResolvedEditRange> ranges;
     ranges.reserve(edits.size());
     for (const auto& edit : edits) {
-        const auto start = lsp_position_to_byte_offset(text, edit.range.start);
-        const auto end = lsp_position_to_byte_offset(text, edit.range.end);
+        const auto start = lspPositionToByteOffset(text, edit.range.start);
+        const auto end = lspPositionToByteOffset(text, edit.range.end);
         if (!start.accepted() || !end.accepted() || end.offset < start.offset) {
             message = "workspace edit range is outside the target document";
             return std::nullopt;
@@ -573,10 +573,10 @@ std::optional<std::vector<ResolvedEditRange>> resolve_ranges(
     return ranges;
 }
 
-std::optional<std::string> apply_text_edits(
+std::optional<std::string> applyTextEdits(
     std::string_view text, const std::vector<ParsedTextEdit>& edits,
     LspWorkspaceEditError& error, std::string& message) {
-    auto resolved = resolve_ranges(text, edits, message);
+    auto resolved = resolveRanges(text, edits, message);
     if (!resolved) {
         error = message.find("overlapping") == std::string::npos
                     ? LspWorkspaceEditError::InvalidPosition
@@ -599,7 +599,7 @@ struct AppliedOperation {
     std::vector<LspWorkspaceEditRecoveryOperation> inverse;
 };
 
-bool set_recovery_document_revisions(
+bool setRecoveryDocumentRevisions(
     LspWorkspaceEditDocuments& documents,
     std::vector<LspWorkspaceEditRecoveryOperation>& operations) {
     std::map<std::string, std::uint64_t> next_revisions;
@@ -622,7 +622,7 @@ bool set_recovery_document_revisions(
     return true;
 }
 
-LspWorkspaceEditApplyResult execute_recovery_operations(
+LspWorkspaceEditApplyResult executeRecoveryOperations(
     LspWorkspaceEditDocuments& documents, LspWorkspaceFileOperations& files,
     const std::vector<LspWorkspaceEditRecoveryOperation>& operations) {
     for (std::size_t index = 0; index < operations.size(); ++index) {
@@ -646,7 +646,7 @@ LspWorkspaceEditApplyResult execute_recovery_operations(
             break;
         }
         case LspWorkspaceEditRecoveryKind::RestorePath: {
-            const auto restored = files.restore_path(operation.uri, operation.node);
+            const auto restored = files.restorePath(operation.uri, operation.node);
             if (!restored.accepted()) {
                 return {LspWorkspaceEditError::RollbackFailed,
                         "workspace edit rollback failed: " + restored.message,
@@ -655,7 +655,7 @@ LspWorkspaceEditApplyResult execute_recovery_operations(
             break;
         }
         case LspWorkspaceEditRecoveryKind::WriteFile: {
-            const auto restored = files.write_file(operation.uri, operation.text);
+            const auto restored = files.writeFile(operation.uri, operation.text);
             if (!restored.accepted()) {
                 return {LspWorkspaceEditError::RollbackFailed,
                         "workspace edit rollback failed: " + restored.message,
@@ -664,7 +664,7 @@ LspWorkspaceEditApplyResult execute_recovery_operations(
             break;
         }
         case LspWorkspaceEditRecoveryKind::DeleteFile: {
-            const auto restored = files.delete_path(operation.uri, true);
+            const auto restored = files.deletePath(operation.uri, true);
             if (!restored.accepted() &&
                 restored.error != LspWorkspaceFileError::NotFound) {
                 return {LspWorkspaceEditError::RollbackFailed,
@@ -674,7 +674,7 @@ LspWorkspaceEditApplyResult execute_recovery_operations(
             break;
         }
         case LspWorkspaceEditRecoveryKind::RenameFile: {
-            const auto restored = files.rename_path(
+            const auto restored = files.renamePath(
                 operation.uri, operation.secondary_uri, operation.overwrite);
             if (!restored.accepted()) {
                 return {LspWorkspaceEditError::RollbackFailed,
@@ -697,17 +697,17 @@ LspWorkspaceEditApplyResult rollback(
         operations.insert(operations.end(), operation->inverse.begin(),
                           operation->inverse.end());
     }
-    if (!set_recovery_document_revisions(documents, operations)) {
+    if (!setRecoveryDocumentRevisions(documents, operations)) {
         return {LspWorkspaceEditError::RollbackFailed,
                 "workspace edit rollback revisions are unavailable",
                 LspWorkspaceEditRecoveryRecord{std::move(operations)}};
     }
-    return execute_recovery_operations(documents, files, operations);
+    return executeRecoveryOperations(documents, files, operations);
 }
 
 } // namespace
 
-LspWorkspaceEditCommandSet lsp_workspace_edit_command_set() { return {}; }
+LspWorkspaceEditCommandSet lspWorkspaceEditCommandSet() { return {}; }
 
 LspWorkspaceEditApplier::LspWorkspaceEditApplier(
     LspWorkspaceEditDocuments& documents, LspWorkspaceFileOperations& files,
@@ -726,7 +726,7 @@ LspWorkspaceEditApplyResult LspWorkspaceEditApplier::apply(
         return failure(LspWorkspaceEditError::MalformedEdit,
                        "workspace edit payload is not valid JSON");
     }
-    const auto parsed_operations = parse_workspace_edit(*parsed_root);
+    const auto parsed_operations = parseWorkspaceEdit(*parsed_root);
     if (!parsed_operations) {
         return failure(LspWorkspaceEditError::MalformedEdit,
                        "workspace edit payload is malformed");
@@ -796,7 +796,7 @@ LspWorkspaceEditApplyResult LspWorkspaceEditApplier::apply(
                 return failure(LspWorkspaceEditError::StaleRevision,
                                "workspace edit carries a stale document version");
             }
-            auto updated = apply_text_edits(document->text, edit.edits, error,
+            auto updated = applyTextEdits(document->text, edit.edits, error,
                                             message);
             if (!updated) return failure(error, std::move(message));
             plan.emplace_back(PlannedDocumentOperation{
@@ -930,7 +930,7 @@ LspWorkspaceEditApplyResult LspWorkspaceEditApplier::apply(
         const auto& file = std::get<PlannedFileOperation>(operation);
         if (file.source.kind == ParsedFileOperationKind::Create) {
             const auto created =
-                files_->create_file(file.source.uri, file.source.overwrite);
+                files_->createFile(file.source.uri, file.source.overwrite);
             if (!created.accepted()) {
                 const auto undone = rollback(*documents_, *files_, applied);
                 if (undone.accepted()) {
@@ -967,7 +967,7 @@ LspWorkspaceEditApplyResult LspWorkspaceEditApplier::apply(
         }
 
         if (file.source.kind == ParsedFileOperationKind::Rename) {
-            const auto renamed = files_->rename_path(file.source.uri,
+            const auto renamed = files_->renamePath(file.source.uri,
                                                      file.source.secondary_uri,
                                                      file.source.overwrite);
             if (!renamed.accepted()) {
@@ -1004,7 +1004,7 @@ LspWorkspaceEditApplyResult LspWorkspaceEditApplier::apply(
         }
 
         const auto removed =
-            files_->delete_path(file.source.uri, file.source.recursive);
+            files_->deletePath(file.source.uri, file.source.recursive);
         if (!removed.accepted()) {
             const auto undone = rollback(*documents_, *files_, applied);
             if (undone.accepted()) {
@@ -1033,7 +1033,7 @@ LspWorkspaceEditApplyResult LspWorkspaceEditApplier::apply(
                                    operation->inverse.begin(),
                                    operation->inverse.end());
     }
-    if (!set_recovery_document_revisions(*documents_, recovery.operations)) {
+    if (!setRecoveryDocumentRevisions(*documents_, recovery.operations)) {
         const auto undone = rollback(*documents_, *files_, applied);
         if (!undone.accepted()) return undone;
         return failure(LspWorkspaceEditError::ApplyFailed,
@@ -1044,7 +1044,7 @@ LspWorkspaceEditApplyResult LspWorkspaceEditApplier::apply(
 
 LspWorkspaceEditApplyResult LspWorkspaceEditApplier::recover(
     const LspWorkspaceEditRecoveryRecord& recovery) {
-    return execute_recovery_operations(*documents_, *files_, recovery.operations);
+    return executeRecoveryOperations(*documents_, *files_, recovery.operations);
 }
 
 LspWorkspaceEditController::LspWorkspaceEditController(
@@ -1062,13 +1062,13 @@ void LspWorkspaceEditController::supersede() {
     active_id_ = 0;
 }
 
-LspRenameRequestResult LspWorkspaceEditController::request_rename(
+LspRenameRequestResult LspWorkspaceEditController::requestRename(
     std::string uri, Revision revision, ByteOffset position, std::string new_name) {
     if (new_name.empty()) {
         return {0, LspRenameError::InvalidArgument,
                 "LSP rename new name must not be empty"};
     }
-    const auto snapshot = client_->document_snapshot(uri);
+    const auto snapshot = client_->documentSnapshot(uri);
     if (!snapshot) {
         return {0, LspRenameError::UnknownDocument,
                 "LSP rename request targets an unknown document"};
@@ -1078,7 +1078,7 @@ LspRenameRequestResult LspWorkspaceEditController::request_rename(
                 "LSP rename request carries a stale revision"};
     }
     const auto lsp_position =
-        byte_offset_to_lsp_position(snapshot->text, position);
+        byteOffsetToLspPosition(snapshot->text, position);
     if (!lsp_position.accepted()) {
         return {0, LspRenameError::InvalidPosition,
                 "LSP rename request position is invalid"};
@@ -1086,11 +1086,11 @@ LspRenameRequestResult LspWorkspaceEditController::request_rename(
 
     supersede();
     const auto params =
-        "{\"textDocument\":{\"uri\":" + json_escape(uri) +
+        "{\"textDocument\":{\"uri\":" + jsonEscape(uri) +
         "},\"position\":{\"line\":" +
         std::to_string(lsp_position.position.line) + ",\"character\":" +
         std::to_string(lsp_position.position.character) +
-        "},\"newName\":" + json_escape(new_name) + "}";
+        "},\"newName\":" + jsonEscape(new_name) + "}";
     const auto sent = client_->request("textDocument/rename", params);
     if (!sent.accepted()) {
         return {0, LspRenameError::SyncError, sent.message};
@@ -1108,7 +1108,7 @@ LspRenamePollResult LspWorkspaceEditController::poll(Revision current_revision) 
     }
 
     LspRenamePollResult result;
-    for (auto& response : client_->take_completed_responses()) {
+    for (auto& response : client_->takeCompletedResponses()) {
         const auto found = pending_.find(response.id);
         if (found == pending_.end()) continue;
         const auto pending = found->second;
@@ -1136,7 +1136,7 @@ LspRenamePollResult LspWorkspaceEditController::poll(Revision current_revision) 
             continue;
         }
 
-        const auto snapshot = client_->document_snapshot(pending.uri);
+        const auto snapshot = client_->documentSnapshot(pending.uri);
         if (current_revision != pending.revision || !snapshot ||
             snapshot->revision != pending.revision) {
             publication.result = LspRenamePublishResult::StaleRevision;
@@ -1165,7 +1165,7 @@ LspRenamePollResult LspWorkspaceEditController::poll(Revision current_revision) 
             continue;
         }
 
-        const auto applied = applier_->apply(json_stringify(*payload));
+        const auto applied = applier_->apply(jsonStringify(*payload));
         if (!applied.accepted()) {
             publication.result = LspRenamePublishResult::EditRejected;
             publication.message = applied.message;

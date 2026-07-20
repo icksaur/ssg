@@ -53,7 +53,7 @@ double percentile(std::vector<double> values, double p) {
 
 double ms(std::uint64_t ns) { return static_cast<double>(ns) / 1'000'000.0; }
 
-fs::path make_fixture(const fs::path& root) {
+fs::path makeFixture(const fs::path& root) {
     fs::create_directories(root);
     auto file = root / "big.txt";
     std::ofstream out{file, std::ios::binary};
@@ -69,7 +69,7 @@ fs::path make_fixture(const fs::path& root) {
 
 // Isolated size-hinted buffered read: stat the size, read the whole file in one
 // sized pass.  This is the intrinsic-read term the SLO formula retains.
-double calibrated_read_ms(const fs::path& file) {
+double calibratedReadMs(const fs::path& file) {
     auto const size = fs::file_size(file);
     auto const start = Clock::now();
     std::ifstream stream{file, std::ios::binary};
@@ -85,7 +85,7 @@ double calibrated_read_ms(const fs::path& file) {
 // Isolated "validate UTF-8 + copy" single pass: the intrinsic decode floor the
 // fused LF-2b decoder approaches (one walk that checks lead bytes and copies each
 // sequence straight through).  Representative, not a full validator.
-double calibrated_validate_copy_ms(const std::string& bytes) {
+double calibratedValidateCopyMs(const std::string& bytes) {
     auto const start = Clock::now();
     std::string out;
     out.reserve(bytes.size());
@@ -109,7 +109,7 @@ double calibrated_validate_copy_ms(const std::string& bytes) {
     return std::chrono::duration<double, std::milli>(elapsed).count();
 }
 
-std::string read_whole(const fs::path& file) {
+std::string readWhole(const fs::path& file) {
     std::ifstream stream{file, std::ios::binary};
     return {std::istreambuf_iterator<char>{stream},
             std::istreambuf_iterator<char>{}};
@@ -120,14 +120,14 @@ struct Sample {
     double wall_ms = 0.0;
 };
 
-Sample open_once(const fs::path& root, const std::string& name) {
+Sample openOnce(const fs::path& root, const std::string& name) {
     // A fresh workspace per rep so open_file does not de-duplicate the path.
     auto recovery = ssg::RecoveryActions::create(root / ".recovery");
     auto workspace = ssg::Workspace::create(root, recovery);
 
-    ssg::reset_open_phase_timing();
+    ssg::resetOpenPhaseTiming();
     auto const start = Clock::now();
-    auto opened = workspace.open_file(name);
+    auto opened = workspace.openFile(name);
     if (!opened.accepted()) throw std::runtime_error{"open failed"};
     auto state = workspace.state(*opened.document);
     if (!state.has_value()) throw std::runtime_error{"state failed"};
@@ -137,7 +137,7 @@ Sample open_once(const fs::path& root, const std::string& name) {
     sample.wall_ms = std::chrono::duration<double, std::milli>(wall).count();
     for (std::size_t i = 0; i < phase_names.size(); ++i)
         sample.phase_ms[i] =
-            ms(ssg::open_phase_ns(static_cast<ssg::OpenPhase>(i)));
+            ms(ssg::openPhaseNs(static_cast<ssg::OpenPhase>(i)));
     return sample;
 }
 
@@ -149,19 +149,19 @@ int main() {
                     ("ssg-open-bench-" + std::to_string(::getpid()));
         std::error_code ec;
         fs::remove_all(root, ec);
-        auto const file = make_fixture(root);
+        auto const file = makeFixture(root);
         auto const name = std::string{"big.txt"};
 
         std::vector<double> calib;
         for (std::size_t rep = 0; rep < repetitions; ++rep) {
-            auto const value = calibrated_read_ms(file);
+            auto const value = calibratedReadMs(file);
             if (rep >= discard) calib.push_back(value);
         }
 
-        const std::string whole = read_whole(file);
+        const std::string whole = readWhole(file);
         std::vector<double> calib_decode;
         for (std::size_t rep = 0; rep < repetitions; ++rep) {
-            auto const value = calibrated_validate_copy_ms(whole);
+            auto const value = calibratedValidateCopyMs(whole);
             if (rep >= discard) calib_decode.push_back(value);
         }
 
@@ -169,12 +169,12 @@ int main() {
         std::uint64_t validation_calls = 0;
         std::uint64_t tree_text_calls = 0;
         for (std::size_t rep = 0; rep < repetitions; ++rep) {
-            ssg::reset_utf8_validation_calls();
-            ssg::reset_piece_tree_text_calls();
-            auto sample = open_once(root, name);
+            ssg::resetUtf8ValidationCalls();
+            ssg::resetPieceTreeTextCalls();
+            auto sample = openOnce(root, name);
             if (rep == discard) {
-                validation_calls = ssg::utf8_validation_calls();
-                tree_text_calls = ssg::piece_tree_text_calls();
+                validation_calls = ssg::utf8ValidationCalls();
+                tree_text_calls = ssg::pieceTreeTextCalls();
             }
             if (rep >= discard) samples.push_back(sample);
         }

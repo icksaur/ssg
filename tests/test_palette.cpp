@@ -7,11 +7,11 @@
 
 namespace {
 
-std::vector<std::string> ids_in_rank_order(
+std::vector<std::string> idsInRankOrder(
     std::vector<ssg::PaletteCandidate> const& candidates,
     std::string_view query) {
     std::vector<std::string> ids;
-    for (auto index : ssg::palette_rank(candidates, query)) {
+    for (auto index : ssg::paletteRank(candidates, query)) {
         ids.push_back(candidates[index].id);
     }
     return ids;
@@ -31,8 +31,8 @@ const std::vector<ssg::PaletteCandidate> catalog{
     {"view.split", "Split View", ""},
 };
 
-TEST(empty_query_keeps_all_in_label_order) {
-    auto const ids = ids_in_rank_order(catalog, "");
+TEST(emptyQueryKeepsAllInLabelOrder) {
+    auto const ids = idsInRankOrder(catalog, "");
     ASSERT_EQ(ids.size(), std::size_t{6});
     // Empty query scores 0 for every candidate, so the tiebreak (label asc)
     // fully determines order.
@@ -41,43 +41,43 @@ TEST(empty_query_keeps_all_in_label_order) {
                                              "view.split", "edit.undo"}));
 }
 
-TEST(prefix_query_ranks_word_boundary_matches_first) {
+TEST(prefixQueryRanksWordBoundaryMatchesFirst) {
     // "save" matches the label "Save File"/"Save All Files" at a word boundary
     // and the id "file.save"/"file.save_all"; both share the boundary bonus, so
     // the shorter candidate (less length penalty) wins, tiebreak label asc.
-    auto const ids = ids_in_rank_order(catalog, "save");
+    auto const ids = idsInRankOrder(catalog, "save");
     ASSERT_EQ(ids, (std::vector<std::string>{"file.save", "file.save_all"}));
 }
 
-TEST(non_subsequence_query_is_filtered_out) {
-    auto const ids = ids_in_rank_order(catalog, "zzz");
+TEST(nonSubsequenceQueryIsFilteredOut) {
+    auto const ids = idsInRankOrder(catalog, "zzz");
     ASSERT_TRUE(ids.empty());
 }
 
-TEST(subsequence_matches_across_separators) {
+TEST(subsequenceMatchesAcrossSeparators) {
     // "fs" is a subsequence of id "file.save" (f...s) and "file.save_all".
-    auto const ids = ids_in_rank_order(catalog, "fs");
+    auto const ids = idsInRankOrder(catalog, "fs");
     ASSERT_EQ(ids, (std::vector<std::string>{"file.save", "file.save_all"}));
 }
 
-TEST(ghost_completes_matching_prefix_case_insensitively) {
-    ASSERT_EQ(ssg::palette_ghost("Save File", "sa"), std::string{"ve File"});
-    ASSERT_EQ(ssg::palette_ghost("Save File", "Save"), std::string{" File"});
+TEST(ghostCompletesMatchingPrefixCaseInsensitively) {
+    ASSERT_EQ(ssg::paletteGhost("Save File", "sa"), std::string{"ve File"});
+    ASSERT_EQ(ssg::paletteGhost("Save File", "Save"), std::string{" File"});
 }
 
-TEST(ghost_empty_when_query_is_not_a_prefix) {
-    ASSERT_EQ(ssg::palette_ghost("Save File", "ile"), std::string{});
-    ASSERT_EQ(ssg::palette_ghost("Save File", ""), std::string{});
-    ASSERT_EQ(ssg::palette_ghost("Sa", "save"), std::string{});
+TEST(ghostEmptyWhenQueryIsNotAPrefix) {
+    ASSERT_EQ(ssg::paletteGhost("Save File", "ile"), std::string{});
+    ASSERT_EQ(ssg::paletteGhost("Save File", ""), std::string{});
+    ASSERT_EQ(ssg::paletteGhost("Sa", "save"), std::string{});
 }
 
 int main() {
-    RUN(empty_query_keeps_all_in_label_order);
-    RUN(prefix_query_ranks_word_boundary_matches_first);
-    RUN(non_subsequence_query_is_filtered_out);
-    RUN(subsequence_matches_across_separators);
-    RUN(ghost_completes_matching_prefix_case_insensitively);
-    RUN(ghost_empty_when_query_is_not_a_prefix);
+    RUN(emptyQueryKeepsAllInLabelOrder);
+    RUN(prefixQueryRanksWordBoundaryMatchesFirst);
+    RUN(nonSubsequenceQueryIsFilteredOut);
+    RUN(subsequenceMatchesAcrossSeparators);
+    RUN(ghostCompletesMatchingPrefixCaseInsensitively);
+    RUN(ghostEmptyWhenQueryIsNotAPrefix);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;

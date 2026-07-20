@@ -114,7 +114,7 @@ std::array<std::byte, 32> sha256(std::span<const std::byte> input) {
     return result;
 }
 
-std::string lowercase_hex(std::span<const std::byte> bytes) {
+std::string lowercaseHex(std::span<const std::byte> bytes) {
     constexpr char digits[] = "0123456789abcdef";
     std::string result(bytes.size() * 2, '0');
     for (std::size_t index = 0; index < bytes.size(); ++index) {
@@ -125,7 +125,7 @@ std::string lowercase_hex(std::span<const std::byte> bytes) {
     return result;
 }
 
-void require_canonical_absolute(
+void requireCanonicalAbsolute(
     const std::filesystem::path& canonical_workspace) {
     if (!canonical_workspace.is_absolute() ||
         canonical_workspace.lexically_normal() != canonical_workspace) {
@@ -134,17 +134,17 @@ void require_canonical_absolute(
     }
 }
 
-void make_private_directory(const std::filesystem::path& path) {
+void makePrivateDirectory(const std::filesystem::path& path) {
     std::error_code error;
     std::filesystem::create_directory(path, error);
     if (error) {
         throw std::filesystem::filesystem_error(
             "create scratch directory", path, error);
     }
-    set_owner_only_permissions(path);
+    setOwnerOnlyPermissions(path);
 }
 
-std::string generate_session_id() {
+std::string generateSessionId() {
     const auto now = std::chrono::duration_cast<std::chrono::nanoseconds>(
                          std::chrono::system_clock::now().time_since_epoch())
                          .count();
@@ -159,11 +159,11 @@ std::string generate_session_id() {
     std::ostringstream result;
     result << std::setw(20) << std::setfill('0')
            << static_cast<std::uint64_t>(now) << '-'
-           << lowercase_hex(random_bytes);
+           << lowercaseHex(random_bytes);
     return result.str();
 }
 
-bool valid_session_id(std::string_view id) {
+bool validSessionId(std::string_view id) {
     if (id.size() != 53 || id[20] != '-') {
         return false;
     }
@@ -177,45 +177,45 @@ bool valid_session_id(std::string_view id) {
 
 } // namespace
 
-std::string scratch_workspace_key(
+std::string scratchWorkspaceKey(
     const std::filesystem::path& canonical_workspace) {
-    require_canonical_absolute(canonical_workspace);
+    requireCanonicalAbsolute(canonical_workspace);
     const auto path_bytes = canonical_workspace.u8string();
     const auto bytes = std::as_bytes(std::span{path_bytes});
-    return lowercase_hex(sha256(bytes));
+    return lowercaseHex(sha256(bytes));
 }
 
 JournalReplayResult ScratchRemnantClaim::replay() const {
-    return ScratchJournal{journal_path()}.replay();
+    return ScratchJournal{journalPath()}.replay();
 }
 
-void ScratchRemnantClaim::mark_restored() {
+void ScratchRemnantClaim::markRestored() {
     constexpr std::array marker{std::byte{'r'}, std::byte{'e'}, std::byte{'s'},
                                 std::byte{'t'}, std::byte{'o'}, std::byte{'r'},
                                 std::byte{'e'}, std::byte{'d'}, std::byte{'\n'}};
-    replace_file_atomically(path_ / "restored", marker);
-    set_owner_only_permissions(path_ / "restored");
+    replaceFileAtomically(path_ / "restored", marker);
+    setOwnerOnlyPermissions(path_ / "restored");
 }
 
 ScratchSession ScratchSession::create(
     const std::filesystem::path& scratch_root,
     const std::filesystem::path& canonical_workspace) {
-    require_canonical_absolute(canonical_workspace);
+    requireCanonicalAbsolute(canonical_workspace);
     if (scratch_root.empty()) {
         throw std::invalid_argument("scratch root must not be empty");
     }
 
-    make_private_directory(scratch_root);
+    makePrivateDirectory(scratch_root);
     const auto workspaces = scratch_root / "workspaces";
-    make_private_directory(workspaces);
+    makePrivateDirectory(workspaces);
     const auto workspace_path =
-        workspaces / scratch_workspace_key(canonical_workspace);
-    make_private_directory(workspace_path);
+        workspaces / scratchWorkspaceKey(canonical_workspace);
+    makePrivateDirectory(workspace_path);
     const auto sessions_path = workspace_path / "sessions";
-    make_private_directory(sessions_path);
+    makePrivateDirectory(sessions_path);
 
     for (int attempt = 0; attempt < 100; ++attempt) {
-        auto id = generate_session_id();
+        auto id = generateSessionId();
         const auto path = sessions_path / id;
         std::error_code error;
         const bool created = std::filesystem::create_directory(path, error);
@@ -226,8 +226,8 @@ ScratchSession ScratchSession::create(
         if (!created) {
             continue;
         }
-        set_owner_only_permissions(path);
-        auto lock = try_lock_file(path / "session.lock");
+        setOwnerOnlyPermissions(path);
+        auto lock = tryLockFile(path / "session.lock");
         if (!lock) {
             throw std::runtime_error(
                 "new scratch session lock unexpectedly contended");
@@ -239,7 +239,7 @@ ScratchSession ScratchSession::create(
 }
 
 std::optional<ScratchRemnantClaim>
-ScratchSession::claim_newest_restorable() const {
+ScratchSession::claimNewestRestorable() const {
     std::vector<std::filesystem::path> candidates;
     for (const auto& entry : std::filesystem::directory_iterator(sessions_path_)) {
         std::error_code status_error;
@@ -252,7 +252,7 @@ ScratchSession::claim_newest_restorable() const {
                 "inspect scratch session directory", entry.path(), status_error);
         }
         if (is_directory &&
-            valid_session_id(entry.path().filename().string()) &&
+            validSessionId(entry.path().filename().string()) &&
             entry.path().filename().string() != id_.value()) {
             candidates.push_back(entry.path());
         }
@@ -265,7 +265,7 @@ ScratchSession::claim_newest_restorable() const {
     for (const auto& candidate : candidates) {
         std::optional<ExclusiveFileLock> lock;
         try {
-            lock = try_lock_file(candidate / "session.lock");
+            lock = tryLockFile(candidate / "session.lock");
         } catch (const std::filesystem::filesystem_error& error) {
             if (error.code() == std::errc::no_such_file_or_directory) {
                 continue;

@@ -28,8 +28,8 @@ private:
     std::filesystem::path path_;
 };
 
-TEST(command_set_owns_every_normative_file_command) {
-    const auto commands = ssg::file_commands_command_set();
+TEST(commandSetOwnsEveryNormativeFileCommand) {
+    const auto commands = ssg::fileCommandsCommandSet();
     const std::array<std::string_view, 12> expected{{
         "workspace.open_directory",
         "file.new",
@@ -54,18 +54,18 @@ TEST(command_set_owns_every_normative_file_command) {
               std::optional<std::string_view>{"local_file_drop"});
 }
 
-TEST(path_commands_open_non_modal_path_prompts) {
+TEST(pathCommandsOpenNonModalPathPrompts) {
     for (const auto command :
          {ssg::FileCommand::Open, ssg::FileCommand::SaveAs,
           ssg::FileCommand::Rename, ssg::FileCommand::NewDirectory}) {
-        const auto request = ssg::file_path_prompt(command);
+        const auto request = ssg::filePathPrompt(command);
         ASSERT_EQ(request.kind, ssg::PromptKind::Path);
         ASSERT_EQ(request.inputs.size(), std::size_t{1});
         ASSERT_FALSE(request.inputs[0].accessible_label.empty());
     }
 }
 
-TEST(local_drop_requires_host_capability_and_sanitizes_label) {
+TEST(localDropRequiresHostCapabilityAndSanitizesLabel) {
     TemporaryDirectory temporary;
     auto recovery =
         ssg::RecoveryActions::create(temporary.path() / ".recovery");
@@ -81,7 +81,7 @@ TEST(local_drop_requires_host_capability_and_sanitizes_label) {
         {ssg::CapabilityId{"local_file_drop"}}};
 
     const auto accepted =
-        workspace.open_dropped_content(local, bytes, "../../bad/name.txt");
+        workspace.openDroppedContent(local, bytes, "../../bad/name.txt");
     ASSERT_TRUE(accepted.accepted());
     const auto state = workspace.state(*accepted.document);
     ASSERT_EQ(state->key.kind(), ssg::JournalDocumentKeyKind::Untitled);
@@ -89,14 +89,14 @@ TEST(local_drop_requires_host_capability_and_sanitizes_label) {
     ASSERT_EQ(workspace.document(*accepted.document).snapshot().text,
               std::string{"hi\n!"});
 
-    ASSERT_EQ(workspace.open_dropped_content(remote, bytes, "x").error,
+    ASSERT_EQ(workspace.openDroppedContent(remote, bytes, "x").error,
               ssg::WorkspaceError::CapabilityDenied);
-    ASSERT_EQ(workspace.open_dropped_content(lua, bytes, "x").error,
+    ASSERT_EQ(workspace.openDroppedContent(lua, bytes, "x").error,
               ssg::WorkspaceError::CapabilityDenied);
     ASSERT_EQ(workspace.documents().size(), std::size_t{1});
 }
 
-TEST(binary_and_invalid_text_drops_open_read_only_without_path_authority) {
+TEST(binaryAndInvalidTextDropsOpenReadOnlyWithoutPathAuthority) {
     TemporaryDirectory temporary;
     auto recovery =
         ssg::RecoveryActions::create(temporary.path() / ".recovery");
@@ -108,9 +108,9 @@ TEST(binary_and_invalid_text_drops_open_read_only_without_path_authority) {
     const std::array<std::uint8_t, 2> invalid{{0xc3, 0x28}};
 
     const auto binary_result =
-        workspace.open_dropped_content(local, binary, "/tmp/a.bin");
+        workspace.openDroppedContent(local, binary, "/tmp/a.bin");
     const auto invalid_result =
-        workspace.open_dropped_content(local, invalid, "bad.txt");
+        workspace.openDroppedContent(local, invalid, "bad.txt");
 
     ASSERT_TRUE(binary_result.accepted());
     ASSERT_TRUE(invalid_result.accepted());
@@ -125,15 +125,15 @@ TEST(binary_and_invalid_text_drops_open_read_only_without_path_authority) {
               ssg::DocumentMode::ReadOnly);
 }
 
-TEST(save_all_attempts_every_document_and_reports_failures) {
+TEST(saveAllAttemptsEveryDocumentAndReportsFailures) {
     TemporaryDirectory temporary;
     std::ofstream(temporary.path() / "one.txt") << "one";
     std::ofstream(temporary.path() / "two.txt") << "two";
     auto recovery =
         ssg::RecoveryActions::create(temporary.path() / ".recovery");
     auto workspace = ssg::Workspace::create(temporary.path(), recovery);
-    const auto one = *workspace.open_file("one.txt").document;
-    const auto two = *workspace.open_file("two.txt").document;
+    const auto one = *workspace.openFile("one.txt").document;
+    const auto two = *workspace.openFile("two.txt").document;
     ASSERT_TRUE(workspace
                     .apply(one, {workspace.document(one).revision(),
                                  {{ssg::ByteOffset{3}, 0, "!"}}})
@@ -145,7 +145,7 @@ TEST(save_all_attempts_every_document_and_reports_failures) {
     std::filesystem::remove(temporary.path() / "two.txt");
     std::filesystem::create_directory(temporary.path() / "two.txt");
 
-    const auto result = workspace.save_all();
+    const auto result = workspace.saveAll();
 
     ASSERT_FALSE(result.accepted());
     ASSERT_EQ(result.failures.size(), std::size_t{1});
@@ -155,20 +155,20 @@ TEST(save_all_attempts_every_document_and_reports_failures) {
     ASSERT_TRUE(two_state->dirty);
 }
 
-TEST(save_all_ignores_untitled_documents) {
+TEST(saveAllIgnoresUntitledDocuments) {
     TemporaryDirectory temporary;
     std::ofstream(temporary.path() / "saved.txt") << "saved";
     auto recovery =
         ssg::RecoveryActions::create(temporary.path() / ".recovery");
     auto workspace = ssg::Workspace::create(temporary.path(), recovery);
-    const auto saved = *workspace.open_file("saved.txt").document;
-    ASSERT_TRUE(workspace.new_document().accepted());
+    const auto saved = *workspace.openFile("saved.txt").document;
+    ASSERT_TRUE(workspace.newDocument().accepted());
     ASSERT_TRUE(workspace
                     .apply(saved, {workspace.document(saved).revision(),
                                    {{ssg::ByteOffset{5}, 0, "!"}}})
                     .accepted());
 
-    const auto result = workspace.save_all();
+    const auto result = workspace.saveAll();
 
     ASSERT_TRUE(result.accepted());
     ASSERT_TRUE(result.failures.empty());
@@ -177,12 +177,12 @@ TEST(save_all_ignores_untitled_documents) {
 }  // namespace
 
 int main() {
-    RUN(command_set_owns_every_normative_file_command);
-    RUN(path_commands_open_non_modal_path_prompts);
-    RUN(local_drop_requires_host_capability_and_sanitizes_label);
-    RUN(binary_and_invalid_text_drops_open_read_only_without_path_authority);
-    RUN(save_all_attempts_every_document_and_reports_failures);
-    RUN(save_all_ignores_untitled_documents);
+    RUN(commandSetOwnsEveryNormativeFileCommand);
+    RUN(pathCommandsOpenNonModalPathPrompts);
+    RUN(localDropRequiresHostCapabilityAndSanitizesLabel);
+    RUN(binaryAndInvalidTextDropsOpenReadOnlyWithoutPathAuthority);
+    RUN(saveAllAttemptsEveryDocumentAndReportsFailures);
+    RUN(saveAllIgnoresUntitledDocuments);
     std::cout << "Passed: " << passed << " Failed: " << failed << '\n';
     return failed == 0 ? 0 : 1;
 }

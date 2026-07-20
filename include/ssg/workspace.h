@@ -119,39 +119,39 @@ public:
     [[nodiscard]] const Document& document(FileDocumentId document) const;
     [[nodiscard]] TransactionResult apply(
         FileDocumentId document, const EditTransaction& transaction);
-    [[nodiscard]] std::vector<std::string> recent_files() const;
+    [[nodiscard]] std::vector<std::string> recentFiles() const;
 
-    [[nodiscard]] WorkspaceResult open_directory(
+    [[nodiscard]] WorkspaceResult openDirectory(
         const std::filesystem::path& path);
-    [[nodiscard]] WorkspaceResult restore_workspace(
+    [[nodiscard]] WorkspaceResult restoreWorkspace(
         WorkspaceReplacementId replacement);
 
-    [[nodiscard]] WorkspaceResult new_document(
+    [[nodiscard]] WorkspaceResult newDocument(
         std::string_view suggested_label = {});
-    [[nodiscard]] WorkspaceResult open_file(std::string_view path);
-    [[nodiscard]] WorkspaceResult open_recent(std::size_t index);
-    [[nodiscard]] WorkspaceResult open_dropped_content(
+    [[nodiscard]] WorkspaceResult openFile(std::string_view path);
+    [[nodiscard]] WorkspaceResult openRecent(std::size_t index);
+    [[nodiscard]] WorkspaceResult openDroppedContent(
         const InvocationPrincipal& principal,
         std::span<const std::uint8_t> bytes,
         std::string_view suggested_label);
 
     [[nodiscard]] WorkspaceResult save(FileDocumentId document);
-    [[nodiscard]] WorkspaceResult save_all();
-    [[nodiscard]] WorkspaceResult save_as(FileDocumentId document,
+    [[nodiscard]] WorkspaceResult saveAll();
+    [[nodiscard]] WorkspaceResult saveAs(FileDocumentId document,
                                           std::string_view path);
     [[nodiscard]] WorkspaceResult reload(FileDocumentId document);
-    [[nodiscard]] WorkspaceResult reopen_with_encoding(
+    [[nodiscard]] WorkspaceResult reopenWithEncoding(
         FileDocumentId document, TextEncoding encoding);
-    [[nodiscard]] WorkspaceResult set_encoding(
+    [[nodiscard]] WorkspaceResult setEncoding(
         FileDocumentId document, TextEncoding encoding);
-    [[nodiscard]] WorkspaceResult set_line_ending(
+    [[nodiscard]] WorkspaceResult setLineEnding(
         FileDocumentId document, LineEnding line_ending);
-    [[nodiscard]] WorkspaceResult set_final_newline(
+    [[nodiscard]] WorkspaceResult setFinalNewline(
         FileDocumentId document, bool final_newline);
-    [[nodiscard]] WorkspaceResult rename_file(FileDocumentId document,
+    [[nodiscard]] WorkspaceResult renameFile(FileDocumentId document,
                                               std::string_view path);
-    [[nodiscard]] WorkspaceResult delete_file(FileDocumentId document);
-    [[nodiscard]] WorkspaceResult new_directory(std::string_view path);
+    [[nodiscard]] WorkspaceResult deleteFile(FileDocumentId document);
+    [[nodiscard]] WorkspaceResult newDirectory(std::string_view path);
     [[nodiscard]] WorkspaceResult restore(
         const RecoveryRecordId& compensation);
 

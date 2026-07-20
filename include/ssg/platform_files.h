@@ -42,7 +42,7 @@ struct PathValidation {
     }
 };
 
-[[nodiscard]] PathValidation validate_workspace_relative_path(
+[[nodiscard]] PathValidation validateWorkspaceRelativePath(
     std::string_view path,
     PathSyntax syntax,
     LongPathPolicy long_paths = LongPathPolicy::Legacy) noexcept;
@@ -54,7 +54,7 @@ struct FileIdentity {
     friend bool operator==(const FileIdentity&, const FileIdentity&) = default;
 };
 
-[[nodiscard]] FileIdentity file_identity(const std::filesystem::path& path);
+[[nodiscard]] FileIdentity fileIdentity(const std::filesystem::path& path);
 
 class ExclusiveFileLock {
 public:
@@ -67,7 +67,7 @@ public:
 
 private:
     explicit ExclusiveFileLock(std::intptr_t native_handle) noexcept;
-    friend std::optional<ExclusiveFileLock> try_lock_file(
+    friend std::optional<ExclusiveFileLock> tryLockFile(
         const std::filesystem::path&);
 
     std::intptr_t native_handle_ = -1;
@@ -75,15 +75,15 @@ private:
 
 // Returns no value only when another live handle owns the lock. Other failures
 // throw std::system_error so contention cannot hide an I/O or permission error.
-[[nodiscard]] std::optional<ExclusiveFileLock> try_lock_file(
+[[nodiscard]] std::optional<ExclusiveFileLock> tryLockFile(
     const std::filesystem::path& path);
 
-void set_owner_only_permissions(const std::filesystem::path& path);
+void setOwnerOnlyPermissions(const std::filesystem::path& path);
 
-[[nodiscard]] std::filesystem::path user_cache_root(
+[[nodiscard]] std::filesystem::path userCacheRoot(
     std::string_view application_name);
 
-void replace_file_atomically(
+void replaceFileAtomically(
     const std::filesystem::path& target,
     std::span<const std::byte> contents);
 

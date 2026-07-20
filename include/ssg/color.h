@@ -46,12 +46,12 @@ struct ResolvedColor {
 // Ties break to the lowest index, so the result is a pure function with a single
 // answer.  `rgb` on a reduced result carries the chosen swatch's canonical
 // channels (for index-less clients and tests).
-[[nodiscard]] ResolvedColor resolve_color(SrgbColor color, ColorDepth depth);
+[[nodiscard]] ResolvedColor resolveColor(SrgbColor color, ColorDepth depth);
 
 // The canonical sRGB channels of xterm palette index `index` (0..255): the 16
 // base colors (0..15), the 6x6x6 cube (16..231), and the 24-step gray ramp
 // (232..255).  Exposed for clients and tests that need the swatch behind an
 // index.
-[[nodiscard]] SrgbColor xterm256_color(std::uint8_t index);
+[[nodiscard]] SrgbColor xterm256Color(std::uint8_t index);
 
 }  // namespace ssg

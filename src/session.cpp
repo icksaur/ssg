@@ -41,7 +41,7 @@ EditorSession::~EditorSession() = default;
 AttachResult EditorSession::attach(InvocationPrincipal principal,
                                    ViewId view_id) {
     std::lock_guard lock{impl_->mutex};
-    ClientId const client_id = principal.client_id();
+    ClientId const client_id = principal.clientId();
     auto [unused, inserted] = impl_->clients.emplace(
         client_id, AttachedClient{std::move(principal), view_id});
     if (!inserted) {
@@ -75,7 +75,7 @@ CommandResult EditorSession::dispatch(ClientId client_id,
 
     for (auto const& capability :
          registration->descriptor.required_capabilities) {
-        if (!client->second.principal.has_capability(capability)) {
+        if (!client->second.principal.hasCapability(capability)) {
             return rejected(
                 CommandError::CapabilityDenied, current_revision,
                 "principal lacks required capability: " +
@@ -132,7 +132,7 @@ Revision EditorSession::revision() const {
     return impl_->revision;
 }
 
-Revision EditorSession::advance_revision() {
+Revision EditorSession::advanceRevision() {
     std::lock_guard lock{impl_->mutex};
     if (impl_->revision.value() == std::numeric_limits<std::uint64_t>::max()) {
         throw std::overflow_error{"session revision is exhausted"};
@@ -146,7 +146,7 @@ SessionTopology EditorSession::topology() const {
     return impl_->topology;
 }
 
-std::optional<AttachedClient> EditorSession::attached_client(
+std::optional<AttachedClient> EditorSession::attachedClient(
     ClientId client_id) const {
     std::lock_guard lock{impl_->mutex};
     auto const found = impl_->clients.find(client_id);

@@ -139,8 +139,8 @@ private:
     std::optional<PromptRequest> request_;
 };
 
-[[nodiscard]] std::uint8_t prompt_row_count(PromptKind kind) noexcept;
-[[nodiscard]] PromptLayoutResult compute_prompt_layout(
+[[nodiscard]] std::uint8_t promptRowCount(PromptKind kind) noexcept;
+[[nodiscard]] PromptLayoutResult computePromptLayout(
     const PromptSurface& surface, Rect reservation);
 
 } // namespace ssg

@@ -37,7 +37,7 @@ struct LspFrameResult {
     }
 };
 
-[[nodiscard]] std::string encode_lsp_frame(std::string_view payload);
+[[nodiscard]] std::string encodeLspFrame(std::string_view payload);
 
 class LspFrameDecoder {
 public:
@@ -81,9 +81,9 @@ struct LspByteOffsetResult {
     }
 };
 
-[[nodiscard]] LspPositionResult byte_offset_to_lsp_position(
+[[nodiscard]] LspPositionResult byteOffsetToLspPosition(
     std::string_view utf8, ByteOffset offset);
-[[nodiscard]] LspByteOffsetResult lsp_position_to_byte_offset(
+[[nodiscard]] LspByteOffsetResult lspPositionToByteOffset(
     std::string_view utf8, LspPosition position);
 
 struct LspRange {
@@ -129,7 +129,7 @@ struct LspSyncDelta {
     friend bool operator==(const LspSyncDelta&, const LspSyncDelta&) = default;
 };
 
-[[nodiscard]] LspSyncDelta derive_lsp_sync_delta(
+[[nodiscard]] LspSyncDelta deriveLspSyncDelta(
     const LspSyncViewState& base, const LspSyncViewState& target);
 
 enum class LspSyncReplayError : std::uint8_t {
@@ -144,7 +144,7 @@ struct LspSyncReplayResult {
     [[nodiscard]] bool accepted() const noexcept { return state.has_value(); }
 };
 
-[[nodiscard]] LspSyncReplayResult replay_lsp_sync_delta(
+[[nodiscard]] LspSyncReplayResult replayLspSyncDelta(
     const LspSyncViewState& base, const LspSyncDelta& delta);
 
 enum class LspIoStatus : std::uint8_t { Ok, Timeout, Closed, Error };
@@ -258,25 +258,25 @@ public:
     [[nodiscard]] LspSyncResult shutdown();
     [[nodiscard]] LspSyncResult poll();
 
-    [[nodiscard]] LspSyncResult open_document(
+    [[nodiscard]] LspSyncResult openDocument(
         std::string uri, std::string language_id, Revision revision,
         std::string text);
-    [[nodiscard]] LspSyncResult change_document(
+    [[nodiscard]] LspSyncResult changeDocument(
         std::string_view uri, Revision revision, std::string text);
-    [[nodiscard]] LspSyncResult close_document(std::string_view uri);
-    [[nodiscard]] std::optional<std::int64_t> document_version(
+    [[nodiscard]] LspSyncResult closeDocument(std::string_view uri);
+    [[nodiscard]] std::optional<std::int64_t> documentVersion(
         std::string_view uri) const;
-    [[nodiscard]] std::optional<LspDocumentSnapshot> document_snapshot(
+    [[nodiscard]] std::optional<LspDocumentSnapshot> documentSnapshot(
         std::string_view uri) const;
 
     [[nodiscard]] LspRequestResult request(std::string method,
                                            std::string params_json);
     [[nodiscard]] LspSyncResult cancel(std::uint64_t request_id);
     [[nodiscard]] std::vector<LspCompletedResponse>
-    take_completed_responses();
+    takeCompletedResponses();
 
     [[nodiscard]] LspLifecycleState state() const noexcept;
-    [[nodiscard]] const LspSyncViewState& view_state() const noexcept;
+    [[nodiscard]] const LspSyncViewState& viewState() const noexcept;
 
 private:
     struct Impl;

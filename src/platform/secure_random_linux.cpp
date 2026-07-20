@@ -8,7 +8,7 @@
 
 namespace ssg {
 
-void platform_secure_random(std::span<std::byte> bytes) {
+void platformSecureRandom(std::span<std::byte> bytes) {
     std::size_t filled = 0;
     while (filled < bytes.size()) {
         auto const count =

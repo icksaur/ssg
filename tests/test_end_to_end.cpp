@@ -47,14 +47,14 @@ void close_test_socket(TestSocket s) { closesocket(s); }
 #else
 using TestSocket = int;
 constexpr TestSocket invalid_test_socket = -1;
-void close_test_socket(TestSocket s) { close(s); }
+void closeTestSocket(TestSocket s) { close(s); }
 #endif
 
 struct SocketOwner {
     TestSocket socket{invalid_test_socket};
     explicit SocketOwner(TestSocket s) : socket{s} {}
     ~SocketOwner() {
-        if (socket != invalid_test_socket) close_test_socket(socket);
+        if (socket != invalid_test_socket) closeTestSocket(socket);
     }
     SocketOwner(SocketOwner const&) = delete;
     SocketOwner& operator=(SocketOwner const&) = delete;
@@ -63,7 +63,7 @@ struct SocketOwner {
     }
 };
 
-void send_all(TestSocket s, std::string const& bytes) {
+void sendAll(TestSocket s, std::string const& bytes) {
     std::size_t sent = 0;
     while (sent < bytes.size()) {
         auto count = send(s, bytes.data() + sent,
@@ -73,14 +73,14 @@ void send_all(TestSocket s, std::string const& bytes) {
     }
 }
 
-std::string receive_some(TestSocket s) {
+std::string receiveSome(TestSocket s) {
     std::array<char, 65536> buf{};
     auto count = recv(s, buf.data(), static_cast<int>(buf.size()), 0);
     if (count <= 0) throw std::runtime_error{"loopback receive failed"};
     return {buf.data(), static_cast<std::size_t>(count)};
 }
 
-std::string masked_frame(std::uint8_t opcode, std::string const& payload) {
+std::string maskedFrame(std::uint8_t opcode, std::string const& payload) {
     std::array<std::uint8_t, 4> const mask{0x12, 0x34, 0x56, 0x78};
     std::string frame;
     frame.push_back(static_cast<char>(0x80 | opcode));
@@ -114,7 +114,7 @@ public:
                 bytes_.erase(0, consumed);
                 return frame;
             }
-            bytes_ += receive_some(socket_);
+            bytes_ += receiveSome(socket_);
         }
     }
 
@@ -123,7 +123,7 @@ private:
     std::string bytes_;
 };
 
-SocketOwner connect_websocket(std::uint16_t port) {
+SocketOwner connectWebsocket(std::uint16_t port) {
 #ifdef _WIN32
     WSADATA data{};
     if (WSAStartup(MAKEWORD(2, 2), &data) != 0)
@@ -139,22 +139,22 @@ SocketOwner connect_websocket(std::uint16_t port) {
     if (connect(owner.socket, reinterpret_cast<sockaddr*>(&addr),
                 sizeof(addr)) != 0)
         throw std::runtime_error{"loopback connect failed"};
-    send_all(owner.socket,
+    sendAll(owner.socket,
              "GET /session HTTP/1.1\r\nHost: 127.0.0.1\r\n"
              "Upgrade: websocket\r\nConnection: Upgrade\r\n"
              "Sec-WebSocket-Version: 13\r\n"
              "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n");
     std::string resp;
     while (resp.find("\r\n\r\n") == std::string::npos)
-        resp += receive_some(owner.socket);
+        resp += receiveSome(owner.socket);
     if (resp.find("101") == std::string::npos)
         throw std::runtime_error{"WebSocket upgrade failed"};
     return owner;
 }
 
-void ws_attach(TestSocket s, std::string credential,
+void wsAttach(TestSocket s, std::string credential,
                std::optional<ssg::Revision> base = std::nullopt) {
-    send_all(s, masked_frame(0x1, ssg::encode_session_attach_request(
+    sendAll(s, maskedFrame(0x1, ssg::encodeSessionAttachRequest(
                                        {std::move(credential), base})));
 }
 
@@ -221,7 +221,7 @@ public:
         ssg::ThemeSnapshot theme{};
         for (std::size_t i = 0; i < theme.palette.size(); ++i) {
             auto ch = static_cast<std::uint8_t>(i * 16);
-            theme.palette[i] = ssg::SrgbColor::from_serialized_channels(
+            theme.palette[i] = ssg::SrgbColor::fromSerializedChannels(
                 ch, static_cast<std::uint8_t>(255 - ch), ch);
             if (i < theme.semantic_indices.size())
                 theme.semantic_indices[i] = static_cast<std::uint8_t>(i);
@@ -289,7 +289,7 @@ public:
             {state_.follow_generation, state_.follow_mode, ssg::PaneId{1},
              std::nullopt, {}, {}},
             {ssg::TreeRevision{revision.value()}, {}},
-            ssg::plain_text_syntax_view_state(revision,
+            ssg::plainTextSyntaxViewState(revision,
                                                ssg::LanguageId{"plain"},
                                                state_.text, 4),
             {revision, {}},
@@ -321,11 +321,11 @@ private:
 
 struct EndToEndScenario {
     EndToEndScenario() {
-        for (auto const& desc : ssg::p0_command_descriptors()) {
+        for (auto const& desc : ssg::p0CommandDescriptors()) {
             auto id = desc.id;
             builder.bind(id, [this, id](ssg::CommandContext& ctx,
                                         std::any const& payload) {
-                return model.apply(id, payload, ctx.principal().client_id(),
+                return model.apply(id, payload, ctx.principal().clientId(),
                                    ctx.revision());
             });
         }
@@ -334,7 +334,7 @@ struct EndToEndScenario {
 
     ssg::SessionSnapshot snapshot(ssg::InvocationPrincipal const& principal,
                                   ssg::ViewId view_id) const {
-        return ssg::assemble_session_snapshot(
+        return ssg::assembleSessionSnapshot(
             session->revision(), session->topology(), principal, view_id,
             model.viewport(), model.sections(session->revision()));
     }
@@ -360,14 +360,14 @@ public:
 
     ssg::SessionSnapshot snapshot(ssg::SessionId const&,
                                   ssg::ClientId client_id) override {
-        auto attached = scenario_.session->attached_client(client_id);
+        auto attached = scenario_.session->attachedClient(client_id);
         if (!attached) throw std::logic_error{"snapshot for detached client"};
         return scenario_.snapshot(attached->principal, attached->view_id);
     }
 
-    void clipboard_response(ssg::SessionId const&, ssg::ClientId,
+    void clipboardResponse(ssg::SessionId const&, ssg::ClientId,
                             ssg::ClipboardResponse const&) override {}
-    void status_action(ssg::SessionId const&, ssg::ClientId,
+    void statusAction(ssg::SessionId const&, ssg::ClientId,
                        ssg::StatusActionInvocation const&) override {}
     void binary(ssg::SessionId const&, ssg::ClientId,
                 ssg::BinaryFrame const&) override {}
@@ -384,7 +384,7 @@ private:
 // models are equal only if command dispatch is semantically identical across
 // all three execution paths.
 
-TEST(direct_api_loopback_websocket_tui_canonical_state_matches_per_step) {
+TEST(directApiLoopbackWebsocketTuiCanonicalStateMatchesPerStep) {
     auto const steps = e2e::load_workflow(SSG_E2E_WORKFLOW_PATH);
     ASSERT_TRUE(!steps.empty());
 
@@ -415,26 +415,26 @@ TEST(direct_api_loopback_websocket_tui_canonical_state_matches_per_step) {
     PeerHost ws_host{ws_scenario, ws_peer_principal};
     constexpr std::uint16_t ws_port = 18800;
     ssg::HttpEditorServer ws_server{
-        *ws_scenario.session, ssg::build_command_argument_codec_registry(),
+        *ws_scenario.session, ssg::buildCommandArgumentCodecRegistry(),
         ws_host, {ws_port, "/session", 64, 128, 500ms}};
     ws_server.start();
     std::this_thread::sleep_for(30ms);
 
-    auto ws = connect_websocket(ws_port);
+    auto ws = connectWebsocket(ws_port);
     FrameReader ws_reader{ws.socket};
-    ws_attach(ws.socket, "ws-peer");
-    auto initial_snap = ssg::decode_session_snapshot(ws_reader.next().payload);
+    wsAttach(ws.socket, "ws-peer");
+    auto initial_snap = ssg::decodeSessionSnapshot(ws_reader.next().payload);
     ASSERT_TRUE(initial_snap.accepted());
     auto ws_snapshot = std::move(*initial_snap.snapshot);
     auto ws_state = e2e::canonical(ws_snapshot);
     ssg::Revision ws_revision = ws_snapshot.revision();
 
-    auto const codec = ssg::build_command_argument_codec_registry();
+    auto const codec = ssg::buildCommandArgumentCodecRegistry();
 
     for (auto const& step : steps) {
         // Direct dispatch
         auto direct_result = direct.session->dispatch(
-            direct_principal.client_id(),
+            direct_principal.clientId(),
             {step.command_id, direct.session->revision(), step.payload});
         ASSERT_EQ(direct_result.accepted(), step.expected_accepted);
 
@@ -444,19 +444,19 @@ TEST(direct_api_loopback_websocket_tui_canonical_state_matches_per_step) {
         ASSERT_EQ(tui_result.accepted(), step.expected_accepted);
 
         // WebSocket dispatch
-        auto ws_encoded = ssg::encode_command_request(
+        auto ws_encoded = ssg::encodeCommandRequest(
             {step.command_id, ws_revision, step.payload}, codec);
-        send_all(ws.socket, masked_frame(0x2, ws_encoded));
+        sendAll(ws.socket, maskedFrame(0x2, ws_encoded));
         auto ws_frame = ws_reader.next();
         if (step.expected_accepted) {
             auto ws_delta =
-                ssg::decode_session_delta(ws_frame.payload);
+                ssg::decodeSessionDelta(ws_frame.payload);
             ASSERT_TRUE(ws_delta.accepted());
             e2e::apply(ws_state, *ws_delta.delta);
             ws_revision = ws_state.revision;
         } else {
             auto ws_cmd_result =
-                ssg::decode_command_result(ws_frame.payload);
+                ssg::decodeCommandResult(ws_frame.payload);
             ASSERT_TRUE(ws_cmd_result.accepted());
             ASSERT_FALSE(ws_cmd_result.result->accepted());
         }
@@ -480,10 +480,10 @@ class ConcurrentFixtureModel {
 public:
     ConcurrentFixtureModel() : follow_model_{{.queue_capacity = 4}} {}
 
-    void register_client(ssg::ClientId client,
+    void registerClient(ssg::ClientId client,
                          ssg::ViewportDimensions dims) {
         std::lock_guard lock{mutex_};
-        (void)follow_model_.attach_client(client, dims);
+        (void)follow_model_.attachClient(client, dims);
     }
 
     ssg::CommandHandlerResult apply(std::string_view id,
@@ -498,7 +498,7 @@ public:
                 std::clamp<std::int64_t>(
                     static_cast<std::int64_t>(per_client_row_[client]) + rows,
                     0, 80));
-            (void)follow_model_.apply_navigation(
+            (void)follow_model_.applyNavigation(
                 {client, ssg::NavigationClass::User, ssg::PaneId{1},
                  ssg::FollowScrollOffset{per_client_row_[client], 0}});
         } else if (id == "follow_edits.pause") {
@@ -509,7 +509,7 @@ public:
         return ssg::CommandHandlerResult::success();
     }
 
-    void accept_external_change(std::string const& file_id,
+    void acceptExternalChange(std::string const& file_id,
                                 std::filesystem::path path,
                                 ssg::Revision source_rev) {
         std::lock_guard lock{mutex_};
@@ -522,13 +522,13 @@ public:
              .target_lines = {"new line\n"}});
         current_diff_.revision = source_rev;
         current_diff_.files.push_back(file);
-        (void)follow_model_.accept_external_change(
+        (void)follow_model_.acceptExternalChange(
             current_diff_.files.back(), source_rev);
     }
 
-    ssg::FollowEditsViewState follow_view_state() const {
+    ssg::FollowEditsViewState followViewState() const {
         std::lock_guard lock{mutex_};
-        return follow_model_.view_state();
+        return follow_model_.viewState();
     }
 
     ssg::SessionSnapshotSections sections(ssg::Revision revision,
@@ -560,9 +560,9 @@ public:
             {{}, std::nullopt},
             {revision, {}},
             {revision, {}},
-            follow_model_.view_state(),
+            follow_model_.viewState(),
             {ssg::TreeRevision{revision.value()}, {}},
-            ssg::plain_text_syntax_view_state(
+            ssg::plainTextSyntaxViewState(
                 revision, ssg::LanguageId{"plain"}, "concurrent", 4),
             {revision, {}},
             {revision, {}, std::nullopt, {}, {}},
@@ -590,11 +590,11 @@ private:
 
 struct ConcurrentScenario {
     ConcurrentScenario() {
-        for (auto const& desc : ssg::p0_command_descriptors()) {
+        for (auto const& desc : ssg::p0CommandDescriptors()) {
             auto id = desc.id;
             builder.bind(id, [this, id](ssg::CommandContext& ctx,
                                         std::any const& payload) {
-                return model.apply(id, payload, ctx.principal().client_id(),
+                return model.apply(id, payload, ctx.principal().clientId(),
                                    ctx.revision());
             });
         }
@@ -603,10 +603,10 @@ struct ConcurrentScenario {
 
     ssg::SessionSnapshot snapshot(ssg::InvocationPrincipal const& principal,
                                   ssg::ViewId view_id) const {
-        return ssg::assemble_session_snapshot(
+        return ssg::assembleSessionSnapshot(
             session->revision(), session->topology(), principal, view_id,
-            model.viewport(principal.client_id()),
-            model.sections(session->revision(), principal.client_id()));
+            model.viewport(principal.clientId()),
+            model.sections(session->revision(), principal.clientId()));
     }
 
     ConcurrentFixtureModel model;
@@ -629,14 +629,14 @@ public:
 
     ssg::SessionSnapshot snapshot(ssg::SessionId const&,
                                   ssg::ClientId client_id) override {
-        auto attached = scenario_.session->attached_client(client_id);
+        auto attached = scenario_.session->attachedClient(client_id);
         if (!attached) throw std::logic_error{"snapshot for detached client"};
         return scenario_.snapshot(attached->principal, attached->view_id);
     }
 
-    void clipboard_response(ssg::SessionId const&, ssg::ClientId,
+    void clipboardResponse(ssg::SessionId const&, ssg::ClientId,
                             ssg::ClipboardResponse const&) override {}
-    void status_action(ssg::SessionId const&, ssg::ClientId,
+    void statusAction(ssg::SessionId const&, ssg::ClientId,
                        ssg::StatusActionInvocation const&) override {}
     void binary(ssg::SessionId const&, ssg::ClientId,
                 ssg::BinaryFrame const&) override {}
@@ -651,14 +651,14 @@ private:
 // to one session share follow state through pause/resume transitions, while
 // their viewport scroll offsets remain independent of each other.
 
-TEST(concurrent_tui_and_websocket_clients_share_follow_interruption) {
+TEST(concurrentTuiAndWebsocketClientsShareFollowInterruption) {
     ConcurrentScenario scenario;
     ssg::InvocationPrincipal const direct_principal{
         ssg::ClientId{41}, ssg::InvocationOrigin::InProcess};
     ssg::InvocationPrincipal const ws_peer_principal{
         ssg::ClientId{42}, ssg::InvocationOrigin::Websocket};
 
-    scenario.model.register_client(ssg::ClientId{41},
+    scenario.model.registerClient(ssg::ClientId{41},
                                    ssg::ViewportDimensions{80, 20});
 
     ASSERT_TRUE(
@@ -667,43 +667,43 @@ TEST(concurrent_tui_and_websocket_clients_share_follow_interruption) {
     constexpr std::uint16_t conc_port = 18801;
     ConcurrentHost conc_host{scenario, ws_peer_principal};
     ssg::HttpEditorServer conc_server{
-        *scenario.session, ssg::build_command_argument_codec_registry(),
+        *scenario.session, ssg::buildCommandArgumentCodecRegistry(),
         conc_host, {conc_port, "/session", 64, 128, 500ms}};
     conc_server.start();
     std::this_thread::sleep_for(30ms);
 
-    auto ws = connect_websocket(conc_port);
+    auto ws = connectWebsocket(conc_port);
     FrameReader ws_reader{ws.socket};
-    ws_attach(ws.socket, "conc-ws");
-    auto initial_ws = ssg::decode_session_snapshot(ws_reader.next().payload);
+    wsAttach(ws.socket, "conc-ws");
+    auto initial_ws = ssg::decodeSessionSnapshot(ws_reader.next().payload);
     ASSERT_TRUE(initial_ws.accepted());
     ssg::Revision ws_rev = initial_ws.snapshot->revision();
 
     // Register WS client in the follow model now that we know it attached.
-    scenario.model.register_client(ssg::ClientId{42},
+    scenario.model.registerClient(ssg::ClientId{42},
                                    ssg::ViewportDimensions{80, 20});
 
-    auto const codec = ssg::build_command_argument_codec_registry();
+    auto const codec = ssg::buildCommandArgumentCodecRegistry();
 
     // Navigate direct client to row 3 and WS client to row 10 to establish
     // independent viewport offsets.
     auto direct_scroll_result = scenario.session->dispatch(
-        direct_principal.client_id(),
+        direct_principal.clientId(),
         {"view.scroll_lines", scenario.session->revision(),
          ssg::ScrollLinesArguments{3}});
     ASSERT_TRUE(direct_scroll_result.accepted());
     // Sync ws_rev: direct dispatch advanced the session revision.
     ws_rev = direct_scroll_result.revision;
 
-    auto ws_scroll = ssg::encode_command_request(
+    auto ws_scroll = ssg::encodeCommandRequest(
         {"view.scroll_lines", ws_rev, ssg::ScrollLinesArguments{10}}, codec);
-    send_all(ws.socket, masked_frame(0x2, ws_scroll));
-    auto scroll_delta = ssg::decode_session_delta(ws_reader.next().payload);
+    sendAll(ws.socket, maskedFrame(0x2, ws_scroll));
+    auto scroll_delta = ssg::decodeSessionDelta(ws_reader.next().payload);
     ASSERT_TRUE(scroll_delta.accepted());
     ws_rev = scroll_delta.delta->revision();
 
     // Both clients have different scroll offsets in the follow model.
-    auto follow_state_before = scenario.model.follow_view_state();
+    auto follow_state_before = scenario.model.followViewState();
     bool found_diff = false;
     if (follow_state_before.clients.size() == 2) {
         found_diff =
@@ -722,20 +722,20 @@ TEST(concurrent_tui_and_websocket_clients_share_follow_interruption) {
 
     // Accept changes to two watched files while paused; resume must choose the
     // newest target across the multi-file queue.
-    scenario.model.accept_external_change(
+    scenario.model.acceptExternalChange(
         "watched-file-a", std::filesystem::path{"/workspace/watched-a.txt"},
         ssg::Revision{scenario.session->revision().value() + 1});
-    scenario.model.accept_external_change(
+    scenario.model.acceptExternalChange(
         "watched-file-b", std::filesystem::path{"/workspace/watched-b.txt"},
         ssg::Revision{scenario.session->revision().value() + 2});
 
-    auto queued_state = scenario.model.follow_view_state();
+    auto queued_state = scenario.model.followViewState();
     ASSERT_EQ(queued_state.mode, ssg::FollowMode::Paused);
     ASSERT_EQ(queued_state.queued_targets.size(), std::size_t{2});
 
     // Explicit pause dispatch is idempotent from the already-paused state.
     auto pause_result = scenario.session->dispatch(
-        direct_principal.client_id(),
+        direct_principal.clientId(),
         {"follow_edits.pause", scenario.session->revision(), {}});
     ASSERT_TRUE(pause_result.accepted());
     // Sync ws_rev: direct pause advanced the session revision.
@@ -748,10 +748,10 @@ TEST(concurrent_tui_and_websocket_clients_share_follow_interruption) {
               ssg::FollowMode::Paused);
 
     // WebSocket client resumes follow: shared state transitions both clients.
-    auto ws_resume = ssg::encode_command_request(
+    auto ws_resume = ssg::encodeCommandRequest(
         {"follow_edits.resume", ws_rev, std::any{}}, codec);
-    send_all(ws.socket, masked_frame(0x2, ws_resume));
-    auto resume_delta = ssg::decode_session_delta(ws_reader.next().payload);
+    sendAll(ws.socket, maskedFrame(0x2, ws_resume));
+    auto resume_delta = ssg::decodeSessionDelta(ws_reader.next().payload);
     ASSERT_TRUE(resume_delta.accepted());
     ws_rev = resume_delta.delta->revision();
 
@@ -760,7 +760,7 @@ TEST(concurrent_tui_and_websocket_clients_share_follow_interruption) {
         scenario.snapshot(direct_principal, ssg::ViewId{41});
     ASSERT_EQ(direct_snap_resumed.sections().follow_edits.mode,
               ssg::FollowMode::Following);
-    auto follow_state_after = scenario.model.follow_view_state();
+    auto follow_state_after = scenario.model.followViewState();
     ASSERT_EQ(follow_state_after.mode, ssg::FollowMode::Following);
     ASSERT_TRUE(follow_state_after.active_target.has_value());
     ASSERT_EQ(follow_state_after.active_target->id,
@@ -781,8 +781,8 @@ TEST(concurrent_tui_and_websocket_clients_share_follow_interruption) {
 
 int main() {
     std::cout << "=== End-to-end parity ===\n";
-    RUN(direct_api_loopback_websocket_tui_canonical_state_matches_per_step);
-    RUN(concurrent_tui_and_websocket_clients_share_follow_interruption);
+    RUN(directApiLoopbackWebsocketTuiCanonicalStateMatchesPerStep);
+    RUN(concurrentTuiAndWebsocketClientsShareFollowInterruption);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

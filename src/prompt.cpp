@@ -9,11 +9,11 @@ PromptCommandResult failure(PromptErrorCode code, std::string message) {
     return {PromptError{code, std::move(message)}, std::nullopt};
 }
 
-bool valid_identity(std::string_view id, std::string_view label) {
+bool validIdentity(std::string_view id, std::string_view label) {
     return !id.empty() && !label.empty();
 }
 
-bool valid_request(const PromptRequest& request) {
+bool validRequest(const PromptRequest& request) {
     if (request.accessible_label.empty()) {
         return false;
     }
@@ -23,7 +23,7 @@ bool valid_request(const PromptRequest& request) {
         return false;
     }
     for (const auto& input : request.inputs) {
-        if (!valid_identity(input.id, input.accessible_label)) {
+        if (!validIdentity(input.id, input.accessible_label)) {
             return false;
         }
     }
@@ -38,19 +38,19 @@ bool valid_request(const PromptRequest& request) {
         return false;
     }
     for (const auto& toggle : request.toggles) {
-        if (!valid_identity(toggle.id, toggle.accessible_label) ||
+        if (!validIdentity(toggle.id, toggle.accessible_label) ||
             toggle.width <= 0) {
             return false;
         }
     }
     return !request.match_count ||
-           valid_identity(request.match_count->id,
+           validIdentity(request.match_count->id,
                           request.match_count->accessible_label);
 }
 
 } // namespace
 
-std::uint8_t prompt_row_count(PromptKind kind) noexcept {
+std::uint8_t promptRowCount(PromptKind kind) noexcept {
     switch (kind) {
     case PromptKind::Find: return 2;
     case PromptKind::Replace: return 3;
@@ -63,7 +63,7 @@ std::uint8_t prompt_row_count(PromptKind kind) noexcept {
 }
 
 PromptCommandResult PromptSurface::open(PromptRequest request) {
-    if (!valid_request(request)) {
+    if (!validRequest(request)) {
         return failure(PromptErrorCode::InvalidRequest,
                        "prompt request does not match its kind");
     }
@@ -97,7 +97,7 @@ PromptCommandResult PromptSurface::cancel() {
     return {};
 }
 
-PromptLayoutResult compute_prompt_layout(const PromptSurface& surface,
+PromptLayoutResult computePromptLayout(const PromptSurface& surface,
                                          Rect reservation) {
     if (!surface.request()) {
         return {PromptError{PromptErrorCode::NoActivePrompt,
@@ -106,7 +106,7 @@ PromptLayoutResult compute_prompt_layout(const PromptSurface& surface,
     }
     const auto& request = *surface.request();
     if (reservation.width <= 0 || reservation.height !=
-            static_cast<int>(prompt_row_count(request.kind))) {
+            static_cast<int>(promptRowCount(request.kind))) {
         return {PromptError{PromptErrorCode::InvalidReservation,
                             "prompt reservation does not match its kind"},
                 std::nullopt};

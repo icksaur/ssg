@@ -6,7 +6,7 @@
 namespace ssg {
 namespace {
 
-bool valid_item(const StatusItem& item) {
+bool validItem(const StatusItem& item) {
     if (item.id.value() == 0 || item.text.empty()) {
         return false;
     }
@@ -21,7 +21,7 @@ bool valid_item(const StatusItem& item) {
 } // namespace
 
 StatusEnqueueResult StatusQueue::enqueue(StatusItem item) {
-    if (!valid_item(item)) {
+    if (!validItem(item)) {
         return {};
     }
 
@@ -86,7 +86,7 @@ void StatusQueue::dismiss() noexcept {
     }
 }
 
-StatusActionResult StatusQueue::invoke_action(
+StatusActionResult StatusQueue::invokeAction(
     const StatusActionInvocation& invocation) const {
     if (entries_.empty()) {
         return {StatusActionError::Stale, std::nullopt};
@@ -107,7 +107,7 @@ StatusActionResult StatusQueue::invoke_action(
     return {StatusActionError::None, action->command_id};
 }
 
-StatusViewState StatusQueue::view_state() const {
+StatusViewState StatusQueue::viewState() const {
     StatusViewState view;
     view.selected = selected_;
     view.items.reserve(entries_.size());
@@ -119,7 +119,7 @@ StatusViewState StatusQueue::view_state() const {
     return view;
 }
 
-StatusFooterProjection StatusQueue::footer_projection() const {
+StatusFooterProjection StatusQueue::footerProjection() const {
     StatusFooterProjection projection;
     if (entries_.empty()) {
         return projection;
@@ -135,7 +135,7 @@ StatusFooterProjection StatusQueue::footer_projection() const {
     return projection;
 }
 
-PromptStatusDelta derive_prompt_status_delta(
+PromptStatusDelta derivePromptStatusDelta(
     const PromptStatusViewState& before, const PromptStatusViewState& after) {
     if (before == after) {
         return {};

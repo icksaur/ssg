@@ -14,7 +14,7 @@ namespace {
 
 using namespace ssg;
 
-std::string read_required_catalog() {
+std::string readRequiredCatalog() {
     std::ifstream input{std::string{SSG_TEST_SOURCE_DIR} +
                         "/data/required-commands.json"};
     std::ostringstream text;
@@ -22,7 +22,7 @@ std::string read_required_catalog() {
     return text.str();
 }
 
-std::vector<std::pair<std::string, bool>> parse_catalog(std::string const& json) {
+std::vector<std::pair<std::string, bool>> parseCatalog(std::string const& json) {
     std::vector<std::pair<std::string, bool>> entries;
     std::size_t position = 0;
     while ((position = json.find("\"id\"", position)) != std::string::npos) {
@@ -49,8 +49,8 @@ LuaCommandHostOptions options(std::vector<LuaCommand> commands = {}) {
     return result;
 }
 
-TEST(required_catalog_minus_exclusions_is_callable) {
-    auto const catalog = parse_catalog(read_required_catalog());
+TEST(requiredCatalogMinusExclusionsIsCallable) {
+    auto const catalog = parseCatalog(readRequiredCatalog());
     std::vector<LuaCommand> commands;
     std::unordered_set<std::string> called;
     std::string excluded;
@@ -77,14 +77,14 @@ TEST(required_catalog_minus_exclusions_is_callable) {
     ASSERT_FALSE(excluded.empty());
 }
 
-TEST(capabilities_are_immutable_and_checked_before_dispatch) {
+TEST(capabilitiesAreImmutableAndCheckedBeforeDispatch) {
     auto configured = options({{"safe", {}}, {"privileged", {CapabilityId{"fs"}}}});
     configured.capabilities.emplace_back("network");
     bool dispatched = false;
     LuaCommandHost host{std::move(configured),
         [&](LuaInvocation const& invocation) {
             dispatched = true;
-            ASSERT_TRUE(invocation.principal.has_capability(
+            ASSERT_TRUE(invocation.principal.hasCapability(
                 CapabilityId{"network"}));
             return CommandHandlerResult::success();
         }};
@@ -95,7 +95,7 @@ TEST(capabilities_are_immutable_and_checked_before_dispatch) {
     ASSERT_TRUE(dispatched);
 }
 
-TEST(generational_handles_reject_stale_access_after_reuse) {
+TEST(generationalHandlesRejectStaleAccessAfterReuse) {
     LuaCommandHost host{options(), [](LuaInvocation const&) {
         return CommandHandlerResult::success();
     }};
@@ -114,7 +114,7 @@ TEST(generational_handles_reject_stale_access_after_reuse) {
     ASSERT_EQ(resolved, static_cast<void*>(&second));
 }
 
-TEST(instruction_and_wall_clock_budgets_isolate_callbacks) {
+TEST(instructionAndWallClockBudgetsIsolateCallbacks) {
     auto configured = options();
     configured.instruction_budget = 2'000;
     configured.time_budget = std::chrono::milliseconds{5};
@@ -126,7 +126,7 @@ TEST(instruction_and_wall_clock_budgets_isolate_callbacks) {
     ASSERT_TRUE(host.evaluate("return 7").accepted());
 }
 
-TEST(reentrant_calls_restore_the_enclosing_budget) {
+TEST(reentrantCallsRestoreTheEnclosingBudget) {
     LuaCommandHost* reentrant = nullptr;
     auto configured = options({{"reenter", {}}});
     configured.instruction_budget = 2'000;
@@ -143,24 +143,24 @@ TEST(reentrant_calls_restore_the_enclosing_budget) {
     ASSERT_TRUE(host.evaluate("return 7").accepted());
 }
 
-TEST(registration_is_atomic_and_duplicate_safe) {
+TEST(registrationIsAtomicAndDuplicateSafe) {
     LuaCommandHost host{options(), [](LuaInvocation const&) {
         return CommandHandlerResult::success();
     }};
     auto evaluation = host.evaluate(
         "ssg.register_command('half', function() end); error('rollback')");
     ASSERT_EQ(evaluation.error, LuaError::RuntimeFault);
-    ASSERT_FALSE(host.has_command("half"));
+    ASSERT_FALSE(host.hasCommand("half"));
     ASSERT_TRUE(host.evaluate(
         "ssg.register_command('owned', function() ssg.command('missing') end)")
                     .accepted());
     auto duplicate = host.evaluate(
         "ssg.register_command('owned', function() end)");
     ASSERT_EQ(duplicate.error, LuaError::DuplicateCommand);
-    ASSERT_TRUE(host.has_command("owned"));
+    ASSERT_TRUE(host.hasCommand("owned"));
 }
 
-TEST(dispatch_and_plugin_faults_are_isolated) {
+TEST(dispatchAndPluginFaultsAreIsolated) {
     LuaCommandHost denied{options({{"edit", {}}}), [](LuaInvocation const&) {
         return CommandHandlerResult::failure("atomic edit rejected");
     }};
@@ -178,7 +178,7 @@ TEST(dispatch_and_plugin_faults_are_isolated) {
     ASSERT_EQ(callbacks.invoke("absent").error, LuaError::UnknownCommand);
 }
 
-TEST(unsafe_standard_libraries_and_native_loader_are_absent) {
+TEST(unsafeStandardLibrariesAndNativeLoaderAreAbsent) {
     LuaCommandHost host{options(), [](LuaInvocation const&) {
         return CommandHandlerResult::success();
     }};
@@ -192,14 +192,14 @@ TEST(unsafe_standard_libraries_and_native_loader_are_absent) {
 }  // namespace
 
 int main() {
-    RUN(required_catalog_minus_exclusions_is_callable);
-    RUN(capabilities_are_immutable_and_checked_before_dispatch);
-    RUN(generational_handles_reject_stale_access_after_reuse);
-    RUN(instruction_and_wall_clock_budgets_isolate_callbacks);
-    RUN(reentrant_calls_restore_the_enclosing_budget);
-    RUN(registration_is_atomic_and_duplicate_safe);
-    RUN(dispatch_and_plugin_faults_are_isolated);
-    RUN(unsafe_standard_libraries_and_native_loader_are_absent);
+    RUN(requiredCatalogMinusExclusionsIsCallable);
+    RUN(capabilitiesAreImmutableAndCheckedBeforeDispatch);
+    RUN(generationalHandlesRejectStaleAccessAfterReuse);
+    RUN(instructionAndWallClockBudgetsIsolateCallbacks);
+    RUN(reentrantCallsRestoreTheEnclosingBudget);
+    RUN(registrationIsAtomicAndDuplicateSafe);
+    RUN(dispatchAndPluginFaultsAreIsolated);
+    RUN(unsafeStandardLibrariesAndNativeLoaderAreAbsent);
     std::cout << "Passed: " << passed << " Failed: " << failed << '\n';
     return failed == 0 ? 0 : 1;
 }

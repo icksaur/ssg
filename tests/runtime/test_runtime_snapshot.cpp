@@ -17,7 +17,7 @@
 
 namespace {
 
-std::filesystem::path unique_root(std::string_view name) {
+std::filesystem::path uniqueRoot(std::string_view name) {
     auto root = std::filesystem::current_path() / ("runtime_snapshot_" + std::string{name});
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
@@ -26,19 +26,19 @@ std::filesystem::path unique_root(std::string_view name) {
     return root;
 }
 
-ssg::EditorRuntimeConfig config_for(const std::filesystem::path& root) {
+ssg::EditorRuntimeConfig configFor(const std::filesystem::path& root) {
     return {root / "workspace", root / "scratch", root / "recovery"};
 }
 
-TEST(construction_rejects_invalid_cwd) {
-    auto root = unique_root("invalid_cwd");
-    auto result = ssg::EditorRuntime::create(config_for(root / "missing"));
+TEST(constructionRejectsInvalidCwd) {
+    auto root = uniqueRoot("invalid_cwd");
+    auto result = ssg::EditorRuntime::create(configFor(root / "missing"));
     ASSERT_FALSE(result.accepted());
     ASSERT_FALSE(result.message.empty());
 }
 
-TEST(command_case_table_exactly_matches_p0_catalog) {
-    auto descriptors = ssg::p0_command_descriptors();
+TEST(commandCaseTableExactlyMatchesP0Catalog) {
+    auto descriptors = ssg::p0CommandDescriptors();
     std::set<std::string> actual;
     for (const auto& descriptor : descriptors) actual.insert(descriptor.id);
 
@@ -51,9 +51,9 @@ TEST(command_case_table_exactly_matches_p0_catalog) {
     ASSERT_EQ(actual, expected);
 }
 
-TEST(runtime_constructs_attaches_and_produces_live_snapshot) {
-    auto root = unique_root("snapshot");
-    auto created = ssg::EditorRuntime::create(config_for(root));
+TEST(runtimeConstructsAttachesAndProducesLiveSnapshot) {
+    auto root = uniqueRoot("snapshot");
+    auto created = ssg::EditorRuntime::create(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
 
@@ -69,7 +69,7 @@ TEST(runtime_constructs_attaches_and_produces_live_snapshot) {
     ASSERT_EQ(snapshot->client().view_id, ssg::ViewId{9});
 }
 
-TEST(runtime_sources_do_not_include_fixture_model) {
+TEST(runtimeSourcesDoNotIncludeFixtureModel) {
     auto root = std::filesystem::path{SSG_SOURCE_SCAN_ROOT};
     bool found = false;
     for (const auto& entry : std::filesystem::recursive_directory_iterator{root / "src"}) {
@@ -84,9 +84,9 @@ TEST(runtime_sources_do_not_include_fixture_model) {
     ASSERT_FALSE(found);
 }
 
-TEST(runtime_publishes_valid_curated_keymap) {
-    auto root = unique_root("keymap_valid");
-    auto created = ssg::EditorRuntime::create(config_for(root));
+TEST(runtimePublishesValidCuratedKeymap) {
+    auto root = uniqueRoot("keymap_valid");
+    auto created = ssg::EditorRuntime::create(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
@@ -96,14 +96,14 @@ TEST(runtime_publishes_valid_curated_keymap) {
     if (!snapshot) return;
     const auto& keymap = snapshot->sections().keymap;
     ASSERT_FALSE(keymap.bindings.empty());
-    ASSERT_TRUE(ssg::validate_keymap(keymap, {}).empty());
-    ASSERT_TRUE(ssg::has_global_binding(keymap, "settings.open", {}));
+    ASSERT_TRUE(ssg::validateKeymap(keymap, {}).empty());
+    ASSERT_TRUE(ssg::hasGlobalBinding(keymap, "settings.open", {}));
 }
 
-TEST(curated_keymap_bindings_are_argument_free) {
-    auto root = unique_root("keymap_argfree");
+TEST(curatedKeymapBindingsAreArgumentFree) {
+    auto root = uniqueRoot("keymap_argfree");
     std::ofstream{root / "workspace" / "doc.txt"} << "alpha\nbeta\n";
-    auto created = ssg::EditorRuntime::create(config_for(root));
+    auto created = ssg::EditorRuntime::create(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
@@ -135,9 +135,9 @@ TEST(curated_keymap_bindings_are_argument_free) {
     }
 }
 
-TEST(curated_keymap_resolves_per_context) {
-    auto root = unique_root("keymap_resolve");
-    auto created = ssg::EditorRuntime::create(config_for(root));
+TEST(curatedKeymapResolvesPerContext) {
+    auto root = uniqueRoot("keymap_resolve");
+    auto created = ssg::EditorRuntime::create(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
@@ -147,52 +147,52 @@ TEST(curated_keymap_resolves_per_context) {
     if (!snapshot) return;
     const auto& keymap = snapshot->sections().keymap;
 
-    const auto down = *ssg::parse_key_sequence({"ArrowDown"});
-    ASSERT_EQ(ssg::resolve_key_sequence(keymap, down, "editor").command_id,
+    const auto down = *ssg::parseKeySequence({"ArrowDown"});
+    ASSERT_EQ(ssg::resolveKeySequence(keymap, down, "editor").command_id,
               std::string{"cursor.line_down"});
-    ASSERT_EQ(ssg::resolve_key_sequence(keymap, down, "panel").command_id,
+    ASSERT_EQ(ssg::resolveKeySequence(keymap, down, "panel").command_id,
               std::string{"tree.select_next"});
-    ASSERT_EQ(ssg::resolve_key_sequence(keymap, down, "prompt").command_id,
+    ASSERT_EQ(ssg::resolveKeySequence(keymap, down, "prompt").command_id,
               std::string{"palette.next"});
 
-    const auto save = *ssg::parse_key_sequence({"Escape", "KeyS"});
-    ASSERT_EQ(ssg::resolve_key_sequence(keymap, save, "editor").command_id,
+    const auto save = *ssg::parseKeySequence({"Escape", "KeyS"});
+    ASSERT_EQ(ssg::resolveKeySequence(keymap, save, "editor").command_id,
               std::string{"file.save"});
 
     // The settings.open escape hatch resolves in every context.
-    const auto settings = *ssg::parse_key_sequence({"Escape", "KeyF", "KeyT"});
+    const auto settings = *ssg::parseKeySequence({"Escape", "KeyF", "KeyT"});
     for (const auto context : {"editor", "panel", "prompt"}) {
-        ASSERT_EQ(ssg::resolve_key_sequence(keymap, settings, context).command_id,
+        ASSERT_EQ(ssg::resolveKeySequence(keymap, settings, context).command_id,
                   std::string{"settings.open"});
     }
 
     // M7-M selection/multi-cursor bindings: Shift+Arrow extends the selection in
     // the editor; the multi-cursor and find/replace chords resolve globally.
-    const auto shift_right = *ssg::parse_key_sequence({"Shift+ArrowRight"});
-    ASSERT_EQ(ssg::resolve_key_sequence(keymap, shift_right, "editor").command_id,
+    const auto shift_right = *ssg::parseKeySequence({"Shift+ArrowRight"});
+    ASSERT_EQ(ssg::resolveKeySequence(keymap, shift_right, "editor").command_id,
               std::string{"select.right"});
-    const auto shift_up = *ssg::parse_key_sequence({"Shift+ArrowUp"});
-    ASSERT_EQ(ssg::resolve_key_sequence(keymap, shift_up, "editor").command_id,
+    const auto shift_up = *ssg::parseKeySequence({"Shift+ArrowUp"});
+    ASSERT_EQ(ssg::resolveKeySequence(keymap, shift_up, "editor").command_id,
               std::string{"select.line_up"});
     // Plain ArrowRight is still cursor motion, distinct from the shifted stroke.
-    const auto plain_right = *ssg::parse_key_sequence({"ArrowRight"});
-    ASSERT_EQ(ssg::resolve_key_sequence(keymap, plain_right, "editor").command_id,
+    const auto plain_right = *ssg::parseKeySequence({"ArrowRight"});
+    ASSERT_EQ(ssg::resolveKeySequence(keymap, plain_right, "editor").command_id,
               std::string{"cursor.right"});
-    const auto add_next = *ssg::parse_key_sequence({"Escape", "KeyD"});
-    ASSERT_EQ(ssg::resolve_key_sequence(keymap, add_next, "editor").command_id,
+    const auto add_next = *ssg::parseKeySequence({"Escape", "KeyD"});
+    ASSERT_EQ(ssg::resolveKeySequence(keymap, add_next, "editor").command_id,
               std::string{"select.add_next_occurrence"});
-    const auto find_open = *ssg::parse_key_sequence({"Escape", "Slash"});
-    ASSERT_EQ(ssg::resolve_key_sequence(keymap, find_open, "editor").command_id,
+    const auto find_open = *ssg::parseKeySequence({"Escape", "Slash"});
+    ASSERT_EQ(ssg::resolveKeySequence(keymap, find_open, "editor").command_id,
               std::string{"find.open"});
-    const auto replace_open = *ssg::parse_key_sequence({"Escape", "KeyR"});
-    ASSERT_EQ(ssg::resolve_key_sequence(keymap, replace_open, "editor").command_id,
+    const auto replace_open = *ssg::parseKeySequence({"Escape", "KeyR"});
+    ASSERT_EQ(ssg::resolveKeySequence(keymap, replace_open, "editor").command_id,
               std::string{"replace.open"});
 }
 
-TEST(add_cursor_chord_produces_multiple_selections) {
-    auto root = unique_root("multi_cursor");
+TEST(addCursorChordProducesMultipleSelections) {
+    auto root = uniqueRoot("multi_cursor");
     std::ofstream{root / "workspace" / "m.txt"} << "alpha\nbeta\n";
-    auto created = ssg::EditorRuntime::create(config_for(root));
+    auto created = ssg::EditorRuntime::create(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
@@ -204,8 +204,8 @@ TEST(add_cursor_chord_produces_multiple_selections) {
     auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    const auto chord = *ssg::parse_key_sequence({"Escape", "KeyJ"});
-    auto resolved = ssg::resolve_key_sequence(snapshot->sections().keymap, chord, "editor");
+    const auto chord = *ssg::parseKeySequence({"Escape", "KeyJ"});
+    auto resolved = ssg::resolveKeySequence(snapshot->sections().keymap, chord, "editor");
     ASSERT_EQ(resolved.kind, ssg::KeymapMatchKind::Resolved);
     ASSERT_EQ(resolved.command_id, std::string{"select.add_cursor_down"});
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {resolved.command_id, runtime.revision(), {}}).accepted());
@@ -216,9 +216,9 @@ TEST(add_cursor_chord_produces_multiple_selections) {
     ASSERT_TRUE(after->sections().selection.selections.items().size() > std::size_t{1});
 }
 
-TEST(settings_open_focuses_a_settings_prompt) {
-    auto root = unique_root("settings_open");
-    auto created = ssg::EditorRuntime::create(config_for(root));
+TEST(settingsOpenFocusesASettingsPrompt) {
+    auto root = uniqueRoot("settings_open");
+    auto created = ssg::EditorRuntime::create(configFor(root));
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
@@ -235,15 +235,15 @@ TEST(settings_open_focuses_a_settings_prompt) {
 } // namespace
 
 int main() {
-    RUN(construction_rejects_invalid_cwd);
-    RUN(command_case_table_exactly_matches_p0_catalog);
-    RUN(runtime_constructs_attaches_and_produces_live_snapshot);
-    RUN(runtime_sources_do_not_include_fixture_model);
-    RUN(runtime_publishes_valid_curated_keymap);
-    RUN(curated_keymap_bindings_are_argument_free);
-    RUN(curated_keymap_resolves_per_context);
-    RUN(add_cursor_chord_produces_multiple_selections);
-    RUN(settings_open_focuses_a_settings_prompt);
+    RUN(constructionRejectsInvalidCwd);
+    RUN(commandCaseTableExactlyMatchesP0Catalog);
+    RUN(runtimeConstructsAttachesAndProducesLiveSnapshot);
+    RUN(runtimeSourcesDoNotIncludeFixtureModel);
+    RUN(runtimePublishesValidCuratedKeymap);
+    RUN(curatedKeymapBindingsAreArgumentFree);
+    RUN(curatedKeymapResolvesPerContext);
+    RUN(addCursorChordProducesMultipleSelections);
+    RUN(settingsOpenFocusesASettingsPrompt);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

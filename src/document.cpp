@@ -17,12 +17,12 @@
 namespace ssg {
 namespace {
 
-bool is_continuation(unsigned char byte) {
+bool isContinuation(unsigned char byte) {
     return (byte & 0xC0U) == 0x80U;
 }
 
-bool valid_utf8_without_nul(std::string_view text) {
-    note_utf8_validation();
+bool validUtf8WithoutNul(std::string_view text) {
+    noteUtf8Validation();
     std::size_t offset = 0;
     while (offset < text.size()) {
         const auto first = static_cast<unsigned char>(text[offset]);
@@ -49,7 +49,7 @@ bool valid_utf8_without_nul(std::string_view text) {
         }
 
         const auto second = static_cast<unsigned char>(text[offset + 1]);
-        if (!is_continuation(second)) {
+        if (!isContinuation(second)) {
             return false;
         }
         if ((first == 0xE0U && second < 0xA0U) ||
@@ -59,7 +59,7 @@ bool valid_utf8_without_nul(std::string_view text) {
             return false;
         }
         for (std::size_t index = 2; index < length; ++index) {
-            if (!is_continuation(
+            if (!isContinuation(
                     static_cast<unsigned char>(text[offset + index]))) {
                 return false;
             }
@@ -69,9 +69,9 @@ bool valid_utf8_without_nul(std::string_view text) {
     return true;
 }
 
-bool is_utf8_boundary(std::string_view text, std::size_t offset) {
+bool isUtf8Boundary(std::string_view text, std::size_t offset) {
     return offset == text.size() ||
-           !is_continuation(static_cast<unsigned char>(text[offset]));
+           !isContinuation(static_cast<unsigned char>(text[offset]));
 }
 
 TransactionResult failure(DocumentError error, Revision revision,
@@ -94,7 +94,7 @@ struct Document::Impl {
 };
 
 Document::Document(std::string_view initial_text, DocumentMode mode) {
-    if (!valid_utf8_without_nul(initial_text)) {
+    if (!validUtf8WithoutNul(initial_text)) {
         throw std::invalid_argument(
             "document text must be well-formed UTF-8 without NUL bytes");
     }
@@ -158,7 +158,7 @@ TransactionResult Document::apply(EditTransaction const& transaction) {
             return failure(DocumentError::EmptyTransaction, current_revision,
                            "transaction contains an empty edit");
         }
-        if (!valid_utf8_without_nul(edit.inserted_text)) {
+        if (!validUtf8WithoutNul(edit.inserted_text)) {
             return failure(DocumentError::InvalidUtf8, current_revision,
                            "inserted text must be well-formed UTF-8 without NUL bytes");
         }
@@ -173,8 +173,8 @@ TransactionResult Document::apply(EditTransaction const& transaction) {
         const auto begin = static_cast<std::size_t>(edit.offset.value());
         const auto end =
             begin + static_cast<std::size_t>(edit.erased_bytes);
-        if (!is_utf8_boundary(original, begin) ||
-            !is_utf8_boundary(original, end)) {
+        if (!isUtf8Boundary(original, begin) ||
+            !isUtf8Boundary(original, end)) {
             return failure(DocumentError::InvalidUtf8Boundary,
                            current_revision,
                            "edit range splits a UTF-8 code point");

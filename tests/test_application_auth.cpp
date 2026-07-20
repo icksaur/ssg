@@ -18,10 +18,10 @@ public:
     }
 };
 
-TEST(generated_bearers_have_32_random_bytes_in_lowercase_hex) {
+TEST(generatedBearersHave32RandomBytesInLowercaseHex) {
     std::set<std::string> values;
     for (int count = 0; count < 64; ++count) {
-        auto credential = ssg::generate_bearer_credential();
+        auto credential = ssg::generateBearerCredential();
         ASSERT_EQ(credential.value().size(), std::size_t{64});
         for (char value : credential.value()) {
             ASSERT_TRUE((value >= '0' && value <= '9') ||
@@ -32,14 +32,14 @@ TEST(generated_bearers_have_32_random_bytes_in_lowercase_hex) {
     ASSERT_EQ(values.size(), std::size_t{64});
 }
 
-TEST(random_failure_is_not_replaced_with_a_weak_credential) {
+TEST(randomFailureIsNotReplacedWithAWeakCredential) {
     FailingRandom random;
-    ASSERT_THROWS(ssg::generate_bearer_credential(random), std::runtime_error);
+    ASSERT_THROWS(ssg::generateBearerCredential(random), std::runtime_error);
 }
 
-TEST(application_auth_accepts_only_current_bearer_with_exact_capability) {
-    auto stale = ssg::generate_bearer_credential();
-    auto current = ssg::generate_bearer_credential();
+TEST(applicationAuthAcceptsOnlyCurrentBearerWithExactCapability) {
+    auto stale = ssg::generateBearerCredential();
+    auto current = ssg::generateBearerCredential();
     auto const stale_value = std::string{stale.value()};
     auto const current_value = std::string{current.value()};
     ssg::ApplicationAuthentication authentication{
@@ -50,7 +50,7 @@ TEST(application_auth_accepts_only_current_bearer_with_exact_capability) {
     ASSERT_FALSE(authentication.authenticate(stale_value).has_value());
     auto accepted = authentication.authenticate(current_value);
     ASSERT_TRUE(accepted.has_value());
-    ASSERT_EQ(accepted->principal.client_id(), ssg::ClientId{41});
+    ASSERT_EQ(accepted->principal.clientId(), ssg::ClientId{41});
     ASSERT_EQ(accepted->principal.origin(), ssg::InvocationOrigin::Websocket);
     ASSERT_EQ(accepted->principal.capabilities().size(), std::size_t{1});
     ASSERT_EQ(accepted->principal.capabilities().front(),
@@ -61,8 +61,8 @@ TEST(application_auth_accepts_only_current_bearer_with_exact_capability) {
 }  // namespace
 
 int main() {
-    RUN(generated_bearers_have_32_random_bytes_in_lowercase_hex);
-    RUN(random_failure_is_not_replaced_with_a_weak_credential);
-    RUN(application_auth_accepts_only_current_bearer_with_exact_capability);
+    RUN(generatedBearersHave32RandomBytesInLowercaseHex);
+    RUN(randomFailureIsNotReplacedWithAWeakCredential);
+    RUN(applicationAuthAcceptsOnlyCurrentBearerWithExactCapability);
     return failed == 0 ? 0 : 1;
 }

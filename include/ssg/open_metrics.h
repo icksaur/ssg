@@ -39,21 +39,21 @@ private:
     std::int64_t start_ns_;
 };
 
-[[nodiscard]] std::uint64_t open_phase_ns(OpenPhase phase);
-void reset_open_phase_timing();
+[[nodiscard]] std::uint64_t openPhaseNs(OpenPhase phase);
+void resetOpenPhaseTiming();
 
 // Counts UTF-8 *validating scans* on the current thread (the decoder's scan plus
 // any Document-ctor re-validation).  A direct-UTF-8 open is 2 today and 1 after
 // LF-3a; a transcoded/binary open is 0 validating UTF-8 scans.
-void note_utf8_validation();
-[[nodiscard]] std::uint64_t utf8_validation_calls();
-void reset_utf8_validation_calls();
+void noteUtf8Validation();
+[[nodiscard]] std::uint64_t utf8ValidationCalls();
+void resetUtf8ValidationCalls();
 
 // Counts whole-document PieceTree::text() materializations on the current
 // thread.  A fresh open attributes 1 to Workspace::state() today and 0 after
 // LF-4b.
-void note_piece_tree_text();
-[[nodiscard]] std::uint64_t piece_tree_text_calls();
-void reset_piece_tree_text_calls();
+void notePieceTreeText();
+[[nodiscard]] std::uint64_t pieceTreeTextCalls();
+void resetPieceTreeTextCalls();
 
 }  // namespace ssg

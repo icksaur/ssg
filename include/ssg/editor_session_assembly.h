@@ -10,7 +10,7 @@
 
 namespace ssg {
 
-[[nodiscard]] std::vector<CommandDescriptor> p0_command_descriptors();
+[[nodiscard]] std::vector<CommandDescriptor> p0CommandDescriptors();
 
 class EditorSessionBuilder {
 public:

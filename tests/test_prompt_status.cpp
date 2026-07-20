@@ -12,19 +12,19 @@ namespace {
 
 using namespace ssg;
 
-std::string read_fixture(const std::string& relative) {
+std::string readFixture(const std::string& relative) {
     std::ifstream input(std::filesystem::path(SSG_SOURCE_DIR) / relative);
     std::ostringstream text;
     text << input.rdbuf();
     return text.str();
 }
 
-std::string rect_text(const Rect& rect) {
+std::string rectText(const Rect& rect) {
     return std::to_string(rect.x) + "," + std::to_string(rect.y) + "," +
            std::to_string(rect.width) + "," + std::to_string(rect.height);
 }
 
-std::string kind_text(PromptKind kind) {
+std::string kindText(PromptKind kind) {
     switch (kind) {
     case PromptKind::Path: return "path";
     case PromptKind::Find: return "find";
@@ -35,7 +35,7 @@ std::string kind_text(PromptKind kind) {
     return "";
 }
 
-std::string control_kind_text(PromptControlKind kind) {
+std::string controlKindText(PromptControlKind kind) {
     switch (kind) {
     case PromptControlKind::Input: return "input";
     case PromptControlKind::Toggle: return "toggle";
@@ -64,52 +64,52 @@ PromptRequest request(PromptKind kind) {
     return value;
 }
 
-std::string geometry_line(PromptKind kind) {
+std::string geometryLine(PromptKind kind) {
     PromptSurface surface;
     const auto opened = surface.open(request(kind));
     ASSERT_TRUE(opened.accepted());
-    const auto rows = prompt_row_count(kind);
+    const auto rows = promptRowCount(kind);
     const auto layout =
-        compute_prompt_layout(surface, Rect{0, 4, 20, static_cast<int>(rows)});
+        computePromptLayout(surface, Rect{0, 4, 20, static_cast<int>(rows)});
     ASSERT_TRUE(layout.accepted());
 
-    std::string line = kind_text(kind) + "|" + rect_text(layout.view->rect) + "|";
+    std::string line = kindText(kind) + "|" + rectText(layout.view->rect) + "|";
     for (std::size_t i = 0; i < layout.view->controls.size(); ++i) {
         const auto& control = layout.view->controls[i];
         if (i != 0) {
             line += ";";
         }
-        line += control_kind_text(control.kind) + ":" + control.id + ":" +
-                rect_text(control.rect);
+        line += controlKindText(control.kind) + ":" + control.id + ":" +
+                rectText(control.rect);
     }
     return line;
 }
 
-TEST(prompt_geometry_matches_golden) {
+TEST(promptGeometryMatchesGolden) {
     const std::string actual =
-        geometry_line(PromptKind::Path) + "\n" +
-        geometry_line(PromptKind::Find) + "\n" +
-        geometry_line(PromptKind::Replace) + "\n";
+        geometryLine(PromptKind::Path) + "\n" +
+        geometryLine(PromptKind::Find) + "\n" +
+        geometryLine(PromptKind::Replace) + "\n";
     ASSERT_EQ(actual,
-              read_fixture("tests/fixtures/prompt_status/geometry.txt"));
+              readFixture("tests/fixtures/prompt_status/geometry.txt"));
 }
 
-TEST(prompt_rows_and_invalid_reservation_are_typed) {
-    ASSERT_EQ(prompt_row_count(PromptKind::Path), std::uint8_t{1});
-    ASSERT_EQ(prompt_row_count(PromptKind::Find), std::uint8_t{2});
-    ASSERT_EQ(prompt_row_count(PromptKind::Replace), std::uint8_t{3});
-    ASSERT_EQ(prompt_row_count(PromptKind::Settings), std::uint8_t{1});
-    ASSERT_EQ(prompt_row_count(PromptKind::CommandArgument), std::uint8_t{1});
-    ASSERT_EQ(prompt_row_count(PromptKind::Palette), std::uint8_t{0});
+TEST(promptRowsAndInvalidReservationAreTyped) {
+    ASSERT_EQ(promptRowCount(PromptKind::Path), std::uint8_t{1});
+    ASSERT_EQ(promptRowCount(PromptKind::Find), std::uint8_t{2});
+    ASSERT_EQ(promptRowCount(PromptKind::Replace), std::uint8_t{3});
+    ASSERT_EQ(promptRowCount(PromptKind::Settings), std::uint8_t{1});
+    ASSERT_EQ(promptRowCount(PromptKind::CommandArgument), std::uint8_t{1});
+    ASSERT_EQ(promptRowCount(PromptKind::Palette), std::uint8_t{0});
 
     PromptSurface surface;
     ASSERT_TRUE(surface.open(request(PromptKind::Find)).accepted());
-    const auto bad = compute_prompt_layout(surface, Rect{0, 0, 20, 1});
+    const auto bad = computePromptLayout(surface, Rect{0, 0, 20, 1});
     ASSERT_FALSE(bad.accepted());
     ASSERT_EQ(bad.error->code, PromptErrorCode::InvalidReservation);
 }
 
-TEST(prompt_submit_and_cancel_are_non_modal) {
+TEST(promptSubmitAndCancelAreNonModal) {
     PromptSurface surface;
     ASSERT_TRUE(surface.open(request(PromptKind::Replace)).accepted());
     const auto submitted = surface.submit();
@@ -140,34 +140,34 @@ std::vector<std::uint64_t> ids(const StatusViewState& view) {
     return values;
 }
 
-TEST(status_priority_and_navigation_transition_table) {
+TEST(statusPriorityAndNavigationTransitionTable) {
     StatusQueue queue;
     ASSERT_TRUE(queue.enqueue(status(1, StatusPriority::Information, "one")).accepted);
     ASSERT_TRUE(queue.enqueue(status(2, StatusPriority::Warning, "two")).accepted);
     ASSERT_TRUE(queue.enqueue(status(3, StatusPriority::Error, "three")).accepted);
     ASSERT_TRUE(queue.enqueue(status(4, StatusPriority::Warning, "four")).accepted);
 
-    ASSERT_EQ(ids(queue.view_state()),
+    ASSERT_EQ(ids(queue.viewState()),
               (std::vector<std::uint64_t>{3, 2, 4, 1}));
-    auto view = queue.view_state();
+    auto view = queue.viewState();
     ASSERT_EQ(view.selected, std::size_t{0});
     queue.next();
-    view = queue.view_state();
+    view = queue.viewState();
     ASSERT_EQ(view.selected, std::size_t{1});
     queue.previous();
-    view = queue.view_state();
+    view = queue.viewState();
     ASSERT_EQ(view.selected, std::size_t{0});
     queue.previous();
-    view = queue.view_state();
+    view = queue.viewState();
     ASSERT_EQ(view.selected, std::size_t{3});
     queue.dismiss();
-    ASSERT_EQ(ids(queue.view_state()),
+    ASSERT_EQ(ids(queue.viewState()),
               (std::vector<std::uint64_t>{3, 2, 4}));
-    view = queue.view_state();
+    view = queue.viewState();
     ASSERT_EQ(view.selected, std::size_t{2});
 }
 
-TEST(status_capacity_admission_and_eviction_table) {
+TEST(statusCapacityAdmissionAndEvictionTable) {
     StatusQueue queue;
     for (std::uint64_t id = 1; id <= StatusQueue::capacity; ++id) {
         ASSERT_TRUE(queue.enqueue(
@@ -176,18 +176,18 @@ TEST(status_capacity_admission_and_eviction_table) {
     const auto rejected =
         queue.enqueue(status(17, StatusPriority::Progress, "rejected"));
     ASSERT_FALSE(rejected.accepted);
-    auto view = queue.view_state();
+    auto view = queue.viewState();
     ASSERT_EQ(view.items.size(), StatusQueue::capacity);
 
     const auto admitted =
         queue.enqueue(status(18, StatusPriority::Error, "admitted"));
     ASSERT_TRUE(admitted.accepted);
     ASSERT_EQ(admitted.evicted, std::optional<StatusId>{StatusId{1}});
-    view = queue.view_state();
+    view = queue.viewState();
     ASSERT_EQ(view.items.front().id, StatusId{18});
 }
 
-TEST(status_stale_actions_are_rejected_without_mutation) {
+TEST(statusStaleActionsAreRejectedWithoutMutation) {
     StatusQueue queue;
     StatusAction retry{"retry", "Retry build", "build.retry"};
     auto first = queue.enqueue(
@@ -197,49 +197,49 @@ TEST(status_stale_actions_are_rejected_without_mutation) {
     auto replacement = queue.enqueue(
         status(7, StatusPriority::Error, "Build failed again", {retry}));
     ASSERT_NE(first.generation, replacement.generation);
-    const auto before = queue.view_state();
-    const auto rejected = queue.invoke_action(stale);
+    const auto before = queue.viewState();
+    const auto rejected = queue.invokeAction(stale);
     ASSERT_FALSE(rejected.accepted());
     ASSERT_EQ(rejected.error, StatusActionError::Stale);
-    ASSERT_EQ(queue.view_state(), before);
+    ASSERT_EQ(queue.viewState(), before);
 
     const StatusActionInvocation current{
         StatusId{7}, "retry", replacement.generation};
-    const auto invoked = queue.invoke_action(current);
+    const auto invoked = queue.invokeAction(current);
     ASSERT_TRUE(invoked.accepted());
     ASSERT_EQ(invoked.command_id, std::optional<std::string>{"build.retry"});
 }
 
-TEST(footer_projection_and_accessibility_match_golden) {
+TEST(footerProjectionAndAccessibilityMatchGolden) {
     PromptSurface prompt;
     ASSERT_TRUE(prompt.open(request(PromptKind::Find)).accepted());
-    const auto layout = compute_prompt_layout(prompt, Rect{0, 4, 20, 2});
+    const auto layout = computePromptLayout(prompt, Rect{0, 4, 20, 2});
     StatusQueue queue;
     std::vector<StatusAction> actions{
         {"retry", "Retry build", "build.retry"},
         {"log", "Open log", "log.open"}};
     ASSERT_TRUE(queue.enqueue(
         status(9, StatusPriority::Error, "Build failed", actions)).accepted);
-    const auto footer = queue.footer_projection();
+    const auto footer = queue.footerProjection();
     ASSERT_EQ(footer.value, std::string{"Build failed 1/1"});
     ASSERT_EQ(footer.actions[0].id, std::string{"retry"});
     ASSERT_EQ(footer.actions[1].accessible_label, std::string{"Open log"});
 
     std::string actual = "prompt|" + layout.view->accessible_label + "\n";
     for (const auto& control : layout.view->controls) {
-        actual += control_kind_text(control.kind) + "|" +
+        actual += controlKindText(control.kind) + "|" +
                   control.accessible_label + "\n";
     }
-    const auto status_view = queue.view_state();
+    const auto status_view = queue.viewState();
     actual += "status|" + status_view.items[0].accessible_label + "\n";
     for (const auto& action : footer.actions) {
         actual += "action|" + action.accessible_label + "\n";
     }
     ASSERT_EQ(actual,
-              read_fixture("tests/fixtures/prompt_status/accessibility.txt"));
+              readFixture("tests/fixtures/prompt_status/accessibility.txt"));
 }
 
-TEST(command_catalog_and_delta_are_exact) {
+TEST(commandCatalogAndDeltaAreExact) {
     const PromptStatusCommandSet commands;
     const std::vector<std::string_view> expected{
         "prompt.submit", "prompt.cancel", "status.next", "status.previous",
@@ -249,13 +249,13 @@ TEST(command_catalog_and_delta_are_exact) {
     }
 
     const PromptStatusViewState before{};
-    const auto unchanged = derive_prompt_status_delta(before, before);
+    const auto unchanged = derivePromptStatusDelta(before, before);
     ASSERT_FALSE(unchanged.changed);
     ASSERT_FALSE(unchanged.replacement.has_value());
     PromptStatusViewState after{};
     after.status.items.push_back(
         StatusItemView{StatusId{1}, StatusPriority::Information, 1, "ready"});
-    const auto changed = derive_prompt_status_delta(before, after);
+    const auto changed = derivePromptStatusDelta(before, after);
     ASSERT_TRUE(changed.changed);
     ASSERT_EQ(changed.replacement, std::optional<PromptStatusViewState>{after});
 }
@@ -263,13 +263,13 @@ TEST(command_catalog_and_delta_are_exact) {
 } // namespace
 
 int main() {
-    RUN(prompt_geometry_matches_golden);
-    RUN(prompt_rows_and_invalid_reservation_are_typed);
-    RUN(prompt_submit_and_cancel_are_non_modal);
-    RUN(status_priority_and_navigation_transition_table);
-    RUN(status_capacity_admission_and_eviction_table);
-    RUN(status_stale_actions_are_rejected_without_mutation);
-    RUN(footer_projection_and_accessibility_match_golden);
-    RUN(command_catalog_and_delta_are_exact);
+    RUN(promptGeometryMatchesGolden);
+    RUN(promptRowsAndInvalidReservationAreTyped);
+    RUN(promptSubmitAndCancelAreNonModal);
+    RUN(statusPriorityAndNavigationTransitionTable);
+    RUN(statusCapacityAdmissionAndEvictionTable);
+    RUN(statusStaleActionsAreRejectedWithoutMutation);
+    RUN(footerProjectionAndAccessibilityMatchGolden);
+    RUN(commandCatalogAndDeltaAreExact);
     return failed == 0 ? 0 : 1;
 }

@@ -52,7 +52,7 @@ constexpr std::array<char const*, 5> phase_marks{
     "main_entry", "post_create", "post_attach", "post_open",
     "first_content_frame"};
 
-[[nodiscard]] long long monotonic_ns() {
+[[nodiscard]] long long monotonicNs() {
     timespec now{};
     clock_gettime(CLOCK_MONOTONIC, &now);
     return static_cast<long long>(now.tv_sec) * 1'000'000'000LL + now.tv_nsec;
@@ -71,7 +71,7 @@ struct Trace {
     }
 };
 
-[[nodiscard]] Trace read_trace(fs::path const& path, long long t0) {
+[[nodiscard]] Trace readTrace(fs::path const& path, long long t0) {
     Trace trace;
     trace.t0 = t0;
     std::ifstream input{path};
@@ -84,7 +84,7 @@ struct Trace {
 // Drain whatever is currently readable from a NON-BLOCKING master fd, discarding
 // the bytes (timing comes from the trace file).  Never blocks, so a child that
 // hangs before writing anything cannot stall the harness past its deadline.
-void drain_nonblocking(int fd) {
+void drainNonblocking(int fd) {
     char buffer[4096];
     for (;;) {
         ssize_t const n = ::read(fd, buffer, sizeof buffer);
@@ -95,19 +95,19 @@ void drain_nonblocking(int fd) {
 // True once the child has exited (reaps it if so).  Lets the poll loops notice a
 // child that died (e.g. execl failure -> _exit(127)) instead of waiting out the
 // full deadline.
-[[nodiscard]] bool child_exited(pid_t pid, int& status) {
+[[nodiscard]] bool childExited(pid_t pid, int& status) {
     return ::waitpid(pid, &status, WNOHANG) == pid;
 }
 
 // Run the probe once under a pty with the file argument; return its trace, or
 // nullopt on failure.  Kills the child once the first content frame is recorded.
-[[nodiscard]] std::optional<Trace> run_once(std::string const& probe,
+[[nodiscard]] std::optional<Trace> runOnce(std::string const& probe,
                                             std::string const& file_arg,
                                             std::string const& cwd) {
     auto trace_path =
         fs::temp_directory_path() /
         ("ssg-startup-" + std::to_string(::getpid()) + "-" +
-         std::to_string(monotonic_ns()) + ".trace");
+         std::to_string(monotonicNs()) + ".trace");
     std::error_code ec;
     fs::remove(trace_path, ec);
 
@@ -115,7 +115,7 @@ void drain_nonblocking(int fd) {
     ws.ws_col = 80;
     ws.ws_row = 24;
     int master = -1;
-    long long const t0 = monotonic_ns();
+    long long const t0 = monotonicNs();
     pid_t const pid = forkpty(&master, nullptr, nullptr, &ws);
     if (pid < 0) return std::nullopt;
     if (pid == 0) {
@@ -141,10 +141,10 @@ void drain_nonblocking(int fd) {
     while (std::chrono::steady_clock::now() < deadline) {
         pollfd pfd{master, POLLIN, 0};
         ::poll(&pfd, 1, 5);
-        drain_nonblocking(master);
-        auto trace = read_trace(trace_path, t0);
+        drainNonblocking(master);
+        auto trace = readTrace(trace_path, t0);
         if (trace.complete()) { done = true; break; }
-        if (child_exited(pid, child_status)) { child_dead = true; break; }
+        if (childExited(pid, child_status)) { child_dead = true; break; }
     }
 
     if (!child_dead) {
@@ -154,7 +154,7 @@ void drain_nonblocking(int fd) {
     ::close(master);
 
     if (!done) { fs::remove(trace_path, ec); return std::nullopt; }
-    auto trace = read_trace(trace_path, t0);
+    auto trace = readTrace(trace_path, t0);
     fs::remove(trace_path, ec);
     if (!trace.complete()) return std::nullopt;
     return trace;
@@ -198,7 +198,7 @@ struct Fixture {
 };
 
 // Build the fixtures under `root`: a small file, a 10 MiB file, and a deep tree.
-[[nodiscard]] std::vector<Fixture> make_fixtures(fs::path const& root) {
+[[nodiscard]] std::vector<Fixture> makeFixtures(fs::path const& root) {
     fs::create_directories(root);
 
     auto small_dir = root / "small";
@@ -241,7 +241,7 @@ struct Fixture {
     };
 }
 
-void report_fixture(std::ostream& out, Fixture const& fixture,
+void reportFixture(std::ostream& out, Fixture const& fixture,
                     std::vector<Trace> const& traces) {
     std::vector<SpanStats> spans{
         {"spawn_exec_link", {}}, {"construct", {}}, {"attach", {}},
@@ -264,7 +264,7 @@ struct TraceProbeResult {
     bool exec_failed = false;
 };
 
-[[nodiscard]] TraceProbeResult run_trace_probe(std::string const& binary,
+[[nodiscard]] TraceProbeResult runTraceProbe(std::string const& binary,
                                                fs::path const& cwd,
                                                std::string const& file_arg) {
     auto trace_path = cwd / "startup-probe.trace";
@@ -293,9 +293,9 @@ struct TraceProbeResult {
     while (std::chrono::steady_clock::now() < deadline) {
         pollfd pfd{master, POLLIN, 0};
         ::poll(&pfd, 1, 20);
-        drain_nonblocking(master);
+        drainNonblocking(master);
         if (fs::exists(trace_path)) break;
-        if (child_exited(pid, status)) { dead = true; break; }
+        if (childExited(pid, status)) { dead = true; break; }
     }
     bool const trace_written = fs::exists(trace_path);
     bool const exec_failed = dead && WIFEXITED(status) && WEXITSTATUS(status) == 127;
@@ -310,14 +310,14 @@ struct TraceProbeResult {
 // under the identical env/pty setup, so a missing trace from the clean binary is
 // meaningful (the setup works) rather than a false pass; both binaries must
 // actually exec.
-[[nodiscard]] int verify_clean(std::string const& clean_binary,
+[[nodiscard]] int verifyClean(std::string const& clean_binary,
                                std::string const& probe_binary) {
     auto root = fs::temp_directory_path() /
                 ("ssg-verify-clean-" + std::to_string(::getpid()));
     fs::create_directories(root);
     { std::ofstream out{root / "note.txt"}; out << "hi\n"; }
 
-    auto const control = run_trace_probe(probe_binary, root, "note.txt");
+    auto const control = runTraceProbe(probe_binary, root, "note.txt");
     if (control.exec_failed) {
         std::cerr << "FAIL: could not exec the instrumented probe\n";
         std::error_code ec; fs::remove_all(root, ec);
@@ -330,7 +330,7 @@ struct TraceProbeResult {
         return 1;
     }
 
-    auto const clean = run_trace_probe(clean_binary, root, "note.txt");
+    auto const clean = runTraceProbe(clean_binary, root, "note.txt");
     std::error_code ec;
     fs::remove_all(root, ec);
     if (clean.exec_failed) {
@@ -355,7 +355,7 @@ struct TraceProbeResult {
 // is the O(document) work deferred to Milestone 12.
 constexpr double kSmallFileBudgetMs = 250.0;
 
-[[nodiscard]] double total_exec_p99(std::vector<Trace> const& traces) {
+[[nodiscard]] double totalExecP99(std::vector<Trace> const& traces) {
     std::vector<double> samples;
     samples.reserve(traces.size());
     for (auto const& trace : traces) {
@@ -367,13 +367,13 @@ constexpr double kSmallFileBudgetMs = 250.0;
 }
 
 // Measure every fixture; returns per-fixture kept traces (post-discard).
-[[nodiscard]] std::map<std::string, std::vector<Trace>> measure_fixtures(
+[[nodiscard]] std::map<std::string, std::vector<Trace>> measureFixtures(
     std::string const& probe, std::vector<Fixture> const& fixtures) {
     std::map<std::string, std::vector<Trace>> result;
     for (auto const& fixture : fixtures) {
         std::vector<Trace> traces;
         for (std::size_t rep = 0; rep < repetitions; ++rep) {
-            auto trace = run_once(probe, fixture.file_arg, fixture.cwd);
+            auto trace = runOnce(probe, fixture.file_arg, fixture.cwd);
             if (trace && rep >= discard) traces.push_back(*trace);
         }
         result.emplace(fixture.name, std::move(traces));
@@ -388,7 +388,7 @@ int main(int argc, char** argv) {
     std::string const clean = SSG_STARTUP_CLEAN_BINARY;
 
     if (argc == 2 && std::string_view{argv[1]} == "--verify-clean") {
-        return verify_clean(clean, probe);
+        return verifyClean(clean, probe);
     }
     bool const enforce =
         argc == 2 && std::string_view{argv[1]} == "--enforce";
@@ -401,8 +401,8 @@ int main(int argc, char** argv) {
                 ("ssg-startup-fixtures-" + std::to_string(::getpid()));
     std::error_code ec;
     fs::remove_all(root, ec);
-    auto fixtures = make_fixtures(root);
-    auto measured = measure_fixtures(probe, fixtures);
+    auto fixtures = makeFixtures(root);
+    auto measured = measureFixtures(probe, fixtures);
 
     std::ostringstream report;
     report << "provenance platform=linux compiler=\"" << SSG_BENCHMARK_COMPILER
@@ -417,7 +417,7 @@ int main(int argc, char** argv) {
             report << "fixture " << fixture.name << " FAILED to produce traces\n";
             continue;
         }
-        report_fixture(report, fixture, traces);
+        reportFixture(report, fixture, traces);
     }
 
     fs::remove_all(root, ec);
@@ -435,7 +435,7 @@ int main(int argc, char** argv) {
             std::cerr << "enforce: small_file produced no traces\n";
             return 1;
         }
-        double const p99 = total_exec_p99(it->second);
+        double const p99 = totalExecP99(it->second);
         if (p99 >= kSmallFileBudgetMs) {
             std::cerr << "enforce: small_file exec->first-frame p99 " << p99
                       << "ms exceeds budget " << kSmallFileBudgetMs << "ms\n";
