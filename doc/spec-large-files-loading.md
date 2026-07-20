@@ -37,13 +37,15 @@ stays that way, because the document/text abstractions make efficient use the ea
 path and wasteful use hard to write by accident. Concretely, for the 10 MiB
 benchmark fixture the `file_open` phase (exec-path `post_attach → post_open`, i.e.
 the `file.open` dispatch: read + decode + document construction; syntax and viewport
-are already deferred off this path — M10/M12) drops from ~868 ms toward the
-intrinsic minimum: **one** buffered disk read + **one** UTF-8 validation + the
-piece-tree build, with no redundant re-validation, no extra whole-document copies,
-and no needless re-materialization.
+are already deferred off this path — M10/M12) drops from the measured ~106 ms
+(LF-1) toward the intrinsic minimum: **one** buffered disk read + **one** fused
+UTF-8 decode+normalize pass (single validation, no scalar-vector intermediate) +
+the piece-tree build, with no redundant re-validation, no extra whole-document
+copies, and no needless re-materialization.
 
 The organizing principle (post-measurement) is **correct-by-design**: the reason
-the 868 ms is full of redundant reads/copies is that the abstractions leak — reads
+the open is full of redundant reads/copies/scans is that the abstractions leak —
+the decoder materializes a whole-document `Scalar` vector and re-walks it, reads
 hand out owned `std::string`s by value, construction re-validates because it cannot
 receive proof, and separate subsystems each keep their own full copy because there
 is no shared buffer. The fix is not to delete copies one by one (they grow back)
@@ -55,14 +57,19 @@ express and the cheap ones are the default.
   (iterate bytes, read a line, extract a range) allocate no whole-document buffer,
   and a `Document` cannot be constructed from unvalidated bytes nor made to validate
   the same bytes twice (validation is proven in the type system, not by convention).
-- **SLO derivation (fixed in LF-1, before any optimization):** the tripwire is
-  `intrinsic + headroom`, where `intrinsic` = the sum of the LF-1-measured phases
-  that are NOT removed (buffered read + one validation + one EOL/status scan + one
-  piece-tree build + the retained `persisted_text`/`raw_bytes` handling), and
-  `headroom` = a fixed measurement margin (e.g. p99/p50 spread + a stated slack).
-  Writing the formula and the retained-phase list in LF-1 BEFORE optimizing keeps
-  `INV-open-under-budget` non-circular (the target is not chosen post-hoc from the
-  optimized result).
+- **SLO derivation (regression baseline, not a pre-optimization target).** LF-1's
+  attribution is honest that the DOMINANT intrinsic term — a single fused
+  decode+normalize pass — does not exist yet, so a fixed pre-optimization tripwire
+  cannot be computed from today's numbers without circularity. Instead: (a) LF-1
+  fixes a calibrated LOWER BOUND on the intrinsic cost from operations that DO
+  exist standalone — the size-hinted buffered read (~1.1 ms measured) plus a
+  standalone single-pass "validate UTF-8 + copy 10 MiB" micro-calibration (to be
+  measured at LF-2b) — so the eventual gate cannot be set arbitrarily loose; and
+  (b) the enforced tripwire is PINNED at LF-4b from the post-optimization measured
+  residual + `headroom` (p99/p50 spread + a stated slack), and functions as a
+  regression gate thereafter (like M10-5's startup budget). `INV-open-under-budget`
+  is therefore a regression baseline whose floor is the LF-1/LF-2b calibration and
+  whose ceiling is pinned once, at LF-4b.
 - No correctness change: the opened document is byte-identical, UTF-8 is still
   validated (rejecting malformed files exactly as today), encoding/EOL/BOM
   detection and dirty-tracking are unchanged, and editing/undo/save behave
@@ -71,31 +78,34 @@ express and the cheap ones are the default.
 Non-goals (this milestone): sub-linear open (reading N bytes is intrinsically
 O(N)); a fundamentally different editor data structure (the piece tree stays); a
 streaming read/write rewrite; changing the wire/snapshot contract; making
-`word_wrap=ON` huge documents fast (M12 covered wrap gating). mmap is the FINAL
-lever (LF-5), reframed as an alternate backing of the new shared buffer handle, and
-pursued only if measurement shows the read still dominates — see the Decision.
+`word_wrap=ON` huge documents fast (M12 covered wrap gating). mmap is NOT pursued
+this milestone — LF-1 measured the read at ~15 ms (~1.1 ms buffered), so mmap
+cannot touch the dominant decode cost; it survives only as a dormant future
+escape hatch (see the Decision and the Future note), not a Plan step.
 
 ## Design
 
-### Measurement boundary (what the 868 ms includes)
+### Measurement boundary (what the file_open phase includes)
 
 The startup benchmark marks `post_attach` (`apps/ssg_main.cpp`) before, and
 `post_open` after, the `file.open` dispatch. So `file_open` covers everything from
 the dispatch down to the document being active, EXCLUDING:
 - **syntax highlighting** — deferred: `refresh_syntax()` early-returns under
   `deferring_enrichment` (the app/probe sets `config.defer_enrichment = true`), so
-  syntax is NOT in the 868 ms;
+  syntax is NOT in the measured phase;
 - **the tree scan** — deferred likewise (M10-3);
 - **the first frame** — the viewport/render passes are a separate `first_frame`
   phase (~9 ms after M12).
 
-So the 868 ms is purely: disk read + NUL scan + decode (validate + EOL scan) +
-document construction (re-validate + piece-tree build) + the retained copies + the
-`activate_document` → `Workspace::state()` step, which **materializes the whole
-document** (`snapshot().text`) and byte-compares it to `persisted_text` for
-dirty-detection (see pass I/J below). All of this is inside the measured phase.
+So the measured ~106 ms (LF-1) is purely: disk read + NUL scan + decode (validate +
+EOL scan) + document construction (re-validate + piece-tree build) + the retained
+copies + the `activate_document` → `Workspace::state()` step, which **materializes
+the whole document** (`snapshot().text`) and byte-compares it to `persisted_text`
+for dirty-detection (see pass I/J below). All of this is inside the measured phase.
+(Historical note: M12 recorded 868 ms here; LF-1 found that figure environmental
+and not reproducible — the reproducible cost is ~101–106 ms.)
 
-### The whole-document passes on the open path (audited, to be confirmed by LF-1)
+### The whole-document passes on the open path (audited; quantified by LF-1)
 
 Traced from `file.open` (`src/runtime/files.cpp`) → `Workspace::open_file` →
 `read_file` → `add_bytes` (`src/workspace.cpp`) → `decode_text`
@@ -172,8 +182,9 @@ each of which makes a class of waste hard or impossible to express:
    `std::string`. Introduce a handle type exposing `const char* data()` + `size()`
    over an immutable buffer, ref-counted for sharing. **It is an interface/handle
    from the start** (not a bare `std::shared_ptr<const std::string>`): its default
-   backing is an owned heap string, and LF-5 adds an mmap-backed implementation
-   BEHIND THE SAME `data()`/`size()` contract, so consumers (piece-tree node offsets
+   backing is an owned heap string, and a future mmap-backed implementation (the
+   dormant escape hatch, not this milestone) could slot in BEHIND THE SAME
+   `data()`/`size()` contract, so consumers (piece-tree node offsets
    into `data()`) never re-plumb. **Raw vs decoded are DISTINCT buffers:** the raw
    file bytes (`raw_bytes`, kept for `reopen_with_encoding`) are NOT the same
    `SharedBytes` as the decoded text — BOM removal, CRLF normalization, and UTF-16
@@ -305,8 +316,14 @@ The milestone executes (A); (B) stays parked behind its own future measurement.
   counter (0 attributable to a fresh open) so a copy hidden behind a helper is
   caught dynamically. This scoped invariant keeps the removed redundancy from
   growing back on the hot path.
-- **INV-open-under-budget:** 10 MiB `file_open` p50 is under the LF-1-derived
-  tripwire (enforced via the startup harness, like M10-5).
+- **INV-open-under-budget:** 10 MiB `file_open` p50 is under a tripwire that is
+  (a) floored by the LF-1/LF-2b calibration (buffered read ~1.1 ms + a standalone
+  single-pass validate+copy micro-calibration) so it cannot be set arbitrarily
+  loose, and (b) PINNED at LF-4b from the post-optimization measured residual +
+  headroom (p99/p50 spread + a stated slack). It is a regression baseline
+  thereafter (enforced via the startup/editor harness, like M10-5) — not a fixed
+  pre-optimization SLO, because the dominant intrinsic term (the fused
+  decode+normalize pass) does not exist until LF-2b.
 
 ## Considerations
 
@@ -344,9 +361,10 @@ The milestone executes (A); (B) stays parked behind its own future measurement.
   file — so the redundancy removal cannot silently change decode/classification/
   status. NUL-before-malformed and malformed-before-NUL cases are included (lever B
   precedence, see Risks).
-- **Platform:** mmap (LF-5, if pursued) is Linux-first (`mmap`/`munmap`); the
-  piece-tree buffer-handle abstraction MUST keep an owned-`std::string` fallback so
-  non-Linux (and a future Windows `CreateFileMapping`/`MapViewOfFile`) builds work
+- **Platform:** the future mmap escape hatch (if ever pursued) is Linux-first
+  (`mmap`/`munmap`); the piece-tree buffer-handle abstraction MUST keep an
+  owned-`std::string` fallback so non-Linux (and a future Windows
+  `CreateFileMapping`/`MapViewOfFile`) builds work
   unchanged. Levers 1–4 are portable.
 
 ## Risks and mitigations
@@ -374,33 +392,28 @@ The milestone executes (A); (B) stays parked behind its own future measurement.
   are separate paths that keep their current logic); the oracle asserts the initial
   dirty flag matches the pre-change baseline across the corpus (incl. an
   untitled/scratch doc and a dirty-recovery-restored doc).
-- *mmap complexity/UB (unmap while referenced, file truncated under us)* → mmap is
-  gated behind measurement (only if warranted), is its own reviewed step with a
-  buffer-handle lifetime design, keeps the original buffer read-only (edits go to
-  the add-buffer, never the mapped region), and retains an owned-`std::string`
-  fallback for non-Linux and for files that cannot be mapped.
-- *mmap SIGBUS when another process truncates the mapped file* → a read-only mmap
-  does NOT prevent SIGBUS if the underlying file is truncated by another process
-  while mapped. LF-5 MUST specify a concrete policy — e.g. copy-into-owned-buffer
-  for files below a size threshold (so only genuinely large files are mapped), a
-  SIGBUS handler or `madvise`, or detabling the map on external-modification detect
-  — with an oracle that a truncation-under-map does not crash the editor. This is a
-  precondition for activating LF-5, not an afterthought.
+- *mmap complexity/UB (unmap while referenced, truncation SIGBUS)* → mmap is OUT
+  OF SCOPE this milestone (LF-1 shows the read is already cheap); it is not
+  implemented. The dormant "Future escape hatch" note above records its
+  preconditions (read-only mapping, owned-buffer fallback, and a concrete
+  external-truncation policy — copy-in below a threshold + drop-map on external
+  modification; `madvise` is NOT a truncation mitigation) as gating requirements
+  IF it is ever activated behind its own future measurement.
 - *Measurement noise* → reuse the M10 startup harness protocol (warm cache, fixed
   reps/discard, p50/p99, `CLOCK_MONOTONIC`), and attribute sub-phases with a
   cross-layer timing seam (see LF-1) so the split is data, not estimate.
 
 ## Acceptance (Definition of Done)
 
-- LF-1 report attributes the 868 ms across read / NUL / decode+validate / EOL /
-  copies / piece-tree BUILD / snapshot-materialize+compare, writes the SLO tripwire
-  formula (`intrinsic + headroom`) and the retained-phase list, and shows the
-  current open validates UTF-8 twice.
-- After LF-2/3/4, 10 MiB `file_open` p50 is under the tripwire; the harness enforces
-  it (`--enforce`-style, extending M10-5).
+- LF-1 (shipped) attributes the reproducible ~106 ms open across read / NUL /
+  decode+validate / EOL / copies / piece-tree BUILD / snapshot-materialize+compare,
+  records the SLO floor (calibrated buffered read + a standalone decode calibration)
+  and retained-phase list, and shows the current open validates UTF-8 twice.
+- After LF-2/2b/3/4, 10 MiB `file_open` p50 is under the tripwire pinned at LF-4b;
+  the harness enforces it (`--enforce`-style, extending M10-5).
 - `utf8_validation_calls` matches the per-input-class expectation (1 for accepted
-  UTF-8); `piece_tree_text_calls` attributable to a fresh open is 0; the copy audit
-  shows the redundant copies removed.
+  UTF-8) after LF-3a; `piece_tree_text_calls` attributable to a fresh open is 0
+  after LF-4b; the copy audit shows the redundant copies removed.
 - Gates: `cmake --build build` clean; `ctest --test-dir build -E
   performance_measurement` green (incl. the open-equivalence + single-validation +
   no-fresh-open-materialize + save-roundtrip oracles); no behavior change in
@@ -410,39 +423,66 @@ The milestone executes (A); (B) stays parked behind its own future measurement.
 
 | # | Step | Files | Oracle | Invariants |
 |---|------|-------|--------|------------|
-| LF-1 | **DONE (see files/m13-lf1-open-attribution.txt).** Cross-layer OpenPhase timing seam (`include/ssg/open_metrics.h` + `src/open_metrics.cpp`) bracketing read / NUL-scan / decode+validate / EOL-scan / document-build / state-dirty-check; test-only `utf8_validation_calls` + `piece_tree_text_calls` counters; isolated buffered-read calibration; immutable open-equivalence goldens (`tests/test_open_equivalence.cpp` + `tests/fixtures/open/golden.txt`, 12-entry corpus); evolving counter oracle (`tests/test_open_metrics.cpp`); attribution benchmark (`benchmarks/open_path_benchmark.cpp`). **Finding: open is ~106 ms (not 868 ms); decode_validate+eol_scan = 75 ms dominate; read is 15 ms / 1.1 ms buffered; validates twice; state materializes once.** SLO + retained-phase list written in the baseline report. | shipped above | the harness prints per-sub-phase p50/p99 and names `decode_validate` dominant; the buffered-read calibration yields ~1.1 ms; `utf8_validation_calls == 2`; the corpus goldens are captured and committed | (measurement + baseline; establishes INV-open-under-budget target and the LF-2/3 reference) |
-| LF-2 | **`SharedBytes` handle + buffered read (abstraction 1, lever 1/B):** introduce the immutable ref-counted buffer as an INTERFACE/handle exposing `data()`+`size()` (owned-string backing now; mmap backing added at LF-5 behind the same contract — NOT a bare `shared_ptr<const string>` that LF-5 must re-plumb); replace `istreambuf_iterator` with a size-hinted buffered read that reads to EOF into an owned buffer (handles a file growing/shrinking under us and short reads — never sizes once and trusts it); keep NUL detection as a WHOLE-raw-byte observation with today's binary-wins precedence (do NOT make it depend on decode short-circuiting). The *decoded* text shares one `SharedBytes` with the (later) piece-tree original; the *raw* bytes are a DISTINCT buffer (kept for `reopen_with_encoding`). | `include/ssg/*` (SharedBytes handle), `src/workspace.cpp`, `src/text_encoding.cpp` | re-measure the read sub-phase (drops from ~15 ms toward the ~1.1 ms calibration); the open-equivalence oracle vs the LF-1 goldens is unchanged for every corpus entry; NUL-before-malformed, malformed-before-NUL, and UTF-16-BOM inputs classify identically; a unit test shows two holders of one `SharedBytes` do not double-allocate, and that the handle interface admits an alternate (test) backing without touching consumers | INV-open-correctness, INV-bounded-copies, INV-open-under-budget |
-| LF-2b | **Fused single-pass UTF-8 decode+normalize (DOMINANT lever, ~75 ms):** for the UTF-8 fast path, replace the `decode_utf8` → `std::vector<Scalar>` → `normalized()` two-pass with ONE walk that validates, appends to the decoded utf8 output (BOM-stripped, CR/CRLF→LF normalized), and records the per-line `LineTerminator` — no whole-document `Scalar` vector. Preserve exact classification/offsets on malformed input (the failing byte offset must match today). Transcode paths (UTF-16/single-byte) may keep the scalar path. This is independent of the type work (LF-3a) and can precede it. | `src/text_encoding.cpp` (`decode_selected` utf8 branch, `decode_utf8`, `normalized`), `tests/test_text_encoding.cpp` | the open-equivalence + save-roundtrip oracles vs the LF-1 goldens are byte-identical for every corpus entry (esp. mixed-EOL, no-final-newline, BOM, malformed-offset); `decode_validate`+`eol_scan` re-measure to a small fraction of 75 ms; `utf8_validation_calls` still counts 1 validating scan for the fused pass | INV-open-correctness, INV-single-validation, INV-save-roundtrip, INV-open-under-budget |
+| LF-1 | **Baseline (shipped; see files/m13-lf1-open-attribution.txt).** Cross-layer OpenPhase timing seam (`include/ssg/open_metrics.h` + `src/open_metrics.cpp`) bracketing read / NUL-scan / decode+validate / EOL-scan / document-build / state-dirty-check; test-only `utf8_validation_calls` + `piece_tree_text_calls` counters; isolated buffered-read calibration; immutable open-equivalence goldens (`tests/test_open_equivalence.cpp` + `tests/fixtures/open/golden.txt`, 12-entry corpus); evolving counter oracle (`tests/test_open_metrics.cpp`); attribution benchmark (`benchmarks/open_path_benchmark.cpp`). Established baseline: open is ~106 ms (the M12 868 ms was environmental); decode_validate+eol_scan = 75 ms dominate; read is 15 ms / 1.1 ms buffered; validates twice; state materializes once. | shipped above | the harness prints per-sub-phase p50/p99 and names `decode_validate` dominant; the buffered-read calibration yields ~1.1 ms; `utf8_validation_calls == 2`; the corpus goldens are captured and committed | (measurement + baseline; establishes the INV-open-under-budget floor and the LF-2/3 reference) |
+| LF-2 | **`SharedBytes` handle + buffered read (abstraction 1, lever 1/B):** introduce the immutable ref-counted buffer as an INTERFACE/handle exposing `data()`+`size()` (owned-string backing now — an interface rather than a bare `shared_ptr<const string>` so the backing is swappable/testable and a future mmap escape hatch would not re-plumb consumers, but mmap is NOT part of this milestone); replace `istreambuf_iterator` with a size-hinted buffered read that reads to EOF into an owned buffer (handles a file growing/shrinking under us and short reads — never sizes once and trusts it); keep NUL detection as a WHOLE-raw-byte observation with today's binary-wins precedence (do NOT make it depend on decode short-circuiting). The *decoded* text shares one `SharedBytes` with the (later) piece-tree original; the *raw* bytes are a DISTINCT buffer (kept for `reopen_with_encoding`). | `include/ssg/*` (SharedBytes handle), `src/workspace.cpp`, `src/text_encoding.cpp` | re-measure the read sub-phase (drops from ~15 ms toward the ~1.1 ms calibration); the open-equivalence oracle vs the LF-1 goldens is unchanged for every corpus entry; NUL-before-malformed, malformed-before-NUL, and UTF-16-BOM inputs classify identically; a unit test shows two holders of one `SharedBytes` do not double-allocate, and that the handle interface admits an alternate (test) backing without touching consumers | INV-open-correctness, INV-bounded-copies, INV-open-under-budget |
+| LF-2b | **Fused single-pass UTF-8 decode+normalize (DOMINANT lever, ~75 ms):** for the UTF-8 fast path, replace the `decode_utf8` → `std::vector<Scalar>` → `normalized()` two-pass with ONE walk that validates, appends to the decoded utf8 output (BOM-stripped, CR/CRLF→LF normalized), and records the per-line `LineTerminator` — no whole-document `Scalar` vector. Preserve exact classification/offsets on malformed input (the failing byte offset must match today, including BOM-relative offsets). Transcode paths (UTF-16/single-byte) may keep the scalar path. Independent of the type work (LF-3a); precedes it. Also add a standalone "validate UTF-8 + copy 10 MiB" micro-calibration to the benchmark to pin the intrinsic decode floor for the SLO. | `src/text_encoding.cpp` (`decode_selected` utf8 branch, `decode_utf8`, `normalized`), `tests/test_text_encoding.cpp`, `benchmarks/open_path_benchmark.cpp` | (1) open-equivalence + save-roundtrip vs the LF-1 goldens byte-identical for every corpus entry; (2) NEW focused `test_text_encoding` unit tests covering each terminator (lone CR, CRLF, LF, mixed, none/no-final-newline) recorded identically, and EACH malformed offset rule (invalid lead byte, bad continuation, truncated sequence, overlong, surrogate/out-of-range scalar, and BOM-relative offset) reporting the SAME `utf8_offset` as today — do NOT regenerate the immutable golden; (3) `decode_validate`+`eol_scan` re-measure to a small fraction of 75 ms; (4) open-path `utf8_validation_calls` is STILL 2 after LF-2b (the fused pass is 1 scan; the `Document` ctor's re-validation is the 2nd, removed only at LF-3a) — the fused pass itself must not add a scan | INV-open-correctness, INV-save-roundtrip, INV-open-under-budget |
 | LF-3a | **`ValidatedUtf8` — single validation in the type (abstraction 2, lever 2):** the decoder mints a move-only `ValidatedUtf8` carrying the validated decoded `SharedBytes` + the encoding/BOM/final-newline status + the per-line `line_terminators` table (required for byte-identical mixed-EOL saves — it MUST travel with the validated value); `Document` gains an UNFORGEABLE construction path that CONSUMES it and does not re-validate (private ctor + decoder-minted token / `friend`-scoped factory — NOT a comment saying "internal"); the public `Document(string_view)` still validates for external callers | `include/ssg/document.h`, `src/text_encoding.{h,cpp}`, `src/document.cpp`, `src/workspace.cpp` | open-equivalence + save-roundtrip vs goldens unchanged (incl. a mixed-EOL fixture saving byte-identically, proving `line_terminators` survived); `utf8_validation_calls` == the per-input-class expectation (1 direct-UTF-8, 0 transcoded, 0 binary/NUL); a unit test proves the PUBLIC `Document` ctor still throws on malformed UTF-8 / NUL, and that there is no public way to build a `Document` from unvalidated bytes without it; re-measure | INV-single-validation, INV-pit-of-success, INV-save-roundtrip, INV-open-correctness |
 | LF-3b | **Move ownership through, share `persisted_text` (abstraction 1 applied, lever 3):** the piece tree's original buffer becomes a `SharedBytes` (move the decoded bytes in, no `string_view` copy); `persisted_text` shares the same `SharedBytes` rather than a second full copy. `raw_bytes` retained (kept for `reopen_with_encoding`). | `src/piece_tree.{h,cpp}`, `src/document.cpp`, `src/workspace.cpp` | open-equivalence + save-roundtrip vs goldens unchanged; the whole-document-buffer allocation/live-count audit shows the redundant transient copy removed (peak live distinct whole-document allocations ≤ the intrinsic set: {shared original/decoded/persisted = 1, raw_bytes = 1}); re-measure | INV-bounded-copies, INV-save-roundtrip, INV-open-correctness, INV-open-under-budget |
 | LF-4a | **`TextView` — cheap read handle (abstraction 3, API + lifetime):** introduce the non-owning `TextView` (iterate / line / range / compare-to-byte-range) with an explicit `materialize_to_string()`; specify the revision-pinned iterator-style lifetime (any mutation/move/destruction invalidates it; a debug staleness assert). No caller migration yet. | `include/ssg/document.h`, `src/document.cpp`, `src/piece_tree.{h,cpp}` | unit tests: `TextView` iterate/line/range/compare match `snapshot().text` for the corpus WITHOUT calling `piece_tree.text()` (0 `piece_tree_text_calls`); `materialize_to_string()` equals `snapshot().text`; a debug build asserts on use-after-mutation | INV-pit-of-success, INV-open-correctness |
-| LF-4b | **Skip the fresh-open materialize/compare + grep gate (lever 4):** make `Workspace::state()` report a freshly opened file's dirty flag via `TextView` (or a known-clean fast path) WITHOUT `snapshot().text` + a full `persisted_text` compare (a fresh non-dirty open is clean by construction; edited buffers still compute dirty); add the scoped pit-of-success grep gate over the open-path TUs | `src/workspace.cpp`, a grep-gate test | `piece_tree_text_calls` attributable to a fresh open == 0; the initial dirty flag matches the goldens across the corpus (incl. untitled/scratch and dirty-recovery-restored docs); external-modification + save tests still pass; the grep gate fails on a new `.snapshot().text` in the open-path TUs; re-measure `file_open` under the tripwire | INV-no-fresh-open-materialize, INV-pit-of-success, INV-open-correctness, INV-open-under-budget |
-| LF-5 | **(Decision B, measurement-gated) mmap as an alternate `SharedBytes` backing** — ONLY if LF-4's measurement leaves the read+build as the dominant residual above target: a read-only mmap-backed `SharedBytes` implementation (Linux) behind the SAME handle interface, with the owned-buffer fallback (non-Linux, unmappable files, AND small files below a size threshold so only genuinely large files are mapped); edits still go to the add-buffer; a concrete **external-truncation policy** (threshold copy-in / SIGBUS handling / drop-map on external-mod) prevents SIGBUS if another process truncates the mapped file; lifetime/ownership reviewed separately. Gated on TOTAL `file_open` residual, not a nominal read sub-phase (node construction still faults pages in). | `include/ssg/*` (SharedBytes mmap impl), `src/piece_tree.{h,cpp}`, a platform mmap wrapper (with fallback), tests | with mmap on, TOTAL `file_open` drops further and the open-equivalence + save-roundtrip + edit/undo oracles all still pass; a fixture edited across the original/add-buffer boundary round-trips; the owned-buffer fallback path is exercised; a truncation-under-map test does not crash; mmap Linux-gated in cmake | INV-open-correctness, INV-save-roundtrip, INV-open-under-budget |
+| LF-4b | **Skip the fresh-open materialize/compare + grep gate (lever 4):** make `Workspace::state()` report a freshly opened file's dirty flag via `TextView` (or a known-clean fast path) WITHOUT `snapshot().text` + a full `persisted_text` compare (a fresh non-dirty open is clean by construction; edited buffers still compute dirty); add the scoped pit-of-success grep gate over the open-path TUs; **PIN the enforced `INV-open-under-budget` tripwire** from the post-optimization measured residual + headroom (extending the `--enforce` gate). | `src/workspace.cpp`, a grep-gate test, `benchmarks/*` (enforce gate) | `piece_tree_text_calls` attributable to a fresh open == 0; the initial dirty flag matches the goldens across the corpus (incl. untitled/scratch and dirty-recovery-restored docs); external-modification + save tests still pass; the grep gate fails on a new `.snapshot().text` in the open-path TUs; re-measure `file_open` and pin/enforce the tripwire | INV-no-fresh-open-materialize, INV-pit-of-success, INV-open-correctness, INV-open-under-budget |
+
+### Future escape hatch (NOT a Plan step): mmap-backed `SharedBytes`
+
+mmap is **out of scope** for this milestone — LF-1 measured the read at ~15 ms
+(~1.1 ms buffered), so it cannot touch the dominant decode cost. It is recorded
+here only as a dormant option, gated behind its OWN future measurement:
+
+- **Activation criterion:** a future much-larger-file case (well beyond 10 MiB)
+  whose measured `file_open` residual is dominated by the buffered read + piece-tree
+  build AFTER LF-2/2b/3/4, above a then-defined budget. Absent that measurement,
+  mmap is not implemented.
+- **If ever activated:** a read-only mmap-backed `SharedBytes` implementation
+  (Linux) behind the SAME `data()`/`size()` handle interface, with an owned-buffer
+  fallback (non-Linux, unmappable files, and small files below a size threshold so
+  only genuinely large files are mapped); edits still go to the add-buffer. A
+  concrete external-truncation policy is REQUIRED before activation — copy-into-
+  owned-buffer below a size threshold, plus dropping the map on external-
+  modification detection (note: `madvise` does NOT prevent a truncation SIGBUS, so
+  it is not a mitigation); with an oracle that a truncation-under-map does not
+  crash. Lifetime/ownership reviewed as its own step. The LF-2 `SharedBytes`
+  interface keeps this a swap-in backing rather than a re-plumb, which is the only
+  reason the interface (not a bare `shared_ptr`) is chosen now.
 
 Instrumentation note: `utf8_validation_calls` / `piece_tree_text_calls` (LF-1) and
-the cross-layer phase timers are test/benchmark-only mechanisms (thread-local
-counters / compiled-out timing scopes), NOT production state — a
+the cross-layer OpenPhase timers are test/benchmark-only mechanisms (thread-local
+counters / always-compiled thread-local timing scopes read only by tests, matching
+the existing `cell_run_calls` pattern), NOT production state — a
 full-validation-twice or re-materializing implementation cannot pass the counter
 oracles.
 
 ## Rationale (skippable)
 
 M12 removed the per-frame O(document) segmentation, exposing the *read/open* as the
-10 MiB bottleneck (868 ms). The instinctive fix — mmap — is the deepest, riskiest
-change (the piece tree owns its original buffer as a `std::string`), yet the audit
-shows the 868 ms is not one intrinsic read: it is an unbuffered byte-by-byte read
-plus **two** UTF-8 validations, **three-to-four** retained whole-document copies,
-and a needless re-materialize + full compare. Crucially, those are not independent
-bugs — they are symptoms of leaky abstractions (reads return owned strings by value;
-construction re-validates because it cannot receive proof; subsystems each keep
-their own copy for lack of a shared buffer). So the milestone is measurement-first
-(as in M10 fast-startup) AND correct-by-design (per the project's pit-of-success
-value): attribute the cost (LF-1), then introduce three abstractions —
-`SharedBytes` (one shared immutable buffer), `ValidatedUtf8` (validation proven in
-the type), and `TextView` (cheap reads; explicit `materialize_to_string`) — that
-make the measured redundancy impossible to express rather than merely deleted
-(LF-2/3/4), and reach for mmap (LF-5, an alternate `SharedBytes` backing) only if
-the numbers still demand it. The correctness oracles (byte-identical open against
-immutable goldens + single validation + no-fresh-open-materialize + save round-trip)
-keep the hot-path refactor safe by construction, and the pit-of-success grep gate
-keeps the waste from growing back.
+10 MiB bottleneck. The instinctive fix — mmap — is the deepest, riskiest change
+(the piece tree owns its original buffer as a `std::string`), yet LF-1's
+measurement shows the open (~106 ms reproducible; the M12 868 ms was environmental)
+is NOT dominated by the read at all: the read is ~15 ms (~1.1 ms buffered), while a
+**two-pass scalar-vector decoder** (decode materializes a whole-document `Scalar`
+vector, then normalize re-walks it) is ~75 ms — plus **two** UTF-8 validations,
+**three-to-four** retained whole-document copies, and a needless re-materialize +
+full compare. Crucially, those are not independent bugs — they are symptoms of leaky
+abstractions (the decoder builds a throwaway whole-document intermediate; reads
+return owned strings by value; construction re-validates because it cannot receive
+proof; subsystems each keep their own copy for lack of a shared buffer). So the
+milestone is measurement-first (as in M10 fast-startup) AND correct-by-design (per
+the project's pit-of-success value): attribute the cost (LF-1), fuse the decoder to
+one pass (LF-2b, the dominant lever measurement revealed), then introduce three
+abstractions — `SharedBytes` (one shared immutable buffer), `ValidatedUtf8`
+(validation proven in the type), and `TextView` (cheap reads; explicit
+`materialize_to_string`) — that make the measured redundancy impossible to express
+rather than merely deleted (LF-2/3/4). mmap is NOT pursued (measurement shows the
+read is already cheap); it survives only as a dormant future escape hatch behind
+its own measurement. The correctness oracles (byte-identical open against immutable
+goldens + single validation + no-fresh-open-materialize + save round-trip) keep the
+hot-path refactor safe by construction, and the pit-of-success grep gate keeps the
+waste from growing back.
