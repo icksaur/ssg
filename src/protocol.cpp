@@ -863,20 +863,20 @@ DecodedMessage decodeMessage(std::string_view bytes,
 //
 // Every leaf/composite type reachable from SessionSnapshotSections,
 // SessionDelta, ClipboardRequest/Response, and StatusActionInvocation has a
-// toValue()/decode_present() pair, plumbed through one generic fromValue<T>
+// toValue()/decodePresent() pair, plumbed through one generic fromValue<T>
 // entry point defined once below.
 //
-// Rationale for the decode_present() split: several domain types (DiffFileId,
+// Rationale for the decodePresent() split: several domain types (DiffFileId,
 // TreeNodeId, TreeProviderId, LanguageId, TreeRevision, ViewportDimensions,
 // ScrollFractionArguments, SelectionSet and therefore SelectionViewState,
 // JournalDocumentKey, and every aggregate embedding one of these) have no
 // default constructor, so a generic "T out{}; decode into out" pattern does
-// not compile. Every decode_present() overload instead receives a
+// not compile. Every decodePresent() overload instead receives a
 // std::optional<T>& and constructs the result in place via out.emplace(...)
 // from already-decoded parts -- never a bare default-constructed T. The
 // single generic fromValue<T>() wrapper interprets a wire null as "field is
 // legitimately absent" (out.reset(); return true) before delegating to
-// decode_present() for the non-null case. This one signature serves both:
+// decodePresent() for the non-null case. This one signature serves both:
 //   - decoding a genuinely domain-optional field (std::optional<T> in the
 //     C++ struct): the caller keeps the resulting std::optional<T> as-is.
 //   - decoding a domain-required field (plain T in the C++ struct): the
@@ -887,7 +887,7 @@ DecodedMessage decodeMessage(std::string_view bytes,
 // Ordering constraint: a function template defined in this anonymous
 // namespace that makes a dependent call does not pick up sibling
 // anonymous-namespace overloads declared later in the file (verified
-// empirically), so every concrete/generic toValue()/decode_present()
+// empirically), so every concrete/generic toValue()/decodePresent()
 // overload is forward-declared before fromValue<T>, toValue<optional<T>>,
 // toValue<vector<T>>, and toValue<array<T,N>> -- the generic templates
 // that call them -- are *defined*. Forward declarations are added to this
@@ -895,24 +895,24 @@ DecodedMessage decodeMessage(std::string_view bytes,
 namespace {
 
 ProtocolValue toValue(bool value);
-bool decode_present(ProtocolValue const& value, std::optional<bool>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<bool>& out);
 ProtocolValue toValue(std::uint8_t value);
-bool decode_present(ProtocolValue const& value, std::optional<std::uint8_t>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<std::uint8_t>& out);
 ProtocolValue toValue(std::uint32_t value);
-bool decode_present(ProtocolValue const& value, std::optional<std::uint32_t>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<std::uint32_t>& out);
 ProtocolValue toValue(std::uint64_t value);
-bool decode_present(ProtocolValue const& value, std::optional<std::uint64_t>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<std::uint64_t>& out);
 ProtocolValue toValue(std::int64_t value);
-bool decode_present(ProtocolValue const& value, std::optional<std::int64_t>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<std::int64_t>& out);
 ProtocolValue toValue(int value);
-bool decode_present(ProtocolValue const& value, std::optional<int>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<int>& out);
 ProtocolValue toValue(std::string const& value);
-bool decode_present(ProtocolValue const& value, std::optional<std::string>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<std::string>& out);
 ProtocolValue toValue(std::vector<std::uint8_t> const& value);
-bool decode_present(ProtocolValue const& value,
+bool decodePresent(ProtocolValue const& value,
                     std::optional<std::vector<std::uint8_t>>& out);
 ProtocolValue toValue(std::filesystem::path const& value);
-bool decode_present(ProtocolValue const& value,
+bool decodePresent(ProtocolValue const& value,
                     std::optional<std::filesystem::path>& out);
 
 template <typename Enum, typename = std::enable_if_t<std::is_enum_v<Enum>>>
@@ -922,7 +922,7 @@ ProtocolValue toValue(Enum value) {
 }
 
 ProtocolValue toValue(bool value) { return ProtocolValue::makeBool(value); }
-bool decode_present(ProtocolValue const& value, std::optional<bool>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<bool>& out) {
     auto decoded = value.asBool();
     if (!decoded) return false;
     out = *decoded;
@@ -932,7 +932,7 @@ bool decode_present(ProtocolValue const& value, std::optional<bool>& out) {
 ProtocolValue toValue(std::uint8_t value) {
     return ProtocolValue::makeUint(value);
 }
-bool decode_present(ProtocolValue const& value, std::optional<std::uint8_t>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<std::uint8_t>& out) {
     auto decoded = value.asUint();
     if (!decoded || *decoded > std::numeric_limits<std::uint8_t>::max()) {
         return false;
@@ -944,7 +944,7 @@ bool decode_present(ProtocolValue const& value, std::optional<std::uint8_t>& out
 ProtocolValue toValue(std::uint32_t value) {
     return ProtocolValue::makeUint(value);
 }
-bool decode_present(ProtocolValue const& value, std::optional<std::uint32_t>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<std::uint32_t>& out) {
     auto decoded = value.asUint();
     if (!decoded || *decoded > std::numeric_limits<std::uint32_t>::max()) {
         return false;
@@ -956,7 +956,7 @@ bool decode_present(ProtocolValue const& value, std::optional<std::uint32_t>& ou
 ProtocolValue toValue(std::uint64_t value) {
     return ProtocolValue::makeUint(value);
 }
-bool decode_present(ProtocolValue const& value, std::optional<std::uint64_t>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<std::uint64_t>& out) {
     auto decoded = value.asUint();
     if (!decoded) return false;
     out = *decoded;
@@ -966,7 +966,7 @@ bool decode_present(ProtocolValue const& value, std::optional<std::uint64_t>& ou
 ProtocolValue toValue(std::int64_t value) {
     return ProtocolValue::makeInt(value);
 }
-bool decode_present(ProtocolValue const& value, std::optional<std::int64_t>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<std::int64_t>& out) {
     auto decoded = value.asInt();
     if (!decoded) return false;
     out = *decoded;
@@ -976,7 +976,7 @@ bool decode_present(ProtocolValue const& value, std::optional<std::int64_t>& out
 ProtocolValue toValue(int value) {
     return ProtocolValue::makeInt(static_cast<std::int64_t>(value));
 }
-bool decode_present(ProtocolValue const& value, std::optional<int>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<int>& out) {
     auto decoded = value.asInt();
     if (!decoded || *decoded < std::numeric_limits<int>::min() ||
         *decoded > std::numeric_limits<int>::max()) {
@@ -989,7 +989,7 @@ bool decode_present(ProtocolValue const& value, std::optional<int>& out) {
 ProtocolValue toValue(std::string const& value) {
     return ProtocolValue::makeText(value);
 }
-bool decode_present(ProtocolValue const& value, std::optional<std::string>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<std::string>& out) {
     auto const* decoded = value.asText();
     if (!decoded) return false;
     out = *decoded;
@@ -999,7 +999,7 @@ bool decode_present(ProtocolValue const& value, std::optional<std::string>& out)
 ProtocolValue toValue(std::vector<std::uint8_t> const& value) {
     return ProtocolValue::makeBytes(value);
 }
-bool decode_present(ProtocolValue const& value,
+bool decodePresent(ProtocolValue const& value,
                     std::optional<std::vector<std::uint8_t>>& out) {
     auto const* decoded = value.asBytes();
     if (!decoded) return false;
@@ -1010,7 +1010,7 @@ bool decode_present(ProtocolValue const& value,
 ProtocolValue toValue(std::filesystem::path const& value) {
     return ProtocolValue::makeText(value.string());
 }
-bool decode_present(ProtocolValue const& value,
+bool decodePresent(ProtocolValue const& value,
                     std::optional<std::filesystem::path>& out) {
     auto const* decoded = value.asText();
     if (!decoded) return false;
@@ -1018,333 +1018,333 @@ bool decode_present(ProtocolValue const& value,
     return true;
 }
 
-// (toValue(Enum) is served generically above; only decode_present needs a
+// (toValue(Enum) is served generically above; only decodePresent needs a
 // forward declaration per enum, each implemented via decode_enum().)
-bool decode_present(ProtocolValue const& value, std::optional<DocumentMode>& out);
-bool decode_present(ProtocolValue const& value, std::optional<ClipboardRequestKind>& out);
-bool decode_present(ProtocolValue const& value, std::optional<ClipboardResponseStatus>& out);
-bool decode_present(ProtocolValue const& value, std::optional<StatusPriority>& out);
-bool decode_present(ProtocolValue const& value, std::optional<PromptKind>& out);
-bool decode_present(ProtocolValue const& value, std::optional<PromptControlKind>& out);
-bool decode_present(ProtocolValue const& value, std::optional<SearchMode>& out);
-bool decode_present(ProtocolValue const& value, std::optional<FindReplaceError>& out);
-bool decode_present(ProtocolValue const& value, std::optional<SettingScope>& out);
-bool decode_present(ProtocolValue const& value, std::optional<SettingKey>& out);
-bool decode_present(ProtocolValue const& value, std::optional<TextEncoding>& out);
-bool decode_present(ProtocolValue const& value, std::optional<IndentStyle>& out);
-bool decode_present(ProtocolValue const& value, std::optional<LineEnding>& out);
-bool decode_present(ProtocolValue const& value, std::optional<TabKind>& out);
-bool decode_present(ProtocolValue const& value, std::optional<TabRecoveryBadge>& out);
-bool decode_present(ProtocolValue const& value, std::optional<JournalDocumentKeyKind>& out);
-bool decode_present(ProtocolValue const& value, std::optional<DiffLineKind>& out);
-bool decode_present(ProtocolValue const& value, std::optional<ExternalAction>& out);
-bool decode_present(ProtocolValue const& value, std::optional<ExternalDocumentStatus>& out);
-bool decode_present(ProtocolValue const& value, std::optional<FollowMode>& out);
-bool decode_present(ProtocolValue const& value, std::optional<TreeProviderKind>& out);
-bool decode_present(ProtocolValue const& value, std::optional<TreeNodeKind>& out);
-bool decode_present(ProtocolValue const& value, std::optional<GitTreeStatus>& out);
-bool decode_present(ProtocolValue const& value, std::optional<SyntaxScope>& out);
-bool decode_present(ProtocolValue const& value, std::optional<BracketKind>& out);
-bool decode_present(ProtocolValue const& value, std::optional<BracketRole>& out);
-bool decode_present(ProtocolValue const& value, std::optional<CommentKind>& out);
-bool decode_present(ProtocolValue const& value, std::optional<CommentTokenRole>& out);
-bool decode_present(ProtocolValue const& value, std::optional<LspDiagnosticSeverity>& out);
-bool decode_present(ProtocolValue const& value, std::optional<ShellNodeKind>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<DocumentMode>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<ClipboardRequestKind>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<ClipboardResponseStatus>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<StatusPriority>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<PromptKind>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<PromptControlKind>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<SearchMode>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<FindReplaceError>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<SettingScope>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<SettingKey>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<TextEncoding>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<IndentStyle>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<LineEnding>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<TabKind>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<TabRecoveryBadge>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<JournalDocumentKeyKind>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<DiffLineKind>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<ExternalAction>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<ExternalDocumentStatus>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<FollowMode>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<TreeProviderKind>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<TreeNodeKind>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<GitTreeStatus>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<SyntaxScope>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<BracketKind>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<BracketRole>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<CommentKind>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<CommentTokenRole>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<LspDiagnosticSeverity>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<ShellNodeKind>& out);
 bool decodePresent(ProtocolValue const& value, std::optional<FocusTarget>& out);
-bool decode_present(ProtocolValue const& value, std::optional<SemanticRole>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<SemanticRole>& out);
 
 ProtocolValue toValue(Revision const& value);
-bool decode_present(ProtocolValue const& value, std::optional<Revision>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<Revision>& out);
 ProtocolValue toValue(ByteOffset const& value);
-bool decode_present(ProtocolValue const& value, std::optional<ByteOffset>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<ByteOffset>& out);
 ProtocolValue toValue(LineIndex const& value);
-bool decode_present(ProtocolValue const& value, std::optional<LineIndex>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<LineIndex>& out);
 ProtocolValue toValue(CellIndex const& value);
-bool decode_present(ProtocolValue const& value, std::optional<CellIndex>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<CellIndex>& out);
 ProtocolValue toValue(ClientId const& value);
-bool decode_present(ProtocolValue const& value, std::optional<ClientId>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<ClientId>& out);
 ProtocolValue toValue(ViewId const& value);
-bool decode_present(ProtocolValue const& value, std::optional<ViewId>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<ViewId>& out);
 ProtocolValue toValue(WorkspaceId const& value);
-bool decode_present(ProtocolValue const& value, std::optional<WorkspaceId>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<WorkspaceId>& out);
 ProtocolValue toValue(CapabilityId const& value);
-bool decode_present(ProtocolValue const& value, std::optional<CapabilityId>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<CapabilityId>& out);
 ProtocolValue toValue(StatusId const& value);
-bool decode_present(ProtocolValue const& value, std::optional<StatusId>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<StatusId>& out);
 ProtocolValue toValue(TabId const& value);
-bool decode_present(ProtocolValue const& value, std::optional<TabId>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<TabId>& out);
 ProtocolValue toValue(FileDocumentId const& value);
-bool decode_present(ProtocolValue const& value, std::optional<FileDocumentId>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<FileDocumentId>& out);
 ProtocolValue toValue(DiffFileId const& value);
-bool decode_present(ProtocolValue const& value, std::optional<DiffFileId>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<DiffFileId>& out);
 ProtocolValue toValue(PaneId const& value);
-bool decode_present(ProtocolValue const& value, std::optional<PaneId>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<PaneId>& out);
 ProtocolValue toValue(TreeProviderId const& value);
-bool decode_present(ProtocolValue const& value, std::optional<TreeProviderId>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<TreeProviderId>& out);
 ProtocolValue toValue(TreeNodeId const& value);
-bool decode_present(ProtocolValue const& value, std::optional<TreeNodeId>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<TreeNodeId>& out);
 ProtocolValue toValue(TreeRevision const& value);
-bool decode_present(ProtocolValue const& value, std::optional<TreeRevision>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<TreeRevision>& out);
 ProtocolValue toValue(LanguageId const& value);
-bool decode_present(ProtocolValue const& value, std::optional<LanguageId>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<LanguageId>& out);
 ProtocolValue toValue(UntitledDocumentId const& value);
-bool decode_present(ProtocolValue const& value, std::optional<UntitledDocumentId>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<UntitledDocumentId>& out);
 ProtocolValue toValue(JournalDocumentKey const& value);
-bool decode_present(ProtocolValue const& value, std::optional<JournalDocumentKey>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<JournalDocumentKey>& out);
 
 ProtocolValue toValue(DocumentPosition const& value);
-bool decode_present(ProtocolValue const& value, std::optional<DocumentPosition>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<DocumentPosition>& out);
 ProtocolValue toValue(DocumentViewState const& value);
-bool decode_present(ProtocolValue const& value, std::optional<DocumentViewState>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<DocumentViewState>& out);
 ProtocolValue toValue(DocumentDelta const& value);
-bool decode_present(ProtocolValue const& value, std::optional<DocumentDelta>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<DocumentDelta>& out);
 ProtocolValue toValue(Selection const& value);
-bool decode_present(ProtocolValue const& value, std::optional<Selection>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<Selection>& out);
 ProtocolValue toValue(SelectionSet const& value);
-bool decode_present(ProtocolValue const& value, std::optional<SelectionSet>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<SelectionSet>& out);
 ProtocolValue toValue(SelectionViewState const& value);
-bool decode_present(ProtocolValue const& value, std::optional<SelectionViewState>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<SelectionViewState>& out);
 ProtocolValue toValue(SelectionViewDelta const& value);
-bool decode_present(ProtocolValue const& value, std::optional<SelectionViewDelta>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<SelectionViewDelta>& out);
 ProtocolValue toValue(HistoryViewState const& value);
-bool decode_present(ProtocolValue const& value, std::optional<HistoryViewState>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<HistoryViewState>& out);
 ProtocolValue toValue(HistoryDelta const& value);
-bool decode_present(ProtocolValue const& value, std::optional<HistoryDelta>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<HistoryDelta>& out);
 ProtocolValue toValue(ClipboardRequest const& value);
-bool decode_present(ProtocolValue const& value, std::optional<ClipboardRequest>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<ClipboardRequest>& out);
 ProtocolValue toValue(ClipboardResponse const& value);
-bool decode_present(ProtocolValue const& value, std::optional<ClipboardResponse>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<ClipboardResponse>& out);
 ProtocolValue toValue(ClipboardViewState const& value);
-bool decode_present(ProtocolValue const& value, std::optional<ClipboardViewState>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<ClipboardViewState>& out);
 ProtocolValue toValue(ClipboardDelta const& value);
-bool decode_present(ProtocolValue const& value, std::optional<ClipboardDelta>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<ClipboardDelta>& out);
 ProtocolValue toValue(StatusAction const& value);
-bool decode_present(ProtocolValue const& value, std::optional<StatusAction>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<StatusAction>& out);
 ProtocolValue toValue(StatusItemView const& value);
-bool decode_present(ProtocolValue const& value, std::optional<StatusItemView>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<StatusItemView>& out);
 ProtocolValue toValue(StatusViewState const& value);
-bool decode_present(ProtocolValue const& value, std::optional<StatusViewState>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<StatusViewState>& out);
 ProtocolValue toValue(StatusActionInvocation const& value);
-bool decode_present(ProtocolValue const& value, std::optional<StatusActionInvocation>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<StatusActionInvocation>& out);
 ProtocolValue toValue(Rect const& value);
-bool decode_present(ProtocolValue const& value, std::optional<Rect>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<Rect>& out);
 ProtocolValue toValue(PromptControlView const& value);
-bool decode_present(ProtocolValue const& value, std::optional<PromptControlView>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<PromptControlView>& out);
 ProtocolValue toValue(PromptViewState const& value);
-bool decode_present(ProtocolValue const& value, std::optional<PromptViewState>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<PromptViewState>& out);
 ProtocolValue toValue(PromptStatusViewState const& value);
-bool decode_present(ProtocolValue const& value, std::optional<PromptStatusViewState>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<PromptStatusViewState>& out);
 ProtocolValue toValue(PromptStatusDelta const& value);
-bool decode_present(ProtocolValue const& value, std::optional<PromptStatusDelta>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<PromptStatusDelta>& out);
 ProtocolValue toValue(SearchResult const& value);
-bool decode_present(ProtocolValue const& value, std::optional<SearchResult>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<SearchResult>& out);
 ProtocolValue toValue(SearchViewState const& value);
-bool decode_present(ProtocolValue const& value, std::optional<SearchViewState>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<SearchViewState>& out);
 ProtocolValue toValue(SearchDelta const& value);
-bool decode_present(ProtocolValue const& value, std::optional<SearchDelta>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<SearchDelta>& out);
 ProtocolValue toValue(ByteRange const& value);
-bool decode_present(ProtocolValue const& value, std::optional<ByteRange>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<ByteRange>& out);
 ProtocolValue toValue(FindOptions const& value);
-bool decode_present(ProtocolValue const& value, std::optional<FindOptions>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<FindOptions>& out);
 ProtocolValue toValue(FindRequest const& value);
-bool decode_present(ProtocolValue const& value, std::optional<FindRequest>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<FindRequest>& out);
 ProtocolValue toValue(FindMatch const& value);
-bool decode_present(ProtocolValue const& value, std::optional<FindMatch>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<FindMatch>& out);
 ProtocolValue toValue(WorkspaceFileReplacement const& value);
-bool decode_present(ProtocolValue const& value, std::optional<WorkspaceFileReplacement>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<WorkspaceFileReplacement>& out);
 ProtocolValue toValue(WorkspaceReplacePreview const& value);
-bool decode_present(ProtocolValue const& value, std::optional<WorkspaceReplacePreview>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<WorkspaceReplacePreview>& out);
 ProtocolValue toValue(FindReplaceViewState const& value);
-bool decode_present(ProtocolValue const& value, std::optional<FindReplaceViewState>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<FindReplaceViewState>& out);
 ProtocolValue toValue(FindReplaceDelta const& value);
-bool decode_present(ProtocolValue const& value, std::optional<FindReplaceDelta>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<FindReplaceDelta>& out);
 ProtocolValue toValue(SettingValue const& value);
-bool decode_present(ProtocolValue const& value, std::optional<SettingValue>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<SettingValue>& out);
 ProtocolValue toValue(EffectiveSetting const& value);
-bool decode_present(ProtocolValue const& value, std::optional<EffectiveSetting>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<EffectiveSetting>& out);
 ProtocolValue toValue(SettingViewEntry const& value);
-bool decode_present(ProtocolValue const& value, std::optional<SettingViewEntry>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<SettingViewEntry>& out);
 ProtocolValue toValue(SettingsViewState const& value);
-bool decode_present(ProtocolValue const& value, std::optional<SettingsViewState>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<SettingsViewState>& out);
 ProtocolValue toValue(SettingsDelta const& value);
-bool decode_present(ProtocolValue const& value, std::optional<SettingsDelta>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<SettingsDelta>& out);
 ProtocolValue toValue(SettingsSectionDelta const& value);
-bool decode_present(ProtocolValue const& value, std::optional<SettingsSectionDelta>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<SettingsSectionDelta>& out);
 ProtocolValue toValue(KeyStroke const& value);
-bool decode_present(ProtocolValue const& value, std::optional<KeyStroke>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<KeyStroke>& out);
 ProtocolValue toValue(KeyBinding const& value);
-bool decode_present(ProtocolValue const& value, std::optional<KeyBinding>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<KeyBinding>& out);
 ProtocolValue toValue(KeymapViewState const& value);
-bool decode_present(ProtocolValue const& value, std::optional<KeymapViewState>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<KeymapViewState>& out);
 ProtocolValue toValue(KeymapDelta const& value);
-bool decode_present(ProtocolValue const& value, std::optional<KeymapDelta>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<KeymapDelta>& out);
 ProtocolValue toValue(TextEncodingStatus const& value);
-bool decode_present(ProtocolValue const& value, std::optional<TextEncodingStatus>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<TextEncodingStatus>& out);
 ProtocolValue toValue(TextEncodingViewState const& value);
-bool decode_present(ProtocolValue const& value, std::optional<TextEncodingViewState>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<TextEncodingViewState>& out);
 ProtocolValue toValue(TextEncodingDelta const& value);
-bool decode_present(ProtocolValue const& value, std::optional<TextEncodingDelta>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<TextEncodingDelta>& out);
 ProtocolValue toValue(TabState const& value);
-bool decode_present(ProtocolValue const& value, std::optional<TabState>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<TabState>& out);
 ProtocolValue toValue(TabViewState const& value);
-bool decode_present(ProtocolValue const& value, std::optional<TabViewState>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<TabViewState>& out);
 ProtocolValue toValue(TabDelta const& value);
-bool decode_present(ProtocolValue const& value, std::optional<TabDelta>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<TabDelta>& out);
 ProtocolValue toValue(DiffHunk const& value);
-bool decode_present(ProtocolValue const& value, std::optional<DiffHunk>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<DiffHunk>& out);
 ProtocolValue toValue(DiffLineChange const& value);
-bool decode_present(ProtocolValue const& value, std::optional<DiffLineChange>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<DiffLineChange>& out);
 ProtocolValue toValue(DiffFileView const& value);
-bool decode_present(ProtocolValue const& value, std::optional<DiffFileView>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<DiffFileView>& out);
 ProtocolValue toValue(DiffViewState const& value);
-bool decode_present(ProtocolValue const& value, std::optional<DiffViewState>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<DiffViewState>& out);
 ProtocolValue toValue(DiffDelta const& value);
-bool decode_present(ProtocolValue const& value, std::optional<DiffDelta>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<DiffDelta>& out);
 ProtocolValue toValue(ExternalDocumentView const& value);
-bool decode_present(ProtocolValue const& value, std::optional<ExternalDocumentView>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<ExternalDocumentView>& out);
 ProtocolValue toValue(ExternalModificationViewState const& value);
-bool decode_present(ProtocolValue const& value, std::optional<ExternalModificationViewState>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<ExternalModificationViewState>& out);
 ProtocolValue toValue(ExternalModificationDelta const& value);
-bool decode_present(ProtocolValue const& value, std::optional<ExternalModificationDelta>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<ExternalModificationDelta>& out);
 ProtocolValue toValue(ViewportDimensions const& value);
-bool decode_present(ProtocolValue const& value, std::optional<ViewportDimensions>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<ViewportDimensions>& out);
 ProtocolValue toValue(FollowScrollOffset const& value);
-bool decode_present(ProtocolValue const& value, std::optional<FollowScrollOffset>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<FollowScrollOffset>& out);
 ProtocolValue toValue(FollowTarget const& value);
-bool decode_present(ProtocolValue const& value, std::optional<FollowTarget>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<FollowTarget>& out);
 ProtocolValue toValue(FollowClientView const& value);
-bool decode_present(ProtocolValue const& value, std::optional<FollowClientView>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<FollowClientView>& out);
 ProtocolValue toValue(FollowEditsViewState const& value);
-bool decode_present(ProtocolValue const& value, std::optional<FollowEditsViewState>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<FollowEditsViewState>& out);
 ProtocolValue toValue(FollowEditsDelta const& value);
-bool decode_present(ProtocolValue const& value, std::optional<FollowEditsDelta>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<FollowEditsDelta>& out);
 ProtocolValue toValue(TreeNodeCommand const& value);
-bool decode_present(ProtocolValue const& value, std::optional<TreeNodeCommand>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<TreeNodeCommand>& out);
 ProtocolValue toValue(TreeNode const& value);
-bool decode_present(ProtocolValue const& value, std::optional<TreeNode>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<TreeNode>& out);
 ProtocolValue toValue(TreeNodeView const& value);
-bool decode_present(ProtocolValue const& value, std::optional<TreeNodeView>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<TreeNodeView>& out);
 ProtocolValue toValue(TreeProviderView const& value);
-bool decode_present(ProtocolValue const& value, std::optional<TreeProviderView>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<TreeProviderView>& out);
 ProtocolValue toValue(TreeViewState const& value);
-bool decode_present(ProtocolValue const& value, std::optional<TreeViewState>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<TreeViewState>& out);
 ProtocolValue toValue(TreeProviderDelta const& value);
-bool decode_present(ProtocolValue const& value, std::optional<TreeProviderDelta>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<TreeProviderDelta>& out);
 ProtocolValue toValue(TreeDelta const& value);
-bool decode_present(ProtocolValue const& value, std::optional<TreeDelta>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<TreeDelta>& out);
 ProtocolValue toValue(SyntaxSpan const& value);
-bool decode_present(ProtocolValue const& value, std::optional<SyntaxSpan>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<SyntaxSpan>& out);
 ProtocolValue toValue(SyntaxBracketPair const& value);
-bool decode_present(ProtocolValue const& value, std::optional<SyntaxBracketPair>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<SyntaxBracketPair>& out);
 ProtocolValue toValue(UnmatchedBracket const& value);
-bool decode_present(ProtocolValue const& value, std::optional<UnmatchedBracket>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<UnmatchedBracket>& out);
 ProtocolValue toValue(SyntaxRange const& value);
-bool decode_present(ProtocolValue const& value, std::optional<SyntaxRange>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<SyntaxRange>& out);
 ProtocolValue toValue(CommentToken const& value);
-bool decode_present(ProtocolValue const& value, std::optional<CommentToken>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<CommentToken>& out);
 ProtocolValue toValue(CommentRange const& value);
-bool decode_present(ProtocolValue const& value, std::optional<CommentRange>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<CommentRange>& out);
 ProtocolValue toValue(LineIndentation const& value);
-bool decode_present(ProtocolValue const& value, std::optional<LineIndentation>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<LineIndentation>& out);
 ProtocolValue toValue(SyntaxViewState const& value);
-bool decode_present(ProtocolValue const& value, std::optional<SyntaxViewState>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<SyntaxViewState>& out);
 ProtocolValue toValue(SyntaxDelta const& value);
-bool decode_present(ProtocolValue const& value, std::optional<SyntaxDelta>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<SyntaxDelta>& out);
 ProtocolValue toValue(LspPosition const& value);
-bool decode_present(ProtocolValue const& value, std::optional<LspPosition>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<LspPosition>& out);
 ProtocolValue toValue(LspRange const& value);
-bool decode_present(ProtocolValue const& value, std::optional<LspRange>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<LspRange>& out);
 ProtocolValue toValue(LspDiagnostic const& value);
-bool decode_present(ProtocolValue const& value, std::optional<LspDiagnostic>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<LspDiagnostic>& out);
 ProtocolValue toValue(LspDocumentDiagnostics const& value);
-bool decode_present(ProtocolValue const& value, std::optional<LspDocumentDiagnostics>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<LspDocumentDiagnostics>& out);
 ProtocolValue toValue(LspSyncViewState const& value);
-bool decode_present(ProtocolValue const& value, std::optional<LspSyncViewState>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<LspSyncViewState>& out);
 ProtocolValue toValue(LspSyncDelta const& value);
-bool decode_present(ProtocolValue const& value, std::optional<LspSyncDelta>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<LspSyncDelta>& out);
 ProtocolValue toValue(LspCompletionItem const& value);
-bool decode_present(ProtocolValue const& value, std::optional<LspCompletionItem>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<LspCompletionItem>& out);
 ProtocolValue toValue(LspCompletionViewState const& value);
-bool decode_present(ProtocolValue const& value, std::optional<LspCompletionViewState>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<LspCompletionViewState>& out);
 ProtocolValue toValue(LspHover const& value);
-bool decode_present(ProtocolValue const& value, std::optional<LspHover>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<LspHover>& out);
 ProtocolValue toValue(LspNavigationTarget const& value);
-bool decode_present(ProtocolValue const& value, std::optional<LspNavigationTarget>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<LspNavigationTarget>& out);
 ProtocolValue toValue(LspNavigationViewState const& value);
-bool decode_present(ProtocolValue const& value, std::optional<LspNavigationViewState>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<LspNavigationViewState>& out);
 ProtocolValue toValue(LspFeatureViewState const& value);
-bool decode_present(ProtocolValue const& value, std::optional<LspFeatureViewState>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<LspFeatureViewState>& out);
 ProtocolValue toValue(LspFeatureDelta const& value);
-bool decode_present(ProtocolValue const& value, std::optional<LspFeatureDelta>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<LspFeatureDelta>& out);
 ProtocolValue toValue(SrgbColor const& value);
-bool decode_present(ProtocolValue const& value, std::optional<SrgbColor>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<SrgbColor>& out);
 ProtocolValue toValue(ThemeSnapshot const& value);
-bool decode_present(ProtocolValue const& value, std::optional<ThemeSnapshot>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<ThemeSnapshot>& out);
 ProtocolValue toValue(ThemeSectionDelta const& value);
-bool decode_present(ProtocolValue const& value, std::optional<ThemeSectionDelta>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<ThemeSectionDelta>& out);
 ProtocolValue toValue(GridSize const& value);
-bool decode_present(ProtocolValue const& value, std::optional<GridSize>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<GridSize>& out);
 ProtocolValue toValue(AccessibilityNode const& value);
-bool decode_present(ProtocolValue const& value, std::optional<AccessibilityNode>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<AccessibilityNode>& out);
 ProtocolValue toValue(PaneGeometry const& value);
-bool decode_present(ProtocolValue const& value, std::optional<PaneGeometry>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<PaneGeometry>& out);
 ProtocolValue toValue(TabHit const& value);
-bool decode_present(ProtocolValue const& value, std::optional<TabHit>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<TabHit>& out);
 ProtocolValue toValue(ShellViewState const& value);
-bool decode_present(ProtocolValue const& value, std::optional<ShellViewState>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<ShellViewState>& out);
 ProtocolValue toValue(ShellSectionDelta const& value);
-bool decode_present(ProtocolValue const& value, std::optional<ShellSectionDelta>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<ShellSectionDelta>& out);
 ProtocolValue toValue(VisualRow const& value);
-bool decode_present(ProtocolValue const& value, std::optional<VisualRow>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<VisualRow>& out);
 ProtocolValue toValue(CellHitTarget const& value);
-bool decode_present(ProtocolValue const& value, std::optional<CellHitTarget>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<CellHitTarget>& out);
 ProtocolValue toValue(ScrollbarMetrics const& value);
-bool decode_present(ProtocolValue const& value, std::optional<ScrollbarMetrics>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<ScrollbarMetrics>& out);
 ProtocolValue toValue(ViewportViewState const& value);
-bool decode_present(ProtocolValue const& value, std::optional<ViewportViewState>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<ViewportViewState>& out);
 ProtocolValue toValue(ViewportDelta const& value);
-bool decode_present(ProtocolValue const& value, std::optional<ViewportDelta>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<ViewportDelta>& out);
 ProtocolValue toValue(SessionTopology const& value);
-bool decode_present(ProtocolValue const& value, std::optional<SessionTopology>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<SessionTopology>& out);
 ProtocolValue toValue(ClientSnapshotState const& value);
-bool decode_present(ProtocolValue const& value, std::optional<ClientSnapshotState>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<ClientSnapshotState>& out);
 ProtocolValue toValue(SessionSnapshotSections const& value);
-bool decode_present(ProtocolValue const& value, std::optional<SessionSnapshotSections>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSections>& out);
 
 ProtocolValue toValue(TextInputArguments const& value);
-bool decode_present(ProtocolValue const& value, std::optional<TextInputArguments>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<TextInputArguments>& out);
 ProtocolValue toValue(PaletteExecuteArguments const& value);
-bool decode_present(ProtocolValue const& value, std::optional<PaletteExecuteArguments>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<PaletteExecuteArguments>& out);
 ProtocolValue toValue(TreeSelectArguments const& value);
-bool decode_present(ProtocolValue const& value, std::optional<TreeSelectArguments>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<TreeSelectArguments>& out);
 ProtocolValue toValue(FindQueryArguments const& value);
-bool decode_present(ProtocolValue const& value, std::optional<FindQueryArguments>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<FindQueryArguments>& out);
 ProtocolValue toValue(SelectionCommandArguments const& value);
-bool decode_present(ProtocolValue const& value, std::optional<SelectionCommandArguments>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<SelectionCommandArguments>& out);
 ProtocolValue toValue(ScrollLinesArguments const& value);
-bool decode_present(ProtocolValue const& value, std::optional<ScrollLinesArguments>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<ScrollLinesArguments>& out);
 ProtocolValue toValue(ScrollPagesArguments const& value);
-bool decode_present(ProtocolValue const& value, std::optional<ScrollPagesArguments>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<ScrollPagesArguments>& out);
 ProtocolValue toValue(ScrollFractionArguments const& value);
-bool decode_present(ProtocolValue const& value, std::optional<ScrollFractionArguments>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<ScrollFractionArguments>& out);
 ProtocolValue toValue(DroppedContentArguments const& value);
-bool decode_present(ProtocolValue const& value, std::optional<DroppedContentArguments>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<DroppedContentArguments>& out);
 ProtocolValue toValue(ReopenWithEncodingArguments const& value);
-bool decode_present(ProtocolValue const& value, std::optional<ReopenWithEncodingArguments>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<ReopenWithEncodingArguments>& out);
 ProtocolValue toValue(SetEncodingArguments const& value);
-bool decode_present(ProtocolValue const& value, std::optional<SetEncodingArguments>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<SetEncodingArguments>& out);
 ProtocolValue toValue(SetLineEndingArguments const& value);
-bool decode_present(ProtocolValue const& value, std::optional<SetLineEndingArguments>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<SetLineEndingArguments>& out);
 ProtocolValue toValue(SetFinalNewlineArguments const& value);
-bool decode_present(ProtocolValue const& value, std::optional<SetFinalNewlineArguments>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<SetFinalNewlineArguments>& out);
 ProtocolValue toValue(SettingSetArguments const& value);
-bool decode_present(ProtocolValue const& value, std::optional<SettingSetArguments>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<SettingSetArguments>& out);
 ProtocolValue toValue(SettingResetArguments const& value);
-bool decode_present(ProtocolValue const& value, std::optional<SettingResetArguments>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<SettingResetArguments>& out);
 ProtocolValue toValue(SettingResetScopeArguments const& value);
-bool decode_present(ProtocolValue const& value, std::optional<SettingResetScopeArguments>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<SettingResetScopeArguments>& out);
 ProtocolValue toValue(WorkspaceReplaceArguments const& value);
-bool decode_present(ProtocolValue const& value, std::optional<WorkspaceReplaceArguments>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<WorkspaceReplaceArguments>& out);
 
 template <typename T>
 ProtocolValue toValue(std::optional<T> const& value);
@@ -1356,9 +1356,9 @@ ProtocolValue toValue(std::array<T, N> const& value);
 template <typename T>
 [[nodiscard]] bool fromValue(ProtocolValue const& value, std::optional<T>& out);
 template <typename T>
-bool decode_present(ProtocolValue const& value, std::optional<std::vector<T>>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<std::vector<T>>& out);
 template <typename T, std::size_t N>
-bool decode_present(ProtocolValue const& value, std::optional<std::array<T, N>>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<std::array<T, N>>& out);
 
 template <typename T>
 ProtocolValue toValue(std::optional<T> const& value) {
@@ -1395,7 +1395,7 @@ template <typename T>
         return true;
     }
     try {
-        return decode_present(value, out);
+        return decodePresent(value, out);
     } catch (std::invalid_argument const&) {
         // Domain constructors enforce invariants for trusted in-process
         // callers. Invalid wire values are ordinary decode failures, not
@@ -1406,7 +1406,7 @@ template <typename T>
 }
 
 template <typename T>
-bool decode_present(ProtocolValue const& value, std::optional<std::vector<T>>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<std::vector<T>>& out) {
     auto const* items = value.asArray();
     if (items == nullptr) {
         return false;
@@ -1425,7 +1425,7 @@ bool decode_present(ProtocolValue const& value, std::optional<std::vector<T>>& o
 }
 
 template <typename T, std::size_t N>
-bool decode_present(ProtocolValue const& value, std::optional<std::array<T, N>>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<std::array<T, N>>& out) {
     auto const* items = value.asArray();
     if (items == nullptr || items->size() != N) {
         return false;
@@ -1492,35 +1492,35 @@ template <typename Enum, std::size_t N>
 }
 
 
-// Enum decode_present() definitions, each delegating to decode_enum() with
+// Enum decodePresent() definitions, each delegating to decode_enum() with
 // the closed set of valid values for that enum.
 
-bool decode_present(ProtocolValue const& value, std::optional<DocumentMode>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<DocumentMode>& out) {
     static constexpr std::array values{DocumentMode::Edit, DocumentMode::ReadOnly,
                                        DocumentMode::Diff};
     return decodeEnum(value, out, values);
 }
 
-bool decode_present(ProtocolValue const& value, std::optional<ClipboardRequestKind>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<ClipboardRequestKind>& out) {
     static constexpr std::array values{ClipboardRequestKind::Write,
                                        ClipboardRequestKind::Read};
     return decodeEnum(value, out, values);
 }
 
-bool decode_present(ProtocolValue const& value, std::optional<ClipboardResponseStatus>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<ClipboardResponseStatus>& out) {
     static constexpr std::array values{
         ClipboardResponseStatus::Success, ClipboardResponseStatus::Denied,
         ClipboardResponseStatus::Unavailable, ClipboardResponseStatus::Disconnected};
     return decodeEnum(value, out, values);
 }
 
-bool decode_present(ProtocolValue const& value, std::optional<StatusPriority>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<StatusPriority>& out) {
     static constexpr std::array values{StatusPriority::Error, StatusPriority::Warning,
                                        StatusPriority::Information, StatusPriority::Progress};
     return decodeEnum(value, out, values);
 }
 
-bool decode_present(ProtocolValue const& value, std::optional<PromptKind>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<PromptKind>& out) {
     static constexpr std::array values{PromptKind::Path, PromptKind::Find,
                                        PromptKind::Replace, PromptKind::Settings,
                                        PromptKind::CommandArgument,
@@ -1528,20 +1528,20 @@ bool decode_present(ProtocolValue const& value, std::optional<PromptKind>& out) 
     return decodeEnum(value, out, values);
 }
 
-bool decode_present(ProtocolValue const& value, std::optional<PromptControlKind>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<PromptControlKind>& out) {
     static constexpr std::array values{PromptControlKind::Input, PromptControlKind::Toggle,
                                        PromptControlKind::Count};
     return decodeEnum(value, out, values);
 }
 
-bool decode_present(ProtocolValue const& value, std::optional<SearchMode>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<SearchMode>& out) {
     static constexpr std::array values{SearchMode::File, SearchMode::Line,
                                        SearchMode::Symbol, SearchMode::Text,
                                        SearchMode::Command};
     return decodeEnum(value, out, values);
 }
 
-bool decode_present(ProtocolValue const& value, std::optional<FindReplaceError>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<FindReplaceError>& out) {
     static constexpr std::array values{
         FindReplaceError::None, FindReplaceError::InvalidPattern,
         FindReplaceError::InvalidUtf8, FindReplaceError::InvalidSelection,
@@ -1552,14 +1552,14 @@ bool decode_present(ProtocolValue const& value, std::optional<FindReplaceError>&
     return decodeEnum(value, out, values);
 }
 
-bool decode_present(ProtocolValue const& value, std::optional<SettingScope>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<SettingScope>& out) {
     static constexpr std::array values{SettingScope::Defaults, SettingScope::User,
                                        SettingScope::Workspace, SettingScope::Language,
                                        SettingScope::Document};
     return decodeEnum(value, out, values);
 }
 
-bool decode_present(ProtocolValue const& value, std::optional<SettingKey>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<SettingKey>& out) {
     static constexpr std::array values{
         SettingKey::IndentWidth, SettingKey::IndentStyle, SettingKey::IndentDetection,
         SettingKey::AutoIndent, SettingKey::LineEnding, SettingKey::FinalNewline,
@@ -1570,120 +1570,120 @@ bool decode_present(ProtocolValue const& value, std::optional<SettingKey>& out) 
     return decodeEnum(value, out, values);
 }
 
-bool decode_present(ProtocolValue const& value, std::optional<TextEncoding>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<TextEncoding>& out) {
     static constexpr std::array values{TextEncoding::Utf8, TextEncoding::Utf8Bom,
                                        TextEncoding::Utf16le, TextEncoding::Utf16be,
                                        TextEncoding::Windows1252, TextEncoding::Iso88591};
     return decodeEnum(value, out, values);
 }
 
-bool decode_present(ProtocolValue const& value, std::optional<IndentStyle>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<IndentStyle>& out) {
     static constexpr std::array values{IndentStyle::Spaces, IndentStyle::Tabs};
     return decodeEnum(value, out, values);
 }
 
-bool decode_present(ProtocolValue const& value, std::optional<LineEnding>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<LineEnding>& out) {
     static constexpr std::array values{LineEnding::Lf, LineEnding::Crlf, LineEnding::Cr,
                                        LineEnding::Mixed};
     return decodeEnum(value, out, values);
 }
 
-bool decode_present(ProtocolValue const& value, std::optional<TabKind>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<TabKind>& out) {
     static constexpr std::array values{TabKind::Document, TabKind::LiveDiff,
                                        TabKind::ReadOnlyOutput, TabKind::SearchResults,
                                        TabKind::TreeView};
     return decodeEnum(value, out, values);
 }
 
-bool decode_present(ProtocolValue const& value, std::optional<TabRecoveryBadge>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<TabRecoveryBadge>& out) {
     static constexpr std::array values{TabRecoveryBadge::None, TabRecoveryBadge::Pending,
                                        TabRecoveryBadge::Durable, TabRecoveryBadge::Failed};
     return decodeEnum(value, out, values);
 }
 
-bool decode_present(ProtocolValue const& value, std::optional<JournalDocumentKeyKind>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<JournalDocumentKeyKind>& out) {
     static constexpr std::array values{JournalDocumentKeyKind::Saved,
                                        JournalDocumentKeyKind::Untitled};
     return decodeEnum(value, out, values);
 }
 
-bool decode_present(ProtocolValue const& value, std::optional<DiffLineKind>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<DiffLineKind>& out) {
     static constexpr std::array values{DiffLineKind::Added, DiffLineKind::Removed,
                                        DiffLineKind::Modified};
     return decodeEnum(value, out, values);
 }
 
-bool decode_present(ProtocolValue const& value, std::optional<ExternalAction>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<ExternalAction>& out) {
     static constexpr std::array values{ExternalAction::Reload, ExternalAction::KeepBuffer,
                                        ExternalAction::OpenDiff};
     return decodeEnum(value, out, values);
 }
 
-bool decode_present(ProtocolValue const& value, std::optional<ExternalDocumentStatus>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<ExternalDocumentStatus>& out) {
     static constexpr std::array values{ExternalDocumentStatus::ExternallyModified,
                                        ExternalDocumentStatus::ExternallyRemoved};
     return decodeEnum(value, out, values);
 }
 
-bool decode_present(ProtocolValue const& value, std::optional<FollowMode>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<FollowMode>& out) {
     static constexpr std::array values{FollowMode::Following, FollowMode::Paused};
     return decodeEnum(value, out, values);
 }
 
-bool decode_present(ProtocolValue const& value, std::optional<TreeProviderKind>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<TreeProviderKind>& out) {
     static constexpr std::array values{TreeProviderKind::Filesystem, TreeProviderKind::Git,
                                        TreeProviderKind::Symbols};
     return decodeEnum(value, out, values);
 }
 
-bool decode_present(ProtocolValue const& value, std::optional<TreeNodeKind>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<TreeNodeKind>& out) {
     static constexpr std::array values{TreeNodeKind::Root, TreeNodeKind::Directory,
                                        TreeNodeKind::File, TreeNodeKind::Symlink,
                                        TreeNodeKind::GitEntry, TreeNodeKind::Symbol};
     return decodeEnum(value, out, values);
 }
 
-bool decode_present(ProtocolValue const& value, std::optional<GitTreeStatus>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<GitTreeStatus>& out) {
     static constexpr std::array values{GitTreeStatus::Added, GitTreeStatus::Modified,
                                        GitTreeStatus::Deleted, GitTreeStatus::Renamed,
                                        GitTreeStatus::Untracked};
     return decodeEnum(value, out, values);
 }
 
-bool decode_present(ProtocolValue const& value, std::optional<SyntaxScope>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<SyntaxScope>& out) {
     return decodeEnum(value, out, kAllSyntaxScopes);
 }
 
-bool decode_present(ProtocolValue const& value, std::optional<BracketKind>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<BracketKind>& out) {
     static constexpr std::array values{BracketKind::Round, BracketKind::Square,
                                        BracketKind::Curly};
     return decodeEnum(value, out, values);
 }
 
-bool decode_present(ProtocolValue const& value, std::optional<BracketRole>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<BracketRole>& out) {
     static constexpr std::array values{BracketRole::Open, BracketRole::Close};
     return decodeEnum(value, out, values);
 }
 
-bool decode_present(ProtocolValue const& value, std::optional<CommentKind>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<CommentKind>& out) {
     static constexpr std::array values{CommentKind::Line, CommentKind::Block};
     return decodeEnum(value, out, values);
 }
 
-bool decode_present(ProtocolValue const& value, std::optional<CommentTokenRole>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<CommentTokenRole>& out) {
     static constexpr std::array values{CommentTokenRole::Line, CommentTokenRole::BlockOpen,
                                        CommentTokenRole::BlockClose};
     return decodeEnum(value, out, values);
 }
 
-bool decode_present(ProtocolValue const& value, std::optional<LspDiagnosticSeverity>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<LspDiagnosticSeverity>& out) {
     static constexpr std::array values{
         LspDiagnosticSeverity::Error, LspDiagnosticSeverity::Warning,
         LspDiagnosticSeverity::Information, LspDiagnosticSeverity::Hint};
     return decodeEnum(value, out, values);
 }
 
-bool decode_present(ProtocolValue const& value, std::optional<ShellNodeKind>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<ShellNodeKind>& out) {
     static constexpr std::array values{
         ShellNodeKind::Header, ShellNodeKind::HeaderField, ShellNodeKind::Footer,
         ShellNodeKind::FooterField, ShellNodeKind::FooterAction, ShellNodeKind::TabBar,
@@ -1699,16 +1699,16 @@ bool decodePresent(ProtocolValue const& value, std::optional<FocusTarget>& out) 
     return decodeEnum(value, out, values);
 }
 
-bool decode_present(ProtocolValue const& value, std::optional<SemanticRole>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<SemanticRole>& out) {
     return decodeEnum(value, out, kAllSemanticRoles);
 }
 
-// Strong-id toValue()/decode_present() definitions.
+// Strong-id toValue()/decodePresent() definitions.
 
 ProtocolValue toValue(Revision const& value) {
     return ProtocolValue::makeUint(value.value());
 }
-bool decode_present(ProtocolValue const& value, std::optional<Revision>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<Revision>& out) {
     auto raw = value.asUint();
     if (!raw) return false;
     out.emplace(*raw);
@@ -1718,7 +1718,7 @@ bool decode_present(ProtocolValue const& value, std::optional<Revision>& out) {
 ProtocolValue toValue(ByteOffset const& value) {
     return ProtocolValue::makeUint(value.value());
 }
-bool decode_present(ProtocolValue const& value, std::optional<ByteOffset>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<ByteOffset>& out) {
     auto raw = value.asUint();
     if (!raw) return false;
     out.emplace(*raw);
@@ -1728,7 +1728,7 @@ bool decode_present(ProtocolValue const& value, std::optional<ByteOffset>& out) 
 ProtocolValue toValue(LineIndex const& value) {
     return ProtocolValue::makeUint(value.value());
 }
-bool decode_present(ProtocolValue const& value, std::optional<LineIndex>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<LineIndex>& out) {
     auto raw = value.asUint();
     if (!raw) return false;
     out.emplace(*raw);
@@ -1738,7 +1738,7 @@ bool decode_present(ProtocolValue const& value, std::optional<LineIndex>& out) {
 ProtocolValue toValue(CellIndex const& value) {
     return ProtocolValue::makeUint(value.value());
 }
-bool decode_present(ProtocolValue const& value, std::optional<CellIndex>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<CellIndex>& out) {
     auto raw = value.asUint();
     if (!raw) return false;
     out.emplace(*raw);
@@ -1748,7 +1748,7 @@ bool decode_present(ProtocolValue const& value, std::optional<CellIndex>& out) {
 ProtocolValue toValue(ClientId const& value) {
     return ProtocolValue::makeUint(value.value());
 }
-bool decode_present(ProtocolValue const& value, std::optional<ClientId>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<ClientId>& out) {
     auto raw = value.asUint();
     if (!raw) return false;
     out.emplace(*raw);
@@ -1758,7 +1758,7 @@ bool decode_present(ProtocolValue const& value, std::optional<ClientId>& out) {
 ProtocolValue toValue(ViewId const& value) {
     return ProtocolValue::makeUint(value.value());
 }
-bool decode_present(ProtocolValue const& value, std::optional<ViewId>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<ViewId>& out) {
     auto raw = value.asUint();
     if (!raw) return false;
     out.emplace(*raw);
@@ -1768,7 +1768,7 @@ bool decode_present(ProtocolValue const& value, std::optional<ViewId>& out) {
 ProtocolValue toValue(WorkspaceId const& value) {
     return ProtocolValue::makeUint(value.value());
 }
-bool decode_present(ProtocolValue const& value, std::optional<WorkspaceId>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<WorkspaceId>& out) {
     auto raw = value.asUint();
     if (!raw) return false;
     out.emplace(*raw);
@@ -1778,7 +1778,7 @@ bool decode_present(ProtocolValue const& value, std::optional<WorkspaceId>& out)
 ProtocolValue toValue(CapabilityId const& value) {
     return ProtocolValue::makeText(std::string{value.value()});
 }
-bool decode_present(ProtocolValue const& value, std::optional<CapabilityId>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<CapabilityId>& out) {
     auto const* text = value.asText();
     if (!text) return false;
     out.emplace(*text);
@@ -1788,7 +1788,7 @@ bool decode_present(ProtocolValue const& value, std::optional<CapabilityId>& out
 ProtocolValue toValue(StatusId const& value) {
     return ProtocolValue::makeUint(value.value());
 }
-bool decode_present(ProtocolValue const& value, std::optional<StatusId>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<StatusId>& out) {
     auto raw = value.asUint();
     if (!raw) return false;
     out.emplace(*raw);
@@ -1798,7 +1798,7 @@ bool decode_present(ProtocolValue const& value, std::optional<StatusId>& out) {
 ProtocolValue toValue(TabId const& value) {
     return ProtocolValue::makeUint(value.value());
 }
-bool decode_present(ProtocolValue const& value, std::optional<TabId>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<TabId>& out) {
     auto raw = value.asUint();
     if (!raw) return false;
     out.emplace(*raw);
@@ -1808,7 +1808,7 @@ bool decode_present(ProtocolValue const& value, std::optional<TabId>& out) {
 ProtocolValue toValue(FileDocumentId const& value) {
     return ProtocolValue::makeUint(value.value());
 }
-bool decode_present(ProtocolValue const& value, std::optional<FileDocumentId>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<FileDocumentId>& out) {
     auto raw = value.asUint();
     if (!raw) return false;
     out.emplace(*raw);
@@ -1818,7 +1818,7 @@ bool decode_present(ProtocolValue const& value, std::optional<FileDocumentId>& o
 ProtocolValue toValue(DiffFileId const& value) {
     return ProtocolValue::makeText(value.value());
 }
-bool decode_present(ProtocolValue const& value, std::optional<DiffFileId>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<DiffFileId>& out) {
     auto const* text = value.asText();
     if (!text) return false;
     out.emplace(*text);
@@ -1828,7 +1828,7 @@ bool decode_present(ProtocolValue const& value, std::optional<DiffFileId>& out) 
 ProtocolValue toValue(PaneId const& value) {
     return ProtocolValue::makeUint(value.value());
 }
-bool decode_present(ProtocolValue const& value, std::optional<PaneId>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<PaneId>& out) {
     auto raw = value.asUint();
     if (!raw || *raw > std::numeric_limits<std::uint32_t>::max()) return false;
     out.emplace(static_cast<std::uint32_t>(*raw));
@@ -1838,7 +1838,7 @@ bool decode_present(ProtocolValue const& value, std::optional<PaneId>& out) {
 ProtocolValue toValue(TreeProviderId const& value) {
     return ProtocolValue::makeText(value.value());
 }
-bool decode_present(ProtocolValue const& value, std::optional<TreeProviderId>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<TreeProviderId>& out) {
     auto const* text = value.asText();
     if (!text) return false;
     out.emplace(*text);
@@ -1848,7 +1848,7 @@ bool decode_present(ProtocolValue const& value, std::optional<TreeProviderId>& o
 ProtocolValue toValue(TreeNodeId const& value) {
     return ProtocolValue::makeText(value.value());
 }
-bool decode_present(ProtocolValue const& value, std::optional<TreeNodeId>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<TreeNodeId>& out) {
     auto const* text = value.asText();
     if (!text) return false;
     out.emplace(*text);
@@ -1858,7 +1858,7 @@ bool decode_present(ProtocolValue const& value, std::optional<TreeNodeId>& out) 
 ProtocolValue toValue(TreeRevision const& value) {
     return ProtocolValue::makeUint(value.value());
 }
-bool decode_present(ProtocolValue const& value, std::optional<TreeRevision>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<TreeRevision>& out) {
     auto raw = value.asUint();
     if (!raw) return false;
     out.emplace(*raw);
@@ -1868,7 +1868,7 @@ bool decode_present(ProtocolValue const& value, std::optional<TreeRevision>& out
 ProtocolValue toValue(LanguageId const& value) {
     return ProtocolValue::makeText(value.value());
 }
-bool decode_present(ProtocolValue const& value, std::optional<LanguageId>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<LanguageId>& out) {
     auto const* text = value.asText();
     if (!text) return false;
     out.emplace(*text);
@@ -1881,7 +1881,7 @@ ProtocolValue toValue(UntitledDocumentId const& value) {
     for (std::byte b : value.bytes()) bytes.push_back(static_cast<std::uint8_t>(b));
     return ProtocolValue::makeBytes(std::move(bytes));
 }
-bool decode_present(ProtocolValue const& value, std::optional<UntitledDocumentId>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<UntitledDocumentId>& out) {
     auto const* bytes = value.asBytes();
     if (!bytes || bytes->size() != 16) return false;
     std::array<std::byte, 16> raw{};
@@ -1900,7 +1900,7 @@ ProtocolValue toValue(JournalDocumentKey const& value) {
     }
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<JournalDocumentKey>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<JournalDocumentKey>& out) {
     auto kind = requireField<JournalDocumentKeyKind>(value.field("kind"));
     if (!kind) return false;
     if (*kind == JournalDocumentKeyKind::Saved) {
@@ -1916,7 +1916,7 @@ bool decode_present(ProtocolValue const& value, std::optional<JournalDocumentKey
 }
 
 //
-// Every composite decode_present() below starts by rejecting a non-object
+// Every composite decodePresent() below starts by rejecting a non-object
 // wire value outright: value.field() already returns nullptr for every key
 // when the value is not an object, which require_field() and
 // decode_optional_field() both turn into "field absent" -- but a struct
@@ -1932,7 +1932,7 @@ ProtocolValue toValue(DocumentPosition const& value) {
     fields.emplace_back("cell", toValue(value.cell));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<DocumentPosition>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<DocumentPosition>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto byteOffset = requireField<ByteOffset>(value.field("byte_offset"));
@@ -1950,7 +1950,7 @@ ProtocolValue toValue(DocumentViewState const& value) {
     fields.emplace_back("caret", toValue(value.caret));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<DocumentViewState>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<DocumentViewState>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto revision = requireField<Revision>(value.field("revision"));
@@ -1970,7 +1970,7 @@ ProtocolValue toValue(DocumentDelta const& value) {
     fields.emplace_back("inserted_text", toValue(value.insertedText));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<DocumentDelta>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<DocumentDelta>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto baseRevision = requireField<Revision>(value.field("base_revision"));
@@ -1992,7 +1992,7 @@ ProtocolValue toValue(Selection const& value) {
     fields.emplace_back("active", toValue(value.active));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<Selection>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<Selection>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto anchor = requireField<DocumentPosition>(value.field("anchor"));
@@ -2007,7 +2007,7 @@ ProtocolValue toValue(SelectionSet const& value) {
     fields.emplace_back("selections", toValue(value.items()));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<SelectionSet>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<SelectionSet>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto selections =
@@ -2025,7 +2025,7 @@ ProtocolValue toValue(SelectionViewState const& value) {
     fields.emplace_back("desired_cell", toValue(value.desiredCell));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<SelectionViewState>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<SelectionViewState>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto selections = requireField<SelectionSet>(value.field("selections"));
@@ -2047,7 +2047,7 @@ ProtocolValue toValue(SelectionViewDelta const& value) {
     fields.emplace_back("replacement", toValue(value.replacement));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<SelectionViewDelta>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<SelectionViewDelta>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto changed = requireField<bool>(value.field("changed"));
@@ -2065,7 +2065,7 @@ ProtocolValue toValue(HistoryViewState const& value) {
     fields.emplace_back("retained_bytes", toValue(value.retainedBytes));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<HistoryViewState>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<HistoryViewState>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto canUndo = requireField<bool>(value.field("can_undo"));
@@ -2082,7 +2082,7 @@ ProtocolValue toValue(HistoryDelta const& value) {
     fields.emplace_back("replacement", toValue(value.replacement));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<HistoryDelta>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<HistoryDelta>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto changed = requireField<bool>(value.field("changed"));
@@ -2102,7 +2102,7 @@ ProtocolValue toValue(Rect const& value) {
     fields.emplace_back("height", toValue(value.height));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<Rect>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<Rect>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto x = requireField<int>(value.field("x"));
@@ -2120,7 +2120,7 @@ ProtocolValue toValue(GridSize const& value) {
     fields.emplace_back("rows", toValue(value.rows));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<GridSize>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<GridSize>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto columns = requireField<int>(value.field("columns"));
@@ -2156,7 +2156,7 @@ ProtocolValue toValue(AccessibilityNode const& value) {
     fields.emplace_back("content", toValue(value.content));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<AccessibilityNode>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<AccessibilityNode>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto kind = requireField<ShellNodeKind>(value.field("kind"));
@@ -2178,7 +2178,7 @@ ProtocolValue toValue(PaneGeometry const& value) {
     fields.emplace_back("scrollbar", toValue(value.scrollbar));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<PaneGeometry>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<PaneGeometry>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto id = requireField<PaneId>(value.field("id"));
@@ -2196,7 +2196,7 @@ ProtocolValue toValue(TabHit const& value) {
     fields.emplace_back("index", toValue(value.index));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<TabHit>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<TabHit>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto rect = requireField<Rect>(value.field("rect"));
@@ -2221,7 +2221,7 @@ ProtocolValue toValue(ShellViewState const& value) {
     fields.emplace_back("focus", toValue(value.focus));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<ShellViewState>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<ShellViewState>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto viewport = requireField<GridSize>(value.field("viewport"));
@@ -2317,7 +2317,7 @@ ProtocolValue toValue(PromptControlView const& value) {
     fields.emplace_back("rect", toValue(value.rect));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<PromptControlView>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<PromptControlView>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto kind = requireField<PromptControlKind>(value.field("kind"));
@@ -2342,7 +2342,7 @@ ProtocolValue toValue(PromptViewState const& value) {
     fields.emplace_back("controls", toValue(value.controls));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<PromptViewState>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<PromptViewState>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto kind = requireField<PromptKind>(value.field("kind"));
@@ -2362,7 +2362,7 @@ ProtocolValue toValue(StatusAction const& value) {
     fields.emplace_back("command_id", toValue(value.commandId));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<StatusAction>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<StatusAction>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto id = requireField<std::string>(value.field("id"));
@@ -2382,7 +2382,7 @@ ProtocolValue toValue(StatusItemView const& value) {
     fields.emplace_back("actions", toValue(value.actions));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<StatusItemView>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<StatusItemView>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto id = requireField<StatusId>(value.field("id"));
@@ -2404,7 +2404,7 @@ ProtocolValue toValue(StatusViewState const& value) {
     fields.emplace_back("selected", toValue(static_cast<std::uint64_t>(value.selected)));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<StatusViewState>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<StatusViewState>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto items = requireField<std::vector<StatusItemView>>(value.field("items"));
@@ -2421,7 +2421,7 @@ ProtocolValue toValue(StatusActionInvocation const& value) {
     fields.emplace_back("generation", toValue(value.generation));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<StatusActionInvocation>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<StatusActionInvocation>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto statusId = requireField<StatusId>(value.field("status_id"));
@@ -2438,7 +2438,7 @@ ProtocolValue toValue(PromptStatusViewState const& value) {
     fields.emplace_back("status", toValue(value.status));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<PromptStatusViewState>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<PromptStatusViewState>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto status = requireField<StatusViewState>(value.field("status"));
@@ -2455,7 +2455,7 @@ ProtocolValue toValue(PromptStatusDelta const& value) {
     fields.emplace_back("replacement", toValue(value.replacement));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<PromptStatusDelta>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<PromptStatusDelta>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto changed = requireField<bool>(value.field("changed"));
@@ -2475,7 +2475,7 @@ ProtocolValue toValue(ClipboardRequest const& value) {
     fields.emplace_back("text", toValue(value.text));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<ClipboardRequest>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<ClipboardRequest>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto id = requireField<std::uint64_t>(value.field("id"));
@@ -2497,7 +2497,7 @@ ProtocolValue toValue(ClipboardResponse const& value) {
     fields.emplace_back("text", toValue(value.text));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<ClipboardResponse>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<ClipboardResponse>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto id = requireField<std::uint64_t>(value.field("id"));
@@ -2522,7 +2522,7 @@ ProtocolValue toValue(ClipboardViewState const& value) {
     fields.emplace_back("pending_write", toValue(value.pendingWrite));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<ClipboardViewState>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<ClipboardViewState>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto fragments = requireField<std::vector<std::string>>(value.field("fragments"));
@@ -2547,7 +2547,7 @@ ProtocolValue toValue(ClipboardDelta const& value) {
     fields.emplace_back("replacement", toValue(value.replacement));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<ClipboardDelta>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<ClipboardDelta>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto changed = requireField<bool>(value.field("changed"));
@@ -2569,7 +2569,7 @@ ProtocolValue toValue(SearchResult const& value) {
     fields.emplace_back("score", toValue(value.score));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<SearchResult>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<SearchResult>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto mode = requireField<SearchMode>(value.field("mode"));
@@ -2606,7 +2606,7 @@ ProtocolValue toValue(SearchViewState const& value) {
     fields.emplace_back("searching", toValue(value.searching));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<SearchViewState>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<SearchViewState>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto revision = requireField<Revision>(value.field("revision"));
@@ -2646,7 +2646,7 @@ ProtocolValue toValue(SearchDelta const& value) {
     fields.emplace_back("state", toValue(value.state));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<SearchDelta>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<SearchDelta>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto baseRevision = requireField<Revision>(value.field("base_revision"));
@@ -2667,7 +2667,7 @@ ProtocolValue toValue(ByteRange const& value) {
     fields.emplace_back("end", toValue(value.end));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<ByteRange>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<ByteRange>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto begin = requireField<ByteOffset>(value.field("begin"));
@@ -2685,7 +2685,7 @@ ProtocolValue toValue(FindOptions const& value) {
     fields.emplace_back("selection_only", toValue(value.selectionOnly));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<FindOptions>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<FindOptions>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto caseSensitive = requireField<bool>(value.field("case_sensitive"));
@@ -2705,7 +2705,7 @@ ProtocolValue toValue(FindRequest const& value) {
     fields.emplace_back("work_budget", toValue(value.workBudget));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<FindRequest>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<FindRequest>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto query = requireField<std::string>(value.field("query"));
@@ -2728,7 +2728,7 @@ ProtocolValue toValue(FindMatch const& value) {
     fields.emplace_back("end", toValue(value.end));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<FindMatch>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<FindMatch>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto begin = requireField<ByteOffset>(value.field("begin"));
@@ -2746,7 +2746,7 @@ ProtocolValue toValue(WorkspaceFileReplacement const& value) {
     fields.emplace_back("matches", toValue(value.matches));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<WorkspaceFileReplacement>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<WorkspaceFileReplacement>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto path = requireField<std::string>(value.field("path"));
@@ -2767,7 +2767,7 @@ ProtocolValue toValue(WorkspaceReplacePreview const& value) {
     fields.emplace_back("changes", toValue(value.changes));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<WorkspaceReplacePreview>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<WorkspaceReplacePreview>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto sourceRevision = requireField<Revision>(value.field("source_revision"));
@@ -2801,7 +2801,7 @@ ProtocolValue toValue(FindReplaceViewState const& value) {
     fields.emplace_back("message", toValue(value.message));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<FindReplaceViewState>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<FindReplaceViewState>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto generation = requireField<std::uint64_t>(value.field("generation"));
@@ -2845,7 +2845,7 @@ ProtocolValue toValue(FindReplaceDelta const& value) {
     fields.emplace_back("replacement", toValue(value.replacement));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<FindReplaceDelta>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<FindReplaceDelta>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto changed = requireField<bool>(value.field("changed"));
@@ -2870,7 +2870,7 @@ ProtocolValue toValue(SettingValue const& value) {
         value);
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<SettingValue>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<SettingValue>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto index = requireField<std::uint64_t>(value.field("index"));
@@ -2931,7 +2931,7 @@ ProtocolValue toValue(EffectiveSetting const& value) {
     fields.emplace_back("source", toValue(value.source));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<EffectiveSetting>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<EffectiveSetting>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto settingValue = requireField<SettingValue>(value.field("value"));
@@ -2947,7 +2947,7 @@ ProtocolValue toValue(SettingViewEntry const& value) {
     fields.emplace_back("effective", toValue(value.effective));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<SettingViewEntry>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<SettingViewEntry>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto key = requireField<SettingKey>(value.field("key"));
@@ -2962,7 +2962,7 @@ ProtocolValue toValue(SettingsViewState const& value) {
     fields.emplace_back("entries", toValue(value.entries));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<SettingsViewState>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<SettingsViewState>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto entries =
@@ -2982,7 +2982,7 @@ ProtocolValue toValue(SettingsDelta const& value) {
     fields.emplace_back("after", toValue(value.after));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<SettingsDelta>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<SettingsDelta>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto key = requireField<SettingKey>(value.field("key"));
@@ -2998,7 +2998,7 @@ ProtocolValue toValue(SettingsSectionDelta const& value) {
     fields.emplace_back("changes", toValue(value.changes));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<SettingsSectionDelta>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<SettingsSectionDelta>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto changes = requireField<std::vector<SettingsDelta>>(value.field("changes"));
@@ -3017,7 +3017,7 @@ ProtocolValue toValue(KeyStroke const& value) {
     fields.emplace_back("shift", toValue(value.shift));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<KeyStroke>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<KeyStroke>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto code = requireField<std::string>(value.field("code"));
@@ -3037,7 +3037,7 @@ ProtocolValue toValue(KeyBinding const& value) {
     fields.emplace_back("context", toValue(value.context));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<KeyBinding>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<KeyBinding>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto sequence = requireField<std::vector<KeyStroke>>(value.field("sequence"));
@@ -3054,7 +3054,7 @@ ProtocolValue toValue(KeymapViewState const& value) {
     fields.emplace_back("bindings", toValue(value.bindings));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<KeymapViewState>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<KeymapViewState>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto name = requireField<std::string>(value.field("name"));
@@ -3070,7 +3070,7 @@ ProtocolValue toValue(KeymapDelta const& value) {
     fields.emplace_back("replacement", toValue(value.replacement));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<KeymapDelta>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<KeymapDelta>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto changed = requireField<bool>(value.field("changed"));
@@ -3090,7 +3090,7 @@ ProtocolValue toValue(TextEncodingStatus const& value) {
     fields.emplace_back("final_newline", toValue(value.finalNewline));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<TextEncodingStatus>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<TextEncodingStatus>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto encoding = requireField<TextEncoding>(value.field("encoding"));
@@ -3107,7 +3107,7 @@ ProtocolValue toValue(TextEncodingViewState const& value) {
     fields.emplace_back("status", toValue(value.status));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<TextEncodingViewState>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<TextEncodingViewState>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto status = requireField<TextEncodingStatus>(value.field("status"));
@@ -3122,7 +3122,7 @@ ProtocolValue toValue(TextEncodingDelta const& value) {
     fields.emplace_back("after", toValue(value.after));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<TextEncodingDelta>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<TextEncodingDelta>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto before = requireField<TextEncodingViewState>(value.field("before"));
@@ -3146,7 +3146,7 @@ ProtocolValue toValue(TabState const& value) {
     fields.emplace_back("recovery", toValue(value.recovery));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<TabState>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<TabState>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto id = requireField<TabId>(value.field("id"));
@@ -3181,7 +3181,7 @@ ProtocolValue toValue(TabViewState const& value) {
     fields.emplace_back("active", toValue(value.active));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<TabViewState>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<TabViewState>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto tabs = requireField<std::vector<TabState>>(value.field("tabs"));
@@ -3198,7 +3198,7 @@ ProtocolValue toValue(TabDelta const& value) {
     fields.emplace_back("state", toValue(value.state));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<TabDelta>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<TabDelta>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     TabDelta result;
@@ -3225,7 +3225,7 @@ ProtocolValue toValue(DiffLineChange const& value) {
     }
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<DiffLineChange>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<DiffLineChange>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto kind = requireField<DiffLineKind>(value.field("kind"));
@@ -3252,7 +3252,7 @@ ProtocolValue toValue(DiffHunk const& value) {
     fields.emplace_back("target_lines", toValue(value.targetLines));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<DiffHunk>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<DiffHunk>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto baselineStart = requireField<std::uint64_t>(value.field("baseline_start"));
@@ -3283,7 +3283,7 @@ ProtocolValue toValue(DiffFileView const& value) {
     fields.emplace_back("changed_lines", toValue(value.changedLines));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<DiffFileView>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<DiffFileView>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto id = requireField<DiffFileId>(value.field("id"));
@@ -3313,7 +3313,7 @@ ProtocolValue toValue(DiffViewState const& value) {
     fields.emplace_back("files", toValue(value.files));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<DiffViewState>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<DiffViewState>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto revision = requireField<Revision>(value.field("revision"));
@@ -3331,7 +3331,7 @@ ProtocolValue toValue(DiffDelta const& value) {
     fields.emplace_back("removed", toValue(value.removed));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<DiffDelta>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<DiffDelta>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto baseRevision = requireField<Revision>(value.field("base_revision"));
@@ -3353,7 +3353,7 @@ ProtocolValue toValue(ExternalDocumentView const& value) {
     fields.emplace_back("actions", toValue(value.actions));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<ExternalDocumentView>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<ExternalDocumentView>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto id = requireField<DiffFileId>(value.field("id"));
@@ -3372,7 +3372,7 @@ ProtocolValue toValue(ExternalModificationViewState const& value) {
     fields.emplace_back("files", toValue(value.files));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<ExternalModificationViewState>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<ExternalModificationViewState>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto revision = requireField<Revision>(value.field("revision"));
@@ -3390,7 +3390,7 @@ ProtocolValue toValue(ExternalModificationDelta const& value) {
     fields.emplace_back("removed", toValue(value.removed));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<ExternalModificationDelta>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<ExternalModificationDelta>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto baseRevision = requireField<Revision>(value.field("base_revision"));
@@ -3409,7 +3409,7 @@ ProtocolValue toValue(ViewportDimensions const& value) {
     fields.emplace_back("rows", toValue(value.rows));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<ViewportDimensions>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<ViewportDimensions>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto columns = requireField<std::uint32_t>(value.field("columns"));
@@ -3430,7 +3430,7 @@ ProtocolValue toValue(VisualRow const& value) {
     fields.emplace_back("end_byte_offset", toValue(value.endByteOffset));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<VisualRow>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<VisualRow>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto logicalLine = requireField<std::uint32_t>(value.field("logical_line"));
@@ -3459,7 +3459,7 @@ ProtocolValue toValue(CellHitTarget const& value) {
     fields.emplace_back("byte_len", toValue(value.byteLen));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<CellHitTarget>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<CellHitTarget>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto viewportRow = requireField<std::uint32_t>(value.field("viewport_row"));
@@ -3487,7 +3487,7 @@ ProtocolValue toValue(ScrollbarMetrics const& value) {
     fields.emplace_back("thumb_size", toValue(value.thumbSize));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<ScrollbarMetrics>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<ScrollbarMetrics>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto totalRows = requireField<std::uint32_t>(value.field("total_rows"));
@@ -3516,7 +3516,7 @@ ProtocolValue toValue(ViewportViewState const& value) {
     fields.emplace_back("scrollbar", toValue(value.scrollbar));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<ViewportViewState>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<ViewportViewState>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto dimensions = requireField<ViewportDimensions>(value.field("dimensions"));
@@ -3542,7 +3542,7 @@ ProtocolValue toValue(ViewportDelta const& value) {
     fields.emplace_back("replacement", toValue(value.replacement));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<ViewportDelta>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<ViewportDelta>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto changed = requireField<bool>(value.field("changed"));
@@ -3560,7 +3560,7 @@ ProtocolValue toValue(FollowScrollOffset const& value) {
     fields.emplace_back("first_column", toValue(value.firstColumn));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<FollowScrollOffset>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<FollowScrollOffset>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto firstRow = requireField<std::uint64_t>(value.field("first_row"));
@@ -3580,7 +3580,7 @@ ProtocolValue toValue(FollowTarget const& value) {
     fields.emplace_back("source_revision", toValue(value.sourceRevision));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<FollowTarget>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<FollowTarget>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto id = requireField<DiffFileId>(value.field("id"));
@@ -3602,7 +3602,7 @@ ProtocolValue toValue(FollowClientView const& value) {
     fields.emplace_back("offset", toValue(value.offset));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<FollowClientView>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<FollowClientView>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto client = requireField<ClientId>(value.field("client"));
@@ -3623,7 +3623,7 @@ ProtocolValue toValue(FollowEditsViewState const& value) {
     fields.emplace_back("clients", toValue(value.clients));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<FollowEditsViewState>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<FollowEditsViewState>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto generation = requireField<std::uint64_t>(value.field("generation"));
@@ -3652,7 +3652,7 @@ ProtocolValue toValue(FollowEditsDelta const& value) {
     fields.emplace_back("replacement", toValue(value.replacement));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<FollowEditsDelta>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<FollowEditsDelta>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto baseGeneration = requireField<std::uint64_t>(value.field("base_generation"));
@@ -3675,7 +3675,7 @@ ProtocolValue toValue(TreeNodeCommand const& value) {
     fields.emplace_back("label", toValue(value.label));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<TreeNodeCommand>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<TreeNodeCommand>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto id = requireField<std::string>(value.field("id"));
@@ -3703,7 +3703,7 @@ ProtocolValue toValue(TreeNode const& value) {
     fields.emplace_back("expandable", toValue(value.expandable));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<TreeNode>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<TreeNode>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto id = requireField<TreeNodeId>(value.field("id"));
@@ -3735,7 +3735,7 @@ ProtocolValue toValue(TreeNodeView const& value) {
     fields.emplace_back("expanded", toValue(value.expanded));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<TreeNodeView>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<TreeNodeView>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto node = requireField<TreeNode>(value.field("node"));
@@ -3757,7 +3757,7 @@ ProtocolValue toValue(TreeProviderView const& value) {
     fields.emplace_back("visible_node_ids", toValue(value.visibleNodeIds));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<TreeProviderView>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<TreeProviderView>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto providerId = requireField<TreeProviderId>(value.field("provider_id"));
@@ -3783,7 +3783,7 @@ ProtocolValue toValue(TreeViewState const& value) {
     fields.emplace_back("providers", toValue(value.providers));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<TreeViewState>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<TreeViewState>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto revision = requireField<TreeRevision>(value.field("revision"));
@@ -3807,7 +3807,7 @@ ProtocolValue toValue(TreeProviderDelta const& value) {
     fields.emplace_back("visible_node_ids", toValue(value.visibleNodeIds));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<TreeProviderDelta>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<TreeProviderDelta>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto providerId = requireField<TreeProviderId>(value.field("provider_id"));
@@ -3842,7 +3842,7 @@ ProtocolValue toValue(TreeDelta const& value) {
     fields.emplace_back("providers", toValue(value.providers));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<TreeDelta>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<TreeDelta>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto baseRevision = requireField<TreeRevision>(value.field("base_revision"));
@@ -3861,7 +3861,7 @@ ProtocolValue toValue(SyntaxRange const& value) {
     fields.emplace_back("end", toValue(value.end));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<SyntaxRange>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<SyntaxRange>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto begin = requireField<ByteOffset>(value.field("begin"));
@@ -3878,7 +3878,7 @@ ProtocolValue toValue(SyntaxSpan const& value) {
     fields.emplace_back("scope", toValue(value.scope));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<SyntaxSpan>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<SyntaxSpan>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto begin = requireField<ByteOffset>(value.field("begin"));
@@ -3897,7 +3897,7 @@ ProtocolValue toValue(SyntaxBracketPair const& value) {
     fields.emplace_back("depth", toValue(value.depth));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<SyntaxBracketPair>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<SyntaxBracketPair>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto open = requireField<ByteOffset>(value.field("open"));
@@ -3916,7 +3916,7 @@ ProtocolValue toValue(UnmatchedBracket const& value) {
     fields.emplace_back("role", toValue(value.role));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<UnmatchedBracket>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<UnmatchedBracket>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto offset = requireField<ByteOffset>(value.field("offset"));
@@ -3933,7 +3933,7 @@ ProtocolValue toValue(CommentToken const& value) {
     fields.emplace_back("role", toValue(value.role));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<CommentToken>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<CommentToken>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto range = requireField<SyntaxRange>(value.field("range"));
@@ -3949,7 +3949,7 @@ ProtocolValue toValue(CommentRange const& value) {
     fields.emplace_back("kind", toValue(value.kind));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<CommentRange>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<CommentRange>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto range = requireField<SyntaxRange>(value.field("range"));
@@ -3970,7 +3970,7 @@ ProtocolValue toValue(LineIndentation const& value) {
     fields.emplace_back("blank", toValue(value.blank));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<LineIndentation>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<LineIndentation>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto line = requireField<LineIndex>(value.field("line"));
@@ -4001,7 +4001,7 @@ ProtocolValue toValue(SyntaxViewState const& value) {
     fields.emplace_back("indentation", toValue(value.indentation()));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<SyntaxViewState>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<SyntaxViewState>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto revision = requireField<Revision>(value.field("revision"));
@@ -4037,7 +4037,7 @@ ProtocolValue toValue(SyntaxDelta const& value) {
     fields.emplace_back("indentation", toValue(value.indentation()));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<SyntaxDelta>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<SyntaxDelta>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto baseRevision = requireField<Revision>(value.field("base_revision"));
@@ -4074,7 +4074,7 @@ ProtocolValue toValue(LspPosition const& value) {
     fields.emplace_back("character", toValue(value.character));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<LspPosition>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<LspPosition>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto line = requireField<std::uint64_t>(value.field("line"));
@@ -4090,7 +4090,7 @@ ProtocolValue toValue(LspRange const& value) {
     fields.emplace_back("end", toValue(value.end));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<LspRange>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<LspRange>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto start = requireField<LspPosition>(value.field("start"));
@@ -4108,7 +4108,7 @@ ProtocolValue toValue(LspDiagnostic const& value) {
     fields.emplace_back("message", toValue(value.message));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<LspDiagnostic>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<LspDiagnostic>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto range = requireField<LspRange>(value.field("range"));
@@ -4131,7 +4131,7 @@ ProtocolValue toValue(LspDocumentDiagnostics const& value) {
     fields.emplace_back("diagnostics", toValue(value.diagnostics));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<LspDocumentDiagnostics>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<LspDocumentDiagnostics>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto uri = requireField<std::string>(value.field("uri"));
@@ -4148,7 +4148,7 @@ ProtocolValue toValue(LspSyncViewState const& value) {
     fields.emplace_back("documents", toValue(value.documents));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<LspSyncViewState>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<LspSyncViewState>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto revision = requireField<Revision>(value.field("revision"));
@@ -4165,7 +4165,7 @@ ProtocolValue toValue(LspSyncDelta const& value) {
     fields.emplace_back("state", toValue(value.state));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<LspSyncDelta>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<LspSyncDelta>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto baseRevision = requireField<Revision>(value.field("base_revision"));
@@ -4189,7 +4189,7 @@ ProtocolValue toValue(LspCompletionItem const& value) {
     fields.emplace_back("replacement_range", toValue(value.replacementRange));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<LspCompletionItem>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<LspCompletionItem>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto label = requireField<std::string>(value.field("label"));
@@ -4222,7 +4222,7 @@ ProtocolValue toValue(LspCompletionViewState const& value) {
     }
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<LspCompletionViewState>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<LspCompletionViewState>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto visible = requireField<bool>(value.field("visible"));
@@ -4246,7 +4246,7 @@ ProtocolValue toValue(LspHover const& value) {
     fields.emplace_back("range", toValue(value.range));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<LspHover>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<LspHover>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto contents = requireField<std::string>(value.field("contents"));
@@ -4264,7 +4264,7 @@ ProtocolValue toValue(LspNavigationTarget const& value) {
     fields.emplace_back("range", toValue(value.range));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<LspNavigationTarget>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<LspNavigationTarget>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto uri = requireField<std::string>(value.field("uri"));
@@ -4287,7 +4287,7 @@ ProtocolValue toValue(LspNavigationViewState const& value) {
     fields.emplace_back("reveal_primary_caret", toValue(value.revealPrimaryCaret));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<LspNavigationViewState>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<LspNavigationViewState>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto targets = requireField<std::vector<LspNavigationTarget>>(value.field("targets"));
@@ -4314,7 +4314,7 @@ ProtocolValue toValue(LspFeatureViewState const& value) {
     fields.emplace_back("status", toValue(value.status));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<LspFeatureViewState>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<LspFeatureViewState>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto revision = requireField<Revision>(value.field("revision"));
@@ -4339,7 +4339,7 @@ ProtocolValue toValue(LspFeatureDelta const& value) {
     fields.emplace_back("state", toValue(value.state));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<LspFeatureDelta>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<LspFeatureDelta>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto baseRevision = requireField<Revision>(value.field("base_revision"));
@@ -4361,7 +4361,7 @@ ProtocolValue toValue(SrgbColor const& value) {
     fields.emplace_back("blue", toValue(value.blue));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<SrgbColor>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<SrgbColor>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto red = requireField<std::uint8_t>(value.field("red"));
@@ -4380,7 +4380,7 @@ ProtocolValue toValue(ThemeSnapshot const& value) {
     fields.emplace_back("syntax_indices", toValue(value.syntaxIndices));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<ThemeSnapshot>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<ThemeSnapshot>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto palette =
@@ -4401,7 +4401,7 @@ ProtocolValue toValue(SessionTopology const& value) {
     fields.emplace_back("active_view", toValue(value.activeView));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<SessionTopology>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<SessionTopology>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     SessionTopology result;
@@ -4424,7 +4424,7 @@ ProtocolValue toValue(ClientSnapshotState const& value) {
     fields.emplace_back("viewport", toValue(value.viewport));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<ClientSnapshotState>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<ClientSnapshotState>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto clientId = requireField<ClientId>(value.field("client_id"));
@@ -4460,7 +4460,7 @@ ProtocolValue toValue(SessionSnapshotSections const& value) {
     fields.emplace_back("shell", toValue(value.shell));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<SessionSnapshotSections>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSections>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto document = requireField<DocumentViewState>(value.field("document"));
@@ -4504,7 +4504,7 @@ ProtocolValue toValue(TextInputArguments const& value) {
     fields.emplace_back("text", toValue(value.text));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<TextInputArguments>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<TextInputArguments>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto text = requireField<std::string>(value.field("text"));
@@ -4518,7 +4518,7 @@ ProtocolValue toValue(PaletteExecuteArguments const& value) {
     fields.emplace_back("command_id", toValue(value.commandId));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<PaletteExecuteArguments>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<PaletteExecuteArguments>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto commandId = requireField<std::string>(value.field("command_id"));
@@ -4532,7 +4532,7 @@ ProtocolValue toValue(TreeSelectArguments const& value) {
     fields.emplace_back("node_id", toValue(value.nodeId));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<TreeSelectArguments>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<TreeSelectArguments>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto nodeId = requireField<TreeNodeId>(value.field("node_id"));
@@ -4546,7 +4546,7 @@ ProtocolValue toValue(FindQueryArguments const& value) {
     fields.emplace_back("query", toValue(value.query));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<FindQueryArguments>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<FindQueryArguments>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto query = requireField<std::string>(value.field("query"));
@@ -4561,7 +4561,7 @@ ProtocolValue toValue(SelectionCommandArguments const& value) {
     fields.emplace_back("selection", toValue(value.selection));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<SelectionCommandArguments>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<SelectionCommandArguments>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     SelectionCommandArguments result;
@@ -4576,7 +4576,7 @@ ProtocolValue toValue(ScrollLinesArguments const& value) {
     fields.emplace_back("rows", toValue(value.rows));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<ScrollLinesArguments>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<ScrollLinesArguments>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto rows = requireField<std::int64_t>(value.field("rows"));
@@ -4590,7 +4590,7 @@ ProtocolValue toValue(ScrollPagesArguments const& value) {
     fields.emplace_back("pages", toValue(value.pages));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<ScrollPagesArguments>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<ScrollPagesArguments>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto pages = requireField<std::int64_t>(value.field("pages"));
@@ -4605,7 +4605,7 @@ ProtocolValue toValue(ScrollFractionArguments const& value) {
     fields.emplace_back("denominator", toValue(value.denominator));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<ScrollFractionArguments>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<ScrollFractionArguments>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto numerator = requireField<std::uint32_t>(value.field("numerator"));
@@ -4621,7 +4621,7 @@ ProtocolValue toValue(DroppedContentArguments const& value) {
     fields.emplace_back("suggested_label", toValue(value.suggestedLabel));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<DroppedContentArguments>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<DroppedContentArguments>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto bytes = requireField<std::vector<std::uint8_t>>(value.field("bytes"));
@@ -4636,7 +4636,7 @@ ProtocolValue toValue(ReopenWithEncodingArguments const& value) {
     fields.emplace_back("encoding", toValue(value.encoding));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<ReopenWithEncodingArguments>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<ReopenWithEncodingArguments>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto encoding = requireField<TextEncoding>(value.field("encoding"));
@@ -4650,7 +4650,7 @@ ProtocolValue toValue(SetEncodingArguments const& value) {
     fields.emplace_back("encoding", toValue(value.encoding));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<SetEncodingArguments>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<SetEncodingArguments>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto encoding = requireField<TextEncoding>(value.field("encoding"));
@@ -4664,7 +4664,7 @@ ProtocolValue toValue(SetLineEndingArguments const& value) {
     fields.emplace_back("line_ending", toValue(value.lineEnding));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<SetLineEndingArguments>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<SetLineEndingArguments>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto lineEnding = requireField<LineEnding>(value.field("line_ending"));
@@ -4678,7 +4678,7 @@ ProtocolValue toValue(SetFinalNewlineArguments const& value) {
     fields.emplace_back("final_newline", toValue(value.finalNewline));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<SetFinalNewlineArguments>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<SetFinalNewlineArguments>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto finalNewline = requireField<bool>(value.field("final_newline"));
@@ -4694,7 +4694,7 @@ ProtocolValue toValue(SettingSetArguments const& value) {
     fields.emplace_back("value", toValue(value.value));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<SettingSetArguments>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<SettingSetArguments>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto scope = requireField<SettingScope>(value.field("scope"));
@@ -4711,7 +4711,7 @@ ProtocolValue toValue(SettingResetArguments const& value) {
     fields.emplace_back("key", toValue(value.key));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<SettingResetArguments>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<SettingResetArguments>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto scope = requireField<SettingScope>(value.field("scope"));
@@ -4726,7 +4726,7 @@ ProtocolValue toValue(SettingResetScopeArguments const& value) {
     fields.emplace_back("scope", toValue(value.scope));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<SettingResetScopeArguments>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<SettingResetScopeArguments>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto scope = requireField<SettingScope>(value.field("scope"));
@@ -4741,7 +4741,7 @@ ProtocolValue toValue(WorkspaceReplaceArguments const& value) {
     fields.emplace_back("replacement", toValue(value.replacement));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<WorkspaceReplaceArguments>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<WorkspaceReplaceArguments>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto request = requireField<FindRequest>(value.field("request"));
@@ -4756,7 +4756,7 @@ ProtocolValue toValue(ThemeSectionDelta const& value) {
     fields.emplace_back("replacement", toValue(value.replacement));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<ThemeSectionDelta>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<ThemeSectionDelta>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     std::optional<ThemeSnapshot> replacement;
@@ -4770,7 +4770,7 @@ ProtocolValue toValue(ShellSectionDelta const& value) {
     fields.emplace_back("replacement", toValue(value.replacement));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decode_present(ProtocolValue const& value, std::optional<ShellSectionDelta>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<ShellSectionDelta>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     std::optional<ShellViewState> replacement;
