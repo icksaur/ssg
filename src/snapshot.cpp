@@ -5,8 +5,8 @@
 
 namespace ssg {
 
-std::optional<DocumentDelta> deriveDocumentDelta(
-    DocumentViewState const& before, DocumentViewState const& after) {
+std::optional<DocumentDelta> DocumentSnapshotCodec::deriveDelta(
+    DocumentViewState const& before, DocumentViewState const& after) const {
     if (before.revision == after.revision) {
         return std::nullopt;
     }
@@ -32,9 +32,9 @@ std::optional<DocumentDelta> deriveDocumentDelta(
         after.text.substr(prefix, after.text.size() - prefix - suffix)};
 }
 
-std::optional<DocumentViewState> replayDocumentDelta(
+std::optional<DocumentViewState> DocumentSnapshotCodec::replay(
     DocumentViewState const& before, DocumentDelta const& delta,
-    ByteOffset targetCaret) {
+    ByteOffset targetCaret) const {
     if (before.revision != delta.baseRevision ||
         delta.revision == delta.baseRevision ||
         delta.start.value() > before.text.size() ||

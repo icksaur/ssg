@@ -309,8 +309,8 @@ TEST(deltaReplayReconstructsTheSameSnapshotAndGrid) {
             continue;
         }
 
-        auto delta = ssg::deriveSessionDelta(*previous, *fresh);
-        auto replayed = ssg::replaySessionDelta(*previous, delta);
+        auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(*previous, *fresh);
+        auto replayed = ssg::SessionSnapshotCodec{}.replay(*previous, delta);
         ASSERT_TRUE(replayed.accepted());
         if (!replayed.accepted()) break;
 

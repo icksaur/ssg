@@ -172,7 +172,7 @@ public:
 
     ssg::SessionSnapshot snapshot(ssg::InvocationPrincipal const& principal,
                                   ssg::ViewId view) const {
-        return ssg::assembleSessionSnapshot(
+        return ssg::SessionSnapshotCodec{}.assemble(
             session->revision(), session->topology(), principal, view,
             model.viewport(), model.sections(session->revision()));
     }

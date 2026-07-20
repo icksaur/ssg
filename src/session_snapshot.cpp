@@ -146,10 +146,10 @@ SessionDelta::SessionDelta(
       shell_{std::move(shell)},
       viewport_{std::move(viewport)} {}
 
-SessionSnapshot assembleSessionSnapshot(
+SessionSnapshot SessionSnapshotCodec::assemble(
     Revision revision, SessionTopology topology,
     InvocationPrincipal const& principal, ViewId viewId,
-    ViewportViewState viewport, SessionSnapshotSections sections) {
+    ViewportViewState viewport, SessionSnapshotSections sections) const {
     return {revision,
             std::move(topology),
             {principal.clientId(), viewId, principal.capabilities(),
@@ -157,8 +157,9 @@ SessionSnapshot assembleSessionSnapshot(
             std::move(sections)};
 }
 
-SessionDelta deriveSessionDelta(SessionSnapshot const& before,
-                                  SessionSnapshot const& after) {
+SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
+                                               SessionSnapshot const& after)
+    const {
     if (before.client().clientId != after.client().clientId ||
         before.client().viewId != after.client().viewId ||
         before.client().capabilities != after.client().capabilities) {
@@ -170,8 +171,8 @@ SessionDelta deriveSessionDelta(SessionSnapshot const& before,
         throw std::invalid_argument{"session delta revisions must advance"};
     }
     auto document =
-        deriveDocumentDelta(before.sections().document,
-                              after.sections().document);
+        DocumentSnapshotCodec{}.deriveDelta(before.sections().document,
+                                           after.sections().document);
     auto const& old = before.sections();
     auto const& next = after.sections();
     if (!document &&
@@ -221,8 +222,9 @@ SessionDelta deriveSessionDelta(SessionSnapshot const& before,
     };
 }
 
-SessionReplayResult replaySessionDelta(SessionSnapshot const& base,
-                                         SessionDelta const& delta) {
+SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
+                                                 SessionDelta const& delta)
+    const {
     if (base.revision() != delta.baseRevision_ ||
         delta.revision_ <= delta.baseRevision_ ||
         base.client().clientId != delta.clientId_ ||
@@ -233,7 +235,7 @@ SessionReplayResult replaySessionDelta(SessionSnapshot const& base,
 
     auto document = std::optional<DocumentViewState>{base.sections().document};
     if (delta.document_) {
-        document = replayDocumentDelta(
+        document = DocumentSnapshotCodec{}.replay(
             base.sections().document, *delta.document_,
             delta.documentCaret_.value_or(base.sections().document.caret));
     } else if (delta.documentCaret_) {
@@ -343,7 +345,7 @@ SessionReplayResult replaySessionDelta(SessionSnapshot const& base,
             {}};
 }
 
-SessionDelta decodeWireSessionDelta(
+SessionDelta SessionSnapshotCodec::decodeWire(
     Revision baseRevision, Revision revision, ClientId clientId,
     ViewId viewId, std::vector<CapabilityId> capabilities,
     std::optional<SessionTopology> topology,
@@ -357,7 +359,8 @@ SessionDelta decodeWireSessionDelta(
     ExternalModificationDelta externalModification,
     FollowEditsDelta followEdits, TreeDelta tree, SyntaxDelta syntax,
     LspSyncDelta lspSync, LspFeatureDelta lspFeatures,
-    ThemeSectionDelta theme, ShellSectionDelta shell, ViewportDelta viewport) {
+    ThemeSectionDelta theme, ShellSectionDelta shell,
+    ViewportDelta viewport) const {
     return SessionDelta{baseRevision,
                         revision,
                         clientId,

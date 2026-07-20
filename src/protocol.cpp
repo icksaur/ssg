@@ -367,7 +367,7 @@ SliceResponse CoreEditorSlice::execute(ClientId clientId,
                       TextInputArguments{request.text}});
     auto const after = impl_->snapshotUnlocked();
     return {ProtocolError::None, result.error, after,
-            result.accepted() ? deriveDocumentDelta(before, after)
+            result.accepted() ? DocumentSnapshotCodec{}.deriveDelta(before, after)
                               : std::nullopt,
             std::move(result.message)};
 }
@@ -5212,7 +5212,7 @@ DecodeSessionDeltaResult decodeSessionDelta(std::string_view bytes,
     }
 
     return {ProtocolError::None,
-            decodeWireSessionDelta(
+            SessionSnapshotCodec{}.decodeWire(
                 *baseRevision, *revision, *clientId, *viewId,
                 std::move(*capabilities), std::move(topology),
                 std::move(document), std::move(documentCaret),

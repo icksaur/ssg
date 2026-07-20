@@ -334,7 +334,7 @@ struct EndToEndScenario {
 
     ssg::SessionSnapshot snapshot(ssg::InvocationPrincipal const& principal,
                                   ssg::ViewId viewId) const {
-        return ssg::assembleSessionSnapshot(
+        return ssg::SessionSnapshotCodec{}.assemble(
             session->revision(), session->topology(), principal, viewId,
             model.viewport(), model.sections(session->revision()));
     }
@@ -603,7 +603,7 @@ struct ConcurrentScenario {
 
     ssg::SessionSnapshot snapshot(ssg::InvocationPrincipal const& principal,
                                   ssg::ViewId viewId) const {
-        return ssg::assembleSessionSnapshot(
+        return ssg::SessionSnapshotCodec{}.assemble(
             session->revision(), session->topology(), principal, viewId,
             model.viewport(principal.clientId()),
             model.sections(session->revision(), principal.clientId()));

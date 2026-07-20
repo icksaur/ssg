@@ -332,7 +332,7 @@ struct HttpEditorRoute::Impl {
                 connection->snapshot.emplace(std::move(current));
                 continue;
             }
-            auto delta = deriveSessionDelta(*connection->snapshot, current);
+            auto delta = SessionSnapshotCodec{}.deriveDelta(*connection->snapshot, current);
             auto encoded = encodeSessionDelta(delta);
             auto& history = replay[replayKey(*connection->binding)];
             history.push_back({delta.baseRevision(), delta.revision(), encoded});
