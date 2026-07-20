@@ -1,6 +1,6 @@
 #include "test_helpers.h"
 
-#include <ssg/clipboard.h>
+#include <ssg/ClipboardRegister.h>
 
 #include <cstdint>
 #include <string>

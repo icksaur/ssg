@@ -1,7 +1,7 @@
 #include "../test_helpers.h"
 
-#include <ssg/editor_runtime.h>
-#include <ssg/grapheme_layout.h>
+#include <ssg/EditorRuntime.h>
+#include <ssg/GraphemeLayout.h>
 
 #include <cstdio>
 #include <filesystem>

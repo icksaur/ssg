@@ -1,7 +1,7 @@
 #include "../test_helpers.h"
 
-#include <ssg/editor_runtime.h>
-#include <ssg/text_input_commands.h>
+#include <ssg/EditorRuntime.h>
+#include <ssg/TextInputCommands.h>
 
 #include <filesystem>
 #include <fstream>

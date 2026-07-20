@@ -1,4 +1,4 @@
-#include "ssg/settings.h"
+#include "ssg/Settings.h"
 #include "test_helpers.h"
 
 #include <chrono>

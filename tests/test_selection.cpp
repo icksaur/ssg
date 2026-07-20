@@ -1,4 +1,4 @@
-#include <ssg/selection.h>
+#include <ssg/Selection.h>
 
 #include "reference_editor.h"
 #include "test_helpers.h"

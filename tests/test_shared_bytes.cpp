@@ -1,6 +1,6 @@
 #include "test_helpers.h"
 
-#include <ssg/shared_bytes.h>
+#include <ssg/SharedBytes.h>
 
 #include <array>
 #include <cstddef>

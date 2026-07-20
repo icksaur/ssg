@@ -1,6 +1,6 @@
 #include "test_helpers.h"
 
-#include <ssg/lua.h>
+#include <ssg/LuaCommandHost.h>
 
 #include <fstream>
 #include <sstream>

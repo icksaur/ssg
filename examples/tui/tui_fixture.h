@@ -1,7 +1,7 @@
 #pragma once
 
-#include <ssg/keymap.h>
-#include <ssg/session.h>
+#include <ssg/Keymap.h>
+#include <ssg/EditorSession.h>
 #include <ssg/session_snapshot.h>
 
 #include <array>

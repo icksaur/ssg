@@ -1,0 +1,97 @@
+#pragma once
+
+#include <ssg/config.h>
+#include <ssg/Document.h>
+#include <ssg/Selection.h>
+
+#include <array>
+#include <cstdint>
+#include <optional>
+#include <string>
+#include <string_view>
+
+namespace ssg {
+
+enum class TextInputCommand : std::uint8_t {
+    Insert,
+    Newline,
+    DeleteBackward,
+    DeleteForward,
+    DeleteWordBackward,
+    DeleteWordForward,
+};
+
+struct TextInputCommandDescriptor {
+    std::string_view id;
+    TextInputCommand command;
+
+    bool operator==(const TextInputCommandDescriptor&) const noexcept = default;
+};
+
+class TextInputCommandSet {
+public:
+    TextInputCommandSet(const TextInputCommandSet&) = default;
+    TextInputCommandSet& operator=(const TextInputCommandSet&) = delete;
+
+    [[nodiscard]] const std::array<TextInputCommandDescriptor, 6>&
+    descriptors() const noexcept;
+
+private:
+    friend TextInputCommandSet textInputCommandSet();
+    TextInputCommandSet();
+
+    const std::array<TextInputCommandDescriptor, 6> descriptors_;
+};
+
+[[nodiscard]] TextInputCommandSet textInputCommandSet();
+
+struct TextInputSettings {
+    IndentStyle indentStyle;
+    std::uint32_t indentWidth;
+    bool autoIndent;
+    LineEnding lineEnding;
+
+    bool operator==(const TextInputSettings&) const noexcept = default;
+};
+
+struct TextInputArguments {
+    std::string text;
+
+    bool operator==(const TextInputArguments&) const = default;
+};
+
+enum class TextInputError : std::uint8_t {
+    None,
+    ReadOnly,
+    Diff,
+    InvalidSelection,
+    InvalidUtf8,
+    InvalidSettings,
+    UnknownCommand,
+};
+
+struct TextInputResult {
+    TextInputError error;
+    std::optional<EditTransaction> transaction;
+    std::optional<SelectionSet> selections;
+    std::string resultingText;
+    std::string message;
+
+    [[nodiscard]] bool accepted() const noexcept {
+        return error == TextInputError::None;
+    }
+};
+
+// Interprets a text-input command against a document snapshot + selections and
+// returns the resulting edits/selections (a pure transform over the snapshot
+// value; it owns no document and mutates nothing). The runtime owns the Document
+// and applies the result.
+class TextInputInterpreter {
+public:
+    [[nodiscard]] TextInputResult apply(
+        const DocumentSnapshot& document, const SelectionSet& selections,
+        TextInputSettings settings, TextInputCommand command,
+        TextInputArguments arguments = {}) const;
+};
+
+}  // namespace ssg

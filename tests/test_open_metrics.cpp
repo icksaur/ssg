@@ -1,8 +1,8 @@
 #include "test_helpers.h"
 
 #include <ssg/open_metrics.h>
-#include <ssg/workspace.h>
-#include <ssg/recovery.h>
+#include <ssg/Workspace.h>
+#include <ssg/RecoveryActions.h>
 
 #include <chrono>
 #include <filesystem>

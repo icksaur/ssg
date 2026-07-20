@@ -13,7 +13,7 @@
 # oracle test executable.
 
 target_sources(ssg PRIVATE
-    ${SSG_SOURCE_DIR}/src/grapheme_layout.cpp
+    ${SSG_SOURCE_DIR}/src/GraphemeLayout.cpp
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)

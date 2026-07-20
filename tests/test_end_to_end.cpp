@@ -2,12 +2,12 @@
 #include "test_helpers.h"
 #include "tui_fixture.h"
 
-#include <ssg/editor_session_builder.h>
-#include <ssg/follow_edits.h>
-#include <ssg/http_server.h>
-#include <ssg/protocol.h>
+#include <ssg/EditorSessionBuilder.h>
+#include <ssg/FollowEditsModel.h>
+#include <ssg/HttpEditorServer.h>
+#include <ssg/Protocol.h>
 #include <ssg/session_snapshot.h>
-#include <ssg/syntax_model.h>
+#include <ssg/SyntaxModel.h>
 
 #include <http.h>
 

@@ -24,7 +24,7 @@ if(NOT SSG_LUA_HEADERS_ARE_54)
 endif()
 
 target_sources(ssg PRIVATE
-    ${SSG_SOURCE_DIR}/src/lua.cpp
+    ${SSG_SOURCE_DIR}/src/LuaCommandHost.cpp
 )
 target_include_directories(ssg PRIVATE ${SSG_LUA_INCLUDE_DIR})
 target_link_libraries(ssg PRIVATE ${SSG_LUA_LIBRARY})

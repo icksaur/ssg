@@ -1,5 +1,5 @@
 target_sources(ssg PRIVATE
-    ${SSG_SOURCE_DIR}/src/editor_runtime.cpp
+    ${SSG_SOURCE_DIR}/src/EditorRuntime.cpp
     ${SSG_SOURCE_DIR}/src/runtime/editing.cpp
     ${SSG_SOURCE_DIR}/src/runtime/files.cpp
     ${SSG_SOURCE_DIR}/src/runtime/language_services.cpp

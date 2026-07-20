@@ -4,7 +4,7 @@
 # the piece-tree original, and the initial persisted_text (wired in LF-3b).
 
 target_sources(ssg PRIVATE
-    ${SSG_SOURCE_DIR}/src/shared_bytes.cpp
+    ${SSG_SOURCE_DIR}/src/SharedBytes.cpp
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)

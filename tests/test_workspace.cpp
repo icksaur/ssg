@@ -1,6 +1,6 @@
 #include "test_helpers.h"
 
-#include <ssg/workspace.h>
+#include <ssg/Workspace.h>
 
 #include <chrono>
 #include <filesystem>

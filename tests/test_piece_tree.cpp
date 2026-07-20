@@ -1,4 +1,4 @@
-#include "piece_tree.h"
+#include "PieceTree.h"
 #include "test_helpers.h"
 
 #include <algorithm>

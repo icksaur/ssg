@@ -2,9 +2,9 @@
 #include "test_helpers.h"
 #include "tui_fixture.h"
 
-#include <ssg/renderer.h>
+#include <ssg/Renderer.h>
 
-#include <ssg/editor_session_builder.h>
+#include <ssg/EditorSessionBuilder.h>
 #include <ssg/session_snapshot.h>
 
 #include <any>

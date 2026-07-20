@@ -1,7 +1,7 @@
 #include "test_helpers.h"
 
-#include <ssg/http_server.h>
-#include <ssg/protocol.h>
+#include <ssg/HttpEditorServer.h>
+#include <ssg/Protocol.h>
 
 #include <http.h>
 

@@ -1,5 +1,5 @@
 target_sources(ssg PRIVATE
-    ${SSG_SOURCE_DIR}/src/settings.cpp
+    ${SSG_SOURCE_DIR}/src/Settings.cpp
     ${SSG_SOURCE_DIR}/src/platform/linux_settings.cpp
     ${SSG_SOURCE_DIR}/src/platform/windows_settings.cpp
 )

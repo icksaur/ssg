@@ -1,5 +1,5 @@
 target_sources(ssg PRIVATE
-    ${SSG_SOURCE_DIR}/src/edit_history_coordinator.cpp
+    ${SSG_SOURCE_DIR}/src/EditHistoryCoordinator.cpp
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)

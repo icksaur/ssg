@@ -1,6 +1,6 @@
 #include "test_helpers.h"
 
-#include <ssg/file_commands.h>
+#include <ssg/FileCommands.h>
 
 #include <algorithm>
 #include <array>

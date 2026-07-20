@@ -1,6 +1,6 @@
-#include <ssg/grapheme_layout.h>
-#include <ssg/selection.h>
-#include <ssg/viewport.h>
+#include <ssg/GraphemeLayout.h>
+#include <ssg/Selection.h>
+#include <ssg/Viewport.h>
 
 #include "test_helpers.h"
 

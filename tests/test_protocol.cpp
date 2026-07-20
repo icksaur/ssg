@@ -1,9 +1,9 @@
 #include "test_helpers.h"
 
-#include <ssg/editor_session_builder.h>
-#include <ssg/file_commands.h>
-#include <ssg/find_replace.h>
-#include <ssg/protocol.h>
+#include <ssg/EditorSessionBuilder.h>
+#include <ssg/FileCommands.h>
+#include <ssg/FindReplace.h>
+#include <ssg/Protocol.h>
 #include <ssg/session_snapshot.h>
 
 #include <cstdlib>

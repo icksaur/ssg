@@ -1,4 +1,4 @@
-#include <ssg/palette_searcher.h>
+#include <ssg/PaletteSearcher.h>
 
 #include "test_helpers.h"
 

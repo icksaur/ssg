@@ -1,6 +1,6 @@
 #include "test_helpers.h"
 
-#include <ssg/find_replace.h>
+#include <ssg/FindReplace.h>
 
 #include <algorithm>
 #include <atomic>

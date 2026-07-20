@@ -1,8 +1,8 @@
 #include "test_helpers.h"
 
-#include <ssg/editor_runtime.h>
+#include <ssg/EditorRuntime.h>
 #include <ssg/startup_audit.h>
-#include <ssg/watcher.h>
+#include <ssg/FilesystemWatcher.h>
 
 #include <filesystem>
 #include <fstream>

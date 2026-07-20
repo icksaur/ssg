@@ -1,7 +1,7 @@
 #include "ssg_terminal.h"
 
-#include <ssg/keymap.h>
-#include <ssg/theme.h>
+#include <ssg/Keymap.h>
+#include <ssg/Theme.h>
 
 #include <csignal>
 

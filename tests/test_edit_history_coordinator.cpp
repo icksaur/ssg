@@ -1,8 +1,8 @@
 #include "test_helpers.h"
 
-#include <ssg/clipboard.h>
-#include <ssg/edit_history_coordinator.h>
-#include <ssg/find_replace.h>
+#include <ssg/ClipboardRegister.h>
+#include <ssg/EditHistoryCoordinator.h>
+#include <ssg/FindReplace.h>
 
 #include <array>
 #include <cstdint>

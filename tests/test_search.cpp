@@ -1,6 +1,6 @@
 #include "test_helpers.h"
 
-#include <ssg/search.h>
+#include <ssg/Search.h>
 
 #include <algorithm>
 #include <filesystem>

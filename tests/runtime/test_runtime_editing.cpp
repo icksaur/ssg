@@ -1,11 +1,11 @@
 #include "../test_helpers.h"
 
-#include <ssg/editor_runtime.h>
-#include <ssg/find_replace.h>
-#include <ssg/keymap.h>
-#include <ssg/selection.h>
-#include <ssg/prompt.h>
-#include <ssg/text_input_commands.h>
+#include <ssg/EditorRuntime.h>
+#include <ssg/FindReplace.h>
+#include <ssg/Keymap.h>
+#include <ssg/Selection.h>
+#include <ssg/PromptSurface.h>
+#include <ssg/TextInputCommands.h>
 
 #include <filesystem>
 #include <fstream>

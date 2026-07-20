@@ -1,7 +1,7 @@
-#include <ssg/hit_tester.h>
+#include <ssg/HitTester.h>
 
-#include <ssg/editor_runtime.h>
-#include <ssg/selection.h>
+#include <ssg/EditorRuntime.h>
+#include <ssg/Selection.h>
 #include <ssg/session_snapshot.h>
 
 #include "test_helpers.h"

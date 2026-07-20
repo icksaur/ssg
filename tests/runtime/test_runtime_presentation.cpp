@@ -1,9 +1,9 @@
 #include "../test_helpers.h"
 
-#include <ssg/editor_runtime.h>
-#include <ssg/editor_session_builder.h>
-#include <ssg/keymap.h>
-#include <ssg/settings.h>
+#include <ssg/EditorRuntime.h>
+#include <ssg/EditorSessionBuilder.h>
+#include <ssg/Keymap.h>
+#include <ssg/Settings.h>
 
 #include <filesystem>
 #include <fstream>

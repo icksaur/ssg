@@ -1,5 +1,5 @@
-#include "ssg/scratch_journal.h"
-#include "ssg/scratch_session.h"
+#include "ssg/ScratchJournal.h"
+#include "ssg/ScratchSession.h"
 #include "test_helpers.h"
 
 #include <chrono>

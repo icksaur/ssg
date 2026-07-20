@@ -1,9 +1,9 @@
 #pragma once
 
-#include <ssg/editor_session_builder.h>
-#include <ssg/file_commands.h>
-#include <ssg/follow_edits.h>
-#include <ssg/selection.h>
+#include <ssg/EditorSessionBuilder.h>
+#include <ssg/FileCommands.h>
+#include <ssg/FollowEditsModel.h>
+#include <ssg/Selection.h>
 #include <ssg/session_snapshot.h>
 
 #include <algorithm>

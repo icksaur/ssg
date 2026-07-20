@@ -1,5 +1,5 @@
 target_sources(ssg PRIVATE
-    ${SSG_SOURCE_DIR}/src/watcher.cpp
+    ${SSG_SOURCE_DIR}/src/FilesystemWatcher.cpp
 )
 
 if(WIN32)

@@ -1,6 +1,6 @@
 target_sources(ssg PRIVATE
     ${SSG_SOURCE_DIR}/src/snapshot.cpp
-    ${SSG_SOURCE_DIR}/src/protocol.cpp
+    ${SSG_SOURCE_DIR}/src/Protocol.cpp
 )
 
 if(NOT TARGET http)
@@ -10,7 +10,7 @@ if(NOT TARGET http)
 endif()
 
 add_library(ssg_http_server STATIC
-    ${SSG_SOURCE_DIR}/src/http_server.cpp
+    ${SSG_SOURCE_DIR}/src/HttpEditorServer.cpp
 )
 target_include_directories(ssg_http_server PUBLIC
     ${SSG_SOURCE_DIR}/include

@@ -1,10 +1,10 @@
 #include "pointer_routing.h"
 #include "ssg_terminal.h"
 
-#include <ssg/editor_runtime.h>
-#include <ssg/hit_tester.h>
-#include <ssg/renderer.h>
-#include <ssg/selection.h>
+#include <ssg/EditorRuntime.h>
+#include <ssg/HitTester.h>
+#include <ssg/Renderer.h>
+#include <ssg/Selection.h>
 
 #include "test_helpers.h"
 

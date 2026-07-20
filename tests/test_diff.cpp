@@ -1,4 +1,4 @@
-#include "ssg/diff_model.h"
+#include "ssg/DiffModel.h"
 #include "test_helpers.h"
 
 #include <algorithm>

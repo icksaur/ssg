@@ -10,8 +10,8 @@
 // gate lands at LF-4b.
 
 #include <ssg/open_metrics.h>
-#include <ssg/recovery.h>
-#include <ssg/workspace.h>
+#include <ssg/RecoveryActions.h>
+#include <ssg/Workspace.h>
 
 #include <algorithm>
 #include <array>

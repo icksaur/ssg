@@ -1,6 +1,6 @@
-#include <ssg/editor_runtime.h>
-#include <ssg/keymap.h>
-#include <ssg/renderer.h>
+#include <ssg/EditorRuntime.h>
+#include <ssg/Keymap.h>
+#include <ssg/Renderer.h>
 #include <ssg/session_snapshot.h>
 
 #include "test_helpers.h"

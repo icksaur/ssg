@@ -1,4 +1,4 @@
-#include "ssg/theme.h"
+#include "ssg/Theme.h"
 #include "test_helpers.h"
 
 #include <algorithm>
@@ -248,7 +248,7 @@ TEST(sourceAndConfigHaveNoIndependentColorSources) {
         if (relative.starts_with(".git/") || relative.starts_with("build") ||
             relative.starts_with("doc/") || relative.starts_with("tasks/") ||
             relative.starts_with("data/themes/") ||
-            relative == "include/ssg/theme.h" ||
+            relative == "include/ssg/Theme.h" ||
             // Terminal color-depth adaptation (M9-C): these define the xterm-256
             // and ANSI-16 TERMINAL palettes — hardware swatches a reduced-depth
             // terminal can display — not editor theme colors.  See

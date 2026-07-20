@@ -1,4 +1,4 @@
-#include "ssg/text_codec.h"
+#include "ssg/TextCodec.h"
 
 #include "test_helpers.h"
 

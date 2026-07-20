@@ -1,4 +1,4 @@
-#include <ssg/edit_commands.h>
+#include <ssg/EditCommands.h>
 
 #include "test_helpers.h"
 

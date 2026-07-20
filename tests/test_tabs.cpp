@@ -1,6 +1,6 @@
 #include "test_helpers.h"
 
-#include <ssg/tab_manager.h>
+#include <ssg/TabManager.h>
 
 #include <algorithm>
 #include <chrono>

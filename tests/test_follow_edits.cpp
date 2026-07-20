@@ -1,4 +1,4 @@
-#include "ssg/follow_edits.h"
+#include "ssg/FollowEditsModel.h"
 #include "test_helpers.h"
 
 #include <filesystem>

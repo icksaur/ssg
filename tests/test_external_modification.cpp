@@ -1,4 +1,4 @@
-#include "ssg/external_modification_flow.h"
+#include "ssg/ExternalModificationFlow.h"
 #include "test_helpers.h"
 
 #include <filesystem>

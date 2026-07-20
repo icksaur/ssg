@@ -1,5 +1,5 @@
 target_sources(ssg PRIVATE
-    ${SSG_SOURCE_DIR}/src/application_authentication.cpp
+    ${SSG_SOURCE_DIR}/src/ApplicationAuthentication.cpp
     $<$<PLATFORM_ID:Windows>:${SSG_SOURCE_DIR}/src/platform/secure_random_windows.cpp>
     $<$<PLATFORM_ID:Linux>:${SSG_SOURCE_DIR}/src/platform/secure_random_linux.cpp>
 )

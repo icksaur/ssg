@@ -1,7 +1,7 @@
 # The authoritative cell renderer, compiled into the ssg library so every client
 # consumes the same snapshot -> CellGrid transform.
 
-target_sources(ssg PRIVATE ${SSG_SOURCE_DIR}/src/renderer.cpp)
+target_sources(ssg PRIVATE ${SSG_SOURCE_DIR}/src/Renderer.cpp)
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     add_executable(test_render ${SSG_SOURCE_DIR}/tests/test_render.cpp)

@@ -1,9 +1,9 @@
-#include <ssg/command_registry.h>
-#include <ssg/document.h>
-#include <ssg/grapheme_layout.h>
-#include <ssg/session.h>
+#include <ssg/CommandRegistry.h>
+#include <ssg/Document.h>
+#include <ssg/GraphemeLayout.h>
+#include <ssg/EditorSession.h>
 #include <ssg/snapshot.h>
-#include <ssg/viewport.h>
+#include <ssg/Viewport.h>
 
 #include <algorithm>
 #include <array>

@@ -1,11 +1,11 @@
 #include "../test_helpers.h"
 
-#include <ssg/editor_runtime.h>
-#include <ssg/file_commands.h>
-#include <ssg/keymap.h>
+#include <ssg/EditorRuntime.h>
+#include <ssg/FileCommands.h>
+#include <ssg/Keymap.h>
 #include <ssg/session_snapshot.h>
-#include <ssg/text_codec.h>
-#include <ssg/text_input_commands.h>
+#include <ssg/TextCodec.h>
+#include <ssg/TextInputCommands.h>
 
 #include <filesystem>
 #include <fstream>

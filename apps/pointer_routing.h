@@ -10,10 +10,10 @@
 
 #include "ssg_terminal.h"
 
-#include <ssg/hit_tester.h>
-#include <ssg/selection.h>
-#include <ssg/tab_manager.h>
-#include <ssg/ui_layout.h>
+#include <ssg/HitTester.h>
+#include <ssg/Selection.h>
+#include <ssg/TabManager.h>
+#include <ssg/ShellState.h>
 
 #include <any>
 #include <optional>

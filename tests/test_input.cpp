@@ -1,5 +1,5 @@
 #include <ssg/focus.h>
-#include <ssg/keymap.h>
+#include <ssg/Keymap.h>
 
 #include "test_helpers.h"
 

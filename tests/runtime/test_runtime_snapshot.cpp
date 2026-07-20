@@ -1,9 +1,9 @@
 #include "command_cases.h"
 #include "../test_helpers.h"
 
-#include <ssg/editor_runtime.h>
-#include <ssg/editor_session_builder.h>
-#include <ssg/keymap.h>
+#include <ssg/EditorRuntime.h>
+#include <ssg/EditorSessionBuilder.h>
+#include <ssg/Keymap.h>
 
 #include <algorithm>
 #include <filesystem>
@@ -76,7 +76,7 @@ TEST(runtimeSourcesDoNotIncludeFixtureModel) {
         if (!entry.is_regular_file()) continue;
         if (entry.path().extension() != ".cpp" && entry.path().extension() != ".h") continue;
         const auto relative = std::filesystem::relative(entry.path(), root).generic_string();
-        if (relative.rfind("src/runtime/", 0) != 0 && relative != "src/editor_runtime.cpp") continue;
+        if (relative.rfind("src/runtime/", 0) != 0 && relative != "src/EditorRuntime.cpp") continue;
         std::ifstream input{entry.path()};
         const std::string text{std::istreambuf_iterator<char>{input}, std::istreambuf_iterator<char>{}};
         found = found || text.find("FixtureModel") != std::string::npos;

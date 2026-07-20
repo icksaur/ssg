@@ -1,6 +1,6 @@
 #include "test_helpers.h"
 
-#include <ssg/editor_session_builder.h>
+#include <ssg/EditorSessionBuilder.h>
 #include <ssg/session_snapshot.h>
 
 #include <algorithm>

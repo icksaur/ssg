@@ -1,9 +1,9 @@
 #include "../test_helpers.h"
 
-#include <ssg/editor_runtime.h>
-#include <ssg/renderer.h>
-#include <ssg/ui_layout.h>
-#include <ssg/viewport.h>
+#include <ssg/EditorRuntime.h>
+#include <ssg/Renderer.h>
+#include <ssg/ShellState.h>
+#include <ssg/Viewport.h>
 
 #include <filesystem>
 #include <fstream>

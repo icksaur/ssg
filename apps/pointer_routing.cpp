@@ -1,8 +1,8 @@
 #include "pointer_routing.h"
 
-#include <ssg/keymap.h>
-#include <ssg/palette_searcher.h>
-#include <ssg/tree_model.h>
+#include <ssg/Keymap.h>
+#include <ssg/PaletteSearcher.h>
+#include <ssg/TreeModel.h>
 
 namespace ssg::app {
 

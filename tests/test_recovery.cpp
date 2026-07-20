@@ -1,7 +1,7 @@
 #include "ssg/platform_files.h"
-#include "ssg/recovery.h"
-#include "ssg/scratch.h"
-#include "ssg/scratch_journal.h"
+#include "ssg/RecoveryActions.h"
+#include "ssg/ScratchStore.h"
+#include "ssg/ScratchJournal.h"
 #include "test_helpers.h"
 
 #include <algorithm>

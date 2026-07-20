@@ -1,9 +1,9 @@
 #include "test_helpers.h"
 
-#include <ssg/document.h>
-#include <ssg/recovery.h>
-#include <ssg/text_codec.h>
-#include <ssg/workspace.h>
+#include <ssg/Document.h>
+#include <ssg/RecoveryActions.h>
+#include <ssg/TextCodec.h>
+#include <ssg/Workspace.h>
 
 #include <chrono>
 #include <cstdint>

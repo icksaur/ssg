@@ -9,7 +9,7 @@
 // Grapheme cluster rules: UAX #29 extended grapheme clusters
 // Width rules: UAX #11 East Asian Width (W/F → 2 cells) + emoji-data
 
-#include <ssg/grapheme_layout.h>
+#include <ssg/GraphemeLayout.h>
 
 #include "test_helpers.h"
 

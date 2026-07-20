@@ -1,8 +1,8 @@
 #include "reference_editor.h"
 #include "test_helpers.h"
 
-#include <ssg/history.h>
-#include <ssg/text_input_commands.h>
+#include <ssg/DocumentHistory.h>
+#include <ssg/TextInputCommands.h>
 
 #include <cstdint>
 #include <string>

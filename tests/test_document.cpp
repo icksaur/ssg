@@ -1,4 +1,4 @@
-#include <ssg/document.h>
+#include <ssg/Document.h>
 
 #include "reference_editor.h"
 #include "test_helpers.h"

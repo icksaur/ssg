@@ -15,7 +15,7 @@
 //
 // The oracle does NOT check CellKind or width; those are implementation details.
 
-#include <ssg/grapheme_layout.h>
+#include <ssg/GraphemeLayout.h>
 
 #include <cassert>
 #include <cstdint>

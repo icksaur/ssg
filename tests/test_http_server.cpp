@@ -1,9 +1,9 @@
 #include "test_helpers.h"
-#include <ssg/application_authentication.h>
-#include <ssg/editor_session_builder.h>
-#include <ssg/http_server.h>
-#include <ssg/protocol.h>
-#include <ssg/text_input_commands.h>
+#include <ssg/ApplicationAuthentication.h>
+#include <ssg/EditorSessionBuilder.h>
+#include <ssg/HttpEditorServer.h>
+#include <ssg/Protocol.h>
+#include <ssg/TextInputCommands.h>
 
 #include <http.h>
 

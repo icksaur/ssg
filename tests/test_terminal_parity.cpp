@@ -17,10 +17,10 @@
 // The pty capture is Linux-scoped (forkpty); the decoder and comparison are
 // portable and would back a Windows ConPTY harness unchanged.
 
-#include <ssg/editor_runtime.h>
-#include <ssg/renderer.h>
+#include <ssg/EditorRuntime.h>
+#include <ssg/Renderer.h>
 #include <ssg/session_snapshot.h>
-#include <ssg/theme.h>
+#include <ssg/Theme.h>
 
 #include "ssg_terminal.h"  // encode_ansi_frame, for the decoder round-trip only.
 #include "test_helpers.h"

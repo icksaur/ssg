@@ -11,7 +11,7 @@
 // introduces no color into the theme/snapshot/API surface, so every client on a
 // reduced-depth terminal presents identically.
 
-#include <ssg/theme.h>
+#include <ssg/Theme.h>
 
 #include <cstdint>
 

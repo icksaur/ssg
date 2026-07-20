@@ -1,7 +1,7 @@
-#include <ssg/renderer.h>
+#include <ssg/Renderer.h>
 
-#include <ssg/editor_runtime.h>
-#include <ssg/find_replace.h>
+#include <ssg/EditorRuntime.h>
+#include <ssg/FindReplace.h>
 #include <ssg/session_snapshot.h>
 
 #include "test_helpers.h"

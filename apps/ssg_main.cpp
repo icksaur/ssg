@@ -12,13 +12,13 @@
 #include "pointer_routing.h"
 #include "ssg_terminal.h"
 
-#include <ssg/editor_runtime.h>
-#include <ssg/hit_tester.h>
-#include <ssg/find_replace.h>
-#include <ssg/keymap.h>
-#include <ssg/palette_searcher.h>
+#include <ssg/EditorRuntime.h>
+#include <ssg/HitTester.h>
+#include <ssg/FindReplace.h>
+#include <ssg/Keymap.h>
+#include <ssg/PaletteSearcher.h>
 #include <ssg/session_snapshot.h>
-#include <ssg/text_input_commands.h>
+#include <ssg/TextInputCommands.h>
 
 #include <sys/ioctl.h>
 #include <sys/select.h>

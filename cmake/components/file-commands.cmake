@@ -1,6 +1,6 @@
 target_sources(ssg PRIVATE
-    ${SSG_SOURCE_DIR}/src/workspace.cpp
-    ${SSG_SOURCE_DIR}/src/file_commands.cpp
+    ${SSG_SOURCE_DIR}/src/Workspace.cpp
+    ${SSG_SOURCE_DIR}/src/FileCommands.cpp
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)

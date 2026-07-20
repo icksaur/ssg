@@ -1,7 +1,7 @@
 #include "test_helpers.h"
 
-#include <ssg/command_registry.h>
-#include <ssg/session.h>
+#include <ssg/CommandRegistry.h>
+#include <ssg/EditorSession.h>
 
 #include <algorithm>
 #include <any>

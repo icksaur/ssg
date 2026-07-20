@@ -1,4 +1,4 @@
-#include "ssg/watcher.h"
+#include "ssg/FilesystemWatcher.h"
 
 #include <ssg/startup_audit.h>
 

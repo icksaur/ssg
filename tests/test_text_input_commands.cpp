@@ -1,4 +1,4 @@
-#include <ssg/text_input_commands.h>
+#include <ssg/TextInputCommands.h>
 
 #include "test_helpers.h"
 
