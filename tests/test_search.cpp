@@ -99,17 +99,22 @@ TEST(queryModesAreUnambiguousAndLinesAreValidated) {
     const ParsedSearchQuery text{.mode = SearchMode::Text, .text = "needle"};
     const ParsedSearchQuery line{
         .mode = SearchMode::Line, .text = "42", .line = LineIndex{41}};
-    ASSERT_EQ(parseSearchQuery("file"), file);
-    ASSERT_EQ(parseSearchQuery("@Widget"), symbol);
-    ASSERT_EQ(parseSearchQuery("#needle"), text);
-    ASSERT_EQ(parseSearchQuery(":42"), line);
-    ASSERT_EQ(parseSearchQuery(":0").error, SearchQueryError::InvalidLine);
-    ASSERT_EQ(parseSearchQuery(":no").error, SearchQueryError::InvalidLine);
+    ASSERT_EQ(WorkspaceSearcher{}.parse("file"), file);
+    ASSERT_EQ(WorkspaceSearcher{}.parse("@Widget"), symbol);
+    ASSERT_EQ(WorkspaceSearcher{}.parse("#needle"), text);
+    ASSERT_EQ(WorkspaceSearcher{}.parse(":42"), line);
+    ASSERT_EQ(WorkspaceSearcher{}.parse(":0").error,
+              SearchQueryError::InvalidLine);
+    ASSERT_EQ(WorkspaceSearcher{}.parse(":no").error,
+              SearchQueryError::InvalidLine);
 
-    const auto target = gotoLine("src/search.cpp", parseSearchQuery(":42"));
+    const auto target = SearchNavigator{}.gotoLine(
+        "src/search.cpp", WorkspaceSearcher{}.parse(":42"));
     ASSERT_TRUE(target.has_value());
     ASSERT_EQ(target->line, LineIndex{41});
-    ASSERT_FALSE(gotoLine({}, parseSearchQuery(":42")).has_value());
+    ASSERT_FALSE(SearchNavigator{}.gotoLine(
+                     {}, WorkspaceSearcher{}.parse(":42"))
+                     .has_value());
 }
 
 TEST(acceptedRankingGoldensMatch) {
@@ -135,9 +140,8 @@ TEST(acceptedRankingGoldensMatch) {
         } else if (fields[0] == "text") {
             query.insert(query.begin(), '#');
         }
-        const auto results =
-            rankWorkspace(snapshot, parseSearchQuery(query),
-                           SearchCancellationToken{});
+        const auto results = WorkspaceSearcher{}.rank(
+            snapshot, WorkspaceSearcher{}.parse(query), SearchCancellationToken{});
         ASSERT_EQ(labels(results), split(fields[2], ','));
     }
 }
@@ -232,18 +236,18 @@ TEST(viewDeltaReplayAndCommandExportsAreExact) {
     const auto base = controller.viewState();
     controller.openPalette(Revision{20});
     const auto target = controller.viewState();
-    const auto delta = deriveSearchDelta(base, target);
-    const auto replay = replaySearchDelta(base, delta);
+    const auto delta = SearchDeltaCodec{}.derive(base, target);
+    const auto replay = SearchDeltaCodec{}.replay(base, delta);
     ASSERT_TRUE(replay.accepted());
     ASSERT_EQ(*replay.state, target);
-    const auto noChange = replaySearchDelta(target,
-                                               deriveSearchDelta(target, target));
+    const auto noChange = SearchDeltaCodec{}.replay(
+        target, SearchDeltaCodec{}.derive(target, target));
     ASSERT_TRUE(noChange.accepted());
     ASSERT_EQ(*noChange.state, target);
 
     auto stale = base;
     stale.revision = Revision{99};
-    ASSERT_EQ(replaySearchDelta(stale, delta).error,
+    ASSERT_EQ(SearchDeltaCodec{}.replay(stale, delta).error,
               SearchReplayError::StaleRevision);
 
     const auto set = searchCommandSet();

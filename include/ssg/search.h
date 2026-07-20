@@ -26,8 +26,6 @@ struct ParsedSearchQuery {
                            const ParsedSearchQuery&) = default;
 };
 
-[[nodiscard]] ParsedSearchQuery parseSearchQuery(std::string_view query);
-
 struct WorkspaceFile {
     std::string path;
     std::string text;
@@ -100,10 +98,6 @@ struct SearchResult {
     friend bool operator==(const SearchResult&, const SearchResult&) = default;
 };
 
-[[nodiscard]] std::vector<SearchResult> rankWorkspace(
-    const WorkspaceSnapshot& workspace, const ParsedSearchQuery& query,
-    const SearchCancellationToken& cancellation);
-
 struct WorkspaceSearchRequest {
     std::uint64_t generation = 0;
     Revision sourceRevision{0};
@@ -118,9 +112,16 @@ struct WorkspaceSearchBatch {
     bool cancelled = false;
 };
 
-[[nodiscard]] WorkspaceSearchBatch evaluateWorkspaceSearch(
-    const SearchWorkspaceSource& source,
-    const WorkspaceSearchRequest& request);
+class WorkspaceSearcher {
+public:
+    [[nodiscard]] ParsedSearchQuery parse(std::string_view query) const;
+    [[nodiscard]] std::vector<SearchResult> rank(
+        const WorkspaceSnapshot& workspace, const ParsedSearchQuery& query,
+        const SearchCancellationToken& cancellation) const;
+    [[nodiscard]] WorkspaceSearchBatch evaluate(
+        const SearchWorkspaceSource& source,
+        const WorkspaceSearchRequest& request) const;
+};
 
 enum class NavigationOrigin : std::uint8_t { User, Programmatic };
 
@@ -141,10 +142,13 @@ struct NavigationTransition {
                            const NavigationTransition&) = default;
 };
 
-[[nodiscard]] std::optional<NavigationTarget> navigationTarget(
-    const SearchResult& result);
-[[nodiscard]] std::optional<NavigationTarget> gotoLine(
-    std::string path, const ParsedSearchQuery& query);
+class SearchNavigator {
+public:
+    [[nodiscard]] std::optional<NavigationTarget> target(
+        const SearchResult& result) const;
+    [[nodiscard]] std::optional<NavigationTarget> gotoLine(
+        std::string path, const ParsedSearchQuery& query) const;
+};
 
 class NavigationHistory {
 public:
@@ -257,9 +261,6 @@ struct SearchDelta {
     friend bool operator==(const SearchDelta&, const SearchDelta&) = default;
 };
 
-[[nodiscard]] SearchDelta deriveSearchDelta(const SearchViewState& base,
-                                              const SearchViewState& target);
-
 enum class SearchReplayError : std::uint8_t {
     None,
     StaleRevision,
@@ -272,7 +273,12 @@ struct SearchReplayResult {
     [[nodiscard]] bool accepted() const noexcept { return state.has_value(); }
 };
 
-[[nodiscard]] SearchReplayResult replaySearchDelta(
-    const SearchViewState& base, const SearchDelta& delta);
+class SearchDeltaCodec {
+public:
+    [[nodiscard]] SearchDelta derive(const SearchViewState& base,
+                                     const SearchViewState& target) const;
+    [[nodiscard]] SearchReplayResult replay(const SearchViewState& base,
+                                            const SearchDelta& delta) const;
+};
 
 } // namespace ssg
