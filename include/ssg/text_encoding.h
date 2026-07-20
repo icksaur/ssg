@@ -2,6 +2,8 @@
 
 #include "ssg/settings.h"
 
+#include <ssg/shared_bytes.h>
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -65,7 +67,9 @@ struct DecodedText {
 // WITHOUT re-validating them (removing the redundant second scan on the open
 // path), while the public `Document(std::string_view)` still validates for
 // external callers.  Move-only + a private constructor make it hard to fabricate
-// a proof for unvalidated bytes by accident.
+// a proof for unvalidated bytes by accident.  The validated bytes are held as a
+// SharedBytes so the piece-tree original and the initial persisted text can share
+// one buffer instead of each keeping a copy.
 class ValidatedUtf8 {
 public:
     ValidatedUtf8(ValidatedUtf8&&) noexcept = default;
@@ -73,17 +77,20 @@ public:
     ValidatedUtf8(const ValidatedUtf8&) = delete;
     ValidatedUtf8& operator=(const ValidatedUtf8&) = delete;
 
-    [[nodiscard]] std::string_view view() const noexcept { return utf8_; }
+    [[nodiscard]] std::string_view view() const noexcept { return bytes_.view(); }
+    // A shared handle to the validated bytes (cheap ref-count bump), so callers
+    // can share the buffer without copying.
+    [[nodiscard]] SharedBytes bytes() const noexcept { return bytes_; }
 
 private:
-    explicit ValidatedUtf8(std::string utf8) noexcept
-        : utf8_(std::move(utf8)) {}
-    [[nodiscard]] std::string take() && noexcept { return std::move(utf8_); }
+    explicit ValidatedUtf8(SharedBytes bytes) noexcept
+        : bytes_(std::move(bytes)) {}
+    [[nodiscard]] SharedBytes take() && noexcept { return std::move(bytes_); }
 
     friend struct DecodeTextResult;
     friend class Document;
 
-    std::string utf8_;
+    SharedBytes bytes_;
 };
 
 struct DecodeTextResult {
@@ -96,7 +103,7 @@ struct DecodeTextResult {
     // accepted().  The decoder is the only producer of an accepted result, so the
     // proof genuinely reflects a validation.
     [[nodiscard]] ValidatedUtf8 validated() const {
-        return ValidatedUtf8{text->utf8};
+        return ValidatedUtf8{SharedBytes::owning(text->utf8)};
     }
 };
 

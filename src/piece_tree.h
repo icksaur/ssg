@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ssg/shared_bytes.h>
+
 #include <cstddef>
 #include <memory>
 #include <string>
@@ -14,7 +16,7 @@ public:
     using NodePtr = std::unique_ptr<Node>;
 
     explicit PieceTree(std::string_view original = {});
-    explicit PieceTree(std::string&& original);
+    explicit PieceTree(SharedBytes original);
     ~PieceTree();
 
     PieceTree(const PieceTree&) = delete;
@@ -47,7 +49,7 @@ private:
 
     [[nodiscard]] std::string_view piece_text(const Node& node) const noexcept;
 
-    std::string original_buffer_;
+    SharedBytes original_buffer_;
     std::string add_buffer_;
     NodePtr root_;
 };

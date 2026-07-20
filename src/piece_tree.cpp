@@ -123,7 +123,7 @@ NodePtr concatenate(NodePtr left, NodePtr right) noexcept {
 
 void append_text(
     const NodePtr& node,
-    const std::string& original,
+    std::string_view original,
     const std::string& add,
     std::string& output) {
     if (!node) {
@@ -137,7 +137,7 @@ void append_text(
 
 void append_range(
     const NodePtr& node,
-    const std::string& original,
+    std::string_view original,
     const std::string& add,
     std::size_t offset,
     std::size_t count,
@@ -174,7 +174,7 @@ void append_range(
 
 std::size_t count_newlines_before(
     const NodePtr& node,
-    const std::string& original,
+    std::string_view original,
     const std::string& add,
     std::size_t offset) noexcept {
     if (!node || offset == 0) {
@@ -203,7 +203,7 @@ std::size_t count_newlines_before(
 
 std::size_t nth_newline_offset(
     const NodePtr& node,
-    const std::string& original,
+    std::string_view original,
     const std::string& add,
     std::size_t newline_index,
     std::size_t base) {
@@ -246,7 +246,7 @@ struct Validation {
 
 Validation validate_node(
     const NodePtr& node,
-    const std::string& original,
+    std::string_view original,
     const std::string& add) noexcept {
     if (!node) {
         return {};
@@ -285,13 +285,13 @@ Validation validate_node(
 } // namespace
 
 PieceTree::PieceTree(std::string_view original)
-    : original_buffer_(original) {
-    if (!original.empty()) {
-        root_ = make_node(false, 0, original.size());
+    : original_buffer_(SharedBytes::owning(std::string{original})) {
+    if (!original_buffer_.empty()) {
+        root_ = make_node(false, 0, original_buffer_.size());
     }
 }
 
-PieceTree::PieceTree(std::string&& original)
+PieceTree::PieceTree(SharedBytes original)
     : original_buffer_(std::move(original)) {
     if (!original_buffer_.empty()) {
         root_ = make_node(false, 0, original_buffer_.size());
@@ -314,7 +314,7 @@ std::string PieceTree::text() const {
     note_piece_tree_text();
     std::string result;
     result.reserve(size());
-    append_text(root_, original_buffer_, add_buffer_, result);
+    append_text(root_, original_buffer_.view(), add_buffer_, result);
     return result;
 }
 
@@ -325,7 +325,7 @@ std::string PieceTree::substr(std::size_t offset, std::size_t count) const {
     std::string result;
     result.reserve(count);
     append_range(
-        root_, original_buffer_, add_buffer_, offset, count, result);
+        root_, original_buffer_.view(), add_buffer_, offset, count, result);
     return result;
 }
 
@@ -371,7 +371,7 @@ std::size_t PieceTree::line_start(std::size_t line) const {
         return 0;
     }
     return nth_newline_offset(
-        root_, original_buffer_, add_buffer_, line - 1, 0) + 1;
+        root_, original_buffer_.view(), add_buffer_, line - 1, 0) + 1;
 }
 
 std::size_t PieceTree::line_of_offset(std::size_t offset) const {
@@ -379,11 +379,11 @@ std::size_t PieceTree::line_of_offset(std::size_t offset) const {
         throw std::out_of_range("piece tree line offset exceeds text size");
     }
     return count_newlines_before(
-        root_, original_buffer_, add_buffer_, offset);
+        root_, original_buffer_.view(), add_buffer_, offset);
 }
 
 bool PieceTree::validate() const noexcept {
-    return validate_node(root_, original_buffer_, add_buffer_).valid;
+    return validate_node(root_, original_buffer_.view(), add_buffer_).valid;
 }
 
 PieceTree::NodePtr PieceTree::make_node(
@@ -473,8 +473,9 @@ std::pair<PieceTree::NodePtr, PieceTree::NodePtr> PieceTree::split(
 }
 
 std::string_view PieceTree::piece_text(const Node& node) const noexcept {
-    const auto& buffer = node.add_buffer ? add_buffer_ : original_buffer_;
-    return std::string_view(buffer).substr(node.start, node.length);
+    const std::string_view buffer =
+        node.add_buffer ? std::string_view{add_buffer_} : original_buffer_.view();
+    return buffer.substr(node.start, node.length);
 }
 
 } // namespace ssg::detail

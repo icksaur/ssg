@@ -84,7 +84,7 @@ TransactionResult failure(DocumentError error, Revision revision,
 struct Document::Impl {
     explicit Impl(std::string_view text, DocumentMode document_mode)
         : tree(text), mode(document_mode) {}
-    explicit Impl(std::string&& text, DocumentMode document_mode)
+    explicit Impl(SharedBytes text, DocumentMode document_mode)
         : tree(std::move(text)), mode(document_mode) {}
 
     detail::PieceTree tree;

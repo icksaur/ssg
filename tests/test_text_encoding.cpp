@@ -261,6 +261,8 @@ TEST(fused_decode_preserves_malformed_offsets) {
 }
 
 } // namespace
+
+int main() {
     RUN(auto_detects_utf8_and_preserves_lf_and_final_newline);
     RUN(auto_detects_utf8_bom_and_preserves_crlf_without_final_newline);
     RUN(round_trips_utf16_endianness_bom_and_mixed_endings);

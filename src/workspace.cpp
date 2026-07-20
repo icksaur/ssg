@@ -1,6 +1,7 @@
 #include <ssg/workspace.h>
 
 #include <ssg/open_metrics.h>
+#include <ssg/shared_bytes.h>
 
 #include <algorithm>
 #include <array>
@@ -266,7 +267,7 @@ public:
         DecodedText decoded;
         std::vector<std::uint8_t> raw_bytes;
         Document document;
-        std::string persisted_text;
+        SharedBytes persisted_text;
         TextEncodingStatus persisted_status;
     };
 
@@ -279,7 +280,7 @@ public:
         bool mark_dirty_on_restore = false;
         std::optional<Entry> deleted_entry;
         std::optional<DecodedText> prior_decoded;
-        std::string prior_persisted_text;
+        SharedBytes prior_persisted_text;
         TextEncodingStatus prior_persisted_status;
     };
 
@@ -396,11 +397,13 @@ public:
                      FileContentKind::decode_failure, {}, std::move(bytes),
                      Document{"", DocumentMode::read_only}, {}, {}});
             } else {
-                const auto persisted = dirty ? std::string{} : decoded.text->utf8;
+                auto proof = decoded.validated();
+                const SharedBytes persisted =
+                    dirty ? SharedBytes{} : proof.bytes();
                 const auto persisted_status = decoded.text->status;
                 Document document = [&] {
                     OpenPhaseTimer timer{OpenPhase::document_build};
-                    return Document{decoded.validated()};
+                    return Document{std::move(proof)};
                 }();
                 entries.push_back(
                     {id, std::move(key), std::move(label),
@@ -457,7 +460,7 @@ public:
                 std::filesystem::path{path}.filename().string();
             entry.decoded = std::move(decoded);
             entry.raw_bytes = encoded.bytes;
-            entry.persisted_text = current;
+            entry.persisted_text = SharedBytes::owning(current);
             entry.persisted_status = entry.decoded.status;
             touch_recent(std::move(path));
             result.document = entry.id;
@@ -508,7 +511,7 @@ std::optional<WorkspaceDocumentState> Workspace::state(
     const auto text = entry->document.snapshot().text;
     const bool dirty =
         entry->key.kind() == JournalDocumentKeyKind::untitled ||
-        text != entry->persisted_text ||
+        text != entry->persisted_text.view() ||
         entry->decoded.status != entry->persisted_status;
     return WorkspaceDocumentState{
         entry->id,
@@ -756,7 +759,8 @@ WorkspaceResult Workspace::reload(FileDocumentId id) {
         entry->document = Document{decoded.text->utf8};
         entry->decoded = std::move(*decoded.text);
         entry->raw_bytes = bytes;
-        entry->persisted_text = entry->document.snapshot().text;
+        entry->persisted_text =
+            SharedBytes::owning(entry->document.snapshot().text);
         entry->persisted_status = entry->decoded.status;
         WorkspaceResult result;
         result.document = id;
@@ -789,7 +793,7 @@ WorkspaceResult Workspace::reopen_with_encoding(FileDocumentId id,
     entry->content_kind = FileContentKind::text;
     entry->decoded = std::move(*decoded.text);
     entry->document = Document{entry->decoded.utf8};
-    entry->persisted_text = entry->decoded.utf8;
+    entry->persisted_text = SharedBytes::owning(entry->decoded.utf8);
     entry->persisted_status = entry->decoded.status;
     WorkspaceResult result;
     result.document = id;
@@ -1002,9 +1006,10 @@ WorkspaceResult Workspace::restore(
         if (found->second.prior_decoded) {
             entry->decoded = *found->second.prior_decoded;
         }
-        entry->persisted_text = restored_document->dirty
-                                    ? found->second.prior_persisted_text
-                                    : restored_document->utf8_content;
+        entry->persisted_text =
+            restored_document->dirty
+                ? found->second.prior_persisted_text
+                : SharedBytes::owning(restored_document->utf8_content);
         entry->persisted_status = found->second.prior_persisted_status;
         impl_->compensations.erase(found);
         return {};
