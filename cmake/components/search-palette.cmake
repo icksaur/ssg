@@ -1,6 +1,6 @@
 target_sources(ssg PRIVATE
     ${SSG_SOURCE_DIR}/src/search.cpp
-    ${SSG_SOURCE_DIR}/src/palette.cpp
+    ${SSG_SOURCE_DIR}/src/palette_searcher.cpp
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)

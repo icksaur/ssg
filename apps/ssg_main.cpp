@@ -16,7 +16,7 @@
 #include <ssg/hit_tester.h>
 #include <ssg/find_replace.h>
 #include <ssg/input.h>
-#include <ssg/palette.h>
+#include <ssg/palette_searcher.h>
 #include <ssg/session_snapshot.h>
 #include <ssg/text_input_commands.h>
 
@@ -336,7 +336,7 @@ int main(int argc, char** argv) {
     // free offset so a wheel scroll persists (see doc/spec-m8.md M8-P). Mirrors
     // the tree's reveal_tree_selection.
     auto revealPaletteSelection = [&] {
-        auto order = ssg::paletteRank(candidates, paletteQuery);
+        auto order = ssg::PaletteSearcher{}.rank(candidates, paletteQuery);
         if (paletteSelected >= order.size()) {
             paletteSelected = order.empty() ? 0 : order.size() - 1;
         }
@@ -354,7 +354,7 @@ int main(int argc, char** argv) {
     // Saturating: `delta` is a decoded int64, so guard the extremes before adding.
     auto scrollPalette = [&](std::int64_t delta) {
         if (!paletteOpen) return;
-        auto order = ssg::paletteRank(candidates, paletteQuery);
+        auto order = ssg::PaletteSearcher{}.rank(candidates, paletteQuery);
         auto probe = ssg::computeListScrollView(
             static_cast<std::uint32_t>(order.size()), palettePaneRows,
             paletteFirstVisible, std::nullopt, /*keep_selection_visible=*/false);
@@ -372,7 +372,7 @@ int main(int argc, char** argv) {
         paletteFirstVisible = static_cast<std::uint32_t>(next);
     };
     auto executeSelectedCandidate = [&] {
-        auto order = ssg::paletteRank(candidates, paletteQuery);
+        auto order = ssg::PaletteSearcher{}.rank(candidates, paletteQuery);
         if (!order.empty() && paletteSelected < order.size()) {
             dispatch("palette.execute",
                      ssg::PaletteExecuteArguments{candidates[order[paletteSelected]].id});
@@ -437,7 +437,7 @@ int main(int argc, char** argv) {
             ssg::PaletteWindowState window{paletteQuery, paletteSelected,
                                            paletteFirstVisible,
                                            palettePaneRows};
-            report = ssg::derivePaletteReport(candidates, window);
+            report = ssg::PaletteSearcher{}.report(candidates, window);
             paletteSelected = window.selected;
             paletteFirstVisible = window.firstVisible;
         }
@@ -633,7 +633,7 @@ int main(int argc, char** argv) {
                     } else if (hit.region == ssg::HitRegion::Palette) {
                         // Map the absolute rank index to its candidate id using
                         // the same ranked order the client renders.
-                        auto order = ssg::paletteRank(candidates, paletteQuery);
+                        auto order = ssg::PaletteSearcher{}.rank(candidates, paletteQuery);
                         if (hit.itemIndex < order.size()) {
                             targets.palette_command_id =
                                 candidates[order[hit.itemIndex]].id;

@@ -86,7 +86,7 @@ ssg::PaletteReport projectReport(
     std::uint32_t paneRows, std::uint32_t firstVisible,
     std::size_t selectedIndex) {
     ssg::PaletteWindowState window{query, selectedIndex, firstVisible, paneRows};
-    return ssg::derivePaletteReport(candidates, window);
+    return ssg::PaletteSearcher{}.report(candidates, window);
 }
 
 // The published candidate list for an open palette, straight from the runtime.
@@ -135,7 +135,7 @@ TEST(paletteReportIsAPureFunctionOfCandidatesAndQuery) {
 
         // Invents no product data: every reported row is a published candidate,
         // and the ghost is derived solely from the top candidate's label.
-        auto order = ssg::paletteRank(candidates, query);
+        auto order = ssg::PaletteSearcher{}.rank(candidates, query);
         for (auto const& shown : report.rows) {
             bool member = false;
             for (auto const& candidate : candidates) {
@@ -148,7 +148,7 @@ TEST(paletteReportIsAPureFunctionOfCandidatesAndQuery) {
             ASSERT_EQ(report.ghost, std::string{});
         } else {
             ASSERT_EQ(report.ghost,
-                      ssg::paletteGhost(candidates[order.front()].label, query));
+                      ssg::PaletteSearcher{}.ghost(candidates[order.front()].label, query));
             // The reported rows are exactly the window of the shared ranker's
             // order — the client uses no private ranking.
             ASSERT_EQ(report.rows.size(),

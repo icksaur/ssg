@@ -1,4 +1,4 @@
-#include <ssg/palette.h>
+#include <ssg/palette_searcher.h>
 
 #include <algorithm>
 #include <cctype>
@@ -13,10 +13,6 @@ char folded(char value) {
         std::tolower(static_cast<unsigned char>(value)));
 }
 
-// Subsequence fuzzy score, identical in shape to the search controller's
-// scorer: contiguous runs and word-boundary hits are rewarded, exact-case hits
-// nudged, and longer candidates lightly penalized.  std::nullopt means the
-// query is not a subsequence of the candidate.
 std::optional<int> fuzzyScore(std::string_view candidate,
                                std::string_view query) {
     if (query.empty()) return 0;
@@ -48,8 +44,8 @@ std::optional<int> fuzzyScore(std::string_view candidate,
 
 }  // namespace
 
-std::vector<std::size_t> paletteRank(
-    std::vector<PaletteCandidate> const& candidates, std::string_view query) {
+std::vector<std::size_t> PaletteSearcher::rank(
+    std::vector<PaletteCandidate> const& candidates, std::string_view query) const {
     struct Ranked {
         std::size_t index;
         int score;
@@ -79,7 +75,8 @@ std::vector<std::size_t> paletteRank(
     return order;
 }
 
-std::string paletteGhost(std::string_view topLabel, std::string_view query) {
+std::string PaletteSearcher::ghost(std::string_view topLabel,
+                                   std::string_view query) const {
     if (query.empty() || query.size() >= topLabel.size()) return {};
     for (std::size_t index = 0; index < query.size(); ++index) {
         if (folded(topLabel[index]) != folded(query[index])) return {};
@@ -87,18 +84,14 @@ std::string paletteGhost(std::string_view topLabel, std::string_view query) {
     return std::string{topLabel.substr(query.size())};
 }
 
-PaletteReport derivePaletteReport(
-    std::vector<PaletteCandidate> const& candidates, PaletteWindowState& window) {
+PaletteReport PaletteSearcher::report(
+    std::vector<PaletteCandidate> const& candidates, PaletteWindowState& window) const {
     PaletteReport report;
-    auto const order = paletteRank(candidates, window.query);
+    auto const order = rank(candidates, window.query);
     report.query = window.query;
     if (!order.empty()) {
-        report.ghost =
-            paletteGhost(candidates[order.front()].label, window.query);
+        report.ghost = ghost(candidates[order.front()].label, window.query);
     }
-    // Clamp the selection into the (possibly shrunken) ranked set; only when the
-    // clamp actually moves it do we re-center the window on it, so a free wheel
-    // scroll otherwise persists (see doc/spec-scroll.md, spec-m8.md M8-P).
     bool selectionClamped = false;
     if (window.selected >= order.size()) {
         window.selected = order.empty() ? 0 : order.size() - 1;
