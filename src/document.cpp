@@ -2,6 +2,8 @@
 
 #include "piece_tree.h"
 
+#include <ssg/open_metrics.h>
+
 #include <algorithm>
 #include <cstddef>
 #include <limits>
@@ -19,6 +21,7 @@ bool is_continuation(unsigned char byte) {
 }
 
 bool valid_utf8_without_nul(std::string_view text) {
+    note_utf8_validation();
     std::size_t offset = 0;
     while (offset < text.size()) {
         const auto first = static_cast<unsigned char>(text[offset]);

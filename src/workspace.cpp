@@ -1,5 +1,7 @@
 #include <ssg/workspace.h>
 
+#include <ssg/open_metrics.h>
+
 #include <algorithm>
 #include <array>
 #include <fstream>
@@ -29,6 +31,7 @@ std::vector<std::uint8_t> read_file(const std::filesystem::path& path) {
         throw std::runtime_error("failed to open file for reading: " +
                                  path.string());
     }
+    OpenPhaseTimer timer{OpenPhase::read};
     return {std::istreambuf_iterator<char>{stream},
             std::istreambuf_iterator<char>{}};
 }
@@ -360,7 +363,12 @@ public:
                               std::string label,
                               bool dirty) {
         const auto id = FileDocumentId{next_document++};
-        if (contains_nul(as_unsigned_bytes(bytes))) {
+        bool has_nul;
+        {
+            OpenPhaseTimer timer{OpenPhase::nul_scan};
+            has_nul = contains_nul(as_unsigned_bytes(bytes));
+        }
+        if (has_nul) {
             entries.push_back({id, std::move(key), std::move(label),
                                FileContentKind::binary, {}, std::move(bytes),
                                Document{"", DocumentMode::read_only}, {}, {}});
@@ -374,7 +382,10 @@ public:
             } else {
                 const auto persisted = dirty ? std::string{} : decoded.text->utf8;
                 const auto persisted_status = decoded.text->status;
-                auto document = Document{decoded.text->utf8};
+                Document document = [&] {
+                    OpenPhaseTimer timer{OpenPhase::document_build};
+                    return Document{decoded.text->utf8};
+                }();
                 entries.push_back(
                     {id, std::move(key), std::move(label),
                      FileContentKind::text, std::move(*decoded.text),
@@ -477,16 +488,19 @@ std::optional<WorkspaceDocumentState> Workspace::state(
     if (!entry) {
         return std::nullopt;
     }
+    OpenPhaseTimer timer{OpenPhase::state_dirty_check};
     const auto text = entry->document.snapshot().text;
+    const bool dirty =
+        entry->key.kind() == JournalDocumentKeyKind::untitled ||
+        text != entry->persisted_text ||
+        entry->decoded.status != entry->persisted_status;
     return WorkspaceDocumentState{
         entry->id,
         entry->key,
         entry->display_label,
         entry->content_kind,
         entry->decoded.status,
-        entry->key.kind() == JournalDocumentKeyKind::untitled ||
-            text != entry->persisted_text ||
-            entry->decoded.status != entry->persisted_status,
+        dirty,
     };
 }
 

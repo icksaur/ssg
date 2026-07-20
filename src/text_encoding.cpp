@@ -1,5 +1,7 @@
 #include "ssg/text_encoding.h"
 
+#include <ssg/open_metrics.h>
+
 #include <algorithm>
 #include <utility>
 
@@ -40,6 +42,8 @@ void append_utf8(std::string& output, char32_t value) {
 
 ScalarResult decode_utf8(std::span<const std::uint8_t> input,
                          std::size_t base_offset = 0) {
+    OpenPhaseTimer timer{OpenPhase::decode_validate};
+    note_utf8_validation();
     ScalarResult result;
     for (std::size_t index = 0; index < input.size();) {
         const auto start = index;
@@ -93,6 +97,7 @@ ScalarResult decode_utf8(std::span<const std::uint8_t> input,
 
 ScalarResult decode_utf16(std::span<const std::uint8_t> input,
                           bool little_endian, std::size_t base_offset) {
+    OpenPhaseTimer timer{OpenPhase::decode_validate};
     ScalarResult result;
     if (input.size() % 2 != 0) {
         result.error = invalid_input(
@@ -142,6 +147,7 @@ constexpr std::array<char32_t, 32> windows1252_high{
 
 ScalarResult decode_single_byte(std::span<const std::uint8_t> input,
                                 TextEncoding encoding) {
+    OpenPhaseTimer timer{OpenPhase::decode_validate};
     ScalarResult result;
     result.scalars.reserve(input.size());
     for (std::size_t index = 0; index < input.size(); ++index) {
@@ -189,6 +195,7 @@ DecodeTextResult normalized(ScalarResult scalar_result,
     if (scalar_result.error.has_value()) {
         return {std::nullopt, std::move(scalar_result.error)};
     }
+    OpenPhaseTimer timer{OpenPhase::eol_scan};
     DecodedText text;
     text.status.encoding = encoding;
     text.status.had_bom = had_bom;
