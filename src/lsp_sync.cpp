@@ -586,14 +586,14 @@ LspByteOffsetResult lspPositionToByteOffset(std::string_view text,
     }
 }
 
-LspSyncDelta deriveLspSyncDelta(const LspSyncViewState& base,
+LspSyncDelta LspSyncDeltaCodec::derive(const LspSyncViewState& base,
                                    const LspSyncViewState& target) {
     return {base.revision, target.revision,
             base == target ? std::nullopt
                            : std::optional<LspSyncViewState>{target}};
 }
 
-LspSyncReplayResult replayLspSyncDelta(const LspSyncViewState& base,
+LspSyncReplayResult LspSyncDeltaCodec::replay(const LspSyncViewState& base,
                                           const LspSyncDelta& delta) {
     if (delta.baseRevision != base.revision) {
         return {std::nullopt, LspSyncReplayError::StaleRevision};

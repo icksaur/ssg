@@ -129,9 +129,6 @@ struct LspSyncDelta {
     friend bool operator==(const LspSyncDelta&, const LspSyncDelta&) = default;
 };
 
-[[nodiscard]] LspSyncDelta deriveLspSyncDelta(
-    const LspSyncViewState& base, const LspSyncViewState& target);
-
 enum class LspSyncReplayError : std::uint8_t {
     None,
     StaleRevision,
@@ -144,8 +141,13 @@ struct LspSyncReplayResult {
     [[nodiscard]] bool accepted() const noexcept { return state.has_value(); }
 };
 
-[[nodiscard]] LspSyncReplayResult replayLspSyncDelta(
-    const LspSyncViewState& base, const LspSyncDelta& delta);
+class LspSyncDeltaCodec {
+public:
+    [[nodiscard]] LspSyncDelta derive(const LspSyncViewState& base,
+                                      const LspSyncViewState& target);
+    [[nodiscard]] LspSyncReplayResult replay(const LspSyncViewState& base,
+                                             const LspSyncDelta& delta);
+};
 
 enum class LspIoStatus : std::uint8_t { Ok, Timeout, Closed, Error };
 
