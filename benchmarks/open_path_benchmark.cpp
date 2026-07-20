@@ -82,6 +82,39 @@ double calibrated_read_ms(const fs::path& file) {
     return std::chrono::duration<double, std::milli>(elapsed).count();
 }
 
+// Isolated "validate UTF-8 + copy" single pass: the intrinsic decode floor the
+// fused LF-2b decoder approaches (one walk that checks lead bytes and copies each
+// sequence straight through).  Representative, not a full validator.
+double calibrated_validate_copy_ms(const std::string& bytes) {
+    auto const start = Clock::now();
+    std::string out;
+    out.reserve(bytes.size());
+    const std::size_t n = bytes.size();
+    std::size_t index = 0;
+    while (index < n) {
+        const auto c = static_cast<unsigned char>(bytes[index]);
+        if (c < 0x80) {
+            out.push_back(bytes[index]);
+            ++index;
+        } else {
+            const std::size_t cont = c >= 0xf0 ? 3 : c >= 0xe0 ? 2 : 1;
+            const std::size_t len = std::min(cont + 1, n - index);
+            out.append(bytes, index, len);
+            index += len;
+        }
+    }
+    auto const elapsed = Clock::now() - start;
+    if (out.size() != bytes.size())
+        throw std::runtime_error{"validate-copy calibration mismatch"};
+    return std::chrono::duration<double, std::milli>(elapsed).count();
+}
+
+std::string read_whole(const fs::path& file) {
+    std::ifstream stream{file, std::ios::binary};
+    return {std::istreambuf_iterator<char>{stream},
+            std::istreambuf_iterator<char>{}};
+}
+
 struct Sample {
     std::array<double, phase_names.size()> phase_ms{};
     double wall_ms = 0.0;
@@ -123,6 +156,13 @@ int main() {
         for (std::size_t rep = 0; rep < repetitions; ++rep) {
             auto const value = calibrated_read_ms(file);
             if (rep >= discard) calib.push_back(value);
+        }
+
+        const std::string whole = read_whole(file);
+        std::vector<double> calib_decode;
+        for (std::size_t rep = 0; rep < repetitions; ++rep) {
+            auto const value = calibrated_validate_copy_ms(whole);
+            if (rep >= discard) calib_decode.push_back(value);
         }
 
         std::vector<Sample> samples;
@@ -171,6 +211,8 @@ int main() {
                << " (p50=" << dominant_p50 << "ms)\n"
                << "  calibrated_buffered_read p50=" << percentile(calib, 0.50)
                << "ms p99=" << percentile(calib, 0.99) << "ms\n"
+               << "  calibrated_validate_copy p50=" << percentile(calib_decode, 0.50)
+               << "ms p99=" << percentile(calib_decode, 0.99) << "ms\n"
                << "  utf8_validation_calls=" << validation_calls
                << " piece_tree_text_calls_on_state=" << tree_text_calls << "\n";
 

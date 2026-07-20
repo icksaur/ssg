@@ -181,7 +181,86 @@ TEST(exports_exact_immutable_command_set_and_typed_view_delta) {
 
 } // namespace
 
-int main() {
+// LF-2b: the fused single-pass UTF-8 decoder must record every terminator and
+// report the exact same malformed-byte offsets as the prior decode+normalize.
+namespace {
+
+ssg::DecodeTextResult decode(std::initializer_list<std::uint8_t> values) {
+    const std::vector<std::uint8_t> buffer{values};
+    return ssg::decode_text(buffer);
+}
+
+TEST(fused_decode_records_every_line_terminator) {
+    const auto lone_cr = decode({'a', 0x0d, 'b'});
+    ASSERT_TRUE(lone_cr.accepted());
+    ASSERT_EQ(lone_cr.text->utf8, std::string{"a\nb"});
+    ASSERT_EQ(lone_cr.text->line_terminators,
+              (std::vector{LineTerminator::cr, LineTerminator::none}));
+    ASSERT_EQ(lone_cr.text->status.line_ending, LineEnding::cr);
+    ASSERT_FALSE(lone_cr.text->status.final_newline);
+
+    const auto crlf = decode({'a', 0x0d, 0x0a});
+    ASSERT_EQ(crlf.text->utf8, std::string{"a\n"});
+    ASSERT_EQ(crlf.text->line_terminators,
+              (std::vector{LineTerminator::crlf}));
+    ASSERT_EQ(crlf.text->status.line_ending, LineEnding::crlf);
+    ASSERT_TRUE(crlf.text->status.final_newline);
+
+    const auto lf = decode({'a', 0x0a});
+    ASSERT_EQ(lf.text->line_terminators, (std::vector{LineTerminator::lf}));
+    ASSERT_EQ(lf.text->status.line_ending, LineEnding::lf);
+
+    const auto mixed = decode({'a', 0x0d, 0x0a, 'b', 0x0a});
+    ASSERT_EQ(mixed.text->utf8, std::string{"a\nb\n"});
+    ASSERT_EQ(mixed.text->line_terminators,
+              (std::vector{LineTerminator::crlf, LineTerminator::lf}));
+    ASSERT_EQ(mixed.text->status.line_ending, LineEnding::mixed);
+    ASSERT_TRUE(mixed.text->status.final_newline);
+
+    const auto no_final = decode({'a', 'b', 'c'});
+    ASSERT_EQ(no_final.text->line_terminators,
+              (std::vector{LineTerminator::none}));
+    ASSERT_FALSE(no_final.text->status.final_newline);
+
+    // A multibyte scalar copies straight through, byte-identical.
+    const auto multibyte = decode({0xce, 0xb2, 0x0a});  // U+03B2 + LF
+    ASSERT_EQ(multibyte.text->utf8,
+              bytes({0xce, 0xb2, 0x0a}));
+}
+
+TEST(fused_decode_preserves_malformed_offsets) {
+    // invalid lead byte (0xC0 < 0xC2) at offset 2.
+    const auto lead = decode({'a', 'b', 0xc0});
+    ASSERT_FALSE(lead.accepted());
+    ASSERT_EQ(lead.error->utf8_offset, std::size_t{2});
+
+    // bad continuation byte: 0xC2 wants a continuation; 0x20 is not one, at offset 1.
+    const auto continuation = decode({0xc2, 0x20});
+    ASSERT_FALSE(continuation.accepted());
+    ASSERT_EQ(continuation.error->utf8_offset, std::size_t{1});
+
+    // truncated three-byte sequence reports the sequence start (offset 0).
+    const auto truncated = decode({0xe0, 0x80});
+    ASSERT_FALSE(truncated.accepted());
+    ASSERT_EQ(truncated.error->utf8_offset, std::size_t{0});
+
+    // overlong (0xE0 0x80 0x80 encodes U+0000) rejected at the sequence start.
+    const auto overlong = decode({0xe0, 0x80, 0x80});
+    ASSERT_FALSE(overlong.accepted());
+    ASSERT_EQ(overlong.error->utf8_offset, std::size_t{0});
+
+    // surrogate (U+D800 = 0xED 0xA0 0x80) rejected at the sequence start.
+    const auto surrogate = decode({0xed, 0xa0, 0x80});
+    ASSERT_FALSE(surrogate.accepted());
+    ASSERT_EQ(surrogate.error->utf8_offset, std::size_t{0});
+
+    // BOM-relative: the offset counts from the original file, not post-BOM.
+    const auto bom_relative = decode({0xef, 0xbb, 0xbf, 'a', 0xc0});
+    ASSERT_FALSE(bom_relative.accepted());
+    ASSERT_EQ(bom_relative.error->utf8_offset, std::size_t{4});
+}
+
+} // namespace
     RUN(auto_detects_utf8_and_preserves_lf_and_final_newline);
     RUN(auto_detects_utf8_bom_and_preserves_crlf_without_final_newline);
     RUN(round_trips_utf16_endianness_bom_and_mixed_endings);
@@ -190,5 +269,7 @@ int main() {
     RUN(refuses_lossy_single_byte_encoding_at_the_offending_offset);
     RUN(normalizes_requested_endings_and_applies_final_newline_policy);
     RUN(exports_exact_immutable_command_set_and_typed_view_delta);
+    RUN(fused_decode_records_every_line_terminator);
+    RUN(fused_decode_preserves_malformed_offsets);
     return failed == 0 ? 0 : 1;
 }

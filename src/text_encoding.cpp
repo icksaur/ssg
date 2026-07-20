@@ -232,6 +232,102 @@ std::span<const std::uint8_t> skip(
     return bytes.subspan(std::min(count, bytes.size()));
 }
 
+// Fused single-pass UTF-8 decode + EOL-normalize (LF-2b, the dominant lever).
+// Validates each sequence and copies its bytes STRAIGHT THROUGH to the utf8
+// output (an accepted UTF-8 sequence is already canonical, so re-encoding is a
+// no-op), normalizing CR/CRLF/CR -> LF and recording the per-line terminator, in
+// ONE walk with no std::vector<Scalar> intermediate. Malformed-byte offsets and
+// classification are identical to decode_utf8 + normalized (see the offset parity
+// tests in test_text_encoding.cpp); `base_offset` makes them BOM-relative.
+DecodeTextResult decode_utf8_fused(std::span<const std::uint8_t> input,
+                                   std::size_t base_offset,
+                                   TextEncoding encoding, bool had_bom) {
+    OpenPhaseTimer timer{OpenPhase::decode_validate};
+    note_utf8_validation();
+    DecodedText text;
+    text.status.encoding = encoding;
+    text.status.had_bom = had_bom;
+    text.utf8.reserve(input.size());
+    const std::size_t n = input.size();
+    std::size_t index = 0;
+    while (index < n) {
+        const std::uint8_t first = input[index];
+        if (first == '\r') {
+            if (index + 1 < n && input[index + 1] == '\n') {
+                text.line_terminators.push_back(LineTerminator::crlf);
+                index += 2;
+            } else {
+                text.line_terminators.push_back(LineTerminator::cr);
+                index += 1;
+            }
+            text.utf8.push_back('\n');
+            continue;
+        }
+        if (first == '\n') {
+            text.line_terminators.push_back(LineTerminator::lf);
+            text.utf8.push_back('\n');
+            index += 1;
+            continue;
+        }
+        if (first <= 0x7f) {
+            text.utf8.push_back(static_cast<char>(first));
+            index += 1;
+            continue;
+        }
+        std::size_t continuation_count = 0;
+        char32_t minimum = 0;
+        char32_t value = 0;
+        if (first >= 0xc2 && first <= 0xdf) {
+            value = first & 0x1f;
+            continuation_count = 1;
+            minimum = 0x80;
+        } else if (first >= 0xe0 && first <= 0xef) {
+            value = first & 0x0f;
+            continuation_count = 2;
+            minimum = 0x800;
+        } else if (first >= 0xf0 && first <= 0xf4) {
+            value = first & 0x07;
+            continuation_count = 3;
+            minimum = 0x10000;
+        } else {
+            return {std::nullopt,
+                    invalid_input(base_offset + index,
+                                  "invalid UTF-8 leading byte")};
+        }
+        if (index + 1 + continuation_count > n) {
+            return {std::nullopt,
+                    invalid_input(base_offset + index,
+                                  "truncated UTF-8 sequence")};
+        }
+        for (std::size_t count = 1; count <= continuation_count; ++count) {
+            const std::uint8_t byte = input[index + count];
+            if ((byte & 0xc0) != 0x80) {
+                return {std::nullopt,
+                        invalid_input(base_offset + index + count,
+                                      "invalid UTF-8 continuation byte")};
+            }
+            value = (value << 6) | (byte & 0x3f);
+        }
+        if (value < minimum || (value >= 0xd800 && value <= 0xdfff) ||
+            value > 0x10ffff) {
+            return {std::nullopt,
+                    invalid_input(base_offset + index,
+                                  "invalid UTF-8 scalar value")};
+        }
+        text.utf8.append(reinterpret_cast<const char*>(input.data() + index),
+                         continuation_count + 1);
+        index += continuation_count + 1;
+    }
+    if (!text.utf8.empty() && text.utf8.back() != '\n') {
+        text.line_terminators.push_back(LineTerminator::none);
+    }
+    text.status.line_ending = detected_line_ending(text.line_terminators);
+    text.status.final_newline =
+        !text.line_terminators.empty() &&
+        text.line_terminators.back() != LineTerminator::none;
+    return {std::move(text), std::nullopt};
+}
+
 DecodeTextResult decode_selected(std::span<const std::uint8_t> bytes,
                                  TextEncoding encoding) {
     switch (encoding) {
@@ -239,8 +335,8 @@ DecodeTextResult decode_selected(std::span<const std::uint8_t> bytes,
     case TextEncoding::utf8_bom: {
         const bool bom = bytes.size() >= 3 && bytes[0] == 0xef &&
                          bytes[1] == 0xbb && bytes[2] == 0xbf;
-        return normalized(
-            decode_utf8(bom ? skip(bytes, 3) : bytes, bom ? 3 : 0),
+        return decode_utf8_fused(
+            bom ? skip(bytes, 3) : bytes, bom ? 3 : 0,
             bom ? TextEncoding::utf8_bom : encoding, bom);
     }
     case TextEncoding::utf16le:
