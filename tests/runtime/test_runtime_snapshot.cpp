@@ -3,7 +3,7 @@
 
 #include <ssg/editor_runtime.h>
 #include <ssg/editor_session_assembly.h>
-#include <ssg/input.h>
+#include <ssg/keymap.h>
 
 #include <algorithm>
 #include <filesystem>
@@ -96,8 +96,8 @@ TEST(runtimePublishesValidCuratedKeymap) {
     if (!snapshot) return;
     const auto& keymap = snapshot->sections().keymap;
     ASSERT_FALSE(keymap.bindings.empty());
-    ASSERT_TRUE(ssg::validateKeymap(keymap, {}).empty());
-    ASSERT_TRUE(ssg::hasGlobalBinding(keymap, "settings.open", {}));
+    ASSERT_TRUE(ssg::KeymapMatcher{keymap}.validate({}).empty());
+    ASSERT_TRUE(ssg::KeymapMatcher{keymap}.hasGlobalBinding("settings.open", {}));
 }
 
 TEST(curatedKeymapBindingsAreArgumentFree) {
@@ -147,45 +147,45 @@ TEST(curatedKeymapResolvesPerContext) {
     if (!snapshot) return;
     const auto& keymap = snapshot->sections().keymap;
 
-    const auto down = *ssg::parseKeySequence({"ArrowDown"});
-    ASSERT_EQ(ssg::resolveKeySequence(keymap, down, "editor").commandId,
+    const auto down = *ssg::KeyCodec{}.parseSequence({"ArrowDown"});
+    ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(down, "editor").commandId,
               std::string{"cursor.line_down"});
-    ASSERT_EQ(ssg::resolveKeySequence(keymap, down, "panel").commandId,
+    ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(down, "panel").commandId,
               std::string{"tree.select_next"});
-    ASSERT_EQ(ssg::resolveKeySequence(keymap, down, "prompt").commandId,
+    ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(down, "prompt").commandId,
               std::string{"palette.next"});
 
-    const auto save = *ssg::parseKeySequence({"Escape", "KeyS"});
-    ASSERT_EQ(ssg::resolveKeySequence(keymap, save, "editor").commandId,
+    const auto save = *ssg::KeyCodec{}.parseSequence({"Escape", "KeyS"});
+    ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(save, "editor").commandId,
               std::string{"file.save"});
 
     // The settings.open escape hatch resolves in every context.
-    const auto settings = *ssg::parseKeySequence({"Escape", "KeyF", "KeyT"});
+    const auto settings = *ssg::KeyCodec{}.parseSequence({"Escape", "KeyF", "KeyT"});
     for (const auto context : {"editor", "panel", "prompt"}) {
-        ASSERT_EQ(ssg::resolveKeySequence(keymap, settings, context).commandId,
+        ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(settings, context).commandId,
                   std::string{"settings.open"});
     }
 
     // M7-M selection/multi-cursor bindings: Shift+Arrow extends the selection in
     // the editor; the multi-cursor and find/replace chords resolve globally.
-    const auto shiftRight = *ssg::parseKeySequence({"Shift+ArrowRight"});
-    ASSERT_EQ(ssg::resolveKeySequence(keymap, shiftRight, "editor").commandId,
+    const auto shiftRight = *ssg::KeyCodec{}.parseSequence({"Shift+ArrowRight"});
+    ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(shiftRight, "editor").commandId,
               std::string{"select.right"});
-    const auto shiftUp = *ssg::parseKeySequence({"Shift+ArrowUp"});
-    ASSERT_EQ(ssg::resolveKeySequence(keymap, shiftUp, "editor").commandId,
+    const auto shiftUp = *ssg::KeyCodec{}.parseSequence({"Shift+ArrowUp"});
+    ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(shiftUp, "editor").commandId,
               std::string{"select.line_up"});
     // Plain ArrowRight is still cursor motion, distinct from the shifted stroke.
-    const auto plainRight = *ssg::parseKeySequence({"ArrowRight"});
-    ASSERT_EQ(ssg::resolveKeySequence(keymap, plainRight, "editor").commandId,
+    const auto plainRight = *ssg::KeyCodec{}.parseSequence({"ArrowRight"});
+    ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(plainRight, "editor").commandId,
               std::string{"cursor.right"});
-    const auto addNext = *ssg::parseKeySequence({"Escape", "KeyD"});
-    ASSERT_EQ(ssg::resolveKeySequence(keymap, addNext, "editor").commandId,
+    const auto addNext = *ssg::KeyCodec{}.parseSequence({"Escape", "KeyD"});
+    ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(addNext, "editor").commandId,
               std::string{"select.add_next_occurrence"});
-    const auto findOpen = *ssg::parseKeySequence({"Escape", "Slash"});
-    ASSERT_EQ(ssg::resolveKeySequence(keymap, findOpen, "editor").commandId,
+    const auto findOpen = *ssg::KeyCodec{}.parseSequence({"Escape", "Slash"});
+    ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(findOpen, "editor").commandId,
               std::string{"find.open"});
-    const auto replaceOpen = *ssg::parseKeySequence({"Escape", "KeyR"});
-    ASSERT_EQ(ssg::resolveKeySequence(keymap, replaceOpen, "editor").commandId,
+    const auto replaceOpen = *ssg::KeyCodec{}.parseSequence({"Escape", "KeyR"});
+    ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(replaceOpen, "editor").commandId,
               std::string{"replace.open"});
 }
 
@@ -204,8 +204,8 @@ TEST(addCursorChordProducesMultipleSelections) {
     auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    const auto chord = *ssg::parseKeySequence({"Escape", "KeyJ"});
-    auto resolved = ssg::resolveKeySequence(snapshot->sections().keymap, chord, "editor");
+    const auto chord = *ssg::KeyCodec{}.parseSequence({"Escape", "KeyJ"});
+    auto resolved = ssg::KeymapMatcher{snapshot->sections().keymap}.resolveSequence(chord, "editor");
     ASSERT_EQ(resolved.kind, ssg::KeymapMatchKind::Resolved);
     ASSERT_EQ(resolved.commandId, std::string{"select.add_cursor_down"});
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {resolved.commandId, runtime.revision(), {}}).accepted());

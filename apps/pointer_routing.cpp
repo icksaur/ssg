@@ -1,6 +1,6 @@
 #include "pointer_routing.h"
 
-#include <ssg/input.h>
+#include <ssg/keymap.h>
 #include <ssg/palette.h>
 #include <ssg/tree.h>
 

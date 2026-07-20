@@ -102,7 +102,7 @@ ThemeSnapshot defaultTheme() {
 // chords are Escape-led and prefix-free; single strokes differ per focus.
 KeymapViewState defaultTerminalKeymap() {
     auto seq = [](std::initializer_list<std::string_view> strokes) {
-        auto parsed = parseKeySequence(strokes);
+        auto parsed = KeyCodec{}.parseSequence(strokes);
         if (!parsed) throw std::logic_error{"curated keymap has an invalid stroke"};
         return *parsed;
     };
@@ -754,10 +754,10 @@ EditorRuntimeCreateResult EditorRuntime::create(EditorRuntimeConfig config) {
                                            config.recoveryRoot,
                                            config.deferEnrichment);
         impl->keymap = defaultTerminalKeymap();
-        if (auto errors = validateKeymap(impl->keymap, {}); !errors.empty()) {
+        if (auto errors = KeymapMatcher{impl->keymap}.validate({}); !errors.empty()) {
             return {nullptr, "default keymap is invalid: " + errors.front().message};
         }
-        if (!hasGlobalBinding(impl->keymap, "settings.open", {})) {
+        if (!KeymapMatcher{impl->keymap}.hasGlobalBinding("settings.open", {})) {
             return {nullptr,
                     "default keymap lacks a global settings.open escape hatch"};
         }

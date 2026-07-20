@@ -4,7 +4,7 @@
 #include <ssg/editor_session_assembly.h>
 #include <ssg/file_commands.h>
 #include <ssg/find_replace.h>
-#include <ssg/input.h>
+#include <ssg/keymap.h>
 #include <ssg/selection.h>
 #include <ssg/settings.h>
 #include <ssg/text_encoding.h>

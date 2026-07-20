@@ -15,7 +15,7 @@
 #include <ssg/editor_runtime.h>
 #include <ssg/hit_tester.h>
 #include <ssg/find_replace.h>
-#include <ssg/input.h>
+#include <ssg/keymap.h>
 #include <ssg/palette.h>
 #include <ssg/session_snapshot.h>
 #include <ssg/text_input_commands.h>
@@ -412,7 +412,7 @@ int main(int argc, char** argv) {
         }
     };
     auto routeText = [&](std::string const& text) {
-        switch (ssg::textRouting(ssg::focusTargetName(focus))) {
+        switch (ssg::SemanticInputRouter{}.textRouting(ssg::focusTargetName(focus))) {
         case ssg::TextRouting::Insert:
             dispatch("text.insert", ssg::TextInputArguments{text});
             break;
@@ -702,8 +702,7 @@ int main(int argc, char** argv) {
             }
 
             chord.push_back(decoded.stroke);
-            auto resolution = ssg::resolveKeySequence(
-                keymap, chord, ssg::focusTargetName(focus));
+            auto resolution = ssg::KeymapMatcher{keymap}.resolveSequence(chord, ssg::focusTargetName(focus));
             if (resolution.kind == ssg::KeymapMatchKind::Resolved) {
                 dispatchResolved(resolution.commandId);
                 chord.clear();
