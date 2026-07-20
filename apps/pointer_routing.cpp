@@ -22,7 +22,7 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
             // independent of the selection drag state: the server-owned scroll
             // offset moves live as the thumb is dragged. Panel/palette gutters
             // are not draggable yet, so they fall through to no command.
-            if (hit.region == ssg::HitRegion::editor_scrollbar) {
+            if (hit.region == ssg::HitRegion::EditorScrollbar) {
                 dispatch.commands.push_back(
                     {"view.scroll_to_fraction",
                      ssg::ScrollFractionArguments{hit.scroll_numerator,
@@ -33,11 +33,11 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
             // -> TabId); on a palette row it executes that candidate (the caller
             // mapped the absolute item_index -> candidate id). Neither begins a
             // selection drag.
-            if (hit.region == ssg::HitRegion::tab && targets.tab_id) {
+            if (hit.region == ssg::HitRegion::Tab && targets.tab_id) {
                 dispatch.commands.push_back({"tab.activate", *targets.tab_id});
                 return dispatch;
             }
-            if (hit.region == ssg::HitRegion::palette && targets.palette_command_id) {
+            if (hit.region == ssg::HitRegion::Palette && targets.palette_command_id) {
                 dispatch.commands.push_back(
                     {"palette.execute",
                      ssg::PaletteExecuteArguments{*targets.palette_command_id}});
@@ -46,7 +46,7 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
             // A left press on a tree row selects that node and then activates it
             // (opens a file / toggles a directory), matching the keyboard
             // select-then-Enter behavior. The node id travels on the hit.
-            if (hit.region == ssg::HitRegion::panel && hit.node_id) {
+            if (hit.region == ssg::HitRegion::Panel && hit.node_id) {
                 dispatch.commands.push_back(
                     {"tree.select", ssg::TreeSelectArguments{*hit.node_id}});
                 dispatch.commands.push_back({"tree.activate", std::any{}});
@@ -55,7 +55,7 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
             // A left press on the editor places the caret and begins a potential
             // selection drag (the drag itself is routed on subsequent motion in
             // M8-S).  Requires the caller to have resolved the document position.
-            if (hit.region == ssg::HitRegion::editor && targets.document_position) {
+            if (hit.region == ssg::HitRegion::Editor && targets.document_position) {
                 dispatch.commands.push_back(
                     {"cursor.set_position",
                      ssg::SelectionCommandArguments{*targets.document_position,
@@ -66,7 +66,7 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
         case PointerKind::drag:
             // Dragging the editor gutter thumb scrolls live, each motion (M8-B),
             // independent of the selection drag state.
-            if (hit.region == ssg::HitRegion::editor_scrollbar) {
+            if (hit.region == ssg::HitRegion::EditorScrollbar) {
                 dispatch.commands.push_back(
                     {"view.scroll_to_fraction",
                      ssg::ScrollFractionArguments{hit.scroll_numerator,
@@ -78,7 +78,7 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
             // cell with no document target (short line, blank row, or beyond the
             // viewport edge) dispatches nothing, so the selection holds at the
             // last in-viewport position (edge auto-scroll is M8-S2).
-            if (dragging && drag_anchor && hit.region == ssg::HitRegion::editor &&
+            if (dragging && drag_anchor && hit.region == ssg::HitRegion::Editor &&
                 targets.document_position) {
                 dispatch.commands.push_back(
                     {"select.set_range",
@@ -98,11 +98,11 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
 
 WheelTarget route_wheel(ssg::HitRegion region) {
     switch (region) {
-        case ssg::HitRegion::panel:
-        case ssg::HitRegion::panel_scrollbar:
+        case ssg::HitRegion::Panel:
+        case ssg::HitRegion::PanelScrollbar:
             return WheelTarget::tree;
-        case ssg::HitRegion::palette:
-        case ssg::HitRegion::palette_scrollbar:
+        case ssg::HitRegion::Palette:
+        case ssg::HitRegion::PaletteScrollbar:
             // The palette is a client-owned overlay; the app scrolls its window
             // directly (no server command). Falling through to view.scroll_lines
             // would wrongly scroll the editor underneath the palette.

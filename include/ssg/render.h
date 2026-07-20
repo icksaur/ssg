@@ -21,7 +21,7 @@ struct CellGridCell {
     std::string text{" "};
     std::uint8_t foreground{0};
     std::uint8_t background{0};
-    SemanticRole role{SemanticRole::background};
+    SemanticRole role{SemanticRole::Background};
     bool continuation{false};
 
     bool operator==(CellGridCell const&) const = default;

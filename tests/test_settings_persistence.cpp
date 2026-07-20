@@ -43,15 +43,15 @@ void write_text(const std::filesystem::path& path, std::string_view text) {
 void restart_round_trip(const ssg::SettingsPaths& paths) {
     ssg::SettingsModel original;
     ASSERT_TRUE(original
-                    .set(ssg::SettingScope::user, ssg::SettingKey::theme,
+                    .set(ssg::SettingScope::User, ssg::SettingKey::Theme,
                          ssg::SettingValue{std::string{"light"}})
                     .accepted());
     ASSERT_TRUE(original
-                    .set(ssg::SettingScope::workspace, ssg::SettingKey::theme,
+                    .set(ssg::SettingScope::Workspace, ssg::SettingKey::Theme,
                          ssg::SettingValue{std::string{"dark"}})
                     .accepted());
     ASSERT_TRUE(original
-                    .set(ssg::SettingScope::user, ssg::SettingKey::indent_width,
+                    .set(ssg::SettingScope::User, ssg::SettingKey::IndentWidth,
                          ssg::SettingValue{std::uint32_t{2}})
                     .accepted());
 
@@ -60,10 +60,10 @@ void restart_round_trip(const ssg::SettingsPaths& paths) {
 
     ssg::SettingsModel restarted;
     ASSERT_TRUE(persistence.load(restarted).ok);
-    const auto theme = restarted.resolve(ssg::SettingKey::theme);
+    const auto theme = restarted.resolve(ssg::SettingKey::Theme);
     ASSERT_EQ(std::get<std::string>(theme.value), "dark");
-    ASSERT_EQ(theme.source, ssg::SettingScope::workspace);
-    const auto width = restarted.resolve(ssg::SettingKey::indent_width);
+    ASSERT_EQ(theme.source, ssg::SettingScope::Workspace);
+    const auto width = restarted.resolve(ssg::SettingKey::IndentWidth);
     ASSERT_EQ(std::get<std::uint32_t>(width.value), 2u);
 }
 
@@ -105,8 +105,8 @@ TEST(unknown_future_field_survives_without_becoming_a_setting) {
 
     ssg::SettingsModel restarted;
     ASSERT_TRUE(persistence.load(restarted).ok);
-    ASSERT_EQ(restarted.resolve(ssg::SettingKey::theme).value,
-              initial.resolve(ssg::SettingKey::theme).value);
+    ASSERT_EQ(restarted.resolve(ssg::SettingKey::Theme).value,
+              initial.resolve(ssg::SettingKey::Theme).value);
     ASSERT_TRUE(persistence.save(restarted).ok);
     ASSERT_TRUE(read_text(paths.user_file).find(
                     "future.setting=s:opaque%20value\n") != std::string::npos);
@@ -118,7 +118,7 @@ TEST(invalid_schema_or_known_value_is_load_atomic) {
         ssg::linux_settings_paths(root.path() / "u", root.path() / "w", "/workspace");
     ssg::SettingsModel settings;
     ASSERT_TRUE(settings
-                    .set(ssg::SettingScope::user, ssg::SettingKey::theme,
+                    .set(ssg::SettingScope::User, ssg::SettingKey::Theme,
                          ssg::SettingValue{std::string{"retained"}})
                     .accepted());
     const auto before = settings.view_state();
@@ -138,26 +138,26 @@ TEST(invalid_schema_or_known_value_is_load_atomic) {
 TEST(language_and_document_records_round_trip_for_recovery_owner) {
     ssg::SettingsModel original;
     ASSERT_TRUE(original
-                    .set(ssg::SettingScope::language, ssg::SettingKey::auto_indent,
+                    .set(ssg::SettingScope::Language, ssg::SettingKey::AutoIndent,
                          ssg::SettingValue{false})
                     .accepted());
     ASSERT_TRUE(original
-                    .set(ssg::SettingScope::document, ssg::SettingKey::word_wrap,
+                    .set(ssg::SettingScope::Document, ssg::SettingKey::WordWrap,
                          ssg::SettingValue{true})
                     .accepted());
 
     ssg::SettingsModel restored;
     ASSERT_TRUE(restored
-                    .import_scope(ssg::SettingScope::language,
-                                  original.export_scope(ssg::SettingScope::language))
+                    .import_scope(ssg::SettingScope::Language,
+                                  original.export_scope(ssg::SettingScope::Language))
                     .ok);
     ASSERT_TRUE(restored
-                    .import_scope(ssg::SettingScope::document,
-                                  original.export_scope(ssg::SettingScope::document))
+                    .import_scope(ssg::SettingScope::Document,
+                                  original.export_scope(ssg::SettingScope::Document))
                     .ok);
-    ASSERT_EQ(restored.resolve(ssg::SettingKey::auto_indent).value,
+    ASSERT_EQ(restored.resolve(ssg::SettingKey::AutoIndent).value,
               ssg::SettingValue{false});
-    ASSERT_EQ(restored.resolve(ssg::SettingKey::word_wrap).value,
+    ASSERT_EQ(restored.resolve(ssg::SettingKey::WordWrap).value,
               ssg::SettingValue{true});
 }
 

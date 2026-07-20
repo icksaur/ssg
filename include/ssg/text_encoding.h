@@ -16,26 +16,26 @@
 namespace ssg {
 
 enum class LineTerminator : std::uint8_t {
-    none,
-    lf,
-    crlf,
-    cr,
+    None,
+    Lf,
+    Crlf,
+    Cr,
 };
 
 enum class FinalNewlinePolicy : std::uint8_t {
-    preserve,
-    ensure_present,
-    ensure_absent,
+    Preserve,
+    EnsurePresent,
+    EnsureAbsent,
 };
 
 enum class TextEncodingErrorCode : std::uint8_t {
-    invalid_input,
-    invalid_metadata,
-    lossy_conversion,
+    InvalidInput,
+    InvalidMetadata,
+    LossyConversion,
 };
 
 struct TextEncodingError {
-    TextEncodingErrorCode code = TextEncodingErrorCode::invalid_input;
+    TextEncodingErrorCode code = TextEncodingErrorCode::InvalidInput;
     std::size_t utf8_offset = 0;
     std::string message;
 
@@ -44,8 +44,8 @@ struct TextEncodingError {
 };
 
 struct TextEncodingStatus {
-    TextEncoding encoding = TextEncoding::utf8;
-    LineEnding line_ending = LineEnding::lf;
+    TextEncoding encoding = TextEncoding::Utf8;
+    LineEnding line_ending = LineEnding::Lf;
     bool had_bom = false;
     bool final_newline = false;
 
@@ -108,9 +108,9 @@ struct DecodeTextResult {
 };
 
 struct EncodeTextOptions {
-    TextEncoding encoding = TextEncoding::utf8;
-    LineEnding line_ending = LineEnding::mixed;
-    FinalNewlinePolicy final_newline = FinalNewlinePolicy::preserve;
+    TextEncoding encoding = TextEncoding::Utf8;
+    LineEnding line_ending = LineEnding::Mixed;
+    FinalNewlinePolicy final_newline = FinalNewlinePolicy::Preserve;
 };
 
 struct EncodeTextResult {
@@ -158,17 +158,17 @@ struct TextEncodingCommandSet {
 };
 
 struct ReopenWithEncodingArguments {
-    TextEncoding encoding = TextEncoding::utf8;
+    TextEncoding encoding = TextEncoding::Utf8;
     bool operator==(const ReopenWithEncodingArguments&) const = default;
 };
 
 struct SetEncodingArguments {
-    TextEncoding encoding = TextEncoding::utf8;
+    TextEncoding encoding = TextEncoding::Utf8;
     bool operator==(const SetEncodingArguments&) const = default;
 };
 
 struct SetLineEndingArguments {
-    LineEnding line_ending = LineEnding::lf;
+    LineEnding line_ending = LineEnding::Lf;
     bool operator==(const SetLineEndingArguments&) const = default;
 };
 

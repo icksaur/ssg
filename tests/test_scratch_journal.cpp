@@ -88,7 +88,7 @@ ssg::UntitledDocumentId fixture_untitled_id() {
 ssg::JournalDocument saved_document(std::string content = "hello\n") {
     return {
         ssg::JournalDocumentKey::saved("notes.txt"),
-        ssg::DocumentMode::edit,
+        ssg::DocumentMode::Edit,
         true,
         std::move(content),
     };
@@ -97,7 +97,7 @@ ssg::JournalDocument saved_document(std::string content = "hello\n") {
 ssg::JournalDocument untitled_document(std::string content = "draft") {
     return {
         ssg::JournalDocumentKey::untitled(fixture_untitled_id()),
-        ssg::DocumentMode::read_only,
+        ssg::DocumentMode::ReadOnly,
         false,
         std::move(content),
     };
@@ -228,7 +228,7 @@ TEST(append_rejects_invalid_saved_identity_and_invalid_utf8) {
     ASSERT_THROWS(
         ssg::encode_document_record(
             {ssg::JournalDocumentKey::saved("valid"),
-             ssg::DocumentMode::edit, true, std::string{"bad\xff", 4}}),
+             ssg::DocumentMode::Edit, true, std::string{"bad\xff", 4}}),
         std::invalid_argument);
 }
 

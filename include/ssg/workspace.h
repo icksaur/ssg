@@ -48,36 +48,36 @@ private:
 };
 
 enum class FileContentKind : std::uint8_t {
-    text,
-    binary,
-    decode_failure,
+    Text,
+    Binary,
+    DecodeFailure,
 };
 
 enum class WorkspaceError : std::uint8_t {
-    none,
-    invalid_workspace,
-    invalid_path,
-    path_outside_workspace,
-    not_found,
-    already_open,
-    read_only,
-    capability_denied,
-    decode_failed,
-    io_failed,
-    recovery_failed,
-    partial_failure,
+    None,
+    InvalidWorkspace,
+    InvalidPath,
+    PathOutsideWorkspace,
+    NotFound,
+    AlreadyOpen,
+    ReadOnly,
+    CapabilityDenied,
+    DecodeFailed,
+    IoFailed,
+    RecoveryFailed,
+    PartialFailure,
 };
 
 struct WorkspaceFailure {
     std::optional<FileDocumentId> document;
-    WorkspaceError error = WorkspaceError::none;
+    WorkspaceError error = WorkspaceError::None;
     std::string message;
     friend bool operator==(const WorkspaceFailure&,
                            const WorkspaceFailure&) = default;
 };
 
 struct WorkspaceResult {
-    WorkspaceError error = WorkspaceError::none;
+    WorkspaceError error = WorkspaceError::None;
     std::string message;
     std::optional<FileDocumentId> document;
     std::optional<RecoveryRecordId> compensation;
@@ -85,7 +85,7 @@ struct WorkspaceResult {
     std::vector<WorkspaceFailure> failures;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == WorkspaceError::none;
+        return error == WorkspaceError::None;
     }
 };
 
@@ -93,7 +93,7 @@ struct WorkspaceDocumentState {
     FileDocumentId id;
     JournalDocumentKey key;
     std::string display_label;
-    FileContentKind content_kind = FileContentKind::text;
+    FileContentKind content_kind = FileContentKind::Text;
     TextEncodingStatus encoding;
     bool dirty = false;
 

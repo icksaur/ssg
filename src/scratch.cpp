@@ -177,9 +177,9 @@ void remove_remnant(const Remnant& remnant) {
 class ScratchStore::Impl {
 public:
     enum class JobKind {
-        document,
-        remove,
-        checkpoint,
+        Document,
+        Remove,
+        Checkpoint,
     };
 
     struct Job {
@@ -210,7 +210,7 @@ public:
         std::lock_guard lock{mutex_};
         require_accepting();
         apply_document(recovery_, document);
-        enqueue_locked({JobKind::document, ++accepted_generation_, recovery_,
+        enqueue_locked({JobKind::Document, ++accepted_generation_, recovery_,
                         std::move(document), std::nullopt});
     }
 
@@ -218,14 +218,14 @@ public:
         std::lock_guard lock{mutex_};
         require_accepting();
         apply_remove(recovery_, key);
-        enqueue_locked({JobKind::remove, ++accepted_generation_, recovery_,
+        enqueue_locked({JobKind::Remove, ++accepted_generation_, recovery_,
                         std::nullopt, std::move(key)});
     }
 
     void compact() {
         std::lock_guard lock{mutex_};
         require_accepting();
-        enqueue_locked({JobKind::checkpoint, ++accepted_generation_, recovery_,
+        enqueue_locked({JobKind::Checkpoint, ++accepted_generation_, recovery_,
                         std::nullopt, std::nullopt});
     }
 
@@ -241,9 +241,9 @@ public:
         result.durable_generation = durable_generation_;
         result.failure = failure_;
         if (!failure_.empty()) {
-            result.kind = ScratchDurability::failed;
+            result.kind = ScratchDurability::Failed;
         } else if (durable_generation_ < accepted_generation_) {
-            result.kind = ScratchDurability::pending;
+            result.kind = ScratchDurability::Pending;
             result.overdue =
                 pending_since_.has_value() &&
                 std::chrono::steady_clock::now() - *pending_since_ >
@@ -342,7 +342,7 @@ private:
                 std::unique_lock lock{mutex_};
                 condition_.wait(lock,
                                 [&] { return stopping_ || !jobs_.empty(); });
-                if (jobs_.empty()) return Job{JobKind::checkpoint, 0, {}};
+                if (jobs_.empty()) return Job{JobKind::Checkpoint, 0, {}};
                 Job next = std::move(jobs_.front());
                 jobs_.pop_front();
                 return next;
@@ -351,19 +351,19 @@ private:
 
             try {
                 switch (job.kind) {
-                case JobKind::document:
+                case JobKind::Document:
                     storage_.append_document(session_.journal_path(),
                                              *job.document);
                     break;
-                case JobKind::remove:
+                case JobKind::Remove:
                     storage_.append_remove(session_.journal_path(), *job.key);
                     break;
-                case JobKind::checkpoint:
+                case JobKind::Checkpoint:
                     storage_.replace_checkpoint(session_.journal_path(),
                                                 job.snapshot);
                     break;
                 }
-                if (job.kind != JobKind::checkpoint) {
+                if (job.kind != JobKind::Checkpoint) {
                     std::error_code error;
                     const auto bytes =
                         std::filesystem::file_size(session_.journal_path(),

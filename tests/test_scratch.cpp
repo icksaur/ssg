@@ -44,7 +44,7 @@ private:
 
 ssg::JournalDocument document(std::string path, std::string contents) {
     return {ssg::JournalDocumentKey::saved(path),
-            ssg::DocumentMode::edit,
+            ssg::DocumentMode::Edit,
             true,
             std::move(contents)};
 }
@@ -237,7 +237,7 @@ TEST(write_failure_is_actionable_and_never_reports_durable) {
     store.update_document(document("failed.txt", "not durable"));
     ASSERT_FALSE(store.wait_until_durable(2s));
     const auto state = store.durability_state();
-    ASSERT_EQ(state.kind, ssg::ScratchDurability::failed);
+    ASSERT_EQ(state.kind, ssg::ScratchDurability::Failed);
     ASSERT_EQ(state.accepted_generation, std::uint64_t{1});
     ASSERT_EQ(state.durable_generation, std::uint64_t{0});
     ASSERT_FALSE(state.failure.empty());
@@ -252,14 +252,14 @@ TEST(hundred_millisecond_lag_is_observable_until_durable) {
 
     store.update_document(document("slow.txt", "pending"));
     ASSERT_EQ(store.durability_state().kind,
-              ssg::ScratchDurability::pending);
+              ssg::ScratchDurability::Pending);
     std::this_thread::sleep_for(125ms);
     const auto lagged = store.durability_state();
-    ASSERT_EQ(lagged.kind, ssg::ScratchDurability::pending);
+    ASSERT_EQ(lagged.kind, ssg::ScratchDurability::Pending);
     ASSERT_TRUE(lagged.overdue);
     ASSERT_TRUE(store.wait_until_durable(2s));
     ASSERT_EQ(store.durability_state().kind,
-              ssg::ScratchDurability::durable);
+              ssg::ScratchDurability::Durable);
 }
 
 TEST(shutdown_drains_and_rejects_new_mutations) {

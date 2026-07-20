@@ -194,13 +194,13 @@ public:
         ssg::PromptStatusViewState prompt_status;
         if (state_.prompt_open) {
             prompt_status.prompt = ssg::PromptViewState{
-                ssg::PromptKind::path, "Open a workspace path",
+                ssg::PromptKind::Path, "Open a workspace path",
                 {0, 2, 80, 1},
-                {{ssg::PromptControlKind::input, "path", "Workspace path", "",
+                {{ssg::PromptControlKind::Input, "path", "Workspace path", "",
                   false, {0, 2, 80, 1}}}};
         }
         prompt_status.status.items.push_back(
-            {ssg::StatusId{7}, ssg::StatusPriority::information, 3,
+            {ssg::StatusId{7}, ssg::StatusPriority::Information, 3,
              "Recovery is ready",
              {{"reopen", "Reopen closed tab", "tab.reopen_closed"}}});
 
@@ -242,32 +242,32 @@ public:
             {ssg::PaneId{1}, {18, 2, 62, 21}, {18, 2, 61, 21},
              {79, 2, 1, 21}});
         shell.accessibility_nodes = {
-            {ssg::ShellNodeKind::header, "header", "Workspace /fixture",
-             *shell.header, ssg::SemanticRole::header},
-            {ssg::ShellNodeKind::header_field, "path",
+            {ssg::ShellNodeKind::Header, "header", "Workspace /fixture",
+             *shell.header, ssg::SemanticRole::Header},
+            {ssg::ShellNodeKind::HeaderField, "path",
              "Current path fixture.txt", *shell.header,
-             ssg::SemanticRole::header},
-            {ssg::ShellNodeKind::footer, "footer", "UTF-8 LF", *shell.footer,
-             ssg::SemanticRole::footer},
-            {ssg::ShellNodeKind::footer_action, "reopen", "Reopen closed tab",
-             *shell.footer, ssg::SemanticRole::status_info},
-            {ssg::ShellNodeKind::tab_bar, "tabs", "Open tabs", *shell.tab_bar,
-             ssg::SemanticRole::tab_active},
-            {ssg::ShellNodeKind::pane, "pane-1", "Editor pane",
-             shell.panes.front().content, ssg::SemanticRole::background},
-            {ssg::ShellNodeKind::scrollbar, "scrollbar-1", "Editor scrollbar",
-             shell.panes.front().scrollbar, ssg::SemanticRole::scrollbar_thumb},
+             ssg::SemanticRole::Header},
+            {ssg::ShellNodeKind::Footer, "footer", "UTF-8 LF", *shell.footer,
+             ssg::SemanticRole::Footer},
+            {ssg::ShellNodeKind::FooterAction, "reopen", "Reopen closed tab",
+             *shell.footer, ssg::SemanticRole::StatusInfo},
+            {ssg::ShellNodeKind::TabBar, "tabs", "Open tabs", *shell.tab_bar,
+             ssg::SemanticRole::TabActive},
+            {ssg::ShellNodeKind::Pane, "pane-1", "Editor pane",
+             shell.panes.front().content, ssg::SemanticRole::Background},
+            {ssg::ShellNodeKind::Scrollbar, "scrollbar-1", "Editor scrollbar",
+             shell.panes.front().scrollbar, ssg::SemanticRole::ScrollbarThumb},
         };
         if (state_.prompt_open) {
             shell.accessibility_nodes.push_back(
-                {ssg::ShellNodeKind::prompt_reservation, "prompt",
+                {ssg::ShellNodeKind::PromptReservation, "prompt",
                  "Open a workspace path", *shell.prompt,
-                 ssg::SemanticRole::prompt});
+                 ssg::SemanticRole::Prompt});
         }
         shell.accessibility_nodes.push_back(
-            {ssg::ShellNodeKind::footer_field, "wrap",
+            {ssg::ShellNodeKind::FooterField, "wrap",
              state_.word_wrap ? "Word wrap on" : "Word wrap off", *shell.footer,
-             ssg::SemanticRole::footer});
+             ssg::SemanticRole::Footer});
 
         return {
             {revision, state_.text, ssg::ByteOffset{state_.text.size()}},
@@ -276,13 +276,13 @@ public:
              state_.undo_text.size() + state_.redo_text.size()},
             {{state_.clipboard}, state_.clipboard, std::nullopt, std::nullopt},
             std::move(prompt_status),
-            {revision, false, {}, ssg::SearchMode::file, {}, std::nullopt, 0,
+            {revision, false, {}, ssg::SearchMode::File, {}, std::nullopt, 0,
              false},
             {0, false, false, revision, {}, {}, {}, {}, std::nullopt,
-             ssg::FindReplaceError::none, {}},
+             ssg::FindReplaceError::None, {}},
             std::move(settings),
             std::move(keymap),
-            {{ssg::TextEncoding::utf8, ssg::LineEnding::lf, false, false}},
+            {{ssg::TextEncoding::Utf8, ssg::LineEnding::Lf, false, false}},
             std::move(tabs),
             {revision, {}},
             {revision, {}},
@@ -391,7 +391,7 @@ TEST(direct_api_loopback_websocket_tui_canonical_state_matches_per_step) {
     // ── Direct API scenario ──
     EndToEndScenario direct;
     ssg::InvocationPrincipal const direct_principal{
-        ssg::ClientId{21}, ssg::InvocationOrigin::in_process,
+        ssg::ClientId{21}, ssg::InvocationOrigin::InProcess,
         {ssg::CapabilityId{"local_file_drop"}}};
     ASSERT_TRUE(direct.session->attach(direct_principal, ssg::ViewId{21})
                     .accepted());
@@ -399,7 +399,7 @@ TEST(direct_api_loopback_websocket_tui_canonical_state_matches_per_step) {
     // ── TUI scenario ──
     EndToEndScenario tui_scenario;
     ssg::InvocationPrincipal const tui_principal{
-        ssg::ClientId{22}, ssg::InvocationOrigin::in_process,
+        ssg::ClientId{22}, ssg::InvocationOrigin::InProcess,
         {ssg::CapabilityId{"local_file_drop"}}};
     ssg::tui::TuiClient tui_client{
         *tui_scenario.session, tui_principal, ssg::ViewId{22},
@@ -410,7 +410,7 @@ TEST(direct_api_loopback_websocket_tui_canonical_state_matches_per_step) {
     // ── WebSocket scenario ──
     EndToEndScenario ws_scenario;
     ssg::InvocationPrincipal const ws_peer_principal{
-        ssg::ClientId{31}, ssg::InvocationOrigin::websocket,
+        ssg::ClientId{31}, ssg::InvocationOrigin::Websocket,
         {ssg::CapabilityId{"local_file_drop"}}};
     PeerHost ws_host{ws_scenario, ws_peer_principal};
     constexpr std::uint16_t ws_port = 18800;
@@ -499,7 +499,7 @@ public:
                     static_cast<std::int64_t>(per_client_row_[client]) + rows,
                     0, 80));
             (void)follow_model_.apply_navigation(
-                {client, ssg::NavigationClass::user, ssg::PaneId{1},
+                {client, ssg::NavigationClass::User, ssg::PaneId{1},
                  ssg::FollowScrollOffset{per_client_row_[client], 0}});
         } else if (id == "follow_edits.pause") {
             (void)follow_model_.pause();
@@ -550,13 +550,13 @@ public:
             {false, false, 0},
             {{}, {}, std::nullopt, std::nullopt},
             {std::nullopt, {{}, 0}},
-            {revision, false, {}, ssg::SearchMode::file, {}, std::nullopt, 0,
+            {revision, false, {}, ssg::SearchMode::File, {}, std::nullopt, 0,
              false},
             {0, false, false, revision, {}, {}, {}, {}, std::nullopt,
-             ssg::FindReplaceError::none, {}},
+             ssg::FindReplaceError::None, {}},
             std::move(settings),
             {"concurrent", {}},
-            {{ssg::TextEncoding::utf8, ssg::LineEnding::lf, false, false}},
+            {{ssg::TextEncoding::Utf8, ssg::LineEnding::Lf, false, false}},
             {{}, std::nullopt},
             {revision, {}},
             {revision, {}},
@@ -654,9 +654,9 @@ private:
 TEST(concurrent_tui_and_websocket_clients_share_follow_interruption) {
     ConcurrentScenario scenario;
     ssg::InvocationPrincipal const direct_principal{
-        ssg::ClientId{41}, ssg::InvocationOrigin::in_process};
+        ssg::ClientId{41}, ssg::InvocationOrigin::InProcess};
     ssg::InvocationPrincipal const ws_peer_principal{
-        ssg::ClientId{42}, ssg::InvocationOrigin::websocket};
+        ssg::ClientId{42}, ssg::InvocationOrigin::Websocket};
 
     scenario.model.register_client(ssg::ClientId{41},
                                    ssg::ViewportDimensions{80, 20});
@@ -718,7 +718,7 @@ TEST(concurrent_tui_and_websocket_clients_share_follow_interruption) {
     auto direct_snap_after_scroll =
         scenario.snapshot(direct_principal, ssg::ViewId{41});
     ASSERT_EQ(direct_snap_after_scroll.sections().follow_edits.mode,
-              ssg::FollowMode::paused);
+              ssg::FollowMode::Paused);
 
     // Accept changes to two watched files while paused; resume must choose the
     // newest target across the multi-file queue.
@@ -730,7 +730,7 @@ TEST(concurrent_tui_and_websocket_clients_share_follow_interruption) {
         ssg::Revision{scenario.session->revision().value() + 2});
 
     auto queued_state = scenario.model.follow_view_state();
-    ASSERT_EQ(queued_state.mode, ssg::FollowMode::paused);
+    ASSERT_EQ(queued_state.mode, ssg::FollowMode::Paused);
     ASSERT_EQ(queued_state.queued_targets.size(), std::size_t{2});
 
     // Explicit pause dispatch is idempotent from the already-paused state.
@@ -745,7 +745,7 @@ TEST(concurrent_tui_and_websocket_clients_share_follow_interruption) {
     auto direct_snap_paused =
         scenario.snapshot(direct_principal, ssg::ViewId{41});
     ASSERT_EQ(direct_snap_paused.sections().follow_edits.mode,
-              ssg::FollowMode::paused);
+              ssg::FollowMode::Paused);
 
     // WebSocket client resumes follow: shared state transitions both clients.
     auto ws_resume = ssg::encode_command_request(
@@ -759,9 +759,9 @@ TEST(concurrent_tui_and_websocket_clients_share_follow_interruption) {
     auto direct_snap_resumed =
         scenario.snapshot(direct_principal, ssg::ViewId{41});
     ASSERT_EQ(direct_snap_resumed.sections().follow_edits.mode,
-              ssg::FollowMode::following);
+              ssg::FollowMode::Following);
     auto follow_state_after = scenario.model.follow_view_state();
-    ASSERT_EQ(follow_state_after.mode, ssg::FollowMode::following);
+    ASSERT_EQ(follow_state_after.mode, ssg::FollowMode::Following);
     ASSERT_TRUE(follow_state_after.active_target.has_value());
     ASSERT_EQ(follow_state_after.active_target->id,
               ssg::DiffFileId{"watched-file-b"});

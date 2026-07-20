@@ -24,10 +24,10 @@ private:
     std::string value_;
 };
 
-enum class DiffLineKind { added, removed, modified };
+enum class DiffLineKind { Added, Removed, Modified };
 
 struct DiffLineChange {
-    DiffLineKind kind = DiffLineKind::modified;
+    DiffLineKind kind = DiffLineKind::Modified;
     std::optional<std::size_t> baseline_line;
     std::optional<std::size_t> target_line;
 
@@ -69,20 +69,20 @@ struct DiffConfig {
 };
 
 enum class DiffError {
-    none,
-    stale_revision,
-    unknown_file,
-    duplicate_file,
-    invalid_path,
-    baseline_identity_required,
-    content_required,
-    content_forbidden,
-    work_limit_exceeded,
+    None,
+    StaleRevision,
+    UnknownFile,
+    DuplicateFile,
+    InvalidPath,
+    BaselineIdentityRequired,
+    ContentRequired,
+    ContentForbidden,
+    WorkLimitExceeded,
 };
 
 struct DiffMutationResult {
-    DiffError error = DiffError::none;
-    [[nodiscard]] bool accepted() const noexcept { return error == DiffError::none; }
+    DiffError error = DiffError::None;
+    [[nodiscard]] bool accepted() const noexcept { return error == DiffError::None; }
 };
 
 struct GitDiffFile {
@@ -100,10 +100,10 @@ struct SeededDiffFile {
     std::string content;
 };
 
-enum class NonGitDiffEventKind { create, modify, rename, remove };
+enum class NonGitDiffEventKind { Create, Modify, Rename, Remove };
 
 struct NonGitDiffEvent {
-    NonGitDiffEventKind kind = NonGitDiffEventKind::modify;
+    NonGitDiffEventKind kind = NonGitDiffEventKind::Modify;
     DiffFileId id;
     std::filesystem::path path;
     std::optional<std::filesystem::path> previous_path;
@@ -126,11 +126,11 @@ public:
     file(const DiffFileId& id) const;
 
 private:
-    enum class Source { git, non_git };
+    enum class Source { Git, NonGit };
 
     struct Entry {
         DiffFileView view;
-        Source source = Source::git;
+        Source source = Source::Git;
         std::string acknowledged_content;
     };
 
@@ -190,11 +190,11 @@ struct DiffDelta {
 [[nodiscard]] DiffDelta derive_diff_delta(const DiffViewState& base,
                                           const DiffViewState& target);
 
-enum class DiffReplayError { none, stale_revision, malformed_delta };
+enum class DiffReplayError { None, StaleRevision, MalformedDelta };
 
 struct DiffReplayResult {
     std::optional<DiffViewState> state;
-    DiffReplayError error = DiffReplayError::none;
+    DiffReplayError error = DiffReplayError::None;
     [[nodiscard]] bool accepted() const noexcept { return state.has_value(); }
 };
 

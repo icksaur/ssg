@@ -29,7 +29,7 @@ struct HistoryUnit {
 
 HistoryResult failure(HistoryError error, Revision revision,
                       std::string message,
-                      DocumentError document_error = DocumentError::none) {
+                      DocumentError document_error = DocumentError::None) {
     return {error, document_error, revision, std::nullopt, std::move(message)};
 }
 
@@ -73,7 +73,7 @@ std::vector<const TextEdit*> ordered_edits(
 bool edit_shape_matches(const EditTransaction& transaction,
                         const SelectionSet& selections,
                         HistoryEditKind kind) {
-    if (kind == HistoryEditKind::other || !all_carets(selections) ||
+    if (kind == HistoryEditKind::Other || !all_carets(selections) ||
         transaction.edits.size() != selections.items().size()) {
         return false;
     }
@@ -83,25 +83,25 @@ bool edit_shape_matches(const EditTransaction& transaction,
         const auto caret =
             selections.items()[index].active.byte_offset.value();
         switch (kind) {
-        case HistoryEditKind::typing:
+        case HistoryEditKind::Typing:
             if (edit.erased_bytes != 0 || edit.inserted_text.empty() ||
                 edit.offset.value() != caret) {
                 return false;
             }
             break;
-        case HistoryEditKind::delete_backward:
+        case HistoryEditKind::DeleteBackward:
             if (!edit.inserted_text.empty() || edit.erased_bytes == 0 ||
                 edit.offset.value() + edit.erased_bytes != caret) {
                 return false;
             }
             break;
-        case HistoryEditKind::delete_forward:
+        case HistoryEditKind::DeleteForward:
             if (!edit.inserted_text.empty() || edit.erased_bytes == 0 ||
                 edit.offset.value() != caret) {
                 return false;
             }
             break;
-        case HistoryEditKind::other:
+        case HistoryEditKind::Other:
             return false;
         }
     }
@@ -206,8 +206,8 @@ struct DocumentHistory::Impl {
 };
 
 HistoryCommandSet::HistoryCommandSet()
-    : descriptors_{{{"edit.undo", HistoryCommand::undo},
-                    {"edit.redo", HistoryCommand::redo}}} {}
+    : descriptors_{{{"edit.undo", HistoryCommand::Undo},
+                    {"edit.redo", HistoryCommand::Redo}}} {}
 
 const std::array<HistoryCommandDescriptor, 2>&
 HistoryCommandSet::descriptors() const noexcept {
@@ -245,14 +245,14 @@ HistoryResult DocumentHistory::apply_edit(
         *impl_->expected_revision != before.revision;
     if (!ranges_are_capturable(before, transaction)) {
         const auto result = document.apply(transaction);
-        return failure(HistoryError::document_rejected, result.revision,
+        return failure(HistoryError::DocumentRejected, result.revision,
                        result.message, result.error);
     }
 
     auto step = make_step(before, transaction);
     const auto result = document.apply(transaction);
     if (!result.accepted()) {
-        return failure(HistoryError::document_rejected, result.revision,
+        return failure(HistoryError::DocumentRejected, result.revision,
                        result.message, result.error);
     }
 
@@ -289,18 +289,18 @@ HistoryResult DocumentHistory::apply_edit(
     impl_->enforce_budget();
     impl_->expected_revision = result.revision;
     impl_->barrier = false;
-    return {HistoryError::none, DocumentError::none, result.revision,
+    return {HistoryError::None, DocumentError::None, result.revision,
             selections_after, {}};
 }
 
 HistoryResult DocumentHistory::undo(Document& document) {
     if (impl_->undo.empty()) {
-        return failure(HistoryError::no_undo, document.revision(),
+        return failure(HistoryError::NoUndo, document.revision(),
                        "document has no undo history");
     }
     if (!impl_->expected_revision ||
         document.revision() != *impl_->expected_revision) {
-        return failure(HistoryError::stale_document, document.revision(),
+        return failure(HistoryError::StaleDocument, document.revision(),
                        "document revision changed outside its history");
     }
 
@@ -308,7 +308,7 @@ HistoryResult DocumentHistory::undo(Document& document) {
     const auto revision = document.revision().value();
     if (unit.steps.size() >
         std::numeric_limits<std::uint64_t>::max() - revision) {
-        return failure(HistoryError::revision_exhausted, document.revision(),
+        return failure(HistoryError::RevisionExhausted, document.revision(),
                        "undo would exhaust the document revision");
     }
 
@@ -317,7 +317,7 @@ HistoryResult DocumentHistory::undo(Document& document) {
         const auto result =
             document.apply({document.revision(), iterator->inverse});
         if (!result.accepted()) {
-            return failure(HistoryError::document_rejected, result.revision,
+            return failure(HistoryError::DocumentRejected, result.revision,
                            result.message, result.error);
         }
     }
@@ -328,18 +328,18 @@ HistoryResult DocumentHistory::undo(Document& document) {
     impl_->redo.push_back(std::move(moved));
     impl_->expected_revision = document.revision();
     impl_->barrier = true;
-    return {HistoryError::none, DocumentError::none, document.revision(),
+    return {HistoryError::None, DocumentError::None, document.revision(),
             selections, {}};
 }
 
 HistoryResult DocumentHistory::redo(Document& document) {
     if (impl_->redo.empty()) {
-        return failure(HistoryError::no_redo, document.revision(),
+        return failure(HistoryError::NoRedo, document.revision(),
                        "document has no redo history");
     }
     if (!impl_->expected_revision ||
         document.revision() != *impl_->expected_revision) {
-        return failure(HistoryError::stale_document, document.revision(),
+        return failure(HistoryError::StaleDocument, document.revision(),
                        "document revision changed outside its history");
     }
 
@@ -347,7 +347,7 @@ HistoryResult DocumentHistory::redo(Document& document) {
     const auto revision = document.revision().value();
     if (unit.steps.size() >
         std::numeric_limits<std::uint64_t>::max() - revision) {
-        return failure(HistoryError::revision_exhausted, document.revision(),
+        return failure(HistoryError::RevisionExhausted, document.revision(),
                        "redo would exhaust the document revision");
     }
 
@@ -355,7 +355,7 @@ HistoryResult DocumentHistory::redo(Document& document) {
         const auto result =
             document.apply({document.revision(), step.forward});
         if (!result.accepted()) {
-            return failure(HistoryError::document_rejected, result.revision,
+            return failure(HistoryError::DocumentRejected, result.revision,
                            result.message, result.error);
         }
     }
@@ -366,7 +366,7 @@ HistoryResult DocumentHistory::redo(Document& document) {
     impl_->undo.push_back(std::move(moved));
     impl_->expected_revision = document.revision();
     impl_->barrier = true;
-    return {HistoryError::none, DocumentError::none, document.revision(),
+    return {HistoryError::None, DocumentError::None, document.revision(),
             selections, {}};
 }
 

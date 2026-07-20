@@ -8,16 +8,16 @@ LspIoResult FakeLspServer::write(std::string_view bytes,
                                  std::chrono::milliseconds) {
     if (write_timeout_) {
         write_timeout_ = false;
-        return {LspIoStatus::timeout, "scripted write timeout"};
+        return {LspIoStatus::Timeout, "scripted write timeout"};
     }
     auto decoded = client_decoder_.feed(bytes);
     if (!decoded.accepted()) {
-        return {LspIoStatus::error, decoded.message};
+        return {LspIoStatus::Error, decoded.message};
     }
     for (auto& payload : decoded.messages) {
         received_payloads_.push_back(std::move(payload));
     }
-    return {LspIoStatus::ok, {}};
+    return {LspIoStatus::Ok, {}};
 }
 
 LspIoResult FakeLspServer::read(std::string& bytes, std::size_t maximum_bytes,
@@ -25,10 +25,10 @@ LspIoResult FakeLspServer::read(std::string& bytes, std::size_t maximum_bytes,
     bytes.clear();
     if (read_timeout_) {
         read_timeout_ = false;
-        return {LspIoStatus::timeout, "scripted read timeout"};
+        return {LspIoStatus::Timeout, "scripted read timeout"};
     }
     if (reads_.empty()) {
-        return {LspIoStatus::timeout, "no scripted server bytes"};
+        return {LspIoStatus::Timeout, "no scripted server bytes"};
     }
     auto& front = reads_.front();
     const auto count = std::min(maximum_bytes, front.size());
@@ -37,7 +37,7 @@ LspIoResult FakeLspServer::read(std::string& bytes, std::size_t maximum_bytes,
     if (front.empty()) {
         reads_.pop_front();
     }
-    return {LspIoStatus::ok, {}};
+    return {LspIoStatus::Ok, {}};
 }
 
 void FakeLspServer::queue_payload(std::string payload, std::size_t chunk_bytes) {

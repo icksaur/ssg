@@ -26,18 +26,18 @@
 namespace ssg {
 
 enum class IndentStyle : uint8_t {
-    spaces,
-    tabs,
+    Spaces,
+    Tabs,
 };
 
 // Line-ending convention stored in a document.
 // `mixed` preserves per-line terminators until an explicit normalization
 // command (spec §Design, file.set_line_ending).
 enum class LineEnding : uint8_t {
-    lf,
-    crlf,
-    cr,
-    mixed,
+    Lf,
+    Crlf,
+    Cr,
+    Mixed,
 };
 
 class TabWidth {
@@ -68,7 +68,7 @@ struct HistoryConfig {
 };
 
 struct IndentConfig {
-    IndentStyle style{IndentStyle::spaces};
+    IndentStyle style{IndentStyle::Spaces};
     TabWidth width{4};
     bool auto_detect{true};
 

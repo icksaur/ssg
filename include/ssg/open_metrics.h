@@ -15,13 +15,13 @@ namespace ssg {
 // The ordered whole-document passes on the open path (the audit A-J collapsed to
 // the phases the LF-1 cross-layer seam brackets).  Phases are non-overlapping.
 enum class OpenPhase : unsigned {
-    read,               // disk read into the raw byte buffer
-    nul_scan,           // whole-raw-byte NUL detection
-    decode_validate,    // UTF-8/UTF-16 validating scan -> scalars
-    eol_scan,           // EOL normalization -> line_terminators + utf8
-    document_build,     // Document + PieceTree construction
-    state_dirty_check,  // Workspace::state() snapshot-materialize + compare
-    count
+    Read,               // disk read into the raw byte buffer
+    NulScan,           // whole-raw-byte NUL detection
+    DecodeValidate,    // UTF-8/UTF-16 validating scan -> scalars
+    EolScan,           // EOL normalization -> line_terminators + utf8
+    DocumentBuild,     // Document + PieceTree construction
+    StateDirtyCheck,  // Workspace::state() snapshot-materialize + compare
+    Count
 };
 
 // Accumulates elapsed steady-clock nanoseconds into the current thread's total

@@ -56,16 +56,16 @@ TEST(frame_decoder_handles_fragmentation_and_multiple_messages) {
 TEST(frame_decoder_rejects_malformed_or_unbounded_headers) {
     LspFrameDecoder decoder{{64, 8}};
     ASSERT_EQ(error_of(decoder.feed("Content-Length: nope\r\n\r\n{}")),
-              LspFrameError::invalid_content_length);
+              LspFrameError::InvalidContentLength);
 
     LspFrameDecoder duplicate;
     ASSERT_EQ(error_of(duplicate.feed(
                   "Content-Length: 2\r\nContent-Length: 2\r\n\r\n{}")),
-              LspFrameError::duplicate_content_length);
+              LspFrameError::DuplicateContentLength);
 
     LspFrameDecoder oversized{{64, 1}};
     ASSERT_EQ(error_of(oversized.feed("Content-Length: 2\r\n\r\n{}")),
-              LspFrameError::message_too_large);
+              LspFrameError::MessageTooLarge);
 }
 
 TEST(utf8_utf16_positions_match_hand_computed_fixture) {
@@ -81,51 +81,51 @@ TEST(utf8_utf16_positions_match_hand_computed_fixture) {
     ASSERT_EQ(offset_of(lsp_position_to_byte_offset(text, {0, 4})),
               ByteOffset{7});
     ASSERT_EQ(error_of(lsp_position_to_byte_offset(text, {0, 3})),
-              LspPositionError::split_surrogate);
+              LspPositionError::SplitSurrogate);
     ASSERT_EQ(offset_of(lsp_position_to_byte_offset(text, {1, 0})),
               ByteOffset{9});
     ASSERT_EQ(offset_of(lsp_position_to_byte_offset("a\r\nb", {1, 0})),
               ByteOffset{3});
     ASSERT_EQ(error_of(byte_offset_to_lsp_position(text, ByteOffset{2})),
-              LspPositionError::invalid_utf8_boundary);
+              LspPositionError::InvalidUtf8Boundary);
     ASSERT_EQ(error_of(byte_offset_to_lsp_position(std::string{"\xff", 1},
                                                    ByteOffset{0})),
-              LspPositionError::invalid_utf8);
+              LspPositionError::InvalidUtf8);
 }
 
 TEST(scripted_server_covers_initialize_sync_and_shutdown_lifecycle) {
     FakeLspServer server;
     LspSyncClient client{server, {}, timeout};
 
-    ASSERT_EQ(error_of(client.initialize("file:///workspace")), LspSyncError::none);
-    ASSERT_EQ(client.state(), LspLifecycleState::initializing);
+    ASSERT_EQ(error_of(client.initialize("file:///workspace")), LspSyncError::None);
+    ASSERT_EQ(client.state(), LspLifecycleState::Initializing);
     ASSERT_TRUE(server.received_payloads().back().find("\"method\":\"initialize\"") !=
                 std::string::npos);
 
     server.queue_payload(ssg::test::response(1, "{\"capabilities\":{}}"), 7);
-    while (client.state() == LspLifecycleState::initializing) {
-        ASSERT_EQ(error_of(client.poll()), LspSyncError::none);
+    while (client.state() == LspLifecycleState::Initializing) {
+        ASSERT_EQ(error_of(client.poll()), LspSyncError::None);
     }
-    ASSERT_EQ(client.state(), LspLifecycleState::ready);
+    ASSERT_EQ(client.state(), LspLifecycleState::Ready);
     ASSERT_TRUE(server.received_payloads().back().find(
                     "\"method\":\"initialized\"") != std::string::npos);
 
     ASSERT_EQ(error_of(client.open_document(uri, "cpp", Revision{40}, "one")),
-              LspSyncError::none);
+              LspSyncError::None);
     ASSERT_EQ(version_of(client), 1);
     ASSERT_EQ(error_of(client.change_document(uri, Revision{41}, "two")),
-              LspSyncError::none);
+              LspSyncError::None);
     ASSERT_EQ(version_of(client), 2);
     ASSERT_EQ(error_of(client.change_document(uri, Revision{41}, "stale")),
-              LspSyncError::stale_document);
+              LspSyncError::StaleDocument);
     ASSERT_EQ(version_of(client), 2);
-    ASSERT_EQ(error_of(client.close_document(uri)), LspSyncError::none);
+    ASSERT_EQ(error_of(client.close_document(uri)), LspSyncError::None);
     ASSERT_FALSE(client.document_version(uri).has_value());
 
-    ASSERT_EQ(error_of(client.shutdown()), LspSyncError::none);
+    ASSERT_EQ(error_of(client.shutdown()), LspSyncError::None);
     server.queue_payload(ssg::test::response(2));
-    ASSERT_EQ(error_of(client.poll()), LspSyncError::none);
-    ASSERT_EQ(client.state(), LspLifecycleState::stopped);
+    ASSERT_EQ(error_of(client.poll()), LspSyncError::None);
+    ASSERT_EQ(client.state(), LspLifecycleState::Stopped);
     ASSERT_TRUE(server.received_payloads().back().find("\"method\":\"exit\"") !=
                 std::string::npos);
 }
@@ -135,30 +135,30 @@ TEST(diagnostics_are_version_checked_bounded_coalesced_and_replayable) {
     LspSyncConfig config;
     config.maximum_diagnostics_per_document = 2;
     LspSyncClient client{server, config, timeout};
-    ASSERT_EQ(error_of(client.initialize("file:///workspace")), LspSyncError::none);
+    ASSERT_EQ(error_of(client.initialize("file:///workspace")), LspSyncError::None);
     server.queue_payload(ssg::test::response(1));
-    ASSERT_EQ(error_of(client.poll()), LspSyncError::none);
+    ASSERT_EQ(error_of(client.poll()), LspSyncError::None);
     ASSERT_EQ(error_of(client.open_document(uri, "cpp", Revision{10}, "abc\n")),
-              LspSyncError::none);
+              LspSyncError::None);
 
     const std::string one =
         "[{\"range\":{\"start\":{\"line\":0,\"character\":0},\"end\":{"
         "\"line\":0,\"character\":1}},\"severity\":1,\"message\":\"bad\"}]";
     server.queue_payload(ssg::test::diagnostics(uri, 1, one));
-    ASSERT_EQ(error_of(client.poll()), LspSyncError::none);
+    ASSERT_EQ(error_of(client.poll()), LspSyncError::None);
     const auto accepted = client.view_state();
     ASSERT_EQ(accepted.documents.size(), 1U);
     ASSERT_EQ(accepted.documents[0].revision, Revision{10});
     ASSERT_EQ(accepted.documents[0].diagnostics[0].message, "bad");
 
     ASSERT_EQ(error_of(client.change_document(uri, Revision{11}, "abcd\n")),
-              LspSyncError::none);
+              LspSyncError::None);
     server.queue_payload(ssg::test::diagnostics(uri, 1, "[]"));
-    ASSERT_EQ(error_of(client.poll()), LspSyncError::stale_diagnostics);
+    ASSERT_EQ(error_of(client.poll()), LspSyncError::StaleDiagnostics);
     ASSERT_EQ(client.view_state().documents[0].diagnostics[0].message, "bad");
 
     server.queue_payload(ssg::test::diagnostics(uri, 2, "[]"));
-    ASSERT_EQ(error_of(client.poll()), LspSyncError::none);
+    ASSERT_EQ(error_of(client.poll()), LspSyncError::None);
     ASSERT_EQ(client.view_state().documents[0].diagnostics.size(), 0U);
 
     const auto base = accepted;
@@ -168,39 +168,39 @@ TEST(diagnostics_are_version_checked_bounded_coalesced_and_replayable) {
     ASSERT_TRUE(replayed.accepted());
     ASSERT_EQ(replayed.state.value(), target);
     ASSERT_EQ(error_of(replay_lsp_sync_delta(target, delta)),
-              LspSyncReplayError::stale_revision);
+              LspSyncReplayError::StaleRevision);
 
     const auto three = "[" + one.substr(1, one.size() - 2) + "," +
                        one.substr(1, one.size() - 2) + "," +
                        one.substr(1, one.size() - 2) + "]";
     server.queue_payload(ssg::test::diagnostics(uri, 2, three));
-    ASSERT_EQ(error_of(client.poll()), LspSyncError::diagnostic_limit_exceeded);
+    ASSERT_EQ(error_of(client.poll()), LspSyncError::DiagnosticLimitExceeded);
     ASSERT_EQ(client.view_state(), target);
 }
 
 TEST(cancellation_timeout_and_malformed_input_are_failure_atomic) {
     FakeLspServer server;
     LspSyncClient client{server, {}, timeout};
-    ASSERT_EQ(error_of(client.initialize("file:///workspace")), LspSyncError::none);
+    ASSERT_EQ(error_of(client.initialize("file:///workspace")), LspSyncError::None);
     server.queue_payload(ssg::test::response(1));
-    ASSERT_EQ(error_of(client.poll()), LspSyncError::none);
+    ASSERT_EQ(error_of(client.poll()), LspSyncError::None);
 
     const auto request = client.request("workspace/symbol", "{\"query\":\"x\"}");
     ASSERT_TRUE(request.accepted());
-    ASSERT_EQ(error_of(client.cancel(request.id)), LspSyncError::none);
+    ASSERT_EQ(error_of(client.cancel(request.id)), LspSyncError::None);
     ASSERT_TRUE(server.received_payloads().back().find("$/cancelRequest") !=
                 std::string::npos);
     server.queue_payload(ssg::test::response(request.id));
-    ASSERT_EQ(error_of(client.poll()), LspSyncError::none);
+    ASSERT_EQ(error_of(client.poll()), LspSyncError::None);
 
     const auto before = client.view_state();
     server.timeout_next_read();
-    ASSERT_EQ(error_of(client.poll()), LspSyncError::timeout);
+    ASSERT_EQ(error_of(client.poll()), LspSyncError::Timeout);
     ASSERT_EQ(client.view_state(), before);
 
     server.queue_raw("Content-Length: nope\r\n\r\n{}");
-    ASSERT_EQ(error_of(client.poll()), LspSyncError::malformed_message);
-    ASSERT_EQ(client.state(), LspLifecycleState::failed);
+    ASSERT_EQ(error_of(client.poll()), LspSyncError::MalformedMessage);
+    ASSERT_EQ(client.state(), LspLifecycleState::Failed);
     ASSERT_EQ(client.view_state(), before);
 }
 
@@ -209,15 +209,15 @@ TEST(write_timeout_does_not_advance_lifecycle_or_document_state) {
     LspSyncClient client{server, {}, timeout};
     server.timeout_next_write();
     ASSERT_EQ(error_of(client.initialize("file:///workspace")),
-              LspSyncError::timeout);
-    ASSERT_EQ(client.state(), LspLifecycleState::stopped);
+              LspSyncError::Timeout);
+    ASSERT_EQ(client.state(), LspLifecycleState::Stopped);
 
-    ASSERT_EQ(error_of(client.initialize("file:///workspace")), LspSyncError::none);
+    ASSERT_EQ(error_of(client.initialize("file:///workspace")), LspSyncError::None);
     server.queue_payload(ssg::test::response(1));
-    ASSERT_EQ(error_of(client.poll()), LspSyncError::none);
+    ASSERT_EQ(error_of(client.poll()), LspSyncError::None);
     server.timeout_next_write();
     ASSERT_EQ(error_of(client.open_document(uri, "cpp", Revision{1}, "x")),
-              LspSyncError::timeout);
+              LspSyncError::Timeout);
     ASSERT_FALSE(client.document_version(uri).has_value());
 }
 
@@ -225,16 +225,16 @@ TEST(soft_diagnostic_rejection_does_not_drop_later_framed_messages) {
     FakeLspServer server;
     LspSyncClient client{server, {}, timeout};
     ASSERT_EQ(error_of(client.initialize("file:///workspace")),
-              LspSyncError::none);
+              LspSyncError::None);
     server.queue_payload(ssg::test::response(1));
-    ASSERT_EQ(error_of(client.poll()), LspSyncError::none);
+    ASSERT_EQ(error_of(client.poll()), LspSyncError::None);
     const std::string second_uri = "file:///workspace/other.cpp";
     ASSERT_EQ(error_of(client.open_document(uri, "cpp", Revision{1}, "a")),
-              LspSyncError::none);
+              LspSyncError::None);
     ASSERT_EQ(error_of(client.open_document(second_uri, "cpp", Revision{2}, "b")),
-              LspSyncError::none);
+              LspSyncError::None);
     ASSERT_EQ(error_of(client.change_document(uri, Revision{3}, "aa")),
-              LspSyncError::none);
+              LspSyncError::None);
 
     const std::string valid =
         "[{\"range\":{\"start\":{\"line\":0,\"character\":0},\"end\":{"
@@ -242,7 +242,7 @@ TEST(soft_diagnostic_rejection_does_not_drop_later_framed_messages) {
     server.queue_raw(
         encode_lsp_frame(ssg::test::diagnostics(uri, 1, "[]")) +
         encode_lsp_frame(ssg::test::diagnostics(second_uri, 1, valid)));
-    ASSERT_EQ(error_of(client.poll()), LspSyncError::stale_diagnostics);
+    ASSERT_EQ(error_of(client.poll()), LspSyncError::StaleDiagnostics);
     ASSERT_EQ(client.view_state().documents.size(), 1U);
     ASSERT_EQ(client.view_state().documents[0].uri, second_uri);
     ASSERT_EQ(client.view_state().documents[0].diagnostics[0].message, "later");
@@ -252,13 +252,13 @@ TEST(soft_diagnostic_rejection_does_not_drop_later_framed_messages) {
         second_uri, 1,
         "[{\"range\":{\"start\":{\"line\":0,\"character\":1},\"end\":{"
         "\"line\":0,\"character\":0}},\"message\":\"reversed\"}]"));
-    ASSERT_EQ(error_of(client.poll()), LspSyncError::malformed_message);
-    ASSERT_EQ(client.state(), LspLifecycleState::ready);
+    ASSERT_EQ(error_of(client.poll()), LspSyncError::MalformedMessage);
+    ASSERT_EQ(client.state(), LspLifecycleState::Ready);
     ASSERT_EQ(client.view_state(), before_malformed);
 
     server.queue_raw({});
-    ASSERT_EQ(error_of(client.poll()), LspSyncError::stream_closed);
-    ASSERT_EQ(client.state(), LspLifecycleState::ready);
+    ASSERT_EQ(error_of(client.poll()), LspSyncError::StreamClosed);
+    ASSERT_EQ(client.state(), LspLifecycleState::Ready);
 }
 
 } // namespace

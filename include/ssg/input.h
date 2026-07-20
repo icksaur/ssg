@@ -62,16 +62,16 @@ struct KeymapDelta {
 };
 
 enum class KeymapErrorCode : std::uint8_t {
-    empty_name,
-    empty_sequence,
-    invalid_stroke,
-    empty_command,
-    empty_context,
-    duplicate_binding,
-    unreachable_binding,
-    reserved_binding,
-    unknown_context,
-    ambiguous_prefix,
+    EmptyName,
+    EmptySequence,
+    InvalidStroke,
+    EmptyCommand,
+    EmptyContext,
+    DuplicateBinding,
+    UnreachableBinding,
+    ReservedBinding,
+    UnknownContext,
+    AmbiguousPrefix,
 };
 
 struct KeymapError {
@@ -95,10 +95,10 @@ struct KeymapError {
 // Whether a binding is eligible in the given resolution context: its context is
 // "*" (global) or equals the context (a FocusTarget name).  See
 // doc/spec-keymap.md.
-enum class KeymapMatchKind : std::uint8_t { none, pending, resolved };
+enum class KeymapMatchKind : std::uint8_t { None, Pending, Resolved };
 
 struct KeymapResolution {
-    KeymapMatchKind kind = KeymapMatchKind::none;
+    KeymapMatchKind kind = KeymapMatchKind::None;
     std::string command_id;  // Set iff kind == resolved.
 
     bool operator==(const KeymapResolution&) const = default;
@@ -120,7 +120,7 @@ struct KeymapResolution {
 
 // Where committed text (with no pending chord) is routed in a focus context
 // (doc/spec-keymap.md).  Committed text is never a keymap binding.
-enum class TextRouting : std::uint8_t { insert, prompt_query, ignore };
+enum class TextRouting : std::uint8_t { Insert, PromptQuery, Ignore };
 
 [[nodiscard]] TextRouting text_routing(std::string_view context) noexcept;
 
@@ -185,12 +185,12 @@ struct SemanticCommand {
 [[nodiscard]] SemanticCommand semantic_input(const CommittedText& committed);
 
 enum class HitTargetKind : std::uint8_t {
-    editor_cell,
-    scrollbar,
-    tab,
-    splitter,
-    panel_node,
-    status_action,
+    EditorCell,
+    Scrollbar,
+    Tab,
+    Splitter,
+    PanelNode,
+    StatusAction,
 };
 
 struct SemanticHitTarget {

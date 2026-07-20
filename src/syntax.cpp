@@ -155,7 +155,7 @@ std::vector<SyntaxSpan> canonical_spans(std::uint64_t text_bytes,
         }
         if (span.begin.value() > cursor) {
             result.push_back({ByteOffset{cursor}, span.begin,
-                              SyntaxScope::plain_text});
+                              SyntaxScope::PlainText});
             cursor = span.begin.value();
         }
         result.push_back(
@@ -164,7 +164,7 @@ std::vector<SyntaxSpan> canonical_spans(std::uint64_t text_bytes,
     }
     if (cursor < text_bytes) {
         result.push_back({ByteOffset{cursor}, ByteOffset{text_bytes},
-                          SyntaxScope::plain_text});
+                          SyntaxScope::PlainText});
     }
 
     std::vector<SyntaxSpan> merged;
@@ -263,7 +263,7 @@ ResolvedBrackets resolve_brackets(std::uint64_t text_bytes,
     std::vector<OpenBracket> stack;
     ResolvedBrackets result;
     for (const auto& token : tokens) {
-        if (token.role == BracketRole::open) {
+        if (token.role == BracketRole::Open) {
             stack.push_back(
                 {token, static_cast<std::uint32_t>(stack.size())});
             continue;
@@ -275,12 +275,12 @@ ResolvedBrackets resolve_brackets(std::uint64_t text_bytes,
             stack.pop_back();
         } else {
             result.unmatched.push_back(
-                {token.offset, token.kind, BracketRole::close});
+                {token.offset, token.kind, BracketRole::Close});
         }
     }
     for (const auto& open : stack) {
         result.unmatched.push_back(
-            {open.token.offset, open.token.kind, BracketRole::open});
+            {open.token.offset, open.token.kind, BracketRole::Open});
     }
     std::sort(result.pairs.begin(), result.pairs.end(),
               [](const SyntaxBracketPair& left, const SyntaxBracketPair& right) {
@@ -438,7 +438,7 @@ SyntaxViewState plain_text_syntax_view_state(
     std::vector<SyntaxSpan> spans;
     if (!text.empty()) {
         spans.push_back(
-            {ByteOffset{0}, ByteOffset{text.size()}, SyntaxScope::plain_text});
+            {ByteOffset{0}, ByteOffset{text.size()}, SyntaxScope::PlainText});
     }
     return {revision,
             std::move(language),
@@ -457,7 +457,7 @@ SyntaxViewState build_syntax_view_state(
     if (config.tab_width == 0) {
         throw std::invalid_argument{"tab width must be positive"};
     }
-    if (output.status != SyntaxParseStatus::parsed || !output.parse) {
+    if (output.status != SyntaxParseStatus::Parsed || !output.parse) {
         return plain_text_syntax_view_state(
             revision, std::move(language), text, config.tab_width);
     }
@@ -490,7 +490,7 @@ std::optional<ByteOffset> matching_bracket(const SyntaxViewState& state,
 
 SyntaxScope scope_at(const SyntaxViewState& state, ByteOffset offset) {
     if (offset.value() >= state.text_bytes()) {
-        return SyntaxScope::plain_text;
+        return SyntaxScope::PlainText;
     }
     const auto span = std::upper_bound(
         state.spans().begin(), state.spans().end(), offset,
@@ -498,7 +498,7 @@ SyntaxScope scope_at(const SyntaxViewState& state, ByteOffset offset) {
             return position < candidate.begin;
         });
     if (span == state.spans().begin()) {
-        return SyntaxScope::plain_text;
+        return SyntaxScope::PlainText;
     }
     return std::prev(span)->scope;
 }
@@ -549,11 +549,11 @@ SyntaxDelta derive_syntax_delta(const SyntaxViewState& base,
 SyntaxReplayResult replay_syntax_delta(const SyntaxViewState& base,
                                        const SyntaxDelta& delta) {
     if (base.revision() != delta.base_revision()) {
-        return {std::nullopt, SyntaxReplayError::stale_revision};
+        return {std::nullopt, SyntaxReplayError::StaleRevision};
     }
     if (delta.revision() < delta.base_revision() ||
         (delta.revision() == delta.base_revision() && !delta.empty())) {
-        return {std::nullopt, SyntaxReplayError::malformed_delta};
+        return {std::nullopt, SyntaxReplayError::MalformedDelta};
     }
 
     SyntaxViewState result{
@@ -568,9 +568,9 @@ SyntaxReplayResult replay_syntax_delta(const SyntaxViewState& base,
         delta.indentation().value_or(base.indentation()),
     };
     if (!valid_state(result)) {
-        return {std::nullopt, SyntaxReplayError::malformed_delta};
+        return {std::nullopt, SyntaxReplayError::MalformedDelta};
     }
-    return {std::move(result), SyntaxReplayError::none};
+    return {std::move(result), SyntaxReplayError::None};
 }
 
 SyntaxModel::SyntaxModel(std::shared_ptr<SyntaxParser> parser,
@@ -583,7 +583,7 @@ SyntaxModel::SyntaxModel(std::shared_ptr<SyntaxParser> parser,
     // plain-text fallback (parser == nullptr) constructs no grammar, so it is not
     // counted by the startup audit (I12 / doc/spec-fast-startup.md M10-2).
     if (parser_ != nullptr) {
-        note_optional_construction(OptionalSubsystem::tree_sitter_grammar);
+        note_optional_construction(OptionalSubsystem::TreeSitterGrammar);
     }
     if (config_.tab_width == 0) {
         throw std::invalid_argument{"tab width must be positive"};
@@ -606,17 +606,17 @@ SyntaxParseRequestResult SyntaxModel::request(
     std::vector<SyntaxEdit> edits) {
     if (revision <= view_state_.revision() ||
         (pending_ && revision <= pending_->revision())) {
-        return {nullptr, SyntaxRequestError::stale_revision};
+        return {nullptr, SyntaxRequestError::StaleRevision};
     }
     cancel_pending();
     if (text.size() > config_.maximum_document_bytes) {
-        return {nullptr, SyntaxRequestError::document_too_large};
+        return {nullptr, SyntaxRequestError::DocumentTooLarge};
     }
     const auto prior_parse =
         language == view_state_.language() ? accepted_parse_ : nullptr;
     if (!edits.empty() &&
         (!prior_parse || !valid_edits(edits, text, accepted_text_))) {
-        return {nullptr, SyntaxRequestError::malformed_edits};
+        return {nullptr, SyntaxRequestError::MalformedEdits};
     }
 
     const auto request_prior =
@@ -626,24 +626,24 @@ SyntaxParseRequestResult SyntaxModel::request(
     pending_ = std::shared_ptr<const SyntaxParseRequest>(
         new SyntaxParseRequest{revision, std::move(language), std::move(text),
                                request_prior, std::move(edits)});
-    return {pending_, SyntaxRequestError::none};
+    return {pending_, SyntaxRequestError::None};
 }
 
 SyntaxParseOutput SyntaxModel::run(
     const SyntaxParseRequest& request) const {
     if (request.cancelled()) {
         return {.revision = request.revision(),
-                .status = SyntaxParseStatus::cancelled};
+                .status = SyntaxParseStatus::Cancelled};
     }
     if (!has_grammar(request.language())) {
         return {.revision = request.revision(),
-                .status = SyntaxParseStatus::grammar_unavailable};
+                .status = SyntaxParseStatus::GrammarUnavailable};
     }
     try {
         return parser_->parse(request);
     } catch (...) {
         return {.revision = request.revision(),
-                .status = SyntaxParseStatus::failed};
+                .status = SyntaxParseStatus::Failed};
     }
 }
 
@@ -651,26 +651,26 @@ SyntaxAcceptResult SyntaxModel::accept(
     const std::shared_ptr<const SyntaxParseRequest>& request,
     const SyntaxParseOutput& output) {
     if (!request) {
-        return {SyntaxAcceptError::unknown_request, false};
+        return {SyntaxAcceptError::UnknownRequest, false};
     }
     if (request->revision() <= view_state_.revision()) {
-        return {SyntaxAcceptError::stale_revision, false};
+        return {SyntaxAcceptError::StaleRevision, false};
     }
     if (request->cancelled()) {
-        return {SyntaxAcceptError::cancelled, false};
+        return {SyntaxAcceptError::Cancelled, false};
     }
     if (request != pending_) {
-        return {SyntaxAcceptError::unknown_request, false};
+        return {SyntaxAcceptError::UnknownRequest, false};
     }
     if (output.revision != request->revision()) {
-        return {SyntaxAcceptError::malformed_output, false};
+        return {SyntaxAcceptError::MalformedOutput, false};
     }
-    if (output.status == SyntaxParseStatus::cancelled) {
-        return {SyntaxAcceptError::cancelled, false};
+    if (output.status == SyntaxParseStatus::Cancelled) {
+        return {SyntaxAcceptError::Cancelled, false};
     }
 
     const bool fallback =
-        output.status != SyntaxParseStatus::parsed || !output.parse;
+        output.status != SyntaxParseStatus::Parsed || !output.parse;
     auto next = fallback
                     ? plain_text_syntax_view_state(
                           request->revision(), request->language(),
@@ -682,7 +682,7 @@ SyntaxAcceptResult SyntaxModel::accept(
     accepted_parse_ = fallback ? nullptr : output.parse;
     accepted_text_ = request->text();
     pending_.reset();
-    return {SyntaxAcceptError::none, fallback};
+    return {SyntaxAcceptError::None, fallback};
 }
 
 void SyntaxModel::cancel_pending() noexcept {

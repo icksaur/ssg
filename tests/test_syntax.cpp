@@ -53,18 +53,18 @@ public:
         SyntaxParseOutput output;
         output.revision = request.revision();
         if (request.cancelled()) {
-            output.status = SyntaxParseStatus::cancelled;
+            output.status = SyntaxParseStatus::Cancelled;
             return output;
         }
         if (fail_parse) {
-            output.status = SyntaxParseStatus::failed;
+            output.status = SyntaxParseStatus::Failed;
             return output;
         }
 
-        output.status = SyntaxParseStatus::parsed;
+        output.status = SyntaxParseStatus::Parsed;
         const auto parsed_text = apply_incremental_input(request);
         if (!parsed_text || *parsed_text != request.text()) {
-            output.status = SyntaxParseStatus::failed;
+            output.status = SyntaxParseStatus::Failed;
             return output;
         }
         output.parse = std::make_shared<FakeParse>(*parsed_text);
@@ -146,11 +146,11 @@ private:
                 const auto range_end =
                     end == std::string_view::npos ? text.size() : end;
                 output.spans.push_back(
-                    {byte(index), byte(range_end), SyntaxScope::comment});
+                    {byte(index), byte(range_end), SyntaxScope::Comment});
                 output.comment_tokens.push_back(
-                    {{byte(index), byte(index + 2)}, CommentTokenRole::line});
+                    {{byte(index), byte(index + 2)}, CommentTokenRole::Line});
                 output.comment_ranges.push_back(
-                    {{byte(index), byte(range_end)}, CommentKind::line});
+                    {{byte(index), byte(range_end)}, CommentKind::Line});
                 index = range_end;
                 continue;
             }
@@ -159,17 +159,17 @@ private:
                 const auto range_end =
                     close == std::string_view::npos ? text.size() : close + 2;
                 output.spans.push_back(
-                    {byte(index), byte(range_end), SyntaxScope::comment});
+                    {byte(index), byte(range_end), SyntaxScope::Comment});
                 output.comment_tokens.push_back(
                     {{byte(index), byte(index + 2)},
-                     CommentTokenRole::block_open});
+                     CommentTokenRole::BlockOpen});
                 if (close != std::string_view::npos) {
                     output.comment_tokens.push_back(
                         {{byte(close), byte(close + 2)},
-                         CommentTokenRole::block_close});
+                         CommentTokenRole::BlockClose});
                 }
                 output.comment_ranges.push_back(
-                    {{byte(index), byte(range_end)}, CommentKind::block});
+                    {{byte(index), byte(range_end)}, CommentKind::Block});
                 index = range_end;
                 continue;
             }
@@ -180,7 +180,7 @@ private:
                 }
                 end += end < text.size() ? 1 : 0;
                 output.spans.push_back(
-                    {byte(index), byte(end), SyntaxScope::string});
+                    {byte(index), byte(end), SyntaxScope::String});
                 index = end;
                 continue;
             }
@@ -191,19 +191,19 @@ private:
                     ++end;
                 }
                 output.spans.push_back(
-                    {byte(index), byte(end), SyntaxScope::number});
+                    {byte(index), byte(end), SyntaxScope::Number});
                 index = end;
                 continue;
             }
             if (word_at(text, index, "fn")) {
                 output.spans.push_back(
-                    {byte(index), byte(index + 2), SyntaxScope::keyword});
+                    {byte(index), byte(index + 2), SyntaxScope::Keyword});
                 index += 2;
                 continue;
             }
             if (word_at(text, index, "let")) {
                 output.spans.push_back(
-                    {byte(index), byte(index + 3), SyntaxScope::keyword});
+                    {byte(index), byte(index + 3), SyntaxScope::Keyword});
                 index += 3;
                 continue;
             }
@@ -212,17 +212,17 @@ private:
                 -> std::optional<std::pair<BracketKind, BracketRole>> {
                 switch (value) {
                 case '(':
-                    return {{BracketKind::round, BracketRole::open}};
+                    return {{BracketKind::Round, BracketRole::Open}};
                 case ')':
-                    return {{BracketKind::round, BracketRole::close}};
+                    return {{BracketKind::Round, BracketRole::Close}};
                 case '[':
-                    return {{BracketKind::square, BracketRole::open}};
+                    return {{BracketKind::Square, BracketRole::Open}};
                 case ']':
-                    return {{BracketKind::square, BracketRole::close}};
+                    return {{BracketKind::Square, BracketRole::Close}};
                 case '{':
-                    return {{BracketKind::curly, BracketRole::open}};
+                    return {{BracketKind::Curly, BracketRole::Open}};
                 case '}':
-                    return {{BracketKind::curly, BracketRole::close}};
+                    return {{BracketKind::Curly, BracketRole::Close}};
                 default:
                     return std::nullopt;
                 }
@@ -254,35 +254,35 @@ TEST(hand_computed_metadata_golden_covers_all_exported_sections) {
     const std::string text = "fn(a[1]) {\n\t// c\n  x] /* y */\n}\n";
     SyntaxParseOutput raw{
         .revision = Revision{7},
-        .status = SyntaxParseStatus::parsed,
+        .status = SyntaxParseStatus::Parsed,
         .parse = std::make_shared<FakeParse>(text),
         .spans =
             {
-                {byte(22), byte(29), SyntaxScope::comment},
-                {byte(5), byte(6), SyntaxScope::number},
-                {byte(0), byte(2), SyntaxScope::keyword},
-                {byte(12), byte(16), SyntaxScope::comment},
+                {byte(22), byte(29), SyntaxScope::Comment},
+                {byte(5), byte(6), SyntaxScope::Number},
+                {byte(0), byte(2), SyntaxScope::Keyword},
+                {byte(12), byte(16), SyntaxScope::Comment},
             },
         .brackets =
             {
-                {byte(30), BracketKind::curly, BracketRole::close},
-                {byte(2), BracketKind::round, BracketRole::open},
-                {byte(20), BracketKind::square, BracketRole::close},
-                {byte(4), BracketKind::square, BracketRole::open},
-                {byte(6), BracketKind::square, BracketRole::close},
-                {byte(7), BracketKind::round, BracketRole::close},
-                {byte(9), BracketKind::curly, BracketRole::open},
+                {byte(30), BracketKind::Curly, BracketRole::Close},
+                {byte(2), BracketKind::Round, BracketRole::Open},
+                {byte(20), BracketKind::Square, BracketRole::Close},
+                {byte(4), BracketKind::Square, BracketRole::Open},
+                {byte(6), BracketKind::Square, BracketRole::Close},
+                {byte(7), BracketKind::Round, BracketRole::Close},
+                {byte(9), BracketKind::Curly, BracketRole::Open},
             },
         .comment_tokens =
             {
-                {{byte(27), byte(29)}, CommentTokenRole::block_close},
-                {{byte(12), byte(14)}, CommentTokenRole::line},
-                {{byte(22), byte(24)}, CommentTokenRole::block_open},
+                {{byte(27), byte(29)}, CommentTokenRole::BlockClose},
+                {{byte(12), byte(14)}, CommentTokenRole::Line},
+                {{byte(22), byte(24)}, CommentTokenRole::BlockOpen},
             },
         .comment_ranges =
             {
-                {{byte(22), byte(29)}, CommentKind::block},
-                {{byte(12), byte(16)}, CommentKind::line},
+                {{byte(22), byte(29)}, CommentKind::Block},
+                {{byte(12), byte(16)}, CommentKind::Line},
             },
     };
 
@@ -295,39 +295,39 @@ TEST(hand_computed_metadata_golden_covers_all_exported_sections) {
     ASSERT_EQ(
         state.spans(),
         (std::vector<SyntaxSpan>{
-            {byte(0), byte(2), SyntaxScope::keyword},
-            {byte(2), byte(5), SyntaxScope::plain_text},
-            {byte(5), byte(6), SyntaxScope::number},
-            {byte(6), byte(12), SyntaxScope::plain_text},
-            {byte(12), byte(16), SyntaxScope::comment},
-            {byte(16), byte(22), SyntaxScope::plain_text},
-            {byte(22), byte(29), SyntaxScope::comment},
-            {byte(29), byte(32), SyntaxScope::plain_text},
+            {byte(0), byte(2), SyntaxScope::Keyword},
+            {byte(2), byte(5), SyntaxScope::PlainText},
+            {byte(5), byte(6), SyntaxScope::Number},
+            {byte(6), byte(12), SyntaxScope::PlainText},
+            {byte(12), byte(16), SyntaxScope::Comment},
+            {byte(16), byte(22), SyntaxScope::PlainText},
+            {byte(22), byte(29), SyntaxScope::Comment},
+            {byte(29), byte(32), SyntaxScope::PlainText},
         }));
     ASSERT_EQ(
         state.bracket_pairs(),
         (std::vector<SyntaxBracketPair>{
-            {byte(2), byte(7), BracketKind::round, 0},
-            {byte(4), byte(6), BracketKind::square, 1},
-            {byte(9), byte(30), BracketKind::curly, 0},
+            {byte(2), byte(7), BracketKind::Round, 0},
+            {byte(4), byte(6), BracketKind::Square, 1},
+            {byte(9), byte(30), BracketKind::Curly, 0},
         }));
     ASSERT_EQ(
         state.unmatched_brackets(),
         (std::vector<UnmatchedBracket>{
-            {byte(20), BracketKind::square, BracketRole::close},
+            {byte(20), BracketKind::Square, BracketRole::Close},
         }));
     ASSERT_EQ(
         state.comment_tokens(),
         (std::vector<CommentToken>{
-            {{byte(12), byte(14)}, CommentTokenRole::line},
-            {{byte(22), byte(24)}, CommentTokenRole::block_open},
-            {{byte(27), byte(29)}, CommentTokenRole::block_close},
+            {{byte(12), byte(14)}, CommentTokenRole::Line},
+            {{byte(22), byte(24)}, CommentTokenRole::BlockOpen},
+            {{byte(27), byte(29)}, CommentTokenRole::BlockClose},
         }));
     ASSERT_EQ(
         state.comment_ranges(),
         (std::vector<CommentRange>{
-            {{byte(12), byte(16)}, CommentKind::line},
-            {{byte(22), byte(29)}, CommentKind::block},
+            {{byte(12), byte(16)}, CommentKind::Line},
+            {{byte(22), byte(29)}, CommentKind::Block},
         }));
     ASSERT_EQ(
         state.indentation(),
@@ -342,8 +342,8 @@ TEST(hand_computed_metadata_golden_covers_all_exported_sections) {
               std::optional<ByteOffset>{ByteOffset{6}});
     ASSERT_EQ(matching_bracket(state, ByteOffset{20}),
               std::optional<ByteOffset>{});
-    ASSERT_EQ(scope_at(state, ByteOffset{5}), SyntaxScope::number);
-    ASSERT_EQ(scope_at(state, ByteOffset{19}), SyntaxScope::plain_text);
+    ASSERT_EQ(scope_at(state, ByteOffset{5}), SyntaxScope::Number);
+    ASSERT_EQ(scope_at(state, ByteOffset{19}), SyntaxScope::PlainText);
 
     static_assert(
         std::is_const_v<std::remove_reference_t<decltype(state.spans())>>);
@@ -392,12 +392,12 @@ TEST(immutable_delta_derives_only_changed_sections_and_replays_exactly) {
         Revision{4}, LanguageId{"toy"}, "alpha\n", 4);
     SyntaxParseOutput raw{
         .revision = Revision{5},
-        .status = SyntaxParseStatus::parsed,
+        .status = SyntaxParseStatus::Parsed,
         .parse = std::make_shared<FakeParse>("let 2\n"),
         .spans =
             {
-                {byte(0), byte(3), SyntaxScope::keyword},
-                {byte(4), byte(5), SyntaxScope::number},
+                {byte(0), byte(3), SyntaxScope::Keyword},
+                {byte(4), byte(5), SyntaxScope::Number},
             },
     };
     const auto after = build_syntax_view_state(
@@ -430,7 +430,7 @@ TEST(immutable_delta_derives_only_changed_sections_and_replays_exactly) {
     const auto stale_base = plain_text_syntax_view_state(
         Revision{3}, LanguageId{"toy"}, "alpha\n", 4);
     ASSERT_EQ(replay_syntax_delta(stale_base, delta).error,
-              SyntaxReplayError::stale_revision);
+              SyntaxReplayError::StaleRevision);
 
     const SyntaxDelta malformed{
         Revision{4},
@@ -438,8 +438,8 @@ TEST(immutable_delta_derives_only_changed_sections_and_replays_exactly) {
         std::nullopt,
         std::uint64_t{6},
         std::vector<SyntaxSpan>{
-            {byte(0), byte(4), SyntaxScope::plain_text},
-            {byte(3), byte(6), SyntaxScope::keyword},
+            {byte(0), byte(4), SyntaxScope::PlainText},
+            {byte(3), byte(6), SyntaxScope::Keyword},
         },
         std::nullopt,
         std::nullopt,
@@ -448,7 +448,7 @@ TEST(immutable_delta_derives_only_changed_sections_and_replays_exactly) {
         std::nullopt,
     };
     ASSERT_EQ(replay_syntax_delta(before, malformed).error,
-              SyntaxReplayError::malformed_delta);
+              SyntaxReplayError::MalformedDelta);
 
     const SyntaxDelta same_revision_change{
         Revision{4},
@@ -456,7 +456,7 @@ TEST(immutable_delta_derives_only_changed_sections_and_replays_exactly) {
         std::nullopt,
         std::nullopt,
         std::vector<SyntaxSpan>{
-            {byte(0), byte(6), SyntaxScope::keyword},
+            {byte(0), byte(6), SyntaxScope::Keyword},
         },
         std::nullopt,
         std::nullopt,
@@ -465,7 +465,7 @@ TEST(immutable_delta_derives_only_changed_sections_and_replays_exactly) {
         std::nullopt,
     };
     ASSERT_EQ(replay_syntax_delta(before, same_revision_change).error,
-              SyntaxReplayError::malformed_delta);
+              SyntaxReplayError::MalformedDelta);
 }
 
 TEST(superseded_and_cancelled_results_never_replace_newer_state) {
@@ -483,20 +483,20 @@ TEST(superseded_and_cancelled_results_never_replace_newer_state) {
     ASSERT_TRUE(second.request->cancelled());
 
     ASSERT_EQ(model.accept(second.request, completed_second).error,
-              SyntaxAcceptError::cancelled);
+              SyntaxAcceptError::Cancelled);
     ASSERT_EQ(model.view_state(), accepted);
 
     model.cancel_pending();
     ASSERT_TRUE(third.request->cancelled());
     ASSERT_EQ(model.accept(third.request, model.run(*third.request)).error,
-              SyntaxAcceptError::cancelled);
+              SyntaxAcceptError::Cancelled);
     ASSERT_EQ(model.view_state(), accepted);
 
     const auto newest = request_for(model, Revision{4}, "let a = 4;\n");
     ASSERT_TRUE(parse_and_accept(model, newest).accepted());
     ASSERT_EQ(model.view_state().revision(), Revision{4});
     ASSERT_EQ(model.accept(first.request, model.run(*first.request)).error,
-              SyntaxAcceptError::stale_revision);
+              SyntaxAcceptError::StaleRevision);
 }
 
 TEST(no_parser_unavailable_grammar_and_failed_parse_share_fallback_snapshot) {
@@ -540,7 +540,7 @@ TEST(no_parser_unavailable_grammar_and_failed_parse_share_fallback_snapshot) {
     ASSERT_EQ(unavailable.view_state(), failed_model.view_state());
     ASSERT_EQ(no_parser.view_state().spans(),
               (std::vector<SyntaxSpan>{
-                  {byte(0), byte(text.size()), SyntaxScope::plain_text},
+                  {byte(0), byte(text.size()), SyntaxScope::PlainText},
               }));
     ASSERT_TRUE(no_parser.view_state().bracket_pairs().empty());
     ASSERT_TRUE(no_parser.view_state().comment_ranges().empty());
@@ -554,7 +554,7 @@ TEST(request_and_result_validation_is_failure_atomic) {
 
     const auto oversized =
         request_for(model, Revision{1}, "123456789");
-    ASSERT_EQ(oversized.error, SyntaxRequestError::document_too_large);
+    ASSERT_EQ(oversized.error, SyntaxRequestError::DocumentTooLarge);
     ASSERT_EQ(model.view_state().revision(), Revision{0});
 
     const SyntaxEdit malformed{
@@ -567,7 +567,7 @@ TEST(request_and_result_validation_is_failure_atomic) {
     };
     const auto malformed_request =
         request_for(model, Revision{1}, "abc", {malformed});
-    ASSERT_EQ(malformed_request.error, SyntaxRequestError::malformed_edits);
+    ASSERT_EQ(malformed_request.error, SyntaxRequestError::MalformedEdits);
     ASSERT_EQ(model.view_state().revision(), Revision{0});
 
     const auto valid = request_for(model, Revision{1}, "let 1\n");
@@ -575,12 +575,12 @@ TEST(request_and_result_validation_is_failure_atomic) {
     auto mismatched = model.run(*valid.request);
     mismatched.revision = Revision{2};
     ASSERT_EQ(model.accept(valid.request, mismatched).error,
-              SyntaxAcceptError::malformed_output);
+              SyntaxAcceptError::MalformedOutput);
     ASSERT_EQ(model.view_state().revision(), Revision{0});
 
     ASSERT_TRUE(parse_and_accept(model, valid).accepted());
     const auto stale = request_for(model, Revision{1}, "let 2\n");
-    ASSERT_EQ(stale.error, SyntaxRequestError::stale_revision);
+    ASSERT_EQ(stale.error, SyntaxRequestError::StaleRevision);
     ASSERT_EQ(model.view_state().revision(), Revision{1});
 
     const auto switched_language = model.request(
@@ -591,10 +591,10 @@ TEST(request_and_result_validation_is_failure_atomic) {
 
     const auto rejected_newer =
         request_for(model, Revision{3}, "123456789");
-    ASSERT_EQ(rejected_newer.error, SyntaxRequestError::document_too_large);
+    ASSERT_EQ(rejected_newer.error, SyntaxRequestError::DocumentTooLarge);
     ASSERT_TRUE(switched_language.request->cancelled());
     ASSERT_EQ(model.accept(switched_language.request, completed_switch).error,
-              SyntaxAcceptError::cancelled);
+              SyntaxAcceptError::Cancelled);
     ASSERT_EQ(model.view_state().revision(), Revision{1});
 }
 

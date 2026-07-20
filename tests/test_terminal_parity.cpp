@@ -244,7 +244,7 @@ std::unique_ptr<ssg::EditorRuntime> make_headless(fs::path const& root) {
     auto created = ssg::EditorRuntime::create(config);
     if (!created.accepted()) return nullptr;
     auto runtime = std::move(created.runtime);
-    (void)runtime->attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process},
+    (void)runtime->attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                           ssg::ViewId{1});
     return runtime;
 }
@@ -349,7 +349,7 @@ TEST(decoder_roundtrips_the_encoded_frame) {
     auto grid = ssg::render(*snapshot);
 
     auto encoded =
-        ssg::app::encode_ansi_frame(grid, ssg::ColorDepth::truecolor);
+        ssg::app::encode_ansi_frame(grid, ssg::ColorDepth::Truecolor);
     auto screen = decode(encoded, grid.size.columns, grid.size.rows);
     compare_screen(screen, grid);
     fs::remove_all(root);

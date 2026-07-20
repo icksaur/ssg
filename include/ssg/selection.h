@@ -62,42 +62,42 @@ struct BracketPair {
 };
 
 enum class SelectionCommand : std::uint8_t {
-    cursor_set_position,
-    cursor_left,
-    cursor_right,
-    cursor_word_left,
-    cursor_word_right,
-    cursor_line_up,
-    cursor_line_down,
-    cursor_line_start,
-    cursor_line_end,
-    cursor_page_up,
-    cursor_page_down,
-    cursor_document_start,
-    cursor_document_end,
-    select_set_range,
-    select_add_range,
-    select_left,
-    select_right,
-    select_word_left,
-    select_word_right,
-    select_line_up,
-    select_line_down,
-    select_line_start,
-    select_line_end,
-    select_page_up,
-    select_page_down,
-    select_document_start,
-    select_document_end,
-    select_all,
-    select_add_next_occurrence,
-    select_add_cursor_up,
-    select_add_cursor_down,
-    select_split_into_lines,
-    select_to_matching_bracket,
-    goto_matching_bracket,
-    view_reveal_caret,
-    view_center_caret,
+    CursorSetPosition,
+    CursorLeft,
+    CursorRight,
+    CursorWordLeft,
+    CursorWordRight,
+    CursorLineUp,
+    CursorLineDown,
+    CursorLineStart,
+    CursorLineEnd,
+    CursorPageUp,
+    CursorPageDown,
+    CursorDocumentStart,
+    CursorDocumentEnd,
+    SelectSetRange,
+    SelectAddRange,
+    SelectLeft,
+    SelectRight,
+    SelectWordLeft,
+    SelectWordRight,
+    SelectLineUp,
+    SelectLineDown,
+    SelectLineStart,
+    SelectLineEnd,
+    SelectPageUp,
+    SelectPageDown,
+    SelectDocumentStart,
+    SelectDocumentEnd,
+    SelectAll,
+    SelectAddNextOccurrence,
+    SelectAddCursorUp,
+    SelectAddCursorDown,
+    SelectSplitIntoLines,
+    SelectToMatchingBracket,
+    GotoMatchingBracket,
+    ViewRevealCaret,
+    ViewCenterCaret,
 };
 
 struct SelectionCommandDescriptor {
@@ -133,11 +133,11 @@ struct SelectionCommandArguments {
 };
 
 enum class SelectionNavigationError : std::uint8_t {
-    none,
-    missing_argument,
-    invalid_position,
-    invalid_bracket_pairs,
-    invalid_tab_width,
+    None,
+    MissingArgument,
+    InvalidPosition,
+    InvalidBracketPairs,
+    InvalidTabWidth,
 };
 
 struct SelectionNavigationResult {
@@ -146,7 +146,7 @@ struct SelectionNavigationResult {
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == SelectionNavigationError::none;
+        return error == SelectionNavigationError::None;
     }
 };
 

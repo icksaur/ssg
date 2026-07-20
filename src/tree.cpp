@@ -189,7 +189,7 @@ TreeProviderSnapshot filesystem_tree_snapshot(
     nodes.push_back(TreeNode{node_id(provider_id, "."),
                              std::nullopt,
                              root.filename().string(),
-                             TreeNodeKind::root,
+                             TreeNodeKind::Root,
                              std::nullopt,
                              {},
                              std::nullopt,
@@ -219,8 +219,8 @@ TreeProviderSnapshot filesystem_tree_snapshot(
             node_id(provider_id, relative),
             node_id(provider_id, parent_path.empty() ? "." : parent_path),
             entry.path().filename().string(),
-            symlink ? TreeNodeKind::symlink
-                    : (directory ? TreeNodeKind::directory : TreeNodeKind::file),
+            symlink ? TreeNodeKind::Symlink
+                    : (directory ? TreeNodeKind::Directory : TreeNodeKind::File),
             std::nullopt,
             {},
             std::nullopt,
@@ -233,7 +233,7 @@ TreeProviderSnapshot filesystem_tree_snapshot(
                                  error.message());
     }
     return TreeProviderSnapshot{std::move(provider_id),
-                                TreeProviderKind::filesystem, revision,
+                                TreeProviderKind::Filesystem, revision,
                                 std::move(nodes)};
 }
 
@@ -250,14 +250,14 @@ TreeProviderSnapshot git_tree_snapshot(TreeProviderId provider_id,
         nodes.push_back(TreeNode{node_id(provider_id, path),
                                  std::nullopt,
                                  std::move(record.label),
-                                 TreeNodeKind::git_entry,
+                                 TreeNodeKind::GitEntry,
                                  std::nullopt,
                                  std::move(record.commands),
                                  record.status,
                                  path,
                                  std::nullopt});
     }
-    return TreeProviderSnapshot{std::move(provider_id), TreeProviderKind::git,
+    return TreeProviderSnapshot{std::move(provider_id), TreeProviderKind::Git,
                                 revision, std::move(nodes)};
 }
 
@@ -282,7 +282,7 @@ TreeProviderSnapshot symbol_tree_snapshot(
         nodes.push_back(TreeNode{node_id(provider_id, record.stable_key),
                                  std::move(parent),
                                  std::move(record.label),
-                                 TreeNodeKind::symbol,
+                                 TreeNodeKind::Symbol,
                                  std::nullopt,
                                  std::move(record.commands),
                                  std::nullopt,
@@ -290,7 +290,7 @@ TreeProviderSnapshot symbol_tree_snapshot(
                                  record.source_line});
     }
     return TreeProviderSnapshot{std::move(provider_id),
-                                TreeProviderKind::symbols, revision,
+                                TreeProviderKind::Symbols, revision,
                                 std::move(nodes)};
 }
 
@@ -594,17 +594,17 @@ TreeDelta derive_tree_delta(const TreeViewState& base,
 TreeReplayResult replay_tree_delta(const TreeViewState& base,
                                    const TreeDelta& delta) {
     if (base.revision != delta.base_revision) {
-        return {std::nullopt, TreeReplayError::stale_revision};
+        return {std::nullopt, TreeReplayError::StaleRevision};
     }
     if (delta.snapshot_required) {
-        return {std::nullopt, TreeReplayError::snapshot_required};
+        return {std::nullopt, TreeReplayError::SnapshotRequired};
     }
 
     auto state = base;
     std::set<TreeProviderId> changed;
     for (const auto& change : delta.providers) {
         if (!changed.insert(change.provider_id).second) {
-            return {std::nullopt, TreeReplayError::malformed_delta};
+            return {std::nullopt, TreeReplayError::MalformedDelta};
         }
         auto provider = std::lower_bound(
             state.providers.begin(), state.providers.end(), change.provider_id,
@@ -616,7 +616,7 @@ TreeReplayResult replay_tree_delta(const TreeViewState& base,
                 provider->provider_id != change.provider_id ||
                 change.start != 0 || change.erase_count != 0 ||
                 !change.insert.empty()) {
-                return {std::nullopt, TreeReplayError::malformed_delta};
+                return {std::nullopt, TreeReplayError::MalformedDelta};
             }
             state.providers.erase(provider);
             continue;
@@ -624,7 +624,7 @@ TreeReplayResult replay_tree_delta(const TreeViewState& base,
         if (provider == state.providers.end() ||
             provider->provider_id != change.provider_id) {
             if (change.start != 0 || change.erase_count != 0) {
-                return {std::nullopt, TreeReplayError::malformed_delta};
+                return {std::nullopt, TreeReplayError::MalformedDelta};
             }
             state.providers.insert(
                 provider, TreeProviderView{change.provider_id, change.kind,
@@ -636,7 +636,7 @@ TreeReplayResult replay_tree_delta(const TreeViewState& base,
         }
         if (change.start > provider->nodes.size() ||
             change.erase_count > provider->nodes.size() - change.start) {
-            return {std::nullopt, TreeReplayError::malformed_delta};
+            return {std::nullopt, TreeReplayError::MalformedDelta};
         }
         provider->kind = change.kind;
         auto first = provider->nodes.begin() +
@@ -651,7 +651,7 @@ TreeReplayResult replay_tree_delta(const TreeViewState& base,
         provider->visible_node_ids = change.visible_node_ids;
     }
     state.revision = delta.revision;
-    return {std::move(state), TreeReplayError::none};
+    return {std::move(state), TreeReplayError::None};
 }
 
 } // namespace ssg

@@ -66,7 +66,7 @@ std::optional<AuthenticatedSession> ApplicationAuthentication::authenticate(
     return AuthenticatedSession{
         session_id_,
         InvocationPrincipal{
-            client_id_, InvocationOrigin::websocket,
+            client_id_, InvocationOrigin::Websocket,
             std::vector<CapabilityId>{CapabilityId{"local_file_drop"}}},
         view_id_};
 }

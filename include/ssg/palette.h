@@ -28,7 +28,7 @@ struct PaletteCandidate {
 };
 
 struct PaletteViewState {
-    SearchMode mode = SearchMode::command;
+    SearchMode mode = SearchMode::Command;
     std::vector<PaletteCandidate> candidates;
 
     friend bool operator==(const PaletteViewState&, const PaletteViewState&) = default;

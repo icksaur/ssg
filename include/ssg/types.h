@@ -77,9 +77,9 @@ struct DocumentPosition {
 // Document editing mode (spec §Design, DocumentMode).
 // The set of modes is closed; all values are always valid.
 enum class DocumentMode : uint8_t {
-    edit,
-    read_only,
-    diff,
+    Edit,
+    ReadOnly,
+    Diff,
 };
 
 }  // namespace ssg

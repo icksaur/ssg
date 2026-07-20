@@ -16,11 +16,11 @@ std::optional<std::string> string_payload(std::any const& payload) {
 
 TabRecoveryBadge badge_for(ScratchDurabilityState state) {
     switch (state.kind) {
-        case ScratchDurability::durable: return TabRecoveryBadge::durable;
-        case ScratchDurability::pending: return TabRecoveryBadge::pending;
-        case ScratchDurability::failed: return TabRecoveryBadge::failed;
+        case ScratchDurability::Durable: return TabRecoveryBadge::Durable;
+        case ScratchDurability::Pending: return TabRecoveryBadge::Pending;
+        case ScratchDurability::Failed: return TabRecoveryBadge::Failed;
     }
-    return TabRecoveryBadge::none;
+    return TabRecoveryBadge::None;
 }
 
 CommandHandlerResult open_document_result(EditorRuntime::Impl& runtime,
@@ -35,7 +35,7 @@ CommandHandlerResult bind_file(EditorRuntime::Impl& runtime,
                                std::any const& payload) {
     WorkspaceResult result;
     switch (command) {
-        case FileCommand::open_directory: {
+        case FileCommand::OpenDirectory: {
             auto path = string_payload(payload);
             if (!path) return failure("workspace.open_directory requires a path payload");
             result = runtime.workspace.open_directory(*path);
@@ -44,12 +44,12 @@ CommandHandlerResult bind_file(EditorRuntime::Impl& runtime,
             runtime.refresh_tree();
             return success();
         }
-        case FileCommand::create: {
+        case FileCommand::Create: {
             auto label = string_payload(payload).value_or("Untitled");
             result = runtime.workspace.new_document(label);
             return open_document_result(runtime, result);
         }
-        case FileCommand::open: {
+        case FileCommand::Open: {
             auto path = string_payload(payload);
             if (!path) {
                 (void)runtime.prompt.open(file_path_prompt(command));
@@ -58,32 +58,32 @@ CommandHandlerResult bind_file(EditorRuntime::Impl& runtime,
             result = runtime.workspace.open_file(*path);
             return open_document_result(runtime, result);
         }
-        case FileCommand::open_recent: {
+        case FileCommand::OpenRecent: {
             auto const* index = payload_as<std::size_t>(payload);
             if (index == nullptr) return failure("file.open_recent requires an index payload");
             result = runtime.workspace.open_recent(*index);
             return open_document_result(runtime, result);
         }
-        case FileCommand::open_dropped_content: {
+        case FileCommand::OpenDroppedContent: {
             auto const* dropped = payload_as<DroppedContentArguments>(payload);
             if (dropped == nullptr) return failure("file.open_dropped_content requires dropped content payload");
             result = runtime.workspace.open_dropped_content(principal, dropped->bytes, dropped->suggested_label);
             return open_document_result(runtime, result);
         }
-        case FileCommand::save: {
+        case FileCommand::Save: {
             auto id = runtime.active_document_id();
             if (!id) return failure("no active document");
             result = runtime.workspace.save(*id);
             if (!result.accepted()) return failure(workspace_message(result));
             return runtime.update_tabs_for(*id);
         }
-        case FileCommand::save_all: {
+        case FileCommand::SaveAll: {
             result = runtime.workspace.save_all();
             if (!result.accepted()) return failure(workspace_message(result));
             for (auto id : runtime.workspace.documents()) (void)runtime.update_tabs_for(id);
             return success();
         }
-        case FileCommand::save_as: {
+        case FileCommand::SaveAs: {
             auto id = runtime.active_document_id();
             auto path = string_payload(payload);
             if (!id) return failure("no active document");
@@ -93,7 +93,7 @@ CommandHandlerResult bind_file(EditorRuntime::Impl& runtime,
             runtime.refresh_tree();
             return runtime.update_tabs_for(*id);
         }
-        case FileCommand::reload: {
+        case FileCommand::Reload: {
             auto id = runtime.active_document_id();
             if (!id) return failure("no active document");
             result = runtime.workspace.reload(*id);
@@ -102,7 +102,7 @@ CommandHandlerResult bind_file(EditorRuntime::Impl& runtime,
             runtime.refresh_syntax();
             return runtime.update_tabs_for(*id);
         }
-        case FileCommand::rename: {
+        case FileCommand::Rename: {
             auto id = runtime.active_document_id();
             auto path = string_payload(payload);
             if (!id) return failure("no active document");
@@ -112,7 +112,7 @@ CommandHandlerResult bind_file(EditorRuntime::Impl& runtime,
             runtime.refresh_tree();
             return runtime.update_tabs_for(*id);
         }
-        case FileCommand::remove: {
+        case FileCommand::Remove: {
             auto id = runtime.active_document_id();
             if (!id) return failure("no active document");
             result = runtime.workspace.delete_file(*id);
@@ -120,7 +120,7 @@ CommandHandlerResult bind_file(EditorRuntime::Impl& runtime,
             runtime.refresh_tree();
             return success();
         }
-        case FileCommand::new_directory: {
+        case FileCommand::NewDirectory: {
             auto path = string_payload(payload);
             if (!path) return failure("file.new_directory requires a path payload");
             result = runtime.workspace.new_directory(*path);
@@ -144,15 +144,15 @@ CommandHandlerResult bind_tab(EditorRuntime::Impl& runtime,
     auto const document_before = runtime.active_document_id();
     TabResult result;
     switch (command) {
-        case TabCommand::close: result = runtime.tabs.close(tab, std::chrono::milliseconds{100}); break;
-        case TabCommand::close_others: result = runtime.tabs.close_others(tab, std::chrono::milliseconds{100}); break;
-        case TabCommand::close_all: result = runtime.tabs.close_all(std::chrono::milliseconds{100}); break;
-        case TabCommand::reopen_closed: result = runtime.tabs.reopen_closed(); break;
-        case TabCommand::next: result = runtime.tabs.next(); break;
-        case TabCommand::previous: result = runtime.tabs.previous(); break;
-        case TabCommand::activate: result = runtime.tabs.activate(tab); break;
-        case TabCommand::move_left: result = runtime.tabs.move_left(tab); break;
-        case TabCommand::move_right: result = runtime.tabs.move_right(tab); break;
+        case TabCommand::Close: result = runtime.tabs.close(tab, std::chrono::milliseconds{100}); break;
+        case TabCommand::CloseOthers: result = runtime.tabs.close_others(tab, std::chrono::milliseconds{100}); break;
+        case TabCommand::CloseAll: result = runtime.tabs.close_all(std::chrono::milliseconds{100}); break;
+        case TabCommand::ReopenClosed: result = runtime.tabs.reopen_closed(); break;
+        case TabCommand::Next: result = runtime.tabs.next(); break;
+        case TabCommand::Previous: result = runtime.tabs.previous(); break;
+        case TabCommand::Activate: result = runtime.tabs.activate(tab); break;
+        case TabCommand::MoveLeft: result = runtime.tabs.move_left(tab); break;
+        case TabCommand::MoveRight: result = runtime.tabs.move_right(tab); break;
     }
     if (!result.accepted()) return failure(tab_message(result));
     runtime.clamp_selection_to_active_document();
@@ -166,7 +166,7 @@ CommandHandlerResult bind_tab(EditorRuntime::Impl& runtime,
     // Focus follows the pointer (M8-F): activating a tab (a tab click, or the
     // palette/lua "Tab Activate") acts on the editor, so move keyboard focus there.
     // Keyboard tab switching uses tab.next/tab.previous, which do not reach here.
-    if (command == TabCommand::activate) {
+    if (command == TabCommand::Activate) {
         runtime.shell.focus_editor();
     }
     return success();
@@ -258,8 +258,8 @@ void bind_runtime_files(EditorSessionBuilder& builder, EditorRuntime::Impl& runt
                 if (id == nullptr) return failure("external command requires a diff file ID payload");
                 std::optional<JournalDocument> document;
                 ExternalModificationResult result;
-                if (descriptor.action == ExternalAction::reload) result = runtime.external.reload(*id, document);
-                else if (descriptor.action == ExternalAction::keep_buffer) result = runtime.external.keep_buffer(*id);
+                if (descriptor.action == ExternalAction::Reload) result = runtime.external.reload(*id, document);
+                else if (descriptor.action == ExternalAction::KeepBuffer) result = runtime.external.keep_buffer(*id);
                 else {
                     auto opened = runtime.external.open_diff(*id);
                     if (!opened.accepted()) return failure("external diff target is unavailable");

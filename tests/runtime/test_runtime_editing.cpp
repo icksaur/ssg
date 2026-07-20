@@ -49,11 +49,11 @@ public:
     }
 
     ssg::WorkspaceApplyResult apply(const ssg::WorkspaceReplacePreview&, ssg::WorkspaceRecoverySink&) override {
-        return {ssg::FindReplaceError::workspace_rejected, revision_, "not used"};
+        return {ssg::FindReplaceError::WorkspaceRejected, revision_, "not used"};
     }
 
     ssg::WorkspaceApplyResult recover(const ssg::WorkspaceRecoveryRecord&) override {
-        return {ssg::FindReplaceError::workspace_rejected, revision_, "not used"};
+        return {ssg::FindReplaceError::WorkspaceRejected, revision_, "not used"};
     }
 
 private:
@@ -67,7 +67,7 @@ TEST(runtime_text_selection_and_history_match_feature_operations) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"edit.txt"}}).accepted());
 
     auto set_position = runtime.dispatch(ssg::ClientId{1}, {"cursor.set_position", runtime.revision(), ssg::SelectionCommandArguments{ssg::resolve_document_position("abc", ssg::ByteOffset{3}), std::nullopt}});
@@ -90,7 +90,7 @@ TEST(typing_undo_breaks_on_word_and_line_boundaries) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"edit.txt"}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"cursor.set_position", runtime.revision(), ssg::SelectionCommandArguments{ssg::resolve_document_position("abc", ssg::ByteOffset{3}), std::nullopt}}).accepted());
 
@@ -123,7 +123,7 @@ TEST(workspace_replace_dispatch_matches_feature_preview_and_disk_apply) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"edit.txt"}}).accepted());
 
     ssg::FindRequest request{"cat", {}, std::nullopt, 100000, nullptr};
@@ -153,7 +153,7 @@ TEST(workspace_replace_rejects_stale_and_out_of_bounds_preview) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
     ssg::FindRequest request{"cat", {}, std::nullopt, 100000, nullptr};
     DiskPreviewWorkspace oracle_workspace{workspace, runtime.revision()};
@@ -193,7 +193,7 @@ TEST(workspace_replace_updates_open_document_snapshot_and_disk) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"edit.txt"}}).accepted());
 
     ssg::FindRequest request{"cat", {}, std::nullopt, 100000, nullptr};
@@ -224,7 +224,7 @@ TEST(workspace_search_and_replace_exclude_runtime_state_roots) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"search.workspace", runtime.revision(), std::string{"#secret"}}).accepted());
     auto search_snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
@@ -253,7 +253,7 @@ TEST(find_update_query_projects_matches_and_prompt_and_next_cycles) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"hits.txt"}}).accepted());
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.open", runtime.revision(), {}}).accepted());
@@ -280,8 +280,8 @@ TEST(find_update_query_projects_matches_and_prompt_and_next_cycles) {
         std::string query_value;
         std::string count_value;
         for (auto const& control : prompt->controls) {
-            if (control.kind == ssg::PromptControlKind::input) query_value = control.value;
-            if (control.kind == ssg::PromptControlKind::count) count_value = control.value;
+            if (control.kind == ssg::PromptControlKind::Input) query_value = control.value;
+            if (control.kind == ssg::PromptControlKind::Count) count_value = control.value;
         }
         ASSERT_EQ(query_value, std::string{"cat"});
         ASSERT_EQ(count_value, std::string{"1/3"});
@@ -308,7 +308,7 @@ TEST(find_close_succeeds_without_an_active_document) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
     // No document is open: find.close (and next/previous) must not be rejected by
     // the active-document guard, so a find opened before the last tab closed can
@@ -328,7 +328,7 @@ TEST(find_close_does_not_cancel_an_unrelated_prompt) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"doc.txt"}}).accepted());
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.open", runtime.revision(), {}}).accepted());
@@ -337,7 +337,7 @@ TEST(find_close_does_not_cancel_an_unrelated_prompt) {
     if (before) {
         ASSERT_TRUE(before->sections().prompt_status.prompt.has_value());
         if (before->sections().prompt_status.prompt) {
-            ASSERT_EQ(before->sections().prompt_status.prompt->kind, ssg::PromptKind::palette);
+            ASSERT_EQ(before->sections().prompt_status.prompt->kind, ssg::PromptKind::Palette);
         }
     }
 
@@ -349,7 +349,7 @@ TEST(find_close_does_not_cancel_an_unrelated_prompt) {
     if (after) {
         ASSERT_TRUE(after->sections().prompt_status.prompt.has_value());
         if (after->sections().prompt_status.prompt) {
-            ASSERT_EQ(after->sections().prompt_status.prompt->kind, ssg::PromptKind::palette);
+            ASSERT_EQ(after->sections().prompt_status.prompt->kind, ssg::PromptKind::Palette);
         }
     }
 }
@@ -365,7 +365,7 @@ TEST(find_closes_when_switching_to_a_different_document) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"a.txt"}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.open", runtime.revision(), {}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.update_query", runtime.revision(), ssg::FindQueryArguments{"cat"}}).accepted());
@@ -401,7 +401,7 @@ TEST(find_scrolls_the_viewport_to_follow_the_active_match) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"tall.txt"}}).accepted());
 
     // Baseline: the viewport starts at the top.
@@ -438,7 +438,7 @@ TEST(replace_current_replaces_active_match_and_resets_to_first) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"r.txt"}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"replace.open", runtime.revision(), {}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.update_query", runtime.revision(), ssg::FindQueryArguments{"cat"}}).accepted());
@@ -456,7 +456,7 @@ TEST(replace_current_replaces_active_match_and_resets_to_first) {
             if (prompt) {
                 std::string replacement_value;
                 for (auto const& control : prompt->controls) {
-                    if (control.kind == ssg::PromptControlKind::input &&
+                    if (control.kind == ssg::PromptControlKind::Input &&
                         control.id == "replace.replacement") {
                         replacement_value = control.value;
                     }
@@ -493,7 +493,7 @@ TEST(replace_all_replaces_every_match) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"r.txt"}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"replace.open", runtime.revision(), {}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.update_query", runtime.revision(), ssg::FindQueryArguments{"cat"}}).accepted());
@@ -518,7 +518,7 @@ TEST(replace_commands_are_benign_no_ops_without_a_replace_prompt) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"r.txt"}}).accepted());
 
     // A find prompt (not replace) is open: replace commands must be benign
@@ -544,7 +544,7 @@ TEST(find_toggle_case_flips_option_and_changes_matches_and_guards_when_no_prompt
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"m.txt"}}).accepted());
 
     // No find/replace prompt yet: find.toggle_case must be a benign no-op that
@@ -585,7 +585,7 @@ TEST(replace_open_preserves_find_options) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"m.txt"}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.open", runtime.revision(), {}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.update_query", runtime.revision(), ssg::FindQueryArguments{"cat"}}).accepted());
@@ -617,7 +617,7 @@ TEST(find_close_dismisses_the_replace_prompt) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"m.txt"}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"replace.open", runtime.revision(), {}}).accepted());
     {
@@ -645,12 +645,12 @@ TEST(pointer_selection_commands_focus_the_editor_keyboard_motion_does_not) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"edit.txt"}}).accepted());
     const ssg::ViewportDimensions dims{80, 24};
     auto focus = [&] {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
-        return snap ? snap->sections().shell.focus : ssg::FocusTarget::editor;
+        return snap ? snap->sections().shell.focus : ssg::FocusTarget::Editor;
     };
     auto focus_panel = [&] {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
@@ -664,25 +664,25 @@ TEST(pointer_selection_commands_focus_the_editor_keyboard_motion_does_not) {
     // A pointer click-to-caret (cursor.set_position) from panel focus moves focus
     // to the editor.
     focus_panel();
-    ASSERT_EQ(focus(), ssg::FocusTarget::panel);
+    ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"cursor.set_position", runtime.revision(), ssg::SelectionCommandArguments{ssg::resolve_document_position("abc", ssg::ByteOffset{1}), std::nullopt}}).accepted());
-    ASSERT_EQ(focus(), ssg::FocusTarget::editor);
+    ASSERT_EQ(focus(), ssg::FocusTarget::Editor);
 
     // A pointer drag (select.set_range) likewise focuses the editor.
     focus_panel();
-    ASSERT_EQ(focus(), ssg::FocusTarget::panel);
+    ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"select.set_range", runtime.revision(),
         ssg::SelectionCommandArguments{std::nullopt, ssg::Selection{ssg::resolve_document_position("abc", ssg::ByteOffset{0}).value(), ssg::resolve_document_position("abc", ssg::ByteOffset{2}).value()}}}).accepted());
-    ASSERT_EQ(focus(), ssg::FocusTarget::editor);
+    ASSERT_EQ(focus(), ssg::FocusTarget::Editor);
 
     // A KEYBOARD caret motion (a different SelectionCommand) does NOT change focus:
     // dispatched from panel focus, the caret moves but the keyboard stays on the panel.
     focus_panel();
-    ASSERT_EQ(focus(), ssg::FocusTarget::panel);
+    ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"cursor.left", runtime.revision(), {}}).accepted());
-    ASSERT_EQ(focus(), ssg::FocusTarget::panel);
+    ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"select.line_down", runtime.revision(), {}}).accepted());
-    ASSERT_EQ(focus(), ssg::FocusTarget::panel);
+    ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
 }
 
 TEST(edit_reveals_the_primary_caret_free_scroll_does_not_and_follows_primary) {
@@ -699,7 +699,7 @@ TEST(edit_reveals_the_primary_caret_free_scroll_does_not_and_follows_primary) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"tall.txt"}}).accepted());
 
     const ssg::ViewportDimensions dims{80, 24};
@@ -769,7 +769,7 @@ TEST(undo_and_paste_reveal_the_caret) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"tall.txt"}}).accepted());
     const ssg::ViewportDimensions dims{80, 24};
     auto first_row = [&] {
@@ -812,7 +812,7 @@ TEST(multi_cursor_paste_preserves_all_cursors) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"m.txt"}}).accepted());
     const ssg::ViewportDimensions dims{80, 24};
     auto selection_count = [&] {
@@ -851,7 +851,7 @@ TEST(replace_all_reveals_the_caret_when_no_match_remains) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"t.txt"}}).accepted());
     const ssg::ViewportDimensions dims{80, 24};
     auto first_row = [&] {

@@ -45,10 +45,10 @@ AttachResult EditorSession::attach(InvocationPrincipal principal,
     auto [unused, inserted] = impl_->clients.emplace(
         client_id, AttachedClient{std::move(principal), view_id});
     if (!inserted) {
-        return {AttachError::duplicate_client,
+        return {AttachError::DuplicateClient,
                 "client ID is already attached"};
     }
-    return {AttachError::none, {}};
+    return {AttachError::None, {}};
 }
 
 bool EditorSession::detach(ClientId client_id) {
@@ -63,13 +63,13 @@ CommandResult EditorSession::dispatch(ClientId client_id,
 
     auto const client = impl_->clients.find(client_id);
     if (client == impl_->clients.end()) {
-        return rejected(CommandError::unknown_client, current_revision,
+        return rejected(CommandError::UnknownClient, current_revision,
                         "client ID is not attached");
     }
 
     auto const* registration = impl_->registry.find(command.id);
     if (registration == nullptr) {
-        return rejected(CommandError::unknown_command, current_revision,
+        return rejected(CommandError::UnknownCommand, current_revision,
                         "command is not registered: " + command.id);
     }
 
@@ -77,22 +77,22 @@ CommandResult EditorSession::dispatch(ClientId client_id,
          registration->descriptor.required_capabilities) {
         if (!client->second.principal.has_capability(capability)) {
             return rejected(
-                CommandError::capability_denied, current_revision,
+                CommandError::CapabilityDenied, current_revision,
                 "principal lacks required capability: " +
                     std::string{capability.value()});
         }
     }
 
     bool const mutates =
-        registration->descriptor.effect == CommandEffect::mutation;
+        registration->descriptor.effect == CommandEffect::Mutation;
     if (mutates && command.base_revision != current_revision) {
-        return rejected(CommandError::stale_revision, current_revision,
+        return rejected(CommandError::StaleRevision, current_revision,
                         "mutation base revision does not match session revision");
     }
     if (mutates &&
         current_revision.value() ==
             std::numeric_limits<std::uint64_t>::max()) {
-        return rejected(CommandError::revision_exhausted, current_revision,
+        return rejected(CommandError::RevisionExhausted, current_revision,
                         "session revision is exhausted");
     }
 
@@ -102,16 +102,16 @@ CommandResult EditorSession::dispatch(ClientId client_id,
     try {
         handler_result = registration->handler(context, command.payload);
     } catch (std::exception const& exception) {
-        return rejected(CommandError::handler_failed, current_revision,
+        return rejected(CommandError::HandlerFailed, current_revision,
                         "command handler threw: " +
                             std::string{exception.what()});
     } catch (...) {
-        return rejected(CommandError::handler_failed, current_revision,
+        return rejected(CommandError::HandlerFailed, current_revision,
                         "command handler threw an unknown exception");
     }
 
     if (!handler_result.accepted) {
-        return rejected(CommandError::handler_failed, current_revision,
+        return rejected(CommandError::HandlerFailed, current_revision,
                         std::move(handler_result.message));
     }
 
@@ -124,7 +124,7 @@ CommandResult EditorSession::dispatch(ClientId client_id,
         }
         impl_->revision = Revision{current_revision.value() + 1};
     }
-    return {CommandError::none, impl_->revision, {}};
+    return {CommandError::None, impl_->revision, {}};
 }
 
 Revision EditorSession::revision() const {

@@ -181,7 +181,7 @@ std::uint8_t Theme::index_for(SyntaxScope scope) const {
 
 std::uint8_t Theme::index_for_syntax(std::string_view scope) const noexcept {
     const auto recognized = syntax_scope_from_name(scope);
-    return syntax_indices_[position(recognized.value_or(SyntaxScope::plain_text))];
+    return syntax_indices_[position(recognized.value_or(SyntaxScope::PlainText))];
 }
 
 ThemeSnapshot Theme::snapshot() const noexcept {

@@ -13,7 +13,7 @@ namespace {
         .count();
 }
 
-constexpr std::size_t phase_count = static_cast<std::size_t>(OpenPhase::count);
+constexpr std::size_t phase_count = static_cast<std::size_t>(OpenPhase::Count);
 
 thread_local std::array<std::uint64_t, phase_count> g_phase_ns{};
 thread_local std::uint64_t g_utf8_validation_calls = 0;

@@ -55,10 +55,10 @@ FollowEditsModel::FollowEditsModel(FollowEditsConfig config)
 FollowEditsResult FollowEditsModel::attach_client(
     ClientId client, ViewportDimensions dimensions) {
     if (dimensions.columns == 0 || dimensions.rows == 0) {
-        return {FollowEditsError::invalid_viewport};
+        return {FollowEditsError::InvalidViewport};
     }
     if (find_client(state_.clients, client) != state_.clients.end()) {
-        return {FollowEditsError::duplicate_client};
+        return {FollowEditsError::DuplicateClient};
     }
 
     FollowScrollOffset offset;
@@ -73,7 +73,7 @@ FollowEditsResult FollowEditsModel::attach_client(
 FollowEditsResult FollowEditsModel::detach_client(ClientId client) {
     const auto found = find_client(state_.clients, client);
     if (found == state_.clients.end()) {
-        return {FollowEditsError::unknown_client};
+        return {FollowEditsError::UnknownClient};
     }
     state_.clients.erase(found);
     advance_generation();
@@ -83,7 +83,7 @@ FollowEditsResult FollowEditsModel::detach_client(ClientId client) {
 FollowEditsResult FollowEditsModel::accept_external_change(
     const DiffFileView& file, Revision source_revision) {
     if (source_revision <= latest_source_revision_) {
-        return {FollowEditsError::stale_revision};
+        return {FollowEditsError::StaleRevision};
     }
 
     latest_source_revision_ = source_revision;
@@ -97,7 +97,7 @@ FollowEditsResult FollowEditsModel::accept_external_change(
         if (state_.queued_targets.size() > config_.queue_capacity) {
             state_.queued_targets.erase(state_.queued_targets.begin());
         }
-        if (state_.mode == FollowMode::following) {
+        if (state_.mode == FollowMode::Following) {
             activate(target);
         }
     }
@@ -110,11 +110,11 @@ FollowEditsResult FollowEditsModel::apply_navigation(
     const FollowNavigation& navigation) {
     const auto client = find_client(state_.clients, navigation.client);
     if (client == state_.clients.end()) {
-        return {FollowEditsError::unknown_client};
+        return {FollowEditsError::UnknownClient};
     }
 
-    if (navigation.classification == NavigationClass::user) {
-        state_.mode = FollowMode::paused;
+    if (navigation.classification == NavigationClass::User) {
+        state_.mode = FollowMode::Paused;
     }
     if (navigation.pane) {
         state_.active_pane = *navigation.pane;
@@ -127,14 +127,14 @@ FollowEditsResult FollowEditsModel::apply_navigation(
 }
 
 FollowEditsResult FollowEditsModel::pause() {
-    state_.mode = FollowMode::paused;
+    state_.mode = FollowMode::Paused;
     advance_generation();
     return {};
 }
 
 FollowEditsResult FollowEditsModel::resume(const DiffViewState& current_diff) {
     if (current_diff.revision < latest_source_revision_) {
-        return {FollowEditsError::stale_revision};
+        return {FollowEditsError::StaleRevision};
     }
 
     std::optional<FollowTarget> resolved;
@@ -151,7 +151,7 @@ FollowEditsResult FollowEditsModel::resume(const DiffViewState& current_diff) {
         }
     }
 
-    state_.mode = FollowMode::following;
+    state_.mode = FollowMode::Following;
     state_.queued_targets.clear();
     if (resolved) {
         activate(*resolved);
@@ -165,7 +165,7 @@ FollowEditsViewState FollowEditsModel::view_state() const {
 }
 
 FollowEditsFooterProjection FollowEditsModel::footer_projection() const {
-    if (state_.mode == FollowMode::paused) {
+    if (state_.mode == FollowMode::Paused) {
         return {"paused", config_.resume_binding, "follow_edits.resume"};
     }
     return {"following", std::nullopt, std::nullopt};

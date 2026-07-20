@@ -58,7 +58,7 @@ TEST(runtime_constructs_attaches_and_produces_live_snapshot) {
     if (!created.accepted()) return;
 
     auto& runtime = *created.runtime;
-    ssg::InvocationPrincipal principal{ssg::ClientId{7}, ssg::InvocationOrigin::in_process};
+    ssg::InvocationPrincipal principal{ssg::ClientId{7}, ssg::InvocationOrigin::InProcess};
     ASSERT_TRUE(runtime.attach(std::move(principal), ssg::ViewId{9}).accepted());
 
     auto snapshot = runtime.snapshot(ssg::ClientId{7}, ssg::ViewportDimensions{80, 24});
@@ -90,7 +90,7 @@ TEST(runtime_publishes_valid_curated_keymap) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
@@ -107,7 +107,7 @@ TEST(curated_keymap_bindings_are_argument_free) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     (void)runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"doc.txt"}});
     auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
@@ -141,7 +141,7 @@ TEST(curated_keymap_resolves_per_context) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
@@ -196,7 +196,7 @@ TEST(add_cursor_chord_produces_multiple_selections) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"m.txt"}}).accepted());
 
     // Resolve the add-cursor-down chord from the published keymap, then dispatch
@@ -206,7 +206,7 @@ TEST(add_cursor_chord_produces_multiple_selections) {
     if (!snapshot) return;
     const auto chord = *ssg::parse_key_sequence({"Escape", "KeyJ"});
     auto resolved = ssg::resolve_key_sequence(snapshot->sections().keymap, chord, "editor");
-    ASSERT_EQ(resolved.kind, ssg::KeymapMatchKind::resolved);
+    ASSERT_EQ(resolved.kind, ssg::KeymapMatchKind::Resolved);
     ASSERT_EQ(resolved.command_id, std::string{"select.add_cursor_down"});
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {resolved.command_id, runtime.revision(), {}}).accepted());
 
@@ -222,13 +222,13 @@ TEST(settings_open_focuses_a_settings_prompt) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"settings.open", runtime.revision(), {}}).accepted());
     auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     // The chord actually opens: focus moves to the prompt with a visible input.
-    ASSERT_EQ(snapshot->sections().shell.focus, ssg::FocusTarget::prompt);
+    ASSERT_EQ(snapshot->sections().shell.focus, ssg::FocusTarget::Prompt);
     ASSERT_TRUE(snapshot->sections().prompt_status.prompt.has_value());
 }
 

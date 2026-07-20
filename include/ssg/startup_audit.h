@@ -19,26 +19,26 @@
 namespace ssg {
 
 enum class OptionalSubsystem : std::uint8_t {
-    lua,
-    lsp,
-    tree_sitter_grammar,
-    filesystem_watcher,
-    http,
-    count_,  // sentinel; keep last. Ties optional_subsystem_count to the enum.
+    Lua,
+    Lsp,
+    TreeSitterGrammar,
+    FilesystemWatcher,
+    Http,
+    Count,  // sentinel; keep last. Ties optional_subsystem_count to the enum.
 };
 
 inline constexpr std::size_t optional_subsystem_count =
-    static_cast<std::size_t>(OptionalSubsystem::count_);
+    static_cast<std::size_t>(OptionalSubsystem::Count);
 
 // Independently sized (deduced from its initializers), then checked against the
 // enum-derived count: adding an OptionalSubsystem without listing it here fails
 // the static_assert, so the audit stays exhaustive.
 inline constexpr auto all_optional_subsystems = std::to_array({
-    OptionalSubsystem::lua,
-    OptionalSubsystem::lsp,
-    OptionalSubsystem::tree_sitter_grammar,
-    OptionalSubsystem::filesystem_watcher,
-    OptionalSubsystem::http,
+    OptionalSubsystem::Lua,
+    OptionalSubsystem::Lsp,
+    OptionalSubsystem::TreeSitterGrammar,
+    OptionalSubsystem::FilesystemWatcher,
+    OptionalSubsystem::Http,
 });
 static_assert(all_optional_subsystems.size() == optional_subsystem_count,
               "every OptionalSubsystem (before the count_ sentinel) must appear "

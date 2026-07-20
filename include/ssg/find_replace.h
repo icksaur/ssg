@@ -36,17 +36,17 @@ struct FindMatch {
 };
 
 enum class FindReplaceError : std::uint8_t {
-    none,
-    invalid_pattern,
-    invalid_utf8,
-    invalid_selection,
-    budget_exhausted,
-    cancelled,
-    no_match,
-    stale_revision,
-    document_rejected,
-    workspace_rejected,
-    recovery_rejected,
+    None,
+    InvalidPattern,
+    InvalidUtf8,
+    InvalidSelection,
+    BudgetExhausted,
+    Cancelled,
+    NoMatch,
+    StaleRevision,
+    DocumentRejected,
+    WorkspaceRejected,
+    RecoveryRejected,
 };
 
 struct FindRequest {
@@ -58,11 +58,11 @@ struct FindRequest {
 };
 
 struct FindResult {
-    FindReplaceError error = FindReplaceError::none;
+    FindReplaceError error = FindReplaceError::None;
     std::vector<FindMatch> matches;
     std::string message;
     [[nodiscard]] bool accepted() const noexcept {
-        return error == FindReplaceError::none;
+        return error == FindReplaceError::None;
     }
 };
 
@@ -70,21 +70,21 @@ struct FindResult {
                                       const FindRequest& request);
 
 enum class FindReplaceCommand : std::uint8_t {
-    find_open,
-    find_close,
-    find_next,
-    find_previous,
-    find_update_query,
-    find_toggle_case,
-    find_toggle_whole_word,
-    find_toggle_regex,
-    find_toggle_selection,
-    replace_open,
-    replace_update_replacement,
-    replace_current,
-    replace_all,
-    replace_workspace_preview,
-    replace_workspace_apply,
+    FindOpen,
+    FindClose,
+    FindNext,
+    FindPrevious,
+    FindUpdateQuery,
+    FindToggleCase,
+    FindToggleWholeWord,
+    FindToggleRegex,
+    FindToggleSelection,
+    ReplaceOpen,
+    ReplaceUpdateReplacement,
+    ReplaceCurrent,
+    ReplaceAll,
+    ReplaceWorkspacePreview,
+    ReplaceWorkspaceApply,
 };
 
 // The typed argument for find.update_query / replace.update_replacement: the full
@@ -125,7 +125,7 @@ struct FindReplaceViewState {
     FindOptions options;
     std::vector<FindMatch> matches;
     std::optional<std::size_t> active_match;
-    FindReplaceError error = FindReplaceError::none;
+    FindReplaceError error = FindReplaceError::None;
     std::string message;
     bool operator==(const FindReplaceViewState&) const = default;
 };
@@ -138,13 +138,13 @@ struct FindReplaceDelta {
 };
 
 enum class FindReplaceReplayError : std::uint8_t {
-    none,
-    base_mismatch,
-    malformed_delta,
+    None,
+    BaseMismatch,
+    MalformedDelta,
 };
 
 struct FindReplaceReplayResult {
-    FindReplaceReplayError error = FindReplaceReplayError::none;
+    FindReplaceReplayError error = FindReplaceReplayError::None;
     FindReplaceViewState state;
 };
 
@@ -154,11 +154,11 @@ struct FindReplaceReplayResult {
     const FindReplaceViewState& base, const FindReplaceDelta& delta);
 
 struct FindReplaceOperationResult {
-    FindReplaceError error = FindReplaceError::none;
+    FindReplaceError error = FindReplaceError::None;
     Revision revision{0};
     std::string message;
     [[nodiscard]] bool accepted() const noexcept {
-        return error == FindReplaceError::none;
+        return error == FindReplaceError::None;
     }
 };
 
@@ -237,11 +237,11 @@ public:
 };
 
 struct WorkspaceApplyResult {
-    FindReplaceError error = FindReplaceError::none;
+    FindReplaceError error = FindReplaceError::None;
     Revision revision{0};
     std::string message;
     [[nodiscard]] bool accepted() const noexcept {
-        return error == FindReplaceError::none;
+        return error == FindReplaceError::None;
     }
 };
 
@@ -258,11 +258,11 @@ public:
 };
 
 struct WorkspacePreviewResult {
-    FindReplaceError error = FindReplaceError::none;
+    FindReplaceError error = FindReplaceError::None;
     std::optional<WorkspaceReplacePreview> preview;
     std::string message;
     [[nodiscard]] bool accepted() const noexcept {
-        return error == FindReplaceError::none;
+        return error == FindReplaceError::None;
     }
 };
 

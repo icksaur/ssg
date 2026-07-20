@@ -47,7 +47,7 @@ TEST(validate_keymap_flags_duplicate_unreachable_and_reserved_bindings) {
                 {sequence, "cursor.right", "editor"}}};
     const auto duplicate_errors = ssg::validate_keymap(duplicate, {});
     ASSERT_TRUE(std::ranges::any_of(duplicate_errors, [](const auto& error) {
-        return error.code == ssg::KeymapErrorCode::duplicate_binding;
+        return error.code == ssg::KeymapErrorCode::DuplicateBinding;
     }));
 
     ssg::KeymapViewState unreachable{
@@ -55,7 +55,7 @@ TEST(validate_keymap_flags_duplicate_unreachable_and_reserved_bindings) {
                 {sequence, "cursor.right", "editor"}}};
     const auto unreachable_errors = ssg::validate_keymap(unreachable, {});
     ASSERT_TRUE(std::ranges::any_of(unreachable_errors, [](const auto& error) {
-        return error.code == ssg::KeymapErrorCode::unreachable_binding;
+        return error.code == ssg::KeymapErrorCode::UnreachableBinding;
     }));
 
     const auto reserved = *ssg::parse_key_sequence({"Ctrl+KeyL"});
@@ -64,7 +64,7 @@ TEST(validate_keymap_flags_duplicate_unreachable_and_reserved_bindings) {
     const auto reserved_errors =
         ssg::validate_keymap(reserved_map, {&reserved, 1});
     ASSERT_TRUE(std::ranges::any_of(reserved_errors, [](const auto& error) {
-        return error.code == ssg::KeymapErrorCode::reserved_binding;
+        return error.code == ssg::KeymapErrorCode::ReservedBinding;
     }));
     const auto longer = *ssg::parse_key_sequence({"Ctrl+KeyL", "KeyA"});
     ssg::KeymapViewState reserved_prefix_map{
@@ -72,7 +72,7 @@ TEST(validate_keymap_flags_duplicate_unreachable_and_reserved_bindings) {
     const auto prefix_errors =
         ssg::validate_keymap(reserved_prefix_map, {&reserved, 1});
     ASSERT_TRUE(std::ranges::any_of(prefix_errors, [](const auto& error) {
-        return error.code == ssg::KeymapErrorCode::reserved_binding;
+        return error.code == ssg::KeymapErrorCode::ReservedBinding;
     }));
 }
 
@@ -81,11 +81,11 @@ TEST(keymap_contexts_are_star_plus_focus_names) {
     std::set<std::string_view> actual{contexts.begin(), contexts.end()};
     const std::set<std::string_view> expected{"*", "editor", "panel", "prompt"};
     ASSERT_TRUE(actual == expected);
-    ASSERT_EQ(ssg::focus_target_name(ssg::FocusTarget::editor),
+    ASSERT_EQ(ssg::focus_target_name(ssg::FocusTarget::Editor),
               std::string_view{"editor"});
-    ASSERT_EQ(ssg::focus_target_name(ssg::FocusTarget::panel),
+    ASSERT_EQ(ssg::focus_target_name(ssg::FocusTarget::Panel),
               std::string_view{"panel"});
-    ASSERT_EQ(ssg::focus_target_name(ssg::FocusTarget::prompt),
+    ASSERT_EQ(ssg::focus_target_name(ssg::FocusTarget::Prompt),
               std::string_view{"prompt"});
 }
 
@@ -103,12 +103,12 @@ TEST(validate_keymap_rejects_unknown_context) {
     const auto seq = *ssg::parse_key_sequence({"ArrowDown"});
     ssg::KeymapViewState bad{"bad", {{seq, "cursor.line_down", "sidebar"}}};
     ASSERT_TRUE(
-        has_error(ssg::validate_keymap(bad, {}), ssg::KeymapErrorCode::unknown_context));
+        has_error(ssg::validate_keymap(bad, {}), ssg::KeymapErrorCode::UnknownContext));
 
     for (const auto context : {"*", "editor", "panel", "prompt"}) {
         ssg::KeymapViewState good{"ok", {{seq, "cursor.line_down", context}}};
         ASSERT_FALSE(has_error(ssg::validate_keymap(good, {}),
-                               ssg::KeymapErrorCode::unknown_context));
+                               ssg::KeymapErrorCode::UnknownContext));
     }
 }
 
@@ -122,27 +122,27 @@ TEST(validate_keymap_rejects_ambiguous_prefix_order_independently) {
     ssg::KeymapViewState reversed{
         "m", {{esc_f_t, "b", "*"}, {esc_f, "a", "*"}}};
     ASSERT_TRUE(has_error(ssg::validate_keymap(forward, {}),
-                          ssg::KeymapErrorCode::ambiguous_prefix));
+                          ssg::KeymapErrorCode::AmbiguousPrefix));
     ASSERT_TRUE(has_error(ssg::validate_keymap(reversed, {}),
-                          ssg::KeymapErrorCode::ambiguous_prefix));
+                          ssg::KeymapErrorCode::AmbiguousPrefix));
 
     // "*"/focus overlap: a global prefix and a focus continuation collide.
     ssg::KeymapViewState star_focus{
         "m", {{esc_f, "a", "*"}, {esc_f_t, "b", "editor"}}};
     ASSERT_TRUE(has_error(ssg::validate_keymap(star_focus, {}),
-                          ssg::KeymapErrorCode::ambiguous_prefix));
+                          ssg::KeymapErrorCode::AmbiguousPrefix));
 
     // focus/focus in the SAME context collide.
     ssg::KeymapViewState focus_focus{
         "m", {{esc_f, "a", "editor"}, {esc_f_t, "b", "editor"}}};
     ASSERT_TRUE(has_error(ssg::validate_keymap(focus_focus, {}),
-                          ssg::KeymapErrorCode::ambiguous_prefix));
+                          ssg::KeymapErrorCode::AmbiguousPrefix));
 
     // DIFFERENT focus contexts do not overlap, so a prefix pair is allowed.
     ssg::KeymapViewState disjoint{
         "m", {{esc_f, "a", "editor"}, {esc_f_t, "b", "panel"}}};
     ASSERT_FALSE(has_error(ssg::validate_keymap(disjoint, {}),
-                           ssg::KeymapErrorCode::ambiguous_prefix));
+                           ssg::KeymapErrorCode::AmbiguousPrefix));
 }
 
 TEST(resolve_key_sequence_maps_same_key_per_context) {
@@ -153,16 +153,16 @@ TEST(resolve_key_sequence_maps_same_key_per_context) {
          {down, "tree.select_next", "panel"}}};
 
     const auto in_editor = ssg::resolve_key_sequence(keymap, down, "editor");
-    ASSERT_EQ(in_editor.kind, ssg::KeymapMatchKind::resolved);
+    ASSERT_EQ(in_editor.kind, ssg::KeymapMatchKind::Resolved);
     ASSERT_EQ(in_editor.command_id, std::string{"cursor.line_down"});
 
     const auto in_panel = ssg::resolve_key_sequence(keymap, down, "panel");
-    ASSERT_EQ(in_panel.kind, ssg::KeymapMatchKind::resolved);
+    ASSERT_EQ(in_panel.kind, ssg::KeymapMatchKind::Resolved);
     ASSERT_EQ(in_panel.command_id, std::string{"tree.select_next"});
 
     // No eligible binding in prompt context.
     ASSERT_EQ(ssg::resolve_key_sequence(keymap, down, "prompt").kind,
-              ssg::KeymapMatchKind::none);
+              ssg::KeymapMatchKind::None);
 }
 
 TEST(resolve_key_sequence_star_beats_focus_and_resolves_everywhere) {
@@ -176,7 +176,7 @@ TEST(resolve_key_sequence_star_beats_focus_and_resolves_everywhere) {
     for (const auto* keymap : {&focus_first, &star_first}) {
         for (const auto context : {"editor", "panel", "prompt"}) {
             const auto r = ssg::resolve_key_sequence(*keymap, save, context);
-            ASSERT_EQ(r.kind, ssg::KeymapMatchKind::resolved);
+            ASSERT_EQ(r.kind, ssg::KeymapMatchKind::Resolved);
             ASSERT_EQ(r.command_id, std::string{"file.save"});
         }
     }
@@ -189,20 +189,20 @@ TEST(resolve_key_sequence_reports_pending_and_none) {
     ssg::KeymapViewState keymap{"m", {{esc_s, "file.save", "*"}}};
 
     ASSERT_EQ(ssg::resolve_key_sequence(keymap, esc, "editor").kind,
-              ssg::KeymapMatchKind::pending);
+              ssg::KeymapMatchKind::Pending);
     ASSERT_EQ(ssg::resolve_key_sequence(keymap, esc_s, "editor").kind,
-              ssg::KeymapMatchKind::resolved);
+              ssg::KeymapMatchKind::Resolved);
     ASSERT_EQ(ssg::resolve_key_sequence(keymap, esc_x, "editor").kind,
-              ssg::KeymapMatchKind::none);
+              ssg::KeymapMatchKind::None);
     ASSERT_EQ(ssg::resolve_key_sequence(keymap, {}, "editor").kind,
-              ssg::KeymapMatchKind::none);
+              ssg::KeymapMatchKind::None);
 }
 
 TEST(text_routing_is_per_context) {
-    ASSERT_EQ(ssg::text_routing("editor"), ssg::TextRouting::insert);
-    ASSERT_EQ(ssg::text_routing("prompt"), ssg::TextRouting::prompt_query);
-    ASSERT_EQ(ssg::text_routing("panel"), ssg::TextRouting::ignore);
-    ASSERT_EQ(ssg::text_routing("*"), ssg::TextRouting::ignore);
+    ASSERT_EQ(ssg::text_routing("editor"), ssg::TextRouting::Insert);
+    ASSERT_EQ(ssg::text_routing("prompt"), ssg::TextRouting::PromptQuery);
+    ASSERT_EQ(ssg::text_routing("panel"), ssg::TextRouting::Ignore);
+    ASSERT_EQ(ssg::text_routing("*"), ssg::TextRouting::Ignore);
 }
 
 TEST(has_global_binding_requires_unreserved_unshadowed_star) {
@@ -235,9 +235,9 @@ TEST(validate_keymap_flags_global_shadow_regardless_of_order) {
     ssg::KeymapViewState focus_first{
         "m", {{seq, "focus.only", "editor"}, {seq, "file.save", "*"}}};
     ASSERT_TRUE(has_error(ssg::validate_keymap(global_first, {}),
-                          ssg::KeymapErrorCode::unreachable_binding));
+                          ssg::KeymapErrorCode::UnreachableBinding));
     ASSERT_TRUE(has_error(ssg::validate_keymap(focus_first, {}),
-                          ssg::KeymapErrorCode::unreachable_binding));
+                          ssg::KeymapErrorCode::UnreachableBinding));
 }
 
 TEST(resolver_and_has_global_binding_agree_on_duplicate_globals) {
@@ -250,7 +250,7 @@ TEST(resolver_and_has_global_binding_agree_on_duplicate_globals) {
         ssg::KeymapViewState keymap{
             "m", {{seq, first, "*"}, {seq, second, "*"}}};
         const auto resolved = ssg::resolve_key_sequence(keymap, seq, "editor");
-        ASSERT_EQ(resolved.kind, ssg::KeymapMatchKind::resolved);
+        ASSERT_EQ(resolved.kind, ssg::KeymapMatchKind::Resolved);
         // First "*" binding wins in both functions.
         ASSERT_EQ(resolved.command_id, first);
         ASSERT_EQ(ssg::has_global_binding(keymap, first, {}), true);
@@ -284,7 +284,7 @@ TEST(hit_targets_round_trip_typed_semantic_arguments) {
                                            ssg::CellIndex{4}},
                                        std::nullopt}};
     const ssg::SemanticHitTarget target{
-        42, ssg::HitTargetKind::editor_cell, "document cell", command};
+        42, ssg::HitTargetKind::EditorCell, "document cell", command};
     ASSERT_EQ(ssg::activate_hit_target(target), command);
 
     const auto& arguments =
@@ -299,7 +299,7 @@ TEST(hit_targets_round_trip_typed_semantic_arguments) {
     const ssg::SemanticCommand scroll{
         "view.scroll_to_fraction", ssg::ScrollFractionArguments{3, 7}};
     const ssg::SemanticHitTarget scrollbar{
-        43, ssg::HitTargetKind::scrollbar, "scrollbar", scroll};
+        43, ssg::HitTargetKind::Scrollbar, "scrollbar", scroll};
     ASSERT_EQ(ssg::activate_hit_target(scrollbar), scroll);
 }
 

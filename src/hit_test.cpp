@@ -35,7 +35,7 @@ RegionHit editor_hit(SessionSnapshot const& snapshot, Rect const& content,
         if (target.viewport_row == viewport_row &&
             target.viewport_column == viewport_column) {
             RegionHit hit;
-            hit.region = HitRegion::editor;
+            hit.region = HitRegion::Editor;
             hit.byte_offset = target.byte_offset;
             hit.byte_len = target.byte_len;
             return hit;
@@ -53,7 +53,7 @@ RegionHit editor_hit(SessionSnapshot const& snapshot, Rect const& content,
             ? viewport.visible_rows[viewport_row]
             : viewport.visible_rows.back();
     RegionHit hit;
-    hit.region = HitRegion::editor;
+    hit.region = HitRegion::Editor;
     hit.byte_offset = target_row.end_byte_offset;
     hit.byte_len = 0;
     return hit;
@@ -61,14 +61,14 @@ RegionHit editor_hit(SessionSnapshot const& snapshot, Rect const& content,
 
 RegionHit palette_hit(PaletteProjection const& palette, int column, int row) {
     if (contains(palette.scrollbar_rect, column, row)) {
-        return scrollbar_hit(HitRegion::palette_scrollbar, palette.scrollbar_rect,
+        return scrollbar_hit(HitRegion::PaletteScrollbar, palette.scrollbar_rect,
                              row);
     }
     if (!contains(palette.rect, column, row)) return {};
     auto const window_index = static_cast<std::size_t>(row - palette.rect.y);
     if (window_index >= palette.rows.size()) return {};
     RegionHit hit;
-    hit.region = HitRegion::palette;
+    hit.region = HitRegion::Palette;
     hit.item_index =
         palette.first_visible + static_cast<std::uint32_t>(window_index);
     return hit;
@@ -77,7 +77,7 @@ RegionHit palette_hit(PaletteProjection const& palette, int column, int row) {
 RegionHit panel_hit(SessionSnapshot const& snapshot, Rect const& panel,
                     std::optional<Rect> const& gutter, int column, int row) {
     if (gutter && contains(*gutter, column, row)) {
-        return scrollbar_hit(HitRegion::panel_scrollbar, *gutter, row);
+        return scrollbar_hit(HitRegion::PanelScrollbar, *gutter, row);
     }
     if (row == panel.y) return {};
     auto const& tree = snapshot.sections().tree;
@@ -86,7 +86,7 @@ RegionHit panel_hit(SessionSnapshot const& snapshot, Rect const& panel,
     auto const viewport_row = static_cast<std::size_t>(row - (panel.y + 1));
     if (viewport_row >= provider.visible_node_ids.size()) return {};
     RegionHit hit;
-    hit.region = HitRegion::panel;
+    hit.region = HitRegion::Panel;
     hit.node_id = provider.visible_node_ids[viewport_row];
     return hit;
 }
@@ -113,7 +113,7 @@ RegionHit hit_test(SessionSnapshot const& snapshot, int column, int row) {
     for (auto const& tab : shell.tab_hits) {
         if (contains(tab.rect, column, row)) {
             RegionHit hit;
-            hit.region = HitRegion::tab;
+            hit.region = HitRegion::Tab;
             hit.tab_index = tab.index;
             return hit;
         }
@@ -135,7 +135,7 @@ RegionHit hit_test(SessionSnapshot const& snapshot, int column, int row) {
     if (!shell.panes.empty()) {
         auto const& pane = shell.panes.front();
         if (contains(pane.scrollbar, column, row)) {
-            return scrollbar_hit(HitRegion::editor_scrollbar, pane.scrollbar,
+            return scrollbar_hit(HitRegion::EditorScrollbar, pane.scrollbar,
                                  row);
         }
         if (contains(pane.content, column, row)) {

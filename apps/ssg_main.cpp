@@ -223,7 +223,7 @@ int main(int argc, char** argv) {
     STARTUP_MARK("post_create");
 
     ssg::ClientId client{1};
-    if (!runtime.attach({client, ssg::InvocationOrigin::in_process}, ssg::ViewId{1})
+    if (!runtime.attach({client, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1})
              .accepted()) {
         std::fprintf(stderr, "ssg: failed to attach client\n");
         return 1;
@@ -291,7 +291,7 @@ int main(int argc, char** argv) {
     std::string buffer;             // Raw bytes read but not yet decoded.
     ssg::KeySequence chord;         // The pending (mid-entry) key chord.
     bool quit = false;
-    auto focus = ssg::FocusTarget::editor;
+    auto focus = ssg::FocusTarget::Editor;
     // Client-owned palette state: query and selection are local (reported for
     // library presentation), ranked against the server's published candidates.
     bool palette_open = false;
@@ -385,18 +385,18 @@ int main(int argc, char** argv) {
     // candidate / rejected execute) leaves the prompt open rather than
     // desynchronizing the client.
     auto dispatch_resolved = [&](std::string const& id) {
-        if (find_open && focus == ssg::FocusTarget::prompt) {
+        if (find_open && focus == ssg::FocusTarget::Prompt) {
             if (id == "prompt.submit" || id == "palette.next") { dispatch("find.next"); return; }
             if (id == "palette.previous") { dispatch("find.previous"); return; }
             if (id == "prompt.cancel") { dispatch("find.close"); return; }
         }
-        if (replace_open && focus == ssg::FocusTarget::prompt) {
+        if (replace_open && focus == ssg::FocusTarget::Prompt) {
             if (id == "prompt.submit") { dispatch("replace.current"); return; }
             if (id == "palette.next") { dispatch("find.next"); return; }
             if (id == "palette.previous") { dispatch("find.previous"); return; }
             if (id == "prompt.cancel") { dispatch("find.close"); return; }
         }
-        if (palette_open && focus == ssg::FocusTarget::prompt) {
+        if (palette_open && focus == ssg::FocusTarget::Prompt) {
             if (id == "prompt.submit") { execute_selected_candidate(); return; }
             if (id == "prompt.cancel") { dispatch("palette.close"); return; }
             if (id == "palette.next") { ++palette_selected; reveal_palette_selection(); return; }
@@ -413,15 +413,15 @@ int main(int argc, char** argv) {
     };
     auto route_text = [&](std::string const& text) {
         switch (ssg::text_routing(ssg::focus_target_name(focus))) {
-        case ssg::TextRouting::insert:
+        case ssg::TextRouting::Insert:
             dispatch("text.insert", ssg::TextInputArguments{text});
             break;
-        case ssg::TextRouting::prompt_query:
+        case ssg::TextRouting::PromptQuery:
             if (palette_open) { palette_query += text; palette_selected = 0; reveal_palette_selection(); }
             else if (replace_open) { dispatch("replace.update_replacement", ssg::FindQueryArguments{replace_replacement + text}); }
             else if (find_open) { dispatch("find.update_query", ssg::FindQueryArguments{find_query + text}); }
             break;
-        case ssg::TextRouting::ignore:
+        case ssg::TextRouting::Ignore:
             break;
         }
     };
@@ -453,7 +453,7 @@ int main(int argc, char** argv) {
             focus = snapshot->sections().shell.focus;
             keymap = snapshot->sections().keymap;
             candidates = snapshot->sections().palette.candidates;
-            if (focus != ssg::FocusTarget::prompt) palette_open = false;
+            if (focus != ssg::FocusTarget::Prompt) palette_open = false;
             // Cache the palette pane height for the next window computation: the
             // palette pane is the editor pane, so this is populated every frame,
             // including before the palette opens (no cold start). The window is
@@ -473,12 +473,12 @@ int main(int argc, char** argv) {
             auto const& find_view = snapshot->sections().find_replace;
             auto const& active_prompt = snapshot->sections().prompt_status.prompt;
             bool const find_prompt_active =
-                active_prompt && active_prompt->kind == ssg::PromptKind::find;
+                active_prompt && active_prompt->kind == ssg::PromptKind::Find;
             find_open = find_view.open && find_prompt_active;
             find_query = find_view.query;
             // The replace prompt edits the replacement, not the query.
             bool const replace_prompt_active =
-                active_prompt && active_prompt->kind == ssg::PromptKind::replace;
+                active_prompt && active_prompt->kind == ssg::PromptKind::Replace;
             replace_open = find_view.open && replace_prompt_active;
             replace_replacement = find_view.replacement;
         }
@@ -549,7 +549,7 @@ int main(int argc, char** argv) {
                     int const column = std::clamp(last_pointer_column, content.x,
                                                   content.right() - 1);
                     auto hit = ssg::hit_test(*scrolled, column, edge_row);
-                    if (hit.region == ssg::HitRegion::editor) {
+                    if (hit.region == ssg::HitRegion::Editor) {
                         auto active = ssg::resolve_document_position(
                             scrolled->sections().document.text,
                             ssg::ByteOffset{hit.byte_offset});
@@ -621,16 +621,16 @@ int main(int argc, char** argv) {
                 if (snapshot) {
                     hit = ssg::hit_test(*snapshot, decoded.pointer.column,
                                         decoded.pointer.row);
-                    if (hit.region == ssg::HitRegion::editor) {
+                    if (hit.region == ssg::HitRegion::Editor) {
                         targets.document_position = ssg::resolve_document_position(
                             snapshot->sections().document.text,
                             ssg::ByteOffset{hit.byte_offset});
-                    } else if (hit.region == ssg::HitRegion::tab) {
+                    } else if (hit.region == ssg::HitRegion::Tab) {
                         auto const& tabs = snapshot->sections().tabs.tabs;
                         if (hit.tab_index < tabs.size()) {
                             targets.tab_id = tabs[hit.tab_index].id;
                         }
-                    } else if (hit.region == ssg::HitRegion::palette) {
+                    } else if (hit.region == ssg::HitRegion::Palette) {
                         // Map the absolute rank index to its candidate id using
                         // the same ranked order the client renders.
                         auto order = ssg::palette_rank(candidates, palette_query);
@@ -663,7 +663,7 @@ int main(int argc, char** argv) {
                 // Route the wheel to the region under the pointer: the side panel
                 // scrolls its tree, the open palette scrolls its client-owned
                 // window, everything else scrolls the editor document.
-                ssg::HitRegion region = ssg::HitRegion::none;
+                ssg::HitRegion region = ssg::HitRegion::None;
                 if (snapshot) {
                     region = ssg::hit_test(*snapshot, decoded.pointer.column,
                                            decoded.pointer.row).region;
@@ -704,10 +704,10 @@ int main(int argc, char** argv) {
             chord.push_back(decoded.stroke);
             auto resolution = ssg::resolve_key_sequence(
                 keymap, chord, ssg::focus_target_name(focus));
-            if (resolution.kind == ssg::KeymapMatchKind::resolved) {
+            if (resolution.kind == ssg::KeymapMatchKind::Resolved) {
                 dispatch_resolved(resolution.command_id);
                 chord.clear();
-            } else if (resolution.kind == ssg::KeymapMatchKind::pending) {
+            } else if (resolution.kind == ssg::KeymapMatchKind::Pending) {
                 // Keep collecting; the leader hint renders next frame.
             } else {
                 // No binding.  Quit is the sole app-local chord (process
@@ -720,17 +720,17 @@ int main(int argc, char** argv) {
                 chord.clear();
                 if (quit_chord) {
                     quit = true;
-                } else if (palette_open && focus == ssg::FocusTarget::prompt &&
+                } else if (palette_open && focus == ssg::FocusTarget::Prompt &&
                            stroke.code == "Backspace") {
                     pop_code_point(palette_query);
                     palette_selected = 0;
                     reveal_palette_selection();
-                } else if (find_open && focus == ssg::FocusTarget::prompt &&
+                } else if (find_open && focus == ssg::FocusTarget::Prompt &&
                            stroke.code == "Backspace") {
                     auto next = find_query;
                     pop_code_point(next);
                     dispatch("find.update_query", ssg::FindQueryArguments{next});
-                } else if (replace_open && focus == ssg::FocusTarget::prompt &&
+                } else if (replace_open && focus == ssg::FocusTarget::Prompt &&
                            stroke.code == "Backspace") {
                     auto next = replace_replacement;
                     pop_code_point(next);

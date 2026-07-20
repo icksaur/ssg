@@ -29,49 +29,49 @@ ssg::SelectionSet selections(
 }
 
 ssg::TextInputSettings text_settings() {
-    return {ssg::IndentStyle::spaces, 4, false, ssg::LineEnding::lf};
+    return {ssg::IndentStyle::Spaces, 4, false, ssg::LineEnding::Lf};
 }
 
 ssg::EditCommandSettings edit_settings() {
-    return {ssg::IndentStyle::spaces, 2, 2, ssg::LineEnding::lf, "//"};
+    return {ssg::IndentStyle::Spaces, 2, 2, ssg::LineEnding::Lf, "//"};
 }
 
 TEST(every_mutating_command_has_the_specified_history_kind) {
-    ASSERT_EQ(ssg::history_edit_kind(ssg::TextInputCommand::insert),
-              ssg::HistoryEditKind::typing);
+    ASSERT_EQ(ssg::history_edit_kind(ssg::TextInputCommand::Insert),
+              ssg::HistoryEditKind::Typing);
     ASSERT_EQ(ssg::history_edit_kind(
-                  ssg::TextInputCommand::delete_backward),
-              ssg::HistoryEditKind::delete_backward);
+                  ssg::TextInputCommand::DeleteBackward),
+              ssg::HistoryEditKind::DeleteBackward);
     ASSERT_EQ(ssg::history_edit_kind(
-                  ssg::TextInputCommand::delete_word_backward),
-              ssg::HistoryEditKind::delete_backward);
+                  ssg::TextInputCommand::DeleteWordBackward),
+              ssg::HistoryEditKind::DeleteBackward);
     ASSERT_EQ(ssg::history_edit_kind(
-                  ssg::TextInputCommand::delete_forward),
-              ssg::HistoryEditKind::delete_forward);
+                  ssg::TextInputCommand::DeleteForward),
+              ssg::HistoryEditKind::DeleteForward);
     ASSERT_EQ(ssg::history_edit_kind(
-                  ssg::TextInputCommand::delete_word_forward),
-              ssg::HistoryEditKind::delete_forward);
-    ASSERT_EQ(ssg::history_edit_kind(ssg::TextInputCommand::newline),
-              ssg::HistoryEditKind::other);
+                  ssg::TextInputCommand::DeleteWordForward),
+              ssg::HistoryEditKind::DeleteForward);
+    ASSERT_EQ(ssg::history_edit_kind(ssg::TextInputCommand::Newline),
+              ssg::HistoryEditKind::Other);
 
     constexpr std::array edit_commands{
-        ssg::EditCommand::indent,
-        ssg::EditCommand::outdent,
-        ssg::EditCommand::duplicate_line,
-        ssg::EditCommand::move_line_up,
-        ssg::EditCommand::move_line_down,
-        ssg::EditCommand::delete_line,
-        ssg::EditCommand::join_lines,
-        ssg::EditCommand::uppercase,
-        ssg::EditCommand::lowercase,
-        ssg::EditCommand::swap_case,
-        ssg::EditCommand::sort_lines,
-        ssg::EditCommand::transpose,
-        ssg::EditCommand::toggle_comment,
+        ssg::EditCommand::Indent,
+        ssg::EditCommand::Outdent,
+        ssg::EditCommand::DuplicateLine,
+        ssg::EditCommand::MoveLineUp,
+        ssg::EditCommand::MoveLineDown,
+        ssg::EditCommand::DeleteLine,
+        ssg::EditCommand::JoinLines,
+        ssg::EditCommand::Uppercase,
+        ssg::EditCommand::Lowercase,
+        ssg::EditCommand::SwapCase,
+        ssg::EditCommand::SortLines,
+        ssg::EditCommand::Transpose,
+        ssg::EditCommand::ToggleComment,
     };
     for (const auto command : edit_commands) {
         ASSERT_EQ(ssg::history_edit_kind(command),
-                  ssg::HistoryEditKind::other);
+                  ssg::HistoryEditKind::Other);
     }
 }
 
@@ -81,21 +81,21 @@ TEST(noop_and_rejected_commands_do_not_create_history) {
     const auto at_start = selections("x", {{0, 0}});
     const auto noop = ssg::apply_text_input_with_history(
         document, history, at_start, text_settings(),
-        ssg::TextInputCommand::delete_backward, {}, 100);
+        ssg::TextInputCommand::DeleteBackward, {}, 100);
     ASSERT_TRUE(noop.accepted());
     ASSERT_FALSE(noop.document_changed());
     ASSERT_EQ(noop.selections, std::optional{at_start});
     ASSERT_FALSE(history.can_undo());
 
-    ssg::Document read_only{"x", ssg::DocumentMode::read_only};
+    ssg::Document read_only{"x", ssg::DocumentMode::ReadOnly};
     const auto rejected = ssg::apply_text_input_with_history(
         read_only, history, at_start, text_settings(),
-        ssg::TextInputCommand::insert, {"y"}, 200);
+        ssg::TextInputCommand::Insert, {"y"}, 200);
     ASSERT_FALSE(rejected.accepted());
     ASSERT_EQ(rejected.error,
-              ssg::EditHistoryIntegrationError::text_input_rejected);
+              ssg::EditHistoryIntegrationError::TextInputRejected);
     ASSERT_EQ(rejected.text_input_error,
-              std::optional{ssg::TextInputError::read_only});
+              std::optional{ssg::TextInputError::ReadOnly});
     ASSERT_EQ(read_only.snapshot().text, std::string{"x"});
     ASSERT_FALSE(history.can_undo());
 }
@@ -107,19 +107,19 @@ TEST(text_input_sequence_has_hand_authored_undo_boundaries) {
 
     auto result = ssg::apply_text_input_with_history(
         document, history, current, text_settings(),
-        ssg::TextInputCommand::insert, {"a"}, 100);
+        ssg::TextInputCommand::Insert, {"a"}, 100);
     ASSERT_TRUE(result.accepted());
     current = *result.selections;
     result = ssg::apply_text_input_with_history(
         document, history, current, text_settings(),
-        ssg::TextInputCommand::insert, {"b"}, 200);
+        ssg::TextInputCommand::Insert, {"b"}, 200);
     ASSERT_TRUE(result.accepted());
     current = *result.selections;
     ASSERT_EQ(document.snapshot().text, std::string{"wordab"});
 
     result = ssg::apply_text_input_with_history(
         document, history, current, text_settings(),
-        ssg::TextInputCommand::newline, {}, 300);
+        ssg::TextInputCommand::Newline, {}, 300);
     ASSERT_TRUE(result.accepted());
     current = *result.selections;
     ASSERT_EQ(document.snapshot().text, std::string{"wordab\n"});
@@ -141,12 +141,12 @@ TEST(word_and_character_delete_coalesce_by_direction) {
 
     auto result = ssg::apply_text_input_with_history(
         document, history, current, text_settings(),
-        ssg::TextInputCommand::delete_backward, {}, 100);
+        ssg::TextInputCommand::DeleteBackward, {}, 100);
     ASSERT_TRUE(result.accepted());
     current = *result.selections;
     result = ssg::apply_text_input_with_history(
         document, history, current, text_settings(),
-        ssg::TextInputCommand::delete_word_backward, {}, 200);
+        ssg::TextInputCommand::DeleteWordBackward, {}, 200);
     ASSERT_TRUE(result.accepted());
     ASSERT_EQ(document.snapshot().text, std::string{"one "});
 
@@ -163,12 +163,12 @@ TEST(line_transform_is_a_history_barrier_and_restores_selection) {
 
     auto typed = ssg::apply_text_input_with_history(
         document, history, current, text_settings(),
-        ssg::TextInputCommand::insert, {"x"}, 100);
+        ssg::TextInputCommand::Insert, {"x"}, 100);
     ASSERT_TRUE(typed.accepted());
     current = *typed.selections;
     const auto transformed = ssg::apply_edit_command_with_history(
         document, history, current, edit_settings(),
-        ssg::EditCommand::duplicate_line, 200);
+        ssg::EditCommand::DuplicateLine, 200);
     ASSERT_TRUE(transformed.accepted());
     ASSERT_EQ(document.snapshot().text, std::string{"xa\nxa\nb\n"});
 
@@ -194,7 +194,7 @@ TEST(clipboard_and_replace_are_distinct_noncoalescing_units) {
     current = *cut.selections;
 
     const auto paste = clipboard.paste(
-        document, history, current, ssg::ClipboardPasteMode::internal_only,
+        document, history, current, ssg::ClipboardPasteMode::InternalOnly,
         200);
     ASSERT_TRUE(paste.accepted());
     ASSERT_EQ(document.snapshot().text, std::string{"cat cat"});

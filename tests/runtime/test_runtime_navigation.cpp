@@ -26,7 +26,7 @@ TEST(search_tree_diff_and_follow_sections_use_runtime_state) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"search.workspace", runtime.revision(), std::string{"needle"}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"follow_edits.pause", runtime.revision(), {}}).accepted());
@@ -34,7 +34,7 @@ TEST(search_tree_diff_and_follow_sections_use_runtime_state) {
     ASSERT_TRUE(snapshot.has_value());
     ASSERT_FALSE(snapshot->sections().search.results.empty());
     ASSERT_FALSE(snapshot->sections().tree.providers.empty());
-    ASSERT_EQ(snapshot->sections().follow_edits.mode, ssg::FollowMode::paused);
+    ASSERT_EQ(snapshot->sections().follow_edits.mode, ssg::FollowMode::Paused);
 }
 
 TEST(palette_open_enters_prompt_focus_and_publishes_candidates) {
@@ -43,20 +43,20 @@ TEST(palette_open_enters_prompt_focus_and_publishes_candidates) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.open", runtime.revision(), {}}).accepted());
     auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_EQ(snapshot->sections().shell.focus, ssg::FocusTarget::prompt);
+    ASSERT_EQ(snapshot->sections().shell.focus, ssg::FocusTarget::Prompt);
     ASSERT_FALSE(snapshot->sections().palette.candidates.empty());
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.close", runtime.revision(), {}}).accepted());
     auto closed = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(closed.has_value());
     if (!closed) return;
-    ASSERT_EQ(closed->sections().shell.focus, ssg::FocusTarget::editor);
+    ASSERT_EQ(closed->sections().shell.focus, ssg::FocusTarget::Editor);
 }
 
 TEST(palette_execute_validates_candidate_membership) {
@@ -65,7 +65,7 @@ TEST(palette_execute_validates_candidate_membership) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"needle.txt"}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.open", runtime.revision(), {}}).accepted());
@@ -79,7 +79,7 @@ TEST(palette_execute_validates_candidate_membership) {
     auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_EQ(snapshot->sections().shell.focus, ssg::FocusTarget::editor);
+    ASSERT_EQ(snapshot->sections().shell.focus, ssg::FocusTarget::Editor);
 }
 
 TEST(palette_candidates_carry_labels_and_key_detail) {
@@ -88,7 +88,7 @@ TEST(palette_candidates_carry_labels_and_key_detail) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
@@ -140,7 +140,7 @@ TEST(tree_scrolls_to_keep_selection_visible_in_a_short_panel) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     // Show the panel; a 12-row terminal gives a panel content height of ~9.
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"panel.toggle", runtime.revision(), {}}).accepted());
     // Select the workspace root and expand it so its 40 files become visible.
@@ -222,7 +222,7 @@ TEST(tree_select_sets_selection_to_a_node_and_rejects_unknown_ids) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process},
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"panel.toggle", runtime.revision(), {}}).accepted());
     // Expand the workspace root so its files become visible/selectable nodes.
@@ -275,19 +275,19 @@ TEST(tree_select_focuses_the_panel_and_the_click_pair_nets_expected_focus) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process},
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1}).accepted());
     const ssg::ViewportDimensions dims{80, 24};
     auto focus = [&] {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
-        return snap ? snap->sections().shell.focus : ssg::FocusTarget::editor;
+        return snap ? snap->sections().shell.focus : ssg::FocusTarget::Editor;
     };
     // Showing the panel now focuses it (QOL); expand the root so a directory node
     // and a file node are both visible/selectable.
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"panel.toggle", runtime.revision(), {}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select_next", runtime.revision(), {}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.activate", runtime.revision(), {}}).accepted());
-    ASSERT_EQ(focus(), ssg::FocusTarget::panel);
+    ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
 
     auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
     ASSERT_TRUE(snap.has_value());
@@ -306,17 +306,17 @@ TEST(tree_select_focuses_the_panel_and_the_click_pair_nets_expected_focus) {
     // file opens, so tree.activate's focus_editor wins over tree.select's panel).
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select", runtime.revision(), ssg::TreeSelectArguments{*file_id}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.activate", runtime.revision(), {}}).accepted());
-    ASSERT_EQ(focus(), ssg::FocusTarget::editor);
+    ASSERT_EQ(focus(), ssg::FocusTarget::Editor);
 
     // From editor focus, tree.select alone moves keyboard focus to the panel.
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select", runtime.revision(), ssg::TreeSelectArguments{*file_id}}).accepted());
-    ASSERT_EQ(focus(), ssg::FocusTarget::panel);
+    ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
 
     // The directory click pair ends on the panel (tree.select focuses the panel,
     // tree.activate toggles the directory and leaves focus alone).
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.select", runtime.revision(), ssg::TreeSelectArguments{*dir_id}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tree.activate", runtime.revision(), {}}).accepted());
-    ASSERT_EQ(focus(), ssg::FocusTarget::panel);
+    ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
     std::filesystem::remove_all(root);
 }
 
@@ -336,7 +336,7 @@ TEST(tree_scroll_moves_the_viewport_without_moving_the_selection) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process},
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"panel.toggle", runtime.revision(), {}}).accepted());
     // Expand the root so the 40 files become a tree taller than a short panel.
@@ -408,7 +408,7 @@ TEST(word_wrap_off_reveals_caret_horizontally) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process},
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"file.open", runtime.revision(),
@@ -464,7 +464,7 @@ TEST(word_wrap_on_wraps_long_lines_off_clips_them) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process},
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"file.open", runtime.revision(),
@@ -533,7 +533,7 @@ TEST(word_wrap_off_navigation_is_viewport_bounded) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process},
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1}).accepted());
     ssg::ViewportDimensions const dims{80, 24};
 

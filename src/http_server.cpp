@@ -83,13 +83,13 @@ std::string encode_session_attach_request(SessionAttachRequest const& request) {
 DecodeSessionAttachRequestResult decode_session_attach_request(
     std::string_view message, ProtocolLimits limits) {
     if (message.size() > limits.max_message_bytes) {
-        return {ProtocolError::message_too_large, std::nullopt,
+        return {ProtocolError::MessageTooLarge, std::nullopt,
                 "attach request exceeds message limit"};
     }
     auto const fields = split(message);
     if (fields.size() != 4 || fields[0] != "SSG1" ||
         fields[1] != "ATTACH") {
-        return {ProtocolError::malformed_message, std::nullopt,
+        return {ProtocolError::MalformedMessage, std::nullopt,
                 "expected SSG1 ATTACH request"};
     }
     std::optional<Revision> revision;
@@ -100,17 +100,17 @@ DecodeSessionAttachRequestResult decode_session_attach_request(
                                             value);
         if (parsed.ec != std::errc{} ||
             parsed.ptr != fields[2].data() + fields[2].size()) {
-            return {ProtocolError::malformed_message, std::nullopt,
+            return {ProtocolError::MalformedMessage, std::nullopt,
                     "invalid last-applied revision"};
         }
         revision.emplace(value);
     }
     auto credential = hex_decode(fields[3]);
     if (!credential) {
-        return {ProtocolError::malformed_message, std::nullopt,
+        return {ProtocolError::MalformedMessage, std::nullopt,
                 "invalid credential encoding"};
     }
-    return {ProtocolError::none,
+    return {ProtocolError::None,
             SessionAttachRequest{std::move(*credential), revision}, {}};
 }
 
@@ -262,7 +262,7 @@ struct HttpEditorRoute::Impl {
         if (!request.accepted()) return false;
         auto authenticated = host.authenticate(request.request->credential);
         if (!authenticated) return false;
-        if (authenticated->principal.origin() != InvocationOrigin::websocket) {
+        if (authenticated->principal.origin() != InvocationOrigin::Websocket) {
             return false;
         }
         auto const client_id = authenticated->principal.client_id();
@@ -513,7 +513,7 @@ struct HttpEditorServer::Impl {
                 {std::move(config.route), config.outbound_queue_messages,
                  config.replay_deltas, config.write_timeout,
                  config.protocol_limits}} {
-        note_optional_construction(OptionalSubsystem::http);
+        note_optional_construction(OptionalSubsystem::Http);
     }
 
     ~Impl() { stop(); }

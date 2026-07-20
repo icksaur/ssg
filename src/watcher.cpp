@@ -50,11 +50,11 @@ WatchEvent event_from(NativeWatchAction action,
                       const std::optional<WatchFileState>& state) {
     WatchEvent result;
     result.path = path;
-    result.kind = action == NativeWatchAction::create
-        ? WatchEventKind::create
-        : action == NativeWatchAction::remove
-            ? WatchEventKind::remove
-            : WatchEventKind::modify;
+    result.kind = action == NativeWatchAction::Create
+        ? WatchEventKind::Create
+        : action == NativeWatchAction::Remove
+            ? WatchEventKind::Remove
+            : WatchEventKind::Modify;
     if (state) {
         result.identity = state->identity;
         result.size = state->size;
@@ -109,18 +109,18 @@ public:
         if (overflow_requested) {
             return;
         }
-        if (native.action == NativeWatchAction::overflow) {
+        if (native.action == NativeWatchAction::Overflow) {
             request_overflow();
             return;
         }
         native.path = normalize_path(std::move(native.path));
-        if (native.action == NativeWatchAction::rename_from ||
-            native.action == NativeWatchAction::rename_to) {
+        if (native.action == NativeWatchAction::RenameFrom ||
+            native.action == NativeWatchAction::RenameTo) {
             push_rename(std::move(native), observed_at);
             return;
         }
 
-        if (native.action == NativeWatchAction::remove && !native.observed) {
+        if (native.action == NativeWatchAction::Remove && !native.observed) {
             native.observed = state_for(cache, native.path);
         }
         auto event = event_from(native.action, native.path, native.observed);
@@ -174,7 +174,7 @@ private:
     void update_cache(NativeWatchAction action,
                       const std::filesystem::path& path,
                       const std::optional<WatchFileState>& observed) {
-        if (action == NativeWatchAction::remove) {
+        if (action == NativeWatchAction::Remove) {
             cache.erase(path);
         } else if (observed) {
             cache[path] = *observed;
@@ -183,19 +183,19 @@ private:
 
     void push_rename(NativeWatchEvent native, WatchTimePoint observed_at) {
         if (native.rename_token == 0) {
-            if (native.action == NativeWatchAction::rename_from &&
+            if (native.action == NativeWatchAction::RenameFrom &&
                 !native.observed) {
                 native.observed = state_for(cache, native.path);
             }
             auto boundary = event_from(
-                native.action == NativeWatchAction::rename_from
-                    ? NativeWatchAction::remove
-                    : NativeWatchAction::create,
+                native.action == NativeWatchAction::RenameFrom
+                    ? NativeWatchAction::Remove
+                    : NativeWatchAction::Create,
                 native.path, native.observed);
             update_cache(
-                native.action == NativeWatchAction::rename_from
-                    ? NativeWatchAction::remove
-                    : NativeWatchAction::create,
+                native.action == NativeWatchAction::RenameFrom
+                    ? NativeWatchAction::Remove
+                    : NativeWatchAction::Create,
                 native.path, native.observed);
             enqueue(std::move(boundary), observed_at);
             return;
@@ -212,7 +212,7 @@ private:
                 RenamePair{{}, {}, observed_at + config.debounce}).first;
         }
         found->second.ready_at = observed_at + config.debounce;
-        if (native.action == NativeWatchAction::rename_from) {
+        if (native.action == NativeWatchAction::RenameFrom) {
             if (!native.observed) {
                 native.observed = state_for(cache, native.path);
             }
@@ -239,18 +239,18 @@ private:
             });
         const auto source_was_new =
             source_pending != pending.rend() &&
-            source_pending->event.kind == WatchEventKind::create;
+            source_pending->event.kind == WatchEventKind::Create;
         if (source_pending != pending.rend()) {
             pending.erase(std::next(source_pending).base());
         }
         WatchEvent event = event_from(
-            NativeWatchAction::modify, pair.to->path, observed);
+            NativeWatchAction::Modify, pair.to->path, observed);
         if (source_was_new) {
             event.kind = cache.contains(pair.to->path)
-                ? WatchEventKind::modify
-                : WatchEventKind::create;
+                ? WatchEventKind::Modify
+                : WatchEventKind::Create;
         } else {
-            event.kind = WatchEventKind::rename;
+            event.kind = WatchEventKind::Rename;
             event.previous_path = pair.from->path;
         }
         cache.erase(pair.from->path);
@@ -268,12 +268,12 @@ private:
             }
             const auto& half = current->second;
             if (half.from) {
-                auto event = event_from(NativeWatchAction::remove,
+                auto event = event_from(NativeWatchAction::Remove,
                                         half.from->path, half.from->observed);
                 cache.erase(half.from->path);
                 enqueue(std::move(event), now - config.debounce);
             } else if (half.to) {
-                auto event = event_from(NativeWatchAction::create,
+                auto event = event_from(NativeWatchAction::Create,
                                         half.to->path, half.to->observed);
                 if (half.to->observed) {
                     cache[half.to->path] = *half.to->observed;
@@ -295,8 +295,8 @@ private:
             });
         if (same != pending.rend()) {
             const auto distinct_replacement =
-                same->event.kind == WatchEventKind::remove &&
-                event.kind == WatchEventKind::create &&
+                same->event.kind == WatchEventKind::Remove &&
+                event.kind == WatchEventKind::Create &&
                 (!same->event.identity || !event.identity ||
                  same->event.identity != event.identity);
             if (!distinct_replacement) {
@@ -316,38 +316,38 @@ private:
     }
 
     static bool coalesce(WatchEvent& current, const WatchEvent& next) {
-        if (current.kind == WatchEventKind::create &&
-            next.kind == WatchEventKind::remove) {
+        if (current.kind == WatchEventKind::Create &&
+            next.kind == WatchEventKind::Remove) {
             return false;
         }
-        if (current.kind == WatchEventKind::create &&
-            next.kind == WatchEventKind::modify) {
+        if (current.kind == WatchEventKind::Create &&
+            next.kind == WatchEventKind::Modify) {
             current.identity = next.identity;
             current.size = next.size;
             current.modification_time = next.modification_time;
             return true;
         }
-        if (current.kind == WatchEventKind::modify &&
-            next.kind == WatchEventKind::remove) {
+        if (current.kind == WatchEventKind::Modify &&
+            next.kind == WatchEventKind::Remove) {
             current = next;
             return true;
         }
-        if (current.kind == WatchEventKind::remove &&
-            next.kind == WatchEventKind::create) {
+        if (current.kind == WatchEventKind::Remove &&
+            next.kind == WatchEventKind::Create) {
             current = next;
-            current.kind = WatchEventKind::modify;
+            current.kind = WatchEventKind::Modify;
             return true;
         }
-        if (current.kind == WatchEventKind::rename &&
-            next.kind == WatchEventKind::remove) {
+        if (current.kind == WatchEventKind::Rename &&
+            next.kind == WatchEventKind::Remove) {
             const auto original_path = *current.previous_path;
             current = next;
             current.path = original_path;
             current.previous_path.reset();
             return true;
         }
-        if (current.kind == WatchEventKind::rename &&
-            next.kind == WatchEventKind::modify) {
+        if (current.kind == WatchEventKind::Rename &&
+            next.kind == WatchEventKind::Modify) {
             current.path = next.path;
             current.identity = next.identity;
             current.size = next.size;
@@ -370,7 +370,7 @@ private:
         std::vector<WatchEvent> result;
         if (!overflow_announced) {
             WatchEvent overflow;
-            overflow.kind = WatchEventKind::overflow;
+            overflow.kind = WatchEventKind::Overflow;
             overflow.sequence = next_sequence++;
             result.push_back(std::move(overflow));
             overflow_announced = true;
@@ -397,11 +397,11 @@ private:
         for (const auto& [path, state] : scanned) {
             const auto previous = cache.find(path);
             if (previous == cache.end()) {
-                auto event = event_from(NativeWatchAction::create, path, state);
+                auto event = event_from(NativeWatchAction::Create, path, state);
                 const auto old =
                     old_paths_by_identity.find(identity_key(state.identity));
                 if (old != old_paths_by_identity.end()) {
-                    event.kind = WatchEventKind::rename;
+                    event.kind = WatchEventKind::Rename;
                     event.previous_path = old->second;
                     renamed_from.push_back(old->second);
                     old_paths_by_identity.erase(old);
@@ -410,7 +410,7 @@ private:
                 correlate_save(event);
                 result.push_back(std::move(event));
             } else if (previous->second != state) {
-                auto event = event_from(NativeWatchAction::modify, path, state);
+                auto event = event_from(NativeWatchAction::Modify, path, state);
                 event.sequence = next_sequence++;
                 correlate_save(event);
                 result.push_back(std::move(event));
@@ -420,7 +420,7 @@ private:
             if (!scanned.contains(path) &&
                 std::find(renamed_from.begin(), renamed_from.end(), path) ==
                     renamed_from.end()) {
-                auto event = event_from(NativeWatchAction::remove, path, state);
+                auto event = event_from(NativeWatchAction::Remove, path, state);
                 event.sequence = next_sequence++;
                 correlate_save(event);
                 result.push_back(std::move(event));
@@ -443,7 +443,7 @@ private:
                        expectation.state == state;
             });
         if (found != save_expectations.end()) {
-            event.origin = WatchEventOrigin::ssg_save;
+            event.origin = WatchEventOrigin::SsgSave;
             save_expectations.erase(found);
         }
     }

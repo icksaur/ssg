@@ -82,9 +82,9 @@ TEST(git_and_symbol_snapshots_are_deterministic_and_use_stable_keys) {
     const auto git = git_tree_snapshot(
         TreeProviderId{"git"}, TreeRevision{7},
         {{.workspace_path = "z.cpp", .label = "renamed label",
-          .status = GitTreeStatus::modified},
+          .status = GitTreeStatus::Modified},
          {.workspace_path = "a.cpp", .label = "a.cpp",
-          .status = GitTreeStatus::added}});
+          .status = GitTreeStatus::Added}});
     ASSERT_EQ(node_ids(git),
               (std::vector<std::string>{"git:a.cpp", "git:z.cpp"}));
     ASSERT_EQ(git.nodes()[1].id, TreeNodeId{"git:z.cpp"});
@@ -256,7 +256,7 @@ TEST(bounded_delta_replays_to_independent_view_and_rejects_stale_base) {
     stale.revision = TreeRevision{base.revision.value() + 1};
     const auto stale_replay = replay_tree_delta(stale, delta);
     ASSERT_FALSE(stale_replay.accepted());
-    ASSERT_EQ(stale_replay.error, TreeReplayError::stale_revision);
+    ASSERT_EQ(stale_replay.error, TreeReplayError::StaleRevision);
 }
 
 TEST(over_budget_delta_requires_snapshot_without_partial_operations) {
@@ -277,7 +277,7 @@ TEST(over_budget_delta_requires_snapshot_without_partial_operations) {
     ASSERT_TRUE(delta.providers.empty());
     ASSERT_EQ(delta.operation_count(), std::size_t{0});
     const auto replay = replay_tree_delta(base, delta);
-    ASSERT_EQ(replay.error, TreeReplayError::snapshot_required);
+    ASSERT_EQ(replay.error, TreeReplayError::SnapshotRequired);
 }
 
 } // namespace

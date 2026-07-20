@@ -33,25 +33,25 @@ enum class CellKind : uint8_t {
     // point (GCB=Extend/ZWJ/SpacingMark) that has nonzero display width (e.g.
     // a standalone wide emoji modifier such as U+1F3FB–U+1F3FF with EAW=W).
     // cell_width is 1 (narrow) or 2 (wide per UAX #11 / Emoji_Presentation).
-    text,
+    Text,
 
     // Zero-width combining cluster.  The base code point is a combining,
     // variation-selector, or zero-width extending character with no prior base
     // in the logical line, and its display width is 0.
     // cell_width is always 0.
-    combining,
+    Combining,
 
     // Horizontal tab (U+0009).
     // cell_width advances to the next tab stop (1..tab_width columns).
-    tab,
+    Tab,
 
     // GCB=Control cluster. C0, DEL, and C1 controls render as a visible
     // 1-cell replacement glyph; zero-width format controls consume 0 cells.
-    control,
+    Control,
 
     // Invalid UTF-8 byte.  Each individual invalid byte yields one span with
     // cell_width 1 (rendered as a visible replacement glyph).
-    invalid_utf8,
+    InvalidUtf8,
 };
 
 // One grapheme cluster mapped to its display columns.

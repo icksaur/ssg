@@ -106,14 +106,14 @@ struct LspFeatureDelta {
     const LspFeatureViewState& base, const LspFeatureViewState& target);
 
 enum class LspFeatureReplayError : std::uint8_t {
-    none,
-    stale_revision,
-    malformed_delta,
+    None,
+    StaleRevision,
+    MalformedDelta,
 };
 
 struct LspFeatureReplayResult {
     std::optional<LspFeatureViewState> state;
-    LspFeatureReplayError error = LspFeatureReplayError::none;
+    LspFeatureReplayError error = LspFeatureReplayError::None;
     [[nodiscard]] bool accepted() const noexcept { return state.has_value(); }
 };
 
@@ -121,45 +121,45 @@ struct LspFeatureReplayResult {
     const LspFeatureViewState& base, const LspFeatureDelta& delta);
 
 enum class LspFeatureError : std::uint8_t {
-    none,
-    sync_error,
-    unknown_document,
-    stale_revision,
-    invalid_position,
+    None,
+    SyncError,
+    UnknownDocument,
+    StaleRevision,
+    InvalidPosition,
 };
 
 struct LspFeatureRequestResult {
     std::uint64_t request_id = 0;
-    LspFeatureError error = LspFeatureError::none;
+    LspFeatureError error = LspFeatureError::None;
     std::string message;
     [[nodiscard]] bool accepted() const noexcept {
-        return request_id != 0 && error == LspFeatureError::none;
+        return request_id != 0 && error == LspFeatureError::None;
     }
 };
 
 enum class LspFeaturePublishResult : std::uint8_t {
-    accepted,
-    cancelled,
-    superseded,
-    stale_revision,
-    malformed_response,
-    server_error,
+    Accepted,
+    Cancelled,
+    Superseded,
+    StaleRevision,
+    MalformedResponse,
+    ServerError,
 };
 
 struct LspFeaturePublication {
     std::uint64_t request_id = 0;
-    LspFeaturePublishResult result = LspFeaturePublishResult::accepted;
+    LspFeaturePublishResult result = LspFeaturePublishResult::Accepted;
     std::string message;
     friend bool operator==(const LspFeaturePublication&,
                            const LspFeaturePublication&) = default;
 };
 
 struct LspFeaturePollResult {
-    LspSyncError error = LspSyncError::none;
+    LspSyncError error = LspSyncError::None;
     std::string message;
     std::vector<LspFeaturePublication> publications;
     [[nodiscard]] bool accepted() const noexcept {
-        return error == LspSyncError::none;
+        return error == LspSyncError::None;
     }
 };
 
@@ -203,18 +203,18 @@ public:
 
 private:
     enum class Kind : std::uint8_t {
-        completion,
-        hover,
-        definition,
-        references,
+        Completion,
+        Hover,
+        Definition,
+        References,
     };
-    enum class Disposition : std::uint8_t { active, cancelled, superseded };
+    enum class Disposition : std::uint8_t { Active, Cancelled, Superseded };
     struct Pending {
-        Kind kind = Kind::completion;
+        Kind kind = Kind::Completion;
         std::string uri;
         Revision revision{0};
         std::uint64_t generation = 0;
-        Disposition disposition = Disposition::active;
+        Disposition disposition = Disposition::Active;
     };
 
     [[nodiscard]] LspFeatureRequestResult request(

@@ -180,8 +180,8 @@ public:
         if (position == start) return start;
         DocumentPosition cursor = previous(position);
         const auto category = category_at(cursor);
-        if (category == SegmentCategory::word ||
-            category == SegmentCategory::space) {
+        if (category == SegmentCategory::Word ||
+            category == SegmentCategory::Space) {
             while (cursor != start) {
                 const auto& candidate = previous(cursor);
                 if (category_at(candidate) != category) break;
@@ -226,9 +226,9 @@ public:
 
 private:
     enum class SegmentCategory : std::uint8_t {
-        word,
-        space,
-        punctuation,
+        Word,
+        Space,
+        Punctuation,
     };
 
     [[nodiscard]] SegmentCategory category_at(
@@ -244,15 +244,15 @@ private:
             (first >= static_cast<unsigned char>('0') &&
              first <= static_cast<unsigned char>('9')) ||
             first == static_cast<unsigned char>('_')) {
-            return SegmentCategory::word;
+            return SegmentCategory::Word;
         }
         if (first == static_cast<unsigned char>(' ') ||
             first == static_cast<unsigned char>('\t') ||
             first == static_cast<unsigned char>('\n') ||
             first == static_cast<unsigned char>('\r')) {
-            return SegmentCategory::space;
+            return SegmentCategory::Space;
         }
-        return SegmentCategory::punctuation;
+        return SegmentCategory::Punctuation;
     }
 
     [[nodiscard]] DocumentPosition position_for_cell(
@@ -453,12 +453,12 @@ SelectionNavigationResult accepted(const SelectionViewState& before,
                                    SelectionViewState after) {
     if (after == before) {
         return SelectionNavigationResult{
-            SelectionNavigationError::none,
+            SelectionNavigationError::None,
             SelectionViewDelta{false, std::nullopt},
             {}};
     }
     return SelectionNavigationResult{
-        SelectionNavigationError::none,
+        SelectionNavigationError::None,
         SelectionViewDelta{true, std::move(after)},
         {}};
 }
@@ -698,46 +698,46 @@ const Selection& SelectionSet::primary() const noexcept {
 
 SelectionNavigationCommandSet::SelectionNavigationCommandSet()
     : descriptors_{{
-          {"cursor.set_position", SelectionCommand::cursor_set_position},
-          {"cursor.left", SelectionCommand::cursor_left},
-          {"cursor.right", SelectionCommand::cursor_right},
-          {"cursor.word_left", SelectionCommand::cursor_word_left},
-          {"cursor.word_right", SelectionCommand::cursor_word_right},
-          {"cursor.line_up", SelectionCommand::cursor_line_up},
-          {"cursor.line_down", SelectionCommand::cursor_line_down},
-          {"cursor.line_start", SelectionCommand::cursor_line_start},
-          {"cursor.line_end", SelectionCommand::cursor_line_end},
-          {"cursor.page_up", SelectionCommand::cursor_page_up},
-          {"cursor.page_down", SelectionCommand::cursor_page_down},
-          {"cursor.document_start", SelectionCommand::cursor_document_start},
-          {"cursor.document_end", SelectionCommand::cursor_document_end},
-          {"select.set_range", SelectionCommand::select_set_range},
-          {"select.add_range", SelectionCommand::select_add_range},
-          {"select.left", SelectionCommand::select_left},
-          {"select.right", SelectionCommand::select_right},
-          {"select.word_left", SelectionCommand::select_word_left},
-          {"select.word_right", SelectionCommand::select_word_right},
-          {"select.line_up", SelectionCommand::select_line_up},
-          {"select.line_down", SelectionCommand::select_line_down},
-          {"select.line_start", SelectionCommand::select_line_start},
-          {"select.line_end", SelectionCommand::select_line_end},
-          {"select.page_up", SelectionCommand::select_page_up},
-          {"select.page_down", SelectionCommand::select_page_down},
-          {"select.document_start", SelectionCommand::select_document_start},
-          {"select.document_end", SelectionCommand::select_document_end},
-          {"select.all", SelectionCommand::select_all},
+          {"cursor.set_position", SelectionCommand::CursorSetPosition},
+          {"cursor.left", SelectionCommand::CursorLeft},
+          {"cursor.right", SelectionCommand::CursorRight},
+          {"cursor.word_left", SelectionCommand::CursorWordLeft},
+          {"cursor.word_right", SelectionCommand::CursorWordRight},
+          {"cursor.line_up", SelectionCommand::CursorLineUp},
+          {"cursor.line_down", SelectionCommand::CursorLineDown},
+          {"cursor.line_start", SelectionCommand::CursorLineStart},
+          {"cursor.line_end", SelectionCommand::CursorLineEnd},
+          {"cursor.page_up", SelectionCommand::CursorPageUp},
+          {"cursor.page_down", SelectionCommand::CursorPageDown},
+          {"cursor.document_start", SelectionCommand::CursorDocumentStart},
+          {"cursor.document_end", SelectionCommand::CursorDocumentEnd},
+          {"select.set_range", SelectionCommand::SelectSetRange},
+          {"select.add_range", SelectionCommand::SelectAddRange},
+          {"select.left", SelectionCommand::SelectLeft},
+          {"select.right", SelectionCommand::SelectRight},
+          {"select.word_left", SelectionCommand::SelectWordLeft},
+          {"select.word_right", SelectionCommand::SelectWordRight},
+          {"select.line_up", SelectionCommand::SelectLineUp},
+          {"select.line_down", SelectionCommand::SelectLineDown},
+          {"select.line_start", SelectionCommand::SelectLineStart},
+          {"select.line_end", SelectionCommand::SelectLineEnd},
+          {"select.page_up", SelectionCommand::SelectPageUp},
+          {"select.page_down", SelectionCommand::SelectPageDown},
+          {"select.document_start", SelectionCommand::SelectDocumentStart},
+          {"select.document_end", SelectionCommand::SelectDocumentEnd},
+          {"select.all", SelectionCommand::SelectAll},
           {"select.add_next_occurrence",
-           SelectionCommand::select_add_next_occurrence},
-          {"select.add_cursor_up", SelectionCommand::select_add_cursor_up},
-          {"select.add_cursor_down", SelectionCommand::select_add_cursor_down},
+           SelectionCommand::SelectAddNextOccurrence},
+          {"select.add_cursor_up", SelectionCommand::SelectAddCursorUp},
+          {"select.add_cursor_down", SelectionCommand::SelectAddCursorDown},
           {"select.split_into_lines",
-           SelectionCommand::select_split_into_lines},
+           SelectionCommand::SelectSplitIntoLines},
           {"select.to_matching_bracket",
-           SelectionCommand::select_to_matching_bracket},
+           SelectionCommand::SelectToMatchingBracket},
           {"goto.matching_bracket",
-           SelectionCommand::goto_matching_bracket},
-          {"view.reveal_caret", SelectionCommand::view_reveal_caret},
-          {"view.center_caret", SelectionCommand::view_center_caret},
+           SelectionCommand::GotoMatchingBracket},
+          {"view.reveal_caret", SelectionCommand::ViewRevealCaret},
+          {"view.center_caret", SelectionCommand::ViewCenterCaret},
       }} {}
 
 const std::array<SelectionCommandDescriptor, 36>&
@@ -763,7 +763,7 @@ SelectionNavigationResult apply_selection_navigation(
     SelectionCommandArguments arguments,
     std::span<const BracketPair> bracket_pairs, int tab_width, bool word_wrap) {
     if (tab_width < 1 || tab_width > 16) {
-        return rejected(SelectionNavigationError::invalid_tab_width,
+        return rejected(SelectionNavigationError::InvalidTabWidth,
                         "tab width must be between 1 and 16");
     }
     const TextModel model{text, tab_width};
@@ -773,7 +773,7 @@ SelectionNavigationResult apply_selection_navigation(
         if (!is_valid_position(model, selection.anchor) ||
             !is_valid_position(model, selection.active)) {
             return rejected(
-                SelectionNavigationError::invalid_position,
+                SelectionNavigationError::InvalidPosition,
                 "selection endpoint does not match the document layout");
         }
     }
@@ -805,13 +805,13 @@ SelectionNavigationResult apply_selection_navigation(
     };
 
     switch (command) {
-    case SelectionCommand::cursor_set_position:
+    case SelectionCommand::CursorSetPosition:
         if (!arguments.position) {
-            return rejected(SelectionNavigationError::missing_argument,
+            return rejected(SelectionNavigationError::MissingArgument,
                             "cursor.set_position requires a position");
         }
         if (!is_valid_position(model, *arguments.position)) {
-            return rejected(SelectionNavigationError::invalid_position,
+            return rejected(SelectionNavigationError::InvalidPosition,
                             "cursor position does not match the document layout");
         }
         selections = {
@@ -819,7 +819,7 @@ SelectionNavigationResult apply_selection_navigation(
         desired_cell.reset();
         break;
 
-    case SelectionCommand::cursor_left:
+    case SelectionCommand::CursorLeft:
         replace_with_carets([&](const Selection& selection) {
             return selection.is_caret() ? model.previous(selection.active)
                                         : selection.lower();
@@ -827,7 +827,7 @@ SelectionNavigationResult apply_selection_navigation(
         desired_cell.reset();
         break;
 
-    case SelectionCommand::cursor_right:
+    case SelectionCommand::CursorRight:
         replace_with_carets([&](const Selection& selection) {
             return selection.is_caret() ? model.next(selection.active)
                                         : selection.upper();
@@ -835,44 +835,44 @@ SelectionNavigationResult apply_selection_navigation(
         desired_cell.reset();
         break;
 
-    case SelectionCommand::cursor_word_left:
+    case SelectionCommand::CursorWordLeft:
         replace_with_carets([&](const Selection& selection) {
             return model.word_left(selection.lower());
         });
         desired_cell.reset();
         break;
 
-    case SelectionCommand::cursor_word_right:
+    case SelectionCommand::CursorWordRight:
         replace_with_carets([&](const Selection& selection) {
             return model.word_right(selection.upper());
         });
         desired_cell.reset();
         break;
 
-    case SelectionCommand::cursor_line_start:
+    case SelectionCommand::CursorLineStart:
         replace_with_carets([&](const Selection& selection) {
             return model.line_start(selection.lower());
         });
         desired_cell.reset();
         break;
 
-    case SelectionCommand::cursor_line_end:
+    case SelectionCommand::CursorLineEnd:
         replace_with_carets([&](const Selection& selection) {
             return model.line_end(selection.upper());
         });
         desired_cell.reset();
         break;
 
-    case SelectionCommand::cursor_line_up:
-    case SelectionCommand::cursor_line_down:
-    case SelectionCommand::cursor_page_up:
-    case SelectionCommand::cursor_page_down: {
+    case SelectionCommand::CursorLineUp:
+    case SelectionCommand::CursorLineDown:
+    case SelectionCommand::CursorPageUp:
+    case SelectionCommand::CursorPageDown: {
         const bool down =
-            command == SelectionCommand::cursor_line_down ||
-            command == SelectionCommand::cursor_page_down;
+            command == SelectionCommand::CursorLineDown ||
+            command == SelectionCommand::CursorPageDown;
         const bool page =
-            command == SelectionCommand::cursor_page_up ||
-            command == SelectionCommand::cursor_page_down;
+            command == SelectionCommand::CursorPageUp ||
+            command == SelectionCommand::CursorPageDown;
         const auto count =
             page ? current_viewport.visible_rows.size() : 1;
         std::optional<CellIndex> primary_desired;
@@ -901,36 +901,36 @@ SelectionNavigationResult apply_selection_navigation(
         break;
     }
 
-    case SelectionCommand::cursor_document_start: {
+    case SelectionCommand::CursorDocumentStart: {
         const auto destination = model.document_start();
         selections = {Selection{destination, destination}};
         desired_cell.reset();
         break;
     }
 
-    case SelectionCommand::cursor_document_end: {
+    case SelectionCommand::CursorDocumentEnd: {
         const auto destination = model.document_end();
         selections = {Selection{destination, destination}};
         desired_cell.reset();
         break;
     }
 
-    case SelectionCommand::select_set_range:
-    case SelectionCommand::select_add_range:
+    case SelectionCommand::SelectSetRange:
+    case SelectionCommand::SelectAddRange:
         if (!arguments.selection) {
             return rejected(
-                SelectionNavigationError::missing_argument,
-                command == SelectionCommand::select_set_range
+                SelectionNavigationError::MissingArgument,
+                command == SelectionCommand::SelectSetRange
                     ? "select.set_range requires a selection"
                     : "select.add_range requires a selection");
         }
         if (!is_valid_position(model, arguments.selection->anchor) ||
             !is_valid_position(model, arguments.selection->active)) {
             return rejected(
-                SelectionNavigationError::invalid_position,
+                SelectionNavigationError::InvalidPosition,
                 "selection range does not match the document layout");
         }
-        if (command == SelectionCommand::select_set_range) {
+        if (command == SelectionCommand::SelectSetRange) {
             selections = {*arguments.selection};
         } else {
             selections.push_back(*arguments.selection);
@@ -938,58 +938,58 @@ SelectionNavigationResult apply_selection_navigation(
         desired_cell.reset();
         break;
 
-    case SelectionCommand::select_left:
+    case SelectionCommand::SelectLeft:
         extend_active([&](const Selection& selection) {
             return model.previous(selection.active);
         });
         desired_cell.reset();
         break;
 
-    case SelectionCommand::select_right:
+    case SelectionCommand::SelectRight:
         extend_active([&](const Selection& selection) {
             return model.next(selection.active);
         });
         desired_cell.reset();
         break;
 
-    case SelectionCommand::select_word_left:
+    case SelectionCommand::SelectWordLeft:
         extend_active([&](const Selection& selection) {
             return model.word_left(selection.active);
         });
         desired_cell.reset();
         break;
 
-    case SelectionCommand::select_word_right:
+    case SelectionCommand::SelectWordRight:
         extend_active([&](const Selection& selection) {
             return model.word_right(selection.active);
         });
         desired_cell.reset();
         break;
 
-    case SelectionCommand::select_line_start:
+    case SelectionCommand::SelectLineStart:
         extend_active([&](const Selection& selection) {
             return model.line_start(selection.active);
         });
         desired_cell.reset();
         break;
 
-    case SelectionCommand::select_line_end:
+    case SelectionCommand::SelectLineEnd:
         extend_active([&](const Selection& selection) {
             return model.line_end(selection.active);
         });
         desired_cell.reset();
         break;
 
-    case SelectionCommand::select_line_up:
-    case SelectionCommand::select_line_down:
-    case SelectionCommand::select_page_up:
-    case SelectionCommand::select_page_down: {
+    case SelectionCommand::SelectLineUp:
+    case SelectionCommand::SelectLineDown:
+    case SelectionCommand::SelectPageUp:
+    case SelectionCommand::SelectPageDown: {
         const bool down =
-            command == SelectionCommand::select_line_down ||
-            command == SelectionCommand::select_page_down;
+            command == SelectionCommand::SelectLineDown ||
+            command == SelectionCommand::SelectPageDown;
         const bool page =
-            command == SelectionCommand::select_page_up ||
-            command == SelectionCommand::select_page_down;
+            command == SelectionCommand::SelectPageUp ||
+            command == SelectionCommand::SelectPageDown;
         const auto count =
             page ? current_viewport.visible_rows.size() : 1;
         std::optional<CellIndex> primary_desired;
@@ -1017,27 +1017,27 @@ SelectionNavigationResult apply_selection_navigation(
         break;
     }
 
-    case SelectionCommand::select_document_start:
+    case SelectionCommand::SelectDocumentStart:
         extend_active([&](const Selection&) {
             return model.document_start();
         });
         desired_cell.reset();
         break;
 
-    case SelectionCommand::select_document_end:
+    case SelectionCommand::SelectDocumentEnd:
         extend_active([&](const Selection&) {
             return model.document_end();
         });
         desired_cell.reset();
         break;
 
-    case SelectionCommand::select_all:
+    case SelectionCommand::SelectAll:
         selections = {Selection{model.document_start(),
                                 model.document_end()}};
         desired_cell.reset();
         break;
 
-    case SelectionCommand::select_add_next_occurrence: {
+    case SelectionCommand::SelectAddNextOccurrence: {
         const auto& source = selections.back();
         if (!source.is_caret()) {
             const auto low = static_cast<std::size_t>(
@@ -1077,10 +1077,10 @@ SelectionNavigationResult apply_selection_navigation(
         break;
     }
 
-    case SelectionCommand::select_add_cursor_up:
-    case SelectionCommand::select_add_cursor_down: {
+    case SelectionCommand::SelectAddCursorUp:
+    case SelectionCommand::SelectAddCursorDown: {
         const bool down =
-            command == SelectionCommand::select_add_cursor_down;
+            command == SelectionCommand::SelectAddCursorDown;
         std::vector<Selection> added;
         for (const auto& selection : selections) {
             const auto line =
@@ -1098,7 +1098,7 @@ SelectionNavigationResult apply_selection_navigation(
         break;
     }
 
-    case SelectionCommand::select_split_into_lines: {
+    case SelectionCommand::SelectSplitIntoLines: {
         std::vector<Selection> split;
         for (const auto& selection : selections) {
             if (selection.is_caret()) {
@@ -1128,11 +1128,11 @@ SelectionNavigationResult apply_selection_navigation(
         break;
     }
 
-    case SelectionCommand::select_to_matching_bracket:
-    case SelectionCommand::goto_matching_bracket: {
+    case SelectionCommand::SelectToMatchingBracket:
+    case SelectionCommand::GotoMatchingBracket: {
         if (!valid_bracket_pairs(bracket_pairs)) {
             return rejected(
-                SelectionNavigationError::invalid_bracket_pairs,
+                SelectionNavigationError::InvalidBracketPairs,
                 "bracket tokens must be non-empty, distinct, and unambiguous");
         }
         const auto matches =
@@ -1145,14 +1145,14 @@ SelectionNavigationResult apply_selection_navigation(
                 continue;
             }
             const auto offset =
-                command == SelectionCommand::goto_matching_bracket ||
+                command == SelectionCommand::GotoMatchingBracket ||
                         !found->second.forward
                     ? found->second.mate_start
                     : found->second.mate_end;
             const auto destination =
                 *model.resolve(ByteOffset{offset});
             if (command ==
-                SelectionCommand::goto_matching_bracket) {
+                SelectionCommand::GotoMatchingBracket) {
                 selection =
                     Selection{destination, destination};
             } else {
@@ -1163,8 +1163,8 @@ SelectionNavigationResult apply_selection_navigation(
         break;
     }
 
-    case SelectionCommand::view_reveal_caret:
-    case SelectionCommand::view_center_caret:
+    case SelectionCommand::ViewRevealCaret:
+    case SelectionCommand::ViewCenterCaret:
         break;
     }
 
@@ -1173,7 +1173,7 @@ SelectionNavigationResult apply_selection_navigation(
         before.first_visual_column, desired_cell};
     after.first_visual_row = revealed_first_row(
         model, after, viewport,
-        command == SelectionCommand::view_center_caret, word_wrap);
+        command == SelectionCommand::ViewCenterCaret, word_wrap);
     after.first_visual_column =
         revealed_first_column(after, viewport, word_wrap);
     return accepted(before, std::move(after));

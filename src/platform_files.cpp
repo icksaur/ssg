@@ -82,20 +82,20 @@ PathValidation validate_component(std::string_view component,
                                   PathSyntax syntax,
                                   std::size_t index) noexcept {
     if (component.empty() || component == "." || component == "..") {
-        return {PathError::traversal, index};
+        return {PathError::Traversal, index};
     }
 
     const auto length = utf8_length(component);
     if (!length.valid) {
-        return {PathError::invalid_utf8, index};
+        return {PathError::InvalidUtf8, index};
     }
 
-    if (syntax == PathSyntax::linux) {
+    if (syntax == PathSyntax::Linux) {
         if (component.find('\0') != std::string_view::npos) {
-            return {PathError::invalid_character, index};
+            return {PathError::InvalidCharacter, index};
         }
         if (component.size() > 255) {
-            return {PathError::component_too_long, index};
+            return {PathError::ComponentTooLong, index};
         }
         return {};
     }
@@ -104,17 +104,17 @@ PathValidation validate_component(std::string_view component,
         if (value < 32 || value == '<' || value == '>' || value == ':' ||
             value == '"' || value == '|' || value == '?' || value == '*' ||
             value == '\0') {
-            return {PathError::invalid_character, index};
+            return {PathError::InvalidCharacter, index};
         }
     }
     if (component.back() == '.' || component.back() == ' ') {
-        return {PathError::trailing_dot_or_space, index};
+        return {PathError::TrailingDotOrSpace, index};
     }
     if (is_windows_reserved(component)) {
-        return {PathError::reserved_name, index};
+        return {PathError::ReservedName, index};
     }
     if (length.utf16_units > 255) {
-        return {PathError::component_too_long, index};
+        return {PathError::ComponentTooLong, index};
     }
     return {};
 }
@@ -125,19 +125,19 @@ PathValidation validate_workspace_relative_path(std::string_view path,
                                                 PathSyntax syntax,
                                                 LongPathPolicy long_paths) noexcept {
     if (path.empty()) {
-        return {PathError::empty, 0};
+        return {PathError::Empty, 0};
     }
     if (path.front() == '/' ||
-        (syntax == PathSyntax::windows &&
+        (syntax == PathSyntax::Windows &&
          (path.front() == '\\' ||
           (path.size() >= 2 &&
            std::isalpha(static_cast<unsigned char>(path.front())) &&
            path[1] == ':')))) {
-        return {PathError::absolute, 0};
+        return {PathError::Absolute, 0};
     }
 
     const auto is_separator = [syntax](char value) {
-        return value == '/' || (syntax == PathSyntax::windows && value == '\\');
+        return value == '/' || (syntax == PathSyntax::Windows && value == '\\');
     };
     std::size_t component_start = 0;
     std::size_t component_index = 0;
@@ -157,16 +157,16 @@ PathValidation validate_workspace_relative_path(std::string_view path,
 
     const auto total_length = utf8_length(path);
     if (!total_length.valid) {
-        return {PathError::invalid_utf8, 0};
+        return {PathError::InvalidUtf8, 0};
     }
     const std::size_t maximum =
-        syntax == PathSyntax::linux
+        syntax == PathSyntax::Linux
             ? 4095
-            : (long_paths == LongPathPolicy::legacy ? 259 : 32766);
+            : (long_paths == LongPathPolicy::Legacy ? 259 : 32766);
     const std::size_t measured =
-        syntax == PathSyntax::linux ? path.size() : total_length.utf16_units;
+        syntax == PathSyntax::Linux ? path.size() : total_length.utf16_units;
     if (measured > maximum) {
-        return {PathError::path_too_long, 0};
+        return {PathError::PathTooLong, 0};
     }
     return {};
 }

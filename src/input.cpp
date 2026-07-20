@@ -254,37 +254,37 @@ std::vector<KeymapError> validate_keymap(
     std::vector<KeymapError> errors;
     if (keymap.name.empty()) {
         errors.push_back(
-            {KeymapErrorCode::empty_name, 0, "keymap name is empty"});
+            {KeymapErrorCode::EmptyName, 0, "keymap name is empty"});
     }
     for (std::size_t index = 0; index < keymap.bindings.size(); ++index) {
         const auto& binding = keymap.bindings[index];
         if (binding.sequence.empty()) {
-            errors.push_back({KeymapErrorCode::empty_sequence, index,
+            errors.push_back({KeymapErrorCode::EmptySequence, index,
                               "binding sequence is empty"});
         }
         if (std::ranges::any_of(binding.sequence,
                                 [](const auto& stroke) {
                                     return !valid_stroke(stroke);
                                 })) {
-            errors.push_back({KeymapErrorCode::invalid_stroke, index,
+            errors.push_back({KeymapErrorCode::InvalidStroke, index,
                               "binding contains an invalid key stroke"});
         }
         if (binding.command_id.empty()) {
-            errors.push_back({KeymapErrorCode::empty_command, index,
+            errors.push_back({KeymapErrorCode::EmptyCommand, index,
                               "binding command is empty"});
         }
         if (binding.context.empty()) {
-            errors.push_back({KeymapErrorCode::empty_context, index,
+            errors.push_back({KeymapErrorCode::EmptyContext, index,
                               "binding context is empty"});
         } else if (!known_context(binding.context)) {
-            errors.push_back({KeymapErrorCode::unknown_context, index,
+            errors.push_back({KeymapErrorCode::UnknownContext, index,
                               "binding context is not '*' or a focus target"});
         }
         if (std::ranges::any_of(
                 reserved_sequences, [&](const auto& reserved) {
                     return starts_with_sequence(binding.sequence, reserved);
                 })) {
-            errors.push_back({KeymapErrorCode::reserved_binding, index,
+            errors.push_back({KeymapErrorCode::ReservedBinding, index,
                               "binding uses a browser-reserved sequence"});
         }
         for (std::size_t previous = 0; previous < index; ++previous) {
@@ -293,7 +293,7 @@ std::vector<KeymapError> validate_keymap(
                 continue;
             }
             if (earlier.context == binding.context) {
-                errors.push_back({KeymapErrorCode::duplicate_binding, index,
+                errors.push_back({KeymapErrorCode::DuplicateBinding, index,
                                   "binding duplicates an earlier binding"});
                 break;
             }
@@ -309,7 +309,7 @@ std::vector<KeymapError> validate_keymap(
                            other.sequence == binding.sequence;
                 });
             if (globally_shadowed) {
-                errors.push_back({KeymapErrorCode::unreachable_binding, index,
+                errors.push_back({KeymapErrorCode::UnreachableBinding, index,
                                   "a global binding shadows this binding"});
             }
         }
@@ -326,7 +326,7 @@ std::vector<KeymapError> validate_keymap(
             if (is_strict_prefix(earlier.sequence, binding.sequence) ||
                 is_strict_prefix(binding.sequence, earlier.sequence)) {
                 errors.push_back(
-                    {KeymapErrorCode::ambiguous_prefix, index,
+                    {KeymapErrorCode::AmbiguousPrefix, index,
                      "binding sequence is a prefix of another eligible binding"});
                 break;
             }
@@ -355,7 +355,7 @@ KeymapResolution resolve_key_sequence(const KeymapViewState& keymap,
                                       const KeySequence& pending,
                                       std::string_view context) {
     if (pending.empty()) {
-        return {KeymapMatchKind::none, {}};
+        return {KeymapMatchKind::None, {}};
     }
     const KeyBinding* match = nullptr;
     bool has_pending = false;
@@ -378,19 +378,19 @@ KeymapResolution resolve_key_sequence(const KeymapViewState& keymap,
         }
     }
     if (match != nullptr) {
-        return {KeymapMatchKind::resolved, match->command_id};
+        return {KeymapMatchKind::Resolved, match->command_id};
     }
-    return {has_pending ? KeymapMatchKind::pending : KeymapMatchKind::none, {}};
+    return {has_pending ? KeymapMatchKind::Pending : KeymapMatchKind::None, {}};
 }
 
 TextRouting text_routing(std::string_view context) noexcept {
-    if (context == focus_target_name(FocusTarget::editor)) {
-        return TextRouting::insert;
+    if (context == focus_target_name(FocusTarget::Editor)) {
+        return TextRouting::Insert;
     }
-    if (context == focus_target_name(FocusTarget::prompt)) {
-        return TextRouting::prompt_query;
+    if (context == focus_target_name(FocusTarget::Prompt)) {
+        return TextRouting::PromptQuery;
     }
-    return TextRouting::ignore;
+    return TextRouting::Ignore;
 }
 
 bool has_global_binding(const KeymapViewState& keymap,

@@ -133,47 +133,47 @@ DocumentPosition caret_position(std::size_t offset) {
 
 std::string_view protocol_error_name(ProtocolError error) {
     switch (error) {
-        case ProtocolError::none: return "none";
-        case ProtocolError::message_too_large: return "message_too_large";
-        case ProtocolError::malformed_message: return "malformed_message";
-        case ProtocolError::unsupported_version: return "unsupported_version";
-        case ProtocolError::unsupported_command: return "unsupported_command";
-        case ProtocolError::insert_too_large: return "insert_too_large";
+        case ProtocolError::None: return "none";
+        case ProtocolError::MessageTooLarge: return "message_too_large";
+        case ProtocolError::MalformedMessage: return "malformed_message";
+        case ProtocolError::UnsupportedVersion: return "unsupported_version";
+        case ProtocolError::UnsupportedCommand: return "unsupported_command";
+        case ProtocolError::InsertTooLarge: return "insert_too_large";
     }
     return "malformed_message";
 }
 
 std::string_view command_error_name(CommandError error) {
     switch (error) {
-        case CommandError::none: return "none";
-        case CommandError::unknown_client: return "unknown_client";
-        case CommandError::unknown_command: return "unknown_command";
-        case CommandError::stale_revision: return "stale_revision";
-        case CommandError::capability_denied: return "capability_denied";
-        case CommandError::handler_failed: return "handler_failed";
-        case CommandError::revision_exhausted: return "revision_exhausted";
+        case CommandError::None: return "none";
+        case CommandError::UnknownClient: return "unknown_client";
+        case CommandError::UnknownCommand: return "unknown_command";
+        case CommandError::StaleRevision: return "stale_revision";
+        case CommandError::CapabilityDenied: return "capability_denied";
+        case CommandError::HandlerFailed: return "handler_failed";
+        case CommandError::RevisionExhausted: return "revision_exhausted";
     }
     return "handler_failed";
 }
 
 ProtocolError parse_protocol_error(std::string_view value) {
-    for (auto error : {ProtocolError::none, ProtocolError::message_too_large,
-                       ProtocolError::malformed_message,
-                       ProtocolError::unsupported_version,
-                       ProtocolError::unsupported_command,
-                       ProtocolError::insert_too_large}) {
+    for (auto error : {ProtocolError::None, ProtocolError::MessageTooLarge,
+                       ProtocolError::MalformedMessage,
+                       ProtocolError::UnsupportedVersion,
+                       ProtocolError::UnsupportedCommand,
+                       ProtocolError::InsertTooLarge}) {
         if (protocol_error_name(error) == value) return error;
     }
     throw std::invalid_argument{"unknown protocol error"};
 }
 
 CommandError parse_command_error(std::string_view value) {
-    for (auto error : {CommandError::none, CommandError::unknown_client,
-                       CommandError::unknown_command,
-                       CommandError::stale_revision,
-                       CommandError::capability_denied,
-                       CommandError::handler_failed,
-                       CommandError::revision_exhausted}) {
+    for (auto error : {CommandError::None, CommandError::UnknownClient,
+                       CommandError::UnknownCommand,
+                       CommandError::StaleRevision,
+                       CommandError::CapabilityDenied,
+                       CommandError::HandlerFailed,
+                       CommandError::RevisionExhausted}) {
         if (command_error_name(error) == value) return error;
     }
     throw std::invalid_argument{"unknown command error"};
@@ -190,41 +190,41 @@ std::string encode_insert_request(InsertRequest const& request) {
 DecodeInsertResult decode_insert_request(std::string_view message,
                                          ProtocolLimits limits) {
     if (message.size() > limits.max_message_bytes) {
-        return decode_failure(ProtocolError::message_too_large,
+        return decode_failure(ProtocolError::MessageTooLarge,
                               "message exceeds configured byte limit");
     }
     auto const parts = fields(message);
     if (parts.size() != 4) {
-        return decode_failure(ProtocolError::malformed_message,
+        return decode_failure(ProtocolError::MalformedMessage,
                               "insert message must contain four fields");
     }
     if (parts[0] != prefix) {
-        return decode_failure(ProtocolError::unsupported_version,
+        return decode_failure(ProtocolError::UnsupportedVersion,
                               "unsupported protocol version");
     }
     if (parts[1] != "INSERT") {
-        return decode_failure(ProtocolError::unsupported_command,
+        return decode_failure(ProtocolError::UnsupportedCommand,
                               "only text.insert is supported");
     }
     std::uint64_t revision = 0;
     if (!parse_integer(parts[2], revision) || revision == 0) {
-        return decode_failure(ProtocolError::malformed_message,
+        return decode_failure(ProtocolError::MalformedMessage,
                               "base revision must be a positive integer");
     }
     auto text = hex_decode(parts[3]);
     if (!text) {
-        return decode_failure(ProtocolError::malformed_message,
+        return decode_failure(ProtocolError::MalformedMessage,
                               "insert payload must be hexadecimal");
     }
     if (text->size() > limits.max_insert_bytes) {
-        return decode_failure(ProtocolError::insert_too_large,
+        return decode_failure(ProtocolError::InsertTooLarge,
                               "insert exceeds configured byte limit");
     }
     if (!valid_utf8(*text)) {
-        return decode_failure(ProtocolError::malformed_message,
+        return decode_failure(ProtocolError::MalformedMessage,
                               "insert payload must be valid non-NUL UTF-8");
     }
-    return {ProtocolError::none,
+    return {ProtocolError::None,
             InsertRequest{Revision{revision}, std::move(*text)}, {}};
 }
 
@@ -304,7 +304,7 @@ struct CoreEditorSlice::Impl {
               Selection{caret_position(0), caret_position(0)}}},
           session{CommandRegistry{std::vector<CommandSet>{CommandSet{{
               CommandRegistration{
-                  {"text.insert", CommandEffect::mutation, {}},
+                  {"text.insert", CommandEffect::Mutation, {}},
                   [this](CommandContext&, std::any const& payload) {
                       auto const* arguments =
                           std::any_cast<TextInputArguments>(&payload);
@@ -318,8 +318,8 @@ struct CoreEditorSlice::Impl {
                       }
                       auto result = apply_text_input(
                           document.snapshot(), selections,
-                          {IndentStyle::spaces, 4, true, LineEnding::lf},
-                          TextInputCommand::insert, *arguments);
+                          {IndentStyle::Spaces, 4, true, LineEnding::Lf},
+                          TextInputCommand::Insert, *arguments);
                       if (!result.accepted() || !result.transaction ||
                           !result.selections) {
                           return CommandHandlerResult::failure(result.message);
@@ -366,7 +366,7 @@ SliceResponse CoreEditorSlice::execute(ClientId client_id,
         ClientCommand{"text.insert", request.base_revision,
                       TextInputArguments{request.text}});
     auto const after = impl_->snapshot_unlocked();
-    return {ProtocolError::none, result.error, after,
+    return {ProtocolError::None, result.error, after,
             result.accepted() ? derive_document_delta(before, after)
                               : std::nullopt,
             std::move(result.message)};
@@ -429,23 +429,23 @@ ProtocolValue ProtocolValue::make_object(Object fields) {
 ProtocolValue::Kind ProtocolValue::kind() const noexcept {
     switch (storage_->value.index()) {
         case 0:
-            return Kind::null_value;
+            return Kind::NullValue;
         case 1:
-            return Kind::boolean;
+            return Kind::Boolean;
         case 2:
-            return Kind::integer;
+            return Kind::Integer;
         case 3:
-            return Kind::unsigned_integer;
+            return Kind::UnsignedInteger;
         case 4:
-            return Kind::text;
+            return Kind::Text;
         case 5:
-            return Kind::bytes;
+            return Kind::Bytes;
         case 6:
-            return Kind::array;
+            return Kind::Array;
         case 7:
-            return Kind::object;
+            return Kind::Object;
         default:
-            return Kind::null_value;
+            return Kind::NullValue;
     }
 }
 
@@ -603,40 +603,40 @@ private:
     std::size_t pos_ = 0;
 };
 
-enum class ValueReadStatus : std::uint8_t { ok, truncated, malformed, bounds_exceeded };
+enum class ValueReadStatus : std::uint8_t { Ok, Truncated, Malformed, BoundsExceeded };
 
 void write_value(std::string& out, ProtocolValue const& value) {
     switch (value.kind()) {
-        case ProtocolValue::Kind::null_value:
+        case ProtocolValue::Kind::NullValue:
             write_u8(out, 0);
             break;
-        case ProtocolValue::Kind::boolean:
+        case ProtocolValue::Kind::Boolean:
             write_u8(out, 1);
             write_u8(out, *value.as_bool() ? 1 : 0);
             break;
-        case ProtocolValue::Kind::integer:
+        case ProtocolValue::Kind::Integer:
             write_u8(out, 2);
             write_i64(out, *value.as_int());
             break;
-        case ProtocolValue::Kind::unsigned_integer:
+        case ProtocolValue::Kind::UnsignedInteger:
             write_u8(out, 3);
             write_u64(out, *value.as_uint());
             break;
-        case ProtocolValue::Kind::text: {
+        case ProtocolValue::Kind::Text: {
             write_u8(out, 4);
             auto const& text = *value.as_text();
             write_u32(out, static_cast<std::uint32_t>(text.size()));
             out.append(text);
             break;
         }
-        case ProtocolValue::Kind::bytes: {
+        case ProtocolValue::Kind::Bytes: {
             write_u8(out, 5);
             auto const& bytes = *value.as_bytes();
             write_u32(out, static_cast<std::uint32_t>(bytes.size()));
             write_raw_bytes(out, bytes);
             break;
         }
-        case ProtocolValue::Kind::array: {
+        case ProtocolValue::Kind::Array: {
             write_u8(out, 6);
             auto const& items = *value.as_array();
             write_u32(out, static_cast<std::uint32_t>(items.size()));
@@ -645,7 +645,7 @@ void write_value(std::string& out, ProtocolValue const& value) {
             }
             break;
         }
-        case ProtocolValue::Kind::object: {
+        case ProtocolValue::Kind::Object: {
             write_u8(out, 7);
             auto const& fields = *value.as_object();
             write_u32(out, static_cast<std::uint32_t>(fields.size()));
@@ -662,144 +662,144 @@ void write_value(std::string& out, ProtocolValue const& value) {
 ValueReadStatus read_value(ByteReader& reader, ProtocolValue& out,
                            std::size_t depth, ProtocolLimits const& limits) {
     if (depth > limits.max_value_depth) {
-        return ValueReadStatus::bounds_exceeded;
+        return ValueReadStatus::BoundsExceeded;
     }
     std::uint8_t tag = 0;
     if (!reader.read_u8(tag)) {
-        return ValueReadStatus::truncated;
+        return ValueReadStatus::Truncated;
     }
     switch (tag) {
         case 0:
             out = ProtocolValue::make_null();
-            return ValueReadStatus::ok;
+            return ValueReadStatus::Ok;
         case 1: {
             std::uint8_t raw = 0;
             if (!reader.read_u8(raw)) {
-                return ValueReadStatus::truncated;
+                return ValueReadStatus::Truncated;
             }
             if (raw > 1) {
-                return ValueReadStatus::malformed;
+                return ValueReadStatus::Malformed;
             }
             out = ProtocolValue::make_bool(raw != 0);
-            return ValueReadStatus::ok;
+            return ValueReadStatus::Ok;
         }
         case 2: {
             std::int64_t value = 0;
             if (!reader.read_i64(value)) {
-                return ValueReadStatus::truncated;
+                return ValueReadStatus::Truncated;
             }
             out = ProtocolValue::make_int(value);
-            return ValueReadStatus::ok;
+            return ValueReadStatus::Ok;
         }
         case 3: {
             std::uint64_t value = 0;
             if (!reader.read_u64(value)) {
-                return ValueReadStatus::truncated;
+                return ValueReadStatus::Truncated;
             }
             out = ProtocolValue::make_uint(value);
-            return ValueReadStatus::ok;
+            return ValueReadStatus::Ok;
         }
         case 4: {
             std::uint32_t length = 0;
             if (!reader.read_u32(length)) {
-                return ValueReadStatus::truncated;
+                return ValueReadStatus::Truncated;
             }
             if (length > limits.max_text_bytes) {
-                return ValueReadStatus::bounds_exceeded;
+                return ValueReadStatus::BoundsExceeded;
             }
             std::string_view bytes;
             if (!reader.read_bytes(length, bytes)) {
-                return ValueReadStatus::truncated;
+                return ValueReadStatus::Truncated;
             }
             out = ProtocolValue::make_text(std::string{bytes});
-            return ValueReadStatus::ok;
+            return ValueReadStatus::Ok;
         }
         case 5: {
             std::uint32_t length = 0;
             if (!reader.read_u32(length)) {
-                return ValueReadStatus::truncated;
+                return ValueReadStatus::Truncated;
             }
             if (length > limits.max_bytes_length) {
-                return ValueReadStatus::bounds_exceeded;
+                return ValueReadStatus::BoundsExceeded;
             }
             std::string_view bytes;
             if (!reader.read_bytes(length, bytes)) {
-                return ValueReadStatus::truncated;
+                return ValueReadStatus::Truncated;
             }
             out = ProtocolValue::make_bytes(
                 std::vector<std::uint8_t>{bytes.begin(), bytes.end()});
-            return ValueReadStatus::ok;
+            return ValueReadStatus::Ok;
         }
         case 6: {
             std::uint32_t count = 0;
             if (!reader.read_u32(count)) {
-                return ValueReadStatus::truncated;
+                return ValueReadStatus::Truncated;
             }
             if (count > limits.max_collection_length) {
-                return ValueReadStatus::bounds_exceeded;
+                return ValueReadStatus::BoundsExceeded;
             }
             ProtocolValue::Array items;
             items.reserve(count);
             for (std::uint32_t index = 0; index < count; ++index) {
                 ProtocolValue item;
                 auto status = read_value(reader, item, depth + 1, limits);
-                if (status != ValueReadStatus::ok) {
+                if (status != ValueReadStatus::Ok) {
                     return status;
                 }
                 items.push_back(std::move(item));
             }
             out = ProtocolValue::make_array(std::move(items));
-            return ValueReadStatus::ok;
+            return ValueReadStatus::Ok;
         }
         case 7: {
             std::uint32_t count = 0;
             if (!reader.read_u32(count)) {
-                return ValueReadStatus::truncated;
+                return ValueReadStatus::Truncated;
             }
             if (count > limits.max_collection_length) {
-                return ValueReadStatus::bounds_exceeded;
+                return ValueReadStatus::BoundsExceeded;
             }
             ProtocolValue::Object fields;
             fields.reserve(count);
             for (std::uint32_t index = 0; index < count; ++index) {
                 std::uint32_t key_length = 0;
                 if (!reader.read_u32(key_length)) {
-                    return ValueReadStatus::truncated;
+                    return ValueReadStatus::Truncated;
                 }
                 if (key_length > limits.max_text_bytes) {
-                    return ValueReadStatus::bounds_exceeded;
+                    return ValueReadStatus::BoundsExceeded;
                 }
                 std::string_view key_bytes;
                 if (!reader.read_bytes(key_length, key_bytes)) {
-                    return ValueReadStatus::truncated;
+                    return ValueReadStatus::Truncated;
                 }
                 ProtocolValue field_value;
                 auto status = read_value(reader, field_value, depth + 1, limits);
-                if (status != ValueReadStatus::ok) {
+                if (status != ValueReadStatus::Ok) {
                     return status;
                 }
                 fields.emplace_back(std::string{key_bytes}, std::move(field_value));
             }
             out = ProtocolValue::make_object(std::move(fields));
-            return ValueReadStatus::ok;
+            return ValueReadStatus::Ok;
         }
         default:
-            return ValueReadStatus::malformed;
+            return ValueReadStatus::Malformed;
     }
 }
 
 ProtocolError to_protocol_error(ValueReadStatus status) {
     switch (status) {
-        case ValueReadStatus::ok:
-            return ProtocolError::none;
-        case ValueReadStatus::truncated:
-            return ProtocolError::truncated_message;
-        case ValueReadStatus::malformed:
-            return ProtocolError::malformed_message;
-        case ValueReadStatus::bounds_exceeded:
-            return ProtocolError::value_bounds_exceeded;
+        case ValueReadStatus::Ok:
+            return ProtocolError::None;
+        case ValueReadStatus::Truncated:
+            return ProtocolError::TruncatedMessage;
+        case ValueReadStatus::Malformed:
+            return ProtocolError::MalformedMessage;
+        case ValueReadStatus::BoundsExceeded:
+            return ProtocolError::ValueBoundsExceeded;
     }
-    return ProtocolError::malformed_message;
+    return ProtocolError::MalformedMessage;
 }
 
 
@@ -823,39 +823,39 @@ DecodedMessage decode_message(std::string_view bytes,
                               ProtocolMessageKind expected_kind,
                               ProtocolLimits const& limits) {
     if (bytes.size() > limits.max_message_bytes) {
-        return {ProtocolError::message_too_large, std::nullopt,
+        return {ProtocolError::MessageTooLarge, std::nullopt,
                 "message exceeds the configured byte limit"};
     }
     ByteReader reader{bytes};
     std::uint8_t version = 0;
     if (!reader.read_u8(version)) {
-        return {ProtocolError::truncated_message, std::nullopt,
+        return {ProtocolError::TruncatedMessage, std::nullopt,
                 "message is missing its version byte"};
     }
     if (version != kProtocolWireVersion) {
-        return {ProtocolError::unsupported_version, std::nullopt,
+        return {ProtocolError::UnsupportedVersion, std::nullopt,
                 "message declares an unsupported protocol version"};
     }
     std::uint8_t kind_byte = 0;
     if (!reader.read_u8(kind_byte)) {
-        return {ProtocolError::truncated_message, std::nullopt,
+        return {ProtocolError::TruncatedMessage, std::nullopt,
                 "message is missing its kind byte"};
     }
     if (kind_byte != static_cast<std::uint8_t>(expected_kind)) {
-        return {ProtocolError::unsupported_message_kind, std::nullopt,
+        return {ProtocolError::UnsupportedMessageKind, std::nullopt,
                 "message kind does not match the requested decoder"};
     }
     ProtocolValue payload;
     auto status = read_value(reader, payload, 0, limits);
-    if (status != ValueReadStatus::ok) {
+    if (status != ValueReadStatus::Ok) {
         return {to_protocol_error(status), std::nullopt,
                 "message payload is malformed"};
     }
     if (!reader.at_end()) {
-        return {ProtocolError::malformed_message, std::nullopt,
+        return {ProtocolError::MalformedMessage, std::nullopt,
                 "message has unexpected trailing bytes"};
     }
-    return {ProtocolError::none, std::move(payload), {}};
+    return {ProtocolError::None, std::move(payload), {}};
 }
 
 }  // namespace
@@ -1390,7 +1390,7 @@ ProtocolValue to_value(std::array<T, N> const& value) {
 
 template <typename T>
 [[nodiscard]] bool from_value(ProtocolValue const& value, std::optional<T>& out) {
-    if (value.kind() == ProtocolValue::Kind::null_value) {
+    if (value.kind() == ProtocolValue::Kind::NullValue) {
         out.reset();
         return true;
     }
@@ -1496,157 +1496,157 @@ template <typename Enum, std::size_t N>
 // the closed set of valid values for that enum.
 
 bool decode_present(ProtocolValue const& value, std::optional<DocumentMode>& out) {
-    static constexpr std::array values{DocumentMode::edit, DocumentMode::read_only,
-                                       DocumentMode::diff};
+    static constexpr std::array values{DocumentMode::Edit, DocumentMode::ReadOnly,
+                                       DocumentMode::Diff};
     return decode_enum(value, out, values);
 }
 
 bool decode_present(ProtocolValue const& value, std::optional<ClipboardRequestKind>& out) {
-    static constexpr std::array values{ClipboardRequestKind::write,
-                                       ClipboardRequestKind::read};
+    static constexpr std::array values{ClipboardRequestKind::Write,
+                                       ClipboardRequestKind::Read};
     return decode_enum(value, out, values);
 }
 
 bool decode_present(ProtocolValue const& value, std::optional<ClipboardResponseStatus>& out) {
     static constexpr std::array values{
-        ClipboardResponseStatus::success, ClipboardResponseStatus::denied,
-        ClipboardResponseStatus::unavailable, ClipboardResponseStatus::disconnected};
+        ClipboardResponseStatus::Success, ClipboardResponseStatus::Denied,
+        ClipboardResponseStatus::Unavailable, ClipboardResponseStatus::Disconnected};
     return decode_enum(value, out, values);
 }
 
 bool decode_present(ProtocolValue const& value, std::optional<StatusPriority>& out) {
-    static constexpr std::array values{StatusPriority::error, StatusPriority::warning,
-                                       StatusPriority::information, StatusPriority::progress};
+    static constexpr std::array values{StatusPriority::Error, StatusPriority::Warning,
+                                       StatusPriority::Information, StatusPriority::Progress};
     return decode_enum(value, out, values);
 }
 
 bool decode_present(ProtocolValue const& value, std::optional<PromptKind>& out) {
-    static constexpr std::array values{PromptKind::path, PromptKind::find,
-                                       PromptKind::replace, PromptKind::settings,
-                                       PromptKind::command_argument,
-                                       PromptKind::palette};
+    static constexpr std::array values{PromptKind::Path, PromptKind::Find,
+                                       PromptKind::Replace, PromptKind::Settings,
+                                       PromptKind::CommandArgument,
+                                       PromptKind::Palette};
     return decode_enum(value, out, values);
 }
 
 bool decode_present(ProtocolValue const& value, std::optional<PromptControlKind>& out) {
-    static constexpr std::array values{PromptControlKind::input, PromptControlKind::toggle,
-                                       PromptControlKind::count};
+    static constexpr std::array values{PromptControlKind::Input, PromptControlKind::Toggle,
+                                       PromptControlKind::Count};
     return decode_enum(value, out, values);
 }
 
 bool decode_present(ProtocolValue const& value, std::optional<SearchMode>& out) {
-    static constexpr std::array values{SearchMode::file, SearchMode::line,
-                                       SearchMode::symbol, SearchMode::text,
-                                       SearchMode::command};
+    static constexpr std::array values{SearchMode::File, SearchMode::Line,
+                                       SearchMode::Symbol, SearchMode::Text,
+                                       SearchMode::Command};
     return decode_enum(value, out, values);
 }
 
 bool decode_present(ProtocolValue const& value, std::optional<FindReplaceError>& out) {
     static constexpr std::array values{
-        FindReplaceError::none, FindReplaceError::invalid_pattern,
-        FindReplaceError::invalid_utf8, FindReplaceError::invalid_selection,
-        FindReplaceError::budget_exhausted, FindReplaceError::cancelled,
-        FindReplaceError::no_match, FindReplaceError::stale_revision,
-        FindReplaceError::document_rejected, FindReplaceError::workspace_rejected,
-        FindReplaceError::recovery_rejected};
+        FindReplaceError::None, FindReplaceError::InvalidPattern,
+        FindReplaceError::InvalidUtf8, FindReplaceError::InvalidSelection,
+        FindReplaceError::BudgetExhausted, FindReplaceError::Cancelled,
+        FindReplaceError::NoMatch, FindReplaceError::StaleRevision,
+        FindReplaceError::DocumentRejected, FindReplaceError::WorkspaceRejected,
+        FindReplaceError::RecoveryRejected};
     return decode_enum(value, out, values);
 }
 
 bool decode_present(ProtocolValue const& value, std::optional<SettingScope>& out) {
-    static constexpr std::array values{SettingScope::defaults, SettingScope::user,
-                                       SettingScope::workspace, SettingScope::language,
-                                       SettingScope::document};
+    static constexpr std::array values{SettingScope::Defaults, SettingScope::User,
+                                       SettingScope::Workspace, SettingScope::Language,
+                                       SettingScope::Document};
     return decode_enum(value, out, values);
 }
 
 bool decode_present(ProtocolValue const& value, std::optional<SettingKey>& out) {
     static constexpr std::array values{
-        SettingKey::indent_width, SettingKey::indent_style, SettingKey::indent_detection,
-        SettingKey::auto_indent, SettingKey::line_ending, SettingKey::final_newline,
-        SettingKey::encoding, SettingKey::word_wrap, SettingKey::theme, SettingKey::keymap,
-        SettingKey::search_case_sensitive, SettingKey::search_whole_word,
-        SettingKey::search_regular_expression, SettingKey::undo_byte_budget,
-        SettingKey::recovery_byte_budget, SettingKey::typing_coalescing_ms};
+        SettingKey::IndentWidth, SettingKey::IndentStyle, SettingKey::IndentDetection,
+        SettingKey::AutoIndent, SettingKey::LineEnding, SettingKey::FinalNewline,
+        SettingKey::Encoding, SettingKey::WordWrap, SettingKey::Theme, SettingKey::Keymap,
+        SettingKey::SearchCaseSensitive, SettingKey::SearchWholeWord,
+        SettingKey::SearchRegularExpression, SettingKey::UndoByteBudget,
+        SettingKey::RecoveryByteBudget, SettingKey::TypingCoalescingMs};
     return decode_enum(value, out, values);
 }
 
 bool decode_present(ProtocolValue const& value, std::optional<TextEncoding>& out) {
-    static constexpr std::array values{TextEncoding::utf8, TextEncoding::utf8_bom,
-                                       TextEncoding::utf16le, TextEncoding::utf16be,
-                                       TextEncoding::windows1252, TextEncoding::iso88591};
+    static constexpr std::array values{TextEncoding::Utf8, TextEncoding::Utf8Bom,
+                                       TextEncoding::Utf16le, TextEncoding::Utf16be,
+                                       TextEncoding::Windows1252, TextEncoding::Iso88591};
     return decode_enum(value, out, values);
 }
 
 bool decode_present(ProtocolValue const& value, std::optional<IndentStyle>& out) {
-    static constexpr std::array values{IndentStyle::spaces, IndentStyle::tabs};
+    static constexpr std::array values{IndentStyle::Spaces, IndentStyle::Tabs};
     return decode_enum(value, out, values);
 }
 
 bool decode_present(ProtocolValue const& value, std::optional<LineEnding>& out) {
-    static constexpr std::array values{LineEnding::lf, LineEnding::crlf, LineEnding::cr,
-                                       LineEnding::mixed};
+    static constexpr std::array values{LineEnding::Lf, LineEnding::Crlf, LineEnding::Cr,
+                                       LineEnding::Mixed};
     return decode_enum(value, out, values);
 }
 
 bool decode_present(ProtocolValue const& value, std::optional<TabKind>& out) {
-    static constexpr std::array values{TabKind::document, TabKind::live_diff,
-                                       TabKind::read_only_output, TabKind::search_results,
-                                       TabKind::tree_view};
+    static constexpr std::array values{TabKind::Document, TabKind::LiveDiff,
+                                       TabKind::ReadOnlyOutput, TabKind::SearchResults,
+                                       TabKind::TreeView};
     return decode_enum(value, out, values);
 }
 
 bool decode_present(ProtocolValue const& value, std::optional<TabRecoveryBadge>& out) {
-    static constexpr std::array values{TabRecoveryBadge::none, TabRecoveryBadge::pending,
-                                       TabRecoveryBadge::durable, TabRecoveryBadge::failed};
+    static constexpr std::array values{TabRecoveryBadge::None, TabRecoveryBadge::Pending,
+                                       TabRecoveryBadge::Durable, TabRecoveryBadge::Failed};
     return decode_enum(value, out, values);
 }
 
 bool decode_present(ProtocolValue const& value, std::optional<JournalDocumentKeyKind>& out) {
-    static constexpr std::array values{JournalDocumentKeyKind::saved,
-                                       JournalDocumentKeyKind::untitled};
+    static constexpr std::array values{JournalDocumentKeyKind::Saved,
+                                       JournalDocumentKeyKind::Untitled};
     return decode_enum(value, out, values);
 }
 
 bool decode_present(ProtocolValue const& value, std::optional<DiffLineKind>& out) {
-    static constexpr std::array values{DiffLineKind::added, DiffLineKind::removed,
-                                       DiffLineKind::modified};
+    static constexpr std::array values{DiffLineKind::Added, DiffLineKind::Removed,
+                                       DiffLineKind::Modified};
     return decode_enum(value, out, values);
 }
 
 bool decode_present(ProtocolValue const& value, std::optional<ExternalAction>& out) {
-    static constexpr std::array values{ExternalAction::reload, ExternalAction::keep_buffer,
-                                       ExternalAction::open_diff};
+    static constexpr std::array values{ExternalAction::Reload, ExternalAction::KeepBuffer,
+                                       ExternalAction::OpenDiff};
     return decode_enum(value, out, values);
 }
 
 bool decode_present(ProtocolValue const& value, std::optional<ExternalDocumentStatus>& out) {
-    static constexpr std::array values{ExternalDocumentStatus::externally_modified,
-                                       ExternalDocumentStatus::externally_removed};
+    static constexpr std::array values{ExternalDocumentStatus::ExternallyModified,
+                                       ExternalDocumentStatus::ExternallyRemoved};
     return decode_enum(value, out, values);
 }
 
 bool decode_present(ProtocolValue const& value, std::optional<FollowMode>& out) {
-    static constexpr std::array values{FollowMode::following, FollowMode::paused};
+    static constexpr std::array values{FollowMode::Following, FollowMode::Paused};
     return decode_enum(value, out, values);
 }
 
 bool decode_present(ProtocolValue const& value, std::optional<TreeProviderKind>& out) {
-    static constexpr std::array values{TreeProviderKind::filesystem, TreeProviderKind::git,
-                                       TreeProviderKind::symbols};
+    static constexpr std::array values{TreeProviderKind::Filesystem, TreeProviderKind::Git,
+                                       TreeProviderKind::Symbols};
     return decode_enum(value, out, values);
 }
 
 bool decode_present(ProtocolValue const& value, std::optional<TreeNodeKind>& out) {
-    static constexpr std::array values{TreeNodeKind::root, TreeNodeKind::directory,
-                                       TreeNodeKind::file, TreeNodeKind::symlink,
-                                       TreeNodeKind::git_entry, TreeNodeKind::symbol};
+    static constexpr std::array values{TreeNodeKind::Root, TreeNodeKind::Directory,
+                                       TreeNodeKind::File, TreeNodeKind::Symlink,
+                                       TreeNodeKind::GitEntry, TreeNodeKind::Symbol};
     return decode_enum(value, out, values);
 }
 
 bool decode_present(ProtocolValue const& value, std::optional<GitTreeStatus>& out) {
-    static constexpr std::array values{GitTreeStatus::added, GitTreeStatus::modified,
-                                       GitTreeStatus::deleted, GitTreeStatus::renamed,
-                                       GitTreeStatus::untracked};
+    static constexpr std::array values{GitTreeStatus::Added, GitTreeStatus::Modified,
+                                       GitTreeStatus::Deleted, GitTreeStatus::Renamed,
+                                       GitTreeStatus::Untracked};
     return decode_enum(value, out, values);
 }
 
@@ -1655,47 +1655,47 @@ bool decode_present(ProtocolValue const& value, std::optional<SyntaxScope>& out)
 }
 
 bool decode_present(ProtocolValue const& value, std::optional<BracketKind>& out) {
-    static constexpr std::array values{BracketKind::round, BracketKind::square,
-                                       BracketKind::curly};
+    static constexpr std::array values{BracketKind::Round, BracketKind::Square,
+                                       BracketKind::Curly};
     return decode_enum(value, out, values);
 }
 
 bool decode_present(ProtocolValue const& value, std::optional<BracketRole>& out) {
-    static constexpr std::array values{BracketRole::open, BracketRole::close};
+    static constexpr std::array values{BracketRole::Open, BracketRole::Close};
     return decode_enum(value, out, values);
 }
 
 bool decode_present(ProtocolValue const& value, std::optional<CommentKind>& out) {
-    static constexpr std::array values{CommentKind::line, CommentKind::block};
+    static constexpr std::array values{CommentKind::Line, CommentKind::Block};
     return decode_enum(value, out, values);
 }
 
 bool decode_present(ProtocolValue const& value, std::optional<CommentTokenRole>& out) {
-    static constexpr std::array values{CommentTokenRole::line, CommentTokenRole::block_open,
-                                       CommentTokenRole::block_close};
+    static constexpr std::array values{CommentTokenRole::Line, CommentTokenRole::BlockOpen,
+                                       CommentTokenRole::BlockClose};
     return decode_enum(value, out, values);
 }
 
 bool decode_present(ProtocolValue const& value, std::optional<LspDiagnosticSeverity>& out) {
     static constexpr std::array values{
-        LspDiagnosticSeverity::error, LspDiagnosticSeverity::warning,
-        LspDiagnosticSeverity::information, LspDiagnosticSeverity::hint};
+        LspDiagnosticSeverity::Error, LspDiagnosticSeverity::Warning,
+        LspDiagnosticSeverity::Information, LspDiagnosticSeverity::Hint};
     return decode_enum(value, out, values);
 }
 
 bool decode_present(ProtocolValue const& value, std::optional<ShellNodeKind>& out) {
     static constexpr std::array values{
-        ShellNodeKind::header, ShellNodeKind::header_field, ShellNodeKind::footer,
-        ShellNodeKind::footer_field, ShellNodeKind::footer_action, ShellNodeKind::tab_bar,
-        ShellNodeKind::tab, ShellNodeKind::panel, ShellNodeKind::panel_provider,
-        ShellNodeKind::pane, ShellNodeKind::scrollbar, ShellNodeKind::prompt_reservation,
-        ShellNodeKind::empty_state};
+        ShellNodeKind::Header, ShellNodeKind::HeaderField, ShellNodeKind::Footer,
+        ShellNodeKind::FooterField, ShellNodeKind::FooterAction, ShellNodeKind::TabBar,
+        ShellNodeKind::Tab, ShellNodeKind::Panel, ShellNodeKind::PanelProvider,
+        ShellNodeKind::Pane, ShellNodeKind::Scrollbar, ShellNodeKind::PromptReservation,
+        ShellNodeKind::EmptyState};
     return decode_enum(value, out, values);
 }
 
 bool decode_present(ProtocolValue const& value, std::optional<FocusTarget>& out) {
-    static constexpr std::array values{FocusTarget::editor, FocusTarget::panel,
-                                       FocusTarget::prompt};
+    static constexpr std::array values{FocusTarget::Editor, FocusTarget::Panel,
+                                       FocusTarget::Prompt};
     return decode_enum(value, out, values);
 }
 
@@ -1893,7 +1893,7 @@ bool decode_present(ProtocolValue const& value, std::optional<UntitledDocumentId
 ProtocolValue to_value(JournalDocumentKey const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("kind", to_value(value.kind()));
-    if (value.kind() == JournalDocumentKeyKind::saved) {
+    if (value.kind() == JournalDocumentKeyKind::Saved) {
         fields.emplace_back("path", to_value(value.saved_path()));
     } else {
         fields.emplace_back("untitled_id", to_value(value.untitled_id()));
@@ -1903,7 +1903,7 @@ ProtocolValue to_value(JournalDocumentKey const& value) {
 bool decode_present(ProtocolValue const& value, std::optional<JournalDocumentKey>& out) {
     auto kind = require_field<JournalDocumentKeyKind>(value.field("kind"));
     if (!kind) return false;
-    if (*kind == JournalDocumentKeyKind::saved) {
+    if (*kind == JournalDocumentKeyKind::Saved) {
         auto path = require_field<std::string>(value.field("path"));
         if (!path) return false;
         out.emplace(JournalDocumentKey::saved(*path));
@@ -4853,7 +4853,7 @@ CommandArgumentCodec make_none_codec() {
     return CommandArgumentCodec{
         [](std::any const&) { return ProtocolValue::make_null(); },
         [](ProtocolValue const& value) -> std::optional<std::any> {
-            if (value.kind() != ProtocolValue::Kind::null_value) {
+            if (value.kind() != ProtocolValue::Kind::NullValue) {
                 return std::nullopt;
             }
             return std::any{};
@@ -4882,7 +4882,7 @@ CommandArgumentCodec make_workspace_apply_codec() {
             return to_value(std::any_cast<WorkspaceReplacePreview const&>(payload));
         },
         [](ProtocolValue const& value) -> std::optional<std::any> {
-            if (value.kind() == ProtocolValue::Kind::null_value) {
+            if (value.kind() == ProtocolValue::Kind::NullValue) {
                 return std::any{};
             }
             std::optional<WorkspaceReplacePreview> decoded;
@@ -4992,7 +4992,7 @@ std::string encode_command_request(ClientCommand const& command,
     fields.emplace_back("base_revision", to_value(command.base_revision));
     fields.emplace_back("payload",
                         registry.encode_argument(command.id, command.payload));
-    return encode_message(ProtocolMessageKind::command_request,
+    return encode_message(ProtocolMessageKind::CommandRequest,
                           ProtocolValue::make_object(std::move(fields)));
 }
 
@@ -5000,36 +5000,36 @@ DecodeCommandRequestResult decode_command_request(
     std::string_view bytes, CommandArgumentCodecRegistry const& registry,
     ProtocolLimits limits) {
     auto decoded =
-        decode_message(bytes, ProtocolMessageKind::command_request, limits);
-    if (decoded.error != ProtocolError::none) {
+        decode_message(bytes, ProtocolMessageKind::CommandRequest, limits);
+    if (decoded.error != ProtocolError::None) {
         return {decoded.error, std::nullopt, decoded.message};
     }
     auto const& payload = *decoded.payload;
     if (!payload.as_object()) {
-        return {ProtocolError::malformed_message, std::nullopt,
+        return {ProtocolError::MalformedMessage, std::nullopt,
                 "command request payload is not an object"};
     }
     auto id = require_field<std::string>(payload.field("id"));
     auto base_revision = require_field<Revision>(payload.field("base_revision"));
     if (!id || !base_revision) {
-        return {ProtocolError::malformed_message, std::nullopt,
+        return {ProtocolError::MalformedMessage, std::nullopt,
                 "command request payload is malformed"};
     }
     if (!registry.contains(*id)) {
-        return {ProtocolError::unsupported_command, std::nullopt,
+        return {ProtocolError::UnsupportedCommand, std::nullopt,
                 "command request references an unknown command id"};
     }
     auto const* payload_field = payload.field("payload");
     if (payload_field == nullptr) {
-        return {ProtocolError::malformed_message, std::nullopt,
+        return {ProtocolError::MalformedMessage, std::nullopt,
                 "command request is missing its payload field"};
     }
     auto argument = registry.decode_argument(*id, *payload_field);
     if (!argument) {
-        return {ProtocolError::malformed_message, std::nullopt,
+        return {ProtocolError::MalformedMessage, std::nullopt,
                 "command request payload does not match its command id"};
     }
-    return {ProtocolError::none,
+    return {ProtocolError::None,
             ClientCommand{std::move(*id), *base_revision,
                           std::move(*argument)},
             {}};
@@ -5042,32 +5042,32 @@ std::string encode_command_result(CommandResult const& result) {
                     static_cast<std::uint8_t>(result.error)));
     fields.emplace_back("revision", to_value(result.revision));
     fields.emplace_back("message", to_value(result.message));
-    return encode_message(ProtocolMessageKind::command_result,
+    return encode_message(ProtocolMessageKind::CommandResult,
                          ProtocolValue::make_object(std::move(fields)));
 }
 
 DecodeCommandResultResult decode_command_result(std::string_view bytes,
                                                ProtocolLimits limits) {
     auto decoded =
-        decode_message(bytes, ProtocolMessageKind::command_result, limits);
-    if (decoded.error != ProtocolError::none) {
+        decode_message(bytes, ProtocolMessageKind::CommandResult, limits);
+    if (decoded.error != ProtocolError::None) {
         return {decoded.error, std::nullopt, decoded.message};
     }
     auto const& payload = *decoded.payload;
     if (!payload.as_object()) {
-        return {ProtocolError::malformed_message, std::nullopt,
+        return {ProtocolError::MalformedMessage, std::nullopt,
                "command result payload is not an object"};
     }
     auto error = require_field<std::uint8_t>(payload.field("error"));
     auto revision = require_field<Revision>(payload.field("revision"));
     auto message = require_field<std::string>(payload.field("message"));
     if (!error || *error > static_cast<std::uint8_t>(
-                              CommandError::revision_exhausted) ||
+                              CommandError::RevisionExhausted) ||
         !revision || !message) {
-        return {ProtocolError::malformed_message, std::nullopt,
+        return {ProtocolError::MalformedMessage, std::nullopt,
                "command result payload is malformed"};
     }
-    return {ProtocolError::none,
+    return {ProtocolError::None,
             CommandResult{static_cast<CommandError>(*error), *revision,
                          std::move(*message)},
             {}};
@@ -5079,20 +5079,20 @@ std::string encode_session_snapshot(SessionSnapshot const& snapshot) {
     fields.emplace_back("topology", to_value(snapshot.topology()));
     fields.emplace_back("client", to_value(snapshot.client()));
     fields.emplace_back("sections", to_value(snapshot.sections()));
-    return encode_message(ProtocolMessageKind::session_snapshot,
+    return encode_message(ProtocolMessageKind::SessionSnapshot,
                           ProtocolValue::make_object(std::move(fields)));
 }
 
 DecodeSessionSnapshotResult decode_session_snapshot(std::string_view bytes,
                                                     ProtocolLimits limits) {
     auto decoded =
-        decode_message(bytes, ProtocolMessageKind::session_snapshot, limits);
-    if (decoded.error != ProtocolError::none) {
+        decode_message(bytes, ProtocolMessageKind::SessionSnapshot, limits);
+    if (decoded.error != ProtocolError::None) {
         return {decoded.error, std::nullopt, decoded.message};
     }
     auto const& payload = *decoded.payload;
     if (!payload.as_object()) {
-        return {ProtocolError::malformed_message, std::nullopt,
+        return {ProtocolError::MalformedMessage, std::nullopt,
                 "session snapshot payload is not an object"};
     }
     auto revision = require_field<Revision>(payload.field("revision"));
@@ -5101,10 +5101,10 @@ DecodeSessionSnapshotResult decode_session_snapshot(std::string_view bytes,
     auto sections =
         require_field<SessionSnapshotSections>(payload.field("sections"));
     if (!revision || !topology || !client || !sections) {
-        return {ProtocolError::malformed_message, std::nullopt,
+        return {ProtocolError::MalformedMessage, std::nullopt,
                 "session snapshot payload is malformed"};
     }
-    return {ProtocolError::none,
+    return {ProtocolError::None,
             SessionSnapshot{*revision, std::move(*topology),
                             std::move(*client), std::move(*sections)},
             {}};
@@ -5141,20 +5141,20 @@ std::string encode_session_delta(SessionDelta const& delta) {
     fields.emplace_back("theme", to_value(delta.theme()));
     fields.emplace_back("shell", to_value(delta.shell()));
     fields.emplace_back("viewport", to_value(delta.viewport()));
-    return encode_message(ProtocolMessageKind::session_delta,
+    return encode_message(ProtocolMessageKind::SessionDelta,
                           ProtocolValue::make_object(std::move(fields)));
 }
 
 DecodeSessionDeltaResult decode_session_delta(std::string_view bytes,
                                               ProtocolLimits limits) {
     auto decoded =
-        decode_message(bytes, ProtocolMessageKind::session_delta, limits);
-    if (decoded.error != ProtocolError::none) {
+        decode_message(bytes, ProtocolMessageKind::SessionDelta, limits);
+    if (decoded.error != ProtocolError::None) {
         return {decoded.error, std::nullopt, decoded.message};
     }
     auto const& payload = *decoded.payload;
     if (!payload.as_object()) {
-        return {ProtocolError::malformed_message, std::nullopt,
+        return {ProtocolError::MalformedMessage, std::nullopt,
                 "session delta payload is not an object"};
     }
 
@@ -5207,11 +5207,11 @@ DecodeSessionDeltaResult decode_session_delta(std::string_view bytes,
         !tabs || !diff || !external_modification || !follow_edits || !tree ||
         !syntax || !lsp_sync || !lsp_features || !theme || !shell ||
         !viewport) {
-        return {ProtocolError::malformed_message, std::nullopt,
+        return {ProtocolError::MalformedMessage, std::nullopt,
                 "session delta payload is malformed"};
     }
 
-    return {ProtocolError::none,
+    return {ProtocolError::None,
             decode_wire_session_delta(
                 *base_revision, *revision, *client_id, *view_id,
                 std::move(*capabilities), std::move(topology),
@@ -5229,64 +5229,64 @@ DecodeSessionDeltaResult decode_session_delta(std::string_view bytes,
 }
 
 std::string encode_clipboard_request(ClipboardRequest const& request) {
-    return encode_message(ProtocolMessageKind::clipboard_request,
+    return encode_message(ProtocolMessageKind::ClipboardRequest,
                           to_value(request));
 }
 
 DecodeClipboardRequestResult decode_clipboard_request(std::string_view bytes,
                                                       ProtocolLimits limits) {
     auto decoded =
-        decode_message(bytes, ProtocolMessageKind::clipboard_request, limits);
-    if (decoded.error != ProtocolError::none) {
+        decode_message(bytes, ProtocolMessageKind::ClipboardRequest, limits);
+    if (decoded.error != ProtocolError::None) {
         return {decoded.error, std::nullopt, decoded.message};
     }
     std::optional<ClipboardRequest> request;
     if (!from_value(*decoded.payload, request) || !request.has_value()) {
-        return {ProtocolError::malformed_message, std::nullopt,
+        return {ProtocolError::MalformedMessage, std::nullopt,
                 "clipboard request payload is malformed"};
     }
-    return {ProtocolError::none, std::move(request), {}};
+    return {ProtocolError::None, std::move(request), {}};
 }
 
 std::string encode_clipboard_response(ClipboardResponse const& response) {
-    return encode_message(ProtocolMessageKind::clipboard_response,
+    return encode_message(ProtocolMessageKind::ClipboardResponse,
                           to_value(response));
 }
 
 DecodeClipboardResponseResult decode_clipboard_response(
     std::string_view bytes, ProtocolLimits limits) {
     auto decoded =
-        decode_message(bytes, ProtocolMessageKind::clipboard_response, limits);
-    if (decoded.error != ProtocolError::none) {
+        decode_message(bytes, ProtocolMessageKind::ClipboardResponse, limits);
+    if (decoded.error != ProtocolError::None) {
         return {decoded.error, std::nullopt, decoded.message};
     }
     std::optional<ClipboardResponse> response;
     if (!from_value(*decoded.payload, response) || !response.has_value()) {
-        return {ProtocolError::malformed_message, std::nullopt,
+        return {ProtocolError::MalformedMessage, std::nullopt,
                 "clipboard response payload is malformed"};
     }
-    return {ProtocolError::none, std::move(response), {}};
+    return {ProtocolError::None, std::move(response), {}};
 }
 
 std::string encode_status_action_invocation(
     StatusActionInvocation const& invocation) {
-    return encode_message(ProtocolMessageKind::status_action_invocation,
+    return encode_message(ProtocolMessageKind::StatusActionInvocation,
                           to_value(invocation));
 }
 
 DecodeStatusActionInvocationResult decode_status_action_invocation(
     std::string_view bytes, ProtocolLimits limits) {
     auto decoded = decode_message(
-        bytes, ProtocolMessageKind::status_action_invocation, limits);
-    if (decoded.error != ProtocolError::none) {
+        bytes, ProtocolMessageKind::StatusActionInvocation, limits);
+    if (decoded.error != ProtocolError::None) {
         return {decoded.error, std::nullopt, decoded.message};
     }
     std::optional<StatusActionInvocation> invocation;
     if (!from_value(*decoded.payload, invocation) || !invocation.has_value()) {
-        return {ProtocolError::malformed_message, std::nullopt,
+        return {ProtocolError::MalformedMessage, std::nullopt,
                 "status action invocation payload is malformed"};
     }
-    return {ProtocolError::none, std::move(invocation), {}};
+    return {ProtocolError::None, std::move(invocation), {}};
 }
 
 // Binary-frame envelope: [u8 version][u8 kind][u64 request_id][u32
@@ -5305,49 +5305,49 @@ std::string encode_binary_frame(BinaryFrame const& frame) {
 DecodeBinaryFrameResult decode_binary_frame(std::string_view bytes,
                                             ProtocolLimits limits) {
     if (bytes.size() > limits.max_binary_frame_bytes) {
-        return {ProtocolError::binary_frame_too_large, std::nullopt,
+        return {ProtocolError::BinaryFrameTooLarge, std::nullopt,
                 "binary frame exceeds the configured byte limit"};
     }
     ByteReader reader{bytes};
     std::uint8_t version = 0;
     if (!reader.read_u8(version)) {
-        return {ProtocolError::truncated_message, std::nullopt,
+        return {ProtocolError::TruncatedMessage, std::nullopt,
                 "binary frame is missing its version byte"};
     }
     std::uint8_t kind_byte = 0;
     if (!reader.read_u8(kind_byte)) {
-        return {ProtocolError::truncated_message, std::nullopt,
+        return {ProtocolError::TruncatedMessage, std::nullopt,
                 "binary frame is missing its kind byte"};
     }
-    if (kind_byte != static_cast<std::uint8_t>(BinaryPayloadKind::dropped_content)) {
-        return {ProtocolError::malformed_message, std::nullopt,
+    if (kind_byte != static_cast<std::uint8_t>(BinaryPayloadKind::DroppedContent)) {
+        return {ProtocolError::MalformedMessage, std::nullopt,
                 "binary frame declares an unsupported payload kind"};
     }
     std::uint64_t request_id = 0;
     if (!reader.read_u64(request_id)) {
-        return {ProtocolError::truncated_message, std::nullopt,
+        return {ProtocolError::TruncatedMessage, std::nullopt,
                 "binary frame is missing its request id"};
     }
     std::uint32_t declared_length = 0;
     if (!reader.read_u32(declared_length)) {
-        return {ProtocolError::truncated_message, std::nullopt,
+        return {ProtocolError::TruncatedMessage, std::nullopt,
                 "binary frame is missing its length prefix"};
     }
     if (declared_length > limits.max_binary_frame_bytes) {
-        return {ProtocolError::binary_frame_too_large, std::nullopt,
+        return {ProtocolError::BinaryFrameTooLarge, std::nullopt,
                 "binary frame payload exceeds the configured byte limit"};
     }
     std::string_view raw_payload;
     if (!reader.read_bytes(declared_length, raw_payload)) {
-        return {ProtocolError::truncated_message, std::nullopt,
+        return {ProtocolError::TruncatedMessage, std::nullopt,
                 "binary frame payload is truncated"};
     }
     if (!reader.at_end()) {
-        return {ProtocolError::malformed_message, std::nullopt,
+        return {ProtocolError::MalformedMessage, std::nullopt,
                 "binary frame has unexpected trailing bytes"};
     }
     std::vector<std::uint8_t> owned_bytes{raw_payload.begin(), raw_payload.end()};
-    return {ProtocolError::none,
+    return {ProtocolError::None,
             BinaryFrame{version, static_cast<BinaryPayloadKind>(kind_byte),
                        request_id, std::move(owned_bytes)},
             {}};

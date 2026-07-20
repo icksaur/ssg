@@ -35,18 +35,18 @@ private:
 [[nodiscard]] LspWorkspaceEditCommandSet lsp_workspace_edit_command_set();
 
 enum class LspWorkspaceDocumentError : std::uint8_t {
-    none,
-    unknown_document,
-    stale_revision,
-    write_failed,
+    None,
+    UnknownDocument,
+    StaleRevision,
+    WriteFailed,
 };
 
 struct LspWorkspaceDocumentWriteResult {
     Revision revision{0};
-    LspWorkspaceDocumentError error = LspWorkspaceDocumentError::none;
+    LspWorkspaceDocumentError error = LspWorkspaceDocumentError::None;
     std::string message;
     [[nodiscard]] bool accepted() const noexcept {
-        return error == LspWorkspaceDocumentError::none;
+        return error == LspWorkspaceDocumentError::None;
     }
 };
 
@@ -60,31 +60,31 @@ public:
 };
 
 enum class LspWorkspaceFileNodeKind : std::uint8_t {
-    missing,
-    file,
-    directory,
+    Missing,
+    File,
+    Directory,
 };
 
 struct LspWorkspaceFileNode {
-    LspWorkspaceFileNodeKind kind = LspWorkspaceFileNodeKind::missing;
+    LspWorkspaceFileNodeKind kind = LspWorkspaceFileNodeKind::Missing;
     std::string content;
     friend bool operator==(const LspWorkspaceFileNode&,
                            const LspWorkspaceFileNode&) = default;
 };
 
 enum class LspWorkspaceFileError : std::uint8_t {
-    none,
-    not_found,
-    already_exists,
-    invalid_operation,
-    io_error,
+    None,
+    NotFound,
+    AlreadyExists,
+    InvalidOperation,
+    IoError,
 };
 
 struct LspWorkspaceFileResult {
-    LspWorkspaceFileError error = LspWorkspaceFileError::none;
+    LspWorkspaceFileError error = LspWorkspaceFileError::None;
     std::string message;
     [[nodiscard]] bool accepted() const noexcept {
-        return error == LspWorkspaceFileError::none;
+        return error == LspWorkspaceFileError::None;
     }
 };
 
@@ -106,28 +106,28 @@ public:
 };
 
 enum class LspWorkspaceEditError : std::uint8_t {
-    none,
-    malformed_edit,
-    unknown_document,
-    stale_revision,
-    invalid_position,
-    overlapping_edits,
-    file_conflict,
-    apply_failed,
-    rollback_failed,
+    None,
+    MalformedEdit,
+    UnknownDocument,
+    StaleRevision,
+    InvalidPosition,
+    OverlappingEdits,
+    FileConflict,
+    ApplyFailed,
+    RollbackFailed,
 };
 
 enum class LspWorkspaceEditRecoveryKind : std::uint8_t {
-    document_text,
-    restore_path,
-    write_file,
-    delete_file,
-    rename_file,
+    DocumentText,
+    RestorePath,
+    WriteFile,
+    DeleteFile,
+    RenameFile,
 };
 
 struct LspWorkspaceEditRecoveryOperation {
     LspWorkspaceEditRecoveryKind kind =
-        LspWorkspaceEditRecoveryKind::document_text;
+        LspWorkspaceEditRecoveryKind::DocumentText;
     std::string uri;
     std::string secondary_uri;
     Revision expected_revision{0};
@@ -146,11 +146,11 @@ struct LspWorkspaceEditRecoveryRecord {
 };
 
 struct LspWorkspaceEditApplyResult {
-    LspWorkspaceEditError error = LspWorkspaceEditError::none;
+    LspWorkspaceEditError error = LspWorkspaceEditError::None;
     std::string message;
     std::optional<LspWorkspaceEditRecoveryRecord> recovery;
     [[nodiscard]] bool accepted() const noexcept {
-        return error == LspWorkspaceEditError::none;
+        return error == LspWorkspaceEditError::None;
     }
 };
 
@@ -176,36 +176,36 @@ private:
 };
 
 enum class LspRenameError : std::uint8_t {
-    none,
-    sync_error,
-    unknown_document,
-    stale_revision,
-    invalid_position,
-    invalid_argument,
+    None,
+    SyncError,
+    UnknownDocument,
+    StaleRevision,
+    InvalidPosition,
+    InvalidArgument,
 };
 
 struct LspRenameRequestResult {
     std::uint64_t request_id = 0;
-    LspRenameError error = LspRenameError::none;
+    LspRenameError error = LspRenameError::None;
     std::string message;
     [[nodiscard]] bool accepted() const noexcept {
-        return request_id != 0 && error == LspRenameError::none;
+        return request_id != 0 && error == LspRenameError::None;
     }
 };
 
 enum class LspRenamePublishResult : std::uint8_t {
-    accepted,
-    cancelled,
-    superseded,
-    stale_revision,
-    malformed_response,
-    server_error,
-    edit_rejected,
+    Accepted,
+    Cancelled,
+    Superseded,
+    StaleRevision,
+    MalformedResponse,
+    ServerError,
+    EditRejected,
 };
 
 struct LspRenamePublication {
     std::uint64_t request_id = 0;
-    LspRenamePublishResult result = LspRenamePublishResult::accepted;
+    LspRenamePublishResult result = LspRenamePublishResult::Accepted;
     std::string message;
     std::optional<LspWorkspaceEditRecoveryRecord> recovery;
     friend bool operator==(const LspRenamePublication&,
@@ -213,11 +213,11 @@ struct LspRenamePublication {
 };
 
 struct LspRenamePollResult {
-    LspSyncError error = LspSyncError::none;
+    LspSyncError error = LspSyncError::None;
     std::string message;
     std::vector<LspRenamePublication> publications;
     [[nodiscard]] bool accepted() const noexcept {
-        return error == LspSyncError::none;
+        return error == LspSyncError::None;
     }
 };
 
@@ -232,11 +232,11 @@ public:
     [[nodiscard]] LspRenamePollResult poll(Revision current_revision);
 
 private:
-    enum class Disposition : std::uint8_t { active, cancelled, superseded };
+    enum class Disposition : std::uint8_t { Active, Cancelled, Superseded };
     struct Pending {
         std::string uri;
         Revision revision{0};
-        Disposition disposition = Disposition::active;
+        Disposition disposition = Disposition::Active;
     };
 
     void supersede();

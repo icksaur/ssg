@@ -60,7 +60,7 @@ std::vector<SearchResult> rank_files(const WorkspaceSnapshot& workspace,
         }
         const auto score = fuzzy_score(file.path, query);
         if (score) {
-            results.push_back({.mode = SearchMode::file,
+            results.push_back({.mode = SearchMode::File,
                                .path = file.path,
                                .label = file.path,
                                .score = *score});
@@ -86,7 +86,7 @@ std::vector<SearchResult> rank_symbols(const WorkspaceSnapshot& workspace,
         const auto score = fuzzy_score(symbol.name, query);
         if (score) {
             results.push_back(
-                {.mode = SearchMode::symbol,
+                {.mode = SearchMode::Symbol,
                  .path = symbol.path,
                  .label = symbol.path + ":" + symbol.name,
                  .line = LineIndex{symbol.line == 0 ? 0 : symbol.line - 1},
@@ -130,7 +130,7 @@ std::vector<SearchResult> rank_text(const WorkspaceSnapshot& workspace,
             const auto match = line.find(query);
             if (match != std::string_view::npos) {
                 results.push_back(
-                    {.mode = SearchMode::text,
+                    {.mode = SearchMode::Text,
                      .path = file.path,
                      .label = file.path + ":" + std::to_string(line_number + 1),
                      .line = LineIndex{line_number},
@@ -164,22 +164,22 @@ ParsedSearchQuery parse_search_query(std::string_view query) {
     }
     switch (query.front()) {
     case '@':
-        result.mode = SearchMode::symbol;
+        result.mode = SearchMode::Symbol;
         result.text = query.substr(1);
         return result;
     case '#':
-        result.mode = SearchMode::text;
+        result.mode = SearchMode::Text;
         result.text = query.substr(1);
         return result;
     case ':': {
-        result.mode = SearchMode::line;
+        result.mode = SearchMode::Line;
         result.text = query.substr(1);
         std::size_t one_based = 0;
         const auto [end, error] = std::from_chars(
             result.text.data(), result.text.data() + result.text.size(), one_based);
         if (result.text.empty() || error != std::errc{} ||
             end != result.text.data() + result.text.size() || one_based == 0) {
-            result.error = SearchQueryError::invalid_line;
+            result.error = SearchQueryError::InvalidLine;
             return result;
         }
         result.line = LineIndex{one_based - 1};
@@ -205,18 +205,18 @@ void SearchCancellationToken::cancel() const noexcept {
 std::vector<SearchResult> rank_workspace(
     const WorkspaceSnapshot& workspace, const ParsedSearchQuery& query,
     const SearchCancellationToken& cancellation) {
-    if (query.error != SearchQueryError::none || cancellation.cancelled()) {
+    if (query.error != SearchQueryError::None || cancellation.cancelled()) {
         return {};
     }
     switch (query.mode) {
-    case SearchMode::file:
+    case SearchMode::File:
         return rank_files(workspace, query.text, cancellation);
-    case SearchMode::symbol:
+    case SearchMode::Symbol:
         return rank_symbols(workspace, query.text, cancellation);
-    case SearchMode::text:
+    case SearchMode::Text:
         return rank_text(workspace, query.text, cancellation);
-    case SearchMode::line:
-    case SearchMode::command:
+    case SearchMode::Line:
+    case SearchMode::Command:
         return {};
     }
     return {};
@@ -246,7 +246,7 @@ std::optional<NavigationTarget> navigation_target(const SearchResult& result) {
     return NavigationTarget{.path = result.path,
                             .line = result.line.value_or(LineIndex{0}),
                             .column = result.column,
-                            .symbol = result.mode == SearchMode::symbol
+                            .symbol = result.mode == SearchMode::Symbol
                                           ? std::optional<std::string>{
                                                 result.label.substr(
                                                     result.label.find(':') + 1)}
@@ -255,8 +255,8 @@ std::optional<NavigationTarget> navigation_target(const SearchResult& result) {
 
 std::optional<NavigationTarget> goto_line(
     std::string path, const ParsedSearchQuery& query) {
-    if (path.empty() || query.mode != SearchMode::line ||
-        query.error != SearchQueryError::none || !query.line) {
+    if (path.empty() || query.mode != SearchMode::Line ||
+        query.error != SearchQueryError::None || !query.line) {
         return std::nullopt;
     }
     return NavigationTarget{
@@ -273,7 +273,7 @@ NavigationHistory::NavigationHistory(std::size_t capacity)
 NavigationTransition NavigationHistory::transition(
     const NavigationTarget& target, NavigationOrigin origin) {
     return {.target = target,
-            .pause_follow_edits = origin == NavigationOrigin::user,
+            .pause_follow_edits = origin == NavigationOrigin::User,
             .reveal_primary_caret = true};
 }
 
@@ -299,7 +299,7 @@ NavigationTransition NavigationHistory::back() {
         return empty_transition();
     }
     --*cursor_;
-    return transition(entries_[*cursor_], NavigationOrigin::user);
+    return transition(entries_[*cursor_], NavigationOrigin::User);
 }
 
 NavigationTransition NavigationHistory::forward() {
@@ -307,7 +307,7 @@ NavigationTransition NavigationHistory::forward() {
         return empty_transition();
     }
     ++*cursor_;
-    return transition(entries_[*cursor_], NavigationOrigin::user);
+    return transition(entries_[*cursor_], NavigationOrigin::User);
 }
 
 SearchController::SearchController(const SearchWorkspaceSource& workspace,
@@ -318,7 +318,7 @@ void SearchController::open_palette(Revision revision) {
     state_.palette_open = true;
     state_.revision = revision;
     state_.query.clear();
-    state_.mode = SearchMode::command;
+    state_.mode = SearchMode::Command;
     rank_palette();
 }
 
@@ -341,7 +341,7 @@ void SearchController::update_palette_query(std::string query,
 }
 
 void SearchController::rank_palette() {
-    state_.mode = SearchMode::command;
+    state_.mode = SearchMode::Command;
     state_.results.clear();
     for (const auto& command : commands_.descriptors()) {
         const auto label_score = fuzzy_score(command.label, state_.query);
@@ -350,7 +350,7 @@ void SearchController::rank_palette() {
             continue;
         }
         state_.results.push_back(
-            {.mode = SearchMode::command,
+            {.mode = SearchMode::Command,
              .path = command.id,
              .label = command.label,
              .score = std::max(label_score.value_or(std::numeric_limits<int>::min()),
@@ -426,21 +426,21 @@ void SearchController::cancel_workspace_search() noexcept {
 SearchPublishResult SearchController::publish(
     const WorkspaceSearchBatch& batch, Revision current_revision) {
     if (batch.cancelled) {
-        return SearchPublishResult::cancelled;
+        return SearchPublishResult::Cancelled;
     }
     if (!active_request_ || batch.generation != active_request_->generation) {
-        return SearchPublishResult::superseded;
+        return SearchPublishResult::Superseded;
     }
     if (batch.source_revision != active_request_->source_revision ||
         batch.source_revision != current_revision) {
-        return SearchPublishResult::stale_revision;
+        return SearchPublishResult::StaleRevision;
     }
     state_.results = batch.results;
     state_.selected_index =
         state_.results.empty() ? std::nullopt : std::optional<std::size_t>{0};
     state_.searching = false;
     active_request_.reset();
-    return SearchPublishResult::accepted;
+    return SearchPublishResult::Accepted;
 }
 
 SearchCommandSet search_command_set() { return {}; }
@@ -456,16 +456,16 @@ SearchDelta derive_search_delta(const SearchViewState& base,
 SearchReplayResult replay_search_delta(const SearchViewState& base,
                                        const SearchDelta& delta) {
     if (base.revision != delta.base_revision) {
-        return {.error = SearchReplayError::stale_revision};
+        return {.error = SearchReplayError::StaleRevision};
     }
     if (!delta.state) {
         if (delta.revision == base.revision) {
             return {.state = base};
         }
-        return {.error = SearchReplayError::malformed_delta};
+        return {.error = SearchReplayError::MalformedDelta};
     }
     if (delta.state->revision != delta.revision) {
-        return {.error = SearchReplayError::malformed_delta};
+        return {.error = SearchReplayError::MalformedDelta};
     }
     return {.state = delta.state};
 }

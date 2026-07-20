@@ -36,16 +36,16 @@ struct ProtocolLimits {
 };
 
 enum class ProtocolError : std::uint8_t {
-    none,
-    message_too_large,
-    malformed_message,
-    unsupported_version,
-    unsupported_command,
-    insert_too_large,
-    truncated_message,
-    value_bounds_exceeded,
-    unsupported_message_kind,
-    binary_frame_too_large,
+    None,
+    MessageTooLarge,
+    MalformedMessage,
+    UnsupportedVersion,
+    UnsupportedCommand,
+    InsertTooLarge,
+    TruncatedMessage,
+    ValueBoundsExceeded,
+    UnsupportedMessageKind,
+    BinaryFrameTooLarge,
 };
 
 struct InsertRequest {
@@ -61,7 +61,7 @@ struct DecodeInsertResult {
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == ProtocolError::none;
+        return error == ProtocolError::None;
     }
 };
 
@@ -73,8 +73,8 @@ struct SliceResponse {
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return protocol_error == ProtocolError::none &&
-               command_error == CommandError::none;
+        return protocol_error == ProtocolError::None &&
+               command_error == CommandError::None;
     }
     bool operator==(SliceResponse const&) const = default;
 };
@@ -120,14 +120,14 @@ private:
 class ProtocolValue {
 public:
     enum class Kind : std::uint8_t {
-        null_value,
-        boolean,
-        integer,
-        unsigned_integer,
-        text,
-        bytes,
-        array,
-        object,
+        NullValue,
+        Boolean,
+        Integer,
+        UnsignedInteger,
+        Text,
+        Bytes,
+        Array,
+        Object,
     };
 
     using Array = std::vector<ProtocolValue>;
@@ -221,13 +221,13 @@ private:
 // snapshot/delta).
 
 enum class ProtocolMessageKind : std::uint8_t {
-    command_request,
-    session_snapshot,
-    session_delta,
-    clipboard_request,
-    clipboard_response,
-    status_action_invocation,
-    command_result,
+    CommandRequest,
+    SessionSnapshot,
+    SessionDelta,
+    ClipboardRequest,
+    ClipboardResponse,
+    StatusActionInvocation,
+    CommandResult,
 };
 
 [[nodiscard]] std::string encode_command_request(
@@ -239,7 +239,7 @@ struct DecodeCommandRequestResult {
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == ProtocolError::none;
+        return error == ProtocolError::None;
     }
 };
 
@@ -255,7 +255,7 @@ struct DecodeCommandResultResult {
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == ProtocolError::none;
+        return error == ProtocolError::None;
     }
 };
 
@@ -271,7 +271,7 @@ struct DecodeSessionSnapshotResult {
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == ProtocolError::none;
+        return error == ProtocolError::None;
     }
 };
 
@@ -286,7 +286,7 @@ struct DecodeSessionDeltaResult {
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == ProtocolError::none;
+        return error == ProtocolError::None;
     }
 };
 
@@ -302,7 +302,7 @@ struct DecodeClipboardRequestResult {
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == ProtocolError::none;
+        return error == ProtocolError::None;
     }
 };
 
@@ -318,7 +318,7 @@ struct DecodeClipboardResponseResult {
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == ProtocolError::none;
+        return error == ProtocolError::None;
     }
 };
 
@@ -334,7 +334,7 @@ struct DecodeStatusActionInvocationResult {
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == ProtocolError::none;
+        return error == ProtocolError::None;
     }
 };
 
@@ -348,7 +348,7 @@ decode_status_action_invocation(std::string_view bytes,
 // raw bytes with bounded, validated framing.
 
 enum class BinaryPayloadKind : std::uint8_t {
-    dropped_content,
+    DroppedContent,
 };
 
 struct BinaryFrame {
@@ -370,7 +370,7 @@ struct DecodeBinaryFrameResult {
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == ProtocolError::none;
+        return error == ProtocolError::None;
     }
 };
 

@@ -54,7 +54,7 @@ TEST(opening_a_file_reveals_the_caret_resetting_a_stale_scroll) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     const ssg::ViewportDimensions dims{80, 24};
     auto first_row = [&] {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
@@ -83,7 +83,7 @@ TEST(open_edit_save_round_trips_real_disk_bytes) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
     auto open = runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"note.txt"}});
     ASSERT_TRUE(open.accepted());
@@ -104,12 +104,12 @@ TEST(dropped_content_requires_real_capability) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::websocket}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::Websocket}, ssg::ViewId{1}).accepted());
 
     auto denied = runtime.dispatch(ssg::ClientId{1}, {"file.open_dropped_content", runtime.revision(), ssg::DroppedContentArguments{{'a'}, "a.txt"}});
     ASSERT_FALSE(denied.accepted());
 
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{2}, ssg::InvocationOrigin::websocket, {ssg::CapabilityId{"local_file_drop"}}}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{2}, ssg::InvocationOrigin::Websocket, {ssg::CapabilityId{"local_file_drop"}}}, ssg::ViewId{1}).accepted());
     auto accepted = runtime.dispatch(ssg::ClientId{2}, {"file.open_dropped_content", runtime.revision(), ssg::DroppedContentArguments{{'a'}, "a.txt"}});
     ASSERT_TRUE(accepted.accepted());
     ASSERT_EQ(runtime.active_document_text(), std::string{"a"});
@@ -126,10 +126,10 @@ TEST(encoding_dispatch_matches_encode_oracle_and_saved_bytes) {
     auto decoded = ssg::decode_text(original);
     ASSERT_TRUE(decoded.accepted());
     decoded.text->utf8 = "one\ntwo\n";
-    decoded.text->line_terminators = {ssg::LineTerminator::crlf, ssg::LineTerminator::crlf};
-    decoded.text->status.encoding = ssg::TextEncoding::utf8_bom;
+    decoded.text->line_terminators = {ssg::LineTerminator::Crlf, ssg::LineTerminator::Crlf};
+    decoded.text->status.encoding = ssg::TextEncoding::Utf8Bom;
     decoded.text->status.had_bom = true;
-    decoded.text->status.line_ending = ssg::LineEnding::crlf;
+    decoded.text->status.line_ending = ssg::LineEnding::Crlf;
     decoded.text->status.final_newline = true;
     auto expected = ssg::encode_text(*decoded.text);
     ASSERT_TRUE(expected.accepted());
@@ -138,11 +138,11 @@ TEST(encoding_dispatch_matches_encode_oracle_and_saved_bytes) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"note.txt"}}).accepted());
 
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.set_encoding", runtime.revision(), ssg::SetEncodingArguments{ssg::TextEncoding::utf8_bom}}).accepted());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.set_line_ending", runtime.revision(), ssg::SetLineEndingArguments{ssg::LineEnding::crlf}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.set_encoding", runtime.revision(), ssg::SetEncodingArguments{ssg::TextEncoding::Utf8Bom}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.set_line_ending", runtime.revision(), ssg::SetLineEndingArguments{ssg::LineEnding::Crlf}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.set_final_newline", runtime.revision(), ssg::SetFinalNewlineArguments{true}}).accepted());
     auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
@@ -160,16 +160,16 @@ TEST(reopen_with_encoding_dispatch_redecodes_real_file_bytes) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"latin.txt"}}).accepted());
 
-    auto reopened = runtime.dispatch(ssg::ClientId{1}, {"file.reopen_with_encoding", runtime.revision(), ssg::ReopenWithEncodingArguments{ssg::TextEncoding::iso88591}});
+    auto reopened = runtime.dispatch(ssg::ClientId{1}, {"file.reopen_with_encoding", runtime.revision(), ssg::ReopenWithEncodingArguments{ssg::TextEncoding::Iso88591}});
     ASSERT_TRUE(reopened.accepted());
     ASSERT_EQ(runtime.active_document_text(), std::string{"\xC3\xA9\n"});
     auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
-    ASSERT_EQ(snapshot->sections().text_encoding.status.encoding, ssg::TextEncoding::iso88591);
-    ASSERT_EQ(snapshot->sections().text_encoding.status.line_ending, ssg::LineEnding::cr);
+    ASSERT_EQ(snapshot->sections().text_encoding.status.encoding, ssg::TextEncoding::Iso88591);
+    ASSERT_EQ(snapshot->sections().text_encoding.status.line_ending, ssg::LineEnding::Cr);
 }
 
 TEST(closing_the_last_tab_clears_the_editor_document) {
@@ -181,7 +181,7 @@ TEST(closing_the_last_tab_clears_the_editor_document) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
     auto tab_count = [&] {
         return runtime.snapshot(ssg::ClientId{1}, {80, 24})->sections().tabs.tabs.size();
@@ -217,24 +217,24 @@ TEST(tab_activate_focuses_the_editor) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"a.txt"}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"b.txt"}}).accepted());
     const ssg::ViewportDimensions dims{80, 24};
     auto focus = [&] {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
-        return snap ? snap->sections().shell.focus : ssg::FocusTarget::editor;
+        return snap ? snap->sections().shell.focus : ssg::FocusTarget::Editor;
     };
 
     // Move focus to the panel, then activating a tab (a tab click) returns focus
     // to the editor.
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"panel.toggle", runtime.revision(), {}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"panel.focus", runtime.revision(), {}}).accepted());
-    ASSERT_EQ(focus(), ssg::FocusTarget::panel);
+    ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
 
     auto first = runtime.snapshot(ssg::ClientId{1}, dims)->sections().tabs.tabs.front().id;
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"tab.activate", runtime.revision(), first}).accepted());
-    ASSERT_EQ(focus(), ssg::FocusTarget::editor);
+    ASSERT_EQ(focus(), ssg::FocusTarget::Editor);
 }
 
 TEST(switching_tabs_reveals_the_new_documents_caret) {
@@ -249,7 +249,7 @@ TEST(switching_tabs_reveals_the_new_documents_caret) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     const ssg::ViewportDimensions dims{80, 24};
     auto first_row = [&] {
         auto snap = runtime.snapshot(ssg::ClientId{1}, dims);

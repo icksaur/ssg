@@ -54,7 +54,7 @@ TEST(deferred_enrichment_skips_syntax_and_tree_until_primed) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process},
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1})
                     .accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
@@ -96,7 +96,7 @@ TEST(eager_construction_runs_enrichment_immediately) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process},
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1})
                     .accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
@@ -128,7 +128,7 @@ TEST(first_frame_constructs_no_optional_subsystem) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process},
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1})
                     .accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
@@ -155,7 +155,7 @@ TEST(optional_construction_audit_is_wired_positive_control) {
     // Guards against a false pass from broken instrumentation: constructing a
     // real optional subsystem (a filesystem watcher) MUST increment its counter.
     ssg::reset_optional_construction_audit();
-    ASSERT_EQ(ssg::optional_construction_count(ssg::OptionalSubsystem::filesystem_watcher),
+    ASSERT_EQ(ssg::optional_construction_count(ssg::OptionalSubsystem::FilesystemWatcher),
               std::uint64_t{0});
     auto root = make_workspace("positive_control");
     {
@@ -164,7 +164,7 @@ TEST(optional_construction_audit_is_wired_positive_control) {
         ASSERT_TRUE(watcher != nullptr);
     }
     ASSERT_TRUE(ssg::optional_construction_count(
-                    ssg::OptionalSubsystem::filesystem_watcher) >= 1);
+                    ssg::OptionalSubsystem::FilesystemWatcher) >= 1);
     fs::remove_all(root);
 }
 

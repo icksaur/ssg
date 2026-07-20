@@ -17,7 +17,7 @@ constexpr int editor_minimum_width = 20;
 
 struct PaneNode {
     PaneId id;
-    SplitAxis axis = SplitAxis::vertical;
+    SplitAxis axis = SplitAxis::Vertical;
     std::unique_ptr<PaneNode> first;
     std::unique_ptr<PaneNode> second;
 
@@ -54,7 +54,7 @@ bool remove_leaf(std::unique_ptr<PaneNode>& node, PaneId id) {
 
 bool can_layout(const PaneNode& node, Rect rect) {
     if (node.leaf()) return rect.width >= 2 && rect.height >= 1;
-    if (node.axis == SplitAxis::vertical) {
+    if (node.axis == SplitAxis::Vertical) {
         const int first_width = rect.width / 2;
         return can_layout(*node.first, {rect.x, rect.y, first_width, rect.height}) &&
                can_layout(*node.second,
@@ -79,7 +79,7 @@ void layout_panes(const PaneNode& node, Rect rect,
         });
         return;
     }
-    if (node.axis == SplitAxis::vertical) {
+    if (node.axis == SplitAxis::Vertical) {
         const int first_width = rect.width / 2;
         layout_panes(*node.first, {rect.x, rect.y, first_width, rect.height},
                      output);
@@ -154,7 +154,7 @@ struct ShellState::Impl {
     std::vector<std::string> providers;
     std::size_t provider_index = 0;
     bool panel_requested = false;
-    FocusTarget focus = FocusTarget::editor;
+    FocusTarget focus = FocusTarget::Editor;
     std::vector<FocusTarget> focus_stack;
     // The focus present when the panel was last shown, so hiding a focused panel
     // restores it (a dedicated slot rather than the prompt focus_stack, so it
@@ -230,10 +230,10 @@ bool ShellState::focus_pane(PaneDirection direction,
         const double dx = center_x(candidate.frame) - current_x;
         const double dy = center_y(candidate.frame) - current_y;
         const bool eligible =
-            (direction == PaneDirection::left && dx < 0) ||
-            (direction == PaneDirection::right && dx > 0) ||
-            (direction == PaneDirection::up && dy < 0) ||
-            (direction == PaneDirection::down && dy > 0);
+            (direction == PaneDirection::Left && dx < 0) ||
+            (direction == PaneDirection::Right && dx > 0) ||
+            (direction == PaneDirection::Up && dy < 0) ||
+            (direction == PaneDirection::Down && dy > 0);
         if (!eligible) continue;
         const double distance = dx * dx + dy * dy;
         if (distance < best_distance) {
@@ -243,7 +243,7 @@ bool ShellState::focus_pane(PaneDirection direction,
     }
     if (!best) return false;
     impl_->active = best->id;
-    impl_->focus = FocusTarget::editor;
+    impl_->focus = FocusTarget::Editor;
     return true;
 }
 
@@ -255,15 +255,15 @@ void ShellState::toggle_panel() noexcept {
         // hiding can restore it), when the panel can actually take focus.
         if (!impl_->providers.empty()) {
             impl_->focus_before_panel = impl_->focus;
-            impl_->focus = FocusTarget::panel;
+            impl_->focus = FocusTarget::Panel;
         }
-    } else if (impl_->focus == FocusTarget::panel) {
+    } else if (impl_->focus == FocusTarget::Panel) {
         // Hiding the focused panel restores the focus that was present when it
         // was shown; never restore to the panel itself or a transient prompt.
         FocusTarget restored =
-            impl_->focus_before_panel.value_or(FocusTarget::editor);
-        if (restored == FocusTarget::panel || restored == FocusTarget::prompt) {
-            restored = FocusTarget::editor;
+            impl_->focus_before_panel.value_or(FocusTarget::Editor);
+        if (restored == FocusTarget::Panel || restored == FocusTarget::Prompt) {
+            restored = FocusTarget::Editor;
         }
         impl_->focus = restored;
         impl_->focus_before_panel.reset();
@@ -272,28 +272,28 @@ void ShellState::toggle_panel() noexcept {
 
 bool ShellState::focus_panel() noexcept {
     if (!impl_->panel_requested || impl_->providers.empty()) return false;
-    impl_->focus = FocusTarget::panel;
+    impl_->focus = FocusTarget::Panel;
     return true;
 }
 
 void ShellState::focus_editor() noexcept {
-    impl_->focus = FocusTarget::editor;
+    impl_->focus = FocusTarget::Editor;
     impl_->focus_stack.clear();
 }
 
 void ShellState::enter_prompt_focus() noexcept {
     impl_->focus_stack.push_back(impl_->focus);
-    impl_->focus = FocusTarget::prompt;
+    impl_->focus = FocusTarget::Prompt;
 }
 
 void ShellState::exit_prompt_focus() noexcept {
-    FocusTarget restored = FocusTarget::editor;
+    FocusTarget restored = FocusTarget::Editor;
     if (!impl_->focus_stack.empty()) {
         restored = impl_->focus_stack.back();
         impl_->focus_stack.pop_back();
     }
-    if (restored == FocusTarget::panel && !impl_->panel_requested) {
-        restored = FocusTarget::editor;
+    if (restored == FocusTarget::Panel && !impl_->panel_requested) {
+        restored = FocusTarget::Editor;
     }
     impl_->focus = restored;
 }
@@ -319,7 +319,7 @@ bool ShellState::panel_requested() const noexcept {
 }
 
 bool ShellState::panel_focused() const noexcept {
-    return impl_->focus == FocusTarget::panel;
+    return impl_->focus == FocusTarget::Panel;
 }
 
 std::string_view ShellState::active_panel_provider() const noexcept {
@@ -339,12 +339,12 @@ ShellLayoutResult compute_shell_layout(const ShellLayoutRequest& request,
                                        const ShellState& state) {
     if (request.viewport.columns < minimum_columns ||
         request.viewport.rows < minimum_rows) {
-        return {ShellLayoutError{ShellLayoutErrorCode::viewport_too_small,
+        return {ShellLayoutError{ShellLayoutErrorCode::ViewportTooSmall,
                                  "viewport must be at least 20 columns by 4 rows"},
                 std::nullopt};
     }
     if (request.reserved_prompt_rows > 3) {
-        return {ShellLayoutError{ShellLayoutErrorCode::invalid_prompt_rows,
+        return {ShellLayoutError{ShellLayoutErrorCode::InvalidPromptRows,
                                  "reserved prompt rows must be in [0, 3]"},
                 std::nullopt};
     }
@@ -359,10 +359,10 @@ ShellLayoutResult compute_shell_layout(const ShellLayoutRequest& request,
         view.header = Rect{0, 0, request.viewport.columns, 1};
         view.footer =
             Rect{0, request.viewport.rows - 1, request.viewport.columns, 1};
-        add_node(view, ShellNodeKind::header, "header", "Status header",
-                 *view.header, SemanticRole::header);
-        add_node(view, ShellNodeKind::footer, "footer", "Status footer",
-                 *view.footer, SemanticRole::footer);
+        add_node(view, ShellNodeKind::Header, "header", "Status header",
+                 *view.header, SemanticRole::Header);
+        add_node(view, ShellNodeKind::Footer, "footer", "Status footer",
+                 *view.footer, SemanticRole::Footer);
         int header_x = view.header->x;
         if (request.palette_active) {
             // The palette owns the header while open: its query renders in the
@@ -372,34 +372,34 @@ ShellLayoutResult compute_shell_layout(const ShellLayoutRequest& request,
             std::string query = "> " + request.palette_query;
             const int query_width =
                 std::min(view.header->width, static_cast<int>(query.size()));
-            add_node(view, ShellNodeKind::header_field, "palette_query",
+            add_node(view, ShellNodeKind::HeaderField, "palette_query",
                      "Palette query", {header_x, view.header->y, query_width, 1},
-                     SemanticRole::prompt, std::move(query));
+                     SemanticRole::Prompt, std::move(query));
             header_x += query_width;
             if (!request.palette_ghost.empty() &&
                 header_x < view.header->right()) {
                 const int ghost_width =
                     std::min(view.header->right() - header_x,
                              static_cast<int>(request.palette_ghost.size()));
-                add_node(view, ShellNodeKind::header_field, "palette_ghost",
+                add_node(view, ShellNodeKind::HeaderField, "palette_ghost",
                          "Palette completion",
                          {header_x, view.header->y, ghost_width, 1},
-                         SemanticRole::line_number, request.palette_ghost);
+                         SemanticRole::LineNumber, request.palette_ghost);
                 header_x += ghost_width;
             }
         } else if (!request.leader_hint.empty()) {
             const int width = std::min(
                 view.header->width,
                 static_cast<int>(request.leader_hint.size()) + 1);
-            add_node(view, ShellNodeKind::header_field, "leader", "Leader hint",
-                     {header_x, view.header->y, width, 1}, SemanticRole::prompt,
+            add_node(view, ShellNodeKind::HeaderField, "leader", "Leader hint",
+                     {header_x, view.header->y, width, 1}, SemanticRole::Prompt,
                      request.leader_hint);
             header_x += width;
         }
         add_fields(view, request.header_fields,
                    {header_x, view.header->y,
                     view.header->right() - header_x, view.header->height},
-                   ShellNodeKind::header_field, SemanticRole::header);
+                   ShellNodeKind::HeaderField, SemanticRole::Header);
         int action_x = view.footer->right();
         for (auto action = request.footer_actions.rbegin();
              action != request.footer_actions.rend(); ++action) {
@@ -407,15 +407,15 @@ ShellLayoutResult compute_shell_layout(const ShellLayoutRequest& request,
                 std::min(action_x, static_cast<int>(action->accessible_label.size()) + 2);
             if (width <= 0 || action->accessible_label.empty()) continue;
             action_x -= width;
-            add_node(view, ShellNodeKind::footer_action, action->id,
+            add_node(view, ShellNodeKind::FooterAction, action->id,
                      action->accessible_label,
                      {action_x, view.footer->y, width, 1},
-                     SemanticRole::status_info, action->accessible_label);
+                     SemanticRole::StatusInfo, action->accessible_label);
         }
         add_fields(view, request.footer_fields,
                    {view.footer->x, view.footer->y,
                     action_x - view.footer->x, view.footer->height},
-                   ShellNodeKind::footer_field, SemanticRole::footer);
+                   ShellNodeKind::FooterField, SemanticRole::Footer);
 
         const bool panel_requested = state.impl_->panel_requested;
         int panel_width = 0;
@@ -426,12 +426,12 @@ ShellLayoutResult compute_shell_layout(const ShellLayoutRequest& request,
                 panel_target_width,
                 request.viewport.columns - editor_minimum_width);
             view.panel = Rect{0, 1, panel_width, request.viewport.rows - 2};
-            add_node(view, ShellNodeKind::panel, "panel", "Side panel",
-                     *view.panel, SemanticRole::panel_inactive);
-            add_node(view, ShellNodeKind::panel_provider, "panel.provider",
+            add_node(view, ShellNodeKind::Panel, "panel", "Side panel",
+                     *view.panel, SemanticRole::PanelInactive);
+            add_node(view, ShellNodeKind::PanelProvider, "panel.provider",
                      request.panel_provider_label, *view.panel,
-                     state.impl_->focus == FocusTarget::panel ? SemanticRole::panel_active :
-                                                  SemanticRole::panel_inactive,
+                     state.impl_->focus == FocusTarget::Panel ? SemanticRole::PanelActive :
+                                                  SemanticRole::PanelInactive,
                      request.panel_provider_label);
             // Reserve the tree's scrollbar gutter: the right column over the tree
             // content rows (below the provider-label row). Content is the panel
@@ -439,17 +439,17 @@ ShellLayoutResult compute_shell_layout(const ShellLayoutRequest& request,
             if (panel_width > 1 && view.panel->height > 1) {
                 view.panel_scrollbar = Rect{panel_width - 1, view.panel->y + 1, 1,
                                             view.panel->height - 1};
-                add_node(view, ShellNodeKind::scrollbar, "panel.scrollbar",
+                add_node(view, ShellNodeKind::Scrollbar, "panel.scrollbar",
                          "Panel scrollbar", *view.panel_scrollbar,
-                         SemanticRole::scrollbar_track);
+                         SemanticRole::ScrollbarTrack);
             }
         }
 
         editor = {panel_width, 1, request.viewport.columns - panel_width,
                   request.viewport.rows - 2};
         view.tab_bar = Rect{editor.x, editor.y, editor.width, 1};
-        add_node(view, ShellNodeKind::tab_bar, "tabs", "Open tabs",
-                 *view.tab_bar, SemanticRole::tab_inactive);
+        add_node(view, ShellNodeKind::TabBar, "tabs", "Open tabs",
+                 *view.tab_bar, SemanticRole::TabInactive);
         int tab_x = view.tab_bar->x;
         for (std::size_t i = 0; i < request.tabs.size(); ++i) {
             const auto& tab = request.tabs[i];
@@ -459,11 +459,11 @@ ShellLayoutResult compute_shell_layout(const ShellLayoutRequest& request,
                 std::min(view.tab_bar->right() - tab_x,
                          std::max(1, static_cast<int>(display.size()) + 2));
             if (width <= 0 || tab.accessible_label.empty()) break;
-            add_node(view, ShellNodeKind::tab, "tab." + std::to_string(i),
+            add_node(view, ShellNodeKind::Tab, "tab." + std::to_string(i),
                      tab.accessible_label,
                      {tab_x, view.tab_bar->y, width, 1},
-                     tab.active ? SemanticRole::tab_active :
-                                  SemanticRole::tab_inactive,
+                     tab.active ? SemanticRole::TabActive :
+                                  SemanticRole::TabInactive,
                      display);
             view.tab_hits.push_back(
                 TabHit{{tab_x, view.tab_bar->y, width, 1},
@@ -475,15 +475,15 @@ ShellLayoutResult compute_shell_layout(const ShellLayoutRequest& request,
         editor.height -= 1;
         if (request.reserved_prompt_rows >= editor.height) {
             return {ShellLayoutError{
-                        ShellLayoutErrorCode::viewport_too_small,
+                        ShellLayoutErrorCode::ViewportTooSmall,
                         "prompt reservation leaves no editor content row"},
                     std::nullopt};
         }
         if (request.reserved_prompt_rows > 0) {
             view.prompt = Rect{editor.x, editor.y, editor.width,
                                request.reserved_prompt_rows};
-            add_node(view, ShellNodeKind::prompt_reservation, "prompt",
-                     "Prompt surface", *view.prompt, SemanticRole::prompt);
+            add_node(view, ShellNodeKind::PromptReservation, "prompt",
+                     "Prompt surface", *view.prompt, SemanticRole::Prompt);
             editor.y += request.reserved_prompt_rows;
             editor.height -= request.reserved_prompt_rows;
         }
@@ -502,15 +502,15 @@ ShellLayoutResult compute_shell_layout(const ShellLayoutRequest& request,
 
     for (const auto& pane : view.panes) {
         const auto suffix = std::to_string(pane.id.value());
-        add_node(view, ShellNodeKind::pane, "pane." + suffix,
-                 "Editor pane " + suffix, pane.frame, SemanticRole::background);
-        add_node(view, ShellNodeKind::scrollbar, "pane." + suffix + ".scrollbar",
+        add_node(view, ShellNodeKind::Pane, "pane." + suffix,
+                 "Editor pane " + suffix, pane.frame, SemanticRole::Background);
+        add_node(view, ShellNodeKind::Scrollbar, "pane." + suffix + ".scrollbar",
                  "Scrollbar for editor pane " + suffix, pane.scrollbar,
-                 SemanticRole::scrollbar_track);
+                 SemanticRole::ScrollbarTrack);
         if (request.empty_state) {
-            add_node(view, ShellNodeKind::empty_state,
+            add_node(view, ShellNodeKind::EmptyState,
                      "pane." + suffix + ".empty", "Empty editor",
-                     pane.content, SemanticRole::background, "Empty editor");
+                     pane.content, SemanticRole::Background, "Empty editor");
         }
     }
 

@@ -185,55 +185,55 @@ TEST(ascii_commands_match_independent_reference_editor) {
             ASSERT_EQ(actual.first_visual_row, 0u);
         };
 
-    run(SelectionCommand::cursor_set_position,
+    run(SelectionCommand::CursorSetPosition,
         [&] { ref::cursor_set_position(expected, 8); },
         {.position = position(text, 8)});
-    run(SelectionCommand::cursor_left, [&] { ref::cursor_left(expected); });
-    run(SelectionCommand::cursor_right, [&] { ref::cursor_right(expected); });
-    run(SelectionCommand::cursor_word_left,
+    run(SelectionCommand::CursorLeft, [&] { ref::cursor_left(expected); });
+    run(SelectionCommand::CursorRight, [&] { ref::cursor_right(expected); });
+    run(SelectionCommand::CursorWordLeft,
         [&] { ref::cursor_word_left(expected); });
-    run(SelectionCommand::cursor_word_right,
+    run(SelectionCommand::CursorWordRight,
         [&] { ref::cursor_word_right(expected); });
-    run(SelectionCommand::cursor_line_start,
+    run(SelectionCommand::CursorLineStart,
         [&] { ref::cursor_line_start(expected); });
-    run(SelectionCommand::cursor_line_end,
+    run(SelectionCommand::CursorLineEnd,
         [&] { ref::cursor_line_end(expected); });
-    run(SelectionCommand::cursor_line_up,
+    run(SelectionCommand::CursorLineUp,
         [&] { ref::cursor_line_up(expected); });
-    run(SelectionCommand::cursor_line_down,
+    run(SelectionCommand::CursorLineDown,
         [&] { ref::cursor_line_down(expected); });
-    run(SelectionCommand::cursor_document_start,
+    run(SelectionCommand::CursorDocumentStart,
         [&] { ref::cursor_doc_start(expected); });
-    run(SelectionCommand::cursor_document_end,
+    run(SelectionCommand::CursorDocumentEnd,
         [&] { ref::cursor_doc_end(expected); });
 
-    run(SelectionCommand::select_set_range,
+    run(SelectionCommand::SelectSetRange,
         [&] { ref::select_set_range(expected, 0, 5); },
         {.selection = selection(text, 0, 5)});
-    run(SelectionCommand::select_add_range,
+    run(SelectionCommand::SelectAddRange,
         [&] { ref::select_add_range(expected, 14, 19); },
         {.selection = selection(text, 14, 19)});
-    run(SelectionCommand::select_left, [&] { ref::select_left(expected); });
-    run(SelectionCommand::select_right, [&] { ref::select_right(expected); });
-    run(SelectionCommand::select_word_left,
+    run(SelectionCommand::SelectLeft, [&] { ref::select_left(expected); });
+    run(SelectionCommand::SelectRight, [&] { ref::select_right(expected); });
+    run(SelectionCommand::SelectWordLeft,
         [&] { ref::select_word_left(expected); });
-    run(SelectionCommand::select_word_right,
+    run(SelectionCommand::SelectWordRight,
         [&] { ref::select_word_right(expected); });
-    run(SelectionCommand::select_line_start,
+    run(SelectionCommand::SelectLineStart,
         [&] { ref::select_line_start(expected); });
-    run(SelectionCommand::select_line_end,
+    run(SelectionCommand::SelectLineEnd,
         [&] { ref::select_line_end(expected); });
-    run(SelectionCommand::select_line_up,
+    run(SelectionCommand::SelectLineUp,
         [&] { ref::select_line_up(expected); });
-    run(SelectionCommand::select_line_end,
+    run(SelectionCommand::SelectLineEnd,
         [&] { ref::select_line_end(expected); });
-    run(SelectionCommand::select_line_down,
+    run(SelectionCommand::SelectLineDown,
         [&] { ref::select_line_down(expected); });
-    run(SelectionCommand::select_document_start,
+    run(SelectionCommand::SelectDocumentStart,
         [&] { ref::select_doc_start(expected); });
-    run(SelectionCommand::select_document_end,
+    run(SelectionCommand::SelectDocumentEnd,
         [&] { ref::select_doc_end(expected); });
-    run(SelectionCommand::select_all, [&] { ref::select_all(expected); });
+    run(SelectionCommand::SelectAll, [&] { ref::select_all(expected); });
 }
 
 TEST(horizontal_movement_uses_extended_grapheme_boundaries) {
@@ -248,19 +248,19 @@ TEST(horizontal_movement_uses_extended_grapheme_boundaries) {
 
     view = resulting_state(
         view, ssg::apply_selection_navigation(
-                  text, view, SelectionCommand::cursor_right, dimensions));
+                  text, view, SelectionCommand::CursorRight, dimensions));
     ASSERT_EQ(view.selections.primary().active.byte_offset, ByteOffset{12});
     ASSERT_EQ(view.selections.primary().active.cell, CellIndex{3});
 
     view = resulting_state(
         view, ssg::apply_selection_navigation(
-                  text, view, SelectionCommand::cursor_left, dimensions));
+                  text, view, SelectionCommand::CursorLeft, dimensions));
     ASSERT_EQ(view.selections.primary().active.byte_offset, ByteOffset{1});
 
     view = state(text, {{14, 14}});
     view = resulting_state(
         view, ssg::apply_selection_navigation(
-                  text, view, SelectionCommand::cursor_right, dimensions));
+                  text, view, SelectionCommand::CursorRight, dimensions));
     ASSERT_EQ(view.selections.primary().active.byte_offset, ByteOffset{17});
 }
 
@@ -271,14 +271,14 @@ TEST(vertical_movement_uses_cells_and_preserves_desired_cell) {
 
     view = resulting_state(
         view, ssg::apply_selection_navigation(
-                  text, view, SelectionCommand::cursor_line_down, dimensions));
+                  text, view, SelectionCommand::CursorLineDown, dimensions));
     ASSERT_EQ(view.selections.primary().active.byte_offset, ByteOffset{9});
     ASSERT_EQ(view.selections.primary().active.cell, CellIndex{2});
     ASSERT_EQ(view.desired_cell, std::optional<CellIndex>{CellIndex{4}});
 
     view = resulting_state(
         view, ssg::apply_selection_navigation(
-                  text, view, SelectionCommand::cursor_line_down, dimensions));
+                  text, view, SelectionCommand::CursorLineDown, dimensions));
     ASSERT_EQ(view.selections.primary().active.byte_offset, ByteOffset{14});
     ASSERT_EQ(view.selections.primary().active.cell, CellIndex{4});
 
@@ -286,7 +286,7 @@ TEST(vertical_movement_uses_cells_and_preserves_desired_cell) {
     view = state(tabbed, {{4, 4}}, 0, 4);
     view = resulting_state(
         view, ssg::apply_selection_navigation(
-                  tabbed, view, SelectionCommand::cursor_line_down, dimensions,
+                  tabbed, view, SelectionCommand::CursorLineDown, dimensions,
                   {}, {}, 4));
     ASSERT_EQ(view.selections.primary().active.byte_offset, ByteOffset{6});
     ASSERT_EQ(view.selections.primary().active.cell, CellIndex{4});
@@ -295,7 +295,7 @@ TEST(vertical_movement_uses_cells_and_preserves_desired_cell) {
     view = state(combined, {{1, 1}});
     view = resulting_state(
         view, ssg::apply_selection_navigation(
-                  combined, view, SelectionCommand::cursor_line_down,
+                  combined, view, SelectionCommand::CursorLineDown,
                   dimensions));
     ASSERT_EQ(view.selections.primary().active.byte_offset, ByteOffset{5});
     ASSERT_EQ(view.selections.primary().active.cell, CellIndex{1});
@@ -308,7 +308,7 @@ TEST(wrapped_vertical_and_page_movement_use_visual_rows) {
 
     view = resulting_state(
         view, ssg::apply_selection_navigation(
-                  text, view, SelectionCommand::cursor_line_down,
+                  text, view, SelectionCommand::CursorLineDown,
                   dimensions));
     ASSERT_EQ(view.selections.primary().active.byte_offset, ByteOffset{4});
     ASSERT_EQ(view.desired_cell, std::optional<CellIndex>{CellIndex{1}});
@@ -316,7 +316,7 @@ TEST(wrapped_vertical_and_page_movement_use_visual_rows) {
 
     view = resulting_state(
         view, ssg::apply_selection_navigation(
-                  text, view, SelectionCommand::cursor_line_down,
+                  text, view, SelectionCommand::CursorLineDown,
                   dimensions));
     ASSERT_EQ(view.selections.primary().active.byte_offset, ByteOffset{8});
     ASSERT_EQ(view.first_visual_row, 1u);
@@ -324,7 +324,7 @@ TEST(wrapped_vertical_and_page_movement_use_visual_rows) {
     view = state(text, {{1, 1}});
     view = resulting_state(
         view, ssg::apply_selection_navigation(
-                  text, view, SelectionCommand::cursor_page_down,
+                  text, view, SelectionCommand::CursorPageDown,
                   dimensions));
     ASSERT_EQ(view.selections.primary().active.byte_offset, ByteOffset{8});
 }
@@ -342,7 +342,7 @@ TEST(word_wrap_off_vertical_movement_is_by_logical_line) {
     // jumps to the next LOGICAL line "xy", preserving desired cell 1 (byte 8).
     auto cursor = resulting_state(
         view, ssg::apply_selection_navigation(
-                  text, view, SelectionCommand::cursor_line_down, dimensions,
+                  text, view, SelectionCommand::CursorLineDown, dimensions,
                   {}, {}, 4, /*word_wrap=*/false));
     ASSERT_EQ(cursor.selections.primary().active.line, ssg::LineIndex{1});
     ASSERT_EQ(cursor.selections.primary().active.byte_offset, ByteOffset{8});
@@ -351,7 +351,7 @@ TEST(word_wrap_off_vertical_movement_is_by_logical_line) {
     // path would have extended into a wrap-row of "abcdef".
     auto selected = resulting_state(
         view, ssg::apply_selection_navigation(
-                  text, view, SelectionCommand::select_line_down, dimensions,
+                  text, view, SelectionCommand::SelectLineDown, dimensions,
                   {}, {}, 4, /*word_wrap=*/false));
     ASSERT_EQ(selected.selections.primary().active.line, ssg::LineIndex{1});
     ASSERT_EQ(selected.selections.primary().active.byte_offset, ByteOffset{8});
@@ -365,7 +365,7 @@ TEST(selection_extension_keeps_anchor_and_page_uses_visible_rows) {
 
     view = resulting_state(
         view, ssg::apply_selection_navigation(
-                  text, view, SelectionCommand::select_page_down, dimensions));
+                  text, view, SelectionCommand::SelectPageDown, dimensions));
     ASSERT_EQ(byte_ranges(view),
               (std::vector<std::pair<std::uint64_t, std::uint64_t>>{{1, 10}}));
     ASSERT_EQ(view.first_visual_row, 1u);
@@ -373,7 +373,7 @@ TEST(selection_extension_keeps_anchor_and_page_uses_visible_rows) {
 
     view = resulting_state(
         view, ssg::apply_selection_navigation(
-                  text, view, SelectionCommand::select_page_up, dimensions));
+                  text, view, SelectionCommand::SelectPageUp, dimensions));
     ASSERT_EQ(byte_ranges(view),
               (std::vector<std::pair<std::uint64_t, std::uint64_t>>{{1, 1}}));
     ASSERT_EQ(view.selections.primary().anchor.byte_offset, ByteOffset{1});
@@ -381,12 +381,12 @@ TEST(selection_extension_keeps_anchor_and_page_uses_visible_rows) {
     view = state(text, {{1, 1}});
     view = resulting_state(
         view, ssg::apply_selection_navigation(
-                  text, view, SelectionCommand::cursor_page_down, dimensions));
+                  text, view, SelectionCommand::CursorPageDown, dimensions));
     ASSERT_EQ(byte_ranges(view),
               (std::vector<std::pair<std::uint64_t, std::uint64_t>>{{10, 10}}));
     view = resulting_state(
         view, ssg::apply_selection_navigation(
-                  text, view, SelectionCommand::cursor_page_up, dimensions));
+                  text, view, SelectionCommand::CursorPageUp, dimensions));
     ASSERT_EQ(byte_ranges(view),
               (std::vector<std::pair<std::uint64_t, std::uint64_t>>{{1, 1}}));
 }
@@ -402,7 +402,7 @@ TEST(multicursor_occurrence_and_line_splitting_match_oracles) {
         view = resulting_state(
             view, ssg::apply_selection_navigation(
                       occurrences, view,
-                      SelectionCommand::select_add_next_occurrence,
+                      SelectionCommand::SelectAddNextOccurrence,
                       dimensions));
         ASSERT_EQ(view.selections.items().size(), expected_count);
         assert_matches_reference(view, expected);
@@ -417,13 +417,13 @@ TEST(multicursor_occurrence_and_line_splitting_match_oracles) {
     ref::select_add_cursor_down(expected);
     view = resulting_state(
         view, ssg::apply_selection_navigation(
-                  cursors, view, SelectionCommand::select_add_cursor_down,
+                  cursors, view, SelectionCommand::SelectAddCursorDown,
                   dimensions));
     assert_matches_reference(view, expected);
     ref::select_add_cursor_up(expected);
     view = resulting_state(
         view, ssg::apply_selection_navigation(
-                  cursors, view, SelectionCommand::select_add_cursor_up,
+                  cursors, view, SelectionCommand::SelectAddCursorUp,
                   dimensions));
     assert_matches_reference(view, expected);
 
@@ -433,7 +433,7 @@ TEST(multicursor_occurrence_and_line_splitting_match_oracles) {
     ref::select_split_into_lines(expected);
     view = resulting_state(
         view, ssg::apply_selection_navigation(
-                  lines, view, SelectionCommand::select_split_into_lines,
+                  lines, view, SelectionCommand::SelectSplitIntoLines,
                   dimensions));
     assert_matches_reference(view, expected);
     ASSERT_EQ(byte_ranges(view),
@@ -449,14 +449,14 @@ TEST(injected_brackets_match_with_nesting) {
 
     view = resulting_state(
         view, ssg::apply_selection_navigation(
-                  text, view, SelectionCommand::goto_matching_bracket,
+                  text, view, SelectionCommand::GotoMatchingBracket,
                   dimensions, {}, pairs));
     ASSERT_EQ(view.selections.primary().active.byte_offset, ByteOffset{7});
 
     view = state(text, {{0, 0}});
     view = resulting_state(
         view, ssg::apply_selection_navigation(
-                  text, view, SelectionCommand::select_to_matching_bracket,
+                  text, view, SelectionCommand::SelectToMatchingBracket,
                   dimensions, {}, pairs));
     ASSERT_EQ(byte_ranges(view),
               (std::vector<std::pair<std::uint64_t, std::uint64_t>>{{0, 8}}));
@@ -466,7 +466,7 @@ TEST(injected_brackets_match_with_nesting) {
     view = state(injected, {{0, 0}});
     view = resulting_state(
         view, ssg::apply_selection_navigation(
-                  injected, view, SelectionCommand::goto_matching_bracket,
+                  injected, view, SelectionCommand::GotoMatchingBracket,
                   dimensions, {}, custom_pairs));
     ASSERT_EQ(view.selections.primary().active.byte_offset, ByteOffset{9});
 }
@@ -477,31 +477,31 @@ TEST(reveal_is_minimal_and_center_clamps) {
     auto view = state(text, {{10, 10}}, 0);
 
     auto result = ssg::apply_selection_navigation(
-        text, view, SelectionCommand::view_reveal_caret, dimensions);
+        text, view, SelectionCommand::ViewRevealCaret, dimensions);
     view = resulting_state(view, result);
     ASSERT_EQ(view.first_visual_row, 3u);
 
     result = ssg::apply_selection_navigation(
-        text, view, SelectionCommand::view_reveal_caret, dimensions);
+        text, view, SelectionCommand::ViewRevealCaret, dimensions);
     ASSERT_TRUE(result.accepted());
     ASSERT_FALSE(result.delta.changed);
     ASSERT_FALSE(result.delta.replacement.has_value());
 
     view = resulting_state(
         view, ssg::apply_selection_navigation(
-                  text, view, SelectionCommand::view_center_caret, dimensions));
+                  text, view, SelectionCommand::ViewCenterCaret, dimensions));
     ASSERT_EQ(view.first_visual_row, 4u);
 
     view = state(text, {{18, 18}}, 0);
     view = resulting_state(
         view, ssg::apply_selection_navigation(
-                  text, view, SelectionCommand::view_center_caret, dimensions));
+                  text, view, SelectionCommand::ViewCenterCaret, dimensions));
     ASSERT_EQ(view.first_visual_row, 7u);
 
     view = state(text, {{4, 4}}, 0);
     view = resulting_state(
         view, ssg::apply_selection_navigation(
-                  text, view, SelectionCommand::cursor_line_down, dimensions));
+                  text, view, SelectionCommand::CursorLineDown, dimensions));
     ASSERT_EQ(view.first_visual_row, 1u);
 }
 
@@ -511,18 +511,18 @@ TEST(invalid_positions_and_missing_arguments_are_typed_rejections) {
     const auto view = state(text, {{0, 0}});
 
     auto result = ssg::apply_selection_navigation(
-        text, view, SelectionCommand::cursor_set_position, dimensions);
+        text, view, SelectionCommand::CursorSetPosition, dimensions);
     ASSERT_FALSE(result.accepted());
-    ASSERT_EQ(result.error, ssg::SelectionNavigationError::missing_argument);
+    ASSERT_EQ(result.error, ssg::SelectionNavigationError::MissingArgument);
     ASSERT_FALSE(result.delta.changed);
 
     const DocumentPosition inconsistent{
         ByteOffset{1}, ssg::LineIndex{9}, CellIndex{9}};
     result = ssg::apply_selection_navigation(
-        text, view, SelectionCommand::cursor_set_position, dimensions,
+        text, view, SelectionCommand::CursorSetPosition, dimensions,
         {.position = inconsistent});
     ASSERT_FALSE(result.accepted());
-    ASSERT_EQ(result.error, ssg::SelectionNavigationError::invalid_position);
+    ASSERT_EQ(result.error, ssg::SelectionNavigationError::InvalidPosition);
 
     ASSERT_FALSE(
         ssg::resolve_document_position(text, ByteOffset{2}).has_value());
@@ -533,11 +533,11 @@ TEST(invalid_tab_width_is_typed_and_atomic) {
     const auto before = state(text, {{0, 0}});
 
     const auto result = apply_selection_navigation(
-        text, before, SelectionCommand::cursor_right,
+        text, before, SelectionCommand::CursorRight,
         ViewportDimensions{20, 4}, {}, {}, 17);
 
     ASSERT_FALSE(result.accepted());
-    ASSERT_EQ(result.error, SelectionNavigationError::invalid_tab_width);
+    ASSERT_EQ(result.error, SelectionNavigationError::InvalidTabWidth);
     ASSERT_FALSE(result.delta.changed);
     ASSERT_FALSE(result.delta.replacement.has_value());
     ASSERT_FALSE(resolve_document_position(text, ByteOffset{0}, 0).has_value());

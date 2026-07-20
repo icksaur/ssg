@@ -38,7 +38,7 @@ struct DecodeSessionAttachRequestResult {
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == ProtocolError::none;
+        return error == ProtocolError::None;
     }
 };
 

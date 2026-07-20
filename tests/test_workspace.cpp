@@ -71,12 +71,12 @@ TEST(paths_cannot_escape_workspace_before_mutation) {
     auto workspace = ssg::Workspace::create(temporary.path(), recovery);
 
     ASSERT_EQ(workspace.open_file("../secret.txt").error,
-              ssg::WorkspaceError::invalid_path);
+              ssg::WorkspaceError::InvalidPath);
     ASSERT_EQ(workspace.open_file(outside.path().string()).error,
-              ssg::WorkspaceError::invalid_path);
+              ssg::WorkspaceError::InvalidPath);
     if (!symlink_error) {
         ASSERT_EQ(workspace.open_file("escape/secret.txt").error,
-                  ssg::WorkspaceError::path_outside_workspace);
+                  ssg::WorkspaceError::PathOutsideWorkspace);
     }
     ASSERT_EQ(workspace.documents().size(), std::size_t{0});
 }
@@ -89,7 +89,7 @@ TEST(untitled_identity_changes_only_after_successful_save) {
     const auto created = workspace.new_document();
     const auto id = *created.document;
     const auto before = workspace.state(id);
-    ASSERT_EQ(before->key.kind(), ssg::JournalDocumentKeyKind::untitled);
+    ASSERT_EQ(before->key.kind(), ssg::JournalDocumentKeyKind::Untitled);
 
     std::filesystem::create_directories(temporary.path() / "blocked");
     const auto failed_save = workspace.save_as(id, "blocked");
@@ -101,7 +101,7 @@ TEST(untitled_identity_changes_only_after_successful_save) {
     const auto saved = workspace.save_as(id, "named.txt");
     ASSERT_TRUE(saved.accepted());
     const auto after_save = workspace.state(id);
-    ASSERT_EQ(after_save->key.kind(), ssg::JournalDocumentKeyKind::saved);
+    ASSERT_EQ(after_save->key.kind(), ssg::JournalDocumentKeyKind::Saved);
     ASSERT_EQ(after_save->key.saved_path(), std::string{"named.txt"});
     ASSERT_FALSE(after_save->dirty);
 }
@@ -122,7 +122,7 @@ TEST(recent_files_are_bounded_mru_and_drop_missing_entries) {
     ASSERT_EQ(recent.back(), std::string{"2.txt"});
 
     std::filesystem::remove(temporary.path() / "33.txt");
-    ASSERT_EQ(workspace.open_recent(0).error, ssg::WorkspaceError::not_found);
+    ASSERT_EQ(workspace.open_recent(0).error, ssg::WorkspaceError::NotFound);
     const auto after_missing = workspace.recent_files();
     ASSERT_EQ(after_missing.front(), std::string{"32.txt"});
 }
@@ -197,7 +197,7 @@ TEST(new_directory_rejects_escape_and_creates_only_inside_root) {
     ASSERT_TRUE(workspace.new_directory("inside").accepted());
     ASSERT_TRUE(std::filesystem::is_directory(temporary.path() / "inside"));
     ASSERT_EQ(workspace.new_directory("../outside").error,
-              ssg::WorkspaceError::invalid_path);
+              ssg::WorkspaceError::InvalidPath);
 }
 
 TEST(empty_and_mixed_ending_edits_save_with_exact_metadata) {

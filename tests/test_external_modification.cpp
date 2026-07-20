@@ -28,14 +28,14 @@ private:
 
 ssg::JournalDocument document(std::string text, bool dirty) {
     return {ssg::JournalDocumentKey::saved("note.txt"),
-            ssg::DocumentMode::edit, dirty, std::move(text)};
+            ssg::DocumentMode::Edit, dirty, std::move(text)};
 }
 
 ssg::WatchEvent event(std::uint64_t sequence,
                       ssg::WatchEventOrigin origin =
-                          ssg::WatchEventOrigin::external) {
+                          ssg::WatchEventOrigin::External) {
     ssg::WatchEvent result;
-    result.kind = ssg::WatchEventKind::modify;
+    result.kind = ssg::WatchEventKind::Modify;
     result.path = "note.txt";
     result.sequence = sequence;
     result.origin = origin;
@@ -44,7 +44,7 @@ ssg::WatchEvent event(std::uint64_t sequence,
 
 ssg::ExternalEventInput input(std::uint64_t sequence, std::string content,
                               ssg::WatchEventOrigin origin =
-                                  ssg::WatchEventOrigin::external) {
+                                  ssg::WatchEventOrigin::External) {
     return {event(sequence, origin), ssg::DiffFileId{"note"}, std::move(content)};
 }
 
@@ -100,11 +100,11 @@ TEST(dirty_external_edit_preserves_buffer_and_publishes_actions) {
     ASSERT_TRUE(open->dirty);
     ASSERT_EQ(state.files.size(), 1U);
     ASSERT_EQ(state.files[0].status,
-              ssg::ExternalDocumentStatus::externally_modified);
+              ssg::ExternalDocumentStatus::ExternallyModified);
     ASSERT_EQ(state.files[0].actions.size(), 3U);
-    ASSERT_EQ(state.files[0].actions[0], ssg::ExternalAction::reload);
-    ASSERT_EQ(state.files[0].actions[1], ssg::ExternalAction::keep_buffer);
-    ASSERT_EQ(state.files[0].actions[2], ssg::ExternalAction::open_diff);
+    ASSERT_EQ(state.files[0].actions[0], ssg::ExternalAction::Reload);
+    ASSERT_EQ(state.files[0].actions[1], ssg::ExternalAction::KeepBuffer);
+    ASSERT_EQ(state.files[0].actions[2], ssg::ExternalAction::OpenDiff);
 }
 
 TEST(open_diff_is_observational_and_keep_buffer_acknowledges_disk) {
@@ -153,7 +153,7 @@ TEST(ssg_save_advances_baseline_without_duplicate_status) {
     std::optional<ssg::JournalDocument> open{document("saved\n", false)};
 
     const auto saved = fixture.flow.process_event(
-        input(2, "saved\n", ssg::WatchEventOrigin::ssg_save), open);
+        input(2, "saved\n", ssg::WatchEventOrigin::SsgSave), open);
 
     ASSERT_TRUE(saved.accepted());
     ASSERT_FALSE(saved.status_published);
@@ -166,7 +166,7 @@ TEST(genuine_external_edit_is_not_consumed_by_save_correlation) {
     std::optional<ssg::JournalDocument> open{document("buffer\n", true)};
     ASSERT_TRUE(fixture.flow
                     .process_event(
-                        input(2, "saved\n", ssg::WatchEventOrigin::ssg_save),
+                        input(2, "saved\n", ssg::WatchEventOrigin::SsgSave),
                         open)
                     .accepted());
 
@@ -191,7 +191,7 @@ TEST(stale_event_is_failure_atomic) {
         fixture.flow.process_event(input(2, "stale\n"), open);
 
     ASSERT_FALSE(stale.accepted());
-    ASSERT_EQ(stale.error, ssg::ExternalModificationError::stale_event);
+    ASSERT_EQ(stale.error, ssg::ExternalModificationError::StaleEvent);
     ASSERT_EQ(open, before);
     ASSERT_EQ(fixture.flow.view_state(), state);
     ASSERT_EQ(fixture.diff.view_state(), diff);
@@ -229,7 +229,7 @@ TEST(view_delta_replays_as_target_state) {
     ASSERT_EQ(*replayed.state, target);
     const auto stale = ssg::replay_external_modification_delta(target, delta);
     ASSERT_FALSE(stale.accepted());
-    ASSERT_EQ(stale.error, ssg::ExternalDeltaError::stale_revision);
+    ASSERT_EQ(stale.error, ssg::ExternalDeltaError::StaleRevision);
 }
 
 }  // namespace

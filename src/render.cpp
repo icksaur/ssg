@@ -140,10 +140,10 @@ void paint_text(CellGrid& grid, int x, int y, int right, std::string_view text,
             break;
         }
         auto piece = std::string{text.substr(span.byte_offset, span.byte_len)};
-        if (span.kind == CellKind::tab) {
+        if (span.kind == CellKind::Tab) {
             piece.assign(span.cell_width, ' ');
-        } else if (span.kind == CellKind::control ||
-                   span.kind == CellKind::invalid_utf8) {
+        } else if (span.kind == CellKind::Control ||
+                   span.kind == CellKind::InvalidUtf8) {
             piece = "\xef\xbf\xbd";
         }
         put(grid, column, y, std::move(piece), foreground, background, role);
@@ -164,14 +164,14 @@ void paint_shell_leaves(CellGrid& grid, ShellViewState const& shell,
     for (auto const& node : shell.accessibility_nodes) {
         std::uint8_t node_background = background;
         switch (node.kind) {
-        case ShellNodeKind::panel_provider:
+        case ShellNodeKind::PanelProvider:
             node_background = panel_background;
             [[fallthrough]];
-        case ShellNodeKind::header_field:
-        case ShellNodeKind::footer_field:
-        case ShellNodeKind::footer_action:
-        case ShellNodeKind::tab:
-        case ShellNodeKind::empty_state:
+        case ShellNodeKind::HeaderField:
+        case ShellNodeKind::FooterField:
+        case ShellNodeKind::FooterAction:
+        case ShellNodeKind::Tab:
+        case ShellNodeKind::EmptyState:
             if (!node.content.empty()) {
                 paint_text(grid, node.rect.x, node.rect.y, node.rect.right(),
                            node.content, semantic_index(theme, node.role),
@@ -191,13 +191,13 @@ void paint_shell_leaves(CellGrid& grid, ShellViewState const& shell,
 void paint_scroll_gutter(CellGrid& grid, int x, int y, int height,
                          ScrollbarMetrics const& metrics,
                          ThemeSnapshot const& theme, std::uint8_t background) {
-    auto const track = semantic_index(theme, SemanticRole::scrollbar_track);
-    auto const thumb = semantic_index(theme, SemanticRole::scrollbar_thumb);
+    auto const track = semantic_index(theme, SemanticRole::ScrollbarTrack);
+    auto const thumb = semantic_index(theme, SemanticRole::ScrollbarThumb);
     bool const scrollable = metrics.maximum_first_row > 0;
     for (int row = 0; row < height; ++row) {
         if (!scrollable) {
             put(grid, x, y + row, " ", track, background,
-                SemanticRole::scrollbar_track);
+                SemanticRole::ScrollbarTrack);
             continue;
         }
         bool const is_thumb =
@@ -205,8 +205,8 @@ void paint_scroll_gutter(CellGrid& grid, int x, int y, int height,
             row < static_cast<int>(metrics.thumb_start + metrics.thumb_size);
         put(grid, x, y + row, is_thumb ? "#" : "|", is_thumb ? thumb : track,
             background,
-            is_thumb ? SemanticRole::scrollbar_thumb
-                     : SemanticRole::scrollbar_track);
+            is_thumb ? SemanticRole::ScrollbarThumb
+                     : SemanticRole::ScrollbarTrack);
     }
 }
 
@@ -216,9 +216,9 @@ void paint_panel_tree(CellGrid& grid, Rect const& panel,
                       std::uint8_t background, bool focused) {
     if (tree.providers.empty() || panel.width <= 0) return;
     auto const& provider = tree.providers.front();
-    auto const foreground = semantic_index(theme, SemanticRole::foreground);
-    auto const directory = semantic_index(theme, SemanticRole::panel_active);
-    auto const selected_bg = semantic_index(theme, SemanticRole::tree_focus);
+    auto const foreground = semantic_index(theme, SemanticRole::Foreground);
+    auto const directory = semantic_index(theme, SemanticRole::PanelActive);
+    auto const selected_bg = semantic_index(theme, SemanticRole::TreeFocus);
     int const top = panel.y + 1;
     int const rows = panel.height - 1;
     // Content stops before the reserved scrollbar gutter so text width is stable.
@@ -237,7 +237,7 @@ void paint_panel_tree(CellGrid& grid, Rect const& panel,
         auto const row_background = is_selected ? selected_bg : background;
         if (is_selected) {
             fill_rect(grid, {panel.x, y, content_right - panel.x, 1}, foreground,
-                      row_background, SemanticRole::tree_focus);
+                      row_background, SemanticRole::TreeFocus);
             if (focused) grid.caret = GridPosition{panel.x, y};
         }
         std::string line(view.depth * 2, ' ');
@@ -246,9 +246,9 @@ void paint_panel_tree(CellGrid& grid, Rect const& panel,
         }
         line += view.node.label;
         auto const color =
-            view.node.kind == TreeNodeKind::directory ? directory : foreground;
+            view.node.kind == TreeNodeKind::Directory ? directory : foreground;
         paint_text(grid, panel.x, y, content_right, line, color, row_background,
-                   SemanticRole::foreground);
+                   SemanticRole::Foreground);
     }
     // Paint the reserved gutter (blank when the tree fits).
     if (panel_scrollbar) {
@@ -265,9 +265,9 @@ void paint_palette(CellGrid& grid, PaletteProjection const& palette,
                    ThemeSnapshot const& theme, std::uint8_t background) {
     auto const& rect = palette.rect;
     if (rect.width <= 0 || rect.height <= 0) return;
-    auto const foreground = semantic_index(theme, SemanticRole::foreground);
-    auto const detail_color = semantic_index(theme, SemanticRole::line_number);
-    auto const selected_bg = semantic_index(theme, SemanticRole::selection);
+    auto const foreground = semantic_index(theme, SemanticRole::Foreground);
+    auto const detail_color = semantic_index(theme, SemanticRole::LineNumber);
+    auto const selected_bg = semantic_index(theme, SemanticRole::Selection);
     // `rows` is already the client's windowed subset; `selected`/`first_visible`
     // are absolute, so the selected row's screen index is selected-first_visible.
     for (std::size_t index = 0; index < palette.rows.size(); ++index) {
@@ -279,11 +279,11 @@ void paint_palette(CellGrid& grid, PaletteProjection const& palette,
             *palette.selected == palette.first_visible + index;
         auto const row_background = is_selected ? selected_bg : background;
         auto const row_role =
-            is_selected ? SemanticRole::selection : SemanticRole::background;
+            is_selected ? SemanticRole::Selection : SemanticRole::Background;
         auto const label_role =
-            is_selected ? SemanticRole::selection : SemanticRole::foreground;
+            is_selected ? SemanticRole::Selection : SemanticRole::Foreground;
         auto const detail_role =
-            is_selected ? SemanticRole::selection : SemanticRole::line_number;
+            is_selected ? SemanticRole::Selection : SemanticRole::LineNumber;
         fill_rect(grid, {rect.x, y, rect.width, 1}, foreground, row_background,
                   row_role);
         paint_text(grid, rect.x, y, rect.right(), row.label, foreground,
@@ -334,7 +334,7 @@ std::optional<SemanticRole> find_match_role(FindReplaceViewState const& find,
         auto const hi = match.end.value();
         if (offset < lo || offset >= hi) continue;
         bool const active = find.active_match && *find.active_match == index;
-        return active ? SemanticRole::selection : SemanticRole::search_match;
+        return active ? SemanticRole::Selection : SemanticRole::SearchMatch;
     }
     return std::nullopt;
 }
@@ -390,8 +390,8 @@ void paint_document(CellGrid& grid, SessionSnapshot const& snapshot,
         if (!find_matches_current) return std::nullopt;
         return find_match_role(find_state, offset);
     };
-    auto const selection_bg = semantic_index(theme, SemanticRole::selection);
-    auto const search_match_bg = semantic_index(theme, SemanticRole::search_match);
+    auto const selection_bg = semantic_index(theme, SemanticRole::Selection);
+    auto const search_match_bg = semantic_index(theme, SemanticRole::SearchMatch);
     for (std::size_t row_index = 0; row_index < viewport.visible_rows.size();
          ++row_index) {
         auto const& row = viewport.visible_rows[row_index];
@@ -410,10 +410,10 @@ void paint_document(CellGrid& grid, SessionSnapshot const& snapshot,
             auto const& span = line.cells.spans[span_index];
             auto text =
                 std::string{line.text.substr(span.byte_offset, span.byte_len)};
-            if (span.kind == CellKind::tab) {
+            if (span.kind == CellKind::Tab) {
                 text.assign(span.cell_width, ' ');
-            } else if (span.kind == CellKind::control ||
-                       span.kind == CellKind::invalid_utf8) {
+            } else if (span.kind == CellKind::Control ||
+                       span.kind == CellKind::InvalidUtf8) {
                 text = "\xef\xbf\xbd";
             }
             auto const document_offset = line.document_offset + span.byte_offset;
@@ -423,12 +423,12 @@ void paint_document(CellGrid& grid, SessionSnapshot const& snapshot,
             auto const selected = offset_in_selection(selection, document_offset);
             auto cell_bg = selected ? selection_bg : background;
             auto cell_role =
-                selected ? SemanticRole::selection : SemanticRole::foreground;
+                selected ? SemanticRole::Selection : SemanticRole::Foreground;
             // Find matches take precedence over the text selection so the query
             // hits stay visible; the active match reuses the selection role.
             if (auto match_role = match_role_at(document_offset)) {
                 cell_role = *match_role;
-                cell_bg = *match_role == SemanticRole::selection ? selection_bg
+                cell_bg = *match_role == SemanticRole::Selection ? selection_bg
                                                                  : search_match_bg;
             }
             auto const width = std::max<std::uint32_t>(span.cell_width, 1);
@@ -460,12 +460,12 @@ void paint_document(CellGrid& grid, SessionSnapshot const& snapshot,
             bool const eol_selected = offset_in_selection(selection, line_end);
             if (eol_match_role || eol_selected) {
                 auto const role = eol_match_role ? *eol_match_role
-                                                 : SemanticRole::selection;
+                                                 : SemanticRole::Selection;
                 auto const fill_bg =
-                    role == SemanticRole::search_match ? search_match_bg
+                    role == SemanticRole::SearchMatch ? search_match_bg
                                                        : selection_bg;
                 auto const foreground =
-                    semantic_index(theme, SemanticRole::foreground);
+                    semantic_index(theme, SemanticRole::Foreground);
                 for (int fill = column; fill < content.right(); ++fill) {
                     put(grid, fill, content.y + static_cast<int>(row_index), " ",
                         foreground, fill_bg, role);
@@ -491,19 +491,19 @@ std::optional<GridPosition> paint_prompt(CellGrid& grid,
                                          PromptViewState const& prompt,
                                          ThemeSnapshot const& theme,
                                          std::uint8_t background) {
-    auto const prompt_fg = semantic_index(theme, SemanticRole::prompt);
-    auto const prompt_bg = semantic_index(theme, SemanticRole::background);
+    auto const prompt_fg = semantic_index(theme, SemanticRole::Prompt);
+    auto const prompt_bg = semantic_index(theme, SemanticRole::Background);
     std::optional<GridPosition> caret;
     for (auto const& control : prompt.controls) {
         std::string text;
         switch (control.kind) {
-            case PromptControlKind::input:
+            case PromptControlKind::Input:
                 text = control.accessible_label + ": " + control.value;
                 break;
-            case PromptControlKind::count:
+            case PromptControlKind::Count:
                 text = control.value;
                 break;
-            case PromptControlKind::toggle:
+            case PromptControlKind::Toggle:
                 text = std::string{control.checked ? "[x] " : "[ ] "} +
                        control.accessible_label;
                 break;
@@ -512,18 +512,18 @@ std::optional<GridPosition> paint_prompt(CellGrid& grid,
         // glyphs behind, then paint the control text.
         for (int column = control.rect.x; column < control.rect.right(); ++column) {
             put(grid, column, control.rect.y, " ", prompt_fg, prompt_bg,
-                SemanticRole::prompt);
+                SemanticRole::Prompt);
         }
         paint_text(grid, control.rect.x, control.rect.y, control.rect.right(),
-                   text, prompt_fg, prompt_bg, SemanticRole::prompt);
+                   text, prompt_fg, prompt_bg, SemanticRole::Prompt);
         // Place the hardware cursor on the editable input: the replacement row
         // for a replace prompt (its query row is display-only), otherwise the
         // first input.
         bool const active_input =
-            prompt.kind == PromptKind::replace
+            prompt.kind == PromptKind::Replace
                 ? control.id == "replace.replacement"
                 : !caret;
-        if (control.kind == PromptControlKind::input && active_input && !caret) {
+        if (control.kind == PromptControlKind::Input && active_input && !caret) {
             auto const label_width =
                 static_cast<int>(compute_cell_run(control.accessible_label + ": ")
                                      .total_cells);
@@ -544,14 +544,14 @@ std::optional<GridPosition> paint_prompt(CellGrid& grid,
 // doc/spec-library-contract.md).  Sized from the terminal dimensions the client
 // viewport carries, since the shell layout was declined (viewport {0,0}).
 CellGrid render_too_small(GridSize size, ThemeSnapshot const& theme) {
-    auto const foreground = semantic_index(theme, SemanticRole::foreground);
-    auto const background = semantic_index(theme, SemanticRole::background);
+    auto const foreground = semantic_index(theme, SemanticRole::Foreground);
+    auto const background = semantic_index(theme, SemanticRole::Background);
     CellGrid grid{
         size, theme.palette,
         std::vector<CellGridCell>(
             static_cast<std::size_t>(std::max(0, size.columns) *
                                      std::max(0, size.rows)),
-            CellGridCell{" ", foreground, background, SemanticRole::background,
+            CellGridCell{" ", foreground, background, SemanticRole::Background,
                          false})};
     if (size.columns <= 0 || size.rows <= 0) return grid;
     std::string_view const message = "terminal too small";
@@ -560,7 +560,7 @@ CellGrid render_too_small(GridSize size, ThemeSnapshot const& theme) {
     int const row = size.rows / 2;
     int const start = std::max(0, (size.columns - message_cells) / 2);
     paint_text(grid, start, row, size.columns, message, foreground, background,
-               SemanticRole::foreground);
+               SemanticRole::Foreground);
     return grid;
 }
 
@@ -587,7 +587,7 @@ std::string CellGrid::canonical() const {
     for (int row = 0; row < size.rows; ++row) {
         for (int column = 0; column < size.columns; ++column) {
             auto const& cell = at(column, row);
-            if (cell.text == " " && cell.role == SemanticRole::background &&
+            if (cell.text == " " && cell.role == SemanticRole::Background &&
                 !cell.continuation) {
                 continue;
             }
@@ -628,22 +628,22 @@ CellGrid render(SessionSnapshot const& snapshot) {
             theme);
     }
 
-    auto const foreground = semantic_index(theme, SemanticRole::foreground);
-    auto const background = semantic_index(theme, SemanticRole::background);
+    auto const foreground = semantic_index(theme, SemanticRole::Foreground);
+    auto const background = semantic_index(theme, SemanticRole::Background);
     CellGrid grid{
         shell.viewport, theme.palette,
         std::vector<CellGridCell>(
             static_cast<std::size_t>(shell.viewport.columns *
                                      shell.viewport.rows),
-            CellGridCell{" ", foreground, background, SemanticRole::background,
+            CellGridCell{" ", foreground, background, SemanticRole::Background,
                          false})};
 
     auto const panel_background =
-        shell.panel ? semantic_index(theme, SemanticRole::tree_background)
+        shell.panel ? semantic_index(theme, SemanticRole::TreeBackground)
                     : background;
     if (shell.panel) {
         fill_rect(grid, *shell.panel, foreground, panel_background,
-                  SemanticRole::tree_background);
+                  SemanticRole::TreeBackground);
     }
 
     paint_shell_leaves(grid, shell, theme, background, panel_background);
@@ -651,7 +651,7 @@ CellGrid render(SessionSnapshot const& snapshot) {
     if (shell.panel) {
         paint_panel_tree(grid, *shell.panel, shell.panel_scrollbar,
                          snapshot.sections().tree, theme,
-                         panel_background, shell.focus == FocusTarget::panel);
+                         panel_background, shell.focus == FocusTarget::Panel);
     }
     if (!shell.panes.empty()) {
         if (shell.palette) {
@@ -667,7 +667,7 @@ CellGrid render(SessionSnapshot const& snapshot) {
             auto const& prompt = snapshot.sections().prompt_status.prompt;
             if (prompt) {
                 auto prompt_caret = paint_prompt(grid, *prompt, theme, background);
-                if (shell.focus == FocusTarget::prompt && prompt_caret) {
+                if (shell.focus == FocusTarget::Prompt && prompt_caret) {
                     grid.caret = *prompt_caret;
                 }
             }
@@ -676,7 +676,7 @@ CellGrid render(SessionSnapshot const& snapshot) {
             // a terminal cursor there, and paint any secondary carets as cells
             // (a terminal has one hardware cursor), but only when the editor is
             // focused.
-            if (shell.focus == FocusTarget::editor) {
+            if (shell.focus == FocusTarget::Editor) {
                 auto const& content = shell.panes.front().content;
                 auto const& viewport = snapshot.client().viewport;
                 auto const& selections =
@@ -687,12 +687,12 @@ CellGrid render(SessionSnapshot const& snapshot) {
                                                 primary.active.cell.value())) {
                     grid.caret = *cell;
                 }
-                auto const caret_bg = semantic_index(theme, SemanticRole::caret);
+                auto const caret_bg = semantic_index(theme, SemanticRole::Caret);
                 // Draw the secondary caret glyph in the selection role: the theme
                 // co-visibility constraint already guarantees caret != selection,
                 // so the block cursor is legible in every valid theme without a
                 // new constraint (the primary caret uses the hardware cursor).
-                auto const caret_fg = semantic_index(theme, SemanticRole::selection);
+                auto const caret_fg = semantic_index(theme, SemanticRole::Selection);
                 for (auto const& item : selections.items()) {
                     if (&item == &primary) continue;
                     // Every non-primary selection (ranged or a bare caret) has an
@@ -705,7 +705,7 @@ CellGrid render(SessionSnapshot const& snapshot) {
                     auto const& existing = grid.at(cell->column, cell->row);
                     put(grid, cell->column, cell->row,
                         existing.text.empty() ? std::string{" "} : existing.text,
-                        caret_fg, caret_bg, SemanticRole::caret);
+                        caret_fg, caret_bg, SemanticRole::Caret);
                 }
             }
         }

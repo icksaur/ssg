@@ -31,11 +31,11 @@
         ASSERT_EQ((run).spans[(idx)].kind, (k));                   \
     } while (0)
 
-static constexpr auto T   = ssg::CellKind::text;
-static constexpr auto C   = ssg::CellKind::combining;
-static constexpr auto TAB = ssg::CellKind::tab;
-static constexpr auto CTL = ssg::CellKind::control;
-static constexpr auto INV = ssg::CellKind::invalid_utf8;
+static constexpr auto T   = ssg::CellKind::Text;
+static constexpr auto C   = ssg::CellKind::Combining;
+static constexpr auto TAB = ssg::CellKind::Tab;
+static constexpr auto CTL = ssg::CellKind::Control;
+static constexpr auto INV = ssg::CellKind::InvalidUtf8;
 
 // ---------------------------------------------------------------------------
 // ASCII fixtures (ascii.txt)

@@ -25,10 +25,10 @@ private:
 };
 
 enum class StatusPriority : std::uint8_t {
-    error,
-    warning,
-    information,
-    progress,
+    Error,
+    Warning,
+    Information,
+    Progress,
 };
 
 struct StatusAction {
@@ -40,7 +40,7 @@ struct StatusAction {
 
 struct StatusItem {
     StatusId id;
-    StatusPriority priority = StatusPriority::information;
+    StatusPriority priority = StatusPriority::Information;
     std::string text;
     std::vector<StatusAction> actions;
     friend bool operator==(const StatusItem&, const StatusItem&) = default;
@@ -48,7 +48,7 @@ struct StatusItem {
 
 struct StatusItemView {
     StatusId id;
-    StatusPriority priority = StatusPriority::information;
+    StatusPriority priority = StatusPriority::Information;
     std::uint64_t generation = 0;
     std::string accessible_label;
     std::vector<StatusAction> actions;
@@ -76,16 +76,16 @@ struct StatusActionInvocation {
 };
 
 enum class StatusActionError : std::uint8_t {
-    none,
-    stale,
-    unknown_action,
+    None,
+    Stale,
+    UnknownAction,
 };
 
 struct StatusActionResult {
-    StatusActionError error = StatusActionError::none;
+    StatusActionError error = StatusActionError::None;
     std::optional<std::string> command_id;
     [[nodiscard]] bool accepted() const noexcept {
-        return error == StatusActionError::none && command_id.has_value();
+        return error == StatusActionError::None && command_id.has_value();
     }
 };
 

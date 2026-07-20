@@ -42,15 +42,15 @@ constexpr std::array<std::byte, 8> manifest_magic{
 constexpr std::uintmax_t record_lifecycle_metadata_bytes = 17;
 
 enum class SnapshotKind : std::uint8_t {
-    missing,
-    regular_file,
-    directory,
-    symlink,
+    Missing,
+    RegularFile,
+    Directory,
+    Symlink,
 };
 
 enum class RecordState : std::uint8_t {
-    in_progress = 1,
-    published = 2,
+    InProgress = 1,
+    Published = 2,
 };
 
 class BudgetExceeded final : public std::runtime_error {
@@ -303,18 +303,18 @@ SnapshotKind snapshot_kind(const std::filesystem::path& path) {
     const auto status = std::filesystem::symlink_status(path, error);
     if (error == std::errc::no_such_file_or_directory ||
         status.type() == std::filesystem::file_type::not_found) {
-        return SnapshotKind::missing;
+        return SnapshotKind::Missing;
     }
     if (error) {
         throw std::filesystem::filesystem_error(
             "failed to inspect recovery source", path, error);
     }
-    if (std::filesystem::is_symlink(status)) return SnapshotKind::symlink;
+    if (std::filesystem::is_symlink(status)) return SnapshotKind::Symlink;
     if (std::filesystem::is_regular_file(status)) {
-        return SnapshotKind::regular_file;
+        return SnapshotKind::RegularFile;
     }
     if (std::filesystem::is_directory(status)) {
-        return SnapshotKind::directory;
+        return SnapshotKind::Directory;
     }
     throw std::runtime_error("unsupported filesystem node in recovery action: " +
                              path.string());
@@ -324,15 +324,15 @@ void copy_node(const std::filesystem::path& source,
                const std::filesystem::path& destination,
                SnapshotKind kind) {
     switch (kind) {
-    case SnapshotKind::missing:
+    case SnapshotKind::Missing:
         return;
-    case SnapshotKind::regular_file:
+    case SnapshotKind::RegularFile:
         std::filesystem::create_directories(destination.parent_path());
         std::filesystem::copy_file(
             source, destination,
             std::filesystem::copy_options::overwrite_existing);
         return;
-    case SnapshotKind::symlink: {
+    case SnapshotKind::Symlink: {
         std::filesystem::create_directories(destination.parent_path());
         const auto target = std::filesystem::read_symlink(source);
         std::error_code status_error;
@@ -347,7 +347,7 @@ void copy_node(const std::filesystem::path& source,
         }
         return;
     }
-    case SnapshotKind::directory:
+    case SnapshotKind::Directory:
         std::filesystem::create_directories(destination);
         for (const auto& entry : std::filesystem::directory_iterator(source)) {
             const auto child_kind = snapshot_kind(entry.path());
@@ -371,7 +371,7 @@ void restore_snapshot(const std::filesystem::path& destination,
                       const std::filesystem::path& artifact,
                       SnapshotKind kind) {
     remove_node(destination);
-    if (kind != SnapshotKind::missing) {
+    if (kind != SnapshotKind::Missing) {
         copy_node(artifact, destination, kind);
     }
 }
@@ -380,13 +380,13 @@ std::uintmax_t stored_tree_bytes(const std::filesystem::path& root) {
     std::uintmax_t total = 0;
     const auto add_node = [&](const std::filesystem::path& path) {
         const auto kind = snapshot_kind(path);
-        if (kind == SnapshotKind::regular_file) {
+        if (kind == SnapshotKind::RegularFile) {
             const auto size = std::filesystem::file_size(path);
             if (size > std::numeric_limits<std::uintmax_t>::max() - total) {
                 throw std::overflow_error("recovery byte accounting overflow");
             }
             total += size;
-        } else if (kind == SnapshotKind::symlink) {
+        } else if (kind == SnapshotKind::Symlink) {
             const auto size = path_to_utf8(std::filesystem::read_symlink(path))
                                   .size();
             if (size > std::numeric_limits<std::uintmax_t>::max() - total) {
@@ -397,7 +397,7 @@ std::uintmax_t stored_tree_bytes(const std::filesystem::path& root) {
     };
 
     add_node(root);
-    if (snapshot_kind(root) == SnapshotKind::directory) {
+    if (snapshot_kind(root) == SnapshotKind::Directory) {
         for (const auto& entry :
              std::filesystem::recursive_directory_iterator(root)) {
             add_node(entry.path());
@@ -472,24 +472,24 @@ RecoveryError error(RecoveryErrorCode code,
 }
 
 bool document_kind(RecoveryRecordKind kind) {
-    return kind == RecoveryRecordKind::document_close ||
-           kind == RecoveryRecordKind::document_reload;
+    return kind == RecoveryRecordKind::DocumentClose ||
+           kind == RecoveryRecordKind::DocumentReload;
 }
 
 bool valid_record_kind(std::uint8_t kind) {
     return kind <=
-           static_cast<std::uint8_t>(RecoveryRecordKind::workspace_replace);
+           static_cast<std::uint8_t>(RecoveryRecordKind::WorkspaceReplace);
 }
 
 bool valid_snapshot_kind(std::uint8_t kind) {
-    return kind <= static_cast<std::uint8_t>(SnapshotKind::symlink);
+    return kind <= static_cast<std::uint8_t>(SnapshotKind::Symlink);
 }
 
 struct StoredRecord {
     RecoveryRecord record;
     std::optional<JournalDocument> document;
     std::vector<SnapshotKind> snapshots;
-    SnapshotKind replacement = SnapshotKind::missing;
+    SnapshotKind replacement = SnapshotKind::Missing;
     std::filesystem::path directory;
     bool restored_in_memory = false;
 };
@@ -653,12 +653,12 @@ public:
         std::chrono::milliseconds durability_timeout) {
         if (!document) {
             return {{},
-                    error(RecoveryErrorCode::preparation_failed,
+                    error(RecoveryErrorCode::PreparationFailed,
                           "cannot close an absent document")};
         }
         if (durability_timeout <= std::chrono::milliseconds::zero()) {
             return {{},
-                    error(RecoveryErrorCode::durability_failed,
+                    error(RecoveryErrorCode::DurabilityFailed,
                           "dirty close requires a finite positive durability "
                           "timeout")};
         }
@@ -671,12 +671,12 @@ public:
                         state.failure.empty() ? "durability timed out"
                                               : state.failure;
                     return {{},
-                            error(RecoveryErrorCode::durability_failed,
+                            error(RecoveryErrorCode::DurabilityFailed,
                                   "dirty close rejected: " + detail)};
                 }
             } catch (...) {
                 return {{},
-                        error(RecoveryErrorCode::durability_failed,
+                        error(RecoveryErrorCode::DurabilityFailed,
                               "dirty close rejected: " +
                                   exception_message(
                                       std::current_exception()))};
@@ -685,13 +685,13 @@ public:
 
         const auto previous = *document;
         return prepare_and_perform(
-            RecoveryRecordKind::document_close, previous, {}, std::nullopt,
+            RecoveryRecordKind::DocumentClose, previous, {}, std::nullopt,
             [&] {
-                before(RecoveryStep::mutate_document);
+                before(RecoveryStep::MutateDocument);
                 document.reset();
             },
             [&](const StoredRecord&) {
-                before(RecoveryStep::rollback_document);
+                before(RecoveryStep::RollbackDocument);
                 document = previous;
             });
     }
@@ -701,18 +701,18 @@ public:
         JournalDocument replacement) {
         if (!document) {
             return {{},
-                    error(RecoveryErrorCode::preparation_failed,
+                    error(RecoveryErrorCode::PreparationFailed,
                           "cannot reload an absent document")};
         }
         const auto previous = *document;
         return prepare_and_perform(
-            RecoveryRecordKind::document_reload, previous, {}, std::nullopt,
+            RecoveryRecordKind::DocumentReload, previous, {}, std::nullopt,
             [&] {
-                before(RecoveryStep::mutate_document);
+                before(RecoveryStep::MutateDocument);
                 document = std::move(replacement);
             },
             [&](const StoredRecord&) {
-                before(RecoveryStep::rollback_document);
+                before(RecoveryStep::RollbackDocument);
                 document = previous;
             });
     }
@@ -723,14 +723,14 @@ public:
         const std::vector<std::byte> owned_replacement(replacement.begin(),
                                                        replacement.end());
         return prepare_and_perform(
-            RecoveryRecordKind::file_overwrite, std::nullopt, {path},
+            RecoveryRecordKind::FileOverwrite, std::nullopt, {path},
             std::nullopt,
             [&] {
-                before(RecoveryStep::mutate_filesystem);
+                before(RecoveryStep::MutateFilesystem);
                 replace_file_atomically(path, owned_replacement);
             },
             [&](const StoredRecord& stored) {
-                before(RecoveryStep::rollback_filesystem);
+                before(RecoveryStep::RollbackFilesystem);
                 restore_snapshot(path, artifact_path(stored, 0),
                                  stored.snapshots[0]);
             });
@@ -742,59 +742,59 @@ public:
         if (path_contains(source, destination) ||
             path_contains(destination, source)) {
             return {{},
-                    error(RecoveryErrorCode::preparation_failed,
+                    error(RecoveryErrorCode::PreparationFailed,
                           "rename source and destination must not overlap")};
         }
         try {
-            if (snapshot_kind(source) == SnapshotKind::missing) {
+            if (snapshot_kind(source) == SnapshotKind::Missing) {
                 return {{},
-                        error(RecoveryErrorCode::preparation_failed,
+                        error(RecoveryErrorCode::PreparationFailed,
                               "rename source does not exist")};
             }
         } catch (...) {
             return {{},
-                    error(RecoveryErrorCode::preparation_failed,
+                    error(RecoveryErrorCode::PreparationFailed,
                           exception_message(std::current_exception()))};
         }
 
         return prepare_and_perform(
-            RecoveryRecordKind::path_rename, std::nullopt,
+            RecoveryRecordKind::PathRename, std::nullopt,
             {source, destination}, std::nullopt,
             [&] {
-                before(RecoveryStep::mutate_filesystem);
+                before(RecoveryStep::MutateFilesystem);
                 remove_node(destination);
-                before(RecoveryStep::mutate_filesystem);
+                before(RecoveryStep::MutateFilesystem);
                 std::filesystem::create_directories(source.parent_path());
                 std::filesystem::create_directories(destination.parent_path());
                 rename_durably(source, destination);
             },
             [&](const StoredRecord& stored) {
-                before(RecoveryStep::rollback_filesystem);
+                before(RecoveryStep::RollbackFilesystem);
                 restore_rename(stored);
             });
     }
 
     RecoveryActionResult delete_path(const std::filesystem::path& path) {
         try {
-            if (snapshot_kind(path) == SnapshotKind::missing) {
+            if (snapshot_kind(path) == SnapshotKind::Missing) {
                 return {{},
-                        error(RecoveryErrorCode::preparation_failed,
+                        error(RecoveryErrorCode::PreparationFailed,
                               "delete target does not exist")};
             }
         } catch (...) {
             return {{},
-                    error(RecoveryErrorCode::preparation_failed,
+                    error(RecoveryErrorCode::PreparationFailed,
                           exception_message(std::current_exception()))};
         }
         return prepare_and_perform(
-            RecoveryRecordKind::path_delete, std::nullopt, {path},
+            RecoveryRecordKind::PathDelete, std::nullopt, {path},
             std::nullopt,
             [&] {
-                before(RecoveryStep::mutate_filesystem);
+                before(RecoveryStep::MutateFilesystem);
                 remove_node(path);
             },
             [&](const StoredRecord& stored) {
-                before(RecoveryStep::rollback_filesystem);
+                before(RecoveryStep::RollbackFilesystem);
                 restore_snapshot(path, artifact_path(stored, 0),
                                  stored.snapshots[0]);
             });
@@ -804,30 +804,30 @@ public:
         const std::filesystem::path& workspace,
         const std::filesystem::path& replacement) {
         try {
-            if (snapshot_kind(replacement) == SnapshotKind::missing) {
+            if (snapshot_kind(replacement) == SnapshotKind::Missing) {
                 return {{},
-                        error(RecoveryErrorCode::preparation_failed,
+                        error(RecoveryErrorCode::PreparationFailed,
                               "replacement workspace does not exist")};
             }
             if (path_contains(workspace, replacement) ||
                 path_contains(replacement, workspace)) {
                 return {{},
-                        error(RecoveryErrorCode::preparation_failed,
+                        error(RecoveryErrorCode::PreparationFailed,
                               "workspace and replacement must not overlap")};
             }
         } catch (...) {
             return {{},
-                    error(RecoveryErrorCode::preparation_failed,
+                    error(RecoveryErrorCode::PreparationFailed,
                           exception_message(std::current_exception()))};
         }
 
         return prepare_and_perform(
-            RecoveryRecordKind::workspace_replace, std::nullopt, {workspace},
+            RecoveryRecordKind::WorkspaceReplace, std::nullopt, {workspace},
             replacement,
             [&] {
-                before(RecoveryStep::mutate_filesystem);
+                before(RecoveryStep::MutateFilesystem);
                 remove_node(workspace);
-                before(RecoveryStep::mutate_filesystem);
+                before(RecoveryStep::MutateFilesystem);
                 const auto installed = records_under_preparation_;
                 if (installed == nullptr) {
                     throw std::logic_error(
@@ -837,7 +837,7 @@ public:
                           installed->replacement);
             },
             [&](const StoredRecord& stored) {
-                before(RecoveryStep::rollback_filesystem);
+                before(RecoveryStep::RollbackFilesystem);
                 restore_snapshot(workspace, artifact_path(stored, 0),
                                  stored.snapshots[0]);
             });
@@ -848,21 +848,21 @@ public:
         std::optional<JournalDocument>& document) {
         const auto found = find_record(id);
         if (found == records_.end()) {
-            return {error(RecoveryErrorCode::record_not_found,
+            return {error(RecoveryErrorCode::RecordNotFound,
                           "recovery record was not found")};
         }
         if (!document_kind(found->record.kind)) {
-            return {error(RecoveryErrorCode::record_kind_mismatch,
+            return {error(RecoveryErrorCode::RecordKindMismatch,
                           "recovery record does not restore a document")};
         }
         try {
-            before(RecoveryStep::restore_document);
+            before(RecoveryStep::RestoreDocument);
             if (!restored_in_this_instance(*found)) {
                 document = found->document;
                 mark_restored(*found);
             }
         } catch (...) {
-            return {error(RecoveryErrorCode::restoration_failed,
+            return {error(RecoveryErrorCode::RestorationFailed,
                           "document restoration failed: " +
                               exception_message(std::current_exception()))};
         }
@@ -872,22 +872,22 @@ public:
     RecoveryRestoreResult restore_filesystem(const RecoveryRecordId& id) {
         const auto found = find_record(id);
         if (found == records_.end()) {
-            return {error(RecoveryErrorCode::record_not_found,
+            return {error(RecoveryErrorCode::RecordNotFound,
                           "recovery record was not found")};
         }
         if (document_kind(found->record.kind)) {
-            return {error(RecoveryErrorCode::record_kind_mismatch,
+            return {error(RecoveryErrorCode::RecordKindMismatch,
                           "recovery record does not restore filesystem state")};
         }
         if (!found->restored_in_memory &&
             !std::filesystem::exists(restored_marker(*found))) {
             try {
-                before(RecoveryStep::restore_filesystem);
+                before(RecoveryStep::RestoreFilesystem);
                 restore_filesystem_state(*found);
                 sync_filesystem_state(*found);
                 mark_restored(*found);
             } catch (...) {
-                return {error(RecoveryErrorCode::restoration_failed,
+                return {error(RecoveryErrorCode::RestorationFailed,
                               "filesystem restoration failed: " +
                                   exception_message(
                                       std::current_exception()))};
@@ -927,12 +927,12 @@ private:
                 remove_node(entry.path());
                 continue;
             }
-            if (*state == RecordState::in_progress &&
+            if (*state == RecordState::InProgress &&
                 document_kind(stored.record.kind)) {
                 remove_node(entry.path());
                 continue;
             }
-            if (*state == RecordState::in_progress &&
+            if (*state == RecordState::InProgress &&
                 !document_kind(stored.record.kind) &&
                 !std::filesystem::exists(restored_marker(stored))) {
                 try {
@@ -1011,7 +1011,7 @@ private:
         std::vector<std::filesystem::path> paths,
         const std::optional<std::filesystem::path>& replacement) {
         validate_recovery_separation(paths, replacement);
-        before(RecoveryStep::prepare_artifact);
+        before(RecoveryStep::PrepareArtifact);
 
         const auto id = make_id();
         const auto staging =
@@ -1030,7 +1030,7 @@ private:
              std::move(paths)},
             std::move(document),
             {},
-            SnapshotKind::missing,
+            SnapshotKind::Missing,
             installed,
             false};
 
@@ -1064,7 +1064,7 @@ private:
             protect_tree(staging);
             sync_tree(staging);
 
-            before(RecoveryStep::install_record);
+            before(RecoveryStep::InstallRecord);
             install_directory_durably(staging, installed, recovery_root_);
         } catch (...) {
             std::error_code ignored;
@@ -1095,21 +1095,21 @@ private:
                                             std::move(paths), replacement));
         } catch (const BudgetExceeded& failure) {
             return {{},
-                    error(RecoveryErrorCode::budget_exceeded, failure.what())};
+                    error(RecoveryErrorCode::BudgetExceeded, failure.what())};
         } catch (...) {
             return {{},
-                    error(RecoveryErrorCode::preparation_failed,
+                    error(RecoveryErrorCode::PreparationFailed,
                           "recovery record preparation failed: " +
                               exception_message(std::current_exception()))};
         }
 
         try {
-            mark_record_state(*prepared, RecordState::in_progress);
+            mark_record_state(*prepared, RecordState::InProgress);
         } catch (...) {
             std::error_code ignored;
             std::filesystem::remove_all(prepared->directory, ignored);
             return {{},
-                    error(RecoveryErrorCode::preparation_failed,
+                    error(RecoveryErrorCode::PreparationFailed,
                           "recovery record activation failed: " +
                               exception_message(std::current_exception()))};
         }
@@ -1121,9 +1121,9 @@ private:
             if (!document_kind(prepared->record.kind)) {
                 sync_filesystem_state(*prepared);
             }
-            before(RecoveryStep::publish_record);
-            mark_record_state(*prepared, RecordState::published);
-            before(RecoveryStep::publish_record);
+            before(RecoveryStep::PublishRecord);
+            mark_record_state(*prepared, RecordState::Published);
+            before(RecoveryStep::PublishRecord);
         } catch (...) {
             action_failure = std::current_exception();
         }
@@ -1134,7 +1134,7 @@ private:
             records_.push_back(std::move(*prepared));
             if (const auto cleanup_failure = enforce_budgets()) {
                 return {id,
-                        error(RecoveryErrorCode::cleanup_failed,
+                        error(RecoveryErrorCode::CleanupFailed,
                               "recovery action succeeded, but old record "
                               "eviction failed: " +
                                   *cleanup_failure)};
@@ -1143,7 +1143,7 @@ private:
         }
 
         try {
-            mark_record_state(*prepared, RecordState::in_progress);
+            mark_record_state(*prepared, RecordState::InProgress);
             rollback(*prepared);
             if (!document_kind(prepared->record.kind)) {
                 sync_filesystem_state(*prepared);
@@ -1158,25 +1158,25 @@ private:
                     "; old record eviction failed: " + *cleanup_failure;
             }
             return {id,
-                    error(RecoveryErrorCode::action_and_rollback_failed,
+                    error(RecoveryErrorCode::ActionAndRollbackFailed,
                           "recovery action failed: " +
                               exception_message(action_failure),
                           std::move(rollback_message))};
         }
 
         try {
-            before(RecoveryStep::cleanup_record);
+            before(RecoveryStep::CleanupRecord);
             mark_restored(*prepared);
             remove_node(prepared->directory);
             return {{},
-                    error(RecoveryErrorCode::action_failed,
+                    error(RecoveryErrorCode::ActionFailed,
                           "recovery action failed: " +
                               exception_message(action_failure))};
         } catch (...) {
             const auto id = prepared->record.id;
             records_.push_back(std::move(*prepared));
             return {id,
-                    error(RecoveryErrorCode::cleanup_failed,
+                    error(RecoveryErrorCode::CleanupFailed,
                           "recovery action failed and was rolled back, but "
                           "record cleanup failed: " +
                               exception_message(std::current_exception()))};
@@ -1235,8 +1235,8 @@ private:
         }
         const auto value =
             std::to_integer<std::uint8_t>(encoded.front());
-        if (value != static_cast<std::uint8_t>(RecordState::in_progress) &&
-            value != static_cast<std::uint8_t>(RecordState::published)) {
+        if (value != static_cast<std::uint8_t>(RecordState::InProgress) &&
+            value != static_cast<std::uint8_t>(RecordState::Published)) {
             throw std::runtime_error("invalid recovery record state");
         }
         return static_cast<RecordState>(value);
@@ -1277,34 +1277,34 @@ private:
         const auto& destination = stored.record.affected_paths[1];
         const auto source_now = snapshot_kind(source);
         const auto destination_now = snapshot_kind(destination);
-        if (source_now == SnapshotKind::missing &&
-            destination_now != SnapshotKind::missing) {
+        if (source_now == SnapshotKind::Missing &&
+            destination_now != SnapshotKind::Missing) {
             remove_node(source);
             std::filesystem::create_directories(source.parent_path());
             rename_durably(destination, source);
-        } else if (source_now == SnapshotKind::missing) {
+        } else if (source_now == SnapshotKind::Missing) {
             restore_snapshot(source, artifact_path(stored, 0),
                              stored.snapshots[0]);
         }
-        before(RecoveryStep::restore_filesystem);
+        before(RecoveryStep::RestoreFilesystem);
         restore_snapshot(destination, artifact_path(stored, 1),
                          stored.snapshots[1]);
-        before(RecoveryStep::restore_filesystem);
+        before(RecoveryStep::RestoreFilesystem);
     }
 
     void restore_filesystem_state(const StoredRecord& stored) {
         switch (stored.record.kind) {
-        case RecoveryRecordKind::file_overwrite:
-        case RecoveryRecordKind::path_delete:
-        case RecoveryRecordKind::workspace_replace:
+        case RecoveryRecordKind::FileOverwrite:
+        case RecoveryRecordKind::PathDelete:
+        case RecoveryRecordKind::WorkspaceReplace:
             restore_snapshot(stored.record.affected_paths[0],
                              artifact_path(stored, 0), stored.snapshots[0]);
             return;
-        case RecoveryRecordKind::path_rename:
+        case RecoveryRecordKind::PathRename:
             restore_rename(stored);
             return;
-        case RecoveryRecordKind::document_close:
-        case RecoveryRecordKind::document_reload:
+        case RecoveryRecordKind::DocumentClose:
+        case RecoveryRecordKind::DocumentReload:
             throw std::logic_error(
                 "document recovery record used for filesystem restoration");
         }
@@ -1313,9 +1313,9 @@ private:
     static void sync_filesystem_state(const StoredRecord& stored) {
         for (const auto& path : stored.record.affected_paths) {
             const auto kind = snapshot_kind(path);
-            if (kind == SnapshotKind::regular_file) {
+            if (kind == SnapshotKind::RegularFile) {
                 sync_path(path, false);
-            } else if (kind == SnapshotKind::directory) {
+            } else if (kind == SnapshotKind::Directory) {
                 sync_tree(path);
             }
             sync_path(std::filesystem::absolute(path).parent_path(), true);
@@ -1331,12 +1331,12 @@ private:
 
     RecoveryRestoreResult cleanup_restored(RecordIterator record) {
         try {
-            before(RecoveryStep::cleanup_record);
+            before(RecoveryStep::CleanupRecord);
             remove_node(record->directory);
             records_.erase(record);
             return {};
         } catch (...) {
-            return {error(RecoveryErrorCode::cleanup_failed,
+            return {error(RecoveryErrorCode::CleanupFailed,
                           "recovery cleanup failed: " +
                               exception_message(std::current_exception()))};
         }

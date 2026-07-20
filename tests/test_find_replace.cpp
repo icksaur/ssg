@@ -88,7 +88,7 @@ public:
     WorkspaceApplyResult apply(const WorkspaceReplacePreview& preview,
                                WorkspaceRecoverySink& sink) override {
         if (preview.source_revision != revision_) {
-            return {FindReplaceError::stale_revision, revision_,
+            return {FindReplaceError::StaleRevision, revision_,
                     "stale workspace preview"};
         }
         auto candidate = files_;
@@ -98,7 +98,7 @@ public:
                     return f.path == change.path;
                 });
             if (it == candidate.end() || it->text != change.before) {
-                return {FindReplaceError::workspace_rejected, revision_,
+                return {FindReplaceError::WorkspaceRejected, revision_,
                         "workspace changed"};
             }
             it->text = change.after;
@@ -106,18 +106,18 @@ public:
         WorkspaceRecoveryRecord record{revision_, Revision{revision_.value() + 1},
                                        preview.changes};
         if (!sink.store(record)) {
-            return {FindReplaceError::recovery_rejected, revision_,
+            return {FindReplaceError::RecoveryRejected, revision_,
                     "recovery sink rejected record"};
         }
         files_ = std::move(candidate);
         revision_ = record.applied_revision;
-        return {FindReplaceError::none, revision_, {}};
+        return {FindReplaceError::None, revision_, {}};
     }
 
     WorkspaceApplyResult recover(
         const WorkspaceRecoveryRecord& record) override {
         if (record.applied_revision != revision_) {
-            return {FindReplaceError::stale_revision, revision_,
+            return {FindReplaceError::StaleRevision, revision_,
                     "stale recovery record"};
         }
         auto candidate = files_;
@@ -127,14 +127,14 @@ public:
                     return f.path == change.path;
                 });
             if (it == candidate.end() || it->text != change.after) {
-                return {FindReplaceError::workspace_rejected, revision_,
+                return {FindReplaceError::WorkspaceRejected, revision_,
                         "workspace changed"};
             }
             it->text = change.before;
         }
         files_ = std::move(candidate);
         revision_ = Revision{revision_.value() + 1};
-        return {FindReplaceError::none, revision_, {}};
+        return {FindReplaceError::None, revision_, {}};
     }
 
     const std::vector<WorkspaceFile>& files() const { return files_; }
@@ -202,7 +202,7 @@ TEST(regex_oracle_covers_grammar_case_word_and_invalid_pattern) {
 
     request.query = "(unterminated";
     ASSERT_EQ(find_matches("text", request).error,
-              FindReplaceError::invalid_pattern);
+              FindReplaceError::InvalidPattern);
 }
 
 TEST(zero_width_advances_one_unicode_scalar_and_budget_cancels) {
@@ -216,19 +216,19 @@ TEST(zero_width_advances_one_unicode_scalar_and_budget_cancels) {
     request.query = "(a|aa)*b";
     request.work_budget = 1;
     ASSERT_EQ(find_matches(std::string(200, 'a'), request).error,
-              FindReplaceError::budget_exhausted);
+              FindReplaceError::BudgetExhausted);
 
     request.query = "z";
     request.options.regex = false;
     request.work_budget = 3;
     ASSERT_EQ(find_matches("aaaaaaaa", request).error,
-              FindReplaceError::budget_exhausted);
+              FindReplaceError::BudgetExhausted);
 
     std::atomic_bool cancelled{true};
     request.work_budget = 100000;
     request.cancelled = &cancelled;
     ASSERT_EQ(find_matches("ab", request).error,
-              FindReplaceError::cancelled);
+              FindReplaceError::Cancelled);
 }
 
 TEST(current_replace_is_atomic_one_undo_unit_and_stale_safe) {
@@ -268,7 +268,7 @@ TEST(current_replace_is_atomic_one_undo_unit_and_stale_safe) {
     const auto before = document.snapshot();
     auto stale =
         controller.replace_all(document, history, caret(0), caret(12), "z", 30);
-    ASSERT_EQ(stale.error, FindReplaceError::stale_revision);
+    ASSERT_EQ(stale.error, FindReplaceError::StaleRevision);
     ASSERT_EQ(document.snapshot(), before);
 }
 
@@ -287,7 +287,7 @@ TEST(workspace_preview_apply_recover_and_failures_round_trip) {
     rejecting.accept = false;
     const auto original = workspace.files();
     auto rejected = apply_workspace_replace(workspace, *preview.preview, rejecting);
-    ASSERT_EQ(rejected.error, FindReplaceError::recovery_rejected);
+    ASSERT_EQ(rejected.error, FindReplaceError::RecoveryRejected);
     ASSERT_EQ(workspace.files(), original);
 
     RecordingSink sink;
@@ -299,7 +299,7 @@ TEST(workspace_preview_apply_recover_and_failures_round_trip) {
     ASSERT_EQ(workspace.files(), original);
 
     auto stale = apply_workspace_replace(workspace, *preview.preview, sink);
-    ASSERT_EQ(stale.error, FindReplaceError::stale_revision);
+    ASSERT_EQ(stale.error, FindReplaceError::StaleRevision);
     ASSERT_EQ(workspace.files(), original);
 }
 
@@ -329,7 +329,7 @@ TEST(view_delta_replay_and_command_exports_are_exact) {
     ASSERT_TRUE(delta.changed);
     ASSERT_EQ(replay_find_replace_delta(closed, delta).state, open);
     ASSERT_EQ(replay_find_replace_delta(open, delta).error,
-              FindReplaceReplayError::base_mismatch);
+              FindReplaceReplayError::BaseMismatch);
 }
 
 }  // namespace

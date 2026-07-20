@@ -11,41 +11,41 @@
 namespace ssg {
 
 enum class PathSyntax {
-    linux,
-    windows,
+    Linux,
+    Windows,
 };
 
 enum class LongPathPolicy {
-    legacy,
-    extended,
+    Legacy,
+    Extended,
 };
 
 enum class PathError {
-    none,
-    empty,
-    absolute,
-    traversal,
-    invalid_utf8,
-    invalid_character,
-    reserved_name,
-    trailing_dot_or_space,
-    component_too_long,
-    path_too_long,
+    None,
+    Empty,
+    Absolute,
+    Traversal,
+    InvalidUtf8,
+    InvalidCharacter,
+    ReservedName,
+    TrailingDotOrSpace,
+    ComponentTooLong,
+    PathTooLong,
 };
 
 struct PathValidation {
-    PathError error = PathError::none;
+    PathError error = PathError::None;
     std::size_t component_index = 0;
 
     [[nodiscard]] constexpr bool valid() const noexcept {
-        return error == PathError::none;
+        return error == PathError::None;
     }
 };
 
 [[nodiscard]] PathValidation validate_workspace_relative_path(
     std::string_view path,
     PathSyntax syntax,
-    LongPathPolicy long_paths = LongPathPolicy::legacy) noexcept;
+    LongPathPolicy long_paths = LongPathPolicy::Legacy) noexcept;
 
 struct FileIdentity {
     std::uint64_t volume = 0;

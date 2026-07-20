@@ -36,9 +36,9 @@ constexpr std::size_t header_size = 14;
 constexpr std::uint32_t maximum_payload_size = 64U * 1024U * 1024U;
 
 enum class RecordKind : std::uint8_t {
-    checkpoint = 1,
-    document = 2,
-    remove = 3,
+    Checkpoint = 1,
+    Document = 2,
+    Remove = 3,
 };
 
 bool valid_utf8(std::string_view value) noexcept {
@@ -212,7 +212,7 @@ std::uint32_t crc32c(std::span<const std::byte> bytes) noexcept {
 }
 
 void encode_key(Writer& writer, const JournalDocumentKey& key) {
-    if (key.kind() == JournalDocumentKeyKind::saved) {
+    if (key.kind() == JournalDocumentKeyKind::Saved) {
         writer.u8(0);
         writer.string32(key.saved_path());
         return;
@@ -308,7 +308,7 @@ bool apply_payload(std::span<const std::byte> payload,
     if (!reader.u8(raw_kind)) return false;
     const auto kind = static_cast<RecordKind>(raw_kind);
 
-    if (kind == RecordKind::checkpoint) {
+    if (kind == RecordKind::Checkpoint) {
         std::uint32_t count = 0;
         if (!reader.u32(count)) return false;
         std::vector<JournalDocument> documents;
@@ -330,7 +330,7 @@ bool apply_payload(std::span<const std::byte> payload,
         return true;
     }
 
-    if (kind == RecordKind::document) {
+    if (kind == RecordKind::Document) {
         JournalDocument document{
             JournalDocumentKey::untitled(UntitledDocumentId{{}})};
         if (!decode_document(reader, document) || reader.remaining() != 0) {
@@ -340,7 +340,7 @@ bool apply_payload(std::span<const std::byte> payload,
         return true;
     }
 
-    if (kind == RecordKind::remove) {
+    if (kind == RecordKind::Remove) {
         JournalDocumentKey key =
             JournalDocumentKey::untitled(UntitledDocumentId{{}});
         if (!decode_key(reader, key) || reader.remaining() != 0) return false;
@@ -426,23 +426,23 @@ JournalDocumentKey JournalDocumentKey::saved(
         if (end == std::string_view::npos) break;
         start = end + 1;
     }
-    return {JournalDocumentKeyKind::saved,
+    return {JournalDocumentKeyKind::Saved,
             std::string{workspace_relative_path}, UntitledDocumentId{{}}};
 }
 
 JournalDocumentKey JournalDocumentKey::untitled(UntitledDocumentId id) {
-    return {JournalDocumentKeyKind::untitled, {}, id};
+    return {JournalDocumentKeyKind::Untitled, {}, id};
 }
 
 const std::string& JournalDocumentKey::saved_path() const {
-    if (kind_ != JournalDocumentKeyKind::saved) {
+    if (kind_ != JournalDocumentKeyKind::Saved) {
         throw std::logic_error("untitled journal key has no saved path");
     }
     return path_;
 }
 
 UntitledDocumentId JournalDocumentKey::untitled_id() const {
-    if (kind_ != JournalDocumentKeyKind::untitled) {
+    if (kind_ != JournalDocumentKeyKind::Untitled) {
         throw std::logic_error("saved journal key has no untitled ID");
     }
     return id_;
@@ -466,20 +466,20 @@ std::vector<std::byte> encode_checkpoint_record(
         keys.push_back(document.key);
         encode_document(body, document);
     }
-    return frame(RecordKind::checkpoint, std::move(body));
+    return frame(RecordKind::Checkpoint, std::move(body));
 }
 
 std::vector<std::byte> encode_document_record(
     const JournalDocument& document) {
     Writer body;
     encode_document(body, document);
-    return frame(RecordKind::document, std::move(body));
+    return frame(RecordKind::Document, std::move(body));
 }
 
 std::vector<std::byte> encode_remove_record(const JournalDocumentKey& key) {
     Writer body;
     encode_key(body, key);
-    return frame(RecordKind::remove, std::move(body));
+    return frame(RecordKind::Remove, std::move(body));
 }
 
 JournalReplayResult replay_journal(std::span<const std::byte> bytes) {

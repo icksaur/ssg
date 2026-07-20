@@ -104,7 +104,7 @@ void run_state(const UiState& state) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) { fs::remove_all(root); return; }
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process},
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1}).accepted());
     if (state.open_document) {
         (void)runtime.dispatch(ssg::ClientId{1},

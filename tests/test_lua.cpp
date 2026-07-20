@@ -63,7 +63,7 @@ TEST(required_catalog_minus_exclusions_is_callable) {
     }
     LuaCommandHost host{options(std::move(commands)),
         [&](LuaInvocation const& invocation) {
-            ASSERT_EQ(invocation.principal.origin(), InvocationOrigin::lua);
+            ASSERT_EQ(invocation.principal.origin(), InvocationOrigin::Lua);
             called.emplace(invocation.command_id);
             return CommandHandlerResult::success();
         }};
@@ -71,7 +71,7 @@ TEST(required_catalog_minus_exclusions_is_callable) {
     for (auto const& [id, lua] : catalog) {
         auto const result = host.evaluate("ssg.command(\"" + id + "\")");
         ASSERT_EQ(result.accepted(), lua);
-        ASSERT_EQ(result.error, lua ? LuaError::none : LuaError::unknown_command);
+        ASSERT_EQ(result.error, lua ? LuaError::None : LuaError::UnknownCommand);
     }
     ASSERT_EQ(called.size(), catalog.size() - 1);
     ASSERT_FALSE(excluded.empty());
@@ -89,7 +89,7 @@ TEST(capabilities_are_immutable_and_checked_before_dispatch) {
             return CommandHandlerResult::success();
         }};
     auto denied = host.evaluate("ssg.command('privileged')");
-    ASSERT_EQ(denied.error, LuaError::capability_denied);
+    ASSERT_EQ(denied.error, LuaError::CapabilityDenied);
     ASSERT_FALSE(dispatched);
     ASSERT_TRUE(host.evaluate("ssg.command('safe')").accepted());
     ASSERT_TRUE(dispatched);
@@ -109,7 +109,7 @@ TEST(generational_handles_reject_stale_access_after_reuse) {
     auto const current = host.expose(&second);
     ASSERT_EQ(current.index, stale.index);
     ASSERT_NE(current.generation, stale.generation);
-    ASSERT_EQ(host.resolve(stale, resolved).error, LuaError::stale_handle);
+    ASSERT_EQ(host.resolve(stale, resolved).error, LuaError::StaleHandle);
     ASSERT_TRUE(host.resolve(current, resolved).accepted());
     ASSERT_EQ(resolved, static_cast<void*>(&second));
 }
@@ -122,7 +122,7 @@ TEST(instruction_and_wall_clock_budgets_isolate_callbacks) {
         return CommandHandlerResult::success();
     }};
     ASSERT_EQ(host.evaluate("while true do end").error,
-              LuaError::budget_exhausted);
+              LuaError::BudgetExhausted);
     ASSERT_TRUE(host.evaluate("return 7").accepted());
 }
 
@@ -139,7 +139,7 @@ TEST(reentrant_calls_restore_the_enclosing_budget) {
     reentrant = &host;
     ASSERT_EQ(host.evaluate(
         "ssg.command('reenter'); while true do end").error,
-        LuaError::budget_exhausted);
+        LuaError::BudgetExhausted);
     ASSERT_TRUE(host.evaluate("return 7").accepted());
 }
 
@@ -149,14 +149,14 @@ TEST(registration_is_atomic_and_duplicate_safe) {
     }};
     auto evaluation = host.evaluate(
         "ssg.register_command('half', function() end); error('rollback')");
-    ASSERT_EQ(evaluation.error, LuaError::runtime_fault);
+    ASSERT_EQ(evaluation.error, LuaError::RuntimeFault);
     ASSERT_FALSE(host.has_command("half"));
     ASSERT_TRUE(host.evaluate(
         "ssg.register_command('owned', function() ssg.command('missing') end)")
                     .accepted());
     auto duplicate = host.evaluate(
         "ssg.register_command('owned', function() end)");
-    ASSERT_EQ(duplicate.error, LuaError::duplicate_command);
+    ASSERT_EQ(duplicate.error, LuaError::DuplicateCommand);
     ASSERT_TRUE(host.has_command("owned"));
 }
 
@@ -165,7 +165,7 @@ TEST(dispatch_and_plugin_faults_are_isolated) {
         return CommandHandlerResult::failure("atomic edit rejected");
     }};
     ASSERT_EQ(denied.evaluate("ssg.command('edit')").error,
-              LuaError::dispatch_failed);
+              LuaError::DispatchFailed);
     ASSERT_TRUE(denied.evaluate("return 1").accepted());
 
     LuaCommandHost callbacks{options(), [](LuaInvocation const&) {
@@ -174,8 +174,8 @@ TEST(dispatch_and_plugin_faults_are_isolated) {
     ASSERT_TRUE(callbacks.evaluate(
         "ssg.register_command('broken', function() error('bad') end)")
                     .accepted());
-    ASSERT_EQ(callbacks.invoke("broken").error, LuaError::runtime_fault);
-    ASSERT_EQ(callbacks.invoke("absent").error, LuaError::unknown_command);
+    ASSERT_EQ(callbacks.invoke("broken").error, LuaError::RuntimeFault);
+    ASSERT_EQ(callbacks.invoke("absent").error, LuaError::UnknownCommand);
 }
 
 TEST(unsafe_standard_libraries_and_native_loader_are_absent) {

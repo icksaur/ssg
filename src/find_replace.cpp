@@ -87,15 +87,15 @@ std::optional<std::size_t> scalar_index(const ScalarText& text,
 }
 
 enum class NodeKind {
-    empty,
-    literal,
-    any,
-    character_class,
-    begin,
-    end,
-    concat,
-    alternate,
-    repeat,
+    Empty,
+    Literal,
+    Any,
+    CharacterClass,
+    Begin,
+    End,
+    Concat,
+    Alternate,
+    Repeat,
 };
 
 struct CharacterRange {
@@ -104,7 +104,7 @@ struct CharacterRange {
 };
 
 struct Node {
-    NodeKind kind = NodeKind::empty;
+    NodeKind kind = NodeKind::Empty;
     char32_t literal = 0;
     bool negated = false;
     std::vector<CharacterRange> ranges;
@@ -137,7 +137,7 @@ private:
             return alternatives.front();
         }
         auto node = std::make_shared<Node>();
-        node->kind = NodeKind::alternate;
+        node->kind = NodeKind::Alternate;
         node->children = std::move(alternatives);
         return node;
     }
@@ -155,7 +155,7 @@ private:
             return parts.front();
         }
         auto node = std::make_shared<Node>();
-        node->kind = NodeKind::concat;
+        node->kind = NodeKind::Concat;
         node->children = std::move(parts);
         return node;
     }
@@ -178,7 +178,7 @@ private:
             return value;
         }
         auto node = std::make_shared<Node>();
-        node->kind = NodeKind::repeat;
+        node->kind = NodeKind::Repeat;
         node->children.push_back(std::move(value));
         node->minimum = minimum;
         node->maximum = maximum;
@@ -204,17 +204,17 @@ private:
         }
         if (take(U'.')) {
             auto node = std::make_shared<Node>();
-            node->kind = NodeKind::any;
+            node->kind = NodeKind::Any;
             return node;
         }
         if (take(U'^')) {
             auto node = std::make_shared<Node>();
-            node->kind = NodeKind::begin;
+            node->kind = NodeKind::Begin;
             return node;
         }
         if (take(U'$')) {
             auto node = std::make_shared<Node>();
-            node->kind = NodeKind::end;
+            node->kind = NodeKind::End;
             return node;
         }
         if (take(U'[')) {
@@ -233,14 +233,14 @@ private:
             return {};
         }
         auto node = std::make_shared<Node>();
-        node->kind = NodeKind::literal;
+        node->kind = NodeKind::Literal;
         node->literal = value;
         return node;
     }
 
     std::shared_ptr<Node> character_class() {
         auto node = std::make_shared<Node>();
-        node->kind = NodeKind::character_class;
+        node->kind = NodeKind::CharacterClass;
         node->negated = take(U'^');
         bool any = false;
         while (at_ < pattern_.size() && pattern_[at_] != U']') {
@@ -300,15 +300,15 @@ struct MatchContext {
     std::size_t upper;
     std::uint64_t remaining;
     const std::atomic_bool* cancelled;
-    FindReplaceError error = FindReplaceError::none;
+    FindReplaceError error = FindReplaceError::None;
 
     bool step() {
         if (cancelled && cancelled->load(std::memory_order_relaxed)) {
-            error = FindReplaceError::cancelled;
+            error = FindReplaceError::Cancelled;
             return false;
         }
         if (remaining == 0) {
-            error = FindReplaceError::budget_exhausted;
+            error = FindReplaceError::BudgetExhausted;
             return false;
         }
         --remaining;
@@ -340,7 +340,7 @@ std::vector<std::size_t> evaluate_repeat(const Node& node,
         std::vector<std::size_t> next;
         for (const auto at : frontier) {
             auto ends = evaluate_node(node.children.front(), at, context);
-            if (context.error != FindReplaceError::none) {
+            if (context.error != FindReplaceError::None) {
                 return {};
             }
             next.insert(next.end(), ends.begin(), ends.end());
@@ -370,20 +370,20 @@ std::vector<std::size_t> evaluate_node(const std::shared_ptr<Node>& node,
         return {};
     }
     switch (node->kind) {
-    case NodeKind::empty:
+    case NodeKind::Empty:
         return {position};
-    case NodeKind::literal:
+    case NodeKind::Literal:
         if (position < context.upper &&
             folded(context.text.values[position], context.case_sensitive) ==
                 folded(node->literal, context.case_sensitive)) {
             return {position + 1};
         }
         return {};
-    case NodeKind::any:
+    case NodeKind::Any:
         return position < context.upper
                    ? std::vector<std::size_t>{position + 1}
                    : std::vector<std::size_t>{};
-    case NodeKind::character_class: {
+    case NodeKind::CharacterClass: {
         if (position >= context.upper) {
             return {};
         }
@@ -399,34 +399,34 @@ std::vector<std::size_t> evaluate_node(const std::shared_ptr<Node>& node,
                    ? std::vector<std::size_t>{position + 1}
                    : std::vector<std::size_t>{};
     }
-    case NodeKind::begin:
+    case NodeKind::Begin:
         return position == context.lower
                    ? std::vector<std::size_t>{position}
                    : std::vector<std::size_t>{};
-    case NodeKind::end:
+    case NodeKind::End:
         return position == context.upper
                    ? std::vector<std::size_t>{position}
                    : std::vector<std::size_t>{};
-    case NodeKind::alternate: {
+    case NodeKind::Alternate: {
         std::vector<std::size_t> result;
         for (const auto& child : node->children) {
             auto values = evaluate_node(child, position, context);
             result.insert(result.end(), values.begin(), values.end());
-            if (context.error != FindReplaceError::none) {
+            if (context.error != FindReplaceError::None) {
                 return {};
             }
         }
         unique(result);
         return result;
     }
-    case NodeKind::concat: {
+    case NodeKind::Concat: {
         std::vector<std::size_t> positions{position};
         for (const auto& child : node->children) {
             std::vector<std::size_t> next;
             for (const auto at : positions) {
                 auto values = evaluate_node(child, at, context);
                 next.insert(next.end(), values.begin(), values.end());
-                if (context.error != FindReplaceError::none) {
+                if (context.error != FindReplaceError::None) {
                     return {};
                 }
             }
@@ -438,7 +438,7 @@ std::vector<std::size_t> evaluate_node(const std::shared_ptr<Node>& node,
         }
         return positions;
     }
-    case NodeKind::repeat:
+    case NodeKind::Repeat:
         return evaluate_repeat(*node, position, context);
     }
     return {};
@@ -463,12 +463,12 @@ FindResult literal_matches(const ScalarText& text, const ScalarText& query,
     while (at + query.values.size() <= upper) {
         if (request.cancelled &&
             request.cancelled->load(std::memory_order_relaxed)) {
-            return {FindReplaceError::cancelled, {}, "find was cancelled"};
+            return {FindReplaceError::Cancelled, {}, "find was cancelled"};
         }
         bool matches = true;
         for (std::size_t index = 0; index < query.values.size(); ++index) {
             if (remaining == 0) {
-                return {FindReplaceError::budget_exhausted, {},
+                return {FindReplaceError::BudgetExhausted, {},
                         "find work budget exhausted"};
             }
             --remaining;
@@ -523,14 +523,14 @@ FindResult find_matches(std::string_view text, const FindRequest& request) {
     ScalarText decoded_query;
     if (!decode_utf8(text, decoded_text) ||
         !decode_utf8(request.query, decoded_query)) {
-        return {FindReplaceError::invalid_utf8, {}, "input is not valid UTF-8"};
+        return {FindReplaceError::InvalidUtf8, {}, "input is not valid UTF-8"};
     }
     std::size_t lower = 0;
     std::size_t upper = decoded_text.values.size();
     if (request.options.selection_only) {
         if (!request.selection ||
             request.selection->begin > request.selection->end) {
-            return {FindReplaceError::invalid_selection, {},
+            return {FindReplaceError::InvalidSelection, {},
                     "selection-limited find requires an ordered selection"};
         }
         const auto begin =
@@ -538,7 +538,7 @@ FindResult find_matches(std::string_view text, const FindRequest& request) {
         const auto end =
             scalar_index(decoded_text, request.selection->end.value());
         if (!begin || !end) {
-            return {FindReplaceError::invalid_selection, {},
+            return {FindReplaceError::InvalidSelection, {},
                     "selection must use UTF-8 boundaries"};
         }
         lower = *begin;
@@ -552,18 +552,18 @@ FindResult find_matches(std::string_view text, const FindRequest& request) {
         return {};
     }
     if (decoded_query.values.size() > 4096) {
-        return {FindReplaceError::invalid_pattern, {},
+        return {FindReplaceError::InvalidPattern, {},
                 "regex pattern exceeds the complexity limit"};
     }
     if (decoded_query.values.size() > request.work_budget) {
-        return {FindReplaceError::budget_exhausted, {},
+        return {FindReplaceError::BudgetExhausted, {},
                 "regex work budget exhausted while parsing"};
     }
 
     RegexParser parser{decoded_query.values};
     const auto root = parser.parse();
     if (!root) {
-        return {FindReplaceError::invalid_pattern, {},
+        return {FindReplaceError::InvalidPattern, {},
                 "regex pattern is invalid"};
     }
     MatchContext context{decoded_text,
@@ -576,9 +576,9 @@ FindResult find_matches(std::string_view text, const FindRequest& request) {
     std::size_t at = lower;
     while (at <= upper) {
         auto ends = evaluate_node(root, at, context);
-        if (context.error != FindReplaceError::none) {
+        if (context.error != FindReplaceError::None) {
             return {context.error, {},
-                    context.error == FindReplaceError::cancelled
+                    context.error == FindReplaceError::Cancelled
                         ? "find was cancelled"
                         : "regex work budget exhausted"};
         }
@@ -606,30 +606,30 @@ FindResult find_matches(std::string_view text, const FindRequest& request) {
 }
 
 FindReplaceCommandSet::FindReplaceCommandSet()
-    : descriptors_{{{"find.open", FindReplaceCommand::find_open},
-                    {"find.close", FindReplaceCommand::find_close},
-                    {"find.next", FindReplaceCommand::find_next},
-                    {"find.previous", FindReplaceCommand::find_previous},
+    : descriptors_{{{"find.open", FindReplaceCommand::FindOpen},
+                    {"find.close", FindReplaceCommand::FindClose},
+                    {"find.next", FindReplaceCommand::FindNext},
+                    {"find.previous", FindReplaceCommand::FindPrevious},
                     {"find.update_query",
-                     FindReplaceCommand::find_update_query},
+                     FindReplaceCommand::FindUpdateQuery},
                     {"find.toggle_case",
-                     FindReplaceCommand::find_toggle_case},
+                     FindReplaceCommand::FindToggleCase},
                     {"find.toggle_whole_word",
-                     FindReplaceCommand::find_toggle_whole_word},
+                     FindReplaceCommand::FindToggleWholeWord},
                     {"find.toggle_regex",
-                     FindReplaceCommand::find_toggle_regex},
+                     FindReplaceCommand::FindToggleRegex},
                     {"find.toggle_selection",
-                     FindReplaceCommand::find_toggle_selection},
-                    {"replace.open", FindReplaceCommand::replace_open},
+                     FindReplaceCommand::FindToggleSelection},
+                    {"replace.open", FindReplaceCommand::ReplaceOpen},
                     {"replace.update_replacement",
-                     FindReplaceCommand::replace_update_replacement},
+                     FindReplaceCommand::ReplaceUpdateReplacement},
                     {"replace.current",
-                     FindReplaceCommand::replace_current},
-                    {"replace.all", FindReplaceCommand::replace_all},
+                     FindReplaceCommand::ReplaceCurrent},
+                    {"replace.all", FindReplaceCommand::ReplaceAll},
                     {"replace.workspace_preview",
-                     FindReplaceCommand::replace_workspace_preview},
+                     FindReplaceCommand::ReplaceWorkspacePreview},
                     {"replace.workspace_apply",
-                     FindReplaceCommand::replace_workspace_apply}}} {}
+                     FindReplaceCommand::ReplaceWorkspaceApply}}} {}
 
 const std::array<FindReplaceCommandDescriptor, 15>&
 FindReplaceCommandSet::descriptors() const noexcept {
@@ -651,12 +651,12 @@ FindReplaceDelta derive_find_replace_delta(
 FindReplaceReplayResult replay_find_replace_delta(
     const FindReplaceViewState& base, const FindReplaceDelta& delta) {
     if (base.generation != delta.base_generation) {
-        return {FindReplaceReplayError::base_mismatch, base};
+        return {FindReplaceReplayError::BaseMismatch, base};
     }
     if (delta.changed != delta.replacement.has_value()) {
-        return {FindReplaceReplayError::malformed_delta, base};
+        return {FindReplaceReplayError::MalformedDelta, base};
     }
-    return {FindReplaceReplayError::none,
+    return {FindReplaceReplayError::None,
             delta.replacement ? *delta.replacement : base};
 }
 
@@ -684,7 +684,7 @@ void FindReplaceController::close() {
     state_.replacement.clear();
     state_.matches.clear();
     state_.active_match.reset();
-    state_.error = FindReplaceError::none;
+    state_.error = FindReplaceError::None;
     state_.message.clear();
     ++state_.generation;
 }
@@ -775,17 +775,17 @@ FindReplaceOperationResult FindReplaceController::replace_current(
     const SelectionSet& selections_after, std::string replacement,
     std::uint64_t timestamp_ms) {
     if (document.revision() != state_.source_revision) {
-        return operation_failure(FindReplaceError::stale_revision,
+        return operation_failure(FindReplaceError::StaleRevision,
                                  document.revision(),
                                  "find result revision is stale");
     }
-    if (!state_.active_match || state_.error != FindReplaceError::none) {
-        return operation_failure(FindReplaceError::no_match,
+    if (!state_.active_match || state_.error != FindReplaceError::None) {
+        return operation_failure(FindReplaceError::NoMatch,
                                  document.revision(), "no active match");
     }
     const auto match = state_.matches[*state_.active_match];
     if (match.begin == match.end && replacement.empty()) {
-        return operation_failure(FindReplaceError::document_rejected,
+        return operation_failure(FindReplaceError::DocumentRejected,
                                  document.revision(),
                                  "replacement would not change the document");
     }
@@ -795,17 +795,17 @@ FindReplaceOperationResult FindReplaceController::replace_current(
           std::move(replacement)}}};
     auto history_result = history.apply_edit(
         document, transaction, selections_before, selections_after,
-        HistoryEditKind::other, timestamp_ms);
+        HistoryEditKind::Other, timestamp_ms);
     if (!history_result.accepted()) {
         return operation_failure(
-            history_result.error == HistoryError::stale_document
-                ? FindReplaceError::stale_revision
-                : FindReplaceError::document_rejected,
+            history_result.error == HistoryError::StaleDocument
+                ? FindReplaceError::StaleRevision
+                : FindReplaceError::DocumentRejected,
             history_result.revision, history_result.message);
     }
     ++state_.generation;
     evaluate(document.snapshot());
-    return {FindReplaceError::none, document.revision(), {}};
+    return {FindReplaceError::None, document.revision(), {}};
 }
 
 FindReplaceOperationResult FindReplaceController::replace_all(
@@ -814,12 +814,12 @@ FindReplaceOperationResult FindReplaceController::replace_all(
     const SelectionSet& selections_after, std::string replacement,
     std::uint64_t timestamp_ms) {
     if (document.revision() != state_.source_revision) {
-        return operation_failure(FindReplaceError::stale_revision,
+        return operation_failure(FindReplaceError::StaleRevision,
                                  document.revision(),
                                  "find result revision is stale");
     }
-    if (state_.matches.empty() || state_.error != FindReplaceError::none) {
-        return operation_failure(FindReplaceError::no_match,
+    if (state_.matches.empty() || state_.error != FindReplaceError::None) {
+        return operation_failure(FindReplaceError::NoMatch,
                                  document.revision(), "no matches");
     }
     EditTransaction transaction{state_.source_revision, {}};
@@ -833,23 +833,23 @@ FindReplaceOperationResult FindReplaceController::replace_all(
              replacement});
     }
     if (transaction.edits.empty()) {
-        return operation_failure(FindReplaceError::document_rejected,
+        return operation_failure(FindReplaceError::DocumentRejected,
                                  document.revision(),
                                  "replacement would not change the document");
     }
     auto history_result = history.apply_edit(
         document, transaction, selections_before, selections_after,
-        HistoryEditKind::other, timestamp_ms);
+        HistoryEditKind::Other, timestamp_ms);
     if (!history_result.accepted()) {
         return operation_failure(
-            history_result.error == HistoryError::stale_document
-                ? FindReplaceError::stale_revision
-                : FindReplaceError::document_rejected,
+            history_result.error == HistoryError::StaleDocument
+                ? FindReplaceError::StaleRevision
+                : FindReplaceError::DocumentRejected,
             history_result.revision, history_result.message);
     }
     ++state_.generation;
     evaluate(document.snapshot());
-    return {FindReplaceError::none, document.revision(), {}};
+    return {FindReplaceError::None, document.revision(), {}};
 }
 
 const FindReplaceViewState& FindReplaceController::view_state() const noexcept {
@@ -860,12 +860,12 @@ WorkspacePreviewResult preview_workspace_replace(
     const FindReplaceWorkspace& workspace, Revision source_revision,
     const FindRequest& request, std::string replacement) {
     if (request.options.selection_only) {
-        return {FindReplaceError::invalid_selection, std::nullopt,
+        return {FindReplaceError::InvalidSelection, std::nullopt,
                 "workspace replace cannot use a document selection"};
     }
     const auto snapshot = workspace.snapshot(source_revision);
     if (snapshot.revision != source_revision) {
-        return {FindReplaceError::stale_revision, std::nullopt,
+        return {FindReplaceError::StaleRevision, std::nullopt,
                 "workspace snapshot revision is stale"};
     }
     WorkspaceReplacePreview preview{source_revision,
@@ -893,7 +893,7 @@ WorkspacePreviewResult preview_workspace_replace(
                  std::move(result.matches)});
         }
     }
-    return {FindReplaceError::none, std::move(preview), {}};
+    return {FindReplaceError::None, std::move(preview), {}};
 }
 
 WorkspaceApplyResult apply_workspace_replace(

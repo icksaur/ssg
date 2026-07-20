@@ -22,12 +22,12 @@ struct RecoveryConfig {
 };
 
 enum class RecoveryRecordKind : std::uint8_t {
-    document_close,
-    document_reload,
-    file_overwrite,
-    path_rename,
-    path_delete,
-    workspace_replace,
+    DocumentClose,
+    DocumentReload,
+    FileOverwrite,
+    PathRename,
+    PathDelete,
+    WorkspaceReplace,
 };
 
 class RecoveryRecordId {
@@ -55,15 +55,15 @@ struct RecoveryRecord {
 };
 
 enum class RecoveryErrorCode : std::uint8_t {
-    durability_failed,
-    budget_exceeded,
-    preparation_failed,
-    action_failed,
-    action_and_rollback_failed,
-    restoration_failed,
-    cleanup_failed,
-    record_not_found,
-    record_kind_mismatch,
+    DurabilityFailed,
+    BudgetExceeded,
+    PreparationFailed,
+    ActionFailed,
+    ActionAndRollbackFailed,
+    RestorationFailed,
+    CleanupFailed,
+    RecordNotFound,
+    RecordKindMismatch,
 };
 
 struct RecoveryError {
@@ -89,16 +89,16 @@ struct RecoveryRestoreResult {
 };
 
 enum class RecoveryStep : std::uint8_t {
-    prepare_artifact,
-    install_record,
-    publish_record,
-    mutate_document,
-    mutate_filesystem,
-    rollback_document,
-    rollback_filesystem,
-    restore_document,
-    restore_filesystem,
-    cleanup_record,
+    PrepareArtifact,
+    InstallRecord,
+    PublishRecord,
+    MutateDocument,
+    MutateFilesystem,
+    RollbackDocument,
+    RollbackFilesystem,
+    RestoreDocument,
+    RestoreFilesystem,
+    CleanupRecord,
 };
 
 class RecoveryFaultInjector {

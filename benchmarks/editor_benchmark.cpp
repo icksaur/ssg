@@ -294,7 +294,7 @@ void measure_command_delta(std::vector<Operation> const& operations,
     for (std::size_t repetition = 0; repetition < repetitions; ++repetition) {
         ssg::Document document{initial};
         ssg::CommandSet commands{{{
-            {"benchmark.edit", ssg::CommandEffect::mutation, {}},
+            {"benchmark.edit", ssg::CommandEffect::Mutation, {}},
             [&document](ssg::CommandContext&, std::any const& payload) {
                 auto result = apply(document, std::any_cast<Operation const&>(payload));
                 return result.accepted()
@@ -304,7 +304,7 @@ void measure_command_delta(std::vector<Operation> const& operations,
         ssg::EditorSession session{
             ssg::CommandRegistry{{std::move(commands)}}};
         ssg::InvocationPrincipal const principal{
-            ssg::ClientId{1}, ssg::InvocationOrigin::in_process};
+            ssg::ClientId{1}, ssg::InvocationOrigin::InProcess};
         if (!session.attach(principal, ssg::ViewId{1}).accepted())
             throw std::runtime_error{"benchmark client attach failed"};
         ssg::DocumentViewState view{

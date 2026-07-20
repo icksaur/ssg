@@ -129,24 +129,24 @@ DocumentSnapshot Document::snapshot() const {
 TransactionResult Document::apply(EditTransaction const& transaction) {
     const auto current_revision = impl_->revision;
     if (transaction.base_revision != current_revision) {
-        return failure(DocumentError::stale_revision, current_revision,
+        return failure(DocumentError::StaleRevision, current_revision,
                        "transaction base revision is stale");
     }
-    if (impl_->mode == DocumentMode::read_only) {
-        return failure(DocumentError::read_only, current_revision,
+    if (impl_->mode == DocumentMode::ReadOnly) {
+        return failure(DocumentError::ReadOnly, current_revision,
                        "read-only documents cannot be edited");
     }
-    if (impl_->mode == DocumentMode::diff) {
-        return failure(DocumentError::diff, current_revision,
+    if (impl_->mode == DocumentMode::Diff) {
+        return failure(DocumentError::Diff, current_revision,
                        "diff documents cannot be edited");
     }
     if (transaction.edits.empty()) {
-        return failure(DocumentError::empty_transaction, current_revision,
+        return failure(DocumentError::EmptyTransaction, current_revision,
                        "transaction must contain at least one edit");
     }
     if (current_revision.value() ==
         std::numeric_limits<std::uint64_t>::max()) {
-        return failure(DocumentError::revision_exhausted, current_revision,
+        return failure(DocumentError::RevisionExhausted, current_revision,
                        "document revision is exhausted");
     }
 
@@ -155,18 +155,18 @@ TransactionResult Document::apply(EditTransaction const& transaction) {
     ordered.reserve(transaction.edits.size());
     for (auto const& edit : transaction.edits) {
         if (edit.erased_bytes == 0 && edit.inserted_text.empty()) {
-            return failure(DocumentError::empty_transaction, current_revision,
+            return failure(DocumentError::EmptyTransaction, current_revision,
                            "transaction contains an empty edit");
         }
         if (!valid_utf8_without_nul(edit.inserted_text)) {
-            return failure(DocumentError::invalid_utf8, current_revision,
+            return failure(DocumentError::InvalidUtf8, current_revision,
                            "inserted text must be well-formed UTF-8 without NUL bytes");
         }
         if (edit.offset.value() > original.size() ||
             edit.erased_bytes >
                 original.size() -
                     static_cast<std::size_t>(edit.offset.value())) {
-            return failure(DocumentError::invalid_range, current_revision,
+            return failure(DocumentError::InvalidRange, current_revision,
                            "edit range is outside the document");
         }
 
@@ -175,7 +175,7 @@ TransactionResult Document::apply(EditTransaction const& transaction) {
             begin + static_cast<std::size_t>(edit.erased_bytes);
         if (!is_utf8_boundary(original, begin) ||
             !is_utf8_boundary(original, end)) {
-            return failure(DocumentError::invalid_utf8_boundary,
+            return failure(DocumentError::InvalidUtf8Boundary,
                            current_revision,
                            "edit range splits a UTF-8 code point");
         }
@@ -193,7 +193,7 @@ TransactionResult Document::apply(EditTransaction const& transaction) {
             previous.offset.value() + previous.erased_bytes;
         if (current.offset == previous.offset ||
             current.offset.value() < previous_end) {
-            return failure(DocumentError::overlapping_edits,
+            return failure(DocumentError::OverlappingEdits,
                            current_revision,
                            "edit ranges must be distinct and non-overlapping");
         }
@@ -214,7 +214,7 @@ TransactionResult Document::apply(EditTransaction const& transaction) {
 
     impl_->revision = Revision{current_revision.value() + 1};
     impl_->dirty = true;
-    return TransactionResult{DocumentError::none, impl_->revision, {}};
+    return TransactionResult{DocumentError::None, impl_->revision, {}};
 }
 
 }  // namespace ssg

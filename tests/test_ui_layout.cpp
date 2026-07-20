@@ -63,7 +63,7 @@ TEST(hand_authored_geometry_goldens) {
     const auto has_header_field = [&](std::string_view id) {
         return std::ranges::any_of(
             minimum_result.view->accessibility_nodes, [&](const auto& node) {
-                return node.kind == ShellNodeKind::header_field &&
+                return node.kind == ShellNodeKind::HeaderField &&
                        node.id == id;
             });
     };
@@ -98,31 +98,31 @@ TEST(viewport_and_prompt_errors_are_typed) {
     ShellState state;
     auto narrow = compute_shell_layout(request(19, 4), state);
     ASSERT_FALSE(narrow.accepted());
-    ASSERT_EQ(narrow.error->code, ShellLayoutErrorCode::viewport_too_small);
+    ASSERT_EQ(narrow.error->code, ShellLayoutErrorCode::ViewportTooSmall);
     ASSERT_FALSE(narrow.view.has_value());
 
     auto short_view = compute_shell_layout(request(20, 3), state);
     ASSERT_FALSE(short_view.accepted());
-    ASSERT_EQ(short_view.error->code, ShellLayoutErrorCode::viewport_too_small);
+    ASSERT_EQ(short_view.error->code, ShellLayoutErrorCode::ViewportTooSmall);
 
     auto invalid_prompt = request(80, 12);
     invalid_prompt.reserved_prompt_rows = 4;
     auto invalid = compute_shell_layout(invalid_prompt, state);
     ASSERT_FALSE(invalid.accepted());
-    ASSERT_EQ(invalid.error->code, ShellLayoutErrorCode::invalid_prompt_rows);
+    ASSERT_EQ(invalid.error->code, ShellLayoutErrorCode::InvalidPromptRows);
 
     auto no_room = request(20, 4);
     no_room.reserved_prompt_rows = 2;
     auto no_room_result = compute_shell_layout(no_room, state);
     ASSERT_FALSE(no_room_result.accepted());
-    ASSERT_EQ(no_room_result.error->code, ShellLayoutErrorCode::viewport_too_small);
+    ASSERT_EQ(no_room_result.error->code, ShellLayoutErrorCode::ViewportTooSmall);
 }
 
 TEST(pane_commands_preserve_topology_and_order) {
     ShellState state;
     const auto first = state.active_pane();
-    const auto second = state.split_active(SplitAxis::vertical);
-    const auto third = state.split_active(SplitAxis::horizontal);
+    const auto second = state.split_active(SplitAxis::Vertical);
+    const auto third = state.split_active(SplitAxis::Horizontal);
     ASSERT_EQ(state.pane_count(), std::size_t{3});
     ASSERT_EQ(state.active_pane(), third);
 
@@ -136,7 +136,7 @@ TEST(pane_commands_preserve_topology_and_order) {
     auto view = compute_shell_layout(request(80, 20), state);
     ASSERT_TRUE(view.accepted());
     ASSERT_EQ(view.view->panes.size(), std::size_t{3});
-    ASSERT_TRUE(state.focus_pane(PaneDirection::down, *view.view));
+    ASSERT_TRUE(state.focus_pane(PaneDirection::Down, *view.view));
     ASSERT_NE(state.active_pane(), first);
     ASSERT_TRUE(state.close_active_pane());
     ASSERT_EQ(state.pane_count(), std::size_t{2});
@@ -211,19 +211,19 @@ TEST(accessibility_nodes_have_labels_and_roles) {
             return node.kind == kind;
         });
     };
-    ASSERT_TRUE(has_kind(ShellNodeKind::header));
-    ASSERT_TRUE(has_kind(ShellNodeKind::footer));
-    ASSERT_TRUE(has_kind(ShellNodeKind::footer_action));
-    ASSERT_TRUE(has_kind(ShellNodeKind::tab));
-    ASSERT_TRUE(has_kind(ShellNodeKind::panel_provider));
-    ASSERT_TRUE(has_kind(ShellNodeKind::pane));
-    ASSERT_TRUE(has_kind(ShellNodeKind::scrollbar));
-    ASSERT_TRUE(has_kind(ShellNodeKind::prompt_reservation));
-    ASSERT_TRUE(has_kind(ShellNodeKind::empty_state));
+    ASSERT_TRUE(has_kind(ShellNodeKind::Header));
+    ASSERT_TRUE(has_kind(ShellNodeKind::Footer));
+    ASSERT_TRUE(has_kind(ShellNodeKind::FooterAction));
+    ASSERT_TRUE(has_kind(ShellNodeKind::Tab));
+    ASSERT_TRUE(has_kind(ShellNodeKind::PanelProvider));
+    ASSERT_TRUE(has_kind(ShellNodeKind::Pane));
+    ASSERT_TRUE(has_kind(ShellNodeKind::Scrollbar));
+    ASSERT_TRUE(has_kind(ShellNodeKind::PromptReservation));
+    ASSERT_TRUE(has_kind(ShellNodeKind::EmptyState));
     for (const auto& field : nodes) {
-        if (field.kind != ShellNodeKind::footer_field) continue;
+        if (field.kind != ShellNodeKind::FooterField) continue;
         for (const auto& action : nodes) {
-            if (action.kind == ShellNodeKind::footer_action) {
+            if (action.kind == ShellNodeKind::FooterAction) {
                 ASSERT_FALSE(overlaps(field.rect, action.rect));
             }
         }
@@ -251,8 +251,8 @@ TEST(non_overlap_and_cardinality_properties) {
     for (int columns = 20; columns <= 100; ++columns) {
         for (int rows = 4; rows <= 20; ++rows) {
             ShellState state;
-            state.split_active(SplitAxis::vertical);
-            state.split_active(SplitAxis::horizontal);
+            state.split_active(SplitAxis::Vertical);
+            state.split_active(SplitAxis::Horizontal);
             state.toggle_panel();
             auto input = request(columns, rows);
             auto result = compute_shell_layout(input, state);
@@ -315,17 +315,17 @@ TEST(accessibility_leaf_nodes_carry_display_content) {
         }
         return nullptr;
     };
-    const auto* command = find(ShellNodeKind::header_field, "active_command");
+    const auto* command = find(ShellNodeKind::HeaderField, "active_command");
     ASSERT_TRUE(command != nullptr);
     if (command) ASSERT_EQ(command->content, std::string{"INSERT"});
-    const auto* tab = find(ShellNodeKind::tab, "tab.0");
+    const auto* tab = find(ShellNodeKind::Tab, "tab.0");
     ASSERT_TRUE(tab != nullptr);
     if (tab) ASSERT_EQ(tab->content, std::string{"main.cpp"});
-    const auto* provider = find(ShellNodeKind::panel_provider, "panel.provider");
+    const auto* provider = find(ShellNodeKind::PanelProvider, "panel.provider");
     ASSERT_TRUE(provider != nullptr);
     if (provider) ASSERT_EQ(provider->content, std::string{"Files"});
     // Container nodes carry no display text.
-    const auto* header = find(ShellNodeKind::header, "header");
+    const auto* header = find(ShellNodeKind::Header, "header");
     ASSERT_TRUE(header != nullptr);
     if (header) ASSERT_TRUE(header->content.empty());
 }
@@ -338,7 +338,7 @@ TEST(dirty_tab_content_shows_marker) {
     ASSERT_TRUE(result.accepted());
     const AccessibilityNode* tab = nullptr;
     for (const auto& node : result.view->accessibility_nodes) {
-        if (node.kind == ShellNodeKind::tab) tab = &node;
+        if (node.kind == ShellNodeKind::Tab) tab = &node;
     }
     ASSERT_TRUE(tab != nullptr);
     if (tab) ASSERT_EQ(tab->content, std::string{"a.cpp *"});
@@ -346,30 +346,30 @@ TEST(dirty_tab_content_shows_marker) {
 
 TEST(focus_transitions_follow_the_navigation_table) {
     ShellState state{{"filesystem"}};
-    ASSERT_TRUE(state.focus() == FocusTarget::editor);
+    ASSERT_TRUE(state.focus() == FocusTarget::Editor);
     // The panel cannot be focused while hidden.
     ASSERT_FALSE(state.focus_panel());
-    ASSERT_TRUE(state.focus() == FocusTarget::editor);
+    ASSERT_TRUE(state.focus() == FocusTarget::Editor);
     // Showing the panel focuses it (no explicit focus_panel needed).
     state.toggle_panel();  // show
-    ASSERT_TRUE(state.focus() == FocusTarget::panel);
+    ASSERT_TRUE(state.focus() == FocusTarget::Panel);
     ASSERT_TRUE(state.panel_focused());
     // A prompt pushes the current focus and restores it on close.
     state.enter_prompt_focus();
-    ASSERT_TRUE(state.focus() == FocusTarget::prompt);
+    ASSERT_TRUE(state.focus() == FocusTarget::Prompt);
     state.exit_prompt_focus();
-    ASSERT_TRUE(state.focus() == FocusTarget::panel);
+    ASSERT_TRUE(state.focus() == FocusTarget::Panel);
     // Hiding the focused panel restores the focus present when it was shown (the
     // editor here).
     state.toggle_panel();  // hide
-    ASSERT_TRUE(state.focus() == FocusTarget::editor);
+    ASSERT_TRUE(state.focus() == FocusTarget::Editor);
     // A prompt over a panel that is hidden before close restores to editor.
     state.toggle_panel();  // show (focuses the panel)
-    ASSERT_TRUE(state.focus() == FocusTarget::panel);
+    ASSERT_TRUE(state.focus() == FocusTarget::Panel);
     state.enter_prompt_focus();
     state.toggle_panel();  // hide the panel while the prompt is focused
     state.exit_prompt_focus();
-    ASSERT_TRUE(state.focus() == FocusTarget::editor);
+    ASSERT_TRUE(state.focus() == FocusTarget::Editor);
 }
 
 TEST(hiding_an_unfocused_panel_leaves_focus_untouched) {
@@ -377,16 +377,16 @@ TEST(hiding_an_unfocused_panel_leaves_focus_untouched) {
     // Show (focuses the panel), then move focus to the editor while the panel is
     // still shown; hiding it must NOT yank focus (it isn't the focused surface).
     state.toggle_panel();  // show -> panel focused
-    ASSERT_TRUE(state.focus() == FocusTarget::panel);
+    ASSERT_TRUE(state.focus() == FocusTarget::Panel);
     state.focus_editor();
-    ASSERT_TRUE(state.focus() == FocusTarget::editor);
+    ASSERT_TRUE(state.focus() == FocusTarget::Editor);
     state.toggle_panel();  // hide while editor-focused
-    ASSERT_TRUE(state.focus() == FocusTarget::editor);
+    ASSERT_TRUE(state.focus() == FocusTarget::Editor);
     // Re-showing focuses the panel again; hiding restores the editor.
     state.toggle_panel();  // show
-    ASSERT_TRUE(state.focus() == FocusTarget::panel);
+    ASSERT_TRUE(state.focus() == FocusTarget::Panel);
     state.toggle_panel();  // hide
-    ASSERT_TRUE(state.focus() == FocusTarget::editor);
+    ASSERT_TRUE(state.focus() == FocusTarget::Editor);
 }
 
 TEST(leader_hint_renders_in_the_header_when_present) {
@@ -397,14 +397,14 @@ TEST(leader_hint_renders_in_the_header_when_present) {
     ASSERT_TRUE(result.accepted());
     const AccessibilityNode* leader = nullptr;
     for (const auto& node : result.view->accessibility_nodes) {
-        if (node.kind == ShellNodeKind::header_field && node.id == "leader") {
+        if (node.kind == ShellNodeKind::HeaderField && node.id == "leader") {
             leader = &node;
         }
     }
     ASSERT_TRUE(leader != nullptr);
     if (leader) {
         ASSERT_EQ(leader->content, std::string{"leader: Escape"});
-        ASSERT_TRUE(leader->role == SemanticRole::prompt);
+        ASSERT_TRUE(leader->role == SemanticRole::Prompt);
         ASSERT_EQ(leader->rect.y, 0);
     }
     // No hint node when the request carries no leader sequence.

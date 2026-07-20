@@ -19,13 +19,13 @@ struct ScratchStoreConfig {
 };
 
 enum class ScratchDurability {
-    durable,
-    pending,
-    failed,
+    Durable,
+    Pending,
+    Failed,
 };
 
 struct ScratchDurabilityState {
-    ScratchDurability kind = ScratchDurability::durable;
+    ScratchDurability kind = ScratchDurability::Durable;
     std::uint64_t accepted_generation = 0;
     std::uint64_t durable_generation = 0;
     bool overdue = false;

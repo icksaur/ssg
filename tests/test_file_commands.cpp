@@ -56,10 +56,10 @@ TEST(command_set_owns_every_normative_file_command) {
 
 TEST(path_commands_open_non_modal_path_prompts) {
     for (const auto command :
-         {ssg::FileCommand::open, ssg::FileCommand::save_as,
-          ssg::FileCommand::rename, ssg::FileCommand::new_directory}) {
+         {ssg::FileCommand::Open, ssg::FileCommand::SaveAs,
+          ssg::FileCommand::Rename, ssg::FileCommand::NewDirectory}) {
         const auto request = ssg::file_path_prompt(command);
-        ASSERT_EQ(request.kind, ssg::PromptKind::path);
+        ASSERT_EQ(request.kind, ssg::PromptKind::Path);
         ASSERT_EQ(request.inputs.size(), std::size_t{1});
         ASSERT_FALSE(request.inputs[0].accessible_label.empty());
     }
@@ -72,27 +72,27 @@ TEST(local_drop_requires_host_capability_and_sanitizes_label) {
     auto workspace = ssg::Workspace::create(temporary.path(), recovery);
     const std::array<std::uint8_t, 5> bytes{{'h', 'i', '\r', '\n', '!'}};
     const ssg::InvocationPrincipal local{
-        ssg::ClientId{1}, ssg::InvocationOrigin::websocket,
+        ssg::ClientId{1}, ssg::InvocationOrigin::Websocket,
         {ssg::CapabilityId{"local_file_drop"}}};
     const ssg::InvocationPrincipal remote{
-        ssg::ClientId{2}, ssg::InvocationOrigin::websocket};
+        ssg::ClientId{2}, ssg::InvocationOrigin::Websocket};
     const ssg::InvocationPrincipal lua{
-        ssg::ClientId{3}, ssg::InvocationOrigin::lua,
+        ssg::ClientId{3}, ssg::InvocationOrigin::Lua,
         {ssg::CapabilityId{"local_file_drop"}}};
 
     const auto accepted =
         workspace.open_dropped_content(local, bytes, "../../bad/name.txt");
     ASSERT_TRUE(accepted.accepted());
     const auto state = workspace.state(*accepted.document);
-    ASSERT_EQ(state->key.kind(), ssg::JournalDocumentKeyKind::untitled);
+    ASSERT_EQ(state->key.kind(), ssg::JournalDocumentKeyKind::Untitled);
     ASSERT_EQ(state->display_label, std::string{"name.txt"});
     ASSERT_EQ(workspace.document(*accepted.document).snapshot().text,
               std::string{"hi\n!"});
 
     ASSERT_EQ(workspace.open_dropped_content(remote, bytes, "x").error,
-              ssg::WorkspaceError::capability_denied);
+              ssg::WorkspaceError::CapabilityDenied);
     ASSERT_EQ(workspace.open_dropped_content(lua, bytes, "x").error,
-              ssg::WorkspaceError::capability_denied);
+              ssg::WorkspaceError::CapabilityDenied);
     ASSERT_EQ(workspace.documents().size(), std::size_t{1});
 }
 
@@ -102,7 +102,7 @@ TEST(binary_and_invalid_text_drops_open_read_only_without_path_authority) {
         ssg::RecoveryActions::create(temporary.path() / ".recovery");
     auto workspace = ssg::Workspace::create(temporary.path(), recovery);
     const ssg::InvocationPrincipal local{
-        ssg::ClientId{1}, ssg::InvocationOrigin::in_process,
+        ssg::ClientId{1}, ssg::InvocationOrigin::InProcess,
         {ssg::CapabilityId{"local_file_drop"}}};
     const std::array<std::uint8_t, 3> binary{{'a', 0, 'b'}};
     const std::array<std::uint8_t, 2> invalid{{0xc3, 0x28}};
@@ -116,13 +116,13 @@ TEST(binary_and_invalid_text_drops_open_read_only_without_path_authority) {
     ASSERT_TRUE(invalid_result.accepted());
     const auto binary_state = workspace.state(*binary_result.document);
     const auto invalid_state = workspace.state(*invalid_result.document);
-    ASSERT_EQ(binary_state->content_kind, ssg::FileContentKind::binary);
+    ASSERT_EQ(binary_state->content_kind, ssg::FileContentKind::Binary);
     ASSERT_EQ(invalid_state->content_kind,
-              ssg::FileContentKind::decode_failure);
+              ssg::FileContentKind::DecodeFailure);
     ASSERT_EQ(workspace.document(*binary_result.document).mode(),
-              ssg::DocumentMode::read_only);
+              ssg::DocumentMode::ReadOnly);
     ASSERT_EQ(workspace.document(*invalid_result.document).mode(),
-              ssg::DocumentMode::read_only);
+              ssg::DocumentMode::ReadOnly);
 }
 
 TEST(save_all_attempts_every_document_and_reports_failures) {

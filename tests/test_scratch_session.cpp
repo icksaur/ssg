@@ -48,7 +48,7 @@ private:
 
 ssg::JournalDocument document(std::string path, std::string contents) {
     return {ssg::JournalDocumentKey::saved(path),
-            ssg::DocumentMode::edit,
+            ssg::DocumentMode::Edit,
             true,
             std::move(contents)};
 }

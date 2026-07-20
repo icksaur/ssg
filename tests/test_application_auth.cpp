@@ -51,7 +51,7 @@ TEST(application_auth_accepts_only_current_bearer_with_exact_capability) {
     auto accepted = authentication.authenticate(current_value);
     ASSERT_TRUE(accepted.has_value());
     ASSERT_EQ(accepted->principal.client_id(), ssg::ClientId{41});
-    ASSERT_EQ(accepted->principal.origin(), ssg::InvocationOrigin::websocket);
+    ASSERT_EQ(accepted->principal.origin(), ssg::InvocationOrigin::Websocket);
     ASSERT_EQ(accepted->principal.capabilities().size(), std::size_t{1});
     ASSERT_EQ(accepted->principal.capabilities().front(),
               ssg::CapabilityId{"local_file_drop"});

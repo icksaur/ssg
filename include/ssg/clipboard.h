@@ -15,9 +15,9 @@
 namespace ssg {
 
 enum class ClipboardCommand : std::uint8_t {
-    copy,
-    cut,
-    paste,
+    Copy,
+    Cut,
+    Paste,
 };
 
 struct ClipboardCommandDescriptor {
@@ -45,8 +45,8 @@ private:
 [[nodiscard]] ClipboardCommandSet clipboard_command_set();
 
 enum class ClipboardRequestKind : std::uint8_t {
-    write,
-    read,
+    Write,
+    Read,
 };
 
 struct ClipboardRequest {
@@ -59,10 +59,10 @@ struct ClipboardRequest {
 };
 
 enum class ClipboardResponseStatus : std::uint8_t {
-    success,
-    denied,
-    unavailable,
-    disconnected,
+    Success,
+    Denied,
+    Unavailable,
+    Disconnected,
 };
 
 struct ClipboardResponse {
@@ -76,30 +76,30 @@ struct ClipboardResponse {
 };
 
 enum class ClipboardPasteMode : std::uint8_t {
-    internal_only,
-    system_first,
+    InternalOnly,
+    SystemFirst,
 };
 
 enum class ClipboardSystemStatus : std::uint8_t {
-    not_requested,
-    pending,
-    succeeded,
-    denied,
-    unavailable,
-    disconnected,
-    stale,
+    NotRequested,
+    Pending,
+    Succeeded,
+    Denied,
+    Unavailable,
+    Disconnected,
+    Stale,
 };
 
 enum class ClipboardError : std::uint8_t {
-    none,
-    read_only,
-    diff,
-    invalid_selection,
-    invalid_utf8,
-    stale_response,
-    no_request,
-    request_exhausted,
-    document_rejected,
+    None,
+    ReadOnly,
+    Diff,
+    InvalidSelection,
+    InvalidUtf8,
+    StaleResponse,
+    NoRequest,
+    RequestExhausted,
+    DocumentRejected,
 };
 
 struct ClipboardResult {
@@ -112,7 +112,7 @@ struct ClipboardResult {
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == ClipboardError::none;
+        return error == ClipboardError::None;
     }
 };
 

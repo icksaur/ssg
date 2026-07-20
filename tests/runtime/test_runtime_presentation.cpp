@@ -29,7 +29,7 @@ TEST(viewport_shell_settings_and_theme_are_live_sections) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"long.txt"}}).accepted());
 
     auto before = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
@@ -51,11 +51,11 @@ TEST(settings_dispatch_matches_settings_model_oracle_snapshot) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
     ssg::SettingsModel oracle;
     auto set_theme = ssg::SettingSetArguments{
-        ssg::SettingScope::workspace, ssg::SettingKey::theme,
+        ssg::SettingScope::Workspace, ssg::SettingKey::Theme,
         ssg::SettingValue{std::string{"dark"}}};
     ASSERT_TRUE(oracle.set(set_theme.scope, set_theme.key, set_theme.value).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"settings.set", runtime.revision(), set_theme}).accepted());
@@ -65,7 +65,7 @@ TEST(settings_dispatch_matches_settings_model_oracle_snapshot) {
     ASSERT_EQ(snapshot->sections().settings, expected);
 
     auto set_wrap = ssg::SettingSetArguments{
-        ssg::SettingScope::user, ssg::SettingKey::word_wrap,
+        ssg::SettingScope::User, ssg::SettingKey::WordWrap,
         ssg::SettingValue{true}};
     ASSERT_TRUE(oracle.set(set_wrap.scope, set_wrap.key, set_wrap.value).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"settings.set", runtime.revision(), set_wrap}).accepted());
@@ -75,7 +75,7 @@ TEST(settings_dispatch_matches_settings_model_oracle_snapshot) {
     ASSERT_EQ(snapshot->sections().settings, expected);
 
     auto reset_theme = ssg::SettingResetArguments{
-        ssg::SettingScope::workspace, ssg::SettingKey::theme};
+        ssg::SettingScope::Workspace, ssg::SettingKey::Theme};
     ASSERT_TRUE(oracle.reset(reset_theme.scope, reset_theme.key).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"settings.reset", runtime.revision(), reset_theme}).accepted());
     snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
@@ -84,12 +84,12 @@ TEST(settings_dispatch_matches_settings_model_oracle_snapshot) {
     ASSERT_EQ(snapshot->sections().settings, expected);
 
     auto set_keymap = ssg::SettingSetArguments{
-        ssg::SettingScope::workspace, ssg::SettingKey::keymap,
+        ssg::SettingScope::Workspace, ssg::SettingKey::Keymap,
         ssg::SettingValue{std::string{"vim"}}};
     ASSERT_TRUE(oracle.set(set_keymap.scope, set_keymap.key, set_keymap.value).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"settings.set", runtime.revision(), set_keymap}).accepted());
-    ASSERT_TRUE(oracle.reset(ssg::SettingScope::workspace, ssg::SettingKey::keymap).accepted());
-    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"settings.reset_scope", runtime.revision(), ssg::SettingResetScopeArguments{ssg::SettingScope::workspace}}).accepted());
+    ASSERT_TRUE(oracle.reset(ssg::SettingScope::Workspace, ssg::SettingKey::Keymap).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"settings.reset_scope", runtime.revision(), ssg::SettingResetScopeArguments{ssg::SettingScope::Workspace}}).accepted());
     snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     expected = oracle.view_state();
     ASSERT_TRUE(snapshot.has_value());
@@ -109,7 +109,7 @@ TEST(editor_scroll_uses_the_real_pane_height_not_a_hardcoded_24) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"tall.txt"}}).accepted());
 
     // A 40-row terminal (NOT 24): a page is the real pane content height.
@@ -148,7 +148,7 @@ TEST(reported_leader_sequence_renders_a_per_snapshot_hint) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
 
     const auto leader_content = [](ssg::SessionSnapshot const& snapshot) {
         for (auto const& node : snapshot.sections().shell.accessibility_nodes) {
@@ -177,13 +177,13 @@ TEST(palette_candidates_match_the_command_registry) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
     auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
 
     auto const& palette = snapshot->sections().palette;
-    ASSERT_TRUE(palette.mode == ssg::SearchMode::command);
+    ASSERT_TRUE(palette.mode == ssg::SearchMode::Command);
     // Every registered P0 command appears exactly once as a candidate.
     auto const descriptors = ssg::p0_command_descriptors();
     ASSERT_EQ(palette.candidates.size(), descriptors.size());

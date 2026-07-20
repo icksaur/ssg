@@ -19,12 +19,12 @@ std::array<std::atomic<std::uint64_t>, optional_subsystem_count>& ledger() {
 
 std::string_view optional_subsystem_name(OptionalSubsystem subsystem) noexcept {
     switch (subsystem) {
-        case OptionalSubsystem::lua: return "lua";
-        case OptionalSubsystem::lsp: return "lsp";
-        case OptionalSubsystem::tree_sitter_grammar: return "tree_sitter_grammar";
-        case OptionalSubsystem::filesystem_watcher: return "filesystem_watcher";
-        case OptionalSubsystem::http: return "http";
-        case OptionalSubsystem::count_: break;  // sentinel, never a real subsystem
+        case OptionalSubsystem::Lua: return "lua";
+        case OptionalSubsystem::Lsp: return "lsp";
+        case OptionalSubsystem::TreeSitterGrammar: return "tree_sitter_grammar";
+        case OptionalSubsystem::FilesystemWatcher: return "filesystem_watcher";
+        case OptionalSubsystem::Http: return "http";
+        case OptionalSubsystem::Count: break;  // sentinel, never a real subsystem
     }
     return "unknown";
 }

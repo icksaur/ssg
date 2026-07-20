@@ -11,11 +11,11 @@
 namespace ssg {
 
 enum class EditHistoryIntegrationError : std::uint8_t {
-    none,
-    text_input_rejected,
-    edit_command_rejected,
-    invalid_command_result,
-    history_rejected,
+    None,
+    TextInputRejected,
+    EditCommandRejected,
+    InvalidCommandResult,
+    HistoryRejected,
 };
 
 struct EditHistoryIntegrationResult {
@@ -27,7 +27,7 @@ struct EditHistoryIntegrationResult {
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == EditHistoryIntegrationError::none;
+        return error == EditHistoryIntegrationError::None;
     }
 
     [[nodiscard]] bool document_changed() const noexcept {

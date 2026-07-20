@@ -13,19 +13,19 @@
 namespace ssg {
 
 enum class EditCommand : std::uint8_t {
-    indent,
-    outdent,
-    duplicate_line,
-    move_line_up,
-    move_line_down,
-    delete_line,
-    join_lines,
-    uppercase,
-    lowercase,
-    swap_case,
-    sort_lines,
-    transpose,
-    toggle_comment,
+    Indent,
+    Outdent,
+    DuplicateLine,
+    MoveLineUp,
+    MoveLineDown,
+    DeleteLine,
+    JoinLines,
+    Uppercase,
+    Lowercase,
+    SwapCase,
+    SortLines,
+    Transpose,
+    ToggleComment,
 };
 
 struct EditCommandDescriptor {
@@ -65,12 +65,12 @@ struct EditCommandSettings {
 };
 
 enum class EditCommandError : std::uint8_t {
-    none,
-    read_only,
-    diff,
-    invalid_selection,
-    invalid_settings,
-    unknown_command,
+    None,
+    ReadOnly,
+    Diff,
+    InvalidSelection,
+    InvalidSettings,
+    UnknownCommand,
 };
 
 struct EditCommandResult {
@@ -81,7 +81,7 @@ struct EditCommandResult {
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == EditCommandError::none;
+        return error == EditCommandError::None;
     }
 };
 

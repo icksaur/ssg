@@ -103,11 +103,11 @@ TEST(independent_transition_table_covers_shared_follow_policy) {
         } else if (operation == "navigate_user" ||
                    operation == "navigate_programmatic" ||
                    operation == "navigate_non_navigation") {
-            auto classification = NavigationClass::user;
+            auto classification = NavigationClass::User;
             if (operation == "navigate_programmatic") {
-                classification = NavigationClass::programmatic;
+                classification = NavigationClass::Programmatic;
             } else if (operation == "navigate_non_navigation") {
-                classification = NavigationClass::non_navigation;
+                classification = NavigationClass::NonNavigation;
             }
             ASSERT_TRUE(model
                             .apply_navigation(
@@ -130,7 +130,7 @@ TEST(independent_transition_table_covers_shared_follow_policy) {
         }
 
         const auto state = model.view_state();
-        ASSERT_EQ(state.mode == FollowMode::following ? "following" : "paused",
+        ASSERT_EQ(state.mode == FollowMode::Following ? "following" : "paused",
                   fields[3]);
         ASSERT_EQ(target_id(state.active_target), fields[4]);
         ASSERT_EQ(queue_ids(state), fields[5]);
@@ -210,7 +210,7 @@ TEST(resume_resolves_rename_delete_and_skips_reverted_or_missing_targets) {
     const auto before = model.view_state();
     ASSERT_TRUE(model.resume(current_diff({}, 5)).accepted());
     const auto after = model.view_state();
-    ASSERT_EQ(after.mode, FollowMode::following);
+    ASSERT_EQ(after.mode, FollowMode::Following);
     ASSERT_EQ(after.active_target, before.active_target);
     ASSERT_EQ(after.clients, before.clients);
     ASSERT_TRUE(after.queued_targets.empty());
@@ -227,22 +227,22 @@ TEST(stale_changes_and_invalid_clients_are_failure_atomic) {
                   .accept_external_change(changed_file("b", "b", 2),
                                           Revision{2})
                   .error,
-              FollowEditsError::stale_revision);
+              FollowEditsError::StaleRevision);
     ASSERT_EQ(model.view_state(), before);
 
     ASSERT_EQ(model
                   .apply_navigation(
                       {.client = ClientId{99},
-                       .classification = NavigationClass::user,
+                       .classification = NavigationClass::User,
                        .offset = FollowScrollOffset{3, 0}})
                   .error,
-              FollowEditsError::unknown_client);
+              FollowEditsError::UnknownClient);
     ASSERT_EQ(model.view_state(), before);
 
     ASSERT_TRUE(model.pause().accepted());
     const auto paused = model.view_state();
     ASSERT_EQ(model.resume(current_diff({}, 1)).error,
-              FollowEditsError::stale_revision);
+              FollowEditsError::StaleRevision);
     ASSERT_EQ(model.view_state(), paused);
 }
 

@@ -16,12 +16,12 @@
 
 namespace ssg {
 
-enum class FollowMode : std::uint8_t { following, paused };
+enum class FollowMode : std::uint8_t { Following, Paused };
 
 enum class NavigationClass : std::uint8_t {
-    user,
-    programmatic,
-    non_navigation,
+    User,
+    Programmatic,
+    NonNavigation,
 };
 
 struct FollowScrollOffset {
@@ -50,7 +50,7 @@ struct FollowClientView {
 
 struct FollowEditsViewState {
     std::uint64_t generation = 0;
-    FollowMode mode = FollowMode::following;
+    FollowMode mode = FollowMode::Following;
     PaneId active_pane;
     std::optional<FollowTarget> active_target;
     std::vector<FollowTarget> queued_targets;
@@ -107,23 +107,23 @@ struct FollowEditsConfig {
 };
 
 enum class FollowEditsError : std::uint8_t {
-    none,
-    stale_revision,
-    duplicate_client,
-    unknown_client,
-    invalid_viewport,
+    None,
+    StaleRevision,
+    DuplicateClient,
+    UnknownClient,
+    InvalidViewport,
 };
 
 struct FollowEditsResult {
-    FollowEditsError error = FollowEditsError::none;
+    FollowEditsError error = FollowEditsError::None;
     [[nodiscard]] bool accepted() const noexcept {
-        return error == FollowEditsError::none;
+        return error == FollowEditsError::None;
     }
 };
 
 struct FollowNavigation {
     ClientId client;
-    NavigationClass classification = NavigationClass::non_navigation;
+    NavigationClass classification = NavigationClass::NonNavigation;
     std::optional<PaneId> pane;
     std::optional<FollowScrollOffset> offset;
 };

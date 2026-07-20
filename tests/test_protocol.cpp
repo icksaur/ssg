@@ -51,7 +51,7 @@ ssg::SelectionViewState selection(std::uint64_t byte, std::uint32_t first_row) {
 ssg::SessionSnapshotSections sections(ssg::Revision revision, std::string marker) {
     ssg::SettingsViewState settings;
     settings.entries[0].effective = {
-        static_cast<std::uint32_t>(marker.size()), ssg::SettingScope::user};
+        static_cast<std::uint32_t>(marker.size()), ssg::SettingScope::User};
     ssg::ThemeSnapshot theme;
     theme.palette[0].red = static_cast<std::uint8_t>(marker.size());
 
@@ -64,23 +64,23 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision, std::string marker
         {true, false, marker.size()},
         {{marker}, marker, std::nullopt, std::nullopt},
         {std::nullopt, {{}, marker.size()}},
-        {revision, true, marker, ssg::SearchMode::file, {}, std::nullopt,
+        {revision, true, marker, ssg::SearchMode::File, {}, std::nullopt,
          marker.size(), false},
         {marker.size(), true, false, revision, marker, {}, {}, {}, std::nullopt,
-         ssg::FindReplaceError::none, {}},
+         ssg::FindReplaceError::None, {}},
         settings,
         {marker, {}},
-        {{marker.size() > 1 ? ssg::TextEncoding::utf16le
-                           : ssg::TextEncoding::utf8,
-          ssg::LineEnding::lf, false,
+        {{marker.size() > 1 ? ssg::TextEncoding::Utf16le
+                           : ssg::TextEncoding::Utf8,
+          ssg::LineEnding::Lf, false,
           !marker.empty()}},
-        {{{ssg::TabId{1}, ssg::TabKind::read_only_output, std::nullopt,
-           std::nullopt, "output", marker, ssg::DocumentMode::read_only,
-           false, ssg::TabRecoveryBadge::none}},
+        {{{ssg::TabId{1}, ssg::TabKind::ReadOnlyOutput, std::nullopt,
+           std::nullopt, "output", marker, ssg::DocumentMode::ReadOnly,
+           false, ssg::TabRecoveryBadge::None}},
          ssg::TabId{1}},
         {revision, {}},
         {revision, {}},
-        {marker.size(), ssg::FollowMode::following, ssg::PaneId{},
+        {marker.size(), ssg::FollowMode::Following, ssg::PaneId{},
          std::nullopt, {}, {}},
         {ssg::TreeRevision{marker.size()}, {}},
         ssg::plain_text_syntax_view_state(revision, ssg::LanguageId{"plain"},
@@ -376,7 +376,7 @@ std::string build_command_request_message(std::string const& id,
     std::string message;
     message += wire_u8(1);
     message += wire_u8(
-        static_cast<std::uint8_t>(ssg::ProtocolMessageKind::command_request));
+        static_cast<std::uint8_t>(ssg::ProtocolMessageKind::CommandRequest));
     message += body;
     return message;
 }
@@ -402,7 +402,7 @@ std::string build_invalid_scroll_fraction_message() {
 
     return wire_u8(1) +
            wire_u8(static_cast<std::uint8_t>(
-               ssg::ProtocolMessageKind::command_request)) +
+               ssg::ProtocolMessageKind::CommandRequest)) +
            body;
 }
 
@@ -414,7 +414,7 @@ TEST(decode_command_request_rejects_unknown_command_id) {
     auto const bytes = build_command_request_message("not.a.command", 1);
     auto const decoded = ssg::decode_command_request(bytes, registry);
     ASSERT_FALSE(decoded.accepted());
-    ASSERT_EQ(decoded.error, ssg::ProtocolError::unsupported_command);
+    ASSERT_EQ(decoded.error, ssg::ProtocolError::UnsupportedCommand);
 }
 
 TEST(decode_command_request_rejects_malformed_payload) {
@@ -434,7 +434,7 @@ TEST(decode_command_request_maps_domain_invariant_failures_to_malformed) {
     auto const decoded = ssg::decode_command_request(
         build_invalid_scroll_fraction_message(), registry);
     ASSERT_FALSE(decoded.accepted());
-    ASSERT_EQ(decoded.error, ssg::ProtocolError::malformed_message);
+    ASSERT_EQ(decoded.error, ssg::ProtocolError::MalformedMessage);
 }
 
 // ---------------------------------------------------------------------------
@@ -445,7 +445,7 @@ TEST(session_snapshot_round_trips_through_the_wire) {
     auto snapshot = ssg::assemble_session_snapshot(
         ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{
-            ssg::ClientId{7}, ssg::InvocationOrigin::in_process,
+            ssg::ClientId{7}, ssg::InvocationOrigin::InProcess,
             {ssg::CapabilityId{"local_file_drop"}}},
         ssg::ViewId{9}, client_view(3), sections(ssg::Revision{4}, "alpha"));
 
@@ -460,12 +460,12 @@ TEST(session_delta_round_trips_and_replay_matches_the_decoded_delta) {
     auto before = ssg::assemble_session_snapshot(
         ssg::Revision{4}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
-                                 ssg::InvocationOrigin::in_process},
+                                 ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, client_view(1), sections(ssg::Revision{4}, "a"));
     auto after = ssg::assemble_session_snapshot(
         ssg::Revision{5}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{ssg::ClientId{7},
-                                 ssg::InvocationOrigin::in_process},
+                                 ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, client_view(5), sections(ssg::Revision{5}, "changed"));
 
     auto const delta = ssg::derive_session_delta(before, after);
@@ -485,13 +485,13 @@ TEST(two_client_capability_and_viewport_isolation_survives_the_wire) {
     auto first = ssg::assemble_session_snapshot(
         ssg::Revision{8}, {},
         ssg::InvocationPrincipal{
-            ssg::ClientId{1}, ssg::InvocationOrigin::websocket,
+            ssg::ClientId{1}, ssg::InvocationOrigin::Websocket,
             {ssg::CapabilityId{"local_file_drop"}}},
         ssg::ViewId{10}, client_view(2), shared);
     auto second = ssg::assemble_session_snapshot(
         ssg::Revision{8}, {},
         ssg::InvocationPrincipal{ssg::ClientId{2},
-                                 ssg::InvocationOrigin::websocket},
+                                 ssg::InvocationOrigin::Websocket},
         ssg::ViewId{11}, client_view(7), std::move(shared));
 
     auto const first_decoded =
@@ -514,11 +514,11 @@ TEST(two_client_capability_and_viewport_isolation_survives_the_wire) {
 TEST(session_snapshot_round_trips_tree_scroll_fields) {
     auto sections_value = sections(ssg::Revision{4}, "alpha");
     ssg::TreeNode node_a{ssg::TreeNodeId{"files:a"}, std::nullopt, "a.txt",
-                         ssg::TreeNodeKind::file};
+                         ssg::TreeNodeKind::File};
     ssg::TreeNode node_b{ssg::TreeNodeId{"files:b"}, std::nullopt, "b.txt",
-                         ssg::TreeNodeKind::file};
+                         ssg::TreeNodeKind::File};
     ssg::TreeProviderView provider{
-        ssg::TreeProviderId{"files"}, ssg::TreeProviderKind::filesystem,
+        ssg::TreeProviderId{"files"}, ssg::TreeProviderKind::Filesystem,
         {ssg::TreeNodeView{node_a, 0, false}, ssg::TreeNodeView{node_b, 0, false}},
         ssg::TreeNodeId{"files:b"}};
     provider.first_visible = 3;
@@ -536,7 +536,7 @@ TEST(session_snapshot_round_trips_tree_scroll_fields) {
     auto snapshot = ssg::assemble_session_snapshot(
         ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{ssg::ClientId{7},
-                                 ssg::InvocationOrigin::in_process},
+                                 ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, client_view(3), std::move(sections_value));
     auto const decoded =
         ssg::decode_session_snapshot(ssg::encode_session_snapshot(snapshot));
@@ -561,7 +561,7 @@ TEST(session_snapshot_round_trips_tree_scroll_fields) {
 
 TEST(command_result_round_trips_through_the_wire) {
     ssg::CommandResult const result{
-        ssg::CommandError::stale_revision, ssg::Revision{17},
+        ssg::CommandError::StaleRevision, ssg::Revision{17},
         "base revision is stale"};
     auto const decoded =
         ssg::decode_command_result(ssg::encode_command_result(result));
@@ -574,7 +574,7 @@ TEST(command_result_round_trips_through_the_wire) {
 
 TEST(clipboard_request_round_trips_through_the_wire) {
     ssg::ClipboardRequest const request{
-        42, ssg::ClipboardRequestKind::write, ssg::Revision{6}, "copied text"};
+        42, ssg::ClipboardRequestKind::Write, ssg::Revision{6}, "copied text"};
     auto const bytes = ssg::encode_clipboard_request(request);
     auto const decoded = ssg::decode_clipboard_request(bytes);
     ASSERT_TRUE(decoded.accepted());
@@ -585,7 +585,7 @@ TEST(clipboard_request_round_trips_through_the_wire) {
 TEST(clipboard_response_round_trips_through_the_wire) {
     ssg::ClipboardResponse const response{
         42, ssg::Revision{6}, ssg::Revision{7},
-        ssg::ClipboardResponseStatus::success, "pasted text"};
+        ssg::ClipboardResponseStatus::Success, "pasted text"};
     auto const bytes = ssg::encode_clipboard_response(response);
     auto const decoded = ssg::decode_clipboard_response(bytes);
     ASSERT_TRUE(decoded.accepted());
@@ -609,7 +609,7 @@ TEST(status_action_invocation_round_trips_through_the_wire) {
 
 TEST(binary_frame_round_trips_through_the_wire) {
     ssg::BinaryFrame const frame{
-        1, ssg::BinaryPayloadKind::dropped_content, 99, {9, 8, 7, 6, 5}};
+        1, ssg::BinaryPayloadKind::DroppedContent, 99, {9, 8, 7, 6, 5}};
     auto const bytes = ssg::encode_binary_frame(frame);
     auto const decoded = ssg::decode_binary_frame(bytes);
     ASSERT_TRUE(decoded.accepted());
@@ -621,7 +621,7 @@ TEST(binary_frame_decoded_bytes_outlive_the_input_buffer) {
     std::optional<ssg::BinaryFrame> surviving_frame;
     {
         std::string bytes = ssg::encode_binary_frame(ssg::BinaryFrame{
-            1, ssg::BinaryPayloadKind::dropped_content, 7, {1, 2, 3, 4, 5, 6}});
+            1, ssg::BinaryPayloadKind::DroppedContent, 7, {1, 2, 3, 4, 5, 6}});
         auto decoded = ssg::decode_binary_frame(bytes);
         ASSERT_TRUE(decoded.accepted());
         surviving_frame = std::move(decoded.frame);
@@ -637,30 +637,30 @@ TEST(binary_frame_decoded_bytes_outlive_the_input_buffer) {
 
 TEST(binary_frame_rejects_an_unsupported_payload_kind) {
     std::string bytes = ssg::encode_binary_frame(ssg::BinaryFrame{
-        1, ssg::BinaryPayloadKind::dropped_content, 1, {1}});
+        1, ssg::BinaryPayloadKind::DroppedContent, 1, {1}});
     bytes[1] = static_cast<char>(0xEE);
     auto const decoded = ssg::decode_binary_frame(bytes);
     ASSERT_FALSE(decoded.accepted());
-    ASSERT_EQ(decoded.error, ssg::ProtocolError::malformed_message);
+    ASSERT_EQ(decoded.error, ssg::ProtocolError::MalformedMessage);
 }
 
 TEST(binary_frame_rejects_oversized_declared_length_and_frame) {
     ssg::ProtocolLimits limits;
     limits.max_binary_frame_bytes = 4;
     auto const bytes = ssg::encode_binary_frame(ssg::BinaryFrame{
-        1, ssg::BinaryPayloadKind::dropped_content, 1, {1, 2, 3, 4, 5}});
+        1, ssg::BinaryPayloadKind::DroppedContent, 1, {1, 2, 3, 4, 5}});
     auto const decoded = ssg::decode_binary_frame(bytes, limits);
     ASSERT_FALSE(decoded.accepted());
-    ASSERT_EQ(decoded.error, ssg::ProtocolError::binary_frame_too_large);
+    ASSERT_EQ(decoded.error, ssg::ProtocolError::BinaryFrameTooLarge);
 }
 
 TEST(binary_frame_rejects_truncated_input) {
     auto bytes = ssg::encode_binary_frame(ssg::BinaryFrame{
-        1, ssg::BinaryPayloadKind::dropped_content, 1, {1, 2, 3}});
+        1, ssg::BinaryPayloadKind::DroppedContent, 1, {1, 2, 3}});
     bytes.resize(bytes.size() - 1);
     auto const decoded = ssg::decode_binary_frame(bytes);
     ASSERT_FALSE(decoded.accepted());
-    ASSERT_EQ(decoded.error, ssg::ProtocolError::truncated_message);
+    ASSERT_EQ(decoded.error, ssg::ProtocolError::TruncatedMessage);
 }
 
 // ---------------------------------------------------------------------------
@@ -669,7 +669,7 @@ TEST(binary_frame_rejects_truncated_input) {
 
 TEST(malformed_and_truncated_and_oversized_and_unknown_version_corpus) {
     ssg::ClipboardRequest const request{
-        1, ssg::ClipboardRequestKind::read, ssg::Revision{1}, "x"};
+        1, ssg::ClipboardRequestKind::Read, ssg::Revision{1}, "x"};
     auto const canonical = ssg::encode_clipboard_request(request);
     ASSERT_TRUE(canonical.size() > 3);
 
@@ -677,7 +677,7 @@ TEST(malformed_and_truncated_and_oversized_and_unknown_version_corpus) {
     {
         auto const decoded = ssg::decode_clipboard_request(std::string_view{});
         ASSERT_FALSE(decoded.accepted());
-        ASSERT_EQ(decoded.error, ssg::ProtocolError::truncated_message);
+        ASSERT_EQ(decoded.error, ssg::ProtocolError::TruncatedMessage);
     }
 
     // Single byte: missing kind byte.
@@ -685,7 +685,7 @@ TEST(malformed_and_truncated_and_oversized_and_unknown_version_corpus) {
         auto const decoded =
             ssg::decode_clipboard_request(canonical.substr(0, 1));
         ASSERT_FALSE(decoded.accepted());
-        ASSERT_EQ(decoded.error, ssg::ProtocolError::truncated_message);
+        ASSERT_EQ(decoded.error, ssg::ProtocolError::TruncatedMessage);
     }
 
     // Wrong version byte.
@@ -694,14 +694,14 @@ TEST(malformed_and_truncated_and_oversized_and_unknown_version_corpus) {
         corrupted[0] = static_cast<char>(0xFF);
         auto const decoded = ssg::decode_clipboard_request(corrupted);
         ASSERT_FALSE(decoded.accepted());
-        ASSERT_EQ(decoded.error, ssg::ProtocolError::unsupported_version);
+        ASSERT_EQ(decoded.error, ssg::ProtocolError::UnsupportedVersion);
     }
 
     // Wrong kind byte (decoded with the wrong expected-kind decoder).
     {
         auto const decoded = ssg::decode_clipboard_response(canonical);
         ASSERT_FALSE(decoded.accepted());
-        ASSERT_EQ(decoded.error, ssg::ProtocolError::unsupported_message_kind);
+        ASSERT_EQ(decoded.error, ssg::ProtocolError::UnsupportedMessageKind);
     }
 
     // Oversized: buffer larger than the configured message-byte limit.
@@ -710,7 +710,7 @@ TEST(malformed_and_truncated_and_oversized_and_unknown_version_corpus) {
         limits.max_message_bytes = canonical.size() - 1;
         auto const decoded = ssg::decode_clipboard_request(canonical, limits);
         ASSERT_FALSE(decoded.accepted());
-        ASSERT_EQ(decoded.error, ssg::ProtocolError::message_too_large);
+        ASSERT_EQ(decoded.error, ssg::ProtocolError::MessageTooLarge);
     }
 
     // Truncated payload: valid header, body cut short.
@@ -718,7 +718,7 @@ TEST(malformed_and_truncated_and_oversized_and_unknown_version_corpus) {
         auto const decoded = ssg::decode_clipboard_request(
             canonical.substr(0, canonical.size() - 2));
         ASSERT_FALSE(decoded.accepted());
-        ASSERT_EQ(decoded.error, ssg::ProtocolError::truncated_message);
+        ASSERT_EQ(decoded.error, ssg::ProtocolError::TruncatedMessage);
     }
 
     // Trailing garbage bytes appended after an otherwise-valid message.
@@ -727,7 +727,7 @@ TEST(malformed_and_truncated_and_oversized_and_unknown_version_corpus) {
         padded.push_back('\x7f');
         auto const decoded = ssg::decode_clipboard_request(padded);
         ASSERT_FALSE(decoded.accepted());
-        ASSERT_EQ(decoded.error, ssg::ProtocolError::malformed_message);
+        ASSERT_EQ(decoded.error, ssg::ProtocolError::MalformedMessage);
     }
 }
 
@@ -740,21 +740,21 @@ TEST(value_bounds_are_enforced_on_decode) {
         limits.max_collection_length = 0;
         auto const decoded = ssg::decode_status_action_invocation(bytes, limits);
         ASSERT_FALSE(decoded.accepted());
-        ASSERT_EQ(decoded.error, ssg::ProtocolError::value_bounds_exceeded);
+        ASSERT_EQ(decoded.error, ssg::ProtocolError::ValueBoundsExceeded);
     }
     {
         ssg::ProtocolLimits limits;
         limits.max_text_bytes = 0;
         auto const decoded = ssg::decode_status_action_invocation(bytes, limits);
         ASSERT_FALSE(decoded.accepted());
-        ASSERT_EQ(decoded.error, ssg::ProtocolError::value_bounds_exceeded);
+        ASSERT_EQ(decoded.error, ssg::ProtocolError::ValueBoundsExceeded);
     }
     {
         ssg::ProtocolLimits limits;
         limits.max_value_depth = 0;
         auto const decoded = ssg::decode_status_action_invocation(bytes, limits);
         ASSERT_FALSE(decoded.accepted());
-        ASSERT_EQ(decoded.error, ssg::ProtocolError::value_bounds_exceeded);
+        ASSERT_EQ(decoded.error, ssg::ProtocolError::ValueBoundsExceeded);
     }
 }
 
@@ -802,7 +802,7 @@ TEST(regenerate_canonical_fixtures) {
     auto snapshot = ssg::assemble_session_snapshot(
         ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{
-            ssg::ClientId{7}, ssg::InvocationOrigin::in_process,
+            ssg::ClientId{7}, ssg::InvocationOrigin::InProcess,
             {ssg::CapabilityId{"local_file_drop"}}},
         ssg::ViewId{9}, client_view(3), sections(ssg::Revision{4}, "alpha"));
     write_fixture_hex("session_snapshot.hex",
@@ -811,12 +811,12 @@ TEST(regenerate_canonical_fixtures) {
     auto before = ssg::assemble_session_snapshot(
         ssg::Revision{4}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
-                                 ssg::InvocationOrigin::in_process},
+                                 ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, client_view(1), sections(ssg::Revision{4}, "a"));
     auto after = ssg::assemble_session_snapshot(
         ssg::Revision{5}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{ssg::ClientId{7},
-                                 ssg::InvocationOrigin::in_process},
+                                 ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, client_view(5), sections(ssg::Revision{5}, "changed"));
     write_fixture_hex("session_delta.hex",
                       ssg::encode_session_delta(ssg::derive_session_delta(before, after)));
@@ -848,7 +848,7 @@ TEST(canonical_fixtures_decode_to_the_expected_values) {
             read_fixture_bytes("command_result.hex"));
         ASSERT_TRUE(decoded.accepted());
         ASSERT_EQ(decoded.result->error,
-                  ssg::CommandError::stale_revision);
+                  ssg::CommandError::StaleRevision);
         ASSERT_EQ(decoded.result->revision, ssg::Revision{17});
         ASSERT_EQ(decoded.result->message,
                   std::string{"base revision is stale"});
@@ -910,7 +910,7 @@ TEST(viewport_first_visual_column_survives_the_wire) {
     auto snapshot = ssg::assemble_session_snapshot(
         ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{ssg::ClientId{7},
-                                 ssg::InvocationOrigin::in_process},
+                                 ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, view, sections(ssg::Revision{4}, "alpha"));
     auto const decoded =
         ssg::decode_session_snapshot(ssg::encode_session_snapshot(snapshot));
@@ -950,7 +950,7 @@ TEST(find_replace_view_state_round_trips_replacement_through_the_wire) {
     auto snapshot = ssg::assemble_session_snapshot(
         ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{ssg::ClientId{7},
-                                 ssg::InvocationOrigin::in_process},
+                                 ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, client_view(3),
         with_replacement(ssg::Revision{4}, "alpha", "dog"));
     auto const decoded =
@@ -965,13 +965,13 @@ TEST(find_replace_view_state_round_trips_replacement_through_the_wire) {
     auto before = ssg::assemble_session_snapshot(
         ssg::Revision{4}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
-                                 ssg::InvocationOrigin::in_process},
+                                 ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, client_view(1),
         with_replacement(ssg::Revision{4}, "a", ""));
     auto after = ssg::assemble_session_snapshot(
         ssg::Revision{5}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
-                                 ssg::InvocationOrigin::in_process},
+                                 ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, client_view(1),
         with_replacement(ssg::Revision{4}, "a", "dog"));
     auto const delta = ssg::derive_session_delta(before, after);

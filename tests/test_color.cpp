@@ -60,8 +60,8 @@ int ref_nearest(ssg::SrgbColor color, int first, int last) {
 
 TEST(truecolor_is_identity) {
     ssg::SrgbColor const c{37, 200, 9};
-    auto r = ssg::resolve_color(c, ssg::ColorDepth::truecolor);
-    ASSERT_TRUE(r.encoding == ssg::ResolvedColor::Encoding::truecolor);
+    auto r = ssg::resolve_color(c, ssg::ColorDepth::Truecolor);
+    ASSERT_TRUE(r.encoding == ssg::ResolvedColor::Encoding::Truecolor);
     ASSERT_TRUE(r.rgb == c);
 }
 
@@ -88,10 +88,10 @@ TEST(indexed256_matches_reference_over_broad_sample) {
                 ssg::SrgbColor const c{static_cast<std::uint8_t>(r),
                                        static_cast<std::uint8_t>(g),
                                        static_cast<std::uint8_t>(b)};
-                auto got = ssg::resolve_color(c, ssg::ColorDepth::indexed256);
+                auto got = ssg::resolve_color(c, ssg::ColorDepth::Indexed256);
                 int const expected = ref_nearest(c, 16, 255);
                 ASSERT_TRUE(got.encoding ==
-                            ssg::ResolvedColor::Encoding::indexed256);
+                            ssg::ResolvedColor::Encoding::Indexed256);
                 ASSERT_EQ(static_cast<int>(got.index), expected);
                 ASSERT_TRUE(got.rgb == ref_xterm(expected));
             }
@@ -106,10 +106,10 @@ TEST(ansi16_matches_reference_over_broad_sample) {
                 ssg::SrgbColor const c{static_cast<std::uint8_t>(r),
                                        static_cast<std::uint8_t>(g),
                                        static_cast<std::uint8_t>(b)};
-                auto got = ssg::resolve_color(c, ssg::ColorDepth::ansi16);
+                auto got = ssg::resolve_color(c, ssg::ColorDepth::Ansi16);
                 int const expected = ref_nearest(c, 0, 15);
                 ASSERT_TRUE(got.encoding ==
-                            ssg::ResolvedColor::Encoding::ansi16);
+                            ssg::ResolvedColor::Encoding::Ansi16);
                 ASSERT_EQ(static_cast<int>(got.index), expected);
             }
         }
@@ -120,13 +120,13 @@ TEST(exact_swatches_map_to_themselves) {
     // Every cube and gray swatch resolves to its own index at indexed256.
     for (int index = 16; index < 256; ++index) {
         auto const swatch = ssg::xterm256_color(static_cast<std::uint8_t>(index));
-        auto got = ssg::resolve_color(swatch, ssg::ColorDepth::indexed256);
+        auto got = ssg::resolve_color(swatch, ssg::ColorDepth::Indexed256);
         ASSERT_EQ(static_cast<int>(got.index), index);
     }
     // Every base color resolves to its own index at ansi16.
     for (int index = 0; index < 16; ++index) {
         auto const swatch = ssg::xterm256_color(static_cast<std::uint8_t>(index));
-        auto got = ssg::resolve_color(swatch, ssg::ColorDepth::ansi16);
+        auto got = ssg::resolve_color(swatch, ssg::ColorDepth::Ansi16);
         ASSERT_EQ(static_cast<int>(got.index), index);
     }
 }
@@ -136,7 +136,7 @@ TEST(ties_break_to_the_lowest_index) {
     // red(128,0,0)=index 1 (64^2 either way); the lower index 0 must win.
     ssg::SrgbColor const midpoint{64, 0, 0};
     ASSERT_EQ(ref_distance(midpoint, ref_xterm(0)), ref_distance(midpoint, ref_xterm(1)));
-    auto got = ssg::resolve_color(midpoint, ssg::ColorDepth::ansi16);
+    auto got = ssg::resolve_color(midpoint, ssg::ColorDepth::Ansi16);
     ASSERT_EQ(static_cast<int>(got.index), 0);
 }
 

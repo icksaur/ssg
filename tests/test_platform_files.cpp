@@ -105,27 +105,27 @@ TEST(path_policy_decision_table) {
     };
 
     const std::array cases{
-        Case{"src/main.cpp", linux, ssg::LongPathPolicy::legacy, none},
-        Case{"dir\\name", linux, ssg::LongPathPolicy::legacy, none},
-        Case{"", linux, ssg::LongPathPolicy::legacy, empty},
-        Case{"/etc/passwd", linux, ssg::LongPathPolicy::legacy, absolute},
-        Case{"a/../b", linux, ssg::LongPathPolicy::legacy, traversal},
-        Case{std::string{"bad\0name", 8}, linux, ssg::LongPathPolicy::legacy,
-             invalid_character},
-        Case{std::string{"bad\xff", 4}, linux, ssg::LongPathPolicy::legacy,
-             invalid_utf8},
-        Case{"src\\main.cpp", windows, ssg::LongPathPolicy::legacy, none},
-        Case{"CON", windows, ssg::LongPathPolicy::legacy, reserved_name},
-        Case{"aux.txt", windows, ssg::LongPathPolicy::legacy, reserved_name},
-        Case{"COM9.log", windows, ssg::LongPathPolicy::legacy, reserved_name},
-        Case{"COM10.log", windows, ssg::LongPathPolicy::legacy, none},
-        Case{"bad<name", windows, ssg::LongPathPolicy::legacy, invalid_character},
-        Case{"name.", windows, ssg::LongPathPolicy::legacy, trailing_dot_or_space},
-        Case{"name ", windows, ssg::LongPathPolicy::legacy, trailing_dot_or_space},
-        Case{"..\\name", windows, ssg::LongPathPolicy::legacy, traversal},
-        Case{"C:\\name", windows, ssg::LongPathPolicy::legacy, absolute},
-        Case{std::string(260, 'a'), windows, ssg::LongPathPolicy::legacy,
-             component_too_long},
+        Case{"src/main.cpp", Linux, ssg::LongPathPolicy::Legacy, None},
+        Case{"dir\\name", Linux, ssg::LongPathPolicy::Legacy, None},
+        Case{"", Linux, ssg::LongPathPolicy::Legacy, Empty},
+        Case{"/etc/passwd", Linux, ssg::LongPathPolicy::Legacy, Absolute},
+        Case{"a/../b", Linux, ssg::LongPathPolicy::Legacy, Traversal},
+        Case{std::string{"bad\0name", 8}, Linux, ssg::LongPathPolicy::Legacy,
+             InvalidCharacter},
+        Case{std::string{"bad\xff", 4}, Linux, ssg::LongPathPolicy::Legacy,
+             InvalidUtf8},
+        Case{"src\\main.cpp", Windows, ssg::LongPathPolicy::Legacy, None},
+        Case{"CON", Windows, ssg::LongPathPolicy::Legacy, ReservedName},
+        Case{"aux.txt", Windows, ssg::LongPathPolicy::Legacy, ReservedName},
+        Case{"COM9.log", Windows, ssg::LongPathPolicy::Legacy, ReservedName},
+        Case{"COM10.log", Windows, ssg::LongPathPolicy::Legacy, None},
+        Case{"bad<name", Windows, ssg::LongPathPolicy::Legacy, InvalidCharacter},
+        Case{"name.", Windows, ssg::LongPathPolicy::Legacy, TrailingDotOrSpace},
+        Case{"name ", Windows, ssg::LongPathPolicy::Legacy, TrailingDotOrSpace},
+        Case{"..\\name", Windows, ssg::LongPathPolicy::Legacy, Traversal},
+        Case{"C:\\name", Windows, ssg::LongPathPolicy::Legacy, Absolute},
+        Case{std::string(260, 'a'), Windows, ssg::LongPathPolicy::Legacy,
+             ComponentTooLong},
     };
 
     for (const auto& test : cases) {
@@ -138,13 +138,13 @@ TEST(path_policy_decision_table) {
     const std::string long_path = std::string(130, 'a') + "\\" +
                                   std::string(130, 'b');
     ASSERT_EQ(ssg::validate_workspace_relative_path(
-                  long_path, windows, ssg::LongPathPolicy::legacy)
+                  long_path, Windows, ssg::LongPathPolicy::Legacy)
                   .error,
-              path_too_long);
+              PathTooLong);
     ASSERT_EQ(ssg::validate_workspace_relative_path(
-                  long_path, windows, ssg::LongPathPolicy::extended)
+                  long_path, Windows, ssg::LongPathPolicy::Extended)
                   .error,
-              none);
+              None);
 }
 
 TEST(identity_is_stable_across_reopen_and_rename) {

@@ -60,9 +60,9 @@ std::vector<std::string> normalized(const DiffFileView& view) {
                                   : "-";
         const auto new_line =
             change.target_line ? std::to_string(*change.target_line) : "-";
-        const char kind = change.kind == DiffLineKind::modified
+        const char kind = change.kind == DiffLineKind::Modified
                               ? 'M'
-                              : change.kind == DiffLineKind::removed ? 'R' : 'A';
+                              : change.kind == DiffLineKind::Removed ? 'R' : 'A';
         result.push_back(std::string{kind} + " " + old_line + " " + new_line);
     }
     return result;
@@ -158,7 +158,7 @@ TEST(seeded_non_git_events_advance_baseline_and_retain_rename_delete) {
                     .accepted());
     ASSERT_TRUE(model
                     .apply_non_git_event(
-                        {.kind = NonGitDiffEventKind::rename,
+                        {.kind = NonGitDiffEventKind::Rename,
                          .id = DiffFileId{"seed"},
                          .path = "new.txt",
                          .previous_path = std::filesystem::path{"old.txt"},
@@ -173,7 +173,7 @@ TEST(seeded_non_git_events_advance_baseline_and_retain_rename_delete) {
 
     ASSERT_TRUE(model
                     .apply_non_git_event(
-                        {.kind = NonGitDiffEventKind::modify,
+                        {.kind = NonGitDiffEventKind::Modify,
                          .id = DiffFileId{"seed"},
                          .path = "new.txt",
                          .content = fixture("tracked.target") + "tail\n"},
@@ -186,7 +186,7 @@ TEST(seeded_non_git_events_advance_baseline_and_retain_rename_delete) {
 
     ASSERT_TRUE(model
                     .apply_non_git_event(
-                        {.kind = NonGitDiffEventKind::remove,
+                        {.kind = NonGitDiffEventKind::Remove,
                          .id = DiffFileId{"seed"},
                          .path = "new.txt"},
                         Revision{4})
@@ -209,23 +209,23 @@ TEST(stale_invalid_and_over_budget_work_are_failure_atomic) {
 
     ASSERT_EQ(model
                   .apply_non_git_event(
-                      {.kind = NonGitDiffEventKind::modify,
+                      {.kind = NonGitDiffEventKind::Modify,
                        .id = DiffFileId{"seed"},
                        .path = "a.txt",
                        .content = "b\n"},
                       Revision{1})
                   .error,
-              DiffError::stale_revision);
+              DiffError::StaleRevision);
     ASSERT_EQ(model.view_state(), before);
 
     ASSERT_EQ(model
                   .apply_non_git_event(
-                      {.kind = NonGitDiffEventKind::remove,
+                      {.kind = NonGitDiffEventKind::Remove,
                        .id = DiffFileId{"missing"},
                        .path = "missing.txt"},
                       Revision{2})
                   .error,
-              DiffError::unknown_file);
+              DiffError::UnknownFile);
     ASSERT_EQ(model.view_state(), before);
 
     ASSERT_EQ(model
@@ -237,7 +237,7 @@ TEST(stale_invalid_and_over_budget_work_are_failure_atomic) {
                        .index_identity = "index"},
                       Revision{2})
                   .error,
-              DiffError::duplicate_file);
+              DiffError::DuplicateFile);
     ASSERT_EQ(model.view_state(), before);
 
     ASSERT_EQ(model
@@ -248,28 +248,28 @@ TEST(stale_invalid_and_over_budget_work_are_failure_atomic) {
                        .working_content = "b\n"},
                       Revision{2})
                   .error,
-              DiffError::baseline_identity_required);
+              DiffError::BaselineIdentityRequired);
     ASSERT_EQ(model.view_state(), before);
 
     ASSERT_EQ(model
                   .apply_non_git_event(
-                      {.kind = NonGitDiffEventKind::create,
+                      {.kind = NonGitDiffEventKind::Create,
                        .id = DiffFileId{"seed"},
                        .path = "a.txt"},
                       Revision{2})
                   .error,
-              DiffError::content_required);
+              DiffError::ContentRequired);
     ASSERT_EQ(model.view_state(), before);
 
     ASSERT_EQ(model
                   .apply_non_git_event(
-                      {.kind = NonGitDiffEventKind::modify,
+                      {.kind = NonGitDiffEventKind::Modify,
                        .id = DiffFileId{"seed"},
                        .path = "a.txt",
                        .content = "b\nc\nd\ne\nf\n"},
                       Revision{2})
                   .error,
-              DiffError::work_limit_exceeded);
+              DiffError::WorkLimitExceeded);
     ASSERT_EQ(model.view_state(), before);
 }
 
@@ -294,7 +294,7 @@ TEST(delta_replay_and_exact_command_navigation_contract) {
     auto stale = base;
     stale.revision = Revision{99};
     ASSERT_EQ(replay_diff_delta(stale, delta).error,
-              DiffReplayError::stale_revision);
+              DiffReplayError::StaleRevision);
 
     const auto commands = diff_command_set();
     ASSERT_EQ(commands.descriptors().size(), std::size_t{3});

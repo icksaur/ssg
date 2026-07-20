@@ -45,53 +45,53 @@ ThemeSnapshot default_theme() {
     auto role = [&](SemanticRole which, std::uint8_t index) {
         snapshot.semantic_indices[static_cast<std::size_t>(which)] = index;
     };
-    role(SemanticRole::foreground, 1);
-    role(SemanticRole::background, 0);
-    role(SemanticRole::caret, 15);
-    role(SemanticRole::selection, 4);
-    role(SemanticRole::diagnostic_error, 6);
-    role(SemanticRole::diagnostic_warning, 5);
-    role(SemanticRole::diagnostic_info, 9);
-    role(SemanticRole::diagnostic_hint, 8);
-    role(SemanticRole::git_added, 7);
-    role(SemanticRole::git_modified, 10);
-    role(SemanticRole::git_deleted, 6);
-    role(SemanticRole::git_conflict, 11);
-    role(SemanticRole::tree_background, 2);
-    role(SemanticRole::tree_focus, 4);
-    role(SemanticRole::tab_active, 4);
-    role(SemanticRole::tab_inactive, 13);
-    role(SemanticRole::panel_active, 9);
-    role(SemanticRole::panel_inactive, 3);
-    role(SemanticRole::header, 12);
-    role(SemanticRole::footer, 12);
-    role(SemanticRole::status_info, 9);
-    role(SemanticRole::status_warning, 5);
-    role(SemanticRole::status_error, 6);
-    role(SemanticRole::line_number, 3);
-    role(SemanticRole::active_line_number, 14);
-    role(SemanticRole::search_match, 10);
-    role(SemanticRole::prompt, 8);
-    role(SemanticRole::scrollbar_track, 2);
-    role(SemanticRole::scrollbar_thumb, 13);
-    role(SemanticRole::diff_added, 7);
-    role(SemanticRole::diff_removed, 6);
-    role(SemanticRole::diff_modified, 10);
+    role(SemanticRole::Foreground, 1);
+    role(SemanticRole::Background, 0);
+    role(SemanticRole::Caret, 15);
+    role(SemanticRole::Selection, 4);
+    role(SemanticRole::DiagnosticError, 6);
+    role(SemanticRole::DiagnosticWarning, 5);
+    role(SemanticRole::DiagnosticInfo, 9);
+    role(SemanticRole::DiagnosticHint, 8);
+    role(SemanticRole::GitAdded, 7);
+    role(SemanticRole::GitModified, 10);
+    role(SemanticRole::GitDeleted, 6);
+    role(SemanticRole::GitConflict, 11);
+    role(SemanticRole::TreeBackground, 2);
+    role(SemanticRole::TreeFocus, 4);
+    role(SemanticRole::TabActive, 4);
+    role(SemanticRole::TabInactive, 13);
+    role(SemanticRole::PanelActive, 9);
+    role(SemanticRole::PanelInactive, 3);
+    role(SemanticRole::Header, 12);
+    role(SemanticRole::Footer, 12);
+    role(SemanticRole::StatusInfo, 9);
+    role(SemanticRole::StatusWarning, 5);
+    role(SemanticRole::StatusError, 6);
+    role(SemanticRole::LineNumber, 3);
+    role(SemanticRole::ActiveLineNumber, 14);
+    role(SemanticRole::SearchMatch, 10);
+    role(SemanticRole::Prompt, 8);
+    role(SemanticRole::ScrollbarTrack, 2);
+    role(SemanticRole::ScrollbarThumb, 13);
+    role(SemanticRole::DiffAdded, 7);
+    role(SemanticRole::DiffRemoved, 6);
+    role(SemanticRole::DiffModified, 10);
 
     auto syntax = [&](SyntaxScope scope, std::uint8_t index) {
         snapshot.syntax_indices[static_cast<std::size_t>(scope)] = index;
     };
-    syntax(SyntaxScope::plain_text, 1);
-    syntax(SyntaxScope::comment, 3);
-    syntax(SyntaxScope::keyword, 8);
-    syntax(SyntaxScope::string, 7);
-    syntax(SyntaxScope::number, 10);
-    syntax(SyntaxScope::type, 9);
-    syntax(SyntaxScope::function, 4);
-    syntax(SyntaxScope::variable, 1);
-    syntax(SyntaxScope::operator_token, 5);
-    syntax(SyntaxScope::punctuation, 14);
-    syntax(SyntaxScope::invalid, 6);
+    syntax(SyntaxScope::PlainText, 1);
+    syntax(SyntaxScope::Comment, 3);
+    syntax(SyntaxScope::Keyword, 8);
+    syntax(SyntaxScope::String, 7);
+    syntax(SyntaxScope::Number, 10);
+    syntax(SyntaxScope::Type, 9);
+    syntax(SyntaxScope::Function, 4);
+    syntax(SyntaxScope::Variable, 1);
+    syntax(SyntaxScope::OperatorToken, 5);
+    syntax(SyntaxScope::Punctuation, 14);
+    syntax(SyntaxScope::Invalid, 6);
     return snapshot;
 }
 
@@ -319,7 +319,7 @@ TabLifecycleResult EditorRuntime::Impl::close(
     const TabState& tab, std::chrono::milliseconds durability_timeout) {
     if (!tab.document) return {};
     auto state = workspace.state(*tab.document);
-    if (!state) return {TabError::not_found, "tab document does not exist", std::nullopt, false};
+    if (!state) return {TabError::NotFound, "tab document does not exist", std::nullopt, false};
     std::optional<JournalDocument> document;
     if (auto const* current = active_document(); current != nullptr) {
         document = JournalDocument{state->key, current->mode(), state->dirty,
@@ -327,17 +327,17 @@ TabLifecycleResult EditorRuntime::Impl::close(
     }
     auto closed = recovery.close_document(document, scratch, durability_timeout);
     if (!closed.accepted()) {
-        return {TabError::lifecycle_failed, closed.error->message, std::nullopt, false};
+        return {TabError::LifecycleFailed, closed.error->message, std::nullopt, false};
     }
     if (document) scratch.remove_document(state->key);
-    return {TabError::none, {}, closed.compensation, scratch.wait_until_durable(durability_timeout)};
+    return {TabError::None, {}, closed.compensation, scratch.wait_until_durable(durability_timeout)};
 }
 
 TabLifecycleResult EditorRuntime::Impl::reopen(
     const TabState&, const RecoveryRecordId& compensation) {
     auto restored = workspace.restore(compensation);
     if (!restored.accepted()) {
-        return {TabError::lifecycle_failed, workspace_message(restored), std::nullopt, false};
+        return {TabError::LifecycleFailed, workspace_message(restored), std::nullopt, false};
     }
     return {};
 }
@@ -347,7 +347,7 @@ WorkspaceSnapshot EditorRuntime::Impl::snapshot(Revision revision) const {
     result.revision = revision;
     for (auto const id : workspace.documents()) {
         auto state = workspace.state(id);
-        if (!state || state->key.kind() != JournalDocumentKeyKind::saved) continue;
+        if (!state || state->key.kind() != JournalDocumentKeyKind::Saved) continue;
         result.files.push_back({state->key.saved_path(), workspace.document(id).snapshot().text});
     }
     std::filesystem::recursive_directory_iterator it{root};
@@ -399,12 +399,12 @@ WorkspaceApplyResult EditorRuntime::Impl::apply(
         std::string message;
         auto path = workspace_change_path(root, change.path, message);
         if (!path) {
-            return {FindReplaceError::workspace_rejected,
+            return {FindReplaceError::WorkspaceRejected,
                     preview.source_revision, std::move(message)};
         }
         if (path_contains(scratch_root, *path) ||
             path_contains(recovery_root, *path)) {
-            return {FindReplaceError::workspace_rejected,
+            return {FindReplaceError::WorkspaceRejected,
                     preview.source_revision,
                     "workspace replacement path targets runtime state"};
         }
@@ -414,7 +414,7 @@ WorkspaceApplyResult EditorRuntime::Impl::apply(
         bool found_open_document = false;
         for (auto const id : workspace.documents()) {
             auto state = workspace.state(id);
-            if (!state || state->key.kind() != JournalDocumentKeyKind::saved ||
+            if (!state || state->key.kind() != JournalDocumentKeyKind::Saved ||
                 state->key.saved_path() != normalized) {
                 continue;
             }
@@ -426,7 +426,7 @@ WorkspaceApplyResult EditorRuntime::Impl::apply(
             current = read_file_text(*path);
         }
         if (current != change.before) {
-            return {FindReplaceError::stale_revision, preview.source_revision,
+            return {FindReplaceError::StaleRevision, preview.source_revision,
                     "workspace replacement preview is stale"};
         }
         paths.push_back(std::move(*path));
@@ -434,40 +434,40 @@ WorkspaceApplyResult EditorRuntime::Impl::apply(
     }
     WorkspaceRecoveryRecord record{preview.source_revision, Revision{preview.source_revision.value() + 1}, preview.changes};
     if (!recovery_sink.store(record)) {
-        return {FindReplaceError::recovery_rejected, preview.source_revision, "workspace replacement recovery rejected"};
+        return {FindReplaceError::RecoveryRejected, preview.source_revision, "workspace replacement recovery rejected"};
     }
     for (std::size_t index = 0; index < preview.changes.size(); ++index) {
         auto const& change = preview.changes[index];
         std::ofstream output{paths[index], std::ios::binary | std::ios::trunc};
-        if (!output) return {FindReplaceError::workspace_rejected, preview.source_revision, "failed to write workspace file"};
+        if (!output) return {FindReplaceError::WorkspaceRejected, preview.source_revision, "failed to write workspace file"};
         output << change.after;
     }
     for (std::size_t index = 0; index < preview.changes.size(); ++index) {
         auto const& change = preview.changes[index];
         for (auto const id : workspace.documents()) {
             auto state = workspace.state(id);
-            if (!state || state->key.kind() != JournalDocumentKeyKind::saved ||
+            if (!state || state->key.kind() != JournalDocumentKeyKind::Saved ||
                 state->key.saved_path() != normalized_paths[index]) {
                 continue;
             }
             auto reloaded = workspace.reload(id);
             if (!reloaded.accepted()) {
-                return {FindReplaceError::workspace_rejected,
+                return {FindReplaceError::WorkspaceRejected,
                         preview.source_revision, workspace_message(reloaded)};
             }
             (void)update_tabs_for(id);
         }
     }
-    return {FindReplaceError::none, record.applied_revision, {}};
+    return {FindReplaceError::None, record.applied_revision, {}};
 }
 
 WorkspaceApplyResult EditorRuntime::Impl::recover(const WorkspaceRecoveryRecord& record) {
     for (auto const& change : record.changes) {
         std::ofstream output{root / change.path, std::ios::binary | std::ios::trunc};
-        if (!output) return {FindReplaceError::workspace_rejected, record.applied_revision, "failed to recover workspace file"};
+        if (!output) return {FindReplaceError::WorkspaceRejected, record.applied_revision, "failed to recover workspace file"};
         output << change.before;
     }
-    return {FindReplaceError::none, record.applied_revision, {}};
+    return {FindReplaceError::None, record.applied_revision, {}};
 }
 
 bool EditorRuntime::Impl::store(const WorkspaceRecoveryRecord&) { return true; }
@@ -477,7 +477,7 @@ std::optional<LspDocumentSnapshot> EditorRuntime::Impl::snapshot(std::string_vie
     if (!path) return std::nullopt;
     for (auto const id : workspace.documents()) {
         auto state = workspace.state(id);
-        if (!state || state->key.kind() != JournalDocumentKeyKind::saved) continue;
+        if (!state || state->key.kind() != JournalDocumentKeyKind::Saved) continue;
         if (uri_from_path(root / state->key.saved_path()) == uri) {
             return LspDocumentSnapshot{std::string{uri}, workspace.document(id).revision(), 1,
                                        workspace.document(id).snapshot().text};
@@ -490,29 +490,29 @@ LspWorkspaceDocumentWriteResult EditorRuntime::Impl::apply(
     std::string uri, Revision expected_revision, std::string text) {
     for (auto const id : workspace.documents()) {
         auto state = workspace.state(id);
-        if (!state || state->key.kind() != JournalDocumentKeyKind::saved) continue;
+        if (!state || state->key.kind() != JournalDocumentKeyKind::Saved) continue;
         if (uri_from_path(root / state->key.saved_path()) != uri) continue;
         auto& document = const_cast<Document&>(workspace.document(id));
         if (document.revision() != expected_revision) {
-            return {document.revision(), LspWorkspaceDocumentError::stale_revision, "document revision is stale"};
+            return {document.revision(), LspWorkspaceDocumentError::StaleRevision, "document revision is stale"};
         }
         auto snapshot = document.snapshot();
         auto result = document.apply({snapshot.revision, {{ByteOffset{0}, snapshot.text.size(), std::move(text)}}});
-        if (!result.accepted()) return {document.revision(), LspWorkspaceDocumentError::write_failed, result.message};
-        return {result.revision, LspWorkspaceDocumentError::none, {}};
+        if (!result.accepted()) return {document.revision(), LspWorkspaceDocumentError::WriteFailed, result.message};
+        return {result.revision, LspWorkspaceDocumentError::None, {}};
     }
-    return {Revision{0}, LspWorkspaceDocumentError::unknown_document, "document URI is not open"};
+    return {Revision{0}, LspWorkspaceDocumentError::UnknownDocument, "document URI is not open"};
 }
 
 LspWorkspaceFileResult EditorRuntime::Impl::snapshot(std::string_view uri, LspWorkspaceFileNode& node) const {
     auto path = path_from_uri(uri);
-    if (!path) return {LspWorkspaceFileError::not_found, "URI is not a file URI"};
+    if (!path) return {LspWorkspaceFileError::NotFound, "URI is not a file URI"};
     if (!std::filesystem::exists(*path)) {
-        node.kind = LspWorkspaceFileNodeKind::missing;
+        node.kind = LspWorkspaceFileNodeKind::Missing;
     } else if (std::filesystem::is_directory(*path)) {
-        node.kind = LspWorkspaceFileNodeKind::directory;
+        node.kind = LspWorkspaceFileNodeKind::Directory;
     } else {
-        node.kind = LspWorkspaceFileNodeKind::file;
+        node.kind = LspWorkspaceFileNodeKind::File;
         node.content = read_file_text(*path);
     }
     return {};
@@ -520,17 +520,17 @@ LspWorkspaceFileResult EditorRuntime::Impl::snapshot(std::string_view uri, LspWo
 
 LspWorkspaceFileResult EditorRuntime::Impl::create_file(std::string uri, bool overwrite) {
     auto path = path_from_uri(uri);
-    if (!path) return {LspWorkspaceFileError::io_error, "URI is not a file URI"};
-    if (std::filesystem::exists(*path) && !overwrite) return {LspWorkspaceFileError::already_exists, "file already exists"};
+    if (!path) return {LspWorkspaceFileError::IoError, "URI is not a file URI"};
+    if (std::filesystem::exists(*path) && !overwrite) return {LspWorkspaceFileError::AlreadyExists, "file already exists"};
     std::ofstream output{*path, std::ios::binary | std::ios::trunc};
-    return output ? LspWorkspaceFileResult{} : LspWorkspaceFileResult{LspWorkspaceFileError::io_error, "failed to create file"};
+    return output ? LspWorkspaceFileResult{} : LspWorkspaceFileResult{LspWorkspaceFileError::IoError, "failed to create file"};
 }
 
 LspWorkspaceFileResult EditorRuntime::Impl::write_file(std::string uri, std::string content) {
     auto path = path_from_uri(uri);
-    if (!path) return {LspWorkspaceFileError::io_error, "URI is not a file URI"};
+    if (!path) return {LspWorkspaceFileError::IoError, "URI is not a file URI"};
     std::ofstream output{*path, std::ios::binary | std::ios::trunc};
-    if (!output) return {LspWorkspaceFileError::io_error, "failed to write file"};
+    if (!output) return {LspWorkspaceFileError::IoError, "failed to write file"};
     output << content;
     return {};
 }
@@ -538,34 +538,34 @@ LspWorkspaceFileResult EditorRuntime::Impl::write_file(std::string uri, std::str
 LspWorkspaceFileResult EditorRuntime::Impl::rename_path(std::string old_uri, std::string new_uri, bool overwrite) {
     auto old_path = path_from_uri(old_uri);
     auto new_path = path_from_uri(new_uri);
-    if (!old_path || !new_path) return {LspWorkspaceFileError::io_error, "URI is not a file URI"};
-    if (std::filesystem::exists(*new_path) && !overwrite) return {LspWorkspaceFileError::already_exists, "destination exists"};
+    if (!old_path || !new_path) return {LspWorkspaceFileError::IoError, "URI is not a file URI"};
+    if (std::filesystem::exists(*new_path) && !overwrite) return {LspWorkspaceFileError::AlreadyExists, "destination exists"};
     std::error_code code;
     std::filesystem::rename(*old_path, *new_path, code);
-    return code ? LspWorkspaceFileResult{LspWorkspaceFileError::io_error, code.message()} : LspWorkspaceFileResult{};
+    return code ? LspWorkspaceFileResult{LspWorkspaceFileError::IoError, code.message()} : LspWorkspaceFileResult{};
 }
 
 LspWorkspaceFileResult EditorRuntime::Impl::delete_path(std::string uri, bool recursive) {
     auto path = path_from_uri(uri);
-    if (!path) return {LspWorkspaceFileError::io_error, "URI is not a file URI"};
+    if (!path) return {LspWorkspaceFileError::IoError, "URI is not a file URI"};
     std::error_code code;
     if (recursive) std::filesystem::remove_all(*path, code);
     else std::filesystem::remove(*path, code);
-    return code ? LspWorkspaceFileResult{LspWorkspaceFileError::io_error, code.message()} : LspWorkspaceFileResult{};
+    return code ? LspWorkspaceFileResult{LspWorkspaceFileError::IoError, code.message()} : LspWorkspaceFileResult{};
 }
 
 LspWorkspaceFileResult EditorRuntime::Impl::restore_path(std::string uri, const LspWorkspaceFileNode& node) {
     auto path = path_from_uri(uri);
-    if (!path) return {LspWorkspaceFileError::io_error, "URI is not a file URI"};
-    if (node.kind == LspWorkspaceFileNodeKind::missing) {
+    if (!path) return {LspWorkspaceFileError::IoError, "URI is not a file URI"};
+    if (node.kind == LspWorkspaceFileNodeKind::Missing) {
         std::error_code code;
         std::filesystem::remove_all(*path, code);
-        return code ? LspWorkspaceFileResult{LspWorkspaceFileError::io_error, code.message()} : LspWorkspaceFileResult{};
+        return code ? LspWorkspaceFileResult{LspWorkspaceFileError::IoError, code.message()} : LspWorkspaceFileResult{};
     }
-    if (node.kind == LspWorkspaceFileNodeKind::directory) {
+    if (node.kind == LspWorkspaceFileNodeKind::Directory) {
         std::error_code code;
         std::filesystem::create_directories(*path, code);
-        return code ? LspWorkspaceFileResult{LspWorkspaceFileError::io_error, code.message()} : LspWorkspaceFileResult{};
+        return code ? LspWorkspaceFileResult{LspWorkspaceFileError::IoError, code.message()} : LspWorkspaceFileResult{};
     }
     return write_file(std::move(uri), node.content);
 }
@@ -666,9 +666,9 @@ void EditorRuntime::Impl::refresh_tree() {
 }
 
 void EditorRuntime::Impl::reconcile_prompt_focus() {
-    if (prompt.active() && shell.focus() != FocusTarget::prompt) {
+    if (prompt.active() && shell.focus() != FocusTarget::Prompt) {
         shell.enter_prompt_focus();
-    } else if (!prompt.active() && shell.focus() == FocusTarget::prompt) {
+    } else if (!prompt.active() && shell.focus() == FocusTarget::Prompt) {
         shell.exit_prompt_focus();
     }
 }
@@ -688,8 +688,8 @@ void EditorRuntime::Impl::reconcile_find_document() {
     // close the controller and dismiss its prompt so no stale match is navigable.
     find_replace.close();
     if (auto const& request = prompt.request();
-        request && (request->kind == PromptKind::find ||
-                    request->kind == PromptKind::replace)) {
+        request && (request->kind == PromptKind::Find ||
+                    request->kind == PromptKind::Replace)) {
         (void)prompt.cancel();
     }
     find_document_id.reset();

@@ -17,30 +17,30 @@ TEST(five_scope_resolution_uses_most_specific_present_value) {
         std::uint32_t width;
     };
     constexpr std::array cases{
-        Case{SettingScope::user, 2},
-        Case{SettingScope::workspace, 3},
-        Case{SettingScope::language, 6},
-        Case{SettingScope::document, 8},
+        Case{SettingScope::User, 2},
+        Case{SettingScope::Workspace, 3},
+        Case{SettingScope::Language, 6},
+        Case{SettingScope::Document, 8},
     };
 
-    auto effective = settings.resolve(SettingKey::indent_width);
+    auto effective = settings.resolve(SettingKey::IndentWidth);
     ASSERT_EQ(std::get<std::uint32_t>(effective.value), 4u);
-    ASSERT_EQ(effective.source, SettingScope::defaults);
+    ASSERT_EQ(effective.source, SettingScope::Defaults);
     for (const auto& entry : cases) {
         const auto result =
-            settings.set(entry.scope, SettingKey::indent_width, SettingValue{entry.width});
+            settings.set(entry.scope, SettingKey::IndentWidth, SettingValue{entry.width});
         ASSERT_TRUE(result.accepted());
-        effective = settings.resolve(SettingKey::indent_width);
+        effective = settings.resolve(SettingKey::IndentWidth);
         ASSERT_EQ(std::get<std::uint32_t>(effective.value), entry.width);
         ASSERT_EQ(effective.source, entry.scope);
     }
 
     for (auto it = cases.rbegin(); it != cases.rend(); ++it) {
-        ASSERT_TRUE(settings.reset(it->scope, SettingKey::indent_width).accepted());
+        ASSERT_TRUE(settings.reset(it->scope, SettingKey::IndentWidth).accepted());
         const auto expected_scope =
-            it + 1 == cases.rend() ? SettingScope::defaults : (it + 1)->scope;
+            it + 1 == cases.rend() ? SettingScope::Defaults : (it + 1)->scope;
         const auto expected_width = it + 1 == cases.rend() ? 4u : (it + 1)->width;
-        effective = settings.resolve(SettingKey::indent_width);
+        effective = settings.resolve(SettingKey::IndentWidth);
         ASSERT_EQ(std::get<std::uint32_t>(effective.value), expected_width);
         ASSERT_EQ(effective.source, expected_scope);
     }
@@ -51,114 +51,114 @@ TEST(invalid_values_and_keys_are_failure_atomic) {
     const auto before = settings.view_state();
 
     const auto wrong_type =
-        settings.set(SettingScope::user, SettingKey::indent_width, SettingValue{true});
+        settings.set(SettingScope::User, SettingKey::IndentWidth, SettingValue{true});
     ASSERT_FALSE(wrong_type.accepted());
-    ASSERT_EQ(wrong_type.error->code, ssg::SettingErrorCode::wrong_value_type);
+    ASSERT_EQ(wrong_type.error->code, ssg::SettingErrorCode::WrongValueType);
     ASSERT_EQ(settings.view_state(), before);
 
     const auto unknown = settings.set(
-        SettingScope::user, static_cast<SettingKey>(255), SettingValue{true});
+        SettingScope::User, static_cast<SettingKey>(255), SettingValue{true});
     ASSERT_FALSE(unknown.accepted());
-    ASSERT_EQ(unknown.error->code, ssg::SettingErrorCode::unknown_key);
+    ASSERT_EQ(unknown.error->code, ssg::SettingErrorCode::UnknownKey);
     ASSERT_EQ(settings.view_state(), before);
 
     const auto out_of_range = settings.set(
-        SettingScope::user, SettingKey::indent_width, SettingValue{std::uint32_t{17}});
+        SettingScope::User, SettingKey::IndentWidth, SettingValue{std::uint32_t{17}});
     ASSERT_FALSE(out_of_range.accepted());
-    ASSERT_EQ(out_of_range.error->code, ssg::SettingErrorCode::out_of_range);
+    ASSERT_EQ(out_of_range.error->code, ssg::SettingErrorCode::OutOfRange);
     ASSERT_EQ(settings.view_state(), before);
 
     const auto empty_identity =
-        settings.set(SettingScope::workspace, SettingKey::theme, SettingValue{std::string{}});
+        settings.set(SettingScope::Workspace, SettingKey::Theme, SettingValue{std::string{}});
     ASSERT_FALSE(empty_identity.accepted());
     ASSERT_EQ(settings.view_state(), before);
 
     const auto mixed = settings.set(
-        SettingScope::document, SettingKey::line_ending,
-        SettingValue{ssg::LineEnding::mixed});
+        SettingScope::Document, SettingKey::LineEnding,
+        SettingValue{ssg::LineEnding::Mixed});
     ASSERT_FALSE(mixed.accepted());
     ASSERT_EQ(settings.view_state(), before);
 
     const auto unknown_ending = settings.set(
-        SettingScope::document, SettingKey::line_ending,
+        SettingScope::Document, SettingKey::LineEnding,
         SettingValue{static_cast<ssg::LineEnding>(255)});
     ASSERT_FALSE(unknown_ending.accepted());
     ASSERT_EQ(settings.view_state(), before);
 
     const auto immutable_default =
-        settings.set(SettingScope::defaults, SettingKey::word_wrap, SettingValue{true});
+        settings.set(SettingScope::Defaults, SettingKey::WordWrap, SettingValue{true});
     ASSERT_FALSE(immutable_default.accepted());
-    ASSERT_EQ(immutable_default.error->code, ssg::SettingErrorCode::immutable_scope);
+    ASSERT_EQ(immutable_default.error->code, ssg::SettingErrorCode::ImmutableScope);
     ASSERT_EQ(settings.view_state(), before);
 }
 
 TEST(set_and_reset_compensations_restore_scoped_and_effective_state) {
     ssg::SettingsModel settings;
     ASSERT_TRUE(settings
-                    .set(SettingScope::user, SettingKey::theme,
+                    .set(SettingScope::User, SettingKey::Theme,
                          SettingValue{std::string{"light"}})
                     .accepted());
 
     const auto set_result =
-        settings.set(SettingScope::workspace, SettingKey::theme,
+        settings.set(SettingScope::Workspace, SettingKey::Theme,
                      SettingValue{std::string{"dark"}});
     ASSERT_TRUE(set_result.accepted());
-    auto effective = settings.resolve(SettingKey::theme);
+    auto effective = settings.resolve(SettingKey::Theme);
     ASSERT_EQ(std::get<std::string>(effective.value), "dark");
     ASSERT_TRUE(settings.apply(set_result.compensation).accepted());
-    effective = settings.resolve(SettingKey::theme);
+    effective = settings.resolve(SettingKey::Theme);
     ASSERT_EQ(std::get<std::string>(effective.value), "light");
-    ASSERT_FALSE(settings.scoped_value(SettingScope::workspace, SettingKey::theme).has_value());
+    ASSERT_FALSE(settings.scoped_value(SettingScope::Workspace, SettingKey::Theme).has_value());
 
     ASSERT_TRUE(settings
-                    .set(SettingScope::workspace, SettingKey::theme,
+                    .set(SettingScope::Workspace, SettingKey::Theme,
                          SettingValue{std::string{"dark"}})
                     .accepted());
-    const auto reset_result = settings.reset(SettingScope::workspace, SettingKey::theme);
+    const auto reset_result = settings.reset(SettingScope::Workspace, SettingKey::Theme);
     ASSERT_TRUE(reset_result.accepted());
-    effective = settings.resolve(SettingKey::theme);
+    effective = settings.resolve(SettingKey::Theme);
     ASSERT_EQ(std::get<std::string>(effective.value), "light");
     ASSERT_TRUE(settings.apply(reset_result.compensation).accepted());
-    effective = settings.resolve(SettingKey::theme);
+    effective = settings.resolve(SettingKey::Theme);
     ASSERT_EQ(std::get<std::string>(effective.value), "dark");
 }
 
 TEST(stale_compensation_does_not_overwrite_a_newer_change) {
     ssg::SettingsModel settings;
     const auto first =
-        settings.set(SettingScope::user, SettingKey::word_wrap, SettingValue{true});
+        settings.set(SettingScope::User, SettingKey::WordWrap, SettingValue{true});
     ASSERT_TRUE(first.accepted());
     ASSERT_TRUE(
-        settings.set(SettingScope::user, SettingKey::word_wrap, SettingValue{false}).accepted());
+        settings.set(SettingScope::User, SettingKey::WordWrap, SettingValue{false}).accepted());
 
     const auto stale = settings.apply(first.compensation);
     ASSERT_FALSE(stale.accepted());
-    ASSERT_EQ(stale.error->code, ssg::SettingErrorCode::stale_compensation);
-    auto effective = settings.resolve(SettingKey::word_wrap);
+    ASSERT_EQ(stale.error->code, ssg::SettingErrorCode::StaleCompensation);
+    auto effective = settings.resolve(SettingKey::WordWrap);
     ASSERT_EQ(std::get<bool>(effective.value), false);
 
     const auto aba =
-        settings.set(SettingScope::user, SettingKey::word_wrap, SettingValue{true});
+        settings.set(SettingScope::User, SettingKey::WordWrap, SettingValue{true});
     ASSERT_TRUE(aba.accepted());
     ASSERT_TRUE(
-        settings.set(SettingScope::user, SettingKey::word_wrap, SettingValue{false}).accepted());
+        settings.set(SettingScope::User, SettingKey::WordWrap, SettingValue{false}).accepted());
     ASSERT_TRUE(
-        settings.set(SettingScope::user, SettingKey::word_wrap, SettingValue{true}).accepted());
+        settings.set(SettingScope::User, SettingKey::WordWrap, SettingValue{true}).accepted());
     ASSERT_FALSE(settings.apply(aba.compensation).accepted());
-    effective = settings.resolve(SettingKey::word_wrap);
+    effective = settings.resolve(SettingKey::WordWrap);
     ASSERT_EQ(std::get<bool>(effective.value), true);
 
     ssg::SettingsModel reloaded;
     const auto before_reload =
-        reloaded.set(SettingScope::user, SettingKey::word_wrap, SettingValue{true});
+        reloaded.set(SettingScope::User, SettingKey::WordWrap, SettingValue{true});
     ASSERT_TRUE(before_reload.accepted());
-    const auto serialized = reloaded.export_scope(SettingScope::user);
-    ASSERT_TRUE(reloaded.import_scope(SettingScope::user, serialized).ok);
+    const auto serialized = reloaded.export_scope(SettingScope::User);
+    ASSERT_TRUE(reloaded.import_scope(SettingScope::User, serialized).ok);
     ASSERT_TRUE(
-        reloaded.set(SettingScope::user, SettingKey::word_wrap, SettingValue{true}).accepted());
+        reloaded.set(SettingScope::User, SettingKey::WordWrap, SettingValue{true}).accepted());
     const auto pre_reload_compensation = reloaded.apply(before_reload.compensation);
     ASSERT_FALSE(pre_reload_compensation.accepted());
-    effective = reloaded.resolve(SettingKey::word_wrap);
+    effective = reloaded.resolve(SettingKey::WordWrap);
     ASSERT_EQ(std::get<bool>(effective.value), true);
 }
 
@@ -166,12 +166,12 @@ TEST(view_state_delta_and_command_set_cover_all_owned_settings_ids) {
     ssg::SettingsModel settings;
     const auto before = settings.view_state();
     const auto changed =
-        settings.set(SettingScope::language, SettingKey::auto_indent, SettingValue{false});
+        settings.set(SettingScope::Language, SettingKey::AutoIndent, SettingValue{false});
     ASSERT_TRUE(changed.accepted());
-    ASSERT_EQ(changed.delta->key, SettingKey::auto_indent);
-    ASSERT_EQ(changed.delta->before, before.find(SettingKey::auto_indent)->effective);
+    ASSERT_EQ(changed.delta->key, SettingKey::AutoIndent);
+    ASSERT_EQ(changed.delta->before, before.find(SettingKey::AutoIndent)->effective);
     const auto after = settings.view_state();
-    ASSERT_EQ(changed.delta->after, after.find(SettingKey::auto_indent)->effective);
+    ASSERT_EQ(changed.delta->after, after.find(SettingKey::AutoIndent)->effective);
 
     constexpr ssg::SettingsCommandSet commands;
     constexpr std::array expected{

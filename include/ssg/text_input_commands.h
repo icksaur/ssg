@@ -13,12 +13,12 @@
 namespace ssg {
 
 enum class TextInputCommand : std::uint8_t {
-    insert,
-    newline,
-    delete_backward,
-    delete_forward,
-    delete_word_backward,
-    delete_word_forward,
+    Insert,
+    Newline,
+    DeleteBackward,
+    DeleteForward,
+    DeleteWordBackward,
+    DeleteWordForward,
 };
 
 struct TextInputCommandDescriptor {
@@ -61,13 +61,13 @@ struct TextInputArguments {
 };
 
 enum class TextInputError : std::uint8_t {
-    none,
-    read_only,
-    diff,
-    invalid_selection,
-    invalid_utf8,
-    invalid_settings,
-    unknown_command,
+    None,
+    ReadOnly,
+    Diff,
+    InvalidSelection,
+    InvalidUtf8,
+    InvalidSettings,
+    UnknownCommand,
 };
 
 struct TextInputResult {
@@ -78,7 +78,7 @@ struct TextInputResult {
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == TextInputError::none;
+        return error == TextInputError::None;
     }
 };
 

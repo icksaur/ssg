@@ -18,7 +18,7 @@ bool valid_request(const PromptRequest& request) {
         return false;
     }
     const std::size_t expected_inputs =
-        request.kind == PromptKind::replace ? 2U : 1U;
+        request.kind == PromptKind::Replace ? 2U : 1U;
     if (request.inputs.size() != expected_inputs) {
         return false;
     }
@@ -29,8 +29,8 @@ bool valid_request(const PromptRequest& request) {
     }
 
     const bool has_options =
-        request.kind == PromptKind::find ||
-        request.kind == PromptKind::replace;
+        request.kind == PromptKind::Find ||
+        request.kind == PromptKind::Replace;
     if (has_options != request.match_count.has_value()) {
         return false;
     }
@@ -52,19 +52,19 @@ bool valid_request(const PromptRequest& request) {
 
 std::uint8_t prompt_row_count(PromptKind kind) noexcept {
     switch (kind) {
-    case PromptKind::find: return 2;
-    case PromptKind::replace: return 3;
-    case PromptKind::path:
-    case PromptKind::settings:
-    case PromptKind::command_argument: return 1;
-    case PromptKind::palette: return 0;  // Query renders in the header; results project into the pane.
+    case PromptKind::Find: return 2;
+    case PromptKind::Replace: return 3;
+    case PromptKind::Path:
+    case PromptKind::Settings:
+    case PromptKind::CommandArgument: return 1;
+    case PromptKind::Palette: return 0;  // Query renders in the header; results project into the pane.
     }
     return 1;
 }
 
 PromptCommandResult PromptSurface::open(PromptRequest request) {
     if (!valid_request(request)) {
-        return failure(PromptErrorCode::invalid_request,
+        return failure(PromptErrorCode::InvalidRequest,
                        "prompt request does not match its kind");
     }
     request_ = std::move(request);
@@ -73,7 +73,7 @@ PromptCommandResult PromptSurface::open(PromptRequest request) {
 
 PromptCommandResult PromptSurface::submit() {
     if (!request_) {
-        return failure(PromptErrorCode::no_active_prompt,
+        return failure(PromptErrorCode::NoActivePrompt,
                        "no active prompt to submit");
     }
     PromptSubmission submission;
@@ -90,7 +90,7 @@ PromptCommandResult PromptSurface::submit() {
 
 PromptCommandResult PromptSurface::cancel() {
     if (!request_) {
-        return failure(PromptErrorCode::no_active_prompt,
+        return failure(PromptErrorCode::NoActivePrompt,
                        "no active prompt to cancel");
     }
     request_.reset();
@@ -100,14 +100,14 @@ PromptCommandResult PromptSurface::cancel() {
 PromptLayoutResult compute_prompt_layout(const PromptSurface& surface,
                                          Rect reservation) {
     if (!surface.request()) {
-        return {PromptError{PromptErrorCode::no_active_prompt,
+        return {PromptError{PromptErrorCode::NoActivePrompt,
                             "no active prompt to lay out"},
                 std::nullopt};
     }
     const auto& request = *surface.request();
     if (reservation.width <= 0 || reservation.height !=
             static_cast<int>(prompt_row_count(request.kind))) {
-        return {PromptError{PromptErrorCode::invalid_reservation,
+        return {PromptError{PromptErrorCode::InvalidReservation,
                             "prompt reservation does not match its kind"},
                 std::nullopt};
     }
@@ -116,7 +116,7 @@ PromptLayoutResult compute_prompt_layout(const PromptSurface& surface,
     for (std::size_t i = 0; i < request.inputs.size(); ++i) {
         const auto& input = request.inputs[i];
         view.controls.push_back(
-            {PromptControlKind::input, input.id, input.accessible_label,
+            {PromptControlKind::Input, input.id, input.accessible_label,
              input.value, false,
              Rect{reservation.x, reservation.y + static_cast<int>(i),
                   reservation.width, 1}});
@@ -127,24 +127,24 @@ PromptLayoutResult compute_prompt_layout(const PromptSurface& surface,
         int x = reservation.x;
         for (const auto& toggle : request.toggles) {
             if (toggle.width > reservation.right() - x) {
-                return {PromptError{PromptErrorCode::invalid_reservation,
+                return {PromptError{PromptErrorCode::InvalidReservation,
                                     "prompt controls exceed reservation width"},
                         std::nullopt};
             }
             view.controls.push_back(
-                {PromptControlKind::toggle, toggle.id,
+                {PromptControlKind::Toggle, toggle.id,
                  toggle.accessible_label, {}, toggle.value,
                  Rect{x, options_y, toggle.width, 1}});
             x += toggle.width;
         }
         const int remaining = reservation.right() - x;
         if (remaining <= 0) {
-            return {PromptError{PromptErrorCode::invalid_reservation,
+            return {PromptError{PromptErrorCode::InvalidReservation,
                                 "prompt count has no visible width"},
                     std::nullopt};
         }
         view.controls.push_back(
-            {PromptControlKind::count, request.match_count->id,
+            {PromptControlKind::Count, request.match_count->id,
              request.match_count->accessible_label,
              request.match_count->value, false,
              Rect{x, options_y, remaining, 1}});

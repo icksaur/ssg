@@ -40,14 +40,14 @@ ssg::ColorDepth detect_color_depth(char const* colorterm, char const* term) {
     if (colorterm != nullptr) {
         std::string_view const value{colorterm};
         if (value == "truecolor" || value == "24bit") {
-            return ssg::ColorDepth::truecolor;
+            return ssg::ColorDepth::Truecolor;
         }
     }
     if (term != nullptr &&
         std::string_view{term}.find("256color") != std::string_view::npos) {
-        return ssg::ColorDepth::indexed256;
+        return ssg::ColorDepth::Indexed256;
     }
-    return ssg::ColorDepth::ansi16;
+    return ssg::ColorDepth::Ansi16;
 }
 
 LaunchTarget resolve_launch(fs::path const& argument) {
@@ -74,14 +74,14 @@ std::string encode_ansi_frame(ssg::CellGrid const& screen, ssg::ColorDepth depth
         auto const& c = screen.palette[std::min<std::size_t>(index, max_index)];
         auto const resolved = ssg::resolve_color(c, depth);
         switch (resolved.encoding) {
-            case ssg::ResolvedColor::Encoding::truecolor:
+            case ssg::ResolvedColor::Encoding::Truecolor:
                 return "\x1b[" + std::string{kind} + "8;2;" +
                        std::to_string(c.red) + ";" + std::to_string(c.green) +
                        ";" + std::to_string(c.blue) + "m";
-            case ssg::ResolvedColor::Encoding::indexed256:
+            case ssg::ResolvedColor::Encoding::Indexed256:
                 return "\x1b[" + std::string{kind} + "8;5;" +
                        std::to_string(resolved.index) + "m";
-            case ssg::ResolvedColor::Encoding::ansi16: {
+            case ssg::ResolvedColor::Encoding::Ansi16: {
                 int const base = kind == '3' ? 30 : 40;
                 int const bright = kind == '3' ? 90 : 100;
                 int const code = resolved.index < 8

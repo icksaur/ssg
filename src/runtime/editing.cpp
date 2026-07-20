@@ -13,25 +13,25 @@ T const* payload_as(std::any const& payload) {
 
 HistoryEditKind history_kind(TextInputCommand command) {
     switch (command) {
-        case TextInputCommand::insert:
-        case TextInputCommand::newline:
-            return HistoryEditKind::typing;
-        case TextInputCommand::delete_backward:
-        case TextInputCommand::delete_word_backward:
-            return HistoryEditKind::delete_backward;
-        case TextInputCommand::delete_forward:
-        case TextInputCommand::delete_word_forward:
-            return HistoryEditKind::delete_forward;
+        case TextInputCommand::Insert:
+        case TextInputCommand::Newline:
+            return HistoryEditKind::Typing;
+        case TextInputCommand::DeleteBackward:
+        case TextInputCommand::DeleteWordBackward:
+            return HistoryEditKind::DeleteBackward;
+        case TextInputCommand::DeleteForward:
+        case TextInputCommand::DeleteWordForward:
+            return HistoryEditKind::DeleteForward;
     }
-    return HistoryEditKind::other;
+    return HistoryEditKind::Other;
 }
 
 TextInputSettings text_input_settings(EditorRuntime::Impl const&) {
-    return {IndentStyle::spaces, 4, true, LineEnding::lf};
+    return {IndentStyle::Spaces, 4, true, LineEnding::Lf};
 }
 
 EditCommandSettings edit_settings(EditorRuntime::Impl const&) {
-    return {IndentStyle::spaces, 4, 4, LineEnding::lf, "//"};
+    return {IndentStyle::Spaces, 4, 4, LineEnding::Lf, "//"};
 }
 
 CommandHandlerResult apply_transaction(EditorRuntime::Impl& runtime,
@@ -60,7 +60,7 @@ CommandHandlerResult bind_text(EditorRuntime::Impl& runtime,
     auto const* document = runtime.active_document();
     if (document == nullptr) return failure("no active document");
     TextInputArguments arguments;
-    if (command == TextInputCommand::insert) {
+    if (command == TextInputCommand::Insert) {
         auto const* typed = payload_as<TextInputArguments>(payload);
         if (typed == nullptr) return failure(wrong_payload(id));
         arguments = *typed;
@@ -77,8 +77,8 @@ CommandHandlerResult bind_text(EditorRuntime::Impl& runtime,
     // inserting a whitespace/punctuation boundary, so the next word starts a
     // fresh undo step.
     if (outcome.accepted) {
-        bool boundary = command == TextInputCommand::newline;
-        if (command == TextInputCommand::insert && !inserted.empty()) {
+        bool boundary = command == TextInputCommand::Newline;
+        if (command == TextInputCommand::Insert && !inserted.empty()) {
             auto const last = static_cast<unsigned char>(inserted.back());
             if (last < 0x80 && (std::isspace(last) || std::ispunct(last))) {
                 boundary = true;
@@ -119,8 +119,8 @@ CommandHandlerResult bind_selection(EditorRuntime::Impl& runtime,
     // editor, so it moves the authoritative keyboard focus there. Gated on the two
     // pointer-driven selection commands; keyboard caret motion is a different
     // SelectionCommand and never reaches here.
-    if (command == SelectionCommand::cursor_set_position ||
-        command == SelectionCommand::select_set_range) {
+    if (command == SelectionCommand::CursorSetPosition ||
+        command == SelectionCommand::SelectSetRange) {
         runtime.shell.focus_editor();
     }
     return success();
@@ -135,7 +135,7 @@ CommandHandlerResult bind_edit(EditorRuntime::Impl& runtime, EditCommand command
         return failure(result.message);
     }
     return apply_transaction(runtime, *result.transaction, *result.selections,
-                             HistoryEditKind::other);
+                             HistoryEditKind::Other);
 }
 
 CommandHandlerResult bind_history(EditorRuntime::Impl& runtime, HistoryCommand command) {
@@ -143,7 +143,7 @@ CommandHandlerResult bind_history(EditorRuntime::Impl& runtime, HistoryCommand c
     auto* document = runtime.active_document();
     if (!id || document == nullptr) return failure("no active document");
     auto& history = runtime.history_for(*id);
-    auto result = command == HistoryCommand::undo ? history.undo(*document) : history.redo(*document);
+    auto result = command == HistoryCommand::Undo ? history.undo(*document) : history.redo(*document);
     if (!result.accepted()) return failure(result.message);
     if (result.selections) runtime.selection.selections = *result.selections;
     runtime.clamp_selection_to_active_document();
@@ -158,18 +158,18 @@ CommandHandlerResult bind_clipboard(EditorRuntime::Impl& runtime, ClipboardComma
     auto* document = runtime.active_document();
     if (!id || document == nullptr) return failure("no active document");
     auto& history = runtime.history_for(*id);
-    ClipboardResult result{ClipboardError::none, ClipboardSystemStatus::not_requested,
+    ClipboardResult result{ClipboardError::None, ClipboardSystemStatus::NotRequested,
                            document->revision(), std::nullopt, std::nullopt, false, {}};
     switch (command) {
-        case ClipboardCommand::copy:
+        case ClipboardCommand::Copy:
             result = runtime.clipboard.copy(document->snapshot(), runtime.selection.selections);
             break;
-        case ClipboardCommand::cut:
+        case ClipboardCommand::Cut:
             result = runtime.clipboard.cut(*document, history, runtime.selection.selections, 0);
             break;
-        case ClipboardCommand::paste:
+        case ClipboardCommand::Paste:
             result = runtime.clipboard.paste(*document, history, runtime.selection.selections,
-                                             ClipboardPasteMode::internal_only, 0);
+                                             ClipboardPasteMode::InternalOnly, 0);
             break;
     }
     if (!result.accepted()) return failure(result.message);
@@ -207,7 +207,7 @@ void reveal_active_find_match(EditorRuntime::Impl& runtime) {
     // prompt-agnostic pane height; subtracting the find prompt's rows (and the
     // margin) guarantees the match lands above the prompt whether or not it was
     // open last snapshot.
-    auto const reserved = prompt_row_count(PromptKind::find) + 1;
+    auto const reserved = prompt_row_count(PromptKind::Find) + 1;
     auto const base_rows = runtime.last_pane_content_rows +
                            runtime.last_reserved_prompt_rows;
     auto const reveal_rows = base_rows > reserved
@@ -216,7 +216,7 @@ void reveal_active_find_match(EditorRuntime::Impl& runtime) {
     ViewportDimensions reveal_viewport{runtime.last_pane_content_columns,
                                        reveal_rows};
     auto result = apply_selection_navigation(
-        text, runtime.selection, SelectionCommand::view_reveal_caret,
+        text, runtime.selection, SelectionCommand::ViewRevealCaret,
         reveal_viewport, {}, {}, 4, runtime.word_wrap);
     if (result.accepted() && result.delta.replacement) {
         runtime.selection = *result.delta.replacement;
@@ -234,7 +234,7 @@ bool replace_prompt_active(EditorRuntime::Impl& runtime) {
     auto const& state = runtime.find_replace.view_state();
     auto const& request = runtime.prompt.request();
     return state.open && state.replace_mode && request &&
-           request->kind == PromptKind::replace;
+           request->kind == PromptKind::Replace;
 }
 
 // A find or replace prompt is the active prompt over an open controller.  The
@@ -245,8 +245,8 @@ bool find_or_replace_prompt_active(EditorRuntime::Impl& runtime) {
     auto const& state = runtime.find_replace.view_state();
     auto const& request = runtime.prompt.request();
     return state.open && request &&
-           (request->kind == PromptKind::find ||
-            request->kind == PromptKind::replace);
+           (request->kind == PromptKind::Find ||
+            request->kind == PromptKind::Replace);
 }
 
 // The find/replace option indicators shared by the find and replace prompts,
@@ -266,31 +266,31 @@ CommandHandlerResult bind_find_replace(EditorRuntime::Impl& runtime,
     auto* document = runtime.active_document();
     auto query = payload_as<std::string>(payload) ? *payload_as<std::string>(payload) : runtime.find_replace.view_state().query;
     std::optional<ByteRange> range;
-    DocumentSnapshot snapshot{{}, Revision{0}, DocumentMode::edit, false};
+    DocumentSnapshot snapshot{{}, Revision{0}, DocumentMode::Edit, false};
     if (document != nullptr) {
         snapshot = document->snapshot();
         auto selected = runtime.selection.selections.primary();
         if (!selected.is_caret()) range = ByteRange{selected.lower().byte_offset, selected.upper().byte_offset};
-    } else if (command != FindReplaceCommand::replace_workspace_preview &&
-               command != FindReplaceCommand::replace_workspace_apply &&
-               command != FindReplaceCommand::find_close &&
-               command != FindReplaceCommand::find_next &&
-               command != FindReplaceCommand::find_previous) {
+    } else if (command != FindReplaceCommand::ReplaceWorkspacePreview &&
+               command != FindReplaceCommand::ReplaceWorkspaceApply &&
+               command != FindReplaceCommand::FindClose &&
+               command != FindReplaceCommand::FindNext &&
+               command != FindReplaceCommand::FindPrevious) {
         return failure("no active document");
     }
     switch (command) {
-        case FindReplaceCommand::find_open:
+        case FindReplaceCommand::FindOpen:
             runtime.find_replace.open(snapshot, FindRequest{query, runtime.find_replace.view_state().options, range});
             runtime.find_document_id = runtime.active_document_id();
             reveal_active_find_match(runtime);
             // Open the find prompt so focus moves to it and the reserved rows
             // display the controller query (projected at snapshot time).
             (void)runtime.prompt.open(PromptRequest{
-                PromptKind::find, "Find", {{"find.query", "Find query", query}},
+                PromptKind::Find, "Find", {{"find.query", "Find query", query}},
                 find_option_toggles(runtime),
                 PromptMatchCount{"find.count", "Match count", ""}});
             return success();
-        case FindReplaceCommand::replace_open:
+        case FindReplaceCommand::ReplaceOpen:
             runtime.find_replace.open_replace(snapshot, FindRequest{query, runtime.find_replace.view_state().options, range});
             runtime.find_document_id = runtime.active_document_id();
             reveal_active_find_match(runtime);
@@ -298,14 +298,14 @@ CommandHandlerResult bind_find_replace(EditorRuntime::Impl& runtime,
             // the current find query), replacement (row 1, editable), and the
             // option/match-count row.  The client edits only the replacement.
             (void)runtime.prompt.open(PromptRequest{
-                PromptKind::replace, "Replace",
+                PromptKind::Replace, "Replace",
                 {{"find.query", "Find query", query},
                  {"replace.replacement", "Replace with",
                   runtime.find_replace.view_state().replacement}},
                 find_option_toggles(runtime),
                 PromptMatchCount{"find.count", "Match count", ""}});
             return success();
-        case FindReplaceCommand::replace_update_replacement: {
+        case FindReplaceCommand::ReplaceUpdateReplacement: {
             if (!replace_prompt_active(runtime)) return success();
             auto const* arguments = payload_as<FindQueryArguments>(payload);
             if (arguments == nullptr) return failure("replace.update_replacement requires a replacement payload");
@@ -313,29 +313,29 @@ CommandHandlerResult bind_find_replace(EditorRuntime::Impl& runtime,
             runtime.find_document_id = runtime.active_document_id();
             return success();
         }
-        case FindReplaceCommand::find_close:
+        case FindReplaceCommand::FindClose:
             runtime.find_replace.close();
             runtime.find_document_id.reset();
             // Dismiss the find or replace prompt (both belong to this
             // controller); a global find.close must not cancel an unrelated
             // palette/settings prompt.
             if (auto const& request = runtime.prompt.request();
-                request && (request->kind == PromptKind::find ||
-                            request->kind == PromptKind::replace)) {
+                request && (request->kind == PromptKind::Find ||
+                            request->kind == PromptKind::Replace)) {
                 (void)runtime.prompt.cancel();
             }
             return success();
-        case FindReplaceCommand::find_next:
+        case FindReplaceCommand::FindNext:
             if (!find_or_replace_prompt_active(runtime)) return success();
             runtime.find_replace.next();
             reveal_active_find_match(runtime);
             return success();
-        case FindReplaceCommand::find_previous:
+        case FindReplaceCommand::FindPrevious:
             if (!find_or_replace_prompt_active(runtime)) return success();
             runtime.find_replace.previous();
             reveal_active_find_match(runtime);
             return success();
-        case FindReplaceCommand::find_update_query: {
+        case FindReplaceCommand::FindUpdateQuery: {
             auto const* arguments = payload_as<FindQueryArguments>(payload);
             if (arguments == nullptr) return failure("find.update_query requires a query payload");
             runtime.find_replace.update_query(snapshot, arguments->query, range);
@@ -343,34 +343,34 @@ CommandHandlerResult bind_find_replace(EditorRuntime::Impl& runtime,
             reveal_active_find_match(runtime);
             return success();
         }
-        case FindReplaceCommand::find_toggle_case:
+        case FindReplaceCommand::FindToggleCase:
             if (!find_or_replace_prompt_active(runtime)) return success();
             runtime.find_replace.toggle_case(snapshot);
             runtime.find_document_id = runtime.active_document_id();
             return success();
-        case FindReplaceCommand::find_toggle_whole_word:
+        case FindReplaceCommand::FindToggleWholeWord:
             if (!find_or_replace_prompt_active(runtime)) return success();
             runtime.find_replace.toggle_whole_word(snapshot);
             runtime.find_document_id = runtime.active_document_id();
             return success();
-        case FindReplaceCommand::find_toggle_regex:
+        case FindReplaceCommand::FindToggleRegex:
             if (!find_or_replace_prompt_active(runtime)) return success();
             runtime.find_replace.toggle_regex(snapshot);
             runtime.find_document_id = runtime.active_document_id();
             return success();
-        case FindReplaceCommand::find_toggle_selection:
+        case FindReplaceCommand::FindToggleSelection:
             runtime.find_replace.toggle_selection(snapshot, range);
             runtime.find_document_id = runtime.active_document_id();
             return success();
-        case FindReplaceCommand::replace_current:
-        case FindReplaceCommand::replace_all: {
+        case FindReplaceCommand::ReplaceCurrent:
+        case FindReplaceCommand::ReplaceAll: {
             if (!replace_prompt_active(runtime)) return success();
             auto id = runtime.active_document_id();
             if (!id) return failure("no active document");
             auto replacement = runtime.find_replace.view_state().replacement;
             auto before = runtime.selection.selections;
             auto after = runtime.selection.selections;
-            auto result = command == FindReplaceCommand::replace_current
+            auto result = command == FindReplaceCommand::ReplaceCurrent
                 ? runtime.find_replace.replace_current(*document, runtime.history_for(*id), before, after, replacement, 0)
                 : runtime.find_replace.replace_all(*document, runtime.history_for(*id), before, after, replacement, 0);
             if (!result.accepted()) return failure(result.message);
@@ -389,7 +389,7 @@ CommandHandlerResult bind_find_replace(EditorRuntime::Impl& runtime,
             }
             return tabs_result;
         }
-        case FindReplaceCommand::replace_workspace_preview:
+        case FindReplaceCommand::ReplaceWorkspacePreview:
         {
             auto const* arguments = payload_as<WorkspaceReplaceArguments>(payload);
             if (arguments == nullptr) {
@@ -402,7 +402,7 @@ CommandHandlerResult bind_find_replace(EditorRuntime::Impl& runtime,
             runtime.workspace_replace_preview = std::move(result.preview);
             return success();
         }
-        case FindReplaceCommand::replace_workspace_apply: {
+        case FindReplaceCommand::ReplaceWorkspaceApply: {
             auto const* explicit_preview = payload_as<WorkspaceReplacePreview>(payload);
             if (payload.has_value() && explicit_preview == nullptr) {
                 return failure("replace.workspace_apply payload has the wrong type");
@@ -438,7 +438,7 @@ void EditorRuntime::Impl::reveal_primary_caret() {
         std::max<std::uint32_t>(last_pane_content_columns, 1),
         std::max<std::uint32_t>(last_pane_content_rows, 1)};
     auto result = apply_selection_navigation(
-        active_text(), selection, SelectionCommand::view_reveal_caret,
+        active_text(), selection, SelectionCommand::ViewRevealCaret,
         reveal_viewport, {}, {}, 4, word_wrap);
     if (result.accepted() && result.delta.replacement) {
         selection = *result.delta.replacement;

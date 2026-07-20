@@ -18,16 +18,16 @@ using WatchClock = std::chrono::steady_clock;
 using WatchTimePoint = WatchClock::time_point;
 
 enum class WatchEventKind {
-    create,
-    modify,
-    rename,
-    remove,
-    overflow,
+    Create,
+    Modify,
+    Rename,
+    Remove,
+    Overflow,
 };
 
 enum class WatchEventOrigin {
-    external,
-    ssg_save,
+    External,
+    SsgSave,
 };
 
 struct WatchFileState {
@@ -39,14 +39,14 @@ struct WatchFileState {
 };
 
 struct WatchEvent {
-    WatchEventKind kind = WatchEventKind::overflow;
+    WatchEventKind kind = WatchEventKind::Overflow;
     std::filesystem::path path;
     std::optional<std::filesystem::path> previous_path;
     std::optional<FileIdentity> identity;
     std::uint64_t sequence = 0;
     std::optional<std::uint64_t> size;
     std::optional<std::int64_t> modification_time;
-    WatchEventOrigin origin = WatchEventOrigin::external;
+    WatchEventOrigin origin = WatchEventOrigin::External;
 
     friend bool operator==(const WatchEvent&, const WatchEvent&) = default;
 };
@@ -68,16 +68,16 @@ struct WatcherConfig {
 };
 
 enum class NativeWatchAction {
-    create,
-    modify,
-    remove,
-    rename_from,
-    rename_to,
-    overflow,
+    Create,
+    Modify,
+    Remove,
+    RenameFrom,
+    RenameTo,
+    Overflow,
 };
 
 struct NativeWatchEvent {
-    NativeWatchAction action = NativeWatchAction::overflow;
+    NativeWatchAction action = NativeWatchAction::Overflow;
     std::filesystem::path path;
     std::uint64_t rename_token = 0;
     std::optional<WatchFileState> observed;

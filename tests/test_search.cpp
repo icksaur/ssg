@@ -94,17 +94,17 @@ std::vector<std::string> labels(const std::vector<SearchResult>& results) {
 }
 
 TEST(query_modes_are_unambiguous_and_lines_are_validated) {
-    const ParsedSearchQuery file{.mode = SearchMode::file, .text = "file"};
-    const ParsedSearchQuery symbol{.mode = SearchMode::symbol, .text = "Widget"};
-    const ParsedSearchQuery text{.mode = SearchMode::text, .text = "needle"};
+    const ParsedSearchQuery file{.mode = SearchMode::File, .text = "file"};
+    const ParsedSearchQuery symbol{.mode = SearchMode::Symbol, .text = "Widget"};
+    const ParsedSearchQuery text{.mode = SearchMode::Text, .text = "needle"};
     const ParsedSearchQuery line{
-        .mode = SearchMode::line, .text = "42", .line = LineIndex{41}};
+        .mode = SearchMode::Line, .text = "42", .line = LineIndex{41}};
     ASSERT_EQ(parse_search_query("file"), file);
     ASSERT_EQ(parse_search_query("@Widget"), symbol);
     ASSERT_EQ(parse_search_query("#needle"), text);
     ASSERT_EQ(parse_search_query(":42"), line);
-    ASSERT_EQ(parse_search_query(":0").error, SearchQueryError::invalid_line);
-    ASSERT_EQ(parse_search_query(":no").error, SearchQueryError::invalid_line);
+    ASSERT_EQ(parse_search_query(":0").error, SearchQueryError::InvalidLine);
+    ASSERT_EQ(parse_search_query(":no").error, SearchQueryError::InvalidLine);
 
     const auto target = goto_line("src/search.cpp", parse_search_query(":42"));
     ASSERT_TRUE(target.has_value());
@@ -154,18 +154,18 @@ TEST(cancellation_supersession_and_stale_revision_are_rejected) {
     const auto cancelled = controller.evaluate(first);
     ASSERT_TRUE(cancelled.cancelled);
     ASSERT_EQ(controller.publish(cancelled, Revision{8}),
-              SearchPublishResult::cancelled);
+              SearchPublishResult::Cancelled);
 
     auto superseded = controller.evaluate(second);
     superseded.generation = first.generation;
     ASSERT_EQ(controller.publish(superseded, Revision{8}),
-              SearchPublishResult::superseded);
+              SearchPublishResult::Superseded);
 
     const auto completed = controller.evaluate(second);
     ASSERT_EQ(controller.publish(completed, Revision{9}),
-              SearchPublishResult::stale_revision);
+              SearchPublishResult::StaleRevision);
     ASSERT_EQ(controller.publish(completed, Revision{8}),
-              SearchPublishResult::accepted);
+              SearchPublishResult::Accepted);
     ASSERT_EQ(labels(controller.view_state().results),
               std::vector<std::string>{"src/search.cpp:3"});
 }
@@ -176,7 +176,7 @@ TEST(navigation_history_matches_transition_table) {
     const NavigationTarget c{.path = "c.cpp", .line = LineIndex{3}};
     NavigationHistory history{3};
 
-    const auto visit_a = history.visit(a, NavigationOrigin::user);
+    const auto visit_a = history.visit(a, NavigationOrigin::User);
     const NavigationTransition to_a{.target = a,
                                     .pause_follow_edits = true,
                                     .reveal_primary_caret = true};
@@ -184,12 +184,12 @@ TEST(navigation_history_matches_transition_table) {
                                     .pause_follow_edits = true,
                                     .reveal_primary_caret = true};
     ASSERT_EQ(visit_a, to_a);
-    const auto visit_b = history.visit(b, NavigationOrigin::programmatic);
+    const auto visit_b = history.visit(b, NavigationOrigin::Programmatic);
     ASSERT_FALSE(visit_b.pause_follow_edits);
     ASSERT_EQ(history.back(), to_a);
     ASSERT_EQ(history.forward(), to_b);
     const auto ignored_back = history.back();
-    const auto visit_c = history.visit(c, NavigationOrigin::user);
+    const auto visit_c = history.visit(c, NavigationOrigin::User);
     ASSERT_TRUE(ignored_back.target.has_value());
     ASSERT_TRUE(visit_c.pause_follow_edits);
     ASSERT_FALSE(history.forward().target.has_value());
@@ -197,9 +197,9 @@ TEST(navigation_history_matches_transition_table) {
     ASSERT_FALSE(history.back().target.has_value());
 
     NavigationHistory bounded{2};
-    const auto ignored_a = bounded.visit(a, NavigationOrigin::user);
-    const auto ignored_b = bounded.visit(b, NavigationOrigin::user);
-    const auto ignored_c = bounded.visit(c, NavigationOrigin::user);
+    const auto ignored_a = bounded.visit(a, NavigationOrigin::User);
+    const auto ignored_b = bounded.visit(b, NavigationOrigin::User);
+    const auto ignored_c = bounded.visit(c, NavigationOrigin::User);
     ASSERT_TRUE(ignored_a.target.has_value());
     ASSERT_TRUE(ignored_b.target.has_value());
     ASSERT_TRUE(ignored_c.target.has_value());
@@ -244,7 +244,7 @@ TEST(view_delta_replay_and_command_exports_are_exact) {
     auto stale = base;
     stale.revision = Revision{99};
     ASSERT_EQ(replay_search_delta(stale, delta).error,
-              SearchReplayError::stale_revision);
+              SearchReplayError::StaleRevision);
 
     const auto set = search_command_set();
     const std::vector<std::string_view> expected{

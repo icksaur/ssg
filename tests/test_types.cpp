@@ -106,13 +106,13 @@ TEST(document_position_equality) {
 // DocumentMode (scoped enum — no operator<<; ASSERT_EQ must not stream values)
 
 TEST(document_mode_distinct_values) {
-    ASSERT_TRUE(ssg::DocumentMode::edit      != ssg::DocumentMode::read_only);
-    ASSERT_TRUE(ssg::DocumentMode::read_only != ssg::DocumentMode::diff);
-    ASSERT_TRUE(ssg::DocumentMode::edit      != ssg::DocumentMode::diff);
+    ASSERT_TRUE(ssg::DocumentMode::Edit      != ssg::DocumentMode::ReadOnly);
+    ASSERT_TRUE(ssg::DocumentMode::ReadOnly != ssg::DocumentMode::Diff);
+    ASSERT_TRUE(ssg::DocumentMode::Edit      != ssg::DocumentMode::Diff);
 }
 
 TEST(document_mode_equality) {
-    ASSERT_EQ(ssg::DocumentMode::edit, ssg::DocumentMode::edit);
+    ASSERT_EQ(ssg::DocumentMode::Edit, ssg::DocumentMode::Edit);
 }
 
 // ---------------------------------------------------------------------------
@@ -186,33 +186,33 @@ TEST(history_config_equality) {
 
 TEST(indent_config_defaults) {
     ssg::IndentConfig cfg;
-    ASSERT_EQ(cfg.style, ssg::IndentStyle::spaces);
+    ASSERT_EQ(cfg.style, ssg::IndentStyle::Spaces);
     ASSERT_EQ(cfg.width.value(), 4);
     ASSERT_TRUE(cfg.auto_detect);
 }
 
 TEST(indent_config_custom_tabs) {
     ssg::IndentConfig cfg{
-        .style       = ssg::IndentStyle::tabs,
+        .style       = ssg::IndentStyle::Tabs,
         .width       = ssg::TabWidth{2},
         .auto_detect = false,
     };
-    ASSERT_EQ(cfg.style, ssg::IndentStyle::tabs);
+    ASSERT_EQ(cfg.style, ssg::IndentStyle::Tabs);
     ASSERT_EQ(cfg.width.value(), 2);
     ASSERT_FALSE(cfg.auto_detect);
 }
 
 TEST(indent_style_distinct_values) {
-    ASSERT_TRUE(ssg::IndentStyle::spaces != ssg::IndentStyle::tabs);
+    ASSERT_TRUE(ssg::IndentStyle::Spaces != ssg::IndentStyle::Tabs);
 }
 
 // ---------------------------------------------------------------------------
 // LineEnding (scoped enum)
 
 TEST(line_ending_distinct_values) {
-    ASSERT_TRUE(ssg::LineEnding::lf   != ssg::LineEnding::crlf);
-    ASSERT_TRUE(ssg::LineEnding::crlf != ssg::LineEnding::cr);
-    ASSERT_TRUE(ssg::LineEnding::cr   != ssg::LineEnding::mixed);
+    ASSERT_TRUE(ssg::LineEnding::Lf   != ssg::LineEnding::Crlf);
+    ASSERT_TRUE(ssg::LineEnding::Crlf != ssg::LineEnding::Cr);
+    ASSERT_TRUE(ssg::LineEnding::Cr   != ssg::LineEnding::Mixed);
 }
 
 // ---------------------------------------------------------------------------

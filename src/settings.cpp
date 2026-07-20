@@ -25,26 +25,26 @@ constexpr bool valid(SettingKey key) noexcept {
 }
 
 constexpr bool valid(SettingScope scope) noexcept {
-    return index(scope) <= index(SettingScope::document);
+    return index(scope) <= index(SettingScope::Document);
 }
 
 constexpr std::array all_keys{
-    SettingKey::indent_width,
-    SettingKey::indent_style,
-    SettingKey::indent_detection,
-    SettingKey::auto_indent,
-    SettingKey::line_ending,
-    SettingKey::final_newline,
-    SettingKey::encoding,
-    SettingKey::word_wrap,
-    SettingKey::theme,
-    SettingKey::keymap,
-    SettingKey::search_case_sensitive,
-    SettingKey::search_whole_word,
-    SettingKey::search_regular_expression,
-    SettingKey::undo_byte_budget,
-    SettingKey::recovery_byte_budget,
-    SettingKey::typing_coalescing_ms,
+    SettingKey::IndentWidth,
+    SettingKey::IndentStyle,
+    SettingKey::IndentDetection,
+    SettingKey::AutoIndent,
+    SettingKey::LineEnding,
+    SettingKey::FinalNewline,
+    SettingKey::Encoding,
+    SettingKey::WordWrap,
+    SettingKey::Theme,
+    SettingKey::Keymap,
+    SettingKey::SearchCaseSensitive,
+    SettingKey::SearchWholeWord,
+    SettingKey::SearchRegularExpression,
+    SettingKey::UndoByteBudget,
+    SettingKey::RecoveryByteBudget,
+    SettingKey::TypingCoalescingMs,
 };
 
 constexpr std::array<std::string_view, setting_key_count> key_names{
@@ -68,91 +68,91 @@ constexpr std::array<std::string_view, setting_key_count> key_names{
 
 SettingValue default_value(SettingKey key) {
     switch (key) {
-    case SettingKey::indent_width: return std::uint32_t{4};
-    case SettingKey::indent_style: return IndentStyle::spaces;
-    case SettingKey::indent_detection: return true;
-    case SettingKey::auto_indent: return true;
-    case SettingKey::line_ending: return LineEnding::lf;
-    case SettingKey::final_newline: return true;
-    case SettingKey::encoding: return TextEncoding::utf8;
-    case SettingKey::word_wrap: return false;
-    case SettingKey::theme: return std::string{"default"};
-    case SettingKey::keymap: return std::string{"default"};
-    case SettingKey::search_case_sensitive: return false;
-    case SettingKey::search_whole_word: return false;
-    case SettingKey::search_regular_expression: return false;
-    case SettingKey::undo_byte_budget: return std::uint64_t{16u * 1024u * 1024u};
-    case SettingKey::recovery_byte_budget: return std::uint64_t{256u * 1024u * 1024u};
-    case SettingKey::typing_coalescing_ms: return std::uint32_t{750};
+    case SettingKey::IndentWidth: return std::uint32_t{4};
+    case SettingKey::IndentStyle: return IndentStyle::Spaces;
+    case SettingKey::IndentDetection: return true;
+    case SettingKey::AutoIndent: return true;
+    case SettingKey::LineEnding: return LineEnding::Lf;
+    case SettingKey::FinalNewline: return true;
+    case SettingKey::Encoding: return TextEncoding::Utf8;
+    case SettingKey::WordWrap: return false;
+    case SettingKey::Theme: return std::string{"default"};
+    case SettingKey::Keymap: return std::string{"default"};
+    case SettingKey::SearchCaseSensitive: return false;
+    case SettingKey::SearchWholeWord: return false;
+    case SettingKey::SearchRegularExpression: return false;
+    case SettingKey::UndoByteBudget: return std::uint64_t{16u * 1024u * 1024u};
+    case SettingKey::RecoveryByteBudget: return std::uint64_t{256u * 1024u * 1024u};
+    case SettingKey::TypingCoalescingMs: return std::uint32_t{750};
     }
     throw std::logic_error("unknown setting key");
 }
 
 std::optional<SettingError> validate(SettingKey key, const SettingValue& value) {
     const auto wrong_type = [key] {
-        return SettingError{SettingErrorCode::wrong_value_type, key,
+        return SettingError{SettingErrorCode::WrongValueType, key,
                             "setting value has the wrong type for its key"};
     };
     switch (key) {
-    case SettingKey::indent_width: {
+    case SettingKey::IndentWidth: {
         const auto* width = std::get_if<std::uint32_t>(&value);
         if (width == nullptr) return wrong_type();
         if (*width < 1 || *width > 16) {
-            return SettingError{SettingErrorCode::out_of_range, key,
+            return SettingError{SettingErrorCode::OutOfRange, key,
                                 "indent width must be in [1, 16]"};
         }
         return std::nullopt;
     }
-    case SettingKey::indent_style:
+    case SettingKey::IndentStyle:
         if (!std::holds_alternative<IndentStyle>(value)) return wrong_type();
         if (const auto style = std::get<IndentStyle>(value);
-            style != IndentStyle::spaces && style != IndentStyle::tabs) {
-            return SettingError{SettingErrorCode::out_of_range, key,
+            style != IndentStyle::Spaces && style != IndentStyle::Tabs) {
+            return SettingError{SettingErrorCode::OutOfRange, key,
                                 "indent style is not recognized"};
         }
         return std::nullopt;
-    case SettingKey::line_ending: {
+    case SettingKey::LineEnding: {
         const auto* ending = std::get_if<LineEnding>(&value);
         if (ending == nullptr) return wrong_type();
-        if (*ending != LineEnding::lf && *ending != LineEnding::crlf &&
-            *ending != LineEnding::cr) {
-            return SettingError{SettingErrorCode::out_of_range, key,
+        if (*ending != LineEnding::Lf && *ending != LineEnding::Crlf &&
+            *ending != LineEnding::Cr) {
+            return SettingError{SettingErrorCode::OutOfRange, key,
                                 "line ending must be lf, crlf, or cr"};
         }
         return std::nullopt;
     }
-    case SettingKey::encoding:
+    case SettingKey::Encoding:
         if (!std::holds_alternative<TextEncoding>(value)) return wrong_type();
         if (static_cast<std::uint8_t>(std::get<TextEncoding>(value)) >
-            static_cast<std::uint8_t>(TextEncoding::iso88591)) {
-            return SettingError{SettingErrorCode::out_of_range, key,
+            static_cast<std::uint8_t>(TextEncoding::Iso88591)) {
+            return SettingError{SettingErrorCode::OutOfRange, key,
                                 "text encoding is not recognized"};
         }
         return std::nullopt;
-    case SettingKey::theme:
-    case SettingKey::keymap: {
+    case SettingKey::Theme:
+    case SettingKey::Keymap: {
         const auto* identity = std::get_if<std::string>(&value);
         if (identity == nullptr) return wrong_type();
         if (identity->empty()) {
-            return SettingError{SettingErrorCode::empty_identity, key,
+            return SettingError{SettingErrorCode::EmptyIdentity, key,
                                 "setting identity must not be empty"};
         }
         return std::nullopt;
     }
-    case SettingKey::undo_byte_budget:
-    case SettingKey::recovery_byte_budget:
+    case SettingKey::UndoByteBudget:
+    case SettingKey::RecoveryByteBudget:
         if (!std::holds_alternative<std::uint64_t>(value)) return wrong_type();
         return std::nullopt;
-    case SettingKey::typing_coalescing_ms:
+    case SettingKey::TypingCoalescingMs:
         if (!std::holds_alternative<std::uint32_t>(value)) return wrong_type();
         return std::nullopt;
-    case SettingKey::indent_detection:
-    case SettingKey::auto_indent:
-    case SettingKey::final_newline:
-    case SettingKey::word_wrap:
-    case SettingKey::search_case_sensitive:
-    case SettingKey::search_whole_word:
-    case SettingKey::search_regular_expression:
+    case SettingKey::IndentDetection:
+    case SettingKey::AutoIndent:
+    case SettingKey::FinalNewline:
+    case SettingKey::WordWrap:
+    case SettingKey::SearchCaseSensitive:
+    case SettingKey::SearchWholeWord:
+    case SettingKey::SearchRegularExpression:
         if (!std::holds_alternative<bool>(value)) return wrong_type();
         return std::nullopt;
     }
@@ -222,14 +222,14 @@ std::string encode_value(const SettingValue& value) {
         return "u64:" + std::to_string(*number);
     }
     if (const auto* style = std::get_if<IndentStyle>(&value)) {
-        return *style == IndentStyle::spaces ? "indent:spaces" : "indent:tabs";
+        return *style == IndentStyle::Spaces ? "indent:spaces" : "indent:tabs";
     }
     if (const auto* ending = std::get_if<LineEnding>(&value)) {
         switch (*ending) {
-        case LineEnding::lf: return "eol:lf";
-        case LineEnding::crlf: return "eol:crlf";
-        case LineEnding::cr: return "eol:cr";
-        case LineEnding::mixed: break;
+        case LineEnding::Lf: return "eol:lf";
+        case LineEnding::Crlf: return "eol:crlf";
+        case LineEnding::Cr: return "eol:cr";
+        case LineEnding::Mixed: break;
         }
     }
     if (const auto* encoding = std::get_if<TextEncoding>(&value)) {
@@ -261,23 +261,23 @@ std::optional<SettingValue> decode_value(std::string_view encoded) {
         return std::nullopt;
     }
     if (type == "indent") {
-        if (value == "spaces") return SettingValue{IndentStyle::spaces};
-        if (value == "tabs") return SettingValue{IndentStyle::tabs};
+        if (value == "spaces") return SettingValue{IndentStyle::Spaces};
+        if (value == "tabs") return SettingValue{IndentStyle::Tabs};
         return std::nullopt;
     }
     if (type == "eol") {
-        if (value == "lf") return SettingValue{LineEnding::lf};
-        if (value == "crlf") return SettingValue{LineEnding::crlf};
-        if (value == "cr") return SettingValue{LineEnding::cr};
+        if (value == "lf") return SettingValue{LineEnding::Lf};
+        if (value == "crlf") return SettingValue{LineEnding::Crlf};
+        if (value == "cr") return SettingValue{LineEnding::Cr};
         return std::nullopt;
     }
     if (type == "encoding") {
-        if (value == "utf8") return SettingValue{TextEncoding::utf8};
-        if (value == "utf8_bom") return SettingValue{TextEncoding::utf8_bom};
-        if (value == "utf16le") return SettingValue{TextEncoding::utf16le};
-        if (value == "utf16be") return SettingValue{TextEncoding::utf16be};
-        if (value == "windows1252") return SettingValue{TextEncoding::windows1252};
-        if (value == "iso88591") return SettingValue{TextEncoding::iso88591};
+        if (value == "utf8") return SettingValue{TextEncoding::Utf8};
+        if (value == "utf8_bom") return SettingValue{TextEncoding::Utf8Bom};
+        if (value == "utf16le") return SettingValue{TextEncoding::Utf16le};
+        if (value == "utf16be") return SettingValue{TextEncoding::Utf16be};
+        if (value == "windows1252") return SettingValue{TextEncoding::Windows1252};
+        if (value == "iso88591") return SettingValue{TextEncoding::Iso88591};
         return std::nullopt;
     }
     if (type == "s") {
@@ -326,13 +326,13 @@ const SettingViewEntry* SettingsViewState::find(SettingKey key) const noexcept {
 
 SettingsModel::SettingsModel() {
     for (const auto key : all_keys) {
-        scopes_[index(SettingScope::defaults)].values[index(key)] = default_value(key);
+        scopes_[index(SettingScope::Defaults)].values[index(key)] = default_value(key);
     }
 }
 
 EffectiveSetting SettingsModel::resolve(SettingKey key) const {
     if (!valid(key)) throw std::invalid_argument("setting key is not recognized");
-    for (std::size_t scope = index(SettingScope::document);; --scope) {
+    for (std::size_t scope = index(SettingScope::Document);; --scope) {
         const auto& value = scopes_[scope].values[index(key)];
         if (value) return {*value, static_cast<SettingScope>(scope)};
         if (scope == 0) break;
@@ -358,17 +358,17 @@ SettingsViewState SettingsModel::view_state() const {
 SettingMutation SettingsModel::set(
     SettingScope scope, SettingKey key, SettingValue value) {
     if (!valid(key)) {
-        return {{SettingError{SettingErrorCode::unknown_key, key,
+        return {{SettingError{SettingErrorCode::UnknownKey, key,
                               "setting key is not recognized"}},
                 std::nullopt, {}};
     }
     if (!valid(scope)) {
-        return {{SettingError{SettingErrorCode::immutable_scope, key,
+        return {{SettingError{SettingErrorCode::ImmutableScope, key,
                               "setting scope is not recognized"}},
                 std::nullopt, {}};
     }
-    if (scope == SettingScope::defaults) {
-        return {{SettingError{SettingErrorCode::immutable_scope, key,
+    if (scope == SettingScope::Defaults) {
+        return {{SettingError{SettingErrorCode::ImmutableScope, key,
                               "default settings are immutable"}},
                 std::nullopt, {}};
     }
@@ -387,17 +387,17 @@ SettingMutation SettingsModel::set(
 
 SettingMutation SettingsModel::reset(SettingScope scope, SettingKey key) {
     if (!valid(key)) {
-        return {{SettingError{SettingErrorCode::unknown_key, key,
+        return {{SettingError{SettingErrorCode::UnknownKey, key,
                               "setting key is not recognized"}},
                 std::nullopt, {}};
     }
     if (!valid(scope)) {
-        return {{SettingError{SettingErrorCode::immutable_scope, key,
+        return {{SettingError{SettingErrorCode::ImmutableScope, key,
                               "setting scope is not recognized"}},
                 std::nullopt, {}};
     }
-    if (scope == SettingScope::defaults) {
-        return {{SettingError{SettingErrorCode::immutable_scope, key,
+    if (scope == SettingScope::Defaults) {
+        return {{SettingError{SettingErrorCode::ImmutableScope, key,
                               "default settings are immutable"}},
                 std::nullopt, {}};
     }
@@ -414,17 +414,17 @@ SettingMutation SettingsModel::reset(SettingScope scope, SettingKey key) {
 
 SettingMutation SettingsModel::apply(const SettingCompensation& compensation) {
     if (!valid(compensation.key)) {
-        return {{SettingError{SettingErrorCode::unknown_key, compensation.key,
+        return {{SettingError{SettingErrorCode::UnknownKey, compensation.key,
                               "setting key is not recognized"}},
                 std::nullopt, {}};
     }
     if (!valid(compensation.scope)) {
-        return {{SettingError{SettingErrorCode::immutable_scope, compensation.key,
+        return {{SettingError{SettingErrorCode::ImmutableScope, compensation.key,
                               "setting scope is not recognized"}},
                 std::nullopt, {}};
     }
-    if (compensation.scope == SettingScope::defaults) {
-        return {{SettingError{SettingErrorCode::immutable_scope, compensation.key,
+    if (compensation.scope == SettingScope::Defaults) {
+        return {{SettingError{SettingErrorCode::ImmutableScope, compensation.key,
                               "default settings are immutable"}},
                 std::nullopt, {}};
     }
@@ -433,7 +433,7 @@ SettingMutation SettingsModel::apply(const SettingCompensation& compensation) {
     if (slot != compensation.expected ||
         data.generations[index(compensation.key)] !=
             compensation.expected_generation) {
-        return {{SettingError{SettingErrorCode::stale_compensation, compensation.key,
+        return {{SettingError{SettingErrorCode::StaleCompensation, compensation.key,
                               "setting changed after the compensating action was created"}},
                 std::nullopt, {}};
     }
@@ -470,7 +470,7 @@ std::string SettingsModel::export_scope(SettingScope scope) const {
 SettingsIoResult SettingsModel::import_scope(
     SettingScope scope, std::string_view document) {
     if (!valid(scope)) return {false, "setting scope is not recognized"};
-    if (scope == SettingScope::defaults) {
+    if (scope == SettingScope::Defaults) {
         return {false, "default settings are immutable"};
     }
     ScopeData parsed;
@@ -527,13 +527,13 @@ SettingsIoResult SettingsPersistence::load(SettingsModel& settings) const {
     const auto user = read_if_present(paths_.user_file, error);
     if (!error.empty()) return {false, error};
     if (user) {
-        const auto result = candidate.import_scope(SettingScope::user, *user);
+        const auto result = candidate.import_scope(SettingScope::User, *user);
         if (!result.ok) return result;
     }
     const auto workspace = read_if_present(paths_.workspace_file, error);
     if (!error.empty()) return {false, error};
     if (workspace) {
-        const auto result = candidate.import_scope(SettingScope::workspace, *workspace);
+        const auto result = candidate.import_scope(SettingScope::Workspace, *workspace);
         if (!result.ok) return result;
     }
     settings = std::move(candidate);
@@ -542,9 +542,9 @@ SettingsIoResult SettingsPersistence::load(SettingsModel& settings) const {
 
 SettingsIoResult SettingsPersistence::save(const SettingsModel& settings) const {
     try {
-        write_document(paths_.user_file, settings.export_scope(SettingScope::user));
+        write_document(paths_.user_file, settings.export_scope(SettingScope::User));
         write_document(paths_.workspace_file,
-                       settings.export_scope(SettingScope::workspace));
+                       settings.export_scope(SettingScope::Workspace));
         return {};
     } catch (const std::exception& error) {
         return {false, error.what()};

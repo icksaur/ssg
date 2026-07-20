@@ -49,7 +49,7 @@ std::unique_ptr<ssg::EditorRuntime> make_runtime(fs::path const& root) {
         {root / "workspace", root / "scratch", root / "recovery"});
     if (!created.accepted()) return nullptr;
     auto runtime = std::move(created.runtime);
-    (void)runtime->attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process},
+    (void)runtime->attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                           ssg::ViewId{1});
     return runtime;
 }

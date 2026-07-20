@@ -69,10 +69,10 @@ std::span<const std::byte> bytes(std::string_view value) {
 }
 
 enum class NodeKind {
-    missing,
-    directory,
-    regular_file,
-    symlink,
+    Missing,
+    Directory,
+    RegularFile,
+    Symlink,
 };
 
 struct TreeNode {
@@ -87,7 +87,7 @@ std::vector<TreeNode> snapshot_tree(const std::filesystem::path& root) {
     std::error_code error;
     const auto root_status = std::filesystem::symlink_status(root, error);
     if (error || root_status.type() == std::filesystem::file_type::not_found) {
-        return {{".", NodeKind::missing, {}}};
+        return {{".", NodeKind::Missing, {}}};
     }
 
     std::vector<TreeNode> result;
@@ -99,13 +99,13 @@ std::vector<TreeNode> snapshot_tree(const std::filesystem::path& root) {
                          : path.lexically_relative(root).generic_string();
         if (std::filesystem::is_symlink(status)) {
             destination.push_back(
-                {relative, NodeKind::symlink,
+                {relative, NodeKind::Symlink,
                  std::filesystem::read_symlink(path).generic_string()});
         } else if (std::filesystem::is_directory(status)) {
-            destination.push_back({relative, NodeKind::directory, {}});
+            destination.push_back({relative, NodeKind::Directory, {}});
         } else if (std::filesystem::is_regular_file(status)) {
             destination.push_back(
-                {relative, NodeKind::regular_file, read_bytes(path)});
+                {relative, NodeKind::RegularFile, read_bytes(path)});
         }
     };
 
@@ -134,7 +134,7 @@ ssg::JournalDocument saved_document(std::string path,
                                     std::string contents,
                                     bool dirty = true) {
     return {ssg::JournalDocumentKey::saved(path),
-            ssg::DocumentMode::edit,
+            ssg::DocumentMode::Edit,
             dirty,
             std::move(contents)};
 }
@@ -228,7 +228,7 @@ TEST(dirty_close_is_durable_before_removal_and_restores_exact_document) {
         temporary.path() / "recovery", recovery_config());
     const ssg::JournalDocument expected{
         ssg::JournalDocumentKey::untitled(fixed_untitled_id()),
-        ssg::DocumentMode::read_only,
+        ssg::DocumentMode::ReadOnly,
         true,
         "dirty \xCE\xB2 draft\n"};
     std::optional<ssg::JournalDocument> document{expected};
@@ -270,7 +270,7 @@ TEST(dirty_close_durability_failure_preserves_document_and_publishes_nothing) {
     const auto closed = actions.close_document(document, scratch, 2s);
 
     ASSERT_FALSE(closed.accepted());
-    ASSERT_EQ(closed.error->code, ssg::RecoveryErrorCode::durability_failed);
+    ASSERT_EQ(closed.error->code, ssg::RecoveryErrorCode::DurabilityFailed);
     ASSERT_EQ(document, std::optional<ssg::JournalDocument>{expected});
     ASSERT_TRUE(actions.records().empty());
 }
@@ -422,13 +422,13 @@ TEST(record_and_artifact_installation_complete_before_canonical_mutation) {
 
     ASSERT_TRUE(overwritten.accepted());
     const auto artifact =
-        event_index(injection.events, ssg::RecoveryStep::prepare_artifact);
+        event_index(injection.events, ssg::RecoveryStep::PrepareArtifact);
     const auto installed =
-        event_index(injection.events, ssg::RecoveryStep::install_record);
+        event_index(injection.events, ssg::RecoveryStep::InstallRecord);
     const auto mutation =
-        event_index(injection.events, ssg::RecoveryStep::mutate_filesystem);
+        event_index(injection.events, ssg::RecoveryStep::MutateFilesystem);
     const auto published =
-        event_index(injection.events, ssg::RecoveryStep::publish_record);
+        event_index(injection.events, ssg::RecoveryStep::PublishRecord);
     ASSERT_TRUE(artifact < installed);
     ASSERT_TRUE(installed < mutation);
     ASSERT_TRUE(mutation < published);
@@ -445,13 +445,13 @@ TEST(preparation_failure_preserves_canonical_state_and_existing_records) {
         temporary.path() / "recovery", recovery_config(1), injection);
     const auto retained = actions.overwrite_file(first, bytes("first new"));
     ASSERT_TRUE(retained.accepted());
-    injection.fail(ssg::RecoveryStep::install_record);
+    injection.fail(ssg::RecoveryStep::InstallRecord);
 
     const auto rejected = actions.overwrite_file(second, bytes("second new"));
 
     ASSERT_FALSE(rejected.accepted());
     ASSERT_EQ(rejected.error->code,
-              ssg::RecoveryErrorCode::preparation_failed);
+              ssg::RecoveryErrorCode::PreparationFailed);
     ASSERT_FALSE(rejected.compensation.has_value());
     ASSERT_EQ(read_bytes(second), "second old");
     const auto records = actions.records();
@@ -465,17 +465,17 @@ TEST(publication_failure_after_mutation_rolls_back_canonical_state) {
     write_bytes(target, "old");
     const auto before = snapshot_tree(target);
     InjectedRecoveryFailures injection;
-    injection.fail(ssg::RecoveryStep::publish_record);
+    injection.fail(ssg::RecoveryStep::PublishRecord);
     auto actions = ssg::RecoveryActions::create(
         temporary.path() / "recovery", recovery_config(), injection);
 
     const auto result = actions.overwrite_file(target, bytes("new"));
 
     ASSERT_FALSE(result.accepted());
-    ASSERT_EQ(result.error->code, ssg::RecoveryErrorCode::action_failed);
+    ASSERT_EQ(result.error->code, ssg::RecoveryErrorCode::ActionFailed);
     ASSERT_EQ(snapshot_tree(target), before);
     ASSERT_TRUE(event_index(injection.events,
-                            ssg::RecoveryStep::rollback_filesystem) !=
+                            ssg::RecoveryStep::RollbackFilesystem) !=
                 std::numeric_limits<std::size_t>::max());
     ASSERT_TRUE(actions.records().empty());
 }
@@ -490,7 +490,7 @@ TEST(each_action_mutation_failure_rolls_back_and_discards_its_record) {
         auto scratch = ssg::ScratchStore::create(
             temporary.path() / "close-scratch", workspace, scratch_config());
         InjectedRecoveryFailures injection;
-        injection.fail(ssg::RecoveryStep::mutate_document);
+        injection.fail(ssg::RecoveryStep::MutateDocument);
         auto actions = ssg::RecoveryActions::create(
             temporary.path() / "close-recovery", recovery_config(), injection);
         const auto expected = saved_document("close.txt", "dirty");
@@ -499,17 +499,17 @@ TEST(each_action_mutation_failure_rolls_back_and_discards_its_record) {
         const auto result = actions.close_document(document, scratch, 2s);
 
         ASSERT_FALSE(result.accepted());
-        ASSERT_EQ(result.error->code, ssg::RecoveryErrorCode::action_failed);
+        ASSERT_EQ(result.error->code, ssg::RecoveryErrorCode::ActionFailed);
         ASSERT_EQ(document, std::optional<ssg::JournalDocument>{expected});
         ASSERT_TRUE(event_index(injection.events,
-                                ssg::RecoveryStep::rollback_document) !=
+                                ssg::RecoveryStep::RollbackDocument) !=
                     std::numeric_limits<std::size_t>::max());
         ASSERT_TRUE(actions.records().empty());
     }
 
     {
         InjectedRecoveryFailures injection;
-        injection.fail(ssg::RecoveryStep::mutate_document);
+        injection.fail(ssg::RecoveryStep::MutateDocument);
         auto actions = ssg::RecoveryActions::create(
             temporary.path() / "reload-recovery", recovery_config(), injection);
         const auto expected = saved_document("reload.txt", "dirty");
@@ -519,10 +519,10 @@ TEST(each_action_mutation_failure_rolls_back_and_discards_its_record) {
             document, saved_document("reload.txt", "disk", false));
 
         ASSERT_FALSE(result.accepted());
-        ASSERT_EQ(result.error->code, ssg::RecoveryErrorCode::action_failed);
+        ASSERT_EQ(result.error->code, ssg::RecoveryErrorCode::ActionFailed);
         ASSERT_EQ(document, std::optional<ssg::JournalDocument>{expected});
         ASSERT_TRUE(event_index(injection.events,
-                                ssg::RecoveryStep::rollback_document) !=
+                                ssg::RecoveryStep::RollbackDocument) !=
                     std::numeric_limits<std::size_t>::max());
         ASSERT_TRUE(actions.records().empty());
     }
@@ -530,16 +530,16 @@ TEST(each_action_mutation_failure_rolls_back_and_discards_its_record) {
     const auto assert_filesystem_action_failure =
         [&](std::string_view name, const auto& invoke) {
             InjectedRecoveryFailures injection;
-            injection.fail(ssg::RecoveryStep::mutate_filesystem);
+            injection.fail(ssg::RecoveryStep::MutateFilesystem);
             auto actions = ssg::RecoveryActions::create(
                 temporary.path() / std::string{name}, recovery_config(),
                 injection);
             const auto result = invoke(actions);
             ASSERT_FALSE(result.accepted());
             ASSERT_EQ(result.error->code,
-                      ssg::RecoveryErrorCode::action_failed);
+                      ssg::RecoveryErrorCode::ActionFailed);
             ASSERT_TRUE(event_index(injection.events,
-                                    ssg::RecoveryStep::rollback_filesystem) !=
+                                    ssg::RecoveryStep::RollbackFilesystem) !=
                         std::numeric_limits<std::size_t>::max());
             ASSERT_TRUE(actions.records().empty());
         };
@@ -583,7 +583,7 @@ TEST(partial_workspace_mutation_failure_rolls_back_to_exact_tree) {
     write_bytes(replacement / "new.txt", "new");
     const auto before = snapshot_tree(workspace);
     InjectedRecoveryFailures injection;
-    injection.fail(ssg::RecoveryStep::mutate_filesystem, 1);
+    injection.fail(ssg::RecoveryStep::MutateFilesystem, 1);
     auto actions = ssg::RecoveryActions::create(
         temporary.path() / "recovery", recovery_config(), injection);
 
@@ -591,7 +591,7 @@ TEST(partial_workspace_mutation_failure_rolls_back_to_exact_tree) {
         actions.replace_workspace(workspace, replacement);
 
     ASSERT_FALSE(replaced.accepted());
-    ASSERT_EQ(replaced.error->code, ssg::RecoveryErrorCode::action_failed);
+    ASSERT_EQ(replaced.error->code, ssg::RecoveryErrorCode::ActionFailed);
     ASSERT_TRUE(replaced.error->rollback_failure.empty());
     ASSERT_FALSE(replaced.compensation.has_value());
     ASSERT_EQ(snapshot_tree(workspace), before);
@@ -606,8 +606,8 @@ TEST(action_and_rollback_failure_retains_record_for_successful_retry) {
     write_bytes(replacement / "new.txt", "new");
     const auto before = snapshot_tree(workspace);
     InjectedRecoveryFailures injection;
-    injection.fail(ssg::RecoveryStep::mutate_filesystem, 1);
-    injection.fail(ssg::RecoveryStep::rollback_filesystem);
+    injection.fail(ssg::RecoveryStep::MutateFilesystem, 1);
+    injection.fail(ssg::RecoveryStep::RollbackFilesystem);
     auto actions = ssg::RecoveryActions::create(
         temporary.path() / "recovery", recovery_config(), injection);
 
@@ -616,7 +616,7 @@ TEST(action_and_rollback_failure_retains_record_for_successful_retry) {
 
     ASSERT_FALSE(replaced.accepted());
     ASSERT_EQ(replaced.error->code,
-              ssg::RecoveryErrorCode::action_and_rollback_failed);
+              ssg::RecoveryErrorCode::ActionAndRollbackFailed);
     ASSERT_FALSE(replaced.error->message.empty());
     ASSERT_FALSE(replaced.error->rollback_failure.empty());
     ASSERT_TRUE(replaced.compensation.has_value());
@@ -636,8 +636,8 @@ TEST(reconstruction_discards_persisted_in_progress_document_record) {
     std::optional<ssg::JournalDocument> document{expected};
     {
         InjectedRecoveryFailures injection;
-        injection.fail(ssg::RecoveryStep::mutate_document);
-        injection.fail(ssg::RecoveryStep::rollback_document);
+        injection.fail(ssg::RecoveryStep::MutateDocument);
+        injection.fail(ssg::RecoveryStep::RollbackDocument);
         auto actions = ssg::RecoveryActions::create(
             recovery_root, recovery_config(), injection);
 
@@ -646,7 +646,7 @@ TEST(reconstruction_discards_persisted_in_progress_document_record) {
 
         ASSERT_FALSE(result.accepted());
         ASSERT_EQ(result.error->code,
-                  ssg::RecoveryErrorCode::action_and_rollback_failed);
+                  ssg::RecoveryErrorCode::ActionAndRollbackFailed);
         ASSERT_TRUE(result.compensation.has_value());
         ASSERT_EQ(actions.records().size(), std::size_t{1});
         ASSERT_EQ(document, std::optional<ssg::JournalDocument>{expected});
@@ -668,8 +668,8 @@ TEST(reconstruction_auto_rolls_back_persisted_in_progress_filesystem_record) {
     const auto before = snapshot_tree(workspace);
     {
         InjectedRecoveryFailures injection;
-        injection.fail(ssg::RecoveryStep::mutate_filesystem, 1);
-        injection.fail(ssg::RecoveryStep::rollback_filesystem);
+        injection.fail(ssg::RecoveryStep::MutateFilesystem, 1);
+        injection.fail(ssg::RecoveryStep::RollbackFilesystem);
         auto actions = ssg::RecoveryActions::create(
             recovery_root, recovery_config(), injection);
 
@@ -678,7 +678,7 @@ TEST(reconstruction_auto_rolls_back_persisted_in_progress_filesystem_record) {
 
         ASSERT_FALSE(result.accepted());
         ASSERT_EQ(result.error->code,
-                  ssg::RecoveryErrorCode::action_and_rollback_failed);
+                  ssg::RecoveryErrorCode::ActionAndRollbackFailed);
         ASSERT_TRUE(result.compensation.has_value());
         ASSERT_EQ(actions.records().size(), std::size_t{1});
         ASSERT_NE(snapshot_tree(workspace), before);
@@ -721,8 +721,8 @@ TEST(rename_failed_publication_rollback_remains_safe_after_reconstruction) {
     const auto source_identity = ssg::file_identity(source);
     {
         InjectedRecoveryFailures injection;
-        injection.fail(ssg::RecoveryStep::publish_record, 1);
-        injection.fail(ssg::RecoveryStep::cleanup_record);
+        injection.fail(ssg::RecoveryStep::PublishRecord, 1);
+        injection.fail(ssg::RecoveryStep::CleanupRecord);
         auto actions = ssg::RecoveryActions::create(
             recovery_root, recovery_config(), injection);
 
@@ -731,7 +731,7 @@ TEST(rename_failed_publication_rollback_remains_safe_after_reconstruction) {
         ASSERT_FALSE(result.accepted());
         ASSERT_TRUE(result.error.has_value());
         if (result.error) {
-            ASSERT_EQ(result.error->code, ssg::RecoveryErrorCode::cleanup_failed);
+            ASSERT_EQ(result.error->code, ssg::RecoveryErrorCode::CleanupFailed);
         }
         ASSERT_TRUE(result.compensation.has_value());
         ASSERT_EQ(snapshot_tree(canonical), before);
@@ -757,14 +757,14 @@ TEST(restoration_failure_keeps_record_and_retry_restores_exact_tree) {
         temporary.path() / "recovery", recovery_config(), injection);
     const auto deleted = actions.delete_path(removed);
     ASSERT_TRUE(deleted.accepted());
-    injection.fail(ssg::RecoveryStep::restore_filesystem);
+    injection.fail(ssg::RecoveryStep::RestoreFilesystem);
 
     const auto failed_restore =
         actions.restore_filesystem(*deleted.compensation);
 
     ASSERT_FALSE(failed_restore.accepted());
     ASSERT_EQ(failed_restore.error->code,
-              ssg::RecoveryErrorCode::restoration_failed);
+              ssg::RecoveryErrorCode::RestorationFailed);
     ASSERT_EQ(actions.records().size(), std::size_t{1});
     injection.clear_failures();
     ASSERT_TRUE(
@@ -787,7 +787,7 @@ TEST(rename_partial_restore_retry_preserves_source_identity) {
         temporary.path() / "recovery", recovery_config(), injection);
     const auto renamed = actions.rename_path(source, destination);
     ASSERT_TRUE(renamed.accepted());
-    injection.fail(ssg::RecoveryStep::restore_filesystem, 1);
+    injection.fail(ssg::RecoveryStep::RestoreFilesystem, 1);
 
     const auto failed_restore =
         actions.restore_filesystem(*renamed.compensation);
@@ -796,7 +796,7 @@ TEST(rename_partial_restore_retry_preserves_source_identity) {
     ASSERT_TRUE(failed_restore.error.has_value());
     if (failed_restore.error) {
         ASSERT_EQ(failed_restore.error->code,
-                  ssg::RecoveryErrorCode::restoration_failed);
+                  ssg::RecoveryErrorCode::RestorationFailed);
     }
     ASSERT_EQ(ssg::file_identity(source), source_identity);
     ASSERT_FALSE(std::filesystem::exists(destination));
@@ -823,7 +823,7 @@ TEST(rename_completed_restore_retry_preserves_source_identity) {
         temporary.path() / "recovery", recovery_config(), injection);
     const auto renamed = actions.rename_path(source, destination);
     ASSERT_TRUE(renamed.accepted());
-    injection.fail(ssg::RecoveryStep::restore_filesystem, 2);
+    injection.fail(ssg::RecoveryStep::RestoreFilesystem, 2);
 
     const auto failed_restore =
         actions.restore_filesystem(*renamed.compensation);
@@ -850,14 +850,14 @@ TEST(cleanup_failure_keeps_restored_record_retryable) {
         temporary.path() / "recovery", recovery_config(), injection);
     const auto overwritten = actions.overwrite_file(target, bytes("new"));
     ASSERT_TRUE(overwritten.accepted());
-    injection.fail(ssg::RecoveryStep::cleanup_record);
+    injection.fail(ssg::RecoveryStep::CleanupRecord);
 
     const auto cleanup_failed =
         actions.restore_filesystem(*overwritten.compensation);
 
     ASSERT_FALSE(cleanup_failed.accepted());
     ASSERT_EQ(cleanup_failed.error->code,
-              ssg::RecoveryErrorCode::cleanup_failed);
+              ssg::RecoveryErrorCode::CleanupFailed);
     ASSERT_EQ(read_bytes(target), "old");
     ASSERT_EQ(actions.records().size(), std::size_t{1});
     injection.clear_failures();
@@ -892,7 +892,7 @@ TEST(count_budget_evicts_oldest_only_after_new_record_is_installed) {
     ASSERT_EQ(records[1].id, *third.compensation);
     const auto evicted = actions.restore_filesystem(*first.compensation);
     ASSERT_FALSE(evicted.accepted());
-    ASSERT_EQ(evicted.error->code, ssg::RecoveryErrorCode::record_not_found);
+    ASSERT_EQ(evicted.error->code, ssg::RecoveryErrorCode::RecordNotFound);
 }
 
 TEST(byte_budget_evicts_oldest_when_new_record_fits_after_eviction) {
@@ -926,7 +926,7 @@ TEST(byte_budget_evicts_oldest_when_new_record_fits_after_eviction) {
     ASSERT_EQ(retained[1].id, *third.compensation);
     const auto evicted = actions.restore_filesystem(*first.compensation);
     ASSERT_FALSE(evicted.accepted());
-    ASSERT_EQ(evicted.error->code, ssg::RecoveryErrorCode::record_not_found);
+    ASSERT_EQ(evicted.error->code, ssg::RecoveryErrorCode::RecordNotFound);
 }
 
 TEST(byte_budget_rejects_before_mutating_when_newest_record_cannot_fit) {
@@ -940,7 +940,7 @@ TEST(byte_budget_rejects_before_mutating_when_newest_record_cannot_fit) {
     const auto rejected = actions.overwrite_file(target, bytes("new"));
 
     ASSERT_FALSE(rejected.accepted());
-    ASSERT_EQ(rejected.error->code, ssg::RecoveryErrorCode::budget_exceeded);
+    ASSERT_EQ(rejected.error->code, ssg::RecoveryErrorCode::BudgetExceeded);
     ASSERT_EQ(read_bytes(target), original);
     ASSERT_TRUE(actions.records().empty());
 }
@@ -985,7 +985,7 @@ TEST(record_kind_mismatches_are_typed_and_non_destructive) {
 
     ASSERT_FALSE(mismatch.accepted());
     ASSERT_EQ(mismatch.error->code,
-              ssg::RecoveryErrorCode::record_kind_mismatch);
+              ssg::RecoveryErrorCode::RecordKindMismatch);
     ASSERT_EQ(read_bytes(target), "new");
     ASSERT_EQ(actions.records().size(), std::size_t{1});
 
@@ -996,7 +996,7 @@ TEST(record_kind_mismatches_are_typed_and_non_destructive) {
         actions.restore_filesystem(*reloaded.compensation);
     ASSERT_FALSE(inverse.accepted());
     ASSERT_EQ(inverse.error->code,
-              ssg::RecoveryErrorCode::record_kind_mismatch);
+              ssg::RecoveryErrorCode::RecordKindMismatch);
     ASSERT_EQ(document,
               std::optional<ssg::JournalDocument>{replacement});
     ASSERT_EQ(actions.records().size(), std::size_t{2});

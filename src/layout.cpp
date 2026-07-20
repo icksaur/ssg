@@ -1358,7 +1358,7 @@ CellRun compute_cell_run(std::string_view line_utf8, int tab_width) {
         if (!base.valid) {
             result.spans.push_back({
                 static_cast<uint32_t>(cluster_start), 1u, 1u,
-                CellKind::invalid_utf8
+                CellKind::InvalidUtf8
             });
             result.total_cells += 1;
             cur_cell            += 1;
@@ -1374,7 +1374,7 @@ CellRun compute_cell_run(std::string_view line_utf8, int tab_width) {
             const uint32_t tw      = static_cast<uint32_t>(tab_width);
             const uint32_t advance = tw - (cur_cell % tw);
             result.spans.push_back({
-                static_cast<uint32_t>(cluster_start), 1u, advance, CellKind::tab
+                static_cast<uint32_t>(cluster_start), 1u, advance, CellKind::Tab
             });
             result.total_cells += advance;
             cur_cell            += advance;
@@ -1392,7 +1392,7 @@ CellRun compute_cell_run(std::string_view line_utf8, int tab_width) {
             result.spans.push_back({
                 static_cast<uint32_t>(cluster_start),
                 static_cast<uint32_t>(base.byte_len),
-                ctrl_width, CellKind::control
+                ctrl_width, CellKind::Control
             });
             result.total_cells += ctrl_width;
             cur_cell            += ctrl_width;
@@ -1414,10 +1414,10 @@ CellRun compute_cell_run(std::string_view line_utf8, int tab_width) {
             // render as 2-cell glyphs even without a base; those get kind=text.
             // Zero-width Extend/ZWJ/SpacingMark alone get kind=combining, width=0.
             base_width = display_width_of(cp, gcb);
-            kind       = (base_width == 0u) ? CellKind::combining : CellKind::text;
+            kind       = (base_width == 0u) ? CellKind::Combining : CellKind::Text;
         } else {
             base_width = display_width_of(cp, gcb);
-            kind       = CellKind::text;
+            kind       = CellKind::Text;
         }
 
         // last_gcb: GCB property of the most recently added code point in this
@@ -1490,7 +1490,7 @@ CellRun compute_cell_run(std::string_view line_utf8, int tab_width) {
                     effective_base_cp = ext_cp;
                     base_width = display_width_of(ext_cp, ext_gcb);
                     kind = (base_width == 0u)
-                           ? CellKind::combining : CellKind::text;
+                           ? CellKind::Combining : CellKind::Text;
                     gb11 = is_extended_pictographic(ext_cp)
                            ? GB11State::ExtPic : GB11State::None;
                 }
@@ -1507,7 +1507,7 @@ CellRun compute_cell_run(std::string_view line_utf8, int tab_width) {
         // that did not already get 2 cells, upgrade to 2.
         if (saw_vs16 && base_width < 2u && is_emoji(effective_base_cp)) {
             base_width = 2u;
-            kind = CellKind::text;
+            kind = CellKind::Text;
         }
 
         result.spans.push_back({

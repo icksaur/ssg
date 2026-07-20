@@ -32,13 +32,13 @@ ssg::HistoryResult input(ssg::DocumentHistory& history, ssg::Document& document,
                          std::string text = {}) {
     const auto generated = ssg::apply_text_input(
         document.snapshot(), selections,
-        ssg::TextInputSettings{ssg::IndentStyle::spaces, 4, false,
-                               ssg::LineEnding::lf},
+        ssg::TextInputSettings{ssg::IndentStyle::Spaces, 4, false,
+                               ssg::LineEnding::Lf},
         command, ssg::TextInputArguments{std::move(text)});
     ASSERT_TRUE(generated.accepted());
     if (!generated.accepted()) {
-        return {ssg::HistoryError::document_rejected,
-                ssg::DocumentError::empty_transaction, document.revision(),
+        return {ssg::HistoryError::DocumentRejected,
+                ssg::DocumentError::EmptyTransaction, document.revision(),
                 std::nullopt, generated.message};
     }
     auto result = history.apply_edit(document, *generated.transaction, selections,
@@ -81,8 +81,8 @@ TEST(reference_forward_undo_redo_round_trips) {
     auto reference = ref::make_editor("one");
 
     ASSERT_TRUE(input(history, document, selections,
-                      ssg::TextInputCommand::insert,
-                      ssg::HistoryEditKind::other, 0, "!").accepted());
+                      ssg::TextInputCommand::Insert,
+                      ssg::HistoryEditKind::Other, 0, "!").accepted());
     ref::text_insert(reference, "!");
     assert_matches(document, selections, reference);
 
@@ -99,8 +99,8 @@ TEST(reference_forward_undo_redo_round_trips) {
     assert_matches(document, selections, reference);
 
     ASSERT_TRUE(input(history, document, selections,
-                      ssg::TextInputCommand::delete_word_backward,
-                      ssg::HistoryEditKind::other, 1000).accepted());
+                      ssg::TextInputCommand::DeleteWordBackward,
+                      ssg::HistoryEditKind::Other, 1000).accepted());
     ref::text_delete_word_backward(reference);
     assert_matches(document, selections, reference);
     selections = *history.undo(document).selections;
@@ -117,11 +117,11 @@ TEST(typing_coalesces_at_inclusive_clock_boundary) {
     auto selections = caret(0);
 
     ASSERT_TRUE(input(history, document, selections,
-                      ssg::TextInputCommand::insert,
-                      ssg::HistoryEditKind::typing, 100, "a").accepted());
+                      ssg::TextInputCommand::Insert,
+                      ssg::HistoryEditKind::Typing, 100, "a").accepted());
     ASSERT_TRUE(input(history, document, selections,
-                      ssg::TextInputCommand::insert,
-                      ssg::HistoryEditKind::typing, 850, "b").accepted());
+                      ssg::TextInputCommand::Insert,
+                      ssg::HistoryEditKind::Typing, 850, "b").accepted());
     ASSERT_EQ(document.snapshot().text, std::string{"ab"});
     selections = *history.undo(document).selections;
     ASSERT_EQ(document.snapshot().text, std::string{});
@@ -140,10 +140,10 @@ TEST(multicaret_typing_coalesces_and_round_trips) {
         ssg::Selection{position(3), position(3)},
     }};
 
-    input(history, document, selections, ssg::TextInputCommand::insert,
-          ssg::HistoryEditKind::typing, 10, "X");
-    input(history, document, selections, ssg::TextInputCommand::insert,
-          ssg::HistoryEditKind::typing, 20, "Y");
+    input(history, document, selections, ssg::TextInputCommand::Insert,
+          ssg::HistoryEditKind::Typing, 10, "X");
+    input(history, document, selections, ssg::TextInputCommand::Insert,
+          ssg::HistoryEditKind::Typing, 20, "Y");
     ASSERT_EQ(document.snapshot().text, std::string{"aXYbcXYd"});
     selections = *history.undo(document).selections;
     ASSERT_EQ(document.snapshot().text, std::string{"abcd"});
@@ -157,17 +157,17 @@ TEST(window_kind_and_barrier_split_units) {
     ssg::DocumentHistory history{{4096, 750}};
     auto selections = caret(0);
 
-    input(history, document, selections, ssg::TextInputCommand::insert,
-          ssg::HistoryEditKind::typing, 100, "a");
-    input(history, document, selections, ssg::TextInputCommand::insert,
-          ssg::HistoryEditKind::typing, 851, "b");
+    input(history, document, selections, ssg::TextInputCommand::Insert,
+          ssg::HistoryEditKind::Typing, 100, "a");
+    input(history, document, selections, ssg::TextInputCommand::Insert,
+          ssg::HistoryEditKind::Typing, 851, "b");
     selections = *history.undo(document).selections;
     ASSERT_EQ(document.snapshot().text, std::string{"a"});
     selections = *history.redo(document).selections;
 
     history.break_coalescing();
-    input(history, document, selections, ssg::TextInputCommand::insert,
-          ssg::HistoryEditKind::typing, 900, "c");
+    input(history, document, selections, ssg::TextInputCommand::Insert,
+          ssg::HistoryEditKind::Typing, 900, "c");
     selections = *history.undo(document).selections;
     ASSERT_EQ(document.snapshot().text, std::string{"ab"});
 
@@ -175,11 +175,11 @@ TEST(window_kind_and_barrier_split_units) {
     ssg::DocumentHistory direction_history{{4096, 750}};
     auto direction_selection = caret(1);
     input(direction_history, directions, direction_selection,
-          ssg::TextInputCommand::delete_backward,
-          ssg::HistoryEditKind::delete_backward, 950);
+          ssg::TextInputCommand::DeleteBackward,
+          ssg::HistoryEditKind::DeleteBackward, 950);
     input(direction_history, directions, direction_selection,
-          ssg::TextInputCommand::delete_forward,
-          ssg::HistoryEditKind::delete_forward, 951);
+          ssg::TextInputCommand::DeleteForward,
+          ssg::HistoryEditKind::DeleteForward, 951);
     direction_selection = *direction_history.undo(directions).selections;
     ASSERT_EQ(directions.snapshot().text, std::string{"bc"});
 }
@@ -189,11 +189,11 @@ TEST(same_direction_deletions_coalesce) {
     ssg::DocumentHistory backward_history{{4096, 750}};
     auto backward_selection = caret(3);
     input(backward_history, backward_document, backward_selection,
-          ssg::TextInputCommand::delete_backward,
-          ssg::HistoryEditKind::delete_backward, 10);
+          ssg::TextInputCommand::DeleteBackward,
+          ssg::HistoryEditKind::DeleteBackward, 10);
     input(backward_history, backward_document, backward_selection,
-          ssg::TextInputCommand::delete_backward,
-          ssg::HistoryEditKind::delete_backward, 20);
+          ssg::TextInputCommand::DeleteBackward,
+          ssg::HistoryEditKind::DeleteBackward, 20);
     backward_selection = *backward_history.undo(backward_document).selections;
     ASSERT_EQ(backward_document.snapshot().text, std::string{"abc"});
     ASSERT_EQ(backward_selection, caret(3));
@@ -202,11 +202,11 @@ TEST(same_direction_deletions_coalesce) {
     ssg::DocumentHistory forward_history{{4096, 750}};
     auto forward_selection = caret(0);
     input(forward_history, forward_document, forward_selection,
-          ssg::TextInputCommand::delete_forward,
-          ssg::HistoryEditKind::delete_forward, 10);
+          ssg::TextInputCommand::DeleteForward,
+          ssg::HistoryEditKind::DeleteForward, 10);
     input(forward_history, forward_document, forward_selection,
-          ssg::TextInputCommand::delete_forward,
-          ssg::HistoryEditKind::delete_forward, 20);
+          ssg::TextInputCommand::DeleteForward,
+          ssg::HistoryEditKind::DeleteForward, 20);
     forward_selection = *forward_history.undo(forward_document).selections;
     ASSERT_EQ(forward_document.snapshot().text, std::string{"abc"});
     ASSERT_EQ(forward_selection, caret(0));
@@ -217,19 +217,19 @@ TEST(selection_restoration_and_redo_invalidation) {
     ssg::DocumentHistory history{{4096, 750}};
     auto selections = range(1, 3);
 
-    input(history, document, selections, ssg::TextInputCommand::insert,
-          ssg::HistoryEditKind::other, 0, "X");
+    input(history, document, selections, ssg::TextInputCommand::Insert,
+          ssg::HistoryEditKind::Other, 0, "X");
     ASSERT_EQ(document.snapshot().text, std::string{"aXd"});
     ASSERT_EQ(selections, caret(2));
     selections = *history.undo(document).selections;
     ASSERT_EQ(selections, range(1, 3));
     ASSERT_EQ(document.snapshot().text, std::string{"abcd"});
 
-    input(history, document, selections, ssg::TextInputCommand::insert,
-          ssg::HistoryEditKind::other, 1, "Y");
+    input(history, document, selections, ssg::TextInputCommand::Insert,
+          ssg::HistoryEditKind::Other, 1, "Y");
     ASSERT_EQ(document.snapshot().text, std::string{"aYd"});
     ASSERT_FALSE(history.can_redo());
-    ASSERT_EQ(history.redo(document).error, ssg::HistoryError::no_redo);
+    ASSERT_EQ(history.redo(document).error, ssg::HistoryError::NoRedo);
 }
 
 TEST(byte_budget_evicts_oldest_and_rejects_oversize_units) {
@@ -239,11 +239,11 @@ TEST(byte_budget_evicts_oldest_and_rejects_oversize_units) {
     ssg::DocumentHistory history{{one_insert_charge, 750}};
     auto selections = caret(0);
 
-    input(history, document, selections, ssg::TextInputCommand::insert,
-          ssg::HistoryEditKind::other, 0, "a");
+    input(history, document, selections, ssg::TextInputCommand::Insert,
+          ssg::HistoryEditKind::Other, 0, "a");
     ASSERT_EQ(history.retained_bytes(), one_insert_charge);
-    input(history, document, selections, ssg::TextInputCommand::insert,
-          ssg::HistoryEditKind::other, 1, "b");
+    input(history, document, selections, ssg::TextInputCommand::Insert,
+          ssg::HistoryEditKind::Other, 1, "b");
     ASSERT_EQ(history.retained_bytes(), one_insert_charge);
     selections = *history.undo(document).selections;
     ASSERT_EQ(document.snapshot().text, std::string{"a"});
@@ -253,7 +253,7 @@ TEST(byte_budget_evicts_oldest_and_rejects_oversize_units) {
     ssg::DocumentHistory oversized{{one_insert_charge - 1, 750}};
     auto oversized_selection = caret(0);
     input(oversized, oversized_document, oversized_selection,
-          ssg::TextInputCommand::insert, ssg::HistoryEditKind::other, 0, "x");
+          ssg::TextInputCommand::Insert, ssg::HistoryEditKind::Other, 0, "x");
     ASSERT_FALSE(oversized.can_undo());
     ASSERT_EQ(oversized.retained_bytes(), std::uint64_t{0});
 
@@ -261,7 +261,7 @@ TEST(byte_budget_evicts_oldest_and_rejects_oversize_units) {
     ssg::DocumentHistory disabled{{0, 750}};
     auto disabled_selection = caret(0);
     input(disabled, disabled_document, disabled_selection,
-          ssg::TextInputCommand::insert, ssg::HistoryEditKind::other, 0, "x");
+          ssg::TextInputCommand::Insert, ssg::HistoryEditKind::Other, 0, "x");
     ASSERT_FALSE(disabled.can_undo());
 }
 
@@ -273,20 +273,20 @@ TEST(rejection_and_stale_document_are_failure_atomic) {
         ssg::Revision{99}, {{ssg::ByteOffset{1}, 0, "b"}}};
     const auto rejected =
         history.apply_edit(document, stale, selections, caret(2),
-                           ssg::HistoryEditKind::other, 0);
+                           ssg::HistoryEditKind::Other, 0);
     ASSERT_FALSE(rejected.accepted());
-    ASSERT_EQ(rejected.document_error, ssg::DocumentError::stale_revision);
+    ASSERT_EQ(rejected.document_error, ssg::DocumentError::StaleRevision);
     ASSERT_EQ(document.snapshot().text, std::string{"a"});
     ASSERT_FALSE(history.can_undo());
 
-    input(history, document, selections, ssg::TextInputCommand::insert,
-          ssg::HistoryEditKind::other, 1, "b");
+    input(history, document, selections, ssg::TextInputCommand::Insert,
+          ssg::HistoryEditKind::Other, 1, "b");
     const auto direct = document.apply(
         {document.revision(), {{ssg::ByteOffset{2}, 0, "c"}}});
     ASSERT_TRUE(direct.accepted());
     const auto before = document.snapshot();
     const auto undo = history.undo(document);
-    ASSERT_EQ(undo.error, ssg::HistoryError::stale_document);
+    ASSERT_EQ(undo.error, ssg::HistoryError::StaleDocument);
     ASSERT_EQ(document.snapshot(), before);
     ASSERT_TRUE(history.can_undo());
 }
@@ -295,8 +295,8 @@ TEST(undo_redo_advance_revision_and_keep_dirty) {
     ssg::Document document;
     ssg::DocumentHistory history{{4096, 750}};
     auto selections = caret(0);
-    input(history, document, selections, ssg::TextInputCommand::insert,
-          ssg::HistoryEditKind::other, 0, "a");
+    input(history, document, selections, ssg::TextInputCommand::Insert,
+          ssg::HistoryEditKind::Other, 0, "a");
     const auto after_edit = document.revision();
     selections = *history.undo(document).selections;
     ASSERT_TRUE(document.revision() > after_edit);
@@ -316,8 +316,8 @@ TEST(view_state_and_delta_track_history_availability) {
     ASSERT_FALSE(ssg::derive_history_delta(empty, empty).changed);
 
     auto selections = caret(0);
-    input(history, document, selections, ssg::TextInputCommand::insert,
-          ssg::HistoryEditKind::other, 0, "a");
+    input(history, document, selections, ssg::TextInputCommand::Insert,
+          ssg::HistoryEditKind::Other, 0, "a");
     const auto edited = history.view_state();
     const auto delta = ssg::derive_history_delta(empty, edited);
     ASSERT_TRUE(delta.changed);

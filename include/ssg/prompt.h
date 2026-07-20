@@ -12,15 +12,15 @@
 namespace ssg {
 
 enum class PromptKind : std::uint8_t {
-    path,
-    find,
-    replace,
-    settings,
-    command_argument,
-    palette,
+    Path,
+    Find,
+    Replace,
+    Settings,
+    CommandArgument,
+    Palette,
 };
 
-enum class PromptControlKind : std::uint8_t { input, toggle, count };
+enum class PromptControlKind : std::uint8_t { Input, Toggle, Count };
 
 struct PromptInput {
     std::string id;
@@ -46,7 +46,7 @@ struct PromptMatchCount {
 };
 
 struct PromptRequest {
-    PromptKind kind = PromptKind::command_argument;
+    PromptKind kind = PromptKind::CommandArgument;
     std::string accessible_label;
     std::vector<PromptInput> inputs;
     std::vector<PromptToggle> toggles;
@@ -55,7 +55,7 @@ struct PromptRequest {
 };
 
 struct PromptSubmission {
-    PromptKind kind = PromptKind::command_argument;
+    PromptKind kind = PromptKind::CommandArgument;
     std::vector<std::string> values;
     std::vector<bool> toggles;
     friend bool operator==(const PromptSubmission&,
@@ -63,13 +63,13 @@ struct PromptSubmission {
 };
 
 enum class PromptErrorCode : std::uint8_t {
-    invalid_request,
-    invalid_reservation,
-    no_active_prompt,
+    InvalidRequest,
+    InvalidReservation,
+    NoActivePrompt,
 };
 
 struct PromptError {
-    PromptErrorCode code = PromptErrorCode::invalid_request;
+    PromptErrorCode code = PromptErrorCode::InvalidRequest;
     std::string message;
     friend bool operator==(const PromptError&, const PromptError&) = default;
 };
@@ -82,7 +82,7 @@ struct PromptCommandResult {
 };
 
 struct PromptControlView {
-    PromptControlKind kind = PromptControlKind::input;
+    PromptControlKind kind = PromptControlKind::Input;
     std::string id;
     std::string accessible_label;
     std::string value;
@@ -93,7 +93,7 @@ struct PromptControlView {
 };
 
 struct PromptViewState {
-    PromptKind kind = PromptKind::command_argument;
+    PromptKind kind = PromptKind::CommandArgument;
     std::string accessible_label;
     Rect rect;
     std::vector<PromptControlView> controls;

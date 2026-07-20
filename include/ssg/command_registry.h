@@ -63,10 +63,10 @@ private:
 };
 
 enum class InvocationOrigin : std::uint8_t {
-    in_process,
-    websocket,
-    lua,
-    system,
+    InProcess,
+    Websocket,
+    Lua,
+    System,
 };
 
 class InvocationPrincipal {
@@ -155,8 +155,8 @@ private:
 };
 
 enum class CommandEffect : std::uint8_t {
-    observation,
-    mutation,
+    Observation,
+    Mutation,
 };
 
 struct CommandHandlerResult {

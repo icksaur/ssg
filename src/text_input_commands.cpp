@@ -22,9 +22,9 @@ struct PendingEdit {
 };
 
 enum class SegmentCategory : std::uint8_t {
-    word,
-    space,
-    punctuation,
+    Word,
+    Space,
+    Punctuation,
 };
 
 TextInputResult failure(TextInputError error, std::string message) {
@@ -125,12 +125,12 @@ SegmentCategory category(std::string_view text, std::size_t start) {
     if (first >= 0x80 || (first >= 'a' && first <= 'z') ||
         (first >= 'A' && first <= 'Z') ||
         (first >= '0' && first <= '9') || first == '_') {
-        return SegmentCategory::word;
+        return SegmentCategory::Word;
     }
     if (first == ' ' || first == '\t' || first == '\r' || first == '\n') {
-        return SegmentCategory::space;
+        return SegmentCategory::Space;
     }
-    return SegmentCategory::punctuation;
+    return SegmentCategory::Punctuation;
 }
 
 std::size_t word_left(std::string_view text,
@@ -141,7 +141,7 @@ std::size_t word_left(std::string_view text,
     }
     auto position = previous_boundary(boundaries, offset);
     const auto target = category(text, position);
-    if (target == SegmentCategory::punctuation) {
+    if (target == SegmentCategory::Punctuation) {
         return position;
     }
     while (position > 0) {
@@ -184,10 +184,10 @@ std::pair<std::size_t, std::size_t> line_bounds(std::string_view text,
 std::string terminator_for(std::string_view text, std::size_t offset,
                            LineEnding configured) {
     switch (configured) {
-    case LineEnding::lf: return "\n";
-    case LineEnding::crlf: return "\r\n";
-    case LineEnding::cr: return "\r";
-    case LineEnding::mixed: {
+    case LineEnding::Lf: return "\n";
+    case LineEnding::Crlf: return "\r\n";
+    case LineEnding::Cr: return "\r";
+    case LineEnding::Mixed: {
         const auto end = line_bounds(text, offset).second;
         if (end == text.size()) {
             return "\n";
@@ -222,7 +222,7 @@ std::string indentation_for(std::string_view text, std::size_t offset,
             break;
         }
     }
-    if (settings.indent_style == IndentStyle::spaces) {
+    if (settings.indent_style == IndentStyle::Spaces) {
         return std::string(static_cast<std::size_t>(columns), ' ');
     }
     const auto tabs = columns / settings.indent_width;
@@ -270,13 +270,13 @@ void normalize_edits(std::vector<PendingEdit>& edits) {
 
 TextInputCommandSet::TextInputCommandSet()
     : descriptors_{{
-          {"text.insert", TextInputCommand::insert},
-          {"text.newline", TextInputCommand::newline},
-          {"text.delete_backward", TextInputCommand::delete_backward},
-          {"text.delete_forward", TextInputCommand::delete_forward},
+          {"text.insert", TextInputCommand::Insert},
+          {"text.newline", TextInputCommand::Newline},
+          {"text.delete_backward", TextInputCommand::DeleteBackward},
+          {"text.delete_forward", TextInputCommand::DeleteForward},
           {"text.delete_word_backward",
-           TextInputCommand::delete_word_backward},
-          {"text.delete_word_forward", TextInputCommand::delete_word_forward},
+           TextInputCommand::DeleteWordBackward},
+          {"text.delete_word_forward", TextInputCommand::DeleteWordForward},
       }} {}
 
 const std::array<TextInputCommandDescriptor, 6>&
@@ -293,37 +293,37 @@ TextInputResult apply_text_input(const DocumentSnapshot& document,
                                  TextInputSettings settings,
                                  TextInputCommand command,
                                  TextInputArguments arguments) {
-    if (document.mode == DocumentMode::read_only) {
-        return failure(TextInputError::read_only,
+    if (document.mode == DocumentMode::ReadOnly) {
+        return failure(TextInputError::ReadOnly,
                        "text input requires an editable document");
     }
-    if (document.mode == DocumentMode::diff) {
-        return failure(TextInputError::diff,
+    if (document.mode == DocumentMode::Diff) {
+        return failure(TextInputError::Diff,
                        "text input is unavailable in diff mode");
     }
     if (settings.indent_width < 1 || settings.indent_width > 16 ||
-        (settings.indent_style != IndentStyle::spaces &&
-         settings.indent_style != IndentStyle::tabs) ||
+        (settings.indent_style != IndentStyle::Spaces &&
+         settings.indent_style != IndentStyle::Tabs) ||
         static_cast<std::uint8_t>(settings.line_ending) >
-            static_cast<std::uint8_t>(LineEnding::mixed)) {
-        return failure(TextInputError::invalid_settings,
+            static_cast<std::uint8_t>(LineEnding::Mixed)) {
+        return failure(TextInputError::InvalidSettings,
                        "text input settings are outside their valid range");
     }
     const auto tab_width = static_cast<int>(settings.indent_width);
     for (const auto& selection : selections.items()) {
         if (!valid_position(document.text, selection.anchor, tab_width) ||
             !valid_position(document.text, selection.active, tab_width)) {
-            return failure(TextInputError::invalid_selection,
+            return failure(TextInputError::InvalidSelection,
                            "selection position is inconsistent with document");
         }
     }
-    if (command == TextInputCommand::insert && !valid_utf8(arguments.text)) {
-        return failure(TextInputError::invalid_utf8,
+    if (command == TextInputCommand::Insert && !valid_utf8(arguments.text)) {
+        return failure(TextInputError::InvalidUtf8,
                        "inserted text must be well-formed UTF-8 without NUL");
     }
     if (static_cast<std::uint8_t>(command) >
-        static_cast<std::uint8_t>(TextInputCommand::delete_word_forward)) {
-        return failure(TextInputError::unknown_command,
+        static_cast<std::uint8_t>(TextInputCommand::DeleteWordForward)) {
+        return failure(TextInputError::UnknownCommand,
                        "text input command is not recognized");
     }
 
@@ -335,7 +335,7 @@ TextInputResult apply_text_input(const DocumentSnapshot& document,
             static_cast<std::size_t>(selection.active.byte_offset.value());
         if (!std::binary_search(boundaries.begin(), boundaries.end(), anchor) ||
             !std::binary_search(boundaries.begin(), boundaries.end(), active)) {
-            return failure(TextInputError::invalid_selection,
+            return failure(TextInputError::InvalidSelection,
                            "selection must be on a grapheme boundary");
         }
     }
@@ -351,9 +351,9 @@ TextInputResult apply_text_input(const DocumentSnapshot& document,
             static_cast<std::size_t>(selection.upper().byte_offset.value());
         std::string inserted;
 
-        if (command == TextInputCommand::insert) {
+        if (command == TextInputCommand::Insert) {
             inserted = arguments.text;
-        } else if (command == TextInputCommand::newline) {
+        } else if (command == TextInputCommand::Newline) {
             const auto active =
                 static_cast<std::size_t>(selection.active.byte_offset.value());
             inserted = terminator_for(document.text, active,
@@ -361,20 +361,20 @@ TextInputResult apply_text_input(const DocumentSnapshot& document,
                        indentation_for(document.text, active, settings);
         } else if (selection.is_caret()) {
             switch (command) {
-            case TextInputCommand::delete_backward:
+            case TextInputCommand::DeleteBackward:
                 start = previous_boundary(boundaries, start);
                 break;
-            case TextInputCommand::delete_forward:
+            case TextInputCommand::DeleteForward:
                 end = next_boundary(boundaries, end);
                 break;
-            case TextInputCommand::delete_word_backward:
+            case TextInputCommand::DeleteWordBackward:
                 start = word_left(document.text, boundaries, start);
                 break;
-            case TextInputCommand::delete_word_forward:
+            case TextInputCommand::DeleteWordForward:
                 end = word_right(document.text, boundaries, end);
                 break;
-            case TextInputCommand::insert:
-            case TextInputCommand::newline: break;
+            case TextInputCommand::Insert:
+            case TextInputCommand::Newline: break;
             }
         }
         if (start != end || !inserted.empty()) {
@@ -385,14 +385,14 @@ TextInputResult apply_text_input(const DocumentSnapshot& document,
     }
 
     const bool deletion =
-        command == TextInputCommand::delete_backward ||
-        command == TextInputCommand::delete_forward ||
-        command == TextInputCommand::delete_word_backward ||
-        command == TextInputCommand::delete_word_forward;
+        command == TextInputCommand::DeleteBackward ||
+        command == TextInputCommand::DeleteForward ||
+        command == TextInputCommand::DeleteWordBackward ||
+        command == TextInputCommand::DeleteWordForward;
     normalize_edits(edits);
 
     if (edits.empty()) {
-        return TextInputResult{TextInputError::none, std::nullopt, selections,
+        return TextInputResult{TextInputError::None, std::nullopt, selections,
                                document.text, {}};
     }
 
@@ -440,7 +440,7 @@ TextInputResult apply_text_input(const DocumentSnapshot& document,
         const auto resolved = resolve_document_position(
             resulting_text, ByteOffset{caret}, tab_width);
         if (!resolved.has_value()) {
-            return failure(TextInputError::invalid_selection,
+            return failure(TextInputError::InvalidSelection,
                            "resulting caret is not a document boundary");
         }
         resulting_selections.push_back(Selection{*resolved, *resolved});
@@ -455,7 +455,7 @@ TextInputResult apply_text_input(const DocumentSnapshot& document,
             std::move(edit.inserted)});
     }
     return TextInputResult{
-        TextInputError::none,
+        TextInputError::None,
         EditTransaction{document.revision, std::move(transaction_edits)},
         SelectionSet{std::move(resulting_selections)},
         std::move(resulting_text),

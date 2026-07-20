@@ -9,7 +9,7 @@ template <typename T>
 T const* payload_as(std::any const& payload) { return std::any_cast<T>(&payload); }
 
 PromptRequest palette_prompt_request() {
-    return PromptRequest{PromptKind::palette, "Command Palette",
+    return PromptRequest{PromptKind::Palette, "Command Palette",
                          {{"query", "Command palette query", ""}}, {}, std::nullopt};
 }
 
@@ -25,7 +25,7 @@ CommandHandlerResult validate_palette_target(EditorRuntime::Impl& runtime,
                                              CommandContext& context,
                                              std::string const& command_id) {
     bool const palette_open = runtime.prompt.active() && runtime.prompt.request() &&
-                              runtime.prompt.request()->kind == PromptKind::palette;
+                              runtime.prompt.request()->kind == PromptKind::Palette;
     if (!palette_open) return failure("palette.execute requires the palette to be open");
     auto const candidates = runtime.descriptors();
     bool const published =
@@ -74,7 +74,7 @@ CommandHandlerResult search_command(EditorRuntime::Impl& runtime, CommandContext
         (void)runtime.navigation.forward();
     } else if (id == "goto.file" || id == "goto.line" || id == "goto.symbol") {
         auto const* target = payload_as<NavigationTarget>(payload);
-        if (target != nullptr) (void)runtime.navigation.visit(*target, NavigationOrigin::user);
+        if (target != nullptr) (void)runtime.navigation.visit(*target, NavigationOrigin::User);
         else return failure(std::string{id} + " requires a navigation target payload");
     } else {
         return failure("unknown search command");

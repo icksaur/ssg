@@ -46,12 +46,12 @@ void apply_to_reference(ref::Editor& editor,
 }
 
 TEST(construction_produces_canonical_clean_snapshot) {
-    Document document("alpha\n\xCE\xB2" "eta", DocumentMode::edit);
+    Document document("alpha\n\xCE\xB2" "eta", DocumentMode::Edit);
     const auto snapshot = document.snapshot();
 
     ASSERT_EQ(snapshot.text, std::string("alpha\n\xCE\xB2" "eta"));
     ASSERT_EQ(snapshot.revision, Revision{1});
-    ASSERT_EQ(snapshot.mode, DocumentMode::edit);
+    ASSERT_EQ(snapshot.mode, DocumentMode::Edit);
     ASSERT_FALSE(snapshot.dirty);
 }
 
@@ -134,16 +134,16 @@ TEST(randomized_multi_edit_snapshots_match_reference_editor) {
 }
 
 TEST(read_only_and_diff_modes_reject_without_state_change) {
-    for (const auto mode : {DocumentMode::read_only, DocumentMode::diff}) {
+    for (const auto mode : {DocumentMode::ReadOnly, DocumentMode::Diff}) {
         Document document("fixed", mode);
         const auto before = document.snapshot();
         const auto result = document.apply(
             transaction(document.revision(), {edit(0, 1, "F")}));
 
         ASSERT_FALSE(result.accepted());
-        ASSERT_EQ(result.error, mode == DocumentMode::read_only
-                                    ? DocumentError::read_only
-                                    : DocumentError::diff);
+        ASSERT_EQ(result.error, mode == DocumentMode::ReadOnly
+                                    ? DocumentError::ReadOnly
+                                    : DocumentError::Diff);
         ASSERT_EQ(document.snapshot(), before);
     }
 }
@@ -157,7 +157,7 @@ TEST(stale_revision_rejects_without_state_change) {
     const auto result =
         document.apply(transaction(Revision{1}, {edit(0, 1, "A")}));
 
-    ASSERT_EQ(result.error, DocumentError::stale_revision);
+    ASSERT_EQ(result.error, DocumentError::StaleRevision);
     ASSERT_EQ(document.snapshot(), before);
 }
 
@@ -168,7 +168,7 @@ TEST(invalid_later_edit_preserves_whole_transaction) {
     const auto result = document.apply(transaction(
         document.revision(), {edit(1, 2, "ok"), edit(99, 0, "bad")}));
 
-    ASSERT_EQ(result.error, DocumentError::invalid_range);
+    ASSERT_EQ(result.error, DocumentError::InvalidRange);
     ASSERT_EQ(document.snapshot(), before);
 }
 
@@ -179,12 +179,12 @@ TEST(overlapping_and_duplicate_ranges_are_atomic_rejections) {
     ASSERT_EQ(document.apply(transaction(
                   document.revision(), {edit(1, 3, "x"), edit(2, 1, "y")}))
                   .error,
-              DocumentError::overlapping_edits);
+              DocumentError::OverlappingEdits);
     ASSERT_EQ(document.snapshot(), before);
     ASSERT_EQ(document.apply(transaction(
                   document.revision(), {edit(2, 0, "x"), edit(2, 0, "y")}))
                   .error,
-              DocumentError::overlapping_edits);
+              DocumentError::OverlappingEdits);
     ASSERT_EQ(document.snapshot(), before);
 }
 
@@ -202,19 +202,19 @@ TEST(utf8_text_and_boundaries_are_validated_atomically) {
     ASSERT_EQ(document.apply(transaction(
                   document.revision(), {edit(2, 0, "x")}))
                   .error,
-              DocumentError::invalid_utf8_boundary);
+              DocumentError::InvalidUtf8Boundary);
     ASSERT_EQ(rejected.apply(transaction(
                   rejected.revision(), {edit(1, 1, "x")}))
                   .error,
-              DocumentError::invalid_utf8_boundary);
+              DocumentError::InvalidUtf8Boundary);
     ASSERT_EQ(rejected.apply(transaction(
                   rejected.revision(), {edit(1, 2, std::string("\xC3", 1))}))
                   .error,
-              DocumentError::invalid_utf8);
+              DocumentError::InvalidUtf8);
     ASSERT_EQ(rejected.apply(transaction(
                   rejected.revision(), {edit(1, 2, std::string("x\0y", 3))}))
                   .error,
-              DocumentError::invalid_utf8);
+              DocumentError::InvalidUtf8);
     ASSERT_EQ(rejected.snapshot(), rejected_before);
 }
 
@@ -228,11 +228,11 @@ TEST(empty_and_noop_transactions_are_rejected) {
     const auto before = document.snapshot();
 
     ASSERT_EQ(document.apply(transaction(document.revision(), {})).error,
-              DocumentError::empty_transaction);
+              DocumentError::EmptyTransaction);
     ASSERT_EQ(document.apply(transaction(
                   document.revision(), {edit(1, 0, "")}))
                   .error,
-              DocumentError::empty_transaction);
+              DocumentError::EmptyTransaction);
     ASSERT_EQ(document.snapshot(), before);
 }
 

@@ -50,10 +50,10 @@ public:
         ssg::PromptStatusViewState prompt_status;
         if (state_.prompt_open) {
             prompt_status.prompt = ssg::PromptViewState{
-                ssg::PromptKind::path, "Open workspace", {0, 2, 24, 1}, {}};
+                ssg::PromptKind::Path, "Open workspace", {0, 2, 24, 1}, {}};
         }
         prompt_status.status.items.push_back(
-            {ssg::StatusId{7}, ssg::StatusPriority::information, 3,
+            {ssg::StatusId{7}, ssg::StatusPriority::Information, 3,
              "Recovery ready",
              {{"reopen", "Reopen closed tab", "tab.reopen_closed"}}});
 
@@ -101,19 +101,19 @@ public:
         shell.panes.push_back(
             {ssg::PaneId{1}, {6, 2, 18, 5}, {6, 2, 17, 5}, {23, 2, 1, 5}});
         shell.accessibility_nodes = {
-            {ssg::ShellNodeKind::header, "header", "Workspace /fixture",
-             *shell.header, ssg::SemanticRole::header},
-            {ssg::ShellNodeKind::panel, "panel", "Files", *shell.panel,
-             ssg::SemanticRole::panel_active},
-            {ssg::ShellNodeKind::tab_bar, "tabs", state_.label, *shell.tab_bar,
-             ssg::SemanticRole::tab_active},
-            {ssg::ShellNodeKind::pane, "pane", "Editor",
-             shell.panes.front().content, ssg::SemanticRole::background},
-            {ssg::ShellNodeKind::scrollbar, "scrollbar", "Scroll",
+            {ssg::ShellNodeKind::Header, "header", "Workspace /fixture",
+             *shell.header, ssg::SemanticRole::Header},
+            {ssg::ShellNodeKind::Panel, "panel", "Files", *shell.panel,
+             ssg::SemanticRole::PanelActive},
+            {ssg::ShellNodeKind::TabBar, "tabs", state_.label, *shell.tab_bar,
+             ssg::SemanticRole::TabActive},
+            {ssg::ShellNodeKind::Pane, "pane", "Editor",
+             shell.panes.front().content, ssg::SemanticRole::Background},
+            {ssg::ShellNodeKind::Scrollbar, "scrollbar", "Scroll",
              shell.panes.front().scrollbar,
-             ssg::SemanticRole::scrollbar_track},
-            {ssg::ShellNodeKind::footer, "footer", "Recovery ready",
-             *shell.footer, ssg::SemanticRole::footer},
+             ssg::SemanticRole::ScrollbarTrack},
+            {ssg::ShellNodeKind::Footer, "footer", "Recovery ready",
+             *shell.footer, ssg::SemanticRole::Footer},
         };
 
         return {
@@ -124,13 +124,13 @@ public:
              state_.undo_text.size() + state_.redo_text.size()},
             {{state_.clipboard}, state_.clipboard, std::nullopt, std::nullopt},
             std::move(prompt_status),
-            {revision, false, {}, ssg::SearchMode::file, {}, std::nullopt, 0,
+            {revision, false, {}, ssg::SearchMode::File, {}, std::nullopt, 0,
              false},
             {0, false, false, revision, {}, {}, {}, {}, std::nullopt,
-             ssg::FindReplaceError::none, {}},
+             ssg::FindReplaceError::None, {}},
             std::move(settings),
             std::move(keymap),
-            {{ssg::TextEncoding::utf8, ssg::LineEnding::lf, false, false}},
+            {{ssg::TextEncoding::Utf8, ssg::LineEnding::Lf, false, false}},
             std::move(tabs),
             {revision, {}},
             {revision, {}},
@@ -187,7 +187,7 @@ private:
 TEST(terminal_events_resolve_only_through_snapshot_input_models) {
     Scenario scenario;
     ssg::InvocationPrincipal const principal{
-        ssg::ClientId{9}, ssg::InvocationOrigin::in_process};
+        ssg::ClientId{9}, ssg::InvocationOrigin::InProcess};
     ssg::tui::TuiClient client{
         *scenario.session, principal, ssg::ViewId{9},
         [&] { return scenario.snapshot(principal, ssg::ViewId{9}); }};
@@ -213,7 +213,7 @@ TEST(terminal_events_resolve_only_through_snapshot_input_models) {
     ASSERT_FALSE(scenario.model.canonical().tab_open);
 
     ssg::SemanticHitTarget target{
-        9, ssg::HitTargetKind::status_action, "Reopen",
+        9, ssg::HitTargetKind::StatusAction, "Reopen",
         {"tab.reopen_closed", {}}};
     auto hit = capture.capture(target, keymap, "editor");
     ASSERT_TRUE(hit.has_value());
@@ -226,10 +226,10 @@ TEST(scripted_tui_commands_match_direct_api_after_every_step) {
     Scenario direct;
     Scenario tui;
     ssg::InvocationPrincipal const direct_principal{
-        ssg::ClientId{1}, ssg::InvocationOrigin::in_process,
+        ssg::ClientId{1}, ssg::InvocationOrigin::InProcess,
         {ssg::CapabilityId{"local_file_drop"}}};
     ssg::InvocationPrincipal const tui_principal{
-        ssg::ClientId{2}, ssg::InvocationOrigin::in_process,
+        ssg::ClientId{2}, ssg::InvocationOrigin::InProcess,
         {ssg::CapabilityId{"local_file_drop"}}};
     ASSERT_TRUE(direct.session->attach(direct_principal, ssg::ViewId{1})
                     .accepted());
@@ -257,7 +257,7 @@ std::string read_all(char const* path) {
 TEST(final_workflow_screen_matches_hand_authored_16_color_golden) {
     Scenario scenario;
     ssg::InvocationPrincipal const principal{
-        ssg::ClientId{3}, ssg::InvocationOrigin::in_process,
+        ssg::ClientId{3}, ssg::InvocationOrigin::InProcess,
         {ssg::CapabilityId{"local_file_drop"}}};
     ssg::tui::TuiClient client{
         *scenario.session, principal, ssg::ViewId{3},

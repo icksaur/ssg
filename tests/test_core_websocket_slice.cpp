@@ -145,15 +145,15 @@ TEST(codec_round_trip_and_malformed_corpus) {
         ASSERT_FALSE(result.accepted());
     }
     ASSERT_EQ(ssg::decode_insert_request(std::string(257, 'x'), limits).error,
-              ssg::ProtocolError::message_too_large);
+              ssg::ProtocolError::MessageTooLarge);
     ASSERT_EQ(ssg::decode_insert_request("SSG1 INSERT 1 616263", {256, 2}).error,
-              ssg::ProtocolError::insert_too_large);
+              ssg::ProtocolError::InsertTooLarge);
 }
 
 TEST(direct_and_codec_scripts_have_identical_snapshots) {
     ssg::CoreEditorSlice direct;
     ASSERT_TRUE(direct.attach({ssg::ClientId{1},
-                               ssg::InvocationOrigin::in_process}));
+                               ssg::InvocationOrigin::InProcess}));
 
     ssg::Revision revision{1};
     for (auto const& text : std::vector<std::string>{"hello", " ", "world"}) {
@@ -176,17 +176,17 @@ TEST(direct_and_codec_scripts_have_identical_snapshots) {
 TEST(stale_and_malformed_requests_are_failure_atomic) {
     ssg::CoreEditorSlice direct;
     ASSERT_TRUE(direct.attach({ssg::ClientId{1},
-                               ssg::InvocationOrigin::in_process}));
+                               ssg::InvocationOrigin::InProcess}));
     auto const accepted =
         direct.execute(ssg::ClientId{1}, {ssg::Revision{1}, "first"});
     auto const stale =
         direct.execute(ssg::ClientId{1}, {ssg::Revision{1}, "stale"});
-    ASSERT_EQ(stale.command_error, ssg::CommandError::stale_revision);
+    ASSERT_EQ(stale.command_error, ssg::CommandError::StaleRevision);
     ASSERT_EQ(stale.snapshot, accepted.snapshot);
     ASSERT_FALSE(stale.delta.has_value());
 
     auto const malformed = ssg::decode_insert_request("not a command");
-    ASSERT_EQ(malformed.error, ssg::ProtocolError::malformed_message);
+    ASSERT_EQ(malformed.error, ssg::ProtocolError::MalformedMessage);
     ASSERT_EQ(direct.snapshot(), accepted.snapshot);
 }
 

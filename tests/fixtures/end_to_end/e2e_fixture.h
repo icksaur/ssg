@@ -53,8 +53,8 @@ inline CanonicalState canonical(ssg::SessionSnapshot const& snapshot) {
         tab ? tab->label : std::string{},
         sections.selection.selections.items().size(),
         sections.selection.first_visual_row,
-        tab ? tab->mode : ssg::DocumentMode::edit,
-        tab ? tab->kind : ssg::TabKind::document,
+        tab ? tab->mode : ssg::DocumentMode::Edit,
+        tab ? tab->kind : ssg::TabKind::Document,
         sections.follow_edits.mode,
         workspace_open,
         tab ? tab->dirty : false,
@@ -84,8 +84,8 @@ inline void apply(CanonicalState& state, ssg::SessionDelta const& delta) {
         auto const& tabs = *delta.tabs().state;
         auto const* tab = tabs.tabs.empty() ? nullptr : &tabs.tabs.front();
         state.label = tab ? tab->label : std::string{};
-        state.mode = tab ? tab->mode : ssg::DocumentMode::edit;
-        state.tab_kind = tab ? tab->kind : ssg::TabKind::document;
+        state.mode = tab ? tab->mode : ssg::DocumentMode::Edit;
+        state.tab_kind = tab ? tab->kind : ssg::TabKind::Document;
         state.dirty = tab ? tab->dirty : false;
         state.tab_open = tab != nullptr;
     }
@@ -117,10 +117,10 @@ struct FixtureState {
     std::size_t selection_count{1};
     std::uint32_t first_row{0};
     std::uint64_t follow_generation{0};
-    ssg::FollowMode follow_mode{ssg::FollowMode::following};
-    ssg::DocumentMode mode{ssg::DocumentMode::edit};
-    ssg::TabKind tab_kind{ssg::TabKind::document};
-    ssg::TabRecoveryBadge recovery{ssg::TabRecoveryBadge::none};
+    ssg::FollowMode follow_mode{ssg::FollowMode::Following};
+    ssg::DocumentMode mode{ssg::DocumentMode::Edit};
+    ssg::TabKind tab_kind{ssg::TabKind::Document};
+    ssg::TabRecoveryBadge recovery{ssg::TabRecoveryBadge::None};
     bool workspace_open{false};
     bool dirty{false};
     bool tab_open{true};
@@ -140,9 +140,9 @@ struct FixtureState {
             workspace_open = true;
         } else if (id == "file.open") {
             tab_open = true;
-            mode = ssg::DocumentMode::edit;
+            mode = ssg::DocumentMode::Edit;
         } else if (id == "text.insert") {
-            if (mode != ssg::DocumentMode::edit)
+            if (mode != ssg::DocumentMode::Edit)
                 return ssg::CommandHandlerResult::failure(
                     "document is not editable");
             undo_text = text;
@@ -186,19 +186,19 @@ struct FixtureState {
             dirty = false;
         } else if (id == "tab.close") {
             tab_open = false;
-            recovery = ssg::TabRecoveryBadge::durable;
+            recovery = ssg::TabRecoveryBadge::Durable;
         } else if (id == "tab.reopen_closed") {
             tab_open = true;
         } else if (id == "file.reload") {
-            mode = ssg::DocumentMode::read_only;
+            mode = ssg::DocumentMode::ReadOnly;
         } else if (id == "external.open_diff") {
-            mode = ssg::DocumentMode::diff;
-            tab_kind = ssg::TabKind::live_diff;
+            mode = ssg::DocumentMode::Diff;
+            tab_kind = ssg::TabKind::LiveDiff;
         } else if (id == "follow_edits.pause") {
-            follow_mode = ssg::FollowMode::paused;
+            follow_mode = ssg::FollowMode::Paused;
             ++follow_generation;
         } else if (id == "follow_edits.resume") {
-            follow_mode = ssg::FollowMode::following;
+            follow_mode = ssg::FollowMode::Following;
             ++follow_generation;
         } else if (id == "prompt.submit") {
             prompt_open = false;
@@ -207,8 +207,8 @@ struct FixtureState {
                 std::any_cast<ssg::DroppedContentArguments const&>(payload);
             text.assign(dropped.bytes.begin(), dropped.bytes.end());
             label = dropped.suggested_label;
-            mode = ssg::DocumentMode::edit;
-            tab_kind = ssg::TabKind::document;
+            mode = ssg::DocumentMode::Edit;
+            tab_kind = ssg::TabKind::Document;
             tab_open = true;
             dirty = true;
         }

@@ -147,7 +147,7 @@ void set_owner_only_permissions(const std::filesystem::path& path) {
 
 std::filesystem::path user_cache_root(std::string_view application_name) {
     const auto validation = validate_workspace_relative_path(
-        application_name, PathSyntax::linux);
+        application_name, PathSyntax::Linux);
     if (!validation.valid() || application_name.find('/') != std::string_view::npos) {
         throw std::invalid_argument("cache application name must be one valid component");
     }

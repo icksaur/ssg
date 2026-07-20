@@ -74,7 +74,7 @@ TEST(completion_results_are_sorted_and_accept_the_selected_edit) {
     const auto published = features.poll(Revision{1});
     ASSERT_TRUE(published.accepted());
     ASSERT_EQ(published.publications.front().result,
-              LspFeaturePublishResult::accepted);
+              LspFeaturePublishResult::Accepted);
     ASSERT_EQ(features.view_state().completion.items[0].label,
               std::string{"alpha"});
     ASSERT_EQ(features.view_state().completion.selected_index,
@@ -104,7 +104,7 @@ TEST(null_completion_result_is_an_accepted_empty_list) {
     const auto published = features.poll(Revision{1});
     ASSERT_TRUE(published.accepted());
     ASSERT_EQ(published.publications.front().result,
-              LspFeaturePublishResult::accepted);
+              LspFeaturePublishResult::Accepted);
     ASSERT_FALSE(features.view_state().completion.visible);
     ASSERT_FALSE(features.view_state().completion.loading);
     ASSERT_TRUE(features.view_state().completion.items.empty());
@@ -122,7 +122,7 @@ TEST(stale_and_cancelled_results_do_not_publish_state) {
     server.queue_payload(fixture("hover.json"));
     const auto stale = features.poll(Revision{2});
     ASSERT_EQ(stale.publications.front().result,
-              LspFeaturePublishResult::stale_revision);
+              LspFeaturePublishResult::StaleRevision);
     ASSERT_FALSE(features.view_state().hover.has_value());
 
     ASSERT_TRUE(features.request_hover("file:///workspace/main.cpp",
@@ -137,7 +137,7 @@ TEST(stale_and_cancelled_results_do_not_publish_state) {
     server.queue_payload(std::move(late));
     const auto cancelled = features.poll(Revision{1});
     ASSERT_EQ(cancelled.publications.front().result,
-              LspFeaturePublishResult::cancelled);
+              LspFeaturePublishResult::Cancelled);
     ASSERT_FALSE(features.view_state().hover.has_value());
 }
 
@@ -176,7 +176,7 @@ TEST(malformed_and_server_error_responses_are_correlated_and_bounded) {
         malformed_request.request_id, R"({"items":[{"detail":"no label"}]})"));
     const auto malformed = features.poll(Revision{1});
     ASSERT_EQ(malformed.publications.front().result,
-              LspFeaturePublishResult::malformed_response);
+              LspFeaturePublishResult::MalformedResponse);
     ASSERT_FALSE(features.view_state().completion.loading);
     ASSERT_TRUE(features.view_state().completion.items.empty());
 
@@ -190,8 +190,8 @@ TEST(malformed_and_server_error_responses_are_correlated_and_bounded) {
     const auto error = features.poll(Revision{1});
     ASSERT_TRUE(error.accepted());
     ASSERT_EQ(error.publications.front().result,
-              LspFeaturePublishResult::server_error);
-    ASSERT_EQ(client.state(), ssg::LspLifecycleState::ready);
+              LspFeaturePublishResult::ServerError);
+    ASSERT_EQ(client.state(), ssg::LspLifecycleState::Ready);
 }
 
 TEST(superseded_completion_response_cannot_replace_the_newer_result) {
@@ -209,7 +209,7 @@ TEST(superseded_completion_response_cannot_replace_the_newer_result) {
     server.queue_payload(ssg::test::response(first.request_id, "[]"));
     const auto old = features.poll(Revision{1});
     ASSERT_EQ(old.publications.front().result,
-              LspFeaturePublishResult::superseded);
+              LspFeaturePublishResult::Superseded);
     ASSERT_TRUE(features.view_state().completion.loading);
 
     auto completion = fixture("completion.json");

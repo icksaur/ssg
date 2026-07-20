@@ -61,40 +61,40 @@ std::string hash_hex(std::string_view bytes) {
 
 std::string encoding_name(ssg::TextEncoding e) {
     switch (e) {
-    case ssg::TextEncoding::utf8: return "utf8";
-    case ssg::TextEncoding::utf8_bom: return "utf8_bom";
-    case ssg::TextEncoding::utf16le: return "utf16le";
-    case ssg::TextEncoding::utf16be: return "utf16be";
-    case ssg::TextEncoding::windows1252: return "windows1252";
-    case ssg::TextEncoding::iso88591: return "iso88591";
+    case ssg::TextEncoding::Utf8: return "utf8";
+    case ssg::TextEncoding::Utf8Bom: return "utf8_bom";
+    case ssg::TextEncoding::Utf16le: return "utf16le";
+    case ssg::TextEncoding::Utf16be: return "utf16be";
+    case ssg::TextEncoding::Windows1252: return "windows1252";
+    case ssg::TextEncoding::Iso88591: return "iso88591";
     }
     return "?";
 }
 
 std::string ending_name(ssg::LineEnding e) {
     switch (e) {
-    case ssg::LineEnding::lf: return "lf";
-    case ssg::LineEnding::crlf: return "crlf";
-    case ssg::LineEnding::cr: return "cr";
-    case ssg::LineEnding::mixed: return "mixed";
+    case ssg::LineEnding::Lf: return "lf";
+    case ssg::LineEnding::Crlf: return "crlf";
+    case ssg::LineEnding::Cr: return "cr";
+    case ssg::LineEnding::Mixed: return "mixed";
     }
     return "?";
 }
 
 std::string kind_name(ssg::FileContentKind k) {
     switch (k) {
-    case ssg::FileContentKind::text: return "text";
-    case ssg::FileContentKind::binary: return "binary";
-    case ssg::FileContentKind::decode_failure: return "decode_failure";
+    case ssg::FileContentKind::Text: return "text";
+    case ssg::FileContentKind::Binary: return "binary";
+    case ssg::FileContentKind::DecodeFailure: return "decode_failure";
     }
     return "?";
 }
 
 std::string mode_name(ssg::DocumentMode m) {
     switch (m) {
-    case ssg::DocumentMode::edit: return "edit";
-    case ssg::DocumentMode::read_only: return "read_only";
-    case ssg::DocumentMode::diff: return "diff";
+    case ssg::DocumentMode::Edit: return "edit";
+    case ssg::DocumentMode::ReadOnly: return "read_only";
+    case ssg::DocumentMode::Diff: return "diff";
     }
     return "?";
 }
@@ -113,10 +113,10 @@ std::string terminator_summary(std::string_view bytes) {
     int lf = 0, crlf = 0, cr = 0, none = 0;
     for (auto t : decoded.text->line_terminators) {
         switch (t) {
-        case ssg::LineTerminator::lf: ++lf; break;
-        case ssg::LineTerminator::crlf: ++crlf; break;
-        case ssg::LineTerminator::cr: ++cr; break;
-        case ssg::LineTerminator::none: ++none; break;
+        case ssg::LineTerminator::Lf: ++lf; break;
+        case ssg::LineTerminator::Crlf: ++crlf; break;
+        case ssg::LineTerminator::Cr: ++cr; break;
+        case ssg::LineTerminator::None: ++none; break;
         }
     }
     std::ostringstream out;

@@ -58,18 +58,18 @@ struct SyntaxRange {
 struct SyntaxSpan {
     ByteOffset begin;
     ByteOffset end;
-    SyntaxScope scope = SyntaxScope::plain_text;
+    SyntaxScope scope = SyntaxScope::PlainText;
 
     friend bool operator==(const SyntaxSpan&, const SyntaxSpan&) = default;
 };
 
-enum class BracketKind : std::uint8_t { round, square, curly };
-enum class BracketRole : std::uint8_t { open, close };
+enum class BracketKind : std::uint8_t { Round, Square, Curly };
+enum class BracketRole : std::uint8_t { Open, Close };
 
 struct BracketToken {
     ByteOffset offset;
-    BracketKind kind = BracketKind::round;
-    BracketRole role = BracketRole::open;
+    BracketKind kind = BracketKind::Round;
+    BracketRole role = BracketRole::Open;
 
     friend bool operator==(const BracketToken&, const BracketToken&) = default;
 };
@@ -77,7 +77,7 @@ struct BracketToken {
 struct SyntaxBracketPair {
     ByteOffset open;
     ByteOffset close;
-    BracketKind kind = BracketKind::round;
+    BracketKind kind = BracketKind::Round;
     std::uint32_t depth = 0;
 
     friend bool operator==(const SyntaxBracketPair&,
@@ -86,30 +86,30 @@ struct SyntaxBracketPair {
 
 struct UnmatchedBracket {
     ByteOffset offset;
-    BracketKind kind = BracketKind::round;
-    BracketRole role = BracketRole::open;
+    BracketKind kind = BracketKind::Round;
+    BracketRole role = BracketRole::Open;
 
     friend bool operator==(const UnmatchedBracket&,
                            const UnmatchedBracket&) = default;
 };
 
-enum class CommentKind : std::uint8_t { line, block };
+enum class CommentKind : std::uint8_t { Line, Block };
 enum class CommentTokenRole : std::uint8_t {
-    line,
-    block_open,
-    block_close,
+    Line,
+    BlockOpen,
+    BlockClose,
 };
 
 struct CommentToken {
     SyntaxRange range;
-    CommentTokenRole role = CommentTokenRole::line;
+    CommentTokenRole role = CommentTokenRole::Line;
 
     friend bool operator==(const CommentToken&, const CommentToken&) = default;
 };
 
 struct CommentRange {
     SyntaxRange range;
-    CommentKind kind = CommentKind::line;
+    CommentKind kind = CommentKind::Line;
 
     friend bool operator==(const CommentRange&, const CommentRange&) = default;
 };
@@ -135,15 +135,15 @@ public:
 using SyntaxParseHandle = std::shared_ptr<const OpaqueSyntaxParse>;
 
 enum class SyntaxParseStatus : std::uint8_t {
-    parsed,
-    grammar_unavailable,
-    failed,
-    cancelled,
+    Parsed,
+    GrammarUnavailable,
+    Failed,
+    Cancelled,
 };
 
 struct SyntaxParseOutput {
     Revision revision{0};
-    SyntaxParseStatus status = SyntaxParseStatus::failed;
+    SyntaxParseStatus status = SyntaxParseStatus::Failed;
     SyntaxParseHandle parse;
     std::vector<SyntaxSpan> spans;
     std::vector<BracketToken> brackets;
@@ -332,14 +332,14 @@ private:
                                               const SyntaxViewState& target);
 
 enum class SyntaxReplayError : std::uint8_t {
-    none,
-    stale_revision,
-    malformed_delta,
+    None,
+    StaleRevision,
+    MalformedDelta,
 };
 
 struct SyntaxReplayResult {
     std::optional<SyntaxViewState> state;
-    SyntaxReplayError error = SyntaxReplayError::none;
+    SyntaxReplayError error = SyntaxReplayError::None;
 
     [[nodiscard]] bool accepted() const noexcept { return state.has_value(); }
 };
@@ -348,35 +348,35 @@ struct SyntaxReplayResult {
     const SyntaxViewState& base, const SyntaxDelta& delta);
 
 enum class SyntaxRequestError : std::uint8_t {
-    none,
-    stale_revision,
-    document_too_large,
-    malformed_edits,
+    None,
+    StaleRevision,
+    DocumentTooLarge,
+    MalformedEdits,
 };
 
 struct SyntaxParseRequestResult {
     std::shared_ptr<const SyntaxParseRequest> request;
-    SyntaxRequestError error = SyntaxRequestError::none;
+    SyntaxRequestError error = SyntaxRequestError::None;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return request != nullptr && error == SyntaxRequestError::none;
+        return request != nullptr && error == SyntaxRequestError::None;
     }
 };
 
 enum class SyntaxAcceptError : std::uint8_t {
-    none,
-    stale_revision,
-    cancelled,
-    unknown_request,
-    malformed_output,
+    None,
+    StaleRevision,
+    Cancelled,
+    UnknownRequest,
+    MalformedOutput,
 };
 
 struct SyntaxAcceptResult {
-    SyntaxAcceptError error = SyntaxAcceptError::none;
+    SyntaxAcceptError error = SyntaxAcceptError::None;
     bool used_fallback = false;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == SyntaxAcceptError::none;
+        return error == SyntaxAcceptError::None;
     }
 };
 

@@ -184,7 +184,7 @@ TEST(snapshot_is_complete_and_deterministic) {
                   first.index_for(ssg::all_semantic_roles[index]));
     }
     ASSERT_EQ(first.index_for_syntax("not.a.known.scope"),
-              first.index_for(SyntaxScope::plain_text));
+              first.index_for(SyntaxScope::PlainText));
 }
 
 TEST(bundled_theme_data_is_complete_and_constructible) {

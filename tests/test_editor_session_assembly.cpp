@@ -67,7 +67,7 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision,
                                       std::string marker) {
     ssg::SettingsViewState settings;
     settings.entries[0].effective = {
-        static_cast<std::uint32_t>(marker.size()), ssg::SettingScope::user};
+        static_cast<std::uint32_t>(marker.size()), ssg::SettingScope::User};
     ssg::ThemeSnapshot theme;
     theme.palette[0].red = static_cast<std::uint8_t>(marker.size());
 
@@ -80,23 +80,23 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision,
         {true, false, marker.size()},
         {{marker}, marker, std::nullopt, std::nullopt},
         {std::nullopt, {{}, marker.size()}},
-        {revision, true, marker, ssg::SearchMode::file, {}, std::nullopt,
+        {revision, true, marker, ssg::SearchMode::File, {}, std::nullopt,
          marker.size(), false},
         {marker.size(), true, false, revision, marker, {}, {}, {}, std::nullopt,
-         ssg::FindReplaceError::none, {}},
+         ssg::FindReplaceError::None, {}},
         settings,
         {marker, {}},
-        {{marker.size() > 1 ? ssg::TextEncoding::utf16le
-                           : ssg::TextEncoding::utf8,
-          ssg::LineEnding::lf, false,
+        {{marker.size() > 1 ? ssg::TextEncoding::Utf16le
+                           : ssg::TextEncoding::Utf8,
+          ssg::LineEnding::Lf, false,
           !marker.empty()}},
-        {{{ssg::TabId{1}, ssg::TabKind::read_only_output, std::nullopt,
-           std::nullopt, "output", marker, ssg::DocumentMode::read_only,
-           false, ssg::TabRecoveryBadge::none}},
+        {{{ssg::TabId{1}, ssg::TabKind::ReadOnlyOutput, std::nullopt,
+           std::nullopt, "output", marker, ssg::DocumentMode::ReadOnly,
+           false, ssg::TabRecoveryBadge::None}},
          ssg::TabId{1}},
         {revision, {}},
         {revision, {}},
-        {marker.size(), ssg::FollowMode::following, ssg::PaneId{},
+        {marker.size(), ssg::FollowMode::Following, ssg::PaneId{},
          std::nullopt, {}, {}},
         {ssg::TreeRevision{marker.size()}, {}},
         ssg::plain_text_syntax_view_state(revision, ssg::LanguageId{"plain"},
@@ -131,7 +131,7 @@ TEST(required_catalog_equals_assembled_registry_exactly) {
     ASSERT_EQ(actual, expected);
     ASSERT_EQ(expected_capabilities.size(), descriptors.size());
     for (auto const& descriptor : descriptors) {
-        ASSERT_EQ(descriptor.effect, ssg::CommandEffect::mutation);
+        ASSERT_EQ(descriptor.effect, ssg::CommandEffect::Mutation);
         std::vector<std::string> actual_capabilities;
         for (auto const& capability : descriptor.required_capabilities) {
             actual_capabilities.emplace_back(capability.value());
@@ -190,7 +190,7 @@ TEST(builder_threads_services_through_the_common_dispatch_path) {
     auto session = builder.services(services).build();
     ASSERT_TRUE(session->attach(
                     ssg::InvocationPrincipal{
-                        ssg::ClientId{1}, ssg::InvocationOrigin::in_process},
+                        ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                     ssg::ViewId{1})
                     .accepted());
     ASSERT_TRUE(session
@@ -203,12 +203,12 @@ TEST(full_snapshot_matches_replayed_aggregate_delta) {
     auto before = ssg::assemble_session_snapshot(
         ssg::Revision{4}, {}, ssg::InvocationPrincipal{
                                   ssg::ClientId{7},
-                                  ssg::InvocationOrigin::in_process},
+                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, client_view(1), sections(ssg::Revision{4}, "a"));
     auto after = ssg::assemble_session_snapshot(
         ssg::Revision{5}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{ssg::ClientId{7},
-                                 ssg::InvocationOrigin::in_process},
+                                 ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, client_view(5), sections(ssg::Revision{5}, "changed"));
 
     auto delta = ssg::derive_session_delta(before, after);
@@ -226,12 +226,12 @@ TEST(non_document_transition_replays_and_rejects_a_different_client) {
     auto before = ssg::assemble_session_snapshot(
         ssg::Revision{4}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
-                                 ssg::InvocationOrigin::in_process},
+                                 ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, client_view(1), std::move(old_sections));
     auto after = ssg::assemble_session_snapshot(
         ssg::Revision{5}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
-                                 ssg::InvocationOrigin::in_process},
+                                 ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, client_view(1), std::move(new_sections));
     auto delta = ssg::derive_session_delta(before, after);
     ASSERT_FALSE(delta.document().has_value());
@@ -242,7 +242,7 @@ TEST(non_document_transition_replays_and_rejects_a_different_client) {
     auto other_client = ssg::assemble_session_snapshot(
         ssg::Revision{4}, {},
         ssg::InvocationPrincipal{ssg::ClientId{8},
-                                 ssg::InvocationOrigin::in_process},
+                                 ssg::InvocationOrigin::InProcess},
         ssg::ViewId{10}, client_view(1),
         sections(ssg::Revision{4}, "same"));
     ASSERT_FALSE(ssg::replay_session_delta(other_client, delta).accepted());
@@ -253,13 +253,13 @@ TEST(per_client_capabilities_and_viewports_are_isolated) {
     auto first = ssg::assemble_session_snapshot(
         ssg::Revision{8}, {},
         ssg::InvocationPrincipal{
-            ssg::ClientId{1}, ssg::InvocationOrigin::websocket,
+            ssg::ClientId{1}, ssg::InvocationOrigin::Websocket,
             {ssg::CapabilityId{"local_file_drop"}}},
         ssg::ViewId{10}, client_view(2), shared);
     auto second = ssg::assemble_session_snapshot(
         ssg::Revision{8}, {},
         ssg::InvocationPrincipal{ssg::ClientId{2},
-                                 ssg::InvocationOrigin::websocket},
+                                 ssg::InvocationOrigin::Websocket},
         ssg::ViewId{11}, client_view(7), std::move(shared));
 
     ASSERT_EQ(first.client().capabilities.size(), std::size_t{1});
@@ -281,12 +281,12 @@ TEST(shell_delta_detects_a_panel_scrollbar_only_change) {
     auto before = ssg::assemble_session_snapshot(
         ssg::Revision{4}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
-                                 ssg::InvocationOrigin::in_process},
+                                 ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, client_view(1), std::move(old_sections));
     auto after = ssg::assemble_session_snapshot(
         ssg::Revision{5}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
-                                 ssg::InvocationOrigin::in_process},
+                                 ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, client_view(1), std::move(new_sections));
     auto delta = ssg::derive_session_delta(before, after);
     ASSERT_TRUE(delta.shell().replacement.has_value());
@@ -307,12 +307,12 @@ TEST(shell_delta_detects_a_tab_hit_only_change) {
     auto before = ssg::assemble_session_snapshot(
         ssg::Revision{4}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
-                                 ssg::InvocationOrigin::in_process},
+                                 ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, client_view(1), std::move(old_sections));
     auto after = ssg::assemble_session_snapshot(
         ssg::Revision{5}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
-                                 ssg::InvocationOrigin::in_process},
+                                 ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, client_view(1), std::move(new_sections));
     auto delta = ssg::derive_session_delta(before, after);
     ASSERT_TRUE(delta.shell().replacement.has_value());

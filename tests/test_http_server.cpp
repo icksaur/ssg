@@ -191,17 +191,17 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision,
         {true, false, marker.size()},
         {{marker}, marker, std::nullopt, std::nullopt},
         {std::nullopt, {{}, 0}},
-        {revision, false, {}, ssg::SearchMode::file, {}, std::nullopt, 0,
+        {revision, false, {}, ssg::SearchMode::File, {}, std::nullopt, 0,
          false},
         {0, false, false, revision, {}, {}, {}, {}, std::nullopt,
-         ssg::FindReplaceError::none, {}},
+         ssg::FindReplaceError::None, {}},
         settings,
         {{}, {}},
-        {{ssg::TextEncoding::utf8, ssg::LineEnding::lf, false, false}},
+        {{ssg::TextEncoding::Utf8, ssg::LineEnding::Lf, false, false}},
         {{}, std::nullopt},
         {revision, {}},
         {revision, {}},
-        {0, ssg::FollowMode::following, ssg::PaneId{}, std::nullopt, {}, {}},
+        {0, ssg::FollowMode::Following, ssg::PaneId{}, std::nullopt, {}, {}},
         {ssg::TreeRevision{0}, {}},
         ssg::plain_text_syntax_view_state(revision, ssg::LanguageId{"plain"},
                                           marker, 4),
@@ -234,7 +234,7 @@ public:
             ssg::SessionId{"test-session"},
             ssg::InvocationPrincipal{
                 ssg::ClientId{local ? 11u : 12u},
-                ssg::InvocationOrigin::websocket,
+                ssg::InvocationOrigin::Websocket,
                 local ? std::vector<ssg::CapabilityId>{
                             ssg::CapabilityId{"local_file_drop"}}
                       : std::vector<ssg::CapabilityId>{}},
@@ -437,7 +437,7 @@ TEST(command_delta_replays_on_reconnect_and_eviction_sends_snapshot) {
         auto rejected = ssg::decode_command_result(reader.next().payload);
         ASSERT_TRUE(rejected.accepted());
         ASSERT_EQ(rejected.result->error,
-                  ssg::CommandError::stale_revision);
+                  ssg::CommandError::StaleRevision);
         send_all(socket.socket,
                  masked_frame(0x2, ssg::encode_status_action_invocation(
                                            {ssg::StatusId{3}, "run", 1})));
@@ -492,11 +492,11 @@ TEST(clipboard_status_and_binary_ingress_share_the_attached_connection) {
 
     auto const clipboard = ssg::encode_clipboard_response(
         {7, ssg::Revision{1}, ssg::Revision{1},
-         ssg::ClipboardResponseStatus::success, "ok"});
+         ssg::ClipboardResponseStatus::Success, "ok"});
     auto const status = ssg::encode_status_action_invocation(
         {ssg::StatusId{3}, "run", 1});
     auto const binary = ssg::encode_binary_frame(
-        {1, ssg::BinaryPayloadKind::dropped_content, 9, {1, 2, 3}});
+        {1, ssg::BinaryPayloadKind::DroppedContent, 9, {1, 2, 3}});
     ASSERT_TRUE(ssg::decode_clipboard_response(clipboard).accepted());
     ASSERT_TRUE(ssg::decode_status_action_invocation(status).accepted());
     ASSERT_TRUE(ssg::decode_binary_frame(binary).accepted());
@@ -590,7 +590,7 @@ TEST(slow_client_cannot_grow_the_outbound_queue) {
     std::this_thread::sleep_for(20ms);
 
     ssg::BinaryFrame large{
-        1, ssg::BinaryPayloadKind::dropped_content, 1,
+        1, ssg::BinaryPayloadKind::DroppedContent, 1,
         std::vector<std::uint8_t>(4 * 1024 * 1024, 0x5a)};
     for (int attempt = 0; attempt < 16; ++attempt) {
         (void)server.send_binary(ssg::ClientId{12}, large);
@@ -599,7 +599,7 @@ TEST(slow_client_cannot_grow_the_outbound_queue) {
     for (int attempt = 0; attempt < 100 && !disconnected; ++attempt) {
         disconnected =
             !server.send_binary(ssg::ClientId{12},
-                                {1, ssg::BinaryPayloadKind::dropped_content,
+                                {1, ssg::BinaryPayloadKind::DroppedContent,
                                  2, {1}});
         std::this_thread::sleep_for(2ms);
     }

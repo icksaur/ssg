@@ -21,22 +21,22 @@ struct LuaHandle {
 };
 
 enum class LuaError : std::uint8_t {
-    none,
-    invalid_script,
-    runtime_fault,
-    budget_exhausted,
-    stale_handle,
-    duplicate_command,
-    unknown_command,
-    capability_denied,
-    dispatch_failed,
+    None,
+    InvalidScript,
+    RuntimeFault,
+    BudgetExhausted,
+    StaleHandle,
+    DuplicateCommand,
+    UnknownCommand,
+    CapabilityDenied,
+    DispatchFailed,
 };
 
 struct LuaResult {
-    LuaError error{LuaError::none};
+    LuaError error{LuaError::None};
     std::string message;
     [[nodiscard]] bool accepted() const noexcept {
-        return error == LuaError::none;
+        return error == LuaError::None;
     }
 };
 

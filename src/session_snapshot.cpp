@@ -268,7 +268,7 @@ SessionReplayResult replay_session_delta(SessionSnapshot const& base,
 
     if (!document || !selection || !history || !clipboard || !prompt_status ||
         !search.accepted() ||
-        find_replace.error != FindReplaceReplayError::none || !settings ||
+        find_replace.error != FindReplaceReplayError::None || !settings ||
         !keymap || !tabs.accepted() || !diff.accepted() ||
         !external.accepted() || !tree.accepted() || !syntax.accepted() ||
         !lsp_sync.accepted() || !lsp_features.accepted()) {

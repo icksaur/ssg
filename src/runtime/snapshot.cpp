@@ -28,7 +28,7 @@ std::string EditorRuntime::Impl::current_path_label() const {
 
 PromptStatusViewState EditorRuntime::Impl::prompt_status_view(ViewportDimensions dimensions) const {
     PromptStatusViewState view;
-    auto rows = prompt_row_count(prompt.request() ? prompt.request()->kind : PromptKind::command_argument);
+    auto rows = prompt_row_count(prompt.request() ? prompt.request()->kind : PromptKind::CommandArgument);
     Rect reservation{0, static_cast<int>(dimensions.rows > rows ? dimensions.rows - rows : 0),
                      static_cast<int>(dimensions.columns), static_cast<int>(rows)};
     auto prompt_layout = compute_prompt_layout(prompt, reservation);
@@ -41,24 +41,24 @@ PromptStatusViewState EditorRuntime::Impl::prompt_status_view(ViewportDimensions
 }
 
 void EditorRuntime::Impl::project_find_replace_prompt(PromptViewState& prompt_view) const {
-    if (prompt_view.kind != PromptKind::find && prompt_view.kind != PromptKind::replace) {
+    if (prompt_view.kind != PromptKind::Find && prompt_view.kind != PromptKind::Replace) {
         return;
     }
     auto const& find_state = find_replace.view_state();
     for (auto& control : prompt_view.controls) {
         switch (control.kind) {
-            case PromptControlKind::input:
+            case PromptControlKind::Input:
                 if (control.id == "find.query") control.value = find_state.query;
                 else if (control.id == "replace.replacement")
                     control.value = find_state.replacement;
                 break;
-            case PromptControlKind::count: {
+            case PromptControlKind::Count: {
                 auto position = find_state.active_match ? *find_state.active_match + 1 : 0;
                 control.value = std::to_string(position) + "/" +
                                 std::to_string(find_state.matches.size());
                 break;
             }
-            case PromptControlKind::toggle:
+            case PromptControlKind::Toggle:
                 if (control.id == "find.toggle_case")
                     control.checked = find_state.options.case_sensitive;
                 else if (control.id == "find.toggle_whole_word")
@@ -100,7 +100,7 @@ ShellViewState EditorRuntime::Impl::shell_view(ViewportDimensions dimensions,
         request.leader_hint = std::move(hint);
     }
     bool const palette_open = prompt.active() && prompt.request() &&
-                              prompt.request()->kind == PromptKind::palette;
+                              prompt.request()->kind == PromptKind::Palette;
     if (palette_open) {
         request.palette_active = true;
         request.palette_query = palette_report.query;
@@ -255,7 +255,7 @@ void EditorRuntime::Impl::scroll_tree(std::int64_t rows) {
 
 PaletteViewState EditorRuntime::Impl::palette_view() const {
     PaletteViewState view;
-    view.mode = SearchMode::command;
+    view.mode = SearchMode::Command;
     for (auto const& descriptor : descriptors()) {
         std::string detail;
         if (auto sequence = preferred_binding(keymap, descriptor.id)) {

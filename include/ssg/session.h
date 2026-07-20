@@ -17,13 +17,13 @@ struct ClientCommand {
 };
 
 enum class CommandError : std::uint8_t {
-    none,
-    unknown_client,
-    unknown_command,
-    stale_revision,
-    capability_denied,
-    handler_failed,
-    revision_exhausted,
+    None,
+    UnknownClient,
+    UnknownCommand,
+    StaleRevision,
+    CapabilityDenied,
+    HandlerFailed,
+    RevisionExhausted,
 };
 
 struct CommandResult {
@@ -32,13 +32,13 @@ struct CommandResult {
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == CommandError::none;
+        return error == CommandError::None;
     }
 };
 
 enum class AttachError : std::uint8_t {
-    none,
-    duplicate_client,
+    None,
+    DuplicateClient,
 };
 
 struct AttachResult {
@@ -46,7 +46,7 @@ struct AttachResult {
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == AttachError::none;
+        return error == AttachError::None;
     }
 };
 

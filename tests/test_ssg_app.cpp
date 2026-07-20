@@ -54,19 +54,19 @@ TEST(encode_ansi_frame_adapts_to_color_depth) {
     screen.cells = {cell};
 
     // Truecolor: exact channels.
-    auto truecolor = ssg::app::encode_ansi_frame(screen, ssg::ColorDepth::truecolor);
+    auto truecolor = ssg::app::encode_ansi_frame(screen, ssg::ColorDepth::Truecolor);
     ASSERT_TRUE(truecolor.find("\x1b[38;2;255;0;0m") != std::string::npos);
     ASSERT_TRUE(truecolor.find("\x1b[48;2;0;0;0m") != std::string::npos);
 
     // Indexed256: pure red is xterm cube index 196; black is index 16.
-    auto indexed = ssg::app::encode_ansi_frame(screen, ssg::ColorDepth::indexed256);
+    auto indexed = ssg::app::encode_ansi_frame(screen, ssg::ColorDepth::Indexed256);
     ASSERT_TRUE(indexed.find("\x1b[38;5;196m") != std::string::npos);
     ASSERT_TRUE(indexed.find("\x1b[48;5;16m") != std::string::npos);
     ASSERT_TRUE(indexed.find(";2;") == std::string::npos);  // no truecolor bytes
 
     // ANSI16: pure red is base index 9 (bright red) -> fg SGR 91; black is index
     // 0 -> bg SGR 40.
-    auto ansi = ssg::app::encode_ansi_frame(screen, ssg::ColorDepth::ansi16);
+    auto ansi = ssg::app::encode_ansi_frame(screen, ssg::ColorDepth::Ansi16);
     ASSERT_TRUE(ansi.find("\x1b[91m") != std::string::npos);
     ASSERT_TRUE(ansi.find("\x1b[40m") != std::string::npos);
     ASSERT_TRUE(ansi.find(";5;") == std::string::npos);
@@ -75,16 +75,16 @@ TEST(encode_ansi_frame_adapts_to_color_depth) {
 
 TEST(detect_color_depth_reads_environment) {
     using ssg::ColorDepth;
-    ASSERT_TRUE(ssg::app::detect_color_depth("truecolor", "xterm") == ColorDepth::truecolor);
-    ASSERT_TRUE(ssg::app::detect_color_depth("24bit", nullptr) == ColorDepth::truecolor);
+    ASSERT_TRUE(ssg::app::detect_color_depth("truecolor", "xterm") == ColorDepth::Truecolor);
+    ASSERT_TRUE(ssg::app::detect_color_depth("24bit", nullptr) == ColorDepth::Truecolor);
     // COLORTERM wins over TERM.
-    ASSERT_TRUE(ssg::app::detect_color_depth("truecolor", "xterm-256color") == ColorDepth::truecolor);
+    ASSERT_TRUE(ssg::app::detect_color_depth("truecolor", "xterm-256color") == ColorDepth::Truecolor);
     // No COLORTERM: a 256color TERM is indexed256.
-    ASSERT_TRUE(ssg::app::detect_color_depth(nullptr, "xterm-256color") == ColorDepth::indexed256);
-    ASSERT_TRUE(ssg::app::detect_color_depth("", "screen-256color") == ColorDepth::indexed256);
+    ASSERT_TRUE(ssg::app::detect_color_depth(nullptr, "xterm-256color") == ColorDepth::Indexed256);
+    ASSERT_TRUE(ssg::app::detect_color_depth("", "screen-256color") == ColorDepth::Indexed256);
     // Neither signal: fall back to 16 colors.
-    ASSERT_TRUE(ssg::app::detect_color_depth(nullptr, "xterm") == ColorDepth::ansi16);
-    ASSERT_TRUE(ssg::app::detect_color_depth(nullptr, nullptr) == ColorDepth::ansi16);
+    ASSERT_TRUE(ssg::app::detect_color_depth(nullptr, "xterm") == ColorDepth::Ansi16);
+    ASSERT_TRUE(ssg::app::detect_color_depth(nullptr, nullptr) == ColorDepth::Ansi16);
 }
 
 TEST(encode_ansi_frame_addresses_rows_and_emits_palette_colors) {
@@ -158,7 +158,7 @@ TEST(unicode_end_to_end_grid_and_encoding) {
     ASSERT_TRUE(created.accepted());
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process},
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                ssg::ViewId{1}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                  {"file.open", runtime.revision(), std::string{"u.txt"}})
@@ -220,7 +220,7 @@ TEST(unicode_end_to_end_grid_and_encoding) {
 
     // Encoding: each wide cluster emits exactly one glyph and continuation cells
     // emit nothing, so the CJK and emoji byte sequences each appear exactly once.
-    auto frame = ssg::app::encode_ansi_frame(grid, ssg::ColorDepth::truecolor);
+    auto frame = ssg::app::encode_ansi_frame(grid, ssg::ColorDepth::Truecolor);
     auto count = [&](std::string const& needle) {
         std::size_t n = 0, pos = 0;
         while ((pos = frame.find(needle, pos)) != std::string::npos) { ++n; pos += needle.size(); }
@@ -568,7 +568,7 @@ TEST(decode_input_pointer_split_reads_are_incomplete) {
 
 TEST(route_pointer_left_press_on_editor_places_caret) {
     ssg::RegionHit hit;
-    hit.region = ssg::HitRegion::editor;
+    hit.region = ssg::HitRegion::Editor;
     hit.byte_offset = 3;
     ssg::app::PointerTargets targets;
     targets.document_position =
@@ -608,7 +608,7 @@ TEST(route_pointer_ignores_non_editor_and_non_left) {
     // A left press on a non-editor region (e.g. the panel) is not handled by
     // M8-C: no editor command, no drag.
     ssg::RegionHit panel_hit;
-    panel_hit.region = ssg::HitRegion::panel;
+    panel_hit.region = ssg::HitRegion::Panel;
     auto panel_plan = ssg::app::route_pointer(
         panel_hit, ssg::app::PointerButton::left, ssg::app::PointerKind::press,
         false, std::nullopt, empty);
@@ -616,7 +616,7 @@ TEST(route_pointer_ignores_non_editor_and_non_left) {
 
     // A right/middle press on the editor is a no-op in M8.
     ssg::RegionHit editor_hit;
-    editor_hit.region = ssg::HitRegion::editor;
+    editor_hit.region = ssg::HitRegion::Editor;
     ssg::app::PointerTargets targets;
     targets.document_position =
         ssg::DocumentPosition{ssg::ByteOffset{0}, ssg::LineIndex{0}, ssg::CellIndex{0}};
@@ -653,7 +653,7 @@ TEST(route_pointer_drag_extends_selection_from_anchor) {
     auto const anchor =
         ssg::DocumentPosition{ssg::ByteOffset{3}, ssg::LineIndex{0}, ssg::CellIndex{3}};
     ssg::RegionHit hit;
-    hit.region = ssg::HitRegion::editor;
+    hit.region = ssg::HitRegion::Editor;
     hit.byte_offset = 10;
     ssg::app::PointerTargets targets;
     auto const active =
@@ -687,7 +687,7 @@ TEST(route_pointer_drag_without_anchor_or_target_is_a_no_op) {
     auto const anchor =
         ssg::DocumentPosition{ssg::ByteOffset{3}, ssg::LineIndex{0}, ssg::CellIndex{3}};
     ssg::RegionHit editor_hit;
-    editor_hit.region = ssg::HitRegion::editor;
+    editor_hit.region = ssg::HitRegion::Editor;
     ssg::app::PointerTargets targets;
     targets.document_position =
         ssg::DocumentPosition{ssg::ByteOffset{5}, ssg::LineIndex{0}, ssg::CellIndex{5}};
@@ -708,7 +708,7 @@ TEST(route_pointer_drag_without_anchor_or_target_is_a_no_op) {
 
     // Dragging over a non-editor region (e.g. the panel) -> no command.
     ssg::RegionHit panel_hit;
-    panel_hit.region = ssg::HitRegion::panel;
+    panel_hit.region = ssg::HitRegion::Panel;
     auto off_editor = ssg::app::route_pointer(
         panel_hit, ssg::app::PointerButton::left, ssg::app::PointerKind::drag,
         true, anchor, targets);
@@ -717,7 +717,7 @@ TEST(route_pointer_drag_without_anchor_or_target_is_a_no_op) {
 
 TEST(route_pointer_release_ends_drag_without_a_command) {
     ssg::RegionHit editor_hit;
-    editor_hit.region = ssg::HitRegion::editor;
+    editor_hit.region = ssg::HitRegion::Editor;
     ssg::app::PointerTargets targets;
     targets.document_position =
         ssg::DocumentPosition{ssg::ByteOffset{5}, ssg::LineIndex{0}, ssg::CellIndex{5}};
@@ -750,7 +750,7 @@ TEST(route_pointer_editor_scrollbar_scrolls_to_fraction) {
     };
 
     ssg::RegionHit bottom;
-    bottom.region = ssg::HitRegion::editor_scrollbar;
+    bottom.region = ssg::HitRegion::EditorScrollbar;
     bottom.scroll_numerator = 7;
     bottom.scroll_denominator = 7;
     ssg::app::PointerTargets const empty;
@@ -769,7 +769,7 @@ TEST(route_pointer_editor_scrollbar_scrolls_to_fraction) {
     }
 
     ssg::RegionHit top;
-    top.region = ssg::HitRegion::editor_scrollbar;
+    top.region = ssg::HitRegion::EditorScrollbar;
     top.scroll_numerator = 0;
     top.scroll_denominator = 7;
     auto top_plan = ssg::app::route_pointer(
@@ -795,8 +795,8 @@ TEST(route_pointer_editor_scrollbar_scrolls_to_fraction) {
 TEST(route_pointer_panel_and_palette_scrollbars_are_no_ops) {
     // Panel/palette gutter drag is not wired in M8; those hits dispatch nothing.
     ssg::app::PointerTargets const empty;
-    for (auto region : {ssg::HitRegion::panel_scrollbar,
-                        ssg::HitRegion::palette_scrollbar}) {
+    for (auto region : {ssg::HitRegion::PanelScrollbar,
+                        ssg::HitRegion::PaletteScrollbar}) {
         ssg::RegionHit hit;
         hit.region = region;
         hit.scroll_numerator = 3;
@@ -811,7 +811,7 @@ TEST(route_pointer_panel_and_palette_scrollbars_are_no_ops) {
 
 TEST(route_pointer_tab_press_activates_the_tab) {
     ssg::RegionHit hit;
-    hit.region = ssg::HitRegion::tab;
+    hit.region = ssg::HitRegion::Tab;
     hit.tab_index = 2;
     ssg::app::PointerTargets targets;
     targets.tab_id = ssg::TabId{7};
@@ -839,7 +839,7 @@ TEST(route_pointer_tab_press_activates_the_tab) {
 
 TEST(route_pointer_palette_press_executes_the_candidate) {
     ssg::RegionHit hit;
-    hit.region = ssg::HitRegion::palette;
+    hit.region = ssg::HitRegion::Palette;
     hit.item_index = 4;
     ssg::app::PointerTargets targets;
     targets.palette_command_id = std::string{"view.split"};
@@ -867,7 +867,7 @@ TEST(route_pointer_palette_press_executes_the_candidate) {
 
 TEST(route_pointer_panel_press_selects_and_activates_the_node) {
     ssg::RegionHit hit;
-    hit.region = ssg::HitRegion::panel;
+    hit.region = ssg::HitRegion::Panel;
     hit.node_id = ssg::TreeNodeId{"files:src/main.cpp"};
     ssg::app::PointerTargets const empty;
 
@@ -890,7 +890,7 @@ TEST(route_pointer_panel_press_selects_and_activates_the_node) {
 
     // A panel hit with no node id (the provider-label row / empty area) is inert.
     ssg::RegionHit no_node;
-    no_node.region = ssg::HitRegion::panel;
+    no_node.region = ssg::HitRegion::Panel;
     auto inert = ssg::app::route_pointer(
         no_node, ssg::app::PointerButton::left, ssg::app::PointerKind::press,
         false, std::nullopt, empty);
@@ -900,17 +900,17 @@ TEST(route_pointer_panel_press_selects_and_activates_the_node) {
 TEST(route_wheel_maps_region_to_scroll_target) {
     using ssg::app::WheelTarget;
     // The side panel and its gutter scroll the tree.
-    ASSERT_TRUE(ssg::app::route_wheel(ssg::HitRegion::panel) == WheelTarget::tree);
-    ASSERT_TRUE(ssg::app::route_wheel(ssg::HitRegion::panel_scrollbar) ==
+    ASSERT_TRUE(ssg::app::route_wheel(ssg::HitRegion::Panel) == WheelTarget::tree);
+    ASSERT_TRUE(ssg::app::route_wheel(ssg::HitRegion::PanelScrollbar) ==
                 WheelTarget::tree);
     // The palette and its gutter scroll the client-owned palette window.
-    ASSERT_TRUE(ssg::app::route_wheel(ssg::HitRegion::palette) ==
+    ASSERT_TRUE(ssg::app::route_wheel(ssg::HitRegion::Palette) ==
                 WheelTarget::palette);
-    ASSERT_TRUE(ssg::app::route_wheel(ssg::HitRegion::palette_scrollbar) ==
+    ASSERT_TRUE(ssg::app::route_wheel(ssg::HitRegion::PaletteScrollbar) ==
                 WheelTarget::palette);
     // The editor, its gutter, a tab, and no region all scroll the document.
-    for (auto region : {ssg::HitRegion::editor, ssg::HitRegion::editor_scrollbar,
-                        ssg::HitRegion::tab, ssg::HitRegion::none}) {
+    for (auto region : {ssg::HitRegion::Editor, ssg::HitRegion::EditorScrollbar,
+                        ssg::HitRegion::Tab, ssg::HitRegion::None}) {
         ASSERT_TRUE(ssg::app::route_wheel(region) == WheelTarget::editor);
     }
 }

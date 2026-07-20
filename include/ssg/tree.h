@@ -43,9 +43,9 @@ private:
     std::uint64_t value_;
 };
 
-enum class TreeProviderKind { filesystem, git, symbols };
-enum class TreeNodeKind { root, directory, file, symlink, git_entry, symbol };
-enum class GitTreeStatus { added, modified, deleted, renamed, untracked };
+enum class TreeProviderKind { Filesystem, Git, Symbols };
+enum class TreeNodeKind { Root, Directory, File, Symlink, GitEntry, Symbol };
+enum class GitTreeStatus { Added, Modified, Deleted, Renamed, Untracked };
 
 struct TreeNodeCommand {
     std::string id;
@@ -87,7 +87,7 @@ private:
 struct GitTreeRecord {
     std::string workspace_path;
     std::string label;
-    GitTreeStatus status = GitTreeStatus::modified;
+    GitTreeStatus status = GitTreeStatus::Modified;
     std::vector<TreeNodeCommand> commands;
 };
 
@@ -245,11 +245,11 @@ TreeDelta derive_tree_delta(const TreeViewState& base,
                             const TreeViewState& target,
                             std::size_t maximum_operations);
 
-enum class TreeReplayError { none, stale_revision, snapshot_required, malformed_delta };
+enum class TreeReplayError { None, StaleRevision, SnapshotRequired, MalformedDelta };
 
 struct TreeReplayResult {
     std::optional<TreeViewState> state;
-    TreeReplayError error = TreeReplayError::none;
+    TreeReplayError error = TreeReplayError::None;
     bool accepted() const noexcept { return state.has_value(); }
 };
 

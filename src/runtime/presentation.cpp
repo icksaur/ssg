@@ -17,8 +17,8 @@ bool bool_setting(SettingsModel const& settings, SettingKey key, bool fallback) 
 }
 
 CommandHandlerResult set_word_wrap(EditorRuntime::Impl& runtime) {
-    bool next = !bool_setting(runtime.settings, SettingKey::word_wrap, runtime.word_wrap);
-    auto mutation = runtime.settings.set(SettingScope::workspace, SettingKey::word_wrap, next);
+    bool next = !bool_setting(runtime.settings, SettingKey::WordWrap, runtime.word_wrap);
+    auto mutation = runtime.settings.set(SettingScope::Workspace, SettingKey::WordWrap, next);
     if (!mutation.accepted()) return failure(mutation.error->message);
     runtime.word_wrap = next;
     return success();
@@ -64,15 +64,15 @@ CommandHandlerResult scroll_fraction(EditorRuntime::Impl& runtime, std::any cons
 }
 
 CommandHandlerResult shell_command(EditorRuntime::Impl& runtime, std::string_view id) {
-    if (id == "pane.split_horizontal") runtime.shell.split_active(SplitAxis::horizontal);
-    else if (id == "pane.split_vertical") runtime.shell.split_active(SplitAxis::vertical);
+    if (id == "pane.split_horizontal") runtime.shell.split_active(SplitAxis::Horizontal);
+    else if (id == "pane.split_vertical") runtime.shell.split_active(SplitAxis::Vertical);
     else if (id == "pane.close") (void)runtime.shell.close_active_pane();
     else if (id == "pane.next") runtime.shell.next_pane();
     else if (id == "pane.previous") runtime.shell.previous_pane();
-    else if (id == "pane.focus_left") (void)runtime.shell.focus_pane(PaneDirection::left, runtime.shell_view(ViewportDimensions{80, 24}));
-    else if (id == "pane.focus_right") (void)runtime.shell.focus_pane(PaneDirection::right, runtime.shell_view(ViewportDimensions{80, 24}));
-    else if (id == "pane.focus_up") (void)runtime.shell.focus_pane(PaneDirection::up, runtime.shell_view(ViewportDimensions{80, 24}));
-    else if (id == "pane.focus_down") (void)runtime.shell.focus_pane(PaneDirection::down, runtime.shell_view(ViewportDimensions{80, 24}));
+    else if (id == "pane.focus_left") (void)runtime.shell.focus_pane(PaneDirection::Left, runtime.shell_view(ViewportDimensions{80, 24}));
+    else if (id == "pane.focus_right") (void)runtime.shell.focus_pane(PaneDirection::Right, runtime.shell_view(ViewportDimensions{80, 24}));
+    else if (id == "pane.focus_up") (void)runtime.shell.focus_pane(PaneDirection::Up, runtime.shell_view(ViewportDimensions{80, 24}));
+    else if (id == "pane.focus_down") (void)runtime.shell.focus_pane(PaneDirection::Down, runtime.shell_view(ViewportDimensions{80, 24}));
     else if (id == "panel.toggle") runtime.shell.toggle_panel();
     else if (id == "panel.focus") (void)runtime.shell.focus_panel();
     else if (id == "panel.next_provider") runtime.shell.next_panel_provider();
@@ -108,25 +108,25 @@ std::string setting_message(SettingMutation const& mutation) {
 }
 
 void sync_runtime_settings(EditorRuntime::Impl& runtime) {
-    runtime.word_wrap = bool_setting(runtime.settings, SettingKey::word_wrap,
+    runtime.word_wrap = bool_setting(runtime.settings, SettingKey::WordWrap,
                                      runtime.word_wrap);
 }
 
 CommandHandlerResult settings_command(EditorRuntime::Impl& runtime, std::string_view id, std::any const& payload) {
     if (id == "settings.open") {
         (void)runtime.prompt.open(PromptRequest{
-            PromptKind::settings, "Settings",
+            PromptKind::Settings, "Settings",
             {{"settings.query", "Settings query", ""}}, {}, std::nullopt});
         return success();
     }
     if (id == "settings.export_workspace") {
-        runtime.enqueue_status(StatusPriority::information, runtime.settings.export_scope(SettingScope::workspace));
+        runtime.enqueue_status(StatusPriority::Information, runtime.settings.export_scope(SettingScope::Workspace));
         return success();
     }
     if (id == "settings.import_workspace") {
         auto const* document = payload_as<std::string>(payload);
         if (document == nullptr) return failure("settings.import_workspace requires a document payload");
-        auto result = runtime.settings.import_scope(SettingScope::workspace, *document);
+        auto result = runtime.settings.import_scope(SettingScope::Workspace, *document);
         sync_runtime_settings(runtime);
         return result.ok ? success() : failure(result.message);
     }

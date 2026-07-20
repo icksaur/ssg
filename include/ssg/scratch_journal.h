@@ -33,8 +33,8 @@ private:
 };
 
 enum class JournalDocumentKeyKind {
-    saved,
-    untitled,
+    Saved,
+    Untitled,
 };
 
 class JournalDocumentKey {
@@ -64,7 +64,7 @@ private:
 
 struct JournalDocument {
     JournalDocumentKey key;
-    DocumentMode mode = DocumentMode::edit;
+    DocumentMode mode = DocumentMode::Edit;
     bool dirty = false;
     std::string utf8_content;
 

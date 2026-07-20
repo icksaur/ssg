@@ -19,15 +19,15 @@ namespace ssg {
 
 // The color capability a terminal advertises.
 enum class ColorDepth : std::uint8_t {
-    ansi16,       // 16 base ANSI colors (SGR 30-37/90-97).
-    indexed256,   // xterm 256-color (SGR 38;5;n) — the 6x6x6 cube and gray ramp.
-    truecolor,    // 24-bit direct color (SGR 38;2;r;g;b).
+    Ansi16,       // 16 base ANSI colors (SGR 30-37/90-97).
+    Indexed256,   // xterm 256-color (SGR 38;5;n) — the 6x6x6 cube and gray ramp.
+    Truecolor,    // 24-bit direct color (SGR 38;2;r;g;b).
 };
 
 struct ResolvedColor {
-    enum class Encoding : std::uint8_t { ansi16, indexed256, truecolor };
+    enum class Encoding : std::uint8_t { Ansi16, Indexed256, Truecolor };
 
-    Encoding encoding = Encoding::truecolor;
+    Encoding encoding = Encoding::Truecolor;
     std::uint8_t index = 0;   // ansi16: 0..15; indexed256: 16..255; unused for truecolor.
     SrgbColor rgb; // truecolor: the exact channels; else the swatch's channels.
 

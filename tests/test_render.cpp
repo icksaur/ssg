@@ -29,7 +29,7 @@ std::unique_ptr<ssg::EditorRuntime> make_runtime(fs::path const& root) {
         {root, root / "scratch", root / "recovery"});
     if (!created.accepted()) return nullptr;
     auto runtime = std::move(created.runtime);
-    (void)runtime->attach({ssg::ClientId{1}, ssg::InvocationOrigin::in_process},
+    (void)runtime->attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                           ssg::ViewId{1});
     return runtime;
 }
@@ -221,10 +221,10 @@ TEST(render_projects_palette_results_into_active_pane) {
     int const selected_row = projection.rect.y + 1;
     ASSERT_EQ(grid.at(projection.rect.x, selected_row).text, std::string{"f"});
     ASSERT_EQ(grid.at(projection.rect.x, selected_row).role,
-              ssg::SemanticRole::selection);
+              ssg::SemanticRole::Selection);
     // The unselected row must not carry the selection role.
     ASSERT_FALSE(grid.at(projection.rect.x, projection.rect.y).role ==
-                 ssg::SemanticRole::selection);
+                 ssg::SemanticRole::Selection);
 }
 
 TEST(render_shows_palette_query_and_ghost_in_header) {
@@ -258,10 +258,10 @@ TEST(render_shows_palette_query_and_ghost_in_header) {
     bool ghost_dim_role = false;
     for (int column = 0; column < grid.size.columns; ++column) {
         auto const& cell = grid.at(column, 0);
-        if (cell.text == "s" && cell.role == ssg::SemanticRole::prompt) {
+        if (cell.text == "s" && cell.role == ssg::SemanticRole::Prompt) {
             query_prompt_role = true;
         }
-        if (cell.text == "v" && cell.role == ssg::SemanticRole::line_number) {
+        if (cell.text == "v" && cell.role == ssg::SemanticRole::LineNumber) {
             ghost_dim_role = true;
         }
     }
@@ -288,7 +288,7 @@ TEST(render_paints_selection_highlight_and_secondary_carets) {
         bool any_selection = false;
         for (int row = 0; row < grid.size.rows; ++row) {
             for (int col = 0; col < grid.size.columns; ++col) {
-                if (grid.at(col, row).role == ssg::SemanticRole::selection) {
+                if (grid.at(col, row).role == ssg::SemanticRole::Selection) {
                     any_selection = true;
                 }
             }
@@ -322,12 +322,12 @@ TEST(render_paints_selection_highlight_and_secondary_carets) {
     if (alpha_col < 0) return;
     for (int k = 0; k < 5; ++k) {
         ASSERT_EQ(grid.at(alpha_col + k, alpha_row).role,
-                  ssg::SemanticRole::selection);
+                  ssg::SemanticRole::Selection);
     }
     // The end-of-line past "alpha" is NOT filled: the selection ends at the line
     // end and does not span into the next line.
     ASSERT_NE(grid.at(alpha_col + 5, alpha_row).role,
-              ssg::SemanticRole::selection);
+              ssg::SemanticRole::Selection);
     // The hardware caret sits at the primary active position (end of "alpha").
     ASSERT_TRUE(grid.caret.has_value());
     if (grid.caret) {
@@ -367,7 +367,7 @@ TEST(render_fills_end_of_line_for_multiline_selection) {
     // "alpha" is highlighted AND the cells past it to the pane's right edge are
     // the end-of-line fill (all selection role).
     for (int col = alpha_col; col < grid.size.columns - 1; ++col) {
-        ASSERT_EQ(grid.at(col, alpha_row).role, ssg::SemanticRole::selection);
+        ASSERT_EQ(grid.at(col, alpha_row).role, ssg::SemanticRole::Selection);
     }
 }
 
@@ -397,9 +397,9 @@ TEST(render_highlights_wide_glyph_cells) {
     ASSERT_TRUE(row >= 0);
     if (row < 0) return;
     // The wide glyph's lead cell and its continuation cell both carry selection.
-    ASSERT_EQ(grid.at(col, row).role, ssg::SemanticRole::selection);
+    ASSERT_EQ(grid.at(col, row).role, ssg::SemanticRole::Selection);
     ASSERT_TRUE(grid.at(col + 1, row).continuation);
-    ASSERT_EQ(grid.at(col + 1, row).role, ssg::SemanticRole::selection);
+    ASSERT_EQ(grid.at(col + 1, row).role, ssg::SemanticRole::Selection);
 }
 
 TEST(render_paints_secondary_ranged_selection_caret) {
@@ -432,7 +432,7 @@ TEST(render_paints_secondary_ranged_selection_caret) {
         for (int col = 0; col < grid.size.columns; ++col) {
             bool const is_primary = grid.caret && grid.caret->row == row &&
                                     grid.caret->column == col;
-            if (grid.at(col, row).role == ssg::SemanticRole::caret && !is_primary) {
+            if (grid.at(col, row).role == ssg::SemanticRole::Caret && !is_primary) {
                 ++painted_secondary;
             }
         }
@@ -468,7 +468,7 @@ TEST(render_paints_secondary_caret_as_a_cell) {
         for (int col = 0; col < grid.size.columns; ++col) {
             bool const is_primary = grid.caret && grid.caret->row == row &&
                                     grid.caret->column == col;
-            if (grid.at(col, row).role == ssg::SemanticRole::caret && !is_primary) {
+            if (grid.at(col, row).role == ssg::SemanticRole::Caret && !is_primary) {
                 ++painted_secondary;
             }
         }
@@ -515,13 +515,13 @@ TEST(render_paints_find_matches_and_active_match) {
     // The active match (the first "cat") carries the selection role; the two
     // other matches carry search_match; the separating spaces carry neither.
     for (int k = 0; k < 3; ++k) {
-        ASSERT_EQ(grid.at(col + k, row).role, ssg::SemanticRole::selection);
+        ASSERT_EQ(grid.at(col + k, row).role, ssg::SemanticRole::Selection);
     }
-    ASSERT_NE(grid.at(col + 3, row).role, ssg::SemanticRole::selection);
-    ASSERT_NE(grid.at(col + 3, row).role, ssg::SemanticRole::search_match);
+    ASSERT_NE(grid.at(col + 3, row).role, ssg::SemanticRole::Selection);
+    ASSERT_NE(grid.at(col + 3, row).role, ssg::SemanticRole::SearchMatch);
     for (int k = 0; k < 3; ++k) {
-        ASSERT_EQ(grid.at(col + 4 + k, row).role, ssg::SemanticRole::search_match);
-        ASSERT_EQ(grid.at(col + 8 + k, row).role, ssg::SemanticRole::search_match);
+        ASSERT_EQ(grid.at(col + 4 + k, row).role, ssg::SemanticRole::SearchMatch);
+        ASSERT_EQ(grid.at(col + 8 + k, row).role, ssg::SemanticRole::SearchMatch);
     }
 }
 
@@ -553,7 +553,7 @@ TEST(render_hides_find_matches_after_document_revision_changes) {
     bool any_match = false;
     for (int row = 0; row < grid.size.rows; ++row) {
         for (int col = 0; col < grid.size.columns; ++col) {
-            if (grid.at(col, row).role == ssg::SemanticRole::search_match) {
+            if (grid.at(col, row).role == ssg::SemanticRole::SearchMatch) {
                 any_match = true;
             }
         }
@@ -741,10 +741,10 @@ TEST(render_palette_windows_rows_and_draws_a_thumb_with_absolute_selection) {
     ASSERT_FALSE(grid_contains(grid, "cmd-00"));
     int const selected_row = projection.rect.y + 5;
     ASSERT_EQ(grid.at(projection.rect.x, selected_row).role,
-              ssg::SemanticRole::selection);
+              ssg::SemanticRole::Selection);
     // Row 0 (absolute 20) is not selected.
     ASSERT_FALSE(grid.at(projection.rect.x, projection.rect.y).role ==
-                 ssg::SemanticRole::selection);
+                 ssg::SemanticRole::Selection);
     // A thumb is drawn in the reserved gutter column.
     bool has_thumb = false;
     for (int y = projection.scrollbar_rect.y;

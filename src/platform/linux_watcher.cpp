@@ -103,7 +103,7 @@ public:
     LinuxFilesystemWatcher(std::filesystem::path root, WatcherConfig config)
         : root_(std::filesystem::canonical(std::move(root))),
           max_rescan_entries_(config.max_rescan_entries) {
-        note_optional_construction(OptionalSubsystem::filesystem_watcher);
+        note_optional_construction(OptionalSubsystem::FilesystemWatcher);
         descriptor_ = ::inotify_init1(IN_NONBLOCK | IN_CLOEXEC);
         if (descriptor_ == -1) {
             throw std::system_error(errno, std::generic_category(),
@@ -249,7 +249,7 @@ private:
     void handle(const inotify_event& native) {
         if ((native.mask & IN_Q_OVERFLOW) != 0) {
             normalizer_->push(
-                {NativeWatchAction::overflow, {}, 0, {}}, WatchClock::now());
+                {NativeWatchAction::Overflow, {}, 0, {}}, WatchClock::now());
             return;
         }
         const auto directory = directories_.find(native.wd);
@@ -262,7 +262,7 @@ private:
         }
         if ((native.mask & (IN_DELETE_SELF | IN_MOVE_SELF)) != 0) {
             normalizer_->push(
-                {NativeWatchAction::overflow, {}, 0, {}}, WatchClock::now());
+                {NativeWatchAction::Overflow, {}, 0, {}}, WatchClock::now());
             return;
         }
         if (native.len == 0) {
@@ -277,12 +277,12 @@ private:
             (native.mask & (IN_CREATE | IN_MOVED_TO)) != 0) {
             if ((native.mask & IN_MOVED_TO) != 0) {
                 normalizer_->push(
-                    {NativeWatchAction::rename_to, relative, native.cookie,
+                    {NativeWatchAction::RenameTo, relative, native.cookie,
                      observed},
                     now);
             } else {
                 normalizer_->push(
-                    {NativeWatchAction::create, relative, 0, observed}, now);
+                    {NativeWatchAction::Create, relative, 0, observed}, now);
             }
             try {
                 add_watch_tree(absolute);
@@ -290,23 +290,23 @@ private:
                     scan_workspace(absolute, max_rescan_entries_);
                 if (!subtree.complete) {
                     normalizer_->push(
-                        {NativeWatchAction::overflow, {}, 0, {}}, now);
+                        {NativeWatchAction::Overflow, {}, 0, {}}, now);
                     return;
                 }
                 for (const auto& entry : subtree.entries) {
                     normalizer_->push(
-                        {NativeWatchAction::create,
+                        {NativeWatchAction::Create,
                          (absolute / entry.path).lexically_relative(root_),
                          0, entry.state},
                         now);
                 }
             } catch (const std::filesystem::filesystem_error&) {
                 normalizer_->push(
-                    {NativeWatchAction::overflow, {}, 0, {}}, now);
+                    {NativeWatchAction::Overflow, {}, 0, {}}, now);
                 return;
             } catch (const std::system_error&) {
                 normalizer_->push(
-                    {NativeWatchAction::overflow, {}, 0, {}}, now);
+                    {NativeWatchAction::Overflow, {}, 0, {}}, now);
                 return;
             }
             return;
@@ -314,20 +314,20 @@ private:
 
         if ((native.mask & IN_MOVED_FROM) != 0) {
             normalizer_->push(
-                {NativeWatchAction::rename_from, relative, native.cookie, {}}, now);
+                {NativeWatchAction::RenameFrom, relative, native.cookie, {}}, now);
         } else if ((native.mask & IN_MOVED_TO) != 0) {
             normalizer_->push(
-                {NativeWatchAction::rename_to, relative, native.cookie, observed},
+                {NativeWatchAction::RenameTo, relative, native.cookie, observed},
                 now);
         } else if ((native.mask & IN_CREATE) != 0) {
             normalizer_->push(
-                {NativeWatchAction::create, relative, 0, observed}, now);
+                {NativeWatchAction::Create, relative, 0, observed}, now);
         } else if ((native.mask & IN_DELETE) != 0) {
             normalizer_->push(
-                {NativeWatchAction::remove, relative, 0, {}}, now);
+                {NativeWatchAction::Remove, relative, 0, {}}, now);
         } else if ((native.mask & (IN_MODIFY | IN_ATTRIB | IN_CLOSE_WRITE)) != 0) {
             normalizer_->push(
-                {NativeWatchAction::modify, relative, 0, observed}, now);
+                {NativeWatchAction::Modify, relative, 0, observed}, now);
         }
     }
 

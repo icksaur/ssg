@@ -42,31 +42,31 @@ private:
     std::uint32_t value_;
 };
 
-enum class SplitAxis : std::uint8_t { horizontal, vertical };
-enum class PaneDirection : std::uint8_t { left, right, up, down };
+enum class SplitAxis : std::uint8_t { Horizontal, Vertical };
+enum class PaneDirection : std::uint8_t { Left, Right, Up, Down };
 
 enum class ShellNodeKind : std::uint8_t {
-    header,
-    header_field,
-    footer,
-    footer_field,
-    footer_action,
-    tab_bar,
-    tab,
-    panel,
-    panel_provider,
-    pane,
-    scrollbar,
-    prompt_reservation,
-    empty_state,
+    Header,
+    HeaderField,
+    Footer,
+    FooterField,
+    FooterAction,
+    TabBar,
+    Tab,
+    Panel,
+    PanelProvider,
+    Pane,
+    Scrollbar,
+    PromptReservation,
+    EmptyState,
 };
 
 struct AccessibilityNode {
-    ShellNodeKind kind = ShellNodeKind::pane;
+    ShellNodeKind kind = ShellNodeKind::Pane;
     std::string id;
     std::string label;
     Rect rect;
-    SemanticRole role = SemanticRole::background;
+    SemanticRole role = SemanticRole::Background;
     std::string content;  // Display text for leaves; empty for containers/panes.
 
     friend bool operator==(const AccessibilityNode&, const AccessibilityNode&) = default;
@@ -167,7 +167,7 @@ struct ShellViewState {
     // rectangle and its index into `sections().tabs.tabs`.
     std::vector<TabHit> tab_hits;
     std::vector<AccessibilityNode> accessibility_nodes;
-    FocusTarget focus = FocusTarget::editor;
+    FocusTarget focus = FocusTarget::Editor;
     std::optional<PaletteProjection> palette;
 
     [[nodiscard]] std::size_t scrollbar_count() const noexcept {
@@ -176,12 +176,12 @@ struct ShellViewState {
 };
 
 enum class ShellLayoutErrorCode : std::uint8_t {
-    viewport_too_small,
-    invalid_prompt_rows,
+    ViewportTooSmall,
+    InvalidPromptRows,
 };
 
 struct ShellLayoutError {
-    ShellLayoutErrorCode code = ShellLayoutErrorCode::viewport_too_small;
+    ShellLayoutErrorCode code = ShellLayoutErrorCode::ViewportTooSmall;
     std::string message;
 };
 

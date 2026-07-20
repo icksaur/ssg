@@ -23,13 +23,13 @@ public:
         std::chrono::milliseconds durability_timeout) override {
         ++close_calls;
         if (durability_timeout <= 0ms) {
-            return {ssg::TabError::durability_failed, "invalid timeout"};
+            return {ssg::TabError::DurabilityFailed, "invalid timeout"};
         }
         if (std::find(fail_close.begin(), fail_close.end(), tab.id) !=
             fail_close.end()) {
-            return {ssg::TabError::durability_failed, "durability failed"};
+            return {ssg::TabError::DurabilityFailed, "durability failed"};
         }
-        return {ssg::TabError::none, {},
+        return {ssg::TabError::None, {},
                 ssg::RecoveryRecordId{"closed-" +
                                       std::to_string(tab.id.value())},
                 tab.dirty};
@@ -40,7 +40,7 @@ public:
         const ssg::RecoveryRecordId&) override {
         ++reopen_calls;
         if (fail_reopen) {
-            return {ssg::TabError::lifecycle_failed, "restore failed"};
+            return {ssg::TabError::LifecycleFailed, "restore failed"};
         }
         return {};
     }
@@ -54,7 +54,7 @@ ssg::TabId open_saved(ssg::TabManager& tabs, std::uint64_t document,
                       std::string_view path, bool dirty = false) {
     return *tabs
                 .open_document(ssg::FileDocumentId{document}, saved(path), path,
-                               ssg::DocumentMode::edit, dirty)
+                               ssg::DocumentMode::Edit, dirty)
                 .tab;
 }
 
@@ -77,7 +77,7 @@ TEST(duplicate_document_identity_activates_existing_tab) {
     (void)open_saved(tabs, 2, "src/b.cpp");
     const auto duplicate = tabs.open_document(
         ssg::FileDocumentId{99}, saved("src/a.cpp"), "other",
-        ssg::DocumentMode::read_only, true, ssg::TabRecoveryBadge::failed);
+        ssg::DocumentMode::ReadOnly, true, ssg::TabRecoveryBadge::Failed);
 
     ASSERT_TRUE(duplicate.accepted());
     ASSERT_EQ(duplicate.tab, std::optional{first});
@@ -90,17 +90,17 @@ TEST(all_tab_kinds_navigate_cyclically_and_reorder) {
     ssg::TabManager tabs{lifecycle};
     const auto document = open_saved(tabs, 1, "a");
     const auto diff =
-        *tabs.open_content(ssg::TabKind::live_diff, "diff:a", "Diff",
-                           ssg::DocumentMode::diff)
+        *tabs.open_content(ssg::TabKind::LiveDiff, "diff:a", "Diff",
+                           ssg::DocumentMode::Diff)
              .tab;
     const auto output =
-        *tabs.open_content(ssg::TabKind::read_only_output, "output:1", "Output",
-                           ssg::DocumentMode::read_only)
+        *tabs.open_content(ssg::TabKind::ReadOnlyOutput, "output:1", "Output",
+                           ssg::DocumentMode::ReadOnly)
              .tab;
-    (void)tabs.open_content(ssg::TabKind::search_results, "search:x", "Search",
-                            ssg::DocumentMode::read_only);
-    (void)tabs.open_content(ssg::TabKind::tree_view, "tree:files", "Files",
-                            ssg::DocumentMode::read_only);
+    (void)tabs.open_content(ssg::TabKind::SearchResults, "search:x", "Search",
+                            ssg::DocumentMode::ReadOnly);
+    (void)tabs.open_content(ssg::TabKind::TreeView, "tree:files", "Files",
+                            ssg::DocumentMode::ReadOnly);
 
     ASSERT_TRUE(tabs.activate(document).accepted());
     ASSERT_EQ(tabs.previous().tab,
@@ -124,7 +124,7 @@ TEST(active_close_prefers_right_then_left_and_dirty_failure_is_atomic) {
     const auto before = tabs.view_state();
 
     const auto close_failure = tabs.close(b, 100ms);
-    ASSERT_EQ(close_failure.error, ssg::TabError::durability_failed);
+    ASSERT_EQ(close_failure.error, ssg::TabError::DurabilityFailed);
     ASSERT_EQ(tabs.view_state(), before);
     ASSERT_EQ(tabs.recently_closed_count(), std::size_t{0});
 
@@ -165,7 +165,7 @@ TEST(reopen_is_lifo_retryable_and_restores_position_and_activation) {
     (void)tabs.close(c, 100ms);
 
     lifecycle.fail_reopen = true;
-    ASSERT_EQ(tabs.reopen_closed().error, ssg::TabError::lifecycle_failed);
+    ASSERT_EQ(tabs.reopen_closed().error, ssg::TabError::LifecycleFailed);
     ASSERT_EQ(tabs.recently_closed_count(), std::size_t{2});
 
     lifecycle.fail_reopen = false;
@@ -191,7 +191,7 @@ TEST(recently_closed_evicts_oldest_at_configured_bound) {
     ASSERT_EQ(tabs.recently_closed_count(), std::size_t{2});
     ASSERT_EQ(tabs.reopen_closed().tab, std::optional{c});
     ASSERT_EQ(tabs.reopen_closed().tab, std::optional{b});
-    ASSERT_EQ(tabs.reopen_closed().error, ssg::TabError::no_recently_closed);
+    ASSERT_EQ(tabs.reopen_closed().error, ssg::TabError::NoRecentlyClosed);
 }
 
 TEST(reopen_activates_an_identity_already_opened_by_another_path) {
@@ -216,11 +216,11 @@ TEST(untitled_labels_are_smallest_available_and_reopen_is_stable) {
     const auto first = tabs.open_document(
         ssg::FileDocumentId{1},
         ssg::JournalDocumentKey::untitled(ssg::UntitledDocumentId::generate()),
-        "", ssg::DocumentMode::edit, true);
+        "", ssg::DocumentMode::Edit, true);
     const auto second = tabs.open_document(
         ssg::FileDocumentId{2},
         ssg::JournalDocumentKey::untitled(ssg::UntitledDocumentId::generate()),
-        "", ssg::DocumentMode::edit, true);
+        "", ssg::DocumentMode::Edit, true);
     ASSERT_EQ(tabs.view_state().tabs[0].label, std::string{"Untitled 1"});
     ASSERT_EQ(tabs.view_state().tabs[1].label, std::string{"Untitled 2"});
 
@@ -228,7 +228,7 @@ TEST(untitled_labels_are_smallest_available_and_reopen_is_stable) {
     const auto third = tabs.open_document(
         ssg::FileDocumentId{3},
         ssg::JournalDocumentKey::untitled(ssg::UntitledDocumentId::generate()),
-        "", ssg::DocumentMode::edit, true);
+        "", ssg::DocumentMode::Edit, true);
     ASSERT_EQ(tabs.view_state().tabs.back().label, std::string{"Untitled 1"});
     (void)tabs.reopen_closed();
     const auto reopened = std::find_if(
@@ -246,17 +246,17 @@ TEST(badges_update_and_delta_replay_is_exact) {
     (void)open_saved(tabs, 7, "a");
     ASSERT_TRUE(tabs.update_document(
                         ssg::FileDocumentId{7},
-                        ssg::DocumentMode::read_only, true,
-                        ssg::TabRecoveryBadge::pending)
+                        ssg::DocumentMode::ReadOnly, true,
+                        ssg::TabRecoveryBadge::Pending)
                     .accepted());
     const auto target = tabs.view_state();
     const auto delta = ssg::derive_tab_delta(base, target);
     const auto replay = ssg::replay_tab_delta(base, delta);
     ASSERT_TRUE(replay.accepted());
     ASSERT_EQ(replay.state, std::optional{target});
-    ASSERT_EQ(target.tabs[0].mode, ssg::DocumentMode::read_only);
+    ASSERT_EQ(target.tabs[0].mode, ssg::DocumentMode::ReadOnly);
     ASSERT_TRUE(target.tabs[0].dirty);
-    ASSERT_EQ(target.tabs[0].recovery, ssg::TabRecoveryBadge::pending);
+    ASSERT_EQ(target.tabs[0].recovery, ssg::TabRecoveryBadge::Pending);
     ASSERT_FALSE(ssg::derive_tab_delta(target, target).state.has_value());
 }
 

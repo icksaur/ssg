@@ -37,7 +37,7 @@ void append_ids(std::vector<CommandDescriptor>& output, Range const& range) {
         if (descriptor.id == std::string_view{"file.open_dropped_content"}) {
             capabilities.emplace_back("local_file_drop");
         }
-        output.push_back({std::string{descriptor.id}, CommandEffect::mutation,
+        output.push_back({std::string{descriptor.id}, CommandEffect::Mutation,
                           std::move(capabilities)});
     }
 }

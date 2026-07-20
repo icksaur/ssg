@@ -29,30 +29,30 @@ private:
 };
 
 enum class TabKind : std::uint8_t {
-    document,
-    live_diff,
-    read_only_output,
-    search_results,
-    tree_view,
+    Document,
+    LiveDiff,
+    ReadOnlyOutput,
+    SearchResults,
+    TreeView,
 };
 
 enum class TabRecoveryBadge : std::uint8_t {
-    none,
-    pending,
-    durable,
-    failed,
+    None,
+    Pending,
+    Durable,
+    Failed,
 };
 
 struct TabState {
     TabId id;
-    TabKind kind = TabKind::document;
+    TabKind kind = TabKind::Document;
     std::optional<FileDocumentId> document;
     std::optional<JournalDocumentKey> document_key;
     std::string content_identity;
     std::string label;
-    DocumentMode mode = DocumentMode::edit;
+    DocumentMode mode = DocumentMode::Edit;
     bool dirty = false;
-    TabRecoveryBadge recovery = TabRecoveryBadge::none;
+    TabRecoveryBadge recovery = TabRecoveryBadge::None;
 
     friend bool operator==(const TabState&, const TabState&) = default;
 };
@@ -83,15 +83,15 @@ struct TabReplayResult {
                                                const TabDelta& delta);
 
 enum class TabCommand : std::uint8_t {
-    close,
-    close_others,
-    close_all,
-    reopen_closed,
-    next,
-    previous,
-    activate,
-    move_left,
-    move_right,
+    Close,
+    CloseOthers,
+    CloseAll,
+    ReopenClosed,
+    Next,
+    Previous,
+    Activate,
+    MoveLeft,
+    MoveRight,
 };
 
 struct TabCommandDescriptor {
@@ -111,57 +111,57 @@ public:
 
 private:
     const std::array<TabCommandDescriptor, 9> descriptors_{{
-        {"tab.close", TabCommand::close},
-        {"tab.close_others", TabCommand::close_others},
-        {"tab.close_all", TabCommand::close_all},
-        {"tab.reopen_closed", TabCommand::reopen_closed},
-        {"tab.next", TabCommand::next},
-        {"tab.previous", TabCommand::previous},
-        {"tab.activate", TabCommand::activate},
-        {"tab.move_left", TabCommand::move_left},
-        {"tab.move_right", TabCommand::move_right},
+        {"tab.close", TabCommand::Close},
+        {"tab.close_others", TabCommand::CloseOthers},
+        {"tab.close_all", TabCommand::CloseAll},
+        {"tab.reopen_closed", TabCommand::ReopenClosed},
+        {"tab.next", TabCommand::Next},
+        {"tab.previous", TabCommand::Previous},
+        {"tab.activate", TabCommand::Activate},
+        {"tab.move_left", TabCommand::MoveLeft},
+        {"tab.move_right", TabCommand::MoveRight},
     }};
 };
 
 [[nodiscard]] TabManagementCommandSet tab_management_command_set();
 
 enum class TabError : std::uint8_t {
-    none,
-    invalid_argument,
-    not_found,
-    no_tabs,
-    no_recently_closed,
-    lifecycle_failed,
-    durability_failed,
+    None,
+    InvalidArgument,
+    NotFound,
+    NoTabs,
+    NoRecentlyClosed,
+    LifecycleFailed,
+    DurabilityFailed,
 };
 
 struct TabFailure {
     TabId tab;
-    TabError error = TabError::none;
+    TabError error = TabError::None;
     std::string message;
 
     friend bool operator==(const TabFailure&, const TabFailure&) = default;
 };
 
 struct TabResult {
-    TabError error = TabError::none;
+    TabError error = TabError::None;
     std::string message;
     std::optional<TabId> tab;
     std::vector<TabFailure> failures;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == TabError::none;
+        return error == TabError::None;
     }
 };
 
 struct TabLifecycleResult {
-    TabError error = TabError::none;
+    TabError error = TabError::None;
     std::string message;
     std::optional<RecoveryRecordId> compensation;
     bool durable = false;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == TabError::none;
+        return error == TabError::None;
     }
 };
 
@@ -195,7 +195,7 @@ public:
     [[nodiscard]] TabResult open_document(
         FileDocumentId document, JournalDocumentKey identity,
         std::string_view label, DocumentMode mode, bool dirty,
-        TabRecoveryBadge recovery = TabRecoveryBadge::none);
+        TabRecoveryBadge recovery = TabRecoveryBadge::None);
     [[nodiscard]] TabResult open_content(TabKind kind,
                                          std::string_view content_identity,
                                          std::string_view label,

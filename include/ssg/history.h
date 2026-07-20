@@ -14,8 +14,8 @@
 namespace ssg {
 
 enum class HistoryCommand : std::uint8_t {
-    undo,
-    redo,
+    Undo,
+    Redo,
 };
 
 struct HistoryCommandDescriptor {
@@ -43,19 +43,19 @@ private:
 [[nodiscard]] HistoryCommandSet history_command_set();
 
 enum class HistoryEditKind : std::uint8_t {
-    typing,
-    delete_backward,
-    delete_forward,
-    other,
+    Typing,
+    DeleteBackward,
+    DeleteForward,
+    Other,
 };
 
 enum class HistoryError : std::uint8_t {
-    none,
-    no_undo,
-    no_redo,
-    stale_document,
-    revision_exhausted,
-    document_rejected,
+    None,
+    NoUndo,
+    NoRedo,
+    StaleDocument,
+    RevisionExhausted,
+    DocumentRejected,
 };
 
 struct HistoryResult {
@@ -66,7 +66,7 @@ struct HistoryResult {
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
-        return error == HistoryError::none;
+        return error == HistoryError::None;
     }
 };
 

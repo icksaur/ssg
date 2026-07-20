@@ -14,14 +14,14 @@
 
 namespace ssg {
 
-enum class SearchMode : std::uint8_t { file, line, symbol, text, command };
-enum class SearchQueryError : std::uint8_t { none, invalid_line };
+enum class SearchMode : std::uint8_t { File, Line, Symbol, Text, Command };
+enum class SearchQueryError : std::uint8_t { None, InvalidLine };
 
 struct ParsedSearchQuery {
-    SearchMode mode = SearchMode::file;
+    SearchMode mode = SearchMode::File;
     std::string text;
     std::optional<LineIndex> line;
-    SearchQueryError error = SearchQueryError::none;
+    SearchQueryError error = SearchQueryError::None;
     friend bool operator==(const ParsedSearchQuery&,
                            const ParsedSearchQuery&) = default;
 };
@@ -91,7 +91,7 @@ private:
 };
 
 struct SearchResult {
-    SearchMode mode = SearchMode::file;
+    SearchMode mode = SearchMode::File;
     std::string path;
     std::string label;
     std::optional<LineIndex> line;
@@ -122,7 +122,7 @@ struct WorkspaceSearchBatch {
     const SearchWorkspaceSource& source,
     const WorkspaceSearchRequest& request);
 
-enum class NavigationOrigin : std::uint8_t { user, programmatic };
+enum class NavigationOrigin : std::uint8_t { User, Programmatic };
 
 struct NavigationTarget {
     std::string path;
@@ -167,7 +167,7 @@ struct SearchViewState {
     Revision revision{0};
     bool palette_open = false;
     std::string query;
-    SearchMode mode = SearchMode::file;
+    SearchMode mode = SearchMode::File;
     std::vector<SearchResult> results;
     std::optional<std::size_t> selected_index;
     std::uint64_t search_generation = 0;
@@ -177,10 +177,10 @@ struct SearchViewState {
 };
 
 enum class SearchPublishResult : std::uint8_t {
-    accepted,
-    cancelled,
-    superseded,
-    stale_revision,
+    Accepted,
+    Cancelled,
+    Superseded,
+    StaleRevision,
 };
 
 class SearchController {
@@ -261,14 +261,14 @@ struct SearchDelta {
                                               const SearchViewState& target);
 
 enum class SearchReplayError : std::uint8_t {
-    none,
-    stale_revision,
-    malformed_delta,
+    None,
+    StaleRevision,
+    MalformedDelta,
 };
 
 struct SearchReplayResult {
     std::optional<SearchViewState> state;
-    SearchReplayError error = SearchReplayError::none;
+    SearchReplayError error = SearchReplayError::None;
     [[nodiscard]] bool accepted() const noexcept { return state.has_value(); }
 };
 

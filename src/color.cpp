@@ -68,22 +68,22 @@ SrgbColor xterm256_color(std::uint8_t index) {
 
 ResolvedColor resolve_color(SrgbColor color, ColorDepth depth) {
     switch (depth) {
-        case ColorDepth::truecolor:
-            return {ResolvedColor::Encoding::truecolor, 0, color};
-        case ColorDepth::indexed256: {
+        case ColorDepth::Truecolor:
+            return {ResolvedColor::Encoding::Truecolor, 0, color};
+        case ColorDepth::Indexed256: {
             // Search the cube and gray ramp (16..255); the configurable system
             // colors 0..15 are excluded so the mapping is deterministic.
             std::uint8_t const index = nearest_index(color, 16, 255);
-            return {ResolvedColor::Encoding::indexed256, index,
+            return {ResolvedColor::Encoding::Indexed256, index,
                     xterm256_color(index)};
         }
-        case ColorDepth::ansi16: {
+        case ColorDepth::Ansi16: {
             std::uint8_t const index = nearest_index(color, 0, 15);
-            return {ResolvedColor::Encoding::ansi16, index,
+            return {ResolvedColor::Encoding::Ansi16, index,
                     xterm256_color(index)};
         }
     }
-    return {ResolvedColor::Encoding::truecolor, 0, color};
+    return {ResolvedColor::Encoding::Truecolor, 0, color};
 }
 
 }  // namespace ssg
