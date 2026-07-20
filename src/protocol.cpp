@@ -5212,7 +5212,7 @@ DecodeSessionDeltaResult decodeSessionDelta(std::string_view bytes,
     }
 
     return {ProtocolError::None,
-            decodeWireSessionDelta(
+            SessionSnapshotCodec{}.decodeWire(
                 *baseRevision, *revision, *clientId, *viewId,
                 std::move(*capabilities), std::move(topology),
                 std::move(document), std::move(documentCaret),

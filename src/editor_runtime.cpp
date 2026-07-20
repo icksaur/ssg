@@ -821,7 +821,7 @@ std::optional<SessionSnapshot> EditorRuntime::snapshot(ClientId clientId, Viewpo
                                                        PaletteReport paletteReport) const {
     auto client = impl_->session->attachedClient(clientId);
     if (!client) return std::nullopt;
-    return assembleSessionSnapshot(impl_->session->revision(), impl_->session->topology(),
+    return SessionSnapshotCodec{}.assemble(impl_->session->revision(), impl_->session->topology(),
                                      client->principal, client->viewId,
                                      impl_->viewport(dimensions),
                                      impl_->sections(dimensions, leaderPending, paletteReport));

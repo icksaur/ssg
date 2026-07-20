@@ -442,7 +442,7 @@ TEST(decodeCommandRequestMapsDomainInvariantFailuresToMalformed) {
 // equivalence and two-client isolation.
 
 TEST(sessionSnapshotRoundTripsThroughTheWire) {
-    auto snapshot = ssg::assembleSessionSnapshot(
+    auto snapshot = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{
             ssg::ClientId{7}, ssg::InvocationOrigin::InProcess,
@@ -457,24 +457,24 @@ TEST(sessionSnapshotRoundTripsThroughTheWire) {
 }
 
 TEST(sessionDeltaRoundTripsAndReplayMatchesTheDecodedDelta) {
-    auto before = ssg::assembleSessionSnapshot(
+    auto before = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(1), sections(ssg::Revision{4}, "a"));
-    auto after = ssg::assembleSessionSnapshot(
+    auto after = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{5}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(5), sections(ssg::Revision{5}, "changed"));
 
-    auto const delta = ssg::deriveSessionDelta(before, after);
+    auto const delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, after);
     auto const bytes = ssg::encodeSessionDelta(delta);
     auto decoded = ssg::decodeSessionDelta(bytes);
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.delta.has_value());
 
-    auto replayed = ssg::replaySessionDelta(before, *decoded.delta);
+    auto replayed = ssg::SessionSnapshotCodec{}.replay(before, *decoded.delta);
     ASSERT_TRUE(replayed.accepted());
     ASSERT_TRUE(replayed.snapshot.has_value());
     ASSERT_EQ(*replayed.snapshot, after);
@@ -482,13 +482,13 @@ TEST(sessionDeltaRoundTripsAndReplayMatchesTheDecodedDelta) {
 
 TEST(twoClientCapabilityAndViewportIsolationSurvivesTheWire) {
     auto shared = sections(ssg::Revision{8}, "shared");
-    auto first = ssg::assembleSessionSnapshot(
+    auto first = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{8}, {},
         ssg::InvocationPrincipal{
             ssg::ClientId{1}, ssg::InvocationOrigin::Websocket,
             {ssg::CapabilityId{"local_file_drop"}}},
         ssg::ViewId{10}, clientView(2), shared);
-    auto second = ssg::assembleSessionSnapshot(
+    auto second = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{8}, {},
         ssg::InvocationPrincipal{ssg::ClientId{2},
                                  ssg::InvocationOrigin::Websocket},
@@ -533,7 +533,7 @@ TEST(sessionSnapshotRoundTripsTreeScrollFields) {
     sectionsValue.shell.tabHits = {ssg::TabHit{ssg::Rect{24, 0, 10, 1}, 0},
                                      ssg::TabHit{ssg::Rect{34, 0, 8, 1}, 1}};
 
-    auto snapshot = ssg::assembleSessionSnapshot(
+    auto snapshot = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
@@ -799,7 +799,7 @@ void writeFixtureHex(std::string const& name, std::string const& bytes) {
 // goldens: `SSG_REGEN_PROTOCOL_FIXTURES=1 ./build/test_protocol`.
 TEST(regenerateCanonicalFixtures) {
     if (std::getenv("SSG_REGEN_PROTOCOL_FIXTURES") == nullptr) return;
-    auto snapshot = ssg::assembleSessionSnapshot(
+    auto snapshot = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{
             ssg::ClientId{7}, ssg::InvocationOrigin::InProcess,
@@ -808,18 +808,18 @@ TEST(regenerateCanonicalFixtures) {
     writeFixtureHex("session_snapshot.hex",
                       ssg::encodeSessionSnapshot(snapshot));
 
-    auto before = ssg::assembleSessionSnapshot(
+    auto before = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(1), sections(ssg::Revision{4}, "a"));
-    auto after = ssg::assembleSessionSnapshot(
+    auto after = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{5}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(5), sections(ssg::Revision{5}, "changed"));
     writeFixtureHex("session_delta.hex",
-                      ssg::encodeSessionDelta(ssg::deriveSessionDelta(before, after)));
+                      ssg::encodeSessionDelta(ssg::SessionSnapshotCodec{}.deriveDelta(before, after)));
 }
 
 TEST(canonicalFixturesDecodeToTheExpectedValues) {
@@ -907,7 +907,7 @@ TEST(viewportFirstVisualColumnSurvivesTheWire) {
     // VP-H (M12): the horizontal scroll offset is a wire field and must round-trip.
     auto view = clientView(3);
     view.firstVisualColumn = 7;
-    auto snapshot = ssg::assembleSessionSnapshot(
+    auto snapshot = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
@@ -947,7 +947,7 @@ TEST(findReplaceViewStateRoundTripsReplacementThroughTheWire) {
         s.findReplace.replacement = std::move(replacement);
         return s;
     };
-    auto snapshot = ssg::assembleSessionSnapshot(
+    auto snapshot = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
@@ -962,24 +962,24 @@ TEST(findReplaceViewStateRoundTripsReplacementThroughTheWire) {
                   std::string{"dog"});
     }
 
-    auto before = ssg::assembleSessionSnapshot(
+    auto before = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{4}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(1),
         withReplacement(ssg::Revision{4}, "a", ""));
-    auto after = ssg::assembleSessionSnapshot(
+    auto after = ssg::SessionSnapshotCodec{}.assemble(
         ssg::Revision{5}, {},
         ssg::InvocationPrincipal{ssg::ClientId{7},
                                  ssg::InvocationOrigin::InProcess},
         ssg::ViewId{9}, clientView(1),
         withReplacement(ssg::Revision{4}, "a", "dog"));
-    auto const delta = ssg::deriveSessionDelta(before, after);
+    auto const delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, after);
     auto decodedDelta =
         ssg::decodeSessionDelta(ssg::encodeSessionDelta(delta));
     ASSERT_TRUE(decodedDelta.accepted());
     ASSERT_TRUE(decodedDelta.delta.has_value());
-    auto replayed = ssg::replaySessionDelta(before, *decodedDelta.delta);
+    auto replayed = ssg::SessionSnapshotCodec{}.replay(before, *decodedDelta.delta);
     ASSERT_TRUE(replayed.accepted());
     ASSERT_TRUE(replayed.snapshot.has_value());
     if (replayed.snapshot) {

@@ -245,7 +245,7 @@ public:
                                   ssg::ClientId clientId) override {
         auto attached = session.attachedClient(clientId);
         if (!attached) throw std::logic_error{"snapshot for detached client"};
-        return ssg::assembleSessionSnapshot(
+        return ssg::SessionSnapshotCodec{}.assemble(
             session.revision(), session.topology(), attached->principal,
             attached->viewId, viewport(),
             sections(session.revision(), document));
