@@ -46,6 +46,8 @@ private:
 enum class TreeProviderKind { Filesystem, Git, Symbols };
 enum class TreeNodeKind { Root, Directory, File, Symlink, GitEntry, Symbol };
 enum class GitTreeStatus { Added, Modified, Deleted, Renamed, Untracked };
+struct GitTreeRecord;
+struct SymbolTreeRecord;
 
 struct TreeNodeCommand {
     std::string id;
@@ -71,6 +73,15 @@ class TreeProviderSnapshot {
 public:
     TreeProviderSnapshot(TreeProviderId providerId, TreeProviderKind kind,
                          TreeRevision revision, std::vector<TreeNode> nodes);
+    static TreeProviderSnapshot fromFilesystem(
+        TreeProviderId providerId, const std::filesystem::path& canonicalCwd,
+        TreeRevision revision);
+    static TreeProviderSnapshot fromGit(TreeProviderId providerId,
+                                        TreeRevision revision,
+                                        std::vector<GitTreeRecord> records);
+    static TreeProviderSnapshot fromSymbols(
+        TreeProviderId providerId, TreeRevision revision,
+        std::vector<SymbolTreeRecord> records);
 
     const TreeProviderId& providerId() const noexcept { return providerId_; }
     TreeProviderKind kind() const noexcept { return kind_; }
@@ -99,16 +110,6 @@ struct SymbolTreeRecord {
     std::optional<std::uint32_t> sourceLine;
     std::vector<TreeNodeCommand> commands;
 };
-
-TreeProviderSnapshot filesystemTreeSnapshot(
-    TreeProviderId providerId, const std::filesystem::path& canonicalCwd,
-    TreeRevision revision);
-TreeProviderSnapshot gitTreeSnapshot(TreeProviderId providerId,
-                                       TreeRevision revision,
-                                       std::vector<GitTreeRecord> records);
-TreeProviderSnapshot symbolTreeSnapshot(
-    TreeProviderId providerId, TreeRevision revision,
-    std::vector<SymbolTreeRecord> records);
 
 struct TreeCommandDescriptor {
     std::string_view id;
@@ -241,10 +242,6 @@ struct TreeDelta {
     bool operator==(const TreeDelta&) const = default;
 };
 
-TreeDelta deriveTreeDelta(const TreeViewState& base,
-                            const TreeViewState& target,
-                            std::size_t maximumOperations);
-
 enum class TreeReplayError { None, StaleRevision, SnapshotRequired, MalformedDelta };
 
 struct TreeReplayResult {
@@ -253,7 +250,13 @@ struct TreeReplayResult {
     bool accepted() const noexcept { return state.has_value(); }
 };
 
-TreeReplayResult replayTreeDelta(const TreeViewState& base,
-                                   const TreeDelta& delta);
+class TreeDeltaCodec {
+public:
+    [[nodiscard]] TreeDelta derive(const TreeViewState& base,
+                                   const TreeViewState& target,
+                                   std::size_t maximumOperations) const;
+    [[nodiscard]] TreeReplayResult replay(const TreeViewState& base,
+                                          const TreeDelta& delta) const;
+};
 
 } // namespace ssg

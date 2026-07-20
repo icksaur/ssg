@@ -661,7 +661,7 @@ void EditorRuntime::Impl::refreshTree() {
         return;
     }
     ++treeScanCount;
-    tree.replaceProvider(filesystemTreeSnapshot(
+    tree.replaceProvider(TreeProviderSnapshot::fromFilesystem(
         TreeProviderId{"filesystem"}, root, TreeRevision{nextTreeRevision++}));
 }
 
