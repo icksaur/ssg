@@ -2,7 +2,7 @@
 #include "../test_helpers.h"
 
 #include <ssg/editor_runtime.h>
-#include <ssg/editor_session_assembly.h>
+#include <ssg/editor_session_builder.h>
 #include <ssg/input.h>
 
 #include <algorithm>

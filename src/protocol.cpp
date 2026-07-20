@@ -1,7 +1,7 @@
 #include <ssg/protocol.h>
 
 #include <ssg/document.h>
-#include <ssg/editor_session_assembly.h>
+#include <ssg/editor_session_builder.h>
 #include <ssg/file_commands.h>
 #include <ssg/find_replace.h>
 #include <ssg/input.h>

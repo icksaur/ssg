@@ -1,5 +1,5 @@
 target_sources(ssg PRIVATE
-    ${SSG_SOURCE_DIR}/src/editor_session_assembly.cpp
+    ${SSG_SOURCE_DIR}/src/editor_session_builder.cpp
     ${SSG_SOURCE_DIR}/src/session_snapshot.cpp
 )
 

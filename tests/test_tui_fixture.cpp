@@ -4,7 +4,7 @@
 
 #include <ssg/render.h>
 
-#include <ssg/editor_session_assembly.h>
+#include <ssg/editor_session_builder.h>
 #include <ssg/session_snapshot.h>
 
 #include <any>

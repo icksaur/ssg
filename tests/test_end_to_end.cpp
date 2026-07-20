@@ -2,7 +2,7 @@
 #include "test_helpers.h"
 #include "tui_fixture.h"
 
-#include <ssg/editor_session_assembly.h>
+#include <ssg/editor_session_builder.h>
 #include <ssg/follow_edits.h>
 #include <ssg/http_server.h>
 #include <ssg/protocol.h>

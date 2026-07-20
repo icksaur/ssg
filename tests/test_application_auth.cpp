@@ -1,6 +1,6 @@
 #include "test_helpers.h"
 
-#include <ssg/application_auth.h>
+#include <ssg/application_authentication.h>
 
 #include <array>
 #include <cstddef>

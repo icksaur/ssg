@@ -128,7 +128,7 @@ int main() {
 ```
 
 For a complete editor session, use `ssg::EditorSessionBuilder` from
-`<ssg/editor_session_assembly.h>`. The host binds handlers for every descriptor
+`<ssg/editor_session_builder.h>`. The host binds handlers for every descriptor
 returned by `ssg::p0_command_descriptors()`, optionally injects
 `CommandServices`, and then calls `build()`. Construction rejects missing,
 extra, or duplicate command bindings.
