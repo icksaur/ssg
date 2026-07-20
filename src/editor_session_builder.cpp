@@ -1,4 +1,4 @@
-#include <ssg/editor_session_assembly.h>
+#include <ssg/editor_session_builder.h>
 
 #include <ssg/clipboard.h>
 #include <ssg/diff.h>

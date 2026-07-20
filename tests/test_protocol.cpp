@@ -1,6 +1,6 @@
 #include "test_helpers.h"
 
-#include <ssg/editor_session_assembly.h>
+#include <ssg/editor_session_builder.h>
 #include <ssg/file_commands.h>
 #include <ssg/find_replace.h>
 #include <ssg/protocol.h>
