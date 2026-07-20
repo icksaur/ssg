@@ -316,7 +316,7 @@ struct CoreEditorSlice::Impl {
                           return CommandHandlerResult::failure(
                               "text.insert payload must not be empty");
                       }
-                      auto result = applyTextInput(
+                      auto result = TextInputInterpreter{}.apply(
                           document.snapshot(), selections,
                           {IndentStyle::Spaces, 4, true, LineEnding::Lf},
                           TextInputCommand::Insert, *arguments);

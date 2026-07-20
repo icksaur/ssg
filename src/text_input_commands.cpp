@@ -288,11 +288,10 @@ TextInputCommandSet textInputCommandSet() {
     return TextInputCommandSet{};
 }
 
-TextInputResult applyTextInput(const DocumentSnapshot& document,
-                                 const SelectionSet& selections,
-                                 TextInputSettings settings,
-                                 TextInputCommand command,
-                                 TextInputArguments arguments) {
+TextInputResult TextInputInterpreter::apply(
+    const DocumentSnapshot& document, const SelectionSet& selections,
+    TextInputSettings settings, TextInputCommand command,
+    TextInputArguments arguments) const {
     if (document.mode == DocumentMode::ReadOnly) {
         return failure(TextInputError::ReadOnly,
                        "text input requires an editable document");

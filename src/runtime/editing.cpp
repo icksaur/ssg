@@ -66,7 +66,7 @@ CommandHandlerResult bindText(EditorRuntime::Impl& runtime,
         arguments = *typed;
     }
     std::string inserted = arguments.text;
-    auto result = applyTextInput(document->snapshot(), runtime.selection.selections,
+    auto result = TextInputInterpreter{}.apply(document->snapshot(), runtime.selection.selections,
                                    textInputSettings(runtime), command, std::move(arguments));
     if (!result.accepted() || !result.transaction || !result.selections) {
         return failure(result.message);

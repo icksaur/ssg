@@ -69,7 +69,7 @@ EditHistoryIntegrationResult applyTextInputWithHistory(
     TextInputCommand command, TextInputArguments arguments,
     std::uint64_t timestampMs) {
     auto result =
-        applyTextInput(document.snapshot(), selections, std::move(settings),
+        TextInputInterpreter{}.apply(document.snapshot(), selections, std::move(settings),
                          command, std::move(arguments));
     if (!result.accepted()) {
         auto message = result.message;
