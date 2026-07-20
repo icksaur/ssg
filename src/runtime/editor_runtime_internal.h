@@ -10,7 +10,7 @@
 #include <ssg/find_replace.h>
 #include <ssg/follow_edits.h>
 #include <ssg/history.h>
-#include <ssg/input.h>
+#include <ssg/keymap.h>
 #include <ssg/lsp_features.h>
 #include <ssg/lsp_workspace_edit.h>
 #include <ssg/lua.h>

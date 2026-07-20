@@ -1,6 +1,6 @@
 #include "ssg_terminal.h"
 
-#include <ssg/input.h>
+#include <ssg/keymap.h>
 #include <ssg/theme.h>
 
 #include <csignal>

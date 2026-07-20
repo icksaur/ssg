@@ -2,7 +2,7 @@
 
 #include <ssg/editor_runtime.h>
 #include <ssg/find_replace.h>
-#include <ssg/input.h>
+#include <ssg/keymap.h>
 #include <ssg/selection.h>
 #include <ssg/prompt.h>
 #include <ssg/text_input_commands.h>

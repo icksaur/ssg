@@ -95,7 +95,7 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
         std::string hint = "leader:";
         for (auto const& stroke : leaderPending) {
             hint += ' ';
-            hint += formatKeyStroke(stroke);
+            hint += KeyCodec{}.formatStroke(stroke);
         }
         request.leaderHint = std::move(hint);
     }
@@ -258,8 +258,8 @@ PaletteViewState EditorRuntime::Impl::paletteView() const {
     view.mode = SearchMode::Command;
     for (auto const& descriptor : descriptors()) {
         std::string detail;
-        if (auto sequence = preferredBinding(keymap, descriptor.id)) {
-            detail = formatKeySequence(*sequence);
+        if (auto sequence = KeymapMatcher{keymap}.preferredBinding(descriptor.id)) {
+            detail = KeyCodec{}.formatSequence(*sequence);
         }
         view.candidates.push_back(
             {descriptor.id, commandLabel(descriptor.id), std::move(detail)});
