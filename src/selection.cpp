@@ -79,7 +79,7 @@ public:
         const auto& boundaries = line_data(line).line.boundaries;
         const auto index = boundary_index(boundaries, position);
         if (index > 0) return boundaries[index - 1];
-        if (line == 0) return boundaries.front();  // document start
+        if (line == 0) return boundaries.front();
         return line_data(line - 1).line.boundaries.back();
     }
 
@@ -149,7 +149,6 @@ public:
 
     [[nodiscard]] CellIndex visual_column(
         const DocumentPosition& position, std::uint32_t columns) const {
-        // No wrap: the row starts at cell 0, so the visual column is the cell.
         if (columns == kNoWrap) return position.cell;
         const auto rows = wrapped_rows(columns);
         const auto& row = rows[wrapped_row_index(rows, position)];
@@ -213,7 +212,6 @@ public:
 
     [[nodiscard]] std::uint32_t visual_row(
         const DocumentPosition& position, std::uint32_t columns) const {
-        // No wrap: the visual row is the logical line index.
         if (columns == kNoWrap) {
             return static_cast<std::uint32_t>(position.line.value());
         }
@@ -417,7 +415,6 @@ private:
             std::distance(line_starts_.begin(), it) - 1);
     }
 
-    // The index of `position` within its line's boundary list (binary search).
     [[nodiscard]] std::size_t boundary_index(
         const std::vector<DocumentPosition>& boundaries,
         const DocumentPosition& position) const {
@@ -770,8 +767,6 @@ SelectionNavigationResult apply_selection_navigation(
                         "tab width must be between 1 and 16");
     }
     const TextModel model{text, tab_width};
-    // Under no-wrap, caret vertical/page movement is by logical line: an effective
-    // unbounded width makes the wrapping helpers treat each line as one row.
     const std::uint32_t nav_columns =
         word_wrap ? viewport.columns : std::numeric_limits<std::uint32_t>::max();
     for (const auto& selection : before.selections.items()) {
