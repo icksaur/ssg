@@ -102,7 +102,7 @@ EditHistoryIntegrationResult applyEditCommandWithHistory(
     const SelectionSet& selections, EditCommandSettings settings,
     EditCommand command, std::uint64_t timestampMs) {
     auto result =
-        applyEditCommand(document.snapshot(), selections, std::move(settings),
+        EditInterpreter{}.apply(document.snapshot(), selections, std::move(settings),
                            command);
     if (!result.accepted()) {
         auto message = result.message;

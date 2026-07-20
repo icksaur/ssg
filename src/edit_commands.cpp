@@ -570,9 +570,9 @@ EditCommandSuiteCommandSet editCommandSuiteCommandSet() {
     return EditCommandSuiteCommandSet{};
 }
 
-EditCommandResult applyEditCommand(
+EditCommandResult EditInterpreter::apply(
     const DocumentSnapshot& document, const SelectionSet& selections,
-    EditCommandSettings settings, EditCommand command) {
+    EditCommandSettings settings, EditCommand command) const {
     if (document.mode == DocumentMode::ReadOnly) {
         return failure(EditCommandError::ReadOnly,
                        "edit command requires an editable document");

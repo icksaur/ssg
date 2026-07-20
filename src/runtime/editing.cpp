@@ -129,7 +129,7 @@ CommandHandlerResult bindSelection(EditorRuntime::Impl& runtime,
 CommandHandlerResult bindEdit(EditorRuntime::Impl& runtime, EditCommand command) {
     auto const* document = runtime.activeDocument();
     if (document == nullptr) return failure("no active document");
-    auto result = applyEditCommand(document->snapshot(), runtime.selection.selections,
+    auto result = EditInterpreter{}.apply(document->snapshot(), runtime.selection.selections,
                                      editSettings(runtime), command);
     if (!result.accepted() || !result.transaction || !result.selections) {
         return failure(result.message);

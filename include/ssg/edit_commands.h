@@ -85,8 +85,15 @@ struct EditCommandResult {
     }
 };
 
-[[nodiscard]] EditCommandResult applyEditCommand(
-    const DocumentSnapshot& document, const SelectionSet& selections,
-    EditCommandSettings settings, EditCommand command);
+// Interprets an edit-suite command against a document snapshot + selections and
+// returns the resulting edits/selections (a pure transform over the snapshot
+// value; owns no document and mutates nothing). The runtime owns the Document
+// and applies the result.
+class EditInterpreter {
+public:
+    [[nodiscard]] EditCommandResult apply(
+        const DocumentSnapshot& document, const SelectionSet& selections,
+        EditCommandSettings settings, EditCommand command) const;
+};
 
 }  // namespace ssg
