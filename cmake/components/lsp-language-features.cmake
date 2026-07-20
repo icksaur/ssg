@@ -1,5 +1,5 @@
 target_sources(ssg PRIVATE
-    ${SSG_SOURCE_DIR}/src/lsp_features.cpp
+    ${SSG_SOURCE_DIR}/src/lsp_feature_controller.cpp
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)

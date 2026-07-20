@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ssg/diff.h"
+#include "ssg/diff_model.h"
 #include "ssg/recovery.h"
 #include "ssg/watcher.h"
 

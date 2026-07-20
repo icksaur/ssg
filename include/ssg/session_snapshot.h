@@ -1,26 +1,26 @@
 #pragma once
 
 #include <ssg/clipboard.h>
-#include <ssg/diff.h>
+#include <ssg/diff_model.h>
 #include <ssg/external_modification_flow.h>
 #include <ssg/find_replace.h>
 #include <ssg/follow_edits.h>
 #include <ssg/history.h>
 #include <ssg/keymap.h>
-#include <ssg/lsp_features.h>
-#include <ssg/lsp_sync.h>
+#include <ssg/lsp_feature_controller.h>
+#include <ssg/lsp_sync_client.h>
 #include <ssg/palette_searcher.h>
 #include <ssg/search.h>
 #include <ssg/selection.h>
 #include <ssg/session.h>
 #include <ssg/settings.h>
 #include <ssg/snapshot.h>
-#include <ssg/status.h>
-#include <ssg/syntax.h>
-#include <ssg/tabs.h>
+#include <ssg/status_queue.h>
+#include <ssg/syntax_model.h>
+#include <ssg/tab_manager.h>
 #include <ssg/text_codec.h>
 #include <ssg/theme.h>
-#include <ssg/tree.h>
+#include <ssg/tree_model.h>
 #include <ssg/ui_layout.h>
 #include <ssg/viewport.h>
 

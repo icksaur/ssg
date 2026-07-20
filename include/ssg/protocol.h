@@ -3,7 +3,7 @@
 #include <ssg/session.h>
 #include <ssg/session_snapshot.h>
 #include <ssg/snapshot.h>
-#include <ssg/status.h>
+#include <ssg/status_queue.h>
 #include <ssg/clipboard.h>
 
 #include <any>

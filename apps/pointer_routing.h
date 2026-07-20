@@ -12,7 +12,7 @@
 
 #include <ssg/hit_tester.h>
 #include <ssg/selection.h>
-#include <ssg/tabs.h>
+#include <ssg/tab_manager.h>
 #include <ssg/ui_layout.h>
 
 #include <any>

@@ -1,4 +1,4 @@
-#include <ssg/tabs.h>
+#include <ssg/tab_manager.h>
 
 #include <algorithm>
 #include <stdexcept>

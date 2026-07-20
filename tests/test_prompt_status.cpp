@@ -1,5 +1,5 @@
 #include "ssg/prompt.h"
-#include "ssg/status.h"
+#include "ssg/status_queue.h"
 #include "test_helpers.h"
 
 #include <filesystem>

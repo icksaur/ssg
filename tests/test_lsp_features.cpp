@@ -1,7 +1,7 @@
 #include "fake_lsp_server.h"
 #include "test_helpers.h"
 
-#include <ssg/lsp_features.h>
+#include <ssg/lsp_feature_controller.h>
 
 #include <fstream>
 #include <iterator>

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <ssg/lsp_sync.h>
+#include <ssg/lsp_sync_client.h>
 
 #include <deque>
 #include <string>

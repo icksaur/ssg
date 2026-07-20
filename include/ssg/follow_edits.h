@@ -1,7 +1,7 @@
 #pragma once
 
 #include "ssg/command_registry.h"
-#include "ssg/diff.h"
+#include "ssg/diff_model.h"
 #include "ssg/ui_layout.h"
 #include "ssg/viewport.h"
 

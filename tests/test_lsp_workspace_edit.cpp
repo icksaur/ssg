@@ -1,7 +1,7 @@
 #include "fake_lsp_server.h"
 #include "test_helpers.h"
 
-#include <ssg/lsp_workspace_edit.h>
+#include <ssg/lsp_workspace_edit_controller.h>
 
 #include <fstream>
 #include <iterator>

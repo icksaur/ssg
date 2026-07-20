@@ -1,4 +1,4 @@
-#include "ssg/tree.h"
+#include "ssg/tree_model.h"
 #include "test_helpers.h"
 
 #include <algorithm>

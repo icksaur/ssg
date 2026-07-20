@@ -1,6 +1,6 @@
 target_sources(ssg PRIVATE
     ${SSG_SOURCE_DIR}/src/prompt.cpp
-    ${SSG_SOURCE_DIR}/src/status.cpp
+    ${SSG_SOURCE_DIR}/src/status_queue.cpp
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)

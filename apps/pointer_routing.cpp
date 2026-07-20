@@ -2,7 +2,7 @@
 
 #include <ssg/keymap.h>
 #include <ssg/palette_searcher.h>
-#include <ssg/tree.h>
+#include <ssg/tree_model.h>
 
 namespace ssg::app {
 

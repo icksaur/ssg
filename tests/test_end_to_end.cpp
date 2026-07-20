@@ -7,7 +7,7 @@
 #include <ssg/http_server.h>
 #include <ssg/protocol.h>
 #include <ssg/session_snapshot.h>
-#include <ssg/syntax.h>
+#include <ssg/syntax_model.h>
 
 #include <http.h>
 

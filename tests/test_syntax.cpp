@@ -1,4 +1,4 @@
-#include "ssg/syntax.h"
+#include "ssg/syntax_model.h"
 #include "test_helpers.h"
 
 #include <algorithm>

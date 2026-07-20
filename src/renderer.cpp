@@ -1,7 +1,7 @@
 #include <ssg/renderer.h>
 
 #include <ssg/grapheme_layout.h>
-#include <ssg/syntax.h>
+#include <ssg/syntax_model.h>
 
 #include <algorithm>
 #include <iomanip>

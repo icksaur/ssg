@@ -6,7 +6,7 @@
 // milestone 8 (mouse) is the caller that turns a RegionHit into commands.
 
 #include <ssg/session_snapshot.h>
-#include <ssg/tree.h>
+#include <ssg/tree_model.h>
 
 #include <cstdint>
 #include <optional>

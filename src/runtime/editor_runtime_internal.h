@@ -1,7 +1,7 @@
 #pragma once
 
 #include <ssg/clipboard.h>
-#include <ssg/diff.h>
+#include <ssg/diff_model.h>
 #include <ssg/edit_commands.h>
 #include <ssg/editor_runtime.h>
 #include <ssg/editor_session_builder.h>
@@ -11,16 +11,16 @@
 #include <ssg/follow_edits.h>
 #include <ssg/history.h>
 #include <ssg/keymap.h>
-#include <ssg/lsp_features.h>
-#include <ssg/lsp_workspace_edit.h>
+#include <ssg/lsp_feature_controller.h>
+#include <ssg/lsp_workspace_edit_controller.h>
 #include <ssg/lua.h>
 #include <ssg/prompt.h>
 #include <ssg/search.h>
 #include <ssg/settings.h>
-#include <ssg/status.h>
-#include <ssg/syntax.h>
-#include <ssg/tabs.h>
-#include <ssg/tree.h>
+#include <ssg/status_queue.h>
+#include <ssg/syntax_model.h>
+#include <ssg/tab_manager.h>
+#include <ssg/tree_model.h>
 #include <ssg/ui_layout.h>
 #include <ssg/workspace.h>
 
