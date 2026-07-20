@@ -79,14 +79,6 @@ struct SliceResponse {
     bool operator==(SliceResponse const&) const = default;
 };
 
-[[nodiscard]] std::string encodeInsertRequest(InsertRequest const& request);
-[[nodiscard]] DecodeInsertResult decodeInsertRequest(
-    std::string_view message, ProtocolLimits limits = {});
-[[nodiscard]] std::string encodeSliceResponse(
-    SliceResponse const& response);
-[[nodiscard]] SliceResponse decodeSliceResponse(
-    std::string_view message, ProtocolLimits limits = {});
-
 class CoreEditorSlice {
 public:
     CoreEditorSlice();
@@ -214,8 +206,6 @@ private:
 // SelectionCommandArguments, ScrollLinesArguments, ScrollPagesArguments,
 // ScrollFractionArguments, DroppedContentArguments) stay in their feature
 // headers; this registry owns only their wire adapters.
-[[nodiscard]] CommandArgumentCodecRegistry buildCommandArgumentCodecRegistry();
-
 // Versioned message kinds. Each carries a distinct payload; there is no
 // client-asserted capability message (capabilities live in the per-client
 // snapshot/delta).
@@ -230,9 +220,6 @@ enum class ProtocolMessageKind : std::uint8_t {
     CommandResult,
 };
 
-[[nodiscard]] std::string encodeCommandRequest(
-    ClientCommand const& command, CommandArgumentCodecRegistry const& registry);
-
 struct DecodeCommandRequestResult {
     ProtocolError error;
     std::optional<ClientCommand> command;
@@ -242,12 +229,6 @@ struct DecodeCommandRequestResult {
         return error == ProtocolError::None;
     }
 };
-
-[[nodiscard]] DecodeCommandRequestResult decodeCommandRequest(
-    std::string_view bytes, CommandArgumentCodecRegistry const& registry,
-    ProtocolLimits limits = {});
-
-[[nodiscard]] std::string encodeCommandResult(CommandResult const& result);
 
 struct DecodeCommandResultResult {
     ProtocolError error;
@@ -259,12 +240,6 @@ struct DecodeCommandResultResult {
     }
 };
 
-[[nodiscard]] DecodeCommandResultResult decodeCommandResult(
-    std::string_view bytes, ProtocolLimits limits = {});
-
-[[nodiscard]] std::string encodeSessionSnapshot(
-    SessionSnapshot const& snapshot);
-
 struct DecodeSessionSnapshotResult {
     ProtocolError error;
     std::optional<SessionSnapshot> snapshot;
@@ -274,11 +249,6 @@ struct DecodeSessionSnapshotResult {
         return error == ProtocolError::None;
     }
 };
-
-[[nodiscard]] DecodeSessionSnapshotResult decodeSessionSnapshot(
-    std::string_view bytes, ProtocolLimits limits = {});
-
-[[nodiscard]] std::string encodeSessionDelta(SessionDelta const& delta);
 
 struct DecodeSessionDeltaResult {
     ProtocolError error;
@@ -290,12 +260,6 @@ struct DecodeSessionDeltaResult {
     }
 };
 
-[[nodiscard]] DecodeSessionDeltaResult decodeSessionDelta(
-    std::string_view bytes, ProtocolLimits limits = {});
-
-[[nodiscard]] std::string encodeClipboardRequest(
-    ClipboardRequest const& request);
-
 struct DecodeClipboardRequestResult {
     ProtocolError error;
     std::optional<ClipboardRequest> request;
@@ -305,12 +269,6 @@ struct DecodeClipboardRequestResult {
         return error == ProtocolError::None;
     }
 };
-
-[[nodiscard]] DecodeClipboardRequestResult decodeClipboardRequest(
-    std::string_view bytes, ProtocolLimits limits = {});
-
-[[nodiscard]] std::string encodeClipboardResponse(
-    ClipboardResponse const& response);
 
 struct DecodeClipboardResponseResult {
     ProtocolError error;
@@ -322,12 +280,6 @@ struct DecodeClipboardResponseResult {
     }
 };
 
-[[nodiscard]] DecodeClipboardResponseResult decodeClipboardResponse(
-    std::string_view bytes, ProtocolLimits limits = {});
-
-[[nodiscard]] std::string encodeStatusActionInvocation(
-    StatusActionInvocation const& invocation);
-
 struct DecodeStatusActionInvocationResult {
     ProtocolError error;
     std::optional<StatusActionInvocation> invocation;
@@ -337,10 +289,6 @@ struct DecodeStatusActionInvocationResult {
         return error == ProtocolError::None;
     }
 };
-
-[[nodiscard]] DecodeStatusActionInvocationResult
-decodeStatusActionInvocation(std::string_view bytes,
-                                ProtocolLimits limits = {});
 
 // Binary-frame envelope: the only P0 binary-payload support. Producing
 // streaming-output or image payloads remains stretch work; this envelope
@@ -360,8 +308,6 @@ struct BinaryFrame {
     bool operator==(BinaryFrame const&) const = default;
 };
 
-[[nodiscard]] std::string encodeBinaryFrame(BinaryFrame const& frame);
-
 struct DecodeBinaryFrameResult {
     ProtocolError error;
     // Decoded bytes are copied into this owned frame independently of the
@@ -374,7 +320,53 @@ struct DecodeBinaryFrameResult {
     }
 };
 
-[[nodiscard]] DecodeBinaryFrameResult decodeBinaryFrame(
-    std::string_view bytes, ProtocolLimits limits = {});
+class ProtocolCodec {
+public:
+    [[nodiscard]] std::string encodeInsertRequest(
+        InsertRequest const& request) const;
+    [[nodiscard]] DecodeInsertResult decodeInsertRequest(
+        std::string_view message, ProtocolLimits limits = {}) const;
+    [[nodiscard]] std::string encodeSliceResponse(
+        SliceResponse const& response) const;
+    [[nodiscard]] SliceResponse decodeSliceResponse(
+        std::string_view message, ProtocolLimits limits = {}) const;
+
+    [[nodiscard]] CommandArgumentCodecRegistry
+    buildCommandArgumentCodecRegistry() const;
+
+    [[nodiscard]] std::string encodeCommandRequest(
+        ClientCommand const& command,
+        CommandArgumentCodecRegistry const& registry) const;
+    [[nodiscard]] DecodeCommandRequestResult decodeCommandRequest(
+        std::string_view bytes, CommandArgumentCodecRegistry const& registry,
+        ProtocolLimits limits = {}) const;
+    [[nodiscard]] std::string encodeCommandResult(
+        CommandResult const& result) const;
+    [[nodiscard]] DecodeCommandResultResult decodeCommandResult(
+        std::string_view bytes, ProtocolLimits limits = {}) const;
+    [[nodiscard]] std::string encodeSessionSnapshot(
+        SessionSnapshot const& snapshot) const;
+    [[nodiscard]] DecodeSessionSnapshotResult decodeSessionSnapshot(
+        std::string_view bytes, ProtocolLimits limits = {}) const;
+    [[nodiscard]] std::string encodeSessionDelta(SessionDelta const& delta) const;
+    [[nodiscard]] DecodeSessionDeltaResult decodeSessionDelta(
+        std::string_view bytes, ProtocolLimits limits = {}) const;
+    [[nodiscard]] std::string encodeClipboardRequest(
+        ClipboardRequest const& request) const;
+    [[nodiscard]] DecodeClipboardRequestResult decodeClipboardRequest(
+        std::string_view bytes, ProtocolLimits limits = {}) const;
+    [[nodiscard]] std::string encodeClipboardResponse(
+        ClipboardResponse const& response) const;
+    [[nodiscard]] DecodeClipboardResponseResult decodeClipboardResponse(
+        std::string_view bytes, ProtocolLimits limits = {}) const;
+    [[nodiscard]] std::string encodeStatusActionInvocation(
+        StatusActionInvocation const& invocation) const;
+    [[nodiscard]] DecodeStatusActionInvocationResult
+    decodeStatusActionInvocation(std::string_view bytes,
+                                 ProtocolLimits limits = {}) const;
+    [[nodiscard]] std::string encodeBinaryFrame(BinaryFrame const& frame) const;
+    [[nodiscard]] DecodeBinaryFrameResult decodeBinaryFrame(
+        std::string_view bytes, ProtocolLimits limits = {}) const;
+};
 
 }  // namespace ssg

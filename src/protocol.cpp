@@ -181,14 +181,14 @@ CommandError parseCommandError(std::string_view value) {
 
 }  // namespace
 
-std::string encodeInsertRequest(InsertRequest const& request) {
+std::string ProtocolCodec::encodeInsertRequest(InsertRequest const& request) const {
     return std::string{kPrefix} + " INSERT " +
            std::to_string(request.baseRevision.value()) + " " +
            hexEncode(request.text);
 }
 
-DecodeInsertResult decodeInsertRequest(std::string_view message,
-                                         ProtocolLimits limits) {
+DecodeInsertResult ProtocolCodec::decodeInsertRequest(std::string_view message,
+                                         ProtocolLimits limits) const {
     if (message.size() > limits.maxMessageBytes) {
         return decodeFailure(ProtocolError::MessageTooLarge,
                               "message exceeds configured byte limit");
@@ -228,7 +228,7 @@ DecodeInsertResult decodeInsertRequest(std::string_view message,
             InsertRequest{Revision{revision}, std::move(*text)}, {}};
 }
 
-std::string encodeSliceResponse(SliceResponse const& response) {
+std::string ProtocolCodec::encodeSliceResponse(SliceResponse const& response) const {
     std::string encoded =
         std::string{kPrefix} + " RESPONSE " +
         std::string{protocolErrorName(response.protocolError)} + " " +
@@ -248,8 +248,8 @@ std::string encodeSliceResponse(SliceResponse const& response) {
            hexEncode(delta.insertedText);
 }
 
-SliceResponse decodeSliceResponse(std::string_view message,
-                                    ProtocolLimits limits) {
+SliceResponse ProtocolCodec::decodeSliceResponse(std::string_view message,
+                                    ProtocolLimits limits) const {
     if (message.size() > limits.maxMessageBytes) {
         throw std::invalid_argument{"response exceeds configured byte limit"};
     }
@@ -4895,7 +4895,7 @@ CommandArgumentCodec makeWorkspaceApplyCodec() {
 
 }  // namespace
 
-CommandArgumentCodecRegistry buildCommandArgumentCodecRegistry() {
+CommandArgumentCodecRegistry ProtocolCodec::buildCommandArgumentCodecRegistry() const {
     auto const textInputCommands = textInputCommandSet();
     std::unordered_set<std::string> textInputIds;
     for (auto const& descriptor : textInputCommands.descriptors()) {
@@ -4985,8 +4985,8 @@ CommandArgumentCodecRegistry buildCommandArgumentCodecRegistry() {
 }
 
 
-std::string encodeCommandRequest(ClientCommand const& command,
-                                   CommandArgumentCodecRegistry const& registry) {
+std::string ProtocolCodec::encodeCommandRequest(ClientCommand const& command,
+                                   CommandArgumentCodecRegistry const& registry) const {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("id", toValue(command.id));
     fields.emplace_back("base_revision", toValue(command.baseRevision));
@@ -4996,9 +4996,9 @@ std::string encodeCommandRequest(ClientCommand const& command,
                           ProtocolValue::makeObject(std::move(fields)));
 }
 
-DecodeCommandRequestResult decodeCommandRequest(
+DecodeCommandRequestResult ProtocolCodec::decodeCommandRequest(
     std::string_view bytes, CommandArgumentCodecRegistry const& registry,
-    ProtocolLimits limits) {
+    ProtocolLimits limits) const {
     auto decoded =
         decodeMessage(bytes, ProtocolMessageKind::CommandRequest, limits);
     if (decoded.error != ProtocolError::None) {
@@ -5035,7 +5035,7 @@ DecodeCommandRequestResult decodeCommandRequest(
             {}};
 }
 
-std::string encodeCommandResult(CommandResult const& result) {
+std::string ProtocolCodec::encodeCommandResult(CommandResult const& result) const {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back(
         "error", ProtocolValue::makeUint(
@@ -5046,8 +5046,8 @@ std::string encodeCommandResult(CommandResult const& result) {
                          ProtocolValue::makeObject(std::move(fields)));
 }
 
-DecodeCommandResultResult decodeCommandResult(std::string_view bytes,
-                                               ProtocolLimits limits) {
+DecodeCommandResultResult ProtocolCodec::decodeCommandResult(std::string_view bytes,
+                                               ProtocolLimits limits) const {
     auto decoded =
         decodeMessage(bytes, ProtocolMessageKind::CommandResult, limits);
     if (decoded.error != ProtocolError::None) {
@@ -5073,7 +5073,7 @@ DecodeCommandResultResult decodeCommandResult(std::string_view bytes,
             {}};
 }
 
-std::string encodeSessionSnapshot(SessionSnapshot const& snapshot) {
+std::string ProtocolCodec::encodeSessionSnapshot(SessionSnapshot const& snapshot) const {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("revision", toValue(snapshot.revision()));
     fields.emplace_back("topology", toValue(snapshot.topology()));
@@ -5083,8 +5083,8 @@ std::string encodeSessionSnapshot(SessionSnapshot const& snapshot) {
                           ProtocolValue::makeObject(std::move(fields)));
 }
 
-DecodeSessionSnapshotResult decodeSessionSnapshot(std::string_view bytes,
-                                                    ProtocolLimits limits) {
+DecodeSessionSnapshotResult ProtocolCodec::decodeSessionSnapshot(std::string_view bytes,
+                                                    ProtocolLimits limits) const {
     auto decoded =
         decodeMessage(bytes, ProtocolMessageKind::SessionSnapshot, limits);
     if (decoded.error != ProtocolError::None) {
@@ -5110,7 +5110,7 @@ DecodeSessionSnapshotResult decodeSessionSnapshot(std::string_view bytes,
             {}};
 }
 
-std::string encodeSessionDelta(SessionDelta const& delta) {
+std::string ProtocolCodec::encodeSessionDelta(SessionDelta const& delta) const {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("base_revision", toValue(delta.baseRevision()));
     fields.emplace_back("revision", toValue(delta.revision()));
@@ -5145,8 +5145,8 @@ std::string encodeSessionDelta(SessionDelta const& delta) {
                           ProtocolValue::makeObject(std::move(fields)));
 }
 
-DecodeSessionDeltaResult decodeSessionDelta(std::string_view bytes,
-                                              ProtocolLimits limits) {
+DecodeSessionDeltaResult ProtocolCodec::decodeSessionDelta(std::string_view bytes,
+                                              ProtocolLimits limits) const {
     auto decoded =
         decodeMessage(bytes, ProtocolMessageKind::SessionDelta, limits);
     if (decoded.error != ProtocolError::None) {
@@ -5228,13 +5228,13 @@ DecodeSessionDeltaResult decodeSessionDelta(std::string_view bytes,
             {}};
 }
 
-std::string encodeClipboardRequest(ClipboardRequest const& request) {
+std::string ProtocolCodec::encodeClipboardRequest(ClipboardRequest const& request) const {
     return encodeMessage(ProtocolMessageKind::ClipboardRequest,
                           toValue(request));
 }
 
-DecodeClipboardRequestResult decodeClipboardRequest(std::string_view bytes,
-                                                      ProtocolLimits limits) {
+DecodeClipboardRequestResult ProtocolCodec::decodeClipboardRequest(std::string_view bytes,
+                                                      ProtocolLimits limits) const {
     auto decoded =
         decodeMessage(bytes, ProtocolMessageKind::ClipboardRequest, limits);
     if (decoded.error != ProtocolError::None) {
@@ -5248,13 +5248,13 @@ DecodeClipboardRequestResult decodeClipboardRequest(std::string_view bytes,
     return {ProtocolError::None, std::move(request), {}};
 }
 
-std::string encodeClipboardResponse(ClipboardResponse const& response) {
+std::string ProtocolCodec::encodeClipboardResponse(ClipboardResponse const& response) const {
     return encodeMessage(ProtocolMessageKind::ClipboardResponse,
                           toValue(response));
 }
 
-DecodeClipboardResponseResult decodeClipboardResponse(
-    std::string_view bytes, ProtocolLimits limits) {
+DecodeClipboardResponseResult ProtocolCodec::decodeClipboardResponse(
+    std::string_view bytes, ProtocolLimits limits) const {
     auto decoded =
         decodeMessage(bytes, ProtocolMessageKind::ClipboardResponse, limits);
     if (decoded.error != ProtocolError::None) {
@@ -5268,14 +5268,14 @@ DecodeClipboardResponseResult decodeClipboardResponse(
     return {ProtocolError::None, std::move(response), {}};
 }
 
-std::string encodeStatusActionInvocation(
-    StatusActionInvocation const& invocation) {
+std::string ProtocolCodec::encodeStatusActionInvocation(
+    StatusActionInvocation const& invocation) const {
     return encodeMessage(ProtocolMessageKind::StatusActionInvocation,
                           toValue(invocation));
 }
 
-DecodeStatusActionInvocationResult decodeStatusActionInvocation(
-    std::string_view bytes, ProtocolLimits limits) {
+DecodeStatusActionInvocationResult ProtocolCodec::decodeStatusActionInvocation(
+    std::string_view bytes, ProtocolLimits limits) const {
     auto decoded = decodeMessage(
         bytes, ProtocolMessageKind::StatusActionInvocation, limits);
     if (decoded.error != ProtocolError::None) {
@@ -5292,7 +5292,7 @@ DecodeStatusActionInvocationResult decodeStatusActionInvocation(
 // Binary-frame envelope: [u8 version][u8 kind][u64 request_id][u32
 // declared_length][declared_length bytes]. No trailing bytes are permitted.
 
-std::string encodeBinaryFrame(BinaryFrame const& frame) {
+std::string ProtocolCodec::encodeBinaryFrame(BinaryFrame const& frame) const {
     std::string out;
     writeU8(out, frame.version);
     writeU8(out, static_cast<std::uint8_t>(frame.kind));
@@ -5302,8 +5302,8 @@ std::string encodeBinaryFrame(BinaryFrame const& frame) {
     return out;
 }
 
-DecodeBinaryFrameResult decodeBinaryFrame(std::string_view bytes,
-                                            ProtocolLimits limits) {
+DecodeBinaryFrameResult ProtocolCodec::decodeBinaryFrame(std::string_view bytes,
+                                            ProtocolLimits limits) const {
     if (bytes.size() > limits.maxBinaryFrameBytes) {
         return {ProtocolError::BinaryFrameTooLarge, std::nullopt,
                 "binary frame exceeds the configured byte limit"};
