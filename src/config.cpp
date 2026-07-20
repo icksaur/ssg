@@ -2,8 +2,6 @@
 
 namespace ssg {
 
-// TabWidth constructor: validates the value is in [min_value, max_value].
-// Throws std::invalid_argument with an actionable message on failure (I4).
 TabWidth::TabWidth(int w) {
     if (w < min_value || w > max_value) {
         throw std::invalid_argument(
