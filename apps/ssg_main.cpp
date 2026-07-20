@@ -495,7 +495,7 @@ int main(int argc, char** argv) {
         if (snapshot) {
             // The library renders every screen branch, including the declined-
             // layout "too small" placeholder (M11-L); the app only encodes.
-            auto grid = ssg::render(*snapshot);
+            auto grid = ssg::Renderer{}.render(*snapshot);
             std::string frame = "\x1b[?25l";  // Hide the cursor while redrawing.
             frame += ssg::app::encode_ansi_frame(grid, colorDepth);
             if (grid.caret) {

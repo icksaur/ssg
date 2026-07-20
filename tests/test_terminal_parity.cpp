@@ -18,7 +18,7 @@
 // portable and would back a Windows ConPTY harness unchanged.
 
 #include <ssg/editor_runtime.h>
-#include <ssg/render.h>
+#include <ssg/renderer.h>
 #include <ssg/session_snapshot.h>
 #include <ssg/theme.h>
 
@@ -346,7 +346,7 @@ TEST(decoderRoundtripsTheEncodedFrame) {
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) { fs::remove_all(root); return; }
-    auto grid = ssg::render(*snapshot);
+    auto grid = ssg::Renderer{}.render(*snapshot);
 
     auto encoded =
         ssg::app::encode_ansi_frame(grid, ssg::ColorDepth::Truecolor);
@@ -373,7 +373,7 @@ TEST(realBinaryOutputMatchesRenderSnapshot) {
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) { fs::remove_all(root); return; }
-    auto grid = ssg::render(*snapshot);
+    auto grid = ssg::Renderer{}.render(*snapshot);
 
     ASSERT_TRUE(compareScreen(screen, grid) > 0);
 
@@ -412,7 +412,7 @@ TEST(realBinaryWideGlyphOutputMatchesRender) {
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) { fs::remove_all(root); return; }
-    auto grid = ssg::render(*snapshot);
+    auto grid = ssg::Renderer{}.render(*snapshot);
 
     // Sanity: the rendered document actually contains wide (continuation) cells,
     // so this case genuinely exercises wide-glyph handling.
