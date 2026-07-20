@@ -134,7 +134,10 @@ struct PromptStatusDelta {
                            const PromptStatusDelta&) = default;
 };
 
-[[nodiscard]] PromptStatusDelta derivePromptStatusDelta(
-    const PromptStatusViewState& before, const PromptStatusViewState& after);
+class PromptStatusDeltaCodec {
+public:
+    [[nodiscard]] PromptStatusDelta derive(const PromptStatusViewState& before,
+                                           const PromptStatusViewState& after);
+};
 
 } // namespace ssg
