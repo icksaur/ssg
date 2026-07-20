@@ -156,7 +156,7 @@ TEST(literalCaseWordAndSelectionMatchIndependentOracle) {
                     FindOptions options{caseSensitive, wholeWord, false, false};
                     FindRequest request{query, options, std::nullopt, 100000,
                                         nullptr};
-                    ASSERT_EQ(findMatches(text, request).matches,
+                    ASSERT_EQ(FindMatcher{}.find(text, request).matches,
                               referenceLiteral(text, query, options,
                                                 std::nullopt));
                     if (text.size() >= 2) {
@@ -164,7 +164,7 @@ TEST(literalCaseWordAndSelectionMatchIndependentOracle) {
                         request.selection =
                             ByteRange{ByteOffset{1},
                                       ByteOffset{text.size() - 1}};
-                        ASSERT_EQ(findMatches(text, request).matches,
+                        ASSERT_EQ(FindMatcher{}.find(text, request).matches,
                                   referenceLiteral(text, query, options,
                                                     request.selection));
                     }
@@ -177,57 +177,57 @@ TEST(literalCaseWordAndSelectionMatchIndependentOracle) {
 TEST(regexOracleCoversGrammarCaseWordAndInvalidPattern) {
     FindRequest request{"(ab|cd)+", FindOptions{true, false, true, false},
                         std::nullopt, 100000, nullptr};
-    ASSERT_EQ(findMatches("xxabcdcd yy ab", request).matches,
+    ASSERT_EQ(FindMatcher{}.find("xxabcdcd yy ab", request).matches,
               (std::vector<FindMatch>{{ByteOffset{2}, ByteOffset{8}},
                                       {ByteOffset{12}, ByteOffset{14}}}));
 
     request.query = "h[ae]llo";
     request.options.caseSensitive = false;
-    ASSERT_EQ(findMatches("HELLO hallo hxllo", request).matches,
+    ASSERT_EQ(FindMatcher{}.find("HELLO hallo hxllo", request).matches,
               (std::vector<FindMatch>{{ByteOffset{0}, ByteOffset{5}},
                                       {ByteOffset{6}, ByteOffset{11}}}));
 
     request.query = "cat";
     request.options.wholeWord = true;
-    ASSERT_EQ(findMatches("cat scatter cat", request).matches,
+    ASSERT_EQ(FindMatcher{}.find("cat scatter cat", request).matches,
               (std::vector<FindMatch>{{ByteOffset{0}, ByteOffset{3}},
                                       {ByteOffset{12}, ByteOffset{15}}}));
 
     request.query = "a-?";
-    ASSERT_EQ(findMatches("a-b", request).matches,
+    ASSERT_EQ(FindMatcher{}.find("a-b", request).matches,
               (std::vector<FindMatch>{{ByteOffset{0}, ByteOffset{1}}}));
 
     request.query.clear();
-    ASSERT_TRUE(findMatches("abc", request).matches.empty());
+    ASSERT_TRUE(FindMatcher{}.find("abc", request).matches.empty());
 
     request.query = "(unterminated";
-    ASSERT_EQ(findMatches("text", request).error,
+    ASSERT_EQ(FindMatcher{}.find("text", request).error,
               FindReplaceError::InvalidPattern);
 }
 
 TEST(zeroWidthAdvancesOneUnicodeScalarAndBudgetCancels) {
     FindRequest request{"a*", FindOptions{true, false, true, false},
                         std::nullopt, 100000, nullptr};
-    ASSERT_EQ(findMatches("a\xC3\xA9", request).matches,
+    ASSERT_EQ(FindMatcher{}.find("a\xC3\xA9", request).matches,
               (std::vector<FindMatch>{{ByteOffset{0}, ByteOffset{1}},
                                       {ByteOffset{1}, ByteOffset{1}},
                                       {ByteOffset{3}, ByteOffset{3}}}));
 
     request.query = "(a|aa)*b";
     request.workBudget = 1;
-    ASSERT_EQ(findMatches(std::string(200, 'a'), request).error,
+    ASSERT_EQ(FindMatcher{}.find(std::string(200, 'a'), request).error,
               FindReplaceError::BudgetExhausted);
 
     request.query = "z";
     request.options.regex = false;
     request.workBudget = 3;
-    ASSERT_EQ(findMatches("aaaaaaaa", request).error,
+    ASSERT_EQ(FindMatcher{}.find("aaaaaaaa", request).error,
               FindReplaceError::BudgetExhausted);
 
     std::atomic_bool cancelled{true};
     request.workBudget = 100000;
     request.cancelled = &cancelled;
-    ASSERT_EQ(findMatches("ab", request).error,
+    ASSERT_EQ(FindMatcher{}.find("ab", request).error,
               FindReplaceError::Cancelled);
 }
 
@@ -278,7 +278,7 @@ TEST(workspacePreviewApplyRecoverAndFailuresRoundTrip) {
                                {"c.txt", "none"}}};
     FindRequest request{"cat", {}, std::nullopt, 100000, nullptr};
     auto preview =
-        previewWorkspaceReplace(workspace, workspace.revision(), request, "x");
+        WorkspaceReplacer{}.preview(workspace, workspace.revision(), request, "x");
     ASSERT_TRUE(preview.accepted());
     ASSERT_EQ(preview.preview->changes.size(), std::size_t{2});
     ASSERT_EQ(preview.preview->changes[0].after, std::string{"x x"});
@@ -286,19 +286,19 @@ TEST(workspacePreviewApplyRecoverAndFailuresRoundTrip) {
     RecordingSink rejecting;
     rejecting.accept = false;
     const auto original = workspace.files();
-    auto rejected = applyWorkspaceReplace(workspace, *preview.preview, rejecting);
+    auto rejected = WorkspaceReplacer{}.apply(workspace, *preview.preview, rejecting);
     ASSERT_EQ(rejected.error, FindReplaceError::RecoveryRejected);
     ASSERT_EQ(workspace.files(), original);
 
     RecordingSink sink;
-    auto applied = applyWorkspaceReplace(workspace, *preview.preview, sink);
+    auto applied = WorkspaceReplacer{}.apply(workspace, *preview.preview, sink);
     ASSERT_TRUE(applied.accepted());
     ASSERT_TRUE(sink.record.has_value());
     ASSERT_EQ(workspace.files()[0].text, std::string{"x x"});
-    ASSERT_TRUE(recoverWorkspaceReplace(workspace, *sink.record).accepted());
+    ASSERT_TRUE(WorkspaceReplacer{}.recover(workspace, *sink.record).accepted());
     ASSERT_EQ(workspace.files(), original);
 
-    auto stale = applyWorkspaceReplace(workspace, *preview.preview, sink);
+    auto stale = WorkspaceReplacer{}.apply(workspace, *preview.preview, sink);
     ASSERT_EQ(stale.error, FindReplaceError::StaleRevision);
     ASSERT_EQ(workspace.files(), original);
 }
@@ -325,10 +325,10 @@ TEST(viewDeltaReplayAndCommandExportsAreExact) {
         document.snapshot(),
         FindRequest{"alpha", {}, std::nullopt, 100000, nullptr});
     ASSERT_TRUE(controller.viewState().replaceMode);
-    const auto delta = deriveFindReplaceDelta(closed, open);
+    const auto delta = FindReplaceDeltaCodec{}.derive(closed, open);
     ASSERT_TRUE(delta.changed);
-    ASSERT_EQ(replayFindReplaceDelta(closed, delta).state, open);
-    ASSERT_EQ(replayFindReplaceDelta(open, delta).error,
+    ASSERT_EQ(FindReplaceDeltaCodec{}.replay(closed, delta).state, open);
+    ASSERT_EQ(FindReplaceDeltaCodec{}.replay(open, delta).error,
               FindReplaceReplayError::BaseMismatch);
 }
 

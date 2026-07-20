@@ -518,7 +518,8 @@ std::string replacedText(std::string_view original,
 
 }  // namespace
 
-FindResult findMatches(std::string_view text, const FindRequest& request) {
+FindResult FindMatcher::find(std::string_view text,
+                             const FindRequest& request) const {
     ScalarText decodedText;
     ScalarText decodedQuery;
     if (!decodeUtf8(text, decodedText) ||
@@ -640,16 +641,17 @@ FindReplaceCommandSet findReplaceCommandSet() {
     return FindReplaceCommandSet{};
 }
 
-FindReplaceDelta deriveFindReplaceDelta(
-    const FindReplaceViewState& before, const FindReplaceViewState& after) {
+FindReplaceDelta FindReplaceDeltaCodec::derive(
+    const FindReplaceViewState& before,
+    const FindReplaceViewState& after) const {
     if (before == after) {
         return {false, before.generation, std::nullopt};
     }
     return {true, before.generation, after};
 }
 
-FindReplaceReplayResult replayFindReplaceDelta(
-    const FindReplaceViewState& base, const FindReplaceDelta& delta) {
+FindReplaceReplayResult FindReplaceDeltaCodec::replay(
+    const FindReplaceViewState& base, const FindReplaceDelta& delta) const {
     if (base.generation != delta.baseGeneration) {
         return {FindReplaceReplayError::BaseMismatch, base};
     }
@@ -744,7 +746,7 @@ void FindReplaceController::evaluate(const DocumentSnapshot& document) {
     state_.sourceRevision = document.revision;
     state_.query = request_.query;
     state_.options = request_.options;
-    auto result = findMatches(document.text, request_);
+    auto result = FindMatcher{}.find(document.text, request_);
     state_.matches = std::move(result.matches);
     state_.error = result.error;
     state_.message = std::move(result.message);
@@ -856,9 +858,9 @@ const FindReplaceViewState& FindReplaceController::viewState() const noexcept {
     return state_;
 }
 
-WorkspacePreviewResult previewWorkspaceReplace(
+WorkspacePreviewResult WorkspaceReplacer::preview(
     const FindReplaceWorkspace& workspace, Revision sourceRevision,
-    const FindRequest& request, std::string replacement) {
+    const FindRequest& request, std::string replacement) const {
     if (request.options.selectionOnly) {
         return {FindReplaceError::InvalidSelection, std::nullopt,
                 "workspace replace cannot use a document selection"};
@@ -881,7 +883,7 @@ WorkspacePreviewResult previewWorkspaceReplace(
     for (const auto& file : snapshot.files) {
         auto fileRequest = request;
         fileRequest.workBudget = perFileBudget;
-        auto result = findMatches(file.text, fileRequest);
+        auto result = FindMatcher{}.find(file.text, fileRequest);
         if (!result.accepted()) {
             return {result.error, std::nullopt, std::move(result.message)};
         }
@@ -896,14 +898,15 @@ WorkspacePreviewResult previewWorkspaceReplace(
     return {FindReplaceError::None, std::move(preview), {}};
 }
 
-WorkspaceApplyResult applyWorkspaceReplace(
+WorkspaceApplyResult WorkspaceReplacer::apply(
     FindReplaceWorkspace& workspace, const WorkspaceReplacePreview& preview,
-    WorkspaceRecoverySink& recoverySink) {
+    WorkspaceRecoverySink& recoverySink) const {
     return workspace.apply(preview, recoverySink);
 }
 
-WorkspaceApplyResult recoverWorkspaceReplace(
-    FindReplaceWorkspace& workspace, const WorkspaceRecoveryRecord& record) {
+WorkspaceApplyResult WorkspaceReplacer::recover(
+    FindReplaceWorkspace& workspace,
+    const WorkspaceRecoveryRecord& record) const {
     return workspace.recover(record);
 }
 

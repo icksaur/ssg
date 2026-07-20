@@ -199,7 +199,7 @@ SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
         deriveClipboardDelta(old.clipboard, next.clipboard),
         derivePromptStatusDelta(old.promptStatus, next.promptStatus),
         SearchDeltaCodec{}.derive(old.search, next.search),
-        deriveFindReplaceDelta(old.findReplace, next.findReplace),
+        FindReplaceDeltaCodec{}.derive(old.findReplace, next.findReplace),
         settingsDelta(old.settings, next.settings),
         KeymapMatcher::deriveDelta(old.keymap, next.keymap),
         TextCodec{}.deriveDelta(old.textEncoding, next.textEncoding),
@@ -252,7 +252,7 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
     auto promptStatus = replayReplacement(base.sections().promptStatus,
                                             delta.promptStatus_);
     auto search = SearchDeltaCodec{}.replay(base.sections().search, delta.search_);
-    auto findReplace = replayFindReplaceDelta(base.sections().findReplace,
+    auto findReplace = FindReplaceDeltaCodec{}.replay(base.sections().findReplace,
                                                   delta.findReplace_);
     auto settings = replaySettings(base.sections().settings, delta.settings_);
     auto keymap = replayReplacement(base.sections().keymap, delta.keymap_);
