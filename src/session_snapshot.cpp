@@ -209,7 +209,7 @@ SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
                                                     next.externalModification),
         FollowEditsDeltaCodec{}.derive(old.followEdits, next.followEdits),
         TreeDeltaCodec{}.derive(old.tree, next.tree, 4096),
-        deriveSyntaxDelta(old.syntax, next.syntax),
+        SyntaxDeltaCodec{}.derive(old.syntax, next.syntax),
         LspSyncDeltaCodec{}.derive(old.lspSync, next.lspSync),
         LspFeatureDeltaCodec{}.derive(old.lspFeatures, next.lspFeatures),
         {old.theme == next.theme ? std::nullopt
@@ -262,7 +262,7 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
         base.sections().externalModification,
         delta.externalModification_);
     auto tree = TreeDeltaCodec{}.replay(base.sections().tree, delta.tree_);
-    auto syntax = replaySyntaxDelta(base.sections().syntax, delta.syntax_);
+    auto syntax = SyntaxDeltaCodec{}.replay(base.sections().syntax, delta.syntax_);
     auto lspSync =
         LspSyncDeltaCodec{}.replay(base.sections().lspSync, delta.lspSync_);
     auto lspFeatures = LspFeatureDeltaCodec{}.replay(

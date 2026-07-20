@@ -328,9 +328,6 @@ private:
     std::optional<std::vector<LineIndentation>> indentation_;
 };
 
-[[nodiscard]] SyntaxDelta deriveSyntaxDelta(const SyntaxViewState& base,
-                                              const SyntaxViewState& target);
-
 enum class SyntaxReplayError : std::uint8_t {
     None,
     StaleRevision,
@@ -344,8 +341,13 @@ struct SyntaxReplayResult {
     [[nodiscard]] bool accepted() const noexcept { return state.has_value(); }
 };
 
-[[nodiscard]] SyntaxReplayResult replaySyntaxDelta(
-    const SyntaxViewState& base, const SyntaxDelta& delta);
+class SyntaxDeltaCodec {
+public:
+    [[nodiscard]] SyntaxDelta derive(const SyntaxViewState& base,
+                                     const SyntaxViewState& target);
+    [[nodiscard]] SyntaxReplayResult replay(const SyntaxViewState& base,
+                                            const SyntaxDelta& delta);
+};
 
 enum class SyntaxRequestError : std::uint8_t {
     None,

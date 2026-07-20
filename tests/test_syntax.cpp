@@ -403,33 +403,33 @@ TEST(immutableDeltaDerivesOnlyChangedSectionsAndReplaysExactly) {
     const auto after = buildSyntaxViewState(
         Revision{5}, LanguageId{"toy"}, "let 2\n", raw, {});
 
-    const auto delta = deriveSyntaxDelta(before, after);
+    const auto delta = SyntaxDeltaCodec{}.derive(before, after);
     ASSERT_EQ(delta.baseRevision(), Revision{4});
     ASSERT_EQ(delta.revision(), Revision{5});
     ASSERT_TRUE(delta.spans().has_value());
     ASSERT_FALSE(delta.bracketPairs().has_value());
-    const auto replayed = replaySyntaxDelta(before, delta);
+    const auto replayed = SyntaxDeltaCodec{}.replay(before, delta);
     ASSERT_TRUE(replayed.accepted());
     ASSERT_EQ(*replayed.state, after);
 
-    const auto identical = deriveSyntaxDelta(after, after);
+    const auto identical = SyntaxDeltaCodec{}.derive(after, after);
     ASSERT_TRUE(identical.empty());
-    ASSERT_EQ(replaySyntaxDelta(after, identical).state,
+    ASSERT_EQ(SyntaxDeltaCodec{}.replay(after, identical).state,
               std::optional<SyntaxViewState>{after});
 
     const auto revisionOnlyTarget = plainTextSyntaxViewState(
         Revision{5}, LanguageId{"toy"}, "alpha\n", 4);
     const auto revisionOnly =
-        deriveSyntaxDelta(before, revisionOnlyTarget);
+        SyntaxDeltaCodec{}.derive(before, revisionOnlyTarget);
     ASSERT_TRUE(revisionOnly.empty());
     const auto revisionOnlyReplay =
-        replaySyntaxDelta(before, revisionOnly);
+        SyntaxDeltaCodec{}.replay(before, revisionOnly);
     ASSERT_TRUE(revisionOnlyReplay.accepted());
     ASSERT_EQ(*revisionOnlyReplay.state, revisionOnlyTarget);
 
     const auto staleBase = plainTextSyntaxViewState(
         Revision{3}, LanguageId{"toy"}, "alpha\n", 4);
-    ASSERT_EQ(replaySyntaxDelta(staleBase, delta).error,
+    ASSERT_EQ(SyntaxDeltaCodec{}.replay(staleBase, delta).error,
               SyntaxReplayError::StaleRevision);
 
     const SyntaxDelta malformed{
@@ -447,7 +447,7 @@ TEST(immutableDeltaDerivesOnlyChangedSectionsAndReplaysExactly) {
         std::nullopt,
         std::nullopt,
     };
-    ASSERT_EQ(replaySyntaxDelta(before, malformed).error,
+    ASSERT_EQ(SyntaxDeltaCodec{}.replay(before, malformed).error,
               SyntaxReplayError::MalformedDelta);
 
     const SyntaxDelta sameRevisionChange{
@@ -464,7 +464,7 @@ TEST(immutableDeltaDerivesOnlyChangedSectionsAndReplaysExactly) {
         std::nullopt,
         std::nullopt,
     };
-    ASSERT_EQ(replaySyntaxDelta(before, sameRevisionChange).error,
+    ASSERT_EQ(SyntaxDeltaCodec{}.replay(before, sameRevisionChange).error,
               SyntaxReplayError::MalformedDelta);
 }
 
