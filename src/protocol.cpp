@@ -377,8 +377,6 @@ DocumentViewState CoreEditorSlice::snapshot() const {
     return impl_->snapshot_unlocked();
 }
 
-// ---------------------------------------------------------------------------
-// ProtocolValue: bounded, versioned wire value tree.
 
 struct ProtocolValue::Storage {
     using Value = std::variant<std::monostate, bool, std::int64_t,
@@ -507,7 +505,6 @@ bool ProtocolValue::operator==(ProtocolValue const& other) const {
 
 namespace {
 
-// ---------------------------------------------------------------------------
 // Binary wire encoding for a ProtocolValue tree.
 //
 // Layout: [u8 tag][tag-specific payload]. null: nothing; boolean: 1 byte;
@@ -805,8 +802,6 @@ ProtocolError to_protocol_error(ValueReadStatus status) {
     return ProtocolError::malformed_message;
 }
 
-// ---------------------------------------------------------------------------
-// Top-level message envelope: [u8 wire_version][u8 message_kind][payload].
 
 constexpr std::uint8_t kProtocolWireVersion = 1;
 
@@ -865,8 +860,6 @@ DecodedMessage decode_message(std::string_view bytes,
 
 }  // namespace
 
-// ---------------------------------------------------------------------------
-// Domain-type <-> ProtocolValue bridge.
 //
 // Every leaf/composite type reachable from SessionSnapshotSections,
 // SessionDelta, ClipboardRequest/Response, and StatusActionInvocation has a
@@ -901,7 +894,6 @@ DecodedMessage decode_message(std::string_view bytes,
 // block as new leaf/composite types are introduced further down the file.
 namespace {
 
-// -- Forward declarations: primitives -------------------------------------
 ProtocolValue to_value(bool value);
 bool decode_present(ProtocolValue const& value, std::optional<bool>& out);
 ProtocolValue to_value(std::uint8_t value);
@@ -929,7 +921,6 @@ ProtocolValue to_value(Enum value) {
         static_cast<std::underlying_type_t<Enum>>(value)));
 }
 
-// -- Definitions: primitives -----------------------------------------------
 ProtocolValue to_value(bool value) { return ProtocolValue::make_bool(value); }
 bool decode_present(ProtocolValue const& value, std::optional<bool>& out) {
     auto decoded = value.as_bool();
@@ -1027,7 +1018,6 @@ bool decode_present(ProtocolValue const& value,
     return true;
 }
 
-// -- Forward declarations: enums ------------------------------------------
 // (to_value(Enum) is served generically above; only decode_present needs a
 // forward declaration per enum, each implemented via decode_enum().)
 bool decode_present(ProtocolValue const& value, std::optional<DocumentMode>& out);
@@ -1063,7 +1053,6 @@ bool decode_present(ProtocolValue const& value, std::optional<ShellNodeKind>& ou
 bool decode_present(ProtocolValue const& value, std::optional<FocusTarget>& out);
 bool decode_present(ProtocolValue const& value, std::optional<SemanticRole>& out);
 
-// -- Forward declarations: strong ids -------------------------------------
 ProtocolValue to_value(Revision const& value);
 bool decode_present(ProtocolValue const& value, std::optional<Revision>& out);
 ProtocolValue to_value(ByteOffset const& value);
@@ -1103,7 +1092,6 @@ bool decode_present(ProtocolValue const& value, std::optional<UntitledDocumentId
 ProtocolValue to_value(JournalDocumentKey const& value);
 bool decode_present(ProtocolValue const& value, std::optional<JournalDocumentKey>& out);
 
-// -- Forward declarations: composite types ---------------------------------
 ProtocolValue to_value(DocumentPosition const& value);
 bool decode_present(ProtocolValue const& value, std::optional<DocumentPosition>& out);
 ProtocolValue to_value(DocumentViewState const& value);
@@ -1323,7 +1311,6 @@ bool decode_present(ProtocolValue const& value, std::optional<ClientSnapshotStat
 ProtocolValue to_value(SessionSnapshotSections const& value);
 bool decode_present(ProtocolValue const& value, std::optional<SessionSnapshotSections>& out);
 
-// -- Forward declarations: command argument payload types -------------------
 ProtocolValue to_value(TextInputArguments const& value);
 bool decode_present(ProtocolValue const& value, std::optional<TextInputArguments>& out);
 ProtocolValue to_value(PaletteExecuteArguments const& value);
@@ -1359,7 +1346,6 @@ bool decode_present(ProtocolValue const& value, std::optional<SettingResetScopeA
 ProtocolValue to_value(WorkspaceReplaceArguments const& value);
 bool decode_present(ProtocolValue const& value, std::optional<WorkspaceReplaceArguments>& out);
 
-// -- Forward declarations: generic container shapes ------------------------
 template <typename T>
 ProtocolValue to_value(std::optional<T> const& value);
 template <typename T>
@@ -1374,7 +1360,6 @@ bool decode_present(ProtocolValue const& value, std::optional<std::vector<T>>& o
 template <typename T, std::size_t N>
 bool decode_present(ProtocolValue const& value, std::optional<std::array<T, N>>& out);
 
-// -- Generic entry points (definitions) -------------------------------------
 template <typename T>
 ProtocolValue to_value(std::optional<T> const& value) {
     if (!value) {
@@ -1507,7 +1492,6 @@ template <typename Enum, std::size_t N>
 }
 
 
-// ---------------------------------------------------------------------------
 // Enum decode_present() definitions, each delegating to decode_enum() with
 // the closed set of valid values for that enum.
 
@@ -1719,7 +1703,6 @@ bool decode_present(ProtocolValue const& value, std::optional<SemanticRole>& out
     return decode_enum(value, out, all_semantic_roles);
 }
 
-// ---------------------------------------------------------------------------
 // Strong-id to_value()/decode_present() definitions.
 
 ProtocolValue to_value(Revision const& value) {
@@ -1932,8 +1915,6 @@ bool decode_present(ProtocolValue const& value, std::optional<JournalDocumentKey
     return true;
 }
 
-// ---------------------------------------------------------------------------
-// types.h / document.h / selection.h / history.h composite definitions.
 //
 // Every composite decode_present() below starts by rejecting a non-object
 // wire value outright: value.field() already returns nullptr for every key
@@ -2112,9 +2093,6 @@ bool decode_present(ProtocolValue const& value, std::optional<HistoryDelta>& out
     return true;
 }
 
-// ---------------------------------------------------------------------------
-// ui_layout.h composite definitions (Rect/GridSize/ShellLabel/AccessibilityNode/
-// PaneGeometry/ShellViewState).
 
 ProtocolValue to_value(Rect const& value) {
     std::vector<ProtocolValue::Field> fields;
@@ -2272,8 +2250,6 @@ bool decode_present(ProtocolValue const& value, std::optional<ShellViewState>& o
     return true;
 }
 
-// ---------------------------------------------------------------------------
-// prompt.h composite definitions.
 
 ProtocolValue to_value(PromptInput const& value) {
     std::vector<ProtocolValue::Field> fields;
@@ -2378,8 +2354,6 @@ bool decode_present(ProtocolValue const& value, std::optional<PromptViewState>& 
     return true;
 }
 
-// ---------------------------------------------------------------------------
-// status.h composite definitions.
 
 ProtocolValue to_value(StatusAction const& value) {
     std::vector<ProtocolValue::Field> fields;
@@ -2492,8 +2466,6 @@ bool decode_present(ProtocolValue const& value, std::optional<PromptStatusDelta>
     return true;
 }
 
-// ---------------------------------------------------------------------------
-// clipboard.h composite definitions.
 
 ProtocolValue to_value(ClipboardRequest const& value) {
     std::vector<ProtocolValue::Field> fields;
@@ -2586,8 +2558,6 @@ bool decode_present(ProtocolValue const& value, std::optional<ClipboardDelta>& o
     return true;
 }
 
-// ---------------------------------------------------------------------------
-// search.h composite definitions.
 
 ProtocolValue to_value(SearchResult const& value) {
     std::vector<ProtocolValue::Field> fields;
@@ -2690,8 +2660,6 @@ bool decode_present(ProtocolValue const& value, std::optional<SearchDelta>& out)
     return true;
 }
 
-// ---------------------------------------------------------------------------
-// find_replace.h composite definitions.
 
 ProtocolValue to_value(ByteRange const& value) {
     std::vector<ProtocolValue::Field> fields;
@@ -2893,9 +2861,6 @@ bool decode_present(ProtocolValue const& value, std::optional<FindReplaceDelta>&
     return true;
 }
 
-// ---------------------------------------------------------------------------
-// settings.h composite definitions, including the SettingValue tagged-union
-// wire encoding (variant index selects the active alternative's decoder).
 
 ProtocolValue to_value(SettingValue const& value) {
     std::vector<ProtocolValue::Field> fields;
@@ -3042,8 +3007,6 @@ bool decode_present(ProtocolValue const& value, std::optional<SettingsSectionDel
     return true;
 }
 
-// ---------------------------------------------------------------------------
-// input.h (keymap) composite definitions.
 
 ProtocolValue to_value(KeyStroke const& value) {
     std::vector<ProtocolValue::Field> fields;
@@ -3118,8 +3081,6 @@ bool decode_present(ProtocolValue const& value, std::optional<KeymapDelta>& out)
     return true;
 }
 
-// ---------------------------------------------------------------------------
-// text_encoding.h composite definitions.
 
 ProtocolValue to_value(TextEncodingStatus const& value) {
     std::vector<ProtocolValue::Field> fields;
@@ -3171,8 +3132,6 @@ bool decode_present(ProtocolValue const& value, std::optional<TextEncodingDelta>
     return true;
 }
 
-// ---------------------------------------------------------------------------
-// tabs.h composite definitions.
 
 ProtocolValue to_value(TabState const& value) {
     std::vector<ProtocolValue::Field> fields;
@@ -3248,8 +3207,6 @@ bool decode_present(ProtocolValue const& value, std::optional<TabDelta>& out) {
     return true;
 }
 
-// ---------------------------------------------------------------------------
-// diff.h composite definitions.
 
 ProtocolValue to_value(DiffLineChange const& value) {
     std::vector<ProtocolValue::Field> fields;
@@ -3386,8 +3343,6 @@ bool decode_present(ProtocolValue const& value, std::optional<DiffDelta>& out) {
     return true;
 }
 
-// ---------------------------------------------------------------------------
-// external_modification.h composite definitions.
 
 ProtocolValue to_value(ExternalDocumentView const& value) {
     std::vector<ProtocolValue::Field> fields;
@@ -3447,8 +3402,6 @@ bool decode_present(ProtocolValue const& value, std::optional<ExternalModificati
     return true;
 }
 
-// ---------------------------------------------------------------------------
-// viewport.h composite definitions.
 
 ProtocolValue to_value(ViewportDimensions const& value) {
     std::vector<ProtocolValue::Field> fields;
@@ -3600,8 +3553,6 @@ bool decode_present(ProtocolValue const& value, std::optional<ViewportDelta>& ou
     return true;
 }
 
-// ---------------------------------------------------------------------------
-// follow_edits.h composite definitions.
 
 ProtocolValue to_value(FollowScrollOffset const& value) {
     std::vector<ProtocolValue::Field> fields;
@@ -3717,8 +3668,6 @@ bool decode_present(ProtocolValue const& value, std::optional<FollowEditsDelta>&
     return true;
 }
 
-// ---------------------------------------------------------------------------
-// tree.h composite definitions.
 
 ProtocolValue to_value(TreeNodeCommand const& value) {
     std::vector<ProtocolValue::Field> fields;
@@ -3905,8 +3854,6 @@ bool decode_present(ProtocolValue const& value, std::optional<TreeDelta>& out) {
     return true;
 }
 
-// ---------------------------------------------------------------------------
-// syntax.h composite definitions.
 
 ProtocolValue to_value(SyntaxRange const& value) {
     std::vector<ProtocolValue::Field> fields;
@@ -4120,8 +4067,6 @@ bool decode_present(ProtocolValue const& value, std::optional<SyntaxDelta>& out)
     return true;
 }
 
-// ---------------------------------------------------------------------------
-// lsp_sync.h composite definitions.
 
 ProtocolValue to_value(LspPosition const& value) {
     std::vector<ProtocolValue::Field> fields;
@@ -4234,8 +4179,6 @@ bool decode_present(ProtocolValue const& value, std::optional<LspSyncDelta>& out
     return true;
 }
 
-// ---------------------------------------------------------------------------
-// lsp_features.h composite definitions.
 
 ProtocolValue to_value(LspCompletionItem const& value) {
     std::vector<ProtocolValue::Field> fields;
@@ -4410,8 +4353,6 @@ bool decode_present(ProtocolValue const& value, std::optional<LspFeatureDelta>& 
     return true;
 }
 
-// ---------------------------------------------------------------------------
-// theme.h composite definitions.
 
 ProtocolValue to_value(SrgbColor const& value) {
     std::vector<ProtocolValue::Field> fields;
@@ -4453,8 +4394,6 @@ bool decode_present(ProtocolValue const& value, std::optional<ThemeSnapshot>& ou
     return true;
 }
 
-// ---------------------------------------------------------------------------
-// session.h composite definitions.
 
 ProtocolValue to_value(SessionTopology const& value) {
     std::vector<ProtocolValue::Field> fields;
@@ -4476,10 +4415,6 @@ bool decode_present(ProtocolValue const& value, std::optional<SessionTopology>& 
     return true;
 }
 
-// ---------------------------------------------------------------------------
-// session_snapshot.h composite definitions: ClientSnapshotState and
-// SessionSnapshotSections (the top-level container for every feature's
-// snapshot-side view state).
 
 ProtocolValue to_value(ClientSnapshotState const& value) {
     std::vector<ProtocolValue::Field> fields;
@@ -4563,9 +4498,6 @@ bool decode_present(ProtocolValue const& value, std::optional<SessionSnapshotSec
     return true;
 }
 
-// ---------------------------------------------------------------------------
-// Command-argument payload type definitions (used by the
-// CommandArgumentCodecRegistry to encode/decode std::any command payloads).
 
 ProtocolValue to_value(TextInputArguments const& value) {
     std::vector<ProtocolValue::Field> fields;
@@ -4849,8 +4781,6 @@ bool decode_present(ProtocolValue const& value, std::optional<ShellSectionDelta>
 
 }  // namespace
 
-// ---------------------------------------------------------------------------
-// Command argument codec registry.
 
 struct CommandArgumentCodecRegistry::Impl {
     std::unordered_map<std::string, CommandArgumentCodec> codecs;
@@ -5054,8 +4984,6 @@ CommandArgumentCodecRegistry build_command_argument_codec_registry() {
     return CommandArgumentCodecRegistry{std::move(entries)};
 }
 
-// ---------------------------------------------------------------------------
-// Top-level message encode/decode functions.
 
 std::string encode_command_request(ClientCommand const& command,
                                    CommandArgumentCodecRegistry const& registry) {
@@ -5361,7 +5289,6 @@ DecodeStatusActionInvocationResult decode_status_action_invocation(
     return {ProtocolError::none, std::move(invocation), {}};
 }
 
-// ---------------------------------------------------------------------------
 // Binary-frame envelope: [u8 version][u8 kind][u64 request_id][u32
 // declared_length][declared_length bytes]. No trailing bytes are permitted.
 

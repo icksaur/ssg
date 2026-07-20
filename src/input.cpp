@@ -206,7 +206,6 @@ std::optional<KeySequence> parse_key_sequence(
 
 namespace {
 
-// The compact display name for a single key code (no modifiers).
 std::string key_display(std::string_view code) {
     if (code.size() == 4 && code.starts_with("Key")) {
         return std::string{code.substr(3)};
