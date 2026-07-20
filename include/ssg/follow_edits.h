@@ -67,8 +67,11 @@ struct FollowEditsDelta {
                            const FollowEditsDelta&) = default;
 };
 
-[[nodiscard]] FollowEditsDelta deriveFollowEditsDelta(
-    const FollowEditsViewState& base, const FollowEditsViewState& target);
+class FollowEditsDeltaCodec {
+public:
+    [[nodiscard]] FollowEditsDelta derive(const FollowEditsViewState& base,
+                                          const FollowEditsViewState& target);
+};
 
 struct FollowEditsFooterProjection {
     std::string mode;

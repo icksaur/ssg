@@ -257,7 +257,7 @@ TEST(commandViewDeltaAndFooterAreComplete) {
     const auto before = model.viewState();
     ASSERT_TRUE(model.pause().accepted());
     const auto after = model.viewState();
-    const auto delta = deriveFollowEditsDelta(before, after);
+    const auto delta = FollowEditsDeltaCodec{}.derive(before, after);
     ASSERT_EQ(delta.baseGeneration, before.generation);
     ASSERT_EQ(delta.generation, after.generation);
     ASSERT_EQ(delta.replacement, after);
