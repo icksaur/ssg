@@ -216,7 +216,7 @@ SessionDelta deriveSessionDelta(SessionSnapshot const& before,
         {shellEqual(old.shell, next.shell)
              ? std::nullopt
              : std::optional{next.shell}},
-        deriveViewportDelta(before.client().viewport,
+        Viewport{}.deriveDelta(before.client().viewport,
                               after.client().viewport),
     };
 }

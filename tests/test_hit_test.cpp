@@ -279,7 +279,7 @@ TEST(paletteRowMapsToItsAbsoluteRankIndex) {
     projection.scrollbarRect = pane.scrollbar;
     projection.firstVisible = 20;
     projection.selected = std::uint32_t{25};
-    projection.scrollbar = ssg::scrollbarMetrics(40, rows, 20);
+    projection.scrollbar = ssg::Viewport{}.scrollbarMetrics(40, rows, 20);
     for (std::uint32_t i = 0; i < rows; ++i) {
         projection.rows.push_back({"cmd-" + std::to_string(20 + i), ""});
     }
@@ -317,7 +317,7 @@ TEST(paletteScrollbarAndEmptyAreaClassifyCorrectly) {
     projection.scrollbarRect = pane.scrollbar;
     projection.firstVisible = 0;
     projection.selected = std::uint32_t{0};
-    projection.scrollbar = ssg::scrollbarMetrics(100, rows, 0);
+    projection.scrollbar = ssg::Viewport{}.scrollbarMetrics(100, rows, 0);
     for (std::uint32_t i = 0; i < rows; ++i) {  // exactly fills the window
         projection.rows.push_back({"cmd-" + std::to_string(i), ""});
     }

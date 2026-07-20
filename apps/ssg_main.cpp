@@ -344,7 +344,7 @@ int main(int argc, char** argv) {
             order.empty() ? std::nullopt
                           : std::optional<std::uint32_t>{
                                 static_cast<std::uint32_t>(paletteSelected)};
-        auto scroll = ssg::computeListScrollView(
+        auto scroll = ssg::Viewport{}.listScrollView(
             static_cast<std::uint32_t>(order.size()), palettePaneRows,
             paletteFirstVisible, selected, /*keep_selection_visible=*/true);
         paletteFirstVisible = scroll.firstVisible;
@@ -355,7 +355,7 @@ int main(int argc, char** argv) {
     auto scrollPalette = [&](std::int64_t delta) {
         if (!paletteOpen) return;
         auto order = ssg::paletteRank(candidates, paletteQuery);
-        auto probe = ssg::computeListScrollView(
+        auto probe = ssg::Viewport{}.listScrollView(
             static_cast<std::uint32_t>(order.size()), palettePaneRows,
             paletteFirstVisible, std::nullopt, /*keep_selection_visible=*/false);
         auto const maximum =

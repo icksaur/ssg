@@ -191,7 +191,7 @@ TreeViewState EditorRuntime::Impl::treeView() const {
             }
         }
     }
-    auto scroll = computeListScrollView(
+    auto scroll = Viewport{}.listScrollView(
         static_cast<std::uint32_t>(provider.nodes.size()),
         lastPanelContentRows, treeFirstVisible, selectedIndex,
         /*keep_selection_visible=*/false);
@@ -219,7 +219,7 @@ void EditorRuntime::Impl::revealTreeSelection() {
         }
     }
     if (!selectedIndex) return;
-    auto scroll = computeListScrollView(
+    auto scroll = Viewport{}.listScrollView(
         static_cast<std::uint32_t>(provider.nodes.size()),
         lastPanelContentRows, treeFirstVisible, selectedIndex,
         /*keep_selection_visible=*/true);
@@ -233,7 +233,7 @@ void EditorRuntime::Impl::scrollTree(std::int64_t rows) {
     // Resolve the current scroll geometry (read-only) to bound the offset, then
     // shift it by `rows`. keep_selection_visible is false: a wheel scroll moves
     // the viewport, not the selection (a later reveal_tree_selection re-snaps).
-    auto scroll = computeListScrollView(
+    auto scroll = Viewport{}.listScrollView(
         static_cast<std::uint32_t>(provider.nodes.size()),
         lastPanelContentRows, treeFirstVisible, std::nullopt,
         /*keep_selection_visible=*/false);

@@ -206,7 +206,7 @@ public:
     [[nodiscard]] ViewportViewState viewportState(
         ViewportDimensions dimensions,
         std::uint32_t requestedFirstVisualRow) const {
-        return computeViewport(allRuns(), dimensions,
+        return Viewport{}.compute(allRuns(), dimensions,
                                 requestedFirstVisualRow);
     }
 
@@ -786,7 +786,7 @@ SelectionNavigationResult applySelectionNavigation(
     // the exact wrapped viewport.
     const auto currentViewport =
         wordWrap ? model.viewportState(viewport, before.firstVisualRow)
-                  : computeViewportUnwrapped(text, viewport,
+                  : Viewport{}.computeUnwrapped(text, viewport,
                                                before.firstVisualRow, 0,
                                                tabWidth);
     std::uint32_t firstVisualRow =
