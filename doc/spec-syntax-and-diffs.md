@@ -568,6 +568,47 @@ Edge/complexity notes:
 
 ## Plan
 
+DEFERRED: app-side diff SOURCE. The library diff/follow machinery (rendering,
+phantom rows, tints, marks, newest-hunk follow, external-diff injection API) is
+built and green, but the ssg APP does not yet wire a diff SOURCE (git working-tree
+or filesystem-watch-vs-baseline). Deferred pending a proper design; today the diff
+subsystem is exercised only by tests. A code review (2026-07-21, branch
+`feat-syntax-diffs` vs master) surfaced findings that live in this deferred
+subsystem — resolve them AS PART OF the diff-source design/wiring, not in
+isolation (their correct fix depends on how diffs get injected):
+
+- MUST — active-diff coherence (`src/DiffModel.cpp` `fileForDocument`):
+  `document.revision != revision` compares the document EDIT-revision against the
+  DiffViewState revision, which are independent counters. On mismatch the overlay
+  silently returns nullopt (no diff shown) with no failing test. The diff-source
+  design MUST define the revision contract: injected diffs carry the exact
+  document revision they were computed against, and a mismatch must be observable
+  (assert/log/dedicated staleness result), never a silent empty. This is the #1
+  correctness item for diff wiring.
+- SHOULD — follow/reveal offsets use `rowProjectionUnwrapped`
+  (`src/FollowEditsModel.cpp:247`, `src/EditorRuntime.cpp:876`), so published
+  follow offsets are wrong when word-wrap is on. Use the wrap-aware projection for
+  reveal.
+- SHOULD — next/previous hunk uses the ACTIVE document's caret line even when the
+  command payload targets a different diff file (`src/runtime/navigation.cpp:134`).
+  Use the targeted file's own current position, not the active caret.
+- NIT — phantom removed-row text strips a trailing `\n` but not `\r`
+  (`src/Viewport.cpp` `lineText`), so CRLF baselines can show a stray carriage
+  return. Strip both.
+
+Review areas confirmed CLEAN: tree-sitter integration + query cache lifetime/
+thread-safety; color derivation + readability gate + precedence (SearchMatch >
+Selection > DiffWord > DiffRow) in renderer and encoder; protocol/snapshot
+additive symmetric round-trip; external-diff burst atomicity; single-owner
+row-projection usage across consumers.
+
+OPEN (live, not diff-deferred) — per-document `syntaxModels` are never evicted on
+document close (`src/EditorRuntime.cpp` `syntaxFor`), mirroring the existing
+`histories` map which also persists for the session. Syntax state is heavier than
+history, so a long session accumulates parse view-state for closed documents.
+Decision pending: evict syntax (and history?) on tab close, or keep session-
+persistent. Consistent-with-histories = keep; memory-conscious = evict both.
+
 Ordered; each step green before the next. Codec/round-trip work lands IN the step
 that changes a shipped state shape (not deferred to a trailing step).
 
