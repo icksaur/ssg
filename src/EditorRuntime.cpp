@@ -92,6 +92,8 @@ ThemeSnapshot defaultTheme() {
     syntax(SyntaxScope::OperatorToken, 5);
     syntax(SyntaxScope::Punctuation, 14);
     syntax(SyntaxScope::Invalid, 6);
+    snapshot.diffTints = deriveDiffTints(
+        snapshot.palette, snapshot.semanticIndices, snapshot.syntaxIndices);
     return snapshot;
 }
 

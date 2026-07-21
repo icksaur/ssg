@@ -35,21 +35,31 @@ struct GrammarSpec {
     std::array<std::string_view, 4> ids;
     const TSLanguage* (*language)();
     std::string_view queryPath;
+    // Highlight query for the base grammar this one inherits (tree-sitter's
+    // "; inherits:" directive, which ts_query_new does not process). Its rules
+    // are prepended so this grammar's specific rules override them. Empty = none.
+    std::string_view inheritsQueryPath;
 };
 
 const std::array kGrammars{
     GrammarSpec{{"c", "", "", ""}, tree_sitter_c,
-                SSG_TREESITTER_VENDOR_DIR "/tree-sitter-c/queries/highlights.scm"},
+                SSG_TREESITTER_VENDOR_DIR "/tree-sitter-c/queries/highlights.scm",
+                ""},
     GrammarSpec{{"cpp", "c++", "cc", ""}, tree_sitter_cpp,
-                SSG_TREESITTER_VENDOR_DIR "/tree-sitter-cpp/queries/highlights.scm"},
+                SSG_TREESITTER_VENDOR_DIR "/tree-sitter-cpp/queries/highlights.scm",
+                SSG_TREESITTER_VENDOR_DIR "/tree-sitter-c/queries/highlights.scm"},
     GrammarSpec{{"javascript", "js", "", ""}, tree_sitter_javascript,
-                SSG_TREESITTER_VENDOR_DIR "/tree-sitter-javascript/queries/highlights.scm"},
+                SSG_TREESITTER_VENDOR_DIR "/tree-sitter-javascript/queries/highlights.scm",
+                ""},
     GrammarSpec{{"typescript", "ts", "", ""}, tree_sitter_typescript,
-                SSG_TREESITTER_VENDOR_DIR "/tree-sitter-typescript/queries/highlights.scm"},
+                SSG_TREESITTER_VENDOR_DIR "/tree-sitter-typescript/queries/highlights.scm",
+                SSG_TREESITTER_VENDOR_DIR "/tree-sitter-javascript/queries/highlights.scm"},
     GrammarSpec{{"csharp", "c#", "cs", ""}, tree_sitter_c_sharp,
-                SSG_TREESITTER_VENDOR_DIR "/tree-sitter-c-sharp/queries/highlights.scm"},
+                SSG_TREESITTER_VENDOR_DIR "/tree-sitter-c-sharp/queries/highlights.scm",
+                ""},
     GrammarSpec{{"lua", "", "", ""}, tree_sitter_lua,
-                SSG_TREESITTER_VENDOR_DIR "/tree-sitter-lua/queries/highlights.scm"},
+                SSG_TREESITTER_VENDOR_DIR "/tree-sitter-lua/queries/highlights.scm",
+                ""},
 };
 
 const GrammarSpec* grammarFor(const LanguageId& language) {
@@ -85,7 +95,15 @@ const TSQuery* queryFor(const GrammarSpec& grammar) {
         return nullptr;
     }
 
-    const auto querySource = readFile(grammar.queryPath);
+    const auto querySource = [&] {
+        std::string source;
+        if (!grammar.inheritsQueryPath.empty()) {
+            source += readFile(grammar.inheritsQueryPath);
+            source += '\n';
+        }
+        source += readFile(grammar.queryPath);
+        return source;
+    }();
     if (querySource.empty()) {
         failedQueries.insert(queryPath);
         return nullptr;

@@ -206,6 +206,16 @@ struct ThemeSnapshot {
 [[nodiscard]] std::string_view syntaxScopeName(SyntaxScope scope);
 [[nodiscard]] std::optional<SyntaxScope> syntaxScopeFromName(std::string_view name);
 
+// Derive the six diff tint colors from a theme's own palette + role/scope
+// mappings (GitAdded/Deleted/Modified hue anchors blended toward Background,
+// contrast- and distinctness-gated). Exposed so a hand-built ThemeSnapshot (e.g.
+// the runtime's defaultTheme) populates diffTints the same way Theme::snapshot()
+// does; without it diffTints defaults to zero (black).
+[[nodiscard]] DiffTints deriveDiffTints(
+    std::array<SrgbColor, kThemePaletteSize> const& palette,
+    std::array<std::uint8_t, kSemanticRoleCount> const& semanticIndices,
+    std::array<std::uint8_t, kSyntaxScopeCount> const& syntaxIndices) noexcept;
+
 class Theme {
 public:
     Theme(std::string name,
