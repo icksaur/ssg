@@ -6,10 +6,14 @@
 #include <cstdint>
 #include <optional>
 #include <span>
+#include <string>
 #include <string_view>
+#include <variant>
 #include <vector>
 
 namespace ssg {
+
+struct DiffFileView;
 
 struct ViewportDimensions {
     uint32_t columns;
@@ -35,6 +39,45 @@ struct VisualRow {
     uint32_t endByteOffset;
 
     bool operator==(const VisualRow&) const noexcept = default;
+};
+
+struct RealRow {
+    uint32_t bufferLine;
+    uint32_t bufferVisualRow;
+    uint32_t startByteOffset = 0;
+    uint32_t endByteOffset = 0;
+    uint32_t startCell = 0;
+    uint32_t endCell = 0;
+
+    bool operator==(const RealRow&) const noexcept = default;
+};
+
+struct PhantomRow {
+    uint32_t baselineLine;
+    std::string text;
+    uint32_t followingByteOffset;
+
+    bool operator==(const PhantomRow&) const noexcept = default;
+};
+
+using ProjectedRow = std::variant<RealRow, PhantomRow>;
+
+class RowProjection {
+public:
+    explicit RowProjection(std::vector<ProjectedRow> rows);
+
+    [[nodiscard]] std::span<const ProjectedRow> rows() const noexcept;
+    [[nodiscard]] const ProjectedRow& row(uint32_t visualRow) const;
+    [[nodiscard]] uint32_t totalRows() const noexcept;
+    [[nodiscard]] uint32_t visualRowForReal(uint32_t bufferVisualRow) const;
+    [[nodiscard]] uint32_t visualRowForBufferLine(uint32_t bufferLine) const;
+    [[nodiscard]] uint32_t visualRowForPosition(
+        const DocumentPosition& position) const;
+    [[nodiscard]] uint32_t movedRealRow(uint32_t visualRow,
+                                        int64_t visualDistance) const;
+
+private:
+    std::vector<ProjectedRow> rows_;
 };
 
 struct CellHitTarget {
@@ -82,8 +125,12 @@ struct ViewportViewState {
     uint32_t firstVisualColumn;
     uint32_t totalVisualRows;
     std::vector<VisualRow> visibleRows;
+    std::vector<ProjectedRow> rowProjection;
     std::vector<CellHitTarget> hitTargets;
     ScrollbarMetrics scrollbar;
+
+    [[nodiscard]] ProjectedRow projectedRow(uint32_t viewportRow) const;
+    [[nodiscard]] uint32_t editableOffset(uint32_t viewportRow) const;
 
     bool operator==(const ViewportViewState&) const noexcept = default;
 };
@@ -126,7 +173,8 @@ public:
     [[nodiscard]] ViewportViewState compute(
         std::span<const CellRun> logicalLines,
         ViewportDimensions dimensions,
-        uint32_t requestedFirstVisualRow = 0) const;
+        uint32_t requestedFirstVisualRow = 0,
+        const DiffFileView* diff = nullptr) const;
 
     // Word-wrap-OFF viewport projection.  Builds the SAME ViewportViewState shape as
     // `compute` for a NON-wrapping document, but in O(visible rows) grapheme
@@ -143,13 +191,24 @@ public:
         ViewportDimensions dimensions,
         uint32_t requestedFirstVisualRow,
         uint32_t requestedFirstVisualColumn,
-        int tabWidth) const;
+        int tabWidth,
+        const DiffFileView* diff = nullptr) const;
+
+    [[nodiscard]] RowProjection rowProjection(
+        std::span<const CellRun> logicalLines,
+        uint32_t columns,
+        const DiffFileView& diff) const;
+
+    [[nodiscard]] RowProjection rowProjectionUnwrapped(
+        std::string_view documentText,
+        const DiffFileView& diff) const;
 
     [[nodiscard]] ViewportViewState scrollBy(
         std::span<const CellRun> logicalLines,
         ViewportDimensions dimensions,
         uint32_t currentFirstVisualRow,
-        int64_t rowDelta) const;
+        int64_t rowDelta,
+        const DiffFileView* diff = nullptr) const;
 
     [[nodiscard]] ViewportDelta deriveDelta(
         const ViewportViewState& previous,

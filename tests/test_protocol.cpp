@@ -99,6 +99,7 @@ ssg::ViewportViewState clientView(std::uint32_t firstRow) {
             firstRow + 8,
             {},
             {},
+            {},
             {firstRow + 8, 8, firstRow, firstRow, 0, 8}};
 }
 
@@ -478,6 +479,52 @@ TEST(sessionDeltaRoundTripsAndReplayMatchesTheDecodedDelta) {
     ASSERT_TRUE(replayed.accepted());
     ASSERT_TRUE(replayed.snapshot.has_value());
     ASSERT_EQ(*replayed.snapshot, after);
+}
+
+TEST(phantomViewportProjectionRoundTripsThroughSnapshotAndDelta) {
+    auto projectedView = clientView(0);
+    projectedView.visibleRows = {
+        ssg::VisualRow{1, 0, 0, ssg::CellIndex{0}, 7, 7, 4}};
+    projectedView.rowProjection = {
+        ssg::PhantomRow{3, "removed", 4}};
+    projectedView.totalVisualRows = 4;
+    projectedView.scrollbar.totalRows = 4;
+
+    auto before = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{4}, {},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(0), sections(ssg::Revision{4}, "text"));
+    auto after = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{5}, {},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, projectedView,
+        sections(ssg::Revision{5}, "text"));
+
+    const auto snapshotDecoded = ssg::ProtocolCodec{}.decodeSessionSnapshot(
+        ssg::ProtocolCodec{}.encodeSessionSnapshot(after));
+    ASSERT_TRUE(snapshotDecoded.accepted());
+    ASSERT_TRUE(snapshotDecoded.snapshot.has_value());
+    if (snapshotDecoded.snapshot) {
+        ASSERT_EQ(snapshotDecoded.snapshot->client().viewport.rowProjection,
+                  projectedView.rowProjection);
+    }
+
+    const auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, after);
+    const auto deltaDecoded = ssg::ProtocolCodec{}.decodeSessionDelta(
+        ssg::ProtocolCodec{}.encodeSessionDelta(delta));
+    ASSERT_TRUE(deltaDecoded.accepted());
+    ASSERT_TRUE(deltaDecoded.delta.has_value());
+    if (!deltaDecoded.delta) return;
+    auto replayed =
+        ssg::SessionSnapshotCodec{}.replay(before, *deltaDecoded.delta);
+    ASSERT_TRUE(replayed.accepted());
+    ASSERT_TRUE(replayed.snapshot.has_value());
+    if (replayed.snapshot) {
+        ASSERT_EQ(replayed.snapshot->client().viewport.rowProjection,
+                  projectedView.rowProjection);
+    }
 }
 
 TEST(twoClientCapabilityAndViewportIsolationSurvivesTheWire) {
@@ -1057,6 +1104,7 @@ int main() {
     RUN(decodeCommandRequestMapsDomainInvariantFailuresToMalformed);
     RUN(sessionSnapshotRoundTripsThroughTheWire);
     RUN(sessionDeltaRoundTripsAndReplayMatchesTheDecodedDelta);
+    RUN(phantomViewportProjectionRoundTripsThroughSnapshotAndDelta);
     RUN(twoClientCapabilityAndViewportIsolationSurvivesTheWire);
     RUN(sessionSnapshotRoundTripsTreeScrollFields);
     RUN(clipboardRequestRoundTripsThroughTheWire);

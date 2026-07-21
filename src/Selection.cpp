@@ -147,6 +147,38 @@ public:
         return positionForWrappedCell(rows[target], desiredCell);
     }
 
+    [[nodiscard]] DocumentPosition verticalProjected(
+        const DocumentPosition& position, bool down, std::size_t rowCount,
+        CellIndex desiredCell, std::uint32_t columns,
+        const RowProjection& projection) const {
+        const auto visualRow = projection.visualRowForPosition(position);
+        const auto distance = static_cast<int64_t>(std::min<std::size_t>(
+            rowCount,
+            static_cast<std::size_t>(std::numeric_limits<int64_t>::max())));
+        const auto targetVisualRow =
+            projection.movedRealRow(visualRow, down ? distance : -distance);
+        const auto* target =
+            std::get_if<RealRow>(&projection.row(targetVisualRow));
+        if (target == nullptr || targetVisualRow == visualRow) {
+            const auto& current =
+                std::get<RealRow>(projection.row(visualRow));
+            return *resolve(ByteOffset{
+                down ? current.endByteOffset : current.startByteOffset});
+        }
+        if (columns == kNoWrap) {
+            return positionForCell(target->bufferLine, desiredCell);
+        }
+        return positionForProjectedCell(*target, desiredCell);
+    }
+
+    [[nodiscard]] CellIndex projectedVisualColumn(
+        const DocumentPosition& position,
+        const RowProjection& projection) const {
+        const auto& real = std::get<RealRow>(
+            projection.row(projection.visualRowForPosition(position)));
+        return CellIndex{position.cell.value() - real.startCell};
+    }
+
     [[nodiscard]] CellIndex visualColumn(
         const DocumentPosition& position, std::uint32_t columns) const {
         if (columns == kNoWrap) return position.cell;
@@ -205,9 +237,18 @@ public:
 
     [[nodiscard]] ViewportViewState viewportState(
         ViewportDimensions dimensions,
-        std::uint32_t requestedFirstVisualRow) const {
+        std::uint32_t requestedFirstVisualRow,
+        const DiffFileView* diff = nullptr) const {
         return Viewport{}.compute(allRuns(), dimensions,
-                                requestedFirstVisualRow);
+                                  requestedFirstVisualRow, diff);
+    }
+
+    [[nodiscard]] RowProjection rowProjection(
+        std::uint32_t columns, const DiffFileView& diff) const {
+        if (columns == kNoWrap) {
+            return Viewport{}.rowProjectionUnwrapped(text_, diff);
+        }
+        return Viewport{}.rowProjection(allRuns(), columns, diff);
     }
 
     [[nodiscard]] std::uint32_t visualRow(
@@ -268,6 +309,24 @@ private:
             }
         }
         return *chosen;
+    }
+
+    [[nodiscard]] DocumentPosition positionForProjectedCell(
+        const RealRow& row, CellIndex desiredCell) const {
+        const auto target =
+            std::min<uint64_t>(row.startCell + desiredCell.value(),
+                               row.endCell);
+        const auto& boundaries = lineData(row.bufferLine).line.boundaries;
+        const DocumentPosition* chosen = nullptr;
+        for (const auto& boundary : boundaries) {
+            const auto byteOffset = boundary.byteOffset.value();
+            if (byteOffset < row.startByteOffset) continue;
+            if (byteOffset > row.endByteOffset || boundary.cell.value() > target) {
+                break;
+            }
+            chosen = &boundary;
+        }
+        return chosen != nullptr ? *chosen : boundaries.front();
     }
 
     [[nodiscard]] std::vector<WrappedRow> wrappedRows(
@@ -472,57 +531,36 @@ bool isValidPosition(const TextModel& model,
 std::uint32_t revealedFirstRow(const TextModel& model,
                                  const SelectionViewState& state,
                                  ViewportDimensions dimensions,
-                                 bool center, bool wordWrap) {
-    if (wordWrap) {
-        const auto viewport =
-            model.viewportState(dimensions, state.firstVisualRow);
-        const auto target =
-            model.visualRow(state.selections.primary().active,
-                             dimensions.columns);
-        const auto maximum = viewport.scrollbar.maximumFirstRow;
-        if (center) {
-            const auto half = dimensions.rows / 2;
-            const auto requested = target > half ? target - half : 0;
-            return std::min(requested, maximum);
-        }
-        if (target < viewport.firstVisualRow) {
-            return target;
-        }
-        const auto visibleEnd =
-            static_cast<std::uint64_t>(viewport.firstVisualRow) +
-            viewport.visibleRows.size();
-        if (target >= visibleEnd) {
-            const auto requested =
-                target - static_cast<std::uint32_t>(
-                             viewport.visibleRows.size()) +
-                1;
-            return std::min(requested, maximum);
-        }
-        return viewport.firstVisualRow;
-    }
-
-    // Word wrap OFF (M12 VP-H): one logical line is one visual row, so the caret's
-    // visual row is its logical line index and the total is the line count — no
-    // O(document) wrapped counting.
-    const auto total = static_cast<std::uint32_t>(model.lineCount());
-    const std::uint32_t maximum =
-        total > dimensions.rows ? total - dimensions.rows : 0;
-    const std::uint32_t currentFirst =
-        std::min(state.firstVisualRow, maximum);
-    const auto target = static_cast<std::uint32_t>(
-        state.selections.primary().active.line.value());
+                                 bool center, bool wordWrap,
+                                 const ViewportViewState& viewport,
+                                 const RowProjection* projection) {
+    const auto columns =
+        wordWrap ? dimensions.columns
+                 : std::numeric_limits<std::uint32_t>::max();
+    const auto target =
+        projection == nullptr
+            ? model.visualRow(state.selections.primary().active, columns)
+            : projection->visualRowForPosition(
+                  state.selections.primary().active);
+    const auto maximum = viewport.scrollbar.maximumFirstRow;
     if (center) {
         const auto half = dimensions.rows / 2;
         const auto requested = target > half ? target - half : 0;
         return std::min(requested, maximum);
     }
-    if (target < currentFirst) {
+    if (target < viewport.firstVisualRow) {
         return target;
     }
-    if (target >= currentFirst + dimensions.rows) {
-        return std::min(target - dimensions.rows + 1, maximum);
+    const auto visibleEnd =
+        static_cast<std::uint64_t>(viewport.firstVisualRow) +
+        viewport.visibleRows.size();
+    if (target >= visibleEnd) {
+        const auto requested =
+            target - static_cast<std::uint32_t>(viewport.visibleRows.size()) +
+            1;
+        return std::min(requested, maximum);
     }
-    return currentFirst;
+    return viewport.firstVisualRow;
 }
 
 // The horizontal scroll offset (word wrap OFF only) that keeps the primary
@@ -762,7 +800,7 @@ SelectionNavigationResult SelectionNavigator::apply(
     SelectionCommand command, ViewportDimensions viewport,
     SelectionCommandArguments arguments,
     std::span<const BracketPair> bracketPairs, int tabWidth,
-    bool wordWrap) const {
+    bool wordWrap, const DiffFileView* diff) const {
     if (tabWidth < 1 || tabWidth > 16) {
         return rejected(SelectionNavigationError::InvalidTabWidth,
                         "tab width must be between 1 and 16");
@@ -786,10 +824,15 @@ SelectionNavigationResult SelectionNavigator::apply(
     // this does NOT segment the whole document (M12 VP-2b); the wrap-ON path keeps
     // the exact wrapped viewport.
     const auto currentViewport =
-        wordWrap ? model.viewportState(viewport, before.firstVisualRow)
+        wordWrap ? model.viewportState(viewport, before.firstVisualRow, diff)
                   : Viewport{}.computeUnwrapped(text, viewport,
                                                before.firstVisualRow, 0,
-                                               tabWidth);
+                                               tabWidth, diff);
+    auto rowProjection =
+        diff == nullptr
+            ? std::optional<RowProjection>{}
+            : std::optional<RowProjection>{
+                  model.rowProjection(navColumns, *diff)};
     std::uint32_t firstVisualRow =
         currentViewport.firstVisualRow;
 
@@ -884,17 +927,28 @@ SelectionNavigationResult SelectionNavigator::apply(
             const auto desired =
                 index + 1 == selections.size() && before.desiredCell
                     ? *before.desiredCell
-                    : model.visualColumn(origin, navColumns);
-            const auto destination =
-                model.verticalVisual(origin, down, count, desired,
-                                      navColumns);
+                    : rowProjection
+                          ? model.projectedVisualColumn(origin, *rowProjection)
+                          : model.visualColumn(origin, navColumns);
+            const auto destination = rowProjection
+                                         ? model.verticalProjected(
+                                               origin, down, count, desired,
+                                               navColumns, *rowProjection)
+                                         : model.verticalVisual(
+                                               origin, down, count, desired,
+                                               navColumns);
             selection = Selection{destination, destination};
             if (index + 1 == selections.size()) {
                 primaryDesired =
-                    model.visualRow(destination, navColumns) ==
-                            model.visualRow(origin, navColumns)
-                        ? model.visualColumn(destination,
-                                              navColumns)
+                    (rowProjection
+                         ? rowProjection->visualRowForPosition(destination) ==
+                               rowProjection->visualRowForPosition(origin)
+                         : model.visualRow(destination, navColumns) ==
+                               model.visualRow(origin, navColumns))
+                        ? (rowProjection
+                               ? model.projectedVisualColumn(destination,
+                                                            *rowProjection)
+                               : model.visualColumn(destination, navColumns))
                         : desired;
             }
         }
@@ -1000,17 +1054,28 @@ SelectionNavigationResult SelectionNavigator::apply(
             const auto desired =
                 index + 1 == selections.size() && before.desiredCell
                     ? *before.desiredCell
-                    : model.visualColumn(origin, navColumns);
+                    : rowProjection
+                          ? model.projectedVisualColumn(origin, *rowProjection)
+                          : model.visualColumn(origin, navColumns);
             selection.active =
-                model.verticalVisual(origin, down, count, desired,
-                                      navColumns);
+                rowProjection
+                    ? model.verticalProjected(origin, down, count, desired,
+                                              navColumns, *rowProjection)
+                    : model.verticalVisual(origin, down, count, desired,
+                                           navColumns);
             if (index + 1 == selections.size()) {
                 primaryDesired =
-                    model.visualRow(selection.active,
-                                     navColumns) ==
-                            model.visualRow(origin, navColumns)
-                        ? model.visualColumn(selection.active,
-                                              navColumns)
+                    (rowProjection
+                         ? rowProjection->visualRowForPosition(
+                               selection.active) ==
+                               rowProjection->visualRowForPosition(origin)
+                         : model.visualRow(selection.active, navColumns) ==
+                               model.visualRow(origin, navColumns))
+                        ? (rowProjection
+                               ? model.projectedVisualColumn(selection.active,
+                                                            *rowProjection)
+                               : model.visualColumn(selection.active,
+                                                    navColumns))
                         : desired;
             }
         }
@@ -1174,7 +1239,8 @@ SelectionNavigationResult SelectionNavigator::apply(
         before.firstVisualColumn, desiredCell};
     after.firstVisualRow = revealedFirstRow(
         model, after, viewport,
-        command == SelectionCommand::ViewCenterCaret, wordWrap);
+        command == SelectionCommand::ViewCenterCaret, wordWrap,
+        currentViewport, rowProjection ? &*rowProjection : nullptr);
     after.firstVisualColumn =
         revealedFirstColumn(after, viewport, wordWrap);
     return accepted(before, std::move(after));

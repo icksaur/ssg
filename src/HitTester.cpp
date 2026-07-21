@@ -48,13 +48,13 @@ RegionHit editorHit(SessionSnapshot const& snapshot, Rect const& content,
     // clicking/dragging below the text reaches the last line. An empty viewport
     // (no visible rows) has nowhere to place the caret -> none.
     if (viewport.visibleRows.empty()) return {};
-    auto const& targetRow =
+    const auto targetRow =
         viewportRow < viewport.visibleRows.size()
-            ? viewport.visibleRows[viewportRow]
-            : viewport.visibleRows.back();
+            ? viewportRow
+            : static_cast<std::uint32_t>(viewport.visibleRows.size() - 1);
     RegionHit hit;
     hit.region = HitRegion::Editor;
-    hit.byteOffset = targetRow.endByteOffset;
+    hit.byteOffset = viewport.editableOffset(targetRow);
     hit.byteLen = 0;
     return hit;
 }

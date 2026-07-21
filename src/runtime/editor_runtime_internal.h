@@ -166,6 +166,7 @@ struct EditorRuntime::Impl final : CommandServices,
     [[nodiscard]] Document* activeDocument();
     [[nodiscard]] DocumentHistory& historyFor(FileDocumentId document);
     [[nodiscard]] std::optional<WorkspaceDocumentState> activeWorkspaceState() const;
+    [[nodiscard]] std::optional<DiffFileView> activeDiffFile() const;
     [[nodiscard]] std::string activeText() const;
     void resetSelectionForActiveDocument();
     void clampSelectionToActiveDocument();

@@ -18,6 +18,10 @@ DiffFileView changedFile(std::string id, std::filesystem::path path,
     DiffFileView view{DiffFileId{std::move(id)}};
     view.path = std::move(path);
     view.deleted = deleted;
+    for (std::size_t line = 0; line < newestLine; ++line) {
+        view.currentContent += "line\n";
+    }
+    if (!deleted) view.currentContent += "new\n";
     view.hunks.push_back(
         {.baselineStart = newestLine,
          .targetStart = newestLine,
@@ -25,6 +29,23 @@ DiffFileView changedFile(std::string id, std::filesystem::path path,
          .targetLines = deleted ? std::vector<std::string>{}
                                  : std::vector<std::string>{"new\n"}});
     return view;
+}
+
+TEST(followOffsetCountsPhantomRowsThroughViewportProjection) {
+    DiffFileView file{DiffFileId{"phantom"}};
+    file.path = "phantom.txt";
+    file.currentContent = "zero\none\ntwo\nthree";
+    file.hunks.push_back({.baselineStart = 2,
+                          .targetStart = 2,
+                          .baselineLines = {"removed\n"},
+                          .targetLines = {}});
+
+    FollowEditsModel model;
+    ASSERT_TRUE(
+        model.attachClient(ClientId{1}, ViewportDimensions{20, 2}).accepted());
+    ASSERT_TRUE(model.acceptExternalChange(file, Revision{1}).accepted());
+    ASSERT_EQ(model.viewState().clients.front().offset.firstRow,
+              std::uint64_t{2});
 }
 
 DiffViewState currentDiff(std::initializer_list<DiffFileView> files,
@@ -280,6 +301,7 @@ TEST(configurationRejectsInvalidQueueCapacity) {
 
 int main() {
     RUN(independentTransitionTableCoversSharedFollowPolicy);
+    RUN(followOffsetCountsPhantomRowsThroughViewportProjection);
     RUN(dirtyConflictUsesDiskDiffTargetWithoutBufferPolicy);
     RUN(queueIsBoundedAndSameFileReplacesInPlace);
     RUN(resumeResolvesRenameDeleteAndSkipsRevertedOrMissingTargets);

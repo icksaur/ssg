@@ -1296,6 +1296,8 @@ ProtocolValue toValue(ShellSectionDelta const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<ShellSectionDelta>& out);
 ProtocolValue toValue(VisualRow const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<VisualRow>& out);
+ProtocolValue toValue(ProjectedRow const& value);
+bool decodePresent(ProtocolValue const& value, std::optional<ProjectedRow>& out);
 ProtocolValue toValue(CellHitTarget const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<CellHitTarget>& out);
 ProtocolValue toValue(ScrollbarMetrics const& value);
@@ -3462,6 +3464,69 @@ bool decodePresent(ProtocolValue const& value, std::optional<VisualRow>& out) {
     return true;
 }
 
+ProtocolValue toValue(ProjectedRow const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    if (const auto* real = std::get_if<RealRow>(&value)) {
+        fields.emplace_back("kind", toValue(std::string{"real"}));
+        fields.emplace_back("buffer_line", toValue(real->bufferLine));
+        fields.emplace_back("buffer_visual_row",
+                            toValue(real->bufferVisualRow));
+        fields.emplace_back("start_byte_offset",
+                            toValue(real->startByteOffset));
+        fields.emplace_back("end_byte_offset", toValue(real->endByteOffset));
+        fields.emplace_back("start_cell", toValue(real->startCell));
+        fields.emplace_back("end_cell", toValue(real->endCell));
+    } else {
+        const auto& phantom = std::get<PhantomRow>(value);
+        fields.emplace_back("kind", toValue(std::string{"phantom"}));
+        fields.emplace_back("baseline_line", toValue(phantom.baselineLine));
+        fields.emplace_back("text", toValue(phantom.text));
+        fields.emplace_back("following_byte_offset",
+                            toValue(phantom.followingByteOffset));
+    }
+    return ProtocolValue::makeObject(std::move(fields));
+}
+
+bool decodePresent(ProtocolValue const& value,
+                   std::optional<ProjectedRow>& out) {
+    auto kind = requireField<std::string>(value.field("kind"));
+    if (!kind) return false;
+    if (*kind == "real") {
+        auto bufferLine =
+            requireField<std::uint32_t>(value.field("buffer_line"));
+        auto bufferVisualRow =
+            requireField<std::uint32_t>(value.field("buffer_visual_row"));
+        auto startByteOffset =
+            requireField<std::uint32_t>(value.field("start_byte_offset"));
+        auto endByteOffset =
+            requireField<std::uint32_t>(value.field("end_byte_offset"));
+        auto startCell =
+            requireField<std::uint32_t>(value.field("start_cell"));
+        auto endCell =
+            requireField<std::uint32_t>(value.field("end_cell"));
+        if (!bufferLine || !bufferVisualRow || !startByteOffset ||
+            !endByteOffset || !startCell || !endCell) {
+            return false;
+        }
+        out.emplace(RealRow{
+            *bufferLine, *bufferVisualRow, *startByteOffset, *endByteOffset,
+            *startCell, *endCell});
+        return true;
+    }
+    if (*kind == "phantom") {
+        auto baselineLine =
+            requireField<std::uint32_t>(value.field("baseline_line"));
+        auto text = requireField<std::string>(value.field("text"));
+        auto followingByteOffset = requireField<std::uint32_t>(
+            value.field("following_byte_offset"));
+        if (!baselineLine || !text || !followingByteOffset) return false;
+        out.emplace(PhantomRow{
+            *baselineLine, std::move(*text), *followingByteOffset});
+        return true;
+    }
+    return false;
+}
+
 ProtocolValue toValue(CellHitTarget const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("viewport_row", toValue(value.viewportRow));
@@ -3525,6 +3590,7 @@ ProtocolValue toValue(ViewportViewState const& value) {
     fields.emplace_back("first_visual_column", toValue(value.firstVisualColumn));
     fields.emplace_back("total_visual_rows", toValue(value.totalVisualRows));
     fields.emplace_back("visible_rows", toValue(value.visibleRows));
+    fields.emplace_back("row_projection", toValue(value.rowProjection));
     fields.emplace_back("hit_targets", toValue(value.hitTargets));
     fields.emplace_back("scrollbar", toValue(value.scrollbar));
     return ProtocolValue::makeObject(std::move(fields));
@@ -3537,15 +3603,19 @@ bool decodePresent(ProtocolValue const& value, std::optional<ViewportViewState>&
     auto firstVisualColumn = requireField<std::uint32_t>(value.field("first_visual_column"));
     auto totalVisualRows = requireField<std::uint32_t>(value.field("total_visual_rows"));
     auto visibleRows = requireField<std::vector<VisualRow>>(value.field("visible_rows"));
+    auto rowProjection =
+        requireField<std::vector<ProjectedRow>>(value.field("row_projection"));
     auto hitTargets = requireField<std::vector<CellHitTarget>>(value.field("hit_targets"));
     auto scrollbar = requireField<ScrollbarMetrics>(value.field("scrollbar"));
     if (!dimensions || !firstVisualRow || !firstVisualColumn ||
-        !totalVisualRows || !visibleRows || !hitTargets || !scrollbar) {
+        !totalVisualRows || !visibleRows || !rowProjection || !hitTargets ||
+        !scrollbar) {
         return false;
     }
     out.emplace(ViewportViewState{*dimensions, *firstVisualRow,
                                   *firstVisualColumn, *totalVisualRows,
-                                  *visibleRows, *hitTargets, *scrollbar});
+                                  *visibleRows, *rowProjection, *hitTargets,
+                                  *scrollbar});
     return true;
 }
 
