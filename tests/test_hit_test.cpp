@@ -217,6 +217,75 @@ TEST(clickPastEolIntegrationLandsCaretAtLineEnd) {
               std::uint64_t{8});
 }
 
+TEST(phantomClickAndDragResolveOnlyRealBufferOffsets) {
+    auto root = uniqueRoot();
+    const std::string text = "one\ntwo\nthree";
+    std::ofstream{root / "doc.txt"} << text;
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(
+        ssg::ClientId{1},
+        {"file.open", runtime->revision(), std::string{"doc.txt"}});
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+
+    ssg::DiffFileView diff{ssg::DiffFileId{"doc.txt"}};
+    diff.currentContent = text;
+    diff.hunks.push_back({.baselineStart = 1,
+                          .targetStart = 1,
+                          .baselineLines = {"removed\n"},
+                          .targetLines = {}});
+    const auto content = snapshot->sections().shell.panes.front().content;
+    auto client = snapshot->client();
+    client.viewport = ssg::Viewport{}.computeUnwrapped(
+        text,
+        ssg::ViewportDimensions{
+            static_cast<std::uint32_t>(content.width),
+            static_cast<std::uint32_t>(content.height)},
+        0, 0, 4, &diff);
+    auto sections = snapshot->sections();
+    ssg::SessionSnapshot projected{
+        snapshot->revision(), snapshot->topology(), std::move(client),
+        std::move(sections)};
+
+    const auto phantom =
+        ssg::HitTester{projected}.at(content.x + 5, content.y + 1);
+    ASSERT_EQ(phantom.region, ssg::HitRegion::Editor);
+    ASSERT_EQ(phantom.byteOffset, std::uint32_t{4});
+    ASSERT_EQ(phantom.byteLen, std::uint32_t{0});
+
+    const auto anchor =
+        ssg::SelectionNavigator::resolvePosition(text, ssg::ByteOffset{1});
+    const auto active = ssg::SelectionNavigator::resolvePosition(
+        text, ssg::ByteOffset{phantom.byteOffset});
+    ASSERT_TRUE(anchor.has_value());
+    ASSERT_TRUE(active.has_value());
+    if (!anchor || !active) return;
+    auto before = ssg::SelectionViewState{
+        ssg::SelectionSet{{ssg::Selection{*anchor, *anchor}}}, 0, 0,
+        std::nullopt};
+    auto result = ssg::SelectionNavigator{}.apply(
+        text, before, ssg::SelectionCommand::SelectSetRange,
+        ssg::ViewportDimensions{20, 4},
+        ssg::SelectionCommandArguments{
+            std::nullopt, ssg::Selection{*anchor, *active}},
+        {}, 4, true, &diff);
+    ASSERT_TRUE(result.accepted());
+    ASSERT_TRUE(result.delta.replacement.has_value());
+    if (result.delta.replacement) {
+        const auto& selected =
+            result.delta.replacement->selections.primary();
+        ASSERT_EQ(selected.anchor.byteOffset, ssg::ByteOffset{1});
+        ASSERT_EQ(selected.active.byteOffset, ssg::ByteOffset{4});
+        ASSERT_EQ(text.substr(selected.anchor.byteOffset.value(),
+                              selected.active.byteOffset.value() -
+                                  selected.anchor.byteOffset.value()),
+                  "ne\n");
+    }
+}
+
 TEST(panelRowMapsToItsTreeNodeId) {
     auto root = uniqueRoot();
     for (int i = 0; i < 6; ++i) {
@@ -432,6 +501,7 @@ int main() {
     RUN(editorCellMapsToItsDocumentByteOffset);
     RUN(clickPastEolBlankLineAndBelowDocumentClampToLineEnd);
     RUN(clickPastEolIntegrationLandsCaretAtLineEnd);
+    RUN(phantomClickAndDragResolveOnlyRealBufferOffsets);
     RUN(panelRowMapsToItsTreeNodeId);
     RUN(paletteRowMapsToItsAbsoluteRankIndex);
     RUN(paletteScrollbarAndEmptyAreaClassifyCorrectly);

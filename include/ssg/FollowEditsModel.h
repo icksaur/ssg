@@ -151,11 +151,12 @@ public:
 private:
     [[nodiscard]] FollowTarget targetFor(const DiffFileView& file,
                                           Revision sourceRevision) const;
-    void activate(const FollowTarget& target);
+    void activate(const FollowTarget& target, const DiffFileView& file);
     void advanceGeneration() noexcept;
 
     FollowEditsConfig config_;
     FollowEditsViewState state_;
+    std::optional<RowProjection> activeProjection_;
     Revision latestSourceRevision_{0};
 };
 

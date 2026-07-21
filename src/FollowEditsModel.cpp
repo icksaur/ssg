@@ -24,9 +24,17 @@ auto findClient(const std::vector<FollowClientView>& clients, ClientId client) {
 }
 
 FollowScrollOffset offsetFor(std::size_t targetLine,
-                              const ViewportDimensions& dimensions) {
+                              const ViewportDimensions& dimensions,
+                              const RowProjection* projection) {
     const auto rows = static_cast<std::uint64_t>(dimensions.rows);
-    const auto line = static_cast<std::uint64_t>(targetLine);
+    const auto line =
+        projection == nullptr
+            ? static_cast<std::uint64_t>(targetLine)
+            : static_cast<std::uint64_t>(
+                  projection->visualRowForBufferLine(static_cast<uint32_t>(
+                      std::min<std::size_t>(
+                          targetLine,
+                          std::numeric_limits<uint32_t>::max()))));
     return {line >= rows ? line - rows + 1 : 0, 0};
 }
 
@@ -63,7 +71,8 @@ FollowEditsResult FollowEditsModel::attachClient(
 
     FollowScrollOffset offset;
     if (state_.activeTarget) {
-        offset = offsetFor(state_.activeTarget->newestHunkLine, dimensions);
+        offset = offsetFor(state_.activeTarget->newestHunkLine, dimensions,
+                           activeProjection_ ? &*activeProjection_ : nullptr);
     }
     state_.clients.push_back({client, dimensions, offset});
     advanceGeneration();
@@ -98,7 +107,7 @@ FollowEditsResult FollowEditsModel::acceptExternalChange(
             state_.queuedTargets.erase(state_.queuedTargets.begin());
         }
         if (state_.mode == FollowMode::Following) {
-            activate(target);
+            activate(target, file);
         }
     }
 
@@ -138,6 +147,7 @@ FollowEditsResult FollowEditsModel::resume(const DiffViewState& currentDiff) {
     }
 
     std::optional<FollowTarget> resolved;
+    std::optional<DiffFileView> resolvedFile;
     for (auto queued = state_.queuedTargets.rbegin();
          queued != state_.queuedTargets.rend(); ++queued) {
         const auto current =
@@ -147,14 +157,15 @@ FollowEditsResult FollowEditsModel::resume(const DiffViewState& currentDiff) {
                          });
         if (current != currentDiff.files.end()) {
             resolved = targetFor(*current, queued->sourceRevision);
+            resolvedFile = *current;
             break;
         }
     }
 
     state_.mode = FollowMode::Following;
     state_.queuedTargets.clear();
-    if (resolved) {
-        activate(*resolved);
+    if (resolved && resolvedFile) {
+        activate(*resolved, *resolvedFile);
     }
     advanceGeneration();
     return {};
@@ -178,10 +189,14 @@ FollowTarget FollowEditsModel::targetFor(const DiffFileView& file,
             sourceRevision};
 }
 
-void FollowEditsModel::activate(const FollowTarget& target) {
+void FollowEditsModel::activate(const FollowTarget& target,
+                                const DiffFileView& file) {
     state_.activeTarget = target;
+    activeProjection_ =
+        Viewport{}.rowProjectionUnwrapped(file.currentContent, file);
     for (auto& client : state_.clients) {
-        client.offset = offsetFor(target.newestHunkLine, client.dimensions);
+        client.offset = offsetFor(target.newestHunkLine, client.dimensions,
+                                  &*activeProjection_);
     }
 }
 

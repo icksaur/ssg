@@ -115,6 +115,7 @@ ssg::ViewportViewState clientView(std::uint32_t firstRow) {
             firstRow + 8,
             {},
             {},
+            {},
             {firstRow + 8, 8, firstRow, firstRow, 0, 8}};
 }
 

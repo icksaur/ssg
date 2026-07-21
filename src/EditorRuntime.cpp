@@ -605,6 +605,12 @@ std::optional<WorkspaceDocumentState> EditorRuntime::Impl::activeWorkspaceState(
     return id ? workspace.state(*id) : std::nullopt;
 }
 
+std::optional<DiffFileView> EditorRuntime::Impl::activeDiffFile() const {
+    const auto diffState = diff.viewState();
+    const auto file = diffState.fileForDocument(documentView());
+    return file ? std::optional<DiffFileView>{file->get()} : std::nullopt;
+}
+
 std::string EditorRuntime::Impl::activeText() const {
     auto const* document = activeDocument();
     return document ? document->snapshot().text : std::string{};
@@ -641,14 +647,17 @@ std::vector<CellRun> EditorRuntime::Impl::activeCellRuns() const {
 ViewportViewState EditorRuntime::Impl::computeEditorViewport(
     ViewportDimensions dimensions, std::uint32_t firstRow,
     std::uint32_t firstColumn) const {
+    const auto diffFile = activeDiffFile();
     if (wordWrap) {
         auto runs = activeCellRuns();
-        return Viewport{}.compute(runs, dimensions, firstRow);
+        return Viewport{}.compute(
+            runs, dimensions, firstRow, diffFile ? &*diffFile : nullptr);
     }
     // Word wrap off (default): one logical line is one visual row; only the
     // visible lines are segmented, so this is O(visible rows), not O(document).
     return Viewport{}.computeUnwrapped(activeText(), dimensions, firstRow,
-                                      firstColumn, 4);
+                                       firstColumn, 4,
+                                       diffFile ? &*diffFile : nullptr);
 }
 
 ViewportViewState EditorRuntime::Impl::viewport(ViewportDimensions dimensions) const {
