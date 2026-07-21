@@ -15,6 +15,8 @@ Priority:
 
 `ssg` is a C++20 library target with transport- and renderer-neutral public interfaces. The library owns resource validity, state transitions, revision ordering, and input validation; applications own presentation, event loops, scheduling policy, and storage of credentials. Read [cpp-values.md](../cpp-values.md) before designing or changing the public C++ API. Its required values include RAII, explicit ownership, move-only resource owners, scoped enums and domain types, construction-time validation, descriptive names, and no required `init()`/`destroy()` sequence.
 
+Separation of duties (feature vs. mechanism). The division is by RESPONSIBILITY, not by whether something touches I/O. The library owns every FEATURE and its orchestration — including features that are driven by I/O, such as filesystem watching, external-modification detection, Git integration and diff sourcing, LSP, and scratch recovery. A client owns only what is intrinsically platform-specific: translating raw platform input events into typed semantic commands, and rendering the server-described cell grid. A client is never responsible for a feature. Where a feature needs a raw platform capability the library cannot portably provide itself (spawn a process, open a socket, receive native filesystem events), that capability is factored as a narrow INJECTED ADAPTER behind a library-owned interface — the LSP process/stream adapter and the `FilesystemWatcher` are the templates: the adapter supplies only the raw mechanism (bytes, native events), while the feature (synchronization, normalization, diff computation, follow orchestration, revision tagging) lives in the library. "Raw platform I/O" as a client/host responsibility means exactly this thin mechanism boundary, never the feature that consumes it. The test for any new capability: if two different clients (TUI, browser, embedder) would each have to reimplement it to get the feature, it belongs in the library behind an injected mechanism adapter, not in the client.
+
 `EditorRuntime` is the default production composition of the complete command
 catalog and live feature-state contributors over a canonical-CWD `Workspace`.
 It implements the session service boundary, owns coherent command
@@ -151,6 +153,16 @@ The build system uses `cmake/components/*.cmake` manifests for component-local s
   client state. This includes editor, panel, prompt/configuration input,
   completion, empty-workspace, read-only, diff, and distraction-free states.
   Configuration changes that would remove all such bindings fail atomically.
+- **I25 — Feature-not-mechanism boundary:** Every editor feature and its
+  orchestration is library-owned, including I/O-driven features (filesystem
+  watching, external-modification detection, Git/diff sourcing, LSP, scratch
+  recovery). A client owns only platform input translation and cell-grid
+  rendering and implements no feature. A raw platform capability the library
+  cannot portably provide is exposed only as a narrow injected mechanism adapter
+  behind a library interface (the LSP process/stream adapter and
+  `FilesystemWatcher` are the templates); the adapter carries no feature logic. A
+  capability that two clients would otherwise each reimplement belongs in the
+  library, not the client.
 
 ## Considerations
 

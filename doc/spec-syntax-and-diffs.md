@@ -361,12 +361,19 @@ No new plugin subsystem. Three existing seams carry all three features:
 
 ## Invariants
 
-- Library/app boundary: the library owns models, state machines, layout, and
-  render output; the app owns all I/O — process spawning, git invocation,
-  language-server transport, and filesystem watching (agent-diff detection is
-  app-side: watch, compute vs baseline, inject). The tree-sitter parser runs
-  in-process (a pure computation over text), which does not cross this boundary;
-  anything requiring a child process or socket stays app-side.
+- Library/app boundary (feature vs. mechanism — see spec.md I25): the library
+  owns every FEATURE and its orchestration, including I/O-driven ones. Diff
+  SOURCING is a library concern: the library owns Git integration, filesystem-
+  watch orchestration (via the existing library `FilesystemWatcher`), baseline
+  tracking, diff computation, and follow. Only the RAW platform mechanism the
+  library cannot portably provide — native filesystem events, the git subprocess/
+  process spawn, a language-server socket — is a narrow injected adapter behind a
+  library interface (the `FilesystemWatcher` and LSP process/stream adapters are
+  the templates); the adapter carries bytes/events, never feature logic. The
+  client does NOT watch, compute, or inject diffs; it renders and translates
+  input only. (An earlier draft wrongly placed "watch, compute vs baseline,
+  inject" in the app — corrected.) The tree-sitter parser runs in-process (a pure
+  computation over text), also library-side.
 - Buffer vs visual coordinates (enforcing rule for a mechanism consequence): the
   divergence between buffer offsets and visual rows is a CONSEQUENCE of choosing
   phantom-row rendering; the load-bearing invariant is that exactly ONE component
@@ -418,14 +425,15 @@ RESOLVED DECISIONS (2026-07-20):
 - Q3 — completion DEFERRED, but no corner-painting: keep modeled completion types
   and the `LspFeatureController`/`CommandSet` seams intact so the feature is a
   later same-shaped add, not a rewrite.
-- Q4 — agent diffs reach the app via FILESYSTEM WATCHING (the existing watcher):
-  the app observes file writes, computes a diff, and injects it through
-  `DiffModel`'s external-diff seam, revision-stamped. NOTE (review MUST): the
-  current `NonGitDiffEvent` computes against the model's private, self-advancing
-  `acknowledgedContent` — it does NOT accept an app-owned baseline. The injection
-  shape must be extended to carry `{baseline, target}` explicitly (see Design
-  "Agent diffs -> follow"). Baseline = content at open / last-accepted; owned
-  app-side.
+- Q4 — diff detection is LIBRARY-side via the existing library `FilesystemWatcher`
+  (see spec.md I25): the LIBRARY observes file writes (through the injected native-
+  watch mechanism adapter), tracks the baseline, computes the diff, and drives
+  follow. The client does nothing. NOTE (review MUST): the current `NonGitDiffEvent`
+  computes against the model's private, self-advancing `acknowledgedContent` — it
+  does NOT accept an owner-supplied baseline. The internal diff-source flow must
+  carry `{baseline, target}` explicitly (see Design "Agent diffs -> follow"), with
+  the baseline (content at open / last-accepted) owned by the library diff-source
+  component, not the client.
 - Performance premise correction (review MUST): the "18.8 ms open" figure earlier
   drafts used was the `eol_scan` SUB-PHASE, not the open. Per
   `spec-large-files-loading.md`, the LF-1 pre-optimization baseline is ~106 ms and
@@ -568,13 +576,16 @@ Edge/complexity notes:
 
 ## Plan
 
-DEFERRED: app-side diff SOURCE. The library diff/follow machinery (rendering,
-phantom rows, tints, marks, newest-hunk follow, external-diff injection API) is
-built and green, but the ssg APP does not yet wire a diff SOURCE (git working-tree
-or filesystem-watch-vs-baseline). Deferred pending a proper design; today the diff
-subsystem is exercised only by tests. A code review (2026-07-21, branch
-`feat-syntax-diffs` vs master) surfaced findings that live in this deferred
-subsystem — resolve them AS PART OF the diff-source design/wiring, not in
+DEFERRED: LIBRARY diff SOURCE (not app-side — see spec.md I25). The library
+diff/follow machinery (rendering, phantom rows, tints, marks, newest-hunk follow,
+external-diff injection API) is built and green, but no diff SOURCE is wired yet: a
+LIBRARY-owned component that tracks a baseline and produces diffs — from the Git
+working tree and/or from filesystem-watch-vs-baseline (via the existing library
+`FilesystemWatcher` + its injected native-watch adapter). The client is never
+involved. Deferred pending a proper design; today the diff subsystem is exercised
+only by tests. A code review (2026-07-21, branch `feat-syntax-diffs` vs master)
+surfaced findings that live in this deferred subsystem — resolve them AS PART OF
+the diff-source design/wiring, not in
 isolation (their correct fix depends on how diffs get injected):
 
 - MUST — active-diff coherence (`src/DiffModel.cpp` `fileForDocument`):
