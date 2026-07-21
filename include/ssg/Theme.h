@@ -18,8 +18,8 @@ struct SrgbColor {
     std::uint8_t blue = 0;
 
     // Reconstructs channels already owned by an authoritative Theme snapshot.
-    // This is not a second color-definition path: callers must not derive or
-    // substitute channels outside theme data.
+    // Theme-internal DiffTints derivation is also authoritative theme color;
+    // renderers and clients must not derive or substitute channels.
     [[nodiscard]] static constexpr SrgbColor fromSerializedChannels(
         std::uint8_t red, std::uint8_t green, std::uint8_t blue) noexcept {
         return SrgbColor{red, green, blue};
@@ -181,10 +181,22 @@ struct SyntaxMapping {
     friend bool operator==(const SyntaxMapping&, const SyntaxMapping&) = default;
 };
 
+struct DiffTints {
+    SrgbColor addedRow;
+    SrgbColor removedRow;
+    SrgbColor modifiedRow;
+    SrgbColor addedWord;
+    SrgbColor removedWord;
+    SrgbColor modifiedWord;
+
+    friend bool operator==(const DiffTints&, const DiffTints&) = default;
+};
+
 struct ThemeSnapshot {
     std::array<SrgbColor, kThemePaletteSize> palette;
     std::array<std::uint8_t, kSemanticRoleCount> semanticIndices;
     std::array<std::uint8_t, kSyntaxScopeCount> syntaxIndices;
+    DiffTints diffTints;
 
     friend bool operator==(const ThemeSnapshot&, const ThemeSnapshot&) = default;
 };

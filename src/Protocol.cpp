@@ -1282,6 +1282,8 @@ ProtocolValue toValue(ThemeSnapshot const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<ThemeSnapshot>& out);
 ProtocolValue toValue(ThemeSectionDelta const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<ThemeSectionDelta>& out);
+ProtocolValue toValue(DiffTints const& value);
+bool decodePresent(ProtocolValue const& value, std::optional<DiffTints>& out);
 ProtocolValue toValue(GridSize const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<GridSize>& out);
 ProtocolValue toValue(AccessibilityNode const& value);
@@ -4386,11 +4388,40 @@ bool decodePresent(ProtocolValue const& value, std::optional<SrgbColor>& out) {
     return true;
 }
 
+ProtocolValue toValue(DiffTints const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("added_row", toValue(value.addedRow));
+    fields.emplace_back("removed_row", toValue(value.removedRow));
+    fields.emplace_back("modified_row", toValue(value.modifiedRow));
+    fields.emplace_back("added_word", toValue(value.addedWord));
+    fields.emplace_back("removed_word", toValue(value.removedWord));
+    fields.emplace_back("modified_word", toValue(value.modifiedWord));
+    return ProtocolValue::makeObject(std::move(fields));
+}
+bool decodePresent(ProtocolValue const& value, std::optional<DiffTints>& out) {
+    auto const* object = value.asObject();
+    if (!object) return false;
+    auto addedRow = requireField<SrgbColor>(value.field("added_row"));
+    auto removedRow = requireField<SrgbColor>(value.field("removed_row"));
+    auto modifiedRow = requireField<SrgbColor>(value.field("modified_row"));
+    auto addedWord = requireField<SrgbColor>(value.field("added_word"));
+    auto removedWord = requireField<SrgbColor>(value.field("removed_word"));
+    auto modifiedWord = requireField<SrgbColor>(value.field("modified_word"));
+    if (!addedRow || !removedRow || !modifiedRow || !addedWord || !removedWord ||
+        !modifiedWord) {
+        return false;
+    }
+    out.emplace(DiffTints{*addedRow, *removedRow, *modifiedRow, *addedWord,
+                          *removedWord, *modifiedWord});
+    return true;
+}
+
 ProtocolValue toValue(ThemeSnapshot const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("palette", toValue(value.palette));
     fields.emplace_back("semantic_indices", toValue(value.semanticIndices));
     fields.emplace_back("syntax_indices", toValue(value.syntaxIndices));
+    fields.emplace_back("diff_tints", toValue(value.diffTints));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<ThemeSnapshot>& out) {
@@ -4402,8 +4433,10 @@ bool decodePresent(ProtocolValue const& value, std::optional<ThemeSnapshot>& out
         value.field("semantic_indices"));
     auto syntaxIndices = requireField<std::array<std::uint8_t, kSyntaxScopeCount>>(
         value.field("syntax_indices"));
-    if (!palette || !semanticIndices || !syntaxIndices) return false;
-    out.emplace(ThemeSnapshot{*palette, *semanticIndices, *syntaxIndices});
+    auto diffTints = requireField<DiffTints>(value.field("diff_tints"));
+    if (!palette || !semanticIndices || !syntaxIndices || !diffTints) return false;
+    out.emplace(
+        ThemeSnapshot{*palette, *semanticIndices, *syntaxIndices, *diffTints});
     return true;
 }
 
