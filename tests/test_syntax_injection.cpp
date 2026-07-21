@@ -26,9 +26,12 @@ private:
 // uses the parser handed to it via EditorRuntimeConfig, not a hard-constructed one.
 class RecordingParser final : public SyntaxParser {
 public:
+    explicit RecordingParser(bool grammarAvailable = true)
+        : grammarAvailable_(grammarAvailable) {}
+
     std::shared_ptr<std::size_t> parseCalls = std::make_shared<std::size_t>(0);
 
-    bool hasGrammar(const LanguageId&) const override { return true; }
+    bool hasGrammar(const LanguageId&) const override { return grammarAvailable_; }
 
     SyntaxParseOutput parse(const SyntaxParseRequest& request) override {
         ++*parseCalls;
@@ -47,6 +50,9 @@ public:
         }
         return output;
     }
+
+private:
+    bool grammarAvailable_ = true;
 };
 
 std::filesystem::path uniqueRoot() {
@@ -131,10 +137,86 @@ TEST(nullParserYieldsPlainText) {
     ASSERT_FALSE(hasScope(snapshot->sections().syntax, SyntaxScope::Keyword));
 }
 
+// With deferred enrichment enabled, a grammar-backed small file is still parsed
+// on open so the first frame already carries syntax colors.
+TEST(deferredEnrichmentStillColorsSmallGrammarBackedFirstFrame) {
+    auto root = uniqueRoot();
+    std::ofstream{root / "workspace" / "main.cpp"} << "int main() {}";
+
+    auto parser = std::make_shared<RecordingParser>();
+    auto calls = parser->parseCalls;
+    auto config = configFor(root);
+    config.deferEnrichment = true;
+    config.syntaxParser = parser;
+
+    auto created = EditorRuntime::create(std::move(config));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime
+                    .attach({ClientId{1}, InvocationOrigin::InProcess},
+                            ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ClientId{1},
+                              {"file.open", runtime.revision(),
+                               std::string{"main.cpp"}})
+                    .accepted());
+
+    auto first = runtime.snapshot(ClientId{1}, ViewportDimensions{80, 12});
+    ASSERT_TRUE(first.has_value());
+    if (!first.has_value()) return;
+    ASSERT_TRUE(*calls > 0);
+    ASSERT_TRUE(hasScope(first->sections().syntax, SyntaxScope::Keyword));
+}
+
+// Large files stay deferred under deferEnrichment even with an available grammar:
+// first frame is plain text, then primeDeferred applies syntax.
+TEST(deferredEnrichmentDefersLargeGrammarBackedFileUntilPrimeDeferred) {
+    auto root = uniqueRoot();
+    std::string text(3 * 1024 * 1024, 'a');
+    std::ofstream{root / "workspace" / "big.cpp"} << text;
+
+    auto parser = std::make_shared<RecordingParser>();
+    auto calls = parser->parseCalls;
+    auto config = configFor(root);
+    config.deferEnrichment = true;
+    config.syntaxParser = parser;
+
+    auto created = EditorRuntime::create(std::move(config));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime
+                    .attach({ClientId{1}, InvocationOrigin::InProcess},
+                            ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ClientId{1},
+                              {"file.open", runtime.revision(),
+                               std::string{"big.cpp"}})
+                    .accepted());
+
+    auto first = runtime.snapshot(ClientId{1}, ViewportDimensions{80, 12});
+    ASSERT_TRUE(first.has_value());
+    if (!first.has_value()) return;
+    ASSERT_EQ(*calls, std::size_t{0});
+    ASSERT_FALSE(hasScope(first->sections().syntax, SyntaxScope::Keyword));
+
+    runtime.primeDeferred();
+    auto after = runtime.snapshot(ClientId{1}, ViewportDimensions{80, 12});
+    ASSERT_TRUE(after.has_value());
+    if (!after.has_value()) return;
+    ASSERT_TRUE(*calls > 0);
+    ASSERT_TRUE(hasScope(after->sections().syntax, SyntaxScope::Keyword));
+}
+
 }  // namespace
 
 int main() {
     RUN(injectedParserDrivesHighlighting);
     RUN(nullParserYieldsPlainText);
+    RUN(deferredEnrichmentStillColorsSmallGrammarBackedFirstFrame);
+    RUN(deferredEnrichmentDefersLargeGrammarBackedFileUntilPrimeDeferred);
     return failed == 0 ? 0 : 1;
 }

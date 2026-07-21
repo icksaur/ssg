@@ -12,6 +12,11 @@
 namespace ssg {
 namespace {
 
+// First-frame syntax should be ready when it's cheap: parsing a small file is
+// comfortably within startup budget, while multi-MB input can exceed it and is
+// deferred until primeDeferred().
+constexpr std::size_t kEagerSyntaxMaxBytes = 2 * 1024 * 1024;
+
 ThemeSnapshot defaultTheme() {
     // Readable dark theme derived from the VSCode-style palette in
     // caco/public/themes/dark.css.  Low indices are dark fills, high indices
@@ -723,11 +728,6 @@ void EditorRuntime::Impl::reconcileFindDocument() {
 }
 
 void EditorRuntime::Impl::refreshSyntax() {
-    if (deferringEnrichment) {
-        pendingSyntaxRefresh = true;
-        return;
-    }
-    ++syntaxRunCount;
     auto const* document = activeDocument();
     auto text = document ? document->snapshot().text : std::string{};
     auto revision = document ? document->revision() : Revision{0};
@@ -736,6 +736,16 @@ void EditorRuntime::Impl::refreshSyntax() {
         state && state->key.kind() == JournalDocumentKeyKind::Saved) {
         language = LanguageId::fromPath(state->key.savedPath());
     }
+    if (deferringEnrichment) {
+        const bool canEagerlyParse =
+            document != nullptr && syntax.hasGrammar(language) &&
+            text.size() <= kEagerSyntaxMaxBytes;
+        if (!canEagerlyParse) {
+            pendingSyntaxRefresh = true;
+            return;
+        }
+    }
+    ++syntaxRunCount;
     auto request = syntax.request(revision, std::move(language), std::move(text));
     if (request.accepted()) {
         auto output = syntax.run(*request.request);
