@@ -111,7 +111,8 @@ struct NonGitDiffEvent {
     DiffFileId id;
     std::filesystem::path path;
     std::optional<std::filesystem::path> previousPath;
-    std::optional<std::string> content;
+    std::string baselineContent;
+    std::optional<std::string> targetContent;
 };
 
 class DiffModel {
@@ -135,7 +136,6 @@ private:
     struct Entry {
         DiffFileView view;
         Source source = Source::Git;
-        std::string acknowledgedContent;
     };
 
     DiffConfig config_;

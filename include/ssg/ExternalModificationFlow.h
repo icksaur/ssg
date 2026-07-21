@@ -107,6 +107,7 @@ public:
 struct ExternalEventInput {
     WatchEvent event;
     DiffFileId id;
+    std::string baselineContent;
     std::optional<std::string> diskContent;
 };
 

@@ -131,16 +131,43 @@ CommandHandlerResult diffCommand(EditorRuntime::Impl& runtime, std::string_view 
     if (fileId == nullptr) return failure(std::string{id} + " requires a diff file ID payload");
     auto file = runtime.diff.file(*fileId);
     if (!file) return failure("diff file does not exist");
-    if (id == "diff.next_hunk") (void)nextDiffHunk(file->get(), std::nullopt);
-    else if (id == "diff.previous_hunk") (void)previousDiffHunk(file->get(), std::nullopt);
-    else if (id == "diff.open_file") (void)diffOpenFile(file->get());
+    std::optional<std::size_t> hunk;
+    const auto currentLine = runtime.activeDocument()
+                                 ? std::optional<std::size_t>{
+                                       runtime.selection.selections.primary()
+                                           .active.line.value()}
+                                 : std::nullopt;
+    if (id == "diff.next_hunk") {
+        hunk = nextDiffHunk(file->get(), currentLine);
+    } else if (id == "diff.previous_hunk") {
+        hunk = previousDiffHunk(file->get(), currentLine);
+    } else if (!file->get().hunks.empty()) {
+        hunk = 0;
+    }
+    if (!hunk) return failure("diff file has no hunks");
+    const auto opened = diffOpenFile(file->get());
+    const FollowTarget target{file->get().id, opened.path, opened.deleted,
+                              file->get().hunks[*hunk].targetStart,
+                              runtime.diff.viewState().revision};
+    if (!runtime.revealDiffTarget(target, NavigationClass::Programmatic)) {
+        return failure("diff target could not be revealed");
+    }
     return success();
 }
 
 CommandHandlerResult followCommand(EditorRuntime::Impl& runtime, std::string_view id) {
     auto result = id == "follow_edits.pause" ? runtime.follow.pause()
                                               : runtime.follow.resume(runtime.diff.viewState());
-    return result.accepted() ? success() : failure("follow edits command failed");
+    if (!result.accepted()) return failure("follow edits command failed");
+    if (id == "follow_edits.resume") {
+        const auto target = runtime.follow.viewState().activeTarget;
+        if (target &&
+            !runtime.revealDiffTarget(*target,
+                                      NavigationClass::Programmatic)) {
+            return failure("follow target could not be revealed");
+        }
+    }
+    return success();
 }
 
 } // namespace

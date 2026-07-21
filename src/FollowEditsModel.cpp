@@ -38,6 +38,35 @@ FollowScrollOffset offsetFor(std::size_t targetLine,
     return {line >= rows ? line - rows + 1 : 0, 0};
 }
 
+bool sameRange(std::size_t leftStart, std::size_t leftSize,
+               std::size_t rightStart, std::size_t rightSize) {
+    return leftStart == rightStart && leftSize == rightSize;
+}
+
+bool correspondsTo(const DiffHunk& incoming, const DiffHunk& prior) {
+    if (sameRange(incoming.baselineStart, incoming.baselineLines.size(),
+                  prior.baselineStart, prior.baselineLines.size())) {
+        return true;
+    }
+    return sameRange(incoming.targetStart, incoming.targetLines.size(),
+                     prior.targetStart, prior.targetLines.size());
+}
+
+const DiffHunk* newestIntroducedHunk(
+    const DiffFileView& file, const std::vector<DiffHunk>& priorHunks) {
+    const DiffHunk* newest = nullptr;
+    for (const auto& incoming : file.hunks) {
+        const auto prior = std::find_if(
+            priorHunks.begin(), priorHunks.end(), [&](const DiffHunk& candidate) {
+                return correspondsTo(incoming, candidate);
+            });
+        if (prior == priorHunks.end()) {
+            newest = &incoming;
+        }
+    }
+    return newest;
+}
+
 }  // namespace
 
 FollowEditsDelta FollowEditsDeltaCodec::derive(const FollowEditsViewState& base,
@@ -91,27 +120,46 @@ FollowEditsResult FollowEditsModel::detachClient(ClientId client) {
 
 FollowEditsResult FollowEditsModel::acceptExternalChange(
     const DiffFileView& file, Revision sourceRevision) {
-    if (sourceRevision <= latestSourceRevision_) {
-        return {FollowEditsError::StaleRevision};
+    return acceptExternalChanges({FollowDiffChange{file, {}, sourceRevision}});
+}
+
+FollowEditsResult FollowEditsModel::acceptExternalChanges(
+    std::vector<FollowDiffChange> changes) {
+    auto expectedRevision = latestSourceRevision_;
+    for (const auto& change : changes) {
+        if (change.sourceRevision <= expectedRevision) {
+            return {FollowEditsError::StaleRevision};
+        }
+        expectedRevision = change.sourceRevision;
     }
 
-    latestSourceRevision_ = sourceRevision;
-    std::erase_if(state_.queuedTargets, [&file](const FollowTarget& target) {
-        return target.id == file.id;
-    });
-
-    if (!file.hunks.empty()) {
-        auto target = targetFor(file, sourceRevision);
+    std::optional<std::pair<FollowTarget, DiffFileView>> activation;
+    for (const auto& change : changes) {
+        activation.reset();
+        latestSourceRevision_ = change.sourceRevision;
+        std::erase_if(state_.queuedTargets,
+                      [&change](const FollowTarget& target) {
+                          return target.id == change.file.id;
+                      });
+        const auto* hunk =
+            newestIntroducedHunk(change.file, change.priorHunks);
+        if (hunk == nullptr) {
+            continue;
+        }
+        auto target = targetFor(change.file, *hunk, change.sourceRevision);
         state_.queuedTargets.push_back(target);
         if (state_.queuedTargets.size() > config_.queueCapacity) {
             state_.queuedTargets.erase(state_.queuedTargets.begin());
         }
-        if (state_.mode == FollowMode::Following) {
-            activate(target, file);
-        }
+        activation = std::pair{std::move(target), change.file};
     }
 
-    advanceGeneration();
+    if (activation && state_.mode == FollowMode::Following) {
+        activate(activation->first, activation->second);
+    }
+    if (!changes.empty()) {
+        advanceGeneration();
+    }
     return {};
 }
 
@@ -156,7 +204,10 @@ FollowEditsResult FollowEditsModel::resume(const DiffViewState& currentDiff) {
                              return file.id == queued->id && !file.hunks.empty();
                          });
         if (current != currentDiff.files.end()) {
-            resolved = targetFor(*current, queued->sourceRevision);
+            const auto opened = diffOpenFile(*current);
+            resolved = *queued;
+            resolved->path = opened.path;
+            resolved->deleted = opened.deleted;
             resolvedFile = *current;
             break;
         }
@@ -183,10 +234,10 @@ FollowEditsFooterProjection FollowEditsModel::footerProjection() const {
 }
 
 FollowTarget FollowEditsModel::targetFor(const DiffFileView& file,
+                                          const DiffHunk& hunk,
                                           Revision sourceRevision) const {
     const auto opened = diffOpenFile(file);
-    return {file.id, opened.path, file.deleted, file.hunks.back().targetStart,
-            sourceRevision};
+    return {file.id, opened.path, file.deleted, hunk.targetStart, sourceRevision};
 }
 
 void FollowEditsModel::activate(const FollowTarget& target,

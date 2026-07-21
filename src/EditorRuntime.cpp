@@ -197,6 +197,19 @@ std::string readFileText(std::filesystem::path const& path) {
     return {std::istreambuf_iterator<char>{input}, std::istreambuf_iterator<char>{}};
 }
 
+std::size_t lineStartOffset(std::string_view text, std::size_t line) {
+    std::size_t offset = 0;
+    while (line > 0 && offset < text.size()) {
+        const auto newline = text.find('\n', offset);
+        if (newline == std::string_view::npos) {
+            return text.size();
+        }
+        offset = newline + 1;
+        --line;
+    }
+    return offset;
+}
+
 std::optional<std::filesystem::path> pathFromUri(std::string_view uri) {
     constexpr std::string_view prefix{"file://"};
     if (uri.rfind(prefix, 0) != 0) return std::nullopt;
@@ -754,6 +767,102 @@ void EditorRuntime::Impl::enqueueStatus(StatusPriority priority, std::string tex
     (void)status.enqueue(StatusItem{StatusId{value}, priority, std::move(text), {}});
 }
 
+ExternalDiffBurstResult EditorRuntime::Impl::applyExternalDiffBurst(
+    std::vector<ExternalDiffRevision> changes) {
+    if (changes.empty()) {
+        return {ExternalDiffBurstError::EmptyBurst};
+    }
+
+    auto stagedDiff = diff;
+    std::vector<FollowDiffChange> followChanges;
+    followChanges.reserve(changes.size());
+    for (auto& change : changes) {
+        const auto id = change.event.id;
+        std::vector<DiffHunk> priorHunks;
+        if (const auto prior = stagedDiff.file(id)) {
+            priorHunks = prior->get().hunks;
+        }
+        const auto applied =
+            stagedDiff.applyNonGitEvent(std::move(change.event), change.revision);
+        if (!applied.accepted()) {
+            return {ExternalDiffBurstError::DiffRejected};
+        }
+        const auto changedFile = stagedDiff.file(id);
+        if (!changedFile) {
+            return {ExternalDiffBurstError::DiffRejected};
+        }
+        followChanges.push_back(
+            {changedFile->get(), std::move(priorHunks), change.revision});
+    }
+
+    auto stagedFollow = follow;
+    const auto followed =
+        stagedFollow.acceptExternalChanges(std::move(followChanges));
+    if (!followed.accepted()) {
+        return {ExternalDiffBurstError::FollowRejected};
+    }
+
+    const auto previousTarget = follow.viewState().activeTarget;
+    diff = std::move(stagedDiff);
+    follow = std::move(stagedFollow);
+    const auto next = follow.viewState();
+    if (next.mode == FollowMode::Following && next.activeTarget &&
+        next.activeTarget != previousTarget) {
+        (void)revealDiffTarget(*next.activeTarget,
+                               NavigationClass::Programmatic);
+    }
+    if (session) {
+        session->advanceRevision();
+    }
+    return {};
+}
+
+bool EditorRuntime::Impl::revealDiffTarget(
+    const FollowTarget& target, NavigationClass classification) {
+    if (target.deleted) {
+        return false;
+    }
+    const auto opened = workspace.openFile(target.path.generic_string());
+    if (!opened.accepted() || !opened.document ||
+        !activateDocument(*opened.document).accepted) {
+        return false;
+    }
+
+    const auto text = activeText();
+    const auto offset = lineStartOffset(text, target.newestHunkLine);
+    const auto position =
+        SelectionNavigator::resolvePosition(text, ByteOffset{offset});
+    if (!position) {
+        return false;
+    }
+    selection.selections =
+        SelectionSet{std::vector<Selection>{Selection{*position, *position}}};
+    if (const auto file = diff.file(target.id)) {
+        const auto projection =
+            Viewport{}.rowProjectionUnwrapped(text, file->get());
+        requestedFirstVisualRow = projection.visualRowForBufferLine(
+            static_cast<std::uint32_t>(std::min<std::size_t>(
+                target.newestHunkLine,
+                std::numeric_limits<std::uint32_t>::max())));
+        selection.firstVisualRow = requestedFirstVisualRow;
+    }
+    revealPrimaryCaret();
+    for (const auto& client : follow.viewState().clients) {
+        recordNavigation(client.client, classification);
+    }
+    shell.focusEditor();
+    return true;
+}
+
+void EditorRuntime::Impl::recordNavigation(
+    ClientId client, NavigationClass classification) {
+    (void)follow.applyNavigation(
+        {.client = client,
+         .classification = classification,
+         .offset = FollowScrollOffset{requestedFirstVisualRow,
+                                      requestedFirstVisualColumn}});
+}
+
 EditorRuntime::EditorRuntime(std::unique_ptr<Impl> implementation) noexcept
     : impl_{std::move(implementation)} {}
 EditorRuntime::~EditorRuntime() = default;
@@ -832,6 +941,10 @@ CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& co
 
 Revision EditorRuntime::revision() const { return impl_->session->revision(); }
 std::filesystem::path const& EditorRuntime::workspaceRoot() const noexcept { return impl_->root; }
+ExternalDiffBurstResult EditorRuntime::applyExternalDiffBurst(
+    std::vector<ExternalDiffRevision> changes) {
+    return impl_->applyExternalDiffBurst(std::move(changes));
+}
 std::optional<SessionSnapshot> EditorRuntime::snapshot(ClientId clientId, ViewportDimensions dimensions,
                                                        KeySequence leaderPending,
                                                        PaletteReport paletteReport) const {

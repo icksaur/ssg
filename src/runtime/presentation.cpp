@@ -177,14 +177,35 @@ void bindRuntimePresentation(EditorSessionBuilder& builder, EditorRuntime::Impl&
     builder.bind("view.toggle_word_wrap", [&runtime](CommandContext&, std::any const&) {
         return runtime.runTransaction([&] { return setWordWrap(runtime); });
     });
-    builder.bind("view.scroll_lines", [&runtime](CommandContext&, std::any const& payload) {
-        return runtime.runTransaction([&] { return scrollLines(runtime, payload); });
+    builder.bind("view.scroll_lines", [&runtime](CommandContext& context, std::any const& payload) {
+        return runtime.runTransaction([&] {
+            auto result = scrollLines(runtime, payload);
+            if (result.accepted) {
+                runtime.recordNavigation(context.principal().clientId(),
+                                         NavigationClass::User);
+            }
+            return result;
+        });
     });
-    builder.bind("view.scroll_pages", [&runtime](CommandContext&, std::any const& payload) {
-        return runtime.runTransaction([&] { return scrollPages(runtime, payload); });
+    builder.bind("view.scroll_pages", [&runtime](CommandContext& context, std::any const& payload) {
+        return runtime.runTransaction([&] {
+            auto result = scrollPages(runtime, payload);
+            if (result.accepted) {
+                runtime.recordNavigation(context.principal().clientId(),
+                                         NavigationClass::User);
+            }
+            return result;
+        });
     });
-    builder.bind("view.scroll_to_fraction", [&runtime](CommandContext&, std::any const& payload) {
-        return runtime.runTransaction([&] { return scrollFraction(runtime, payload); });
+    builder.bind("view.scroll_to_fraction", [&runtime](CommandContext& context, std::any const& payload) {
+        return runtime.runTransaction([&] {
+            auto result = scrollFraction(runtime, payload);
+            if (result.accepted) {
+                runtime.recordNavigation(context.principal().clientId(),
+                                         NavigationClass::User);
+            }
+            return result;
+        });
     });
     for (auto const& descriptor : ShellCommandSet{}.descriptors) {
         builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const&) {

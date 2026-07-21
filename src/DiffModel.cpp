@@ -197,11 +197,10 @@ DiffMutationResult DiffModel::updateGitFile(GitDiffFile file,
                       .hunks = std::move(computed->hunks),
                       .changedLines = std::move(computed->changes)};
     if (existing == entries_.end()) {
-        entries_.push_back({std::move(view), Source::Git, {}});
+        entries_.push_back({std::move(view), Source::Git});
     } else {
         existing->view = std::move(view);
         existing->source = Source::Git;
-        existing->acknowledgedContent.clear();
     }
     revision_ = revision;
     return {};
@@ -230,7 +229,7 @@ DiffMutationResult DiffModel::seedNonGit(std::vector<SeededDiffFile> files,
             {DiffFileView{.id = file.id,
                           .path = std::move(file.path),
                           .currentContent = file.content},
-             Source::NonGit, std::move(file.content)});
+             Source::NonGit});
     }
 
     entries_.insert(entries_.end(),
@@ -250,10 +249,10 @@ DiffMutationResult DiffModel::applyNonGitEvent(NonGitDiffEvent event,
         return {DiffError::InvalidPath};
     }
     const bool removed = event.kind == NonGitDiffEventKind::Remove;
-    if (removed && event.content) {
+    if (removed && event.targetContent) {
         return {DiffError::ContentForbidden};
     }
-    if (!removed && !event.content) {
+    if (!removed && !event.targetContent) {
         return {DiffError::ContentRequired};
     }
 
@@ -265,8 +264,8 @@ DiffMutationResult DiffModel::applyNonGitEvent(NonGitDiffEvent event,
         if (event.kind != NonGitDiffEventKind::Create) {
             return {DiffError::UnknownFile};
         }
-        const std::string target = *event.content;
-        auto computed = computeDiff("", target, config_);
+        const std::string target = *event.targetContent;
+        auto computed = computeDiff(event.baselineContent, target, config_);
         if (!computed) {
             return {DiffError::WorkLimitExceeded};
         }
@@ -277,14 +276,13 @@ DiffMutationResult DiffModel::applyNonGitEvent(NonGitDiffEvent event,
                           .currentContent = target,
                           .hunks = std::move(computed->hunks),
                           .changedLines = std::move(computed->changes)},
-             Source::NonGit, target});
+             Source::NonGit});
         revision_ = revision;
         return {};
     }
 
-    const std::string target = event.content.value_or("");
-    auto computed =
-        computeDiff(existing->acknowledgedContent, target, config_);
+    const std::string target = event.targetContent.value_or("");
+    auto computed = computeDiff(event.baselineContent, target, config_);
     if (!computed) {
         return {DiffError::WorkLimitExceeded};
     }
@@ -295,7 +293,6 @@ DiffMutationResult DiffModel::applyNonGitEvent(NonGitDiffEvent event,
     existing->view.currentContent = target;
     existing->view.hunks = std::move(computed->hunks);
     existing->view.changedLines = std::move(computed->changes);
-    existing->acknowledgedContent = target;
     revision_ = revision;
     return {};
 }
