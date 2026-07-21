@@ -344,7 +344,7 @@ TabLifecycleResult EditorRuntime::Impl::close(
     auto state = workspace.state(*tab.document);
     if (!state) return {TabError::NotFound, "tab document does not exist", std::nullopt, false};
     std::optional<JournalDocument> document;
-    if (auto const* current = activeDocument(); current != nullptr) {
+    if (auto const* current = workspace.tryDocument(*tab.document); current != nullptr) {
         document = JournalDocument{state->key, current->mode(), state->dirty,
                                    current->snapshot().text};
     }
