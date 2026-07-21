@@ -18,12 +18,23 @@
 
 namespace ssg {
 
+enum class DiffTint : std::uint8_t {
+    None,
+    AddedRow,
+    RemovedRow,
+    ModifiedRow,
+    AddedWord,
+    RemovedWord,
+    ModifiedWord,
+};
+
 struct CellGridCell {
     std::string text{" "};
     std::uint8_t foreground{0};
     std::uint8_t background{0};
     SemanticRole role{SemanticRole::Background};
     bool continuation{false};
+    DiffTint tint{DiffTint::None};
 
     bool operator==(CellGridCell const&) const = default;
 };
@@ -41,6 +52,7 @@ struct CellGrid {
     std::array<SrgbColor, kThemePaletteSize> palette{};
     std::vector<CellGridCell> cells;
     std::optional<GridPosition> caret;
+    DiffTints diffTints;
 
     [[nodiscard]] CellGridCell const& at(int column, int row) const;
     [[nodiscard]] std::string canonical() const;

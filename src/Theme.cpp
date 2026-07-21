@@ -1,6 +1,10 @@
 #include "ssg/Theme.h"
 
+#include "ssg/color.h"
+
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <stdexcept>
 
 namespace ssg {
@@ -77,6 +81,205 @@ void validatePaletteIndex(std::uint8_t index) {
     if (index >= kThemePaletteSize) {
         throw std::invalid_argument("theme mapping palette index must be in [0, 15]");
     }
+}
+
+constexpr double kReadContrast = 3.0;
+constexpr double kKindDeltaE = 8.0;
+constexpr double kWordDeltaE = 4.5;
+constexpr double kRowDeltaE = 3.8;
+
+double linearChannel(std::uint8_t channel) noexcept {
+    const double encoded = static_cast<double>(channel) / 255.0;
+    return encoded <= 0.04045 ? encoded / 12.92
+                             : std::pow((encoded + 0.055) / 1.055, 2.4);
+}
+
+double luminance(SrgbColor color) noexcept {
+    return 0.2126 * linearChannel(color.red) +
+           0.7152 * linearChannel(color.green) +
+           0.0722 * linearChannel(color.blue);
+}
+
+double contrast(SrgbColor first, SrgbColor second) noexcept {
+    const auto darker = std::min(luminance(first), luminance(second));
+    const auto lighter = std::max(luminance(first), luminance(second));
+    return (lighter + 0.05) / (darker + 0.05);
+}
+
+std::array<double, 3> lab(SrgbColor color) noexcept {
+    const auto red = linearChannel(color.red);
+    const auto green = linearChannel(color.green);
+    const auto blue = linearChannel(color.blue);
+    const std::array xyz{
+        (0.4124564 * red + 0.3575761 * green + 0.1804375 * blue) / 0.95047,
+        0.2126729 * red + 0.7151522 * green + 0.0721750 * blue,
+        (0.0193339 * red + 0.1191920 * green + 0.9503041 * blue) / 1.08883,
+    };
+    std::array<double, 3> transformed{};
+    std::transform(xyz.begin(), xyz.end(), transformed.begin(), [](double value) {
+        return value > 0.008856 ? std::cbrt(value)
+                               : 7.787 * value + 16.0 / 116.0;
+    });
+    return {116.0 * transformed[1] - 16.0,
+            500.0 * (transformed[0] - transformed[1]),
+            200.0 * (transformed[1] - transformed[2])};
+}
+
+double deltaE(SrgbColor first, SrgbColor second) noexcept {
+    const auto a = lab(first);
+    const auto b = lab(second);
+    return std::hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+}
+
+SrgbColor interpolate(SrgbColor first, SrgbColor second, double weight) noexcept {
+    const auto channel = [weight](std::uint8_t from, std::uint8_t to) {
+        return static_cast<std::uint8_t>(std::clamp(
+            std::lround(static_cast<double>(from) +
+                        (static_cast<double>(to) - from) * weight),
+            0L, 255L));
+    };
+    return {channel(first.red, second.red), channel(first.green, second.green),
+            channel(first.blue, second.blue)};
+}
+
+SrgbColor desaturate(SrgbColor color, double retainedSaturation) noexcept {
+    const auto linearGray = luminance(color);
+    const auto encodedGray =
+        linearGray <= 0.0031308
+            ? 12.92 * linearGray
+            : 1.055 * std::pow(linearGray, 1.0 / 2.4) - 0.055;
+    const auto gray = static_cast<std::uint8_t>(
+        std::clamp(std::lround(255.0 * encodedGray), 0L, 255L));
+    return interpolate({gray, gray, gray}, color, retainedSaturation);
+}
+
+std::array<SrgbColor, 6> colors(DiffTints const& tints) noexcept {
+    return {tints.addedRow, tints.removedRow, tints.modifiedRow,
+            tints.addedWord, tints.removedWord, tints.modifiedWord};
+}
+
+bool readable(SrgbColor tint,
+              std::array<SrgbColor, kSyntaxScopeCount + 1> const& foregrounds)
+    noexcept {
+    for (const auto depth : {ColorDepth::Truecolor, ColorDepth::Indexed256}) {
+        const auto resolvedTint = resolveColor(tint, depth).rgb;
+        for (const auto foreground : foregrounds) {
+            if (contrast(resolvedTint, resolveColor(foreground, depth).rgb) <
+                kReadContrast) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+bool readable(
+    DiffTints const& tints,
+    std::array<SrgbColor, kSyntaxScopeCount + 1> const& foregrounds) noexcept {
+    return std::ranges::all_of(colors(tints), [&](SrgbColor tint) {
+        return readable(tint, foregrounds);
+    });
+}
+
+SrgbColor strongestReadableTint(
+    SrgbColor background, SrgbColor anchor, double desiredWeight,
+    double retainedSaturation,
+    std::array<SrgbColor, kSyntaxScopeCount + 1> const& foregrounds) noexcept {
+    const auto mutedAnchor = desaturate(anchor, retainedSaturation);
+    const auto steps = static_cast<int>(std::lround(desiredWeight * 100.0));
+    for (int step = steps; step >= 1; --step) {
+        const auto candidate =
+            interpolate(background, mutedAnchor, static_cast<double>(step) / 100.0);
+        if (readable(candidate, foregrounds)) return candidate;
+    }
+    return background;
+}
+
+bool distinct(DiffTints const& tints, SrgbColor background) noexcept {
+    const auto tintColors = colors(tints);
+    for (const auto depth : {ColorDepth::Truecolor, ColorDepth::Indexed256}) {
+        std::array<SrgbColor, 6> resolved{};
+        std::transform(tintColors.begin(), tintColors.end(), resolved.begin(),
+                       [depth](SrgbColor color) {
+                           return resolveColor(color, depth).rgb;
+                       });
+        const auto resolvedBackground = resolveColor(background, depth).rgb;
+        for (std::size_t first = 0; first < 3; ++first) {
+            for (std::size_t second = first + 1; second < 3; ++second) {
+                if (deltaE(resolved[first], resolved[second]) < kKindDeltaE ||
+                    deltaE(resolved[first + 3], resolved[second + 3]) <
+                        kKindDeltaE) {
+                    return false;
+                }
+            }
+            if (deltaE(resolved[first], resolved[first + 3]) < kWordDeltaE ||
+                deltaE(resolved[first], resolvedBackground) < kRowDeltaE) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+DiffTints fixedFallback(bool lightBackground) noexcept {
+    if (lightBackground) {
+        return {{0, 95, 255}, {0, 135, 0}, {0, 135, 95},
+                {0, 135, 0}, {0, 135, 95}, {0, 95, 255}};
+    }
+    return {{0, 0, 95}, {0, 0, 0}, {38, 38, 38},
+            {0, 0, 135}, {28, 28, 28}, {8, 8, 8}};
+}
+
+DiffTints deriveDiffTints(
+    std::array<SrgbColor, kThemePaletteSize> const& palette,
+    std::array<std::uint8_t, kSemanticRoleCount> const& semanticIndices,
+    std::array<std::uint8_t, kSyntaxScopeCount> const& syntaxIndices) noexcept {
+    std::array<SrgbColor, kSyntaxScopeCount + 1> foregrounds{};
+    for (std::size_t index = 0; index < syntaxIndices.size(); ++index) {
+        foregrounds[index] = palette[syntaxIndices[index]];
+    }
+    foregrounds.back() =
+        palette[semanticIndices[position(SemanticRole::Foreground)]];
+    const auto background =
+        palette[semanticIndices[position(SemanticRole::Background)]];
+    const std::array anchors{
+        palette[semanticIndices[position(SemanticRole::GitAdded)]],
+        palette[semanticIndices[position(SemanticRole::GitDeleted)]],
+        palette[semanticIndices[position(SemanticRole::GitModified)]],
+    };
+
+    DiffTints derived;
+    auto derivedColors = std::array<SrgbColor*, 6>{
+        &derived.addedRow, &derived.removedRow, &derived.modifiedRow,
+        &derived.addedWord, &derived.removedWord, &derived.modifiedWord};
+    for (std::size_t kind = 0; kind < anchors.size(); ++kind) {
+        *derivedColors[kind] = strongestReadableTint(
+            background, anchors[kind], 0.18, 0.35, foregrounds);
+        *derivedColors[kind + 3] = strongestReadableTint(
+            background, anchors[kind], 0.45, 0.70, foregrounds);
+    }
+
+    // 3.0 is the shipped theme's achievable WCAG floor; 8 CIE76 separates
+    // kinds strongly, while 4.5/3.8 are above a just-noticeable difference for
+    // word tiers and subtle rows. Quantized 256-color output is gated too.
+    if (distinct(derived, background)) return derived;
+    const bool lightBackground = luminance(background) > 0.5;
+    const auto preferredFallback = fixedFallback(lightBackground);
+    if (readable(preferredFallback, foregrounds) &&
+        distinct(preferredFallback, background)) {
+        return preferredFallback;
+    }
+    const auto alternateFallback = fixedFallback(!lightBackground);
+    if (readable(alternateFallback, foregrounds) &&
+        distinct(alternateFallback, background)) {
+        return alternateFallback;
+    }
+    // A fixed set cannot be contrast-safe for every arbitrary foreground
+    // palette. The clamped derived colors preserve readability in that
+    // pathological case; Indexed256 may make the requested distinctness
+    // mathematically impossible (for example, a black background at the exact
+    // contrast floor has only one readable resolved swatch).
+    return derived;
 }
 
 } // namespace
@@ -185,7 +388,8 @@ std::uint8_t Theme::indexForSyntax(std::string_view scope) const noexcept {
 }
 
 ThemeSnapshot Theme::snapshot() const noexcept {
-    return {palette_, semanticIndices_, syntaxIndices_};
+    return {palette_, semanticIndices_, syntaxIndices_,
+            deriveDiffTints(palette_, semanticIndices_, syntaxIndices_)};
 }
 
 } // namespace ssg

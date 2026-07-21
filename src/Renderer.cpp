@@ -553,6 +553,7 @@ CellGrid renderTooSmall(GridSize size, ThemeSnapshot const& theme) {
                                      std::max(0, size.rows)),
             CellGridCell{" ", foreground, background, SemanticRole::Background,
                          false})};
+    grid.diffTints = theme.diffTints;
     if (size.columns <= 0 || size.rows <= 0) return grid;
     std::string_view const message = "terminal too small";
     auto const messageCells =
@@ -584,11 +585,22 @@ std::string CellGrid::canonical() const {
                << static_cast<unsigned>(color.blue);
     }
     output << std::dec << '\n';
+    output << "diff_tints";
+    for (auto const& color : std::array{
+             diffTints.addedRow, diffTints.removedRow, diffTints.modifiedRow,
+             diffTints.addedWord, diffTints.removedWord,
+             diffTints.modifiedWord}) {
+        output << ' ' << std::hex << std::setw(2) << std::setfill('0')
+               << static_cast<unsigned>(color.red) << std::setw(2)
+               << static_cast<unsigned>(color.green) << std::setw(2)
+               << static_cast<unsigned>(color.blue);
+    }
+    output << std::dec << '\n';
     for (int row = 0; row < size.rows; ++row) {
         for (int column = 0; column < size.columns; ++column) {
             auto const& cell = at(column, row);
             if (cell.text == " " && cell.role == SemanticRole::Background &&
-                !cell.continuation) {
+                !cell.continuation && cell.tint == DiffTint::None) {
                 continue;
             }
             output << "cell " << column << ' ' << row << ' '
@@ -596,6 +608,10 @@ std::string CellGrid::canonical() const {
                    << static_cast<unsigned>(cell.background) << ' '
                    << static_cast<unsigned>(cell.role) << ' '
                    << (cell.continuation ? "~" : '"' + escaped(cell.text) + '"')
+                   << (cell.tint == DiffTint::None
+                           ? ""
+                           : " tint " +
+                                 std::to_string(static_cast<unsigned>(cell.tint)))
                    << '\n';
         }
     }
@@ -637,6 +653,7 @@ CellGrid Renderer::render(SessionSnapshot const& snapshot) const {
                                      shell.viewport.rows),
             CellGridCell{" ", foreground, background, SemanticRole::Background,
                          false})};
+    grid.diffTints = theme.diffTints;
 
     auto const panelBackground =
         shell.panel ? semanticIndex(theme, SemanticRole::TreeBackground)

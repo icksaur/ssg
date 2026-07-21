@@ -321,7 +321,30 @@ int compareScreen(DecodedScreen const& screen, ssg::CellGrid const& grid) {
             std::string const expected = cell.text.empty() ? " " : cell.text;
             ASSERT_EQ(decoded.text, expected);
             ASSERT_TRUE(colorEq(decoded.foreground, grid.palette[cell.foreground]));
-            ASSERT_TRUE(colorEq(decoded.background, grid.palette[cell.background]));
+            auto expectedBackground = grid.palette[cell.background];
+            switch (cell.tint) {
+                case ssg::DiffTint::AddedRow:
+                    expectedBackground = grid.diffTints.addedRow;
+                    break;
+                case ssg::DiffTint::RemovedRow:
+                    expectedBackground = grid.diffTints.removedRow;
+                    break;
+                case ssg::DiffTint::ModifiedRow:
+                    expectedBackground = grid.diffTints.modifiedRow;
+                    break;
+                case ssg::DiffTint::AddedWord:
+                    expectedBackground = grid.diffTints.addedWord;
+                    break;
+                case ssg::DiffTint::RemovedWord:
+                    expectedBackground = grid.diffTints.removedWord;
+                    break;
+                case ssg::DiffTint::ModifiedWord:
+                    expectedBackground = grid.diffTints.modifiedWord;
+                    break;
+                case ssg::DiffTint::None:
+                    break;
+            }
+            ASSERT_TRUE(colorEq(decoded.background, expectedBackground));
             ++compared;
         }
     }
@@ -353,6 +376,35 @@ TEST(decoderRoundtripsTheEncodedFrame) {
     auto screen = decode(encoded, grid.size.columns, grid.size.rows);
     compareScreen(screen, grid);
     fs::remove_all(root);
+}
+
+TEST(decoderRoundtripsOrthogonalTintBackgrounds) {
+    ssg::CellGrid grid;
+    grid.size = {2, 1};
+    grid.palette[0] = {30, 30, 30};
+    grid.palette[1] = {212, 212, 212};
+    grid.diffTints.addedRow = {0, 0, 95};
+    ssg::CellGridCell plain;
+    plain.text = "X";
+    plain.foreground = 1;
+    ssg::CellGridCell tinted = plain;
+    tinted.text = "Y";
+    tinted.tint = ssg::DiffTint::AddedRow;
+    grid.cells = {plain, tinted};
+
+    const auto encoded =
+        ssg::app::encode_ansi_frame(grid, ssg::ColorDepth::Truecolor);
+    const auto decoded = decode(encoded, grid.size.columns, grid.size.rows);
+    ASSERT_EQ(compareScreen(decoded, grid), 2);
+}
+
+TEST(canonicalIncludesTintedBlankCells) {
+    ssg::CellGrid grid;
+    grid.size = {1, 1};
+    grid.cells.resize(1);
+    grid.cells.front().tint = ssg::DiffTint::AddedRow;
+    ASSERT_TRUE(grid.canonical().find("cell 0 0") != std::string::npos);
+    ASSERT_TRUE(grid.canonical().find("tint 1") != std::string::npos);
 }
 
 // M11-2a: the real `ssg` binary's pty output, decoded independently, equals
@@ -428,6 +480,8 @@ TEST(realBinaryWideGlyphOutputMatchesRender) {
 
 int main() {
     RUN(decoderRoundtripsTheEncodedFrame);
+    RUN(decoderRoundtripsOrthogonalTintBackgrounds);
+    RUN(canonicalIncludesTintedBlankCells);
     RUN(realBinaryOutputMatchesRenderSnapshot);
     RUN(realBinaryWideGlyphOutputMatchesRender);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
