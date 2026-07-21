@@ -1,6 +1,7 @@
 #include <ssg/TabManager.h>
 
 #include <algorithm>
+#include <cassert>
 #include <stdexcept>
 #include <unordered_map>
 #include <utility>
@@ -253,6 +254,7 @@ TabResult TabManager::openDocument(FileDocumentId document,
                    tab.documentKey == identity;
         });
     if (duplicate != impl_->view.tabs.end()) {
+        assert(duplicate->document.has_value());
         impl_->view.active = duplicate->id;
         return {TabError::None, {}, duplicate->id, {}};
     }
