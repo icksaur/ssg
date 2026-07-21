@@ -704,7 +704,12 @@ void EditorRuntime::Impl::refreshSyntax() {
     auto const* document = activeDocument();
     auto text = document ? document->snapshot().text : std::string{};
     auto revision = document ? document->revision() : Revision{0};
-    auto request = syntax.request(revision, LanguageId::plainText(), std::move(text));
+    auto language = LanguageId::plainText();
+    if (auto state = activeWorkspaceState();
+        state && state->key.kind() == JournalDocumentKeyKind::Saved) {
+        language = LanguageId::fromPath(state->key.savedPath());
+    }
+    auto request = syntax.request(revision, std::move(language), std::move(text));
     if (request.accepted()) {
         auto output = syntax.run(*request.request);
         (void)syntax.accept(request.request, output);

@@ -3,13 +3,57 @@
 #include <ssg/startup_audit.h>
 
 #include <algorithm>
+#include <array>
+#include <cctype>
 #include <limits>
 #include <stdexcept>
+#include <string>
 #include <tuple>
 #include <utility>
 
 namespace ssg {
 namespace {
+
+struct LanguageExtension {
+    std::string_view extension;
+    std::string_view language;
+};
+
+constexpr std::array<LanguageExtension, 15> kLanguageExtensions{{
+    {".c", "c"},
+    {".h", "c"},
+    {".cc", "cpp"},
+    {".cpp", "cpp"},
+    {".cxx", "cpp"},
+    {".hpp", "cpp"},
+    {".hh", "cpp"},
+    {".hxx", "cpp"},
+    {".js", "javascript"},
+    {".mjs", "javascript"},
+    {".cjs", "javascript"},
+    {".ts", "typescript"},
+    {".tsx", "typescript"},
+    {".cs", "csharp"},
+    {".lua", "lua"},
+}};
+
+std::string lowerAscii(std::string_view value) {
+    std::string lowered;
+    lowered.reserve(value.size());
+    for (char ch : value) {
+        lowered.push_back(static_cast<char>(
+            std::tolower(static_cast<unsigned char>(ch))));
+    }
+    return lowered;
+}
+
+std::string_view fileName(std::string_view path) {
+    auto separator = path.find_last_of("/\\");
+    if (separator == std::string_view::npos) {
+        return path;
+    }
+    return path.substr(separator + 1);
+}
 
 bool pointBeforeOrEqual(const SyntaxPoint& left,
                            const SyntaxPoint& right) {
@@ -388,6 +432,48 @@ LanguageId::LanguageId(std::string value) : value_(std::move(value)) {
 
 LanguageId LanguageId::plainText() {
     return LanguageId{"plain_text"};
+}
+
+LanguageId LanguageId::c() {
+    return LanguageId{"c"};
+}
+
+LanguageId LanguageId::cpp() {
+    return LanguageId{"cpp"};
+}
+
+LanguageId LanguageId::javascript() {
+    return LanguageId{"javascript"};
+}
+
+LanguageId LanguageId::typescript() {
+    return LanguageId{"typescript"};
+}
+
+LanguageId LanguageId::csharp() {
+    return LanguageId{"csharp"};
+}
+
+LanguageId LanguageId::lua() {
+    return LanguageId{"lua"};
+}
+
+LanguageId LanguageId::fromPath(std::string_view path) {
+    auto name = fileName(path);
+    auto separator = name.find_last_of('.');
+    if (separator == std::string_view::npos || separator == 0) {
+        return plainText();
+    }
+    auto extension = lowerAscii(name.substr(separator));
+    const auto found = std::find_if(
+        kLanguageExtensions.begin(), kLanguageExtensions.end(),
+        [&](const LanguageExtension& mapping) {
+            return mapping.extension == extension;
+        });
+    if (found == kLanguageExtensions.end()) {
+        return plainText();
+    }
+    return LanguageId{std::string{found->language}};
 }
 
 bool LanguageId::isPlainText() const noexcept {
