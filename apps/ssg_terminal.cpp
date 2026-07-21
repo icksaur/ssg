@@ -111,20 +111,26 @@ std::string encode_ansi_frame(ssg::CellGrid const& screen, ssg::ColorDepth depth
         out += "\x1b[" + std::to_string(y + 1) + ";1H\x1b[0m";
         int foreground = -1;
         int background = -1;
+        int role = -1;
         auto tint = ssg::DiffTint::None;
         for (int x = 0; x < columns; ++x) {
             auto const& cell =
                 screen.cells[static_cast<std::size_t>(y * columns + x)];
             if (cell.continuation) continue;
             if (cell.foreground != foreground || cell.background != background ||
-                cell.tint != tint) {
+                cell.tint != tint || static_cast<int>(cell.role) != role) {
                 out += paletteColor(cell.foreground, '3');
-                out += cell.tint == ssg::DiffTint::None
-                           ? paletteColor(cell.background, '4')
-                           : color(tintColor(cell.tint), '4');
+                if (cell.tint != ssg::DiffTint::None) {
+                    out += color(tintColor(cell.tint), '4');
+                } else if (cell.role == ssg::SemanticRole::Selection) {
+                    out += color(screen.selectionFill, '4');
+                } else {
+                    out += paletteColor(cell.background, '4');
+                }
                 foreground = cell.foreground;
                 background = cell.background;
                 tint = cell.tint;
+                role = static_cast<int>(cell.role);
             }
             out += cell.text.empty() ? std::string{" "} : cell.text;
         }

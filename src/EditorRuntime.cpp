@@ -94,6 +94,8 @@ ThemeSnapshot defaultTheme() {
     syntax(SyntaxScope::Invalid, 6);
     snapshot.diffTints = deriveDiffTints(
         snapshot.palette, snapshot.semanticIndices, snapshot.syntaxIndices);
+    snapshot.selectionFill = deriveSelectionFill(
+        snapshot.palette, snapshot.semanticIndices, snapshot.syntaxIndices);
     return snapshot;
 }
 

@@ -228,6 +228,8 @@ public:
             if (i < theme.syntaxIndices.size())
                 theme.syntaxIndices[i] = static_cast<std::uint8_t>(i);
         }
+        theme.selectionFill = ssg::deriveSelectionFill(
+            theme.palette, theme.semanticIndices, theme.syntaxIndices);
 
         ssg::ShellViewState shell;
         shell.viewport = {80, 24};
@@ -542,6 +544,8 @@ public:
             ssg::ByteOffset{0}, ssg::LineIndex{0}, ssg::CellIndex{0}};
         ssg::SettingsViewState settings;
         ssg::ThemeSnapshot theme{};
+        theme.selectionFill = ssg::deriveSelectionFill(
+            theme.palette, theme.semanticIndices, theme.syntaxIndices);
         ssg::ShellViewState shell;
         shell.viewport = {80, 24};
         return {

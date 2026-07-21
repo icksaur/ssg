@@ -654,6 +654,7 @@ CellGrid renderTooSmall(GridSize size, ThemeSnapshot const& theme) {
             CellGridCell{" ", foreground, background, SemanticRole::Background,
                          false})};
     grid.diffTints = theme.diffTints;
+    grid.selectionFill = theme.selectionFill;
     if (size.columns <= 0 || size.rows <= 0) return grid;
     std::string_view const message = "terminal too small";
     auto const messageCells =
@@ -696,6 +697,10 @@ std::string CellGrid::canonical() const {
                << static_cast<unsigned>(color.blue);
     }
     output << std::dec << '\n';
+    output << "selection_fill " << std::hex << std::setw(2) << std::setfill('0')
+           << static_cast<unsigned>(selectionFill.red) << std::setw(2)
+           << static_cast<unsigned>(selectionFill.green) << std::setw(2)
+           << static_cast<unsigned>(selectionFill.blue) << std::dec << '\n';
     for (int row = 0; row < size.rows; ++row) {
         for (int column = 0; column < size.columns; ++column) {
             auto const& cell = at(column, row);
@@ -754,6 +759,7 @@ CellGrid Renderer::render(SessionSnapshot const& snapshot) const {
             CellGridCell{" ", foreground, background, SemanticRole::Background,
                          false})};
     grid.diffTints = theme.diffTints;
+    grid.selectionFill = theme.selectionFill;
 
     auto const panelBackground =
         shell.panel ? semanticIndex(theme, SemanticRole::TreeBackground)

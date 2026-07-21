@@ -167,6 +167,24 @@ std::array<SrgbColor, 6> colors(DiffTints const& tints) noexcept {
             tints.addedWord, tints.removedWord, tints.modifiedWord};
 }
 
+std::array<SrgbColor, kSyntaxScopeCount + 1> foregrounds(
+    std::array<SrgbColor, kThemePaletteSize> const& palette,
+    std::array<std::uint8_t, kSemanticRoleCount> const& semanticIndices,
+    std::array<std::uint8_t, kSyntaxScopeCount> const& syntaxIndices) noexcept {
+    std::array<SrgbColor, kSyntaxScopeCount + 1> colors{};
+    for (std::size_t index = 0; index < syntaxIndices.size(); ++index) {
+        colors[index] = palette[syntaxIndices[index]];
+    }
+    colors.back() = palette[semanticIndices[position(SemanticRole::Foreground)]];
+    return colors;
+}
+
+SrgbColor background(
+    std::array<SrgbColor, kThemePaletteSize> const& palette,
+    std::array<std::uint8_t, kSemanticRoleCount> const& semanticIndices) noexcept {
+    return palette[semanticIndices[position(SemanticRole::Background)]];
+}
+
 bool readable(SrgbColor tint, SrgbColor background,
               std::array<SrgbColor, kSyntaxScopeCount + 1> const& foregrounds)
     noexcept {
@@ -253,14 +271,8 @@ DiffTints deriveDiffTints(
     std::array<SrgbColor, kThemePaletteSize> const& palette,
     std::array<std::uint8_t, kSemanticRoleCount> const& semanticIndices,
     std::array<std::uint8_t, kSyntaxScopeCount> const& syntaxIndices) noexcept {
-    std::array<SrgbColor, kSyntaxScopeCount + 1> foregrounds{};
-    for (std::size_t index = 0; index < syntaxIndices.size(); ++index) {
-        foregrounds[index] = palette[syntaxIndices[index]];
-    }
-    foregrounds.back() =
-        palette[semanticIndices[position(SemanticRole::Foreground)]];
-    const auto background =
-        palette[semanticIndices[position(SemanticRole::Background)]];
+    const auto allForegrounds = foregrounds(palette, semanticIndices, syntaxIndices);
+    const auto themeBackground = background(palette, semanticIndices);
     const std::array anchors{
         palette[semanticIndices[position(SemanticRole::GitAdded)]],
         palette[semanticIndices[position(SemanticRole::GitDeleted)]],
@@ -273,9 +285,9 @@ DiffTints deriveDiffTints(
         &derived.addedWord, &derived.removedWord, &derived.modifiedWord};
     for (std::size_t kind = 0; kind < anchors.size(); ++kind) {
         *derivedColors[kind] = strongestReadableTint(
-            background, anchors[kind], 0.40, 0.60, foregrounds);
+            themeBackground, anchors[kind], 0.40, 0.60, allForegrounds);
         *derivedColors[kind + 3] = strongestReadableTint(
-            background, anchors[kind], 0.72, 0.85, foregrounds);
+            themeBackground, anchors[kind], 0.72, 0.85, allForegrounds);
     }
 
     // 3.0 is the shipped theme's achievable WCAG floor; 8 CIE76 separates
@@ -286,22 +298,34 @@ DiffTints deriveDiffTints(
     // rescues only a degenerate theme whose near-monochrome anchors make the
     // derived tints indistinguishable. If nothing is both readable and distinct,
     // keep the readable derived washes (readability is the primary guarantee).
-    if (readable(derived, background, foregrounds) &&
-        distinct(derived, background)) {
+    if (readable(derived, themeBackground, allForegrounds) &&
+        distinct(derived, themeBackground)) {
         return derived;
     }
-    const bool lightBackground = luminance(background) > 0.5;
+    const bool lightBackground = luminance(themeBackground) > 0.5;
     const auto preferredFallback = fixedFallback(lightBackground);
-    if (readable(preferredFallback, background, foregrounds) &&
-        distinct(preferredFallback, background)) {
+    if (readable(preferredFallback, themeBackground, allForegrounds) &&
+        distinct(preferredFallback, themeBackground)) {
         return preferredFallback;
     }
     const auto alternateFallback = fixedFallback(!lightBackground);
-    if (readable(alternateFallback, background, foregrounds) &&
-        distinct(alternateFallback, background)) {
+    if (readable(alternateFallback, themeBackground, allForegrounds) &&
+        distinct(alternateFallback, themeBackground)) {
         return alternateFallback;
     }
     return derived;
+}
+
+SrgbColor deriveSelectionFill(
+    std::array<SrgbColor, kThemePaletteSize> const& palette,
+    std::array<std::uint8_t, kSemanticRoleCount> const& semanticIndices,
+    std::array<std::uint8_t, kSyntaxScopeCount> const& syntaxIndices) noexcept {
+    const auto allForegrounds = foregrounds(palette, semanticIndices, syntaxIndices);
+    const auto themeBackground = background(palette, semanticIndices);
+    const auto selectionAnchor =
+        palette[semanticIndices[position(SemanticRole::Selection)]];
+    return strongestReadableTint(themeBackground, selectionAnchor, 0.40, 0.60,
+                                 allForegrounds);
 }
 
 std::string_view semanticRoleName(SemanticRole role) {
@@ -409,7 +433,8 @@ std::uint8_t Theme::indexForSyntax(std::string_view scope) const noexcept {
 
 ThemeSnapshot Theme::snapshot() const noexcept {
     return {palette_, semanticIndices_, syntaxIndices_,
-            deriveDiffTints(palette_, semanticIndices_, syntaxIndices_)};
+            deriveDiffTints(palette_, semanticIndices_, syntaxIndices_),
+            deriveSelectionFill(palette_, semanticIndices_, syntaxIndices_)};
 }
 
 } // namespace ssg

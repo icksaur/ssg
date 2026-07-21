@@ -213,6 +213,43 @@ void assertDiffTintGates(ssg::ThemeSnapshot const& snapshot) {
     }
 }
 
+void assertSelectionFillGate(ssg::ThemeSnapshot const& snapshot) {
+    constexpr double kFloorContrast = 2.1;
+    constexpr double kRetainContrast = 0.80;
+    std::array<SrgbColor, ssg::kSyntaxScopeCount + 1> foregrounds{};
+    for (std::size_t index = 0; index < snapshot.syntaxIndices.size(); ++index) {
+        foregrounds[index] = snapshot.palette[snapshot.syntaxIndices[index]];
+    }
+    foregrounds.back() =
+        snapshot.palette[snapshot.semanticIndices[static_cast<std::size_t>(
+            SemanticRole::Foreground)]];
+    const auto background =
+        snapshot.palette[snapshot.semanticIndices[static_cast<std::size_t>(
+            SemanticRole::Background)]];
+    const auto selectionAnchor =
+        snapshot.palette[snapshot.semanticIndices[static_cast<std::size_t>(
+            SemanticRole::Selection)]];
+
+    bool anchorFails = false;
+    for (const auto depth :
+         {ssg::ColorDepth::Truecolor, ssg::ColorDepth::Indexed256}) {
+        for (const auto foreground : foregrounds) {
+            const auto required = std::max(
+                kFloorContrast,
+                kRetainContrast * contrast(resolved(background, depth),
+                                           resolved(foreground, depth)));
+            if (contrast(resolved(selectionAnchor, depth),
+                         resolved(foreground, depth)) < required - 1e-9) {
+                anchorFails = true;
+            }
+            ASSERT_TRUE(contrast(resolved(snapshot.selectionFill, depth),
+                                 resolved(foreground, depth)) >=
+                        required - 1e-9);
+        }
+    }
+    ASSERT_TRUE(anchorFails);
+}
+
 std::string readFile(const std::filesystem::path& path) {
     std::ifstream input(path, std::ios::binary);
     if (!input) throw std::runtime_error("failed to open fixture: " + path.string());
@@ -353,6 +390,7 @@ TEST(diffTintsMeetResolvedReadabilityAndDistinctnessGates) {
     }
     ASSERT_TRUE(naiveAnchorFails);
     assertDiffTintGates(snapshot);
+    assertSelectionFillGate(snapshot);
     for (const auto tint : colors(snapshot.diffTints)) {
         const auto indexed = ssg::resolveColor(tint, ssg::ColorDepth::Indexed256);
         ASSERT_TRUE(indexed.index >= 16);

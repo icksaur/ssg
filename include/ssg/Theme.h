@@ -197,6 +197,7 @@ struct ThemeSnapshot {
     std::array<std::uint8_t, kSemanticRoleCount> semanticIndices;
     std::array<std::uint8_t, kSyntaxScopeCount> syntaxIndices;
     DiffTints diffTints;
+    SrgbColor selectionFill;
 
     friend bool operator==(const ThemeSnapshot&, const ThemeSnapshot&) = default;
 };
@@ -209,9 +210,13 @@ struct ThemeSnapshot {
 // Derive the six diff tint colors from a theme's own palette + role/scope
 // mappings (GitAdded/Deleted/Modified hue anchors blended toward Background,
 // contrast- and distinctness-gated). Exposed so a hand-built ThemeSnapshot (e.g.
-// the runtime's defaultTheme) populates diffTints the same way Theme::snapshot()
-// does; without it diffTints defaults to zero (black).
+// the runtime's defaultTheme) populates diffTints/selectionFill the same way
+// Theme::snapshot() does; without it those fields default to black.
 [[nodiscard]] DiffTints deriveDiffTints(
+    std::array<SrgbColor, kThemePaletteSize> const& palette,
+    std::array<std::uint8_t, kSemanticRoleCount> const& semanticIndices,
+    std::array<std::uint8_t, kSyntaxScopeCount> const& syntaxIndices) noexcept;
+[[nodiscard]] SrgbColor deriveSelectionFill(
     std::array<SrgbColor, kThemePaletteSize> const& palette,
     std::array<std::uint8_t, kSemanticRoleCount> const& semanticIndices,
     std::array<std::uint8_t, kSyntaxScopeCount> const& syntaxIndices) noexcept;

@@ -4535,6 +4535,7 @@ ProtocolValue toValue(ThemeSnapshot const& value) {
     fields.emplace_back("semantic_indices", toValue(value.semanticIndices));
     fields.emplace_back("syntax_indices", toValue(value.syntaxIndices));
     fields.emplace_back("diff_tints", toValue(value.diffTints));
+    fields.emplace_back("selection_fill", toValue(value.selectionFill));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<ThemeSnapshot>& out) {
@@ -4547,9 +4548,14 @@ bool decodePresent(ProtocolValue const& value, std::optional<ThemeSnapshot>& out
     auto syntaxIndices = requireField<std::array<std::uint8_t, kSyntaxScopeCount>>(
         value.field("syntax_indices"));
     auto diffTints = requireField<DiffTints>(value.field("diff_tints"));
-    if (!palette || !semanticIndices || !syntaxIndices || !diffTints) return false;
+    auto selectionFill = requireField<SrgbColor>(value.field("selection_fill"));
+    if (!palette || !semanticIndices || !syntaxIndices || !diffTints ||
+        !selectionFill) {
+        return false;
+    }
     out.emplace(
-        ThemeSnapshot{*palette, *semanticIndices, *syntaxIndices, *diffTints});
+        ThemeSnapshot{*palette, *semanticIndices, *syntaxIndices, *diffTints,
+                      *selectionFill});
     return true;
 }
 
