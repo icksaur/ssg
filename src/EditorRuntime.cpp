@@ -278,7 +278,8 @@ std::string tabMessage(TabResult const& result) {
 EditorRuntime::Impl::Impl(std::filesystem::path canonicalCwd,
                           std::filesystem::path scratchRoot,
                           std::filesystem::path recoveryRoot,
-                          bool deferEnrichment)
+                          bool deferEnrichment,
+                          std::shared_ptr<SyntaxParser> syntaxParser)
     : root{std::move(canonicalCwd)},
       scratchRoot{std::filesystem::weakly_canonical(scratchRoot)},
       recoveryRoot{std::filesystem::weakly_canonical(recoveryRoot)},
@@ -290,7 +291,7 @@ EditorRuntime::Impl::Impl(std::filesystem::path canonicalCwd,
       shell{{"Files", "Git", "Symbols"}},
       tabs{*this},
       external{recovery, diff},
-      syntax{},
+      syntax{std::move(syntaxParser)},
       search{*this, *this},
       theme{defaultTheme()},
       deferringEnrichment{deferEnrichment} {
@@ -757,7 +758,8 @@ EditorRuntimeCreateResult EditorRuntime::create(EditorRuntimeConfig config) {
         std::filesystem::create_directories(config.recoveryRoot);
         auto impl = std::make_unique<Impl>(cwd, config.scratchRoot,
                                            config.recoveryRoot,
-                                           config.deferEnrichment);
+                                           config.deferEnrichment,
+                                           std::move(config.syntaxParser));
         impl->keymap = defaultTerminalKeymap();
         if (auto errors = KeymapMatcher{impl->keymap}.validate({}); !errors.empty()) {
             return {nullptr, "default keymap is invalid: " + errors.front().message};

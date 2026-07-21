@@ -18,6 +18,15 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_link_libraries(test_runtime_snapshot PRIVATE ssg)
     add_test(NAME test_runtime_snapshot COMMAND test_runtime_snapshot)
 
+    add_executable(test_syntax_injection
+        ${SSG_SOURCE_DIR}/tests/test_syntax_injection.cpp
+    )
+    target_include_directories(test_syntax_injection PRIVATE
+        ${SSG_SOURCE_DIR}/tests
+    )
+    target_link_libraries(test_syntax_injection PRIVATE ssg)
+    add_test(NAME test_syntax_injection COMMAND test_syntax_injection)
+
     add_executable(test_runtime_files
         ${SSG_SOURCE_DIR}/tests/runtime/test_runtime_files.cpp
     )

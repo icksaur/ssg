@@ -55,7 +55,8 @@ struct EditorRuntime::Impl final : CommandServices,
     Impl(std::filesystem::path canonicalCwd,
          std::filesystem::path scratchRoot,
          std::filesystem::path recoveryRoot,
-         bool deferEnrichment = false);
+         bool deferEnrichment = false,
+         std::shared_ptr<SyntaxParser> syntaxParser = nullptr);
 
     std::filesystem::path root;
     std::filesystem::path scratchRoot;

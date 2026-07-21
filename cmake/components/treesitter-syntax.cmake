@@ -1,5 +1,6 @@
 target_sources(ssg PRIVATE
     ${SSG_SOURCE_DIR}/src/SyntaxModel.cpp
+    ${SSG_SOURCE_DIR}/src/syntax_parser_factory.cpp
 )
 
 if(SSG_TREESITTER)
