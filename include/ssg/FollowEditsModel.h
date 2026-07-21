@@ -131,6 +131,12 @@ struct FollowNavigation {
     std::optional<FollowScrollOffset> offset;
 };
 
+struct FollowDiffChange {
+    DiffFileView file;
+    std::vector<DiffHunk> priorHunks;
+    Revision sourceRevision{0};
+};
+
 class FollowEditsModel {
 public:
     explicit FollowEditsModel(FollowEditsConfig config = {});
@@ -140,6 +146,8 @@ public:
     [[nodiscard]] FollowEditsResult detachClient(ClientId client);
     [[nodiscard]] FollowEditsResult acceptExternalChange(
         const DiffFileView& file, Revision sourceRevision);
+    [[nodiscard]] FollowEditsResult acceptExternalChanges(
+        std::vector<FollowDiffChange> changes);
     [[nodiscard]] FollowEditsResult applyNavigation(
         const FollowNavigation& navigation);
     [[nodiscard]] FollowEditsResult pause();
@@ -150,6 +158,7 @@ public:
 
 private:
     [[nodiscard]] FollowTarget targetFor(const DiffFileView& file,
+                                          const DiffHunk& hunk,
                                           Revision sourceRevision) const;
     void activate(const FollowTarget& target, const DiffFileView& file);
     void advanceGeneration() noexcept;

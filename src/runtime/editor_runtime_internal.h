@@ -213,6 +213,11 @@ struct EditorRuntime::Impl final : CommandServices,
     [[nodiscard]] std::string currentPathLabel() const;
     [[nodiscard]] CommandHandlerResult updateTabsFor(FileDocumentId document);
     [[nodiscard]] CommandHandlerResult activateDocument(FileDocumentId document);
+    [[nodiscard]] ExternalDiffBurstResult applyExternalDiffBurst(
+        std::vector<ExternalDiffRevision> changes);
+    [[nodiscard]] bool revealDiffTarget(
+        const FollowTarget& target, NavigationClass classification);
+    void recordNavigation(ClientId client, NavigationClass classification);
     void refreshTree();
     void reconcilePromptFocus();
     void refreshSyntax();

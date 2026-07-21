@@ -148,7 +148,7 @@ TEST(gitUntrackedRenameDeleteAndIndexChangeRetainIdentity) {
     ASSERT_EQ(onlyFile(renamed).baselineIdentity, std::string{"index-b"});
 }
 
-TEST(seededNonGitEventsAdvanceBaselineAndRetainRenameDelete) {
+TEST(externalDiffsUseExplicitAppOwnedBaselineAndRetainRenameDelete) {
     DiffModel model;
     ASSERT_TRUE(model.seedNonGit(
                          {{.id = DiffFileId{"seed"},
@@ -162,7 +162,8 @@ TEST(seededNonGitEventsAdvanceBaselineAndRetainRenameDelete) {
                          .id = DiffFileId{"seed"},
                          .path = "new.txt",
                          .previousPath = std::filesystem::path{"old.txt"},
-                         .content = fixture("tracked.target")},
+                         .baselineContent = fixture("tracked.baseline"),
+                         .targetContent = fixture("tracked.target")},
                         Revision{2})
                     .accepted());
     ASSERT_EQ(onlyFile(model).id, DiffFileId{"seed"});
@@ -176,19 +177,20 @@ TEST(seededNonGitEventsAdvanceBaselineAndRetainRenameDelete) {
                         {.kind = NonGitDiffEventKind::Modify,
                          .id = DiffFileId{"seed"},
                          .path = "new.txt",
-                         .content = fixture("tracked.target") + "tail\n"},
+                        .baselineContent = fixture("tracked.baseline"),
+                        .targetContent = fixture("tracked.target") + "tail\n"},
                         Revision{3})
                     .accepted());
-    ASSERT_EQ(onlyFile(model).hunks.front().baselineLines.size(),
-              std::size_t{0});
-    ASSERT_EQ(onlyFile(model).hunks.front().targetLines,
-              (std::vector<std::string>{"tail\n"}));
+    ASSERT_EQ(reconstruct(fixture("tracked.baseline"), onlyFile(model).hunks),
+              fixture("tracked.target") + "tail\n");
+    ASSERT_TRUE(onlyFile(model).hunks.size() > std::size_t{1});
 
     ASSERT_TRUE(model
                     .applyNonGitEvent(
                         {.kind = NonGitDiffEventKind::Remove,
                          .id = DiffFileId{"seed"},
-                         .path = "new.txt"},
+                        .path = "new.txt",
+                        .baselineContent = fixture("tracked.baseline")},
                         Revision{4})
                     .accepted());
     ASSERT_TRUE(onlyFile(model).deleted);
@@ -212,7 +214,8 @@ TEST(staleInvalidAndOverBudgetWorkAreFailureAtomic) {
                       {.kind = NonGitDiffEventKind::Modify,
                        .id = DiffFileId{"seed"},
                        .path = "a.txt",
-                       .content = "b\n"},
+                      .baselineContent = "a\n",
+                      .targetContent = "b\n"},
                       Revision{1})
                   .error,
               DiffError::StaleRevision);
@@ -222,7 +225,8 @@ TEST(staleInvalidAndOverBudgetWorkAreFailureAtomic) {
                   .applyNonGitEvent(
                       {.kind = NonGitDiffEventKind::Remove,
                        .id = DiffFileId{"missing"},
-                       .path = "missing.txt"},
+                      .path = "missing.txt",
+                      .baselineContent = "a\n"},
                       Revision{2})
                   .error,
               DiffError::UnknownFile);
@@ -255,7 +259,8 @@ TEST(staleInvalidAndOverBudgetWorkAreFailureAtomic) {
                   .applyNonGitEvent(
                       {.kind = NonGitDiffEventKind::Create,
                        .id = DiffFileId{"seed"},
-                       .path = "a.txt"},
+                      .path = "a.txt",
+                      .baselineContent = ""},
                       Revision{2})
                   .error,
               DiffError::ContentRequired);
@@ -266,7 +271,8 @@ TEST(staleInvalidAndOverBudgetWorkAreFailureAtomic) {
                       {.kind = NonGitDiffEventKind::Modify,
                        .id = DiffFileId{"seed"},
                        .path = "a.txt",
-                       .content = "b\nc\nd\ne\nf\n"},
+                      .baselineContent = "a\n",
+                      .targetContent = "b\nc\nd\ne\nf\n"},
                       Revision{2})
                   .error,
               DiffError::WorkLimitExceeded);
@@ -344,7 +350,7 @@ TEST(documentDiffLookupUsesIdentityAndRevision) {
 int main() {
     RUN(gitTrackedFixtureReconstructsAndMatchesIndependentChangedLines);
     RUN(gitUntrackedRenameDeleteAndIndexChangeRetainIdentity);
-    RUN(seededNonGitEventsAdvanceBaselineAndRetainRenameDelete);
+    RUN(externalDiffsUseExplicitAppOwnedBaselineAndRetainRenameDelete);
     RUN(staleInvalidAndOverBudgetWorkAreFailureAtomic);
     RUN(deltaReplayAndExactCommandNavigationContract);
     RUN(documentDiffLookupUsesIdentityAndRevision);

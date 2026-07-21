@@ -185,6 +185,7 @@ public:
             input.id,
             input.event.path,
             input.event.previousPath,
+            std::move(input.baselineContent),
             input.diskContent};
         const auto diffResult = diff_.applyNonGitEvent(
             std::move(diffEvent), Revision{input.event.sequence});

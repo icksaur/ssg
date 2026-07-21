@@ -94,6 +94,7 @@ CommandHandlerResult bindText(EditorRuntime::Impl& runtime,
 }
 
 CommandHandlerResult bindSelection(EditorRuntime::Impl& runtime,
+                                    ClientId client,
                                     SelectionCommand command,
                                     std::any const& payload) {
     SelectionCommandArguments arguments;
@@ -126,6 +127,7 @@ CommandHandlerResult bindSelection(EditorRuntime::Impl& runtime,
         command == SelectionCommand::SelectSetRange) {
         runtime.shell.focusEditor();
     }
+    runtime.recordNavigation(client, NavigationClass::User);
     return success();
 }
 
@@ -467,8 +469,11 @@ void bindRuntimeEditing(EditorSessionBuilder& builder, EditorRuntime::Impl& runt
         });
     }
     for (auto const& descriptor : selectionCommands.descriptors()) {
-        builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const& payload) {
-            return runtime.runTransaction([&] { return bindSelection(runtime, descriptor.command, payload); });
+        builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext& context, std::any const& payload) {
+            return runtime.runTransaction([&] {
+                return bindSelection(runtime, context.principal().clientId(),
+                                     descriptor.command, payload);
+            });
         });
     }
     for (auto const& descriptor : historyCommands.descriptors()) {

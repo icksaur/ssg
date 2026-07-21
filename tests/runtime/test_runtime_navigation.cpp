@@ -37,6 +37,70 @@ TEST(searchTreeDiffAndFollowSectionsUseRuntimeState) {
     ASSERT_EQ(snapshot->sections().followEdits.mode, ssg::FollowMode::Paused);
 }
 
+TEST(externalDiffBurstRevealsOnlyNewestFileWithoutPausingFollow) {
+    auto root = uniqueRoot();
+    std::string middle;
+    for (int line = 0; line < 40; ++line) {
+        middle += "line " + std::to_string(line) + "\n";
+    }
+    std::ofstream{root / "workspace" / "a.txt"} << "a\n";
+    std::ofstream{root / "workspace" / "b.txt"} << "b\n";
+    std::ofstream{root / "workspace" / "c.txt"} << middle;
+
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime
+                    .attach({ssg::ClientId{1},
+                             ssg::InvocationOrigin::InProcess},
+                            ssg::ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .applyExternalDiffBurst(
+                        {{{.kind = ssg::NonGitDiffEventKind::Create,
+                           .id = ssg::DiffFileId{"a.txt"},
+                           .path = "a.txt",
+                           .baselineContent = "",
+                           .targetContent = "a\n"},
+                          ssg::Revision{1}},
+                         {{.kind = ssg::NonGitDiffEventKind::Create,
+                           .id = ssg::DiffFileId{"b.txt"},
+                           .path = "b.txt",
+                           .baselineContent = "",
+                           .targetContent = "b\n"},
+                          ssg::Revision{2}},
+                         {{.kind = ssg::NonGitDiffEventKind::Create,
+                           .id = ssg::DiffFileId{"c.txt"},
+                           .path = "c.txt",
+                           .baselineContent = "",
+                           .targetContent = middle},
+                          ssg::Revision{3}}})
+                    .accepted());
+
+    const ssg::ViewportDimensions dimensions{20, 6};
+    auto snapshot = runtime.snapshot(ssg::ClientId{1}, dimensions);
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    ASSERT_EQ(snapshot->sections().document.diffFileIdentity,
+              std::optional<std::string>{"c.txt"});
+    ASSERT_EQ(snapshot->sections().followEdits.activeTarget->id,
+              ssg::DiffFileId{"c.txt"});
+    ASSERT_EQ(snapshot->sections().followEdits.mode, ssg::FollowMode::Following);
+
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"cursor.line_up", runtime.revision(), {}})
+                    .accepted());
+    snapshot = runtime.snapshot(ssg::ClientId{1}, dimensions);
+    ASSERT_TRUE(snapshot.has_value());
+    if (snapshot) {
+        ASSERT_EQ(snapshot->sections().followEdits.mode,
+                  ssg::FollowMode::Paused);
+    }
+}
+
 TEST(paletteOpenEntersPromptFocusAndPublishesCandidates) {
     auto root = uniqueRoot();
     auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
@@ -565,6 +629,7 @@ TEST(wordWrapOffNavigationIsViewportBounded) {
 
 int main() {
     RUN(searchTreeDiffAndFollowSectionsUseRuntimeState);
+    RUN(externalDiffBurstRevealsOnlyNewestFileWithoutPausingFollow);
     RUN(paletteOpenEntersPromptFocusAndPublishesCandidates);
     RUN(paletteExecuteValidatesCandidateMembership);
     RUN(paletteCandidatesCarryLabelsAndKeyDetail);

@@ -1,6 +1,8 @@
 #pragma once
 
+#include <ssg/DiffModel.h>
 #include <ssg/EditorSession.h>
+#include <ssg/FollowEditsModel.h>
 #include <ssg/session_snapshot.h>
 #include <ssg/SyntaxModel.h>
 #include <ssg/Viewport.h>
@@ -10,6 +12,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace ssg {
 
@@ -45,6 +48,25 @@ struct EditorRuntimeCreateResult {
     [[nodiscard]] bool accepted() const noexcept { return runtime != nullptr; }
 };
 
+struct ExternalDiffRevision {
+    NonGitDiffEvent event;
+    Revision revision{0};
+};
+
+enum class ExternalDiffBurstError {
+    None,
+    EmptyBurst,
+    DiffRejected,
+    FollowRejected,
+};
+
+struct ExternalDiffBurstResult {
+    ExternalDiffBurstError error = ExternalDiffBurstError::None;
+    [[nodiscard]] bool accepted() const noexcept {
+        return error == ExternalDiffBurstError::None;
+    }
+};
+
 class EditorRuntime {
 public:
     [[nodiscard]] static EditorRuntimeCreateResult create(
@@ -64,6 +86,8 @@ public:
 
     [[nodiscard]] Revision revision() const;
     [[nodiscard]] std::filesystem::path const& workspaceRoot() const noexcept;
+    [[nodiscard]] ExternalDiffBurstResult applyExternalDiffBurst(
+        std::vector<ExternalDiffRevision> changes);
     // M10 fast startup: run the enrichment work that was deferred when the
     // runtime was created with defer_enrichment=true (the workspace tree scan and
     // syntax highlighting), then publish it through the normal snapshot/delta
