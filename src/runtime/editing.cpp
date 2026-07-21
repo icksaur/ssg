@@ -118,7 +118,9 @@ CommandHandlerResult bindSelection(EditorRuntime::Impl& runtime,
     if (result.delta.replacement) runtime.selection = *result.delta.replacement;
     runtime.requestedFirstVisualRow = runtime.selection.firstVisualRow;
     runtime.requestedFirstVisualColumn = runtime.selection.firstVisualColumn;
-    runtime.historyFor(runtime.activeDocumentId().value_or(FileDocumentId{0})).breakCoalescing();
+    if (auto active = runtime.activeDocumentId()) {
+        runtime.historyFor(*active).breakCoalescing();
+    }
     // Focus follows the pointer (M8-F): a click-to-caret / drag-select acts on the
     // editor, so it moves the authoritative keyboard focus there. Gated on the two
     // pointer-driven selection commands; keyboard caret motion is a different

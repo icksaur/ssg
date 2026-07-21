@@ -148,8 +148,10 @@ SessionSnapshotSections EditorRuntime::Impl::sections(ViewportDimensions dimensi
                                                      PaletteReport const& paletteReport) const {
     auto currentHistory = HistoryViewState{false, false, 0};
     if (auto id = activeDocumentId()) {
-        auto found = histories.find(id->value());
-        if (found != histories.end()) currentHistory = found->second.viewState();
+        auto found = documentRuntimeStates.find(id->value());
+        if (found != documentRuntimeStates.end()) {
+            currentHistory = found->second.history.viewState();
+        }
     }
     // Compute the shell layout first: it caches the panel height that tree_view
     // resolves the tree scroll offset against (the aggregate below does not

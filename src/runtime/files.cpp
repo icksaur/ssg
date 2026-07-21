@@ -224,6 +224,7 @@ CommandHandlerResult EditorRuntime::Impl::updateTabsFor(FileDocumentId document)
 CommandHandlerResult EditorRuntime::Impl::activateDocument(FileDocumentId document) {
     auto state = workspace.state(document);
     if (!state) return failure("workspace document does not exist");
+    ensureDocumentRuntimeState(document);
     auto result = tabs.openDocument(document, state->key, state->displayLabel,
                                      workspace.document(document).mode(), state->dirty,
                                      badgeFor(scratch.durabilityState()));

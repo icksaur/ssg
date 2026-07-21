@@ -38,6 +38,16 @@
 
 namespace ssg {
 
+struct DocumentRuntimeState {
+    explicit DocumentRuntimeState(
+        HistoryConfig historyConfig = HistoryConfig::defaults(),
+        std::shared_ptr<SyntaxParser> parser = nullptr)
+        : history{historyConfig}, syntax{std::move(parser)} {}
+
+    DocumentHistory history;
+    SyntaxModel syntax;
+};
+
 void bindRuntimeEditing(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime);
 void bindRuntimeFiles(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime);
 void bindRuntimePresentation(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime);
@@ -65,7 +75,7 @@ struct EditorRuntime::Impl final : CommandServices,
     ScratchStore scratch;
     Workspace workspace;
     SelectionViewState selection;
-    std::map<std::uint64_t, DocumentHistory> histories;
+    std::map<std::uint64_t, DocumentRuntimeState> documentRuntimeStates;
     ClipboardRegister clipboard;
     SettingsModel settings;
     FindReplaceController findReplace;
@@ -83,7 +93,6 @@ struct EditorRuntime::Impl final : CommandServices,
     FollowEditsModel follow;
     TreeModel tree;
     std::shared_ptr<SyntaxParser> syntaxParser;
-    std::map<std::uint64_t, SyntaxModel> syntaxModels;
     SearchController search;
     NavigationHistory navigation{64};
     LspSyncViewState lspSync;
@@ -165,6 +174,7 @@ struct EditorRuntime::Impl final : CommandServices,
     [[nodiscard]] std::optional<FileDocumentId> activeDocumentId() const;
     [[nodiscard]] Document const* activeDocument() const;
     [[nodiscard]] Document* activeDocument();
+    void ensureDocumentRuntimeState(FileDocumentId document);
     [[nodiscard]] DocumentHistory& historyFor(FileDocumentId document);
     [[nodiscard]] SyntaxModel& syntaxFor(FileDocumentId document);
     [[nodiscard]] SyntaxViewState activeSyntaxView() const;

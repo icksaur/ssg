@@ -617,20 +617,35 @@ Document* EditorRuntime::Impl::activeDocument() {
     return id ? const_cast<Document*>(&workspace.document(*id)) : nullptr;
 }
 
+void EditorRuntime::Impl::ensureDocumentRuntimeState(FileDocumentId document) {
+    documentRuntimeStates.try_emplace(
+        document.value(),
+        DocumentRuntimeState{HistoryConfig::defaults(), syntaxParser});
+}
+
 DocumentHistory& EditorRuntime::Impl::historyFor(FileDocumentId document) {
-    auto [it, inserted] = histories.try_emplace(document.value(), HistoryConfig::defaults());
-    return it->second;
+    auto it = documentRuntimeStates.find(document.value());
+    if (it == documentRuntimeStates.end()) {
+        throw std::logic_error{
+            "document history was requested before document runtime state existed"};
+    }
+    return it->second.history;
 }
 
 SyntaxModel& EditorRuntime::Impl::syntaxFor(FileDocumentId document) {
-    auto [it, inserted] = syntaxModels.try_emplace(document.value(), syntaxParser);
-    return it->second;
+    auto it = documentRuntimeStates.find(document.value());
+    if (it == documentRuntimeStates.end()) {
+        throw std::logic_error{
+            "document syntax was requested before document runtime state existed"};
+    }
+    return it->second.syntax;
 }
 
 SyntaxViewState EditorRuntime::Impl::activeSyntaxView() const {
     if (auto id = activeDocumentId()) {
-        if (auto it = syntaxModels.find(id->value()); it != syntaxModels.end()) {
-            return it->second.viewState();
+        if (auto it = documentRuntimeStates.find(id->value());
+            it != documentRuntimeStates.end()) {
+            return it->second.syntax.viewState();
         }
     }
     const auto* document = activeDocument();
