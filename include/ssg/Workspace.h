@@ -116,6 +116,7 @@ public:
     [[nodiscard]] std::vector<FileDocumentId> documents() const;
     [[nodiscard]] std::optional<WorkspaceDocumentState> state(
         FileDocumentId document) const;
+    [[nodiscard]] const Document* tryDocument(FileDocumentId document) const noexcept;
     [[nodiscard]] const Document& document(FileDocumentId document) const;
     [[nodiscard]] TransactionResult apply(
         FileDocumentId document, const EditTransaction& transaction);

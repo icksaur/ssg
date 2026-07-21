@@ -226,6 +226,20 @@ TEST(emptyAndMixedEndingEditsSaveWithExactMetadata) {
               std::string{"X\na\r\nb\nc"});
 }
 
+TEST(tryDocumentReturnsNullForAbsentId) {
+    TemporaryDirectory temporary;
+    auto recovery =
+        ssg::RecoveryActions::create(temporary.path() / ".recovery");
+    auto workspace = ssg::Workspace::create(temporary.path(), recovery);
+    ASSERT_EQ(workspace.tryDocument(ssg::FileDocumentId{777}), nullptr);
+
+    const auto created = workspace.newDocument();
+    ASSERT_TRUE(created.accepted());
+    ASSERT_TRUE(created.document.has_value());
+    ASSERT_TRUE(workspace.tryDocument(*created.document) != nullptr);
+    ASSERT_EQ(workspace.tryDocument(ssg::FileDocumentId{778}), nullptr);
+}
+
 }  // namespace
 
 int main() {
@@ -237,6 +251,7 @@ int main() {
     RUN(saveOverwriteAndReloadCompensationsRestoreGroundTruth);
     RUN(newDirectoryRejectsEscapeAndCreatesOnlyInsideRoot);
     RUN(emptyAndMixedEndingEditsSaveWithExactMetadata);
+    RUN(tryDocumentReturnsNullForAbsentId);
     std::cout << "Passed: " << passed << " Failed: " << failed << '\n';
     return failed == 0 ? 0 : 1;
 }

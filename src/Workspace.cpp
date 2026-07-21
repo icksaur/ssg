@@ -531,6 +531,11 @@ const Document& Workspace::document(FileDocumentId id) const {
     return entry->document;
 }
 
+const Document* Workspace::tryDocument(FileDocumentId id) const noexcept {
+    const auto* entry = impl_->find(id);
+    return entry ? &entry->document : nullptr;
+}
+
 TransactionResult Workspace::apply(
     FileDocumentId id, const EditTransaction& transaction) {
     auto* entry = impl_->find(id);
