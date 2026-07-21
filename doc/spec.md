@@ -142,6 +142,7 @@ The build system uses `cmake/components/*.cmake` manifests for component-local s
   the published keymap, and fuzzy filtering/ranking of a published candidate list
   — provided the authoritative catalog, command execution, and presentation
   placement/color remain server-owned and the client invents no product data.
+  The feature-vs-mechanism split this implies is stated normatively in I25.
 - **I18 — Browser feasibility:** A feature is admissible only when a standards-based browser client can complete its workflow through available browser capabilities and the SSG API.
 - **I19 — Non-modal reversibility:** No command requires a blocking dialog. State-losing major actions take effect immediately and create a bounded recovery or compensating command before loss.
 - **I20 — Lua command parity:** Every user-visible command except lifecycle, transport authentication, raw platform I/O, host capability grants, and explicitly cataloged capability-gated ingress commands is callable through the versioned Lua API.
@@ -153,16 +154,20 @@ The build system uses `cmake/components/*.cmake` manifests for component-local s
   client state. This includes editor, panel, prompt/configuration input,
   completion, empty-workspace, read-only, diff, and distraction-free states.
   Configuration changes that would remove all such bindings fail atomically.
-- **I25 — Feature-not-mechanism boundary:** Every editor feature and its
+- **I25 — Feature-not-mechanism boundary:** Every editor FEATURE and its
   orchestration is library-owned, including I/O-driven features (filesystem
   watching, external-modification detection, Git/diff sourcing, LSP, scratch
-  recovery). A client owns only platform input translation and cell-grid
-  rendering and implements no feature. A raw platform capability the library
-  cannot portably provide is exposed only as a narrow injected mechanism adapter
-  behind a library interface (the LSP process/stream adapter and
+  recovery). This governs FEATURE ownership only; it does not disturb the
+  host/app concerns declared elsewhere (event loops, scheduling policy, credential
+  storage, transport authentication, host capability grants, composition-root
+  selection of optional library components, and the I17 latency-sensitive derived
+  view). Regarding editor features, a client owns only platform input translation
+  and cell-grid rendering and implements no feature. A raw platform capability the
+  library cannot portably provide is exposed only as a narrow injected mechanism
+  adapter behind a library interface (the LSP process/stream adapter and
   `FilesystemWatcher` are the templates); the adapter carries no feature logic. A
-  capability that two clients would otherwise each reimplement belongs in the
-  library, not the client.
+  feature capability that two clients would otherwise each reimplement belongs in
+  the library, not the client.
 
 ## Considerations
 

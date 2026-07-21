@@ -62,9 +62,11 @@ Syntax render path is WIRED end-to-end and only the parser is missing:
 Diff data + navigation exist; rendering and integration are STUBBED:
 - `DiffModel` represents per-line change records (`DiffLineChange{kind,
   baselineLine, targetLine}`) grouped into `DiffHunk`s over a target document.
-  Diff data is APP-SUPPLIED via two seams: `GitDiffFile` (app runs git) and
-  `SeededDiffFile` / `NonGitDiffEvent` (app injects arbitrary diffs) — the latter
-  is the agent-diff entry point.
+  Diff data enters `DiffModel` through two internal library seams: `GitDiffFile`
+  and `SeededDiffFile` / `NonGitDiffEvent`. These are the model's INPUT seams; per
+  spec.md I25 they must be driven by a LIBRARY diff-source component (Git
+  integration / watch-vs-baseline), not by the client. The `NonGitDiffEvent` seam
+  is the entry point the library diff-source uses for computed/agent diffs.
 - `SemanticRole::Diff{Added,Removed,Modified}` and theme colors exist but
   `Renderer::paintDocument` never reads `snapshot.sections().diff`; the cell
   `role` is only ever set to Selection/SearchMatch/Foreground.
@@ -231,14 +233,15 @@ Agent diffs enter through the `DiffModel` external-diff seam, revision-stamped.
 BASELINE SEMANTICS (review MUST — the injection shape must change). Today
 `DiffModel` computes each event against its own PRIVATE `acknowledgedContent` and
 ADVANCES that baseline after every event (`DiffModel.cpp:270-284`), i.e. diffs are
-event-to-event, not against an app-owned open/accepted baseline. The stated
-"diff vs a baseline snapshot the app owns" therefore cannot be expressed by the
-current `NonGitDiffEvent`. Decision: EXTEND the external-diff injection to carry
-an explicit `{baselineContent (or baseline revision), targetContent}` so the app
-owns the baseline (content at open / last-accepted), and the model computes
-target-vs-baseline without mutating an internal baseline. (Alternative — adopt
-incremental event-to-event semantics and document it — is rejected because
-"follow the newest agent change since I last looked" needs a stable baseline.)
+event-to-event, not against a stable owner-supplied baseline. The stated
+"diff vs a baseline snapshot" therefore cannot be expressed by the current
+`NonGitDiffEvent`. Decision: EXTEND the external-diff injection to carry an
+explicit `{baselineContent (or baseline revision), targetContent}` so the LIBRARY
+diff-source component owns the baseline (content at open / last-accepted), and the
+model computes target-vs-baseline without mutating an internal baseline.
+(Alternative — adopt incremental event-to-event semantics and document it — is
+rejected because "follow the newest change since I last looked" needs a stable
+baseline.)
 
 NEWEST-HUNK TARGET (review MUST — current `targetFor` just returns
 `file.hunks.back()`, `FollowEditsModel.cpp:174-178`, which is wrong for a bottom-
@@ -638,7 +641,7 @@ that changes a shipped state shape (not deferred to a trailing step).
 | 3c | Theme-derived `DiffTints` (add/remove/modify row + word) from `Git*` anchors, darken+desaturate toward Background, clamped to the min-contrast + deltaE gate (total/`noexcept`, fallback to safe set); ship in `ThemeSnapshot`; add `CellGridCell.tint` + a `DiffTints` sidecar on `CellGrid`; extend terminal/browser encoders to emit tint bg via `resolveColor`; update the `color.h` contract comment | `Theme.h`/`Theme.cpp`, `Renderer.h` (cell `tint` + CellGrid sidecar), `Renderer.cpp:633-639`, `apps/ssg_terminal.cpp:67-111`, browser client encoder, `color.h` (comment), `Protocol.cpp:4376-4394,4754-4765` + protocol/snapshot goldens + `ThemeSectionDelta` derive/replay | contrast+deltaE property oracle on resolved RGBs (Truecolor+256) over shipped + near-mono-anchor themes; theme-sanity precondition; terminal/browser parity; ThemeSnapshot round-trip | diff-colors theme-derived + contrast-gated; snapshot/delta symmetry; wire-literals |
 | 4b | Diff overlay in renderer incl. phantom rows: select active `DiffFileView` (3b), set per-cell `tint` (row kind) NOT a 16-palette background, precedence SearchMatch>Selection>DiffWord>DiffRow>normal; full row width incl. trailing cells; phantom rows render baseline text tinted RemovedRow (tint-only, no syntax) | `Renderer.cpp:420-443`, helper `diffTintAt` | renderer test: tint + syntax fg coexist; precedence cases; phantom-row render | buffer-vs-visual coords; diff-colors |
 | 5 | Wire `diff.next_hunk`/`previous_hunk` handlers to move caret + reveal viewport via the 4a projection; programmatic reveal must not pause follow | `src/runtime/navigation.cpp` (diffCommand), `FollowEditsModel` (NavigationClass use) | navigation oracle: caret+reveal at hunk; reveal does not flip Following->Paused | wire-literals; reveal-not-pause |
-| 6 | Extend external-diff injection to carry app-owned `{baseline,target}` (not self-advancing `acknowledgedContent`); newest-introduced-hunk `FollowTarget`; burst API so only last file reveals; ONE domain op opens file + moves caret (via projection) + programmatic reveal | `DiffModel.*` (injection shape + baseline), `FollowEditsModel.*` (`targetFor`), `EditorRuntime`/runtime glue, app watcher wiring, matching `*DeltaCodec`, goldens | hand-case: activeTarget=newest hunk (prior top&bottom, new middle); baseline-vs-target diff correct; round-trip | snapshot/delta symmetry; lib/app boundary; reveal-not-pause |
+| 6 | Extend external-diff injection to carry a library-diff-source-owned `{baseline,target}` (not self-advancing `acknowledgedContent`); newest-introduced-hunk `FollowTarget`; burst API so only last file reveals; ONE domain op opens file + moves caret (via projection) + programmatic reveal | `DiffModel.*` (injection shape + baseline), `FollowEditsModel.*` (`targetFor`), `EditorRuntime`/runtime glue, library diff-source + `FilesystemWatcher` wiring, matching `*DeltaCodec`, goldens | hand-case: activeTarget=newest hunk (prior top&bottom, new middle); baseline-vs-target diff correct; round-trip | snapshot/delta symmetry; feature-not-mechanism (I25); reveal-not-pause |
 | 7 | Word-level intra-line marks: intra-line diff for modified lines -> mark ranges in diff view-state; renderer sets per-cell `tint` to the `*Word` kind over the row tint, keeping syntax fg; word tints derived+gated in 3c | `DiffModel.*`, `Renderer.cpp`, matching `*DeltaCodec`, goldens | golden: intra-line mark ranges; renderer test marks keep syntax fg; contrast gate covers word tints; round-trip | snapshot/delta symmetry; diff-colors |
 
 Completion (Q3): out of scope. The parser-injection seam (step 3) and untouched
@@ -658,7 +661,7 @@ sharpened the real scope: the cheap parts are genuinely cheap (inject a parser,
 merge a diff tint), but three areas carry real design work the first draft
 under-weighted — (a) phantom removed rows force a single-owner buffer<->visual
 coordinate projection touching selection/hit-test/caret/reveal/follow; (b)
-external diffs need an app-owned baseline because the current model self-advances
+external diffs need a library-diff-source-owned baseline because the current model self-advances
 its baseline; and (c) the follow "newest hunk" and reveal-without-pausing must be
 built, not assumed, since `targetFor` returns `hunks.back()` and reveal never
 touches runtime selection today. caco's files-applet validates the follow design
