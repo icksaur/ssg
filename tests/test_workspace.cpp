@@ -240,6 +240,24 @@ TEST(tryDocumentReturnsNullForAbsentId) {
     ASSERT_EQ(workspace.tryDocument(ssg::FileDocumentId{778}), nullptr);
 }
 
+TEST(removeDocumentErasesOnlyInMemoryState) {
+    TemporaryDirectory temporary;
+    writeBytes(temporary.path() / "keep.txt", "keep me");
+    auto recovery =
+        ssg::RecoveryActions::create(temporary.path() / ".recovery");
+    auto workspace = ssg::Workspace::create(temporary.path(), recovery);
+    const auto opened = workspace.openFile("keep.txt");
+    ASSERT_TRUE(opened.accepted());
+    ASSERT_TRUE(opened.document.has_value());
+
+    const auto removed = workspace.removeDocument(*opened.document);
+    ASSERT_TRUE(removed.accepted());
+    ASSERT_EQ(workspace.state(*opened.document), std::nullopt);
+    ASSERT_EQ(workspace.tryDocument(*opened.document), nullptr);
+    ASSERT_TRUE(std::filesystem::exists(temporary.path() / "keep.txt"));
+    ASSERT_EQ(readBytes(temporary.path() / "keep.txt"), std::string{"keep me"});
+}
+
 }  // namespace
 
 int main() {
@@ -252,6 +270,7 @@ int main() {
     RUN(newDirectoryRejectsEscapeAndCreatesOnlyInsideRoot);
     RUN(emptyAndMixedEndingEditsSaveWithExactMetadata);
     RUN(tryDocumentReturnsNullForAbsentId);
+    RUN(removeDocumentErasesOnlyInMemoryState);
     std::cout << "Passed: " << passed << " Failed: " << failed << '\n';
     return failed == 0 ? 0 : 1;
 }

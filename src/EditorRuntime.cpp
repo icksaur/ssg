@@ -353,6 +353,11 @@ TabLifecycleResult EditorRuntime::Impl::close(
         return {TabError::LifecycleFailed, closed.error->message, std::nullopt, false};
     }
     if (document) scratch.removeDocument(state->key);
+    auto removed = workspace.removeDocument(*tab.document);
+    if (!removed.accepted()) {
+        return {TabError::LifecycleFailed, workspaceMessage(removed), std::nullopt, false};
+    }
+    documentRuntimeStates.erase(tab.document->value());
     return {TabError::None, {}, closed.compensation, scratch.waitUntilDurable(durabilityTimeout)};
 }
 

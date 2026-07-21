@@ -152,6 +152,7 @@ public:
     [[nodiscard]] WorkspaceResult renameFile(FileDocumentId document,
                                               std::string_view path);
     [[nodiscard]] WorkspaceResult deleteFile(FileDocumentId document);
+    [[nodiscard]] WorkspaceResult removeDocument(FileDocumentId document);
     [[nodiscard]] WorkspaceResult newDirectory(std::string_view path);
     [[nodiscard]] WorkspaceResult restore(
         const RecoveryRecordId& compensation);

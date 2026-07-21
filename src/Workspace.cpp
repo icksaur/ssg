@@ -972,6 +972,20 @@ WorkspaceResult Workspace::deleteFile(FileDocumentId id) {
     return result;
 }
 
+WorkspaceResult Workspace::removeDocument(FileDocumentId id) {
+    auto removed = std::find_if(
+        impl_->entries.begin(), impl_->entries.end(),
+        [id](const Impl::Entry& candidate) { return candidate.id == id; });
+    if (removed == impl_->entries.end()) {
+        return failure(WorkspaceError::NotFound,
+                       "workspace document does not exist");
+    }
+    impl_->entries.erase(removed);
+    WorkspaceResult result;
+    result.document = id;
+    return result;
+}
+
 WorkspaceResult Workspace::newDirectory(std::string_view rawPath) {
     WorkspaceResult pathError;
     const auto path = impl_->resolve(rawPath, false, pathError);
