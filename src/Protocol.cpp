@@ -1192,6 +1192,8 @@ ProtocolValue toValue(TabDelta const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<TabDelta>& out);
 ProtocolValue toValue(DiffHunk const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<DiffHunk>& out);
+ProtocolValue toValue(DiffWordRange const& value);
+bool decodePresent(ProtocolValue const& value, std::optional<DiffWordRange>& out);
 ProtocolValue toValue(DiffLineChange const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<DiffLineChange>& out);
 ProtocolValue toValue(DiffFileView const& value);
@@ -3225,6 +3227,26 @@ bool decodePresent(ProtocolValue const& value, std::optional<TabDelta>& out) {
 }
 
 
+ProtocolValue toValue(DiffWordRange const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back(
+        "byte_start", toValue(static_cast<std::uint64_t>(value.byteStart)));
+    fields.emplace_back(
+        "byte_length", toValue(static_cast<std::uint64_t>(value.byteLength)));
+    return ProtocolValue::makeObject(std::move(fields));
+}
+bool decodePresent(ProtocolValue const& value,
+                   std::optional<DiffWordRange>& out) {
+    auto const* object = value.asObject();
+    if (!object) return false;
+    auto byteStart = requireField<std::uint64_t>(value.field("byte_start"));
+    auto byteLength = requireField<std::uint64_t>(value.field("byte_length"));
+    if (!byteStart || !byteLength) return false;
+    out.emplace(DiffWordRange{static_cast<std::size_t>(*byteStart),
+                              static_cast<std::size_t>(*byteLength)});
+    return true;
+}
+
 ProtocolValue toValue(DiffLineChange const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("kind", toValue(value.kind));
@@ -3240,6 +3262,12 @@ ProtocolValue toValue(DiffLineChange const& value) {
     } else {
         fields.emplace_back("target_line", ProtocolValue::makeNull());
     }
+    fields.emplace_back("target_added_word_ranges",
+                        toValue(value.targetAddedWordRanges));
+    fields.emplace_back("baseline_removed_word_ranges",
+                        toValue(value.baselineRemovedWordRanges));
+    fields.emplace_back("target_modified_word_ranges",
+                        toValue(value.targetModifiedWordRanges));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<DiffLineChange>& out) {
@@ -3255,7 +3283,22 @@ bool decodePresent(ProtocolValue const& value, std::optional<DiffLineChange>& ou
     std::optional<std::uint64_t> targetLine;
     if (!decodeOptionalField(value.field("target_line"), targetLine)) return false;
     if (targetLine) result.targetLine = static_cast<std::size_t>(*targetLine);
-    out.emplace(result);
+    if (auto const* field = value.field("target_added_word_ranges")) {
+        auto ranges = requireField<std::vector<DiffWordRange>>(field);
+        if (!ranges) return false;
+        result.targetAddedWordRanges = std::move(*ranges);
+    }
+    if (auto const* field = value.field("baseline_removed_word_ranges")) {
+        auto ranges = requireField<std::vector<DiffWordRange>>(field);
+        if (!ranges) return false;
+        result.baselineRemovedWordRanges = std::move(*ranges);
+    }
+    if (auto const* field = value.field("target_modified_word_ranges")) {
+        auto ranges = requireField<std::vector<DiffWordRange>>(field);
+        if (!ranges) return false;
+        result.targetModifiedWordRanges = std::move(*ranges);
+    }
+    out.emplace(std::move(result));
     return true;
 }
 

@@ -529,6 +529,57 @@ TEST(phantomViewportProjectionRoundTripsThroughSnapshotAndDelta) {
     }
 }
 
+TEST(diffWordRangesRoundTripThroughSnapshotAndDelta) {
+    auto withWordRanges = [](ssg::Revision revision, std::string marker) {
+        auto result = sections(revision, std::move(marker));
+        ssg::DiffFileView file{ssg::DiffFileId{"words.cpp"}};
+        file.path = "words.cpp";
+        file.currentContent = "int foo = 42;\n";
+        file.changedLines = {{
+            ssg::DiffLineKind::Modified,
+            std::size_t{0},
+            std::size_t{0},
+            {},
+            {{10, 1}},
+            {{10, 2}},
+        }};
+        result.diff = {revision, {std::move(file)}};
+        return result;
+    };
+
+    auto snapshot = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{5}, {},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(0),
+        withWordRanges(ssg::Revision{5}, "words"));
+    const auto decodedSnapshot = ssg::ProtocolCodec{}.decodeSessionSnapshot(
+        ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot));
+    ASSERT_TRUE(decodedSnapshot.accepted());
+    ASSERT_TRUE(decodedSnapshot.snapshot.has_value());
+    if (!decodedSnapshot.snapshot) return;
+    ASSERT_EQ(*decodedSnapshot.snapshot, snapshot);
+
+    auto before = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{4}, {},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(0), sections(ssg::Revision{4}, "words"));
+    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, snapshot);
+    const auto decodedDelta = ssg::ProtocolCodec{}.decodeSessionDelta(
+        ssg::ProtocolCodec{}.encodeSessionDelta(delta));
+    ASSERT_TRUE(decodedDelta.accepted());
+    ASSERT_TRUE(decodedDelta.delta.has_value());
+    if (!decodedDelta.delta) return;
+    auto replayed =
+        ssg::SessionSnapshotCodec{}.replay(before, *decodedDelta.delta);
+    ASSERT_TRUE(replayed.accepted());
+    ASSERT_TRUE(replayed.snapshot.has_value());
+    if (replayed.snapshot) {
+        ASSERT_EQ(*replayed.snapshot, snapshot);
+    }
+}
+
 TEST(twoClientCapabilityAndViewportIsolationSurvivesTheWire) {
     auto shared = sections(ssg::Revision{8}, "shared");
     auto first = ssg::SessionSnapshotCodec{}.assemble(
@@ -1107,6 +1158,7 @@ int main() {
     RUN(sessionSnapshotRoundTripsThroughTheWire);
     RUN(sessionDeltaRoundTripsAndReplayMatchesTheDecodedDelta);
     RUN(phantomViewportProjectionRoundTripsThroughSnapshotAndDelta);
+    RUN(diffWordRangesRoundTripThroughSnapshotAndDelta);
     RUN(twoClientCapabilityAndViewportIsolationSurvivesTheWire);
     RUN(sessionSnapshotRoundTripsTreeScrollFields);
     RUN(clipboardRequestRoundTripsThroughTheWire);

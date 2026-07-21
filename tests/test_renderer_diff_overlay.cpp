@@ -58,21 +58,25 @@ std::pair<int, int> findText(const ssg::CellGrid& grid,
 
 ssg::DiffFileView overlayDiff(std::string_view currentContent) {
     return {
-        ssg::DiffFileId{"overlay.cpp"},
-        "overlay.cpp",
-        std::nullopt,
-        false,
-        "baseline",
-        std::string{currentContent},
-        {
+        .id = ssg::DiffFileId{"overlay.cpp"},
+        .path = "overlay.cpp",
+        .baselineIdentity = "baseline",
+        .currentContent = std::string{currentContent},
+        .hunks = {
             ssg::DiffHunk{0, 0, {}, {"added search search\n"}},
             ssg::DiffHunk{0, 1, {"removed baseline\n"}, {}},
-            ssg::DiffHunk{1, 1, {"old modified\n"}, {"modified\n"}},
+            ssg::DiffHunk{1, 1, {"int foo = 1;\n"},
+                          {"int new foo = 42;\n"}},
         },
-        {
+        .changedLines = {
             {ssg::DiffLineKind::Added, std::nullopt, std::size_t{0}},
             {ssg::DiffLineKind::Removed, std::size_t{0}, std::nullopt},
-            {ssg::DiffLineKind::Modified, std::size_t{1}, std::size_t{1}},
+            {ssg::DiffLineKind::Modified,
+             std::size_t{1},
+             std::size_t{1},
+             {{4, 4}},
+             {{10, 1}},
+             {{14, 2}}},
         },
     };
 }
@@ -87,7 +91,7 @@ ssg::SessionSnapshot snapshotWith(
 }
 
 TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
-    const std::string text = "added search search\nmodified\nplain\n";
+    const std::string text = "added search search\nint new foo = 42;\nplain\n";
     auto fixture = makeFixture(text);
     ASSERT_TRUE(fixture.runtime != nullptr);
     if (!fixture.runtime) return;
@@ -106,7 +110,8 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
         sections.document.revision,
         ssg::LanguageId::plainText(),
         text.size(),
-        {{ssg::ByteOffset{0}, ssg::ByteOffset{5}, ssg::SyntaxScope::Keyword}},
+        {{ssg::ByteOffset{0}, ssg::ByteOffset{5}, ssg::SyntaxScope::Keyword},
+         {ssg::ByteOffset{34}, ssg::ByteOffset{36}, ssg::SyntaxScope::Number}},
         {},
         {},
         {},
@@ -132,11 +137,20 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
     ASSERT_EQ(grid.at(content.right() - 1, addedRow).tint,
               ssg::DiffTint::AddedRow);
 
-    const auto [modifiedColumn, modifiedRow] = findText(grid, "modified");
+    const auto [modifiedColumn, modifiedRow] =
+        findText(grid, "int new foo = 42;");
     ASSERT_TRUE(modifiedColumn >= 0 && modifiedRow >= 0);
     if (modifiedColumn < 0 || modifiedRow < 0) return;
     ASSERT_EQ(grid.at(modifiedColumn, modifiedRow).tint,
               ssg::DiffTint::ModifiedRow);
+    ASSERT_EQ(grid.at(modifiedColumn + 4, modifiedRow).tint,
+              ssg::DiffTint::AddedWord);
+    ASSERT_EQ(grid.at(modifiedColumn + 14, modifiedRow).tint,
+              ssg::DiffTint::ModifiedWord);
+    ASSERT_EQ(
+        grid.at(modifiedColumn + 14, modifiedRow).foreground,
+        overlay.sections().theme.syntaxIndices[
+            static_cast<std::size_t>(ssg::SyntaxScope::Number)]);
     ASSERT_EQ(grid.at(content.right() - 1, modifiedRow).tint,
               ssg::DiffTint::ModifiedRow);
 
@@ -182,6 +196,7 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
     precedenceSections.findReplace.matches = {
         {ssg::ByteOffset{6}, ssg::ByteOffset{12}},
         {ssg::ByteOffset{13}, ssg::ByteOffset{19}},
+        {ssg::ByteOffset{34}, ssg::ByteOffset{36}},
     };
     precedenceSections.findReplace.activeMatch = std::size_t{0};
     auto precedence = snapshotWith(
@@ -194,6 +209,30 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
     ASSERT_EQ(precedenceGrid.at(addedColumn + 13, addedRow).role,
               ssg::SemanticRole::SearchMatch);
     ASSERT_EQ(precedenceGrid.at(addedColumn + 13, addedRow).tint,
+              ssg::DiffTint::None);
+    ASSERT_EQ(precedenceGrid.at(modifiedColumn + 14, modifiedRow).role,
+              ssg::SemanticRole::SearchMatch);
+    ASSERT_EQ(precedenceGrid.at(modifiedColumn + 14, modifiedRow).tint,
+              ssg::DiffTint::None);
+
+    auto wordSelectionSections = overlay.sections();
+    auto wordSelectionClient = overlay.client();
+    const auto wordStart = ssg::DocumentPosition{
+        ssg::ByteOffset{34}, ssg::LineIndex{1}, ssg::CellIndex{14}};
+    const auto wordEnd = ssg::DocumentPosition{
+        ssg::ByteOffset{36}, ssg::LineIndex{1}, ssg::CellIndex{16}};
+    wordSelectionSections.selection = ssg::SelectionViewState{
+        ssg::SelectionSet{{ssg::Selection{wordStart, wordEnd}}},
+        0,
+        0,
+        std::nullopt};
+    auto wordSelection =
+        snapshotWith(overlay, std::move(wordSelectionSections),
+                     std::move(wordSelectionClient));
+    const auto wordSelectionGrid = ssg::Renderer{}.render(wordSelection);
+    ASSERT_EQ(wordSelectionGrid.at(modifiedColumn + 14, modifiedRow).role,
+              ssg::SemanticRole::Selection);
+    ASSERT_EQ(wordSelectionGrid.at(modifiedColumn + 14, modifiedRow).tint,
               ssg::DiffTint::None);
 
     auto noDiffSections = overlay.sections();
