@@ -247,6 +247,7 @@ TEST(sourceAndConfigHaveNoIndependentColorSources) {
         const auto relative = std::filesystem::relative(entry.path(), root).generic_string();
         if (relative.starts_with(".git/") || relative.starts_with("build") ||
             relative.starts_with("doc/") || relative.starts_with("tasks/") ||
+            relative.starts_with("vendor/") ||
             relative.starts_with("data/themes/") ||
             relative == "include/ssg/Theme.h" ||
             // Terminal color-depth adaptation (M9-C): these define the xterm-256
