@@ -228,6 +228,8 @@ public:
             if (i < theme.syntaxIndices.size())
                 theme.syntaxIndices[i] = static_cast<std::uint8_t>(i);
         }
+        theme.selectionFill = ssg::deriveSelectionFill(
+            theme.palette, theme.semanticIndices, theme.syntaxIndices);
 
         ssg::ShellViewState shell;
         shell.viewport = {80, 24};
@@ -306,6 +308,7 @@ public:
             state_.first_row,
             0,
             100,
+            {},
             {},
             {{0, 0, 0, ssg::CellIndex{0}, 0, 1}},
             {100, 20, state_.first_row, 80, state_.first_row, 4},
@@ -541,6 +544,8 @@ public:
             ssg::ByteOffset{0}, ssg::LineIndex{0}, ssg::CellIndex{0}};
         ssg::SettingsViewState settings;
         ssg::ThemeSnapshot theme{};
+        theme.selectionFill = ssg::deriveSelectionFill(
+            theme.palette, theme.semanticIndices, theme.syntaxIndices);
         ssg::ShellViewState shell;
         shell.viewport = {80, 24};
         return {
@@ -576,7 +581,7 @@ public:
         auto firstRow = perClientRow_.count(client)
                              ? perClientRow_.at(client)
                              : std::uint32_t{0};
-        return {ssg::ViewportDimensions{80, 20}, firstRow, 0, 100, {},
+        return {ssg::ViewportDimensions{80, 20}, firstRow, 0, 100, {}, {},
                 {{0, 0, 0, ssg::CellIndex{0}, 0, 1}},
                 {100, 20, firstRow, 80, firstRow, 4}};
     }

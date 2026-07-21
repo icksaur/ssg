@@ -92,6 +92,81 @@ TEST(gitTrackedFixtureReconstructsAndMatchesIndependentChangedLines) {
     ASSERT_EQ(view.baselineIdentity, std::string{"index-a"});
 }
 
+TEST(modifiedLineMarksOnlyChangedWordTokens) {
+    DiffModel model;
+    ASSERT_TRUE(model
+                    .updateGitFile(
+                        {.id = DiffFileId{"words"},
+                         .path = "words.cpp",
+                         .indexContent = "int foo = 1;\n",
+                         .workingContent = "int foo = 42;\n",
+                         .indexIdentity = "index"},
+                        Revision{1})
+                    .accepted());
+
+    const auto& changes = onlyFile(model).changedLines;
+    ASSERT_EQ(changes.size(), std::size_t{1});
+    ASSERT_EQ(changes.front().kind, DiffLineKind::Modified);
+    ASSERT_TRUE(changes.front().targetAddedWordRanges.empty());
+    ASSERT_EQ(changes.front().baselineRemovedWordRanges,
+              (std::vector<DiffWordRange>{{10, 1}}));
+    ASSERT_EQ(changes.front().targetModifiedWordRanges,
+              (std::vector<DiffWordRange>{{10, 2}}));
+}
+
+TEST(wordDiffWorkLimitIsFailureAtomic) {
+    DiffModel model{DiffConfig{.maximumLineCount = 10,
+                               .maximumMatrixCells = 100,
+                               .maximumWordMatrixCells = 4}};
+    const auto before = model.viewState();
+
+    ASSERT_EQ(model
+                  .updateGitFile(
+                      {.id = DiffFileId{"words"},
+                       .path = "words.cpp",
+                       .indexContent = "one two\n",
+                       .workingContent = "three four\n",
+                       .indexIdentity = "index"},
+                      Revision{1})
+                  .error,
+              DiffError::WorkLimitExceeded);
+    ASSERT_EQ(model.viewState(), before);
+}
+
+TEST(wordMarksUseStableByteRangesForInsertionAndUtf8) {
+    DiffModel insertion;
+    ASSERT_TRUE(insertion
+                    .updateGitFile(
+                        {.id = DiffFileId{"insertion"},
+                         .path = "insertion.cpp",
+                         .indexContent = "int foo;\n",
+                         .workingContent = "int new foo;\n",
+                         .indexIdentity = "index"},
+                        Revision{1})
+                    .accepted());
+    const auto& inserted = onlyFile(insertion).changedLines.front();
+    ASSERT_EQ(inserted.targetAddedWordRanges,
+              (std::vector<DiffWordRange>{{4, 4}}));
+    ASSERT_TRUE(inserted.baselineRemovedWordRanges.empty());
+    ASSERT_TRUE(inserted.targetModifiedWordRanges.empty());
+
+    DiffModel utf8;
+    ASSERT_TRUE(utf8
+                    .updateGitFile(
+                        {.id = DiffFileId{"utf8"},
+                         .path = "utf8.txt",
+                         .indexContent = "\xf0\x9f\x98\x80 x\n",
+                         .workingContent = "\xf0\x9f\x98\x80 y\n",
+                         .indexIdentity = "index"},
+                        Revision{1})
+                    .accepted());
+    const auto& changed = onlyFile(utf8).changedLines.front();
+    ASSERT_EQ(changed.baselineRemovedWordRanges,
+              (std::vector<DiffWordRange>{{5, 1}}));
+    ASSERT_EQ(changed.targetModifiedWordRanges,
+              (std::vector<DiffWordRange>{{5, 1}}));
+}
+
 TEST(gitUntrackedRenameDeleteAndIndexChangeRetainIdentity) {
     DiffModel untracked;
     ASSERT_TRUE(untracked
@@ -148,7 +223,7 @@ TEST(gitUntrackedRenameDeleteAndIndexChangeRetainIdentity) {
     ASSERT_EQ(onlyFile(renamed).baselineIdentity, std::string{"index-b"});
 }
 
-TEST(seededNonGitEventsAdvanceBaselineAndRetainRenameDelete) {
+TEST(externalDiffsUseExplicitAppOwnedBaselineAndRetainRenameDelete) {
     DiffModel model;
     ASSERT_TRUE(model.seedNonGit(
                          {{.id = DiffFileId{"seed"},
@@ -162,7 +237,8 @@ TEST(seededNonGitEventsAdvanceBaselineAndRetainRenameDelete) {
                          .id = DiffFileId{"seed"},
                          .path = "new.txt",
                          .previousPath = std::filesystem::path{"old.txt"},
-                         .content = fixture("tracked.target")},
+                         .baselineContent = fixture("tracked.baseline"),
+                         .targetContent = fixture("tracked.target")},
                         Revision{2})
                     .accepted());
     ASSERT_EQ(onlyFile(model).id, DiffFileId{"seed"});
@@ -176,19 +252,20 @@ TEST(seededNonGitEventsAdvanceBaselineAndRetainRenameDelete) {
                         {.kind = NonGitDiffEventKind::Modify,
                          .id = DiffFileId{"seed"},
                          .path = "new.txt",
-                         .content = fixture("tracked.target") + "tail\n"},
+                        .baselineContent = fixture("tracked.baseline"),
+                        .targetContent = fixture("tracked.target") + "tail\n"},
                         Revision{3})
                     .accepted());
-    ASSERT_EQ(onlyFile(model).hunks.front().baselineLines.size(),
-              std::size_t{0});
-    ASSERT_EQ(onlyFile(model).hunks.front().targetLines,
-              (std::vector<std::string>{"tail\n"}));
+    ASSERT_EQ(reconstruct(fixture("tracked.baseline"), onlyFile(model).hunks),
+              fixture("tracked.target") + "tail\n");
+    ASSERT_TRUE(onlyFile(model).hunks.size() > std::size_t{1});
 
     ASSERT_TRUE(model
                     .applyNonGitEvent(
                         {.kind = NonGitDiffEventKind::Remove,
                          .id = DiffFileId{"seed"},
-                         .path = "new.txt"},
+                        .path = "new.txt",
+                        .baselineContent = fixture("tracked.baseline")},
                         Revision{4})
                     .accepted());
     ASSERT_TRUE(onlyFile(model).deleted);
@@ -212,7 +289,8 @@ TEST(staleInvalidAndOverBudgetWorkAreFailureAtomic) {
                       {.kind = NonGitDiffEventKind::Modify,
                        .id = DiffFileId{"seed"},
                        .path = "a.txt",
-                       .content = "b\n"},
+                      .baselineContent = "a\n",
+                      .targetContent = "b\n"},
                       Revision{1})
                   .error,
               DiffError::StaleRevision);
@@ -222,7 +300,8 @@ TEST(staleInvalidAndOverBudgetWorkAreFailureAtomic) {
                   .applyNonGitEvent(
                       {.kind = NonGitDiffEventKind::Remove,
                        .id = DiffFileId{"missing"},
-                       .path = "missing.txt"},
+                      .path = "missing.txt",
+                      .baselineContent = "a\n"},
                       Revision{2})
                   .error,
               DiffError::UnknownFile);
@@ -255,7 +334,8 @@ TEST(staleInvalidAndOverBudgetWorkAreFailureAtomic) {
                   .applyNonGitEvent(
                       {.kind = NonGitDiffEventKind::Create,
                        .id = DiffFileId{"seed"},
-                       .path = "a.txt"},
+                      .path = "a.txt",
+                      .baselineContent = ""},
                       Revision{2})
                   .error,
               DiffError::ContentRequired);
@@ -266,7 +346,8 @@ TEST(staleInvalidAndOverBudgetWorkAreFailureAtomic) {
                       {.kind = NonGitDiffEventKind::Modify,
                        .id = DiffFileId{"seed"},
                        .path = "a.txt",
-                       .content = "b\nc\nd\ne\nf\n"},
+                      .baselineContent = "a\n",
+                      .targetContent = "b\nc\nd\ne\nf\n"},
                       Revision{2})
                   .error,
               DiffError::WorkLimitExceeded);
@@ -317,13 +398,39 @@ TEST(deltaReplayAndExactCommandNavigationContract) {
               std::optional<std::size_t>{1});
 }
 
+TEST(documentDiffLookupUsesIdentityAndRevision) {
+    DiffFileView fileA{DiffFileId{"a.cpp"}};
+    fileA.path = "a.cpp";
+    DiffFileView fileB{DiffFileId{"b.cpp"}};
+    fileB.path = "b.cpp";
+    DiffViewState diff{Revision{8}, {fileA, fileB}};
+
+    DocumentViewState document{Revision{8}, "x", ByteOffset{0}};
+    document.diffFileIdentity = std::string{"b.cpp"};
+    auto const selected = diff.fileForDocument(document);
+    ASSERT_TRUE(selected.has_value());
+    ASSERT_EQ(selected->get().id, DiffFileId{"b.cpp"});
+
+    DocumentViewState missing{Revision{8}, "x", ByteOffset{0}};
+    missing.diffFileIdentity = std::string{"missing.cpp"};
+    ASSERT_FALSE(diff.fileForDocument(missing).has_value());
+
+    DocumentViewState stale{Revision{7}, "x", ByteOffset{0}};
+    stale.diffFileIdentity = std::string{"b.cpp"};
+    ASSERT_FALSE(diff.fileForDocument(stale).has_value());
+}
+
 } // namespace
 
 int main() {
     RUN(gitTrackedFixtureReconstructsAndMatchesIndependentChangedLines);
+    RUN(modifiedLineMarksOnlyChangedWordTokens);
+    RUN(wordDiffWorkLimitIsFailureAtomic);
+    RUN(wordMarksUseStableByteRangesForInsertionAndUtf8);
     RUN(gitUntrackedRenameDeleteAndIndexChangeRetainIdentity);
-    RUN(seededNonGitEventsAdvanceBaselineAndRetainRenameDelete);
+    RUN(externalDiffsUseExplicitAppOwnedBaselineAndRetainRenameDelete);
     RUN(staleInvalidAndOverBudgetWorkAreFailureAtomic);
     RUN(deltaReplayAndExactCommandNavigationContract);
+    RUN(documentDiffLookupUsesIdentityAndRevision);
     return failed == 0 ? 0 : 1;
 }

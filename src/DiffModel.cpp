@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <span>
 #include <stdexcept>
 #include <utility>
 
@@ -24,6 +25,128 @@ struct ComputedDiff {
     std::vector<DiffHunk> hunks;
     std::vector<DiffLineChange> changes;
 };
+
+struct WordToken {
+    std::size_t byteStart;
+    std::size_t byteLength;
+};
+
+struct WordDiff {
+    std::vector<DiffWordRange> targetAdded;
+    std::vector<DiffWordRange> baselineRemoved;
+    std::vector<DiffWordRange> targetModified;
+};
+
+bool isAsciiWordByte(char byte) {
+    return (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') ||
+           (byte >= '0' && byte <= '9') || byte == '_';
+}
+
+std::vector<WordToken> wordTokens(std::string_view line) {
+    std::vector<WordToken> result;
+    for (std::size_t start = 0; start < line.size();) {
+        const bool word = isAsciiWordByte(line[start]);
+        std::size_t end = start + 1;
+        while (end < line.size() && isAsciiWordByte(line[end]) == word) {
+            ++end;
+        }
+        result.push_back({start, end - start});
+        start = end;
+    }
+    return result;
+}
+
+void appendTokenRanges(std::vector<DiffWordRange>& ranges,
+                       std::span<const WordToken> tokens) {
+    for (const auto& token : tokens) {
+        if (!ranges.empty() &&
+            ranges.back().byteStart + ranges.back().byteLength ==
+                token.byteStart) {
+            ranges.back().byteLength += token.byteLength;
+        } else {
+            ranges.push_back({token.byteStart, token.byteLength});
+        }
+    }
+}
+
+std::optional<WordDiff> computeWordDiff(std::string_view baseline,
+                                        std::string_view target,
+                                        std::size_t& remainingMatrixCells) {
+    // Maximal ASCII alnum/underscore and non-word runs keep review marks
+    // readable; character-level differences obscure the surrounding token.
+    const auto oldTokens = wordTokens(baseline);
+    const auto newTokens = wordTokens(target);
+    const auto rows = oldTokens.size() + 1;
+    const auto columns = newTokens.size() + 1;
+    if (rows > std::numeric_limits<std::size_t>::max() / columns ||
+        rows * columns > remainingMatrixCells) {
+        return std::nullopt;
+    }
+    remainingMatrixCells -= rows * columns;
+
+    const auto tokenText = [](std::string_view line, const WordToken& token) {
+        return line.substr(token.byteStart, token.byteLength);
+    };
+    std::vector<std::size_t> lcs(rows * columns);
+    const auto at = [&](std::size_t oldIndex,
+                        std::size_t newIndex) -> std::size_t& {
+        return lcs[oldIndex * columns + newIndex];
+    };
+    for (std::size_t oldIndex = oldTokens.size(); oldIndex-- > 0;) {
+        for (std::size_t newIndex = newTokens.size(); newIndex-- > 0;) {
+            at(oldIndex, newIndex) =
+                tokenText(baseline, oldTokens[oldIndex]) ==
+                        tokenText(target, newTokens[newIndex])
+                    ? at(oldIndex + 1, newIndex + 1) + 1
+                    : std::max(at(oldIndex + 1, newIndex),
+                               at(oldIndex, newIndex + 1));
+        }
+    }
+
+    WordDiff result;
+    std::size_t oldIndex = 0;
+    std::size_t newIndex = 0;
+    while (oldIndex < oldTokens.size() || newIndex < newTokens.size()) {
+        if (oldIndex < oldTokens.size() && newIndex < newTokens.size() &&
+            tokenText(baseline, oldTokens[oldIndex]) ==
+                tokenText(target, newTokens[newIndex])) {
+            ++oldIndex;
+            ++newIndex;
+            continue;
+        }
+
+        const auto oldStart = oldIndex;
+        const auto newStart = newIndex;
+        while (oldIndex < oldTokens.size() || newIndex < newTokens.size()) {
+            if (oldIndex < oldTokens.size() &&
+                newIndex < newTokens.size() &&
+                tokenText(baseline, oldTokens[oldIndex]) ==
+                    tokenText(target, newTokens[newIndex])) {
+                break;
+            }
+            if (oldIndex < oldTokens.size() &&
+                (newIndex == newTokens.size() ||
+                 at(oldIndex + 1, newIndex) >=
+                     at(oldIndex, newIndex + 1))) {
+                ++oldIndex;
+            } else {
+                ++newIndex;
+            }
+        }
+
+        appendTokenRanges(
+            result.baselineRemoved,
+            std::span<const WordToken>{oldTokens}.subspan(oldStart,
+                                                          oldIndex - oldStart));
+        auto& targetRanges =
+            oldIndex == oldStart ? result.targetAdded : result.targetModified;
+        appendTokenRanges(
+            targetRanges,
+            std::span<const WordToken>{newTokens}.subspan(newStart,
+                                                          newIndex - newStart));
+    }
+    return result;
+}
 
 std::optional<ComputedDiff> computeDiff(std::string_view baseline,
                                          std::string_view target,
@@ -59,17 +182,38 @@ std::optional<ComputedDiff> computeDiff(std::string_view baseline,
     ComputedDiff result;
     std::size_t oldIndex = 0;
     std::size_t newIndex = 0;
+    std::size_t remainingWordMatrixCells = config.maximumWordMatrixCells;
+    bool wordLimitExceeded = false;
     std::optional<DiffHunk> pending;
     const auto flush = [&] {
         if (!pending) {
             return;
         }
+        if (wordLimitExceeded) {
+            pending.reset();
+            return;
+        }
         const auto paired =
             std::min(pending->baselineLines.size(), pending->targetLines.size());
         for (std::size_t index = 0; index < paired; ++index) {
+            auto wordDiff =
+                computeWordDiff(pending->baselineLines[index],
+                               pending->targetLines[index],
+                               remainingWordMatrixCells);
+            if (!wordDiff) {
+                wordLimitExceeded = true;
+                pending.reset();
+                return;
+            }
             result.changes.push_back(
-                {DiffLineKind::Modified, pending->baselineStart + index,
-                 pending->targetStart + index});
+                {.kind = DiffLineKind::Modified,
+                 .baselineLine = pending->baselineStart + index,
+                 .targetLine = pending->targetStart + index,
+                 .targetAddedWordRanges = std::move(wordDiff->targetAdded),
+                 .baselineRemovedWordRanges =
+                     std::move(wordDiff->baselineRemoved),
+                 .targetModifiedWordRanges =
+                     std::move(wordDiff->targetModified)});
         }
         for (std::size_t index = paired; index < pending->baselineLines.size();
              ++index) {
@@ -108,6 +252,9 @@ std::optional<ComputedDiff> computeDiff(std::string_view baseline,
         }
     }
     flush();
+    if (wordLimitExceeded) {
+        return std::nullopt;
+    }
     return result;
 }
 
@@ -142,9 +289,25 @@ std::vector<std::string> splitDiffLines(std::string_view content) {
     return lines;
 }
 
+std::optional<std::reference_wrapper<const DiffFileView>>
+DiffViewState::fileForDocument(const DocumentViewState& document) const {
+    if (!document.diffFileIdentity || document.revision != revision) {
+        return std::nullopt;
+    }
+    auto const found = std::find_if(
+        files.begin(), files.end(), [&](const DiffFileView& file) {
+            return file.id.value() == *document.diffFileIdentity;
+        });
+    if (found == files.end()) {
+        return std::nullopt;
+    }
+    return std::cref(*found);
+}
+
 DiffModel::DiffModel(DiffConfig config) : config_(config) {
     if (config_.maximumLineCount == 0 ||
-        config_.maximumMatrixCells == 0) {
+        config_.maximumMatrixCells == 0 ||
+        config_.maximumWordMatrixCells == 0) {
         throw std::invalid_argument("diff work limits must be greater than zero");
     }
 }
@@ -182,11 +345,10 @@ DiffMutationResult DiffModel::updateGitFile(GitDiffFile file,
                       .hunks = std::move(computed->hunks),
                       .changedLines = std::move(computed->changes)};
     if (existing == entries_.end()) {
-        entries_.push_back({std::move(view), Source::Git, {}});
+        entries_.push_back({std::move(view), Source::Git});
     } else {
         existing->view = std::move(view);
         existing->source = Source::Git;
-        existing->acknowledgedContent.clear();
     }
     revision_ = revision;
     return {};
@@ -215,7 +377,7 @@ DiffMutationResult DiffModel::seedNonGit(std::vector<SeededDiffFile> files,
             {DiffFileView{.id = file.id,
                           .path = std::move(file.path),
                           .currentContent = file.content},
-             Source::NonGit, std::move(file.content)});
+             Source::NonGit});
     }
 
     entries_.insert(entries_.end(),
@@ -235,10 +397,10 @@ DiffMutationResult DiffModel::applyNonGitEvent(NonGitDiffEvent event,
         return {DiffError::InvalidPath};
     }
     const bool removed = event.kind == NonGitDiffEventKind::Remove;
-    if (removed && event.content) {
+    if (removed && event.targetContent) {
         return {DiffError::ContentForbidden};
     }
-    if (!removed && !event.content) {
+    if (!removed && !event.targetContent) {
         return {DiffError::ContentRequired};
     }
 
@@ -250,8 +412,8 @@ DiffMutationResult DiffModel::applyNonGitEvent(NonGitDiffEvent event,
         if (event.kind != NonGitDiffEventKind::Create) {
             return {DiffError::UnknownFile};
         }
-        const std::string target = *event.content;
-        auto computed = computeDiff("", target, config_);
+        const std::string target = *event.targetContent;
+        auto computed = computeDiff(event.baselineContent, target, config_);
         if (!computed) {
             return {DiffError::WorkLimitExceeded};
         }
@@ -262,14 +424,13 @@ DiffMutationResult DiffModel::applyNonGitEvent(NonGitDiffEvent event,
                           .currentContent = target,
                           .hunks = std::move(computed->hunks),
                           .changedLines = std::move(computed->changes)},
-             Source::NonGit, target});
+             Source::NonGit});
         revision_ = revision;
         return {};
     }
 
-    const std::string target = event.content.value_or("");
-    auto computed =
-        computeDiff(existing->acknowledgedContent, target, config_);
+    const std::string target = event.targetContent.value_or("");
+    auto computed = computeDiff(event.baselineContent, target, config_);
     if (!computed) {
         return {DiffError::WorkLimitExceeded};
     }
@@ -280,7 +441,6 @@ DiffMutationResult DiffModel::applyNonGitEvent(NonGitDiffEvent event,
     existing->view.currentContent = target;
     existing->view.hunks = std::move(computed->hunks);
     existing->view.changedLines = std::move(computed->changes);
-    existing->acknowledgedContent = target;
     revision_ = revision;
     return {};
 }

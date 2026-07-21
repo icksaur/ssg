@@ -214,6 +214,7 @@ int main(int argc, char** argv) {
     // the first-frame path; prime_deferred() runs them once the first frame is
     // drawn.
     config.deferEnrichment = true;
+    config.syntaxParser = ssg::defaultSyntaxParser();
     auto created = ssg::EditorRuntime::create(config);
     if (!created.accepted()) {
         std::fprintf(stderr, "ssg: %s\n", created.message.c_str());

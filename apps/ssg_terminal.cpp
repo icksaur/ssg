@@ -66,18 +66,14 @@ LaunchTarget resolve_launch(fs::path const& argument) {
 
 std::string encode_ansi_frame(ssg::CellGrid const& screen, ssg::ColorDepth depth) {
     constexpr std::size_t maxIndex = ssg::kThemePaletteSize - 1;
-    // Format one SGR color for palette entry `index`, adapted to the terminal's
-    // depth.  `kind` is '3' for foreground, '4' for background (SGR selectors),
-    // which also selects the ANSI-16 base ('3'/'4' -> 30/40) vs bright
-    // ('9'/'10' -> 90/100) prefix.
-    auto color = [&](std::uint8_t index, char kind) -> std::string {
-        auto const& c = screen.palette[std::min<std::size_t>(index, maxIndex)];
+    auto color = [&](ssg::SrgbColor c, char kind) -> std::string {
         auto const resolved = ssg::resolveColor(c, depth);
         switch (resolved.encoding) {
             case ssg::ResolvedColor::Encoding::Truecolor:
                 return "\x1b[" + std::string{kind} + "8;2;" +
-                       std::to_string(c.red) + ";" + std::to_string(c.green) +
-                       ";" + std::to_string(c.blue) + "m";
+                       std::to_string(resolved.rgb.red) + ";" +
+                       std::to_string(resolved.rgb.green) + ";" +
+                       std::to_string(resolved.rgb.blue) + "m";
             case ssg::ResolvedColor::Encoding::Indexed256:
                 return "\x1b[" + std::string{kind} + "8;5;" +
                        std::to_string(resolved.index) + "m";
@@ -92,6 +88,21 @@ std::string encode_ansi_frame(ssg::CellGrid const& screen, ssg::ColorDepth depth
         }
         return {};
     };
+    auto paletteColor = [&](std::uint8_t index, char kind) {
+        return color(screen.palette[std::min<std::size_t>(index, maxIndex)], kind);
+    };
+    auto tintColor = [&](ssg::DiffTint tint) {
+        switch (tint) {
+            case ssg::DiffTint::AddedRow: return screen.diffTints.addedRow;
+            case ssg::DiffTint::RemovedRow: return screen.diffTints.removedRow;
+            case ssg::DiffTint::ModifiedRow: return screen.diffTints.modifiedRow;
+            case ssg::DiffTint::AddedWord: return screen.diffTints.addedWord;
+            case ssg::DiffTint::RemovedWord: return screen.diffTints.removedWord;
+            case ssg::DiffTint::ModifiedWord: return screen.diffTints.modifiedWord;
+            case ssg::DiffTint::None: break;
+        }
+        return screen.diffTints.addedRow;
+    };
 
     std::string out = "\x1b[H";
     int const columns = screen.size.columns;
@@ -100,15 +111,26 @@ std::string encode_ansi_frame(ssg::CellGrid const& screen, ssg::ColorDepth depth
         out += "\x1b[" + std::to_string(y + 1) + ";1H\x1b[0m";
         int foreground = -1;
         int background = -1;
+        int role = -1;
+        auto tint = ssg::DiffTint::None;
         for (int x = 0; x < columns; ++x) {
             auto const& cell =
                 screen.cells[static_cast<std::size_t>(y * columns + x)];
             if (cell.continuation) continue;
-            if (cell.foreground != foreground || cell.background != background) {
-                out += color(cell.foreground, '3');
-                out += color(cell.background, '4');
+            if (cell.foreground != foreground || cell.background != background ||
+                cell.tint != tint || static_cast<int>(cell.role) != role) {
+                out += paletteColor(cell.foreground, '3');
+                if (cell.tint != ssg::DiffTint::None) {
+                    out += color(tintColor(cell.tint), '4');
+                } else if (cell.role == ssg::SemanticRole::Selection) {
+                    out += color(screen.selectionFill, '4');
+                } else {
+                    out += paletteColor(cell.background, '4');
+                }
                 foreground = cell.foreground;
                 background = cell.background;
+                tint = cell.tint;
+                role = static_cast<int>(cell.role);
             }
             out += cell.text.empty() ? std::string{" "} : cell.text;
         }

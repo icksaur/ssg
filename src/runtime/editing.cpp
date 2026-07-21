@@ -94,6 +94,7 @@ CommandHandlerResult bindText(EditorRuntime::Impl& runtime,
 }
 
 CommandHandlerResult bindSelection(EditorRuntime::Impl& runtime,
+                                    ClientId client,
                                     SelectionCommand command,
                                     std::any const& payload) {
     SelectionCommandArguments arguments;
@@ -107,9 +108,12 @@ CommandHandlerResult bindSelection(EditorRuntime::Impl& runtime,
     ViewportDimensions const viewport{
         std::max<std::uint32_t>(runtime.lastPaneContentColumns, 1),
         std::max<std::uint32_t>(runtime.lastPaneContentRows, 1)};
+    const auto diffFile = runtime.activeDiffFile();
     auto result = ssg::SelectionNavigator{}.apply(runtime.activeText(), runtime.selection,
                                              command, viewport,
-                                             arguments, {}, 4, runtime.wordWrap);
+                                             arguments, {}, 4,
+                                             runtime.wordWrap,
+                                             diffFile ? &*diffFile : nullptr);
     if (!result.accepted()) return failure(result.message);
     if (result.delta.replacement) runtime.selection = *result.delta.replacement;
     runtime.requestedFirstVisualRow = runtime.selection.firstVisualRow;
@@ -123,6 +127,7 @@ CommandHandlerResult bindSelection(EditorRuntime::Impl& runtime,
         command == SelectionCommand::SelectSetRange) {
         runtime.shell.focusEditor();
     }
+    runtime.recordNavigation(client, NavigationClass::User);
     return success();
 }
 
@@ -215,9 +220,11 @@ void revealActiveFindMatch(EditorRuntime::Impl& runtime) {
                                  : std::uint32_t{1};
     ViewportDimensions revealViewport{runtime.lastPaneContentColumns,
                                        revealRows};
+    const auto diffFile = runtime.activeDiffFile();
     auto result = ssg::SelectionNavigator{}.apply(
         text, runtime.selection, SelectionCommand::ViewRevealCaret,
-        revealViewport, {}, {}, 4, runtime.wordWrap);
+        revealViewport, {}, {}, 4, runtime.wordWrap,
+        diffFile ? &*diffFile : nullptr);
     if (result.accepted() && result.delta.replacement) {
         runtime.selection = *result.delta.replacement;
     }
@@ -437,9 +444,11 @@ void EditorRuntime::Impl::revealPrimaryCaret() {
     ViewportDimensions revealViewport{
         std::max<std::uint32_t>(lastPaneContentColumns, 1),
         std::max<std::uint32_t>(lastPaneContentRows, 1)};
+    const auto diffFile = activeDiffFile();
     auto result = ssg::SelectionNavigator{}.apply(
         activeText(), selection, SelectionCommand::ViewRevealCaret,
-        revealViewport, {}, {}, 4, wordWrap);
+        revealViewport, {}, {}, 4, wordWrap,
+        diffFile ? &*diffFile : nullptr);
     if (result.accepted() && result.delta.replacement) {
         selection = *result.delta.replacement;
     }
@@ -460,8 +469,11 @@ void bindRuntimeEditing(EditorSessionBuilder& builder, EditorRuntime::Impl& runt
         });
     }
     for (auto const& descriptor : selectionCommands.descriptors()) {
-        builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const& payload) {
-            return runtime.runTransaction([&] { return bindSelection(runtime, descriptor.command, payload); });
+        builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext& context, std::any const& payload) {
+            return runtime.runTransaction([&] {
+                return bindSelection(runtime, context.principal().clientId(),
+                                     descriptor.command, payload);
+            });
         });
     }
     for (auto const& descriptor : historyCommands.descriptors()) {

@@ -18,8 +18,8 @@ struct SrgbColor {
     std::uint8_t blue = 0;
 
     // Reconstructs channels already owned by an authoritative Theme snapshot.
-    // This is not a second color-definition path: callers must not derive or
-    // substitute channels outside theme data.
+    // Theme-internal DiffTints derivation is also authoritative theme color;
+    // renderers and clients must not derive or substitute channels.
     [[nodiscard]] static constexpr SrgbColor fromSerializedChannels(
         std::uint8_t red, std::uint8_t green, std::uint8_t blue) noexcept {
         return SrgbColor{red, green, blue};
@@ -181,10 +181,23 @@ struct SyntaxMapping {
     friend bool operator==(const SyntaxMapping&, const SyntaxMapping&) = default;
 };
 
+struct DiffTints {
+    SrgbColor addedRow;
+    SrgbColor removedRow;
+    SrgbColor modifiedRow;
+    SrgbColor addedWord;
+    SrgbColor removedWord;
+    SrgbColor modifiedWord;
+
+    friend bool operator==(const DiffTints&, const DiffTints&) = default;
+};
+
 struct ThemeSnapshot {
     std::array<SrgbColor, kThemePaletteSize> palette;
     std::array<std::uint8_t, kSemanticRoleCount> semanticIndices;
     std::array<std::uint8_t, kSyntaxScopeCount> syntaxIndices;
+    DiffTints diffTints;
+    SrgbColor selectionFill;
 
     friend bool operator==(const ThemeSnapshot&, const ThemeSnapshot&) = default;
 };
@@ -193,6 +206,20 @@ struct ThemeSnapshot {
 [[nodiscard]] std::optional<SemanticRole> semanticRoleFromName(std::string_view name);
 [[nodiscard]] std::string_view syntaxScopeName(SyntaxScope scope);
 [[nodiscard]] std::optional<SyntaxScope> syntaxScopeFromName(std::string_view name);
+
+// Derive the six diff tint colors from a theme's own palette + role/scope
+// mappings (GitAdded/Deleted/Modified hue anchors blended toward Background,
+// contrast- and distinctness-gated). Exposed so a hand-built ThemeSnapshot (e.g.
+// the runtime's defaultTheme) populates diffTints/selectionFill the same way
+// Theme::snapshot() does; without it those fields default to black.
+[[nodiscard]] DiffTints deriveDiffTints(
+    std::array<SrgbColor, kThemePaletteSize> const& palette,
+    std::array<std::uint8_t, kSemanticRoleCount> const& semanticIndices,
+    std::array<std::uint8_t, kSyntaxScopeCount> const& syntaxIndices) noexcept;
+[[nodiscard]] SrgbColor deriveSelectionFill(
+    std::array<SrgbColor, kThemePaletteSize> const& palette,
+    std::array<std::uint8_t, kSemanticRoleCount> const& semanticIndices,
+    std::array<std::uint8_t, kSyntaxScopeCount> const& syntaxIndices) noexcept;
 
 class Theme {
 public:

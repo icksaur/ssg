@@ -219,6 +219,7 @@ ssg::ViewportViewState viewport() {
             8,
             {},
             {},
+            {},
             {8, 8, 0, 0, 0, 8}};
 }
 

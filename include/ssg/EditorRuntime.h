@@ -1,7 +1,10 @@
 #pragma once
 
+#include <ssg/DiffModel.h>
 #include <ssg/EditorSession.h>
+#include <ssg/FollowEditsModel.h>
 #include <ssg/session_snapshot.h>
+#include <ssg/SyntaxModel.h>
 #include <ssg/Viewport.h>
 
 #include <cstdint>
@@ -9,6 +12,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace ssg {
 
@@ -22,7 +26,18 @@ struct EditorRuntimeConfig {
     // first frame.  Default false preserves the eager, fully-populated behavior
     // every non-startup caller (tests, in-process embedders) already relies on.
     bool deferEnrichment = false;
+    // The syntax parser the runtime drives for highlighting. Injected here (not
+    // hard-constructed inside the runtime) so an app supplies tree-sitter via
+    // defaultSyntaxParser(), a future LSP semantic-tokens source substitutes
+    // another implementation, and tests inject a deterministic double. Null =
+    // plain-text highlighting.
+    std::shared_ptr<SyntaxParser> syntaxParser;
 };
+
+// The syntax parser the shipped app injects by default: a tree-sitter parser
+// when built with SSG_TREESITTER, otherwise null (plain text). The app opts in;
+// the library never hard-depends on tree-sitter.
+[[nodiscard]] std::shared_ptr<SyntaxParser> defaultSyntaxParser();
 
 class EditorRuntime;
 
@@ -31,6 +46,25 @@ struct EditorRuntimeCreateResult {
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept { return runtime != nullptr; }
+};
+
+struct ExternalDiffRevision {
+    NonGitDiffEvent event;
+    Revision revision{0};
+};
+
+enum class ExternalDiffBurstError {
+    None,
+    EmptyBurst,
+    DiffRejected,
+    FollowRejected,
+};
+
+struct ExternalDiffBurstResult {
+    ExternalDiffBurstError error = ExternalDiffBurstError::None;
+    [[nodiscard]] bool accepted() const noexcept {
+        return error == ExternalDiffBurstError::None;
+    }
 };
 
 class EditorRuntime {
@@ -52,6 +86,8 @@ public:
 
     [[nodiscard]] Revision revision() const;
     [[nodiscard]] std::filesystem::path const& workspaceRoot() const noexcept;
+    [[nodiscard]] ExternalDiffBurstResult applyExternalDiffBurst(
+        std::vector<ExternalDiffRevision> changes);
     // M10 fast startup: run the enrichment work that was deferred when the
     // runtime was created with defer_enrichment=true (the workspace tree scan and
     // syntax highlighting), then publish it through the normal snapshot/delta

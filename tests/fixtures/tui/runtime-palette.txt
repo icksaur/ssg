@@ -1,5 +1,7 @@
 size 80 24
 palette 1e1e1e d4d4d4 3e3e42 858585 4daafc e5c07b ef4a4a 4caf50 ab47bc 26c0c0 d4956a d16d9e bbbbbb 6a6a6a e8e8e8 ffffff
+diff_tints 283028 322626 2e2b28 263227 372525 302a27
+selection_fill 252a2f
 cell 0 0 8 0 26 ">"
 cell 1 0 8 0 26 " "
 cell 2 0 8 0 26 "s"

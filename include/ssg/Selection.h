@@ -160,7 +160,8 @@ public:
         SelectionCommand command, ViewportDimensions viewport,
         SelectionCommandArguments arguments = {},
         std::span<const BracketPair> bracketPairs = {}, int tabWidth = 4,
-        bool wordWrap = true) const;
+        bool wordWrap = true,
+        const DiffFileView* diff = nullptr) const;
 };
 
 } // namespace ssg

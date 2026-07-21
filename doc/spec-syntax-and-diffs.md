@@ -147,43 +147,52 @@ for each kind, blend the anchor hue toward the editor `Background`, desaturated:
   saturation, so intra-line marks pop above the row tint.
 
 Guarantee (the INVARIANT the mechanism serves — this, not the blend, is load-
-bearing). Stated precisely: for each tint, `min over all applicable fg of
-contrast(resolve(tint), resolve(fg)) >= T_read`, evaluated on the RESOLVED
-(post-`resolveColor`) RGBs at the target depth, not the pre-quantization ideal
-(review MUST — nearest-256 quantization can erode contrast and collapse
-distinctness). "Applicable fg" = every syntax scope foreground that can paint on
-that tint + the default `Foreground`. The tints MUST satisfy, for the shipped
-theme(s), at Truecolor AND Indexed256:
-1. Readability: the min-contrast constraint above at metric = WCAG relative-
-   luminance ratio. Row tints target a comfortable T_read; word marks (stronger)
-   are the primary oracle focus.
-2. Kind-distinctness (named metric): CIELAB deltaE (CIE76) between resolved tints
-   >= dE_kind for Added/Removed/Modified, and >= dE_word between each word mark and
-   its own row tint; pick dE_kind/dE_word in step 3c.
-3. Diff-vs-normal: deltaE(row tint, plain `Background`) >= dE_row (reads as diffed)
-   while staying a subtle wash.
+bearing). Readability is RELATIVE, not an absolute WCAG floor. IMPLEMENTATION
+FINDING (folded after visual signoff): an absolute `contrast(tint, fg) >= 3.0`
+against every syntax foreground is unachievable for a normal theme — a
+mid-luminance accent (e.g. a purple keyword that itself only ~clears 3.0 on the
+plain Background) forces every hued wash to near-black, erasing the hue and
+producing an ugly fallback. So the rule is: for each tint and each applicable
+foreground, on the RESOLVED (post-`resolveColor`) RGBs at BOTH Truecolor and
+Indexed256,
 
-Feasibility + failure semantics (review MUST — `Theme::snapshot()` is `noexcept`
-at `Theme.h:211`, so derivation is TOTAL and never throws). The min-contrast
-constraint is only achievable if the theme itself has adequate baseline syntax-vs-
-Background contrast (a theme with unreadable syntax cannot yield readable diffs —
-out of our hands). So: (a) a PRECONDITION on candidate themes is baseline syntax/
-Background contrast >= T_read (the shipped themes must satisfy it; asserted by a
-separate theme-sanity oracle); (b) GIVEN that precondition, a subtle-enough row
-tint trivially satisfies the gate because it barely moves Background, so T_read is
-chosen so the wash always passes; (c) the word-mark weight `aWord` is REDUCED as
-needed (clamped) to the strongest value that still passes the gate — marks stay as
-strong as readability allows, never stronger; (d) if even the minimal tint cannot
-satisfy both readability and kind-distinctness (degenerate theme), fall back to a
-fixed built-in safe tint set at guaranteed contrast rather than throwing. Contrast
-first, mark strength second, hue third.
+    contrast(tint, fg) >= max(kFloorContrast, kRetainContrast * contrast(Background, fg))
+
+i.e. the wash must retain a fraction (kRetainContrast = 0.80) of the contrast the
+foreground already had against the editor Background, never below a hard floor
+(kFloorContrast = 2.1). Because a subtle wash barely moves Background, existing
+per-foreground contrast is nearly preserved — which is why syntax stays readable
+on diff rows. "Applicable fg" = every syntax scope foreground + the default
+`Foreground`.
+
+Distinctness is a SECONDARY, best-effort property judged at TRUECOLOR ONLY:
+1. Row-visibility: `deltaE(row tint, Background) >= ~2` at Truecolor (a diff row
+   reads as diffed). Asserted.
+2. Kind-separation (CIELAB CIE76): the shipped theme's derived washes separate
+   Added/Removed/Modified well at Truecolor (dE ~5-11 for the default theme), but
+   this is NOT a hard gate — Indexed256 quantization can collapse subtle washes,
+   and diff kinds also read apart STRUCTURALLY (added rows vs phantom removed rows
+   vs word-marked modified rows). Not asserted as a per-theme invariant.
+The derivation prefers the readable derived washes when they are also
+truecolor-distinct (their hue comes from the theme's Git anchors); a fixed
+fallback set is used ONLY to rescue a degenerate theme whose near-monochrome
+anchors make the derived tints indistinguishable, and otherwise the readable
+derived washes are kept (readability is primary). Distinctness is judged at
+Truecolor because 256-quantization distinctness is not reliably achievable.
+
+Feasibility + failure semantics (`Theme::snapshot()` is `noexcept` at
+`Theme.h:211`, so derivation is TOTAL and never throws). Given a theme with
+adequate baseline syntax-vs-Background contrast, a subtle wash trivially satisfies
+the relative gate (it barely moves Background). The word-mark weight is the
+strongest value still passing the gate. If neither the derived washes nor a fixed
+fallback is both readable and truecolor-distinct, the readable derived washes are
+returned (readability first; distinctness degrades to structural cues).
 
 ANSI16 degradation: on a 16-color terminal `resolveColor` collapses tints to
-nearest ANSI slots and the readability/distinctness guarantees CANNOT hold in
-general (accepted limitation, same category as 16-color syntax). Define behavior:
-on Ansi16, diff rows MAY fall back to the existing 16-palette `Git*`-style
-role background (no separate word-mark tier). The gate is asserted only for
-Indexed256 and Truecolor.
+nearest ANSI slots and hue guarantees CANNOT hold (accepted limitation, same
+category as 16-color syntax). On Ansi16, diff rows MAY fall back to the existing
+16-palette `Git*`-style role background (no separate word-mark tier). The gate is
+asserted only for Indexed256 and Truecolor.
 
 Ownership + override: `Theme::snapshot()` computes `DiffTints` and ships them in
 `ThemeSnapshot` (a small `struct DiffTints { SrgbColor addedRow, removedRow,
@@ -517,18 +526,22 @@ Edge/complexity notes:
     simultaneously, including trailing blank cells tinted; plus precedence cases
     (search suppresses tint, selection suppresses tint, word mark over row tint,
     search-over-selection preserved).
-  - diff colors (contrast property oracle): for each shipped theme, on RESOLVED
+  - diff colors (readability property oracle): for each shipped theme, on RESOLVED
     RGBs at Truecolor AND Indexed256 (post-`resolveColor`, not the ideal), for
     EVERY (diff tint x syntax-scope foreground) pair and (diff tint x default
-    Foreground), assert `min contrast >= T_read` (WCAG luminance ratio, computed
-    INDEPENDENTLY in the test, not via production helpers); assert CIELAB deltaE
-    kind-distinctness (Added/Removed/Modified) and word-vs-row and row-vs-Background
-    per the named thresholds. This FAILS for a naive "bright green background" and
-    for an unclamped derivation. Include a theme-sanity oracle asserting each
-    shipped theme's baseline syntax-vs-Background contrast >= T_read (the
-    precondition), and a near-monochrome-ANCHOR fixture (valid syntax/Background
-    contrast, only its Git* hue anchors near-monochrome) exercising the clamp/
-    fallback.
+    Foreground), assert the RELATIVE readability rule `contrast(tint, fg) >=
+    max(kFloorContrast, kRetainContrast * contrast(Background, fg))` (WCAG luminance
+    ratio, computed INDEPENDENTLY in the test). Plus row-visibility:
+    `deltaE(row tint, Background) >= ~2` at Truecolor (a diff row reads as diffed).
+    Strong kind/word deltaE is NOT asserted per-theme (best-effort; see Design).
+    Exercise the derivation across the default theme (derived washes kept), a
+    near-monochrome-ANCHOR fixture and a light-background fixture (readability holds
+    via the fixed fallback), confirming readability is total.
+  - color path: `resolveColor(tint, Indexed256)` yields a 256-cube/gray index
+    (16..255, not an ansi16 slot) and `resolveColor(tint, Truecolor)` is identity —
+    confirming tints break the 16 without touching the palette; and the Ansi16
+    fallback path renders diff rows via the role-background degradation (no word
+    tier).
   - color path: `resolveColor(tint, Indexed256)` yields a 256-cube/gray index
     (16..255, not an ansi16 slot) and `resolveColor(tint, Truecolor)` is identity —
     confirming tints break the 16 without touching the palette; and the Ansi16
@@ -554,6 +567,52 @@ Edge/complexity notes:
 ---
 
 ## Plan
+
+DEFERRED: app-side diff SOURCE. The library diff/follow machinery (rendering,
+phantom rows, tints, marks, newest-hunk follow, external-diff injection API) is
+built and green, but the ssg APP does not yet wire a diff SOURCE (git working-tree
+or filesystem-watch-vs-baseline). Deferred pending a proper design; today the diff
+subsystem is exercised only by tests. A code review (2026-07-21, branch
+`feat-syntax-diffs` vs master) surfaced findings that live in this deferred
+subsystem — resolve them AS PART OF the diff-source design/wiring, not in
+isolation (their correct fix depends on how diffs get injected):
+
+- MUST — active-diff coherence (`src/DiffModel.cpp` `fileForDocument`):
+  `document.revision != revision` compares the document EDIT-revision against the
+  DiffViewState revision, which are independent counters. On mismatch the overlay
+  silently returns nullopt (no diff shown) with no failing test. The diff-source
+  design MUST define the revision contract: injected diffs carry the exact
+  document revision they were computed against, and a mismatch must be observable
+  (assert/log/dedicated staleness result), never a silent empty. This is the #1
+  correctness item for diff wiring.
+- SHOULD — follow/reveal offsets use `rowProjectionUnwrapped`
+  (`src/FollowEditsModel.cpp:247`, `src/EditorRuntime.cpp:876`), so published
+  follow offsets are wrong when word-wrap is on. Use the wrap-aware projection for
+  reveal.
+- SHOULD — next/previous hunk uses the ACTIVE document's caret line even when the
+  command payload targets a different diff file (`src/runtime/navigation.cpp:134`).
+  Use the targeted file's own current position, not the active caret.
+- NIT — phantom removed-row text strips a trailing `\n` but not `\r`
+  (`src/Viewport.cpp` `lineText`), so CRLF baselines can show a stray carriage
+  return. Strip both.
+
+Review areas confirmed CLEAN: tree-sitter integration + query cache lifetime/
+thread-safety; color derivation + readability gate + precedence (SearchMatch >
+Selection > DiffWord > DiffRow) in renderer and encoder; protocol/snapshot
+additive symmetric round-trip; external-diff burst atomicity; single-owner
+row-projection usage across consumers.
+
+NOT A BUG (review SHOULD re-examined) — per-document `syntaxModels` are keyed by
+`FileDocumentId` and persist for the session, but this is CONSISTENT with document
+lifetime, not a leak: closing a tab does NOT destroy the `Document` (the
+`Workspace` never removes documents — `close()` journals for recovery + scratch
+cleanup only; the document stays reopenable, IDs never reused). So a syntax model
+lives and dies exactly with its document, identical to the pre-existing
+`histories` map and the documents themselves. The reviewer's "never evicted on
+close" conflated tab-close with document-destruction. The only real (pre-existing,
+feature-independent) question is whether closing a tab should eventually FULLY
+destroy a document and free its bytes + history + syntax together — a session-
+memory policy that predates this work and applies uniformly; out of scope here.
 
 Ordered; each step green before the next. Codec/round-trip work lands IN the step
 that changes a shipped state shape (not deferred to a trailing step).

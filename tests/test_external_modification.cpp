@@ -45,7 +45,8 @@ ssg::WatchEvent event(std::uint64_t sequence,
 ssg::ExternalEventInput input(std::uint64_t sequence, std::string content,
                               ssg::WatchEventOrigin origin =
                                   ssg::WatchEventOrigin::External) {
-    return {event(sequence, origin), ssg::DiffFileId{"note"}, std::move(content)};
+    return {event(sequence, origin), ssg::DiffFileId{"note"}, "base\n",
+            std::move(content)};
 }
 
 struct Fixture {
@@ -105,6 +106,14 @@ TEST(dirtyExternalEditPreservesBufferAndPublishesActions) {
     ASSERT_EQ(state.files[0].actions[0], ssg::ExternalAction::Reload);
     ASSERT_EQ(state.files[0].actions[1], ssg::ExternalAction::KeepBuffer);
     ASSERT_EQ(state.files[0].actions[2], ssg::ExternalAction::OpenDiff);
+    const auto diff = fixture.diff.file(ssg::DiffFileId{"note"});
+    ASSERT_TRUE(diff.has_value());
+    if (diff) {
+        ASSERT_EQ(diff->get().hunks.front().baselineLines,
+                  (std::vector<std::string>{"base\n"}));
+        ASSERT_EQ(diff->get().hunks.front().targetLines,
+                  (std::vector<std::string>{"disk\n"}));
+    }
 }
 
 TEST(openDiffIsObservationalAndKeepBufferAcknowledgesDisk) {

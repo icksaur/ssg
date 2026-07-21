@@ -1,4 +1,5 @@
 #include <ssg/Selection.h>
+#include <ssg/DiffModel.h>
 
 #include "reference_editor.h"
 #include "test_helpers.h"
@@ -329,6 +330,46 @@ TEST(wrappedVerticalAndPageMovementUseVisualRows) {
     ASSERT_EQ(view.selections.primary().active.byteOffset, ByteOffset{8});
 }
 
+TEST(phantomRowsAreSkippedByCaretSelectionAndCountedByReveal) {
+    const std::string text = "one\ntwo\nthree";
+    ssg::DiffFileView diff{ssg::DiffFileId{"doc.txt"}};
+    diff.currentContent = text;
+    diff.hunks.push_back({.baselineStart = 1,
+                          .targetStart = 1,
+                          .baselineLines = {"removed\n"},
+                          .targetLines = {}});
+    const auto dimensions = ViewportDimensions{20, 2};
+
+    auto caret = state(text, {{1, 1}});
+    caret = resultingState(
+        caret, ssg::SelectionNavigator{}.apply(
+                   text, caret, SelectionCommand::CursorLineDown, dimensions,
+                   {}, {}, 4, true, &diff));
+    ASSERT_EQ(caret.selections.primary().active.byteOffset, ByteOffset{5});
+    ASSERT_EQ(caret.firstVisualRow, std::uint32_t{1});
+
+    auto paged = state(text, {{1, 1}});
+    paged = resultingState(
+        paged, ssg::SelectionNavigator{}.apply(
+                   text, paged, SelectionCommand::CursorPageDown, dimensions,
+                   {}, {}, 4, true, &diff));
+    ASSERT_EQ(paged.selections.primary().active.byteOffset, ByteOffset{5});
+
+    auto selected = state(text, {{1, 1}});
+    selected = resultingState(
+        selected, ssg::SelectionNavigator{}.apply(
+                      text, selected, SelectionCommand::SelectLineDown,
+                      dimensions, {}, {}, 4, true, &diff));
+    ASSERT_EQ(byteRanges(selected),
+              (std::vector<std::pair<std::uint64_t, std::uint64_t>>{{1, 5}}));
+
+    auto centered = resultingState(
+        caret, ssg::SelectionNavigator{}.apply(
+                   text, caret, SelectionCommand::ViewCenterCaret,
+                   ViewportDimensions{20, 3}, {}, {}, 4, true, &diff));
+    ASSERT_EQ(centered.firstVisualRow, std::uint32_t{1});
+}
+
 // M12 VP-H / review-fold #3: with word wrap OFF, BOTH cursor and selection
 // vertical movement are by LOGICAL line, never through wrap-chunks of a long
 // line. The wrapped test above (columns=3) moves within wrap rows of "abcdef";
@@ -552,6 +593,7 @@ int main() {
     RUN(horizontalMovementUsesExtendedGraphemeBoundaries);
     RUN(verticalMovementUsesCellsAndPreservesDesiredCell);
     RUN(wrappedVerticalAndPageMovementUseVisualRows);
+    RUN(phantomRowsAreSkippedByCaretSelectionAndCountedByReveal);
     RUN(wordWrapOffVerticalMovementIsByLogicalLine);
     RUN(selectionExtensionKeepsAnchorAndPageUsesVisibleRows);
     RUN(multicursorOccurrenceAndLineSplittingMatchOracles);

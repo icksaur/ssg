@@ -12,6 +12,11 @@
 namespace ssg {
 namespace {
 
+// First-frame syntax should be ready when it's cheap: parsing a small file is
+// comfortably within startup budget, while multi-MB input can exceed it and is
+// deferred until primeDeferred().
+constexpr std::size_t kEagerSyntaxMaxBytes = 2 * 1024 * 1024;
+
 ThemeSnapshot defaultTheme() {
     // Readable dark theme derived from the VSCode-style palette in
     // caco/public/themes/dark.css.  Low indices are dark fills, high indices
@@ -92,6 +97,10 @@ ThemeSnapshot defaultTheme() {
     syntax(SyntaxScope::OperatorToken, 5);
     syntax(SyntaxScope::Punctuation, 14);
     syntax(SyntaxScope::Invalid, 6);
+    snapshot.diffTints = deriveDiffTints(
+        snapshot.palette, snapshot.semanticIndices, snapshot.syntaxIndices);
+    snapshot.selectionFill = deriveSelectionFill(
+        snapshot.palette, snapshot.semanticIndices, snapshot.syntaxIndices);
     return snapshot;
 }
 
@@ -197,6 +206,19 @@ std::string readFileText(std::filesystem::path const& path) {
     return {std::istreambuf_iterator<char>{input}, std::istreambuf_iterator<char>{}};
 }
 
+std::size_t lineStartOffset(std::string_view text, std::size_t line) {
+    std::size_t offset = 0;
+    while (line > 0 && offset < text.size()) {
+        const auto newline = text.find('\n', offset);
+        if (newline == std::string_view::npos) {
+            return text.size();
+        }
+        offset = newline + 1;
+        --line;
+    }
+    return offset;
+}
+
 std::optional<std::filesystem::path> pathFromUri(std::string_view uri) {
     constexpr std::string_view prefix{"file://"};
     if (uri.rfind(prefix, 0) != 0) return std::nullopt;
@@ -278,7 +300,8 @@ std::string tabMessage(TabResult const& result) {
 EditorRuntime::Impl::Impl(std::filesystem::path canonicalCwd,
                           std::filesystem::path scratchRoot,
                           std::filesystem::path recoveryRoot,
-                          bool deferEnrichment)
+                          bool deferEnrichment,
+                          std::shared_ptr<SyntaxParser> parser)
     : root{std::move(canonicalCwd)},
       scratchRoot{std::filesystem::weakly_canonical(scratchRoot)},
       recoveryRoot{std::filesystem::weakly_canonical(recoveryRoot)},
@@ -290,7 +313,7 @@ EditorRuntime::Impl::Impl(std::filesystem::path canonicalCwd,
       shell{{"Files", "Git", "Symbols"}},
       tabs{*this},
       external{recovery, diff},
-      syntax{},
+      syntaxParser{std::move(parser)},
       search{*this, *this},
       theme{defaultTheme()},
       deferringEnrichment{deferEnrichment} {
@@ -599,9 +622,32 @@ DocumentHistory& EditorRuntime::Impl::historyFor(FileDocumentId document) {
     return it->second;
 }
 
+SyntaxModel& EditorRuntime::Impl::syntaxFor(FileDocumentId document) {
+    auto [it, inserted] = syntaxModels.try_emplace(document.value(), syntaxParser);
+    return it->second;
+}
+
+SyntaxViewState EditorRuntime::Impl::activeSyntaxView() const {
+    if (auto id = activeDocumentId()) {
+        if (auto it = syntaxModels.find(id->value()); it != syntaxModels.end()) {
+            return it->second.viewState();
+        }
+    }
+    const auto* document = activeDocument();
+    const auto text = document ? document->snapshot().text : std::string{};
+    const auto revision = document ? document->revision() : Revision{0};
+    return plainTextSyntaxViewState(revision, LanguageId::plainText(), text, 4);
+}
+
 std::optional<WorkspaceDocumentState> EditorRuntime::Impl::activeWorkspaceState() const {
     auto id = activeDocumentId();
     return id ? workspace.state(*id) : std::nullopt;
+}
+
+std::optional<DiffFileView> EditorRuntime::Impl::activeDiffFile() const {
+    const auto diffState = diff.viewState();
+    const auto file = diffState.fileForDocument(documentView());
+    return file ? std::optional<DiffFileView>{file->get()} : std::nullopt;
 }
 
 std::string EditorRuntime::Impl::activeText() const {
@@ -640,14 +686,17 @@ std::vector<CellRun> EditorRuntime::Impl::activeCellRuns() const {
 ViewportViewState EditorRuntime::Impl::computeEditorViewport(
     ViewportDimensions dimensions, std::uint32_t firstRow,
     std::uint32_t firstColumn) const {
+    const auto diffFile = activeDiffFile();
     if (wordWrap) {
         auto runs = activeCellRuns();
-        return Viewport{}.compute(runs, dimensions, firstRow);
+        return Viewport{}.compute(
+            runs, dimensions, firstRow, diffFile ? &*diffFile : nullptr);
     }
     // Word wrap off (default): one logical line is one visual row; only the
     // visible lines are segmented, so this is O(visible rows), not O(document).
     return Viewport{}.computeUnwrapped(activeText(), dimensions, firstRow,
-                                      firstColumn, 4);
+                                       firstColumn, 4,
+                                       diffFile ? &*diffFile : nullptr);
 }
 
 ViewportViewState EditorRuntime::Impl::viewport(ViewportDimensions dimensions) const {
@@ -696,18 +745,31 @@ void EditorRuntime::Impl::reconcileFindDocument() {
 }
 
 void EditorRuntime::Impl::refreshSyntax() {
-    if (deferringEnrichment) {
-        pendingSyntaxRefresh = true;
-        return;
-    }
-    ++syntaxRunCount;
+    auto id = activeDocumentId();
+    if (!id) return;
+    auto& model = syntaxFor(*id);
     auto const* document = activeDocument();
     auto text = document ? document->snapshot().text : std::string{};
     auto revision = document ? document->revision() : Revision{0};
-    auto request = syntax.request(revision, LanguageId::plainText(), std::move(text));
+    auto language = LanguageId::plainText();
+    if (auto state = activeWorkspaceState();
+        state && state->key.kind() == JournalDocumentKeyKind::Saved) {
+        language = LanguageId::fromPath(state->key.savedPath());
+    }
+    if (deferringEnrichment) {
+        const bool canEagerlyParse =
+            document != nullptr && model.hasGrammar(language) &&
+            text.size() <= kEagerSyntaxMaxBytes;
+        if (!canEagerlyParse) {
+            pendingSyntaxRefresh = true;
+            return;
+        }
+    }
+    ++syntaxRunCount;
+    auto request = model.request(revision, std::move(language), std::move(text));
     if (request.accepted()) {
-        auto output = syntax.run(*request.request);
-        (void)syntax.accept(request.request, output);
+        auto output = model.run(*request.request);
+        (void)model.accept(request.request, output);
     }
 }
 
@@ -739,6 +801,102 @@ void EditorRuntime::Impl::enqueueStatus(StatusPriority priority, std::string tex
     (void)status.enqueue(StatusItem{StatusId{value}, priority, std::move(text), {}});
 }
 
+ExternalDiffBurstResult EditorRuntime::Impl::applyExternalDiffBurst(
+    std::vector<ExternalDiffRevision> changes) {
+    if (changes.empty()) {
+        return {ExternalDiffBurstError::EmptyBurst};
+    }
+
+    auto stagedDiff = diff;
+    std::vector<FollowDiffChange> followChanges;
+    followChanges.reserve(changes.size());
+    for (auto& change : changes) {
+        const auto id = change.event.id;
+        std::vector<DiffHunk> priorHunks;
+        if (const auto prior = stagedDiff.file(id)) {
+            priorHunks = prior->get().hunks;
+        }
+        const auto applied =
+            stagedDiff.applyNonGitEvent(std::move(change.event), change.revision);
+        if (!applied.accepted()) {
+            return {ExternalDiffBurstError::DiffRejected};
+        }
+        const auto changedFile = stagedDiff.file(id);
+        if (!changedFile) {
+            return {ExternalDiffBurstError::DiffRejected};
+        }
+        followChanges.push_back(
+            {changedFile->get(), std::move(priorHunks), change.revision});
+    }
+
+    auto stagedFollow = follow;
+    const auto followed =
+        stagedFollow.acceptExternalChanges(std::move(followChanges));
+    if (!followed.accepted()) {
+        return {ExternalDiffBurstError::FollowRejected};
+    }
+
+    const auto previousTarget = follow.viewState().activeTarget;
+    diff = std::move(stagedDiff);
+    follow = std::move(stagedFollow);
+    const auto next = follow.viewState();
+    if (next.mode == FollowMode::Following && next.activeTarget &&
+        next.activeTarget != previousTarget) {
+        (void)revealDiffTarget(*next.activeTarget,
+                               NavigationClass::Programmatic);
+    }
+    if (session) {
+        session->advanceRevision();
+    }
+    return {};
+}
+
+bool EditorRuntime::Impl::revealDiffTarget(
+    const FollowTarget& target, NavigationClass classification) {
+    if (target.deleted) {
+        return false;
+    }
+    const auto opened = workspace.openFile(target.path.generic_string());
+    if (!opened.accepted() || !opened.document ||
+        !activateDocument(*opened.document).accepted) {
+        return false;
+    }
+
+    const auto text = activeText();
+    const auto offset = lineStartOffset(text, target.newestHunkLine);
+    const auto position =
+        SelectionNavigator::resolvePosition(text, ByteOffset{offset});
+    if (!position) {
+        return false;
+    }
+    selection.selections =
+        SelectionSet{std::vector<Selection>{Selection{*position, *position}}};
+    if (const auto file = diff.file(target.id)) {
+        const auto projection =
+            Viewport{}.rowProjectionUnwrapped(text, file->get());
+        requestedFirstVisualRow = projection.visualRowForBufferLine(
+            static_cast<std::uint32_t>(std::min<std::size_t>(
+                target.newestHunkLine,
+                std::numeric_limits<std::uint32_t>::max())));
+        selection.firstVisualRow = requestedFirstVisualRow;
+    }
+    revealPrimaryCaret();
+    for (const auto& client : follow.viewState().clients) {
+        recordNavigation(client.client, classification);
+    }
+    shell.focusEditor();
+    return true;
+}
+
+void EditorRuntime::Impl::recordNavigation(
+    ClientId client, NavigationClass classification) {
+    (void)follow.applyNavigation(
+        {.client = client,
+         .classification = classification,
+         .offset = FollowScrollOffset{requestedFirstVisualRow,
+                                      requestedFirstVisualColumn}});
+}
+
 EditorRuntime::EditorRuntime(std::unique_ptr<Impl> implementation) noexcept
     : impl_{std::move(implementation)} {}
 EditorRuntime::~EditorRuntime() = default;
@@ -752,7 +910,8 @@ EditorRuntimeCreateResult EditorRuntime::create(EditorRuntimeConfig config) {
         std::filesystem::create_directories(config.recoveryRoot);
         auto impl = std::make_unique<Impl>(cwd, config.scratchRoot,
                                            config.recoveryRoot,
-                                           config.deferEnrichment);
+                                           config.deferEnrichment,
+                                           std::move(config.syntaxParser));
         impl->keymap = defaultTerminalKeymap();
         if (auto errors = KeymapMatcher{impl->keymap}.validate({}); !errors.empty()) {
             return {nullptr, "default keymap is invalid: " + errors.front().message};
@@ -816,6 +975,10 @@ CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& co
 
 Revision EditorRuntime::revision() const { return impl_->session->revision(); }
 std::filesystem::path const& EditorRuntime::workspaceRoot() const noexcept { return impl_->root; }
+ExternalDiffBurstResult EditorRuntime::applyExternalDiffBurst(
+    std::vector<ExternalDiffRevision> changes) {
+    return impl_->applyExternalDiffBurst(std::move(changes));
+}
 std::optional<SessionSnapshot> EditorRuntime::snapshot(ClientId clientId, ViewportDimensions dimensions,
                                                        KeySequence leaderPending,
                                                        PaletteReport paletteReport) const {

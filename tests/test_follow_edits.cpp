@@ -18,6 +18,10 @@ DiffFileView changedFile(std::string id, std::filesystem::path path,
     DiffFileView view{DiffFileId{std::move(id)}};
     view.path = std::move(path);
     view.deleted = deleted;
+    for (std::size_t line = 0; line < newestLine; ++line) {
+        view.currentContent += "line\n";
+    }
+    if (!deleted) view.currentContent += "new\n";
     view.hunks.push_back(
         {.baselineStart = newestLine,
          .targetStart = newestLine,
@@ -25,6 +29,101 @@ DiffFileView changedFile(std::string id, std::filesystem::path path,
          .targetLines = deleted ? std::vector<std::string>{}
                                  : std::vector<std::string>{"new\n"}});
     return view;
+}
+
+TEST(followOffsetCountsPhantomRowsThroughViewportProjection) {
+    DiffFileView file{DiffFileId{"phantom"}};
+    file.path = "phantom.txt";
+    file.currentContent = "zero\none\ntwo\nthree";
+    file.hunks.push_back({.baselineStart = 2,
+                          .targetStart = 2,
+                          .baselineLines = {"removed\n"},
+                          .targetLines = {}});
+
+    FollowEditsModel model;
+    ASSERT_TRUE(
+        model.attachClient(ClientId{1}, ViewportDimensions{20, 2}).accepted());
+    ASSERT_TRUE(model.acceptExternalChange(file, Revision{1}).accepted());
+    ASSERT_EQ(model.viewState().clients.front().offset.firstRow,
+              std::uint64_t{2});
+}
+
+TEST(newestIntroducedHunkWinsWhenPriorBottomHunkRemains) {
+    auto revisionA = changedFile("file", "file.txt", 0);
+    revisionA.currentContent = "top\nsame\nmiddle\nsame\nbottom\n";
+    revisionA.hunks = {
+        {.baselineStart = 0,
+         .targetStart = 0,
+         .baselineLines = {"old top\n"},
+         .targetLines = {"top\n"}},
+        {.baselineStart = 4,
+         .targetStart = 4,
+         .baselineLines = {"old bottom\n"},
+         .targetLines = {"bottom\n"}}};
+    auto revisionB = revisionA;
+    revisionB.hunks.insert(
+        revisionB.hunks.begin() + 1,
+        {.baselineStart = 2,
+         .targetStart = 2,
+         .baselineLines = {"old middle\n"},
+         .targetLines = {"middle\n"}});
+
+    FollowEditsModel model;
+    ASSERT_TRUE(model
+                    .acceptExternalChanges(
+                        {{revisionB, revisionA.hunks, Revision{2}}})
+                    .accepted());
+    ASSERT_TRUE(model.viewState().activeTarget.has_value());
+    ASSERT_EQ(model.viewState().activeTarget->newestHunkLine, std::size_t{2});
+}
+
+TEST(burstActivatesOnlyLastFileAndAdvancesOnce) {
+    FollowEditsModel model;
+    const auto before = model.viewState().generation;
+    ASSERT_TRUE(model
+                    .acceptExternalChanges(
+                        {{changedFile("a", "a.txt", 2), {}, Revision{1}},
+                         {changedFile("b", "b.txt", 5), {}, Revision{2}},
+                         {changedFile("c", "c.txt", 8), {}, Revision{3}}})
+                    .accepted());
+    const auto state = model.viewState();
+    ASSERT_TRUE(state.activeTarget.has_value());
+    ASSERT_EQ(state.activeTarget->id, DiffFileId{"c"});
+    ASSERT_EQ(state.generation, before + 1);
+}
+
+TEST(burstDoesNotRevealEarlierFileWhenLastFileHasNoNewHunk) {
+    FollowEditsModel model;
+    auto unchanged = changedFile("b", "b.txt", 5);
+    ASSERT_TRUE(model
+                    .acceptExternalChanges(
+                        {{changedFile("a", "a.txt", 2), {}, Revision{1}},
+                         {unchanged, unchanged.hunks, Revision{2}}})
+                    .accepted());
+    const auto state = model.viewState();
+    ASSERT_FALSE(state.activeTarget.has_value());
+    ASSERT_EQ(state.queuedTargets.size(), std::size_t{1});
+    ASSERT_EQ(state.queuedTargets.front().id, DiffFileId{"a"});
+}
+
+TEST(programmaticRevealDoesNotPauseButUserNavigationDoes) {
+    FollowEditsModel model;
+    ASSERT_TRUE(
+        model.attachClient(ClientId{1}, ViewportDimensions{20, 2}).accepted());
+    ASSERT_TRUE(model
+                    .applyNavigation(
+                        {.client = ClientId{1},
+                         .classification = NavigationClass::Programmatic,
+                         .offset = FollowScrollOffset{3, 0}})
+                    .accepted());
+    ASSERT_EQ(model.viewState().mode, FollowMode::Following);
+    ASSERT_TRUE(model
+                    .applyNavigation(
+                        {.client = ClientId{1},
+                         .classification = NavigationClass::User,
+                         .offset = FollowScrollOffset{4, 0}})
+                    .accepted());
+    ASSERT_EQ(model.viewState().mode, FollowMode::Paused);
 }
 
 DiffViewState currentDiff(std::initializer_list<DiffFileView> files,
@@ -216,6 +315,37 @@ TEST(resumeResolvesRenameDeleteAndSkipsRevertedOrMissingTargets) {
     ASSERT_TRUE(after.queuedTargets.empty());
 }
 
+TEST(resumePreservesNewestIntroducedHunkInsteadOfChoosingBottomHunk) {
+    auto prior = changedFile("file", "file.txt", 0);
+    prior.currentContent = "top\nmiddle\nbottom\n";
+    prior.hunks = {
+        {.baselineStart = 0,
+         .targetStart = 0,
+         .baselineLines = {"old top\n"},
+         .targetLines = {"top\n"}},
+        {.baselineStart = 2,
+         .targetStart = 2,
+         .baselineLines = {"old bottom\n"},
+         .targetLines = {"bottom\n"}}};
+    auto current = prior;
+    current.hunks.insert(
+        current.hunks.begin() + 1,
+        {.baselineStart = 1,
+         .targetStart = 1,
+         .baselineLines = {"old middle\n"},
+         .targetLines = {"middle\n"}});
+
+    FollowEditsModel model;
+    ASSERT_TRUE(model.pause().accepted());
+    ASSERT_TRUE(model
+                    .acceptExternalChanges(
+                        {{current, prior.hunks, Revision{1}}})
+                    .accepted());
+    ASSERT_TRUE(model.resume(currentDiff({current}, 2)).accepted());
+    ASSERT_TRUE(model.viewState().activeTarget.has_value());
+    ASSERT_EQ(model.viewState().activeTarget->newestHunkLine, std::size_t{1});
+}
+
 TEST(staleChangesAndInvalidClientsAreFailureAtomic) {
     FollowEditsModel model;
     ASSERT_TRUE(model
@@ -280,9 +410,15 @@ TEST(configurationRejectsInvalidQueueCapacity) {
 
 int main() {
     RUN(independentTransitionTableCoversSharedFollowPolicy);
+    RUN(followOffsetCountsPhantomRowsThroughViewportProjection);
+    RUN(newestIntroducedHunkWinsWhenPriorBottomHunkRemains);
+    RUN(burstActivatesOnlyLastFileAndAdvancesOnce);
+    RUN(burstDoesNotRevealEarlierFileWhenLastFileHasNoNewHunk);
+    RUN(programmaticRevealDoesNotPauseButUserNavigationDoes);
     RUN(dirtyConflictUsesDiskDiffTargetWithoutBufferPolicy);
     RUN(queueIsBoundedAndSameFileReplacesInPlace);
     RUN(resumeResolvesRenameDeleteAndSkipsRevertedOrMissingTargets);
+    RUN(resumePreservesNewestIntroducedHunkInsteadOfChoosingBottomHunk);
     RUN(staleChangesAndInvalidClientsAreFailureAtomic);
     RUN(commandViewDeltaAndFooterAreComplete);
     RUN(configurationRejectsInvalidQueueCapacity);

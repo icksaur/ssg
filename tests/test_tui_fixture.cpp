@@ -91,6 +91,8 @@ public:
                 static_cast<std::uint8_t>((index + 1) %
                                           ssg::kThemePaletteSize);
         }
+        theme.selectionFill = ssg::deriveSelectionFill(
+            theme.palette, theme.semanticIndices, theme.syntaxIndices);
 
         ssg::ShellViewState shell;
         shell.viewport = {24, 8};

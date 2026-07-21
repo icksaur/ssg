@@ -73,6 +73,34 @@ TEST(encodeAnsiFrameAdaptsToColorDepth) {
     ASSERT_TRUE(ansi.find(";2;") == std::string::npos);
 }
 
+TEST(encodeAnsiFrameEmitsOrthogonalTintBackgrounds) {
+    ssg::CellGrid screen;
+    screen.size = {2, 1};
+    screen.palette[0] = {30, 30, 30};
+    screen.palette[1] = {212, 212, 212};
+    screen.diffTints.addedRow = {0, 0, 95};
+    ssg::CellGridCell plain;
+    plain.text = "X";
+    plain.foreground = 1;
+    ssg::CellGridCell tinted = plain;
+    tinted.text = "Y";
+    tinted.tint = ssg::DiffTint::AddedRow;
+    screen.cells = {plain, tinted};
+
+    const auto truecolor =
+        ssg::app::encode_ansi_frame(screen, ssg::ColorDepth::Truecolor);
+    ASSERT_TRUE(truecolor.find("\x1b[48;2;30;30;30m") != std::string::npos);
+    ASSERT_TRUE(truecolor.find("\x1b[48;2;0;0;95m") != std::string::npos);
+    const auto indexed =
+        ssg::app::encode_ansi_frame(screen, ssg::ColorDepth::Indexed256);
+    const auto tintIndex =
+        ssg::resolveColor(screen.diffTints.addedRow,
+                          ssg::ColorDepth::Indexed256)
+            .index;
+    ASSERT_TRUE(indexed.find("\x1b[48;5;" + std::to_string(tintIndex) + "m") !=
+                std::string::npos);
+}
+
 TEST(detectColorDepthReadsEnvironment) {
     using ssg::ColorDepth;
     ASSERT_TRUE(ssg::app::detect_color_depth("truecolor", "xterm") == ColorDepth::Truecolor);
@@ -954,6 +982,7 @@ int main() {
     RUN(unicodeEndToEndGridAndEncoding);
     RUN(classifySignalTagsMapsSignalNumbers);
     RUN(encodeAnsiFrameAdaptsToColorDepth);
+    RUN(encodeAnsiFrameEmitsOrthogonalTintBackgrounds);
     RUN(detectColorDepthReadsEnvironment);
     RUN(encodeAnsiFrameAddressesRowsAndEmitsPaletteColors);
     RUN(encodeAnsiFrameSkipsWideGlyphContinuation);

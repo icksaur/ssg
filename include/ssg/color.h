@@ -2,14 +2,10 @@
 
 // Color-depth adaptation (M9-C, doc/spec-terminal-robustness.md).
 //
-// Themes are the sole source of color (spec.md I22): the CellGrid palette carries
-// only the 16 authoritative theme SrgbColors.  A terminal, however, may not be
-// able to display 24-bit color.  resolve_color maps a theme SrgbColor to the
-// nearest color a terminal of a given ColorDepth can actually show.  This is a
-// client-side hardware-capability adaptation applied at output time (the same
-// category as a physical terminal approximating a requested RGB value); it
-// introduces no color into the theme/snapshot/API surface, so every client on a
-// reduced-depth terminal presents identically.
+// Themes are the sole source of color (spec.md I22): CellGrid carries the 16
+// authoritative palette colors plus Theme-derived DiffTints. A client never
+// mints or substitutes editor color; resolveColor only depth-adapts those theme
+// colors to the nearest color its output medium can display.
 
 #include <ssg/Theme.h>
 

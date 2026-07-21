@@ -1192,6 +1192,8 @@ ProtocolValue toValue(TabDelta const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<TabDelta>& out);
 ProtocolValue toValue(DiffHunk const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<DiffHunk>& out);
+ProtocolValue toValue(DiffWordRange const& value);
+bool decodePresent(ProtocolValue const& value, std::optional<DiffWordRange>& out);
 ProtocolValue toValue(DiffLineChange const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<DiffLineChange>& out);
 ProtocolValue toValue(DiffFileView const& value);
@@ -1282,6 +1284,8 @@ ProtocolValue toValue(ThemeSnapshot const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<ThemeSnapshot>& out);
 ProtocolValue toValue(ThemeSectionDelta const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<ThemeSectionDelta>& out);
+ProtocolValue toValue(DiffTints const& value);
+bool decodePresent(ProtocolValue const& value, std::optional<DiffTints>& out);
 ProtocolValue toValue(GridSize const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<GridSize>& out);
 ProtocolValue toValue(AccessibilityNode const& value);
@@ -1296,6 +1300,8 @@ ProtocolValue toValue(ShellSectionDelta const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<ShellSectionDelta>& out);
 ProtocolValue toValue(VisualRow const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<VisualRow>& out);
+ProtocolValue toValue(ProjectedRow const& value);
+bool decodePresent(ProtocolValue const& value, std::optional<ProjectedRow>& out);
 ProtocolValue toValue(CellHitTarget const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<CellHitTarget>& out);
 ProtocolValue toValue(ScrollbarMetrics const& value);
@@ -1948,6 +1954,7 @@ ProtocolValue toValue(DocumentViewState const& value) {
     fields.emplace_back("revision", toValue(value.revision));
     fields.emplace_back("text", toValue(value.text));
     fields.emplace_back("caret", toValue(value.caret));
+    fields.emplace_back("diff_file_identity", toValue(value.diffFileIdentity));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<DocumentViewState>& out) {
@@ -1956,8 +1963,14 @@ bool decodePresent(ProtocolValue const& value, std::optional<DocumentViewState>&
     auto revision = requireField<Revision>(value.field("revision"));
     auto text = requireField<std::string>(value.field("text"));
     auto caret = requireField<ByteOffset>(value.field("caret"));
+    std::optional<std::string> diffFileIdentity;
+    if (!decodeOptionalField(value.field("diff_file_identity"),
+                             diffFileIdentity)) {
+        return false;
+    }
     if (!revision || !text || !caret) return false;
-    out.emplace(DocumentViewState{*revision, *text, *caret});
+    out.emplace(DocumentViewState{*revision, *text, *caret,
+                                  std::move(diffFileIdentity)});
     return true;
 }
 
@@ -1968,6 +1981,7 @@ ProtocolValue toValue(DocumentDelta const& value) {
     fields.emplace_back("start", toValue(value.start));
     fields.emplace_back("erased_bytes", toValue(value.erasedBytes));
     fields.emplace_back("inserted_text", toValue(value.insertedText));
+    fields.emplace_back("diff_file_identity", toValue(value.diffFileIdentity));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<DocumentDelta>& out) {
@@ -1978,11 +1992,16 @@ bool decodePresent(ProtocolValue const& value, std::optional<DocumentDelta>& out
     auto start = requireField<ByteOffset>(value.field("start"));
     auto erasedBytes = requireField<std::uint64_t>(value.field("erased_bytes"));
     auto insertedText = requireField<std::string>(value.field("inserted_text"));
+    std::optional<std::string> diffFileIdentity;
+    if (!decodeOptionalField(value.field("diff_file_identity"),
+                             diffFileIdentity)) {
+        return false;
+    }
     if (!baseRevision || !revision || !start || !erasedBytes || !insertedText) {
         return false;
     }
     out.emplace(DocumentDelta{*baseRevision, *revision, *start, *erasedBytes,
-                              *insertedText});
+                              *insertedText, std::move(diffFileIdentity)});
     return true;
 }
 
@@ -3208,6 +3227,26 @@ bool decodePresent(ProtocolValue const& value, std::optional<TabDelta>& out) {
 }
 
 
+ProtocolValue toValue(DiffWordRange const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back(
+        "byte_start", toValue(static_cast<std::uint64_t>(value.byteStart)));
+    fields.emplace_back(
+        "byte_length", toValue(static_cast<std::uint64_t>(value.byteLength)));
+    return ProtocolValue::makeObject(std::move(fields));
+}
+bool decodePresent(ProtocolValue const& value,
+                   std::optional<DiffWordRange>& out) {
+    auto const* object = value.asObject();
+    if (!object) return false;
+    auto byteStart = requireField<std::uint64_t>(value.field("byte_start"));
+    auto byteLength = requireField<std::uint64_t>(value.field("byte_length"));
+    if (!byteStart || !byteLength) return false;
+    out.emplace(DiffWordRange{static_cast<std::size_t>(*byteStart),
+                              static_cast<std::size_t>(*byteLength)});
+    return true;
+}
+
 ProtocolValue toValue(DiffLineChange const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("kind", toValue(value.kind));
@@ -3223,6 +3262,12 @@ ProtocolValue toValue(DiffLineChange const& value) {
     } else {
         fields.emplace_back("target_line", ProtocolValue::makeNull());
     }
+    fields.emplace_back("target_added_word_ranges",
+                        toValue(value.targetAddedWordRanges));
+    fields.emplace_back("baseline_removed_word_ranges",
+                        toValue(value.baselineRemovedWordRanges));
+    fields.emplace_back("target_modified_word_ranges",
+                        toValue(value.targetModifiedWordRanges));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<DiffLineChange>& out) {
@@ -3238,7 +3283,22 @@ bool decodePresent(ProtocolValue const& value, std::optional<DiffLineChange>& ou
     std::optional<std::uint64_t> targetLine;
     if (!decodeOptionalField(value.field("target_line"), targetLine)) return false;
     if (targetLine) result.targetLine = static_cast<std::size_t>(*targetLine);
-    out.emplace(result);
+    if (auto const* field = value.field("target_added_word_ranges")) {
+        auto ranges = requireField<std::vector<DiffWordRange>>(field);
+        if (!ranges) return false;
+        result.targetAddedWordRanges = std::move(*ranges);
+    }
+    if (auto const* field = value.field("baseline_removed_word_ranges")) {
+        auto ranges = requireField<std::vector<DiffWordRange>>(field);
+        if (!ranges) return false;
+        result.baselineRemovedWordRanges = std::move(*ranges);
+    }
+    if (auto const* field = value.field("target_modified_word_ranges")) {
+        auto ranges = requireField<std::vector<DiffWordRange>>(field);
+        if (!ranges) return false;
+        result.targetModifiedWordRanges = std::move(*ranges);
+    }
+    out.emplace(std::move(result));
     return true;
 }
 
@@ -3449,6 +3509,69 @@ bool decodePresent(ProtocolValue const& value, std::optional<VisualRow>& out) {
     return true;
 }
 
+ProtocolValue toValue(ProjectedRow const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    if (const auto* real = std::get_if<RealRow>(&value)) {
+        fields.emplace_back("kind", toValue(std::string{"real"}));
+        fields.emplace_back("buffer_line", toValue(real->bufferLine));
+        fields.emplace_back("buffer_visual_row",
+                            toValue(real->bufferVisualRow));
+        fields.emplace_back("start_byte_offset",
+                            toValue(real->startByteOffset));
+        fields.emplace_back("end_byte_offset", toValue(real->endByteOffset));
+        fields.emplace_back("start_cell", toValue(real->startCell));
+        fields.emplace_back("end_cell", toValue(real->endCell));
+    } else {
+        const auto& phantom = std::get<PhantomRow>(value);
+        fields.emplace_back("kind", toValue(std::string{"phantom"}));
+        fields.emplace_back("baseline_line", toValue(phantom.baselineLine));
+        fields.emplace_back("text", toValue(phantom.text));
+        fields.emplace_back("following_byte_offset",
+                            toValue(phantom.followingByteOffset));
+    }
+    return ProtocolValue::makeObject(std::move(fields));
+}
+
+bool decodePresent(ProtocolValue const& value,
+                   std::optional<ProjectedRow>& out) {
+    auto kind = requireField<std::string>(value.field("kind"));
+    if (!kind) return false;
+    if (*kind == "real") {
+        auto bufferLine =
+            requireField<std::uint32_t>(value.field("buffer_line"));
+        auto bufferVisualRow =
+            requireField<std::uint32_t>(value.field("buffer_visual_row"));
+        auto startByteOffset =
+            requireField<std::uint32_t>(value.field("start_byte_offset"));
+        auto endByteOffset =
+            requireField<std::uint32_t>(value.field("end_byte_offset"));
+        auto startCell =
+            requireField<std::uint32_t>(value.field("start_cell"));
+        auto endCell =
+            requireField<std::uint32_t>(value.field("end_cell"));
+        if (!bufferLine || !bufferVisualRow || !startByteOffset ||
+            !endByteOffset || !startCell || !endCell) {
+            return false;
+        }
+        out.emplace(RealRow{
+            *bufferLine, *bufferVisualRow, *startByteOffset, *endByteOffset,
+            *startCell, *endCell});
+        return true;
+    }
+    if (*kind == "phantom") {
+        auto baselineLine =
+            requireField<std::uint32_t>(value.field("baseline_line"));
+        auto text = requireField<std::string>(value.field("text"));
+        auto followingByteOffset = requireField<std::uint32_t>(
+            value.field("following_byte_offset"));
+        if (!baselineLine || !text || !followingByteOffset) return false;
+        out.emplace(PhantomRow{
+            *baselineLine, std::move(*text), *followingByteOffset});
+        return true;
+    }
+    return false;
+}
+
 ProtocolValue toValue(CellHitTarget const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("viewport_row", toValue(value.viewportRow));
@@ -3512,6 +3635,7 @@ ProtocolValue toValue(ViewportViewState const& value) {
     fields.emplace_back("first_visual_column", toValue(value.firstVisualColumn));
     fields.emplace_back("total_visual_rows", toValue(value.totalVisualRows));
     fields.emplace_back("visible_rows", toValue(value.visibleRows));
+    fields.emplace_back("row_projection", toValue(value.rowProjection));
     fields.emplace_back("hit_targets", toValue(value.hitTargets));
     fields.emplace_back("scrollbar", toValue(value.scrollbar));
     return ProtocolValue::makeObject(std::move(fields));
@@ -3524,15 +3648,19 @@ bool decodePresent(ProtocolValue const& value, std::optional<ViewportViewState>&
     auto firstVisualColumn = requireField<std::uint32_t>(value.field("first_visual_column"));
     auto totalVisualRows = requireField<std::uint32_t>(value.field("total_visual_rows"));
     auto visibleRows = requireField<std::vector<VisualRow>>(value.field("visible_rows"));
+    auto rowProjection =
+        requireField<std::vector<ProjectedRow>>(value.field("row_projection"));
     auto hitTargets = requireField<std::vector<CellHitTarget>>(value.field("hit_targets"));
     auto scrollbar = requireField<ScrollbarMetrics>(value.field("scrollbar"));
     if (!dimensions || !firstVisualRow || !firstVisualColumn ||
-        !totalVisualRows || !visibleRows || !hitTargets || !scrollbar) {
+        !totalVisualRows || !visibleRows || !rowProjection || !hitTargets ||
+        !scrollbar) {
         return false;
     }
     out.emplace(ViewportViewState{*dimensions, *firstVisualRow,
                                   *firstVisualColumn, *totalVisualRows,
-                                  *visibleRows, *hitTargets, *scrollbar});
+                                  *visibleRows, *rowProjection, *hitTargets,
+                                  *scrollbar});
     return true;
 }
 
@@ -4373,11 +4501,41 @@ bool decodePresent(ProtocolValue const& value, std::optional<SrgbColor>& out) {
     return true;
 }
 
+ProtocolValue toValue(DiffTints const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("added_row", toValue(value.addedRow));
+    fields.emplace_back("removed_row", toValue(value.removedRow));
+    fields.emplace_back("modified_row", toValue(value.modifiedRow));
+    fields.emplace_back("added_word", toValue(value.addedWord));
+    fields.emplace_back("removed_word", toValue(value.removedWord));
+    fields.emplace_back("modified_word", toValue(value.modifiedWord));
+    return ProtocolValue::makeObject(std::move(fields));
+}
+bool decodePresent(ProtocolValue const& value, std::optional<DiffTints>& out) {
+    auto const* object = value.asObject();
+    if (!object) return false;
+    auto addedRow = requireField<SrgbColor>(value.field("added_row"));
+    auto removedRow = requireField<SrgbColor>(value.field("removed_row"));
+    auto modifiedRow = requireField<SrgbColor>(value.field("modified_row"));
+    auto addedWord = requireField<SrgbColor>(value.field("added_word"));
+    auto removedWord = requireField<SrgbColor>(value.field("removed_word"));
+    auto modifiedWord = requireField<SrgbColor>(value.field("modified_word"));
+    if (!addedRow || !removedRow || !modifiedRow || !addedWord || !removedWord ||
+        !modifiedWord) {
+        return false;
+    }
+    out.emplace(DiffTints{*addedRow, *removedRow, *modifiedRow, *addedWord,
+                          *removedWord, *modifiedWord});
+    return true;
+}
+
 ProtocolValue toValue(ThemeSnapshot const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("palette", toValue(value.palette));
     fields.emplace_back("semantic_indices", toValue(value.semanticIndices));
     fields.emplace_back("syntax_indices", toValue(value.syntaxIndices));
+    fields.emplace_back("diff_tints", toValue(value.diffTints));
+    fields.emplace_back("selection_fill", toValue(value.selectionFill));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<ThemeSnapshot>& out) {
@@ -4389,8 +4547,15 @@ bool decodePresent(ProtocolValue const& value, std::optional<ThemeSnapshot>& out
         value.field("semantic_indices"));
     auto syntaxIndices = requireField<std::array<std::uint8_t, kSyntaxScopeCount>>(
         value.field("syntax_indices"));
-    if (!palette || !semanticIndices || !syntaxIndices) return false;
-    out.emplace(ThemeSnapshot{*palette, *semanticIndices, *syntaxIndices});
+    auto diffTints = requireField<DiffTints>(value.field("diff_tints"));
+    auto selectionFill = requireField<SrgbColor>(value.field("selection_fill"));
+    if (!palette || !semanticIndices || !syntaxIndices || !diffTints ||
+        !selectionFill) {
+        return false;
+    }
+    out.emplace(
+        ThemeSnapshot{*palette, *semanticIndices, *syntaxIndices, *diffTints,
+                      *selectionFill});
     return true;
 }
 

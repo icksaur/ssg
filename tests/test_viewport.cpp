@@ -1,4 +1,5 @@
 #include <ssg/GraphemeLayout.h>
+#include <ssg/DiffModel.h>
 #include <ssg/Selection.h>
 #include <ssg/Viewport.h>
 
@@ -11,6 +12,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <variant>
 #include <vector>
 
 #ifndef VIEWPORT_FIXTURE_DIR
@@ -20,6 +22,10 @@
 namespace {
 
 using ssg::CellRun;
+using ssg::DiffFileId;
+using ssg::DiffFileView;
+using ssg::PhantomRow;
+using ssg::RealRow;
 using ssg::ViewportDimensions;
 using ssg::ViewportViewState;
 
@@ -83,6 +89,18 @@ std::string fixture(std::string_view name) {
     return contents.str();
 }
 
+DiffFileView removedLines(std::size_t baselineStart,
+                          std::size_t targetStart,
+                          std::initializer_list<std::string> lines) {
+    DiffFileView file{DiffFileId{"doc.txt"}};
+    file.currentContent = "one\ntwo\nthree";
+    file.hunks.push_back({.baselineStart = baselineStart,
+                          .targetStart = targetStart,
+                          .baselineLines = lines,
+                          .targetLines = {}});
+    return file;
+}
+
 void assertGolden(std::string_view name,
                    const std::vector<CellRun>& lines,
                    ViewportDimensions dimensions,
@@ -114,6 +132,88 @@ TEST(wrappedScrolledGolden) {
 TEST(tinyClippedGolden) {
     assertGolden("tiny.txt", runs({"\xE4\xB8\xAD" "a"}),
                   ViewportDimensions{1, 1}, 0);
+}
+
+TEST(noDiffProjectionIsIdentity) {
+    auto state = ssg::Viewport{}.compute(
+        runs({"one", "two", "three"}), ViewportDimensions{20, 4});
+    ASSERT_TRUE(state.rowProjection.empty());
+    ASSERT_EQ(state.totalVisualRows, std::uint32_t{3});
+    for (std::uint32_t row = 0; row < state.visibleRows.size(); ++row) {
+        auto projected = state.projectedRow(row);
+        ASSERT_TRUE(std::holds_alternative<RealRow>(projected));
+        if (auto real = std::get_if<RealRow>(&projected)) {
+            ASSERT_EQ(real->bufferLine, row);
+            ASSERT_EQ(real->bufferVisualRow, row);
+        }
+    }
+}
+
+TEST(removedRowsAreProjectedAtTargetAndCountedByScrollbar) {
+    auto diff = removedLines(1, 1, {"gone\n", "also gone\n"});
+    auto state = ssg::Viewport{}.compute(
+        runs({"one", "two", "three"}), ViewportDimensions{20, 4}, 0, &diff);
+
+    ASSERT_EQ(state.totalVisualRows, std::uint32_t{5});
+    ASSERT_EQ(state.scrollbar.totalRows, std::uint32_t{5});
+    ASSERT_EQ(state.rowProjection.size(), std::size_t{4});
+    ASSERT_TRUE(std::holds_alternative<RealRow>(state.projectedRow(0)));
+    ASSERT_TRUE(std::holds_alternative<PhantomRow>(state.projectedRow(1)));
+    ASSERT_TRUE(std::holds_alternative<PhantomRow>(state.projectedRow(2)));
+    ASSERT_TRUE(std::holds_alternative<RealRow>(state.projectedRow(3)));
+    auto first = std::get<PhantomRow>(state.projectedRow(1));
+    auto second = std::get<PhantomRow>(state.projectedRow(2));
+    ASSERT_EQ(first.baselineLine, std::uint32_t{1});
+    ASSERT_EQ(first.text, "gone");
+    ASSERT_EQ(first.followingByteOffset, std::uint32_t{4});
+    ASSERT_EQ(second.baselineLine, std::uint32_t{2});
+    ASSERT_EQ(second.text, "also gone");
+    ASSERT_EQ(second.followingByteOffset, std::uint32_t{4});
+}
+
+TEST(leadingTrailingAndWrappedPhantomBlocksUseTheSameProjection) {
+    auto leading = removedLines(0, 0, {"before\n"});
+    auto leadingState = ssg::Viewport{}.compute(
+        runs({"one", "two", "three"}), ViewportDimensions{20, 8}, 0,
+        &leading);
+    ASSERT_TRUE(
+        std::holds_alternative<PhantomRow>(leadingState.projectedRow(0)));
+    ASSERT_EQ(std::get<PhantomRow>(leadingState.projectedRow(0))
+                  .followingByteOffset,
+              std::uint32_t{0});
+    ASSERT_EQ(leadingState.editableOffset(0), std::uint32_t{0});
+
+    auto trailing = removedLines(3, 3, {"abcdef\n"});
+    auto trailingState = ssg::Viewport{}.compute(
+        runs({"one", "two", "three"}), ViewportDimensions{3, 8}, 0,
+        &trailing);
+    ASSERT_EQ(trailingState.totalVisualRows, std::uint32_t{6});
+    ASSERT_TRUE(
+        std::holds_alternative<PhantomRow>(trailingState.projectedRow(4)));
+    ASSERT_TRUE(
+        std::holds_alternative<PhantomRow>(trailingState.projectedRow(5)));
+    ASSERT_EQ(std::get<PhantomRow>(trailingState.projectedRow(4)).text,
+              "abc");
+    ASSERT_EQ(std::get<PhantomRow>(trailingState.projectedRow(5)).text,
+              "def");
+    ASSERT_EQ(std::get<PhantomRow>(trailingState.projectedRow(5))
+                  .followingByteOffset,
+              std::uint32_t{13});
+    ASSERT_EQ(trailingState.editableOffset(5), std::uint32_t{13});
+}
+
+TEST(unwrappedProjectionStaysAlignedAcrossEmptyAndScrolledOffRows) {
+    auto diff = removedLines(0, 0, {});
+    const std::string text = "a\n\nb";
+    auto state = ssg::Viewport{}.computeUnwrapped(
+        text, ViewportDimensions{2, 3}, 0, 5, 4, &diff);
+    ASSERT_EQ(state.visibleRows.size(), std::size_t{3});
+    ASSERT_EQ(state.rowProjection.size(), state.visibleRows.size());
+    for (std::uint32_t row = 0; row < state.visibleRows.size(); ++row) {
+        ASSERT_TRUE(std::holds_alternative<RealRow>(state.projectedRow(row)));
+        ASSERT_EQ(state.editableOffset(row),
+                  state.visibleRows[row].endByteOffset);
+    }
 }
 
 TEST(scrollSaturatesAndDeltaSuppressesEqualPayload) {
@@ -480,6 +580,10 @@ int main() {
     RUN(wideBoundaryGolden);
     RUN(wrappedScrolledGolden);
     RUN(tinyClippedGolden);
+    RUN(noDiffProjectionIsIdentity);
+    RUN(removedRowsAreProjectedAtTargetAndCountedByScrollbar);
+    RUN(leadingTrailingAndWrappedPhantomBlocksUseTheSameProjection);
+    RUN(unwrappedProjectionStaysAlignedAcrossEmptyAndScrolledOffRows);
     RUN(scrollSaturatesAndDeltaSuppressesEqualPayload);
     RUN(unwrappedMatchesFullPathForFittingLines);
     RUN(unwrappedClipsLongLinesToOneRow);

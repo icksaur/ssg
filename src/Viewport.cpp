@@ -1,10 +1,15 @@
 #include <ssg/Viewport.h>
 
+#include <ssg/DiffModel.h>
+
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <map>
 #include <stdexcept>
+#include <string>
 #include <utility>
 
 namespace ssg {
@@ -15,6 +20,41 @@ uint32_t checkedU32(std::size_t value, const char* what) {
         throw std::length_error(what);
     }
     return static_cast<uint32_t>(value);
+}
+
+struct RemovedLine {
+    uint32_t baselineLine;
+    std::string text;
+};
+
+using RemovedBlocks = std::map<uint32_t, std::vector<RemovedLine>>;
+
+std::string lineText(std::string text) {
+    if (!text.empty() && text.back() == '\n') {
+        text.pop_back();
+    }
+    return text;
+}
+
+RemovedBlocks removedBlocks(const DiffFileView& diff, uint32_t lineCount) {
+    RemovedBlocks result;
+    for (const auto& hunk : diff.hunks) {
+        const auto paired =
+            std::min(hunk.baselineLines.size(), hunk.targetLines.size());
+        const auto insertion = checkedU32(
+            std::min<std::size_t>(hunk.targetStart + paired, lineCount),
+            "phantom insertion row exceeds uint32");
+        auto& block = result[insertion];
+        for (std::size_t index = paired; index < hunk.baselineLines.size();
+             ++index) {
+            block.push_back(RemovedLine{
+                checkedU32(hunk.baselineStart + index,
+                           "phantom baseline row exceeds uint32"),
+                lineText(hunk.baselineLines[index]),
+            });
+        }
+    }
+    return result;
 }
 
 std::vector<VisualRow> wrapRows(std::span<const CellRun> lines,
@@ -76,6 +116,158 @@ std::vector<VisualRow> wrapRows(std::span<const CellRun> lines,
     return rows;
 }
 
+std::vector<uint32_t> documentLineStarts(
+    std::span<const CellRun> logicalLines) {
+    std::vector<uint32_t> starts(logicalLines.size(), 0);
+    uint64_t documentByte = 0;
+    for (std::size_t line = 0; line < logicalLines.size(); ++line) {
+        starts[line] =
+            checkedU32(documentByte, "viewport byte offset exceeds uint32");
+        uint64_t contentBytes = 0;
+        for (const auto& span : logicalLines[line].spans) {
+            contentBytes += span.byteLen;
+        }
+        documentByte += contentBytes + 1;
+    }
+    return starts;
+}
+
+std::vector<std::size_t> documentLineStarts(std::string_view text) {
+    std::vector<std::size_t> starts{0};
+    for (std::size_t newline = text.find('\n');
+         newline != std::string_view::npos;
+         newline = text.find('\n', newline + 1)) {
+        starts.push_back(newline + 1);
+    }
+    return starts;
+}
+
+template <typename LineStart>
+uint32_t followingOffset(uint32_t insertion,
+                         std::span<const LineStart> lineStarts,
+                         uint32_t documentSize) {
+    return insertion < lineStarts.size()
+               ? checkedU32(lineStarts[insertion],
+                            "viewport byte offset exceeds uint32")
+               : documentSize;
+}
+
+std::vector<std::pair<VisualRow, ProjectedRow>> projectedWrappedRows(
+    std::span<const CellRun> logicalLines,
+    uint32_t columns,
+    const DiffFileView& diff) {
+    auto realRows = wrapRows(logicalLines, columns);
+    auto starts = documentLineStarts(logicalLines);
+    uint64_t documentSize = 0;
+    if (!logicalLines.empty()) {
+        documentSize = starts.back();
+        for (const auto& span : logicalLines.back().spans) {
+            documentSize += span.byteLen;
+        }
+    }
+    const auto checkedDocumentSize =
+        checkedU32(documentSize, "viewport byte offset exceeds uint32");
+    const auto lineCount = checkedU32(
+        logicalLines.size(), "viewport logical line count exceeds uint32");
+    auto blocks = removedBlocks(diff, lineCount);
+    std::vector<std::pair<VisualRow, ProjectedRow>> result;
+
+    const auto appendBlock = [&](uint32_t insertion) {
+        const auto found = blocks.find(insertion);
+        if (found == blocks.end()) return;
+        const auto offset =
+            followingOffset(insertion, std::span<const uint32_t>{starts},
+                            checkedDocumentSize);
+        const auto logicalLine =
+            lineCount == 0 ? 0 : std::min(insertion, lineCount - 1);
+        for (const auto& removed : found->second) {
+            const auto run = GraphemeLayout{}.computeRun(removed.text);
+            const std::array<CellRun, 1> line{run};
+            const auto wrapped = wrapRows(line, columns);
+            for (const auto& segment : wrapped) {
+                std::string text;
+                if (segment.spanCount != 0) {
+                    const auto& first = run.spans[segment.firstSpan];
+                    const auto& last =
+                        run.spans[segment.firstSpan + segment.spanCount - 1];
+                    text = removed.text.substr(
+                        first.byteOffset,
+                        last.byteOffset + last.byteLen - first.byteOffset);
+                }
+                result.emplace_back(
+                    VisualRow{logicalLine, 0, 0, CellIndex{0},
+                              segment.contentCells, segment.visibleCells,
+                              offset},
+                    PhantomRow{removed.baselineLine, std::move(text), offset});
+            }
+        }
+    };
+
+    std::size_t realVisualRow = 0;
+    for (uint32_t line = 0; line < lineCount; ++line) {
+        appendBlock(line);
+        while (realVisualRow < realRows.size() &&
+               realRows[realVisualRow].logicalLine == line) {
+            auto geometry = realRows[realVisualRow];
+            geometry.endByteOffset += starts[line];
+            result.emplace_back(
+                geometry,
+                RealRow{line, checkedU32(
+                                  realVisualRow,
+                                  "viewport visual row count exceeds uint32"),
+                        geometry.spanCount == 0
+                            ? starts[line]
+                            : starts[line] +
+                                  logicalLines[line]
+                                      .spans[geometry.firstSpan]
+                                      .byteOffset,
+                        geometry.endByteOffset,
+                        checkedU32(
+                            geometry.startCell.value(),
+                            "viewport cell offset exceeds uint32"),
+                        checkedU32(
+                            geometry.startCell.value() +
+                                geometry.contentCells,
+                            "viewport cell offset exceeds uint32")});
+            ++realVisualRow;
+        }
+    }
+    appendBlock(lineCount);
+    return result;
+}
+
+RowProjection projectedUnwrappedRows(std::string_view documentText,
+                                     const DiffFileView& diff) {
+    const auto starts = documentLineStarts(documentText);
+    const auto lineCount =
+        checkedU32(starts.size(), "viewport line count exceeds uint32");
+    const auto documentSize =
+        checkedU32(documentText.size(), "viewport byte offset exceeds uint32");
+    const auto blocks = removedBlocks(diff, lineCount);
+    std::vector<ProjectedRow> rows;
+    for (uint32_t line = 0; line <= lineCount; ++line) {
+        if (const auto found = blocks.find(line); found != blocks.end()) {
+            const auto offset =
+                followingOffset(line, std::span<const std::size_t>{starts},
+                                documentSize);
+            for (const auto& removed : found->second) {
+                rows.emplace_back(PhantomRow{
+                    removed.baselineLine, removed.text, offset});
+            }
+        }
+        if (line < lineCount) {
+            const auto start = checkedU32(
+                starts[line], "viewport byte offset exceeds uint32");
+            const auto end = checkedU32(
+                line + 1 < lineCount ? starts[line + 1] - 1
+                                     : documentText.size(),
+                "viewport byte offset exceeds uint32");
+            rows.emplace_back(RealRow{line, line, start, end, 0, 0});
+        }
+    }
+    return RowProjection{std::move(rows)};
+}
+
 ScrollbarMetrics scrollbarMetricsImpl(uint32_t totalRows,
                                         uint32_t viewportRows,
                                         uint32_t firstRow) {
@@ -102,6 +294,112 @@ ScrollbarMetrics scrollbarMetricsImpl(uint32_t totalRows,
 }
 
 }  // namespace
+
+RowProjection::RowProjection(std::vector<ProjectedRow> rows)
+    : rows_(std::move(rows)) {
+    if (rows_.size() > std::numeric_limits<uint32_t>::max()) {
+        throw std::length_error("viewport row projection exceeds uint32");
+    }
+}
+
+std::span<const ProjectedRow> RowProjection::rows() const noexcept {
+    return rows_;
+}
+
+const ProjectedRow& RowProjection::row(uint32_t visualRow) const {
+    return rows_.at(visualRow);
+}
+
+uint32_t RowProjection::totalRows() const noexcept {
+    return static_cast<uint32_t>(rows_.size());
+}
+
+uint32_t RowProjection::visualRowForReal(uint32_t bufferVisualRow) const {
+    for (uint32_t visual = 0; visual < rows_.size(); ++visual) {
+        if (const auto* real = std::get_if<RealRow>(&rows_[visual]);
+            real != nullptr && real->bufferVisualRow == bufferVisualRow) {
+            return visual;
+        }
+    }
+    return totalRows();
+}
+
+uint32_t RowProjection::visualRowForBufferLine(uint32_t bufferLine) const {
+    for (uint32_t visual = 0; visual < rows_.size(); ++visual) {
+        if (const auto* real = std::get_if<RealRow>(&rows_[visual]);
+            real != nullptr && real->bufferLine == bufferLine) {
+            return visual;
+        }
+    }
+    return totalRows();
+}
+
+uint32_t RowProjection::visualRowForPosition(
+    const DocumentPosition& position) const {
+    const auto bufferLine = static_cast<uint32_t>(position.line.value());
+    const auto byteOffset =
+        static_cast<uint32_t>(position.byteOffset.value());
+    uint32_t fallback = totalRows();
+    for (uint32_t visual = 0; visual < rows_.size(); ++visual) {
+        const auto* real = std::get_if<RealRow>(&rows_[visual]);
+        if (real == nullptr || real->bufferLine != bufferLine) continue;
+        fallback = visual;
+        const auto next = std::find_if(
+            rows_.begin() + visual + 1, rows_.end(),
+            [](const ProjectedRow& row) {
+                return std::holds_alternative<RealRow>(row);
+            });
+        const auto finalRow =
+            next == rows_.end() ||
+            std::get<RealRow>(*next).bufferLine != bufferLine;
+        if (byteOffset >= real->startByteOffset &&
+            (byteOffset < real->endByteOffset ||
+             (finalRow && byteOffset == real->endByteOffset))) {
+            return visual;
+        }
+    }
+    return fallback;
+}
+
+uint32_t RowProjection::movedRealRow(uint32_t visualRow,
+                                    int64_t visualDistance) const {
+    if (rows_.empty()) return 0;
+    const auto last = static_cast<int64_t>(rows_.size() - 1);
+    auto target = std::clamp<int64_t>(
+        static_cast<int64_t>(visualRow) + visualDistance, 0, last);
+    const auto direction = visualDistance < 0 ? -1 : 1;
+    while (target >= 0 && target <= last &&
+           std::holds_alternative<PhantomRow>(
+               rows_[static_cast<std::size_t>(target)])) {
+        target += direction;
+    }
+    if (target < 0 || target > last) {
+        target = std::clamp<int64_t>(
+            static_cast<int64_t>(visualRow), 0, last);
+        while (target >= 0 && target <= last &&
+               std::holds_alternative<PhantomRow>(
+                   rows_[static_cast<std::size_t>(target)])) {
+            target -= direction;
+        }
+    }
+    return static_cast<uint32_t>(std::clamp<int64_t>(target, 0, last));
+}
+
+ProjectedRow ViewportViewState::projectedRow(uint32_t viewportRow) const {
+    if (!rowProjection.empty()) {
+        return rowProjection.at(viewportRow);
+    }
+    const auto& row = visibleRows.at(viewportRow);
+    return RealRow{row.logicalLine, firstVisualRow + viewportRow};
+}
+
+uint32_t ViewportViewState::editableOffset(uint32_t viewportRow) const {
+    const auto projected = projectedRow(viewportRow);
+    if (const auto* phantom = std::get_if<PhantomRow>(&projected)) {
+        return phantom->followingByteOffset;
+    }
+    return visibleRows.at(viewportRow).endByteOffset;
+}
 
 ScrollbarMetrics Viewport::scrollbarMetrics(uint32_t totalRows,
                                             uint32_t viewportRows,
@@ -157,7 +455,63 @@ ViewportDimensions::ViewportDimensions(uint32_t columnCount,
 
 ViewportViewState Viewport::compute(std::span<const CellRun> logicalLines,
                                     ViewportDimensions dimensions,
-                                    uint32_t requestedFirstVisualRow) const {
+                                    uint32_t requestedFirstVisualRow,
+                                    const DiffFileView* diff) const {
+    if (diff != nullptr) {
+        auto projected =
+            projectedWrappedRows(logicalLines, dimensions.columns, *diff);
+        const auto totalRows = checkedU32(
+            projected.size(), "viewport visual row count exceeds uint32");
+        const auto maximumFirst =
+            totalRows > dimensions.rows ? totalRows - dimensions.rows : 0;
+        const auto firstRow =
+            std::min(requestedFirstVisualRow, maximumFirst);
+        const auto visibleCount =
+            std::min<uint32_t>(dimensions.rows, totalRows - firstRow);
+        std::vector<VisualRow> visibleRows;
+        std::vector<ProjectedRow> rowProjection;
+        std::vector<CellHitTarget> hitTargets;
+        const auto lineStarts = documentLineStarts(logicalLines);
+        visibleRows.reserve(visibleCount);
+        rowProjection.reserve(visibleCount);
+        for (uint32_t viewportRow = 0; viewportRow < visibleCount;
+             ++viewportRow) {
+            auto& [geometry, source] = projected[firstRow + viewportRow];
+            visibleRows.push_back(geometry);
+            rowProjection.push_back(source);
+            const auto* real = std::get_if<RealRow>(&source);
+            if (real == nullptr) continue;
+            const auto& line = logicalLines[real->bufferLine];
+            uint32_t viewportColumn = 0;
+            uint64_t logicalCell = geometry.startCell.value();
+            for (uint32_t spanIndex = geometry.firstSpan;
+                 spanIndex < geometry.firstSpan + geometry.spanCount;
+                 ++spanIndex) {
+                const auto& span = line.spans[spanIndex];
+                const auto available = dimensions.columns - viewportColumn;
+                const auto visibleWidth = std::min(span.cellWidth, available);
+                for (uint32_t cell = 0; cell < visibleWidth; ++cell) {
+                    hitTargets.push_back(CellHitTarget{
+                        viewportRow, viewportColumn + cell, real->bufferLine,
+                        CellIndex{logicalCell},
+                        lineStarts[real->bufferLine] + span.byteOffset,
+                        span.byteLen});
+                }
+                viewportColumn += visibleWidth;
+                logicalCell += span.cellWidth;
+            }
+        }
+        return ViewportViewState{
+            dimensions,
+            firstRow,
+            0,
+            totalRows,
+            std::move(visibleRows),
+            std::move(rowProjection),
+            std::move(hitTargets),
+            scrollbarMetrics(totalRows, dimensions.rows, firstRow),
+        };
+    }
     const auto allRows = wrapRows(logicalLines, dimensions.columns);
     const auto totalRows =
         checkedU32(allRows.size(), "viewport visual row count exceeds uint32");
@@ -229,6 +583,7 @@ ViewportViewState Viewport::compute(std::span<const CellRun> logicalLines,
         0,  // word-wrap-ON never scrolls horizontally (first_visual_column)
         totalRows,
         std::move(visibleRows),
+        {},
         std::move(hitTargets),
         scrollbarMetrics(totalRows, dimensions.rows, firstRow),
     };
@@ -236,7 +591,8 @@ ViewportViewState Viewport::compute(std::span<const CellRun> logicalLines,
 
 ViewportViewState Viewport::computeUnwrapped(
     std::string_view documentText, ViewportDimensions dimensions,
-    uint32_t requestedFirstVisualRow, uint32_t requestedFirstVisualColumn, int tabWidth) const {
+    uint32_t requestedFirstVisualRow, uint32_t requestedFirstVisualColumn,
+    int tabWidth, const DiffFileView* diff) const {
     // Word wrap OFF: one logical line renders as exactly one visual row, clipped
     // to the pane width.  The total visual row count is the logical line count, a
     // cheap byte scan for '\n' — NO compute_cell_run over the whole document.
@@ -247,14 +603,15 @@ ViewportViewState Viewport::computeUnwrapped(
     // same way), and because compute_cell_run accounts for every content byte, the
     // '\n' offsets recorded here equal the running-sum offsets compute_viewport
     // derives — so hit-target byte offsets are identical and document-absolute.
-    std::vector<std::size_t> lineStart{0};
-    for (std::size_t newline = documentText.find('\n');
-         newline != std::string_view::npos;
-         newline = documentText.find('\n', newline + 1)) {
-        lineStart.push_back(newline + 1);
-    }
+    const auto lineStart = documentLineStarts(documentText);
+    const auto projection =
+        diff == nullptr ? std::optional<RowProjection>{}
+                        : std::optional<RowProjection>{
+                              projectedUnwrappedRows(documentText, *diff)};
     const auto totalRows =
-        checkedU32(lineStart.size(), "viewport line count exceeds uint32");
+        projection ? projection->totalRows()
+                   : checkedU32(lineStart.size(),
+                                "viewport line count exceeds uint32");
     const uint32_t maximumFirst =
         totalRows > dimensions.rows ? totalRows - dimensions.rows : 0;
     const uint32_t firstRow =
@@ -263,8 +620,10 @@ ViewportViewState Viewport::computeUnwrapped(
         std::min<uint32_t>(dimensions.rows, totalRows - firstRow);
 
     std::vector<VisualRow> visibleRows;
+    std::vector<ProjectedRow> rowProjection;
     std::vector<CellHitTarget> hitTargets;
     visibleRows.reserve(visibleCount);
+    if (projection) rowProjection.reserve(visibleCount);
 
     // Horizontal scroll (VP-H / H0): every visible row windows from the SAME
     // requested offset `requested_first_visual_column` (the shared per-pane left
@@ -277,7 +636,30 @@ ViewportViewState Viewport::computeUnwrapped(
     // no change; at offset 0 this is exactly the pre-VP-H behavior, so
     // INV-projection-equivalence for fitting lines holds.
     for (uint32_t viewportRow = 0; viewportRow < visibleCount; ++viewportRow) {
-        const uint32_t logicalLine = firstRow + viewportRow;
+        const auto projected =
+            projection ? projection->row(firstRow + viewportRow)
+                       : ProjectedRow{RealRow{firstRow + viewportRow,
+                                              firstRow + viewportRow}};
+        if (const auto* phantom = std::get_if<PhantomRow>(&projected)) {
+            const auto run =
+                GraphemeLayout{}.computeRun(phantom->text, tabWidth);
+            const auto following = std::lower_bound(
+                lineStart.begin(), lineStart.end(),
+                static_cast<std::size_t>(phantom->followingByteOffset));
+            const auto logicalLine = checkedU32(
+                std::min<std::size_t>(
+                    std::distance(lineStart.begin(), following),
+                    lineStart.size() - 1),
+                "viewport logical line count exceeds uint32");
+            visibleRows.push_back(VisualRow{
+                logicalLine, 0, 0, CellIndex{0}, run.totalCells,
+                std::min(run.totalCells, dimensions.columns),
+                phantom->followingByteOffset});
+            rowProjection.push_back(projected);
+            continue;
+        }
+        const auto& real = std::get<RealRow>(projected);
+        const uint32_t logicalLine = real.bufferLine;
         const std::size_t start = lineStart[logicalLine];
         const std::size_t end = logicalLine + 1 < lineStart.size()
                                     ? lineStart[logicalLine + 1] - 1
@@ -306,6 +688,7 @@ ViewportViewState Viewport::computeUnwrapped(
             visibleRows.push_back(
                 VisualRow{logicalLine, firstSpan, 0, CellIndex{startCell},
                           run.totalCells, 0, endByteOffset});
+            if (projection) rowProjection.push_back(projected);
             continue;
         }
 
@@ -339,6 +722,7 @@ ViewportViewState Viewport::computeUnwrapped(
                       run.totalCells,
                       std::min(contentFromOffset, dimensions.columns),
                       endByteOffset});
+        if (projection) rowProjection.push_back(projected);
     }
 
     return ViewportViewState{
@@ -347,16 +731,38 @@ ViewportViewState Viewport::computeUnwrapped(
         requestedFirstVisualColumn,
         totalRows,
         std::move(visibleRows),
+        std::move(rowProjection),
         std::move(hitTargets),
         scrollbarMetrics(totalRows, dimensions.rows, firstRow),
     };
+}
+
+RowProjection Viewport::rowProjection(
+    std::span<const CellRun> logicalLines,
+    uint32_t columns,
+    const DiffFileView& diff) const {
+    auto projected = projectedWrappedRows(logicalLines, columns, diff);
+    std::vector<ProjectedRow> rows;
+    rows.reserve(projected.size());
+    for (auto& [geometry, source] : projected) {
+        (void)geometry;
+        rows.push_back(std::move(source));
+    }
+    return RowProjection{std::move(rows)};
+}
+
+RowProjection Viewport::rowProjectionUnwrapped(
+    std::string_view documentText,
+    const DiffFileView& diff) const {
+    return projectedUnwrappedRows(documentText, diff);
 }
 
 ViewportViewState Viewport::scrollBy(
     std::span<const CellRun> logicalLines,
     ViewportDimensions dimensions,
     uint32_t currentFirstVisualRow,
-    int64_t rowDelta) const {
+    int64_t rowDelta,
+    const DiffFileView* diff) const {
     uint32_t requested = currentFirstVisualRow;
     if (rowDelta >= 0) {
         const auto delta = static_cast<uint64_t>(rowDelta);
@@ -370,7 +776,7 @@ ViewportViewState Viewport::scrollBy(
                         ? 0
                         : requested - static_cast<uint32_t>(magnitude);
     }
-    return compute(logicalLines, dimensions, requested);
+    return compute(logicalLines, dimensions, requested, diff);
 }
 
 ViewportDelta Viewport::deriveDelta(const ViewportViewState& previous,
