@@ -602,12 +602,17 @@ Selection > DiffWord > DiffRow) in renderer and encoder; protocol/snapshot
 additive symmetric round-trip; external-diff burst atomicity; single-owner
 row-projection usage across consumers.
 
-OPEN (live, not diff-deferred) — per-document `syntaxModels` are never evicted on
-document close (`src/EditorRuntime.cpp` `syntaxFor`), mirroring the existing
-`histories` map which also persists for the session. Syntax state is heavier than
-history, so a long session accumulates parse view-state for closed documents.
-Decision pending: evict syntax (and history?) on tab close, or keep session-
-persistent. Consistent-with-histories = keep; memory-conscious = evict both.
+NOT A BUG (review SHOULD re-examined) — per-document `syntaxModels` are keyed by
+`FileDocumentId` and persist for the session, but this is CONSISTENT with document
+lifetime, not a leak: closing a tab does NOT destroy the `Document` (the
+`Workspace` never removes documents — `close()` journals for recovery + scratch
+cleanup only; the document stays reopenable, IDs never reused). So a syntax model
+lives and dies exactly with its document, identical to the pre-existing
+`histories` map and the documents themselves. The reviewer's "never evicted on
+close" conflated tab-close with document-destruction. The only real (pre-existing,
+feature-independent) question is whether closing a tab should eventually FULLY
+destroy a document and free its bytes + history + syntax together — a session-
+memory policy that predates this work and applies uniformly; out of scope here.
 
 Ordered; each step green before the next. Codec/round-trip work lands IN the step
 that changes a shipped state shape (not deferred to a trailing step).
