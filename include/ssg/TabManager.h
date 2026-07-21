@@ -162,6 +162,7 @@ struct TabLifecycleResult {
     std::string message;
     std::optional<RecoveryRecordId> compensation;
     std::optional<FileDocumentId> reopenedDocument;
+    std::optional<JournalDocumentKey> reopenedDocumentKey;
     bool durable = false;
 
     [[nodiscard]] bool accepted() const noexcept {

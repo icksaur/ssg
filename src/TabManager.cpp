@@ -439,6 +439,9 @@ TabResult TabManager::reopenClosed() {
     if (restoredState.kind == TabKind::Document &&
         restored.reopenedDocument.has_value()) {
         restoredState.document = restored.reopenedDocument;
+        if (restored.reopenedDocumentKey.has_value()) {
+            restoredState.documentKey = restored.reopenedDocumentKey;
+        }
     }
     const auto index = std::min(closed.index, impl_->view.tabs.size());
     const auto id = restoredState.id;

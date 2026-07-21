@@ -343,7 +343,7 @@ TabLifecycleResult EditorRuntime::Impl::close(
     if (!tab.document) return {};
     auto state = workspace.state(*tab.document);
     if (!state) return {TabError::NotFound, "tab document does not exist",
-                        std::nullopt, std::nullopt, false};
+                        std::nullopt, std::nullopt, std::nullopt, false};
     std::optional<JournalDocument> document;
     if (auto const* current = workspace.tryDocument(*tab.document); current != nullptr) {
         document = JournalDocument{state->key, current->mode(), state->dirty,
@@ -352,16 +352,16 @@ TabLifecycleResult EditorRuntime::Impl::close(
     auto closed = recovery.closeDocument(document, scratch, durabilityTimeout);
     if (!closed.accepted()) {
         return {TabError::LifecycleFailed, closed.error->message, std::nullopt,
-                std::nullopt, false};
+                std::nullopt, std::nullopt, false};
     }
     if (document) scratch.removeDocument(state->key);
     auto removed = workspace.removeDocument(*tab.document);
     if (!removed.accepted()) {
         return {TabError::LifecycleFailed, workspaceMessage(removed),
-                std::nullopt, std::nullopt, false};
+                std::nullopt, std::nullopt, std::nullopt, false};
     }
     documentRuntimeStates.erase(tab.document->value());
-    return {TabError::None, {}, closed.compensation, std::nullopt,
+    return {TabError::None, {}, closed.compensation, std::nullopt, std::nullopt,
             scratch.waitUntilDurable(durabilityTimeout)};
 }
 
@@ -371,11 +371,11 @@ TabLifecycleResult EditorRuntime::Impl::reopen(
     auto restored = recovery.restoreDocument(compensation, restoredDocument);
     if (!restored.accepted()) {
         return {TabError::LifecycleFailed, restored.error->message, std::nullopt,
-                std::nullopt, false};
+                std::nullopt, std::nullopt, false};
     }
     if (!restoredDocument) {
         return {TabError::LifecycleFailed, "recovery record had no document",
-                std::nullopt, std::nullopt, false};
+                std::nullopt, std::nullopt, std::nullopt, false};
     }
 
     WorkspaceResult opened;
@@ -386,13 +386,13 @@ TabLifecycleResult EditorRuntime::Impl::reopen(
     }
     if (!opened.accepted() || !opened.document) {
         return {TabError::LifecycleFailed, workspaceMessage(opened), std::nullopt,
-                std::nullopt, false};
+                std::nullopt, std::nullopt, false};
     }
     auto* reopenedDocument = const_cast<Document*>(workspace.tryDocument(*opened.document));
     if (!reopenedDocument) {
         return {TabError::LifecycleFailed,
                 "reopened document was not available in workspace",
-                std::nullopt, std::nullopt, false};
+                std::nullopt, std::nullopt, std::nullopt, false};
     }
     const auto current = reopenedDocument->snapshot();
     if (current.text != restoredDocument->utf8Content) {
@@ -402,11 +402,18 @@ TabLifecycleResult EditorRuntime::Impl::reopen(
              {{ByteOffset{0}, current.text.size(), restoredDocument->utf8Content}}});
         if (!replace.accepted()) {
             return {TabError::LifecycleFailed, replace.message, std::nullopt,
-                    std::nullopt, false};
+                    std::nullopt, std::nullopt, false};
         }
     }
     ensureDocumentRuntimeState(*opened.document);
-    return {TabError::None, {}, std::nullopt, *opened.document, true};
+    auto reopenedState = workspace.state(*opened.document);
+    if (!reopenedState) {
+        return {TabError::LifecycleFailed,
+                "reopened document state was not available in workspace",
+                std::nullopt, std::nullopt, std::nullopt, false};
+    }
+    return {TabError::None, {}, std::nullopt, *opened.document,
+            reopenedState->key, true};
 }
 
 WorkspaceSnapshot EditorRuntime::Impl::snapshot(Revision revision) const {

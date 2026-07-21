@@ -15,6 +15,8 @@ class FakeLifecycle final : public ssg::TabLifecycle {
 public:
     std::vector<ssg::TabId> failClose;
     bool failReopen = false;
+    std::optional<ssg::FileDocumentId> reopenedDocument;
+    std::optional<ssg::JournalDocumentKey> reopenedDocumentKey;
     int closeCalls = 0;
     int reopenCalls = 0;
 
@@ -24,17 +26,17 @@ public:
         ++closeCalls;
         if (durabilityTimeout <= 0ms) {
             return {ssg::TabError::DurabilityFailed, "invalid timeout",
-                    std::nullopt, std::nullopt, false};
+                    std::nullopt, std::nullopt, std::nullopt, false};
         }
         if (std::find(failClose.begin(), failClose.end(), tab.id) !=
             failClose.end()) {
             return {ssg::TabError::DurabilityFailed, "durability failed",
-                    std::nullopt, std::nullopt, false};
+                    std::nullopt, std::nullopt, std::nullopt, false};
         }
         return {ssg::TabError::None, {},
                 ssg::RecoveryRecordId{"closed-" +
                                       std::to_string(tab.id.value())},
-                std::nullopt,
+                std::nullopt, std::nullopt,
                 tab.dirty};
     }
 
@@ -44,9 +46,10 @@ public:
         ++reopenCalls;
         if (failReopen) {
             return {ssg::TabError::LifecycleFailed, "restore failed",
-                    std::nullopt, std::nullopt, false};
+                    std::nullopt, std::nullopt, std::nullopt, false};
         }
-        return {ssg::TabError::None, {}, std::nullopt, std::nullopt, true};
+        return {ssg::TabError::None, {}, std::nullopt, reopenedDocument,
+                reopenedDocumentKey, true};
     }
 };
 
@@ -243,6 +246,40 @@ TEST(untitledLabelsAreSmallestAvailableAndReopenIsStable) {
     ASSERT_NE(third.tab, second.tab);
 }
 
+TEST(reopenUntitledRebindsDocumentKeyForDedup) {
+    FakeLifecycle lifecycle;
+    ssg::TabManager tabs{lifecycle};
+    auto originalKey =
+        ssg::JournalDocumentKey::untitled(ssg::UntitledDocumentId::generate());
+    auto reopenedKey =
+        ssg::JournalDocumentKey::untitled(ssg::UntitledDocumentId::generate());
+    while (reopenedKey == originalKey) {
+        reopenedKey =
+            ssg::JournalDocumentKey::untitled(ssg::UntitledDocumentId::generate());
+    }
+    auto opened = tabs.openDocument(ssg::FileDocumentId{1}, originalKey, "",
+                                    ssg::DocumentMode::Edit, true);
+    ASSERT_TRUE(opened.accepted());
+    ASSERT_TRUE(opened.tab.has_value());
+    if (!opened.tab) return;
+    ASSERT_TRUE(tabs.close(*opened.tab, 100ms).accepted());
+
+    lifecycle.reopenedDocument = ssg::FileDocumentId{2};
+    lifecycle.reopenedDocumentKey = reopenedKey;
+    ASSERT_TRUE(tabs.reopenClosed().accepted());
+
+    ASSERT_EQ(tabs.viewState().tabs.size(), std::size_t{1});
+    ASSERT_EQ(tabs.viewState().tabs.front().document,
+              lifecycle.reopenedDocument);
+    ASSERT_EQ(tabs.viewState().tabs.front().documentKey,
+              lifecycle.reopenedDocumentKey);
+
+    auto duplicate = tabs.openDocument(*lifecycle.reopenedDocument, reopenedKey,
+                                       "reopened", ssg::DocumentMode::Edit, false);
+    ASSERT_TRUE(duplicate.accepted());
+    ASSERT_EQ(tabs.viewState().tabs.size(), std::size_t{1});
+}
+
 TEST(badgesUpdateAndDeltaReplayIsExact) {
     FakeLifecycle lifecycle;
     ssg::TabManager tabs{lifecycle};
@@ -276,6 +313,7 @@ int main() {
     RUN(recentlyClosedEvictsOldestAtConfiguredBound);
     RUN(reopenActivatesAnIdentityAlreadyOpenedByAnotherPath);
     RUN(untitledLabelsAreSmallestAvailableAndReopenIsStable);
+    RUN(reopenUntitledRebindsDocumentKeyForDedup);
     RUN(badgesUpdateAndDeltaReplayIsExact);
     std::cout << "\nPassed: " << passed << " Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
