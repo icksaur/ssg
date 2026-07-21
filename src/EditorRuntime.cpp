@@ -614,12 +614,12 @@ std::optional<FileDocumentId> EditorRuntime::Impl::activeDocumentId() const {
 
 Document const* EditorRuntime::Impl::activeDocument() const {
     auto id = activeDocumentId();
-    return id ? &workspace.document(*id) : nullptr;
+    return id ? workspace.tryDocument(*id) : nullptr;
 }
 
 Document* EditorRuntime::Impl::activeDocument() {
     auto id = activeDocumentId();
-    return id ? const_cast<Document*>(&workspace.document(*id)) : nullptr;
+    return id ? const_cast<Document*>(workspace.tryDocument(*id)) : nullptr;
 }
 
 void EditorRuntime::Impl::ensureDocumentRuntimeState(FileDocumentId document) {

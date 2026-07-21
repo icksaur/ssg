@@ -216,7 +216,9 @@ CommandHandlerResult bindEncoding(EditorRuntime::Impl& runtime,
 CommandHandlerResult EditorRuntime::Impl::updateTabsFor(FileDocumentId document) {
     auto state = workspace.state(document);
     if (!state) return failure("workspace document does not exist");
-    auto result = tabs.updateDocument(document, workspace.document(document).mode(),
+    auto const* opened = workspace.tryDocument(document);
+    if (opened == nullptr) return failure("workspace document does not exist");
+    auto result = tabs.updateDocument(document, opened->mode(),
                                        state->dirty, badgeFor(scratch.durabilityState()));
     return result.accepted() ? success() : failure(tabMessage(result));
 }
@@ -224,9 +226,11 @@ CommandHandlerResult EditorRuntime::Impl::updateTabsFor(FileDocumentId document)
 CommandHandlerResult EditorRuntime::Impl::activateDocument(FileDocumentId document) {
     auto state = workspace.state(document);
     if (!state) return failure("workspace document does not exist");
+    auto const* opened = workspace.tryDocument(document);
+    if (opened == nullptr) return failure("workspace document does not exist");
     ensureDocumentRuntimeState(document);
     auto result = tabs.openDocument(document, state->key, state->displayLabel,
-                                     workspace.document(document).mode(), state->dirty,
+                                     opened->mode(), state->dirty,
                                      badgeFor(scratch.durabilityState()));
     if (!result.accepted()) return failure(tabMessage(result));
     resetSelectionForActiveDocument();
