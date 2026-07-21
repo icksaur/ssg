@@ -92,6 +92,81 @@ TEST(gitTrackedFixtureReconstructsAndMatchesIndependentChangedLines) {
     ASSERT_EQ(view.baselineIdentity, std::string{"index-a"});
 }
 
+TEST(modifiedLineMarksOnlyChangedWordTokens) {
+    DiffModel model;
+    ASSERT_TRUE(model
+                    .updateGitFile(
+                        {.id = DiffFileId{"words"},
+                         .path = "words.cpp",
+                         .indexContent = "int foo = 1;\n",
+                         .workingContent = "int foo = 42;\n",
+                         .indexIdentity = "index"},
+                        Revision{1})
+                    .accepted());
+
+    const auto& changes = onlyFile(model).changedLines;
+    ASSERT_EQ(changes.size(), std::size_t{1});
+    ASSERT_EQ(changes.front().kind, DiffLineKind::Modified);
+    ASSERT_TRUE(changes.front().targetAddedWordRanges.empty());
+    ASSERT_EQ(changes.front().baselineRemovedWordRanges,
+              (std::vector<DiffWordRange>{{10, 1}}));
+    ASSERT_EQ(changes.front().targetModifiedWordRanges,
+              (std::vector<DiffWordRange>{{10, 2}}));
+}
+
+TEST(wordDiffWorkLimitIsFailureAtomic) {
+    DiffModel model{DiffConfig{.maximumLineCount = 10,
+                               .maximumMatrixCells = 100,
+                               .maximumWordMatrixCells = 4}};
+    const auto before = model.viewState();
+
+    ASSERT_EQ(model
+                  .updateGitFile(
+                      {.id = DiffFileId{"words"},
+                       .path = "words.cpp",
+                       .indexContent = "one two\n",
+                       .workingContent = "three four\n",
+                       .indexIdentity = "index"},
+                      Revision{1})
+                  .error,
+              DiffError::WorkLimitExceeded);
+    ASSERT_EQ(model.viewState(), before);
+}
+
+TEST(wordMarksUseStableByteRangesForInsertionAndUtf8) {
+    DiffModel insertion;
+    ASSERT_TRUE(insertion
+                    .updateGitFile(
+                        {.id = DiffFileId{"insertion"},
+                         .path = "insertion.cpp",
+                         .indexContent = "int foo;\n",
+                         .workingContent = "int new foo;\n",
+                         .indexIdentity = "index"},
+                        Revision{1})
+                    .accepted());
+    const auto& inserted = onlyFile(insertion).changedLines.front();
+    ASSERT_EQ(inserted.targetAddedWordRanges,
+              (std::vector<DiffWordRange>{{4, 4}}));
+    ASSERT_TRUE(inserted.baselineRemovedWordRanges.empty());
+    ASSERT_TRUE(inserted.targetModifiedWordRanges.empty());
+
+    DiffModel utf8;
+    ASSERT_TRUE(utf8
+                    .updateGitFile(
+                        {.id = DiffFileId{"utf8"},
+                         .path = "utf8.txt",
+                         .indexContent = "\xf0\x9f\x98\x80 x\n",
+                         .workingContent = "\xf0\x9f\x98\x80 y\n",
+                         .indexIdentity = "index"},
+                        Revision{1})
+                    .accepted());
+    const auto& changed = onlyFile(utf8).changedLines.front();
+    ASSERT_EQ(changed.baselineRemovedWordRanges,
+              (std::vector<DiffWordRange>{{5, 1}}));
+    ASSERT_EQ(changed.targetModifiedWordRanges,
+              (std::vector<DiffWordRange>{{5, 1}}));
+}
+
 TEST(gitUntrackedRenameDeleteAndIndexChangeRetainIdentity) {
     DiffModel untracked;
     ASSERT_TRUE(untracked
@@ -349,6 +424,9 @@ TEST(documentDiffLookupUsesIdentityAndRevision) {
 
 int main() {
     RUN(gitTrackedFixtureReconstructsAndMatchesIndependentChangedLines);
+    RUN(modifiedLineMarksOnlyChangedWordTokens);
+    RUN(wordDiffWorkLimitIsFailureAtomic);
+    RUN(wordMarksUseStableByteRangesForInsertionAndUtf8);
     RUN(gitUntrackedRenameDeleteAndIndexChangeRetainIdentity);
     RUN(externalDiffsUseExplicitAppOwnedBaselineAndRetainRenameDelete);
     RUN(staleInvalidAndOverBudgetWorkAreFailureAtomic);

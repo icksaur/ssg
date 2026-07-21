@@ -378,9 +378,11 @@ void paintDocument(CellGrid& grid, SessionSnapshot const& snapshot,
     auto const activeDiff =
         snapshot.sections().diff.fileForDocument(snapshot.sections().document);
     std::unordered_map<std::size_t, DiffTint> rowTints;
+    std::unordered_map<std::size_t, const DiffLineChange*> targetChanges;
     if (activeDiff) {
         for (auto const& change : activeDiff->get().changedLines) {
             if (!change.targetLine) continue;
+            targetChanges[*change.targetLine] = &change;
             switch (change.kind) {
             case DiffLineKind::Added:
                 rowTints[*change.targetLine] = DiffTint::AddedRow;
@@ -466,6 +468,9 @@ void paintDocument(CellGrid& grid, SessionSnapshot const& snapshot,
         auto const tintIt = rowTints.find(real.bufferLine);
         auto const rowTint =
            tintIt == rowTints.end() ? DiffTint::None : tintIt->second;
+        auto const changeIt = targetChanges.find(real.bufferLine);
+        auto const* lineChange =
+            changeIt == targetChanges.end() ? nullptr : changeIt->second;
         auto const lineIt = lines.find(row.logicalLine);
         if (lineIt == lines.end()) continue;
         auto const& line = lineIt->second;
@@ -500,8 +505,28 @@ void paintDocument(CellGrid& grid, SessionSnapshot const& snapshot,
                 cellBg = *matchRole == SemanticRole::Selection ? selectionBg
                                                                  : searchMatchBg;
             }
+            const auto overlaps = [&](const DiffWordRange& range) {
+                const auto spanEnd = span.byteOffset + span.byteLen;
+                const auto rangeEnd = range.byteStart + range.byteLength;
+                return span.byteOffset < rangeEnd && range.byteStart < spanEnd;
+            };
+            auto wordTint = DiffTint::None;
+            if (lineChange) {
+                if (std::any_of(lineChange->targetAddedWordRanges.begin(),
+                                lineChange->targetAddedWordRanges.end(),
+                                overlaps)) {
+                    wordTint = DiffTint::AddedWord;
+                } else if (std::any_of(
+                               lineChange->targetModifiedWordRanges.begin(),
+                               lineChange->targetModifiedWordRanges.end(),
+                               overlaps)) {
+                    wordTint = DiffTint::ModifiedWord;
+                }
+            }
             auto const cellTint =
-                selected || matchRole ? DiffTint::None : rowTint;
+                selected || matchRole
+                    ? DiffTint::None
+                    : wordTint != DiffTint::None ? wordTint : rowTint;
             auto const width = std::max<std::uint32_t>(span.cellWidth, 1);
             put(grid, column, content.y + static_cast<int>(rowIndex),
                 std::move(text), foreground, cellBg, cellRole, false, cellTint);

@@ -27,10 +27,20 @@ private:
 
 enum class DiffLineKind { Added, Removed, Modified };
 
+struct DiffWordRange {
+    std::size_t byteStart = 0;
+    std::size_t byteLength = 0;
+
+    friend bool operator==(const DiffWordRange&, const DiffWordRange&) = default;
+};
+
 struct DiffLineChange {
     DiffLineKind kind = DiffLineKind::Modified;
     std::optional<std::size_t> baselineLine;
     std::optional<std::size_t> targetLine;
+    std::vector<DiffWordRange> targetAddedWordRanges;
+    std::vector<DiffWordRange> baselineRemovedWordRanges;
+    std::vector<DiffWordRange> targetModifiedWordRanges;
 
     friend bool operator==(const DiffLineChange&, const DiffLineChange&) = default;
 };
@@ -70,6 +80,7 @@ struct DiffViewState {
 struct DiffConfig {
     std::size_t maximumLineCount = 200'000;
     std::size_t maximumMatrixCells = 4'000'000;
+    std::size_t maximumWordMatrixCells = 4'000'000;
 };
 
 enum class DiffError {
