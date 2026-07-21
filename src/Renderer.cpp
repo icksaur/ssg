@@ -109,10 +109,11 @@ std::unordered_map<std::uint32_t, LogicalLine> visibleLogicalLines(
 }
 
 void put(CellGrid& grid, int x, int y, std::string text, std::uint8_t foreground,
-         std::uint8_t background, SemanticRole role, bool continuation = false) {
+         std::uint8_t background, SemanticRole role, bool continuation = false,
+         DiffTint tint = DiffTint::None) {
     if (x < 0 || y < 0 || x >= grid.size.columns || y >= grid.size.rows) return;
     grid.cells[static_cast<std::size_t>(y * grid.size.columns + x)] = {
-        std::move(text), foreground, background, role, continuation};
+        std::move(text), foreground, background, role, continuation, tint};
 }
 
 void fillRect(CellGrid& grid, Rect const& rect, std::uint8_t foreground,
@@ -374,6 +375,23 @@ void paintDocument(CellGrid& grid, SessionSnapshot const& snapshot,
                     Rect const& content, ThemeSnapshot const& theme,
                     std::uint8_t background) {
     auto const& viewport = snapshot.client().viewport;
+    auto const activeDiff =
+        snapshot.sections().diff.fileForDocument(snapshot.sections().document);
+    std::unordered_map<std::size_t, DiffTint> rowTints;
+    if (activeDiff) {
+        for (auto const& change : activeDiff->get().changedLines) {
+            if (!change.targetLine) continue;
+            switch (change.kind) {
+            case DiffLineKind::Added:
+                rowTints[*change.targetLine] = DiffTint::AddedRow;
+                break;
+            case DiffLineKind::Modified:
+                rowTints[*change.targetLine] = DiffTint::ModifiedRow;
+                break;
+            case DiffLineKind::Removed: break;
+            }
+        }
+    }
     auto lines = visibleLogicalLines(snapshot.sections().document.text,
                                        viewport.visibleRows);
     auto const& selection = snapshot.sections().selection;
@@ -394,12 +412,62 @@ void paintDocument(CellGrid& grid, SessionSnapshot const& snapshot,
     auto const searchMatchBg = semanticIndex(theme, SemanticRole::SearchMatch);
     for (std::size_t rowIndex = 0; rowIndex < viewport.visibleRows.size();
          ++rowIndex) {
+        if (rowIndex >= static_cast<std::size_t>(content.height)) continue;
         auto const& row = viewport.visibleRows[rowIndex];
-        auto const lineIt = lines.find(row.logicalLine);
-        if (lineIt == lines.end() ||
-            rowIndex >= static_cast<std::size_t>(content.height)) {
-            continue;
+        auto const projected = viewport.projectedRow(
+           static_cast<std::uint32_t>(rowIndex));
+        if (auto const* phantom = std::get_if<PhantomRow>(&projected)) {
+           auto const foreground =
+               semanticIndex(theme, SemanticRole::Foreground);
+           auto const cells = GraphemeLayout{}.computeRun(phantom->text);
+           int column = content.x;
+           std::size_t firstSpan = 0;
+           std::uint32_t startCell = 0;
+           for (; firstSpan < cells.spans.size(); ++firstSpan) {
+               if (startCell >= viewport.firstVisualColumn) break;
+               startCell += cells.spans[firstSpan].cellWidth;
+           }
+           for (std::size_t spanIndex = firstSpan;
+                spanIndex < cells.spans.size(); ++spanIndex) {
+               if (column >= content.right()) break;
+               auto const& span = cells.spans[spanIndex];
+               auto text = std::string{
+                   std::string_view{phantom->text}.substr(span.byteOffset,
+                                                          span.byteLen)};
+               if (span.kind == CellKind::Tab) {
+                   text.assign(span.cellWidth, ' ');
+               } else if (span.kind == CellKind::Control ||
+                          span.kind == CellKind::InvalidUtf8) {
+                   text = "\xef\xbf\xbd";
+               }
+               auto const width = std::max<std::uint32_t>(span.cellWidth, 1);
+               put(grid, column, content.y + static_cast<int>(rowIndex),
+                   std::move(text), foreground, background,
+                   SemanticRole::Foreground, false, DiffTint::RemovedRow);
+               for (std::uint32_t offset = 1;
+                    offset < width &&
+                    column + static_cast<int>(offset) < content.right();
+                    ++offset) {
+                   put(grid, column + static_cast<int>(offset),
+                       content.y + static_cast<int>(rowIndex), "", foreground,
+                       background, SemanticRole::Foreground, true,
+                       DiffTint::RemovedRow);
+               }
+               column += static_cast<int>(width);
+           }
+           for (; column < content.right(); ++column) {
+               put(grid, column, content.y + static_cast<int>(rowIndex), " ",
+                   foreground, background, SemanticRole::Foreground, false,
+                   DiffTint::RemovedRow);
+           }
+           continue;
         }
+        auto const& real = std::get<RealRow>(projected);
+        auto const tintIt = rowTints.find(real.bufferLine);
+        auto const rowTint =
+           tintIt == rowTints.end() ? DiffTint::None : tintIt->second;
+        auto const lineIt = lines.find(row.logicalLine);
+        if (lineIt == lines.end()) continue;
         auto const& line = lineIt->second;
         int column = content.x;
         auto const lastSpan = std::min<std::size_t>(
@@ -426,21 +494,24 @@ void paintDocument(CellGrid& grid, SessionSnapshot const& snapshot,
                 selected ? SemanticRole::Selection : SemanticRole::Foreground;
             // Find matches take precedence over the text selection so the query
             // hits stay visible; the active match reuses the selection role.
-            if (auto matchRole = matchRoleAt(documentOffset)) {
+            auto const matchRole = matchRoleAt(documentOffset);
+            if (matchRole) {
                 cellRole = *matchRole;
                 cellBg = *matchRole == SemanticRole::Selection ? selectionBg
                                                                  : searchMatchBg;
             }
+            auto const cellTint =
+                selected || matchRole ? DiffTint::None : rowTint;
             auto const width = std::max<std::uint32_t>(span.cellWidth, 1);
             put(grid, column, content.y + static_cast<int>(rowIndex),
-                std::move(text), foreground, cellBg, cellRole);
+                std::move(text), foreground, cellBg, cellRole, false, cellTint);
             for (std::uint32_t offset = 1;
                  offset < width &&
                  column + static_cast<int>(offset) < content.right();
                  ++offset) {
                 put(grid, column + static_cast<int>(offset),
                     content.y + static_cast<int>(rowIndex), "", foreground,
-                    cellBg, cellRole, true);
+                   cellBg, cellRole, true, cellTint);
             }
             column += static_cast<int>(width);
         }
@@ -455,21 +526,25 @@ void paintDocument(CellGrid& grid, SessionSnapshot const& snapshot,
         auto const lineEnd = line.documentOffset + line.text.size();
         // A find match (or text selection) that spans the newline highlights the
         // end-of-line: fill the trailing columns, giving find-role precedence.
-        if (isFinalVisualRow) {
-            auto const eolMatchRole = matchRoleAt(lineEnd);
-            bool const eolSelected = offsetInSelection(selection, lineEnd);
-            if (eolMatchRole || eolSelected) {
-                auto const role = eolMatchRole ? *eolMatchRole
-                                                 : SemanticRole::Selection;
-                auto const fillBg =
-                    role == SemanticRole::SearchMatch ? searchMatchBg
-                                                       : selectionBg;
-                auto const foreground =
-                    semanticIndex(theme, SemanticRole::Foreground);
-                for (int fill = column; fill < content.right(); ++fill) {
-                    put(grid, fill, content.y + static_cast<int>(rowIndex), " ",
-                        foreground, fillBg, role);
-                }
+        auto const eolMatchRole =
+            isFinalVisualRow ? matchRoleAt(lineEnd) : std::nullopt;
+        bool const eolSelected =
+            isFinalVisualRow && offsetInSelection(selection, lineEnd);
+        if (rowTint != DiffTint::None || eolMatchRole || eolSelected) {
+            auto const role = eolMatchRole   ? *eolMatchRole
+                              : eolSelected ? SemanticRole::Selection
+                                            : SemanticRole::Foreground;
+            auto const fillBg =
+                role == SemanticRole::SearchMatch
+                    ? searchMatchBg
+                    : role == SemanticRole::Selection ? selectionBg : background;
+            auto const fillTint =
+                eolMatchRole || eolSelected ? DiffTint::None : rowTint;
+            auto const foreground =
+                semanticIndex(theme, SemanticRole::Foreground);
+            for (int fill = column; fill < content.right(); ++fill) {
+                put(grid, fill, content.y + static_cast<int>(rowIndex), " ",
+                    foreground, fillBg, role, false, fillTint);
             }
         }
     }
