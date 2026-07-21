@@ -248,6 +248,31 @@ TEST(nonDocumentTransitionReplaysAndRejectsADifferentClient) {
     ASSERT_FALSE(ssg::SessionSnapshotCodec{}.replay(otherClient, delta).accepted());
 }
 
+TEST(documentIdentityOnlyTransitionRoundTripsThroughSessionDeltaReplay) {
+    auto oldSections = sections(ssg::Revision{4}, "same");
+    oldSections.document.diffFileIdentity = std::string{"a.cpp"};
+    auto newSections = oldSections;
+    newSections.document.diffFileIdentity = std::string{"b.cpp"};
+
+    auto before = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{4}, {},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(1), std::move(oldSections));
+    auto after = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{5}, {},
+        ssg::InvocationPrincipal{ssg::ClientId{7},
+                                 ssg::InvocationOrigin::InProcess},
+        ssg::ViewId{9}, clientView(1), std::move(newSections));
+
+    auto delta = ssg::SessionSnapshotCodec{}.deriveDelta(before, after);
+    ASSERT_TRUE(delta.document().has_value());
+    auto replayed = ssg::SessionSnapshotCodec{}.replay(before, delta);
+    ASSERT_TRUE(replayed.accepted());
+    ASSERT_TRUE(replayed.snapshot.has_value());
+    ASSERT_EQ(*replayed.snapshot, after);
+}
+
 TEST(perClientCapabilitiesAndViewportsAreIsolated) {
     auto shared = sections(ssg::Revision{8}, "shared");
     auto first = ssg::SessionSnapshotCodec{}.assemble(
@@ -333,6 +358,7 @@ int main() {
     RUN(builderThreadsServicesThroughTheCommonDispatchPath);
     RUN(fullSnapshotMatchesReplayedAggregateDelta);
     RUN(nonDocumentTransitionReplaysAndRejectsADifferentClient);
+    RUN(documentIdentityOnlyTransitionRoundTripsThroughSessionDeltaReplay);
     RUN(perClientCapabilitiesAndViewportsAreIsolated);
     RUN(shellDeltaDetectsAPanelScrollbarOnlyChange);
     RUN(shellDeltaDetectsATabHitOnlyChange);

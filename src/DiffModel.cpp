@@ -142,6 +142,21 @@ std::vector<std::string> splitDiffLines(std::string_view content) {
     return lines;
 }
 
+std::optional<std::reference_wrapper<const DiffFileView>>
+DiffViewState::fileForDocument(const DocumentViewState& document) const {
+    if (!document.diffFileIdentity || document.revision != revision) {
+        return std::nullopt;
+    }
+    auto const found = std::find_if(
+        files.begin(), files.end(), [&](const DiffFileView& file) {
+            return file.id.value() == *document.diffFileIdentity;
+        });
+    if (found == files.end()) {
+        return std::nullopt;
+    }
+    return std::cref(*found);
+}
+
 DiffModel::DiffModel(DiffConfig config) : config_(config) {
     if (config_.maximumLineCount == 0 ||
         config_.maximumMatrixCells == 0) {

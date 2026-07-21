@@ -317,6 +317,28 @@ TEST(deltaReplayAndExactCommandNavigationContract) {
               std::optional<std::size_t>{1});
 }
 
+TEST(documentDiffLookupUsesIdentityAndRevision) {
+    DiffFileView fileA{DiffFileId{"a.cpp"}};
+    fileA.path = "a.cpp";
+    DiffFileView fileB{DiffFileId{"b.cpp"}};
+    fileB.path = "b.cpp";
+    DiffViewState diff{Revision{8}, {fileA, fileB}};
+
+    DocumentViewState document{Revision{8}, "x", ByteOffset{0}};
+    document.diffFileIdentity = std::string{"b.cpp"};
+    auto const selected = diff.fileForDocument(document);
+    ASSERT_TRUE(selected.has_value());
+    ASSERT_EQ(selected->get().id, DiffFileId{"b.cpp"});
+
+    DocumentViewState missing{Revision{8}, "x", ByteOffset{0}};
+    missing.diffFileIdentity = std::string{"missing.cpp"};
+    ASSERT_FALSE(diff.fileForDocument(missing).has_value());
+
+    DocumentViewState stale{Revision{7}, "x", ByteOffset{0}};
+    stale.diffFileIdentity = std::string{"b.cpp"};
+    ASSERT_FALSE(diff.fileForDocument(stale).has_value());
+}
+
 } // namespace
 
 int main() {
@@ -325,5 +347,6 @@ int main() {
     RUN(seededNonGitEventsAdvanceBaselineAndRetainRenameDelete);
     RUN(staleInvalidAndOverBudgetWorkAreFailureAtomic);
     RUN(deltaReplayAndExactCommandNavigationContract);
+    RUN(documentDiffLookupUsesIdentityAndRevision);
     return failed == 0 ? 0 : 1;
 }
