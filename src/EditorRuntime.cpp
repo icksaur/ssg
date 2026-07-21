@@ -301,7 +301,7 @@ EditorRuntime::Impl::Impl(std::filesystem::path canonicalCwd,
                           std::filesystem::path scratchRoot,
                           std::filesystem::path recoveryRoot,
                           bool deferEnrichment,
-                          std::shared_ptr<SyntaxParser> syntaxParser)
+                          std::shared_ptr<SyntaxParser> parser)
     : root{std::move(canonicalCwd)},
       scratchRoot{std::filesystem::weakly_canonical(scratchRoot)},
       recoveryRoot{std::filesystem::weakly_canonical(recoveryRoot)},
@@ -313,7 +313,7 @@ EditorRuntime::Impl::Impl(std::filesystem::path canonicalCwd,
       shell{{"Files", "Git", "Symbols"}},
       tabs{*this},
       external{recovery, diff},
-      syntax{std::move(syntaxParser)},
+      syntaxParser{std::move(parser)},
       search{*this, *this},
       theme{defaultTheme()},
       deferringEnrichment{deferEnrichment} {
@@ -622,6 +622,23 @@ DocumentHistory& EditorRuntime::Impl::historyFor(FileDocumentId document) {
     return it->second;
 }
 
+SyntaxModel& EditorRuntime::Impl::syntaxFor(FileDocumentId document) {
+    auto [it, inserted] = syntaxModels.try_emplace(document.value(), syntaxParser);
+    return it->second;
+}
+
+SyntaxViewState EditorRuntime::Impl::activeSyntaxView() const {
+    if (auto id = activeDocumentId()) {
+        if (auto it = syntaxModels.find(id->value()); it != syntaxModels.end()) {
+            return it->second.viewState();
+        }
+    }
+    const auto* document = activeDocument();
+    const auto text = document ? document->snapshot().text : std::string{};
+    const auto revision = document ? document->revision() : Revision{0};
+    return plainTextSyntaxViewState(revision, LanguageId::plainText(), text, 4);
+}
+
 std::optional<WorkspaceDocumentState> EditorRuntime::Impl::activeWorkspaceState() const {
     auto id = activeDocumentId();
     return id ? workspace.state(*id) : std::nullopt;
@@ -728,6 +745,9 @@ void EditorRuntime::Impl::reconcileFindDocument() {
 }
 
 void EditorRuntime::Impl::refreshSyntax() {
+    auto id = activeDocumentId();
+    if (!id) return;
+    auto& model = syntaxFor(*id);
     auto const* document = activeDocument();
     auto text = document ? document->snapshot().text : std::string{};
     auto revision = document ? document->revision() : Revision{0};
@@ -738,7 +758,7 @@ void EditorRuntime::Impl::refreshSyntax() {
     }
     if (deferringEnrichment) {
         const bool canEagerlyParse =
-            document != nullptr && syntax.hasGrammar(language) &&
+            document != nullptr && model.hasGrammar(language) &&
             text.size() <= kEagerSyntaxMaxBytes;
         if (!canEagerlyParse) {
             pendingSyntaxRefresh = true;
@@ -746,10 +766,10 @@ void EditorRuntime::Impl::refreshSyntax() {
         }
     }
     ++syntaxRunCount;
-    auto request = syntax.request(revision, std::move(language), std::move(text));
+    auto request = model.request(revision, std::move(language), std::move(text));
     if (request.accepted()) {
-        auto output = syntax.run(*request.request);
-        (void)syntax.accept(request.request, output);
+        auto output = model.run(*request.request);
+        (void)model.accept(request.request, output);
     }
 }
 

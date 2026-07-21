@@ -211,6 +211,72 @@ TEST(deferredEnrichmentDefersLargeGrammarBackedFileUntilPrimeDeferred) {
     ASSERT_TRUE(hasScope(after->sections().syntax, SyntaxScope::Keyword));
 }
 
+// Syntax state is document-owned: switching back to a deferred large file must
+// never show keyword spans parsed for another tab.
+TEST(deferredLargeTabNeverBorrowsAnotherTabsSyntaxState) {
+    auto root = uniqueRoot();
+    std::string large = "alpha = 1;\n";
+    large.append(3 * 1024 * 1024, 'x');
+    std::ofstream{root / "workspace" / "fileA.cpp"} << large;
+    std::ofstream{root / "workspace" / "fileB.cpp"} << "return b;\n";
+
+    auto parser = std::make_shared<RecordingParser>();
+    auto config = configFor(root);
+    config.deferEnrichment = true;
+    config.syntaxParser = parser;
+
+    auto created = EditorRuntime::create(std::move(config));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime
+                    .attach({ClientId{1}, InvocationOrigin::InProcess},
+                            ViewId{1})
+                    .accepted());
+
+    ASSERT_TRUE(runtime
+                    .dispatch(ClientId{1},
+                              {"file.open", runtime.revision(),
+                               std::string{"fileA.cpp"}})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ClientId{1},
+                              {"file.open", runtime.revision(),
+                               std::string{"fileB.cpp"}})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ClientId{1},
+                              {"file.open", runtime.revision(),
+                               std::string{"fileA.cpp"}})
+                    .accepted());
+
+    auto firstA = runtime.snapshot(ClientId{1}, ViewportDimensions{80, 12});
+    ASSERT_TRUE(firstA.has_value());
+    if (!firstA.has_value()) return;
+    ASSERT_FALSE(hasScope(firstA->sections().syntax, SyntaxScope::Keyword));
+
+    ASSERT_TRUE(runtime
+                    .dispatch(ClientId{1},
+                              {"file.open", runtime.revision(),
+                               std::string{"fileB.cpp"}})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ClientId{1},
+                              {"text.insert", runtime.revision(),
+                               TextInputArguments{"z"}})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ClientId{1},
+                              {"file.open", runtime.revision(),
+                               std::string{"fileA.cpp"}})
+                    .accepted());
+
+    auto secondA = runtime.snapshot(ClientId{1}, ViewportDimensions{80, 12});
+    ASSERT_TRUE(secondA.has_value());
+    if (!secondA.has_value()) return;
+    ASSERT_FALSE(hasScope(secondA->sections().syntax, SyntaxScope::Keyword));
+}
+
 }  // namespace
 
 int main() {
@@ -218,5 +284,6 @@ int main() {
     RUN(nullParserYieldsPlainText);
     RUN(deferredEnrichmentStillColorsSmallGrammarBackedFirstFrame);
     RUN(deferredEnrichmentDefersLargeGrammarBackedFileUntilPrimeDeferred);
+    RUN(deferredLargeTabNeverBorrowsAnotherTabsSyntaxState);
     return failed == 0 ? 0 : 1;
 }

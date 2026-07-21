@@ -56,7 +56,7 @@ struct EditorRuntime::Impl final : CommandServices,
          std::filesystem::path scratchRoot,
          std::filesystem::path recoveryRoot,
          bool deferEnrichment = false,
-         std::shared_ptr<SyntaxParser> syntaxParser = nullptr);
+         std::shared_ptr<SyntaxParser> parser = nullptr);
 
     std::filesystem::path root;
     std::filesystem::path scratchRoot;
@@ -82,7 +82,8 @@ struct EditorRuntime::Impl final : CommandServices,
     ExternalModificationFlow external;
     FollowEditsModel follow;
     TreeModel tree;
-    SyntaxModel syntax;
+    std::shared_ptr<SyntaxParser> syntaxParser;
+    std::map<std::uint64_t, SyntaxModel> syntaxModels;
     SearchController search;
     NavigationHistory navigation{64};
     LspSyncViewState lspSync;
@@ -165,6 +166,8 @@ struct EditorRuntime::Impl final : CommandServices,
     [[nodiscard]] Document const* activeDocument() const;
     [[nodiscard]] Document* activeDocument();
     [[nodiscard]] DocumentHistory& historyFor(FileDocumentId document);
+    [[nodiscard]] SyntaxModel& syntaxFor(FileDocumentId document);
+    [[nodiscard]] SyntaxViewState activeSyntaxView() const;
     [[nodiscard]] std::optional<WorkspaceDocumentState> activeWorkspaceState() const;
     [[nodiscard]] std::optional<DiffFileView> activeDiffFile() const;
     [[nodiscard]] std::string activeText() const;

@@ -171,7 +171,7 @@ SessionSnapshotSections EditorRuntime::Impl::sections(ViewportDimensions dimensi
             external.viewState(),
             follow.viewState(),
             std::move(treeSection),
-            syntax.viewState(),
+            activeSyntaxView(),
             lspSync,
             lspFeatures,
             theme,
