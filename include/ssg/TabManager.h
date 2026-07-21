@@ -161,6 +161,7 @@ struct TabLifecycleResult {
     TabError error = TabError::None;
     std::string message;
     std::optional<RecoveryRecordId> compensation;
+    std::optional<FileDocumentId> reopenedDocument;
     bool durable = false;
 
     [[nodiscard]] bool accepted() const noexcept {

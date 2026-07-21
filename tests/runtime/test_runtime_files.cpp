@@ -274,6 +274,78 @@ TEST(switchingTabsRevealsTheNewDocumentsCaret) {
     ASSERT_EQ(firstRow(), 50U);  // same document -> no reveal snap
 }
 
+TEST(closingNonActiveDirtyTabReopensItsOwnContentWithNewDocumentId) {
+    auto root = uniqueRoot("close_non_active_dirty");
+    std::ofstream{root / "workspace" / "a.txt", std::ios::binary} << "alpha";
+    std::ofstream{root / "workspace" / "b.txt", std::ios::binary} << "beta";
+
+    auto created = ssg::EditorRuntime::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1})
+                    .accepted());
+
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"file.open", runtime.revision(),
+                               std::string{"a.txt"}})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"text.insert", runtime.revision(),
+                               ssg::TextInputArguments{"!"}})
+                    .accepted());
+    ASSERT_EQ(runtime.activeDocumentText(), std::string{"!alpha"});
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"file.open", runtime.revision(),
+                               std::string{"b.txt"}})
+                    .accepted());
+    ASSERT_EQ(runtime.activeDocumentText(), std::string{"beta"});
+
+    auto beforeClose = runtime.snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(beforeClose.has_value());
+    if (!beforeClose.has_value()) return;
+    std::optional<ssg::TabId> tabA;
+    std::optional<ssg::FileDocumentId> documentA;
+    for (auto const& tab : beforeClose->sections().tabs.tabs) {
+        if (tab.label == "a.txt") {
+            tabA = tab.id;
+            documentA = tab.document;
+            break;
+        }
+    }
+    ASSERT_TRUE(tabA.has_value());
+    ASSERT_TRUE(documentA.has_value());
+    if (!tabA || !documentA) return;
+
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"tab.close", runtime.revision(), *tabA})
+                    .accepted());
+    ASSERT_EQ(runtime.activeDocumentText(), std::string{"beta"});
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"tab.reopen_closed", runtime.revision(), {}})
+                    .accepted());
+    ASSERT_EQ(runtime.activeDocumentText(), std::string{"!alpha"});
+
+    auto afterReopen = runtime.snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(afterReopen.has_value());
+    if (!afterReopen.has_value()) return;
+    std::optional<ssg::FileDocumentId> reopenedDocumentA;
+    for (auto const& tab : afterReopen->sections().tabs.tabs) {
+        if (tab.label == "a.txt") {
+            reopenedDocumentA = tab.document;
+            break;
+        }
+    }
+    ASSERT_TRUE(reopenedDocumentA.has_value());
+    ASSERT_TRUE(*reopenedDocumentA != *documentA);
+}
+
 } // namespace
 
 int main() {
@@ -285,6 +357,7 @@ int main() {
     RUN(closingTheLastTabClearsTheEditorDocument);
     RUN(tabActivateFocusesTheEditor);
     RUN(switchingTabsRevealsTheNewDocumentsCaret);
+    RUN(closingNonActiveDirtyTabReopensItsOwnContentWithNewDocumentId);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

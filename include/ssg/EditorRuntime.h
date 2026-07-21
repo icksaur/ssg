@@ -103,6 +103,7 @@ public:
         std::uint64_t treeScans = 0;
     };
     [[nodiscard]] DeferredWorkCounts deferredWorkCounts() const;
+    [[nodiscard]] static std::uint64_t liveDocumentRuntimeStateCountForTests();
     [[nodiscard]] std::optional<SessionSnapshot> snapshot(
         ClientId clientId, ViewportDimensions dimensions,
         KeySequence leaderPending = {},

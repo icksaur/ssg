@@ -342,7 +342,8 @@ TabLifecycleResult EditorRuntime::Impl::close(
     const TabState& tab, std::chrono::milliseconds durabilityTimeout) {
     if (!tab.document) return {};
     auto state = workspace.state(*tab.document);
-    if (!state) return {TabError::NotFound, "tab document does not exist", std::nullopt, false};
+    if (!state) return {TabError::NotFound, "tab document does not exist",
+                        std::nullopt, std::nullopt, false};
     std::optional<JournalDocument> document;
     if (auto const* current = workspace.tryDocument(*tab.document); current != nullptr) {
         document = JournalDocument{state->key, current->mode(), state->dirty,
@@ -350,24 +351,62 @@ TabLifecycleResult EditorRuntime::Impl::close(
     }
     auto closed = recovery.closeDocument(document, scratch, durabilityTimeout);
     if (!closed.accepted()) {
-        return {TabError::LifecycleFailed, closed.error->message, std::nullopt, false};
+        return {TabError::LifecycleFailed, closed.error->message, std::nullopt,
+                std::nullopt, false};
     }
     if (document) scratch.removeDocument(state->key);
     auto removed = workspace.removeDocument(*tab.document);
     if (!removed.accepted()) {
-        return {TabError::LifecycleFailed, workspaceMessage(removed), std::nullopt, false};
+        return {TabError::LifecycleFailed, workspaceMessage(removed),
+                std::nullopt, std::nullopt, false};
     }
     documentRuntimeStates.erase(tab.document->value());
-    return {TabError::None, {}, closed.compensation, scratch.waitUntilDurable(durabilityTimeout)};
+    return {TabError::None, {}, closed.compensation, std::nullopt,
+            scratch.waitUntilDurable(durabilityTimeout)};
 }
 
 TabLifecycleResult EditorRuntime::Impl::reopen(
     const TabState&, const RecoveryRecordId& compensation) {
-    auto restored = workspace.restore(compensation);
+    std::optional<JournalDocument> restoredDocument;
+    auto restored = recovery.restoreDocument(compensation, restoredDocument);
     if (!restored.accepted()) {
-        return {TabError::LifecycleFailed, workspaceMessage(restored), std::nullopt, false};
+        return {TabError::LifecycleFailed, restored.error->message, std::nullopt,
+                std::nullopt, false};
     }
-    return {};
+    if (!restoredDocument) {
+        return {TabError::LifecycleFailed, "recovery record had no document",
+                std::nullopt, std::nullopt, false};
+    }
+
+    WorkspaceResult opened;
+    if (restoredDocument->key.kind() == JournalDocumentKeyKind::Saved) {
+        opened = workspace.openFile(restoredDocument->key.savedPath());
+    } else {
+        opened = workspace.newDocument();
+    }
+    if (!opened.accepted() || !opened.document) {
+        return {TabError::LifecycleFailed, workspaceMessage(opened), std::nullopt,
+                std::nullopt, false};
+    }
+    auto* reopenedDocument = const_cast<Document*>(workspace.tryDocument(*opened.document));
+    if (!reopenedDocument) {
+        return {TabError::LifecycleFailed,
+                "reopened document was not available in workspace",
+                std::nullopt, std::nullopt, false};
+    }
+    const auto current = reopenedDocument->snapshot();
+    if (current.text != restoredDocument->utf8Content) {
+        auto replace = workspace.apply(
+            *opened.document,
+            {current.revision,
+             {{ByteOffset{0}, current.text.size(), restoredDocument->utf8Content}}});
+        if (!replace.accepted()) {
+            return {TabError::LifecycleFailed, replace.message, std::nullopt,
+                    std::nullopt, false};
+        }
+    }
+    ensureDocumentRuntimeState(*opened.document);
+    return {TabError::None, {}, std::nullopt, *opened.document, true};
 }
 
 WorkspaceSnapshot EditorRuntime::Impl::snapshot(Revision revision) const {
@@ -972,6 +1011,10 @@ void EditorRuntime::primeDeferred() { impl_->primeDeferred(); }
 
 EditorRuntime::DeferredWorkCounts EditorRuntime::deferredWorkCounts() const {
     return {impl_->syntaxRunCount, impl_->treeScanCount};
+}
+
+std::uint64_t EditorRuntime::liveDocumentRuntimeStateCountForTests() {
+    return DocumentRuntimeState::liveInstances();
 }
 
 CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& command) {

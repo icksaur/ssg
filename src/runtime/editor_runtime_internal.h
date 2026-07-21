@@ -25,6 +25,7 @@
 #include <ssg/Workspace.h>
 
 #include <any>
+#include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <functional>
@@ -42,10 +43,30 @@ struct DocumentRuntimeState {
     explicit DocumentRuntimeState(
         HistoryConfig historyConfig = HistoryConfig::defaults(),
         std::shared_ptr<SyntaxParser> parser = nullptr)
-        : history{historyConfig}, syntax{std::move(parser)} {}
+        : history{historyConfig}, syntax{std::move(parser)} {
+        ++liveCount;
+    }
+
+    DocumentRuntimeState(DocumentRuntimeState&& other) noexcept
+        : history{std::move(other.history)}, syntax{std::move(other.syntax)} {
+        ++liveCount;
+    }
+
+    DocumentRuntimeState(const DocumentRuntimeState&) = delete;
+    DocumentRuntimeState& operator=(const DocumentRuntimeState&) = delete;
+    DocumentRuntimeState& operator=(DocumentRuntimeState&&) = default;
+
+    ~DocumentRuntimeState() { --liveCount; }
+
+    static std::uint64_t liveInstances() noexcept {
+        return liveCount.load(std::memory_order_relaxed);
+    }
 
     DocumentHistory history;
     SyntaxModel syntax;
+
+private:
+    inline static std::atomic<std::uint64_t> liveCount{0};
 };
 
 void bindRuntimeEditing(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime);

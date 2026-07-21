@@ -433,11 +433,16 @@ TabResult TabManager::reopenClosed() {
     if (!restored.accepted()) {
         return failure(restored.error, std::move(restored.message));
     }
+    auto restoredState = std::move(closed.state);
+    if (restoredState.kind == TabKind::Document &&
+        restored.reopenedDocument.has_value()) {
+        restoredState.document = restored.reopenedDocument;
+    }
     const auto index = std::min(closed.index, impl_->view.tabs.size());
-    const auto id = closed.state.id;
+    const auto id = restoredState.id;
     impl_->view.tabs.insert(
         impl_->view.tabs.begin() + static_cast<std::ptrdiff_t>(index),
-        std::move(closed.state));
+        std::move(restoredState));
     impl_->view.active = id;
     impl_->recentlyClosed.pop_back();
     return {TabError::None, {}, id, {}};

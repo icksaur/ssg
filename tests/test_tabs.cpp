@@ -23,15 +23,18 @@ public:
         std::chrono::milliseconds durabilityTimeout) override {
         ++closeCalls;
         if (durabilityTimeout <= 0ms) {
-            return {ssg::TabError::DurabilityFailed, "invalid timeout"};
+            return {ssg::TabError::DurabilityFailed, "invalid timeout",
+                    std::nullopt, std::nullopt, false};
         }
         if (std::find(failClose.begin(), failClose.end(), tab.id) !=
             failClose.end()) {
-            return {ssg::TabError::DurabilityFailed, "durability failed"};
+            return {ssg::TabError::DurabilityFailed, "durability failed",
+                    std::nullopt, std::nullopt, false};
         }
         return {ssg::TabError::None, {},
                 ssg::RecoveryRecordId{"closed-" +
                                       std::to_string(tab.id.value())},
+                std::nullopt,
                 tab.dirty};
     }
 
@@ -40,9 +43,10 @@ public:
         const ssg::RecoveryRecordId&) override {
         ++reopenCalls;
         if (failReopen) {
-            return {ssg::TabError::LifecycleFailed, "restore failed"};
+            return {ssg::TabError::LifecycleFailed, "restore failed",
+                    std::nullopt, std::nullopt, false};
         }
-        return {};
+        return {ssg::TabError::None, {}, std::nullopt, std::nullopt, true};
     }
 };
 
