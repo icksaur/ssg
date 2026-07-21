@@ -1948,6 +1948,7 @@ ProtocolValue toValue(DocumentViewState const& value) {
     fields.emplace_back("revision", toValue(value.revision));
     fields.emplace_back("text", toValue(value.text));
     fields.emplace_back("caret", toValue(value.caret));
+    fields.emplace_back("diff_file_identity", toValue(value.diffFileIdentity));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<DocumentViewState>& out) {
@@ -1956,8 +1957,14 @@ bool decodePresent(ProtocolValue const& value, std::optional<DocumentViewState>&
     auto revision = requireField<Revision>(value.field("revision"));
     auto text = requireField<std::string>(value.field("text"));
     auto caret = requireField<ByteOffset>(value.field("caret"));
+    std::optional<std::string> diffFileIdentity;
+    if (!decodeOptionalField(value.field("diff_file_identity"),
+                             diffFileIdentity)) {
+        return false;
+    }
     if (!revision || !text || !caret) return false;
-    out.emplace(DocumentViewState{*revision, *text, *caret});
+    out.emplace(DocumentViewState{*revision, *text, *caret,
+                                  std::move(diffFileIdentity)});
     return true;
 }
 
@@ -1968,6 +1975,7 @@ ProtocolValue toValue(DocumentDelta const& value) {
     fields.emplace_back("start", toValue(value.start));
     fields.emplace_back("erased_bytes", toValue(value.erasedBytes));
     fields.emplace_back("inserted_text", toValue(value.insertedText));
+    fields.emplace_back("diff_file_identity", toValue(value.diffFileIdentity));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<DocumentDelta>& out) {
@@ -1978,11 +1986,16 @@ bool decodePresent(ProtocolValue const& value, std::optional<DocumentDelta>& out
     auto start = requireField<ByteOffset>(value.field("start"));
     auto erasedBytes = requireField<std::uint64_t>(value.field("erased_bytes"));
     auto insertedText = requireField<std::string>(value.field("inserted_text"));
+    std::optional<std::string> diffFileIdentity;
+    if (!decodeOptionalField(value.field("diff_file_identity"),
+                             diffFileIdentity)) {
+        return false;
+    }
     if (!baseRevision || !revision || !start || !erasedBytes || !insertedText) {
         return false;
     }
     out.emplace(DocumentDelta{*baseRevision, *revision, *start, *erasedBytes,
-                              *insertedText});
+                              *insertedText, std::move(diffFileIdentity)});
     return true;
 }
 

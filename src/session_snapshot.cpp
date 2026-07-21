@@ -177,9 +177,10 @@ SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
     auto const& next = after.sections();
     if (!document &&
         (old.document.revision != next.document.revision ||
-         old.document.text != next.document.text)) {
+         old.document.text != next.document.text ||
+         old.document.diffFileIdentity != next.document.diffFileIdentity)) {
         throw std::invalid_argument{
-            "document content changed without a new document revision"};
+            "document state changed without a document delta"};
     }
     return {
         before.revision(),

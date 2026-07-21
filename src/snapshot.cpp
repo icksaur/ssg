@@ -7,7 +7,8 @@ namespace ssg {
 
 std::optional<DocumentDelta> DocumentSnapshotCodec::deriveDelta(
     DocumentViewState const& before, DocumentViewState const& after) const {
-    if (before.revision == after.revision) {
+    if (before.revision == after.revision &&
+        before.diffFileIdentity == after.diffFileIdentity) {
         return std::nullopt;
     }
 
@@ -29,16 +30,20 @@ std::optional<DocumentDelta> DocumentSnapshotCodec::deriveDelta(
         after.revision,
         ByteOffset{prefix},
         static_cast<std::uint64_t>(before.text.size() - prefix - suffix),
-        after.text.substr(prefix, after.text.size() - prefix - suffix)};
+        after.text.substr(prefix, after.text.size() - prefix - suffix),
+        after.diffFileIdentity};
 }
 
 std::optional<DocumentViewState> DocumentSnapshotCodec::replay(
     DocumentViewState const& before, DocumentDelta const& delta,
     ByteOffset targetCaret) const {
     if (before.revision != delta.baseRevision ||
-        delta.revision == delta.baseRevision ||
         delta.start.value() > before.text.size() ||
         delta.erasedBytes > before.text.size() - delta.start.value()) {
+        return std::nullopt;
+    }
+    bool const textChanged = delta.erasedBytes != 0 || !delta.insertedText.empty();
+    if (textChanged && delta.revision == delta.baseRevision) {
         return std::nullopt;
     }
     std::string text = before.text;
@@ -46,7 +51,8 @@ std::optional<DocumentViewState> DocumentSnapshotCodec::replay(
     if (targetCaret.value() > text.size()) {
         return std::nullopt;
     }
-    return DocumentViewState{delta.revision, std::move(text), targetCaret};
+    return DocumentViewState{delta.revision, std::move(text), targetCaret,
+                             delta.diffFileIdentity};
 }
 
 }  // namespace ssg

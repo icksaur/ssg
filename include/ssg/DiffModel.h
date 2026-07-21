@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ssg/snapshot.h"
 #include "ssg/types.h"
 
 #include <array>
@@ -59,6 +60,9 @@ struct DiffFileView {
 struct DiffViewState {
     Revision revision{0};
     std::vector<DiffFileView> files;
+
+    [[nodiscard]] std::optional<std::reference_wrapper<const DiffFileView>>
+    fileForDocument(const DocumentViewState& document) const;
 
     friend bool operator==(const DiffViewState&, const DiffViewState&) = default;
 };

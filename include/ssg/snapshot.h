@@ -12,6 +12,7 @@ struct DocumentViewState {
     Revision revision;
     std::string text;
     ByteOffset caret;
+    std::optional<std::string> diffFileIdentity;
 
     bool operator==(DocumentViewState const&) const = default;
 };
@@ -22,6 +23,7 @@ struct DocumentDelta {
     ByteOffset start;
     std::uint64_t erasedBytes;
     std::string insertedText;
+    std::optional<std::string> diffFileIdentity;
 
     bool operator==(DocumentDelta const&) const = default;
 };
