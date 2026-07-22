@@ -83,6 +83,14 @@ A scan yields the authoritative changed set (full scan) or a targeted subset
 - in a PATH scan, a named path absent from the returned files ⇒ that path is now
   clean ⇒ remove just that path. Unnamed paths are untouched (a path scan is not
   authoritative over the whole set).
+- RENAME under a PATH scan (MUST): a rename touches two filesystem paths but is
+  ONE Git rename with a stable `DiffFileId`. A path scan triggered by a rename MUST
+  include BOTH the old and the new path in its input set, so the adapter can return
+  the rename (new path, `previousPath` = old) AND the source can retire any stale
+  entry keyed to the old path. If a path scan cannot guarantee both halves (e.g.
+  the watcher delivered only one side within the window), the source MUST escalate
+  to a FULL scan rather than leave a possibly-orphaned old-path entry until the
+  next full scan. Path scans never silently orphan an id.
 - baseline identity changed since the last scan ⇒ a full rebaseline is required
   (a path scan alone cannot be trusted across a HEAD/index move); the source
   requests a full scan and reconciles the entire set.
@@ -98,8 +106,18 @@ returning-to-clean is expressible without rebuilding the model.
   diff revision is a SEPARATE counter from document edit-revisions; the two are
   never compared as equals. (The existing `fileForDocument` bug that compares them
   is a RENDERING concern, deferred — but this spec fixes the contract it needs:
-  the source guarantees a stable `DiffFileId` = the workspace-relative path, so the
-  later UI selects a file's diff by IDENTITY, not by revision equality.)
+  the source keys each file by a `DiffFileId` equal to its CURRENT
+  workspace-relative path, so the later UI selects a file's diff by IDENTITY, not
+  by revision equality.)
+- `DiffFileId` stability scope: an id is stable for as long as the file keeps its
+  path. It is NOT stable across a rename — a rename is modeled as retire-old-id +
+  introduce-new-id in ONE reconcile step, with the new file's `previousPath`
+  carrying the linkage (the existing `DiffFileView.previousPath` field). This
+  matches how a diff consumer resolves a file (by current path) and keeps identity
+  derivation trivial and content-free; a content-hash identity that survives
+  renames is intentionally out of scope. Consumers MUST treat a `DiffFileId` as a
+  weak handle (spec.md handle rule): an id that no longer resolves is a
+  gracefully-empty diff, never a crash.
 - `baselineIdentity` tags every file with the baseline it was computed against.
   On any HEAD/index move the identity changes and the whole set is recomputed, so
   a consumer can reject diffs computed for an obsolete baseline (I5 atomicity: a
@@ -166,8 +184,8 @@ scope. The client never calls this; only the host loop does.
 
 ## Risks and Mitigations
 
-- Subprocess latency defeating fast-follow ⇒ recommend in-process libgit2 for the
-  event path; keep shell-git for poll only.
+- Subprocess latency defeating fast-follow ⇒ resolved by Decision 3 (libgit2
+  in-process is the sole mechanism; no per-event subprocess exists).
 - Rebaseline storms (rapid commits by an agent) ⇒ identity-change collapses to one
   full rescan at backoff; revision ordering discards superseded work.
 - Path-scan non-authoritativeness ⇒ a path scan never removes files it did not
@@ -201,7 +219,7 @@ that changes a shipped state shape.
 | 2 | Define the `GitRepository` injected interface + `GitDiffScan`/`GitWorkingTreeScan` types (full scan + path scan + baselineIdentity + complete flag), and `GitDiffConfig` (baseline = HEAD default, bounds) | `include/ssg/GitDiffSource.h` | interface-only; compiles; no impl yet | I25 |
 | 3 | Implement `GitDiffSource` reconcile (pull-driven, revision + identity contract, full/path/rebaseline/incomplete cases) against an INJECTED fake `GitRepository` | `include/ssg/GitDiffSource.h`, `src/GitDiffSource.cpp`, `tests/test_git_diff_source.cpp`, `cmake/components/git-diff-source.cmake` | reference reconcile: independently-computed changed-set vs source-driven `DiffModel` view over scripted scans (present/removed/rename/identity-change/incomplete) — fails before impl | I3, I5, I25 |
 | 4 | Platform `GitRepository` impl on libgit2 (vendored, in-process) behind `makePlatformGitRepository`; not-a-repo ⇒ inert | `src/platform/git_repository.cpp`, `vendor/libgit2`, `cmake/components/git-diff-source.cmake` + `CMakeLists.txt`, `tests/test_git_repository.cpp` | temp-repo ground truth: real `git` CLI status/diff vs adapter output over create/modify/delete/stage/commit/checkout/rename/ignored | I25 |
-| 5 | Runtime injection `EditorRuntime::applyGitDiffScan` (feed updateGitFile + removals + follow model via existing burst logic); no reveal/render | `include/ssg/EditorRuntime.h`, `src/EditorRuntime.cpp`, `src/runtime/editor_runtime_internal.h`, runtime tests | runtime test: a scan batch updates `DiffViewState` + follow target; stale batch rejected | I3, I5 |
+| 5 | Runtime injection `EditorRuntime::applyGitDiffScan` (feed updateGitFile + removals + follow model via existing burst logic); no reveal/render | `include/ssg/EditorRuntime.h`, `src/EditorRuntime.cpp`, `src/runtime/editor_runtime_internal.h`, runtime tests | runtime test: a scan batch updates `DiffViewState` + follow target; stale batch rejected; AND a bridge oracle proving a file's `DiffFileView` is selectable by `DiffFileId` alone, independent of any document edit-revision (establishes the contract the deferred `fileForDocument` fix needs) | I3, I5 |
 | 6 | Host wiring: composition owns a poll timer and/or `FilesystemWatcher` thread that drives the source and posts batches to the executor; poll + event modes selectable | `src/EditorSessionBuilder.cpp` (or app composition), integration test | headless temp-repo harness: edits ⇒ correct `DiffViewState` in both modes (the Observable acceptance) | I25 |
 
 ## Decisions (settled)
