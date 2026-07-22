@@ -321,7 +321,7 @@ DiffMutationResult DiffModel::updateGitFile(GitDiffFile file,
         (file.previousPath && !validWorkspacePath(*file.previousPath))) {
         return {DiffError::InvalidPath};
     }
-    if (file.indexIdentity.empty()) {
+    if (file.baselineIdentity.empty()) {
         return {DiffError::BaselineIdentityRequired};
     }
     const auto existing = findEntry(entries_, file.id);
@@ -329,7 +329,7 @@ DiffMutationResult DiffModel::updateGitFile(GitDiffFile file,
         return {DiffError::DuplicateFile};
     }
 
-    const std::string baseline = file.indexContent.value_or("");
+    const std::string baseline = file.baselineContent.value_or("");
     const std::string target = file.workingContent.value_or("");
     auto computed = computeDiff(baseline, target, config_);
     if (!computed) {
@@ -340,7 +340,7 @@ DiffMutationResult DiffModel::updateGitFile(GitDiffFile file,
                       .path = std::move(file.path),
                       .previousPath = std::move(file.previousPath),
                       .deleted = !file.workingContent.has_value(),
-                      .baselineIdentity = std::move(file.indexIdentity),
+                      .baselineIdentity = std::move(file.baselineIdentity),
                       .currentContent = target,
                       .hunks = std::move(computed->hunks),
                       .changedLines = std::move(computed->changes)};
@@ -350,6 +350,20 @@ DiffMutationResult DiffModel::updateGitFile(GitDiffFile file,
         existing->view = std::move(view);
         existing->source = Source::Git;
     }
+    revision_ = revision;
+    return {};
+}
+
+DiffMutationResult DiffModel::removeFile(const DiffFileId& id,
+                                         Revision revision) {
+    if (revision <= revision_) {
+        return {DiffError::StaleRevision};
+    }
+    const auto existing = findEntry(entries_, id);
+    if (existing == entries_.end()) {
+        return {DiffError::UnknownFile};
+    }
+    entries_.erase(existing);
     revision_ = revision;
     return {};
 }

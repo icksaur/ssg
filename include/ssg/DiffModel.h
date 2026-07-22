@@ -104,9 +104,9 @@ struct GitDiffFile {
     DiffFileId id;
     std::filesystem::path path;
     std::optional<std::filesystem::path> previousPath;
-    std::optional<std::string> indexContent;
+    std::optional<std::string> baselineContent;
     std::optional<std::string> workingContent;
-    std::string indexIdentity;
+    std::string baselineIdentity;
 };
 
 struct SeededDiffFile {
@@ -132,6 +132,8 @@ public:
 
     [[nodiscard]] DiffMutationResult updateGitFile(GitDiffFile file,
                                                       Revision revision);
+    [[nodiscard]] DiffMutationResult removeFile(const DiffFileId& id,
+                                                Revision revision);
     [[nodiscard]] DiffMutationResult seedNonGit(
         std::vector<SeededDiffFile> files, Revision revision);
     [[nodiscard]] DiffMutationResult applyNonGitEvent(

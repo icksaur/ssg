@@ -79,9 +79,9 @@ TEST(gitTrackedFixtureReconstructsAndMatchesIndependentChangedLines) {
     const auto result = model.updateGitFile(
         {.id = DiffFileId{"tracked"},
          .path = "src/file.cpp",
-         .indexContent = fixture("tracked.baseline"),
+        .baselineContent = fixture("tracked.baseline"),
          .workingContent = fixture("tracked.target"),
-         .indexIdentity = "index-a"},
+        .baselineIdentity = "index-a"},
         Revision{1});
 
     ASSERT_TRUE(result.accepted());
@@ -98,9 +98,9 @@ TEST(modifiedLineMarksOnlyChangedWordTokens) {
                     .updateGitFile(
                         {.id = DiffFileId{"words"},
                          .path = "words.cpp",
-                         .indexContent = "int foo = 1;\n",
+                        .baselineContent = "int foo = 1;\n",
                          .workingContent = "int foo = 42;\n",
-                         .indexIdentity = "index"},
+                        .baselineIdentity = "index"},
                         Revision{1})
                     .accepted());
 
@@ -124,9 +124,9 @@ TEST(wordDiffWorkLimitIsFailureAtomic) {
                   .updateGitFile(
                       {.id = DiffFileId{"words"},
                        .path = "words.cpp",
-                       .indexContent = "one two\n",
+                       .baselineContent = "one two\n",
                        .workingContent = "three four\n",
-                       .indexIdentity = "index"},
+                       .baselineIdentity = "index"},
                       Revision{1})
                   .error,
               DiffError::WorkLimitExceeded);
@@ -139,9 +139,9 @@ TEST(wordMarksUseStableByteRangesForInsertionAndUtf8) {
                     .updateGitFile(
                         {.id = DiffFileId{"insertion"},
                          .path = "insertion.cpp",
-                         .indexContent = "int foo;\n",
+                         .baselineContent = "int foo;\n",
                          .workingContent = "int new foo;\n",
-                         .indexIdentity = "index"},
+                         .baselineIdentity = "index"},
                         Revision{1})
                     .accepted());
     const auto& inserted = onlyFile(insertion).changedLines.front();
@@ -155,9 +155,9 @@ TEST(wordMarksUseStableByteRangesForInsertionAndUtf8) {
                     .updateGitFile(
                         {.id = DiffFileId{"utf8"},
                          .path = "utf8.txt",
-                         .indexContent = "\xf0\x9f\x98\x80 x\n",
+                         .baselineContent = "\xf0\x9f\x98\x80 x\n",
                          .workingContent = "\xf0\x9f\x98\x80 y\n",
-                         .indexIdentity = "index"},
+                         .baselineIdentity = "index"},
                         Revision{1})
                     .accepted());
     const auto& changed = onlyFile(utf8).changedLines.front();
@@ -174,7 +174,7 @@ TEST(gitUntrackedRenameDeleteAndIndexChangeRetainIdentity) {
                         {.id = DiffFileId{"untracked"},
                          .path = "new.txt",
                          .workingContent = fixture("untracked.target"),
-                         .indexIdentity = "index-a"},
+                         .baselineIdentity = "index-a"},
                         Revision{1})
                     .accepted());
     ASSERT_EQ(normalized(onlyFile(untracked)),
@@ -186,9 +186,9 @@ TEST(gitUntrackedRenameDeleteAndIndexChangeRetainIdentity) {
                         {.id = DiffFileId{"stable"},
                          .path = "new-name.txt",
                          .previousPath = std::filesystem::path{"old-name.txt"},
-                         .indexContent = fixture("tracked.baseline"),
+                         .baselineContent = fixture("tracked.baseline"),
                          .workingContent = fixture("tracked.target"),
-                         .indexIdentity = "index-a"},
+                         .baselineIdentity = "index-a"},
                         Revision{1})
                     .accepted());
     ASSERT_EQ(onlyFile(renamed).id, DiffFileId{"stable"});
@@ -200,8 +200,8 @@ TEST(gitUntrackedRenameDeleteAndIndexChangeRetainIdentity) {
                     .updateGitFile(
                         {.id = DiffFileId{"deleted"},
                          .path = "gone.txt",
-                         .indexContent = fixture("delete.baseline"),
-                         .indexIdentity = "index-a"},
+                         .baselineContent = fixture("delete.baseline"),
+                         .baselineIdentity = "index-a"},
                         Revision{1})
                     .accepted());
     ASSERT_TRUE(onlyFile(removed).deleted);
@@ -214,9 +214,9 @@ TEST(gitUntrackedRenameDeleteAndIndexChangeRetainIdentity) {
                     .updateGitFile(
                         {.id = DiffFileId{"stable"},
                          .path = "new-name.txt",
-                         .indexContent = fixture("tracked.target"),
+                         .baselineContent = fixture("tracked.target"),
                          .workingContent = fixture("tracked.target"),
-                         .indexIdentity = "index-b"},
+                         .baselineIdentity = "index-b"},
                         Revision{2})
                     .accepted());
     ASSERT_TRUE(onlyFile(renamed).hunks.empty());
@@ -311,9 +311,9 @@ TEST(staleInvalidAndOverBudgetWorkAreFailureAtomic) {
                   .updateGitFile(
                       {.id = DiffFileId{"seed"},
                        .path = "a.txt",
-                       .indexContent = "a\n",
+                      .baselineContent = "a\n",
                        .workingContent = "b\n",
-                       .indexIdentity = "index"},
+                      .baselineIdentity = "index"},
                       Revision{2})
                   .error,
               DiffError::DuplicateFile);
@@ -323,7 +323,7 @@ TEST(staleInvalidAndOverBudgetWorkAreFailureAtomic) {
                   .updateGitFile(
                       {.id = DiffFileId{"git"},
                        .path = "git.txt",
-                       .indexContent = "a\n",
+                       .baselineContent = "a\n",
                        .workingContent = "b\n"},
                       Revision{2})
                   .error,
@@ -361,9 +361,9 @@ TEST(deltaReplayAndExactCommandNavigationContract) {
                     .updateGitFile(
                         {.id = DiffFileId{"tracked"},
                          .path = "file.txt",
-                         .indexContent = "a\nsame\nb\n",
+                         .baselineContent = "a\nsame\nb\n",
                          .workingContent = "A\nsame\nB\n",
-                         .indexIdentity = "index"},
+                         .baselineIdentity = "index"},
                         Revision{1})
                     .accepted());
     const auto target = model.viewState();
@@ -420,6 +420,29 @@ TEST(documentDiffLookupUsesIdentityAndRevision) {
     ASSERT_FALSE(diff.fileForDocument(stale).has_value());
 }
 
+TEST(gitRemoveFileRejectsStaleOrEqualRevisionAndRemovesOnNextRevision) {
+    DiffModel model;
+    ASSERT_TRUE(model
+                    .updateGitFile(
+                        {.id = DiffFileId{"tracked"},
+                         .path = "tracked.txt",
+                         .baselineContent = "a\n",
+                         .workingContent = "b\n",
+                         .baselineIdentity = "head-a"},
+                        Revision{1})
+                    .accepted());
+    ASSERT_EQ(model.viewState().files.size(), std::size_t{1});
+
+    const auto before = model.viewState();
+    ASSERT_EQ(model.removeFile(DiffFileId{"tracked"}, Revision{1}).error,
+              DiffError::StaleRevision);
+    ASSERT_EQ(model.viewState(), before);
+
+    ASSERT_TRUE(model.removeFile(DiffFileId{"tracked"}, Revision{2}).accepted());
+    ASSERT_TRUE(model.viewState().files.empty());
+    ASSERT_EQ(model.viewState().revision, Revision{2});
+}
+
 } // namespace
 
 int main() {
@@ -432,5 +455,6 @@ int main() {
     RUN(staleInvalidAndOverBudgetWorkAreFailureAtomic);
     RUN(deltaReplayAndExactCommandNavigationContract);
     RUN(documentDiffLookupUsesIdentityAndRevision);
+    RUN(gitRemoveFileRejectsStaleOrEqualRevisionAndRemovesOnNextRevision);
     return failed == 0 ? 0 : 1;
 }
