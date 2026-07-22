@@ -31,6 +31,7 @@
 #include <cerrno>
 #include <csignal>
 #include <chrono>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
@@ -253,16 +254,47 @@ int main(int argc, char** argv) {
         if (!scan) return;
         (void)runtime.applyGitDiffScan(std::move(*scan));
     };
-    auto refreshGitPoll = [&] { applyGitRefresh(gitDiffSource.refresh(*gitRepository)); };
+    constexpr auto kGitRescanRetry = std::chrono::milliseconds{1000};
+    auto nextGitRetry = std::chrono::steady_clock::time_point::max();
+    bool gitRetryPending = false;
+    std::function<void(const ssg::GitDiffRefreshResult&, bool)> handleGitRefreshResult;
+    auto scheduleGitRetry = [&] {
+        gitRetryPending = true;
+        nextGitRetry = std::chrono::steady_clock::now() + kGitRescanRetry;
+    };
+    auto clearGitRetry = [&] {
+        gitRetryPending = false;
+        nextGitRetry = std::chrono::steady_clock::time_point::max();
+    };
+    auto refreshGitPoll = [&]() {
+        handleGitRefreshResult(gitDiffSource.refresh(*gitRepository), true);
+    };
     auto refreshGitPaths = [&](std::vector<fs::path> paths) {
         if (paths.empty()) {
             refreshGitPoll();
             return;
         }
-        applyGitRefresh(gitDiffSource.refreshPaths(*gitRepository, paths));
+        handleGitRefreshResult(gitDiffSource.refreshPaths(*gitRepository, paths),
+                               false);
     };
+    handleGitRefreshResult =
+        [&](const ssg::GitDiffRefreshResult& refreshed, bool fullRefresh) {
+            if (refreshed.applied) {
+                applyGitRefresh(refreshed);
+                clearGitRetry();
+            }
+            if (!refreshed.accepted || refreshed.requestedRescan) {
+                if (!fullRefresh) {
+                    refreshGitPoll();
+                    return;
+                }
+                scheduleGitRetry();
+            }
+        };
     auto nextGitPoll = std::chrono::steady_clock::now();
     constexpr auto kGitPollInterval = std::chrono::milliseconds{250};
+    refreshGitPoll();
+    nextGitPoll = std::chrono::steady_clock::now() + kGitPollInterval;
 
     if (target.file) {
         if (fs::exists(target.cwd / *target.file)) {
@@ -523,6 +555,10 @@ int main(int argc, char** argv) {
     bool firstFrameMarked = false;
     try {
         while (!quit) {
+            if (gitRetryPending &&
+                std::chrono::steady_clock::now() >= nextGitRetry) {
+                refreshGitPoll();
+            }
             if (gitDiffMode == GitDiffMode::Poll) {
                 auto now = std::chrono::steady_clock::now();
                 if (now >= nextGitPoll) {
@@ -630,7 +666,22 @@ int main(int argc, char** argv) {
         // Block until keyboard input OR a signal-driven self-pipe wake (M9-W).
         // A bare read() could not be interrupted reliably by a resize/terminate
         // signal; selecting on both fds makes the wake deterministic.
-        auto const wait = waitReadiness(-1, signalPipe[0]);
+        int waitTimeoutMs = -1;
+        std::optional<std::chrono::steady_clock::time_point> nextWake;
+        auto now = std::chrono::steady_clock::now();
+        if (gitRetryPending) {
+            nextWake = nextGitRetry;
+        }
+        if (gitDiffMode == GitDiffMode::Poll) {
+            nextWake = nextWake ? std::min(*nextWake, nextGitPoll) : nextGitPoll;
+        }
+        if (nextWake) {
+            auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                          *nextWake - now)
+                          .count();
+            waitTimeoutMs = static_cast<int>(std::max<std::int64_t>(ms, 0));
+        }
+        auto const wait = waitReadiness(waitTimeoutMs, signalPipe[0]);
         if (wait.signal) {
             // Terminate does not return (restore + re-raise); a resize just
             // re-snapshots at the loop top.

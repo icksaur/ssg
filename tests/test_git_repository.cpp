@@ -142,10 +142,46 @@ TEST(platformRepositoryMatchesGitStatusAcrossWorkflow) {
     fs::remove_all(root);
 }
 
+TEST(platformRepositoryOpenFailureIsIncomplete) {
+    const auto uniqueSuffix =
+        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    auto base = fs::temp_directory_path() / ("ssg-git-repository-openfail-" + uniqueSuffix);
+    auto parent = base / "parent";
+    auto root = parent / "repo";
+    fs::remove_all(base);
+    fs::create_directories(root);
+    std::ofstream{root / "a.txt"} << "a0\n";
+    ASSERT_EQ(runStatus(root, "init"), 0);
+    ASSERT_EQ(runStatus(root, "config user.email a@b.c"), 0);
+    ASSERT_EQ(runStatus(root, "config user.name tester"), 0);
+    ASSERT_EQ(runStatus(root, "add a.txt"), 0);
+    ASSERT_EQ(runStatus(root, "commit -m init"), 0);
+
+    auto repository = makePlatformGitRepository(root);
+    std::ofstream{root / "a.txt"} << "a1\n";
+    auto changed = repository->scanDiff({});
+    ASSERT_TRUE(changed.complete);
+    ASSERT_EQ(changed.files.size(), std::size_t{1});
+
+    std::error_code error;
+    fs::permissions(parent, fs::perms::none, fs::perm_options::replace,
+                    error);
+    ASSERT_FALSE(error);
+
+    auto failedScan = repository->scanDiff({});
+    fs::permissions(parent, fs::perms::owner_all,
+                    fs::perm_options::replace, error);
+    ASSERT_FALSE(error);
+
+    ASSERT_FALSE(failedScan.complete);
+    fs::remove_all(base);
+}
+
 }  // namespace
 
 int main() {
     RUN(platformRepositoryMatchesGitStatusAcrossWorkflow);
+    RUN(platformRepositoryOpenFailureIsIncomplete);
     std::cout << "\nPassed: " << passed << " Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

@@ -114,7 +114,12 @@ public:
     GitDiffScan scanDiff(const GitDiffConfig& config) override {
         GitDiffScan result;
         git_repository* repository = nullptr;
-        if (git_repository_open_ext(&repository, root_.c_str(), 0, nullptr) != 0) {
+        const int openResult =
+            git_repository_open_ext(&repository, root_.c_str(), 0, nullptr);
+        if (openResult != 0) {
+            if (openResult != GIT_ENOTFOUND) {
+                result.complete = false;
+            }
             return result;
         }
         auto repositoryGuard = std::unique_ptr<git_repository, decltype(&git_repository_free)>(
@@ -165,7 +170,12 @@ public:
         GitWorkingTreeScan result;
         result.requestedPaths = paths;
         git_repository* repository = nullptr;
-        if (git_repository_open_ext(&repository, root_.c_str(), 0, nullptr) != 0) {
+        const int openResult =
+            git_repository_open_ext(&repository, root_.c_str(), 0, nullptr);
+        if (openResult != 0) {
+            if (openResult != GIT_ENOTFOUND) {
+                result.complete = false;
+            }
             return result;
         }
         auto repositoryGuard = std::unique_ptr<git_repository, decltype(&git_repository_free)>(

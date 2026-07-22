@@ -87,7 +87,6 @@ private:
     [[nodiscard]] GitDiffRefreshResult applyFullScan(const GitDiffScan& scan);
     [[nodiscard]] GitDiffRefreshResult applyPathScan(
         GitRepository& repository, const GitWorkingTreeScan& scan);
-    [[nodiscard]] Revision nextDiffRevision();
 
     DiffModel* diffModel_ = nullptr;
     GitDiffConfig config_{};

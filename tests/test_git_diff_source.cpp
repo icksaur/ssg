@@ -216,10 +216,89 @@ TEST(referenceReconcileMatchesScriptedScans) {
     ASSERT_EQ(model.viewState(), beforeIncomplete);
 }
 
+TEST(fullScanRejectsAtomicallyWithoutPartialPublication) {
+    DiffModel model;
+    GitDiffSource source{model};
+    FakeRepository repository;
+
+    GitDiffScan seed{
+        .baselineIdentity = "base-1",
+        .files = {
+            {.id = DiffFileId{"seed.cpp"},
+             .path = "seed.cpp",
+             .baselineContent = "s\n",
+             .workingContent = "ss\n"},
+        },
+        .complete = true,
+    };
+    repository.fullScans.push_back(seed);
+    auto seeded = source.refresh(repository);
+    ASSERT_TRUE(seeded.accepted);
+    ASSERT_TRUE(seeded.applied);
+    auto before = model.viewState();
+
+    GitDiffScan invalid{
+        .baselineIdentity = "base-2",
+        .files = {
+            {.id = DiffFileId{"good.cpp"},
+             .path = "good.cpp",
+             .baselineContent = "g\n",
+             .workingContent = "gg\n"},
+            {.id = DiffFileId{"bad.cpp"},
+             .path = "../bad.cpp",
+             .baselineContent = "b\n",
+             .workingContent = "bb\n"},
+        },
+        .complete = true,
+    };
+    repository.fullScans.push_back(invalid);
+    auto rejected = source.refresh(repository);
+    ASSERT_FALSE(rejected.accepted);
+    ASSERT_FALSE(rejected.applied);
+    ASSERT_TRUE(rejected.shouldRetry());
+    ASSERT_EQ(model.viewState(), before);
+}
+
+TEST(incompleteScanKeepsPublishedDiffSet) {
+    DiffModel model;
+    GitDiffSource source{model};
+    FakeRepository repository;
+
+    GitDiffScan first{
+        .baselineIdentity = "base-1",
+        .files = {
+            {.id = DiffFileId{"a.cpp"},
+             .path = "a.cpp",
+             .baselineContent = "a\n",
+             .workingContent = "aa\n"},
+        },
+        .complete = true,
+    };
+    repository.fullScans.push_back(first);
+    auto initial = source.refresh(repository);
+    ASSERT_TRUE(initial.accepted);
+    ASSERT_TRUE(initial.applied);
+    auto published = model.viewState();
+
+    GitDiffScan openFailure{
+        .baselineIdentity = "base-1",
+        .files = {},
+        .complete = false,
+    };
+    repository.fullScans.push_back(openFailure);
+    auto retry = source.refresh(repository);
+    ASSERT_TRUE(retry.accepted);
+    ASSERT_FALSE(retry.applied);
+    ASSERT_TRUE(retry.shouldRetry());
+    ASSERT_EQ(model.viewState(), published);
+}
+
 }  // namespace
 
 int main() {
     RUN(referenceReconcileMatchesScriptedScans);
+    RUN(fullScanRejectsAtomicallyWithoutPartialPublication);
+    RUN(incompleteScanKeepsPublishedDiffSet);
     std::cout << "\nPassed: " << passed << " Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

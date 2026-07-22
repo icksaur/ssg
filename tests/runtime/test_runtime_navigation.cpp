@@ -2,6 +2,7 @@
 
 #include <ssg/EditorRuntime.h>
 #include <ssg/GraphemeLayout.h>
+#include <ssg/TextInputCommands.h>
 
 #include <algorithm>
 #include <cstdio>
@@ -183,12 +184,19 @@ TEST(gitDiffSelectionUsesDiffIdentityIndependentOfDocumentRevision) {
                                     .workingContent =
                                         std::string{"alpha NEEDLE omega"}}}})
                     .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"text.insert", runtime.revision(),
+                               ssg::TextInputArguments{"!"}})
+                    .accepted());
 
     auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     ASSERT_EQ(snapshot->sections().document.diffFileIdentity,
               std::optional<std::string>{"needle.txt"});
+    ASSERT_NE(snapshot->sections().document.revision,
+              snapshot->sections().diff.revision);
     const auto byIdentity = std::find_if(
         snapshot->sections().diff.files.begin(),
         snapshot->sections().diff.files.end(),
