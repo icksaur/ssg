@@ -3,6 +3,7 @@
 #include <ssg/EditorRuntime.h>
 #include <ssg/GraphemeLayout.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -43,6 +44,7 @@ TEST(externalDiffBurstRevealsOnlyNewestFileWithoutPausingFollow) {
     for (int line = 0; line < 40; ++line) {
         middle += "line " + std::to_string(line) + "\n";
     }
+
     std::ofstream{root / "workspace" / "a.txt"} << "a\n";
     std::ofstream{root / "workspace" / "b.txt"} << "b\n";
     std::ofstream{root / "workspace" / "c.txt"} << middle;
@@ -99,6 +101,103 @@ TEST(externalDiffBurstRevealsOnlyNewestFileWithoutPausingFollow) {
         ASSERT_EQ(snapshot->sections().followEdits.mode,
                   ssg::FollowMode::Paused);
     }
+}
+
+TEST(gitDiffScanUpdatesDiffAndRejectsStaleBatches) {
+    auto root = uniqueRoot();
+    std::ofstream{root / "workspace" / "a.txt"} << "a\n";
+    std::ofstream{root / "workspace" / "b.txt"} << "b\n";
+
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime
+                    .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                            ssg::ViewId{1})
+                    .accepted());
+
+    ssg::GitDiffScan scan{
+        .revision = ssg::Revision{10},
+        .baselineIdentity = "head-1:index-1",
+        .files = {
+            {.id = ssg::DiffFileId{"a.txt"},
+             .path = "a.txt",
+             .baselineContent = std::string{"a\n"},
+             .workingContent = std::string{"a changed\n"}},
+            {.id = ssg::DiffFileId{"b.txt"},
+             .path = "b.txt",
+             .baselineContent = std::string{"b\n"},
+             .workingContent = std::string{"b changed\n"}},
+        }};
+    ASSERT_TRUE(runtime.applyGitDiffScan(scan).accepted());
+
+    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    ASSERT_EQ(snapshot->sections().diff.files.size(), std::size_t{2});
+    ASSERT_TRUE(snapshot->sections().followEdits.activeTarget.has_value());
+    if (snapshot->sections().followEdits.activeTarget) {
+        ASSERT_EQ(snapshot->sections().followEdits.activeTarget->id,
+                  ssg::DiffFileId{"b.txt"});
+    }
+
+    ssg::GitDiffScan stale{
+        .revision = ssg::Revision{10},
+        .baselineIdentity = "head-1:index-2",
+        .files = {{.id = ssg::DiffFileId{"a.txt"},
+                   .path = "a.txt",
+                   .baselineContent = std::string{"a\n"},
+                   .workingContent = std::string{"a changed again\n"}}}};
+    auto staleResult = runtime.applyGitDiffScan(std::move(stale));
+    ASSERT_FALSE(staleResult.accepted());
+    ASSERT_EQ(staleResult.error, ssg::GitDiffScanError::DiffRejected);
+}
+
+TEST(gitDiffSelectionUsesDiffIdentityIndependentOfDocumentRevision) {
+    auto root = uniqueRoot();
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime
+                    .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                            ssg::ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"file.open", runtime.revision(),
+                               std::string{"needle.txt"}})
+                    .accepted());
+
+    ASSERT_TRUE(runtime
+                    .applyGitDiffScan(
+                        {.revision = ssg::Revision{20},
+                         .baselineIdentity = "head-2:index-1",
+                         .files = {{.id = ssg::DiffFileId{"needle.txt"},
+                                    .path = "needle.txt",
+                                    .baselineContent =
+                                        std::string{"alpha needle omega"},
+                                    .workingContent =
+                                        std::string{"alpha NEEDLE omega"}}}})
+                    .accepted());
+
+    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    ASSERT_EQ(snapshot->sections().document.diffFileIdentity,
+              std::optional<std::string>{"needle.txt"});
+    ASSERT_NE(snapshot->sections().document.revision,
+              snapshot->sections().diff.revision);
+    const auto byIdentity = std::find_if(
+        snapshot->sections().diff.files.begin(),
+        snapshot->sections().diff.files.end(),
+        [](const ssg::DiffFileView& file) {
+            return file.id == ssg::DiffFileId{"needle.txt"};
+        });
+    ASSERT_TRUE(byIdentity != snapshot->sections().diff.files.end());
 }
 
 TEST(paletteOpenEntersPromptFocusAndPublishesCandidates) {
@@ -630,6 +729,8 @@ TEST(wordWrapOffNavigationIsViewportBounded) {
 int main() {
     RUN(searchTreeDiffAndFollowSectionsUseRuntimeState);
     RUN(externalDiffBurstRevealsOnlyNewestFileWithoutPausingFollow);
+    RUN(gitDiffScanUpdatesDiffAndRejectsStaleBatches);
+    RUN(gitDiffSelectionUsesDiffIdentityIndependentOfDocumentRevision);
     RUN(paletteOpenEntersPromptFocusAndPublishesCandidates);
     RUN(paletteExecuteValidatesCandidateMembership);
     RUN(paletteCandidatesCarryLabelsAndKeyDetail);

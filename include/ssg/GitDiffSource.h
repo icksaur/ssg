@@ -32,6 +32,7 @@ struct GitDiffScanFile {
 };
 
 struct GitDiffScan {
+    Revision revision{0};
     std::string baselineIdentity;
     std::vector<GitDiffScanFile> files;
     bool complete = true;
@@ -40,6 +41,7 @@ struct GitDiffScan {
 };
 
 struct GitWorkingTreeScan {
+    Revision revision{0};
     std::string baselineIdentity;
     std::vector<std::filesystem::path> requestedPaths;
     std::vector<GitDiffScanFile> files;

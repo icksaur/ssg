@@ -252,6 +252,7 @@ struct EditorRuntime::Impl final : CommandServices,
     [[nodiscard]] CommandHandlerResult activateDocument(FileDocumentId document);
     [[nodiscard]] ExternalDiffBurstResult applyExternalDiffBurst(
         std::vector<ExternalDiffRevision> changes);
+    [[nodiscard]] GitDiffScanResult applyGitDiffScan(GitDiffScan scan);
     [[nodiscard]] bool revealDiffTarget(
         const FollowTarget& target, NavigationClass classification);
     void recordNavigation(ClientId client, NavigationClass classification);

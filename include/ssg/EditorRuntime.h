@@ -3,6 +3,7 @@
 #include <ssg/DiffModel.h>
 #include <ssg/EditorSession.h>
 #include <ssg/FollowEditsModel.h>
+#include <ssg/GitDiffSource.h>
 #include <ssg/session_snapshot.h>
 #include <ssg/SyntaxModel.h>
 #include <ssg/Viewport.h>
@@ -67,6 +68,19 @@ struct ExternalDiffBurstResult {
     }
 };
 
+enum class GitDiffScanError {
+    None,
+    DiffRejected,
+    FollowRejected,
+};
+
+struct GitDiffScanResult {
+    GitDiffScanError error = GitDiffScanError::None;
+    [[nodiscard]] bool accepted() const noexcept {
+        return error == GitDiffScanError::None;
+    }
+};
+
 class EditorRuntime {
 public:
     [[nodiscard]] static EditorRuntimeCreateResult create(
@@ -88,6 +102,7 @@ public:
     [[nodiscard]] std::filesystem::path const& workspaceRoot() const noexcept;
     [[nodiscard]] ExternalDiffBurstResult applyExternalDiffBurst(
         std::vector<ExternalDiffRevision> changes);
+    [[nodiscard]] GitDiffScanResult applyGitDiffScan(GitDiffScan scan);
     // M10 fast startup: run the enrichment work that was deferred when the
     // runtime was created with defer_enrichment=true (the workspace tree scan and
     // syntax highlighting), then publish it through the normal snapshot/delta

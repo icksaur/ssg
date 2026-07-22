@@ -917,6 +917,92 @@ ExternalDiffBurstResult EditorRuntime::Impl::applyExternalDiffBurst(
     return {};
 }
 
+GitDiffScanResult EditorRuntime::Impl::applyGitDiffScan(GitDiffScan scan) {
+    auto stagedDiff = diff;
+    auto stagedFollow = follow;
+    std::vector<FollowDiffChange> followChanges;
+    followChanges.reserve(scan.files.size() + stagedDiff.viewState().files.size());
+
+    Revision nextRevision = scan.revision;
+    const auto nextMutationRevision = [&nextRevision]() {
+        auto current = nextRevision;
+        nextRevision = Revision{nextRevision.value() + 1};
+        return current;
+    };
+
+    std::vector<DiffFileId> scannedIds;
+    scannedIds.reserve(scan.files.size());
+    for (auto& file : scan.files) {
+        scannedIds.push_back(file.id);
+        std::vector<DiffHunk> priorHunks;
+        if (const auto prior = stagedDiff.file(file.id)) {
+            priorHunks = prior->get().hunks;
+        }
+        const auto revision = nextMutationRevision();
+        const auto applied = stagedDiff.updateGitFile(
+            {.id = file.id,
+             .path = file.path,
+             .previousPath = file.previousPath,
+             .baselineContent = std::move(file.baselineContent),
+             .workingContent = std::move(file.workingContent),
+             .baselineIdentity = scan.baselineIdentity},
+            revision);
+        if (!applied.accepted()) {
+            return {GitDiffScanError::DiffRejected};
+        }
+        const auto changedFile = stagedDiff.file(file.id);
+        if (!changedFile) {
+            return {GitDiffScanError::DiffRejected};
+        }
+        followChanges.push_back(
+            {changedFile->get(), std::move(priorHunks), revision});
+    }
+
+    const auto stagedView = stagedDiff.viewState();
+    for (const auto& file : stagedView.files) {
+        if (std::find(scannedIds.begin(), scannedIds.end(), file.id) !=
+            scannedIds.end()) {
+            continue;
+        }
+        const auto prior = stagedDiff.file(file.id);
+        if (!prior) {
+            continue;
+        }
+        auto removedFile = prior->get();
+        auto priorHunks = removedFile.hunks;
+        const auto revision = nextMutationRevision();
+        const auto removed = stagedDiff.removeFile(file.id, revision);
+        if (!removed.accepted()) {
+            return {GitDiffScanError::DiffRejected};
+        }
+        removedFile.deleted = true;
+        removedFile.currentContent.clear();
+        removedFile.hunks.clear();
+        removedFile.changedLines.clear();
+        followChanges.push_back(
+            {std::move(removedFile), std::move(priorHunks), revision});
+    }
+
+    const auto followed = stagedFollow.acceptExternalChanges(std::move(followChanges));
+    if (!followed.accepted()) {
+        return {GitDiffScanError::FollowRejected};
+    }
+
+    const auto previousTarget = follow.viewState().activeTarget;
+    diff = std::move(stagedDiff);
+    follow = std::move(stagedFollow);
+    const auto next = follow.viewState();
+    if (next.mode == FollowMode::Following && next.activeTarget &&
+        next.activeTarget != previousTarget) {
+        (void)revealDiffTarget(*next.activeTarget,
+                               NavigationClass::Programmatic);
+    }
+    if (session) {
+        session->advanceRevision();
+    }
+    return {};
+}
+
 bool EditorRuntime::Impl::revealDiffTarget(
     const FollowTarget& target, NavigationClass classification) {
     if (target.deleted) {
@@ -1048,6 +1134,9 @@ std::filesystem::path const& EditorRuntime::workspaceRoot() const noexcept { ret
 ExternalDiffBurstResult EditorRuntime::applyExternalDiffBurst(
     std::vector<ExternalDiffRevision> changes) {
     return impl_->applyExternalDiffBurst(std::move(changes));
+}
+GitDiffScanResult EditorRuntime::applyGitDiffScan(GitDiffScan scan) {
+    return impl_->applyGitDiffScan(std::move(scan));
 }
 std::optional<SessionSnapshot> EditorRuntime::snapshot(ClientId clientId, ViewportDimensions dimensions,
                                                        KeySequence leaderPending,
