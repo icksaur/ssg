@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -80,6 +81,7 @@ public:
     [[nodiscard]] GitDiffRefreshResult refreshPaths(
         GitRepository& repository,
         const std::vector<std::filesystem::path>& paths);
+    [[nodiscard]] std::optional<GitDiffScan> latestAppliedScan() const;
 
 private:
     [[nodiscard]] GitDiffRefreshResult applyFullScan(const GitDiffScan& scan);
@@ -90,7 +92,9 @@ private:
     DiffModel* diffModel_ = nullptr;
     GitDiffConfig config_{};
     Revision nextRevision_{1};
+    std::map<DiffFileId, GitDiffScanFile> currentFiles_;
     std::string baselineIdentity_;
+    std::optional<GitDiffScan> latestAppliedScan_;
 };
 
 }  // namespace ssg

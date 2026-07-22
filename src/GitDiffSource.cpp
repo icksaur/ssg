@@ -47,14 +47,15 @@ GitDiffRefreshResult GitDiffSource::applyFullScan(const GitDiffScan& scan) {
     }
 
     std::set<DiffFileId> seen;
-    for (auto file : scan.files) {
+    std::map<DiffFileId, GitDiffScanFile> nextFiles;
+    for (const auto& file : scan.files) {
         auto result = diffModel_->updateGitFile(
             GitDiffFile{
                 .id = file.id,
-                .path = std::move(file.path),
-                .previousPath = std::move(file.previousPath),
-                .baselineContent = std::move(file.baselineContent),
-                .workingContent = std::move(file.workingContent),
+                .path = file.path,
+                .previousPath = file.previousPath,
+                .baselineContent = file.baselineContent,
+                .workingContent = file.workingContent,
                 .baselineIdentity = scan.baselineIdentity,
             },
             nextDiffRevision());
@@ -62,10 +63,12 @@ GitDiffRefreshResult GitDiffSource::applyFullScan(const GitDiffScan& scan) {
             return {.applied = false, .requestedRescan = true, .accepted = false};
         }
         seen.insert(file.id);
+        nextFiles.insert_or_assign(file.id, file);
         if (file.previousPath) {
             if (auto previous = pathIdentity(*file.previousPath);
                 previous && *previous != file.id) {
                 (void)diffModel_->removeFile(*previous, nextDiffRevision());
+                nextFiles.erase(*previous);
             }
         }
     }
@@ -80,7 +83,17 @@ GitDiffRefreshResult GitDiffSource::applyFullScan(const GitDiffScan& scan) {
         }
     }
 
+    currentFiles_ = std::move(nextFiles);
     baselineIdentity_ = scan.baselineIdentity;
+    latestAppliedScan_ = GitDiffScan{
+        .revision = diffModel_->viewState().revision,
+        .baselineIdentity = baselineIdentity_,
+    };
+    latestAppliedScan_->files.reserve(currentFiles_.size());
+    for (const auto& [id, file] : currentFiles_) {
+        (void)id;
+        latestAppliedScan_->files.push_back(file);
+    }
     return {.applied = true, .requestedRescan = false, .accepted = true};
 }
 
@@ -111,14 +124,14 @@ GitDiffRefreshResult GitDiffSource::applyPathScan(
     }
 
     std::set<DiffFileId> present;
-    for (auto file : scan.files) {
+    for (const auto& file : scan.files) {
         auto result = diffModel_->updateGitFile(
             GitDiffFile{
                 .id = file.id,
-                .path = std::move(file.path),
-                .previousPath = std::move(file.previousPath),
-                .baselineContent = std::move(file.baselineContent),
-                .workingContent = std::move(file.workingContent),
+                .path = file.path,
+                .previousPath = file.previousPath,
+                .baselineContent = file.baselineContent,
+                .workingContent = file.workingContent,
                 .baselineIdentity = scan.baselineIdentity,
             },
             nextDiffRevision());
@@ -126,6 +139,13 @@ GitDiffRefreshResult GitDiffSource::applyPathScan(
             return {.applied = false, .requestedRescan = true, .accepted = false};
         }
         present.insert(file.id);
+        currentFiles_.insert_or_assign(file.id, file);
+        if (file.previousPath) {
+            if (auto previous = pathIdentity(*file.previousPath);
+                previous && *previous != file.id) {
+                currentFiles_.erase(*previous);
+            }
+        }
     }
 
     for (const auto& path : scan.requestedPaths) {
@@ -137,9 +157,19 @@ GitDiffRefreshResult GitDiffSource::applyPathScan(
         if (!removed.accepted() && removed.error != DiffError::UnknownFile) {
             return {.applied = false, .requestedRescan = true, .accepted = false};
         }
+        currentFiles_.erase(*id);
     }
 
     baselineIdentity_ = scan.baselineIdentity;
+    latestAppliedScan_ = GitDiffScan{
+        .revision = diffModel_->viewState().revision,
+        .baselineIdentity = baselineIdentity_,
+    };
+    latestAppliedScan_->files.reserve(currentFiles_.size());
+    for (const auto& [id, file] : currentFiles_) {
+        (void)id;
+        latestAppliedScan_->files.push_back(file);
+    }
     return {.applied = true, .requestedRescan = false, .accepted = true};
 }
 
@@ -147,6 +177,10 @@ Revision GitDiffSource::nextDiffRevision() {
     auto current = nextRevision_;
     nextRevision_ = Revision{nextRevision_.value() + 1};
     return current;
+}
+
+std::optional<GitDiffScan> GitDiffSource::latestAppliedScan() const {
+    return latestAppliedScan_;
 }
 
 }  // namespace ssg

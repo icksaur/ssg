@@ -74,4 +74,13 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     )
     target_link_libraries(test_git_repository PRIVATE ssg)
     add_test(NAME test_git_repository COMMAND test_git_repository)
+
+    add_executable(test_git_diff_host
+        ${SSG_SOURCE_DIR}/tests/test_git_diff_host.cpp
+    )
+    target_include_directories(test_git_diff_host PRIVATE
+        ${SSG_SOURCE_DIR}/tests
+    )
+    target_link_libraries(test_git_diff_host PRIVATE ssg)
+    add_test(NAME test_git_diff_host COMMAND test_git_diff_host)
 endif()

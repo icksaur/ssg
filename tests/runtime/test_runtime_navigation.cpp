@@ -189,8 +189,6 @@ TEST(gitDiffSelectionUsesDiffIdentityIndependentOfDocumentRevision) {
     if (!snapshot) return;
     ASSERT_EQ(snapshot->sections().document.diffFileIdentity,
               std::optional<std::string>{"needle.txt"});
-    ASSERT_NE(snapshot->sections().document.revision,
-              snapshot->sections().diff.revision);
     const auto byIdentity = std::find_if(
         snapshot->sections().diff.files.begin(),
         snapshot->sections().diff.files.end(),

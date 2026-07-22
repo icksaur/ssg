@@ -115,6 +115,7 @@ struct EditorRuntime::Impl final : CommandServices,
     DiffModel diff;
     ExternalModificationFlow external;
     FollowEditsModel follow;
+    Revision lastGitScanRevision{0};
     TreeModel tree;
     std::shared_ptr<SyntaxParser> syntaxParser;
     SearchController search;

@@ -918,12 +918,19 @@ ExternalDiffBurstResult EditorRuntime::Impl::applyExternalDiffBurst(
 }
 
 GitDiffScanResult EditorRuntime::Impl::applyGitDiffScan(GitDiffScan scan) {
+    if (scan.revision.value() == 0) {
+        return {};
+    }
+    if (scan.revision <= lastGitScanRevision) {
+        return {GitDiffScanError::DiffRejected};
+    }
     auto stagedDiff = diff;
     auto stagedFollow = follow;
     std::vector<FollowDiffChange> followChanges;
     followChanges.reserve(scan.files.size() + stagedDiff.viewState().files.size());
+    bool mutated = false;
 
-    Revision nextRevision = scan.revision;
+    Revision nextRevision = Revision{stagedDiff.viewState().revision.value() + 1};
     const auto nextMutationRevision = [&nextRevision]() {
         auto current = nextRevision;
         nextRevision = Revision{nextRevision.value() + 1};
@@ -954,6 +961,7 @@ GitDiffScanResult EditorRuntime::Impl::applyGitDiffScan(GitDiffScan scan) {
         if (!changedFile) {
             return {GitDiffScanError::DiffRejected};
         }
+        mutated = true;
         followChanges.push_back(
             {changedFile->get(), std::move(priorHunks), revision});
     }
@@ -975,12 +983,17 @@ GitDiffScanResult EditorRuntime::Impl::applyGitDiffScan(GitDiffScan scan) {
         if (!removed.accepted()) {
             return {GitDiffScanError::DiffRejected};
         }
+        mutated = true;
         removedFile.deleted = true;
         removedFile.currentContent.clear();
         removedFile.hunks.clear();
         removedFile.changedLines.clear();
         followChanges.push_back(
             {std::move(removedFile), std::move(priorHunks), revision});
+    }
+
+    if (!mutated) {
+        return {};
     }
 
     const auto followed = stagedFollow.acceptExternalChanges(std::move(followChanges));
@@ -991,6 +1004,7 @@ GitDiffScanResult EditorRuntime::Impl::applyGitDiffScan(GitDiffScan scan) {
     const auto previousTarget = follow.viewState().activeTarget;
     diff = std::move(stagedDiff);
     follow = std::move(stagedFollow);
+    lastGitScanRevision = scan.revision;
     const auto next = follow.viewState();
     if (next.mode == FollowMode::Following && next.activeTarget &&
         next.activeTarget != previousTarget) {

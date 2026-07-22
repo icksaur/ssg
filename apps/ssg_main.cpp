@@ -13,8 +13,10 @@
 #include "ssg_terminal.h"
 
 #include <ssg/EditorRuntime.h>
+#include <ssg/FilesystemWatcher.h>
 #include <ssg/HitTester.h>
 #include <ssg/FindReplace.h>
+#include <ssg/GitDiffSource.h>
 #include <ssg/Keymap.h>
 #include <ssg/PaletteSearcher.h>
 #include <ssg/session_snapshot.h>
@@ -28,6 +30,7 @@
 
 #include <cerrno>
 #include <csignal>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
@@ -230,6 +233,36 @@ int main(int argc, char** argv) {
         return 1;
     }
     STARTUP_MARK("post_attach");
+
+    enum class GitDiffMode { Poll, Event };
+    GitDiffMode gitDiffMode = GitDiffMode::Poll;
+    if (const char* mode = std::getenv("SSG_GIT_DIFF_MODE");
+        mode != nullptr && std::string_view{mode} == "event") {
+        gitDiffMode = GitDiffMode::Event;
+    }
+    ssg::DiffModel gitDiffModel;
+    ssg::GitDiffSource gitDiffSource{gitDiffModel};
+    auto gitRepository = ssg::makePlatformGitRepository(runtime.workspaceRoot());
+    std::unique_ptr<ssg::FilesystemWatcher> gitWatcher;
+    if (gitDiffMode == GitDiffMode::Event) {
+        gitWatcher = ssg::makePlatformFilesystemWatcher(runtime.workspaceRoot());
+    }
+    auto applyGitRefresh = [&](const ssg::GitDiffRefreshResult& refreshed) {
+        if (!refreshed.accepted || !refreshed.applied) return;
+        auto scan = gitDiffSource.latestAppliedScan();
+        if (!scan) return;
+        (void)runtime.applyGitDiffScan(std::move(*scan));
+    };
+    auto refreshGitPoll = [&] { applyGitRefresh(gitDiffSource.refresh(*gitRepository)); };
+    auto refreshGitPaths = [&](std::vector<fs::path> paths) {
+        if (paths.empty()) {
+            refreshGitPoll();
+            return;
+        }
+        applyGitRefresh(gitDiffSource.refreshPaths(*gitRepository, paths));
+    };
+    auto nextGitPoll = std::chrono::steady_clock::now();
+    constexpr auto kGitPollInterval = std::chrono::milliseconds{250};
 
     if (target.file) {
         if (fs::exists(target.cwd / *target.file)) {
@@ -490,6 +523,36 @@ int main(int argc, char** argv) {
     bool firstFrameMarked = false;
     try {
         while (!quit) {
+            if (gitDiffMode == GitDiffMode::Poll) {
+                auto now = std::chrono::steady_clock::now();
+                if (now >= nextGitPoll) {
+                    refreshGitPoll();
+                    nextGitPoll = now + kGitPollInterval;
+                }
+            } else if (gitWatcher) {
+                auto events = gitWatcher->poll(std::chrono::milliseconds{0});
+                bool overflowed = false;
+                std::vector<fs::path> paths;
+                paths.reserve(events.size() * 2);
+                for (const auto& event : events) {
+                    if (event.kind == ssg::WatchEventKind::Overflow) {
+                        overflowed = true;
+                        break;
+                    }
+                    paths.push_back(event.path);
+                    if (event.previousPath) {
+                        paths.push_back(*event.previousPath);
+                    }
+                }
+                if (overflowed) {
+                    refreshGitPoll();
+                } else if (!paths.empty()) {
+                    std::sort(paths.begin(), paths.end());
+                    paths.erase(std::unique(paths.begin(), paths.end()), paths.end());
+                    refreshGitPaths(std::move(paths));
+                }
+            }
+
             auto snapshot = refresh();
         if (snapshot) {
             // The library renders every screen branch, including the declined-
