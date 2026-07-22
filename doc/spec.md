@@ -138,11 +138,16 @@ The build system uses `cmake/components/*.cmake` manifests for component-local s
   or rendering implementation. Clients contain no editor behavior and must not
   invent UI elements, controls, defaults, or authoritative state. A client may
   compute a **latency-sensitive derived view** as a pure function of authoritative
-  server-published state plus local input — key-sequence (leader) resolution from
-  the published keymap, and fuzzy filtering/ranking of a published candidate list
-  — provided the authoritative catalog, command execution, and presentation
-  placement/color remain server-owned and the client invents no product data.
-  The feature-vs-mechanism split this implies is stated normatively in I25.
+  server-published state plus local input only in this exhaustive set (as of this
+  spec): (1) key-sequence (leader) resolution from the published keymap; (2) fuzzy
+  filtering/ranking of a published candidate list and the resulting per-client
+  selection; (3) deriving the next value of an input-carrying command from the
+  authoritative published field plus local keystroke input while holding no
+  authoritative client copy. This set is extended only by amending this invariant.
+  Resolving a generic command to a feature-specific command by prompt/context kind
+  is not a permitted derived view unless it is the resolution of a client-owned
+  derived-view selection. The feature-vs-mechanism split this implies is stated
+  normatively in I25.
 - **I18 — Browser feasibility:** A feature is admissible only when a standards-based browser client can complete its workflow through available browser capabilities and the SSG API.
 - **I19 — Non-modal reversibility:** No command requires a blocking dialog. State-losing major actions take effect immediately and create a bounded recovery or compensating command before loss.
 - **I20 — Lua command parity:** Every user-visible command except lifecycle, transport authentication, raw platform I/O, host capability grants, and explicitly cataloged capability-gated ingress commands is callable through the versioned Lua API.
@@ -168,6 +173,8 @@ The build system uses `cmake/components/*.cmake` manifests for component-local s
   `FilesystemWatcher` are the templates); the adapter carries no feature logic. A
   feature capability that two clients would otherwise each reimplement belongs in
   the library, not the client.
+  Together, roles ownership, I17's exhaustive derived-view set, and this I25
+  feature-not-mechanism boundary define one boundary rule.
 
 ## Considerations
 

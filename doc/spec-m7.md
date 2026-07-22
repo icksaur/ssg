@@ -189,12 +189,11 @@ Flow:
   matches and re-projects the prompt input **without** resetting the
   toggles/options or re-opening the prompt (unlike `find.open`, which resets
   generation/active_match/options and is dispatched only once, on open).
-- Navigation and operations are reachable via two mechanisms. **Client
-  fulfilment** keyed on the active prompt kind (the bounded pattern already used
-  for the palette), on decoded strokes: in a **find** prompt, `Enter`
-  (`prompt.submit`) → `find.next`, `ArrowDown` → `find.next`, `ArrowUp` →
-  `find.previous`, `[Escape, Escape]` → `find.close`. This is the F1 navigation
-  set; F2 adds the replace-prompt fulfilment.
+- Navigation and operations are reachable via generic prompt commands whose
+  find/replace fulfilment is library-owned by active prompt kind: in find
+  focus, `prompt.submit`/`prompt.next` perform `find.next`,
+  `prompt.previous` performs `find.previous`, and `prompt.cancel` performs
+  `find.close`.
 - **Render (matches only).** `paint_document` paints every
   `FindReplaceViewState.match` byte range with the `search_match` role background
   and the `active_match` range with the `selection` role background (both existing
@@ -252,11 +251,10 @@ chords and option indicators).
   `replacement` mutated by the event, the same no-client-copy rule as F1). To
   change the query, use find first (its value carries into replace). `paint_prompt`
   places the hardware text cursor on the **replacement** input row (row 1) for a
-  replace prompt, not the first input. Client fulfilment in replace focus:
-  `Enter` (`prompt.submit`) → `replace.current`, `ArrowDown` → `find.next`,
-  `ArrowUp` → `find.previous`, `[Escape, Escape]` → `find.close`. The client
-  tracks a replace-prompt flag parallel to F1's find flag, derived from the
-  active prompt kind being `replace`.
+  replace prompt, not the first input. Replace navigation/submit/cancel are
+  fulfilled by the library by active prompt kind: `prompt.submit` performs
+  `replace.current`, `prompt.next` performs `find.next`, `prompt.previous`
+  performs `find.previous`, and `prompt.cancel` performs `find.close`.
 - **Execution sources the replacement from state.** `replace.current` replaces
   the active match; `replace.all` replaces every match. Both already exist; F2a
   changes only the runtime call site to pass `view_state().replacement` (single

@@ -82,14 +82,45 @@ CommandHandlerResult shellCommand(EditorRuntime::Impl& runtime, std::string_view
     return success();
 }
 
-CommandHandlerResult promptStatusCommand(EditorRuntime::Impl& runtime, std::string_view id, std::any const& payload) {
-    if (id == "prompt.submit") {
-        auto result = runtime.prompt.submit();
-        return result.accepted() ? success() : failure(result.error->message);
-    }
-    if (id == "prompt.cancel") {
-        auto result = runtime.prompt.cancel();
-        return result.accepted() ? success() : failure(result.error->message);
+CommandHandlerResult promptStatusCommand(EditorRuntime::Impl& runtime,
+                                         Revision revision,
+                                         std::string_view id,
+                                         std::any const& payload) {
+    if (id == "prompt.submit" || id == "prompt.cancel" ||
+        id == "prompt.next" || id == "prompt.previous") {
+        auto const& request = runtime.prompt.request();
+        if (!request) {
+            return failure("no active prompt");
+        }
+        if (request->kind == PromptKind::Find ||
+            request->kind == PromptKind::Replace) {
+            if (id == "prompt.submit") {
+                auto command = request->kind == PromptKind::Replace
+                                   ? FindReplaceCommand::ReplaceCurrent
+                                   : FindReplaceCommand::FindNext;
+                return executeFindReplaceCommand(
+                    runtime, revision, command, payload);
+            }
+            if (id == "prompt.cancel") {
+                return executeFindReplaceCommand(
+                    runtime, revision, FindReplaceCommand::FindClose, payload);
+            }
+            if (id == "prompt.next") {
+                return executeFindReplaceCommand(
+                    runtime, revision, FindReplaceCommand::FindNext, payload);
+            }
+            return executeFindReplaceCommand(
+                runtime, revision, FindReplaceCommand::FindPrevious, payload);
+        }
+        if (id == "prompt.submit") {
+            auto result = runtime.prompt.submit();
+            return result.accepted() ? success() : failure(result.error->message);
+        }
+        if (id == "prompt.cancel") {
+            auto result = runtime.prompt.cancel();
+            return result.accepted() ? success() : failure(result.error->message);
+        }
+        return success();
     }
     if (id == "status.next") runtime.status.next();
     else if (id == "status.previous") runtime.status.previous();
@@ -213,8 +244,11 @@ void bindRuntimePresentation(EditorSessionBuilder& builder, EditorRuntime::Impl&
         });
     }
     for (auto const& descriptor : PromptStatusCommandSet{}.descriptors) {
-        builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const& payload) {
-            return runtime.runTransaction([&] { return promptStatusCommand(runtime, descriptor.id, payload); });
+        builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext& context, std::any const& payload) {
+            return runtime.runTransaction([&] {
+                return promptStatusCommand(runtime, context.revision(),
+                                           descriptor.id, payload);
+            });
         });
     }
     for (auto const& descriptor : SettingsCommandSet{}.descriptors) {

@@ -153,7 +153,7 @@ TEST(curatedKeymapResolvesPerContext) {
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(down, "panel").commandId,
               std::string{"tree.select_next"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(down, "prompt").commandId,
-              std::string{"palette.next"});
+              std::string{"prompt.next"});
 
     const auto save = *ssg::KeyCodec{}.parseSequence({"Escape", "KeyS"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(save, "editor").commandId,

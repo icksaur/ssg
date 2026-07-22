@@ -386,22 +386,19 @@ int main(int argc, char** argv) {
     // candidate / rejected execute) leaves the prompt open rather than
     // desynchronizing the client.
     auto dispatchResolved = [&](std::string const& id) {
-        if (findOpen && focus == ssg::FocusTarget::Prompt) {
-            if (id == "prompt.submit" || id == "palette.next") { dispatch("find.next"); return; }
-            if (id == "palette.previous") { dispatch("find.previous"); return; }
-            if (id == "prompt.cancel") { dispatch("find.close"); return; }
-        }
-        if (replaceOpen && focus == ssg::FocusTarget::Prompt) {
-            if (id == "prompt.submit") { dispatch("replace.current"); return; }
-            if (id == "palette.next") { dispatch("find.next"); return; }
-            if (id == "palette.previous") { dispatch("find.previous"); return; }
-            if (id == "prompt.cancel") { dispatch("find.close"); return; }
-        }
         if (paletteOpen && focus == ssg::FocusTarget::Prompt) {
             if (id == "prompt.submit") { executeSelectedCandidate(); return; }
             if (id == "prompt.cancel") { dispatch("palette.close"); return; }
-            if (id == "palette.next") { ++paletteSelected; revealPaletteSelection(); return; }
-            if (id == "palette.previous") { if (paletteSelected > 0) --paletteSelected; revealPaletteSelection(); return; }
+            if (id == "prompt.next" || id == "palette.next") {
+                ++paletteSelected;
+                revealPaletteSelection();
+                return;
+            }
+            if (id == "prompt.previous" || id == "palette.previous") {
+                if (paletteSelected > 0) --paletteSelected;
+                revealPaletteSelection();
+                return;
+            }
         }
         dispatch(id);
         if (id == "palette.open") {
@@ -454,7 +451,6 @@ int main(int argc, char** argv) {
             focus = snapshot->sections().shell.focus;
             keymap = snapshot->sections().keymap;
             candidates = snapshot->sections().palette.candidates;
-            if (focus != ssg::FocusTarget::Prompt) paletteOpen = false;
             // Cache the palette pane height for the next window computation: the
             // palette pane is the editor pane, so this is populated every frame,
             // including before the palette opens (no cold start). The window is
@@ -473,6 +469,8 @@ int main(int argc, char** argv) {
             // fulfillment must not hijack that unrelated prompt's keys.
             auto const& findView = snapshot->sections().findReplace;
             auto const& activePrompt = snapshot->sections().promptStatus.prompt;
+            paletteOpen =
+                activePrompt && activePrompt->kind == ssg::PromptKind::Palette;
             bool const findPromptActive =
                 activePrompt && activePrompt->kind == ssg::PromptKind::Find;
             findOpen = findView.open && findPromptActive;

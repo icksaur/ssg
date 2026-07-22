@@ -74,6 +74,9 @@ void bindRuntimeFiles(EditorSessionBuilder& builder, EditorRuntime::Impl& runtim
 void bindRuntimePresentation(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime);
 void bindRuntimeNavigation(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime);
 void bindRuntimeLanguageServices(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime);
+[[nodiscard]] CommandHandlerResult executeFindReplaceCommand(
+    EditorRuntime::Impl& runtime, Revision revision, FindReplaceCommand command,
+    std::any const& payload);
 
 struct EditorRuntime::Impl final : CommandServices,
                                    TabLifecycle,

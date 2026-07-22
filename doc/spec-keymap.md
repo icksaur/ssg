@@ -198,7 +198,7 @@ terminal has no browser-reserved chords, so none is excluded):
 - `panel`: `ArrowDown` → `tree.select_next`, `ArrowUp` → `tree.select_previous`,
   `Enter` → `tree.activate`.
 - `prompt`: `Enter` → `prompt.submit`, `[Escape, Escape]` → `prompt.cancel`,
-  `ArrowDown` → `palette.next`, `ArrowUp` → `palette.previous`. (Prompt query
+  `ArrowDown` → `prompt.next`, `ArrowUp` → `prompt.previous`. (Prompt query
   editing — printable insert and backspace — is client-local text handling via
   `text_routing == prompt_query`, not a binding.)
 
@@ -246,8 +246,9 @@ and keyed on the active prompt kind:
   `prompt.submit`.
 - `prompt.cancel` for a palette prompt is fulfilled as `palette.close`; otherwise
   `prompt.cancel`.
-- `palette.next`/`palette.previous` move the client-local selection (no dispatch
-  needed for the palette; the client updates its reported view).
+- `prompt.next`/`prompt.previous` for a palette prompt move the client-local
+  selection (no dispatch needed for the palette; the client updates its
+  reported view). For non-palette prompts they are dispatched unchanged.
 - Committed text and Backspace edit the client-local palette query (client-local,
   not commands).
 

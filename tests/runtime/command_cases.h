@@ -136,6 +136,8 @@ inline constexpr auto runtime_command_cases = std::to_array<RuntimeCommandCase>(
     RuntimeCommandCase{"view.toggle_distraction_free", "shell-layout"},
     RuntimeCommandCase{"prompt.submit", "prompt-status-surface"},
     RuntimeCommandCase{"prompt.cancel", "prompt-status-surface"},
+    RuntimeCommandCase{"prompt.next", "prompt-status-surface"},
+    RuntimeCommandCase{"prompt.previous", "prompt-status-surface"},
     RuntimeCommandCase{"status.next", "prompt-status-surface"},
     RuntimeCommandCase{"status.previous", "prompt-status-surface"},
     RuntimeCommandCase{"status.dismiss", "prompt-status-surface"},
@@ -181,6 +183,6 @@ inline constexpr auto runtime_command_cases = std::to_array<RuntimeCommandCase>(
     RuntimeCommandCase{"diff.open_file", "diff-model"},
 });
 
-static_assert(runtime_command_cases.size() == 168);
+static_assert(runtime_command_cases.size() == 170);
 
 } // namespace ssg::test

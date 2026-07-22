@@ -169,8 +169,8 @@ KeymapViewState defaultTerminalKeymap() {
 
     bind(seq({"Enter"}), "prompt.submit", "prompt");
     bind(seq({"Escape", "Escape"}), "prompt.cancel", "prompt");
-    bind(seq({"ArrowDown"}), "palette.next", "prompt");
-    bind(seq({"ArrowUp"}), "palette.previous", "prompt");
+    bind(seq({"ArrowDown"}), "prompt.next", "prompt");
+    bind(seq({"ArrowUp"}), "prompt.previous", "prompt");
     // Find/replace option toggles and replace-all, reachable while a find or
     // replace prompt is focused.  KeyC/KeyG/KeyE/KeyL are not in the `*` chord
     // set, so these Escape-prefixed chords stay prefix-free.  The handlers are

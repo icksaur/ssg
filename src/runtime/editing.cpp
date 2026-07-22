@@ -269,9 +269,9 @@ std::vector<PromptToggle> findOptionToggles(EditorRuntime::Impl& runtime) {
 }
 
 CommandHandlerResult bindFindReplace(EditorRuntime::Impl& runtime,
-                                       Revision revision,
-                                       FindReplaceCommand command,
-                                       std::any const& payload) {
+                                     Revision revision,
+                                     FindReplaceCommand command,
+                                     std::any const& payload) {
     auto* document = runtime.activeDocument();
     auto query = payloadAs<std::string>(payload) ? *payloadAs<std::string>(payload) : runtime.findReplace.viewState().query;
     std::optional<ByteRange> range;
@@ -437,6 +437,13 @@ CommandHandlerResult bindFindReplace(EditorRuntime::Impl& runtime,
 
 } // namespace
 
+CommandHandlerResult executeFindReplaceCommand(EditorRuntime::Impl& runtime,
+                                               Revision revision,
+                                               FindReplaceCommand command,
+                                               std::any const& payload) {
+    return bindFindReplace(runtime, revision, command, payload);
+}
+
 void EditorRuntime::Impl::revealPrimaryCaret() {
     // Reveal against the real editor pane cached from the last snapshot: the
     // content rows/columns already exclude any reserved prompt rows, so no prompt
@@ -495,7 +502,10 @@ void bindRuntimeEditing(EditorSessionBuilder& builder, EditorRuntime::Impl& runt
     }
     for (auto const& descriptor : findReplaceCommands.descriptors()) {
         builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext& context, std::any const& payload) {
-            return runtime.runTransaction([&] { return bindFindReplace(runtime, context.revision(), descriptor.command, payload); });
+            return runtime.runTransaction([&] {
+                return executeFindReplaceCommand(runtime, context.revision(),
+                                                 descriptor.command, payload);
+            });
         });
     }
 }

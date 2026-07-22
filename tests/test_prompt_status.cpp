@@ -242,8 +242,9 @@ TEST(footerProjectionAndAccessibilityMatchGolden) {
 TEST(commandCatalogAndDeltaAreExact) {
     const PromptStatusCommandSet commands;
     const std::vector<std::string_view> expected{
-        "prompt.submit", "prompt.cancel", "status.next", "status.previous",
-        "status.dismiss", "status.invoke_action"};
+        "prompt.submit", "prompt.cancel", "prompt.next", "prompt.previous",
+        "status.next", "status.previous", "status.dismiss",
+        "status.invoke_action"};
     for (std::size_t i = 0; i < expected.size(); ++i) {
         ASSERT_EQ(commands.descriptors[i].id, expected[i]);
     }

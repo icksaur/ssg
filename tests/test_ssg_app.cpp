@@ -12,9 +12,29 @@
 #include <csignal>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <string>
 
 namespace fs = std::filesystem;
+
+std::string readSource(const fs::path& path) {
+    std::ifstream input{path, std::ios::binary};
+    return {std::istreambuf_iterator<char>{input},
+            std::istreambuf_iterator<char>{}};
+}
+
+std::optional<fs::path> locateFromParents(
+    fs::path start, const fs::path& relative) {
+    for (int depth = 0; depth < 8; ++depth) {
+        auto candidate = start / relative;
+        if (fs::exists(candidate)) {
+            return candidate;
+        }
+        if (!start.has_parent_path()) break;
+        start = start.parent_path();
+    }
+    return std::nullopt;
+}
 
 TEST(resolveLaunchNoArgumentOpensCwd) {
     auto target = ssg::app::resolve_launch({});
@@ -893,6 +913,29 @@ TEST(routePointerPalettePressExecutesTheCandidate) {
     ASSERT_TRUE(unresolved.commands.empty());
 }
 
+TEST(promptBoundaryKeepsPaletteFulfillmentAndRemovesFindReplaceMapping) {
+    auto sourcePath = locateFromParents(
+        fs::current_path(), fs::path{"apps"} / "ssg_main.cpp");
+    ASSERT_TRUE(sourcePath.has_value());
+    if (!sourcePath) return;
+    auto source = readSource(*sourcePath);
+    const auto dispatchStart = source.find("auto dispatchResolved = ");
+    const auto dispatchEnd = source.find("auto routeText = ", dispatchStart);
+    ASSERT_TRUE(dispatchStart != std::string::npos);
+    ASSERT_TRUE(dispatchEnd != std::string::npos);
+    if (dispatchStart == std::string::npos || dispatchEnd == std::string::npos) {
+        return;
+    }
+    auto block = source.substr(dispatchStart, dispatchEnd - dispatchStart);
+
+    ASSERT_TRUE(block.find("if (id == \"prompt.submit\") { executeSelectedCandidate(); return; }") !=
+                std::string::npos);
+    ASSERT_TRUE(block.find("dispatch(\"find.next\")") == std::string::npos);
+    ASSERT_TRUE(block.find("dispatch(\"replace.current\")") == std::string::npos);
+    ASSERT_TRUE(block.find("dispatch(\"find.close\")") == std::string::npos);
+    ASSERT_TRUE(source.find("dispatch(\"palette.execute\"") != std::string::npos);
+}
+
 TEST(routePointerPanelPressSelectsAndActivatesTheNode) {
     ssg::RegionHit hit;
     hit.region = ssg::HitRegion::Panel;
@@ -1003,6 +1046,7 @@ int main() {
     RUN(routePointerPanelAndPaletteScrollbarsAreNoOps);
     RUN(routePointerTabPressActivatesTheTab);
     RUN(routePointerPalettePressExecutesTheCandidate);
+    RUN(promptBoundaryKeepsPaletteFulfillmentAndRemovesFindReplaceMapping);
     RUN(routePointerPanelPressSelectsAndActivatesTheNode);
     RUN(routeWheelMapsRegionToScrollTarget);
     RUN(edgeScrollDecidesDirectionAtTheContentEdges);

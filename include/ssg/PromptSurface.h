@@ -115,9 +115,11 @@ struct PromptStatusCommandDescriptor {
 };
 
 struct PromptStatusCommandSet {
-    std::array<PromptStatusCommandDescriptor, 6> descriptors{{
+    std::array<PromptStatusCommandDescriptor, 8> descriptors{{
         {"prompt.submit"},
         {"prompt.cancel"},
+        {"prompt.next"},
+        {"prompt.previous"},
         {"status.next"},
         {"status.previous"},
         {"status.dismiss"},

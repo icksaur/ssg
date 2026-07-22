@@ -159,6 +159,8 @@ constexpr auto kExpectedCommands = std::to_array<ExpectedCommand>({
     {"view.toggle_distraction_free", "shell-layout"},
     {"prompt.submit", "prompt-status-surface"},
     {"prompt.cancel", "prompt-status-surface"},
+    {"prompt.next", "prompt-status-surface"},
+    {"prompt.previous", "prompt-status-surface"},
     {"status.next", "prompt-status-surface"},
     {"status.previous", "prompt-status-surface"},
     {"status.dismiss", "prompt-status-surface"},
@@ -213,12 +215,12 @@ constexpr auto kExpectedCategoryCounts =
         {"hover", 2},      {"rename", 1},    {"pane", 9},
         {"panel", 4},
         {"tree", 7},
-        {"prompt", 2},     {"status", 4},    {"workspace", 1},
+        {"prompt", 4},     {"status", 4},    {"workspace", 1},
         {"file", 15},      {"tab", 9},       {"external", 3},
         {"settings", 6},   {"follow_edits", 2}, {"diff", 3},
     });
 
-static_assert(kExpectedCommands.size() == 168);
+static_assert(kExpectedCommands.size() == 170);
 
 std::optional<std::string> field(const std::string& object,
                                  const std::string& name) {

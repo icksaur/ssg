@@ -870,6 +870,105 @@ TEST(replaceAllRevealsTheCaretWhenNoMatchRemains) {
     std::filesystem::remove_all(root);
 }
 
+TEST(promptCommandsFulfillFindReplaceByActiveKind) {
+    auto root = std::filesystem::current_path() / "runtime_editing_prompt_fulfillment";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root / "workspace");
+    std::filesystem::create_directories(root / "scratch");
+    std::filesystem::create_directories(root / "recovery");
+    std::ofstream{root / "workspace" / "f.txt"} << "cat cat cat";
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime
+                    .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                            ssg::ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.open", runtime.revision(),
+                                  std::string{"f.txt"}})
+                    .accepted());
+
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"find.open", runtime.revision(), {}})
+                    .accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"find.update_query", runtime.revision(),
+                                  ssg::FindQueryArguments{"cat"}})
+                    .accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"prompt.submit", runtime.revision(), {}})
+                    .accepted());
+    auto findAfterSubmit =
+        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(findAfterSubmit.has_value());
+    if (findAfterSubmit) {
+        ASSERT_TRUE(findAfterSubmit->sections().findReplace.open);
+        ASSERT_EQ(findAfterSubmit->sections().findReplace.activeMatch,
+                  std::optional<std::size_t>{1});
+        ASSERT_TRUE(findAfterSubmit->sections().promptStatus.prompt.has_value());
+        if (findAfterSubmit->sections().promptStatus.prompt) {
+            ASSERT_EQ(findAfterSubmit->sections().promptStatus.prompt->kind,
+                      ssg::PromptKind::Find);
+        }
+    }
+
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"prompt.previous", runtime.revision(), {}})
+                    .accepted());
+    auto findAfterPrevious =
+        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(findAfterPrevious.has_value());
+    if (findAfterPrevious) {
+        ASSERT_EQ(findAfterPrevious->sections().findReplace.activeMatch,
+                  std::optional<std::size_t>{0});
+    }
+
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"replace.open", runtime.revision(), {}})
+                    .accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"replace.update_replacement",
+                                  runtime.revision(),
+                                  ssg::FindQueryArguments{"dog"}})
+                    .accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"prompt.submit", runtime.revision(), {}})
+                    .accepted());
+    ASSERT_EQ(runtime.activeDocumentText(), std::string{"dog cat cat"});
+    auto replaceAfterSubmit =
+        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(replaceAfterSubmit.has_value());
+    std::uint64_t generationBeforeCancel = 0;
+    if (replaceAfterSubmit) {
+        generationBeforeCancel = replaceAfterSubmit->sections().findReplace.generation;
+        ASSERT_TRUE(replaceAfterSubmit->sections().promptStatus.prompt.has_value());
+        if (replaceAfterSubmit->sections().promptStatus.prompt) {
+            ASSERT_EQ(replaceAfterSubmit->sections().promptStatus.prompt->kind,
+                      ssg::PromptKind::Replace);
+        }
+    }
+
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"prompt.cancel", runtime.revision(), {}})
+                    .accepted());
+    auto afterCancel =
+        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(afterCancel.has_value());
+    if (afterCancel) {
+        auto const& find = afterCancel->sections().findReplace;
+        ASSERT_FALSE(find.open);
+        ASSERT_FALSE(find.replaceMode);
+        ASSERT_TRUE(find.matches.empty());
+        ASSERT_FALSE(find.activeMatch.has_value());
+        ASSERT_TRUE(find.generation > generationBeforeCancel);
+        ASSERT_FALSE(afterCancel->sections().promptStatus.prompt.has_value());
+    }
+    std::filesystem::remove_all(root);
+}
+
 } // namespace
 
 int main() {
@@ -884,6 +983,7 @@ int main() {
     RUN(undoAndPasteRevealTheCaret);
     RUN(multiCursorPastePreservesAllCursors);
     RUN(replaceAllRevealsTheCaretWhenNoMatchRemains);
+    RUN(promptCommandsFulfillFindReplaceByActiveKind);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }
