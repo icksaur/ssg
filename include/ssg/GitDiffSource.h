@@ -49,6 +49,14 @@ struct GitWorkingTreeScan {
                            const GitWorkingTreeScan&) = default;
 };
 
+struct GitDiffRefreshResult {
+    bool applied = false;
+    bool requestedRescan = false;
+    bool accepted = true;
+
+    [[nodiscard]] bool shouldRetry() const noexcept { return requestedRescan; }
+};
+
 class GitRepository {
 public:
     virtual ~GitRepository() = default;
@@ -57,6 +65,27 @@ public:
     [[nodiscard]] virtual GitWorkingTreeScan scanPaths(
         const std::vector<std::filesystem::path>& paths,
         const GitDiffConfig& config) = 0;
+};
+
+class GitDiffSource {
+public:
+    explicit GitDiffSource(DiffModel& diffModel, GitDiffConfig config = {});
+
+    [[nodiscard]] GitDiffRefreshResult refresh(GitRepository& repository);
+    [[nodiscard]] GitDiffRefreshResult refreshPaths(
+        GitRepository& repository,
+        const std::vector<std::filesystem::path>& paths);
+
+private:
+    [[nodiscard]] GitDiffRefreshResult applyFullScan(const GitDiffScan& scan);
+    [[nodiscard]] GitDiffRefreshResult applyPathScan(
+        GitRepository& repository, const GitWorkingTreeScan& scan);
+    [[nodiscard]] Revision nextDiffRevision();
+
+    DiffModel* diffModel_ = nullptr;
+    GitDiffConfig config_{};
+    Revision nextRevision_{1};
+    std::string baselineIdentity_;
 };
 
 }  // namespace ssg
