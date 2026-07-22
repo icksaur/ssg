@@ -67,6 +67,9 @@ public:
         const GitDiffConfig& config) = 0;
 };
 
+[[nodiscard]] std::unique_ptr<GitRepository> makePlatformGitRepository(
+    const std::filesystem::path& canonicalRoot);
+
 class GitDiffSource {
 public:
     explicit GitDiffSource(DiffModel& diffModel, GitDiffConfig config = {});

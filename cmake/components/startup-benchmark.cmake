@@ -20,7 +20,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     add_executable(startup_benchmark
         ${SSG_SOURCE_DIR}/benchmarks/startup_benchmark.cpp
     )
-    target_link_libraries(startup_benchmark PRIVATE util)
+    target_link_libraries(startup_benchmark PRIVATE -lutil)
     add_dependencies(startup_benchmark ssg_startup_probe ssg_app)
     target_compile_definitions(startup_benchmark PRIVATE
         SSG_STARTUP_PROBE_BINARY="$<TARGET_FILE:ssg_startup_probe>"
