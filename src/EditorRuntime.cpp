@@ -868,20 +868,17 @@ void EditorRuntime::Impl::refreshLiveDiffDocuments(const DiffViewState& diffView
         auto state = workspace.state(document);
         const auto label =
             state ? state->displayLabel : std::string{"LiveDiff"};
-        documentRuntimeStates.erase(document.value());
-        auto removed = workspace.removeDocument(document);
-        if (!removed.accepted()) {
-            it = liveDiffDocuments.erase(it);
-            continue;
-        }
-        auto recreated = workspace.openVirtualDocument(
+        auto replacement = workspace.openVirtualDocument(
             label, desired, DocumentMode::Diff);
-        if (!recreated.accepted() || !recreated.document) {
-            it = liveDiffDocuments.erase(it);
+        if (!replacement.accepted() || !replacement.document) {
             continue;
         }
-        it->second = *recreated.document;
-        ensureDocumentRuntimeState(*recreated.document);
+        it->second = *replacement.document;
+        ensureDocumentRuntimeState(*replacement.document);
+        auto removed = workspace.removeDocument(document);
+        if (removed.accepted()) {
+            documentRuntimeStates.erase(document.value());
+        }
         ++it;
     }
 }
