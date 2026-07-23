@@ -266,7 +266,9 @@ struct EditorRuntime::Impl final : CommandServices,
     [[nodiscard]] CommandHandlerResult openOrFocusLiveDiffTab(
         const DiffFileView& file, NavigationClass classification,
         std::optional<ClientId> userClient);
-    [[nodiscard]] bool refreshLiveDiffDocuments();
+    void refreshLiveDiffDocuments(const DiffViewState& view);
+    [[nodiscard]] bool openOrRevealFollowTargetProgrammatic(
+        const FollowTarget& target);
     [[nodiscard]] bool revealCurrentDiffTarget(
         const FollowTarget& target, NavigationClass classification);
     [[nodiscard]] bool revealDiffTarget(

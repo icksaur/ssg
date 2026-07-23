@@ -846,8 +846,7 @@ CommandHandlerResult EditorRuntime::Impl::openOrFocusLiveDiffTab(
     return success();
 }
 
-bool EditorRuntime::Impl::refreshLiveDiffDocuments() {
-    const auto diffView = diff.viewState();
+void EditorRuntime::Impl::refreshLiveDiffDocuments(const DiffViewState& diffView) {
     for (auto it = liveDiffDocuments.begin(); it != liveDiffDocuments.end();) {
         const auto id = DiffFileId{it->first};
         auto file = std::find_if(
@@ -872,18 +871,36 @@ bool EditorRuntime::Impl::refreshLiveDiffDocuments() {
         documentRuntimeStates.erase(document.value());
         auto removed = workspace.removeDocument(document);
         if (!removed.accepted()) {
-            return false;
+            it = liveDiffDocuments.erase(it);
+            continue;
         }
         auto recreated = workspace.openVirtualDocument(
             label, desired, DocumentMode::Diff);
         if (!recreated.accepted() || !recreated.document) {
-            return false;
+            it = liveDiffDocuments.erase(it);
+            continue;
         }
         it->second = *recreated.document;
         ensureDocumentRuntimeState(*recreated.document);
         ++it;
     }
-    return true;
+}
+
+bool EditorRuntime::Impl::openOrRevealFollowTargetProgrammatic(
+    const FollowTarget& target) {
+    const auto file = diff.file(target.id);
+    if (!file.has_value()) {
+        return false;
+    }
+    if (!openOrFocusLiveDiffTab(file->get(), NavigationClass::Programmatic,
+                                std::nullopt)
+             .accepted) {
+        return false;
+    }
+    if (target.deleted) {
+        return true;
+    }
+    return revealCurrentDiffTarget(target, NavigationClass::Programmatic);
 }
 
 Document const* EditorRuntime::Impl::activeDocument() const {
@@ -1136,16 +1153,7 @@ ExternalDiffBurstResult EditorRuntime::Impl::applyExternalDiffBurst(
     const auto next = follow.viewState();
     if (next.mode == FollowMode::Following && next.activeTarget &&
         next.activeTarget != previousTarget) {
-        if (const auto file = diff.file(next.activeTarget->id); file.has_value() &&
-            openOrFocusLiveDiffTab(file->get(),
-                                   NavigationClass::Programmatic,
-                                   std::nullopt)
-                .accepted) {
-            if (!next.activeTarget->deleted) {
-                (void)revealCurrentDiffTarget(*next.activeTarget,
-                                              NavigationClass::Programmatic);
-            }
-        }
+        (void)openOrRevealFollowTargetProgrammatic(*next.activeTarget);
     }
     if (session) {
         session->advanceRevision();
@@ -1244,23 +1252,11 @@ GitDiffScanResult EditorRuntime::Impl::applyGitDiffScan(GitDiffScan scan) {
         const auto previousTarget = follow.viewState().activeTarget;
         diff = std::move(stagedDiff);
         follow = std::move(stagedFollow);
-        if (!refreshLiveDiffDocuments()) {
-            return {GitDiffScanError::DiffRejected};
-        }
+        refreshLiveDiffDocuments(diff.viewState());
         const auto next = follow.viewState();
         if (next.mode == FollowMode::Following && next.activeTarget &&
             next.activeTarget != previousTarget) {
-            if (const auto file = diff.file(next.activeTarget->id);
-                file.has_value() &&
-                openOrFocusLiveDiffTab(file->get(),
-                                       NavigationClass::Programmatic,
-                                       std::nullopt)
-                    .accepted) {
-                if (!next.activeTarget->deleted) {
-                    (void)revealCurrentDiffTarget(
-                        *next.activeTarget, NavigationClass::Programmatic);
-                }
-            }
+            (void)openOrRevealFollowTargetProgrammatic(*next.activeTarget);
         }
     }
     tree.replaceProvider(TreeProviderSnapshot::fromGit(

@@ -438,6 +438,122 @@ TEST(gitStatusActivationOpensLiveDiffTabAndReusesIt) {
     ASSERT_EQ(second->sections().tabs.active, liveDiffId);
 }
 
+TEST(documentAndLiveDiffTabsCloseIndependently) {
+    auto root = uniqueRoot();
+    std::ofstream{root / "workspace" / "coexist.txt"} << "disk\n";
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime
+                    .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                            ssg::ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"file.open", runtime.revision(),
+                               std::string{"coexist.txt"}})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .applyGitDiffScan(
+                        {.revision = ssg::Revision{32},
+                         .baselineIdentity = "head-z:index-1",
+                         .files = {{.id = ssg::DiffFileId{"coexist-id"},
+                                    .path = "coexist.txt",
+                                    .baselineContent = std::string{"before\n"},
+                                    .workingContent = std::string{"after\n"}}}})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"panel.show_git_status", runtime.revision(), {}})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"tree.select_next", runtime.revision(), {}})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"tree.activate", runtime.revision(), {}})
+                    .accepted());
+
+    auto first = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(first.has_value());
+    if (!first) return;
+    std::optional<ssg::TabId> documentTab;
+    std::optional<ssg::TabId> liveDiffTab;
+    for (const auto& tab : first->sections().tabs.tabs) {
+        if (tab.kind == ssg::TabKind::Document) {
+            documentTab = tab.id;
+        } else if (tab.kind == ssg::TabKind::LiveDiff) {
+            liveDiffTab = tab.id;
+        }
+    }
+    ASSERT_TRUE(documentTab.has_value());
+    ASSERT_TRUE(liveDiffTab.has_value());
+    if (!documentTab || !liveDiffTab) return;
+
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"tab.activate", runtime.revision(),
+                               *documentTab})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"tab.close", runtime.revision(),
+                               *documentTab})
+                    .accepted());
+    auto afterDocumentClose =
+        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(afterDocumentClose.has_value());
+    if (!afterDocumentClose) return;
+    ASSERT_EQ(countTabsOfKind(afterDocumentClose->sections().tabs,
+                              ssg::TabKind::Document),
+              std::size_t{0});
+    ASSERT_EQ(countTabsOfKind(afterDocumentClose->sections().tabs,
+                              ssg::TabKind::LiveDiff),
+              std::size_t{1});
+    ASSERT_EQ(afterDocumentClose->sections().document.diffFileIdentity,
+              std::optional<std::string>{"coexist-id"});
+
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"file.open", runtime.revision(),
+                               std::string{"coexist.txt"}})
+                    .accepted());
+    auto reopened =
+        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(reopened.has_value());
+    if (!reopened) return;
+    ASSERT_EQ(countTabsOfKind(reopened->sections().tabs, ssg::TabKind::Document),
+              std::size_t{1});
+    ASSERT_EQ(countTabsOfKind(reopened->sections().tabs, ssg::TabKind::LiveDiff),
+              std::size_t{1});
+
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"tab.activate", runtime.revision(),
+                               *liveDiffTab})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"tab.close", runtime.revision(),
+                               *liveDiffTab})
+                    .accepted());
+    auto afterLiveDiffClose =
+        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(afterLiveDiffClose.has_value());
+    if (!afterLiveDiffClose) return;
+    ASSERT_EQ(countTabsOfKind(afterLiveDiffClose->sections().tabs,
+                              ssg::TabKind::Document),
+              std::size_t{1});
+    ASSERT_EQ(countTabsOfKind(afterLiveDiffClose->sections().tabs,
+                              ssg::TabKind::LiveDiff),
+              std::size_t{0});
+    ASSERT_EQ(afterLiveDiffClose->sections().document.diffFileIdentity,
+              std::optional<std::string>{"coexist.txt"});
+}
+
 TEST(gitStatusActivationOpensDeletedLiveDiffWithoutDiskFile) {
     auto root = uniqueRoot();
     std::ofstream{root / "workspace" / "gone.txt"} << "gone\n";
@@ -1099,6 +1215,7 @@ int main() {
     RUN(gitDiffSelectionUsesDiffIdentityIndependentOfDocumentRevision);
     RUN(gitDiffScanRefreshesGitTreeProviderFromDiffAndOnSecondScan);
     RUN(gitStatusActivationOpensLiveDiffTabAndReusesIt);
+    RUN(documentAndLiveDiffTabsCloseIndependently);
     RUN(gitStatusActivationOpensDeletedLiveDiffWithoutDiskFile);
     RUN(liveDiffOpenClassificationPausesOnlyForUserActivation);
     RUN(paletteOpenEntersPromptFocusAndPublishesCandidates);

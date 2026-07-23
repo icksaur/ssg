@@ -194,20 +194,7 @@ CommandHandlerResult followCommand(EditorRuntime::Impl& runtime, std::string_vie
     if (id == "follow_edits.resume") {
         const auto target = runtime.follow.viewState().activeTarget;
         if (target) {
-            const auto file = runtime.diff.file(target->id);
-            if (!file.has_value()) {
-                return failure("follow target is unavailable");
-            }
-            if (!runtime
-                     .openOrFocusLiveDiffTab(file->get(),
-                                             NavigationClass::Programmatic,
-                                             std::nullopt)
-                     .accepted) {
-                return failure("follow target could not open a diff tab");
-            }
-            if (!target->deleted &&
-                !runtime.revealCurrentDiffTarget(*target,
-                                                 NavigationClass::Programmatic)) {
+            if (!runtime.openOrRevealFollowTargetProgrammatic(*target)) {
                 return failure("follow target could not be revealed");
             }
         }
