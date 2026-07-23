@@ -17,6 +17,29 @@ namespace {
 // deferred until primeDeferred().
 constexpr std::size_t kEagerSyntaxMaxBytes = 2 * 1024 * 1024;
 
+GitTreeStatus gitTreeStatusForDiffStatus(DiffFileStatus status) {
+    switch (status) {
+        case DiffFileStatus::Added: return GitTreeStatus::Added;
+        case DiffFileStatus::Modified: return GitTreeStatus::Modified;
+        case DiffFileStatus::Deleted: return GitTreeStatus::Deleted;
+        case DiffFileStatus::Renamed: return GitTreeStatus::Renamed;
+    }
+    throw std::logic_error("unknown diff file status");
+}
+
+std::vector<GitTreeRecord> gitTreeRecordsFromDiff(const DiffViewState& diffView) {
+    std::vector<GitTreeRecord> records;
+    records.reserve(diffView.files.size());
+    for (const auto& file : diffView.files) {
+        records.push_back(
+            {.workspacePath = file.path.generic_string(),
+             .label = file.path.generic_string(),
+             .status = gitTreeStatusForDiffStatus(file.status),
+             .commands = {}});
+    }
+    return records;
+}
+
 ThemeSnapshot defaultTheme() {
     // Readable dark theme derived from the VSCode-style palette in
     // caco/public/themes/dark.css.  Low indices are dark fills, high indices
@@ -1026,6 +1049,9 @@ GitDiffScanResult EditorRuntime::Impl::applyGitDiffScan(GitDiffScan scan) {
     const auto previousTarget = follow.viewState().activeTarget;
     diff = std::move(stagedDiff);
     follow = std::move(stagedFollow);
+    tree.replaceProvider(TreeProviderSnapshot::fromGit(
+        TreeProviderId{"git"}, TreeRevision{nextTreeRevision++},
+        gitTreeRecordsFromDiff(diff.viewState())));
     lastGitScanRevision = scan.revision;
     const auto next = follow.viewState();
     if (next.mode == FollowMode::Following && next.activeTarget &&

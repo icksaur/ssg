@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <string>
 
 namespace {
@@ -20,6 +21,30 @@ std::filesystem::path uniqueRoot() {
     std::filesystem::create_directories(root / "recovery");
     std::ofstream{root / "workspace" / "needle.txt"} << "alpha needle omega";
     return root;
+}
+
+const ssg::TreeProviderView* findProvider(const ssg::TreeViewState& tree,
+                                          ssg::TreeProviderKind kind) {
+    for (const auto& provider : tree.providers) {
+        if (provider.kind == kind) {
+            return &provider;
+        }
+    }
+    return nullptr;
+}
+
+std::map<std::string, ssg::GitTreeStatus> gitProviderStatuses(
+    const ssg::TreeProviderView& provider) {
+    std::map<std::string, ssg::GitTreeStatus> statuses;
+    for (const auto& node : provider.nodes) {
+        ASSERT_TRUE(node.node.workspacePath.has_value());
+        ASSERT_TRUE(node.node.gitStatus.has_value());
+        if (!node.node.workspacePath || !node.node.gitStatus) {
+            continue;
+        }
+        statuses.emplace(*node.node.workspacePath, *node.node.gitStatus);
+    }
+    return statuses;
 }
 
 TEST(searchTreeDiffAndFollowSectionsUseRuntimeState) {
@@ -204,6 +229,94 @@ TEST(gitDiffSelectionUsesDiffIdentityIndependentOfDocumentRevision) {
             return file.id == ssg::DiffFileId{"needle.txt"};
         });
     ASSERT_TRUE(byIdentity != snapshot->sections().diff.files.end());
+}
+
+TEST(gitDiffScanRefreshesGitTreeProviderFromDiffAndOnSecondScan) {
+    auto root = uniqueRoot();
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime
+                    .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                            ssg::ViewId{1})
+                    .accepted());
+
+    ASSERT_TRUE(runtime
+                    .applyGitDiffScan(
+                        {.revision = ssg::Revision{21},
+                         .baselineIdentity = "head-1:index-1",
+                         .files =
+                             {
+                                 {.id = ssg::DiffFileId{"added.txt"},
+                                  .path = "added.txt",
+                                  .baselineContent = std::nullopt,
+                                  .workingContent = std::string{"added\n"}},
+                                 {.id = ssg::DiffFileId{"modified.txt"},
+                                  .path = "modified.txt",
+                                  .baselineContent = std::string{"before\n"},
+                                  .workingContent = std::string{"after\n"}},
+                                 {.id = ssg::DiffFileId{"deleted.txt"},
+                                  .path = "deleted.txt",
+                                  .baselineContent = std::string{"gone\n"},
+                                  .workingContent = std::nullopt},
+                                 {.id = ssg::DiffFileId{"renamed.txt"},
+                                  .path = "renamed.txt",
+                                  .previousPath = std::filesystem::path{"old-name.txt"},
+                                  .baselineContent = std::string{"same\n"},
+                                  .workingContent = std::string{"same\n"}},
+                             }})
+                    .accepted());
+
+    auto first = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(first.has_value());
+    if (!first) return;
+    auto* firstGit =
+        findProvider(first->sections().tree, ssg::TreeProviderKind::Git);
+    ASSERT_TRUE(firstGit != nullptr);
+    if (!firstGit) return;
+
+    const auto firstStatuses = gitProviderStatuses(*firstGit);
+    ASSERT_EQ(firstStatuses.size(), std::size_t{4});
+    ASSERT_EQ(firstStatuses.at("added.txt"), ssg::GitTreeStatus::Added);
+    ASSERT_EQ(firstStatuses.at("modified.txt"), ssg::GitTreeStatus::Modified);
+    ASSERT_EQ(firstStatuses.at("deleted.txt"), ssg::GitTreeStatus::Deleted);
+    ASSERT_EQ(firstStatuses.at("renamed.txt"), ssg::GitTreeStatus::Renamed);
+
+    std::uint64_t firstRevision = first->sections().tree.revision.value();
+
+    ASSERT_TRUE(runtime
+                    .applyGitDiffScan(
+                        {.revision = ssg::Revision{22},
+                         .baselineIdentity = "head-1:index-2",
+                         .files =
+                             {
+                                 {.id = ssg::DiffFileId{"modified.txt"},
+                                  .path = "modified.txt",
+                                  .baselineContent = std::string{"after\n"},
+                                  .workingContent = std::string{"after again\n"}},
+                                 {.id = ssg::DiffFileId{"renamed.txt"},
+                                  .path = "renamed.txt",
+                                  .previousPath = std::filesystem::path{"old-name.txt"},
+                                  .baselineContent = std::string{"same\n"},
+                                  .workingContent = std::string{"same\n"}},
+                             }})
+                    .accepted());
+
+    auto second = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(second.has_value());
+    if (!second) return;
+    auto* secondGit =
+        findProvider(second->sections().tree, ssg::TreeProviderKind::Git);
+    ASSERT_TRUE(secondGit != nullptr);
+    if (!secondGit) return;
+
+    const auto secondStatuses = gitProviderStatuses(*secondGit);
+    ASSERT_EQ(secondStatuses.size(), std::size_t{2});
+    ASSERT_EQ(secondStatuses.at("modified.txt"), ssg::GitTreeStatus::Modified);
+    ASSERT_EQ(secondStatuses.at("renamed.txt"), ssg::GitTreeStatus::Renamed);
+    ASSERT_TRUE(second->sections().tree.revision.value() > firstRevision);
 }
 
 TEST(paletteOpenEntersPromptFocusAndPublishesCandidates) {
@@ -737,6 +850,7 @@ int main() {
     RUN(externalDiffBurstRevealsOnlyNewestFileWithoutPausingFollow);
     RUN(gitDiffScanUpdatesDiffAndRejectsStaleBatches);
     RUN(gitDiffSelectionUsesDiffIdentityIndependentOfDocumentRevision);
+    RUN(gitDiffScanRefreshesGitTreeProviderFromDiffAndOnSecondScan);
     RUN(paletteOpenEntersPromptFocusAndPublishesCandidates);
     RUN(paletteExecuteValidatesCandidateMembership);
     RUN(paletteCandidatesCarryLabelsAndKeyDetail);

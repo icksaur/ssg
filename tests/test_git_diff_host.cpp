@@ -8,6 +8,8 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <map>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -19,6 +21,79 @@ int runStatus(const fs::path& root, std::string_view command) {
     auto full = "git -C \"" + root.string() + "\" " + std::string{command} +
                 " >/dev/null 2>&1";
     return std::system(full.c_str());
+}
+
+std::string run(const fs::path& root, std::string_view command) {
+    auto full = "git -C \"" + root.string() + "\" " + std::string{command} +
+                " 2>/dev/null";
+    std::array<char, 4096> buffer{};
+    std::string output;
+    auto* pipe = popen(full.c_str(), "r");
+    if (!pipe) {
+        return output;
+    }
+    while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe)) {
+        output += buffer.data();
+    }
+    (void)pclose(pipe);
+    return output;
+}
+
+ssg::GitTreeStatus gitStatusFromPorcelainLine(std::string_view line) {
+    if (line.size() >= 2 && line[0] == '?' && line[1] == '?') {
+        return ssg::GitTreeStatus::Added;
+    }
+    if (line.size() >= 2 && (line[0] == 'D' || line[1] == 'D')) {
+        return ssg::GitTreeStatus::Deleted;
+    }
+    if (line.size() >= 2 && (line[0] == 'A' || line[1] == 'A')) {
+        return ssg::GitTreeStatus::Added;
+    }
+    if (line.size() >= 2 && (line[0] == 'R' || line[1] == 'R')) {
+        return ssg::GitTreeStatus::Renamed;
+    }
+    return ssg::GitTreeStatus::Modified;
+}
+
+std::map<std::string, ssg::GitTreeStatus> porcelainStatuses(const fs::path& root) {
+    std::map<std::string, ssg::GitTreeStatus> statuses;
+    std::istringstream input{run(root, "status --porcelain=v1")};
+    for (std::string line; std::getline(input, line);) {
+        if (line.size() < 4) {
+            continue;
+        }
+        auto payload = line.substr(3);
+        auto arrow = payload.find(" -> ");
+        if (arrow != std::string::npos) {
+            payload = payload.substr(arrow + 4);
+        }
+        statuses.emplace(std::move(payload), gitStatusFromPorcelainLine(line));
+    }
+    return statuses;
+}
+
+std::map<std::string, ssg::GitTreeStatus> gitProviderStatuses(
+    const ssg::EditorRuntime& runtime) {
+    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) {
+        return {};
+    }
+    std::map<std::string, ssg::GitTreeStatus> statuses;
+    for (const auto& provider : snapshot->sections().tree.providers) {
+        if (provider.kind != ssg::TreeProviderKind::Git) {
+            continue;
+        }
+        for (const auto& node : provider.nodes) {
+            ASSERT_TRUE(node.node.workspacePath.has_value());
+            ASSERT_TRUE(node.node.gitStatus.has_value());
+            if (!node.node.workspacePath || !node.node.gitStatus) {
+                continue;
+            }
+            statuses.emplace(*node.node.workspacePath, *node.node.gitStatus);
+        }
+    }
+    return statuses;
 }
 
 void applyPollTick(ssg::EditorRuntime& runtime,
@@ -122,10 +197,72 @@ TEST(gitDiffHostPollingAndEventRefreshProduceExpectedDiffView) {
     fs::remove_all(stateRoot);
 }
 
+TEST(gitDiffHostPublishesGitTreeProviderMatchingPorcelain) {
+    const auto uniqueSuffix =
+        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    auto root = fs::temp_directory_path() / ("ssg-git-tree-host-" + uniqueSuffix);
+    auto stateRoot =
+        fs::temp_directory_path() / ("ssg-git-tree-host-state-" + uniqueSuffix);
+    fs::remove_all(root);
+    fs::remove_all(stateRoot);
+    fs::create_directories(root);
+    fs::create_directories(stateRoot / "scratch");
+    fs::create_directories(stateRoot / "recovery");
+
+    std::ofstream{root / "tracked.txt"} << "base\n";
+    std::ofstream{root / "rename-me.txt"} << "rename-base\n";
+    std::ofstream{root / "delete-me.txt"} << "delete-base\n";
+    ASSERT_EQ(runStatus(root, "init"), 0);
+    ASSERT_EQ(runStatus(root, "config user.email a@b.c"), 0);
+    ASSERT_EQ(runStatus(root, "config user.name tester"), 0);
+    ASSERT_EQ(runStatus(root, "add tracked.txt rename-me.txt delete-me.txt"), 0);
+    ASSERT_EQ(runStatus(root, "commit -m init"), 0);
+
+    auto created = ssg::EditorRuntime::create(
+        {root, stateRoot / "scratch", stateRoot / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime
+                    .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                            ssg::ViewId{1})
+                    .accepted());
+
+    auto repository = ssg::makePlatformGitRepository(root);
+    ssg::DiffModel sourceModel;
+    ssg::GitDiffSource source{sourceModel};
+
+    applyPollTick(runtime, source, *repository);
+    ASSERT_EQ(gitProviderStatuses(runtime), porcelainStatuses(root));
+
+    std::ofstream{root / "tracked.txt"} << "changed\n";
+    std::ofstream{root / "added.txt"} << "added\n";
+    ASSERT_EQ(runStatus(root, "rm delete-me.txt"), 0);
+    ASSERT_EQ(runStatus(root, "mv rename-me.txt renamed.txt"), 0);
+    applyPollTick(runtime, source, *repository);
+    auto firstStatuses = gitProviderStatuses(runtime);
+    ASSERT_EQ(firstStatuses, porcelainStatuses(root));
+    ASSERT_TRUE(firstStatuses.contains("tracked.txt"));
+    ASSERT_TRUE(firstStatuses.contains("added.txt"));
+    ASSERT_TRUE(firstStatuses.contains("delete-me.txt"));
+    ASSERT_TRUE(firstStatuses.contains("renamed.txt"));
+
+    ASSERT_EQ(runStatus(root, "checkout -- tracked.txt"), 0);
+    ASSERT_EQ(runStatus(root, "clean -fd"), 0);
+    applyPollTick(runtime, source, *repository);
+    auto secondStatuses = gitProviderStatuses(runtime);
+    ASSERT_EQ(secondStatuses, porcelainStatuses(root));
+    ASSERT_NE(secondStatuses, firstStatuses);
+
+    fs::remove_all(root);
+    fs::remove_all(stateRoot);
+}
+
 }  // namespace
 
 int main() {
     RUN(gitDiffHostPollingAndEventRefreshProduceExpectedDiffView);
+    RUN(gitDiffHostPublishesGitTreeProviderMatchingPorcelain);
     std::cout << "\nPassed: " << passed << " Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }
