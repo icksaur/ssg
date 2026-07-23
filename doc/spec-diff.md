@@ -1,7 +1,7 @@
-# spec-diff-ux
+# spec-diff
 
-Status: DRAFT — UX ONLY. No architecture, ownership, or implementation mechanism.
-This is the contract the follow-on architecture spec must satisfy.
+Status: FINALIZED (UX layer). This is the UX contract; the architecture spec
+(added below/alongside as this document grows) must satisfy it.
 
 ## Goals
 
