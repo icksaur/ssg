@@ -283,6 +283,28 @@ TEST(gitFileStatusIsComputedWithDeterministicPrecedence) {
                         Revision{1})
                     .accepted());
     ASSERT_EQ(onlyFile(renamedModified).status, DiffFileStatus::Renamed);
+
+    DiffModel deletedRenamed;
+    ASSERT_TRUE(deletedRenamed
+                    .updateGitFile(
+                        {.id = DiffFileId{"deleted-renamed"},
+                         .path = "new-name.txt",
+                         .previousPath = std::filesystem::path{"old-name.txt"},
+                         .baselineContent = "old\n",
+                         .baselineIdentity = "head"},
+                        Revision{1})
+                    .accepted());
+    ASSERT_EQ(onlyFile(deletedRenamed).status, DiffFileStatus::Deleted);
+
+    DiffModel deletedAddedLooking;
+    ASSERT_TRUE(deletedAddedLooking
+                    .updateGitFile(
+                        {.id = DiffFileId{"deleted-added"},
+                         .path = "edge.txt",
+                         .baselineIdentity = "head"},
+                        Revision{1})
+                    .accepted());
+    ASSERT_EQ(onlyFile(deletedAddedLooking).status, DiffFileStatus::Deleted);
 }
 
 TEST(externalDiffsUseExplicitAppOwnedBaselineAndRetainRenameDelete) {
@@ -333,6 +355,63 @@ TEST(externalDiffsUseExplicitAppOwnedBaselineAndRetainRenameDelete) {
     ASSERT_TRUE(onlyFile(model).deleted);
     ASSERT_EQ(diffOpenFile(onlyFile(model)).path,
               std::filesystem::path{"new.txt"});
+}
+
+TEST(nonGitStatusUsesSourceAgnosticClassification) {
+    DiffModel seeded;
+    ASSERT_TRUE(seeded.seedNonGit(
+                         {{.id = DiffFileId{"seed"},
+                           .path = "seed.txt",
+                           .content = "seed\n"}},
+                         Revision{1})
+                    .accepted());
+    ASSERT_EQ(onlyFile(seeded).status, DiffFileStatus::Added);
+
+    DiffModel created;
+    ASSERT_TRUE(created
+                    .applyNonGitEvent(
+                        {.kind = NonGitDiffEventKind::Create,
+                         .id = DiffFileId{"created"},
+                         .path = "created.txt",
+                         .baselineContent = "",
+                         .targetContent = std::string{"new\n"}},
+                        Revision{1})
+                    .accepted());
+    ASSERT_EQ(onlyFile(created).status, DiffFileStatus::Added);
+
+    ASSERT_TRUE(created
+                    .applyNonGitEvent(
+                        {.kind = NonGitDiffEventKind::Rename,
+                         .id = DiffFileId{"created"},
+                         .path = "renamed.txt",
+                         .previousPath = std::filesystem::path{"created.txt"},
+                         .baselineContent = "new\n",
+                         .targetContent = std::string{"new\n"}},
+                        Revision{2})
+                    .accepted());
+    ASSERT_EQ(onlyFile(created).status, DiffFileStatus::Renamed);
+
+    ASSERT_TRUE(created
+                    .applyNonGitEvent(
+                        {.kind = NonGitDiffEventKind::Modify,
+                         .id = DiffFileId{"created"},
+                         .path = "renamed.txt",
+                         .previousPath = std::filesystem::path{"stale-old.txt"},
+                         .baselineContent = "new\n",
+                         .targetContent = std::string{"changed\n"}},
+                        Revision{3})
+                    .accepted());
+    ASSERT_EQ(onlyFile(created).status, DiffFileStatus::Modified);
+
+    ASSERT_TRUE(created
+                    .applyNonGitEvent(
+                        {.kind = NonGitDiffEventKind::Remove,
+                         .id = DiffFileId{"created"},
+                         .path = "renamed.txt",
+                         .baselineContent = "changed\n"},
+                        Revision{4})
+                    .accepted());
+    ASSERT_EQ(onlyFile(created).status, DiffFileStatus::Deleted);
 }
 
 TEST(staleInvalidAndOverBudgetWorkAreFailureAtomic) {
@@ -515,6 +594,7 @@ int main() {
     RUN(gitUntrackedRenameDeleteAndIndexChangeRetainIdentity);
     RUN(gitFileStatusIsComputedWithDeterministicPrecedence);
     RUN(externalDiffsUseExplicitAppOwnedBaselineAndRetainRenameDelete);
+    RUN(nonGitStatusUsesSourceAgnosticClassification);
     RUN(staleInvalidAndOverBudgetWorkAreFailureAtomic);
     RUN(deltaReplayAndExactCommandNavigationContract);
     RUN(documentDiffLookupUsesIdentityAndRevision);

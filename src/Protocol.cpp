@@ -3371,11 +3371,39 @@ bool decodePresent(ProtocolValue const& value, std::optional<DiffFileView>& out)
     if (!decodeOptionalField(value.field("previous_path"), previousPath)) {
         return false;
     }
-    const auto decodedStatus =
-        status.value_or(*deleted
-                            ? DiffFileStatus::Deleted
-                            : (previousPath.has_value() ? DiffFileStatus::Renamed
-                                                        : DiffFileStatus::Modified));
+    auto const inferLegacyStatus = [&]() {
+        if (*deleted) {
+            return DiffFileStatus::Deleted;
+        }
+        bool baselineLooksAbsent = true;
+        std::string addedOnlyReconstruction;
+        for (const auto& hunk : *hunks) {
+            if (!hunk.baselineLines.empty()) {
+                baselineLooksAbsent = false;
+                break;
+            }
+            for (const auto& line : hunk.targetLines) {
+                addedOnlyReconstruction += line;
+            }
+        }
+        if (baselineLooksAbsent) {
+            for (const auto& change : *changedLines) {
+                if (change.kind != DiffLineKind::Added ||
+                    change.baselineLine.has_value()) {
+                    baselineLooksAbsent = false;
+                    break;
+                }
+            }
+        }
+        if (baselineLooksAbsent && addedOnlyReconstruction == *currentContent) {
+            return DiffFileStatus::Added;
+        }
+        if (previousPath.has_value()) {
+            return DiffFileStatus::Renamed;
+        }
+        return DiffFileStatus::Modified;
+    };
+    const auto decodedStatus = status.value_or(inferLegacyStatus());
     out.emplace(DiffFileView{.id = *id,
                              .path = *path,
                              .previousPath = std::move(previousPath),

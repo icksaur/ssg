@@ -287,9 +287,16 @@ DiffFileStatus nonGitFileStatus(NonGitDiffEventKind kind,
     if (deleted) {
         return DiffFileStatus::Deleted;
     }
-    if (kind == NonGitDiffEventKind::Rename || previousPath.has_value()) {
-        return DiffFileStatus::Renamed;
+    switch (kind) {
+        case NonGitDiffEventKind::Create:
+            return DiffFileStatus::Added;
+        case NonGitDiffEventKind::Rename:
+            return DiffFileStatus::Renamed;
+        case NonGitDiffEventKind::Modify:
+        case NonGitDiffEventKind::Remove:
+            break;
     }
+    (void)previousPath;
     return DiffFileStatus::Modified;
 }
 
@@ -417,7 +424,7 @@ DiffMutationResult DiffModel::seedNonGit(std::vector<SeededDiffFile> files,
         seeded.push_back(
             {DiffFileView{.id = file.id,
                           .path = std::move(file.path),
-                          .status = DiffFileStatus::Modified,
+                          .status = DiffFileStatus::Added,
                           .currentContent = file.content},
              Source::NonGit});
     }
