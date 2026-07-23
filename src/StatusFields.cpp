@@ -13,6 +13,10 @@
 namespace ssg {
 namespace {
 
+std::string composeBranchField(std::string_view branchName) {
+    return std::string{"\xE2\x8E\x87 "} + std::string{branchName};
+}
+
 std::optional<std::string> objectStringField(const std::string& object,
                                              const std::string& fieldName) {
     const std::regex expression{
@@ -98,7 +102,10 @@ std::vector<StatusFieldProviderBinding> defaultStatusFieldProviders() {
         {"branch",
          [](StatusFieldProviderContext const& context)
              -> std::optional<std::string> {
-             return context.currentBranch;
+             if (!context.currentBranch || context.currentBranch->empty()) {
+                 return std::nullopt;
+             }
+             return composeBranchField(*context.currentBranch);
          }},
         {"status",
          [](StatusFieldProviderContext const& context)

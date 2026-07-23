@@ -326,7 +326,7 @@ TEST(shellStatusFieldsRenderBranchWhenGitBranchIsApplied) {
     ASSERT_TRUE(branchField != nullptr);
     if (branchField) {
         ASSERT_EQ(branchField->label, std::string{"Branch"});
-        ASSERT_EQ(branchField->content, std::string{"main"});
+        ASSERT_EQ(branchField->content, std::string{"\xE2\x8E\x87 main"});
     }
 }
 
@@ -389,7 +389,38 @@ TEST(panelShowCommandsToggleAndSwitchProviders) {
     ASSERT_EQ(providerLabel(*snapshot), std::string{"Git"});
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                {"panel.show_files", runtime.revision(), {}})
+                    .accepted());
+    snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    ASSERT_TRUE(snapshot.has_value());
+    ASSERT_TRUE(snapshot->sections().shell.panel.has_value());
+    ASSERT_EQ(providerLabel(*snapshot), std::string{"Files"});
+
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                 {"panel.show_git_status", runtime.revision(), {}})
+                    .accepted());
+    snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    ASSERT_TRUE(snapshot.has_value());
+    ASSERT_TRUE(snapshot->sections().shell.panel.has_value());
+    ASSERT_EQ(providerLabel(*snapshot), std::string{"Git"});
+
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                {"panel.show_git_status", runtime.revision(), {}})
+                    .accepted());
+    snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    ASSERT_TRUE(snapshot.has_value());
+    ASSERT_FALSE(snapshot->sections().shell.panel.has_value());
+
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                {"panel.show_files", runtime.revision(), {}})
+                    .accepted());
+    snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    ASSERT_TRUE(snapshot.has_value());
+    ASSERT_TRUE(snapshot->sections().shell.panel.has_value());
+    ASSERT_EQ(providerLabel(*snapshot), std::string{"Files"});
+
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                {"panel.show_files", runtime.revision(), {}})
                     .accepted());
     snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
