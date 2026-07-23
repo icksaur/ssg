@@ -201,30 +201,72 @@ Four areas were audited before deciding what to split/generalize/recompose:
    no baseline content" (Added/untracked) is discarded during `updateGitFile`
    ingestion — nothing downstream can currently tell Added from Modified. Add a
    `DiffFileStatus{Added,Modified,Deleted,Renamed}` computed once, at ingestion, in
-   `DiffModel::updateGitFile` (baseline absent -> Added; `previousPath` set ->
-   Renamed; `workingContent` absent -> Deleted; else Modified) and stored on
-   `DiffFileView`. This directly answers "colored status letter" without a new
-   parallel data source, and is a minimal, backward-compatible field addition
-   (existing consumers ignore it).
-5. **Diff-tab session assembly (RECOMPOSE existing pieces, one new seam).**
-   Clicking a git-status bar item dispatches `tree.activate` on a Git-provider
-   node; the handler resolves `diffOpenFile(view)` (existing, unmodified) into a
-   `DiffOpenTarget`, then asks `TabManager` for-or-creates a `TabKind::LiveDiff`
-   tab keyed by the target's stable file id (kind-aware dedup already exists,
-   confirmed above) with `DocumentMode::Diff` (already edit-blocking). This is the
-   "later editor-session-assembly" binding `workspace-live-diffs.md` explicitly
-   deferred — no new tab/document types needed, only this binding function.
+   `DiffModel::updateGitFile`, with an EXPLICIT precedence order (a file can be
+   simultaneously renamed and content-modified — one enum value must still be
+   chosen deterministically): `workingContent` absent -> Deleted (highest
+   precedence — no content to show regardless of any other fact); else baseline
+   absent -> Added; else `previousPath` set -> Renamed (a rename is reported as
+   Renamed even when its content also changed, matching `git status` porcelain,
+   which reports `R` with a similarity score rather than `M` for a modified
+   rename); else Modified (default/lowest precedence). Stored on `DiffFileView`.
+   This directly answers "colored status letter" without a new parallel data
+   source, and is a minimal, backward-compatible field addition (existing
+   consumers ignore it). Oracle: hand cases for every pairwise combination
+   (renamed+modified, renamed+unmodified, added, deleted, plain modified) plus a
+   ground-truth comparison against real `git status --porcelain` output (mirrors
+   `test_git_repository.cpp`'s existing pattern).
+5. **Diff-tab session assembly (RECOMPOSE existing pieces, one new seam, TWO
+   entry points into ONE binding function).** A single library function —
+   "open-or-focus the `LiveDiff` tab for file X" — resolves `diffOpenFile(view)`
+   (existing, unmodified) into a `DiffOpenTarget`, then asks `TabManager`
+   for-or-creates a `TabKind::LiveDiff` tab keyed by the target's stable file id
+   (kind-aware dedup already exists, confirmed above) with `DocumentMode::Diff`
+   (already edit-blocking). It has exactly two callers, kept structurally
+   separate so one cannot be mistaken for the other:
+   (a) USER path — a git-status bar item click dispatches `tree.activate` on a
+   Git-provider node (`NavigationClass::User`, so it pauses follow like any other
+   user navigation, per the EXISTING `applyNavigation` rule — no new pause logic
+   needed here, tab/pane/scroll/cursor navigation already pauses follow today);
+   (b) FOLLOW path — the diff-source-driven auto-open (UX section) calls the same
+   binding function directly under `NavigationClass::Programmatic`, never through
+   `tree.activate`, so it cannot accidentally reuse the user-navigation pause
+   trigger. This structural separation is what actually prevents the
+   self-triggering bug the Considerations section warns about — it is not merely
+   a documentation note, it is why two distinct call sites exist.
+   DELETED-FILE TARGETS (a `DiffOpenTarget` with `deleted=true`) MUST NOT go
+   through the normal `Workspace::openFile` disk-read path, which would fail (the
+   file no longer exists on disk). The binding function branches on
+   `DiffOpenTarget::deleted`: for a deleted target it constructs the `LiveDiff`
+   tab's content directly from the `DiffFileView`'s own retained prior content
+   (already present in the model — `DiffFileView` retains baseline content for a
+   deletion per the existing content-consumer contract), never touching disk. This
+   is the same mechanism the UX section's "`git rm` renders as entire file
+   removed" expectation depends on.
 6. **`LiveDiff` tab title glyph (small, additive).** Tab-title composition (the
    label-building step in `runtime/snapshot.cpp`) prefixes a theme-derived glyph
    for `TabKind::LiveDiff` tabs; `TabLabel` needs no structural change (already
    carries a free-form title string). Glyph color/style is theme-derived
    (deriveSelectionFill-style resolution), never a hardcoded terminal color.
-7. **Follow-mode pause-on-edit (behavior addition, not redesign).** Add an
-   explicit `FollowEditsModel::notifyLocalEdit()` distinct from
-   `applyNavigation()` (edits are not navigation, so folding them into
-   `NavigationClass` would be a category error) that pauses exactly like a User
-   navigation. The edit-command dispatch path calls it alongside existing
-   `recordNavigation` calls, for any committed text mutation in any tab.
+7. **Follow-mode pause-on-edit (behavior addition, not redesign).** Tab-switch,
+   pane-switch, scroll, and cursor movement ALREADY pause follow today via the
+   EXISTING `NavigationClass::User` classification in `applyNavigation()` — this
+   item adds ONLY the missing edit-pause trigger, it does not touch or duplicate
+   the existing navigation-pause path. Add an explicit
+   `FollowEditsModel::notifyLocalEdit()` distinct from `applyNavigation()` (edits
+   are not navigation, so folding them into `NavigationClass` would be a category
+   error) that pauses exactly like a User navigation. The call site MUST be the
+   single most-downstream point where a user-originated edit is committed to a
+   `Document` — not scattered across each command TYPE (`bindEdit` alone is
+   insufficient: paste/cut, undo/redo, replace, and multi-cursor edits are
+   separate call paths that would each need their own hook and would regress
+   independently if added ad hoc). Concretely: hook at the point the command
+   executor advances the session revision as a result of a `Document` mutation
+   that originated from a USER-classified command (excluding Lua-driven and
+   recovery/replay mutations, which are not user edits and must NOT pause — same
+   exclusion Considerations/Risks already requires). This keeps ONE call site
+   authoritative for "a user just edited something," matching how
+   `NavigationClass::User` is already a single classification point rather than
+   one flag per navigation command.
 8. **`follow_edits.toggle` (NEW library command; do not client-compose).** The
    footer's single click text must flip between Following/Paused; deciding WHICH
    underlying transition to perform based on currently-published mode is exactly
@@ -318,12 +360,28 @@ Four areas were audited before deciding what to split/generalize/recompose:
 
 ### Plan
 
-Fan-out/implementation steps to be broken into a detailed per-step Plan table once
-this architecture is reviewed; the ten numbered Design items above are the step
-seeds. Steps must land in an order where each new capability (provider
-abstraction, then fields, then bar feed, then tab assembly, then follow behavior,
-then hit-testing) is independently gate-able, consistent with prior specs in this
-project.
+Ordered so each step is independently gate-able; a detailed file-list/oracle Plan
+table is written per-step at implementation time (this sketch fixes ORDER and
+per-step SCOPE now so the design is reviewable and implementable without
+re-discovery):
+
+| # | Step | Scope | Oracle intent |
+|---|------|-------|----------------|
+| 1 | `DiffFileStatus` on `DiffFileView` (item 4) | `DiffModel.h`/`.cpp`; no consumers yet | hand cases incl. renamed+modified precedence; ground-truth vs `git status --porcelain` |
+| 2 | Status field provider abstraction (item 1) + header/footer field lists rewired to providers; remove dead footer git fields | `ShellState`/`EditorSessionBuilder`/`runtime/snapshot.cpp` | header/footer content matches provider output per field id |
+| 3 | Header path/branch fields wired; `panel.show_files`/`panel.show_git_status` commands (item 2), full command-catalog cascade | provider callbacks + new commands + cascade files | click-region-to-command table; toggle-open/close transition table |
+| 4 | Git status tree feed (item 3): `DiffViewState` -> `GitTreeRecord` adapter, wired at `applyGitDiffScan` seam | new adapter fn; `EditorRuntime` seam | live-refresh test: scan changes -> tree snapshot changes, ground-truth vs real git status list |
+| 5 | Diff-tab session-assembly binding (item 5): one function, two callers (user `tree.activate`, follow-triggered programmatic); deleted-target branch reads from `DiffFileView` not disk | new binding fn; `tree.activate` handler; follow trigger call site | dedup/coexistence test (Document+LiveDiff tabs); deleted-file tab renders retained content, no disk read |
+| 6 | `LiveDiff` tab title glyph (item 6) | `runtime/snapshot.cpp` label composition; theme glyph resolution | tab label test; theme-color-not-hardcoded invariant test |
+| 7 | Follow pause-on-edit (item 7): single authoritative user-edit-commit hook + `notifyLocalEdit()` | `FollowEditsModel`; command-executor revision-advance call site | pause/no-pause transition table incl. Lua/recovery exclusion; existing tab/scroll/cursor pause cases unchanged (regression) |
+| 8 | `follow_edits.toggle` command (item 8) + footer follow field wired to it via provider (item 1/3) | `FollowEditsModel` command set + cascade | toggle flips Following<->Paused from either starting state |
+| 9 | Header/footer/bar click-to-command hit-testing (item 9) | `HitTester.cpp`; snapshot publishes field click regions | hit-test coordinate table per field; one generic field-click handler (Risks) |
+| 10 | Git branch source (item 10, if needed): `GitRepository::currentBranch()` or reuse existing token | `GitDiffSource`/`GitRepository` adapter | branch field shows correct name across checkout/detached-HEAD cases |
+
+Step 1 first because item 4 has zero dependents to break; steps 2-3 unblock every
+other header/footer/bar UX line; step 5 depends on steps 3-4 (needs the bar item
+and the tree feed to click); step 7 is independent of 1-6 and can run in parallel;
+steps 8-9 depend on the provider abstraction (2) and the toggle command (8) resp.
 
 ### Rationale (skippable)
 
