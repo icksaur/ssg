@@ -223,6 +223,68 @@ TEST(gitUntrackedRenameDeleteAndIndexChangeRetainIdentity) {
     ASSERT_EQ(onlyFile(renamed).baselineIdentity, std::string{"index-b"});
 }
 
+TEST(gitFileStatusIsComputedWithDeterministicPrecedence) {
+    DiffModel added;
+    ASSERT_TRUE(added
+                    .updateGitFile(
+                        {.id = DiffFileId{"added"},
+                         .path = "added.txt",
+                         .workingContent = "new\n",
+                         .baselineIdentity = "head"},
+                        Revision{1})
+                    .accepted());
+    ASSERT_EQ(onlyFile(added).status, DiffFileStatus::Added);
+
+    DiffModel modified;
+    ASSERT_TRUE(modified
+                    .updateGitFile(
+                        {.id = DiffFileId{"modified"},
+                         .path = "modified.txt",
+                         .baselineContent = "old\n",
+                         .workingContent = "new\n",
+                         .baselineIdentity = "head"},
+                        Revision{1})
+                    .accepted());
+    ASSERT_EQ(onlyFile(modified).status, DiffFileStatus::Modified);
+
+    DiffModel deleted;
+    ASSERT_TRUE(deleted
+                    .updateGitFile(
+                        {.id = DiffFileId{"deleted"},
+                         .path = "deleted.txt",
+                         .baselineContent = "old\n",
+                         .baselineIdentity = "head"},
+                        Revision{1})
+                    .accepted());
+    ASSERT_EQ(onlyFile(deleted).status, DiffFileStatus::Deleted);
+
+    DiffModel renamed;
+    ASSERT_TRUE(renamed
+                    .updateGitFile(
+                        {.id = DiffFileId{"renamed"},
+                         .path = "new-name.txt",
+                         .previousPath = std::filesystem::path{"old-name.txt"},
+                         .baselineContent = "same\n",
+                         .workingContent = "same\n",
+                         .baselineIdentity = "head"},
+                        Revision{1})
+                    .accepted());
+    ASSERT_EQ(onlyFile(renamed).status, DiffFileStatus::Renamed);
+
+    DiffModel renamedModified;
+    ASSERT_TRUE(renamedModified
+                    .updateGitFile(
+                        {.id = DiffFileId{"renamed-modified"},
+                         .path = "new-name.txt",
+                         .previousPath = std::filesystem::path{"old-name.txt"},
+                         .baselineContent = "old\n",
+                         .workingContent = "new\n",
+                         .baselineIdentity = "head"},
+                        Revision{1})
+                    .accepted());
+    ASSERT_EQ(onlyFile(renamedModified).status, DiffFileStatus::Renamed);
+}
+
 TEST(externalDiffsUseExplicitAppOwnedBaselineAndRetainRenameDelete) {
     DiffModel model;
     ASSERT_TRUE(model.seedNonGit(
@@ -451,6 +513,7 @@ int main() {
     RUN(wordDiffWorkLimitIsFailureAtomic);
     RUN(wordMarksUseStableByteRangesForInsertionAndUtf8);
     RUN(gitUntrackedRenameDeleteAndIndexChangeRetainIdentity);
+    RUN(gitFileStatusIsComputedWithDeterministicPrecedence);
     RUN(externalDiffsUseExplicitAppOwnedBaselineAndRetainRenameDelete);
     RUN(staleInvalidAndOverBudgetWorkAreFailureAtomic);
     RUN(deltaReplayAndExactCommandNavigationContract);

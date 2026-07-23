@@ -1037,6 +1037,7 @@ bool decodePresent(ProtocolValue const& value, std::optional<TabKind>& out);
 bool decodePresent(ProtocolValue const& value, std::optional<TabRecoveryBadge>& out);
 bool decodePresent(ProtocolValue const& value, std::optional<JournalDocumentKeyKind>& out);
 bool decodePresent(ProtocolValue const& value, std::optional<DiffLineKind>& out);
+bool decodePresent(ProtocolValue const& value, std::optional<DiffFileStatus>& out);
 bool decodePresent(ProtocolValue const& value, std::optional<ExternalAction>& out);
 bool decodePresent(ProtocolValue const& value, std::optional<ExternalDocumentStatus>& out);
 bool decodePresent(ProtocolValue const& value, std::optional<FollowMode>& out);
@@ -1616,6 +1617,13 @@ bool decodePresent(ProtocolValue const& value, std::optional<JournalDocumentKeyK
 bool decodePresent(ProtocolValue const& value, std::optional<DiffLineKind>& out) {
     static constexpr std::array values{DiffLineKind::Added, DiffLineKind::Removed,
                                        DiffLineKind::Modified};
+    return decodeEnum(value, out, values);
+}
+bool decodePresent(ProtocolValue const& value, std::optional<DiffFileStatus>& out) {
+    static constexpr std::array values{DiffFileStatus::Added,
+                                       DiffFileStatus::Modified,
+                                       DiffFileStatus::Deleted,
+                                       DiffFileStatus::Renamed};
     return decodeEnum(value, out, values);
 }
 
@@ -3337,6 +3345,7 @@ ProtocolValue toValue(DiffFileView const& value) {
     fields.emplace_back("path", toValue(value.path));
     fields.emplace_back("previous_path", toValue(value.previousPath));
     fields.emplace_back("deleted", toValue(value.deleted));
+    fields.emplace_back("status", toValue(value.status));
     fields.emplace_back("baseline_identity", toValue(value.baselineIdentity));
     fields.emplace_back("current_content", toValue(value.currentContent));
     fields.emplace_back("hunks", toValue(value.hunks));
@@ -3349,6 +3358,7 @@ bool decodePresent(ProtocolValue const& value, std::optional<DiffFileView>& out)
     auto id = requireField<DiffFileId>(value.field("id"));
     auto path = requireField<std::filesystem::path>(value.field("path"));
     auto deleted = requireField<bool>(value.field("deleted"));
+    auto status = requireField<DiffFileStatus>(value.field("status"));
     auto baselineIdentity = requireField<std::string>(value.field("baseline_identity"));
     auto currentContent = requireField<std::string>(value.field("current_content"));
     auto hunks = requireField<std::vector<DiffHunk>>(value.field("hunks"));
@@ -3361,9 +3371,20 @@ bool decodePresent(ProtocolValue const& value, std::optional<DiffFileView>& out)
     if (!decodeOptionalField(value.field("previous_path"), previousPath)) {
         return false;
     }
-    out.emplace(DiffFileView{*id, *path, std::move(previousPath), *deleted,
-                            *baselineIdentity, *currentContent, *hunks,
-                            *changedLines});
+    const auto decodedStatus =
+        status.value_or(*deleted
+                            ? DiffFileStatus::Deleted
+                            : (previousPath.has_value() ? DiffFileStatus::Renamed
+                                                        : DiffFileStatus::Modified));
+    out.emplace(DiffFileView{.id = *id,
+                             .path = *path,
+                             .previousPath = std::move(previousPath),
+                             .deleted = *deleted,
+                             .status = decodedStatus,
+                             .baselineIdentity = *baselineIdentity,
+                             .currentContent = *currentContent,
+                             .hunks = *hunks,
+                             .changedLines = *changedLines});
     return true;
 }
 

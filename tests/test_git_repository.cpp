@@ -66,6 +66,84 @@ std::set<std::string> scanCurrentPaths(const GitDiffScan& scan) {
     return paths;
 }
 
+DiffFileStatus statusFromPorcelainLine(std::string_view line) {
+    if (line.size() >= 2 && line[0] == '?' && line[1] == '?') {
+        return DiffFileStatus::Added;
+    }
+    const bool deleted =
+        (line.size() >= 2) && (line[0] == 'D' || line[1] == 'D');
+    if (deleted) {
+        return DiffFileStatus::Deleted;
+    }
+    const bool added =
+        (line.size() >= 2) && (line[0] == 'A' || line[1] == 'A');
+    if (added) {
+        return DiffFileStatus::Added;
+    }
+    const bool renamed =
+        (line.size() >= 2) && (line[0] == 'R' || line[1] == 'R');
+    if (renamed) {
+        return DiffFileStatus::Renamed;
+    }
+    return DiffFileStatus::Modified;
+}
+
+std::map<std::string, DiffFileStatus> porcelainStatuses(const fs::path& root) {
+    std::map<std::string, DiffFileStatus> statuses;
+    std::istringstream input{run(root, "status --porcelain=v1")};
+    for (std::string line; std::getline(input, line);) {
+        if (line.size() < 4) {
+            continue;
+        }
+        auto payload = line.substr(3);
+        auto arrow = payload.find(" -> ");
+        if (arrow != std::string::npos) {
+            payload = payload.substr(arrow + 4);
+        }
+        statuses.emplace(std::move(payload), statusFromPorcelainLine(line));
+    }
+    return statuses;
+}
+
+std::map<std::string, DiffFileStatus> modelStatuses(const GitDiffScan& scan) {
+    DiffModel model;
+    std::uint64_t revisionValue = 1;
+    for (const auto& file : scan.files) {
+        auto result = model.updateGitFile(
+            {.id = file.id,
+             .path = file.path,
+             .previousPath = file.previousPath,
+             .baselineContent = file.baselineContent,
+             .workingContent = file.workingContent,
+             .baselineIdentity = scan.baselineIdentity},
+            Revision{revisionValue++});
+        ASSERT_TRUE(result.accepted());
+    }
+
+    std::map<std::string, DiffFileStatus> statuses;
+    for (const auto& file : model.viewState().files) {
+        auto maybe = model.file(file.id);
+        if (!maybe.has_value()) {
+            return {};
+        }
+        statuses.emplace(maybe->get().path.generic_string(), maybe->get().status);
+    }
+    return statuses;
+}
+
+void assertStatusMatches(const fs::path& root,
+                         GitRepository& repository,
+                         const std::string& expectedPath) {
+    auto scan = repository.scanDiff({});
+    ASSERT_TRUE(scan.complete);
+
+    const auto porcelain = porcelainStatuses(root);
+    const auto actual = modelStatuses(scan);
+    ASSERT_EQ(actual, porcelain);
+    ASSERT_TRUE(actual.contains(expectedPath));
+    ASSERT_EQ(actual.at(expectedPath), porcelain.at(expectedPath));
+}
+
 TEST(platformRepositoryMatchesGitStatusAcrossWorkflow) {
     const auto uniqueSuffix =
         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
@@ -142,6 +220,56 @@ TEST(platformRepositoryMatchesGitStatusAcrossWorkflow) {
     fs::remove_all(root);
 }
 
+TEST(platformRepositoryStatusClassificationMatchesGitPorcelain) {
+    const auto uniqueSuffix =
+        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    auto root =
+        fs::temp_directory_path() / ("ssg-git-status-classification-" + uniqueSuffix);
+    fs::remove_all(root);
+    fs::create_directories(root);
+
+    std::ofstream{root / "tracked.txt"} << "base\n";
+    std::ofstream{root / "rename-me.txt"} << "original\n";
+    ASSERT_EQ(runStatus(root, "init"), 0);
+    ASSERT_EQ(runStatus(root, "config user.email a@b.c"), 0);
+    ASSERT_EQ(runStatus(root, "config user.name tester"), 0);
+    ASSERT_EQ(runStatus(root, "add tracked.txt rename-me.txt"), 0);
+    ASSERT_EQ(runStatus(root, "commit -m init"), 0);
+
+    auto repository = makePlatformGitRepository(root);
+
+    std::ofstream{root / "tracked.txt"} << "changed\n";
+    assertStatusMatches(root, *repository, "tracked.txt");
+    ASSERT_EQ(porcelainStatuses(root).at("tracked.txt"), DiffFileStatus::Modified);
+    ASSERT_EQ(runStatus(root, "reset --hard HEAD"), 0);
+    ASSERT_EQ(runStatus(root, "clean -fd"), 0);
+
+    std::ofstream{root / "added.txt"} << "added\n";
+    assertStatusMatches(root, *repository, "added.txt");
+    ASSERT_EQ(porcelainStatuses(root).at("added.txt"), DiffFileStatus::Added);
+    ASSERT_EQ(runStatus(root, "reset --hard HEAD"), 0);
+    ASSERT_EQ(runStatus(root, "clean -fd"), 0);
+
+    ASSERT_EQ(runStatus(root, "rm tracked.txt"), 0);
+    assertStatusMatches(root, *repository, "tracked.txt");
+    ASSERT_EQ(porcelainStatuses(root).at("tracked.txt"), DiffFileStatus::Deleted);
+    ASSERT_EQ(runStatus(root, "reset --hard HEAD"), 0);
+    ASSERT_EQ(runStatus(root, "clean -fd"), 0);
+
+    ASSERT_EQ(runStatus(root, "mv rename-me.txt renamed.txt"), 0);
+    assertStatusMatches(root, *repository, "renamed.txt");
+    ASSERT_EQ(porcelainStatuses(root).at("renamed.txt"), DiffFileStatus::Renamed);
+    ASSERT_EQ(runStatus(root, "reset --hard HEAD"), 0);
+    ASSERT_EQ(runStatus(root, "clean -fd"), 0);
+
+    ASSERT_EQ(runStatus(root, "mv rename-me.txt renamed.txt"), 0);
+    std::ofstream{root / "renamed.txt"} << "changed-after-rename\n";
+    ASSERT_EQ(runStatus(root, "add renamed.txt"), 0);
+    assertStatusMatches(root, *repository, "renamed.txt");
+
+    fs::remove_all(root);
+}
+
 TEST(platformRepositoryOpenFailureIsIncomplete) {
     const auto uniqueSuffix =
         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
@@ -181,6 +309,7 @@ TEST(platformRepositoryOpenFailureIsIncomplete) {
 
 int main() {
     RUN(platformRepositoryMatchesGitStatusAcrossWorkflow);
+    RUN(platformRepositoryStatusClassificationMatchesGitPorcelain);
     RUN(platformRepositoryOpenFailureIsIncomplete);
     std::cout << "\nPassed: " << passed << " Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;

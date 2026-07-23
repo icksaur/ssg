@@ -268,6 +268,31 @@ bool containsId(const std::vector<DiffFileId>& ids, const DiffFileId& id) {
     return std::find(ids.begin(), ids.end(), id) != ids.end();
 }
 
+DiffFileStatus gitFileStatus(const GitDiffFile& file) {
+    if (!file.workingContent.has_value()) {
+        return DiffFileStatus::Deleted;
+    }
+    if (!file.baselineContent.has_value()) {
+        return DiffFileStatus::Added;
+    }
+    if (file.previousPath.has_value()) {
+        return DiffFileStatus::Renamed;
+    }
+    return DiffFileStatus::Modified;
+}
+
+DiffFileStatus nonGitFileStatus(NonGitDiffEventKind kind,
+                                bool deleted,
+                                const std::optional<std::filesystem::path>& previousPath) {
+    if (deleted) {
+        return DiffFileStatus::Deleted;
+    }
+    if (kind == NonGitDiffEventKind::Rename || previousPath.has_value()) {
+        return DiffFileStatus::Renamed;
+    }
+    return DiffFileStatus::Modified;
+}
+
 } // namespace
 
 DiffFileId::DiffFileId(std::string value) : value_(std::move(value)) {
@@ -329,6 +354,7 @@ DiffMutationResult DiffModel::updateGitFile(GitDiffFile file,
         return {DiffError::DuplicateFile};
     }
 
+    const auto status = gitFileStatus(file);
     const std::string baseline = file.baselineContent.value_or("");
     const std::string target = file.workingContent.value_or("");
     auto computed = computeDiff(baseline, target, config_);
@@ -340,6 +366,7 @@ DiffMutationResult DiffModel::updateGitFile(GitDiffFile file,
                       .path = std::move(file.path),
                       .previousPath = std::move(file.previousPath),
                       .deleted = !file.workingContent.has_value(),
+                      .status = status,
                       .baselineIdentity = std::move(file.baselineIdentity),
                       .currentContent = target,
                       .hunks = std::move(computed->hunks),
@@ -390,6 +417,7 @@ DiffMutationResult DiffModel::seedNonGit(std::vector<SeededDiffFile> files,
         seeded.push_back(
             {DiffFileView{.id = file.id,
                           .path = std::move(file.path),
+                          .status = DiffFileStatus::Modified,
                           .currentContent = file.content},
              Source::NonGit});
     }
@@ -427,6 +455,7 @@ DiffMutationResult DiffModel::applyNonGitEvent(NonGitDiffEvent event,
             return {DiffError::UnknownFile};
         }
         const std::string target = *event.targetContent;
+        const auto status = nonGitFileStatus(event.kind, removed, event.previousPath);
         auto computed = computeDiff(event.baselineContent, target, config_);
         if (!computed) {
             return {DiffError::WorkLimitExceeded};
@@ -435,6 +464,7 @@ DiffMutationResult DiffModel::applyNonGitEvent(NonGitDiffEvent event,
             {DiffFileView{.id = event.id,
                           .path = std::move(event.path),
                           .previousPath = std::move(event.previousPath),
+                          .status = status,
                           .currentContent = target,
                           .hunks = std::move(computed->hunks),
                           .changedLines = std::move(computed->changes)},
@@ -451,6 +481,8 @@ DiffMutationResult DiffModel::applyNonGitEvent(NonGitDiffEvent event,
     existing->view.path = std::move(event.path);
     existing->view.previousPath = std::move(event.previousPath);
     existing->view.deleted = removed;
+    existing->view.status =
+        nonGitFileStatus(event.kind, removed, existing->view.previousPath);
     existing->view.baselineIdentity.clear();
     existing->view.currentContent = target;
     existing->view.hunks = std::move(computed->hunks);

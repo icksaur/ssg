@@ -26,6 +26,7 @@ private:
 };
 
 enum class DiffLineKind { Added, Removed, Modified };
+enum class DiffFileStatus { Added, Modified, Deleted, Renamed };
 
 struct DiffWordRange {
     std::size_t byteStart = 0;
@@ -59,6 +60,7 @@ struct DiffFileView {
     std::filesystem::path path;
     std::optional<std::filesystem::path> previousPath;
     bool deleted = false;
+    DiffFileStatus status = DiffFileStatus::Modified;
     std::string baselineIdentity;
     std::string currentContent;
     std::vector<DiffHunk> hunks;
