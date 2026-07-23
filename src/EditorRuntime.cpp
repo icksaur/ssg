@@ -963,7 +963,6 @@ GitDiffScanResult EditorRuntime::Impl::applyGitDiffScan(GitDiffScan scan) {
     if (scan.revision <= lastGitScanRevision) {
         return {GitDiffScanError::DiffRejected};
     }
-    auto const previousBranch = currentGitBranch;
     currentGitBranch = scan.currentBranch;
     auto stagedDiff = diff;
     auto stagedFollow = follow;
@@ -1033,32 +1032,27 @@ GitDiffScanResult EditorRuntime::Impl::applyGitDiffScan(GitDiffScan scan) {
             {std::move(removedFile), std::move(priorHunks), revision});
     }
 
-    if (!mutated) {
-        lastGitScanRevision = scan.revision;
-        if (currentGitBranch != previousBranch && session) {
-            session->advanceRevision();
+    if (mutated) {
+        const auto followed =
+            stagedFollow.acceptExternalChanges(std::move(followChanges));
+        if (!followed.accepted()) {
+            return {GitDiffScanError::FollowRejected};
         }
-        return {};
-    }
 
-    const auto followed = stagedFollow.acceptExternalChanges(std::move(followChanges));
-    if (!followed.accepted()) {
-        return {GitDiffScanError::FollowRejected};
+        const auto previousTarget = follow.viewState().activeTarget;
+        diff = std::move(stagedDiff);
+        follow = std::move(stagedFollow);
+        const auto next = follow.viewState();
+        if (next.mode == FollowMode::Following && next.activeTarget &&
+            next.activeTarget != previousTarget) {
+            (void)revealDiffTarget(*next.activeTarget,
+                                   NavigationClass::Programmatic);
+        }
     }
-
-    const auto previousTarget = follow.viewState().activeTarget;
-    diff = std::move(stagedDiff);
-    follow = std::move(stagedFollow);
     tree.replaceProvider(TreeProviderSnapshot::fromGit(
         TreeProviderId{"git"}, TreeRevision{nextTreeRevision++},
-        gitTreeRecordsFromDiff(diff.viewState())));
+        gitTreeRecordsFromDiff(mutated ? diff.viewState() : stagedDiff.viewState())));
     lastGitScanRevision = scan.revision;
-    const auto next = follow.viewState();
-    if (next.mode == FollowMode::Following && next.activeTarget &&
-        next.activeTarget != previousTarget) {
-        (void)revealDiffTarget(*next.activeTarget,
-                               NavigationClass::Programmatic);
-    }
     if (session) {
         session->advanceRevision();
     }

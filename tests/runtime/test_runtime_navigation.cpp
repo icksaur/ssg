@@ -245,7 +245,43 @@ TEST(gitDiffScanRefreshesGitTreeProviderFromDiffAndOnSecondScan) {
 
     ASSERT_TRUE(runtime
                     .applyGitDiffScan(
+                        {.revision = ssg::Revision{20},
+                         .baselineIdentity = "head-1:index-0",
+                         .files = {}})
+                    .accepted());
+    auto emptyFirst =
+        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(emptyFirst.has_value());
+    if (!emptyFirst) return;
+    auto* emptyFirstGit =
+        findProvider(emptyFirst->sections().tree, ssg::TreeProviderKind::Git);
+    ASSERT_TRUE(emptyFirstGit != nullptr);
+    if (!emptyFirstGit) return;
+    ASSERT_TRUE(gitProviderStatuses(*emptyFirstGit).empty());
+    const std::uint64_t emptyFirstRevision =
+        emptyFirst->sections().tree.revision.value();
+
+    ASSERT_TRUE(runtime
+                    .applyGitDiffScan(
                         {.revision = ssg::Revision{21},
+                         .baselineIdentity = "head-1:index-0",
+                         .files = {}})
+                    .accepted());
+    auto emptySecond =
+        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(emptySecond.has_value());
+    if (!emptySecond) return;
+    auto* emptySecondGit =
+        findProvider(emptySecond->sections().tree, ssg::TreeProviderKind::Git);
+    ASSERT_TRUE(emptySecondGit != nullptr);
+    if (!emptySecondGit) return;
+    ASSERT_TRUE(gitProviderStatuses(*emptySecondGit).empty());
+    ASSERT_TRUE(emptySecond->sections().tree.revision.value() >
+                emptyFirstRevision);
+
+    ASSERT_TRUE(runtime
+                    .applyGitDiffScan(
+                        {.revision = ssg::Revision{22},
                          .baselineIdentity = "head-1:index-1",
                          .files =
                              {
@@ -288,7 +324,7 @@ TEST(gitDiffScanRefreshesGitTreeProviderFromDiffAndOnSecondScan) {
 
     ASSERT_TRUE(runtime
                     .applyGitDiffScan(
-                        {.revision = ssg::Revision{22},
+                        {.revision = ssg::Revision{23},
                          .baselineIdentity = "head-1:index-2",
                          .files =
                              {
