@@ -348,11 +348,29 @@ void TreeModel::replaceProvider(TreeProviderSnapshot snapshot) {
 }
 
 TreeModel::ProviderState* TreeModel::activeProvider() {
-    return providers_.empty() ? nullptr : &providers_.front();
+    if (providers_.empty()) return nullptr;
+    if (activeProviderId_) {
+        auto found = std::find_if(
+            providers_.begin(), providers_.end(),
+            [&](const ProviderState& state) {
+                return state.snapshot.providerId() == *activeProviderId_;
+            });
+        if (found != providers_.end()) return &*found;
+    }
+    return &providers_.front();
 }
 
 const TreeModel::ProviderState* TreeModel::activeProvider() const {
-    return providers_.empty() ? nullptr : &providers_.front();
+    if (providers_.empty()) return nullptr;
+    if (activeProviderId_) {
+        auto found = std::find_if(
+            providers_.begin(), providers_.end(),
+            [&](const ProviderState& state) {
+                return state.snapshot.providerId() == *activeProviderId_;
+            });
+        if (found != providers_.end()) return &*found;
+    }
+    return &providers_.front();
 }
 
 bool TreeModel::selectNext() {
@@ -466,6 +484,37 @@ bool TreeModel::isExpanded(const TreeProviderId& providerId,
                               provider->expanded.end(), nodeId);
 }
 
+bool TreeModel::activateProvider(const TreeProviderId& providerId) {
+    const auto found = std::find_if(
+        providers_.begin(), providers_.end(),
+        [&](const ProviderState& state) {
+            return state.snapshot.providerId() == providerId;
+        });
+    if (found == providers_.end()) {
+        return false;
+    }
+    if (!activeProviderId_ || *activeProviderId_ != providerId) {
+        activeProviderId_ = providerId;
+        if (const auto* active = activeProvider()) {
+            auto visible = visibleNodes(active->snapshot, active->expanded);
+            const bool stillValid =
+                selected_ &&
+                std::any_of(visible.begin(), visible.end(),
+                            [&](const TreeNodeView& view) {
+                                return view.node.id == *selected_;
+                            });
+            if (!stillValid) {
+                selected_ = visible.empty()
+                                ? std::nullopt
+                                : std::optional<TreeNodeId>{
+                                      visible.front().node.id};
+            }
+        }
+        revision_ = TreeRevision{revision_.value() + 1};
+    }
+    return true;
+}
+
 std::optional<TreeCommandInvocation> TreeModel::invokeNodeCommand(
     const TreeProviderId& providerId, const TreeNodeId& nodeId,
     std::string_view commandId) const {
@@ -497,16 +546,27 @@ std::optional<TreeCommandInvocation> TreeModel::invokeNodeCommand(
 TreeViewState TreeModel::viewState() const {
     TreeViewState result{revision_, {}};
     result.providers.reserve(providers_.size());
+    std::vector<const ProviderState*> ordered;
+    ordered.reserve(providers_.size());
+    if (const auto* active = activeProvider()) {
+        ordered.push_back(active);
+    }
     for (const auto& provider : providers_) {
+        if (!ordered.empty() && &provider == ordered.front()) {
+            continue;
+        }
+        ordered.push_back(&provider);
+    }
+    for (const auto* provider : ordered) {
         std::optional<TreeNodeId> providerSelected;
         if (selected_ &&
             selected_->value().starts_with(
-                provider.snapshot.providerId().value() + ":")) {
+                provider->snapshot.providerId().value() + ":")) {
             providerSelected = selected_;
         }
         result.providers.push_back(TreeProviderView{
-            provider.snapshot.providerId(), provider.snapshot.kind(),
-            visibleNodes(provider.snapshot, provider.expanded),
+            provider->snapshot.providerId(), provider->snapshot.kind(),
+            visibleNodes(provider->snapshot, provider->expanded),
             providerSelected});
     }
     return result;

@@ -10,6 +10,30 @@ namespace {
 template <typename T>
 T const* payloadAs(std::any const& payload) { return std::any_cast<T>(&payload); }
 
+bool syncTreeProviderToPanel(EditorRuntime::Impl& runtime) {
+    const auto label = runtime.shell.activePanelProvider();
+    if (label == "Files") {
+        return runtime.tree.activateProvider(TreeProviderId{"filesystem"});
+    } else if (label == "Git") {
+        if (!runtime.tree.activateProvider(TreeProviderId{"git"})) {
+            runtime.tree.replaceProvider(TreeProviderSnapshot{
+                TreeProviderId{"git"}, TreeProviderKind::Git,
+                TreeRevision{runtime.nextTreeRevision++}, {}});
+            return runtime.tree.activateProvider(TreeProviderId{"git"});
+        }
+        return true;
+    } else if (label == "Symbols") {
+        if (!runtime.tree.activateProvider(TreeProviderId{"symbols"})) {
+            runtime.tree.replaceProvider(TreeProviderSnapshot{
+                TreeProviderId{"symbols"}, TreeProviderKind::Symbols,
+                TreeRevision{runtime.nextTreeRevision++}, {}});
+            return runtime.tree.activateProvider(TreeProviderId{"symbols"});
+        }
+        return true;
+    }
+    return false;
+}
+
 bool boolSetting(SettingsModel const& settings, SettingKey key, bool fallback) {
     auto value = settings.resolve(key).value;
     if (auto const* typed = std::get_if<bool>(&value)) return *typed;
@@ -79,13 +103,28 @@ CommandHandlerResult shellCommand(EditorRuntime::Impl& runtime, std::string_view
         if (!runtime.shell.showPanelProvider("Files")) {
             return failure("files panel provider is unavailable");
         }
+        if (!syncTreeProviderToPanel(runtime)) {
+            return failure("files tree provider is unavailable");
+        }
     } else if (id == "panel.show_git_status") {
         if (!runtime.shell.showPanelProvider("Git")) {
             return failure("git panel provider is unavailable");
         }
+        if (!syncTreeProviderToPanel(runtime)) {
+            return failure("git tree provider is unavailable");
+        }
     }
-    else if (id == "panel.next_provider") runtime.shell.nextPanelProvider();
-    else if (id == "panel.previous_provider") runtime.shell.previousPanelProvider();
+    else if (id == "panel.next_provider") {
+        runtime.shell.nextPanelProvider();
+        if (!syncTreeProviderToPanel(runtime)) {
+            return failure("next tree provider is unavailable");
+        }
+    } else if (id == "panel.previous_provider") {
+        runtime.shell.previousPanelProvider();
+        if (!syncTreeProviderToPanel(runtime)) {
+            return failure("previous tree provider is unavailable");
+        }
+    }
     else if (id == "view.toggle_distraction_free") runtime.shell.toggleDistractionFree();
     else return failure("unknown shell command");
     return success();

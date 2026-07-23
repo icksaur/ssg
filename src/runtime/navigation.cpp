@@ -13,6 +13,13 @@ PromptRequest palettePromptRequest() {
                          {{"query", "Command palette query", ""}}, {}, std::nullopt};
 }
 
+std::optional<TreeProviderId> panelProviderTreeId(std::string_view label) {
+    if (label == "Files") return TreeProviderId{"filesystem"};
+    if (label == "Git") return TreeProviderId{"git"};
+    if (label == "Symbols") return TreeProviderId{"symbols"};
+    return std::nullopt;
+}
+
 // Validates that the palette is open and that `command_id` is a member of the
 // currently published palette candidate set (the command mode's candidates,
 // which `palette_view()` publishes from `descriptors()`) and that the invoking
@@ -82,13 +89,38 @@ CommandHandlerResult searchCommand(EditorRuntime::Impl& runtime, CommandContext&
     return success();
 }
 
-CommandHandlerResult treeCommand(EditorRuntime::Impl& runtime, std::string_view id, std::any const& payload) {
+CommandHandlerResult treeCommand(EditorRuntime::Impl& runtime,
+                                 CommandContext& context,
+                                 std::string_view id,
+                                 std::any const& payload) {
+    if (auto providerId = panelProviderTreeId(runtime.shell.activePanelProvider())) {
+        (void)runtime.tree.activateProvider(*providerId);
+    }
     if (id == "tree.select_next") { (void)runtime.tree.selectNext(); runtime.revealTreeSelection(); return success(); }
     if (id == "tree.select_previous") { (void)runtime.tree.selectPrevious(); runtime.revealTreeSelection(); return success(); }
     if (id == "tree.activate") {
+        auto treeView = runtime.tree.viewState();
+        auto providerKind = treeView.providers.empty()
+                                ? std::optional<TreeProviderKind>{}
+                                : std::optional<TreeProviderKind>{
+                                      treeView.providers.front().kind};
         auto selected = runtime.tree.selectedNode();
         if (!selected) return failure("no tree node is selected");
         if (selected->expandable) { (void)runtime.tree.toggleSelected(); runtime.revealTreeSelection(); return success(); }
+        if (providerKind == TreeProviderKind::Git && selected->workspacePath) {
+            const auto diffView = runtime.diff.viewState();
+            auto file = std::find_if(
+                diffView.files.begin(), diffView.files.end(),
+                [&](const DiffFileView& candidate) {
+                    return candidate.path.generic_string() == *selected->workspacePath;
+                });
+            if (file == diffView.files.end()) {
+                return failure("failed to resolve git status item");
+            }
+            return runtime.openOrFocusLiveDiffTab(
+                *file, NavigationClass::User,
+                context.principal().clientId());
+        }
         if (selected->workspacePath) {
             auto result = runtime.workspace.openFile(*selected->workspacePath);
             if (!result.accepted() || !result.document) return failure("failed to open tree file");
@@ -161,10 +193,23 @@ CommandHandlerResult followCommand(EditorRuntime::Impl& runtime, std::string_vie
     if (!result.accepted()) return failure("follow edits command failed");
     if (id == "follow_edits.resume") {
         const auto target = runtime.follow.viewState().activeTarget;
-        if (target &&
-            !runtime.revealDiffTarget(*target,
-                                      NavigationClass::Programmatic)) {
-            return failure("follow target could not be revealed");
+        if (target) {
+            const auto file = runtime.diff.file(target->id);
+            if (!file.has_value()) {
+                return failure("follow target is unavailable");
+            }
+            if (!runtime
+                     .openOrFocusLiveDiffTab(file->get(),
+                                             NavigationClass::Programmatic,
+                                             std::nullopt)
+                     .accepted) {
+                return failure("follow target could not open a diff tab");
+            }
+            if (!target->deleted &&
+                !runtime.revealCurrentDiffTarget(*target,
+                                                 NavigationClass::Programmatic)) {
+                return failure("follow target could not be revealed");
+            }
         }
     }
     return success();
@@ -183,8 +228,8 @@ void bindRuntimeNavigation(EditorSessionBuilder& builder, EditorRuntime::Impl& r
         });
     }
     for (auto const& descriptor : treeCommands.descriptors()) {
-        builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const& payload) {
-            return runtime.runTransaction([&] { return treeCommand(runtime, descriptor.id, payload); });
+        builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext& context, std::any const& payload) {
+            return runtime.runTransaction([&] { return treeCommand(runtime, context, descriptor.id, payload); });
         });
     }
     for (auto const& descriptor : diffCommands.descriptors()) {

@@ -23,6 +23,11 @@ TabRecoveryBadge badgeFor(ScratchDurabilityState state) {
     return TabRecoveryBadge::None;
 }
 
+bool activeLiveDiffTab(const EditorRuntime::Impl& runtime) {
+    const auto* tab = runtime.activeTabState();
+    return tab != nullptr && tab->kind == TabKind::LiveDiff;
+}
+
 CommandHandlerResult openDocumentResult(EditorRuntime::Impl& runtime,
                                           WorkspaceResult const& result) {
     if (!result.accepted() || !result.document) return failure(workspaceMessage(result));
@@ -72,6 +77,9 @@ CommandHandlerResult bindFile(EditorRuntime::Impl& runtime,
             return openDocumentResult(runtime, result);
         }
         case FileCommand::Save: {
+            if (activeLiveDiffTab(runtime)) {
+                return failure("file.save is unavailable in live diff tabs");
+            }
             auto id = runtime.activeDocumentId();
             if (!id) return failure("no active document");
             result = runtime.workspace.save(*id);
@@ -85,6 +93,9 @@ CommandHandlerResult bindFile(EditorRuntime::Impl& runtime,
             return success();
         }
         case FileCommand::SaveAs: {
+            if (activeLiveDiffTab(runtime)) {
+                return failure("file.save_as is unavailable in live diff tabs");
+            }
             auto id = runtime.activeDocumentId();
             auto path = stringPayload(payload);
             if (!id) return failure("no active document");
@@ -95,6 +106,9 @@ CommandHandlerResult bindFile(EditorRuntime::Impl& runtime,
             return runtime.updateTabsFor(*id);
         }
         case FileCommand::Reload: {
+            if (activeLiveDiffTab(runtime)) {
+                return failure("file.reload is unavailable in live diff tabs");
+            }
             auto id = runtime.activeDocumentId();
             if (!id) return failure("no active document");
             result = runtime.workspace.reload(*id);
@@ -104,6 +118,9 @@ CommandHandlerResult bindFile(EditorRuntime::Impl& runtime,
             return runtime.updateTabsFor(*id);
         }
         case FileCommand::Rename: {
+            if (activeLiveDiffTab(runtime)) {
+                return failure("file.rename is unavailable in live diff tabs");
+            }
             auto id = runtime.activeDocumentId();
             auto path = stringPayload(payload);
             if (!id) return failure("no active document");
@@ -114,6 +131,9 @@ CommandHandlerResult bindFile(EditorRuntime::Impl& runtime,
             return runtime.updateTabsFor(*id);
         }
         case FileCommand::Remove: {
+            if (activeLiveDiffTab(runtime)) {
+                return failure("file.remove is unavailable in live diff tabs");
+            }
             auto id = runtime.activeDocumentId();
             if (!id) return failure("no active document");
             result = runtime.workspace.deleteFile(*id);
@@ -176,6 +196,9 @@ CommandHandlerResult bindTab(EditorRuntime::Impl& runtime,
 CommandHandlerResult bindEncoding(EditorRuntime::Impl& runtime,
                                     std::string_view id,
                                     std::any const& payload) {
+    if (activeLiveDiffTab(runtime)) {
+        return failure(std::string{id} + " is unavailable in live diff tabs");
+    }
     auto document = runtime.activeDocumentId();
     if (!document) return failure("no active document");
     WorkspaceResult result;

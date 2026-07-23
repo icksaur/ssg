@@ -11,14 +11,20 @@ DocumentViewState EditorRuntime::Impl::documentView() const {
     auto const* document = activeDocument();
     if (document == nullptr) return {Revision{0}, {}, ByteOffset{0}, std::nullopt};
     auto snapshot = document->snapshot();
+    auto publishedRevision = snapshot.revision;
     auto caret = selection.selections.primary().active.byteOffset;
     if (caret.value() > snapshot.text.size()) caret = ByteOffset{snapshot.text.size()};
     std::optional<std::string> diffFileIdentity;
-    if (auto state = activeWorkspaceState();
-        state && state->key.kind() == JournalDocumentKeyKind::Saved) {
+    if (const auto* tab = activeTabState();
+        tab && tab->kind == TabKind::LiveDiff &&
+        !tab->contentIdentity.empty()) {
+        diffFileIdentity = tab->contentIdentity;
+        publishedRevision = diff.viewState().revision;
+    } else if (auto state = activeWorkspaceState();
+               state && state->key.kind() == JournalDocumentKeyKind::Saved) {
         diffFileIdentity = state->key.savedPath();
     }
-    return {snapshot.revision, std::move(snapshot.text), caret,
+    return {publishedRevision, std::move(snapshot.text), caret,
             std::move(diffFileIdentity)};
 }
 

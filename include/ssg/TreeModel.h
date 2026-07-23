@@ -9,6 +9,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace ssg {
@@ -184,6 +185,7 @@ public:
                          const TreeNodeId& nodeId);
     bool isExpanded(const TreeProviderId& providerId,
                      const TreeNodeId& nodeId) const;
+    bool activateProvider(const TreeProviderId& providerId);
     std::optional<TreeCommandInvocation> invokeNodeCommand(
         const TreeProviderId& providerId, const TreeNodeId& nodeId,
         std::string_view commandId) const;
@@ -212,6 +214,7 @@ private:
 
     TreeRevision revision_{0};
     std::vector<ProviderState> providers_;
+    std::optional<TreeProviderId> activeProviderId_;
     std::optional<TreeNodeId> selected_;
 };
 

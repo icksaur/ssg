@@ -125,6 +125,7 @@ struct EditorRuntime::Impl final : CommandServices,
     std::shared_ptr<SyntaxParser> syntaxParser;
     std::vector<StatusFieldCatalogEntry> statusFieldCatalog;
     std::unordered_map<std::string, StatusFieldProvider> statusFieldProviders;
+    std::unordered_map<std::string, FileDocumentId> liveDiffDocuments;
     SearchController search;
     NavigationHistory navigation{64};
     LspSyncViewState lspSync;
@@ -204,6 +205,7 @@ struct EditorRuntime::Impl final : CommandServices,
         std::string uri, const LspWorkspaceFileNode& node) override;
 
     [[nodiscard]] std::optional<FileDocumentId> activeDocumentId() const;
+    [[nodiscard]] const TabState* activeTabState() const;
     [[nodiscard]] Document const* activeDocument() const;
     [[nodiscard]] Document* activeDocument();
     void ensureDocumentRuntimeState(FileDocumentId document);
@@ -261,6 +263,12 @@ struct EditorRuntime::Impl final : CommandServices,
     [[nodiscard]] ExternalDiffBurstResult applyExternalDiffBurst(
         std::vector<ExternalDiffRevision> changes);
     [[nodiscard]] GitDiffScanResult applyGitDiffScan(GitDiffScan scan);
+    [[nodiscard]] CommandHandlerResult openOrFocusLiveDiffTab(
+        const DiffFileView& file, NavigationClass classification,
+        std::optional<ClientId> userClient);
+    [[nodiscard]] bool refreshLiveDiffDocuments();
+    [[nodiscard]] bool revealCurrentDiffTarget(
+        const FollowTarget& target, NavigationClass classification);
     [[nodiscard]] bool revealDiffTarget(
         const FollowTarget& target, NavigationClass classification);
     void recordNavigation(ClientId client, NavigationClass classification);

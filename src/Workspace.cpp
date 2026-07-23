@@ -378,7 +378,8 @@ public:
     WorkspaceResult addBytes(std::vector<std::uint8_t> bytes,
                               JournalDocumentKey key,
                               std::string label,
-                              bool dirty) {
+                              bool dirty,
+                              DocumentMode mode = DocumentMode::Edit) {
         const auto id = FileDocumentId{nextDocument++};
         bool hasNul;
         {
@@ -403,7 +404,7 @@ public:
                 const auto persistedStatus = decoded.text->status;
                 Document document = [&] {
                     OpenPhaseTimer timer{OpenPhase::DocumentBuild};
-                    return Document{std::move(proof)};
+                    return Document{std::move(proof), mode};
                 }();
                 entries.push_back(
                     {id, std::move(key), std::move(label),
@@ -592,8 +593,18 @@ WorkspaceResult Workspace::restoreWorkspace(
 WorkspaceResult Workspace::newDocument(std::string_view suggestedLabel) {
     return impl_->addBytes(
         {}, JournalDocumentKey::untitled(UntitledDocumentId::generate()),
+        suggestedLabel.empty() ? "Untitled" : sanitizeLabel(suggestedLabel), true,
+        DocumentMode::Edit);
+}
+
+WorkspaceResult Workspace::openVirtualDocument(std::string_view suggestedLabel,
+                                               std::string_view initialText,
+                                               DocumentMode mode) {
+    return impl_->addBytes(
+        std::vector<std::uint8_t>{initialText.begin(), initialText.end()},
+        JournalDocumentKey::untitled(UntitledDocumentId::generate()),
         suggestedLabel.empty() ? "Untitled" : sanitizeLabel(suggestedLabel),
-        true);
+        false, mode);
 }
 
 WorkspaceResult Workspace::openFile(std::string_view rawPath) {
@@ -652,7 +663,7 @@ WorkspaceResult Workspace::openDroppedContent(
     return impl_->addBytes(
         {bytes.begin(), bytes.end()},
         JournalDocumentKey::untitled(UntitledDocumentId::generate()),
-        sanitizeLabel(suggestedLabel), true);
+        sanitizeLabel(suggestedLabel), true, DocumentMode::Edit);
 }
 
 WorkspaceResult Workspace::save(FileDocumentId id) {

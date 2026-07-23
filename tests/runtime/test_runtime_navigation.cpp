@@ -47,6 +47,13 @@ std::map<std::string, ssg::GitTreeStatus> gitProviderStatuses(
     return statuses;
 }
 
+std::size_t countTabsOfKind(const ssg::TabViewState& tabs, ssg::TabKind kind) {
+    return static_cast<std::size_t>(std::count_if(
+        tabs.tabs.begin(), tabs.tabs.end(), [&](const ssg::TabState& tab) {
+            return tab.kind == kind;
+        }));
+}
+
 TEST(searchTreeDiffAndFollowSectionsUseRuntimeState) {
     auto root = uniqueRoot();
     auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
@@ -196,6 +203,10 @@ TEST(gitDiffSelectionUsesDiffIdentityIndependentOfDocumentRevision) {
                     .dispatch(ssg::ClientId{1},
                               {"file.open", runtime.revision(),
                                std::string{"needle.txt"}})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"follow_edits.pause", runtime.revision(), {}})
                     .accepted());
 
     ASSERT_TRUE(runtime
@@ -353,6 +364,206 @@ TEST(gitDiffScanRefreshesGitTreeProviderFromDiffAndOnSecondScan) {
     ASSERT_EQ(secondStatuses.at("modified.txt"), ssg::GitTreeStatus::Modified);
     ASSERT_EQ(secondStatuses.at("renamed.txt"), ssg::GitTreeStatus::Renamed);
     ASSERT_TRUE(second->sections().tree.revision.value() > firstRevision);
+}
+
+TEST(gitStatusActivationOpensLiveDiffTabAndReusesIt) {
+    auto root = uniqueRoot();
+    std::ofstream{root / "workspace" / "coexist.txt"} << "disk\n";
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime
+                    .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                            ssg::ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"file.open", runtime.revision(),
+                               std::string{"coexist.txt"}})
+                    .accepted());
+
+    ASSERT_TRUE(runtime
+                    .applyGitDiffScan(
+                        {.revision = ssg::Revision{30},
+                         .baselineIdentity = "head-x:index-1",
+                         .files = {{.id = ssg::DiffFileId{"coexist-id"},
+                                    .path = "coexist.txt",
+                                    .baselineContent = std::string{"before\n"},
+                                    .workingContent = std::string{"after\n"}}}})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"panel.show_git_status", runtime.revision(), {}})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"tree.select_next", runtime.revision(), {}})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"tree.activate", runtime.revision(), {}})
+                    .accepted());
+
+    auto first = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(first.has_value());
+    if (!first) return;
+    ASSERT_EQ(countTabsOfKind(first->sections().tabs, ssg::TabKind::Document),
+              std::size_t{1});
+    ASSERT_EQ(countTabsOfKind(first->sections().tabs, ssg::TabKind::LiveDiff),
+              std::size_t{1});
+    std::optional<ssg::TabId> liveDiffId;
+    for (const auto& tab : first->sections().tabs.tabs) {
+        if (tab.kind == ssg::TabKind::LiveDiff) {
+            liveDiffId = tab.id;
+            ASSERT_EQ(tab.contentIdentity, std::string{"coexist-id"});
+        }
+    }
+    ASSERT_TRUE(liveDiffId.has_value());
+    if (!liveDiffId) return;
+
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"tree.activate", runtime.revision(), {}})
+                    .accepted());
+    auto second =
+        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(second.has_value());
+    if (!second) return;
+    ASSERT_EQ(countTabsOfKind(second->sections().tabs, ssg::TabKind::Document),
+              std::size_t{1});
+    ASSERT_EQ(countTabsOfKind(second->sections().tabs, ssg::TabKind::LiveDiff),
+              std::size_t{1});
+    ASSERT_EQ(second->sections().tabs.active, liveDiffId);
+}
+
+TEST(gitStatusActivationOpensDeletedLiveDiffWithoutDiskFile) {
+    auto root = uniqueRoot();
+    std::ofstream{root / "workspace" / "gone.txt"} << "gone\n";
+    std::filesystem::remove(root / "workspace" / "gone.txt");
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime
+                    .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                            ssg::ViewId{1})
+                    .accepted());
+    ASSERT_FALSE(std::filesystem::exists(root / "workspace" / "gone.txt"));
+
+    ASSERT_TRUE(runtime
+                    .applyGitDiffScan(
+                        {.revision = ssg::Revision{31},
+                         .baselineIdentity = "head-x:index-2",
+                         .files = {{.id = ssg::DiffFileId{"deleted-id"},
+                                    .path = "gone.txt",
+                                    .baselineContent = std::string{"gone\n"},
+                                    .workingContent = std::nullopt}}})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"panel.show_git_status", runtime.revision(), {}})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"tree.select_next", runtime.revision(), {}})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"tree.activate", runtime.revision(), {}})
+                    .accepted());
+
+    auto snapshot =
+        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    ASSERT_EQ(countTabsOfKind(snapshot->sections().tabs, ssg::TabKind::LiveDiff),
+              std::size_t{1});
+    ASSERT_EQ(snapshot->sections().document.diffFileIdentity,
+              std::optional<std::string>{"deleted-id"});
+    ASSERT_EQ(snapshot->sections().document.text, std::string{"gone\n"});
+    const auto deleted = std::find_if(
+        snapshot->sections().diff.files.begin(),
+        snapshot->sections().diff.files.end(),
+        [](const ssg::DiffFileView& file) {
+            return file.id == ssg::DiffFileId{"deleted-id"};
+        });
+    ASSERT_TRUE(deleted != snapshot->sections().diff.files.end());
+    if (deleted == snapshot->sections().diff.files.end()) return;
+    ASSERT_TRUE(deleted->deleted);
+    ASSERT_FALSE(deleted->hunks.empty());
+}
+
+TEST(liveDiffOpenClassificationPausesOnlyForUserActivation) {
+    auto root = uniqueRoot();
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime
+                    .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                            ssg::ViewId{1})
+                    .accepted());
+
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"follow_edits.pause", runtime.revision(), {}})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .applyGitDiffScan(
+                        {.revision = ssg::Revision{40},
+                         .baselineIdentity = "head-y:index-1",
+                         .files = {{.id = ssg::DiffFileId{"programmatic-id"},
+                                    .path = "needle.txt",
+                                    .baselineContent =
+                                        std::string{"alpha needle omega"},
+                                    .workingContent =
+                                        std::string{"alpha NEEDLE omega"}}}})
+                    .accepted());
+    auto beforeResume =
+        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(beforeResume.has_value());
+    if (!beforeResume) return;
+    ASSERT_EQ(beforeResume->sections().followEdits.mode,
+              ssg::FollowMode::Paused);
+    ASSERT_EQ(countTabsOfKind(beforeResume->sections().tabs,
+                              ssg::TabKind::LiveDiff),
+              std::size_t{0});
+
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"follow_edits.resume", runtime.revision(), {}})
+                    .accepted());
+    auto afterProgrammatic =
+        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(afterProgrammatic.has_value());
+    if (!afterProgrammatic) return;
+    ASSERT_EQ(afterProgrammatic->sections().followEdits.mode,
+              ssg::FollowMode::Following);
+    ASSERT_EQ(countTabsOfKind(afterProgrammatic->sections().tabs,
+                              ssg::TabKind::LiveDiff),
+              std::size_t{1});
+
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"panel.show_git_status", runtime.revision(), {}})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"tree.select_next", runtime.revision(), {}})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"tree.activate", runtime.revision(), {}})
+                    .accepted());
+    auto afterUser =
+        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(afterUser.has_value());
+    if (!afterUser) return;
+    ASSERT_EQ(afterUser->sections().followEdits.mode, ssg::FollowMode::Paused);
 }
 
 TEST(paletteOpenEntersPromptFocusAndPublishesCandidates) {
@@ -887,6 +1098,9 @@ int main() {
     RUN(gitDiffScanUpdatesDiffAndRejectsStaleBatches);
     RUN(gitDiffSelectionUsesDiffIdentityIndependentOfDocumentRevision);
     RUN(gitDiffScanRefreshesGitTreeProviderFromDiffAndOnSecondScan);
+    RUN(gitStatusActivationOpensLiveDiffTabAndReusesIt);
+    RUN(gitStatusActivationOpensDeletedLiveDiffWithoutDiskFile);
+    RUN(liveDiffOpenClassificationPausesOnlyForUserActivation);
     RUN(paletteOpenEntersPromptFocusAndPublishesCandidates);
     RUN(paletteExecuteValidatesCandidateMembership);
     RUN(paletteCandidatesCarryLabelsAndKeyDetail);

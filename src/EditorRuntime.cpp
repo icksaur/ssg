@@ -40,6 +40,24 @@ std::vector<GitTreeRecord> gitTreeRecordsFromDiff(const DiffViewState& diffView)
     return records;
 }
 
+std::string liveDiffTabLabelForPath(const std::filesystem::path& path) {
+    const auto filename = path.filename().string();
+    return filename.empty() ? path.generic_string() : filename;
+}
+
+std::string liveDiffDocumentText(const DiffFileView& file) {
+    if (!file.deleted) {
+        return file.currentContent;
+    }
+    std::string priorContent;
+    for (const auto& hunk : file.hunks) {
+        for (const auto& line : hunk.baselineLines) {
+            priorContent += line;
+        }
+    }
+    return priorContent;
+}
+
 ThemeSnapshot defaultTheme() {
     // Readable dark theme derived from the VSCode-style palette in
     // caco/public/themes/dark.css.  Low indices are dark fills, high indices
@@ -374,7 +392,73 @@ void EditorRuntime::Impl::publishDeltaValue(std::type_index, std::any) {}
 
 TabLifecycleResult EditorRuntime::Impl::close(
     const TabState& tab, std::chrono::milliseconds durabilityTimeout) {
-    if (!tab.document) return {};
+    if (!tab.document) {
+        if (tab.kind == TabKind::LiveDiff) {
+            const auto mapped = liveDiffDocuments.find(tab.contentIdentity);
+            if (mapped != liveDiffDocuments.end()) {
+                const auto document = mapped->second;
+                const bool stillReferenced = std::any_of(
+                    tabs.viewState().tabs.begin(), tabs.viewState().tabs.end(),
+                    [&](const TabState& candidate) {
+                        return candidate.id != tab.id &&
+                               candidate.document == document;
+                    });
+                if (!stillReferenced) {
+                    auto state = workspace.state(document);
+                    if (!state) {
+                        return {TabError::NotFound,
+                                "live diff document state does not exist",
+                                std::nullopt, std::nullopt, std::nullopt, false};
+                    }
+                    std::optional<JournalDocument> journal;
+                    if (auto const* current = workspace.tryDocument(document);
+                        current != nullptr) {
+                        journal = JournalDocument{state->key, current->mode(),
+                                                  state->dirty,
+                                                  current->snapshot().text};
+                    }
+                    auto closed =
+                        recovery.closeDocument(journal, scratch, durabilityTimeout);
+                    if (!closed.accepted()) {
+                        return {TabError::LifecycleFailed, closed.error->message,
+                                std::nullopt, std::nullopt, std::nullopt, false};
+                    }
+                    if (journal) scratch.removeDocument(state->key);
+                    auto removed = workspace.removeDocument(document);
+                    if (!removed.accepted()) {
+                        return {TabError::LifecycleFailed, workspaceMessage(removed),
+                                std::nullopt, std::nullopt, std::nullopt, false};
+                    }
+                    documentRuntimeStates.erase(document.value());
+                    liveDiffDocuments.erase(mapped);
+                    return {TabError::None, {}, closed.compensation, std::nullopt,
+                            std::nullopt,
+                            scratch.waitUntilDurable(durabilityTimeout)};
+                }
+                liveDiffDocuments.erase(mapped);
+            }
+        }
+        return {};
+    }
+    const bool sharedByDocumentTab = std::any_of(
+        tabs.viewState().tabs.begin(), tabs.viewState().tabs.end(),
+        [&](const TabState& candidate) {
+            return candidate.id != tab.id &&
+                   candidate.document == tab.document;
+        });
+    const bool sharedByLiveDiffTab = std::any_of(
+        tabs.viewState().tabs.begin(), tabs.viewState().tabs.end(),
+        [&](const TabState& candidate) {
+            if (candidate.id == tab.id || candidate.kind != TabKind::LiveDiff) {
+                return false;
+            }
+            const auto mapped = liveDiffDocuments.find(candidate.contentIdentity);
+            return mapped != liveDiffDocuments.end() &&
+                   mapped->second == *tab.document;
+        });
+    if (sharedByDocumentTab || sharedByLiveDiffTab) {
+        return {};
+    }
     auto state = workspace.state(*tab.document);
     if (!state) return {TabError::NotFound, "tab document does not exist",
                         std::nullopt, std::nullopt, std::nullopt, false};
@@ -400,7 +484,7 @@ TabLifecycleResult EditorRuntime::Impl::close(
 }
 
 TabLifecycleResult EditorRuntime::Impl::reopen(
-    const TabState&, const RecoveryRecordId& compensation) {
+    const TabState& tab, const RecoveryRecordId& compensation) {
     std::optional<JournalDocument> restoredDocument;
     auto restored = recovery.restoreDocument(compensation, restoredDocument);
     if (!restored.accepted()) {
@@ -413,7 +497,10 @@ TabLifecycleResult EditorRuntime::Impl::reopen(
     }
 
     WorkspaceResult opened;
-    if (restoredDocument->key.kind() == JournalDocumentKeyKind::Saved) {
+    if (tab.kind == TabKind::LiveDiff) {
+        opened = workspace.openVirtualDocument(
+            tab.label, restoredDocument->utf8Content, restoredDocument->mode);
+    } else if (restoredDocument->key.kind() == JournalDocumentKeyKind::Saved) {
         opened = workspace.openFile(restoredDocument->key.savedPath());
     } else {
         opened = workspace.newDocument();
@@ -445,6 +532,9 @@ TabLifecycleResult EditorRuntime::Impl::reopen(
         return {TabError::LifecycleFailed,
                 "reopened document state was not available in workspace",
                 std::nullopt, std::nullopt, std::nullopt, false};
+    }
+    if (tab.kind == TabKind::LiveDiff) {
+        liveDiffDocuments[tab.contentIdentity] = *opened.document;
     }
     return {TabError::None, {}, std::nullopt, *opened.document,
             reopenedState->key, true};
@@ -688,8 +778,112 @@ std::optional<FileDocumentId> EditorRuntime::Impl::activeDocumentId() const {
     auto found = std::find_if(view.tabs.begin(), view.tabs.end(), [&](TabState const& tab) {
         return tab.id == *view.active;
     });
-    if (found != view.tabs.end()) return found->document;
+    if (found == view.tabs.end()) return std::nullopt;
+    if (found->document) return found->document;
+    if (found->kind == TabKind::LiveDiff) {
+        const auto mapped = liveDiffDocuments.find(found->contentIdentity);
+        if (mapped != liveDiffDocuments.end()) {
+            return mapped->second;
+        }
+    }
     return std::nullopt;
+}
+
+const TabState* EditorRuntime::Impl::activeTabState() const {
+    auto const& view = tabs.viewState();
+    if (!view.active) return nullptr;
+    auto found = std::find_if(view.tabs.begin(), view.tabs.end(),
+                              [&](const TabState& tab) {
+                                  return tab.id == *view.active;
+                              });
+    if (found == view.tabs.end()) return nullptr;
+    return &*found;
+}
+
+CommandHandlerResult EditorRuntime::Impl::openOrFocusLiveDiffTab(
+    const DiffFileView& file, NavigationClass classification,
+    std::optional<ClientId> userClient) {
+    const auto target = diffOpenFile(file);
+    const auto diffText = liveDiffDocumentText(file);
+    std::optional<FileDocumentId> document;
+    auto mapped = liveDiffDocuments.find(target.id.value());
+    if (mapped != liveDiffDocuments.end()) {
+        if (const auto* opened = workspace.tryDocument(mapped->second);
+            opened != nullptr &&
+            opened->snapshot().text == diffText) {
+            document = mapped->second;
+        } else {
+            documentRuntimeStates.erase(mapped->second.value());
+            auto removed = workspace.removeDocument(mapped->second);
+            liveDiffDocuments.erase(mapped);
+            if (!removed.accepted()) {
+                return failure(workspaceMessage(removed));
+            }
+        }
+    }
+    if (!document) {
+        auto created = workspace.openVirtualDocument(
+            liveDiffTabLabelForPath(target.path), diffText,
+            DocumentMode::Diff);
+        if (!created.accepted() || !created.document) {
+            return failure(workspaceMessage(created));
+        }
+        document = *created.document;
+    }
+
+    ensureDocumentRuntimeState(*document);
+    liveDiffDocuments[target.id.value()] = *document;
+    auto opened = tabs.openContent(TabKind::LiveDiff, target.id.value(),
+                                   liveDiffTabLabelForPath(target.path),
+                                   DocumentMode::Diff);
+    if (!opened.accepted()) {
+        return failure(tabMessage(opened));
+    }
+    if (userClient.has_value()) {
+        recordNavigation(*userClient, classification);
+    }
+    shell.focusEditor();
+    return success();
+}
+
+bool EditorRuntime::Impl::refreshLiveDiffDocuments() {
+    const auto diffView = diff.viewState();
+    for (auto it = liveDiffDocuments.begin(); it != liveDiffDocuments.end();) {
+        const auto id = DiffFileId{it->first};
+        auto file = std::find_if(
+            diffView.files.begin(), diffView.files.end(),
+            [&](const DiffFileView& candidate) { return candidate.id == id; });
+        const auto desired =
+            file == diffView.files.end() ? std::string{}
+                                         : liveDiffDocumentText(*file);
+        const auto document = it->second;
+        const auto* opened = workspace.tryDocument(document);
+        if (opened == nullptr) {
+            it = liveDiffDocuments.erase(it);
+            continue;
+        }
+        if (opened->snapshot().text == desired) {
+            ++it;
+            continue;
+        }
+        auto state = workspace.state(document);
+        const auto label =
+            state ? state->displayLabel : std::string{"LiveDiff"};
+        documentRuntimeStates.erase(document.value());
+        auto removed = workspace.removeDocument(document);
+        if (!removed.accepted()) {
+            return false;
+        }
+        auto recreated = workspace.openVirtualDocument(
+            label, desired, DocumentMode::Diff);
+        if (!recreated.accepted() || !recreated.document) {
+            return false;
+        }
+        it->second = *recreated.document;
+        ensureDocumentRuntimeState(*recreated.document);
+        ++it;
+    }
+    return true;
 }
 
 Document const* EditorRuntime::Impl::activeDocument() const {
@@ -942,8 +1136,16 @@ ExternalDiffBurstResult EditorRuntime::Impl::applyExternalDiffBurst(
     const auto next = follow.viewState();
     if (next.mode == FollowMode::Following && next.activeTarget &&
         next.activeTarget != previousTarget) {
-        (void)revealDiffTarget(*next.activeTarget,
-                               NavigationClass::Programmatic);
+        if (const auto file = diff.file(next.activeTarget->id); file.has_value() &&
+            openOrFocusLiveDiffTab(file->get(),
+                                   NavigationClass::Programmatic,
+                                   std::nullopt)
+                .accepted) {
+            if (!next.activeTarget->deleted) {
+                (void)revealCurrentDiffTarget(*next.activeTarget,
+                                              NavigationClass::Programmatic);
+            }
+        }
     }
     if (session) {
         session->advanceRevision();
@@ -1042,11 +1244,23 @@ GitDiffScanResult EditorRuntime::Impl::applyGitDiffScan(GitDiffScan scan) {
         const auto previousTarget = follow.viewState().activeTarget;
         diff = std::move(stagedDiff);
         follow = std::move(stagedFollow);
+        if (!refreshLiveDiffDocuments()) {
+            return {GitDiffScanError::DiffRejected};
+        }
         const auto next = follow.viewState();
         if (next.mode == FollowMode::Following && next.activeTarget &&
             next.activeTarget != previousTarget) {
-            (void)revealDiffTarget(*next.activeTarget,
-                                   NavigationClass::Programmatic);
+            if (const auto file = diff.file(next.activeTarget->id);
+                file.has_value() &&
+                openOrFocusLiveDiffTab(file->get(),
+                                       NavigationClass::Programmatic,
+                                       std::nullopt)
+                    .accepted) {
+                if (!next.activeTarget->deleted) {
+                    (void)revealCurrentDiffTarget(
+                        *next.activeTarget, NavigationClass::Programmatic);
+                }
+            }
         }
     }
     tree.replaceProvider(TreeProviderSnapshot::fromGit(
@@ -1059,17 +1273,8 @@ GitDiffScanResult EditorRuntime::Impl::applyGitDiffScan(GitDiffScan scan) {
     return {};
 }
 
-bool EditorRuntime::Impl::revealDiffTarget(
+bool EditorRuntime::Impl::revealCurrentDiffTarget(
     const FollowTarget& target, NavigationClass classification) {
-    if (target.deleted) {
-        return false;
-    }
-    const auto opened = workspace.openFile(target.path.generic_string());
-    if (!opened.accepted() || !opened.document ||
-        !activateDocument(*opened.document).accepted) {
-        return false;
-    }
-
     const auto text = activeText();
     const auto offset = lineStartOffset(text, target.newestHunkLine);
     const auto position =
@@ -1094,6 +1299,19 @@ bool EditorRuntime::Impl::revealDiffTarget(
     }
     shell.focusEditor();
     return true;
+}
+
+bool EditorRuntime::Impl::revealDiffTarget(
+    const FollowTarget& target, NavigationClass classification) {
+    if (target.deleted) {
+        return false;
+    }
+    const auto opened = workspace.openFile(target.path.generic_string());
+    if (!opened.accepted() || !opened.document ||
+        !activateDocument(*opened.document).accepted) {
+        return false;
+    }
+    return revealCurrentDiffTarget(target, classification);
 }
 
 void EditorRuntime::Impl::recordNavigation(

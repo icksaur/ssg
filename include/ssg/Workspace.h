@@ -129,6 +129,9 @@ public:
 
     [[nodiscard]] WorkspaceResult newDocument(
         std::string_view suggestedLabel = {});
+    [[nodiscard]] WorkspaceResult openVirtualDocument(
+        std::string_view suggestedLabel, std::string_view initialText,
+        DocumentMode mode);
     [[nodiscard]] WorkspaceResult openFile(std::string_view path);
     [[nodiscard]] WorkspaceResult openRecent(std::size_t index);
     [[nodiscard]] WorkspaceResult openDroppedContent(
