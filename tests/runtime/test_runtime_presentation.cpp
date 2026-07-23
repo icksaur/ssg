@@ -9,6 +9,7 @@
 #include <fstream>
 #include <set>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -238,12 +239,69 @@ TEST(shellStatusFieldsUseRegisteredProviders) {
     }
 }
 
+TEST(shellStatusFieldsPreserveDefaultContentOrderAndLabels) {
+    auto root = uniqueRoot();
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"file.open", runtime.revision(),
+                               std::string{"long.txt"}})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"settings.export_workspace", runtime.revision(),
+                               {}})
+                    .accepted());
+
+    auto snapshot =
+        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+
+    std::vector<const ssg::AccessibilityNode*> headerFields;
+    std::vector<const ssg::AccessibilityNode*> footerFields;
+    for (const auto& node : snapshot->sections().shell.accessibilityNodes) {
+        if (node.kind == ssg::ShellNodeKind::HeaderField &&
+            (node.id == "cwd" || node.id == "file")) {
+            headerFields.push_back(&node);
+        }
+        if (node.kind == ssg::ShellNodeKind::FooterField &&
+            (node.id == "status" || node.id == "follow")) {
+            footerFields.push_back(&node);
+        }
+    }
+
+    ASSERT_EQ(headerFields.size(), std::size_t{2});
+    ASSERT_EQ(headerFields[0]->id, std::string{"cwd"});
+    ASSERT_EQ(headerFields[0]->label, std::string{"Workspace"});
+    ASSERT_EQ(headerFields[0]->content, runtime.workspaceRoot().string());
+    ASSERT_EQ(headerFields[1]->id, std::string{"file"});
+    ASSERT_EQ(headerFields[1]->label, std::string{"File"});
+    ASSERT_EQ(headerFields[1]->content, std::string{"long.txt"});
+
+    ASSERT_EQ(footerFields.size(), std::size_t{2});
+    ASSERT_EQ(footerFields[0]->id, std::string{"status"});
+    ASSERT_EQ(footerFields[0]->label, std::string{"Status"});
+    ASSERT_TRUE(footerFields[0]->content.starts_with("schema=1\n"));
+    ASSERT_EQ(footerFields[1]->id, std::string{"follow"});
+    ASSERT_EQ(footerFields[1]->label, std::string{"Follow edits"});
+    ASSERT_EQ(footerFields[1]->content, std::string{"following"});
+}
+
 int main() {
     RUN(viewportShellSettingsAndThemeAreLiveSections);
     RUN(settingsDispatchMatchesSettingsModelOracleSnapshot);
     RUN(reportedLeaderSequenceRendersAPerSnapshotHint);
     RUN(paletteCandidatesMatchTheCommandRegistry);
     RUN(shellStatusFieldsUseRegisteredProviders);
+    RUN(shellStatusFieldsPreserveDefaultContentOrderAndLabels);
     RUN(editorScrollUsesTheRealPaneHeightNotAHardcoded24);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;

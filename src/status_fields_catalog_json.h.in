@@ -1,0 +1,9 @@
+#pragma once
+
+namespace ssg {
+
+inline constexpr char kStatusFieldsCatalogJson[] = R"SF(
+@SSG_STATUS_FIELDS_JSON@
+)SF";
+
+} // namespace ssg

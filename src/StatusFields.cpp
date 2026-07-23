@@ -1,24 +1,17 @@
 #include <ssg/StatusFields.h>
 
+#include "status_fields_catalog_json.h"
+
 #include <charconv>
-#include <fstream>
-#include <iterator>
 #include <limits>
 #include <optional>
 #include <regex>
+#include <string_view>
+#include <stdexcept>
 #include <utility>
 
 namespace ssg {
 namespace {
-
-std::vector<StatusFieldCatalogEntry> fallbackStatusFieldCatalog() {
-    return {
-        {"cwd", "Workspace", StatusFieldRegion::Header, 0},
-        {"file", "File", StatusFieldRegion::Header, 1},
-        {"status", "Status", StatusFieldRegion::Footer, 0},
-        {"follow", "Follow edits", StatusFieldRegion::Footer, 1},
-    };
-}
 
 std::optional<std::string> objectStringField(const std::string& object,
                                              const std::string& fieldName) {
@@ -50,17 +43,13 @@ std::optional<std::uint8_t> objectUnsignedByteField(const std::string& object,
     return static_cast<std::uint8_t>(value);
 }
 
-std::optional<std::vector<StatusFieldCatalogEntry>>
-loadStatusFieldCatalog(std::filesystem::path path) {
-    std::ifstream input(path);
-    if (!input.is_open()) {
-        return std::nullopt;
-    }
-    const std::string json((std::istreambuf_iterator<char>(input)),
-                           std::istreambuf_iterator<char>());
+std::optional<std::vector<StatusFieldCatalogEntry>> parseStatusFieldCatalog(
+    std::string_view json) {
+    std::string catalogText{json};
     const std::regex objectRegex{R"(\{[^}]*\})"};
     std::vector<StatusFieldCatalogEntry> entries;
-    for (auto it = std::sregex_iterator(json.begin(), json.end(), objectRegex);
+    for (auto it = std::sregex_iterator(catalogText.begin(), catalogText.end(),
+                                        objectRegex);
          it != std::sregex_iterator(); ++it) {
         const auto object = it->str();
         auto id = objectStringField(object, "id");
@@ -71,13 +60,15 @@ loadStatusFieldCatalog(std::filesystem::path path) {
             return std::nullopt;
         }
         if (*region == "header") {
-            entries.push_back(
-                {*id, *accessibleLabel, StatusFieldRegion::Header, *collapseRank});
+            entries.push_back(StatusFieldCatalogEntry{*id, *accessibleLabel,
+                                                      StatusFieldRegion::Header,
+                                                      *collapseRank});
             continue;
         }
         if (*region == "footer") {
-            entries.push_back(
-                {*id, *accessibleLabel, StatusFieldRegion::Footer, *collapseRank});
+            entries.push_back(StatusFieldCatalogEntry{*id, *accessibleLabel,
+                                                      StatusFieldRegion::Footer,
+                                                      *collapseRank});
             continue;
         }
         return std::nullopt;
@@ -90,12 +81,11 @@ loadStatusFieldCatalog(std::filesystem::path path) {
 } // namespace
 
 std::vector<StatusFieldCatalogEntry> p0StatusFieldCatalog() {
-#ifdef SSG_STATUS_FIELDS_PATH
-    if (auto loaded = loadStatusFieldCatalog(SSG_STATUS_FIELDS_PATH)) {
-        return *loaded;
+    if (auto parsed = parseStatusFieldCatalog(kStatusFieldsCatalogJson)) {
+        return *parsed;
     }
-#endif
-    return fallbackStatusFieldCatalog();
+    throw std::logic_error{
+        "status fields catalog is invalid: data/ui/status_fields.json"};
 }
 
 std::vector<StatusFieldProviderBinding> defaultStatusFieldProviders() {
