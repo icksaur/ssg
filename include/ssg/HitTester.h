@@ -10,6 +10,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
 
 namespace ssg {
 
@@ -23,6 +24,8 @@ enum class HitRegion : std::uint8_t {
     Panel,              // a tree row: node_id is set
     Palette,            // a palette row: item_index is the absolute rank index
     Tab,                // a tab-bar tab: tab_index selects sections().tabs.tabs
+    HeaderField,        // a shell header status field
+    FooterField,        // a shell footer status field
     EditorScrollbar,   // the editor pane gutter: scroll_* are set
     PanelScrollbar,    // the side-panel gutter: scroll_* are set
     PaletteScrollbar,  // the palette gutter: scroll_* are set
@@ -46,6 +49,9 @@ struct RegionHit {
     std::uint32_t scrollNumerator = 0;
     std::uint32_t scrollDenominator = 1;
     double scrollbarFraction = 0.0;
+    // Header/footer status-field hits: the published field id and optional command.
+    std::optional<std::string> fieldId;
+    std::optional<std::string> commandId;
 
     [[nodiscard]] bool hit() const noexcept { return region != HitRegion::None; }
     bool operator==(const RegionHit&) const = default;

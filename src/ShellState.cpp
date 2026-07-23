@@ -100,9 +100,11 @@ void layoutPanes(const PaneNode& node, Rect rect,
 
 void addNode(ShellViewState& view, ShellNodeKind kind, std::string id,
               std::string label, Rect rect, SemanticRole role,
-              std::string content = {}) {
+              std::string content = {},
+              std::optional<std::string> commandId = std::nullopt) {
     view.accessibilityNodes.push_back(
-        {kind, std::move(id), std::move(label), rect, role, std::move(content)});
+        {kind, std::move(id), std::move(label), rect, role, std::move(content),
+         std::move(commandId)});
 }
 
 void addFields(ShellViewState& view, const std::vector<StatusField>& fields,
@@ -131,7 +133,7 @@ void addFields(ShellViewState& view, const std::vector<StatusField>& fields,
         if (x != row.x) ++x;
         const int width = static_cast<int>(field->value.size()) + 2;
         addNode(view, kind, field->id, field->accessibleLabel,
-                 {x, row.y, width, 1}, role, field->value);
+                 {x, row.y, width, 1}, role, field->value, field->commandId);
         x += width;
     }
 }

@@ -68,6 +68,7 @@ struct AccessibilityNode {
     Rect rect;
     SemanticRole role = SemanticRole::Background;
     std::string content;  // Display text for leaves; empty for containers/panes.
+    std::optional<std::string> commandId;
 
     friend bool operator==(const AccessibilityNode&, const AccessibilityNode&) = default;
 };
@@ -77,6 +78,7 @@ struct StatusField {
     std::string accessibleLabel;
     std::string value;
     std::uint8_t collapseRank = 0;
+    std::optional<std::string> commandId;
 };
 
 struct ShellLabel {

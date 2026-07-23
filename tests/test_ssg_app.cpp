@@ -731,6 +731,26 @@ TEST(routePointerDragExtendsSelectionFromAnchor) {
     ASSERT_FALSE(plan.ends_drag);
 }
 
+TEST(routePointerFieldHitDispatchesPublishedCommandGenerically) {
+    ssg::app::PointerTargets targets;
+    targets.field_command_id = std::string{"panel.show_files"};
+    for (auto region :
+         {ssg::HitRegion::HeaderField, ssg::HitRegion::FooterField}) {
+        ssg::RegionHit hit;
+        hit.region = region;
+        auto plan = ssg::app::route_pointer(
+            hit, ssg::app::PointerButton::left, ssg::app::PointerKind::press,
+            false, std::nullopt, targets);
+        ASSERT_EQ(plan.commands.size(), std::size_t{1});
+        if (plan.commands.size() == 1) {
+            ASSERT_EQ(plan.commands[0].command_id,
+                      std::string{"panel.show_files"});
+        }
+        ASSERT_FALSE(plan.begins_drag);
+        ASSERT_FALSE(plan.ends_drag);
+    }
+}
+
 TEST(routePointerDragWithoutAnchorOrTargetIsANoOp) {
     auto const anchor =
         ssg::DocumentPosition{ssg::ByteOffset{3}, ssg::LineIndex{0}, ssg::CellIndex{3}};
@@ -1040,6 +1060,7 @@ int main() {
     RUN(routePointerLeftPressOnEditorPlacesCaret);
     RUN(routePointerIgnoresNonEditorAndNonLeft);
     RUN(routePointerDragExtendsSelectionFromAnchor);
+    RUN(routePointerFieldHitDispatchesPublishedCommandGenerically);
     RUN(routePointerDragWithoutAnchorOrTargetIsANoOp);
     RUN(routePointerReleaseEndsDragWithoutACommand);
     RUN(routePointerEditorScrollbarScrollsToFraction);

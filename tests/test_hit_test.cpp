@@ -34,6 +34,15 @@ std::unique_ptr<ssg::EditorRuntime> makeRuntime(fs::path const& root) {
     return runtime;
 }
 
+const ssg::AccessibilityNode* findNode(
+    const ssg::ShellViewState& shell, ssg::ShellNodeKind kind,
+    std::string_view id) {
+    for (const auto& node : shell.accessibilityNodes) {
+        if (node.kind == kind && node.id == id) return &node;
+    }
+    return nullptr;
+}
+
 // ---------------------------------------------------------------------------
 
 TEST(editorCellMapsToItsDocumentByteOffset) {
@@ -475,6 +484,136 @@ TEST(tabBarCellMapsToItsTabIndex) {
     ASSERT_TRUE(pad.region != ssg::HitRegion::Tab);
 }
 
+TEST(statusFieldHitCoordinatesResolvePublishedFieldCommands) {
+    auto root = uniqueRoot();
+    std::ofstream{root / "doc.txt"} << "alpha\n";
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(
+        ssg::ClientId{1},
+        {"file.open", runtime->revision(), std::string{"doc.txt"}});
+    ssg::GitDiffScan scan;
+    scan.revision = ssg::Revision{1};
+    scan.currentBranch = std::string{"main"};
+    ASSERT_TRUE(runtime->applyGitDiffScan(std::move(scan)).accepted());
+
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    auto const& shell = snapshot->sections().shell;
+
+    const auto* path = findNode(shell, ssg::ShellNodeKind::HeaderField, "path");
+    const auto* branch =
+        findNode(shell, ssg::ShellNodeKind::HeaderField, "branch");
+    const auto* follow =
+        findNode(shell, ssg::ShellNodeKind::FooterField, "follow");
+    ASSERT_TRUE(path != nullptr);
+    ASSERT_TRUE(branch != nullptr);
+    ASSERT_TRUE(follow != nullptr);
+    if (!path || !branch || !follow) return;
+
+    auto pathHit = ssg::HitTester{*snapshot}.at(path->rect.x, path->rect.y);
+    ASSERT_EQ(pathHit.region, ssg::HitRegion::HeaderField);
+    ASSERT_EQ(pathHit.fieldId, std::optional<std::string>{"path"});
+    ASSERT_EQ(pathHit.commandId,
+              std::optional<std::string>{"panel.show_files"});
+
+    auto branchHit =
+        ssg::HitTester{*snapshot}.at(branch->rect.x, branch->rect.y);
+    ASSERT_EQ(branchHit.region, ssg::HitRegion::HeaderField);
+    ASSERT_EQ(branchHit.fieldId, std::optional<std::string>{"branch"});
+    ASSERT_EQ(branchHit.commandId,
+              std::optional<std::string>{"panel.show_git_status"});
+
+    auto followHit =
+        ssg::HitTester{*snapshot}.at(follow->rect.x, follow->rect.y);
+    ASSERT_EQ(followHit.region, ssg::HitRegion::FooterField);
+    ASSERT_EQ(followHit.fieldId, std::optional<std::string>{"follow"});
+    ASSERT_EQ(followHit.commandId,
+              std::optional<std::string>{"follow_edits.toggle"});
+
+    // A chrome coordinate outside any field remains a non-field hit.
+    auto chrome = ssg::HitTester{*snapshot}.at(shell.viewport.columns - 1, 0);
+    ASSERT_TRUE(chrome.region != ssg::HitRegion::HeaderField);
+    ASSERT_TRUE(chrome.region != ssg::HitRegion::FooterField);
+}
+
+TEST(clickingPublishedStatusFieldCommandsDispatchesThroughOneGenericPath) {
+    auto root = uniqueRoot();
+    std::ofstream{root / "doc.txt"} << "alpha\n";
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(
+        ssg::ClientId{1},
+        {"file.open", runtime->revision(), std::string{"doc.txt"}});
+
+    ssg::GitDiffScan scan{
+        .revision = ssg::Revision{1},
+        .baselineIdentity = "head-1:index-1",
+        .currentBranch = std::string{"main"},
+        .files = {{.id = ssg::DiffFileId{"doc-id"},
+                   .path = "doc.txt",
+                   .baselineContent = std::string{"alpha\n"},
+                   .workingContent = std::string{"alpha changed\n"}}}};
+    ASSERT_TRUE(runtime->applyGitDiffScan(std::move(scan)).accepted());
+
+    const auto clickField = [&](ssg::ShellNodeKind kind, std::string_view id) {
+        auto before = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+        ASSERT_TRUE(before.has_value());
+        if (!before) return false;
+        auto const* node = findNode(before->sections().shell, kind, id);
+        ASSERT_TRUE(node != nullptr);
+        if (!node) return false;
+        auto hit = ssg::HitTester{*before}.at(node->rect.x, node->rect.y);
+        ASSERT_TRUE(hit.commandId.has_value());
+        if (!hit.commandId) return false;
+        return runtime
+            ->dispatch(ssg::ClientId{1},
+                       {*hit.commandId, runtime->revision(), std::any{}})
+            .accepted();
+    };
+    const auto panelProviderLabel = [&]() -> std::optional<std::string> {
+        auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+        ASSERT_TRUE(snapshot.has_value());
+        if (!snapshot) return std::nullopt;
+        const auto* provider = findNode(snapshot->sections().shell,
+                                        ssg::ShellNodeKind::PanelProvider,
+                                        "panel.provider");
+        if (!provider) return std::nullopt;
+        return provider->content;
+    };
+    const auto panelVisible = [&]() -> bool {
+        auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+        ASSERT_TRUE(snapshot.has_value());
+        if (!snapshot) return false;
+        return snapshot->sections().shell.panel.has_value();
+    };
+    const auto followMode = [&]() {
+        auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+        ASSERT_TRUE(snapshot.has_value());
+        if (!snapshot) return ssg::FollowMode::Paused;
+        return snapshot->sections().followEdits.mode;
+    };
+
+    ASSERT_TRUE(clickField(ssg::ShellNodeKind::HeaderField, "path"));
+    ASSERT_TRUE(panelVisible());
+    ASSERT_EQ(panelProviderLabel(), std::optional<std::string>{"Files"});
+    ASSERT_TRUE(clickField(ssg::ShellNodeKind::HeaderField, "path"));
+    ASSERT_FALSE(panelVisible());
+
+    ASSERT_TRUE(clickField(ssg::ShellNodeKind::HeaderField, "branch"));
+    ASSERT_TRUE(panelVisible());
+    ASSERT_EQ(panelProviderLabel(), std::optional<std::string>{"Git"});
+
+    ASSERT_EQ(followMode(), ssg::FollowMode::Following);
+    ASSERT_TRUE(clickField(ssg::ShellNodeKind::FooterField, "follow"));
+    ASSERT_EQ(followMode(), ssg::FollowMode::Paused);
+    ASSERT_TRUE(clickField(ssg::ShellNodeKind::FooterField, "follow"));
+    ASSERT_EQ(followMode(), ssg::FollowMode::Following);
+}
+
 TEST(outOfBoundsAndChromeReturnNoTarget) {
     auto root = uniqueRoot();
     std::ofstream{root / "doc.txt"} << "alpha\n";
@@ -491,8 +630,27 @@ TEST(outOfBoundsAndChromeReturnNoTarget) {
     ASSERT_EQ(ssg::HitTester{*snapshot}.at( 5, -1).region, ssg::HitRegion::None);
     ASSERT_EQ(ssg::HitTester{*snapshot}.at( 9999, 5).region, ssg::HitRegion::None);
     ASSERT_EQ(ssg::HitTester{*snapshot}.at( 5, 9999).region, ssg::HitRegion::None);
-    // The header row (row 0) is chrome, not a region.
-    ASSERT_EQ(ssg::HitTester{*snapshot}.at( 0, 0).region, ssg::HitRegion::None);
+    // A top-row coordinate outside visible header fields is chrome.
+    int chromeX = -1;
+    for (int x = snapshot->sections().shell.viewport.columns - 1; x >= 0; --x) {
+        bool occupied = false;
+        for (const auto& node : snapshot->sections().shell.accessibilityNodes) {
+            if (node.kind != ssg::ShellNodeKind::HeaderField) continue;
+            if (x >= node.rect.x && x < node.rect.right()) {
+                occupied = true;
+                break;
+            }
+        }
+        if (!occupied) {
+            chromeX = x;
+            break;
+        }
+    }
+    ASSERT_TRUE(chromeX >= 0);
+    if (chromeX >= 0) {
+        auto topChrome = ssg::HitTester{*snapshot}.at(chromeX, 0);
+        ASSERT_TRUE(topChrome.region != ssg::HitRegion::HeaderField);
+    }
 }
 
 }  // namespace
@@ -507,6 +665,8 @@ int main() {
     RUN(paletteScrollbarAndEmptyAreaClassifyCorrectly);
     RUN(editorScrollbarFractionFeedsScrollToFraction);
     RUN(tabBarCellMapsToItsTabIndex);
+    RUN(statusFieldHitCoordinatesResolvePublishedFieldCommands);
+    RUN(clickingPublishedStatusFieldCommandsDispatchesThroughOneGenericPath);
     RUN(outOfBoundsAndChromeReturnNoTarget);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;

@@ -44,6 +44,7 @@ struct PointerTargets {
     std::optional<ssg::DocumentPosition> document_position;  // an editor hit
     std::optional<ssg::TabId> tab_id;             // a tab hit (tabs[index] id)
     std::optional<std::string> palette_command_id;  // a palette-row candidate id
+    std::optional<std::string> field_command_id;    // a header/footer field command
 };
 
 // Route one pointer event.  `dragging`/`drag_anchor` are the loop's current

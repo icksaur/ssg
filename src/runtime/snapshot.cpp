@@ -16,6 +16,22 @@ std::string composedTabTitle(const TabState& tab) {
     return std::string{"D "} + tab.label;
 }
 
+std::optional<std::string> statusFieldCommandId(
+    std::string_view fieldId,
+    const FollowEditsFooterProjection& followProjection) {
+    if (fieldId == "path") return std::string{"panel.show_files"};
+    if (fieldId == "branch") return std::string{"panel.show_git_status"};
+    if (fieldId == "follow") return followProjection.resumeCommand;
+    return std::nullopt;
+}
+
+void bindStatusFieldCommands(std::vector<StatusField>& fields,
+                             const FollowEditsFooterProjection& followProjection) {
+    for (auto& field : fields) {
+        field.commandId = statusFieldCommandId(field.id, followProjection);
+    }
+}
+
 } // namespace
 
 DocumentViewState EditorRuntime::Impl::documentView() const {
@@ -110,6 +126,8 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
          .currentBranch = currentGitBranch,
          .statusValue = statusProjection.value,
          .followMode = followProjection.mode});
+    bindStatusFieldCommands(statusFields.headerFields, followProjection);
+    bindStatusFieldCommands(statusFields.footerFields, followProjection);
     ShellLayoutRequest request;
     request.viewport = {static_cast<int>(dimensions.columns), static_cast<int>(dimensions.rows)};
     request.reservedPromptRows = prompt.active() ? promptRowCount(prompt.request()->kind) : 0;

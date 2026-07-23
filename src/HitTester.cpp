@@ -101,6 +101,24 @@ RegionHit HitTester::at(int column, int row) const {
         return {};
     }
 
+    for (auto const& node : shell.accessibilityNodes) {
+        if (!contains(node.rect, column, row)) continue;
+        if (node.kind == ShellNodeKind::HeaderField) {
+            RegionHit hit;
+            hit.region = HitRegion::HeaderField;
+            hit.fieldId = node.id;
+            hit.commandId = node.commandId;
+            return hit;
+        }
+        if (node.kind == ShellNodeKind::FooterField) {
+            RegionHit hit;
+            hit.region = HitRegion::FooterField;
+            hit.fieldId = node.id;
+            hit.commandId = node.commandId;
+            return hit;
+        }
+    }
+
     // The side panel and its gutter occupy the leftmost columns, disjoint from
     // the editor/palette pane.
     if (shell.panel && contains(*shell.panel, column, row)) {

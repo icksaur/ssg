@@ -751,6 +751,9 @@ int main(int argc, char** argv) {
                             targets.palette_command_id =
                                 candidates[order[hit.itemIndex]].id;
                         }
+                    } else if (hit.region == ssg::HitRegion::HeaderField ||
+                               hit.region == ssg::HitRegion::FooterField) {
+                        targets.field_command_id = hit.commandId;
                     }
                 }
                 auto plan =

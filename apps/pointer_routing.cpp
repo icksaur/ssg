@@ -43,6 +43,12 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
                      ssg::PaletteExecuteArguments{*targets.palette_command_id}});
                 return dispatch;
             }
+            if ((hit.region == ssg::HitRegion::HeaderField ||
+                 hit.region == ssg::HitRegion::FooterField) &&
+                targets.field_command_id) {
+                dispatch.commands.push_back({*targets.field_command_id, std::any{}});
+                return dispatch;
+            }
             // A left press on a tree row selects that node and then activates it
             // (opens a file / toggles a directory), matching the keyboard
             // select-then-Enter behavior. The node id travels on the hit.
