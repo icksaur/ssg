@@ -7,6 +7,17 @@
 
 namespace ssg {
 
+namespace {
+
+std::string composedTabTitle(const TabState& tab) {
+    if (tab.kind != TabKind::LiveDiff) {
+        return tab.label;
+    }
+    return std::string{"D "} + tab.label;
+}
+
+} // namespace
+
 DocumentViewState EditorRuntime::Impl::documentView() const {
     auto const* document = activeDocument();
     if (document == nullptr) return {Revision{0}, {}, ByteOffset{0}, std::nullopt};
@@ -87,7 +98,7 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
                                                PaletteReport const& paletteReport) const {
     std::vector<TabLabel> labels;
     for (auto const& tab : tabs.viewState().tabs) {
-        labels.push_back({tab.label, tab.label,
+        labels.push_back({composedTabTitle(tab), tab.label,
                           tabs.viewState().active == tab.id, tab.dirty});
     }
     auto statusProjection = status.footerProjection();

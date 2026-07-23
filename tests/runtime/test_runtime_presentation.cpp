@@ -3,6 +3,7 @@
 #include <ssg/EditorRuntime.h>
 #include <ssg/EditorSessionBuilder.h>
 #include <ssg/Keymap.h>
+#include <ssg/Renderer.h>
 #include <ssg/Settings.h>
 
 #include <filesystem>
@@ -22,6 +23,35 @@ std::filesystem::path uniqueRoot() {
     std::ofstream out{root / "workspace" / "long.txt"};
     for (int line = 0; line < 80; ++line) out << "line " << line << "\n";
     return root;
+}
+
+void openLiveDiffTabForLongTxt(ssg::EditorRuntime& runtime) {
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"file.open", runtime.revision(),
+                               std::string{"long.txt"}})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .applyGitDiffScan(
+                        {.revision = ssg::Revision{1},
+                         .baselineIdentity = "head-z:index-1",
+                         .files = {{.id = ssg::DiffFileId{"long-id"},
+                                    .path = "long.txt",
+                                    .baselineContent = std::string{"before\n"},
+                                    .workingContent = std::string{"after\n"}}}})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"panel.show_git_status", runtime.revision(), {}})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"tree.select_next", runtime.revision(), {}})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"tree.activate", runtime.revision(), {}})
+                    .accepted());
 }
 
 TEST(viewportShellSettingsAndThemeAreLiveSections) {
@@ -330,6 +360,108 @@ TEST(shellStatusFieldsRenderBranchWhenGitBranchIsApplied) {
     }
 }
 
+TEST(liveDiffTabTitlePrefixesGlyphWithoutChangingDocumentTabs) {
+    auto root = uniqueRoot();
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1})
+                    .accepted());
+
+    openLiveDiffTabForLongTxt(runtime);
+    auto snapshot =
+        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+
+    std::optional<std::string> documentTitle;
+    std::optional<std::string> liveDiffTitle;
+    for (const auto& node : snapshot->sections().shell.accessibilityNodes) {
+        if (node.kind != ssg::ShellNodeKind::Tab) {
+            continue;
+        }
+        if (node.content == "long.txt") {
+            documentTitle = node.content;
+        }
+        if (node.content == "D long.txt") {
+            liveDiffTitle = node.content;
+        }
+    }
+    ASSERT_TRUE(documentTitle.has_value());
+    ASSERT_TRUE(liveDiffTitle.has_value());
+}
+
+TEST(liveDiffTabGlyphColorTracksThemePalette) {
+    auto root = uniqueRoot();
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1})
+                    .accepted());
+
+    openLiveDiffTabForLongTxt(runtime);
+    auto darkSnapshot =
+        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    ASSERT_TRUE(darkSnapshot.has_value());
+    if (!darkSnapshot) return;
+    std::optional<ssg::TabId> documentTabId;
+    for (const auto& tab : darkSnapshot->sections().tabs.tabs) {
+        if (tab.kind == ssg::TabKind::Document) {
+            documentTabId = tab.id;
+            break;
+        }
+    }
+    ASSERT_TRUE(documentTabId.has_value());
+    if (!documentTabId) return;
+    auto darkGrid = ssg::Renderer{}.render(*darkSnapshot);
+    const auto* darkLiveTab = [&]() -> const ssg::AccessibilityNode* {
+        for (const auto& node : darkSnapshot->sections().shell.accessibilityNodes) {
+            if (node.kind == ssg::ShellNodeKind::Tab &&
+                node.content.starts_with("D ")) {
+                return &node;
+            }
+        }
+        return nullptr;
+    }();
+    ASSERT_TRUE(darkLiveTab != nullptr);
+    if (!darkLiveTab) return;
+    const auto darkCell = darkGrid.at(darkLiveTab->rect.x, darkLiveTab->rect.y);
+    const auto darkColor = darkGrid.palette[darkCell.foreground];
+
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"tab.activate", runtime.revision(),
+                               *documentTabId})
+                    .accepted());
+    auto inactiveSnapshot =
+        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    ASSERT_TRUE(inactiveSnapshot.has_value());
+    if (!inactiveSnapshot) return;
+    auto inactiveGrid = ssg::Renderer{}.render(*inactiveSnapshot);
+    const auto* inactiveLiveTab = [&]() -> const ssg::AccessibilityNode* {
+        for (const auto& node :
+             inactiveSnapshot->sections().shell.accessibilityNodes) {
+            if (node.kind == ssg::ShellNodeKind::Tab &&
+                node.content.starts_with("D ")) {
+                return &node;
+            }
+        }
+        return nullptr;
+    }();
+    ASSERT_TRUE(inactiveLiveTab != nullptr);
+    if (!inactiveLiveTab) return;
+    const auto inactiveCell = inactiveGrid.at(inactiveLiveTab->rect.x,
+                                              inactiveLiveTab->rect.y);
+    const auto inactiveColor = inactiveGrid.palette[inactiveCell.foreground];
+    ASSERT_TRUE(darkColor != inactiveColor);
+}
+
 TEST(panelShowCommandsToggleAndSwitchProviders) {
     auto root = uniqueRoot();
     auto created = ssg::EditorRuntime::create(
@@ -435,6 +567,8 @@ int main() {
     RUN(shellStatusFieldsUseRegisteredProviders);
     RUN(shellStatusFieldsPreserveDefaultContentOrderAndLabels);
     RUN(shellStatusFieldsRenderBranchWhenGitBranchIsApplied);
+    RUN(liveDiffTabTitlePrefixesGlyphWithoutChangingDocumentTabs);
+    RUN(liveDiffTabGlyphColorTracksThemePalette);
     RUN(panelShowCommandsToggleAndSwitchProviders);
     RUN(editorScrollUsesTheRealPaneHeightNotAHardcoded24);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
