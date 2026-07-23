@@ -724,6 +724,37 @@ TEST(liveDiffOpenClassificationPausesOnlyForUserActivation) {
     ASSERT_EQ(afterUser->sections().followEdits.mode, ssg::FollowMode::Paused);
 }
 
+TEST(tabSwitchPausesFollowViaNavigationPath) {
+    auto root = uniqueRoot();
+    std::ofstream{root / "workspace" / "other.txt"} << "other\n";
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime
+                    .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                            ssg::ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"file.open", runtime.revision(),
+                               std::string{"needle.txt"}})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"file.open", runtime.revision(),
+                               std::string{"other.txt"}})
+                    .accepted());
+    ASSERT_EQ(followMode(runtime), ssg::FollowMode::Following);
+
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"tab.previous", runtime.revision(), {}})
+                    .accepted());
+    ASSERT_EQ(followMode(runtime), ssg::FollowMode::Paused);
+}
+
 TEST(followPauseOnEditTransitionTable) {
     {
         auto runtime = followPauseRuntime("alpha needle omega\n");
@@ -864,11 +895,13 @@ TEST(followPauseOnEditTransitionTable) {
         auto runtime = followPauseRuntime("alpha needle omega\n");
         ASSERT_TRUE(runtime != nullptr);
         if (!runtime) return;
-        ASSERT_TRUE(runtime
-                        ->dispatch(ssg::ClientId{3},
-                                   {"text.insert", runtime->revision(),
-                                    ssg::TextInputArguments{"x"}})
-                        .accepted());
+        // Recovery/replay-originated edits execute under a System principal.
+        ASSERT_TRUE(
+            runtime
+                ->dispatch(ssg::ClientId{3},
+                           {"text.insert", runtime->revision(),
+                            ssg::TextInputArguments{"x"}})
+                .accepted());
         ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Following);
     }
     {
@@ -877,12 +910,7 @@ TEST(followPauseOnEditTransitionTable) {
         if (!runtime) return;
         ASSERT_TRUE(runtime
                         ->dispatch(ssg::ClientId{1},
-                                   {"file.open", runtime->revision(),
-                                    std::string{"other.txt"}})
-                        .accepted());
-        ASSERT_TRUE(runtime
-                        ->dispatch(ssg::ClientId{1},
-                                   {"tab.previous", runtime->revision(), {}})
+                                   {"pane.next", runtime->revision(), {}})
                         .accepted());
         ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Paused);
     }
@@ -1445,6 +1473,7 @@ int main() {
     RUN(documentAndLiveDiffTabsCloseIndependently);
     RUN(gitStatusActivationOpensDeletedLiveDiffWithoutDiskFile);
     RUN(liveDiffOpenClassificationPausesOnlyForUserActivation);
+    RUN(tabSwitchPausesFollowViaNavigationPath);
     RUN(followPauseOnEditTransitionTable);
     RUN(paletteOpenEntersPromptFocusAndPublishesCandidates);
     RUN(paletteExecuteValidatesCandidateMembership);

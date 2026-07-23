@@ -40,6 +40,12 @@ bool boolSetting(SettingsModel const& settings, SettingKey key, bool fallback) {
     return fallback;
 }
 
+bool userNavigationShellCommand(std::string_view id) {
+    return id == "pane.next" || id == "pane.previous" ||
+           id == "pane.focus_left" || id == "pane.focus_right" ||
+           id == "pane.focus_up" || id == "pane.focus_down";
+}
+
 CommandHandlerResult setWordWrap(EditorRuntime::Impl& runtime) {
     bool next = !boolSetting(runtime.settings, SettingKey::WordWrap, runtime.wordWrap);
     auto mutation = runtime.settings.set(SettingScope::Workspace, SettingKey::WordWrap, next);
@@ -287,8 +293,15 @@ void bindRuntimePresentation(EditorSessionBuilder& builder, EditorRuntime::Impl&
         });
     });
     for (auto const& descriptor : ShellCommandSet{}.descriptors) {
-        builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const&) {
-            return runtime.runTransaction([&] { return shellCommand(runtime, descriptor.id); });
+        builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext& context, std::any const&) {
+            return runtime.runTransaction([&] {
+                auto result = shellCommand(runtime, descriptor.id);
+                if (result.accepted && userNavigationShellCommand(descriptor.id)) {
+                    runtime.recordNavigation(context.principal().clientId(),
+                                             NavigationClass::User);
+                }
+                return result;
+            });
         });
     }
     for (auto const& descriptor : PromptStatusCommandSet{}.descriptors) {
