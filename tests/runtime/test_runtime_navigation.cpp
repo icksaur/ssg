@@ -54,6 +54,48 @@ std::size_t countTabsOfKind(const ssg::TabViewState& tabs, ssg::TabKind kind) {
         }));
 }
 
+ssg::FollowMode followMode(ssg::EditorRuntime& runtime) {
+    auto snapshot =
+        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) {
+        return ssg::FollowMode::Paused;
+    }
+    return snapshot->sections().followEdits.mode;
+}
+
+std::unique_ptr<ssg::EditorRuntime> followPauseRuntime(std::string text) {
+    auto root = uniqueRoot();
+    std::ofstream{root / "workspace" / "needle.txt"} << text;
+    std::ofstream{root / "workspace" / "other.txt"} << "other\n";
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) {
+        return nullptr;
+    }
+    auto runtime = std::move(created.runtime);
+    ASSERT_TRUE(runtime
+                    ->attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                             ssg::ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    ->attach({ssg::ClientId{2}, ssg::InvocationOrigin::Lua},
+                             ssg::ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    ->attach({ssg::ClientId{3}, ssg::InvocationOrigin::System},
+                             ssg::ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    ->dispatch(ssg::ClientId{1},
+                               {"file.open", runtime->revision(),
+                                std::string{"needle.txt"}})
+                    .accepted());
+    ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Following);
+    return runtime;
+}
+
 TEST(searchTreeDiffAndFollowSectionsUseRuntimeState) {
     auto root = uniqueRoot();
     auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
@@ -682,6 +724,191 @@ TEST(liveDiffOpenClassificationPausesOnlyForUserActivation) {
     ASSERT_EQ(afterUser->sections().followEdits.mode, ssg::FollowMode::Paused);
 }
 
+TEST(followPauseOnEditTransitionTable) {
+    {
+        auto runtime = followPauseRuntime("alpha needle omega\n");
+        ASSERT_TRUE(runtime != nullptr);
+        if (!runtime) return;
+        ASSERT_TRUE(runtime
+                        ->dispatch(ssg::ClientId{1},
+                                   {"text.insert", runtime->revision(),
+                                    ssg::TextInputArguments{"x"}})
+                        .accepted());
+        ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Paused);
+    }
+    {
+        auto runtime = followPauseRuntime("alpha needle omega\n");
+        ASSERT_TRUE(runtime != nullptr);
+        if (!runtime) return;
+        ASSERT_TRUE(runtime
+                        ->dispatch(ssg::ClientId{1},
+                                   {"select.right", runtime->revision(), {}})
+                        .accepted());
+        ASSERT_TRUE(runtime
+                        ->dispatch(ssg::ClientId{1},
+                                   {"clipboard.cut", runtime->revision(), {}})
+                        .accepted());
+        ASSERT_TRUE(runtime
+                        ->dispatch(ssg::ClientId{1},
+                                   {"follow_edits.resume", runtime->revision(), {}})
+                        .accepted());
+        ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Following);
+        ASSERT_TRUE(runtime
+                        ->dispatch(ssg::ClientId{1},
+                                   {"clipboard.paste", runtime->revision(), {}})
+                        .accepted());
+        ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Paused);
+    }
+    {
+        auto runtime = followPauseRuntime("alpha needle omega\n");
+        ASSERT_TRUE(runtime != nullptr);
+        if (!runtime) return;
+        ASSERT_TRUE(runtime
+                        ->dispatch(ssg::ClientId{1},
+                                   {"text.insert", runtime->revision(),
+                                    ssg::TextInputArguments{"x"}})
+                        .accepted());
+        ASSERT_TRUE(runtime
+                        ->dispatch(ssg::ClientId{1},
+                                   {"follow_edits.resume", runtime->revision(), {}})
+                        .accepted());
+        ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Following);
+        ASSERT_TRUE(runtime
+                        ->dispatch(ssg::ClientId{1},
+                                   {"edit.undo", runtime->revision(), {}})
+                        .accepted());
+        ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Paused);
+    }
+    {
+        auto runtime = followPauseRuntime("alpha needle omega\n");
+        ASSERT_TRUE(runtime != nullptr);
+        if (!runtime) return;
+        ASSERT_TRUE(runtime
+                        ->dispatch(ssg::ClientId{1},
+                                   {"text.insert", runtime->revision(),
+                                    ssg::TextInputArguments{"x"}})
+                        .accepted());
+        ASSERT_TRUE(runtime
+                        ->dispatch(ssg::ClientId{1},
+                                   {"follow_edits.resume", runtime->revision(), {}})
+                        .accepted());
+        ASSERT_TRUE(runtime
+                        ->dispatch(ssg::ClientId{1},
+                                   {"edit.undo", runtime->revision(), {}})
+                        .accepted());
+        ASSERT_TRUE(runtime
+                        ->dispatch(ssg::ClientId{1},
+                                   {"follow_edits.resume", runtime->revision(), {}})
+                        .accepted());
+        ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Following);
+        ASSERT_TRUE(runtime
+                        ->dispatch(ssg::ClientId{1},
+                                   {"edit.redo", runtime->revision(), {}})
+                        .accepted());
+        ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Paused);
+    }
+    {
+        auto runtime = followPauseRuntime("alpha needle omega\n");
+        ASSERT_TRUE(runtime != nullptr);
+        if (!runtime) return;
+        ASSERT_TRUE(runtime
+                        ->dispatch(ssg::ClientId{1},
+                                   {"replace.open", runtime->revision(), {}})
+                        .accepted());
+        ASSERT_TRUE(runtime
+                        ->dispatch(ssg::ClientId{1},
+                                   {"find.update_query", runtime->revision(),
+                                    ssg::FindQueryArguments{"needle"}})
+                        .accepted());
+        ASSERT_TRUE(runtime
+                        ->dispatch(ssg::ClientId{1},
+                                   {"replace.update_replacement",
+                                    runtime->revision(),
+                                    ssg::FindQueryArguments{"pin"}})
+                        .accepted());
+        ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Following);
+        ASSERT_TRUE(runtime
+                        ->dispatch(ssg::ClientId{1},
+                                   {"replace.current", runtime->revision(), {}})
+                        .accepted());
+        ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Paused);
+    }
+    {
+        auto runtime = followPauseRuntime("alpha\nbeta\n");
+        ASSERT_TRUE(runtime != nullptr);
+        if (!runtime) return;
+        ASSERT_TRUE(runtime
+                        ->dispatch(ssg::ClientId{1},
+                                   {"select.add_cursor_down",
+                                    runtime->revision(), {}})
+                        .accepted());
+        ASSERT_TRUE(runtime
+                        ->dispatch(ssg::ClientId{1},
+                                   {"text.insert", runtime->revision(),
+                                    ssg::TextInputArguments{"x"}})
+                        .accepted());
+        ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Paused);
+    }
+    {
+        auto runtime = followPauseRuntime("alpha needle omega\n");
+        ASSERT_TRUE(runtime != nullptr);
+        if (!runtime) return;
+        ASSERT_TRUE(runtime
+                        ->dispatch(ssg::ClientId{2},
+                                   {"text.insert", runtime->revision(),
+                                    ssg::TextInputArguments{"x"}})
+                        .accepted());
+        ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Following);
+    }
+    {
+        auto runtime = followPauseRuntime("alpha needle omega\n");
+        ASSERT_TRUE(runtime != nullptr);
+        if (!runtime) return;
+        ASSERT_TRUE(runtime
+                        ->dispatch(ssg::ClientId{3},
+                                   {"text.insert", runtime->revision(),
+                                    ssg::TextInputArguments{"x"}})
+                        .accepted());
+        ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Following);
+    }
+    {
+        auto runtime = followPauseRuntime("alpha needle omega\n");
+        ASSERT_TRUE(runtime != nullptr);
+        if (!runtime) return;
+        ASSERT_TRUE(runtime
+                        ->dispatch(ssg::ClientId{1},
+                                   {"file.open", runtime->revision(),
+                                    std::string{"other.txt"}})
+                        .accepted());
+        ASSERT_TRUE(runtime
+                        ->dispatch(ssg::ClientId{1},
+                                   {"tab.previous", runtime->revision(), {}})
+                        .accepted());
+        ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Paused);
+    }
+    {
+        auto runtime = followPauseRuntime("alpha needle omega\n");
+        ASSERT_TRUE(runtime != nullptr);
+        if (!runtime) return;
+        ASSERT_TRUE(runtime
+                        ->dispatch(ssg::ClientId{1},
+                                   {"view.scroll_lines", runtime->revision(),
+                                    ssg::ScrollLinesArguments{1}})
+                        .accepted());
+        ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Paused);
+    }
+    {
+        auto runtime = followPauseRuntime("alpha needle omega\n");
+        ASSERT_TRUE(runtime != nullptr);
+        if (!runtime) return;
+        ASSERT_TRUE(runtime
+                        ->dispatch(ssg::ClientId{1},
+                                   {"cursor.right", runtime->revision(), {}})
+                        .accepted());
+        ASSERT_EQ(followMode(*runtime), ssg::FollowMode::Paused);
+    }
+}
+
 TEST(paletteOpenEntersPromptFocusAndPublishesCandidates) {
     auto root = uniqueRoot();
     auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
@@ -1218,6 +1445,7 @@ int main() {
     RUN(documentAndLiveDiffTabsCloseIndependently);
     RUN(gitStatusActivationOpensDeletedLiveDiffWithoutDiskFile);
     RUN(liveDiffOpenClassificationPausesOnlyForUserActivation);
+    RUN(followPauseOnEditTransitionTable);
     RUN(paletteOpenEntersPromptFocusAndPublishesCandidates);
     RUN(paletteExecuteValidatesCandidateMembership);
     RUN(paletteCandidatesCarryLabelsAndKeyDetail);

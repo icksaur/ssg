@@ -150,6 +150,7 @@ public:
         std::vector<FollowDiffChange> changes);
     [[nodiscard]] FollowEditsResult applyNavigation(
         const FollowNavigation& navigation);
+    [[nodiscard]] FollowEditsResult notifyLocalEdit();
     [[nodiscard]] FollowEditsResult pause();
     [[nodiscard]] FollowEditsResult resume(const DiffViewState& currentDiff);
 

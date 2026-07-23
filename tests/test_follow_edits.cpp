@@ -126,6 +126,20 @@ TEST(programmaticRevealDoesNotPauseButUserNavigationDoes) {
     ASSERT_EQ(model.viewState().mode, FollowMode::Paused);
 }
 
+TEST(localEditPausesOnlyWhenFollowing) {
+    FollowEditsModel model;
+    const auto before = model.viewState();
+    ASSERT_TRUE(model.notifyLocalEdit().accepted());
+    const auto paused = model.viewState();
+    ASSERT_EQ(paused.mode, FollowMode::Paused);
+    ASSERT_EQ(paused.generation, before.generation + 1);
+
+    ASSERT_TRUE(model.notifyLocalEdit().accepted());
+    const auto stillPaused = model.viewState();
+    ASSERT_EQ(stillPaused.mode, FollowMode::Paused);
+    ASSERT_EQ(stillPaused.generation, paused.generation);
+}
+
 DiffViewState currentDiff(std::initializer_list<DiffFileView> files,
                            std::uint64_t revision) {
     return {Revision{revision}, files};
@@ -415,6 +429,7 @@ int main() {
     RUN(burstActivatesOnlyLastFileAndAdvancesOnce);
     RUN(burstDoesNotRevealEarlierFileWhenLastFileHasNoNewHunk);
     RUN(programmaticRevealDoesNotPauseButUserNavigationDoes);
+    RUN(localEditPausesOnlyWhenFollowing);
     RUN(dirtyConflictUsesDiskDiffTargetWithoutBufferPolicy);
     RUN(queueIsBoundedAndSameFileReplacesInPlace);
     RUN(resumeResolvesRenameDeleteAndSkipsRevertedOrMissingTargets);

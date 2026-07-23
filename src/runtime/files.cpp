@@ -154,10 +154,12 @@ CommandHandlerResult bindFile(EditorRuntime::Impl& runtime,
 }
 
 CommandHandlerResult bindTab(EditorRuntime::Impl& runtime,
+                              ClientId client,
                               TabCommand command,
                               std::any const& payload) {
     auto active = runtime.tabs.viewState().active;
     auto tab = payloadAs<TabId>(payload) ? *payloadAs<TabId>(payload) : active.value_or(TabId{0});
+    const auto activeTabBefore = runtime.tabs.viewState().active;
     // Remember the active document so we can reveal the caret only when the tab
     // command actually switches to a different document (activate/next/previous/
     // a close that changes the active tab / reopen). move_left/move_right and
@@ -189,6 +191,11 @@ CommandHandlerResult bindTab(EditorRuntime::Impl& runtime,
     // Keyboard tab switching uses tab.next/tab.previous, which do not reach here.
     if (command == TabCommand::Activate) {
         runtime.shell.focusEditor();
+    }
+    if (runtime.tabs.viewState().active != activeTabBefore &&
+        (command == TabCommand::Activate || command == TabCommand::Next ||
+         command == TabCommand::Previous)) {
+        runtime.recordNavigation(client, NavigationClass::User);
     }
     return success();
 }
@@ -271,8 +278,11 @@ void bindRuntimeFiles(EditorSessionBuilder& builder, EditorRuntime::Impl& runtim
         });
     }
     for (auto const& descriptor : tabCommands.descriptors()) {
-        builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const& payload) {
-            return runtime.runTransaction([&] { return bindTab(runtime, descriptor.command, payload); });
+        builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext& context, std::any const& payload) {
+            return runtime.runTransaction([&] {
+                return bindTab(runtime, context.principal().clientId(),
+                               descriptor.command, payload);
+            });
         });
     }
     for (auto const& descriptor : kTextEncodingCommandSet.descriptors) {

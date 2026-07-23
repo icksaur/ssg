@@ -183,6 +183,15 @@ FollowEditsResult FollowEditsModel::applyNavigation(
     return {};
 }
 
+FollowEditsResult FollowEditsModel::notifyLocalEdit() {
+    if (state_.mode != FollowMode::Following) {
+        return {};
+    }
+    state_.mode = FollowMode::Paused;
+    advanceGeneration();
+    return {};
+}
+
 FollowEditsResult FollowEditsModel::pause() {
     state_.mode = FollowMode::Paused;
     advanceGeneration();

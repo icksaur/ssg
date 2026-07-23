@@ -7,6 +7,7 @@
 #include <fstream>
 #include <iterator>
 #include <stdexcept>
+#include <unordered_map>
 #include <system_error>
 
 namespace ssg {
@@ -258,6 +259,30 @@ std::size_t lineStartOffset(std::string_view text, std::size_t line) {
         --line;
     }
     return offset;
+}
+
+std::unordered_map<std::uint64_t, Revision> documentRevisions(
+    const Workspace& workspace) {
+    std::unordered_map<std::uint64_t, Revision> revisions;
+    for (auto const id : workspace.documents()) {
+        revisions.emplace(id.value(), workspace.document(id).revision());
+    }
+    return revisions;
+}
+
+bool existingDocumentMutated(
+    const std::unordered_map<std::uint64_t, Revision>& before,
+    const Workspace& workspace) {
+    for (auto const id : workspace.documents()) {
+        const auto found = before.find(id.value());
+        if (found == before.end()) {
+            continue;
+        }
+        if (workspace.document(id).revision() != found->second) {
+            return true;
+        }
+    }
+    return false;
 }
 
 std::optional<std::filesystem::path> pathFromUri(std::string_view uri) {
@@ -1379,19 +1404,32 @@ std::uint64_t EditorRuntime::liveDocumentRuntimeStateCountForTests() {
 }
 
 CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& command) {
-    auto result = impl_->session->dispatch(clientId, command);
-    impl_->reconcileFindDocument();
-    impl_->reconcilePromptFocus();
+    const auto attached = impl_->session->attachedClient(clientId);
+    const auto origin =
+        attached ? attached->principal.origin() : InvocationOrigin::System;
+    const auto shouldPauseForLocalEdit =
+        origin != InvocationOrigin::Lua && origin != InvocationOrigin::System;
+    const auto dispatchWithFollowEditPause =
+        [&](const ClientCommand& dispatched) {
+            const auto revisionsBefore = documentRevisions(impl_->workspace);
+            auto result = impl_->session->dispatch(clientId, dispatched);
+            impl_->reconcileFindDocument();
+            impl_->reconcilePromptFocus();
+            if (result.accepted() && shouldPauseForLocalEdit &&
+                existingDocumentMutated(revisionsBefore, impl_->workspace)) {
+                (void)impl_->follow.notifyLocalEdit();
+            }
+            return result;
+        };
+    auto result = dispatchWithFollowEditPause(command);
     // palette.execute validates the selected candidate then defers execution to
     // here so the target runs through the registry (with its own capability and
     // revision checks) outside the non-reentrant session lock.
     if (result.accepted() && impl_->pendingPaletteTarget) {
         auto target = std::move(*impl_->pendingPaletteTarget);
         impl_->pendingPaletteTarget.reset();
-        auto targetResult = impl_->session->dispatch(
-            clientId, {target, impl_->session->revision(), {}});
-        impl_->reconcileFindDocument();
-        impl_->reconcilePromptFocus();
+        auto targetResult = dispatchWithFollowEditPause(
+            ClientCommand{target, impl_->session->revision(), {}});
         return targetResult;
     }
     return result;
