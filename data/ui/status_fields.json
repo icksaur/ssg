@@ -1,6 +1,6 @@
 [
-  {"id":"cwd","region":"header","collapse_rank":0,"accessible_label":"Workspace"},
-  {"id":"file","region":"header","collapse_rank":1,"accessible_label":"File"},
+  {"id":"path","region":"header","collapse_rank":0,"accessible_label":"Path"},
+  {"id":"branch","region":"header","collapse_rank":1,"accessible_label":"Branch"},
   {"id":"status","region":"footer","collapse_rank":0,"accessible_label":"Status"},
   {"id":"follow","region":"footer","collapse_rank":1,"accessible_label":"Follow edits"}
 ]

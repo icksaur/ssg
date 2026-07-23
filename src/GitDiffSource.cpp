@@ -23,12 +23,14 @@ std::set<DiffFileId> currentIds(const DiffModel& model) {
     return ids;
 }
 
-GitDiffScan buildPublishedScan(const DiffModel& model,
-                               const std::map<DiffFileId, GitDiffScanFile>& files,
-                               const std::string& baselineIdentity) {
+GitDiffScan buildPublishedScan(const std::map<DiffFileId, GitDiffScanFile>& files,
+                               const std::string& baselineIdentity,
+                               const std::optional<std::string>& currentBranch,
+                               Revision publishedRevision) {
     GitDiffScan published{
-        .revision = model.viewState().revision,
+        .revision = publishedRevision,
         .baselineIdentity = baselineIdentity,
+        .currentBranch = currentBranch,
     };
     published.files.reserve(files.size());
     for (const auto& [id, file] : files) {
@@ -46,12 +48,14 @@ GitDiffSource::GitDiffSource(DiffModel& diffModel, GitDiffConfig config)
       nextRevision_{Revision{diffModel.viewState().revision.value() + 1}} {}
 
 GitDiffRefreshResult GitDiffSource::refresh(GitRepository& repository) {
+    currentBranch_ = repository.currentBranch();
     auto scan = repository.scanDiff(config_);
     return applyFullScan(scan);
 }
 
 GitDiffRefreshResult GitDiffSource::refreshPaths(
     GitRepository& repository, const std::vector<std::filesystem::path>& paths) {
+    currentBranch_ = repository.currentBranch();
     auto scan = repository.scanPaths(paths, config_);
     return applyPathScan(repository, scan);
 }
@@ -124,8 +128,10 @@ GitDiffRefreshResult GitDiffSource::applyFullScan(const GitDiffScan& scan) {
     nextRevision_ = stagedNextRevision;
     currentFiles_ = std::move(stagedFiles);
     baselineIdentity_ = scan.baselineIdentity;
-    latestAppliedScan_ =
-        buildPublishedScan(*diffModel_, currentFiles_, baselineIdentity_);
+    auto publishedRevision = publishedRevision_;
+    publishedRevision_ = Revision{publishedRevision_.value() + 1};
+    latestAppliedScan_ = buildPublishedScan(currentFiles_, baselineIdentity_,
+                                            currentBranch_, publishedRevision);
     return {.applied = true, .requestedRescan = false, .accepted = true};
 }
 
@@ -213,8 +219,10 @@ GitDiffRefreshResult GitDiffSource::applyPathScan(
     nextRevision_ = stagedNextRevision;
     currentFiles_ = std::move(stagedFiles);
     baselineIdentity_ = scan.baselineIdentity;
-    latestAppliedScan_ =
-        buildPublishedScan(*diffModel_, currentFiles_, baselineIdentity_);
+    auto publishedRevision = publishedRevision_;
+    publishedRevision_ = Revision{publishedRevision_.value() + 1};
+    latestAppliedScan_ = buildPublishedScan(currentFiles_, baselineIdentity_,
+                                            currentBranch_, publishedRevision);
     return {.applied = true, .requestedRescan = false, .accepted = true};
 }
 

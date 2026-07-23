@@ -90,15 +90,15 @@ std::vector<StatusFieldCatalogEntry> p0StatusFieldCatalog() {
 
 std::vector<StatusFieldProviderBinding> defaultStatusFieldProviders() {
     return {
-        {"cwd",
+        {"path",
          [](StatusFieldProviderContext const& context)
              -> std::optional<std::string> {
              return context.workspaceRoot.string();
          }},
-        {"file",
+        {"branch",
          [](StatusFieldProviderContext const& context)
              -> std::optional<std::string> {
-             return context.currentPathLabel;
+             return context.currentBranch;
          }},
         {"status",
          [](StatusFieldProviderContext const& context)

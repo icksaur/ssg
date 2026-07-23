@@ -147,6 +147,8 @@ constexpr auto kExpectedCommands = std::to_array<ExpectedCommand>({
     {"pane.focus_down", "shell-layout"},
     {"panel.toggle", "shell-layout"},
     {"panel.focus", "shell-layout"},
+    {"panel.show_files", "shell-layout"},
+    {"panel.show_git_status", "shell-layout"},
     {"panel.next_provider", "shell-layout"},
     {"panel.previous_provider", "shell-layout"},
     {"tree.toggle_expanded", "tree-providers"},
@@ -213,14 +215,14 @@ constexpr auto kExpectedCategoryCounts =
         {"palette", 5},    {"goto", 8},      {"find", 9},
         {"replace", 6},    {"search", 3},    {"completion", 5},
         {"hover", 2},      {"rename", 1},    {"pane", 9},
-        {"panel", 4},
+        {"panel", 6},
         {"tree", 7},
         {"prompt", 4},     {"status", 4},    {"workspace", 1},
         {"file", 15},      {"tab", 9},       {"external", 3},
         {"settings", 6},   {"follow_edits", 2}, {"diff", 3},
     });
 
-static_assert(kExpectedCommands.size() == 170);
+static_assert(kExpectedCommands.size() == 172);
 
 std::optional<std::string> field(const std::string& object,
                                  const std::string& name) {

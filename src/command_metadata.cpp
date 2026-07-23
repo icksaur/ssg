@@ -11,7 +11,7 @@ namespace {
 
 // Authored labels for the commands most often surfaced in the palette.  Any id
 // absent here is humanized from its segments.
-constexpr std::array<std::pair<std::string_view, std::string_view>, 34> kLabels{{
+constexpr std::array<std::pair<std::string_view, std::string_view>, 36> kLabels{{
     {"file.save", "Save File"},
     {"file.save_all", "Save All Files"},
     {"file.save_as", "Save File As"},
@@ -31,6 +31,8 @@ constexpr std::array<std::pair<std::string_view, std::string_view>, 34> kLabels{
     {"palette.open", "Command Palette"},
     {"panel.toggle", "Toggle Sidebar"},
     {"panel.focus", "Focus Sidebar"},
+    {"panel.show_files", "Show Files Sidebar"},
+    {"panel.show_git_status", "Show Git Sidebar"},
     {"tab.next", "Next Tab"},
     {"tab.previous", "Previous Tab"},
     {"tab.close", "Close Tab"},

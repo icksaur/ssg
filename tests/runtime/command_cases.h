@@ -124,6 +124,8 @@ inline constexpr auto runtime_command_cases = std::to_array<RuntimeCommandCase>(
     RuntimeCommandCase{"pane.focus_down", "shell-layout"},
     RuntimeCommandCase{"panel.toggle", "shell-layout"},
     RuntimeCommandCase{"panel.focus", "shell-layout"},
+    RuntimeCommandCase{"panel.show_files", "shell-layout"},
+    RuntimeCommandCase{"panel.show_git_status", "shell-layout"},
     RuntimeCommandCase{"panel.next_provider", "shell-layout"},
     RuntimeCommandCase{"panel.previous_provider", "shell-layout"},
     RuntimeCommandCase{"tree.toggle_expanded", "tree-providers"},
@@ -183,6 +185,6 @@ inline constexpr auto runtime_command_cases = std::to_array<RuntimeCommandCase>(
     RuntimeCommandCase{"diff.open_file", "diff-model"},
 });
 
-static_assert(runtime_command_cases.size() == 170);
+static_assert(runtime_command_cases.size() == 172);
 
 } // namespace ssg::test

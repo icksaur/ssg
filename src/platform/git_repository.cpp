@@ -234,6 +234,40 @@ public:
         return result;
     }
 
+    std::optional<std::string> currentBranch() override {
+        git_repository* repository = nullptr;
+        const int openResult =
+            git_repository_open_ext(&repository, root_.c_str(), 0, nullptr);
+        if (openResult != 0) {
+            return std::nullopt;
+        }
+        auto repositoryGuard = std::unique_ptr<git_repository, decltype(&git_repository_free)>(
+            repository, &git_repository_free);
+
+        git_reference* head = nullptr;
+        if (git_repository_head(&head, repository) != 0) {
+            return std::nullopt;
+        }
+        auto headGuard = std::unique_ptr<git_reference, decltype(&git_reference_free)>(
+            head, &git_reference_free);
+
+        if (git_repository_head_detached(repository) == 1) {
+            const git_oid* oid = git_reference_target(head);
+            if (oid == nullptr || git_oid_is_zero(oid)) {
+                return std::optional<std::string>{"detached"};
+            }
+            auto hex = oidHex(oid);
+            return std::optional<std::string>{
+                hex.substr(0, std::min<std::size_t>(hex.size(), 7))};
+        }
+
+        auto shorthand = git_reference_shorthand(head);
+        if (shorthand == nullptr || std::string_view{shorthand}.empty()) {
+            return std::nullopt;
+        }
+        return std::optional<std::string>{shorthand};
+    }
+
 private:
     std::filesystem::path root_;
 };
@@ -255,6 +289,7 @@ public:
         scan.requestedPaths = paths;
         return scan;
     }
+    std::optional<std::string> currentBranch() override { return std::nullopt; }
 };
 
 }  // namespace

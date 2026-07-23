@@ -179,6 +179,8 @@ TEST(exactOwnedCommandSet) {
         std::string_view{"pane.focus_down"},
         std::string_view{"panel.toggle"},
         std::string_view{"panel.focus"},
+        std::string_view{"panel.show_files"},
+        std::string_view{"panel.show_git_status"},
         std::string_view{"panel.next_provider"},
         std::string_view{"panel.previous_provider"},
         std::string_view{"view.toggle_distraction_free"},
@@ -287,7 +289,7 @@ TEST(statusFieldManifestHasExactOrderAndLabels) {
     const std::string json((std::istreambuf_iterator<char>(input)),
                            std::istreambuf_iterator<char>());
     const std::array ids{
-        "cwd", "file", "status", "follow",
+        "path", "branch", "status", "follow",
     };
     std::size_t position = 0;
     for (const auto* id : ids) {

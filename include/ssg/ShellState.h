@@ -199,7 +199,7 @@ struct ShellCommandDescriptor {
 };
 
 struct ShellCommandSet {
-    std::array<ShellCommandDescriptor, 14> descriptors{{
+    std::array<ShellCommandDescriptor, 16> descriptors{{
         {"pane.split_horizontal"},
         {"pane.split_vertical"},
         {"pane.close"},
@@ -211,6 +211,8 @@ struct ShellCommandSet {
         {"pane.focus_down"},
         {"panel.toggle"},
         {"panel.focus"},
+        {"panel.show_files"},
+        {"panel.show_git_status"},
         {"panel.next_provider"},
         {"panel.previous_provider"},
         {"view.toggle_distraction_free"},
@@ -237,6 +239,7 @@ public:
 
     void togglePanel() noexcept;
     [[nodiscard]] bool focusPanel() noexcept;
+    [[nodiscard]] bool showPanelProvider(std::string_view provider) noexcept;
     void focusEditor() noexcept;
     void enterPromptFocus() noexcept;
     void exitPromptFocus() noexcept;

@@ -276,6 +276,23 @@ bool ShellState::focusPanel() noexcept {
     return true;
 }
 
+bool ShellState::showPanelProvider(std::string_view provider) noexcept {
+    auto found = std::find(impl_->providers.begin(), impl_->providers.end(),
+                           provider);
+    if (found == impl_->providers.end()) return false;
+    auto index = static_cast<std::size_t>(
+        std::distance(impl_->providers.begin(), found));
+    if (impl_->panelRequested && impl_->providerIndex == index) {
+        togglePanel();
+        return true;
+    }
+    impl_->providerIndex = index;
+    if (!impl_->panelRequested) {
+        togglePanel();
+    }
+    return true;
+}
+
 void ShellState::focusEditor() noexcept {
     impl_->focus = FocusTarget::Editor;
     impl_->focusStack.clear();

@@ -40,6 +40,14 @@ int runStatus(const fs::path& root, std::string_view command) {
     return std::system(full.c_str());
 }
 
+std::string trim(std::string text) {
+    while (!text.empty() &&
+           (text.back() == '\n' || text.back() == '\r' || text.back() == ' ')) {
+        text.pop_back();
+    }
+    return text;
+}
+
 std::set<std::string> porcelainCurrentPaths(const fs::path& root) {
     std::set<std::string> paths;
     std::istringstream input{run(root, "status --porcelain")};
@@ -305,12 +313,53 @@ TEST(platformRepositoryOpenFailureIsIncomplete) {
     fs::remove_all(base);
 }
 
+TEST(platformRepositoryCurrentBranchMatchesGitBranchAndDetachedHead) {
+    const auto uniqueSuffix =
+        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    auto root = fs::temp_directory_path() / ("ssg-git-branch-" + uniqueSuffix);
+    fs::remove_all(root);
+    fs::create_directories(root);
+    std::ofstream{root / "a.txt"} << "a0\n";
+    ASSERT_EQ(runStatus(root, "init"), 0);
+    ASSERT_EQ(runStatus(root, "config user.email a@b.c"), 0);
+    ASSERT_EQ(runStatus(root, "config user.name tester"), 0);
+    ASSERT_EQ(runStatus(root, "add a.txt"), 0);
+    ASSERT_EQ(runStatus(root, "commit -m init"), 0);
+
+    auto repository = makePlatformGitRepository(root);
+    auto named = repository->currentBranch();
+    ASSERT_TRUE(named.has_value());
+    ASSERT_EQ(named.value_or(""), trim(run(root, "branch --show-current")));
+
+    ASSERT_EQ(runStatus(root, "checkout --detach"), 0);
+    auto detached = repository->currentBranch();
+    ASSERT_TRUE(detached.has_value());
+    ASSERT_EQ(detached.value_or(""), trim(run(root, "rev-parse --short HEAD")));
+
+    fs::remove_all(root);
+}
+
+TEST(platformRepositoryCurrentBranchIsAbsentOutsideGitRepo) {
+    const auto uniqueSuffix =
+        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    auto root = fs::temp_directory_path() / ("ssg-non-git-branch-" + uniqueSuffix);
+    fs::remove_all(root);
+    fs::create_directories(root);
+    std::ofstream{root / "plain.txt"} << "x\n";
+
+    auto repository = makePlatformGitRepository(root);
+    ASSERT_FALSE(repository->currentBranch().has_value());
+    fs::remove_all(root);
+}
+
 }  // namespace
 
 int main() {
     RUN(platformRepositoryMatchesGitStatusAcrossWorkflow);
     RUN(platformRepositoryStatusClassificationMatchesGitPorcelain);
     RUN(platformRepositoryOpenFailureIsIncomplete);
+    RUN(platformRepositoryCurrentBranchMatchesGitBranchAndDetachedHead);
+    RUN(platformRepositoryCurrentBranchIsAbsentOutsideGitRepo);
     std::cout << "\nPassed: " << passed << " Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

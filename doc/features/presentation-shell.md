@@ -30,7 +30,7 @@ per-client viewport rules are defined in `doc/spec.md`.
 Normative commands owned by this feature:
 
 - `pane.split_horizontal`, `pane.split_vertical`, `pane.close`, `pane.next`, `pane.previous`, `pane.focus_left`, `pane.focus_right`, `pane.focus_up`, `pane.focus_down`
-- `panel.toggle`, `panel.focus`, `panel.next_provider`, `panel.previous_provider`
+- `panel.toggle`, `panel.focus`, `panel.show_files`, `panel.show_git_status`, `panel.next_provider`, `panel.previous_provider`
 - `view.toggle_distraction_free`
 
 The `shell-layout` task owns the pane, panel, and distraction-free commands

@@ -75,6 +75,15 @@ CommandHandlerResult shellCommand(EditorRuntime::Impl& runtime, std::string_view
     else if (id == "pane.focus_down") (void)runtime.shell.focusPane(PaneDirection::Down, runtime.shellView(ViewportDimensions{80, 24}));
     else if (id == "panel.toggle") runtime.shell.togglePanel();
     else if (id == "panel.focus") (void)runtime.shell.focusPanel();
+    else if (id == "panel.show_files") {
+        if (!runtime.shell.showPanelProvider("Files")) {
+            return failure("files panel provider is unavailable");
+        }
+    } else if (id == "panel.show_git_status") {
+        if (!runtime.shell.showPanelProvider("Git")) {
+            return failure("git panel provider is unavailable");
+        }
+    }
     else if (id == "panel.next_provider") runtime.shell.nextPanelProvider();
     else if (id == "panel.previous_provider") runtime.shell.previousPanelProvider();
     else if (id == "view.toggle_distraction_free") runtime.shell.toggleDistractionFree();

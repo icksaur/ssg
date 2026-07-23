@@ -120,6 +120,7 @@ struct EditorRuntime::Impl final : CommandServices,
     ExternalModificationFlow external;
     FollowEditsModel follow;
     Revision lastGitScanRevision{0};
+    std::optional<std::string> currentGitBranch;
     TreeModel tree;
     std::shared_ptr<SyntaxParser> syntaxParser;
     std::vector<StatusFieldCatalogEntry> statusFieldCatalog;

@@ -114,6 +114,8 @@
     {"id":"pane.focus_down","owner":"shell-layout","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"panel.toggle","owner":"shell-layout","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"panel.focus","owner":"shell-layout","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
+    {"id":"panel.show_files","owner":"shell-layout","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
+    {"id":"panel.show_git_status","owner":"shell-layout","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"panel.next_provider","owner":"shell-layout","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"panel.previous_provider","owner":"shell-layout","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"tree.toggle_expanded","owner":"tree-providers","required_capabilities":[],"lua":true,"keymap":true,"palette":true},

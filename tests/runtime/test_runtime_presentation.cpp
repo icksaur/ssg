@@ -269,7 +269,7 @@ TEST(shellStatusFieldsPreserveDefaultContentOrderAndLabels) {
     std::vector<const ssg::AccessibilityNode*> footerFields;
     for (const auto& node : snapshot->sections().shell.accessibilityNodes) {
         if (node.kind == ssg::ShellNodeKind::HeaderField &&
-            (node.id == "cwd" || node.id == "file")) {
+            (node.id == "path" || node.id == "branch")) {
             headerFields.push_back(&node);
         }
         if (node.kind == ssg::ShellNodeKind::FooterField &&
@@ -278,13 +278,13 @@ TEST(shellStatusFieldsPreserveDefaultContentOrderAndLabels) {
         }
     }
 
-    ASSERT_EQ(headerFields.size(), std::size_t{2});
-    ASSERT_EQ(headerFields[0]->id, std::string{"cwd"});
-    ASSERT_EQ(headerFields[0]->label, std::string{"Workspace"});
+    ASSERT_EQ(headerFields.size(), std::size_t{1});
+    ASSERT_EQ(headerFields[0]->id, std::string{"path"});
+    ASSERT_EQ(headerFields[0]->label, std::string{"Path"});
     ASSERT_EQ(headerFields[0]->content, runtime.workspaceRoot().string());
-    ASSERT_EQ(headerFields[1]->id, std::string{"file"});
-    ASSERT_EQ(headerFields[1]->label, std::string{"File"});
-    ASSERT_EQ(headerFields[1]->content, std::string{"long.txt"});
+
+    ASSERT_EQ(snapshot->sections().tabs.tabs.size(), std::size_t{1});
+    ASSERT_EQ(snapshot->sections().tabs.tabs.front().label, std::string{"long.txt"});
 
     ASSERT_EQ(footerFields.size(), std::size_t{2});
     ASSERT_EQ(footerFields[0]->id, std::string{"status"});
@@ -295,6 +295,107 @@ TEST(shellStatusFieldsPreserveDefaultContentOrderAndLabels) {
     ASSERT_EQ(footerFields[1]->content, std::string{"following"});
 }
 
+TEST(shellStatusFieldsRenderBranchWhenGitBranchIsApplied) {
+    auto root = uniqueRoot();
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1})
+                    .accepted());
+
+    ssg::GitDiffScan scan;
+    scan.revision = ssg::Revision{1};
+    scan.currentBranch = std::string{"main"};
+    ASSERT_TRUE(runtime.applyGitDiffScan(std::move(scan)).accepted());
+    auto snapshot =
+        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    const auto* branchField = [&]() -> const ssg::AccessibilityNode* {
+        for (const auto& node : snapshot->sections().shell.accessibilityNodes) {
+            if (node.kind == ssg::ShellNodeKind::HeaderField &&
+                node.id == "branch") {
+                return &node;
+            }
+        }
+        return nullptr;
+    }();
+    ASSERT_TRUE(branchField != nullptr);
+    if (branchField) {
+        ASSERT_EQ(branchField->label, std::string{"Branch"});
+        ASSERT_EQ(branchField->content, std::string{"main"});
+    }
+}
+
+TEST(panelShowCommandsToggleAndSwitchProviders) {
+    auto root = uniqueRoot();
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1})
+                    .accepted());
+
+    auto providerLabel = [&](ssg::SessionSnapshot const& snapshot) {
+        for (const auto& node : snapshot.sections().shell.accessibilityNodes) {
+            if (node.kind == ssg::ShellNodeKind::PanelProvider &&
+                node.id == "panel.provider") {
+                return node.content;
+            }
+        }
+        return std::string{};
+    };
+
+    auto snapshot =
+        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    ASSERT_FALSE(snapshot->sections().shell.panel.has_value());
+
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                {"panel.show_files", runtime.revision(), {}})
+                    .accepted());
+    snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    ASSERT_TRUE(snapshot.has_value());
+    ASSERT_TRUE(snapshot->sections().shell.panel.has_value());
+    ASSERT_EQ(providerLabel(*snapshot), std::string{"Files"});
+
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                {"panel.show_files", runtime.revision(), {}})
+                    .accepted());
+    snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    ASSERT_TRUE(snapshot.has_value());
+    ASSERT_FALSE(snapshot->sections().shell.panel.has_value());
+
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                {"panel.show_files", runtime.revision(), {}})
+                    .accepted());
+    snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    ASSERT_TRUE(snapshot.has_value());
+    ASSERT_TRUE(snapshot->sections().shell.panel.has_value());
+    ASSERT_EQ(providerLabel(*snapshot), std::string{"Files"});
+
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                {"panel.show_git_status", runtime.revision(), {}})
+                    .accepted());
+    snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    ASSERT_TRUE(snapshot.has_value());
+    ASSERT_TRUE(snapshot->sections().shell.panel.has_value());
+    ASSERT_EQ(providerLabel(*snapshot), std::string{"Git"});
+
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                {"panel.show_git_status", runtime.revision(), {}})
+                    .accepted());
+    snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    ASSERT_TRUE(snapshot.has_value());
+    ASSERT_FALSE(snapshot->sections().shell.panel.has_value());
+}
+
 int main() {
     RUN(viewportShellSettingsAndThemeAreLiveSections);
     RUN(settingsDispatchMatchesSettingsModelOracleSnapshot);
@@ -302,6 +403,8 @@ int main() {
     RUN(paletteCandidatesMatchTheCommandRegistry);
     RUN(shellStatusFieldsUseRegisteredProviders);
     RUN(shellStatusFieldsPreserveDefaultContentOrderAndLabels);
+    RUN(shellStatusFieldsRenderBranchWhenGitBranchIsApplied);
+    RUN(panelShowCommandsToggleAndSwitchProviders);
     RUN(editorScrollUsesTheRealPaneHeightNotAHardcoded24);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;

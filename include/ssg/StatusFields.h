@@ -24,6 +24,7 @@ struct StatusFieldCatalogEntry {
 struct StatusFieldProviderContext {
     std::filesystem::path workspaceRoot;
     std::string currentPathLabel;
+    std::optional<std::string> currentBranch;
     std::string statusValue;
     std::string followMode;
 };

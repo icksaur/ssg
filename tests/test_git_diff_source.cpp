@@ -22,6 +22,7 @@ class FakeRepository final : public GitRepository {
 public:
     std::deque<GitDiffScan> fullScans;
     std::deque<PathScanExpectation> pathScans;
+    std::optional<std::string> branch;
     std::size_t fullCalls = 0;
     std::size_t pathCalls = 0;
 
@@ -46,6 +47,8 @@ public:
         ASSERT_EQ(paths, expected.requested);
         return expected.result;
     }
+
+    std::optional<std::string> currentBranch() override { return branch; }
 };
 
 using OracleState = std::map<std::string, GitDiffScanFile>;

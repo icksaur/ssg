@@ -90,6 +90,7 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
         statusFieldCatalog, statusFieldProviders,
         {.workspaceRoot = root,
          .currentPathLabel = currentPathLabel(),
+         .currentBranch = currentGitBranch,
          .statusValue = statusProjection.value,
          .followMode = followProjection.mode});
     ShellLayoutRequest request;

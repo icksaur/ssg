@@ -930,11 +930,18 @@ ExternalDiffBurstResult EditorRuntime::Impl::applyExternalDiffBurst(
 
 GitDiffScanResult EditorRuntime::Impl::applyGitDiffScan(GitDiffScan scan) {
     if (scan.revision.value() == 0) {
+        auto const previousBranch = currentGitBranch;
+        currentGitBranch = scan.currentBranch;
+        if (currentGitBranch != previousBranch && session) {
+            session->advanceRevision();
+        }
         return {};
     }
     if (scan.revision <= lastGitScanRevision) {
         return {GitDiffScanError::DiffRejected};
     }
+    auto const previousBranch = currentGitBranch;
+    currentGitBranch = scan.currentBranch;
     auto stagedDiff = diff;
     auto stagedFollow = follow;
     std::vector<FollowDiffChange> followChanges;
@@ -1004,6 +1011,10 @@ GitDiffScanResult EditorRuntime::Impl::applyGitDiffScan(GitDiffScan scan) {
     }
 
     if (!mutated) {
+        lastGitScanRevision = scan.revision;
+        if (currentGitBranch != previousBranch && session) {
+            session->advanceRevision();
+        }
         return {};
     }
 
