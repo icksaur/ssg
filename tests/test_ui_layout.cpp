@@ -287,9 +287,7 @@ TEST(statusFieldManifestHasExactOrderAndLabels) {
     const std::string json((std::istreambuf_iterator<char>(input)),
                            std::istreambuf_iterator<char>());
     const std::array ids{
-        "active_command", "current_path", "mode", "actionable_status",
-        "follow_state", "background_activity", "encoding", "line_ending",
-        "git_branch", "git_repository", "file_type", "file_size",
+        "cwd", "file", "status", "follow",
     };
     std::size_t position = 0;
     for (const auto* id : ids) {
@@ -299,6 +297,8 @@ TEST(statusFieldManifestHasExactOrderAndLabels) {
     }
     ASSERT_EQ(std::count(json.begin(), json.end(), '{'), ids.size());
     ASSERT_EQ(json.find("\"accessible_label\":\"\""), std::string::npos);
+    ASSERT_EQ(json.find("\"id\":\"git_branch\""), std::string::npos);
+    ASSERT_EQ(json.find("\"id\":\"git_repository\""), std::string::npos);
 }
 
 } // namespace

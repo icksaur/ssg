@@ -17,6 +17,7 @@
 #include <ssg/PromptSurface.h>
 #include <ssg/Search.h>
 #include <ssg/Settings.h>
+#include <ssg/StatusFields.h>
 #include <ssg/StatusQueue.h>
 #include <ssg/SyntaxModel.h>
 #include <ssg/TabManager.h>
@@ -35,6 +36,7 @@
 #include <string>
 #include <string_view>
 #include <typeindex>
+#include <unordered_map>
 #include <vector>
 
 namespace ssg {
@@ -90,7 +92,9 @@ struct EditorRuntime::Impl final : CommandServices,
          std::filesystem::path scratchRoot,
          std::filesystem::path recoveryRoot,
          bool deferEnrichment = false,
-         std::shared_ptr<SyntaxParser> parser = nullptr);
+         std::shared_ptr<SyntaxParser> parser = nullptr,
+         std::vector<StatusFieldProviderBinding> statusFieldProviderOverrides =
+             {});
 
     std::filesystem::path root;
     std::filesystem::path scratchRoot;
@@ -118,6 +122,8 @@ struct EditorRuntime::Impl final : CommandServices,
     Revision lastGitScanRevision{0};
     TreeModel tree;
     std::shared_ptr<SyntaxParser> syntaxParser;
+    std::vector<StatusFieldCatalogEntry> statusFieldCatalog;
+    std::unordered_map<std::string, StatusFieldProvider> statusFieldProviders;
     SearchController search;
     NavigationHistory navigation{64};
     LspSyncViewState lspSync;

@@ -86,15 +86,19 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
     }
     auto statusProjection = status.footerProjection();
     auto followProjection = follow.footerProjection();
+    auto statusFields = projectStatusFields(
+        statusFieldCatalog, statusFieldProviders,
+        {.workspaceRoot = root,
+         .currentPathLabel = currentPathLabel(),
+         .statusValue = statusProjection.value,
+         .followMode = followProjection.mode});
     ShellLayoutRequest request;
     request.viewport = {static_cast<int>(dimensions.columns), static_cast<int>(dimensions.rows)};
     request.reservedPromptRows = prompt.active() ? promptRowCount(prompt.request()->kind) : 0;
     request.emptyState = activeDocument() == nullptr;
     request.panelProviderLabel = std::string{shell.activePanelProvider()};
-    request.headerFields = {{"cwd", "Workspace", root.string(), 0},
-                             {"file", "File", currentPathLabel(), 1}};
-    request.footerFields = {{"status", "Status", statusProjection.value, 0},
-                             {"follow", "Follow edits", followProjection.mode, 1}};
+    request.headerFields = std::move(statusFields.headerFields);
+    request.footerFields = std::move(statusFields.footerFields);
     request.footerActions = statusProjection.actions;
     request.tabs = std::move(labels);
     if (!leaderPending.empty()) {

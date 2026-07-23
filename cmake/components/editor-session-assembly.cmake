@@ -1,6 +1,10 @@
 target_sources(ssg PRIVATE
     ${SSG_SOURCE_DIR}/src/EditorSessionBuilder.cpp
+    ${SSG_SOURCE_DIR}/src/StatusFields.cpp
     ${SSG_SOURCE_DIR}/src/session_snapshot.cpp
+)
+target_compile_definitions(ssg PRIVATE
+    SSG_STATUS_FIELDS_PATH="${SSG_SOURCE_DIR}/data/ui/status_fields.json"
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)

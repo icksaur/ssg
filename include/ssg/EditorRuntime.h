@@ -4,6 +4,7 @@
 #include <ssg/EditorSession.h>
 #include <ssg/FollowEditsModel.h>
 #include <ssg/GitDiffSource.h>
+#include <ssg/StatusFields.h>
 #include <ssg/session_snapshot.h>
 #include <ssg/SyntaxModel.h>
 #include <ssg/Viewport.h>
@@ -33,6 +34,9 @@ struct EditorRuntimeConfig {
     // another implementation, and tests inject a deterministic double. Null =
     // plain-text highlighting.
     std::shared_ptr<SyntaxParser> syntaxParser;
+    // Optional provider overrides keyed by status-field id. These replace the
+    // default compiled providers for matching ids.
+    std::vector<StatusFieldProviderBinding> statusFieldProviders;
 };
 
 // The syntax parser the shipped app injects by default: a tree-sitter parser

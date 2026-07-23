@@ -197,11 +197,53 @@ TEST(paletteCandidatesMatchTheCommandRegistry) {
     }
 }
 
+TEST(shellStatusFieldsUseRegisteredProviders) {
+    auto root = uniqueRoot();
+    ssg::EditorRuntimeConfig config{
+        root / "workspace", root / "scratch", root / "recovery"};
+    config.statusFieldProviders.push_back(
+        {"status", [](const ssg::StatusFieldProviderContext&) {
+             return std::optional<std::string>{"OVERRIDDEN"};
+         }});
+    auto created = ssg::EditorRuntime::create(std::move(config));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"file.open", runtime.revision(),
+                               std::string{"long.txt"}})
+                    .accepted());
+
+    auto snapshot =
+        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+
+    const auto* statusField = [&]() -> const ssg::AccessibilityNode* {
+        for (const auto& node : snapshot->sections().shell.accessibilityNodes) {
+            if (node.kind == ssg::ShellNodeKind::FooterField &&
+                node.id == "status") {
+                return &node;
+            }
+        }
+        return nullptr;
+    }();
+    ASSERT_TRUE(statusField != nullptr);
+    if (statusField) {
+        ASSERT_EQ(statusField->content, std::string{"OVERRIDDEN"});
+    }
+}
+
 int main() {
     RUN(viewportShellSettingsAndThemeAreLiveSections);
     RUN(settingsDispatchMatchesSettingsModelOracleSnapshot);
     RUN(reportedLeaderSequenceRendersAPerSnapshotHint);
     RUN(paletteCandidatesMatchTheCommandRegistry);
+    RUN(shellStatusFieldsUseRegisteredProviders);
     RUN(editorScrollUsesTheRealPaneHeightNotAHardcoded24);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;

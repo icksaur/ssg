@@ -301,7 +301,9 @@ EditorRuntime::Impl::Impl(std::filesystem::path canonicalCwd,
                           std::filesystem::path scratchRoot,
                           std::filesystem::path recoveryRoot,
                           bool deferEnrichment,
-                          std::shared_ptr<SyntaxParser> parser)
+                          std::shared_ptr<SyntaxParser> parser,
+                          std::vector<StatusFieldProviderBinding>
+                              statusFieldProviderOverrides)
     : root{std::move(canonicalCwd)},
       scratchRoot{std::filesystem::weakly_canonical(scratchRoot)},
       recoveryRoot{std::filesystem::weakly_canonical(recoveryRoot)},
@@ -314,9 +316,18 @@ EditorRuntime::Impl::Impl(std::filesystem::path canonicalCwd,
       tabs{*this},
       external{recovery, diff},
       syntaxParser{std::move(parser)},
+      statusFieldCatalog{p0StatusFieldCatalog()},
       search{*this, *this},
       theme{defaultTheme()},
       deferringEnrichment{deferEnrichment} {
+    for (auto& provider : defaultStatusFieldProviders()) {
+        statusFieldProviders.insert_or_assign(provider.id,
+                                              std::move(provider.provider));
+    }
+    for (auto& provider : statusFieldProviderOverrides) {
+        statusFieldProviders.insert_or_assign(provider.id,
+                                              std::move(provider.provider));
+    }
     refreshTree();
     refreshSyntax();
 }
@@ -1077,7 +1088,8 @@ EditorRuntimeCreateResult EditorRuntime::create(EditorRuntimeConfig config) {
         auto impl = std::make_unique<Impl>(cwd, config.scratchRoot,
                                            config.recoveryRoot,
                                            config.deferEnrichment,
-                                           std::move(config.syntaxParser));
+                                           std::move(config.syntaxParser),
+                                           std::move(config.statusFieldProviders));
         impl->keymap = defaultTerminalKeymap();
         if (auto errors = KeymapMatcher{impl->keymap}.validate({}); !errors.empty()) {
             return {nullptr, "default keymap is invalid: " + errors.front().message};
