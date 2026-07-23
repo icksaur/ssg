@@ -1,7 +1,8 @@
 # spec-diff
 
-Status: FINALIZED (UX layer). This is the UX contract; the architecture spec
-(added below/alongside as this document grows) must satisfy it.
+Status: UX layer FINALIZED; ARCHITECTURE layer DRAFT (this addition). The UX
+section above is the contract; everything from "## Architecture" on is the
+class-collaboration design that ships it.
 
 ## Goals
 
@@ -100,3 +101,242 @@ source, with no manual refresh.
 - Command/keybinding names for the new actions (open files bar, open git status
   bar, toggle follow, etc.) — left to the architecture spec unless there's a
   naming preference now.
+
+## Architecture
+
+### Design
+
+#### Current-object survey (Phase 1 findings)
+
+Four areas were audited before deciding what to split/generalize/recompose:
+
+- **Header/footer fields** — `ShellState`/`computeShellLayout` (`src/ShellState.cpp`)
+  already collapse-rank and lay out two SEPARATE ordered lists,
+  `ShellLayoutRequest.headerFields`/`footerFields` (`include/ssg/ShellState.h`).
+  But the CONTENT of every field is hardcoded inline in
+  `EditorRuntime::Impl::shellView()` (`src/runtime/snapshot.cpp:94-97`) — there is
+  no provider/callback abstraction, `data/ui/status_fields.json` is consumed only
+  by a fixture test, and `git_branch`/`git_repository` are dead fields (declared,
+  never populated). No header/footer region is hit-tested for clicks anywhere.
+  **This area needs real generalization** — the field-provider abstraction the UX
+  spec calls for does not exist yet.
+- **Bar/tree/panel** — `TreeModel` (`include/ssg/TreeModel.h`/`.cpp`) is ALREADY a
+  correctly-generic multi-provider store (`ShellState state({"Files","Git",
+  "Symbols"})` is an existing test); the front provider is the active one; open/
+  close and provider-cycle commands already exist. `GitTreeRecord`/`GitTreeStatus`
+  (Added/Modified/Deleted/Renamed/Untracked) is already the right FLAT shape for a
+  git-status list. What's missing is a real feed: `TreeProviderSnapshot::fromGit`
+  is called only by tests today; nothing wires it to the shipped `GitDiffSource`/
+  `DiffModel`. **This area needs a new adapter, not a new abstraction** — the
+  container is already correct.
+- **Tabs/document view** — `TabManager` ALREADY has `TabKind::{Document,LiveDiff,
+  ReadOnlyOutput,SearchResults,TreeView}` and `DocumentMode::{Edit,ReadOnly,Diff}`;
+  `Document::apply()` already rejects edits for `ReadOnly`/`Diff` mode; tab dedup
+  is already kind-aware (a `Document` tab and a `LiveDiff` tab for the same file
+  coexist without conflict today); the renderer already accepts an optional
+  `DiffFileView*` per document with no mode branching. **This area needs almost no
+  new types** — the UX's "edit tab + diff tab, same document, two tabs" requirement
+  is already representable. What's missing: (a) a glyph prefix on `LiveDiff` tab
+  titles, (b) a runtime path from "click a git-status bar item" to "open/focus a
+  `LiveDiff` tab" (the `diff.open_file` command already resolves a
+  `DiffOpenTarget` but intentionally does not open a tab — session-assembly
+  binding it to `TabManager` is exactly the "later task" `workspace-live-diffs.md`
+  deferred, and is now due).
+- **Follow mode + commands** — `FollowEditsModel` states are `Following`/`Paused`;
+  its ONLY pause trigger is `NavigationClass::User` inside `applyNavigation()`.
+  Text edits (`bindEdit` path) never call `recordNavigation` and so currently do
+  NOT pause follow — a genuine gap against this spec's "edits pause follow"
+  expectation. The command-catalog cascade (required-commands.json + owner count,
+  `test_required_commands.cpp`, `command_cases.h`, protocol round-trip, Lua-parity)
+  is well-trodden (used for `prompt.next`/`prompt.previous`); the palette
+  auto-discovers every cataloged command with `"palette":true` (no separate
+  registration) and any cataloged command with `"keymap":true` is automatically
+  bindable (`KeymapMatcher::validate` checks syntax, not command existence).
+  Footer/header click-to-command hit-testing does not exist for ANY field today
+  (`HitTester.cpp` has no header/footer region) — this is net-new, not a
+  generalization of something existing.
+
+#### Target object model (Phase 2 — splits, generalizations, recompositions)
+
+1. **Status field providers (NEW).** Introduce a `StatusFieldProvider` — a
+   library-owned callback shape, one per field id, that reads runtime/session
+   state and yields a field's live value plus an optional bound command id to
+   dispatch on click. Two ordered PROVIDER lists (header, footer) replace the two
+   hardcoded literal lists in `shellView()`; `data/ui/status_fields.json` becomes
+   real config for id/label/collapse-rank/HEADER-OR-FOOTER placement (not just a
+   test fixture) while the live VALUE and click behavior stay compiled providers
+   (mirrors the existing split between compiled `CommandSet` descriptors and the
+   validated `required-commands.json` catalog — data drives shape, code drives
+   behavior). `StatusField` gains an optional bound command id. New header fields:
+   `path` (click -> open bar to Files, toggle-closes if already showing Files),
+   `branch` (click -> open bar to Git status, toggle-closes if already showing
+   Git; glyph + name, present only inside a git repo). Footer's dead `git_branch`/
+   `git_repository` fields are REMOVED (superseded by the header field, per UX
+   spec); a new footer `follow` field's value comes from `FollowEditsModel`
+   directly, click -> the new toggle command (below).
+2. **Header-click bar commands (NEW, library-owned per I25/I17).** Two
+   parameterless commands — e.g. `panel.show_files`, `panel.show_git_status` —
+   each meaning "show bar to this provider, or close the bar if it is already
+   showing this provider" (the UX's open/toggle-closed rule). This is a FEATURE
+   decision (what a click means), not a client-composed one: the client sending
+   "open Files" vs "open Git" IF it also had to decide close-vs-open based on
+   current state would replicate the exact class of I17/I25 violation just fixed
+   in the prompt-fulfillment milestone (a client deciding which of two
+   library-meaningful actions to take from view state it must read to decide).
+   Two named commands (rather than one `panel.show_provider{id}` parameterized
+   command) keep this palette/keymap-simple, matching the existing pattern of
+   distinct named commands for distinct fulfillments (`external.reload`/
+   `keep_buffer`/`open_diff`).
+3. **Git status tree feed (NEW adapter, no new container).** A pure function/
+   small adapter mapping the shipped `DiffModel`'s `DiffViewState` to
+   `vector<GitTreeRecord>` (already the right flat shape), producing a
+   `TreeProviderSnapshot::fromGit` refresh whenever the diff revision changes.
+   Wired at the same runtime seam that already applies `GitDiffScan` results
+   (`EditorRuntime::applyGitDiffScan`) — after updating `DiffModel`, also refresh
+   the Git tree provider. No new panel/tree type; this is pure recomposition of
+   two already-correct pieces (`DiffModel` as source of truth, `TreeModel` as the
+   generic container) that were never connected.
+4. **`DiffFileStatus` (NEW small field on `DiffFileView`).** Today
+   `DiffFileView::deleted` and `previousPath` derive Deleted/Renamed, but "file has
+   no baseline content" (Added/untracked) is discarded during `updateGitFile`
+   ingestion — nothing downstream can currently tell Added from Modified. Add a
+   `DiffFileStatus{Added,Modified,Deleted,Renamed}` computed once, at ingestion, in
+   `DiffModel::updateGitFile` (baseline absent -> Added; `previousPath` set ->
+   Renamed; `workingContent` absent -> Deleted; else Modified) and stored on
+   `DiffFileView`. This directly answers "colored status letter" without a new
+   parallel data source, and is a minimal, backward-compatible field addition
+   (existing consumers ignore it).
+5. **Diff-tab session assembly (RECOMPOSE existing pieces, one new seam).**
+   Clicking a git-status bar item dispatches `tree.activate` on a Git-provider
+   node; the handler resolves `diffOpenFile(view)` (existing, unmodified) into a
+   `DiffOpenTarget`, then asks `TabManager` for-or-creates a `TabKind::LiveDiff`
+   tab keyed by the target's stable file id (kind-aware dedup already exists,
+   confirmed above) with `DocumentMode::Diff` (already edit-blocking). This is the
+   "later editor-session-assembly" binding `workspace-live-diffs.md` explicitly
+   deferred — no new tab/document types needed, only this binding function.
+6. **`LiveDiff` tab title glyph (small, additive).** Tab-title composition (the
+   label-building step in `runtime/snapshot.cpp`) prefixes a theme-derived glyph
+   for `TabKind::LiveDiff` tabs; `TabLabel` needs no structural change (already
+   carries a free-form title string). Glyph color/style is theme-derived
+   (deriveSelectionFill-style resolution), never a hardcoded terminal color.
+7. **Follow-mode pause-on-edit (behavior addition, not redesign).** Add an
+   explicit `FollowEditsModel::notifyLocalEdit()` distinct from
+   `applyNavigation()` (edits are not navigation, so folding them into
+   `NavigationClass` would be a category error) that pauses exactly like a User
+   navigation. The edit-command dispatch path calls it alongside existing
+   `recordNavigation` calls, for any committed text mutation in any tab.
+8. **`follow_edits.toggle` (NEW library command; do not client-compose).** The
+   footer's single click text must flip between Following/Paused; deciding WHICH
+   underlying transition to perform based on currently-published mode is exactly
+   the class of decision I17's exhaustive derived-view set does NOT permit
+   client-side (it is not leader resolution, not a palette rank+selection, not
+   deriving an input field from a keystroke) — so add one library-owned
+   `follow_edits.toggle` command that reads its own current state and flips it.
+   `follow_edits.pause`/`resume` remain for direct/programmatic use.
+9. **Header/footer/bar click-to-command hit-testing (NEW).** `HitTester` gains
+   region kinds for header/footer status fields (and confirms tree-item hit
+   regions already cover bar items — Phase 1 found `tree.activate` already
+   dispatches from a hit tree node). The SERVER publishes which screen regions are
+   clickable and which command each maps to (as part of the existing
+   snapshot/ShellViewState publication, extending `StatusField` with its bound
+   command id per item 1) — the client only translates a raw click coordinate to
+   the published region and command id, never invents the mapping (I17/I25: the
+   region-to-command mapping is a feature decision, published by the library).
+10. **Git branch source (Consideration, not yet confirmed).** The shipped
+    `GitRepository` adapter (`doc/spec-git-diff-source.md`) exposes changed-file
+    scans and a baseline identity token, but was not designed to expose the
+    current branch NAME. Verify during implementation whether a narrow
+    `currentBranch()` query needs adding to the `GitRepository` interface (still
+    an I25-compliant adapter extension — reading a ref name is exactly the kind of
+    raw repository read the adapter already owns) or whether the baseline-identity
+    token can be reused/extended for display.
+
+### Invariants
+
+- I17 — the header-click bar commands (item 2) and `follow_edits.toggle` (item 8)
+  are library-owned; no client composes an open-vs-close or pause-vs-resume
+  decision from view state.
+- I25 — the git-status tree feed (item 3) and any branch-name read (item 10)
+  route through the already-injected `GitRepository`/`GitDiffSource`; no new
+  client-side Git access is introduced.
+- Document lifetime (`doc/spec-document-lifetime.md`) — a `LiveDiff` tab and a
+  `Document` tab referencing the same file are two independent tabs; closing one
+  must not destroy the document out from under the other (existing per-kind dedup
+  and weak `FileDocumentId` handles already guarantee this — verify by test, not
+  by new mechanism).
+- Diff content-consumer contract (`doc/features/workspace-live-diffs.md`) —
+  `DiffModel` still never invokes Git; `DiffFileStatus` (item 4) is computed from
+  data already passed into `updateGitFile`, not by a new Git read.
+- Reveal-not-pause (existing) — the diff-tab session-assembly binding (item 5)
+  opening/focusing a tab under follow must use PROGRAMMATIC navigation, so it does
+  not itself trip the new pause-on-edit/pause-on-navigation behavior (item 7).
+
+### Considerations
+
+- The header/footer field-provider abstraction (item 1) is the largest net-new
+  piece; get its shape (provider signature, where the provider list is assembled
+  — likely `EditorSessionBuilder.cpp`, mirroring `p0CommandDescriptors()`) right
+  before wiring individual fields, since every other header/footer expectation in
+  the UX section depends on it.
+- `DiffFileStatus` (item 4) must be computed ONCE at ingestion and carried on
+  `DiffFileView`, not re-derived ad hoc at render time in multiple places (a
+  classic implicit-coupling smell — two call sites re-deriving the same fact
+  differently).
+- The "close bar if already showing this provider, else show it" toggle (item 2)
+  needs its own small state machine or explicit rule at the point `panel.show_*`
+  is handled: reuse `ShellState`'s existing open/active-provider fields; do not
+  invent parallel state.
+- Follow-jump "does not change the bar's current view" (UX spec) means the
+  diff-tab session-assembly path (item 5) must NOT call the header-click bar
+  commands (item 2) even though both ultimately touch tabs/panels — keep these
+  two paths structurally separate so one cannot accidentally trigger the other.
+
+### Risks and Mitigations
+
+- Pause-on-edit (item 7) firing too eagerly (e.g. on programmatic/recovery-replay
+  edits, not just user typing) ⇒ scope `notifyLocalEdit()` to genuinely
+  user-originated edit dispatch only, mirroring how `NavigationClass::User` is
+  scoped today; add a test with a programmatic/recovery edit that must NOT pause.
+- Adding a bound command id to `StatusField` (item 1) could tempt ad hoc parallel
+  hit-test paths per field ⇒ one generic field-click handler keyed by field id,
+  not one handler per field.
+- `DiffFileStatus` (item 4) silently wrong for an edge case (e.g. a renamed file
+  that is ALSO modified) ⇒ oracle against real `git status` porcelain output
+  (mirrors the existing `test_git_repository.cpp` ground-truth pattern).
+
+### Acceptance (Definition of Done)
+
+- Observable: every UX-section expectation above is demonstrable in the TUI (and
+  ideally browser client) against a real git repo, with visual signoff before
+  merge (this is user-visible UI work).
+- Gates: `bash scripts/check.sh` green with and without `SSG_TREESITTER`.
+- Oracles: each numbered item above gets its own test per its existing project
+  pattern (hand-case for `DiffFileStatus`, ground-truth-vs-real-`git`-status for
+  the tree feed, a pause/no-pause transition table for follow, a dedup/lifetime
+  test for coexisting Document+LiveDiff tabs, a hit-test coordinate table for new
+  click regions).
+
+### Plan
+
+Fan-out/implementation steps to be broken into a detailed per-step Plan table once
+this architecture is reviewed; the ten numbered Design items above are the step
+seeds. Steps must land in an order where each new capability (provider
+abstraction, then fields, then bar feed, then tab assembly, then follow behavior,
+then hit-testing) is independently gate-able, consistent with prior specs in this
+project.
+
+### Rationale (skippable)
+
+Three of four investigated areas (bar/tree, tabs, command cascade) turned out to
+already be correctly generalized — `TreeModel`'s multi-provider design and
+`TabManager`'s kind-aware dedup were built for exactly this kind of extension
+without knowing it yet. That is the "pit of success" already paying off: this
+spec adds one adapter (Git status feed) and one binding (diff-tab assembly)
+rather than new containers. The one area that was NOT ready — status fields — was
+hardcoded from the start (`data/ui/status_fields.json` was aspirational, never
+consumed), so it gets the only genuinely new abstraction in this design. Follow
+mode and header/footer hit-testing needed small, targeted behavior additions
+(pause-on-edit, a toggle command, click regions) rather than redesign, because the
+underlying state machines (`FollowEditsModel`, `ShellState`) were already the
+right shape — they just never had all their triggers wired.
+
