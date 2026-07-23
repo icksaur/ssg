@@ -203,6 +203,7 @@ constexpr auto kExpectedCommands = std::to_array<ExpectedCommand>({
     {"settings.import_workspace", "settings-model"},
     {"follow_edits.resume", "follow-edits"},
     {"follow_edits.pause", "follow-edits"},
+    {"follow_edits.toggle", "follow-edits"},
     {"diff.next_hunk", "diff-model"},
     {"diff.previous_hunk", "diff-model"},
     {"diff.open_file", "diff-model"},
@@ -219,10 +220,10 @@ constexpr auto kExpectedCategoryCounts =
         {"tree", 7},
         {"prompt", 4},     {"status", 4},    {"workspace", 1},
         {"file", 15},      {"tab", 9},       {"external", 3},
-        {"settings", 6},   {"follow_edits", 2}, {"diff", 3},
+        {"settings", 6},   {"follow_edits", 3}, {"diff", 3},
     });
 
-static_assert(kExpectedCommands.size() == 172);
+static_assert(kExpectedCommands.size() == 173);
 
 std::optional<std::string> field(const std::string& object,
                                  const std::string& name) {

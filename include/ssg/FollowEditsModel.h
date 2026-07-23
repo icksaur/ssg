@@ -90,15 +90,16 @@ struct FollowEditsCommandDescriptor {
 class FollowEditsCommandSet {
 public:
     [[nodiscard]]
-    const std::array<FollowEditsCommandDescriptor, 2>& descriptors()
+    const std::array<FollowEditsCommandDescriptor, 3>& descriptors()
         const noexcept {
         return descriptors_;
     }
 
 private:
-    const std::array<FollowEditsCommandDescriptor, 2> descriptors_{{
+    const std::array<FollowEditsCommandDescriptor, 3> descriptors_{{
         {"follow_edits.resume"},
         {"follow_edits.pause"},
+        {"follow_edits.toggle"},
     }};
 };
 
@@ -153,6 +154,7 @@ public:
     [[nodiscard]] FollowEditsResult notifyLocalEdit();
     [[nodiscard]] FollowEditsResult pause();
     [[nodiscard]] FollowEditsResult resume(const DiffViewState& currentDiff);
+    [[nodiscard]] FollowEditsResult toggle(const DiffViewState& currentDiff);
 
     [[nodiscard]] FollowEditsViewState viewState() const;
     [[nodiscard]] FollowEditsFooterProjection footerProjection() const;

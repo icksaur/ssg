@@ -170,6 +170,7 @@
     {"id":"settings.import_workspace","owner":"settings-model","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"follow_edits.resume","owner":"follow-edits","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"follow_edits.pause","owner":"follow-edits","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
+    {"id":"follow_edits.toggle","owner":"follow-edits","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"diff.next_hunk","owner":"diff-model","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"diff.previous_hunk","owner":"diff-model","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"diff.open_file","owner":"diff-model","required_capabilities":[],"lua":true,"keymap":true,"palette":true}

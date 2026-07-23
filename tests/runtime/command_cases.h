@@ -180,11 +180,12 @@ inline constexpr auto runtime_command_cases = std::to_array<RuntimeCommandCase>(
     RuntimeCommandCase{"settings.import_workspace", "settings-model"},
     RuntimeCommandCase{"follow_edits.resume", "follow-edits"},
     RuntimeCommandCase{"follow_edits.pause", "follow-edits"},
+    RuntimeCommandCase{"follow_edits.toggle", "follow-edits"},
     RuntimeCommandCase{"diff.next_hunk", "diff-model"},
     RuntimeCommandCase{"diff.previous_hunk", "diff-model"},
     RuntimeCommandCase{"diff.open_file", "diff-model"},
 });
 
-static_assert(runtime_command_cases.size() == 172);
+static_assert(runtime_command_cases.size() == 173);
 
 } // namespace ssg::test

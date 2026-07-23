@@ -125,8 +125,10 @@ dimension-specific offsets while observing the shared mode and target.
 While following, an accepted target becomes active immediately and every
 client receives the smallest non-negative vertical offset that exposes the
 newest hunk in that client's viewport. While paused, accepted targets only
-update the bounded queue. `follow_edits.pause` explicitly enters paused mode.
-`follow_edits.resume` resolves queued identities against the current
+update the bounded queue. `follow_edits.toggle` flips between the two modes by
+reading the model's current state, while `follow_edits.pause` and
+`follow_edits.resume` remain direct transitions. `follow_edits.resume` resolves
+queued identities against the current
 `DiffViewState`, newest first. A target is valid only when its identity still
 resolves and the current view has at least one hunk; current rename and delete
 views remain valid, while missing and reverted views do not. Resume activates
@@ -136,7 +138,7 @@ valid, it clears the queue and returns to following without changing the active
 target or client offsets.
 
 The component exports the immutable `FollowEditsCommandSet` in
-`follow_edits.resume`, `follow_edits.pause` order, typed
+`follow_edits.resume`, `follow_edits.pause`, `follow_edits.toggle` order, typed
 `FollowEditsViewState` and `FollowEditsDelta` values, pure delta derivation, and
 a footer projection containing the mode plus the configured resume binding
 when paused.
@@ -145,7 +147,7 @@ Normative commands owned by this feature:
 
 - `tree.toggle_expanded`, `tree.invoke_node_command`, `tree.select`,
   `tree.select_next`, `tree.select_previous`, `tree.activate`, `tree.scroll`
-- `follow_edits.resume`, `follow_edits.pause`
+- `follow_edits.resume`, `follow_edits.pause`, `follow_edits.toggle`
 - `diff.next_hunk`, `diff.previous_hunk`, `diff.open_file`
 
 Plan 1 owns only generic tree data and the two `tree.*` commands. It performs

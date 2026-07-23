@@ -188,10 +188,22 @@ CommandHandlerResult diffCommand(EditorRuntime::Impl& runtime, std::string_view 
 }
 
 CommandHandlerResult followCommand(EditorRuntime::Impl& runtime, std::string_view id) {
-    auto result = id == "follow_edits.pause" ? runtime.follow.pause()
-                                              : runtime.follow.resume(runtime.diff.viewState());
+    const auto modeBefore = runtime.follow.viewState().mode;
+    FollowEditsResult result;
+    if (id == "follow_edits.pause") {
+        result = runtime.follow.pause();
+    } else if (id == "follow_edits.resume") {
+        result = runtime.follow.resume(runtime.diff.viewState());
+    } else if (id == "follow_edits.toggle") {
+        result = runtime.follow.toggle(runtime.diff.viewState());
+    } else {
+        return failure("unknown follow edits command");
+    }
     if (!result.accepted()) return failure("follow edits command failed");
-    if (id == "follow_edits.resume") {
+    const bool resumed = id == "follow_edits.resume" ||
+                         (id == "follow_edits.toggle" &&
+                          modeBefore == FollowMode::Paused);
+    if (resumed) {
         const auto target = runtime.follow.viewState().activeTarget;
         if (target) {
             if (!runtime.openOrRevealFollowTargetProgrammatic(*target)) {

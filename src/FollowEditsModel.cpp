@@ -231,15 +231,22 @@ FollowEditsResult FollowEditsModel::resume(const DiffViewState& currentDiff) {
     return {};
 }
 
+FollowEditsResult FollowEditsModel::toggle(const DiffViewState& currentDiff) {
+    if (state_.mode == FollowMode::Following) {
+        return pause();
+    }
+    return resume(currentDiff);
+}
+
 FollowEditsViewState FollowEditsModel::viewState() const {
     return state_;
 }
 
 FollowEditsFooterProjection FollowEditsModel::footerProjection() const {
     if (state_.mode == FollowMode::Paused) {
-        return {"paused", config_.resumeBinding, "follow_edits.resume"};
+        return {"paused", config_.resumeBinding, "follow_edits.toggle"};
     }
-    return {"following", std::nullopt, std::nullopt};
+    return {"following", std::nullopt, "follow_edits.toggle"};
 }
 
 FollowTarget FollowEditsModel::targetFor(const DiffFileView& file,

@@ -508,6 +508,8 @@ public:
             (void)followModel_.pause();
         } else if (id == "follow_edits.resume") {
             (void)followModel_.resume(currentDiff_);
+        } else if (id == "follow_edits.toggle") {
+            (void)followModel_.toggle(currentDiff_);
         }
         return ssg::CommandHandlerResult::success();
     }

@@ -392,12 +392,18 @@ TEST(staleChangesAndInvalidClientsAreFailureAtomic) {
 
 TEST(commandViewDeltaAndFooterAreComplete) {
     const auto commands = followEditsCommandSet().descriptors();
-    ASSERT_EQ(commands.size(), std::size_t{2});
+    ASSERT_EQ(commands.size(), std::size_t{3});
     ASSERT_EQ(commands[0].id, "follow_edits.resume");
     ASSERT_EQ(commands[1].id, "follow_edits.pause");
+    ASSERT_EQ(commands[2].id, "follow_edits.toggle");
 
     FollowEditsModel model{{.queueCapacity = 2,
                             .resumeBinding = "Ctrl+Shift+F"}};
+    const auto followingFooter = model.footerProjection();
+    ASSERT_EQ(followingFooter.mode, "following");
+    ASSERT_EQ(followingFooter.resumeCommand,
+              std::optional<std::string>{"follow_edits.toggle"});
+
     const auto before = model.viewState();
     ASSERT_TRUE(model.pause().accepted());
     const auto after = model.viewState();
@@ -410,7 +416,7 @@ TEST(commandViewDeltaAndFooterAreComplete) {
     ASSERT_EQ(footer.mode, "paused");
     ASSERT_EQ(footer.resumeBinding, std::optional<std::string>{"Ctrl+Shift+F"});
     ASSERT_EQ(footer.resumeCommand,
-              std::optional<std::string>{"follow_edits.resume"});
+              std::optional<std::string>{"follow_edits.toggle"});
 }
 
 TEST(configurationRejectsInvalidQueueCapacity) {

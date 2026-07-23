@@ -46,7 +46,7 @@ void appendIds(std::vector<CommandDescriptor>& output, Range const& range) {
 
 std::vector<CommandDescriptor> p0CommandDescriptors() {
     std::vector<CommandDescriptor> result;
-    result.reserve(164);
+    result.reserve(165);
 
     appendIds(result, textInputCommandSet().descriptors());
     appendIds(result, selectionNavigationCommandSet().descriptors());

@@ -200,6 +200,11 @@ struct FixtureState {
         } else if (id == "follow_edits.resume") {
             follow_mode = ssg::FollowMode::Following;
             ++follow_generation;
+        } else if (id == "follow_edits.toggle") {
+            follow_mode = follow_mode == ssg::FollowMode::Following
+                              ? ssg::FollowMode::Paused
+                              : ssg::FollowMode::Following;
+            ++follow_generation;
         } else if (id == "prompt.submit") {
             prompt_open = false;
         } else if (id == "file.open_dropped_content") {

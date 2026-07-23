@@ -755,6 +755,89 @@ TEST(tabSwitchPausesFollowViaNavigationPath) {
     ASSERT_EQ(followMode(runtime), ssg::FollowMode::Paused);
 }
 
+TEST(followToggleMatchesPauseAndResumeIncludingQueuedTargetResolution) {
+    const auto makeRuntime = []() -> std::unique_ptr<ssg::EditorRuntime> {
+        auto root = uniqueRoot();
+        auto created = ssg::EditorRuntime::create(
+            {root / "workspace", root / "scratch", root / "recovery"});
+        ASSERT_TRUE(created.accepted());
+        if (!created.accepted()) return nullptr;
+        auto runtime = std::move(created.runtime);
+        ASSERT_TRUE(runtime
+                        ->attach({ssg::ClientId{1},
+                                  ssg::InvocationOrigin::InProcess},
+                                 ssg::ViewId{1})
+                        .accepted());
+        ASSERT_TRUE(runtime
+                        ->dispatch(ssg::ClientId{1},
+                                   {"file.open", runtime->revision(),
+                                    std::string{"needle.txt"}})
+                        .accepted());
+        return runtime;
+    };
+    const auto followState = [](ssg::EditorRuntime& runtime) {
+        auto snapshot =
+            runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        ASSERT_TRUE(snapshot.has_value());
+        if (!snapshot) return ssg::FollowEditsViewState();
+        return snapshot->sections().followEdits;
+    };
+
+    auto pauseResume = makeRuntime();
+    auto togglePath = makeRuntime();
+    ASSERT_TRUE(pauseResume != nullptr);
+    ASSERT_TRUE(togglePath != nullptr);
+    if (!pauseResume || !togglePath) return;
+
+    ASSERT_TRUE(pauseResume
+                    ->dispatch(ssg::ClientId{1},
+                               {"follow_edits.pause", pauseResume->revision(), {}})
+                    .accepted());
+    ASSERT_TRUE(togglePath
+                    ->dispatch(ssg::ClientId{1},
+                               {"follow_edits.toggle", togglePath->revision(), {}})
+                    .accepted());
+
+    const auto pausedWithPause = followState(*pauseResume);
+    const auto pausedWithToggle = followState(*togglePath);
+    ASSERT_EQ(pausedWithPause.mode, ssg::FollowMode::Paused);
+    ASSERT_EQ(pausedWithToggle, pausedWithPause);
+
+    ssg::GitDiffScan scan{
+        .revision = ssg::Revision{2},
+        .baselineIdentity = "head-1:index-1",
+        .files = {{.id = ssg::DiffFileId{"needle.txt"},
+                   .path = "needle.txt",
+                   .baselineContent = std::string{"alpha needle omega"},
+                   .workingContent = std::string{"alpha needle omega plus"}}}};
+    ASSERT_TRUE(pauseResume->applyGitDiffScan(scan).accepted());
+    ASSERT_TRUE(togglePath->applyGitDiffScan(scan).accepted());
+
+    const auto pausedQueuedWithPause = followState(*pauseResume);
+    const auto pausedQueuedWithToggle = followState(*togglePath);
+    ASSERT_EQ(pausedQueuedWithPause.mode, ssg::FollowMode::Paused);
+    ASSERT_FALSE(pausedQueuedWithPause.queuedTargets.empty());
+    ASSERT_EQ(pausedQueuedWithToggle, pausedQueuedWithPause);
+
+    ASSERT_TRUE(pauseResume
+                    ->dispatch(ssg::ClientId{1},
+                               {"follow_edits.resume", pauseResume->revision(),
+                                {}})
+                    .accepted());
+    ASSERT_TRUE(togglePath
+                    ->dispatch(ssg::ClientId{1},
+                               {"follow_edits.toggle", togglePath->revision(),
+                                {}})
+                    .accepted());
+
+    const auto resumedWithResume = followState(*pauseResume);
+    const auto resumedWithToggle = followState(*togglePath);
+    ASSERT_EQ(resumedWithResume.mode, ssg::FollowMode::Following);
+    ASSERT_TRUE(resumedWithResume.activeTarget.has_value());
+    ASSERT_TRUE(resumedWithResume.queuedTargets.empty());
+    ASSERT_EQ(resumedWithToggle, resumedWithResume);
+}
+
 TEST(followPauseOnEditTransitionTable) {
     {
         auto runtime = followPauseRuntime("alpha needle omega\n");
@@ -1474,6 +1557,7 @@ int main() {
     RUN(gitStatusActivationOpensDeletedLiveDiffWithoutDiskFile);
     RUN(liveDiffOpenClassificationPausesOnlyForUserActivation);
     RUN(tabSwitchPausesFollowViaNavigationPath);
+    RUN(followToggleMatchesPauseAndResumeIncludingQueuedTargetResolution);
     RUN(followPauseOnEditTransitionTable);
     RUN(paletteOpenEntersPromptFocusAndPublishesCandidates);
     RUN(paletteExecuteValidatesCandidateMembership);
