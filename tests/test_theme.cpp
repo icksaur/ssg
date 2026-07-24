@@ -250,6 +250,32 @@ void assertSelectionFillGate(ssg::ThemeSnapshot const& snapshot) {
     ASSERT_TRUE(anchorFails);
 }
 
+void assertDistinctAtDepth(ssg::DiffTints const& tints, SrgbColor background,
+                           ssg::ColorDepth depth) {
+    constexpr double kKindDeltaE = 4.0;
+    constexpr double kWordDeltaE = 1.0;
+    constexpr double kRowDeltaE = 4.0;
+    const auto tintColors = colors(tints);
+    std::array<SrgbColor, 6> resolvedTints{};
+    std::transform(tintColors.begin(), tintColors.end(), resolvedTints.begin(),
+                   [depth](SrgbColor color) {
+                       return resolved(color, depth);
+                   });
+    const auto resolvedBackground = resolved(background, depth);
+    for (std::size_t first = 0; first < 3; ++first) {
+        for (std::size_t second = first + 1; second < 3; ++second) {
+            ASSERT_TRUE(deltaE(resolvedTints[first], resolvedTints[second]) >=
+                        kKindDeltaE);
+            ASSERT_TRUE(deltaE(resolvedTints[first + 3], resolvedTints[second + 3]) >=
+                        kKindDeltaE);
+        }
+        ASSERT_TRUE(deltaE(resolvedTints[first], resolvedTints[first + 3]) >=
+                    kWordDeltaE);
+        ASSERT_TRUE(deltaE(resolvedTints[first], resolvedBackground) >=
+                    kRowDeltaE);
+    }
+}
+
 std::string readFile(const std::filesystem::path& path) {
     std::ifstream input(path, std::ios::binary);
     if (!input) throw std::runtime_error("failed to open fixture: " + path.string());
@@ -398,6 +424,64 @@ TEST(diffTintsMeetResolvedReadabilityAndDistinctnessGates) {
     }
 }
 
+TEST(diffTintsRemainDistinctAtTruecolorAndIndexed256) {
+    auto assertBothDepthsDistinct = [](const ssg::ThemeSnapshot& snapshot) {
+        const auto background =
+            snapshot.palette[snapshot.semanticIndices[static_cast<std::size_t>(
+                SemanticRole::Background)]];
+        assertDistinctAtDepth(snapshot.diffTints, background, ssg::ColorDepth::Truecolor);
+        assertDistinctAtDepth(snapshot.diffTints, background, ssg::ColorDepth::Indexed256);
+    };
+
+    assertBothDepthsDistinct(bundledTheme().snapshot());
+
+    auto nearMonochromeBase = bundledTheme();
+    auto nearMonochromeColors = std::vector<IndexedColor>{};
+    for (std::size_t index = 0; index < nearMonochromeBase.palette().size(); ++index) {
+        nearMonochromeColors.push_back(
+            {static_cast<std::uint8_t>(index), nearMonochromeBase.palette()[index]});
+    }
+    nearMonochromeColors[nearMonochromeBase.indexFor(SemanticRole::GitAdded)].color =
+        {118, 119, 120};
+    nearMonochromeColors[nearMonochromeBase.indexFor(SemanticRole::GitDeleted)].color =
+        {120, 119, 118};
+    nearMonochromeColors[nearMonochromeBase.indexFor(SemanticRole::GitModified)].color =
+        {119, 120, 118};
+    auto nearMonochromeRoles = roles();
+    for (auto& mapping : nearMonochromeRoles) {
+        mapping.paletteIndex = nearMonochromeBase.indexFor(mapping.role);
+    }
+    auto nearMonochromeSyntax = syntax();
+    for (auto& mapping : nearMonochromeSyntax) {
+        mapping.paletteIndex = nearMonochromeBase.indexFor(mapping.scope);
+    }
+    const ssg::Theme nearMonochrome{"near-monochrome", nearMonochromeColors,
+                                    nearMonochromeRoles, nearMonochromeSyntax};
+    assertBothDepthsDistinct(nearMonochrome.snapshot());
+
+    auto lightBase = bundledTheme();
+    auto lightColors = std::vector<IndexedColor>{};
+    for (std::size_t index = 0; index < lightBase.palette().size(); ++index) {
+        lightColors.push_back(
+            {static_cast<std::uint8_t>(index), lightBase.palette()[index]});
+    }
+    lightColors[lightBase.indexFor(SemanticRole::Background)].color = {225, 225, 225};
+    lightColors[lightBase.indexFor(SemanticRole::Foreground)].color = {30, 30, 30};
+    lightColors[lightBase.indexFor(SemanticRole::GitAdded)].color = {118, 119, 120};
+    lightColors[lightBase.indexFor(SemanticRole::GitDeleted)].color = {120, 119, 118};
+    lightColors[lightBase.indexFor(SemanticRole::GitModified)].color = {119, 120, 118};
+    auto lightRoles = roles();
+    for (auto& mapping : lightRoles) {
+        mapping.paletteIndex = lightBase.indexFor(mapping.role);
+    }
+    auto lightSyntax = syntax();
+    for (auto& mapping : lightSyntax) {
+        mapping.paletteIndex = lightBase.indexFor(SemanticRole::Foreground);
+    }
+    const ssg::Theme light{"light", lightColors, lightRoles, lightSyntax};
+    assertBothDepthsDistinct(light.snapshot());
+}
+
 TEST(nearMonochromeAnchorsUseAReadableDistinctFallback) {
     auto base = bundledTheme();
     auto colors = std::vector<IndexedColor>{};
@@ -496,6 +580,7 @@ int main() {
     RUN(snapshotIsCompleteAndDeterministic);
     RUN(bundledThemeDataIsCompleteAndConstructible);
     RUN(diffTintsMeetResolvedReadabilityAndDistinctnessGates);
+    RUN(diffTintsRemainDistinctAtTruecolorAndIndexed256);
     RUN(nearMonochromeAnchorsUseAReadableDistinctFallback);
     RUN(lightThemeFallbackRemainsReadableAndDistinct);
     RUN(sourceAndConfigHaveNoIndependentColorSources);
