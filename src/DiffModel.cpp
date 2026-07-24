@@ -39,7 +39,7 @@ struct WordDiff {
     std::vector<DiffWordRange> targetModified;
     // Same information as the three ranges above, but as one ORDERED,
     // interleaved sequence (see InlineWordSegment) for the merged
-    // single-line rendering spike -- Added covers both true insertions and
+    // single-line inline word diff -- Added covers both true insertions and
     // in-place changes (both read as "new content" inline).
     std::vector<InlineWordSegment> segments;
 };
