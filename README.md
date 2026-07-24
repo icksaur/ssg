@@ -199,10 +199,14 @@ Runtime settings support default, user, workspace, language, and document
 scopes. Workspace file authority and persisted relative paths are rooted at the
 canonical CWD.
 
+User-authored startup configuration (`init.lua`, e.g. custom theme colors) is
+documented in `doc/config.md`.
+
 ## Project documentation
 
 - `doc/spec.md` — architecture, invariants, acceptance gates, and scope
 - `doc/features/` — detailed feature contracts
+- `doc/config.md` — user guide: writing `init.lua`
 - `doc/learnings.md` — durable implementation and integration constraints
 - `cpp-values.md` — public C++ API design values
 - `process.md` — development and review workflow
