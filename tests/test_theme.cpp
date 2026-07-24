@@ -153,6 +153,32 @@ double deltaE(SrgbColor first, SrgbColor second) {
     return std::hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 }
 
+std::optional<double> hslHueDegrees(SrgbColor color) {
+    const auto red = static_cast<double>(color.red) / 255.0;
+    const auto green = static_cast<double>(color.green) / 255.0;
+    const auto blue = static_cast<double>(color.blue) / 255.0;
+    const auto maxChannel = std::max({red, green, blue});
+    const auto minChannel = std::min({red, green, blue});
+    const auto chroma = maxChannel - minChannel;
+    if (chroma <= 1e-9) return std::nullopt;
+    double hue = 0.0;
+    if (maxChannel == red) {
+        hue = std::fmod((green - blue) / chroma, 6.0);
+    } else if (maxChannel == green) {
+        hue = (blue - red) / chroma + 2.0;
+    } else {
+        hue = (red - green) / chroma + 4.0;
+    }
+    hue *= 60.0;
+    if (hue < 0.0) hue += 360.0;
+    return hue;
+}
+
+double hueDistanceDegrees(double first, double second) {
+    const auto distance = std::abs(first - second);
+    return std::min(distance, 360.0 - distance);
+}
+
 std::array<SrgbColor, 6> colors(ssg::DiffTints const& tints) {
     return {tints.addedRow, tints.removedRow, tints.modifiedRow,
             tints.addedWord, tints.removedWord, tints.modifiedWord};
@@ -519,6 +545,30 @@ TEST(diffTintsRemainDistinctAtTruecolorAndIndexed256) {
     assertSnapshotDistinctAtBothDepths(bundledTheme().snapshot());
 }
 
+TEST(diffTintsTrackBundledGitAnchorHuesAtBothDepths) {
+    constexpr double kHueToleranceDegrees = 40.0;
+    const auto theme = bundledTheme();
+    const auto snapshot = theme.snapshot();
+    const auto tintColors = colors(snapshot.diffTints);
+    const std::array anchorRoles{SemanticRole::GitAdded, SemanticRole::GitDeleted,
+                                 SemanticRole::GitModified};
+    for (const auto depth :
+         {ssg::ColorDepth::Truecolor, ssg::ColorDepth::Indexed256}) {
+        for (std::size_t kind = 0; kind < anchorRoles.size(); ++kind) {
+            const auto anchor =
+                resolved(theme.palette()[theme.indexFor(anchorRoles[kind])], depth);
+            const auto anchorHue = hslHueDegrees(anchor);
+            ASSERT_TRUE(anchorHue.has_value());
+            const auto rowHue = hslHueDegrees(resolved(tintColors[kind], depth));
+            const auto wordHue = hslHueDegrees(resolved(tintColors[kind + 3], depth));
+            ASSERT_TRUE(rowHue.has_value());
+            ASSERT_TRUE(wordHue.has_value());
+            ASSERT_TRUE(hueDistanceDegrees(*rowHue, *anchorHue) <= kHueToleranceDegrees);
+            ASSERT_TRUE(hueDistanceDegrees(*wordHue, *anchorHue) <= kHueToleranceDegrees);
+        }
+    }
+}
+
 TEST(nearMonochromeDiffTintsRemainDistinctAtTruecolorAndIndexed256) {
     assertSnapshotDistinctAtBothDepths(nearMonochromeFixtureTheme().snapshot());
 }
@@ -640,6 +690,7 @@ int main() {
     RUN(bundledThemeDataIsCompleteAndConstructible);
     RUN(diffTintsMeetResolvedReadabilityAndDistinctnessGates);
     RUN(diffTintsRemainDistinctAtTruecolorAndIndexed256);
+    RUN(diffTintsTrackBundledGitAnchorHuesAtBothDepths);
     RUN(nearMonochromeDiffTintsRemainDistinctAtTruecolorAndIndexed256);
     RUN(lightFixtureDiffTintsRemainDistinctAtTruecolorAndIndexed256);
     RUN(fixedFallbackSetsRemainDistinctAtBothDepths);
