@@ -50,8 +50,10 @@ theme — the black/dark-blue/bright-blue/bright-red palette the user observed
 must not appear for the shipped theme at any depth. The design is provably
 theme-agnostic: a differently-hued or differently-lit user theme (once
 themes are user-configurable — see Considerations) still produces
-correctly-hued, correctly-distinct tints without per-theme tuning in the
-derivation code.
+correctly-hued tints, readable and background-distinct at every rendered
+depth, without per-theme tuning in the derivation code (mutual distinctness
+BETWEEN kinds is guaranteed at Truecolor only — see the descope below —
+not at Indexed256).
 
 ## Design
 
@@ -184,7 +186,8 @@ red ≈ 0°, an orange/amber for modified ≈ 30–40°) at a chroma/lightness
 matched to the theme's OWN background-relative envelope (e.g. derived from
 `themeBackground`'s and the foreground's luminance, the same inputs the
 primary derivation already uses) — then run the SAME `strongestReadableTint`
-/ joint-search machinery on those synthetic anchors instead of the theme's
+derivation (independently per kind, per the simplified Fix 1 design above —
+no joint/ordered search) on those synthetic anchors instead of the theme's
 own (degenerate) ones. This is a hue-angle CONSTANT (a fixed point in the
 derivation ALGORITHM, like `kFloorContrast`), not a hardcoded final COLOR —
 the actual RGB values it produces still depend on and adapt to the theme's
