@@ -142,29 +142,80 @@ struct LuaCommandHost::Impl {
                 char const* idData =
                     luaL_checklstring(callbackState, 1, &length);
                 std::string id{idData, length};
-                auto const found = host.catalog.find(id);
-                if (found == host.catalog.end()) {
-                    host.pendingError = LuaError::UnknownCommand;
-                    host.callbackMessage = "unknown Lua command: " + id;
-                    raiseError = true;
-                } else {
-                    for (auto const& capability :
-                         found->second.requiredCapabilities) {
-                        if (!host.principal.hasCapability(capability)) {
-                            host.pendingError = LuaError::CapabilityDenied;
-                            host.callbackMessage =
-                                "Lua plugin lacks capability: " +
-                                std::string{capability.value()};
-                            raiseError = true;
-                            break;
+
+                // ssg.command(id, args): `args` is an OPTIONAL second Lua
+                // table argument, decoded into a flat string->string map
+                // BEFORE any command lookup or dispatch happens -- a
+                // malformed second argument (not a table, or a table with a
+                // non-string key/value) must never reach a command handler,
+                // so it is rejected here, ahead of even the unknown-command
+                // check below.
+                std::optional<std::unordered_map<std::string, std::string>>
+                    arguments;
+                if (lua_gettop(callbackState) >= 2 &&
+                    !lua_isnoneornil(callbackState, 2)) {
+                    if (lua_type(callbackState, 2) != LUA_TTABLE) {
+                        host.pendingError = LuaError::InvalidScript;
+                        host.callbackMessage =
+                            "ssg.command's second argument must be a table";
+                        raiseError = true;
+                    } else {
+                        std::unordered_map<std::string, std::string> decoded;
+                        lua_pushvalue(callbackState, 2);
+                        lua_pushnil(callbackState);
+                        while (lua_next(callbackState, -2) != 0) {
+                            if (lua_type(callbackState, -2) != LUA_TSTRING ||
+                                lua_type(callbackState, -1) != LUA_TSTRING) {
+                                host.pendingError = LuaError::InvalidScript;
+                                host.callbackMessage =
+                                    "ssg.command's argument table keys and "
+                                    "values must be strings";
+                                raiseError = true;
+                                lua_pop(callbackState, 2);
+                                break;
+                            }
+                            std::size_t keyLength = 0;
+                            char const* keyData = lua_tolstring(
+                                callbackState, -2, &keyLength);
+                            std::size_t valueLength = 0;
+                            char const* valueData = lua_tolstring(
+                                callbackState, -1, &valueLength);
+                            decoded.emplace(std::string{keyData, keyLength},
+                                            std::string{valueData, valueLength});
+                            lua_pop(callbackState, 1);
+                        }
+                        lua_pop(callbackState, 1);
+                        if (!raiseError) {
+                            arguments = std::move(decoded);
+                        }
+                    }
+                }
+
+                if (!raiseError) {
+                    auto const found = host.catalog.find(id);
+                    if (found == host.catalog.end()) {
+                        host.pendingError = LuaError::UnknownCommand;
+                        host.callbackMessage = "unknown Lua command: " + id;
+                        raiseError = true;
+                    } else {
+                        for (auto const& capability :
+                             found->second.requiredCapabilities) {
+                            if (!host.principal.hasCapability(capability)) {
+                                host.pendingError = LuaError::CapabilityDenied;
+                                host.callbackMessage =
+                                    "Lua plugin lacks capability: " +
+                                    std::string{capability.value()};
+                                raiseError = true;
+                                break;
+                            }
                         }
                     }
                 }
 
                 if (!raiseError) {
                     try {
-                        auto result =
-                            host.dispatcher(LuaInvocation{id, host.principal});
+                        auto result = host.dispatcher(
+                            LuaInvocation{id, host.principal, std::move(arguments)});
                         if (!result.accepted) {
                             host.pendingError = LuaError::DispatchFailed;
                             host.callbackMessage =

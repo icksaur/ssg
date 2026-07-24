@@ -3,9 +3,11 @@
 #include <ssg/LuaCommandHost.h>
 
 #include <fstream>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -178,6 +180,67 @@ TEST(dispatchAndPluginFaultsAreIsolated) {
     ASSERT_EQ(callbacks.invoke("absent").error, LuaError::UnknownCommand);
 }
 
+TEST(commandTableArgumentReachesTheDispatcherDecodedAsAStringMap) {
+    std::optional<std::unordered_map<std::string, std::string>> received;
+    LuaCommandHost host{options({{"configure", {}}}),
+        [&](LuaInvocation const& invocation) {
+            received = invocation.arguments;
+            return CommandHandlerResult::success();
+        }};
+
+    ASSERT_TRUE(host.evaluate(
+        "ssg.command('configure', {red = 'crimson', name = 'dark'})")
+                    .accepted());
+    ASSERT_TRUE(received.has_value());
+    ASSERT_EQ(received->size(), std::size_t{2});
+    ASSERT_EQ(received->at("red"), "crimson");
+    ASSERT_EQ(received->at("name"), "dark");
+}
+
+TEST(commandWithoutSecondArgumentLeavesArgumentsEmpty) {
+    std::optional<std::unordered_map<std::string, std::string>> received{
+        std::unordered_map<std::string, std::string>{{"stale", "value"}}};
+    LuaCommandHost host{options({{"noop", {}}}),
+        [&](LuaInvocation const& invocation) {
+            received = invocation.arguments;
+            return CommandHandlerResult::success();
+        }};
+    ASSERT_TRUE(host.evaluate("ssg.command('noop')").accepted());
+    ASSERT_FALSE(received.has_value());
+}
+
+TEST(malformedCommandArgumentIsRejectedBeforeTheDispatcherIsCalled) {
+    bool dispatched = false;
+    LuaCommandHost host{options({{"configure", {}}}),
+        [&](LuaInvocation const&) {
+            dispatched = true;
+            return CommandHandlerResult::success();
+        }};
+
+    // A non-table second argument.
+    auto nonTable = host.evaluate("ssg.command('configure', 'oops')");
+    ASSERT_EQ(nonTable.error, LuaError::InvalidScript);
+    ASSERT_FALSE(dispatched);
+
+    // A table with a non-string VALUE.
+    auto nonStringValue =
+        host.evaluate("ssg.command('configure', {red = 42})");
+    ASSERT_EQ(nonStringValue.error, LuaError::InvalidScript);
+    ASSERT_FALSE(dispatched);
+
+    // A table with a non-string KEY.
+    auto nonStringKey =
+        host.evaluate("ssg.command('configure', {[1] = 'x'})");
+    ASSERT_EQ(nonStringKey.error, LuaError::InvalidScript);
+    ASSERT_FALSE(dispatched);
+
+    // Confirm the host still works normally afterward (a rejected call
+    // leaves no residual state).
+    ASSERT_TRUE(host.evaluate("ssg.command('configure', {ok = 'yes'})")
+                    .accepted());
+    ASSERT_TRUE(dispatched);
+}
+
 TEST(unsafeStandardLibrariesAndNativeLoaderAreAbsent) {
     LuaCommandHost host{options(), [](LuaInvocation const&) {
         return CommandHandlerResult::success();
@@ -199,6 +262,9 @@ int main() {
     RUN(reentrantCallsRestoreTheEnclosingBudget);
     RUN(registrationIsAtomicAndDuplicateSafe);
     RUN(dispatchAndPluginFaultsAreIsolated);
+    RUN(commandTableArgumentReachesTheDispatcherDecodedAsAStringMap);
+    RUN(commandWithoutSecondArgumentLeavesArgumentsEmpty);
+    RUN(malformedCommandArgumentIsRejectedBeforeTheDispatcherIsCalled);
     RUN(unsafeStandardLibrariesAndNativeLoaderAreAbsent);
     std::cout << "Passed: " << passed << " Failed: " << failed << '\n';
     return failed == 0 ? 0 : 1;
