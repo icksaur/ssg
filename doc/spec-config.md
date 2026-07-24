@@ -2,7 +2,7 @@
 
 ## Goals
 
-SSG loads a user config script (`init.lua`) once at startup, from a standard
+SSG loads a user config script (`init.lua`) at startup, from a standard
 per-OS location, and runs it in the SAME sandboxed Lua host the codebase
 already has (`LuaCommandHost` — see `doc/features/language-services.md`).
 `init.lua` calls SSG palette commands to configure the editor. The first
@@ -11,9 +11,20 @@ and applies it to the running session's palette. A missing `init.lua` is not
 an error (SSG runs with defaults); a script error is reported but does not
 prevent the editor from starting.
 
+`init.lua` is also auto-reloaded: editing and saving the file while SSG is
+running re-evaluates it with the EXACT SAME non-blocking semantics as
+startup (a broken edit prints a diagnostic and leaves the prior
+configuration in place; detecting the change never blocks the interactive
+event loop).
+
 Non-goals (explicit scope cuts, revisit only if they prove limiting):
-- Hot-reload of `init.lua` while running (a future `config.reload` command
-  could re-run it; not built here).
+- An explicit `config.reload` command (auto-reload on file change covers the
+  interactive case; a manual trigger is unnecessary until proven otherwise).
+- Reverting configuration when `init.lua` is DELETED while running (a
+  delete is observed and silently clears this mechanism's "last content"
+  baseline — see Design — but takes no action on the runtime; nothing
+  currently applied is undone). A later RECREATION of the file reloads
+  normally, same as any other change.
 - Any command beyond `theme.define` (`cycleTheme` etc. are mentioned by the
   user as future examples of the same argument-passing mechanism, not
   required now — there is not even a multi-theme registry to cycle over
@@ -161,6 +172,60 @@ after construction — adding one is in scope; its exact shape is an
 implementation-time decision, not fixed here beyond "existing snapshot/delta
 conventions apply, no new transport").
 
+**Auto-reload mechanism.** This mirrors the codebase's OWN existing
+git-diff-worker pattern (`EditorRuntime::Impl::startGitDiffWorker`,
+`src/EditorRuntime.cpp`) rather than inventing a new one, applied at the
+APP layer since the whole init-script mechanism is already app-owned
+(`ssg_main.cpp`; the library's `EditorRuntime` has no Lua/config
+awareness — see the existing `doc/features/language-services.md`
+boundary: session assembly owns Lua routing, not `EditorRuntime` itself):
+
+- A background thread reads `init.lua`'s FULL CONTENT (not just mtime/
+  size — a same-size rewrite within one filesystem timestamp tick would
+  otherwise go undetected, and config files are tiny, so re-reading the
+  whole file every poll is cheap) at a fixed interval and compares it
+  byte-for-byte against the last content this mechanism observed.
+- **Stability debounce**: a change is only queued for the main thread
+  once the SAME new content is observed on two consecutive polls (one
+  interval apart) — a save-in-progress (an editor writing in multiple
+  chunks, or a temp-file-then-rename sequence) can otherwise be read
+  mid-write and queue a truncated script. This mirrors the SAME concept
+  `WatcherConfig::debounce` already applies for workspace file watching,
+  just re-derived here since `FilesystemWatcher` itself isn't reused (see
+  Considerations). A transient truncated read that settles differently on
+  the next poll is simply never queued at all, not queued-then-corrected.
+- Once content is stable and DIFFERENT from the last content this
+  mechanism actually applied, the thread stores the new content for the
+  main thread and writes one byte to a dedicated self-pipe, exactly like
+  the git-diff worker's `wakeWriteFd`.
+- **Delete and recreate**: when the file is observed to no longer exist,
+  this mechanism clears its "last observed content" to empty and takes NO
+  action on the runtime — exactly startup's own "absent file → silently
+  skip" semantics, applied identically to a delete observed mid-run (no
+  diagnostic, no reload, no reverting whatever configuration is already
+  applied). If the file is later recreated, its content is compared
+  against that cleared (empty) baseline, so a recreation is always
+  treated as a fresh change and reloaded through the normal stable-content
+  path above — recreating the file behaves exactly like the file
+  appearing for the very first time.
+- The main event loop's `waitReadiness`/`FdReadiness` (`ssg_main.cpp`)
+  gains one more watched descriptor for this pipe, alongside the existing
+  signal and git-diff wake descriptors. On waking for it, the main thread
+  drains the pending script text and evaluates it through the SAME
+  `LuaCommandHost`-construction/synthetic-client/error-diagnostic path
+  `loadInitScript` already uses at startup (refactored so both callers
+  share it) — a fresh `LuaCommandHost` each time, attached/detached around
+  one `evaluate()` call, never a persistent Lua state across reloads.
+- All actual Lua execution and `runtime.dispatch()` calls stay on the MAIN
+  thread, exactly like `drainGitDiffScans()` keeps `applyGitDiffScan` main-
+  thread-only — the background thread only ever does file I/O and queues
+  a string, never touches `EditorRuntime` itself.
+- "Non-blocking" therefore means TWO separate things, both true: file-
+  change DETECTION never blocks the interactive loop (background thread,
+  wake-fd, exactly like git-diff), and a broken reload never blocks
+  further interaction (same bounded instruction/time budget and diagnostic-
+  then-continue behavior `loadInitScript` already has at startup).
+
 ## Invariants
 
 - **No new Lua sandbox**: `theme.define` and any future init-script command
@@ -168,9 +233,11 @@ conventions apply, no new transport").
   budgeted exactly like every other Lua-callable command
   (`doc/features/language-services.md`). Nothing about init-script loading
   gets its own bespoke trust or execution model.
-- **A broken/missing config never blocks startup.** Absent file → silently
-  skipped. Present-but-broken file → one-line stderr diagnostic, editor
-  still opens with default settings/theme.
+- **A broken/missing config never blocks startup or reload.** Absent file
+  at startup → silently skipped. Present-but-broken file (at startup OR
+  on a later auto-reload) → one-line stderr diagnostic, the editor (or the
+  prior configuration, on reload) stays exactly as it was before the
+  attempt.
 - **Command payload typing stays strict.** The Lua→native argument bridge
   produces a flat string map at the Lua boundary, but each command's
   handler receives its own typed struct via `std::any_cast`, not the raw
@@ -195,10 +262,23 @@ conventions apply, no new transport").
   RGB values.
 - **One init-script host per process, not per session/client.** `init.lua`
   configures the running SSG PROCESS (single TUI instance, single
-  workspace) once at startup; it is not re-evaluated per attached client
-  or per workspace. This matches today's single-process TUI shape
-  (`apps/ssg_main.cpp`) and is why the host is constructed once in
-  `ssg_main.cpp`, not inside `EditorRuntime`.
+  workspace); it is not re-evaluated per attached client or per workspace.
+  This matches today's single-process TUI shape (`apps/ssg_main.cpp`) and
+  is why the host is constructed in `ssg_main.cpp`, not inside
+  `EditorRuntime` — including on reload, a fresh `LuaCommandHost` per
+  evaluation, never a persistent state shared across reloads or clients.
+- **The reload watcher is a SEPARATE, dedicated mechanism from the
+  git-diff worker** even though it copies that worker's shape (poll
+  thread + wake-fd, main-thread-only apply) — it is not layered onto the
+  SAME thread or wake-fd. `init.lua` lives outside the workspace tree
+  entirely (in the user's config directory), so `FilesystemWatcher`'s
+  workspace-rooted native watcher (built for one canonical root scanned
+  recursively) is the wrong tool; a simple periodic single-file content
+  poll is both simpler and correctly scoped to the ONE file that matters.
+  It compares full file CONTENT, not `WatchFileState`'s mtime/size (a
+  same-size same-tick rewrite would evade a stat-only check, and the
+  content is read anyway to queue it for evaluation, so a separate stat
+  check buys nothing).
 - **`ThemeDefineArguments` bypassing `std::unordered_map` at the handler
   boundary** is a small but real design point: without it, EVERY consumer
   of the command dispatch table would need to know the Lua-bridge's map
@@ -212,6 +292,11 @@ conventions apply, no new transport").
 - **Risk**: a slow or infinite-looping init script delays every startup.
   **Mitigation**: reuse `LuaCommandHost`'s existing instruction/wall-clock
   budget unchanged — no new budget tuning, no exemption for init scripts.
+- **Risk**: a reload firing mid-keystroke or mid-render corrupts the
+  interactive session. **Mitigation**: the reload is applied only when the
+  main loop's `select()` wakes for it, at the same point in the loop
+  ordinary command dispatch already happens — there is no reentrant call
+  into `EditorRuntime` from the background poll thread itself.
 - **Risk**: capability creep — init.lua runs with elevated trust since it's
   a local file, which could become a precedent for skipping capability
   checks elsewhere. **Mitigation**: init.lua is granted capabilities
@@ -231,9 +316,16 @@ conventions apply, no new transport").
   `ssg.command("theme.define", { red = "#ff5555" })` changes the running
   editor's rendered red palette slot; removing the file, or leaving it
   absent, starts with the unmodified default theme; a syntactically broken
-  script prints a diagnostic and still starts normally.
+  script prints a diagnostic and still starts normally. EDITING and SAVING
+  `init.lua` while SSG is running re-applies the new colors within one
+  poll interval, without any keyboard/render interruption; saving a
+  broken edit prints a diagnostic and leaves the PRIOR configuration
+  exactly as it was.
 - Budgets: unchanged — the existing `LuaCommandHostOptions` instruction/
-  time budget applies to init-script evaluation with no special-casing.
+  time budget applies to every evaluation (startup AND reload) with no
+  special-casing. The reload poll interval itself adds no observable
+  input latency (background thread; the main loop's `select()` timeout is
+  unaffected when nothing has changed).
 - Gates: `bash scripts/check.sh` (tree-sitter ON) and
   `BUILD_DIR=build-no-ts bash scripts/check.sh` (OFF) both green.
 - Oracles:
@@ -270,6 +362,16 @@ conventions apply, no new transport").
     the untouched default — proves the whole load path (path resolution,
     Lua eval, argument decode, command dispatch, palette replacement) end
     to end with zero visual ambiguity to eyeball.
+  - Auto-reload oracle: a PTY-harness-style real-binary run that writes
+    `init.lua` AFTER the editor has already started, waits at most a
+    couple of poll intervals, and asserts the rendered SGR bytes changed
+    to the new color WITHOUT restarting the process; a second write with
+    a broken script prints a diagnostic and leaves the PRIOR color
+    rendered unchanged (proving reload failure doesn't corrupt or blank
+    out the already-applied configuration); deleting the file mid-session
+    changes nothing and prints nothing, and recreating it afterward
+    reloads normally (proving the delete/recreate baseline-reset behavior,
+    not just the ordinary edit-and-save case).
 
 ## Plan
 
@@ -280,6 +382,7 @@ conventions apply, no new transport").
 | 3 | Add `theme.define` command (descriptor + handler + `ThemeDefineArguments`), wired into the command registry alongside other command sets, INCLUDING the P0 command-catalog wiring (`src/EditorSessionBuilder.cpp` and `data/required-commands.json`/its Lua-parity tests) so registry-completeness and Lua-catalog-parity invariants stay intact | wherever theme-affecting commands are registered (new `ThemeCommands.h/.cpp` alongside `EditCommands.cpp`'s pattern), `src/EditorRuntime.cpp` (theme mutation + delta), `src/EditorSessionBuilder.cpp`, `data/required-commands.json` | test: full/partial/invalid table cases against `ThemeSnapshot` equality; catalog-parity test still passes with the new entry | - |
 | 4 | Attach a synthetic Lua-origin client at startup and wire init-script loading into `ssg_main.cpp` (resolve path, read, `runtime.attach(InvocationPrincipal{..., InvocationOrigin::Lua, ...})`, construct `LuaCommandHost` with a dispatcher closing over that ClientId, `evaluate()`, diagnostic-and-continue on failure) | `apps/ssg_main.cpp` | test: PTY-harness-style real-binary run with a real `init.lua` on disk; capability-gated command accepted/rejected per grant list | - |
 | 5 | End-to-end verification + both gates | - | both `scripts/check.sh` configs green | - |
+| 6 | Refactor `loadInitScript` so path-resolve/read and evaluate-and-dispatch are separately callable; add a background poll thread (mirroring `startGitDiffWorker`'s shape) that stats `init.lua`'s `WatchFileState` on a fixed interval, reads its content on change, and wakes the main loop via a dedicated self-pipe; extend `waitReadiness`/`FdReadiness` with that descriptor; on wake, evaluate the queued script on the main thread through the shared evaluate-and-dispatch path | `apps/ssg_main.cpp` | test: PTY-harness real-binary run that edits `init.lua` mid-session and observes the rendered color change without restart; a broken mid-session edit prints a diagnostic and leaves the prior color rendered | - |
 
 ## Rationale
 
