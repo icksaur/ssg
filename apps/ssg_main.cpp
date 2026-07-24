@@ -275,7 +275,9 @@ int main(int argc, char** argv) {
     // Detect the terminal color depth once at startup (M9-C2); the frame encoder
     // adapts the theme's 16 colors to it via the library's resolve_color.
     ssg::ColorDepth const colorDepth =
-        ssg::app::detect_color_depth(std::getenv("COLORTERM"), std::getenv("TERM"));
+        ssg::app::detect_color_depth(std::getenv("SSG_COLOR_DEPTH"),
+                                     std::getenv("COLORTERM"), std::getenv("TERM"),
+                                     std::getenv("TERM_PROGRAM"));
 
     // Drain and classify any pending signal tags.  Returns false to keep looping;
     // a terminating signal does not return — it restores the terminal in normal
