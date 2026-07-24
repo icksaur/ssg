@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ssg/DiffModel.h>
 #include <ssg/GraphemeLayout.h>
 #include <ssg/types.h>
 
@@ -48,6 +49,15 @@ struct RealRow {
     uint32_t endByteOffset = 0;
     uint32_t startCell = 0;
     uint32_t endCell = 0;
+    // Present only for an UNWRAPPED Modified line rendered as ONE merged
+    // inline row (git --word-diff style: baseline-removed and target-added
+    // words shown inline on one row) instead of the usual phantom-row-above
+    // plus target-row-below split. Empty for every other row, including a
+    // Modified line under word wrap (ghost spans are unwrapped-only; a
+    // wrapped Modified line always keeps the two-row split). Viewport is the
+    // sole computer of this data (from DiffLineChange::inlineWordSegments);
+    // Renderer paints it verbatim.
+    std::vector<InlineWordSegment> mergedSegments;
 
     bool operator==(const RealRow&) const noexcept = default;
 };
@@ -56,6 +66,15 @@ struct PhantomRow {
     uint32_t baselineLine;
     std::string text;
     uint32_t followingByteOffset;
+    // Byte ranges within `text` that were the specific words removed by a
+    // Modified pair's edit (empty for a phantom row from a pure Removed
+    // line, where the whole line is gone and there is nothing more specific
+    // to mark). Lets the renderer apply a stronger RemovedWord tint over
+    // just those ranges, mirroring how a real row's AddedWord/ModifiedWord
+    // marks work -- the phantom row stays tint-only (no syntax fg, per this
+    // project's REMOVED-ROW SYNTAX decision), but still gets word-level
+    // diff marks, which are an orthogonal concept to syntax coloring.
+    std::vector<DiffWordRange> removedWordRanges;
 
     bool operator==(const PhantomRow&) const noexcept = default;
 };

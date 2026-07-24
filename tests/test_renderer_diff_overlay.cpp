@@ -221,8 +221,11 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
               ssg::DiffTint::ModifiedRow);
     ASSERT_EQ(grid.at(modifiedColumn + 4, modifiedRow).tint,
               ssg::DiffTint::AddedWord);
+    // A changed-in-place token (e.g. "1" -> "42") reuses the AddedWord tint
+    // directly -- there is no separate ModifiedWord color (only three diff
+    // colors exist: added/removed/modified; see Renderer.cpp).
     ASSERT_EQ(grid.at(modifiedColumn + 14, modifiedRow).tint,
-              ssg::DiffTint::ModifiedWord);
+              ssg::DiffTint::AddedWord);
     ASSERT_EQ(
         grid.at(modifiedColumn + 14, modifiedRow).foreground,
         overlay.sections().theme.syntaxIndices[

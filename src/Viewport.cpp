@@ -25,6 +25,7 @@ uint32_t checkedU32(std::size_t value, const char* what) {
 struct RemovedLine {
     uint32_t baselineLine;
     std::string text;
+    std::vector<DiffWordRange> removedWordRanges;
 };
 
 using RemovedBlocks = std::map<uint32_t, std::vector<RemovedLine>>;
@@ -36,25 +37,71 @@ std::string lineText(std::string text) {
     return text;
 }
 
-RemovedBlocks removedBlocks(const DiffFileView& diff, uint32_t lineCount) {
+// A Modified pair's baseline text is never shown as a real row (only its
+// target/edited text is -- see DiffModel.cpp's flush()), so its removed
+// words would otherwise be invisible; find the changedLines entry for this
+// baseline line to recover which specific words were removed. Pure-Removed
+// lines have no such entry and fall back to no marks (the whole line is
+// already RemovedRow-tinted, nothing more specific to mark).
+std::vector<DiffWordRange> removedWordRangesFor(const DiffFileView& diff,
+                                                uint32_t baselineLine) {
+    for (const auto& change : diff.changedLines) {
+        if (change.kind == DiffLineKind::Modified && change.baselineLine &&
+            *change.baselineLine == baselineLine) {
+            return change.baselineRemovedWordRanges;
+        }
+    }
+    return {};
+}
+
+RemovedBlocks removedBlocks(const DiffFileView& diff, uint32_t lineCount,
+                             bool skipMergedPairs) {
     RemovedBlocks result;
     for (const auto& hunk : diff.hunks) {
-        const auto paired =
-            std::min(hunk.baselineLines.size(), hunk.targetLines.size());
+        // A clean single-line 1:1 Modified pair (see DiffModel.cpp's
+        // flush()/alignHunkLines) renders as ONE merged inline row
+        // (RealRow::mergedSegments, populated below in
+        // projectedUnwrappedRows) instead of a separate phantom row above
+        // the real target row -- skip it here so it isn't shown twice.
+        // Ghost spans are UNWRAPPED-ONLY (see RealRow::mergedSegments), so
+        // the WRAPPED projection never skips: `skipMergedPairs` is false
+        // there, and every hunk shape keeps the phantom-row-above split.
+        if (skipMergedPairs && hunk.baselineLines.size() == 1 &&
+            hunk.targetLines.size() == 1) {
+            continue;
+        }
         const auto insertion = checkedU32(
-            std::min<std::size_t>(hunk.targetStart + paired, lineCount),
+            std::min<std::size_t>(hunk.targetStart, lineCount),
             "phantom insertion row exceeds uint32");
         auto& block = result[insertion];
-        for (std::size_t index = paired; index < hunk.baselineLines.size();
+        for (std::size_t index = 0; index < hunk.baselineLines.size();
              ++index) {
+            const auto baselineLine = checkedU32(
+                hunk.baselineStart + index, "phantom baseline row exceeds uint32");
             block.push_back(RemovedLine{
-                checkedU32(hunk.baselineStart + index,
-                           "phantom baseline row exceeds uint32"),
+                baselineLine,
                 lineText(hunk.baselineLines[index]),
+                removedWordRangesFor(diff, baselineLine),
             });
         }
     }
     return result;
+}
+
+// The inline merged-row segments for the Modified change targeting `line`,
+// or empty if there is none (only a clean single-line 1:1 Modified pair --
+// see DiffModel.cpp's flush() -- ever populates DiffLineChange::
+// inlineWordSegments, so this and removedBlocks' skip condition above always
+// agree on which lines merge).
+std::vector<InlineWordSegment> mergedSegmentsFor(const DiffFileView& diff,
+                                                  uint32_t line) {
+    for (const auto& change : diff.changedLines) {
+        if (change.kind == DiffLineKind::Modified && change.targetLine &&
+            *change.targetLine == line && !change.inlineWordSegments.empty()) {
+            return change.inlineWordSegments;
+        }
+    }
+    return {};
 }
 
 std::vector<VisualRow> wrapRows(std::span<const CellRun> lines,
@@ -169,7 +216,7 @@ std::vector<std::pair<VisualRow, ProjectedRow>> projectedWrappedRows(
         checkedU32(documentSize, "viewport byte offset exceeds uint32");
     const auto lineCount = checkedU32(
         logicalLines.size(), "viewport logical line count exceeds uint32");
-    auto blocks = removedBlocks(diff, lineCount);
+    auto blocks = removedBlocks(diff, lineCount, /*skipMergedPairs=*/false);
     std::vector<std::pair<VisualRow, ProjectedRow>> result;
 
     const auto appendBlock = [&](uint32_t insertion) {
@@ -186,19 +233,33 @@ std::vector<std::pair<VisualRow, ProjectedRow>> projectedWrappedRows(
             const auto wrapped = wrapRows(line, columns);
             for (const auto& segment : wrapped) {
                 std::string text;
+                std::size_t segmentStart = 0;
+                std::size_t segmentEnd = 0;
                 if (segment.spanCount != 0) {
                     const auto& first = run.spans[segment.firstSpan];
                     const auto& last =
                         run.spans[segment.firstSpan + segment.spanCount - 1];
-                    text = removed.text.substr(
-                        first.byteOffset,
-                        last.byteOffset + last.byteLen - first.byteOffset);
+                    segmentStart = first.byteOffset;
+                    segmentEnd = last.byteOffset + last.byteLen;
+                    text = removed.text.substr(segmentStart,
+                                               segmentEnd - segmentStart);
+                }
+                std::vector<DiffWordRange> segmentRanges;
+                for (const auto& range : removed.removedWordRanges) {
+                    const auto rangeEnd = range.byteStart + range.byteLength;
+                    const auto overlapStart = std::max(range.byteStart, segmentStart);
+                    const auto overlapEnd = std::min(rangeEnd, segmentEnd);
+                    if (overlapStart < overlapEnd) {
+                        segmentRanges.push_back(
+                            {overlapStart - segmentStart, overlapEnd - overlapStart});
+                    }
                 }
                 result.emplace_back(
                     VisualRow{logicalLine, 0, 0, CellIndex{0},
                               segment.contentCells, segment.visibleCells,
                               offset},
-                    PhantomRow{removed.baselineLine, std::move(text), offset});
+                    PhantomRow{removed.baselineLine, std::move(text), offset,
+                              std::move(segmentRanges)});
             }
         }
     };
@@ -243,7 +304,7 @@ RowProjection projectedUnwrappedRows(std::string_view documentText,
         checkedU32(starts.size(), "viewport line count exceeds uint32");
     const auto documentSize =
         checkedU32(documentText.size(), "viewport byte offset exceeds uint32");
-    const auto blocks = removedBlocks(diff, lineCount);
+    const auto blocks = removedBlocks(diff, lineCount, /*skipMergedPairs=*/true);
     std::vector<ProjectedRow> rows;
     for (uint32_t line = 0; line <= lineCount; ++line) {
         if (const auto found = blocks.find(line); found != blocks.end()) {
@@ -252,7 +313,8 @@ RowProjection projectedUnwrappedRows(std::string_view documentText,
                                 documentSize);
             for (const auto& removed : found->second) {
                 rows.emplace_back(PhantomRow{
-                    removed.baselineLine, removed.text, offset});
+                    removed.baselineLine, removed.text, offset,
+                    removed.removedWordRanges});
             }
         }
         if (line < lineCount) {
@@ -262,7 +324,8 @@ RowProjection projectedUnwrappedRows(std::string_view documentText,
                 line + 1 < lineCount ? starts[line + 1] - 1
                                      : documentText.size(),
                 "viewport byte offset exceeds uint32");
-            rows.emplace_back(RealRow{line, line, start, end, 0, 0});
+            rows.emplace_back(
+                RealRow{line, line, start, end, 0, 0, mergedSegmentsFor(diff, line)});
         }
     }
     return RowProjection{std::move(rows)};
@@ -664,14 +727,119 @@ ViewportViewState Viewport::computeUnwrapped(
         const std::size_t end = logicalLine + 1 < lineStart.size()
                                     ? lineStart[logicalLine + 1] - 1
                                     : documentText.size();
-        const auto run = GraphemeLayout{}.computeRun(
-            documentText.substr(start, end - start), tabWidth);
         const auto documentStart =
             checkedU32(start, "viewport byte offset exceeds uint32");
         // The row's end is the line's TRUE end (newline byte, or text.size() for
         // the last line) — the FULL line, independent of the horizontal clip.
         const auto endByteOffset =
             checkedU32(end, "viewport byte offset exceeds uint32");
+
+        if (!real.mergedSegments.empty()) {
+            // A Modified line rendered as ONE merged inline row (git
+            // --word-diff style). This is the SOLE place the merged text is
+            // built and turned into cells/hit-targets -- Renderer paints
+            // RealRow::mergedSegments verbatim and does not recompute this.
+            // Unchanged/Added segments are REAL: concatenated in order they
+            // reconstruct the target line's bytes exactly, so their byte
+            // offsets accumulate from `documentStart` as the merged text is
+            // assembled. Removed/Separator segments are GHOST: every cell
+            // inside one resolves to the real byte offset immediately
+            // before it with byteLen 0 -- the same "phantom content has no
+            // bytes of its own" convention already used for whole
+            // PhantomRows, generalized to span granularity.
+            struct SegmentBound {
+                uint32_t mergedStart;
+                uint32_t mergedEnd;
+                bool ghost;
+                uint32_t byteOffsetBase;
+            };
+            std::string mergedText;
+            std::vector<SegmentBound> bounds;
+            bounds.reserve(real.mergedSegments.size());
+            uint32_t realCursor = documentStart;
+            for (const auto& segment : real.mergedSegments) {
+                const auto mergedStart = checkedU32(
+                    mergedText.size(), "viewport byte offset exceeds uint32");
+                mergedText += segment.text;
+                const auto ghost =
+                    segment.kind == InlineWordSegment::Kind::Removed ||
+                    segment.kind == InlineWordSegment::Kind::Separator;
+                bounds.push_back(
+                    {mergedStart,
+                     checkedU32(mergedText.size(),
+                                "viewport byte offset exceeds uint32"),
+                     ghost, realCursor});
+                if (!ghost) {
+                    realCursor += checkedU32(
+                        segment.text.size(), "viewport byte offset exceeds uint32");
+                }
+            }
+            const auto boundFor = [&](uint32_t mergedByteOffset) {
+                for (const auto& bound : bounds) {
+                    if (mergedByteOffset >= bound.mergedStart &&
+                        mergedByteOffset < bound.mergedEnd) {
+                        return bound;
+                    }
+                }
+                return bounds.back();
+            };
+            const auto run = GraphemeLayout{}.computeRun(mergedText, tabWidth);
+
+            uint32_t firstSpan = 0;
+            uint32_t startCell = 0;
+            for (; firstSpan < run.spans.size(); ++firstSpan) {
+                if (startCell >= requestedFirstVisualColumn) break;
+                startCell += run.spans[firstSpan].cellWidth;
+            }
+            if (firstSpan >= run.spans.size()) {
+                visibleRows.push_back(
+                    VisualRow{logicalLine, firstSpan, 0, CellIndex{startCell},
+                              run.totalCells, 0, endByteOffset});
+                if (projection) rowProjection.push_back(projected);
+                continue;
+            }
+            uint32_t viewportColumn = 0;
+            uint32_t logicalCell = startCell;
+            uint32_t spanCount = 0;
+            for (uint32_t spanIndex = firstSpan; spanIndex < run.spans.size();
+                 ++spanIndex) {
+                const auto& span = run.spans[spanIndex];
+                const auto available = dimensions.columns - viewportColumn;
+                if (available == 0) break;
+                const auto visibleWidth = std::min(span.cellWidth, available);
+                const auto bound = boundFor(span.byteOffset);
+                const auto byteOffset =
+                    bound.ghost ? bound.byteOffsetBase
+                                : bound.byteOffsetBase +
+                                      (span.byteOffset - bound.mergedStart);
+                const auto byteLen = bound.ghost ? 0u : span.byteLen;
+                for (uint32_t cell = 0; cell < visibleWidth; ++cell) {
+                    hitTargets.push_back(CellHitTarget{
+                        viewportRow,
+                        viewportColumn + cell,
+                        logicalLine,
+                        CellIndex{logicalCell},
+                        byteOffset,
+                        byteLen,
+                    });
+                }
+                viewportColumn += visibleWidth;
+                logicalCell += span.cellWidth;
+                ++spanCount;
+            }
+            const uint32_t contentFromOffset =
+                run.totalCells > startCell ? run.totalCells - startCell : 0;
+            visibleRows.push_back(
+                VisualRow{logicalLine, firstSpan, spanCount, CellIndex{startCell},
+                          run.totalCells,
+                          std::min(contentFromOffset, dimensions.columns),
+                          endByteOffset});
+            if (projection) rowProjection.push_back(projected);
+            continue;
+        }
+
+        const auto run = GraphemeLayout{}.computeRun(
+            documentText.substr(start, end - start), tabWidth);
 
         // Locate the first span at or past the requested horizontal offset; its
         // start cell is this row's visible origin.  A row shorter than the offset

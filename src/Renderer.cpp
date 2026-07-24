@@ -442,10 +442,26 @@ void paintDocument(CellGrid& grid, SessionSnapshot const& snapshot,
                           span.kind == CellKind::InvalidUtf8) {
                    text = "\xef\xbf\xbd";
                }
+               // A Modified pair's baseline text is only ever visible here
+               // (its target/edited line is the real row below); mark the
+               // specific removed words more strongly than the flat
+               // RemovedRow wash, mirroring how AddedWord/ModifiedWord
+               // outrank ModifiedRow on the real row.
+               auto const spanEnd = span.byteOffset + span.byteLen;
+               auto const marked = std::any_of(
+                   phantom->removedWordRanges.begin(),
+                   phantom->removedWordRanges.end(),
+                   [&](const DiffWordRange& range) {
+                       auto const rangeEnd = range.byteStart + range.byteLength;
+                       return span.byteOffset < rangeEnd &&
+                              range.byteStart < spanEnd;
+                   });
+               auto const cellTint =
+                   marked ? DiffTint::RemovedWord : DiffTint::RemovedRow;
                auto const width = std::max<std::uint32_t>(span.cellWidth, 1);
                put(grid, column, content.y + static_cast<int>(rowIndex),
                    std::move(text), foreground, background,
-                   SemanticRole::Foreground, false, DiffTint::RemovedRow);
+                   SemanticRole::Foreground, false, cellTint);
                for (std::uint32_t offset = 1;
                     offset < width &&
                     column + static_cast<int>(offset) < content.right();
@@ -453,7 +469,7 @@ void paintDocument(CellGrid& grid, SessionSnapshot const& snapshot,
                    put(grid, column + static_cast<int>(offset),
                        content.y + static_cast<int>(rowIndex), "", foreground,
                        background, SemanticRole::Foreground, true,
-                       DiffTint::RemovedRow);
+                       cellTint);
                }
                column += static_cast<int>(width);
            }
@@ -474,10 +490,95 @@ void paintDocument(CellGrid& grid, SessionSnapshot const& snapshot,
         auto const lineIt = lines.find(row.logicalLine);
         if (lineIt == lines.end()) continue;
         auto const& line = lineIt->second;
-        int column = content.x;
         auto const lastSpan = std::min<std::size_t>(
             line.cells.spans.size(),
             static_cast<std::size_t>(row.firstSpan) + row.spanCount);
+        // A Modified line rendered as ONE merged inline row (git-diff
+        // --word-diff style: baseline-removed and target-added/changed words
+        // shown inline, red-then-green, instead of a separate phantom row
+        // above a plain target row). Viewport is the sole decider of WHICH
+        // rows merge and the sole owner of hit-testing/caret/selection byte
+        // mapping for the ghost (Removed/Separator) segments this
+        // introduces (see RealRow::mergedSegments); this branch only paints
+        // the segments Viewport already computed, recomputing a
+        // GraphemeLayout run over the SAME merged text purely to know where
+        // to draw each cell -- not to decide layout or byte offsets.
+        // Word wrap, selection, and find-match highlighting are not painted
+        // on a merged row (selection/find BYTE ranges still resolve
+        // correctly via Viewport's hit targets; only the visual highlight
+        // wash is not drawn here yet) -- a non-goal for this increment,
+        // matching the spec's explicit unwrapped-only scope.
+        if (!real.mergedSegments.empty()) {
+            std::string mergedText;
+            struct SegmentBounds {
+                std::size_t start;
+                std::size_t end;
+                InlineWordSegment::Kind kind;
+            };
+            std::vector<SegmentBounds> bounds;
+            bounds.reserve(real.mergedSegments.size());
+            for (auto const& segment : real.mergedSegments) {
+                const auto start = mergedText.size();
+                mergedText += segment.text;
+                bounds.push_back({start, mergedText.size(), segment.kind});
+            }
+            auto const foreground = semanticIndex(theme, SemanticRole::Foreground);
+            auto const cells = GraphemeLayout{}.computeRun(mergedText);
+            int column = content.x;
+            std::size_t firstSpan = 0;
+            std::uint32_t startCell = 0;
+            for (; firstSpan < cells.spans.size(); ++firstSpan) {
+                if (startCell >= viewport.firstVisualColumn) break;
+                startCell += cells.spans[firstSpan].cellWidth;
+            }
+            for (std::size_t spanIndex = firstSpan;
+                 spanIndex < cells.spans.size(); ++spanIndex) {
+                if (column >= content.right()) break;
+                auto const& span = cells.spans[spanIndex];
+                auto text = std::string{
+                    std::string_view{mergedText}.substr(span.byteOffset,
+                                                        span.byteLen)};
+                if (span.kind == CellKind::Tab) {
+                    text.assign(span.cellWidth, ' ');
+                } else if (span.kind == CellKind::Control ||
+                           span.kind == CellKind::InvalidUtf8) {
+                    text = "\xef\xbf\xbd";
+                }
+                auto segmentKind = InlineWordSegment::Kind::Unchanged;
+                for (auto const& bound : bounds) {
+                    if (span.byteOffset >= bound.start && span.byteOffset < bound.end) {
+                        segmentKind = bound.kind;
+                        break;
+                    }
+                }
+                auto const cellTint =
+                    segmentKind == InlineWordSegment::Kind::Removed
+                        ? DiffTint::RemovedWord
+                    : segmentKind == InlineWordSegment::Kind::Added
+                        ? DiffTint::AddedWord
+                        : DiffTint::ModifiedRow;
+                auto const width = std::max<std::uint32_t>(span.cellWidth, 1);
+                put(grid, column, content.y + static_cast<int>(rowIndex),
+                    std::move(text), foreground, background,
+                    SemanticRole::Foreground, false, cellTint);
+                for (std::uint32_t offset = 1;
+                     offset < width &&
+                     column + static_cast<int>(offset) < content.right();
+                     ++offset) {
+                    put(grid, column + static_cast<int>(offset),
+                        content.y + static_cast<int>(rowIndex), "", foreground,
+                        background, SemanticRole::Foreground, true, cellTint);
+                }
+                column += static_cast<int>(width);
+            }
+            for (; column < content.right(); ++column) {
+                put(grid, column, content.y + static_cast<int>(rowIndex), " ",
+                    foreground, background, SemanticRole::Foreground, false,
+                    DiffTint::ModifiedRow);
+            }
+            continue;
+        }
+        int column = content.x;
         for (std::size_t spanIndex = row.firstSpan;
              spanIndex < lastSpan && column < content.right(); ++spanIndex) {
             auto const& span = line.cells.spans[spanIndex];
@@ -512,15 +613,20 @@ void paintDocument(CellGrid& grid, SessionSnapshot const& snapshot,
             };
             auto wordTint = DiffTint::None;
             if (lineChange) {
+                // Only three diff colors exist (added/removed/modified row);
+                // a word-level mark inside a modified line reuses the Added
+                // color directly for BOTH a purely inserted span and a
+                // changed-in-place span -- both are "new content in the
+                // target", so both read as the same green highlight over
+                // the row's own modified wash. There is no separate fourth
+                // "modified word" shade.
                 if (std::any_of(lineChange->targetAddedWordRanges.begin(),
                                 lineChange->targetAddedWordRanges.end(),
+                                overlaps) ||
+                    std::any_of(lineChange->targetModifiedWordRanges.begin(),
+                                lineChange->targetModifiedWordRanges.end(),
                                 overlaps)) {
                     wordTint = DiffTint::AddedWord;
-                } else if (std::any_of(
-                               lineChange->targetModifiedWordRanges.begin(),
-                               lineChange->targetModifiedWordRanges.end(),
-                               overlaps)) {
-                    wordTint = DiffTint::ModifiedWord;
                 }
             }
             auto const cellTint =
@@ -675,32 +781,15 @@ CellGridCell const& CellGrid::at(int column, int row) const {
     return cells[static_cast<std::size_t>(row * size.columns + column)];
 }
 
+// Deliberately omits literal palette/diffTints/selectionFill RGB values: those
+// are theme tuning, which changes often and independently of layout/content
+// correctness, and per-cell lines already reference palette INDEX + symbolic
+// tint kind (not resolved colors) -- coupling this golden to exact color
+// bytes would break every legitimate color tweak for no structural reason.
+// Theme color values are tested directly in test_theme.cpp instead.
 std::string CellGrid::canonical() const {
     std::ostringstream output;
     output << "size " << size.columns << ' ' << size.rows << '\n';
-    output << "palette";
-    for (auto const& color : palette) {
-        output << ' ' << std::hex << std::setw(2) << std::setfill('0')
-               << static_cast<unsigned>(color.red) << std::setw(2)
-               << static_cast<unsigned>(color.green) << std::setw(2)
-               << static_cast<unsigned>(color.blue);
-    }
-    output << std::dec << '\n';
-    output << "diff_tints";
-    for (auto const& color : std::array{
-             diffTints.addedRow, diffTints.removedRow, diffTints.modifiedRow,
-             diffTints.addedWord, diffTints.removedWord,
-             diffTints.modifiedWord}) {
-        output << ' ' << std::hex << std::setw(2) << std::setfill('0')
-               << static_cast<unsigned>(color.red) << std::setw(2)
-               << static_cast<unsigned>(color.green) << std::setw(2)
-               << static_cast<unsigned>(color.blue);
-    }
-    output << std::dec << '\n';
-    output << "selection_fill " << std::hex << std::setw(2) << std::setfill('0')
-           << static_cast<unsigned>(selectionFill.red) << std::setw(2)
-           << static_cast<unsigned>(selectionFill.green) << std::setw(2)
-           << static_cast<unsigned>(selectionFill.blue) << std::dec << '\n';
     for (int row = 0; row < size.rows; ++row) {
         for (int column = 0; column < size.columns; ++column) {
             auto const& cell = at(column, row);

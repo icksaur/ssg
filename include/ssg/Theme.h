@@ -207,11 +207,11 @@ struct ThemeSnapshot {
 [[nodiscard]] std::string_view syntaxScopeName(SyntaxScope scope);
 [[nodiscard]] std::optional<SyntaxScope> syntaxScopeFromName(std::string_view name);
 
-// Derive the six diff tint colors from a theme's own palette + role/scope
-// mappings (GitAdded/Deleted/Modified hue anchors blended toward Background,
-// contrast- and distinctness-gated). Exposed so a hand-built ThemeSnapshot (e.g.
-// the runtime's defaultTheme) populates diffTints/selectionFill the same way
-// Theme::snapshot() does; without it those fields default to black.
+// Each of a diff's three kinds (added/removed/modified) uses ONE flat color
+// straight from the theme's own Git anchor role -- no blending toward
+// Background, no desaturation, no per-theme readability search. Row and
+// word share that same color; a word mark exists only to say "here
+// specifically" within an already-tinted row, not to be a different shade.
 [[nodiscard]] DiffTints deriveDiffTints(
     std::array<SrgbColor, kThemePaletteSize> const& palette,
     std::array<std::uint8_t, kSemanticRoleCount> const& semanticIndices,
@@ -245,27 +245,3 @@ private:
 };
 
 } // namespace ssg
-
-// Testing-only observability seam: reports WHICH internal path
-// deriveDiffTints() took (Primary derivation vs. the degenerate-theme
-// Rescue fallback). Not part of the render contract — production code
-// only ever needs deriveDiffTints()'s final colors; this exists so tests
-// can assert a non-degenerate theme never silently depends on rescue.
-namespace ssg::testing {
-
-enum class DiffTintDerivationPath : std::uint8_t { Primary, Rescue };
-
-struct DiffTintDerivationResult {
-    DiffTints tints;
-    DiffTintDerivationPath path = DiffTintDerivationPath::Rescue;
-
-    friend bool operator==(const DiffTintDerivationResult&,
-                           const DiffTintDerivationResult&) = default;
-};
-
-[[nodiscard]] DiffTintDerivationResult deriveDiffTintsWithPath(
-    std::array<SrgbColor, kThemePaletteSize> const& palette,
-    std::array<std::uint8_t, kSemanticRoleCount> const& semanticIndices,
-    std::array<std::uint8_t, kSyntaxScopeCount> const& syntaxIndices) noexcept;
-
-} // namespace ssg::testing

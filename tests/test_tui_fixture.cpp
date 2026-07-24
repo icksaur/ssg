@@ -9,6 +9,7 @@
 
 #include <any>
 #include <cstdint>
+#include <cstdlib>
 #include <fstream>
 #include <optional>
 #include <sstream>
@@ -276,6 +277,10 @@ TEST(finalWorkflowScreenMatchesHandAuthored16ColorGolden) {
         ASSERT_TRUE(cell.background < ssg::kThemePaletteSize);
     }
     auto actual = screen.canonical();
+    if (std::getenv("SSG_REGEN_GOLDEN") != nullptr) {
+        std::ofstream{SSG_TUI_SCREEN_PATH, std::ios::binary} << actual;
+        return;
+    }
     auto expected = readAll(SSG_TUI_SCREEN_PATH);
     if (actual != expected) std::cerr << actual;
     ASSERT_EQ(actual, expected);

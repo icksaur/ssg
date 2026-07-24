@@ -83,27 +83,16 @@ void validatePaletteIndex(std::uint8_t index) {
     }
 }
 
-// A diff-row tint is a subtle background wash laid over text whose foreground was
-// already chosen to read on the editor Background. Readability is therefore
-// relative: a tint must not drop any foreground's contrast below a fraction of
-// what it had on the plain Background, subject to a hard absolute floor. Requiring
-// each tint to independently reach a high absolute ratio against every syntax
-// foreground is impossible for a theme with a mid-luminance accent (it forces the
-// tint to near-black and erases the hue); this relative rule matches how editors
-// actually tint diff rows.
+// Selection fill is a subtle background wash laid over text whose foreground
+// was already chosen to read on the editor Background. Readability is
+// therefore relative: a tint must not drop any foreground's contrast below a
+// fraction of what it had on the plain Background, subject to a hard
+// absolute floor. Requiring the tint to independently reach a high absolute
+// ratio against every syntax foreground is impossible for a theme with a
+// mid-luminance accent (it forces the tint to near-black and erases the
+// hue); this relative rule matches how editors actually tint a selection.
 constexpr double kFloorContrast = 2.1;
 constexpr double kRetainContrast = 0.80;
-constexpr double kKindDeltaETruecolor = 4.0;
-constexpr double kWordDeltaETruecolor = 1.0;
-constexpr double kRowDeltaETruecolor = 4.0;
-// Indexed256 is coarser than truecolor, but it still needs a real perceptual
-// gate: one xterm gray-ramp step (e.g. 234->235) is about ΔE≈4.9 and still
-// reads as near-collapsed in dark diff rows. Keep kind above that boundary and
-// keep word/row visibly separated while allowing tested themes to remain
-// readable.
-constexpr double kKindDeltaEIndexed256 = 5.0;
-constexpr double kWordDeltaEIndexed256 = 3.0;
-constexpr double kRowDeltaEIndexed256 = 4.0;
 
 double linearChannel(std::uint8_t channel) noexcept {
     const double encoded = static_cast<double>(channel) / 255.0;
@@ -121,31 +110,6 @@ double contrast(SrgbColor first, SrgbColor second) noexcept {
     const auto darker = std::min(luminance(first), luminance(second));
     const auto lighter = std::max(luminance(first), luminance(second));
     return (lighter + 0.05) / (darker + 0.05);
-}
-
-std::array<double, 3> lab(SrgbColor color) noexcept {
-    const auto red = linearChannel(color.red);
-    const auto green = linearChannel(color.green);
-    const auto blue = linearChannel(color.blue);
-    const std::array xyz{
-        (0.4124564 * red + 0.3575761 * green + 0.1804375 * blue) / 0.95047,
-        0.2126729 * red + 0.7151522 * green + 0.0721750 * blue,
-        (0.0193339 * red + 0.1191920 * green + 0.9503041 * blue) / 1.08883,
-    };
-    std::array<double, 3> transformed{};
-    std::transform(xyz.begin(), xyz.end(), transformed.begin(), [](double value) {
-        return value > 0.008856 ? std::cbrt(value)
-                               : 7.787 * value + 16.0 / 116.0;
-    });
-    return {116.0 * transformed[1] - 16.0,
-            500.0 * (transformed[0] - transformed[1]),
-            200.0 * (transformed[1] - transformed[2])};
-}
-
-double deltaE(SrgbColor first, SrgbColor second) noexcept {
-    const auto a = lab(first);
-    const auto b = lab(second);
-    return std::hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 }
 
 SrgbColor interpolate(SrgbColor first, SrgbColor second, double weight) noexcept {
@@ -168,11 +132,6 @@ SrgbColor desaturate(SrgbColor color, double retainedSaturation) noexcept {
     const auto gray = static_cast<std::uint8_t>(
         std::clamp(std::lround(255.0 * encodedGray), 0L, 255L));
     return interpolate({gray, gray, gray}, color, retainedSaturation);
-}
-
-std::array<SrgbColor, 6> colors(DiffTints const& tints) noexcept {
-    return {tints.addedRow, tints.removedRow, tints.modifiedRow,
-            tints.addedWord, tints.removedWord, tints.modifiedWord};
 }
 
 std::array<SrgbColor, kSyntaxScopeCount + 1> foregrounds(
@@ -212,208 +171,48 @@ bool readable(SrgbColor tint, SrgbColor background,
     return true;
 }
 
-bool readable(
-    DiffTints const& tints, SrgbColor background,
-    std::array<SrgbColor, kSyntaxScopeCount + 1> const& foregrounds) noexcept {
-    return std::ranges::all_of(colors(tints), [&](SrgbColor tint) {
-        return readable(tint, background, foregrounds);
-    });
-}
-
+// Selection fill is the one remaining derived (not flat-anchor) tint: walk
+// from Background toward the Selection role's own color, keeping the
+// boldest weight that stays readable against every syntax foreground.
 SrgbColor strongestReadableTint(
     SrgbColor background, SrgbColor anchor, double desiredWeight,
-    double retainedSaturation, double truecolorBackgroundDeltaE,
-    double indexedBackgroundDeltaE,
+    double retainedSaturation,
     std::array<SrgbColor, kSyntaxScopeCount + 1> const& foregrounds) noexcept {
-    const auto distinctFromBackground = [&](SrgbColor candidate) {
-        return deltaE(resolveColor(candidate, ColorDepth::Truecolor).rgb,
-                      resolveColor(background, ColorDepth::Truecolor).rgb) >=
-                   truecolorBackgroundDeltaE &&
-               deltaE(resolveColor(candidate, ColorDepth::Indexed256).rgb,
-                      resolveColor(background, ColorDepth::Indexed256).rgb) >=
-                   indexedBackgroundDeltaE;
-    };
     const auto mutedAnchor = desaturate(anchor, retainedSaturation);
     const auto steps = static_cast<int>(std::lround(desiredWeight * 100.0));
     for (int step = steps; step >= 1; --step) {
         const auto candidate =
             interpolate(background, mutedAnchor, static_cast<double>(step) / 100.0);
-        if (readable(candidate, background, foregrounds) &&
-            distinctFromBackground(candidate)) {
+        if (readable(candidate, background, foregrounds)) {
             return candidate;
         }
     }
     return background;
 }
 
-bool distinct(DiffTints const& tints, SrgbColor background) noexcept {
-    const auto tintColors = colors(tints);
-    for (const auto depth : {ColorDepth::Truecolor, ColorDepth::Indexed256}) {
-        const auto rowDeltaE = depth == ColorDepth::Truecolor
-                                   ? kRowDeltaETruecolor
-                                   : kRowDeltaEIndexed256;
-        std::array<SrgbColor, 6> resolved{};
-        std::transform(tintColors.begin(), tintColors.end(), resolved.begin(),
-                       [depth](SrgbColor color) {
-                           return resolveColor(color, depth).rgb;
-                       });
-        const auto resolvedBackground = resolveColor(background, depth).rgb;
-        for (std::size_t first = 0; first < 3; ++first) {
-            if (depth == ColorDepth::Truecolor) {
-                for (std::size_t second = first + 1; second < 3; ++second) {
-                    if (deltaE(resolved[first], resolved[second]) <
-                            kKindDeltaETruecolor ||
-                        deltaE(resolved[first + 3], resolved[second + 3]) <
-                            kKindDeltaETruecolor) {
-                        return false;
-                    }
-                }
-                if (deltaE(resolved[first], resolved[first + 3]) <
-                    kWordDeltaETruecolor) {
-                    return false;
-                }
-            }
-            if (deltaE(resolved[first], resolvedBackground) < rowDeltaE) {
-                return false;
-            }
-            if (depth == ColorDepth::Indexed256 &&
-                deltaE(resolved[first + 3], resolvedBackground) <
-                    kWordDeltaEIndexed256) {
-                return false;
-            }
-        }
-    }
-    return true;
-}
-
-SrgbColor fromHsl(double hueDegrees, double saturation, double lightness) noexcept {
-    const auto hueSector = hueDegrees / 60.0;
-    const auto chroma = (1.0 - std::abs(2.0 * lightness - 1.0)) * saturation;
-    const auto x = chroma * (1.0 - std::abs(std::fmod(hueSector, 2.0) - 1.0));
-    double redPrime = 0.0;
-    double greenPrime = 0.0;
-    double bluePrime = 0.0;
-    if (hueSector < 1.0) {
-        redPrime = chroma;
-        greenPrime = x;
-    } else if (hueSector < 2.0) {
-        redPrime = x;
-        greenPrime = chroma;
-    } else if (hueSector < 3.0) {
-        greenPrime = chroma;
-        bluePrime = x;
-    } else if (hueSector < 4.0) {
-        greenPrime = x;
-        bluePrime = chroma;
-    } else if (hueSector < 5.0) {
-        redPrime = x;
-        bluePrime = chroma;
-    } else {
-        redPrime = chroma;
-        bluePrime = x;
-    }
-    const auto match = lightness - chroma / 2.0;
-    const auto channel = [match](double value) {
-        return static_cast<std::uint8_t>(std::clamp(
-            std::lround((value + match) * 255.0), 0L, 255L));
-    };
-    return {channel(redPrime), channel(greenPrime), channel(bluePrime)};
-}
-
-SrgbColor syntheticAnchor(SrgbColor background, SrgbColor foreground,
-                          double hueDegrees) noexcept {
-    const bool darkBackground = luminance(background) < luminance(foreground);
-    const auto envelopeBase = interpolate(background, foreground,
-                                          darkBackground ? 0.72 : 0.28);
-    const auto hueBasis =
-        fromHsl(hueDegrees, 0.78, darkBackground ? 0.56 : 0.44);
-    return interpolate(envelopeBase, hueBasis, 0.68);
-}
-
-DiffTints syntheticRescue(
-    SrgbColor themeBackground, SrgbColor themeForeground,
-    std::array<SrgbColor, kSyntaxScopeCount + 1> const& allForegrounds) noexcept {
-    // Rescue hue anchors preserve conventional diff semantics: added=green,
-    // removed=red, modified=amber.
-    constexpr double kRescueAddedHue = 120.0;
-    constexpr double kRescueRemovedHue = 0.0;
-    constexpr double kRescueModifiedHue = 34.0;
-    const std::array anchors{
-        syntheticAnchor(themeBackground, themeForeground, kRescueAddedHue),
-        syntheticAnchor(themeBackground, themeForeground, kRescueRemovedHue),
-        syntheticAnchor(themeBackground, themeForeground, kRescueModifiedHue),
-    };
-    DiffTints tints;
-    auto tintSlots = std::array<SrgbColor*, 6>{
-        &tints.addedRow, &tints.removedRow, &tints.modifiedRow,
-        &tints.addedWord, &tints.removedWord, &tints.modifiedWord};
-    for (std::size_t kind = 0; kind < anchors.size(); ++kind) {
-        *tintSlots[kind] = strongestReadableTint(
-            themeBackground, anchors[kind], 0.40, 0.60, kRowDeltaETruecolor,
-            kRowDeltaEIndexed256, allForegrounds);
-        *tintSlots[kind + 3] = strongestReadableTint(
-            themeBackground, anchors[kind], 0.72, 0.85, kWordDeltaETruecolor,
-            kWordDeltaEIndexed256, allForegrounds);
-    }
-    return tints;
-}
-
 } // namespace
 
-namespace testing {
-
-DiffTintDerivationResult deriveDiffTintsWithPath(
-    std::array<SrgbColor, kThemePaletteSize> const& palette,
-    std::array<std::uint8_t, kSemanticRoleCount> const& semanticIndices,
-    std::array<std::uint8_t, kSyntaxScopeCount> const& syntaxIndices) noexcept {
-    const auto allForegrounds = foregrounds(palette, semanticIndices, syntaxIndices);
-    const auto themeBackground = background(palette, semanticIndices);
-    const auto themeForeground =
-        palette[semanticIndices[position(SemanticRole::Foreground)]];
-    const std::array anchors{
-        palette[semanticIndices[position(SemanticRole::GitAdded)]],
-        palette[semanticIndices[position(SemanticRole::GitDeleted)]],
-        palette[semanticIndices[position(SemanticRole::GitModified)]],
-    };
-
-    DiffTints derived;
-    auto derivedColors = std::array<SrgbColor*, 6>{
-        &derived.addedRow, &derived.removedRow, &derived.modifiedRow,
-        &derived.addedWord, &derived.removedWord, &derived.modifiedWord};
-    for (std::size_t kind = 0; kind < anchors.size(); ++kind) {
-        *derivedColors[kind] = strongestReadableTint(
-            themeBackground, anchors[kind], 0.40, 0.60, kRowDeltaETruecolor,
-            kRowDeltaEIndexed256, allForegrounds);
-        *derivedColors[kind + 3] = strongestReadableTint(
-            themeBackground, anchors[kind], 0.72, 0.85, kWordDeltaETruecolor,
-            kWordDeltaEIndexed256, allForegrounds);
-    }
-
-    // Prefer the derived washes when they are readable and stay distinct at both
-    // Truecolor and Indexed256 depths; their hue comes from the theme's own Git
-    // anchors. A fixed set rescues only a degenerate theme whose near-monochrome
-    // anchors make the derived tints indistinguishable. If nothing is both
-    // readable and distinct, keep the readable derived washes (readability is
-    // the primary guarantee).
-    if (readable(derived, themeBackground, allForegrounds) &&
-        distinct(derived, themeBackground)) {
-        return {derived, DiffTintDerivationPath::Primary};
-    }
-    const auto rescue = syntheticRescue(themeBackground, themeForeground, allForegrounds);
-    if (readable(rescue, themeBackground, allForegrounds) &&
-        distinct(rescue, themeBackground)) {
-        return {rescue, DiffTintDerivationPath::Rescue};
-    }
-    return {derived, DiffTintDerivationPath::Rescue};
-}
-
-} // namespace testing
-
+// Each diff kind uses ONE flat color straight from the theme's own Git
+// anchor role -- no blending, no desaturation, no readability search. Row
+// and word share that same color for a given kind; a word mark's job is
+// only to say "here specifically" within an already-tinted row.
 DiffTints deriveDiffTints(
     std::array<SrgbColor, kThemePaletteSize> const& palette,
     std::array<std::uint8_t, kSemanticRoleCount> const& semanticIndices,
-    std::array<std::uint8_t, kSyntaxScopeCount> const& syntaxIndices) noexcept {
-    return testing::deriveDiffTintsWithPath(palette, semanticIndices, syntaxIndices).tints;
+    std::array<std::uint8_t, kSyntaxScopeCount> const&) noexcept {
+    const auto added = palette[semanticIndices[position(SemanticRole::GitAdded)]];
+    const auto deleted = palette[semanticIndices[position(SemanticRole::GitDeleted)]];
+    const auto modified = palette[semanticIndices[position(SemanticRole::GitModified)]];
+    return {.addedRow = added,
+            .removedRow = deleted,
+            .modifiedRow = modified,
+            .addedWord = added,
+            .removedWord = deleted,
+            // Word-level marks inside a modified line reuse the Added/
+            // Removed colors directly (the added/inserted span reads as
+            // "added", the phantom row's removed span reads as "removed");
+            // there is no separate fourth shade for "modified word".
+            .modifiedWord = added};
 }
 
 SrgbColor deriveSelectionFill(
@@ -424,8 +223,8 @@ SrgbColor deriveSelectionFill(
     const auto themeBackground = background(palette, semanticIndices);
     const auto selectionAnchor =
         palette[semanticIndices[position(SemanticRole::Selection)]];
-    return strongestReadableTint(themeBackground, selectionAnchor, 0.40, 0.60, 0.0,
-                                 0.0, allForegrounds);
+    return strongestReadableTint(themeBackground, selectionAnchor, 0.40, 0.60,
+                                 allForegrounds);
 }
 
 std::string_view semanticRoleName(SemanticRole role) {

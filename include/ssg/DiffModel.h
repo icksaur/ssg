@@ -35,6 +35,28 @@ struct DiffWordRange {
     friend bool operator==(const DiffWordRange&, const DiffWordRange&) = default;
 };
 
+// A single-line Modified pair's baseline and target text merged into ONE
+// ordered sequence of segments (git-diff --word-diff style: old and new
+// words appear inline on one line, not as two separate lines). Unchanged and
+// Added segments are REAL: concatenated in order (skipping Removed and
+// Separator) they reconstruct the target line's text byte-for-byte, so a
+// consumer can map a byte within one of these segments back to a real
+// document offset by simple accumulation. Removed carries baseline text no
+// longer present in the target; Separator is a synthetic single space
+// spliced between a Removed/Added pair with no shared whitespace, purely so
+// the two colored words don't visually run together -- both Removed and
+// Separator are GHOST: they contribute display-only text with no
+// corresponding real document byte. Viewport turns this sequence into ghost
+// spans (see RealRow::mergedSegments) for hit-testing/caret/selection;
+// Renderer paints it without recomputing the segmentation.
+struct InlineWordSegment {
+    enum class Kind { Unchanged, Removed, Added, Separator };
+    Kind kind = Kind::Unchanged;
+    std::string text;
+
+    friend bool operator==(const InlineWordSegment&, const InlineWordSegment&) = default;
+};
+
 struct DiffLineChange {
     DiffLineKind kind = DiffLineKind::Modified;
     std::optional<std::size_t> baselineLine;
@@ -42,6 +64,9 @@ struct DiffLineChange {
     std::vector<DiffWordRange> targetAddedWordRanges;
     std::vector<DiffWordRange> baselineRemovedWordRanges;
     std::vector<DiffWordRange> targetModifiedWordRanges;
+    // Populated only for a Modified change backed by a clean single-line
+    // 1:1 hunk (see DiffModel.cpp's flush()); empty otherwise.
+    std::vector<InlineWordSegment> inlineWordSegments;
 
     friend bool operator==(const DiffLineChange&, const DiffLineChange&) = default;
 };
