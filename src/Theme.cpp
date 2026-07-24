@@ -286,13 +286,76 @@ bool distinct(DiffTints const& tints, SrgbColor background) noexcept {
     return true;
 }
 
-DiffTints fixedFallback(bool lightBackground) noexcept {
-    if (lightBackground) {
-        return {{215, 255, 215}, {255, 215, 215}, {215, 215, 255},
-                {175, 255, 175}, {255, 215, 175}, {175, 215, 255}};
+SrgbColor fromHsl(double hueDegrees, double saturation, double lightness) noexcept {
+    const auto hueSector = hueDegrees / 60.0;
+    const auto chroma = (1.0 - std::abs(2.0 * lightness - 1.0)) * saturation;
+    const auto x = chroma * (1.0 - std::abs(std::fmod(hueSector, 2.0) - 1.0));
+    double redPrime = 0.0;
+    double greenPrime = 0.0;
+    double bluePrime = 0.0;
+    if (hueSector < 1.0) {
+        redPrime = chroma;
+        greenPrime = x;
+    } else if (hueSector < 2.0) {
+        redPrime = x;
+        greenPrime = chroma;
+    } else if (hueSector < 3.0) {
+        greenPrime = chroma;
+        bluePrime = x;
+    } else if (hueSector < 4.0) {
+        greenPrime = x;
+        bluePrime = chroma;
+    } else if (hueSector < 5.0) {
+        redPrime = x;
+        bluePrime = chroma;
+    } else {
+        redPrime = chroma;
+        bluePrime = x;
     }
-    return {{0, 0, 0}, {0, 0, 95}, {0, 0, 135},
-            {0, 0, 95}, {0, 0, 135}, {95, 0, 0}};
+    const auto match = lightness - chroma / 2.0;
+    const auto channel = [match](double value) {
+        return static_cast<std::uint8_t>(std::clamp(
+            std::lround((value + match) * 255.0), 0L, 255L));
+    };
+    return {channel(redPrime), channel(greenPrime), channel(bluePrime)};
+}
+
+SrgbColor syntheticAnchor(SrgbColor background, SrgbColor foreground,
+                          double hueDegrees) noexcept {
+    const bool darkBackground = luminance(background) < luminance(foreground);
+    const auto envelopeBase = interpolate(background, foreground,
+                                          darkBackground ? 0.72 : 0.28);
+    const auto hueBasis =
+        fromHsl(hueDegrees, 0.78, darkBackground ? 0.56 : 0.44);
+    return interpolate(envelopeBase, hueBasis, 0.68);
+}
+
+DiffTints syntheticRescue(
+    SrgbColor themeBackground, SrgbColor themeForeground,
+    std::array<SrgbColor, kSyntaxScopeCount + 1> const& allForegrounds) noexcept {
+    // Rescue hue anchors preserve conventional diff semantics: added=green,
+    // removed=red, modified=amber.
+    constexpr double kRescueAddedHue = 120.0;
+    constexpr double kRescueRemovedHue = 0.0;
+    constexpr double kRescueModifiedHue = 34.0;
+    const std::array anchors{
+        syntheticAnchor(themeBackground, themeForeground, kRescueAddedHue),
+        syntheticAnchor(themeBackground, themeForeground, kRescueRemovedHue),
+        syntheticAnchor(themeBackground, themeForeground, kRescueModifiedHue),
+    };
+    DiffTints tints;
+    auto tintSlots = std::array<SrgbColor*, 6>{
+        &tints.addedRow, &tints.removedRow, &tints.modifiedRow,
+        &tints.addedWord, &tints.removedWord, &tints.modifiedWord};
+    for (std::size_t kind = 0; kind < anchors.size(); ++kind) {
+        *tintSlots[kind] = strongestReadableTint(
+            themeBackground, anchors[kind], 0.40, 0.60, kRowDeltaETruecolor,
+            kRowDeltaEIndexed256, allForegrounds);
+        *tintSlots[kind + 3] = strongestReadableTint(
+            themeBackground, anchors[kind], 0.72, 0.85, kWordDeltaETruecolor,
+            kWordDeltaEIndexed256, allForegrounds);
+    }
+    return tints;
 }
 
 } // namespace
@@ -303,6 +366,8 @@ DiffTintDerivationResult deriveDiffTintsWithPath(
     std::array<std::uint8_t, kSyntaxScopeCount> const& syntaxIndices) noexcept {
     const auto allForegrounds = foregrounds(palette, semanticIndices, syntaxIndices);
     const auto themeBackground = background(palette, semanticIndices);
+    const auto themeForeground =
+        palette[semanticIndices[position(SemanticRole::Foreground)]];
     const std::array anchors{
         palette[semanticIndices[position(SemanticRole::GitAdded)]],
         palette[semanticIndices[position(SemanticRole::GitDeleted)]],
@@ -332,16 +397,10 @@ DiffTintDerivationResult deriveDiffTintsWithPath(
         distinct(derived, themeBackground)) {
         return {derived, DiffTintDerivationPath::Primary};
     }
-    const bool lightBackground = luminance(themeBackground) > 0.5;
-    const auto preferredFallback = fixedFallback(lightBackground);
-    if (readable(preferredFallback, themeBackground, allForegrounds) &&
-        distinct(preferredFallback, themeBackground)) {
-        return {preferredFallback, DiffTintDerivationPath::Rescue};
-    }
-    const auto alternateFallback = fixedFallback(!lightBackground);
-    if (readable(alternateFallback, themeBackground, allForegrounds) &&
-        distinct(alternateFallback, themeBackground)) {
-        return {alternateFallback, DiffTintDerivationPath::Rescue};
+    const auto rescue = syntheticRescue(themeBackground, themeForeground, allForegrounds);
+    if (readable(rescue, themeBackground, allForegrounds) &&
+        distinct(rescue, themeBackground)) {
+        return {rescue, DiffTintDerivationPath::Rescue};
     }
     return {derived, DiffTintDerivationPath::Rescue};
 }
