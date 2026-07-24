@@ -39,11 +39,13 @@
 #include <any>
 #include <filesystem>
 #include <fstream>
+#include <mutex>
 #include <optional>
 #include <sstream>
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <thread>
 #include <vector>
 
 namespace {
@@ -139,12 +141,14 @@ ssg::ViewportDimensions terminalSize() {
 // signal pipe so a resize/terminate signal is observed promptly even mid-drag or
 // mid-Escape (M9-W); the callers drain and act on `signal`.
 struct FdReadiness {
-    bool input = false;   // STDIN has bytes.
-    bool signal = false;  // The signal self-pipe has pending tags.
-    bool gitDiff = false; // The runtime git-diff wake descriptor is readable.
+    bool input = false;      // STDIN has bytes.
+    bool signal = false;     // The signal self-pipe has pending tags.
+    bool gitDiff = false;    // The runtime git-diff wake descriptor is readable.
+    bool initScript = false; // The init-script reload wake descriptor is readable.
 };
 
-FdReadiness waitReadiness(int timeoutMs, int signalFd, int gitDiffFd) {
+FdReadiness waitReadiness(int timeoutMs, int signalFd, int gitDiffFd,
+                          int initScriptFd = -1) {
     fd_set set;
     FD_ZERO(&set);
     FD_SET(STDIN_FILENO, &set);
@@ -154,6 +158,10 @@ FdReadiness waitReadiness(int timeoutMs, int signalFd, int gitDiffFd) {
         FD_SET(gitDiffFd, &set);
         maxFd = std::max(maxFd, gitDiffFd);
     }
+    if (initScriptFd >= 0) {
+        FD_SET(initScriptFd, &set);
+        maxFd = std::max(maxFd, initScriptFd);
+    }
     timeval timeout{timeoutMs / 1000, (timeoutMs % 1000) * 1000};
     int const ready =
         ::select(maxFd + 1, &set, nullptr, nullptr,
@@ -161,7 +169,8 @@ FdReadiness waitReadiness(int timeoutMs, int signalFd, int gitDiffFd) {
     if (ready <= 0) return {};
     return {
         FD_ISSET(STDIN_FILENO, &set) != 0, FD_ISSET(signalFd, &set) != 0,
-        gitDiffFd >= 0 ? FD_ISSET(gitDiffFd, &set) != 0 : false};
+        gitDiffFd >= 0 ? FD_ISSET(gitDiffFd, &set) != 0 : false,
+        initScriptFd >= 0 ? FD_ISSET(initScriptFd, &set) != 0 : false};
 }
 
 constexpr int kEscapeTimeoutMs = 30;
@@ -263,44 +272,18 @@ ssg::CommandHandlerResult dispatchInitScriptCommand(
         "unknown init-script command: " + std::string{invocation.commandId});
 }
 
-// Loads and evaluates `~/.config/ssg/init.lua` (or the platform equivalent)
-// through the existing sandboxed LuaCommandHost, exactly once at startup.
-// Absent file: silently skipped (the normal no-config case, not an error).
-// Present-but-broken file, an I/O error discovering or reading it, or an
-// unresolvable config root (e.g. HOME unset): a one-line stderr
-// diagnostic, startup continues regardless -- a broken config script must
-// never block opening the editor (see doc/spec-config.md's Invariants).
-void loadInitScript(ssg::EditorRuntime& runtime) {
-    std::filesystem::path scriptPath;
-    try {
-        scriptPath = ssg::userConfigRoot("ssg") / "init.lua";
-    } catch (std::exception const& error) {
-        std::fprintf(stderr, "ssg: could not resolve config directory: %s\n",
-                    error.what());
-        return;
-    }
-
-    std::error_code existsError;
-    bool const present = std::filesystem::exists(scriptPath, existsError);
-    if (existsError) {
-        std::fprintf(stderr, "ssg: could not check %s: %s\n",
-                    scriptPath.string().c_str(), existsError.message().c_str());
-        return;
-    }
-    if (!present) {
-        return;
-    }
-
-    std::ifstream input{scriptPath, std::ios::binary};
-    if (!input) {
-        std::fprintf(stderr, "ssg: could not read %s\n",
-                    scriptPath.string().c_str());
-        return;
-    }
-    std::ostringstream buffer;
-    buffer << input.rdbuf();
-    auto const script = buffer.str();
-
+// Evaluates `script` (already read from `scriptPath`, used only for
+// diagnostic messages) through a FRESH sandboxed LuaCommandHost attached as
+// the synthetic Lua-origin client, then detaches it -- the SAME path used
+// at startup and on every later auto-reload (never a persistent Lua state
+// shared across evaluations). A broken script prints a one-line stderr
+// diagnostic and otherwise changes nothing -- MUST NEVER be called with an
+// empty/whitespace-only `script`, since an empty Lua chunk is trivially
+// valid and would look like a silent successful "reload" of nothing; the
+// callers below only invoke this when there is real content to run.
+void evaluateInitScript(ssg::EditorRuntime& runtime,
+                        std::filesystem::path const& scriptPath,
+                        std::string const& script) {
     if (!runtime
              .attach({kInitScriptClientId, ssg::InvocationOrigin::Lua,
                       initScriptCapabilities()},
@@ -325,6 +308,205 @@ void loadInitScript(ssg::EditorRuntime& runtime) {
     }
     (void)runtime.detach(kInitScriptClientId);
 }
+
+// Resolves `init.lua`'s path for this OS. Returns nullopt (after printing a
+// diagnostic) only if the config root itself is unresolvable (e.g. HOME
+// unset) -- an unusual environment problem, distinct from the file simply
+// not existing there.
+std::optional<std::filesystem::path> resolveInitScriptPath() {
+    try {
+        return ssg::userConfigRoot("ssg") / "init.lua";
+    } catch (std::exception const& error) {
+        std::fprintf(stderr, "ssg: could not resolve config directory: %s\n",
+                    error.what());
+        return std::nullopt;
+    }
+}
+
+// Reads `scriptPath`'s full content if it currently exists. Returns nullopt
+// silently (NO diagnostic) if the file simply does not exist -- the normal
+// no-config case, and also the steady state after a mid-run delete (see
+// InitScriptWatcher below). Prints a diagnostic and returns nullopt for a
+// genuine I/O error (a stat or read failure other than "does not exist").
+std::optional<std::string> readInitScriptIfPresent(
+    std::filesystem::path const& scriptPath) {
+    std::error_code existsError;
+    bool const present = std::filesystem::exists(scriptPath, existsError);
+    if (existsError) {
+        std::fprintf(stderr, "ssg: could not check %s: %s\n",
+                    scriptPath.string().c_str(), existsError.message().c_str());
+        return std::nullopt;
+    }
+    if (!present) return std::nullopt;
+
+    std::ifstream input{scriptPath, std::ios::binary};
+    if (!input) {
+        std::fprintf(stderr, "ssg: could not read %s\n",
+                    scriptPath.string().c_str());
+        return std::nullopt;
+    }
+    std::ostringstream buffer;
+    buffer << input.rdbuf();
+    return buffer.str();
+}
+
+// Loads and evaluates `init.lua` exactly once at startup, via
+// resolveInitScriptPath + readInitScriptIfPresent + evaluateInitScript.
+// Absent file, or any of the diagnostic-then-return-nullopt cases above:
+// silently continue starting with defaults (see doc/spec-config.md's
+// Invariants -- a broken config script must never block opening the
+// editor).
+void loadInitScript(ssg::EditorRuntime& runtime) {
+    auto const scriptPath = resolveInitScriptPath();
+    if (!scriptPath) return;
+    auto const script = readInitScriptIfPresent(*scriptPath);
+    if (!script) return;
+    evaluateInitScript(runtime, *scriptPath, *script);
+}
+
+// How often the background thread re-reads init.lua's content to check for
+// a change (doc/spec-config.md's auto-reload design). Content, not mtime/
+// size, is compared -- a same-size rewrite within one filesystem timestamp
+// tick would otherwise evade a stat-only check, and the content must be
+// read anyway to queue it for evaluation.
+constexpr std::chrono::milliseconds kInitScriptPollInterval{500};
+
+// Watches init.lua for changes on a background thread and wakes the main
+// loop to re-evaluate it -- mirrors EditorRuntime's OWN git-diff-worker
+// shape (background poll thread + wake self-pipe + main-thread-only apply,
+// src/EditorRuntime.cpp's startGitDiffWorker/drainGitDiffScans) as a
+// SEPARATE, dedicated mechanism (not sharing that worker's thread or
+// pipe): init.lua lives outside the workspace tree, where the library's
+// FilesystemWatcher (a workspace-rooted native recursive watcher) does not
+// apply. All Lua evaluation and runtime.dispatch() calls happen on the
+// MAIN thread inside drainAndEvaluate(), never on the background thread,
+// which only ever reads file bytes and compares strings.
+class InitScriptWatcher {
+public:
+    explicit InitScriptWatcher(std::filesystem::path scriptPath)
+        : scriptPath_{std::move(scriptPath)} {
+        if (::pipe(wakePipe_) != 0) {
+            wakePipe_[0] = wakePipe_[1] = -1;
+            return;
+        }
+        for (int fd : wakePipe_) {
+            int const flags = ::fcntl(fd, F_GETFL, 0);
+            if (flags == -1 || ::fcntl(fd, F_SETFL, flags | O_NONBLOCK) != 0) {
+                (void)::close(wakePipe_[0]);
+                (void)::close(wakePipe_[1]);
+                wakePipe_[0] = wakePipe_[1] = -1;
+                return;
+            }
+        }
+        thread_ = std::thread([this] { run(); });
+    }
+
+    ~InitScriptWatcher() {
+        if (thread_.joinable()) {
+            {
+                std::lock_guard lock{mutex_};
+                stop_ = true;
+            }
+            thread_.join();
+        }
+        if (wakePipe_[0] != -1) (void)::close(wakePipe_[0]);
+        if (wakePipe_[1] != -1) (void)::close(wakePipe_[1]);
+    }
+
+    InitScriptWatcher(InitScriptWatcher const&) = delete;
+    InitScriptWatcher& operator=(InitScriptWatcher const&) = delete;
+
+    // -1 if the watcher failed to start (e.g. pipe()/fcntl() failure) --
+    // the main loop simply never selects on it, so auto-reload is silently
+    // unavailable rather than fatal (matching the "never block startup"
+    // invariant extended to the reload mechanism itself).
+    [[nodiscard]] int wakeDescriptor() const noexcept { return wakePipe_[0]; }
+
+    // Drains the wake pipe and, if a stable new script is queued,
+    // evaluates it on the CALLING (main) thread. Call this only after the
+    // main loop's select() reports wakeDescriptor() readable.
+    void drainAndEvaluate(ssg::EditorRuntime& runtime) {
+        char buffer[64];
+        while (::read(wakePipe_[0], buffer, sizeof buffer) > 0) {
+        }
+        std::optional<std::string> pending;
+        {
+            std::lock_guard lock{mutex_};
+            pending = std::move(pendingScript_);
+            pendingScript_.reset();
+        }
+        if (pending) {
+            evaluateInitScript(runtime, scriptPath_, *pending);
+        }
+    }
+
+private:
+    void run() {
+        // The content last observed as fully settled (two identical
+        // consecutive reads) -- empty both initially and after a delete is
+        // observed, so a later recreation compares against an empty
+        // baseline and reloads exactly like any other change (doc/spec-
+        // config.md: recreate behaves like the file appearing for the
+        // first time).
+        std::string lastApplied;
+        std::optional<std::string> lastRead;
+        while (true) {
+            {
+                std::lock_guard lock{mutex_};
+                if (stop_) return;
+            }
+            auto current = readInitScriptIfPresentQuiet(scriptPath_);
+            if (current && lastRead && *current == *lastRead &&
+                *current != lastApplied) {
+                // Stable across two consecutive polls (this reading and
+                // the last) AND different from what was last applied --
+                // queue it and wake the main thread.
+                lastApplied = *current;
+                bool wasEmpty = false;
+                {
+                    std::lock_guard lock{mutex_};
+                    wasEmpty = !pendingScript_.has_value();
+                    pendingScript_ = *current;
+                }
+                if (wasEmpty) {
+                    char const tag = 'i';
+                    (void)::write(wakePipe_[1], &tag, 1);
+                }
+            } else if (!current) {
+                // Deleted (or unreadable): clear the applied baseline so a
+                // later recreation is treated as fresh, per doc/spec-
+                // config.md -- but take NO action on the runtime itself.
+                lastApplied.clear();
+            }
+            lastRead = current;
+            std::this_thread::sleep_for(kInitScriptPollInterval);
+        }
+    }
+
+    // Same shape as readInitScriptIfPresent, but never prints a diagnostic
+    // -- this runs continuously on a background thread, so a transient
+    // read failure (e.g. observed mid-rename) must not spam stderr; only
+    // the eventual evaluateInitScript() call (on a STABLE, successfully
+    // read script) can ever produce a diagnostic, exactly like startup.
+    static std::optional<std::string> readInitScriptIfPresentQuiet(
+        std::filesystem::path const& scriptPath) {
+        std::error_code existsError;
+        bool const present = std::filesystem::exists(scriptPath, existsError);
+        if (existsError || !present) return std::nullopt;
+        std::ifstream input{scriptPath, std::ios::binary};
+        if (!input) return std::nullopt;
+        std::ostringstream buffer;
+        buffer << input.rdbuf();
+        return buffer.str();
+    }
+
+    std::filesystem::path scriptPath_;
+    int wakePipe_[2] = {-1, -1};
+    std::thread thread_;
+    std::mutex mutex_;
+    bool stop_ = false;
+    std::optional<std::string> pendingScript_;
+};
 
 }  // namespace
 
@@ -366,6 +548,15 @@ int main(int argc, char** argv) {
 
     loadInitScript(runtime);
     STARTUP_MARK("post_init_script");
+
+    // doc/spec-config.md's auto-reload: watches the SAME path just loaded
+    // above, on a background thread, and wakes the main loop's select() to
+    // re-evaluate it when it changes. Absent if the config root itself
+    // could not be resolved (already diagnosed by loadInitScript above).
+    std::optional<InitScriptWatcher> initScriptWatcher;
+    if (auto scriptPath = resolveInitScriptPath()) {
+        initScriptWatcher.emplace(*scriptPath);
+    }
 
     if (target.file) {
         if (fs::exists(target.cwd / *target.file)) {
@@ -703,13 +894,23 @@ int main(int argc, char** argv) {
                 // Keyboard input arrived during the drag: fall through and read it.
             }
             // Block until keyboard input OR a signal-driven self-pipe wake (M9-W)
-            // OR a runtime git-diff wake. A bare read() could not be interrupted
-            // reliably by resize/terminate or background diff updates.
-            auto const wait = waitReadiness(-1, signalPipe[0], gitDiffWakeFd);
+            // OR a runtime git-diff wake OR an init-script reload wake. A bare
+            // read() could not be interrupted reliably by resize/terminate or
+            // background diff/config updates.
+            auto const wait = waitReadiness(
+                -1, signalPipe[0], gitDiffWakeFd,
+                initScriptWatcher ? initScriptWatcher->wakeDescriptor() : -1);
             if (wait.signal) {
                 // Terminate does not return (restore + re-raise); a resize just
                 // re-snapshots at the loop top.
                 drainSignals();
+                if (!wait.input) continue;
+            }
+            if (wait.initScript) {
+                // Unlike git-diff (auto-drained inside EditorRuntime::snapshot()),
+                // nothing else drains this -- evaluate the reloaded script here,
+                // on the main thread, exactly like startup's loadInitScript.
+                initScriptWatcher->drainAndEvaluate(runtime);
                 if (!wait.input) continue;
             }
             if (wait.gitDiff && !wait.input) continue;
