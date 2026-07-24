@@ -271,8 +271,7 @@ TEST(gitDiffSelectionUsesDiffIdentityIndependentOfDocumentRevision) {
     auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    ASSERT_EQ(snapshot->sections().document.diffFileIdentity,
-              std::optional<std::string>{"needle.txt"});
+    ASSERT_EQ(snapshot->sections().document.diffFileIdentity, std::nullopt);
     ASSERT_NE(snapshot->sections().document.revision,
               snapshot->sections().diff.revision);
     const auto byIdentity = std::find_if(
@@ -593,7 +592,7 @@ TEST(documentAndLiveDiffTabsCloseIndependently) {
                               ssg::TabKind::LiveDiff),
               std::size_t{0});
     ASSERT_EQ(afterLiveDiffClose->sections().document.diffFileIdentity,
-              std::optional<std::string>{"coexist.txt"});
+              std::nullopt);
 }
 
 TEST(gitStatusActivationOpensDeletedLiveDiffWithoutDiskFile) {

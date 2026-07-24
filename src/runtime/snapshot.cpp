@@ -47,9 +47,6 @@ DocumentViewState EditorRuntime::Impl::documentView() const {
         !tab->contentIdentity.empty()) {
         diffFileIdentity = tab->contentIdentity;
         publishedRevision = diff.viewState().revision;
-    } else if (auto state = activeWorkspaceState();
-               state && state->key.kind() == JournalDocumentKeyKind::Saved) {
-        diffFileIdentity = state->key.savedPath();
     }
     return {publishedRevision, std::move(snapshot.text), caret,
             std::move(diffFileIdentity)};

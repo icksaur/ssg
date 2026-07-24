@@ -539,7 +539,7 @@ TEST(deltaReplayAndExactCommandNavigationContract) {
               std::optional<std::size_t>{1});
 }
 
-TEST(documentDiffLookupUsesIdentityAndRevision) {
+TEST(documentDiffLookupUsesIdentityOnly) {
     DiffFileView fileA{DiffFileId{"a.cpp"}};
     fileA.path = "a.cpp";
     DiffFileView fileB{DiffFileId{"b.cpp"}};
@@ -556,9 +556,12 @@ TEST(documentDiffLookupUsesIdentityAndRevision) {
     missing.diffFileIdentity = std::string{"missing.cpp"};
     ASSERT_FALSE(diff.fileForDocument(missing).has_value());
 
-    DocumentViewState stale{Revision{7}, "x", ByteOffset{0}};
-    stale.diffFileIdentity = std::string{"b.cpp"};
-    ASSERT_FALSE(diff.fileForDocument(stale).has_value());
+    DocumentViewState revisionMismatch{Revision{7}, "x", ByteOffset{0}};
+    revisionMismatch.diffFileIdentity = std::string{"b.cpp"};
+    auto const matchedWithDifferentRevision =
+        diff.fileForDocument(revisionMismatch);
+    ASSERT_TRUE(matchedWithDifferentRevision.has_value());
+    ASSERT_EQ(matchedWithDifferentRevision->get().id, DiffFileId{"b.cpp"});
 }
 
 TEST(gitRemoveFileRejectsStaleOrEqualRevisionAndRemovesOnNextRevision) {
@@ -597,7 +600,7 @@ int main() {
     RUN(nonGitStatusUsesSourceAgnosticClassification);
     RUN(staleInvalidAndOverBudgetWorkAreFailureAtomic);
     RUN(deltaReplayAndExactCommandNavigationContract);
-    RUN(documentDiffLookupUsesIdentityAndRevision);
+    RUN(documentDiffLookupUsesIdentityOnly);
     RUN(gitRemoveFileRejectsStaleOrEqualRevisionAndRemovesOnNextRevision);
     return failed == 0 ? 0 : 1;
 }

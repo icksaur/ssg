@@ -323,7 +323,7 @@ std::vector<std::string> splitDiffLines(std::string_view content) {
 
 std::optional<std::reference_wrapper<const DiffFileView>>
 DiffViewState::fileForDocument(const DocumentViewState& document) const {
-    if (!document.diffFileIdentity || document.revision != revision) {
+    if (!document.diffFileIdentity) {
         return std::nullopt;
     }
     auto const found = std::find_if(
