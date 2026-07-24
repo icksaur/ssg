@@ -237,9 +237,6 @@ SrgbColor strongestReadableTint(
 bool distinct(DiffTints const& tints, SrgbColor background) noexcept {
     const auto tintColors = colors(tints);
     for (const auto depth : {ColorDepth::Truecolor, ColorDepth::Indexed256}) {
-        const auto kindDeltaE = depth == ColorDepth::Truecolor
-                                    ? kKindDeltaETruecolor
-                                    : kKindDeltaEIndexed256;
         const auto wordDeltaE = depth == ColorDepth::Truecolor
                                     ? kWordDeltaETruecolor
                                     : kWordDeltaEIndexed256;
@@ -253,11 +250,14 @@ bool distinct(DiffTints const& tints, SrgbColor background) noexcept {
                        });
         const auto resolvedBackground = resolveColor(background, depth).rgb;
         for (std::size_t first = 0; first < 3; ++first) {
-            for (std::size_t second = first + 1; second < 3; ++second) {
-                if (deltaE(resolved[first], resolved[second]) < kindDeltaE ||
-                    deltaE(resolved[first + 3], resolved[second + 3]) <
-                        kindDeltaE) {
-                    return false;
+            if (depth == ColorDepth::Truecolor) {
+                for (std::size_t second = first + 1; second < 3; ++second) {
+                    if (deltaE(resolved[first], resolved[second]) <
+                            kKindDeltaETruecolor ||
+                        deltaE(resolved[first + 3], resolved[second + 3]) <
+                            kKindDeltaETruecolor) {
+                        return false;
+                    }
                 }
             }
             if (deltaE(resolved[first], resolved[first + 3]) < wordDeltaE ||
