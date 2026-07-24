@@ -214,13 +214,22 @@ void popCodePoint(std::string& text) {
 // etc.) once startup configuration has run.
 ssg::ClientId const kInitScriptClientId{2};
 
-// The catalog of commands init.lua may call via ssg.command(id, args), and
-// the capabilities the init-script Lua host is granted (a NAMED, explicit
-// grant list -- see doc/spec-config.md's Risks: never a wildcard/all-
-// capabilities grant, even though init.lua is a local, user-authored file).
-// theme.define requires none today; a future capability-gated init-script
-// command must be added to BOTH this catalog and the grant list below, or
-// InvocationPrincipal::hasCapability denies it by default, same as any
+// The capabilities the init-script Lua host is granted -- ONE named,
+// explicit list shared by BOTH LuaCommandHost's own catalog check (via
+// LuaCommandHostOptions.capabilities) AND the attached principal's real
+// dispatch-time capability check (InvocationPrincipal::hasCapability),
+// so there is exactly one place to update when a future capability-gated
+// init-script command is added -- keeping these as two independently
+// hand-maintained lists would let one drift out of sync with the other
+// (passing one gate but silently denied, or vice versa, at the other).
+// theme.define requires none today, so this is empty; see doc/spec-
+// config.md's Risks: never a wildcard/all-capabilities grant.
+std::vector<ssg::CapabilityId> initScriptCapabilities() { return {}; }
+
+// The catalog of commands init.lua may call via ssg.command(id, args). A
+// future capability-gated init-script command must be added BOTH here
+// (with its required capabilities) and to initScriptCapabilities() above,
+// or InvocationPrincipal::hasCapability denies it by default, same as any
 // other Lua caller.
 std::vector<ssg::LuaCommand> initScriptCommandCatalog() {
     return {{"theme.define", {}}};
@@ -235,8 +244,14 @@ std::vector<ssg::LuaCommand> initScriptCommandCatalog() {
 ssg::CommandHandlerResult dispatchInitScriptCommand(
     ssg::EditorRuntime& runtime, ssg::LuaInvocation const& invocation) {
     if (invocation.commandId == "theme.define") {
-        ssg::ThemeDefineArguments arguments;
-        if (invocation.arguments) arguments.colors = *invocation.arguments;
+        // theme.define always requires its color-table argument; a bare
+        // ssg.command("theme.define") with no table must fail loudly (a
+        // caller mistake), not silently apply an empty no-op table.
+        if (!invocation.arguments) {
+            return ssg::CommandHandlerResult::failure(
+                "theme.define requires a color-table argument");
+        }
+        ssg::ThemeDefineArguments arguments{*invocation.arguments};
         auto result = runtime.dispatch(
             kInitScriptClientId,
             {"theme.define", runtime.revision(), arguments});
@@ -251,10 +266,10 @@ ssg::CommandHandlerResult dispatchInitScriptCommand(
 // Loads and evaluates `~/.config/ssg/init.lua` (or the platform equivalent)
 // through the existing sandboxed LuaCommandHost, exactly once at startup.
 // Absent file: silently skipped (the normal no-config case, not an error).
-// Present-but-broken file, or an unresolvable config root (e.g. HOME
-// unset): a one-line stderr diagnostic, startup continues regardless --
-// a broken config script must never block opening the editor (see
-// doc/spec-config.md's Invariants).
+// Present-but-broken file, an I/O error discovering or reading it, or an
+// unresolvable config root (e.g. HOME unset): a one-line stderr
+// diagnostic, startup continues regardless -- a broken config script must
+// never block opening the editor (see doc/spec-config.md's Invariants).
 void loadInitScript(ssg::EditorRuntime& runtime) {
     std::filesystem::path scriptPath;
     try {
@@ -265,8 +280,14 @@ void loadInitScript(ssg::EditorRuntime& runtime) {
         return;
     }
 
-    std::error_code exists;
-    if (!std::filesystem::exists(scriptPath, exists) || exists) {
+    std::error_code existsError;
+    bool const present = std::filesystem::exists(scriptPath, existsError);
+    if (existsError) {
+        std::fprintf(stderr, "ssg: could not check %s: %s\n",
+                    scriptPath.string().c_str(), existsError.message().c_str());
+        return;
+    }
+    if (!present) {
         return;
     }
 
@@ -281,7 +302,8 @@ void loadInitScript(ssg::EditorRuntime& runtime) {
     auto const script = buffer.str();
 
     if (!runtime
-             .attach({kInitScriptClientId, ssg::InvocationOrigin::Lua, {}},
+             .attach({kInitScriptClientId, ssg::InvocationOrigin::Lua,
+                      initScriptCapabilities()},
                      ssg::ViewId{0})
              .accepted()) {
         std::fprintf(stderr, "ssg: could not start init-script host\n");
@@ -290,6 +312,7 @@ void loadInitScript(ssg::EditorRuntime& runtime) {
 
     ssg::LuaCommandHostOptions options;
     options.pluginId = kInitScriptClientId;
+    options.capabilities = initScriptCapabilities();
     options.commands = initScriptCommandCatalog();
     ssg::LuaCommandHost host{
         std::move(options), [&runtime](ssg::LuaInvocation const& invocation) {
