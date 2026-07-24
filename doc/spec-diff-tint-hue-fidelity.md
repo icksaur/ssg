@@ -123,6 +123,20 @@ inside its existing `for (depth : {Truecolor, Indexed256})` loop, mirroring
 EXACTLY how `distinct()` already selects per-depth ΔE thresholds inside its
 own depth loop — no new structural pattern, just extending the one already
 in place to a constant it had not yet needed to split.
+
+**Minimality is a FALSIFIABLE property (settled, not a narrative claim):**
+"smallest loosening" must be provable, not asserted. When choosing the
+final `kRetainContrastIndexed256` value during implementation, also test
+ONE step STRICTER (e.g. +0.05 above the chosen value, on whatever step
+granularity implementation uses) and confirm it FAILS to let the shipped
+theme's `GitDeleted` anchor reach a jointly-readable-and-distinct Indexed256
+candidate via the Fix 1 search. Record both results (chosen value succeeds;
+one-step-stricter value fails) directly in the implementing commit message
+and as an explicit code comment alongside the constant (mirroring
+`kFloorContrast`'s existing comment style) — this makes "minimal" a
+checked, falsifiable fact instead of a narrative intention, and gives any
+future reviewer a concrete anchor to re-verify against rather than
+re-deriving the empirical sweep from scratch.
 individual kind's tint further from another kind's if they end up too close
 post-quantization. Tightening the ACCEPTANCE gate without also giving the
 SEARCH a way to satisfy the new, stricter target was the actual mistake —
@@ -407,7 +421,7 @@ confirm rather than assume).
 | # | Step | Files | Oracle | Invariants |
 |---|------|-------|--------|------------|
 | 1 | Red-before-green: add the hue-fidelity property test against the shipped theme at both depths (must fail against current `c3d0003` code, which returns `fixedFallback`'s blue/black palette) | `tests/test_theme.cpp` | fails pre-fix | - |
-| 2 | Split `kRetainContrast` into `kRetainContrastTruecolor`/`kRetainContrastIndexed256` (Fix 0); empirically tune the Indexed256 value to the smallest loosening that makes Fix 1's search feasible for the shipped theme's real anchors | `src/Theme.cpp` | documented reasoning for the chosen value (comment, mirroring existing constant-comment style); `kFloorContrast` absolute floor unchanged | I22 |
+| 2 | Split `kRetainContrast` into `kRetainContrastTruecolor`/`kRetainContrastIndexed256` (Fix 0); empirically tune the Indexed256 value to the smallest loosening that makes Fix 1's search feasible for the shipped theme's real anchors | `src/Theme.cpp` | minimality sweep: chosen value succeeds AND one-step-stricter value fails (both recorded in commit message + code comment); `kFloorContrast` absolute floor unchanged | I22 |
 | 3 | Add the path-reporting testability seam (Primary/Rescue) to `deriveDiffTints`; implement the joint, hue-preserving derivation search (Fix 1) so the shipped theme's anchors succeed via the Primary path without rescue | `src/Theme.cpp`, `include/ssg/Theme.h` if the seam needs a declared type | step 1's oracle passes for the shipped theme; new test asserts the shipped theme's path is `Primary` | I22 |
 | 4 | Replace `fixedFallback`'s hardcoded RGB constants with the theme-derived synthetic-hue rescue (Fix 2); update near-monochrome/light-theme fixture test expectations if their taken values change | `src/Theme.cpp`, `tests/test_theme.cpp` | near-monochrome/light-theme fixtures still readable+distinct+now hue-correct at both depths; new synthetic non-degenerate fixture (Considerations) passes | I22 |
 | 5 | Strengthen or replace the color-authority scanner to close the brace-elision gap (Fix 3) | `tests/test_theme.cpp` | scanner now flags a reintroduced bare-literal palette; no new false positives against the current codebase | I22 |
