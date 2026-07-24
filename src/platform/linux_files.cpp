@@ -165,6 +165,26 @@ std::filesystem::path userCacheRoot(std::string_view applicationName) {
     return base / std::filesystem::path{applicationName};
 }
 
+std::filesystem::path userConfigRoot(std::string_view applicationName) {
+    const auto validation = validateWorkspaceRelativePath(
+        applicationName, PathSyntax::Linux);
+    if (!validation.valid() || applicationName.find('/') != std::string_view::npos) {
+        throw std::invalid_argument("config application name must be one valid component");
+    }
+
+    std::filesystem::path base;
+    if (const char* xdg = std::getenv("XDG_CONFIG_HOME");
+        xdg != nullptr && *xdg != '\0' && std::filesystem::path{xdg}.is_absolute()) {
+        base = xdg;
+    } else if (const char* home = std::getenv("HOME");
+               home != nullptr && *home != '\0') {
+        base = std::filesystem::path{home} / ".config";
+    } else {
+        throw std::runtime_error("cannot resolve user config root: HOME is unset");
+    }
+    return base / std::filesystem::path{applicationName};
+}
+
 void replaceFileAtomically(const std::filesystem::path& target,
                              std::span<const std::byte> contents) {
     mode_t mode = 0600;

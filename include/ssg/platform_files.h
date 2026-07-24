@@ -83,6 +83,15 @@ void setOwnerOnlyPermissions(const std::filesystem::path& path);
 [[nodiscard]] std::filesystem::path userCacheRoot(
     std::string_view applicationName);
 
+// The user's own per-application CONFIGURATION root -- distinct from
+// userCacheRoot() above, which is LOCAL/disposable (Linux `~/.cache`,
+// Windows `%LOCALAPPDATA%`). Config is the thing a user backs up, syncs,
+// and hand-edits (Linux XDG `~/.config`, Windows ROAMING `%APPDATA%`), so
+// it deliberately resolves to a different root than the cache primitive
+// even though both mirror the same XDG-style env-var-with-fallback shape.
+[[nodiscard]] std::filesystem::path userConfigRoot(
+    std::string_view applicationName);
+
 void replaceFileAtomically(
     const std::filesystem::path& target,
     std::span<const std::byte> contents);

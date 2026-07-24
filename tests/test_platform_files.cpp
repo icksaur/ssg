@@ -232,6 +232,83 @@ TEST(cacheRootContainsValidatedApplicationComponent) {
     ASSERT_THROWS(ssg::userCacheRoot("../escape"), std::invalid_argument);
 }
 
+#ifndef _WIN32
+// RAII env-var save/restore, mirroring test_git_diff_host.cpp's
+// ScopedGitDiffMode -- Linux-only since userConfigRoot's env-var fallback
+// logic (XDG_CONFIG_HOME / HOME) is Linux-specific.
+class ScopedEnvVar {
+public:
+    ScopedEnvVar(const char* name, const char* value) : name_{name} {
+        if (const char* prior = std::getenv(name); prior != nullptr) {
+            hadPrevious_ = true;
+            previous_ = prior;
+        }
+        if (value == nullptr) {
+            ::unsetenv(name);
+        } else {
+            ::setenv(name, value, 1);
+        }
+    }
+
+    ~ScopedEnvVar() {
+        if (hadPrevious_) {
+            ::setenv(name_.c_str(), previous_.c_str(), 1);
+        } else {
+            ::unsetenv(name_.c_str());
+        }
+    }
+
+    ScopedEnvVar(const ScopedEnvVar&) = delete;
+    ScopedEnvVar& operator=(const ScopedEnvVar&) = delete;
+
+private:
+    std::string name_;
+    bool hadPrevious_ = false;
+    std::string previous_;
+};
+
+TEST(configRootPrefersXdgConfigHomeWhenSetAndAbsolute) {
+    ScopedEnvVar xdg("XDG_CONFIG_HOME", "/tmp/ssg-xdg-config-test");
+    ScopedEnvVar home("HOME", "/tmp/ssg-home-test");
+    ASSERT_EQ(ssg::userConfigRoot("ssg"),
+              std::filesystem::path{"/tmp/ssg-xdg-config-test/ssg"});
+}
+
+TEST(configRootFallsBackToHomeDotConfigWhenXdgUnsetOrRelative) {
+    {
+        ScopedEnvVar xdg("XDG_CONFIG_HOME", nullptr);
+        ScopedEnvVar home("HOME", "/tmp/ssg-home-test");
+        ASSERT_EQ(ssg::userConfigRoot("ssg"),
+                  std::filesystem::path{"/tmp/ssg-home-test/.config/ssg"});
+    }
+    {
+        // A relative XDG_CONFIG_HOME is ignored -- only an absolute override
+        // is honored, matching userCacheRoot's existing XDG_CACHE_HOME rule.
+        ScopedEnvVar xdg("XDG_CONFIG_HOME", "relative/path");
+        ScopedEnvVar home("HOME", "/tmp/ssg-home-test");
+        ASSERT_EQ(ssg::userConfigRoot("ssg"),
+                  std::filesystem::path{"/tmp/ssg-home-test/.config/ssg"});
+    }
+}
+
+TEST(configRootThrowsWhenHomeAndXdgAreBothUnset) {
+    ScopedEnvVar xdg("XDG_CONFIG_HOME", nullptr);
+    ScopedEnvVar home("HOME", nullptr);
+    ASSERT_THROWS(ssg::userConfigRoot("ssg"), std::runtime_error);
+}
+#endif
+
+TEST(configRootRejectsMultiComponentApplicationName) {
+    ASSERT_THROWS(ssg::userConfigRoot("../escape"), std::invalid_argument);
+}
+
+TEST(configRootIsDistinctFromCacheRootForTheSameApplication) {
+    // Config (backed up/synced/hand-edited) and cache (local/disposable) must
+    // never resolve to the same directory, even for the same application
+    // name -- otherwise a cache-clearing operation could destroy user config.
+    ASSERT_TRUE(ssg::userConfigRoot("ssg-test") != ssg::userCacheRoot("ssg-test"));
+}
+
 TEST(atomicReplacementPublishesCompleteBytes) {
     TemporaryDirectory temporary;
     const auto target = temporary.path() / "document";
@@ -283,6 +360,13 @@ int main() {
     RUN(cacheRootContainsValidatedApplicationComponent);
     RUN(atomicReplacementPublishesCompleteBytes);
     RUN(atomicReplacementNeverExposesPartialBytes);
+#ifndef _WIN32
+    RUN(configRootPrefersXdgConfigHomeWhenSetAndAbsolute);
+    RUN(configRootFallsBackToHomeDotConfigWhenXdgUnsetOrRelative);
+    RUN(configRootThrowsWhenHomeAndXdgAreBothUnset);
+#endif
+    RUN(configRootRejectsMultiComponentApplicationName);
+    RUN(configRootIsDistinctFromCacheRootForTheSameApplication);
     std::cout << "Passed: " << passed << " Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

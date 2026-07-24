@@ -231,6 +231,41 @@ std::filesystem::path user_cache_root(std::string_view application_name) {
     throw std::runtime_error("LOCALAPPDATA changed repeatedly during lookup");
 }
 
+// The user's own per-application CONFIGURATION root -- distinct from
+// user_cache_root above, which resolves to LOCALAPPDATA (local, disposable,
+// never roamed). Config is the thing a user backs up/syncs/hand-edits, so
+// this resolves to the ROAMING root (%APPDATA%) instead.
+std::filesystem::path user_config_root(std::string_view application_name) {
+    const auto validation = validate_workspace_relative_path(
+        application_name, PathSyntax::windows);
+    if (!validation.valid() ||
+        application_name.find_first_of("/\\") != std::string_view::npos) {
+        throw std::invalid_argument("config application name must be one valid component");
+    }
+
+    for (int attempt = 0; attempt < 3; ++attempt) {
+        const DWORD required =
+            GetEnvironmentVariableW(L"APPDATA", nullptr, 0);
+        if (required == 0) {
+            throw_last_error("resolve APPDATA", {});
+        }
+        std::wstring root(required, L'\0');
+        const DWORD copied =
+            GetEnvironmentVariableW(L"APPDATA", root.data(), required);
+        if (copied == 0) {
+            throw_last_error("resolve APPDATA", {});
+        }
+        if (copied < required) {
+            root.resize(copied);
+            return std::filesystem::path{root} /
+                   std::filesystem::path{std::u8string(
+                       reinterpret_cast<const char8_t*>(application_name.data()),
+                       application_name.size())};
+        }
+    }
+    throw std::runtime_error("APPDATA changed repeatedly during lookup");
+}
+
 void replace_file_atomically(const std::filesystem::path& target,
                              std::span<const std::byte> contents) {
     TemporaryFile temporary(target);
