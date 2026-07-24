@@ -6,6 +6,8 @@
 #include <csignal>
 
 #include <algorithm>
+#include <array>
+#include <cctype>
 #include <system_error>
 
 namespace ssg::app {
@@ -36,18 +38,67 @@ std::string terminal_restore_sequence() {
     return "\x1b[?1006l\x1b[?1002l\x1b[?1000l\x1b[0 q\x1b[?25h\x1b[?1049l";
 }
 
-ssg::ColorDepth detect_color_depth(char const* colorterm, char const* term) {
+std::string lowercase(std::string_view value) {
+    std::string normalized;
+    normalized.reserve(value.size());
+    for (unsigned char ch : value) {
+        normalized.push_back(static_cast<char>(std::tolower(ch)));
+    }
+    return normalized;
+}
+
+bool matchesAny(std::string_view value,
+                std::initializer_list<std::string_view> options) {
+    return std::ranges::any_of(options, [&](std::string_view option) {
+        return value == option;
+    });
+}
+
+ssg::ColorDepth detect_color_depth(char const* color_depth_override,
+                                   char const* colorterm, char const* term,
+                                   char const* term_program) {
+    if (color_depth_override != nullptr) {
+        const auto overrideValue = lowercase(color_depth_override);
+        if (matchesAny(overrideValue, {"truecolor", "24bit"})) {
+            return ssg::ColorDepth::Truecolor;
+        }
+        if (matchesAny(overrideValue, {"256", "256color", "indexed256"})) {
+            return ssg::ColorDepth::Indexed256;
+        }
+        if (matchesAny(overrideValue, {"16", "ansi16"})) {
+            return ssg::ColorDepth::Ansi16;
+        }
+    }
+
     if (colorterm != nullptr) {
-        std::string_view const value{colorterm};
-        if (value == "truecolor" || value == "24bit") {
+        const auto colortermValue = lowercase(colorterm);
+        if (matchesAny(colortermValue, {"truecolor", "24bit"})) {
             return ssg::ColorDepth::Truecolor;
         }
     }
-    if (term != nullptr &&
-        std::string_view{term}.find("256color") != std::string_view::npos) {
-        return ssg::ColorDepth::Indexed256;
+
+    const auto termValue =
+        term == nullptr ? std::string{} : lowercase(std::string_view{term});
+    if (termValue == "dumb" || termValue.empty()) {
+        return ssg::ColorDepth::Ansi16;
     }
-    return ssg::ColorDepth::Ansi16;
+
+    const auto termProgramValue = term_program == nullptr
+                                      ? std::string{}
+                                      : lowercase(std::string_view{term_program});
+    if (matchesAny(termProgramValue,
+                   {"iterm.app", "wezterm", "vscode", "hyper", "ghostty"})) {
+        return ssg::ColorDepth::Truecolor;
+    }
+    constexpr std::array<std::string_view, 6> termTruecolorHints{
+        "kitty", "alacritty", "wezterm", "foot", "contour", "ghostty"};
+    if (std::ranges::any_of(termTruecolorHints, [&](std::string_view hint) {
+            return termValue.find(hint) != std::string::npos;
+        })) {
+        return ssg::ColorDepth::Truecolor;
+    }
+
+    return ssg::ColorDepth::Truecolor;
 }
 
 LaunchTarget resolve_launch(fs::path const& argument) {

@@ -123,16 +123,40 @@ TEST(encodeAnsiFrameEmitsOrthogonalTintBackgrounds) {
 
 TEST(detectColorDepthReadsEnvironment) {
     using ssg::ColorDepth;
-    ASSERT_TRUE(ssg::app::detect_color_depth("truecolor", "xterm") == ColorDepth::Truecolor);
-    ASSERT_TRUE(ssg::app::detect_color_depth("24bit", nullptr) == ColorDepth::Truecolor);
-    // COLORTERM wins over TERM.
-    ASSERT_TRUE(ssg::app::detect_color_depth("truecolor", "xterm-256color") == ColorDepth::Truecolor);
-    // No COLORTERM: a 256color TERM is indexed256.
-    ASSERT_TRUE(ssg::app::detect_color_depth(nullptr, "xterm-256color") == ColorDepth::Indexed256);
-    ASSERT_TRUE(ssg::app::detect_color_depth("", "screen-256color") == ColorDepth::Indexed256);
-    // Neither signal: fall back to 16 colors.
-    ASSERT_TRUE(ssg::app::detect_color_depth(nullptr, "xterm") == ColorDepth::Ansi16);
-    ASSERT_TRUE(ssg::app::detect_color_depth(nullptr, nullptr) == ColorDepth::Ansi16);
+    ASSERT_TRUE(ssg::app::detect_color_depth("truecolor", nullptr, "dumb", nullptr) ==
+                ColorDepth::Truecolor);
+    ASSERT_TRUE(ssg::app::detect_color_depth("24BIT", nullptr, "dumb", nullptr) ==
+                ColorDepth::Truecolor);
+    ASSERT_TRUE(ssg::app::detect_color_depth("256", nullptr, "xterm", nullptr) ==
+                ColorDepth::Indexed256);
+    ASSERT_TRUE(ssg::app::detect_color_depth("indexed256", nullptr, "xterm", nullptr) ==
+                ColorDepth::Indexed256);
+    ASSERT_TRUE(ssg::app::detect_color_depth("ansi16", nullptr, "xterm", nullptr) ==
+                ColorDepth::Ansi16);
+    ASSERT_TRUE(ssg::app::detect_color_depth("bogus", "truecolor", "dumb", nullptr) ==
+                ColorDepth::Truecolor);
+
+    ASSERT_TRUE(ssg::app::detect_color_depth(nullptr, "truecolor", "xterm-256color",
+                                             nullptr) == ColorDepth::Truecolor);
+    ASSERT_TRUE(ssg::app::detect_color_depth(nullptr, "24bit", "xterm", nullptr) ==
+                ColorDepth::Truecolor);
+
+    ASSERT_TRUE(ssg::app::detect_color_depth(nullptr, nullptr, "dumb", "wezterm") ==
+                ColorDepth::Ansi16);
+    ASSERT_TRUE(ssg::app::detect_color_depth(nullptr, nullptr, "", "wezterm") ==
+                ColorDepth::Ansi16);
+    ASSERT_TRUE(ssg::app::detect_color_depth(nullptr, nullptr, nullptr, "wezterm") ==
+                ColorDepth::Ansi16);
+
+    ASSERT_TRUE(ssg::app::detect_color_depth(nullptr, nullptr, "screen",
+                                             "iTerm.app") == ColorDepth::Truecolor);
+    ASSERT_TRUE(ssg::app::detect_color_depth(nullptr, nullptr, "xterm-kitty",
+                                             nullptr) == ColorDepth::Truecolor);
+
+    ASSERT_TRUE(ssg::app::detect_color_depth(nullptr, nullptr, "vt100", nullptr) ==
+                ColorDepth::Truecolor);
+    ASSERT_TRUE(ssg::app::detect_color_depth(nullptr, "", "xterm-256color", nullptr) ==
+                ColorDepth::Truecolor);
 }
 
 TEST(encodeAnsiFrameAddressesRowsAndEmitsPaletteColors) {

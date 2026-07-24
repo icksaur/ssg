@@ -97,12 +97,14 @@ struct Decoded {
 [[nodiscard]] std::string encode_ansi_frame(
     ssg::CellGrid const& screen, ssg::ColorDepth depth = ssg::ColorDepth::Truecolor);
 
-// Detect the terminal's color capability from the environment (M9-C2): COLORTERM
-// of "truecolor"/"24bit" -> truecolor; else a TERM containing "256color" ->
-// indexed256; else ansi16.  Nullable inputs (a missing variable) are treated as
-// absent.  Pure, so it is unit-testable without touching the real environment.
-[[nodiscard]] ssg::ColorDepth detect_color_depth(char const* colorterm,
-                                                 char const* term);
+// Detect the terminal's color capability from environment-derived hints.
+// `color_depth_override` models SSG_COLOR_DEPTH and can force truecolor,
+// indexed256, or ansi16. Nullable inputs (a missing variable) are treated as
+// absent. Pure, so it is unit-testable without touching the real environment.
+[[nodiscard]] ssg::ColorDepth detect_color_depth(char const* color_depth_override,
+                                                 char const* colorterm,
+                                                 char const* term,
+                                                 char const* term_program);
 
 // The exact control bytes that put the terminal into / take it out of the
 // editor's display mode.  Pure so the RAII guard, a signal-driven restore, and a
