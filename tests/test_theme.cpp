@@ -254,11 +254,11 @@ void assertSelectionFillGate(ssg::ThemeSnapshot const& snapshot) {
 void assertDistinctAtDepth(ssg::DiffTints const& tints, SrgbColor background,
                            ssg::ColorDepth depth) {
     const auto kindDeltaE =
-        depth == ssg::ColorDepth::Truecolor ? 4.0 : 0.01;
+        depth == ssg::ColorDepth::Truecolor ? 4.0 : 5.0;
     const auto wordDeltaE =
-        depth == ssg::ColorDepth::Truecolor ? 1.0 : 0.01;
+        depth == ssg::ColorDepth::Truecolor ? 1.0 : 3.0;
     const auto rowDeltaE =
-        depth == ssg::ColorDepth::Truecolor ? 4.0 : 0.01;
+        depth == ssg::ColorDepth::Truecolor ? 4.0 : 4.0;
     const auto tintColors = colors(tints);
     std::array<SrgbColor, 6> resolvedTints{};
     std::transform(tintColors.begin(), tintColors.end(), resolvedTints.begin(),
@@ -278,6 +278,37 @@ void assertDistinctAtDepth(ssg::DiffTints const& tints, SrgbColor background,
         ASSERT_TRUE(deltaE(resolvedTints[first], resolvedBackground) >=
                     rowDeltaE);
     }
+}
+
+bool passesDistinctAtDepth(ssg::DiffTints const& tints, SrgbColor background,
+                           ssg::ColorDepth depth) {
+    const auto kindDeltaE =
+        depth == ssg::ColorDepth::Truecolor ? 4.0 : 5.0;
+    const auto wordDeltaE =
+        depth == ssg::ColorDepth::Truecolor ? 1.0 : 3.0;
+    const auto rowDeltaE =
+        depth == ssg::ColorDepth::Truecolor ? 4.0 : 4.0;
+    const auto tintColors = colors(tints);
+    std::array<SrgbColor, 6> resolvedTints{};
+    std::transform(tintColors.begin(), tintColors.end(), resolvedTints.begin(),
+                   [depth](SrgbColor color) {
+                       return resolved(color, depth);
+                   });
+    const auto resolvedBackground = resolved(background, depth);
+    for (std::size_t first = 0; first < 3; ++first) {
+        for (std::size_t second = first + 1; second < 3; ++second) {
+            if (deltaE(resolvedTints[first], resolvedTints[second]) < kindDeltaE ||
+                deltaE(resolvedTints[first + 3], resolvedTints[second + 3]) <
+                    kindDeltaE) {
+                return false;
+            }
+        }
+        if (deltaE(resolvedTints[first], resolvedTints[first + 3]) < wordDeltaE ||
+            deltaE(resolvedTints[first], resolvedBackground) < rowDeltaE) {
+            return false;
+        }
+    }
+    return true;
 }
 
 std::string readFile(const std::filesystem::path& path) {
@@ -518,6 +549,35 @@ TEST(fixedFallbackSetsRemainDistinctAtBothDepths) {
     }
 }
 
+TEST(indexed256DistinctnessRejectsAdjacentGrayStep) {
+    const ssg::DiffTints nearCollapsed{{28, 28, 28},
+                                       {38, 38, 38},
+                                       {88, 88, 88},
+                                       {128, 128, 128},
+                                       {138, 138, 138},
+                                       {188, 188, 188}};
+    const SrgbColor background{0, 0, 0};
+    const auto resolvedRows = std::array<SrgbColor, 3>{
+        resolved(nearCollapsed.addedRow, ssg::ColorDepth::Indexed256),
+        resolved(nearCollapsed.removedRow, ssg::ColorDepth::Indexed256),
+        resolved(nearCollapsed.modifiedRow, ssg::ColorDepth::Indexed256),
+    };
+    const auto resolvedWords = std::array<SrgbColor, 3>{
+        resolved(nearCollapsed.addedWord, ssg::ColorDepth::Indexed256),
+        resolved(nearCollapsed.removedWord, ssg::ColorDepth::Indexed256),
+        resolved(nearCollapsed.modifiedWord, ssg::ColorDepth::Indexed256),
+    };
+    for (std::size_t index = 0; index < 3; ++index) {
+        ASSERT_TRUE(deltaE(resolvedRows[index], resolved(background, ssg::ColorDepth::Indexed256)) >=
+                    4.0);
+        ASSERT_TRUE(deltaE(resolvedRows[index], resolvedWords[index]) >= 3.0);
+    }
+    ASSERT_TRUE(deltaE(resolvedRows[0], resolvedRows[1]) > 0.01);
+    ASSERT_TRUE(deltaE(resolvedRows[0], resolvedRows[1]) < 5.0);
+    ASSERT_FALSE(passesDistinctAtDepth(nearCollapsed, background,
+                                       ssg::ColorDepth::Indexed256));
+}
+
 TEST(nearMonochromeAnchorsUseAReadableDistinctFallback) {
     assertDiffTintGates(nearMonochromeFixtureTheme().snapshot());
 }
@@ -583,6 +643,7 @@ int main() {
     RUN(nearMonochromeDiffTintsRemainDistinctAtTruecolorAndIndexed256);
     RUN(lightFixtureDiffTintsRemainDistinctAtTruecolorAndIndexed256);
     RUN(fixedFallbackSetsRemainDistinctAtBothDepths);
+    RUN(indexed256DistinctnessRejectsAdjacentGrayStep);
     RUN(nearMonochromeAnchorsUseAReadableDistinctFallback);
     RUN(lightThemeFallbackRemainsReadableAndDistinct);
     RUN(sourceAndConfigHaveNoIndependentColorSources);

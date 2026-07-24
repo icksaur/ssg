@@ -96,12 +96,14 @@ constexpr double kRetainContrast = 0.80;
 constexpr double kKindDeltaETruecolor = 4.0;
 constexpr double kWordDeltaETruecolor = 1.0;
 constexpr double kRowDeltaETruecolor = 4.0;
-// Indexed 256-color quantization collapses close washes; keep a smaller
-// non-equality floor so themes avoid unnecessary fallback while still requiring
-// observable separation after quantization.
-constexpr double kKindDeltaEIndexed256 = 0.01;
-constexpr double kWordDeltaEIndexed256 = 0.01;
-constexpr double kRowDeltaEIndexed256 = 0.01;
+// Indexed256 is coarser than truecolor, but it still needs a real perceptual
+// gate: one xterm gray-ramp step (e.g. 234->235) is about ΔE≈4.9 and still
+// reads as near-collapsed in dark diff rows. Keep kind above that boundary and
+// keep word/row visibly separated while allowing tested themes to remain
+// readable.
+constexpr double kKindDeltaEIndexed256 = 5.0;
+constexpr double kWordDeltaEIndexed256 = 3.0;
+constexpr double kRowDeltaEIndexed256 = 4.0;
 
 double linearChannel(std::uint8_t channel) noexcept {
     const double encoded = static_cast<double>(channel) / 255.0;
