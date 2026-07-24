@@ -264,6 +264,12 @@ conventions apply, no new transport").
     style) proving a real `init.lua` on disk changes rendered SGR bytes
     for a palette slot, and that a missing file changes nothing and prints
     nothing.
+  - A "full round-trip is a no-op" oracle: an `init.lua` that calls
+    `theme.define` with all 16 slots set to `defaultTheme()`'s own hex
+    values produces a `ThemeSnapshot` byte-identical (via `operator==`) to
+    the untouched default — proves the whole load path (path resolution,
+    Lua eval, argument decode, command dispatch, palette replacement) end
+    to end with zero visual ambiguity to eyeball.
 
 ## Plan
 
