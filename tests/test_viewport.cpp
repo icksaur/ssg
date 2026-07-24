@@ -101,6 +101,35 @@ DiffFileView removedLines(std::size_t baselineStart,
     return file;
 }
 
+// A clean single-line 1:1 Modified pair ("gamma original line two" ->
+// "gamma modified line two") with inline segments already isolating the one
+// changed word, mirroring what DiffModel.cpp's computeWordDiff actually
+// produces: Unchanged "gamma ", Removed "original", Separator " ", Added
+// "modified", Unchanged " line two". Only Unchanged/Added segments are REAL
+// (they reconstruct the target line "gamma modified line two" exactly);
+// Removed/Separator are GHOST (display-only, no real document byte).
+DiffFileView modifiedLineWithInlineSegments() {
+    using ssg::InlineWordSegment;
+    DiffFileView file{DiffFileId{"doc.txt"}};
+    file.currentContent = "gamma modified line two";
+    file.hunks.push_back({.baselineStart = 0,
+                          .targetStart = 0,
+                          .baselineLines = {"gamma original line two"},
+                          .targetLines = {"gamma modified line two"}});
+    file.changedLines.push_back(
+        {.kind = ssg::DiffLineKind::Modified,
+         .baselineLine = std::size_t{0},
+         .targetLine = std::size_t{0},
+         .inlineWordSegments = {
+             {InlineWordSegment::Kind::Unchanged, "gamma "},
+             {InlineWordSegment::Kind::Removed, "original"},
+             {InlineWordSegment::Kind::Separator, " "},
+             {InlineWordSegment::Kind::Added, "modified"},
+             {InlineWordSegment::Kind::Unchanged, " line two"},
+         }});
+    return file;
+}
+
 void assertGolden(std::string_view name,
                    const std::vector<CellRun>& lines,
                    ViewportDimensions dimensions,
@@ -214,6 +243,67 @@ TEST(unwrappedProjectionStaysAlignedAcrossEmptyAndScrolledOffRows) {
         ASSERT_EQ(state.editableOffset(row),
                   state.visibleRows[row].endByteOffset);
     }
+}
+
+TEST(unwrappedMergedInlineRowGhostSpansResolveHitTestsToRealBytesAroundThem) {
+    auto diff = modifiedLineWithInlineSegments();
+    auto state = ssg::Viewport{}.computeUnwrapped(
+        diff.currentContent, ViewportDimensions{40, 3}, 0, 0, 4, &diff);
+    // Merged text: "gamma original modified line two" (ghosts "original"/" "
+    // spliced between the real "gamma " prefix and the real "modified line
+    // two" suffix). Real text is "gamma modified line two" -- the real
+    // document only ever has ONE row here (the merged inline row replaces
+    // both the baseline phantom row and the plain target row), never a
+    // separate phantom row for this line.
+    ASSERT_EQ(state.rowProjection.size(), std::size_t{1});
+    ASSERT_TRUE(std::holds_alternative<RealRow>(state.projectedRow(0)));
+    const auto ghostStart = std::string_view{"gamma "}.size();
+    const auto ghostLen = std::string_view{"original "}.size();
+    const auto realAfterGhost =
+        std::string_view{"gamma "}.size();  // "modified..." starts right
+                                             // after "gamma " in the real doc
+    for (std::size_t column = ghostStart; column < ghostStart + ghostLen;
+         ++column) {
+        const ssg::CellHitTarget* hit = nullptr;
+        for (const auto& candidate : state.hitTargets) {
+            if (candidate.viewportRow == 0 &&
+                candidate.viewportColumn == column) {
+                hit = &candidate;
+                break;
+            }
+        }
+        ASSERT_TRUE(hit != nullptr);
+        ASSERT_EQ(hit->byteOffset, std::uint32_t{6});  // "gamma " is 6 bytes
+        ASSERT_EQ(hit->byteLen, std::uint32_t{0});
+    }
+    const ssg::CellHitTarget* afterGhost = nullptr;
+    for (const auto& candidate : state.hitTargets) {
+        if (candidate.viewportRow == 0 &&
+            candidate.viewportColumn == ghostStart + ghostLen) {
+            afterGhost = &candidate;
+            break;
+        }
+    }
+    ASSERT_TRUE(afterGhost != nullptr);
+    ASSERT_EQ(afterGhost->byteOffset,
+              static_cast<std::uint32_t>(realAfterGhost));
+    ASSERT_TRUE(afterGhost->byteLen > 0);
+}
+
+TEST(wrappedModifiedLineNeverMergesEvenWhenTheLineFitsOnOneRow) {
+    // Ghost spans are unwrapped-only (see doc/spec-inline-word-diff.md): the
+    // WRAPPED projection must always keep the two-row baseline-phantom /
+    // target-row split for a Modified line, even one short enough to have
+    // fit as a single visual row.
+    auto diff = modifiedLineWithInlineSegments();
+    auto lines = runs({"gamma modified line two"});
+    auto state = ssg::Viewport{}.compute(lines, ViewportDimensions{80, 4}, 0,
+                                          &diff);
+    ASSERT_EQ(state.totalVisualRows, std::uint32_t{2});
+    ASSERT_TRUE(std::holds_alternative<PhantomRow>(state.projectedRow(0)));
+    ASSERT_TRUE(std::holds_alternative<RealRow>(state.projectedRow(1)));
+    ASSERT_EQ(std::get<PhantomRow>(state.projectedRow(0)).text,
+              "gamma original line two");
 }
 
 TEST(scrollSaturatesAndDeltaSuppressesEqualPayload) {

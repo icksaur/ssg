@@ -640,7 +640,12 @@ TEST(gitStatusActivationOpensDeletedLiveDiffWithoutDiskFile) {
               std::size_t{1});
     ASSERT_EQ(snapshot->sections().document.diffFileIdentity,
               std::optional<std::string>{"deleted-id"});
-    ASSERT_EQ(snapshot->sections().document.text, std::string{"gone\n"});
+    // A deleted file has no real document content -- its removed lines are
+    // represented entirely as phantom rows (Viewport's removedBlocks
+    // projection), derived from diff.files' hunks below, not as literal
+    // document text. Synthesizing the baseline here as "current" text would
+    // duplicate every removed line: once as a real row, once as its phantom.
+    ASSERT_EQ(snapshot->sections().document.text, std::string{});
     const auto deleted = std::find_if(
         snapshot->sections().diff.files.begin(),
         snapshot->sections().diff.files.end(),

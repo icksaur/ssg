@@ -3581,6 +3581,8 @@ ProtocolValue toValue(ProjectedRow const& value) {
         fields.emplace_back("text", toValue(phantom.text));
         fields.emplace_back("following_byte_offset",
                             toValue(phantom.followingByteOffset));
+        fields.emplace_back("removed_word_ranges",
+                            toValue(phantom.removedWordRanges));
     }
     return ProtocolValue::makeObject(std::move(fields));
 }
@@ -3617,9 +3619,15 @@ bool decodePresent(ProtocolValue const& value,
         auto text = requireField<std::string>(value.field("text"));
         auto followingByteOffset = requireField<std::uint32_t>(
             value.field("following_byte_offset"));
-        if (!baselineLine || !text || !followingByteOffset) return false;
+        auto removedWordRanges = requireField<std::vector<DiffWordRange>>(
+            value.field("removed_word_ranges"));
+        if (!baselineLine || !text || !followingByteOffset ||
+            !removedWordRanges) {
+            return false;
+        }
         out.emplace(PhantomRow{
-            *baselineLine, std::move(*text), *followingByteOffset});
+            *baselineLine, std::move(*text), *followingByteOffset,
+            std::move(*removedWordRanges)});
         return true;
     }
     return false;

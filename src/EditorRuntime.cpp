@@ -78,16 +78,15 @@ std::string liveDiffTabLabelForPath(const std::filesystem::path& path) {
 }
 
 std::string liveDiffDocumentText(const DiffFileView& file) {
-    if (!file.deleted) {
-        return file.currentContent;
-    }
-    std::string priorContent;
-    for (const auto& hunk : file.hunks) {
-        for (const auto& line : hunk.baselineLines) {
-            priorContent += line;
-        }
-    }
-    return priorContent;
+    // A deleted file's whole content is represented as Removed phantom rows
+    // (see Viewport.cpp's removedBlocks/phantom-row projection), never as
+    // real document text -- currentContent is already empty for a deleted
+    // file (DiffModel::updateGitFile sets it from workingContent, which is
+    // absent when deleted). Synthesizing baseline content as the "current"
+    // text here would duplicate every removed line: once as a real row from
+    // this text, and again as the phantom row the viewport already inserts
+    // for the same baseline line.
+    return file.currentContent;
 }
 
 ThemeSnapshot defaultTheme() {

@@ -370,6 +370,68 @@ TEST(phantomRowsAreSkippedByCaretSelectionAndCountedByReveal) {
     ASSERT_EQ(centered.firstVisualRow, std::uint32_t{1});
 }
 
+TEST(mergedInlineModifiedRowNavigatesByRealBytesUnaffectedByGhostSpans) {
+    // "gamma modified line two" is the REAL document text on line 1; its
+    // diff pairs it with baseline "gamma original line two" via inline
+    // segments (Unchanged/Removed/Separator/Added/Unchanged), rendered as
+    // ONE merged row with the ghost "original " text visually spliced in.
+    // Caret navigation must be entirely unaffected by that ghost text: it
+    // does not exist in the document, so CursorLeft/CursorRight/vertical
+    // movement need no special ghost-span handling (see doc/spec-inline-
+    // word-diff.md and its accompanying review).
+    const std::string text = "one\ngamma modified line two\nthree";
+    ssg::DiffFileView diff{ssg::DiffFileId{"doc.txt"}};
+    diff.currentContent = text;
+    diff.hunks.push_back({.baselineStart = 1,
+                          .targetStart = 1,
+                          .baselineLines = {"gamma original line two\n"},
+                          .targetLines = {"gamma modified line two\n"}});
+    diff.changedLines.push_back(
+        {.kind = ssg::DiffLineKind::Modified,
+         .baselineLine = std::size_t{1},
+         .targetLine = std::size_t{1},
+         .inlineWordSegments = {
+             {ssg::InlineWordSegment::Kind::Unchanged, "gamma "},
+             {ssg::InlineWordSegment::Kind::Removed, "original"},
+             {ssg::InlineWordSegment::Kind::Separator, " "},
+             {ssg::InlineWordSegment::Kind::Added, "modified"},
+             {ssg::InlineWordSegment::Kind::Unchanged, " line two\n"},
+         }});
+    const auto dimensions = ViewportDimensions{40, 3};
+
+    // Caret at the end of line 0 ("one", byte 3, cell 3); moving down lands
+    // on the merged row at the SAME real cell 3 ('m' in "gamma"), byte 7 --
+    // desiredCell is real-cell-space throughout, so the ghost-widened
+    // merged row needs no translation.
+    auto view = state(text, {{3, 3}});
+    view = resultingState(
+        view, ssg::SelectionNavigator{}.apply(
+                  text, view, SelectionCommand::CursorLineDown, dimensions,
+                  {}, {}, 4, true, &diff));
+    ASSERT_EQ(view.selections.primary().active.line, ssg::LineIndex{1});
+    ASSERT_EQ(view.selections.primary().active.byteOffset, ByteOffset{7});
+
+    // CursorRight steps through the REAL text one grapheme at a time (there
+    // is no ghost byte to skip over -- "original" only ever exists in
+    // Viewport's display text, never in this document).
+    for (int i = 0; i < 4; ++i) {
+        view = resultingState(
+            view, ssg::SelectionNavigator{}.apply(
+                      text, view, SelectionCommand::CursorRight, dimensions,
+                      {}, {}, 4, true, &diff));
+    }
+    ASSERT_EQ(view.selections.primary().active.byteOffset, ByteOffset{11});
+
+    // Continuing down lands on line 2 ("three"): the merged row's real line
+    // count/byte range are unaffected by the ghost text it visually adds.
+    view = resultingState(
+        view, ssg::SelectionNavigator{}.apply(
+                  text, view, SelectionCommand::CursorLineDown, dimensions,
+                  {}, {}, 4, true, &diff));
+    ASSERT_EQ(view.selections.primary().active.line, ssg::LineIndex{2});
+}
+
+
 // M12 VP-H / review-fold #3: with word wrap OFF, BOTH cursor and selection
 // vertical movement are by LOGICAL line, never through wrap-chunks of a long
 // line. The wrapped test above (columns=3) moves within wrap rows of "abcdef";
