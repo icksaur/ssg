@@ -57,8 +57,20 @@ New precedence, highest to lowest:
    and the general escape hatch for any future misdetection in either
    direction.
 2. **`COLORTERM`** == `truecolor`/`24bit` -> Truecolor (unchanged; the existing
-   definitive positive signal).
-3. **Known-truecolor terminal identifiers** (new): `TERM_PROGRAM` or `TERM`
+   definitive positive signal — this is a direct assertion by the terminal
+   itself and outranks even `TERM=dumb`/unset below, since a terminal that
+   explicitly sets `COLORTERM=truecolor` alongside an otherwise-minimal `TERM`
+   is still telling the truth about its color capability).
+3. **`TERM` == `dumb`** -> Ansi16 (unchanged; an explicit, well-established
+   low-capability signal used by non-interactive/piped/minimal contexts — a
+   HARD FLOOR that nothing below this tier may override, including the
+   allowlist in the next tier: a heuristic `TERM_PROGRAM`/`TERM` STRING match
+   is weaker evidence than an explicit `TERM=dumb` assertion, so `dumb` must be
+   checked, and win, before the allowlist is even consulted).
+4. **`TERM` unset or empty** -> Ansi16 (unchanged; conservative default for a
+   context that may not be a real interactive terminal at all — likewise a
+   hard floor checked before the allowlist).
+5. **Known-truecolor terminal identifiers** (new): `TERM_PROGRAM` or `TERM`
    matching a short allowlist of terminals that are ALWAYS truecolor
    regardless of `COLORTERM` forwarding — the same technique widely used by
    other color-detection libraries (e.g. the `supports-color`/
@@ -69,11 +81,6 @@ New precedence, highest to lowest:
    `vscode`, `Hyper`, `ghostty`}; `TERM` containing {`kitty`, `alacritty`,
    `wezterm`, `foot`, `contour`, `ghostty`}. `TERM=xterm-kitty` (Kitty's actual
    default `TERM`) is covered by this.
-4. **`TERM` == `dumb`** -> Ansi16 (unchanged; an explicit, well-established
-   low-capability signal used by non-interactive/piped/minimal contexts —
-   never upgraded).
-5. **`TERM` unset or empty** -> Ansi16 (unchanged; conservative default for a
-   context that may not be a real interactive terminal at all).
 6. **Otherwise** (new default): **Truecolor** — this is the actual behavior
    change. Any other `TERM` value (including `xterm`, `xterm-256color`,
    `screen`, `screen-256color`, `tmux-256color`, `vt100`, `linux`, etc.) is now
@@ -163,16 +170,16 @@ distinctness at whatever depth is actually resolved) is the fixed contract.
 
 ## Considerations
 
-- The allowlist (Part A, item 3) is intentionally small and named as a FACT
+- The allowlist (Part A, item 5) is intentionally small and named as a FACT
   list (not exhaustive, extendable without a spec amendment) — the risk of a
   false positive (assuming truecolor for a terminal that doesn't support it)
-  is bounded by graceful degradation: confirm during implementation/review
-  what modern terminals actually do when they receive a truecolor SGR code
-  they don't support (expected: either the terminal itself downsamples the
-  requested RGB to its own nearest supported color, or it ignores the
-  sequence and keeps the prior/default color — both are a readable, if
-  imperfect, degrade, not corruption/garbage output). If a genuine
-  garbling risk is found for some real terminal during review, narrow the
+  is bounded by graceful degradation, VERIFIED (not merely assumed) per Plan
+  step 3b below: confirm what modern terminals actually do when they receive
+  a truecolor SGR code they don't support (expected: either the terminal
+  itself downsamples the requested RGB to its own nearest supported color, or
+  it ignores the sequence and keeps the prior/default color — both are a
+  readable, if imperfect, degrade, not corruption/garbage output). If a
+  genuine garbling risk is found for some real terminal during review, narrow the
   allowlist or make the "otherwise -> Truecolor" default (item 6) more
   conservative instead.
 - Extending `distinct()` to Indexed256 must not cause the FALLBACK colors
@@ -238,16 +245,28 @@ distinctness at whatever depth is actually resolved) is the fixed contract.
     two fallback-path tests continue to pass (possibly with updated
     assertions reflecting a fallback-path outcome where the property still
     holds, per Considerations).
+  - degradation safety (NEW, required, not a hand-wave): before shipping the
+    "otherwise -> Truecolor" default flip, concretely verify (documented in
+    the implementation's PR/commit, checked in review, not merely asserted in
+    this spec) that at least one terminal representative of each depth class
+    this default could now mis-target — a 256-color-only terminal (e.g. a
+    minimal `xterm-256color` build or documented behavior thereof) and a
+    16-color-only terminal — degrades gracefully (downsamples or ignores
+    unsupported truecolor SGR) rather than corrupting output. If no real
+    terminal exhibiting genuine incapability is available to test directly,
+    this MUST be confirmed from the terminal's own documented behavior/
+    changelog (not assumed), and the finding recorded in the Plan step 3
+    commit message.
 
 ## Plan
 
 | # | Step | Files | Oracle | Invariants |
 |---|------|-------|--------|------------|
 | 1 | Red-before-green: add the Indexed256 `distinct()` property test against the shipped theme (must fail against current code) | `tests/test_theme.cpp` | fails pre-fix | - |
-| 2 | Extend `distinct()` to loop over Truecolor + Indexed256 (mirror `readable()`'s existing pattern); tune/introduce a separate Indexed256 ΔE threshold if the Truecolor constants prove too strict empirically; verify `fixedFallback()`'s sets pass the new check | `src/Theme.cpp`, `tests/test_theme.cpp` | step 1's oracle now passes; existing near-monochrome/light-theme fallback tests still pass (updated if the taken path legitimately changes) | I22, color-derivation invariants above |
-| 3 | Add `SSG_COLOR_DEPTH` override + `TERM_PROGRAM`/allowlist signals + flip the "otherwise" default to Truecolor in `detect_color_depth` | `apps/ssg_terminal.cpp`, `apps/ssg_terminal.h` if the signature needs `TERM_PROGRAM`/env accessors passed in | extended hand-case table in `tests/test_ssg_app.cpp`, including this bug's exact repro case | I25 (mechanism stays client-side) |
+| 2 | Extend `distinct()` to loop over Truecolor + Indexed256 (mirror `readable()`'s existing pattern); tune/introduce a separate Indexed256 ΔE threshold if the Truecolor constants prove too strict empirically; verify `fixedFallback()`'s sets ALSO pass the new two-depth check (a MUST precondition, not optional — if the fallback itself fails, the selection chain can still exhaust to the original bug) | `src/Theme.cpp`, `tests/test_theme.cpp` | step 1's oracle now passes; existing near-monochrome/light-theme fallback tests still pass (updated if the taken path legitimately changes); new explicit assertion that `fixedFallback()`'s dark AND light sets independently pass `distinct()` at both depths | I22, color-derivation invariants above |
+| 3 | Add `SSG_COLOR_DEPTH` override + `TERM_PROGRAM`/allowlist signals + reordered precedence (override > `COLORTERM` > `dumb` > unset > allowlist > otherwise-Truecolor) in `detect_color_depth`; perform and record the degradation-safety verification above | `apps/ssg_terminal.cpp`, `apps/ssg_terminal.h` if the signature needs `TERM_PROGRAM`/env accessors passed in | extended hand-case table in `tests/test_ssg_app.cpp`, including this bug's exact repro case AND a case proving `TERM=dumb`/unset are never upgraded by an allowlist match | I25 (mechanism stays client-side) |
 | 4 | Wire `SSG_COLOR_DEPTH`/`TERM_PROGRAM` reads at the one call site in `apps/ssg_main.cpp` (currently reads only `COLORTERM`/`TERM`) | `apps/ssg_main.cpp` | manual smoke test against `/tmp/gittest` in the real reported environment (`TERM=xterm-256color`, `COLORTERM=` empty) — diff tints visibly colored | I25 |
-| 5 | Regenerate any golden/fixture files whose rendered output embeds resolved diff-tint hex values, affected by step 2's changed derivation output | `tests/fixtures/tui/*.txt` (regen via `SSG_REGEN_GOLDEN=1`), any protocol/snapshot goldens embedding theme colors | dual-gate green | snapshot/delta symmetry (existing) |
+| 5 | Regenerate any golden/fixture files whose rendered output embeds resolved diff-tint hex values, affected by step 2's changed derivation output | `tests/fixtures/tui/*.txt` (regen via `SSG_REGEN_GOLDEN=1`), any protocol/snapshot goldens embedding theme colors — search beyond just `tests/fixtures/tui/` for any other fixture embedding `diff_tints`/theme hex values (protocol round-trip goldens, snapshot delta goldens) | dual-gate green | snapshot/delta symmetry (existing) |
 
 ## Rationale (skippable)
 
