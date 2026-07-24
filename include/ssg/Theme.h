@@ -192,16 +192,6 @@ struct DiffTints {
     friend bool operator==(const DiffTints&, const DiffTints&) = default;
 };
 
-enum class DiffTintDerivationPath : std::uint8_t { Primary, Rescue };
-
-struct DiffTintDerivationResult {
-    DiffTints tints;
-    DiffTintDerivationPath path = DiffTintDerivationPath::Rescue;
-
-    friend bool operator==(const DiffTintDerivationResult&,
-                           const DiffTintDerivationResult&) = default;
-};
-
 struct ThemeSnapshot {
     std::array<SrgbColor, kThemePaletteSize> palette;
     std::array<std::uint8_t, kSemanticRoleCount> semanticIndices;
@@ -223,10 +213,6 @@ struct ThemeSnapshot {
 // the runtime's defaultTheme) populates diffTints/selectionFill the same way
 // Theme::snapshot() does; without it those fields default to black.
 [[nodiscard]] DiffTints deriveDiffTints(
-    std::array<SrgbColor, kThemePaletteSize> const& palette,
-    std::array<std::uint8_t, kSemanticRoleCount> const& semanticIndices,
-    std::array<std::uint8_t, kSyntaxScopeCount> const& syntaxIndices) noexcept;
-[[nodiscard]] DiffTintDerivationResult deriveDiffTintsWithPath(
     std::array<SrgbColor, kThemePaletteSize> const& palette,
     std::array<std::uint8_t, kSemanticRoleCount> const& semanticIndices,
     std::array<std::uint8_t, kSyntaxScopeCount> const& syntaxIndices) noexcept;
@@ -259,3 +245,27 @@ private:
 };
 
 } // namespace ssg
+
+// Testing-only observability seam: reports WHICH internal path
+// deriveDiffTints() took (Primary derivation vs. the degenerate-theme
+// Rescue fallback). Not part of the render contract — production code
+// only ever needs deriveDiffTints()'s final colors; this exists so tests
+// can assert a non-degenerate theme never silently depends on rescue.
+namespace ssg::testing {
+
+enum class DiffTintDerivationPath : std::uint8_t { Primary, Rescue };
+
+struct DiffTintDerivationResult {
+    DiffTints tints;
+    DiffTintDerivationPath path = DiffTintDerivationPath::Rescue;
+
+    friend bool operator==(const DiffTintDerivationResult&,
+                           const DiffTintDerivationResult&) = default;
+};
+
+[[nodiscard]] DiffTintDerivationResult deriveDiffTintsWithPath(
+    std::array<SrgbColor, kThemePaletteSize> const& palette,
+    std::array<std::uint8_t, kSemanticRoleCount> const& semanticIndices,
+    std::array<std::uint8_t, kSyntaxScopeCount> const& syntaxIndices) noexcept;
+
+} // namespace ssg::testing

@@ -360,6 +360,8 @@ DiffTints syntheticRescue(
 
 } // namespace
 
+namespace testing {
+
 DiffTintDerivationResult deriveDiffTintsWithPath(
     std::array<SrgbColor, kThemePaletteSize> const& palette,
     std::array<std::uint8_t, kSemanticRoleCount> const& semanticIndices,
@@ -405,11 +407,13 @@ DiffTintDerivationResult deriveDiffTintsWithPath(
     return {derived, DiffTintDerivationPath::Rescue};
 }
 
+} // namespace testing
+
 DiffTints deriveDiffTints(
     std::array<SrgbColor, kThemePaletteSize> const& palette,
     std::array<std::uint8_t, kSemanticRoleCount> const& semanticIndices,
     std::array<std::uint8_t, kSyntaxScopeCount> const& syntaxIndices) noexcept {
-    return deriveDiffTintsWithPath(palette, semanticIndices, syntaxIndices).tints;
+    return testing::deriveDiffTintsWithPath(palette, semanticIndices, syntaxIndices).tints;
 }
 
 SrgbColor deriveSelectionFill(

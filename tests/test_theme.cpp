@@ -619,9 +619,9 @@ TEST(diffTintsTrackBundledGitAnchorHuesAtTruecolor) {
 
 TEST(bundledThemeDiffTintsUsePrimaryDerivationPath) {
     const auto snapshot = bundledTheme().snapshot();
-    const auto result = ssg::deriveDiffTintsWithPath(
+    const auto result = ssg::testing::deriveDiffTintsWithPath(
         snapshot.palette, snapshot.semanticIndices, snapshot.syntaxIndices);
-    ASSERT_TRUE(result.path == ssg::DiffTintDerivationPath::Primary);
+    ASSERT_TRUE(result.path == ssg::testing::DiffTintDerivationPath::Primary);
 }
 
 TEST(nearMonochromeDiffTintsRemainDistinctAtTruecolorAndIndexed256) {
@@ -650,17 +650,17 @@ TEST(indexed256DistinctnessStillRejectsBackgroundCollapse) {
 TEST(nearMonochromeAnchorsUseAReadableDistinctFallback) {
     const auto snapshot = nearMonochromeFixtureTheme().snapshot();
     assertDiffTintGates(snapshot);
-    const auto result = ssg::deriveDiffTintsWithPath(
+    const auto result = ssg::testing::deriveDiffTintsWithPath(
         snapshot.palette, snapshot.semanticIndices, snapshot.syntaxIndices);
-    ASSERT_TRUE(result.path == ssg::DiffTintDerivationPath::Rescue);
+    ASSERT_TRUE(result.path == ssg::testing::DiffTintDerivationPath::Rescue);
 }
 
 TEST(lightThemeFallbackRemainsReadableAndDistinct) {
     const auto snapshot = lightFixtureTheme().snapshot();
     assertDiffTintGates(snapshot);
-    const auto result = ssg::deriveDiffTintsWithPath(
+    const auto result = ssg::testing::deriveDiffTintsWithPath(
         snapshot.palette, snapshot.semanticIndices, snapshot.syntaxIndices);
-    ASSERT_TRUE(result.path == ssg::DiffTintDerivationPath::Rescue);
+    ASSERT_TRUE(result.path == ssg::testing::DiffTintDerivationPath::Rescue);
 }
 
 TEST(rotatedAnchorThemeUsesPrimaryDerivationPathAndTracksAnchorHues) {
@@ -669,9 +669,9 @@ TEST(rotatedAnchorThemeUsesPrimaryDerivationPathAndTracksAnchorHues) {
     assertDiffTintGates(snapshot);
     assertSnapshotDistinctAtBothDepths(snapshot);
     assertHueFidelityAtTruecolor(theme, snapshot.diffTints);
-    const auto result = ssg::deriveDiffTintsWithPath(
+    const auto result = ssg::testing::deriveDiffTintsWithPath(
         snapshot.palette, snapshot.semanticIndices, snapshot.syntaxIndices);
-    ASSERT_TRUE(result.path == ssg::DiffTintDerivationPath::Primary);
+    ASSERT_TRUE(result.path == ssg::testing::DiffTintDerivationPath::Primary);
 }
 
 TEST(sourceAndConfigHaveNoIndependentColorSources) {
