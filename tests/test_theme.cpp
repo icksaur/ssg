@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <regex>
@@ -66,6 +67,25 @@ ssg::Theme validTheme() {
     const auto roleMappings = roles();
     const auto syntaxMappings = syntax();
     return {"test", colors, roleMappings, syntaxMappings};
+}
+
+// The 16 classic ANSI palette-slot names in the order documented publicly
+// on ThemeDefineArguments/applyThemeDefine (Theme.h) -- this is the SPEC'd
+// order (also the palette's own 0-15 index order), independent of Theme.cpp's
+// private implementation array, so a test built from it is a genuine check
+// that the implementation matches what was documented, not a tautology.
+constexpr std::array<std::string_view, ssg::kThemePaletteSize> kAnsiSlotNamesInIndexOrder{
+    "black",         "red",           "green",         "yellow",
+    "blue",          "magenta",       "cyan",          "white",
+    "brightBlack",   "brightRed",     "brightGreen",   "brightYellow",
+    "brightBlue",    "brightMagenta", "brightCyan",    "brightWhite",
+};
+
+std::string hexOf(SrgbColor color) {
+    char buffer[8];
+    std::snprintf(buffer, sizeof(buffer), "#%02x%02x%02x", color.red,
+                  color.green, color.blue);
+    return buffer;
 }
 
 ssg::Theme bundledTheme() {
@@ -327,6 +347,75 @@ TEST(diffTintsAreTheThemesOwnFlatGitAnchorColors) {
     assertSelectionFillGate(snapshot);
 }
 
+TEST(themeDefineFullTableRoundTripsToAByteIdenticalSnapshot) {
+    // Full round-trip is a no-op oracle (doc/spec-config.md's Acceptance):
+    // re-specifying every slot with the theme's own current colors must
+    // produce a snapshot byte-identical to the untouched original --
+    // proves the whole apply path (name lookup, hex parse, palette
+    // replacement, DiffTints/selectionFill recompute) with zero visual
+    // ambiguity to eyeball.
+    const auto current = bundledTheme().snapshot();
+    ssg::ThemeDefineArguments arguments;
+    for (std::size_t index = 0; index < kAnsiSlotNamesInIndexOrder.size();
+         ++index) {
+        arguments.colors.emplace(std::string{kAnsiSlotNamesInIndexOrder[index]},
+                                 hexOf(current.palette[index]));
+    }
+    const auto result = ssg::applyThemeDefine(current, arguments);
+    ASSERT_TRUE(result.accepted());
+    ASSERT_EQ(result.snapshot, current);
+}
+
+TEST(themeDefinePartialTableChangesOnlyTheNamedSlotsExactly) {
+    const auto current = bundledTheme().snapshot();
+    ssg::ThemeDefineArguments arguments;
+    const auto replacement = SrgbColor{1, 2, 3};
+    arguments.colors.emplace("red", hexOf(replacement));
+    const auto result = ssg::applyThemeDefine(current, arguments);
+    ASSERT_TRUE(result.accepted());
+    for (std::size_t index = 0; index < ssg::kThemePaletteSize; ++index) {
+        if (kAnsiSlotNamesInIndexOrder[index] == "red") {
+            ASSERT_EQ(result.snapshot.palette[index], replacement);
+        } else {
+            ASSERT_EQ(result.snapshot.palette[index], current.palette[index]);
+        }
+    }
+    ASSERT_EQ(result.snapshot.semanticIndices, current.semanticIndices);
+    ASSERT_EQ(result.snapshot.syntaxIndices, current.syntaxIndices);
+}
+
+TEST(themeDefineUnknownSlotNameIsRejectedWithTheOriginalUntouched) {
+    const auto current = bundledTheme().snapshot();
+    ssg::ThemeDefineArguments arguments;
+    arguments.colors.emplace("not_a_real_slot", "#112233");
+    const auto result = ssg::applyThemeDefine(current, arguments);
+    ASSERT_FALSE(result.accepted());
+    ASSERT_FALSE(result.error->message.empty());
+}
+
+TEST(themeDefineMalformedHexColorIsRejectedWithTheOriginalUntouched) {
+    const auto current = bundledTheme().snapshot();
+    for (auto const* malformed :
+         {"not-a-color", "#12345", "#gggggg", "112233", "#12345678"}) {
+        ssg::ThemeDefineArguments arguments;
+        arguments.colors.emplace("red", malformed);
+        const auto result = ssg::applyThemeDefine(current, arguments);
+        ASSERT_FALSE(result.accepted());
+    }
+}
+
+TEST(themeDefineRejectionIsAllOrNothingNotPartial) {
+    // A table with ONE valid entry and ONE invalid entry must reject the
+    // whole call -- if it partially applied, this would silently mutate
+    // the valid slot despite reporting failure.
+    const auto current = bundledTheme().snapshot();
+    ssg::ThemeDefineArguments arguments;
+    arguments.colors.emplace("red", "#112233");
+    arguments.colors.emplace("green", "not-a-color");
+    const auto result = ssg::applyThemeDefine(current, arguments);
+    ASSERT_FALSE(result.accepted());
+}
+
 TEST(sourceAndConfigHaveNoIndependentColorSources) {
     const std::filesystem::path root = SSG_SOURCE_ROOT;
     const std::array forbidden{
@@ -386,6 +475,11 @@ int main() {
     RUN(snapshotIsCompleteAndDeterministic);
     RUN(bundledThemeDataIsCompleteAndConstructible);
     RUN(diffTintsAreTheThemesOwnFlatGitAnchorColors);
+    RUN(themeDefineFullTableRoundTripsToAByteIdenticalSnapshot);
+    RUN(themeDefinePartialTableChangesOnlyTheNamedSlotsExactly);
+    RUN(themeDefineUnknownSlotNameIsRejectedWithTheOriginalUntouched);
+    RUN(themeDefineMalformedHexColorIsRejectedWithTheOriginalUntouched);
+    RUN(themeDefineRejectionIsAllOrNothingNotPartial);
     RUN(sourceAndConfigHaveNoIndependentColorSources);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;

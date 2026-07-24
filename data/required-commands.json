@@ -168,6 +168,7 @@
     {"id":"settings.reset_scope","owner":"settings-model","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"settings.export_workspace","owner":"settings-model","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"settings.import_workspace","owner":"settings-model","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
+    {"id":"theme.define","owner":"theme-model","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"follow_edits.resume","owner":"follow-edits","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"follow_edits.pause","owner":"follow-edits","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"follow_edits.toggle","owner":"follow-edits","required_capabilities":[],"lua":true,"keymap":true,"palette":true},

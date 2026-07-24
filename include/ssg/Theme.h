@@ -7,6 +7,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 
 namespace ssg {
 
@@ -200,6 +201,55 @@ struct ThemeSnapshot {
     SrgbColor selectionFill;
 
     friend bool operator==(const ThemeSnapshot&, const ThemeSnapshot&) = default;
+};
+
+// theme.define's argument: a table of the 16 classic ANSI palette-slot
+// names (see kAnsiSlotNames in Theme.cpp), each optionally mapped to a
+// "#rrggbb" hex string. A name absent from `colors` keeps the CURRENT
+// active theme's color for that slot -- the table may be partial. This is
+// the ONLY argument shape theme.define accepts (see doc/spec-config.md);
+// role/syntax mappings are never touched by this command.
+struct ThemeDefineArguments {
+    std::unordered_map<std::string, std::string> colors;
+
+    friend bool operator==(const ThemeDefineArguments&, const ThemeDefineArguments&) = default;
+};
+
+struct ThemeDefineError {
+    std::string message;
+
+    friend bool operator==(const ThemeDefineError&, const ThemeDefineError&) = default;
+};
+
+struct ThemeDefineResult {
+    std::optional<ThemeDefineError> error;
+    // The replacement snapshot when accepted; left default-constructed
+    // (unused) when rejected -- all-or-nothing, no partial apply on error.
+    ThemeSnapshot snapshot;
+
+    [[nodiscard]] bool accepted() const noexcept { return !error.has_value(); }
+};
+
+// Applies theme.define's color table to `current`: replaces ONLY the named
+// palette slots (an omitted name keeps its current value) and recomputes
+// DiffTints/selectionFill (pure functions of palette + role/syntax indices)
+// over the new palette. Role/syntax mappings are copied from `current`
+// unchanged. Rejects (leaving `current` conceptually untouched -- the
+// caller simply does not apply `.snapshot`) on an unknown slot name or a
+// malformed "#rrggbb" string; the whole table is validated before any
+// slot is replaced, so a rejected call never partially mutates the result.
+[[nodiscard]] ThemeDefineResult applyThemeDefine(
+    ThemeSnapshot const& current,
+    ThemeDefineArguments const& arguments) noexcept;
+
+struct ThemeCommandDescriptor {
+    std::string_view id;
+};
+
+struct ThemeCommandSet {
+    std::array<ThemeCommandDescriptor, 1> descriptors{{
+        {"theme.define"},
+    }};
 };
 
 [[nodiscard]] std::string_view semanticRoleName(SemanticRole role);

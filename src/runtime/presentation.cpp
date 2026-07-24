@@ -256,6 +256,21 @@ CommandHandlerResult settingsCommand(EditorRuntime::Impl& runtime, std::string_v
     return failure(std::string{id} + " requires a typed settings payload");
 }
 
+CommandHandlerResult themeCommand(EditorRuntime::Impl& runtime,
+                                  std::string_view id, std::any const& payload) {
+    if (id == "theme.define") {
+        auto const* arguments = payloadAs<ThemeDefineArguments>(payload);
+        if (arguments == nullptr) {
+            return failure("theme.define requires a typed color-table payload");
+        }
+        auto result = applyThemeDefine(runtime.theme, *arguments);
+        if (!result.accepted()) return failure(result.error->message);
+        runtime.theme = result.snapshot;
+        return success();
+    }
+    return failure(std::string{id} + " requires a typed theme payload");
+}
+
 } // namespace
 
 void bindRuntimePresentation(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime) {
@@ -315,6 +330,11 @@ void bindRuntimePresentation(EditorSessionBuilder& builder, EditorRuntime::Impl&
     for (auto const& descriptor : SettingsCommandSet{}.descriptors) {
         builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const& payload) {
             return runtime.runTransaction([&] { return settingsCommand(runtime, descriptor.id, payload); });
+        });
+    }
+    for (auto const& descriptor : ThemeCommandSet{}.descriptors) {
+        builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const& payload) {
+            return runtime.runTransaction([&] { return themeCommand(runtime, descriptor.id, payload); });
         });
     }
 }

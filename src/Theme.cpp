@@ -69,6 +69,65 @@ constexpr std::size_t position(SyntaxScope scope) noexcept {
     return static_cast<std::size_t>(scope);
 }
 
+// theme.define's 16 classic ANSI palette-slot names, in the SAME order as
+// the palette's own 0-15 indices (see doc/spec-config.md's Considerations:
+// this vocabulary was chosen over SemanticRole names because it matches
+// how every terminal color-scheme config already names things, and it
+// fits the palette's own 16-slot shape exactly).
+constexpr std::array kAnsiSlotNames{
+    std::string_view{"black"},
+    std::string_view{"red"},
+    std::string_view{"green"},
+    std::string_view{"yellow"},
+    std::string_view{"blue"},
+    std::string_view{"magenta"},
+    std::string_view{"cyan"},
+    std::string_view{"white"},
+    std::string_view{"brightBlack"},
+    std::string_view{"brightRed"},
+    std::string_view{"brightGreen"},
+    std::string_view{"brightYellow"},
+    std::string_view{"brightBlue"},
+    std::string_view{"brightMagenta"},
+    std::string_view{"brightCyan"},
+    std::string_view{"brightWhite"},
+};
+static_assert(kAnsiSlotNames.size() == kThemePaletteSize);
+
+std::optional<std::size_t> ansiSlotIndex(std::string_view name) noexcept {
+    for (std::size_t index = 0; index < kAnsiSlotNames.size(); ++index) {
+        if (kAnsiSlotNames[index] == name) return index;
+    }
+    return std::nullopt;
+}
+
+// Parses a "#rrggbb" literal (exactly '#' followed by 6 hex digits; no
+// short form, no alpha channel -- the one shape theme.define accepts).
+std::optional<SrgbColor> parseHexColor(std::string_view text) noexcept {
+    if (text.size() != 7 || text[0] != '#') return std::nullopt;
+    std::array<std::uint8_t, 3> channels{};
+    for (std::size_t channel = 0; channel < 3; ++channel) {
+        std::uint8_t value = 0;
+        for (std::size_t digit = 0; digit < 2; ++digit) {
+            const char byte = text[1 + channel * 2 + digit];
+            std::uint8_t nibble = 0;
+            if (byte >= '0' && byte <= '9') {
+                nibble = static_cast<std::uint8_t>(byte - '0');
+            } else if (byte >= 'a' && byte <= 'f') {
+                nibble = static_cast<std::uint8_t>(byte - 'a' + 10);
+            } else if (byte >= 'A' && byte <= 'F') {
+                nibble = static_cast<std::uint8_t>(byte - 'A' + 10);
+            } else {
+                return std::nullopt;
+            }
+            value = static_cast<std::uint8_t>((value << 4) | nibble);
+        }
+        channels[channel] = value;
+    }
+    return SrgbColor::fromSerializedChannels(channels[0], channels[1],
+                                             channels[2]);
+}
+
 constexpr bool valid(SemanticRole role) noexcept {
     return position(role) < kSemanticRoleCount;
 }
@@ -225,6 +284,35 @@ SrgbColor deriveSelectionFill(
         palette[semanticIndices[position(SemanticRole::Selection)]];
     return strongestReadableTint(themeBackground, selectionAnchor, 0.40, 0.60,
                                  allForegrounds);
+}
+
+ThemeDefineResult applyThemeDefine(ThemeSnapshot const& current,
+                                   ThemeDefineArguments const& arguments) noexcept {
+    // Validate the WHOLE table before replacing anything -- an unknown slot
+    // name or a malformed hex string rejects the whole call, never a
+    // partial apply (see doc/spec-config.md's Acceptance: all-or-nothing).
+    auto palette = current.palette;
+    for (auto const& [name, hex] : arguments.colors) {
+        const auto index = ansiSlotIndex(name);
+        if (!index) {
+            return {ThemeDefineError{"unknown palette slot name: " + name}, {}};
+        }
+        const auto color = parseHexColor(hex);
+        if (!color) {
+            return {ThemeDefineError{"invalid \"#rrggbb\" color for " + name +
+                                     ": " + hex},
+                    {}};
+        }
+        palette[*index] = *color;
+    }
+
+    ThemeSnapshot next{palette, current.semanticIndices, current.syntaxIndices,
+                       {}, {}};
+    next.diffTints =
+        deriveDiffTints(next.palette, next.semanticIndices, next.syntaxIndices);
+    next.selectionFill = deriveSelectionFill(next.palette, next.semanticIndices,
+                                             next.syntaxIndices);
+    return {std::nullopt, next};
 }
 
 std::string_view semanticRoleName(SemanticRole role) {

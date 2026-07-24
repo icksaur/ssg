@@ -17,6 +17,7 @@
 #include <ssg/TabManager.h>
 #include <ssg/TextCodec.h>
 #include <ssg/TextInputCommands.h>
+#include <ssg/Theme.h>
 #include <ssg/TreeModel.h>
 #include <ssg/ShellState.h>
 
@@ -67,6 +68,7 @@ std::vector<CommandDescriptor> p0CommandDescriptors() {
     appendIds(result, SettingsCommandSet{}.descriptors);
     appendIds(result, followEditsCommandSet().descriptors());
     appendIds(result, diffCommandSet().descriptors());
+    appendIds(result, ThemeCommandSet{}.descriptors);
 
     constexpr std::array<std::string_view, 4> viewportCommands{
         "view.toggle_word_wrap", "view.scroll_lines", "view.scroll_pages",
