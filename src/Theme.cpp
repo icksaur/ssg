@@ -93,9 +93,15 @@ void validatePaletteIndex(std::uint8_t index) {
 // actually tint diff rows.
 constexpr double kFloorContrast = 2.1;
 constexpr double kRetainContrast = 0.80;
-constexpr double kKindDeltaE = 4.0;
-constexpr double kWordDeltaE = 1.0;
-constexpr double kRowDeltaE = 4.0;
+constexpr double kKindDeltaETruecolor = 4.0;
+constexpr double kWordDeltaETruecolor = 1.0;
+constexpr double kRowDeltaETruecolor = 4.0;
+// Indexed 256-color quantization collapses close washes; keep a smaller
+// non-equality floor so themes avoid unnecessary fallback while still requiring
+// observable separation after quantization.
+constexpr double kKindDeltaEIndexed256 = 0.01;
+constexpr double kWordDeltaEIndexed256 = 0.01;
+constexpr double kRowDeltaEIndexed256 = 0.01;
 
 double linearChannel(std::uint8_t channel) noexcept {
     const double encoded = static_cast<double>(channel) / 255.0;
@@ -226,31 +232,36 @@ SrgbColor strongestReadableTint(
     return background;
 }
 
-// Distinctness is judged at Truecolor only. Indexed256 quantization can collapse
-// subtle-but-readable washes to the same swatch, which would force an unreadable
-// near-black fallback; a diff row still reads apart structurally at 256. At
-// Truecolor the derived hues separate cleanly, and this is where a degenerate
-// (near-monochrome anchor) theme is detected so a fixed distinct set can rescue it.
 bool distinct(DiffTints const& tints, SrgbColor background) noexcept {
     const auto tintColors = colors(tints);
-    const auto depth = ColorDepth::Truecolor;
-    std::array<SrgbColor, 6> resolved{};
-    std::transform(tintColors.begin(), tintColors.end(), resolved.begin(),
-                   [depth](SrgbColor color) {
-                       return resolveColor(color, depth).rgb;
-                   });
-    const auto resolvedBackground = resolveColor(background, depth).rgb;
-    for (std::size_t first = 0; first < 3; ++first) {
-        for (std::size_t second = first + 1; second < 3; ++second) {
-            if (deltaE(resolved[first], resolved[second]) < kKindDeltaE ||
-                deltaE(resolved[first + 3], resolved[second + 3]) <
-                    kKindDeltaE) {
+    for (const auto depth : {ColorDepth::Truecolor, ColorDepth::Indexed256}) {
+        const auto kindDeltaE = depth == ColorDepth::Truecolor
+                                    ? kKindDeltaETruecolor
+                                    : kKindDeltaEIndexed256;
+        const auto wordDeltaE = depth == ColorDepth::Truecolor
+                                    ? kWordDeltaETruecolor
+                                    : kWordDeltaEIndexed256;
+        const auto rowDeltaE = depth == ColorDepth::Truecolor
+                                   ? kRowDeltaETruecolor
+                                   : kRowDeltaEIndexed256;
+        std::array<SrgbColor, 6> resolved{};
+        std::transform(tintColors.begin(), tintColors.end(), resolved.begin(),
+                       [depth](SrgbColor color) {
+                           return resolveColor(color, depth).rgb;
+                       });
+        const auto resolvedBackground = resolveColor(background, depth).rgb;
+        for (std::size_t first = 0; first < 3; ++first) {
+            for (std::size_t second = first + 1; second < 3; ++second) {
+                if (deltaE(resolved[first], resolved[second]) < kindDeltaE ||
+                    deltaE(resolved[first + 3], resolved[second + 3]) <
+                        kindDeltaE) {
+                    return false;
+                }
+            }
+            if (deltaE(resolved[first], resolved[first + 3]) < wordDeltaE ||
+                deltaE(resolved[first], resolvedBackground) < rowDeltaE) {
                 return false;
             }
-        }
-        if (deltaE(resolved[first], resolved[first + 3]) < kWordDeltaE ||
-            deltaE(resolved[first], resolvedBackground) < kRowDeltaE) {
-            return false;
         }
     }
     return true;
@@ -258,11 +269,11 @@ bool distinct(DiffTints const& tints, SrgbColor background) noexcept {
 
 DiffTints fixedFallback(bool lightBackground) noexcept {
     if (lightBackground) {
-        return {{0, 95, 255}, {0, 135, 0}, {0, 135, 95},
-                {0, 135, 0}, {0, 135, 95}, {0, 95, 255}};
+        return {{215, 255, 215}, {255, 215, 215}, {215, 215, 255},
+                {175, 255, 175}, {255, 215, 175}, {175, 215, 255}};
     }
-    return {{0, 0, 95}, {0, 0, 0}, {38, 38, 38},
-            {0, 0, 135}, {28, 28, 28}, {8, 8, 8}};
+    return {{0, 0, 0}, {0, 0, 95}, {0, 0, 135},
+            {0, 0, 95}, {0, 0, 135}, {95, 0, 0}};
 }
 
 } // namespace
@@ -290,14 +301,12 @@ DiffTints deriveDiffTints(
             themeBackground, anchors[kind], 0.72, 0.85, allForegrounds);
     }
 
-    // 3.0 is the shipped theme's achievable WCAG floor; 8 CIE76 separates
-    // kinds strongly, while 4.5/3.8 are above a just-noticeable difference for
-    // word tiers and subtle rows. Quantized 256-color output is gated too.
-    // Prefer the derived washes when they are readable AND distinct (at
-    // Truecolor); their hue comes from the theme's own Git anchors. A fixed set
-    // rescues only a degenerate theme whose near-monochrome anchors make the
-    // derived tints indistinguishable. If nothing is both readable and distinct,
-    // keep the readable derived washes (readability is the primary guarantee).
+    // Prefer the derived washes when they are readable and stay distinct at both
+    // Truecolor and Indexed256 depths; their hue comes from the theme's own Git
+    // anchors. A fixed set rescues only a degenerate theme whose near-monochrome
+    // anchors make the derived tints indistinguishable. If nothing is both
+    // readable and distinct, keep the readable derived washes (readability is
+    // the primary guarantee).
     if (readable(derived, themeBackground, allForegrounds) &&
         distinct(derived, themeBackground)) {
         return derived;

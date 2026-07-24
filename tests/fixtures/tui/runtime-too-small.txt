@@ -1,6 +1,6 @@
 size 24 3
 palette 1e1e1e d4d4d4 3e3e42 858585 4daafc e5c07b ef4a4a 4caf50 ab47bc 26c0c0 d4956a d16d9e bbbbbb 6a6a6a e8e8e8 ffffff
-diff_tints 283028 322626 2e2b28 263227 372525 302a27
+diff_tints 000000 00005f 000087 00005f 000087 5f0000
 selection_fill 252a2f
 cell 3 1 1 0 0 "t"
 cell 4 1 1 0 0 "e"
