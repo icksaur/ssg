@@ -109,10 +109,24 @@ bool collectDiffFiles(git_repository* repository, git_diff* diff,
 
 class Libgit2Repository final : public GitRepository {
 public:
-    explicit Libgit2Repository(std::filesystem::path root) : root_(std::move(root)) {}
+    explicit Libgit2Repository(std::filesystem::path root)
+        : root_(std::move(root)) {
+        git_repository* repository = nullptr;
+        const int openResult =
+            git_repository_open_ext(&repository, root_.c_str(), 0, nullptr);
+        if (openResult == 0) {
+            available_ = true;
+            git_repository_free(repository);
+        }
+    }
+
+    bool isUsable() const override { return available_; }
 
     GitDiffScan scanDiff(const GitDiffConfig& config) override {
         GitDiffScan result;
+        if (!available_) {
+            return result;
+        }
         git_repository* repository = nullptr;
         const int openResult =
             git_repository_open_ext(&repository, root_.c_str(), 0, nullptr);
@@ -169,6 +183,9 @@ public:
                                  const GitDiffConfig& config) override {
         GitWorkingTreeScan result;
         result.requestedPaths = paths;
+        if (!available_) {
+            return result;
+        }
         git_repository* repository = nullptr;
         const int openResult =
             git_repository_open_ext(&repository, root_.c_str(), 0, nullptr);
@@ -235,6 +252,9 @@ public:
     }
 
     std::optional<std::string> currentBranch() override {
+        if (!available_) {
+            return std::nullopt;
+        }
         git_repository* repository = nullptr;
         const int openResult =
             git_repository_open_ext(&repository, root_.c_str(), 0, nullptr);
@@ -270,6 +290,7 @@ public:
 
 private:
     std::filesystem::path root_;
+    bool available_ = false;
 };
 
 class Libgit2Scope {
@@ -282,6 +303,7 @@ public:
 
 class InertGitRepository final : public GitRepository {
 public:
+    bool isUsable() const override { return false; }
     GitDiffScan scanDiff(const GitDiffConfig&) override { return {}; }
     GitWorkingTreeScan scanPaths(const std::vector<std::filesystem::path>& paths,
                                  const GitDiffConfig&) override {

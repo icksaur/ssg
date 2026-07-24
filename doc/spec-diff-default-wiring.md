@@ -215,19 +215,16 @@ the worker thread itself. Apply the SAME shape here:
 - Thread lifecycle: the worker must stop cleanly on `EditorRuntime` destruction
   with no detached/leaked thread. `ScratchStore`'s shutdown discipline is the
   template for the STOP-SIGNALING pattern (a guarded stop flag + condvar
-  notify + join), but this worker's blocking calls are DIFFERENT in kind from
-  `ScratchStore`'s (disk I/O) and need their own explicit timeout discipline:
-  the libgit2 scan call and the `FilesystemWatcher::poll` call must each be
-  invoked with a BOUNDED timeout (mirroring the watcher's own existing
-  contract: "a poll has a finite caller-supplied timeout, so destruction and
-  shutdown never depend on an uninterruptible background callback" — apply
-  this SAME rule to the worker's libgit2 call, which must not be issued as an
-  unbounded/indefinite blocking call). Concretely: the worker loop's sleep/poll
-  interval is itself the upper bound on shutdown latency (e.g. a 250ms poll
-  wait means destruction blocks at most ~250ms for the thread to notice the
-  stop flag and exit) — no separate cancellation mechanism is needed as long
-  as every blocking call inside the loop is bounded by a timeout the worker
-  itself controls.
+  notify + join). `FilesystemWatcher::poll` is already timeout-bounded; the
+  libgit2 scan calls used here (`git_repository_open_ext`,
+  `git_diff_tree_to_workdir_with_index`, related local object reads) do not
+  expose a strict timeout boundary in this adapter path, so shutdown cannot
+  truthfully be specified as "bounded by poll interval only." The honest
+  contract is: stop is checked immediately before and immediately after each
+  scan call, so the worker exits as soon as any in-flight local scan returns,
+  with no extra sleep layered on top. In practice this design assumes local
+  repository reads are fast (no network I/O), and lifecycle tests enforce a
+  generous finite destruction bound for expected workloads.
 
 ## Risks and Mitigations
 

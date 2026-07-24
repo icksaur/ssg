@@ -7,6 +7,7 @@
 #include <ssg/PromptSurface.h>
 #include <ssg/TextInputCommands.h>
 
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -17,7 +18,9 @@
 namespace {
 
 std::filesystem::path uniqueRoot() {
-    auto root = std::filesystem::current_path() / "runtime_editing";
+    auto root = std::filesystem::temp_directory_path() /
+                ("runtime_editing_" + std::to_string(
+                    std::chrono::steady_clock::now().time_since_epoch().count()));
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
     std::filesystem::create_directories(root / "scratch");

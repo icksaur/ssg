@@ -26,6 +26,8 @@ public:
     std::size_t fullCalls = 0;
     std::size_t pathCalls = 0;
 
+    bool isUsable() const override { return true; }
+
     GitDiffScan scanDiff(const GitDiffConfig&) override {
         ++fullCalls;
         if (fullScans.empty()) {

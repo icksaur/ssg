@@ -24,7 +24,10 @@ std::filesystem::path uniqueRoot(std::string_view name) {
 }
 
 ssg::EditorRuntimeConfig configFor(const std::filesystem::path& root) {
-    return {root / "workspace", root / "scratch", root / "recovery"};
+    ssg::EditorRuntimeConfig config{
+        root / "workspace", root / "scratch", root / "recovery"};
+    config.enableGitDiffWorker = false;
+    return config;
 }
 
 std::string readText(const std::filesystem::path& path) {

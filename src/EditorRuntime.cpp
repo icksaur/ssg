@@ -41,12 +41,6 @@ GitDiffMode gitDiffModeFromEnvironment() {
     return GitDiffMode::Poll;
 }
 
-bool isGitWorkspaceRoot(const std::filesystem::path& root) {
-    std::error_code code;
-    const auto gitPath = root / ".git";
-    return std::filesystem::exists(gitPath, code) && !code;
-}
-
 bool setNonBlocking(int descriptor) {
     const int flags = ::fcntl(descriptor, F_GETFL, 0);
     if (flags == -1) {
@@ -465,10 +459,13 @@ EditorRuntime::Impl::Impl(std::filesystem::path canonicalCwd,
 EditorRuntime::Impl::~Impl() { stopGitDiffWorker(); }
 
 void EditorRuntime::Impl::startGitDiffWorker(bool enable) {
-    if (!enable || !isGitWorkspaceRoot(root)) {
+    if (!enable) {
         return;
     }
     auto state = std::make_unique<GitDiffRefreshWorkerState>(root);
+    if (!state->repository || !state->repository->isUsable()) {
+        return;
+    }
     int wakePipe[2] = {-1, -1};
     if (::pipe(wakePipe) != 0 || !setNonBlocking(wakePipe[0]) ||
         !setNonBlocking(wakePipe[1])) {
@@ -500,6 +497,44 @@ void EditorRuntime::Impl::startGitDiffWorker(bool enable) {
             std::lock_guard lock(worker->mutex);
             return worker->stop;
         };
+        const auto maybeRefreshAll = [&]() -> std::optional<GitDiffRefreshResult> {
+            if (shouldStop()) {
+                return std::nullopt;
+            }
+            try {
+                auto refreshed = worker->source.refresh(*worker->repository);
+                if (shouldStop()) {
+                    return std::nullopt;
+                }
+                return refreshed;
+            } catch (const std::system_error&) {
+                return GitDiffRefreshResult{
+                    .applied = false, .requestedRescan = true, .accepted = false};
+            } catch (const std::exception&) {
+                return GitDiffRefreshResult{
+                    .applied = false, .requestedRescan = true, .accepted = false};
+            }
+        };
+        const auto maybeRefreshPaths =
+            [&](const std::vector<std::filesystem::path>& paths)
+            -> std::optional<GitDiffRefreshResult> {
+            if (shouldStop()) {
+                return std::nullopt;
+            }
+            try {
+                auto refreshed = worker->source.refreshPaths(*worker->repository, paths);
+                if (shouldStop()) {
+                    return std::nullopt;
+                }
+                return refreshed;
+            } catch (const std::system_error&) {
+                return GitDiffRefreshResult{
+                    .applied = false, .requestedRescan = true, .accepted = false};
+            } catch (const std::exception&) {
+                return GitDiffRefreshResult{
+                    .applied = false, .requestedRescan = true, .accepted = false};
+            }
+        };
         const auto scheduleRetry = [&]() {
             std::lock_guard lock(worker->mutex);
             worker->retryPending = true;
@@ -528,28 +563,6 @@ void EditorRuntime::Impl::startGitDiffWorker(bool enable) {
         };
 
         std::function<void(const GitDiffRefreshResult&, bool)> handleResult;
-        const auto refreshAll = [&]() {
-            try {
-                return worker->source.refresh(*worker->repository);
-            } catch (const std::runtime_error&) {
-                return GitDiffRefreshResult{
-                    .applied = false, .requestedRescan = true, .accepted = false};
-            } catch (const std::system_error&) {
-                return GitDiffRefreshResult{
-                    .applied = false, .requestedRescan = true, .accepted = false};
-            }
-        };
-        const auto refreshPaths = [&](const std::vector<std::filesystem::path>& paths) {
-            try {
-                return worker->source.refreshPaths(*worker->repository, paths);
-            } catch (const std::runtime_error&) {
-                return GitDiffRefreshResult{
-                    .applied = false, .requestedRescan = true, .accepted = false};
-            } catch (const std::system_error&) {
-                return GitDiffRefreshResult{
-                    .applied = false, .requestedRescan = true, .accepted = false};
-            }
-        };
         handleResult = [&](const GitDiffRefreshResult& refreshed, bool fullRefresh) {
             if (refreshed.applied) {
                 queueLatestScan();
@@ -557,14 +570,22 @@ void EditorRuntime::Impl::startGitDiffWorker(bool enable) {
             }
             if (!refreshed.accepted || refreshed.requestedRescan) {
                 if (!fullRefresh) {
-                    handleResult(refreshAll(), true);
+                    auto full = maybeRefreshAll();
+                    if (!full) {
+                        return;
+                    }
+                    handleResult(*full, true);
                     return;
                 }
                 scheduleRetry();
             }
         };
 
-        handleResult(refreshAll(), true);
+        if (auto first = maybeRefreshAll()) {
+            handleResult(*first, true);
+        } else {
+            return;
+        }
         auto nextPoll = std::chrono::steady_clock::now() + kGitDiffPollInterval;
         while (!shouldStop()) {
             if (worker->mode == GitDiffMode::Poll) {
@@ -600,10 +621,18 @@ void EditorRuntime::Impl::startGitDiffWorker(bool enable) {
                 try {
                     events = worker->watcher->poll(timeout);
                 } catch (const std::runtime_error&) {
-                    handleResult(refreshAll(), true);
+                    auto full = maybeRefreshAll();
+                    if (!full) {
+                        break;
+                    }
+                    handleResult(*full, true);
                     continue;
                 } catch (const std::system_error&) {
-                    handleResult(refreshAll(), true);
+                    auto full = maybeRefreshAll();
+                    if (!full) {
+                        break;
+                    }
+                    handleResult(*full, true);
                     continue;
                 }
                 bool overflowed = false;
@@ -620,11 +649,19 @@ void EditorRuntime::Impl::startGitDiffWorker(bool enable) {
                     }
                 }
                 if (overflowed) {
-                    handleResult(refreshAll(), true);
+                    auto full = maybeRefreshAll();
+                    if (!full) {
+                        break;
+                    }
+                    handleResult(*full, true);
                 } else if (!paths.empty()) {
                     std::sort(paths.begin(), paths.end());
                     paths.erase(std::unique(paths.begin(), paths.end()), paths.end());
-                    handleResult(refreshPaths(paths), false);
+                    auto pathRefresh = maybeRefreshPaths(paths);
+                    if (!pathRefresh) {
+                        break;
+                    }
+                    handleResult(*pathRefresh, false);
                 }
             }
 
@@ -635,10 +672,18 @@ void EditorRuntime::Impl::startGitDiffWorker(bool enable) {
                 retryDue = worker->retryPending && now >= worker->nextRetry;
             }
             if (retryDue) {
-                handleResult(refreshAll(), true);
+                auto full = maybeRefreshAll();
+                if (!full) {
+                    break;
+                }
+                handleResult(*full, true);
             }
             if (worker->mode == GitDiffMode::Poll && now >= nextPoll) {
-                handleResult(refreshAll(), true);
+                auto full = maybeRefreshAll();
+                if (!full) {
+                    break;
+                }
+                handleResult(*full, true);
                 nextPoll = now + kGitDiffPollInterval;
             }
         }

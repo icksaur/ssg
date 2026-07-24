@@ -65,6 +65,7 @@ class GitRepository {
 public:
     virtual ~GitRepository() = default;
 
+    [[nodiscard]] virtual bool isUsable() const = 0;
     [[nodiscard]] virtual GitDiffScan scanDiff(const GitDiffConfig& config) = 0;
     [[nodiscard]] virtual GitWorkingTreeScan scanPaths(
         const std::vector<std::filesystem::path>& paths,

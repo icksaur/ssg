@@ -2,6 +2,7 @@
 #include "test_helpers.h"
 
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cstdlib>
 #include <cstdio>
@@ -153,7 +154,7 @@ bool waitForGitTreeStatuses(ssg::EditorRuntime& runtime,
 TEST(gitDiffHostWorkerPollingAndEventRefreshProduceExpectedDiffView) {
     for (const char* mode : {"poll", "event"}) {
         ScopedGitDiffMode scopedMode{mode};
-    const auto uniqueSuffix =
+        const auto uniqueSuffix =
             std::to_string(
                 std::chrono::steady_clock::now().time_since_epoch().count());
         auto root = fs::temp_directory_path() / ("ssg-git-host-worker-" + uniqueSuffix);
@@ -212,6 +213,53 @@ TEST(gitDiffHostWorkerPollingAndEventRefreshProduceExpectedDiffView) {
         fs::remove_all(root);
         fs::remove_all(stateRoot);
     }
+}
+
+TEST(gitDiffHostWorkerStartsFromSubdirectoryWorkspace) {
+    ScopedGitDiffMode scopedMode{"poll"};
+    const auto uniqueSuffix =
+        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    auto root = fs::temp_directory_path() / ("ssg-git-subdir-host-" + uniqueSuffix);
+    auto subdir = root / "src";
+    auto stateRoot =
+        fs::temp_directory_path() / ("ssg-git-subdir-host-state-" + uniqueSuffix);
+    fs::remove_all(root);
+    fs::remove_all(stateRoot);
+    fs::create_directories(subdir);
+    fs::create_directories(stateRoot / "scratch");
+    fs::create_directories(stateRoot / "recovery");
+    std::ofstream{root / "src" / "tracked.txt"} << "v1\n";
+    ASSERT_EQ(runStatus(root, "init"), 0);
+    ASSERT_EQ(runStatus(root, "config user.email a@b.c"), 0);
+    ASSERT_EQ(runStatus(root, "config user.name tester"), 0);
+    ASSERT_EQ(runStatus(root, "add src/tracked.txt"), 0);
+    ASSERT_EQ(runStatus(root, "commit -m init"), 0);
+
+    auto created = ssg::EditorRuntime::create(
+        {subdir, stateRoot / "scratch", stateRoot / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(
+        runtime
+            .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                    ssg::ViewId{1})
+            .accepted());
+    ASSERT_TRUE(runtime.gitDiffWakeDescriptor() >= 0);
+
+    std::ofstream{root / "src" / "tracked.txt"} << "v2\n";
+    ASSERT_EQ(runStatus(root, "add src/tracked.txt"), 0);
+    ASSERT_TRUE(waitForDiffCount(runtime, 1, std::chrono::milliseconds{3000}));
+
+    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    ASSERT_EQ(snapshot->sections().diff.files.size(), std::size_t{1});
+    ASSERT_EQ(snapshot->sections().diff.files.front().id,
+              ssg::DiffFileId{"src/tracked.txt"});
+
+    fs::remove_all(root);
+    fs::remove_all(stateRoot);
 }
 
 TEST(gitDiffHostWorkerPublishesGitTreeProviderMatchingPorcelain) {
@@ -304,14 +352,30 @@ TEST(gitDiffHostWorkerLifecycleHasBoundedShutdownLatency) {
                             ->attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                                      ssg::ViewId{1})
                             .accepted());
+            ASSERT_TRUE(created.runtime->gitDiffWakeDescriptor() >= 0);
+
+            std::atomic<bool> churn{true};
+            std::thread writer([&]() {
+                bool high = false;
+                while (churn.load(std::memory_order_relaxed)) {
+                    std::ofstream{root / "tracked.txt"}
+                        << (high ? "v2\n" : "v3\n");
+                    (void)runStatus(root, "add tracked.txt");
+                    high = !high;
+                    std::this_thread::sleep_for(std::chrono::milliseconds{20});
+                }
+            });
+            std::this_thread::sleep_for(std::chrono::milliseconds{200});
 
             auto runtime = std::move(created.runtime);
             const auto start = std::chrono::steady_clock::now();
             runtime.reset();
+            churn.store(false, std::memory_order_relaxed);
+            writer.join();
             const auto elapsed =
                 std::chrono::duration_cast<std::chrono::milliseconds>(
                     std::chrono::steady_clock::now() - start);
-            ASSERT_TRUE(elapsed < std::chrono::milliseconds{1500});
+            ASSERT_TRUE(elapsed < std::chrono::milliseconds{3000});
             fs::remove_all(stateRoot);
         }
     }
@@ -322,6 +386,7 @@ TEST(gitDiffHostWorkerLifecycleHasBoundedShutdownLatency) {
 
 int main() {
     RUN(gitDiffHostWorkerPollingAndEventRefreshProduceExpectedDiffView);
+    RUN(gitDiffHostWorkerStartsFromSubdirectoryWorkspace);
     RUN(gitDiffHostWorkerPublishesGitTreeProviderMatchingPorcelain);
     RUN(gitDiffHostWorkerLifecycleHasBoundedShutdownLatency);
     std::cout << "\nPassed: " << passed << " Failed: " << failed << "\n";
