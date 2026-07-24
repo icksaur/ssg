@@ -242,10 +242,15 @@ confirm rather than assume).
   (e.g. anchors rotated to unconventional hues, still well-separated) to
   prove the joint search generalizes and is not accidentally tuned to the
   shipped palette's exact numbers.
-- The joint search's exact stepping strategy (how weight/saturation are
-  walked, in what order, what step size) is a MECHANISM, not an invariant
-  — implement whatever concretely satisfies the Acceptance oracles; do not
-  over-specify the interpolation math here.
+- The joint search's stepping strategy IS now settled above (Fix 1: fixed
+  integer grid, weight-outer/saturation-inner strictly-decreasing order,
+  tie-break to highest saturation) — this is deliberately more prescriptive
+  than a typical "mechanism, not invariant" freedom, because the earlier,
+  looser version of this spec left it open and a reviewer correctly flagged
+  that as a real risk of re-devolving into ad hoc tuning. Do not treat the
+  settled grid/order/tie-break as optional; only truly free choices (e.g.
+  the exact percentage step size, if a value other than whole percentage
+  points is used) remain implementation discretion.
 - `fixedFallback`'s synthetic hue angles (green≈120°, red≈0°, orange≈30–40°)
   are themselves a design choice belonging to this feature, not a project-
   wide invariant — document the chosen angles with a brief code comment
