@@ -16,7 +16,9 @@
 #include <ssg/HitTester.h>
 #include <ssg/FindReplace.h>
 #include <ssg/Keymap.h>
+#include <ssg/LuaCommandHost.h>
 #include <ssg/PaletteSearcher.h>
+#include <ssg/platform_files.h>
 #include <ssg/session_snapshot.h>
 #include <ssg/TextInputCommands.h>
 
@@ -36,7 +38,9 @@
 #include <algorithm>
 #include <any>
 #include <filesystem>
+#include <fstream>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -203,6 +207,102 @@ void popCodePoint(std::string& text) {
     if (!text.empty()) text.pop_back();
 }
 
+// The reserved client id for the one-shot init-script Lua host (distinct
+// from the interactive client's ClientId{1}) -- attached ONLY while
+// init.lua is being evaluated, then detached, so this synthetic client
+// leaves no lasting per-client state (follow-edits tracking, viewport,
+// etc.) once startup configuration has run.
+ssg::ClientId const kInitScriptClientId{2};
+
+// The catalog of commands init.lua may call via ssg.command(id, args), and
+// the capabilities the init-script Lua host is granted (a NAMED, explicit
+// grant list -- see doc/spec-config.md's Risks: never a wildcard/all-
+// capabilities grant, even though init.lua is a local, user-authored file).
+// theme.define requires none today; a future capability-gated init-script
+// command must be added to BOTH this catalog and the grant list below, or
+// InvocationPrincipal::hasCapability denies it by default, same as any
+// other Lua caller.
+std::vector<ssg::LuaCommand> initScriptCommandCatalog() {
+    return {{"theme.define", {}}};
+}
+
+// Translates one ssg.command(id, args) call from init.lua into the matching
+// ClientCommand payload and dispatches it through the SAME command
+// boundary the palette and every other caller uses. Only theme.define
+// exists today (v1's one config scenario); a later init-script command
+// adds one more `if (invocation.commandId == ...)` branch here, not a new
+// dispatch mechanism.
+ssg::CommandHandlerResult dispatchInitScriptCommand(
+    ssg::EditorRuntime& runtime, ssg::LuaInvocation const& invocation) {
+    if (invocation.commandId == "theme.define") {
+        ssg::ThemeDefineArguments arguments;
+        if (invocation.arguments) arguments.colors = *invocation.arguments;
+        auto result = runtime.dispatch(
+            kInitScriptClientId,
+            {"theme.define", runtime.revision(), arguments});
+        return result.accepted()
+                   ? ssg::CommandHandlerResult::success()
+                   : ssg::CommandHandlerResult::failure(result.message);
+    }
+    return ssg::CommandHandlerResult::failure(
+        "unknown init-script command: " + std::string{invocation.commandId});
+}
+
+// Loads and evaluates `~/.config/ssg/init.lua` (or the platform equivalent)
+// through the existing sandboxed LuaCommandHost, exactly once at startup.
+// Absent file: silently skipped (the normal no-config case, not an error).
+// Present-but-broken file, or an unresolvable config root (e.g. HOME
+// unset): a one-line stderr diagnostic, startup continues regardless --
+// a broken config script must never block opening the editor (see
+// doc/spec-config.md's Invariants).
+void loadInitScript(ssg::EditorRuntime& runtime) {
+    std::filesystem::path scriptPath;
+    try {
+        scriptPath = ssg::userConfigRoot("ssg") / "init.lua";
+    } catch (std::exception const& error) {
+        std::fprintf(stderr, "ssg: could not resolve config directory: %s\n",
+                    error.what());
+        return;
+    }
+
+    std::error_code exists;
+    if (!std::filesystem::exists(scriptPath, exists) || exists) {
+        return;
+    }
+
+    std::ifstream input{scriptPath, std::ios::binary};
+    if (!input) {
+        std::fprintf(stderr, "ssg: could not read %s\n",
+                    scriptPath.string().c_str());
+        return;
+    }
+    std::ostringstream buffer;
+    buffer << input.rdbuf();
+    auto const script = buffer.str();
+
+    if (!runtime
+             .attach({kInitScriptClientId, ssg::InvocationOrigin::Lua, {}},
+                     ssg::ViewId{0})
+             .accepted()) {
+        std::fprintf(stderr, "ssg: could not start init-script host\n");
+        return;
+    }
+
+    ssg::LuaCommandHostOptions options;
+    options.pluginId = kInitScriptClientId;
+    options.commands = initScriptCommandCatalog();
+    ssg::LuaCommandHost host{
+        std::move(options), [&runtime](ssg::LuaInvocation const& invocation) {
+            return dispatchInitScriptCommand(runtime, invocation);
+        }};
+    auto const result = host.evaluate(script);
+    if (!result.accepted()) {
+        std::fprintf(stderr, "ssg: %s: %s\n", scriptPath.string().c_str(),
+                    result.message.c_str());
+    }
+    (void)runtime.detach(kInitScriptClientId);
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -240,6 +340,9 @@ int main(int argc, char** argv) {
         return 1;
     }
     STARTUP_MARK("post_attach");
+
+    loadInitScript(runtime);
+    STARTUP_MARK("post_init_script");
 
     if (target.file) {
         if (fs::exists(target.cwd / *target.file)) {
