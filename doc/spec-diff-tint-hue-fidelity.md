@@ -12,21 +12,29 @@ palette exist in the codebase at all, undetected by the project's own
 color-authority scanner, and states the forward invariant that no presentation
 color may ever be a literal unrelated to the active theme.
 
-**Addendum (empirical finding during implementation, folded in before
-completion):** implementing Fix 1's joint search found a genuine,
-irreducible conflict for the shipped theme's `GitDeleted` (red) anchor: no
-interpolation weight simultaneously satisfies `readable()`'s
-`kRetainContrast=0.80` (retain 80% of background's contrast against every
-syntax foreground — pushes the wash to stay CLOSE to background) and
-`kRowDeltaEIndexed256=4.0` (a genuine, non-collapsing separation from
-background at Indexed256 — pushes the wash AWAY from background) at the
-SAME time. The best readable candidate found was only ~ΔE 0 apart from
-background at Indexed256 (i.e. still invisible — the original bug); the
-best visually-distinct candidate failed readability outright. `Fix 0`
-below resolves this by loosening the RETAIN fraction specifically at
-Indexed256 (mirroring the ALREADY-EXISTING pattern of separate
-Truecolor/Indexed256 constants for the ΔE thresholds) — Truecolor is
-unaffected and already works correctly with the stricter retention.
+**Addendum 1 (empirical finding during implementation):** an early attempt
+at a JOINT, ordered, cross-kind search (locking each Git-role kind's color
+in turn and requiring it be distinct from every already-locked kind, at
+Indexed256) found a genuine, irreducible conflict for the shipped theme's
+`GitDeleted` (red) anchor — no interpolation weight simultaneously
+satisfied readability and background-distinctness once the Added kind had
+already claimed the same narrow dark-and-readable zone. This was NOT
+resolved by loosening `kRetainContrast` alone (swept 0.80 down to 0.40,
+still infeasible after the Added lock) — the JOINT/ORDERED design itself
+was the problem, not a threshold value.
+
+**Addendum 2 (final decision, supersedes Addendum 1's approach):** rather
+than pursue a more complex backtracking search to rescue the joint design,
+this spec DESCOPES mutual inter-KIND distinctness to Truecolor only
+(Truecolor is the default, primary rendering path since
+`doc/spec-color-depth-defaults.md` and works correctly today with no
+further changes). At Indexed256 — now an explicitly secondary path — a
+tint must still be readable and distinct from plain BACKGROUND (fixing the
+original invisible-grey bug), but two different change KINDS are no longer
+required to be mutually distinguishable from each other at that depth.
+This eliminates the joint/ordered/locking search entirely: each kind is
+derived fully independently again (see Design), which is both simpler and
+sufficient for the stated priority (Truecolor correctness first).
 
 ## Goals
 
@@ -80,112 +88,80 @@ stops at the first weight where `readable()` (which already checks both
 depths) passes — it has NEVER accounted for whether the resulting TRIPLE
 stays mutually distinct once quantized; distinctness is checked only as an
 all-or-nothing gate on the finished set, with no ability to nudge an
-
-### Fix 0 — `kRetainContrast` split by depth (the empirical unblock)
-
-Implementing Fix 1's joint search (below) surfaced a SECOND, independent
-tuning defect, distinct from the distinctness-threshold work: for the
-shipped theme's `GitDeleted` (red) anchor, `readable()`'s
-`kRetainContrast=0.80` and `distinct()`'s `kRowDeltaEIndexed256=4.0`
-(from `doc/spec-color-depth-defaults.md`) are jointly infeasible at
-Indexed256 — no interpolation weight satisfies both. Retaining 80% of
-contrast forces the wash to sit close to background (low weight); reaching
-a genuine, non-collapsing ΔE≥4 separation from background at Indexed256's
-coarse palette requires moving further away (higher weight). For this
-specific anchor/background/foreground combination the two requirements do
-not overlap: the best `readable()`-passing candidate found is only ~ΔE 0
-from background (still invisible — the ORIGINAL bug), and the best
-`distinct()`-passing candidate fails `readable()` outright.
-
-`kRetainContrast` is a RELATIVE readability floor — a fraction of how much
-contrast the plain background already had against a foreground before any
-tint is applied. It is NOT inherently tied to color depth the way the ΔE
-distinctness thresholds are (those exist specifically because Indexed256's
-palette geometry is coarser). But it is the ONLY currently-Truecolor-only-
-tuned knob that, empirically, has room to loosen without reopening the
-original bug: `kFloorContrast=2.1` remains as a hard ABSOLUTE floor
-regardless of the retained fraction, so loosening the RELATIVE retention
-still keeps a real, non-negotiable minimum contrast guarantee — it only
-permits a tint to move further from a purely-relative target, within an
-already-bounded absolute safety net.
-
-Fix: split `kRetainContrast` into `kRetainContrastTruecolor` (keep the
-existing `0.80` — Truecolor has no quantization tension, so the stricter
-retention is both achievable and desirable there) and
-`kRetainContrastIndexed256` (a new, empirically-determined looser value —
-this is a MECHANISM constant, tune it during implementation to the
-smallest loosening that lets the shipped theme's `GitDeleted` anchor (and
-the other two anchors, and the near-monochrome/light-theme/new synthetic
-fixture themes) jointly satisfy `readable()` and `distinct()` at
-Indexed256 via the Fix 1 search — do not loosen further than empirically
-necessary). `readable()` (`~200-216`) selects the per-depth constant
-inside its existing `for (depth : {Truecolor, Indexed256})` loop, mirroring
-EXACTLY how `distinct()` already selects per-depth ΔE thresholds inside its
-own depth loop — no new structural pattern, just extending the one already
-in place to a constant it had not yet needed to split.
-
-**Minimality is a FALSIFIABLE property (settled, not a narrative claim):**
-"smallest loosening" must be provable, not asserted. When choosing the
-final `kRetainContrastIndexed256` value during implementation, also test
-ONE step STRICTER (e.g. +0.05 above the chosen value, on whatever step
-granularity implementation uses) and confirm it FAILS to let the shipped
-theme's `GitDeleted` anchor reach a jointly-readable-and-distinct Indexed256
-candidate via the Fix 1 search. Record both results (chosen value succeeds;
-one-step-stricter value fails) directly in the implementing commit message
-and as an explicit code comment alongside the constant (mirroring
-`kFloorContrast`'s existing comment style) — this makes "minimal" a
-checked, falsifiable fact instead of a narrative intention, and gives any
-future reviewer a concrete anchor to re-verify against rather than
-re-deriving the empirical sweep from scratch.
 individual kind's tint further from another kind's if they end up too close
-post-quantization. Tightening the ACCEPTANCE gate without also giving the
-SEARCH a way to satisfy the new, stricter target was the actual mistake —
-this spec fixes the search, not by loosening the gate back down (which
-would silently reintroduce the original invisible-grey bug), but by making
-the search good enough to meet the existing, correct target.
+post-quantization.
 
-### Fix 1 — joint, hue-preserving derivation search (the real fix)
+### DESCOPE (empirical finding during implementation, folded in before
+completion): mutual inter-kind distinctness at Indexed256 is dropped
 
-Replace the current "derive independently per kind, gate the whole set,
-give up to a literal fallback on any failure" flow with a search that:
+Implementation attempted a joint, per-kind search (locking kinds in a fixed
+order and requiring each new kind's candidate be distinct from every
+already-fixed kind at the same tier, at Indexed256) and found it
+STRUCTURALLY infeasible, not merely mistunable: once the first kind
+(Added) locks in a color, that color occupies the same narrow
+readable-and-near-background zone every OTHER kind's readable candidates
+also live in at Indexed256's coarse resolution — dark, low-saturation
+washes of DIFFERENT hues still collapse numerically close to each other at
+that depth. A documented sweep of the retain-contrast floor from 0.80 down
+to 0.40 could not unblock the Deleted kind after Added was locked, at any
+value — this is not a threshold-tuning problem, it is the inter-kind
+distinctness-at-Indexed256 requirement itself being unsatisfiable for real,
+legitimately-different-hued anchors sharing one dark background.
 
-- Still derives each kind's hue SOLELY from its own theme Git anchor
-  (`GitAdded`/`GitDeleted`/`GitModified`) — never a hardcoded hue.
-- For the row tint tier, instead of one fixed (weight, retainedSaturation)
-  pair applied uniformly to all three kinds, allow the search to walk BOTH
-  weight and retained-saturation jointly per kind, continuing past the
-  first-readable point to also require the CURRENT candidate is
-  `distinct()`-separated from the background and from the SAME tier's other
-  two already-chosen kinds (row-vs-row, word-vs-word) at BOTH Truecolor and
-  Indexed256 — i.e. distinctness becomes part of the per-kind stopping
-  condition, not a global post-hoc gate over independently-chosen values.
-  Process kinds in a fixed, deterministic order (Added, then Deleted, then
-  Modified) so each new kind's search is aware of the already-fixed
-  colors before it.
-- **Deterministic bounds and tie-break (settled, not left to
-  implementation choice):** candidates are enumerated on a fixed integer
-  grid — weight and retainedSaturation each stepped in whole percentage
-  points from the kind's existing starting ceiling (row: 40%/60%; word:
-  72%/85%, unchanged as upper bounds) DOWN to 1%, in that order (weight
-  outer loop, retainedSaturation inner loop, both strictly decreasing, so
-  the walk is finite — at most 100×100 candidates per kind — and always
-  terminates). The FIRST candidate (in this fixed enumeration order) that
-  passes readable() AND is distinct from the background and from every
-  already-fixed kind at this tier, at both depths, is chosen — ties (more
-  than one candidate at the same weight passing) break to the HIGHEST
-  retainedSaturation at that weight (preserves as much of the anchor's
-  original hue/chroma as possible; weight is prioritized over saturation
-  because weight controls how strongly the anchor blends into the
-  background — the primary lightness/wash-strength knob — while retained
-  saturation is the secondary color-purity knob). If the entire grid is
-  exhausted with no passing candidate for a kind, derivation for the WHOLE
-  six-tuple fails and the rescue path (Fix 2) is used — this is the only
-  case a real (non-degenerate) theme should reach it, and Acceptance
-  requires proving the shipped theme does not.
-- If, after this joint search, the six-tuple is readable and distinct at
-  both depths, return it — the shipped theme's clearly-separated anchors are
-  expected to succeed here without ever reaching a fallback (this is the
-  Acceptance oracle below).
+**Decision (explicit priority call): Truecolor is the primary, default-path
+target and works correctly today with no changes needed — Indexed256 is a
+secondary, explicitly-opted-into fallback path (`SSG_COLOR_DEPTH=256`, or a
+genuinely non-truecolor terminal) and does not need the SAME strength of
+guarantee.** Accordingly, DROP the pairwise inter-KIND distinctness
+requirement (`kKindDeltaE`) at Indexed256 entirely — keep it, unchanged, at
+Truecolor, where three real hues remain easily and cheaply separable and
+this guarantee is worth keeping. At Indexed256, require ONLY: (a)
+`readable()` (contrast against every syntax foreground — UNCHANGED,
+`kRetainContrast`/`kFloorContrast` revert to ONE constant each again, no
+Truecolor/Indexed256 split needed since there is no longer a competing
+inter-kind constraint pulling in the opposite direction), and (b)
+`distinct()`-from-BACKGROUND only (`kRowDeltaE`/`kWordDeltaE`, unchanged,
+still checked at both depths) — i.e. a tint must still be genuinely
+visible against the plain background at Indexed256 (the ORIGINAL bug —
+identical-to-background — remains fixed), but two DIFFERENT kinds (e.g.
+Added vs Modified) are no longer required to be distinguishable from EACH
+OTHER at Indexed256. This is an accepted, explicit, documented degradation
+for the secondary depth: at Indexed256 a user can reliably tell "something
+changed here" (real separation from unmodified text) even if two change
+KINDS render as a similar dark wash; at Truecolor (the default, primary
+path) all three kinds remain both readable, mutually distinct, AND
+correctly hued.
+
+This ELIMINATES the joint/ordered/locking search entirely — with no
+cross-kind constraint left to satisfy at Indexed256, and Truecolor's
+existing constraints already achievable independently per kind (this is
+exactly the ORIGINAL, pre-this-session `strongestReadableTint` shape,
+which already passed Truecolor's requirements fine), each kind is derived
+FULLY INDEPENDENTLY again — no fixed processing order, no lock-in, no
+backtracking, no per-kind grid search needed. `strongestReadableTint`'s
+existing single-weight-descent loop (already correct in spirit) simply
+needs its stopping condition to ALSO require `distinct()`-from-background
+at whichever depths currently apply (both, using the now-narrower
+Indexed256 check above) before accepting a candidate — a small, local
+change, not a new search algorithm.
+
+### Fix 1 — background-only distinctness stopping condition (the real fix)
+
+Replace `strongestReadableTint`'s stopping condition (currently: first
+weight where `readable()` passes) with: first weight where `readable()`
+passes AND the candidate is `distinct()`-from-background (row tier:
+`kRowDeltaE`; word tier: `kWordDeltaE`) at BOTH Truecolor and Indexed256.
+Each of the three kinds continues to be derived independently, in any
+order (order no longer matters — there is no cross-kind interaction left).
+After all three kinds are derived, a SEPARATE, existing check —
+`distinct()`'s inter-kind pairwise comparison — runs ONLY at Truecolor
+(not Indexed256, per the descope above) to confirm the three real hues
+stay mutually separable there; Indexed256 has no equivalent inter-kind
+check.
+- If, after this, the six-tuple is readable, background-distinct at both
+  depths, AND Truecolor-inter-kind-distinct, return it — the shipped
+  theme's clearly-separated anchors are expected to succeed here without
+  ever reaching a fallback (this is the Acceptance oracle below).
 - Fallback is reserved for GENUINELY degenerate cases (anchors that are
   themselves near-identical, e.g. the existing
   `nearMonochromeAnchorsUseAReadableDistinctFallback` fixture) where no
@@ -293,16 +269,19 @@ confirm rather than assume).
   unaffected; this spec touches only tint COLOR derivation, not diff
   computation.
 - Existing readability/distinctness contract from
-  `doc/spec-color-depth-defaults.md` — the DISTINCTNESS requirement
-  (`kKindDeltaEIndexed256`/`kWordDeltaEIndexed256`/`kRowDeltaEIndexed256`)
-  is PRESERVED, not loosened, by this spec — it makes the search capable of
-  MEETING that requirement with theme-derived hues instead of giving up to
-  an unrelated palette. The READABILITY requirement's Indexed256 RELATIVE
-  retention (`kRetainContrastIndexed256`, Fix 0) IS loosened, but its
-  ABSOLUTE floor (`kFloorContrast=2.1`) is NOT — every diff tint remains
-  guaranteed a real, non-negotiable minimum contrast against every syntax
-  foreground at every depth, regardless of how the relative fraction is
-  tuned.
+  `doc/spec-color-depth-defaults.md` — the READABILITY requirement
+  (`kRetainContrast`/`kFloorContrast`) and the BACKGROUND-distinctness
+  requirement (`kRowDeltaE`/`kWordDeltaE`) are UNCHANGED (one constant
+  each again, no per-depth split needed) and apply at both depths, so the
+  original invisible-grey bug (a tint identical to background) remains
+  fixed at Indexed256 exactly as before. The INTER-KIND distinctness
+  requirement (`kKindDeltaE`) is EXPLICITLY DESCOPED to Truecolor only, per
+  a deliberate priority decision recorded above — Indexed256 no longer
+  guarantees two different change KINDS render as visually distinguishable
+  from EACH OTHER, only that each remains readable and distinguishable
+  from plain background. This is a narrowing of what
+  `doc/spec-color-depth-defaults.md` established, made explicit and
+  intentional, not an accidental regression.
 
 ## Considerations
 
@@ -319,17 +298,18 @@ confirm rather than assume).
   test this generality; add at least one more synthetic fixture theme with
   a DIFFERENT, clearly-separated (non-degenerate) anchor hue arrangement
   (e.g. anchors rotated to unconventional hues, still well-separated) to
-  prove the joint search generalizes and is not accidentally tuned to the
-  shipped palette's exact numbers.
-- The joint search's stepping strategy IS now settled above (Fix 1: fixed
-  integer grid, weight-outer/saturation-inner strictly-decreasing order,
-  tie-break to highest saturation) — this is deliberately more prescriptive
-  than a typical "mechanism, not invariant" freedom, because the earlier,
-  looser version of this spec left it open and a reviewer correctly flagged
-  that as a real risk of re-devolving into ad hoc tuning. Do not treat the
-  settled grid/order/tie-break as optional; only truly free choices (e.g.
-  the exact percentage step size, if a value other than whole percentage
-  points is used) remain implementation discretion.
+  prove the per-kind derivation generalizes and is not accidentally tuned
+  to the shipped palette's exact numbers.
+- The per-kind derivation's stepping strategy (Fix 1: `strongestReadableTint`'s
+  existing single-weight-descent loop, now ALSO requiring
+  background-distinctness at its stopping condition) is a small, local
+  change to an already-correct-in-shape function — no joint/ordered/locking
+  search is needed once inter-kind distinctness is scoped to Truecolor only
+  (Design), since there is no longer any cross-kind interaction to
+  coordinate. This is deliberately the SIMPLER of the two designs this spec
+  considered; the more complex joint-search design was abandoned during
+  implementation when it proved structurally infeasible for the shipped
+  theme, not merely mistunable (see Design).
 - `fixedFallback`'s synthetic hue angles (green≈120°, red≈0°, orange≈30–40°)
   are themselves a design choice belonging to this feature, not a project-
   wide invariant — document the chosen angles with a brief code comment
@@ -346,12 +326,13 @@ confirm rather than assume).
 
 ## Risks and Mitigations
 
-- The joint search could still fail to find a jointly-readable-and-distinct
-  triple for SOME real (non-shipped) theme with unusually close anchor hues
-  that are nonetheless not degenerate enough to be "near-monochrome" ⇒ the
-  rescue path (Fix 2) exists for exactly this residual case, and — critically
-  — is now ALSO theme-derived, so even a rescue no longer reproduces this
-  bug's git-semantically-wrong blue/black palette.
+- Each kind's independent derivation could still fail to find a
+  readable-and-background-distinct candidate for SOME real (non-shipped)
+  theme with an unusually extreme anchor (e.g. near-identical to
+  background itself) ⇒ the rescue path (Fix 2) exists for exactly this
+  residual case, and — critically — is now ALSO theme-derived, so even a
+  rescue no longer reproduces this bug's git-semantically-wrong blue/black
+  palette.
 - A hue-fidelity oracle with too tight an angular tolerance could itself
   force unnecessary fallback for a legitimately-hued but slightly-rotated
   theme color ⇒ choose a generous tolerance (e.g. ±30–40° from the anchor's
@@ -374,10 +355,15 @@ confirm rather than assume).
   against a real git repo with add/modify/delete, show clearly green-family
   (added), red-family (removed/deleted), and the theme's own modified-color
   family (orange-family, for the shipped theme) tints — NOT the
-  black/dark-blue/blue/bright-red palette from this bug — at BOTH the new
-  Truecolor default AND a forced `SSG_COLOR_DEPTH=256`. Visual signoff
-  required (this is the same user-visible rendering property the earlier
-  color-depth-defaults spec targeted, now corrected).
+  black/dark-blue/blue/bright-red palette from this bug — at the new
+  Truecolor default (the primary target). At a forced `SSG_COLOR_DEPTH=256`,
+  each tint remains readable and visibly different from plain background
+  (the original bug is fixed there too), though two different change kinds
+  are no longer guaranteed to be mutually distinguishable from each other at
+  that depth (an explicit, documented priority call — see Design). Visual
+  signoff required (this is the same user-visible rendering property the
+  earlier color-depth-defaults spec targeted, now corrected, with Truecolor
+  as the primary target).
 - Gates: `bash scripts/check.sh` green with and without `SSG_TREESITTER`.
 - Oracles:
   - hue-fidelity (write FIRST, must FAIL against current/`c3d0003` code):
@@ -390,43 +376,54 @@ confirm rather than assume).
     (settled, not left ambiguous)** — `deriveDiffTints` gains an internal
     result type (or the existing function is split into a testable helper
     plus a thin public wrapper) that reports WHICH path produced the
-    returned tints: `Primary` (the joint anchor-derived search succeeded)
-    or `Rescue` (the search exhausted and the synthetic-hue fallback was
-    used). This is test-only-visible detail (e.g. an overload or a
-    `namespace ssg::testing`-style accessor), not a change to
-    `DiffTints`'s public shape or the render path, which only ever needs
-    the final colors. The test asserts the shipped default theme's path is
-    `Primary`, directly and unambiguously — no need to infer it indirectly
-    from hue correlation. This directly answers reviewer scrutiny: the
-    hue-fidelity oracle alone cannot distinguish "primary path, correctly
-    hued" from "rescue path, ALSO correctly hued" (both are expected to
-    pass hue-fidelity once Fix 2 lands) — the path-reporting seam is what
-    makes "the shipped theme never needs rescue" a directly provable,
-    non-circular fact rather than an inference.
+    returned tints: `Primary` (each kind's independent derivation
+    succeeded) or `Rescue` (a kind's derivation exhausted and the
+    synthetic-hue fallback was used). This is test-only-visible detail
+    (e.g. an overload or a `namespace ssg::testing`-style accessor), not a
+    change to `DiffTints`'s public shape or the render path, which only
+    ever needs the final colors. The test asserts the shipped default
+    theme's path is `Primary`, directly and unambiguously — no need to
+    infer it indirectly from hue correlation. This directly answers
+    reviewer scrutiny: the hue-fidelity oracle alone cannot distinguish
+    "primary path, correctly hued" from "rescue path, ALSO correctly hued"
+    (both are expected to pass hue-fidelity once Fix 2 lands) — the
+    path-reporting seam is what makes "the shipped theme never needs
+    rescue" a directly provable, non-circular fact rather than an
+    inference.
+  - inter-kind Truecolor distinctness (unchanged from
+    `doc/spec-color-depth-defaults.md`): the shipped theme's three row
+    tints and three word tints remain pairwise distinct from EACH OTHER at
+    Truecolor (the existing `kKindDeltaE` check, now scoped to Truecolor
+    only per the descope above) — this proves the priority decision did
+    not silently also weaken the PRIMARY depth's guarantee.
   - generality: the near-monochrome and light-theme fixture tests continue
     to pass (updated values as needed, per Risks); a NEW synthetic
     non-degenerate, non-shipped-theme fixture (Considerations) also passes
-    hue-fidelity and readability/distinctness at both depths, proving the
-    search is not tuned to the shipped palette specifically, AND is
-    confirmed (via the same path-reporting seam) to take the `Primary`
-    path, not `Rescue` — a non-degenerate fixture theme silently depending
-    on rescue would itself indicate the joint search is too weak.
-  - regression: `test_color.cpp`/`test_theme.cpp`'s existing readability/
-    distinctness gates (from `doc/spec-color-depth-defaults.md`) continue to
-    pass unmodified in their PROPERTY (only fallback-triggered VALUES may
-    change if Fix 2 changes what the rescue produces).
+    hue-fidelity and readability/background-distinctness at both depths
+    plus Truecolor inter-kind distinctness, proving the derivation is not
+    tuned to the shipped palette specifically, AND is confirmed (via the
+    same path-reporting seam) to take the `Primary` path, not `Rescue` — a
+    non-degenerate fixture theme silently depending on rescue would itself
+    indicate the per-kind derivation is too weak.
+  - regression: `test_color.cpp`/`test_theme.cpp`'s existing readability
+    gate and BACKGROUND-distinctness gate (from
+    `doc/spec-color-depth-defaults.md`) continue to pass unmodified in
+    their PROPERTY at both depths (only fallback-triggered VALUES may
+    change if Fix 2 changes what the rescue produces); the INTER-KIND
+    distinctness gate's scope narrows to Truecolor-only, an intentional,
+    documented change to that test's assertions, not a silent regression.
 
 ## Plan
 
 | # | Step | Files | Oracle | Invariants |
 |---|------|-------|--------|------------|
 | 1 | Red-before-green: add the hue-fidelity property test against the shipped theme at both depths (must fail against current `c3d0003` code, which returns `fixedFallback`'s blue/black palette) | `tests/test_theme.cpp` | fails pre-fix | - |
-| 2 | Split `kRetainContrast` into `kRetainContrastTruecolor`/`kRetainContrastIndexed256` (Fix 0); empirically tune the Indexed256 value to the smallest loosening that makes Fix 1's search feasible for the shipped theme's real anchors | `src/Theme.cpp` | minimality sweep: chosen value succeeds AND one-step-stricter value fails (both recorded in commit message + code comment); `kFloorContrast` absolute floor unchanged | I22 |
-| 3 | Add the path-reporting testability seam (Primary/Rescue) to `deriveDiffTints`; implement the joint, hue-preserving derivation search (Fix 1) so the shipped theme's anchors succeed via the Primary path without rescue | `src/Theme.cpp`, `include/ssg/Theme.h` if the seam needs a declared type | step 1's oracle passes for the shipped theme; new test asserts the shipped theme's path is `Primary` | I22 |
-| 4 | Replace `fixedFallback`'s hardcoded RGB constants with the theme-derived synthetic-hue rescue (Fix 2); update near-monochrome/light-theme fixture test expectations if their taken values change | `src/Theme.cpp`, `tests/test_theme.cpp` | near-monochrome/light-theme fixtures still readable+distinct+now hue-correct at both depths; new synthetic non-degenerate fixture (Considerations) passes | I22 |
+| 2 | Scope `distinct()`'s inter-KIND check (`kKindDeltaE`) to Truecolor only; keep BACKGROUND-distinctness (`kRowDeltaE`/`kWordDeltaE`) and `readable()` (`kRetainContrast`/`kFloorContrast`) unchanged, one constant each, at both depths (the descope) | `src/Theme.cpp` | existing distinctness/readability tests updated to reflect Truecolor-only inter-kind scope; background-distinctness tests unchanged | I22 |
+| 3 | Add the path-reporting testability seam (Primary/Rescue) to `deriveDiffTints`; fold background-distinctness into `strongestReadableTint`'s existing per-kind stopping condition (Fix 1) so each kind is derived independently and the shipped theme's anchors succeed via the Primary path without rescue | `src/Theme.cpp`, `include/ssg/Theme.h` if the seam needs a declared type | step 1's oracle passes for the shipped theme; new test asserts the shipped theme's path is `Primary`; Truecolor inter-kind distinctness oracle passes | I22 |
+| 4 | Replace `fixedFallback`'s hardcoded RGB constants with the theme-derived synthetic-hue rescue (Fix 2); update near-monochrome/light-theme fixture test expectations if their taken values change | `src/Theme.cpp`, `tests/test_theme.cpp` | near-monochrome/light-theme fixtures still readable+background-distinct+now hue-correct at both depths, Truecolor inter-kind-distinct; new synthetic non-degenerate fixture (Considerations) passes | I22 |
 | 5 | Strengthen or replace the color-authority scanner to close the brace-elision gap (Fix 3) | `tests/test_theme.cpp` | scanner now flags a reintroduced bare-literal palette; no new false positives against the current codebase | I22 |
 | 6 | Regenerate any golden/fixture files whose rendered output embeds the (now-corrected) diff-tint hex values | `tests/fixtures/tui/*.txt` (`SSG_REGEN_GOLDEN=1`), any other fixture embedding theme/diff_tints hex values (search beyond `tests/fixtures/tui/`) | dual-gate green | snapshot/delta symmetry |
-| 7 | Manual/automated end-to-end visual confirmation against a real git repo (mirroring the verification already done for the color-depth-defaults fix) | - | real captured terminal bytes show green/red/orange family SGR codes, not blue/black, at both Truecolor and forced-256 | - |
+| 7 | Manual/automated end-to-end visual confirmation against a real git repo (mirroring the verification already done for the color-depth-defaults fix), PRIORITIZING Truecolor (the default) | - | real captured terminal bytes show green/red/orange family SGR codes, not blue/black, at Truecolor by default; forced-256 shows readable, background-distinct (not necessarily mutually distinct) tints | - |
 
 ## Rationale (skippable)
 
