@@ -45,17 +45,29 @@ value you can publish for "document revision" that will ever legitimately equal
 The revision-equality check must be REMOVED from `fileForDocument`; a
 `LiveDiff` document is selected by `diffFileIdentity` ALONE. This is safe
 because of an invariant `doc/spec-diff.md` Step 5 already established and this
-spec now makes load-bearing: `EditorRuntime::Impl::refreshLiveDiffDocuments`
-(`src/EditorRuntime.cpp:849-887`) re-synchronizes every open `LiveDiff`
-document's content to the CURRENT `DiffViewState` synchronously, in the SAME
-atomic commit that advances the diff revision (`applyGitDiffScan`,
-`applyExternalDiffBurst`). A `LiveDiff` document's displayed text is therefore
-NEVER stale relative to the current `DiffViewState` — there is no window where
-identity matches but content is old, so a revision check was never protecting
-against a real race in this design; it was a leftover from an EARLIER,
-different (and since-abandoned) design where diffs were meant to overlay
-directly onto a live-edited document's own buffer (the object this spec
-retires — see next paragraph).
+spec now makes load-bearing, stated PRECISELY (not as a blanket "never stale"
+claim): `EditorRuntime::Impl::refreshLiveDiffDocuments`
+(`src/EditorRuntime.cpp:849-887`) updates a `LiveDiff` document's content and
+its `liveDiffDocuments` identity-tracking entry TOGETHER, as a single atomic
+step, in the SAME command-executor-thread commit that advances the diff
+revision — and (per Step 5's review-fold fix, `942c448`+`fa5fb12`) on a
+PER-TAB refresh FAILURE it leaves the OLD document and its identity mapping
+BOTH untouched (a create-before-remove swap order), never a state where
+identity has advanced but content has not, or vice versa. So a `LiveDiff`
+document is, at every observable moment, EITHER exactly current relative to
+the `DiffViewState` that last successfully refreshed it, OR exactly as it was
+after its last successful refresh (a stale-but-coherent pair) — content and
+identity move together or not at all. There is consequently no window where
+identity matches the current view but content reflects a DIFFERENT (older or
+newer) view — which is precisely the property revision-equality was
+(ineffectively) trying to guard, and identity-only matching preserves it
+exactly, because that pairing is enforced at the WRITE site
+(`refreshLiveDiffDocuments`), not at the read/select site (`fileForDocument`).
+This is not a race-free claim for hypothetical FUTURE multi-writer scenarios
+(e.g. concurrent multi-client editing of session state from different
+threads) — it holds because this codebase's session mutation is already
+single-threaded end to end (see Invariants below), a property this spec does
+not change and the background-worker design (below) explicitly preserves.
 
 **A second, related contract error must be fixed in the same change.** The
 `else if` branch of `documentView()` (`src/runtime/snapshot.cpp:50-52`) ALSO
@@ -112,6 +124,32 @@ the worker thread itself. Apply the SAME shape here:
   invariant in this codebase. The worker thread NEVER touches runtime/session
   state directly, exactly like `ScratchStore`'s worker never touches
   `Workspace`/`Document` state directly.
+- **CONCRETE drain + wake hook (settled, not deferred to implementation).**
+  Every client already calls `EditorRuntime::snapshot(...)` unconditionally on
+  every loop iteration (`apps/ssg_main.cpp:513-550`, the `refresh` lambda) —
+  this is the correct, already-universal drain point: `snapshot()` drains the
+  worker's queue and applies any pending `GitDiffScan` via the existing
+  `applyGitDiffScan` path BEFORE assembling the returned snapshot, so any
+  client that calls `snapshot()` sees current diffs, with no new API to learn.
+  This alone is NOT sufficient, though: a client blocked in a blocking-read
+  event loop (`ssg_main.cpp`'s `select()` with a timeout, waiting on terminal
+  input) will not call `snapshot()` again until a key arrives, so a
+  following-agent's fast edits would sit undrained until the human happens to
+  press a key — defeating the follow-mode goal for an unattended/agent-only
+  session. Per I25, the CLIENT still owns its own event-loop scheduling policy
+  (spec.md I25's explicit carve-out: "does not disturb... scheduling"); the
+  library's job is only to give it a narrow WAKE mechanism, exactly the shape
+  `ssg_main.cpp` already uses for its SIGWINCH self-pipe (`apps/ssg_main.cpp`
+  line ~183's comment references this exact existing pattern). Add
+  `EditorRuntime::gitDiffWakeDescriptor()` (or an equivalent narrow,
+  platform-appropriate notification primitive — a self-pipe/eventfd on POSIX)
+  that the worker thread signals once when it enqueues a new scan; the client
+  adds this descriptor to its EXISTING `select()`/poll set (one line, no
+  policy) alongside its terminal-input fd, exactly as it already does for the
+  signal self-pipe. A client with no such event loop (a synchronous in-process
+  embedder that calls `dispatch`/`snapshot` on its own cadence) is unaffected —
+  it already drains on every call and never blocks indefinitely on this
+  library's behalf.
 - Event mode (filesystem-watch-driven refresh) is folded into the SAME internal
   worker: it owns the `FilesystemWatcher` poll loop too (mirroring the existing
   watcher-ownership contract: "the session host owns the polling thread" — that
@@ -166,19 +204,30 @@ the worker thread itself. Apply the SAME shape here:
   for a non-`LiveDiff` tab (several exist per a grep of `diffFileIdentity` in
   `tests/`) — those assertions must be updated to expect `std::nullopt`, since
   that behavior is the explicit fix, not a regression to paper over.
-- The background worker's queue-drain point must run on every session tick
-  regardless of whether a client is actively dispatching commands (a following
-  agent editing files with no human input must still see the diff tab jump) —
-  confirm the existing per-tick/idle path (whatever currently drives
-  `primeDeferred`-style periodic work, or the main loop's existing idle timeout)
-  is sufficient, or identify the exact hook if not.
+- The background worker's queue-drain point is SETTLED by the Design section's
+  drain+wake hook above (`snapshot()` drains unconditionally; the wake
+  descriptor covers clients blocked in their own event loop) — no further
+  investigation needed at implementation time.
 - `makePlatformGitRepository` failing (not a git repo) must result in NO
   worker thread started at all, not a thread that spins retrying forever
   against a permanently-absent repository (mirrors the existing git-diff-source
   spec's "not-a-repo is a permanent inert state, not an error loop").
 - Thread lifecycle: the worker must stop cleanly on `EditorRuntime` destruction
-  with no detached/leaked thread (mirror `ScratchStore`'s existing shutdown
-  discipline exactly — do not invent new shutdown semantics).
+  with no detached/leaked thread. `ScratchStore`'s shutdown discipline is the
+  template for the STOP-SIGNALING pattern (a guarded stop flag + condvar
+  notify + join), but this worker's blocking calls are DIFFERENT in kind from
+  `ScratchStore`'s (disk I/O) and need their own explicit timeout discipline:
+  the libgit2 scan call and the `FilesystemWatcher::poll` call must each be
+  invoked with a BOUNDED timeout (mirroring the watcher's own existing
+  contract: "a poll has a finite caller-supplied timeout, so destruction and
+  shutdown never depend on an uninterruptible background callback" — apply
+  this SAME rule to the worker's libgit2 call, which must not be issued as an
+  unbounded/indefinite blocking call). Concretely: the worker loop's sleep/poll
+  interval is itself the upper bound on shutdown latency (e.g. a 250ms poll
+  wait means destruction blocks at most ~250ms for the thread to notice the
+  stop flag and exit) — no separate cancellation mechanism is needed as long
+  as every blocking call inside the loop is bounded by a timeout the worker
+  itself controls.
 
 ## Risks and Mitigations
 
@@ -230,10 +279,10 @@ the worker thread itself. Apply the SAME shape here:
 
 | # | Step | Files | Oracle | Invariants |
 |---|------|-------|--------|------------|
-| 1 | Fix `fileForDocument` to match by identity only; remove the edit-tab `diffFileIdentity` branch in `documentView()`; rewrite the now-wrong unit test | `src/DiffModel.cpp`, `src/runtime/snapshot.cpp`, `tests/test_diff.cpp`, any test asserting edit-tab `diffFileIdentity` | rewritten hand cases; audit + fix every affected existing assertion | contract change, documented above |
-| 2 | End-to-end render oracle proving tints actually paint for a `LiveDiff` tab (the oracle that should have existed) | `tests/test_renderer_diff_overlay.cpp` or a new runtime-level render test | fails before step 1, passes after | render correctness |
-| 3 | Library-owned background git-diff worker (mirrors `ScratchStore`'s worker/queue shape): starts automatically when `GitRepository` resolves, drains on the executor thread, owns poll+event mode/retry/reconcile policy | `include/ssg/EditorRuntime.h`, `src/EditorRuntime.cpp` (or new `GitDiffRefreshWorker.h/.cpp`), `cmake` | headless temp-repo test: `EditorRuntime::create` alone produces live diffs, both modes; thread lifecycle test (create/destroy loop, no leak) | I25; single-threaded session mutation |
-| 4 | Delete `apps/ssg_main.cpp`'s entire manual git-diff loop; confirm the browser client (if it has its own copy) is deleted too | `apps/ssg_main.cpp`, browser client sources if applicable | dual-gate green; manual smoke test against `/tmp/gittest` | I25 |
+| 1 | Write the end-to-end render oracle FIRST (red before green) proving tints actually paint for a `LiveDiff` tab — must FAIL against current code, proving it would have caught the original bug | `tests/test_renderer_diff_overlay.cpp` or a new runtime-level render test | fails before step 2, passes after | render correctness |
+| 2 | Fix `fileForDocument` to match by identity only; remove the edit-tab `diffFileIdentity` branch in `documentView()`; rewrite the now-wrong unit test | `src/DiffModel.cpp`, `src/runtime/snapshot.cpp`, `tests/test_diff.cpp`, any test asserting edit-tab `diffFileIdentity` | step 1's oracle now passes; rewritten hand cases; audit + fix every affected existing assertion | contract change, documented above |
+| 3 | Library-owned background git-diff worker (mirrors `ScratchStore`'s worker/queue shape): starts automatically when `GitRepository` resolves, drains inside `EditorRuntime::snapshot()`, owns poll+event mode/retry/reconcile policy, exposes the wake descriptor | `include/ssg/EditorRuntime.h`, `src/EditorRuntime.cpp` (or new `GitDiffRefreshWorker.h/.cpp`), `cmake` | headless temp-repo test: `EditorRuntime::create` alone produces live diffs, both modes; thread lifecycle test (create/destroy loop, no leak, bounded shutdown latency) | I25; single-threaded session mutation |
+| 4 | Delete `apps/ssg_main.cpp`'s entire manual git-diff loop; wire the new wake descriptor into its existing `select()` set (one line, mirroring the SIGWINCH self-pipe); confirm the browser client (if it has its own copy) is deleted too | `apps/ssg_main.cpp`, browser client sources if applicable | dual-gate green; manual smoke test against `/tmp/gittest`, including an unattended/no-keypress follow scenario | I25 |
 
 ## Rationale (skippable)
 
