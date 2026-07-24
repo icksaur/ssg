@@ -484,8 +484,6 @@ void EditorRuntime::Impl::startGitDiffWorker(bool enable) {
             state->watcher = makePlatformFilesystemWatcher(root);
         } catch (const std::runtime_error&) {
             state->mode = GitDiffMode::Poll;
-        } catch (const std::system_error&) {
-            state->mode = GitDiffMode::Poll;
         }
         if (!state->watcher) {
             state->mode = GitDiffMode::Poll;
@@ -621,13 +619,6 @@ void EditorRuntime::Impl::startGitDiffWorker(bool enable) {
                 try {
                     events = worker->watcher->poll(timeout);
                 } catch (const std::runtime_error&) {
-                    auto full = maybeRefreshAll();
-                    if (!full) {
-                        break;
-                    }
-                    handleResult(*full, true);
-                    continue;
-                } catch (const std::system_error&) {
                     auto full = maybeRefreshAll();
                     if (!full) {
                         break;
