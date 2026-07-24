@@ -1,14 +1,14 @@
 #include "ssg/EditorRuntime.h"
-#include "ssg/GitDiffSource.h"
 #include "test_helpers.h"
 
 #include <array>
 #include <chrono>
-#include <cstdio>
 #include <cstdlib>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <map>
+#include <thread>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -96,108 +96,126 @@ std::map<std::string, ssg::GitTreeStatus> gitProviderStatuses(
     return statuses;
 }
 
-void applyPollTick(ssg::EditorRuntime& runtime,
-                   ssg::GitDiffSource& source,
-                   ssg::GitRepository& repository) {
-    auto refreshed = source.refresh(repository);
-    ASSERT_TRUE(refreshed.accepted);
-    if (!refreshed.accepted || !refreshed.applied) return;
-    auto scan = source.latestAppliedScan();
-    ASSERT_TRUE(scan.has_value());
-    if (!scan) return;
-    auto result = runtime.applyGitDiffScan(std::move(*scan));
-    ASSERT_TRUE(result.accepted());
+class ScopedGitDiffMode {
+public:
+    explicit ScopedGitDiffMode(const char* mode) {
+        const char* prior = std::getenv("SSG_GIT_DIFF_MODE");
+        if (prior != nullptr) {
+            hadPrevious_ = true;
+            previous_ = prior;
+        }
+        if (mode == nullptr) {
+            ::unsetenv("SSG_GIT_DIFF_MODE");
+        } else {
+            ::setenv("SSG_GIT_DIFF_MODE", mode, 1);
+        }
+    }
+
+    ~ScopedGitDiffMode() {
+        if (hadPrevious_) {
+            ::setenv("SSG_GIT_DIFF_MODE", previous_.c_str(), 1);
+        } else {
+            ::unsetenv("SSG_GIT_DIFF_MODE");
+        }
+    }
+
+private:
+    bool hadPrevious_ = false;
+    std::string previous_;
+};
+
+bool waitForDiffCount(ssg::EditorRuntime& runtime, std::size_t expectedCount,
+                      std::chrono::milliseconds timeout) {
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline) {
+        auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        if (snapshot && snapshot->sections().diff.files.size() == expectedCount) {
+            return true;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds{20});
+    }
+    return false;
 }
 
-void applyEventTick(ssg::EditorRuntime& runtime,
-                    ssg::GitDiffSource& source,
-                    ssg::GitRepository& repository,
-                    std::vector<fs::path> paths) {
-    auto refreshed = source.refreshPaths(repository, paths);
-    ASSERT_TRUE(refreshed.accepted);
-    if (!refreshed.accepted || !refreshed.applied) return;
-    auto scan = source.latestAppliedScan();
-    ASSERT_TRUE(scan.has_value());
-    if (!scan) return;
-    auto result = runtime.applyGitDiffScan(std::move(*scan));
-    ASSERT_TRUE(result.accepted());
+bool waitForGitTreeStatuses(ssg::EditorRuntime& runtime,
+                            const std::map<std::string, ssg::GitTreeStatus>& expected,
+                            std::chrono::milliseconds timeout) {
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline) {
+        if (gitProviderStatuses(runtime) == expected) {
+            return true;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds{20});
+    }
+    return false;
 }
 
-TEST(gitDiffHostPollingAndEventRefreshProduceExpectedDiffView) {
+TEST(gitDiffHostWorkerPollingAndEventRefreshProduceExpectedDiffView) {
+    for (const char* mode : {"poll", "event"}) {
+        ScopedGitDiffMode scopedMode{mode};
     const auto uniqueSuffix =
-        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
-    auto root = fs::temp_directory_path() / ("ssg-git-host-" + uniqueSuffix);
-    auto stateRoot =
-        fs::temp_directory_path() / ("ssg-git-host-state-" + uniqueSuffix);
-    fs::remove_all(root);
-    fs::remove_all(stateRoot);
-    fs::create_directories(root);
-    fs::create_directories(stateRoot / "scratch");
-    fs::create_directories(stateRoot / "recovery");
+            std::to_string(
+                std::chrono::steady_clock::now().time_since_epoch().count());
+        auto root = fs::temp_directory_path() / ("ssg-git-host-worker-" + uniqueSuffix);
+        auto stateRoot =
+            fs::temp_directory_path() / ("ssg-git-host-worker-state-" + uniqueSuffix);
+        fs::remove_all(root);
+        fs::remove_all(stateRoot);
+        fs::create_directories(root);
+        fs::create_directories(stateRoot / "scratch");
+        fs::create_directories(stateRoot / "recovery");
 
-    std::ofstream{root / "tracked.txt"} << "v1\n";
-    ASSERT_EQ(runStatus(root, "init"), 0);
-    ASSERT_EQ(runStatus(root, "config user.email a@b.c"), 0);
-    ASSERT_EQ(runStatus(root, "config user.name tester"), 0);
-    ASSERT_EQ(runStatus(root, "add tracked.txt"), 0);
-    ASSERT_EQ(runStatus(root, "commit -m init"), 0);
+        std::ofstream{root / "tracked.txt"} << "v1\n";
+        ASSERT_EQ(runStatus(root, "init"), 0);
+        ASSERT_EQ(runStatus(root, "config user.email a@b.c"), 0);
+        ASSERT_EQ(runStatus(root, "config user.name tester"), 0);
+        ASSERT_EQ(runStatus(root, "add tracked.txt"), 0);
+        ASSERT_EQ(runStatus(root, "commit -m init"), 0);
 
-    auto created = ssg::EditorRuntime::create(
-        {root, stateRoot / "scratch", stateRoot / "recovery"});
-    ASSERT_TRUE(created.accepted());
-    if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime
-                    .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
-                            ssg::ViewId{1})
-                    .accepted());
+        auto created = ssg::EditorRuntime::create(
+            {root, stateRoot / "scratch", stateRoot / "recovery"});
+        ASSERT_TRUE(created.accepted());
+        if (!created.accepted()) return;
+        auto& runtime = *created.runtime;
+        ASSERT_TRUE(
+            runtime
+                .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                        ssg::ViewId{1})
+                .accepted());
+        ASSERT_TRUE(runtime.gitDiffWakeDescriptor() >= 0);
 
-    auto repository = ssg::makePlatformGitRepository(root);
-    ssg::DiffModel sourceModel;
-    ssg::GitDiffSource source{sourceModel};
+        ASSERT_TRUE(
+            waitForDiffCount(runtime, 0, std::chrono::milliseconds{3000}));
 
-    applyPollTick(runtime, source, *repository);
-    auto initial = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
-    ASSERT_TRUE(initial.has_value());
-    if (!initial) return;
-    ASSERT_TRUE(initial->sections().diff.files.empty());
+        std::ofstream{root / "tracked.txt"} << "v2\n";
+        ASSERT_EQ(runStatus(root, "add tracked.txt"), 0);
+        ASSERT_TRUE(
+            waitForDiffCount(runtime, 1, std::chrono::milliseconds{3000}));
+        auto changed =
+            runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        ASSERT_TRUE(changed.has_value());
+        if (!changed) return;
+        ASSERT_EQ(changed->sections().diff.files.front().id,
+                  ssg::DiffFileId{"tracked.txt"});
 
-    std::ofstream{root / "tracked.txt"} << "v2\n";
-    applyPollTick(runtime, source, *repository);
-    auto polled = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
-    ASSERT_TRUE(polled.has_value());
-    if (!polled) return;
-    ASSERT_EQ(polled->sections().diff.files.size(), std::size_t{1});
-    ASSERT_EQ(polled->sections().diff.files.front().id, ssg::DiffFileId{"tracked.txt"});
+        ASSERT_EQ(runStatus(root, "commit -m update"), 0);
+        ASSERT_TRUE(
+            waitForDiffCount(runtime, 0, std::chrono::milliseconds{3000}));
 
-    ASSERT_EQ(runStatus(root, "add tracked.txt"), 0);
-    ASSERT_EQ(runStatus(root, "commit -m update"), 0);
-    applyPollTick(runtime, source, *repository);
-    auto afterCommit = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
-    ASSERT_TRUE(afterCommit.has_value());
-    if (!afterCommit) return;
-    ASSERT_TRUE(afterCommit->sections().diff.files.empty());
+        std::ofstream{root / "tracked.txt"} << "v3\n";
+        ASSERT_TRUE(
+            waitForDiffCount(runtime, 1, std::chrono::milliseconds{3000}));
+        ASSERT_EQ(runStatus(root, "checkout -- tracked.txt"), 0);
+        ASSERT_TRUE(
+            waitForDiffCount(runtime, 0, std::chrono::milliseconds{3000}));
 
-    std::ofstream{root / "tracked.txt"} << "v3\n";
-    applyEventTick(runtime, source, *repository, {fs::path{"tracked.txt"}});
-    auto eventScan = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
-    ASSERT_TRUE(eventScan.has_value());
-    if (!eventScan) return;
-    ASSERT_EQ(eventScan->sections().diff.files.size(), std::size_t{1});
-    ASSERT_EQ(eventScan->sections().diff.files.front().id, ssg::DiffFileId{"tracked.txt"});
-
-    ASSERT_EQ(runStatus(root, "checkout -- tracked.txt"), 0);
-    applyEventTick(runtime, source, *repository, {fs::path{"tracked.txt"}});
-    auto afterRestore = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
-    ASSERT_TRUE(afterRestore.has_value());
-    if (!afterRestore) return;
-    ASSERT_TRUE(afterRestore->sections().diff.files.empty());
-
-    fs::remove_all(root);
-    fs::remove_all(stateRoot);
+        fs::remove_all(root);
+        fs::remove_all(stateRoot);
+    }
 }
 
-TEST(gitDiffHostPublishesGitTreeProviderMatchingPorcelain) {
+TEST(gitDiffHostWorkerPublishesGitTreeProviderMatchingPorcelain) {
+    ScopedGitDiffMode scopedMode{"poll"};
     const auto uniqueSuffix =
         std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
     auto root = fs::temp_directory_path() / ("ssg-git-tree-host-" + uniqueSuffix);
@@ -227,21 +245,17 @@ TEST(gitDiffHostPublishesGitTreeProviderMatchingPorcelain) {
                     .attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                             ssg::ViewId{1})
                     .accepted());
-
-    auto repository = ssg::makePlatformGitRepository(root);
-    ssg::DiffModel sourceModel;
-    ssg::GitDiffSource source{sourceModel};
-
-    applyPollTick(runtime, source, *repository);
-    ASSERT_EQ(gitProviderStatuses(runtime), porcelainStatuses(root));
+    ASSERT_TRUE(waitForGitTreeStatuses(runtime, porcelainStatuses(root),
+                                       std::chrono::milliseconds{3000}));
 
     std::ofstream{root / "tracked.txt"} << "changed\n";
     std::ofstream{root / "added.txt"} << "added\n";
     ASSERT_EQ(runStatus(root, "rm delete-me.txt"), 0);
     ASSERT_EQ(runStatus(root, "mv rename-me.txt renamed.txt"), 0);
-    applyPollTick(runtime, source, *repository);
+    auto expectedFirst = porcelainStatuses(root);
+    ASSERT_TRUE(waitForGitTreeStatuses(runtime, expectedFirst,
+                                       std::chrono::milliseconds{3000}));
     auto firstStatuses = gitProviderStatuses(runtime);
-    ASSERT_EQ(firstStatuses, porcelainStatuses(root));
     ASSERT_TRUE(firstStatuses.contains("tracked.txt"));
     ASSERT_TRUE(firstStatuses.contains("added.txt"));
     ASSERT_TRUE(firstStatuses.contains("delete-me.txt"));
@@ -249,20 +263,67 @@ TEST(gitDiffHostPublishesGitTreeProviderMatchingPorcelain) {
 
     ASSERT_EQ(runStatus(root, "checkout -- tracked.txt"), 0);
     ASSERT_EQ(runStatus(root, "clean -fd"), 0);
-    applyPollTick(runtime, source, *repository);
+    auto expectedSecond = porcelainStatuses(root);
+    ASSERT_TRUE(waitForGitTreeStatuses(runtime, expectedSecond,
+                                       std::chrono::milliseconds{3000}));
     auto secondStatuses = gitProviderStatuses(runtime);
-    ASSERT_EQ(secondStatuses, porcelainStatuses(root));
+    ASSERT_EQ(secondStatuses, expectedSecond);
     ASSERT_NE(secondStatuses, firstStatuses);
 
     fs::remove_all(root);
     fs::remove_all(stateRoot);
 }
 
+TEST(gitDiffHostWorkerLifecycleHasBoundedShutdownLatency) {
+    const auto uniqueSuffix =
+        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    auto root = fs::temp_directory_path() / ("ssg-git-worker-life-" + uniqueSuffix);
+    fs::remove_all(root);
+    fs::create_directories(root);
+    std::ofstream{root / "tracked.txt"} << "v1\n";
+    ASSERT_EQ(runStatus(root, "init"), 0);
+    ASSERT_EQ(runStatus(root, "config user.email a@b.c"), 0);
+    ASSERT_EQ(runStatus(root, "config user.name tester"), 0);
+    ASSERT_EQ(runStatus(root, "add tracked.txt"), 0);
+    ASSERT_EQ(runStatus(root, "commit -m init"), 0);
+
+    for (const char* mode : {"poll", "event"}) {
+        ScopedGitDiffMode scopedMode{mode};
+        for (int index = 0; index < 6; ++index) {
+            auto stateRoot = fs::temp_directory_path() /
+                             ("ssg-git-worker-life-state-" + uniqueSuffix + "-" +
+                              std::to_string(index) + "-" + mode);
+            fs::remove_all(stateRoot);
+            fs::create_directories(stateRoot / "scratch");
+            fs::create_directories(stateRoot / "recovery");
+            auto created = ssg::EditorRuntime::create(
+                {root, stateRoot / "scratch", stateRoot / "recovery"});
+            ASSERT_TRUE(created.accepted());
+            if (!created.accepted()) return;
+            ASSERT_TRUE(created.runtime
+                            ->attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                                     ssg::ViewId{1})
+                            .accepted());
+
+            auto runtime = std::move(created.runtime);
+            const auto start = std::chrono::steady_clock::now();
+            runtime.reset();
+            const auto elapsed =
+                std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - start);
+            ASSERT_TRUE(elapsed < std::chrono::milliseconds{1500});
+            fs::remove_all(stateRoot);
+        }
+    }
+    fs::remove_all(root);
+}
+
 }  // namespace
 
 int main() {
-    RUN(gitDiffHostPollingAndEventRefreshProduceExpectedDiffView);
-    RUN(gitDiffHostPublishesGitTreeProviderMatchingPorcelain);
+    RUN(gitDiffHostWorkerPollingAndEventRefreshProduceExpectedDiffView);
+    RUN(gitDiffHostWorkerPublishesGitTreeProviderMatchingPorcelain);
+    RUN(gitDiffHostWorkerLifecycleHasBoundedShutdownLatency);
     std::cout << "\nPassed: " << passed << " Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

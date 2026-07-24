@@ -1,14 +1,25 @@
 #include "runtime/editor_runtime_internal.h"
 
+#include <ssg/FilesystemWatcher.h>
 #include <ssg/GraphemeLayout.h>
 
 #include <algorithm>
 #include <array>
+#include <chrono>
+#include <cerrno>
+#include <condition_variable>
+#include <cstdlib>
+#include <deque>
 #include <fstream>
+#include <limits>
 #include <iterator>
 #include <stdexcept>
+#include <thread>
 #include <unordered_map>
 #include <system_error>
+
+#include <fcntl.h>
+#include <unistd.h>
 
 namespace ssg {
 namespace {
@@ -17,6 +28,32 @@ namespace {
 // comfortably within startup budget, while multi-MB input can exceed it and is
 // deferred until primeDeferred().
 constexpr std::size_t kEagerSyntaxMaxBytes = 2 * 1024 * 1024;
+constexpr auto kGitDiffPollInterval = std::chrono::milliseconds{250};
+constexpr auto kGitDiffRetryDelay = std::chrono::milliseconds{1000};
+
+enum class GitDiffMode { Poll, Event };
+
+GitDiffMode gitDiffModeFromEnvironment() {
+    if (const char* mode = std::getenv("SSG_GIT_DIFF_MODE");
+        mode != nullptr && std::string_view{mode} == "event") {
+        return GitDiffMode::Event;
+    }
+    return GitDiffMode::Poll;
+}
+
+bool isGitWorkspaceRoot(const std::filesystem::path& root) {
+    std::error_code code;
+    const auto gitPath = root / ".git";
+    return std::filesystem::exists(gitPath, code) && !code;
+}
+
+bool setNonBlocking(int descriptor) {
+    const int flags = ::fcntl(descriptor, F_GETFL, 0);
+    if (flags == -1) {
+        return false;
+    }
+    return ::fcntl(descriptor, F_SETFL, flags | O_NONBLOCK) == 0;
+}
 
 GitTreeStatus gitTreeStatusForDiffStatus(DiffFileStatus status) {
     switch (status) {
@@ -346,6 +383,31 @@ std::optional<std::filesystem::path> workspaceChangePath(
 
 } // namespace
 
+struct GitDiffRefreshWorkerState {
+    explicit GitDiffRefreshWorkerState(const std::filesystem::path& rootPath)
+        : repository{makePlatformGitRepository(rootPath)},
+          source{sourceModel},
+          mode{gitDiffModeFromEnvironment()} {}
+
+    std::unique_ptr<GitRepository> repository;
+    DiffModel sourceModel;
+    GitDiffSource source;
+    std::unique_ptr<FilesystemWatcher> watcher;
+    GitDiffMode mode = GitDiffMode::Poll;
+
+    std::mutex mutex;
+    std::condition_variable wake;
+    bool stop = false;
+    bool retryPending = false;
+    std::chrono::steady_clock::time_point nextRetry =
+        std::chrono::steady_clock::time_point::max();
+    std::deque<GitDiffScan> pendingScans;
+    std::thread thread;
+
+    int wakeReadFd = -1;
+    int wakeWriteFd = -1;
+};
+
 CommandHandlerResult success() { return CommandHandlerResult::success(); }
 CommandHandlerResult failure(std::string message) {
     return CommandHandlerResult::failure(std::move(message));
@@ -369,7 +431,8 @@ EditorRuntime::Impl::Impl(std::filesystem::path canonicalCwd,
                           bool deferEnrichment,
                           std::shared_ptr<SyntaxParser> parser,
                           std::vector<StatusFieldProviderBinding>
-                              statusFieldProviderOverrides)
+                              statusFieldProviderOverrides,
+                          bool enableGitDiffWorker)
     : root{std::move(canonicalCwd)},
       scratchRoot{std::filesystem::weakly_canonical(scratchRoot)},
       recoveryRoot{std::filesystem::weakly_canonical(recoveryRoot)},
@@ -396,6 +459,242 @@ EditorRuntime::Impl::Impl(std::filesystem::path canonicalCwd,
     }
     refreshTree();
     refreshSyntax();
+    startGitDiffWorker(enableGitDiffWorker);
+}
+
+EditorRuntime::Impl::~Impl() { stopGitDiffWorker(); }
+
+void EditorRuntime::Impl::startGitDiffWorker(bool enable) {
+    if (!enable || !isGitWorkspaceRoot(root)) {
+        return;
+    }
+    auto state = std::make_unique<GitDiffRefreshWorkerState>(root);
+    int wakePipe[2] = {-1, -1};
+    if (::pipe(wakePipe) != 0 || !setNonBlocking(wakePipe[0]) ||
+        !setNonBlocking(wakePipe[1])) {
+        if (wakePipe[0] != -1) {
+            (void)::close(wakePipe[0]);
+        }
+        if (wakePipe[1] != -1) {
+            (void)::close(wakePipe[1]);
+        }
+        return;
+    }
+    state->wakeReadFd = wakePipe[0];
+    state->wakeWriteFd = wakePipe[1];
+    if (state->mode == GitDiffMode::Event) {
+        try {
+            state->watcher = makePlatformFilesystemWatcher(root);
+        } catch (const std::runtime_error&) {
+            state->mode = GitDiffMode::Poll;
+        } catch (const std::system_error&) {
+            state->mode = GitDiffMode::Poll;
+        }
+        if (!state->watcher) {
+            state->mode = GitDiffMode::Poll;
+        }
+    }
+
+    state->thread = std::thread([worker = state.get()]() {
+        const auto shouldStop = [&]() {
+            std::lock_guard lock(worker->mutex);
+            return worker->stop;
+        };
+        const auto scheduleRetry = [&]() {
+            std::lock_guard lock(worker->mutex);
+            worker->retryPending = true;
+            worker->nextRetry = std::chrono::steady_clock::now() + kGitDiffRetryDelay;
+        };
+        const auto clearRetry = [&]() {
+            std::lock_guard lock(worker->mutex);
+            worker->retryPending = false;
+            worker->nextRetry = std::chrono::steady_clock::time_point::max();
+        };
+        const auto queueLatestScan = [&]() {
+            auto scan = worker->source.latestAppliedScan();
+            if (!scan) {
+                return;
+            }
+            bool signal = false;
+            {
+                std::lock_guard lock(worker->mutex);
+                signal = worker->pendingScans.empty();
+                worker->pendingScans.push_back(std::move(*scan));
+            }
+            if (signal) {
+                const char byte = 'g';
+                (void)::write(worker->wakeWriteFd, &byte, 1);
+            }
+        };
+
+        std::function<void(const GitDiffRefreshResult&, bool)> handleResult;
+        const auto refreshAll = [&]() {
+            try {
+                return worker->source.refresh(*worker->repository);
+            } catch (const std::runtime_error&) {
+                return GitDiffRefreshResult{
+                    .applied = false, .requestedRescan = true, .accepted = false};
+            } catch (const std::system_error&) {
+                return GitDiffRefreshResult{
+                    .applied = false, .requestedRescan = true, .accepted = false};
+            }
+        };
+        const auto refreshPaths = [&](const std::vector<std::filesystem::path>& paths) {
+            try {
+                return worker->source.refreshPaths(*worker->repository, paths);
+            } catch (const std::runtime_error&) {
+                return GitDiffRefreshResult{
+                    .applied = false, .requestedRescan = true, .accepted = false};
+            } catch (const std::system_error&) {
+                return GitDiffRefreshResult{
+                    .applied = false, .requestedRescan = true, .accepted = false};
+            }
+        };
+        handleResult = [&](const GitDiffRefreshResult& refreshed, bool fullRefresh) {
+            if (refreshed.applied) {
+                queueLatestScan();
+                clearRetry();
+            }
+            if (!refreshed.accepted || refreshed.requestedRescan) {
+                if (!fullRefresh) {
+                    handleResult(refreshAll(), true);
+                    return;
+                }
+                scheduleRetry();
+            }
+        };
+
+        handleResult(refreshAll(), true);
+        auto nextPoll = std::chrono::steady_clock::now() + kGitDiffPollInterval;
+        while (!shouldStop()) {
+            if (worker->mode == GitDiffMode::Poll) {
+                auto wakeAt = nextPoll;
+                {
+                    std::lock_guard lock(worker->mutex);
+                    if (worker->retryPending && worker->nextRetry < wakeAt) {
+                        wakeAt = worker->nextRetry;
+                    }
+                }
+                std::unique_lock lock(worker->mutex);
+                if (worker->wake.wait_until(lock, wakeAt,
+                                            [&]() { return worker->stop; })) {
+                    break;
+                }
+                lock.unlock();
+            } else {
+                auto timeout = kGitDiffPollInterval;
+                {
+                    std::lock_guard lock(worker->mutex);
+                    if (worker->retryPending) {
+                        const auto now = std::chrono::steady_clock::now();
+                        const auto remaining =
+                            worker->nextRetry > now ? worker->nextRetry - now
+                                                    : std::chrono::milliseconds{0};
+                        timeout = std::min(
+                            timeout,
+                            std::chrono::duration_cast<std::chrono::milliseconds>(
+                                remaining));
+                    }
+                }
+                std::vector<WatchEvent> events;
+                try {
+                    events = worker->watcher->poll(timeout);
+                } catch (const std::runtime_error&) {
+                    handleResult(refreshAll(), true);
+                    continue;
+                } catch (const std::system_error&) {
+                    handleResult(refreshAll(), true);
+                    continue;
+                }
+                bool overflowed = false;
+                std::vector<std::filesystem::path> paths;
+                paths.reserve(events.size() * 2);
+                for (const auto& event : events) {
+                    if (event.kind == WatchEventKind::Overflow) {
+                        overflowed = true;
+                        break;
+                    }
+                    paths.push_back(event.path);
+                    if (event.previousPath) {
+                        paths.push_back(*event.previousPath);
+                    }
+                }
+                if (overflowed) {
+                    handleResult(refreshAll(), true);
+                } else if (!paths.empty()) {
+                    std::sort(paths.begin(), paths.end());
+                    paths.erase(std::unique(paths.begin(), paths.end()), paths.end());
+                    handleResult(refreshPaths(paths), false);
+                }
+            }
+
+            const auto now = std::chrono::steady_clock::now();
+            bool retryDue = false;
+            {
+                std::lock_guard lock(worker->mutex);
+                retryDue = worker->retryPending && now >= worker->nextRetry;
+            }
+            if (retryDue) {
+                handleResult(refreshAll(), true);
+            }
+            if (worker->mode == GitDiffMode::Poll && now >= nextPoll) {
+                handleResult(refreshAll(), true);
+                nextPoll = now + kGitDiffPollInterval;
+            }
+        }
+    });
+    gitDiffWorker = std::move(state);
+}
+
+void EditorRuntime::Impl::stopGitDiffWorker() {
+    if (!gitDiffWorker) {
+        return;
+    }
+    {
+        std::lock_guard lock(gitDiffWorker->mutex);
+        gitDiffWorker->stop = true;
+    }
+    gitDiffWorker->wake.notify_all();
+    if (gitDiffWorker->thread.joinable()) {
+        gitDiffWorker->thread.join();
+    }
+    if (gitDiffWorker->wakeReadFd != -1) {
+        (void)::close(gitDiffWorker->wakeReadFd);
+        gitDiffWorker->wakeReadFd = -1;
+    }
+    if (gitDiffWorker->wakeWriteFd != -1) {
+        (void)::close(gitDiffWorker->wakeWriteFd);
+        gitDiffWorker->wakeWriteFd = -1;
+    }
+    gitDiffWorker.reset();
+}
+
+void EditorRuntime::Impl::drainGitDiffScans() {
+    if (!gitDiffWorker) {
+        return;
+    }
+    char scratch[64];
+    while (true) {
+        const auto count = ::read(gitDiffWorker->wakeReadFd, scratch, sizeof scratch);
+        if (count <= 0) {
+            if (count == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+                break;
+            }
+            break;
+        }
+    }
+    std::deque<GitDiffScan> scans;
+    {
+        std::lock_guard lock(gitDiffWorker->mutex);
+        scans.swap(gitDiffWorker->pendingScans);
+    }
+    for (auto& scan : scans) {
+        (void)applyGitDiffScan(std::move(scan));
+    }
+}
+
+int EditorRuntime::Impl::gitDiffWakeDescriptor() const {
+    return gitDiffWorker ? gitDiffWorker->wakeReadFd : -1;
 }
 
 CommandHandlerResult EditorRuntime::Impl::runTransaction(
@@ -1356,7 +1655,8 @@ EditorRuntimeCreateResult EditorRuntime::create(EditorRuntimeConfig config) {
                                            config.recoveryRoot,
                                            config.deferEnrichment,
                                            std::move(config.syntaxParser),
-                                           std::move(config.statusFieldProviders));
+                                           std::move(config.statusFieldProviders),
+                                           config.enableGitDiffWorker);
         impl->keymap = defaultTerminalKeymap();
         if (auto errors = KeymapMatcher{impl->keymap}.validate({}); !errors.empty()) {
             return {nullptr, "default keymap is invalid: " + errors.front().message};
@@ -1447,12 +1747,17 @@ GitDiffScanResult EditorRuntime::applyGitDiffScan(GitDiffScan scan) {
 std::optional<SessionSnapshot> EditorRuntime::snapshot(ClientId clientId, ViewportDimensions dimensions,
                                                        KeySequence leaderPending,
                                                        PaletteReport paletteReport) const {
+    const_cast<EditorRuntime::Impl*>(impl_.get())->drainGitDiffScans();
     auto client = impl_->session->attachedClient(clientId);
     if (!client) return std::nullopt;
     return SessionSnapshotCodec{}.assemble(impl_->session->revision(), impl_->session->topology(),
                                      client->principal, client->viewId,
                                      impl_->viewport(dimensions),
                                      impl_->sections(dimensions, leaderPending, paletteReport));
+}
+
+int EditorRuntime::gitDiffWakeDescriptor() const {
+    return impl_->gitDiffWakeDescriptor();
 }
 
 std::string EditorRuntime::activeDocumentText() const { return impl_->activeText(); }

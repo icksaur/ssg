@@ -41,6 +41,8 @@
 
 namespace ssg {
 
+struct GitDiffRefreshWorkerState;
+
 struct DocumentRuntimeState {
     explicit DocumentRuntimeState(
         HistoryConfig historyConfig = HistoryConfig::defaults(),
@@ -93,8 +95,9 @@ struct EditorRuntime::Impl final : CommandServices,
          std::filesystem::path recoveryRoot,
          bool deferEnrichment = false,
          std::shared_ptr<SyntaxParser> parser = nullptr,
-         std::vector<StatusFieldProviderBinding> statusFieldProviderOverrides =
-             {});
+         std::vector<StatusFieldProviderBinding> statusFieldProviderOverrides = {},
+         bool enableGitDiffWorker = true);
+    ~Impl();
 
     std::filesystem::path root;
     std::filesystem::path scratchRoot;
@@ -290,7 +293,13 @@ struct EditorRuntime::Impl final : CommandServices,
     bool pendingSyntaxRefresh = false;
     std::uint64_t treeScanCount = 0;
     std::uint64_t syntaxRunCount = 0;
+    std::unique_ptr<GitDiffRefreshWorkerState> gitDiffWorker;
+
     void enqueueStatus(StatusPriority priority, std::string text);
+    void startGitDiffWorker(bool enable);
+    void stopGitDiffWorker();
+    void drainGitDiffScans();
+    [[nodiscard]] int gitDiffWakeDescriptor() const;
 };
 
 [[nodiscard]] CommandHandlerResult success();

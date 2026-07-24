@@ -37,6 +37,9 @@ struct EditorRuntimeConfig {
     // Optional provider overrides keyed by status-field id. These replace the
     // default compiled providers for matching ids.
     std::vector<StatusFieldProviderBinding> statusFieldProviders;
+    // When false, disables the internal git-diff refresh worker. Tests can use
+    // this for deterministic control; default true keeps git-diff wiring library-owned.
+    bool enableGitDiffWorker = true;
 };
 
 // The syntax parser the shipped app injects by default: a tree-sitter parser
@@ -127,6 +130,7 @@ public:
         ClientId clientId, ViewportDimensions dimensions,
         KeySequence leaderPending = {},
         PaletteReport paletteReport = {}) const;
+    [[nodiscard]] int gitDiffWakeDescriptor() const;
     [[nodiscard]] std::string activeDocumentText() const;
 
     struct Impl;

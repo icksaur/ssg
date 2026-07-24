@@ -13,10 +13,8 @@
 #include "ssg_terminal.h"
 
 #include <ssg/EditorRuntime.h>
-#include <ssg/FilesystemWatcher.h>
 #include <ssg/HitTester.h>
 #include <ssg/FindReplace.h>
-#include <ssg/GitDiffSource.h>
 #include <ssg/Keymap.h>
 #include <ssg/PaletteSearcher.h>
 #include <ssg/session_snapshot.h>
@@ -139,20 +137,27 @@ ssg::ViewportDimensions terminalSize() {
 struct FdReadiness {
     bool input = false;   // STDIN has bytes.
     bool signal = false;  // The signal self-pipe has pending tags.
+    bool gitDiff = false; // The runtime git-diff wake descriptor is readable.
 };
 
-FdReadiness waitReadiness(int timeoutMs, int signalFd) {
+FdReadiness waitReadiness(int timeoutMs, int signalFd, int gitDiffFd) {
     fd_set set;
     FD_ZERO(&set);
     FD_SET(STDIN_FILENO, &set);
     FD_SET(signalFd, &set);
-    int const maxFd = std::max(STDIN_FILENO, signalFd);
+    int maxFd = std::max(STDIN_FILENO, signalFd);
+    if (gitDiffFd >= 0) {
+        FD_SET(gitDiffFd, &set);
+        maxFd = std::max(maxFd, gitDiffFd);
+    }
     timeval timeout{timeoutMs / 1000, (timeoutMs % 1000) * 1000};
     int const ready =
         ::select(maxFd + 1, &set, nullptr, nullptr,
                  timeoutMs < 0 ? nullptr : &timeout);
     if (ready <= 0) return {};
-    return {FD_ISSET(STDIN_FILENO, &set) != 0, FD_ISSET(signalFd, &set) != 0};
+    return {
+        FD_ISSET(STDIN_FILENO, &set) != 0, FD_ISSET(signalFd, &set) != 0,
+        gitDiffFd >= 0 ? FD_ISSET(gitDiffFd, &set) != 0 : false};
 }
 
 constexpr int kEscapeTimeoutMs = 30;
@@ -225,6 +230,7 @@ int main(int argc, char** argv) {
         return 1;
     }
     auto& runtime = *created.runtime;
+    int const gitDiffWakeFd = runtime.gitDiffWakeDescriptor();
     STARTUP_MARK("post_create");
 
     ssg::ClientId client{1};
@@ -234,67 +240,6 @@ int main(int argc, char** argv) {
         return 1;
     }
     STARTUP_MARK("post_attach");
-
-    enum class GitDiffMode { Poll, Event };
-    GitDiffMode gitDiffMode = GitDiffMode::Poll;
-    if (const char* mode = std::getenv("SSG_GIT_DIFF_MODE");
-        mode != nullptr && std::string_view{mode} == "event") {
-        gitDiffMode = GitDiffMode::Event;
-    }
-    ssg::DiffModel gitDiffModel;
-    ssg::GitDiffSource gitDiffSource{gitDiffModel};
-    auto gitRepository = ssg::makePlatformGitRepository(runtime.workspaceRoot());
-    std::unique_ptr<ssg::FilesystemWatcher> gitWatcher;
-    if (gitDiffMode == GitDiffMode::Event) {
-        gitWatcher = ssg::makePlatformFilesystemWatcher(runtime.workspaceRoot());
-    }
-    auto applyGitRefresh = [&](const ssg::GitDiffRefreshResult& refreshed) {
-        if (!refreshed.accepted || !refreshed.applied) return;
-        auto scan = gitDiffSource.latestAppliedScan();
-        if (!scan) return;
-        (void)runtime.applyGitDiffScan(std::move(*scan));
-    };
-    constexpr auto kGitRescanRetry = std::chrono::milliseconds{1000};
-    auto nextGitRetry = std::chrono::steady_clock::time_point::max();
-    bool gitRetryPending = false;
-    std::function<void(const ssg::GitDiffRefreshResult&, bool)> handleGitRefreshResult;
-    auto scheduleGitRetry = [&] {
-        gitRetryPending = true;
-        nextGitRetry = std::chrono::steady_clock::now() + kGitRescanRetry;
-    };
-    auto clearGitRetry = [&] {
-        gitRetryPending = false;
-        nextGitRetry = std::chrono::steady_clock::time_point::max();
-    };
-    auto refreshGitPoll = [&]() {
-        handleGitRefreshResult(gitDiffSource.refresh(*gitRepository), true);
-    };
-    auto refreshGitPaths = [&](std::vector<fs::path> paths) {
-        if (paths.empty()) {
-            refreshGitPoll();
-            return;
-        }
-        handleGitRefreshResult(gitDiffSource.refreshPaths(*gitRepository, paths),
-                               false);
-    };
-    handleGitRefreshResult =
-        [&](const ssg::GitDiffRefreshResult& refreshed, bool fullRefresh) {
-            if (refreshed.applied) {
-                applyGitRefresh(refreshed);
-                clearGitRetry();
-            }
-            if (!refreshed.accepted || refreshed.requestedRescan) {
-                if (!fullRefresh) {
-                    refreshGitPoll();
-                    return;
-                }
-                scheduleGitRetry();
-            }
-        };
-    auto nextGitPoll = std::chrono::steady_clock::now();
-    constexpr auto kGitPollInterval = std::chrono::milliseconds{250};
-    refreshGitPoll();
-    nextGitPoll = std::chrono::steady_clock::now() + kGitPollInterval;
 
     if (target.file) {
         if (fs::exists(target.cwd / *target.file)) {
@@ -555,143 +500,95 @@ int main(int argc, char** argv) {
     bool firstFrameMarked = false;
     try {
         while (!quit) {
-            if (gitRetryPending &&
-                std::chrono::steady_clock::now() >= nextGitRetry) {
-                refreshGitPoll();
-            }
-            if (gitDiffMode == GitDiffMode::Poll) {
-                auto now = std::chrono::steady_clock::now();
-                if (now >= nextGitPoll) {
-                    refreshGitPoll();
-                    nextGitPoll = now + kGitPollInterval;
-                }
-            } else if (gitWatcher) {
-                auto events = gitWatcher->poll(std::chrono::milliseconds{0});
-                bool overflowed = false;
-                std::vector<fs::path> paths;
-                paths.reserve(events.size() * 2);
-                for (const auto& event : events) {
-                    if (event.kind == ssg::WatchEventKind::Overflow) {
-                        overflowed = true;
-                        break;
-                    }
-                    paths.push_back(event.path);
-                    if (event.previousPath) {
-                        paths.push_back(*event.previousPath);
-                    }
-                }
-                if (overflowed) {
-                    refreshGitPoll();
-                } else if (!paths.empty()) {
-                    std::sort(paths.begin(), paths.end());
-                    paths.erase(std::unique(paths.begin(), paths.end()), paths.end());
-                    refreshGitPaths(std::move(paths));
-                }
-            }
-
             auto snapshot = refresh();
-        if (snapshot) {
-            // The library renders every screen branch, including the declined-
-            // layout "too small" placeholder (M11-L); the app only encodes.
-            auto grid = ssg::Renderer{}.render(*snapshot);
-            std::string frame = "\x1b[?25l";  // Hide the cursor while redrawing.
-            frame += ssg::app::encode_ansi_frame(grid, colorDepth);
-            if (grid.caret) {
-                frame += "\x1b[" + std::to_string(grid.caret->row + 1) + ";" +
-                         std::to_string(grid.caret->column + 1) + "H\x1b[?25h";
-            }
-            if (!firstFrameMarked) {
-                // M10-1 stop mark: the first content frame (an actual rendered
-                // payload), not the earlier terminal-setup bytes.
-                STARTUP_MARK("first_content_frame");
-                firstFrameMarked = true;
+            if (snapshot) {
+                // The library renders every screen branch, including the declined-
+                // layout "too small" placeholder (M11-L); the app only encodes.
+                auto grid = ssg::Renderer{}.render(*snapshot);
+                std::string frame = "\x1b[?25l";  // Hide the cursor while redrawing.
+                frame += ssg::app::encode_ansi_frame(grid, colorDepth);
+                if (grid.caret) {
+                    frame += "\x1b[" + std::to_string(grid.caret->row + 1) + ";" +
+                             std::to_string(grid.caret->column + 1) + "H\x1b[?25h";
+                }
+                if (!firstFrameMarked) {
+                    // M10-1 stop mark: the first content frame (an actual rendered
+                    // payload), not the earlier terminal-setup bytes.
+                    STARTUP_MARK("first_content_frame");
+                    firstFrameMarked = true;
+                    writeAll(frame);
+                    // M10-3/M10-4: the first frame is on screen; now run the
+                    // enrichment (tree scan, syntax) deferred off the startup
+                    // path.  It publishes on the next snapshot at the loop top.
+                    runtime.primeDeferred();
+                    continue;
+                }
                 writeAll(frame);
-                // M10-3/M10-4: the first frame is on screen; now run the
-                // enrichment (tree scan, syntax) deferred off the startup
-                // path.  It publishes on the next snapshot at the loop top.
-                runtime.primeDeferred();
-                continue;
             }
-            writeAll(frame);
-        }
 
-        char bytes[64];
-        // Edge auto-scroll (M8-S2): if a drag is held past the top/bottom of the
-        // editor content, don't block indefinitely on input — wake on a timer to
-        // scroll one line and re-extend the selection to the new edge cell, so a
-        // drag held still at the edge keeps scrolling and selecting.
-        std::optional<int> dragEdge;
-        if (dragging && snapshot && !snapshot->sections().shell.panes.empty()) {
-            dragEdge = ssg::app::edge_scroll(
-                dragging, lastPointerRow,
-                snapshot->sections().shell.panes.front().content);
-        }
-        if (dragEdge) {
-            auto const ready = waitReadiness(kEdgeScrollIntervalMs, signalPipe[0]);
-            if (ready.signal) {
-                // A resize/terminate signal arrived mid-drag: drain it now rather
-                // than deferring until the drag releases.  Terminate does not
-                // return (restore + re-raise); resize re-snapshots at the loop
-                // top with the drag preserved.
-                drainSignals();
-                continue;
+            char bytes[64];
+            // Edge auto-scroll (M8-S2): if a drag is held past the top/bottom of the
+            // editor content, don't block indefinitely on input — wake on a timer to
+            // scroll one line and re-extend the selection to the new edge cell, so a
+            // drag held still at the edge keeps scrolling and selecting.
+            std::optional<int> dragEdge;
+            if (dragging && snapshot && !snapshot->sections().shell.panes.empty()) {
+                dragEdge = ssg::app::edge_scroll(
+                    dragging, lastPointerRow,
+                    snapshot->sections().shell.panes.front().content);
             }
-            if (!ready.input) {
-                dispatch("view.scroll_lines", ssg::ScrollLinesArguments{*dragEdge});
-                auto scrolled = refresh();
-                if (scrolled && dragAnchor &&
-                    !scrolled->sections().shell.panes.empty()) {
-                    auto const content = scrolled->sections().shell.panes.front().content;
-                    int const edgeRow =
-                        *dragEdge < 0 ? content.y : content.bottom() - 1;
-                    int const column = std::clamp(lastPointerColumn, content.x,
-                                                  content.right() - 1);
-                    auto hit = ssg::HitTester{*scrolled}.at( column, edgeRow);
-                    if (hit.region == ssg::HitRegion::Editor) {
-                        auto active = ssg::SelectionNavigator::resolvePosition(
-                            scrolled->sections().document.text,
-                            ssg::ByteOffset{hit.byteOffset});
-                        if (active) {
-                            dispatch("select.set_range",
-                                     ssg::SelectionCommandArguments{
-                                         std::nullopt,
-                                         ssg::Selection{*dragAnchor, *active}});
+            if (dragEdge) {
+                auto const ready = waitReadiness(kEdgeScrollIntervalMs, signalPipe[0], -1);
+                if (ready.signal) {
+                    // A resize/terminate signal arrived mid-drag: drain it now rather
+                    // than deferring until the drag releases.  Terminate does not
+                    // return (restore + re-raise); resize re-snapshots at the loop
+                    // top with the drag preserved.
+                    drainSignals();
+                    continue;
+                }
+                if (!ready.input) {
+                    dispatch("view.scroll_lines", ssg::ScrollLinesArguments{*dragEdge});
+                    auto scrolled = refresh();
+                    if (scrolled && dragAnchor &&
+                        !scrolled->sections().shell.panes.empty()) {
+                        auto const content = scrolled->sections().shell.panes.front().content;
+                        int const edgeRow =
+                            *dragEdge < 0 ? content.y : content.bottom() - 1;
+                        int const column = std::clamp(lastPointerColumn, content.x,
+                                                      content.right() - 1);
+                        auto hit = ssg::HitTester{*scrolled}.at(column, edgeRow);
+                        if (hit.region == ssg::HitRegion::Editor) {
+                            auto active = ssg::SelectionNavigator::resolvePosition(
+                                scrolled->sections().document.text,
+                                ssg::ByteOffset{hit.byteOffset});
+                            if (active) {
+                                dispatch("select.set_range",
+                                         ssg::SelectionCommandArguments{
+                                             std::nullopt,
+                                             ssg::Selection{*dragAnchor, *active}});
+                            }
                         }
                     }
+                    continue;  // re-render with the scrolled viewport, then re-evaluate
                 }
-                continue;  // re-render with the scrolled viewport, then re-evaluate
+                // Keyboard input arrived during the drag: fall through and read it.
             }
-            // Keyboard input arrived during the drag: fall through and read it.
-        }
-        // Block until keyboard input OR a signal-driven self-pipe wake (M9-W).
-        // A bare read() could not be interrupted reliably by a resize/terminate
-        // signal; selecting on both fds makes the wake deterministic.
-        int waitTimeoutMs = -1;
-        std::optional<std::chrono::steady_clock::time_point> nextWake;
-        auto now = std::chrono::steady_clock::now();
-        if (gitRetryPending) {
-            nextWake = nextGitRetry;
-        }
-        if (gitDiffMode == GitDiffMode::Poll) {
-            nextWake = nextWake ? std::min(*nextWake, nextGitPoll) : nextGitPoll;
-        }
-        if (nextWake) {
-            auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                          *nextWake - now)
-                          .count();
-            waitTimeoutMs = static_cast<int>(std::max<std::int64_t>(ms, 0));
-        }
-        auto const wait = waitReadiness(waitTimeoutMs, signalPipe[0]);
-        if (wait.signal) {
-            // Terminate does not return (restore + re-raise); a resize just
-            // re-snapshots at the loop top.
-            drainSignals();
-            if (!wait.input) continue;
-        }
-        if (!wait.input) continue;  // EINTR or spurious wake: re-render and retry.
-        auto readBytes = ::read(STDIN_FILENO, bytes, sizeof bytes);
-        if (readBytes <= 0) break;
-        buffer.append(bytes, static_cast<std::size_t>(readBytes));
+            // Block until keyboard input OR a signal-driven self-pipe wake (M9-W)
+            // OR a runtime git-diff wake. A bare read() could not be interrupted
+            // reliably by resize/terminate or background diff updates.
+            auto const wait = waitReadiness(-1, signalPipe[0], gitDiffWakeFd);
+            if (wait.signal) {
+                // Terminate does not return (restore + re-raise); a resize just
+                // re-snapshots at the loop top.
+                drainSignals();
+                if (!wait.input) continue;
+            }
+            if (wait.gitDiff && !wait.input) continue;
+            if (!wait.input) continue;  // Wake-only cycle: re-render and retry.
+            auto readBytes = ::read(STDIN_FILENO, bytes, sizeof bytes);
+            if (readBytes <= 0) break;
+            buffer.append(bytes, static_cast<std::size_t>(readBytes));
 
         bool firstEvent = true;
         while (!buffer.empty() && !quit) {
@@ -702,7 +599,7 @@ int main(int argc, char** argv) {
                 // briefly for the disambiguating bytes; if none arrive, force the
                 // bounded-Escape resolution.  The wait also watches the signal
                 // pipe so a resize/terminate is not deferred by a lone ESC.
-                auto const ready = waitReadiness(kEscapeTimeoutMs, signalPipe[0]);
+                auto const ready = waitReadiness(kEscapeTimeoutMs, signalPipe[0], -1);
                 if (ready.signal) drainSignals();
                 if (ready.input) {
                     auto more = ::read(STDIN_FILENO, bytes, sizeof bytes);
