@@ -682,6 +682,8 @@ TEST(sourceAndConfigHaveNoIndependentColorSources) {
         std::regex{R"(\b(lighten|darken|shade|tint|blend|gradient)\s*\()"},
         std::regex{R"(\bSrgbColor\s*[\{\(])"},
     };
+    const std::regex themeBareRgbLiteral{
+        R"(\{\s*(?:25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\s*,\s*(?:25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\s*,\s*(?:25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})\s*(?:,\s*(?:25[0-5]|2[0-4][0-9]|1?[0-9]{1,2}))?\s*\})"};
     const std::set<std::string> scannedExtensions{
         ".h",    ".hpp",  ".cpp", ".cc",   ".cxx", ".json", ".cmake",
         ".css",  ".scss", ".sass", ".html", ".js",  ".jsx",  ".ts",
@@ -713,6 +715,10 @@ TEST(sourceAndConfigHaveNoIndependentColorSources) {
                 violations.push_back(relative);
                 break;
             }
+        }
+        if (relative == "src/Theme.cpp" &&
+            std::regex_search(contents, themeBareRgbLiteral)) {
+            violations.push_back(relative);
         }
     }
     ASSERT_TRUE(violations.empty());
