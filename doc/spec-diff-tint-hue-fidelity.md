@@ -89,6 +89,26 @@ give up to a literal fallback on any failure" flow with a search that:
   Process kinds in a fixed, deterministic order (Added, then Deleted, then
   Modified) so each new kind's search is aware of the already-fixed
   colors before it.
+- **Deterministic bounds and tie-break (settled, not left to
+  implementation choice):** candidates are enumerated on a fixed integer
+  grid — weight and retainedSaturation each stepped in whole percentage
+  points from the kind's existing starting ceiling (row: 40%/60%; word:
+  72%/85%, unchanged as upper bounds) DOWN to 1%, in that order (weight
+  outer loop, retainedSaturation inner loop, both strictly decreasing, so
+  the walk is finite — at most 100×100 candidates per kind — and always
+  terminates). The FIRST candidate (in this fixed enumeration order) that
+  passes readable() AND is distinct from the background and from every
+  already-fixed kind at this tier, at both depths, is chosen — ties (more
+  than one candidate at the same weight passing) break to the HIGHEST
+  retainedSaturation at that weight (preserves as much of the anchor's
+  original hue/chroma as possible; weight is prioritized over saturation
+  because weight controls how strongly the anchor blends into the
+  background — the primary lightness/wash-strength knob — while retained
+  saturation is the secondary color-purity knob). If the entire grid is
+  exhausted with no passing candidate for a kind, derivation for the WHOLE
+  six-tuple fails and the rescue path (Fix 2) is used — this is the only
+  case a real (non-degenerate) theme should reach it, and Acceptance
+  requires proving the shipped theme does not.
 - If, after this joint search, the six-tuple is readable and distinct at
   both depths, return it — the shipped theme's clearly-separated anchors are
   expected to succeed here without ever reaching a fallback (this is the
@@ -161,6 +181,29 @@ BOTH Truecolor and Indexed256 — it is the oracle that would have caught
 this regression immediately, and the one this spec's Acceptance section
 requires be written FIRST (red-before-green) against the current
 (fallback-triggering) code.
+
+**Concrete hue computation (settled, not left to implementation choice):**
+hue is the standard HSL hue channel (degrees, 0–360, computed from sRGB via
+the conventional max/min-channel formula — the same well-known conversion
+this codebase's existing `lab()`/`deltaE()` functions neighbor, but HSL hue
+specifically, not CIE hue, since HSL hue is simpler, has no chroma-dependent
+instability near gray, and is the natural fit for "is this reddish vs
+greenish vs orangeish"). Hue DISTANCE between two angles is the standard
+circular/wraparound distance: `min(|a-b|, 360-|a-b|)`, never a naive linear
+subtraction (which would wrongly report ~350° apart as far when it is
+actually 10° apart across the 0°/360° wrap). Tolerance: ±40° from the
+anchor's own hue — chosen because the intentional darkening/desaturation
+this feature applies can shift HSL hue slightly at very low
+lightness/saturation (where hue becomes numerically less stable), and 40°
+is comfortably narrower than the ~120° separation between the red/green/
+orange family members themselves (so no tolerance window can overlap
+another family's), while still admitting the shift. Validate this
+concretely against the shipped theme's actual anchors
+(`GitAdded={76,175,80}`, `GitDeleted={239,74,74}`,
+`GitModified={212,149,106}`) during implementation; narrow the tolerance if
+40° proves too permissive to actually distinguish families for these
+specific anchors (it should not be, given ~120° family separation, but
+confirm rather than assume).
 
 ## Invariants
 
@@ -259,24 +302,31 @@ requires be written FIRST (red-before-green) against the current
     tolerance of `GitAdded`/`GitDeleted`/`GitModified`'s own hues for the
     corresponding row/word tint pairs. This is the oracle this project's
     existing test suite was missing.
-  - no-fallback-for-non-degenerate-theme: an explicit test asserting the
-    shipped default theme's derived tints are NOT bit-identical to
-    `fixedFallback`'s output (a direct regression guard for this exact bug)
-    — actually, once Fix 2 lands, this becomes "not bit-identical to the
-    SYNTHETIC-hue rescue's output either," since a literal constant no
-    longer exists to compare against; restate as: the shipped theme's
-    result is reached via the PRIMARY (anchor-derived) path, verifiable by
-    a test hook or by construction (the joint search's success is provable
-    without needing a private-implementation-detail assertion — prefer
-    proving it via the hue-fidelity oracle above, which the rescue path,
-    now also hue-correct, would ALSO satisfy, so the real distinguishing
-    proof is that primary-path color VALUES correlate closely with the
-    theme's actual anchor hues rather than a fixed synthetic angle).
+  - no-fallback-for-non-degenerate-theme: **concrete testability seam
+    (settled, not left ambiguous)** — `deriveDiffTints` gains an internal
+    result type (or the existing function is split into a testable helper
+    plus a thin public wrapper) that reports WHICH path produced the
+    returned tints: `Primary` (the joint anchor-derived search succeeded)
+    or `Rescue` (the search exhausted and the synthetic-hue fallback was
+    used). This is test-only-visible detail (e.g. an overload or a
+    `namespace ssg::testing`-style accessor), not a change to
+    `DiffTints`'s public shape or the render path, which only ever needs
+    the final colors. The test asserts the shipped default theme's path is
+    `Primary`, directly and unambiguously — no need to infer it indirectly
+    from hue correlation. This directly answers reviewer scrutiny: the
+    hue-fidelity oracle alone cannot distinguish "primary path, correctly
+    hued" from "rescue path, ALSO correctly hued" (both are expected to
+    pass hue-fidelity once Fix 2 lands) — the path-reporting seam is what
+    makes "the shipped theme never needs rescue" a directly provable,
+    non-circular fact rather than an inference.
   - generality: the near-monochrome and light-theme fixture tests continue
     to pass (updated values as needed, per Risks); a NEW synthetic
     non-degenerate, non-shipped-theme fixture (Considerations) also passes
     hue-fidelity and readability/distinctness at both depths, proving the
-    search is not tuned to the shipped palette specifically.
+    search is not tuned to the shipped palette specifically, AND is
+    confirmed (via the same path-reporting seam) to take the `Primary`
+    path, not `Rescue` — a non-degenerate fixture theme silently depending
+    on rescue would itself indicate the joint search is too weak.
   - regression: `test_color.cpp`/`test_theme.cpp`'s existing readability/
     distinctness gates (from `doc/spec-color-depth-defaults.md`) continue to
     pass unmodified in their PROPERTY (only fallback-triggered VALUES may
@@ -287,7 +337,7 @@ requires be written FIRST (red-before-green) against the current
 | # | Step | Files | Oracle | Invariants |
 |---|------|-------|--------|------------|
 | 1 | Red-before-green: add the hue-fidelity property test against the shipped theme at both depths (must fail against current `c3d0003` code, which returns `fixedFallback`'s blue/black palette) | `tests/test_theme.cpp` | fails pre-fix | - |
-| 2 | Implement the joint, hue-preserving derivation search (Fix 1) so the shipped theme's anchors succeed via the primary path without fallback | `src/Theme.cpp` | step 1's oracle passes for the shipped theme | I22 |
+| 2 | Add the path-reporting testability seam (Primary/Rescue) to `deriveDiffTints`; implement the joint, hue-preserving derivation search (Fix 1) so the shipped theme's anchors succeed via the Primary path without rescue | `src/Theme.cpp`, `include/ssg/Theme.h` if the seam needs a declared type | step 1's oracle passes for the shipped theme; new test asserts the shipped theme's path is `Primary` | I22 |
 | 3 | Replace `fixedFallback`'s hardcoded RGB constants with the theme-derived synthetic-hue rescue (Fix 2); update near-monochrome/light-theme fixture test expectations if their taken values change | `src/Theme.cpp`, `tests/test_theme.cpp` | near-monochrome/light-theme fixtures still readable+distinct+now hue-correct at both depths; new synthetic non-degenerate fixture (Considerations) passes | I22 |
 | 4 | Strengthen or replace the color-authority scanner to close the brace-elision gap (Fix 3) | `tests/test_theme.cpp` | scanner now flags a reintroduced bare-literal palette; no new false positives against the current codebase | I22 |
 | 5 | Regenerate any golden/fixture files whose rendered output embeds the (now-corrected) diff-tint hex values | `tests/fixtures/tui/*.txt` (`SSG_REGEN_GOLDEN=1`), any other fixture embedding theme/diff_tints hex values (search beyond `tests/fixtures/tui/`) | dual-gate green | snapshot/delta symmetry |
