@@ -31,12 +31,14 @@
 #include <cerrno>
 #include <csignal>
 #include <chrono>
+#include <condition_variable>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
 #include <algorithm>
 #include <any>
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <mutex>
@@ -272,6 +274,17 @@ ssg::CommandHandlerResult dispatchInitScriptCommand(
         "unknown init-script command: " + std::string{invocation.commandId});
 }
 
+// True for empty or whitespace-only content -- treated as "nothing to
+// run", same as an absent file, so a zero-byte read observed mid-truncate
+// (or mid-save, before an editor writes real bytes) can never be queued
+// or evaluated as a false "successful reload of nothing" (evaluateInitScript
+// below must never be called with this).
+bool isBlank(std::string const& text) {
+    return std::all_of(text.begin(), text.end(), [](unsigned char byte) {
+        return std::isspace(byte) != 0;
+    });
+}
+
 // Evaluates `script` (already read from `scriptPath`, used only for
 // diagnostic messages) through a FRESH sandboxed LuaCommandHost attached as
 // the synthetic Lua-origin client, then detaches it -- the SAME path used
@@ -280,7 +293,8 @@ ssg::CommandHandlerResult dispatchInitScriptCommand(
 // diagnostic and otherwise changes nothing -- MUST NEVER be called with an
 // empty/whitespace-only `script`, since an empty Lua chunk is trivially
 // valid and would look like a silent successful "reload" of nothing; the
-// callers below only invoke this when there is real content to run.
+// callers below only invoke this when there is real content to run (see
+// isBlank above, applied at every read site before this is called).
 void evaluateInitScript(ssg::EditorRuntime& runtime,
                         std::filesystem::path const& scriptPath,
                         std::string const& script) {
@@ -323,11 +337,13 @@ std::optional<std::filesystem::path> resolveInitScriptPath() {
     }
 }
 
-// Reads `scriptPath`'s full content if it currently exists. Returns nullopt
-// silently (NO diagnostic) if the file simply does not exist -- the normal
-// no-config case, and also the steady state after a mid-run delete (see
-// InitScriptWatcher below). Prints a diagnostic and returns nullopt for a
-// genuine I/O error (a stat or read failure other than "does not exist").
+// Reads `scriptPath`'s full content if it currently exists AND is not
+// blank. Returns nullopt silently (NO diagnostic) if the file simply does
+// not exist, or exists but is empty/whitespace-only -- both are "nothing
+// to run", the normal no-config case, and also the steady state after a
+// mid-run delete (see InitScriptWatcher below). Prints a diagnostic and
+// returns nullopt for a genuine I/O error (a stat or read failure other
+// than "does not exist").
 std::optional<std::string> readInitScriptIfPresent(
     std::filesystem::path const& scriptPath) {
     std::error_code existsError;
@@ -347,7 +363,9 @@ std::optional<std::string> readInitScriptIfPresent(
     }
     std::ostringstream buffer;
     buffer << input.rdbuf();
-    return buffer.str();
+    auto text = buffer.str();
+    if (isBlank(text)) return std::nullopt;
+    return text;
 }
 
 // Loads and evaluates `init.lua` exactly once at startup, via
@@ -355,13 +373,16 @@ std::optional<std::string> readInitScriptIfPresent(
 // Absent file, or any of the diagnostic-then-return-nullopt cases above:
 // silently continue starting with defaults (see doc/spec-config.md's
 // Invariants -- a broken config script must never block opening the
-// editor).
-void loadInitScript(ssg::EditorRuntime& runtime) {
+// editor). Returns the content actually applied (or nullopt), so the
+// caller can seed InitScriptWatcher's "last applied" baseline and avoid
+// redundantly re-evaluating the SAME unchanged content on its first poll.
+std::optional<std::string> loadInitScript(ssg::EditorRuntime& runtime) {
     auto const scriptPath = resolveInitScriptPath();
-    if (!scriptPath) return;
-    auto const script = readInitScriptIfPresent(*scriptPath);
-    if (!script) return;
+    if (!scriptPath) return std::nullopt;
+    auto script = readInitScriptIfPresent(*scriptPath);
+    if (!script) return std::nullopt;
     evaluateInitScript(runtime, *scriptPath, *script);
+    return script;
 }
 
 // How often the background thread re-reads init.lua's content to check for
@@ -383,8 +404,15 @@ constexpr std::chrono::milliseconds kInitScriptPollInterval{500};
 // which only ever reads file bytes and compares strings.
 class InitScriptWatcher {
 public:
-    explicit InitScriptWatcher(std::filesystem::path scriptPath)
-        : scriptPath_{std::move(scriptPath)} {
+    // `alreadyApplied` is whatever content `loadInitScript()` already
+    // evaluated at startup (or nullopt if none) -- seeding the "last
+    // applied" baseline with it so the watcher's FIRST poll never
+    // redundantly re-queues the SAME unchanged startup content as if it
+    // were a new edit.
+    InitScriptWatcher(std::filesystem::path scriptPath,
+                      std::optional<std::string> alreadyApplied)
+        : scriptPath_{std::move(scriptPath)},
+          lastApplied_{std::move(alreadyApplied).value_or(std::string{})} {
         if (::pipe(wakePipe_) != 0) {
             wakePipe_[0] = wakePipe_[1] = -1;
             return;
@@ -407,6 +435,10 @@ public:
                 std::lock_guard lock{mutex_};
                 stop_ = true;
             }
+            // Notify rather than rely on the poll interval elapsing, so
+            // shutdown is prompt instead of blocking for up to
+            // kInitScriptPollInterval.
+            wake_.notify_all();
             thread_.join();
         }
         if (wakePipe_[0] != -1) (void)::close(wakePipe_[0]);
@@ -442,44 +474,42 @@ public:
 
 private:
     void run() {
-        // The content last observed as fully settled (two identical
-        // consecutive reads) -- empty both initially and after a delete is
-        // observed, so a later recreation compares against an empty
-        // baseline and reloads exactly like any other change (doc/spec-
-        // config.md: recreate behaves like the file appearing for the
-        // first time).
-        std::string lastApplied;
+        // `lastRead` is the previous poll's reading (to detect two
+        // consecutive identical reads = stable); `lastApplied_` (shared
+        // with the constructor's seed) is the content last actually
+        // queued for evaluation -- empty after a delete is observed, so a
+        // later recreation compares against an empty baseline and reloads
+        // exactly like any other change (doc/spec-config.md: recreate
+        // behaves like the file appearing for the first time).
         std::optional<std::string> lastRead;
-        while (true) {
-            {
-                std::lock_guard lock{mutex_};
-                if (stop_) return;
-            }
+        std::unique_lock lock{mutex_};
+        while (!stop_) {
+            lock.unlock();
             auto current = readInitScriptIfPresentQuiet(scriptPath_);
+            lock.lock();
             if (current && lastRead && *current == *lastRead &&
-                *current != lastApplied) {
+                *current != lastApplied_) {
                 // Stable across two consecutive polls (this reading and
                 // the last) AND different from what was last applied --
                 // queue it and wake the main thread.
-                lastApplied = *current;
-                bool wasEmpty = false;
-                {
-                    std::lock_guard lock{mutex_};
-                    wasEmpty = !pendingScript_.has_value();
-                    pendingScript_ = *current;
-                }
+                lastApplied_ = *current;
+                bool const wasEmpty = !pendingScript_.has_value();
+                pendingScript_ = *current;
                 if (wasEmpty) {
                     char const tag = 'i';
                     (void)::write(wakePipe_[1], &tag, 1);
                 }
             } else if (!current) {
-                // Deleted (or unreadable): clear the applied baseline so a
-                // later recreation is treated as fresh, per doc/spec-
-                // config.md -- but take NO action on the runtime itself.
-                lastApplied.clear();
+                // Deleted, unreadable, or blank (readInitScriptIfPresentQuiet
+                // treats blank the same as absent -- see isBlank): clear the
+                // applied baseline so a later recreation is treated as
+                // fresh, per doc/spec-config.md -- but take NO action on
+                // the runtime itself.
+                lastApplied_.clear();
             }
             lastRead = current;
-            std::this_thread::sleep_for(kInitScriptPollInterval);
+            wake_.wait_for(lock, kInitScriptPollInterval,
+                           [this] { return stop_; });
         }
     }
 
@@ -488,6 +518,9 @@ private:
     // read failure (e.g. observed mid-rename) must not spam stderr; only
     // the eventual evaluateInitScript() call (on a STABLE, successfully
     // read script) can ever produce a diagnostic, exactly like startup.
+    // Blank content (see isBlank) is treated the same as absent, so a
+    // zero-byte read observed mid-truncate/mid-save can never be queued or
+    // evaluated as a false "successful reload of nothing".
     static std::optional<std::string> readInitScriptIfPresentQuiet(
         std::filesystem::path const& scriptPath) {
         std::error_code existsError;
@@ -497,14 +530,18 @@ private:
         if (!input) return std::nullopt;
         std::ostringstream buffer;
         buffer << input.rdbuf();
-        return buffer.str();
+        auto text = buffer.str();
+        if (isBlank(text)) return std::nullopt;
+        return text;
     }
 
     std::filesystem::path scriptPath_;
     int wakePipe_[2] = {-1, -1};
     std::thread thread_;
     std::mutex mutex_;
+    std::condition_variable wake_;
     bool stop_ = false;
+    std::string lastApplied_;
     std::optional<std::string> pendingScript_;
 };
 
@@ -546,16 +583,19 @@ int main(int argc, char** argv) {
     }
     STARTUP_MARK("post_attach");
 
-    loadInitScript(runtime);
+    auto const appliedInitScript = loadInitScript(runtime);
     STARTUP_MARK("post_init_script");
 
     // doc/spec-config.md's auto-reload: watches the SAME path just loaded
     // above, on a background thread, and wakes the main loop's select() to
     // re-evaluate it when it changes. Absent if the config root itself
     // could not be resolved (already diagnosed by loadInitScript above).
+    // Seeded with whatever loadInitScript already applied, so the
+    // watcher's first poll never redundantly re-queues the SAME unchanged
+    // startup content as if it were a new edit.
     std::optional<InitScriptWatcher> initScriptWatcher;
     if (auto scriptPath = resolveInitScriptPath()) {
-        initScriptWatcher.emplace(*scriptPath);
+        initScriptWatcher.emplace(*scriptPath, appliedInitScript);
     }
 
     if (target.file) {
