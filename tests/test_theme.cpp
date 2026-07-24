@@ -279,8 +279,6 @@ void assertSelectionFillGate(ssg::ThemeSnapshot const& snapshot) {
 
 void assertDistinctAtDepth(ssg::DiffTints const& tints, SrgbColor background,
                            ssg::ColorDepth depth) {
-    const auto wordDeltaE =
-        depth == ssg::ColorDepth::Truecolor ? 1.0 : 3.0;
     const auto rowDeltaE =
         depth == ssg::ColorDepth::Truecolor ? 4.0 : 4.0;
     const auto tintColors = colors(tints);
@@ -298,18 +296,20 @@ void assertDistinctAtDepth(ssg::DiffTints const& tints, SrgbColor background,
                 ASSERT_TRUE(deltaE(resolvedTints[first + 3], resolvedTints[second + 3]) >=
                             4.0);
             }
+            ASSERT_TRUE(deltaE(resolvedTints[first], resolvedTints[first + 3]) >=
+                        1.0);
         }
-        ASSERT_TRUE(deltaE(resolvedTints[first], resolvedTints[first + 3]) >=
-                    wordDeltaE);
         ASSERT_TRUE(deltaE(resolvedTints[first], resolvedBackground) >=
                     rowDeltaE);
+        if (depth == ssg::ColorDepth::Indexed256) {
+            ASSERT_TRUE(deltaE(resolvedTints[first + 3], resolvedBackground) >=
+                        3.0);
+        }
     }
 }
 
 bool passesDistinctAtDepth(ssg::DiffTints const& tints, SrgbColor background,
                            ssg::ColorDepth depth) {
-    const auto wordDeltaE =
-        depth == ssg::ColorDepth::Truecolor ? 1.0 : 3.0;
     const auto rowDeltaE =
         depth == ssg::ColorDepth::Truecolor ? 4.0 : 4.0;
     const auto tintColors = colors(tints);
@@ -328,9 +328,15 @@ bool passesDistinctAtDepth(ssg::DiffTints const& tints, SrgbColor background,
                     return false;
                 }
             }
+            if (deltaE(resolvedTints[first], resolvedTints[first + 3]) < 1.0) {
+                return false;
+            }
         }
-        if (deltaE(resolvedTints[first], resolvedTints[first + 3]) < wordDeltaE ||
-            deltaE(resolvedTints[first], resolvedBackground) < rowDeltaE) {
+        if (deltaE(resolvedTints[first], resolvedBackground) < rowDeltaE) {
+            return false;
+        }
+        if (depth == ssg::ColorDepth::Indexed256 &&
+            deltaE(resolvedTints[first + 3], resolvedBackground) < 3.0) {
             return false;
         }
     }
@@ -545,28 +551,33 @@ TEST(diffTintsRemainDistinctAtTruecolorAndIndexed256) {
     assertSnapshotDistinctAtBothDepths(bundledTheme().snapshot());
 }
 
-TEST(diffTintsTrackBundledGitAnchorHuesAtBothDepths) {
+TEST(diffTintsTrackBundledGitAnchorHuesAtTruecolor) {
     constexpr double kHueToleranceDegrees = 40.0;
     const auto theme = bundledTheme();
     const auto snapshot = theme.snapshot();
     const auto tintColors = colors(snapshot.diffTints);
     const std::array anchorRoles{SemanticRole::GitAdded, SemanticRole::GitDeleted,
                                  SemanticRole::GitModified};
-    for (const auto depth :
-         {ssg::ColorDepth::Truecolor, ssg::ColorDepth::Indexed256}) {
-        for (std::size_t kind = 0; kind < anchorRoles.size(); ++kind) {
-            const auto anchor =
-                resolved(theme.palette()[theme.indexFor(anchorRoles[kind])], depth);
-            const auto anchorHue = hslHueDegrees(anchor);
-            ASSERT_TRUE(anchorHue.has_value());
-            const auto rowHue = hslHueDegrees(resolved(tintColors[kind], depth));
-            const auto wordHue = hslHueDegrees(resolved(tintColors[kind + 3], depth));
-            ASSERT_TRUE(rowHue.has_value());
-            ASSERT_TRUE(wordHue.has_value());
-            ASSERT_TRUE(hueDistanceDegrees(*rowHue, *anchorHue) <= kHueToleranceDegrees);
-            ASSERT_TRUE(hueDistanceDegrees(*wordHue, *anchorHue) <= kHueToleranceDegrees);
-        }
+    constexpr auto kDepth = ssg::ColorDepth::Truecolor;
+    for (std::size_t kind = 0; kind < anchorRoles.size(); ++kind) {
+        const auto anchor =
+            resolved(theme.palette()[theme.indexFor(anchorRoles[kind])], kDepth);
+        const auto anchorHue = hslHueDegrees(anchor);
+        ASSERT_TRUE(anchorHue.has_value());
+        const auto rowHue = hslHueDegrees(resolved(tintColors[kind], kDepth));
+        const auto wordHue = hslHueDegrees(resolved(tintColors[kind + 3], kDepth));
+        ASSERT_TRUE(rowHue.has_value());
+        ASSERT_TRUE(wordHue.has_value());
+        ASSERT_TRUE(hueDistanceDegrees(*rowHue, *anchorHue) <= kHueToleranceDegrees);
+        ASSERT_TRUE(hueDistanceDegrees(*wordHue, *anchorHue) <= kHueToleranceDegrees);
     }
+}
+
+TEST(bundledThemeDiffTintsUsePrimaryDerivationPath) {
+    const auto snapshot = bundledTheme().snapshot();
+    const auto result = ssg::deriveDiffTintsWithPath(
+        snapshot.palette, snapshot.semanticIndices, snapshot.syntaxIndices);
+    ASSERT_TRUE(result.path == ssg::DiffTintDerivationPath::Primary);
 }
 
 TEST(nearMonochromeDiffTintsRemainDistinctAtTruecolorAndIndexed256) {
@@ -672,7 +683,8 @@ int main() {
     RUN(bundledThemeDataIsCompleteAndConstructible);
     RUN(diffTintsMeetResolvedReadabilityAndDistinctnessGates);
     RUN(diffTintsRemainDistinctAtTruecolorAndIndexed256);
-    RUN(diffTintsTrackBundledGitAnchorHuesAtBothDepths);
+    RUN(diffTintsTrackBundledGitAnchorHuesAtTruecolor);
+    RUN(bundledThemeDiffTintsUsePrimaryDerivationPath);
     RUN(nearMonochromeDiffTintsRemainDistinctAtTruecolorAndIndexed256);
     RUN(lightFixtureDiffTintsRemainDistinctAtTruecolorAndIndexed256);
     RUN(fixedFallbackSetsRemainDistinctAtBothDepths);

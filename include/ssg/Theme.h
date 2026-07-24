@@ -192,6 +192,16 @@ struct DiffTints {
     friend bool operator==(const DiffTints&, const DiffTints&) = default;
 };
 
+enum class DiffTintDerivationPath : std::uint8_t { Primary, Rescue };
+
+struct DiffTintDerivationResult {
+    DiffTints tints;
+    DiffTintDerivationPath path = DiffTintDerivationPath::Rescue;
+
+    friend bool operator==(const DiffTintDerivationResult&,
+                           const DiffTintDerivationResult&) = default;
+};
+
 struct ThemeSnapshot {
     std::array<SrgbColor, kThemePaletteSize> palette;
     std::array<std::uint8_t, kSemanticRoleCount> semanticIndices;
@@ -213,6 +223,10 @@ struct ThemeSnapshot {
 // the runtime's defaultTheme) populates diffTints/selectionFill the same way
 // Theme::snapshot() does; without it those fields default to black.
 [[nodiscard]] DiffTints deriveDiffTints(
+    std::array<SrgbColor, kThemePaletteSize> const& palette,
+    std::array<std::uint8_t, kSemanticRoleCount> const& semanticIndices,
+    std::array<std::uint8_t, kSyntaxScopeCount> const& syntaxIndices) noexcept;
+[[nodiscard]] DiffTintDerivationResult deriveDiffTintsWithPath(
     std::array<SrgbColor, kThemePaletteSize> const& palette,
     std::array<std::uint8_t, kSemanticRoleCount> const& semanticIndices,
     std::array<std::uint8_t, kSyntaxScopeCount> const& syntaxIndices) noexcept;

@@ -222,14 +222,26 @@ bool readable(
 
 SrgbColor strongestReadableTint(
     SrgbColor background, SrgbColor anchor, double desiredWeight,
-    double retainedSaturation,
+    double retainedSaturation, double truecolorBackgroundDeltaE,
+    double indexedBackgroundDeltaE,
     std::array<SrgbColor, kSyntaxScopeCount + 1> const& foregrounds) noexcept {
+    const auto distinctFromBackground = [&](SrgbColor candidate) {
+        return deltaE(resolveColor(candidate, ColorDepth::Truecolor).rgb,
+                      resolveColor(background, ColorDepth::Truecolor).rgb) >=
+                   truecolorBackgroundDeltaE &&
+               deltaE(resolveColor(candidate, ColorDepth::Indexed256).rgb,
+                      resolveColor(background, ColorDepth::Indexed256).rgb) >=
+                   indexedBackgroundDeltaE;
+    };
     const auto mutedAnchor = desaturate(anchor, retainedSaturation);
     const auto steps = static_cast<int>(std::lround(desiredWeight * 100.0));
     for (int step = steps; step >= 1; --step) {
         const auto candidate =
             interpolate(background, mutedAnchor, static_cast<double>(step) / 100.0);
-        if (readable(candidate, background, foregrounds)) return candidate;
+        if (readable(candidate, background, foregrounds) &&
+            distinctFromBackground(candidate)) {
+            return candidate;
+        }
     }
     return background;
 }
@@ -237,9 +249,6 @@ SrgbColor strongestReadableTint(
 bool distinct(DiffTints const& tints, SrgbColor background) noexcept {
     const auto tintColors = colors(tints);
     for (const auto depth : {ColorDepth::Truecolor, ColorDepth::Indexed256}) {
-        const auto wordDeltaE = depth == ColorDepth::Truecolor
-                                    ? kWordDeltaETruecolor
-                                    : kWordDeltaEIndexed256;
         const auto rowDeltaE = depth == ColorDepth::Truecolor
                                    ? kRowDeltaETruecolor
                                    : kRowDeltaEIndexed256;
@@ -259,9 +268,17 @@ bool distinct(DiffTints const& tints, SrgbColor background) noexcept {
                         return false;
                     }
                 }
+                if (deltaE(resolved[first], resolved[first + 3]) <
+                    kWordDeltaETruecolor) {
+                    return false;
+                }
             }
-            if (deltaE(resolved[first], resolved[first + 3]) < wordDeltaE ||
-                deltaE(resolved[first], resolvedBackground) < rowDeltaE) {
+            if (deltaE(resolved[first], resolvedBackground) < rowDeltaE) {
+                return false;
+            }
+            if (depth == ColorDepth::Indexed256 &&
+                deltaE(resolved[first + 3], resolvedBackground) <
+                    kWordDeltaEIndexed256) {
                 return false;
             }
         }
@@ -280,7 +297,7 @@ DiffTints fixedFallback(bool lightBackground) noexcept {
 
 } // namespace
 
-DiffTints deriveDiffTints(
+DiffTintDerivationResult deriveDiffTintsWithPath(
     std::array<SrgbColor, kThemePaletteSize> const& palette,
     std::array<std::uint8_t, kSemanticRoleCount> const& semanticIndices,
     std::array<std::uint8_t, kSyntaxScopeCount> const& syntaxIndices) noexcept {
@@ -298,9 +315,11 @@ DiffTints deriveDiffTints(
         &derived.addedWord, &derived.removedWord, &derived.modifiedWord};
     for (std::size_t kind = 0; kind < anchors.size(); ++kind) {
         *derivedColors[kind] = strongestReadableTint(
-            themeBackground, anchors[kind], 0.40, 0.60, allForegrounds);
+            themeBackground, anchors[kind], 0.40, 0.60, kRowDeltaETruecolor,
+            kRowDeltaEIndexed256, allForegrounds);
         *derivedColors[kind + 3] = strongestReadableTint(
-            themeBackground, anchors[kind], 0.72, 0.85, allForegrounds);
+            themeBackground, anchors[kind], 0.72, 0.85, kWordDeltaETruecolor,
+            kWordDeltaEIndexed256, allForegrounds);
     }
 
     // Prefer the derived washes when they are readable and stay distinct at both
@@ -311,20 +330,27 @@ DiffTints deriveDiffTints(
     // the primary guarantee).
     if (readable(derived, themeBackground, allForegrounds) &&
         distinct(derived, themeBackground)) {
-        return derived;
+        return {derived, DiffTintDerivationPath::Primary};
     }
     const bool lightBackground = luminance(themeBackground) > 0.5;
     const auto preferredFallback = fixedFallback(lightBackground);
     if (readable(preferredFallback, themeBackground, allForegrounds) &&
         distinct(preferredFallback, themeBackground)) {
-        return preferredFallback;
+        return {preferredFallback, DiffTintDerivationPath::Rescue};
     }
     const auto alternateFallback = fixedFallback(!lightBackground);
     if (readable(alternateFallback, themeBackground, allForegrounds) &&
         distinct(alternateFallback, themeBackground)) {
-        return alternateFallback;
+        return {alternateFallback, DiffTintDerivationPath::Rescue};
     }
-    return derived;
+    return {derived, DiffTintDerivationPath::Rescue};
+}
+
+DiffTints deriveDiffTints(
+    std::array<SrgbColor, kThemePaletteSize> const& palette,
+    std::array<std::uint8_t, kSemanticRoleCount> const& semanticIndices,
+    std::array<std::uint8_t, kSyntaxScopeCount> const& syntaxIndices) noexcept {
+    return deriveDiffTintsWithPath(palette, semanticIndices, syntaxIndices).tints;
 }
 
 SrgbColor deriveSelectionFill(
@@ -335,8 +361,8 @@ SrgbColor deriveSelectionFill(
     const auto themeBackground = background(palette, semanticIndices);
     const auto selectionAnchor =
         palette[semanticIndices[position(SemanticRole::Selection)]];
-    return strongestReadableTint(themeBackground, selectionAnchor, 0.40, 0.60,
-                                 allForegrounds);
+    return strongestReadableTint(themeBackground, selectionAnchor, 0.40, 0.60, 0.0,
+                                 0.0, allForegrounds);
 }
 
 std::string_view semanticRoleName(SemanticRole role) {
