@@ -34,86 +34,127 @@ const TSLanguage* tree_sitter_lua();
 
 class TreeSitterParse final : public OpaqueSyntaxParse {};
 
-struct GrammarSpec {
-    std::array<std::string_view, 4> ids;
-    const TSLanguage* (*language)();
-    // Key into the generated embedded-query table, NOT a path: the queries are
-    // compiled into the binary so a moved or absent source tree cannot silently
-    // cost us highlighting.
-    std::string_view queryKey;
-    // Highlight query for the base grammar this one inherits (tree-sitter's
-    // "; inherits:" directive, which ts_query_new does not process). Its rules
-    // are prepended so this grammar's specific rules override them. Empty = none.
-    std::string_view inheritsQueryKey;
+// Adapts a tree-sitter entry point to the public opaque handle.  Captureless
+// lambdas convert to plain function pointers, which keeps this well-defined --
+// casting between function pointer types would not be.
+TreeSitterGrammar vendoredGrammar(std::vector<std::string> ids,
+                                  SyntaxLanguageFactory language,
+                                  std::string_view queryKey,
+                                  std::string_view inheritsQueryKey) {
+    TreeSitterGrammar grammar;
+    grammar.languageIds = std::move(ids);
+    grammar.language = language;
+    grammar.highlightQuery = std::string{embeddedHighlightQuery(queryKey)};
+    if (!inheritsQueryKey.empty()) {
+        grammar.inheritedHighlightQuery =
+            std::string{embeddedHighlightQuery(inheritsQueryKey)};
+    }
+    return grammar;
+}
+
+}  // namespace
+
+std::vector<TreeSitterGrammar> vendoredTreeSitterGrammars() {
+    std::vector<TreeSitterGrammar> grammars;
+    grammars.push_back(vendoredGrammar(
+        {"c"}, [] -> SyntaxLanguageHandle { return tree_sitter_c(); }, "c", ""));
+    grammars.push_back(vendoredGrammar(
+        {"cpp", "c++", "cc"},
+        [] -> SyntaxLanguageHandle { return tree_sitter_cpp(); }, "cpp", "c"));
+    grammars.push_back(vendoredGrammar(
+        {"javascript", "js"},
+        [] -> SyntaxLanguageHandle { return tree_sitter_javascript(); },
+        "javascript", ""));
+    grammars.push_back(vendoredGrammar(
+        {"typescript", "ts"},
+        [] -> SyntaxLanguageHandle { return tree_sitter_typescript(); },
+        "typescript", "javascript"));
+    grammars.push_back(vendoredGrammar(
+        {"csharp", "c#", "cs"},
+        [] -> SyntaxLanguageHandle { return tree_sitter_c_sharp(); }, "csharp",
+        ""));
+    grammars.push_back(vendoredGrammar(
+        {"lua"}, [] -> SyntaxLanguageHandle { return tree_sitter_lua(); }, "lua",
+        ""));
+    return grammars;
+}
+
+std::shared_ptr<SyntaxParser> makeTreeSitterParser(
+    std::vector<TreeSitterGrammar> grammars) {
+    return std::make_shared<TreeSitterParser>(std::move(grammars));
+}
+
+std::shared_ptr<SyntaxParser> makeTreeSitterParser() {
+    return std::make_shared<TreeSitterParser>();
+}
+
+// Compiled queries for one parser, keyed by the language id that produced them.
+struct TreeSitterParser::QueryCache {
+    std::mutex mutex;
+    std::unordered_map<std::string,
+                       std::unique_ptr<TSQuery, decltype(&ts_query_delete)>>
+        compiled;
+    std::unordered_set<std::string> failed;
 };
 
-const std::array kGrammars{
-    GrammarSpec{{"c", "", "", ""}, tree_sitter_c, "c", ""},
-    GrammarSpec{{"cpp", "c++", "cc", ""}, tree_sitter_cpp, "cpp", "c"},
-    GrammarSpec{{"javascript", "js", "", ""}, tree_sitter_javascript,
-                "javascript", ""},
-    GrammarSpec{{"typescript", "ts", "", ""}, tree_sitter_typescript,
-                "typescript", "javascript"},
-    GrammarSpec{{"csharp", "c#", "cs", ""}, tree_sitter_c_sharp, "csharp", ""},
-    GrammarSpec{{"lua", "", "", ""}, tree_sitter_lua, "lua", ""},
-};
+TreeSitterParser::TreeSitterParser()
+    : TreeSitterParser(vendoredTreeSitterGrammars()) {}
 
-const GrammarSpec* grammarFor(const LanguageId& language) {
+TreeSitterParser::TreeSitterParser(std::vector<TreeSitterGrammar> grammars)
+    : grammars_(std::move(grammars)),
+      queries_(std::make_unique<QueryCache>()) {}
+
+TreeSitterParser::~TreeSitterParser() = default;
+
+const TreeSitterGrammar* TreeSitterParser::grammarFor(
+    const LanguageId& language) const {
     const auto& id = language.value();
-    for (const auto& grammar : kGrammars) {
-        for (const auto alias : grammar.ids) {
-            if (!alias.empty() && alias == id) {
-                return &grammar;
-            }
+    for (const auto& grammar : grammars_) {
+        if (grammar.language == nullptr) continue;
+        for (const auto& alias : grammar.languageIds) {
+            if (!alias.empty() && alias == id) return &grammar;
         }
     }
     return nullptr;
 }
 
-const TSQuery* queryFor(const GrammarSpec& grammar) {
-    static std::mutex mutex;
-    static std::unordered_map<
-        std::string, std::unique_ptr<TSQuery, decltype(&ts_query_delete)>>
-        queries;
-    static std::unordered_set<std::string> failedQueries;
+namespace {
 
-    std::lock_guard<std::mutex> lock{mutex};
-    const std::string queryKey{grammar.queryKey};
-    if (const auto found = queries.find(queryKey); found != queries.end()) {
+const TSQuery* queryFor(TreeSitterParser::QueryCache& cache,
+                        const TreeSitterGrammar& grammar) {
+    std::lock_guard<std::mutex> lock{cache.mutex};
+    const std::string& key = grammar.languageIds.front();
+    if (const auto found = cache.compiled.find(key); found != cache.compiled.end()) {
         return found->second.get();
     }
-    if (failedQueries.contains(queryKey)) {
+    if (cache.failed.contains(key)) {
         return nullptr;
     }
 
-    const auto querySource = [&] {
-        std::string source;
-        if (!grammar.inheritsQueryKey.empty()) {
-            source += embeddedHighlightQuery(grammar.inheritsQueryKey);
-            source += '\n';
-        }
-        source += embeddedHighlightQuery(grammar.queryKey);
-        return source;
-    }();
-    if (querySource.empty()) {
-        failedQueries.insert(queryKey);
+    std::string source;
+    if (!grammar.inheritedHighlightQuery.empty()) {
+        source += grammar.inheritedHighlightQuery;
+        source += '\n';
+    }
+    source += grammar.highlightQuery;
+    if (source.empty()) {
+        cache.failed.insert(key);
         return nullptr;
     }
 
     std::uint32_t errorOffset = 0;
     TSQueryError errorType = TSQueryErrorNone;
     auto query = std::unique_ptr<TSQuery, decltype(&ts_query_delete)>(
-        ts_query_new(grammar.language(), querySource.data(), querySource.size(),
-                     &errorOffset, &errorType),
+        ts_query_new(static_cast<const TSLanguage*>(grammar.language()),
+                     source.data(), source.size(), &errorOffset, &errorType),
         &ts_query_delete);
     (void)errorOffset;
     if (!query || errorType != TSQueryErrorNone) {
-        failedQueries.insert(queryKey);
+        cache.failed.insert(key);
         return nullptr;
     }
 
-    const auto inserted =
-        queries.emplace(queryKey, std::move(query));
+    const auto inserted = cache.compiled.emplace(key, std::move(query));
     return inserted.first->second.get();
 }
 
@@ -202,7 +243,10 @@ SyntaxParseOutput TreeSitterParser::parse(const SyntaxParseRequest& request) {
 
     std::unique_ptr<TSParser, decltype(&ts_parser_delete)> parser(
         ts_parser_new(), &ts_parser_delete);
-    if (!parser || !ts_parser_set_language(parser.get(), grammar->language())) {
+    if (!parser ||
+        !ts_parser_set_language(
+            parser.get(),
+            static_cast<const TSLanguage*>(grammar->language()))) {
         output.status = SyntaxParseStatus::Failed;
         return output;
     }
@@ -216,7 +260,7 @@ SyntaxParseOutput TreeSitterParser::parse(const SyntaxParseRequest& request) {
         return output;
     }
 
-    const TSQuery* query = queryFor(*grammar);
+    const TSQuery* query = queryFor(*queries_, *grammar);
     if (query == nullptr) {
         output.status = SyntaxParseStatus::Failed;
         return output;

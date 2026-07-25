@@ -150,4 +150,18 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         RUN_SERIAL TRUE)
     set_tests_properties(test_treesitter_syntax PROPERTIES
         RUN_SERIAL TRUE)
+
+    # The public registration seam.  Deliberately does NOT get the vendored
+    # include directories: it must compile against <ssg/TreeSitterGrammars.h>
+    # alone, which is what proves a host is not forced to have tree-sitter's
+    # headers.
+    add_executable(test_treesitter_grammar_registration
+        ${SSG_SOURCE_DIR}/tests/test_treesitter_grammar_registration.cpp
+    )
+    target_include_directories(test_treesitter_grammar_registration PRIVATE
+        ${SSG_SOURCE_DIR}/tests
+    )
+    target_link_libraries(test_treesitter_grammar_registration PRIVATE ssg)
+    add_test(NAME test_treesitter_grammar_registration
+             COMMAND test_treesitter_grammar_registration)
 endif()
