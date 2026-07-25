@@ -110,6 +110,15 @@ public:
     [[nodiscard]] ExternalDiffBurstResult applyExternalDiffBurst(
         std::vector<ExternalDiffRevision> changes);
     [[nodiscard]] GitDiffScanResult applyGitDiffScan(GitDiffScan scan);
+    // Resets the live keymap to defaultTerminalKeymap() -- the same
+    // hand-reviewed keymap installed at EditorRuntime::create. Called by
+    // the host (apps/ssg_main.cpp) immediately before every init.lua
+    // evaluation (startup AND auto-reload), so keymap.bind/keymap.unbind
+    // always start from a clean slate: init.lua's current content is the
+    // WHOLE keymap customization, never additive across reloads (see
+    // doc/spec-config.md's keymap.bind design). A dedicated method rather
+    // than ssg_main.cpp reaching into Impl fields directly.
+    void resetKeymapToDefault();
     // M10 fast startup: run the enrichment work that was deferred when the
     // runtime was created with defer_enrichment=true (the workspace tree scan and
     // syntax highlighting), then publish it through the normal snapshot/delta

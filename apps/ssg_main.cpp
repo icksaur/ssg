@@ -243,15 +243,25 @@ std::vector<ssg::CapabilityId> initScriptCapabilities() { return {}; }
 // or InvocationPrincipal::hasCapability denies it by default, same as any
 // other Lua caller.
 std::vector<ssg::LuaCommand> initScriptCommandCatalog() {
-    return {{"theme.define", {}}};
+    return {{"theme.define", {}}, {"keymap.bind", {}}, {"keymap.unbind", {}}};
+}
+
+// Extracts a string field from a Lua flat-map argument table, or an empty
+// string when absent -- keymap.bind/unbind treat an absent "context" as
+// "*" (see KeymapBindArguments/KeymapUnbindArguments in Keymap.h), so the
+// caller distinguishes "absent" from "empty" only for required fields.
+std::string luaArgument(
+    std::unordered_map<std::string, std::string> const& arguments,
+    std::string_view key) {
+    const auto it = arguments.find(std::string{key});
+    return it == arguments.end() ? std::string{} : it->second;
 }
 
 // Translates one ssg.command(id, args) call from init.lua into the matching
 // ClientCommand payload and dispatches it through the SAME command
-// boundary the palette and every other caller uses. Only theme.define
-// exists today (v1's one config scenario); a later init-script command
-// adds one more `if (invocation.commandId == ...)` branch here, not a new
-// dispatch mechanism.
+// boundary the palette and every other caller uses. A later init-script
+// command adds one more `if (invocation.commandId == ...)` branch here,
+// not a new dispatch mechanism.
 ssg::CommandHandlerResult dispatchInitScriptCommand(
     ssg::EditorRuntime& runtime, ssg::LuaInvocation const& invocation) {
     if (invocation.commandId == "theme.define") {
@@ -266,6 +276,37 @@ ssg::CommandHandlerResult dispatchInitScriptCommand(
         auto result = runtime.dispatch(
             kInitScriptClientId,
             {"theme.define", runtime.revision(), arguments});
+        return result.accepted()
+                   ? ssg::CommandHandlerResult::success()
+                   : ssg::CommandHandlerResult::failure(result.message);
+    }
+    if (invocation.commandId == "keymap.bind") {
+        if (!invocation.arguments) {
+            return ssg::CommandHandlerResult::failure(
+                "keymap.bind requires a sequence/command argument table");
+        }
+        ssg::KeymapBindArguments arguments{
+            luaArgument(*invocation.arguments, "sequence"),
+            luaArgument(*invocation.arguments, "command"),
+            luaArgument(*invocation.arguments, "context")};
+        auto result = runtime.dispatch(
+            kInitScriptClientId,
+            {"keymap.bind", runtime.revision(), arguments});
+        return result.accepted()
+                   ? ssg::CommandHandlerResult::success()
+                   : ssg::CommandHandlerResult::failure(result.message);
+    }
+    if (invocation.commandId == "keymap.unbind") {
+        if (!invocation.arguments) {
+            return ssg::CommandHandlerResult::failure(
+                "keymap.unbind requires a sequence argument table");
+        }
+        ssg::KeymapUnbindArguments arguments{
+            luaArgument(*invocation.arguments, "sequence"),
+            luaArgument(*invocation.arguments, "context")};
+        auto result = runtime.dispatch(
+            kInitScriptClientId,
+            {"keymap.unbind", runtime.revision(), arguments});
         return result.accepted()
                    ? ssg::CommandHandlerResult::success()
                    : ssg::CommandHandlerResult::failure(result.message);
@@ -298,6 +339,12 @@ bool isBlank(std::string const& text) {
 void evaluateInitScript(ssg::EditorRuntime& runtime,
                         std::filesystem::path const& scriptPath,
                         std::string const& script) {
+    // keymap.bind/unbind's "reset-then-reapply" model: init.lua's current
+    // content is the WHOLE keymap customization on every evaluation
+    // (startup and every later auto-reload), never additive -- so a line
+    // removed from init.lua reverts that binding on the next reload, same
+    // as theme.define's replace-on-full-reload behavior.
+    runtime.resetKeymapToDefault();
     if (!runtime
              .attach({kInitScriptClientId, ssg::InvocationOrigin::Lua,
                       initScriptCapabilities()},

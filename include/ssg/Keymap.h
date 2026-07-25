@@ -4,6 +4,7 @@
 #include <ssg/Selection.h>
 #include <ssg/TextInputCommands.h>
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
@@ -35,6 +36,14 @@ public:
     [[nodiscard]] std::string formatStroke(const KeyStroke& stroke) const;
     [[nodiscard]] std::optional<KeySequence> parseSequence(
         std::initializer_list<std::string_view> encoded) const;
+    // Runtime counterpart to parseSequence's compile-time initializer_list:
+    // splits `encoded` on whitespace into stroke tokens (each in the SAME
+    // "Modifier+...+Code" syntax parseStroke accepts) and parses each one.
+    // Used to decode a Lua-supplied "Escape KeyF KeyT"-style sequence
+    // string without widening the flat string->string Lua argument bridge
+    // to carry arrays (see doc/spec-config.md's keymap.bind design).
+    [[nodiscard]] std::optional<KeySequence> parseSequenceString(
+        std::string_view encoded) const;
     [[nodiscard]] std::string formatSequence(const KeySequence& sequence) const;
 };
 
@@ -108,6 +117,80 @@ public:
 
 private:
     const KeymapViewState& keymap_;
+};
+
+// keymap.bind's argument: a single sequence string (space-separated
+// KeyCodec strokes, e.g. "Escape KeyF KeyT"), the command id it should
+// invoke, and the context it applies in ("*"/"editor"/"panel"/"prompt";
+// empty defaults to "*"). This is the ONLY argument shape keymap.bind
+// accepts (see doc/spec-config.md); one call binds exactly one sequence.
+struct KeymapBindArguments {
+    std::string sequence;
+    std::string command;
+    std::string context;
+
+    friend bool operator==(const KeymapBindArguments&, const KeymapBindArguments&) = default;
+};
+
+// keymap.unbind's argument: the sequence string to remove and the context
+// it was bound in (empty defaults to "*"). Unbinding a sequence that is
+// not currently bound in that context is a no-op success, not an error --
+// matching the reset-then-reapply model's "config always reflects exactly
+// what init.lua asked for" contract.
+struct KeymapUnbindArguments {
+    std::string sequence;
+    std::string context;
+
+    friend bool operator==(const KeymapUnbindArguments&, const KeymapUnbindArguments&) = default;
+};
+
+struct KeymapMutationError {
+    std::string message;
+
+    friend bool operator==(const KeymapMutationError&, const KeymapMutationError&) = default;
+};
+
+struct KeymapMutationResult {
+    std::optional<KeymapMutationError> error;
+    // The replacement keymap when accepted; left default-constructed
+    // (unused) when rejected -- all-or-nothing, no partial apply on error.
+    KeymapViewState keymap;
+
+    [[nodiscard]] bool accepted() const noexcept { return !error.has_value(); }
+};
+
+// Applies keymap.bind's request to `current`: parses the sequence string,
+// removes any existing binding for the SAME (context, sequence) pair (a
+// rebind, not a duplicate), appends the new binding, then re-validates the
+// WHOLE resulting keymap via KeymapMatcher (K1 context validity, K2
+// prefix-freedom, K6 the settings.open global escape hatch survives).
+// Rejects -- leaving `current` untouched -- on an unparseable sequence, an
+// unknown context, an empty command id, or any KeymapMatcher validation
+// failure; the whole binding is validated before it is applied, so a
+// rejected call never partially mutates the result.
+[[nodiscard]] KeymapMutationResult applyKeymapBind(
+    KeymapViewState const& current,
+    KeymapBindArguments const& arguments) noexcept;
+
+// Applies keymap.unbind's request to `current`: parses the sequence
+// string and removes any binding matching the (context, sequence) pair.
+// Absence is a no-op success (see KeymapUnbindArguments above). Rejects
+// only on an unparseable sequence or unknown context; unbinding can never
+// break K1/K2/K6 (removing a binding cannot introduce a prefix collision
+// or an invalid context), so no post-removal re-validation is needed.
+[[nodiscard]] KeymapMutationResult applyKeymapUnbind(
+    KeymapViewState const& current,
+    KeymapUnbindArguments const& arguments) noexcept;
+
+struct KeymapCommandDescriptor {
+    std::string_view id;
+};
+
+struct KeymapCommandSet {
+    std::array<KeymapCommandDescriptor, 2> descriptors{{
+        {"keymap.bind"},
+        {"keymap.unbind"},
+    }};
 };
 
 enum class TextRouting : std::uint8_t { Insert, PromptQuery, Ignore };

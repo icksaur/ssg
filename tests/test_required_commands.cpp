@@ -202,6 +202,8 @@ constexpr auto kExpectedCommands = std::to_array<ExpectedCommand>({
     {"settings.export_workspace", "settings-model"},
     {"settings.import_workspace", "settings-model"},
     {"theme.define", "theme-model"},
+    {"keymap.bind", "keymap-model"},
+    {"keymap.unbind", "keymap-model"},
     {"follow_edits.resume", "follow-edits"},
     {"follow_edits.pause", "follow-edits"},
     {"follow_edits.toggle", "follow-edits"},
@@ -223,9 +225,10 @@ constexpr auto kExpectedCategoryCounts =
         {"file", 15},      {"tab", 9},       {"external", 3},
         {"settings", 6},   {"follow_edits", 3}, {"diff", 3},
         {"theme", 1},
+        {"keymap", 2},
     });
 
-static_assert(kExpectedCommands.size() == 174);
+static_assert(kExpectedCommands.size() == 176);
 
 std::optional<std::string> field(const std::string& object,
                                  const std::string& name) {

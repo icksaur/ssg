@@ -204,6 +204,34 @@ std::optional<KeySequence> KeyCodec::parseSequence(
     return result;
 }
 
+std::optional<KeySequence> KeyCodec::parseSequenceString(
+    std::string_view encoded) const {
+    KeySequence result;
+    std::size_t begin = 0;
+    while (begin < encoded.size()) {
+        while (begin < encoded.size() &&
+               std::isspace(static_cast<unsigned char>(encoded[begin]))) {
+            ++begin;
+        }
+        if (begin >= encoded.size()) break;
+        std::size_t end = begin;
+        while (end < encoded.size() &&
+               !std::isspace(static_cast<unsigned char>(encoded[end]))) {
+            ++end;
+        }
+        const auto stroke = parseStroke(encoded.substr(begin, end - begin));
+        if (!stroke) {
+            return std::nullopt;
+        }
+        result.push_back(*stroke);
+        begin = end;
+    }
+    if (result.empty()) {
+        return std::nullopt;
+    }
+    return result;
+}
+
 namespace {
 
 std::string keyDisplay(std::string_view code) {
@@ -439,6 +467,65 @@ std::optional<KeySequence> KeymapMatcher::preferredBinding(
     }
     if (best == nullptr) return std::nullopt;
     return *best;
+}
+
+KeymapMutationResult applyKeymapBind(
+    KeymapViewState const& current,
+    KeymapBindArguments const& arguments) noexcept {
+    if (arguments.command.empty()) {
+        return {KeymapMutationError{"keymap.bind requires a command id"}, {}};
+    }
+    const auto sequence = KeyCodec{}.parseSequenceString(arguments.sequence);
+    if (!sequence) {
+        return {KeymapMutationError{
+                    "keymap.bind requires a valid space-separated key "
+                    "sequence"},
+                {}};
+    }
+    const std::string context =
+        arguments.context.empty() ? "*" : arguments.context;
+
+    KeymapViewState proposed{current.name, current.bindings};
+    std::erase_if(proposed.bindings, [&](const KeyBinding& binding) {
+        return binding.context == context && binding.sequence == *sequence;
+    });
+    proposed.bindings.push_back({*sequence, arguments.command, context});
+
+    if (auto errors = KeymapMatcher{proposed}.validate({}); !errors.empty()) {
+        return {KeymapMutationError{errors.front().message}, {}};
+    }
+    if (!KeymapMatcher{proposed}.hasGlobalBinding("settings.open", {})) {
+        return {KeymapMutationError{
+                    "keymap.bind must not remove the settings.open "
+                    "global escape hatch"},
+                {}};
+    }
+    return {std::nullopt, std::move(proposed)};
+}
+
+KeymapMutationResult applyKeymapUnbind(
+    KeymapViewState const& current,
+    KeymapUnbindArguments const& arguments) noexcept {
+    const auto sequence = KeyCodec{}.parseSequenceString(arguments.sequence);
+    if (!sequence) {
+        return {KeymapMutationError{
+                    "keymap.unbind requires a valid space-separated key "
+                    "sequence"},
+                {}};
+    }
+    const std::string context =
+        arguments.context.empty() ? "*" : arguments.context;
+    if (!knownContext(context)) {
+        return {KeymapMutationError{
+                    "keymap.unbind context is not '*' or a focus target"},
+                {}};
+    }
+
+    KeymapViewState proposed{current.name, current.bindings};
+    std::erase_if(proposed.bindings, [&](const KeyBinding& binding) {
+        return binding.context == context && binding.sequence == *sequence;
+    });
+    return {std::nullopt, std::move(proposed)};
 }
 
 std::optional<CommittedText> CommittedText::fromUtf8(std::string text) {

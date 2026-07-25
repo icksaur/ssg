@@ -1679,6 +1679,13 @@ EditorRuntime::EditorRuntime(std::unique_ptr<Impl> implementation) noexcept
     : impl_{std::move(implementation)} {}
 EditorRuntime::~EditorRuntime() = default;
 
+void EditorRuntime::resetKeymapToDefault() {
+    // defaultTerminalKeymap() is a fixed, already-construction-time-
+    // validated value (see create() above), so no re-validation is needed
+    // here -- resetting to it can never fail.
+    impl_->keymap = defaultTerminalKeymap();
+}
+
 EditorRuntimeCreateResult EditorRuntime::create(EditorRuntimeConfig config) {
     try {
         auto cwd = canonicalDirectory(config.cwd);

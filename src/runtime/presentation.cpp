@@ -271,6 +271,31 @@ CommandHandlerResult themeCommand(EditorRuntime::Impl& runtime,
     return failure(std::string{id} + " requires a typed theme payload");
 }
 
+CommandHandlerResult keymapCommand(EditorRuntime::Impl& runtime,
+                                   std::string_view id, std::any const& payload) {
+    if (id == "keymap.bind") {
+        auto const* arguments = payloadAs<KeymapBindArguments>(payload);
+        if (arguments == nullptr) {
+            return failure("keymap.bind requires a typed sequence/command payload");
+        }
+        auto result = applyKeymapBind(runtime.keymap, *arguments);
+        if (!result.accepted()) return failure(result.error->message);
+        runtime.keymap = std::move(result.keymap);
+        return success();
+    }
+    if (id == "keymap.unbind") {
+        auto const* arguments = payloadAs<KeymapUnbindArguments>(payload);
+        if (arguments == nullptr) {
+            return failure("keymap.unbind requires a typed sequence payload");
+        }
+        auto result = applyKeymapUnbind(runtime.keymap, *arguments);
+        if (!result.accepted()) return failure(result.error->message);
+        runtime.keymap = std::move(result.keymap);
+        return success();
+    }
+    return failure(std::string{id} + " requires a typed keymap payload");
+}
+
 } // namespace
 
 void bindRuntimePresentation(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime) {
@@ -335,6 +360,11 @@ void bindRuntimePresentation(EditorSessionBuilder& builder, EditorRuntime::Impl&
     for (auto const& descriptor : ThemeCommandSet{}.descriptors) {
         builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const& payload) {
             return runtime.runTransaction([&] { return themeCommand(runtime, descriptor.id, payload); });
+        });
+    }
+    for (auto const& descriptor : KeymapCommandSet{}.descriptors) {
+        builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const& payload) {
+            return runtime.runTransaction([&] { return keymapCommand(runtime, descriptor.id, payload); });
         });
     }
 }

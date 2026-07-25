@@ -303,6 +303,78 @@ TEST(hitTargetsRoundTripTypedSemanticArguments) {
     ASSERT_EQ(ssg::SemanticInputRouter{}.activateHitTarget(scrollbar), scroll);
 }
 
+TEST(applyKeymapBindAddsRebindsAndRejectsInvalidRequests) {
+    const auto settingsSeq = *ssg::KeyCodec{}.parseSequence({"Escape", "KeyS"});
+    ssg::KeymapViewState base{"m", {{settingsSeq, "settings.open", "*"}}};
+
+    // Fresh bind: adds a new global binding.
+    {
+        auto result = ssg::applyKeymapBind(
+            base, {"Escape KeyF KeyT", "find.open", ""});
+        ASSERT_TRUE(result.accepted());
+        const auto boundSeq =
+            *ssg::KeyCodec{}.parseSequence({"Escape", "KeyF", "KeyT"});
+        ssg::KeymapViewState expected{
+            "m", {{settingsSeq, "settings.open", "*"},
+                  {boundSeq, "find.open", "*"}}};
+        ASSERT_EQ(result.keymap, expected);
+    }
+
+    // Rebind: same (context, sequence) replaces rather than duplicates.
+    {
+        auto once = ssg::applyKeymapBind(
+            base, {"Escape KeyF KeyT", "find.open", "editor"});
+        ASSERT_TRUE(once.accepted());
+        auto twice = ssg::applyKeymapBind(
+            once.keymap, {"Escape KeyF KeyT", "find.replace", "editor"});
+        ASSERT_TRUE(twice.accepted());
+        const auto boundSeq =
+            *ssg::KeyCodec{}.parseSequence({"Escape", "KeyF", "KeyT"});
+        ssg::KeymapViewState expected{
+            "m", {{settingsSeq, "settings.open", "*"},
+                  {boundSeq, "find.replace", "editor"}}};
+        ASSERT_EQ(twice.keymap, expected);
+    }
+
+    // Rejections leave the input keymap conceptually untouched (caller
+    // never applies .keymap on a rejected result).
+    ASSERT_FALSE(ssg::applyKeymapBind(base, {"NotAKey", "find.open", ""})
+                     .accepted());
+    ASSERT_FALSE(ssg::applyKeymapBind(base, {"Escape KeyF", "", ""})
+                     .accepted());
+    ASSERT_FALSE(
+        ssg::applyKeymapBind(base, {"Escape KeyF", "find.open", "bogus"})
+            .accepted());
+    // Rebinding the sole settings.open global binding to something else
+    // must reject: K6's escape hatch must survive.
+    ASSERT_FALSE(
+        ssg::applyKeymapBind(base, {"Escape KeyS", "other.command", ""})
+            .accepted());
+}
+
+TEST(applyKeymapUnbindRemovesOrNoOpsAndRejectsBadSequence) {
+    const auto settingsSeq = *ssg::KeyCodec{}.parseSequence({"Escape", "KeyS"});
+    const auto findSeq =
+        *ssg::KeyCodec{}.parseSequence({"Escape", "KeyF", "KeyT"});
+    ssg::KeymapViewState base{
+        "m", {{settingsSeq, "settings.open", "*"},
+              {findSeq, "find.open", "editor"}}};
+
+    auto removed = ssg::applyKeymapUnbind(base, {"Escape KeyF KeyT", "editor"});
+    ASSERT_TRUE(removed.accepted());
+    ssg::KeymapViewState expected{"m", {{settingsSeq, "settings.open", "*"}}};
+    ASSERT_EQ(removed.keymap, expected);
+
+    // Absent binding: no-op success, unchanged keymap.
+    auto noOp = ssg::applyKeymapUnbind(base, {"Escape KeyQ", ""});
+    ASSERT_TRUE(noOp.accepted());
+    ASSERT_EQ(noOp.keymap, base);
+
+    ASSERT_FALSE(ssg::applyKeymapUnbind(base, {"NotAKey", ""}).accepted());
+    ASSERT_FALSE(
+        ssg::applyKeymapUnbind(base, {"Escape KeyF", "bogus"}).accepted());
+}
+
 TEST(backendHasNoPlatformInputCaptureDependency) {
     const std::vector<std::string> forbidden{
         "KeyboardEvent", "keydown", "compositionstart", "compositionupdate",
@@ -337,6 +409,8 @@ int main() {
     RUN(resolverAndHasGlobalBindingAgreeOnDuplicateGlobals);
     RUN(imeAcceptsOnlyCommittedUtf8Text);
     RUN(hitTargetsRoundTripTypedSemanticArguments);
+    RUN(applyKeymapBindAddsRebindsAndRejectsInvalidRequests);
+    RUN(applyKeymapUnbindRemovesOrNoOpsAndRejectsBadSequence);
     RUN(backendHasNoPlatformInputCaptureDependency);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
