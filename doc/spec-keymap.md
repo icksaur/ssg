@@ -187,7 +187,8 @@ Bindings (all terminal-typable; Escape-led chords and single strokes only; the
 terminal has no browser-reserved chords, so none is excluded):
 
 - Global (`*`): `[Escape, KeyS]` → `file.save`, `[Escape, KeyZ]` → `edit.undo`,
-  `[Escape, Shift+KeyZ]` → `edit.redo`, `[Escape, KeyP]` → `palette.open`,
+  `[Escape, Shift+KeyZ]` → `edit.redo`, `[Escape, KeyP]` → `file_finder.open`,
+  `[Escape, Shift+KeyP]` → `palette.open`,
   `[Escape, KeyB]` → `panel.toggle`, `[Escape, KeyO]` → `panel.focus`,
   `[Escape, BracketRight]` → `tab.next`, `[Escape, BracketLeft]` →
   `tab.previous`, `[Escape, KeyW]` → `tab.close`, `[Escape, KeyF, KeyT]` →

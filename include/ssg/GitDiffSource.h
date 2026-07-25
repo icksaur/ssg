@@ -76,6 +76,31 @@ public:
 [[nodiscard]] std::unique_ptr<GitRepository> makePlatformGitRepository(
     const std::filesystem::path& canonicalRoot);
 
+// Answers "does gitignore exclude this path?" for every step of a directory
+// walk.  Deliberately not a method on GitRepository: that class opens and closes
+// a repository handle inside each call, which is right for one scan per refresh
+// but not for the thousands of queries a walk makes, so this holds its handle
+// open for its lifetime instead.
+class GitIgnoreMatcher {
+public:
+    virtual ~GitIgnoreMatcher() = default;
+
+    // False when there is no usable repository, in which case `ignores` is
+    // always false and every file is listed.  Not an error: a workspace need
+    // not be a git repository.
+    [[nodiscard]] virtual bool usable() const = 0;
+
+    // `workspaceRelative` is relative to the workspace root this matcher was
+    // built for, which is NOT necessarily the repository root.  Rebasing it onto
+    // the repository work directory is the matcher's job; callers must never
+    // pre-rebase, and must not pass absolute paths.
+    [[nodiscard]] virtual bool ignores(
+        const std::filesystem::path& workspaceRelative) const = 0;
+};
+
+[[nodiscard]] std::unique_ptr<GitIgnoreMatcher> makePlatformGitIgnoreMatcher(
+    const std::filesystem::path& workspaceRoot);
+
 class GitDiffSource {
 public:
     explicit GitDiffSource(DiffModel& diffModel, GitDiffConfig config = {});

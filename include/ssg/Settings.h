@@ -38,9 +38,10 @@ enum class SettingKey : std::uint8_t {
     UndoByteBudget,
     RecoveryByteBudget,
     TypingCoalescingMs,
+    FileFinderRespectGitignore,
 };
 
-inline constexpr std::size_t kSettingKeyCount = 16;
+inline constexpr std::size_t kSettingKeyCount = 17;
 
 enum class TextEncoding : std::uint8_t {
     Utf8,

@@ -29,6 +29,13 @@ CommandHandlerResult validatePaletteTarget(EditorRuntime::Impl& runtime,
     bool const paletteOpen = runtime.prompt.active() && runtime.prompt.request() &&
                               runtime.prompt.request()->kind == PromptKind::Palette;
     if (!paletteOpen) return failure("palette.execute requires the palette to be open");
+    // Every picker uses a Palette-kind prompt, so prompt kind alone no longer
+    // identifies the command palette.  Without this the file picker's
+    // candidates -- which are PATHS, not command ids -- would be submittable as
+    // commands.
+    if (runtime.openPicker != PickerKind::Command) {
+        return failure("palette.execute requires the command palette to be open");
+    }
     auto const candidates = runtime.descriptors();
     bool const published =
         std::any_of(candidates.begin(), candidates.end(),
@@ -57,6 +64,21 @@ CommandHandlerResult searchCommand(EditorRuntime::Impl& runtime, CommandContext&
         if (!runtime.openPickerPrompt(PickerKind::Command)) {
             return failure("could not open the command picker");
         }
+    }
+    else if (id == "file_finder.open") {
+        if (!runtime.openPickerPrompt(PickerKind::File)) {
+            return failure("could not open the file picker");
+        }
+    }
+    else if (id == "file_finder.toggle_gitignore") {
+        bool const next = !boolSetting(
+            runtime.settings, SettingKey::FileFinderRespectGitignore, true);
+        auto mutation = runtime.settings.set(
+            SettingScope::Workspace, SettingKey::FileFinderRespectGitignore, next);
+        if (!mutation.accepted()) return failure(mutation.error->message);
+        // Toggling with the picker already open must re-walk, or the setting
+        // appears to do nothing until the picker is reopened.
+        if (runtime.openPicker == PickerKind::File) runtime.rebuildFileCandidates();
     }
     else if (id == "palette.close") { (void)runtime.prompt.cancel(); }
     else if (id == "palette.next" || id == "search.results_next") runtime.search.selectNext();

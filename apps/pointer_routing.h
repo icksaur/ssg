@@ -43,7 +43,12 @@ struct PointerDispatch {
 struct PointerTargets {
     std::optional<ssg::DocumentPosition> document_position;  // an editor hit
     std::optional<ssg::TabId> tab_id;             // a tab hit (tabs[index] id)
-    std::optional<std::string> palette_command_id;  // a palette-row candidate id
+    // A picker-row candidate id, plus which picker published it.  The id alone
+    // is not actionable: for the command palette it is a command id, for the
+    // file picker a workspace-relative path, and submitting one as the other
+    // either fails the server guard or is nonsense.
+    std::optional<std::string> picker_candidate_id;
+    ssg::SearchMode picker_mode = ssg::SearchMode::Command;
     std::optional<std::string> field_command_id;    // a header/footer field command
 };
 

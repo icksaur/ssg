@@ -318,6 +318,9 @@ PaletteViewState EditorRuntime::Impl::paletteView() const {
                 {descriptor.id, commandLabel(descriptor.id), std::move(detail)});
         }
         break;
+    case PickerKind::File:
+        view.candidates = fileCandidates;
+        break;
     }
     return view;
 }

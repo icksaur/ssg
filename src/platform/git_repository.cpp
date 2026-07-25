@@ -299,7 +299,73 @@ public:
     ~Libgit2Scope() { (void)git_libgit2_shutdown(); }
 };
 
+class Libgit2IgnoreMatcher final : public GitIgnoreMatcher {
+public:
+    explicit Libgit2IgnoreMatcher(const std::filesystem::path& workspaceRoot) {
+        git_repository* repository = nullptr;
+        // Flags 0 searches upward, so a workspace nested inside a repository
+        // still finds it -- which is exactly the case that makes rebasing
+        // necessary below.
+        if (git_repository_open_ext(&repository, workspaceRoot.c_str(), 0,
+                                    nullptr) != 0) {
+            return;
+        }
+        repository_.reset(repository);
+
+        const char* workdir = git_repository_workdir(repository);
+        if (workdir == nullptr) {  // A bare repository has no work tree.
+            repository_.reset();
+            return;
+        }
+        std::error_code error;
+        auto relative = std::filesystem::relative(
+            workspaceRoot, std::filesystem::path{workdir}, error);
+        if (error) {
+            repository_.reset();
+            return;
+        }
+        if (relative != std::filesystem::path{"."}) {
+            prefix_ = relative.generic_string();
+        }
+        // A workspace outside the work tree would rebase to "../" paths, which
+        // libgit2 cannot answer.  Report unusable rather than silently answer
+        // against the wrong prefix.
+        if (prefix_.starts_with("..")) {
+            repository_.reset();
+            prefix_.clear();
+        }
+    }
+
+    bool usable() const override { return repository_ != nullptr; }
+
+    bool ignores(const std::filesystem::path& workspaceRelative) const override {
+        if (!usable()) return false;
+        auto relative = workspaceRelative.generic_string();
+        if (relative.empty()) return false;
+        auto query = prefix_.empty() ? relative : prefix_ + "/" + relative;
+        int ignored = 0;
+        if (git_ignore_path_is_ignored(&ignored, repository_.get(),
+                                       query.c_str()) != 0) {
+            return false;
+        }
+        return ignored != 0;
+    }
+
+private:
+    std::unique_ptr<git_repository, decltype(&git_repository_free)> repository_{
+        nullptr, &git_repository_free};
+    // The workspace root relative to the repository work directory; empty when
+    // they coincide.
+    std::string prefix_;
+};
+
 #endif
+
+class InertGitIgnoreMatcher final : public GitIgnoreMatcher {
+public:
+    bool usable() const override { return false; }
+    bool ignores(const std::filesystem::path&) const override { return false; }
+};
 
 class InertGitRepository final : public GitRepository {
 public:
@@ -324,6 +390,19 @@ std::unique_ptr<GitRepository> makePlatformGitRepository(
 #else
     (void)canonicalRoot;
     return std::make_unique<InertGitRepository>();
+#endif
+}
+
+std::unique_ptr<GitIgnoreMatcher> makePlatformGitIgnoreMatcher(
+    const std::filesystem::path& workspaceRoot) {
+#ifdef SSG_LIBGIT2
+    static Libgit2Scope scope;
+    auto matcher = std::make_unique<Libgit2IgnoreMatcher>(workspaceRoot);
+    if (matcher->usable()) return matcher;
+    return std::make_unique<InertGitIgnoreMatcher>();
+#else
+    (void)workspaceRoot;
+    return std::make_unique<InertGitIgnoreMatcher>();
 #endif
 }
 

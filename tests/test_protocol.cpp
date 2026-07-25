@@ -126,6 +126,30 @@ ssg::CommandArgumentCodec makeProbeCodec() {
         }};
 }
 
+// The SettingKey decode array in Protocol.cpp is hand-maintained and separate
+// from the enum, so a key added to Settings.h alone compiles and links but is
+// undecodable over the wire.  Round-tripping EVERY key through a settings.set
+// command makes that gap fail here rather than at runtime, for this key and any
+// future one.
+TEST(everySettingKeyRoundTripsThroughTheCommandCodec) {
+    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
+    for (std::size_t index = 0; index < ssg::kSettingKeyCount; ++index) {
+        auto const key = static_cast<ssg::SettingKey>(index);
+        ssg::SettingSetArguments arguments{ssg::SettingScope::User, key,
+                                           ssg::SettingValue{true}};
+        auto const encoded = ssg::ProtocolCodec{}.encodeCommandRequest(
+            ssg::ClientCommand{"settings.set", ssg::Revision{1}, arguments},
+            registry);
+        auto decoded = ssg::ProtocolCodec{}.decodeCommandRequest(encoded, registry);
+        ASSERT_TRUE(decoded.accepted());
+        if (!decoded.accepted()) continue;
+        auto const* roundTripped =
+            std::any_cast<ssg::SettingSetArguments>(&decoded.command->payload);
+        ASSERT_TRUE(roundTripped != nullptr);
+        if (roundTripped != nullptr) ASSERT_TRUE(roundTripped->key == key);
+    }
+}
+
 TEST(registryRejectsMissingEntries) {
     std::vector<std::pair<std::string, ssg::CommandArgumentCodec>> entries;
     auto const ids = ssg::p0CommandDescriptors();
@@ -1135,8 +1159,8 @@ TEST(findReplaceViewStateRoundTripsReplacementThroughTheWire) {
 
 int main() {
     RUN(registryCoversEveryP0CommandAndRejectsUnknownIds);
-    RUN(registryRejectsMissingEntries);
-    RUN(registryRejectsExtraEntries);
+    RUN(everySettingKeyRoundTripsThroughTheCommandCodec);
+    RUN(registryRejectsMissingEntries);    RUN(registryRejectsExtraEntries);
     RUN(registryRejectsDuplicateEntries);
     RUN(commandRequestRoundTripsWithNoPayload);
     RUN(commandRequestRoundTripsWithPaletteExecuteArguments);

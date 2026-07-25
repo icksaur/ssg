@@ -98,6 +98,8 @@ constexpr auto kExpectedCommands = std::to_array<ExpectedCommand>({
     {"view.reveal_caret", "selection-navigation"},
     {"view.center_caret", "selection-navigation"},
     {"palette.open", "search-palette"},
+    {"file_finder.open", "search-palette"},
+    {"file_finder.toggle_gitignore", "search-palette"},
     {"palette.close", "search-palette"},
     {"palette.next", "search-palette"},
     {"palette.previous", "search-palette"},
@@ -226,9 +228,10 @@ constexpr auto kExpectedCategoryCounts =
         {"settings", 6},   {"follow_edits", 3}, {"diff", 3},
         {"theme", 1},
         {"keymap", 2},
+        {"file_finder", 2},
     });
 
-static_assert(kExpectedCommands.size() == 176);
+static_assert(kExpectedCommands.size() == 178);
 
 std::optional<std::string> field(const std::string& object,
                                  const std::string& name) {

@@ -92,7 +92,7 @@ ssg.command("keymap.unbind", {
   unbinding something that isn't bound is not an error. It's rejected on
   the same "would remove the last `settings.open` binding" ground as
   `keymap.bind`.
-- Bound commands show up in the command palette (`Escape KeyP`) with
+- Bound commands show up in the command palette (`Escape Shift+KeyP`) with
   their current key sequence next to them.
 - Binding a command that needs more than a keystroke to do anything
   useful (e.g. `settings.set`, `cursor.set_position`, `text.insert`) is

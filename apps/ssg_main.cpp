@@ -19,6 +19,7 @@
 #include <ssg/Keymap.h>
 #include <ssg/LuaCommandHost.h>
 #include <ssg/PaletteSearcher.h>
+#include <ssg/Picker.h>
 #include <ssg/platform_files.h>
 #include <ssg/session_snapshot.h>
 #include <ssg/TextInputCommands.h>
@@ -823,6 +824,13 @@ int main(int argc, char** argv) {
         case ssg::SearchMode::Command:
             dispatch("palette.execute", ssg::PaletteExecuteArguments{id});
             break;
+        case ssg::SearchMode::File:
+            // file.open has no prompt side effects (unlike palette.execute,
+            // which cancels the prompt as part of executing), so the picker must
+            // be closed explicitly or it survives its own submit.
+            dispatch("file.open", id);
+            dispatch("palette.close");
+            break;
         default:
             break;
         }
@@ -849,7 +857,15 @@ int main(int argc, char** argv) {
             }
         }
         dispatch(id);
-        if (id == "palette.open") {
+        // Any picker's open command starts a fresh window.  Driven off the
+        // catalog rather than a hardcoded "palette.open" so adding a picker
+        // cannot forget to reset the query and selection -- which silently
+        // inherits the previous picker's filter.
+        bool opensAPicker = false;
+        for (auto const& descriptor : ssg::pickerCatalog().descriptors()) {
+            if (id == descriptor.openCommandId) opensAPicker = true;
+        }
+        if (opensAPicker) {
             pickerOpen = true;
             picker.query.clear();
             picker.selected = 0;
@@ -1117,8 +1133,9 @@ int main(int argc, char** argv) {
                         // the same ranked order the client renders.
                         auto order = ssg::PaletteSearcher{}.rank(candidates, picker.query);
                         if (hit.itemIndex < order.size()) {
-                            targets.palette_command_id =
+                            targets.picker_candidate_id =
                                 candidates[order[hit.itemIndex]].id;
+                            targets.picker_mode = pickerMode;
                         }
                     } else if (hit.region == ssg::HitRegion::HeaderField ||
                                hit.region == ssg::HitRegion::FooterField) {

@@ -23,6 +23,7 @@
 #include <ssg/SyntaxModel.h>
 #include <ssg/TabManager.h>
 #include <ssg/TreeModel.h>
+#include <ssg/WorkspaceFileIndex.h>
 #include <ssg/ShellState.h>
 #include <ssg/Workspace.h>
 
@@ -41,6 +42,15 @@
 #include <vector>
 
 namespace ssg {
+
+// Resolves a boolean setting, falling back when the stored value is not a bool.
+// Shared by the presentation commands and the runtime's own reads.
+inline bool boolSetting(SettingsModel const& settings, SettingKey key,
+                        bool fallback) {
+    auto value = settings.resolve(key).value;
+    if (auto const* typed = std::get_if<bool>(&value)) return *typed;
+    return fallback;
+}
 
 struct GitDiffRefreshWorkerState;
 
@@ -149,6 +159,11 @@ struct EditorRuntime::Impl final : CommandServices,
     // reconcileOpenPicker() rather than cleared at each close path, so a stale
     // kind cannot leak into the next open.
     std::optional<PickerKind> openPicker;
+    // The open file picker's candidate set, built when the picker opens and
+    // discarded when it closes: the walk stays off the per-keystroke and
+    // per-frame paths, at the cost of not reflecting files created while the
+    // picker is open (reopening picks them up).
+    std::vector<PaletteCandidate> fileCandidates;
     std::uint32_t requestedFirstVisualRow = 0;
     // Horizontal scroll offset in cells (word wrap OFF only; VP-H). Reveal and the
     // horizontal scroll command update it; the viewport path passes it through.
@@ -292,6 +307,8 @@ struct EditorRuntime::Impl final : CommandServices,
     // active" half of the invariant true by construction, leaving
     // reconcileOpenPicker() responsible only for the clearing half.
     [[nodiscard]] bool openPickerPrompt(PickerKind kind);
+    // Walks the workspace into `fileCandidates`, honoring the gitignore setting.
+    void rebuildFileCandidates();
     void refreshSyntax();
     // M10 fast startup deferral (doc/spec-fast-startup.md M10-3/M10-4).  While
     // `deferring_enrichment` is set (the pre-first-frame window when created with

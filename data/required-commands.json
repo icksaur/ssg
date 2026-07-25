@@ -65,6 +65,8 @@
     {"id":"view.reveal_caret","owner":"selection-navigation","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"view.center_caret","owner":"selection-navigation","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"palette.open","owner":"search-palette","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
+    {"id":"file_finder.open","owner":"search-palette","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
+    {"id":"file_finder.toggle_gitignore","owner":"search-palette","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"palette.close","owner":"search-palette","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"palette.next","owner":"search-palette","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"palette.previous","owner":"search-palette","required_capabilities":[],"lua":true,"keymap":true,"palette":true},

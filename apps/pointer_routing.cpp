@@ -37,10 +37,26 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
                 dispatch.commands.push_back({"tab.activate", *targets.tab_id});
                 return dispatch;
             }
-            if (hit.region == ssg::HitRegion::Palette && targets.palette_command_id) {
-                dispatch.commands.push_back(
-                    {"palette.execute",
-                     ssg::PaletteExecuteArguments{*targets.palette_command_id}});
+            if (hit.region == ssg::HitRegion::Palette && targets.picker_candidate_id) {
+                // Same dispatch decision as a keyboard submit, and it must stay
+                // that way: a click and an Enter on the same row mean the same
+                // thing.
+                switch (targets.picker_mode) {
+                case ssg::SearchMode::Command:
+                    dispatch.commands.push_back(
+                        {"palette.execute",
+                         ssg::PaletteExecuteArguments{*targets.picker_candidate_id}});
+                    break;
+                case ssg::SearchMode::File:
+                    dispatch.commands.push_back(
+                        {"file.open", *targets.picker_candidate_id});
+                    // Mirrors the keyboard submit: file.open does not dismiss
+                    // the prompt the way palette.execute does.
+                    dispatch.commands.push_back({"palette.close", std::any{}});
+                    break;
+                default:
+                    break;
+                }
                 return dispatch;
             }
             if ((hit.region == ssg::HitRegion::HeaderField ||

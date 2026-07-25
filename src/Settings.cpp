@@ -45,6 +45,7 @@ constexpr std::array kAllKeys{
     SettingKey::UndoByteBudget,
     SettingKey::RecoveryByteBudget,
     SettingKey::TypingCoalescingMs,
+    SettingKey::FileFinderRespectGitignore,
 };
 
 constexpr std::array<std::string_view, kSettingKeyCount> kEyNames{
@@ -64,6 +65,7 @@ constexpr std::array<std::string_view, kSettingKeyCount> kEyNames{
     "undo_byte_budget",
     "recovery_byte_budget",
     "typing_coalescing_ms",
+    "file_finder_respect_gitignore",
 };
 
 SettingValue defaultValue(SettingKey key) {
@@ -84,6 +86,7 @@ SettingValue defaultValue(SettingKey key) {
     case SettingKey::UndoByteBudget: return std::uint64_t{16u * 1024u * 1024u};
     case SettingKey::RecoveryByteBudget: return std::uint64_t{256u * 1024u * 1024u};
     case SettingKey::TypingCoalescingMs: return std::uint32_t{750};
+    case SettingKey::FileFinderRespectGitignore: return true;
     }
     throw std::logic_error("unknown setting key");
 }
@@ -153,6 +156,7 @@ std::optional<SettingError> validate(SettingKey key, const SettingValue& value) 
     case SettingKey::SearchCaseSensitive:
     case SettingKey::SearchWholeWord:
     case SettingKey::SearchRegularExpression:
+    case SettingKey::FileFinderRespectGitignore:
         if (!std::holds_alternative<bool>(value)) return wrongType();
         return std::nullopt;
     }

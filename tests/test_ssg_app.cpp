@@ -962,7 +962,8 @@ TEST(routePointerPalettePressExecutesTheCandidate) {
     hit.region = ssg::HitRegion::Palette;
     hit.itemIndex = 4;
     ssg::app::PointerTargets targets;
-    targets.palette_command_id = std::string{"view.split"};
+    targets.picker_candidate_id = std::string{"view.split"};
+    targets.picker_mode = ssg::SearchMode::Command;
 
     auto plan = ssg::app::route_pointer(hit, ssg::app::PointerButton::left,
                                         ssg::app::PointerKind::press, false,
@@ -983,6 +984,35 @@ TEST(routePointerPalettePressExecutesTheCandidate) {
         hit, ssg::app::PointerButton::left, ssg::app::PointerKind::press, false,
         std::nullopt, empty);
     ASSERT_TRUE(unresolved.commands.empty());
+}
+
+// Clicking a row must mean the same as pressing Enter on it.  A file
+// candidate's id is a PATH, so routing it to palette.execute would both be
+// rejected by the server guard and be nonsense; this is the pointer half of the
+// mode-dispatched submit.
+TEST(routePointerFilePickerPressOpensTheFileRatherThanExecutingIt) {
+    ssg::RegionHit hit;
+    hit.region = ssg::HitRegion::Palette;
+    hit.itemIndex = 2;
+    ssg::app::PointerTargets targets;
+    targets.picker_candidate_id = std::string{"src/runtime/snapshot.cpp"};
+    targets.picker_mode = ssg::SearchMode::File;
+
+    auto plan = ssg::app::route_pointer(hit, ssg::app::PointerButton::left,
+                                        ssg::app::PointerKind::press, false,
+                                        std::nullopt, targets);
+    ASSERT_EQ(plan.commands.size(), std::size_t{2});
+    if (plan.commands.size() == 2) {
+        ASSERT_EQ(plan.commands[0].command_id, std::string{"file.open"});
+        ASSERT_TRUE(std::any_cast<ssg::PaletteExecuteArguments>(
+                        &plan.commands[0].payload) == nullptr);
+        auto const* path = std::any_cast<std::string>(&plan.commands[0].payload);
+        ASSERT_TRUE(path != nullptr);
+        if (path) ASSERT_EQ(*path, std::string{"src/runtime/snapshot.cpp"});
+        // The picker does not dismiss itself on file.open.
+        ASSERT_EQ(plan.commands[1].command_id, std::string{"palette.close"});
+    }
+    ASSERT_FALSE(plan.begins_drag);
 }
 
 TEST(promptBoundaryKeepsPaletteFulfillmentAndRemovesFindReplaceMapping) {
@@ -1120,6 +1150,7 @@ int main() {
     RUN(routePointerPanelAndPaletteScrollbarsAreNoOps);
     RUN(routePointerTabPressActivatesTheTab);
     RUN(routePointerPalettePressExecutesTheCandidate);
+    RUN(routePointerFilePickerPressOpensTheFileRatherThanExecutingIt);
     RUN(promptBoundaryKeepsPaletteFulfillmentAndRemovesFindReplaceMapping);
     RUN(routePointerPanelPressSelectsAndActivatesTheNode);
     RUN(routeWheelMapsRegionToScrollTarget);

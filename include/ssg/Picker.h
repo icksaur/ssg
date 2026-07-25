@@ -16,10 +16,11 @@ namespace ssg {
 // `Symbol`, `Text`) are not pickers and never will be, which would dilute the
 // exhaustiveness check in tests/test_picker.cpp into a mostly-inapplicable
 // loop.  The wire mode a picker publishes is carried by its descriptor.
-enum class PickerKind : std::uint8_t { Command };
+enum class PickerKind : std::uint8_t { Command, File };
 
-inline constexpr std::array<PickerKind, 1> kAllPickerKinds{
+inline constexpr std::array<PickerKind, 2> kAllPickerKinds{
     PickerKind::Command,
+    PickerKind::File,
 };
 
 // Every point a picker must wire, in one place, so adding a picker is filling a
@@ -38,8 +39,9 @@ struct PickerDescriptor {
 // static_assert below turns that into a compile error, and the runtime oracle in
 // tests/test_picker.cpp is left to catch what a count cannot: a row that exists
 // but names the wrong kind or a nonexistent command.
-inline constexpr std::array<PickerDescriptor, 1> kPickerDescriptors{{
+inline constexpr std::array<PickerDescriptor, 2> kPickerDescriptors{{
     {PickerKind::Command, "palette.open", "Command Palette", SearchMode::Command},
+    {PickerKind::File, "file_finder.open", "Go to File", SearchMode::File},
 }};
 
 static_assert(kPickerDescriptors.size() == kAllPickerKinds.size(),

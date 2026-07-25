@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <set>
 #include <map>
 #include <string>
 
@@ -1084,6 +1085,94 @@ TEST(everyPaletteClosePathLeavesNoOpenPickerBehind) {
     if (executed) ASSERT_TRUE(executed->sections().palette.candidates.empty());
 }
 
+// The file picker publishes paths, not command ids, so palette.execute must
+// refuse to run while it is open.  Before the picker existed, the guard checked
+// only that a Palette-kind prompt was active, which every picker satisfies.
+TEST(filePickerPublishesWorkspaceFilesAndRejectsPaletteExecute) {
+    auto root = uniqueRoot();
+    auto workspace = root / "workspace";
+    std::filesystem::create_directories(workspace / "src");
+    std::ofstream{workspace / "alpha.txt"} << "a\n";
+    std::ofstream{workspace / "src" / "beta.cpp"} << "b\n";
+    // The test root lives inside SSG's own repository, whose .gitignore covers
+    // it; give the workspace its own repository so the picker's ignore rules are
+    // the fixture's, not the enclosing checkout's.
+    ASSERT_EQ(std::system(("git -C \"" + workspace.string() + "\" init -q >/dev/null 2>&1").c_str()), 0);
+
+    auto created = ssg::EditorRuntime::create({workspace, root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
+
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file_finder.open", runtime.revision(), {}}).accepted());
+    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+
+    auto const& palette = snapshot->sections().palette;
+    ASSERT_TRUE(palette.mode == ssg::SearchMode::File);
+    std::set<std::string> paths;
+    for (auto const& candidate : palette.candidates) paths.insert(candidate.id);
+    ASSERT_TRUE(paths.contains("alpha.txt"));
+    ASSERT_TRUE(paths.contains("src/beta.cpp"));
+
+    // Candidate ids are paths here; executing one as a command must be refused
+    // even though a Palette prompt is genuinely open.
+    auto rejected = runtime.dispatch(
+        ssg::ClientId{1},
+        {"palette.execute", runtime.revision(),
+         ssg::PaletteExecuteArguments{"src/beta.cpp"}});
+    ASSERT_FALSE(rejected.accepted());
+    // Not even a real command id is executable through the file picker.
+    auto alsoRejected = runtime.dispatch(
+        ssg::ClientId{1},
+        {"palette.execute", runtime.revision(),
+         ssg::PaletteExecuteArguments{"edit.undo"}});
+    ASSERT_FALSE(alsoRejected.accepted());
+    std::filesystem::remove_all(root);
+}
+
+// Toggling the setting with the picker already open must re-walk; otherwise the
+// command appears to do nothing until the picker is closed and reopened.
+TEST(togglingGitignoreRebuildsTheOpenFilePickerIndex) {
+    auto root = uniqueRoot();
+    auto workspace = root / "workspace";
+    std::filesystem::create_directories(workspace / "build");
+    std::ofstream{workspace / ".gitignore"} << "build/\n";
+    std::ofstream{workspace / "kept.txt"} << "k\n";
+    std::ofstream{workspace / "build" / "hidden.o"} << "h\n";
+    ASSERT_EQ(std::system(("git -C \"" + workspace.string() + "\" init -q >/dev/null 2>&1").c_str()), 0);
+
+    auto created = ssg::EditorRuntime::create({workspace, root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
+
+    auto candidateIds = [&] {
+        auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        std::set<std::string> paths;
+        if (snapshot) {
+            for (auto const& candidate : snapshot->sections().palette.candidates) {
+                paths.insert(candidate.id);
+            }
+        }
+        return paths;
+    };
+
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file_finder.open", runtime.revision(), {}}).accepted());
+    auto before = candidateIds();
+    ASSERT_TRUE(before.contains("kept.txt"));
+    ASSERT_FALSE(before.contains("build/hidden.o"));
+
+    // No reopen in between: the SAME open picker must change.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file_finder.toggle_gitignore", runtime.revision(), {}}).accepted());
+    auto after = candidateIds();
+    ASSERT_TRUE(after.contains("build/hidden.o"));
+    std::filesystem::remove_all(root);
+}
+
 TEST(paletteExecuteValidatesCandidateMembership) {
     auto root = uniqueRoot();
     auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
@@ -1605,6 +1694,8 @@ int main() {
     RUN(paletteOpenEntersPromptFocusAndPublishesCandidates);
     RUN(everyPaletteClosePathLeavesNoOpenPickerBehind);
     RUN(paletteExecuteValidatesCandidateMembership);
+    RUN(filePickerPublishesWorkspaceFilesAndRejectsPaletteExecute);
+    RUN(togglingGitignoreRebuildsTheOpenFilePickerIndex);
     RUN(paletteCandidatesCarryLabelsAndKeyDetail);
     RUN(treeScrollsToKeepSelectionVisibleInAShortPanel);
     RUN(treeSelectSetsSelectionToANodeAndRejectsUnknownIds);

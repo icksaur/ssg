@@ -229,18 +229,20 @@ struct SearchCommandDescriptorExport {
 
 class SearchCommandSet {
 public:
-    [[nodiscard]] const std::array<SearchCommandDescriptorExport, 13>&
+    [[nodiscard]] const std::array<SearchCommandDescriptorExport, 15>&
     descriptors() const noexcept {
         return descriptors_;
     }
 
 private:
-    const std::array<SearchCommandDescriptorExport, 13> descriptors_{{
+    const std::array<SearchCommandDescriptorExport, 15> descriptors_{{
         {"palette.open", false},
         {"palette.close", false},
         {"palette.next", false},
         {"palette.previous", false},
         {"palette.execute", false},
+        {"file_finder.open", false},
+        {"file_finder.toggle_gitignore", false},
         {"goto.file", true},
         {"goto.line", true},
         {"goto.symbol", true},

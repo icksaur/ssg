@@ -253,7 +253,8 @@ TEST(viewDeltaReplayAndCommandExportsAreExact) {
     const auto set = searchCommandSet();
     const std::vector<std::string_view> expected{
         "palette.open",          "palette.close",        "palette.next",
-        "palette.previous",      "palette.execute",      "goto.file",
+        "palette.previous",      "palette.execute",      "file_finder.open",
+        "file_finder.toggle_gitignore",                  "goto.file",
         "goto.line",             "goto.symbol",          "goto.back",
         "goto.forward",          "search.workspace",     "search.results_next",
         "search.results_previous"};

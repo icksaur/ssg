@@ -75,6 +75,8 @@ inline constexpr auto runtime_command_cases = std::to_array<RuntimeCommandCase>(
     RuntimeCommandCase{"view.reveal_caret", "selection-navigation"},
     RuntimeCommandCase{"view.center_caret", "selection-navigation"},
     RuntimeCommandCase{"palette.open", "search-palette"},
+    RuntimeCommandCase{"file_finder.open", "search-palette"},
+    RuntimeCommandCase{"file_finder.toggle_gitignore", "search-palette"},
     RuntimeCommandCase{"palette.close", "search-palette"},
     RuntimeCommandCase{"palette.next", "search-palette"},
     RuntimeCommandCase{"palette.previous", "search-palette"},
@@ -189,6 +191,6 @@ inline constexpr auto runtime_command_cases = std::to_array<RuntimeCommandCase>(
     RuntimeCommandCase{"diff.open_file", "diff-model"},
 });
 
-static_assert(runtime_command_cases.size() == 176);
+static_assert(runtime_command_cases.size() == 178);
 
 } // namespace ssg::test

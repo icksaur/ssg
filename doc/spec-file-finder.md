@@ -1,5 +1,10 @@
 # spec-file-finder
 
+## Status
+
+Done. P1 landed in d0a35bb/f1d9bdb, P2 in this change. Deviations from the plan
+as written are recorded inline below.
+
 Status: draft (spec review pending)
 
 ## Goals
@@ -301,6 +306,23 @@ already decodes as `KeyP` with `shift` set from the ASCII case.
 | 12 | Mode-dispatch BOTH submit paths: keyboard (`prompt.submit`) and pointer (palette-row click). `route_pointer` takes the published picker mode and emits `palette.execute{id}` or `file.open{id}`; rename the target field from `palette_command_id` to an activated-candidate id | `apps/ssg_main.cpp`, `apps/pointer_routing.h`, `apps/pointer_routing.cpp`, `tests/test_ssg_app.cpp` | test: extend the existing `routePointerPalettePressExecutesTheCandidate` unit case with a File-mode case asserting `file.open{path}` (NOT `palette.execute`); keyboard fulfilment table covers the File branch | INV-derived-view-bounded |
 | 13 | Rebind the keymap: `Escape KeyP` -> `file_finder.open`, `Escape Shift+KeyP` -> `palette.open` | `src/EditorRuntime.cpp`, `tests/runtime/test_runtime_snapshot.cpp`, `doc/spec-keymap.md` | test: `resolveSequence` returns the new command for each chord; existing `curatedKeymapBindingsAreArgumentFree` and keymap-validation oracles green | K2, K5 |
 | 14 | **P2 gate**: both build gates green; PTY end-to-end verification of the Observable list; user visual signoff | - | real-binary PTY harness | - |
+
+## Implementation deviations
+
+- Step 6 landed as a dedicated `GitIgnoreMatcher` interface plus
+  `makePlatformGitIgnoreMatcher`, not as a method on `GitRepository`. Every
+  `GitRepository` method opens and closes a repository handle per call, which is
+  right for one scan per refresh but wrong for the thousands of queries a walk
+  makes; the matcher holds its handle for its lifetime.
+- Submitting from the file picker dispatches `file.open` AND `palette.close`,
+  in both the keyboard and pointer paths. `palette.execute` cancels the prompt
+  server-side as part of executing, but `file.open` has no prompt side effects,
+  so without the explicit close the picker survived its own submit (observed in
+  a real PTY run).
+- The client resets the picker window for ANY id in `pickerCatalog()`, not for
+  a hardcoded `"palette.open"`. The hardcoded form left the file picker
+  inheriting the previous query (observed: opening the file picker after a
+  command-palette query pre-filtered the file list).
 
 ## Rationale
 

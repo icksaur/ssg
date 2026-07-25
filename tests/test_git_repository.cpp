@@ -352,6 +352,90 @@ TEST(platformRepositoryCurrentBranchIsAbsentOutsideGitRepo) {
     fs::remove_all(root);
 }
 
+// Reference-implementation oracle: real `git check-ignore` decides, and the
+// matcher must agree on every probe.  A hand-listed expectation would encode my
+// reading of gitignore semantics; git itself encodes the real ones.
+int gitSaysIgnored(const fs::path& repoRoot, std::string_view repoRelative) {
+    auto command = "check-ignore -q \"" + std::string{repoRelative} + "\"";
+    return runStatus(repoRoot, command) == 0 ? 1 : 0;
+}
+
+fs::path makeUniqueRoot(std::string_view label) {
+    const auto suffix =
+        std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    return fs::temp_directory_path() /
+           ("ssg-" + std::string{label} + "-" + suffix);
+}
+
+TEST(ignoreMatcherAgreesWithGitCheckIgnoreAtTheRepositoryRoot) {
+    auto root = makeUniqueRoot("ignore-root");
+    fs::create_directories(root / "src");
+    fs::create_directories(root / "build" / "nested");
+    std::ofstream{root / ".gitignore"} << "build/\n*.log\n";
+    std::ofstream{root / "src" / "main.cpp"} << "int main(){}\n";
+    std::ofstream{root / "build" / "nested" / "out.o"} << "x\n";
+    std::ofstream{root / "debug.log"} << "x\n";
+    ASSERT_EQ(runStatus(root, "init -q"), 0);
+
+    auto matcher = makePlatformGitIgnoreMatcher(root);
+    ASSERT_TRUE(matcher->usable());
+
+    for (std::string_view probe :
+         {"src/main.cpp", "build", "build/nested/out.o", "debug.log",
+          ".gitignore"}) {
+        ASSERT_EQ(matcher->ignores(fs::path{probe}) ? 1 : 0,
+                  gitSaysIgnored(root, probe));
+    }
+    fs::remove_all(root);
+}
+
+// The workspace root need not be the repository root.  The matcher takes
+// WORKSPACE-relative paths, so it must rebase them onto the work directory
+// before asking libgit2; without that a root-anchored pattern silently matches
+// against the wrong prefix and the answers look plausible but are wrong.
+TEST(ignoreMatcherRebasesWhenTheWorkspaceIsNestedInsideTheRepository) {
+    auto root = makeUniqueRoot("ignore-nested");
+    fs::create_directories(root / "sub" / "build");
+    fs::create_directories(root / "sub" / "keep");
+    // Anchored at the REPOSITORY root: it must NOT match sub/build, and it must
+    // match the top-level build.  This is the pattern that exposes a missing
+    // rebase in either direction.
+    std::ofstream{root / ".gitignore"} << "/build/\nsub/ignored.txt\n";
+    fs::create_directories(root / "build");
+    std::ofstream{root / "sub" / "build" / "kept.txt"} << "x\n";
+    std::ofstream{root / "sub" / "keep" / "file.txt"} << "x\n";
+    std::ofstream{root / "sub" / "ignored.txt"} << "x\n";
+    ASSERT_EQ(runStatus(root, "init -q"), 0);
+
+    auto workspace = root / "sub";
+    auto matcher = makePlatformGitIgnoreMatcher(workspace);
+    ASSERT_TRUE(matcher->usable());
+
+    // Probes are workspace-relative; git is asked the repository-relative form.
+    ASSERT_EQ(matcher->ignores(fs::path{"ignored.txt"}) ? 1 : 0,
+              gitSaysIgnored(root, "sub/ignored.txt"));
+    ASSERT_EQ(matcher->ignores(fs::path{"build/kept.txt"}) ? 1 : 0,
+              gitSaysIgnored(root, "sub/build/kept.txt"));
+    ASSERT_EQ(matcher->ignores(fs::path{"keep/file.txt"}) ? 1 : 0,
+              gitSaysIgnored(root, "sub/keep/file.txt"));
+    // Concretely: the root-anchored /build/ rule does not reach the nested one.
+    ASSERT_FALSE(matcher->ignores(fs::path{"build/kept.txt"}));
+    ASSERT_TRUE(matcher->ignores(fs::path{"ignored.txt"}));
+    fs::remove_all(root);
+}
+
+TEST(ignoreMatcherIsUnusableAndNeverIgnoresOutsideARepository) {
+    auto root = makeUniqueRoot("ignore-norepo");
+    fs::create_directories(root);
+    std::ofstream{root / "plain.txt"} << "x\n";
+
+    auto matcher = makePlatformGitIgnoreMatcher(root);
+    ASSERT_FALSE(matcher->usable());
+    ASSERT_FALSE(matcher->ignores(fs::path{"plain.txt"}));
+    ASSERT_FALSE(matcher->ignores(fs::path{"anything/at/all"}));
+    fs::remove_all(root);
+}
+
 }  // namespace
 
 int main() {
@@ -360,6 +444,9 @@ int main() {
     RUN(platformRepositoryOpenFailureIsIncomplete);
     RUN(platformRepositoryCurrentBranchMatchesGitBranchAndDetachedHead);
     RUN(platformRepositoryCurrentBranchIsAbsentOutsideGitRepo);
+    RUN(ignoreMatcherAgreesWithGitCheckIgnoreAtTheRepositoryRoot);
+    RUN(ignoreMatcherRebasesWhenTheWorkspaceIsNestedInsideTheRepository);
+    RUN(ignoreMatcherIsUnusableAndNeverIgnoresOutsideARepository);
     std::cout << "\nPassed: " << passed << " Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

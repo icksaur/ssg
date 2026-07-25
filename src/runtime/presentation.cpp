@@ -34,12 +34,6 @@ bool syncTreeProviderToPanel(EditorRuntime::Impl& runtime) {
     return false;
 }
 
-bool boolSetting(SettingsModel const& settings, SettingKey key, bool fallback) {
-    auto value = settings.resolve(key).value;
-    if (auto const* typed = std::get_if<bool>(&value)) return *typed;
-    return fallback;
-}
-
 bool userNavigationShellCommand(std::string_view id) {
     return id == "pane.next" || id == "pane.previous" ||
            id == "pane.focus_left" || id == "pane.focus_right" ||

@@ -110,7 +110,10 @@ KeymapViewState defaultTerminalKeymap() {
     bind(seq({"Escape", "KeyS"}), "file.save", "*");
     bind(seq({"Escape", "KeyZ"}), "edit.undo", "*");
     bind(seq({"Escape", "Shift+KeyZ"}), "edit.redo", "*");
-    bind(seq({"Escape", "KeyP"}), "palette.open", "*");
+    // leader+p opens the file picker (the frequent action) and leader+Shift+P
+    // the command palette, matching the convention users arrive with.
+    bind(seq({"Escape", "KeyP"}), "file_finder.open", "*");
+    bind(seq({"Escape", "Shift+KeyP"}), "palette.open", "*");
     bind(seq({"Escape", "KeyB"}), "panel.toggle", "*");
     bind(seq({"Escape", "KeyO"}), "panel.focus", "*");
     bind(seq({"Escape", "BracketRight"}), "tab.next", "*");
@@ -1334,7 +1337,20 @@ bool EditorRuntime::Impl::openPickerPrompt(PickerKind kind) {
         {{"query", "Command palette query", ""}}, {}, std::nullopt});
     if (!opened.accepted()) return false;
     openPicker = kind;
+    if (kind == PickerKind::File) rebuildFileCandidates();
     return true;
+}
+
+// The index opens its OWN repository handle rather than sharing the git-diff
+// worker's: that one is owned by its thread, and libgit2 handles are not safe to
+// use from two threads.
+void EditorRuntime::Impl::rebuildFileCandidates() {
+    auto matcher = makePlatformGitIgnoreMatcher(root);
+    WorkspaceFileIndexOptions options;
+    options.respectGitignore =
+        boolSetting(settings, SettingKey::FileFinderRespectGitignore, true);
+    fileCandidates =
+        std::move(WorkspaceFileIndex{}.build(root, *matcher, options).candidates);
 }
 
 // Re-derives `openPicker` from the prompt after every dispatch.  A picker can be
@@ -1348,7 +1364,11 @@ bool EditorRuntime::Impl::openPickerPrompt(PickerKind kind) {
 void EditorRuntime::Impl::reconcileOpenPicker() {
     bool const paletteActive = prompt.active() && prompt.request() &&
                                prompt.request()->kind == PromptKind::Palette;
-    if (!paletteActive) openPicker.reset();
+    if (!paletteActive) {
+        openPicker.reset();
+        // Discard the walk's results with the picker that owned them.
+        fileCandidates.clear();
+    }
 }
 
 void EditorRuntime::Impl::reconcileFindDocument() {
