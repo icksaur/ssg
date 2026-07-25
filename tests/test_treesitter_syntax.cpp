@@ -9,7 +9,15 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
+
+namespace ssg {
+// Provided by the generated translation unit; declared here so the test can
+// compare embedded text against the vendor files independently.
+std::string_view embeddedHighlightQuery(std::string_view key);
+}
 
 namespace {
 
@@ -111,9 +119,49 @@ TEST(treeSitterSyntaxGoldenByLanguage) {
     }
 }
 
+// LAYER (b): the structural guarantee.  Layer (a) passes as long as SOMETHING
+// supplies the query; this pins that the parser contains no file-reading code at
+// all, so a future change cannot reintroduce a runtime read that happens to work
+// on the dev machine.  Mirrors the source-scanning technique already used by
+// tests/test_theme.cpp and tests/test_ssg_app.cpp.
+TEST(parserSourceContainsNoRuntimeFileReading) {
+    const fs::path source = fs::path{SSG_TREESITTER_SOURCE_DIR} / "TreeSitterParser.cpp";
+    const auto text = readFile(source);
+    ASSERT_FALSE(text.empty());
+    for (std::string_view forbidden :
+         {"ifstream", "fopen", "highlights.scm", "SSG_TREESITTER_VENDOR_DIR"}) {
+        ASSERT_TRUE(text.find(forbidden) == std::string::npos);
+    }
+}
+
+// LAYER (c), supplemental: the shipped artifact carries no query path.  Kept
+// deliberately weak -- `strings` output is tool- and artifact-dependent, so this
+// guards the build wiring rather than proving the behavior.
+TEST(embeddedQueryTextMatchesTheVendorFilesByteForByte) {
+    const fs::path vendorRoot = fs::path{SSG_TREESITTER_VENDOR_DIR};
+    const std::vector<std::pair<std::string, std::string>> keyToFile{
+        {"c", "tree-sitter-c/queries/highlights.scm"},
+        {"cpp", "tree-sitter-cpp/queries/highlights.scm"},
+        {"javascript", "tree-sitter-javascript/queries/highlights.scm"},
+        {"typescript", "tree-sitter-typescript/queries/highlights.scm"},
+        {"csharp", "tree-sitter-c-sharp/queries/highlights.scm"},
+        {"lua", "tree-sitter-lua/queries/highlights.scm"},
+    };
+    // Reference-implementation oracle: the test reads the file itself and
+    // compares, so a generator that truncates or mangles escaping fails here.
+    for (const auto& [key, relative] : keyToFile) {
+        const auto expected = readFile(vendorRoot / relative);
+        ASSERT_FALSE(expected.empty());
+        ASSERT_EQ(std::string{embeddedHighlightQuery(key)}, expected);
+    }
+    ASSERT_TRUE(embeddedHighlightQuery("no-such-grammar").empty());
+}
+
 } // namespace
 
 int main() {
     RUN(treeSitterSyntaxGoldenByLanguage);
+    RUN(parserSourceContainsNoRuntimeFileReading);
+    RUN(embeddedQueryTextMatchesTheVendorFilesByteForByte);
     return failed == 0 ? 0 : 1;
 }

@@ -7,8 +7,6 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
-#include <fstream>
-#include <iterator>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -18,6 +16,13 @@
 #include <vector>
 
 namespace ssg {
+
+// Defined by the generated translation unit (cmake/embed_text.cmake).  Returns
+// the compiled-in query text for a key from the table below, or an empty view
+// for an unknown key -- which can only mean the table and the CMake embed list
+// have drifted apart.
+std::string_view embeddedHighlightQuery(std::string_view key);
+
 namespace {
 
 extern "C" {
@@ -34,32 +39,25 @@ class TreeSitterParse final : public OpaqueSyntaxParse {};
 struct GrammarSpec {
     std::array<std::string_view, 4> ids;
     const TSLanguage* (*language)();
-    std::string_view queryPath;
+    // Key into the generated embedded-query table, NOT a path: the queries are
+    // compiled into the binary so a moved or absent source tree cannot silently
+    // cost us highlighting.
+    std::string_view queryKey;
     // Highlight query for the base grammar this one inherits (tree-sitter's
     // "; inherits:" directive, which ts_query_new does not process). Its rules
     // are prepended so this grammar's specific rules override them. Empty = none.
-    std::string_view inheritsQueryPath;
+    std::string_view inheritsQueryKey;
 };
 
 const std::array kGrammars{
-    GrammarSpec{{"c", "", "", ""}, tree_sitter_c,
-                SSG_TREESITTER_VENDOR_DIR "/tree-sitter-c/queries/highlights.scm",
-                ""},
-    GrammarSpec{{"cpp", "c++", "cc", ""}, tree_sitter_cpp,
-                SSG_TREESITTER_VENDOR_DIR "/tree-sitter-cpp/queries/highlights.scm",
-                SSG_TREESITTER_VENDOR_DIR "/tree-sitter-c/queries/highlights.scm"},
+    GrammarSpec{{"c", "", "", ""}, tree_sitter_c, "c", ""},
+    GrammarSpec{{"cpp", "c++", "cc", ""}, tree_sitter_cpp, "cpp", "c"},
     GrammarSpec{{"javascript", "js", "", ""}, tree_sitter_javascript,
-                SSG_TREESITTER_VENDOR_DIR "/tree-sitter-javascript/queries/highlights.scm",
-                ""},
+                "javascript", ""},
     GrammarSpec{{"typescript", "ts", "", ""}, tree_sitter_typescript,
-                SSG_TREESITTER_VENDOR_DIR "/tree-sitter-typescript/queries/highlights.scm",
-                SSG_TREESITTER_VENDOR_DIR "/tree-sitter-javascript/queries/highlights.scm"},
-    GrammarSpec{{"csharp", "c#", "cs", ""}, tree_sitter_c_sharp,
-                SSG_TREESITTER_VENDOR_DIR "/tree-sitter-c-sharp/queries/highlights.scm",
-                ""},
-    GrammarSpec{{"lua", "", "", ""}, tree_sitter_lua,
-                SSG_TREESITTER_VENDOR_DIR "/tree-sitter-lua/queries/highlights.scm",
-                ""},
+                "typescript", "javascript"},
+    GrammarSpec{{"csharp", "c#", "cs", ""}, tree_sitter_c_sharp, "csharp", ""},
+    GrammarSpec{{"lua", "", "", ""}, tree_sitter_lua, "lua", ""},
 };
 
 const GrammarSpec* grammarFor(const LanguageId& language) {
@@ -74,11 +72,6 @@ const GrammarSpec* grammarFor(const LanguageId& language) {
     return nullptr;
 }
 
-std::string readFile(const std::string_view path) {
-    std::ifstream input{std::string{path}, std::ios::binary};
-    return {std::istreambuf_iterator<char>{input}, std::istreambuf_iterator<char>{}};
-}
-
 const TSQuery* queryFor(const GrammarSpec& grammar) {
     static std::mutex mutex;
     static std::unordered_map<
@@ -87,25 +80,25 @@ const TSQuery* queryFor(const GrammarSpec& grammar) {
     static std::unordered_set<std::string> failedQueries;
 
     std::lock_guard<std::mutex> lock{mutex};
-    const std::string queryPath{grammar.queryPath};
-    if (const auto found = queries.find(queryPath); found != queries.end()) {
+    const std::string queryKey{grammar.queryKey};
+    if (const auto found = queries.find(queryKey); found != queries.end()) {
         return found->second.get();
     }
-    if (failedQueries.contains(queryPath)) {
+    if (failedQueries.contains(queryKey)) {
         return nullptr;
     }
 
     const auto querySource = [&] {
         std::string source;
-        if (!grammar.inheritsQueryPath.empty()) {
-            source += readFile(grammar.inheritsQueryPath);
+        if (!grammar.inheritsQueryKey.empty()) {
+            source += embeddedHighlightQuery(grammar.inheritsQueryKey);
             source += '\n';
         }
-        source += readFile(grammar.queryPath);
+        source += embeddedHighlightQuery(grammar.queryKey);
         return source;
     }();
     if (querySource.empty()) {
-        failedQueries.insert(queryPath);
+        failedQueries.insert(queryKey);
         return nullptr;
     }
 
@@ -117,12 +110,12 @@ const TSQuery* queryFor(const GrammarSpec& grammar) {
         &ts_query_delete);
     (void)errorOffset;
     if (!query || errorType != TSQueryErrorNone) {
-        failedQueries.insert(queryPath);
+        failedQueries.insert(queryKey);
         return nullptr;
     }
 
     const auto inserted =
-        queries.emplace(queryPath, std::move(query));
+        queries.emplace(queryKey, std::move(query));
     return inserted.first->second.get();
 }
 

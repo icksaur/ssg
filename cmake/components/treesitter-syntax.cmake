@@ -8,6 +8,54 @@ if(SSG_TREESITTER)
 
     set(_SSG_TREESITTER_VENDOR_DIR ${SSG_SOURCE_DIR}/vendor)
 
+    # Highlight queries embedded into the binary.  ONE LINE PER QUERY: add a
+    # "key=path" entry here and it is compiled in; nothing else in the build
+    # needs to change.  The keys are what src/TreeSitterParser.cpp's kGrammars
+    # table refers to.
+    set(_SSG_EMBEDDED_QUERIES
+        "c=${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-c/queries/highlights.scm"
+        "cpp=${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-cpp/queries/highlights.scm"
+        "javascript=${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-javascript/queries/highlights.scm"
+        "typescript=${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-typescript/queries/highlights.scm"
+        "csharp=${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-c-sharp/queries/highlights.scm"
+        "lua=${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-lua/queries/highlights.scm"
+    )
+
+    # Depend on the query files themselves so editing one regenerates the TU.
+    set(_SSG_EMBEDDED_QUERY_FILES "")
+    foreach(_entry IN LISTS _SSG_EMBEDDED_QUERIES)
+        string(FIND "${_entry}" "=" _split)
+        math(EXPR _rest "${_split} + 1")
+        string(SUBSTRING "${_entry}" ${_rest} -1 _path)
+        list(APPEND _SSG_EMBEDDED_QUERY_FILES "${_path}")
+    endforeach()
+
+    set(_SSG_EMBEDDED_QUERIES_TU
+        ${CMAKE_BINARY_DIR}/generated/treesitter_queries.cpp)
+    # The spec goes through a FILE rather than a -D argument.  Neither a
+    # ';'-separated list (truncated at the first ';' by the command-line parser)
+    # nor a newline-joined string (newlines stripped under VERBATIM) survives
+    # transit intact, and both failure modes are silent -- they yield a partial
+    # table that still compiles.
+    set(_SSG_EMBEDDED_QUERIES_SPEC
+        ${CMAKE_BINARY_DIR}/generated/treesitter_queries.spec)
+    string(JOIN "\n" _SSG_EMBEDDED_QUERIES_TEXT ${_SSG_EMBEDDED_QUERIES})
+    file(GENERATE OUTPUT ${_SSG_EMBEDDED_QUERIES_SPEC}
+         CONTENT "${_SSG_EMBEDDED_QUERIES_TEXT}\n")
+    add_custom_command(
+        OUTPUT ${_SSG_EMBEDDED_QUERIES_TU}
+        COMMAND ${CMAKE_COMMAND}
+            -DEMBED_SPEC_FILE=${_SSG_EMBEDDED_QUERIES_SPEC}
+            -DEMBED_OUTPUT=${_SSG_EMBEDDED_QUERIES_TU}
+            -DEMBED_NAMESPACE=ssg
+            -DEMBED_ACCESSOR=embeddedHighlightQuery
+            -P ${SSG_SOURCE_DIR}/cmake/embed_text.cmake
+        DEPENDS ${_SSG_EMBEDDED_QUERY_FILES}
+                ${_SSG_EMBEDDED_QUERIES_SPEC}
+                ${SSG_SOURCE_DIR}/cmake/embed_text.cmake
+        COMMENT "Embedding tree-sitter highlight queries"
+        VERBATIM)
+
     set(_SSG_TREESITTER_VENDOR_SOURCES
         ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter/lib/src/lib.c
         ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-c/src/parser.c
@@ -25,6 +73,7 @@ if(SSG_TREESITTER)
 
     target_sources(ssg PRIVATE
         ${SSG_SOURCE_DIR}/src/TreeSitterParser.cpp
+        ${_SSG_EMBEDDED_QUERIES_TU}
         ${_SSG_TREESITTER_VENDOR_SOURCES}
     )
 
@@ -40,7 +89,6 @@ if(SSG_TREESITTER)
 
     target_compile_definitions(ssg PRIVATE
         SSG_TREESITTER
-        SSG_TREESITTER_VENDOR_DIR="${_SSG_TREESITTER_VENDOR_DIR}"
     )
 
     set_source_files_properties(${_SSG_TREESITTER_VENDOR_SOURCES}
@@ -79,8 +127,34 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         target_compile_definitions(test_treesitter_syntax PRIVATE
             SSG_TREESITTER
             SSG_TREESITTER_FIXTURE_DIR="${SSG_SOURCE_DIR}/tests/fixtures/syntax"
+            SSG_TREESITTER_VENDOR_DIR="${_SSG_TREESITTER_VENDOR_DIR}"
+            SSG_TREESITTER_SOURCE_DIR="${SSG_SOURCE_DIR}/src"
         )
         target_link_libraries(test_treesitter_syntax PRIVATE ssg)
         add_test(NAME test_treesitter_syntax COMMAND test_treesitter_syntax)
+
+        # A separate executable because TreeSitterParser's query cache is
+        # process-wide: run in the same process as the golden tests, this check
+        # is vacuous (they populate the cache first).
+        add_executable(test_treesitter_embedded_queries
+            ${SSG_SOURCE_DIR}/tests/test_treesitter_embedded_queries.cpp
+        )
+        target_include_directories(test_treesitter_embedded_queries PRIVATE
+            ${SSG_SOURCE_DIR}/tests
+            ${SSG_SOURCE_DIR}/src
+        )
+        target_compile_definitions(test_treesitter_embedded_queries PRIVATE
+            SSG_TREESITTER
+            SSG_TREESITTER_VENDOR_DIR="${_SSG_TREESITTER_VENDOR_DIR}"
+        )
+        target_link_libraries(test_treesitter_embedded_queries PRIVATE ssg)
+        add_test(NAME test_treesitter_embedded_queries
+                 COMMAND test_treesitter_embedded_queries)
+        # Renames vendor files while it runs, so it must not overlap the golden
+        # tests that read them.
+        set_tests_properties(test_treesitter_embedded_queries PROPERTIES
+            RUN_SERIAL TRUE)
+        set_tests_properties(test_treesitter_syntax PROPERTIES
+            RUN_SERIAL TRUE)
     endif()
 endif()
