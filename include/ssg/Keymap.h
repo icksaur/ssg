@@ -175,9 +175,11 @@ struct KeymapMutationResult {
 // Applies keymap.unbind's request to `current`: parses the sequence
 // string and removes any binding matching the (context, sequence) pair.
 // Absence is a no-op success (see KeymapUnbindArguments above). Rejects
-// only on an unparseable sequence or unknown context; unbinding can never
-// break K1/K2/K6 (removing a binding cannot introduce a prefix collision
-// or an invalid context), so no post-removal re-validation is needed.
+// on an unparseable sequence, an unknown context, or if removing the
+// binding would eliminate the LAST settings.open global binding (K6's
+// escape hatch): unlike K1/K2 (which removal can never violate), K6 is a
+// property of the WHOLE keymap and a removal can be the one that breaks
+// it, so it is re-checked the same way keymap.bind checks it.
 [[nodiscard]] KeymapMutationResult applyKeymapUnbind(
     KeymapViewState const& current,
     KeymapUnbindArguments const& arguments) noexcept;

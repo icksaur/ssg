@@ -43,7 +43,10 @@ Normative commands owned by this feature:
 - K1 (context validity), K2 (prefix-freedom), K6 (a `settings.open` global
   escape hatch always survives) are re-checked on every `keymap.bind` call
   via the existing `KeymapMatcher::validate`/`hasGlobalBinding` -- the same
-  checks the compiled-in default keymap must already pass.
+  checks the compiled-in default keymap must already pass. `keymap.unbind`
+  re-checks K6 too (unlike K1/K2, which a removal can never violate, K6 is
+  a property of the WHOLE keymap and removing the LAST `settings.open`
+  binding is exactly the case that breaks it).
 - The command is all-or-nothing: a rejected `keymap.bind`/`keymap.unbind`
   call never partially mutates the live keymap.
 
@@ -52,6 +55,12 @@ Normative commands owned by this feature:
 - Sequence is a single space-separated string, not a Lua array, to avoid
   widening ssg.command's flat string->string argument bridge to carry
   arrays (see `doc/spec-config.md`).
+- `keymap.bind`/`keymap.unbind` are themselves marked `keymap:false`/
+  `palette:false` in `data/required-commands.json` -- like
+  `find.update_query`/`tree.select`, each requires a typed payload
+  (sequence/command/context) that neither a bare keystroke nor a
+  parameterless palette invocation can supply, so both surfaces are
+  excluded; only init.lua (Lua) can call them.
 - K5 ("only argument-free commands are keystroke-bindable") is a
   documentation-level convention observed by the compiled-in default
   keymap, not a machine-checked catalog flag: `data/required-commands.json`'s
@@ -60,20 +69,26 @@ Normative commands owned by this feature:
   `find.update_query`), not whether it requires an argument -- commands
   like `settings.set`/`cursor.set_position`/`text.insert` are marked
   `keymap:true` despite requiring one. `keymap.bind` therefore does not
-  reject binding to an argument-required command id; resolving such a
-  binding at runtime dispatches with an empty payload, which every
-  existing command handler already rejects gracefully (a "requires a
-  typed ... payload" failure), not a crash. A future increment could add a
-  real machine-checked "argument-free" catalog flag if this proves
+  reject binding TO an argument-required command id (as opposed to
+  binding keymap.bind/unbind themselves, excluded above for a different
+  reason). Resolving such a binding at runtime dispatches with an empty
+  payload, which every existing command handler already rejects
+  gracefully (a "requires a typed ... payload" failure), not a crash --
+  but the keystroke-dispatch call site (`apps/ssg_main.cpp`'s `dispatch`
+  lambda) already discards every `CommandResult` for every keystroke, a
+  pre-existing pattern unrelated to this feature, so that failure is
+  silent (no crash, no surfaced error) rather than a visible diagnostic.
+  A future increment could add a real machine-checked "argument-free"
+  catalog flag, or surface keystroke-dispatch failures, if this proves
   confusing in practice.
 
 ## Acceptance (Definition of Done)
 
 - Observable: binding a new sequence to a known command makes it resolve
   through `KeymapMatcher`/appear in the palette's live keymap detail;
-  unbinding removes it; an invalid bind (bad sequence, unknown context,
-  reintroduced ambiguity, or removing the last `settings.open` global
-  binding) is rejected with the prior keymap unchanged; reloading
+  unbinding removes it; an invalid bind or unbind (bad sequence, unknown
+  context, reintroduced ambiguity, or removing the last `settings.open`
+  global binding) is rejected with the prior keymap unchanged; reloading
   init.lua with a binding line removed reverts to the default keymap for
   that sequence.
 - Gates: project build and keymap tests are green.

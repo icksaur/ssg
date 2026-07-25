@@ -464,6 +464,17 @@ TEST(capabilityAndSurfaceExclusionsAreExact) {
             ASSERT_TRUE(command.lua);
             ASSERT_FALSE(command.keymap);
             ASSERT_FALSE(command.palette);
+        } else if (command.id == "keymap.bind" ||
+                   command.id == "keymap.unbind") {
+            // Config-time commands: each requires a typed sequence/command/
+            // context payload that neither a bare keystroke nor a
+            // parameterless palette invocation can supply, so both are
+            // excluded -- same shape as the client/pointer-fulfilment
+            // exclusions above. Lua-only (init.lua is the only caller).
+            ASSERT_TRUE(command.requiredCapabilities.empty());
+            ASSERT_TRUE(command.lua);
+            ASSERT_FALSE(command.keymap);
+            ASSERT_FALSE(command.palette);
         } else {
             ASSERT_TRUE(command.requiredCapabilities.empty());
             ASSERT_TRUE(command.lua);

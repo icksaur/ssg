@@ -525,6 +525,12 @@ KeymapMutationResult applyKeymapUnbind(
     std::erase_if(proposed.bindings, [&](const KeyBinding& binding) {
         return binding.context == context && binding.sequence == *sequence;
     });
+    if (!KeymapMatcher{proposed}.hasGlobalBinding("settings.open", {})) {
+        return {KeymapMutationError{
+                    "keymap.unbind must not remove the settings.open "
+                    "global escape hatch"},
+                {}};
+    }
     return {std::nullopt, std::move(proposed)};
 }
 

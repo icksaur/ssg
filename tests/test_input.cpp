@@ -373,6 +373,10 @@ TEST(applyKeymapUnbindRemovesOrNoOpsAndRejectsBadSequence) {
     ASSERT_FALSE(ssg::applyKeymapUnbind(base, {"NotAKey", ""}).accepted());
     ASSERT_FALSE(
         ssg::applyKeymapUnbind(base, {"Escape KeyF", "bogus"}).accepted());
+    // Removing the sole settings.open global binding must reject: K6's
+    // escape hatch must survive unbind, same as bind.
+    ASSERT_FALSE(
+        ssg::applyKeymapUnbind(base, {"Escape KeyS", ""}).accepted());
 }
 
 TEST(backendHasNoPlatformInputCaptureDependency) {
