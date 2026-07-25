@@ -15,6 +15,7 @@
 #include <ssg/EditorRuntime.h>
 #include <ssg/HitTester.h>
 #include <ssg/FindReplace.h>
+#include <ssg/InitScriptCatalog.h>
 #include <ssg/Keymap.h>
 #include <ssg/LuaCommandHost.h>
 #include <ssg/PaletteSearcher.h>
@@ -241,9 +242,16 @@ std::vector<ssg::CapabilityId> initScriptCapabilities() { return {}; }
 // future capability-gated init-script command must be added BOTH here
 // (with its required capabilities) and to initScriptCapabilities() above,
 // or InvocationPrincipal::hasCapability denies it by default, same as any
-// other Lua caller.
+// other Lua caller. Built from ssg::kInitScriptCommands (see
+// InitScriptCatalog.h), the single source of truth doc/config.md's
+// coverage test checks against.
 std::vector<ssg::LuaCommand> initScriptCommandCatalog() {
-    return {{"theme.define", {}}, {"keymap.bind", {}}, {"keymap.unbind", {}}};
+    std::vector<ssg::LuaCommand> result;
+    result.reserve(ssg::kInitScriptCommands.size());
+    for (auto const& descriptor : ssg::kInitScriptCommands) {
+        result.push_back({std::string{descriptor.id}, {}});
+    }
+    return result;
 }
 
 // Extracts a string field from a Lua flat-map argument table, or an empty
