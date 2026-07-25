@@ -326,19 +326,26 @@ Decoded decode_input(std::string_view bytes, bool inputExhausted,
         case 'D': consumed = 3; return {DecodeStatus::key, ssg::KeyStroke{"ArrowLeft"}, {}, 0};
         case 'H': consumed = 3; return {DecodeStatus::key, ssg::KeyStroke{"Home"}, {}, 0};
         case 'F': consumed = 3; return {DecodeStatus::key, ssg::KeyStroke{"End"}, {}, 0};
+        case '3':
         case '5':
         case '6': {
-            // PageUp/PageDown: plain ESC [ 5 ~ / ESC [ 6 ~, or the modified form
-            // ESC [ 5 ; m ~ (m = 1 + bitmask: bit0 Shift, bit1 Alt, bit2 Ctrl),
-            // mirroring the '1'-prefixed arrow/Home/End modifier handling above.
-            std::string const code = third == '5' ? "PageUp" : "PageDown";
+            // Delete/PageUp/PageDown: plain ESC [ 3|5|6 ~, or the modified form
+            // ESC [ 3|5|6 ; m ~ (m = 1 + bitmask: bit0 Shift, bit1 Alt, bit2
+            // Ctrl), mirroring the '1'-prefixed arrow/Home/End modifier
+            // handling above. Without this case, ESC [ 3 ~ (Delete) fell
+            // through to the `default` branch below, which consumes only the
+            // "ESC [ 3" introducer and leaves the trailing '~' byte to be
+            // decoded on the NEXT call as plain printable text -- inserting a
+            // literal "~" instead of deleting forward.
+            std::string const code =
+                third == '3' ? "Delete" : third == '5' ? "PageUp" : "PageDown";
             if (bytes.size() < 4) return {DecodeStatus::incomplete, {}, {}, 0};
             if (bytes[3] == '~') {
                 consumed = 4;
                 return {DecodeStatus::key, ssg::KeyStroke{code}, {}, 0};
             }
             if (bytes[3] != ';') {
-                consumed = 4;  // Unknown '5'/'6'-prefixed CSI; skip conservatively.
+                consumed = 4;  // Unknown '3'/'5'/'6'-prefixed CSI; skip conservatively.
                 return {DecodeStatus::none, {}, {}, 0};
             }
             std::size_t pos = 4;

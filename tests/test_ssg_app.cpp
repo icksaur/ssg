@@ -488,6 +488,34 @@ TEST(decodeInputModifiedArrowSplitReadsAreIncomplete) {
     ASSERT_FALSE(overflow.stroke.control);
 }
 
+TEST(decodeInputDeleteKeyPlainAndModified) {
+    std::size_t consumed = 0;
+    // Plain Delete: ESC [ 3 ~. Regression test: this byte sequence used to
+    // fall through to the unknown-CSI `default` branch (only consuming the
+    // "ESC [ 3" introducer), leaving the trailing '~' to be decoded on the
+    // NEXT call as plain printable text -- inserting a literal "~" instead
+    // of deleting forward.
+    auto del = ssg::app::decode_input("\x1b[3~", true, consumed);
+    ASSERT_EQ(consumed, std::size_t{4});
+    ASSERT_TRUE(del.status == ssg::app::DecodeStatus::key);
+    ASSERT_EQ(del.stroke.code, std::string{"Delete"});
+    ASSERT_TRUE(del.text.empty());
+
+    // Modified form ESC [ 3 ; m ~ (m = 1 + bitmask). Shift+Delete: m=2.
+    auto shiftDel = ssg::app::decode_input("\x1b[3;2~", true, consumed);
+    ASSERT_EQ(consumed, std::size_t{6});
+    ASSERT_EQ(shiftDel.stroke.code, std::string{"Delete"});
+    ASSERT_TRUE(shiftDel.stroke.shift);
+
+    // Split reads of the plain form are incomplete until the '~' arrives.
+    for (auto const* partial : {"\x1b[3"}) {
+        consumed = 99;
+        auto decoded = ssg::app::decode_input(partial, true, consumed);
+        ASSERT_TRUE(decoded.status == ssg::app::DecodeStatus::incomplete);
+        ASSERT_EQ(consumed, std::size_t{0});
+    }
+}
+
 TEST(decodeInputPageKeysPlainAndModified) {
     std::size_t consumed = 0;
     // Plain PageUp / PageDown: ESC [ 5 ~ / ESC [ 6 ~.
@@ -1076,6 +1104,7 @@ int main() {
     RUN(decodeInputMapsPrintablesAndNamedKeys);
     RUN(decodeInputModifiedArrows);
     RUN(decodeInputModifiedArrowSplitReadsAreIncomplete);
+    RUN(decodeInputDeleteKeyPlainAndModified);
     RUN(decodeInputPageKeysPlainAndModified);
     RUN(decodeInputArrowsAndMouse);
     RUN(decodeInputPointerPressReleaseDrag);

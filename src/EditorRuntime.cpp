@@ -234,6 +234,16 @@ KeymapViewState defaultTerminalKeymap() {
     bind(seq({"Shift+PageDown"}), "select.page_down", "editor");
     bind(seq({"Enter"}), "text.newline", "editor");
     bind(seq({"Backspace"}), "text.delete_backward", "editor");
+    bind(seq({"Delete"}), "text.delete_forward", "editor");
+    // Word-left/right: Ctrl+Left/Right is the common editor convention, but
+    // Ctrl is not reliably interceptable in every host (browsers capture
+    // several Ctrl+key combos at the chrome layer; see doc/spec-mod-keys.md).
+    // The Escape leader works in both hosts, so word navigation rides it
+    // instead, with the Shift variant extending the selection.
+    bind(seq({"Escape", "ArrowLeft"}), "cursor.word_left", "editor");
+    bind(seq({"Escape", "ArrowRight"}), "cursor.word_right", "editor");
+    bind(seq({"Escape", "Shift+ArrowLeft"}), "select.word_left", "editor");
+    bind(seq({"Escape", "Shift+ArrowRight"}), "select.word_right", "editor");
 
     bind(seq({"ArrowDown"}), "tree.select_next", "panel");
     bind(seq({"ArrowUp"}), "tree.select_previous", "panel");

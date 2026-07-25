@@ -187,6 +187,25 @@ TEST(curatedKeymapResolvesPerContext) {
     const auto replaceOpen = *ssg::KeyCodec{}.parseSequence({"Escape", "KeyR"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(replaceOpen, "editor").commandId,
               std::string{"replace.open"});
+
+    // Delete forward and Escape-led word navigation (with Shift for select).
+    const auto del = *ssg::KeyCodec{}.parseSequence({"Delete"});
+    ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(del, "editor").commandId,
+              std::string{"text.delete_forward"});
+    const auto wordLeft = *ssg::KeyCodec{}.parseSequence({"Escape", "ArrowLeft"});
+    ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(wordLeft, "editor").commandId,
+              std::string{"cursor.word_left"});
+    const auto wordRight = *ssg::KeyCodec{}.parseSequence({"Escape", "ArrowRight"});
+    ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(wordRight, "editor").commandId,
+              std::string{"cursor.word_right"});
+    const auto selectWordLeft =
+        *ssg::KeyCodec{}.parseSequence({"Escape", "Shift+ArrowLeft"});
+    ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(selectWordLeft, "editor").commandId,
+              std::string{"select.word_left"});
+    const auto selectWordRight =
+        *ssg::KeyCodec{}.parseSequence({"Escape", "Shift+ArrowRight"});
+    ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(selectWordRight, "editor").commandId,
+              std::string{"select.word_right"});
 }
 
 TEST(addCursorChordProducesMultipleSelections) {

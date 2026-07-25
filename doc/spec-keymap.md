@@ -194,7 +194,10 @@ terminal has no browser-reserved chords, so none is excluded):
   `settings.open` (the I24 escape hatch).
 - `editor`: `ArrowDown` → `cursor.line_down`, `ArrowUp` → `cursor.line_up`,
   `ArrowLeft` → `cursor.left`, `ArrowRight` → `cursor.right`, `Enter` →
-  `text.newline`, `Backspace` → `text.delete_backward`.
+  `text.newline`, `Backspace` → `text.delete_backward`, `Delete` →
+  `text.delete_forward`, `[Escape, ArrowLeft]` → `cursor.word_left`,
+  `[Escape, ArrowRight]` → `cursor.word_right`, `[Escape, Shift+ArrowLeft]` →
+  `select.word_left`, `[Escape, Shift+ArrowRight]` → `select.word_right`.
 - `panel`: `ArrowDown` → `tree.select_next`, `ArrowUp` → `tree.select_previous`,
   `Enter` → `tree.activate`.
 - `prompt`: `Enter` → `prompt.submit`, `[Escape, Escape]` → `prompt.cancel`,
