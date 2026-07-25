@@ -246,6 +246,10 @@ std::unique_ptr<ssg::EditorRuntime> makeHeadless(fs::path const& root) {
     auto runtime = std::move(created.runtime);
     (void)runtime->attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                           ssg::ViewId{1});
+    // apps/ssg_main.cpp always opens the Files sidebar at startup; mirror that
+    // here so this fixture matches the app's actual final frame.
+    (void)runtime->dispatch(ssg::ClientId{1},
+                            {"panel.show_files", runtime->revision(), {}});
     return runtime;
 }
 

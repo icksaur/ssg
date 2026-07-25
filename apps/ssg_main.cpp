@@ -641,6 +641,13 @@ int main(int argc, char** argv) {
     auto const appliedInitScript = loadInitScript(runtime);
     STARTUP_MARK("post_init_script");
 
+    // Always open the Files sidebar at startup (before any file-argument
+    // open below) -- lets a user immediately browse for a file to open
+    // without a separate keystroke, whether or not one was given on the
+    // command line. Uses the SAME panel.show_files command Escape-B/
+    // Escape-O reach interactively; startup introduces no new mechanism.
+    (void)runtime.dispatch(client, {"panel.show_files", runtime.revision(), {}});
+
     // doc/spec-config.md's auto-reload: watches the SAME path just loaded
     // above, on a background thread, and wakes the main loop's select() to
     // re-evaluate it when it changes. Absent if the config root itself
