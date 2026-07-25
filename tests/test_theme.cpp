@@ -11,6 +11,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <system_error>
 #include <string_view>
 #include <vector>
 
@@ -368,13 +369,35 @@ TEST(sourceAndConfigHaveNoIndependentColorSources) {
         ".css",  ".scss", ".sass", ".html", ".js",  ".jsx",  ".ts",
         ".tsx",  ".lua"};
     std::vector<std::string> violations;
-    for (const auto& entry : std::filesystem::recursive_directory_iterator(root)) {
-        if (!entry.is_regular_file()) continue;
-        const auto relative = std::filesystem::relative(entry.path(), root).generic_string();
-        if (relative.starts_with(".git/") || relative.starts_with("build") ||
-            relative.starts_with("doc/") || relative.starts_with("tasks/") ||
-            relative.starts_with("vendor/") ||
-            relative == "include/ssg/Theme.h" ||
+    // Prune excluded DIRECTORIES during descent rather than filtering their
+    // entries afterwards.  Filtering alone still walks them, and `build*` is a
+    // live tree: other tests create and delete scratch directories under it
+    // while this runs, so the iterator would intermittently abort with
+    // "cannot increment recursive directory iterator: No such file or
+    // directory".  Pruning also removes the bulk of the walk's cost.
+    const auto prunedDirectory = [](std::string_view relative) {
+        return relative == ".git" || relative.starts_with("build") ||
+               relative == "doc" || relative == "tasks" || relative == "vendor";
+    };
+    std::error_code walkError;
+    std::filesystem::recursive_directory_iterator entry{
+        root, std::filesystem::directory_options::skip_permission_denied,
+        walkError};
+    ASSERT_FALSE(static_cast<bool>(walkError));
+    const std::filesystem::recursive_directory_iterator last;
+    for (; entry != last; entry.increment(walkError)) {
+        if (walkError) break;
+        const auto relative =
+            std::filesystem::relative(entry->path(), root).generic_string();
+        std::error_code kindError;
+        if (entry->is_directory(kindError) && !kindError) {
+            if (entry.depth() == 0 && prunedDirectory(relative)) {
+                entry.disable_recursion_pending();
+            }
+            continue;
+        }
+        if (!entry->is_regular_file(kindError) || kindError) continue;
+        if (relative == "include/ssg/Theme.h" ||
             // Terminal color-depth adaptation (M9-C): these define the xterm-256
             // and ANSI-16 TERMINAL palettes — hardware swatches a reduced-depth
             // terminal can display — not editor theme colors.  See
@@ -386,8 +409,8 @@ TEST(sourceAndConfigHaveNoIndependentColorSources) {
             relative == "tests/test_theme.cpp") {
             continue;
         }
-        if (!scannedExtensions.contains(entry.path().extension().string())) continue;
-        const auto contents = readFile(entry.path());
+        if (!scannedExtensions.contains(entry->path().extension().string())) continue;
+        const auto contents = readFile(entry->path());
         for (const auto& pattern : forbidden) {
             if (std::regex_search(contents, pattern)) {
                 violations.push_back(relative);
@@ -399,6 +422,7 @@ TEST(sourceAndConfigHaveNoIndependentColorSources) {
             violations.push_back(relative);
         }
     }
+    ASSERT_FALSE(static_cast<bool>(walkError));
     ASSERT_TRUE(violations.empty());
 }
 
