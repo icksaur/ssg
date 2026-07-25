@@ -287,6 +287,11 @@ struct EditorRuntime::Impl final : CommandServices,
     void refreshTree();
     void reconcilePromptFocus();
     void reconcileOpenPicker();
+    // The only way to open a picker.  Setting the kind and opening its prompt
+    // together is what makes the "openPicker is set whenever a Palette prompt is
+    // active" half of the invariant true by construction, leaving
+    // reconcileOpenPicker() responsible only for the clearing half.
+    [[nodiscard]] bool openPickerPrompt(PickerKind kind);
     void refreshSyntax();
     // M10 fast startup deferral (doc/spec-fast-startup.md M10-3/M10-4).  While
     // `deferring_enrichment` is set (the pre-first-frame window when created with

@@ -31,23 +31,30 @@ struct PickerDescriptor {
     SearchMode wireMode = SearchMode::Command;
 };
 
+// The descriptor table is sized independently of `kAllPickerKinds` on purpose:
+// sizing it by `kAllPickerKinds.size()` would silently grow it with a
+// default-constructed row (kind `Command`, empty ids) when a kind is added,
+// deferring the missing wiring to a runtime test.  With an independent size the
+// static_assert below turns that into a compile error, and the runtime oracle in
+// tests/test_picker.cpp is left to catch what a count cannot: a row that exists
+// but names the wrong kind or a nonexistent command.
+inline constexpr std::array<PickerDescriptor, 1> kPickerDescriptors{{
+    {PickerKind::Command, "palette.open", "Command Palette", SearchMode::Command},
+}};
+
+static_assert(kPickerDescriptors.size() == kAllPickerKinds.size(),
+              "every PickerKind needs exactly one descriptor row");
+
 class PickerCatalog {
 public:
     // Null for a kind with no entry, rather than a fabricated fallback: the
     // exhaustiveness oracle can only fail if absence is observable.
     [[nodiscard]] PickerDescriptor const* find(PickerKind kind) const noexcept;
 
-    [[nodiscard]] std::array<PickerDescriptor, kAllPickerKinds.size()> const&
+    [[nodiscard]] std::array<PickerDescriptor, kPickerDescriptors.size()> const&
     descriptors() const noexcept {
-        return descriptors_;
+        return kPickerDescriptors;
     }
-
-private:
-    static constexpr std::array<PickerDescriptor, kAllPickerKinds.size()>
-        descriptors_{{
-            {PickerKind::Command, "palette.open", "Command Palette",
-             SearchMode::Command},
-        }};
 };
 
 [[nodiscard]] PickerCatalog const& pickerCatalog() noexcept;

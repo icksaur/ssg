@@ -6,9 +6,9 @@ namespace ssg {
 
 PickerDescriptor const* PickerCatalog::find(PickerKind kind) const noexcept {
     auto const found = std::find_if(
-        descriptors_.begin(), descriptors_.end(),
+        kPickerDescriptors.begin(), kPickerDescriptors.end(),
         [&](PickerDescriptor const& descriptor) { return descriptor.kind == kind; });
-    return found == descriptors_.end() ? nullptr : &*found;
+    return found == kPickerDescriptors.end() ? nullptr : &*found;
 }
 
 PickerCatalog const& pickerCatalog() noexcept {

@@ -59,10 +59,23 @@ TEST(catalogReportsAbsenceRatherThanFabricatingADescriptor) {
     ASSERT_TRUE(unknown == nullptr);
 }
 
+// The static_assert in Picker.h pins the row COUNT; it cannot see that two rows
+// name the same kind, which is what a copy-pasted row looks like -- the count
+// still matches, and the new kind silently resolves to nullptr.
+TEST(noTwoDescriptorsClaimTheSameKind) {
+    auto const& descriptors = ssg::pickerCatalog().descriptors();
+    for (std::size_t i = 0; i < descriptors.size(); ++i) {
+        for (std::size_t j = i + 1; j < descriptors.size(); ++j) {
+            ASSERT_TRUE(descriptors[i].kind != descriptors[j].kind);
+        }
+    }
+}
+
 int main() {
     RUN(everyPickerKindHasACompletelyWiredDescriptor);
     RUN(commandPickerDescriptorMatchesThePreRefactorPaletteBehavior);
     RUN(catalogReportsAbsenceRatherThanFabricatingADescriptor);
+    RUN(noTwoDescriptorsClaimTheSameKind);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;

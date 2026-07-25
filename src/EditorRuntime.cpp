@@ -1322,11 +1322,29 @@ void EditorRuntime::Impl::reconcilePromptFocus() {
     }
 }
 
+// Opens a picker's prompt and records its kind in one step.  Neither half is
+// meaningful alone: a Palette prompt with no kind publishes an empty candidate
+// list, and a kind with no prompt is a leak.  Pairing them here is why
+// reconcileOpenPicker() below only has to handle closing.
+bool EditorRuntime::Impl::openPickerPrompt(PickerKind kind) {
+    auto const* picker = pickerCatalog().find(kind);
+    if (picker == nullptr) return false;
+    auto opened = prompt.open(PromptRequest{
+        PromptKind::Palette, std::string{picker->promptTitle},
+        {{"query", "Command palette query", ""}}, {}, std::nullopt});
+    if (!opened.accepted()) return false;
+    openPicker = kind;
+    return true;
+}
+
 // Re-derives `openPicker` from the prompt after every dispatch.  A picker can be
 // closed by palette.close, by prompt.cancel, by a successful palette.execute, or
 // by the find-document reconcile dismissing the prompt; deriving the field here
 // covers all of them at once, so adding a fifth close path cannot leave the next
-// open publishing the previous picker's candidates.
+// open publishing the previous picker's candidates.  The converse (a Palette
+// prompt without a kind) is not reconcilable here -- nothing in the prompt says
+// WHICH picker it is -- and is instead made unrepresentable by openPickerPrompt()
+// being the only opener.
 void EditorRuntime::Impl::reconcileOpenPicker() {
     bool const paletteActive = prompt.active() && prompt.request() &&
                                prompt.request()->kind == PromptKind::Palette;

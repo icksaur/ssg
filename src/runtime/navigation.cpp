@@ -8,11 +8,6 @@ namespace {
 template <typename T>
 T const* payloadAs(std::any const& payload) { return std::any_cast<T>(&payload); }
 
-PromptRequest pickerPromptRequest(PickerDescriptor const& picker) {
-    return PromptRequest{PromptKind::Palette, std::string{picker.promptTitle},
-                         {{"query", "Command palette query", ""}}, {}, std::nullopt};
-}
-
 std::optional<TreeProviderId> panelProviderTreeId(std::string_view label) {
     if (label == "Files") return TreeProviderId{"filesystem"};
     if (label == "Git") return TreeProviderId{"git"};
@@ -59,10 +54,9 @@ CommandHandlerResult validatePaletteTarget(EditorRuntime::Impl& runtime,
 CommandHandlerResult searchCommand(EditorRuntime::Impl& runtime, CommandContext& context, std::string_view id, std::any const& payload) {
     Revision const revision = context.revision();
     if (id == "palette.open") {
-        auto const* picker = pickerCatalog().find(PickerKind::Command);
-        if (picker == nullptr) return failure("no descriptor for the command picker");
-        runtime.openPicker = picker->kind;
-        (void)runtime.prompt.open(pickerPromptRequest(*picker));
+        if (!runtime.openPickerPrompt(PickerKind::Command)) {
+            return failure("could not open the command picker");
+        }
     }
     else if (id == "palette.close") { (void)runtime.prompt.cancel(); }
     else if (id == "palette.next" || id == "search.results_next") runtime.search.selectNext();
