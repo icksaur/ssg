@@ -1,3 +1,4 @@
+#include "ssg/EditorRuntime.h"
 #include "ssg/Theme.h"
 #include "ssg/color.h"
 #include "test_helpers.h"
@@ -15,6 +16,8 @@
 #include <string>
 #include <string_view>
 #include <vector>
+
+#include <unistd.h>
 
 namespace {
 
@@ -416,6 +419,45 @@ TEST(themeDefineRejectionIsAllOrNothingNotPartial) {
     ASSERT_FALSE(result.accepted());
 }
 
+// EditorRuntime::create's compiled-in default theme (src/EditorRuntime.cpp's
+// defaultTheme(), an anonymous-namespace literal not directly reachable from
+// tests) is a SEPARATE hand-authored copy of data/themes/default.theme's
+// values, not something loaded from that file at runtime -- there is no
+// production code path that reads a .theme file (the file-parsing bundledTheme()
+// helper above exists only in this test binary). Two independently
+// hand-maintained sources of the same "default theme" values is exactly the
+// silent-drift hazard sourceAndConfigHaveNoIndependentColorSources (below)
+// exists to prevent for literal color TEXT, but that scan cannot catch two
+// numerically-different tables that are each individually well-formed C++.
+// This oracle closes that gap directly: it builds a runtime with the REAL
+// production defaultTheme() and asserts its published snapshot is
+// byte-identical to bundledTheme().snapshot() (independently parsed from the
+// data file) -- so any future edit to just one of the two literals fails
+// this test immediately, rather than silently drifting.
+TEST(defaultRuntimeThemeMatchesTheBundledThemeFile) {
+    auto root = std::filesystem::temp_directory_path() /
+                ("ssg_theme_oracle_" + std::to_string(::getpid()));
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root / "workspace");
+    ssg::EditorRuntimeConfig config;
+    config.cwd = root / "workspace";
+    config.scratchRoot = root / "scratch";
+    config.recoveryRoot = root / "recovery";
+    auto created = ssg::EditorRuntime::create(config);
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) { std::filesystem::remove_all(root); return; }
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1})
+                    .accepted());
+    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (snapshot) {
+        ASSERT_EQ(snapshot->sections().theme, bundledTheme().snapshot());
+    }
+    std::filesystem::remove_all(root);
+}
+
 TEST(sourceAndConfigHaveNoIndependentColorSources) {
     const std::filesystem::path root = SSG_SOURCE_ROOT;
     const std::array forbidden{
@@ -480,6 +522,7 @@ int main() {
     RUN(themeDefineUnknownSlotNameIsRejectedWithTheOriginalUntouched);
     RUN(themeDefineMalformedHexColorIsRejectedWithTheOriginalUntouched);
     RUN(themeDefineRejectionIsAllOrNothingNotPartial);
+    RUN(defaultRuntimeThemeMatchesTheBundledThemeFile);
     RUN(sourceAndConfigHaveNoIndependentColorSources);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;

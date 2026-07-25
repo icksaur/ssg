@@ -94,6 +94,15 @@ ThemeSnapshot defaultTheme() {
     // caco/public/themes/dark.css.  Low indices are dark fills, high indices
     // are light text, hues sit in the middle.  Role assignments keep every
     // co_visible_role_pairs member on a distinct palette index.
+    //
+    // This table MUST stay byte-identical to data/themes/default.theme --
+    // there is no runtime code path that loads that file (it exists only to
+    // be parsed by tests/test_theme.cpp's bundledTheme() helper), so this
+    // compiled literal is the actual, sole color source at runtime; the
+    // data file is a second, independently hand-maintained copy that exists
+    // for readability/tooling. tests/test_theme.cpp's
+    // defaultRuntimeThemeMatchesTheBundledThemeFile oracle fails the build
+    // if the two ever drift -- update BOTH when changing default colors.
     ThemeSnapshot snapshot{};
     constexpr std::array<std::array<std::uint8_t, 3>, kThemePaletteSize>
         palette{{
