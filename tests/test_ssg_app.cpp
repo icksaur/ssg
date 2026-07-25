@@ -1000,7 +1000,7 @@ TEST(promptBoundaryKeepsPaletteFulfillmentAndRemovesFindReplaceMapping) {
     }
     auto block = source.substr(dispatchStart, dispatchEnd - dispatchStart);
 
-    ASSERT_TRUE(block.find("if (id == \"prompt.submit\") { executeSelectedCandidate(); return; }") !=
+    ASSERT_TRUE(block.find("if (id == \"prompt.submit\") { submitSelectedCandidate(); return; }") !=
                 std::string::npos);
     ASSERT_TRUE(block.find("dispatch(\"find.next\")") == std::string::npos);
     ASSERT_TRUE(block.find("dispatch(\"replace.current\")") == std::string::npos);

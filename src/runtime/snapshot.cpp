@@ -298,16 +298,26 @@ void EditorRuntime::Impl::scrollTree(std::int64_t rows) {
     treeFirstVisible = static_cast<std::uint32_t>(next);
 }
 
+// Publishes the candidate set of whichever picker is open.  The mode and the
+// candidate source both come from the picker descriptor, so a new picker adds a
+// case here rather than a second hardcoded view.
 PaletteViewState EditorRuntime::Impl::paletteView() const {
     PaletteViewState view;
-    view.mode = SearchMode::Command;
-    for (auto const& descriptor : descriptors()) {
-        std::string detail;
-        if (auto sequence = KeymapMatcher{keymap}.preferredBinding(descriptor.id)) {
-            detail = KeyCodec{}.formatSequence(*sequence);
+    if (!openPicker) return view;
+    auto const* picker = pickerCatalog().find(*openPicker);
+    if (picker == nullptr) return view;
+    view.mode = picker->wireMode;
+    switch (*openPicker) {
+    case PickerKind::Command:
+        for (auto const& descriptor : descriptors()) {
+            std::string detail;
+            if (auto sequence = KeymapMatcher{keymap}.preferredBinding(descriptor.id)) {
+                detail = KeyCodec{}.formatSequence(*sequence);
+            }
+            view.candidates.push_back(
+                {descriptor.id, commandLabel(descriptor.id), std::move(detail)});
         }
-        view.candidates.push_back(
-            {descriptor.id, commandLabel(descriptor.id), std::move(detail)});
+        break;
     }
     return view;
 }

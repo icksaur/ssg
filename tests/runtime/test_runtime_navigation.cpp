@@ -1046,6 +1046,44 @@ TEST(paletteOpenEntersPromptFocusAndPublishesCandidates) {
     ASSERT_EQ(closed->sections().shell.focus, ssg::FocusTarget::Editor);
 }
 
+// The open-picker kind is derived from the prompt after every dispatch rather
+// than cleared at each close path.  Pin that across every way a picker closes:
+// a stale kind would make the NEXT open publish the previous picker's mode and
+// candidates, which is invisible while only one picker exists and wrong the
+// moment a second one lands.
+TEST(everyPaletteClosePathLeavesNoOpenPickerBehind) {
+    auto root = uniqueRoot();
+    auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
+
+    auto candidatesAfter = [&](std::string const& closeCommand) {
+        ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.open", runtime.revision(), {}}).accepted());
+        auto open = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        ASSERT_TRUE(open.has_value());
+        if (open) ASSERT_FALSE(open->sections().palette.candidates.empty());
+        (void)runtime.dispatch(ssg::ClientId{1}, {closeCommand, runtime.revision(), {}});
+        auto shut = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        ASSERT_TRUE(shut.has_value());
+        if (shut) ASSERT_TRUE(shut->sections().palette.candidates.empty());
+    };
+
+    candidatesAfter("palette.close");
+    candidatesAfter("prompt.cancel");
+
+    // A successful palette.execute cancels the prompt as part of executing; the
+    // picker must not survive into the next open.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.open", runtime.revision(), {}}).accepted());
+    (void)runtime.dispatch(
+        ssg::ClientId{1},
+        {"palette.execute", runtime.revision(), ssg::PaletteExecuteArguments{"edit.undo"}});
+    auto executed = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(executed.has_value());
+    if (executed) ASSERT_TRUE(executed->sections().palette.candidates.empty());
+}
+
 TEST(paletteExecuteValidatesCandidateMembership) {
     auto root = uniqueRoot();
     auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
@@ -1076,6 +1114,7 @@ TEST(paletteCandidatesCarryLabelsAndKeyDetail) {
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.open", runtime.revision(), {}}).accepted());
     auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
@@ -1564,6 +1603,7 @@ int main() {
     RUN(followToggleMatchesPauseAndResumeIncludingQueuedTargetResolution);
     RUN(followPauseOnEditTransitionTable);
     RUN(paletteOpenEntersPromptFocusAndPublishesCandidates);
+    RUN(everyPaletteClosePathLeavesNoOpenPickerBehind);
     RUN(paletteExecuteValidatesCandidateMembership);
     RUN(paletteCandidatesCarryLabelsAndKeyDetail);
     RUN(treeScrollsToKeepSelectionVisibleInAShortPanel);

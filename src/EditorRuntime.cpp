@@ -1322,6 +1322,17 @@ void EditorRuntime::Impl::reconcilePromptFocus() {
     }
 }
 
+// Re-derives `openPicker` from the prompt after every dispatch.  A picker can be
+// closed by palette.close, by prompt.cancel, by a successful palette.execute, or
+// by the find-document reconcile dismissing the prompt; deriving the field here
+// covers all of them at once, so adding a fifth close path cannot leave the next
+// open publishing the previous picker's candidates.
+void EditorRuntime::Impl::reconcileOpenPicker() {
+    bool const paletteActive = prompt.active() && prompt.request() &&
+                               prompt.request()->kind == PromptKind::Palette;
+    if (!paletteActive) openPicker.reset();
+}
+
 void EditorRuntime::Impl::reconcileFindDocument() {
     if (!findReplace.viewState().open) {
         findDocumentId.reset();
@@ -1692,6 +1703,7 @@ CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& co
             auto result = impl_->session->dispatch(clientId, dispatched);
             impl_->reconcileFindDocument();
             impl_->reconcilePromptFocus();
+            impl_->reconcileOpenPicker();
             if (result.accepted() && shouldPauseForLocalEdit &&
                 existingDocumentMutated(revisionsBefore, impl_->workspace)) {
                 (void)impl_->follow.notifyLocalEdit();

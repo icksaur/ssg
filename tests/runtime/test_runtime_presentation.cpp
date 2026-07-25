@@ -209,6 +209,12 @@ TEST(paletteCandidatesMatchTheCommandRegistry) {
     if (!created.accepted()) return;
     auto& runtime = *created.runtime;
     ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
+    // Candidates are published only for the picker that is actually open, so a
+    // closed palette publishes none.
+    auto closed = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    ASSERT_TRUE(closed.has_value());
+    if (closed) ASSERT_TRUE(closed->sections().palette.candidates.empty());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.open", runtime.revision(), {}}).accepted());
     auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;

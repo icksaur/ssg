@@ -731,15 +731,18 @@ int main(int argc, char** argv) {
     auto focus = ssg::FocusTarget::Editor;
     // Client-owned palette state: query and selection are local (reported for
     // library presentation), ranked against the server's published candidates.
-    bool paletteOpen = false;
-    std::string paletteQuery;
-    std::size_t paletteSelected = 0;
-    // Client-owned palette scroll: the offset into the ranked order and the pane
-    // height cached from the last snapshot (the palette pane == the editor pane,
-    // so this is populated before the palette ever opens; see doc/spec-scroll.md
-    // R3). The window is resolved with the shared list-scroll primitive.
-    std::uint32_t paletteFirstVisible = 0;
-    std::uint32_t palettePaneRows = 1;
+    bool pickerOpen = false;
+    // Which picker the open prompt is, adopted from the snapshot rather than
+    // invented locally, so submit routes to that picker's command.
+    ssg::SearchMode pickerMode = ssg::SearchMode::Command;
+    // One value, not four parallel locals: the library's own window type carries
+    // query, selection, scroll offset and pane height together, so a second
+    // picker cannot introduce a drifting copy of half of them.
+    // The pane height is cached from the last snapshot (the palette pane == the
+    // editor pane, so it is populated before any picker opens; see
+    // doc/spec-scroll.md R3). The window is resolved with the shared list-scroll
+    // primitive.
+    ssg::PaletteWindowState picker{};
     // Mouse drag state (M8): a left press on the editor records the anchor and
     // enters dragging; subsequent motion extends the selection. Client-local and
     // transient — the server only ever sees cursor.set_position / select.set_range.
@@ -773,31 +776,31 @@ int main(int argc, char** argv) {
     // free offset so a wheel scroll persists (see doc/spec-m8.md M8-P). Mirrors
     // the tree's reveal_tree_selection.
     auto revealPaletteSelection = [&] {
-        auto order = ssg::PaletteSearcher{}.rank(candidates, paletteQuery);
-        if (paletteSelected >= order.size()) {
-            paletteSelected = order.empty() ? 0 : order.size() - 1;
+        auto order = ssg::PaletteSearcher{}.rank(candidates, picker.query);
+        if (picker.selected >= order.size()) {
+            picker.selected = order.empty() ? 0 : order.size() - 1;
         }
         std::optional<std::uint32_t> selected =
             order.empty() ? std::nullopt
                           : std::optional<std::uint32_t>{
-                                static_cast<std::uint32_t>(paletteSelected)};
+                                static_cast<std::uint32_t>(picker.selected)};
         auto scroll = ssg::Viewport{}.listScrollView(
-            static_cast<std::uint32_t>(order.size()), palettePaneRows,
-            paletteFirstVisible, selected, /*keep_selection_visible=*/true);
-        paletteFirstVisible = scroll.firstVisible;
+            static_cast<std::uint32_t>(order.size()), picker.paneRows,
+            picker.firstVisible, selected, /*keep_selection_visible=*/true);
+        picker.firstVisible = scroll.firstVisible;
     };
     // Scroll the client-owned palette window by `delta` rows WITHOUT moving the
     // selection (a wheel over the open palette), clamped to [0, maximum_first_row].
     // Saturating: `delta` is a decoded int64, so guard the extremes before adding.
     auto scrollPalette = [&](std::int64_t delta) {
-        if (!paletteOpen) return;
-        auto order = ssg::PaletteSearcher{}.rank(candidates, paletteQuery);
+        if (!pickerOpen) return;
+        auto order = ssg::PaletteSearcher{}.rank(candidates, picker.query);
         auto probe = ssg::Viewport{}.listScrollView(
-            static_cast<std::uint32_t>(order.size()), palettePaneRows,
-            paletteFirstVisible, std::nullopt, /*keep_selection_visible=*/false);
+            static_cast<std::uint32_t>(order.size()), picker.paneRows,
+            picker.firstVisible, std::nullopt, /*keep_selection_visible=*/false);
         auto const maximum =
             static_cast<std::int64_t>(probe.scrollbar.maximumFirstRow);
-        auto const current = static_cast<std::int64_t>(paletteFirstVisible);
+        auto const current = static_cast<std::int64_t>(picker.firstVisible);
         std::int64_t next;
         if (delta >= maximum) {
             next = maximum;
@@ -806,13 +809,22 @@ int main(int argc, char** argv) {
         } else {
             next = std::clamp<std::int64_t>(current + delta, 0, maximum);
         }
-        paletteFirstVisible = static_cast<std::uint32_t>(next);
+        picker.firstVisible = static_cast<std::uint32_t>(next);
     };
-    auto executeSelectedCandidate = [&] {
-        auto order = ssg::PaletteSearcher{}.rank(candidates, paletteQuery);
-        if (!order.empty() && paletteSelected < order.size()) {
-            dispatch("palette.execute",
-                     ssg::PaletteExecuteArguments{candidates[order[paletteSelected]].id});
+    // Submit routes to the open picker's command, chosen from the mode the
+    // server published rather than assumed: a candidate id means different
+    // things per picker (a command id for the command palette), so a single
+    // hardcoded submit would silently misinterpret another picker's ids.
+    auto submitSelectedCandidate = [&] {
+        auto order = ssg::PaletteSearcher{}.rank(candidates, picker.query);
+        if (order.empty() || picker.selected >= order.size()) return;
+        auto const& id = candidates[order[picker.selected]].id;
+        switch (pickerMode) {
+        case ssg::SearchMode::Command:
+            dispatch("palette.execute", ssg::PaletteExecuteArguments{id});
+            break;
+        default:
+            break;
         }
     };
     // Dispatch a resolved command, fulfilling prompt-context commands against the
@@ -822,26 +834,26 @@ int main(int argc, char** argv) {
     // candidate / rejected execute) leaves the prompt open rather than
     // desynchronizing the client.
     auto dispatchResolved = [&](std::string const& id) {
-        if (paletteOpen && focus == ssg::FocusTarget::Prompt) {
-            if (id == "prompt.submit") { executeSelectedCandidate(); return; }
+        if (pickerOpen && focus == ssg::FocusTarget::Prompt) {
+            if (id == "prompt.submit") { submitSelectedCandidate(); return; }
             if (id == "prompt.cancel") { dispatch("palette.close"); return; }
             if (id == "prompt.next" || id == "palette.next") {
-                ++paletteSelected;
+                ++picker.selected;
                 revealPaletteSelection();
                 return;
             }
             if (id == "prompt.previous" || id == "palette.previous") {
-                if (paletteSelected > 0) --paletteSelected;
+                if (picker.selected > 0) --picker.selected;
                 revealPaletteSelection();
                 return;
             }
         }
         dispatch(id);
         if (id == "palette.open") {
-            paletteOpen = true;
-            paletteQuery.clear();
-            paletteSelected = 0;
-            paletteFirstVisible = 0;
+            pickerOpen = true;
+            picker.query.clear();
+            picker.selected = 0;
+            picker.firstVisible = 0;
             revealPaletteSelection();
         }
     };
@@ -851,7 +863,7 @@ int main(int argc, char** argv) {
             dispatch("text.insert", ssg::TextInputArguments{text});
             break;
         case ssg::TextRouting::PromptQuery:
-            if (paletteOpen) { paletteQuery += text; paletteSelected = 0; revealPaletteSelection(); }
+            if (pickerOpen) { picker.query += text; picker.selected = 0; revealPaletteSelection(); }
             else if (replaceOpen) { dispatch("replace.update_replacement", ssg::FindQueryArguments{replaceReplacement + text}); }
             else if (findOpen) { dispatch("find.update_query", ssg::FindQueryArguments{findQuery + text}); }
             break;
@@ -862,18 +874,13 @@ int main(int argc, char** argv) {
 
     auto buildReport = [&] {
         ssg::PaletteReport report;
-        if (paletteOpen) {
+        if (pickerOpen) {
             // The library owns the palette projection: rank the published
             // candidates, window them, and assemble the bounded report. The app
             // supplies only the client-owned window (query/selection/scroll) and
             // adopts back the clamped selection and resolved offset, inventing no
             // product data (INV-derived-view-bounded).
-            ssg::PaletteWindowState window{paletteQuery, paletteSelected,
-                                           paletteFirstVisible,
-                                           palettePaneRows};
-            report = ssg::PaletteSearcher{}.report(candidates, window);
-            paletteSelected = window.selected;
-            paletteFirstVisible = window.firstVisible;
+            report = ssg::PaletteSearcher{}.report(candidates, picker);
         }
         return report;
     };
@@ -887,6 +894,7 @@ int main(int argc, char** argv) {
             focus = snapshot->sections().shell.focus;
             keymap = snapshot->sections().keymap;
             candidates = snapshot->sections().palette.candidates;
+            pickerMode = snapshot->sections().palette.mode;
             // Cache the palette pane height for the next window computation: the
             // palette pane is the editor pane, so this is populated every frame,
             // including before the palette opens (no cold start). The window is
@@ -896,7 +904,7 @@ int main(int argc, char** argv) {
             // self-corrects on the next snapshot.
             auto const& shell = snapshot->sections().shell;
             if (!shell.panes.empty()) {
-                palettePaneRows = static_cast<std::uint32_t>(
+                picker.paneRows = static_cast<std::uint32_t>(
                     std::max(shell.panes.front().content.height, 1));
             }
             // Derive find fulfillment from the ACTIVE prompt kind, not merely the
@@ -905,7 +913,7 @@ int main(int argc, char** argv) {
             // fulfillment must not hijack that unrelated prompt's keys.
             auto const& findView = snapshot->sections().findReplace;
             auto const& activePrompt = snapshot->sections().promptStatus.prompt;
-            paletteOpen =
+            pickerOpen =
                 activePrompt && activePrompt->kind == ssg::PromptKind::Palette;
             bool const findPromptActive =
                 activePrompt && activePrompt->kind == ssg::PromptKind::Find;
@@ -1107,7 +1115,7 @@ int main(int argc, char** argv) {
                     } else if (hit.region == ssg::HitRegion::Palette) {
                         // Map the absolute rank index to its candidate id using
                         // the same ranked order the client renders.
-                        auto order = ssg::PaletteSearcher{}.rank(candidates, paletteQuery);
+                        auto order = ssg::PaletteSearcher{}.rank(candidates, picker.query);
                         if (hit.itemIndex < order.size()) {
                             targets.palette_command_id =
                                 candidates[order[hit.itemIndex]].id;
@@ -1196,10 +1204,10 @@ int main(int argc, char** argv) {
                 chord.clear();
                 if (quitChord) {
                     quit = true;
-                } else if (paletteOpen && focus == ssg::FocusTarget::Prompt &&
+                } else if (pickerOpen && focus == ssg::FocusTarget::Prompt &&
                            stroke.code == "Backspace") {
-                    popCodePoint(paletteQuery);
-                    paletteSelected = 0;
+                    popCodePoint(picker.query);
+                    picker.selected = 0;
                     revealPaletteSelection();
                 } else if (findOpen && focus == ssg::FocusTarget::Prompt &&
                            stroke.code == "Backspace") {

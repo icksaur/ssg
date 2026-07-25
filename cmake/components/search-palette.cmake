@@ -1,6 +1,7 @@
 target_sources(ssg PRIVATE
     ${SSG_SOURCE_DIR}/src/Search.cpp
     ${SSG_SOURCE_DIR}/src/PaletteSearcher.cpp
+    ${SSG_SOURCE_DIR}/src/Picker.cpp
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
@@ -24,4 +25,13 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     )
     target_link_libraries(test_palette PRIVATE ssg)
     add_test(NAME test_palette COMMAND test_palette)
+
+    add_executable(test_picker
+        ${SSG_SOURCE_DIR}/tests/test_picker.cpp
+    )
+    target_include_directories(test_picker PRIVATE
+        ${SSG_SOURCE_DIR}/tests
+    )
+    target_link_libraries(test_picker PRIVATE ssg)
+    add_test(NAME test_picker COMMAND test_picker)
 endif()

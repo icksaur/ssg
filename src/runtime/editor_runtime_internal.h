@@ -14,6 +14,7 @@
 #include <ssg/LspFeatureController.h>
 #include <ssg/LspWorkspaceEditController.h>
 #include <ssg/LuaCommandHost.h>
+#include <ssg/Picker.h>
 #include <ssg/PromptSurface.h>
 #include <ssg/Search.h>
 #include <ssg/Settings.h>
@@ -142,6 +143,12 @@ struct EditorRuntime::Impl final : CommandServices,
     // palette.execute transaction's session lock releases (the session mutex is
     // non-reentrant, so a handler cannot re-enter dispatch).
     std::optional<std::string> pendingPaletteTarget;
+    // Which picker the active PromptKind::Palette prompt belongs to, and the
+    // sole source of the published palette mode and candidate set.  Maintained
+    // as an invariant (set iff such a prompt is active) by
+    // reconcileOpenPicker() rather than cleared at each close path, so a stale
+    // kind cannot leak into the next open.
+    std::optional<PickerKind> openPicker;
     std::uint32_t requestedFirstVisualRow = 0;
     // Horizontal scroll offset in cells (word wrap OFF only; VP-H). Reveal and the
     // horizontal scroll command update it; the viewport path passes it through.
@@ -279,6 +286,7 @@ struct EditorRuntime::Impl final : CommandServices,
     void recordNavigation(ClientId client, NavigationClass classification);
     void refreshTree();
     void reconcilePromptFocus();
+    void reconcileOpenPicker();
     void refreshSyntax();
     // M10 fast startup deferral (doc/spec-fast-startup.md M10-3/M10-4).  While
     // `deferring_enrichment` is set (the pre-first-frame window when created with
