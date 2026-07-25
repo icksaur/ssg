@@ -442,10 +442,12 @@ confirm rather than assume).
     the same path-reporting seam) to take the `Primary` path, not
     `Rescue` — a non-degenerate fixture theme silently depending on rescue
     would itself indicate the per-kind derivation is too weak.
-  - regression: `test_color.cpp`/`test_theme.cpp`'s existing readability
-    gate and BACKGROUND-distinctness gate (from
-    `doc/spec-color-depth-defaults.md`) continue to pass unmodified in
-    their PROPERTY at both depths (only fallback-triggered VALUES may
+  - regression: `test_theme.cpp`'s BACKGROUND-distinctness gate (from
+    `doc/spec-color-depth-defaults.md`; `deriveSelectionFill`'s separate
+    readability gate mentioned alongside it here was later REMOVED, see
+    commit 5319ab5 -- `selectionFill` is now a flat anchor color with no
+    readability derivation to regress) continues to pass unmodified in
+    its PROPERTY at both depths (only fallback-triggered VALUES may
     change if Fix 2 changes what the rescue produces); the INTER-KIND
     distinctness gate's and the HUE-FIDELITY gate's scope both narrow to
     Truecolor-only, an intentional, documented change to those tests'

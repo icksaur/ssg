@@ -439,6 +439,19 @@ needs no new delta code at all, only the mutation itself.
   later spec could add a SEPARATE role-remapping command if direct
   role→color control is wanted; this spec only replaces the 16 palette
   RGB values.
+- **`selectionFill` has no readability guardrail against a user-supplied
+  palette.** `deriveSelectionFill` is a FLAT lookup of the `Selection`
+  role's palette color (see commit 5319ab5, "Make selectionFill a flat
+  Selection-role color, matching diff tints") — an earlier revision
+  computed a desaturated, contrast-floor-checked blend toward `Background`
+  instead, specifically to guarantee a selected-text background stayed
+  legible against every syntax foreground. That guarantee is now gone: a
+  `theme.define` call that sets an unusual `Selection`-mapped palette
+  color (e.g. one close to a syntax foreground's hue) can produce a
+  selection highlight that is hard to read, with nothing in the system to
+  prevent or warn about it — the same trust model `theme.define` already
+  has for every other slot (a user can set `background`/`foreground` to
+  the same color too, and nothing stops them).
 - **One init-script host per process, not per session/client.** `init.lua`
   configures the running SSG PROCESS (single TUI instance, single
   workspace); it is not re-evaluated per attached client or per workspace.

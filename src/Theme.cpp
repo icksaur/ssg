@@ -1,10 +1,6 @@
 #include "ssg/Theme.h"
 
-#include "ssg/color.h"
-
-#include <algorithm>
 #include <array>
-#include <cmath>
 #include <stdexcept>
 
 namespace ssg {
@@ -142,113 +138,6 @@ void validatePaletteIndex(std::uint8_t index) {
     }
 }
 
-// Selection fill is a subtle background wash laid over text whose foreground
-// was already chosen to read on the editor Background. Readability is
-// therefore relative: a tint must not drop any foreground's contrast below a
-// fraction of what it had on the plain Background, subject to a hard
-// absolute floor. Requiring the tint to independently reach a high absolute
-// ratio against every syntax foreground is impossible for a theme with a
-// mid-luminance accent (it forces the tint to near-black and erases the
-// hue); this relative rule matches how editors actually tint a selection.
-constexpr double kFloorContrast = 2.1;
-constexpr double kRetainContrast = 0.80;
-
-double linearChannel(std::uint8_t channel) noexcept {
-    const double encoded = static_cast<double>(channel) / 255.0;
-    return encoded <= 0.04045 ? encoded / 12.92
-                             : std::pow((encoded + 0.055) / 1.055, 2.4);
-}
-
-double luminance(SrgbColor color) noexcept {
-    return 0.2126 * linearChannel(color.red) +
-           0.7152 * linearChannel(color.green) +
-           0.0722 * linearChannel(color.blue);
-}
-
-double contrast(SrgbColor first, SrgbColor second) noexcept {
-    const auto darker = std::min(luminance(first), luminance(second));
-    const auto lighter = std::max(luminance(first), luminance(second));
-    return (lighter + 0.05) / (darker + 0.05);
-}
-
-SrgbColor interpolate(SrgbColor first, SrgbColor second, double weight) noexcept {
-    const auto channel = [weight](std::uint8_t from, std::uint8_t to) {
-        return static_cast<std::uint8_t>(std::clamp(
-            std::lround(static_cast<double>(from) +
-                        (static_cast<double>(to) - from) * weight),
-            0L, 255L));
-    };
-    return {channel(first.red, second.red), channel(first.green, second.green),
-            channel(first.blue, second.blue)};
-}
-
-SrgbColor desaturate(SrgbColor color, double retainedSaturation) noexcept {
-    const auto linearGray = luminance(color);
-    const auto encodedGray =
-        linearGray <= 0.0031308
-            ? 12.92 * linearGray
-            : 1.055 * std::pow(linearGray, 1.0 / 2.4) - 0.055;
-    const auto gray = static_cast<std::uint8_t>(
-        std::clamp(std::lround(255.0 * encodedGray), 0L, 255L));
-    return interpolate({gray, gray, gray}, color, retainedSaturation);
-}
-
-std::array<SrgbColor, kSyntaxScopeCount + 1> foregrounds(
-    std::array<SrgbColor, kThemePaletteSize> const& palette,
-    std::array<std::uint8_t, kSemanticRoleCount> const& semanticIndices,
-    std::array<std::uint8_t, kSyntaxScopeCount> const& syntaxIndices) noexcept {
-    std::array<SrgbColor, kSyntaxScopeCount + 1> colors{};
-    for (std::size_t index = 0; index < syntaxIndices.size(); ++index) {
-        colors[index] = palette[syntaxIndices[index]];
-    }
-    colors.back() = palette[semanticIndices[position(SemanticRole::Foreground)]];
-    return colors;
-}
-
-SrgbColor background(
-    std::array<SrgbColor, kThemePaletteSize> const& palette,
-    std::array<std::uint8_t, kSemanticRoleCount> const& semanticIndices) noexcept {
-    return palette[semanticIndices[position(SemanticRole::Background)]];
-}
-
-bool readable(SrgbColor tint, SrgbColor background,
-              std::array<SrgbColor, kSyntaxScopeCount + 1> const& foregrounds)
-    noexcept {
-    for (const auto depth : {ColorDepth::Truecolor, ColorDepth::Indexed256}) {
-        const auto resolvedTint = resolveColor(tint, depth).rgb;
-        const auto resolvedBackground = resolveColor(background, depth).rgb;
-        for (const auto foreground : foregrounds) {
-            const auto resolvedForeground = resolveColor(foreground, depth).rgb;
-            const auto required = std::max(
-                kFloorContrast,
-                kRetainContrast * contrast(resolvedBackground, resolvedForeground));
-            if (contrast(resolvedTint, resolvedForeground) < required) {
-                return false;
-            }
-        }
-    }
-    return true;
-}
-
-// Selection fill is the one remaining derived (not flat-anchor) tint: walk
-// from Background toward the Selection role's own color, keeping the
-// boldest weight that stays readable against every syntax foreground.
-SrgbColor strongestReadableTint(
-    SrgbColor background, SrgbColor anchor, double desiredWeight,
-    double retainedSaturation,
-    std::array<SrgbColor, kSyntaxScopeCount + 1> const& foregrounds) noexcept {
-    const auto mutedAnchor = desaturate(anchor, retainedSaturation);
-    const auto steps = static_cast<int>(std::lround(desiredWeight * 100.0));
-    for (int step = steps; step >= 1; --step) {
-        const auto candidate =
-            interpolate(background, mutedAnchor, static_cast<double>(step) / 100.0);
-        if (readable(candidate, background, foregrounds)) {
-            return candidate;
-        }
-    }
-    return background;
-}
-
 } // namespace
 
 // Each diff kind uses ONE flat color straight from the theme's own Git
@@ -274,16 +163,23 @@ DiffTints deriveDiffTints(
             .modifiedWord = added};
 }
 
+// A flat anchor color, matching deriveDiffTints's model exactly: the
+// Selection role's own palette color, used directly with no blend, no
+// desaturation, and no readability search against it. This is deliberate:
+// a selected tab (TabActive), a selected tree row (TreeFocus), and a text
+// selection all read the SAME palette entry the same way, so all three
+// render as visually identical highlights -- there is exactly one
+// "selected" color in a theme, not a separate muted derivative for text.
+// (An earlier revision computed a desaturated, readability-guarded blend
+// toward Background here instead; that made the text-selection wash
+// visibly dimmer than the flat TabActive/TreeFocus highlight even though
+// both point at the same Selection-adjacent palette index, which is the
+// mismatch this flat model corrects.)
 SrgbColor deriveSelectionFill(
     std::array<SrgbColor, kThemePaletteSize> const& palette,
     std::array<std::uint8_t, kSemanticRoleCount> const& semanticIndices,
-    std::array<std::uint8_t, kSyntaxScopeCount> const& syntaxIndices) noexcept {
-    const auto allForegrounds = foregrounds(palette, semanticIndices, syntaxIndices);
-    const auto themeBackground = background(palette, semanticIndices);
-    const auto selectionAnchor =
-        palette[semanticIndices[position(SemanticRole::Selection)]];
-    return strongestReadableTint(themeBackground, selectionAnchor, 0.40, 0.60,
-                                 allForegrounds);
+    std::array<std::uint8_t, kSyntaxScopeCount> const&) noexcept {
+    return palette[semanticIndices[position(SemanticRole::Selection)]];
 }
 
 ThemeDefineResult applyThemeDefine(ThemeSnapshot const& current,

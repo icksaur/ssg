@@ -152,6 +152,12 @@ distinctness at whatever depth is actually resolved) is the fixed contract.
 - No change to the readability gate itself (`kFloorContrast`/
   `kRetainContrast`) — this bug is about distinctness, not readability; the
   two are already independently and correctly gated for readability.
+  (Historical note: `deriveSelectionFill`'s readability gate described here
+  was later REMOVED — see commit 5319ab5, "Make selectionFill a flat
+  Selection-role color, matching diff tints" — in favor of a flat anchor
+  color matching `deriveDiffTints`'s model. This spec's own distinctness
+  gate, which is about `resolveColor`/depth quantization rather than
+  `deriveSelectionFill`, is unaffected by that later change.)
 
 ## Invariants
 

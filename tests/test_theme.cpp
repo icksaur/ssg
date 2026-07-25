@@ -1,11 +1,8 @@
 #include "ssg/EditorRuntime.h"
 #include "ssg/Theme.h"
-#include "ssg/color.h"
 #include "test_helpers.h"
 
-#include <algorithm>
 #include <array>
-#include <cmath>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -91,74 +88,22 @@ std::string hexOf(SrgbColor color) {
     return buffer;
 }
 
-double linearChannel(std::uint8_t channel) {
-    const double encoded = static_cast<double>(channel) / 255.0;
-    return encoded <= 0.04045 ? encoded / 12.92
-                             : std::pow((encoded + 0.055) / 1.055, 2.4);
-}
-
-double relativeLuminance(SrgbColor color) {
-    return 0.2126 * linearChannel(color.red) +
-           0.7152 * linearChannel(color.green) +
-           0.0722 * linearChannel(color.blue);
-}
-
-double contrast(SrgbColor first, SrgbColor second) {
-    const auto darker = std::min(relativeLuminance(first), relativeLuminance(second));
-    const auto lighter = std::max(relativeLuminance(first), relativeLuminance(second));
-    return (lighter + 0.05) / (darker + 0.05);
-}
-
 std::array<SrgbColor, 6> colors(ssg::DiffTints const& tints) {
     return {tints.addedRow, tints.removedRow, tints.modifiedRow,
             tints.addedWord, tints.removedWord, tints.modifiedWord};
 }
 
-SrgbColor resolved(SrgbColor color, ssg::ColorDepth depth) {
-    return ssg::resolveColor(color, depth).rgb;
-}
-
-// Selection fill is the one remaining derived (not flat-anchor) tint;
-// readability is RELATIVE: a wash over text whose foreground was chosen to
-// read on the editor Background must retain a fraction of that contrast
-// (with an absolute floor), not independently reach a high absolute ratio
-// (impossible for a theme with a mid-luminance accent).
+// Selection fill is a FLAT anchor color: exactly the Selection role's own
+// palette entry, matching how deriveDiffTints's Git-anchor colors work --
+// no blend, no desaturation, no readability search. This keeps a text
+// selection, a selected tab (TabActive), and a selected tree row
+// (TreeFocus) visually identical, since all three read the same palette
+// index the same way.
 void assertSelectionFillGate(ssg::ThemeSnapshot const& snapshot) {
-    constexpr double kFloorContrast = 2.1;
-    constexpr double kRetainContrast = 0.80;
-    std::array<SrgbColor, ssg::kSyntaxScopeCount + 1> foregrounds{};
-    for (std::size_t index = 0; index < snapshot.syntaxIndices.size(); ++index) {
-        foregrounds[index] = snapshot.palette[snapshot.syntaxIndices[index]];
-    }
-
-    foregrounds.back() =
-        snapshot.palette[snapshot.semanticIndices[static_cast<std::size_t>(
-            SemanticRole::Foreground)]];
-    const auto background =
-        snapshot.palette[snapshot.semanticIndices[static_cast<std::size_t>(
-            SemanticRole::Background)]];
     const auto selectionAnchor =
         snapshot.palette[snapshot.semanticIndices[static_cast<std::size_t>(
             SemanticRole::Selection)]];
-
-    bool anchorFails = false;
-    for (const auto depth :
-         {ssg::ColorDepth::Truecolor, ssg::ColorDepth::Indexed256}) {
-        for (const auto foreground : foregrounds) {
-            const auto required = std::max(
-                kFloorContrast,
-                kRetainContrast * contrast(resolved(background, depth),
-                                           resolved(foreground, depth)));
-            if (contrast(resolved(selectionAnchor, depth),
-                         resolved(foreground, depth)) < required - 1e-9) {
-                anchorFails = true;
-            }
-            ASSERT_TRUE(contrast(resolved(snapshot.selectionFill, depth),
-                                 resolved(foreground, depth)) >=
-                        required - 1e-9);
-        }
-    }
-    ASSERT_TRUE(anchorFails);
+    ASSERT_EQ(snapshot.selectionFill, selectionAnchor);
 }
 
 std::string readFile(const std::filesystem::path& path) {
