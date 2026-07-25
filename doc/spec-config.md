@@ -18,19 +18,31 @@ configuration in place; detecting the change never blocks the interactive
 event loop).
 
 **M2 (this addition): configurable keybindings.** `init.lua` can also
-rebind keys: add/replace a binding (`keymap.bind`), remove one
-(`keymap.unbind`), and bulk-redefine the leader stroke every global
-Escape-led chord uses (`keymap.set_leader`). A rebound command's new
-chord shows up in the command palette exactly like any built-in
-binding — this is a byproduct of how the palette already works (see
-Design), not new plumbing. There is no separate "mod key" mechanism:
-`keymap.bind`'s stroke syntax already lets a binding use Alt (or Ctrl,
-Shift, Meta) via the SAME encoding the terminal decoder and `KeyCodec`
-already support (`doc/spec-keymap.md`) — "redefine the mod key" is just
-writing a binding whose stroke uses the modifier you want, most
-usefully Alt (see Considerations for why Alt specifically).
+rebind keys: add/replace a binding (`keymap.bind`) or remove one
+(`keymap.unbind`), for any command reachable by a bare keystroke. A
+rebound command's new chord shows up in the command palette exactly
+like any built-in binding — this is a byproduct of how the palette
+already works (see Design), not new plumbing.
+
+Leader-key redefinition and modifier-key redefinition (e.g. a
+first-class "use Alt instead of Escape as the leader" toggle) are
+explicitly OUT OF SCOPE for now — see Non-goals. `keymap.bind`'s stroke
+syntax already lets a binding use Alt (or Ctrl, Shift, Meta) via the
+SAME encoding the terminal decoder and `KeyCodec` already support
+(`doc/spec-keymap.md`), so a user CAN bind an Alt-modified stroke to a
+specific command today; there is just no dedicated "redefine the
+leader" or "redefine the mod key" command in this increment.
 
 Non-goals (explicit scope cuts, revisit only if they prove limiting):
+- Leader-key redefinition (a command that bulk-rewrites every global
+  chord's leading stroke) and modifier-key redefinition (a first-class
+  "use this modifier instead" toggle). Out of scope for now — see
+  `doc/spec-mod-keys.md` for the reliability research behind why this
+  needs more thought (SSG's `Escape` leader currently gets Alt-as-an-
+  alternate-leader "for free" as a byte-encoding coincidence in most
+  terminals; a dedicated redefinition command risks silently breaking
+  that without a considered design). `keymap.bind`/`unbind` (below) are
+  the only keymap-mutating commands in this increment.
 - A palette-driven or otherwise interactive rebinding UI. `init.lua` is
   the only path to a keymap change in this increment (matching the
   init.lua-only shape of every other config command so far).
@@ -45,21 +57,21 @@ Non-goals (explicit scope cuts, revisit only if they prove limiting):
   catalog's existing `keymap` boolean (see Design) — only a name the
   catalog has no entry for at all skips validation entirely.
 - Whole-script staged/transactional keymap validation. Each
-  `keymap.bind`/`unbind`/`set_leader` call validates and commits
-  independently, exactly like `theme.define` (see Design) — a script
-  that transiently makes the keymap invalid then fixes it later in the
-  SAME evaluation has that transient call rejected even though the
-  script's final state would have been fine. Acceptable for v1 because
-  every K1/K2/K5/K6 check is a PURE FUNCTION of one proposed keymap value
-  (no cross-call state to get wrong), so per-call rejection is always a
-  true negative (never silently accepts an actually-invalid intermediate
-  state) — it can only be a false negative on a script's FINAL intent
-  when that script deliberately visits an invalid intermediate state
-  first (e.g. unbinding `settings.open` before rebinding it elsewhere in
-  the SAME script) — an editing pattern users can trivially avoid by
-  ordering their `keymap.bind`/`unbind` calls so the keymap stays valid
-  after each one. A later revision could defer validation to
-  end-of-script if this proves too limiting in practice.
+  `keymap.bind`/`unbind` call validates and commits independently,
+  exactly like `theme.define` (see Design) — a script that transiently
+  makes the keymap invalid then fixes it later in the SAME evaluation
+  has that transient call rejected even though the script's final state
+  would have been fine. Acceptable for v1 because every K1/K2/K5/K6
+  check is a PURE FUNCTION of one proposed keymap value (no cross-call
+  state to get wrong), so per-call rejection is always a true negative
+  (never silently accepts an actually-invalid intermediate state) — it
+  can only be a false negative on a script's FINAL intent when that
+  script deliberately visits an invalid intermediate state first (e.g.
+  unbinding `settings.open` before rebinding it elsewhere in the SAME
+  script) — an editing pattern users can trivially avoid by ordering
+  their `keymap.bind`/`unbind` calls so the keymap stays valid after
+  each one. A later revision could defer validation to end-of-script if
+  this proves too limiting in practice.
 - An explicit `config.reload` command (auto-reload on file change covers the
   interactive case; a manual trigger is unnecessary until proven otherwise).
 - Reverting configuration when `init.lua` is DELETED while running (a
@@ -275,7 +287,7 @@ not change the resolution engine, the wire format, or the K1-K7
 invariants; it only adds a way to MUTATE `EditorRuntime::Impl::keymap` at
 runtime, the same way `theme.define` mutates `Impl::theme`.
 
-Three new commands, all following the SAME "read current, compute
+Two new commands, both following the SAME "read current, compute
 proposed, validate, commit-or-reject-whole-call" shape `theme.define`
 already established:
 
@@ -303,30 +315,6 @@ already established:
   default "*") }`. Removes the one binding with that exact
   `(sequence, context)` pair; a no-op (still succeeds) if none matches —
   removing something that was never there is not an error.
-- `keymap.set_leader`: args `{ stroke = "<one stroke>" }`. Rewrites the
-  FIRST stroke of every CURRENT `*`-context binding whose first stroke
-  equals the tracked "current leader stroke" (a new `EditorRuntime::Impl`
-  field, `currentLeaderStroke`, defaulting to `"Escape"` — matching
-  today's shipped default) to the new stroke, then updates that tracked
-  value. Scoped to `*`-context bindings only — the `prompt` context's own
-  `Escape Escape` → `prompt.cancel` (a double-press-to-cancel convention,
-  unrelated to the global leader) is untouched. This matches by STROKE
-  VALUE across every CURRENT `*` binding, including ones a `keymap.bind`
-  call EARLIER in the same script already added — it does not know or
-  care whether a binding came from the shipped default or from the
-  script itself. This is intentional, order-dependent behavior, not a
-  bug: a script that calls `keymap.set_leader` BEFORE adding its own
-  custom `*`-bindings only ever rewrites the shipped defaults; one that
-  adds custom bindings FIRST (with a first stroke that happens to match
-  the current leader) will have those rewritten too on a later
-  `set_leader` call. Script authors who want to avoid this should call
-  `set_leader` first, before any custom `keymap.bind` calls. **Changing
-  the leader away from literal `Escape` also silently drops the free
-  Alt-as-alternate-leader equivalence** most terminals provide today —
-  see `doc/spec-mod-keys.md` for why that overlap only exists for
-  `Escape` specifically (a byte-encoding coincidence of how terminals
-  send Alt, not a feature this spec built) and is not carried forward by
-  `set_leader` to whatever new stroke is chosen.
 
 **Sequence syntax reuses the existing stroke encoding, not a new Lua
 argument shape.** A `KeySequence` is a list of strokes, which the flat
@@ -353,18 +341,18 @@ leave its binding permanently stuck from a stale earlier run. So, at the
 START of every `evaluateInitScript()` call (both the ONE startup call and
 every later auto-reload — this is the single seam both paths already
 share, see M1's Design), the runtime resets its keymap to
-`defaultTerminalKeymap()` and `currentLeaderStroke` to `"Escape"`, BEFORE
-the script runs. Editing a `keymap.bind` line out of `init.lua` and
-letting it reload therefore actually reverts that chord to its shipped
-default — the expected behavior for a rebinding feature, even though
-it's a deliberate divergence from `theme.define`'s never-reset model.
-This reset is exposed as a small dedicated `EditorRuntime` method (not
-`ssg_main.cpp` reaching into `Impl` fields directly, and not a
-Lua-callable command — it is an internal app/runtime seam, invoked only
-by `evaluateInitScript` immediately before `LuaCommandHost::evaluate`),
-keeping `Impl::keymap`/`Impl::currentLeaderStroke` properly encapsulated
-the same way every other `Impl` mutation is already reached only through
-`EditorRuntime`'s public surface, never a raw field poke from `apps/`.
+`defaultTerminalKeymap()` BEFORE the script runs. Editing a `keymap.bind`
+line out of `init.lua` and letting it reload therefore actually reverts
+that chord to its shipped default — the expected behavior for a
+rebinding feature, even though it's a deliberate divergence from
+`theme.define`'s never-reset model. This reset is exposed as a small
+dedicated `EditorRuntime` method (not `ssg_main.cpp` reaching into
+`Impl` fields directly, and not a Lua-callable command — it is an
+internal app/runtime seam, invoked only by `evaluateInitScript`
+immediately before `LuaCommandHost::evaluate`), keeping `Impl::keymap`
+properly encapsulated the same way every other `Impl` mutation is
+already reached only through `EditorRuntime`'s public surface, never a
+raw field poke from `apps/`.
 
 **A keymap reset/replacement clears any client-side in-flight chord.**
 Per K3 (pure client resolution — `doc/spec-keymap.md`), a PENDING
@@ -382,8 +370,8 @@ WHILE a client might genuinely be mid-chord (unlike startup, where no
 chord is ever in flight).
 
 **Validation reuses the EXISTING assembly-time checks verbatim.** Every
-`keymap.bind`/`unbind`/`set_leader` call constructs the full proposed
-`KeymapViewState` and runs the SAME `KeymapMatcher{proposed}.validate({})`
+`keymap.bind`/`unbind` call constructs the full proposed `KeymapViewState`
+and runs the SAME `KeymapMatcher{proposed}.validate({})`
 + `KeymapMatcher{proposed}.hasGlobalBinding("settings.open", {})` pair
 `EditorRuntime::create` already runs on the compiled-in default keymap
 (`src/EditorRuntime.cpp`) — K1 (context validity), K2 (prefix-free), and
@@ -422,8 +410,8 @@ needs no new delta code at all, only the mutation itself.
   handler receives its own typed struct via `std::any_cast`, not the raw
   map — no handler downstream of the bridge does its own map-key parsing.
 - **The K1, K2, K5, and K6 keymap invariants (`doc/spec-keymap.md`) are
-  never weakened for a runtime-mutated keymap.** `keymap.bind`/`unbind`/
-  `set_leader` reuse the EXACT SAME `KeymapMatcher::validate`/
+  never weakened for a runtime-mutated keymap.** `keymap.bind`/`unbind`
+  reuse the EXACT SAME `KeymapMatcher::validate`/
   `hasGlobalBinding` checks `EditorRuntime::create` already runs on the
   compiled-in default (K1 context validity, K2 prefix-free), PLUS a new
   catalog-flag check for K5 (argument-free usability — see Design) for
@@ -477,19 +465,6 @@ needs no new delta code at all, only the mutation itself.
   be origin-agnostic (the same `theme.define` command must also be
   reachable from `InvocationOrigin::InProcess`/`Websocket` with a
   non-Lua-sourced payload, e.g. a future settings-UI).
-- **Why Alt, not a new modifier abstraction, for "mod key redefinition".**
-  There is no dedicated "mod key" concept to redefine — a `KeyStroke`
-  already carries all four of `control`/`alt`/`meta`/`shift`
-  (`include/ssg/Keymap.h`), and the terminal decoder already reports Alt
-  correctly (`apps/ssg_terminal.cpp`'s CSI modifier-bit decoding).
-  "Redefining the mod key" is simply writing a `keymap.bind` whose stroke
-  uses whichever modifier the user wants; Alt is called out because it's
-  the practically USABLE one for new single-stroke bindings — `Ctrl`+
-  letter below the ASCII 0x20 range is already how raw-terminal-mode
-  control characters are conventionally read (colliding with a new
-  binding risks stealing a literal keystroke), and `Meta` is not reliably
-  decoded by most terminal emulators. No new modifier-abstraction concept
-  is introduced by this spec.
 - **Reset-then-reapply for keybindings vs. never-reset for theme colors**
   is a deliberate ASYMMETRY between the two config scenarios, not an
   oversight — see Design's "Reset-then-reapply" bullet for why an
@@ -521,18 +496,10 @@ needs no new delta code at all, only the mutation itself.
 - **Risk**: a user rebinds (or the auto-reset accidentally drops) the
   `settings.open` escape hatch, locking themselves out of the one command
   that could otherwise fix a bad keymap. **Mitigation**: K6 is re-checked
-  on every `keymap.bind`/`unbind`/`set_leader` call, not just once at
+  on every `keymap.bind`/`unbind` call, not just once at
   startup — a call that would remove the last valid `settings.open`
   binding is rejected outright, keymap unchanged, exactly like any other
   K1/K2 violation.
-- **Risk**: `keymap.set_leader` silently no-ops if called twice with the
-  SAME target stroke it already set (nothing left to rewrite), which
-  could look like a bug rather than "already applied". **Mitigation**:
-  this is accepted as correct, idempotent behavior — re-running
-  `init.lua` (e.g. on reload) always resets to the shipped default first
-  (see Design), so `set_leader` only ever "does nothing" if the script
-  itself calls it more than once with the same value, which is a
-  script-authoring redundancy, not a runtime bug.
 - **Risk**: a client is mid-chord (has already seen a leading stroke and
   is awaiting the next one to resolve it) exactly when a reload changes
   the keymap out from under it, producing a one-keystroke-inconsistent
@@ -622,13 +589,6 @@ needs no new delta code at all, only the mutation itself.
     payload) is rejected on K5 grounds, keymap unchanged, while binding a
     genuinely UNKNOWN command id is accepted (deferred to an ordinary
     dispatch-time failure, per Non-goals).
-  - `keymap.set_leader` test: rewrites EVERY `*`-context binding's first
-    stroke from the tracked current leader to the new one, and leaves
-    every `editor`/`panel`/`prompt`-context binding (including the
-    `prompt` context's own `Escape Escape` → `prompt.cancel`) untouched;
-    calling it twice with different strokes in the same script correctly
-    rewrites from the FIRST new stroke to the SECOND (proving the tracked
-    "current leader" bookkeeping, not a hardcoded "Escape" search).
   - Palette-visibility oracle: after `keymap.bind` rebinds `file.save` to
     a new chord (via a real `init.lua`, through the full startup/reload
     path, not a unit-level call), the NEXT session snapshot's palette
@@ -653,9 +613,8 @@ needs no new delta code at all, only the mutation itself.
 | 5 | End-to-end verification + both gates | - | both `scripts/check.sh` configs green | - |
 | 6 | Refactor `loadInitScript` so path-resolve/read and evaluate-and-dispatch are separately callable; add a background poll thread (mirroring `startGitDiffWorker`'s shape) that stats `init.lua`'s `WatchFileState` on a fixed interval, reads its content on change, and wakes the main loop via a dedicated self-pipe; extend `waitReadiness`/`FdReadiness` with that descriptor; on wake, evaluate the queued script on the main thread through the shared evaluate-and-dispatch path | `apps/ssg_main.cpp` | test: PTY-harness real-binary run that edits `init.lua` mid-session and observes the rendered color change without restart; a broken mid-session edit prints a diagnostic and leaves the prior color rendered | - |
 | 7 | Add a runtime-string-sequence-parsing helper (space-separated stroke tokens, each via `KeyCodec::parseStroke`) and `keymap.bind`/`keymap.unbind` commands (descriptor + handler), reusing `KeymapMatcher::validate`/`hasGlobalBinding` for all-or-nothing per-call validation against `EditorRuntime::Impl::keymap`, plus a new K5 catalog-flag check (`data/required-commands.json`'s existing per-command `keymap` boolean) for any KNOWN command id; P0 catalog wiring identical to step 3's pattern | `include/ssg/Keymap.h`/`src/Keymap.cpp` (sequence-string parser), new `KeymapCommands.h/.cpp` alongside `ThemeCommands`'s pattern, `src/EditorRuntime.cpp`, `src/EditorSessionBuilder.cpp`, `data/required-commands.json` | test: bind/unbind add/replace/no-op/rejection cases against `KeymapViewState` equality (incl. a known-but-argument-required command id rejected via the K5 catalog-flag check); catalog-parity test still passes | K1, K2, K5, K6 |
-| 8 | Add `keymap.set_leader` (descriptor + handler + tracked `currentLeaderStroke` field on `EditorRuntime::Impl`, defaulting to `"Escape"`), rewriting only `*`-context bindings whose first stroke matches the tracked value | `src/EditorRuntime.cpp`, `src/EditorSessionBuilder.cpp`, `data/required-commands.json` (P0 catalog wiring) | test: rewrites `*`-context bindings only, leaves focus-scoped bindings (incl. `prompt`'s `Escape Escape`) untouched; repeated calls with different strokes rewrite from the tracked value, not a hardcoded `"Escape"`; a `*`-binding added earlier in the SAME script by `keymap.bind` whose first stroke matches the tracked leader IS also rewritten (proving the documented order-dependent scoping, not accidentally exempting script-added bindings) | K1, K2, K6 |
-| 9 | Add a dedicated `EditorRuntime` method (not a Lua-callable command; an internal app/runtime seam) that resets the keymap to `defaultTerminalKeymap()` and `currentLeaderStroke` to `"Escape"` in one call, keeping `Impl`'s fields encapsulated; call it from `evaluateInitScript` immediately before `LuaCommandHost::evaluate` on EVERY evaluation (both startup and reload) | `include/ssg/EditorRuntime.h`, `src/EditorRuntime.cpp`, `apps/ssg_main.cpp` | test: removing a `keymap.bind` line and reloading reverts that chord to the default | - |
-| 10 | End-to-end verification (palette-visibility oracle via real `init.lua` + PTY harness; reset-then-reapply oracle) + both gates | - | both `scripts/check.sh` configs green | - |
+| 8 | Add a dedicated `EditorRuntime` method (not a Lua-callable command; an internal app/runtime seam) that resets the keymap to `defaultTerminalKeymap()` in one call, keeping `Impl::keymap` encapsulated; call it from `evaluateInitScript` immediately before `LuaCommandHost::evaluate` on EVERY evaluation (both startup and reload) | `include/ssg/EditorRuntime.h`, `src/EditorRuntime.cpp`, `apps/ssg_main.cpp` | test: removing a `keymap.bind` line and reloading reverts that chord to the default | - |
+| 9 | End-to-end verification (palette-visibility oracle via real `init.lua` + PTY harness; reset-then-reapply oracle) + both gates | - | both `scripts/check.sh` configs green | - |
 
 ## Rationale
 
