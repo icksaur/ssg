@@ -50,4 +50,17 @@ struct ResolvedColor {
 // index.
 [[nodiscard]] SrgbColor xterm256Color(std::uint8_t index);
 
+// Scales a color's HSL lightness and saturation by `adjustment`, clamping both
+// to [0, 1].  Hue is never modified, so a wash cannot change identity -- red
+// stays red however hard it is pushed -- and clamping saturates rather than
+// wraps, so a large multiplier yields white rather than a dark value.
+//
+// A neutral adjustment returns `color` EXACTLY.  Measured: this round trip is
+// in fact exact for all 16.7M sRGB colors, so the short-circuit is not what
+// makes identity hold today -- it is a guard so that identity CANNOT stop
+// holding if the math here is ever changed (a different rounding rule or color
+// space would silently perturb every color at the shipped 1.0/1.0 default).
+[[nodiscard]] SrgbColor adjustBackgroundTint(SrgbColor color,
+                                             TintAdjustment adjustment);
+
 }  // namespace ssg

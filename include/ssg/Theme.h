@@ -193,12 +193,71 @@ struct DiffTints {
     friend bool operator==(const DiffTints&, const DiffTints&) = default;
 };
 
+// Multipliers applied to a background wash before it is painted.  1.0 means
+// "unchanged"; above 1.0 strengthens, below weakens.  Not colors -- tuning
+// parameters, so holding them does not make a type a source of color (I22).
+struct TintAdjustment {
+    float brightness = 1.0f;
+    float saturation = 1.0f;
+
+    // Whether this is the identity, and therefore skippable.
+    [[nodiscard]] constexpr bool neutral() const noexcept {
+        return brightness == 1.0f && saturation == 1.0f;
+    }
+
+    friend bool operator==(TintAdjustment const&, TintAdjustment const&) = default;
+};
+
+// Which background wash an adjustment applies to.  Named for MEANING, not
+// color: a theme may make "added" cyan, and DiffAdded still identifies it.
+enum class BackgroundTintTarget : std::uint8_t {
+    DiffAdded,
+    DiffRemoved,
+    DiffModified,
+    Selection,
+};
+
+inline constexpr std::size_t kBackgroundTintTargetCount = 4;
+inline constexpr std::array kAllBackgroundTintTargets{
+    BackgroundTintTarget::DiffAdded,
+    BackgroundTintTarget::DiffRemoved,
+    BackgroundTintTarget::DiffModified,
+    BackgroundTintTarget::Selection,
+};
+static_assert(kAllBackgroundTintTargets.size() == kBackgroundTintTargetCount);
+
+// Per-target brightness/saturation multipliers, applied when the washes are
+// derived.  Default-constructed is the identity, which is what ships.
+struct BackgroundTintAdjustments {
+    std::array<TintAdjustment, kBackgroundTintTargetCount> byTarget{};
+
+    [[nodiscard]] TintAdjustment const& operator[](
+        BackgroundTintTarget target) const noexcept {
+        return byTarget[static_cast<std::size_t>(target)];
+    }
+    [[nodiscard]] TintAdjustment& operator[](
+        BackgroundTintTarget target) noexcept {
+        return byTarget[static_cast<std::size_t>(target)];
+    }
+
+    friend bool operator==(BackgroundTintAdjustments const&,
+                           BackgroundTintAdjustments const&) = default;
+};
+
+[[nodiscard]] std::string_view backgroundTintTargetName(BackgroundTintTarget target);
+[[nodiscard]] std::optional<BackgroundTintTarget> backgroundTintTargetFromName(
+    std::string_view name);
+
 struct ThemeSnapshot {
     std::array<SrgbColor, kThemePaletteSize> palette;
     std::array<std::uint8_t, kSemanticRoleCount> semanticIndices;
     std::array<std::uint8_t, kSyntaxScopeCount> syntaxIndices;
     DiffTints diffTints;
     SrgbColor selectionFill;
+    // The multipliers the tints above were derived WITH.  Carried on the
+    // snapshot because they are theme state: a later theme.define re-derives
+    // over the current palette and must re-apply them.
+    BackgroundTintAdjustments backgroundTints;
 
     friend bool operator==(const ThemeSnapshot&, const ThemeSnapshot&) = default;
 };
@@ -213,6 +272,18 @@ struct ThemeDefineArguments {
     std::unordered_map<std::string, std::string> colors;
 
     friend bool operator==(const ThemeDefineArguments&, const ThemeDefineArguments&) = default;
+};
+
+// theme.background's argument: the FLAT string->string table the Lua seam
+// permits (LuaCommandHost rejects nested tables and non-string values before
+// dispatch).  Keys are "brightness"/"saturation" for every target, and
+// "<target>_brightness"/"<target>_saturation" to override one; values are
+// numeric strings. Any key may be omitted.
+struct ThemeBackgroundArguments {
+    std::unordered_map<std::string, std::string> values;
+
+    friend bool operator==(const ThemeBackgroundArguments&,
+                           const ThemeBackgroundArguments&) = default;
 };
 
 struct ThemeDefineError {
@@ -242,6 +313,14 @@ struct ThemeDefineResult {
     ThemeSnapshot const& current,
     ThemeDefineArguments const& arguments) noexcept;
 
+// Applies theme.background's table to `current`, re-deriving the washes.
+// Validated whole before anything is replaced: an unknown key, an unparseable
+// number, or a negative or non-finite multiplier rejects the entire call, so a
+// rejected call never leaves a partially-adjusted theme.
+[[nodiscard]] ThemeDefineResult applyThemeBackground(
+    ThemeSnapshot const& current,
+    ThemeBackgroundArguments const& arguments) noexcept;
+
 // The compiled-in built-in theme: EditorRuntime::create()'s starting
 // ThemeSnapshot, before any init.lua theme.define() call runs. This is
 // the ONE source of the default theme's colors -- there is no data-file
@@ -258,8 +337,9 @@ struct ThemeCommandDescriptor {
 };
 
 struct ThemeCommandSet {
-    std::array<ThemeCommandDescriptor, 1> descriptors{{
+    std::array<ThemeCommandDescriptor, 2> descriptors{{
         {"theme.define"},
+        {"theme.background"},
     }};
 };
 
@@ -276,11 +356,13 @@ struct ThemeCommandSet {
 [[nodiscard]] DiffTints deriveDiffTints(
     std::array<SrgbColor, kThemePaletteSize> const& palette,
     std::array<std::uint8_t, kSemanticRoleCount> const& semanticIndices,
-    std::array<std::uint8_t, kSyntaxScopeCount> const& syntaxIndices) noexcept;
+    std::array<std::uint8_t, kSyntaxScopeCount> const& syntaxIndices,
+    BackgroundTintAdjustments const& adjustments = {}) noexcept;
 [[nodiscard]] SrgbColor deriveSelectionFill(
     std::array<SrgbColor, kThemePaletteSize> const& palette,
     std::array<std::uint8_t, kSemanticRoleCount> const& semanticIndices,
-    std::array<std::uint8_t, kSyntaxScopeCount> const& syntaxIndices) noexcept;
+    std::array<std::uint8_t, kSyntaxScopeCount> const& syntaxIndices,
+    BackgroundTintAdjustments const& adjustments = {}) noexcept;
 
 class Theme {
 public:

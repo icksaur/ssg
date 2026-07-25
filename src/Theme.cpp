@@ -1,7 +1,15 @@
 #include "ssg/Theme.h"
 
+#include "ssg/color.h"
+
 #include <array>
+#include <cmath>
+#include <cstddef>
+#include <optional>
 #include <stdexcept>
+#include <string>
+#include <string_view>
+#include <vector>
 
 namespace ssg {
 namespace {
@@ -147,10 +155,19 @@ void validatePaletteIndex(std::uint8_t index) {
 DiffTints deriveDiffTints(
     std::array<SrgbColor, kThemePaletteSize> const& palette,
     std::array<std::uint8_t, kSemanticRoleCount> const& semanticIndices,
-    std::array<std::uint8_t, kSyntaxScopeCount> const&) noexcept {
-    const auto added = palette[semanticIndices[position(SemanticRole::GitAdded)]];
-    const auto deleted = palette[semanticIndices[position(SemanticRole::GitDeleted)]];
-    const auto modified = palette[semanticIndices[position(SemanticRole::GitModified)]];
+    std::array<std::uint8_t, kSyntaxScopeCount> const&,
+    BackgroundTintAdjustments const& adjustments) noexcept {
+    // The anchor color, scaled by that target's multipliers.  At the shipped
+    // identity this is the anchor unchanged, so the flat model is preserved.
+    const auto added = adjustBackgroundTint(
+        palette[semanticIndices[position(SemanticRole::GitAdded)]],
+        adjustments[BackgroundTintTarget::DiffAdded]);
+    const auto deleted = adjustBackgroundTint(
+        palette[semanticIndices[position(SemanticRole::GitDeleted)]],
+        adjustments[BackgroundTintTarget::DiffRemoved]);
+    const auto modified = adjustBackgroundTint(
+        palette[semanticIndices[position(SemanticRole::GitModified)]],
+        adjustments[BackgroundTintTarget::DiffModified]);
     return {.addedRow = added,
             .removedRow = deleted,
             .modifiedRow = modified,
@@ -178,8 +195,130 @@ DiffTints deriveDiffTints(
 SrgbColor deriveSelectionFill(
     std::array<SrgbColor, kThemePaletteSize> const& palette,
     std::array<std::uint8_t, kSemanticRoleCount> const& semanticIndices,
-    std::array<std::uint8_t, kSyntaxScopeCount> const&) noexcept {
-    return palette[semanticIndices[position(SemanticRole::Selection)]];
+    std::array<std::uint8_t, kSyntaxScopeCount> const&,
+    BackgroundTintAdjustments const& adjustments) noexcept {
+    return adjustBackgroundTint(
+        palette[semanticIndices[position(SemanticRole::Selection)]],
+        adjustments[BackgroundTintTarget::Selection]);
+}
+
+
+namespace {
+
+constexpr std::array kBackgroundTintTargetNames{
+    std::string_view{"diff_added"},
+    std::string_view{"diff_removed"},
+    std::string_view{"diff_modified"},
+    std::string_view{"selection"},
+};
+static_assert(kBackgroundTintTargetNames.size() == kBackgroundTintTargetCount);
+
+}  // namespace
+
+std::string_view backgroundTintTargetName(BackgroundTintTarget target) {
+    return kBackgroundTintTargetNames[static_cast<std::size_t>(target)];
+}
+
+std::optional<BackgroundTintTarget> backgroundTintTargetFromName(
+    std::string_view name) {
+    for (std::size_t index = 0; index < kBackgroundTintTargetNames.size(); ++index) {
+        if (kBackgroundTintTargetNames[index] == name) {
+            return kAllBackgroundTintTargets[index];
+        }
+    }
+    return std::nullopt;
+}
+
+namespace {
+
+// Parses a multiplier, rejecting anything that is not a finite number >= 0.
+// Trailing garbage is rejected too: "0.8x" is a typo, not 0.8.
+std::optional<float> parseMultiplier(std::string const& text) {
+    if (text.empty()) return std::nullopt;
+    try {
+        std::size_t consumed = 0;
+        const double value = std::stod(text, &consumed);
+        if (consumed != text.size()) return std::nullopt;
+        if (!std::isfinite(value) || value < 0.0) return std::nullopt;
+        return static_cast<float>(value);
+    } catch (...) {
+        return std::nullopt;
+    }
+}
+
+// Splits "<target>_brightness" into its target and axis, or reports that the
+// key is one of the global axis names.
+struct ParsedKey {
+    std::optional<BackgroundTintTarget> target;  // Empty means "all targets".
+    bool brightness = false;
+};
+
+std::optional<ParsedKey> parseKey(std::string const& key) {
+    if (key == "brightness") return ParsedKey{std::nullopt, true};
+    if (key == "saturation") return ParsedKey{std::nullopt, false};
+    for (auto const suffix : {std::string_view{"_brightness"},
+                              std::string_view{"_saturation"}}) {
+        if (key.size() <= suffix.size()) continue;
+        if (std::string_view{key}.substr(key.size() - suffix.size()) != suffix) continue;
+        const auto name = std::string_view{key}.substr(0, key.size() - suffix.size());
+        if (auto target = backgroundTintTargetFromName(name)) {
+            return ParsedKey{*target, suffix == "_brightness"};
+        }
+        return std::nullopt;
+    }
+    return std::nullopt;
+}
+
+}  // namespace
+
+ThemeDefineResult applyThemeBackground(
+    ThemeSnapshot const& current,
+    ThemeBackgroundArguments const& arguments) noexcept {
+    // Validate everything BEFORE mutating, so a rejected call leaves the caller
+    // with nothing to apply.
+    struct Entry {
+        ParsedKey key;
+        float value;
+    };
+    std::vector<Entry> entries;
+    entries.reserve(arguments.values.size());
+    for (auto const& [key, text] : arguments.values) {
+        const auto parsedKey = parseKey(key);
+        if (!parsedKey) {
+            return {ThemeDefineError{"unknown theme.background key: " + key}, {}};
+        }
+        const auto value = parseMultiplier(text);
+        if (!value) {
+            return {ThemeDefineError{"theme.background " + key +
+                                     " must be a number >= 0: " + text},
+                    {}};
+        }
+        entries.push_back({*parsedKey, *value});
+    }
+
+    auto adjustments = current.backgroundTints;
+    // Globals first, so a per-target key set in the same call wins regardless of
+    // the order the table happened to iterate in.
+    for (bool perTarget : {false, true}) {
+        for (auto const& entry : entries) {
+            if (entry.key.target.has_value() != perTarget) continue;
+            for (auto target : kAllBackgroundTintTargets) {
+                if (entry.key.target && *entry.key.target != target) continue;
+                auto& adjustment = adjustments[target];
+                (entry.key.brightness ? adjustment.brightness
+                                      : adjustment.saturation) = entry.value;
+            }
+        }
+    }
+
+    ThemeSnapshot next{current.palette, current.semanticIndices,
+                       current.syntaxIndices, {}, {}, adjustments};
+    next.diffTints = deriveDiffTints(next.palette, next.semanticIndices,
+                                     next.syntaxIndices, next.backgroundTints);
+    next.selectionFill = deriveSelectionFill(
+        next.palette, next.semanticIndices, next.syntaxIndices,
+        next.backgroundTints);
+    return {std::nullopt, next};
 }
 
 ThemeDefineResult applyThemeDefine(ThemeSnapshot const& current,
@@ -202,12 +341,15 @@ ThemeDefineResult applyThemeDefine(ThemeSnapshot const& current,
         palette[*index] = *color;
     }
 
+    // Carry the adjustments forward: they are theme state, so a palette change
+    // re-derives WITH them rather than dropping back to identity.
     ThemeSnapshot next{palette, current.semanticIndices, current.syntaxIndices,
-                       {}, {}};
-    next.diffTints =
-        deriveDiffTints(next.palette, next.semanticIndices, next.syntaxIndices);
-    next.selectionFill = deriveSelectionFill(next.palette, next.semanticIndices,
-                                             next.syntaxIndices);
+                       {}, {}, current.backgroundTints};
+    next.diffTints = deriveDiffTints(next.palette, next.semanticIndices,
+                                     next.syntaxIndices, next.backgroundTints);
+    next.selectionFill = deriveSelectionFill(
+        next.palette, next.semanticIndices, next.syntaxIndices,
+        next.backgroundTints);
     return {std::nullopt, next};
 }
 

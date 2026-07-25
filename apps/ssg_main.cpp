@@ -289,6 +289,21 @@ ssg::CommandHandlerResult dispatchInitScriptCommand(
                    ? ssg::CommandHandlerResult::success()
                    : ssg::CommandHandlerResult::failure(result.message);
     }
+    if (invocation.commandId == "theme.background") {
+        // Same rule as theme.define: a bare call with no table is a caller
+        // mistake, not a request to apply an empty no-op.
+        if (!invocation.arguments) {
+            return ssg::CommandHandlerResult::failure(
+                "theme.background requires a multiplier table argument");
+        }
+        ssg::ThemeBackgroundArguments arguments{*invocation.arguments};
+        auto result = runtime.dispatch(
+            kInitScriptClientId,
+            {"theme.background", runtime.revision(), arguments});
+        return result.accepted()
+                   ? ssg::CommandHandlerResult::success()
+                   : ssg::CommandHandlerResult::failure(result.message);
+    }
     if (invocation.commandId == "keymap.bind") {
         if (!invocation.arguments) {
             return ssg::CommandHandlerResult::failure(

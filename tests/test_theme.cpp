@@ -13,6 +13,7 @@
 #include <string>
 #include <system_error>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <unistd.h>
@@ -426,9 +427,126 @@ TEST(sourceAndConfigHaveNoIndependentColorSources) {
     ASSERT_TRUE(violations.empty());
 }
 
+
+// ---------------------------------------------------------------------------
+// Background tint adjustment (doc/spec-background-tint-adjust.md).
+
+// The property Step 3 ships on: at the default identity the washes are the
+// anchor colors, so nothing changes visually until a user asks it to.
+TEST(defaultAdjustmentsLeaveEveryWashEqualToItsAnchor) {
+    const auto theme = ssg::defaultTheme();
+    ASSERT_EQ(theme.backgroundTints, ssg::BackgroundTintAdjustments{});
+    const auto anchor = [&](ssg::SemanticRole role) {
+        return theme.palette[theme.semanticIndices[static_cast<std::size_t>(role)]];
+    };
+    ASSERT_EQ(theme.diffTints.addedRow, anchor(ssg::SemanticRole::GitAdded));
+    ASSERT_EQ(theme.diffTints.removedRow, anchor(ssg::SemanticRole::GitDeleted));
+    ASSERT_EQ(theme.diffTints.modifiedRow, anchor(ssg::SemanticRole::GitModified));
+    ASSERT_EQ(theme.selectionFill, anchor(ssg::SemanticRole::Selection));
+}
+
+// Adjusting must change the derived wash WITHOUT touching the palette entry it
+// came from -- otherwise foreground text sharing that slot would move too,
+// which is the entire problem this feature exists to avoid.
+TEST(adjustingAWashLeavesThePaletteUntouched) {
+    const auto before = ssg::defaultTheme();
+    auto result = ssg::applyThemeBackground(
+        before, ssg::ThemeBackgroundArguments{{{"selection_brightness", "0.5"}}});
+    ASSERT_TRUE(result.accepted());
+    if (!result.accepted()) return;
+    const auto& after = result.snapshot;
+
+    ASSERT_EQ(after.palette, before.palette);
+    ASSERT_NE(after.selectionFill, before.selectionFill);
+    // Only the requested target moved.
+    ASSERT_EQ(after.diffTints.addedRow, before.diffTints.addedRow);
+    ASSERT_EQ(after.diffTints.removedRow, before.diffTints.removedRow);
+    ASSERT_EQ(after.diffTints.modifiedRow, before.diffTints.modifiedRow);
+}
+
+TEST(aPerTargetKeyOverridesTheGlobalOneAndInheritsTheOtherAxis) {
+    auto result = ssg::applyThemeBackground(
+        ssg::defaultTheme(),
+        ssg::ThemeBackgroundArguments{{{"brightness", "0.5"},
+                                       {"saturation", "0.25"},
+                                       {"selection_brightness", "1.5"}}});
+    ASSERT_TRUE(result.accepted());
+    if (!result.accepted()) return;
+    const auto& tints = result.snapshot.backgroundTints;
+    ASSERT_EQ(tints[ssg::BackgroundTintTarget::Selection].brightness, 1.5f);
+    // Saturation was not overridden per-target, so it keeps the global value.
+    ASSERT_EQ(tints[ssg::BackgroundTintTarget::Selection].saturation, 0.25f);
+    ASSERT_EQ(tints[ssg::BackgroundTintTarget::DiffAdded].brightness, 0.5f);
+}
+
+// The bug this is most likely to have: theme.define aggregate-initializes a
+// fresh snapshot, so an adjustment set earlier can silently reset. It would
+// look correct until a user used both commands.
+TEST(adjustmentsSurviveASubsequentThemeDefine) {
+    auto adjusted = ssg::applyThemeBackground(
+        ssg::defaultTheme(),
+        ssg::ThemeBackgroundArguments{{{"brightness", "0.4"}}});
+    ASSERT_TRUE(adjusted.accepted());
+    if (!adjusted.accepted()) return;
+
+    auto redefined = ssg::applyThemeDefine(
+        adjusted.snapshot, ssg::ThemeDefineArguments{{{"cyan", "#123456"}}});
+    ASSERT_TRUE(redefined.accepted());
+    if (!redefined.accepted()) return;
+
+    ASSERT_EQ(redefined.snapshot.backgroundTints,
+              adjusted.snapshot.backgroundTints);
+    // And the washes are still derived WITH the adjustment, not reset.
+    const auto& snapshot = redefined.snapshot;
+    const auto anchor =
+        snapshot.palette[snapshot.semanticIndices[static_cast<std::size_t>(
+            ssg::SemanticRole::Selection)]];
+    ASSERT_NE(snapshot.selectionFill, anchor);
+}
+
+TEST(rejectedAdjustmentsLeaveTheThemeUnchanged) {
+    const auto base = ssg::applyThemeBackground(
+        ssg::defaultTheme(),
+        ssg::ThemeBackgroundArguments{{{"brightness", "0.6"}}});
+    ASSERT_TRUE(base.accepted());
+    if (!base.accepted()) return;
+
+    for (auto const& bad : std::vector<std::pair<std::string, std::string>>{
+             {"unknown_key", "1.0"},
+             {"nonsense_brightness", "1.0"},
+             {"brightness", "not-a-number"},
+             {"brightness", "0.8x"},
+             {"brightness", "-1.0"},
+             {"saturation", "nan"},
+             {"saturation", "inf"},
+             {"brightness", ""}}) {
+        auto result = ssg::applyThemeBackground(
+            base.snapshot, ssg::ThemeBackgroundArguments{{{bad.first, bad.second}}});
+        ASSERT_FALSE(result.accepted());
+        // Rejection must be total: the caller's theme is untouched, which is
+        // only observable because the base is already non-default.
+        ASSERT_EQ(base.snapshot.backgroundTints[ssg::BackgroundTintTarget::DiffAdded]
+                      .brightness,
+                  0.6f);
+    }
+}
+
+TEST(anEmptyAdjustmentTableIsAcceptedAndChangesNothing) {
+    const auto before = ssg::defaultTheme();
+    auto result = ssg::applyThemeBackground(before, ssg::ThemeBackgroundArguments{});
+    ASSERT_TRUE(result.accepted());
+    if (result.accepted()) ASSERT_EQ(result.snapshot, before);
+}
+
 } // namespace
 
 int main() {
+    RUN(defaultAdjustmentsLeaveEveryWashEqualToItsAnchor);
+    RUN(adjustingAWashLeavesThePaletteUntouched);
+    RUN(aPerTargetKeyOverridesTheGlobalOneAndInheritsTheOtherAxis);
+    RUN(adjustmentsSurviveASubsequentThemeDefine);
+    RUN(rejectedAdjustmentsLeaveTheThemeUnchanged);
+    RUN(anEmptyAdjustmentTableIsAcceptedAndChangesNothing);
     RUN(rejectsMissingDuplicateAndExtraPaletteIndices);
     RUN(requiresEverySemanticRoleAndSyntaxScopeExactlyOnce);
     RUN(sharedFixtureRolesAreDistinctForEveryTheme);

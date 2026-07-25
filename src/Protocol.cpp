@@ -12,6 +12,7 @@
 
 #include <any>
 #include <array>
+#include <bit>
 #include <charconv>
 #include <cstdint>
 #include <cstring>
@@ -1281,6 +1282,11 @@ ProtocolValue toValue(LspFeatureDelta const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<LspFeatureDelta>& out);
 ProtocolValue toValue(SrgbColor const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<SrgbColor>& out);
+ProtocolValue toValue(TintAdjustment const& value);
+bool decodePresent(ProtocolValue const& value, std::optional<TintAdjustment>& out);
+ProtocolValue toValue(BackgroundTintAdjustments const& value);
+bool decodePresent(ProtocolValue const& value,
+                   std::optional<BackgroundTintAdjustments>& out);
 ProtocolValue toValue(ThemeSnapshot const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<ThemeSnapshot>& out);
 ProtocolValue toValue(ThemeSectionDelta const& value);
@@ -4591,6 +4597,43 @@ bool decodePresent(ProtocolValue const& value, std::optional<DiffTints>& out) {
     return true;
 }
 
+// The wire carries no floating-point scalar, so a multiplier travels as its
+// IEEE-754 bit pattern.  Exact, unlike a fixed-point encoding, which would make
+// the round trip lossy for values not on the chosen decimal grid.
+ProtocolValue toValue(TintAdjustment const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("brightness", toValue(std::bit_cast<std::uint32_t>(value.brightness)));
+    fields.emplace_back("saturation", toValue(std::bit_cast<std::uint32_t>(value.saturation)));
+    return ProtocolValue::makeObject(std::move(fields));
+}
+bool decodePresent(ProtocolValue const& value, std::optional<TintAdjustment>& out) {
+    auto const* object = value.asObject();
+    if (!object) return false;
+    auto brightness = requireField<std::uint32_t>(value.field("brightness"));
+    auto saturation = requireField<std::uint32_t>(value.field("saturation"));
+    if (!brightness || !saturation) return false;
+    out.emplace(TintAdjustment{std::bit_cast<float>(*brightness),
+                               std::bit_cast<float>(*saturation)});
+    return true;
+}
+
+ProtocolValue toValue(BackgroundTintAdjustments const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("by_target", toValue(value.byTarget));
+    return ProtocolValue::makeObject(std::move(fields));
+}
+bool decodePresent(ProtocolValue const& value,
+                   std::optional<BackgroundTintAdjustments>& out) {
+    auto const* object = value.asObject();
+    if (!object) return false;
+    auto byTarget =
+        requireField<std::array<TintAdjustment, kBackgroundTintTargetCount>>(
+            value.field("by_target"));
+    if (!byTarget) return false;
+    out.emplace(BackgroundTintAdjustments{*byTarget});
+    return true;
+}
+
 ProtocolValue toValue(ThemeSnapshot const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("palette", toValue(value.palette));
@@ -4598,6 +4641,7 @@ ProtocolValue toValue(ThemeSnapshot const& value) {
     fields.emplace_back("syntax_indices", toValue(value.syntaxIndices));
     fields.emplace_back("diff_tints", toValue(value.diffTints));
     fields.emplace_back("selection_fill", toValue(value.selectionFill));
+    fields.emplace_back("background_tints", toValue(value.backgroundTints));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<ThemeSnapshot>& out) {
@@ -4611,13 +4655,15 @@ bool decodePresent(ProtocolValue const& value, std::optional<ThemeSnapshot>& out
         value.field("syntax_indices"));
     auto diffTints = requireField<DiffTints>(value.field("diff_tints"));
     auto selectionFill = requireField<SrgbColor>(value.field("selection_fill"));
+    auto backgroundTints =
+        requireField<BackgroundTintAdjustments>(value.field("background_tints"));
     if (!palette || !semanticIndices || !syntaxIndices || !diffTints ||
-        !selectionFill) {
+        !selectionFill || !backgroundTints) {
         return false;
     }
     out.emplace(
         ThemeSnapshot{*palette, *semanticIndices, *syntaxIndices, *diffTints,
-                      *selectionFill});
+                      *selectionFill, *backgroundTints});
     return true;
 }
 

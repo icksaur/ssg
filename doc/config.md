@@ -57,6 +57,29 @@ does not change which UI element (foreground text, selection highlight,
 diff-added lines, etc.) uses which color slot -- that mapping is fixed by
 ssg's built-in theme today.
 
+### Background wash intensity
+
+The diff and selection backgrounds are taken straight from the palette, which
+can be stronger than you want underneath text. `theme.background` scales them
+without touching the palette itself, so foreground text, tabs and tree rows keep
+the full-strength color:
+
+```lua
+ssg.command("theme.background", {
+    brightness = "0.85",              -- every wash
+    saturation = "0.70",
+    selection_brightness = "1.10",    -- override one
+    diff_added_saturation = "0.55",
+})
+```
+
+Values are numeric strings. `brightness` and `saturation` apply to all four
+targets; `<target>_brightness` and `<target>_saturation` override one, where
+target is `diff_added`, `diff_removed`, `diff_modified` (the modified-row
+wash), or `selection`. Anything you omit stays at 1.0, which means unchanged.
+Multipliers may exceed 1.0 to strengthen a wash; they are clamped, so a large
+value saturates rather than wrapping. Hue is never altered.
+
 ### Key bindings
 
 ```lua
@@ -101,7 +124,7 @@ ssg.command("keymap.unbind", {
 
 ## What's NOT possible yet
 
-- **Only `theme.define`, `keymap.bind`, and `keymap.unbind` are exposed to
+- **Only `theme.define`, `theme.background`, `keymap.bind`, and `keymap.unbind` are exposed to
   `init.lua` today.** ssg has ~170 other commands (cursor movement,
   editing, file operations, etc.) but none of the rest are callable from
   Lua -- only whichever ones a future update explicitly adds.

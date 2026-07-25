@@ -71,10 +71,12 @@ Two properties the mechanism must have, both of which are the whole reason this
 is safe to ship at 1.0:
 
 - **Identity is exact.** `adjust(c, 1.0, 1.0) == c` for every color, with no
-  rounding drift. An sRGB -> HSL -> sRGB round trip is NOT exact in general, so
-  the implementation must short-circuit the no-op case rather than rely on the
-  round trip. This is what makes "no visible change at defaults" a fact rather
-  than a hope.
+  rounding drift. This is asserted directly over the palette and a broad sample,
+  because it is what makes "no visible change at defaults" a fact rather than a
+  hope. The implementation also short-circuits the neutral case. Measured, the
+  round trip is exact for all 16.7M sRGB colors, so that short-circuit is not
+  load-bearing TODAY -- it is a guard so identity cannot quietly stop holding if
+  the rounding rule or color space is ever changed.
 - **Clamping is saturating, not wrapping.** `brightness = 3.0` on an already
   light color yields white, never a wrapped dark value. Hue is never modified,
   so a wash cannot change identity under adjustment -- red stays red.

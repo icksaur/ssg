@@ -17,8 +17,9 @@ struct InitScriptCommandDescriptor {
     std::string_view id;
 };
 
-inline constexpr std::array<InitScriptCommandDescriptor, 3> kInitScriptCommands{{
+inline constexpr std::array<InitScriptCommandDescriptor, 4> kInitScriptCommands{{
     {"theme.define"},
+    {"theme.background"},
     {"keymap.bind"},
     {"keymap.unbind"},
 }};

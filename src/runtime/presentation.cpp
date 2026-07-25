@@ -262,6 +262,16 @@ CommandHandlerResult themeCommand(EditorRuntime::Impl& runtime,
         runtime.theme = result.snapshot;
         return success();
     }
+    if (id == "theme.background") {
+        auto const* arguments = payloadAs<ThemeBackgroundArguments>(payload);
+        if (arguments == nullptr) {
+            return failure("theme.background requires a typed multiplier payload");
+        }
+        auto result = applyThemeBackground(runtime.theme, *arguments);
+        if (!result.accepted()) return failure(result.error->message);
+        runtime.theme = result.snapshot;
+        return success();
+    }
     return failure(std::string{id} + " requires a typed theme payload");
 }
 

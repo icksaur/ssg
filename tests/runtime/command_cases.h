@@ -181,6 +181,7 @@ inline constexpr auto runtime_command_cases = std::to_array<RuntimeCommandCase>(
     RuntimeCommandCase{"settings.export_workspace", "settings-model"},
     RuntimeCommandCase{"settings.import_workspace", "settings-model"},
     RuntimeCommandCase{"theme.define", "theme-model"},
+    RuntimeCommandCase{"theme.background", "theme-model"},
     RuntimeCommandCase{"keymap.bind", "keymap-model"},
     RuntimeCommandCase{"keymap.unbind", "keymap-model"},
     RuntimeCommandCase{"follow_edits.resume", "follow-edits"},
@@ -191,6 +192,6 @@ inline constexpr auto runtime_command_cases = std::to_array<RuntimeCommandCase>(
     RuntimeCommandCase{"diff.open_file", "diff-model"},
 });
 
-static_assert(runtime_command_cases.size() == 178);
+static_assert(runtime_command_cases.size() == 179);
 
 } // namespace ssg::test

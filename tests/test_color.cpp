@@ -2,8 +2,11 @@
 
 #include "test_helpers.h"
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
+#include <utility>
 
 // An INDEPENDENT reimplementation of the xterm-256 palette and nearest-swatch
 // search, authored here so it shares no code with production (src/color.cpp).
@@ -140,6 +143,140 @@ TEST(tiesBreakToTheLowestIndex) {
     ASSERT_EQ(static_cast<int>(got.index), 0);
 }
 
+
+// ---------------------------------------------------------------------------
+// Background tint adjustment (doc/spec-background-tint-adjust.md).
+
+// An INDEPENDENT HSL round trip, authored here rather than shared with
+// production, so agreement between the two pins the transform.
+struct RefHsl { double h, s, l; };
+
+RefHsl refToHsl(ssg::SrgbColor c) {
+    const double r = c.red / 255.0, g = c.green / 255.0, b = c.blue / 255.0;
+    const double mx = std::max({r, g, b}), mn = std::min({r, g, b});
+    const double l = (mx + mn) / 2.0;
+    if (mx == mn) return {0.0, 0.0, l};
+    const double d = mx - mn;
+    const double s = l > 0.5 ? d / (2.0 - mx - mn) : d / (mx + mn);
+    double h = 0.0;
+    if (mx == r) h = (g - b) / d + (g < b ? 6.0 : 0.0);
+    else if (mx == g) h = (b - r) / d + 2.0;
+    else h = (r - g) / d + 4.0;
+    return {h / 6.0, s, l};
+}
+
+double refHueChannel(double p, double q, double t) {
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1.0 / 6.0) return p + (q - p) * 6.0 * t;
+    if (t < 1.0 / 2.0) return q;
+    if (t < 2.0 / 3.0) return p + (q - p) * (2.0 / 3.0 - t) * 6.0;
+    return p;
+}
+
+ssg::SrgbColor refFromHsl(RefHsl v) {
+    const auto quantize = [](double channel) {
+        const double scaled = channel * 255.0;
+        const double clamped = scaled < 0.0 ? 0.0 : (scaled > 255.0 ? 255.0 : scaled);
+        return static_cast<std::uint8_t>(clamped + 0.5);
+    };
+    if (v.s == 0.0) {
+        const auto grey = quantize(v.l);
+        return {grey, grey, grey};
+    }
+    const double q = v.l < 0.5 ? v.l * (1.0 + v.s) : v.l + v.s - v.l * v.s;
+    const double p = 2.0 * v.l - q;
+    return {quantize(refHueChannel(p, q, v.h + 1.0 / 3.0)),
+            quantize(refHueChannel(p, q, v.h)),
+            quantize(refHueChannel(p, q, v.h - 1.0 / 3.0))};
+}
+
+ssg::SrgbColor refAdjust(ssg::SrgbColor c, float brightness, float saturation) {
+    auto hsl = refToHsl(c);
+    const auto clamp01 = [](double x) { return x < 0.0 ? 0.0 : (x > 1.0 ? 1.0 : x); };
+    hsl.s = clamp01(hsl.s * saturation);
+    hsl.l = clamp01(hsl.l * brightness);
+    return refFromHsl(hsl);
+}
+
+// The property the shipped 1.0/1.0 default depends on.  An sRGB -> HSL -> sRGB
+// round trip is lossy, so this can only hold via an explicit short-circuit.
+TEST(neutralAdjustmentIsExactlyIdentity) {
+    const auto theme = ssg::defaultTheme();
+    for (const auto& color : theme.palette) {
+        ASSERT_EQ(ssg::adjustBackgroundTint(color, {}), color);
+        ASSERT_EQ(ssg::adjustBackgroundTint(color, {1.0f, 1.0f}), color);
+    }
+    // Also across a broad sample, not just the 16 theme colors.
+    for (int r = 0; r <= 255; r += 17) {
+        for (int g = 0; g <= 255; g += 17) {
+            for (int b = 0; b <= 255; b += 51) {
+                const ssg::SrgbColor c{static_cast<std::uint8_t>(r),
+                                       static_cast<std::uint8_t>(g),
+                                       static_cast<std::uint8_t>(b)};
+                ASSERT_EQ(ssg::adjustBackgroundTint(c, {}), c);
+            }
+        }
+    }
+}
+
+TEST(adjustmentMatchesAnIndependentHslImplementation) {
+    const std::array<std::pair<float, float>, 6> cases{{
+        {0.5f, 1.0f}, {1.5f, 1.0f}, {1.0f, 0.5f},
+        {1.0f, 1.5f}, {0.8f, 0.6f}, {1.2f, 1.3f},
+    }};
+    for (const auto& [brightness, saturation] : cases) {
+        for (int r = 0; r <= 255; r += 51) {
+            for (int g = 0; g <= 255; g += 51) {
+                for (int b = 0; b <= 255; b += 85) {
+                    const ssg::SrgbColor c{static_cast<std::uint8_t>(r),
+                                           static_cast<std::uint8_t>(g),
+                                           static_cast<std::uint8_t>(b)};
+                    ASSERT_EQ(ssg::adjustBackgroundTint(c, {brightness, saturation}),
+                              refAdjust(c, brightness, saturation));
+                }
+            }
+        }
+    }
+}
+
+TEST(zeroSaturationIsGreyAndZeroBrightnessIsBlack) {
+    const ssg::SrgbColor vivid{200, 60, 40};
+    const auto grey = ssg::adjustBackgroundTint(vivid, {1.0f, 0.0f});
+    ASSERT_EQ(grey.red, grey.green);
+    ASSERT_EQ(grey.green, grey.blue);
+    const auto black = ssg::adjustBackgroundTint(vivid, {0.0f, 1.0f});
+    ASSERT_EQ(black, (ssg::SrgbColor{0, 0, 0}));
+}
+
+// Clamping must saturate, never wrap: a wrapped value would make a large
+// multiplier produce a DARKER color, which is the opposite of what was asked.
+TEST(largeMultipliersClampRatherThanWrap) {
+    for (const auto& c : ssg::defaultTheme().palette) {
+        const auto bright = ssg::adjustBackgroundTint(c, {1000.0f, 1.0f});
+        ASSERT_EQ(bright, (ssg::SrgbColor{255, 255, 255}));
+        const auto saturated = ssg::adjustBackgroundTint(c, {1.0f, 1000.0f});
+        // Saturating cannot darken the lightness axis.
+        ASSERT_TRUE(refToHsl(saturated).l >= refToHsl(c).l - 0.01);
+    }
+}
+
+// Hue is identity under any multiplier, so a wash never changes what it means.
+TEST(hueIsNeverModified) {
+    const std::array<ssg::SrgbColor, 4> colors{{
+        {200, 60, 40}, {60, 200, 80}, {70, 90, 220}, {210, 200, 60}}};
+    for (const auto& c : colors) {
+        const double before = refToHsl(c).h;
+        for (float m : {0.3f, 0.7f, 1.4f, 2.0f}) {
+            const auto adjusted = ssg::adjustBackgroundTint(c, {m, m});
+            const auto hsl = refToHsl(adjusted);
+            // Achromatic results have no meaningful hue; skip those.
+            if (hsl.s == 0.0 || hsl.l == 0.0 || hsl.l == 1.0) continue;
+            ASSERT_TRUE(std::abs(hsl.h - before) < 0.02);
+        }
+    }
+}
+
 int main() {
     RUN(truecolorIsIdentity);
     RUN(xterm256SwatchesMatchTheReference);
@@ -147,6 +284,11 @@ int main() {
     RUN(ansi16MatchesReferenceOverBroadSample);
     RUN(exactSwatchesMapToThemselves);
     RUN(tiesBreakToTheLowestIndex);
+    RUN(neutralAdjustmentIsExactlyIdentity);
+    RUN(adjustmentMatchesAnIndependentHslImplementation);
+    RUN(zeroSaturationIsGreyAndZeroBrightnessIsBlack);
+    RUN(largeMultipliersClampRatherThanWrap);
+    RUN(hueIsNeverModified);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

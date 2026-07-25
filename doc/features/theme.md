@@ -14,6 +14,11 @@ role, every syntax scope) just to change a couple of colors.
 projection of a `Theme` (palette + role/syntax indices + derived
 `DiffTints`/`selectionFill`).
 
+`theme.background` takes brightness and saturation multipliers for the four
+background washes (diff added, removed, modified, and text selection), applied
+when those washes are derived from the palette. Defaults of 1.0 leave them
+exactly as the palette states them.
+
 `theme.define` takes a table keyed by the 16 classic ANSI palette-slot
 names (`black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`,
 `white`, and their `bright*` counterparts), each mapped to a `"#rrggbb"`
