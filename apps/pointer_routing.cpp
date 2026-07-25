@@ -48,11 +48,11 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
                          ssg::PaletteExecuteArguments{*targets.picker_candidate_id}});
                     break;
                 case ssg::SearchMode::File:
+                    // Just the open: the server dismisses the picker when it
+                    // succeeds, so click and Enter behave identically on both
+                    // the success and the failure path.
                     dispatch.commands.push_back(
                         {"file.open", *targets.picker_candidate_id});
-                    // Mirrors the keyboard submit: file.open does not dismiss
-                    // the prompt the way palette.execute does.
-                    dispatch.commands.push_back({"palette.close", std::any{}});
                     break;
                 default:
                     break;

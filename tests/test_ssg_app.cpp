@@ -1001,16 +1001,14 @@ TEST(routePointerFilePickerPressOpensTheFileRatherThanExecutingIt) {
     auto plan = ssg::app::route_pointer(hit, ssg::app::PointerButton::left,
                                         ssg::app::PointerKind::press, false,
                                         std::nullopt, targets);
-    ASSERT_EQ(plan.commands.size(), std::size_t{2});
-    if (plan.commands.size() == 2) {
+    ASSERT_EQ(plan.commands.size(), std::size_t{1});
+    if (plan.commands.size() == 1) {
         ASSERT_EQ(plan.commands[0].command_id, std::string{"file.open"});
         ASSERT_TRUE(std::any_cast<ssg::PaletteExecuteArguments>(
                         &plan.commands[0].payload) == nullptr);
         auto const* path = std::any_cast<std::string>(&plan.commands[0].payload);
         ASSERT_TRUE(path != nullptr);
         if (path) ASSERT_EQ(*path, std::string{"src/runtime/snapshot.cpp"});
-        // The picker does not dismiss itself on file.open.
-        ASSERT_EQ(plan.commands[1].command_id, std::string{"palette.close"});
     }
     ASSERT_FALSE(plan.begins_drag);
 }

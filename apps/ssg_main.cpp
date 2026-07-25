@@ -825,11 +825,9 @@ int main(int argc, char** argv) {
             dispatch("palette.execute", ssg::PaletteExecuteArguments{id});
             break;
         case ssg::SearchMode::File:
-            // file.open has no prompt side effects (unlike palette.execute,
-            // which cancels the prompt as part of executing), so the picker must
-            // be closed explicitly or it survives its own submit.
+            // The server closes the picker when the open succeeds, so a
+            // rejected open leaves it up with the query intact.
             dispatch("file.open", id);
-            dispatch("palette.close");
             break;
         default:
             break;

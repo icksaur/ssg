@@ -314,11 +314,14 @@ already decodes as `KeyP` with `shift` set from the ASCII case.
   `GitRepository` method opens and closes a repository handle per call, which is
   right for one scan per refresh but wrong for the thousands of queries a walk
   makes; the matcher holds its handle for its lifetime.
-- Submitting from the file picker dispatches `file.open` AND `palette.close`,
-  in both the keyboard and pointer paths. `palette.execute` cancels the prompt
-  server-side as part of executing, but `file.open` has no prompt side effects,
-  so without the explicit close the picker survived its own submit (observed in
-  a real PTY run).
+- The file picker closes server-side when its submit succeeds, in
+  `EditorRuntime::dispatch` beside the `pendingPaletteTarget` handling.
+  `file.open` has no prompt side effects of its own (unlike `palette.execute`,
+  which cancels the prompt as part of executing), so without this the picker
+  survived its own submit -- found by driving the real binary under a pty, not
+  by any test. Owning it server-side rather than closing from the client gives
+  close-on-success semantics matching `palette.execute`, identically for
+  keyboard and pointer: a rejected open leaves the picker up with its query.
 - The client resets the picker window for ANY id in `pickerCatalog()`, not for
   a hardcoded `"palette.open"`. The hardcoded form left the file picker
   inheriting the previous query (observed: opening the file picker after a

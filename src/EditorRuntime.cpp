@@ -1759,6 +1759,17 @@ CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& co
             ClientCommand{target, impl_->session->revision(), {}});
         return targetResult;
     }
+    // The file picker's submit is file.open, which (unlike palette.execute) has
+    // no prompt side effects of its own.  Closing it here rather than in the
+    // client keeps close-on-success semantics identical for keyboard and
+    // pointer submits: a rejected open -- the file was removed between the walk
+    // and the submit -- leaves the picker open with its query intact.
+    if (result.accepted() && impl_->openPicker == PickerKind::File &&
+        command.id == "file.open") {
+        (void)impl_->prompt.cancel();
+        impl_->reconcilePromptFocus();
+        impl_->reconcileOpenPicker();
+    }
     return result;
 }
 

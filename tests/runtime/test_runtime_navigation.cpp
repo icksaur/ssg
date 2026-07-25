@@ -1173,6 +1173,43 @@ TEST(togglingGitignoreRebuildsTheOpenFilePickerIndex) {
     std::filesystem::remove_all(root);
 }
 
+// Submitting from the file picker closes it ONLY when the open succeeds, so a
+// file removed between the walk and the submit leaves the picker up with its
+// query intact rather than silently dropping the user back to the editor.
+// Server-owned so keyboard and pointer submits cannot drift apart.
+TEST(filePickerClosesOnSuccessfulOpenAndStaysOpenOnFailure) {
+    auto root = uniqueRoot();
+    auto workspace = root / "workspace";
+    std::filesystem::create_directories(workspace);
+    std::ofstream{workspace / "present.txt"} << "p\n";
+    ASSERT_EQ(std::system(("git -C \"" + workspace.string() + "\" init -q >/dev/null 2>&1").c_str()), 0);
+
+    auto created = ssg::EditorRuntime::create({workspace, root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
+
+    auto pickerIsOpen = [&] {
+        auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+        return snapshot && !snapshot->sections().palette.candidates.empty();
+    };
+
+    // A rejected open leaves the picker up.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file_finder.open", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(pickerIsOpen());
+    auto missing = runtime.dispatch(
+        ssg::ClientId{1},
+        {"file.open", runtime.revision(), std::string{"gone.txt"}});
+    ASSERT_FALSE(missing.accepted());
+    ASSERT_TRUE(pickerIsOpen());
+
+    // A successful open dismisses it.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"present.txt"}}).accepted());
+    ASSERT_FALSE(pickerIsOpen());
+    std::filesystem::remove_all(root);
+}
+
 TEST(paletteExecuteValidatesCandidateMembership) {
     auto root = uniqueRoot();
     auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
@@ -1696,6 +1733,7 @@ int main() {
     RUN(paletteExecuteValidatesCandidateMembership);
     RUN(filePickerPublishesWorkspaceFilesAndRejectsPaletteExecute);
     RUN(togglingGitignoreRebuildsTheOpenFilePickerIndex);
+    RUN(filePickerClosesOnSuccessfulOpenAndStaysOpenOnFailure);
     RUN(paletteCandidatesCarryLabelsAndKeyDetail);
     RUN(treeScrollsToKeepSelectionVisibleInAShortPanel);
     RUN(treeSelectSetsSelectionToANodeAndRejectsUnknownIds);
