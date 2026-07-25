@@ -3,99 +3,96 @@ target_sources(ssg PRIVATE
     ${SSG_SOURCE_DIR}/src/syntax_parser_factory.cpp
 )
 
-if(SSG_TREESITTER)
-    enable_language(C)
+# Tree-sitter is compiled unconditionally.  Highlighting is disabled at RUNTIME
+# by constructing the runtime with a null EditorRuntimeConfig::syntaxParser,
+# which yields plain text; see doc/spec-grammar-pipeline.md.
+enable_language(C)
 
-    set(_SSG_TREESITTER_VENDOR_DIR ${SSG_SOURCE_DIR}/vendor)
+set(_SSG_TREESITTER_VENDOR_DIR ${SSG_SOURCE_DIR}/vendor)
 
-    # Highlight queries embedded into the binary.  ONE LINE PER QUERY: add a
-    # "key=path" entry here and it is compiled in; nothing else in the build
-    # needs to change.  The keys are what src/TreeSitterParser.cpp's kGrammars
-    # table refers to.
-    set(_SSG_EMBEDDED_QUERIES
-        "c=${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-c/queries/highlights.scm"
-        "cpp=${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-cpp/queries/highlights.scm"
-        "javascript=${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-javascript/queries/highlights.scm"
-        "typescript=${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-typescript/queries/highlights.scm"
-        "csharp=${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-c-sharp/queries/highlights.scm"
-        "lua=${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-lua/queries/highlights.scm"
-    )
+# Highlight queries embedded into the binary.  ONE LINE PER QUERY: add a
+# "key=path" entry here and it is compiled in; nothing else in the build
+# needs to change.  The keys are what src/TreeSitterParser.cpp's kGrammars
+# table refers to.
+set(_SSG_EMBEDDED_QUERIES
+    "c=${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-c/queries/highlights.scm"
+    "cpp=${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-cpp/queries/highlights.scm"
+    "javascript=${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-javascript/queries/highlights.scm"
+    "typescript=${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-typescript/queries/highlights.scm"
+    "csharp=${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-c-sharp/queries/highlights.scm"
+    "lua=${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-lua/queries/highlights.scm"
+)
 
-    # Depend on the query files themselves so editing one regenerates the TU.
-    set(_SSG_EMBEDDED_QUERY_FILES "")
-    foreach(_entry IN LISTS _SSG_EMBEDDED_QUERIES)
-        string(FIND "${_entry}" "=" _split)
-        math(EXPR _rest "${_split} + 1")
-        string(SUBSTRING "${_entry}" ${_rest} -1 _path)
-        list(APPEND _SSG_EMBEDDED_QUERY_FILES "${_path}")
-    endforeach()
+# Depend on the query files themselves so editing one regenerates the TU.
+set(_SSG_EMBEDDED_QUERY_FILES "")
+foreach(_entry IN LISTS _SSG_EMBEDDED_QUERIES)
+    string(FIND "${_entry}" "=" _split)
+    math(EXPR _rest "${_split} + 1")
+    string(SUBSTRING "${_entry}" ${_rest} -1 _path)
+    list(APPEND _SSG_EMBEDDED_QUERY_FILES "${_path}")
+endforeach()
 
-    set(_SSG_EMBEDDED_QUERIES_TU
-        ${CMAKE_BINARY_DIR}/generated/treesitter_queries.cpp)
-    # The spec goes through a FILE rather than a -D argument.  Neither a
-    # ';'-separated list (truncated at the first ';' by the command-line parser)
-    # nor a newline-joined string (newlines stripped under VERBATIM) survives
-    # transit intact, and both failure modes are silent -- they yield a partial
-    # table that still compiles.
-    set(_SSG_EMBEDDED_QUERIES_SPEC
-        ${CMAKE_BINARY_DIR}/generated/treesitter_queries.spec)
-    string(JOIN "\n" _SSG_EMBEDDED_QUERIES_TEXT ${_SSG_EMBEDDED_QUERIES})
-    file(GENERATE OUTPUT ${_SSG_EMBEDDED_QUERIES_SPEC}
-         CONTENT "${_SSG_EMBEDDED_QUERIES_TEXT}\n")
-    add_custom_command(
-        OUTPUT ${_SSG_EMBEDDED_QUERIES_TU}
-        COMMAND ${CMAKE_COMMAND}
-            -DEMBED_SPEC_FILE=${_SSG_EMBEDDED_QUERIES_SPEC}
-            -DEMBED_OUTPUT=${_SSG_EMBEDDED_QUERIES_TU}
-            -DEMBED_NAMESPACE=ssg
-            -DEMBED_ACCESSOR=embeddedHighlightQuery
-            -P ${SSG_SOURCE_DIR}/cmake/embed_text.cmake
-        DEPENDS ${_SSG_EMBEDDED_QUERY_FILES}
-                ${_SSG_EMBEDDED_QUERIES_SPEC}
-                ${SSG_SOURCE_DIR}/cmake/embed_text.cmake
-        COMMENT "Embedding tree-sitter highlight queries"
-        VERBATIM)
+set(_SSG_EMBEDDED_QUERIES_TU
+    ${CMAKE_BINARY_DIR}/generated/treesitter_queries.cpp)
+# The spec goes through a FILE rather than a -D argument.  Neither a
+# ';'-separated list (truncated at the first ';' by the command-line parser)
+# nor a newline-joined string (newlines stripped under VERBATIM) survives
+# transit intact, and both failure modes are silent -- they yield a partial
+# table that still compiles.
+set(_SSG_EMBEDDED_QUERIES_SPEC
+    ${CMAKE_BINARY_DIR}/generated/treesitter_queries.spec)
+string(JOIN "\n" _SSG_EMBEDDED_QUERIES_TEXT ${_SSG_EMBEDDED_QUERIES})
+file(GENERATE OUTPUT ${_SSG_EMBEDDED_QUERIES_SPEC}
+     CONTENT "${_SSG_EMBEDDED_QUERIES_TEXT}\n")
+add_custom_command(
+    OUTPUT ${_SSG_EMBEDDED_QUERIES_TU}
+    COMMAND ${CMAKE_COMMAND}
+        -DEMBED_SPEC_FILE=${_SSG_EMBEDDED_QUERIES_SPEC}
+        -DEMBED_OUTPUT=${_SSG_EMBEDDED_QUERIES_TU}
+        -DEMBED_NAMESPACE=ssg
+        -DEMBED_ACCESSOR=embeddedHighlightQuery
+        -P ${SSG_SOURCE_DIR}/cmake/embed_text.cmake
+    DEPENDS ${_SSG_EMBEDDED_QUERY_FILES}
+            ${_SSG_EMBEDDED_QUERIES_SPEC}
+            ${SSG_SOURCE_DIR}/cmake/embed_text.cmake
+    COMMENT "Embedding tree-sitter highlight queries"
+    VERBATIM)
 
-    set(_SSG_TREESITTER_VENDOR_SOURCES
-        ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter/lib/src/lib.c
-        ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-c/src/parser.c
-        ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-cpp/src/parser.c
-        ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-cpp/src/scanner.c
-        ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-javascript/src/parser.c
-        ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-javascript/src/scanner.c
-        ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-typescript/typescript/src/parser.c
-        ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-typescript/typescript/src/scanner.c
-        ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-c-sharp/src/parser.c
-        ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-c-sharp/src/scanner.c
-        ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-lua/src/parser.c
-        ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-lua/src/scanner.c
-    )
+set(_SSG_TREESITTER_VENDOR_SOURCES
+    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter/lib/src/lib.c
+    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-c/src/parser.c
+    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-cpp/src/parser.c
+    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-cpp/src/scanner.c
+    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-javascript/src/parser.c
+    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-javascript/src/scanner.c
+    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-typescript/typescript/src/parser.c
+    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-typescript/typescript/src/scanner.c
+    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-c-sharp/src/parser.c
+    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-c-sharp/src/scanner.c
+    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-lua/src/parser.c
+    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-lua/src/scanner.c
+)
 
-    target_sources(ssg PRIVATE
-        ${SSG_SOURCE_DIR}/src/TreeSitterParser.cpp
-        ${_SSG_EMBEDDED_QUERIES_TU}
-        ${_SSG_TREESITTER_VENDOR_SOURCES}
-    )
+target_sources(ssg PRIVATE
+    ${SSG_SOURCE_DIR}/src/TreeSitterParser.cpp
+    ${_SSG_EMBEDDED_QUERIES_TU}
+    ${_SSG_TREESITTER_VENDOR_SOURCES}
+)
 
-    target_include_directories(ssg PRIVATE
-        ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter/lib/include
-        ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-c/src
-        ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-cpp/src
-        ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-javascript/src
-        ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-typescript/typescript/src
-        ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-c-sharp/src
-        ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-lua/src
-    )
+target_include_directories(ssg PRIVATE
+    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter/lib/include
+    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-c/src
+    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-cpp/src
+    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-javascript/src
+    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-typescript/typescript/src
+    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-c-sharp/src
+    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-lua/src
+)
 
-    target_compile_definitions(ssg PRIVATE
-        SSG_TREESITTER
-    )
-
-    set_source_files_properties(${_SSG_TREESITTER_VENDOR_SOURCES}
-        PROPERTIES
-            COMPILE_OPTIONS "-w"
-    )
-endif()
+set_source_files_properties(${_SSG_TREESITTER_VENDOR_SOURCES}
+    PROPERTIES
+        COMPILE_OPTIONS "-w"
+)
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     add_executable(test_syntax
@@ -116,45 +113,41 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_link_libraries(test_syntax_language_detection PRIVATE ssg)
     add_test(NAME test_syntax_language_detection COMMAND test_syntax_language_detection)
 
-    if(SSG_TREESITTER)
-        add_executable(test_treesitter_syntax
-            ${SSG_SOURCE_DIR}/tests/test_treesitter_syntax.cpp
-        )
-        target_include_directories(test_treesitter_syntax PRIVATE
-            ${SSG_SOURCE_DIR}/tests
-            ${SSG_SOURCE_DIR}/src
-        )
-        target_compile_definitions(test_treesitter_syntax PRIVATE
-            SSG_TREESITTER
-            SSG_TREESITTER_FIXTURE_DIR="${SSG_SOURCE_DIR}/tests/fixtures/syntax"
-            SSG_TREESITTER_VENDOR_DIR="${_SSG_TREESITTER_VENDOR_DIR}"
-            SSG_TREESITTER_SOURCE_DIR="${SSG_SOURCE_DIR}/src"
-        )
-        target_link_libraries(test_treesitter_syntax PRIVATE ssg)
-        add_test(NAME test_treesitter_syntax COMMAND test_treesitter_syntax)
+    add_executable(test_treesitter_syntax
+        ${SSG_SOURCE_DIR}/tests/test_treesitter_syntax.cpp
+    )
+    target_include_directories(test_treesitter_syntax PRIVATE
+        ${SSG_SOURCE_DIR}/tests
+        ${SSG_SOURCE_DIR}/src
+    )
+    target_compile_definitions(test_treesitter_syntax PRIVATE
+        SSG_TREESITTER_FIXTURE_DIR="${SSG_SOURCE_DIR}/tests/fixtures/syntax"
+        SSG_TREESITTER_VENDOR_DIR="${_SSG_TREESITTER_VENDOR_DIR}"
+        SSG_TREESITTER_SOURCE_DIR="${SSG_SOURCE_DIR}/src"
+    )
+    target_link_libraries(test_treesitter_syntax PRIVATE ssg)
+    add_test(NAME test_treesitter_syntax COMMAND test_treesitter_syntax)
 
-        # A separate executable because TreeSitterParser's query cache is
-        # process-wide: run in the same process as the golden tests, this check
-        # is vacuous (they populate the cache first).
-        add_executable(test_treesitter_embedded_queries
-            ${SSG_SOURCE_DIR}/tests/test_treesitter_embedded_queries.cpp
-        )
-        target_include_directories(test_treesitter_embedded_queries PRIVATE
-            ${SSG_SOURCE_DIR}/tests
-            ${SSG_SOURCE_DIR}/src
-        )
-        target_compile_definitions(test_treesitter_embedded_queries PRIVATE
-            SSG_TREESITTER
-            SSG_TREESITTER_VENDOR_DIR="${_SSG_TREESITTER_VENDOR_DIR}"
-        )
-        target_link_libraries(test_treesitter_embedded_queries PRIVATE ssg)
-        add_test(NAME test_treesitter_embedded_queries
-                 COMMAND test_treesitter_embedded_queries)
-        # Renames vendor files while it runs, so it must not overlap the golden
-        # tests that read them.
-        set_tests_properties(test_treesitter_embedded_queries PROPERTIES
-            RUN_SERIAL TRUE)
-        set_tests_properties(test_treesitter_syntax PROPERTIES
-            RUN_SERIAL TRUE)
-    endif()
+    # A separate executable because TreeSitterParser's query cache is
+    # process-wide: run in the same process as the golden tests, this check
+    # is vacuous (they populate the cache first).
+    add_executable(test_treesitter_embedded_queries
+        ${SSG_SOURCE_DIR}/tests/test_treesitter_embedded_queries.cpp
+    )
+    target_include_directories(test_treesitter_embedded_queries PRIVATE
+        ${SSG_SOURCE_DIR}/tests
+        ${SSG_SOURCE_DIR}/src
+    )
+    target_compile_definitions(test_treesitter_embedded_queries PRIVATE
+        SSG_TREESITTER_VENDOR_DIR="${_SSG_TREESITTER_VENDOR_DIR}"
+    )
+    target_link_libraries(test_treesitter_embedded_queries PRIVATE ssg)
+    add_test(NAME test_treesitter_embedded_queries
+             COMMAND test_treesitter_embedded_queries)
+    # Renames vendor files while it runs, so it must not overlap the golden
+    # tests that read them.
+    set_tests_properties(test_treesitter_embedded_queries PROPERTIES
+        RUN_SERIAL TRUE)
+    set_tests_properties(test_treesitter_syntax PROPERTIES
+        RUN_SERIAL TRUE)
 endif()

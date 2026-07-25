@@ -541,8 +541,7 @@ needs no new delta code at all, only the mutation itself.
   special-casing. The reload poll interval itself adds no observable
   input latency (background thread; the main loop's `select()` timeout is
   unaffected when nothing has changed).
-- Gates: `bash scripts/check.sh` (tree-sitter ON) and
-  `BUILD_DIR=build-no-ts bash scripts/check.sh` (OFF) both green.
+- Gates: `bash scripts/check.sh` green.
 - Oracles:
   - `userConfigRoot` unit tests mirroring `test_platform_files.cpp`'s
     existing `userCacheRoot` cases (XDG env set/unset/relative-and-ignored,

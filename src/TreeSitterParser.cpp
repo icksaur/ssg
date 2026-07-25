@@ -1,7 +1,5 @@
 #include "TreeSitterParser.h"
 
-#ifdef SSG_TREESITTER
-
 #include <tree_sitter/api.h>
 
 #include <algorithm>
@@ -278,5 +276,3 @@ SyntaxParseOutput TreeSitterParser::parse(const SyntaxParseRequest& request) {
 }
 
 } // namespace ssg
-
-#endif

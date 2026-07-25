@@ -284,8 +284,7 @@ already decodes as `KeyP` with `shift` set from the ASCII case.
   a bound asserted by a test (mechanism: a wall-clock assertion in the index
   test, calibrated so the measured value has meaningful headroom). Ranking and
   per-frame windowing add no new budget — they are the existing palette path.
-- Gates: `bash scripts/check.sh` and `BUILD_DIR=build-no-ts bash scripts/check.sh`
-  both green, zero warnings.
+- Gates: `bash scripts/check.sh` green, zero warnings.
 - Oracles: see the Plan's Oracle column; every non-mechanical step names one.
 
 ## Plan

@@ -253,7 +253,7 @@ the worker thread itself. Apply the SAME shape here:
   the syntax-and-diffs engine already renders elsewhere; a fresh `ssg_main.cpp`
   build with ZERO diff-related code in `main()` still shows live diffs; visual
   signoff required before merge (user-visible UI fix).
-- Gates: `bash scripts/check.sh` green with and without `SSG_TREESITTER`.
+- Gates: `bash scripts/check.sh` green.
 - Oracles:
   - render: an end-to-end runtime test opens a `LiveDiff` tab for a file with
     known hunks and asserts the published `CellGrid`/render output actually

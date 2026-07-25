@@ -351,7 +351,7 @@ Four areas were audited before deciding what to split/generalize/recompose:
 - Observable: every UX-section expectation above is demonstrable in the TUI (and
   ideally browser client) against a real git repo, with visual signoff before
   merge (this is user-visible UI work).
-- Gates: `bash scripts/check.sh` green with and without `SSG_TREESITTER`.
+- Gates: `bash scripts/check.sh` green.
 - Oracles: each numbered item above gets its own test per its existing project
   pattern (hand-case for `DiffFileStatus`, ground-truth-vs-real-`git`-status for
   the tree feed, a pause/no-pause transition table for follow, a dedup/lifetime

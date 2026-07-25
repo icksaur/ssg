@@ -401,7 +401,7 @@ confirm rather than assume).
   documented priority call — see Design). Visual signoff required (this is
   the same user-visible rendering property the earlier color-depth-defaults
   spec targeted, now corrected, with Truecolor as the primary target).
-- Gates: `bash scripts/check.sh` green with and without `SSG_TREESITTER`.
+- Gates: `bash scripts/check.sh` green.
 - Oracles:
   - hue-fidelity (write FIRST, must FAIL against current/`c3d0003` code):
     a property test asserting the shipped theme's `deriveDiffTints` output

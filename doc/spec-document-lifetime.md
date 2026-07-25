@@ -160,8 +160,7 @@ once on close, not N parallel maps.
   empty history.
 - Budgets: no reopen regression (documents open fast; no cache); no per-render
   cost added.
-- Gates: `bash scripts/check.sh` green (0 warnings, all tests) with and without
-  `SSG_TREESITTER`.
+- Gates: `bash scripts/check.sh` green (0 warnings, all tests).
 - Oracles:
   - lifetime (mechanism-independent observability — review SHOULD): destruction of
     the document's history and syntax is proven by an instrumented resource

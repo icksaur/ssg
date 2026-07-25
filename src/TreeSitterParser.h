@@ -2,8 +2,6 @@
 
 #include <ssg/SyntaxModel.h>
 
-#ifdef SSG_TREESITTER
-
 namespace ssg {
 
 class TreeSitterParser final : public SyntaxParser {
@@ -14,5 +12,3 @@ public:
 };
 
 } // namespace ssg
-
-#endif

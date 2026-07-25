@@ -221,10 +221,19 @@ path, and works with zero external processes. LSP remains a future second
 `SyntaxParser` implementation (semantic tokens -> `SyntaxScope`) behind the same
 seam if ever wanted; this spec does not build it.
 
-The tree-sitter parser + grammars are an OPTIONAL library component (CMake
-`SSG_TREESITTER`) so the library builds without it (parser stays null =
-plain-text) and the app opts in. Highlighting is "OOTB" in that the shipped app
-injects it by default.
+The tree-sitter parser + grammars are compiled UNCONDITIONALLY. Highlighting is
+disabled at RUNTIME by constructing the runtime with a null
+`EditorRuntimeConfig::syntaxParser`, which yields plain text; the shipped app
+opts in via `defaultSyntaxParser()`.
+
+Historical note: this was originally an optional CMake component
+(`SSG_TREESITTER`) so the library could build with no tree-sitter dependency at
+all. That capability was retired in doc/spec-grammar-pipeline.md Phase B: the
+flag protected a configuration nobody used while taxing every change with a
+doubled build-and-test gate, of which 80 of 81 tests were identical. The cost is
+real -- every consumer, including `add_subdirectory` embedders, now compiles the
+vendored C and therefore needs a C toolchain -- and is guarded by the
+`test_embed_consumer` compatibility oracle.
 
 ### Agent diffs -> follow
 
@@ -418,7 +427,8 @@ No new plugin subsystem. Three existing seams carry all three features:
 
 RESOLVED DECISIONS (2026-07-20):
 
-- Q1 — tree-sitter vendored under `vendor/` (behind `SSG_TREESITTER`). Language
+- Q1 — tree-sitter vendored under `vendor/` (originally behind `SSG_TREESITTER`,
+  compiled unconditionally since spec-grammar-pipeline Phase B). Language
   set: C, C++, JavaScript, TypeScript, C#, Lua (Lua only if a maintained grammar
   is available; if not, ship the other five and note Lua as follow-up). Grammars
   are C, compiled into the library behind the flag.
@@ -484,9 +494,10 @@ Edge/complexity notes:
 
 ## Risks and Mitigations
 
-- Tree-sitter build complexity / portability -> gate behind `SSG_TREESITTER`,
-  vendor pinned grammar sources, keep the null-parser plain-text path as the
-  always-available default; CI builds both with and without.
+- Tree-sitter build complexity / portability -> vendor pinned grammar sources and
+  keep the null-parser plain-text path as the always-available default. The
+  `SSG_TREESITTER` opt-out that originally covered this was retired (see above);
+  `test_embed_consumer` now proves the embedder build path.
 - Highlighting perf on large files -> `scopeAt` is O(log n) per cell and only
   visible rows render. Tree-sitter PARSE of a whole 10 MiB file is its own cost
   (tens of ms range) and currently runs synchronously in `refreshSyntax`
@@ -524,8 +535,7 @@ Edge/complexity notes:
   SEPARATELY (target: name a number after a first measurement, not before); no
   per-frame regression in `Renderer` for the visible-rows render. Do NOT cite the
   18.8 ms eol_scan sub-phase as an open budget.
-- Gates: `bash scripts/check.sh` green (0 warnings, all tests) with and without
-  `SSG_TREESITTER`.
+- Gates: `bash scripts/check.sh` green (0 warnings, all tests).
 - Oracles:
   - syntax mapping: golden of `(byteOffset -> SyntaxScope)` for a fixture in EACH
     shipped language (not just C/C++), including a multibyte-UTF-8 case (byte
@@ -634,7 +644,7 @@ that changes a shipped state shape (not deferred to a trailing step).
 | # | Step | Files | Oracle | Invariants |
 |---|------|-------|--------|------------|
 | 1 | Language detection: `LanguageId` from file extension; build parse requests with the real language | `SyntaxModel.h`/`.cpp` (or a small `LanguageId` detector), `EditorRuntime.cpp:707` | golden: extension->LanguageId table | wire-literals |
-| 2 | Tree-sitter `SyntaxParser` impl for C, C++, JS, TS, C#, Lua(if grammar avail), behind `SSG_TREESITTER`; vendor grammars; produce `SyntaxSpan`+scopes; keep public types parser-agnostic | new `src/TreeSitterParser.*`, `vendor/tree-sitter*`, `cmake/components/treesitter-syntax.cmake`, `CMakeLists.txt`, `tests/fixtures/syntax/*` | golden: byteOffset->SyntaxScope per shipped language + multibyte + overlap cases (fails before impl) | lib/app boundary; syntax types transport-agnostic |
+| 2 | Tree-sitter `SyntaxParser` impl for C, C++, JS, TS, C#, Lua(if grammar avail), originally behind `SSG_TREESITTER`; vendor grammars; produce `SyntaxSpan`+scopes; keep public types parser-agnostic | new `src/TreeSitterParser.*`, `vendor/tree-sitter*`, `cmake/components/treesitter-syntax.cmake`, `CMakeLists.txt`, `tests/fixtures/syntax/*` | golden: byteOffset->SyntaxScope per shipped language + multibyte + overlap cases (fails before impl) | lib/app boundary; syntax types transport-agnostic |
 | 3 | Runtime parser-injection seam: app supplies the parser (default tree-sitter) instead of runtime hard-constructing; null stays the no-treesitter default | `EditorRuntime.h:15-25` (config/factory), `EditorRuntime.cpp:278-299`, app wiring | build+run both cmake configs green; a test injects an alternate parser without editing runtime | parser runtime-injected |
 | 3b | Publish stable document/file identity into the rendered document view-state (or a per-document active-diff projection) so a document selects its `DiffFileView` by identity+revision | `snapshot.h` (DocumentViewState), `session_snapshot.h`, `Protocol.cpp`, snapshot/protocol goldens, matching `*DeltaCodec` | round-trip identity; unidentified doc renders no diff | active-diff coherence; snapshot/delta symmetry; wire-literals |
 | 4a | `RealRow\|PhantomRow` projection OWNED BY `Viewport`; route renderer/hit-test/selection/caret-movement/reveal/follow through it; identity when no diff | `Viewport.h/.cpp`, `Selection.h/.cpp`, `HitTester.cpp`, `runtime/editing.cpp`, `runtime/presentation.cpp`, `FollowEditsModel.cpp` | phantom oracle: click->next real offset, caret steps over, drag selects real only, scrollbar counts phantom; identity when no diff | buffer-vs-visual coords (one owner) |

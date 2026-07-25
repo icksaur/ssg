@@ -203,7 +203,7 @@ scope. The client never calls this; only the host loop does.
 - Budgets: event-mode recompute touches only the named paths; no full scan except
   on identity change or overflow. Failed/incomplete scans allocate no partial
   state.
-- Gates: `bash scripts/check.sh` green with and without `SSG_TREESITTER`. libgit2
+- Gates: `bash scripts/check.sh` green. libgit2
   is vendored; the source degrades to an inert no-adapter state when no repository
   is present (not-a-repo), and that inert path is covered without a repo.
 - Oracles: each below is an independent ground truth NOT going through the source.

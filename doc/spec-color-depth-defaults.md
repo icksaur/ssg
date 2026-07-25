@@ -235,7 +235,7 @@ distinctness at whatever depth is actually resolved) is the fixed contract.
   shows clearly colored (not grey) added/removed/modified rows in both the
   new default (Truecolor) and the forced-256 path. Visual signoff required
   (user-visible rendering fix).
-- Gates: `bash scripts/check.sh` green with and without `SSG_TREESITTER`.
+- Gates: `bash scripts/check.sh` green.
 - Oracles:
   - detection: hand-case table covering every precedence tier in Design Part A
     (override valid/invalid, `COLORTERM` positive, allowlist `TERM_PROGRAM`

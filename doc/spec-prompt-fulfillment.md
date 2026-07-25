@@ -155,8 +155,8 @@ I17 so it is unambiguously permitted; do NOT reframe it as a client-held copy.
 
 - Observable: find, replace, and palette behave identically to today (Enter/arrows/
   escape do the same things); confirmed by existing + new tests. No visible change.
-- Gates: `bash scripts/check.sh` green (0 warnings, all tests) with and without
-  `SSG_TREESITTER`; `data/required-commands.json` cascade tests pass.
+- Gates: `bash scripts/check.sh` green (0 warnings, all tests);
+  `data/required-commands.json` cascade tests pass.
 - Oracles:
   - library fulfilment: a runtime test opens a find prompt and dispatches the
     generic `prompt.submit` (no client mapping) and asserts the library advances

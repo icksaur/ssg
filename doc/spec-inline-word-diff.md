@@ -112,7 +112,7 @@ doesn't see intra-row content, only row counts.
   dead space; left/right arrow keys skip over the red text in one step
   from either side; dragging a selection across the red text selects only
   the real (target) bytes before/after it.
-- Gates: `bash scripts/check.sh` green with and without `SSG_TREESITTER`.
+- Gates: `bash scripts/check.sh` green.
 - Oracles:
   - hit-test: a click at every column within a ghost span resolves to the
     SAME anchor byte offset with `byteLen=0`; a click just past the ghost

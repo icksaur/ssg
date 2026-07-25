@@ -28,11 +28,6 @@ set(SSG_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 # Requires Clang or GCC.  Applied as PUBLIC so linked test executables inherit
 # the flags and link options.
 option(SSG_SANITIZE "Build with AddressSanitizer and UBSanitizer" OFF)
-# ON by default so the TUI is fully-featured out of the box; a dependency-free
-# library build can opt out with -DSSG_TREESITTER=OFF (the parser is then null and
-# highlighting falls back to plain text).
-option(SSG_TREESITTER "Enable vendored tree-sitter syntax parsing" ON)
-
 # enable_testing() must precede the component-manifest loop so manifests can
 # register test executables.  Skipped when SSG is a subdirectory so host
 # projects are not contaminated with SSG's CTest entries.
