@@ -347,6 +347,19 @@ void TreeModel::replaceProvider(TreeProviderSnapshot snapshot) {
     }
 }
 
+// Falls back to providers_.front() when activeProviderId_ is unset OR
+// refers to a provider not (yet) registered -- e.g. a caller's
+// activateProvider(id) call failed because that provider was still
+// pending registration (a deferred workspace scan not yet primed; see
+// apps/ssg_main.cpp's startup panel.show_files sequencing). This masks a
+// failed/never-issued activation as long as there is only ONE registered
+// provider at the time, which is today's common case at startup, but is
+// an incidental correctness reliance, not a guarantee: if a second
+// provider (e.g. "git") were ever registered before "filesystem" during
+// some future startup-ordering change, this fallback could silently
+// select the WRONG one instead of surfacing that activation never
+// happened. Worth hardening (e.g. returning nullptr for a stale-but-set
+// activeProviderId_ rather than guessing) if that scenario becomes real.
 TreeModel::ProviderState* TreeModel::activeProvider() {
     if (providers_.empty()) return nullptr;
     if (activeProviderId_) {
@@ -360,6 +373,8 @@ TreeModel::ProviderState* TreeModel::activeProvider() {
     return &providers_.front();
 }
 
+// Same fallback-to-front() reliance as the non-const overload above -- see
+// its comment.
 const TreeModel::ProviderState* TreeModel::activeProvider() const {
     if (providers_.empty()) return nullptr;
     if (activeProviderId_) {

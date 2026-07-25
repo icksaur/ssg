@@ -168,6 +168,92 @@ TEST(optionalConstructionAuditIsWiredPositiveControl) {
     fs::remove_all(root);
 }
 
+// Pins the exact ordering apps/ssg_main.cpp's startup sequence depends on
+// (regression coverage for the "ssg: could not open Files sidebar: files
+// tree provider is unavailable" bug): with deferred enrichment, the tree's
+// "filesystem" provider does not exist until primeDeferred() runs, so
+// panel.show_files (dispatched before that) legitimately fails; dispatched
+// AFTER primeDeferred(), it must succeed cleanly. A future startup-path edit
+// that moves panel.show_files back before primeDeferred() would fail this
+// test's first assertion becoming the WRONG one to rely on silently.
+TEST(panelShowFilesRequiresPrimeDeferredFirst) {
+    auto root = makeWorkspace("panel_ordering");
+    auto created = ssg::EditorRuntime::create(configFor(root, /*defer=*/true));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1})
+                    .accepted());
+
+    auto tooEarly = runtime.dispatch(
+        ssg::ClientId{1}, {"panel.show_files", runtime.revision(), {}});
+    ASSERT_FALSE(tooEarly.accepted());
+
+    runtime.primeDeferred();
+    auto onTime = runtime.dispatch(
+        ssg::ClientId{1}, {"panel.show_files", runtime.revision(), {}});
+    ASSERT_TRUE(onTime.accepted());
+
+    fs::remove_all(root);
+}
+
+// Pins the fileOpenedAtStartup re-focus contract: panel.show_files's
+// showPanelProvider side effect moves keyboard focus to the panel
+// unconditionally, so a startup sequence that opens a command-line file
+// argument (and focuses the editor) BEFORE dispatching panel.show_files
+// (matching apps/ssg_main.cpp's ordering: file.open+focusEditor() pre-loop,
+// panel.show_files after primeDeferred() inside the loop) must re-assert
+// editor focus AFTER panel.show_files, or the file-argument launch silently
+// ends with focus on the panel instead of the editor.
+TEST(focusEditorSurvivesPanelShowFilesDispatchedAfter) {
+    auto root = makeWorkspace("focus_ordering");
+    auto created = ssg::EditorRuntime::create(configFor(root, /*defer=*/true));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1})
+                    .accepted());
+
+    // Mirrors apps/ssg_main.cpp's pre-loop file-argument open.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.open", runtime.revision(), std::string{"code.txt"}})
+                    .accepted());
+    runtime.focusEditor();
+    auto beforePanel =
+        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(beforePanel.has_value());
+    if (beforePanel) {
+        ASSERT_EQ(beforePanel->sections().shell.focus, ssg::FocusTarget::Editor);
+    }
+
+    // Mirrors apps/ssg_main.cpp's post-primeDeferred panel dispatch: this
+    // moves focus to the panel as a side effect, clobbering the above.
+    runtime.primeDeferred();
+    ASSERT_TRUE(runtime.dispatch(
+                        ssg::ClientId{1}, {"panel.show_files", runtime.revision(), {}})
+                    .accepted());
+    auto afterPanel =
+        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(afterPanel.has_value());
+    if (afterPanel) {
+        ASSERT_EQ(afterPanel->sections().shell.focus, ssg::FocusTarget::Panel);
+    }
+
+    // Mirrors apps/ssg_main.cpp's fileOpenedAtStartup re-assert: calling
+    // focusEditor() again restores the correct final focus.
+    runtime.focusEditor();
+    auto restored =
+        runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(restored.has_value());
+    if (restored) {
+        ASSERT_EQ(restored->sections().shell.focus, ssg::FocusTarget::Editor);
+    }
+
+    fs::remove_all(root);
+}
+
 int main() {
     // M10-2 static-init probe: nothing optional may construct before main (no
     // self-registering globals); the ledger must be empty at process entry.
@@ -180,6 +266,8 @@ int main() {
     RUN(eagerConstructionRunsEnrichmentImmediately);
     RUN(firstFrameConstructsNoOptionalSubsystem);
     RUN(optionalConstructionAuditIsWiredPositiveControl);
+    RUN(panelShowFilesRequiresPrimeDeferredFirst);
+    RUN(focusEditorSurvivesPanelShowFilesDispatchedAfter);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }
