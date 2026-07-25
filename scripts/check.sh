@@ -7,17 +7,22 @@
 #   scripts/check.sh            configure (if needed) + build + fast tests
 #   scripts/check.sh build      build only
 #   scripts/check.sh test       fast tests only (assumes built)
-#   scripts/check.sh perf       build + ONLY the timing benchmarks
-#   scripts/check.sh push       build + EVERY test (the pre-push gate)
+#   scripts/check.sh perf       build + ONLY the timing benchmarks (on demand)
+#   scripts/check.sh push       build + every test except the benchmarks
 #   scripts/check.sh configure  (re)configure only
 #
-# Two tiers, because the slow checks answer questions an edit-test loop is not
-# asking.  The default gate runs the unit tests in parallel and skips three
-# labels -- `performance` (timing benchmarks), `performance-correctness`
-# (editor_benchmark --verify-only over a large corpus), and `embed` (rebuilds
-# the library as an add_subdirectory consumer).  `push` runs all of them, so
-# the skipped checks still gate work leaving the machine; wire it to a
-# pre-push hook with:
+# Three tiers, because these checks answer different questions:
+#
+#   default  the edit-test loop.  Unit tests in parallel; skips the labels
+#            `performance`, `performance-correctness` and `embed`.
+#   push     adds back `performance-correctness` (a correctness oracle over the
+#            benchmark corpus) and `embed` (an add_subdirectory consumer
+#            build).  Sized to sit in front of an interactive `git push`.
+#   perf     the timing benchmarks, ON DEMAND ONLY.  They take minutes and
+#            answer "did throughput regress?", which no gate is asking; run
+#            them when touching a hot path or chasing a regression.
+#
+# Wire the push tier to a pre-push hook with:
 #
 #   ln -s ../../scripts/pre-push.hook .git/hooks/pre-push
 #
@@ -104,9 +109,11 @@ run_perf() {
 }
 
 run_push() {
-    # Everything, including what the fast gate skips.  Intended for a pre-push
-    # hook: slow checks still run before work leaves the machine.
-    if ctest --test-dir "$BUILD_DIR" -j"$JOBS" \
+    # Everything EXCEPT the timing benchmarks: the pre-push gate has to finish
+    # fast enough to sit in front of an interactive `git push`, and throughput
+    # measurements are not what a push is asking about.  Benchmarks are
+    # on-demand only, via `scripts/check.sh perf`.
+    if ctest --test-dir "$BUILD_DIR" -j"$JOBS" -LE '^performance$' \
             --output-on-failure >"$log" 2>&1; then
         grep -E '% tests passed' "$log" | tail -1
         return 0

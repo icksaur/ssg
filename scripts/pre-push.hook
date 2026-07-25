@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Pre-push gate: runs EVERY test, including the slow checks the fast gate skips
-# (timing benchmarks, the benchmark-corpus correctness oracle, and the
-# add_subdirectory consumer build).
+# Pre-push gate: every test except the timing benchmarks -- it adds back the
+# benchmark-corpus correctness oracle and the add_subdirectory consumer build
+# that the fast gate skips.  Benchmarks stay on demand (scripts/check.sh perf)
+# so this stays short enough to front an interactive push.
 #
 # Install:
 #   ln -s ../../scripts/pre-push.hook .git/hooks/pre-push
