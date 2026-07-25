@@ -126,89 +126,13 @@ normal background**. A selected or searched cell shows the role background (16-
 palette) and suppresses the tint, so selection/search stay visible over diffs.
 Within diffs, a word mark outranks its row tint on the same cell.
 
-### Diff colors (theme-derived tints, contrast-guaranteed)
+### Diff colors
 
-The `DiffTints` set is DERIVED by the Theme from the theme's OWN hue anchors, so
-every theme gets readable, non-clashing diff colors for free (pit of success) and
-no color enters outside theme data (honors the `color.h` "theme is the sole source
-of color" invariant — derivation happens INSIDE `Theme`, the client only depth-
-adapts via `resolveColor`).
-
-Anchors: the theme already defines `SemanticRole::GitAdded` / `GitDeleted` /
-`GitModified` — its own add/delete/modify hues (each maps to a palette `SrgbColor`).
-Use those as the add/remove/modify hue anchors; do NOT guess which of the 16 slots
-is "green".
-
-Derivation (mechanism — chosen to satisfy the guarantee below, free to change):
-for each kind, blend the anchor hue toward the editor `Background`, desaturated:
-- Row tint = `blend(Background, desaturate(anchor, sRow), aRow)` with a SMALL
-  weight `aRow` (a subtle wash, ~caco 18%). Because a subtle wash barely moves the
-  background, existing syntax-vs-background contrast is nearly preserved — which is
-  precisely why syntax stays readable on diff rows.
-- Word mark = same anchor, STRONGER weight `aWord > aRow` (~caco 45%) and higher
-  saturation, so intra-line marks pop above the row tint.
-
-Guarantee (the INVARIANT the mechanism serves — this, not the blend, is load-
-bearing). Readability is RELATIVE, not an absolute WCAG floor. IMPLEMENTATION
-FINDING (folded after visual signoff): an absolute `contrast(tint, fg) >= 3.0`
-against every syntax foreground is unachievable for a normal theme — a
-mid-luminance accent (e.g. a purple keyword that itself only ~clears 3.0 on the
-plain Background) forces every hued wash to near-black, erasing the hue and
-producing an ugly fallback. So the rule is: for each tint and each applicable
-foreground, on the RESOLVED (post-`resolveColor`) RGBs at BOTH Truecolor and
-Indexed256,
-
-    contrast(tint, fg) >= max(kFloorContrast, kRetainContrast * contrast(Background, fg))
-
-i.e. the wash must retain a fraction (kRetainContrast = 0.80) of the contrast the
-foreground already had against the editor Background, never below a hard floor
-(kFloorContrast = 2.1). Because a subtle wash barely moves Background, existing
-per-foreground contrast is nearly preserved — which is why syntax stays readable
-on diff rows. "Applicable fg" = every syntax scope foreground + the default
-`Foreground`.
-
-Distinctness is a SECONDARY, best-effort property judged at TRUECOLOR ONLY:
-1. Row-visibility: `deltaE(row tint, Background) >= ~2` at Truecolor (a diff row
-   reads as diffed). Asserted.
-2. Kind-separation (CIELAB CIE76): the shipped theme's derived washes separate
-   Added/Removed/Modified well at Truecolor (dE ~5-11 for the default theme), but
-   this is NOT a hard gate — Indexed256 quantization can collapse subtle washes,
-   and diff kinds also read apart STRUCTURALLY (added rows vs phantom removed rows
-   vs word-marked modified rows). Not asserted as a per-theme invariant.
-The derivation prefers the readable derived washes when they are also
-truecolor-distinct (their hue comes from the theme's Git anchors); a fixed
-fallback set is used ONLY to rescue a degenerate theme whose near-monochrome
-anchors make the derived tints indistinguishable, and otherwise the readable
-derived washes are kept (readability is primary). Distinctness is judged at
-Truecolor because 256-quantization distinctness is not reliably achievable.
-
-Feasibility + failure semantics (`Theme::snapshot()` is `noexcept` at
-`Theme.h:211`, so derivation is TOTAL and never throws). Given a theme with
-adequate baseline syntax-vs-Background contrast, a subtle wash trivially satisfies
-the relative gate (it barely moves Background). The word-mark weight is the
-strongest value still passing the gate. If neither the derived washes nor a fixed
-fallback is both readable and truecolor-distinct, the readable derived washes are
-returned (readability first; distinctness degrades to structural cues).
-
-ANSI16 degradation: on a 16-color terminal `resolveColor` collapses tints to
-nearest ANSI slots and hue guarantees CANNOT hold (accepted limitation, same
-category as 16-color syntax). On Ansi16, diff rows MAY fall back to the existing
-16-palette `Git*`-style role background (no separate word-mark tier). The gate is
-asserted only for Indexed256 and Truecolor.
-
-Ownership + override: `Theme::snapshot()` computes `DiffTints` and ships them in
-`ThemeSnapshot` (a small `struct DiffTints { SrgbColor addedRow, removedRow,
-modifiedRow, addedWord, removedWord, modifiedWord; }`). A theme MAY override any
-tint with an explicit color; an override is CLAMPED to satisfy the same gate (not
-rejected, not silently trusted) — the derivation path and the override path both
-end in the same clamp so the guarantee is unconditional. Default = derived.
-
-Contract update (review MUST): `include/ssg/color.h:5-12` currently says only the
-16 palette colors are authoritative and adaptation "introduces no color into the
-snapshot/API". `ThemeSnapshot::diffTints` extends the authoritative color set, so
-step 3c updates that contract comment (and clarifies `SrgbColor::fromSerializedChannels`
-at `Theme.h:20-26`) to bless Theme-INTERNAL derivation while keeping the rule that
-no RENDERER/CLIENT mints color — the client still only depth-adapts.
+Moved to `doc/spec-color.md`, which is the document of record for color and
+theming. The derivation described here previously -- desaturated blends toward
+Background with per-tier weights and a contrast-guaranteed readability search --
+was retired; diff tints are now the theme's flat Git anchor colors. See that
+document's History section.
 
 ### Mechanism choice: tree-sitter (OOTB) over LSP for syntax
 
@@ -547,17 +471,9 @@ Edge/complexity notes:
     simultaneously, including trailing blank cells tinted; plus precedence cases
     (search suppresses tint, selection suppresses tint, word mark over row tint,
     search-over-selection preserved).
-  - diff colors (readability property oracle): for each shipped theme, on RESOLVED
-    RGBs at Truecolor AND Indexed256 (post-`resolveColor`, not the ideal), for
-    EVERY (diff tint x syntax-scope foreground) pair and (diff tint x default
-    Foreground), assert the RELATIVE readability rule `contrast(tint, fg) >=
-    max(kFloorContrast, kRetainContrast * contrast(Background, fg))` (WCAG luminance
-    ratio, computed INDEPENDENTLY in the test). Plus row-visibility:
-    `deltaE(row tint, Background) >= ~2` at Truecolor (a diff row reads as diffed).
-    Strong kind/word deltaE is NOT asserted per-theme (best-effort; see Design).
-    Exercise the derivation across the default theme (derived washes kept), a
-    near-monochrome-ANCHOR fixture and a light-background fixture (readability holds
-    via the fixed fallback), confirming readability is total.
+  - diff colors: RETIRED. This described a readability search that no longer
+    exists; diff tints are the theme's flat Git anchor colors. See
+    `doc/spec-color.md`.
   - color path: `resolveColor(tint, Indexed256)` yields a 256-cube/gray index
     (16..255, not an ansi16 slot) and `resolveColor(tint, Truecolor)` is identity —
     confirming tints break the 16 without touching the palette; and the Ansi16
