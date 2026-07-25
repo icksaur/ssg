@@ -465,6 +465,11 @@ TEST(realBinaryWideGlyphOutputMatchesRender) {
                                   {"file.open", runtime->revision(),
                                    std::string{"wide.txt"}})
                     .accepted());
+    // The real binary above was launched with wide.txt as its file
+    // ARGUMENT (captureFrames(SSG_APP_BINARY, wide)), so apps/ssg_main.cpp's
+    // startup focuses the editor after opening it (see "Always open Files
+    // sidebar at startup"); mirror that here so the reference matches.
+    runtime->focusEditor();
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) { fs::remove_all(root); return; }

@@ -1706,6 +1706,8 @@ void EditorRuntime::resetKeymapToDefault() {
     impl_->keymap = defaultTerminalKeymap();
 }
 
+void EditorRuntime::focusEditor() { impl_->shell.focusEditor(); }
+
 EditorRuntimeCreateResult EditorRuntime::create(EditorRuntimeConfig config) {
     try {
         auto cwd = canonicalDirectory(config.cwd);

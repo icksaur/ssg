@@ -646,7 +646,15 @@ int main(int argc, char** argv) {
     // without a separate keystroke, whether or not one was given on the
     // command line. Uses the SAME panel.show_files command Escape-B/
     // Escape-O reach interactively; startup introduces no new mechanism.
-    (void)runtime.dispatch(client, {"panel.show_files", runtime.revision(), {}});
+    // Failure here is unexpected (the Files provider always exists in a
+    // freshly created runtime) but not fatal -- print a diagnostic and
+    // keep starting, same as other startup problems below.
+    if (auto const panelResult = runtime.dispatch(
+            client, {"panel.show_files", runtime.revision(), {}});
+        !panelResult.accepted()) {
+        std::fprintf(stderr, "ssg: could not open Files sidebar: %s\n",
+                    panelResult.message.c_str());
+    }
 
     // doc/spec-config.md's auto-reload: watches the SAME path just loaded
     // above, on a background thread, and wakes the main loop's select() to
@@ -662,8 +670,15 @@ int main(int argc, char** argv) {
 
     if (target.file) {
         if (fs::exists(target.cwd / *target.file)) {
-            (void)runtime.dispatch(
+            auto const openResult = runtime.dispatch(
                 client, {"file.open", runtime.revision(), *target.file});
+            // panel.show_files (above) moved focus to the panel; when a
+            // file was explicitly named on the command line, the user
+            // wants to start editing it, so move focus back to the
+            // editor rather than leaving it on the sidebar.
+            if (openResult.accepted()) {
+                runtime.focusEditor();
+            }
         }
     }
     STARTUP_MARK("post_open");
