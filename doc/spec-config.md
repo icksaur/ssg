@@ -320,7 +320,13 @@ already established:
   adds custom bindings FIRST (with a first stroke that happens to match
   the current leader) will have those rewritten too on a later
   `set_leader` call. Script authors who want to avoid this should call
-  `set_leader` first, before any custom `keymap.bind` calls.
+  `set_leader` first, before any custom `keymap.bind` calls. **Changing
+  the leader away from literal `Escape` also silently drops the free
+  Alt-as-alternate-leader equivalence** most terminals provide today —
+  see `doc/spec-mod-keys.md` for why that overlap only exists for
+  `Escape` specifically (a byte-encoding coincidence of how terminals
+  send Alt, not a feature this spec built) and is not carried forward by
+  `set_leader` to whatever new stroke is chosen.
 
 **Sequence syntax reuses the existing stroke encoding, not a new Lua
 argument shape.** A `KeySequence` is a list of strokes, which the flat
