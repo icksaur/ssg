@@ -641,21 +641,6 @@ int main(int argc, char** argv) {
     auto const appliedInitScript = loadInitScript(runtime);
     STARTUP_MARK("post_init_script");
 
-    // Always open the Files sidebar at startup (before any file-argument
-    // open below) -- lets a user immediately browse for a file to open
-    // without a separate keystroke, whether or not one was given on the
-    // command line. Uses the SAME panel.show_files command Escape-B/
-    // Escape-O reach interactively; startup introduces no new mechanism.
-    // Failure here is unexpected (the Files provider always exists in a
-    // freshly created runtime) but not fatal -- print a diagnostic and
-    // keep starting, same as other startup problems below.
-    if (auto const panelResult = runtime.dispatch(
-            client, {"panel.show_files", runtime.revision(), {}});
-        !panelResult.accepted()) {
-        std::fprintf(stderr, "ssg: could not open Files sidebar: %s\n",
-                    panelResult.message.c_str());
-    }
-
     // doc/spec-config.md's auto-reload: watches the SAME path just loaded
     // above, on a background thread, and wakes the main loop's select() to
     // re-evaluate it when it changes. Absent if the config root itself
@@ -668,17 +653,22 @@ int main(int argc, char** argv) {
         initScriptWatcher.emplace(*scriptPath, appliedInitScript);
     }
 
+    // Set when a command-line file argument is successfully opened below;
+    // used after the deferred-startup panel.show_files dispatch (in the
+    // render loop) to re-assert editor focus, since that dispatch's
+    // showPanelProvider side effect moves focus to the panel.
+    bool fileOpenedAtStartup = false;
     if (target.file) {
         if (fs::exists(target.cwd / *target.file)) {
             auto const openResult = runtime.dispatch(
                 client, {"file.open", runtime.revision(), *target.file});
-            // panel.show_files (above) moved focus to the panel; when a
-            // file was explicitly named on the command line, the user
-            // wants to start editing it, so move focus back to the
-            // editor rather than leaving it on the sidebar.
-            if (openResult.accepted()) {
-                runtime.focusEditor();
-            }
+            fileOpenedAtStartup = openResult.accepted();
+            // panel.show_files (dispatched later, once the deferred tree
+            // scan below completes) moves focus to the panel as a side
+            // effect; when a file was explicitly named on the command
+            // line, the user wants to start editing it, so focus is
+            // re-asserted onto the editor AFTER that dispatch runs (see
+            // fileOpenedAtStartup's use below), not here.
         }
     }
     STARTUP_MARK("post_open");
@@ -957,6 +947,34 @@ int main(int argc, char** argv) {
                     // enrichment (tree scan, syntax) deferred off the startup
                     // path.  It publishes on the next snapshot at the loop top.
                     runtime.primeDeferred();
+                    // Always open the Files sidebar once the workspace tree
+                    // scan above has populated the "filesystem" tree
+                    // provider -- lets a user immediately browse for a file
+                    // to open without a separate keystroke. Uses the SAME
+                    // panel.show_files command Escape-B/Escape-O reach
+                    // interactively; this is not a new mechanism, only
+                    // sequenced AFTER primeDeferred() rather than before
+                    // it: dispatching it earlier (pre-loop, before the
+                    // deferred tree scan has run) would fail with "files
+                    // tree provider is unavailable" every startup, since
+                    // the M10 fast-startup path defers registering that
+                    // provider until exactly this point.
+                    if (auto const panelResult = runtime.dispatch(
+                            client, {"panel.show_files", runtime.revision(), {}});
+                        !panelResult.accepted()) {
+                        std::fprintf(stderr, "ssg: could not open Files sidebar: %s\n",
+                                    panelResult.message.c_str());
+                    }
+                    // panel.show_files (just above) moves focus to the
+                    // panel as a side effect (ShellState::showPanelProvider
+                    // -> togglePanel); when a file was explicitly named on
+                    // the command line and successfully opened earlier, the
+                    // user wants to start editing it, so re-assert editor
+                    // focus here, AFTER panel.show_files, so it's the final
+                    // word on where focus lands.
+                    if (fileOpenedAtStartup) {
+                        runtime.focusEditor();
+                    }
                     continue;
                 }
                 writeAll(frame);
