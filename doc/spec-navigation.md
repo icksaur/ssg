@@ -143,7 +143,8 @@ branching and hard-coded chords with keymap-driven local resolution.
 The renderer marks the focused region using the active/inactive role split
 already present for the panel, generalized to each surface.  The terminal cursor
 is placed in the focused surface: the caret in `editor`, the selected tree row in
-`panel`, the prompt input position in `prompt`.  When a client's reported leader
+`panel`, the prompt input position in `prompt`.  (Both rules are restated as
+normative in `doc/spec-ux.md`, the UX document of record.)  When a client's reported leader
 sequence is non-empty, the library places a leader hint in that client's status
 area in a distinct theme role.
 

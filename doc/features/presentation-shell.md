@@ -104,6 +104,9 @@ Normal mode has the following top-to-bottom and left-to-right composition. All
 geometry is expressed in monospace cells by `ShellViewState`; CSS pixels,
 terminal cells, and desktop coordinates are renderer concerns.
 
+Screen layout, focus and cursor rules are specified in `doc/spec-ux.md`; this
+table is the server/client contract for emitting them.
+
 | Region | Placement | Contents and behavior |
 |---|---|---|
 | Header | Full width, fixed first row | Active command or palette query, current workspace-relative path, and editor mode. Fields collapse by server-provided rank when space is limited. |
