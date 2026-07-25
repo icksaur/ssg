@@ -244,6 +244,16 @@ KeymapViewState defaultTerminalKeymap() {
     bind(seq({"Escape", "ArrowRight"}), "cursor.word_right", "editor");
     bind(seq({"Escape", "Shift+ArrowLeft"}), "select.word_left", "editor");
     bind(seq({"Escape", "Shift+ArrowRight"}), "select.word_right", "editor");
+    // Alt+Left/Right is the conventional word-nav shortcut, but unlike
+    // Alt+<letter> it does NOT arrive "for free" via the Escape/Alt byte
+    // collision (see doc/spec-mod-keys.md): arrow keys use the CSI
+    // modifier-parameter form, which decode_input already parses into a
+    // single alt=true stroke, so this is an explicit, deliberate second
+    // binding to the same commands as the Escape-led chords above.
+    bind(seq({"Alt+ArrowLeft"}), "cursor.word_left", "editor");
+    bind(seq({"Alt+ArrowRight"}), "cursor.word_right", "editor");
+    bind(seq({"Alt+Shift+ArrowLeft"}), "select.word_left", "editor");
+    bind(seq({"Alt+Shift+ArrowRight"}), "select.word_right", "editor");
 
     bind(seq({"ArrowDown"}), "tree.select_next", "panel");
     bind(seq({"ArrowUp"}), "tree.select_previous", "panel");

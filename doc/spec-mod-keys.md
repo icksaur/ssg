@@ -59,7 +59,63 @@ resolves against the keymap identically either way.
   forward automatically — `Ctrl+Space` sent as a real terminal byte
   sequence looks nothing like `Alt+<key>`'s encoding.
 
-## What Emacs does (the same trick, but deliberate)
+## Alt as a deliberately-configured modifier (first case: word navigation)
+
+Word navigation surfaced a case where the free Escape/Alt collision
+above does **not** apply: `Escape+ArrowLeft`/`Escape+ArrowRight` (bound to
+`cursor.word_left`/`cursor.word_right`, see `doc/spec-keymap.md`) work
+today, but `Alt+ArrowLeft`/`Alt+ArrowRight` — the conventional editor
+shortcut for the same action — did **not**, even though `Alt+<letter>`
+chords work "for free" per the section above. This is not a bug in the
+free-Alt trick; it is the trick's documented boundary (Consequences,
+above) meeting a real case for the first time.
+
+**Why arrows are different from letters.** The free Escape/Alt collision
+exists only because `Alt+<letter>` and `Escape` `<letter>` happen to be
+byte-identical (`meta sends escape`: raw `ESC` immediately followed by the
+plain key byte). Arrow keys do not have a "plain key byte" to prefix —
+they are already multi-byte CSI sequences (`ESC [ D` for `ArrowLeft`).
+Modern terminals that support the modifier-parameter CSI form (`ESC [ 1 ;
+m D`, the same `modifyOtherKeys`-descended convention `decode_input`
+already parses for `Shift`/`Ctrl`+arrow — see `apps/ssg_terminal.cpp`)
+encode `Alt+ArrowLeft` as `ESC [ 1 ; 3 D` (`m=3` = `1 + bit1(Alt)`): a
+single stroke carrying `alt=true`, not two strokes that happen to look
+like an `Escape`-prefixed chord. `decode_input` already parses this form
+correctly (`KeyStroke{"ArrowLeft", .alt=true}`) and always has —
+`tests/test_ssg_app.cpp`'s `decodeInputModifiedArrows` covers it — but
+until this change nothing in the keymap was bound to that stroke, so the
+input decoded fine and then simply matched no binding (a silent no-op,
+same "unbound stroke" behavior as any other unmapped key).
+
+**The fix**: rather than relying on more byte-level coincidence (there
+isn't one to rely on for arrows), `Alt+ArrowLeft`/`Alt+ArrowRight`/
+`Alt+Shift+ArrowLeft`/`Alt+Shift+ArrowRight` are now EXPLICIT entries in
+the compiled-in default keymap (`defaultTerminalKeymap()`,
+`src/EditorRuntime.cpp`), bound to the exact same commands as their
+`Escape`-prefixed counterparts (`cursor.word_left`/`cursor.word_right`/
+`select.word_left`/`select.word_right`). Two independent sequences
+resolving to the same command is not a new mechanism — `KeymapViewState`
+already allows any number of bindings per command id (see
+`KeymapMatcher::preferredBinding`'s existing "multiple bindings, pick the
+shortest" handling) — this is simply the first curated binding to use
+that shape deliberately, as a documented design choice rather than a
+coincidence: **Alt is graduated from "accidental Escape-collision" to a
+first-class, explicitly-bound secondary modifier**, at least for this one
+pair of commands.
+
+This does not generalize automatically to other arrow-adjacent keys
+(`Home`/`End`/`PageUp`/`PageDown` etc.) or other modifiers — each would
+need its own explicit binding decision the same way, since none of them
+inherit reliability from the Escape/Alt byte collision either. It also
+does not change anything about `keymap.bind`'s Lua surface: `Alt+` was
+already a valid stroke-modifier token in `KeyCodec::parseStroke`'s
+grammar (`Ctrl+`/`Alt+`/`Meta+`/`Shift+`, any combination) before this
+change, and remains the only place a user configures new bindings — no
+new Lua API, no new modifier syntax, no new resolution mechanism. What
+changed is which sequences the COMPILED-IN default keymap curates, not
+what's expressible.
+
+
 
 Emacs's terminal input model is functionally identical, but documented
 as first-class behavior rather than incidental:
@@ -192,6 +248,12 @@ overlap):
 - Does SSG want to formalize (test, document, guarantee) the current
   Alt-as-Escape-prefix equivalence for the shipped `Escape` leader
   specifically, given it is currently a pure byte-encoding coincidence?
+  (Partially answered for one case: `Alt+ArrowLeft`/`Alt+ArrowRight` are
+  now an explicit, tested, non-coincidental binding — see "Alt as a
+  deliberately-configured modifier" above. The general question — whether
+  EVERY `Escape`-led chord should also get an explicit `Alt`-prefixed
+  alternate binding, vs. deciding this case-by-case as each is requested
+  — remains open.)
 - Should `keymap.bind`/`keymap.set_leader` (see `doc/spec-config.md`)
   expose any notion of "also accept this alternate stroke" for a chord,
   to let a user deliberately restore an Alt-equivalent fast path after

@@ -206,6 +206,25 @@ TEST(curatedKeymapResolvesPerContext) {
         *ssg::KeyCodec{}.parseSequence({"Escape", "Shift+ArrowRight"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(selectWordRight, "editor").commandId,
               std::string{"select.word_right"});
+
+    // Alt+Left/Right is a deliberate, explicit alternate binding to the
+    // SAME commands as the Escape-led chords above (doc/spec-mod-keys.md):
+    // arrow keys do not get the free Escape/Alt byte collision that
+    // Alt+<letter> does, so this pair had to be bound explicitly.
+    const auto altWordLeft = *ssg::KeyCodec{}.parseSequence({"Alt+ArrowLeft"});
+    ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(altWordLeft, "editor").commandId,
+              std::string{"cursor.word_left"});
+    const auto altWordRight = *ssg::KeyCodec{}.parseSequence({"Alt+ArrowRight"});
+    ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(altWordRight, "editor").commandId,
+              std::string{"cursor.word_right"});
+    const auto altSelectWordLeft =
+        *ssg::KeyCodec{}.parseSequence({"Alt+Shift+ArrowLeft"});
+    ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(altSelectWordLeft, "editor").commandId,
+              std::string{"select.word_left"});
+    const auto altSelectWordRight =
+        *ssg::KeyCodec{}.parseSequence({"Alt+Shift+ArrowRight"});
+    ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(altSelectWordRight, "editor").commandId,
+              std::string{"select.word_right"});
 }
 
 TEST(addCursorChordProducesMultipleSelections) {

@@ -197,7 +197,12 @@ terminal has no browser-reserved chords, so none is excluded):
   `text.newline`, `Backspace` → `text.delete_backward`, `Delete` →
   `text.delete_forward`, `[Escape, ArrowLeft]` → `cursor.word_left`,
   `[Escape, ArrowRight]` → `cursor.word_right`, `[Escape, Shift+ArrowLeft]` →
-  `select.word_left`, `[Escape, Shift+ArrowRight]` → `select.word_right`.
+  `select.word_left`, `[Escape, Shift+ArrowRight]` → `select.word_right`,
+  `Alt+ArrowLeft` → `cursor.word_left`, `Alt+ArrowRight` →
+  `cursor.word_right`, `Alt+Shift+ArrowLeft` → `select.word_left`,
+  `Alt+Shift+ArrowRight` → `select.word_right` (a deliberate, explicit
+  binding, not the incidental Escape/Alt byte collision — see
+  `doc/spec-mod-keys.md`'s "Alt as a deliberately-configured modifier").
 - `panel`: `ArrowDown` → `tree.select_next`, `ArrowUp` → `tree.select_previous`,
   `Enter` → `tree.activate`.
 - `prompt`: `Enter` → `prompt.submit`, `[Escape, Escape]` → `prompt.cancel`,
