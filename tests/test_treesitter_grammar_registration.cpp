@@ -16,10 +16,14 @@
 #include <vector>
 
 // The C grammar's entry point, declared by hand rather than by including
-// tree-sitter's headers, exactly as a host linking its own grammar would.  Its
-// real return type is `const TSLanguage*`; an opaque pointer is all the seam
-// needs, and all a caller must be able to name.
-extern "C" const void* tree_sitter_c();
+// tree-sitter's headers, exactly as a host linking its own grammar would.
+// TSLanguage is left INCOMPLETE: naming the real return type keeps this
+// declaration compatible with the definition -- declaring it as returning
+// `const void*` would be a type mismatch across translation units -- while
+// still requiring no tree-sitter header, since an incomplete type is all a
+// pointer return needs.
+struct TSLanguage;
+extern "C" const TSLanguage* tree_sitter_c();
 
 namespace {
 

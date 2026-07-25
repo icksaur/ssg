@@ -128,9 +128,8 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_link_libraries(test_treesitter_syntax PRIVATE ssg)
     add_test(NAME test_treesitter_syntax COMMAND test_treesitter_syntax)
 
-    # A separate executable because TreeSitterParser's query cache is
-    # process-wide: run in the same process as the golden tests, this check
-    # is vacuous (they populate the cache first).
+    # A separate executable so no earlier test has compiled a query first,
+    # which would make these checks vacuous.
     add_executable(test_treesitter_embedded_queries
         ${SSG_SOURCE_DIR}/tests/test_treesitter_embedded_queries.cpp
     )
@@ -144,11 +143,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_link_libraries(test_treesitter_embedded_queries PRIVATE ssg)
     add_test(NAME test_treesitter_embedded_queries
              COMMAND test_treesitter_embedded_queries)
-    # Renames vendor files while it runs, so it must not overlap the golden
-    # tests that read them.
     set_tests_properties(test_treesitter_embedded_queries PROPERTIES
-        RUN_SERIAL TRUE)
-    set_tests_properties(test_treesitter_syntax PROPERTIES
         RUN_SERIAL TRUE)
 
     # The public registration seam.  Deliberately does NOT get the vendored

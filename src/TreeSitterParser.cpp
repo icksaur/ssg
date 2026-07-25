@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -88,13 +89,17 @@ std::shared_ptr<SyntaxParser> makeTreeSitterParser() {
     return std::make_shared<TreeSitterParser>();
 }
 
-// Compiled queries for one parser, keyed by the language id that produced them.
+// Compiled queries for one parser, keyed by the grammar's INDEX in that
+// parser's registration list.  Not keyed by language id: the public contract
+// does not require ids to be unique or non-empty across registrations, so two
+// valid-looking grammars could collide on a string key and silently share a
+// compiled query.  An index is unique by construction.
 struct TreeSitterParser::QueryCache {
     std::mutex mutex;
-    std::unordered_map<std::string,
+    std::unordered_map<std::size_t,
                        std::unique_ptr<TSQuery, decltype(&ts_query_delete)>>
         compiled;
-    std::unordered_set<std::string> failed;
+    std::unordered_set<std::size_t> failed;
 };
 
 TreeSitterParser::TreeSitterParser()
@@ -106,24 +111,24 @@ TreeSitterParser::TreeSitterParser(std::vector<TreeSitterGrammar> grammars)
 
 TreeSitterParser::~TreeSitterParser() = default;
 
-const TreeSitterGrammar* TreeSitterParser::grammarFor(
+std::optional<std::size_t> TreeSitterParser::grammarIndexFor(
     const LanguageId& language) const {
     const auto& id = language.value();
-    for (const auto& grammar : grammars_) {
+    for (std::size_t index = 0; index < grammars_.size(); ++index) {
+        const auto& grammar = grammars_[index];
         if (grammar.language == nullptr) continue;
         for (const auto& alias : grammar.languageIds) {
-            if (!alias.empty() && alias == id) return &grammar;
+            if (!alias.empty() && alias == id) return index;
         }
     }
-    return nullptr;
+    return std::nullopt;
 }
 
 namespace {
 
 const TSQuery* queryFor(TreeSitterParser::QueryCache& cache,
-                        const TreeSitterGrammar& grammar) {
+                        const TreeSitterGrammar& grammar, std::size_t key) {
     std::lock_guard<std::mutex> lock{cache.mutex};
-    const std::string& key = grammar.languageIds.front();
     if (const auto found = cache.compiled.find(key); found != cache.compiled.end()) {
         return found->second.get();
     }
@@ -224,7 +229,7 @@ std::vector<SyntaxSpan> spansFromBytes(const std::vector<SyntaxScope>& perByte) 
 } // namespace
 
 bool TreeSitterParser::hasGrammar(const LanguageId& language) const {
-    return grammarFor(language) != nullptr;
+    return grammarIndexFor(language).has_value();
 }
 
 SyntaxParseOutput TreeSitterParser::parse(const SyntaxParseRequest& request) {
@@ -235,11 +240,12 @@ SyntaxParseOutput TreeSitterParser::parse(const SyntaxParseRequest& request) {
         return output;
     }
 
-    const auto* grammar = grammarFor(request.language());
-    if (grammar == nullptr) {
+    const auto grammarIndex = grammarIndexFor(request.language());
+    if (!grammarIndex) {
         output.status = SyntaxParseStatus::GrammarUnavailable;
         return output;
     }
+    const TreeSitterGrammar* grammar = &grammars_[*grammarIndex];
 
     std::unique_ptr<TSParser, decltype(&ts_parser_delete)> parser(
         ts_parser_new(), &ts_parser_delete);
@@ -260,7 +266,7 @@ SyntaxParseOutput TreeSitterParser::parse(const SyntaxParseRequest& request) {
         return output;
     }
 
-    const TSQuery* query = queryFor(*queries_, *grammar);
+    const TSQuery* query = queryFor(*queries_, *grammar, *grammarIndex);
     if (query == nullptr) {
         output.status = SyntaxParseStatus::Failed;
         return output;

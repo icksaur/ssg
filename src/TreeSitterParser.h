@@ -3,7 +3,9 @@
 #include <ssg/SyntaxModel.h>
 #include <ssg/TreeSitterGrammars.h>
 
+#include <cstddef>
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace ssg {
@@ -25,7 +27,9 @@ public:
 
 private:
 
-    [[nodiscard]] const TreeSitterGrammar* grammarFor(
+    // Index rather than pointer: the compiled-query cache is keyed by it, since
+    // language ids are host-supplied and not guaranteed unique.
+    [[nodiscard]] std::optional<std::size_t> grammarIndexFor(
         const LanguageId& language) const;
 
     std::vector<TreeSitterGrammar> grammars_;

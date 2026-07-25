@@ -1,107 +1,99 @@
-// The decisive check that highlight queries are compiled into the binary rather
-// than read from the source tree.
+// Proves highlight queries are carried IN the binary rather than read from the
+// source tree at runtime (doc/spec-grammar-pipeline.md Phase A).
 //
-// This is a SEPARATE executable on purpose.  TreeSitterParser's compiled-query
-// cache is a function-local static, so it is process-wide, not per-parser: any
-// earlier test that highlights a language leaves that language's query cached
-// and makes this check vacuous.  Constructing a fresh parser is NOT enough --
-// only a fresh process is.  (Verified by perturbation: run in-process alongside
-// the golden tests, a reverted-to-file-reading implementation passes.)
-#include "TreeSitterParser.h"
+// A separate executable on purpose: TreeSitterParser compiles a query lazily and
+// caches it, so any earlier test that highlights a language would make these
+// checks vacuous. Only a fresh process is sufficient -- a fresh parser is not.
+// (Verified by perturbation: run in-process alongside the golden tests, a
+// reverted-to-file-reading implementation passed.)
+//
+// This does NOT rename or delete anything in the checkout. An earlier version
+// hid the vendored .scm files and highlighted, which proved the point but left a
+// broken tree if the process died before its restore ran. The same claim holds
+// without touching the tree: query text is materialized into each grammar at
+// construction, so if it is non-empty and byte-identical to the vendor file it
+// cannot have come from a file the parser never opens -- and that no such open
+// exists is pinned by the source scan in tests/test_treesitter_syntax.cpp.
+#include <ssg/TreeSitterGrammars.h>
+
 #include "test_helpers.h"
 
 #include <filesystem>
-#include <memory>
+#include <fstream>
+#include <iterator>
 #include <string>
-#include <system_error>
+#include <string_view>
 #include <utility>
 #include <vector>
+
+namespace ssg {
+// Defined by the generated translation unit.
+std::string_view embeddedHighlightQuery(std::string_view key);
+}  // namespace ssg
 
 namespace {
 
 using namespace ssg;
 namespace fs = std::filesystem;
 
-SyntaxScope scopeAtOffset(const std::vector<SyntaxSpan>& spans, std::size_t offset) {
-    for (const auto& span : spans) {
-        if (span.begin.value() <= offset && offset < span.end.value()) {
-            return span.scope;
-        }
-    }
-    return SyntaxScope::PlainText;
+std::string readFile(const fs::path& path) {
+    std::ifstream input{path, std::ios::binary};
+    return {std::istreambuf_iterator<char>{input}, std::istreambuf_iterator<char>{}};
 }
 
-TEST(highlightingWorksWithTheVendorQueryFilesRemoved) {
+TEST(everyVendoredGrammarCarriesItsQueryTextInMemory) {
+    const auto grammars = vendoredTreeSitterGrammars();
+    ASSERT_EQ(grammars.size(), std::size_t{6});
+    for (const auto& grammar : grammars) {
+        ASSERT_FALSE(grammar.languageIds.empty());
+        ASSERT_TRUE(grammar.language != nullptr);
+        // The query travels with the grammar; nothing is resolved later from a
+        // path, so there is no point at which a missing file could degrade it.
+        ASSERT_FALSE(grammar.highlightQuery.empty());
+    }
+}
+
+// Reference-implementation oracle: the test reads the vendor file itself and
+// compares, so a generator that truncates, mis-escapes, or drops an entry fails
+// here rather than producing subtly wrong highlighting.
+TEST(embeddedQueryTextMatchesTheVendorFilesByteForByte) {
     const fs::path vendorRoot = fs::path{SSG_TREESITTER_VENDOR_DIR};
-    const std::vector<std::string> grammarDirs{
-        "tree-sitter-c",          "tree-sitter-cpp",
-        "tree-sitter-javascript", "tree-sitter-typescript",
-        "tree-sitter-c-sharp",    "tree-sitter-lua"};
-
-    // Establish the premise: these are the files the old implementation read.
-    std::vector<fs::path> queryFiles;
-    for (const auto& dir : grammarDirs) {
-        auto path = vendorRoot / dir / "queries" / "highlights.scm";
-        if (fs::exists(path)) queryFiles.push_back(path);
-    }
-    ASSERT_FALSE(queryFiles.empty());
-
-    // Rename rather than delete, and restore unconditionally, so a crash here
-    // leaves a recoverable checkout.
-    std::vector<std::pair<fs::path, fs::path>> hidden;
-    for (const auto& path : queryFiles) {
-        auto stashed = path;
-        stashed += ".hidden-by-test";
-        std::error_code error;
-        fs::rename(path, stashed, error);
-        if (!error) hidden.emplace_back(path, stashed);
-    }
-    struct Restore {
-        const std::vector<std::pair<fs::path, fs::path>>& entries;
-        ~Restore() {
-            for (const auto& [original, stashed] : entries) {
-                std::error_code error;
-                fs::rename(stashed, original, error);
-            }
-        }
-    } restore{hidden};
-    ASSERT_EQ(hidden.size(), queryFiles.size());
-
-    // Every grammar, not just one: a partially-embedded table (the generator's
-    // most likely failure) would otherwise pass on whichever grammar came first.
-    const std::vector<std::pair<std::string, std::string>> cases{
-        {"c", "int main() { return 0; }\n"},
-        {"cpp", "class Widget { int value; };\n"},
-        {"javascript", "function main() { return 0; }\n"},
-        {"typescript", "function main(): number { return 0; }\n"},
-        {"csharp", "class Widget { int Value; }\n"},
-        {"lua", "local function main() return 0 end\n"},
+    const std::vector<std::pair<std::string, std::string>> keyToFile{
+        {"c", "tree-sitter-c/queries/highlights.scm"},
+        {"cpp", "tree-sitter-cpp/queries/highlights.scm"},
+        {"javascript", "tree-sitter-javascript/queries/highlights.scm"},
+        {"typescript", "tree-sitter-typescript/queries/highlights.scm"},
+        {"csharp", "tree-sitter-c-sharp/queries/highlights.scm"},
+        {"lua", "tree-sitter-lua/queries/highlights.scm"},
     };
+    for (const auto& [key, relative] : keyToFile) {
+        const auto expected = readFile(vendorRoot / relative);
+        ASSERT_FALSE(expected.empty());
+        ASSERT_EQ(std::string{embeddedHighlightQuery(key)}, expected);
+    }
+    // An unknown key must be observably absent rather than fabricated, or the
+    // check above could pass against a table that returns something for
+    // everything.
+    ASSERT_TRUE(embeddedHighlightQuery("no-such-grammar").empty());
+}
 
-    auto parser = std::make_shared<TreeSitterParser>();
-    SyntaxModel model{parser};
-    std::uint64_t revision = 1;
-    for (const auto& [language, source] : cases) {
-        const auto request =
-            model.request(Revision{revision++}, LanguageId{language}, source);
-        ASSERT_TRUE(request.accepted());
-        if (!request.accepted()) continue;
-        const auto output = model.run(*request.request);
-        ASSERT_FALSE(output.spans.empty());
-
-        // With no query loaded the parse still succeeds but every span is
-        // PlainText, so a non-plain scope proves the query was available.
-        bool highlighted = false;
-        for (const auto& span : output.spans) {
-            if (span.scope != SyntaxScope::PlainText) highlighted = true;
-        }
-        ASSERT_TRUE(highlighted);
+// The inherited-query prepend is a real artifact accommodation: tree-sitter's
+// "; inherits:" directive is a convention its query compiler ignores, so C++ and
+// TypeScript would silently lose their base grammar's rules without it.
+TEST(derivedGrammarsCarryTheirInheritedQueryText) {
+    for (const auto& grammar : vendoredTreeSitterGrammars()) {
+        const auto& id = grammar.languageIds.front();
+        const bool derived = id == "cpp" || id == "typescript";
+        ASSERT_EQ(!grammar.inheritedHighlightQuery.empty(), derived);
     }
 }
 
 }  // namespace
 
 int main() {
-    RUN(highlightingWorksWithTheVendorQueryFilesRemoved);
-    return failed == 0 ? 0 : 1;
+    RUN(everyVendoredGrammarCarriesItsQueryTextInMemory);
+    RUN(embeddedQueryTextMatchesTheVendorFilesByteForByte);
+    RUN(derivedGrammarsCarryTheirInheritedQueryText);
+    std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
+    return failed > 0 ? 1 : 0;
 }
