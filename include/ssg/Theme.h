@@ -242,6 +242,17 @@ struct ThemeDefineResult {
     ThemeSnapshot const& current,
     ThemeDefineArguments const& arguments) noexcept;
 
+// The compiled-in built-in theme: EditorRuntime::create()'s starting
+// ThemeSnapshot, before any init.lua theme.define() call runs. This is
+// the ONE source of the default theme's colors -- there is no data-file
+// or other loadable-config path (init.lua's theme.define overrides it
+// entirely in memory, per doc/spec-config.md); a second, independently
+// hand-maintained copy of these values would silently drift with nothing
+// to catch it, so tests requiring a realistic full-16-color theme call
+// this function directly rather than parsing a duplicate. Defined in
+// src/DefaultTheme.cpp, not Theme.cpp -- see that file's header comment.
+[[nodiscard]] ThemeSnapshot defaultTheme() noexcept;
+
 struct ThemeCommandDescriptor {
     std::string_view id;
 };

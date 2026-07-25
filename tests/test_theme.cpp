@@ -91,48 +91,6 @@ std::string hexOf(SrgbColor color) {
     return buffer;
 }
 
-ssg::Theme bundledTheme() {
-    std::ifstream input(SSG_THEME_PATH);
-    if (!input) throw std::runtime_error("failed to open bundled theme");
-    std::string name;
-    std::vector<IndexedColor> colors;
-    std::vector<RoleMapping> roleMappings;
-    std::vector<SyntaxMapping> syntaxMappings;
-    std::string kind;
-    while (input >> kind) {
-        if (kind == "name") {
-            input >> name;
-        } else if (kind == "palette") {
-            unsigned index = 0;
-            unsigned red = 0;
-            unsigned green = 0;
-            unsigned blue = 0;
-            input >> index >> red >> green >> blue;
-            colors.push_back({static_cast<std::uint8_t>(index),
-                              {static_cast<std::uint8_t>(red),
-                               static_cast<std::uint8_t>(green),
-                               static_cast<std::uint8_t>(blue)}});
-        } else if (kind == "role") {
-            std::string roleName;
-            unsigned index = 0;
-            input >> roleName >> index;
-            const auto role = ssg::semanticRoleFromName(roleName);
-            if (!role) throw std::runtime_error("unknown bundled theme role");
-            roleMappings.push_back({*role, static_cast<std::uint8_t>(index)});
-        } else if (kind == "syntax") {
-            std::string scopeName;
-            unsigned index = 0;
-            input >> scopeName >> index;
-            const auto scope = ssg::syntaxScopeFromName(scopeName);
-            if (!scope) throw std::runtime_error("unknown bundled syntax scope");
-            syntaxMappings.push_back({*scope, static_cast<std::uint8_t>(index)});
-        } else {
-            throw std::runtime_error("unknown bundled theme record");
-        }
-    }
-    return {name, colors, roleMappings, syntaxMappings};
-}
-
 double linearChannel(std::uint8_t channel) {
     const double encoded = static_cast<double>(channel) / 255.0;
     return encoded <= 0.04045 ? encoded / 12.92
@@ -324,21 +282,22 @@ TEST(snapshotIsCompleteAndDeterministic) {
               first.indexFor(SyntaxScope::PlainText));
 }
 
-TEST(bundledThemeDataIsCompleteAndConstructible) {
-    ASSERT_NO_THROW(bundledTheme());
-}
-
 TEST(diffTintsAreTheThemesOwnFlatGitAnchorColors) {
     // No desaturation, no dimming, no readability search: each diff kind is
     // exactly the theme's own Git anchor color, used directly as a
     // background. Row and word share that same color; a modified line's
     // word-level marks reuse Added/Removed directly (see Renderer.cpp),
     // so there is no separate fourth "modified word" shade to test either.
-    const auto theme = bundledTheme();
-    const auto snapshot = theme.snapshot();
-    const auto added = theme.palette()[theme.indexFor(SemanticRole::GitAdded)];
-    const auto deleted = theme.palette()[theme.indexFor(SemanticRole::GitDeleted)];
-    const auto modified = theme.palette()[theme.indexFor(SemanticRole::GitModified)];
+    const auto snapshot = ssg::defaultTheme();
+    const auto added =
+        snapshot.palette[snapshot.semanticIndices[static_cast<std::size_t>(
+            SemanticRole::GitAdded)]];
+    const auto deleted =
+        snapshot.palette[snapshot.semanticIndices[static_cast<std::size_t>(
+            SemanticRole::GitDeleted)]];
+    const auto modified =
+        snapshot.palette[snapshot.semanticIndices[static_cast<std::size_t>(
+            SemanticRole::GitModified)]];
 
     ASSERT_EQ(snapshot.diffTints.addedRow, added);
     ASSERT_EQ(snapshot.diffTints.addedWord, added);
@@ -357,7 +316,7 @@ TEST(themeDefineFullTableRoundTripsToAByteIdenticalSnapshot) {
     // proves the whole apply path (name lookup, hex parse, palette
     // replacement, DiffTints/selectionFill recompute) with zero visual
     // ambiguity to eyeball.
-    const auto current = bundledTheme().snapshot();
+    const auto current = ssg::defaultTheme();
     ssg::ThemeDefineArguments arguments;
     for (std::size_t index = 0; index < kAnsiSlotNamesInIndexOrder.size();
          ++index) {
@@ -370,7 +329,7 @@ TEST(themeDefineFullTableRoundTripsToAByteIdenticalSnapshot) {
 }
 
 TEST(themeDefinePartialTableChangesOnlyTheNamedSlotsExactly) {
-    const auto current = bundledTheme().snapshot();
+    const auto current = ssg::defaultTheme();
     ssg::ThemeDefineArguments arguments;
     const auto replacement = SrgbColor{1, 2, 3};
     arguments.colors.emplace("red", hexOf(replacement));
@@ -388,7 +347,7 @@ TEST(themeDefinePartialTableChangesOnlyTheNamedSlotsExactly) {
 }
 
 TEST(themeDefineUnknownSlotNameIsRejectedWithTheOriginalUntouched) {
-    const auto current = bundledTheme().snapshot();
+    const auto current = ssg::defaultTheme();
     ssg::ThemeDefineArguments arguments;
     arguments.colors.emplace("not_a_real_slot", "#112233");
     const auto result = ssg::applyThemeDefine(current, arguments);
@@ -397,7 +356,7 @@ TEST(themeDefineUnknownSlotNameIsRejectedWithTheOriginalUntouched) {
 }
 
 TEST(themeDefineMalformedHexColorIsRejectedWithTheOriginalUntouched) {
-    const auto current = bundledTheme().snapshot();
+    const auto current = ssg::defaultTheme();
     for (auto const* malformed :
          {"not-a-color", "#12345", "#gggggg", "112233", "#12345678"}) {
         ssg::ThemeDefineArguments arguments;
@@ -411,7 +370,7 @@ TEST(themeDefineRejectionIsAllOrNothingNotPartial) {
     // A table with ONE valid entry and ONE invalid entry must reject the
     // whole call -- if it partially applied, this would silently mutate
     // the valid slot despite reporting failure.
-    const auto current = bundledTheme().snapshot();
+    const auto current = ssg::defaultTheme();
     ssg::ThemeDefineArguments arguments;
     arguments.colors.emplace("red", "#112233");
     arguments.colors.emplace("green", "not-a-color");
@@ -419,24 +378,15 @@ TEST(themeDefineRejectionIsAllOrNothingNotPartial) {
     ASSERT_FALSE(result.accepted());
 }
 
-// EditorRuntime::create's compiled-in default theme (src/EditorRuntime.cpp's
-// defaultTheme(), an anonymous-namespace literal not directly reachable from
-// tests) is a SEPARATE hand-authored copy of data/themes/default.theme's
-// values, not something loaded from that file at runtime -- there is no
-// production code path that reads a .theme file (the file-parsing bundledTheme()
-// helper above exists only in this test binary). Two independently
-// hand-maintained sources of the same "default theme" values is exactly the
-// silent-drift hazard sourceAndConfigHaveNoIndependentColorSources (below)
-// exists to prevent for literal color TEXT, but that scan cannot catch two
-// numerically-different tables that are each individually well-formed C++.
-// This oracle closes that gap directly: it builds a runtime with the REAL
-// production defaultTheme() and asserts its published snapshot is
-// byte-identical to bundledTheme().snapshot() (independently parsed from the
-// data file) -- so any future edit to just one of the two literals fails
-// this test immediately, rather than silently drifting.
-TEST(defaultRuntimeThemeMatchesTheBundledThemeFile) {
+// EditorRuntime::create's initial theme must be exactly ssg::defaultTheme()
+// -- the one compiled-in source (see its doc comment in Theme.h) -- and
+// nothing else. This is a wiring regression test, not a drift guard: since
+// there is now only one copy of the default theme's values, nothing can
+// number-for-number drift out of sync with itself; what CAN regress is
+// EditorRuntime::create() silently starting from some other theme.
+TEST(editorRuntimeStartsFromTheDefaultTheme) {
     auto root = std::filesystem::temp_directory_path() /
-                ("ssg_theme_oracle_" + std::to_string(::getpid()));
+                ("ssg_theme_wiring_" + std::to_string(::getpid()));
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root / "workspace");
     ssg::EditorRuntimeConfig config;
@@ -453,7 +403,7 @@ TEST(defaultRuntimeThemeMatchesTheBundledThemeFile) {
     auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (snapshot) {
-        ASSERT_EQ(snapshot->sections().theme, bundledTheme().snapshot());
+        ASSERT_EQ(snapshot->sections().theme, ssg::defaultTheme());
     }
     std::filesystem::remove_all(root);
 }
@@ -479,7 +429,6 @@ TEST(sourceAndConfigHaveNoIndependentColorSources) {
         if (relative.starts_with(".git/") || relative.starts_with("build") ||
             relative.starts_with("doc/") || relative.starts_with("tasks/") ||
             relative.starts_with("vendor/") ||
-            relative.starts_with("data/themes/") ||
             relative == "include/ssg/Theme.h" ||
             // Terminal color-depth adaptation (M9-C): these define the xterm-256
             // and ANSI-16 TERMINAL palettes — hardware swatches a reduced-depth
@@ -515,14 +464,13 @@ int main() {
     RUN(requiresEverySemanticRoleAndSyntaxScopeExactlyOnce);
     RUN(sharedFixtureRolesAreDistinctForEveryTheme);
     RUN(snapshotIsCompleteAndDeterministic);
-    RUN(bundledThemeDataIsCompleteAndConstructible);
     RUN(diffTintsAreTheThemesOwnFlatGitAnchorColors);
     RUN(themeDefineFullTableRoundTripsToAByteIdenticalSnapshot);
     RUN(themeDefinePartialTableChangesOnlyTheNamedSlotsExactly);
     RUN(themeDefineUnknownSlotNameIsRejectedWithTheOriginalUntouched);
     RUN(themeDefineMalformedHexColorIsRejectedWithTheOriginalUntouched);
     RUN(themeDefineRejectionIsAllOrNothingNotPartial);
-    RUN(defaultRuntimeThemeMatchesTheBundledThemeFile);
+    RUN(editorRuntimeStartsFromTheDefaultTheme);
     RUN(sourceAndConfigHaveNoIndependentColorSources);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;

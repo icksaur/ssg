@@ -326,12 +326,10 @@ confirm rather than assume).
 
 - **User-configurable themes (forward-looking, out of scope to IMPLEMENT
   here, but a hard constraint on this fix's DESIGN):** this project's
-  `Theme` class already supports arbitrary palette/role assignment
-  (data-driven `.theme` files, `data/themes/default.theme`); a settings/UI
-  surface for a user to author or switch themes at runtime is planned but
-  not implemented by this spec. The derivation algorithm fixed here MUST
-  be correct for ANY future palette a user supplies — not tuned to the
-  shipped theme's specific numbers. Concretely: the existing
+  `Theme` class already supports arbitrary palette/role assignment (see
+  `theme.define`, `doc/spec-config.md`); the derivation algorithm fixed
+  here MUST be correct for ANY future palette a user supplies — not tuned
+  to the shipped theme's specific numbers. Concretely: the existing
   `nearMonochromeAnchorsUseAReadableDistinctFallback` and
   `lightThemeFallbackRemainsReadableAndDistinct` fixture themes already
   test this generality; add at least one more synthetic fixture theme with

@@ -11,7 +11,7 @@ only color source.
 
 ## Files
 
-`include/ssg/theme.h`, `src/theme.cpp`, `data/themes/`,
+`include/ssg/theme.h`, `src/theme.cpp`, `src/DefaultTheme.cpp`,
 `tests/fixtures/theme_roles.json`, `tests/test_theme.cpp`,
 `cmake/components/theme-model.cmake`
 
