@@ -6,6 +6,7 @@
 
 #include <chrono>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <optional>
@@ -62,9 +63,23 @@ bool pathPromptOpen(ssg::EditorRuntime& runtime) {
     return prompt.has_value() && prompt->kind == ssg::PromptKind::Path;
 }
 
+// The path-taking commands, named exactly. A count threshold would let the set
+// shrink silently; naming them means removing one is a deliberate edit here.
+constexpr std::string_view kPathCommands[] = {
+    "workspace.open_directory", "file.open", "file.save_as", "file.rename",
+    "file.new_directory",
+};
+
+bool isPathCommand(std::string_view id) {
+    for (const auto candidate : kPathCommands) {
+        if (candidate == id) return true;
+    }
+    return false;
+}
+
 // Every path-taking command must announce itself, and the flag must agree with
-// the pathPrompt() accessor. Two independent expressions of the same fact catch
-// a descriptor added to one and forgotten in the other.
+// the pathPrompt() accessor. Three independent expressions of the same fact
+// catch a descriptor added to one and forgotten in the others.
 TEST(pathPromptFlagAgreesWithThePathPromptAccessor) {
     const auto commands = ssg::fileCommandsCommandSet();
     std::size_t flagged = 0;
@@ -76,10 +91,10 @@ TEST(pathPromptFlagAgreesWithThePathPromptAccessor) {
             accessorAccepts = false;
         }
         ASSERT_EQ(descriptor.pathPrompt, accessorAccepts);
+        ASSERT_EQ(descriptor.pathPrompt, isPathCommand(descriptor.id));
         if (descriptor.pathPrompt) ++flagged;
     }
-    // A guard over an empty set proves nothing.
-    ASSERT_TRUE(flagged >= 3);
+    ASSERT_EQ(flagged, std::size(kPathCommands));
 }
 
 // Dispatching a path-taking command with no payload must leave a path prompt
@@ -93,19 +108,45 @@ TEST(everyPathCommandWithoutAPayloadOpensAPathPrompt) {
         if (!descriptor.pathPrompt) continue;
 
         TemporaryDirectory directory;
+        const auto seed = directory.path() / "seed.txt";
+        std::ofstream{seed} << "seed\n";
         auto runtime = makeRuntime(directory.path());
         ASSERT_TRUE(runtime != nullptr);
 
-        // save_as and rename need a document to act on; open and new_directory
-        // do not. Creating one unconditionally keeps the loop uniform.
-        (void)run(*runtime, "file.new");
+        // rename needs a SAVED document; save_as needs any document; open and
+        // new_directory need none. Opening a real file satisfies all three, so
+        // the loop stays uniform.
+        (void)run(*runtime, "file.open", std::string{"seed.txt"});
 
         ASSERT_TRUE(run(*runtime, std::string{descriptor.id}).accepted());
         ASSERT_TRUE(pathPromptOpen(*runtime));
         ++exercised;
     }
 
-    ASSERT_TRUE(exercised >= 3);
+    ASSERT_EQ(exercised, std::size(kPathCommands));
+}
+
+// The precondition must be checked BEFORE the prompt opens, so a user is never
+// asked to type a name that cannot possibly be used. Without this, save_as with
+// nothing open would prompt and then discard the typed name.
+TEST(aPathCommandThatCannotRunRefusesInsteadOfPrompting) {
+    TemporaryDirectory directory;
+    auto runtime = makeRuntime(directory.path());
+    ASSERT_TRUE(runtime != nullptr);
+
+    // No document is open, so there is nothing to save or rename.
+    ASSERT_FALSE(run(*runtime, "file.save_as").accepted());
+    ASSERT_FALSE(pathPromptOpen(*runtime));
+    ASSERT_FALSE(run(*runtime, "file.rename").accepted());
+    ASSERT_FALSE(pathPromptOpen(*runtime));
+
+    // An unnamed buffer has no file to rename, so rename must still refuse --
+    // while save_as, which is how a buffer GETS a name, must now prompt.
+    ASSERT_TRUE(run(*runtime, "file.new").accepted());
+    ASSERT_FALSE(run(*runtime, "file.rename").accepted());
+    ASSERT_FALSE(pathPromptOpen(*runtime));
+    ASSERT_TRUE(run(*runtime, "file.save_as").accepted());
+    ASSERT_TRUE(pathPromptOpen(*runtime));
 }
 
 // The load-bearing behavior: two different path commands prompted in turn must
@@ -201,6 +242,7 @@ TEST(updatingAValueWithNoPromptOpenIsRejected) {
 int main() {
     RUN(pathPromptFlagAgreesWithThePathPromptAccessor);
     RUN(everyPathCommandWithoutAPayloadOpensAPathPrompt);
+    RUN(aPathCommandThatCannotRunRefusesInsteadOfPrompting);
     RUN(submittingAPathPromptRedispatchesTheCommandThatOpenedIt);
     RUN(savingAnUnnamedBufferPromptsAndThenSaves);
     RUN(cancellingAPathPromptRunsNothing);

@@ -34,6 +34,33 @@ CommandHandlerResult openDocumentResult(EditorRuntime::Impl& runtime,
     return runtime.activateDocument(*result.document);
 }
 
+// Why a command cannot run right now, or nullopt if it can. Checked BEFORE the
+// path prompt opens: prompting first and validating after would make the user
+// type a name only to be told there was nothing to save, and would discard what
+// they typed. The same reasons are re-checked by the command itself when the
+// submitted path arrives, since state can change while the prompt is open.
+std::optional<std::string> pathCommandPrecondition(
+    const EditorRuntime::Impl& runtime, FileCommand command) {
+    const bool actsOnActiveTab = command == FileCommand::SaveAs ||
+                                 command == FileCommand::Rename;
+    if (!actsOnActiveTab) return std::nullopt;
+
+    if (activeLiveDiffTab(runtime)) {
+        return std::string{"command is unavailable in live diff tabs"};
+    }
+    auto id = runtime.activeDocumentId();
+    if (!id) return std::string{"no active document"};
+    if (command == FileCommand::Rename) {
+        auto const state = runtime.workspace.state(*id);
+        // Renaming needs a file to rename. An unnamed buffer has none, and the
+        // command that gives it one is save_as.
+        if (!state || state->key.kind() != JournalDocumentKeyKind::Saved) {
+            return std::string{"document has no file to rename"};
+        }
+    }
+    return std::nullopt;
+}
+
 CommandHandlerResult bindFile(EditorRuntime::Impl& runtime,
                                InvocationPrincipal const& principal,
                                FileCommand command,
@@ -52,6 +79,9 @@ CommandHandlerResult bindFile(EditorRuntime::Impl& runtime,
         });
     if (descriptor != descriptors.end() && descriptor->pathPrompt &&
         !stringPayload(payload)) {
+        if (auto refusal = pathCommandPrecondition(runtime, command)) {
+            return failure(*refusal);
+        }
         auto opened =
             runtime.prompt.open(fileCommandsCommandSet().pathPrompt(command));
         if (!opened.accepted()) return failure(opened.error->message);

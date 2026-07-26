@@ -1332,6 +1332,8 @@ ProtocolValue toValue(TreeSelectArguments const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<TreeSelectArguments>& out);
 ProtocolValue toValue(FindQueryArguments const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<FindQueryArguments>& out);
+ProtocolValue toValue(PromptValueArguments const& value);
+bool decodePresent(ProtocolValue const& value, std::optional<PromptValueArguments>& out);
 ProtocolValue toValue(SelectionCommandArguments const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<SelectionCommandArguments>& out);
 ProtocolValue toValue(ScrollLinesArguments const& value);
@@ -4814,8 +4816,7 @@ bool decodePresent(ProtocolValue const& value, std::optional<TreeSelectArguments
     return true;
 }
 
-ProtocolValue toValue(FindQueryArguments const& value) {
-    std::vector<ProtocolValue::Field> fields;
+ProtocolValue toValue(FindQueryArguments const& value) {    std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("query", toValue(value.query));
     return ProtocolValue::makeObject(std::move(fields));
 }
@@ -4825,6 +4826,22 @@ bool decodePresent(ProtocolValue const& value, std::optional<FindQueryArguments>
     auto query = requireField<std::string>(value.field("query"));
     if (!query) return false;
     out.emplace(FindQueryArguments{*query});
+    return true;
+}
+
+ProtocolValue toValue(PromptValueArguments const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("index", toValue(static_cast<std::uint64_t>(value.index)));
+    fields.emplace_back("value", toValue(value.value));
+    return ProtocolValue::makeObject(std::move(fields));
+}
+bool decodePresent(ProtocolValue const& value, std::optional<PromptValueArguments>& out) {
+    auto const* object = value.asObject();
+    if (!object) return false;
+    auto index = requireField<std::uint64_t>(value.field("index"));
+    auto text = requireField<std::string>(value.field("value"));
+    if (!index || !text) return false;
+    out.emplace(PromptValueArguments{static_cast<std::size_t>(*index), *text});
     return true;
 }
 
@@ -5185,6 +5202,7 @@ CommandArgumentCodecRegistry ProtocolCodec::buildCommandArgumentCodecRegistry() 
     auto const paletteExecuteCodec = makeTypedCodec<PaletteExecuteArguments>();
     auto const treeSelectCodec = makeTypedCodec<TreeSelectArguments>();
     auto const findQueryCodec = makeTypedCodec<FindQueryArguments>();
+    auto const promptValueCodec = makeTypedCodec<PromptValueArguments>();
     auto const selectionCodec =
         makeTypedCodec<SelectionCommandArguments>();
     auto const scrollLinesCodec = makeTypedCodec<ScrollLinesArguments>();
@@ -5246,6 +5264,8 @@ CommandArgumentCodecRegistry ProtocolCodec::buildCommandArgumentCodecRegistry() 
             entries.emplace_back(descriptor.id, findQueryCodec);
         } else if (descriptor.id == "replace.update_replacement") {
             entries.emplace_back(descriptor.id, findQueryCodec);
+        } else if (descriptor.id == "prompt.update_value") {
+            entries.emplace_back(descriptor.id, promptValueCodec);
         } else if (textInputIds.contains(descriptor.id)) {
             entries.emplace_back(descriptor.id, textInputCodec);
         } else if (selectionIds.contains(descriptor.id)) {

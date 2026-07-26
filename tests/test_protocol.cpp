@@ -217,6 +217,27 @@ TEST(commandRequestRoundTripsWithFindQueryArguments) {
 }
 
 
+// The registry test only proves an entry EXISTS for each command, not that it
+// is the right one -- a payload-bearing command wired to noneCodec passes it
+// while silently dropping the payload for every protocol client. Round-tripping
+// the actual value is what catches that.
+TEST(commandRequestRoundTripsWithPromptValueArguments) {
+    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
+    ssg::ClientCommand const command{
+        "prompt.update_value", ssg::Revision{11},
+        ssg::PromptValueArguments{1, "notes/draft.txt"}};
+    auto const bytes = ssg::ProtocolCodec{}.encodeCommandRequest(command, registry);
+    auto const decoded = ssg::ProtocolCodec{}.decodeCommandRequest(bytes, registry);
+    ASSERT_TRUE(decoded.accepted());
+    ASSERT_EQ(decoded.command->id, command.id);
+    auto const* arguments =
+        std::any_cast<ssg::PromptValueArguments>(&decoded.command->payload);
+    ASSERT_TRUE(arguments != nullptr);
+    ASSERT_EQ(*arguments,
+              std::any_cast<ssg::PromptValueArguments>(command.payload));
+}
+
+
 TEST(commandRequestRoundTripsWithTreeSelectArguments) {
     auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
     ssg::ClientCommand const command{
@@ -1164,6 +1185,8 @@ int main() {
     RUN(registryRejectsDuplicateEntries);
     RUN(commandRequestRoundTripsWithNoPayload);
     RUN(commandRequestRoundTripsWithPaletteExecuteArguments);
+    RUN(commandRequestRoundTripsWithFindQueryArguments);
+    RUN(commandRequestRoundTripsWithPromptValueArguments);
     RUN(commandRequestRoundTripsWithTreeSelectArguments);
     RUN(viewportFirstVisualColumnSurvivesTheWire);
     RUN(documentIdentitySurvivesSessionSnapshotAndDeltaWireRoundTrips);
