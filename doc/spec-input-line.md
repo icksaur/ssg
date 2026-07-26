@@ -1,5 +1,19 @@
 # spec-input-line
 
+## Status
+
+Done. Rename, reposition and caret in 4e65efa; header-width reservation fixed
+after review in dba54f5; query scrolling in aae9c3e; doc cascade in this change.
+
+One deviation from the plan, recorded because it is the kind of thing that gets
+re-broken: the narrow-header fallback as first written pulled the input line
+back OVER already-emitted field nodes. Hit-testing returns the first node
+containing a cell, so clicks on visible query cells dispatched the field's
+command. The budget is now subtracted from the field region before the fields
+are laid out, and it is a fixed size rather than one derived from the query --
+a query-derived reservation shrank the field region on every keystroke, which
+is the original bug in a new place.
+
 ## Goals
 
 The header's text input is named for what it is rather than for one of its two

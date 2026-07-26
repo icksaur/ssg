@@ -109,7 +109,7 @@ table is the server/client contract for emitting them.
 
 | Region | Placement | Contents and behavior |
 |---|---|---|
-| Header | Full width, fixed first row | Active command or palette query, current workspace-relative path, and editor mode. Fields collapse by server-provided rank when space is limited. |
+| Header | Full width, fixed first row | Status fields (current workspace-relative path, then branch) anchored left, then the input line when a picker is open. Fields collapse by server-provided rank when space is limited. |
 | Left panel | Below the header and above the footer, at the left edge | One collapsible tree surface. Its active server-owned provider is Filesystem, Git, Symbols/Tree-sitter, or a future registered tree provider. It targets 24 columns, never renders below 12 columns, and collapses before shrinking the editor below 20 columns. |
 | Tab bar | First row of the main column, to the right of a visible panel | One shared tab row for all open document, diff, and streaming tabs. It displays server-provided order, labels, active state, dirty/recovery state, and mode. |
 | Prompt surface | Zero to three rows directly below the tab bar in the main column | Non-modal command arguments, path entry, find, replace, settings, and command-palette interaction. Opening a prompt reduces pane height; it never overlays or blocks the editor. |
@@ -161,7 +161,10 @@ authoritative UI state, or implement command behavior.
 
 `data/ui/status_fields.json` is an array of objects with `id`, `region`,
 `collapse_rank`, and non-empty `accessible_label`. Lower ranks are retained
-first. Header order is active command/palette query, current path, then mode.
+first. Header order is the status fields (current path, then branch) at the left
+edge, followed by the input line -- the header's text input, shared by every
+picker -- when one is open. The fields are laid out FIRST so typing cannot move
+them; see `doc/spec-ux.md`.
 Footer order is actionable status, follow state/resume binding, background
 activity, encoding, line ending, Git branch, Git repository, file type, then
 file size.

@@ -24,8 +24,8 @@ Laid out by `computeShellLayout` (`src/ShellState.cpp`) from the top down. The
 viewport must be at least 20 columns by 4 rows; below that, layout is rejected
 rather than degraded.
 
-- **Header** -- full width, row 0. Status fields and, when a picker is open,
-  the input line (below).
+- **Header** -- full width, row 0. Status fields anchored at the left edge,
+  then the input line when a picker is open (below).
 - **Panel** -- left edge, rows 1..height-2, when requested AND the viewport can
   afford it. Targets 24 columns, never renders below 12, and is dropped
   entirely before the editor is squeezed under 20 columns. Its rightmost column
@@ -71,6 +71,30 @@ It carries three things: a `>` sigil, the query text the user has typed, and a
 dim ghost completion of the top-ranked candidate trailing it. The query is
 client-owned; the candidate list and ghost come from the server.
 
+**It is laid out AFTER the status fields, and never takes space back from
+them.** The fields are placed first at the header's left edge, with the input
+line's budget subtracted from their region up front rather than clawed back
+afterwards. Two consequences, both load-bearing:
+
+- Typing cannot move or collapse the path and branch, because their layout does
+  not depend on the query at all.
+- Header nodes never overlap. Hit-testing returns the FIRST node containing a
+  cell, so an input line drawn on top of a field would render the query while
+  dispatching the field's command on click.
+
+The reserved budget is a fixed size, deliberately independent of the query: a
+reservation that grew as the user typed would shrink the field region on every
+keystroke and start collapsing fields again, which is the behavior this ordering
+exists to prevent.
+
+When the query outgrows its region the input line **scrolls its own text**,
+showing the tail so the insertion point stays visible -- the same principle as
+caret reveal in the editor. The `>` sigil stays fixed as the surface's identity
+while the text slides under it. Slicing is on grapheme boundaries, never bytes.
+
+Layout holds one column back for the caret, because a terminal cursor has to
+land on a real cell.
+
 Results do not appear here. They project into the active pane
 (`PaletteProjection`), which is a projection rather than an overlay -- the
 underlying document state is preserved and restored on close.
@@ -87,15 +111,19 @@ Focus is indicated two ways:
   `*Active` semantic role and the unfocused one in `*Inactive` (for example
   `PanelActive` vs `PanelInactive`).
 - **The terminal cursor.** It is placed in the focused surface: the primary
-  caret in `editor`, the selected tree row in `panel`, the input position in
-  `prompt`. A terminal has one hardware cursor, so secondary carets are painted
-  as cells instead (`SemanticRole::Caret` background); only the primary uses
-  the real cursor.
+  caret in `editor`, the selected tree row in `panel`, and the input position in
+  `prompt` -- which includes a picker's input line, whose caret sits one column
+  past the last DRAWN character (at the end of the visible text when the query
+  has scrolled). A terminal has one hardware cursor, so secondary carets are
+  painted as cells instead (`SemanticRole::Caret` background); only the primary
+  uses the real cursor.
 
 **The cursor is the primary focus affordance for a text-entry surface.** A
 surface that accepts typing and does not show a cursor gives the user no way to
 tell it has focus, which is why the rule above is normative rather than
-advisory.
+advisory. The input line is the case that proved it: it reserves zero prompt
+rows, so the prompt painter produced no caret for it and the cursor was left
+wherever painting happened to finish, several rows away.
 
 ### Caret reveal
 
@@ -123,9 +151,13 @@ clipped. The reveal target is only `selections.primary().active`.
 
 - **Header width is contended.** The input line, the leader-chord hint, and the
   status fields all want the header row. Leader entry and picker focus are
-  mutually exclusive, so those two never compete -- but the input line and the
-  status fields do, and the resolution determines whether fields move while the
-  user types.
+  mutually exclusive, so those two never compete -- the leader hint occupies the
+  same slot as the input line, so the header does not jump between two layouts
+  depending on which is active. The fields are always laid out first, so they
+  are never the ones that move.
+- **Header nodes must stay disjoint.** Hit-testing takes the first node
+  containing a cell, so overlapping nodes route clicks to whichever was emitted
+  first regardless of what is drawn on top.
 - **The prompt rows and the input line are different surfaces.** Find and
   replace render their query in the reserved rows below the tab bar; a picker
   renders its query in the header and reserves no rows. Both are

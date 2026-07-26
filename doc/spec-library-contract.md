@@ -58,8 +58,8 @@ view** as a pure function of authoritative server-published state plus local
 input — … fuzzy filtering/ranking of a published candidate list — provided the
 authoritative catalog, command execution, and **presentation placement/color
 remain server-owned** and the client invents no product data" (spec.md, the I17
-derived-view clause). The TUI's palette query/selection + `palette_rank` /
-`palette_ghost` / `compute_list_scroll_view` are exactly this: local input +
+derived-view clause). The TUI's input-line query/selection + `palette_rank` /
+`input_line.ghost` / `compute_list_scroll_view` are exactly this: local input +
 library functions over the server-published candidate list. So this is **not** an
 app violation — but it is also **not** "library-owned"; it is a bounded, sanctioned
 client derived view.
