@@ -15,4 +15,11 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     )
     target_link_libraries(test_file_commands PRIVATE ssg)
     add_test(NAME test_file_commands COMMAND test_file_commands)
+
+    add_executable(test_path_prompt
+        ${SSG_SOURCE_DIR}/tests/test_path_prompt.cpp
+    )
+    target_include_directories(test_path_prompt PRIVATE ${SSG_SOURCE_DIR}/tests)
+    target_link_libraries(test_path_prompt PRIVATE ssg)
+    add_test(NAME test_path_prompt COMMAND test_path_prompt)
 endif()

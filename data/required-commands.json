@@ -132,6 +132,7 @@
     {"id":"prompt.cancel","owner":"prompt-status-surface","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"prompt.next","owner":"prompt-status-surface","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"prompt.previous","owner":"prompt-status-surface","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
+    {"id":"prompt.update_value","owner":"prompt-status-surface","required_capabilities":[],"lua":true,"keymap":false,"palette":false},
     {"id":"status.next","owner":"prompt-status-surface","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"status.previous","owner":"prompt-status-surface","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"status.dismiss","owner":"prompt-status-surface","required_capabilities":[],"lua":true,"keymap":true,"palette":true},

@@ -71,6 +71,20 @@ PromptCommandResult PromptSurface::open(PromptRequest request) {
     return {};
 }
 
+PromptCommandResult PromptSurface::updateValue(std::size_t index,
+                                               std::string value) {
+    if (!request_) {
+        return failure(PromptErrorCode::NoActivePrompt,
+                       "no active prompt to update");
+    }
+    if (index >= request_->inputs.size()) {
+        return failure(PromptErrorCode::UnknownInput,
+                       "prompt has no input at that index");
+    }
+    request_->inputs[index].value = std::move(value);
+    return {std::nullopt, std::nullopt};
+}
+
 PromptCommandResult PromptSurface::submit() {
     if (!request_) {
         return failure(PromptErrorCode::NoActivePrompt,
@@ -78,6 +92,7 @@ PromptCommandResult PromptSurface::submit() {
     }
     PromptSubmission submission;
     submission.kind = request_->kind;
+    submission.commandId = request_->commandId;
     for (const auto& input : request_->inputs) {
         submission.values.push_back(input.value);
     }

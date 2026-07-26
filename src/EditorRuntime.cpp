@@ -1830,6 +1830,17 @@ CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& co
             ClientCommand{target, impl_->session->revision(), {}});
         return targetResult;
     }
+    // prompt.submit defers the command its prompt was collecting for, so the
+    // command runs through the registry -- with its own capability and revision
+    // checks -- outside the non-reentrant session lock. Its result becomes the
+    // submit's result, so a rejected save-as is reported as a failed submit
+    // rather than a silent success.
+    if (result.accepted() && impl_->pendingPromptCommand) {
+        auto pending = std::move(*impl_->pendingPromptCommand);
+        impl_->pendingPromptCommand.reset();
+        pending.baseRevision = impl_->session->revision();
+        return dispatchWithFollowEditPause(std::move(pending));
+    }
     // The file picker's submit is file.open, which (unlike palette.execute) has
     // no prompt side effects of its own.  Closing it here rather than in the
     // client keeps close-on-success semantics identical for keyboard and

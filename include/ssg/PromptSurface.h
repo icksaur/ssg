@@ -51,6 +51,14 @@ struct PromptRequest {
     std::vector<PromptInput> inputs;
     std::vector<PromptToggle> toggles;
     std::optional<PromptMatchCount> matchCount;
+    // The command this prompt is collecting arguments for, re-dispatched with
+    // the typed value on submit. Carrying the id -- rather than a kind enum the
+    // submit path switches on -- is what lets a new path-taking command be
+    // added without touching submission at all.
+    //
+    // Runtime-internal: PromptViewState is the protocol type, and it does not
+    // carry this. The client never needs to know which command a prompt serves.
+    std::string commandId;
     friend bool operator==(const PromptRequest&, const PromptRequest&) = default;
 };
 
@@ -58,14 +66,25 @@ struct PromptSubmission {
     PromptKind kind = PromptKind::CommandArgument;
     std::vector<std::string> values;
     std::vector<bool> toggles;
+    std::string commandId;
     friend bool operator==(const PromptSubmission&,
                            const PromptSubmission&) = default;
+};
+
+// Payload for `prompt.update_value`: which input of the active prompt receives
+// the text. Prompts with several inputs (replace) address them by index.
+struct PromptValueArguments {
+    std::size_t index = 0;
+    std::string value;
+    friend bool operator==(const PromptValueArguments&,
+                           const PromptValueArguments&) = default;
 };
 
 enum class PromptErrorCode : std::uint8_t {
     InvalidRequest,
     InvalidReservation,
     NoActivePrompt,
+    UnknownInput,
 };
 
 struct PromptError {
@@ -115,11 +134,12 @@ struct PromptStatusCommandDescriptor {
 };
 
 struct PromptStatusCommandSet {
-    std::array<PromptStatusCommandDescriptor, 8> descriptors{{
+    std::array<PromptStatusCommandDescriptor, 9> descriptors{{
         {"prompt.submit"},
         {"prompt.cancel"},
         {"prompt.next"},
         {"prompt.previous"},
+        {"prompt.update_value"},
         {"status.next"},
         {"status.previous"},
         {"status.dismiss"},
@@ -130,6 +150,8 @@ struct PromptStatusCommandSet {
 class PromptSurface {
 public:
     [[nodiscard]] PromptCommandResult open(PromptRequest request);
+    [[nodiscard]] PromptCommandResult updateValue(std::size_t index,
+                                                  std::string value);
     [[nodiscard]] PromptCommandResult submit();
     [[nodiscard]] PromptCommandResult cancel();
     [[nodiscard]] bool active() const noexcept { return request_.has_value(); }

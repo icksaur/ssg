@@ -770,6 +770,11 @@ int main(int argc, char** argv) {
     // replacement, mutates it, dispatches replace.update_replacement).
     bool replaceOpen = false;
     std::string replaceReplacement;
+    // Path prompt: same no-copy discipline. The library owns the value and
+    // publishes it in the prompt view; the client reads it, edits it, and
+    // reports the full next string via prompt.update_value.
+    bool pathPromptOpen = false;
+    std::string pathPromptValue;
     ssg::KeymapViewState keymap;
     std::vector<ssg::PaletteCandidate> candidates;
 
@@ -886,6 +891,7 @@ int main(int argc, char** argv) {
             if (pickerOpen) { picker.query += text; picker.selected = 0; revealPaletteSelection(); }
             else if (replaceOpen) { dispatch("replace.update_replacement", ssg::FindQueryArguments{replaceReplacement + text}); }
             else if (findOpen) { dispatch("find.update_query", ssg::FindQueryArguments{findQuery + text}); }
+            else if (pathPromptOpen) { dispatch("prompt.update_value", ssg::PromptValueArguments{0, pathPromptValue + text}); }
             break;
         case ssg::TextRouting::Ignore:
             break;
@@ -944,6 +950,16 @@ int main(int argc, char** argv) {
                 activePrompt && activePrompt->kind == ssg::PromptKind::Replace;
             replaceOpen = findView.open && replacePromptActive;
             replaceReplacement = findView.replacement;
+            // The path prompt keeps its authoritative value in the library, and
+            // publishes it in the prompt view. Mirroring it here (rather than
+            // holding a client-side copy) means the two cannot drift when the
+            // library rewrites the value -- a rejected save-as, say.
+            pathPromptOpen =
+                activePrompt && activePrompt->kind == ssg::PromptKind::Path;
+            pathPromptValue.clear();
+            if (pathPromptOpen && !activePrompt->controls.empty()) {
+                pathPromptValue = activePrompt->controls.front().value;
+            }
         }
         return snapshot;
     };
@@ -1240,6 +1256,11 @@ int main(int argc, char** argv) {
                     auto next = replaceReplacement;
                     popCodePoint(next);
                     dispatch("replace.update_replacement", ssg::FindQueryArguments{next});
+                } else if (pathPromptOpen && focus == ssg::FocusTarget::Prompt &&
+                           stroke.code == "Backspace") {
+                    auto next = pathPromptValue;
+                    popCodePoint(next);
+                    dispatch("prompt.update_value", ssg::PromptValueArguments{0, next});
                 } else if (!decoded.text.empty()) {
                     routeText(decoded.text);
                 }

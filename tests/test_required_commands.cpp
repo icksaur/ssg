@@ -165,6 +165,7 @@ constexpr auto kExpectedCommands = std::to_array<ExpectedCommand>({
     {"prompt.cancel", "prompt-status-surface"},
     {"prompt.next", "prompt-status-surface"},
     {"prompt.previous", "prompt-status-surface"},
+    {"prompt.update_value", "prompt-status-surface"},
     {"status.next", "prompt-status-surface"},
     {"status.previous", "prompt-status-surface"},
     {"status.dismiss", "prompt-status-surface"},
@@ -224,7 +225,7 @@ constexpr auto kExpectedCategoryCounts =
         {"hover", 2},      {"rename", 1},    {"pane", 9},
         {"panel", 6},
         {"tree", 7},
-        {"prompt", 4},     {"status", 4},    {"workspace", 1},
+        {"prompt", 5},     {"status", 4},    {"workspace", 1},
         {"file", 15},      {"tab", 9},       {"external", 3},
         {"settings", 6},   {"follow_edits", 3}, {"diff", 3},
         {"theme", 2},
@@ -232,7 +233,7 @@ constexpr auto kExpectedCategoryCounts =
         {"file_finder", 2},
     });
 
-static_assert(kExpectedCommands.size() == 179);
+static_assert(kExpectedCommands.size() == 180);
 
 std::optional<std::string> field(const std::string& object,
                                  const std::string& name) {
@@ -442,7 +443,8 @@ TEST(capabilityAndSurfaceExclusionsAreExact) {
             ASSERT_FALSE(command.keymap);
             ASSERT_FALSE(command.palette);
         } else if (command.id == "find.update_query" ||
-                   command.id == "replace.update_replacement") {
+                   command.id == "replace.update_replacement" ||
+                   command.id == "prompt.update_value") {
             // Client-fulfilment commands: the client edits the query/replacement
             // and reports the full next string, so each carries a payload and is
             // neither keymap- nor palette-reachable, but remains Lua-scriptable.

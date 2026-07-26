@@ -43,6 +43,11 @@ struct FileCommandDescriptor {
     FileCommand command;
     bool lua = true;
     std::optional<std::string_view> requiredCapability;
+    // Takes a workspace-relative path, and so must open the path prompt when
+    // dispatched without one. Declaring it here is what lets a test enumerate
+    // the path-taking commands and prove each one is wired; without the flag
+    // there is nothing to enumerate and the check passes vacuously.
+    bool pathPrompt = false;
 
     friend bool operator==(const FileCommandDescriptor&,
                            const FileCommandDescriptor&) = default;
@@ -61,19 +66,21 @@ public:
 
 private:
     const std::array<FileCommandDescriptor, 12> descriptors_{{
-        {"workspace.open_directory", FileCommand::OpenDirectory},
+        {"workspace.open_directory", FileCommand::OpenDirectory, true,
+         std::nullopt, true},
         {"file.new", FileCommand::Create},
-        {"file.open", FileCommand::Open},
+        {"file.open", FileCommand::Open, true, std::nullopt, true},
         {"file.open_recent", FileCommand::OpenRecent},
         {"file.open_dropped_content", FileCommand::OpenDroppedContent, false,
          std::string_view{"local_file_drop"}},
         {"file.save", FileCommand::Save},
         {"file.save_all", FileCommand::SaveAll},
-        {"file.save_as", FileCommand::SaveAs},
+        {"file.save_as", FileCommand::SaveAs, true, std::nullopt, true},
         {"file.reload", FileCommand::Reload},
-        {"file.rename", FileCommand::Rename},
+        {"file.rename", FileCommand::Rename, true, std::nullopt, true},
         {"file.delete", FileCommand::Remove},
-        {"file.new_directory", FileCommand::NewDirectory},
+        {"file.new_directory", FileCommand::NewDirectory, true, std::nullopt,
+         true},
     }};
 };
 

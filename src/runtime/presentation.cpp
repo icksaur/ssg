@@ -135,7 +135,8 @@ CommandHandlerResult promptStatusCommand(EditorRuntime::Impl& runtime,
                                          std::string_view id,
                                          std::any const& payload) {
     if (id == "prompt.submit" || id == "prompt.cancel" ||
-        id == "prompt.next" || id == "prompt.previous") {
+        id == "prompt.next" || id == "prompt.previous" ||
+        id == "prompt.update_value") {
         auto const& request = runtime.prompt.request();
         if (!request) {
             return failure("no active prompt");
@@ -162,6 +163,29 @@ CommandHandlerResult promptStatusCommand(EditorRuntime::Impl& runtime,
         }
         if (id == "prompt.submit") {
             auto result = runtime.prompt.submit();
+            if (!result.accepted()) return failure(result.error->message);
+            // A prompt that names a command exists to collect that command's
+            // argument, so submitting it runs the command. Deferred to the
+            // dispatch wrapper because the session lock is non-reentrant.
+            auto const& submission = result.submission;
+            if (submission && !submission->commandId.empty()) {
+                if (submission->values.empty() ||
+                    submission->values.front().empty()) {
+                    return failure(submission->commandId +
+                                   " requires a non-empty value");
+                }
+                runtime.pendingPromptCommand = ClientCommand{
+                    submission->commandId, revision, submission->values.front()};
+            }
+            return success();
+        }
+        if (id == "prompt.update_value") {
+            auto const* arguments = payloadAs<PromptValueArguments>(payload);
+            if (arguments == nullptr) {
+                return failure("prompt.update_value requires a value payload");
+            }
+            auto result =
+                runtime.prompt.updateValue(arguments->index, arguments->value);
             return result.accepted() ? success() : failure(result.error->message);
         }
         if (id == "prompt.cancel") {

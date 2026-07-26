@@ -35,8 +35,9 @@ Normative commands owned by this feature:
 
 The `shell-layout` task owns the pane, panel, and distraction-free commands
 above. The later `prompt-status-surface` task owns `prompt.submit`,
-`prompt.cancel`, `prompt.next`, `prompt.previous`, `status.next`,
-`status.previous`, `status.dismiss`, and `status.invoke_action`.
+`prompt.cancel`, `prompt.next`, `prompt.previous`, `prompt.update_value`,
+`status.next`, `status.previous`, `status.dismiss`, and
+`status.invoke_action`.
 
 `PromptSurface` is a non-modal one-to-three-row view below the shared tab bar. Path prompts use one input; find uses one input plus toggles/count; replace uses find and replacement inputs plus toggles/count. Footer statuses are a bounded priority queue rather than one lossy slot.
 
@@ -48,11 +49,15 @@ out labeled input, toggle, and count controls within the `Rect` returned as
 `ShellViewState::prompt`; it rejects a reservation whose height does not match
 the prompt kind. Prompt configuration supplies text and accessible labels but
 does not implement path validation, completion, find matching, or replacement
-policy. `prompt.submit` returns the current field values to the owning feature
-and closes the prompt. `prompt.cancel` closes it without a submission or other
-state change. `prompt.next` and `prompt.previous` are generic prompt-navigation
-commands whose meaning is fulfilled by the owning feature for the active prompt
-kind.
+policy. `prompt.update_value` sets one input's text, so the client reports the
+full next string exactly as it does for find and replace. `prompt.submit`
+returns the current field values to the owning feature and closes the prompt; a
+prompt opened on behalf of a named command additionally re-dispatches that
+command with the submitted value, which is how a path-taking command collects
+its path without the submit path knowing which command it is. `prompt.cancel`
+closes it without a submission or other state change, and so runs nothing.
+`prompt.next` and `prompt.previous` are generic prompt-navigation commands whose
+meaning is fulfilled by the owning feature for the active prompt kind.
 
 The status queue has a fixed capacity of 16. Its canonical order is severity
 (`error`, `warning`, `information`, `progress`) and then oldest first. When

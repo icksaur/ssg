@@ -39,6 +39,26 @@ CommandHandlerResult bindFile(EditorRuntime::Impl& runtime,
                                FileCommand command,
                                std::any const& payload) {
     WorkspaceResult result;
+
+    // Every path-taking command prompts for its path when dispatched without
+    // one, in ONE place rather than per command. A command that gains the
+    // pathPrompt flag is wired by that fact alone, so the flag and the behavior
+    // cannot drift apart.
+    const auto& descriptors = fileCommandsCommandSet().descriptors();
+    const auto* descriptor = std::find_if(
+        descriptors.begin(), descriptors.end(),
+        [&](const FileCommandDescriptor& entry) {
+            return entry.command == command;
+        });
+    if (descriptor != descriptors.end() && descriptor->pathPrompt &&
+        !stringPayload(payload)) {
+        auto opened =
+            runtime.prompt.open(fileCommandsCommandSet().pathPrompt(command));
+        if (!opened.accepted()) return failure(opened.error->message);
+        runtime.reconcilePromptFocus();
+        return success();
+    }
+
     switch (command) {
         case FileCommand::OpenDirectory: {
             auto path = stringPayload(payload);
@@ -82,6 +102,20 @@ CommandHandlerResult bindFile(EditorRuntime::Impl& runtime,
             }
             auto id = runtime.activeDocumentId();
             if (!id) return failure("no active document");
+            // A buffer that has never had a name cannot be saved over itself,
+            // so saving it IS a save-as. Opening save_as's prompt (rather than
+            // one of its own) keeps a single naming path: whatever the user
+            // types is handled by the command that knows how to name a
+            // document.
+            auto const state = runtime.workspace.state(*id);
+            if (state &&
+                state->key.kind() != JournalDocumentKeyKind::Saved) {
+                auto opened = runtime.prompt.open(
+                    fileCommandsCommandSet().pathPrompt(FileCommand::SaveAs));
+                if (!opened.accepted()) return failure(opened.error->message);
+                runtime.reconcilePromptFocus();
+                return success();
+            }
             result = runtime.workspace.save(*id);
             if (!result.accepted()) return failure(workspaceMessage(result));
             return runtime.updateTabsFor(*id);

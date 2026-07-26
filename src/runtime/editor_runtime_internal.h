@@ -153,6 +153,11 @@ struct EditorRuntime::Impl final : CommandServices,
     // palette.execute transaction's session lock releases (the session mutex is
     // non-reentrant, so a handler cannot re-enter dispatch).
     std::optional<std::string> pendingPaletteTarget;
+    // Set by prompt.submit when the closed prompt named a command: the runtime
+    // dispatch wrapper runs it, with its typed value as payload, once the
+    // session lock releases. Same reason as pendingPaletteTarget above -- the
+    // session mutex is non-reentrant, so a handler cannot dispatch.
+    std::optional<ClientCommand> pendingPromptCommand;
     // Which picker the active PromptKind::Palette prompt belongs to, and the
     // sole source of the published palette mode and candidate set.  Maintained
     // as an invariant (set iff such a prompt is active) by
