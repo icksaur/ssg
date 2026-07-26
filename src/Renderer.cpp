@@ -159,6 +159,41 @@ void paintText(CellGrid& grid, int x, int y, int right, std::string_view text,
     }
 }
 
+// The input line's caret cell: one column past the last typed character, so it
+// marks where the next keystroke lands.  Derived from the SAME published node
+// geometry and the same grapheme measurement that positioned the text, so the
+// two cannot drift.
+//
+// The offset is display WIDTH, not byte count: a query may hold multi-byte or
+// wide characters, and `size()` would misplace the caret for any of them.
+//
+// When the query exactly fills its node this lands on the ghost's first cell,
+// which is intended -- the ghost is unaccepted suggestion text and the insertion
+// point belongs on top of it.  The caret is therefore bounded by the HEADER row,
+// not by the query node (doc/spec-input-line.md).
+std::optional<GridPosition> inputLineCaret(ShellViewState const& shell) {
+    if (!shell.header) return std::nullopt;
+    for (auto const& node : shell.accessibilityNodes) {
+        if (node.id != "input_line.query") continue;
+        // Walk the same spans paintText walks, stopping where it stops: the
+        // caret must sit after the last character actually DRAWN, not after the
+        // last character in the string, or an over-long query would push it off
+        // the end of the rendered text.
+        auto const run = GraphemeLayout{}.computeRun(node.content);
+        int column = node.rect.x;
+        for (auto const& span : run.spans) {
+            auto const width =
+                static_cast<int>(std::max<std::uint32_t>(span.cellWidth, 1));
+            if (column + width > node.rect.right()) break;
+            column += width;
+        }
+        column = std::min(column, shell.header->right() - 1);
+        return GridPosition{static_cast<std::uint32_t>(std::max(column, 0)),
+                            static_cast<std::uint32_t>(node.rect.y)};
+    }
+    return std::nullopt;
+}
+
 void paintShellLeaves(CellGrid& grid, ShellViewState const& shell,
                         ThemeSnapshot const& theme, std::uint8_t background,
                         std::uint8_t panelBackground) {
@@ -884,6 +919,11 @@ CellGrid Renderer::render(SessionSnapshot const& snapshot) const {
                 }
             }
 
+            // A picker holds Prompt focus but reserves ZERO prompt rows -- its
+            // query lives in the header -- so paintPrompt yields no caret here.
+            // The input line's caret is published after this block, outside
+            // both pane branches.
+
             // Place the primary caret at its screen cell so the client can position
             // a terminal cursor there, and paint any secondary carets as cells
             // (a terminal has one hardware cursor), but only when the editor is
@@ -921,6 +961,16 @@ CellGrid Renderer::render(SessionSnapshot const& snapshot) const {
                 }
             }
         }
+    }
+
+    // The input line's caret, published outside the pane branches above.  A
+    // picker paints its RESULTS through paintPalette (the `shell.palette`
+    // branch), so a caret placed beside the prompt rows in the `else` branch
+    // would never be reached while a picker is open.  The cursor is the primary
+    // way a user can tell a text input has focus (doc/spec-ux.md), so it must
+    // not depend on which pane branch ran.
+    if (shell.focus == FocusTarget::Prompt) {
+        if (auto caret = inputLineCaret(shell)) grid.caret = *caret;
     }
     return grid;
 }

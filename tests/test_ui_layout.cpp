@@ -6,6 +6,7 @@
 #include <fstream>
 #include <iterator>
 #include <sstream>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -391,6 +392,92 @@ TEST(hidingAnUnfocusedPanelLeavesFocusUntouched) {
     ASSERT_TRUE(state.focus() == FocusTarget::Editor);
 }
 
+
+// ---------------------------------------------------------------------------
+// The header input line (doc/spec-input-line.md).
+
+const AccessibilityNode* findNode(const ShellViewState& view, std::string_view id) {
+    for (const auto& node : view.accessibilityNodes) {
+        if (node.id == id) return &node;
+    }
+    return nullptr;
+}
+
+// The reason this change exists: typing into a picker must not move the status
+// fields.  Before the fix the query was laid out first and pushed them right,
+// so this fails against the old order.
+TEST(typingInTheInputLineNeverMovesTheStatusFields) {
+    std::optional<Rect> firstPathRect;
+    std::optional<Rect> firstQueryRect;
+    for (const auto& query : {std::string{}, std::string{"a"},
+                              std::string{"abcdefgh"},
+                              std::string(40, 'x')}) {
+        auto value = request(120, 12);
+        value.inputLineActive = true;
+        value.inputLineQuery = query;
+        ShellState state;
+        auto result = computeShellLayout(value, state);
+        ASSERT_TRUE(result.accepted());
+        if (!result.accepted()) continue;
+
+        const auto* path = findNode(*result.view, "current_path");
+        const auto* command = findNode(*result.view, "active_command");
+        const auto* line = findNode(*result.view, "input_line.query");
+        ASSERT_TRUE(path != nullptr);
+        ASSERT_TRUE(command != nullptr);
+        ASSERT_TRUE(line != nullptr);
+        if (!path || !command || !line) continue;
+
+        // Every field keeps its exact rectangle regardless of query length...
+        if (!firstPathRect) firstPathRect = path->rect;
+        ASSERT_EQ(path->rect, *firstPathRect);
+        // ...and the input line's own start column is stable too, so the text
+        // does not slide under the user as they type.
+        if (!firstQueryRect) firstQueryRect = line->rect;
+        ASSERT_EQ(line->rect.x, firstQueryRect->x);
+        // The input line sits AFTER the fields, which is the requested order.
+        ASSERT_TRUE(line->rect.x > path->rect.x);
+    }
+}
+
+// A focused text input that accepts keys while being invisible is worse than a
+// field that moved, so at a narrow header the fields yield instead.
+TEST(aNarrowHeaderStillGivesTheInputLineRoom) {
+    auto value = request(30, 12);
+    value.inputLineActive = true;
+    value.inputLineQuery = "query";
+    ShellState state;
+    auto result = computeShellLayout(value, state);
+    ASSERT_TRUE(result.accepted());
+    if (!result.accepted()) return;
+    const auto* line = findNode(*result.view, "input_line.query");
+    ASSERT_TRUE(line != nullptr);
+    if (line) {
+        ASSERT_TRUE(line->rect.width > 0);
+        // And it stays inside the header row.
+        ASSERT_TRUE(line->rect.x + line->rect.width <= 30);
+    }
+}
+
+// The leader hint occupies the same slot, so it must follow the input line's
+// position rather than staying at the old left edge -- otherwise the header
+// jumps between two layouts depending on which is active.
+TEST(theLeaderHintSitsWhereTheInputLineWould) {
+    auto withHint = request(120, 12);
+    withHint.leaderHint = "leader: Escape";
+    auto withLine = request(120, 12);
+    withLine.inputLineActive = true;
+    ShellState state;
+    auto hintResult = computeShellLayout(withHint, state);
+    auto lineResult = computeShellLayout(withLine, state);
+    ASSERT_TRUE(hintResult.accepted() && lineResult.accepted());
+    if (!hintResult.accepted() || !lineResult.accepted()) return;
+    const auto* hint = findNode(*hintResult.view, "leader");
+    const auto* line = findNode(*lineResult.view, "input_line.query");
+    ASSERT_TRUE(hint != nullptr && line != nullptr);
+    if (hint && line) ASSERT_EQ(hint->rect.x, line->rect.x);
+}
+
 TEST(leaderHintRendersInTheHeaderWhenPresent) {
     auto value = request(80, 12);
     value.leaderHint = "leader: Escape";
@@ -430,6 +517,9 @@ int main() {
     RUN(focusTransitionsFollowTheNavigationTable);
     RUN(hidingAnUnfocusedPanelLeavesFocusUntouched);
     RUN(leaderHintRendersInTheHeaderWhenPresent);
+    RUN(typingInTheInputLineNeverMovesTheStatusFields);
+    RUN(aNarrowHeaderStillGivesTheInputLineRoom);
+    RUN(theLeaderHintSitsWhereTheInputLineWould);
     RUN(nonOverlapAndCardinalityProperties);
     RUN(statusFieldManifestHasExactOrderAndLabels);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << '\n';

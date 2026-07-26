@@ -103,9 +103,12 @@ struct ShellLayoutRequest {
     std::vector<ShellLabel> footerActions;
     std::vector<TabLabel> tabs;
     std::string leaderHint;  // Non-empty when a client is mid-chord.
-    bool paletteActive = false;  // The palette prompt is open on this client.
-    std::string paletteQuery;    // The client's current palette query text.
-    std::string paletteGhost;    // Fish-style completion of the top candidate.
+    // The header's single-line text input, shared by every picker (command
+    // palette, file finder, ...) -- see doc/spec-ux.md.  Named for the surface
+    // rather than one of its callers.
+    bool inputLineActive = false;  // A picker is open on this client.
+    std::string inputLineQuery;    // The client's current query text.
+    std::string inputLineGhost;    // Fish-style completion of the top candidate.
 };
 
 struct PaneGeometry {

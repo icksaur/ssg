@@ -2,6 +2,7 @@
 
 #include <ssg/EditorRuntime.h>
 #include <ssg/FindReplace.h>
+#include <ssg/PaletteSearcher.h>
 #include <ssg/session_snapshot.h>
 
 #include "test_helpers.h"
@@ -854,6 +855,81 @@ TEST(renderTooSmallIsSafeAtOneByOne) {
     std::filesystem::remove_all(root);
 }
 
+
+// The cursor is how a user can tell a text input has focus, and a picker holds
+// Prompt focus while reserving ZERO prompt rows -- so paintPrompt yields no
+// caret and the cursor was previously left wherever painting finished
+// (doc/spec-input-line.md).
+TEST(anOpenPickerPutsTheCaretAtTheEndOfTheTypedQuery) {
+    auto root = uniqueRoot();
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    ASSERT_TRUE(runtime->dispatch(ssg::ClientId{1},
+                                  {"palette.open", runtime->revision(), {}})
+                    .accepted());
+
+    // The client owns the query text and reports it through the palette report,
+    // exactly as the app does.
+    ssg::PaletteReport report;
+    report.query = "save";
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24}, {}, report);
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    auto grid = ssg::Renderer{}.render(*snapshot);
+
+    ASSERT_TRUE(grid.caret.has_value());
+    if (!grid.caret) return;
+    // In the header row, not wherever painting stopped.
+    ASSERT_EQ(grid.caret->row, std::uint32_t{0});
+
+    // And exactly one cell past the last drawn character of "> save".
+    auto const& shell = snapshot->sections().shell;
+    const ssg::AccessibilityNode* query = nullptr;
+    for (auto const& node : shell.accessibilityNodes) {
+        if (node.id == "input_line.query") query = &node;
+    }
+    ASSERT_TRUE(query != nullptr);
+    if (query) {
+        ASSERT_EQ(grid.caret->column,
+                  static_cast<std::uint32_t>(query->rect.x +
+                                             static_cast<int>(query->content.size())));
+    }
+}
+
+// Display width, not byte count: a multi-byte query would otherwise place the
+// caret several columns short of the text.
+TEST(theInputLineCaretIsPlacedByDisplayWidthNotByteCount) {
+    auto root = uniqueRoot();
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    ASSERT_TRUE(runtime->dispatch(ssg::ClientId{1},
+                                  {"palette.open", runtime->revision(), {}})
+                    .accepted());
+
+    ssg::PaletteReport report;
+    report.query = "\u00e9\u00e9\u00e9";  // 3 characters, 6 bytes, 3 columns.
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24}, {}, report);
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    auto grid = ssg::Renderer{}.render(*snapshot);
+    ASSERT_TRUE(grid.caret.has_value());
+    if (!grid.caret) return;
+
+    auto const& shell = snapshot->sections().shell;
+    const ssg::AccessibilityNode* query = nullptr;
+    for (auto const& node : shell.accessibilityNodes) {
+        if (node.id == "input_line.query") query = &node;
+    }
+    ASSERT_TRUE(query != nullptr);
+    if (query) {
+        // "> " plus three single-width characters = 5 columns, NOT 8 bytes.
+        ASSERT_EQ(grid.caret->column,
+                  static_cast<std::uint32_t>(query->rect.x + 5));
+    }
+}
+
 int main() {
     RUN(renderPaintsContentNotAccessibilityLabels);
     RUN(renderSegmentsOnlyVisibleLinesNotWholeDocument);
@@ -878,6 +954,8 @@ int main() {
     RUN(renderTooSmallViewportProducesLibraryPlaceholder);
     RUN(renderTooSmallMatchesHandAuthoredGolden);
     RUN(renderTooSmallIsSafeAtOneByOne);
+    RUN(anOpenPickerPutsTheCaretAtTheEndOfTheTypedQuery);
+    RUN(theInputLineCaretIsPlacedByDisplayWidthNotByteCount);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;

@@ -1362,9 +1362,9 @@ void EditorRuntime::Impl::rebuildFileCandidates() {
 // WHICH picker it is -- and is instead made unrepresentable by openPickerPrompt()
 // being the only opener.
 void EditorRuntime::Impl::reconcileOpenPicker() {
-    bool const paletteActive = prompt.active() && prompt.request() &&
+    bool const inputLineActive = prompt.active() && prompt.request() &&
                                prompt.request()->kind == PromptKind::Palette;
-    if (!paletteActive) {
+    if (!inputLineActive) {
         openPicker.reset();
         // Discard the walk's results with the picker that owned them.
         fileCandidates.clear();

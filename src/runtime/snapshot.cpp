@@ -145,9 +145,9 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
     bool const paletteOpen = prompt.active() && prompt.request() &&
                               prompt.request()->kind == PromptKind::Palette;
     if (paletteOpen) {
-        request.paletteActive = true;
-        request.paletteQuery = paletteReport.query;
-        request.paletteGhost = paletteReport.ghost;
+        request.inputLineActive = true;
+        request.inputLineQuery = paletteReport.query;
+        request.inputLineGhost = paletteReport.ghost;
     }
     auto result = computeShellLayout(request, shell);
     if (!result.accepted()) return {};

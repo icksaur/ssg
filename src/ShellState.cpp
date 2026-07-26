@@ -12,6 +12,10 @@ namespace {
 constexpr int kMinimumColumns = 20;
 constexpr int kMinimumRows = 4;
 constexpr int kPanelTargetWidth = 24;
+// Enough for the "> " sigil and a few typed characters.  When the status fields
+// would leave less than this, they yield rather than let a focused input line
+// become invisible.
+constexpr int kInputLineMinimumWidth = 12;
 constexpr int kPanelMinimumWidth = 12;
 constexpr int kEditorMinimumWidth = 20;
 
@@ -107,7 +111,10 @@ void addNode(ShellViewState& view, ShellNodeKind kind, std::string id,
          std::move(commandId)});
 }
 
-void addFields(ShellViewState& view, const std::vector<StatusField>& fields,
+// Lays out status fields left to right, retaining as many as fit by collapse
+// rank.  Returns the x just past the last field, so a caller can place
+// something after them without recomputing their widths.
+int addFields(ShellViewState& view, const std::vector<StatusField>& fields,
                 Rect row, ShellNodeKind kind, SemanticRole role) {
     std::vector<const StatusField*> prioritized;
     prioritized.reserve(fields.size());
@@ -136,6 +143,7 @@ void addFields(ShellViewState& view, const std::vector<StatusField>& fields,
                  {x, row.y, width, 1}, role, field->value, field->commandId);
         x += width;
     }
+    return x;
 }
 
 const PaneGeometry* paneGeometry(const ShellViewState& view, PaneId id) {
@@ -382,43 +390,60 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
                  *view.header, SemanticRole::Header);
         addNode(view, ShellNodeKind::Footer, "footer", "Status footer",
                  *view.footer, SemanticRole::Footer);
-        int headerX = view.header->x;
-        if (request.paletteActive) {
-            // The palette owns the header while open: its query renders in the
-            // prompt role, the ghost completion trails it dim.  Palette focus
-            // and leader-chord entry are mutually exclusive, so they never
-            // compete for the header start.
-            std::string query = "> " + request.paletteQuery;
+        // Status fields FIRST, anchored at the header's left edge, so their
+        // position does not depend on the input line's contents: typing into a
+        // picker must not slide the working directory and branch rightward or
+        // collapse them out (doc/spec-input-line.md).
+        int headerX = addFields(view, request.headerFields,
+                                 {view.header->x, view.header->y,
+                                  view.header->width, view.header->height},
+                                 ShellNodeKind::HeaderField,
+                                 SemanticRole::Header);
+        // A space between the fields and whatever follows them.
+        if (headerX > view.header->x) ++headerX;
+
+        // The input line and the leader hint share this slot; picker focus and
+        // leader-chord entry are mutually exclusive, so they never compete.
+        if (request.inputLineActive) {
+            // The picker's query renders in the prompt role, its ghost
+            // completion trailing dim.  Reserve room even when the fields
+            // filled the header: a focused text input that is invisible while
+            // still accepting keys is worse than a shifted field, and this is
+            // the ONE case where typing may move fields.
+            if (view.header->right() - headerX < kInputLineMinimumWidth) {
+                headerX = std::max(view.header->x,
+                                   view.header->right() - kInputLineMinimumWidth);
+            }
+            std::string query = "> " + request.inputLineQuery;
+            const int available = view.header->right() - headerX;
             const int queryWidth =
-                std::min(view.header->width, static_cast<int>(query.size()));
-            addNode(view, ShellNodeKind::HeaderField, "palette_query",
-                     "Palette query", {headerX, view.header->y, queryWidth, 1},
+                std::min(available, static_cast<int>(query.size()));
+            addNode(view, ShellNodeKind::HeaderField, "input_line.query",
+                     "Input line", {headerX, view.header->y, queryWidth, 1},
                      SemanticRole::Prompt, std::move(query));
             headerX += queryWidth;
-            if (!request.paletteGhost.empty() &&
+            if (!request.inputLineGhost.empty() &&
                 headerX < view.header->right()) {
                 const int ghostWidth =
                     std::min(view.header->right() - headerX,
-                             static_cast<int>(request.paletteGhost.size()));
-                addNode(view, ShellNodeKind::HeaderField, "palette_ghost",
-                         "Palette completion",
+                             static_cast<int>(request.inputLineGhost.size()));
+                addNode(view, ShellNodeKind::HeaderField, "input_line.ghost",
+                         "Input line completion",
                          {headerX, view.header->y, ghostWidth, 1},
-                         SemanticRole::LineNumber, request.paletteGhost);
+                         SemanticRole::LineNumber, request.inputLineGhost);
                 headerX += ghostWidth;
             }
         } else if (!request.leaderHint.empty()) {
             const int width = std::min(
-                view.header->width,
+                view.header->right() - headerX,
                 static_cast<int>(request.leaderHint.size()) + 1);
-            addNode(view, ShellNodeKind::HeaderField, "leader", "Leader hint",
-                     {headerX, view.header->y, width, 1}, SemanticRole::Prompt,
-                     request.leaderHint);
-            headerX += width;
+            if (width > 0) {
+                addNode(view, ShellNodeKind::HeaderField, "leader", "Leader hint",
+                         {headerX, view.header->y, width, 1},
+                         SemanticRole::Prompt, request.leaderHint);
+                headerX += width;
+            }
         }
-        addFields(view, request.headerFields,
-                   {headerX, view.header->y,
-                    view.header->right() - headerX, view.header->height},
-                   ShellNodeKind::HeaderField, SemanticRole::Header);
         int actionX = view.footer->right();
         for (auto action = request.footerActions.rbegin();
              action != request.footerActions.rend(); ++action) {
