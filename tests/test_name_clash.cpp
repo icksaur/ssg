@@ -3,6 +3,8 @@
 #include <ssg/EditorRuntime.h>
 #include <ssg/FileCommands.h>
 #include <ssg/PromptSurface.h>
+#include <ssg/RecoveryActions.h>
+#include <ssg/Workspace.h>
 
 #include <chrono>
 #include <filesystem>
@@ -210,6 +212,33 @@ TEST(aRuntimeWithNoDocumentOpensAnEditableNewBuffer) {
                 std::string::npos);
 }
 
+// Rolling back a rename must leave the workspace as it was: the file back at
+// its old name AND NOTHING at the new one. This is the oracle that a
+// placeholder-based clash check fails -- it makes the recovery snapshot record
+// the placeholder as the destination's prior state, so a rollback restores an
+// empty file where there had been none. Refusal tests cannot see that.
+TEST(rollingBackARenameLeavesNothingAtTheNewName) {
+    TemporaryDirectory directory;
+    const auto recoveryRoot = directory.path() / "recovery";
+    fs::create_directories(recoveryRoot);
+    writeOutOfBand(directory.path() / "before.txt", "payload\n");
+
+    auto recovery = ssg::RecoveryActions::create(recoveryRoot);
+    auto workspace = ssg::Workspace::create(directory.path(), recovery);
+    const auto opened = workspace.openFile("before.txt");
+    ASSERT_TRUE(opened.accepted());
+
+    const auto renamed = workspace.renameFile(*opened.document, "after.txt");
+    ASSERT_TRUE(renamed.accepted());
+    ASSERT_TRUE(fs::exists(directory.path() / "after.txt"));
+    ASSERT_TRUE(renamed.compensation.has_value());
+    if (!renamed.compensation) return;
+
+    ASSERT_TRUE(workspace.restore(*renamed.compensation).accepted());
+    ASSERT_EQ(readOutOfBand(directory.path() / "before.txt"), "payload\n");
+    ASSERT_FALSE(fs::exists(directory.path() / "after.txt"));
+}
+
 }  // namespace
 
 int main() {
@@ -220,6 +249,7 @@ int main() {
     RUN(saveAsToAFreeNameSucceedsAndRetitlesTheTab);
     RUN(renameToAFreeNameMovesTheFileAndRetitlesTheTab);
     RUN(aRuntimeWithNoDocumentOpensAnEditableNewBuffer);
+    RUN(rollingBackARenameLeavesNothingAtTheNewName);
     std::cout << "Passed: " << passed << " Failed: " << failed << '\n';
     return failed == 0 ? 0 : 1;
 }

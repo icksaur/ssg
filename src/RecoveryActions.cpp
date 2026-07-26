@@ -781,6 +781,65 @@ public:
             });
     }
 
+    RecoveryActionResult renamePathNoClobber(
+        const std::filesystem::path& source,
+        const std::filesystem::path& destination) {
+        if (pathContains(source, destination) ||
+            pathContains(destination, source)) {
+            return {{},
+                    error(RecoveryErrorCode::PreparationFailed,
+                          "rename source and destination must not overlap")};
+        }
+        try {
+            if (snapshotKind(source) == SnapshotKind::Missing) {
+                return {{},
+                        error(RecoveryErrorCode::PreparationFailed,
+                              "rename source does not exist")};
+            }
+            // An early, friendly rejection. It is NOT what makes the rename
+            // safe -- renameFileNoClobber below is, because the kernel decides.
+            // Snapshotting proceeds with the destination recorded as missing,
+            // which is what lets a rollback remove it rather than restore
+            // something that was never there.
+            if (snapshotKind(destination) != SnapshotKind::Missing) {
+                return {{},
+                        error(RecoveryErrorCode::PreparationFailed,
+                              "rename destination already exists")};
+            }
+        } catch (...) {
+            return {{},
+                    error(RecoveryErrorCode::PreparationFailed,
+                          exceptionMessage(std::current_exception()))};
+        }
+
+        return prepareAndPerform(
+            RecoveryRecordKind::PathRename, std::nullopt,
+            {source, destination}, std::nullopt,
+            [&] {
+                before(RecoveryStep::MutateFilesystem);
+                std::filesystem::create_directories(destination.parent_path());
+                const auto renamed = renameFileNoClobber(source, destination);
+                if (!renamed.ok()) {
+                    throw std::runtime_error("rename failed: " +
+                                             renamed.message);
+                }
+                syncPath(std::filesystem::absolute(source).parent_path(), true);
+                const auto sourceParent =
+                    std::filesystem::absolute(source).parent_path()
+                        .lexically_normal();
+                const auto destinationParent =
+                    std::filesystem::absolute(destination).parent_path()
+                        .lexically_normal();
+                if (destinationParent != sourceParent) {
+                    syncPath(destinationParent, true);
+                }
+            },
+            [&](const StoredRecord& stored) {
+                before(RecoveryStep::RollbackFilesystem);
+                restoreRename(stored);
+            });
+    }
+
     RecoveryActionResult deletePath(const std::filesystem::path& path) {
         try {
             if (snapshotKind(path) == SnapshotKind::Missing) {
@@ -1410,6 +1469,12 @@ RecoveryActionResult RecoveryActions::renamePath(
     const std::filesystem::path& source,
     const std::filesystem::path& destination) {
     return impl_->renamePath(source, destination);
+}
+
+RecoveryActionResult RecoveryActions::renamePathNoClobber(
+    const std::filesystem::path& source,
+    const std::filesystem::path& destination) {
+    return impl_->renamePathNoClobber(source, destination);
 }
 
 RecoveryActionResult RecoveryActions::deletePath(

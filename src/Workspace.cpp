@@ -941,24 +941,14 @@ WorkspaceResult Workspace::renameFile(FileDocumentId id,
         return failure(WorkspaceError::AlreadyOpen,
                        "destination is already open");
     }
-    // The recovery rename replaces an existing destination, which would destroy
-    // the occupant. Claim the name exclusively FIRST -- the filesystem decides,
-    // so a file created between here and the rename cannot be lost -- then let
-    // the rename replace the placeholder we ourselves just made.
-    if (const auto claimed = createFileExclusively(*destination, {});
-        !claimed.ok()) {
-        return failure(claimed.status == FileIoStatus::AlreadyExists
-                           ? WorkspaceError::AlreadyOpen
-                           : WorkspaceError::IoFailed,
-                       claimed.status == FileIoStatus::AlreadyExists
-                           ? "destination already exists"
-                           : claimed.message);
-    }
-    const auto action = impl_->recovery.renamePath(*source, *destination);
+    // renamePathNoClobber, not renamePath: the latter deliberately replaces the
+    // destination. Letting the recovery action own the exclusion (rather than
+    // claiming the name here first) keeps its snapshot honest -- the
+    // destination is recorded as missing, so a rollback REMOVES it instead of
+    // restoring an empty placeholder that was never really there.
+    const auto action =
+        impl_->recovery.renamePathNoClobber(*source, *destination);
     if (!action.accepted()) {
-        // Our placeholder must not outlive the failed rename, or a retry would
-        // report a clash against a file that only we created.
-        (void)removeFile(*destination);
         return failure(WorkspaceError::RecoveryFailed,
                        action.error->message);
     }

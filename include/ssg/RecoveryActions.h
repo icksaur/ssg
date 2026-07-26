@@ -142,6 +142,15 @@ public:
     [[nodiscard]] RecoveryActionResult renamePath(
         const std::filesystem::path& source,
         const std::filesystem::path& destination);
+
+    // Renames only when the destination is free, with the exclusion enforced by
+    // the filesystem rather than by a preceding check. Distinct from
+    // renamePath, which deliberately REPLACES the destination: replacing is
+    // right for an LSP-driven or recovery-internal move, and wrong for a
+    // user-facing rename, where clobbering is data loss.
+    [[nodiscard]] RecoveryActionResult renamePathNoClobber(
+        const std::filesystem::path& source,
+        const std::filesystem::path& destination);
     [[nodiscard]] RecoveryActionResult deletePath(
         const std::filesystem::path& path);
 
