@@ -508,6 +508,65 @@ TEST(headerNodesNeverOverlap) {
     }
 }
 
+// An over-long query must keep its END visible rather than clipping it, and it
+// must NOT take space back from the fields to do so.
+TEST(anOverlongQueryScrollsItsOwnTextAndLeavesFieldsAlone) {
+    auto shortQuery = request(60, 12);
+    shortQuery.inputLineActive = true;
+    shortQuery.inputLineQuery = "ab";
+    auto longQuery = request(60, 12);
+    longQuery.inputLineActive = true;
+    // Distinct tail so the visible window is identifiable.
+    longQuery.inputLineQuery = std::string(200, 'x') + "TAIL";
+
+    ShellState state;
+    auto shortResult = computeShellLayout(shortQuery, state);
+    auto longResult = computeShellLayout(longQuery, state);
+    ASSERT_TRUE(shortResult.accepted() && longResult.accepted());
+    if (!shortResult.accepted() || !longResult.accepted()) return;
+
+    const auto* shortPath = findNode(*shortResult.view, "active_command");
+    const auto* longPath = findNode(*longResult.view, "active_command");
+    ASSERT_TRUE(shortPath != nullptr && longPath != nullptr);
+    // The fields did not move or shrink to make room.
+    if (shortPath && longPath) ASSERT_EQ(shortPath->rect, longPath->rect);
+
+    const auto* line = findNode(*longResult.view, "input_line.query");
+    ASSERT_TRUE(line != nullptr);
+    if (!line) return;
+    // Stays inside the header...
+    ASSERT_TRUE(line->rect.x + line->rect.width <= 60);
+    // ...keeps the sigil...
+    ASSERT_TRUE(line->content.rfind("> ", 0) == 0);
+    // ...and shows the END of the query, not the beginning.
+    ASSERT_TRUE(line->content.find("TAIL") != std::string::npos);
+    ASSERT_TRUE(line->content.find(std::string(50, 'x')) == std::string::npos);
+}
+
+// Slicing must respect grapheme boundaries: a byte-wise cut would emit half a
+// multi-byte character.
+TEST(theScrolledQueryIsCutOnCharacterBoundaries) {
+    auto value = request(40, 12);
+    value.inputLineActive = true;
+    // 60 two-byte characters; any byte-wise slice lands mid-character.
+    std::string query;
+    for (int i = 0; i < 60; ++i) query += "\u00e9";
+    value.inputLineQuery = query;
+    ShellState state;
+    auto result = computeShellLayout(value, state);
+    ASSERT_TRUE(result.accepted());
+    if (!result.accepted()) return;
+    const auto* line = findNode(*result.view, "input_line.query");
+    ASSERT_TRUE(line != nullptr);
+    if (!line) return;
+    // Every byte after the "> " sigil belongs to a whole two-byte character.
+    const auto text = line->content.substr(2);
+    ASSERT_TRUE(text.size() % 2 == 0);
+    for (std::size_t i = 0; i < text.size(); i += 2) {
+        ASSERT_EQ(static_cast<unsigned char>(text[i]), 0xC3u);
+    }
+}
+
 TEST(aNarrowHeaderStillGivesTheInputLineRoom) {
     auto value = request(30, 12);
     value.inputLineActive = true;
@@ -586,6 +645,8 @@ int main() {
     RUN(typingInTheInputLineNeverMovesTheStatusFields);
     RUN(fieldsAreStableEvenWhenTheHeaderIsTight);
     RUN(headerNodesNeverOverlap);
+    RUN(anOverlongQueryScrollsItsOwnTextAndLeavesFieldsAlone);
+    RUN(theScrolledQueryIsCutOnCharacterBoundaries);
     RUN(aNarrowHeaderStillGivesTheInputLineRoom);
     RUN(theLeaderHintSitsWhereTheInputLineWould);
     RUN(nonOverlapAndCardinalityProperties);

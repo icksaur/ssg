@@ -123,6 +123,31 @@ void addNode(ShellViewState& view, ShellNodeKind kind, std::string id,
 // Lays out status fields left to right, retaining as many as fit by collapse
 // rank.  Returns the x just past the last field, so a caller can place
 // something after them without recomputing their widths.
+// The tail of `query` that fits in `cells` display columns, so the END of what
+// the user typed stays visible as it outgrows the header -- the same principle
+// as caret reveal in the editor: the thing being typed at is what must remain on
+// screen.
+//
+// Sliced on grapheme boundaries via the shared layout, never on bytes: cutting a
+// multi-byte character in half would emit a broken cluster, and cutting by
+// byte count would show the wrong amount of text for any non-ASCII query.
+std::string visibleQueryTail(std::string_view query, int cells) {
+    if (cells <= 0) return {};
+    auto const run = GraphemeLayout{}.computeRun(query);
+    if (static_cast<int>(run.totalCells) <= cells) return std::string{query};
+    // Walk backwards from the end, taking clusters while they fit.
+    int used = 0;
+    std::size_t begin = query.size();
+    for (auto span = run.spans.rbegin(); span != run.spans.rend(); ++span) {
+        auto const width =
+            static_cast<int>(std::max<std::uint32_t>(span->cellWidth, 1));
+        if (used + width > cells) break;
+        used += width;
+        begin = span->byteOffset;
+    }
+    return std::string{query.substr(begin)};
+}
+
 int addFields(ShellViewState& view, const std::vector<StatusField>& fields,
                 Rect row, ShellNodeKind kind, SemanticRole role) {
     std::vector<const StatusField*> prioritized;
@@ -429,10 +454,23 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
         // The input line and the leader hint share this slot; picker focus and
         // leader-chord entry are mutually exclusive, so they never compete.
         if (request.inputLineActive) {
-            std::string query = "> " + request.inputLineQuery;
-            const int available = headerRight - headerX;
+            const int available = std::max(0, headerRight - headerX);
+            // Scroll the query rather than reclaim field width when it outgrows
+            // the space: the fields' positions are the thing being protected,
+            // and the end of the query is what the user is looking at. The "> "
+            // sigil stays put as the surface's identity while the text slides
+            // under it, which is why the tail is measured against the space
+            // AFTER the sigil.
+            //
+            // One column is held back for the caret. A terminal cursor must
+            // land on a real cell, so text filling the header to its last
+            // column would leave the insertion point nowhere to sit.
+            const int drawable = std::max(0, available - 1);
+            const int textRoom = std::max(0, drawable - kInputLineSigilWidth);
+            std::string query =
+                "> " + visibleQueryTail(request.inputLineQuery, textRoom);
             const int queryWidth =
-                std::min(available, static_cast<int>(query.size()));
+                std::min(drawable, static_cast<int>(query.size()));
             addNode(view, ShellNodeKind::HeaderField, "input_line.query",
                      "Input line", {headerX, view.header->y, queryWidth, 1},
                      SemanticRole::Prompt, std::move(query));

@@ -187,7 +187,10 @@ std::optional<GridPosition> inputLineCaret(ShellViewState const& shell) {
             if (column + width > node.rect.right()) break;
             column += width;
         }
-        column = std::min(column, shell.header->right() - 1);
+        // The caret sits one past the last drawn character. Layout holds a
+        // column back for it, so this normally needs no clamping; the bound is
+        // a guard against a degenerate header rather than routine behavior.
+        column = std::min(column, static_cast<int>(shell.viewport.columns) - 1);
         return GridPosition{static_cast<std::uint32_t>(std::max(column, 0)),
                             static_cast<std::uint32_t>(node.rect.y)};
     }

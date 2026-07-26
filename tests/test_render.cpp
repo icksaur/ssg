@@ -930,6 +930,43 @@ TEST(theInputLineCaretIsPlacedByDisplayWidthNotByteCount) {
     }
 }
 
+// With a scrolled query the caret must sit at the end of the VISIBLE text --
+// still inside the header, still marking where the next keystroke lands.
+TEST(theCaretFollowsAScrolledQueryToTheEndOfTheVisibleText) {
+    auto root = uniqueRoot();
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    ASSERT_TRUE(runtime->dispatch(ssg::ClientId{1},
+                                  {"palette.open", runtime->revision(), {}})
+                    .accepted());
+
+    ssg::PaletteReport report;
+    report.query = std::string(300, 'x');
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24}, {}, report);
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    auto grid = ssg::Renderer{}.render(*snapshot);
+
+    ASSERT_TRUE(grid.caret.has_value());
+    if (!grid.caret) return;
+    ASSERT_EQ(grid.caret->row, std::uint32_t{0});
+    // Inside the header, not run off the right edge by the untruncated query.
+    ASSERT_TRUE(grid.caret->column < std::uint32_t{80});
+
+    auto const& shell = snapshot->sections().shell;
+    const ssg::AccessibilityNode* query = nullptr;
+    for (auto const& node : shell.accessibilityNodes) {
+        if (node.id == "input_line.query") query = &node;
+    }
+    ASSERT_TRUE(query != nullptr);
+    if (query) {
+        // At the end of what is actually drawn.
+        ASSERT_EQ(grid.caret->column,
+                  static_cast<std::uint32_t>(query->rect.x + query->rect.width));
+    }
+}
+
 int main() {
     RUN(renderPaintsContentNotAccessibilityLabels);
     RUN(renderSegmentsOnlyVisibleLinesNotWholeDocument);
@@ -956,6 +993,7 @@ int main() {
     RUN(renderTooSmallIsSafeAtOneByOne);
     RUN(anOpenPickerPutsTheCaretAtTheEndOfTheTypedQuery);
     RUN(theInputLineCaretIsPlacedByDisplayWidthNotByteCount);
+    RUN(theCaretFollowsAScrolledQueryToTheEndOfTheVisibleText);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;
