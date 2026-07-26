@@ -442,6 +442,72 @@ TEST(typingInTheInputLineNeverMovesTheStatusFields) {
 
 // A focused text input that accepts keys while being invisible is worse than a
 // field that moved, so at a narrow header the fields yield instead.
+// The narrow case is where a query-length-dependent reservation would betray
+// the whole point: if the reservation grows with the query, the fields shrink
+// as the user types and start collapsing again. Assert stability at a width
+// where the reservation actually binds, not just at a roomy one.
+TEST(fieldsAreStableEvenWhenTheHeaderIsTight) {
+    std::optional<Rect> firstPathRect;
+    std::optional<std::size_t> firstFieldCount;
+    for (const auto& query : {std::string{}, std::string{"ab"},
+                              std::string{"abcdefghij"},
+                              std::string(30, 'z')}) {
+        auto value = request(48, 12);
+        value.inputLineActive = true;
+        value.inputLineQuery = query;
+        ShellState state;
+        auto result = computeShellLayout(value, state);
+        ASSERT_TRUE(result.accepted());
+        if (!result.accepted()) continue;
+
+        std::size_t fieldCount = 0;
+        for (const auto& node : result.view->accessibilityNodes) {
+            if (node.kind == ShellNodeKind::HeaderField &&
+                node.id.rfind("input_line", 0) != 0) {
+                ++fieldCount;
+            }
+        }
+        if (!firstFieldCount) firstFieldCount = fieldCount;
+        // The same fields survive, in the same places, at every query length.
+        ASSERT_EQ(fieldCount, *firstFieldCount);
+        const auto* path = findNode(*result.view, "active_command");
+        ASSERT_TRUE(path != nullptr);
+        if (path) {
+            if (!firstPathRect) firstPathRect = path->rect;
+            ASSERT_EQ(path->rect, *firstPathRect);
+        }
+    }
+}
+
+// Header nodes must not overlap: hit-testing returns the FIRST node containing
+// a cell, so an input line drawn on top of a field would render the query but
+// dispatch the field's command on click.
+TEST(headerNodesNeverOverlap) {
+    for (int columns : {30, 48, 80, 120}) {
+        auto value = request(columns, 12);
+        value.inputLineActive = true;
+        value.inputLineQuery = std::string(20, 'q');
+        value.inputLineGhost = "ghost";
+        ShellState state;
+        auto result = computeShellLayout(value, state);
+        ASSERT_TRUE(result.accepted());
+        if (!result.accepted()) continue;
+        std::vector<const AccessibilityNode*> header;
+        for (const auto& node : result.view->accessibilityNodes) {
+            if (node.kind == ShellNodeKind::HeaderField) header.push_back(&node);
+        }
+        for (std::size_t i = 0; i < header.size(); ++i) {
+            for (std::size_t j = i + 1; j < header.size(); ++j) {
+                const auto& a = header[i]->rect;
+                const auto& b = header[j]->rect;
+                const bool disjoint =
+                    a.x + a.width <= b.x || b.x + b.width <= a.x;
+                ASSERT_TRUE(disjoint);
+            }
+        }
+    }
+}
+
 TEST(aNarrowHeaderStillGivesTheInputLineRoom) {
     auto value = request(30, 12);
     value.inputLineActive = true;
@@ -518,6 +584,8 @@ int main() {
     RUN(hidingAnUnfocusedPanelLeavesFocusUntouched);
     RUN(leaderHintRendersInTheHeaderWhenPresent);
     RUN(typingInTheInputLineNeverMovesTheStatusFields);
+    RUN(fieldsAreStableEvenWhenTheHeaderIsTight);
+    RUN(headerNodesNeverOverlap);
     RUN(aNarrowHeaderStillGivesTheInputLineRoom);
     RUN(theLeaderHintSitsWhereTheInputLineWould);
     RUN(nonOverlapAndCardinalityProperties);

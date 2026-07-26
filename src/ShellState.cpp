@@ -12,10 +12,19 @@ namespace {
 constexpr int kMinimumColumns = 20;
 constexpr int kMinimumRows = 4;
 constexpr int kPanelTargetWidth = 24;
-// Enough for the "> " sigil and a few typed characters.  When the status fields
-// would leave less than this, they yield rather than let a focused input line
-// become invisible.
-constexpr int kInputLineMinimumWidth = 12;
+// What the input line reserves from the status fields while a picker is open.
+//
+// Deliberately INDEPENDENT of the query: a reservation that grew with the typed
+// text would shrink the field region on every keystroke, collapsing fields out
+// again -- the exact bug this change exists to fix. So it is a fixed budget:
+// the separating space, the "> " sigil, and room for a short query. Beyond that
+// the input line uses whatever the fields left, and overflows by scrolling its
+// own text rather than by taking more (doc/spec-input-line.md).
+constexpr int kInputLineSeparator = 1;
+constexpr int kInputLineSigilWidth = 2;   // "> "
+constexpr int kInputLineQueryBudget = 8;
+constexpr int kInputLineReservation =
+    kInputLineSeparator + kInputLineSigilWidth + kInputLineQueryBudget;
 constexpr int kPanelMinimumWidth = 12;
 constexpr int kEditorMinimumWidth = 20;
 
@@ -394,9 +403,24 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
         // position does not depend on the input line's contents: typing into a
         // picker must not slide the working directory and branch rightward or
         // collapse them out (doc/spec-input-line.md).
+        //
+        // The input line's needs are subtracted from the fields' width BEFORE
+        // they are laid out, never after. Emitting fields first and then pulling
+        // the input line back over them would overlap two nodes on the same
+        // cells, and hit-testing takes the FIRST node containing a cell, so a
+        // click on visible query cells would dispatch the field's command.
+        // Reserving up front keeps the fields' own collapse-rank logic the one
+        // mechanism that decides what fits.
+        const int headerRight = view.header->right();
+        int fieldWidth = view.header->width;
+        if (request.inputLineActive) {
+            const int reserved =
+                std::min(kInputLineReservation, view.header->width);
+            fieldWidth = std::max(0, view.header->width - reserved);
+        }
         int headerX = addFields(view, request.headerFields,
-                                 {view.header->x, view.header->y,
-                                  view.header->width, view.header->height},
+                                 {view.header->x, view.header->y, fieldWidth,
+                                  view.header->height},
                                  ShellNodeKind::HeaderField,
                                  SemanticRole::Header);
         // A space between the fields and whatever follows them.
@@ -405,27 +429,17 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
         // The input line and the leader hint share this slot; picker focus and
         // leader-chord entry are mutually exclusive, so they never compete.
         if (request.inputLineActive) {
-            // The picker's query renders in the prompt role, its ghost
-            // completion trailing dim.  Reserve room even when the fields
-            // filled the header: a focused text input that is invisible while
-            // still accepting keys is worse than a shifted field, and this is
-            // the ONE case where typing may move fields.
-            if (view.header->right() - headerX < kInputLineMinimumWidth) {
-                headerX = std::max(view.header->x,
-                                   view.header->right() - kInputLineMinimumWidth);
-            }
             std::string query = "> " + request.inputLineQuery;
-            const int available = view.header->right() - headerX;
+            const int available = headerRight - headerX;
             const int queryWidth =
                 std::min(available, static_cast<int>(query.size()));
             addNode(view, ShellNodeKind::HeaderField, "input_line.query",
                      "Input line", {headerX, view.header->y, queryWidth, 1},
                      SemanticRole::Prompt, std::move(query));
             headerX += queryWidth;
-            if (!request.inputLineGhost.empty() &&
-                headerX < view.header->right()) {
+            if (!request.inputLineGhost.empty() && headerX < headerRight) {
                 const int ghostWidth =
-                    std::min(view.header->right() - headerX,
+                    std::min(headerRight - headerX,
                              static_cast<int>(request.inputLineGhost.size()));
                 addNode(view, ShellNodeKind::HeaderField, "input_line.ghost",
                          "Input line completion",
@@ -435,7 +449,7 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
             }
         } else if (!request.leaderHint.empty()) {
             const int width = std::min(
-                view.header->right() - headerX,
+                headerRight - headerX,
                 static_cast<int>(request.leaderHint.size()) + 1);
             if (width > 0) {
                 addNode(view, ShellNodeKind::HeaderField, "leader", "Leader hint",
