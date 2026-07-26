@@ -401,8 +401,13 @@ public:
         return result;
     }
 
+    // `mayOverwrite` distinguishes saving a document over the path it already
+    // lives at (allowed, and the only allowed overwrite) from writing to a name
+    // the user just supplied (must never clobber). Passing the intent in is
+    // what lets one function serve both without guessing.
     WorkspaceResult saveTo(Entry& entry, std::string path,
-                            const std::filesystem::path& absolute) {
+                            const std::filesystem::path& absolute,
+                            bool mayOverwrite) {
         if (entry.contentKind != FileContentKind::Text) {
             return failure(WorkspaceError::ReadOnly,
                            "read-only content cannot be saved");
@@ -416,7 +421,23 @@ public:
         }
         try {
             WorkspaceResult result;
-            if (std::filesystem::exists(absolute)) {
+            if (!mayOverwrite) {
+                // The filesystem decides whether the name was taken, so a file
+                // created between here and the write cannot be destroyed. An
+                // exists() check followed by a write would lose that race
+                // silently, which is the whole reason for the clash rule.
+                const auto created = createFileExclusively(
+                    absolute, asBytes(encoded.bytes));
+                if (!created.ok()) {
+                    return failure(
+                        created.status == FileIoStatus::AlreadyExists
+                            ? WorkspaceError::AlreadyOpen
+                            : WorkspaceError::IoFailed,
+                        created.status == FileIoStatus::AlreadyExists
+                            ? "destination already exists"
+                            : created.message);
+                }
+            } else if (std::filesystem::exists(absolute)) {
                 const auto priorPersisted = entry.persistedText;
                 const auto replacement = toBytes(encoded.bytes);
                 const auto action =
@@ -437,6 +458,8 @@ public:
                         std::move(state));
                 }
             } else {
+                // Own path, but nothing there: the file was removed under us.
+                // Recreating it is the right outcome for a save.
                 replaceFileAtomically(absolute, asBytes(encoded.bytes));
             }
             entry.key = JournalDocumentKey::saved(path);
@@ -576,7 +599,7 @@ WorkspaceResult Workspace::restoreWorkspace(
 WorkspaceResult Workspace::newDocument(std::string_view suggestedLabel) {
     return impl_->addBytes(
         {}, JournalDocumentKey::untitled(UntitledDocumentId::generate()),
-        suggestedLabel.empty() ? "Untitled" : sanitizeLabel(suggestedLabel), true,
+        suggestedLabel.empty() ? std::string{kNewBufferLabel} : sanitizeLabel(suggestedLabel), true,
         DocumentMode::Edit);
 }
 
@@ -586,7 +609,7 @@ WorkspaceResult Workspace::openVirtualDocument(std::string_view suggestedLabel,
     return impl_->addBytes(
         std::vector<std::uint8_t>{initialText.begin(), initialText.end()},
         JournalDocumentKey::untitled(UntitledDocumentId::generate()),
-        suggestedLabel.empty() ? "Untitled" : sanitizeLabel(suggestedLabel),
+        suggestedLabel.empty() ? std::string{kNewBufferLabel} : sanitizeLabel(suggestedLabel),
         false, mode);
 }
 
@@ -665,7 +688,8 @@ WorkspaceResult Workspace::save(FileDocumentId id) {
     if (!absolute) {
         return pathError;
     }
-    return impl_->saveTo(*entry, entry->key.savedPath(), *absolute);
+    // Saving a document over its own path is the one permitted overwrite.
+    return impl_->saveTo(*entry, entry->key.savedPath(), *absolute, true);
 }
 
 WorkspaceResult Workspace::saveAll() {
@@ -708,7 +732,11 @@ WorkspaceResult Workspace::saveAs(FileDocumentId id,
         return failure(WorkspaceError::AlreadyOpen,
                        "destination is already open");
     }
-    return impl_->saveTo(*entry, path, *absolute);
+    // Save-as to the document's OWN current path is just a save, so it keeps
+    // the self-overwrite permission. Any other name must not clobber.
+    const bool ownPath = entry->key.kind() == JournalDocumentKeyKind::Saved &&
+                         entry->key.savedPath() == path;
+    return impl_->saveTo(*entry, path, *absolute, ownPath);
 }
 
 WorkspaceResult Workspace::reload(FileDocumentId id) {
@@ -913,8 +941,24 @@ WorkspaceResult Workspace::renameFile(FileDocumentId id,
         return failure(WorkspaceError::AlreadyOpen,
                        "destination is already open");
     }
+    // The recovery rename replaces an existing destination, which would destroy
+    // the occupant. Claim the name exclusively FIRST -- the filesystem decides,
+    // so a file created between here and the rename cannot be lost -- then let
+    // the rename replace the placeholder we ourselves just made.
+    if (const auto claimed = createFileExclusively(*destination, {});
+        !claimed.ok()) {
+        return failure(claimed.status == FileIoStatus::AlreadyExists
+                           ? WorkspaceError::AlreadyOpen
+                           : WorkspaceError::IoFailed,
+                       claimed.status == FileIoStatus::AlreadyExists
+                           ? "destination already exists"
+                           : claimed.message);
+    }
     const auto action = impl_->recovery.renamePath(*source, *destination);
     if (!action.accepted()) {
+        // Our placeholder must not outlive the failed rename, or a retry would
+        // report a clash against a file that only we created.
+        (void)removeFile(*destination);
         return failure(WorkspaceError::RecoveryFailed,
                        action.error->message);
     }

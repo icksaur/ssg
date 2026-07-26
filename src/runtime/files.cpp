@@ -100,7 +100,8 @@ CommandHandlerResult bindFile(EditorRuntime::Impl& runtime,
             return success();
         }
         case FileCommand::Create: {
-            auto label = stringPayload(payload).value_or("Untitled");
+            // No payload means an unnamed buffer; the workspace supplies the label.
+            auto label = stringPayload(payload).value_or(std::string{});
             result = runtime.workspace.newDocument(label);
             return openDocumentResult(runtime, result);
         }
@@ -312,8 +313,9 @@ CommandHandlerResult EditorRuntime::Impl::updateTabsFor(FileDocumentId document)
     if (!state) return failure("workspace document does not exist");
     auto const* opened = workspace.tryDocument(document);
     if (opened == nullptr) return failure("workspace document does not exist");
-    auto result = tabs.updateDocument(document, opened->mode(),
-                                       state->dirty, badgeFor(scratch.durabilityState()));
+    auto result = tabs.updateDocument(document, state->key, state->displayLabel,
+                                       opened->mode(), state->dirty,
+                                       badgeFor(scratch.durabilityState()));
     return result.accepted() ? success() : failure(tabMessage(result));
 }
 

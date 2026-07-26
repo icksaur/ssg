@@ -186,7 +186,8 @@ prompt. Exhaustive command reachability is the palette's job, not the keymap's
 Bindings (all terminal-typable; Escape-led chords and single strokes only; the
 terminal has no browser-reserved chords, so none is excluded):
 
-- Global (`*`): `[Escape, KeyS]` → `file.save`, `[Escape, KeyZ]` → `edit.undo`,
+- Global (`*`): `[Escape, KeyS]` → `file.save`, `[Escape, KeyN]` → `file.new`,
+  `[Escape, KeyZ]` → `edit.undo`,
   `[Escape, Shift+KeyZ]` → `edit.redo`, `[Escape, KeyP]` → `file_finder.open`,
   `[Escape, Shift+KeyP]` → `palette.open`,
   `[Escape, KeyB]` → `panel.toggle`, `[Escape, KeyO]` → `panel.focus`,

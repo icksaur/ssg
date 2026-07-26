@@ -108,6 +108,7 @@ KeymapViewState defaultTerminalKeymap() {
     };
 
     bind(seq({"Escape", "KeyS"}), "file.save", "*");
+    bind(seq({"Escape", "KeyN"}), "file.new", "*");
     bind(seq({"Escape", "KeyZ"}), "edit.undo", "*");
     bind(seq({"Escape", "Shift+KeyZ"}), "edit.redo", "*");
     // leader+p opens the file picker (the frequent action) and leader+Shift+P

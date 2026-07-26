@@ -101,6 +101,11 @@ struct WorkspaceDocumentState {
                            const WorkspaceDocumentState&) = default;
 };
 
+// The tab title for a document that has never been named. Defined once so the
+// library and its clients cannot disagree about what an unnamed buffer is
+// called.
+inline constexpr std::string_view kNewBufferLabel = "[new buffer]";
+
 class Workspace {
 public:
     [[nodiscard]] static Workspace create(

@@ -2,6 +2,26 @@
 
 Status: draft (spec review pending)
 
+## Status
+
+Steps 1-6 are implemented. Corrections made against this spec during
+implementation, recorded because they change what the remaining steps can
+assume:
+
+- The path prompt could not be typed into at all. `PromptSurface` had no way to
+  change an input's value after `open()`, so `file.open`'s prompt was unusable.
+  Step 1 therefore also added `prompt.update_value`.
+- `pathPrompt()` accepted `FileCommand::Create`. It no longer does: `file.new`
+  takes a label and creates immediately. `workspace.open_directory` is
+  path-taking and is now flagged, so the set is
+  {OpenDirectory, Open, SaveAs, Rename, NewDirectory}.
+- `TabManager::updateDocument` synced mode/dirty/badge but NOT the label or key,
+  so a renamed or saved-as document kept its old tab title. It is now a full
+  sync from workspace state, which is what makes I4 hold.
+- The client focused the editor at startup only when a FILE was opened, so the
+  new unnamed buffer never received focus and everything typed was silently
+  discarded. The condition is now "startup left something editable".
+
 ## Goals
 
 A user can start `ssg` with no arguments and immediately type into a real

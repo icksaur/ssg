@@ -236,7 +236,11 @@ fs::path makeFixture() {
 
 // A headless production runtime over the fixture workspace, fully enriched (tree
 // scanned), matching the app's FINAL frame after it primes deferred enrichment.
-std::unique_ptr<ssg::EditorRuntime> makeHeadless(fs::path const& root) {
+// `startsOnANewBuffer` mirrors apps/ssg_main.cpp opening an unnamed buffer when
+// no file was opened at startup. Tests that go on to open a real file leave it
+// false, because in that case the app opens the file instead.
+std::unique_ptr<ssg::EditorRuntime> makeHeadless(fs::path const& root,
+                                                 bool startsOnANewBuffer = false) {
     ssg::EditorRuntimeConfig config;
     config.cwd = root / "workspace";
     config.scratchRoot = root / "scratch";
@@ -246,10 +250,22 @@ std::unique_ptr<ssg::EditorRuntime> makeHeadless(fs::path const& root) {
     auto runtime = std::move(created.runtime);
     (void)runtime->attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
                           ssg::ViewId{1});
+    // The app opens its startup document BEFORE showing the sidebar, so the
+    // fixture must too or the final frame differs.
+    if (startsOnANewBuffer) {
+        (void)runtime->dispatch(ssg::ClientId{1},
+                                {"file.new", runtime->revision(), {}});
+    }
     // apps/ssg_main.cpp always opens the Files sidebar at startup; mirror that
     // here so this fixture matches the app's actual final frame.
     (void)runtime->dispatch(ssg::ClientId{1},
                             {"panel.show_files", runtime->revision(), {}});
+    // Showing the sidebar moves focus to the panel, and the app re-asserts
+    // editor focus afterwards whenever startup left something editable. The
+    // caret position differs otherwise, which this fixture's parity check sees.
+    if (startsOnANewBuffer) {
+        runtime->focusEditor();
+    }
     return runtime;
 }
 
@@ -423,7 +439,7 @@ TEST(realBinaryOutputMatchesRenderSnapshot) {
     if (output.empty()) { fs::remove_all(root); return; }
     auto screen = decode(output, 80, 24);
 
-    auto runtime = makeHeadless(root);
+    auto runtime = makeHeadless(root, true);
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) { fs::remove_all(root); return; }
     auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});

@@ -205,8 +205,13 @@ public:
                                          std::string_view contentIdentity,
                                          std::string_view label,
                                          DocumentMode mode);
+    // Syncs the whole of a tab's document-derived state, INCLUDING its identity
+    // and label. Taking them here rather than only mode/dirty/badge is what
+    // keeps a renamed or saved-as document's tab title correct: a partial sync
+    // silently leaves the old name on screen while the bytes live elsewhere.
     [[nodiscard]] TabResult updateDocument(
-        FileDocumentId document, DocumentMode mode, bool dirty,
+        FileDocumentId document, JournalDocumentKey identity,
+        std::string_view label, DocumentMode mode, bool dirty,
         TabRecoveryBadge recovery);
 
     [[nodiscard]] TabResult activate(TabId tab);

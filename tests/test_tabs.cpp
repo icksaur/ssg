@@ -286,7 +286,7 @@ TEST(badgesUpdateAndDeltaReplayIsExact) {
     const auto base = tabs.viewState();
     (void)openSaved(tabs, 7, "a");
     ASSERT_TRUE(tabs.updateDocument(
-                        ssg::FileDocumentId{7},
+                        ssg::FileDocumentId{7}, saved("a"), "a",
                         ssg::DocumentMode::ReadOnly, true,
                         ssg::TabRecoveryBadge::Pending)
                     .accepted());

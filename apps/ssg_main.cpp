@@ -660,23 +660,34 @@ int main(int argc, char** argv) {
         initScriptWatcher.emplace(*scriptPath, appliedInitScript);
     }
 
-    // Set when a command-line file argument is successfully opened below;
-    // used after the deferred-startup panel.show_files dispatch (in the
-    // render loop) to re-assert editor focus, since that dispatch's
-    // showPanelProvider side effect moves focus to the panel.
-    bool fileOpenedAtStartup = false;
+    // Set when startup leaves a document ready to type into -- either the file
+    // named on the command line, or the unnamed buffer opened below. Used after
+    // the deferred panel.show_files dispatch to re-assert editor focus, since
+    // that dispatch moves focus to the panel. The condition is "is there
+    // something to edit", NOT "was a file opened": a new buffer is just as
+    // editable, and treating it otherwise silently swallows everything typed.
+    bool startsWithAnEditableDocument = false;
     if (target.file) {
         if (fs::exists(target.cwd / *target.file)) {
             auto const openResult = runtime.dispatch(
                 client, {"file.open", runtime.revision(), *target.file});
-            fileOpenedAtStartup = openResult.accepted();
+            startsWithAnEditableDocument = openResult.accepted();
             // panel.show_files (dispatched later, once the deferred tree
             // scan below completes) moves focus to the panel as a side
             // effect; when a file was explicitly named on the command
             // line, the user wants to start editing it, so focus is
             // re-asserted onto the editor AFTER that dispatch runs (see
-            // fileOpenedAtStartup's use below), not here.
+            // startsWithAnEditableDocument's use below), not here.
         }
+    }
+    // Nothing to edit otherwise: no argument, an argument naming a file that
+    // does not exist, or an open that failed. Starting on an unnamed buffer
+    // means the editor is always typeable, and `file.save` prompts for a name
+    // when the user is ready to keep it.
+    if (!startsWithAnEditableDocument) {
+        startsWithAnEditableDocument =
+            runtime.dispatch(client, {"file.new", runtime.revision(), {}})
+                .accepted();
     }
     STARTUP_MARK("post_open");
 
@@ -1016,7 +1027,7 @@ int main(int argc, char** argv) {
                     // user wants to start editing it, so re-assert editor
                     // focus here, AFTER panel.show_files, so it's the final
                     // word on where focus lands.
-                    if (fileOpenedAtStartup) {
+                    if (startsWithAnEditableDocument) {
                         runtime.focusEditor();
                     }
                     continue;

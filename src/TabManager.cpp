@@ -311,6 +311,8 @@ TabResult TabManager::openContent(TabKind kind,
 }
 
 TabResult TabManager::updateDocument(FileDocumentId document,
+                                      JournalDocumentKey identity,
+                                      std::string_view label,
                                       DocumentMode mode,
                                       bool dirty,
                                       TabRecoveryBadge recovery) {
@@ -322,6 +324,8 @@ TabResult TabManager::updateDocument(FileDocumentId document,
     if (found == impl_->view.tabs.end()) {
         return failure(TabError::NotFound, "document tab is not open");
     }
+    found->documentKey = identity;
+    found->label = label;
     found->mode = mode;
     found->dirty = dirty;
     found->recovery = recovery;
