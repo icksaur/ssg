@@ -156,7 +156,9 @@ File-management rules, all owned here:
   be the only surviving copy. Entries older than
   `ssg::kFileArchiveRetention` (14 days) are pruned at workspace open; entries
   whose name cannot be read, or that are dated in the future, are retained and
-  reported rather than removed.
+  counted in the returned prune report rather than removed. A prune that
+  genuinely fails raises a warning status and never blocks opening the
+  workspace.
 - **Deleting closes the tab.** The document has no backing bytes, so its tabs
   are dropped without the close lifecycle (there is nothing to flush, and the
   workspace entry is already gone).

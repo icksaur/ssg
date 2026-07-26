@@ -1287,6 +1287,17 @@ void EditorRuntime::Impl::ensureDocumentRuntimeState(FileDocumentId document) {
         DocumentRuntimeState{HistoryConfig::defaults(), syntaxParser});
 }
 
+void EditorRuntime::Impl::discardDocumentRuntimeState(FileDocumentId document) {
+    documentRuntimeStates.erase(document.value());
+    // A find that was scoped to this document no longer has a subject.
+    if (findDocumentId == document) findDocumentId.reset();
+    // Any live diff tab mapped to it is equally orphaned.
+    for (auto it = liveDiffDocuments.begin(); it != liveDiffDocuments.end();) {
+        it = it->second == document ? liveDiffDocuments.erase(it)
+                                    : std::next(it);
+    }
+}
+
 DocumentHistory& EditorRuntime::Impl::historyFor(FileDocumentId document) {
     auto it = documentRuntimeStates.find(document.value());
     if (it == documentRuntimeStates.end()) {

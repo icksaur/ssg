@@ -371,6 +371,74 @@ TEST(deletingAFileClosesItsTab) {
     }
 }
 
+// Bypassing the close lifecycle means its cleanup does not run either. This
+// pins the part that is invisible from the outside: per-document runtime state
+// must not accumulate for documents that no longer exist.
+TEST(deletingAFileLeavesNoRuntimeStateBehind) {
+    TemporaryDirectory directory;
+    const auto before =
+        ssg::EditorRuntime::liveDocumentRuntimeStateCountForTests();
+    {
+        writeOutOfBand(directory.path() / "doomed.txt", "bytes\n");
+        auto runtime = makeRuntime(directory.path());
+        ASSERT_TRUE(runtime != nullptr);
+        ASSERT_TRUE(
+            run(*runtime, "file.open", std::string{"doomed.txt"}).accepted());
+        ASSERT_TRUE(
+            ssg::EditorRuntime::liveDocumentRuntimeStateCountForTests() > before);
+        ASSERT_TRUE(run(*runtime, "file.delete").accepted());
+        ASSERT_EQ(ssg::EditorRuntime::liveDocumentRuntimeStateCountForTests(),
+                  before);
+    }
+}
+
+// The live-diff rule against an ACTUAL live diff tab, not just the descriptor
+// classification. A live diff tab is a computed view of two revisions, so
+// there is no file to save, rename, reload or delete.
+TEST(everyActiveFileMutatorIsRefusedInALiveDiffTab) {
+    TemporaryDirectory directory;
+    writeOutOfBand(directory.path() / "coexist.txt", "disk\n");
+    auto runtime = makeRuntime(directory.path());
+    ASSERT_TRUE(runtime != nullptr);
+    ASSERT_TRUE(
+        run(*runtime, "file.open", std::string{"coexist.txt"}).accepted());
+
+    ASSERT_TRUE(runtime
+                    ->applyGitDiffScan(
+                        {.revision = ssg::Revision{30},
+                         .baselineIdentity = "head-x:index-1",
+                         .files = {{.id = ssg::DiffFileId{"coexist-id"},
+                                    .path = "coexist.txt",
+                                    .baselineContent = std::string{"before\n"},
+                                    .workingContent = std::string{"after\n"}}}})
+                    .accepted());
+    ASSERT_TRUE(run(*runtime, "panel.show_git_status").accepted());
+    ASSERT_TRUE(run(*runtime, "tree.select_next").accepted());
+    ASSERT_TRUE(run(*runtime, "tree.activate").accepted());
+
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    bool liveDiffActive = false;
+    for (const auto& tab : snapshot->sections().tabs.tabs) {
+        if (tab.kind == ssg::TabKind::LiveDiff &&
+            snapshot->sections().tabs.active == tab.id) {
+            liveDiffActive = true;
+        }
+    }
+    ASSERT_TRUE(liveDiffActive);
+
+    // Driven from the descriptor set, so a command that gains the flag is
+    // covered here without editing this test.
+    for (const auto& descriptor :
+         ssg::fileCommandsCommandSet().descriptors()) {
+        if (!descriptor.mutatesActiveDocumentFile) continue;
+        ASSERT_FALSE(run(*runtime, std::string{descriptor.id}).accepted());
+    }
+    // The file is untouched by any of those refusals.
+    ASSERT_EQ(readOutOfBand(directory.path() / "coexist.txt"),
+              std::string{"disk\n"});
+}
+
 }  // namespace
 
 int main() {
@@ -387,6 +455,8 @@ int main() {
     RUN(theActiveFileMutatorSetIsExactlyTheDeclaredOne);
     RUN(activeFileMutatorsRefuseWithNoDocumentWhileCreatorsDoNot);
     RUN(deletingAFileClosesItsTab);
+    RUN(deletingAFileLeavesNoRuntimeStateBehind);
+    RUN(everyActiveFileMutatorIsRefusedInALiveDiffTab);
     std::cout << "Passed: " << passed << " Failed: " << failed << '\n';
     return failed == 0 ? 0 : 1;
 }

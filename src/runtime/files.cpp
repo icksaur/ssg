@@ -40,6 +40,18 @@ bool mutatesTheActiveDocumentsFile(FileCommand command) {
     return found != descriptors.end() && found->mutatesActiveDocumentFile;
 }
 
+// Prunes the archive and surfaces a genuine housekeeping FAILURE as a
+// non-fatal status. Deliberately not fatal: a corrupt archive entry must never
+// stop a user opening their workspace. Retained-entry counts stay in the return
+// value rather than nagging on every startup.
+void pruneArchiveReportingFailures(EditorRuntime::Impl& runtime) {
+    const auto report = runtime.workspace.pruneArchive();
+    if (report.ok()) return;
+    runtime.enqueueStatus(
+        StatusPriority::Warning,
+        "could not fully prune the deleted-file archive: " + report.message);
+}
+
 CommandHandlerResult openDocumentResult(EditorRuntime::Impl& runtime,
                                           WorkspaceResult const& result) {
     if (!result.accepted() || !result.document) return failure(workspaceMessage(result));
@@ -115,7 +127,7 @@ CommandHandlerResult bindFile(EditorRuntime::Impl& runtime,
             runtime.root = runtime.workspace.root();
             // Same housekeeping as at startup: opening a different workspace
             // means a different archive to expire.
-            (void)runtime.workspace.pruneArchive();
+            pruneArchiveReportingFailures(runtime);
             runtime.refreshTree();
             return success();
         }
@@ -212,8 +224,12 @@ CommandHandlerResult bindFile(EditorRuntime::Impl& runtime,
             // open would offer editing and saving of a file that is gone.
             // Dropped rather than closed: deleteFile has already removed the
             // workspace entry, so the close lifecycle would fail on a missing
-            // document and strand the tab.
+            // document and strand the tab. That lifecycle also owns the
+            // per-document runtime state, so bypassing it means discarding
+            // that state here or it accumulates for a document nobody can
+            // reach again.
             (void)runtime.tabs.dropDocument(*id);
+            runtime.discardDocumentRuntimeState(*id);
             runtime.refreshTree();
             return success();
         }
@@ -317,7 +333,7 @@ CommandHandlerResult bindEncoding(EditorRuntime::Impl& runtime,
     return runtime.updateTabsFor(*document);
 }
 
-} // namespace
+}  // namespace
 
 CommandHandlerResult EditorRuntime::Impl::updateTabsFor(FileDocumentId document) {
     auto state = workspace.state(document);

@@ -241,6 +241,11 @@ struct EditorRuntime::Impl final : CommandServices,
     [[nodiscard]] Document const* activeDocument() const;
     [[nodiscard]] Document* activeDocument();
     void ensureDocumentRuntimeState(FileDocumentId document);
+    // Discards every per-document association for a document that no longer
+    // exists. Normally the tab close lifecycle does this; delete bypasses that
+    // lifecycle (there is nothing left to flush), so it must do the same
+    // cleanup or the state outlives the document.
+    void discardDocumentRuntimeState(FileDocumentId document);
     [[nodiscard]] DocumentHistory& historyFor(FileDocumentId document);
     [[nodiscard]] SyntaxModel& syntaxFor(FileDocumentId document);
     [[nodiscard]] SyntaxViewState activeSyntaxView() const;
