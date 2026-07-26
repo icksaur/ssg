@@ -214,8 +214,16 @@ public:
         std::string_view label, DocumentMode mode, bool dirty,
         TabRecoveryBadge recovery);
 
-    [[nodiscard]] TabResult activate(TabId tab);
-    [[nodiscard]] TabResult next();
+    // Removes every tab for a document that NO LONGER EXISTS, without running
+    // the close lifecycle. Distinct from close(): closing flushes a document
+    // and records it as reopenable, and neither is meaningful once the file and
+    // its workspace entry are gone -- the lifecycle would simply fail on the
+    // missing document and leave the tab stranded.
+    //
+    // Returns the number of tabs removed.
+    std::size_t dropDocument(FileDocumentId document);
+
+    [[nodiscard]] TabResult activate(TabId tab);    [[nodiscard]] TabResult next();
     [[nodiscard]] TabResult previous();
     [[nodiscard]] TabResult moveLeft(TabId tab);
     [[nodiscard]] TabResult moveRight(TabId tab);

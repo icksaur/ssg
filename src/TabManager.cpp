@@ -332,6 +332,27 @@ TabResult TabManager::updateDocument(FileDocumentId document,
     return {TabError::None, {}, found->id, {}};
 }
 
+std::size_t TabManager::dropDocument(FileDocumentId document) {
+    std::size_t removed = 0;
+    for (std::size_t index = impl_->view.tabs.size(); index > 0; --index) {
+        const auto position = index - 1;
+        if (impl_->view.tabs[position].document != document) continue;
+        const auto wasActive =
+            impl_->view.active == impl_->view.tabs[position].id;
+        impl_->view.tabs.erase(impl_->view.tabs.begin() +
+                               static_cast<std::ptrdiff_t>(position));
+        ++removed;
+        if (impl_->view.tabs.empty()) {
+            impl_->view.active.reset();
+        } else if (wasActive) {
+            const auto replacement =
+                std::min(position, impl_->view.tabs.size() - 1);
+            impl_->view.active = impl_->view.tabs[replacement].id;
+        }
+    }
+    return removed;
+}
+
 TabResult TabManager::activate(TabId tab) {
     if (impl_->find(tab) == impl_->view.tabs.end()) {
         return failure(TabError::NotFound, "tab is not open");

@@ -298,6 +298,79 @@ TEST(aFailedArchiveWriteAbortsTheDeleteAndKeepsTheFile) {
     ASSERT_EQ(readOutOfBand(directory.path() / "kept.txt"), payload);
 }
 
+// The live-diff rule's classification, named exactly. Adding a FileCommand does
+// NOT fail to compile (verified by perturbation: adding an enumerator built
+// cleanly), so the set is pinned here instead -- a new command lands with
+// mutatesActiveDocumentFile defaulting to false and must be considered.
+constexpr std::string_view kActiveFileMutators[] = {
+    "file.save", "file.save_as", "file.reload", "file.rename", "file.delete",
+};
+
+bool mutatesActiveFile(std::string_view id) {
+    for (const auto candidate : kActiveFileMutators) {
+        if (candidate == id) return true;
+    }
+    return false;
+}
+
+TEST(theActiveFileMutatorSetIsExactlyTheDeclaredOne) {
+    const auto commands = ssg::fileCommandsCommandSet();
+    std::size_t flagged = 0;
+    for (const auto& descriptor : commands.descriptors()) {
+        ASSERT_EQ(descriptor.mutatesActiveDocumentFile,
+                  mutatesActiveFile(descriptor.id));
+        if (descriptor.mutatesActiveDocumentFile) ++flagged;
+    }
+    ASSERT_EQ(flagged, std::size(kActiveFileMutators));
+}
+
+// Every command that mutates the active document's file needs a document to
+// act on, and refuses without one. file.new and file.new_directory create
+// something new and must NOT be caught by that rule.
+TEST(activeFileMutatorsRefuseWithNoDocumentWhileCreatorsDoNot) {
+    const auto commands = ssg::fileCommandsCommandSet();
+    for (const auto& descriptor : commands.descriptors()) {
+        if (!descriptor.mutatesActiveDocumentFile) continue;
+        TemporaryDirectory directory;
+        auto runtime = makeRuntime(directory.path());
+        ASSERT_TRUE(runtime != nullptr);
+        ASSERT_FALSE(run(*runtime, std::string{descriptor.id}).accepted());
+    }
+
+    TemporaryDirectory directory;
+    auto runtime = makeRuntime(directory.path());
+    ASSERT_TRUE(runtime != nullptr);
+    ASSERT_TRUE(run(*runtime, "file.new").accepted());
+    ASSERT_TRUE(
+        run(*runtime, "file.new_directory", std::string{"made"}).accepted());
+}
+
+// A tab whose file has been deleted would offer editing and saving of
+// something that no longer exists.
+TEST(deletingAFileClosesItsTab) {
+    TemporaryDirectory directory;
+    writeOutOfBand(directory.path() / "doomed.txt", "bytes\n");
+    auto runtime = makeRuntime(directory.path());
+    ASSERT_TRUE(runtime != nullptr);
+    ASSERT_TRUE(run(*runtime, "file.open", std::string{"doomed.txt"}).accepted());
+
+    auto before = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(before.has_value());
+    bool present = false;
+    for (const auto& tab : before->sections().tabs.tabs) {
+        if (tab.label.find("doomed.txt") != std::string::npos) present = true;
+    }
+    ASSERT_TRUE(present);
+
+    ASSERT_TRUE(run(*runtime, "file.delete").accepted());
+
+    auto after = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(after.has_value());
+    for (const auto& tab : after->sections().tabs.tabs) {
+        ASSERT_TRUE(tab.label.find("doomed.txt") == std::string::npos);
+    }
+}
+
 }  // namespace
 
 int main() {
@@ -311,6 +384,9 @@ int main() {
     RUN(rollingBackARenameLeavesNothingAtTheNewName);
     RUN(deletingAFileLeavesTheBytesInTheArchive);
     RUN(aFailedArchiveWriteAbortsTheDeleteAndKeepsTheFile);
+    RUN(theActiveFileMutatorSetIsExactlyTheDeclaredOne);
+    RUN(activeFileMutatorsRefuseWithNoDocumentWhileCreatorsDoNot);
+    RUN(deletingAFileClosesItsTab);
     std::cout << "Passed: " << passed << " Failed: " << failed << '\n';
     return failed == 0 ? 0 : 1;
 }

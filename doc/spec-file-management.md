@@ -4,9 +4,8 @@ Status: draft (spec review pending)
 
 ## Status
 
-Steps 1-6 are implemented. Corrections made against this spec during
-implementation, recorded because they change what the remaining steps can
-assume:
+Steps 1-12 are implemented; this spec is complete. Corrections made against it
+during implementation, recorded because they change what a reader can assume:
 
 - The path prompt could not be typed into at all. `PromptSurface` had no way to
   change an input's value after `open()`, so `file.open`'s prompt was unusable.
@@ -21,6 +20,22 @@ assume:
 - The client focused the editor at startup only when a FILE was opened, so the
   new unnamed buffer never received focus and everything typed was silently
   discarded. The condition is now "startup left something editable".
+- The live-diff rule was going to be a `switch` over `FileCommand`. Perturbation
+  showed that adding an enumerator compiles CLEANLY, so a switch would let a new
+  command silently miss the rule. The classification is a declared descriptor
+  field (`mutatesActiveDocumentFile`) with a table-driven test instead.
+- `RecoveryActions::renamePath` replaces its destination. A rename that claimed
+  the name with a placeholder first made the recovery snapshot record that
+  placeholder as the destination's prior state, so a rollback restored an empty
+  file where there had been none. `renamePathNoClobber` was added so the
+  exclusion and the snapshot stay consistent.
+- Deleting could not close the tab via `TabManager::close`: `deleteFile` removes
+  the workspace entry first, so the close lifecycle failed on a missing document
+  and stranded the tab. `TabManager::dropDocument` exists for the case where
+  there is nothing left to flush.
+- The archive root is created lazily. Creating it at startup materialised a
+  `.ssg/` directory inside every workspace merely for being opened, which
+  appeared as a node in the file tree.
 
 ## Goals
 

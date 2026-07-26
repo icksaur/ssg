@@ -135,7 +135,42 @@ and marked restored.
 `scratch_journal.h`, persisted in journal records, and stable across restart.
 The user-visible `Untitled N` number is derived by the later tab layer and is not
 persisted by the journal-format component. Saved document journal keys use
-workspace-relative path identity rather than filesystem inode identity.
+workspace-relative path identity rather than filesystem inode identity. A
+document that has never been named is labelled `[new buffer]`
+(`ssg::kNewBufferLabel`); the runtime opens one at startup when no file was
+opened, so the editor is always typeable.
+
+File-management rules, all owned here:
+
+- **Name clash.** A name-taking operation fails if the destination already
+  exists, except that saving a document over its own current path may overwrite.
+  Enforced by the filesystem (`createFileExclusively`,
+  `renamePathNoClobber`), never by an `exists()` check, so a file created
+  between the check and the write cannot be destroyed.
+- **Delete archives first.** `file.delete` copies the file into
+  `.ssg/archive/<utc-timestamp>-<counter>/<workspace-relative-path>` and returns
+  only once that copy is durable, *then* removes the original. If the archive
+  cannot be written the delete fails and the file is untouched: a delete never
+  reduces the number of copies below one. The archive is deliberately separate
+  from the recovery store, which is a bounded evicting undo ring and so cannot
+  be the only surviving copy. Entries older than
+  `ssg::kFileArchiveRetention` (14 days) are pruned at workspace open; entries
+  whose name cannot be read, or that are dated in the future, are retained and
+  reported rather than removed.
+- **Deleting closes the tab.** The document has no backing bytes, so its tabs
+  are dropped without the close lifecycle (there is nothing to flush, and the
+  workspace entry is already gone).
+- **Live diff tabs.** A command whose descriptor sets
+  `mutatesActiveDocumentFile` is refused while a live diff tab is active, since
+  such a tab is a computed view of two revisions and has no file. `file.new` and
+  `file.new_directory` create something new and are allowed.
+- **Path entry.** A command whose descriptor sets `pathPrompt`, dispatched with
+  no path, opens the `PromptKind::Path` prompt naming itself; submitting
+  re-dispatches that command with the typed value. `file.save` on an unnamed
+  buffer opens `file.save_as`'s prompt, because naming a buffer is what save-as
+  does.
+
+Nothing under `.ssg/` is intended to be committed; it is gitignored wholesale.
 
 Normative commands owned by this feature:
 

@@ -28,6 +28,18 @@ bool activeLiveDiffTab(const EditorRuntime::Impl& runtime) {
     return tab != nullptr && tab->kind == TabKind::LiveDiff;
 }
 
+// The live-diff rule's classification, read from the command's own descriptor
+// rather than re-derived here, so the rule and the catalog cannot disagree.
+bool mutatesTheActiveDocumentsFile(FileCommand command) {
+    const auto& descriptors = fileCommandsCommandSet().descriptors();
+    const auto* found = std::find_if(
+        descriptors.begin(), descriptors.end(),
+        [&](const FileCommandDescriptor& entry) {
+            return entry.command == command;
+        });
+    return found != descriptors.end() && found->mutatesActiveDocumentFile;
+}
+
 CommandHandlerResult openDocumentResult(EditorRuntime::Impl& runtime,
                                           WorkspaceResult const& result) {
     if (!result.accepted() || !result.document) return failure(workspaceMessage(result));
@@ -41,9 +53,7 @@ CommandHandlerResult openDocumentResult(EditorRuntime::Impl& runtime,
 // submitted path arrives, since state can change while the prompt is open.
 std::optional<std::string> pathCommandPrecondition(
     const EditorRuntime::Impl& runtime, FileCommand command) {
-    const bool actsOnActiveTab = command == FileCommand::SaveAs ||
-                                 command == FileCommand::Rename;
-    if (!actsOnActiveTab) return std::nullopt;
+    if (!mutatesTheActiveDocumentsFile(command)) return std::nullopt;
 
     if (activeLiveDiffTab(runtime)) {
         return std::string{"command is unavailable in live diff tabs"};
@@ -66,6 +76,13 @@ CommandHandlerResult bindFile(EditorRuntime::Impl& runtime,
                                FileCommand command,
                                std::any const& payload) {
     WorkspaceResult result;
+
+    // The live-diff rule, applied once for every command it covers. A live diff
+    // tab is a computed view of two revisions, so there is no file to save,
+    // rename, reload or delete.
+    if (mutatesTheActiveDocumentsFile(command) && activeLiveDiffTab(runtime)) {
+        return failure("command is unavailable in live diff tabs");
+    }
 
     // Every path-taking command prompts for its path when dispatched without
     // one, in ONE place rather than per command. A command that gains the
@@ -131,9 +148,6 @@ CommandHandlerResult bindFile(EditorRuntime::Impl& runtime,
             return openDocumentResult(runtime, result);
         }
         case FileCommand::Save: {
-            if (activeLiveDiffTab(runtime)) {
-                return failure("file.save is unavailable in live diff tabs");
-            }
             auto id = runtime.activeDocumentId();
             if (!id) return failure("no active document");
             // A buffer that has never had a name cannot be saved over itself,
@@ -161,9 +175,6 @@ CommandHandlerResult bindFile(EditorRuntime::Impl& runtime,
             return success();
         }
         case FileCommand::SaveAs: {
-            if (activeLiveDiffTab(runtime)) {
-                return failure("file.save_as is unavailable in live diff tabs");
-            }
             auto id = runtime.activeDocumentId();
             auto path = stringPayload(payload);
             if (!id) return failure("no active document");
@@ -174,9 +185,6 @@ CommandHandlerResult bindFile(EditorRuntime::Impl& runtime,
             return runtime.updateTabsFor(*id);
         }
         case FileCommand::Reload: {
-            if (activeLiveDiffTab(runtime)) {
-                return failure("file.reload is unavailable in live diff tabs");
-            }
             auto id = runtime.activeDocumentId();
             if (!id) return failure("no active document");
             result = runtime.workspace.reload(*id);
@@ -186,9 +194,6 @@ CommandHandlerResult bindFile(EditorRuntime::Impl& runtime,
             return runtime.updateTabsFor(*id);
         }
         case FileCommand::Rename: {
-            if (activeLiveDiffTab(runtime)) {
-                return failure("file.rename is unavailable in live diff tabs");
-            }
             auto id = runtime.activeDocumentId();
             auto path = stringPayload(payload);
             if (!id) return failure("no active document");
@@ -199,13 +204,16 @@ CommandHandlerResult bindFile(EditorRuntime::Impl& runtime,
             return runtime.updateTabsFor(*id);
         }
         case FileCommand::Remove: {
-            if (activeLiveDiffTab(runtime)) {
-                return failure("file.remove is unavailable in live diff tabs");
-            }
             auto id = runtime.activeDocumentId();
             if (!id) return failure("no active document");
             result = runtime.workspace.deleteFile(*id);
             if (!result.accepted()) return failure(workspaceMessage(result));
+            // The tab's document no longer has backing bytes, so leaving it
+            // open would offer editing and saving of a file that is gone.
+            // Dropped rather than closed: deleteFile has already removed the
+            // workspace entry, so the close lifecycle would fail on a missing
+            // document and strand the tab.
+            (void)runtime.tabs.dropDocument(*id);
             runtime.refreshTree();
             return success();
         }

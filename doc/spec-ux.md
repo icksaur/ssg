@@ -36,6 +36,8 @@ rather than degraded.
   prompt kind (`PromptSurface::promptRows`): Find 2, Replace 3, Path/Settings/
   CommandArgument 1, **Palette 0**. The palette kind reserves no rows because
   its query renders in the header and its results project into the pane.
+  The Path prompt is where a filename is typed for save, save-as, rename, open
+  and new-directory; it is a prompt row, not the header input line.
 - **Pane** -- the remaining main-column space. Its rightmost column is a
   reserved scrollbar gutter, for the same stability reason as the panel's.
 - **Footer** -- full width, last row. Status fields from the left; footer
