@@ -1,13 +1,16 @@
 #include "ssg/platform_files.h"
 
+#include <array>
 #include <cerrno>
 #include <cstdlib>
 #include <fcntl.h>
+#include <optional>
 #include <stdexcept>
 #include <string>
-#include <system_error>
 #include <sys/file.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
+#include <system_error>
 #include <unistd.h>
 #include <utility>
 #include <vector>
@@ -237,6 +240,238 @@ void replaceFileAtomically(const std::filesystem::path& target,
         throwErrno("flush replacement directory", parent);
     }
     close(directory);
+}
+
+namespace {
+
+FileIoFaultInjector*& faultInjectorSlot() noexcept {
+    static FileIoFaultInjector* injector = nullptr;
+    return injector;
+}
+
+// Returns a non-Ok status when the installed injector wants this operation to
+// fail. The production path pays one null check.
+std::optional<FileIoStatus> injectedFailure(
+    std::string_view operation, const std::filesystem::path& path) {
+    auto* injector = faultInjectorSlot();
+    if (injector == nullptr) return std::nullopt;
+    const auto status = injector->beforeOperation(operation, path);
+    if (status == FileIoStatus::Ok) return std::nullopt;
+    return status;
+}
+
+FileIoStatus statusForErrno(int code) noexcept {
+    switch (code) {
+        case ENOENT:
+        case ENOTDIR:
+            return FileIoStatus::NotFound;
+        case EEXIST:
+        case ENOTEMPTY:
+            return FileIoStatus::AlreadyExists;
+        default:
+            return FileIoStatus::IoError;
+    }
+}
+
+std::string describeErrno(int code, std::string_view operation,
+                          const std::filesystem::path& path) {
+    return std::string(operation) + ": " + path.string() + ": " +
+           std::generic_category().message(code);
+}
+
+FileIoResult errnoFailure(int code, std::string_view operation,
+                          const std::filesystem::path& path) {
+    return {statusForErrno(code), describeErrno(code, operation, path)};
+}
+
+// fsync of the directory entry, so a freshly created or renamed file survives a
+// crash. Bytes reaching the disk is not enough if the name pointing at them has
+// not.
+[[nodiscard]] FileIoResult syncParentDirectory(
+    const std::filesystem::path& target) {
+    const auto parent = target.parent_path().empty()
+                            ? std::filesystem::path{"."}
+                            : target.parent_path();
+    const int directory =
+        open(parent.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    if (directory < 0) {
+        return errnoFailure(errno, "open parent directory", parent);
+    }
+    if (fsync(directory) != 0) {
+        const int saved = errno;
+        close(directory);
+        return errnoFailure(saved, "flush parent directory", parent);
+    }
+    close(directory);
+    return {FileIoStatus::Ok, {}};
+}
+
+[[nodiscard]] FileIoResult writeAll(int descriptor,
+                                    std::span<const std::byte> contents,
+                                    const std::filesystem::path& target) {
+    std::size_t written = 0;
+    while (written < contents.size()) {
+        const auto count = write(descriptor, contents.data() + written,
+                                 contents.size() - written);
+        if (count < 0) {
+            if (errno == EINTR) continue;
+            return errnoFailure(errno, "write file", target);
+        }
+        if (count == 0) {
+            return {FileIoStatus::IoError,
+                    "write made no progress: " + target.string()};
+        }
+        written += static_cast<std::size_t>(count);
+    }
+    return {FileIoStatus::Ok, {}};
+}
+
+} // namespace
+
+FileIoFaultInjector* installFileIoFaultInjector(
+    FileIoFaultInjector* injector) noexcept {
+    return std::exchange(faultInjectorSlot(), injector);
+}
+
+FileReadResult readFile(const std::filesystem::path& path) {
+    if (const auto injected = injectedFailure("readFile", path)) {
+        return {*injected, {}, "injected fault: readFile"};
+    }
+
+    const int descriptor = open(path.c_str(), O_RDONLY | O_CLOEXEC);
+    if (descriptor < 0) {
+        const auto failure = errnoFailure(errno, "open file for reading", path);
+        return {failure.status, {}, failure.message};
+    }
+
+    struct stat status {};
+    if (fstat(descriptor, &status) != 0) {
+        const int saved = errno;
+        close(descriptor);
+        const auto failure = errnoFailure(saved, "stat file for reading", path);
+        return {failure.status, {}, failure.message};
+    }
+    if (S_ISDIR(status.st_mode)) {
+        close(descriptor);
+        return {FileIoStatus::IoError, {},
+                "path is a directory, not a file: " + path.string()};
+    }
+
+    std::vector<std::uint8_t> bytes;
+    if (S_ISREG(status.st_mode) && status.st_size > 0) {
+        bytes.reserve(static_cast<std::size_t>(status.st_size));
+    }
+
+    // Read to EOF in chunks: size from the stat hint but never trust it, since
+    // the file may grow or shrink under us.
+    std::array<std::uint8_t, 64 * 1024> buffer{};
+    for (;;) {
+        const auto count = read(descriptor, buffer.data(), buffer.size());
+        if (count < 0) {
+            if (errno == EINTR) continue;
+            const int saved = errno;
+            close(descriptor);
+            const auto failure = errnoFailure(saved, "read file", path);
+            return {failure.status, {}, failure.message};
+        }
+        if (count == 0) break;
+        bytes.insert(bytes.end(), buffer.data(),
+                     buffer.data() + static_cast<std::size_t>(count));
+    }
+    close(descriptor);
+    return {FileIoStatus::Ok, std::move(bytes), {}};
+}
+
+FileIoResult createFileExclusively(const std::filesystem::path& target,
+                                   std::span<const std::byte> contents) {
+    if (const auto injected = injectedFailure("createFileExclusively", target)) {
+        return {*injected, "injected fault: createFileExclusively"};
+    }
+
+    // O_EXCL is what makes the clash rule race-free: the kernel, not this
+    // process, decides whether the name was already taken.
+    const int descriptor =
+        open(target.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0600);
+    if (descriptor < 0) {
+        return errnoFailure(errno, "create file", target);
+    }
+
+    if (auto written = writeAll(descriptor, contents, target); !written.ok()) {
+        close(descriptor);
+        unlink(target.c_str());
+        return written;
+    }
+    if (fsync(descriptor) != 0) {
+        const int saved = errno;
+        close(descriptor);
+        unlink(target.c_str());
+        return errnoFailure(saved, "flush created file", target);
+    }
+    if (close(descriptor) != 0) {
+        const int saved = errno;
+        unlink(target.c_str());
+        return errnoFailure(saved, "close created file", target);
+    }
+    return syncParentDirectory(target);
+}
+
+FileIoResult renameFileNoClobber(const std::filesystem::path& source,
+                                 const std::filesystem::path& destination) {
+    if (const auto injected = injectedFailure("renameFileNoClobber", source)) {
+        return {*injected, "injected fault: renameFileNoClobber"};
+    }
+
+    // renameat2 with RENAME_NOREPLACE lets the kernel enforce non-replacement.
+    // Where it is unavailable (older kernels, or a filesystem that does not
+    // implement it) there is no race-free primitive, so the fallback is a link
+    // + unlink pair: link() itself fails with EEXIST, keeping the exclusion in
+    // the kernel rather than in a check performed here.
+#if defined(SYS_renameat2) && defined(RENAME_NOREPLACE)
+    if (syscall(SYS_renameat2, AT_FDCWD, source.c_str(), AT_FDCWD,
+                destination.c_str(), RENAME_NOREPLACE) == 0) {
+        return syncParentDirectory(destination);
+    }
+    if (errno != ENOSYS && errno != EINVAL) {
+        return errnoFailure(errno, "rename file", destination);
+    }
+#endif
+    if (link(source.c_str(), destination.c_str()) != 0) {
+        return errnoFailure(errno, "rename file", destination);
+    }
+    if (unlink(source.c_str()) != 0) {
+        const int saved = errno;
+        unlink(destination.c_str());
+        return errnoFailure(saved, "remove renamed source", source);
+    }
+    return syncParentDirectory(destination);
+}
+
+FileIoResult removeFile(const std::filesystem::path& path) {
+    if (const auto injected = injectedFailure("removeFile", path)) {
+        return {*injected, "injected fault: removeFile"};
+    }
+
+    if (unlink(path.c_str()) != 0) {
+        return errnoFailure(errno, "remove file", path);
+    }
+    return syncParentDirectory(path);
+}
+
+FileIoResult copyFileDurably(const std::filesystem::path& source,
+                             const std::filesystem::path& destination) {
+    if (const auto injected = injectedFailure("copyFileDurably", source)) {
+        return {*injected, "injected fault: copyFileDurably"};
+    }
+
+    auto contents = readFile(source);
+    if (!contents.ok()) {
+        return {contents.status, contents.message};
+    }
+    return createFileExclusively(
+        destination,
+        std::span<const std::byte>{
+            reinterpret_cast<const std::byte*>(contents.bytes.data()),
+            contents.bytes.size()});
 }
 
 } // namespace ssg

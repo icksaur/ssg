@@ -1,5 +1,7 @@
 #include "ssg/GitDiffSource.h"
 
+#include "ssg/platform_files.h"
+
 #include <algorithm>
 #include <array>
 #include <cstring>
@@ -18,10 +20,14 @@
 namespace ssg {
 namespace {
 
-std::string readFile(const std::filesystem::path& path) {
-    std::ifstream input{path, std::ios::binary};
-    return {std::istreambuf_iterator<char>{input},
-            std::istreambuf_iterator<char>{}};
+// A file that cannot be read yields no text: this reader backs git status
+// probes where an unreadable path and an absent one are equally "nothing to
+// diff". The seam still forces the distinction to be stated rather than assumed.
+std::string readWorktreeText(const std::filesystem::path& path) {
+    auto result = readFile(path);
+    if (!result.ok()) return {};
+    return {reinterpret_cast<const char*>(result.bytes.data()),
+            result.bytes.size()};
 }
 
 #ifdef SSG_LIBGIT2
@@ -92,7 +98,7 @@ bool collectDiffFiles(git_repository* repository, git_diff* diff,
         if (!deleted) {
             auto absolute = root / currentPath;
             if (std::filesystem::exists(absolute)) {
-                auto text = readFile(absolute);
+                auto text = readWorktreeText(absolute);
                 if (text.size() > config.maxBytesPerFile) {
                     return false;
                 }

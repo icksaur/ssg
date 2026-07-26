@@ -351,18 +351,20 @@ bool applyPayload(std::span<const std::byte> payload,
     return false;
 }
 
-std::vector<std::byte> readFile(const std::filesystem::path& path) {
-    std::ifstream input(path, std::ios::binary);
-    if (!input) {
-        if (!std::filesystem::exists(path)) return {};
-        throw std::system_error(errno, std::generic_category(),
-                                "open scratch journal for replay");
+std::vector<std::byte> readJournalBytes(const std::filesystem::path& path) {
+    auto result = readFile(path);
+    // A journal that has never been written is not an error: replay of nothing
+    // is the correct start state. Any OTHER failure must surface, because
+    // treating an unreadable journal as empty would silently discard recovery
+    // data.
+    if (result.status == FileIoStatus::NotFound) return {};
+    if (!result.ok()) {
+        throw std::runtime_error("open scratch journal for replay: " +
+                                 result.message);
     }
-    const std::string contents{std::istreambuf_iterator<char>(input),
-                               std::istreambuf_iterator<char>()};
-    return {reinterpret_cast<const std::byte*>(contents.data()),
-            reinterpret_cast<const std::byte*>(contents.data() +
-                                               contents.size())};
+    return {reinterpret_cast<const std::byte*>(result.bytes.data()),
+            reinterpret_cast<const std::byte*>(result.bytes.data() +
+                                               result.bytes.size())};
 }
 
 #ifndef _WIN32
@@ -546,7 +548,7 @@ void ScratchJournal::appendRemove(const JournalDocumentKey& key) const {
 }
 
 JournalReplayResult ScratchJournal::replay() const {
-    return JournalCodec{}.replay(readFile(path_));
+    return JournalCodec{}.replay(readJournalBytes(path_));
 }
 
 void ScratchJournal::append(std::span<const std::byte> record) const {

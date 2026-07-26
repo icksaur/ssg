@@ -209,9 +209,15 @@ std::filesystem::path canonicalDirectory(std::filesystem::path const& path) {
     return canonical;
 }
 
-std::string readFileText(std::filesystem::path const& path) {
-    std::ifstream input{path, std::ios::binary};
-    return {std::istreambuf_iterator<char>{input}, std::istreambuf_iterator<char>{}};
+// std::nullopt for a file that could not be read, so an unreadable file can
+// never be mistaken for an empty one. That mistake is destructive here: these
+// results feed staleness comparisons and rollback snapshots, where fake empty
+// content would overwrite or restore nothing over something.
+std::optional<std::string> readFileText(std::filesystem::path const& path) {
+    auto result = readFile(path);
+    if (!result.ok()) return std::nullopt;
+    return std::string{reinterpret_cast<const char*>(result.bytes.data()),
+                       result.bytes.size()};
 }
 
 std::size_t lineStartOffset(std::string_view text, std::size_t line) {
@@ -861,7 +867,9 @@ WorkspaceSnapshot EditorRuntime::Impl::snapshot(Revision revision) const {
             }) != result.files.end()) {
             continue;
         }
-        result.files.push_back({*relative, readFileText(entry.path())});
+        auto content = readFileText(entry.path());
+        if (!content) continue;
+        result.files.push_back({*relative, std::move(*content)});
     }
     return result;
 }
@@ -916,7 +924,15 @@ WorkspaceApplyResult EditorRuntime::Impl::apply(
             break;
         }
         if (!foundOpenDocument) {
-            current = readFileText(*path);
+            auto content = readFileText(*path);
+            // Unreadable is not "unchanged": refusing here is what stops a
+            // replacement being applied to a file whose current state is
+            // unknown.
+            if (!content) {
+                return {FindReplaceError::StaleRevision, preview.sourceRevision,
+                        "workspace replacement target cannot be read"};
+            }
+            current = std::move(*content);
         }
         if (current != change.before) {
             return {FindReplaceError::StaleRevision, preview.sourceRevision,
@@ -1006,25 +1022,69 @@ LspWorkspaceFileResult EditorRuntime::Impl::snapshot(std::string_view uri, LspWo
         node.kind = LspWorkspaceFileNodeKind::Directory;
     } else {
         node.kind = LspWorkspaceFileNodeKind::File;
-        node.content = readFileText(*path);
+        auto content = readFileText(*path);
+        // This snapshot is what a rollback restores from. Recording empty
+        // content for a file that merely could not be read would turn a failed
+        // edit into a truncation.
+        if (!content) {
+            return {LspWorkspaceFileError::IoError,
+                    "failed to read file for snapshot"};
+        }
+        node.content = std::move(*content);
     }
     return {};
 }
 
+namespace {
+
+LspWorkspaceFileResult asLspResult(FileIoResult result) {
+    switch (result.status) {
+        case FileIoStatus::Ok:
+            return {};
+        case FileIoStatus::NotFound:
+            return {LspWorkspaceFileError::NotFound, std::move(result.message)};
+        case FileIoStatus::AlreadyExists:
+            return {LspWorkspaceFileError::AlreadyExists,
+                    std::move(result.message)};
+        case FileIoStatus::IoError:
+            break;
+    }
+    return {LspWorkspaceFileError::IoError, std::move(result.message)};
+}
+
+std::span<const std::byte> asByteSpan(std::string_view text) noexcept {
+    return {reinterpret_cast<const std::byte*>(text.data()), text.size()};
+}
+
+}  // namespace
+
 LspWorkspaceFileResult EditorRuntime::Impl::createFile(std::string uri, bool overwrite) {
     auto path = pathFromUri(uri);
     if (!path) return {LspWorkspaceFileError::IoError, "URI is not a file URI"};
-    if (std::filesystem::exists(*path) && !overwrite) return {LspWorkspaceFileError::AlreadyExists, "file already exists"};
-    std::ofstream output{*path, std::ios::binary | std::ios::trunc};
-    return output ? LspWorkspaceFileResult{} : LspWorkspaceFileResult{LspWorkspaceFileError::IoError, "failed to create file"};
+    if (overwrite) {
+        try {
+            replaceFileAtomically(*path, {});
+        } catch (const std::exception& exception) {
+            return {LspWorkspaceFileError::IoError, exception.what()};
+        }
+        return {};
+    }
+    // Exclusive create rather than exists()-then-truncate: the previous form
+    // could report success after another process won the race, and its truncate
+    // would then have destroyed that file's contents.
+    return asLspResult(createFileExclusively(*path, {}));
 }
 
 LspWorkspaceFileResult EditorRuntime::Impl::writeFile(std::string uri, std::string content) {
     auto path = pathFromUri(uri);
     if (!path) return {LspWorkspaceFileError::IoError, "URI is not a file URI"};
-    std::ofstream output{*path, std::ios::binary | std::ios::trunc};
-    if (!output) return {LspWorkspaceFileError::IoError, "failed to write file"};
-    output << content;
+    // Atomic replace rather than truncate-then-stream: an LSP edit interrupted
+    // part way through must leave the user's file whole, not half written.
+    try {
+        replaceFileAtomically(*path, asByteSpan(content));
+    } catch (const std::exception& exception) {
+        return {LspWorkspaceFileError::IoError, exception.what()};
+    }
     return {};
 }
 
@@ -1032,7 +1092,9 @@ LspWorkspaceFileResult EditorRuntime::Impl::renamePath(std::string oldUri, std::
     auto oldPath = pathFromUri(oldUri);
     auto newPath = pathFromUri(newUri);
     if (!oldPath || !newPath) return {LspWorkspaceFileError::IoError, "URI is not a file URI"};
-    if (std::filesystem::exists(*newPath) && !overwrite) return {LspWorkspaceFileError::AlreadyExists, "destination exists"};
+    if (!overwrite) {
+        return asLspResult(renameFileNoClobber(*oldPath, *newPath));
+    }
     std::error_code code;
     std::filesystem::rename(*oldPath, *newPath, code);
     return code ? LspWorkspaceFileResult{LspWorkspaceFileError::IoError, code.message()} : LspWorkspaceFileResult{};

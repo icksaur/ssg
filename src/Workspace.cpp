@@ -26,31 +26,14 @@ WorkspaceResult failure(WorkspaceError error, std::string message) {
     return result;
 }
 
-std::vector<std::uint8_t> readFile(const std::filesystem::path& path) {
-    std::ifstream stream(path, std::ios::binary);
-    if (!stream) {
-        throw std::runtime_error("failed to open file for reading: " +
-                                 path.string());
-    }
+std::vector<std::uint8_t> readFileBytes(const std::filesystem::path& path) {
     OpenPhaseTimer timer{OpenPhase::Read};
-    std::vector<std::uint8_t> bytes;
-    std::error_code sizeError;
-    const auto hint = std::filesystem::file_size(path, sizeError);
-    if (!sizeError) {
-        bytes.reserve(static_cast<std::size_t>(hint));
+    auto result = readFile(path);
+    if (!result.ok()) {
+        throw std::runtime_error("failed to open file for reading: " +
+                                 path.string() + ": " + result.message);
     }
-    // Read to EOF in chunks: size the buffer from the stat hint but never trust
-    // it (the file may grow/shrink under us), and copy each chunk into the
-    // reserved vector without zero-initializing capacity first.
-    std::array<char, 1U << 16> chunk;
-    while (stream.read(chunk.data(), static_cast<std::streamsize>(chunk.size())) ||
-           stream.gcount() > 0) {
-        const auto got = static_cast<std::size_t>(stream.gcount());
-        bytes.insert(bytes.end(),
-                     reinterpret_cast<const std::uint8_t*>(chunk.data()),
-                     reinterpret_cast<const std::uint8_t*>(chunk.data()) + got);
-    }
-    return bytes;
+    return std::move(result.bytes);
 }
 
 std::span<const std::byte> asBytes(
@@ -626,7 +609,7 @@ WorkspaceResult Workspace::openFile(std::string_view rawPath) {
     }
     try {
         auto result = impl_->addBytes(
-            readFile(*absolute), JournalDocumentKey::saved(path),
+            readFileBytes(*absolute), JournalDocumentKey::saved(path),
             absolute->filename().string(), false);
         impl_->touchRecent(path);
         return result;
@@ -741,7 +724,7 @@ WorkspaceResult Workspace::reload(FileDocumentId id) {
         return pathError;
     }
     try {
-        const auto bytes = readFile(*absolute);
+        const auto bytes = readFileBytes(*absolute);
         if (containsNul(asUnsignedBytes(bytes))) {
             return failure(WorkspaceError::DecodeFailed,
                            "binary file cannot replace an editable document");

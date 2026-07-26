@@ -300,18 +300,18 @@ std::optional<SettingKey> keyFromName(std::string_view name) {
 
 std::optional<std::string> readIfPresent(const std::filesystem::path& path,
                                            std::string& error) {
-    std::error_code existsError;
-    if (!std::filesystem::exists(path, existsError)) {
-        if (existsError) error = existsError.message();
-        return std::nullopt;
-    }
-    std::ifstream input(path, std::ios::binary);
-    if (!input) {
+    // One call decides present-vs-absent-vs-unreadable. The previous
+    // exists()-then-open pair could report "absent" for a file that appeared
+    // between the two calls, and reported an open failure for a file that had
+    // been removed in between.
+    auto result = readFile(path);
+    if (result.status == FileIoStatus::NotFound) return std::nullopt;
+    if (!result.ok()) {
         error = "failed to open settings file: " + path.string();
         return std::nullopt;
     }
-    return std::string{std::istreambuf_iterator<char>(input),
-                       std::istreambuf_iterator<char>()};
+    return std::string{reinterpret_cast<const char*>(result.bytes.data()),
+                       result.bytes.size()};
 }
 
 void writeDocument(const std::filesystem::path& path, std::string_view document) {
