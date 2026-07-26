@@ -1103,6 +1103,7 @@ LspWorkspaceFileResult EditorRuntime::Impl::renamePath(std::string oldUri, std::
         return asLspResult(renameFileNoClobber(*oldPath, *newPath));
     }
     std::error_code code;
+    // seam-exempt: the LSP protocol asked for overwrite explicitly
     std::filesystem::rename(*oldPath, *newPath, code);
     return code ? LspWorkspaceFileResult{LspWorkspaceFileError::IoError, code.message()} : LspWorkspaceFileResult{};
 }
@@ -1112,6 +1113,7 @@ LspWorkspaceFileResult EditorRuntime::Impl::deletePath(std::string uri, bool rec
     if (!path) return {LspWorkspaceFileError::IoError, "URI is not a file URI"};
     std::error_code code;
     if (recursive) std::filesystem::remove_all(*path, code);
+    // seam-exempt: LSP delete has no archive contract; file.delete is the archived path
     else std::filesystem::remove(*path, code);
     return code ? LspWorkspaceFileResult{LspWorkspaceFileError::IoError, code.message()} : LspWorkspaceFileResult{};
 }

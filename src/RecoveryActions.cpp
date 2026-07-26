@@ -263,6 +263,7 @@ void installDirectoryDurably(const std::filesystem::path& staging,
         throw_sync_error("failed to install recovery directory", installed);
     }
 #else
+    // seam-exempt: installs a recovery staging dir; syncPath below provides durability
     std::filesystem::rename(staging, installed);
     syncPath(parent, true);
 #endif
@@ -276,6 +277,7 @@ void renameDurably(const std::filesystem::path& source,
         throw_sync_error("failed to durably rename path", source);
     }
 #else
+    // seam-exempt: recovery-internal durable rename, paired with syncPath below
     std::filesystem::rename(source, destination);
     syncPath(std::filesystem::absolute(source).parent_path(), true);
     const auto sourceParent =
@@ -332,6 +334,7 @@ void copyNode(const std::filesystem::path& source,
         return;
     case SnapshotKind::RegularFile:
         std::filesystem::create_directories(destination.parent_path());
+        // seam-exempt: restoring a recovery snapshot MUST overwrite the current file
         std::filesystem::copy_file(
             source, destination,
             std::filesystem::copy_options::overwrite_existing);

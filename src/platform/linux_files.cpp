@@ -263,9 +263,12 @@ std::optional<FileIoStatus> injectedFailure(
 FileIoStatus statusForErrno(int code) noexcept {
     switch (code) {
         case ENOENT:
-        case ENOTDIR:
             return FileIoStatus::NotFound;
         case EEXIST:
+        // renameat2 reports a non-empty existing destination this way, which is
+        // still "the name is taken". ENOTDIR is deliberately NOT here: a path
+        // component that is not a directory is a structural error, and calling
+        // it NotFound would let callers that treat absence as benign swallow it.
         case ENOTEMPTY:
             return FileIoStatus::AlreadyExists;
         default:
@@ -324,6 +327,24 @@ FileIoResult errnoFailure(int code, std::string_view operation,
         written += static_cast<std::size_t>(count);
     }
     return {FileIoStatus::Ok, {}};
+}
+
+// Removes a file we created, but ONLY if the name still refers to the very file
+// our descriptor holds. Unlinking by name alone would delete whatever now sits
+// at that path -- possibly another process's file, created after ours was
+// replaced. Comparing device+inode makes the cleanup refuse to destroy a
+// stranger's data.
+void unlinkIfStillOurs(int descriptor,
+                       const std::filesystem::path& path) noexcept {
+    struct stat byDescriptor {};
+    struct stat byName {};
+    if (fstat(descriptor, &byDescriptor) != 0) return;
+    if (stat(path.c_str(), &byName) != 0) return;
+    if (byDescriptor.st_dev != byName.st_dev ||
+        byDescriptor.st_ino != byName.st_ino) {
+        return;
+    }
+    unlink(path.c_str());
 }
 
 } // namespace
@@ -396,21 +417,21 @@ FileIoResult createFileExclusively(const std::filesystem::path& target,
         return errnoFailure(errno, "create file", target);
     }
 
+    // Cleanup happens while the descriptor is still open so the file can be
+    // identified, never by name alone.
     if (auto written = writeAll(descriptor, contents, target); !written.ok()) {
+        unlinkIfStillOurs(descriptor, target);
         close(descriptor);
-        unlink(target.c_str());
         return written;
     }
     if (fsync(descriptor) != 0) {
         const int saved = errno;
+        unlinkIfStillOurs(descriptor, target);
         close(descriptor);
-        unlink(target.c_str());
         return errnoFailure(saved, "flush created file", target);
     }
     if (close(descriptor) != 0) {
-        const int saved = errno;
-        unlink(target.c_str());
-        return errnoFailure(saved, "close created file", target);
+        return errnoFailure(errno, "close created file", target);
     }
     return syncParentDirectory(target);
 }
@@ -421,11 +442,10 @@ FileIoResult renameFileNoClobber(const std::filesystem::path& source,
         return {*injected, "injected fault: renameFileNoClobber"};
     }
 
-    // renameat2 with RENAME_NOREPLACE lets the kernel enforce non-replacement.
-    // Where it is unavailable (older kernels, or a filesystem that does not
-    // implement it) there is no race-free primitive, so the fallback is a link
-    // + unlink pair: link() itself fails with EEXIST, keeping the exclusion in
-    // the kernel rather than in a check performed here.
+    // renameat2 with RENAME_NOREPLACE lets the kernel enforce non-replacement
+    // atomically. It has existed since Linux 3.15, so the fallback below is
+    // reached only on an ancient kernel or a filesystem that does not implement
+    // it.
 #if defined(SYS_renameat2) && defined(RENAME_NOREPLACE)
     if (syscall(SYS_renameat2, AT_FDCWD, source.c_str(), AT_FDCWD,
                 destination.c_str(), RENAME_NOREPLACE) == 0) {
@@ -435,13 +455,23 @@ FileIoResult renameFileNoClobber(const std::filesystem::path& source,
         return errnoFailure(errno, "rename file", destination);
     }
 #endif
+    // Fallback: link() fails with EEXIST on an occupied destination, so the
+    // exclusion still lives in the kernel rather than in a check performed
+    // here. It is NOT atomic and it cannot cross filesystems (EXDEV) or
+    // preserve symlink identity, so it is strictly a last resort.
     if (link(source.c_str(), destination.c_str()) != 0) {
         return errnoFailure(errno, "rename file", destination);
     }
     if (unlink(source.c_str()) != 0) {
-        const int saved = errno;
-        unlink(destination.c_str());
-        return errnoFailure(saved, "remove renamed source", source);
+        // Both names now exist. Leaving the duplicate is the safe outcome:
+        // unlinking the destination to "roll back" could delete a file another
+        // process put there, and losing data is worse than an extra copy the
+        // caller is told about.
+        return {statusForErrno(errno),
+                "renamed file left duplicated because the source could not be "
+                "removed: " +
+                    source.string() + ": " +
+                    std::generic_category().message(errno)};
     }
     return syncParentDirectory(destination);
 }

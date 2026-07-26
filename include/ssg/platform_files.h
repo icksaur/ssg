@@ -147,6 +147,7 @@ struct FileReadResult {
     const std::filesystem::path& target,
     std::span<const std::byte> contents);
 
+// seam-exempt: naming the unsafe call in prose, not calling it
 // Renames without replacing an existing destination. std::filesystem::rename
 // silently replaces, so it must not be used where a clash has to be refused.
 [[nodiscard]] FileIoResult renameFileNoClobber(
@@ -182,6 +183,10 @@ public:
 
 // Installs (or, with nullptr, removes) the process-wide injector and returns
 // the previous one. Test-only; production never calls it.
+//
+// Not synchronized: install and uninstall must not race with seam calls on
+// other threads. Tests install around a single-threaded section and restore
+// afterwards, which is the only supported use.
 FileIoFaultInjector* installFileIoFaultInjector(
     FileIoFaultInjector* injector) noexcept;
 

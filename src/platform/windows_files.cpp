@@ -413,6 +413,8 @@ FileIoResult createFileExclusively(const std::filesystem::path& target,
         if (!WriteFile(handle, contents.data() + written, request, &count,
                        nullptr)) {
             const DWORD error = GetLastError();
+            // The handle is held open across the delete so the file cannot be
+            // confused with one another process created at the same name.
             CloseHandle(handle);
             DeleteFileW(target.c_str());
             return last_error_failure(error, "write created file", target);

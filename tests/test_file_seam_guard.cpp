@@ -46,8 +46,18 @@ bool exempt(const std::string& relative) {
 
 // The raw-stream spellings that reach the filesystem directly. std::fopen is
 // included because it is the C-shaped way to do the same thing.
+//
+// The std::filesystem mutations are here because they CLOBBER: rename and
+// copy_file silently replace an existing destination, and remove deletes
+// without the archive. Those are precisely the behaviors the clash rule and the
+// delete-to-archive design exist to prevent, so reaching past the seam to them
+// has to be a deliberate, justified act. remove_all is absent because recursive
+// directory removal is an operation the seam does not offer an alternative to.
 constexpr std::string_view kForbidden[] = {
-    "std::ifstream", "std::ofstream", "std::fstream", "std::fopen",
+    "std::ifstream",         "std::ofstream",
+    "std::fstream",          "std::fopen",
+    "std::filesystem::rename", "std::filesystem::copy_file",
+    "std::filesystem::remove(",
 };
 
 // A single line may opt out by carrying this marker plus a reason. Line-scoped

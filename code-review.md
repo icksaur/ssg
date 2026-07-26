@@ -403,6 +403,20 @@ items are now resolved.
 Conclusion: no bugs and no weak-oracle gaps of substance in either commit. The
 M9-U golden is a real end-to-end lock; the three items above are NITs.
 
+## File-IO seam prep review (84a1845, bf919b7)
+
+MUST-FIX cleanup-race-on-failed-exclusive-create src/platform/linux_files.cpp:399-403,404-413 — `createFileExclusively` closes the newly created fd before `unlink(target)`. Another process can create `target` in that gap and this cleanup unlinks the other process’s file.
+
+MUST-FIX wrong-errno-classification src/platform/linux_files.cpp:263-268 — mapping `ENOTDIR` to `NotFound` misclassifies path-shape I/O errors as absence. Callers that treat `NotFound` as benign (e.g. init.lua loader) can silently hide real failures.
+
+SHOULD-FIX non-atomic-rename-fallback-risk src/platform/linux_files.cpp:429-447 — `renameFileNoClobber` fallback `link()+unlink()` is not rename-equivalent (non-atomic, symlink semantics differ) and its cleanup `unlink(destination)` can remove a replacement created by another process after the link step. Failing loudly when `renameat2(RENAME_NOREPLACE)` is unavailable is safer.
+
+SHOULD-FIX seam-guard-bypasses tests/test_file_seam_guard.cpp:49-51,121-128 and src/EditorRuntime.cpp:1106,1114-1115 — the guard only matches `std::ifstream/ofstream/fstream/fopen`, so `::fopen`, POSIX `open/read/write`, and direct `std::filesystem::{rename,remove,copy_file}` mutations bypass seam enforcement.
+
+SHOULD-FIX windows-adapter-name-mismatch-preexisting include/ssg/platform_files.h:57-99 and src/platform/windows_files.cpp:92-271 — confirmed pre-existing rot: header exports camelCase (`fileIdentity`, `userConfigRoot`, `replaceFileAtomically`) while Windows TU defines snake_case (`file_identity`, `user_config_root`, `replace_file_atomically`), so a Windows link cannot satisfy those symbols.
+
+CONSIDER process-wide-fault-injector-global src/platform/linux_files.cpp:247-250 and src/platform/windows_files.cpp:310-313 — process-global mutable injector pointer is fine for current single-test usage, but is not synchronized if future tests install/uninstall while other threads call seam primitives.
+
 
 ## M10-1 (startup measurement harness)
 
