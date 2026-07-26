@@ -158,6 +158,12 @@ struct FileReadResult {
 // caller can tell "already gone" from "not allowed to remove".
 [[nodiscard]] FileIoResult removeFile(const std::filesystem::path& path);
 
+// Flushes a DIRECTORY's own entry to disk. Writing a file durably only makes
+// the file and its immediate parent survive a crash; when a caller has just
+// created a chain of directories, every link in that chain needs this or the
+// whole subtree can vanish while the caller believes the copy is safe.
+[[nodiscard]] FileIoResult syncDirectory(const std::filesystem::path& path);
+
 // Copies to a destination that must not already exist, and returns only once
 // the copy is durable -- including the directory entry, not merely the bytes.
 // An archive built on a copy whose parent entry is unsynced can lose the file

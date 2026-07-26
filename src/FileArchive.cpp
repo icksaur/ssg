@@ -94,11 +94,38 @@ FileArchiveResult FileArchive::archive(
         return {false, {}, "archive source is not a regular file"};
     }
 
-    const auto entry =
-        root_ / entryDirectoryName(std::chrono::system_clock::now(), counter_++);
+    std::filesystem::create_directories(root_, code);
+    if (code) {
+        return {false, {}, "could not create the archive root: " +
+                               code.message()};
+    }
+
+    // Claim an entry directory that DID NOT already exist. A second process
+    // deleting in the same second starts its counter at zero too, and
+    // create_directories succeeds silently on an existing path -- so without
+    // this the two deletions would merge into one entry, and the cleanup below
+    // could then delete the other process's archived files. create_directory
+    // returns false when the directory already exists, which is the signal.
+    const auto now = std::chrono::system_clock::now();
+    std::filesystem::path entry;
+    bool claimed = false;
+    for (std::size_t attempt = 0; attempt < 10000 && !claimed; ++attempt) {
+        entry = root_ / entryDirectoryName(now, counter_++);
+        claimed = std::filesystem::create_directory(entry, code) && !code;
+        if (code) {
+            return {false, {}, "could not create archive entry: " +
+                                   code.message()};
+        }
+    }
+    if (!claimed) {
+        return {false, {}, "could not claim a unique archive entry"};
+    }
+
     const auto destination = entry / *relative;
     std::filesystem::create_directories(destination.parent_path(), code);
     if (code) {
+        std::error_code ignored;
+        std::filesystem::remove_all(entry, ignored);
         return {false, {}, "could not create archive directory: " +
                                code.message()};
     }
@@ -107,9 +134,28 @@ FileArchiveResult FileArchive::archive(
     // only other copy is still in a write cache.
     const auto copied = copyFileDurably(source, destination);
     if (!copied.ok()) {
+        // Safe because `entry` is one WE created above and no other process can
+        // be using it.
         std::error_code ignored;
         std::filesystem::remove_all(entry, ignored);
         return {false, {}, "could not write archive copy: " + copied.message};
+    }
+
+    // copyFileDurably flushes the file and its immediate parent. The rest of
+    // the chain -- the entry directory, any subdirectories of the relative
+    // path, and the archive root -- is newly created and just as unflushed, so
+    // a crash could take the whole subtree while the caller believed the copy
+    // was safe and went on to unlink the original.
+    for (auto directory = destination.parent_path();
+         directory != root_.parent_path() && !directory.empty();
+         directory = directory.parent_path()) {
+        if (const auto synced = syncDirectory(directory); !synced.ok()) {
+            std::error_code ignored;
+            std::filesystem::remove_all(entry, ignored);
+            return {false, {}, "could not flush the archive to disk: " +
+                                   synced.message};
+        }
+        if (directory == root_) break;
     }
     return {true, destination, {}};
 }
@@ -135,6 +181,14 @@ FileArchivePruneReport FileArchive::prune(
         const auto timestamp = entryTimestamp(entry.path().filename().string());
         if (!timestamp) {
             ++report.retainedUnparseable;
+            continue;
+        }
+        if (*timestamp > now) {
+            // Clock skew, or an archive restored from a backup. Retained rather
+            // than pruned: deleting a user's only copy of a deleted file
+            // because a clock disagreed would be the very loss this feature
+            // exists to prevent. Reported so it is not silently immortal.
+            ++report.retainedFutureDated;
             continue;
         }
         if (now - *timestamp > maxAge) expired.push_back(entry.path());

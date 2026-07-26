@@ -463,6 +463,21 @@ FileIoResult removeFile(const std::filesystem::path& path) {
     return {FileIoStatus::Ok, {}};
 }
 
+FileIoResult syncDirectory(const std::filesystem::path& path) {
+    if (const auto injected = injectedFailure("syncDirectory", path)) {
+        return {*injected, "injected fault: syncDirectory"};
+    }
+
+    // Windows has no directory-handle flush equivalent; its metadata writes for
+    // MoveFileEx/ReplaceFile are ordered by the filesystem, and the write-through
+    // flags used elsewhere in this file cover the cases that matter.
+    std::error_code code;
+    if (!std::filesystem::is_directory(path, code) || code) {
+        return {FileIoStatus::NotFound, "not a directory: " + path.string()};
+    }
+    return {FileIoStatus::Ok, {}};
+}
+
 FileIoResult copyFileDurably(const std::filesystem::path& source,
                              const std::filesystem::path& destination) {
     if (const auto injected = injectedFailure("copyFileDurably", source)) {

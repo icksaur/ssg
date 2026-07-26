@@ -32,6 +32,15 @@ private:
     fs::path path_;
 };
 
+class FailCopy : public ssg::FileIoFaultInjector {
+public:
+    ssg::FileIoStatus beforeOperation(std::string_view operation,
+                                      const fs::path&) override {
+        return operation == "copyFileDurably" ? ssg::FileIoStatus::IoError
+                                              : ssg::FileIoStatus::Ok;
+    }
+};
+
 // Out-of-band so the archive is never its own oracle.
 std::string readOutOfBand(const fs::path& path) {
     std::ifstream input(path, std::ios::binary);
@@ -207,6 +216,71 @@ TEST(entryTimestampsRoundTripThroughTheDirectoryName) {
     ASSERT_FALSE(ssg::FileArchive::entryTimestamp("").has_value());
 }
 
+// A second process deleting in the same second starts its counter at zero too.
+// Simulating that with two FileArchive instances: the entries must not merge,
+// because a later failure cleans up "its" entry with remove_all and would
+// otherwise erase the other process's archived files.
+TEST(twoArchivesInTheSameSecondDoNotShareAnEntryDirectory) {
+    TemporaryDirectory workspace;
+    const auto archiveRoot = workspace.path() / ".ssg" / "archive";
+    writeOutOfBand(workspace.path() / "one.txt", "first process");
+    writeOutOfBand(workspace.path() / "two.txt", "second process");
+
+    ssg::FileArchive first{archiveRoot};
+    ssg::FileArchive second{archiveRoot};
+    const auto a = first.archive(workspace.path(), workspace.path() / "one.txt");
+    const auto b = second.archive(workspace.path(), workspace.path() / "two.txt");
+    ASSERT_TRUE(a.ok());
+    ASSERT_TRUE(b.ok());
+
+    ASSERT_TRUE(a.archivedPath.parent_path() != b.archivedPath.parent_path());
+    ASSERT_EQ(readOutOfBand(a.archivedPath), std::string{"first process"});
+    ASSERT_EQ(readOutOfBand(b.archivedPath), std::string{"second process"});
+}
+
+// A failed copy must clean up only what it created. If it reused an existing
+// entry directory, its remove_all would take another deletion's files with it.
+TEST(aFailedArchiveNeverRemovesAnEarlierEntry) {
+    TemporaryDirectory workspace;
+    const auto archiveRoot = workspace.path() / ".ssg" / "archive";
+    writeOutOfBand(workspace.path() / "kept.txt", "already archived");
+    writeOutOfBand(workspace.path() / "next.txt", "will fail");
+
+    ssg::FileArchive first{archiveRoot};
+    const auto kept =
+        first.archive(workspace.path(), workspace.path() / "kept.txt");
+    ASSERT_TRUE(kept.ok());
+
+    FailCopy injector;
+    auto* previous = ssg::installFileIoFaultInjector(&injector);
+    ssg::FileArchive second{archiveRoot};
+    const auto refused =
+        second.archive(workspace.path(), workspace.path() / "next.txt");
+    (void)ssg::installFileIoFaultInjector(previous);
+
+    ASSERT_FALSE(refused.ok());
+    ASSERT_EQ(readOutOfBand(kept.archivedPath), std::string{"already archived"});
+}
+
+// Future-dated entries must survive: pruning a user's only copy because a clock
+// disagreed would be the exact loss this feature prevents.
+TEST(pruningRetainsAndReportsFutureDatedEntries) {
+    TemporaryDirectory workspace;
+    const auto archiveRoot = workspace.path() / ".ssg" / "archive";
+    const auto now = at(2026, 3, 1);
+    writeOutOfBand(
+        archiveRoot / ssg::FileArchive::entryDirectoryName(at(2027, 1, 1), 0) /
+            "tomorrow.txt",
+        "from the future");
+
+    ssg::FileArchive archive{archiveRoot};
+    const auto report = archive.prune(now, std::chrono::hours{24 * 14});
+
+    ASSERT_TRUE(report.ok());
+    ASSERT_EQ(report.removed, std::size_t{0});
+    ASSERT_EQ(report.retainedFutureDated, std::size_t{1});
+}
+
 }  // namespace
 
 int main() {
@@ -219,6 +293,9 @@ int main() {
     RUN(pruningAnAbsentArchiveIsNotAnError);
     RUN(entryDirectoryNamesSortChronologically);
     RUN(entryTimestampsRoundTripThroughTheDirectoryName);
+    RUN(twoArchivesInTheSameSecondDoNotShareAnEntryDirectory);
+    RUN(aFailedArchiveNeverRemovesAnEarlierEntry);
+    RUN(pruningRetainsAndReportsFutureDatedEntries);
     std::cout << "Passed: " << passed << " Failed: " << failed << '\n';
     return failed == 0 ? 0 : 1;
 }

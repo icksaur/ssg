@@ -487,6 +487,24 @@ FileIoResult removeFile(const std::filesystem::path& path) {
     return syncParentDirectory(path);
 }
 
+FileIoResult syncDirectory(const std::filesystem::path& path) {
+    if (const auto injected = injectedFailure("syncDirectory", path)) {
+        return {*injected, "injected fault: syncDirectory"};
+    }
+
+    const int directory = open(path.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    if (directory < 0) {
+        return errnoFailure(errno, "open directory for flush", path);
+    }
+    if (fsync(directory) != 0) {
+        const int saved = errno;
+        close(directory);
+        return errnoFailure(saved, "flush directory", path);
+    }
+    close(directory);
+    return {FileIoStatus::Ok, {}};
+}
+
 FileIoResult copyFileDurably(const std::filesystem::path& source,
                              const std::filesystem::path& destination) {
     if (const auto injected = injectedFailure("copyFileDurably", source)) {

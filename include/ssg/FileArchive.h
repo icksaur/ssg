@@ -24,6 +24,10 @@ struct FileArchivePruneReport {
     // than garbage, and removing it would be a second way to lose data in a
     // feature whose entire purpose is preventing the first.
     std::size_t retainedUnparseable = 0;
+    // Entries dated in the future -- clock skew, or an archive restored from a
+    // backup. Retained for the same reason as unparseable entries, and counted
+    // so the condition is visible rather than a silently immortal entry.
+    std::size_t retainedFutureDated = 0;
     // Housekeeping failures. Non-empty does NOT mean the caller should fail:
     // a corrupt archive entry must never stop a user opening their workspace.
     std::string message;
