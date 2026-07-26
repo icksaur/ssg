@@ -134,6 +134,45 @@ displaying client scrolls minimally to keep the primary caret visible --
 vertically always, and horizontally when word wrap is off and the line is
 clipped. The reveal target is only `selections.primary().active`.
 
+### Scrolling and scrollbars
+
+Three surfaces scroll: the **document pane**, the **picker list** (command
+palette and file finder), and the **panel** (file explorer and git trees).
+
+**Scrollbars and scroll gestures are vertical only.** There is no horizontal
+scrollbar and no horizontal scroll gesture on any surface. The document pane
+does move horizontally when word wrap is off, but only as a consequence of
+revealing the caret (`requestedFirstVisualColumn`, driven by caret reveal); the
+user cannot scroll horizontally, and nothing paints a horizontal track. See
+`doc/spec-viewport-projection.md` for that mechanism.
+
+The user-visible contract is identical for all three, and stated here once
+because "the bar behaves unlike the document" is exactly the drift this
+document exists to prevent:
+
+- **A reserved gutter.** Every scrollable surface reserves its rightmost column
+  for a scrollbar, always, whether or not a thumb is currently shown. Content
+  width therefore never changes as a list grows or shrinks.
+- **One appearance.** A thumb is `#`, a track is `|`, drawn in
+  `SemanticRole::ScrollbarThumb` / `ScrollbarTrack`. Every surface paints
+  through one function, so they cannot diverge. Thumb *size* is proportional to
+  the visible fraction and legitimately differs between surfaces.
+- **An empty gutter means nothing to scroll.** When the content fits, the
+  gutter is blank rather than showing a full-height thumb. A collapsed tree
+  shows an empty gutter; this is the surface saying "there is no more", not a
+  missing scrollbar.
+- **The same gestures, everywhere.** The wheel scrolls the surface under the
+  pointer. Clicking a gutter jumps to that position. Dragging a thumb scrolls
+  live. A surface that responds to one of these responds to all of them.
+- **Selection may leave the viewport.** An explicit scroll gesture (wheel,
+  gutter click, thumb drag, page keys) is the one interaction that decouples
+  the view from the selection, and never snaps back. Moving the selection, by
+  contrast, always reveals it.
+
+`doc/spec-scroll.md` owns the mechanism: offsets, the shared scroll-view
+function, reveal policy, and the consolidation work that makes the gesture rule
+above true of all three surfaces.
+
 ## Invariants
 
 - **I23 (caret visibility, `doc/spec.md`)** -- after any accepted command that
@@ -144,6 +183,11 @@ clipped. The reveal target is only `selections.primary().active`.
 - **Reserved gutters keep content width stable.** The panel's and pane's
   scrollbar columns are always reserved, so text does not reflow when a thumb
   appears or disappears.
+- **Every scrollable surface answers the same gestures.** Wheel, gutter click,
+  and thumb drag work on the document, the picker, and the panel alike. A
+  surface that scrolls but ignores a gesture is a defect, not a design choice.
+- **One scrollbar appearance.** All scrollbars are painted by one function from
+  one pair of semantic roles; only thumb size varies.
 - Layout is a pure function of its request and shell state. The same request
   produces the same geometry on every client.
 - The library owns geometry; the client only paints it. A client does not
