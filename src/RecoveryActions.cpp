@@ -164,8 +164,15 @@ std::filesystem::path pathFromUtf8(std::string_view value) {
     return std::filesystem::path{encoded};
 }
 
+// Not routed to the seam's write primitives: these writes land in a STAGING
+// directory whose durability is established afterwards by syncTree() before the
+// record is installed. An atomic replace here would add a rename and a parent
+// fsync in the middle of that two-phase commit, reordering the very sequence
+// the recovery design depends on. Durability is not weaker; it is established
+// one level up.
 void writeBytes(const std::filesystem::path& path,
                  std::span<const std::byte> bytes) {
+    // seam-exempt: staged write, durability established by syncTree below
     std::ofstream output(path, std::ios::binary | std::ios::trunc);
     if (!output) {
         throw std::runtime_error("failed to create recovery file: " +
@@ -282,20 +289,17 @@ void renameDurably(const std::filesystem::path& source,
 }
 
 std::vector<std::byte> readBytes(const std::filesystem::path& path) {
-    std::ifstream input(path, std::ios::binary);
-    if (!input) {
+    auto result = readFile(path);
+    if (!result.ok()) {
         throw std::runtime_error("failed to open recovery file: " +
-                                 path.string());
+                                 path.string() + ": " + result.message);
     }
-    const std::vector<char> encoded{std::istreambuf_iterator<char>(input),
-                                    std::istreambuf_iterator<char>()};
-    std::vector<std::byte> result(encoded.size());
-    std::transform(encoded.begin(), encoded.end(), result.begin(),
-                   [](char value) {
-                       return static_cast<std::byte>(
-                           static_cast<unsigned char>(value));
+    std::vector<std::byte> bytes(result.bytes.size());
+    std::transform(result.bytes.begin(), result.bytes.end(), bytes.begin(),
+                   [](std::uint8_t value) {
+                       return static_cast<std::byte>(value);
                    });
-    return result;
+    return bytes;
 }
 
 SnapshotKind snapshotKind(const std::filesystem::path& path) {

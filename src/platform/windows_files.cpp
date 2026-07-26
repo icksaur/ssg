@@ -8,10 +8,12 @@
 
 #include <atomic>
 #include <cstring>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <system_error>
 #include <utility>
+#include <vector>
 
 namespace ssg {
 namespace {
@@ -301,6 +303,179 @@ void replace_file_atomically(const std::filesystem::path& target,
         throw_last_error("publish replacement file", target);
     }
     temporary.published();
+}
+
+namespace {
+
+FileIoFaultInjector*& faultInjectorSlot() noexcept {
+    static FileIoFaultInjector* injector = nullptr;
+    return injector;
+}
+
+std::optional<FileIoStatus> injectedFailure(
+    std::string_view operation, const std::filesystem::path& path) {
+    auto* injector = faultInjectorSlot();
+    if (injector == nullptr) return std::nullopt;
+    const auto status = injector->beforeOperation(operation, path);
+    if (status == FileIoStatus::Ok) return std::nullopt;
+    return status;
+}
+
+FileIoStatus status_for_last_error(DWORD error) noexcept {
+    switch (error) {
+        case ERROR_FILE_NOT_FOUND:
+        case ERROR_PATH_NOT_FOUND:
+            return FileIoStatus::NotFound;
+        case ERROR_FILE_EXISTS:
+        case ERROR_ALREADY_EXISTS:
+            return FileIoStatus::AlreadyExists;
+        default:
+            return FileIoStatus::IoError;
+    }
+}
+
+FileIoResult last_error_failure(DWORD error, std::string_view operation,
+                                const std::filesystem::path& path) {
+    return {status_for_last_error(error),
+            std::string(operation) + ": " + path.string() + ": " +
+                std::system_category().message(static_cast<int>(error))};
+}
+
+} // namespace
+
+FileIoFaultInjector* installFileIoFaultInjector(
+    FileIoFaultInjector* injector) noexcept {
+    return std::exchange(faultInjectorSlot(), injector);
+}
+
+FileReadResult readFile(const std::filesystem::path& path) {
+    if (const auto injected = injectedFailure("readFile", path)) {
+        return {*injected, {}, "injected fault: readFile"};
+    }
+
+    const HANDLE handle =
+        CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                    nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (handle == INVALID_HANDLE_VALUE) {
+        const auto failure =
+            last_error_failure(GetLastError(), "open file for reading", path);
+        return {failure.status, {}, failure.message};
+    }
+
+    BY_HANDLE_FILE_INFORMATION information{};
+    if (GetFileInformationByHandle(handle, &information) &&
+        (information.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
+        CloseHandle(handle);
+        return {FileIoStatus::IoError, {},
+                "path is a directory, not a file: " + path.string()};
+    }
+
+    std::vector<std::uint8_t> bytes;
+    std::vector<std::uint8_t> buffer(64 * 1024);
+    for (;;) {
+        DWORD count = 0;
+        if (!ReadFile(handle, buffer.data(),
+                      static_cast<DWORD>(buffer.size()), &count, nullptr)) {
+            const DWORD error = GetLastError();
+            CloseHandle(handle);
+            const auto failure = last_error_failure(error, "read file", path);
+            return {failure.status, {}, failure.message};
+        }
+        if (count == 0) break;
+        bytes.insert(bytes.end(), buffer.begin(),
+                     buffer.begin() + static_cast<std::size_t>(count));
+    }
+    CloseHandle(handle);
+    return {FileIoStatus::Ok, std::move(bytes), {}};
+}
+
+FileIoResult createFileExclusively(const std::filesystem::path& target,
+                                   std::span<const std::byte> contents) {
+    if (const auto injected = injectedFailure("createFileExclusively", target)) {
+        return {*injected, "injected fault: createFileExclusively"};
+    }
+
+    // CREATE_NEW is the Windows counterpart of O_CREAT|O_EXCL: the filesystem,
+    // not this process, decides whether the name was already taken.
+    const HANDLE handle =
+        CreateFileW(target.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW,
+                    FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (handle == INVALID_HANDLE_VALUE) {
+        return last_error_failure(GetLastError(), "create file", target);
+    }
+
+    std::size_t written = 0;
+    while (written < contents.size()) {
+        const DWORD request = static_cast<DWORD>(
+            (std::min)(contents.size() - written,
+                       static_cast<std::size_t>(MAXDWORD)));
+        DWORD count = 0;
+        if (!WriteFile(handle, contents.data() + written, request, &count,
+                       nullptr)) {
+            const DWORD error = GetLastError();
+            CloseHandle(handle);
+            DeleteFileW(target.c_str());
+            return last_error_failure(error, "write created file", target);
+        }
+        if (count == 0) {
+            CloseHandle(handle);
+            DeleteFileW(target.c_str());
+            return {FileIoStatus::IoError,
+                    "write made no progress: " + target.string()};
+        }
+        written += count;
+    }
+    if (!FlushFileBuffers(handle)) {
+        const DWORD error = GetLastError();
+        CloseHandle(handle);
+        DeleteFileW(target.c_str());
+        return last_error_failure(error, "flush created file", target);
+    }
+    CloseHandle(handle);
+    return {FileIoStatus::Ok, {}};
+}
+
+FileIoResult renameFileNoClobber(const std::filesystem::path& source,
+                                 const std::filesystem::path& destination) {
+    if (const auto injected = injectedFailure("renameFileNoClobber", source)) {
+        return {*injected, "injected fault: renameFileNoClobber"};
+    }
+
+    // Deliberately WITHOUT MOVEFILE_REPLACE_EXISTING, so an occupied
+    // destination fails rather than being overwritten.
+    if (!MoveFileExW(source.c_str(), destination.c_str(),
+                     MOVEFILE_WRITE_THROUGH)) {
+        return last_error_failure(GetLastError(), "rename file", destination);
+    }
+    return {FileIoStatus::Ok, {}};
+}
+
+FileIoResult removeFile(const std::filesystem::path& path) {
+    if (const auto injected = injectedFailure("removeFile", path)) {
+        return {*injected, "injected fault: removeFile"};
+    }
+
+    if (!DeleteFileW(path.c_str())) {
+        return last_error_failure(GetLastError(), "remove file", path);
+    }
+    return {FileIoStatus::Ok, {}};
+}
+
+FileIoResult copyFileDurably(const std::filesystem::path& source,
+                             const std::filesystem::path& destination) {
+    if (const auto injected = injectedFailure("copyFileDurably", source)) {
+        return {*injected, "injected fault: copyFileDurably"};
+    }
+
+    auto contents = readFile(source);
+    if (!contents.ok()) {
+        return {contents.status, contents.message};
+    }
+    return createFileExclusively(
+        destination,
+        std::span<const std::byte>{
+            reinterpret_cast<const std::byte*>(contents.bytes.data()),
+            contents.bytes.size()});
 }
 
 } // namespace ssg

@@ -209,6 +209,25 @@ std::filesystem::path canonicalDirectory(std::filesystem::path const& path) {
     return canonical;
 }
 
+std::span<const std::byte> asByteSpan(std::string_view text) noexcept {
+    return {reinterpret_cast<const std::byte*>(text.data()), text.size()};
+}
+
+LspWorkspaceFileResult asLspResult(FileIoResult result) {
+    switch (result.status) {
+        case FileIoStatus::Ok:
+            return {};
+        case FileIoStatus::NotFound:
+            return {LspWorkspaceFileError::NotFound, std::move(result.message)};
+        case FileIoStatus::AlreadyExists:
+            return {LspWorkspaceFileError::AlreadyExists,
+                    std::move(result.message)};
+        case FileIoStatus::IoError:
+            break;
+    }
+    return {LspWorkspaceFileError::IoError, std::move(result.message)};
+}
+
 // std::nullopt for a file that could not be read, so an unreadable file can
 // never be mistaken for an empty one. That mistake is destructive here: these
 // results feed staleness comparisons and rollback snapshots, where fake empty
@@ -947,9 +966,15 @@ WorkspaceApplyResult EditorRuntime::Impl::apply(
     }
     for (std::size_t index = 0; index < preview.changes.size(); ++index) {
         auto const& change = preview.changes[index];
-        std::ofstream output{paths[index], std::ios::binary | std::ios::trunc};
-        if (!output) return {FindReplaceError::WorkspaceRejected, preview.sourceRevision, "failed to write workspace file"};
-        output << change.after;
+        // Atomic replace, not truncate-then-stream: a replace-across-files run
+        // interrupted part way through must leave each file either wholly old
+        // or wholly new. A truncating write turns an interruption into a
+        // truncated source file.
+        try {
+            replaceFileAtomically(paths[index], asByteSpan(change.after));
+        } catch (const std::exception&) {
+            return {FindReplaceError::WorkspaceRejected, preview.sourceRevision, "failed to write workspace file"};
+        }
     }
     for (std::size_t index = 0; index < preview.changes.size(); ++index) {
         auto const& change = preview.changes[index];
@@ -972,9 +997,13 @@ WorkspaceApplyResult EditorRuntime::Impl::apply(
 
 WorkspaceApplyResult EditorRuntime::Impl::recover(const WorkspaceRecoveryRecord& record) {
     for (auto const& change : record.changes) {
-        std::ofstream output{root / change.path, std::ios::binary | std::ios::trunc};
-        if (!output) return {FindReplaceError::WorkspaceRejected, record.appliedRevision, "failed to recover workspace file"};
-        output << change.before;
+        // This is the rollback path, so an interrupted write here would leave a
+        // file that is neither the edited version nor the original.
+        try {
+            replaceFileAtomically(root / change.path, asByteSpan(change.before));
+        } catch (const std::exception&) {
+            return {FindReplaceError::WorkspaceRejected, record.appliedRevision, "failed to recover workspace file"};
+        }
     }
     return {FindReplaceError::None, record.appliedRevision, {}};
 }
@@ -1035,28 +1064,6 @@ LspWorkspaceFileResult EditorRuntime::Impl::snapshot(std::string_view uri, LspWo
     return {};
 }
 
-namespace {
-
-LspWorkspaceFileResult asLspResult(FileIoResult result) {
-    switch (result.status) {
-        case FileIoStatus::Ok:
-            return {};
-        case FileIoStatus::NotFound:
-            return {LspWorkspaceFileError::NotFound, std::move(result.message)};
-        case FileIoStatus::AlreadyExists:
-            return {LspWorkspaceFileError::AlreadyExists,
-                    std::move(result.message)};
-        case FileIoStatus::IoError:
-            break;
-    }
-    return {LspWorkspaceFileError::IoError, std::move(result.message)};
-}
-
-std::span<const std::byte> asByteSpan(std::string_view text) noexcept {
-    return {reinterpret_cast<const std::byte*>(text.data()), text.size()};
-}
-
-}  // namespace
 
 LspWorkspaceFileResult EditorRuntime::Impl::createFile(std::string uri, bool overwrite) {
     auto path = pathFromUri(uri);

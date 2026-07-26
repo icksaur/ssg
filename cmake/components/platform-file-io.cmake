@@ -31,4 +31,11 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     )
     target_link_libraries(test_platform_file_seam PRIVATE ssg)
     add_test(NAME test_platform_file_seam COMMAND test_platform_file_seam)
+
+    add_executable(test_file_seam_guard
+        ${SSG_SOURCE_DIR}/tests/test_file_seam_guard.cpp
+    )
+    target_link_libraries(test_file_seam_guard PRIVATE ssg)
+    add_test(NAME test_file_seam_guard COMMAND test_file_seam_guard
+        WORKING_DIRECTORY ${SSG_SOURCE_DIR})
 endif()

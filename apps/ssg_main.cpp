@@ -70,6 +70,7 @@ void startup_mark_impl(char const* phase) {
     clock_gettime(CLOCK_MONOTONIC, &now);
     long long const ns =
         static_cast<long long>(now.tv_sec) * 1'000'000'000LL + now.tv_nsec;
+    // seam-exempt: append-only diagnostic trace, not file content access
     if (std::FILE* file = std::fopen(path, "a"); file != nullptr) {
         std::fprintf(file, "%s %lld\n", phase, ns);
         std::fclose(file);
@@ -412,29 +413,26 @@ std::optional<std::filesystem::path> resolveInitScriptPath() {
 // blank. Returns nullopt silently (NO diagnostic) if the file simply does
 // not exist, or exists but is empty/whitespace-only -- both are "nothing
 // to run", the normal no-config case, and also the steady state after a
-// mid-run delete (see InitScriptWatcher below). Prints a diagnostic and
-// returns nullopt for a genuine I/O error (a stat or read failure other
-// than "does not exist").
+// mid-run delete (see InitScriptWatcher below). A genuine I/O error (a read
+// failure other than "does not exist") also yields nullopt, and is reported
+// only when `reportDiagnostics` is set.
+//
+// One read decides absent-vs-blank-vs-unreadable. The previous
+// exists()-then-open pair could call a file that appeared between the two
+// calls unreadable, and a file deleted between them a genuine I/O error.
 std::optional<std::string> readInitScriptIfPresent(
-    std::filesystem::path const& scriptPath) {
-    std::error_code existsError;
-    bool const present = std::filesystem::exists(scriptPath, existsError);
-    if (existsError) {
-        std::fprintf(stderr, "ssg: could not check %s: %s\n",
-                    scriptPath.string().c_str(), existsError.message().c_str());
+    std::filesystem::path const& scriptPath, bool reportDiagnostics) {
+    auto result = ssg::readFile(scriptPath);
+    if (result.status == ssg::FileIoStatus::NotFound) return std::nullopt;
+    if (!result.ok()) {
+        if (reportDiagnostics) {
+            std::fprintf(stderr, "ssg: could not read %s: %s\n",
+                        scriptPath.string().c_str(), result.message.c_str());
+        }
         return std::nullopt;
     }
-    if (!present) return std::nullopt;
-
-    std::ifstream input{scriptPath, std::ios::binary};
-    if (!input) {
-        std::fprintf(stderr, "ssg: could not read %s\n",
-                    scriptPath.string().c_str());
-        return std::nullopt;
-    }
-    std::ostringstream buffer;
-    buffer << input.rdbuf();
-    auto text = buffer.str();
+    std::string text{reinterpret_cast<char const*>(result.bytes.data()),
+                     result.bytes.size()};
     if (isBlank(text)) return std::nullopt;
     return text;
 }
@@ -450,7 +448,7 @@ std::optional<std::string> readInitScriptIfPresent(
 std::optional<std::string> loadInitScript(ssg::EditorRuntime& runtime) {
     auto const scriptPath = resolveInitScriptPath();
     if (!scriptPath) return std::nullopt;
-    auto script = readInitScriptIfPresent(*scriptPath);
+    auto script = readInitScriptIfPresent(*scriptPath, true);
     if (!script) return std::nullopt;
     evaluateInitScript(runtime, *scriptPath, *script);
     return script;
@@ -591,19 +589,12 @@ private:
     // read script) can ever produce a diagnostic, exactly like startup.
     // Blank content (see isBlank) is treated the same as absent, so a
     // zero-byte read observed mid-truncate/mid-save can never be queued or
-    // evaluated as a false "successful reload of nothing".
+    // evaluated as a false "successful reload of nothing". Diagnostics are
+    // suppressed here because a watcher fires on transient states a user did
+    // not ask about; startup uses the same reader with reporting on.
     static std::optional<std::string> readInitScriptIfPresentQuiet(
         std::filesystem::path const& scriptPath) {
-        std::error_code existsError;
-        bool const present = std::filesystem::exists(scriptPath, existsError);
-        if (existsError || !present) return std::nullopt;
-        std::ifstream input{scriptPath, std::ios::binary};
-        if (!input) return std::nullopt;
-        std::ostringstream buffer;
-        buffer << input.rdbuf();
-        auto text = buffer.str();
-        if (isBlank(text)) return std::nullopt;
-        return text;
+        return readInitScriptIfPresent(scriptPath, false);
     }
 
     std::filesystem::path scriptPath_;
