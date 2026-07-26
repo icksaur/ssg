@@ -104,6 +104,7 @@ struct EditorRuntime::Impl final : CommandServices,
     Impl(std::filesystem::path canonicalCwd,
          std::filesystem::path scratchRoot,
          std::filesystem::path recoveryRoot,
+         std::filesystem::path archiveRoot,
          bool deferEnrichment = false,
          std::shared_ptr<SyntaxParser> parser = nullptr,
          std::vector<StatusFieldProviderBinding> statusFieldProviderOverrides = {},
@@ -113,6 +114,7 @@ struct EditorRuntime::Impl final : CommandServices,
     std::filesystem::path root;
     std::filesystem::path scratchRoot;
     std::filesystem::path recoveryRoot;
+    std::filesystem::path archiveRoot;
     RecoveryActions recovery;
     ScratchStore scratch;
     Workspace workspace;

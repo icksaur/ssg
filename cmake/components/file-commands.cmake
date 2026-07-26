@@ -1,6 +1,7 @@
 target_sources(ssg PRIVATE
     ${SSG_SOURCE_DIR}/src/Workspace.cpp
     ${SSG_SOURCE_DIR}/src/FileCommands.cpp
+    ${SSG_SOURCE_DIR}/src/FileArchive.cpp
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
@@ -29,4 +30,11 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_include_directories(test_name_clash PRIVATE ${SSG_SOURCE_DIR}/tests)
     target_link_libraries(test_name_clash PRIVATE ssg)
     add_test(NAME test_name_clash COMMAND test_name_clash)
+
+    add_executable(test_file_archive
+        ${SSG_SOURCE_DIR}/tests/test_file_archive.cpp
+    )
+    target_include_directories(test_file_archive PRIVATE ${SSG_SOURCE_DIR}/tests)
+    target_link_libraries(test_file_archive PRIVATE ssg)
+    add_test(NAME test_file_archive COMMAND test_file_archive)
 endif()

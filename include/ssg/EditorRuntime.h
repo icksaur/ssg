@@ -22,6 +22,9 @@ struct EditorRuntimeConfig {
     std::filesystem::path cwd;
     std::filesystem::path scratchRoot;
     std::filesystem::path recoveryRoot;
+    // Where deleted files are kept. Defaults beside scratch and recovery under
+    // the workspace's `.ssg/`.
+    std::filesystem::path archiveRoot;
     // M10 fast startup: when true, deferrable enrichment (workspace tree scan,
     // syntax highlighting) is NOT run during construction or the initial
     // file.open; it runs when the client calls prime_deferred() after drawing its

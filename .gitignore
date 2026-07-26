@@ -1,7 +1,9 @@
 build/
 build-*/
 build_*/
-.ssg/scratch/
+# The editor's private state: scratch, recovery, and the delete archive.
+# Ignored wholesale so a future subdirectory cannot leak into git status.
+.ssg/
 
 # Runtime test artifacts (created under CWD when test binaries run outside build/)
 runtime_editing/

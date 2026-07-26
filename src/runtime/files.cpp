@@ -96,6 +96,9 @@ CommandHandlerResult bindFile(EditorRuntime::Impl& runtime,
             result = runtime.workspace.openDirectory(*path);
             if (!result.accepted()) return failure(workspaceMessage(result));
             runtime.root = runtime.workspace.root();
+            // Same housekeeping as at startup: opening a different workspace
+            // means a different archive to expire.
+            (void)runtime.workspace.pruneArchive();
             runtime.refreshTree();
             return success();
         }

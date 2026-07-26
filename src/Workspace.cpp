@@ -274,11 +274,17 @@ public:
         std::vector<std::string> recent;
     };
 
-    Impl(std::filesystem::path canonicalRoot, RecoveryActions& actions)
-        : root(std::move(canonicalRoot)), recovery(actions) {}
+    Impl(std::filesystem::path canonicalRoot, RecoveryActions& actions,
+         std::filesystem::path archiveRoot)
+        : root(std::move(canonicalRoot)),
+          recovery(actions),
+          archive(std::move(archiveRoot)) {}
 
     std::filesystem::path root;
     RecoveryActions& recovery;
+    // The durable home for deleted files, separate from `recovery` because that
+    // is a bounded evicting undo ring (see FileArchive.h).
+    FileArchive archive;
     std::uint64_t nextDocument = 1;
     std::uint64_t nextWorkspaceReplacement = 1;
     std::vector<Entry> entries;
@@ -482,13 +488,19 @@ Workspace::Workspace(std::unique_ptr<Impl> implementation) noexcept
     : impl_(std::move(implementation)) {}
 
 Workspace Workspace::create(const std::filesystem::path& root,
-                            RecoveryActions& recovery) {
+                            RecoveryActions& recovery,
+                            std::optional<std::filesystem::path> archiveRoot) {
     std::error_code code;
     const auto canonical = std::filesystem::canonical(root, code);
     if (code || !std::filesystem::is_directory(canonical)) {
         throw std::invalid_argument("workspace root must be an existing directory");
     }
-    return Workspace{std::make_unique<Impl>(canonical, recovery)};
+    // Defaults beside the other editor-private state, so a caller that does not
+    // care still gets a real archive rather than none.
+    auto archive = archiveRoot ? std::move(*archiveRoot)
+                               : canonical / ".ssg" / "archive";
+    return Workspace{
+        std::make_unique<Impl>(canonical, recovery, std::move(archive))};
 }
 
 Workspace::~Workspace() = default;
@@ -497,6 +509,11 @@ Workspace& Workspace::operator=(Workspace&&) noexcept = default;
 
 const std::filesystem::path& Workspace::root() const noexcept {
     return impl_->root;
+}
+
+FileArchivePruneReport Workspace::pruneArchive(
+    std::chrono::system_clock::time_point now) {
+    return impl_->archive.prune(now, kFileArchiveRetention);
 }
 
 std::vector<FileDocumentId> Workspace::documents() const {
@@ -977,6 +994,16 @@ WorkspaceResult Workspace::deleteFile(FileDocumentId id) {
         impl_->resolve(entry->key.savedPath(), true, pathError);
     if (!path) {
         return pathError;
+    }
+    // The archive copy is durable BEFORE the delete runs. If it fails, the
+    // delete fails and the file is untouched: a delete must never reduce the
+    // number of copies below one, and this command deliberately asks for no
+    // confirmation, so the archive is what makes that safe.
+    if (const auto archived = impl_->archive.archive(impl_->root, *path);
+        !archived.ok()) {
+        return failure(WorkspaceError::IoFailed,
+                       "could not archive the file before deleting it: " +
+                           archived.message);
     }
     const auto action = impl_->recovery.deletePath(*path);
     if (!action.accepted()) {

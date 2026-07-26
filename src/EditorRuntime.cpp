@@ -383,6 +383,7 @@ std::string tabMessage(TabResult const& result) {
 EditorRuntime::Impl::Impl(std::filesystem::path canonicalCwd,
                           std::filesystem::path scratchRoot,
                           std::filesystem::path recoveryRoot,
+                          std::filesystem::path archiveRoot,
                           bool deferEnrichment,
                           std::shared_ptr<SyntaxParser> parser,
                           std::vector<StatusFieldProviderBinding>
@@ -391,9 +392,10 @@ EditorRuntime::Impl::Impl(std::filesystem::path canonicalCwd,
     : root{std::move(canonicalCwd)},
       scratchRoot{std::filesystem::weakly_canonical(scratchRoot)},
       recoveryRoot{std::filesystem::weakly_canonical(recoveryRoot)},
+      archiveRoot{std::filesystem::weakly_canonical(archiveRoot)},
       recovery{RecoveryActions::create(recoveryRoot)},
       scratch{ScratchStore::create(scratchRoot, root)},
-      workspace{Workspace::create(root, recovery)},
+      workspace{Workspace::create(root, recovery, this->archiveRoot)},
       selection{initialSelection()},
       clipboard{4},
       shell{{"Files", "Git", "Symbols"}},
@@ -875,7 +877,8 @@ WorkspaceSnapshot EditorRuntime::Impl::snapshot(Revision revision) const {
         auto const& entry = *it;
         if (entry.is_directory() &&
             (pathContains(scratchRoot, entry.path()) ||
-             pathContains(recoveryRoot, entry.path()))) {
+             pathContains(recoveryRoot, entry.path()) ||
+             pathContains(archiveRoot, entry.path()))) {
             it.disable_recursion_pending();
             continue;
         }
@@ -924,7 +927,8 @@ WorkspaceApplyResult EditorRuntime::Impl::apply(
                     preview.sourceRevision, std::move(message)};
         }
         if (pathContains(scratchRoot, *path) ||
-            pathContains(recoveryRoot, *path)) {
+            pathContains(recoveryRoot, *path) ||
+            pathContains(archiveRoot, *path)) {
             return {FindReplaceError::WorkspaceRejected,
                     preview.sourceRevision,
                     "workspace replacement path targets runtime state"};
@@ -1747,16 +1751,26 @@ EditorRuntimeCreateResult EditorRuntime::create(EditorRuntimeConfig config) {
         auto cwd = canonicalDirectory(config.cwd);
         if (config.scratchRoot.empty()) config.scratchRoot = cwd / ".ssg" / "scratch";
         if (config.recoveryRoot.empty()) config.recoveryRoot = cwd / ".ssg" / "recovery";
+        if (config.archiveRoot.empty()) config.archiveRoot = cwd / ".ssg" / "archive";
         std::filesystem::create_directories(config.scratchRoot);
         std::filesystem::create_directories(config.recoveryRoot);
+        // The archive root is deliberately NOT created here. Creating it eagerly
+        // would materialise a `.ssg/` directory inside every workspace merely
+        // for being opened -- visible in the file tree, and pointless for a
+        // session that never deletes anything. FileArchive creates it on the
+        // first delete instead.
         auto impl = std::make_unique<Impl>(cwd, config.scratchRoot,
                                            config.recoveryRoot,
+                                           config.archiveRoot,
                                            config.deferEnrichment,
                                            std::move(config.syntaxParser),
                                            std::move(config.statusFieldProviders),
                                            config.enableGitDiffWorker);
-        impl->keymap = defaultTerminalKeymap();
-        if (auto errors = KeymapMatcher{impl->keymap}.validate({}); !errors.empty()) {
+        // Housekeeping at workspace open rather than on a timer, so it is
+        // deterministic and testable. Its result is deliberately ignored: a
+        // corrupt archive entry must never stop a user opening their workspace.
+        (void)impl->workspace.pruneArchive();
+        impl->keymap = defaultTerminalKeymap();        if (auto errors = KeymapMatcher{impl->keymap}.validate({}); !errors.empty()) {
             return {nullptr, "default keymap is invalid: " + errors.front().message};
         }
         if (!KeymapMatcher{impl->keymap}.hasGlobalBinding("settings.open", {})) {

@@ -4,6 +4,7 @@
 #include <ssg/FileCommands.h>
 #include <ssg/PromptSurface.h>
 #include <ssg/RecoveryActions.h>
+#include <ssg/platform_files.h>
 #include <ssg/Workspace.h>
 
 #include <chrono>
@@ -52,6 +53,16 @@ ssg::CommandResult run(ssg::EditorRuntime& runtime, std::string id,
         ssg::ClientId{1},
         {std::move(id), runtime.revision(), std::move(payload)});
 }
+
+// Forces the archive's copy to fail so the delete's abort path is reachable.
+class FailArchiveCopy : public ssg::FileIoFaultInjector {
+public:
+    ssg::FileIoStatus beforeOperation(std::string_view operation,
+                                      const fs::path&) override {
+        return operation == "copyFileDurably" ? ssg::FileIoStatus::IoError
+                                              : ssg::FileIoStatus::Ok;
+    }
+};
 
 // Read WITHOUT the seam so the check is independent of the code under test.
 std::string readOutOfBand(const fs::path& path) {
@@ -239,6 +250,54 @@ TEST(rollingBackARenameLeavesNothingAtTheNewName) {
     ASSERT_FALSE(fs::exists(directory.path() / "after.txt"));
 }
 
+// Deleting must leave the bytes recoverable. This is the invariant the whole
+// archive exists for: the command takes no confirmation, so the only thing
+// standing between a mistaken keystroke and permanent loss is this copy.
+TEST(deletingAFileLeavesTheBytesInTheArchive) {
+    TemporaryDirectory directory;
+    const std::string payload = "irreplaceable\n";
+    writeOutOfBand(directory.path() / "doomed.txt", payload);
+
+    auto runtime = makeRuntime(directory.path());
+    ASSERT_TRUE(runtime != nullptr);
+    ASSERT_TRUE(run(*runtime, "file.open", std::string{"doomed.txt"}).accepted());
+    ASSERT_TRUE(run(*runtime, "file.delete").accepted());
+
+    ASSERT_FALSE(fs::exists(directory.path() / "doomed.txt"));
+
+    const auto archiveRoot = directory.path() / ".ssg" / "archive";
+    std::string recovered;
+    for (const auto& entry : fs::recursive_directory_iterator(archiveRoot)) {
+        if (entry.is_regular_file() &&
+            entry.path().filename() == "doomed.txt") {
+            recovered = readOutOfBand(entry.path());
+        }
+    }
+    ASSERT_EQ(recovered, payload);
+}
+
+// The ordering rule. If the archive cannot be written the delete must FAIL and
+// leave the file alone -- a delete never reduces the number of copies below
+// one. Fault injection is what makes this reachable; without it the branch
+// would only ever run on a full disk.
+TEST(aFailedArchiveWriteAbortsTheDeleteAndKeepsTheFile) {
+    TemporaryDirectory directory;
+    const std::string payload = "must survive a failed archive\n";
+    writeOutOfBand(directory.path() / "kept.txt", payload);
+
+    auto runtime = makeRuntime(directory.path());
+    ASSERT_TRUE(runtime != nullptr);
+    ASSERT_TRUE(run(*runtime, "file.open", std::string{"kept.txt"}).accepted());
+
+    FailArchiveCopy injector;
+    auto* previous = ssg::installFileIoFaultInjector(&injector);
+    const auto result = run(*runtime, "file.delete");
+    (void)ssg::installFileIoFaultInjector(previous);
+
+    ASSERT_FALSE(result.accepted());
+    ASSERT_EQ(readOutOfBand(directory.path() / "kept.txt"), payload);
+}
+
 }  // namespace
 
 int main() {
@@ -250,6 +309,8 @@ int main() {
     RUN(renameToAFreeNameMovesTheFileAndRetitlesTheTab);
     RUN(aRuntimeWithNoDocumentOpensAnEditableNewBuffer);
     RUN(rollingBackARenameLeavesNothingAtTheNewName);
+    RUN(deletingAFileLeavesTheBytesInTheArchive);
+    RUN(aFailedArchiveWriteAbortsTheDeleteAndKeepsTheFile);
     std::cout << "Passed: " << passed << " Failed: " << failed << '\n';
     return failed == 0 ? 0 : 1;
 }

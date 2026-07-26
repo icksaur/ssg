@@ -3,6 +3,7 @@
 #include "ssg/CommandRegistry.h"
 #include "ssg/Document.h"
 #include "ssg/platform_files.h"
+#include "ssg/FileArchive.h"
 #include "ssg/RecoveryActions.h"
 #include "ssg/ScratchJournal.h"
 #include "ssg/TextCodec.h"
@@ -109,7 +110,14 @@ inline constexpr std::string_view kNewBufferLabel = "[new buffer]";
 class Workspace {
 public:
     [[nodiscard]] static Workspace create(
-        const std::filesystem::path& root, RecoveryActions& recovery);
+        const std::filesystem::path& root, RecoveryActions& recovery,
+        std::optional<std::filesystem::path> archiveRoot = std::nullopt);
+
+    // Removes archive entries older than kFileArchiveRetention. Housekeeping:
+    // a failure here is reported but never prevents using the workspace.
+    [[nodiscard]] FileArchivePruneReport pruneArchive(
+        std::chrono::system_clock::time_point now =
+            std::chrono::system_clock::now());
 
     ~Workspace();
     Workspace(Workspace&&) noexcept;
