@@ -132,4 +132,12 @@ StyleDefineResult applyStyleDefine(Style const& current,
     return {std::nullopt, std::move(next)};
 }
 
+std::vector<std::string> styleDefineKeys() {
+    std::vector<std::string> keys;
+    keys.reserve(glyphSetters().size() + dimensionSetters().size());
+    for (auto const& [key, _] : glyphSetters()) keys.push_back(key);
+    for (auto const& [key, _] : dimensionSetters()) keys.push_back(key);
+    return keys;
+}
+
 }  // namespace ssg

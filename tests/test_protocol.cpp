@@ -6,6 +6,7 @@
 #include <ssg/Protocol.h>
 #include <ssg/session_snapshot.h>
 
+#include <algorithm>
 #include <cstdlib>
 #include <fstream>
 #include <regex>
@@ -1233,6 +1234,18 @@ TEST(findReplaceViewStateRoundTripsReplacementThroughTheWire) {
     }
 }
 
+// style.define and the wire codec each hand-maintain the Style field-name list,
+// in different files.  A field added to one but not the other means a field
+// settable over the wire but not by style.define (or vice versa).  This asserts
+// the two lists are exactly equal, deriving the codec's names from the codec.
+TEST(styleDefineKeysExactlyMatchTheWireCodecFields) {
+    auto defineKeys = ssg::styleDefineKeys();
+    auto wireKeys = ssg::styleWireFieldNames();
+    std::sort(defineKeys.begin(), defineKeys.end());
+    std::sort(wireKeys.begin(), wireKeys.end());
+    ASSERT_EQ(defineKeys, wireKeys);
+}
+
 int main() {
     RUN(registryCoversEveryP0CommandAndRejectsUnknownIds);
     RUN(everySettingKeyRoundTripsThroughTheCommandCodec);
@@ -1260,6 +1273,7 @@ int main() {
     RUN(decodeCommandRequestMapsDomainInvariantFailuresToMalformed);
     RUN(sessionSnapshotRoundTripsThroughTheWire);
     RUN(sessionSnapshotRoundTripsANonDefaultStyle);
+    RUN(styleDefineKeysExactlyMatchTheWireCodecFields);
     RUN(sessionDeltaRoundTripsAndReplayMatchesTheDecodedDelta);
     RUN(phantomViewportProjectionRoundTripsThroughSnapshotAndDelta);
     RUN(diffWordRangesRoundTripThroughSnapshotAndDelta);

@@ -5781,4 +5781,14 @@ DecodeBinaryFrameResult ProtocolCodec::decodeBinaryFrame(std::string_view bytes,
             {}};
 }
 
+std::vector<std::string> styleWireFieldNames() {
+    auto const encoded = toValue(Style{});
+    std::vector<std::string> names;
+    if (auto const* object = encoded.asObject()) {
+        names.reserve(object->size());
+        for (auto const& [key, _] : *object) names.push_back(key);
+    }
+    return names;
+}
+
 }  // namespace ssg

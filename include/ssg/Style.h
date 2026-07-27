@@ -6,6 +6,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <vector>
 
 namespace ssg {
 
@@ -168,6 +169,12 @@ struct StyleDefineResult {
 // caller simply does not use `.style`.
 [[nodiscard]] StyleDefineResult applyStyleDefine(
     Style const& current, StyleDefineArguments const& arguments);
+
+// Every key style.define accepts (glyph + dimension names).  Exposed so a test
+// can assert this set exactly matches the wire codec's Style field names --
+// the two lists are hand-maintained in different files (this and Protocol.cpp),
+// and this is the guard against them drifting apart.
+[[nodiscard]] std::vector<std::string> styleDefineKeys();
 
 struct StyleCommandDescriptor {
     std::string_view id;

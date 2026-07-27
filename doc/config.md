@@ -122,9 +122,32 @@ ssg.command("keymap.unbind", {
   not rejected today, but pressing that key silently does nothing --
   those commands aren't reachable this way yet.
 
+### Chrome glyphs and dimensions
+
+`style.define` changes the glyphs ssg draws its own furniture with -- the
+scrollbar track and thumb, the tree's expand/collapse arrows, the tab dirty
+marker, and so on -- and the sizes of the header, footer, tab bar, scrollbar
+gutter, and panel:
+
+```lua
+ssg.command("style.define", {
+  scrollbar_track = ":",
+  scrollbar_body = "#",
+  tree_expanded = "v ",
+  tree_collapsed = "> ",
+})
+```
+
+The table is partial: any key you omit keeps its current value. Glyph values
+are the literal string to draw; dimension keys start with `dim_` and take a
+whole number (e.g. `dim_header_height = 1`). An unknown key, or a non-numeric
+or negative dimension, rejects the whole call and changes nothing. The full key
+list matches the style fields in `include/ssg/Style.h`.
+
 ## What's NOT possible yet
 
-- **Only `theme.define`, `theme.background`, `keymap.bind`, and `keymap.unbind` are exposed to
+- **Only `theme.define`, `theme.background`, `keymap.bind`, `keymap.unbind`, and
+  `style.define` are exposed to
   `init.lua` today.** ssg has ~170 other commands (cursor movement,
   editing, file operations, etc.) but none of the rest are callable from
   Lua -- only whichever ones a future update explicitly adds.

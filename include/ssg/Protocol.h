@@ -369,4 +369,11 @@ public:
         std::string_view bytes, ProtocolLimits limits = {}) const;
 };
 
+// Introspection for the style.define key-parity guard: the field names the
+// Style wire codec actually emits, derived from the codec itself (not a second
+// hand-kept list).  A test asserts this equals ssg::styleDefineKeys(), so a
+// field added to one surface but not the other is caught.  Not on any runtime
+// path.
+[[nodiscard]] std::vector<std::string> styleWireFieldNames();
+
 }  // namespace ssg
