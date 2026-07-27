@@ -477,6 +477,10 @@ ListScrollView Viewport::listScrollView(
     std::optional<uint32_t> selected,
     bool keepSelectionVisible) const {
     if (viewportRows == 0) {
+        // A zero-height surface shows nothing. NOTE the returned metrics report
+        // `maximumFirstRow == totalItems` here (scrollbarMetricsImpl's
+        // no-viewport case), NOT 0 -- so a caller must not use those metrics to
+        // bound an offset without checking the height first. ScrollOffset does.
         return ListScrollView{0, 0, scrollbarMetricsImpl(totalItems, 0, 0)};
     }
     const uint32_t maximumFirst =
@@ -1004,20 +1008,14 @@ ViewportViewState Viewport::scrollBy(
     uint32_t currentFirstVisualRow,
     int64_t rowDelta,
     const DiffFileView* diff) const {
-    uint32_t requested = currentFirstVisualRow;
-    if (rowDelta >= 0) {
-        const auto delta = static_cast<uint64_t>(rowDelta);
-        requested = delta > std::numeric_limits<uint32_t>::max() - requested
-                        ? std::numeric_limits<uint32_t>::max()
-                        : requested + static_cast<uint32_t>(delta);
-    } else {
-        const uint64_t magnitude =
-            static_cast<uint64_t>(-(rowDelta + 1)) + 1;
-        requested = magnitude > requested
-                        ? 0
-                        : requested - static_cast<uint32_t>(magnitude);
-    }
-    return compute(logicalLines, dimensions, requested, diff);
+    // The saturating shift lives in ScrollOffset, so this is not a fifth
+    // implementation of it. compute() applies the top clamp, which is why this
+    // deliberately does not bound `requested` here: it would need the total
+    // row count, which compute is about to derive anyway.
+    ScrollOffset offset{currentFirstVisualRow};
+    offset.byLines(rowDelta, std::numeric_limits<uint32_t>::max(),
+                   dimensions.rows);
+    return compute(logicalLines, dimensions, offset.firstVisible(), diff);
 }
 
 ViewportDelta Viewport::deriveDelta(const ViewportViewState& previous,

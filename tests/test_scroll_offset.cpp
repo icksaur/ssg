@@ -214,12 +214,14 @@ TEST(explicitScrollDoesNotSnapBackButRevealDoes) {
     ASSERT_EQ(offset.firstVisible(), std::uint32_t{0});
 }
 
-// The editor's clamp now comes from the same shared rule, applied inside the
-// viewport. Asserted against the REAL viewport rather than against ScrollOffset,
-// so a divergence between the two would fail here rather than pass by
-// tautology.
-TEST(editorOverScrollResolvesToTheSameMaximumAsTheSharedRule) {
-    // 100 single-cell lines, an 80x10 pane.
+// The editor's clamp now comes from the same shared rule. Asserted against
+// HAND-COMPUTED literals, not against ScrollOffset: comparing the viewport to
+// ScrollOffset would be circular now that both route through listScrollView,
+// and would pass if the shared rule were wrong in one consistent way.
+//
+// 100 rows in a 10-row pane means the last window starts at 90. That is
+// arithmetic on paper, independent of any code here.
+TEST(editorOverScrollResolvesToTheHandComputedMaximum) {
     std::vector<ssg::CellRun> lines;
     for (int i = 0; i < 100; ++i) {
         ssg::CellRun run;
@@ -229,16 +231,50 @@ TEST(editorOverScrollResolvesToTheSameMaximumAsTheSharedRule) {
     const ssg::ViewportDimensions dimensions{80, 10};
 
     const auto over = ssg::Viewport{}.compute(lines, dimensions, 100000);
-    const auto expected = ssg::ScrollOffset{100000}.resolve(100, 10);
-    ASSERT_EQ(over.firstVisualRow, expected.firstVisible);
     ASSERT_EQ(over.firstVisualRow, std::uint32_t{90});
     ASSERT_EQ(over.scrollbar.maximumFirstRow, std::uint32_t{90});
+    ASSERT_EQ(over.visibleRows.size(), std::size_t{10});
 
-    // And an in-range request is honoured verbatim by both.
+    // An in-range request is honoured verbatim.
     const auto within = ssg::Viewport{}.compute(lines, dimensions, 37);
-    ASSERT_EQ(within.firstVisualRow,
-              ssg::ScrollOffset{37}.resolve(100, 10).firstVisible);
     ASSERT_EQ(within.firstVisualRow, std::uint32_t{37});
+
+    // Exactly at the boundary, and one past it.
+    ASSERT_EQ(ssg::Viewport{}.compute(lines, dimensions, 90).firstVisualRow,
+              std::uint32_t{90});
+    ASSERT_EQ(ssg::Viewport{}.compute(lines, dimensions, 91).firstVisualRow,
+              std::uint32_t{90});
+}
+
+// The wire-extreme inputs that previously reached raw int64 arithmetic in the
+// editor's scroll handlers. Signed overflow is UB, so "it clamped anyway" is
+// not a defence -- these must saturate.
+TEST(unboundedShiftSaturatesOnWireExtremes) {
+    constexpr auto kMaxRow = std::numeric_limits<std::uint32_t>::max();
+
+    ssg::ScrollOffset up{0};
+    up.shiftUnbounded(std::numeric_limits<std::int64_t>::max());
+    ASSERT_EQ(up.firstVisible(), kMaxRow);
+
+    // INT64_MIN cannot be negated; taking its magnitude must not be UB.
+    ssg::ScrollOffset down{500};
+    down.shiftUnbounded(std::numeric_limits<std::int64_t>::min());
+    ASSERT_EQ(down.firstVisible(), std::uint32_t{0});
+
+    ssg::ScrollOffset high{kMaxRow};
+    high.shiftUnbounded(1);
+    ASSERT_EQ(high.firstVisible(), kMaxRow);
+
+    ssg::ScrollOffset zero{0};
+    zero.shiftUnbounded(-1);
+    ASSERT_EQ(zero.firstVisible(), std::uint32_t{0});
+
+    // Ordinary moves are exact, so saturation has not eaten the normal path.
+    ssg::ScrollOffset ordinary{40};
+    ordinary.shiftUnbounded(-15);
+    ASSERT_EQ(ordinary.firstVisible(), std::uint32_t{25});
+    ordinary.shiftUnbounded(7);
+    ASSERT_EQ(ordinary.firstVisible(), std::uint32_t{32});
 }
 
 }  // namespace
@@ -252,7 +288,8 @@ int main() {
     RUN(scrollOffsetMetricsEqualTheSharedPrimitive);
     RUN(everySurfaceClampsOverScrollToItsOwnMaximum);
     RUN(explicitScrollDoesNotSnapBackButRevealDoes);
-    RUN(editorOverScrollResolvesToTheSameMaximumAsTheSharedRule);
+    RUN(editorOverScrollResolvesToTheHandComputedMaximum);
+    RUN(unboundedShiftSaturatesOnWireExtremes);
     std::cout << "Passed: " << passed << " Failed: " << failed << '\n';
     return failed == 0 ? 0 : 1;
 }
