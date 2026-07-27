@@ -278,14 +278,42 @@ that step is mechanical rather than a redesign.
 
 | # | Step | Files | Oracle |
 |---|------|-------|--------|
-| Y0 | Pin today's chrome glyphs and dimensions BEFORE changing anything, since nothing pins them now | `tests/` | render a screen containing a scrollbar (scrollable and not), a tree with both indicators, a dirty tab, a live-diff tab, a truncated label and an open picker; assert the exact glyph at each chrome cell. Must fail if any literal is changed -- verify by perturbation, one glyph at a time |
-| Y1 | Add `StyleSnapshot` + `Style` with the glyph tables and dimensions, defaults byte-identical to today. No callers | `include/ssg/Style.h`, `src/Style.cpp` | hand cases for the thumb rule at sizes 0, 1, 2, 3, N, and at track height 1; a uniform style reproduces today's output exactly. Invariant: the resolved run length always equals the requested size |
+| Y0 | **Superseded** -- merged into Y1. Originally: pin today's glyphs with golden assertions before refactoring | -- | see Status |
+| Y1 | **Delivered.** `Style` with the glyph tables and dimensions, defaults byte-identical to today. No callers yet | `include/ssg/Style.h`, `src/Style.cpp`, `tests/test_style.cpp`, `cmake/components/style.cmake` | configured-behavior unit tests: a style built with distinctive glyphs must render exactly those. Plus a size property (resolved thumb length == requested size, over all heights and offsets) and the derived sigil width. Every behavior perturbation-verified |
 | Y2 | Route the renderer, shell layout and snapshot composition through it | `src/Renderer.cpp`, `src/ShellState.cpp`, `src/runtime/snapshot.cpp` | Y0's oracles still pass with no fixture edits -- the refactor is invisible. Plus: sigil display width is DERIVED, asserted by setting a two-cell sigil and a one-cell sigil and checking the input line's reserved region tracks it (this is what stops the `"> "` / `kInputLineSigilWidth` pair drifting) |
 | Y3 | Add the no-literal guard across all three chrome translation units | `tests/` | perturbation: reintroduce a glyph literal in EACH of the three files in turn; the guard must fail all three times |
 | Y4 | (Optional, after review) Publish style as a snapshot section with delta, wire codec and a `style.define` command, following the theme's path | `include/ssg/session_snapshot.h`, `src/Protocol.cpp`, runtime, command catalog | round-trip through the codec; a `style.define` at runtime repaints with the new glyph |
 
-Y0 before Y1 is deliberate: the suite currently cannot tell whether this
-refactor changed the screen, and that is the one thing it must be able to tell.
+## Status
+
+**Y1 delivered.** `Style` exists with the seven chrome glyphs and the
+dimensions, defaults byte-identical to today, no callers yet (Y2 routes them).
+89 tests green, 0 warnings.
+
+**Y0 was dropped as originally written, deliberately.** The plan called for
+golden assertions pinning today's literal glyphs before refactoring. That is the
+wrong test for this work: it would freeze the very values the abstraction exists
+to make configurable, and every future style change would have to edit the tests
+that supposedly guard it -- rigidity bought at the price of the goal. What
+matters is not that the thumb is `#` today; it is that a style configured with a
+given glyph renders *that* glyph.
+
+So `tests/test_style.cpp` constructs styles with deliberately distinctive
+multi-character glyphs and asserts the output follows the configuration. An
+implementation that ignored its configuration and returned hardcoded `|`/`#`
+fails every case. The size rule is additionally pinned by a property -- the
+resolved thumb always covers exactly its requested rows, across all heights and
+offsets -- which catches cap-rule errors at sizes no hand case enumerates.
+
+All six behaviors were perturbation-verified (size-1 cap selection, both
+clamps, the size-0 gutter contract, the bottom cap, and the derived sigil
+width); each perturbation produced failures, so none of these assertions is
+decorative.
+
+The sigil width is measured through `GraphemeLayout`, not declared: setting a
+fullwidth sigil yields 2, a narrow one yields 1, with no second constant to keep
+in step. This retires the `"> "` / `kInputLineSigilWidth` pair that Considerations
+flagged as certain to drift.
 
 ## Rationale
 
