@@ -807,32 +807,23 @@ int main(int argc, char** argv) {
             order.empty() ? std::nullopt
                           : std::optional<std::uint32_t>{
                                 static_cast<std::uint32_t>(picker.selected)};
-        auto scroll = ssg::Viewport{}.listScrollView(
-            static_cast<std::uint32_t>(order.size()), picker.paneRows,
-            picker.firstVisible, selected, /*keep_selection_visible=*/true);
-        picker.firstVisible = scroll.firstVisible;
+        if (!selected) return;
+        ssg::ScrollOffset offset{picker.firstVisible};
+        offset.revealSelection(*selected,
+                               static_cast<std::uint32_t>(order.size()),
+                               picker.paneRows);
+        picker.firstVisible = offset.firstVisible();
     };
     // Scroll the client-owned palette window by `delta` rows WITHOUT moving the
-    // selection (a wheel over the open palette), clamped to [0, maximum_first_row].
-    // Saturating: `delta` is a decoded int64, so guard the extremes before adding.
+    // selection (a wheel over the open palette). The clamp-and-shift is the same
+    // ScrollOffset the editor and tree use; only the ownership differs.
     auto scrollPalette = [&](std::int64_t delta) {
         if (!pickerOpen) return;
         auto order = ssg::PaletteSearcher{}.rank(candidates, picker.query);
-        auto probe = ssg::Viewport{}.listScrollView(
-            static_cast<std::uint32_t>(order.size()), picker.paneRows,
-            picker.firstVisible, std::nullopt, /*keep_selection_visible=*/false);
-        auto const maximum =
-            static_cast<std::int64_t>(probe.scrollbar.maximumFirstRow);
-        auto const current = static_cast<std::int64_t>(picker.firstVisible);
-        std::int64_t next;
-        if (delta >= maximum) {
-            next = maximum;
-        } else if (delta <= -maximum) {
-            next = 0;
-        } else {
-            next = std::clamp<std::int64_t>(current + delta, 0, maximum);
-        }
-        picker.firstVisible = static_cast<std::uint32_t>(next);
+        ssg::ScrollOffset offset{picker.firstVisible};
+        offset.byLines(delta, static_cast<std::uint32_t>(order.size()),
+                       picker.paneRows);
+        picker.firstVisible = offset.firstVisible();
     };
     // Submit routes to the open picker's command, chosen from the mode the
     // server published rather than assumed: a candidate id means different

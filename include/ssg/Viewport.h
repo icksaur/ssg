@@ -161,9 +161,70 @@ struct ViewportDelta {
     bool operator==(const ViewportDelta&) const noexcept = default;
 };
 
-class Viewport {
+// A scrollable surface's vertical position, and the operations on it.
+//
+// Owns exactly one durable field: which item is at the top. Geometry
+// (`totalItems`, `viewportRows`, the selection) is passed at each call rather
+// than stored, because those change every frame -- a cached copy would be a
+// stale-cache bug, and every caller already threads them per-frame.
+//
+// This exists because a shared *function* could not stop the three scrollable
+// surfaces diverging: a pure function cannot own state, so each surface grew
+// its own offset field and its own clamp-and-shift arithmetic. Every operation
+// here is expressed through `Viewport::listScrollView`, so the math still lives
+// in one place; what is new is that the state and its mutators do too.
+//
+// A value type rather than a base class the surfaces inherit: the editor and
+// tree offsets are server state while the picker's is client-owned by
+// deliberate latency design, so a common base would have to drag one across
+// that boundary. Both sides can hold one of these instead.
+class ScrollOffset {
 public:
-    // The scrollbar thumb geometry for a list of `total_rows` items shown in a
+    ScrollOffset() = default;
+    explicit ScrollOffset(uint32_t firstVisible) noexcept
+        : firstVisible_(firstVisible) {}
+
+    [[nodiscard]] uint32_t firstVisible() const noexcept {
+        return firstVisible_;
+    }
+
+    // Assign a caller-supplied position. Unclamped on purpose: the surface may
+    // set a position before it knows its geometry, and every read goes through
+    // an operation that clamps.
+    void setFirstVisible(uint32_t value) noexcept { firstVisible_ = value; }
+
+    // Explicit scroll gestures. These deliberately do NOT keep the selection
+    // visible -- scrolling is the one interaction that decouples the view from
+    // the selection, and must never snap back.
+    //
+    // `delta`/`pages` are wire-decoded and may be enormous, so the shift
+    // saturates rather than overflowing.
+    void byLines(std::int64_t delta, uint32_t totalItems, uint32_t viewportRows);
+    void byPages(std::int64_t pages, uint32_t totalItems, uint32_t viewportRows);
+
+    // Scroll to a position along the track, as from a scrollbar drag.
+    // A zero denominator scrolls to the top rather than dividing by zero.
+    void toFraction(uint32_t numerator, uint32_t denominator,
+                    uint32_t totalItems, uint32_t viewportRows);
+
+    // Shift minimally so `selected` lies inside the window. The counterpart to
+    // the explicit gestures above.
+    void revealSelection(uint32_t selected, uint32_t totalItems,
+                         uint32_t viewportRows);
+
+    // The window this offset currently denotes. Const: resolving describes the
+    // surface, and must not scroll the thing it is describing.
+    [[nodiscard]] ListScrollView resolve(uint32_t totalItems,
+                                         uint32_t viewportRows) const;
+
+    bool operator==(const ScrollOffset&) const noexcept = default;
+
+private:
+    uint32_t firstVisible_ = 0;
+};
+
+class Viewport {
+public:    // The scrollbar thumb geometry for a list of `total_rows` items shown in a
     // `viewport_rows`-tall window scrolled to `first_row`.  When the content fits
     // (`total_rows <= viewport_rows`) the thumb is hidden: `maximum_first_row`,
     // `thumb_start`, and `thumb_size` collapse to a no-thumb sentinel.  Shared by

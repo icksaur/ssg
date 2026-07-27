@@ -51,8 +51,15 @@ CommandHandlerResult setWordWrap(EditorRuntime::Impl& runtime) {
 CommandHandlerResult scrollLines(EditorRuntime::Impl& runtime, std::any const& payload) {
     auto const* arguments = payloadAs<ScrollLinesArguments>(payload);
     if (arguments == nullptr) return failure("view.scroll_lines requires scroll-lines payload");
-    auto rows = static_cast<std::int64_t>(runtime.requestedFirstVisualRow) + arguments->rows;
-    runtime.requestedFirstVisualRow = rows < 0 ? 0U : static_cast<std::uint32_t>(rows);
+    // Clamped at the bottom only; the top clamp is deferred to the viewport,
+    // which resolves it through ScrollOffset. Deliberate: bounding here would
+    // need the document's total visual row count, which is O(document) when word
+    // wrap is on, on a path that fires per wheel notch. The tree and picker DO
+    // bound eagerly because their totals (node count, ranked size) are free.
+    auto offset = ScrollOffset{runtime.requestedFirstVisualRow};
+    auto rows = static_cast<std::int64_t>(offset.firstVisible()) + arguments->rows;
+    offset.setFirstVisible(rows < 0 ? 0U : static_cast<std::uint32_t>(rows));
+    runtime.requestedFirstVisualRow = offset.firstVisible();
     runtime.selection.firstVisualRow = runtime.requestedFirstVisualRow;
     return success();
 }
@@ -61,10 +68,13 @@ CommandHandlerResult scrollPages(EditorRuntime::Impl& runtime, std::any const& p
     auto const* arguments = payloadAs<ScrollPagesArguments>(payload);
     if (arguments == nullptr) return failure("view.scroll_pages requires scroll-pages payload");
     // A page is the real pane height cached from the last snapshot, not a fake 24.
+    // Same deferred-top-clamp discipline as scroll_lines above.
     auto const pageRows = static_cast<std::int64_t>(
         std::max<std::uint32_t>(runtime.lastPaneContentRows, 1));
-    auto rows = static_cast<std::int64_t>(runtime.requestedFirstVisualRow) + arguments->pages * pageRows;
-    runtime.requestedFirstVisualRow = rows < 0 ? 0U : static_cast<std::uint32_t>(rows);
+    auto offset = ScrollOffset{runtime.requestedFirstVisualRow};
+    auto rows = static_cast<std::int64_t>(offset.firstVisible()) + arguments->pages * pageRows;
+    offset.setFirstVisible(rows < 0 ? 0U : static_cast<std::uint32_t>(rows));
+    runtime.requestedFirstVisualRow = offset.firstVisible();
     runtime.selection.firstVisualRow = runtime.requestedFirstVisualRow;
     return success();
 }
@@ -81,8 +91,10 @@ CommandHandlerResult scrollFraction(EditorRuntime::Impl& runtime, std::any const
         std::max<std::uint32_t>(runtime.lastPaneContentColumns, 1),
         std::max<std::uint32_t>(runtime.lastPaneContentRows, 1)};
     auto view = runtime.computeEditorViewport(viewport, 0, 0);
-    runtime.requestedFirstVisualRow = arguments->denominator == 0 ? 0 :
-        static_cast<std::uint32_t>((static_cast<std::uint64_t>(view.scrollbar.maximumFirstRow) * arguments->numerator) / arguments->denominator);
+    auto offset = ScrollOffset{runtime.requestedFirstVisualRow};
+    offset.toFraction(arguments->numerator, arguments->denominator,
+                      view.totalVisualRows, viewport.rows);
+    runtime.requestedFirstVisualRow = offset.firstVisible();
     runtime.selection.firstVisualRow = runtime.requestedFirstVisualRow;
     return success();
 }

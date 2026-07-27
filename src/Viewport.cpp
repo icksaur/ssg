@@ -503,6 +503,78 @@ ListScrollView Viewport::listScrollView(
                           scrollbarMetricsImpl(totalItems, viewportRows,
                                                  first)};
 }
+// Saturating clamped shift, shared by byLines and byPages. `delta` arrives from
+// the wire and may be any int64, so the extremes are handled before the add
+// rather than relying on it not overflowing.
+uint32_t shiftedOffset(uint32_t current, std::int64_t delta,
+                       uint32_t maximumFirst) {
+    const auto maximum = static_cast<std::int64_t>(maximumFirst);
+    if (delta >= maximum) return maximumFirst;
+    if (delta <= -maximum) return 0;
+    const auto from =
+        static_cast<std::int64_t>(std::min(current, maximumFirst));
+    return static_cast<uint32_t>(
+        std::clamp<std::int64_t>(from + delta, 0, maximum));
+}
+
+void ScrollOffset::byLines(std::int64_t delta, uint32_t totalItems,
+                           uint32_t viewportRows) {
+    // A surface with no rows shows nothing, so there is nowhere to scroll to.
+    // Checked here rather than trusting the resolved metrics: with zero rows
+    // those report a maximum of `totalItems`, which would let a shift land
+    // outside the range every other operation guarantees.
+    if (viewportRows == 0) {
+        firstVisible_ = 0;
+        return;
+    }
+    const auto view = resolve(totalItems, viewportRows);
+    firstVisible_ =
+        shiftedOffset(firstVisible_, delta, view.scrollbar.maximumFirstRow);
+}
+
+void ScrollOffset::byPages(std::int64_t pages, uint32_t totalItems,
+                           uint32_t viewportRows) {
+    // A page is the window height, so paging and line-scrolling cannot drift
+    // apart into different units.
+    const auto rows = static_cast<std::int64_t>(viewportRows);
+    if (rows == 0) {
+        firstVisible_ = 0;
+        return;
+    }
+    // Saturate the multiply before it can overflow; byLines saturates the rest.
+    constexpr auto kLimit = std::numeric_limits<std::int64_t>::max();
+    const std::int64_t delta =
+        pages > kLimit / rows    ? kLimit
+        : pages < -kLimit / rows ? -kLimit
+                                 : pages * rows;
+    byLines(delta, totalItems, viewportRows);
+}
+
+void ScrollOffset::toFraction(uint32_t numerator, uint32_t denominator,
+                              uint32_t totalItems, uint32_t viewportRows) {
+    if (denominator == 0 || viewportRows == 0) {
+        firstVisible_ = 0;
+        return;
+    }
+    const auto maximum = resolve(totalItems, viewportRows).scrollbar.maximumFirstRow;
+    const auto scaled =
+        (static_cast<std::uint64_t>(maximum) * numerator) / denominator;
+    firstVisible_ = static_cast<uint32_t>(std::min<std::uint64_t>(scaled, maximum));
+}
+
+void ScrollOffset::revealSelection(uint32_t selected, uint32_t totalItems,
+                                   uint32_t viewportRows) {
+    firstVisible_ = Viewport{}
+                        .listScrollView(totalItems, viewportRows, firstVisible_,
+                                        selected, true)
+                        .firstVisible;
+}
+
+ListScrollView ScrollOffset::resolve(uint32_t totalItems,
+                                     uint32_t viewportRows) const {
+    return Viewport{}.listScrollView(totalItems, viewportRows, firstVisible_,
+                                     std::nullopt, false);
+}
 
 ViewportDimensions::ViewportDimensions(uint32_t columnCount,
                                        uint32_t rowCount)
@@ -525,12 +597,14 @@ ViewportViewState Viewport::compute(std::span<const CellRun> logicalLines,
             projectedWrappedRows(logicalLines, dimensions.columns, *diff);
         const auto totalRows = checkedU32(
             projected.size(), "viewport visual row count exceeds uint32");
-        const auto maximumFirst =
-            totalRows > dimensions.rows ? totalRows - dimensions.rows : 0;
-        const auto firstRow =
-            std::min(requestedFirstVisualRow, maximumFirst);
-        const auto visibleCount =
-            std::min<uint32_t>(dimensions.rows, totalRows - firstRow);
+        // The shared clamp, not a local one: the editor used to compute its own
+        // maximumFirst here, which made it a second implementation of the rule
+        // listScrollView exists to own (doc/spec-scroll.md S-I3).
+        const auto scroll =
+            ScrollOffset{requestedFirstVisualRow}.resolve(totalRows,
+                                                          dimensions.rows);
+        const auto firstRow = scroll.firstVisible;
+        const auto visibleCount = scroll.visibleCount;
         std::vector<VisualRow> visibleRows;
         std::vector<ProjectedRow> rowProjection;
         std::vector<CellHitTarget> hitTargets;
@@ -578,10 +652,10 @@ ViewportViewState Viewport::compute(std::span<const CellRun> logicalLines,
     const auto allRows = wrapRows(logicalLines, dimensions.columns);
     const auto totalRows =
         checkedU32(allRows.size(), "viewport visual row count exceeds uint32");
-    const uint32_t maximumFirst =
-        totalRows > dimensions.rows ? totalRows - dimensions.rows : 0;
     const uint32_t firstRow =
-        std::min(requestedFirstVisualRow, maximumFirst);
+        ScrollOffset{requestedFirstVisualRow}
+            .resolve(totalRows, dimensions.rows)
+            .firstVisible;
 
     // A CellSpan's byte_offset is relative to its logical line, but a hit target
     // must carry a DOCUMENT-absolute byte offset (so resolve_document_position
@@ -675,12 +749,11 @@ ViewportViewState Viewport::computeUnwrapped(
         projection ? projection->totalRows()
                    : checkedU32(lineStart.size(),
                                 "viewport line count exceeds uint32");
-    const uint32_t maximumFirst =
-        totalRows > dimensions.rows ? totalRows - dimensions.rows : 0;
-    const uint32_t firstRow =
-        std::min(requestedFirstVisualRow, maximumFirst);
-    const uint32_t visibleCount =
-        std::min<uint32_t>(dimensions.rows, totalRows - firstRow);
+    const auto scroll =
+        ScrollOffset{requestedFirstVisualRow}.resolve(totalRows,
+                                                      dimensions.rows);
+    const uint32_t firstRow = scroll.firstVisible;
+    const uint32_t visibleCount = scroll.visibleCount;
 
     std::vector<VisualRow> visibleRows;
     std::vector<ProjectedRow> rowProjection;

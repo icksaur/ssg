@@ -264,38 +264,24 @@ void EditorRuntime::Impl::revealTreeSelection() {
         }
     }
     if (!selectedIndex) return;
-    auto scroll = Viewport{}.listScrollView(
-        static_cast<std::uint32_t>(provider.nodes.size()),
-        lastPanelContentRows, treeFirstVisible, selectedIndex,
-        /*keep_selection_visible=*/true);
-    treeFirstVisible = scroll.firstVisible;
+    auto offset = ScrollOffset{treeFirstVisible};
+    offset.revealSelection(*selectedIndex,
+                           static_cast<std::uint32_t>(provider.nodes.size()),
+                           lastPanelContentRows);
+    treeFirstVisible = offset.firstVisible();
 }
 
 void EditorRuntime::Impl::scrollTree(std::int64_t rows) {
     auto view = tree.viewState();
     if (view.providers.empty()) return;
     auto const& provider = view.providers.front();
-    // Resolve the current scroll geometry (read-only) to bound the offset, then
-    // shift it by `rows`. keep_selection_visible is false: a wheel scroll moves
-    // the viewport, not the selection (a later reveal_tree_selection re-snaps).
-    auto scroll = Viewport{}.listScrollView(
-        static_cast<std::uint32_t>(provider.nodes.size()),
-        lastPanelContentRows, treeFirstVisible, std::nullopt,
-        /*keep_selection_visible=*/false);
-    // Saturating add-then-clamp: `rows` is a wire-decoded int64 and may be huge,
-    // so guard the extremes before the add to avoid signed overflow. Within the
-    // guarded range |rows| < maximum <= UINT32_MAX, so cur + rows cannot overflow.
-    auto const maximum = static_cast<std::int64_t>(scroll.scrollbar.maximumFirstRow);
-    auto const current = static_cast<std::int64_t>(treeFirstVisible);
-    std::int64_t next;
-    if (rows >= maximum) {
-        next = maximum;
-    } else if (rows <= -maximum) {
-        next = 0;
-    } else {
-        next = std::clamp<std::int64_t>(current + rows, 0, maximum);
-    }
-    treeFirstVisible = static_cast<std::uint32_t>(next);
+    // keep-visible is not applied: a wheel scroll moves the viewport, not the
+    // selection (a later revealTreeSelection re-snaps). The saturating
+    // clamp-shift lives in ScrollOffset, shared with every other surface.
+    auto offset = ScrollOffset{treeFirstVisible};
+    offset.byLines(rows, static_cast<std::uint32_t>(provider.nodes.size()),
+                   lastPanelContentRows);
+    treeFirstVisible = offset.firstVisible();
 }
 
 // Publishes the candidate set of whichever picker is open.  The mode and the
