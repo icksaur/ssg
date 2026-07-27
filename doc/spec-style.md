@@ -37,26 +37,37 @@ style a data object rather than a second layout engine.
 
 ## Current state (verified in code, not from docs)
 
-**Chrome glyphs.** Eight, all originally hardcoded at their point of use. The
-inventory was wrong twice -- it first missed the ellipsis and the live-diff
-prefix, then missed the prompt toggle markers -- so it was rebuilt by sweeping
-every literal argument to `put()` in `src/Renderer.cpp` and every composed
-display string in `src/ShellState.cpp` and `src/runtime/snapshot.cpp` rather
-than by recall:
+**Chrome glyphs.** Ten, all originally hardcoded at their point of use. The
+inventory was wrong repeatedly by recall -- first missing the ellipsis and the
+live-diff prefix, then the prompt toggle markers, and finally the replacement
+glyph and the prompt separator, which a whitespace-tolerant sweep for
+`\xNN`-escaped and composed literals found only after Y2 shipped. It is now
+rebuilt from that sweep rather than memory:
 
 - `|` scrollbar track, `#` scrollbar thumb -- `src/Renderer.cpp:245`
 - `" "` empty gutter when nothing scrolls -- `src/Renderer.cpp:238`
 - `…` (U+2026) truncation marker -- `src/Renderer.cpp:158`
 - `▾` / `▸` tree expanded/collapsed -- `src/Renderer.cpp:284`
 - `[x] ` / `[ ] ` prompt toggle markers -- `src/Renderer.cpp:749`
+- U+FFFD replacement glyph for control/invalid bytes -- `src/Renderer.cpp`,
+  duplicated at FOUR sites (148, 486, 588, 634) before the sweep
+- `": "` prompt label/value separator -- `src/Renderer.cpp:752`, duplicated at
+  the cursor-width site (780), the same label/width drift the sigil had
 - `" *"` dirty-tab marker -- `src/ShellState.cpp:553`
 - `"D "` live-diff tab prefix -- `src/runtime/snapshot.cpp:16`
 - `"> "` input-line sigil -- `src/ShellState.cpp:471`, and separately as the
   width constant `kInputLineSigilWidth = 2`
 
-Note the last two are produced OUTSIDE the renderer -- in shell layout and in
-snapshot composition. Any guard that scans only `Renderer.cpp` would miss them,
-which is why Y3 below scans all three translation units.
+Deliberately NOT style, and left in place: the `"leader:"` hint prefix
+(`src/runtime/snapshot.cpp`) is functional label text, not a decorative glyph;
+`" "` blanking fills and accessibility labels and error strings are content, not
+chrome. The line between the two is "would a re-theme want to change it" -- a
+substitution glyph yes, a leader-mode announcement no.
+
+Several are produced OUTSIDE the renderer -- in shell layout and in snapshot
+composition -- so no single-file scan could ever have been complete. That, more
+than any specific miss, is why the sweep (below) reads all three translation
+units.
 
 **Dimensions.** Named constants in one anonymous namespace
 (`src/ShellState.cpp:12-29`): `kMinimumColumns` 20, `kMinimumRows` 4,
@@ -209,14 +220,17 @@ that step is mechanical rather than a redesign.
 
 ## Invariants
 
-- **Y1** No chrome glyph literal outside the style tables, in **any** of the
-  three translation units that produce chrome: `src/Renderer.cpp`,
-  `src/ShellState.cpp` and `src/runtime/snapshot.cpp`. Scoping the guard to the
-  renderer alone would miss the dirty marker, the sigil and the live-diff
-  prefix -- which is precisely how the first draft of this spec's own inventory
-  came up short. Enforced in the style of
-  `sourceAndConfigHaveNoIndependentColorSources`, with an explicit exemption
-  list.
+- **Y1** Chrome glyphs live only in the style tables, kept true by *routing
+  tests* rather than a literal-blocklist guard. The routing tests restyle a
+  `Renderer` (and a `ShellLayoutRequest`) and require the painted output to
+  follow; a painter that reintroduces a hardcoded glyph makes restyling stop
+  changing that cell, so the test fails -- for the right reason, at any glyph,
+  without anyone enumerating the forbidden literals. A one-time sweep (the Y3
+  step) established that the current painters hold no stray glyph; the routing
+  tests keep it that way. This replaces an earlier plan for a grep-guard with an
+  exemption list, which would have been a blocklist of the glyphs already known
+  -- codifying exactly the recall failure that made the inventory wrong four
+  times, and giving false confidence against the next new glyph.
 - **Y2** No layout dimension literal outside `StyleSnapshot`, except where a
   value is structural rather than stylistic (see Considerations).
 - **Y3** Style never names a colour, and the theme never names a glyph or a
@@ -242,10 +256,13 @@ that step is mechanical rather than a redesign.
   tree indicators are already multi-byte, and a wide glyph would occupy two
   cells. Y2 makes this an executable check rather than a note, because a
   derivation stated only in prose is how the pair drifted in the first place.
-- **A guard's scope is part of the guard.** The first draft of this document
-  listed six glyphs; there are seven, and two of them are produced outside
-  `Renderer.cpp`. The lesson is recorded because it is the same mistake the
-  guard exists to prevent, made by the spec that proposes the guard.
+- **Recall does not converge; a sweep does.** The inventory grew six -> seven ->
+  eight -> ten, each correction from a different method (review, routing, a
+  whitespace-tolerant literal sweep), and several glyphs are produced outside
+  the renderer. This is the case against a literal-blocklist guard: it would
+  have been seeded from whatever count was current and would silently pass the
+  next new glyph. The completeness check is the one-time sweep; the standing net
+  is the routing tests, which fail on any unrouted glyph without naming it.
 - **Glyphs must be terminal-safe.** `▾`/`▸` already assume a UTF-8 terminal.
   Whether the default set should be ASCII-only, with box-drawing as an opt-in
   style, is a real question this spec does not answer. It matters more once
@@ -288,20 +305,35 @@ that step is mechanical rather than a redesign.
 | Y0 | **Superseded** -- merged into Y1. Originally: pin today's glyphs with golden assertions before refactoring | -- | see Status |
 | Y1 | **Delivered.** `Style` with the glyph tables and dimensions, defaults byte-identical to today. No callers yet | `include/ssg/Style.h`, `src/Style.cpp`, `tests/test_style.cpp`, `cmake/components/style.cmake` | configured-behavior unit tests: a style built with distinctive glyphs must render exactly those. Plus a size property (resolved thumb length == requested size, over all heights and offsets) and the derived sigil width. Every behavior perturbation-verified |
 | Y2 | **Delivered.** Route the renderer, shell layout and snapshot composition through it | `src/Renderer.cpp`, `src/ShellState.cpp`, `src/runtime/snapshot.cpp`, `include/ssg/Renderer.h`, `include/ssg/ShellState.h`, `src/runtime/editor_runtime_internal.h` | the existing suite passes unchanged (the refactor is invisible), PLUS two routing proofs -- restyling a `Renderer` changes the painted chrome, and a `ShellLayoutRequest`'s style changes panel width, the minimum viewport and the sigil. Both perturbation-verified against a regression to literals |
-| Y3 | Add the no-literal guard across all three chrome translation units | `tests/` | perturbation: reintroduce a glyph literal in EACH of the three files in turn; the guard must fail all three times |
+| Y3 | **Delivered as a sweep, not a guard.** One-time sweep of the three chrome translation units for any glyph literal reaching the grid; route the stragglers into `Style`; then rely on the Y2 routing tests as the standing net | `src/Renderer.cpp`, `include/ssg/Style.h`, `tests/test_render.cpp`, `tests/test_style.cpp` | the sweep found two more glyphs (U+FFFD replacement x4, prompt `": "` separator x2), now routed; a new routing proof restyles `unrenderable` and requires the document to follow (perturbation-verified). No grep-guard: a blocklist would only catch the glyphs already known |
 | Y4 | (Optional, after review) Publish style as a snapshot section with delta, wire codec and a `style.define` command, following the theme's path | `include/ssg/session_snapshot.h`, `src/Protocol.cpp`, runtime, command catalog | round-trip through the codec; a `style.define` at runtime repaints with the new glyph |
 
 ## Status
 
-**Y1 and Y2 delivered.** `Style` exists and the renderer, shell layout and
-snapshot composition all draw from it. 89 tests green.
+**Y1, Y2 and Y3 delivered.** `Style` exists, the renderer, shell layout and
+snapshot composition all draw from it, and a one-time sweep confirmed the
+painters hold no stray glyph. 89 tests green (91 push).
 
-**The glyph count was wrong twice.** The first inventory said six; review found
-seven; routing the code found an **eighth** -- the prompt toggle markers
-`[x] `/`[ ] ` at `src/Renderer.cpp:749`, which an earlier targeted grep missed
-because the search pattern was malformed. The lesson is that the sweep
-(every literal argument to `put()`, every composed display string) found what
-recall and ad-hoc greps did not, and it should be the method for Y3's guard.
+**The glyph inventory was wrong four times, which is the whole argument against
+a grep-guard.** Six by first recall; seven at review (ellipsis, live-diff
+prefix); eight while routing (the prompt toggles `[x] `/`[ ] `, missed because a
+targeted grep pattern was malformed); and finally ten when a whitespace-tolerant
+sweep for escaped and composed literals found the U+FFFD replacement glyph
+(duplicated four times in `paintDocument`) and the prompt `": "` separator
+(duplicated at its cursor-width site). A blocklist guard would have been seeded
+from whichever count was current when it was written, and would have waved the
+next new glyph straight through. The sweep -- read every `\xNN` and composed
+display literal in all three units, classify each as chrome or content -- is
+what actually reached the bottom, and it is a thing you do once, not a test you
+run forever.
+
+**What keeps it true instead:** the Y2 routing tests. They restyle and require
+the screen to follow, so a painter that reintroduces a literal fails them at any
+glyph without enumerating forbidden ones. The replacement glyph got its own such
+proof; regressing all its uses to the literal fails it (perturbation-verified),
+while regressing a single site does not -- a reminder that a routing test covers
+the path its fixture traverses, and the four replacement sites are structurally
+identical one-liners rather than four independent risks.
 
 **A wrong assumption about scrollbar metrics broke 42 assertions.** The spec
 claimed `thumbSize == 0` when content fits; it is actually `viewportRows`, with

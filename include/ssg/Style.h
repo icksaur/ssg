@@ -92,6 +92,13 @@ public:
     // The input line's prefix.  Its WIDTH is derived from this string (see
     // sigilWidth); the two must never be configured independently.
     std::string inputLineSigil = "> ";
+    // Substitute drawn for a byte that has no glyph -- a control character or
+    // invalid UTF-8.  U+FFFD.  A substitution glyph like `truncation`, and the
+    // reason both live here: "what do we show when we cannot show the real
+    // thing?" is a style decision, not a rendering detail.
+    std::string unrenderable = "\xef\xbf\xbd";
+    // Separates a prompt control's label from its value ("Find: text").
+    std::string promptLabelSeparator = ": ";
     StyleDimensions dimensions{};
 
     // Display width of the sigil, measured -- not declared.  A one-cell sigil

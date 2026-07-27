@@ -1018,6 +1018,34 @@ TEST(theRendererDrawsChromeFromItsStyleNotFromLiterals) {
     ASSERT_TRUE(gridContains(grid, "- "));
 }
 
+// The replacement glyph is the one chrome glyph paintDocument draws, and it was
+// duplicated at four sites before Y2's sweep.  A document with a control byte,
+// rendered with a restyled `unrenderable`, must show the restyled glyph -- proof
+// paintDocument reads Style rather than holding the literal.
+TEST(theDocumentReplacementGlyphComesFromStyle) {
+    auto root = uniqueRoot();
+    std::ofstream{root / "ctrl.txt"} << "a\x01" "b\n";  // \x01 has no glyph
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(
+        ssg::ClientId{1},
+        {"file.open", runtime->revision(), std::string{"ctrl.txt"}});
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+
+    ssg::Renderer defaultRenderer;
+    auto const shipped = defaultRenderer.render(*snapshot);
+    ASSERT_TRUE(gridContains(shipped, "\xef\xbf\xbd"));  // U+FFFD by default
+
+    ssg::Renderer restyled;
+    restyled.style.unrenderable = "?";
+    auto const grid = restyled.render(*snapshot);
+    ASSERT_TRUE(gridContains(grid, "a?b"));
+    ASSERT_FALSE(gridContains(grid, "\xef\xbf\xbd"));
+}
+
 int main() {
     RUN(renderPaintsContentNotAccessibilityLabels);
     RUN(renderSegmentsOnlyVisibleLinesNotWholeDocument);
@@ -1046,6 +1074,7 @@ int main() {
     RUN(theInputLineCaretIsPlacedByDisplayWidthNotByteCount);
     RUN(theCaretFollowsAScrolledQueryToTheEndOfTheVisibleText);
     RUN(theRendererDrawsChromeFromItsStyleNotFromLiterals);
+    RUN(theDocumentReplacementGlyphComesFromStyle);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;

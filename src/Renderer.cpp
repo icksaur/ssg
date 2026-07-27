@@ -145,7 +145,7 @@ void paintText(CellGrid& grid, int x, int y, int right, std::string_view text,
             piece.assign(span.cellWidth, ' ');
         } else if (span.kind == CellKind::Control ||
                    span.kind == CellKind::InvalidUtf8) {
-            piece = "\xef\xbf\xbd";
+            piece = style.unrenderable;
         }
         put(grid, column, y, std::move(piece), foreground, background, role);
         for (std::uint32_t offset = 1; offset < width; ++offset) {
@@ -416,7 +416,7 @@ std::optional<GridPosition> screenCellFor(ViewportViewState const& viewport,
 
 void paintDocument(CellGrid& grid, SessionSnapshot const& snapshot,
                     Rect const& content, ThemeSnapshot const& theme,
-                    std::uint8_t background) {
+                    std::uint8_t background, Style const& style) {
     auto const& viewport = snapshot.client().viewport;
     auto const activeDiff =
         snapshot.sections().diff.fileForDocument(snapshot.sections().document);
@@ -483,7 +483,7 @@ void paintDocument(CellGrid& grid, SessionSnapshot const& snapshot,
                    text.assign(span.cellWidth, ' ');
                } else if (span.kind == CellKind::Control ||
                           span.kind == CellKind::InvalidUtf8) {
-                   text = "\xef\xbf\xbd";
+                   text = style.unrenderable;
                }
                // A Modified pair's baseline text is only ever visible here
                // (its target/edited line is the real row below); mark the
@@ -585,7 +585,7 @@ void paintDocument(CellGrid& grid, SessionSnapshot const& snapshot,
                     text.assign(span.cellWidth, ' ');
                 } else if (span.kind == CellKind::Control ||
                            span.kind == CellKind::InvalidUtf8) {
-                    text = "\xef\xbf\xbd";
+                    text = style.unrenderable;
                 }
                 auto segmentKind = InlineWordSegment::Kind::Unchanged;
                 for (auto const& bound : bounds) {
@@ -631,7 +631,7 @@ void paintDocument(CellGrid& grid, SessionSnapshot const& snapshot,
                 text.assign(span.cellWidth, ' ');
             } else if (span.kind == CellKind::Control ||
                        span.kind == CellKind::InvalidUtf8) {
-                text = "\xef\xbf\xbd";
+                text = style.unrenderable;
             }
             auto const documentOffset = line.documentOffset + span.byteOffset;
             auto const scope =
@@ -749,7 +749,7 @@ std::optional<GridPosition> paintPrompt(CellGrid& grid,
         std::string text;
         switch (control.kind) {
             case PromptControlKind::Input:
-                text = control.accessibleLabel + ": " + control.value;
+                text = control.accessibleLabel + style.promptLabelSeparator + control.value;
                 break;
             case PromptControlKind::Count:
                 text = control.value;
@@ -777,7 +777,7 @@ std::optional<GridPosition> paintPrompt(CellGrid& grid,
                 : !caret;
         if (control.kind == PromptControlKind::Input && activeInput && !caret) {
             auto const labelWidth =
-                static_cast<int>(GraphemeLayout{}.computeRun(control.accessibleLabel + ": ")
+                static_cast<int>(GraphemeLayout{}.computeRun(control.accessibleLabel + style.promptLabelSeparator)
                                      .totalCells);
             auto const valueWidth =
                 static_cast<int>(GraphemeLayout{}.computeRun(control.value).totalCells);
@@ -918,7 +918,7 @@ CellGrid Renderer::render(SessionSnapshot const& snapshot) const {
             paintPalette(grid, *shell.palette, theme, background, style);
         } else {
             paintDocument(grid, snapshot, shell.panes.front().content, theme,
-                           background);
+                           background, style);
             paintScrollbar(grid, shell.panes.front(), snapshot.client().viewport,
                             theme, background, style);
 

@@ -177,6 +177,8 @@ TEST(chromeGlyphsAreConfigurableRatherThanCompiledIn) {
     style.tab.dirtySuffix = "*";
     style.tab.liveDiffPrefix = "diff:";
     style.truncation = "~";
+    style.unrenderable = "?";
+    style.promptLabelSeparator = " = ";
     style.dimensions.labelPadding = 3;
 
     ASSERT_EQ(style.tree.expanded, std::string{"v"});
@@ -185,6 +187,8 @@ TEST(chromeGlyphsAreConfigurableRatherThanCompiledIn) {
     ASSERT_EQ(style.tab.dirtySuffix, std::string{"*"});
     ASSERT_EQ(style.tab.liveDiffPrefix, std::string{"diff:"});
     ASSERT_EQ(style.truncation, std::string{"~"});
+    ASSERT_EQ(style.unrenderable, std::string{"?"});
+    ASSERT_EQ(style.promptLabelSeparator, std::string{" = "});
     ASSERT_EQ(style.dimensions.labelPadding, 3);
 }
 
