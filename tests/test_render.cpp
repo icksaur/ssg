@@ -5,6 +5,7 @@
 #include <ssg/PaletteSearcher.h>
 #include <ssg/session_snapshot.h>
 
+#include "session_snapshot_builder.h"
 #include "test_helpers.h"
 
 #include <cstdio>
@@ -164,14 +165,8 @@ TEST(wordWrapOffRendersHorizontallyScrolledContent) {
 
 
 TEST(renderColorsArePaletteIndices) {
-    auto root = uniqueRoot();
-    auto runtime = makeRuntime(root);
-    ASSERT_TRUE(runtime != nullptr);
-    if (!runtime) return;
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
-    ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot) return;
-    auto grid = ssg::Renderer{}.render(*snapshot);
+    auto snapshot = ssg::test::SessionSnapshotBuilder{}.viewport(80, 24).build();
+    auto grid = ssg::Renderer{}.render(snapshot);
     bool allInPalette = true;
     for (auto const& cell : grid.cells) {
         if (cell.foreground >= ssg::kThemePaletteSize ||
@@ -183,16 +178,10 @@ TEST(renderColorsArePaletteIndices) {
 }
 
 TEST(renderIsDeterministic) {
-    auto root = uniqueRoot();
-    std::ofstream{root / "file.txt"} << "content\n";
-    auto runtime = makeRuntime(root);
-    ASSERT_TRUE(runtime != nullptr);
-    if (!runtime) return;
-    auto first = runtime->snapshot(ssg::ClientId{1}, {80, 24});
-    auto second = runtime->snapshot(ssg::ClientId{1}, {80, 24});
-    ASSERT_TRUE(first.has_value() && second.has_value());
-    if (!first || !second) return;
-    ASSERT_EQ(ssg::Renderer{}.render(*first).canonical(), ssg::Renderer{}.render(*second).canonical());
+    auto snapshot =
+        ssg::test::SessionSnapshotBuilder{}.document("content\n").viewport(80, 24).build();
+    ASSERT_EQ(ssg::Renderer{}.render(snapshot).canonical(),
+              ssg::Renderer{}.render(snapshot).canonical());
 }
 
 TEST(renderProjectsPaletteResultsIntoActivePane) {
@@ -804,19 +793,10 @@ TEST(renderPaletteReservesAnEmptyGutterWhenTheListFits) {
 TEST(renderTooSmallViewportProducesLibraryPlaceholder) {
     // M11-L: below the 20x4 minimum the library (not the app) renders the
     // placeholder screen, sized to the terminal, so no app code authors cells.
-    auto root = uniqueRoot();
-    auto runtime = makeRuntime(root);
-    ASSERT_TRUE(runtime != nullptr);
-    if (!runtime) return;
-
-    // A sub-minimum viewport: render must NOT throw and must yield a grid of the
-    // requested terminal size carrying the centered message.
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {10, 5});
-    ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot) return;
-    ASSERT_EQ(snapshot->sections().shell.viewport.columns, 0);  // declined layout
+    auto snapshot = ssg::test::SessionSnapshotBuilder{}.viewport(10, 5).build();
+    ASSERT_EQ(snapshot.sections().shell.viewport.columns, 0);  // declined layout
     ssg::CellGrid grid;
-    ASSERT_NO_THROW(grid = ssg::Renderer{}.render(*snapshot));
+    ASSERT_NO_THROW(grid = ssg::Renderer{}.render(snapshot));
     ASSERT_EQ(grid.size.columns, 10);
     ASSERT_EQ(grid.size.rows, 5);
     ASSERT_EQ(grid.cells.size(), std::size_t{50});
@@ -824,8 +804,6 @@ TEST(renderTooSmallViewportProducesLibraryPlaceholder) {
     // ellipsis to the 10-column width.
     ASSERT_EQ(rowText(grid, 2), std::string("terminal \xe2\x80\xa6"));
     ASSERT_EQ(rowText(grid, 0), std::string(10, ' '));
-
-    std::filesystem::remove_all(root);
 }
 
 TEST(renderTooSmallMatchesHandAuthoredGolden) {
@@ -852,19 +830,12 @@ TEST(renderTooSmallMatchesHandAuthoredGolden) {
 }
 
 TEST(renderTooSmallIsSafeAtOneByOne) {
-    auto root = uniqueRoot();
-    auto runtime = makeRuntime(root);
-    ASSERT_TRUE(runtime != nullptr);
-    if (!runtime) return;
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {1, 1});
-    ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot) return;
+    auto snapshot = ssg::test::SessionSnapshotBuilder{}.viewport(1, 1).build();
     ssg::CellGrid grid;
-    ASSERT_NO_THROW(grid = ssg::Renderer{}.render(*snapshot));
+    ASSERT_NO_THROW(grid = ssg::Renderer{}.render(snapshot));
     ASSERT_EQ(grid.size.columns, 1);
     ASSERT_EQ(grid.size.rows, 1);
     ASSERT_EQ(grid.cells.size(), std::size_t{1});
-    std::filesystem::remove_all(root);
 }
 
 
@@ -1036,24 +1007,24 @@ TEST(theRendererDrawsChromeFromTheSnapshotStyleNotFromLiterals) {
 // rendered with a restyled `unrenderable`, must show the restyled glyph -- proof
 // paintDocument reads the snapshot's Style rather than holding the literal.
 TEST(theDocumentReplacementGlyphComesFromStyle) {
-    auto root = uniqueRoot();
-    std::ofstream{root / "ctrl.txt"} << "a\x01" "b\n";  // \x01 has no glyph
-    auto runtime = makeRuntime(root);
-    ASSERT_TRUE(runtime != nullptr);
-    if (!runtime) return;
-    (void)runtime->dispatch(
-        ssg::ClientId{1},
-        {"file.open", runtime->revision(), std::string{"ctrl.txt"}});
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
-    ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot) return;
+    ssg::Style restyled;
+    restyled.unrenderable = "?";
 
-    auto const shipped = ssg::Renderer{}.render(*snapshot);
+    auto const shipped = ssg::Renderer{}.render(
+        ssg::test::SessionSnapshotBuilder{}
+            .document("a\x01" "b\n")  // \x01 has no glyph
+            .viewport(80, 24)
+            .build());
     ASSERT_TRUE(gridContains(shipped, "\xef\xbf\xbd"));  // U+FFFD by default
 
-    ssg::Style style;
-    style.unrenderable = "?";
-    auto const grid = ssg::Renderer{}.render(withStyle(*snapshot, style));
+    auto const grid = ssg::Renderer{}.render(
+        ssg::test::SessionSnapshotBuilder{}
+            .document("a\x01" "b\n")
+            .viewport(80, 24)
+            .sections([&](ssg::SessionSnapshotSections& sections) {
+                sections.style = restyled;
+            })
+            .build());
     ASSERT_TRUE(gridContains(grid, "a?b"));
     ASSERT_FALSE(gridContains(grid, "\xef\xbf\xbd"));
 }
