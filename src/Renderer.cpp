@@ -129,7 +129,7 @@ void fillRect(CellGrid& grid, Rect const& rect, std::uint8_t foreground,
 // truncated and the last visible cell shows an ellipsis in the same role.
 void paintText(CellGrid& grid, int x, int y, int right, std::string_view text,
                 std::uint8_t foreground, std::uint8_t background,
-                SemanticRole role) {
+                SemanticRole role, Style const& style) {
     if (right <= x) return;
     auto run = GraphemeLayout{}.computeRun(text);
     int column = x;
@@ -155,7 +155,7 @@ void paintText(CellGrid& grid, int x, int y, int right, std::string_view text,
         column += static_cast<int>(width);
     }
     if (truncated) {
-        put(grid, right - 1, y, "\xe2\x80\xa6", foreground, background, role);
+        put(grid, right - 1, y, style.truncation, foreground, background, role);
     }
 }
 
@@ -199,7 +199,7 @@ std::optional<GridPosition> inputLineCaret(ShellViewState const& shell) {
 
 void paintShellLeaves(CellGrid& grid, ShellViewState const& shell,
                         ThemeSnapshot const& theme, std::uint8_t background,
-                        std::uint8_t panelBackground) {
+                        std::uint8_t panelBackground, Style const& style) {
     for (auto const& node : shell.accessibilityNodes) {
         std::uint8_t nodeBackground = background;
         switch (node.kind) {
@@ -214,7 +214,7 @@ void paintShellLeaves(CellGrid& grid, ShellViewState const& shell,
             if (!node.content.empty()) {
                 paintText(grid, node.rect.x, node.rect.y, node.rect.right(),
                            node.content, semanticIndex(theme, node.role),
-                           nodeBackground, node.role);
+                           nodeBackground, node.role, style);
             }
             break;
         default:
@@ -224,26 +224,29 @@ void paintShellLeaves(CellGrid& grid, ShellViewState const& shell,
 }
 
 // Paint a scrollbar into a reserved 1-column gutter from resolved metrics.  When
-// the content fits (`maximum_first_row == 0`) the gutter is left blank (the thumb
-// is hidden), so a thumb appearing or vanishing never changes the content width
-// (see doc/spec-scroll.md). Otherwise it draws a `|` track with a `#` thumb.
+// the content fits, Style resolves the whole column to its gutter glyph (blank
+// by default), so a thumb appearing or vanishing never changes the content width
+// (see doc/spec-scroll.md).  Which glyph each row gets, and how a short thumb
+// degrades, is the style's rule -- this function only reconciles the metrics'
+// conventions with Style's and maps the resolved kind onto a color role.
 void paintScrollGutter(CellGrid& grid, int x, int y, int height,
                          ScrollbarMetrics const& metrics,
-                         ThemeSnapshot const& theme, std::uint8_t background) {
+                         ThemeSnapshot const& theme, std::uint8_t background,
+                         Style const& style) {
     auto const track = semanticIndex(theme, SemanticRole::ScrollbarTrack);
     auto const thumb = semanticIndex(theme, SemanticRole::ScrollbarThumb);
-    bool const scrollable = metrics.maximumFirstRow > 0;
+    // ScrollbarMetrics reports a FULL-VIEWPORT thumb when nothing scrolls
+    // (`thumbSize == viewportRows`, `maximumFirstRow == 0`), not an absent one.
+    // Style's contract is the clearer "size 0 means no thumb", so the two are
+    // reconciled here rather than teaching Style the metrics' convention.
+    int const thumbSize =
+        metrics.maximumFirstRow > 0 ? static_cast<int>(metrics.thumbSize) : 0;
     for (int row = 0; row < height; ++row) {
-        if (!scrollable) {
-            put(grid, x, y + row, " ", track, background,
-                SemanticRole::ScrollbarTrack);
-            continue;
-        }
-        bool const isThumb =
-            row >= static_cast<int>(metrics.thumbStart) &&
-            row < static_cast<int>(metrics.thumbStart + metrics.thumbSize);
-        put(grid, x, y + row, isThumb ? "#" : "|", isThumb ? thumb : track,
-            background,
+        auto const cell = style.scrollbarCell(
+            row, static_cast<int>(metrics.thumbStart), thumbSize, height);
+        bool const isThumb = cell.kind == ScrollbarCellKind::Thumb;
+        put(grid, x, y + row, std::string{cell.glyph},
+            isThumb ? thumb : track, background,
             isThumb ? SemanticRole::ScrollbarThumb
                      : SemanticRole::ScrollbarTrack);
     }
@@ -252,7 +255,8 @@ void paintScrollGutter(CellGrid& grid, int x, int y, int height,
 void paintPanelTree(CellGrid& grid, Rect const& panel,
                       std::optional<Rect> const& panelScrollbar,
                       TreeViewState const& tree, ThemeSnapshot const& theme,
-                      std::uint8_t background, bool focused) {
+                      std::uint8_t background, bool focused,
+                      Style const& style) {
     if (tree.providers.empty() || panel.width <= 0) return;
     auto const& provider = tree.providers.front();
     auto const foreground = semanticIndex(theme, SemanticRole::Foreground);
@@ -279,21 +283,21 @@ void paintPanelTree(CellGrid& grid, Rect const& panel,
                       rowBackground, SemanticRole::TreeFocus);
             if (focused) grid.caret = GridPosition{panel.x, y};
         }
-        std::string line(view.depth * 2, ' ');
+        std::string line(view.depth * style.tree.indentPerDepth, ' ');
         if (view.node.expandable) {
-            line += view.expanded ? "\xe2\x96\xbe " : "\xe2\x96\xb8 ";
+            line += view.expanded ? style.tree.expanded : style.tree.collapsed;
         }
         line += view.node.label;
         auto const color =
             view.node.kind == TreeNodeKind::Directory ? directory : foreground;
         paintText(grid, panel.x, y, contentRight, line, color, rowBackground,
-                   SemanticRole::Foreground);
+                   SemanticRole::Foreground, style);
     }
     // Paint the reserved gutter (blank when the tree fits).
     if (panelScrollbar) {
         paintScrollGutter(grid, panelScrollbar->x, panelScrollbar->y,
                             panelScrollbar->height, provider.scrollbar, theme,
-                            background);
+                            background, style);
     }
 }
 
@@ -301,7 +305,8 @@ void paintPanelTree(CellGrid& grid, Rect const& panel,
 // prompt is open.  The query and caret live in the header (see spec-palette.md);
 // this paints only the results window with the selected row highlighted.
 void paintPalette(CellGrid& grid, PaletteProjection const& palette,
-                   ThemeSnapshot const& theme, std::uint8_t background) {
+                   ThemeSnapshot const& theme, std::uint8_t background,
+                   Style const& style) {
     auto const& rect = palette.rect;
     if (rect.width <= 0 || rect.height <= 0) return;
     auto const foreground = semanticIndex(theme, SemanticRole::Foreground);
@@ -326,7 +331,7 @@ void paintPalette(CellGrid& grid, PaletteProjection const& palette,
         fillRect(grid, {rect.x, y, rect.width, 1}, foreground, rowBackground,
                   rowRole);
         paintText(grid, rect.x, y, rect.right(), row.label, foreground,
-                   rowBackground, labelRole);
+                   rowBackground, labelRole, style);
         if (!row.detail.empty()) {
             auto const run = GraphemeLayout{}.computeRun(row.detail);
             int width = 0;
@@ -335,7 +340,7 @@ void paintPalette(CellGrid& grid, PaletteProjection const& palette,
             }
             int const start = std::max(rect.x, rect.right() - width);
             paintText(grid, start, y, rect.right(), row.detail, detailColor,
-                       rowBackground, detailRole);
+                       rowBackground, detailRole, style);
         }
     }
     // Paint the reserved gutter (blank when the ranked list fits).
@@ -343,7 +348,7 @@ void paintPalette(CellGrid& grid, PaletteProjection const& palette,
         paintScrollGutter(grid, palette.scrollbarRect.x,
                             palette.scrollbarRect.y,
                             palette.scrollbarRect.height, palette.scrollbar,
-                            theme, background);
+                            theme, background, style);
     }
 }
 
@@ -721,10 +726,11 @@ void paintDocument(CellGrid& grid, SessionSnapshot const& snapshot,
 
 void paintScrollbar(CellGrid& grid, PaneGeometry const& pane,
                      ViewportViewState const& viewport,
-                     ThemeSnapshot const& theme, std::uint8_t background) {
+                     ThemeSnapshot const& theme, std::uint8_t background,
+                     Style const& style) {
     paintScrollGutter(grid, pane.scrollbar.x, pane.scrollbar.y,
                         pane.scrollbar.height, viewport.scrollbar, theme,
-                        background);
+                        background, style);
 }
 
 // Paint the reserved prompt rows (find/replace/settings/command_argument).  The
@@ -734,7 +740,8 @@ void paintScrollbar(CellGrid& grid, PaneGeometry const& pane,
 std::optional<GridPosition> paintPrompt(CellGrid& grid,
                                          PromptViewState const& prompt,
                                          ThemeSnapshot const& theme,
-                                         std::uint8_t background) {
+                                         std::uint8_t background,
+                                         Style const& style) {
     auto const promptFg = semanticIndex(theme, SemanticRole::Prompt);
     auto const promptBg = semanticIndex(theme, SemanticRole::Background);
     std::optional<GridPosition> caret;
@@ -748,7 +755,8 @@ std::optional<GridPosition> paintPrompt(CellGrid& grid,
                 text = control.value;
                 break;
             case PromptControlKind::Toggle:
-                text = std::string{control.checked ? "[x] " : "[ ] "} +
+                text = (control.checked ? style.toggle.checked
+                                         : style.toggle.unchecked) +
                        control.accessibleLabel;
                 break;
         }
@@ -759,7 +767,7 @@ std::optional<GridPosition> paintPrompt(CellGrid& grid,
                 SemanticRole::Prompt);
         }
         paintText(grid, control.rect.x, control.rect.y, control.rect.right(),
-                   text, promptFg, promptBg, SemanticRole::Prompt);
+                   text, promptFg, promptBg, SemanticRole::Prompt, style);
         // Place the hardware cursor on the editable input: the replacement row
         // for a replace prompt (its query row is display-only), otherwise the
         // first input.
@@ -787,7 +795,8 @@ std::optional<GridPosition> paintPrompt(CellGrid& grid,
 // owns this screen so a client contributes no cell content (M11-L,
 // doc/spec-library-contract.md).  Sized from the terminal dimensions the client
 // viewport carries, since the shell layout was declined (viewport {0,0}).
-CellGrid renderTooSmall(GridSize size, ThemeSnapshot const& theme) {
+CellGrid renderTooSmall(GridSize size, ThemeSnapshot const& theme,
+                         Style const& style) {
     auto const foreground = semanticIndex(theme, SemanticRole::Foreground);
     auto const background = semanticIndex(theme, SemanticRole::Background);
     CellGrid grid{
@@ -806,7 +815,7 @@ CellGrid renderTooSmall(GridSize size, ThemeSnapshot const& theme) {
     int const row = size.rows / 2;
     int const start = std::max(0, (size.columns - messageCells) / 2);
     paintText(grid, start, row, size.columns, message, foreground, background,
-               SemanticRole::Foreground);
+               SemanticRole::Foreground, style);
     return grid;
 }
 
@@ -873,7 +882,7 @@ CellGrid Renderer::render(SessionSnapshot const& snapshot) const {
         return renderTooSmall(
             GridSize{static_cast<int>(dimensions.columns),
                      static_cast<int>(dimensions.rows)},
-            theme);
+            theme, style);
     }
 
     auto const foreground = semanticIndex(theme, SemanticRole::Foreground);
@@ -896,27 +905,29 @@ CellGrid Renderer::render(SessionSnapshot const& snapshot) const {
                   SemanticRole::TreeBackground);
     }
 
-    paintShellLeaves(grid, shell, theme, background, panelBackground);
+    paintShellLeaves(grid, shell, theme, background, panelBackground, style);
 
     if (shell.panel) {
         paintPanelTree(grid, *shell.panel, shell.panelScrollbar,
                          snapshot.sections().tree, theme,
-                         panelBackground, shell.focus == FocusTarget::Panel);
+                         panelBackground, shell.focus == FocusTarget::Panel,
+                         style);
     }
     if (!shell.panes.empty()) {
         if (shell.palette) {
-            paintPalette(grid, *shell.palette, theme, background);
+            paintPalette(grid, *shell.palette, theme, background, style);
         } else {
             paintDocument(grid, snapshot, shell.panes.front().content, theme,
                            background);
             paintScrollbar(grid, shell.panes.front(), snapshot.client().viewport,
-                            theme, background);
+                            theme, background, style);
 
             // Paint the reserved prompt rows (find/replace/settings) and place
             // the hardware cursor at the query when the prompt is focused.
             auto const& prompt = snapshot.sections().promptStatus.prompt;
             if (prompt) {
-                auto promptCaret = paintPrompt(grid, *prompt, theme, background);
+                auto promptCaret =
+                    paintPrompt(grid, *prompt, theme, background, style);
                 if (shell.focus == FocusTarget::Prompt && promptCaret) {
                     grid.caret = *promptCaret;
                 }

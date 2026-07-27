@@ -9,11 +9,11 @@ namespace ssg {
 
 namespace {
 
-std::string composedTabTitle(const TabState& tab) {
+std::string composedTabTitle(const TabState& tab, const Style& style) {
     if (tab.kind != TabKind::LiveDiff) {
         return tab.label;
     }
-    return std::string{"D "} + tab.label;
+    return style.tab.liveDiffPrefix + tab.label;
 }
 
 std::optional<std::string> statusFieldCommandId(
@@ -111,7 +111,7 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
                                                PaletteReport const& paletteReport) const {
     std::vector<TabLabel> labels;
     for (auto const& tab : tabs.viewState().tabs) {
-        labels.push_back({composedTabTitle(tab), tab.label,
+        labels.push_back({composedTabTitle(tab, style), tab.label,
                           tabs.viewState().active == tab.id, tab.dirty});
     }
     auto statusProjection = status.footerProjection();
@@ -134,6 +134,7 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
     request.footerFields = std::move(statusFields.footerFields);
     request.footerActions = statusProjection.actions;
     request.tabs = std::move(labels);
+    request.style = style;
     if (!leaderPending.empty()) {
         std::string hint = "leader:";
         for (auto const& stroke : leaderPending) {

@@ -967,6 +967,57 @@ TEST(theCaretFollowsAScrolledQueryToTheEndOfTheVisibleText) {
     }
 }
 
+// Proves the renderer actually READS its Style rather than still holding the
+// literals.  The existing suite passing only shows the refactor changed nothing;
+// it cannot show the routing is live, because the defaults reproduce the old
+// glyphs exactly.  So: restyle, and require the screen to follow.
+TEST(theRendererDrawsChromeFromItsStyleNotFromLiterals) {
+    auto root = uniqueRoot();
+    for (int i = 0; i < 40; ++i) {
+        std::ofstream{root / ("file-" + std::to_string(i) + ".txt")} << "x";
+    }
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(ssg::ClientId{1}, {"panel.toggle", runtime->revision(), {}});
+    (void)runtime->dispatch(ssg::ClientId{1}, {"tree.select_next", runtime->revision(), {}});
+    (void)runtime->dispatch(ssg::ClientId{1}, {"tree.activate", runtime->revision(), {}});
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    auto const& shell = snapshot->sections().shell;
+    ASSERT_TRUE(shell.panelScrollbar.has_value());
+    if (!shell.panelScrollbar) return;
+
+    ssg::Renderer renderer;
+    renderer.style.scrollbar.track = ":";
+    renderer.style.scrollbar.single = "@";
+    renderer.style.scrollbar.top = "@";
+    renderer.style.scrollbar.body = "@";
+    renderer.style.scrollbar.bottom = "@";
+    renderer.style.tree.collapsed = "+ ";
+    renderer.style.tree.expanded = "- ";
+    auto const grid = renderer.render(*snapshot);
+
+    int const gx = shell.panelScrollbar->x;
+    bool restyledThumb = false;
+    bool restyledTrack = false;
+    for (int y = shell.panelScrollbar->y;
+         y < shell.panelScrollbar->y + shell.panelScrollbar->height; ++y) {
+        auto const& text = grid.at(gx, y).text;
+        if (text == "@") restyledThumb = true;
+        if (text == ":") restyledTrack = true;
+        // The shipped glyphs must be gone entirely, not merely joined.
+        ASSERT_NE(text, std::string{"#"});
+        ASSERT_NE(text, std::string{"|"});
+    }
+    ASSERT_TRUE(restyledThumb);
+    ASSERT_TRUE(restyledTrack);
+
+    // The tree indicator follows too, so panel painting is routed as well.
+    ASSERT_TRUE(gridContains(grid, "- "));
+}
+
 int main() {
     RUN(renderPaintsContentNotAccessibilityLabels);
     RUN(renderSegmentsOnlyVisibleLinesNotWholeDocument);
@@ -994,6 +1045,7 @@ int main() {
     RUN(anOpenPickerPutsTheCaretAtTheEndOfTheTypedQuery);
     RUN(theInputLineCaretIsPlacedByDisplayWidthNotByteCount);
     RUN(theCaretFollowsAScrolledQueryToTheEndOfTheVisibleText);
+    RUN(theRendererDrawsChromeFromItsStyleNotFromLiterals);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;

@@ -148,6 +148,10 @@ struct EditorRuntime::Impl final : CommandServices,
     LspFeatureViewState lspFeatures;
     KeymapViewState keymap{"default", {}};
     ThemeSnapshot theme{};
+    // Chrome glyphs and dimensions, beside the theme because they are the same
+    // kind of thing: presentation this runtime owns and hands to layout.  See
+    // doc/spec-style.md.
+    Style style{};
     std::optional<WorkspaceReplacePreview> workspaceReplacePreview;
     std::unique_ptr<EditorSession> session;
     // Set by palette.execute after validating the selected candidate; the

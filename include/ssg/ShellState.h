@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ssg/focus.h"
+#include "ssg/Style.h"
 #include "ssg/Theme.h"
 #include "ssg/Viewport.h"
 
@@ -109,6 +110,9 @@ struct ShellLayoutRequest {
     bool inputLineActive = false;  // A picker is open on this client.
     std::string inputLineQuery;    // The client's current query text.
     std::string inputLineGhost;    // Fish-style completion of the top candidate.
+    // Dimensions and chrome glyphs this layout is computed against.  Defaults
+    // reproduce the shipped appearance; see doc/spec-style.md.
+    Style style;
 };
 
 struct PaneGeometry {

@@ -1,6 +1,7 @@
 #include "ssg/Style.h"
 
 #include <algorithm>
+#include <cstdint>
 
 #include "ssg/GraphemeLayout.h"
 
@@ -16,10 +17,12 @@ int Style::inputLineReservation() const {
            dimensions.inputLineQueryBudget;
 }
 
-std::string_view Style::scrollbarCell(int row, int thumbStart, int thumbSize,
-                                        int trackHeight) const {
-    if (row < 0 || row >= trackHeight) return scrollbar.gutter;
-    if (thumbSize <= 0 || trackHeight <= 0) return scrollbar.gutter;
+ScrollbarCell Style::scrollbarCell(int row, int thumbStart, int thumbSize,
+                                     int trackHeight) const {
+    auto const gutter =
+        ScrollbarCell{scrollbar.gutter, ScrollbarCellKind::Gutter};
+    if (row < 0 || row >= trackHeight) return gutter;
+    if (thumbSize <= 0 || trackHeight <= 0) return gutter;
 
     // A thumb that claims more rows than the track has would otherwise index
     // past the bottom cap.  Clamp instead of trusting the caller's metrics.
@@ -27,12 +30,17 @@ std::string_view Style::scrollbarCell(int row, int thumbStart, int thumbSize,
     thumbStart = std::clamp(thumbStart, 0, trackHeight - thumbSize);
 
     int const offset = row - thumbStart;
-    if (offset < 0 || offset >= thumbSize) return scrollbar.track;
+    if (offset < 0 || offset >= thumbSize) {
+        return {scrollbar.track, ScrollbarCellKind::Track};
+    }
 
-    if (thumbSize == 1) return scrollbar.single;
-    if (offset == 0) return scrollbar.top;
-    if (offset == thumbSize - 1) return scrollbar.bottom;
-    return scrollbar.body;
+    auto const thumb = [](std::string const& glyph) {
+        return ScrollbarCell{glyph, ScrollbarCellKind::Thumb};
+    };
+    if (thumbSize == 1) return thumb(scrollbar.single);
+    if (offset == 0) return thumb(scrollbar.top);
+    if (offset == thumbSize - 1) return thumb(scrollbar.bottom);
+    return thumb(scrollbar.body);
 }
 
 }  // namespace ssg

@@ -630,6 +630,53 @@ TEST(leaderHintRendersInTheHeaderWhenPresent) {
     ASSERT_FALSE(hasLeader);
 }
 
+// The layout counterpart to the renderer's routing proof: dimensions and the
+// sigil must come from the request's Style, not from constants that used to
+// live in ShellState.cpp.
+TEST(shellLayoutTakesItsDimensionsAndSigilFromStyle) {
+    ShellState state;
+    state.togglePanel();
+
+    auto narrow = request(100, 24);
+    narrow.style.dimensions.panelTargetWidth = 24;
+    auto narrowResult = computeShellLayout(narrow, state);
+    ASSERT_TRUE(narrowResult.accepted());
+    ASSERT_TRUE(narrowResult.view->panel.has_value());
+    if (!narrowResult.view->panel) return;
+
+    auto wide = request(100, 24);
+    wide.style.dimensions.panelTargetWidth = 31;
+    auto wideResult = computeShellLayout(wide, state);
+    ASSERT_TRUE(wideResult.accepted());
+    ASSERT_TRUE(wideResult.view->panel.has_value());
+    if (!wideResult.view->panel) return;
+
+    ASSERT_EQ(narrowResult.view->panel->width, 24);
+    ASSERT_EQ(wideResult.view->panel->width, 31);
+
+    // The minimum viewport is a style dimension too: raising it must make a
+    // previously-accepted viewport too small.
+    auto demanding = request(20, 4);
+    demanding.style.dimensions.minimumColumns = 40;
+    ASSERT_FALSE(computeShellLayout(demanding, state).accepted());
+
+    // The input line renders the configured sigil rather than a literal "> ".
+    auto styled = request(100, 24);
+    styled.inputLineActive = true;
+    styled.inputLineQuery = "abc";
+    styled.style.inputLineSigil = ":: ";
+    auto styledResult = computeShellLayout(styled, state);
+    ASSERT_TRUE(styledResult.accepted());
+    if (!styledResult.accepted()) return;
+    bool sawStyledSigil = false;
+    for (auto const& node : styledResult.view->accessibilityNodes) {
+        if (node.id == "input_line.query") {
+            sawStyledSigil = node.content.rfind(":: ", 0) == 0;
+        }
+    }
+    ASSERT_TRUE(sawStyledSigil);
+}
+
 int main() {
     RUN(handAuthoredGeometryGoldens);
     RUN(viewportAndPromptErrorsAreTyped);
@@ -651,6 +698,7 @@ int main() {
     RUN(theLeaderHintSitsWhereTheInputLineWould);
     RUN(nonOverlapAndCardinalityProperties);
     RUN(statusFieldManifestHasExactOrderAndLabels);
+    RUN(shellLayoutTakesItsDimensionsAndSigilFromStyle);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << '\n';
     return failed == 0 ? 0 : 1;
 }

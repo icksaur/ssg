@@ -7,6 +7,7 @@
 // their medium; they add no layout, content, or color.
 
 #include <ssg/session_snapshot.h>
+#include <ssg/Style.h>
 #include <ssg/Theme.h>
 #include <ssg/ShellState.h>
 
@@ -61,6 +62,13 @@ struct CellGrid {
 
 class Renderer {
 public:
+    // The chrome glyphs and dimensions this renderer draws with.  Public and
+    // assignable so a client can restyle without a new render entry point;
+    // defaults reproduce the shipped appearance.  Style will move onto the
+    // snapshot when it becomes a published, wire-visible section
+    // (doc/spec-style.md Y4).
+    Style style{};
+
     [[nodiscard]] CellGrid render(SessionSnapshot const& snapshot) const;
 
     // Test instrumentation (M12 INV-render-projection).  Counts the

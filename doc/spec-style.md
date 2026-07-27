@@ -37,16 +37,18 @@ style a data object rather than a second layout engine.
 
 ## Current state (verified in code, not from docs)
 
-**Chrome glyphs.** Seven, all hardcoded at their point of use. The inventory was
-initially wrong -- it missed the ellipsis and the live-diff prefix -- so it was
-rebuilt by sweeping every literal argument to `put()` in `src/Renderer.cpp` and
-every composed display string in `src/ShellState.cpp` and
-`src/runtime/snapshot.cpp` rather than by recall:
+**Chrome glyphs.** Eight, all originally hardcoded at their point of use. The
+inventory was wrong twice -- it first missed the ellipsis and the live-diff
+prefix, then missed the prompt toggle markers -- so it was rebuilt by sweeping
+every literal argument to `put()` in `src/Renderer.cpp` and every composed
+display string in `src/ShellState.cpp` and `src/runtime/snapshot.cpp` rather
+than by recall:
 
 - `|` scrollbar track, `#` scrollbar thumb -- `src/Renderer.cpp:245`
 - `" "` empty gutter when nothing scrolls -- `src/Renderer.cpp:238`
 - `…` (U+2026) truncation marker -- `src/Renderer.cpp:158`
 - `▾` / `▸` tree expanded/collapsed -- `src/Renderer.cpp:284`
+- `[x] ` / `[ ] ` prompt toggle markers -- `src/Renderer.cpp:749`
 - `" *"` dirty-tab marker -- `src/ShellState.cpp:553`
 - `"D "` live-diff tab prefix -- `src/runtime/snapshot.cpp:16`
 - `"> "` input-line sigil -- `src/ShellState.cpp:471`, and separately as the
@@ -133,9 +135,14 @@ cannot be "top, then body, then bottom" alone.
 `bottom`. The resolver's rule, stated once and completely:
 
 - size 0 -> nothing is a thumb; the whole gutter is the empty-gutter glyph.
-  This is not hypothetical: `scrollbarMetricsImpl` returns `thumbSize == 0`
-  whenever the content fits (`src/Viewport.cpp:339-341`), which is the common
-  case for a short tree or a filtered picker.
+  **Note the metrics do not report it this way.** `scrollbarMetricsImpl` returns
+  `thumbSize == viewportRows` when the content fits -- a full-length thumb, not
+  an absent one -- and marks the case with `maximumFirstRow == 0`
+  (`src/Viewport.cpp:339-341`). An earlier draft of this spec asserted the
+  opposite, and routing the renderer through Style on that assumption turned
+  every fits-in-view gutter solid. `paintScrollGutter` therefore translates the
+  metrics' convention into Style's at the boundary; Style keeps the clearer
+  contract rather than inheriting the confusing one.
 - size 1 -> `single`
 - size 2 -> `top`, `bottom`
 - size N>2 -> `top`, then N-2 x `body`, then `bottom`
@@ -280,15 +287,41 @@ that step is mechanical rather than a redesign.
 |---|------|-------|--------|
 | Y0 | **Superseded** -- merged into Y1. Originally: pin today's glyphs with golden assertions before refactoring | -- | see Status |
 | Y1 | **Delivered.** `Style` with the glyph tables and dimensions, defaults byte-identical to today. No callers yet | `include/ssg/Style.h`, `src/Style.cpp`, `tests/test_style.cpp`, `cmake/components/style.cmake` | configured-behavior unit tests: a style built with distinctive glyphs must render exactly those. Plus a size property (resolved thumb length == requested size, over all heights and offsets) and the derived sigil width. Every behavior perturbation-verified |
-| Y2 | Route the renderer, shell layout and snapshot composition through it | `src/Renderer.cpp`, `src/ShellState.cpp`, `src/runtime/snapshot.cpp` | Y0's oracles still pass with no fixture edits -- the refactor is invisible. Plus: sigil display width is DERIVED, asserted by setting a two-cell sigil and a one-cell sigil and checking the input line's reserved region tracks it (this is what stops the `"> "` / `kInputLineSigilWidth` pair drifting) |
+| Y2 | **Delivered.** Route the renderer, shell layout and snapshot composition through it | `src/Renderer.cpp`, `src/ShellState.cpp`, `src/runtime/snapshot.cpp`, `include/ssg/Renderer.h`, `include/ssg/ShellState.h`, `src/runtime/editor_runtime_internal.h` | the existing suite passes unchanged (the refactor is invisible), PLUS two routing proofs -- restyling a `Renderer` changes the painted chrome, and a `ShellLayoutRequest`'s style changes panel width, the minimum viewport and the sigil. Both perturbation-verified against a regression to literals |
 | Y3 | Add the no-literal guard across all three chrome translation units | `tests/` | perturbation: reintroduce a glyph literal in EACH of the three files in turn; the guard must fail all three times |
 | Y4 | (Optional, after review) Publish style as a snapshot section with delta, wire codec and a `style.define` command, following the theme's path | `include/ssg/session_snapshot.h`, `src/Protocol.cpp`, runtime, command catalog | round-trip through the codec; a `style.define` at runtime repaints with the new glyph |
 
 ## Status
 
-**Y1 delivered.** `Style` exists with the seven chrome glyphs and the
-dimensions, defaults byte-identical to today, no callers yet (Y2 routes them).
-89 tests green, 0 warnings.
+**Y1 and Y2 delivered.** `Style` exists and the renderer, shell layout and
+snapshot composition all draw from it. 89 tests green.
+
+**The glyph count was wrong twice.** The first inventory said six; review found
+seven; routing the code found an **eighth** -- the prompt toggle markers
+`[x] `/`[ ] ` at `src/Renderer.cpp:749`, which an earlier targeted grep missed
+because the search pattern was malformed. The lesson is that the sweep
+(every literal argument to `put()`, every composed display string) found what
+recall and ad-hoc greps did not, and it should be the method for Y3's guard.
+
+**A wrong assumption about scrollbar metrics broke 42 assertions.** The spec
+claimed `thumbSize == 0` when content fits; it is actually `viewportRows`, with
+`maximumFirstRow == 0` as the real signal. Routing on the wrong assumption made
+every fits-in-view gutter solid, and the existing tests caught it immediately.
+The fix reconciles the two conventions in `paintScrollGutter` rather than
+teaching `Style` the confusing one. Corrected above.
+
+**"Existing tests pass" was deliberately not accepted as proof of routing.**
+Because the defaults reproduce the old appearance exactly, an implementation
+that ignored `Style` entirely would also pass. Two dedicated tests therefore
+restyle and require the output to follow, and all three routing reversions
+(renderer glyphs, panel width, sigil) were perturbation-verified to fail them.
+
+**Ownership.** `EditorRuntime::Impl` holds the one `Style`, beside the
+`ThemeSnapshot` it resembles, and copies it into each `ShellLayoutRequest`.
+`Renderer` holds its own assignable `Style` because it takes only a snapshot;
+unifying the two is Y4's job, when style becomes a published section. Until
+then a client that restyles the renderer must restyle the runtime to match --
+recorded here because nothing enforces it yet.
 
 **Y0 was dropped as originally written, deliberately.** The plan called for
 golden assertions pinning today's literal glyphs before refactoring. That is the
@@ -305,10 +338,9 @@ fails every case. The size rule is additionally pinned by a property -- the
 resolved thumb always covers exactly its requested rows, across all heights and
 offsets -- which catches cap-rule errors at sizes no hand case enumerates.
 
-All six behaviors were perturbation-verified (size-1 cap selection, both
-clamps, the size-0 gutter contract, the bottom cap, and the derived sigil
-width); each perturbation produced failures, so none of these assertions is
-decorative.
+All behaviors were perturbation-verified (size-1 cap selection, both clamps, the
+size-0 gutter contract, the bottom cap, and the derived sigil width); each
+perturbation produced failures, so none of these assertions is decorative.
 
 The sigil width is measured through `GraphemeLayout`, not declared: setting a
 fullwidth sigil yields 2, a narrow one yields 1, with no second constant to keep

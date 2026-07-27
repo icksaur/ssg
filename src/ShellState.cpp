@@ -9,25 +9,6 @@
 namespace ssg {
 namespace {
 
-constexpr int kMinimumColumns = 20;
-constexpr int kMinimumRows = 4;
-constexpr int kPanelTargetWidth = 24;
-// What the input line reserves from the status fields while a picker is open.
-//
-// Deliberately INDEPENDENT of the query: a reservation that grew with the typed
-// text would shrink the field region on every keystroke, collapsing fields out
-// again -- the exact bug this change exists to fix. So it is a fixed budget:
-// the separating space, the "> " sigil, and room for a short query. Beyond that
-// the input line uses whatever the fields left, and overflows by scrolling its
-// own text rather than by taking more (doc/spec-input-line.md).
-constexpr int kInputLineSeparator = 1;
-constexpr int kInputLineSigilWidth = 2;   // "> "
-constexpr int kInputLineQueryBudget = 8;
-constexpr int kInputLineReservation =
-    kInputLineSeparator + kInputLineSigilWidth + kInputLineQueryBudget;
-constexpr int kPanelMinimumWidth = 12;
-constexpr int kEditorMinimumWidth = 20;
-
 struct PaneNode {
     PaneId id;
     SplitAxis axis = SplitAxis::Vertical;
@@ -398,8 +379,8 @@ bool ShellState::distractionFree() const noexcept {
 
 ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
                                        const ShellState& state) {
-    if (request.viewport.columns < kMinimumColumns ||
-        request.viewport.rows < kMinimumRows) {
+    if (request.viewport.columns < request.style.dimensions.minimumColumns ||
+        request.viewport.rows < request.style.dimensions.minimumRows) {
         return {ShellLayoutError{ShellLayoutErrorCode::ViewportTooSmall,
                                  "viewport must be at least 20 columns by 4 rows"},
                 std::nullopt};
@@ -439,8 +420,8 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
         const int headerRight = view.header->right();
         int fieldWidth = view.header->width;
         if (request.inputLineActive) {
-            const int reserved =
-                std::min(kInputLineReservation, view.header->width);
+            const int reserved = std::min(
+                request.style.inputLineReservation(), view.header->width);
             fieldWidth = std::max(0, view.header->width - reserved);
         }
         int headerX = addFields(view, request.headerFields,
@@ -466,9 +447,10 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
             // land on a real cell, so text filling the header to its last
             // column would leave the insertion point nowhere to sit.
             const int drawable = std::max(0, available - 1);
-            const int textRoom = std::max(0, drawable - kInputLineSigilWidth);
-            std::string query =
-                "> " + visibleQueryTail(request.inputLineQuery, textRoom);
+            const int textRoom =
+                std::max(0, drawable - request.style.sigilWidth());
+            std::string query = request.style.inputLineSigil +
+                                 visibleQueryTail(request.inputLineQuery, textRoom);
             const int queryWidth =
                 std::min(drawable, static_cast<int>(query.size()));
             addNode(view, ShellNodeKind::HeaderField, "input_line.query",
@@ -500,7 +482,8 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
         for (auto action = request.footerActions.rbegin();
              action != request.footerActions.rend(); ++action) {
             const int width =
-                std::min(actionX, static_cast<int>(action->accessibleLabel.size()) + 2);
+                std::min(actionX, static_cast<int>(action->accessibleLabel.size()) +
+                                      request.style.dimensions.labelPadding);
             if (width <= 0 || action->accessibleLabel.empty()) continue;
             actionX -= width;
             addNode(view, ShellNodeKind::FooterAction, action->id,
@@ -517,10 +500,12 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
         int panelWidth = 0;
         if (panelRequested &&
             request.viewport.columns >=
-                kEditorMinimumWidth + kPanelMinimumWidth) {
+                request.style.dimensions.editorMinimumWidth +
+                    request.style.dimensions.panelMinimumWidth) {
             panelWidth = std::min(
-                kPanelTargetWidth,
-                request.viewport.columns - kEditorMinimumWidth);
+                request.style.dimensions.panelTargetWidth,
+                request.viewport.columns -
+                    request.style.dimensions.editorMinimumWidth);
             view.panel = Rect{0, 1, panelWidth, request.viewport.rows - 2};
             addNode(view, ShellNodeKind::Panel, "panel", "Side panel",
                      *view.panel, SemanticRole::PanelInactive);
@@ -550,10 +535,12 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
         for (std::size_t i = 0; i < request.tabs.size(); ++i) {
             const auto& tab = request.tabs[i];
             const std::string display =
-                tab.dirty ? tab.title + " *" : tab.title;
+                tab.dirty ? tab.title + request.style.tab.dirtySuffix
+                          : tab.title;
             const int width =
                 std::min(view.tabBar->right() - tabX,
-                         std::max(1, static_cast<int>(display.size()) + 2));
+                         std::max(1, static_cast<int>(display.size()) +
+                                          request.style.dimensions.labelPadding));
             if (width <= 0 || tab.accessibleLabel.empty()) break;
             addNode(view, ShellNodeKind::Tab, "tab." + std::to_string(i),
                      tab.accessibleLabel,

@@ -26,7 +26,22 @@ std::string column(ssg::Style const& style, int thumbStart, int thumbSize,
                    int trackHeight) {
     std::string out;
     for (int row = 0; row < trackHeight; ++row) {
-        out += style.scrollbarCell(row, thumbStart, thumbSize, trackHeight);
+        out += style.scrollbarCell(row, thumbStart, thumbSize, trackHeight).glyph;
+    }
+    return out;
+}
+
+// The same column expressed as kinds rather than glyphs.  The kind is what
+// selects the color role, so it has to be right independently of the glyph.
+std::string kinds(ssg::Style const& style, int thumbStart, int thumbSize,
+                  int trackHeight) {
+    std::string out;
+    for (int row = 0; row < trackHeight; ++row) {
+        switch (style.scrollbarCell(row, thumbStart, thumbSize, trackHeight).kind) {
+            case ssg::ScrollbarCellKind::Gutter: out += 'g'; break;
+            case ssg::ScrollbarCellKind::Track: out += 't'; break;
+            case ssg::ScrollbarCellKind::Thumb: out += 'T'; break;
+        }
     }
     return out;
 }
@@ -84,6 +99,22 @@ TEST(theResolvedThumbAlwaysCoversExactlyItsRequestedRows) {
     }
 }
 
+TEST(cellKindDistinguishesGutterFromTrackAndThumb) {
+    auto const style = configuredStyle();
+
+    // Track and gutter are different KINDS even when a style gives them the
+    // same glyph, because they take different color roles.  An empty column is
+    // gutter throughout; a populated one is track around the thumb.
+    ASSERT_EQ(kinds(style, 1, 2, 5), std::string{"tTTtt"});
+    ASSERT_EQ(kinds(style, 0, 0, 4), std::string{"gggg"});
+
+    ssg::Style ambiguous;
+    ambiguous.scrollbar.gutter = "=";
+    ambiguous.scrollbar.track = "=";
+    ASSERT_EQ(kinds(ambiguous, 0, 0, 3), std::string{"ggg"});
+    ASSERT_EQ(kinds(ambiguous, 0, 1, 3), std::string{"Ttt"});
+}
+
 TEST(outOfRangeScrollbarGeometryIsClampedNotTrusted) {
     auto const style = configuredStyle();
 
@@ -98,8 +129,8 @@ TEST(outOfRangeScrollbarGeometryIsClampedNotTrusted) {
 
     // Degenerate tracks produce no thumb rather than misdrawn one.
     ASSERT_EQ(column(style, 0, 1, 0), std::string{""});
-    ASSERT_EQ(style.scrollbarCell(-1, 0, 2, 4), style.scrollbar.gutter);
-    ASSERT_EQ(style.scrollbarCell(9, 0, 2, 4), style.scrollbar.gutter);
+    ASSERT_EQ(style.scrollbarCell(-1, 0, 2, 4).glyph, style.scrollbar.gutter);
+    ASSERT_EQ(style.scrollbarCell(9, 0, 2, 4).glyph, style.scrollbar.gutter);
 }
 
 TEST(sigilWidthIsMeasuredFromTheSigilNotDeclaredBesideIt) {
@@ -163,6 +194,7 @@ int main() {
     RUN(scrollbarUsesTheGlyphsItWasConfiguredWith);
     RUN(aUniformThumbNeedsNoCapAwareness);
     RUN(theResolvedThumbAlwaysCoversExactlyItsRequestedRows);
+    RUN(cellKindDistinguishesGutterFromTrackAndThumb);
     RUN(outOfRangeScrollbarGeometryIsClampedNotTrusted);
     RUN(sigilWidthIsMeasuredFromTheSigilNotDeclaredBesideIt);
     RUN(inputLineReservationTracksTheConfiguredSigilAndBudget);

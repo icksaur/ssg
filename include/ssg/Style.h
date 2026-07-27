@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <string_view>
 
@@ -42,6 +43,12 @@ struct TabGlyphs {
     std::string liveDiffPrefix = "D ";
 };
 
+// Checkbox markers for prompt toggle controls (find's case/word/regex).
+struct ToggleGlyphs {
+    std::string checked = "[x] ";
+    std::string unchecked = "[ ] ";
+};
+
 // Sizes in terminal cells.  There is no unit system and no scaling factor: the
 // unit is a cell.
 struct StyleDimensions {
@@ -61,6 +68,17 @@ struct StyleDimensions {
     int inputLineQueryBudget = 8;
 };
 
+enum class ScrollbarCellKind : std::uint8_t { Gutter, Track, Thumb };
+
+// A resolved scrollbar cell: what to draw, and what it IS.  The kind is
+// returned alongside the glyph because the caller colors track and thumb
+// differently, and re-deriving "is this a thumb row?" at the call site would
+// put the size rule in two places.
+struct ScrollbarCell {
+    std::string_view glyph;
+    ScrollbarCellKind kind = ScrollbarCellKind::Gutter;
+};
+
 class Style {
 public:
     Style() = default;
@@ -68,6 +86,7 @@ public:
     ScrollbarGlyphs scrollbar{};
     TreeGlyphs tree{};
     TabGlyphs tab{};
+    ToggleGlyphs toggle{};
     // Marks a label that did not fit.  U+2026.
     std::string truncation = "\xe2\x80\xa6";
     // The input line's prefix.  Its WIDTH is derived from this string (see
@@ -84,14 +103,14 @@ public:
     // open.  Independent of the typed query by design (doc/spec-input-line.md).
     int inputLineReservation() const;
 
-    // The glyph at `row` of a scrollbar column `trackHeight` rows tall.
+    // The cell at `row` of a scrollbar column `trackHeight` rows tall.
     //
     // Encodes the whole size rule in one place: size 0 means nothing is a thumb
     // and the column is all gutter, size 1 uses `single`, size 2 is top+bottom
     // with no body, and larger sizes are top, body..., bottom.  A thumb longer
     // than the track is clamped rather than trusted.
-    std::string_view scrollbarCell(int row, int thumbStart, int thumbSize,
-                                     int trackHeight) const;
+    ScrollbarCell scrollbarCell(int row, int thumbStart, int thumbSize,
+                                 int trackHeight) const;
 };
 
 }  // namespace ssg
