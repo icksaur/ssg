@@ -32,6 +32,13 @@ Normative commands owned by this feature:
 - `pane.split_horizontal`, `pane.split_vertical`, `pane.close`, `pane.next`, `pane.previous`, `pane.focus_left`, `pane.focus_right`, `pane.focus_up`, `pane.focus_down`
 - `panel.toggle`, `panel.focus`, `panel.show_files`, `panel.show_git_status`, `panel.next_provider`, `panel.previous_provider`
 - `view.toggle_distraction_free`
+- `style.define`
+
+`style.define` replaces named fields of the published `Style` section (chrome
+glyphs and chrome dimensions) from a partial name-to-value table, leaving
+unnamed fields unchanged; it is an init-script command with no keyboard or
+palette surface because it requires a typed table argument (see
+`doc/spec-style.md`).
 
 The `shell-layout` task owns the pane, panel, and distraction-free commands
 above. The later `prompt-status-surface` task owns `prompt.submit`,

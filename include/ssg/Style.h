@@ -1,8 +1,11 @@
 #pragma once
 
 #include <cstdint>
+#include <array>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 
 namespace ssg {
 
@@ -127,6 +130,53 @@ public:
     // Style is a published snapshot section (doc/spec-style.md Y4), so it
     // participates in equality and wire round-trips like any other section.
     bool operator==(Style const&) const = default;
+};
+
+// style.define's argument: a flat name->value table.  Keys are the same field
+// names the wire codec uses (scrollbar_track, tree_expanded, dim_header_height,
+// ...); a glyph value is the literal string, a `dim_` value is a decimal
+// integer.  The table may be PARTIAL -- a name absent from `values` keeps the
+// current style's value for that field (doc/spec-style.md).  This mirrors
+// theme.define's partial-table shape and is the one shape the Lua seam permits.
+struct StyleDefineArguments {
+    std::unordered_map<std::string, std::string> values;
+
+    friend bool operator==(StyleDefineArguments const&,
+                           StyleDefineArguments const&) = default;
+};
+
+struct StyleDefineError {
+    std::string message;
+
+    friend bool operator==(StyleDefineError const&,
+                           StyleDefineError const&) = default;
+};
+
+struct StyleDefineResult {
+    std::optional<StyleDefineError> error;
+    // The replacement style when accepted; default-constructed and unused when
+    // rejected -- all-or-nothing, no partial apply on error.
+    Style style;
+
+    [[nodiscard]] bool accepted() const noexcept { return !error.has_value(); }
+};
+
+// Applies style.define's table to `current`: replaces ONLY the named fields (an
+// omitted name keeps its current value).  The whole table is validated before
+// anything is applied, so a rejected call (unknown key, or a non-integer or
+// negative value for a `dim_` key) never partially mutates the result -- the
+// caller simply does not use `.style`.
+[[nodiscard]] StyleDefineResult applyStyleDefine(
+    Style const& current, StyleDefineArguments const& arguments);
+
+struct StyleCommandDescriptor {
+    std::string_view id;
+};
+
+struct StyleCommandSet {
+    std::array<StyleCommandDescriptor, 1> descriptors{{
+        {"style.define"},
+    }};
 };
 
 }  // namespace ssg

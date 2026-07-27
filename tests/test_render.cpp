@@ -1058,6 +1058,81 @@ TEST(theDocumentReplacementGlyphComesFromStyle) {
     ASSERT_FALSE(gridContains(grid, "\xef\xbf\xbd"));
 }
 
+// The whole point of Y4+style.define: an init-script command restyles the live
+// session.  Dispatch it and require both the published Style section and the
+// rendered chrome to follow -- proof the command mutates the one shared instance
+// the renderer reads.
+TEST(styleDefineRestylesTheLiveSessionChrome) {
+    auto root = uniqueRoot();
+    for (int i = 0; i < 40; ++i) {
+        std::ofstream{root / ("file-" + std::to_string(i) + ".txt")} << "x";
+    }
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(ssg::ClientId{1}, {"panel.toggle", runtime->revision(), {}});
+    (void)runtime->dispatch(ssg::ClientId{1}, {"tree.select_next", runtime->revision(), {}});
+    (void)runtime->dispatch(ssg::ClientId{1}, {"tree.activate", runtime->revision(), {}});
+
+    ssg::StyleDefineArguments args;
+    args.values = {{"scrollbar_track", ":"},
+                   {"scrollbar_single", "@"},
+                   {"scrollbar_top", "@"},
+                   {"scrollbar_body", "@"},
+                   {"scrollbar_bottom", "@"},
+                   {"tree_collapsed", "+ "},
+                   {"tree_expanded", "- "}};
+    auto const applied =
+        runtime->dispatch(ssg::ClientId{1}, {"style.define", runtime->revision(), args});
+    ASSERT_TRUE(applied.accepted());
+
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    // The published section carries the new glyphs.
+    ASSERT_EQ(snapshot->sections().style.scrollbar.track, std::string{":"});
+    ASSERT_EQ(snapshot->sections().style.tree.expanded, std::string{"- "});
+
+    // And the rendered screen shows them, with the shipped glyphs gone.
+    auto const grid = ssg::Renderer{}.render(*snapshot);
+    auto const& shell = snapshot->sections().shell;
+    ASSERT_TRUE(shell.panelScrollbar.has_value());
+    if (!shell.panelScrollbar) return;
+    int const gx = shell.panelScrollbar->x;
+    bool restyled = false;
+    for (int y = shell.panelScrollbar->y;
+         y < shell.panelScrollbar->y + shell.panelScrollbar->height; ++y) {
+        auto const& text = grid.at(gx, y).text;
+        if (text == "@" || text == ":") restyled = true;
+        ASSERT_NE(text, std::string{"#"});
+        ASSERT_NE(text, std::string{"|"});
+    }
+    ASSERT_TRUE(restyled);
+    ASSERT_TRUE(gridContains(grid, "- "));
+}
+
+// style.define is transactional at the field level too: a table with an unknown
+// key is rejected whole, and the live session keeps its previous style.
+TEST(styleDefineRejectionLeavesTheLiveStyleUnchanged) {
+    auto root = uniqueRoot();
+    std::ofstream{root / "a.txt"} << "x";
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+
+    ssg::StyleDefineArguments args;
+    args.values = {{"tree_expanded", "- "}, {"bogus_key", "z"}};
+    auto const rejected =
+        runtime->dispatch(ssg::ClientId{1}, {"style.define", runtime->revision(), args});
+    ASSERT_FALSE(rejected.accepted());
+
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    // The good key in the rejected table did NOT leak into the live style.
+    ASSERT_EQ(snapshot->sections().style.tree.expanded, ssg::Style{}.tree.expanded);
+}
+
 int main() {
     RUN(renderPaintsContentNotAccessibilityLabels);
     RUN(renderSegmentsOnlyVisibleLinesNotWholeDocument);
@@ -1087,6 +1162,8 @@ int main() {
     RUN(theCaretFollowsAScrolledQueryToTheEndOfTheVisibleText);
     RUN(theRendererDrawsChromeFromTheSnapshotStyleNotFromLiterals);
     RUN(theDocumentReplacementGlyphComesFromStyle);
+    RUN(styleDefineRestylesTheLiveSessionChrome);
+    RUN(styleDefineRejectionLeavesTheLiveStyleUnchanged);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;

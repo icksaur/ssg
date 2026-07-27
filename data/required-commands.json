@@ -174,6 +174,7 @@
     {"id":"settings.import_workspace","owner":"settings-model","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"theme.define","owner":"theme-model","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
     {"id":"theme.background","owner":"theme-model","required_capabilities":[],"lua":true,"keymap":true,"palette":true},
+    {"id":"style.define","owner":"style-model","required_capabilities":[],"lua":true,"keymap":false,"palette":false},
     {"id":"keymap.bind","owner":"keymap-model","required_capabilities":[],"lua":true,"keymap":false,"palette":false},
     {"id":"keymap.unbind","owner":"keymap-model","required_capabilities":[],"lua":true,"keymap":false,"palette":false},
     {"id":"follow_edits.resume","owner":"follow-edits","required_capabilities":[],"lua":true,"keymap":true,"palette":true},

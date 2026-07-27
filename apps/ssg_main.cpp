@@ -305,6 +305,21 @@ ssg::CommandHandlerResult dispatchInitScriptCommand(
                    ? ssg::CommandHandlerResult::success()
                    : ssg::CommandHandlerResult::failure(result.message);
     }
+    if (invocation.commandId == "style.define") {
+        // Same rule as theme.define: a bare call with no table is a caller
+        // mistake, not a request to apply an empty no-op style.
+        if (!invocation.arguments) {
+            return ssg::CommandHandlerResult::failure(
+                "style.define requires a style-table argument");
+        }
+        ssg::StyleDefineArguments arguments{*invocation.arguments};
+        auto result = runtime.dispatch(
+            kInitScriptClientId,
+            {"style.define", runtime.revision(), arguments});
+        return result.accepted()
+                   ? ssg::CommandHandlerResult::success()
+                   : ssg::CommandHandlerResult::failure(result.message);
+    }
     if (invocation.commandId == "keymap.bind") {
         if (!invocation.arguments) {
             return ssg::CommandHandlerResult::failure(

@@ -207,6 +207,7 @@ constexpr auto kExpectedCommands = std::to_array<ExpectedCommand>({
     {"settings.import_workspace", "settings-model"},
     {"theme.define", "theme-model"},
     {"theme.background", "theme-model"},
+    {"style.define", "style-model"},
     {"keymap.bind", "keymap-model"},
     {"keymap.unbind", "keymap-model"},
     {"follow_edits.resume", "follow-edits"},
@@ -230,11 +231,12 @@ constexpr auto kExpectedCategoryCounts =
         {"file", 15},      {"tab", 9},       {"external", 3},
         {"settings", 6},   {"follow_edits", 3}, {"diff", 3},
         {"theme", 2},
+        {"style", 1},
         {"keymap", 2},
         {"file_finder", 2},
     });
 
-static_assert(kExpectedCommands.size() == 181);
+static_assert(kExpectedCommands.size() == 182);
 
 std::optional<std::string> field(const std::string& object,
                                  const std::string& name) {
@@ -473,11 +475,11 @@ TEST(capabilityAndSurfaceExclusionsAreExact) {
             ASSERT_FALSE(command.keymap);
             ASSERT_FALSE(command.palette);
         } else if (command.id == "keymap.bind" ||
-                   command.id == "keymap.unbind") {
-            // Config-time commands: each requires a typed sequence/command/
-            // context payload that neither a bare keystroke nor a
-            // parameterless palette invocation can supply, so both are
-            // excluded -- same shape as the client/pointer-fulfilment
+                   command.id == "keymap.unbind" ||
+                   command.id == "style.define") {
+            // Config-time commands: each requires a typed payload that neither a
+            // bare keystroke nor a parameterless palette invocation can supply,
+            // so both are excluded -- same shape as the client/pointer-fulfilment
             // exclusions above. Lua-only (init.lua is the only caller).
             ASSERT_TRUE(command.requiredCapabilities.empty());
             ASSERT_TRUE(command.lua);

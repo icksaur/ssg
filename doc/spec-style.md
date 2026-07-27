@@ -310,6 +310,43 @@ that step is mechanical rather than a redesign.
 
 ## Status
 
+**style.define delivered — the spec is now fully implemented (Y1–Y4 plus the
+optional command).** An init-script command restyles the live session:
+`ssg.command("style.define", { scrollbar_track = ":", tree_expanded = "- " })`
+replaces those fields and repaints, leaving every unnamed field unchanged.
+
+**Design, mirroring theme.define exactly.** A `StyleDefineArguments` flat
+name-to-value table (the shape the Lua seam permits); `applyStyleDefine` validates
+the whole table before committing, so an unknown key or a non-integer/negative
+`dim_` value rejects the call whole and the live style is untouched
+(perturbation-verified: a rejected table's good key does not leak). The handler
+`styleCommand` mutates `Impl::style`, the one instance Y4 established; the next
+snapshot carries it and the renderer repaints. It is `lua:true, keymap:false,
+palette:false` — like `keymap.bind`, it needs a typed table no keystroke or
+parameterless palette entry can supply, so it exposes no invocation surface that
+would always fail.
+
+**The key names are shared with the wire codec on purpose.** `style.define`'s
+table keys are the same strings the Y4 wire codec uses (`scrollbar_track`,
+`dim_header_height`, ...), so a reader learns one vocabulary. The cost is that
+the field list now appears in three places -- the struct, the codec, and
+`applyStyleDefine`'s setter tables. The wire fidelity test pins the codec against
+the struct; the `applyStyleDefine` unit tests and the live-restyle runtime test
+pin the command. A field added without a corresponding setter would compile and
+simply be unsettable by `style.define` until noticed -- an acceptable gap given
+the alternative (a single reflection-like registry) is more machinery than the
+current field count warrants. Recorded so a future maintainer can revisit if the
+field set grows.
+
+**The command-catalog cascade touched the expected sites:**
+`StyleCommandSet` (Style.h), `p0CommandDescriptors` (EditorSessionBuilder.cpp),
+the handler + bind loop (presentation.cpp), the init-script glue (ssg_main.cpp),
+`data/required-commands.json`, both `test_required_commands.cpp` count/category
+lists (181 -> 182) and its lua/keymap/palette classification, `command_cases.h`
+(181 -> 182), and a normative-command mention in
+`doc/features/presentation-shell.md` (which the feature-spec/catalog union test
+requires).
+
 **Y1–Y4 delivered.** `Style` is a published snapshot section; the runtime owns
 the one instance (`EditorRuntime::Impl::style`), the shell layout and the
 renderer both read from it, and the two-instance divergence the earlier steps

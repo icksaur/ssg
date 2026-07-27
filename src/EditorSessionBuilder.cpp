@@ -70,6 +70,7 @@ std::vector<CommandDescriptor> p0CommandDescriptors() {
     appendIds(result, followEditsCommandSet().descriptors());
     appendIds(result, diffCommandSet().descriptors());
     appendIds(result, ThemeCommandSet{}.descriptors);
+    appendIds(result, StyleCommandSet{}.descriptors);
     appendIds(result, KeymapCommandSet{}.descriptors);
 
     constexpr std::array<std::string_view, 4> viewportCommands{

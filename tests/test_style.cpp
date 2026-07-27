@@ -192,6 +192,63 @@ TEST(chromeGlyphsAreConfigurableRatherThanCompiledIn) {
     ASSERT_EQ(style.dimensions.labelPadding, 3);
 }
 
+TEST(styleDefineReplacesOnlyTheNamedFields) {
+    ssg::Style base;
+    base.scrollbar.track = "|";
+    base.tree.expanded = "v";
+
+    ssg::StyleDefineArguments args;
+    args.values = {{"scrollbar_track", ":"}, {"dim_header_height", "3"}};
+    auto const result = ssg::applyStyleDefine(base, args);
+    ASSERT_TRUE(result.accepted());
+    if (!result.accepted()) return;
+
+    // The two named fields changed...
+    ASSERT_EQ(result.style.scrollbar.track, std::string{":"});
+    ASSERT_EQ(result.style.dimensions.headerHeight, 3);
+    // ...and everything else is untouched (partial table).
+    ASSERT_EQ(result.style.tree.expanded, std::string{"v"});
+    ASSERT_EQ(result.style.scrollbar.single, std::string{"#"});
+}
+
+TEST(styleDefineRejectsUnknownKeysWholesale) {
+    ssg::Style base;
+    base.scrollbar.track = "|";
+
+    ssg::StyleDefineArguments args;
+    // One good key and one unknown key: the whole call must reject, and the
+    // good key must NOT have leaked through (all-or-nothing).
+    args.values = {{"scrollbar_track", ":"}, {"not_a_style_field", "x"}};
+    auto const result = ssg::applyStyleDefine(base, args);
+    ASSERT_FALSE(result.accepted());
+    ASSERT_TRUE(result.error.has_value());
+}
+
+TEST(styleDefineRejectsMalformedAndNegativeDimensions) {
+    ssg::Style base;
+
+    ssg::StyleDefineArguments notInt;
+    notInt.values = {{"dim_header_height", "tall"}};
+    ASSERT_FALSE(ssg::applyStyleDefine(base, notInt).accepted());
+
+    ssg::StyleDefineArguments trailing;
+    trailing.values = {{"dim_header_height", "3px"}};
+    ASSERT_FALSE(ssg::applyStyleDefine(base, trailing).accepted());
+
+    ssg::StyleDefineArguments negative;
+    negative.values = {{"dim_header_height", "-1"}};
+    ASSERT_FALSE(ssg::applyStyleDefine(base, negative).accepted());
+}
+
+TEST(styleDefineWithAnEmptyTableIsANoOp) {
+    ssg::Style base;
+    base.scrollbar.track = "%";
+    auto const result = ssg::applyStyleDefine(base, ssg::StyleDefineArguments{});
+    ASSERT_TRUE(result.accepted());
+    if (!result.accepted()) return;
+    ASSERT_TRUE(result.style == base);
+}
+
 }  // namespace
 
 int main() {
@@ -203,6 +260,10 @@ int main() {
     RUN(sigilWidthIsMeasuredFromTheSigilNotDeclaredBesideIt);
     RUN(inputLineReservationTracksTheConfiguredSigilAndBudget);
     RUN(chromeGlyphsAreConfigurableRatherThanCompiledIn);
+    RUN(styleDefineReplacesOnlyTheNamedFields);
+    RUN(styleDefineRejectsUnknownKeysWholesale);
+    RUN(styleDefineRejectsMalformedAndNegativeDimensions);
+    RUN(styleDefineWithAnEmptyTableIsANoOp);
     std::cout << "Passed: " << passed << " Failed: " << failed << '\n';
     return failed == 0 ? 0 : 1;
 }
