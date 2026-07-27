@@ -2,32 +2,42 @@
 
 ## Status (verified against code)
 
-R1-R6 are delivered and the machinery still exists, under different names than
-this document originally used: `Viewport::listScrollView` (not
-`compute_list_scroll_view`) and `Viewport::scrollbarMetrics`. Verified by
-rendering both gutters through the real renderer: the document draws
-`#||||||||||||||||||||`, the panel draws `######|||||||||||||||` -- same glyphs,
-same semantic roles, differing only in thumb size, which is proportional and
-correct.
+**S1-S4 are delivered.** All three scrollable surfaces -- document, picker, and
+panel -- now share one offset type, one clamp rule, one painter, and one
+routing catalog, and all three answer wheel, gutter click, and thumb drag.
+Verified in the real binary over a PTY, not only in tests: the editor wheel
+scrolls line 0000 -> 0056 and back; a panel gutter click shows file-00..19 at
+the top and file-50..70 at the bottom, and a live drag follows the pointer; a
+picker gutter click changes the visible candidate window.
 
-**Sharing is partial, and the split matters.** `scrollbarMetrics` (thumb
-geometry) genuinely serves all three. `listScrollView` (window + clamp) serves
-the tree and the picker, but **not** the editor: `Viewport::compute`
-(`src/Viewport.cpp:578-584`) computes its own `maximumFirst` and clamps
-`requestedFirstVisualRow` itself, then calls `scrollbarMetrics` directly. So the
-editor's clamp is a second implementation of the one rule `listScrollView`
-exists to own -- a real duplication, not a naming difference.
+Corrections made against this document during implementation, recorded because
+they change what a reader can assume:
 
-**One piece of this document's Design was never planned or built.** The
-"Scroll-command targeting" section below specifies an optional region target on
-the scroll arguments. No R-step ever implemented it: `ScrollFractionArguments`
-(`include/ssg/Keymap.h:222`) carries only `{numerator, denominator}` and
-`view.scroll_to_fraction` mutates the editor offset unconditionally. That
-omission is the reason the panel and picker gutters are not draggable --
-`apps/pointer_routing.cpp:24` says so outright ("Panel/palette gutters are not
-draggable yet") -- because there is no command such a drag could dispatch.
-
-The S-steps at the end of this document close that gap.
+- The editor had **four** duplicate clamps, not one: three inside
+  `Viewport::compute` (wrapped-diff, wrapped, unwrapped paths) and a fourth in
+  `Viewport::scrollBy`. All now route through `ScrollOffset`.
+- **S2 deviation, deliberate.** The editor's `view.scroll_lines` and
+  `scroll_pages` do NOT clamp eagerly at the top. Bounding them requires the
+  document's total visual row count, which is O(document) with word wrap on, on
+  a path that fires per wheel notch. The editor keeps its deferred clamp; the
+  clamp *rule* is shared, the *timing* is not. The tree and picker clamp eagerly
+  because their totals (node count, ranked size) are free.
+- Two real overflow bugs were found in the editor's scroll handlers: raw
+  `int64` arithmetic on wire-decoded payloads, which is UB before any clamp can
+  run. `ScrollOffset::shiftUnbounded` saturates instead.
+- `listScrollView` with `viewportRows == 0` reports
+  `maximumFirstRow == totalItems`, not 0. A caller bounding an offset with those
+  metrics lands out of range; `ScrollOffset` checks the height first. Found by a
+  failing oracle, and now noted at the call site.
+- `PointerDispatch` returned commands only, so a picker gutter drag was
+  **inexpressible** -- its offset is client-owned and must not round-trip. It
+  now carries an optional `ClientScroll` the loop applies locally.
+- `scrollTreeToFraction` and the pre-existing `scrollTree` both called
+  `TreeModel::viewState()`, which rebuilds every provider's view. On a drag that
+  is a per-motion allocation storm. Both now use `activeVisibleNodeCount()`.
+- A test named `routePointerPanelAndPaletteScrollbarsAreNoOps` asserted the
+  panel and picker gutters dispatch nothing -- it pinned the reported defect as
+  intended behavior. Replaced by the catalog-driven test.
 
 ## Goal
 
@@ -399,33 +409,29 @@ scroll commands.
 
 ## Consolidation (S1-S4)
 
-### What is already shared, and what is not
+### What was shared before this work, and what was not
 
-Verified in code, because the answer changes the shape of the work:
+Recorded because it explains why the fix has the shape it does. All of it is
+now shared; this is the starting position, not the current one.
 
-- **Shared already:** the thumb geometry (`Viewport::scrollbarMetrics`, used by
-  all three); the gutter reservation; the painter (`paintScrollGutter`,
+- **Shared already:** the thumb geometry (`Viewport::scrollbarMetrics`); the
+  gutter reservation; the painter (`paintScrollGutter`,
   `src/Renderer.cpp:230`); the hit classification (all of `EditorScrollbar`,
-  `PanelScrollbar`, `PaletteScrollbar` are published by `src/HitTester.cpp`);
-  and the wheel (`route_wheel` handles all three).
-- **Shared by two of three:** `Viewport::listScrollView` -- the window-and-clamp
-  rule -- is called by the trees (`src/runtime/snapshot.cpp:239,267,281`) and
-  the picker (`src/PaletteSearcher.cpp:104`,
-  `apps/ssg_main.cpp:810,821`). The **editor does not use it**:
-  `Viewport::compute` clamps with its own `maximumFirst` arithmetic. Two
-  implementations of one rule.
+  `PanelScrollbar`, `PaletteScrollbar`); and the wheel.
+- **Shared by two of three:** `Viewport::listScrollView` -- the
+  window-and-clamp rule -- served the trees and the picker. The editor did not
+  use it, clamping with its own arithmetic in four places.
 - **Not shared:** the *offset state* and the *operations on it*. Three
-  independent integers -- `requestedFirstVisualRow`, `treeFirstVisible`
-  (`src/runtime/editor_runtime_internal.h:194`), and the client's
-  `window.firstVisible` (`apps/ssg_main.cpp:944`) -- each mutated by bespoke
-  handlers. And the *pointer routing*: `route_pointer` handles press and drag
-  for `EditorScrollbar` only.
+  independent integers, each mutated by bespoke handlers, with the tree's and
+  picker's scroll-by-delta blocks near-identical. And the *pointer routing*:
+  press and drag were handled for `EditorScrollbar` only.
 
-So this is not "three scrollbar implementations to merge" -- drawing and thumb
-geometry are already one implementation. What diverged is the clamp rule (twice)
-and everything that owns or mutates an offset, which is precisely the part no
+So this was never "three scrollbar implementations to merge" -- drawing and
+thumb geometry were already one. What diverged was the clamp rule and
+everything that owned or mutated an offset, which is precisely the part no
 shared *function* could capture: a pure function cannot own state, so each
-caller grew its own field and its own mutators.
+caller grew its own field and its own mutators. That is why the fix is a type
+(`ScrollOffset`) and a catalog, not another function.
 
 ### Mechanism: a state-owning ScrollOffset, not a bigger function
 
@@ -510,9 +516,8 @@ This is the piece the original Design specified and no R-step built.
 - **S-I2** Every scrollable surface responds to wheel, gutter click, and thumb
   drag. Enforced by a catalog-driven test, not by review.
 - **S-I3** No layer computes thumb geometry or window bounds except
-  `listScrollView` / `scrollbarMetrics`. This is **not** true today -- the
-  editor's clamp in `Viewport::compute` is a second implementation -- and S2 is
-  what makes it true.
+  `listScrollView` / `scrollbarMetrics`. Established by S2, which removed the
+  editor's four private clamps.
 - **S-I4** An explicit scroll never reveals the selection; a selection move
   always does.
 - **S-I5** The picker's offset stays client-owned. No command dispatches picker
@@ -536,15 +541,16 @@ This is the piece the original Design specified and no R-step built.
 - Retiring the now-redundant `tree.scroll` is tempting but is a command-catalog
   cascade touching six sites. Keep it; it is the wheel's path.
 
-## Plan (consolidation)
+## Plan (consolidation) -- all delivered
 
-| # | Step | Files | Oracle |
-|---|------|-------|--------|
-| S1 | Add `ScrollOffset` owning `firstVisible` with `byLines`/`byPages`/`toFraction`/`revealSelection`/`resolve`, each implemented via `listScrollView`. Pure addition, no callers yet | `include/ssg/Viewport.h`, `src/Viewport.cpp`, `tests/test_viewport.cpp` | ref-impl: for a table of (total, rows, offset, selected), every `ScrollOffset` operation equals the existing hand-called `listScrollView` result. Perturb: break one operation, table fails |
-| S2 | Route the three offsets through `ScrollOffset`, including replacing `Viewport::compute`'s own `maximumFirst` clamp so the editor stops being a second implementation. Behavior-preserving | `src/Viewport.cpp`, `src/runtime/presentation.cpp`, `src/runtime/snapshot.cpp`, `apps/ssg_main.cpp` | per region, asserted directly rather than relying on the suite: over-scrolling clamps to the same `maximumFirstRow` as before; an explicit scroll leaves the selection off-screen; a selection move reveals minimally. Plus the existing suite green with no test edits. Perturb: an off-by-one in the shared clamp must fail all three regions, proving they now share it |
-| S3 | Add the optional region target to the scroll arguments and honour it for the panel; add the scrollable-region catalog; extend `PointerDispatch` with a client-local `scrollFraction`; route press and drag for `PanelScrollbar` and `PaletteScrollbar` | `include/ssg/Keymap.h`, `src/Protocol.cpp`, `src/runtime/presentation.cpp`, `apps/pointer_routing.h`, `apps/pointer_routing.cpp`, `apps/ssg_main.cpp` | catalog-driven: every descriptor's gutter yields either a command or a `scrollFraction` on press AND on drag -- never nothing. Perturb: drop one region's routing, test fails. Protocol round-trip for the new field. Absent target still means editor. Invariant: no descriptor whose target is the picker emits a command (S-I5) |
-| S4 | Record the delivered state: mark the S-steps done here, and confirm `doc/spec-ux.md`'s gesture invariant is satisfied rather than aspirational | `doc/spec-scroll.md`, `doc/spec-ux.md` | doc-consistency tests; the S-I2 catalog test from S3 is the evidence the invariant is true |
+| # | Step | Status | Oracle that pins it |
+|---|------|--------|---------------------|
+| S1 | `ScrollOffset` owning `firstVisible`, operations via `listScrollView` | done | `tests/test_scroll_offset.cpp` -- compared against an independent reimplementation written from the rule, not the code |
+| S2 | Route the editor, tree and picker offsets through it, including the editor's four private clamps | done (with the deferred-clamp deviation above) | an off-by-one in the one shared clamp fails `test_viewport`, `test_runtime_editing`, `test_runtime_presentation`, `test_runtime_navigation` and `test_scroll_offset` together -- proving they share it |
+| S3 | Region-targeted scroll commands, the scrollable-region catalog, `ClientScroll`, press+drag on all three gutters | done | `everyScrollableGutterAnswersPressAndDrag` and `noClientOwnedSurfaceEverDispatchesAScrollCommand` in `tests/test_ssg_app.cpp`; deleting a catalog entry fails four ways |
+| S4 | Record the delivered state; confirm `doc/spec-ux.md`'s gesture invariant is satisfied | done | the S3 catalog test IS the evidence, plus PTY verification of all three surfaces |
 
-Acceptance: a user can drag the file-explorer thumb and the git-status thumb and
-the picker thumb, and each scrolls live exactly as the document's does; clicking
-any gutter jumps. **Visual output -- requires signoff, not assumed.**
+Acceptance met: a user can click or drag the file-explorer, git-status and
+picker gutters and each scrolls exactly as the document's does.
+**Visual signoff outstanding** -- the behavior is verified mechanically, but the
+user has not yet driven it.

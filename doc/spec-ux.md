@@ -163,8 +163,7 @@ document exists to prevent:
   missing scrollbar.
 - **The same gestures, everywhere.** The wheel scrolls the surface under the
   pointer. Clicking a gutter jumps to that position. Dragging a thumb scrolls
-  live. A surface that responds to one of these responds to all of them.
-- **Selection may leave the viewport.** An explicit scroll gesture (wheel,
+  live. A surface that responds to one of these responds to all of them.- **Selection may leave the viewport.** An explicit scroll gesture (wheel,
   gutter click, thumb drag, page keys) is the one interaction that decouples
   the view from the selection, and never snaps back. Moving the selection, by
   contrast, always reveals it.
@@ -184,8 +183,11 @@ above true of all three surfaces.
   scrollbar columns are always reserved, so text does not reflow when a thumb
   appears or disappears.
 - **Every scrollable surface answers the same gestures.** Wheel, gutter click,
-  and thumb drag work on the document, the picker, and the panel alike. A
-  surface that scrolls but ignores a gesture is a defect, not a design choice.
+  and thumb drag work on the document, the picker, and the panel alike. Held by
+  construction: one catalog (`ssg::app::scrollable_regions()`) drives both the
+  wheel and the gutter routing, and a test asserts every entry answers press and
+  drag. A surface that scrolls but ignores a gesture is a defect, not a design
+  choice.
 - **One scrollbar appearance.** All scrollbars are painted by one function from
   one pair of semantic roles; only thumb size varies.
 - Layout is a pure function of its request and shell state. The same request
