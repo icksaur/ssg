@@ -1,5 +1,7 @@
 #include "ssg/ShellState.h"
 
+#include "ssg/GraphemeLayout.h"
+
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -8,6 +10,13 @@
 
 namespace ssg {
 namespace {
+
+// Width of a label in terminal CELLS.  Layout budgets are cell counts, so
+// measuring bytes would mis-size any label -- or any configured style glyph --
+// outside ASCII.
+int displayCells(std::string_view text) {
+    return static_cast<int>(GraphemeLayout{}.computeRun(text).totalCells);
+}
 
 struct PaneNode {
     PaneId id;
@@ -63,33 +72,33 @@ bool canLayout(const PaneNode& node, Rect rect) {
 }
 
 void layoutPanes(const PaneNode& node, Rect rect,
-                  std::vector<PaneGeometry>& output) {
+                  std::vector<PaneGeometry>& output, int gutterWidth) {
     if (node.leaf()) {
         output.push_back({
             node.id,
             rect,
-            {rect.x, rect.y, rect.width - 1, rect.height},
-            {rect.right() - 1, rect.y, 1, rect.height},
+            {rect.x, rect.y, rect.width - gutterWidth, rect.height},
+            {rect.right() - gutterWidth, rect.y, gutterWidth, rect.height},
         });
         return;
     }
     if (node.axis == SplitAxis::Vertical) {
         const int firstWidth = rect.width / 2;
         layoutPanes(*node.first, {rect.x, rect.y, firstWidth, rect.height},
-                     output);
+                     output, gutterWidth);
         layoutPanes(*node.second,
                      {rect.x + firstWidth, rect.y,
                       rect.width - firstWidth, rect.height},
-                     output);
+                     output, gutterWidth);
         return;
     }
     const int firstHeight = rect.height / 2;
     layoutPanes(*node.first, {rect.x, rect.y, rect.width, firstHeight},
-                 output);
+                 output, gutterWidth);
     layoutPanes(*node.second,
                  {rect.x, rect.y + firstHeight, rect.width,
                   rect.height - firstHeight},
-                 output);
+                 output, gutterWidth);
 }
 
 void addNode(ShellViewState& view, ShellNodeKind kind, std::string id,
@@ -396,11 +405,15 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
     view.focus = state.focus();
     const bool distractionFree = state.impl_->distractionFree;
     Rect editor{0, 0, request.viewport.columns, request.viewport.rows};
+    const int gutterWidth = request.style.dimensions.scrollbarGutterWidth;
 
     if (!distractionFree) {
-        view.header = Rect{0, 0, request.viewport.columns, 1};
-        view.footer =
-            Rect{0, request.viewport.rows - 1, request.viewport.columns, 1};
+        const int headerHeight = request.style.dimensions.headerHeight;
+        const int footerHeight = request.style.dimensions.footerHeight;
+        const int tabBarHeight = request.style.dimensions.tabBarHeight;
+        view.header = Rect{0, 0, request.viewport.columns, headerHeight};
+        view.footer = Rect{0, request.viewport.rows - footerHeight,
+                            request.viewport.columns, footerHeight};
         addNode(view, ShellNodeKind::Header, "header", "Status header",
                  *view.header, SemanticRole::Header);
         addNode(view, ShellNodeKind::Footer, "footer", "Status footer",
@@ -451,8 +464,7 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
                 std::max(0, drawable - request.style.sigilWidth());
             std::string query = request.style.inputLineSigil +
                                  visibleQueryTail(request.inputLineQuery, textRoom);
-            const int queryWidth =
-                std::min(drawable, static_cast<int>(query.size()));
+            const int queryWidth = std::min(drawable, displayCells(query));
             addNode(view, ShellNodeKind::HeaderField, "input_line.query",
                      "Input line", {headerX, view.header->y, queryWidth, 1},
                      SemanticRole::Prompt, std::move(query));
@@ -460,7 +472,7 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
             if (!request.inputLineGhost.empty() && headerX < headerRight) {
                 const int ghostWidth =
                     std::min(headerRight - headerX,
-                             static_cast<int>(request.inputLineGhost.size()));
+                             displayCells(request.inputLineGhost));
                 addNode(view, ShellNodeKind::HeaderField, "input_line.ghost",
                          "Input line completion",
                          {headerX, view.header->y, ghostWidth, 1},
@@ -482,7 +494,7 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
         for (auto action = request.footerActions.rbegin();
              action != request.footerActions.rend(); ++action) {
             const int width =
-                std::min(actionX, static_cast<int>(action->accessibleLabel.size()) +
+                std::min(actionX, displayCells(action->accessibleLabel) +
                                       request.style.dimensions.labelPadding);
             if (width <= 0 || action->accessibleLabel.empty()) continue;
             actionX -= width;
@@ -506,7 +518,8 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
                 request.style.dimensions.panelTargetWidth,
                 request.viewport.columns -
                     request.style.dimensions.editorMinimumWidth);
-            view.panel = Rect{0, 1, panelWidth, request.viewport.rows - 2};
+            view.panel = Rect{0, headerHeight, panelWidth,
+                               request.viewport.rows - headerHeight - footerHeight};
             addNode(view, ShellNodeKind::Panel, "panel", "Side panel",
                      *view.panel, SemanticRole::PanelInactive);
             addNode(view, ShellNodeKind::PanelProvider, "panel.provider",
@@ -517,18 +530,19 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
             // Reserve the tree's scrollbar gutter: the right column over the tree
             // content rows (below the provider-label row). Content is the panel
             // minus this column, so tree text width never changes with the thumb.
-            if (panelWidth > 1 && view.panel->height > 1) {
-                view.panelScrollbar = Rect{panelWidth - 1, view.panel->y + 1, 1,
-                                            view.panel->height - 1};
+            if (panelWidth > gutterWidth && view.panel->height > 1) {
+                view.panelScrollbar =
+                    Rect{panelWidth - gutterWidth, view.panel->y + 1,
+                         gutterWidth, view.panel->height - 1};
                 addNode(view, ShellNodeKind::Scrollbar, "panel.scrollbar",
                          "Panel scrollbar", *view.panelScrollbar,
                          SemanticRole::ScrollbarTrack);
             }
         }
 
-        editor = {panelWidth, 1, request.viewport.columns - panelWidth,
-                  request.viewport.rows - 2};
-        view.tabBar = Rect{editor.x, editor.y, editor.width, 1};
+        editor = {panelWidth, headerHeight, request.viewport.columns - panelWidth,
+                  request.viewport.rows - headerHeight - footerHeight};
+        view.tabBar = Rect{editor.x, editor.y, editor.width, tabBarHeight};
         addNode(view, ShellNodeKind::TabBar, "tabs", "Open tabs",
                  *view.tabBar, SemanticRole::TabInactive);
         int tabX = view.tabBar->x;
@@ -539,23 +553,23 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
                           : tab.title;
             const int width =
                 std::min(view.tabBar->right() - tabX,
-                         std::max(1, static_cast<int>(display.size()) +
+                         std::max(1, displayCells(display) +
                                           request.style.dimensions.labelPadding));
             if (width <= 0 || tab.accessibleLabel.empty()) break;
             addNode(view, ShellNodeKind::Tab, "tab." + std::to_string(i),
                      tab.accessibleLabel,
-                     {tabX, view.tabBar->y, width, 1},
+                     {tabX, view.tabBar->y, width, tabBarHeight},
                      tab.active ? SemanticRole::TabActive :
                                   SemanticRole::TabInactive,
                      display);
             view.tabHits.push_back(
-                TabHit{{tabX, view.tabBar->y, width, 1},
+                TabHit{{tabX, view.tabBar->y, width, tabBarHeight},
                        static_cast<std::uint32_t>(i)});
             tabX += width;
         }
 
-        editor.y += 1;
-        editor.height -= 1;
+        editor.y += tabBarHeight;
+        editor.height -= tabBarHeight;
         if (request.reservedPromptRows >= editor.height) {
             return {ShellLayoutError{
                         ShellLayoutErrorCode::ViewportTooSmall,
@@ -573,13 +587,13 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
     }
 
     if (canLayout(*state.impl_->root, editor)) {
-        layoutPanes(*state.impl_->root, editor, view.panes);
+        layoutPanes(*state.impl_->root, editor, view.panes, gutterWidth);
     } else {
         view.panes.push_back({
             state.impl_->active,
             editor,
-            {editor.x, editor.y, editor.width - 1, editor.height},
-            {editor.right() - 1, editor.y, 1, editor.height},
+            {editor.x, editor.y, editor.width - gutterWidth, editor.height},
+            {editor.right() - gutterWidth, editor.y, gutterWidth, editor.height},
         });
     }
 

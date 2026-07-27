@@ -677,6 +677,66 @@ TEST(shellLayoutTakesItsDimensionsAndSigilFromStyle) {
     ASSERT_TRUE(sawStyledSigil);
 }
 
+// The chrome heights and the gutter width were exposed as style dimensions but
+// silently ignored -- configurable in appearance only.  These pin them to real
+// geometry so the struct cannot drift back into advertising fields it drops.
+TEST(chromeHeightsAndGutterWidthAreHonoured) {
+    ShellState state;
+    state.togglePanel();
+
+    auto tall = request(100, 24);
+    tall.style.dimensions.headerHeight = 2;
+    tall.style.dimensions.footerHeight = 3;
+    tall.style.dimensions.tabBarHeight = 2;
+    auto tallResult = computeShellLayout(tall, state);
+    ASSERT_TRUE(tallResult.accepted());
+    if (!tallResult.accepted()) return;
+    assertRect(*tallResult.view->header, {0, 0, 100, 2});
+    assertRect(*tallResult.view->footer, {0, 21, 100, 3});
+    // The tab bar starts below the header, and the panel spans what is left
+    // between header and footer.
+    ASSERT_EQ(tallResult.view->tabBar->y, 2);
+    ASSERT_EQ(tallResult.view->tabBar->height, 2);
+    ASSERT_EQ(tallResult.view->panel->y, 2);
+    ASSERT_EQ(tallResult.view->panel->height, 19);
+    // Content begins after header + tab bar.
+    ASSERT_EQ(tallResult.view->panes.front().content.y, 4);
+
+    auto wideGutter = request(100, 24);
+    wideGutter.style.dimensions.scrollbarGutterWidth = 3;
+    auto gutterResult = computeShellLayout(wideGutter, state);
+    ASSERT_TRUE(gutterResult.accepted());
+    if (!gutterResult.accepted()) return;
+    auto const& pane = gutterResult.view->panes.front();
+    ASSERT_EQ(pane.scrollbar.width, 3);
+    ASSERT_EQ(pane.content.width, pane.frame.width - 3);
+    ASSERT_EQ(gutterResult.view->panelScrollbar->width, 3);
+}
+
+// Layout budgets are cell counts, so a label's width must be its display width.
+// Byte counts over-measure every non-ASCII label -- and style glyphs are now
+// configurable, so they can be non-ASCII too.
+TEST(labelWidthsAreMeasuredInCellsNotBytes) {
+    ShellState state;
+
+    auto ascii = request(100, 24);
+    ascii.tabs = {{"ab", "ab tab", true}};
+    auto asciiResult = computeShellLayout(ascii, state);
+    ASSERT_TRUE(asciiResult.accepted());
+    if (!asciiResult.accepted()) return;
+
+    // Two fullwidth characters: 4 bytes each, 2 cells each.  Measured in cells
+    // this tab is 4 wide plus padding; measured in bytes it would be 8.
+    auto wide = request(100, 24);
+    wide.tabs = {{"\xef\xbc\xa1\xef\xbc\xa2", "wide tab", true}};
+    auto wideResult = computeShellLayout(wide, state);
+    ASSERT_TRUE(wideResult.accepted());
+    if (!wideResult.accepted()) return;
+
+    ASSERT_EQ(asciiResult.view->tabHits.front().rect.width, 4);
+    ASSERT_EQ(wideResult.view->tabHits.front().rect.width, 6);
+}
+
 int main() {
     RUN(handAuthoredGeometryGoldens);
     RUN(viewportAndPromptErrorsAreTyped);
@@ -699,6 +759,8 @@ int main() {
     RUN(nonOverlapAndCardinalityProperties);
     RUN(statusFieldManifestHasExactOrderAndLabels);
     RUN(shellLayoutTakesItsDimensionsAndSigilFromStyle);
+    RUN(chromeHeightsAndGutterWidthAreHonoured);
+    RUN(labelWidthsAreMeasuredInCellsNotBytes);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << '\n';
     return failed == 0 ? 0 : 1;
 }

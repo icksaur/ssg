@@ -347,6 +347,23 @@ fullwidth sigil yields 2, a narrow one yields 1, with no second constant to keep
 in step. This retires the `"> "` / `kInputLineSigilWidth` pair that Considerations
 flagged as certain to drift.
 
+**Review findings folded.** The code review returned one MUST and two SHOULDs,
+all verified in code before folding:
+
+- Layout budgeted in cells but measured labels in **bytes**
+  (`query.size()`, the ghost, the tab title, the footer action). Harmless while
+  every glyph was ASCII; making glyphs configurable made it reachable, so a
+  fullwidth sigil or a non-ASCII tab title would have mis-sized its region.
+  All four now measure through `displayCells`, which is `GraphemeLayout`.
+- `headerHeight`, `footerHeight`, `tabBarHeight` and `scrollbarGutterWidth` were
+  **exposed but ignored** -- the worst kind of API, one that accepts a value and
+  drops it. They are now wired through the header, footer, panel, tab bar, tab
+  hit rects, pane content and both scrollbar gutters (including `layoutPanes`,
+  which held its own copy of the gutter literal). Defaults are unchanged, so the
+  shipped geometry is identical.
+
+Both fixes are pinned by tests and perturbation-verified.
+
 ## Rationale
 
 The request asked for scrollbars, tabs, tree, header and footer to share a style
