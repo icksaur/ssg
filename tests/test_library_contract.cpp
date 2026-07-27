@@ -19,9 +19,9 @@
 //
 // M11-1: the TUI screen is a pure function of the production EditorRuntime's
 // SessionSnapshot.  These tests drive the REAL runtime (not a hand-authored
-// fixture model) through a fixed script and compare render(snapshot).canonical()
-// to a checked-in golden, for the normal, prompt, and too-small screens.  Set
-// SSG_REGEN_GOLDEN=1 to (re)write the goldens after an intentional change.
+// fixture model) through a fixed script and assert the screen contract:
+// geometry, no uninitialised cells, theme-sourced colour, expected content, and
+// render determinism.  They deliberately do not pin an exact appearance.
 
 namespace {
 
@@ -54,26 +54,40 @@ std::unique_ptr<ssg::EditorRuntime> makeRuntime(fs::path const& root) {
     return runtime;
 }
 
-std::string readFile(char const* path) {
-    std::ifstream input{path, std::ios::binary};
-    return {std::istreambuf_iterator<char>{input},
-            std::istreambuf_iterator<char>{}};
+// Screen invariants that hold for every rendered production screen, replacing
+// three full-screen goldens.  The goldens pinned an exact appearance nobody had
+// approved: every colour, glyph, or width change re-blessed 363 fixture lines,
+// and a diff of those lines told a reviewer nothing about what had broken.
+// These assert what the contract actually claims -- correct geometry, no
+// uninitialised cells, and colours drawn only from the 16-entry theme (I22).
+void assertScreenInvariants(ssg::CellGrid const& grid, int columns, int rows) {
+    ASSERT_EQ(grid.size.columns, columns);
+    ASSERT_EQ(grid.size.rows, rows);
+    ASSERT_EQ(grid.cells.size(),
+              static_cast<std::size_t>(columns) * static_cast<std::size_t>(rows));
+    for (int row = 0; row < rows; ++row) {
+        for (int column = 0; column < columns; ++column) {
+            auto const& cell = grid.at(column, row);
+            // A continuation cell of a wide glyph is deliberately empty; every
+            // other cell must carry text, so no cell is left uninitialised.
+            if (!cell.continuation) ASSERT_FALSE(cell.text.empty());
+            ASSERT_TRUE(cell.foreground < ssg::kThemePaletteSize);
+            ASSERT_TRUE(cell.background < ssg::kThemePaletteSize);
+        }
+    }
 }
 
-// Compare `actual` to the golden at `path`, or rewrite the golden when
-// SSG_REGEN_GOLDEN is set.  Returns true on match.
-bool matchesGolden(std::string const& actual, char const* path) {
-    if (std::getenv("SSG_REGEN_GOLDEN") != nullptr) {
-        std::ofstream{path, std::ios::binary} << actual;
-        return true;
+// Whether the rendered screen contains `needle` on any row.
+bool screenContains(ssg::CellGrid const& grid, std::string_view needle) {
+    for (int row = 0; row < grid.size.rows; ++row) {
+        std::string line;
+        for (int column = 0; column < grid.size.columns; ++column) {
+            auto const& cell = grid.at(column, row);
+            if (!cell.continuation) line += cell.text;
+        }
+        if (line.find(needle) != std::string::npos) return true;
     }
-    auto expected = readFile(path);
-    if (actual != expected) {
-        std::cerr << "  golden mismatch for " << path << "\n--- actual ---\n"
-                  << actual << "--- end ---\n";
-        return false;
-    }
-    return true;
+    return false;
 }
 
 // M11-4: the client's PaletteReport is a pure, bounded derived view built ONLY by
@@ -202,7 +216,7 @@ TEST(renderedPaletteLabelsTraceToPublishedCandidates) {
     fs::remove_all(root);
 }
 
-TEST(productionRuntimeNormalScreenMatchesGolden) {
+TEST(productionRuntimeNormalScreenSatisfiesTheScreenContract) {
     auto root = uniqueRoot("normal");
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
@@ -215,13 +229,16 @@ TEST(productionRuntimeNormalScreenMatchesGolden) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto grid = ssg::Renderer{}.render(*snapshot);
-    ASSERT_TRUE(matchesGolden(grid.canonical(), SSG_CONTRACT_NORMAL_GOLDEN));
+    assertScreenInvariants(grid, 80, 24);
+    // The opened document's content and name reach the screen.
+    ASSERT_TRUE(screenContains(grid, "first line"));
+    ASSERT_TRUE(screenContains(grid, "alpha.txt"));
     // The screen is a pure function of the snapshot: a second render is identical.
     ASSERT_EQ(ssg::Renderer{}.render(*snapshot).canonical(), grid.canonical());
     fs::remove_all(root);
 }
 
-TEST(productionRuntimePaletteScreenMatchesGolden) {
+TEST(productionRuntimePaletteScreenSatisfiesTheScreenContract) {
     auto root = uniqueRoot("palette");
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
@@ -245,12 +262,16 @@ TEST(productionRuntimePaletteScreenMatchesGolden) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto grid = ssg::Renderer{}.render(*snapshot);
-    ASSERT_TRUE(matchesGolden(grid.canonical(), SSG_CONTRACT_PALETTE_GOLDEN));
+    assertScreenInvariants(grid, 80, 24);
+    // The reported query and candidate rows are projected onto the screen.
+    ASSERT_TRUE(screenContains(grid, "sa"));
+    ASSERT_TRUE(screenContains(grid, "Save File"));
+    ASSERT_TRUE(screenContains(grid, "Save As"));
     ASSERT_EQ(ssg::Renderer{}.render(*snapshot).canonical(), grid.canonical());
     fs::remove_all(root);
 }
 
-TEST(productionRuntimeTooSmallScreenMatchesGolden) {
+TEST(productionRuntimeTooSmallScreenSatisfiesTheScreenContract) {
     auto root = uniqueRoot("small");
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
@@ -263,7 +284,10 @@ TEST(productionRuntimeTooSmallScreenMatchesGolden) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto grid = ssg::Renderer{}.render(*snapshot);
-    ASSERT_TRUE(matchesGolden(grid.canonical(), SSG_CONTRACT_TOO_SMALL_GOLDEN));
+    // Below the supported minimum the library still emits a well-formed grid at
+    // the terminal's real size, carrying the typed too-small state.
+    assertScreenInvariants(grid, 24, 3);
+    ASSERT_TRUE(screenContains(grid, "too small"));
     fs::remove_all(root);
 }
 
@@ -326,9 +350,9 @@ TEST(deltaReplayReconstructsTheSameSnapshotAndGrid) {
 }
 
 int main() {
-    RUN(productionRuntimeNormalScreenMatchesGolden);
-    RUN(productionRuntimePaletteScreenMatchesGolden);
-    RUN(productionRuntimeTooSmallScreenMatchesGolden);
+    RUN(productionRuntimeNormalScreenSatisfiesTheScreenContract);
+    RUN(productionRuntimePaletteScreenSatisfiesTheScreenContract);
+    RUN(productionRuntimeTooSmallScreenSatisfiesTheScreenContract);
     RUN(deltaReplayReconstructsTheSameSnapshotAndGrid);
     RUN(paletteReportIsAPureFunctionOfCandidatesAndQuery);
     RUN(renderedPaletteLabelsTraceToPublishedCandidates);

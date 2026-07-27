@@ -42,9 +42,14 @@ TEST(commandCaseTableExactlyMatchesP0Catalog) {
     std::set<std::string> actual;
     for (const auto& descriptor : descriptors) actual.insert(descriptor.id);
 
+    auto const cases = ssg::test::runtimeCommandCases();
+    // A failed catalog load yields an empty table, which would make the set
+    // comparison below vacuously interesting rather than failing loudly.
+    ASSERT_FALSE(cases.empty());
+
     std::set<std::string> expected;
-    for (const auto& command : ssg::test::runtime_command_cases) {
-        ASSERT_TRUE(expected.insert(std::string{command.id}).second);
+    for (const auto& command : cases) {
+        ASSERT_TRUE(expected.insert(command.id).second);
         ASSERT_FALSE(command.owner.empty());
     }
 

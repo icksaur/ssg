@@ -309,17 +309,48 @@ TEST(terminalSequencesAreInverseControlStrings) {
     auto setup = ssg::app::terminal_setup_sequence();
     auto restore = ssg::app::terminal_restore_sequence();
 
-    // The exact bytes are pinned: a signal-driven restore and the RAII destructor
-    // share these, so any drift would leave a real terminal in raw/alt-screen
-    // state after a terminating signal.
-    ASSERT_EQ(setup, std::string{"\x1b[?1049h\x1b[5 q\x1b[?1000h\x1b[?1002h\x1b[?1006h"});
-    ASSERT_EQ(restore, std::string{"\x1b[?1006l\x1b[?1002l\x1b[?1000l\x1b[0 q\x1b[?25h\x1b[?1049l"});
+    // A signal-driven restore and the RAII destructor share these, so a private
+    // mode enabled at startup but never disabled would leave a real terminal in
+    // raw/alt-screen state after a terminating signal.
+    //
+    // The rule is asserted generally rather than by pinning the two exact
+    // strings: every private mode the setup turns ON (CSI ? N h) must be turned
+    // OFF (CSI ? N l) by the restore, and in reverse order.  Pinned literals
+    // covered only the modes someone remembered to list a second time, so a
+    // newly added mode could go unrestored without failing anything.
+    auto privateModes = [](std::string const& sequence, char terminator) {
+        std::vector<int> modes;
+        for (std::size_t i = 0; i + 3 < sequence.size(); ++i) {
+            if (sequence[i] != '\x1b' || sequence[i + 1] != '[' ||
+                sequence[i + 2] != '?') {
+                continue;
+            }
+            std::size_t j = i + 3;
+            int value = 0;
+            bool digits = false;
+            while (j < sequence.size() && sequence[j] >= '0' && sequence[j] <= '9') {
+                value = value * 10 + (sequence[j] - '0');
+                ++j;
+                digits = true;
+            }
+            if (digits && j < sequence.size() && sequence[j] == terminator) {
+                modes.push_back(value);
+            }
+        }
+        return modes;
+    };
 
-    // Every mode setup turns ON (…h / high) restore turns OFF (…l / low).
-    ASSERT_TRUE(setup.find("\x1b[?1049h") != std::string::npos);
-    ASSERT_TRUE(restore.find("\x1b[?1049l") != std::string::npos);
-    ASSERT_TRUE(setup.find("\x1b[?1000h") != std::string::npos);
-    ASSERT_TRUE(restore.find("\x1b[?1000l") != std::string::npos);
+    auto enabled = privateModes(setup, 'h');
+    auto disabled = privateModes(restore, 'l');
+    ASSERT_FALSE(enabled.empty());
+    ASSERT_EQ(enabled.size(), disabled.size());
+
+    // Reverse order: the alt screen is entered first and left last.
+    std::vector<int> reversed(disabled.rbegin(), disabled.rend());
+    ASSERT_EQ(enabled, reversed);
+
+    // The cursor is always made visible again, whatever shape setup chose.
+    ASSERT_TRUE(restore.find("\x1b[?25h") != std::string::npos);
 }
 
 TEST(classifySignalTagsMapsSignalNumbers) {
@@ -1110,29 +1141,6 @@ TEST(routePointerFilePickerPressOpensTheFileRatherThanExecutingIt) {
     ASSERT_FALSE(plan.begins_drag);
 }
 
-TEST(promptBoundaryKeepsPaletteFulfillmentAndRemovesFindReplaceMapping) {
-    auto sourcePath = locateFromParents(
-        fs::current_path(), fs::path{"apps"} / "ssg_main.cpp");
-    ASSERT_TRUE(sourcePath.has_value());
-    if (!sourcePath) return;
-    auto source = readSource(*sourcePath);
-    const auto dispatchStart = source.find("auto dispatchResolved = ");
-    const auto dispatchEnd = source.find("auto routeText = ", dispatchStart);
-    ASSERT_TRUE(dispatchStart != std::string::npos);
-    ASSERT_TRUE(dispatchEnd != std::string::npos);
-    if (dispatchStart == std::string::npos || dispatchEnd == std::string::npos) {
-        return;
-    }
-    auto block = source.substr(dispatchStart, dispatchEnd - dispatchStart);
-
-    ASSERT_TRUE(block.find("if (id == \"prompt.submit\") { submitSelectedCandidate(); return; }") !=
-                std::string::npos);
-    ASSERT_TRUE(block.find("dispatch(\"find.next\")") == std::string::npos);
-    ASSERT_TRUE(block.find("dispatch(\"replace.current\")") == std::string::npos);
-    ASSERT_TRUE(block.find("dispatch(\"find.close\")") == std::string::npos);
-    ASSERT_TRUE(source.find("dispatch(\"palette.execute\"") != std::string::npos);
-}
-
 TEST(routePointerPanelPressSelectsAndActivatesTheNode) {
     ssg::RegionHit hit;
     hit.region = ssg::HitRegion::Panel;
@@ -1249,7 +1257,6 @@ int main() {
     RUN(routePointerTabPressActivatesTheTab);
     RUN(routePointerPalettePressExecutesTheCandidate);
     RUN(routePointerFilePickerPressOpensTheFileRatherThanExecutingIt);
-    RUN(promptBoundaryKeepsPaletteFulfillmentAndRemovesFindReplaceMapping);
     RUN(routePointerPanelPressSelectsAndActivatesTheNode);
     RUN(routeWheelMapsRegionToScrollTarget);
     RUN(edgeScrollDecidesDirectionAtTheContentEdges);

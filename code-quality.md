@@ -19,5 +19,7 @@ Project rules:
 - Separate configuration from operational state.
 - Keep the editor core independent of transports and renderers.
 - Put platform-specific behavior behind adapter boundaries.
-- Test public seams with independent oracles before implementation.
+- Test each behavior once at the narrowest stable seam that owns it. Reserve
+  independent oracles for answers knowable independently of the implementation.
+- Facts live in one place; delete a duplicate list rather than syncing it.
 - Comments explain contracts and rationale, not code narration.

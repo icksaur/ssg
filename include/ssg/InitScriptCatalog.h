@@ -17,12 +17,12 @@ struct InitScriptCommandDescriptor {
     std::string_view id;
 };
 
-inline constexpr std::array<InitScriptCommandDescriptor, 5> kInitScriptCommands{{
+inline constexpr auto kInitScriptCommands = std::to_array<InitScriptCommandDescriptor>({
     {"theme.define"},
     {"theme.background"},
     {"keymap.bind"},
     {"keymap.unbind"},
     {"style.define"},
-}};
+});
 
 }  // namespace ssg

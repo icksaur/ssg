@@ -1,200 +1,36 @@
 #pragma once
 
-#include <array>
-#include <string_view>
+// Kind: seam.
+//
+// Runtime command cases, derived from `data/required-commands.json` rather than
+// restated.  This file used to carry a hand-maintained copy of all 182 command
+// ids and owners plus a `static_assert` on the total, which meant adding one
+// command required editing two inventories and two counts that asserted nothing
+// about the product.
+
+#include "command_catalog.h"
+
+#include <string>
+#include <vector>
 
 namespace ssg::test {
 
 struct RuntimeCommandCase {
-    std::string_view id;
-    std::string_view owner;
+    std::string id;
+    std::string owner;
 };
 
-inline constexpr auto runtime_command_cases = std::to_array<RuntimeCommandCase>({
-    RuntimeCommandCase{"text.insert", "text-input-commands"},
-    RuntimeCommandCase{"text.newline", "text-input-commands"},
-    RuntimeCommandCase{"text.delete_backward", "text-input-commands"},
-    RuntimeCommandCase{"text.delete_forward", "text-input-commands"},
-    RuntimeCommandCase{"text.delete_word_backward", "text-input-commands"},
-    RuntimeCommandCase{"text.delete_word_forward", "text-input-commands"},
-    RuntimeCommandCase{"cursor.set_position", "selection-navigation"},
-    RuntimeCommandCase{"cursor.left", "selection-navigation"},
-    RuntimeCommandCase{"cursor.right", "selection-navigation"},
-    RuntimeCommandCase{"cursor.word_left", "selection-navigation"},
-    RuntimeCommandCase{"cursor.word_right", "selection-navigation"},
-    RuntimeCommandCase{"cursor.line_up", "selection-navigation"},
-    RuntimeCommandCase{"cursor.line_down", "selection-navigation"},
-    RuntimeCommandCase{"cursor.line_start", "selection-navigation"},
-    RuntimeCommandCase{"cursor.line_end", "selection-navigation"},
-    RuntimeCommandCase{"cursor.page_up", "selection-navigation"},
-    RuntimeCommandCase{"cursor.page_down", "selection-navigation"},
-    RuntimeCommandCase{"cursor.document_start", "selection-navigation"},
-    RuntimeCommandCase{"cursor.document_end", "selection-navigation"},
-    RuntimeCommandCase{"select.set_range", "selection-navigation"},
-    RuntimeCommandCase{"select.add_range", "selection-navigation"},
-    RuntimeCommandCase{"select.left", "selection-navigation"},
-    RuntimeCommandCase{"select.right", "selection-navigation"},
-    RuntimeCommandCase{"select.word_left", "selection-navigation"},
-    RuntimeCommandCase{"select.word_right", "selection-navigation"},
-    RuntimeCommandCase{"select.line_up", "selection-navigation"},
-    RuntimeCommandCase{"select.line_down", "selection-navigation"},
-    RuntimeCommandCase{"select.line_start", "selection-navigation"},
-    RuntimeCommandCase{"select.line_end", "selection-navigation"},
-    RuntimeCommandCase{"select.page_up", "selection-navigation"},
-    RuntimeCommandCase{"select.page_down", "selection-navigation"},
-    RuntimeCommandCase{"select.document_start", "selection-navigation"},
-    RuntimeCommandCase{"select.document_end", "selection-navigation"},
-    RuntimeCommandCase{"select.all", "selection-navigation"},
-    RuntimeCommandCase{"select.add_next_occurrence", "selection-navigation"},
-    RuntimeCommandCase{"select.add_cursor_up", "selection-navigation"},
-    RuntimeCommandCase{"select.add_cursor_down", "selection-navigation"},
-    RuntimeCommandCase{"select.split_into_lines", "selection-navigation"},
-    RuntimeCommandCase{"select.to_matching_bracket", "selection-navigation"},
-    RuntimeCommandCase{"edit.undo", "undo-redo-history"},
-    RuntimeCommandCase{"edit.redo", "undo-redo-history"},
-    RuntimeCommandCase{"edit.indent", "edit-command-suite"},
-    RuntimeCommandCase{"edit.outdent", "edit-command-suite"},
-    RuntimeCommandCase{"edit.duplicate_line", "edit-command-suite"},
-    RuntimeCommandCase{"edit.move_line_up", "edit-command-suite"},
-    RuntimeCommandCase{"edit.move_line_down", "edit-command-suite"},
-    RuntimeCommandCase{"edit.delete_line", "edit-command-suite"},
-    RuntimeCommandCase{"edit.join_lines", "edit-command-suite"},
-    RuntimeCommandCase{"edit.uppercase", "edit-command-suite"},
-    RuntimeCommandCase{"edit.lowercase", "edit-command-suite"},
-    RuntimeCommandCase{"edit.swap_case", "edit-command-suite"},
-    RuntimeCommandCase{"edit.sort_lines", "edit-command-suite"},
-    RuntimeCommandCase{"edit.transpose", "edit-command-suite"},
-    RuntimeCommandCase{"edit.toggle_comment", "edit-command-suite"},
-    RuntimeCommandCase{"clipboard.copy", "clipboard-register"},
-    RuntimeCommandCase{"clipboard.cut", "clipboard-register"},
-    RuntimeCommandCase{"clipboard.paste", "clipboard-register"},
-    RuntimeCommandCase{"view.toggle_word_wrap", "viewport-wrap-scrollbar"},
-    RuntimeCommandCase{"view.scroll_lines", "viewport-wrap-scrollbar"},
-    RuntimeCommandCase{"view.scroll_pages", "viewport-wrap-scrollbar"},
-    RuntimeCommandCase{"view.scroll_to_fraction", "viewport-wrap-scrollbar"},
-    RuntimeCommandCase{"view.reveal_caret", "selection-navigation"},
-    RuntimeCommandCase{"view.center_caret", "selection-navigation"},
-    RuntimeCommandCase{"palette.open", "search-palette"},
-    RuntimeCommandCase{"file_finder.open", "search-palette"},
-    RuntimeCommandCase{"file_finder.toggle_gitignore", "search-palette"},
-    RuntimeCommandCase{"palette.close", "search-palette"},
-    RuntimeCommandCase{"palette.next", "search-palette"},
-    RuntimeCommandCase{"palette.previous", "search-palette"},
-    RuntimeCommandCase{"palette.execute", "search-palette"},
-    RuntimeCommandCase{"goto.file", "search-palette"},
-    RuntimeCommandCase{"goto.line", "search-palette"},
-    RuntimeCommandCase{"goto.symbol", "search-palette"},
-    RuntimeCommandCase{"goto.definition", "lsp-language-features"},
-    RuntimeCommandCase{"goto.reference", "lsp-language-features"},
-    RuntimeCommandCase{"goto.matching_bracket", "selection-navigation"},
-    RuntimeCommandCase{"goto.back", "search-palette"},
-    RuntimeCommandCase{"goto.forward", "search-palette"},
-    RuntimeCommandCase{"find.open", "find-replace"},
-    RuntimeCommandCase{"find.close", "find-replace"},
-    RuntimeCommandCase{"find.next", "find-replace"},
-    RuntimeCommandCase{"find.previous", "find-replace"},
-    RuntimeCommandCase{"find.update_query", "find-replace"},
-    RuntimeCommandCase{"find.toggle_case", "find-replace"},
-    RuntimeCommandCase{"find.toggle_whole_word", "find-replace"},
-    RuntimeCommandCase{"find.toggle_regex", "find-replace"},
-    RuntimeCommandCase{"find.toggle_selection", "find-replace"},
-    RuntimeCommandCase{"replace.open", "find-replace"},
-    RuntimeCommandCase{"replace.update_replacement", "find-replace"},
-    RuntimeCommandCase{"replace.current", "find-replace"},
-    RuntimeCommandCase{"replace.all", "find-replace"},
-    RuntimeCommandCase{"replace.workspace_preview", "find-replace"},
-    RuntimeCommandCase{"replace.workspace_apply", "find-replace"},
-    RuntimeCommandCase{"search.workspace", "search-palette"},
-    RuntimeCommandCase{"search.results_next", "search-palette"},
-    RuntimeCommandCase{"search.results_previous", "search-palette"},
-    RuntimeCommandCase{"completion.open", "lsp-language-features"},
-    RuntimeCommandCase{"completion.next", "lsp-language-features"},
-    RuntimeCommandCase{"completion.previous", "lsp-language-features"},
-    RuntimeCommandCase{"completion.accept", "lsp-language-features"},
-    RuntimeCommandCase{"completion.dismiss", "lsp-language-features"},
-    RuntimeCommandCase{"hover.show", "lsp-language-features"},
-    RuntimeCommandCase{"hover.dismiss", "lsp-language-features"},
-    RuntimeCommandCase{"rename.symbol", "lsp-workspace-edits"},
-    RuntimeCommandCase{"pane.split_horizontal", "shell-layout"},
-    RuntimeCommandCase{"pane.split_vertical", "shell-layout"},
-    RuntimeCommandCase{"pane.close", "shell-layout"},
-    RuntimeCommandCase{"pane.next", "shell-layout"},
-    RuntimeCommandCase{"pane.previous", "shell-layout"},
-    RuntimeCommandCase{"pane.focus_left", "shell-layout"},
-    RuntimeCommandCase{"pane.focus_right", "shell-layout"},
-    RuntimeCommandCase{"pane.focus_up", "shell-layout"},
-    RuntimeCommandCase{"pane.focus_down", "shell-layout"},
-    RuntimeCommandCase{"panel.toggle", "shell-layout"},
-    RuntimeCommandCase{"panel.focus", "shell-layout"},
-    RuntimeCommandCase{"panel.show_files", "shell-layout"},
-    RuntimeCommandCase{"panel.show_git_status", "shell-layout"},
-    RuntimeCommandCase{"panel.next_provider", "shell-layout"},
-    RuntimeCommandCase{"panel.previous_provider", "shell-layout"},
-    RuntimeCommandCase{"tree.toggle_expanded", "tree-providers"},
-    RuntimeCommandCase{"tree.invoke_node_command", "tree-providers"},
-    RuntimeCommandCase{"tree.select", "tree-providers"},
-    RuntimeCommandCase{"tree.select_next", "tree-providers"},
-    RuntimeCommandCase{"tree.select_previous", "tree-providers"},
-    RuntimeCommandCase{"tree.activate", "tree-providers"},
-    RuntimeCommandCase{"tree.scroll", "tree-providers"},
-    RuntimeCommandCase{"tree.scroll_to_fraction", "tree-providers"},
-    RuntimeCommandCase{"view.toggle_distraction_free", "shell-layout"},
-    RuntimeCommandCase{"prompt.submit", "prompt-status-surface"},
-    RuntimeCommandCase{"prompt.cancel", "prompt-status-surface"},
-    RuntimeCommandCase{"prompt.next", "prompt-status-surface"},
-    RuntimeCommandCase{"prompt.previous", "prompt-status-surface"},
-    RuntimeCommandCase{"prompt.update_value", "prompt-status-surface"},
-    RuntimeCommandCase{"status.next", "prompt-status-surface"},
-    RuntimeCommandCase{"status.previous", "prompt-status-surface"},
-    RuntimeCommandCase{"status.dismiss", "prompt-status-surface"},
-    RuntimeCommandCase{"status.invoke_action", "prompt-status-surface"},
-    RuntimeCommandCase{"workspace.open_directory", "file-commands"},
-    RuntimeCommandCase{"file.new", "file-commands"},
-    RuntimeCommandCase{"file.open", "file-commands"},
-    RuntimeCommandCase{"file.open_recent", "file-commands"},
-    RuntimeCommandCase{"file.open_dropped_content", "file-commands"},
-    RuntimeCommandCase{"file.save", "file-commands"},
-    RuntimeCommandCase{"file.save_all", "file-commands"},
-    RuntimeCommandCase{"file.save_as", "file-commands"},
-    RuntimeCommandCase{"file.reload", "file-commands"},
-    RuntimeCommandCase{"file.rename", "file-commands"},
-    RuntimeCommandCase{"file.delete", "file-commands"},
-    RuntimeCommandCase{"file.new_directory", "file-commands"},
-    RuntimeCommandCase{"file.reopen_with_encoding", "encoding-eol"},
-    RuntimeCommandCase{"file.set_encoding", "encoding-eol"},
-    RuntimeCommandCase{"file.set_line_ending", "encoding-eol"},
-    RuntimeCommandCase{"file.set_final_newline", "encoding-eol"},
-    RuntimeCommandCase{"tab.close", "tab-management"},
-    RuntimeCommandCase{"tab.close_others", "tab-management"},
-    RuntimeCommandCase{"tab.close_all", "tab-management"},
-    RuntimeCommandCase{"tab.reopen_closed", "tab-management"},
-    RuntimeCommandCase{"tab.next", "tab-management"},
-    RuntimeCommandCase{"tab.previous", "tab-management"},
-    RuntimeCommandCase{"tab.activate", "tab-management"},
-    RuntimeCommandCase{"tab.move_left", "tab-management"},
-    RuntimeCommandCase{"tab.move_right", "tab-management"},
-    RuntimeCommandCase{"external.reload", "external-modification-flow"},
-    RuntimeCommandCase{"external.keep_buffer", "external-modification-flow"},
-    RuntimeCommandCase{"external.open_diff", "external-modification-flow"},
-    RuntimeCommandCase{"settings.open", "settings-model"},
-    RuntimeCommandCase{"settings.set", "settings-model"},
-    RuntimeCommandCase{"settings.reset", "settings-model"},
-    RuntimeCommandCase{"settings.reset_scope", "settings-model"},
-    RuntimeCommandCase{"settings.export_workspace", "settings-model"},
-    RuntimeCommandCase{"settings.import_workspace", "settings-model"},
-    RuntimeCommandCase{"theme.define", "theme-model"},
-    RuntimeCommandCase{"theme.background", "theme-model"},
-    RuntimeCommandCase{"style.define", "style-model"},
-    RuntimeCommandCase{"keymap.bind", "keymap-model"},
-    RuntimeCommandCase{"keymap.unbind", "keymap-model"},
-    RuntimeCommandCase{"follow_edits.resume", "follow-edits"},
-    RuntimeCommandCase{"follow_edits.pause", "follow-edits"},
-    RuntimeCommandCase{"follow_edits.toggle", "follow-edits"},
-    RuntimeCommandCase{"diff.next_hunk", "diff-model"},
-    RuntimeCommandCase{"diff.previous_hunk", "diff-model"},
-    RuntimeCommandCase{"diff.open_file", "diff-model"},
-});
+// Empty when the catalog cannot be parsed; callers assert non-empty so a broken
+// load fails loudly instead of vacuously passing a zero-iteration loop.
+[[nodiscard]] inline std::vector<RuntimeCommandCase> runtimeCommandCases() {
+    std::vector<RuntimeCommandCase> cases;
+    auto const catalog = loadCommandCatalog();
+    if (!catalog) return cases;
+    cases.reserve(catalog->size());
+    for (auto const& command : *catalog) {
+        cases.push_back({command.id, command.owner});
+    }
+    return cases;
+}
 
-static_assert(runtime_command_cases.size() == 182);
-
-} // namespace ssg::test
+}  // namespace ssg::test

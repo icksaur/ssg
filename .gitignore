@@ -14,3 +14,10 @@ runtime_files/
 runtime_snapshot/
 runtime_snapshot_*/
 hit_test_root/
+
+# Working artifacts from agent review and analysis passes. These are inputs to a
+# change, not documents of record: code-review.md alone churned 528 lines across
+# two accidental commits before being ignored (doc/agility-plan.md).
+code-review.md
+code-review-*.md
+agility-analysis-*.md

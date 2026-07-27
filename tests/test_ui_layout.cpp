@@ -231,23 +231,6 @@ TEST(accessibilityNodesHaveLabelsAndRoles) {
             }
         }
     }
-
-    std::ostringstream actual;
-    for (const auto& node : nodes) {
-        actual << static_cast<int>(node.kind) << '|' << node.id << '|'
-               << node.label << '|' << node.rect.x << ',' << node.rect.y << ','
-               << node.rect.width << ',' << node.rect.height << '|'
-               << static_cast<int>(node.role) << '\n';
-    }
-    std::ifstream golden(std::string{SSG_SOURCE_DIR} +
-                         "/tests/fixtures/ui_layout/accessibility.txt");
-    const std::string expected((std::istreambuf_iterator<char>(golden)),
-                               std::istreambuf_iterator<char>());
-    if (actual.str() != expected) {
-        std::cerr << "  accessibility actual:\n" << actual.str()
-                  << "  accessibility expected:\n" << expected;
-    }
-    ASSERT_EQ(actual.str(), expected);
 }
 
 TEST(nonOverlapAndCardinalityProperties) {

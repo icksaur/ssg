@@ -208,5 +208,5 @@ documented in `doc/config.md`.
 - `doc/config.md` — user guide: writing `init.lua`
 - `doc/learnings.md` — durable implementation and integration constraints
 - `cpp-values.md` — public C++ API design values
-- `process.md` — development and review workflow
+- `copilot-instructions.md` — invariants, risk-tiered workflow, and test rules
 - `doc/backlog.md` — deferred work

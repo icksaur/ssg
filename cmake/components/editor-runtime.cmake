@@ -14,6 +14,10 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     )
     target_compile_definitions(test_runtime_snapshot PRIVATE
         SSG_SOURCE_SCAN_ROOT="${SSG_SOURCE_DIR}"
+        SSG_REQUIRED_COMMANDS_PATH="${SSG_SOURCE_DIR}/data/required-commands.json"
+    )
+    target_include_directories(test_runtime_snapshot PRIVATE
+        ${SSG_SOURCE_DIR}/tests
     )
     target_link_libraries(test_runtime_snapshot PRIVATE ssg)
     add_test(NAME test_runtime_snapshot COMMAND test_runtime_snapshot)

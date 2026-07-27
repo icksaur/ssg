@@ -3,9 +3,24 @@
 Read `doc/spec.md`, `doc/learnings.md`, `code-quality.md`, and
 `cpp-values.md` before changing SSG.
 
-Use the workflow: specification, specification review, implementation, code
-review. Do not begin implementation before warranted specification-review
-findings are folded into the specification.
+Match process to risk.
+
+- **Tier 0 — mechanical:** behaviour-preserving refactors, generated metadata,
+  and commands fitting an existing seam need no specification. Review the
+  implementation once.
+- **Tier 1 — local behaviour:** a change inside one established class or seam
+  gets a short acceptance note in its owning feature document and one
+  implementation review. No separate specification review unless a public
+  contract, persistence format, security boundary, or ownership rule changes.
+- **Tier 2 — contract or architecture:** new public APIs, ownership seams,
+  wire/persistence formats, platform adapters, capability changes, and anything
+  that can lose user data get specification, specification review,
+  implementation, and code review. Fold warranted specification-review findings
+  before implementation.
+
+A specification is a current contract, not a task diary. Cap it at ~80 lines.
+Move delivered history to Git; never append review transcripts, perturbation
+logs, or repeated status sections.
 
 ## Cross-cutting invariants
 
@@ -67,23 +82,45 @@ findings are folded into the specification.
 - Comments explain rationale, external contracts, or non-local constraints.
   Improve names and types instead of narrating code.
 
-## Unit tests
+## Tests
 
-- Write the strongest independent oracle before non-trivial implementation:
-  reference implementation, hand-computed fixture, golden, property, or
-  round-trip as specified in `doc/spec.md`.
-- Every public command has unit tests for its successful transition, invalid
-  input, stale revision, failure atomicity, and undo/recovery behavior where
-  applicable.
-- Test API seams, not only helpers. Run the same command scripts through the
-  in-process API and WebSocket codec and compare canonical semantic state.
-- Add Linux and Windows tests for every platform adapter. Browser-facing input
-  and clipboard contracts require Chromium, Firefox, and WebKit conformance.
+- Test each behaviour once, at the narrowest stable seam that owns it. Prefer
+  class-level tests with explicit inputs and observable outputs.
+- Every test file declares its kind in a header comment: **contract** (external
+  truth: wire bytes, Unicode, encodings, platform), **algorithm** (independently
+  knowable answer), **seam** (an architectural rule), or **smoke** (production
+  composition works at all).
+- Write an independent oracle before implementation only where the answer is
+  knowable independently of the implementation: Unicode/layout maths,
+  transactions, selection and history state machines, encoding and protocol
+  bytes, recovery, atomic file operations, or a reproduced bug. Prefer
+  properties, round-trips, hand cases and fault injection over writing a second
+  implementation.
+- Do not create an oracle, golden, or full-stack script for presentation taste,
+  internal structure, inventories, or counts. For configurable presentation,
+  assert that output follows configuration and satisfies bounds — never that it
+  equals today's appearance.
+- A golden requires an external or pinned contract, or recorded owner approval.
+  Every golden has a regeneration path. Appearance is not a contract.
+- A behaviour-preserving refactor needs no new test when existing focused tests
+  would fail on a regression. Add a test only for a discovered gap.
+- Facts live in one place. If adding a command, field, or glyph requires editing
+  a list that duplicates another list, delete the duplicate instead.
+- Every public command has tests for the outcomes that carry risk for that
+  command: successful transition, invalid input, stale revision, failure
+  atomicity, and recovery where applicable. Do not repeat the same transition at
+  class, runtime, transport, and TUI layers.
+- Keep one representative in-process/WebSocket parity script and one TUI
+  transport smoke. Broad tests cover registration and transport, not every
+  command permutation.
+- Keep Linux and Windows parity tests at platform adapter boundaries, and the
+  required browser conformance tests for browser input and clipboard contracts.
+  Do not repeat platform-independent editor behaviour per platform or browser.
 - Do not install or use Wine for Windows validation. Local task work performs
   source-level best-effort checks and may use an already-installed
   cross-compiler; native Windows CI is authoritative for Windows runtime parity.
 - Each test file is a standalone executable using `tests/test_helpers.h`; do not
   add a test framework.
-- Before review, run the configured build, `ctest --test-dir build
-  --output-on-failure`, relevant sanitizer tests, and applicable platform or
-  browser conformance gates.
+- Before review, build the affected target and run its focused suite. Run the
+  fast gate for ordinary changes; run push, sanitizer, platform, browser, or
+  performance gates only when the changed risk requires them.
