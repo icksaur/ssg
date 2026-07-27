@@ -144,24 +144,6 @@ whole number (e.g. `dim_header_height = 1`). An unknown key, or a non-numeric
 or negative dimension, rejects the whole call and changes nothing. The full key
 list matches the style fields in `include/ssg/Style.h`.
 
-## What's NOT possible yet
-
-- **Only `theme.define`, `theme.background`, `keymap.bind`, `keymap.unbind`, and
-  `style.define` are exposed to
-  `init.lua` today.** ssg has ~170 other commands (cursor movement,
-  editing, file operations, etc.) but none of the rest are callable from
-  Lua -- only whichever ones a future update explicitly adds.
-- **No multiple named themes / theme switching.** `theme.define` edits the
-  one active theme's colors in place; there's no way to define two themes
-  and switch between them yet.
-- **No leader-key or Alt/Ctrl/Meta modifier redefinition.** You can bind
-  new sequences, but you can't change what counts as the leader key
-  (`Escape` today) or reconfigure how modifier keys behave; see
-  `doc/spec-mod-keys.md` for why this needs more thought first.
-- **No `--config <path>` flag.** The file location above is fixed (other
-  than via `XDG_CONFIG_HOME`/`%APPDATA%`); there's no way to point ssg at
-  an arbitrary file per-invocation yet.
-
 ## Sandbox notes
 
 `init.lua` runs in a restricted Lua interpreter: no file I/O, no
