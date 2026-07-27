@@ -273,27 +273,29 @@ void EditorRuntime::Impl::revealTreeSelection() {
 
 void EditorRuntime::Impl::scrollTreeToFraction(std::uint32_t numerator,
                                                 std::uint32_t denominator) {
-    auto view = tree.viewState();
-    if (view.providers.empty()) return;
-    auto const& provider = view.providers.front();
+    // Only the node COUNT is needed, and this runs per pointer motion during a
+    // thumb drag, so it must not rebuild every provider's view.
+    auto const nodes = tree.activeVisibleNodeCount();
+    if (nodes == 0) return;
     // The panel's counterpart to view.scroll_to_fraction: a gutter click or
     // thumb drag positions the tree along its track. Same ScrollOffset the
     // editor uses, so both gutters map a pointer row to a position identically.
     auto offset = ScrollOffset{treeFirstVisible};
     offset.toFraction(numerator, denominator,
-                      static_cast<std::uint32_t>(provider.nodes.size()),
-                      lastPanelContentRows);
+                      static_cast<std::uint32_t>(nodes), lastPanelContentRows);
     treeFirstVisible = offset.firstVisible();
 }
 
-void EditorRuntime::Impl::scrollTree(std::int64_t rows) {    auto view = tree.viewState();
-    if (view.providers.empty()) return;
-    auto const& provider = view.providers.front();
+void EditorRuntime::Impl::scrollTree(std::int64_t rows) {
+    // Same reasoning as scrollTreeToFraction: the wheel path needs the count,
+    // not the view.
+    auto const nodes = tree.activeVisibleNodeCount();
+    if (nodes == 0) return;
     // keep-visible is not applied: a wheel scroll moves the viewport, not the
     // selection (a later revealTreeSelection re-snaps). The saturating
     // clamp-shift lives in ScrollOffset, shared with every other surface.
     auto offset = ScrollOffset{treeFirstVisible};
-    offset.byLines(rows, static_cast<std::uint32_t>(provider.nodes.size()),
+    offset.byLines(rows, static_cast<std::uint32_t>(nodes),
                    lastPanelContentRows);
     treeFirstVisible = offset.firstVisible();
 }

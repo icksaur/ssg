@@ -238,6 +238,26 @@ TEST(commandRequestRoundTripsWithPromptValueArguments) {
 }
 
 
+// A payload-bearing command reaching the WRONG codec entry (or none) is
+// invisible to the registry's exhaustiveness check, which only proves an entry
+// exists. Each payload-bearing command therefore round-trips its own id.
+TEST(commandRequestRoundTripsWithTreeScrollToFraction) {
+    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
+    ssg::ClientCommand const command{
+        "tree.scroll_to_fraction", ssg::Revision{5},
+        ssg::ScrollFractionArguments{3, 8}};
+    auto const bytes = ssg::ProtocolCodec{}.encodeCommandRequest(command, registry);
+    auto const decoded = ssg::ProtocolCodec{}.decodeCommandRequest(bytes, registry);
+    ASSERT_TRUE(decoded.accepted());
+    ASSERT_EQ(decoded.command->id, command.id);
+    auto const* arguments =
+        std::any_cast<ssg::ScrollFractionArguments>(&decoded.command->payload);
+    ASSERT_TRUE(arguments != nullptr);
+    ASSERT_EQ(*arguments,
+              std::any_cast<ssg::ScrollFractionArguments>(command.payload));
+}
+
+
 TEST(commandRequestRoundTripsWithTreeSelectArguments) {
     auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
     ssg::ClientCommand const command{
@@ -1187,6 +1207,7 @@ int main() {
     RUN(commandRequestRoundTripsWithPaletteExecuteArguments);
     RUN(commandRequestRoundTripsWithFindQueryArguments);
     RUN(commandRequestRoundTripsWithPromptValueArguments);
+    RUN(commandRequestRoundTripsWithTreeScrollToFraction);
     RUN(commandRequestRoundTripsWithTreeSelectArguments);
     RUN(viewportFirstVisualColumnSurvivesTheWire);
     RUN(documentIdentitySurvivesSessionSnapshotAndDeltaWireRoundTrips);

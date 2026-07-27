@@ -559,6 +559,12 @@ std::optional<TreeCommandInvocation> TreeModel::invokeNodeCommand(
                                  std::string{commandId}};
 }
 
+std::size_t TreeModel::activeVisibleNodeCount() const {
+    const auto* active = activeProvider();
+    if (active == nullptr) return 0;
+    return visibleNodes(active->snapshot, active->expanded).size();
+}
+
 TreeViewState TreeModel::viewState() const {
     TreeViewState result{revision_, {}};
     result.providers.reserve(providers_.size());

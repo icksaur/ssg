@@ -140,6 +140,8 @@ TEST(commandSetIsExactAndInvocationIsProviderDataOnly) {
               std::string_view{"tree.select_previous"});
     ASSERT_EQ(commands.descriptors()[5].id, std::string_view{"tree.activate"});
     ASSERT_EQ(commands.descriptors()[6].id, std::string_view{"tree.scroll"});
+    ASSERT_EQ(commands.descriptors()[7].id,
+              std::string_view{"tree.scroll_to_fraction"});
 
     TreeModel model;
     model.replaceProvider(TreeProviderSnapshot::fromSymbols(

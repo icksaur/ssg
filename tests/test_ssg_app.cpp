@@ -964,6 +964,38 @@ TEST(everyScrollableGutterAnswersPressAndDrag) {
     ASSERT_EQ(checked, std::size_t{6});
 }
 
+// S-I5: no picker scroll may reach the server. Its ranked list is client-owned
+// for latency, so a round-trip on this path would undo that design. Asserted
+// over the catalog rather than on the picker alone, so a future client-owned
+// surface is covered by the same rule.
+TEST(noClientOwnedSurfaceEverDispatchesAScrollCommand) {
+    ssg::app::PointerTargets const empty;
+    std::size_t clientOwned = 0;
+
+    for (auto const& descriptor : ssg::app::scrollable_regions()) {
+        if (!descriptor.scrollCommand.empty()) continue;
+        ++clientOwned;
+        // A client-owned surface must name a target the loop can act on;
+        // `none` would be a gesture routed nowhere.
+        ASSERT_TRUE(descriptor.target != ssg::app::WheelTarget::none);
+
+        ssg::RegionHit hit;
+        hit.region = descriptor.scrollbar;
+        hit.scrollNumerator = 1;
+        hit.scrollDenominator = 2;
+        for (auto kind : {ssg::app::PointerKind::press,
+                          ssg::app::PointerKind::drag}) {
+            auto plan = ssg::app::route_pointer(
+                hit, ssg::app::PointerButton::left, kind, false, std::nullopt,
+                empty);
+            ASSERT_TRUE(plan.commands.empty());
+        }
+    }
+    // The picker is the one such surface today; if that ever becomes zero the
+    // rule above would be vacuous.
+    ASSERT_EQ(clientOwned, std::size_t{1});
+}
+
 // The wheel and the gutter must agree about which surface a region belongs to.
 // They previously came from separate code, which is how they could drift.
 TEST(theWheelAndTheGutterAgreeOnEverySurface) {
@@ -1211,6 +1243,7 @@ int main() {
     RUN(routePointerReleaseEndsDragWithoutACommand);
     RUN(routePointerEditorScrollbarScrollsToFraction);
     RUN(everyScrollableGutterAnswersPressAndDrag);
+    RUN(noClientOwnedSurfaceEverDispatchesAScrollCommand);
     RUN(theWheelAndTheGutterAgreeOnEverySurface);
     RUN(theCatalogCoversEveryScrollbarHitRegion);
     RUN(routePointerTabPressActivatesTheTab);

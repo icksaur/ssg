@@ -203,6 +203,14 @@ public:
 
     TreeViewState viewState() const;
 
+    // How many nodes the ACTIVE provider currently shows. Cheaper than
+    // viewState(), which builds EVERY provider's view and copies each node
+    // list, when the scroll paths need only this one number -- a thumb drag
+    // asks once per pointer motion. It still walks the active provider, and
+    // deliberately reuses the same traversal viewState() does rather than
+    // adding a second definition of "which nodes are visible".
+    [[nodiscard]] std::size_t activeVisibleNodeCount() const;
+
 private:
     struct ProviderState {
         TreeProviderSnapshot snapshot;

@@ -1186,12 +1186,24 @@ int main(int argc, char** argv) {
                 }
                 // A gutter gesture on a client-owned surface has no command to
                 // dispatch (the picker's offset must not round-trip), so the
-                // loop applies it here.
-                if (plan.client_scroll &&
-                    plan.client_scroll->target ==
-                        ssg::app::WheelTarget::palette) {
-                    scrollPaletteToFraction(plan.client_scroll->numerator,
-                                            plan.client_scroll->denominator);
+                // loop applies it here. The switch is exhaustive over the
+                // targets a client-owned descriptor can name, so adding one
+                // without handling it is a visible gap rather than a silently
+                // dropped gesture.
+                if (plan.client_scroll) {
+                    switch (plan.client_scroll->target) {
+                        case ssg::app::WheelTarget::palette:
+                            scrollPaletteToFraction(
+                                plan.client_scroll->numerator,
+                                plan.client_scroll->denominator);
+                            break;
+                        case ssg::app::WheelTarget::editor:
+                        case ssg::app::WheelTarget::tree:
+                        case ssg::app::WheelTarget::none:
+                            // Server-owned surfaces dispatch a command instead
+                            // and never reach here; `none` is not scrollable.
+                            break;
+                    }
                 }
                 if (plan.begins_drag) {
                     dragging = true;
