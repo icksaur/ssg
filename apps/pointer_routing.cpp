@@ -5,6 +5,55 @@
 #include <ssg/TreeModel.h>
 
 namespace ssg::app {
+namespace {
+
+// The one list of scrollable surfaces. `route_pointer` and `route_wheel` both
+// drive from it, so a surface cannot be wired for one gesture and forgotten for
+// the other -- which is exactly how the panel and picker gutters ended up
+// wheel-scrollable but not draggable.
+constexpr ScrollableRegionDescriptor kScrollableRegions[] = {
+    {ssg::HitRegion::Editor, ssg::HitRegion::EditorScrollbar,
+     WheelTarget::editor, "view.scroll_to_fraction"},
+    {ssg::HitRegion::Panel, ssg::HitRegion::PanelScrollbar, WheelTarget::tree,
+     "tree.scroll_to_fraction"},
+        // No command: the picker's ranked list is client-owned for latency, so its
+    // scroll must never round-trip. route_pointer returns a ClientScroll for
+    // this one instead (doc/spec-scroll.md S-I5).
+    {ssg::HitRegion::Palette, ssg::HitRegion::PaletteScrollbar,
+     WheelTarget::palette, {}},
+};
+
+// The descriptor whose GUTTER this region is, if any.
+const ScrollableRegionDescriptor* gutterRegion(ssg::HitRegion region) {
+    for (auto const& descriptor : kScrollableRegions) {
+        if (descriptor.scrollbar == region) return &descriptor;
+    }
+    return nullptr;
+}
+
+// The gesture a gutter press or drag produces: a command for a server-owned
+// offset, or a client-local scroll for a client-owned one. One place, so every
+// gutter behaves alike.
+PointerDispatch gutterScroll(ScrollableRegionDescriptor const& descriptor,
+                             ssg::RegionHit const& hit) {
+    PointerDispatch dispatch;
+    if (descriptor.scrollCommand.empty()) {
+        dispatch.client_scroll = ClientScroll{
+            descriptor.target, hit.scrollNumerator, hit.scrollDenominator};
+        return dispatch;
+    }
+    dispatch.commands.push_back(
+        {std::string{descriptor.scrollCommand},
+         ssg::ScrollFractionArguments{hit.scrollNumerator,
+                                      hit.scrollDenominator}});
+    return dispatch;
+}
+
+}  // namespace
+
+std::span<const ScrollableRegionDescriptor> scrollable_regions() noexcept {
+    return kScrollableRegions;
+}
 
 PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
                               PointerKind kind, bool dragging,
@@ -17,17 +66,14 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
 
     switch (kind) {
         case PointerKind::press:
-            // A left press or drag on the editor gutter scrolls the document to
-            // the fraction hit_test computed from the pointer row (M8-B). This is
-            // independent of the selection drag state: the server-owned scroll
-            // offset moves live as the thumb is dragged. Panel/palette gutters
-            // are not draggable yet, so they fall through to no command.
-            if (hit.region == ssg::HitRegion::EditorScrollbar) {
-                dispatch.commands.push_back(
-                    {"view.scroll_to_fraction",
-                     ssg::ScrollFractionArguments{hit.scrollNumerator,
-                                                  hit.scrollDenominator}});
-                return dispatch;
+            // A left press on ANY scrollable surface's gutter scrolls it to the
+            // fraction hit_test computed from the pointer row. Driven from the
+            // catalog rather than per region, so every gutter answers the same
+            // gesture -- the panel's and picker's used to be silently ignored.
+            // Independent of the selection drag state: the offset moves live as
+            // the thumb is dragged.
+            if (auto const* gutter = gutterRegion(hit.region)) {
+                return gutterScroll(*gutter, hit);
             }
             // A left press on a tab activates it (the caller resolved tab_index
             // -> TabId); on a palette row it executes that candidate (the caller
@@ -86,14 +132,10 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
             }
             return dispatch;
         case PointerKind::drag:
-            // Dragging the editor gutter thumb scrolls live, each motion (M8-B),
-            // independent of the selection drag state.
-            if (hit.region == ssg::HitRegion::EditorScrollbar) {
-                dispatch.commands.push_back(
-                    {"view.scroll_to_fraction",
-                     ssg::ScrollFractionArguments{hit.scrollNumerator,
-                                                  hit.scrollDenominator}});
-                return dispatch;
+            // Dragging any gutter thumb scrolls that surface live, each motion,
+            // independent of the selection drag state. Same catalog as press.
+            if (auto const* gutter = gutterRegion(hit.region)) {
+                return gutterScroll(*gutter, hit);
             }
             // While dragging, a motion over an editor cell extends the selection
             // from the press anchor to the cell under the pointer. A drag over a
@@ -119,19 +161,16 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
 }
 
 WheelTarget route_wheel(ssg::HitRegion region) {
-    switch (region) {
-        case ssg::HitRegion::Panel:
-        case ssg::HitRegion::PanelScrollbar:
-            return WheelTarget::tree;
-        case ssg::HitRegion::Palette:
-        case ssg::HitRegion::PaletteScrollbar:
-            // The palette is a client-owned overlay; the app scrolls its window
-            // directly (no server command). Falling through to view.scroll_lines
-            // would wrongly scroll the editor underneath the palette.
-            return WheelTarget::palette;
-        default:
-            return WheelTarget::editor;
+    // Same catalog as the gutter routing, so a surface cannot be wheel-scrollable
+    // but not draggable (or the reverse) by omission.
+    for (auto const& descriptor : kScrollableRegions) {
+        if (descriptor.content == region || descriptor.scrollbar == region) {
+            return descriptor.target;
+        }
     }
+    // Everything else scrolls the document: the editor is the default surface,
+    // and a wheel over chrome should not be inert.
+    return WheelTarget::editor;
 }
 
 std::optional<int> edge_scroll(bool dragging, int pointerRow,

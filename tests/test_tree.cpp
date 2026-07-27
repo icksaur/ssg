@@ -130,7 +130,7 @@ TEST(expansionSurvivesRefreshByIdentityAndDisappearingNodesArePruned) {
 
 TEST(commandSetIsExactAndInvocationIsProviderDataOnly) {
     const auto commands = treeCommandSet();
-    ASSERT_EQ(commands.descriptors().size(), std::size_t{7});
+    ASSERT_EQ(commands.descriptors().size(), std::size_t{8});
     ASSERT_EQ(commands.descriptors()[0].id, std::string_view{"tree.toggle_expanded"});
     ASSERT_EQ(commands.descriptors()[1].id,
               std::string_view{"tree.invoke_node_command"});

@@ -160,6 +160,7 @@ constexpr auto kExpectedCommands = std::to_array<ExpectedCommand>({
     {"tree.select_previous", "tree-providers"},
     {"tree.activate", "tree-providers"},
     {"tree.scroll", "tree-providers"},
+    {"tree.scroll_to_fraction", "tree-providers"},
     {"view.toggle_distraction_free", "shell-layout"},
     {"prompt.submit", "prompt-status-surface"},
     {"prompt.cancel", "prompt-status-surface"},
@@ -224,7 +225,7 @@ constexpr auto kExpectedCategoryCounts =
         {"replace", 6},    {"search", 3},    {"completion", 5},
         {"hover", 2},      {"rename", 1},    {"pane", 9},
         {"panel", 6},
-        {"tree", 7},
+        {"tree", 8},
         {"prompt", 5},     {"status", 4},    {"workspace", 1},
         {"file", 15},      {"tab", 9},       {"external", 3},
         {"settings", 6},   {"follow_edits", 3}, {"diff", 3},
@@ -233,7 +234,7 @@ constexpr auto kExpectedCategoryCounts =
         {"file_finder", 2},
     });
 
-static_assert(kExpectedCommands.size() == 180);
+static_assert(kExpectedCommands.size() == 181);
 
 std::optional<std::string> field(const std::string& object,
                                  const std::string& name) {
@@ -461,7 +462,8 @@ TEST(capabilityAndSurfaceExclusionsAreExact) {
             ASSERT_TRUE(command.lua);
             ASSERT_FALSE(command.keymap);
             ASSERT_FALSE(command.palette);
-        } else if (command.id == "tree.scroll") {
+        } else if (command.id == "tree.scroll" ||
+                   command.id == "tree.scroll_to_fraction") {
             // A pointer-fulfilment command: the wheel scrolls the tree viewport,
             // so it carries a scroll-lines payload and is neither keymap- nor
             // palette-reachable (the keyboard scrolls via next/previous, which

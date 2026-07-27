@@ -912,21 +912,86 @@ TEST(routePointerEditorScrollbarScrollsToFraction) {
     ASSERT_TRUE(scrollArgs(mid) != nullptr);
 }
 
-TEST(routePointerPanelAndPaletteScrollbarsAreNoOps) {
-    // Panel/palette gutter drag is not wired in M8; those hits dispatch nothing.
+// S3: EVERY scrollable surface's gutter answers press AND drag. This replaces a
+// test that asserted the panel and picker gutters were no-ops -- that pinned the
+// defect the user reported ("the bar scrollbar has no mouse interactivity") as
+// intended behavior. Driven from the catalog, so a surface listed there without
+// routing fails here rather than being silently inert.
+TEST(everyScrollableGutterAnswersPressAndDrag) {
     ssg::app::PointerTargets const empty;
-    for (auto region : {ssg::HitRegion::PanelScrollbar,
-                        ssg::HitRegion::PaletteScrollbar}) {
+    std::size_t checked = 0;
+
+    for (auto const& descriptor : ssg::app::scrollable_regions()) {
         ssg::RegionHit hit;
-        hit.region = region;
+        hit.region = descriptor.scrollbar;
         hit.scrollNumerator = 3;
-        hit.scrollDenominator = 5;
-        for (auto kind : {ssg::app::PointerKind::press, ssg::app::PointerKind::drag}) {
+        hit.scrollDenominator = 4;
+
+        for (auto kind : {ssg::app::PointerKind::press,
+                          ssg::app::PointerKind::drag}) {
             auto plan = ssg::app::route_pointer(
-                hit, ssg::app::PointerButton::left, kind, false, std::nullopt, empty);
-            ASSERT_TRUE(plan.commands.empty());
+                hit, ssg::app::PointerButton::left, kind, false, std::nullopt,
+                empty);
+
+            if (descriptor.scrollCommand.empty()) {
+                // A client-owned surface must NOT emit a command (S-I5): its
+                // scroll would otherwise round-trip on a latency-critical path.
+                ASSERT_TRUE(plan.commands.empty());
+                ASSERT_TRUE(plan.client_scroll.has_value());
+                if (plan.client_scroll) {
+                    ASSERT_EQ(plan.client_scroll->numerator, std::uint32_t{3});
+                    ASSERT_EQ(plan.client_scroll->denominator, std::uint32_t{4});
+                    ASSERT_TRUE(plan.client_scroll->target == descriptor.target);
+                }
+            } else {
+                ASSERT_EQ(plan.commands.size(), std::size_t{1});
+                ASSERT_EQ(plan.commands[0].command_id,
+                          std::string{descriptor.scrollCommand});
+                auto const* args = std::any_cast<ssg::ScrollFractionArguments>(
+                    &plan.commands[0].payload);
+                ASSERT_TRUE(args != nullptr);
+                if (args) {
+                    ASSERT_EQ(args->numerator, std::uint32_t{3});
+                    ASSERT_EQ(args->denominator, std::uint32_t{4});
+                }
+                ASSERT_FALSE(plan.client_scroll.has_value());
+            }
+            ++checked;
         }
     }
+
+    // A catalog that scanned nothing would pass vacuously.
+    ASSERT_EQ(checked, std::size_t{6});
+}
+
+// The wheel and the gutter must agree about which surface a region belongs to.
+// They previously came from separate code, which is how they could drift.
+TEST(theWheelAndTheGutterAgreeOnEverySurface) {
+    for (auto const& descriptor : ssg::app::scrollable_regions()) {
+        ASSERT_TRUE(ssg::app::route_wheel(descriptor.content) ==
+                    descriptor.target);
+        ASSERT_TRUE(ssg::app::route_wheel(descriptor.scrollbar) ==
+                    descriptor.target);
+    }
+}
+
+// Every scrollbar region the library can report must be in the catalog. Named
+// explicitly because adding a HitRegion does NOT fail to compile here.
+TEST(theCatalogCoversEveryScrollbarHitRegion) {
+    constexpr ssg::HitRegion kScrollbarRegions[] = {
+        ssg::HitRegion::EditorScrollbar,
+        ssg::HitRegion::PanelScrollbar,
+        ssg::HitRegion::PaletteScrollbar,
+    };
+    for (auto region : kScrollbarRegions) {
+        bool found = false;
+        for (auto const& descriptor : ssg::app::scrollable_regions()) {
+            if (descriptor.scrollbar == region) found = true;
+        }
+        ASSERT_TRUE(found);
+    }
+    ASSERT_EQ(ssg::app::scrollable_regions().size(),
+              std::size(kScrollbarRegions));
 }
 
 TEST(routePointerTabPressActivatesTheTab) {
@@ -1145,7 +1210,9 @@ int main() {
     RUN(routePointerDragWithoutAnchorOrTargetIsANoOp);
     RUN(routePointerReleaseEndsDragWithoutACommand);
     RUN(routePointerEditorScrollbarScrollsToFraction);
-    RUN(routePointerPanelAndPaletteScrollbarsAreNoOps);
+    RUN(everyScrollableGutterAnswersPressAndDrag);
+    RUN(theWheelAndTheGutterAgreeOnEverySurface);
+    RUN(theCatalogCoversEveryScrollbarHitRegion);
     RUN(routePointerTabPressActivatesTheTab);
     RUN(routePointerPalettePressExecutesTheCandidate);
     RUN(routePointerFilePickerPressOpensTheFileRatherThanExecutingIt);

@@ -146,7 +146,8 @@ when paused.
 Normative commands owned by this feature:
 
 - `tree.toggle_expanded`, `tree.invoke_node_command`, `tree.select`,
-  `tree.select_next`, `tree.select_previous`, `tree.activate`, `tree.scroll`
+  `tree.select_next`, `tree.select_previous`, `tree.activate`, `tree.scroll`,
+  `tree.scroll_to_fraction`
 - `follow_edits.resume`, `follow_edits.pause`, `follow_edits.toggle`
 - `diff.next_hunk`, `diff.previous_hunk`, `diff.open_file`
 

@@ -271,8 +271,22 @@ void EditorRuntime::Impl::revealTreeSelection() {
     treeFirstVisible = offset.firstVisible();
 }
 
-void EditorRuntime::Impl::scrollTree(std::int64_t rows) {
+void EditorRuntime::Impl::scrollTreeToFraction(std::uint32_t numerator,
+                                                std::uint32_t denominator) {
     auto view = tree.viewState();
+    if (view.providers.empty()) return;
+    auto const& provider = view.providers.front();
+    // The panel's counterpart to view.scroll_to_fraction: a gutter click or
+    // thumb drag positions the tree along its track. Same ScrollOffset the
+    // editor uses, so both gutters map a pointer row to a position identically.
+    auto offset = ScrollOffset{treeFirstVisible};
+    offset.toFraction(numerator, denominator,
+                      static_cast<std::uint32_t>(provider.nodes.size()),
+                      lastPanelContentRows);
+    treeFirstVisible = offset.firstVisible();
+}
+
+void EditorRuntime::Impl::scrollTree(std::int64_t rows) {    auto view = tree.viewState();
     if (view.providers.empty()) return;
     auto const& provider = view.providers.front();
     // keep-visible is not applied: a wheel scroll moves the viewport, not the

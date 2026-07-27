@@ -825,6 +825,19 @@ int main(int argc, char** argv) {
                        picker.paneRows);
         picker.firstVisible = offset.firstVisible();
     };
+    // Position the client-owned palette window along its track, as from a gutter
+    // click or thumb drag. The picker's counterpart to view.scroll_to_fraction,
+    // kept client-local for the same latency reason its ranking is.
+    auto scrollPaletteToFraction = [&](std::uint32_t numerator,
+                                       std::uint32_t denominator) {
+        if (!pickerOpen) return;
+        auto order = ssg::PaletteSearcher{}.rank(candidates, picker.query);
+        ssg::ScrollOffset offset{picker.firstVisible};
+        offset.toFraction(numerator, denominator,
+                          static_cast<std::uint32_t>(order.size()),
+                          picker.paneRows);
+        picker.firstVisible = offset.firstVisible();
+    };
     // Submit routes to the open picker's command, chosen from the mode the
     // server published rather than assumed: a candidate id means different
     // things per picker (a command id for the command palette), so a single
@@ -1170,6 +1183,15 @@ int main(int argc, char** argv) {
                                             dragAnchor, targets);
                 for (auto const& command : plan.commands) {
                     dispatch(command.command_id, command.payload);
+                }
+                // A gutter gesture on a client-owned surface has no command to
+                // dispatch (the picker's offset must not round-trip), so the
+                // loop applies it here.
+                if (plan.client_scroll &&
+                    plan.client_scroll->target ==
+                        ssg::app::WheelTarget::palette) {
+                    scrollPaletteToFraction(plan.client_scroll->numerator,
+                                            plan.client_scroll->denominator);
                 }
                 if (plan.begins_drag) {
                     dragging = true;

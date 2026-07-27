@@ -5230,6 +5230,8 @@ CommandArgumentCodecRegistry ProtocolCodec::buildCommandArgumentCodecRegistry() 
     for (auto const& descriptor : p0CommandDescriptors()) {
         if (descriptor.id == "view.scroll_lines") {
             entries.emplace_back(descriptor.id, scrollLinesCodec);
+        } else if (descriptor.id == "tree.scroll_to_fraction") {
+            entries.emplace_back(descriptor.id, scrollFractionCodec);
         } else if (descriptor.id == "tree.scroll") {
             entries.emplace_back(descriptor.id, scrollLinesCodec);
         } else if (descriptor.id == "view.scroll_pages") {

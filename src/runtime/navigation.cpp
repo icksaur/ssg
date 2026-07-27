@@ -168,6 +168,12 @@ CommandHandlerResult treeCommand(EditorRuntime::Impl& runtime,
         runtime.scrollTree(arguments->rows);
         return success();
     }
+    if (id == "tree.scroll_to_fraction") {
+        auto const* arguments = payloadAs<ScrollFractionArguments>(payload);
+        if (arguments == nullptr) return failure("tree.scroll_to_fraction requires a scroll-fraction payload");
+        runtime.scrollTreeToFraction(arguments->numerator, arguments->denominator);
+        return success();
+    }
     auto const* invocation = payloadAs<TreeCommandInvocation>(payload);
     if (invocation == nullptr) return failure(std::string{id} + " requires a tree invocation payload");
     if (id == "tree.toggle_expanded") {

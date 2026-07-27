@@ -286,6 +286,8 @@ struct EditorRuntime::Impl final : CommandServices,
     // offset clamped to [0, maximum_first_row] WITHOUT moving the selection --
     // the tree analog of the editor's view.scroll_lines.
     void scrollTree(std::int64_t rows);
+    void scrollTreeToFraction(std::uint32_t numerator,
+                              std::uint32_t denominator);
     // Scroll the editor viewport minimally so the PRIMARY caret is visible, using
     // the last cached pane dimensions. Called on the command path after any edit
     // moves the caret (typing, delete, undo/redo, paste), so the view follows the

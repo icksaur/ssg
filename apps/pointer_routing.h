@@ -18,6 +18,8 @@
 #include <any>
 #include <optional>
 #include <string>
+#include <span>
+#include <string_view>
 #include <vector>
 
 namespace ssg::app {
@@ -29,6 +31,45 @@ struct PointerCommand {
     std::any payload;
 };
 
+// Which scroll a gesture drives, by the surface it targets. Declared here
+// because both the wheel and the gutter routing name surfaces with it.
+enum class WheelTarget : std::uint8_t {
+    none,     // no scroll (nothing under the pointer wants the wheel)
+    editor,   // dispatch view.scroll_lines (the document)
+    tree,     // dispatch tree.scroll (the side panel)
+    palette,  // scroll the client-owned palette window (no command)
+};
+
+// A scrollable surface, for the routing that must treat all of them alike.
+//
+// A table rather than a `switch`, because a switch over `HitRegion` does NOT
+// fail to compile when a region is added -- verified by perturbation, this
+// build does not enable -Wswitch. Two of the three gutters were already
+// forgotten once; the exhaustiveness test over this table is what stops it
+// happening again.
+struct ScrollableRegionDescriptor {
+    ssg::HitRegion content;
+    ssg::HitRegion scrollbar;
+    WheelTarget target;
+    // The command a gutter gesture dispatches, or empty when the surface's
+    // offset is client-owned and must not round-trip (the picker: its ranked
+    // list is produced client-side for latency, so scrolling it stays local).
+    std::string_view scrollCommand;
+};
+
+// Every scrollable surface. Routing drives from this, so listing a surface here
+// is what wires it, and the exhaustiveness test fails if one is not routed.
+[[nodiscard]] std::span<const ScrollableRegionDescriptor>
+scrollable_regions() noexcept;
+
+// A gutter gesture the CALLER must apply to a client-owned offset, because no
+// server command may be dispatched for it (see ScrollableRegionDescriptor).
+struct ClientScroll {
+    WheelTarget target = WheelTarget::none;
+    std::uint32_t numerator = 0;
+    std::uint32_t denominator = 0;
+};
+
 // The result of routing one pointer event: an ordered command sequence (0, 1,
 // or — for a tree-row click — 2 commands, dispatched in order) plus how the
 // client-local drag state changes.
@@ -36,6 +77,9 @@ struct PointerDispatch {
     std::vector<PointerCommand> commands;
     bool begins_drag = false;  // a press that starts an editor selection drag
     bool ends_drag = false;    // a release that ends a drag
+    // Set when the gesture targets a surface whose offset the client owns, so
+    // there is no command to dispatch. The loop applies it locally.
+    std::optional<ClientScroll> client_scroll;
 };
 
 // The snapshot-derived data a pointer event needs, resolved by the caller (only
@@ -58,14 +102,6 @@ struct PointerTargets {
     ssg::RegionHit const& hit, PointerButton button, PointerKind kind,
     bool dragging, std::optional<ssg::DocumentPosition> drag_anchor,
     PointerTargets const& targets);
-
-// Which scroll a mouse-wheel event drives, by the region under the pointer.
-enum class WheelTarget : std::uint8_t {
-    none,     // no scroll (nothing under the pointer wants the wheel)
-    editor,   // dispatch view.scroll_lines (the document)
-    tree,     // dispatch tree.scroll (the side panel)
-    palette,  // scroll the client-owned palette window (no command)
-};
 
 // Route a mouse-wheel event to the scroll it drives for the region under the
 // pointer: the side panel (or its gutter) scrolls the tree, the palette (or its

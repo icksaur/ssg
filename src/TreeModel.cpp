@@ -301,7 +301,8 @@ TreeCommandSet::TreeCommandSet()
                     {"tree.select_next"},
                     {"tree.select_previous"},
                     {"tree.activate"},
-                    {"tree.scroll"}}} {}
+                    {"tree.scroll"},
+                    {"tree.scroll_to_fraction"}}} {}
 
 TreeCommandSet treeCommandSet() { return TreeCommandSet{}; }
 
