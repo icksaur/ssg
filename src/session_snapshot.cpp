@@ -85,7 +85,8 @@ bool operator==(SessionSnapshotSections const& left,
            left.tree == right.tree && left.syntax == right.syntax &&
            left.lspSync == right.lspSync &&
            left.lspFeatures == right.lspFeatures &&
-           left.theme == right.theme && shellEqual(left.shell, right.shell) &&
+           left.theme == right.theme && left.style == right.style &&
+           shellEqual(left.shell, right.shell) &&
            left.palette == right.palette;
 }
 
@@ -116,7 +117,8 @@ SessionDelta::SessionDelta(
     ExternalModificationDelta externalModification,
     FollowEditsDelta followEdits, TreeDelta tree, SyntaxDelta syntax,
     LspSyncDelta lspSync, LspFeatureDelta lspFeatures,
-    ThemeSectionDelta theme, ShellSectionDelta shell, ViewportDelta viewport)
+    ThemeSectionDelta theme, StyleSectionDelta style,
+    ShellSectionDelta shell, ViewportDelta viewport)
     : baseRevision_{baseRevision},
       revision_{revision},
       clientId_{clientId},
@@ -143,6 +145,7 @@ SessionDelta::SessionDelta(
       lspSync_{std::move(lspSync)},
       lspFeatures_{std::move(lspFeatures)},
       theme_{std::move(theme)},
+      style_{std::move(style)},
       shell_{std::move(shell)},
       viewport_{std::move(viewport)} {}
 
@@ -215,6 +218,8 @@ SessionDelta SessionSnapshotCodec::deriveDelta(SessionSnapshot const& before,
         LspFeatureDeltaCodec{}.derive(old.lspFeatures, next.lspFeatures),
         {old.theme == next.theme ? std::nullopt
                                  : std::optional{next.theme}},
+        {old.style == next.style ? std::nullopt
+                                 : std::optional{next.style}},
         {shellEqual(old.shell, next.shell)
              ? std::nullopt
              : std::optional{next.shell}},
@@ -303,6 +308,7 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
     }
 
     auto theme = delta.theme_.replacement.value_or(base.sections().theme);
+    auto style = delta.style_.replacement.value_or(base.sections().style);
     auto shell = delta.shell_.replacement.value_or(base.sections().shell);
     auto viewport = delta.viewport_.replacement.value_or(
         base.client().viewport);
@@ -333,6 +339,7 @@ SessionReplayResult SessionSnapshotCodec::replay(SessionSnapshot const& base,
         std::move(*lspSync.state),
         std::move(*lspFeatures.state),
         std::move(theme),
+        std::move(style),
         std::move(shell),
         std::move(palette),
     };
@@ -360,7 +367,8 @@ SessionDelta SessionSnapshotCodec::decodeWire(
     ExternalModificationDelta externalModification,
     FollowEditsDelta followEdits, TreeDelta tree, SyntaxDelta syntax,
     LspSyncDelta lspSync, LspFeatureDelta lspFeatures,
-    ThemeSectionDelta theme, ShellSectionDelta shell,
+    ThemeSectionDelta theme, StyleSectionDelta style,
+    ShellSectionDelta shell,
     ViewportDelta viewport) const {
     return SessionDelta{baseRevision,
                         revision,
@@ -388,6 +396,7 @@ SessionDelta SessionSnapshotCodec::decodeWire(
                         std::move(lspSync),
                         std::move(lspFeatures),
                         std::move(theme),
+                        std::move(style),
                         std::move(shell),
                         std::move(viewport)};
 }

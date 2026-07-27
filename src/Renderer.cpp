@@ -862,6 +862,7 @@ std::string CellGrid::canonical() const {
 CellGrid Renderer::render(SessionSnapshot const& snapshot) const {
     auto const& shell = snapshot.sections().shell;
     auto const& theme = snapshot.sections().theme;
+    auto const& style = snapshot.sections().style;
     for (auto index : theme.semanticIndices) {
         if (index >= kThemePaletteSize) {
             throw std::invalid_argument{

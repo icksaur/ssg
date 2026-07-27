@@ -208,6 +208,7 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision,
         {revision, {}},
         {revision, {}, std::nullopt, {}, {}},
         theme,
+        ssg::Style{},
         std::move(shell),
     };
 }

@@ -20,6 +20,7 @@
 #include <ssg/TabManager.h>
 #include <ssg/TextCodec.h>
 #include <ssg/Theme.h>
+#include <ssg/Style.h>
 #include <ssg/TreeModel.h>
 #include <ssg/ShellState.h>
 #include <ssg/Viewport.h>
@@ -52,6 +53,7 @@ struct SessionSnapshotSections {
     LspSyncViewState lspSync;
     LspFeatureViewState lspFeatures;
     ThemeSnapshot theme;
+    Style style;
     ShellViewState shell;
     PaletteViewState palette;
 };
@@ -105,6 +107,10 @@ struct SettingsSectionDelta {
 
 struct ThemeSectionDelta {
     std::optional<ThemeSnapshot> replacement;
+};
+
+struct StyleSectionDelta {
+    std::optional<Style> replacement;
 };
 
 struct ShellSectionDelta {
@@ -183,6 +189,9 @@ public:
     [[nodiscard]] ThemeSectionDelta const& theme() const noexcept {
         return theme_;
     }
+    [[nodiscard]] StyleSectionDelta const& style() const noexcept {
+        return style_;
+    }
     [[nodiscard]] ShellSectionDelta const& shell() const noexcept {
         return shell_;
     }
@@ -210,7 +219,8 @@ private:
         DiffDelta diff, ExternalModificationDelta externalModification,
         FollowEditsDelta followEdits, TreeDelta tree, SyntaxDelta syntax,
         LspSyncDelta lspSync, LspFeatureDelta lspFeatures,
-        ThemeSectionDelta theme, ShellSectionDelta shell,
+        ThemeSectionDelta theme, StyleSectionDelta style,
+        ShellSectionDelta shell,
         ViewportDelta viewport);
 
     Revision baseRevision_;
@@ -239,6 +249,7 @@ private:
     LspSyncDelta lspSync_;
     LspFeatureDelta lspFeatures_;
     ThemeSectionDelta theme_;
+    StyleSectionDelta style_;
     ShellSectionDelta shell_;
     ViewportDelta viewport_;
 };
@@ -279,7 +290,8 @@ public:
         DiffDelta diff, ExternalModificationDelta externalModification,
         FollowEditsDelta followEdits, TreeDelta tree, SyntaxDelta syntax,
         LspSyncDelta lspSync, LspFeatureDelta lspFeatures,
-        ThemeSectionDelta theme, ShellSectionDelta shell,
+        ThemeSectionDelta theme, StyleSectionDelta style,
+        ShellSectionDelta shell,
         ViewportDelta viewport) const;
 };
 

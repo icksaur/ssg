@@ -55,6 +55,18 @@ bool gridContains(ssg::CellGrid const& grid, std::string_view needle) {
     return false;
 }
 
+// Rebuilds a snapshot with a replaced Style section.  After Y4 the renderer
+// reads style from the snapshot, not from a member, so this is how a test
+// restyles -- and doing it through the published section is exactly the proof
+// that the renderer and runtime share the one instance.
+ssg::SessionSnapshot withStyle(ssg::SessionSnapshot const& base,
+                               ssg::Style style) {
+    auto sections = base.sections();
+    sections.style = std::move(style);
+    return ssg::SessionSnapshot{base.revision(), base.topology(), base.client(),
+                                std::move(sections)};
+}
+
 }  // namespace
 
 TEST(renderPaintsContentNotAccessibilityLabels) {
@@ -967,11 +979,12 @@ TEST(theCaretFollowsAScrolledQueryToTheEndOfTheVisibleText) {
     }
 }
 
-// Proves the renderer actually READS its Style rather than still holding the
-// literals.  The existing suite passing only shows the refactor changed nothing;
-// it cannot show the routing is live, because the defaults reproduce the old
-// glyphs exactly.  So: restyle, and require the screen to follow.
-TEST(theRendererDrawsChromeFromItsStyleNotFromLiterals) {
+// Proves the renderer READS the snapshot's published Style section rather than
+// holding its own.  The existing suite passing only shows the refactor changed
+// nothing; it cannot show the routing is live, because the defaults reproduce
+// the old glyphs exactly.  So: restyle the published section, and require the
+// screen to follow -- which also proves the runtime and renderer share it.
+TEST(theRendererDrawsChromeFromTheSnapshotStyleNotFromLiterals) {
     auto root = uniqueRoot();
     for (int i = 0; i < 40; ++i) {
         std::ofstream{root / ("file-" + std::to_string(i) + ".txt")} << "x";
@@ -989,15 +1002,15 @@ TEST(theRendererDrawsChromeFromItsStyleNotFromLiterals) {
     ASSERT_TRUE(shell.panelScrollbar.has_value());
     if (!shell.panelScrollbar) return;
 
-    ssg::Renderer renderer;
-    renderer.style.scrollbar.track = ":";
-    renderer.style.scrollbar.single = "@";
-    renderer.style.scrollbar.top = "@";
-    renderer.style.scrollbar.body = "@";
-    renderer.style.scrollbar.bottom = "@";
-    renderer.style.tree.collapsed = "+ ";
-    renderer.style.tree.expanded = "- ";
-    auto const grid = renderer.render(*snapshot);
+    ssg::Style style;
+    style.scrollbar.track = ":";
+    style.scrollbar.single = "@";
+    style.scrollbar.top = "@";
+    style.scrollbar.body = "@";
+    style.scrollbar.bottom = "@";
+    style.tree.collapsed = "+ ";
+    style.tree.expanded = "- ";
+    auto const grid = ssg::Renderer{}.render(withStyle(*snapshot, style));
 
     int const gx = shell.panelScrollbar->x;
     bool restyledThumb = false;
@@ -1021,7 +1034,7 @@ TEST(theRendererDrawsChromeFromItsStyleNotFromLiterals) {
 // The replacement glyph is the one chrome glyph paintDocument draws, and it was
 // duplicated at four sites before Y2's sweep.  A document with a control byte,
 // rendered with a restyled `unrenderable`, must show the restyled glyph -- proof
-// paintDocument reads Style rather than holding the literal.
+// paintDocument reads the snapshot's Style rather than holding the literal.
 TEST(theDocumentReplacementGlyphComesFromStyle) {
     auto root = uniqueRoot();
     std::ofstream{root / "ctrl.txt"} << "a\x01" "b\n";  // \x01 has no glyph
@@ -1035,13 +1048,12 @@ TEST(theDocumentReplacementGlyphComesFromStyle) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
 
-    ssg::Renderer defaultRenderer;
-    auto const shipped = defaultRenderer.render(*snapshot);
+    auto const shipped = ssg::Renderer{}.render(*snapshot);
     ASSERT_TRUE(gridContains(shipped, "\xef\xbf\xbd"));  // U+FFFD by default
 
-    ssg::Renderer restyled;
-    restyled.style.unrenderable = "?";
-    auto const grid = restyled.render(*snapshot);
+    ssg::Style style;
+    style.unrenderable = "?";
+    auto const grid = ssg::Renderer{}.render(withStyle(*snapshot, style));
     ASSERT_TRUE(gridContains(grid, "a?b"));
     ASSERT_FALSE(gridContains(grid, "\xef\xbf\xbd"));
 }
@@ -1073,7 +1085,7 @@ int main() {
     RUN(anOpenPickerPutsTheCaretAtTheEndOfTheTypedQuery);
     RUN(theInputLineCaretIsPlacedByDisplayWidthNotByteCount);
     RUN(theCaretFollowsAScrolledQueryToTheEndOfTheVisibleText);
-    RUN(theRendererDrawsChromeFromItsStyleNotFromLiterals);
+    RUN(theRendererDrawsChromeFromTheSnapshotStyleNotFromLiterals);
     RUN(theDocumentReplacementGlyphComesFromStyle);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";

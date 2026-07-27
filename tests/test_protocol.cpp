@@ -90,6 +90,7 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision, std::string marker
         {revision, {}},
         {revision, {}, std::nullopt, {}, marker},
         theme,
+        ssg::Style{},
         std::move(shell),
     };
 }
@@ -522,6 +523,40 @@ TEST(sessionSnapshotRoundTripsThroughTheWire) {
     ASSERT_TRUE(decoded.accepted());
     ASSERT_TRUE(decoded.snapshot.has_value());
     ASSERT_EQ(*decoded.snapshot, snapshot);
+}
+
+// The round-trip above carries a DEFAULT style, so it proves the field is
+// present but not that each of the ~29 hand-written codec fields maps to its
+// own slot.  A copy-paste error (encoding `top` where `bottom` belongs) would
+// survive a default round-trip.  This style makes every field distinct, so a
+// mis-wired field decodes to the wrong value and equality fails.
+TEST(sessionSnapshotRoundTripsANonDefaultStyle) {
+    ssg::Style style;
+    style.scrollbar = {"g", "r", "s", "t", "b", "e"};
+    style.tree = {"x", "y", 7};
+    style.tab = {"D1", "L1"};
+    style.toggle = {"C1", "U1"};
+    style.truncation = "T1";
+    style.inputLineSigil = "S1";
+    style.unrenderable = "R1";
+    style.promptLabelSeparator = "P1";
+    style.dimensions = {21, 5, 25, 13, 19, 2, 3, 4, 6, 7, 8, 9};
+
+    auto snapshotSections = sections(ssg::Revision{4}, "alpha");
+    snapshotSections.style = style;
+    auto snapshot = ssg::SessionSnapshotCodec{}.assemble(
+        ssg::Revision{4}, {ssg::WorkspaceId{2}, ssg::ViewId{9}},
+        ssg::InvocationPrincipal{
+            ssg::ClientId{7}, ssg::InvocationOrigin::InProcess,
+            {ssg::CapabilityId{"local_file_drop"}}},
+        ssg::ViewId{9}, clientView(3), std::move(snapshotSections));
+
+    auto const bytes = ssg::ProtocolCodec{}.encodeSessionSnapshot(snapshot);
+    auto const decoded = ssg::ProtocolCodec{}.decodeSessionSnapshot(bytes);
+    ASSERT_TRUE(decoded.accepted());
+    ASSERT_TRUE(decoded.snapshot.has_value());
+    if (!decoded.snapshot) return;
+    ASSERT_TRUE(decoded.snapshot->sections().style == style);
 }
 
 TEST(sessionDeltaRoundTripsAndReplayMatchesTheDecodedDelta) {
@@ -1224,6 +1259,7 @@ int main() {
     RUN(decodeCommandRequestRejectsMalformedPayload);
     RUN(decodeCommandRequestMapsDomainInvariantFailuresToMalformed);
     RUN(sessionSnapshotRoundTripsThroughTheWire);
+    RUN(sessionSnapshotRoundTripsANonDefaultStyle);
     RUN(sessionDeltaRoundTripsAndReplayMatchesTheDecodedDelta);
     RUN(phantomViewportProjectionRoundTripsThroughSnapshotAndDelta);
     RUN(diffWordRangesRoundTripThroughSnapshotAndDelta);

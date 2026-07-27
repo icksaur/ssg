@@ -62,14 +62,12 @@ struct CellGrid {
 
 class Renderer {
 public:
-    // The chrome glyphs and dimensions this renderer draws with.  Public and
-    // assignable so a client can restyle without a new render entry point;
-    // defaults reproduce the shipped appearance.  Style will move onto the
-    // snapshot when it becomes a published, wire-visible section
-    // (doc/spec-style.md Y4).
-    Style style{};
-
     [[nodiscard]] CellGrid render(SessionSnapshot const& snapshot) const;
+
+    // Style is no longer a renderer member: it is read from the snapshot's
+    // published Style section (doc/spec-style.md Y4), so the runtime and the
+    // renderer share the one instance the runtime owns rather than two that can
+    // drift.
 
     // Test instrumentation (M12 INV-render-projection).  Counts the
     // compute_cell_run (grapheme-segmentation) calls render() has made since the

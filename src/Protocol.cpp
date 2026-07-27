@@ -1289,8 +1289,12 @@ bool decodePresent(ProtocolValue const& value,
                    std::optional<BackgroundTintAdjustments>& out);
 ProtocolValue toValue(ThemeSnapshot const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<ThemeSnapshot>& out);
+ProtocolValue toValue(Style const& value);
+bool decodePresent(ProtocolValue const& value, std::optional<Style>& out);
 ProtocolValue toValue(ThemeSectionDelta const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<ThemeSectionDelta>& out);
+ProtocolValue toValue(StyleSectionDelta const& value);
+bool decodePresent(ProtocolValue const& value, std::optional<StyleSectionDelta>& out);
 ProtocolValue toValue(DiffTints const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<DiffTints>& out);
 ProtocolValue toValue(GridSize const& value);
@@ -4669,6 +4673,116 @@ bool decodePresent(ProtocolValue const& value, std::optional<ThemeSnapshot>& out
     return true;
 }
 
+// Style's glyph tables are Style-internal structs, so their fields are encoded
+// flat here rather than through per-struct codecs nothing else would use.
+ProtocolValue toValue(Style const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("scrollbar_gutter", toValue(value.scrollbar.gutter));
+    fields.emplace_back("scrollbar_track", toValue(value.scrollbar.track));
+    fields.emplace_back("scrollbar_single", toValue(value.scrollbar.single));
+    fields.emplace_back("scrollbar_top", toValue(value.scrollbar.top));
+    fields.emplace_back("scrollbar_body", toValue(value.scrollbar.body));
+    fields.emplace_back("scrollbar_bottom", toValue(value.scrollbar.bottom));
+    fields.emplace_back("tree_expanded", toValue(value.tree.expanded));
+    fields.emplace_back("tree_collapsed", toValue(value.tree.collapsed));
+    fields.emplace_back("tree_indent", toValue(value.tree.indentPerDepth));
+    fields.emplace_back("tab_dirty_suffix", toValue(value.tab.dirtySuffix));
+    fields.emplace_back("tab_live_diff_prefix", toValue(value.tab.liveDiffPrefix));
+    fields.emplace_back("toggle_checked", toValue(value.toggle.checked));
+    fields.emplace_back("toggle_unchecked", toValue(value.toggle.unchecked));
+    fields.emplace_back("truncation", toValue(value.truncation));
+    fields.emplace_back("input_line_sigil", toValue(value.inputLineSigil));
+    fields.emplace_back("unrenderable", toValue(value.unrenderable));
+    fields.emplace_back("prompt_label_separator",
+                        toValue(value.promptLabelSeparator));
+    fields.emplace_back("dim_minimum_columns",
+                        toValue(value.dimensions.minimumColumns));
+    fields.emplace_back("dim_minimum_rows",
+                        toValue(value.dimensions.minimumRows));
+    fields.emplace_back("dim_panel_target_width",
+                        toValue(value.dimensions.panelTargetWidth));
+    fields.emplace_back("dim_panel_minimum_width",
+                        toValue(value.dimensions.panelMinimumWidth));
+    fields.emplace_back("dim_editor_minimum_width",
+                        toValue(value.dimensions.editorMinimumWidth));
+    fields.emplace_back("dim_scrollbar_gutter_width",
+                        toValue(value.dimensions.scrollbarGutterWidth));
+    fields.emplace_back("dim_header_height",
+                        toValue(value.dimensions.headerHeight));
+    fields.emplace_back("dim_tab_bar_height",
+                        toValue(value.dimensions.tabBarHeight));
+    fields.emplace_back("dim_footer_height",
+                        toValue(value.dimensions.footerHeight));
+    fields.emplace_back("dim_label_padding",
+                        toValue(value.dimensions.labelPadding));
+    fields.emplace_back("dim_input_line_separator",
+                        toValue(value.dimensions.inputLineSeparator));
+    fields.emplace_back("dim_input_line_query_budget",
+                        toValue(value.dimensions.inputLineQueryBudget));
+    return ProtocolValue::makeObject(std::move(fields));
+}
+bool decodePresent(ProtocolValue const& value, std::optional<Style>& out) {
+    auto const* object = value.asObject();
+    if (!object) return false;
+    auto gutter = requireField<std::string>(value.field("scrollbar_gutter"));
+    auto track = requireField<std::string>(value.field("scrollbar_track"));
+    auto single = requireField<std::string>(value.field("scrollbar_single"));
+    auto top = requireField<std::string>(value.field("scrollbar_top"));
+    auto body = requireField<std::string>(value.field("scrollbar_body"));
+    auto bottom = requireField<std::string>(value.field("scrollbar_bottom"));
+    auto expanded = requireField<std::string>(value.field("tree_expanded"));
+    auto collapsed = requireField<std::string>(value.field("tree_collapsed"));
+    auto indent = requireField<int>(value.field("tree_indent"));
+    auto dirtySuffix = requireField<std::string>(value.field("tab_dirty_suffix"));
+    auto liveDiffPrefix =
+        requireField<std::string>(value.field("tab_live_diff_prefix"));
+    auto checked = requireField<std::string>(value.field("toggle_checked"));
+    auto unchecked = requireField<std::string>(value.field("toggle_unchecked"));
+    auto truncation = requireField<std::string>(value.field("truncation"));
+    auto sigil = requireField<std::string>(value.field("input_line_sigil"));
+    auto unrenderable = requireField<std::string>(value.field("unrenderable"));
+    auto separator =
+        requireField<std::string>(value.field("prompt_label_separator"));
+    auto minCols = requireField<int>(value.field("dim_minimum_columns"));
+    auto minRows = requireField<int>(value.field("dim_minimum_rows"));
+    auto panelTarget = requireField<int>(value.field("dim_panel_target_width"));
+    auto panelMin = requireField<int>(value.field("dim_panel_minimum_width"));
+    auto editorMin = requireField<int>(value.field("dim_editor_minimum_width"));
+    auto gutterWidth =
+        requireField<int>(value.field("dim_scrollbar_gutter_width"));
+    auto headerHeight = requireField<int>(value.field("dim_header_height"));
+    auto tabBarHeight = requireField<int>(value.field("dim_tab_bar_height"));
+    auto footerHeight = requireField<int>(value.field("dim_footer_height"));
+    auto labelPadding = requireField<int>(value.field("dim_label_padding"));
+    auto separatorWidth =
+        requireField<int>(value.field("dim_input_line_separator"));
+    auto queryBudget =
+        requireField<int>(value.field("dim_input_line_query_budget"));
+    if (!gutter || !track || !single || !top || !body || !bottom || !expanded ||
+        !collapsed || !indent || !dirtySuffix || !liveDiffPrefix || !checked ||
+        !unchecked || !truncation || !sigil || !unrenderable || !separator ||
+        !minCols || !minRows || !panelTarget || !panelMin || !editorMin ||
+        !gutterWidth || !headerHeight || !tabBarHeight || !footerHeight ||
+        !labelPadding || !separatorWidth || !queryBudget) {
+        return false;
+    }
+    Style style;
+    style.scrollbar = {*gutter, *track, *single, *top, *body, *bottom};
+    style.tree = {*expanded, *collapsed, *indent};
+    style.tab = {*dirtySuffix, *liveDiffPrefix};
+    style.toggle = {*checked, *unchecked};
+    style.truncation = *truncation;
+    style.inputLineSigil = *sigil;
+    style.unrenderable = *unrenderable;
+    style.promptLabelSeparator = *separator;
+    style.dimensions = {*minCols,      *minRows,      *panelTarget,
+                        *panelMin,     *editorMin,    *gutterWidth,
+                        *headerHeight, *tabBarHeight, *footerHeight,
+                        *labelPadding, *separatorWidth, *queryBudget};
+    out.emplace(std::move(style));
+    return true;
+}
+
 
 ProtocolValue toValue(SessionTopology const& value) {
     std::vector<ProtocolValue::Field> fields;
@@ -4732,6 +4846,7 @@ ProtocolValue toValue(SessionSnapshotSections const& value) {
     fields.emplace_back("lsp_sync", toValue(value.lspSync));
     fields.emplace_back("lsp_features", toValue(value.lspFeatures));
     fields.emplace_back("theme", toValue(value.theme));
+    fields.emplace_back("style", toValue(value.style));
     fields.emplace_back("shell", toValue(value.shell));
     return ProtocolValue::makeObject(std::move(fields));
 }
@@ -4758,18 +4873,19 @@ bool decodePresent(ProtocolValue const& value, std::optional<SessionSnapshotSect
     auto lspSync = requireField<LspSyncViewState>(value.field("lsp_sync"));
     auto lspFeatures = requireField<LspFeatureViewState>(value.field("lsp_features"));
     auto theme = requireField<ThemeSnapshot>(value.field("theme"));
+    auto style = requireField<Style>(value.field("style"));
     auto shell = requireField<ShellViewState>(value.field("shell"));
     if (!document || !selection || !history || !clipboard || !promptStatus || !search ||
         !findReplace || !settings || !keymap || !textEncoding || !tabs || !diff ||
         !externalModification || !followEdits || !tree || !syntax || !lspSync ||
-        !lspFeatures || !theme || !shell) {
+        !lspFeatures || !theme || !style || !shell) {
         return false;
     }
     out.emplace(SessionSnapshotSections{
         *document, *selection, *history, *clipboard, *promptStatus, *search,
         *findReplace, *settings, *keymap, *textEncoding, *tabs, *diff,
         *externalModification, *followEdits, *tree, std::move(*syntax), *lspSync,
-        *lspFeatures, *theme, *shell});
+        *lspFeatures, *theme, std::move(*style), *shell});
     return true;
 }
 
@@ -5052,6 +5168,20 @@ bool decodePresent(ProtocolValue const& value, std::optional<ThemeSectionDelta>&
     std::optional<ThemeSnapshot> replacement;
     if (!decodeOptionalField(value.field("replacement"), replacement)) return false;
     out.emplace(ThemeSectionDelta{std::move(replacement)});
+    return true;
+}
+
+ProtocolValue toValue(StyleSectionDelta const& value) {
+    std::vector<ProtocolValue::Field> fields;
+    fields.emplace_back("replacement", toValue(value.replacement));
+    return ProtocolValue::makeObject(std::move(fields));
+}
+bool decodePresent(ProtocolValue const& value, std::optional<StyleSectionDelta>& out) {
+    auto const* object = value.asObject();
+    if (!object) return false;
+    std::optional<Style> replacement;
+    if (!decodeOptionalField(value.field("replacement"), replacement)) return false;
+    out.emplace(StyleSectionDelta{std::move(replacement)});
     return true;
 }
 
@@ -5434,6 +5564,7 @@ std::string ProtocolCodec::encodeSessionDelta(SessionDelta const& delta) const {
     fields.emplace_back("lsp_sync", toValue(delta.lspSync()));
     fields.emplace_back("lsp_features", toValue(delta.lspFeatures()));
     fields.emplace_back("theme", toValue(delta.theme()));
+    fields.emplace_back("style", toValue(delta.style()));
     fields.emplace_back("shell", toValue(delta.shell()));
     fields.emplace_back("viewport", toValue(delta.viewport()));
     return encodeMessage(ProtocolMessageKind::SessionDelta,
@@ -5493,6 +5624,7 @@ DecodeSessionDeltaResult ProtocolCodec::decodeSessionDelta(std::string_view byte
     auto lspFeatures =
         requireField<LspFeatureDelta>(payload.field("lsp_features"));
     auto theme = requireField<ThemeSectionDelta>(payload.field("theme"));
+    auto style = requireField<StyleSectionDelta>(payload.field("style"));
     auto shell = requireField<ShellSectionDelta>(payload.field("shell"));
     auto viewport = requireField<ViewportDelta>(payload.field("viewport"));
 
@@ -5500,7 +5632,7 @@ DecodeSessionDeltaResult ProtocolCodec::decodeSessionDelta(std::string_view byte
         !capabilities || !selection || !history || !clipboard ||
         !promptStatus || !search || !findReplace || !settings || !keymap ||
         !tabs || !diff || !externalModification || !followEdits || !tree ||
-        !syntax || !lspSync || !lspFeatures || !theme || !shell ||
+        !syntax || !lspSync || !lspFeatures || !theme || !style || !shell ||
         !viewport) {
         return {ProtocolError::MalformedMessage, std::nullopt,
                 "session delta payload is malformed"};
@@ -5519,6 +5651,7 @@ DecodeSessionDeltaResult ProtocolCodec::decodeSessionDelta(std::string_view byte
                 std::move(*externalModification), std::move(*followEdits),
                 std::move(*tree), std::move(*syntax), std::move(*lspSync),
                 std::move(*lspFeatures), std::move(*theme),
+                std::move(*style),
                 std::move(*shell), std::move(*viewport)),
             {}};
 }

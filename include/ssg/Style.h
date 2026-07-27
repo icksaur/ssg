@@ -30,23 +30,27 @@ struct ScrollbarGlyphs {
     std::string top = "#";
     std::string body = "#";
     std::string bottom = "#";
+    friend bool operator==(ScrollbarGlyphs const&, ScrollbarGlyphs const&) = default;
 };
 
 struct TreeGlyphs {
     std::string expanded = "\xe2\x96\xbe ";    // U+25BE
     std::string collapsed = "\xe2\x96\xb8 ";   // U+25B8
     int indentPerDepth = 2;
+    friend bool operator==(TreeGlyphs const&, TreeGlyphs const&) = default;
 };
 
 struct TabGlyphs {
     std::string dirtySuffix = " *";
     std::string liveDiffPrefix = "D ";
+    friend bool operator==(TabGlyphs const&, TabGlyphs const&) = default;
 };
 
 // Checkbox markers for prompt toggle controls (find's case/word/regex).
 struct ToggleGlyphs {
     std::string checked = "[x] ";
     std::string unchecked = "[ ] ";
+    friend bool operator==(ToggleGlyphs const&, ToggleGlyphs const&) = default;
 };
 
 // Sizes in terminal cells.  There is no unit system and no scaling factor: the
@@ -66,6 +70,7 @@ struct StyleDimensions {
     int labelPadding = 2;
     int inputLineSeparator = 1;
     int inputLineQueryBudget = 8;
+    friend bool operator==(StyleDimensions const&, StyleDimensions const&) = default;
 };
 
 enum class ScrollbarCellKind : std::uint8_t { Gutter, Track, Thumb };
@@ -118,6 +123,10 @@ public:
     // than the track is clamped rather than trusted.
     ScrollbarCell scrollbarCell(int row, int thumbStart, int thumbSize,
                                  int trackHeight) const;
+
+    // Style is a published snapshot section (doc/spec-style.md Y4), so it
+    // participates in equality and wire round-trips like any other section.
+    bool operator==(Style const&) const = default;
 };
 
 }  // namespace ssg

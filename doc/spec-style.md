@@ -306,9 +306,45 @@ that step is mechanical rather than a redesign.
 | Y1 | **Delivered.** `Style` with the glyph tables and dimensions, defaults byte-identical to today. No callers yet | `include/ssg/Style.h`, `src/Style.cpp`, `tests/test_style.cpp`, `cmake/components/style.cmake` | configured-behavior unit tests: a style built with distinctive glyphs must render exactly those. Plus a size property (resolved thumb length == requested size, over all heights and offsets) and the derived sigil width. Every behavior perturbation-verified |
 | Y2 | **Delivered.** Route the renderer, shell layout and snapshot composition through it | `src/Renderer.cpp`, `src/ShellState.cpp`, `src/runtime/snapshot.cpp`, `include/ssg/Renderer.h`, `include/ssg/ShellState.h`, `src/runtime/editor_runtime_internal.h` | the existing suite passes unchanged (the refactor is invisible), PLUS two routing proofs -- restyling a `Renderer` changes the painted chrome, and a `ShellLayoutRequest`'s style changes panel width, the minimum viewport and the sigil. Both perturbation-verified against a regression to literals |
 | Y3 | **Delivered as a sweep, not a guard.** One-time sweep of the three chrome translation units for any glyph literal reaching the grid; route the stragglers into `Style`; then rely on the Y2 routing tests as the standing net | `src/Renderer.cpp`, `include/ssg/Style.h`, `tests/test_render.cpp`, `tests/test_style.cpp` | the sweep found two more glyphs (U+FFFD replacement x4, prompt `": "` separator x2), now routed; a new routing proof restyles `unrenderable` and requires the document to follow (perturbation-verified). No grep-guard: a blocklist would only catch the glyphs already known |
-| Y4 | (Optional, after review) Publish style as a snapshot section with delta, wire codec and a `style.define` command, following the theme's path | `include/ssg/session_snapshot.h`, `src/Protocol.cpp`, runtime, command catalog | round-trip through the codec; a `style.define` at runtime repaints with the new glyph |
+| Y4 | **Delivered.** Publish `Style` as a snapshot section so the runtime and renderer share one instance, following the theme's path | `include/ssg/Style.h`, `include/ssg/session_snapshot.h`, `src/session_snapshot.cpp`, `src/Protocol.cpp`, `src/runtime/snapshot.cpp`, `include/ssg/Renderer.h`, `src/Renderer.cpp`, `tests/*` | full wire round-trip incl. a NON-default style pinning all 29 codec fields (a mis-wired field is caught, perturbation-verified); the renderer reads `snapshot.sections().style` and the routing tests restyle through the published section; `Renderer::style` member deleted; delta derive/replay covered. The `style.define` command (runtime restyle) stays deferred |
 
 ## Status
+
+**Y1–Y4 delivered.** `Style` is a published snapshot section; the runtime owns
+the one instance (`EditorRuntime::Impl::style`), the shell layout and the
+renderer both read from it, and the two-instance divergence the earlier steps
+warned about is gone -- `Renderer::style` no longer exists.
+
+**What "share one instance" required, concretely.** Before Y4 the renderer held
+its own `Style` and the runtime held another, copied into each layout request;
+nothing kept them equal. Y4 makes `Style` a section on `SessionSnapshotSections`
+(right after `theme`, following its exact path), filled from `Impl::style`. The
+renderer reads `snapshot.sections().style`. So one source feeds both the shell
+layout and the renderer, published once per snapshot.
+
+**The section had to round-trip on the wire, and that is where the risk was.**
+`Style` gained `operator==` (and each glyph struct did), a 29-field flat wire
+codec, a `StyleSectionDelta` following `ThemeSectionDelta`, and derive/replay
+entries. The default round-trip only proves the field is *present*; a copy-paste
+error across 29 hand-written fields would survive it. So a second test round-trips
+a style whose every field is distinct and asserts equality -- and mis-wiring one
+field (encoding `top` where `bottom` belongs) was perturbation-verified to fail
+it at the fidelity assertion. The canonical wire goldens were regenerated, which
+is the documented workflow for a format change, not a masked break.
+
+**Testing restyle without a command.** Removing `Renderer::style` meant the Y2/Y3
+routing tests could no longer restyle via a member. They now rebuild the snapshot
+with a replaced `style` section (`withStyle`) -- which is *stronger*, because it
+proves the renderer reads the shared published instance rather than any private
+copy. Making the renderer ignore the section (read a local default) fails 26
+assertions, perturbation-verified.
+
+**Deferred, deliberately:** the `style.define` runtime command. The spec listed
+it as optional, and the user deferred dynamic restyling. Its absence is why tests
+restyle by rebuilding the snapshot rather than dispatching a command. Adding it
+later is the command-catalog cascade (six sites) plus a handler mutating
+`Impl::style`, mirroring `theme.define` -- no new section work, since the section
+now exists.
 
 **Y1, Y2 and Y3 delivered.** `Style` exists, the renderer, shell layout and
 snapshot composition all draw from it, and a one-time sweep confirmed the
