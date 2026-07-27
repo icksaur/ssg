@@ -308,6 +308,20 @@ that step is mechanical rather than a redesign.
 | Y3 | **Delivered as a sweep, not a guard.** One-time sweep of the three chrome translation units for any glyph literal reaching the grid; route the stragglers into `Style`; then rely on the Y2 routing tests as the standing net | `src/Renderer.cpp`, `include/ssg/Style.h`, `tests/test_render.cpp`, `tests/test_style.cpp` | the sweep found two more glyphs (U+FFFD replacement x4, prompt `": "` separator x2), now routed; a new routing proof restyles `unrenderable` and requires the document to follow (perturbation-verified). No grep-guard: a blocklist would only catch the glyphs already known |
 | Y4 | **Delivered.** Publish `Style` as a snapshot section so the runtime and renderer share one instance, following the theme's path | `include/ssg/Style.h`, `include/ssg/session_snapshot.h`, `src/session_snapshot.cpp`, `src/Protocol.cpp`, `src/runtime/snapshot.cpp`, `include/ssg/Renderer.h`, `src/Renderer.cpp`, `tests/*` | full wire round-trip incl. a NON-default style pinning all 29 codec fields (a mis-wired field is caught, perturbation-verified); the renderer reads `snapshot.sections().style` and the routing tests restyle through the published section; `Renderer::style` member deleted; delta derive/replay covered. The `style.define` command (runtime restyle) stays deferred |
 
+**Review fixes folded (commit 601d7ae).** The review found one MUST and one
+SHOULD, both real:
+- **MUST**: `style.define` was missing from `kInitScriptCommands`
+  (`include/ssg/InitScriptCatalog.h`), the allowlist the Lua host gates on -- so
+  despite the handler and JSON entry, `init.lua` calling it got "unknown Lua
+  command". My runtime test passed only because it dispatched directly, bypassing
+  the allowlist. Fixed (allowlist + a `doc/config.md` user-facing section, which
+  `test_config_doc` requires for every allowlisted command).
+- **SHOULD**: the field-name list is duplicated between the wire codec and
+  `applyStyleDefine`'s setters with no guard. Added `styleDefineKeys()` and
+  `styleWireFieldNames()` (the latter derived from the codec itself) and a test
+  asserting they are exactly equal, so a field added to one surface but not the
+  other now fails a test. Perturbation-verified.
+
 ## Status
 
 **style.define delivered — the spec is now fully implemented (Y1–Y4 plus the
