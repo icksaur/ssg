@@ -1,6 +1,6 @@
 # spec-reentrant-dispatch
 
-Status: draft
+Status: done
 
 ## Goals
 
@@ -211,3 +211,28 @@ concurrency model:
 The withdrawn design cost a new hook interface, changes to three headers, and a
 new session-owned queue type, to fix nothing that was broken. Recorded so the
 same idea is not re-derived.
+
+## Status
+
+Implemented in `bdd6148`, `d15f42c`, `075b811` and this commit. Gate green
+(93 tests, 0 warnings).
+
+- **Step 1** `tests/test_command_dispatch.cpp` counts accepted mutating
+  dispatches independently of the counter under test and asserts the revision
+  advanced by exactly that many steps -- across a flat chain, a nested chain, an
+  observing command, and a chain whose queued command fails. Confirmed to fail
+  for the right reason under the prescribed perturbation.
+- **Step 2** `EditorSession::kNestedDispatchRefusal` is the single definition,
+  used by both guards, naming the alternative and the reason.
+- **Step 3** the queue's storage is private to `DeferredCommandQueue` and
+  `Impl::defer` is its only writer; a direct `push_back` no longer compiles.
+  `palette.execute` and `prompt.submit` now report a refusal rather than
+  queueing into a dispatch that will not drain. Palette and save-as verified
+  against the real binary over a pty.
+- **Step 4** recorded beside I3 in `doc/spec.md` and closed in
+  `doc/spec-lua-commands.md`.
+
+The out-of-scope item stands and is the next thing worth doing:
+`HttpEditorServer` bypasses `EditorRuntime`, so a WebSocket client receives no
+per-command reconciliation, no follow-edit pause and no drain -- a wider I2 gap
+than deferral, needing its own spec.

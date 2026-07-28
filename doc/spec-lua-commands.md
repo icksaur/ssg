@@ -475,14 +475,22 @@ record instead of taking the lock, because a handler asking for the revision is
 asking from inside a dispatch that already knows it -- without this the
 deadlock simply moved into the argument list of the nested call.
 
-That is the minimum honest behavior, not the goal: a deadlock is never an
-acceptable way to report a rule, but refusing composition is not much of an
-answer either. **Whether a handler SHOULD be able to dispatch remains open and
-needs its own spec.** The real options are to release the lock around handler
-execution, or to admit same-thread re-entrancy explicitly and define what a
-nested mutation does to the revision. Until one is chosen, a script's function
-may compute and register but cannot call `ssg.command` -- and now finds that
-out immediately.
+That was the minimum honest behavior rather than the goal, and it left open
+whether a handler SHOULD be able to dispatch. **That question is now settled:
+never** (`doc/spec-reentrant-dispatch.md`).
+
+The reason turned out not to be the lock at all. `EditorSession::dispatch`
+computes the new revision from a value captured BEFORE the handler runs, so a
+nested mutation advances the revision and the outer overwrites it: two accepted
+mutations, one revision step, and a client replaying deltas misses an edit
+(I3). Releasing the lock around handler execution would not have fixed that;
+it would only have made the loss reachable. Verified by doing it -- recursive
+mutex, both guards removed, rebuilt -- and observing a revision delta of 1 for
+two accepted mutations.
+
+So deferral is not a workaround for a lock. It is the shape that keeps one
+dispatch equal to one revision step, and a script's function composes commands
+by asking for them, which is what it does today.
 
 ### The refusable step runs before the irreversible one
 

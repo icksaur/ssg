@@ -107,7 +107,7 @@ The build system uses `cmake/components/*.cmake` manifests for component-local s
 
 - **I1 — Headless core:** Editor behavior is usable through the C++ library without HTTP, a renderer, browser APIs, terminal APIs, `../gridui`, or an event-loop framework.
 - **I2 — Single behavior path:** In-process and WebSocket clients execute the same command implementation and observe the same ordered snapshot/delta model.
-- **I3 — Authoritative revisions:** Accepted state changes are totally ordered; clients never apply a delta to a different base revision.
+- **I3 — Authoritative revisions:** Accepted state changes are totally ordered; clients never apply a delta to a different base revision. One accepted mutating dispatch advances the revision exactly once, so a command handler may never dispatch another command directly — it asks for one, which runs as its own dispatch with its own revision step. Nesting would make two accepted mutations produce one revision step and a client would silently miss an edit; making the session lock reentrant only makes that loss reachable. See `doc/spec-reentrant-dispatch.md`, pinned by `revisionAdvancesExactlyOncePerAcceptedMutation`.
 - **I4 — Valid state by construction:** Public owning objects are RAII-managed, construction establishes validity, ownership is explicit, and failures are actionable.
 - **I5 — Atomic edits:** A failed edit or workspace edit changes no document; every accepted transaction belongs to exactly one undo unit, and only explicitly compatible adjacent transactions may coalesce.
 - **I6 — Portable input:** Every keymap-eligible required command has a default
