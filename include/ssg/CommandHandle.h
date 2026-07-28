@@ -96,8 +96,15 @@ public:
 
     // Two refs are equal when they name the same command.  A literal converts,
     // so a call site asking "is this file.open?" reads as it always did.
+    //
+    // A catalogued command's handle IS its identity, so the common case is an
+    // integer compare and no name is examined; only two uncatalogued refs fall
+    // back to comparing text.
     [[nodiscard]] bool operator==(CommandRef const& other) const noexcept {
-        return handle_ == other.handle_ && name() == other.name();
+        if (handle_.valid() || other.handle_.valid()) {
+            return handle_ == other.handle_;
+        }
+        return unknownName_ == other.unknownName_;
     }
 
 private:

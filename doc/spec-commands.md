@@ -247,6 +247,12 @@ catalog. `ClientCommand::id` is a `CommandRef`, so disagreement is not
 representable rather than merely detected, and `name()` is always available — a
 rejected dispatch can always say which command it rejected.
 
+A ref, not a bare handle, is also what a compiled binding stores. `keymap.bind`
+accepts any non-empty command id, so a binding may name a command the catalog
+does not have — a typo, or a command removed since the config was written. Such
+a binding still resolves, and the name it carries is the only thing the
+resulting `UnknownCommand` rejection can report.
+
 **`KeyCode`** (`include/ssg/KeyCode.h`) is a closed enum of every key the decoder
 can name. `KeyStroke::code` is a `KeyCode`, so the decoder emits identity
 directly and allocates nothing per keystroke.
@@ -307,9 +313,10 @@ when no binding matched, which is discussed under Considerations below.
 
 ## Invariants
 
-- **V1** A command's identity on the keystroke path is a `CommandHandle`. Command
-  id strings are resolved at construction or keymap-compile time, never per
-  keystroke.
+- **V1** A command's identity on the keystroke path is a `CommandHandle`, carried
+  in a `CommandRef` that can always name the command. Command id strings are
+  resolved at construction or keymap-compile time, never per keystroke, and a
+  command that cannot be identified can still be named in a diagnostic.
 - **V2** `CompiledKeymap` is derived from `KeymapViewState` and owns no policy.
   Its resolution rules must match `KeymapMatcher`'s; where they disagree,
   `KeymapMatcher` is correct and the compiled form is wrong.
@@ -358,8 +365,9 @@ when no binding matched, which is discussed under Considerations below.
   CSI Delete and both chords behave identically to `master`. Review found the
   dual-identity dispatch hazard, the lost diagnostic on the handle path, and
   per-keystroke context string work; all three are fixed above. V2 is guarded by
-  a perturbation-verified differential test; V1, V3 and V4 rest on the type
-  system rather than on tests.
+  a perturbation-verified differential test, and V1's naming guarantee by
+  `compiledKeymapCarriesTheNameOfAnUncataloguedCommand`; V3 and V4 rest on the
+  type system rather than on tests.
 
 ## Acceptance
 

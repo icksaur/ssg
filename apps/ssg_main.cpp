@@ -852,11 +852,10 @@ int main(int argc, char** argv) {
     };
     // The keystroke path's dispatch: the command is already identified, so no
     // name is constructed, hashed or compared.
-    auto dispatchHandle = [&](ssg::CommandHandle command,
+    auto dispatchHandle = [&](ssg::CommandRef const& command,
                               std::any payload = {}) {
         (void)runtime.dispatch(
-            client, {ssg::CommandRef{command}, runtime.revision(),
-                     std::move(payload)});
+            client, {command, runtime.revision(), std::move(payload)});
     };
     // Re-center the client-owned palette window on the current selection
     // (keep-visible). Called ONLY when the selection changes (arrow navigation,
@@ -934,26 +933,23 @@ int main(int argc, char** argv) {
     // commands that open a picker.  Both are resolved to handles once, so the
     // keystroke path compares integers instead of command names.
     struct InterceptHandles {
-        ssg::CommandHandle promptSubmit = ssg::commandHandle("prompt.submit");
-        ssg::CommandHandle promptCancel = ssg::commandHandle("prompt.cancel");
-        ssg::CommandHandle promptNext = ssg::commandHandle("prompt.next");
-        ssg::CommandHandle promptPrevious =
-            ssg::commandHandle("prompt.previous");
-        ssg::CommandHandle paletteNext = ssg::commandHandle("palette.next");
-        ssg::CommandHandle palettePrevious =
-            ssg::commandHandle("palette.previous");
-        ssg::CommandHandle paletteClose = ssg::commandHandle("palette.close");
-        std::vector<ssg::CommandHandle> pickerOpeners;
+        ssg::CommandRef promptSubmit{"prompt.submit"};
+        ssg::CommandRef promptCancel{"prompt.cancel"};
+        ssg::CommandRef promptNext{"prompt.next"};
+        ssg::CommandRef promptPrevious{"prompt.previous"};
+        ssg::CommandRef paletteNext{"palette.next"};
+        ssg::CommandRef palettePrevious{"palette.previous"};
+        ssg::CommandRef paletteClose{"palette.close"};
+        std::vector<ssg::CommandRef> pickerOpeners;
     };
     InterceptHandles const intercept = [] {
         InterceptHandles handles;
         for (auto const& descriptor : ssg::pickerCatalog().descriptors()) {
-            handles.pickerOpeners.push_back(
-                ssg::commandHandle(descriptor.openCommandId));
+            handles.pickerOpeners.emplace_back(descriptor.openCommandId);
         }
         return handles;
     }();
-    auto dispatchResolved = [&](ssg::CommandHandle command) {
+    auto dispatchResolved = [&](ssg::CommandRef const& command) {
         if (pickerOpen && focus == ssg::FocusTarget::Prompt) {
             if (command == intercept.promptSubmit) {
                 submitSelectedCandidate();

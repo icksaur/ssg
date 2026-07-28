@@ -464,11 +464,31 @@ TEST(compiledKeymapResolvesIdenticallyToTheAuthoredMatcher) {
                     input, ssg::focusTargetName(focus));
                 const auto fast = compiled.resolve(compiledInput, focus);
                 ASSERT_TRUE(authored.kind == fast.kind);
-                ASSERT_EQ(std::string{fast.command.id()},
+                ASSERT_EQ(std::string{fast.command.name()},
                           std::string{authored.commandId});
             }
         }
     }
+}
+
+// keymap.bind accepts any non-empty command id, so a binding may name a command
+// the catalog does not have -- a typo, or a command removed since the config was
+// written.  Resolution must carry that NAME out, because it is the only thing a
+// rejected dispatch can report; a bare handle would be invalid and nameless.
+TEST(compiledKeymapCarriesTheNameOfAnUncataloguedCommand) {
+    ssg::KeyStroke escape;
+    escape.code = ssg::KeyCode::Escape;
+
+    const ssg::KeymapViewState keymap{
+        "typo", {ssg::KeyBinding{{escape}, "file.saev", "*"}}};
+    const ssg::CompiledKeymap compiled{keymap};
+    const std::vector<ssg::CompiledStroke> input{
+        ssg::CompiledKeymap::compile(escape)};
+
+    const auto resolution = compiled.resolve(input, ssg::FocusTarget::Editor);
+    ASSERT_TRUE(resolution.kind == ssg::KeymapMatchKind::Resolved);
+    ASSERT_FALSE(resolution.command.handle().valid());
+    ASSERT_EQ(std::string{resolution.command.name()}, std::string{"file.saev"});
 }
 
 int main() {
@@ -481,6 +501,7 @@ int main() {
     RUN(resolveKeySequenceStarBeatsFocusAndResolvesEverywhere);
     RUN(resolveKeySequenceReportsPendingAndNone);
     RUN(compiledKeymapResolvesIdenticallyToTheAuthoredMatcher);
+    RUN(compiledKeymapCarriesTheNameOfAnUncataloguedCommand);
     RUN(textRoutingIsPerContext);
     RUN(hasGlobalBindingRequiresUnreservedUnshadowedStar);
     RUN(validateKeymapFlagsGlobalShadowRegardlessOfOrder);

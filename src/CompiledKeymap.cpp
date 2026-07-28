@@ -30,7 +30,7 @@ CompiledKeymap::CompiledKeymap(KeymapViewState const& keymap) {
     entries_.reserve(keymap.bindings.size());
     for (auto const& binding : keymap.bindings) {
         Entry entry;
-        entry.command = commandHandle(binding.commandId);
+        entry.command = CommandRef{binding.commandId};
         entry.context = compileContext(binding.context);
         entry.sequence.reserve(binding.sequence.size());
         for (auto const& stroke : binding.sequence) {
