@@ -466,6 +466,21 @@ LuaResult LuaCommandHost::evaluate(std::string_view script) {
     auto transaction = std::move(impl_->registrationStack.back());
     impl_->registrationStack.pop_back();
     if (result.accepted()) {
+        // The gate may still refuse, and it is the LAST thing that can: once
+        // publishStaged runs, the previous generation's functions are gone.
+        if (impl_->options.publishGate) {
+            std::vector<std::string> ids;
+            ids.reserve(transaction.commands.size());
+            for (auto const& command : transaction.commands) {
+                ids.push_back(command.id);
+            }
+            std::sort(ids.begin(), ids.end());
+            auto refusal = impl_->options.publishGate(ids);
+            if (!refusal.accepted()) {
+                impl_->rollbackStaged(transaction);
+                return refusal;
+            }
+        }
         impl_->publishStaged(transaction);
     } else {
         impl_->rollbackStaged(transaction);

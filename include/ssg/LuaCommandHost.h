@@ -65,12 +65,25 @@ struct LuaInvocation {
 
 using LuaDispatcher = std::function<CommandHandlerResult(LuaInvocation const&)>;
 
+// Asked to accept an evaluation's registrations BEFORE they replace the
+// previous ones.  Returning a failure abandons the evaluation: the new
+// registrations are discarded and the previous ones stay in place, so whatever
+// the gate protects and the host's own state cannot disagree.
+//
+// This exists so the step that can REFUSE runs before the step that cannot be
+// undone.  Publishing first and reconciling afterwards leaves the previous
+// generation's Lua functions already released, with nothing able to restore
+// them.
+using LuaGenerationGate =
+    std::function<LuaResult(std::vector<std::string> const& commandIds)>;
+
 struct LuaCommandHostOptions {
     ClientId pluginId;
     std::vector<CapabilityId> capabilities;
     std::vector<LuaCommand> commands;
     std::uint64_t instructionBudget{100'000};
     std::chrono::milliseconds timeBudget{50};
+    LuaGenerationGate publishGate;
 };
 
 class LuaCommandHost {

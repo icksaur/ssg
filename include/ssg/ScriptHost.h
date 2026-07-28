@@ -3,7 +3,9 @@
 #include <ssg/LuaCommandHost.h>
 
 #include <memory>
+#include <string>
 #include <string_view>
+#include <vector>
 
 namespace ssg {
 
@@ -52,7 +54,7 @@ public:
     [[nodiscard]] LuaResult evaluate(std::string_view script);
 
 private:
-    LuaResult publishGeneration();
+    LuaResult offerGeneration(std::vector<std::string> const& commandIds);
 
     struct Impl;
     std::unique_ptr<Impl> impl_;

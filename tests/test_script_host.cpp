@@ -219,11 +219,11 @@ TEST(aScriptCommandCollidingWithABuiltInIsRefusedWithoutLosingTheEditor) {
 
 
 
-TEST(aRefusedGenerationLeavesNoCommandThatFailsWhenInvoked) {
-    // The host replaces its registrations before the catalog is asked to take
-    // them, so a refused batch would otherwise leave the PREVIOUS generation
-    // listed in the catalog with its Lua closures already released -- commands
-    // that look available and fail on use.  Neither may survive.
+TEST(aRefusedGenerationLeavesThePreviousOneWhollyIntact) {
+    // The catalog is asked BEFORE the host makes the new registrations its own,
+    // so a refused batch abandons the whole evaluation: the previous
+    // generation keeps both its catalog entries and the Lua functions behind
+    // them.  Asking afterwards would leave one of the two already destroyed.
     auto root = uniqueRoot();
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
@@ -242,7 +242,12 @@ TEST(aRefusedGenerationLeavesNoCommandThatFailsWhenInvoked) {
              .accepted());
 
     ASSERT_TRUE(runtime->commandCatalog()->find("user.new") == nullptr);
-    ASSERT_TRUE(runtime->commandCatalog()->find("user.old") == nullptr);
+    // Still registered, and still backed by a live Lua function.
+    ASSERT_TRUE(runtime->commandCatalog()->find("user.old") != nullptr);
+    ASSERT_TRUE(runtime
+                    ->dispatch(ssg::ClientId{1},
+                               {"user.old", runtime->revision(), {}})
+                    .accepted());
     auto const* builtIn = runtime->commandCatalog()->find("file.save");
     ASSERT_TRUE(builtIn != nullptr);
     if (builtIn) ASSERT_TRUE(builtIn->owner != std::string{"lua"});
@@ -290,7 +295,7 @@ int main() {
     RUN(aFailedReloadKeepsThePreviousGenerationDispatchable);
     RUN(aRetiredScriptCommandIsNoLongerDispatchable);
     RUN(aScriptCommandCollidingWithABuiltInIsRefusedWithoutLosingTheEditor);
-    RUN(aRefusedGenerationLeavesNoCommandThatFailsWhenInvoked);
+    RUN(aRefusedGenerationLeavesThePreviousOneWhollyIntact);
     RUN(aScriptCommandThatDispatchesIsRefusedRatherThanHanging);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;

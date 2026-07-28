@@ -151,6 +151,9 @@ ScriptHost::ScriptHost(EditorRuntime& runtime) {
     options.pluginId = kScriptClientId;
     options.capabilities = scriptCapabilities();
     options.commands = scriptCommandCatalog(*runtime.commandCatalog());
+    options.publishGate = [this](std::vector<std::string> const& ids) {
+        return offerGeneration(ids);
+    };
     impl_ = std::make_unique<Impl>(runtime, std::move(options));
 }
 
@@ -164,24 +167,30 @@ LuaResult ScriptHost::evaluate(std::string_view script) {
     // additive, so a line removed from it reverts that binding on the next
     // reload -- matching theme.define's replace-on-reload behavior.
     impl_->runtime.resetKeymapToDefault();
-    auto result = impl_->host.evaluate(script);
-    // A failed script registers nothing, so its predecessor's commands stay
-    // available.  This cannot undo effects the script already caused before it
-    // failed -- a theme it applied stays applied (doc/spec-lua-commands.md, L5).
-    if (!result.accepted()) return result;
-    return publishGeneration();
+    // The catalog swap happens inside this call, through the publish gate.  A
+    // failed script -- or a batch the catalog refuses -- leaves the previous
+    // evaluation's commands registered and callable.  Neither can undo effects
+    // the script already caused before failing: a theme it applied stays
+    // applied (doc/spec-lua-commands.md, L5).
+    return impl_->host.evaluate(script);
 }
 
-// Publishes what `host` registered as the catalog's Lua generation, replacing
-// the previous one.
+// Offers what an evaluation registered to the catalog, before the host makes
+// those registrations its own.
 //
 // A script's command becomes an ORDINARY catalog command: the palette lists it,
 // a keybinding resolves it, and dispatch reaches it through the same path as
 // every built-in.  Nothing downstream knows it came from Lua.  If this needed a
 // second lookup path, the catalog would not have earned its keep.
-LuaResult ScriptHost::publishGeneration() {
+//
+// Called as the host's publish gate, so a batch the catalog refuses abandons
+// the whole evaluation: the previous generation keeps both its catalog entries
+// and the Lua functions behind them.  Doing this AFTER the host published would
+// leave the catalog listing commands whose functions had already been released.
+LuaResult ScriptHost::offerGeneration(std::vector<std::string> const& ids) {
     std::vector<CommandSpecBuilder> specs;
-    for (auto const& id : impl_->host.registeredCommands()) {
+    specs.reserve(ids.size());
+    for (auto const& id : ids) {
         specs.push_back(
             CommandSpecBuilder{id}
                 .owner("lua")
@@ -211,15 +220,9 @@ LuaResult ScriptHost::publishGeneration() {
         impl_->generation = impl_->runtime.commandCatalog()->replaceGeneration(
             impl_->generation, std::move(specs));
     } catch (std::exception const& refused) {
-        // The catalog refused the batch, but the host has ALREADY replaced its
-        // registrations: the previous generation's Lua closures are gone.
-        // Leaving the previous generation in the catalog would leave commands
-        // that look available and fail when invoked, so retire them too and
-        // report the refusal.  Retiring alone cannot fail -- an empty batch has
-        // nothing to validate -- so the two always end up agreeing.
-        impl_->runtime.commandCatalog()->replaceGeneration(impl_->generation,
-                                                           {});
-        impl_->generation.clear();
+        // The catalog validated the whole batch before applying any of it, so
+        // the previous generation is still installed -- and because this ran
+        // before the host published, its Lua functions are still there too.
         return {LuaError::DuplicateCommand, refused.what()};
     }
     return {};

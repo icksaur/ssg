@@ -445,12 +445,25 @@ nested mutation does to the revision. Until one is chosen, a script's function
 may compute and register but cannot call `ssg.command` -- and now finds that
 out immediately.
 
-### Keeping the host and the catalog in agreement
+### The refusable step runs before the irreversible one
 
-`LuaCommandHost::evaluate` publishes its registrations before `ScriptHost` can
-offer them to the catalog, so a batch the catalog refuses -- an id colliding
-with a built-in, say -- would leave the previous generation listed in the
-catalog with its Lua closures already released: commands that look available
-and fail when invoked. `publishGeneration` therefore retires the previous
-catalog generation on refusal too. Retiring alone cannot fail, since an empty
-batch has nothing to validate, so the two always end up agreeing.
+The host and the catalog each hold half of a Lua command -- the function and the
+registration -- and both are replaced on reload. Whichever commits first can be
+left holding a generation the other has abandoned.
+
+Originally `LuaCommandHost::evaluate` published its registrations and
+`ScriptHost` offered them to the catalog afterwards. A batch the catalog
+refused -- an id colliding with a built-in, say -- then left the previous
+generation listed in the catalog with its Lua functions already released:
+commands that look available and fail when invoked. Retiring those entries too
+would keep the two in agreement, but only by destroying a working generation
+because its *replacement* was invalid, which is the opposite of what a failed
+reload should do.
+
+So the order is inverted instead. `LuaCommandHostOptions` carries a
+`publishGate`, called with the evaluation's command ids after they are staged
+and before they replace anything; `ScriptHost` sets it to the catalog swap. A
+refusal discards the staged registrations and returns, leaving the previous
+generation whole on both sides. The step that can refuse now runs before the
+step that cannot be undone, so there is no window in which the two disagree and
+nothing to reconcile afterwards.
