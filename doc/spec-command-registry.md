@@ -451,3 +451,39 @@ is wrong and little has been spent.
 - No test **restates** the command list. Tests may walk the catalog — the doc
   reference is generated that way — but none holds its own copy of what the
   commands are.
+
+## Status
+
+Delivered. D0–D5 are complete: all 176 commands are registered by the
+components that implement them, `src/Commands.cpp` and `include/ssg/Commands.h`
+are deleted, and `doc/spec.md`'s catalog rule is amended above.
+
+**What the migration found.** Each batch exposed a fact the static table had
+been recording wrongly, all of the same shape: `ArgumentKind::None` meant "no
+argument on the WIRE", and reading it as "no argument at all" dropped payloads
+that commands were relying on in process.
+
+- Five of the six text commands were declared as taking text; only insertion
+  ever read it.
+- `tab.activate`, `file.open` and the tree and status invocations take an
+  argument when given one and act on the current thing otherwise.
+- `theme.define`, `diff.open_file` and their neighbours take typed payloads
+  that have no wire form at all.
+- `replace.workspace_apply` applies the preview it already holds when given
+  none.
+
+The builder therefore ended with four honest combinations rather than one:
+an argument is carried **on the wire or only in process**, and is **required or
+has a defined meaning when absent**. Each is a separate method, so a command
+states which it is and cannot be silently misread.
+
+**What was deleted.** `p0CommandDescriptors`, `EditorSessionBuilder::bind`, the
+`ArgumentKind` enum and its type mapping, `commandLabel`'s id-only overload, the
+`ssg_command_docs` build step, and eight tests that existed to prove a
+declaration and its handler agreed.
+
+**Handles are catalog-relative.** `commandHandle(id)` could not survive: it
+resolved a name against the one global table, and there is no longer one.
+`CommandRef` always carries the name and carries a handle only when someone
+holding a catalog resolved it; `CompiledKeymap` takes the catalog and does that
+once per binding, rebuilding when the catalog's revision changes.
