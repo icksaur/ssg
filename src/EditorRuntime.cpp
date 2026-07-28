@@ -1839,13 +1839,14 @@ bool EditorRuntime::deferDispatch(ClientId clientId, ClientCommand command) {
 }
 
 CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& command) {
-    // Checked before anything that takes the session lock -- including the
-    // attachment lookup on the next line.  A handler that dispatches would
-    // otherwise block on the lock its own call is holding, hanging the editor
-    // with no way to find out why.  See EditorSession::activeDispatchRevision.
+    // The session refuses this too, but it has to be caught HERE as well:
+    // everything below touches the session first (the attachment lookup), and
+    // would block on the lock the handler's own call is holding before the
+    // session ever got the chance to refuse.  One message, defined on
+    // EditorSession, so the two guards cannot drift apart.
     if (const auto nested = impl_->session->activeDispatchRevision()) {
         return {CommandError::HandlerFailed, *nested,
-                "a command handler may not dispatch another command"};
+                std::string{EditorSession::kNestedDispatchRefusal}};
     }
     // Parameterised by client because a deferred command runs as the client
     // that queued it, whose origin -- and so whether an edit counts as local --

@@ -111,18 +111,23 @@ std::optional<Revision> EditorSession::activeDispatchRevision() const noexcept {
 
 CommandResult EditorSession::dispatch(ClientId clientId,
                                       ClientCommand const& command) {
-    // A handler runs with the session locked, so a handler that dispatches
-    // would block on a lock its own call already holds.  Refusing says so;
-    // waiting would hang the editor with no way to find out why.
+    // A handler may not dispatch.  The reason is revision accounting, not the
+    // lock: the new revision below is computed from a value captured BEFORE the
+    // handler runs, so a nested mutation would advance the revision and then be
+    // overwritten -- two accepted mutations, one revision step, and a client
+    // replaying deltas silently misses an edit (doc/spec.md's I3).
     //
-    // Every built-in handler mutates the session directly rather than
-    // dispatching, so only a scripted handler can reach this.  Whether nesting
-    // should be ALLOWED is a separate design question (what a nested mutation
-    // does to the revision, chiefly); this only ensures the current answer is
-    // reported rather than hung.  See doc/spec-lua-commands.md's Status.
+    // A handler that needs another command asks for it instead, and it runs as
+    // its own dispatch with its own revision step.  See
+    // doc/spec-reentrant-dispatch.md, and the oracle
+    // revisionAdvancesExactlyOncePerAcceptedMutation which pins this.
+    //
+    // (A handler that dispatched would also deadlock on the non-reentrant lock
+    // its own call holds.  That is a symptom; making the lock reentrant would
+    // only make the revision loss reachable.)
     if (auto const nested = activeDispatchRevision()) {
         return rejected(CommandError::HandlerFailed, *nested,
-                        "a command handler may not dispatch another command");
+                        std::string{kNestedDispatchRefusal});
     }
 
     std::lock_guard lock{impl_->mutex};

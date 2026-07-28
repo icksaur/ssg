@@ -243,6 +243,45 @@ TEST(aFailedChainAdvancesTheRevisionOnlyForCommandsThatRan) {
     fs::remove_all(root);
 }
 
+
+// A handler that dispatches is refused -- and told what to do instead.  The
+// prohibition alone leaves a script author stuck: composing commands is a
+// supported thing to want, so the message has to name the alternative.
+TEST(aHandlerThatDispatchesIsToldToDeferInstead) {
+    auto root = uniqueRoot();
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+
+    ssg::CommandResult nested{};
+    runtime->commandCatalog()->add(
+        ssg::CommandSpecBuilder{"oracle.dispatches"}
+            .owner("test-oracle")
+            .summary("dispatches from its handler")
+            .mutates()
+            .handler([&nested, &runtime](ssg::CommandContext& ctx) {
+                nested = runtime->dispatch(
+                    ssg::ClientId{1}, {"oracle.dispatches", ctx.revision(), {}});
+                return ssg::CommandHandlerResult::success();
+            }));
+
+    ASSERT_TRUE(runtime
+                    ->dispatch(ssg::ClientId{1},
+                               {"oracle.dispatches", runtime->revision(), {}})
+                    .accepted());
+
+    ASSERT_TRUE(!nested.accepted());
+    ASSERT_EQ(nested.error, ssg::CommandError::HandlerFailed);
+    // Names the alternative, not only the prohibition.
+    ASSERT_TRUE(nested.message.find("instead") != std::string::npos);
+    // And says why it matters, so the rule is not mistaken for an arbitrary
+    // limitation by whoever reads it next.
+    ASSERT_TRUE(nested.message.find("revision") != std::string::npos);
+    ASSERT_EQ(std::string{ssg::EditorSession::kNestedDispatchRefusal},
+              nested.message);
+
+    fs::remove_all(root);
+}
+
 }  // namespace
 
 int main() {
@@ -250,6 +289,7 @@ int main() {
     RUN(revisionAdvancesOncePerMutationAcrossANestedChain);
     RUN(anObservingCommandLeavesTheRevisionAlone);
     RUN(aFailedChainAdvancesTheRevisionOnlyForCommandsThatRan);
+    RUN(aHandlerThatDispatchesIsToldToDeferInstead);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }
