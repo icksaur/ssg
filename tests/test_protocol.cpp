@@ -3,6 +3,7 @@
 #include <ssg/EditorSessionBuilder.h>
 #include <ssg/FileCommands.h>
 #include <ssg/FindReplace.h>
+#include <ssg/Commands.h>
 #include <ssg/Protocol.h>
 #include <ssg/session_snapshot.h>
 
@@ -13,10 +14,6 @@
 #include <sstream>
 #include <string>
 #include <vector>
-
-#ifndef SSG_REQUIRED_COMMANDS_PATH
-#error "SSG_REQUIRED_COMMANDS_PATH must name the accepted catalog"
-#endif
 
 #ifndef SSG_PROTOCOL_FIXTURES_DIR
 #error "SSG_PROTOCOL_FIXTURES_DIR must name the fixtures directory"
@@ -30,14 +27,9 @@ namespace {
 // every-section-populated snapshot shape through the wire codec.
 
 std::vector<std::string> catalogIds() {
-    std::ifstream input{SSG_REQUIRED_COMMANDS_PATH};
-    std::string json{std::istreambuf_iterator<char>{input},
-                     std::istreambuf_iterator<char>{}};
-    std::regex const idPattern{R"json("id"\s*:\s*"([^"]+)")json"};
     std::vector<std::string> ids;
-    for (std::sregex_iterator it{json.begin(), json.end(), idPattern}, end;
-         it != end; ++it) {
-        ids.push_back((*it)[1].str());
+    for (auto const& command : ssg::commandCatalog()) {
+        ids.emplace_back(command.id);
     }
     return ids;
 }

@@ -1,5 +1,6 @@
 #include "test_helpers.h"
 
+#include <ssg/Commands.h>
 #include <ssg/LuaCommandHost.h>
 
 #include <fstream>
@@ -16,30 +17,11 @@ namespace {
 
 using namespace ssg;
 
-std::string readRequiredCatalog() {
-    std::ifstream input{std::string{SSG_TEST_SOURCE_DIR} +
-                        "/data/required-commands.json"};
-    std::ostringstream text;
-    text << input.rdbuf();
-    return text.str();
-}
-
-std::vector<std::pair<std::string, bool>> parseCatalog(std::string const& json) {
+// Every catalog command with its Lua-API eligibility.
+std::vector<std::pair<std::string, bool>> catalogWithLuaEligibility() {
     std::vector<std::pair<std::string, bool>> entries;
-    std::size_t position = 0;
-    while ((position = json.find("\"id\"", position)) != std::string::npos) {
-        auto const valueBegin = json.find('"', json.find(':', position) + 1) + 1;
-        auto const valueEnd = json.find('"', valueBegin);
-        auto const objectEnd = json.find('}', valueEnd);
-        auto const luaKey = json.find("\"lua\"", valueEnd);
-        ASSERT_TRUE(valueBegin != std::string::npos);
-        ASSERT_TRUE(valueEnd != std::string::npos);
-        ASSERT_TRUE(luaKey < objectEnd);
-        auto const luaValue = json.find_first_not_of(" \t\r\n:",
-            luaKey + std::string_view{"\"lua\""}.size());
-        entries.emplace_back(json.substr(valueBegin, valueEnd - valueBegin),
-                             json.compare(luaValue, 4, "true") == 0);
-        position = objectEnd;
+    for (auto const& command : ssg::commandCatalog()) {
+        entries.emplace_back(std::string{command.id}, command.surfaces.luaApi);
     }
     return entries;
 }
@@ -52,7 +34,7 @@ LuaCommandHostOptions options(std::vector<LuaCommand> commands = {}) {
 }
 
 TEST(requiredCatalogMinusExclusionsIsCallable) {
-    auto const catalog = parseCatalog(readRequiredCatalog());
+    auto const catalog = catalogWithLuaEligibility();
     std::vector<LuaCommand> commands;
     std::unordered_set<std::string> called;
     std::string excluded;

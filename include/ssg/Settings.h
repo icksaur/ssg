@@ -128,21 +128,6 @@ struct SettingsIoResult {
     std::string message;
 };
 
-struct SettingsCommandDescriptor {
-    std::string_view id;
-};
-
-struct SettingsCommandSet {
-    std::array<SettingsCommandDescriptor, 6> descriptors{{
-        {"settings.open"},
-        {"settings.set"},
-        {"settings.reset"},
-        {"settings.reset_scope"},
-        {"settings.export_workspace"},
-        {"settings.import_workspace"},
-    }};
-};
-
 struct SettingSetArguments {
     SettingScope scope = SettingScope::User;
     SettingKey key = SettingKey::IndentWidth;

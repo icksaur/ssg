@@ -1,3 +1,4 @@
+#include <ssg/Commands.h>
 #include <ssg/Protocol.h>
 
 #include <ssg/Document.h>
@@ -5316,95 +5317,42 @@ CommandArgumentCodec makeWorkspaceApplyCodec() {
 }  // namespace
 
 CommandArgumentCodecRegistry ProtocolCodec::buildCommandArgumentCodecRegistry() const {
-    auto const textInputCommands = textInputCommandSet();
-    std::unordered_set<std::string> textInputIds;
-    for (auto const& descriptor : textInputCommands.descriptors()) {
-        textInputIds.emplace(descriptor.id);
-    }
-    auto const selectionCommands = selectionNavigationCommandSet();
-    std::unordered_set<std::string> selectionIds;
-    for (auto const& descriptor : selectionCommands.descriptors()) {
-        selectionIds.emplace(descriptor.id);
-    }
-
-    auto const noneCodec = makeNoneCodec();
-    auto const textInputCodec = makeTypedCodec<TextInputArguments>();
-    auto const paletteExecuteCodec = makeTypedCodec<PaletteExecuteArguments>();
-    auto const treeSelectCodec = makeTypedCodec<TreeSelectArguments>();
-    auto const findQueryCodec = makeTypedCodec<FindQueryArguments>();
-    auto const promptValueCodec = makeTypedCodec<PromptValueArguments>();
-    auto const selectionCodec =
-        makeTypedCodec<SelectionCommandArguments>();
-    auto const scrollLinesCodec = makeTypedCodec<ScrollLinesArguments>();
-    auto const scrollPagesCodec = makeTypedCodec<ScrollPagesArguments>();
-    auto const scrollFractionCodec =
-        makeTypedCodec<ScrollFractionArguments>();
-    auto const droppedContentCodec =
-        makeTypedCodec<DroppedContentArguments>();
-    auto const reopenWithEncodingCodec =
-        makeTypedCodec<ReopenWithEncodingArguments>();
-    auto const setEncodingCodec = makeTypedCodec<SetEncodingArguments>();
-    auto const setLineEndingCodec =
-        makeTypedCodec<SetLineEndingArguments>();
-    auto const setFinalNewlineCodec =
-        makeTypedCodec<SetFinalNewlineArguments>();
-    auto const settingSetCodec = makeTypedCodec<SettingSetArguments>();
-    auto const settingResetCodec = makeTypedCodec<SettingResetArguments>();
-    auto const settingResetScopeCodec =
-        makeTypedCodec<SettingResetScopeArguments>();
-    auto const workspaceReplaceCodec =
-        makeTypedCodec<WorkspaceReplaceArguments>();
-    auto const workspaceApplyCodec = makeWorkspaceApplyCodec();
+    // One codec per declared argument shape.  This used to be a 20-branch
+    // if-chain matching command ids, whose final `else` silently gave any
+    // unlisted command the no-argument codec -- so a command that took a
+    // payload but was missed by the chain lost that payload on the wire while
+    // working in-process.  The shape is now declared in the catalog and looked
+    // up here, so it cannot be forgotten.
+    auto const codecFor = [](ArgumentKind kind) -> CommandArgumentCodec {
+        switch (kind) {
+            case ArgumentKind::None: return makeNoneCodec();
+            case ArgumentKind::TextInput: return makeTypedCodec<TextInputArguments>();
+            case ArgumentKind::SelectionCommand: return makeTypedCodec<SelectionCommandArguments>();
+            case ArgumentKind::ScrollLines: return makeTypedCodec<ScrollLinesArguments>();
+            case ArgumentKind::ScrollPages: return makeTypedCodec<ScrollPagesArguments>();
+            case ArgumentKind::ScrollFraction: return makeTypedCodec<ScrollFractionArguments>();
+            case ArgumentKind::DroppedContent: return makeTypedCodec<DroppedContentArguments>();
+            case ArgumentKind::ReopenWithEncoding: return makeTypedCodec<ReopenWithEncodingArguments>();
+            case ArgumentKind::SetEncoding: return makeTypedCodec<SetEncodingArguments>();
+            case ArgumentKind::SetLineEnding: return makeTypedCodec<SetLineEndingArguments>();
+            case ArgumentKind::SetFinalNewline: return makeTypedCodec<SetFinalNewlineArguments>();
+            case ArgumentKind::SettingSet: return makeTypedCodec<SettingSetArguments>();
+            case ArgumentKind::SettingReset: return makeTypedCodec<SettingResetArguments>();
+            case ArgumentKind::SettingResetScope: return makeTypedCodec<SettingResetScopeArguments>();
+            case ArgumentKind::WorkspaceReplace: return makeTypedCodec<WorkspaceReplaceArguments>();
+            case ArgumentKind::WorkspaceApply: return makeWorkspaceApplyCodec();
+            case ArgumentKind::PaletteExecute: return makeTypedCodec<PaletteExecuteArguments>();
+            case ArgumentKind::TreeSelect: return makeTypedCodec<TreeSelectArguments>();
+            case ArgumentKind::FindQuery: return makeTypedCodec<FindQueryArguments>();
+            case ArgumentKind::PromptValue: return makeTypedCodec<PromptValueArguments>();
+        }
+        return makeNoneCodec();
+    };
 
     std::vector<std::pair<std::string, CommandArgumentCodec>> entries;
-    for (auto const& descriptor : p0CommandDescriptors()) {
-        if (descriptor.id == "view.scroll_lines") {
-            entries.emplace_back(descriptor.id, scrollLinesCodec);
-        } else if (descriptor.id == "tree.scroll_to_fraction") {
-            entries.emplace_back(descriptor.id, scrollFractionCodec);
-        } else if (descriptor.id == "tree.scroll") {
-            entries.emplace_back(descriptor.id, scrollLinesCodec);
-        } else if (descriptor.id == "view.scroll_pages") {
-            entries.emplace_back(descriptor.id, scrollPagesCodec);
-        } else if (descriptor.id == "view.scroll_to_fraction") {
-            entries.emplace_back(descriptor.id, scrollFractionCodec);
-        } else if (descriptor.id == "file.open_dropped_content") {
-            entries.emplace_back(descriptor.id, droppedContentCodec);
-        } else if (descriptor.id == "file.reopen_with_encoding") {
-            entries.emplace_back(descriptor.id, reopenWithEncodingCodec);
-        } else if (descriptor.id == "file.set_encoding") {
-            entries.emplace_back(descriptor.id, setEncodingCodec);
-        } else if (descriptor.id == "file.set_line_ending") {
-            entries.emplace_back(descriptor.id, setLineEndingCodec);
-        } else if (descriptor.id == "file.set_final_newline") {
-            entries.emplace_back(descriptor.id, setFinalNewlineCodec);
-        } else if (descriptor.id == "settings.set") {
-            entries.emplace_back(descriptor.id, settingSetCodec);
-        } else if (descriptor.id == "settings.reset") {
-            entries.emplace_back(descriptor.id, settingResetCodec);
-        } else if (descriptor.id == "settings.reset_scope") {
-            entries.emplace_back(descriptor.id, settingResetScopeCodec);
-        } else if (descriptor.id == "replace.workspace_preview") {
-            entries.emplace_back(descriptor.id, workspaceReplaceCodec);
-        } else if (descriptor.id == "replace.workspace_apply") {
-            entries.emplace_back(descriptor.id, workspaceApplyCodec);
-        } else if (descriptor.id == "palette.execute") {
-            entries.emplace_back(descriptor.id, paletteExecuteCodec);
-        } else if (descriptor.id == "tree.select") {
-            entries.emplace_back(descriptor.id, treeSelectCodec);
-        } else if (descriptor.id == "find.update_query") {
-            entries.emplace_back(descriptor.id, findQueryCodec);
-        } else if (descriptor.id == "replace.update_replacement") {
-            entries.emplace_back(descriptor.id, findQueryCodec);
-        } else if (descriptor.id == "prompt.update_value") {
-            entries.emplace_back(descriptor.id, promptValueCodec);
-        } else if (textInputIds.contains(descriptor.id)) {
-            entries.emplace_back(descriptor.id, textInputCodec);
-        } else if (selectionIds.contains(descriptor.id)) {
-            entries.emplace_back(descriptor.id, selectionCodec);
-        } else {
-            entries.emplace_back(descriptor.id, noneCodec);
-        }
+    entries.reserve(commandCatalog().size());
+    for (auto const& command : commandCatalog()) {
+        entries.emplace_back(std::string{command.id}, codecFor(command.argument));
     }
     return CommandArgumentCodecRegistry{std::move(entries)};
 }

@@ -176,14 +176,4 @@ struct StyleDefineResult {
 // and this is the guard against them drifting apart.
 [[nodiscard]] std::vector<std::string> styleDefineKeys();
 
-struct StyleCommandDescriptor {
-    std::string_view id;
-};
-
-struct StyleCommandSet {
-    std::array<StyleCommandDescriptor, 1> descriptors{{
-        {"style.define"},
-    }};
-};
-
 }  // namespace ssg

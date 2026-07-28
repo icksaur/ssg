@@ -332,17 +332,6 @@ struct ThemeDefineResult {
 // src/DefaultTheme.cpp, not Theme.cpp -- see that file's header comment.
 [[nodiscard]] ThemeSnapshot defaultTheme() noexcept;
 
-struct ThemeCommandDescriptor {
-    std::string_view id;
-};
-
-struct ThemeCommandSet {
-    std::array<ThemeCommandDescriptor, 2> descriptors{{
-        {"theme.define"},
-        {"theme.background"},
-    }};
-};
-
 [[nodiscard]] std::string_view semanticRoleName(SemanticRole role);
 [[nodiscard]] std::optional<SemanticRole> semanticRoleFromName(std::string_view name);
 [[nodiscard]] std::string_view syntaxScopeName(SyntaxScope scope);

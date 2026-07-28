@@ -184,17 +184,6 @@ struct KeymapMutationResult {
     KeymapViewState const& current,
     KeymapUnbindArguments const& arguments) noexcept;
 
-struct KeymapCommandDescriptor {
-    std::string_view id;
-};
-
-struct KeymapCommandSet {
-    std::array<KeymapCommandDescriptor, 2> descriptors{{
-        {"keymap.bind"},
-        {"keymap.unbind"},
-    }};
-};
-
 enum class TextRouting : std::uint8_t { Insert, PromptQuery, Ignore };
 
 class CommittedText {

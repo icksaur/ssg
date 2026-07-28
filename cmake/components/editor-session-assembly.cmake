@@ -24,10 +24,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_include_directories(test_editor_session_assembly PRIVATE
         ${SSG_SOURCE_DIR}/tests
     )
-    target_compile_definitions(test_editor_session_assembly PRIVATE
-        SSG_REQUIRED_COMMANDS_PATH="${SSG_SOURCE_DIR}/data/required-commands.json"
-    )
-    target_link_libraries(test_editor_session_assembly PRIVATE ssg)
+        target_link_libraries(test_editor_session_assembly PRIVATE ssg)
     add_test(NAME test_editor_session_assembly
              COMMAND test_editor_session_assembly)
 endif()

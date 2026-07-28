@@ -1,5 +1,6 @@
 #include "test_helpers.h"
 
+#include <ssg/Commands.h>
 #include <ssg/EditorSessionBuilder.h>
 #include <ssg/session_snapshot.h>
 
@@ -13,46 +14,26 @@
 #include <type_traits>
 #include <vector>
 
-#ifndef SSG_REQUIRED_COMMANDS_PATH
-#error "SSG_REQUIRED_COMMANDS_PATH must name the accepted catalog"
-#endif
-
 namespace {
 
 std::vector<std::string> catalogIds() {
-    std::ifstream input{SSG_REQUIRED_COMMANDS_PATH};
-    std::string json{std::istreambuf_iterator<char>{input},
-                     std::istreambuf_iterator<char>{}};
-    std::regex const idPattern{R"json("id"\s*:\s*"([^"]+)")json"};
     std::vector<std::string> ids;
-    for (std::sregex_iterator it{json.begin(), json.end(), idPattern}, end;
-         it != end; ++it) {
-        ids.push_back((*it)[1].str());
+    for (auto const& command : ssg::commandCatalog()) {
+        ids.emplace_back(command.id);
     }
     return ids;
 }
 
 std::map<std::string, std::vector<std::string>> catalogCapabilities() {
-    std::ifstream input{SSG_REQUIRED_COMMANDS_PATH};
-    std::string json{std::istreambuf_iterator<char>{input},
-                     std::istreambuf_iterator<char>{}};
-    std::regex const commandPattern{
-        R"json(\{"id":"([^"]+)","owner":"[^"]+","required_capabilities":\[([^\]]*)\])json"};
-    std::regex const valuePattern{R"json("([^"]+)")json"};
-    std::map<std::string, std::vector<std::string>> result;
-    for (std::sregex_iterator it{json.begin(), json.end(), commandPattern}, end;
-         it != end; ++it) {
-        std::vector<std::string> capabilities;
-        std::string const values = (*it)[2].str();
-        for (std::sregex_iterator value{values.begin(), values.end(),
-                                        valuePattern},
-             valueEnd;
-             value != valueEnd; ++value) {
-            capabilities.push_back((*value)[1].str());
+    std::map<std::string, std::vector<std::string>> capabilities;
+    for (auto const& command : ssg::commandCatalog()) {
+        std::vector<std::string> required;
+        for (auto const& capability : command.requiredCapabilities) {
+            required.emplace_back(capability);
         }
-        result.emplace((*it)[1].str(), std::move(capabilities));
+        capabilities.emplace(std::string{command.id}, std::move(required));
     }
-    return result;
+    return capabilities;
 }
 
 ssg::SelectionViewState selection(std::uint64_t byte,

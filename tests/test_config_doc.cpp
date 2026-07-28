@@ -1,4 +1,4 @@
-#include <ssg/InitScriptCatalog.h>
+#include <ssg/Commands.h>
 
 #include "test_helpers.h"
 
@@ -19,8 +19,8 @@ std::string readFile(const char* path) {
     return contents.str();
 }
 
-// Every id in ssg::kInitScriptCommands (the actual init.lua Lua surface --
-// see InitScriptCatalog.h and apps/ssg_main.cpp's initScriptCommandCatalog)
+// Every command granted to init.lua (surfaces.initScript in the command
+// catalog, which apps/ssg_main.cpp's initScriptCommandCatalog builds from)
 // must appear backticked in doc/config.md, so a newly Lua-exposed command
 // can't ship without a user-facing mention. One-directional (unlike
 // test_required_commands.cpp's bidirectional feature-doc check): doc/
@@ -30,7 +30,8 @@ std::string readFile(const char* path) {
 TEST(configDocMentionsEveryInitScriptCommand) {
     const auto doc = readFile(SSG_CONFIG_DOC_PATH);
     ASSERT_FALSE(doc.empty());
-    for (const auto& command : ssg::kInitScriptCommands) {
+    for (const auto& command : ssg::commandCatalog()) {
+        if (!command.surfaces.initScript) continue;
         const std::string needle = "`" + std::string{command.id} + "`";
         ASSERT_TRUE(doc.find(needle) != std::string::npos);
     }

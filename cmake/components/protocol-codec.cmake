@@ -6,7 +6,6 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ${SSG_SOURCE_DIR}/tests
     )
     target_compile_definitions(test_protocol PRIVATE
-        SSG_REQUIRED_COMMANDS_PATH="${SSG_SOURCE_DIR}/data/required-commands.json"
         SSG_PROTOCOL_FIXTURES_DIR="${SSG_SOURCE_DIR}/tests/fixtures/protocol"
     )
     target_link_libraries(test_protocol PRIVATE ssg)

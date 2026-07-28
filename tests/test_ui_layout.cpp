@@ -167,31 +167,6 @@ TEST(panelCommandsPreserveProviderStateWhenHidden) {
     ASSERT_TRUE(state.panelFocused());
 }
 
-TEST(exactOwnedCommandSet) {
-    constexpr std::array expected{
-        std::string_view{"pane.split_horizontal"},
-        std::string_view{"pane.split_vertical"},
-        std::string_view{"pane.close"},
-        std::string_view{"pane.next"},
-        std::string_view{"pane.previous"},
-        std::string_view{"pane.focus_left"},
-        std::string_view{"pane.focus_right"},
-        std::string_view{"pane.focus_up"},
-        std::string_view{"pane.focus_down"},
-        std::string_view{"panel.toggle"},
-        std::string_view{"panel.focus"},
-        std::string_view{"panel.show_files"},
-        std::string_view{"panel.show_git_status"},
-        std::string_view{"panel.next_provider"},
-        std::string_view{"panel.previous_provider"},
-        std::string_view{"view.toggle_distraction_free"},
-    };
-    constexpr ShellCommandSet commands;
-    ASSERT_EQ(commands.descriptors.size(), expected.size());
-    for (std::size_t i = 0; i < expected.size(); ++i) {
-        ASSERT_EQ(commands.descriptors[i].id, expected[i]);
-    }
-}
 
 TEST(accessibilityNodesHaveLabelsAndRoles) {
     ShellState state({"Files"});
@@ -725,7 +700,6 @@ int main() {
     RUN(viewportAndPromptErrorsAreTyped);
     RUN(paneCommandsPreserveTopologyAndOrder);
     RUN(panelCommandsPreserveProviderStateWhenHidden);
-    RUN(exactOwnedCommandSet);
     RUN(accessibilityNodesHaveLabelsAndRoles);
     RUN(accessibilityLeafNodesCarryDisplayContent);
     RUN(dirtyTabContentShowsMarker);

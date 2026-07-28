@@ -173,22 +173,6 @@ TEST(viewStateDeltaAndCommandSetCoverAllOwnedSettingsIds) {
     const auto after = settings.viewState();
     ASSERT_EQ(changed.delta->after, after.find(SettingKey::AutoIndent)->effective);
 
-    constexpr ssg::SettingsCommandSet commands;
-    constexpr std::array expected{
-        std::string_view{"settings.open"},
-        std::string_view{"settings.set"},
-        std::string_view{"settings.reset"},
-        std::string_view{"settings.reset_scope"},
-        std::string_view{"settings.export_workspace"},
-        std::string_view{"settings.import_workspace"},
-    };
-    static_assert(commands.descriptors.size() == expected.size());
-    for (std::size_t i = 0; i < expected.size(); ++i) {
-        ASSERT_EQ(commands.descriptors[i].id, expected[i]);
-        for (std::size_t j = i + 1; j < expected.size(); ++j) {
-            ASSERT_NE(commands.descriptors[i].id, commands.descriptors[j].id);
-        }
-    }
 }
 
 } // namespace

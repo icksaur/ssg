@@ -203,31 +203,6 @@ struct ShellLayoutResult {
     }
 };
 
-struct ShellCommandDescriptor {
-    std::string_view id;
-};
-
-struct ShellCommandSet {
-    std::array<ShellCommandDescriptor, 16> descriptors{{
-        {"pane.split_horizontal"},
-        {"pane.split_vertical"},
-        {"pane.close"},
-        {"pane.next"},
-        {"pane.previous"},
-        {"pane.focus_left"},
-        {"pane.focus_right"},
-        {"pane.focus_up"},
-        {"pane.focus_down"},
-        {"panel.toggle"},
-        {"panel.focus"},
-        {"panel.show_files"},
-        {"panel.show_git_status"},
-        {"panel.next_provider"},
-        {"panel.previous_provider"},
-        {"view.toggle_distraction_free"},
-    }};
-};
-
 class ShellState {
 public:
     explicit ShellState(std::vector<std::string> panelProviders = {});

@@ -129,24 +129,6 @@ struct PromptLayoutResult {
     }
 };
 
-struct PromptStatusCommandDescriptor {
-    std::string_view id;
-};
-
-struct PromptStatusCommandSet {
-    std::array<PromptStatusCommandDescriptor, 9> descriptors{{
-        {"prompt.submit"},
-        {"prompt.cancel"},
-        {"prompt.next"},
-        {"prompt.previous"},
-        {"prompt.update_value"},
-        {"status.next"},
-        {"status.previous"},
-        {"status.dismiss"},
-        {"status.invoke_action"},
-    }};
-};
-
 class PromptSurface {
 public:
     [[nodiscard]] PromptCommandResult open(PromptRequest request);

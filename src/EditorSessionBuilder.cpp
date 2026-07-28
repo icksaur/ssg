@@ -1,6 +1,7 @@
 #include <ssg/EditorSessionBuilder.h>
 
 #include <ssg/ClipboardRegister.h>
+#include <ssg/Commands.h>
 #include <ssg/DiffModel.h>
 #include <ssg/EditCommands.h>
 #include <ssg/ExternalModificationFlow.h>
@@ -32,58 +33,26 @@
 namespace ssg {
 namespace {
 
-template <typename Range>
-void appendIds(std::vector<CommandDescriptor>& output, Range const& range) {
-    for (auto const& descriptor : range) {
-        std::vector<CapabilityId> capabilities;
-        if (descriptor.id == std::string_view{"file.open_dropped_content"}) {
-            capabilities.emplace_back("local_file_drop");
-        }
-        output.push_back({std::string{descriptor.id}, CommandEffect::Mutation,
-                          std::move(capabilities)});
-    }
-}
-
 }  // namespace
 
 std::vector<CommandDescriptor> p0CommandDescriptors() {
+    // A projection of the one authored catalog (src/Commands.cpp).  Effect and
+    // capabilities used to be invented here -- every command was hardcoded
+    // `Mutation`, and one capability was assigned by an `if` on a single id --
+    // so the assembled registry disagreed with the declared catalog by
+    // construction.  Both are now declared per command.
+    auto const catalog = commandCatalog();
     std::vector<CommandDescriptor> result;
-    result.reserve(165);
-
-    appendIds(result, textInputCommandSet().descriptors());
-    appendIds(result, selectionNavigationCommandSet().descriptors());
-    appendIds(result, historyCommandSet().descriptors());
-    appendIds(result, editCommandSuiteCommandSet().descriptors());
-    appendIds(result, clipboardCommandSet().descriptors());
-    appendIds(result, searchCommandSet().descriptors());
-    appendIds(result, lspFeatureCommandSet().descriptors());
-    appendIds(result, lspWorkspaceEditCommandSet().descriptors());
-    appendIds(result, findReplaceCommandSet().descriptors());
-    appendIds(result, ShellCommandSet{}.descriptors);
-    appendIds(result, treeCommandSet().descriptors());
-    appendIds(result, PromptStatusCommandSet{}.descriptors);
-    appendIds(result, fileCommandsCommandSet().descriptors());
-    appendIds(result, kTextEncodingCommandSet.descriptors);
-    appendIds(result, tabManagementCommandSet().descriptors());
-    appendIds(result, externalModificationCommandSet().descriptors());
-    appendIds(result, SettingsCommandSet{}.descriptors);
-    appendIds(result, followEditsCommandSet().descriptors());
-    appendIds(result, diffCommandSet().descriptors());
-    appendIds(result, ThemeCommandSet{}.descriptors);
-    appendIds(result, StyleCommandSet{}.descriptors);
-    appendIds(result, KeymapCommandSet{}.descriptors);
-
-    constexpr std::array<std::string_view, 4> viewportCommands{
-        "view.toggle_word_wrap", "view.scroll_lines", "view.scroll_pages",
-        "view.scroll_to_fraction"};
-    struct ViewportDescriptor {
-        std::string_view id;
-    };
-    std::array<ViewportDescriptor, viewportCommands.size()> viewport{};
-    for (std::size_t index = 0; index < viewport.size(); ++index) {
-        viewport[index].id = viewportCommands[index];
+    result.reserve(catalog.size());
+    for (auto const& command : catalog) {
+        std::vector<CapabilityId> capabilities;
+        capabilities.reserve(command.requiredCapabilities.size());
+        for (auto const& capability : command.requiredCapabilities) {
+            capabilities.emplace_back(std::string{capability});
+        }
+        result.push_back({std::string{command.id}, command.effect,
+                          std::move(capabilities)});
     }
-    appendIds(result, viewport);
 
     std::unordered_set<std::string> unique;
     for (auto const& descriptor : result) {

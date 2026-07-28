@@ -281,28 +281,6 @@ TEST(footerProjectionAndAccessibilityMatchGolden) {
         ASSERT_FALSE(action.accessibleLabel.empty());
     }
 }
-TEST(commandCatalogAndDeltaAreExact) {
-    const PromptStatusCommandSet commands;
-    const std::vector<std::string_view> expected{
-        "prompt.submit", "prompt.cancel", "prompt.next", "prompt.previous",
-        "prompt.update_value",
-        "status.next", "status.previous", "status.dismiss",
-        "status.invoke_action"};
-    for (std::size_t i = 0; i < expected.size(); ++i) {
-        ASSERT_EQ(commands.descriptors[i].id, expected[i]);
-    }
-
-    const PromptStatusViewState before{};
-    const auto unchanged = PromptStatusDeltaCodec{}.derive(before, before);
-    ASSERT_FALSE(unchanged.changed);
-    ASSERT_FALSE(unchanged.replacement.has_value());
-    PromptStatusViewState after{};
-    after.status.items.push_back(
-        StatusItemView{StatusId{1}, StatusPriority::Information, 1, "ready"});
-    const auto changed = PromptStatusDeltaCodec{}.derive(before, after);
-    ASSERT_TRUE(changed.changed);
-    ASSERT_EQ(changed.replacement, std::optional<PromptStatusViewState>{after});
-}
 
 } // namespace
 
@@ -314,6 +292,5 @@ int main() {
     RUN(statusCapacityAdmissionAndEvictionTable);
     RUN(statusStaleActionsAreRejectedWithoutMutation);
     RUN(footerProjectionAndAccessibilityMatchGolden);
-    RUN(commandCatalogAndDeltaAreExact);
     return failed == 0 ? 0 : 1;
 }

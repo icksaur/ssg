@@ -1,5 +1,7 @@
 #include "editor_runtime_internal.h"
 
+#include <ssg/Commands.h>
+
 #include <algorithm>
 #include <stdexcept>
 #include <variant>
@@ -390,11 +392,11 @@ void bindRuntimePresentation(EditorSessionBuilder& builder, EditorRuntime::Impl&
             return result;
         });
     });
-    for (auto const& descriptor : ShellCommandSet{}.descriptors) {
-        builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext& context, std::any const&) {
+    for (auto const* descriptor : commandsOwnedBy("shell-layout")) {
+        builder.bind(std::string{descriptor->id}, [&runtime, descriptor](CommandContext& context, std::any const&) {
             return runtime.runTransaction([&] {
-                auto result = shellCommand(runtime, descriptor.id);
-                if (result.accepted && userNavigationShellCommand(descriptor.id)) {
+                auto result = shellCommand(runtime, descriptor->id);
+                if (result.accepted && userNavigationShellCommand(descriptor->id)) {
                     runtime.recordNavigation(context.principal().clientId(),
                                              NavigationClass::User);
                 }
@@ -402,32 +404,32 @@ void bindRuntimePresentation(EditorSessionBuilder& builder, EditorRuntime::Impl&
             });
         });
     }
-    for (auto const& descriptor : PromptStatusCommandSet{}.descriptors) {
-        builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext& context, std::any const& payload) {
+    for (auto const* descriptor : commandsOwnedBy("prompt-status-surface")) {
+        builder.bind(std::string{descriptor->id}, [&runtime, descriptor](CommandContext& context, std::any const& payload) {
             return runtime.runTransaction([&] {
                 return promptStatusCommand(runtime, context.revision(),
-                                           descriptor.id, payload);
+                                           descriptor->id, payload);
             });
         });
     }
-    for (auto const& descriptor : SettingsCommandSet{}.descriptors) {
-        builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const& payload) {
-            return runtime.runTransaction([&] { return settingsCommand(runtime, descriptor.id, payload); });
+    for (auto const* descriptor : commandsOwnedBy("settings-model")) {
+        builder.bind(std::string{descriptor->id}, [&runtime, descriptor](CommandContext&, std::any const& payload) {
+            return runtime.runTransaction([&] { return settingsCommand(runtime, descriptor->id, payload); });
         });
     }
-    for (auto const& descriptor : ThemeCommandSet{}.descriptors) {
-        builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const& payload) {
-            return runtime.runTransaction([&] { return themeCommand(runtime, descriptor.id, payload); });
+    for (auto const* descriptor : commandsOwnedBy("theme-model")) {
+        builder.bind(std::string{descriptor->id}, [&runtime, descriptor](CommandContext&, std::any const& payload) {
+            return runtime.runTransaction([&] { return themeCommand(runtime, descriptor->id, payload); });
         });
     }
-    for (auto const& descriptor : StyleCommandSet{}.descriptors) {
-        builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const& payload) {
-            return runtime.runTransaction([&] { return styleCommand(runtime, descriptor.id, payload); });
+    for (auto const* descriptor : commandsOwnedBy("style-model")) {
+        builder.bind(std::string{descriptor->id}, [&runtime, descriptor](CommandContext&, std::any const& payload) {
+            return runtime.runTransaction([&] { return styleCommand(runtime, descriptor->id, payload); });
         });
     }
-    for (auto const& descriptor : KeymapCommandSet{}.descriptors) {
-        builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const& payload) {
-            return runtime.runTransaction([&] { return keymapCommand(runtime, descriptor.id, payload); });
+    for (auto const* descriptor : commandsOwnedBy("keymap-model")) {
+        builder.bind(std::string{descriptor->id}, [&runtime, descriptor](CommandContext&, std::any const& payload) {
+            return runtime.runTransaction([&] { return keymapCommand(runtime, descriptor->id, payload); });
         });
     }
 }
