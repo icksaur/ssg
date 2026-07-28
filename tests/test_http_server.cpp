@@ -1,6 +1,8 @@
 #include "test_helpers.h"
 #include <ssg/ApplicationAuthentication.h>
 #include <ssg/EditorSessionBuilder.h>
+
+#include "all_command_ids.h"
 #include <ssg/HttpEditorServer.h>
 #include <ssg/Protocol.h>
 #include <ssg/TextInputCommands.h>
@@ -290,18 +292,16 @@ private:
 
 struct Fixture {
     Fixture() {
-        for (auto const& descriptor : ssg::p0CommandDescriptors()) {
-            auto const id = descriptor.id;
-            builder.bind(id, [this, id](ssg::CommandContext&,
-                                        std::any const& payload) {
+        ssg::testing::registerStandIns(builder, [this](std::string id) {
+            return [this, id](ssg::CommandContext&, std::any const& payload) {
                 if (id == "text.insert") {
                     host->document +=
                         std::any_cast<ssg::TextInputArguments const&>(payload)
                             .text;
                 }
                 return ssg::CommandHandlerResult::success();
-            });
-        }
+            };
+        });
         session = builder.build();
         host.emplace(*session);
     }

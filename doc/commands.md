@@ -265,11 +265,11 @@ There are 182 commands.
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
 | `text.insert` | Insert | text | lua |
-| `text.newline` | Newline | text | lua |
-| `text.delete_backward` | Delete Backward | text | lua |
-| `text.delete_forward` | Delete Forward | text | lua |
-| `text.delete_word_backward` | Delete Word Backward | text | lua |
-| `text.delete_word_forward` | Delete Word Forward | text | lua |
+| `text.newline` | Newline | none | lua |
+| `text.delete_backward` | Delete Backward | none | lua |
+| `text.delete_forward` | Delete Forward | none | lua |
+| `text.delete_word_backward` | Delete Word Backward | none | lua |
+| `text.delete_word_forward` | Delete Word Forward | none | lua |
 
 ## theme-model
 

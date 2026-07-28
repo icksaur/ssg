@@ -5,6 +5,8 @@
 #include <ssg/Renderer.h>
 
 #include <ssg/EditorSessionBuilder.h>
+
+#include "all_command_ids.h"
 #include <ssg/session_snapshot.h>
 
 #include <any>
@@ -164,13 +166,11 @@ private:
 class Scenario {
 public:
     Scenario() {
-        for (auto const& descriptor : ssg::p0CommandDescriptors()) {
-            auto id = descriptor.id;
-            builder_.bind(id, [this, id](ssg::CommandContext&,
-                                         std::any const& value) {
+        ssg::testing::registerStandIns(builder_, [this](std::string id) {
+            return [this, id](ssg::CommandContext&, std::any const& value) {
                 return model.apply(id, value);
-            });
-        }
+            };
+        });
         session = builder_.build();
     }
 

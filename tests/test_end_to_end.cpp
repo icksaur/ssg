@@ -3,6 +3,8 @@
 #include "tui_fixture.h"
 
 #include <ssg/EditorSessionBuilder.h>
+
+#include "all_command_ids.h"
 #include <ssg/FollowEditsModel.h>
 #include <ssg/HttpEditorServer.h>
 #include <ssg/Protocol.h>
@@ -325,14 +327,13 @@ private:
 
 struct EndToEndScenario {
     EndToEndScenario() {
-        for (auto const& desc : ssg::p0CommandDescriptors()) {
-            auto id = desc.id;
-            builder.bind(id, [this, id](ssg::CommandContext& ctx,
-                                        std::any const& payload) {
+        ssg::testing::registerStandIns(builder, [this](std::string id) {
+            return [this, id](ssg::CommandContext& ctx,
+                              std::any const& payload) {
                 return model.apply(id, payload, ctx.principal().clientId(),
                                    ctx.revision());
-            });
-        }
+            };
+        });
         session = builder.build();
     }
 
@@ -599,14 +600,13 @@ private:
 
 struct ConcurrentScenario {
     ConcurrentScenario() {
-        for (auto const& desc : ssg::p0CommandDescriptors()) {
-            auto id = desc.id;
-            builder.bind(id, [this, id](ssg::CommandContext& ctx,
-                                        std::any const& payload) {
+        ssg::testing::registerStandIns(builder, [this](std::string id) {
+            return [this, id](ssg::CommandContext& ctx,
+                              std::any const& payload) {
                 return model.apply(id, payload, ctx.principal().clientId(),
                                    ctx.revision());
-            });
-        }
+            };
+        });
         session = builder.build();
     }
 

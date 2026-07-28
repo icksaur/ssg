@@ -5,6 +5,9 @@
 #include <ssg/FindReplace.h>
 #include <ssg/Commands.h>
 #include <ssg/CommandCatalog.h>
+#include <ssg/EditorRuntime.h>
+
+#include <filesystem>
 #include <ssg/Protocol.h>
 #include <ssg/session_snapshot.h>
 
@@ -101,30 +104,32 @@ ssg::ViewportViewState clientView(std::uint32_t firstRow) {
 }
 
 
-// A catalog mirroring the static table, for codec tests that need one without a
-// running editor.  Handlers are stubs: these tests exercise the WIRE, not
-// dispatch.  Deleted with the static table (doc/spec-command-registry.md, D5).
+// The catalog these wire tests encode against.
+//
+// It cannot be built from the static table alone: components are migrating off
+// it, so a command already registered by its component would be missing here
+// and encoding it would throw.  A real runtime is the only thing that knows the
+// whole catalog, which is the point of the migration.  Handlers still come from
+// the static rows because these tests exercise the WIRE, not dispatch.
+//
+// Deleted with the static table (doc/spec-command-registry.md, D5).
 std::shared_ptr<ssg::CommandCatalog> staticTableCatalog() {
-    auto catalog = std::make_shared<ssg::CommandCatalog>();
-    for (auto const& command : ssg::commandCatalog()) {
-        ssg::CommandSpecBuilder spec{std::string{command.id}};
-        spec.owner(std::string{command.owner})
-            .summary(command.summary.empty() ? std::string{"stub"}
-                                             : std::string{command.summary});
-        if (command.effect == ssg::CommandEffect::Mutation) {
-            spec.mutates();
-        } else {
-            spec.observes();
-        }
-        spec.adoptBoundHandler(
-            [](ssg::CommandContext&, std::any const&) {
-                return ssg::CommandHandlerResult::success();
-            },
-            ssg::argumentTypeForKind(command.argument));
-        catalog->add(std::move(spec));
-    }
+    static auto const catalog = [] {
+        auto const root = std::filesystem::temp_directory_path() /
+                          "ssg-protocol-catalog";
+        std::filesystem::remove_all(root);
+        std::filesystem::create_directories(root);
+        auto created = ssg::EditorRuntime::create({root});
+        auto result = created.runtime ? created.runtime->commandCatalog()
+                                      : nullptr;
+        // The runtime owns the catalog; keep it alive for the test's lifetime.
+        static auto keepAlive = std::move(created.runtime);
+        std::filesystem::remove_all(root);
+        return result;
+    }();
     return catalog;
 }
+
 
 // ---------------------------------------------------------------------------
 // Registry coverage and construction validation.

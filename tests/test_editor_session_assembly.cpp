@@ -157,16 +157,20 @@ private:
     void publishDeltaValue(std::type_index, std::any) override {}
 };
 
+// Registers its own command rather than binding one from the static table: the
+// path under test is service threading, not which commands happen to exist, and
+// a test naming a real command breaks every time that command migrates.
 TEST(builderThreadsServicesThroughTheCommonDispatchPath) {
     TestServices services;
     ssg::EditorSessionBuilder builder;
-    for (auto const& id : catalogIds()) {
-        builder.bind(id, [&services](ssg::CommandContext& context,
-                                     std::any const&) {
-            ASSERT_TRUE(context.services() == &services);
-            return ssg::CommandHandlerResult::success();
-        });
-    }
+    builder.add(ssg::CommandSpecBuilder{"probe.services"}
+                    .owner("test-owner")
+                    .summary("Observes the services it was dispatched with")
+                    .observes()
+                    .handler([&services](ssg::CommandContext& context) {
+                        ASSERT_TRUE(context.services() == &services);
+                        return ssg::CommandHandlerResult::success();
+                    }));
     auto session = builder.services(services).build();
     ASSERT_TRUE(session->attach(
                     ssg::InvocationPrincipal{
@@ -175,7 +179,7 @@ TEST(builderThreadsServicesThroughTheCommonDispatchPath) {
                     .accepted());
     ASSERT_TRUE(session
                     ->dispatch(ssg::ClientId{1},
-                               {"text.insert", ssg::Revision{1}, {}})
+                               {"probe.services", ssg::Revision{1}, {}})
                     .accepted());
 }
 

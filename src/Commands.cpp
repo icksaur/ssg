@@ -17,25 +17,7 @@ constexpr std::array<std::string_view, 1> kfile_open_dropped_contentCapabilities
 //
 // Columns: id, owner, label ("" = humanise the id), summary, effect, argument
 // shape, surfaces {luaApi, initScript}, required capabilities.
-constexpr std::array<CommandSpec, 182> kCommands{{
-    {"text.insert", "text-input-commands", "", "Insert",
-     CommandEffect::Mutation, ArgumentKind::TextInput, {true, false},
-     {}},
-    {"text.newline", "text-input-commands", "", "Newline",
-     CommandEffect::Mutation, ArgumentKind::TextInput, {true, false},
-     {}},
-    {"text.delete_backward", "text-input-commands", "", "Delete Backward",
-     CommandEffect::Mutation, ArgumentKind::TextInput, {true, false},
-     {}},
-    {"text.delete_forward", "text-input-commands", "", "Delete Forward",
-     CommandEffect::Mutation, ArgumentKind::TextInput, {true, false},
-     {}},
-    {"text.delete_word_backward", "text-input-commands", "", "Delete Word Backward",
-     CommandEffect::Mutation, ArgumentKind::TextInput, {true, false},
-     {}},
-    {"text.delete_word_forward", "text-input-commands", "", "Delete Word Forward",
-     CommandEffect::Mutation, ArgumentKind::TextInput, {true, false},
-     {}},
+constexpr std::array<CommandSpec, 176> kCommands{{
     {"cursor.set_position", "selection-navigation", "", "Set Position",
      CommandEffect::Mutation, ArgumentKind::SelectionCommand, {true, false},
      {}},

@@ -60,19 +60,15 @@ CommandHandlerResult applyTransaction(EditorRuntime::Impl& runtime,
 
 CommandHandlerResult bindText(EditorRuntime::Impl& runtime,
                                TextInputCommand command,
-                               std::string_view id,
-                               std::any const& payload) {
+                               TextInputArguments arguments) {
     if (activeLiveDiffTab(runtime)) {
         return failure("text input is unavailable in diff mode");
     }
     auto const* document = runtime.activeDocument();
     if (document == nullptr) return failure("no active document");
-    TextInputArguments arguments;
-    if (command == TextInputCommand::Insert) {
-        auto const* typed = payloadAs<TextInputArguments>(payload);
-        if (typed == nullptr) return failure(wrongPayload(id));
-        arguments = *typed;
-    }
+    // The payload arrives already typed: the handler declared what it consumes,
+    // so there is no cast to fail here.
+    if (command != TextInputCommand::Insert) arguments = {};
     std::string inserted = arguments.text;
     auto result = TextInputInterpreter{}.apply(document->snapshot(), runtime.selection.selections,
                                    textInputSettings(runtime), command, std::move(arguments));
@@ -489,18 +485,71 @@ void EditorRuntime::Impl::revealPrimaryCaret() {
     requestedFirstVisualColumn = selection.firstVisualColumn;
 }
 
+// The text-input commands, declared where they are implemented.
+//
+// The first component migrated off the static table
+// (doc/spec-command-registry.md, D3).  Each command's facts and its handler are
+// one expression, so the argument type is written once -- in `handler<...>` --
+// and the codec, the unwrap and the reference's argument column are all derived
+// from it.  There is no row elsewhere to keep in step.
+void registerTextInputCommands(EditorSessionBuilder& builder,
+                               EditorRuntime::Impl& runtime) {
+    // Only insertion carries text.  The other five never read a payload -- the
+    // old handler default-constructed one and ignored it -- yet the static table
+    // declared all six as taking text.  Deducing the type from the handler makes
+    // that fiction impossible to write: a command that does not consume an
+    // argument cannot declare one.
+    auto declareTextless = [&](std::string id, std::string label,
+                               std::string summary, TextInputCommand command) {
+        builder.add(CommandSpecBuilder{std::move(id)}
+                        .owner("text-input-commands")
+                        .label(std::move(label))
+                        .summary(std::move(summary))
+                        .mutates()
+                        .lua()
+                        .handler([&runtime, command](CommandContext&) {
+                            return runtime.runTransaction([&] {
+                                return bindText(runtime, command, {});
+                            });
+                        }));
+    };
+
+    builder.add(CommandSpecBuilder{"text.insert"}
+                    .owner("text-input-commands")
+                    .label("Insert")
+                    .summary("Insert")
+                    .mutates()
+                    .lua()
+                    .handler<TextInputArguments>(
+                        [&runtime](CommandContext&,
+                                   TextInputArguments const& arguments) {
+                            return runtime.runTransaction([&] {
+                                return bindText(runtime,
+                                                TextInputCommand::Insert,
+                                                arguments);
+                            });
+                        }));
+    declareTextless("text.newline", "Newline", "Newline",
+                    TextInputCommand::Newline);
+    declareTextless("text.delete_backward", "Delete Backward",
+                    "Delete Backward", TextInputCommand::DeleteBackward);
+    declareTextless("text.delete_forward", "Delete Forward", "Delete Forward",
+                    TextInputCommand::DeleteForward);
+    declareTextless("text.delete_word_backward", "Delete Word Backward",
+                    "Delete Word Backward",
+                    TextInputCommand::DeleteWordBackward);
+    declareTextless("text.delete_word_forward", "Delete Word Forward",
+                    "Delete Word Forward",
+                    TextInputCommand::DeleteWordForward);
+}
+
 void bindRuntimeEditing(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime) {
-    auto textCommands = textInputCommandSet();
+    registerTextInputCommands(builder, runtime);
     auto selectionCommands = selectionNavigationCommandSet();
     auto historyCommands = historyCommandSet();
     auto editCommands = editCommandSuiteCommandSet();
     auto clipboardCommands = clipboardCommandSet();
     auto findReplaceCommands = findReplaceCommandSet();
-    for (auto const& descriptor : textCommands.descriptors()) {
-        builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const& payload) {
-            return runtime.runTransaction([&] { return bindText(runtime, descriptor.command, descriptor.id, payload); });
-        });
-    }
     for (auto const& descriptor : selectionCommands.descriptors()) {
         builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext& context, std::any const& payload) {
             return runtime.runTransaction([&] {

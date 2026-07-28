@@ -53,7 +53,9 @@ std::unordered_map<std::type_index, std::string_view> const& argumentNames() {
     return names;
 }
 
-std::string_view argumentName(CommandEntry const& command) {
+}  // namespace
+
+std::string_view commandArgumentName(CommandEntry const& command) {
     if (!command.argument.type.has_value()) return "none";
     auto const& names = argumentNames();
     auto const found = names.find(*command.argument.type);
@@ -64,6 +66,8 @@ std::string_view argumentName(CommandEntry const& command) {
     }
     return found->second;
 }
+
+namespace {
 
 std::string_view surfaces(CommandEntry const& command) {
     // init.lua implies the Lua API, so naming both would be noise.
@@ -97,7 +101,7 @@ std::string renderCommandReference(CommandCatalog const& catalog) {
             << "|---|---|---|---|\n";
         for (auto const* command : owned) {
             out << "| `" << command->id << "` | " << command->summary << " | "
-                << argumentName(*command) << " | " << surfaces(*command)
+                << commandArgumentName(*command) << " | " << surfaces(*command)
                 << " |\n";
         }
     }

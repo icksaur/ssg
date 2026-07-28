@@ -19,6 +19,7 @@
 
 #include "frozen_catalog.h"
 
+#include <array>
 #include <cstdlib>
 
 #include <filesystem>
@@ -196,6 +197,29 @@ TEST(theGeneratedCommandReferenceIsCurrent) {
 // init.lua.  Later dynamic registrations are not migration defects.
 //
 // Deleted with the static table at D5.
+// A migration may deliberately correct a fact the static table got wrong.  Each
+// such correction is named HERE, one line per command, rather than by editing
+// the frozen snapshot -- so a reviewer sees the deviation and its reason in the
+// diff instead of a silently rewritten oracle.  An unlisted change still fails.
+struct DeliberateCorrection {
+    std::string_view id;
+    std::string_view wasArgument;
+    std::string_view nowArgument;
+};
+
+// text.newline and the four delete commands were declared as taking text, but
+// their handler default-constructed the payload and ignored it; only insertion
+// ever read one.  Deducing the argument type from the handler makes that
+// fiction unwritable, so the declaration now matches what the code does.  A
+// client that still sends a payload has it ignored, exactly as before.
+constexpr std::array<DeliberateCorrection, 5> kDeliberateCorrections{{
+    {"text.newline", "text", "none"},
+    {"text.delete_backward", "text", "none"},
+    {"text.delete_forward", "text", "none"},
+    {"text.delete_word_backward", "text", "none"},
+    {"text.delete_word_forward", "text", "none"},
+}};
+
 TEST(theCoreCatalogStillMatchesTheFrozenPreMigrationSnapshot) {
     auto const root = std::filesystem::temp_directory_path() /
                       "ssg-frozen-catalog-oracle";
@@ -218,6 +242,15 @@ TEST(theCoreCatalogStillMatchesTheFrozenPreMigrationSnapshot) {
 
         bool const mutates = actual->effect == ssg::CommandEffect::Mutation;
         ASSERT_EQ(mutates, expected.mutates);
+        std::string_view expectedArgument = expected.argument;
+        for (auto const& correction : kDeliberateCorrections) {
+            if (correction.id != expected.id) continue;
+            ASSERT_EQ(std::string{correction.wasArgument},
+                      std::string{expected.argument});
+            expectedArgument = correction.nowArgument;
+        }
+        ASSERT_EQ(std::string{ssg::commandArgumentName(*actual)},
+                  std::string{expectedArgument});
         ASSERT_EQ(actual->luaApi, expected.luaApi);
         ASSERT_EQ(actual->initScript, expected.initScript);
 
