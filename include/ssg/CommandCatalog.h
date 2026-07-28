@@ -30,9 +30,11 @@
 #include <deque>
 #include <memory>
 #include <shared_mutex>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace ssg {
@@ -82,6 +84,31 @@ public:
     // because a builder passed to `add` is finished by definition.
     CommandHandle add(CommandSpecBuilder spec);
 
+    // Swaps one set of commands for another, atomically.
+    //
+    // Retires every command in `retire` and registers everything in `add`,
+    // under a single exclusive lock, so no reader can observe the catalog with
+    // the old set gone and the new one not yet present -- which for a script
+    // reload would be a palette momentarily listing none of the user's commands
+    // (doc/spec-lua-commands.md).
+    //
+    // ALL OR NOTHING.  Every addition is validated, and the batch checked
+    // against the handle space, BEFORE anything is retired or added.  A batch
+    // containing one bad spec therefore leaves the previous set registered and
+    // working, rather than removing it and then failing to install its
+    // replacement.  (Allocation failure is out of scope, as everywhere else in
+    // this codebase.)
+    //
+    // Retiring frees a command's NAME while keeping its slot: the id may be
+    // registered again -- receiving a NEW handle -- while the retired handle
+    // stays permanently dead, so a stale handle resolves to nothing rather than
+    // to a different command (doc/spec-command-registry.md, R4).
+    //
+    // Returns the handles of the added commands, in order.
+    std::vector<CommandHandle> replaceGeneration(
+        std::span<CommandHandle const> retire,
+        std::vector<CommandSpecBuilder> add);
+
     [[nodiscard]] CatalogRevision revision() const;
 
     // Stable for the life of the process; nullptr when unknown or retired.
@@ -96,6 +123,18 @@ public:
     [[nodiscard]] std::size_t size() const;
 
 private:
+    struct ValidatedSpec;
+
+    // Everything that can refuse a registration.  Shared by add and
+    // replaceGeneration so a check cannot be added to one and forgotten in the
+    // other.  Caller holds the lock.
+    [[nodiscard]] ValidatedSpec validate(
+        CommandSpecBuilder spec,
+        std::unordered_set<std::string> const& alsoTaken,
+        std::unordered_set<std::string> const& beingFreed) const;
+    CommandHandle appendValidated(ValidatedSpec spec);
+    void requireCapacity(std::size_t additional) const;
+
     // Stable storage: a deque never moves an element it already holds, so a
     // borrowed pointer survives every later add (see the header comment).
     std::deque<CommandEntry> entries_;

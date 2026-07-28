@@ -3,6 +3,7 @@
 
 #include "test_helpers.h"
 
+#include <array>
 #include <atomic>
 #include <string>
 #include <thread>
@@ -302,6 +303,116 @@ TEST(registeringPastTheHandleSpaceIsRefused) {
     ASSERT_EQ(ssg::CommandCatalog::kMaximumCommands, std::size_t{65535});
 }
 
+
+TEST(retiringACommandFreesItsNameButNeverItsHandle) {
+    // A reload registers the same ids again, so retiring must release the name.
+    // The handle must NOT be reused: a stale handle has to resolve to nothing
+    // rather than to whatever was registered next.
+    ssg::CommandCatalog catalog;
+    auto const first = catalog.add(minimal("lua.hello"));
+    ASSERT_TRUE(catalog.find("lua.hello") != nullptr);
+
+    std::vector<ssg::CommandSpecBuilder> second;
+    second.push_back(minimal("lua.hello"));
+    auto const replaced = catalog.replaceGeneration(std::array{first}, std::move(second));
+
+    ASSERT_EQ(replaced.size(), std::size_t{1});
+    ASSERT_TRUE(catalog.find(first) == nullptr);
+    ASSERT_TRUE(!(replaced[0] == first));
+    auto const* live = catalog.find("lua.hello");
+    ASSERT_TRUE(live != nullptr);
+    ASSERT_TRUE(catalog.find(replaced[0]) == live);
+    ASSERT_EQ(catalog.size(), std::size_t{1});
+}
+
+TEST(retiringWithoutReplacementMakesTheCommandUnknown) {
+    ssg::CommandCatalog catalog;
+    auto const handle = catalog.add(minimal("lua.gone"));
+    catalog.replaceGeneration(std::array{handle}, {});
+    ASSERT_TRUE(catalog.find("lua.gone") == nullptr);
+    ASSERT_TRUE(catalog.find(handle) == nullptr);
+    ASSERT_EQ(catalog.size(), std::size_t{0});
+}
+
+TEST(aBatchWithOneBadSpecChangesNothing) {
+    // The whole point of validating first: a failed reload must leave the
+    // previous generation registered and working, not delete it and then fail
+    // to install the replacement.
+    ssg::CommandCatalog catalog;
+    auto const previous = catalog.add(minimal("lua.keep"));
+
+    std::vector<ssg::CommandSpecBuilder> batch;
+    batch.push_back(minimal("lua.fine"));
+    batch.push_back(minimal("lua.broken").capability(""));
+    bool threw = false;
+    try {
+        catalog.replaceGeneration(std::array{previous}, std::move(batch));
+    } catch (std::runtime_error const&) {
+        threw = true;
+    }
+
+    ASSERT_TRUE(threw);
+    ASSERT_TRUE(catalog.find(previous) != nullptr);
+    ASSERT_TRUE(catalog.find("lua.fine") == nullptr);
+    ASSERT_EQ(catalog.size(), std::size_t{1});
+}
+
+TEST(aBatchRepeatingAnIdIsRefusedWholesale) {
+    ssg::CommandCatalog catalog;
+    std::vector<ssg::CommandSpecBuilder> batch;
+    batch.push_back(minimal("lua.twice"));
+    batch.push_back(minimal("lua.twice"));
+    bool threw = false;
+    try {
+        catalog.replaceGeneration({}, std::move(batch));
+    } catch (std::runtime_error const&) {
+        threw = true;
+    }
+    ASSERT_TRUE(threw);
+    ASSERT_EQ(catalog.size(), std::size_t{0});
+}
+
+TEST(aBatchMayReuseAnIdItIsItselfRetiring) {
+    // Retirement is applied after validation, so validation has to accept an id
+    // that the same batch is about to free -- which is the ordinary reload.
+    ssg::CommandCatalog catalog;
+    auto const a = catalog.add(minimal("lua.a"));
+    auto const b = catalog.add(minimal("lua.b"));
+    std::vector<ssg::CommandSpecBuilder> batch;
+    batch.push_back(minimal("lua.a"));
+    batch.push_back(minimal("lua.c"));
+    auto const added = catalog.replaceGeneration(std::array{a, b}, std::move(batch));
+    ASSERT_EQ(added.size(), std::size_t{2});
+    ASSERT_TRUE(catalog.find("lua.a") != nullptr);
+    ASSERT_TRUE(catalog.find("lua.b") == nullptr);
+    ASSERT_TRUE(catalog.find("lua.c") != nullptr);
+    ASSERT_EQ(catalog.size(), std::size_t{2});
+}
+
+TEST(aSwapIsNeverObservedWithNeitherGenerationPresent) {
+    // A palette listing none of the user's commands, even for an instant, is
+    // the failure this exists to prevent.
+    ssg::CommandCatalog catalog;
+    auto handles = std::vector{catalog.add(minimal("lua.only"))};
+
+    std::atomic<bool> stop{false};
+    std::atomic<bool> sawNeither{false};
+    std::thread reader{[&] {
+        while (!stop.load()) {
+            if (catalog.find("lua.only") == nullptr) sawNeither.store(true);
+        }
+    }};
+
+    for (int generation = 0; generation < 200; ++generation) {
+        std::vector<ssg::CommandSpecBuilder> batch;
+        batch.push_back(minimal("lua.only"));
+        handles = catalog.replaceGeneration(handles, std::move(batch));
+    }
+    stop.store(true);
+    reader.join();
+    ASSERT_TRUE(!sawNeither.load());
+}
+
 int main() {
     RUN(aCommandRegisteredAfterTheSessionIsBuiltIsDispatchable);
     RUN(anEmptyCapabilityIsRefusedAtRegistration);
@@ -317,6 +428,12 @@ int main() {
     RUN(initScriptImpliesLuaApi);
     RUN(unknownIdsAndHandlesResolveToNothing);
     RUN(concurrentReadsSeeOnlyWholeRegistrations);
+    RUN(retiringACommandFreesItsNameButNeverItsHandle);
+    RUN(retiringWithoutReplacementMakesTheCommandUnknown);
+    RUN(aBatchWithOneBadSpecChangesNothing);
+    RUN(aBatchRepeatingAnIdIsRefusedWholesale);
+    RUN(aBatchMayReuseAnIdItIsItselfRetiring);
+    RUN(aSwapIsNeverObservedWithNeitherGenerationPresent);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

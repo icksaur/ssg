@@ -176,6 +176,50 @@ the theme. Lua has no transactions and the existing dispatch path has no undo,
 so the only thing a generation swap can protect is the thing it owns —
 registration state. The wider guarantee is not available and is not promised.
 
+### The classes
+
+Three files, one of them new.
+
+**`LuaCommandHost` stays a pure sandbox.** It knows Lua, budgets and the two
+globals it exposes; it knows nothing about catalogs or runtimes. It gains
+`registeredCommands()`, reporting what the last successful evaluation
+registered, and its existing `publishStaged`/`rollbackStaged` are extended to
+release the previous generation's references on success. Its public shape is
+otherwise unchanged.
+
+**`CommandCatalog` gains `replaceGeneration`**, described above. `add` becomes
+its one-command case and shares the validation.
+
+**`ScriptHost` (new, `include/ssg/ScriptHost.h`) is the wiring**, and the only
+thing the application sees:
+
+```cpp
+class ScriptHost {
+public:
+    explicit ScriptHost(EditorRuntime& runtime);
+    LuaResult evaluate(std::string_view script);
+};
+```
+
+It owns the `LuaCommandHost` — and therefore the `lua_State`'s lifetime — the
+live generation's handles, and the thread the state belongs to. `evaluate` is
+called at startup and on every reload; everything this spec describes happens
+behind it.
+
+It is also the one place that builds a Lua-backed handler, so L6 is enforced in
+exactly one place: the handler compares `std::this_thread::get_id()` against the
+thread `ScriptHost` was constructed on and refuses otherwise.
+
+About 250 lines move out of `apps/ssg_main.cpp`, which currently holds this
+policy inline: the capability set, the grant list, the argument marshalling, and
+`evaluateInitScript` itself.
+
+**`InitScriptWatcher` stays in the application.** It owns a thread and a wake
+pipe wired into `main`'s `select()`, and its two-identical-reads stability rule
+decides *when* to reload rather than what a reload means. Moving it would drag
+the application's event loop into the library. Path resolution stays for the
+same reason: `~/.config/ssg/init.lua` is an application convention.
+
 ### Threading
 
 A `lua_State` is not thread-safe, and a registered command's handler re-enters
