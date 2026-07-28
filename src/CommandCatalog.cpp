@@ -53,12 +53,25 @@ CommandHandle CommandCatalog::add(CommandSpecBuilder spec) {
             "command catalog is full: at most " +
             std::to_string(kMaximumCommands) + " commands may be registered"};
     }
+    // Capabilities become CapabilityId here, so a malformed one is refused at
+    // registration -- where the author can see it -- rather than throwing from
+    // dispatch, which no caller expects to throw.
+    std::vector<CapabilityId> capabilities;
+    capabilities.reserve(spec.capabilities_.size());
+    for (auto& capability : spec.capabilities_) {
+        if (capability.empty()) {
+            throw std::runtime_error{"command \"" + spec.id_ +
+                                     "\" declares an empty capability"};
+        }
+        capabilities.emplace_back(std::move(capability));
+    }
+
     auto const index = entries_.size();
     entries_.push_back(CommandEntry{
         std::move(spec.id_), std::move(spec.owner_), std::move(spec.label_),
-        std::move(spec.summary_), *spec.effect_,
-        std::move(spec.capabilities_), spec.luaApi_, spec.initScript_,
-        spec.argument_, std::move(spec.handler_), false});
+        std::move(spec.summary_), *spec.effect_, std::move(capabilities),
+        spec.luaApi_, spec.initScript_, spec.argument_,
+        std::move(spec.handler_), false});
     byId_.emplace(entries_[index].id, index);
     ++revision_;
 

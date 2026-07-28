@@ -37,7 +37,7 @@ struct CommandFacts {
     bool luaApi = false;
     bool initScript = false;
     bool mutates = true;
-    std::vector<std::string> requiredCapabilities;
+    std::vector<ssg::CapabilityId> requiredCapabilities;
     // The real argument type, so a stand-in's wire codec matches the real one.
     std::optional<std::type_index> argument;
     // Whether that argument crosses the wire.  An in-process-only payload has
@@ -87,7 +87,7 @@ void registerStandIns(ssg::EditorSessionBuilder& builder,
             spec.observes();
         }
         for (auto const& capability : facts.requiredCapabilities) {
-            spec.capability(capability);
+            spec.capability(std::string{capability.value()});
         }
         // Untyped by necessity: one stand-in handler serves every command, so
         // it cannot name the argument any single one consumes.  It still

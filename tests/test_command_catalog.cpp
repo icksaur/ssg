@@ -276,6 +276,26 @@ TEST(aCommandRegisteredAfterTheSessionIsBuiltIsDispatchable) {
     ASSERT_EQ(lateCalls, 2);
 }
 
+// A capability is checked where it is declared.  Dispatch consults the stored
+// CapabilityId directly and nothing on that path constructs one, so a malformed
+// declaration cannot surface as an exception thrown mid-command.
+TEST(anEmptyCapabilityIsRefusedAtRegistration) {
+    ssg::CommandCatalog catalog;
+    bool threw = false;
+    try {
+        catalog.add(minimal("bad.capability").capability(""));
+    } catch (std::runtime_error const&) {
+        threw = true;
+    }
+    ASSERT_TRUE(threw);
+    ASSERT_EQ(catalog.size(), std::size_t{0});
+
+    catalog.add(minimal("good.capability").capability("local_file_drop"));
+    auto const* entry = catalog.find("good.capability");
+    ASSERT_TRUE(entry != nullptr);
+    if (entry) ASSERT_EQ(entry->requiredCapabilities.size(), std::size_t{1});
+}
+
 TEST(registeringPastTheHandleSpaceIsRefused) {
     // A handle is a 16-bit index, so the catalog must refuse a command it
     // cannot name rather than wrap one onto another command's handle.
@@ -284,6 +304,7 @@ TEST(registeringPastTheHandleSpaceIsRefused) {
 
 int main() {
     RUN(aCommandRegisteredAfterTheSessionIsBuiltIsDispatchable);
+    RUN(anEmptyCapabilityIsRefusedAtRegistration);
     RUN(registeringPastTheHandleSpaceIsRefused);
     RUN(addIssuesAHandleThatResolvesBackToItsCommand);
     RUN(addRejectsADuplicateIdAndNamesBothOwners);

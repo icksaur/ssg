@@ -98,10 +98,10 @@ CommandResult EditorSession::dispatch(ClientId clientId,
     }
 
     for (auto const& capability : command_->requiredCapabilities) {
-        if (!client->second.principal.hasCapability(CapabilityId{capability})) {
-            return rejected(
-                CommandError::CapabilityDenied, currentRevision,
-                "principal lacks required capability: " + capability);
+        if (!client->second.principal.hasCapability(capability)) {
+            return rejected(CommandError::CapabilityDenied, currentRevision,
+                            "principal lacks required capability: " +
+                                std::string{capability.value()});
         }
     }
 

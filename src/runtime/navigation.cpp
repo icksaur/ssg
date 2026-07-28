@@ -48,7 +48,7 @@ CommandHandlerResult validatePaletteTarget(EditorRuntime::Impl& runtime,
     auto const* declared = runtime.session->catalog()->find(commandId);
     if (declared != nullptr) {
         for (auto const& capability : declared->requiredCapabilities) {
-            if (!context.principal().hasCapability(CapabilityId{std::string{capability}})) {
+            if (!context.principal().hasCapability(capability)) {
                 return failure("principal lacks capability for palette command: " +
                                commandId);
             }

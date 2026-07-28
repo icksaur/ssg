@@ -46,7 +46,9 @@ struct CommandEntry {
     std::string label;
     std::string summary;
     CommandEffect effect = CommandEffect::Mutation;
-    std::vector<std::string> requiredCapabilities;
+    // Validated CapabilityId, not raw text: a capability is checked when the
+    // command is registered, so dispatch cannot be handed one that throws.
+    std::vector<CapabilityId> requiredCapabilities;
     bool luaApi = false;
     bool initScript = false;
     CommandArgumentType argument;
