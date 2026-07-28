@@ -1,3 +1,4 @@
+#include <ssg/CommandCatalog.h>
 #include <ssg/command_metadata.h>
 #include <ssg/Keymap.h>
 
@@ -6,18 +7,40 @@
 #include <string>
 
 TEST(commandLabelUsesAuthoredLabelsAndHumanizesTheRest) {
-    // Authored labels for common commands.
-    ASSERT_EQ(ssg::commandLabel("file.save"), std::string{"Save File"});
-    ASSERT_EQ(ssg::commandLabel("edit.undo"), std::string{"Undo"});
-    ASSERT_EQ(ssg::commandLabel("palette.open"),
-              std::string{"Command Palette"});
+    // Built here rather than taken from a runtime: the rule under test is how a
+    // label is DERIVED, which does not depend on which commands the editor
+    // happens to offer.
+    ssg::CommandCatalog catalog;
+    auto declare = [&catalog](std::string id, std::string label) {
+        auto spec = ssg::CommandSpecBuilder{std::move(id)}
+                        .owner("test-owner")
+                        .summary("a command")
+                        .observes()
+                        .handler([](ssg::CommandContext&) {
+                            return ssg::CommandHandlerResult::success();
+                        });
+        if (!label.empty()) spec.label(std::move(label));
+        catalog.add(std::move(spec));
+    };
+    declare("file.save", "Save File");
+    declare("edit.undo", "Undo");
+    declare("cursor.line_down", "");
+    declare("tree.select_previous", "");
 
-    // Uncurated ids humanize from their segments, never showing the raw id.
-    ASSERT_EQ(ssg::commandLabel("cursor.line_down"),
-              std::string{"Cursor Line Down"});
-    ASSERT_NE(ssg::commandLabel("cursor.line_down"),
-              std::string{"cursor.line_down"});
-    ASSERT_EQ(ssg::commandLabel("tree.select_previous"),
+    auto labelOf = [&catalog](std::string_view id) {
+        auto const* command = catalog.find(id);
+        return command == nullptr ? std::string{} : ssg::commandLabel(*command);
+    };
+
+    // An authored label is used verbatim.
+    ASSERT_EQ(labelOf("file.save"), std::string{"Save File"});
+    ASSERT_EQ(labelOf("edit.undo"), std::string{"Undo"});
+
+    // A command with no authored label humanizes from its segments, and never
+    // shows the raw id.
+    ASSERT_EQ(labelOf("cursor.line_down"), std::string{"Cursor Line Down"});
+    ASSERT_NE(labelOf("cursor.line_down"), std::string{"cursor.line_down"});
+    ASSERT_EQ(labelOf("tree.select_previous"),
               std::string{"Tree Select Previous"});
 }
 

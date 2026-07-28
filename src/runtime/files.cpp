@@ -361,10 +361,54 @@ CommandHandlerResult EditorRuntime::Impl::activateDocument(FileDocumentId docume
     return success();
 }
 
+// What to do about a file that changed on disk under an open buffer.
+//
+// Each takes a live diff-file id, which means nothing to a remote client, so
+// these are in-process only.
+void registerExternalModificationCommands(EditorSessionBuilder& builder,
+                                          EditorRuntime::Impl& runtime) {
+    auto declare = [&](std::string id, std::string summary,
+                       ExternalAction action) {
+        builder.add(
+            CommandSpecBuilder{std::move(id)}
+                .owner("external-modification-flow")
+                .summary(std::move(summary))
+                .mutates()
+                .lua()
+                .inProcessHandler<DiffFileId>(
+                    [&runtime, action](CommandContext&,
+                                       DiffFileId const& file) {
+                        return runtime.runTransaction([&]() -> CommandHandlerResult {
+                            std::optional<JournalDocument> document;
+                            ExternalModificationResult result;
+                            if (action == ExternalAction::Reload) {
+                                result = runtime.external.reload(file, document);
+                            } else if (action == ExternalAction::KeepBuffer) {
+                                result = runtime.external.keepBuffer(file);
+                            } else {
+                                auto opened = runtime.external.openDiff(file);
+                                if (!opened.accepted()) {
+                                    return failure(
+                                        "external diff target is unavailable");
+                                }
+                                return success();
+                            }
+                            return result.accepted()
+                                       ? success()
+                                       : failure(
+                                             "external modification command failed");
+                        });
+                    }));
+    };
+    declare("external.reload", "Reload", ExternalAction::Reload);
+    declare("external.keep_buffer", "Keep Buffer", ExternalAction::KeepBuffer);
+    declare("external.open_diff", "Open Diff", ExternalAction::OpenDiff);
+}
+
 void bindRuntimeFiles(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime) {
+    registerExternalModificationCommands(builder, runtime);
     auto fileCommands = fileCommandsCommandSet();
     auto tabCommands = tabManagementCommandSet();
-    auto externalCommands = externalModificationCommandSet();
     for (auto const& descriptor : fileCommands.descriptors()) {
         builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext& context, std::any const& payload) {
             return runtime.runTransaction([&] { return bindFile(runtime, context.principal(), descriptor.command, payload); });
@@ -381,24 +425,6 @@ void bindRuntimeFiles(EditorSessionBuilder& builder, EditorRuntime::Impl& runtim
     for (auto const& descriptor : kTextEncodingCommandSet.descriptors) {
         builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const& payload) {
             return runtime.runTransaction([&] { return bindEncoding(runtime, descriptor.id, payload); });
-        });
-    }
-    for (auto const& descriptor : externalCommands.descriptors()) {
-        builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const& payload) {
-            return runtime.runTransaction([&] {
-                auto const* id = payloadAs<DiffFileId>(payload);
-                if (id == nullptr) return failure("external command requires a diff file ID payload");
-                std::optional<JournalDocument> document;
-                ExternalModificationResult result;
-                if (descriptor.action == ExternalAction::Reload) result = runtime.external.reload(*id, document);
-                else if (descriptor.action == ExternalAction::KeepBuffer) result = runtime.external.keepBuffer(*id);
-                else {
-                    auto opened = runtime.external.openDiff(*id);
-                    if (!opened.accepted()) return failure("external diff target is unavailable");
-                    return success();
-                }
-                return result.accepted() ? success() : failure("external modification command failed");
-            });
         });
     }
 }

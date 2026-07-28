@@ -34,6 +34,10 @@ struct CommandFacts {
     std::vector<std::string> requiredCapabilities;
     // The real argument type, so a stand-in's wire codec matches the real one.
     std::optional<std::type_index> argument;
+    // Whether that argument crosses the wire.  An in-process-only payload has
+    // no codec, so a stand-in that claimed one would make the command
+    // unencodable.
+    bool wire = false;
 };
 
 inline std::vector<CommandFacts> const& allCommandFacts() {
@@ -51,7 +55,7 @@ inline std::vector<CommandFacts> const& allCommandFacts() {
                     {command->id,
                      command->effect == ssg::CommandEffect::Mutation,
                      command->requiredCapabilities,
-                     command->argument.type});
+                     command->argument.type, command->argument.wire});
             }
         }
         created.runtime.reset();
@@ -81,7 +85,8 @@ void registerStandIns(ssg::EditorSessionBuilder& builder,
         // Adopted rather than typed: a stand-in forwards whatever payload it is
         // given, so it carries the real command's argument type rather than
         // deducing one from a handler that ignores it.
-        spec.adoptBoundHandler(makeHandler(facts.id), facts.argument);
+        spec.adoptBoundHandler(makeHandler(facts.id),
+                               facts.wire ? facts.argument : std::nullopt);
         builder.add(std::move(spec));
     }
 }

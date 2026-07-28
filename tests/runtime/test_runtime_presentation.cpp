@@ -1,5 +1,6 @@
 #include "../test_helpers.h"
 
+#include <ssg/CommandCatalog.h>
 #include <ssg/EditorRuntime.h>
 #include <ssg/EditorSessionBuilder.h>
 #include <ssg/Keymap.h>
@@ -221,16 +222,19 @@ TEST(paletteCandidatesMatchTheCommandRegistry) {
 
     auto const& palette = snapshot->sections().palette;
     ASSERT_TRUE(palette.mode == ssg::SearchMode::Command);
-    // Every registered P0 command appears exactly once as a candidate.
-    auto const descriptors = ssg::p0CommandDescriptors();
+    // Every registered command appears exactly once as a candidate, compared
+    // against the runtime's own catalog rather than the static table -- which
+    // is only part of the catalog while commands are migrating out of it.
+    auto const catalog = runtime.commandCatalog();
+    auto const descriptors = catalog->commands();
     ASSERT_EQ(palette.candidates.size(), descriptors.size());
     std::set<std::string> candidateIds;
     for (auto const& candidate : palette.candidates) {
         ASSERT_FALSE(candidate.label.empty());
         candidateIds.insert(candidate.id);
     }
-    for (auto const& descriptor : descriptors) {
-        ASSERT_TRUE(candidateIds.contains(descriptor.id));
+    for (auto const* descriptor : descriptors) {
+        ASSERT_TRUE(candidateIds.contains(descriptor->id));
     }
 }
 

@@ -1,5 +1,7 @@
 #include "editor_runtime_internal.h"
 
+#include <ssg/CommandCatalog.h>
+
 #include <algorithm>
 
 namespace ssg {
@@ -43,13 +45,10 @@ CommandHandlerResult validatePaletteTarget(EditorRuntime::Impl& runtime,
     if (!published) {
         return failure("command is not in the palette candidate set: " + commandId);
     }
-    auto const descriptors = p0CommandDescriptors();
-    auto const found = std::find_if(
-        descriptors.begin(), descriptors.end(),
-        [&](CommandDescriptor const& descriptor) { return descriptor.id == commandId; });
-    if (found != descriptors.end()) {
-        for (auto const& capability : found->requiredCapabilities) {
-            if (!context.principal().hasCapability(capability)) {
+    auto const* declared = runtime.session->catalog()->find(commandId);
+    if (declared != nullptr) {
+        for (auto const& capability : declared->requiredCapabilities) {
+            if (!context.principal().hasCapability(CapabilityId{std::string{capability}})) {
                 return failure("principal lacks capability for palette command: " +
                                commandId);
             }
@@ -243,11 +242,55 @@ CommandHandlerResult followCommand(EditorRuntime::Impl& runtime, std::string_vie
 
 } // namespace
 
+// Moving through a diff, and the follow-edits toggle.
+//
+// The diff commands take a live document id, which is meaningless to a remote
+// client, so they are in-process only: typed for the handler, absent from the
+// protocol.
+void registerDiffAndFollowCommands(EditorSessionBuilder& builder,
+                                   EditorRuntime::Impl& runtime) {
+    auto diff = [&](std::string id, std::string summary) {
+        auto const name = id;
+        builder.add(CommandSpecBuilder{std::move(id)}
+                        .owner("diff-model")
+                        .summary(std::move(summary))
+                        .mutates()
+                        .lua()
+                        .inProcessHandler<DiffFileId>(
+                            [&runtime, name](CommandContext&,
+                                             DiffFileId const& file) {
+                                return runtime.runTransaction([&] {
+                                    return diffCommand(runtime, name,
+                                                       std::any{file});
+                                });
+                            }));
+    };
+    diff("diff.next_hunk", "Next Hunk");
+    diff("diff.previous_hunk", "Previous Hunk");
+    diff("diff.open_file", "Open File");
+
+    auto follow = [&](std::string id, std::string summary) {
+        auto const name = id;
+        builder.add(CommandSpecBuilder{std::move(id)}
+                        .owner("follow-edits")
+                        .summary(std::move(summary))
+                        .mutates()
+                        .lua()
+                        .handler([&runtime, name](CommandContext&) {
+                            return runtime.runTransaction([&] {
+                                return followCommand(runtime, name);
+                            });
+                        }));
+    };
+    follow("follow_edits.resume", "Resume");
+    follow("follow_edits.pause", "Pause");
+    follow("follow_edits.toggle", "Toggle");
+}
+
 void bindRuntimeNavigation(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime) {
+    registerDiffAndFollowCommands(builder, runtime);
     auto searchCommands = searchCommandSet();
     auto treeCommands = treeCommandSet();
-    auto diffCommands = diffCommandSet();
-    auto followCommands = followEditsCommandSet();
     for (auto const& descriptor : searchCommands.descriptors()) {
         builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext& context, std::any const& payload) {
             return runtime.runTransaction([&] { return searchCommand(runtime, context, descriptor.id, payload); });
@@ -256,16 +299,6 @@ void bindRuntimeNavigation(EditorSessionBuilder& builder, EditorRuntime::Impl& r
     for (auto const& descriptor : treeCommands.descriptors()) {
         builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext& context, std::any const& payload) {
             return runtime.runTransaction([&] { return treeCommand(runtime, context, descriptor.id, payload); });
-        });
-    }
-    for (auto const& descriptor : diffCommands.descriptors()) {
-        builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const& payload) {
-            return runtime.runTransaction([&] { return diffCommand(runtime, descriptor.id, payload); });
-        });
-    }
-    for (auto const& descriptor : followCommands.descriptors()) {
-        builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const&) {
-            return runtime.runTransaction([&] { return followCommand(runtime, descriptor.id); });
         });
     }
 }

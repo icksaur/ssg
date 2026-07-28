@@ -1,5 +1,6 @@
 #include <ssg/command_metadata.h>
 
+#include <ssg/CommandCatalog.h>
 #include <ssg/Commands.h>
 
 #include <array>
@@ -49,15 +50,9 @@ std::string humanize(std::string_view commandId) {
 
 }  // namespace
 
-std::string commandLabel(std::string_view commandId) {
-    // Authored labels live in the command catalog, beside the command they name
-    // (src/Commands.cpp).  They used to sit in a separate kLabels table here,
-    // which was one more place a command's data could be added or forgotten.
-    if (auto const* command = findCommand(commandId);
-        command != nullptr && !command->label.empty()) {
-        return std::string{command->label};
-    }
-    return humanize(commandId);
+std::string commandLabel(CommandEntry const& command) {
+    return command.label.empty() ? humanize(command.id) : command.label;
 }
+
 
 }  // namespace ssg

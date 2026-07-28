@@ -1,5 +1,8 @@
 #include "editor_runtime_internal.h"
 
+#include <ssg/CommandCatalog.h>
+
+#include <ssg/CommandCatalog.h>
 #include <ssg/command_metadata.h>
 
 #include <algorithm>
@@ -313,13 +316,16 @@ PaletteViewState EditorRuntime::Impl::paletteView() const {
     view.mode = picker->wireMode;
     switch (*openPicker) {
     case PickerKind::Command:
-        for (auto const& descriptor : descriptors()) {
+        // Every registered command is a palette candidate, read from the live
+        // catalog rather than a static list: a command registered by a plugin
+        // is findable the moment it exists.
+        for (auto const* command : session->catalog()->commands()) {
             std::string detail;
-            if (auto sequence = KeymapMatcher{keymap}.preferredBinding(descriptor.id)) {
+            if (auto sequence = KeymapMatcher{keymap}.preferredBinding(command->id)) {
                 detail = KeyCodec{}.formatSequence(*sequence);
             }
             view.candidates.push_back(
-                {descriptor.id, commandLabel(descriptor.id), std::move(detail)});
+                {command->id, commandLabel(*command), std::move(detail)});
         }
         break;
     case PickerKind::File:

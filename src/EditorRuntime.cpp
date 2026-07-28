@@ -1,5 +1,6 @@
 #include "runtime/editor_runtime_internal.h"
 
+#include <ssg/CommandCatalog.h>
 #include <ssg/FilesystemWatcher.h>
 #include <ssg/GraphemeLayout.h>
 
@@ -899,18 +900,14 @@ WorkspaceSnapshot EditorRuntime::Impl::snapshot(Revision revision) const {
 
 std::vector<SearchCommandDescriptor> EditorRuntime::Impl::descriptors() const {
     std::vector<SearchCommandDescriptor> result;
-    for (auto const& descriptor : p0CommandDescriptors()) {
-        result.push_back({descriptor.id, descriptor.id});
+    for (auto const* command : session->catalog()->commands()) {
+        result.push_back({command->id, command->id});
     }
     return result;
 }
 
 PaletteExecutionResult EditorRuntime::Impl::execute(std::string_view commandId) {
-    auto descriptors = p0CommandDescriptors();
-    return {std::find_if(descriptors.begin(), descriptors.end(),
-                         [&](CommandDescriptor const& descriptor) { return descriptor.id == commandId; }) !=
-                descriptors.end(),
-            {}};
+    return {session->catalog()->find(commandId) != nullptr, {}};
 }
 
 WorkspaceApplyResult EditorRuntime::Impl::apply(

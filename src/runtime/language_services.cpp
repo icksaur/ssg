@@ -28,17 +28,30 @@ CommandHandlerResult lspWorkspaceCommand(EditorRuntime::Impl& runtime, std::any 
 
 } // namespace
 
+// Renaming a symbol across the workspace.  The new name arrives in-process from
+// the prompt that collected it.
+void registerLspWorkspaceEditCommands(EditorSessionBuilder& builder,
+                                      EditorRuntime::Impl& runtime) {
+    builder.add(CommandSpecBuilder{"rename.symbol"}
+                    .owner("lsp-workspace-edits")
+                    .summary("Symbol")
+                    .mutates()
+                    .lua()
+                    .inProcessHandler<std::string>(
+                        [&runtime](CommandContext&, std::string const& name) {
+                            return runtime.runTransaction([&] {
+                                return lspWorkspaceCommand(runtime,
+                                                           std::any{name});
+                            });
+                        }));
+}
+
 void bindRuntimeLanguageServices(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime) {
+    registerLspWorkspaceEditCommands(builder, runtime);
     auto featureCommands = lspFeatureCommandSet();
-    auto workspaceCommands = lspWorkspaceEditCommandSet();
     for (auto const& descriptor : featureCommands.descriptors()) {
         builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const&) {
             return runtime.runTransaction([&] { return lspFeatureCommand(runtime, descriptor.id); });
-        });
-    }
-    for (auto const& descriptor : workspaceCommands.descriptors()) {
-        builder.bind(std::string{descriptor.id}, [&runtime](CommandContext&, std::any const& payload) {
-            return runtime.runTransaction([&] { return lspWorkspaceCommand(runtime, payload); });
         });
     }
 }

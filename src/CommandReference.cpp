@@ -56,7 +56,11 @@ std::unordered_map<std::type_index, std::string_view> const& argumentNames() {
 }  // namespace
 
 std::string_view commandArgumentName(CommandEntry const& command) {
-    if (!command.argument.type.has_value()) return "none";
+    // The reference documents the WIRE surface, so an in-process-only payload
+    // reads as no argument: a remote client cannot send one.
+    if (!command.argument.type.has_value() || !command.argument.wire) {
+        return "none";
+    }
     auto const& names = argumentNames();
     auto const found = names.find(*command.argument.type);
     if (found == names.end()) {

@@ -291,72 +291,105 @@ CommandHandlerResult settingsCommand(EditorRuntime::Impl& runtime, std::string_v
     return failure(std::string{id} + " requires a typed settings payload");
 }
 
-CommandHandlerResult themeCommand(EditorRuntime::Impl& runtime,
-                                  std::string_view id, std::any const& payload) {
-    if (id == "theme.define") {
-        auto const* arguments = payloadAs<ThemeDefineArguments>(payload);
-        if (arguments == nullptr) {
-            return failure("theme.define requires a typed color-table payload");
-        }
-        auto result = applyThemeDefine(runtime.theme, *arguments);
-        if (!result.accepted()) return failure(result.error->message);
-        runtime.theme = result.snapshot;
-        return success();
-    }
-    if (id == "theme.background") {
-        auto const* arguments = payloadAs<ThemeBackgroundArguments>(payload);
-        if (arguments == nullptr) {
-            return failure("theme.background requires a typed multiplier payload");
-        }
-        auto result = applyThemeBackground(runtime.theme, *arguments);
-        if (!result.accepted()) return failure(result.error->message);
-        runtime.theme = result.snapshot;
-        return success();
-    }
-    return failure(std::string{id} + " requires a typed theme payload");
-}
 
-CommandHandlerResult styleCommand(EditorRuntime::Impl& runtime,
-                                  std::string_view id, std::any const& payload) {
-    if (id == "style.define") {
-        auto const* arguments = payloadAs<StyleDefineArguments>(payload);
-        if (arguments == nullptr) {
-            return failure("style.define requires a typed style-table payload");
-        }
-        auto result = applyStyleDefine(runtime.style, *arguments);
-        if (!result.accepted()) return failure(result.error->message);
-        runtime.style = std::move(result.style);
-        return success();
-    }
-    return failure(std::string{id} + " requires a typed style payload");
-}
 
-CommandHandlerResult keymapCommand(EditorRuntime::Impl& runtime,
-                                   std::string_view id, std::any const& payload) {
-    if (id == "keymap.bind") {
-        auto const* arguments = payloadAs<KeymapBindArguments>(payload);
-        if (arguments == nullptr) {
-            return failure("keymap.bind requires a typed sequence/command payload");
-        }
-        auto result = applyKeymapBind(runtime.keymap, *arguments);
-        if (!result.accepted()) return failure(result.error->message);
-        runtime.keymap = std::move(result.keymap);
-        return success();
-    }
-    if (id == "keymap.unbind") {
-        auto const* arguments = payloadAs<KeymapUnbindArguments>(payload);
-        if (arguments == nullptr) {
-            return failure("keymap.unbind requires a typed sequence payload");
-        }
-        auto result = applyKeymapUnbind(runtime.keymap, *arguments);
-        if (!result.accepted()) return failure(result.error->message);
-        runtime.keymap = std::move(result.keymap);
-        return success();
-    }
-    return failure(std::string{id} + " requires a typed keymap payload");
-}
 
 } // namespace
+
+// Theme, style and keymap: the commands `init.lua` uses to configure the
+// editor at startup.
+//
+// Each carries a whole table -- colours, a style value, a key sequence -- as an
+// in-process payload with no wire form, so each is declared with
+// `inProcessHandler`: typed for the handler, absent from the protocol.
+//
+// Declaring each command with the type it actually consumes also removes the
+// id-branching these handlers used to do.  A single `themeCommand(id, payload)`
+// had to re-derive from the id which of two payload types it held; here the
+// type is stated once, at the command, and the compiler carries it.
+void registerAppearanceCommands(EditorSessionBuilder& builder,
+                                EditorRuntime::Impl& runtime) {
+    auto declare = [&](std::string_view owner, std::string id,
+                       std::string summary) {
+        return CommandSpecBuilder{std::move(id)}
+            .owner(std::string{owner})
+            .summary(std::move(summary))
+            .mutates()
+            .initScript();
+    };
+
+    builder.add(declare("theme-model", "theme.define", "Define")
+                    .inProcessHandler<ThemeDefineArguments>(
+                        [&runtime](CommandContext&,
+                                   ThemeDefineArguments const& arguments) {
+                            return runtime.runTransaction([&] {
+                                auto result = applyThemeDefine(runtime.theme,
+                                                               arguments);
+                                if (!result.accepted()) {
+                                    return failure(result.error->message);
+                                }
+                                runtime.theme = result.snapshot;
+                                return success();
+                            });
+                        }));
+    builder.add(declare("theme-model", "theme.background", "Background")
+                    .inProcessHandler<ThemeBackgroundArguments>(
+                        [&runtime](CommandContext&,
+                                   ThemeBackgroundArguments const& arguments) {
+                            return runtime.runTransaction([&] {
+                                auto result =
+                                    applyThemeBackground(runtime.theme,
+                                                         arguments);
+                                if (!result.accepted()) {
+                                    return failure(result.error->message);
+                                }
+                                runtime.theme = result.snapshot;
+                                return success();
+                            });
+                        }));
+    builder.add(declare("style-model", "style.define", "Define")
+                    .inProcessHandler<StyleDefineArguments>(
+                        [&runtime](CommandContext&,
+                                   StyleDefineArguments const& arguments) {
+                            return runtime.runTransaction([&] {
+                                auto result = applyStyleDefine(runtime.style,
+                                                               arguments);
+                                if (!result.accepted()) {
+                                    return failure(result.error->message);
+                                }
+                                runtime.style = std::move(result.style);
+                                return success();
+                            });
+                        }));
+    builder.add(declare("keymap-model", "keymap.bind", "Bind")
+                    .inProcessHandler<KeymapBindArguments>(
+                        [&runtime](CommandContext&,
+                                   KeymapBindArguments const& arguments) {
+                            return runtime.runTransaction([&] {
+                                auto result = applyKeymapBind(runtime.keymap,
+                                                              arguments);
+                                if (!result.accepted()) {
+                                    return failure(result.error->message);
+                                }
+                                runtime.keymap = std::move(result.keymap);
+                                return success();
+                            });
+                        }));
+    builder.add(declare("keymap-model", "keymap.unbind", "Unbind")
+                    .inProcessHandler<KeymapUnbindArguments>(
+                        [&runtime](CommandContext&,
+                                   KeymapUnbindArguments const& arguments) {
+                            return runtime.runTransaction([&] {
+                                auto result = applyKeymapUnbind(runtime.keymap,
+                                                                arguments);
+                                if (!result.accepted()) {
+                                    return failure(result.error->message);
+                                }
+                                runtime.keymap = std::move(result.keymap);
+                                return success();
+                            });
+                        }));
+}
 
 void bindRuntimePresentation(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime) {
     builder.bind("view.toggle_word_wrap", [&runtime](CommandContext&, std::any const&) {
@@ -417,21 +450,7 @@ void bindRuntimePresentation(EditorSessionBuilder& builder, EditorRuntime::Impl&
             return runtime.runTransaction([&] { return settingsCommand(runtime, descriptor->id, payload); });
         });
     }
-    for (auto const* descriptor : commandsOwnedBy("theme-model")) {
-        builder.bind(std::string{descriptor->id}, [&runtime, descriptor](CommandContext&, std::any const& payload) {
-            return runtime.runTransaction([&] { return themeCommand(runtime, descriptor->id, payload); });
-        });
-    }
-    for (auto const* descriptor : commandsOwnedBy("style-model")) {
-        builder.bind(std::string{descriptor->id}, [&runtime, descriptor](CommandContext&, std::any const& payload) {
-            return runtime.runTransaction([&] { return styleCommand(runtime, descriptor->id, payload); });
-        });
-    }
-    for (auto const* descriptor : commandsOwnedBy("keymap-model")) {
-        builder.bind(std::string{descriptor->id}, [&runtime, descriptor](CommandContext&, std::any const& payload) {
-            return runtime.runTransaction([&] { return keymapCommand(runtime, descriptor->id, payload); });
-        });
-    }
+    registerAppearanceCommands(builder, runtime);
 }
 
 } // namespace ssg

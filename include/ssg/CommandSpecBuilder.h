@@ -43,6 +43,10 @@ struct CommandArgumentType {
     // The payload's type, for the codec registry to key on.  Absent for a
     // command that takes no arguments -- which is a declaration, not a default.
     std::optional<std::type_index> type;
+    // Whether that payload crosses the wire.  A typed payload that does not is
+    // in-process only: the handler unwraps it, the protocol never sees it, and
+    // no codec is required for its type.
+    bool wire = false;
 };
 
 class CommandSpecBuilder {
@@ -86,29 +90,40 @@ public:
         return *this;
     }
 
-    // The implementation, taking a typed argument.  The argument type is
-    // recorded here and nowhere else: the codec and the unwrap are both derived
-    // from it, so a handler and its codec cannot disagree.
+    // The implementation, taking a typed argument that crosses the wire.
+    //
+    // The argument type is recorded here and nowhere else: the codec and the
+    // unwrap are both derived from it, so a handler and its codec cannot
+    // disagree.  The type must have a wire codec; if it does not, the command
+    // wanted `inProcessHandler` instead.
     template <typename Arguments, typename Fn>
     CommandSpecBuilder& handler(Fn&& fn) {
         argument_.type = std::type_index{typeid(Arguments)};
-        handler_ = [call = std::forward<Fn>(fn)](
-                       CommandContext& context,
-                       std::any const& payload) -> CommandHandlerResult {
-            auto const* typed = std::any_cast<Arguments>(&payload);
-            if (typed == nullptr) {
-                return CommandHandlerResult::failure(
-                    "command payload has the wrong type");
-            }
-            return call(context, *typed);
-        };
+        argument_.wire = true;
+        handler_ = typedHandler<Arguments>(std::forward<Fn>(fn));
+        return *this;
+    }
+
+    // The implementation, taking a typed argument that does NOT cross the wire.
+    //
+    // Some commands are only ever invoked in-process -- `theme.define` carries
+    // a whole colour table from `init.lua`, `diff.open_file` a live document id
+    // -- and their payloads have no wire representation.  Declaring them with
+    // `handler` would demand a codec that should not exist; declaring them with
+    // the no-argument overload would silently drop the payload.  This states
+    // the third case: typed for the handler, absent from the protocol.
+    template <typename Arguments, typename Fn>
+    CommandSpecBuilder& inProcessHandler(Fn&& fn) {
+        argument_.type = std::type_index{typeid(Arguments)};
+        argument_.wire = false;
+        handler_ = typedHandler<Arguments>(std::forward<Fn>(fn));
         return *this;
     }
 
     // The implementation of a command that takes no arguments.
     template <typename Fn>
     CommandSpecBuilder& handler(Fn&& fn) {
-        argument_.type.reset();
+        argument_ = {};
         handler_ = [call = std::forward<Fn>(fn)](
                        CommandContext& context,
                        std::any const&) -> CommandHandlerResult {
@@ -126,12 +141,27 @@ public:
     CommandSpecBuilder& adoptBoundHandler(
         CommandHandler handler, std::optional<std::type_index> argumentType) {
         argument_.type = argumentType;
+        argument_.wire = argumentType.has_value();
         handler_ = std::move(handler);
         return *this;
     }
 
 private:
     friend class CommandCatalog;
+
+    template <typename Arguments, typename Fn>
+    static CommandHandler typedHandler(Fn&& fn) {
+        return [call = std::forward<Fn>(fn)](
+                   CommandContext& context,
+                   std::any const& payload) -> CommandHandlerResult {
+            auto const* typed = std::any_cast<Arguments>(&payload);
+            if (typed == nullptr) {
+                return CommandHandlerResult::failure(
+                    "command payload has the wrong type");
+            }
+            return call(context, *typed);
+        };
+    }
 
     std::string id_;
     std::string owner_;

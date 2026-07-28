@@ -543,12 +543,55 @@ void registerTextInputCommands(EditorSessionBuilder& builder,
                     TextInputCommand::DeleteWordForward);
 }
 
+// Undo and redo.
+void registerHistoryCommands(EditorSessionBuilder& builder,
+                             EditorRuntime::Impl& runtime) {
+    auto declare = [&](std::string id, std::string summary,
+                       HistoryCommand command) {
+        builder.add(CommandSpecBuilder{std::move(id)}
+                        .owner("undo-redo-history")
+                        .label(summary)
+                        .summary(std::move(summary))
+                        .mutates()
+                        .lua()
+                        .handler([&runtime, command](CommandContext&) {
+                            return runtime.runTransaction([&] {
+                                return bindHistory(runtime, command);
+                            });
+                        }));
+    };
+    declare("edit.undo", "Undo", HistoryCommand::Undo);
+    declare("edit.redo", "Redo", HistoryCommand::Redo);
+}
+
+// The clipboard register: copy, cut and paste over the current selections.
+void registerClipboardCommands(EditorSessionBuilder& builder,
+                               EditorRuntime::Impl& runtime) {
+    auto declare = [&](std::string id, std::string summary,
+                       ClipboardCommand command) {
+        builder.add(CommandSpecBuilder{std::move(id)}
+                        .owner("clipboard-register")
+                        .label(summary)
+                        .summary(std::move(summary))
+                        .mutates()
+                        .lua()
+                        .handler([&runtime, command](CommandContext&) {
+                            return runtime.runTransaction([&] {
+                                return bindClipboard(runtime, command);
+                            });
+                        }));
+    };
+    declare("clipboard.copy", "Copy", ClipboardCommand::Copy);
+    declare("clipboard.cut", "Cut", ClipboardCommand::Cut);
+    declare("clipboard.paste", "Paste", ClipboardCommand::Paste);
+}
+
 void bindRuntimeEditing(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime) {
     registerTextInputCommands(builder, runtime);
+    registerHistoryCommands(builder, runtime);
+    registerClipboardCommands(builder, runtime);
     auto selectionCommands = selectionNavigationCommandSet();
-    auto historyCommands = historyCommandSet();
     auto editCommands = editCommandSuiteCommandSet();
-    auto clipboardCommands = clipboardCommandSet();
     auto findReplaceCommands = findReplaceCommandSet();
     for (auto const& descriptor : selectionCommands.descriptors()) {
         builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext& context, std::any const& payload) {
@@ -558,19 +601,9 @@ void bindRuntimeEditing(EditorSessionBuilder& builder, EditorRuntime::Impl& runt
             });
         });
     }
-    for (auto const& descriptor : historyCommands.descriptors()) {
-        builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const&) {
-            return runtime.runTransaction([&] { return bindHistory(runtime, descriptor.command); });
-        });
-    }
     for (auto const& descriptor : editCommands.descriptors()) {
         builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const&) {
             return runtime.runTransaction([&] { return bindEdit(runtime, descriptor.command); });
-        });
-    }
-    for (auto const& descriptor : clipboardCommands.descriptors()) {
-        builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const&) {
-            return runtime.runTransaction([&] { return bindClipboard(runtime, descriptor.command); });
         });
     }
     for (auto const& descriptor : findReplaceCommands.descriptors()) {

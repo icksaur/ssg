@@ -5305,7 +5305,9 @@ CommandArgumentCodec const* codecForCommand(CommandCatalog const& catalog,
                                             std::string_view commandId) {
     auto const* command = catalog.find(commandId);
     if (command == nullptr) return nullptr;
-    if (!command->argument.type.has_value()) {
+    // An in-process-only payload has no wire representation, so the command
+    // carries nothing across the protocol -- the same as taking no arguments.
+    if (!command->argument.type.has_value() || !command->argument.wire) {
         static CommandArgumentCodec const none = makeNoneCodec();
         return &none;
     }
