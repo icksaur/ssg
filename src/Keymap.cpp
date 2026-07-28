@@ -88,7 +88,7 @@ bool validUtf8WithoutNul(std::string_view text) {
 }
 
 bool validStroke(const KeyStroke& stroke) {
-    return validCode(stroke.code);
+    return stroke.code != KeyCode::None;
 }
 
 bool startsWithSequence(const KeySequence& sequence,
@@ -139,7 +139,7 @@ std::optional<KeyStroke> KeyCodec::parseStroke(std::string_view encoded) const {
         }
         const bool final = separator == std::string_view::npos;
         if (final) {
-            result.code = token;
+            result.code = keyCodeFromName(token);
         } else if (token == "Ctrl" && !result.control) {
             result.control = true;
         } else if (token == "Alt" && !result.alt) {
@@ -183,7 +183,7 @@ std::string KeyCodec::formatStroke(const KeyStroke& stroke) const {
     if (stroke.shift) {
         append("Shift");
     }
-    append(stroke.code);
+    append(keyCodeName(stroke.code));
     return result;
 }
 
@@ -234,32 +234,6 @@ std::optional<KeySequence> KeyCodec::parseSequenceString(
 
 namespace {
 
-std::string keyDisplay(std::string_view code) {
-    if (code.size() == 4 && code.starts_with("Key")) {
-        return std::string{code.substr(3)};
-    }
-    if (code.size() == 6 && code.starts_with("Digit")) {
-        return std::string{code.substr(5)};
-    }
-    if (code == "Escape") return "Esc";
-    if (code == "ArrowUp") return "Up";
-    if (code == "ArrowDown") return "Down";
-    if (code == "ArrowLeft") return "Left";
-    if (code == "ArrowRight") return "Right";
-    if (code == "BracketLeft") return "[";
-    if (code == "BracketRight") return "]";
-    if (code == "Backspace") return "Bksp";
-    if (code == "Backslash") return "\\";
-    if (code == "Semicolon") return ";";
-    if (code == "Quote") return "'";
-    if (code == "Comma") return ",";
-    if (code == "Period") return ".";
-    if (code == "Slash") return "/";
-    if (code == "Minus") return "-";
-    if (code == "Equal") return "=";
-    if (code == "Backquote") return "`";
-    return std::string{code};
-}
 
 }  // namespace
 
@@ -271,7 +245,7 @@ std::string KeyCodec::formatSequence(const KeySequence& sequence) const {
         if (stroke.alt) result += "Alt+";
         if (stroke.shift) result += "Shift+";
         if (stroke.meta) result += "Meta+";
-        result += keyDisplay(stroke.code);
+        result += keyCodeDisplay(stroke.code);
     }
     return result;
 }

@@ -1355,13 +1355,13 @@ int main(int argc, char** argv) {
 
             // A printable without a keycode (e.g. multibyte text) cannot be a
             // chord; route it straight to the text sink.
-            if (decoded.stroke.code.empty()) {
+            if (decoded.stroke.code == ssg::KeyCode::None) {
                 routeText(decoded.text);
                 chord.clear();
                 continue;
             }
 
-            chord.push(decoded.stroke, compiledKeymap->intern(decoded.stroke));
+            chord.push(decoded.stroke, ssg::CompiledKeymap::compile(decoded.stroke));
             auto resolution = compiledKeymap->resolve(
                 chord.compiled(),
                 compiledKeymap->contextFor(ssg::focusTargetName(focus)));
@@ -1375,29 +1375,29 @@ int main(int argc, char** argv) {
                 // lifecycle); everything else clears the chord and, for a
                 // printable, still routes as text.
                 const bool quitChord =
-                    chord.size() == 2 && chord[0].code == "Escape" &&
-                    chord[1].code == "KeyQ";
+                    chord.size() == 2 && chord[0].code == ssg::KeyCode::Escape &&
+                    chord[1].code == ssg::KeyCode::KeyQ;
                 const auto stroke = decoded.stroke;
                 chord.clear();
                 if (quitChord) {
                     quit = true;
                 } else if (pickerOpen && focus == ssg::FocusTarget::Prompt &&
-                           stroke.code == "Backspace") {
+                           stroke.code == ssg::KeyCode::Backspace) {
                     popCodePoint(picker.query);
                     picker.selected = 0;
                     revealPaletteSelection();
                 } else if (findOpen && focus == ssg::FocusTarget::Prompt &&
-                           stroke.code == "Backspace") {
+                           stroke.code == ssg::KeyCode::Backspace) {
                     auto next = findQuery;
                     popCodePoint(next);
                     dispatch("find.update_query", ssg::FindQueryArguments{next});
                 } else if (replaceOpen && focus == ssg::FocusTarget::Prompt &&
-                           stroke.code == "Backspace") {
+                           stroke.code == ssg::KeyCode::Backspace) {
                     auto next = replaceReplacement;
                     popCodePoint(next);
                     dispatch("replace.update_replacement", ssg::FindQueryArguments{next});
                 } else if (pathPromptOpen && focus == ssg::FocusTarget::Prompt &&
-                           stroke.code == "Backspace") {
+                           stroke.code == ssg::KeyCode::Backspace) {
                     auto next = pathPromptValue;
                     popCodePoint(next);
                     dispatch("prompt.update_value", ssg::PromptValueArguments{0, next});

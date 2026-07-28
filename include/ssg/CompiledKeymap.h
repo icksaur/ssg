@@ -31,31 +31,20 @@
 
 namespace ssg {
 
-// A key code interned against one keymap.  `kUnknownStroke` is the code for
-// every key the keymap does not mention -- notably ordinary printable
-// characters, which therefore fail every binding on an integer compare.
-using StrokeCode = std::uint16_t;
-inline constexpr StrokeCode kUnknownStroke = 0;
-
 // A focus context interned against one keymap.  `kAnyContext` is "*".
 using ContextId = std::uint16_t;
 inline constexpr ContextId kUnknownContext = 0;
 inline constexpr ContextId kAnyContext = 1;
 
-// One keystroke as a single integer: the interned code plus modifier bits.
+// One keystroke as a single integer: the decoder's KeyCode plus modifier bits.
 // Comparing two strokes is comparing two `std::uint32_t`.
 class CompiledStroke {
 public:
     CompiledStroke() = default;
-    CompiledStroke(StrokeCode code, bool control, bool alt, bool meta,
-                   bool shift) noexcept
-        : bits_{static_cast<std::uint32_t>(code) << 4U |
-                (control ? 1U : 0U) | (alt ? 2U : 0U) | (meta ? 4U : 0U) |
-                (shift ? 8U : 0U)} {}
-
-    [[nodiscard]] bool known() const noexcept {
-        return (bits_ >> 4U) != kUnknownStroke;
-    }
+    explicit CompiledStroke(KeyStroke const& stroke) noexcept
+        : bits_{static_cast<std::uint32_t>(stroke.code) << 4U |
+                (stroke.control ? 1U : 0U) | (stroke.alt ? 2U : 0U) |
+                (stroke.meta ? 4U : 0U) | (stroke.shift ? 8U : 0U)} {}
 
     bool operator==(CompiledStroke const&) const noexcept = default;
 
@@ -78,10 +67,11 @@ public:
     CompiledKeymap(CompiledKeymap const&) = delete;
     CompiledKeymap& operator=(CompiledKeymap const&) = delete;
 
-    // Interning a stroke is the single string lookup left on the keystroke
-    // path.  An unmentioned key interns to `kUnknownStroke` rather than
-    // failing, so a printable is a normal (unmatched) stroke, not an error.
-    [[nodiscard]] CompiledStroke intern(KeyStroke const& stroke) const;
+    // Compiling a stroke is now pure arithmetic: the decoder already produced
+    // the key's identity, so there is nothing left to look up.
+    [[nodiscard]] static CompiledStroke compile(KeyStroke const& stroke) noexcept {
+        return CompiledStroke{stroke};
+    }
     [[nodiscard]] ContextId contextFor(std::string_view name) const;
 
     // Integer-only resolution: the same first-eligible-match, "*"-upgrades and
@@ -96,9 +86,6 @@ private:
         ContextId context = kUnknownContext;
     };
 
-    [[nodiscard]] StrokeCode codeFor(std::string_view name) const;
-
-    std::unordered_map<std::string, StrokeCode> strokeCodes_;
     std::unordered_map<std::string, ContextId> contexts_;
     std::vector<Entry> entries_;
 };

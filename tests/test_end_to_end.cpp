@@ -207,7 +207,7 @@ public:
         ssg::SettingsViewState settings;
         ssg::KeymapViewState keymap{
             "end-to-end fixture",
-            {{{ssg::KeyStroke{"KeyA", false, false, false, false}},
+            {{{ssg::KeyStroke{ssg::KeyCode::KeyA, false, false, false, false}},
               "select.add_cursor_down", "editor"}}};
         ssg::TabViewState tabs;
         if (state_.tab_open) {

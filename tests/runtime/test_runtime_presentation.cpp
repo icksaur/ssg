@@ -190,7 +190,7 @@ TEST(reportedLeaderSequenceRendersAPerSnapshotHint) {
 
     // A snapshot with a reported leader sequence carries the hint.
     auto withLeader = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12},
-                                        ssg::KeySequence{ssg::KeyStroke{"Escape"}});
+                                        ssg::KeySequence{ssg::KeyStroke{ssg::KeyCode::Escape}});
     ASSERT_TRUE(withLeader.has_value());
     if (withLeader) ASSERT_EQ(leaderContent(*withLeader), std::string{"leader: Escape"});
 

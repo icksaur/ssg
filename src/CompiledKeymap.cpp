@@ -20,9 +20,8 @@ CompiledKeymap::CompiledKeymap(KeymapViewState const& keymap) {
         auto const next = static_cast<ContextId>(contexts_.size() + 1);
         return contexts_.emplace(name, next).first->second;
     };
-    auto internCode = [this](std::string const& name) {
-        auto const next = static_cast<StrokeCode>(strokeCodes_.size() + 1);
-        return strokeCodes_.emplace(name, next).first->second;
+    auto internCode = [](KeyStroke const& stroke) {
+        return CompiledStroke{stroke};
     };
 
     entries_.reserve(keymap.bindings.size());
@@ -32,22 +31,10 @@ CompiledKeymap::CompiledKeymap(KeymapViewState const& keymap) {
         entry.context = internContext(binding.context);
         entry.sequence.reserve(binding.sequence.size());
         for (auto const& stroke : binding.sequence) {
-            entry.sequence.emplace_back(internCode(stroke.code),
-                                        stroke.control, stroke.alt,
-                                        stroke.meta, stroke.shift);
+            entry.sequence.push_back(internCode(stroke));
         }
         entries_.push_back(std::move(entry));
     }
-}
-
-StrokeCode CompiledKeymap::codeFor(std::string_view name) const {
-    auto const found = strokeCodes_.find(std::string{name});
-    return found == strokeCodes_.end() ? kUnknownStroke : found->second;
-}
-
-CompiledStroke CompiledKeymap::intern(KeyStroke const& stroke) const {
-    return CompiledStroke{codeFor(stroke.code), stroke.control, stroke.alt,
-                          stroke.meta, stroke.shift};
 }
 
 ContextId CompiledKeymap::contextFor(std::string_view name) const {

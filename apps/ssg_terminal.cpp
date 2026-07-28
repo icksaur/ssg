@@ -206,27 +206,32 @@ std::int64_t parseDecimal(std::string_view text, std::size_t& pos) {
     return value;
 }
 
-// The named KeyStroke code for a single printable ASCII byte, or "" if the byte
-// has no keycode we bind or route as a chord.  Letters fold to KeyA..KeyZ with a
-// shift flag; the code carries no shift itself (the caller sets it).
-std::string asciiKeyCode(unsigned char byte) {
-    if (byte >= 'a' && byte <= 'z') return std::string{"Key"} + static_cast<char>(byte - 'a' + 'A');
-    if (byte >= 'A' && byte <= 'Z') return std::string{"Key"} + static_cast<char>(byte);
-    if (byte >= '0' && byte <= '9') return std::string{"Digit"} + static_cast<char>(byte);
+// The key a single printable ASCII byte stands for, or None if the byte has no
+// key we bind or route as a chord.  Letters fold to KeyA..KeyZ with a shift flag
+// (the key itself carries no shift; the caller sets it).  Letters and digits are
+// contiguous in KeyCode, so folding is arithmetic and allocates nothing.
+constexpr ssg::KeyCode asciiKeyCode(unsigned char byte) {
+    auto const offsetFrom = [](ssg::KeyCode base, int offset) {
+        return static_cast<ssg::KeyCode>(
+            static_cast<std::uint16_t>(base) + offset);
+    };
+    if (byte >= 'a' && byte <= 'z') return offsetFrom(ssg::KeyCode::KeyA, byte - 'a');
+    if (byte >= 'A' && byte <= 'Z') return offsetFrom(ssg::KeyCode::KeyA, byte - 'A');
+    if (byte >= '0' && byte <= '9') return offsetFrom(ssg::KeyCode::Digit0, byte - '0');
     switch (byte) {
-    case '[': return "BracketLeft";
-    case ']': return "BracketRight";
-    case '\\': return "Backslash";
-    case ';': return "Semicolon";
-    case '\'': return "Quote";
-    case ',': return "Comma";
-    case '.': return "Period";
-    case '/': return "Slash";
-    case '-': return "Minus";
-    case '=': return "Equal";
-    case '`': return "Backquote";
-    case ' ': return "Space";
-    default: return {};
+    case '[': return ssg::KeyCode::BracketLeft;
+    case ']': return ssg::KeyCode::BracketRight;
+    case '\\': return ssg::KeyCode::Backslash;
+    case ';': return ssg::KeyCode::Semicolon;
+    case '\'': return ssg::KeyCode::Quote;
+    case ',': return ssg::KeyCode::Comma;
+    case '.': return ssg::KeyCode::Period;
+    case '/': return ssg::KeyCode::Slash;
+    case '-': return ssg::KeyCode::Minus;
+    case '=': return ssg::KeyCode::Equal;
+    case '`': return ssg::KeyCode::Backquote;
+    case ' ': return ssg::KeyCode::Space;
+    default: return ssg::KeyCode::None;
     }
 }
 
@@ -251,15 +256,15 @@ Decoded decode_input(std::string_view bytes, bool inputExhausted,
 
     if (first == '\r' || first == '\n') {
         consumed = 1;
-        return {DecodeStatus::key, ssg::KeyStroke{"Enter"}, {}, 0};
+        return {DecodeStatus::key, ssg::KeyStroke{ssg::KeyCode::Enter}, {}, 0};
     }
     if (first == 0x7f || first == 0x08) {
         consumed = 1;
-        return {DecodeStatus::key, ssg::KeyStroke{"Backspace"}, {}, 0};
+        return {DecodeStatus::key, ssg::KeyStroke{ssg::KeyCode::Backspace}, {}, 0};
     }
     if (first == '\t') {
         consumed = 1;
-        return {DecodeStatus::key, ssg::KeyStroke{"Tab"}, {}, 0};
+        return {DecodeStatus::key, ssg::KeyStroke{ssg::KeyCode::Tab}, {}, 0};
     }
     if (first == 0x1b) {
         if (bytes.size() < 2) {
@@ -267,7 +272,7 @@ Decoded decode_input(std::string_view bytes, bool inputExhausted,
             // otherwise wait for the byte that disambiguates CSI vs. chord.
             if (inputExhausted) {
                 consumed = 1;
-                return {DecodeStatus::key, ssg::KeyStroke{"Escape"}, {}, 0};
+                return {DecodeStatus::key, ssg::KeyStroke{ssg::KeyCode::Escape}, {}, 0};
             }
             return {DecodeStatus::incomplete, {}, {}, 0};
         }
@@ -276,7 +281,7 @@ Decoded decode_input(std::string_view bytes, bool inputExhausted,
             // ESC followed by a non-CSI byte: ESC is a standalone Escape stroke;
             // the next byte is decoded on the following call.
             consumed = 1;
-            return {DecodeStatus::key, ssg::KeyStroke{"Escape"}, {}, 0};
+            return {DecodeStatus::key, ssg::KeyStroke{ssg::KeyCode::Escape}, {}, 0};
         }
         if (bytes.size() < 3) return {DecodeStatus::incomplete, {}, {}, 0};
         auto const third = static_cast<unsigned char>(bytes[2]);
@@ -296,14 +301,14 @@ Decoded decode_input(std::string_view bytes, bool inputExhausted,
                 return {DecodeStatus::incomplete, {}, {}, 0};  // Await digits/final.
             }
             auto const final = static_cast<unsigned char>(bytes[pos]);
-            std::string code;
+            ssg::KeyCode code = ssg::KeyCode::None;
             switch (final) {
-            case 'A': code = "ArrowUp"; break;
-            case 'B': code = "ArrowDown"; break;
-            case 'C': code = "ArrowRight"; break;
-            case 'D': code = "ArrowLeft"; break;
-            case 'H': code = "Home"; break;
-            case 'F': code = "End"; break;
+            case 'A': code = ssg::KeyCode::ArrowUp; break;
+            case 'B': code = ssg::KeyCode::ArrowDown; break;
+            case 'C': code = ssg::KeyCode::ArrowRight; break;
+            case 'D': code = ssg::KeyCode::ArrowLeft; break;
+            case 'H': code = ssg::KeyCode::Home; break;
+            case 'F': code = ssg::KeyCode::End; break;
             default:
                 consumed = pos + 1;  // Unknown final byte; skip.
                 return {DecodeStatus::none, {}, {}, 0};
@@ -320,12 +325,12 @@ Decoded decode_input(std::string_view bytes, bool inputExhausted,
             }
             return {DecodeStatus::key, stroke, {}, 0};
         }
-        case 'A': consumed = 3; return {DecodeStatus::key, ssg::KeyStroke{"ArrowUp"}, {}, 0};
-        case 'B': consumed = 3; return {DecodeStatus::key, ssg::KeyStroke{"ArrowDown"}, {}, 0};
-        case 'C': consumed = 3; return {DecodeStatus::key, ssg::KeyStroke{"ArrowRight"}, {}, 0};
-        case 'D': consumed = 3; return {DecodeStatus::key, ssg::KeyStroke{"ArrowLeft"}, {}, 0};
-        case 'H': consumed = 3; return {DecodeStatus::key, ssg::KeyStroke{"Home"}, {}, 0};
-        case 'F': consumed = 3; return {DecodeStatus::key, ssg::KeyStroke{"End"}, {}, 0};
+        case 'A': consumed = 3; return {DecodeStatus::key, ssg::KeyStroke{ssg::KeyCode::ArrowUp}, {}, 0};
+        case 'B': consumed = 3; return {DecodeStatus::key, ssg::KeyStroke{ssg::KeyCode::ArrowDown}, {}, 0};
+        case 'C': consumed = 3; return {DecodeStatus::key, ssg::KeyStroke{ssg::KeyCode::ArrowRight}, {}, 0};
+        case 'D': consumed = 3; return {DecodeStatus::key, ssg::KeyStroke{ssg::KeyCode::ArrowLeft}, {}, 0};
+        case 'H': consumed = 3; return {DecodeStatus::key, ssg::KeyStroke{ssg::KeyCode::Home}, {}, 0};
+        case 'F': consumed = 3; return {DecodeStatus::key, ssg::KeyStroke{ssg::KeyCode::End}, {}, 0};
         case '3':
         case '5':
         case '6': {
@@ -337,8 +342,9 @@ Decoded decode_input(std::string_view bytes, bool inputExhausted,
             // "ESC [ 3" introducer and leaves the trailing '~' byte to be
             // decoded on the NEXT call as plain printable text -- inserting a
             // literal "~" instead of deleting forward.
-            std::string const code =
-                third == '3' ? "Delete" : third == '5' ? "PageUp" : "PageDown";
+            ssg::KeyCode const code = third == '3'   ? ssg::KeyCode::Delete
+                                     : third == '5' ? ssg::KeyCode::PageUp
+                                                    : ssg::KeyCode::PageDown;
             if (bytes.size() < 4) return {DecodeStatus::incomplete, {}, {}, 0};
             if (bytes[3] == '~') {
                 consumed = 4;

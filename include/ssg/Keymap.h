@@ -1,6 +1,7 @@
 #pragma once
 
 #include <ssg/focus.h>
+#include <ssg/KeyCode.h>
 #include <ssg/Selection.h>
 #include <ssg/TextInputCommands.h>
 
@@ -18,7 +19,7 @@
 namespace ssg {
 
 struct KeyStroke {
-    std::string code;
+    KeyCode code = KeyCode::None;
     bool control = false;
     bool alt = false;
     bool meta = false;

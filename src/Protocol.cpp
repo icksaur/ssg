@@ -3055,7 +3055,7 @@ bool decodePresent(ProtocolValue const& value, std::optional<SettingsSectionDelt
 
 ProtocolValue toValue(KeyStroke const& value) {
     std::vector<ProtocolValue::Field> fields;
-    fields.emplace_back("code", toValue(value.code));
+    fields.emplace_back("code", toValue(std::string{keyCodeName(value.code)}));
     fields.emplace_back("control", toValue(value.control));
     fields.emplace_back("alt", toValue(value.alt));
     fields.emplace_back("meta", toValue(value.meta));
@@ -3071,7 +3071,11 @@ bool decodePresent(ProtocolValue const& value, std::optional<KeyStroke>& out) {
     auto meta = requireField<bool>(value.field("meta"));
     auto shift = requireField<bool>(value.field("shift"));
     if (!code || !control || !alt || !meta || !shift) return false;
-    out.emplace(KeyStroke{*code, *control, *alt, *meta, *shift});
+    // The wire carries the key's NAME; a name outside the decoder's key set
+    // names no key, so the stroke is undecodable rather than silently dead.
+    auto const key = keyCodeFromName(*code);
+    if (key == KeyCode::None) return false;
+    out.emplace(KeyStroke{key, *control, *alt, *meta, *shift});
     return true;
 }
 

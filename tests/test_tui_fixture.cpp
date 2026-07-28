@@ -61,10 +61,10 @@ public:
         ssg::SettingsViewState settings;
         ssg::KeymapViewState keymap{
             "tui fixture",
-            {{{ssg::KeyStroke{"KeyA", true, false, false, false}},
+            {{{ssg::KeyStroke{ssg::KeyCode::KeyA, true, false, false, false}},
               "select.add_cursor_down", "editor"},
-             {{ssg::KeyStroke{"KeyK", true, false, false, false},
-               ssg::KeyStroke{"KeyW", true, false, false, false}},
+             {{ssg::KeyStroke{ssg::KeyCode::KeyK, true, false, false, false},
+               ssg::KeyStroke{ssg::KeyCode::KeyW, true, false, false, false}},
               "tab.close", "editor"}}};
         ssg::TabViewState tabs;
         if (state_.tab_open) {
@@ -207,10 +207,10 @@ TEST(terminalEventsResolveOnlyThroughSnapshotInputModels) {
     ASSERT_EQ(scenario.model.canonical().text, std::string{"alphahello"});
 
     auto chordStart = capture.capture(
-        ssg::KeyStroke{"KeyK", true, false, false, false}, keymap, "editor");
+        ssg::KeyStroke{ssg::KeyCode::KeyK, true, false, false, false}, keymap, "editor");
     ASSERT_FALSE(chordStart.has_value());
     auto chordEnd = capture.capture(
-        ssg::KeyStroke{"KeyW", true, false, false, false}, keymap, "editor");
+        ssg::KeyStroke{ssg::KeyCode::KeyW, true, false, false, false}, keymap, "editor");
     ASSERT_TRUE(chordEnd.has_value());
     ASSERT_EQ(chordEnd->commandId, std::string{"tab.close"});
     ASSERT_TRUE(client.submit(*chordEnd).accepted());
