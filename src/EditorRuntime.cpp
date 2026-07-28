@@ -1868,38 +1868,50 @@ CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& co
         }
         return result;
     };
+    // Dispatches a command AND runs whatever its handler asked to invoke,
+    // before returning.  The drain lives here rather than at the end of this
+    // function so that no path can reach a `return` with requests still
+    // queued: the palette and prompt paths below return early, and a command
+    // run through either of them may queue just as any other can.
+    //
+    // Requests run once the session lock has released, in the order asked for,
+    // each rebased on the revision the previous one left.
+    const auto dispatchAndDrain = [&](ClientId as,
+                                      const ClientCommand& dispatched) {
+        auto outcome = dispatchAs(as, dispatched);
+        // A handler that FAILED does not get its requests performed: it may
+        // have queued half a sequence before giving up, and running that half
+        // is worse than running none of it.  Its success would also overwrite
+        // the failure being reported.
+        if (!outcome.accepted()) {
+            impl_->deferredCommands.clear();
+            return outcome;
+        }
+        while (!impl_->deferredCommands.empty()) {
+            auto deferred = std::move(impl_->deferredCommands.front());
+            impl_->deferredCommands.erase(impl_->deferredCommands.begin());
+            deferred.command.baseRevision = impl_->session->revision();
+            auto const deferredResult =
+                dispatchAs(deferred.client, deferred.command);
+            // The first failure is reported, naming the command that failed,
+            // and the rest are abandoned: continuing would run the remainder of
+            // a sequence whose earlier step did not happen.
+            if (!deferredResult.accepted()) {
+                impl_->deferredCommands.clear();
+                return CommandResult{deferredResult.error,
+                                     deferredResult.revision,
+                                     std::string{deferred.command.id.name()} +
+                                         ": " + deferredResult.message};
+            }
+            outcome = deferredResult;
+        }
+        return outcome;
+    };
     const auto dispatchWithFollowEditPause =
         [&](const ClientCommand& dispatched) {
-            return dispatchAs(clientId, dispatched);
+            return dispatchAndDrain(clientId, dispatched);
         };
     auto result = dispatchWithFollowEditPause(command);
-    // A handler asked to invoke other commands.  They run here, once the
-    // session lock has released, in the order requested -- each rebased on the
-    // revision the previous one left.  A drained command may itself queue more,
-    // so this loops; the bound in deferDispatch is what stops a script that
-    // queues itself forever.
-    // A handler that FAILED does not get its requests performed: it may have
-    // queued half a sequence before giving up, and running that half is worse
-    // than running none of it.  Its success would also overwrite the failure
-    // reported below.
-    if (!result.accepted()) impl_->deferredCommands.clear();
-    while (result.accepted() && !impl_->deferredCommands.empty()) {
-        auto deferred = std::move(impl_->deferredCommands.front());
-        impl_->deferredCommands.erase(impl_->deferredCommands.begin());
-        deferred.command.baseRevision = impl_->session->revision();
-        auto const deferredResult =
-            dispatchAs(deferred.client, deferred.command);
-        // The first failure is reported, naming the command that failed, and
-        // the rest are abandoned: continuing would run the remainder of a
-        // sequence whose earlier step did not happen.
-        if (!deferredResult.accepted()) {
-            impl_->deferredCommands.clear();
-            return {deferredResult.error, deferredResult.revision,
-                    std::string{deferred.command.id.name()} + ": " +
-                        deferredResult.message};
-        }
-        result = deferredResult;
-    }
     // palette.execute validates the selected candidate then defers execution to
     // here so the target runs through the registry (with its own capability and
     // revision checks) outside the non-reentrant session lock.

@@ -372,6 +372,41 @@ TEST(aLuaBackedCommandDispatchedFromAnotherThreadIsRefusedNotSerialised) {
 }
 
 
+
+TEST(aScriptCommandRunFromThePaletteAlsoRunsWhatItAsksFor) {
+    // palette.execute returns its target's result directly, so a drain placed
+    // after it would be skipped entirely: a script command chosen from the
+    // palette would queue its requests and never run them, leaving them to be
+    // performed by some later, unrelated dispatch.
+    auto root = uniqueRoot();
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    ssg::ScriptHost scripts{*runtime};
+
+    // The queued command fails, which is what makes running it observable:
+    // an unrun queue would leave the palette reporting success.
+    ASSERT_TRUE(scripts
+                    .evaluate("ssg.register_command('user.viapalette', "
+                              "function()\n"
+                              "  ssg.command('keymap.bind', "
+                              "{sequence = 'not a key', command = 'file.save'})\n"
+                              "end)")
+                    .accepted());
+
+    ASSERT_TRUE(runtime
+                    ->dispatch(ssg::ClientId{1},
+                               {"palette.open", runtime->revision(), {}})
+                    .accepted());
+    auto const executed = runtime->dispatch(
+        ssg::ClientId{1},
+        {"palette.execute", runtime->revision(),
+         ssg::PaletteExecuteArguments{"user.viapalette"}});
+
+    ASSERT_TRUE(!executed.accepted());
+    ASSERT_TRUE(executed.message.find("keymap.bind") != std::string::npos);
+    fs::remove_all(root);
+}
+
 }  // namespace
 
 int main() {
@@ -388,6 +423,7 @@ int main() {
     RUN(aRefusedGenerationLeavesThePreviousOneWhollyIntact);
     RUN(aScriptCommandCanCallCommandsAndBothArePerformedInOrder);
     RUN(aFailureAmongQueuedCommandsIsReportedAndNamesTheCommand);
+    RUN(aScriptCommandRunFromThePaletteAlsoRunsWhatItAsksFor);
     RUN(aScriptThatQueuesWithoutBoundIsRefusedRatherThanSpinning);
     RUN(aLuaBackedCommandDispatchedFromAnotherThreadIsRefusedNotSerialised);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";

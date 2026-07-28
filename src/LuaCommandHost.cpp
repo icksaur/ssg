@@ -433,6 +433,7 @@ struct LuaCommandHost::Impl {
     std::uint64_t hookInterval{};
     std::chrono::steady_clock::time_point deadline;
     std::vector<BudgetFrame> budgetStack;
+    bool gateActive{false};
 };
 
 LuaCommandHost::LuaCommandHost(LuaCommandHostOptions options,
@@ -455,6 +456,11 @@ std::vector<std::string> LuaCommandHost::registeredCommands() const {
 }
 
 LuaResult LuaCommandHost::evaluate(std::string_view script) {
+    if (impl_->gateActive) {
+        return {LuaError::RuntimeFault,
+                "a command registration gate may not evaluate on the host it "
+                "is gating"};
+    }
     int const stackBase = lua_gettop(impl_->state);
     impl_->registrationStack.emplace_back();
     impl_->pendingError = LuaError::None;
@@ -484,6 +490,17 @@ LuaResult LuaCommandHost::evaluate(std::string_view script) {
             // registrations back, or their Lua references leak and the
             // evaluation neither publishes nor rolls back.
             LuaResult refusal;
+            // The gate runs while this evaluation's registrations are staged
+            // and the previous generation's are still installed.  A gate that
+            // re-entered this host would evaluate or invoke against that
+            // half-swapped state and could interleave two generations, so it is
+            // refused for the duration of the call rather than left to
+            // convention.
+            impl_->gateActive = true;
+            struct GateScope {
+                bool& active;
+                ~GateScope() { active = false; }
+            } const gateScope{impl_->gateActive};
             try {
                 refusal = impl_->options.publishGate(ids);
             } catch (std::exception const& thrown) {
@@ -510,6 +527,11 @@ LuaResult LuaCommandHost::evaluate(std::string_view script) {
 }
 
 LuaResult LuaCommandHost::invoke(std::string_view pluginCommand) {
+    if (impl_->gateActive) {
+        return {LuaError::RuntimeFault,
+                "a command registration gate may not invoke on the host it is "
+                "gating"};
+    }
     auto const found =
         impl_->pluginCommands.find(std::string{pluginCommand});
     if (found == impl_->pluginCommands.end()) {

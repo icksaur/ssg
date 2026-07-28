@@ -301,6 +301,32 @@ TEST(aGateThatRefusesLeavesThePreviousGenerationRegistered) {
     ASSERT_FALSE(host.hasCommand("second"));
 }
 
+TEST(aGateMayNotReEnterTheHostItIsGating) {
+    // The gate runs with this evaluation's registrations staged and the
+    // previous generation's still installed. Re-entering the host would work
+    // against that half-swapped state and could interleave two generations, so
+    // it is refused rather than left to the gate author's discretion.
+    LuaResult nested{};
+    LuaCommandHost* self = nullptr;
+    auto configured = options();
+    configured.publishGate =
+        [&nested, &self](std::vector<std::string> const&) -> LuaResult {
+        if (self != nullptr) nested = self->evaluate("return 1");
+        return {};
+    };
+    LuaCommandHost host{std::move(configured), [](LuaInvocation const&) {
+        return CommandHandlerResult::success();
+    }};
+    self = &host;
+
+    ASSERT_TRUE(
+        host.evaluate("ssg.register_command('outer', function() end)")
+            .accepted());
+    ASSERT_EQ(nested.error, LuaError::RuntimeFault);
+    // The outer evaluation still completed normally.
+    ASSERT_TRUE(host.hasCommand("outer"));
+}
+
 int main() {
     RUN(requiredCatalogMinusExclusionsIsCallable);
     RUN(capabilitiesAreImmutableAndCheckedBeforeDispatch);
@@ -310,6 +336,7 @@ int main() {
     RUN(registrationIsAtomicAndDuplicateSafe);
     RUN(aGateThatThrowsRollsTheEvaluationBackLikeAnyOtherRefusal);
     RUN(aGateThatRefusesLeavesThePreviousGenerationRegistered);
+    RUN(aGateMayNotReEnterTheHostItIsGating);
     RUN(dispatchAndPluginFaultsAreIsolated);
     RUN(commandTableArgumentReachesTheDispatcherDecodedAsAStringMap);
     RUN(commandWithoutSecondArgumentLeavesArgumentsEmpty);

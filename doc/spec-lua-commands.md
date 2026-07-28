@@ -546,3 +546,24 @@ binary.
 Writing L5 is what forced composition to be resolved: the honest documentation
 of a feature whose commands may not call any command is a feature nobody would
 use.
+
+### Draining belongs to the dispatch, not to the end of it
+
+The queue was first drained after the outer dispatch and before the
+`pendingPaletteTarget` / `pendingPromptCommand` blocks -- both of which
+`return` directly. A script command chosen from the PALETTE therefore queued
+its requests and never ran them: they sat in the queue until some later,
+unrelated dispatch happened to drain them. Ordering was not merely wrong, it
+depended on what the user did next.
+
+Draining now lives inside the wrapper that dispatches, so every path that runs
+a command runs what that command asked for before returning, and no future
+early return can reintroduce the gap.
+
+### The publish gate may not re-enter its host
+
+A gate runs with the evaluation's registrations staged and the previous
+generation's still installed. Re-entering `evaluate` or `invoke` there works
+against that half-swapped state -- and, in practice, re-enters the `lua_State`
+mid-call and **crashes**. Both refuse while a gate is active rather than
+leaving this to the gate author.
