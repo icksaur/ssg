@@ -180,7 +180,47 @@ struct EditorRuntime::Impl final : CommandServices,
         std::optional<ClientId> client;
         ClientCommand command;
     };
-    std::vector<DeferredCommand> deferredCommands;
+
+    // The queue itself, with its storage private so `defer` is the only way in.
+    //
+    // It was previously a bare vector, which two callers pushed to directly and
+    // one reached through a checked method -- so the shortest way to queue a
+    // command was also the only unchecked one.  Draining stays with the owner
+    // (EditorRuntime::dispatch), which is why take/clear are exposed.
+    class DeferredCommandQueue {
+    public:
+        // A handler that queued without limit would spin the drain loop
+        // forever; refusing says so, where the alternative is an editor that
+        // stops responding for no visible reason.
+        static constexpr std::size_t kMaximum = 64;
+
+        [[nodiscard]] bool enqueue(DeferredCommand deferred) {
+            if (commands_.size() >= kMaximum) return false;
+            commands_.push_back(std::move(deferred));
+            return true;
+        }
+
+        [[nodiscard]] bool empty() const noexcept { return commands_.empty(); }
+        [[nodiscard]] DeferredCommand takeFront() {
+            auto front = std::move(commands_.front());
+            commands_.erase(commands_.begin());
+            return front;
+        }
+        void clear() noexcept { commands_.clear(); }
+
+    private:
+        std::vector<DeferredCommand> commands_;
+    };
+
+    DeferredCommandQueue deferredCommands;
+
+    // Asks for `command` to run once the dispatch in progress finishes.
+    //
+    // THE one way to queue: it checks that a dispatch is actually in progress
+    // (queueing outside one would strand the command until some later,
+    // unrelated dispatch drained it) and enforces the bound.  Returns false if
+    // either fails.
+    [[nodiscard]] bool defer(std::optional<ClientId> as, ClientCommand command);
     // Which picker the active PromptKind::Palette prompt belongs to, and the
     // sole source of the published palette mode and candidate set.  Maintained
     // as an invariant (set iff such a prompt is active) by

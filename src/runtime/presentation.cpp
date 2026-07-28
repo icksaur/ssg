@@ -190,10 +190,12 @@ CommandHandlerResult promptStatusCommand(EditorRuntime::Impl& runtime,
                     return failure(submission->commandId +
                                    " requires a non-empty value");
                 }
-                runtime.deferredCommands.push_back(
-                    {std::nullopt,
-                     ClientCommand{submission->commandId, revision,
-                                   submission->values.front()}});
+                if (!runtime.defer(
+                        std::nullopt,
+                        ClientCommand{submission->commandId, revision,
+                                      submission->values.front()})) {
+                    return failure("could not queue " + submission->commandId);
+                }
             }
             return success();
         }

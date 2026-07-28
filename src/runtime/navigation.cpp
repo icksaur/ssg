@@ -87,8 +87,10 @@ CommandHandlerResult searchCommand(EditorRuntime::Impl& runtime, CommandContext&
         if (arguments == nullptr) return failure("palette.execute requires a command id payload");
         auto validation = validatePaletteTarget(runtime, context, arguments->commandId);
         if (!validation.accepted) return validation;
-        runtime.deferredCommands.push_back(
-            {std::nullopt, ClientCommand{arguments->commandId, revision, {}}});
+        if (!runtime.defer(std::nullopt,
+                           ClientCommand{arguments->commandId, revision, {}})) {
+            return failure("could not queue the selected command");
+        }
         (void)runtime.prompt.cancel();
     } else if (id == "search.workspace") {
         std::string query;

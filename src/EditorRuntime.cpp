@@ -1827,15 +1827,14 @@ bool EditorRuntime::dispatchInProgress() const noexcept {
     return impl_->session->activeDispatchRevision().has_value();
 }
 
+bool EditorRuntime::Impl::defer(std::optional<ClientId> as,
+                                ClientCommand command) {
+    if (!session->activeDispatchRevision()) return false;
+    return deferredCommands.enqueue({as, std::move(command)});
+}
+
 bool EditorRuntime::deferDispatch(ClientId clientId, ClientCommand command) {
-    if (!dispatchInProgress()) return false;
-    // A handler that queues without bound would spin the drain loop forever.
-    // Refusing says so; the alternative is an editor that stops responding with
-    // no indication of why.
-    constexpr std::size_t kMaximumDeferredCommands = 64;
-    if (impl_->deferredCommands.size() >= kMaximumDeferredCommands) return false;
-    impl_->deferredCommands.push_back({clientId, std::move(command)});
-    return true;
+    return impl_->defer(clientId, std::move(command));
 }
 
 CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& command) {
@@ -1889,8 +1888,7 @@ CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& co
             return outcome;
         }
         while (!impl_->deferredCommands.empty()) {
-            auto deferred = std::move(impl_->deferredCommands.front());
-            impl_->deferredCommands.erase(impl_->deferredCommands.begin());
+            auto deferred = impl_->deferredCommands.takeFront();
             deferred.command.baseRevision = impl_->session->revision();
             auto const deferredResult = dispatchAs(
                 deferred.client.value_or(as), deferred.command);
