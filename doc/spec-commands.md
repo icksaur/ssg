@@ -187,3 +187,163 @@ makes a surface change visible in review as a documentation change.
 - No id-matching `if`-chain remains.
 - `doc/commands.md` is generated and current.
 - No JSON outside HTTP/wire use.
+
+## Status
+
+C0–C6 are delivered (`aa70d7d`), and the two unread surface flags `keymap` and
+`palette` were deleted afterwards (`9268311`) once it emerged they had been
+copied into `CommandSpec` from the JSON with no consumer — the same defect the
+catalog migration was meant to remove. Adding a command is now two files, or
+three with a key chord. `owner` survives with exactly one consumer, the doc
+generator's grouping.
+
+# Invocation
+
+Everything above concerns what a command *is*. This part concerns how one is
+*invoked*, which the sections above deliberately left alone and which turned out
+to carry the migration's remaining cost.
+
+## Why names are the wrong currency on the keystroke path
+
+The catalog made a command's declaration compiled and singular, but a command's
+*identity* was still a `std::string` id, and a key's identity was still a
+`std::string` code. So the most common operation in a text editor — typing a
+character — did this:
+
+1. the terminal decoder **allocated** a `std::string` naming the key,
+2. the keymap was scanned linearly, comparing that name against every binding's
+   stroke names and every binding's context name,
+3. dispatch **constructed another `std::string`** to hash against the registry.
+
+Strings are the right currency at three boundaries, and only there: the palette
+(which displays and searches names), `init.lua` and the Lua API (which name
+commands in script), and the wire protocol (which must serialise them). None of
+those is the keystroke path. The TUI is the priority, and it was paying the full
+cost of a generality it never used.
+
+The fix is not to remove names. It is to stop treating a name as the *identity*
+of a thing that already has one.
+
+## The two identities
+
+**`CommandHandle`** (`include/ssg/CommandHandle.h`) is a command's index into the
+catalog, in a `std::uint16_t`. The catalog is compiled, fixed and ordered, so an
+id string was only ever *one name* for a row that already had a perfectly good
+index. A handle is minted by resolving a name **once** — at build or
+keymap-compile time — and carried by value thereafter. It resolves back to its
+`CommandSpec`, so any boundary that genuinely wants the string still gets it.
+
+It lives in its own header, apart from `Commands.h`, because the registry and the
+session need to *name* a command without depending on the catalog's data: every
+summary, argument shape and documentation line. Identity is small; the catalog is
+not.
+
+**`KeyCode`** (`include/ssg/KeyCode.h`) is a closed enum of every key the decoder
+can name. `KeyStroke::code` is a `KeyCode`, so the decoder emits identity
+directly and allocates nothing per keystroke.
+
+The enum, each key's wire name and its display name are **one table**
+(`kKeyCodes`), with a `consteval` check proving the table covers the enum exactly
+and in declaration order. A key cannot be added without all three. That table
+also replaced `keyDisplay`'s twenty-branch string chain: the short form rendered
+in the leader hint is now simply the table's display column.
+
+Letters and digits are **contiguous** in the enum by design, so the decoder folds
+a printable byte to its key with arithmetic rather than a lookup. This is a real
+constraint on the enum's ordering and is commented as such.
+
+## The compiled keymap
+
+`KeymapViewState` remains the authored, transportable keymap: strings, because
+that is what a config file, `keymap.bind` and the protocol speak. It is the
+source of truth and is unchanged.
+
+`CompiledKeymap` (`include/ssg/CompiledKeymap.h`) is a **derived index** of it,
+rebuilt exactly when the authored keymap changes — a `keymap.bind`, a config
+reload — and never per keystroke. It resolves command ids to `CommandHandle`s and
+interns focus contexts to integers. Because the decoder now supplies a `KeyCode`,
+`CompiledStroke` packs key and modifier bits into a single `std::uint32_t`, and
+the compiled keymap needs no key intern table at all.
+
+Resolution applies **the same rules** `KeymapMatcher` applies — first eligible
+match wins, a `"*"` binding upgrades a focus-specific match, a strict prefix is
+`Pending` — expressed over integers. It decides no policy of its own; a
+divergence between the two would be a bug, not a design.
+
+The scan remains linear over bindings, because it must detect *prefixes* to
+report `Pending` for a partial chord. At ~61 bindings compared as integers this
+is not worth indexing, and a map could not answer the prefix question anyway.
+
+## What the path costs now
+
+| Stage | Before | After |
+|---|---|---|
+| Printable typed | `std::string` allocated per keystroke | nothing allocated |
+| Stroke → identity | string compare per binding | `std::uint32_t` compare per binding |
+| Registry dispatch | `std::string` constructed, then hashed | array index |
+| Leader hint | twenty-branch prefix-strip chain | table column |
+
+A key the keymap never mentions — an ordinary printable — now fails every binding
+on an integer compare. Text insertion is still architecturally the *fallthrough*
+when no binding matched, which is discussed under Considerations below.
+
+## Invariants
+
+- **V1** A command's identity on the keystroke path is a `CommandHandle`. Command
+  id strings are resolved at construction or keymap-compile time, never per
+  keystroke.
+- **V2** `CompiledKeymap` is derived from `KeymapViewState` and owns no policy.
+  Its resolution rules must match `KeymapMatcher`'s; where they disagree,
+  `KeymapMatcher` is correct and the compiled form is wrong.
+- **V3** `KeyCode` is the sole spelling of a key's identity. A key's enumerator,
+  wire name and display name are declared together in `kKeyCodes`.
+- **V4** Names remain authoritative at the palette, Lua and wire boundaries.
+  Nothing on those boundaries may be converted to handles for speed.
+
+## Considerations
+
+- **Two spellings of a keymap now exist**, authored and compiled, and they must
+  not disagree. The compiled form is rebuilt whenever the authored one changes
+  and derives every binding from it, so divergence requires a bug in
+  `CompiledKeymap`'s constructor rather than ordinary drift. There is currently
+  **no test** asserting the two resolvers agree, which is the most valuable test
+  this design is missing.
+- **The pending chord has two forms**, compiled for matching and authored for the
+  leader hint and the app-local quit chord. `PendingChord` in `apps/ssg_main.cpp`
+  owns both because six call sites clear the chord, and a clear that forgot one
+  form would leave resolution matching strokes the user had abandoned.
+- **A binding naming an unknown key is now rejected** rather than silently
+  producing a binding no key can trigger. `KeymapErrorCode::InvalidStroke`
+  already existed for this; it now fires. This is a behaviour change and an
+  improvement, but it is a behaviour change.
+- **The decoder does not emit function keys**, though the key codec has always
+  accepted `F5` and a test asserted it round-trips. `KeyCode` names F1–F12 to
+  preserve that parity, so a binding on one still parses and still cannot fire.
+  The free-string design hid this gap; closing it is separate work.
+- **Prompt input bypasses all of this.** Backspace and text in a prompt are
+  handled by two hardcoded if-chains in `apps/ssg_main.cpp` that never reach the
+  catalog or the registry, and the two chains test `find` and `replace` in
+  opposite orders. The same physical key is a first-class command in the editor
+  and a special case in a prompt. This asymmetry predates the fast path and is
+  not addressed by it.
+- **Text insertion is defined by failure.** A printable is pushed onto the chord,
+  fails to match, and is routed as text from the no-match branch. This is cheap
+  now, but it means the editor's most common operation is the default case of a
+  fallthrough rather than a stated rule.
+- **Origin.** This part was built as a spike (`cb0893f`, `955bb37`) on
+  `spike/handle-dispatch` to find the simplest thing that could work, explicitly
+  without tests. It compiles, the full suite of 94 passes, and the binary was
+  driven over a pty to confirm printables, Backspace, CSI Delete and both chords
+  behave identically to `master`. That is evidence it works, **not** evidence it
+  is correct: it has no tests of its own, and the invariants above are currently
+  unguarded.
+
+## Acceptance
+
+- No `std::string` is allocated or compared to route a keystroke to a handler.
+- The authored keymap remains the source of truth and the only thing a user or a
+  config file edits.
+- Palette, Lua and protocol behaviour are unchanged.
+- Before merging: a test that `CompiledKeymap` and `KeymapMatcher` resolve
+  identically across the default keymap, and perturbation evidence that it fails
+  when they diverge.
