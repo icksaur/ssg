@@ -218,6 +218,65 @@ TEST(aScriptCommandCollidingWithABuiltInIsRefusedWithoutLosingTheEditor) {
 }
 
 
+
+TEST(aRefusedGenerationLeavesNoCommandThatFailsWhenInvoked) {
+    // The host replaces its registrations before the catalog is asked to take
+    // them, so a refused batch would otherwise leave the PREVIOUS generation
+    // listed in the catalog with its Lua closures already released -- commands
+    // that look available and fail on use.  Neither may survive.
+    auto root = uniqueRoot();
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    ssg::ScriptHost scripts{*runtime};
+
+    ASSERT_TRUE(
+        scripts.evaluate("ssg.register_command('user.old', function() end)")
+            .accepted());
+    ASSERT_TRUE(runtime->commandCatalog()->find("user.old") != nullptr);
+
+    // Collides with a built-in, so the catalog refuses the whole batch.
+    ASSERT_TRUE(
+        !scripts
+             .evaluate("ssg.register_command('user.new', function() end);"
+                       "ssg.register_command('file.save', function() end)")
+             .accepted());
+
+    ASSERT_TRUE(runtime->commandCatalog()->find("user.new") == nullptr);
+    ASSERT_TRUE(runtime->commandCatalog()->find("user.old") == nullptr);
+    auto const* builtIn = runtime->commandCatalog()->find("file.save");
+    ASSERT_TRUE(builtIn != nullptr);
+    if (builtIn) ASSERT_TRUE(builtIn->owner != std::string{"lua"});
+    fs::remove_all(root);
+}
+
+TEST(aScriptCommandThatDispatchesIsRefusedRatherThanHanging) {
+    // A handler runs with the session locked, so dispatching from one would
+    // block forever on a lock its own call holds.  Whether nesting should be
+    // allowed is undecided; that it must never hang is not.
+    auto root = uniqueRoot();
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    ssg::ScriptHost scripts{*runtime};
+
+    ASSERT_TRUE(scripts
+                    .evaluate("ssg.register_command('user.nested', function()\n"
+                              "  ssg.command('keymap.unbind', "
+                              "{sequence = 'Escape KeyU'})\n"
+                              "end)")
+                    .accepted());
+    auto const dispatched = runtime->dispatch(
+        ssg::ClientId{1}, {"user.nested", runtime->revision(), {}});
+    ASSERT_TRUE(!dispatched.accepted());
+    ASSERT_TRUE(!dispatched.message.empty());
+
+    // And the session is still usable afterwards.
+    ASSERT_TRUE(runtime
+                    ->dispatch(ssg::ClientId{1},
+                               {"user.nested", runtime->revision(), {}})
+                    .error == ssg::CommandError::HandlerFailed);
+    fs::remove_all(root);
+}
+
 }  // namespace
 
 int main() {
@@ -231,6 +290,8 @@ int main() {
     RUN(aFailedReloadKeepsThePreviousGenerationDispatchable);
     RUN(aRetiredScriptCommandIsNoLongerDispatchable);
     RUN(aScriptCommandCollidingWithABuiltInIsRefusedWithoutLosingTheEditor);
+    RUN(aRefusedGenerationLeavesNoCommandThatFailsWhenInvoked);
+    RUN(aScriptCommandThatDispatchesIsRefusedRatherThanHanging);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

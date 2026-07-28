@@ -9,6 +9,14 @@ namespace ssg {
 
 class EditorRuntime;
 
+// The client every script-originated command is dispatched as, reserved for the
+// process's one ScriptHost.  Named here rather than buried in the
+// implementation because it is a contract with every other attaching client:
+// constructing a second ScriptHost, or attaching this id elsewhere, is refused
+// by the runtime, and ScriptHost's constructor reports that rather than
+// starting in a half-connected state.
+inline constexpr ClientId kScriptClientId{2};
+
 // The editor's Lua state, and everything that connects it to the editor.
 //
 // One ScriptHost lives for the process, so the Lua state outlives any single

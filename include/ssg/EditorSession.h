@@ -86,6 +86,13 @@ public:
                                       ViewId viewId);
     [[nodiscard]] bool detach(ClientId clientId);
 
+    // The revision of the dispatch in progress on THIS thread, if there is
+    // one.  A handler runs with the session locked, so anything it calls that
+    // would take that lock has to ask this first rather than block on a lock
+    // its own call already holds.
+    [[nodiscard]] std::optional<Revision> activeDispatchRevision()
+        const noexcept;
+
     [[nodiscard]] CommandResult dispatch(ClientId clientId,
                                          ClientCommand const& command);
 

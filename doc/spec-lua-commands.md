@@ -420,19 +420,37 @@ itself. A Lua-backed handler is the first handler that dispatches: every
 built-in mutates the session directly instead, so this constraint has existed
 unnoticed and unwritten since the session was built.
 
-This makes a script command that does nothing but call built-ins -- the obvious
-first thing a user would write -- hang the editor. It is a pre-existing
-invariant ("a handler must not dispatch") that nothing states, tests, or
-enforces, and that only a re-entrant handler can violate.
+This would make a script command that does nothing but call built-ins -- the
+obvious first thing a user would write -- hang the editor. It is a pre-existing
+invariant ("a handler must not dispatch") that nothing stated, tested or
+enforced, and that only a re-entrant handler can violate. `EditorRuntime`'s
+palette path already worked around it, describing the session lock as
+"non-reentrant" in passing.
 
-Resolving it is a design decision about re-entrant dispatch, and needs its own
-spec. The options are at least: release the lock around handler execution;
-admit same-thread re-entrancy explicitly (and define what a nested mutation
-does to the revision); or forbid nesting outright and make a handler that
-dispatches fail loudly instead of hanging. The last is the least useful but is
-the minimum honest behavior: a deadlock is never an acceptable way to report a
-rule.
+**Nesting is now refused rather than hung.** `EditorSession` records which
+thread is inside `dispatch` and the revision it is running against
+(`activeDispatchRevision`). `EditorRuntime::dispatch` consults it before
+touching anything that takes the session lock and returns `HandlerFailed` with
+a message naming the rule. `EditorSession::revision()` answers from the same
+record instead of taking the lock, because a handler asking for the revision is
+asking from inside a dispatch that already knows it -- without this the
+deadlock simply moved into the argument list of the nested call.
 
-Until then a script's function may compute and register, but must not call
-`ssg.command`. Nothing enforces that, which is why this cannot be left as it
-is.
+That is the minimum honest behavior, not the goal: a deadlock is never an
+acceptable way to report a rule, but refusing composition is not much of an
+answer either. **Whether a handler SHOULD be able to dispatch remains open and
+needs its own spec.** The real options are to release the lock around handler
+execution, or to admit same-thread re-entrancy explicitly and define what a
+nested mutation does to the revision. Until one is chosen, a script's function
+may compute and register but cannot call `ssg.command` -- and now finds that
+out immediately.
+
+### Keeping the host and the catalog in agreement
+
+`LuaCommandHost::evaluate` publishes its registrations before `ScriptHost` can
+offer them to the catalog, so a batch the catalog refuses -- an id colliding
+with a built-in, say -- would leave the previous generation listed in the
+catalog with its Lua closures already released: commands that look available
+and fail when invoked. `publishGeneration` therefore retires the previous
+catalog generation on refusal too. Retiring alone cannot fail, since an empty
+batch has nothing to validate, so the two always end up agreeing.

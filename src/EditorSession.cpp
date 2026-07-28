@@ -2,12 +2,39 @@
 
 #include <ssg/CommandCatalog.h>
 
+#include <atomic>
 #include <limits>
 #include <mutex>
+#include <thread>
 #include <unordered_map>
 #include <utility>
 
 namespace ssg {
+
+namespace {
+
+// Records which thread is inside dispatch, for as long as it is, so a handler
+// that dispatches again is recognised instead of deadlocking.
+class DispatchMarker {
+public:
+    DispatchMarker(std::atomic<std::thread::id>& slot,
+                   std::atomic<std::uint64_t>& revisionSlot, Revision revision)
+        : slot_{slot}, revisionSlot_{revisionSlot} {
+        revisionSlot_.store(revision.value(), std::memory_order_relaxed);
+        slot_.store(std::this_thread::get_id(), std::memory_order_release);
+    }
+    ~DispatchMarker() {
+        slot_.store(std::thread::id{}, std::memory_order_release);
+    }
+    DispatchMarker(DispatchMarker const&) = delete;
+    DispatchMarker& operator=(DispatchMarker const&) = delete;
+
+private:
+    std::atomic<std::thread::id>& slot_;
+    std::atomic<std::uint64_t>& revisionSlot_;
+};
+
+}  // namespace
 namespace {
 
 struct ClientIdHash {
@@ -29,6 +56,8 @@ struct EditorSession::Impl {
         : catalog{std::move(commandCatalog)}, services{commandServices} {}
 
     mutable std::mutex mutex;
+    std::atomic<std::thread::id> dispatchingThread{};
+    std::atomic<std::uint64_t> dispatchRevision{};
     // Held, never copied: the catalog is what dispatch reads, so a command
     // registered after this session was built is dispatchable immediately.
     std::shared_ptr<CommandCatalog> catalog;
@@ -70,10 +99,36 @@ bool EditorSession::detach(ClientId clientId) {
     return impl_->clients.erase(clientId) != 0;
 }
 
+std::optional<Revision> EditorSession::activeDispatchRevision() const noexcept {
+    if (impl_->dispatchingThread.load(std::memory_order_acquire) !=
+        std::this_thread::get_id()) {
+        return std::nullopt;
+    }
+    // The revision the in-progress dispatch is running against: readable
+    // without the lock precisely because this thread is the one holding it.
+    return Revision{impl_->dispatchRevision.load(std::memory_order_relaxed)};
+}
+
 CommandResult EditorSession::dispatch(ClientId clientId,
                                       ClientCommand const& command) {
+    // A handler runs with the session locked, so a handler that dispatches
+    // would block on a lock its own call already holds.  Refusing says so;
+    // waiting would hang the editor with no way to find out why.
+    //
+    // Every built-in handler mutates the session directly rather than
+    // dispatching, so only a scripted handler can reach this.  Whether nesting
+    // should be ALLOWED is a separate design question (what a nested mutation
+    // does to the revision, chiefly); this only ensures the current answer is
+    // reported rather than hung.  See doc/spec-lua-commands.md's Status.
+    if (auto const nested = activeDispatchRevision()) {
+        return rejected(CommandError::HandlerFailed, *nested,
+                        "a command handler may not dispatch another command");
+    }
+
     std::lock_guard lock{impl_->mutex};
     Revision const currentRevision = impl_->revision;
+    DispatchMarker const marker{impl_->dispatchingThread,
+                                impl_->dispatchRevision, currentRevision};
 
     auto const client = impl_->clients.find(clientId);
     if (client == impl_->clients.end()) {
@@ -149,6 +204,10 @@ CommandResult EditorSession::dispatch(ClientId clientId,
 }
 
 Revision EditorSession::revision() const {
+    // A handler asking for the revision is asking from INSIDE a dispatch, which
+    // already holds this lock -- and already knows the answer.  Taking the lock
+    // again would hang rather than answer.
+    if (auto const nested = activeDispatchRevision()) return *nested;
     std::lock_guard lock{impl_->mutex};
     return impl_->revision;
 }

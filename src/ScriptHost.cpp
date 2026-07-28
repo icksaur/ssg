@@ -17,11 +17,6 @@ namespace ssg {
 
 namespace {
 
-// The synthetic client every script-originated command is dispatched as.  Being
-// a real client means a script goes through the same capability gate and the
-// same command boundary as the palette, rather than reaching past it.
-ClientId const kScriptClientId{2};
-
 // Capabilities granted to the script client, and to the commands it may call --
 // one list, so there is exactly one place to update when a future
 // capability-gated script command is added.  Keeping these as two
@@ -216,8 +211,15 @@ LuaResult ScriptHost::publishGeneration() {
         impl_->generation = impl_->runtime.commandCatalog()->replaceGeneration(
             impl_->generation, std::move(specs));
     } catch (std::exception const& refused) {
-        // The catalog validated the whole batch before applying any of it, so
-        // the previous generation is still installed and working.
+        // The catalog refused the batch, but the host has ALREADY replaced its
+        // registrations: the previous generation's Lua closures are gone.
+        // Leaving the previous generation in the catalog would leave commands
+        // that look available and fail when invoked, so retire them too and
+        // report the refusal.  Retiring alone cannot fail -- an empty batch has
+        // nothing to validate -- so the two always end up agreeing.
+        impl_->runtime.commandCatalog()->replaceGeneration(impl_->generation,
+                                                           {});
+        impl_->generation.clear();
         return {LuaError::DuplicateCommand, refused.what()};
     }
     return {};

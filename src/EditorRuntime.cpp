@@ -1824,6 +1824,14 @@ std::uint64_t EditorRuntime::liveDocumentRuntimeStateCountForTests() {
 }
 
 CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& command) {
+    // Checked before anything that takes the session lock -- including the
+    // attachment lookup on the next line.  A handler that dispatches would
+    // otherwise block on the lock its own call is holding, hanging the editor
+    // with no way to find out why.  See EditorSession::activeDispatchRevision.
+    if (const auto nested = impl_->session->activeDispatchRevision()) {
+        return {CommandError::HandlerFailed, *nested,
+                "a command handler may not dispatch another command"};
+    }
     const auto attached = impl_->session->attachedClient(clientId);
     const auto origin =
         attached ? attached->principal.origin() : InvocationOrigin::System;
