@@ -56,9 +56,13 @@ enum class ArgumentKind : std::uint8_t {
 // requires argument marshalling to exist for it.  Collapsing the two would
 // either shrink Lua parity to the startup set or grant startup authority to
 // every eligible command.  `initScript` implies `luaApi`.
+//
+// There are deliberately no `keymap` or `palette` fields.  Both existed here
+// and in the catalog they replaced, and both were read by nothing: key chords
+// are the curated `defaultTerminalKeymap()` table, and every command is a
+// palette candidate.  A declaration nothing enforces drifts into fiction, so
+// the surfaces recorded here are only the ones with a consumer.
 struct CommandSurfaces {
-    bool keymap = false;
-    bool palette = false;
     bool luaApi = false;
     bool initScript = false;
 };

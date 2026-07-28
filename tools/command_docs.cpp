@@ -45,18 +45,10 @@ std::string_view argumentName(ssg::ArgumentKind kind) {
 }
 
 std::string surfaces(ssg::CommandSurfaces const& value) {
-    std::vector<std::string> parts;
-    if (value.keymap) parts.emplace_back("keymap");
-    if (value.palette) parts.emplace_back("palette");
-    if (value.luaApi) parts.emplace_back("lua");
-    if (value.initScript) parts.emplace_back("init.lua");
-    if (parts.empty()) return "—";
-    std::string joined;
-    for (std::size_t index = 0; index < parts.size(); ++index) {
-        if (index != 0) joined += ", ";
-        joined += parts[index];
-    }
-    return joined;
+    // init.lua implies the Lua API, so naming both would be noise.
+    if (value.initScript) return "lua, init.lua";
+    if (value.luaApi) return "lua";
+    return "—";
 }
 
 }  // namespace

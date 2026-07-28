@@ -13,97 +13,97 @@ There are 182 commands.
 
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
-| `clipboard.copy` | Copy | none | keymap, palette, lua |
-| `clipboard.cut` | Cut | none | keymap, palette, lua |
-| `clipboard.paste` | Paste | none | keymap, palette, lua |
+| `clipboard.copy` | Copy | none | lua |
+| `clipboard.cut` | Cut | none | lua |
+| `clipboard.paste` | Paste | none | lua |
 
 ## diff-model
 
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
-| `diff.next_hunk` | Next Hunk | none | keymap, palette, lua |
-| `diff.previous_hunk` | Previous Hunk | none | keymap, palette, lua |
-| `diff.open_file` | Open File | none | keymap, palette, lua |
+| `diff.next_hunk` | Next Hunk | none | lua |
+| `diff.previous_hunk` | Previous Hunk | none | lua |
+| `diff.open_file` | Open File | none | lua |
 
 ## edit-command-suite
 
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
-| `edit.indent` | Indent | none | keymap, palette, lua |
-| `edit.outdent` | Outdent | none | keymap, palette, lua |
-| `edit.duplicate_line` | Duplicate Line | none | keymap, palette, lua |
-| `edit.move_line_up` | Move Line Up | none | keymap, palette, lua |
-| `edit.move_line_down` | Move Line Down | none | keymap, palette, lua |
-| `edit.delete_line` | Delete Line | none | keymap, palette, lua |
-| `edit.join_lines` | Join Lines | none | keymap, palette, lua |
-| `edit.uppercase` | Uppercase | none | keymap, palette, lua |
-| `edit.lowercase` | Lowercase | none | keymap, palette, lua |
-| `edit.swap_case` | Swap Case | none | keymap, palette, lua |
-| `edit.sort_lines` | Sort Lines | none | keymap, palette, lua |
-| `edit.transpose` | Transpose | none | keymap, palette, lua |
-| `edit.toggle_comment` | Toggle Comment | none | keymap, palette, lua |
+| `edit.indent` | Indent | none | lua |
+| `edit.outdent` | Outdent | none | lua |
+| `edit.duplicate_line` | Duplicate Line | none | lua |
+| `edit.move_line_up` | Move Line Up | none | lua |
+| `edit.move_line_down` | Move Line Down | none | lua |
+| `edit.delete_line` | Delete Line | none | lua |
+| `edit.join_lines` | Join Lines | none | lua |
+| `edit.uppercase` | Uppercase | none | lua |
+| `edit.lowercase` | Lowercase | none | lua |
+| `edit.swap_case` | Swap Case | none | lua |
+| `edit.sort_lines` | Sort Lines | none | lua |
+| `edit.transpose` | Transpose | none | lua |
+| `edit.toggle_comment` | Toggle Comment | none | lua |
 
 ## encoding-eol
 
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
-| `file.reopen_with_encoding` | Reopen With Encoding | encoding | keymap, palette, lua |
-| `file.set_encoding` | Set Encoding | encoding | keymap, palette, lua |
-| `file.set_line_ending` | Set Line Ending | line ending | keymap, palette, lua |
-| `file.set_final_newline` | Set Final Newline | final newline | keymap, palette, lua |
+| `file.reopen_with_encoding` | Reopen With Encoding | encoding | lua |
+| `file.set_encoding` | Set Encoding | encoding | lua |
+| `file.set_line_ending` | Set Line Ending | line ending | lua |
+| `file.set_final_newline` | Set Final Newline | final newline | lua |
 
 ## external-modification-flow
 
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
-| `external.reload` | Reload | none | keymap, palette, lua |
-| `external.keep_buffer` | Keep Buffer | none | keymap, palette, lua |
-| `external.open_diff` | Open Diff | none | keymap, palette, lua |
+| `external.reload` | Reload | none | lua |
+| `external.keep_buffer` | Keep Buffer | none | lua |
+| `external.open_diff` | Open Diff | none | lua |
 
 ## file-commands
 
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
-| `workspace.open_directory` | Open Directory | none | keymap, palette, lua |
-| `file.new` | New File | none | keymap, palette, lua |
-| `file.open` | Open File | none | keymap, palette, lua |
-| `file.open_recent` | Open Recent | none | keymap, palette, lua |
+| `workspace.open_directory` | Open Directory | none | lua |
+| `file.new` | New File | none | lua |
+| `file.open` | Open File | none | lua |
+| `file.open_recent` | Open Recent | none | lua |
 | `file.open_dropped_content` | Open Dropped Content | dropped content | — |
-| `file.save` | Save File | none | keymap, palette, lua |
-| `file.save_all` | Save All Files | none | keymap, palette, lua |
-| `file.save_as` | Save File As | none | keymap, palette, lua |
-| `file.reload` | Reload File | none | keymap, palette, lua |
-| `file.rename` | Rename File | none | keymap, palette, lua |
-| `file.delete` | Delete File | none | keymap, palette, lua |
-| `file.new_directory` | New Directory | none | keymap, palette, lua |
+| `file.save` | Save File | none | lua |
+| `file.save_all` | Save All Files | none | lua |
+| `file.save_as` | Save File As | none | lua |
+| `file.reload` | Reload File | none | lua |
+| `file.rename` | Rename File | none | lua |
+| `file.delete` | Delete File | none | lua |
+| `file.new_directory` | New Directory | none | lua |
 
 ## find-replace
 
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
-| `find.open` | Find | none | keymap, palette, lua |
-| `find.close` | Close | none | keymap, palette, lua |
-| `find.next` | Next | none | keymap, palette, lua |
-| `find.previous` | Previous | none | keymap, palette, lua |
+| `find.open` | Find | none | lua |
+| `find.close` | Close | none | lua |
+| `find.next` | Next | none | lua |
+| `find.previous` | Previous | none | lua |
 | `find.update_query` | Update Query | query | lua |
-| `find.toggle_case` | Toggle Case | none | keymap, palette, lua |
-| `find.toggle_whole_word` | Toggle Whole Word | none | keymap, palette, lua |
-| `find.toggle_regex` | Toggle Regex | none | keymap, palette, lua |
-| `find.toggle_selection` | Toggle Selection | none | keymap, palette, lua |
-| `replace.open` | Replace | none | keymap, palette, lua |
+| `find.toggle_case` | Toggle Case | none | lua |
+| `find.toggle_whole_word` | Toggle Whole Word | none | lua |
+| `find.toggle_regex` | Toggle Regex | none | lua |
+| `find.toggle_selection` | Toggle Selection | none | lua |
+| `replace.open` | Replace | none | lua |
 | `replace.update_replacement` | Update Replacement | query | lua |
-| `replace.current` | Current | none | keymap, palette, lua |
-| `replace.all` | All | none | keymap, palette, lua |
-| `replace.workspace_preview` | Workspace Preview | workspace replace | keymap, palette, lua |
-| `replace.workspace_apply` | Workspace Apply | workspace apply | keymap, palette, lua |
+| `replace.current` | Current | none | lua |
+| `replace.all` | All | none | lua |
+| `replace.workspace_preview` | Workspace Preview | workspace replace | lua |
+| `replace.workspace_apply` | Workspace Apply | workspace apply | lua |
 
 ## follow-edits
 
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
-| `follow_edits.resume` | Resume | none | keymap, palette, lua |
-| `follow_edits.pause` | Pause | none | keymap, palette, lua |
-| `follow_edits.toggle` | Toggle | none | keymap, palette, lua |
+| `follow_edits.resume` | Resume | none | lua |
+| `follow_edits.pause` | Pause | none | lua |
+| `follow_edits.toggle` | Toggle | none | lua |
 
 ## keymap-model
 
@@ -116,128 +116,128 @@ There are 182 commands.
 
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
-| `goto.definition` | Go to Definition | none | keymap, palette, lua |
-| `goto.reference` | Reference | none | keymap, palette, lua |
-| `completion.open` | Open | none | keymap, palette, lua |
-| `completion.next` | Next | none | keymap, palette, lua |
-| `completion.previous` | Previous | none | keymap, palette, lua |
-| `completion.accept` | Accept | none | keymap, palette, lua |
-| `completion.dismiss` | Dismiss | none | keymap, palette, lua |
-| `hover.show` | Show | none | keymap, palette, lua |
-| `hover.dismiss` | Dismiss | none | keymap, palette, lua |
+| `goto.definition` | Go to Definition | none | lua |
+| `goto.reference` | Reference | none | lua |
+| `completion.open` | Open | none | lua |
+| `completion.next` | Next | none | lua |
+| `completion.previous` | Previous | none | lua |
+| `completion.accept` | Accept | none | lua |
+| `completion.dismiss` | Dismiss | none | lua |
+| `hover.show` | Show | none | lua |
+| `hover.dismiss` | Dismiss | none | lua |
 
 ## lsp-workspace-edits
 
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
-| `rename.symbol` | Symbol | none | keymap, palette, lua |
+| `rename.symbol` | Symbol | none | lua |
 
 ## prompt-status-surface
 
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
-| `prompt.submit` | Submit Prompt | none | keymap, palette, lua |
-| `prompt.cancel` | Cancel | none | keymap, palette, lua |
-| `prompt.next` | Next | none | keymap, palette, lua |
-| `prompt.previous` | Previous | none | keymap, palette, lua |
+| `prompt.submit` | Submit Prompt | none | lua |
+| `prompt.cancel` | Cancel | none | lua |
+| `prompt.next` | Next | none | lua |
+| `prompt.previous` | Previous | none | lua |
 | `prompt.update_value` | Update Value | prompt value | lua |
-| `status.next` | Next | none | keymap, palette, lua |
-| `status.previous` | Previous | none | keymap, palette, lua |
-| `status.dismiss` | Dismiss | none | keymap, palette, lua |
-| `status.invoke_action` | Invoke Action | none | keymap, palette, lua |
+| `status.next` | Next | none | lua |
+| `status.previous` | Previous | none | lua |
+| `status.dismiss` | Dismiss | none | lua |
+| `status.invoke_action` | Invoke Action | none | lua |
 
 ## search-palette
 
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
-| `palette.open` | Command Palette | none | keymap, palette, lua |
-| `file_finder.open` | Open | none | keymap, palette, lua |
-| `file_finder.toggle_gitignore` | Toggle Gitignore | none | keymap, palette, lua |
-| `palette.close` | Close | none | keymap, palette, lua |
-| `palette.next` | Next | none | keymap, palette, lua |
-| `palette.previous` | Previous | none | keymap, palette, lua |
-| `palette.execute` | Execute | palette selection | keymap, palette, lua |
-| `goto.file` | Go to File | none | keymap, palette, lua |
-| `goto.line` | Go to Line | none | keymap, palette, lua |
-| `goto.symbol` | Go to Symbol | none | keymap, palette, lua |
-| `goto.back` | Back | none | keymap, palette, lua |
-| `goto.forward` | Forward | none | keymap, palette, lua |
-| `search.workspace` | Workspace | none | keymap, palette, lua |
-| `search.results_next` | Results Next | none | keymap, palette, lua |
-| `search.results_previous` | Results Previous | none | keymap, palette, lua |
+| `palette.open` | Command Palette | none | lua |
+| `file_finder.open` | Open | none | lua |
+| `file_finder.toggle_gitignore` | Toggle Gitignore | none | lua |
+| `palette.close` | Close | none | lua |
+| `palette.next` | Next | none | lua |
+| `palette.previous` | Previous | none | lua |
+| `palette.execute` | Execute | palette selection | lua |
+| `goto.file` | Go to File | none | lua |
+| `goto.line` | Go to Line | none | lua |
+| `goto.symbol` | Go to Symbol | none | lua |
+| `goto.back` | Back | none | lua |
+| `goto.forward` | Forward | none | lua |
+| `search.workspace` | Workspace | none | lua |
+| `search.results_next` | Results Next | none | lua |
+| `search.results_previous` | Results Previous | none | lua |
 
 ## selection-navigation
 
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
-| `cursor.set_position` | Set Position | selection | keymap, palette, lua |
-| `cursor.left` | Left | selection | keymap, palette, lua |
-| `cursor.right` | Right | selection | keymap, palette, lua |
-| `cursor.word_left` | Word Left | selection | keymap, palette, lua |
-| `cursor.word_right` | Word Right | selection | keymap, palette, lua |
-| `cursor.line_up` | Line Up | selection | keymap, palette, lua |
-| `cursor.line_down` | Line Down | selection | keymap, palette, lua |
-| `cursor.line_start` | Line Start | selection | keymap, palette, lua |
-| `cursor.line_end` | Line End | selection | keymap, palette, lua |
-| `cursor.page_up` | Page Up | selection | keymap, palette, lua |
-| `cursor.page_down` | Page Down | selection | keymap, palette, lua |
-| `cursor.document_start` | Document Start | selection | keymap, palette, lua |
-| `cursor.document_end` | Document End | selection | keymap, palette, lua |
-| `select.set_range` | Set Range | selection | keymap, palette, lua |
-| `select.add_range` | Add Range | selection | keymap, palette, lua |
-| `select.left` | Left | selection | keymap, palette, lua |
-| `select.right` | Right | selection | keymap, palette, lua |
-| `select.word_left` | Word Left | selection | keymap, palette, lua |
-| `select.word_right` | Word Right | selection | keymap, palette, lua |
-| `select.line_up` | Line Up | selection | keymap, palette, lua |
-| `select.line_down` | Line Down | selection | keymap, palette, lua |
-| `select.line_start` | Line Start | selection | keymap, palette, lua |
-| `select.line_end` | Line End | selection | keymap, palette, lua |
-| `select.page_up` | Page Up | selection | keymap, palette, lua |
-| `select.page_down` | Page Down | selection | keymap, palette, lua |
-| `select.document_start` | Document Start | selection | keymap, palette, lua |
-| `select.document_end` | Document End | selection | keymap, palette, lua |
-| `select.all` | All | selection | keymap, palette, lua |
-| `select.add_next_occurrence` | Add Next Occurrence | selection | keymap, palette, lua |
-| `select.add_cursor_up` | Add Cursor Up | selection | keymap, palette, lua |
-| `select.add_cursor_down` | Add Cursor Down | selection | keymap, palette, lua |
-| `select.split_into_lines` | Split Into Lines | selection | keymap, palette, lua |
-| `select.to_matching_bracket` | To Matching Bracket | selection | keymap, palette, lua |
-| `view.reveal_caret` | Reveal Caret | selection | keymap, palette, lua |
-| `view.center_caret` | Center Caret | selection | keymap, palette, lua |
-| `goto.matching_bracket` | Matching Bracket | selection | keymap, palette, lua |
+| `cursor.set_position` | Set Position | selection | lua |
+| `cursor.left` | Left | selection | lua |
+| `cursor.right` | Right | selection | lua |
+| `cursor.word_left` | Word Left | selection | lua |
+| `cursor.word_right` | Word Right | selection | lua |
+| `cursor.line_up` | Line Up | selection | lua |
+| `cursor.line_down` | Line Down | selection | lua |
+| `cursor.line_start` | Line Start | selection | lua |
+| `cursor.line_end` | Line End | selection | lua |
+| `cursor.page_up` | Page Up | selection | lua |
+| `cursor.page_down` | Page Down | selection | lua |
+| `cursor.document_start` | Document Start | selection | lua |
+| `cursor.document_end` | Document End | selection | lua |
+| `select.set_range` | Set Range | selection | lua |
+| `select.add_range` | Add Range | selection | lua |
+| `select.left` | Left | selection | lua |
+| `select.right` | Right | selection | lua |
+| `select.word_left` | Word Left | selection | lua |
+| `select.word_right` | Word Right | selection | lua |
+| `select.line_up` | Line Up | selection | lua |
+| `select.line_down` | Line Down | selection | lua |
+| `select.line_start` | Line Start | selection | lua |
+| `select.line_end` | Line End | selection | lua |
+| `select.page_up` | Page Up | selection | lua |
+| `select.page_down` | Page Down | selection | lua |
+| `select.document_start` | Document Start | selection | lua |
+| `select.document_end` | Document End | selection | lua |
+| `select.all` | All | selection | lua |
+| `select.add_next_occurrence` | Add Next Occurrence | selection | lua |
+| `select.add_cursor_up` | Add Cursor Up | selection | lua |
+| `select.add_cursor_down` | Add Cursor Down | selection | lua |
+| `select.split_into_lines` | Split Into Lines | selection | lua |
+| `select.to_matching_bracket` | To Matching Bracket | selection | lua |
+| `view.reveal_caret` | Reveal Caret | selection | lua |
+| `view.center_caret` | Center Caret | selection | lua |
+| `goto.matching_bracket` | Matching Bracket | selection | lua |
 
 ## settings-model
 
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
-| `settings.open` | Open Settings | none | keymap, palette, lua |
-| `settings.set` | Set | setting | keymap, palette, lua |
-| `settings.reset` | Reset | setting key | keymap, palette, lua |
-| `settings.reset_scope` | Reset Scope | setting scope | keymap, palette, lua |
-| `settings.export_workspace` | Export Workspace | none | keymap, palette, lua |
-| `settings.import_workspace` | Import Workspace | none | keymap, palette, lua |
+| `settings.open` | Open Settings | none | lua |
+| `settings.set` | Set | setting | lua |
+| `settings.reset` | Reset | setting key | lua |
+| `settings.reset_scope` | Reset Scope | setting scope | lua |
+| `settings.export_workspace` | Export Workspace | none | lua |
+| `settings.import_workspace` | Import Workspace | none | lua |
 
 ## shell-layout
 
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
-| `pane.split_horizontal` | Split Horizontal | none | keymap, palette, lua |
-| `pane.split_vertical` | Split Vertical | none | keymap, palette, lua |
-| `pane.close` | Close | none | keymap, palette, lua |
-| `pane.next` | Next | none | keymap, palette, lua |
-| `pane.previous` | Previous | none | keymap, palette, lua |
-| `pane.focus_left` | Focus Left | none | keymap, palette, lua |
-| `pane.focus_right` | Focus Right | none | keymap, palette, lua |
-| `pane.focus_up` | Focus Up | none | keymap, palette, lua |
-| `pane.focus_down` | Focus Down | none | keymap, palette, lua |
-| `panel.toggle` | Toggle Sidebar | none | keymap, palette, lua |
-| `panel.focus` | Focus Sidebar | none | keymap, palette, lua |
-| `panel.show_files` | Show Files Sidebar | none | keymap, palette, lua |
-| `panel.show_git_status` | Show Git Sidebar | none | keymap, palette, lua |
-| `panel.next_provider` | Next Provider | none | keymap, palette, lua |
-| `panel.previous_provider` | Previous Provider | none | keymap, palette, lua |
-| `view.toggle_distraction_free` | Toggle Distraction Free | none | keymap, palette, lua |
+| `pane.split_horizontal` | Split Horizontal | none | lua |
+| `pane.split_vertical` | Split Vertical | none | lua |
+| `pane.close` | Close | none | lua |
+| `pane.next` | Next | none | lua |
+| `pane.previous` | Previous | none | lua |
+| `pane.focus_left` | Focus Left | none | lua |
+| `pane.focus_right` | Focus Right | none | lua |
+| `pane.focus_up` | Focus Up | none | lua |
+| `pane.focus_down` | Focus Down | none | lua |
+| `panel.toggle` | Toggle Sidebar | none | lua |
+| `panel.focus` | Focus Sidebar | none | lua |
+| `panel.show_files` | Show Files Sidebar | none | lua |
+| `panel.show_git_status` | Show Git Sidebar | none | lua |
+| `panel.next_provider` | Next Provider | none | lua |
+| `panel.previous_provider` | Previous Provider | none | lua |
+| `view.toggle_distraction_free` | Toggle Distraction Free | none | lua |
 
 ## style-model
 
@@ -249,44 +249,44 @@ There are 182 commands.
 
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
-| `tab.close` | Close Tab | none | keymap, palette, lua |
-| `tab.close_others` | Close Other Tabs | none | keymap, palette, lua |
-| `tab.close_all` | Close All Tabs | none | keymap, palette, lua |
-| `tab.reopen_closed` | Reopen Closed | none | keymap, palette, lua |
-| `tab.next` | Next Tab | none | keymap, palette, lua |
-| `tab.previous` | Previous Tab | none | keymap, palette, lua |
-| `tab.activate` | Activate | none | keymap, palette, lua |
-| `tab.move_left` | Move Left | none | keymap, palette, lua |
-| `tab.move_right` | Move Right | none | keymap, palette, lua |
+| `tab.close` | Close Tab | none | lua |
+| `tab.close_others` | Close Other Tabs | none | lua |
+| `tab.close_all` | Close All Tabs | none | lua |
+| `tab.reopen_closed` | Reopen Closed | none | lua |
+| `tab.next` | Next Tab | none | lua |
+| `tab.previous` | Previous Tab | none | lua |
+| `tab.activate` | Activate | none | lua |
+| `tab.move_left` | Move Left | none | lua |
+| `tab.move_right` | Move Right | none | lua |
 
 ## text-input-commands
 
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
-| `text.insert` | Insert | text | keymap, palette, lua |
-| `text.newline` | Newline | text | keymap, palette, lua |
-| `text.delete_backward` | Delete Backward | text | keymap, palette, lua |
-| `text.delete_forward` | Delete Forward | text | keymap, palette, lua |
-| `text.delete_word_backward` | Delete Word Backward | text | keymap, palette, lua |
-| `text.delete_word_forward` | Delete Word Forward | text | keymap, palette, lua |
+| `text.insert` | Insert | text | lua |
+| `text.newline` | Newline | text | lua |
+| `text.delete_backward` | Delete Backward | text | lua |
+| `text.delete_forward` | Delete Forward | text | lua |
+| `text.delete_word_backward` | Delete Word Backward | text | lua |
+| `text.delete_word_forward` | Delete Word Forward | text | lua |
 
 ## theme-model
 
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
-| `theme.define` | Define | none | keymap, palette, lua, init.lua |
-| `theme.background` | Background | none | keymap, palette, lua, init.lua |
+| `theme.define` | Define | none | lua, init.lua |
+| `theme.background` | Background | none | lua, init.lua |
 
 ## tree-providers
 
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
-| `tree.toggle_expanded` | Toggle Expanded | none | keymap, palette, lua |
-| `tree.invoke_node_command` | Invoke Node Command | none | keymap, palette, lua |
+| `tree.toggle_expanded` | Toggle Expanded | none | lua |
+| `tree.invoke_node_command` | Invoke Node Command | none | lua |
 | `tree.select` | Select | tree node | lua |
-| `tree.select_next` | Select Next | none | keymap, palette, lua |
-| `tree.select_previous` | Select Previous | none | keymap, palette, lua |
-| `tree.activate` | Open Selected | none | keymap, palette, lua |
+| `tree.select_next` | Select Next | none | lua |
+| `tree.select_previous` | Select Previous | none | lua |
+| `tree.activate` | Open Selected | none | lua |
 | `tree.scroll` | Scroll | scroll lines | lua |
 | `tree.scroll_to_fraction` | Scroll To Fraction | scroll fraction | lua |
 
@@ -294,14 +294,14 @@ There are 182 commands.
 
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
-| `edit.undo` | Undo | none | keymap, palette, lua |
-| `edit.redo` | Redo | none | keymap, palette, lua |
+| `edit.undo` | Undo | none | lua |
+| `edit.redo` | Redo | none | lua |
 
 ## viewport-wrap-scrollbar
 
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
-| `view.toggle_word_wrap` | Toggle Word Wrap | none | keymap, palette, lua |
-| `view.scroll_lines` | Scroll Lines | scroll lines | keymap, palette, lua |
-| `view.scroll_pages` | Scroll Pages | scroll pages | keymap, palette, lua |
-| `view.scroll_to_fraction` | Scroll To Fraction | scroll fraction | keymap, palette, lua |
+| `view.toggle_word_wrap` | Toggle Word Wrap | none | lua |
+| `view.scroll_lines` | Scroll Lines | scroll lines | lua |
+| `view.scroll_pages` | Scroll Pages | scroll pages | lua |
+| `view.scroll_to_fraction` | Scroll To Fraction | scroll fraction | lua |
