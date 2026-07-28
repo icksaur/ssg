@@ -405,6 +405,51 @@ void registerExternalModificationCommands(EditorSessionBuilder& builder,
     declare("external.open_diff", "Open Diff", ExternalAction::OpenDiff);
 }
 
+// How the active document is decoded and written back: its text encoding, its
+// line endings, and whether it ends with a newline.
+void registerEncodingCommands(EditorSessionBuilder& builder,
+                              EditorRuntime::Impl& runtime) {
+    auto declare = [](std::string id, std::string summary) {
+        return CommandSpecBuilder{std::move(id)}
+            .owner("encoding-eol")
+            .summary(std::move(summary))
+            .mutates()
+            .lua();
+    };
+    auto run = [&runtime](std::string_view id, std::any payload) {
+        return runtime.runTransaction(
+            [&] { return bindEncoding(runtime, id, payload); });
+    };
+
+    builder.add(declare("file.reopen_with_encoding", "Reopen With Encoding")
+                    .handler<ReopenWithEncodingArguments>(
+                        [run](CommandContext&,
+                              ReopenWithEncodingArguments const& arguments) {
+                            return run("file.reopen_with_encoding",
+                                       std::any{arguments});
+                        }));
+    builder.add(declare("file.set_encoding", "Set Encoding")
+                    .handler<SetEncodingArguments>(
+                        [run](CommandContext&,
+                              SetEncodingArguments const& arguments) {
+                            return run("file.set_encoding", std::any{arguments});
+                        }));
+    builder.add(declare("file.set_line_ending", "Set Line Ending")
+                    .handler<SetLineEndingArguments>(
+                        [run](CommandContext&,
+                              SetLineEndingArguments const& arguments) {
+                            return run("file.set_line_ending",
+                                       std::any{arguments});
+                        }));
+    builder.add(declare("file.set_final_newline", "Set Final Newline")
+                    .handler<SetFinalNewlineArguments>(
+                        [run](CommandContext&,
+                              SetFinalNewlineArguments const& arguments) {
+                            return run("file.set_final_newline",
+                                       std::any{arguments});
+                        }));
+}
+
 void bindRuntimeFiles(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime) {
     registerExternalModificationCommands(builder, runtime);
     auto fileCommands = fileCommandsCommandSet();
@@ -422,11 +467,7 @@ void bindRuntimeFiles(EditorSessionBuilder& builder, EditorRuntime::Impl& runtim
             });
         });
     }
-    for (auto const& descriptor : kTextEncodingCommandSet.descriptors) {
-        builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const& payload) {
-            return runtime.runTransaction([&] { return bindEncoding(runtime, descriptor.id, payload); });
-        });
-    }
+    registerEncodingCommands(builder, runtime);
 }
 
 } // namespace ssg

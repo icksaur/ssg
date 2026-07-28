@@ -391,40 +391,134 @@ void registerAppearanceCommands(EditorSessionBuilder& builder,
                         }));
 }
 
+// Word wrap and the three ways to scroll.
+//
+// The scroll commands all record a user navigation when they move the view, so
+// follow-edits knows the user drove rather than the editor.
+void registerViewportCommands(EditorSessionBuilder& builder,
+                              EditorRuntime::Impl& runtime) {
+    builder.add(CommandSpecBuilder{"view.toggle_word_wrap"}
+                    .owner("viewport-wrap-scrollbar")
+                    .label("Toggle Word Wrap")
+                    .summary("Toggle Word Wrap")
+                    .mutates()
+                    .lua()
+                    .handler([&runtime](CommandContext&) {
+                        return runtime.runTransaction(
+                            [&] { return setWordWrap(runtime); });
+                    }));
+
+    auto scroll = [](std::string id, std::string summary) {
+        return CommandSpecBuilder{std::move(id)}
+            .owner("viewport-wrap-scrollbar")
+            .summary(std::move(summary))
+            .mutates()
+            .lua();
+    };
+    builder.add(scroll("view.scroll_lines", "Scroll Lines")
+                    .handler<ScrollLinesArguments>(
+                        [&runtime](CommandContext& context,
+                                   ScrollLinesArguments const& arguments) {
+                            return runtime.runTransaction([&] {
+                                auto result = scrollLines(runtime,
+                                                          std::any{arguments});
+                                if (result.accepted) {
+                                    runtime.recordNavigation(
+                                        context.principal().clientId(),
+                                        NavigationClass::User);
+                                }
+                                return result;
+                            });
+                        }));
+    builder.add(scroll("view.scroll_pages", "Scroll Pages")
+                    .handler<ScrollPagesArguments>(
+                        [&runtime](CommandContext& context,
+                                   ScrollPagesArguments const& arguments) {
+                            return runtime.runTransaction([&] {
+                                auto result = scrollPages(runtime,
+                                                          std::any{arguments});
+                                if (result.accepted) {
+                                    runtime.recordNavigation(
+                                        context.principal().clientId(),
+                                        NavigationClass::User);
+                                }
+                                return result;
+                            });
+                        }));
+    builder.add(scroll("view.scroll_to_fraction", "Scroll To Fraction")
+                    .handler<ScrollFractionArguments>(
+                        [&runtime](CommandContext& context,
+                                   ScrollFractionArguments const& arguments) {
+                            return runtime.runTransaction([&] {
+                                auto result =
+                                    scrollFraction(runtime, std::any{arguments});
+                                if (result.accepted) {
+                                    runtime.recordNavigation(
+                                        context.principal().clientId(),
+                                        NavigationClass::User);
+                                }
+                                return result;
+                            });
+                        }));
+}
+
+// Reading and writing settings.
+//
+// settings.import_workspace carries a whole settings document from the prompt
+// that collected it, and settings.set/reset carry typed mutations that a remote
+// client may send.  The three that take nothing say so.
+void registerSettingsCommands(EditorSessionBuilder& builder,
+                              EditorRuntime::Impl& runtime) {
+    auto declare = [](std::string id, std::string summary) {
+        return CommandSpecBuilder{std::move(id)}
+            .owner("settings-model")
+            .summary(std::move(summary))
+            .mutates()
+            .lua();
+    };
+    auto run = [&runtime](std::string_view id, std::any payload) {
+        return runtime.runTransaction(
+            [&] { return settingsCommand(runtime, id, payload); });
+    };
+
+    builder.add(declare("settings.open", "Open Settings")
+                    .label("Open Settings")
+                    .handler([run](CommandContext&) {
+                        return run("settings.open", {});
+                    }));
+    builder.add(declare("settings.export_workspace", "Export Workspace")
+                    .handler([run](CommandContext&) {
+                        return run("settings.export_workspace", {});
+                    }));
+    builder.add(declare("settings.import_workspace", "Import Workspace")
+                    .inProcessHandler<std::string>(
+                        [run](CommandContext&, std::string const& document) {
+                            return run("settings.import_workspace",
+                                       std::any{document});
+                        }));
+    builder.add(declare("settings.set", "Set")
+                    .handler<SettingSetArguments>(
+                        [run](CommandContext&,
+                              SettingSetArguments const& arguments) {
+                            return run("settings.set", std::any{arguments});
+                        }));
+    builder.add(declare("settings.reset", "Reset")
+                    .handler<SettingResetArguments>(
+                        [run](CommandContext&,
+                              SettingResetArguments const& arguments) {
+                            return run("settings.reset", std::any{arguments});
+                        }));
+    builder.add(declare("settings.reset_scope", "Reset Scope")
+                    .handler<SettingResetScopeArguments>(
+                        [run](CommandContext&,
+                              SettingResetScopeArguments const& arguments) {
+                            return run("settings.reset_scope",
+                                       std::any{arguments});
+                        }));
+}
+
 void bindRuntimePresentation(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime) {
-    builder.bind("view.toggle_word_wrap", [&runtime](CommandContext&, std::any const&) {
-        return runtime.runTransaction([&] { return setWordWrap(runtime); });
-    });
-    builder.bind("view.scroll_lines", [&runtime](CommandContext& context, std::any const& payload) {
-        return runtime.runTransaction([&] {
-            auto result = scrollLines(runtime, payload);
-            if (result.accepted) {
-                runtime.recordNavigation(context.principal().clientId(),
-                                         NavigationClass::User);
-            }
-            return result;
-        });
-    });
-    builder.bind("view.scroll_pages", [&runtime](CommandContext& context, std::any const& payload) {
-        return runtime.runTransaction([&] {
-            auto result = scrollPages(runtime, payload);
-            if (result.accepted) {
-                runtime.recordNavigation(context.principal().clientId(),
-                                         NavigationClass::User);
-            }
-            return result;
-        });
-    });
-    builder.bind("view.scroll_to_fraction", [&runtime](CommandContext& context, std::any const& payload) {
-        return runtime.runTransaction([&] {
-            auto result = scrollFraction(runtime, payload);
-            if (result.accepted) {
-                runtime.recordNavigation(context.principal().clientId(),
-                                         NavigationClass::User);
-            }
-            return result;
-        });
-    });
+    registerViewportCommands(builder, runtime);
     for (auto const* descriptor : commandsOwnedBy("shell-layout")) {
         builder.bind(std::string{descriptor->id}, [&runtime, descriptor](CommandContext& context, std::any const&) {
             return runtime.runTransaction([&] {
@@ -445,11 +539,7 @@ void bindRuntimePresentation(EditorSessionBuilder& builder, EditorRuntime::Impl&
             });
         });
     }
-    for (auto const* descriptor : commandsOwnedBy("settings-model")) {
-        builder.bind(std::string{descriptor->id}, [&runtime, descriptor](CommandContext&, std::any const& payload) {
-            return runtime.runTransaction([&] { return settingsCommand(runtime, descriptor->id, payload); });
-        });
-    }
+    registerSettingsCommands(builder, runtime);
     registerAppearanceCommands(builder, runtime);
 }
 

@@ -117,6 +117,8 @@ There are 182 commands.
 
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
+| `goto.definition` | Go to Definition | none | lua |
+| `goto.reference` | Reference | none | lua |
 | `completion.open` | Open | none | lua |
 | `completion.next` | Next | none | lua |
 | `completion.previous` | Previous | none | lua |
@@ -124,8 +126,6 @@ There are 182 commands.
 | `completion.dismiss` | Dismiss | none | lua |
 | `hover.show` | Show | none | lua |
 | `hover.dismiss` | Dismiss | none | lua |
-| `goto.definition` | Go to Definition | none | lua |
-| `goto.reference` | Reference | none | lua |
 
 ## lsp-workspace-edits
 
@@ -213,11 +213,11 @@ There are 182 commands.
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
 | `settings.open` | Open Settings | none | lua |
+| `settings.export_workspace` | Export Workspace | none | lua |
+| `settings.import_workspace` | Import Workspace | none | lua |
 | `settings.set` | Set | setting | lua |
 | `settings.reset` | Reset | setting key | lua |
 | `settings.reset_scope` | Reset Scope | setting scope | lua |
-| `settings.export_workspace` | Export Workspace | none | lua |
-| `settings.import_workspace` | Import Workspace | none | lua |
 
 ## shell-layout
 

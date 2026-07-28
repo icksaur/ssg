@@ -46,14 +46,39 @@ void registerLspWorkspaceEditCommands(EditorSessionBuilder& builder,
                         }));
 }
 
+// Go-to, completion and hover.  None takes an argument: each acts on wherever
+// the cursor already is.
+void registerLspFeatureCommands(EditorSessionBuilder& builder,
+                                EditorRuntime::Impl& runtime) {
+    auto declare = [&](std::string id, std::string label, std::string summary) {
+        auto const name = id;
+        auto spec = CommandSpecBuilder{std::move(id)}
+                        .owner("lsp-language-features")
+                        .summary(std::move(summary))
+                        .mutates()
+                        .lua()
+                        .handler([&runtime, name](CommandContext&) {
+                            return runtime.runTransaction([&] {
+                                return lspFeatureCommand(runtime, name);
+                            });
+                        });
+        if (!label.empty()) spec.label(std::move(label));
+        builder.add(std::move(spec));
+    };
+    declare("goto.definition", "Go to Definition", "Go to Definition");
+    declare("goto.reference", "", "Reference");
+    declare("completion.open", "", "Open");
+    declare("completion.next", "", "Next");
+    declare("completion.previous", "", "Previous");
+    declare("completion.accept", "", "Accept");
+    declare("completion.dismiss", "", "Dismiss");
+    declare("hover.show", "", "Show");
+    declare("hover.dismiss", "", "Dismiss");
+}
+
 void bindRuntimeLanguageServices(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime) {
     registerLspWorkspaceEditCommands(builder, runtime);
-    auto featureCommands = lspFeatureCommandSet();
-    for (auto const& descriptor : featureCommands.descriptors()) {
-        builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const&) {
-            return runtime.runTransaction([&] { return lspFeatureCommand(runtime, descriptor.id); });
-        });
-    }
+    registerLspFeatureCommands(builder, runtime);
 }
 
 } // namespace ssg
