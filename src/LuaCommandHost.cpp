@@ -278,8 +278,12 @@ struct LuaCommandHost::Impl {
                     raiseError = true;
                 } else {
                     auto& transaction = host.registrationStack.back();
-                    if (host.pluginCommands.contains(id) ||
-                        !transaction.ids.emplace(id).second) {
+                    // Only THIS evaluation's registrations are checked.  The
+                    // previously published generation is retired wholesale when
+                    // this one publishes, so re-registering its ids is exactly
+                    // what reloading an unchanged script does; rejecting that
+                    // would make the second load of any script fail.
+                    if (!transaction.ids.emplace(id).second) {
                         host.pendingError = LuaError::DuplicateCommand;
                         host.callbackMessage =
                             "duplicate plugin command: " + id;
@@ -394,10 +398,19 @@ struct LuaCommandHost::Impl {
         }
     }
 
+    // Installs this evaluation's registrations AS the current generation,
+    // releasing the previous one: what a script registers is replaced by what
+    // the next successful evaluation registers, never merged with it, so a
+    // function deleted from the script stops existing on reload.
     void publishStaged(RegistrationTransaction& transaction) {
+        for (auto const& [id, reference] : pluginCommands) {
+            if (reference != LUA_NOREF) {
+                luaL_unref(state, LUA_REGISTRYINDEX, reference);
+            }
+        }
+        pluginCommands.clear();
         for (auto& command : transaction.commands) {
-            pluginCommands.emplace(command.id,
-                                    command.functionReference);
+            pluginCommands.emplace(command.id, command.functionReference);
         }
     }
 
@@ -426,6 +439,16 @@ LuaCommandHost::LuaCommandHost(LuaCommandHostOptions options,
 LuaCommandHost::~LuaCommandHost() = default;
 LuaCommandHost::LuaCommandHost(LuaCommandHost&&) noexcept = default;
 LuaCommandHost& LuaCommandHost::operator=(LuaCommandHost&&) noexcept = default;
+
+std::vector<std::string> LuaCommandHost::registeredCommands() const {
+    std::vector<std::string> ids;
+    ids.reserve(impl_->pluginCommands.size());
+    for (auto const& [id, reference] : impl_->pluginCommands) ids.push_back(id);
+    // Ordered so a caller registering these downstream produces the same
+    // handles for the same script, rather than depending on hash order.
+    std::sort(ids.begin(), ids.end());
+    return ids;
+}
 
 LuaResult LuaCommandHost::evaluate(std::string_view script) {
     int const stackBase = lua_gettop(impl_->state);

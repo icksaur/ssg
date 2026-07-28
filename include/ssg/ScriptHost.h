@@ -44,6 +44,8 @@ public:
     [[nodiscard]] LuaResult evaluate(std::string_view script);
 
 private:
+    LuaResult publishGeneration();
+
     struct Impl;
     std::unique_ptr<Impl> impl_;
 };

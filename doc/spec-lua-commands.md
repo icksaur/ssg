@@ -398,3 +398,41 @@ it promised.
 - A broken `init.lua` leaves the previous commands working.
 - A Lua command is never dispatched off the thread owning the Lua state.
 - No second command registry exists.
+
+## Status
+
+L0-L2 are implemented (`CommandCatalog::replaceGeneration`, `ScriptHost`, and
+the `register_command` bridge). The class breakdown above was added after the
+five review rounds and reflects what shipped.
+
+### What L2's decision point found
+
+A command a script registers IS an ordinary catalog command. It is registered
+through the same `CommandSpecBuilder`, appears in the palette, is bindable by
+name from `keymap.bind`, and is dispatched through the same path as every
+built-in. Nothing downstream distinguishes it. That part of the design holds,
+and the catalog work earned its keep.
+
+**But a script's command cannot yet call another command.** `EditorSession::
+dispatch` holds a non-recursive `std::mutex` across the handler call
+(`src/EditorSession.cpp`), so a handler that dispatches deadlocks against
+itself. A Lua-backed handler is the first handler that dispatches: every
+built-in mutates the session directly instead, so this constraint has existed
+unnoticed and unwritten since the session was built.
+
+This makes a script command that does nothing but call built-ins -- the obvious
+first thing a user would write -- hang the editor. It is a pre-existing
+invariant ("a handler must not dispatch") that nothing states, tests, or
+enforces, and that only a re-entrant handler can violate.
+
+Resolving it is a design decision about re-entrant dispatch, and needs its own
+spec. The options are at least: release the lock around handler execution;
+admit same-thread re-entrancy explicitly (and define what a nested mutation
+does to the revision); or forbid nesting outright and make a handler that
+dispatches fail loudly instead of hanging. The last is the least useful but is
+the minimum honest behavior: a deadlock is never an acceptable way to report a
+rule.
+
+Until then a script's function may compute and register, but must not call
+`ssg.command`. Nothing enforces that, which is why this cannot be left as it
+is.

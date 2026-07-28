@@ -84,6 +84,9 @@ public:
     LuaCommandHost& operator=(LuaCommandHost&&) noexcept;
 
     [[nodiscard]] LuaResult evaluate(std::string_view script);
+    // The commands the last successful evaluation registered, sorted.  Each
+    // evaluation replaces this set entirely.
+    [[nodiscard]] std::vector<std::string> registeredCommands() const;
     [[nodiscard]] LuaResult invoke(std::string_view pluginCommand);
     [[nodiscard]] bool hasCommand(std::string_view pluginCommand) const;
 

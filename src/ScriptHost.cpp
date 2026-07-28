@@ -59,6 +59,9 @@ struct ScriptHost::Impl {
     EditorRuntime& runtime;
     std::thread::id owningThread{std::this_thread::get_id()};
     LuaCommandHost host;
+    // What the last successful evaluation put in the catalog, retired by the
+    // next one.
+    std::vector<CommandHandle> generation;
 
     Impl(EditorRuntime& editorRuntime, LuaCommandHostOptions options)
         : runtime{editorRuntime},
@@ -166,7 +169,58 @@ LuaResult ScriptHost::evaluate(std::string_view script) {
     // additive, so a line removed from it reverts that binding on the next
     // reload -- matching theme.define's replace-on-reload behavior.
     impl_->runtime.resetKeymapToDefault();
-    return impl_->host.evaluate(script);
+    auto result = impl_->host.evaluate(script);
+    // A failed script registers nothing, so its predecessor's commands stay
+    // available.  This cannot undo effects the script already caused before it
+    // failed -- a theme it applied stays applied (doc/spec-lua-commands.md, L5).
+    if (!result.accepted()) return result;
+    return publishGeneration();
+}
+
+// Publishes what `host` registered as the catalog's Lua generation, replacing
+// the previous one.
+//
+// A script's command becomes an ORDINARY catalog command: the palette lists it,
+// a keybinding resolves it, and dispatch reaches it through the same path as
+// every built-in.  Nothing downstream knows it came from Lua.  If this needed a
+// second lookup path, the catalog would not have earned its keep.
+LuaResult ScriptHost::publishGeneration() {
+    std::vector<CommandSpecBuilder> specs;
+    for (auto const& id : impl_->host.registeredCommands()) {
+        specs.push_back(
+            CommandSpecBuilder{id}
+                .owner("lua")
+                .summary("Registered by init.lua")
+                // A script's function may do anything the commands it calls can
+                // do, so it is always treated as a mutation.  It carries no
+                // capability of its own: everything it invokes is gated
+                // individually at dispatch, as any other Lua caller is.
+                .mutates()
+                .handler([impl = impl_.get(), id](CommandContext&) {
+                    // The Lua state belongs to one thread.  A call from another
+                    // is REFUSED rather than serialised: serialising would run
+                    // script code at a moment the caller cannot reason about,
+                    // and the editor has one thread that dispatches commands.
+                    if (std::this_thread::get_id() != impl->owningThread) {
+                        return CommandHandlerResult::failure(
+                            "script commands run only on the editor thread");
+                    }
+                    auto const result = impl->host.invoke(id);
+                    return result.accepted()
+                               ? CommandHandlerResult::success()
+                               : CommandHandlerResult::failure(result.message);
+                }));
+    }
+
+    try {
+        impl_->generation = impl_->runtime.commandCatalog()->replaceGeneration(
+            impl_->generation, std::move(specs));
+    } catch (std::exception const& refused) {
+        // The catalog validated the whole batch before applying any of it, so
+        // the previous generation is still installed and working.
+        return {LuaError::DuplicateCommand, refused.what()};
+    }
+    return {};
 }
 
 }  // namespace ssg

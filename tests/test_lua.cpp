@@ -139,10 +139,26 @@ TEST(registrationIsAtomicAndDuplicateSafe) {
     ASSERT_TRUE(host.evaluate(
         "ssg.register_command('owned', function() ssg.command('missing') end)")
                     .accepted());
+    // Registering the same id TWICE IN ONE evaluation is a mistake in the
+    // script, and is refused.
     auto duplicate = host.evaluate(
-        "ssg.register_command('owned', function() end)");
+        "ssg.register_command('twice', function() end);"
+        "ssg.register_command('twice', function() end)");
     ASSERT_EQ(duplicate.error, LuaError::DuplicateCommand);
+
+    // Registering it again in a LATER evaluation is a reload, not a mistake:
+    // each evaluation replaces the previous evaluation's registrations, so a
+    // script that registers the same ids every time must keep working.
+    ASSERT_TRUE(host.evaluate(
+        "ssg.register_command('owned', function() end)").accepted());
     ASSERT_TRUE(host.hasCommand("owned"));
+
+    // And a command the newest evaluation did NOT register is gone, rather
+    // than accumulating across reloads.
+    ASSERT_TRUE(host.evaluate(
+        "ssg.register_command('replacement', function() end)").accepted());
+    ASSERT_FALSE(host.hasCommand("owned"));
+    ASSERT_TRUE(host.hasCommand("replacement"));
 }
 
 TEST(dispatchAndPluginFaultsAreIsolated) {
