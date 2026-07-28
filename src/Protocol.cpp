@@ -1,6 +1,7 @@
 #include <ssg/Protocol.h>
 
 #include <ssg/CommandCatalog.h>
+#include <ssg/CommandSpecBuilder.h>
 
 #include <ssg/Document.h>
 #include <ssg/EditorSessionBuilder.h>
@@ -305,16 +306,16 @@ struct CoreEditorSlice::Impl {
         : document{},
           selections{std::vector<Selection>{
               Selection{caretPosition(0), caretPosition(0)}}},
-          session{CommandRegistry{std::vector<CommandSet>{CommandSet{{
-              CommandRegistration{
-                  {"text.insert", CommandEffect::Mutation, {}},
-                  [this](CommandContext&, std::any const& payload) {
-                      auto const* arguments =
-                          std::any_cast<TextInputArguments>(&payload);
-                      if (arguments == nullptr) {
-                          return CommandHandlerResult::failure(
-                              "text.insert payload has the wrong type");
-                      }
+          catalog{std::make_shared<CommandCatalog>()},
+          session{[this] {
+              catalog->add(
+                  CommandSpecBuilder{"text.insert"}
+                      .owner("core-editor-slice")
+                      .summary("Insert")
+                      .mutates()
+                      .handler<TextInputArguments>(
+                  [this](CommandContext&, TextInputArguments const& args) {
+                      auto const* arguments = &args;
                       if (arguments->text.empty()) {
                           return CommandHandlerResult::failure(
                               "text.insert payload must not be empty");
@@ -333,7 +334,9 @@ struct CoreEditorSlice::Impl {
                       }
                       selections = std::move(*result.selections);
                       return CommandHandlerResult::success();
-                  }}}}}}} {}
+                  }));
+              return EditorSession{catalog};
+          }()} {}
 
     DocumentViewState snapshotUnlocked() const {
         auto documentSnapshot = document.snapshot();
@@ -344,6 +347,7 @@ struct CoreEditorSlice::Impl {
     mutable std::mutex mutex;
     Document document;
     SelectionSet selections;
+    std::shared_ptr<CommandCatalog> catalog;
     EditorSession session;
 };
 

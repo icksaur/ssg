@@ -62,6 +62,11 @@ using CatalogRevision = std::uint64_t;
 
 class CommandCatalog {
 public:
+    // A handle is a 16-bit index into this catalog, so this is how many
+    // commands may exist at once.  Registration past it throws rather than
+    // wrapping a handle onto another command.
+    static constexpr std::size_t kMaximumCommands = 65535;
+
     CommandCatalog();
     ~CommandCatalog();
 

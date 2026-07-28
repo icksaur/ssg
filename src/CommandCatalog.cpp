@@ -44,6 +44,15 @@ CommandHandle CommandCatalog::add(CommandSpecBuilder spec) {
                                  "\""};
     }
 
+    // A handle is a 16-bit index, so a catalog cannot exceed that space.
+    // Truncating would alias a new command onto an existing handle and
+    // misdispatch silently, which is the one failure mode handles must not
+    // have (doc/spec-command-registry.md, R4).
+    if (entries_.size() >= kMaximumCommands) {
+        throw std::runtime_error{
+            "command catalog is full: at most " +
+            std::to_string(kMaximumCommands) + " commands may be registered"};
+    }
     auto const index = entries_.size();
     entries_.push_back(CommandEntry{
         std::move(spec.id_), std::move(spec.owner_), std::move(spec.label_),

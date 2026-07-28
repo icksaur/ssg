@@ -1,5 +1,7 @@
 #include "test_helpers.h"
 
+#include <ssg/CommandCatalog.h>
+#include <ssg/CommandSpecBuilder.h>
 #include <ssg/CommandRegistry.h>
 #include <ssg/EditorSession.h>
 
@@ -21,13 +23,43 @@ using namespace std::chrono_literals;
 static_assert(!std::is_copy_assignable_v<ssg::InvocationPrincipal>);
 static_assert(!std::is_move_assignable_v<ssg::InvocationPrincipal>);
 
-ssg::CommandRegistration command(
+// The session dispatches from a catalog, so these tests register into one.
+// Kept as a tuple-shaped helper so each test still reads as "a command with
+// this effect, this handler and these capabilities".
+struct TestCommand {
+    std::string id;
+    ssg::CommandEffect effect;
+    ssg::CommandHandler handler;
+    std::vector<ssg::CapabilityId> requiredCapabilities;
+};
+
+TestCommand command(
     std::string id,
     ssg::CommandEffect effect,
     ssg::CommandHandler handler,
     std::vector<ssg::CapabilityId> requiredCapabilities = {}) {
-    return {{std::move(id), effect, std::move(requiredCapabilities)},
-            std::move(handler)};
+    return {std::move(id), effect, std::move(handler),
+            std::move(requiredCapabilities)};
+}
+
+std::shared_ptr<ssg::CommandCatalog> catalogOf(
+    std::vector<TestCommand> commands) {
+    auto catalog = std::make_shared<ssg::CommandCatalog>();
+    for (auto& entry : commands) {
+        ssg::CommandSpecBuilder spec{std::move(entry.id)};
+        spec.owner("test-owner").summary("a command");
+        if (entry.effect == ssg::CommandEffect::Mutation) {
+            spec.mutates();
+        } else {
+            spec.observes();
+        }
+        for (auto const& capability : entry.requiredCapabilities) {
+            spec.capability(std::string{capability.value()});
+        }
+        spec.untypedHandler(std::move(entry.handler), std::nullopt);
+        catalog->add(std::move(spec));
+    }
+    return catalog;
 }
 
 ssg::InvocationPrincipal principal(
@@ -43,14 +75,13 @@ ssg::ClientCommand request(std::string id, std::uint64_t revision) {
 
 TEST(totalOrderAndRegisteredDispatch) {
     std::vector<std::uint64_t> clients;
-    ssg::CommandSet commands{{command(
+    auto catalog = catalogOf({command(
         "state.advance", ssg::CommandEffect::Mutation,
         [&](ssg::CommandContext& context, std::any const&) {
             clients.push_back(context.principal().clientId().value());
             return ssg::CommandHandlerResult::success();
-        })}};
-    ssg::EditorSession session{
-        ssg::CommandRegistry{{std::move(commands)}}};
+        })});
+    ssg::EditorSession session{catalog};
 
     ASSERT_TRUE(session.attach(principal(1), ssg::ViewId{11}).accepted());
     ASSERT_TRUE(session.attach(principal(2), ssg::ViewId{22}).accepted());
@@ -75,7 +106,7 @@ TEST(totalOrderAndRegisteredDispatch) {
 
 TEST(staleRejectionAppliesOnlyToMutations) {
     int observations = 0;
-    ssg::CommandSet commands{{
+    auto catalog = catalogOf({
         command("state.advance", ssg::CommandEffect::Mutation,
                 [](ssg::CommandContext&, std::any const&) {
                     return ssg::CommandHandlerResult::success();
@@ -85,9 +116,8 @@ TEST(staleRejectionAppliesOnlyToMutations) {
                     ++observations;
                     return ssg::CommandHandlerResult::success();
                 }),
-    }};
-    ssg::EditorSession session{
-        ssg::CommandRegistry{{std::move(commands)}}};
+    });
+    ssg::EditorSession session{catalog};
     ASSERT_TRUE(session.attach(principal(1), ssg::ViewId{1}).accepted());
     ASSERT_TRUE(
         session.dispatch(ssg::ClientId{1}, request("state.advance", 1)).accepted());
@@ -105,14 +135,13 @@ TEST(staleRejectionAppliesOnlyToMutations) {
 
 TEST(clientIdentityAndPrincipalAreIsolated) {
     std::vector<std::uint64_t> observedClients;
-    ssg::CommandSet commands{{command(
+    auto catalog = catalogOf({command(
         "identity.inspect", ssg::CommandEffect::Observation,
         [&](ssg::CommandContext& context, std::any const&) {
             observedClients.push_back(context.principal().clientId().value());
             return ssg::CommandHandlerResult::success();
-        })}};
-    ssg::EditorSession session{
-        ssg::CommandRegistry{{std::move(commands)}}};
+        })});
+    ssg::EditorSession session{catalog};
     ASSERT_TRUE(session.attach(principal(7), ssg::ViewId{70}).accepted());
     ASSERT_TRUE(session.attach(
         principal(8, ssg::InvocationOrigin::Websocket), ssg::ViewId{80})
@@ -138,7 +167,7 @@ TEST(clientIdentityAndPrincipalAreIsolated) {
 }
 
 TEST(handlerFailureIsAtomic) {
-    ssg::CommandSet commands{{
+    auto catalog = catalogOf({
         command("topology.fail", ssg::CommandEffect::Mutation,
                 [](ssg::CommandContext& context, std::any const&) {
                     context.setActiveWorkspace(ssg::WorkspaceId{5});
@@ -158,9 +187,8 @@ TEST(handlerFailureIsAtomic) {
                     context.setActiveView(ssg::ViewId{3});
                     return ssg::CommandHandlerResult::success();
                 }),
-    }};
-    ssg::EditorSession session{
-        ssg::CommandRegistry{{std::move(commands)}}};
+    });
+    ssg::EditorSession session{catalog};
     ASSERT_TRUE(session.attach(principal(1), ssg::ViewId{1}).accepted());
 
     auto rejectedResult =
@@ -190,41 +218,22 @@ TEST(handlerFailureIsAtomic) {
               std::optional<ssg::ViewId>{ssg::ViewId{3}});
 }
 
-TEST(duplicateRegistrationIsRejectedEagerly) {
-    auto noOp = [](ssg::CommandContext&, std::any const&) {
-        return ssg::CommandHandlerResult::success();
-    };
-
-    ASSERT_THROWS(
-        ssg::CommandSet({
-            command("duplicate", ssg::CommandEffect::Observation, noOp),
-            command("duplicate", ssg::CommandEffect::Mutation, noOp),
-        }),
-        std::invalid_argument);
-
-    ssg::CommandSet first{{
-        command("duplicate", ssg::CommandEffect::Observation, noOp),
-    }};
-    ssg::CommandSet second{{
-        command("duplicate", ssg::CommandEffect::Observation, noOp),
-    }};
-    ASSERT_THROWS(
-        ssg::CommandRegistry(
-            {std::move(first), std::move(second)}),
-        std::invalid_argument);
-}
+// A duplicate id is rejected by the catalog, where registration happens, and
+// that rule is covered by test_command_catalog.  It used to be checked twice
+// here -- once per command set, once across sets -- because commands were
+// assembled from several sets before reaching the session.  There is one place
+// now.
 
 TEST(principalCapabilityEnforcementHasOriginParity) {
     int calls = 0;
-    ssg::CommandSet commands{{command(
+    auto catalog = catalogOf({command(
         "local.ingress", ssg::CommandEffect::Observation,
         [&](ssg::CommandContext&, std::any const&) {
             ++calls;
             return ssg::CommandHandlerResult::success();
         },
-        {ssg::CapabilityId{"local_file_drop"}})}};
-    ssg::EditorSession session{
-        ssg::CommandRegistry{{std::move(commands)}}};
+        {ssg::CapabilityId{"local_file_drop"}})});
+    ssg::EditorSession session{catalog};
 
     ASSERT_TRUE(session.attach(
         principal(1, ssg::InvocationOrigin::InProcess,
@@ -259,7 +268,7 @@ TEST(principalCapabilityEnforcementHasOriginParity) {
 TEST(executorSerializesConcurrentHandlers) {
     std::atomic<int> active{0};
     std::atomic<int> maximum{0};
-    ssg::CommandSet commands{{command(
+    auto catalog = catalogOf({command(
         "executor.observe", ssg::CommandEffect::Observation,
         [&](ssg::CommandContext&, std::any const&) {
             int now = active.fetch_add(1) + 1;
@@ -270,9 +279,8 @@ TEST(executorSerializesConcurrentHandlers) {
             std::this_thread::sleep_for(2ms);
             active.fetch_sub(1);
             return ssg::CommandHandlerResult::success();
-        })}};
-    ssg::EditorSession session{
-        ssg::CommandRegistry{{std::move(commands)}}};
+        })});
+    ssg::EditorSession session{catalog};
     ASSERT_TRUE(session.attach(principal(1), ssg::ViewId{1}).accepted());
     ASSERT_TRUE(session.attach(principal(2), ssg::ViewId{2}).accepted());
 
@@ -302,7 +310,6 @@ int main() {
     RUN(staleRejectionAppliesOnlyToMutations);
     RUN(clientIdentityAndPrincipalAreIsolated);
     RUN(handlerFailureIsAtomic);
-    RUN(duplicateRegistrationIsRejectedEagerly);
     RUN(principalCapabilityEnforcementHasOriginParity);
     RUN(executorSerializesConcurrentHandlers);
 

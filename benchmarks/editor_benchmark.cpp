@@ -1,3 +1,5 @@
+#include <ssg/CommandCatalog.h>
+#include <ssg/CommandSpecBuilder.h>
 #include <ssg/CommandRegistry.h>
 #include <ssg/Document.h>
 #include <ssg/GraphemeLayout.h>
@@ -260,8 +262,7 @@ void verifyCorrectness(std::string const& base,
     if (unchanged.changed || unchanged.replacement.has_value())
         throw std::runtime_error{"unchanged viewport emitted a payload"};
 
-    ssg::EditorSession idle{
-        ssg::CommandRegistry{std::vector<ssg::CommandSet>{}}};
+    ssg::EditorSession idle{std::make_shared<ssg::CommandCatalog>()};
     double const cpuStart = processCpuMilliseconds();
     std::this_thread::sleep_for(std::chrono::milliseconds{100});
     timings.idleCpuMilliseconds = processCpuMilliseconds() - cpuStart;
@@ -293,16 +294,21 @@ void measureCommandDelta(std::vector<Operation> const& operations,
     std::string const initial(16U * 1024U, 'a');
     for (std::size_t repetition = 0; repetition < kRepetitions; ++repetition) {
         ssg::Document document{initial};
-        ssg::CommandSet commands{{{
-            {"benchmark.edit", ssg::CommandEffect::Mutation, {}},
-            [&document](ssg::CommandContext&, std::any const& payload) {
-                auto result = apply(document, std::any_cast<Operation const&>(payload));
-                return result.accepted()
-                           ? ssg::CommandHandlerResult::success()
-                           : ssg::CommandHandlerResult::failure(result.message);
-            }}}};
-        ssg::EditorSession session{
-            ssg::CommandRegistry{{std::move(commands)}}};
+        auto catalog = std::make_shared<ssg::CommandCatalog>();
+        catalog->add(ssg::CommandSpecBuilder{"benchmark.edit"}
+                         .owner("benchmark")
+                         .summary("Apply one benchmark edit")
+                         .mutates()
+                         .inProcessHandler<Operation>(
+                             [&document](ssg::CommandContext&,
+                                         Operation const& operation) {
+                                 auto result = apply(document, operation);
+                                 return result.accepted()
+                                            ? ssg::CommandHandlerResult::success()
+                                            : ssg::CommandHandlerResult::failure(
+                                                  result.message);
+                             }));
+        ssg::EditorSession session{catalog};
         ssg::InvocationPrincipal const principal{
             ssg::ClientId{1}, ssg::InvocationOrigin::InProcess};
         if (!session.attach(principal, ssg::ViewId{1}).accepted())

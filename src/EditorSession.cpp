@@ -24,22 +24,26 @@ CommandResult rejected(CommandError error, Revision revision,
 }  // namespace
 
 struct EditorSession::Impl {
-    explicit Impl(CommandRegistry commandRegistry, CommandServices* services)
-        : registry{std::move(commandRegistry)}, services{services} {}
+    Impl(std::shared_ptr<CommandCatalog> commandCatalog,
+         CommandServices* commandServices)
+        : catalog{std::move(commandCatalog)}, services{commandServices} {}
 
     mutable std::mutex mutex;
-    CommandRegistry registry;
-    CommandServices* services;
+    // Held, never copied: the catalog is what dispatch reads, so a command
+    // registered after this session was built is dispatchable immediately.
     std::shared_ptr<CommandCatalog> catalog;
+    CommandServices* services;
     Revision revision{1};
     SessionTopology topology;
     std::unordered_map<ClientId, AttachedClient, ClientIdHash> clients;
 };
 
-EditorSession::EditorSession(CommandRegistry registry, CommandServices* services,
-                             std::shared_ptr<CommandCatalog> catalog)
-    : impl_{std::make_unique<Impl>(std::move(registry), services)} {
-    impl_->catalog = std::move(catalog);
+EditorSession::EditorSession(std::shared_ptr<CommandCatalog> catalog,
+                             CommandServices* services)
+    : impl_{std::make_unique<Impl>(std::move(catalog), services)} {
+    if (!impl_->catalog) {
+        throw std::invalid_argument{"a session requires a command catalog"};
+    }
 }
 
 std::shared_ptr<CommandCatalog> const& EditorSession::catalog() const {
@@ -77,29 +81,31 @@ CommandResult EditorSession::dispatch(ClientId clientId,
                         "client ID is not attached");
     }
 
-    // A ref built from a name the catalog knows already carries its handle, so
-    // the name lookup is only reached for a command outside the catalog.
-    auto const* registration = command.id.handle().valid()
-                                   ? impl_->registry.find(command.id.handle())
-                                   : impl_->registry.find(command.id.name());
-    if (registration == nullptr) {
+    // Straight from the live catalog, so a command registered a moment ago is
+    // dispatchable now.  A snapshot taken when the session was built would
+    // publish new commands to the palette and the keymap while refusing to run
+    // them (doc/spec-command-registry.md, R8).
+    //
+    // A handle names the command directly; a caller that has not resolved one
+    // supplies only the name, which costs a lookup.
+    auto const* command_ = command.id.handle().valid()
+                               ? impl_->catalog->find(command.id.handle())
+                               : impl_->catalog->find(command.id.name());
+    if (command_ == nullptr) {
         return rejected(CommandError::UnknownCommand, currentRevision,
                         "command is not registered: " +
                             std::string{command.id.name()});
     }
 
-    for (auto const& capability :
-         registration->descriptor.requiredCapabilities) {
-        if (!client->second.principal.hasCapability(capability)) {
+    for (auto const& capability : command_->requiredCapabilities) {
+        if (!client->second.principal.hasCapability(CapabilityId{capability})) {
             return rejected(
                 CommandError::CapabilityDenied, currentRevision,
-                "principal lacks required capability: " +
-                    std::string{capability.value()});
+                "principal lacks required capability: " + capability);
         }
     }
 
-    bool const mutates =
-        registration->descriptor.effect == CommandEffect::Mutation;
+    bool const mutates = command_->effect == CommandEffect::Mutation;
     if (mutates && command.baseRevision != currentRevision) {
         return rejected(CommandError::StaleRevision, currentRevision,
                         "mutation base revision does not match session revision");
@@ -115,7 +121,7 @@ CommandResult EditorSession::dispatch(ClientId clientId,
                            impl_->services};
     CommandHandlerResult handlerResult;
     try {
-        handlerResult = registration->handler(context, command.payload);
+        handlerResult = command_->handler(context, command.payload);
     } catch (std::exception const& exception) {
         return rejected(CommandError::HandlerFailed, currentRevision,
                         "command handler threw: " +

@@ -66,26 +66,11 @@ std::shared_ptr<CommandCatalog> EditorSessionBuilder::catalog() const {
 }
 
 std::unique_ptr<EditorSession> EditorSessionBuilder::build() {
-    // There is deliberately no "bindings must equal the catalog" check here.
-    // It existed to prove every declared command had a handler and every
-    // handler a declaration; registration now states both in one act, so the
-    // check compared a thing to itself (doc/spec-command-registry.md).
-    std::vector<CommandRegistration> registrations;
-    for (auto const* command : impl_->catalog->commands()) {
-        std::vector<CapabilityId> capabilities;
-        capabilities.reserve(command->requiredCapabilities.size());
-        for (auto const& capability : command->requiredCapabilities) {
-            capabilities.emplace_back(capability);
-        }
-        registrations.push_back(
-            {CommandDescriptor{command->id, command->effect,
-                               std::move(capabilities)},
-             command->handler});
-    }
-    return std::make_unique<EditorSession>(
-        CommandRegistry{
-            std::vector<CommandSet>{CommandSet{std::move(registrations)}}},
-        impl_->services, impl_->catalog);
+    // Nothing is copied out of the catalog here.  The session holds it, so a
+    // command registered after this returns is dispatchable without any
+    // propagation step -- and cannot appear in the palette while being refused
+    // by dispatch (doc/spec-command-registry.md, R8).
+    return std::make_unique<EditorSession>(impl_->catalog, impl_->services);
 }
 
 }  // namespace ssg

@@ -69,9 +69,8 @@ struct SessionTopology {
 
 class EditorSession {
 public:
-    explicit EditorSession(CommandRegistry registry,
-                           CommandServices* services = nullptr,
-                           std::shared_ptr<CommandCatalog> catalog = {});
+    explicit EditorSession(std::shared_ptr<CommandCatalog> catalog,
+                           CommandServices* services = nullptr);
     ~EditorSession();
 
     EditorSession(EditorSession const&) = delete;

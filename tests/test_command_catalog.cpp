@@ -1,4 +1,5 @@
 #include <ssg/CommandCatalog.h>
+#include <ssg/EditorSessionBuilder.h>
 
 #include "test_helpers.h"
 
@@ -230,7 +231,60 @@ TEST(concurrentReadsSeeOnlyWholeRegistrations) {
 
 }  // namespace
 
+// The point of a dynamic catalog: a command registered after the session was
+// built is dispatchable at once.
+//
+// This failed before the session stopped keeping its own registry.  A late
+// registration reached the catalog -- so the palette listed the command and the
+// keymap resolved a handle for it -- while dispatch consulted a snapshot taken
+// at build time and answered UnknownCommand.  Worse, the handle indexed past
+// that snapshot's parallel array.
+TEST(aCommandRegisteredAfterTheSessionIsBuiltIsDispatchable) {
+    ssg::EditorSessionBuilder builder;
+    builder.add(minimal("early.command"));
+    auto session = builder.build();
+    ASSERT_TRUE(session->attach(
+                    ssg::InvocationPrincipal{ssg::ClientId{1},
+                                             ssg::InvocationOrigin::InProcess},
+                    ssg::ViewId{1})
+                    .accepted());
+
+    int lateCalls = 0;
+    builder.catalog()->add(
+        ssg::CommandSpecBuilder{"late.command"}
+            .owner("test-owner")
+            .summary("registered after the session existed")
+            .observes()
+            .handler([&lateCalls](ssg::CommandContext&) {
+                ++lateCalls;
+                return ssg::CommandHandlerResult::success();
+            }));
+
+    auto const byName = session->dispatch(
+        ssg::ClientId{1}, {"late.command", session->revision(), {}});
+    ASSERT_TRUE(byName.accepted());
+    ASSERT_EQ(lateCalls, 1);
+
+    // And by the handle the catalog issued for it, which is the keystroke
+    // path's spelling.
+    auto const handle = builder.catalog()->handleFor("late.command");
+    ASSERT_TRUE(handle.valid());
+    auto const byHandle = session->dispatch(
+        ssg::ClientId{1},
+        {ssg::CommandRef{"late.command", handle}, session->revision(), {}});
+    ASSERT_TRUE(byHandle.accepted());
+    ASSERT_EQ(lateCalls, 2);
+}
+
+TEST(registeringPastTheHandleSpaceIsRefused) {
+    // A handle is a 16-bit index, so the catalog must refuse a command it
+    // cannot name rather than wrap one onto another command's handle.
+    ASSERT_EQ(ssg::CommandCatalog::kMaximumCommands, std::size_t{65535});
+}
+
 int main() {
+    RUN(aCommandRegisteredAfterTheSessionIsBuiltIsDispatchable);
+    RUN(registeringPastTheHandleSpaceIsRefused);
     RUN(addIssuesAHandleThatResolvesBackToItsCommand);
     RUN(addRejectsADuplicateIdAndNamesBothOwners);
     RUN(addRejectsEachMissingRequiredField);
