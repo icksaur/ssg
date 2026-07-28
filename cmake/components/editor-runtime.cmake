@@ -72,4 +72,11 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_include_directories(test_startup_path PRIVATE ${SSG_SOURCE_DIR}/tests)
     target_link_libraries(test_startup_path PRIVATE ssg)
     add_test(NAME test_startup_path COMMAND test_startup_path)
+
+    add_executable(test_command_dispatch
+        ${SSG_SOURCE_DIR}/tests/test_command_dispatch.cpp
+    )
+    target_include_directories(test_command_dispatch PRIVATE ${SSG_SOURCE_DIR}/tests)
+    target_link_libraries(test_command_dispatch PRIVATE ssg)
+    add_test(NAME test_command_dispatch COMMAND test_command_dispatch)
 endif()
