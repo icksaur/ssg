@@ -91,6 +91,11 @@ as, because `shouldPauseForLocalEdit` depends on that client's origin: a
 script's edit runs as the script client and must not count as the user's local
 edit.
 
+The hook is the session reporting command completion to its host, not a general
+extension point; it is required because the drain moved into the session and
+per-command reconciliation is observable by the next command in a chain (see the
+investigation below).
+
 Mechanism chosen: observer-installed-at-build over returning the executed chain
 to the caller. Returning the chain keeps the runtime in control but restores the
 caller obligation — every caller must remember to iterate it, which is the
@@ -170,7 +175,52 @@ nothing in this spec changes it.
   `doc/config.md`. A future Lua state-read API must arrive with an answer to
   this; it is out of scope here.
 - **Risk: scope creep into the WebSocket transport.** Making the WebSocket path
-  drain is in scope; making it use `EditorRuntime` is not.
+  drain is in scope; making it use `EditorRuntime` is not -- but that is now a
+  named follow-up with a reason, not an unexamined exclusion: a WebSocket client
+  currently bypasses all runtime per-command policy, which is a wider I2 gap
+  than deferral and wants its own change.
+
+## Investigated: routing the WebSocket server through EditorRuntime
+
+Asked whether handing `HttpEditorServer` an `EditorRuntime&` instead of an
+`EditorSession&` would remove the need for the observer. **It does not**, and
+the reasoning is worth recording because it is not obvious.
+
+What the server needs is small: it uses exactly four session members --
+`catalog()`, `dispatch()`, `attach()`, `detach()` -- and `EditorRuntime` has
+all four with identical signatures. Build layering permits it too:
+`ssg_http_server` is a separate static library that already links all of `ssg`,
+so depending on the runtime adds no link dependency and does not weaken I12.
+
+But the observer is not removable by re-routing, because:
+
+- The queue must move into `EditorSession` for scoping and thread-safety
+  (defect 2), and **the drain has to live where the queue lives** -- otherwise
+  the invariant is split across two layers and "the caller must remember to
+  drain" returns, which is exactly the failure this design removes.
+- Per-command reconciliation is load-bearing, not cosmetic. The three
+  `reconcile*` steps are convergent -- each is a function of current state and
+  idempotent -- so running them once after a chain yields the same FINAL state.
+  What changes is what a *deferred* command observes: today `palette.execute`
+  cancels its prompt and the target then runs against reconciled state, seeing
+  focus already off the prompt. Batching reconciliation to the end of the chain
+  would let the target observe `shell.focus() == Prompt` with no active prompt.
+- So the session's drain must call back into its host once per command
+  regardless of which object the transport holds.
+
+Re-routing is still worth doing, for a **larger reason than deferral**: because
+`HttpEditorServer` calls `session.dispatch` directly, a WebSocket client today
+receives none of the runtime's per-command policy at all -- no find/prompt/
+picker reconciliation and no follow-edit pause -- not merely no drain. That is
+a broader I2 gap than the one this spec set out to close. It is latent rather
+than live only because nothing in `apps/` wires the server to a runtime session
+yet; the WebSocket tests build bare `EditorSessionBuilder` sessions.
+
+Decision: keep the per-command hook (it is structurally required), and treat
+re-routing as its own change. The hook is better understood not as an
+"observer" but as the session telling its host that a command completed --
+a single-purpose interface, which is why it is acceptable rather than a
+general-purpose extension point.
 
 ## Acceptance (Definition of Done)
 
