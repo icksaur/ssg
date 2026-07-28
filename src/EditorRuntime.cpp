@@ -1891,8 +1891,8 @@ CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& co
             auto deferred = std::move(impl_->deferredCommands.front());
             impl_->deferredCommands.erase(impl_->deferredCommands.begin());
             deferred.command.baseRevision = impl_->session->revision();
-            auto const deferredResult =
-                dispatchAs(deferred.client, deferred.command);
+            auto const deferredResult = dispatchAs(
+                deferred.client.value_or(as), deferred.command);
             // The first failure is reported, naming the command that failed,
             // and the rest are abandoned: continuing would run the remainder of
             // a sequence whose earlier step did not happen.
@@ -1912,27 +1912,6 @@ CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& co
             return dispatchAndDrain(clientId, dispatched);
         };
     auto result = dispatchWithFollowEditPause(command);
-    // palette.execute validates the selected candidate then defers execution to
-    // here so the target runs through the registry (with its own capability and
-    // revision checks) outside the non-reentrant session lock.
-    if (result.accepted() && impl_->pendingPaletteTarget) {
-        auto target = std::move(*impl_->pendingPaletteTarget);
-        impl_->pendingPaletteTarget.reset();
-        auto targetResult = dispatchWithFollowEditPause(
-            ClientCommand{target, impl_->session->revision(), {}});
-        return targetResult;
-    }
-    // prompt.submit defers the command its prompt was collecting for, so the
-    // command runs through the registry -- with its own capability and revision
-    // checks -- outside the non-reentrant session lock. Its result becomes the
-    // submit's result, so a rejected save-as is reported as a failed submit
-    // rather than a silent success.
-    if (result.accepted() && impl_->pendingPromptCommand) {
-        auto pending = std::move(*impl_->pendingPromptCommand);
-        impl_->pendingPromptCommand.reset();
-        pending.baseRevision = impl_->session->revision();
-        return dispatchWithFollowEditPause(std::move(pending));
-    }
     // The file picker's submit is file.open, which (unlike palette.execute) has
     // no prompt side effects of its own.  Closing it here rather than in the
     // client keeps close-on-success semantics identical for keyboard and

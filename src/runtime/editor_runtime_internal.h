@@ -154,30 +154,30 @@ struct EditorRuntime::Impl final : CommandServices,
     Style style{};
     std::optional<WorkspaceReplacePreview> workspaceReplacePreview;
     std::unique_ptr<EditorSession> session;
-    // Set by palette.execute after validating the selected candidate; the
-    // EditorRuntime dispatch wrapper runs it through the registry once the
-    // palette.execute transaction's session lock releases (the session mutex is
-    // non-reentrant, so a handler cannot re-enter dispatch).
-    std::optional<std::string> pendingPaletteTarget;
-    // Set by prompt.submit when the closed prompt named a command: the runtime
-    // dispatch wrapper runs it, with its typed value as payload, once the
-    // session lock releases. Same reason as pendingPaletteTarget above -- the
-    // session mutex is non-reentrant, so a handler cannot dispatch.
-    std::optional<ClientCommand> pendingPromptCommand;
     // Commands a running handler asked to dispatch, run in order once the
-    // session lock releases.  Same reason as the two above, generalised to a
-    // queue because a script's function may ask for several -- composing
-    // built-ins is the point of writing one.
+    // session lock releases.  The session mutex is not reentrant, so a handler
+    // cannot dispatch; this is how it asks for one.
+    //
+    // ONE queue, drained inside the dispatch wrapper, rather than a field per
+    // caller: palette.execute, prompt.submit and a script's ssg.command all
+    // want the same thing.  Separate single-slot fields each needed their own
+    // early return, and a return that forgot to drain silently postponed the
+    // work to some later, unrelated dispatch.
     //
     // Deferring rather than nesting also keeps revisions sequential: each
     // command is rebased on the revision left by the one before it, whereas a
     // truly nested dispatch would advance the revision underneath a caller that
     // had already read it.
-    // Each carries the client that queued it: a deferred command runs as its
-    // OWN principal, so a script's request is gated by the script client's
-    // capabilities rather than inheriting those of whoever pressed the key.
     struct DeferredCommand {
-        ClientId client;
+        // Absent means "whichever client's dispatch this is", which is what a
+        // follow-up to the user's own action wants: palette.execute's target
+        // and prompt.submit's command are the user acting, and must carry the
+        // user's principal.
+        //
+        // Present names a different one.  A script's request runs as the SCRIPT
+        // client, so it is gated by the script's capabilities rather than
+        // inheriting those of whoever pressed the key.
+        std::optional<ClientId> client;
         ClientCommand command;
     };
     std::vector<DeferredCommand> deferredCommands;

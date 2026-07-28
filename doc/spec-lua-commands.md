@@ -557,8 +557,16 @@ unrelated dispatch happened to drain them. Ordering was not merely wrong, it
 depended on what the user did next.
 
 Draining now lives inside the wrapper that dispatches, so every path that runs
-a command runs what that command asked for before returning, and no future
-early return can reintroduce the gap.
+a command runs what that command asked for before returning.
+
+The early returns themselves are gone too. `pendingPaletteTarget` and
+`pendingPromptCommand` were single-slot fields, each needing its own block and
+its own `return`, and each a place to forget to drain -- one queue serves all
+three callers, so there is nothing left to keep in step. A follow-up carries an
+optional client: absent means "whoever's dispatch this is", which is what the
+user's own palette selection or prompt submission wants; a script names the
+script client, so its requests are gated by its own capabilities rather than
+inheriting the user's.
 
 ### The publish gate may not re-enter its host
 

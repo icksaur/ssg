@@ -190,8 +190,10 @@ CommandHandlerResult promptStatusCommand(EditorRuntime::Impl& runtime,
                     return failure(submission->commandId +
                                    " requires a non-empty value");
                 }
-                runtime.pendingPromptCommand = ClientCommand{
-                    submission->commandId, revision, submission->values.front()};
+                runtime.deferredCommands.push_back(
+                    {std::nullopt,
+                     ClientCommand{submission->commandId, revision,
+                                   submission->values.front()}});
             }
             return success();
         }
