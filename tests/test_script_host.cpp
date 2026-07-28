@@ -6,6 +6,7 @@
 #include "test_helpers.h"
 
 #include <filesystem>
+#include <fstream>
 #include <memory>
 #include <iostream>
 #include <string>
@@ -255,34 +256,77 @@ TEST(aRefusedGenerationLeavesThePreviousOneWhollyIntact) {
     fs::remove_all(root);
 }
 
-TEST(aScriptCommandThatDispatchesIsRefusedRatherThanHanging) {
-    // A handler runs with the session locked, so dispatching from one would
-    // block forever on a lock its own call holds.  Whether nesting should be
-    // allowed is undecided; that it must never hang is not.
+TEST(aScriptCommandCanCallCommandsAndBothArePerformedInOrder) {
+    // Composing built-ins is the point of writing a command. A handler runs
+    // with the session locked, so these are queued and run when that dispatch
+    // finishes -- in the order asked for.
     auto root = uniqueRoot();
     auto runtime = makeRuntime(root);
     ASSERT_TRUE(runtime != nullptr);
     ssg::ScriptHost scripts{*runtime};
 
     ASSERT_TRUE(scripts
-                    .evaluate("ssg.register_command('user.nested', function()\n"
+                    .evaluate("ssg.register_command('user.rebind', function()\n"
+                              "  ssg.command('keymap.bind', "
+                              "{sequence = 'Escape KeyY', command = 'file.save'})\n"
                               "  ssg.command('keymap.unbind', "
-                              "{sequence = 'Escape KeyU'})\n"
+                              "{sequence = 'Escape KeyY'})\n"
                               "end)")
                     .accepted());
-    auto const dispatched = runtime->dispatch(
-        ssg::ClientId{1}, {"user.nested", runtime->revision(), {}});
-    ASSERT_TRUE(!dispatched.accepted());
-    ASSERT_TRUE(!dispatched.message.empty());
 
-    // And the session is still usable afterwards.
-    ASSERT_TRUE(runtime
-                    ->dispatch(ssg::ClientId{1},
-                               {"user.nested", runtime->revision(), {}})
-                    .error == ssg::CommandError::HandlerFailed);
+    auto const dispatched = runtime->dispatch(
+        ssg::ClientId{1}, {"user.rebind", runtime->revision(), {}});
+    if (!dispatched.accepted()) {
+        std::cout << "  msg: " << dispatched.message << "\n";
+    }
+    ASSERT_TRUE(dispatched.accepted());
     fs::remove_all(root);
 }
 
+TEST(aFailureAmongQueuedCommandsIsReportedAndNamesTheCommand) {
+    // A queued command that fails must not be swallowed: the script's function
+    // has already returned, so this dispatch is the only place left to say so.
+    auto root = uniqueRoot();
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    ssg::ScriptHost scripts{*runtime};
+
+    ASSERT_TRUE(scripts
+                    .evaluate("ssg.register_command('user.bad', function()\n"
+                              "  ssg.command('keymap.bind', "
+                              "{sequence = 'not a key', command = 'file.save'})\n"
+                              "end)")
+                    .accepted());
+
+    auto const dispatched = runtime->dispatch(
+        ssg::ClientId{1}, {"user.bad", runtime->revision(), {}});
+    ASSERT_TRUE(!dispatched.accepted());
+    ASSERT_TRUE(dispatched.message.find("keymap.bind") != std::string::npos);
+    fs::remove_all(root);
+}
+
+TEST(aScriptThatQueuesWithoutBoundIsRefusedRatherThanSpinning) {
+    // A handler that queues forever would spin the drain loop forever. The
+    // editor must say so instead of stopping.
+    auto root = uniqueRoot();
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    ssg::ScriptHost scripts{*runtime};
+
+    ASSERT_TRUE(scripts
+                    .evaluate("ssg.register_command('user.flood', function()\n"
+                              "  for _ = 1, 500 do\n"
+                              "    ssg.command('keymap.unbind', "
+                              "{sequence = 'Escape KeyY'})\n"
+                              "  end\n"
+                              "end)")
+                    .accepted());
+
+    auto const dispatched = runtime->dispatch(
+        ssg::ClientId{1}, {"user.flood", runtime->revision(), {}});
+    ASSERT_TRUE(!dispatched.accepted());
+    fs::remove_all(root);
+}
 
 TEST(aLuaBackedCommandDispatchedFromAnotherThreadIsRefusedNotSerialised) {
     // The Lua state belongs to the thread that built it.  A call from elsewhere
@@ -327,6 +371,7 @@ TEST(aLuaBackedCommandDispatchedFromAnotherThreadIsRefusedNotSerialised) {
     fs::remove_all(root);
 }
 
+
 }  // namespace
 
 int main() {
@@ -341,7 +386,9 @@ int main() {
     RUN(aRetiredScriptCommandIsNoLongerDispatchable);
     RUN(aScriptCommandCollidingWithABuiltInIsRefusedWithoutLosingTheEditor);
     RUN(aRefusedGenerationLeavesThePreviousOneWhollyIntact);
-    RUN(aScriptCommandThatDispatchesIsRefusedRatherThanHanging);
+    RUN(aScriptCommandCanCallCommandsAndBothArePerformedInOrder);
+    RUN(aFailureAmongQueuedCommandsIsReportedAndNamesTheCommand);
+    RUN(aScriptThatQueuesWithoutBoundIsRefusedRatherThanSpinning);
     RUN(aLuaBackedCommandDispatchedFromAnotherThreadIsRefusedNotSerialised);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;

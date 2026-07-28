@@ -1823,6 +1823,21 @@ std::uint64_t EditorRuntime::liveDocumentRuntimeStateCountForTests() {
     return DocumentRuntimeState::liveInstances();
 }
 
+bool EditorRuntime::dispatchInProgress() const noexcept {
+    return impl_->session->activeDispatchRevision().has_value();
+}
+
+bool EditorRuntime::deferDispatch(ClientId clientId, ClientCommand command) {
+    if (!dispatchInProgress()) return false;
+    // A handler that queues without bound would spin the drain loop forever.
+    // Refusing says so; the alternative is an editor that stops responding with
+    // no indication of why.
+    constexpr std::size_t kMaximumDeferredCommands = 64;
+    if (impl_->deferredCommands.size() >= kMaximumDeferredCommands) return false;
+    impl_->deferredCommands.push_back({clientId, std::move(command)});
+    return true;
+}
+
 CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& command) {
     // Checked before anything that takes the session lock -- including the
     // attachment lookup on the next line.  A handler that dispatches would
@@ -1832,25 +1847,59 @@ CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& co
         return {CommandError::HandlerFailed, *nested,
                 "a command handler may not dispatch another command"};
     }
-    const auto attached = impl_->session->attachedClient(clientId);
-    const auto origin =
-        attached ? attached->principal.origin() : InvocationOrigin::System;
-    const auto shouldPauseForLocalEdit =
-        origin != InvocationOrigin::Lua && origin != InvocationOrigin::System;
+    // Parameterised by client because a deferred command runs as the client
+    // that queued it, whose origin -- and so whether an edit counts as local --
+    // may differ from the client whose dispatch is draining the queue.
+    const auto dispatchAs = [&](ClientId as, const ClientCommand& dispatched) {
+        const auto attached = impl_->session->attachedClient(as);
+        const auto origin =
+            attached ? attached->principal.origin() : InvocationOrigin::System;
+        const auto shouldPauseForLocalEdit =
+            origin != InvocationOrigin::Lua &&
+            origin != InvocationOrigin::System;
+        const auto revisionsBefore = documentRevisions(impl_->workspace);
+        auto result = impl_->session->dispatch(as, dispatched);
+        impl_->reconcileFindDocument();
+        impl_->reconcilePromptFocus();
+        impl_->reconcileOpenPicker();
+        if (result.accepted() && shouldPauseForLocalEdit &&
+            existingDocumentMutated(revisionsBefore, impl_->workspace)) {
+            (void)impl_->follow.notifyLocalEdit();
+        }
+        return result;
+    };
     const auto dispatchWithFollowEditPause =
         [&](const ClientCommand& dispatched) {
-            const auto revisionsBefore = documentRevisions(impl_->workspace);
-            auto result = impl_->session->dispatch(clientId, dispatched);
-            impl_->reconcileFindDocument();
-            impl_->reconcilePromptFocus();
-            impl_->reconcileOpenPicker();
-            if (result.accepted() && shouldPauseForLocalEdit &&
-                existingDocumentMutated(revisionsBefore, impl_->workspace)) {
-                (void)impl_->follow.notifyLocalEdit();
-            }
-            return result;
+            return dispatchAs(clientId, dispatched);
         };
     auto result = dispatchWithFollowEditPause(command);
+    // A handler asked to invoke other commands.  They run here, once the
+    // session lock has released, in the order requested -- each rebased on the
+    // revision the previous one left.  A drained command may itself queue more,
+    // so this loops; the bound in deferDispatch is what stops a script that
+    // queues itself forever.
+    // A handler that FAILED does not get its requests performed: it may have
+    // queued half a sequence before giving up, and running that half is worse
+    // than running none of it.  Its success would also overwrite the failure
+    // reported below.
+    if (!result.accepted()) impl_->deferredCommands.clear();
+    while (result.accepted() && !impl_->deferredCommands.empty()) {
+        auto deferred = std::move(impl_->deferredCommands.front());
+        impl_->deferredCommands.erase(impl_->deferredCommands.begin());
+        deferred.command.baseRevision = impl_->session->revision();
+        auto const deferredResult =
+            dispatchAs(deferred.client, deferred.command);
+        // The first failure is reported, naming the command that failed, and
+        // the rest are abandoned: continuing would run the remainder of a
+        // sequence whose earlier step did not happen.
+        if (!deferredResult.accepted()) {
+            impl_->deferredCommands.clear();
+            return {deferredResult.error, deferredResult.revision,
+                    std::string{deferred.command.id.name()} + ": " +
+                        deferredResult.message};
+        }
+        result = deferredResult;
+    }
     // palette.execute validates the selected candidate then defers execution to
     // here so the target runs through the registry (with its own capability and
     // revision checks) outside the non-reentrant session lock.

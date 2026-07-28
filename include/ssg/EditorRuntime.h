@@ -110,6 +110,24 @@ public:
     [[nodiscard]] CommandResult dispatch(ClientId clientId,
                                          ClientCommand const& command);
 
+    // Asks for `command` to be dispatched once the dispatch in progress
+    // finishes, and reports whether the request was taken.
+    //
+    // For a handler that needs to invoke another command.  A handler runs with
+    // the session locked, so it cannot dispatch directly -- `dispatch` refuses
+    // it rather than deadlocking.  Queued commands run in order, each rebased
+    // on the revision the previous one left, and a failure among them becomes
+    // the result of the dispatch that queued them.
+    //
+    // Returns false when called outside a dispatch (where the caller should
+    // simply dispatch) or when the queue is full, which means a handler is
+    // queueing without bound.
+    [[nodiscard]] bool deferDispatch(ClientId clientId, ClientCommand command);
+
+    // Whether a dispatch is in progress on this thread, and so whether
+    // `deferDispatch` is the way to reach another command.
+    [[nodiscard]] bool dispatchInProgress() const noexcept;
+
     // The commands this runtime offers.  Held, not copied: a command
     // registered later is visible through the same pointer.
     [[nodiscard]] std::shared_ptr<CommandCatalog> commandCatalog() const;

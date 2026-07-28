@@ -427,7 +427,46 @@ enforced, and that only a re-entrant handler can violate. `EditorRuntime`'s
 palette path already worked around it, describing the session lock as
 "non-reentrant" in passing.
 
-**Nesting is now refused rather than hung.** `EditorSession` records which
+**Nesting is deferred, not nested.** (Superseded the refusal described below;
+kept because the reasoning still explains why nesting is not synchronous.)
+
+A handler that needs to invoke another command calls
+`EditorRuntime::deferDispatch`, which queues it; `EditorRuntime::dispatch`
+drains the queue in order once the session lock has released. This generalises
+what `palette.execute`, `prompt.submit` and the file picker each already did
+ad hoc, for the same stated reason.
+
+Deferring is not merely easier than true nesting -- it is better behaved.
+A nested dispatch would advance the revision underneath a caller that had
+already read it; a deferred one is rebased on the revision the previous command
+left, so revisions stay sequential and every command sees a consistent one.
+
+Consequences, all of which the documentation must state plainly:
+
+- **A script's function returns before its commands run.** `ssg.command` reports
+  that the request was *taken*, not that it *succeeded*, so a script cannot
+  branch on the outcome. Nothing in the Lua API can read editor state today, so
+  the return value is the only observable this affects -- but it will become a
+  trap the moment a read API exists, and that API should arrive with an answer.
+- **A handler that fails performs none of its requests.** It may have queued
+  half a sequence before giving up, and running that half is worse than running
+  none of it.
+- **The first queued failure is reported and names its command**, and the rest
+  are abandoned; the script has already returned, so this dispatch is the only
+  place left to say so.
+- **The queue is bounded.** A handler that queues without limit is refused
+  rather than spinning the drain loop forever.
+
+The mechanism is not the practical limit on composition; the **grant is**. The
+host's own allow-list (`initScript`) is five commands, so a script may today
+compose theme, style and keymap commands and nothing else -- `file.save` is
+refused before it reaches a dispatcher. Widening that is a security decision,
+not a mechanism one, and needs its own spec: the interesting question it raises
+is that a command invoked BY THE USER pressing a key arguably deserves a wider
+grant than the same script's configuration statements running at startup, which
+is a distinction the current single grant cannot express.
+
+**The original refusal, for reference.** `EditorSession` records which
 thread is inside `dispatch` and the revision it is running against
 (`activeDispatchRevision`). `EditorRuntime::dispatch` consults it before
 touching anything that takes the session lock and returns `HandlerFailed` with

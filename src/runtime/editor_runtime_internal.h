@@ -164,6 +164,23 @@ struct EditorRuntime::Impl final : CommandServices,
     // session lock releases. Same reason as pendingPaletteTarget above -- the
     // session mutex is non-reentrant, so a handler cannot dispatch.
     std::optional<ClientCommand> pendingPromptCommand;
+    // Commands a running handler asked to dispatch, run in order once the
+    // session lock releases.  Same reason as the two above, generalised to a
+    // queue because a script's function may ask for several -- composing
+    // built-ins is the point of writing one.
+    //
+    // Deferring rather than nesting also keeps revisions sequential: each
+    // command is rebased on the revision left by the one before it, whereas a
+    // truly nested dispatch would advance the revision underneath a caller that
+    // had already read it.
+    // Each carries the client that queued it: a deferred command runs as its
+    // OWN principal, so a script's request is gated by the script client's
+    // capabilities rather than inheriting those of whoever pressed the key.
+    struct DeferredCommand {
+        ClientId client;
+        ClientCommand command;
+    };
+    std::vector<DeferredCommand> deferredCommands;
     // Which picker the active PromptKind::Palette prompt belongs to, and the
     // sole source of the published palette mode and candidate set.  Maintained
     // as an invariant (set iff such a prompt is active) by

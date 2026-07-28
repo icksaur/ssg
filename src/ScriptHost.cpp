@@ -65,11 +65,26 @@ struct ScriptHost::Impl {
                    return dispatch(invocation);
                }} {}
 
-    // Dispatches one command from `runtime` and reports it the way Lua expects.
+    // Sends one command from `runtime` and reports it the way Lua expects.
+    //
+    // A script called from a KEYSTROKE is running inside a dispatch, whose
+    // session lock its own call holds, so the command is queued to run when
+    // that dispatch finishes.  A script evaluated at startup or reload is not
+    // inside one, and its commands run immediately -- which is what makes an
+    // init.lua of bare ssg.command calls behave as it always has.
     CommandHandlerResult forward(std::string_view id, std::any payload) {
-        auto result = runtime.dispatch(
-            kScriptClientId,
-            {std::string{id}, runtime.revision(), std::move(payload)});
+        ClientCommand command{std::string{id}, runtime.revision(),
+                              std::move(payload)};
+        if (runtime.dispatchInProgress()) {
+            if (!runtime.deferDispatch(kScriptClientId, std::move(command))) {
+                return CommandHandlerResult::failure(
+                    "too many commands queued from one script command");
+            }
+            // Queued, not yet run: see doc/config.md on what a script can and
+            // cannot conclude from this.
+            return CommandHandlerResult::success();
+        }
+        auto result = runtime.dispatch(kScriptClientId, std::move(command));
         return result.accepted() ? CommandHandlerResult::success()
                                  : CommandHandlerResult::failure(result.message);
     }
