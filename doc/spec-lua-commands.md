@@ -467,3 +467,19 @@ refusal discards the staged registrations and returns, leaving the previous
 generation whole on both sides. The step that can refuse now runs before the
 step that cannot be undone, so there is no window in which the two disagree and
 nothing to reconcile afterwards.
+
+### Deferred: the reserved client id
+
+`kScriptClientId` is a named constant in `ScriptHost.h`, and `ScriptHost`'s
+constructor throws if the runtime refuses the attachment, so a collision fails
+loudly at construction rather than starting half-connected. That makes the
+reservation visible and its violation immediate, but it is still convention:
+nothing prevents another component from choosing the same id, only reports it
+afterwards.
+
+The seam that would remove the convention is a runtime-assigned client id. It
+is deliberately NOT done here, because the application attaches its own
+`ClientId{1}` directly: introducing allocation for one client and leaving the
+other a literal would replace one convention with two, which is worse than the
+problem. Doing it properly means every attachment asks the runtime for its id,
+and that is a change to the client boundary rather than to this feature.

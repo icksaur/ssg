@@ -475,7 +475,21 @@ LuaResult LuaCommandHost::evaluate(std::string_view script) {
                 ids.push_back(command.id);
             }
             std::sort(ids.begin(), ids.end());
-            auto refusal = impl_->options.publishGate(ids);
+            // The gate is caller-supplied, so it is contained the same way a
+            // dispatcher is: an escaping exception must still roll the staged
+            // registrations back, or their Lua references leak and the
+            // evaluation neither publishes nor rolls back.
+            LuaResult refusal;
+            try {
+                refusal = impl_->options.publishGate(ids);
+            } catch (std::exception const& thrown) {
+                refusal = {LuaError::RuntimeFault,
+                           "command registration gate threw: " +
+                               std::string{thrown.what()}};
+            } catch (...) {
+                refusal = {LuaError::RuntimeFault,
+                           "command registration gate threw"};
+            }
             if (!refusal.accepted()) {
                 impl_->rollbackStaged(transaction);
                 return refusal;

@@ -7,6 +7,7 @@
 #include <fstream>
 #include <optional>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -253,6 +254,53 @@ TEST(unsafeStandardLibrariesAndNativeLoaderAreAbsent) {
 
 }  // namespace
 
+TEST(aGateThatThrowsRollsTheEvaluationBackLikeAnyOtherRefusal) {
+    // The gate is caller-supplied. An escaping exception must not skip the
+    // rollback: that would leak the staged Lua references and leave the
+    // evaluation neither published nor undone.
+    bool throwing = true;
+    auto configured = options();
+    configured.publishGate =
+        [&throwing](std::vector<std::string> const&) -> LuaResult {
+        if (throwing) throw std::runtime_error{"gate refused loudly"};
+        return {};
+    };
+    LuaCommandHost host{std::move(configured), [](LuaInvocation const&) {
+        return CommandHandlerResult::success();
+    }};
+
+    auto const thrown =
+        host.evaluate("ssg.register_command('gated', function() end)");
+    ASSERT_EQ(thrown.error, LuaError::RuntimeFault);
+    ASSERT_FALSE(host.hasCommand("gated"));
+    // And the host is still usable.
+    throwing = false;
+    ASSERT_TRUE(host.evaluate("return 1").accepted());
+}
+
+TEST(aGateThatRefusesLeavesThePreviousGenerationRegistered) {
+    bool refuse = false;
+    auto configured = options();
+    configured.publishGate =
+        [&refuse](std::vector<std::string> const&) -> LuaResult {
+        return refuse ? LuaResult{LuaError::DuplicateCommand, "refused"}
+                      : LuaResult{};
+    };
+    LuaCommandHost host{std::move(configured), [](LuaInvocation const&) {
+        return CommandHandlerResult::success();
+    }};
+
+    ASSERT_TRUE(
+        host.evaluate("ssg.register_command('first', function() end)")
+            .accepted());
+    refuse = true;
+    ASSERT_FALSE(
+        host.evaluate("ssg.register_command('second', function() end)")
+            .accepted());
+    ASSERT_TRUE(host.hasCommand("first"));
+    ASSERT_FALSE(host.hasCommand("second"));
+}
+
 int main() {
     RUN(requiredCatalogMinusExclusionsIsCallable);
     RUN(capabilitiesAreImmutableAndCheckedBeforeDispatch);
@@ -260,6 +308,8 @@ int main() {
     RUN(instructionAndWallClockBudgetsIsolateCallbacks);
     RUN(reentrantCallsRestoreTheEnclosingBudget);
     RUN(registrationIsAtomicAndDuplicateSafe);
+    RUN(aGateThatThrowsRollsTheEvaluationBackLikeAnyOtherRefusal);
+    RUN(aGateThatRefusesLeavesThePreviousGenerationRegistered);
     RUN(dispatchAndPluginFaultsAreIsolated);
     RUN(commandTableArgumentReachesTheDispatcherDecodedAsAStringMap);
     RUN(commandWithoutSecondArgumentLeavesArgumentsEmpty);
