@@ -1,6 +1,8 @@
 #include "test_helpers.h"
 
 #include <ssg/Commands.h>
+
+#include "all_command_ids.h"
 #include <ssg/LuaCommandHost.h>
 
 #include <fstream>
@@ -20,8 +22,8 @@ using namespace ssg;
 // Every catalog command with its Lua-API eligibility.
 std::vector<std::pair<std::string, bool>> catalogWithLuaEligibility() {
     std::vector<std::pair<std::string, bool>> entries;
-    for (auto const& command : ssg::commandCatalog()) {
-        entries.emplace_back(std::string{command.id}, command.surfaces.luaApi);
+    for (auto const& facts : ssg::testing::allCommandFacts()) {
+        entries.emplace_back(facts.id, facts.luaApi);
     }
     return entries;
 }

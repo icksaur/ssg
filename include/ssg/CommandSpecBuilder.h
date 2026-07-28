@@ -132,6 +132,28 @@ public:
         return *this;
     }
 
+    // The implementation, taking a typed argument that may be absent.
+    //
+    // Some in-process commands act on a specific thing when told which and on
+    // the current one otherwise: `tab.close` closes the tab you name, or the
+    // active tab.  The handler receives an engaged optional only when a payload
+    // of the right type was supplied, so "no payload" and "wrong payload" stay
+    // distinguishable from a real value.
+    template <typename Arguments, typename Fn>
+    CommandSpecBuilder& optionalInProcessHandler(Fn&& fn) {
+        argument_.type = std::type_index{typeid(Arguments)};
+        argument_.wire = false;
+        handler_ = [call = std::forward<Fn>(fn)](
+                       CommandContext& context,
+                       std::any const& payload) -> CommandHandlerResult {
+            auto const* typed = std::any_cast<Arguments>(&payload);
+            return call(context, typed == nullptr
+                                     ? std::optional<Arguments>{}
+                                     : std::optional<Arguments>{*typed});
+        };
+        return *this;
+    }
+
     // Migration only: adopt an already type-erased handler together with the
     // argument type it expects.  Used while commands still come from the static
     // table in Commands.cpp, where the handler was bound separately from the

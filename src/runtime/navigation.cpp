@@ -287,20 +287,97 @@ void registerDiffAndFollowCommands(EditorSessionBuilder& builder,
     follow("follow_edits.toggle", "Toggle");
 }
 
+// Moving around and acting on whichever tree the panel shows.
+//
+// All eight share one handler, which branches on the id, so each declaration
+// only has to say what the command is called and what it carries.
+void registerTreeCommands(EditorSessionBuilder& builder,
+                          EditorRuntime::Impl& runtime) {
+    auto spec = [](std::string id, std::string summary) {
+        return CommandSpecBuilder{std::move(id)}
+            .owner("tree-providers")
+            .summary(std::move(summary))
+            .mutates()
+            .lua();
+    };
+    // The id is captured by value so the lambda owns it: a string_view into
+    // the caller's temporary would dangle by the time the command runs.
+    auto bare = [&](std::string id, std::string summary) {
+        auto name = id;
+        builder.add(spec(std::move(id), std::move(summary))
+                        .handler([&runtime, name](CommandContext& context) {
+                            return runtime.runTransaction([&] {
+                                return treeCommand(runtime, context, name, {});
+                            });
+                        }));
+    };
+
+    bare("tree.toggle_expanded", "Toggle Expanded");
+    bare("tree.select_next", "Select Next");
+    bare("tree.select_previous", "Select Previous");
+
+    builder.add(spec("tree.activate", "Open Selected")
+                    .label("Open Selected")
+                    .handler([&runtime](CommandContext& context) {
+                        return runtime.runTransaction([&] {
+                            return treeCommand(runtime, context,
+                                               "tree.activate", {});
+                        });
+                    }));
+    builder.add(spec("tree.invoke_node_command", "Invoke Node Command")
+                    .optionalInProcessHandler<TreeCommandInvocation>(
+                        [&runtime](CommandContext& context,
+                                   std::optional<TreeCommandInvocation> const&
+                                       invocation) {
+                            return runtime.runTransaction([&] {
+                                return treeCommand(
+                                    runtime, context,
+                                    "tree.invoke_node_command",
+                                    invocation ? std::any{*invocation}
+                                               : std::any{});
+                            });
+                        }));
+    builder.add(spec("tree.select", "Select")
+                    .handler<TreeSelectArguments>(
+                        [&runtime](CommandContext& context,
+                                   TreeSelectArguments const& arguments) {
+                            return runtime.runTransaction([&] {
+                                return treeCommand(runtime, context,
+                                                   "tree.select",
+                                                   std::any{arguments});
+                            });
+                        }));
+    builder.add(spec("tree.scroll", "Scroll")
+                    .handler<ScrollLinesArguments>(
+                        [&runtime](CommandContext& context,
+                                   ScrollLinesArguments const& arguments) {
+                            return runtime.runTransaction([&] {
+                                return treeCommand(runtime, context,
+                                                   "tree.scroll",
+                                                   std::any{arguments});
+                            });
+                        }));
+    builder.add(spec("tree.scroll_to_fraction", "Scroll To Fraction")
+                    .handler<ScrollFractionArguments>(
+                        [&runtime](CommandContext& context,
+                                   ScrollFractionArguments const& arguments) {
+                            return runtime.runTransaction([&] {
+                                return treeCommand(runtime, context,
+                                                   "tree.scroll_to_fraction",
+                                                   std::any{arguments});
+                            });
+                        }));
+}
+
 void bindRuntimeNavigation(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime) {
     registerDiffAndFollowCommands(builder, runtime);
     auto searchCommands = searchCommandSet();
-    auto treeCommands = treeCommandSet();
     for (auto const& descriptor : searchCommands.descriptors()) {
         builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext& context, std::any const& payload) {
             return runtime.runTransaction([&] { return searchCommand(runtime, context, descriptor.id, payload); });
         });
     }
-    for (auto const& descriptor : treeCommands.descriptors()) {
-        builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext& context, std::any const& payload) {
-            return runtime.runTransaction([&] { return treeCommand(runtime, context, descriptor.id, payload); });
-        });
-    }
+    registerTreeCommands(builder, runtime);
 }
 
 } // namespace ssg

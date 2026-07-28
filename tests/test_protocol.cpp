@@ -7,7 +7,10 @@
 #include <ssg/CommandCatalog.h>
 #include <ssg/EditorRuntime.h>
 
+#include <unistd.h>
+
 #include <filesystem>
+#include <string>
 #include <ssg/Protocol.h>
 #include <ssg/session_snapshot.h>
 
@@ -116,7 +119,7 @@ ssg::ViewportViewState clientView(std::uint32_t firstRow) {
 std::shared_ptr<ssg::CommandCatalog> staticTableCatalog() {
     static auto const catalog = [] {
         auto const root = std::filesystem::temp_directory_path() /
-                          "ssg-protocol-catalog";
+                          ("ssg-protocol-catalog-" + std::to_string(::getpid()));
         std::filesystem::remove_all(root);
         std::filesystem::create_directories(root);
         auto created = ssg::EditorRuntime::create({root});

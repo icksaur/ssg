@@ -20,7 +20,10 @@
 #include <optional>
 #include <typeindex>
 
+#include <unistd.h>
+
 #include <filesystem>
+#include <string>
 #include <string>
 #include <vector>
 
@@ -30,6 +33,8 @@ namespace ssg::testing {
 // register a faithful stand-in.
 struct CommandFacts {
     std::string id;
+    std::string owner;
+    bool luaApi = false;
     bool mutates = true;
     std::vector<std::string> requiredCapabilities;
     // The real argument type, so a stand-in's wire codec matches the real one.
@@ -43,7 +48,7 @@ struct CommandFacts {
 inline std::vector<CommandFacts> const& allCommandFacts() {
     static std::vector<CommandFacts> const facts = [] {
         auto const root = std::filesystem::temp_directory_path() /
-                          "ssg-all-command-ids";
+                          ("ssg-all-command-ids-" + std::to_string(::getpid()));
         std::filesystem::remove_all(root);
         std::filesystem::create_directories(root);
         std::vector<CommandFacts> collected;
@@ -52,7 +57,7 @@ inline std::vector<CommandFacts> const& allCommandFacts() {
             for (auto const* command :
                  created.runtime->commandCatalog()->commands()) {
                 collected.push_back(
-                    {command->id,
+                    {command->id, command->owner, command->luaApi,
                      command->effect == ssg::CommandEffect::Mutation,
                      command->requiredCapabilities,
                      command->argument.type, command->argument.wire});

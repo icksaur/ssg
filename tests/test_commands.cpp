@@ -17,12 +17,16 @@
 
 #include <ssg/CommandReference.h>
 
+#include "all_command_ids.h"
 #include "frozen_catalog.h"
 
 #include <array>
 #include <cstdlib>
 
+#include <unistd.h>
+
 #include <filesystem>
+#include <string>
 #include <ssg/EditorSessionBuilder.h>
 #include <ssg/FileCommands.h>
 
@@ -108,10 +112,14 @@ TEST(featureMetadataTablesAnnotateCatalogCommandsAndDeclareNoNewOnes) {
     // rules, the FileCommand enum).  Those tables ANNOTATE commands; they must
     // not declare one the catalog does not have, or introduce a command id
     // nothing else knows about.
+    // Against the runtime's catalog, not the static table: file-commands has
+    // migrated out of that table, and the rule being checked is that the
+    // feature's own table annotates registered commands rather than declaring
+    // any the editor does not offer.
     auto const owned = [](std::string_view owner) {
         std::set<std::string> ids;
-        for (auto const* command : ssg::commandsOwnedBy(owner)) {
-            ids.emplace(command->id);
+        for (auto const& facts : ssg::testing::allCommandFacts()) {
+            if (facts.owner == owner) ids.emplace(facts.id);
         }
         return ids;
     };
@@ -150,7 +158,7 @@ TEST(everyOwnerInTheCatalogHasAtLeastOneCommand) {
 // Regenerate with:  SSG_UPDATE_DOCS=1 ./build/test_commands
 TEST(theGeneratedCommandReferenceIsCurrent) {
     auto const root = std::filesystem::temp_directory_path() /
-                      "ssg-command-reference";
+                      ("ssg-command-reference-" + std::to_string(::getpid()));
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root);
     auto created = ssg::EditorRuntime::create({root});
@@ -222,7 +230,7 @@ constexpr std::array<DeliberateCorrection, 5> kDeliberateCorrections{{
 
 TEST(theCoreCatalogStillMatchesTheFrozenPreMigrationSnapshot) {
     auto const root = std::filesystem::temp_directory_path() /
-                      "ssg-frozen-catalog-oracle";
+                      ("ssg-frozen-catalog-oracle-" + std::to_string(::getpid()));
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root);
     auto created = ssg::EditorRuntime::create({root});

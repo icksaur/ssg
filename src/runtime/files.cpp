@@ -450,23 +450,131 @@ void registerEncodingCommands(EditorSessionBuilder& builder,
                         }));
 }
 
+// Opening, saving, renaming and deleting files.
+//
+// file.open_dropped_content is the one command in the editor that requires a
+// capability: content dropped by a local window manager is a different trust
+// question from a path the user typed, so a principal without
+// `local_file_drop` cannot invoke it.  It is also the only one not offered to
+// Lua.
+void registerFileCommands(EditorSessionBuilder& builder,
+                          EditorRuntime::Impl& runtime) {
+    auto spec = [](std::string id, std::string summary) {
+        return CommandSpecBuilder{std::move(id)}
+            .owner("file-commands")
+            .summary(std::move(summary))
+            .mutates();
+    };
+    // Most of these act on a path when given one and on the active document
+    // otherwise, so the path is an optional in-process argument.  A remote
+    // client cannot send one: opening an arbitrary path is a local decision.
+    auto declare = [&](std::string id, std::string label, std::string summary,
+                       FileCommand command) {
+        auto built =
+            spec(std::move(id), std::move(summary))
+                .lua()
+                .optionalInProcessHandler<std::string>(
+                    [&runtime, command](CommandContext& context,
+                                        std::optional<std::string> const& path) {
+                        return runtime.runTransaction([&] {
+                            return bindFile(
+                                runtime, context.principal(), command,
+                                path ? std::any{*path} : std::any{});
+                        });
+                    });
+        if (!label.empty()) built.label(std::move(label));
+        builder.add(std::move(built));
+    };
+
+    declare("workspace.open_directory", "", "Open Directory",
+            FileCommand::OpenDirectory);
+    declare("file.new", "New File", "New File", FileCommand::Create);
+    declare("file.open", "Open File", "Open File", FileCommand::Open);
+    // Chooses from the recent list by position, not by path.
+    builder.add(spec("file.open_recent", "Open Recent")
+                    .lua()
+                    .optionalInProcessHandler<std::size_t>(
+                        [&runtime](CommandContext& context,
+                                   std::optional<std::size_t> const& index) {
+                            return runtime.runTransaction([&] {
+                                return bindFile(
+                                    runtime, context.principal(),
+                                    FileCommand::OpenRecent,
+                                    index ? std::any{*index} : std::any{});
+                            });
+                        }));
+    declare("file.save", "Save File", "Save File", FileCommand::Save);
+    declare("file.save_all", "Save All Files", "Save All Files",
+            FileCommand::SaveAll);
+    declare("file.save_as", "Save File As", "Save File As",
+            FileCommand::SaveAs);
+    declare("file.reload", "Reload File", "Reload File", FileCommand::Reload);
+    declare("file.rename", "Rename File", "Rename File", FileCommand::Rename);
+    declare("file.delete", "Delete File", "Delete File", FileCommand::Remove);
+    declare("file.new_directory", "", "New Directory",
+            FileCommand::NewDirectory);
+
+    builder.add(spec("file.open_dropped_content", "Open Dropped Content")
+                    .capability("local_file_drop")
+                    .handler<DroppedContentArguments>(
+                        [&runtime](CommandContext& context,
+                                   DroppedContentArguments const& arguments) {
+                            return runtime.runTransaction([&] {
+                                return bindFile(runtime, context.principal(),
+                                                FileCommand::OpenDroppedContent,
+                                                std::any{arguments});
+                            });
+                        }));
+}
+
+// Tabs.
+//
+// Every one of these acts on the tab you name, or on the active tab when you
+// name none -- so each takes an OPTIONAL in-process tab id.  Declaring them as
+// taking nothing dropped that id and made tab.activate act on whichever tab
+// happened to be active.
+void registerTabCommands(EditorSessionBuilder& builder,
+                         EditorRuntime::Impl& runtime) {
+    auto declare = [&](std::string id, std::string label, std::string summary,
+                       TabCommand command) {
+        auto built =
+            CommandSpecBuilder{std::move(id)}
+                .owner("tab-management")
+                .summary(std::move(summary))
+                .mutates()
+                .lua()
+                .optionalInProcessHandler<TabId>(
+                    [&runtime, command](CommandContext& context,
+                                        std::optional<TabId> const& tab) {
+                        return runtime.runTransaction([&] {
+                            return bindTab(runtime,
+                                           context.principal().clientId(),
+                                           command,
+                                           tab ? std::any{*tab} : std::any{});
+                        });
+                    });
+        if (!label.empty()) built.label(std::move(label));
+        builder.add(std::move(built));
+    };
+    declare("tab.close", "Close Tab", "Close Tab", TabCommand::Close);
+    declare("tab.close_others", "Close Other Tabs", "Close Other Tabs",
+            TabCommand::CloseOthers);
+    declare("tab.close_all", "Close All Tabs", "Close All Tabs",
+            TabCommand::CloseAll);
+    declare("tab.reopen_closed", "", "Reopen Closed",
+            TabCommand::ReopenClosed);
+    declare("tab.next", "Next Tab", "Next Tab", TabCommand::Next);
+    declare("tab.previous", "Previous Tab", "Previous Tab",
+            TabCommand::Previous);
+    declare("tab.activate", "", "Activate", TabCommand::Activate);
+    declare("tab.move_left", "", "Move Left", TabCommand::MoveLeft);
+    declare("tab.move_right", "", "Move Right", TabCommand::MoveRight);
+}
+
 void bindRuntimeFiles(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime) {
     registerExternalModificationCommands(builder, runtime);
-    auto fileCommands = fileCommandsCommandSet();
-    auto tabCommands = tabManagementCommandSet();
-    for (auto const& descriptor : fileCommands.descriptors()) {
-        builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext& context, std::any const& payload) {
-            return runtime.runTransaction([&] { return bindFile(runtime, context.principal(), descriptor.command, payload); });
-        });
-    }
-    for (auto const& descriptor : tabCommands.descriptors()) {
-        builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext& context, std::any const& payload) {
-            return runtime.runTransaction([&] {
-                return bindTab(runtime, context.principal().clientId(),
-                               descriptor.command, payload);
-            });
-        });
-    }
+    registerFileCommands(builder, runtime);
+    registerTabCommands(builder, runtime);
     registerEncodingCommands(builder, runtime);
 }
 

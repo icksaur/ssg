@@ -517,6 +517,63 @@ void registerSettingsCommands(EditorSessionBuilder& builder,
                         }));
 }
 
+// The prompt line and the status queue.  Only prompt.update_value carries
+// anything: the text typed so far.
+void registerPromptStatusCommands(EditorSessionBuilder& builder,
+                                  EditorRuntime::Impl& runtime) {
+    auto spec = [](std::string id, std::string summary) {
+        return CommandSpecBuilder{std::move(id)}
+            .owner("prompt-status-surface")
+            .summary(std::move(summary))
+            .mutates()
+            .lua();
+    };
+    auto bare = [&](std::string id, std::string summary, std::string label) {
+        auto name = id;
+        auto built = spec(std::move(id), std::move(summary))
+                         .handler([&runtime, name](CommandContext& context) {
+                             return runtime.runTransaction([&] {
+                                 return promptStatusCommand(
+                                     runtime, context.revision(), name, {});
+                             });
+                         });
+        if (!label.empty()) built.label(std::move(label));
+        builder.add(std::move(built));
+    };
+
+    bare("prompt.submit", "Submit Prompt", "Submit Prompt");
+    bare("prompt.cancel", "Cancel", "");
+    bare("prompt.next", "Next", "");
+    bare("prompt.previous", "Previous", "");
+    bare("status.next", "Next", "");
+    bare("status.previous", "Previous", "");
+    bare("status.dismiss", "Dismiss", "");
+
+    builder.add(spec("status.invoke_action", "Invoke Action")
+                    .optionalInProcessHandler<StatusActionInvocation>(
+                        [&runtime](CommandContext& context,
+                                   std::optional<StatusActionInvocation> const&
+                                       invocation) {
+                            return runtime.runTransaction([&] {
+                                return promptStatusCommand(
+                                    runtime, context.revision(),
+                                    "status.invoke_action",
+                                    invocation ? std::any{*invocation}
+                                               : std::any{});
+                            });
+                        }));
+    builder.add(spec("prompt.update_value", "Update Value")
+                    .handler<PromptValueArguments>(
+                        [&runtime](CommandContext& context,
+                                   PromptValueArguments const& arguments) {
+                            return runtime.runTransaction([&] {
+                                return promptStatusCommand(
+                                    runtime, context.revision(),
+                                    "prompt.update_value", std::any{arguments});
+                            });
+                        }));
+}
+
 void bindRuntimePresentation(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime) {
     registerViewportCommands(builder, runtime);
     for (auto const* descriptor : commandsOwnedBy("shell-layout")) {
@@ -531,14 +588,7 @@ void bindRuntimePresentation(EditorSessionBuilder& builder, EditorRuntime::Impl&
             });
         });
     }
-    for (auto const* descriptor : commandsOwnedBy("prompt-status-surface")) {
-        builder.bind(std::string{descriptor->id}, [&runtime, descriptor](CommandContext& context, std::any const& payload) {
-            return runtime.runTransaction([&] {
-                return promptStatusCommand(runtime, context.revision(),
-                                           descriptor->id, payload);
-            });
-        });
-    }
+    registerPromptStatusCommands(builder, runtime);
     registerSettingsCommands(builder, runtime);
     registerAppearanceCommands(builder, runtime);
 }

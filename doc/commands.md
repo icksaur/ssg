@@ -69,7 +69,6 @@ There are 182 commands.
 | `file.new` | New File | none | lua |
 | `file.open` | Open File | none | lua |
 | `file.open_recent` | Open Recent | none | lua |
-| `file.open_dropped_content` | Open Dropped Content | dropped content | — |
 | `file.save` | Save File | none | lua |
 | `file.save_all` | Save All Files | none | lua |
 | `file.save_as` | Save File As | none | lua |
@@ -77,6 +76,7 @@ There are 182 commands.
 | `file.rename` | Rename File | none | lua |
 | `file.delete` | Delete File | none | lua |
 | `file.new_directory` | New Directory | none | lua |
+| `file.open_dropped_content` | Open Dropped Content | dropped content | — |
 
 ## find-replace
 
@@ -141,11 +141,11 @@ There are 182 commands.
 | `prompt.cancel` | Cancel | none | lua |
 | `prompt.next` | Next | none | lua |
 | `prompt.previous` | Previous | none | lua |
-| `prompt.update_value` | Update Value | prompt value | lua |
 | `status.next` | Next | none | lua |
 | `status.previous` | Previous | none | lua |
 | `status.dismiss` | Dismiss | none | lua |
 | `status.invoke_action` | Invoke Action | none | lua |
+| `prompt.update_value` | Update Value | prompt value | lua |
 
 ## search-palette
 
@@ -283,11 +283,11 @@ There are 182 commands.
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
 | `tree.toggle_expanded` | Toggle Expanded | none | lua |
-| `tree.invoke_node_command` | Invoke Node Command | none | lua |
-| `tree.select` | Select | tree node | lua |
 | `tree.select_next` | Select Next | none | lua |
 | `tree.select_previous` | Select Previous | none | lua |
 | `tree.activate` | Open Selected | none | lua |
+| `tree.invoke_node_command` | Invoke Node Command | none | lua |
+| `tree.select` | Select | tree node | lua |
 | `tree.scroll` | Scroll | scroll lines | lua |
 | `tree.scroll_to_fraction` | Scroll To Fraction | scroll fraction | lua |
 
