@@ -1,5 +1,7 @@
 #include "all_command_ids.h"
 
+#include <ssg/LuaCommandHost.h>
+
 #include "test_helpers.h"
 
 #include <fstream>
@@ -37,10 +39,23 @@ TEST(configDocMentionsEveryInitScriptCommand) {
     }
 }
 
+// Every function the Lua API exposes must be described in doc/config.md.
+// A function a user can call but cannot read about is undiscoverable, and the
+// only way to learn it exists is to read the source.
+TEST(configDocDescribesEveryLuaApiFunction) {
+    const auto doc = readFile(SSG_CONFIG_DOC_PATH);
+    ASSERT_FALSE(doc.empty());
+    for (const auto& function : ssg::LuaCommandHost::kApiFunctions) {
+        const std::string needle = "ssg." + std::string{function};
+        ASSERT_TRUE(doc.find(needle) != std::string::npos);
+    }
+}
+
 } // namespace
 
 int main() {
     RUN(configDocMentionsEveryInitScriptCommand);
+    RUN(configDocDescribesEveryLuaApiFunction);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

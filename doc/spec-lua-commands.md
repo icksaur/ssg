@@ -401,7 +401,7 @@ it promised.
 
 ## Status
 
-L0-L2 are implemented (`CommandCatalog::replaceGeneration`, `ScriptHost`, and
+L0-L5 are implemented (see below for what L3-L5 found). L0-L2 are implemented (`CommandCatalog::replaceGeneration`, `ScriptHost`, and
 the `register_command` bridge). The class breakdown above was added after the
 five review rounds and reflects what shipped.
 
@@ -522,3 +522,27 @@ is deliberately NOT done here, because the application attaches its own
 other a literal would replace one convention with two, which is worse than the
 problem. Doing it properly means every attachment asks the runtime for its id,
 and that is a change to the client boundary rather than to this feature.
+
+### L3-L5
+
+L3's substance shipped with L2's publish gate, so L3 was closed out by adding
+the tests its Testing entries name but that did not exist: capacity exhaustion
+(retired slots are not reclaimed, so a script reloaded often enough runs the
+handle space out, and that refusal must leave the installed generation
+working), and the thread refusal for L4 — asserting not only that an
+off-thread dispatch is refused with a message naming the rule, but that exactly
+one call reaches the script, so the refused one was not quietly serialised onto
+the owning thread.
+
+L5 documented `register_command` in `doc/config.md`, including the two
+non-obvious consequences of deferral: commands run after the function returns,
+and `ssg.command` reports acceptance rather than success. `LuaCommandHost::
+kApiFunctions` now names the exposed API in one place, read both by the
+installer and by a new coverage test, so a function cannot be exposed to
+scripts without a place in the documentation describing it. The documented
+example was extracted from `config.md` and run verbatim against the real
+binary.
+
+Writing L5 is what forced composition to be resolved: the honest documentation
+of a feature whose commands may not call any command is a feature nobody would
+use.

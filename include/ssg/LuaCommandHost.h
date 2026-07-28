@@ -88,6 +88,12 @@ struct LuaCommandHostOptions {
 
 class LuaCommandHost {
 public:
+    // Every function the `ssg` table exposes to a script, in one place, so
+    // installing the API and checking that it is documented read the same list
+    // rather than two hand-maintained ones.
+    static constexpr std::string_view kApiFunctions[]{"command",
+                                                      "register_command"};
+
     LuaCommandHost(LuaCommandHostOptions options, LuaDispatcher dispatcher);
     ~LuaCommandHost();
 

@@ -144,6 +144,56 @@ whole number (e.g. `dim_header_height = 1`). An unknown key, or a non-numeric
 or negative dimension, rejects the whole call and changes nothing. The full key
 list matches the style fields in `include/ssg/Style.h`.
 
+### Your own commands
+
+`ssg.register_command` defines a command in your own words and gives it a
+name. It becomes a real ssg command: it shows up in the command palette, you
+can bind it to a key with `keymap.bind`, and it runs the same way every
+built-in does.
+
+```lua
+ssg.register_command("my.hotpink", function()
+    ssg.command("theme.define", { magenta = "#ff00ff" })
+    ssg.command("theme.background", { brightness = "0.6" })
+end)
+
+ssg.command("keymap.bind", {
+    sequence = "Escape KeyU",
+    command = "my.hotpink",
+})
+```
+
+Pick a name with a prefix of your own (`my.`, or your initials) so it can't
+collide with a built-in. If it does collide, or if you register the same name
+twice in one file, the whole script is rejected and your previous commands keep
+working.
+
+Your commands live exactly as long as the lines that define them. Every reload
+replaces the whole set: delete a `register_command` line and save, and that
+command stops existing. A key still bound to it does nothing. A reload that
+fails leaves your previous commands in place and working.
+
+**Your function may only call the commands listed on this page.** These are the
+same ones `init.lua` can call directly -- `theme.define`, `theme.background`,
+`style.define`, `keymap.bind` and `keymap.unbind`. Anything else, including
+things like `file.save`, is refused. That list is deliberately small and will
+grow deliberately.
+
+Two things about `ssg.command` inside a registered function are worth knowing,
+because neither is obvious:
+
+- **The commands you ask for run after your function returns**, in the order you
+  asked, not at the moment you call them. Your function is already running as a
+  command, and ssg finishes one command before starting the next.
+- **`ssg.command` tells you the request was accepted, not that it worked.**
+  Since it hasn't run yet, there's nothing to report. If one of them fails, ssg
+  reports that failure against the key you pressed, names the command that
+  failed, and skips the rest. If your own function raises an error, none of the
+  commands it asked for run at all.
+
+There's also a limit -- a few dozen -- on how many commands one of your
+commands may ask for. Past it the call is refused rather than ssg locking up.
+
 ## Sandbox notes
 
 `init.lua` runs in a restricted Lua interpreter: no file I/O, no

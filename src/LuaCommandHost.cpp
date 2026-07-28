@@ -119,12 +119,16 @@ struct LuaCommandHost::Impl {
         lua_setfield(state, LUA_REGISTRYINDEX, kHostRegistryKey);
 
         lua_newtable(state);
+        // Installed from the same list the documentation check reads, so a
+        // function cannot be exposed without a place to describe it.
+        static_assert(std::size(LuaCommandHost::kApiFunctions) == 2,
+                      "add the new API function's installer below");
         lua_pushlightuserdata(state, this);
         lua_pushcclosure(state, &Impl::commandCallback, 1);
-        lua_setfield(state, -2, "command");
+        lua_setfield(state, -2, LuaCommandHost::kApiFunctions[0].data());
         lua_pushlightuserdata(state, this);
         lua_pushcclosure(state, &Impl::registerCallback, 1);
-        lua_setfield(state, -2, "register_command");
+        lua_setfield(state, -2, LuaCommandHost::kApiFunctions[1].data());
         lua_setglobal(state, "ssg");
     }
 
