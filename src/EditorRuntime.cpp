@@ -1881,6 +1881,10 @@ CommandResult EditorRuntime::dispatch(ClientId clientId, ClientCommand const& co
     return result;
 }
 
+std::shared_ptr<CommandCatalog> EditorRuntime::commandCatalog() const {
+    return impl_->session->catalog();
+}
+
 Revision EditorRuntime::revision() const { return impl_->session->revision(); }
 std::filesystem::path const& EditorRuntime::workspaceRoot() const noexcept { return impl_->root; }
 ExternalDiffBurstResult EditorRuntime::applyExternalDiffBurst(

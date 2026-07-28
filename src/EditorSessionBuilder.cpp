@@ -1,7 +1,9 @@
 #include <ssg/EditorSessionBuilder.h>
 
 #include <ssg/ClipboardRegister.h>
+#include <ssg/CommandCatalog.h>
 #include <ssg/Commands.h>
+#include <ssg/Protocol.h>
 #include <ssg/DiffModel.h>
 #include <ssg/EditCommands.h>
 #include <ssg/ExternalModificationFlow.h>
@@ -65,7 +67,7 @@ std::vector<CommandDescriptor> p0CommandDescriptors() {
 }
 
 struct EditorSessionBuilder::Impl {
-    std::unordered_map<std::string, CommandHandler> handlers;
+    std::shared_ptr<CommandCatalog> catalog = std::make_shared<CommandCatalog>();
     CommandServices* services = nullptr;
 };
 
@@ -76,16 +78,45 @@ EditorSessionBuilder::EditorSessionBuilder(EditorSessionBuilder&&) noexcept =
 EditorSessionBuilder& EditorSessionBuilder::operator=(
     EditorSessionBuilder&&) noexcept = default;
 
+EditorSessionBuilder& EditorSessionBuilder::add(CommandSpecBuilder spec) {
+    impl_->catalog->add(std::move(spec));
+    return *this;
+}
+
 EditorSessionBuilder& EditorSessionBuilder::bind(std::string commandId,
                                                  CommandHandler handler) {
+    // Migration only: a component that has not yet moved still binds a handler
+    // to an id declared in the static table, so the declaration is fetched from
+    // there and joined to the handler here.  A migrated component calls `add`
+    // and states both in one expression (doc/spec-command-registry.md, D5).
     if (commandId.empty() || !handler) {
         throw std::invalid_argument{"command binding must have an ID and handler"};
     }
-
-    if (!impl_->handlers.emplace(std::move(commandId), std::move(handler))
-             .second) {
-        throw std::invalid_argument{"duplicate command binding"};
+    auto const* declared = findCommand(commandId);
+    if (declared == nullptr) {
+        throw std::invalid_argument{"bound command is not declared: " + commandId};
     }
+
+    CommandSpecBuilder spec{std::string{declared->id}};
+    spec.owner(std::string{declared->owner})
+        .label(std::string{declared->label})
+        .summary(std::string{declared->summary});
+    if (declared->effect == CommandEffect::Mutation) {
+        spec.mutates();
+    } else {
+        spec.observes();
+    }
+    for (auto const& capability : declared->requiredCapabilities) {
+        spec.capability(std::string{capability});
+    }
+    if (declared->surfaces.initScript) {
+        spec.initScript();
+    } else if (declared->surfaces.luaApi) {
+        spec.lua();
+    }
+    spec.adoptBoundHandler(std::move(handler),
+                           argumentTypeForKind(declared->argument));
+    impl_->catalog->add(std::move(spec));
     return *this;
 }
 
@@ -95,29 +126,31 @@ EditorSessionBuilder& EditorSessionBuilder::services(
     return *this;
 }
 
-std::unique_ptr<EditorSession> EditorSessionBuilder::build() {
-    auto descriptors = p0CommandDescriptors();
-    if (impl_->handlers.size() != descriptors.size()) {
-        throw std::invalid_argument{
-            "command bindings must equal the complete P0 catalog"};
-    }
+std::shared_ptr<CommandCatalog> EditorSessionBuilder::catalog() const {
+    return impl_->catalog;
+}
 
+std::unique_ptr<EditorSession> EditorSessionBuilder::build() {
+    // There is deliberately no "bindings must equal the catalog" check here.
+    // It existed to prove every declared command had a handler and every
+    // handler a declaration; registration now states both in one act, so the
+    // check compared a thing to itself (doc/spec-command-registry.md).
     std::vector<CommandRegistration> registrations;
-    registrations.reserve(descriptors.size());
-    for (auto& descriptor : descriptors) {
-        auto found = impl_->handlers.find(descriptor.id);
-        if (found == impl_->handlers.end()) {
-            throw std::invalid_argument{"missing P0 command binding: " +
-                                        descriptor.id};
+    for (auto const* command : impl_->catalog->commands()) {
+        std::vector<CapabilityId> capabilities;
+        capabilities.reserve(command->requiredCapabilities.size());
+        for (auto const& capability : command->requiredCapabilities) {
+            capabilities.emplace_back(capability);
         }
         registrations.push_back(
-            {std::move(descriptor), std::move(found->second)});
+            {CommandDescriptor{command->id, command->effect,
+                               std::move(capabilities)},
+             command->handler});
     }
-    impl_->handlers.clear();
     return std::make_unique<EditorSession>(
         CommandRegistry{
             std::vector<CommandSet>{CommandSet{std::move(registrations)}}},
-        impl_->services);
+        impl_->services, impl_->catalog);
 }
 
 }  // namespace ssg

@@ -11,7 +11,13 @@
 
 #include "test_helpers.h"
 
+#include <ssg/CommandCatalog.h>
 #include <ssg/Commands.h>
+#include <ssg/EditorRuntime.h>
+
+#include "frozen_catalog.h"
+
+#include <filesystem>
 #include <ssg/EditorSessionBuilder.h>
 #include <ssg/FileCommands.h>
 
@@ -157,7 +163,62 @@ TEST(theGeneratedCommandReferenceIsCurrent) {
 
 }  // namespace
 
+// The migration's transition oracle (doc/spec-command-registry.md).
+//
+// A command's declaration is moving from the static table into the component
+// that implements it, a few components per commit.  "The gate is green" does
+// not prove a move was faithful: a commit can drop a command, rename one,
+// smuggle a new one in, or -- worst -- keep every id while flipping a fact that
+// governs behaviour or authority.  Pinning ids alone would catch none of the
+// last kind.
+//
+// So this compares each command's BEHAVIOURAL tuple against the frozen
+// pre-migration snapshot: effect (which decides whether the stale-revision
+// check applies), required capabilities, and the two Lua axes.  Label and
+// summary are excluded deliberately -- they are cosmetic, a move is a natural
+// moment to improve them, and doc/commands.md shows any change in the same
+// diff.
+//
+// Scoped to CORE registration: a runtime built without plugins, before
+// init.lua.  Later dynamic registrations are not migration defects.
+//
+// Deleted with the static table at D5.
+TEST(theCoreCatalogStillMatchesTheFrozenPreMigrationSnapshot) {
+    auto const root = std::filesystem::temp_directory_path() /
+                      "ssg-frozen-catalog-oracle";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root);
+    auto created = ssg::EditorRuntime::create({root});
+    ASSERT_TRUE(created.runtime != nullptr);
+    if (!created.runtime) return;
+    auto const catalog = created.runtime->commandCatalog();
+    ASSERT_TRUE(catalog != nullptr);
+    if (!catalog) return;
+
+    auto const frozen = ssg::frozen::preMigrationCatalog();
+    ASSERT_EQ(catalog->size(), frozen.size());
+
+    for (auto const& expected : frozen) {
+        auto const* actual = catalog->find(expected.id);
+        ASSERT_TRUE(actual != nullptr);
+        if (actual == nullptr) continue;
+
+        bool const mutates = actual->effect == ssg::CommandEffect::Mutation;
+        ASSERT_EQ(mutates, expected.mutates);
+        ASSERT_EQ(actual->luaApi, expected.luaApi);
+        ASSERT_EQ(actual->initScript, expected.initScript);
+
+        std::vector<std::string> expectedCapabilities;
+        for (auto const& capability : expected.requiredCapabilities) {
+            expectedCapabilities.emplace_back(capability);
+        }
+        ASSERT_EQ(actual->requiredCapabilities, expectedCapabilities);
+    }
+    std::filesystem::remove_all(root);
+}
+
 int main() {
+    RUN(theCoreCatalogStillMatchesTheFrozenPreMigrationSnapshot);
     RUN(compiledCatalogHasExactlyTheAssembledRegistrysCommands);
     RUN(compiledCatalogAgreesOnEffectAndCapabilities);
     RUN(everyCommandDeclaresAnArgumentShapeAndIdsAreUnique);

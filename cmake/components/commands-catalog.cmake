@@ -1,5 +1,6 @@
 target_sources(ssg PRIVATE
     ${SSG_SOURCE_DIR}/src/Commands.cpp
+    ${SSG_SOURCE_DIR}/src/CommandCatalog.cpp
 )
 
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
@@ -21,6 +22,13 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     add_custom_target(ssg_command_docs_generate ALL
         DEPENDS ${SSG_SOURCE_DIR}/doc/commands.md
     )
+
+    add_executable(test_command_catalog
+        ${SSG_SOURCE_DIR}/tests/test_command_catalog.cpp
+    )
+    target_include_directories(test_command_catalog PRIVATE ${SSG_SOURCE_DIR}/tests)
+    target_link_libraries(test_command_catalog PRIVATE ssg)
+    add_test(NAME test_command_catalog COMMAND test_command_catalog)
 
     add_executable(test_commands
         ${SSG_SOURCE_DIR}/tests/test_commands.cpp

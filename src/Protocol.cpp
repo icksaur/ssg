@@ -1,6 +1,8 @@
 #include <ssg/Commands.h>
 #include <ssg/Protocol.h>
 
+#include <ssg/CommandCatalog.h>
+
 #include <ssg/Document.h>
 #include <ssg/EditorSessionBuilder.h>
 #include <ssg/FileCommands.h>
@@ -5207,70 +5209,6 @@ bool decodePresent(ProtocolValue const& value, std::optional<ShellSectionDelta>&
 }  // namespace
 
 
-struct CommandArgumentCodecRegistry::Impl {
-    std::unordered_map<std::string, CommandArgumentCodec> codecs;
-};
-
-CommandArgumentCodecRegistry::CommandArgumentCodecRegistry(
-    std::vector<std::pair<std::string, CommandArgumentCodec>> entries)
-    : impl_{std::make_unique<Impl>()} {
-    auto const descriptors = p0CommandDescriptors();
-
-    std::unordered_map<std::string, CommandArgumentCodec> codecs;
-    codecs.reserve(entries.size());
-    for (auto& entry : entries) {
-        if (!codecs.emplace(std::move(entry.first), std::move(entry.second))
-                 .second) {
-            throw std::invalid_argument{
-                "duplicate command argument codec entry: " + entry.first};
-        }
-    }
-    if (codecs.size() != descriptors.size()) {
-        throw std::invalid_argument{
-            "command argument codec registry does not cover exactly the P0 "
-            "command catalog"};
-    }
-    for (auto const& descriptor : descriptors) {
-        if (codecs.find(descriptor.id) == codecs.end()) {
-            throw std::invalid_argument{
-                "command argument codec registry is missing command: " +
-                descriptor.id};
-        }
-    }
-    impl_->codecs = std::move(codecs);
-}
-
-CommandArgumentCodecRegistry::~CommandArgumentCodecRegistry() = default;
-CommandArgumentCodecRegistry::CommandArgumentCodecRegistry(
-    CommandArgumentCodecRegistry&&) noexcept = default;
-CommandArgumentCodecRegistry& CommandArgumentCodecRegistry::operator=(
-    CommandArgumentCodecRegistry&&) noexcept = default;
-
-bool CommandArgumentCodecRegistry::contains(
-    std::string_view commandId) const {
-    return impl_->codecs.find(std::string{commandId}) !=
-           impl_->codecs.end();
-}
-
-ProtocolValue CommandArgumentCodecRegistry::encodeArgument(
-    std::string_view commandId, std::any const& payload) const {
-    auto found = impl_->codecs.find(std::string{commandId});
-    if (found == impl_->codecs.end()) {
-        throw std::invalid_argument{"unknown command id: " +
-                                    std::string{commandId}};
-    }
-    return found->second.encode(payload);
-}
-
-std::optional<std::any> CommandArgumentCodecRegistry::decodeArgument(
-    std::string_view commandId, ProtocolValue const& value) const {
-    auto found = impl_->codecs.find(std::string{commandId});
-    if (found == impl_->codecs.end()) {
-        throw std::invalid_argument{"unknown command id: " +
-                                    std::string{commandId}};
-    }
-    return found->second.decode(value);
-}
 
 namespace {
 
@@ -5320,47 +5258,127 @@ CommandArgumentCodec makeWorkspaceApplyCodec() {
 
 }  // namespace
 
-CommandArgumentCodecRegistry ProtocolCodec::buildCommandArgumentCodecRegistry() const {
-    // One codec per declared argument shape.  This used to be a 20-branch
-    // if-chain matching command ids, whose final `else` silently gave any
-    // unlisted command the no-argument codec -- so a command that took a
-    // payload but was missed by the chain lost that payload on the wire while
-    // working in-process.  The shape is now declared in the catalog and looked
-    // up here, so it cannot be forgotten.
-    auto const codecFor = [](ArgumentKind kind) -> CommandArgumentCodec {
-        switch (kind) {
-            case ArgumentKind::None: return makeNoneCodec();
-            case ArgumentKind::TextInput: return makeTypedCodec<TextInputArguments>();
-            case ArgumentKind::SelectionCommand: return makeTypedCodec<SelectionCommandArguments>();
-            case ArgumentKind::ScrollLines: return makeTypedCodec<ScrollLinesArguments>();
-            case ArgumentKind::ScrollPages: return makeTypedCodec<ScrollPagesArguments>();
-            case ArgumentKind::ScrollFraction: return makeTypedCodec<ScrollFractionArguments>();
-            case ArgumentKind::DroppedContent: return makeTypedCodec<DroppedContentArguments>();
-            case ArgumentKind::ReopenWithEncoding: return makeTypedCodec<ReopenWithEncodingArguments>();
-            case ArgumentKind::SetEncoding: return makeTypedCodec<SetEncodingArguments>();
-            case ArgumentKind::SetLineEnding: return makeTypedCodec<SetLineEndingArguments>();
-            case ArgumentKind::SetFinalNewline: return makeTypedCodec<SetFinalNewlineArguments>();
-            case ArgumentKind::SettingSet: return makeTypedCodec<SettingSetArguments>();
-            case ArgumentKind::SettingReset: return makeTypedCodec<SettingResetArguments>();
-            case ArgumentKind::SettingResetScope: return makeTypedCodec<SettingResetScopeArguments>();
-            case ArgumentKind::WorkspaceReplace: return makeTypedCodec<WorkspaceReplaceArguments>();
-            case ArgumentKind::WorkspaceApply: return makeWorkspaceApplyCodec();
-            case ArgumentKind::PaletteExecute: return makeTypedCodec<PaletteExecuteArguments>();
-            case ArgumentKind::TreeSelect: return makeTypedCodec<TreeSelectArguments>();
-            case ArgumentKind::FindQuery: return makeTypedCodec<FindQueryArguments>();
-            case ArgumentKind::PromptValue: return makeTypedCodec<PromptValueArguments>();
-        }
-        return makeNoneCodec();
-    };
+namespace {
 
-    std::vector<std::pair<std::string, CommandArgumentCodec>> entries;
-    entries.reserve(commandCatalog().size());
-    for (auto const& command : commandCatalog()) {
-        entries.emplace_back(std::string{command.id}, codecFor(command.argument));
-    }
-    return CommandArgumentCodecRegistry{std::move(entries)};
+// How a command's arguments travel, keyed by the TYPE the handler consumes.
+//
+// This replaced a switch over an authored ArgumentKind enum, which itself
+// replaced a 20-branch if-chain on command ids whose final `else` silently gave
+// any unlisted command the no-argument codec.  Keying on the type closes the
+// remaining gap: the type comes from the handler, so a command's codec and its
+// handler cannot disagree about what the payload is.
+//
+// The catalog says which type each command uses; this says how each type
+// travels.  Neither restates the other.
+std::unordered_map<std::type_index, CommandArgumentCodec> const&
+argumentCodecsByType() {
+    static auto const codecs = [] {
+        std::unordered_map<std::type_index, CommandArgumentCodec> table;
+        table.emplace(typeid(TextInputArguments), makeTypedCodec<TextInputArguments>());
+        table.emplace(typeid(SelectionCommandArguments), makeTypedCodec<SelectionCommandArguments>());
+        table.emplace(typeid(ScrollLinesArguments), makeTypedCodec<ScrollLinesArguments>());
+        table.emplace(typeid(ScrollPagesArguments), makeTypedCodec<ScrollPagesArguments>());
+        table.emplace(typeid(ScrollFractionArguments), makeTypedCodec<ScrollFractionArguments>());
+        table.emplace(typeid(DroppedContentArguments), makeTypedCodec<DroppedContentArguments>());
+        table.emplace(typeid(ReopenWithEncodingArguments), makeTypedCodec<ReopenWithEncodingArguments>());
+        table.emplace(typeid(SetEncodingArguments), makeTypedCodec<SetEncodingArguments>());
+        table.emplace(typeid(SetLineEndingArguments), makeTypedCodec<SetLineEndingArguments>());
+        table.emplace(typeid(SetFinalNewlineArguments), makeTypedCodec<SetFinalNewlineArguments>());
+        table.emplace(typeid(SettingSetArguments), makeTypedCodec<SettingSetArguments>());
+        table.emplace(typeid(SettingResetArguments), makeTypedCodec<SettingResetArguments>());
+        table.emplace(typeid(SettingResetScopeArguments), makeTypedCodec<SettingResetScopeArguments>());
+        table.emplace(typeid(WorkspaceReplaceArguments), makeTypedCodec<WorkspaceReplaceArguments>());
+        table.emplace(typeid(WorkspaceReplacePreview), makeWorkspaceApplyCodec());
+        table.emplace(typeid(PaletteExecuteArguments), makeTypedCodec<PaletteExecuteArguments>());
+        table.emplace(typeid(TreeSelectArguments), makeTypedCodec<TreeSelectArguments>());
+        table.emplace(typeid(FindQueryArguments), makeTypedCodec<FindQueryArguments>());
+        table.emplace(typeid(PromptValueArguments), makeTypedCodec<PromptValueArguments>());
+        return table;
+    }();
+    return codecs;
 }
 
+// The codec a registered command's arguments travel by, or nullptr when the
+// command is unknown.  Resolved per call against the LIVE catalog, so a command
+// registered a moment ago is already carryable and nothing can go stale.
+CommandArgumentCodec const* codecForCommand(CommandCatalog const& catalog,
+                                            std::string_view commandId) {
+    auto const* command = catalog.find(commandId);
+    if (command == nullptr) return nullptr;
+    if (!command->argument.type.has_value()) {
+        static CommandArgumentCodec const none = makeNoneCodec();
+        return &none;
+    }
+    auto const& codecs = argumentCodecsByType();
+    auto const found = codecs.find(*command->argument.type);
+    return found == codecs.end() ? nullptr : &found->second;
+}
+
+}  // namespace
+
+std::optional<std::type_index> argumentTypeForKind(ArgumentKind kind) {
+    switch (kind) {
+        case ArgumentKind::None: return std::nullopt;
+        case ArgumentKind::TextInput: return std::type_index{typeid(TextInputArguments)};
+        case ArgumentKind::SelectionCommand: return std::type_index{typeid(SelectionCommandArguments)};
+        case ArgumentKind::ScrollLines: return std::type_index{typeid(ScrollLinesArguments)};
+        case ArgumentKind::ScrollPages: return std::type_index{typeid(ScrollPagesArguments)};
+        case ArgumentKind::ScrollFraction: return std::type_index{typeid(ScrollFractionArguments)};
+        case ArgumentKind::DroppedContent: return std::type_index{typeid(DroppedContentArguments)};
+        case ArgumentKind::ReopenWithEncoding: return std::type_index{typeid(ReopenWithEncodingArguments)};
+        case ArgumentKind::SetEncoding: return std::type_index{typeid(SetEncodingArguments)};
+        case ArgumentKind::SetLineEnding: return std::type_index{typeid(SetLineEndingArguments)};
+        case ArgumentKind::SetFinalNewline: return std::type_index{typeid(SetFinalNewlineArguments)};
+        case ArgumentKind::SettingSet: return std::type_index{typeid(SettingSetArguments)};
+        case ArgumentKind::SettingReset: return std::type_index{typeid(SettingResetArguments)};
+        case ArgumentKind::SettingResetScope: return std::type_index{typeid(SettingResetScopeArguments)};
+        case ArgumentKind::WorkspaceReplace: return std::type_index{typeid(WorkspaceReplaceArguments)};
+        case ArgumentKind::WorkspaceApply: return std::type_index{typeid(WorkspaceReplacePreview)};
+        case ArgumentKind::PaletteExecute: return std::type_index{typeid(PaletteExecuteArguments)};
+        case ArgumentKind::TreeSelect: return std::type_index{typeid(TreeSelectArguments)};
+        case ArgumentKind::FindQuery: return std::type_index{typeid(FindQueryArguments)};
+        case ArgumentKind::PromptValue: return std::type_index{typeid(PromptValueArguments)};
+    }
+    return std::nullopt;
+}
+
+struct CommandArgumentCodecRegistry::Impl {
+    std::shared_ptr<CommandCatalog const> catalog;
+};
+
+CommandArgumentCodecRegistry::CommandArgumentCodecRegistry(
+    std::shared_ptr<CommandCatalog const> catalog)
+    : impl_{std::make_unique<Impl>(std::move(catalog))} {
+    if (!impl_->catalog) {
+        throw std::invalid_argument{"command argument codecs require a catalog"};
+    }
+}
+
+CommandArgumentCodecRegistry::~CommandArgumentCodecRegistry() = default;
+CommandArgumentCodecRegistry::CommandArgumentCodecRegistry(
+    CommandArgumentCodecRegistry&&) noexcept = default;
+CommandArgumentCodecRegistry& CommandArgumentCodecRegistry::operator=(
+    CommandArgumentCodecRegistry&&) noexcept = default;
+
+bool CommandArgumentCodecRegistry::contains(std::string_view commandId) const {
+    return codecForCommand(*impl_->catalog, commandId) != nullptr;
+}
+
+ProtocolValue CommandArgumentCodecRegistry::encodeArgument(
+    std::string_view commandId, std::any const& payload) const {
+    auto const* codec = codecForCommand(*impl_->catalog, commandId);
+    if (codec == nullptr) {
+        throw std::invalid_argument{"unknown command ID: " + std::string{commandId}};
+    }
+    return codec->encode(payload);
+}
+
+std::optional<std::any> CommandArgumentCodecRegistry::decodeArgument(
+    std::string_view commandId, ProtocolValue const& value) const {
+    auto const* codec = codecForCommand(*impl_->catalog, commandId);
+    if (codec == nullptr) return std::nullopt;
+    return codec->decode(value);
+}
 
 std::string ProtocolCodec::encodeCommandRequest(ClientCommand const& command,
                                    CommandArgumentCodecRegistry const& registry) const {

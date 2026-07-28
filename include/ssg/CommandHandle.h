@@ -40,6 +40,7 @@ public:
 
 private:
     friend CommandHandle commandHandle(std::string_view id) noexcept;
+    friend CommandHandle commandHandleFromIndex(std::size_t index) noexcept;
 
     static constexpr std::uint16_t kInvalid =
         std::numeric_limits<std::uint16_t>::max();
@@ -52,6 +53,10 @@ private:
 // Resolve a command name to its handle.  This is the one place a command id
 // string is matched; call it at construction time, not per keystroke.
 [[nodiscard]] CommandHandle commandHandle(std::string_view id) noexcept;
+
+// Mint a handle for a catalog position.  Only a catalog may say what a handle
+// means, which is why this is not a public constructor.
+[[nodiscard]] CommandHandle commandHandleFromIndex(std::size_t index) noexcept;
 
 // How a caller names the command it wants to invoke.
 //

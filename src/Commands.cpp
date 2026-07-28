@@ -583,6 +583,10 @@ CommandSpec const* findCommand(std::string_view id) {
     return found == kCommands.end() ? nullptr : &*found;
 }
 
+CommandHandle commandHandleFromIndex(std::size_t index) noexcept {
+    return CommandHandle{static_cast<std::uint16_t>(index)};
+}
+
 CommandHandle commandHandle(std::string_view id) noexcept {
     auto const found = std::ranges::find(kCommands, id, &CommandSpec::id);
     if (found == kCommands.end()) return {};

@@ -1,5 +1,7 @@
 #include <ssg/EditorSession.h>
 
+#include <ssg/CommandCatalog.h>
+
 #include <limits>
 #include <mutex>
 #include <unordered_map>
@@ -28,13 +30,21 @@ struct EditorSession::Impl {
     mutable std::mutex mutex;
     CommandRegistry registry;
     CommandServices* services;
+    std::shared_ptr<CommandCatalog> catalog;
     Revision revision{1};
     SessionTopology topology;
     std::unordered_map<ClientId, AttachedClient, ClientIdHash> clients;
 };
 
-EditorSession::EditorSession(CommandRegistry registry, CommandServices* services)
-    : impl_{std::make_unique<Impl>(std::move(registry), services)} {}
+EditorSession::EditorSession(CommandRegistry registry, CommandServices* services,
+                             std::shared_ptr<CommandCatalog> catalog)
+    : impl_{std::make_unique<Impl>(std::move(registry), services)} {
+    impl_->catalog = std::move(catalog);
+}
+
+std::shared_ptr<CommandCatalog> const& EditorSession::catalog() const {
+    return impl_->catalog;
+}
 
 EditorSession::~EditorSession() = default;
 

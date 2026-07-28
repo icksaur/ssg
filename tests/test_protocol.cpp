@@ -4,6 +4,7 @@
 #include <ssg/FileCommands.h>
 #include <ssg/FindReplace.h>
 #include <ssg/Commands.h>
+#include <ssg/CommandCatalog.h>
 #include <ssg/Protocol.h>
 #include <ssg/session_snapshot.h>
 
@@ -99,11 +100,37 @@ ssg::ViewportViewState clientView(std::uint32_t firstRow) {
             {firstRow + 8, 8, firstRow, firstRow, 0, 8}};
 }
 
+
+// A catalog mirroring the static table, for codec tests that need one without a
+// running editor.  Handlers are stubs: these tests exercise the WIRE, not
+// dispatch.  Deleted with the static table (doc/spec-command-registry.md, D5).
+std::shared_ptr<ssg::CommandCatalog> staticTableCatalog() {
+    auto catalog = std::make_shared<ssg::CommandCatalog>();
+    for (auto const& command : ssg::commandCatalog()) {
+        ssg::CommandSpecBuilder spec{std::string{command.id}};
+        spec.owner(std::string{command.owner})
+            .summary(command.summary.empty() ? std::string{"stub"}
+                                             : std::string{command.summary});
+        if (command.effect == ssg::CommandEffect::Mutation) {
+            spec.mutates();
+        } else {
+            spec.observes();
+        }
+        spec.adoptBoundHandler(
+            [](ssg::CommandContext&, std::any const&) {
+                return ssg::CommandHandlerResult::success();
+            },
+            ssg::argumentTypeForKind(command.argument));
+        catalog->add(std::move(spec));
+    }
+    return catalog;
+}
+
 // ---------------------------------------------------------------------------
 // Registry coverage and construction validation.
 
 TEST(registryCoversEveryP0CommandAndRejectsUnknownIds) {
-    auto registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
+    auto registry = ssg::CommandArgumentCodecRegistry{staticTableCatalog()};
     for (auto const& id : catalogIds()) {
         ASSERT_TRUE(registry.contains(id));
     }
@@ -126,7 +153,7 @@ ssg::CommandArgumentCodec makeProbeCodec() {
 // command makes that gap fail here rather than at runtime, for this key and any
 // future one.
 TEST(everySettingKeyRoundTripsThroughTheCommandCodec) {
-    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
+    auto const registry = ssg::CommandArgumentCodecRegistry{staticTableCatalog()};
     for (std::size_t index = 0; index < ssg::kSettingKeyCount; ++index) {
         auto const key = static_cast<ssg::SettingKey>(index);
         ssg::SettingSetArguments arguments{ssg::SettingScope::User, key,
@@ -144,42 +171,18 @@ TEST(everySettingKeyRoundTripsThroughTheCommandCodec) {
     }
 }
 
-TEST(registryRejectsMissingEntries) {
-    std::vector<std::pair<std::string, ssg::CommandArgumentCodec>> entries;
-    auto const ids = ssg::p0CommandDescriptors();
-    for (std::size_t index = 1; index < ids.size(); ++index) {
-        entries.emplace_back(ids[index].id, makeProbeCodec());
-    }
-    ASSERT_THROWS(ssg::CommandArgumentCodecRegistry{std::move(entries)},
-                 std::invalid_argument);
-}
-
-TEST(registryRejectsExtraEntries) {
-    std::vector<std::pair<std::string, ssg::CommandArgumentCodec>> entries;
-    for (auto const& descriptor : ssg::p0CommandDescriptors()) {
-        entries.emplace_back(descriptor.id, makeProbeCodec());
-    }
-    entries.emplace_back("not.p0", makeProbeCodec());
-    ASSERT_THROWS(ssg::CommandArgumentCodecRegistry{std::move(entries)},
-                 std::invalid_argument);
-}
-
-TEST(registryRejectsDuplicateEntries) {
-    std::vector<std::pair<std::string, ssg::CommandArgumentCodec>> entries;
-    auto const ids = ssg::p0CommandDescriptors();
-    for (auto const& descriptor : ids) {
-        entries.emplace_back(descriptor.id, makeProbeCodec());
-    }
-    entries.emplace_back(ids.front().id, makeProbeCodec());
-    ASSERT_THROWS(ssg::CommandArgumentCodecRegistry{std::move(entries)},
-                 std::invalid_argument);
-}
+// registryRejectsMissingEntries / RejectsExtraEntries / RejectsDuplicateEntries
+// are deleted with the registry constructor they exercised.  They checked that a
+// hand-assembled list of codecs covered every command exactly once; the registry
+// is now backed by the catalog itself, so a command's codec is found by looking
+// the command up.  There is no list to get wrong (doc/spec-command-registry.md,
+// R8).
 
 // ---------------------------------------------------------------------------
 // Command request round trips: one canonical fixture per argument shape.
 
 TEST(commandRequestRoundTripsWithPaletteExecuteArguments) {
-    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
+    auto const registry = ssg::CommandArgumentCodecRegistry{staticTableCatalog()};
     ssg::ClientCommand const command{
         "palette.execute", ssg::Revision{4},
         ssg::PaletteExecuteArguments{"file.save"}};
@@ -195,7 +198,7 @@ TEST(commandRequestRoundTripsWithPaletteExecuteArguments) {
 }
 
 TEST(commandRequestRoundTripsWithFindQueryArguments) {
-    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
+    auto const registry = ssg::CommandArgumentCodecRegistry{staticTableCatalog()};
     ssg::ClientCommand const command{
         "find.update_query", ssg::Revision{7},
         ssg::FindQueryArguments{"cat"}};
@@ -216,7 +219,7 @@ TEST(commandRequestRoundTripsWithFindQueryArguments) {
 // while silently dropping the payload for every protocol client. Round-tripping
 // the actual value is what catches that.
 TEST(commandRequestRoundTripsWithPromptValueArguments) {
-    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
+    auto const registry = ssg::CommandArgumentCodecRegistry{staticTableCatalog()};
     ssg::ClientCommand const command{
         "prompt.update_value", ssg::Revision{11},
         ssg::PromptValueArguments{1, "notes/draft.txt"}};
@@ -236,7 +239,7 @@ TEST(commandRequestRoundTripsWithPromptValueArguments) {
 // invisible to the registry's exhaustiveness check, which only proves an entry
 // exists. Each payload-bearing command therefore round-trips its own id.
 TEST(commandRequestRoundTripsWithTreeScrollToFraction) {
-    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
+    auto const registry = ssg::CommandArgumentCodecRegistry{staticTableCatalog()};
     ssg::ClientCommand const command{
         "tree.scroll_to_fraction", ssg::Revision{5},
         ssg::ScrollFractionArguments{3, 8}};
@@ -253,7 +256,7 @@ TEST(commandRequestRoundTripsWithTreeScrollToFraction) {
 
 
 TEST(commandRequestRoundTripsWithTreeSelectArguments) {
-    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
+    auto const registry = ssg::CommandArgumentCodecRegistry{staticTableCatalog()};
     ssg::ClientCommand const command{
         "tree.select", ssg::Revision{9},
         ssg::TreeSelectArguments{ssg::TreeNodeId{"files:src/main.cpp"}}};
@@ -269,7 +272,7 @@ TEST(commandRequestRoundTripsWithTreeSelectArguments) {
 }
 
 TEST(commandRequestRoundTripsWithNoPayload) {
-    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
+    auto const registry = ssg::CommandArgumentCodecRegistry{staticTableCatalog()};
     ssg::ClientCommand const command{"edit.undo", ssg::Revision{3}, {}};
     auto const bytes = ssg::ProtocolCodec{}.encodeCommandRequest(command, registry);
     auto const decoded = ssg::ProtocolCodec{}.decodeCommandRequest(bytes, registry);
@@ -281,7 +284,7 @@ TEST(commandRequestRoundTripsWithNoPayload) {
 }
 
 TEST(commandRequestRoundTripsWithTextInputArguments) {
-    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
+    auto const registry = ssg::CommandArgumentCodecRegistry{staticTableCatalog()};
     ssg::ClientCommand const command{
         "text.insert", ssg::Revision{5},
         ssg::TextInputArguments{"hello world"}};
@@ -296,7 +299,7 @@ TEST(commandRequestRoundTripsWithTextInputArguments) {
 }
 
 TEST(commandRequestRoundTripsWithSelectionCommandArguments) {
-    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
+    auto const registry = ssg::CommandArgumentCodecRegistry{staticTableCatalog()};
     ssg::DocumentPosition const position{ssg::ByteOffset{4}, ssg::LineIndex{0},
                                          ssg::CellIndex{4}};
     ssg::SelectionCommandArguments const original{
@@ -314,7 +317,7 @@ TEST(commandRequestRoundTripsWithSelectionCommandArguments) {
 }
 
 TEST(commandRequestRoundTripsWithEmptySelectionCommandArguments) {
-    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
+    auto const registry = ssg::CommandArgumentCodecRegistry{staticTableCatalog()};
     ssg::SelectionCommandArguments const original{std::nullopt, std::nullopt};
     ssg::ClientCommand const command{"cursor.left", ssg::Revision{2}, original};
     auto const bytes = ssg::ProtocolCodec{}.encodeCommandRequest(command, registry);
@@ -328,7 +331,7 @@ TEST(commandRequestRoundTripsWithEmptySelectionCommandArguments) {
 }
 
 TEST(commandRequestRoundTripsWithScrollLinesArguments) {
-    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
+    auto const registry = ssg::CommandArgumentCodecRegistry{staticTableCatalog()};
     ssg::ClientCommand const command{"view.scroll_lines", ssg::Revision{1},
                                      ssg::ScrollLinesArguments{-7}};
     auto const bytes = ssg::ProtocolCodec{}.encodeCommandRequest(command, registry);
@@ -341,7 +344,7 @@ TEST(commandRequestRoundTripsWithScrollLinesArguments) {
 }
 
 TEST(commandRequestRoundTripsWithScrollPagesArguments) {
-    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
+    auto const registry = ssg::CommandArgumentCodecRegistry{staticTableCatalog()};
     ssg::ClientCommand const command{"view.scroll_pages", ssg::Revision{1},
                                      ssg::ScrollPagesArguments{3}};
     auto const bytes = ssg::ProtocolCodec{}.encodeCommandRequest(command, registry);
@@ -354,7 +357,7 @@ TEST(commandRequestRoundTripsWithScrollPagesArguments) {
 }
 
 TEST(commandRequestRoundTripsWithScrollFractionArguments) {
-    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
+    auto const registry = ssg::CommandArgumentCodecRegistry{staticTableCatalog()};
     ssg::ClientCommand const command{"view.scroll_to_fraction", ssg::Revision{1},
                                      ssg::ScrollFractionArguments{3, 4}};
     auto const bytes = ssg::ProtocolCodec{}.encodeCommandRequest(command, registry);
@@ -368,7 +371,7 @@ TEST(commandRequestRoundTripsWithScrollFractionArguments) {
 }
 
 TEST(commandRequestRoundTripsWithDroppedContentArguments) {
-    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
+    auto const registry = ssg::CommandArgumentCodecRegistry{staticTableCatalog()};
     ssg::ClientCommand const command{
         "file.open_dropped_content", ssg::Revision{1},
         ssg::DroppedContentArguments{{1, 2, 3, 4}, "dropped.txt"}};
@@ -469,7 +472,7 @@ std::string buildInvalidScrollFractionMessage() {
 }
 
 TEST(decodeCommandRequestRejectsUnknownCommandId) {
-    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
+    auto const registry = ssg::CommandArgumentCodecRegistry{staticTableCatalog()};
     ASSERT_THROWS(registry.encodeArgument("not.a.command", std::any{}),
                  std::invalid_argument);
 
@@ -480,7 +483,7 @@ TEST(decodeCommandRequestRejectsUnknownCommandId) {
 }
 
 TEST(decodeCommandRequestRejectsMalformedPayload) {
-    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
+    auto const registry = ssg::CommandArgumentCodecRegistry{staticTableCatalog()};
     ssg::ClientCommand const command{"text.insert", ssg::Revision{1},
                                      ssg::TextInputArguments{"x"}};
     auto bytes = ssg::ProtocolCodec{}.encodeCommandRequest(command, registry);
@@ -492,7 +495,7 @@ TEST(decodeCommandRequestRejectsMalformedPayload) {
 }
 
 TEST(decodeCommandRequestMapsDomainInvariantFailuresToMalformed) {
-    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
+    auto const registry = ssg::CommandArgumentCodecRegistry{staticTableCatalog()};
     auto const decoded = ssg::ProtocolCodec{}.decodeCommandRequest(
         buildInvalidScrollFractionMessage(), registry);
     ASSERT_FALSE(decoded.accepted());
@@ -1016,7 +1019,7 @@ TEST(regenerateCanonicalFixtures) {
 }
 
 TEST(canonicalFixturesDecodeToTheExpectedValues) {
-    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
+    auto const registry = ssg::CommandArgumentCodecRegistry{staticTableCatalog()};
 
     {
         auto decoded = ssg::ProtocolCodec{}.decodeCommandRequest(
@@ -1161,7 +1164,7 @@ TEST(documentIdentitySurvivesSessionSnapshotAndDeltaWireRoundTrips) {
 }
 
 TEST(commandRequestRoundTripsWithReplaceReplacementArguments) {
-    auto const registry = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
+    auto const registry = ssg::CommandArgumentCodecRegistry{staticTableCatalog()};
     ssg::ClientCommand const command{
         "replace.update_replacement", ssg::Revision{9},
         ssg::FindQueryArguments{"dog"}};
@@ -1241,8 +1244,6 @@ TEST(styleDefineKeysExactlyMatchTheWireCodecFields) {
 int main() {
     RUN(registryCoversEveryP0CommandAndRejectsUnknownIds);
     RUN(everySettingKeyRoundTripsThroughTheCommandCodec);
-    RUN(registryRejectsMissingEntries);    RUN(registryRejectsExtraEntries);
-    RUN(registryRejectsDuplicateEntries);
     RUN(commandRequestRoundTripsWithNoPayload);
     RUN(commandRequestRoundTripsWithPaletteExecuteArguments);
     RUN(commandRequestRoundTripsWithFindQueryArguments);

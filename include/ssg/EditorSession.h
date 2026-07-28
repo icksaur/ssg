@@ -10,6 +10,8 @@
 
 namespace ssg {
 
+class CommandCatalog;
+
 struct ClientCommand {
     // The command to invoke, named however the caller most cheaply can: a name
     // at the protocol, Lua and palette boundaries, a handle on the keystroke
@@ -68,13 +70,18 @@ struct SessionTopology {
 class EditorSession {
 public:
     explicit EditorSession(CommandRegistry registry,
-                           CommandServices* services = nullptr);
+                           CommandServices* services = nullptr,
+                           std::shared_ptr<CommandCatalog> catalog = {});
     ~EditorSession();
 
     EditorSession(EditorSession const&) = delete;
     EditorSession& operator=(EditorSession const&) = delete;
     EditorSession(EditorSession&&) = delete;
     EditorSession& operator=(EditorSession&&) = delete;
+
+    // The catalog this session dispatches from.  Held rather than copied, so a
+    // command registered later is visible here with no propagation step.
+    [[nodiscard]] std::shared_ptr<CommandCatalog> const& catalog() const;
 
     [[nodiscard]] AttachResult attach(InvocationPrincipal principal,
                                       ViewId viewId);

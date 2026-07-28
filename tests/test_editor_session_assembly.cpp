@@ -123,26 +123,23 @@ TEST(requiredCatalogEqualsAssembledRegistryExactly) {
     }
 }
 
-TEST(builderRejectsMissingAndExtraBindings) {
-    auto ids = catalogIds();
-    ssg::EditorSessionBuilder missing;
-    for (std::size_t i = 1; i < ids.size(); ++i) {
-        missing.bind(ids[i], [](ssg::CommandContext&, std::any const&) {
-            return ssg::CommandHandlerResult::success();
-        });
-    }
-    ASSERT_THROWS(missing.build(), std::invalid_argument);
-
-    ssg::EditorSessionBuilder extra;
-    for (auto const& id : ids) {
-        extra.bind(id, [](ssg::CommandContext&, std::any const&) {
-            return ssg::CommandHandlerResult::success();
-        });
-    }
-    extra.bind("not.p0", [](ssg::CommandContext&, std::any const&) {
-        return ssg::CommandHandlerResult::success();
-    });
-    ASSERT_THROWS(extra.build(), std::invalid_argument);
+// The builder no longer requires bindings to equal the catalog exactly.  That
+// rule proved every declared command had a handler and every handler a
+// declaration; registration now states both in one act, so it compared a thing
+// to itself (doc/spec-command-registry.md).
+//
+// What survives is the migration guard: while commands are still declared in
+// the static table, binding a handler to an id that table does not contain is a
+// wiring mistake and is refused where it happens rather than at build.  A
+// command that goes MISSING is caught by the frozen behavioural snapshot in
+// test_commands, not here.
+TEST(bindingAnUndeclaredCommandIsRefusedAtTheBinding) {
+    ssg::EditorSessionBuilder builder;
+    ASSERT_THROWS(builder.bind("not.p0",
+                               [](ssg::CommandContext&, std::any const&) {
+                                   return ssg::CommandHandlerResult::success();
+                               }),
+                  std::invalid_argument);
 }
 
 class TestServices final : public ssg::CommandServices {
@@ -337,7 +334,7 @@ static_assert(!std::is_copy_constructible_v<ssg::SessionDelta>);
 
 int main() {
     RUN(requiredCatalogEqualsAssembledRegistryExactly);
-    RUN(builderRejectsMissingAndExtraBindings);
+    RUN(bindingAnUndeclaredCommandIsRefusedAtTheBinding);
     RUN(builderThreadsServicesThroughTheCommonDispatchPath);
     RUN(fullSnapshotMatchesReplayedAggregateDelta);
     RUN(nonDocumentTransitionReplaysAndRejectsADifferentClient);

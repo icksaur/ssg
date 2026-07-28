@@ -7,6 +7,7 @@
 #include <ssg/ClipboardRegister.h>
 
 #include <any>
+#include <typeindex>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -18,6 +19,13 @@
 #include <vector>
 
 namespace ssg {
+
+class CommandCatalog;
+enum class ArgumentKind : std::uint8_t;
+
+// Migration only: the argument type a static-table ArgumentKind stood for.
+// Deleted with that enum (doc/spec-command-registry.md, D5).
+[[nodiscard]] std::optional<std::type_index> argumentTypeForKind(ArgumentKind kind);
 
 struct ProtocolLimits {
     // Aggregate snapshots can contain the bounded text and binary values below;
@@ -173,13 +181,16 @@ struct CommandArgumentCodec {
     CommandArgumentDecoder decode;
 };
 
+// How each command's arguments travel.
+//
+// Backed by the catalog rather than by a snapshot of it: a command registered
+// after this object was created is decodable immediately, because there is
+// nothing here to go stale.  Holding a copy would be a staleness bug the moment
+// registration became dynamic (doc/spec-command-registry.md, R8).
 class CommandArgumentCodecRegistry {
 public:
-    // Throws std::invalid_argument if `entries` does not have exactly one
-    // entry per ID in `p0_command_descriptors()` (missing, extra, and
-    // duplicate IDs are all rejected).
     explicit CommandArgumentCodecRegistry(
-        std::vector<std::pair<std::string, CommandArgumentCodec>> entries);
+        std::shared_ptr<CommandCatalog const> catalog);
     ~CommandArgumentCodecRegistry();
 
     CommandArgumentCodecRegistry(CommandArgumentCodecRegistry const&) = delete;
@@ -330,9 +341,6 @@ public:
         SliceResponse const& response) const;
     [[nodiscard]] SliceResponse decodeSliceResponse(
         std::string_view message, ProtocolLimits limits = {}) const;
-
-    [[nodiscard]] CommandArgumentCodecRegistry
-    buildCommandArgumentCodecRegistry() const;
 
     [[nodiscard]] std::string encodeCommandRequest(
         ClientCommand const& command,

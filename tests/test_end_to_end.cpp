@@ -419,7 +419,7 @@ TEST(directApiLoopbackWebsocketTuiCanonicalStateMatchesPerStep) {
     PeerHost wsHost{wsScenario, wsPeerPrincipal};
     constexpr std::uint16_t wsPort = 18800;
     ssg::HttpEditorServer wsServer{
-        *wsScenario.session, ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry(),
+        *wsScenario.session,
         wsHost, {wsPort, "/session", 64, 128, 500ms}};
     wsServer.start();
     std::this_thread::sleep_for(30ms);
@@ -433,7 +433,7 @@ TEST(directApiLoopbackWebsocketTuiCanonicalStateMatchesPerStep) {
     auto wsState = e2e::canonical(wsSnapshot);
     ssg::Revision wsRevision = wsSnapshot.revision();
 
-    auto const codec = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
+    auto const codec = ssg::CommandArgumentCodecRegistry{wsScenario.session->catalog()};
 
     for (auto const& step : steps) {
         // Direct dispatch
@@ -676,7 +676,7 @@ TEST(concurrentTuiAndWebsocketClientsShareFollowInterruption) {
     constexpr std::uint16_t concPort = 18801;
     ConcurrentHost concHost{scenario, wsPeerPrincipal};
     ssg::HttpEditorServer concServer{
-        *scenario.session, ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry(),
+        *scenario.session,
         concHost, {concPort, "/session", 64, 128, 500ms}};
     concServer.start();
     std::this_thread::sleep_for(30ms);
@@ -692,7 +692,7 @@ TEST(concurrentTuiAndWebsocketClientsShareFollowInterruption) {
     scenario.model.registerClient(ssg::ClientId{42},
                                    ssg::ViewportDimensions{80, 20});
 
-    auto const codec = ssg::ProtocolCodec{}.buildCommandArgumentCodecRegistry();
+    auto const codec = ssg::CommandArgumentCodecRegistry{scenario.session->catalog()};
 
     // Navigate direct client to row 3 and WS client to row 10 to establish
     // independent viewport offsets.

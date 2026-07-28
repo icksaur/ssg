@@ -140,11 +140,10 @@ struct HttpEditorRoute::Impl {
     using ReplayKey = std::pair<std::string, std::uint64_t>;
 
     Impl(Http::Server& httpServer, EditorSession& editorSession,
-         CommandArgumentCodecRegistry commandArgumentCodecs,
          HttpEditorSessionHost& sessionHost,
          HttpEditorRouteConfig routeConfig)
         : session{editorSession},
-          argumentCodecs{std::move(commandArgumentCodecs)},
+          argumentCodecs{session.catalog()},
           host{sessionHost},
           config{std::move(routeConfig)},
           server{httpServer} {
@@ -475,6 +474,9 @@ struct HttpEditorRoute::Impl {
     }
 
     EditorSession& session;
+    // Derived from the session's catalog rather than handed in as a value: a
+    // command registered while the server is running must be decodable at once,
+    // and a snapshot taken at construction could not be (R8).
     CommandArgumentCodecRegistry argumentCodecs;
     HttpEditorSessionHost& host;
     HttpEditorRouteConfig config;
@@ -487,10 +489,9 @@ struct HttpEditorRoute::Impl {
 
 HttpEditorRoute::HttpEditorRoute(
     Http::Server& server, EditorSession& session,
-    CommandArgumentCodecRegistry argumentCodecs,
     HttpEditorSessionHost& host, HttpEditorRouteConfig config)
-    : impl_{std::make_unique<Impl>(server, session, std::move(argumentCodecs),
-                                  host, std::move(config))} {}
+    : impl_{std::make_unique<Impl>(server, session, host,
+                                   std::move(config))} {}
 
 HttpEditorRoute::~HttpEditorRoute() = default;
 
@@ -506,10 +507,9 @@ bool HttpEditorRoute::sendBinary(ClientId clientId,
 
 struct HttpEditorServer::Impl {
     Impl(EditorSession& session,
-         CommandArgumentCodecRegistry argumentCodecs,
-         HttpEditorSessionHost& host, HttpEditorServerConfig config)
+              HttpEditorSessionHost& host, HttpEditorServerConfig config)
         : server{config.port},
-          route{server, session, std::move(argumentCodecs), host,
+          route{server, session, host,
                 {std::move(config.route), config.outboundQueueMessages,
                  config.replayDeltas, config.writeTimeout,
                  config.protocolLimits}} {
@@ -538,10 +538,10 @@ struct HttpEditorServer::Impl {
 };
 
 HttpEditorServer::HttpEditorServer(
-    EditorSession& session, CommandArgumentCodecRegistry argumentCodecs,
+    EditorSession& session,
     HttpEditorSessionHost& host, HttpEditorServerConfig config)
     : impl_{std::make_unique<Impl>(
-          session, std::move(argumentCodecs), host, std::move(config))} {}
+          session, host, std::move(config))} {}
 
 HttpEditorServer::~HttpEditorServer() = default;
 

@@ -92,7 +92,6 @@ public:
     // The referenced server must outlive this route and must be stopped before
     // route destruction so no registered callback can outlive its state.
     HttpEditorRoute(Http::Server& server, EditorSession& session,
-                    CommandArgumentCodecRegistry argumentCodecs,
                     HttpEditorSessionHost& host,
                     HttpEditorRouteConfig config = {});
     ~HttpEditorRoute();
@@ -113,8 +112,7 @@ private:
 class HttpEditorServer {
 public:
     HttpEditorServer(EditorSession& session,
-                     CommandArgumentCodecRegistry argumentCodecs,
-                     HttpEditorSessionHost& host,
+                      HttpEditorSessionHost& host,
                      HttpEditorServerConfig config);
     ~HttpEditorServer();
 

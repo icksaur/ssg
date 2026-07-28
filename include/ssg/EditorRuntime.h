@@ -18,6 +18,8 @@
 
 namespace ssg {
 
+class CommandCatalog;
+
 struct EditorRuntimeConfig {
     std::filesystem::path cwd;
     std::filesystem::path scratchRoot;
@@ -107,6 +109,10 @@ public:
     [[nodiscard]] bool detach(ClientId clientId);
     [[nodiscard]] CommandResult dispatch(ClientId clientId,
                                          ClientCommand const& command);
+
+    // The commands this runtime offers.  Held, not copied: a command
+    // registered later is visible through the same pointer.
+    [[nodiscard]] std::shared_ptr<CommandCatalog> commandCatalog() const;
 
     [[nodiscard]] Revision revision() const;
     [[nodiscard]] std::filesystem::path const& workspaceRoot() const noexcept;
