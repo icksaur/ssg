@@ -15,7 +15,11 @@
 #include <ssg/Commands.h>
 #include <ssg/EditorRuntime.h>
 
+#include <ssg/CommandReference.h>
+
 #include "frozen_catalog.h"
+
+#include <cstdlib>
 
 #include <filesystem>
 #include <ssg/EditorSessionBuilder.h>
@@ -132,33 +136,42 @@ TEST(everyOwnerInTheCatalogHasAtLeastOneCommand) {
     }
 }
 
+// doc/commands.md is generated from the catalog, so this compares the WHOLE
+// committed file against what a core-registered runtime renders -- not merely
+// that every id appears somewhere.  A summary edited in the catalog, a command
+// whose arguments changed, or an owner regrouped all fail here.
+//
+// Generation is a test rather than a build step because populating the catalog
+// means running registration, which needs a runtime, and constructing one
+// creates directories.  A build must not do filesystem work, and a generated
+// file must not appear unbidden in a working tree: it is a reviewed diff.
+//
+// Regenerate with:  SSG_UPDATE_DOCS=1 ./build/test_commands
 TEST(theGeneratedCommandReferenceIsCurrent) {
-    // doc/commands.md is generated from this catalog by ssg_command_docs.  If
-    // it is stale the catalog and the published reference disagree, so this
-    // fails rather than letting the doc drift.  Regenerate with:
-    //   cmake --build build --target ssg_command_docs_generate
+    auto const root = std::filesystem::temp_directory_path() /
+                      "ssg-command-reference";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root);
+    auto created = ssg::EditorRuntime::create({root});
+    ASSERT_TRUE(created.runtime != nullptr);
+    if (!created.runtime) return;
+    auto const catalog = created.runtime->commandCatalog();
+    auto const rendered = ssg::renderCommandReference(*catalog);
+    std::filesystem::remove_all(root);
+
+    if (std::getenv("SSG_UPDATE_DOCS") != nullptr) {
+        std::ofstream out{SSG_COMMAND_DOC_PATH, std::ios::binary};
+        out << rendered;
+        ASSERT_TRUE(out.good());
+        return;
+    }
+
     std::ifstream input{SSG_COMMAND_DOC_PATH, std::ios::binary};
     ASSERT_TRUE(input.good());
     if (!input.good()) return;
-    std::string const doc{std::istreambuf_iterator<char>{input},
-                          std::istreambuf_iterator<char>{}};
-    ASSERT_FALSE(doc.empty());
-
-    // Every command appears, and no command appears that the catalog lacks.
-    std::size_t documented = 0;
-    for (auto const& command : ssg::commandCatalog()) {
-        std::string const needle = "| `" + std::string{command.id} + "` |";
-        ASSERT_TRUE(doc.find(needle) != std::string::npos);
-        ++documented;
-    }
-    ASSERT_EQ(documented, ssg::commandCatalog().size());
-
-    std::size_t rows = 0;
-    for (std::size_t at = doc.find("| `"); at != std::string::npos;
-         at = doc.find("| `", at + 1)) {
-        ++rows;
-    }
-    ASSERT_EQ(rows, ssg::commandCatalog().size());
+    std::string const committed{std::istreambuf_iterator<char>{input},
+                                std::istreambuf_iterator<char>{}};
+    ASSERT_EQ(committed, rendered);
 }
 
 }  // namespace

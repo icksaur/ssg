@@ -1,11 +1,12 @@
 # Commands
 
-Generated from the command catalog in `src/Commands.cpp` by
-`ssg_command_docs`. Do not edit: change the catalog instead.
+Generated from the command catalog by `test_commands`. Do not
+edit: change the command's registration instead, then regenerate
+with `SSG_UPDATE_DOCS=1 ./build/test_commands`.
 
 `init.lua` may call the commands marked `init.lua`; the rest are
 available to the Lua API when a host grants them
-(see `doc/spec-commands.md`).
+(see `doc/spec-command-registry.md`).
 
 There are 182 commands.
 
@@ -116,8 +117,6 @@ There are 182 commands.
 
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
-| `goto.definition` | Go to Definition | none | lua |
-| `goto.reference` | Reference | none | lua |
 | `completion.open` | Open | none | lua |
 | `completion.next` | Next | none | lua |
 | `completion.previous` | Previous | none | lua |
@@ -125,6 +124,8 @@ There are 182 commands.
 | `completion.dismiss` | Dismiss | none | lua |
 | `hover.show` | Show | none | lua |
 | `hover.dismiss` | Dismiss | none | lua |
+| `goto.definition` | Go to Definition | none | lua |
+| `goto.reference` | Reference | none | lua |
 
 ## lsp-workspace-edits
 
@@ -151,12 +152,12 @@ There are 182 commands.
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
 | `palette.open` | Command Palette | none | lua |
-| `file_finder.open` | Open | none | lua |
-| `file_finder.toggle_gitignore` | Toggle Gitignore | none | lua |
 | `palette.close` | Close | none | lua |
 | `palette.next` | Next | none | lua |
 | `palette.previous` | Previous | none | lua |
 | `palette.execute` | Execute | palette selection | lua |
+| `file_finder.open` | Open | none | lua |
+| `file_finder.toggle_gitignore` | Toggle Gitignore | none | lua |
 | `goto.file` | Go to File | none | lua |
 | `goto.line` | Go to Line | none | lua |
 | `goto.symbol` | Go to Symbol | none | lua |
@@ -203,9 +204,9 @@ There are 182 commands.
 | `select.add_cursor_down` | Add Cursor Down | selection | lua |
 | `select.split_into_lines` | Split Into Lines | selection | lua |
 | `select.to_matching_bracket` | To Matching Bracket | selection | lua |
+| `goto.matching_bracket` | Matching Bracket | selection | lua |
 | `view.reveal_caret` | Reveal Caret | selection | lua |
 | `view.center_caret` | Center Caret | selection | lua |
-| `goto.matching_bracket` | Matching Bracket | selection | lua |
 
 ## settings-model
 
