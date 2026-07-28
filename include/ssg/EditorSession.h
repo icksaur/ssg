@@ -14,6 +14,10 @@ struct ClientCommand {
     std::string id;
     Revision baseRevision;
     std::any payload;
+    // Set by callers that already know the command (the TUI's compiled keymap).
+    // When valid it selects the registration directly and `id` is not read on
+    // dispatch; when invalid the name is resolved as before.
+    CommandHandle handle;
 };
 
 enum class CommandError : std::uint8_t {

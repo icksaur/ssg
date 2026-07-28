@@ -1,5 +1,7 @@
 #include <ssg/CommandRegistry.h>
 
+#include <ssg/Commands.h>
+
 #include <algorithm>
 #include <stdexcept>
 #include <unordered_map>
@@ -70,6 +72,10 @@ CommandSet::CommandSet(std::vector<CommandRegistration> commands)
 
 struct CommandRegistry::Impl {
     std::unordered_map<std::string, CommandRegistration> commands;
+    // Parallel to the catalog: byHandle[h.index()] is the registration for that
+    // catalog row, or nullptr when the row is unbound.  Stable because the map
+    // is never mutated after construction.
+    std::vector<CommandRegistration const*> byHandle;
 };
 
 CommandRegistry::CommandRegistry(std::vector<CommandSet> commandSets)
@@ -85,6 +91,12 @@ CommandRegistry::CommandRegistry(std::vector<CommandSet> commandSets)
             }
         }
     }
+    impl_->byHandle.assign(commandCatalog().size(), nullptr);
+    for (auto const& [id, registration] : impl_->commands) {
+        if (auto const handle = commandHandle(id); handle.valid()) {
+            impl_->byHandle[handle.index()] = &registration;
+        }
+    }
 }
 
 CommandRegistry::~CommandRegistry() = default;
@@ -96,6 +108,10 @@ CommandRegistration const* CommandRegistry::find(
     std::string_view commandId) const {
     auto found = impl_->commands.find(std::string{commandId});
     return found == impl_->commands.end() ? nullptr : &found->second;
+}
+
+CommandRegistration const* CommandRegistry::find(CommandHandle command) const {
+    return command.valid() ? impl_->byHandle[command.index()] : nullptr;
 }
 
 }  // namespace ssg

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ssg/CommandHandle.h>
+
 #include <ssg/types.h>
 
 #include <any>
@@ -206,6 +208,11 @@ public:
 
     [[nodiscard]] CommandRegistration const* find(
         std::string_view commandId) const;
+
+    // Handle lookup: an array index, no hashing and no string to construct.
+    // The name-based overload is the boundary (protocol, Lua, palette); this is
+    // what the keystroke path uses once a handle has been minted.
+    [[nodiscard]] CommandRegistration const* find(CommandHandle command) const;
 
 private:
     struct Impl;

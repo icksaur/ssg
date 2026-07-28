@@ -67,7 +67,9 @@ CommandResult EditorSession::dispatch(ClientId clientId,
                         "client ID is not attached");
     }
 
-    auto const* registration = impl_->registry.find(command.id);
+    auto const* registration = command.handle.valid()
+                                   ? impl_->registry.find(command.handle)
+                                   : impl_->registry.find(command.id);
     if (registration == nullptr) {
         return rejected(CommandError::UnknownCommand, currentRevision,
                         "command is not registered: " + command.id);

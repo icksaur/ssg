@@ -12,6 +12,7 @@
 #include "pointer_routing.h"
 #include "ssg_terminal.h"
 
+#include <ssg/CompiledKeymap.h>
 #include <ssg/EditorRuntime.h>
 #include <ssg/HitTester.h>
 #include <ssg/FindReplace.h>
@@ -763,7 +764,42 @@ int main(int argc, char** argv) {
     };
 
     std::string buffer;             // Raw bytes read but not yet decoded.
-    ssg::KeySequence chord;         // The pending (mid-entry) key chord.
+    // The pending (mid-entry) key chord, in both of its forms.
+    //
+    // Resolution matches on the compiled strokes; the leader hint and the
+    // app-local quit chord read the authored ones.  They live in one object
+    // because six call sites clear this chord, and a clear that forgot one form
+    // would leave resolution matching strokes the user had already abandoned.
+    class PendingChord {
+    public:
+        void push(ssg::KeyStroke stroke, ssg::CompiledStroke compiled) {
+            strokes_.push_back(std::move(stroke));
+            compiled_.push_back(compiled);
+        }
+        void clear() noexcept {
+            strokes_.clear();
+            compiled_.clear();
+        }
+        [[nodiscard]] ssg::KeySequence const& strokes() const noexcept {
+            return strokes_;
+        }
+        [[nodiscard]] std::span<ssg::CompiledStroke const> compiled()
+            const noexcept {
+            return compiled_;
+        }
+        [[nodiscard]] std::size_t size() const noexcept {
+            return strokes_.size();
+        }
+        [[nodiscard]] ssg::KeyStroke const& operator[](std::size_t index)
+            const {
+            return strokes_[index];
+        }
+
+    private:
+        ssg::KeySequence strokes_;
+        std::vector<ssg::CompiledStroke> compiled_;
+    };
+    PendingChord chord;
     bool quit = false;
     auto focus = ssg::FocusTarget::Editor;
     // Client-owned palette state: query and selection are local (reported for
@@ -806,11 +842,20 @@ int main(int argc, char** argv) {
     bool pathPromptOpen = false;
     std::string pathPromptValue;
     ssg::KeymapViewState keymap;
+    std::unique_ptr<ssg::CompiledKeymap> compiledKeymap =
+        std::make_unique<ssg::CompiledKeymap>(keymap);
     std::vector<ssg::PaletteCandidate> candidates;
 
     auto dispatch = [&](std::string_view id, std::any payload = {}) {
         (void)runtime.dispatch(client, {std::string{id}, runtime.revision(),
                                         std::move(payload)});
+    };
+    // The keystroke path's dispatch: the command is already identified, so no
+    // name is constructed, hashed or compared.
+    auto dispatchHandle = [&](ssg::CommandHandle command,
+                              std::any payload = {}) {
+        (void)runtime.dispatch(client, {std::string{}, runtime.revision(),
+                                        std::move(payload), command});
     };
     // Re-center the client-owned palette window on the current selection
     // (keep-visible). Called ONLY when the selection changes (arrow navigation,
@@ -884,29 +929,60 @@ int main(int argc, char** argv) {
     // server focus on the next snapshot, not forced here, so a failed submit (no
     // candidate / rejected execute) leaves the prompt open rather than
     // desynchronizing the client.
-    auto dispatchResolved = [&](std::string const& id) {
+    // The commands the client intercepts before the registry sees them, and the
+    // commands that open a picker.  Both are resolved to handles once, so the
+    // keystroke path compares integers instead of command names.
+    struct InterceptHandles {
+        ssg::CommandHandle promptSubmit = ssg::commandHandle("prompt.submit");
+        ssg::CommandHandle promptCancel = ssg::commandHandle("prompt.cancel");
+        ssg::CommandHandle promptNext = ssg::commandHandle("prompt.next");
+        ssg::CommandHandle promptPrevious =
+            ssg::commandHandle("prompt.previous");
+        ssg::CommandHandle paletteNext = ssg::commandHandle("palette.next");
+        ssg::CommandHandle palettePrevious =
+            ssg::commandHandle("palette.previous");
+        ssg::CommandHandle paletteClose = ssg::commandHandle("palette.close");
+        std::vector<ssg::CommandHandle> pickerOpeners;
+    };
+    InterceptHandles const intercept = [] {
+        InterceptHandles handles;
+        for (auto const& descriptor : ssg::pickerCatalog().descriptors()) {
+            handles.pickerOpeners.push_back(
+                ssg::commandHandle(descriptor.openCommandId));
+        }
+        return handles;
+    }();
+    auto dispatchResolved = [&](ssg::CommandHandle command) {
         if (pickerOpen && focus == ssg::FocusTarget::Prompt) {
-            if (id == "prompt.submit") { submitSelectedCandidate(); return; }
-            if (id == "prompt.cancel") { dispatch("palette.close"); return; }
-            if (id == "prompt.next" || id == "palette.next") {
+            if (command == intercept.promptSubmit) {
+                submitSelectedCandidate();
+                return;
+            }
+            if (command == intercept.promptCancel) {
+                dispatchHandle(intercept.paletteClose);
+                return;
+            }
+            if (command == intercept.promptNext ||
+                command == intercept.paletteNext) {
                 ++picker.selected;
                 revealPaletteSelection();
                 return;
             }
-            if (id == "prompt.previous" || id == "palette.previous") {
+            if (command == intercept.promptPrevious ||
+                command == intercept.palettePrevious) {
                 if (picker.selected > 0) --picker.selected;
                 revealPaletteSelection();
                 return;
             }
         }
-        dispatch(id);
+        dispatchHandle(command);
         // Any picker's open command starts a fresh window.  Driven off the
         // catalog rather than a hardcoded "palette.open" so adding a picker
         // cannot forget to reset the query and selection -- which silently
         // inherits the previous picker's filter.
         bool opensAPicker = false;
-        for (auto const& descriptor : ssg::pickerCatalog().descriptors()) {
-            if (id == descriptor.openCommandId) opensAPicker = true;
+        for (auto const& opener : intercept.pickerOpeners) {
+            if (command == opener) opensAPicker = true;
         }
         if (opensAPicker) {
             pickerOpen = true;
@@ -949,10 +1025,17 @@ int main(int argc, char** argv) {
     // coalesced input after a focus-changing command routes against the new
     // focus rather than a stale one.
     auto refresh = [&]() -> std::optional<ssg::SessionSnapshot> {
-        auto snapshot = runtime.snapshot(client, terminalSize(), chord, buildReport());
+        auto snapshot = runtime.snapshot(client, terminalSize(), chord.strokes(), buildReport());
         if (snapshot) {
             focus = snapshot->sections().shell.focus;
-            keymap = snapshot->sections().keymap;
+            if (keymap != snapshot->sections().keymap) {
+                keymap = snapshot->sections().keymap;
+                // The compiled index is derived from the authored keymap, so it
+                // is rebuilt exactly when that changes (keymap.bind, a config
+                // reload) and never per keystroke.
+                compiledKeymap =
+                    std::make_unique<ssg::CompiledKeymap>(keymap);
+            }
             candidates = snapshot->sections().palette.candidates;
             pickerMode = snapshot->sections().palette.mode;
             // Cache the palette pane height for the next window computation: the
@@ -1278,10 +1361,12 @@ int main(int argc, char** argv) {
                 continue;
             }
 
-            chord.push_back(decoded.stroke);
-            auto resolution = ssg::KeymapMatcher{keymap}.resolveSequence(chord, ssg::focusTargetName(focus));
+            chord.push(decoded.stroke, compiledKeymap->intern(decoded.stroke));
+            auto resolution = compiledKeymap->resolve(
+                chord.compiled(),
+                compiledKeymap->contextFor(ssg::focusTargetName(focus)));
             if (resolution.kind == ssg::KeymapMatchKind::Resolved) {
-                dispatchResolved(resolution.commandId);
+                dispatchResolved(resolution.command);
                 chord.clear();
             } else if (resolution.kind == ssg::KeymapMatchKind::Pending) {
                 // Keep collecting; the leader hint renders next frame.

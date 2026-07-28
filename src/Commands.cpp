@@ -583,4 +583,18 @@ CommandSpec const* findCommand(std::string_view id) {
     return found == kCommands.end() ? nullptr : &*found;
 }
 
+CommandHandle commandHandle(std::string_view id) noexcept {
+    auto const found = std::ranges::find(kCommands, id, &CommandSpec::id);
+    if (found == kCommands.end()) return {};
+    return CommandHandle{static_cast<std::uint16_t>(found - kCommands.begin())};
+}
+
+CommandSpec const* CommandHandle::spec() const noexcept {
+    return valid() ? &kCommands[index_] : nullptr;
+}
+
+std::string_view CommandHandle::id() const noexcept {
+    return valid() ? kCommands[index_].id : std::string_view{};
+}
+
 }  // namespace ssg
