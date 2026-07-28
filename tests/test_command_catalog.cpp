@@ -303,6 +303,41 @@ TEST(registeringPastTheHandleSpaceIsRefused) {
     ASSERT_EQ(ssg::CommandCatalog::kMaximumCommands, std::size_t{65535});
 }
 
+TEST(aSwapExceedingTheHandleSpaceLeavesThePreviousGenerationWorking) {
+    // Capacity is checked in the validate phase, so running out of handles
+    // behaves like any other refusal: the generation already installed keeps
+    // working rather than being retired for a replacement that cannot fit.
+    // Retired slots are NOT reclaimed, which is what makes exhaustion reachable
+    // at all -- a script reloaded often enough consumes the space.
+    ssg::CommandCatalog catalog;
+    auto previous = std::vector{catalog.add(minimal("lua.survivor"))};
+
+    // Fill the space, one reload at a time, until a swap is refused.
+    bool refused = false;
+    std::string refusal;
+    for (int reload = 0; reload < 200000 && !refused; ++reload) {
+        std::vector<ssg::CommandSpecBuilder> batch;
+        batch.push_back(minimal("lua.churn"));
+        try {
+            auto const added = catalog.replaceGeneration(previous, std::move(batch));
+            previous = added;
+        } catch (std::runtime_error const& thrown) {
+            refused = true;
+            refusal = thrown.what();
+        }
+    }
+    ASSERT_TRUE(refused);
+    ASSERT_TRUE(refusal.find("full") != std::string::npos);
+
+    // The generation that was installed when the refusal happened is intact,
+    // and still dispatchable -- its handle resolves to a live entry.
+    ASSERT_EQ(previous.size(), std::size_t{1});
+    auto const* live = catalog.find(previous[0]);
+    ASSERT_TRUE(live != nullptr);
+    if (live) ASSERT_EQ(live->id, std::string{"lua.churn"});
+    ASSERT_TRUE(catalog.find("lua.churn") == live);
+}
+
 
 TEST(retiringACommandFreesItsNameButNeverItsHandle) {
     // A reload registers the same ids again, so retiring must release the name.
@@ -417,6 +452,7 @@ int main() {
     RUN(aCommandRegisteredAfterTheSessionIsBuiltIsDispatchable);
     RUN(anEmptyCapabilityIsRefusedAtRegistration);
     RUN(registeringPastTheHandleSpaceIsRefused);
+    RUN(aSwapExceedingTheHandleSpaceLeavesThePreviousGenerationWorking);
     RUN(addIssuesAHandleThatResolvesBackToItsCommand);
     RUN(addRejectsADuplicateIdAndNamesBothOwners);
     RUN(addRejectsEachMissingRequiredField);

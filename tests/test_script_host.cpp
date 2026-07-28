@@ -9,6 +9,7 @@
 #include <memory>
 #include <iostream>
 #include <string>
+#include <thread>
 #include <unistd.h>
 
 namespace {
@@ -282,6 +283,50 @@ TEST(aScriptCommandThatDispatchesIsRefusedRatherThanHanging) {
     fs::remove_all(root);
 }
 
+
+TEST(aLuaBackedCommandDispatchedFromAnotherThreadIsRefusedNotSerialised) {
+    // The Lua state belongs to the thread that built it.  A call from elsewhere
+    // must be REFUSED: serialising it would run script code at a moment the
+    // caller cannot reason about, and would hide the rule instead of stating
+    // it.  The message has to say so, since this is the kind of failure a user
+    // meets with no other explanation.
+    auto root = uniqueRoot();
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    ssg::ScriptHost scripts{*runtime};
+
+    ASSERT_TRUE(scripts
+                    .evaluate("calls = 0\n"
+                              "ssg.register_command('user.owned', function()\n"
+                              "  calls = calls + 1\n"
+                              "end)")
+                    .accepted());
+
+    ssg::CommandResult offThread{};
+    std::thread caller{[&] {
+        offThread = runtime->dispatch(
+            ssg::ClientId{1}, {"user.owned", runtime->revision(), {}});
+    }};
+    caller.join();
+
+    ASSERT_TRUE(!offThread.accepted());
+    ASSERT_TRUE(offThread.message.find("thread") != std::string::npos);
+
+    // The same command still works from the owning thread.
+    ASSERT_TRUE(runtime
+                    ->dispatch(ssg::ClientId{1},
+                               {"user.owned", runtime->revision(), {}})
+                    .accepted());
+
+    // Exactly one call reached the script, so the refused one was not merely
+    // delayed onto the owning thread.  Checked last because an evaluation
+    // retires the generation it replaces, which would remove the command.
+    ASSERT_TRUE(
+        scripts.evaluate("if calls ~= 1 then error('wrong call count') end")
+            .accepted());
+    fs::remove_all(root);
+}
+
 }  // namespace
 
 int main() {
@@ -297,6 +342,7 @@ int main() {
     RUN(aScriptCommandCollidingWithABuiltInIsRefusedWithoutLosingTheEditor);
     RUN(aRefusedGenerationLeavesThePreviousOneWhollyIntact);
     RUN(aScriptCommandThatDispatchesIsRefusedRatherThanHanging);
+    RUN(aLuaBackedCommandDispatchedFromAnotherThreadIsRefusedNotSerialised);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }
