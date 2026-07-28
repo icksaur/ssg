@@ -24,17 +24,51 @@
 #include <ssg/Keymap.h>
 
 #include <cstdint>
+#include <optional>
 #include <span>
-#include <string_view>
-#include <unordered_map>
 #include <vector>
 
 namespace ssg {
 
-// A focus context interned against one keymap.  `kAnyContext` is "*".
-using ContextId = std::uint16_t;
-inline constexpr ContextId kUnknownContext = 0;
-inline constexpr ContextId kAnyContext = 1;
+// A binding's context, compiled.  A keymap context is already a closed set --
+// `"*"` plus the FocusTarget names (focus.h) -- so a compiled binding stores the
+// focus it applies to, the global context, or `Never` for a name outside that
+// set.  Resolution then takes the FocusTarget the client already holds, and no
+// context name is built, hashed or compared on the keystroke path.
+//
+// `Never` matters: an unrecognised context must match no keystroke, exactly as
+// KeymapMatcher's name comparison does.  Folding it into the global context
+// would turn a rejected binding into a binding active everywhere.
+class CompiledContext {
+public:
+    static constexpr CompiledContext any() noexcept {
+        return CompiledContext{kAny};
+    }
+    static constexpr CompiledContext never() noexcept {
+        return CompiledContext{kNever};
+    }
+    static constexpr CompiledContext of(FocusTarget focus) noexcept {
+        return CompiledContext{static_cast<std::int8_t>(focus)};
+    }
+
+    [[nodiscard]] constexpr bool isAny() const noexcept {
+        return value_ == kAny;
+    }
+    [[nodiscard]] constexpr bool eligibleIn(FocusTarget focus) const noexcept {
+        return value_ == kAny || value_ == static_cast<std::int8_t>(focus);
+    }
+
+    bool operator==(CompiledContext const&) const noexcept = default;
+
+private:
+    static constexpr std::int8_t kAny = -1;
+    static constexpr std::int8_t kNever = -2;
+
+    explicit constexpr CompiledContext(std::int8_t value) noexcept
+        : value_{value} {}
+
+    std::int8_t value_ = kNever;
+};
 
 // One keystroke as a single integer: the decoder's KeyCode plus modifier bits.
 // Comparing two strokes is comparing two `std::uint32_t`.
@@ -72,21 +106,19 @@ public:
     [[nodiscard]] static CompiledStroke compile(KeyStroke const& stroke) noexcept {
         return CompiledStroke{stroke};
     }
-    [[nodiscard]] ContextId contextFor(std::string_view name) const;
 
     // Integer-only resolution: the same first-eligible-match, "*"-upgrades and
     // strict-prefix-is-pending rules KeymapMatcher applies to strings.
     [[nodiscard]] CompiledResolution resolve(
-        std::span<CompiledStroke const> pending, ContextId context) const;
+        std::span<CompiledStroke const> pending, FocusTarget focus) const;
 
 private:
     struct Entry {
         CompiledSequence sequence;
         CommandHandle command;
-        ContextId context = kUnknownContext;
+        CompiledContext context = CompiledContext::never();
     };
 
-    std::unordered_map<std::string, ContextId> contexts_;
     std::vector<Entry> entries_;
 };
 

@@ -854,8 +854,9 @@ int main(int argc, char** argv) {
     // name is constructed, hashed or compared.
     auto dispatchHandle = [&](ssg::CommandHandle command,
                               std::any payload = {}) {
-        (void)runtime.dispatch(client, {std::string{}, runtime.revision(),
-                                        std::move(payload), command});
+        (void)runtime.dispatch(
+            client, {ssg::CommandRef{command}, runtime.revision(),
+                     std::move(payload)});
     };
     // Re-center the client-owned palette window on the current selection
     // (keep-visible). Called ONLY when the selection changes (arrow navigation,
@@ -1362,9 +1363,7 @@ int main(int argc, char** argv) {
             }
 
             chord.push(decoded.stroke, ssg::CompiledKeymap::compile(decoded.stroke));
-            auto resolution = compiledKeymap->resolve(
-                chord.compiled(),
-                compiledKeymap->contextFor(ssg::focusTargetName(focus)));
+            auto resolution = compiledKeymap->resolve(chord.compiled(), focus);
             if (resolution.kind == ssg::KeymapMatchKind::Resolved) {
                 dispatchResolved(resolution.command);
                 chord.clear();

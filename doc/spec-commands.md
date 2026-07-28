@@ -238,6 +238,15 @@ session need to *name* a command without depending on the catalog's data: every
 summary, argument shape and documentation line. Identity is small; the catalog is
 not.
 
+**`CommandRef`** is how a caller names the command it wants to invoke, and it
+exists because a dispatch target carrying a name *and* a handle as independent
+fields could carry two different commands, with no principled answer as to which
+wins. A ref holds one identity and derives the other: built from a name it
+resolves the handle once; built from a handle the name comes free from the
+catalog. `ClientCommand::id` is a `CommandRef`, so disagreement is not
+representable rather than merely detected, and `name()` is always available — a
+rejected dispatch can always say which command it rejected.
+
 **`KeyCode`** (`include/ssg/KeyCode.h`) is a closed enum of every key the decoder
 can name. `KeyStroke::code` is a `KeyCode`, so the decoder emits identity
 directly and allocates nothing per keystroke.
@@ -260,10 +269,19 @@ source of truth and is unchanged.
 
 `CompiledKeymap` (`include/ssg/CompiledKeymap.h`) is a **derived index** of it,
 rebuilt exactly when the authored keymap changes — a `keymap.bind`, a config
-reload — and never per keystroke. It resolves command ids to `CommandHandle`s and
-interns focus contexts to integers. Because the decoder now supplies a `KeyCode`,
-`CompiledStroke` packs key and modifier bits into a single `std::uint32_t`, and
-the compiled keymap needs no key intern table at all.
+reload — and never per keystroke. It resolves command ids to `CommandHandle`s.
+Because the decoder now supplies a `KeyCode`, `CompiledStroke` packs key and
+modifier bits into a single `std::uint32_t`, and the compiled keymap needs no key
+intern table at all.
+
+A binding's context needs no intern table either: a keymap context is already a
+closed set — `"*"` plus the `FocusTarget` names — so `CompiledContext` stores the
+focus a binding applies to, the global context, or `Never`. `Never` is
+load-bearing: an unrecognised context name must match no keystroke, exactly as
+the authored matcher's name comparison does, and folding it into the global
+context would turn a rejected binding into one active everywhere. Resolution
+takes the `FocusTarget` the client already holds, so no context name is built,
+hashed or compared on the keystroke path.
 
 Resolution applies **the same rules** `KeymapMatcher` applies — first eligible
 match wins, a `"*"` binding upgrades a focus-specific match, a strict prefix is
@@ -305,9 +323,12 @@ when no binding matched, which is discussed under Considerations below.
 - **Two spellings of a keymap now exist**, authored and compiled, and they must
   not disagree. The compiled form is rebuilt whenever the authored one changes
   and derives every binding from it, so divergence requires a bug in
-  `CompiledKeymap`'s constructor rather than ordinary drift. There is currently
-  **no test** asserting the two resolvers agree, which is the most valuable test
-  this design is missing.
+  `CompiledKeymap`'s constructor rather than ordinary drift. This is guarded by
+  `compiledKeymapResolvesIdenticallyToTheAuthoredMatcher`, a differential test
+  that compares the two resolvers over adversarial keymaps (duplicate globals, a
+  global shadowing a focus binding, prefix chains, an unknown context) rather
+  than pinning either one's answers — an oracle would state the rules twice and
+  still not prove they agree.
 - **The pending chord has two forms**, compiled for matching and authored for the
   leader hint and the app-local quit chord. `PendingChord` in `apps/ssg_main.cpp`
   owns both because six call sites clear the chord, and a clear that forgot one
@@ -332,11 +353,13 @@ when no binding matched, which is discussed under Considerations below.
   fallthrough rather than a stated rule.
 - **Origin.** This part was built as a spike (`cb0893f`, `955bb37`) on
   `spike/handle-dispatch` to find the simplest thing that could work, explicitly
-  without tests. It compiles, the full suite of 94 passes, and the binary was
-  driven over a pty to confirm printables, Backspace, CSI Delete and both chords
-  behave identically to `master`. That is evidence it works, **not** evidence it
-  is correct: it has no tests of its own, and the invariants above are currently
-  unguarded.
+  without tests, and was then reviewed and hardened. It compiles, the full suite
+  passes, and the binary was driven over a pty to confirm printables, Backspace,
+  CSI Delete and both chords behave identically to `master`. Review found the
+  dual-identity dispatch hazard, the lost diagnostic on the handle path, and
+  per-keystroke context string work; all three are fixed above. V2 is guarded by
+  a perturbation-verified differential test; V1, V3 and V4 rest on the type
+  system rather than on tests.
 
 ## Acceptance
 
@@ -344,6 +367,6 @@ when no binding matched, which is discussed under Considerations below.
 - The authored keymap remains the source of truth and the only thing a user or a
   config file edits.
 - Palette, Lua and protocol behaviour are unchanged.
-- Before merging: a test that `CompiledKeymap` and `KeymapMatcher` resolve
-  identically across the default keymap, and perturbation evidence that it fails
-  when they diverge.
+- `CompiledKeymap` and `KeymapMatcher` resolve identically; verified by
+  perturbation (breaking the global-precedence upgrade, the `Never` context, and
+  prefix detection each fail the differential test).

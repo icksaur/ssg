@@ -67,12 +67,15 @@ CommandResult EditorSession::dispatch(ClientId clientId,
                         "client ID is not attached");
     }
 
-    auto const* registration = command.handle.valid()
-                                   ? impl_->registry.find(command.handle)
-                                   : impl_->registry.find(command.id);
+    // A ref built from a name the catalog knows already carries its handle, so
+    // the name lookup is only reached for a command outside the catalog.
+    auto const* registration = command.id.handle().valid()
+                                   ? impl_->registry.find(command.id.handle())
+                                   : impl_->registry.find(command.id.name());
     if (registration == nullptr) {
         return rejected(CommandError::UnknownCommand, currentRevision,
-                        "command is not registered: " + command.id);
+                        "command is not registered: " +
+                            std::string{command.id.name()});
     }
 
     for (auto const& capability :

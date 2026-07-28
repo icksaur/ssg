@@ -12,51 +12,50 @@ bool isStrictPrefix(std::span<CompiledStroke const> shorter,
            std::equal(shorter.begin(), shorter.end(), longer.begin());
 }
 
+// The authored context name, compiled.  "*" is the global context and every
+// other valid name is a focus; a name outside that closed set matches no
+// keystroke, exactly as KeymapMatcher's name comparison does.
+CompiledContext compileContext(std::string_view name) {
+    if (name == "*") return CompiledContext::any();
+    for (auto const focus :
+         {FocusTarget::Editor, FocusTarget::Panel, FocusTarget::Prompt}) {
+        if (focusTargetName(focus) == name) return CompiledContext::of(focus);
+    }
+    return CompiledContext::never();
+}
+
 }  // namespace
 
 CompiledKeymap::CompiledKeymap(KeymapViewState const& keymap) {
-    contexts_.emplace("*", kAnyContext);
-    auto internContext = [this](std::string const& name) {
-        auto const next = static_cast<ContextId>(contexts_.size() + 1);
-        return contexts_.emplace(name, next).first->second;
-    };
-    auto internCode = [](KeyStroke const& stroke) {
-        return CompiledStroke{stroke};
-    };
-
     entries_.reserve(keymap.bindings.size());
     for (auto const& binding : keymap.bindings) {
         Entry entry;
         entry.command = commandHandle(binding.commandId);
-        entry.context = internContext(binding.context);
+        entry.context = compileContext(binding.context);
         entry.sequence.reserve(binding.sequence.size());
         for (auto const& stroke : binding.sequence) {
-            entry.sequence.push_back(internCode(stroke));
+            entry.sequence.emplace_back(stroke);
         }
         entries_.push_back(std::move(entry));
     }
 }
 
-ContextId CompiledKeymap::contextFor(std::string_view name) const {
-    auto const found = contexts_.find(std::string{name});
-    return found == contexts_.end() ? kUnknownContext : found->second;
-}
-
 CompiledResolution CompiledKeymap::resolve(
-    std::span<CompiledStroke const> pending, ContextId context) const {
+    std::span<CompiledStroke const> pending, FocusTarget focus) const {
     if (pending.empty()) return {};
 
     Entry const* match = nullptr;
     bool hasPending = false;
     for (auto const& entry : entries_) {
-        if (entry.context != kAnyContext && entry.context != context) {
-            continue;
-        }
+        if (!entry.context.eligibleIn(focus)) continue;
         if (std::ranges::equal(entry.sequence, pending)) {
+            // First eligible match wins; a global binding upgrades a focus
+            // match (K4 precedence) but two global bindings keep the first,
+            // matching KeymapMatcher's first-authoritative rule so the two
+            // agree on any (even invalid) keymap.
             if (match == nullptr) {
                 match = &entry;
-            } else if (entry.context == kAnyContext &&
-                       match->context != kAnyContext) {
+            } else if (entry.context.isAny() && !match->context.isAny()) {
                 match = &entry;
             }
         } else if (isStrictPrefix(pending, entry.sequence)) {

@@ -5365,10 +5365,10 @@ CommandArgumentCodecRegistry ProtocolCodec::buildCommandArgumentCodecRegistry() 
 std::string ProtocolCodec::encodeCommandRequest(ClientCommand const& command,
                                    CommandArgumentCodecRegistry const& registry) const {
     std::vector<ProtocolValue::Field> fields;
-    fields.emplace_back("id", toValue(command.id));
+    fields.emplace_back("id", toValue(std::string{command.id.name()}));
     fields.emplace_back("base_revision", toValue(command.baseRevision));
-    fields.emplace_back("payload",
-                        registry.encodeArgument(command.id, command.payload));
+    fields.emplace_back(
+        "payload", registry.encodeArgument(command.id.name(), command.payload));
     return encodeMessage(ProtocolMessageKind::CommandRequest,
                           ProtocolValue::makeObject(std::move(fields)));
 }

@@ -11,13 +11,12 @@
 namespace ssg {
 
 struct ClientCommand {
-    std::string id;
+    // The command to invoke, named however the caller most cheaply can: a name
+    // at the protocol, Lua and palette boundaries, a handle on the keystroke
+    // path.  One field, so a dispatch cannot carry two different commands.
+    CommandRef id;
     Revision baseRevision;
     std::any payload;
-    // Set by callers that already know the command (the TUI's compiled keymap).
-    // When valid it selects the registration directly and `id` is not read on
-    // dispatch; when invalid the name is resolved as before.
-    CommandHandle handle;
 };
 
 enum class CommandError : std::uint8_t {

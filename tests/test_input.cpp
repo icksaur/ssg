@@ -1,3 +1,4 @@
+#include <ssg/CompiledKeymap.h>
 #include <ssg/focus.h>
 #include <ssg/Keymap.h>
 
@@ -398,6 +399,78 @@ TEST(backendHasNoPlatformInputCaptureDependency) {
 
 } // namespace
 
+// The compiled keymap is a DERIVED index of the authored one, so the only thing
+// that makes it safe is that it decides exactly what KeymapMatcher decides.  It
+// duplicates the precedence and prefix rules, so this compares the two
+// resolvers directly rather than asserting either one's answers: an oracle here
+// would pin the rules twice and still not prove they agree.
+//
+// The keymaps below are deliberately adversarial -- duplicate globals, a global
+// shadowing a focus binding, prefix chains, and an unknown context -- because
+// those are the cases where a reimplementation diverges.
+TEST(compiledKeymapResolvesIdenticallyToTheAuthoredMatcher) {
+    const auto stroke = [](ssg::KeyCode code, bool control = false) {
+        ssg::KeyStroke result;
+        result.code = code;
+        result.control = control;
+        return result;
+    };
+    const auto binding = [](ssg::KeySequence sequence, std::string command,
+                            std::string context) {
+        return ssg::KeyBinding{std::move(sequence), std::move(command),
+                               std::move(context)};
+    };
+
+    const auto escape = stroke(ssg::KeyCode::Escape);
+    const auto keyS = stroke(ssg::KeyCode::KeyS);
+    const auto keyQ = stroke(ssg::KeyCode::KeyQ);
+    const auto ctrlS = stroke(ssg::KeyCode::KeyS, true);
+
+    std::vector<ssg::KeymapViewState> keymaps;
+    keymaps.push_back({"focus-vs-global",
+                       {binding({escape, keyS}, "file.save", "editor"),
+                        binding({escape, keyS}, "file.save_as", "*"),
+                        binding({escape, keyQ}, "edit.undo", "prompt")}});
+    keymaps.push_back({"duplicate-globals",
+                       {binding({escape, keyS}, "file.save", "*"),
+                        binding({escape, keyS}, "file.save_as", "*")}});
+    keymaps.push_back({"prefix-chain",
+                       {binding({escape}, "edit.undo", "editor"),
+                        binding({escape, keyS}, "file.save", "editor"),
+                        binding({escape, keyS, keyQ}, "edit.redo", "editor")}});
+    keymaps.push_back({"unknown-context",
+                       {binding({escape, keyS}, "file.save", "nonsense"),
+                        binding({ctrlS}, "file.save_as", "panel")}});
+    keymaps.push_back({"empty", {}});
+
+    // Every prefix of every candidate sequence, so Pending and None are covered
+    // as well as Resolved.
+    const std::vector<ssg::KeySequence> inputs{
+        {}, {escape}, {keyS}, {ctrlS}, {escape, keyS}, {escape, keyQ},
+        {escape, ctrlS}, {escape, keyS, keyQ}, {escape, keyS, keyS},
+        {keyS, escape}};
+
+    for (const auto& keymap : keymaps) {
+        const ssg::CompiledKeymap compiled{keymap};
+        for (const auto focus : {ssg::FocusTarget::Editor,
+                                 ssg::FocusTarget::Panel,
+                                 ssg::FocusTarget::Prompt}) {
+            for (const auto& input : inputs) {
+                std::vector<ssg::CompiledStroke> compiledInput;
+                for (const auto& key : input) {
+                    compiledInput.push_back(ssg::CompiledKeymap::compile(key));
+                }
+                const auto authored = ssg::KeymapMatcher{keymap}.resolveSequence(
+                    input, ssg::focusTargetName(focus));
+                const auto fast = compiled.resolve(compiledInput, focus);
+                ASSERT_TRUE(authored.kind == fast.kind);
+                ASSERT_EQ(std::string{fast.command.id()},
+                          std::string{authored.commandId});
+            }
+        }
+    }
+}
+
 int main() {
     RUN(keyStrokesHaveACanonicalRoundTrip);
     RUN(validateKeymapFlagsDuplicateUnreachableAndReservedBindings);
@@ -407,6 +480,7 @@ int main() {
     RUN(resolveKeySequenceMapsSameKeyPerContext);
     RUN(resolveKeySequenceStarBeatsFocusAndResolvesEverywhere);
     RUN(resolveKeySequenceReportsPendingAndNone);
+    RUN(compiledKeymapResolvesIdenticallyToTheAuthoredMatcher);
     RUN(textRoutingIsPerContext);
     RUN(hasGlobalBindingRequiresUnreservedUnshadowedStar);
     RUN(validateKeymapFlagsGlobalShadowRegardlessOfOrder);

@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <limits>
+#include <string>
 #include <string_view>
 
 namespace ssg {
@@ -51,5 +52,59 @@ private:
 // Resolve a command name to its handle.  This is the one place a command id
 // string is matched; call it at construction time, not per keystroke.
 [[nodiscard]] CommandHandle commandHandle(std::string_view id) noexcept;
+
+// How a caller names the command it wants to invoke.
+//
+// A command has two spellings -- a name and a handle -- and a dispatch target
+// that carried BOTH as independent fields could carry two different commands,
+// with no principled answer as to which wins.  CommandRef holds ONE identity
+// and derives the other, so they cannot disagree:
+//
+//   * built from a name, it resolves the handle once, here;
+//   * built from a handle, the name comes free from the catalog.
+//
+// Either way `name()` is always available, so a rejected dispatch can say which
+// command it rejected.  A name outside the catalog keeps its text and yields an
+// invalid handle, which is exactly the unknown-command case.
+class CommandRef {
+public:
+    CommandRef() = default;
+
+    // Implicit: a command name is the ordinary way to name a command, and every
+    // existing call site spells one as a literal.  The name is retained only
+    // when the catalog does not know it -- otherwise the handle is the identity
+    // and the name is derived from it, so there is one fact, not two.
+    CommandRef(std::string_view name)  // NOLINT(google-explicit-constructor)
+        : handle_{commandHandle(name)} {
+        if (!handle_.valid()) unknownName_ = std::string{name};
+    }
+    CommandRef(char const* name)  // NOLINT(google-explicit-constructor)
+        : CommandRef{std::string_view{name}} {}
+    CommandRef(std::string const& name)  // NOLINT(google-explicit-constructor)
+        : CommandRef{std::string_view{name}} {}
+
+    // The keystroke path's spelling: no name is constructed or compared.
+    explicit CommandRef(CommandHandle handle) noexcept : handle_{handle} {}
+
+    [[nodiscard]] CommandHandle handle() const noexcept { return handle_; }
+    // The command's name, for lookup fallback and for diagnostics.  Never empty
+    // for a ref that names any real command.
+    [[nodiscard]] std::string_view name() const noexcept {
+        return handle_.valid() ? handle_.id() : std::string_view{unknownName_};
+    }
+    [[nodiscard]] bool empty() const noexcept { return name().empty(); }
+
+    // Two refs are equal when they name the same command.  A literal converts,
+    // so a call site asking "is this file.open?" reads as it always did.
+    [[nodiscard]] bool operator==(CommandRef const& other) const noexcept {
+        return handle_ == other.handle_ && name() == other.name();
+    }
+
+private:
+    // The text of a name the catalog does not know; empty otherwise, because a
+    // known command's name is derived from its handle.
+    std::string unknownName_;
+    CommandHandle handle_;
+};
 
 }  // namespace ssg
