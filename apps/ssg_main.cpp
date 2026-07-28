@@ -19,6 +19,7 @@
 #include <ssg/FindReplace.h>
 #include <ssg/Keymap.h>
 #include <ssg/LuaCommandHost.h>
+#include <ssg/ScriptHost.h>
 #include <ssg/PaletteSearcher.h>
 #include <ssg/Picker.h>
 #include <ssg/platform_files.h>
@@ -222,139 +223,7 @@ void popCodePoint(std::string& text) {
     if (!text.empty()) text.pop_back();
 }
 
-// The reserved client id for the one-shot init-script Lua host (distinct
-// from the interactive client's ClientId{1}) -- attached ONLY while
-// init.lua is being evaluated, then detached, so this synthetic client
-// leaves no lasting per-client state (follow-edits tracking, viewport,
-// etc.) once startup configuration has run.
-ssg::ClientId const kInitScriptClientId{2};
 
-// The capabilities the init-script Lua host is granted -- ONE named,
-// explicit list shared by BOTH LuaCommandHost's own catalog check (via
-// LuaCommandHostOptions.capabilities) AND the attached principal's real
-// dispatch-time capability check (InvocationPrincipal::hasCapability),
-// so there is exactly one place to update when a future capability-gated
-// init-script command is added -- keeping these as two independently
-// hand-maintained lists would let one drift out of sync with the other
-// (passing one gate but silently denied, or vice versa, at the other).
-// theme.define requires none today, so this is empty; see doc/spec-
-// config.md's Risks: never a wildcard/all-capabilities grant.
-std::vector<ssg::CapabilityId> initScriptCapabilities() { return {}; }
-
-// The catalog of commands init.lua may call via ssg.command(id, args). A
-// future capability-gated init-script command must be added BOTH here
-// (with its required capabilities) and to initScriptCapabilities() above,
-// or InvocationPrincipal::hasCapability denies it by default, same as any
-// other Lua caller.  Built from the running editor's catalog: a command's
-// startup grant is declared by the component that implements it, so this asks
-// what is registered rather than reading a list.
-std::vector<ssg::LuaCommand> initScriptCommandCatalog(
-    ssg::CommandCatalog const& catalog) {
-    std::vector<ssg::LuaCommand> result;
-    for (auto const* command : catalog.commands()) {
-        if (command->initScript) result.push_back({command->id, {}});
-    }
-    return result;
-}
-
-// Extracts a string field from a Lua flat-map argument table, or an empty
-// string when absent -- keymap.bind/unbind treat an absent "context" as
-// "*" (see KeymapBindArguments/KeymapUnbindArguments in Keymap.h), so the
-// caller distinguishes "absent" from "empty" only for required fields.
-std::string luaArgument(
-    std::unordered_map<std::string, std::string> const& arguments,
-    std::string_view key) {
-    const auto it = arguments.find(std::string{key});
-    return it == arguments.end() ? std::string{} : it->second;
-}
-
-// Translates one ssg.command(id, args) call from init.lua into the matching
-// ClientCommand payload and dispatches it through the SAME command
-// boundary the palette and every other caller uses. A later init-script
-// command adds one more `if (invocation.commandId == ...)` branch here,
-// not a new dispatch mechanism.
-ssg::CommandHandlerResult dispatchInitScriptCommand(
-    ssg::EditorRuntime& runtime, ssg::LuaInvocation const& invocation) {
-    if (invocation.commandId == "theme.define") {
-        // theme.define always requires its color-table argument; a bare
-        // ssg.command("theme.define") with no table must fail loudly (a
-        // caller mistake), not silently apply an empty no-op table.
-        if (!invocation.arguments) {
-            return ssg::CommandHandlerResult::failure(
-                "theme.define requires a color-table argument");
-        }
-        ssg::ThemeDefineArguments arguments{*invocation.arguments};
-        auto result = runtime.dispatch(
-            kInitScriptClientId,
-            {"theme.define", runtime.revision(), arguments});
-        return result.accepted()
-                   ? ssg::CommandHandlerResult::success()
-                   : ssg::CommandHandlerResult::failure(result.message);
-    }
-    if (invocation.commandId == "theme.background") {
-        // Same rule as theme.define: a bare call with no table is a caller
-        // mistake, not a request to apply an empty no-op.
-        if (!invocation.arguments) {
-            return ssg::CommandHandlerResult::failure(
-                "theme.background requires a multiplier table argument");
-        }
-        ssg::ThemeBackgroundArguments arguments{*invocation.arguments};
-        auto result = runtime.dispatch(
-            kInitScriptClientId,
-            {"theme.background", runtime.revision(), arguments});
-        return result.accepted()
-                   ? ssg::CommandHandlerResult::success()
-                   : ssg::CommandHandlerResult::failure(result.message);
-    }
-    if (invocation.commandId == "style.define") {
-        // Same rule as theme.define: a bare call with no table is a caller
-        // mistake, not a request to apply an empty no-op style.
-        if (!invocation.arguments) {
-            return ssg::CommandHandlerResult::failure(
-                "style.define requires a style-table argument");
-        }
-        ssg::StyleDefineArguments arguments{*invocation.arguments};
-        auto result = runtime.dispatch(
-            kInitScriptClientId,
-            {"style.define", runtime.revision(), arguments});
-        return result.accepted()
-                   ? ssg::CommandHandlerResult::success()
-                   : ssg::CommandHandlerResult::failure(result.message);
-    }
-    if (invocation.commandId == "keymap.bind") {
-        if (!invocation.arguments) {
-            return ssg::CommandHandlerResult::failure(
-                "keymap.bind requires a sequence/command argument table");
-        }
-        ssg::KeymapBindArguments arguments{
-            luaArgument(*invocation.arguments, "sequence"),
-            luaArgument(*invocation.arguments, "command"),
-            luaArgument(*invocation.arguments, "context")};
-        auto result = runtime.dispatch(
-            kInitScriptClientId,
-            {"keymap.bind", runtime.revision(), arguments});
-        return result.accepted()
-                   ? ssg::CommandHandlerResult::success()
-                   : ssg::CommandHandlerResult::failure(result.message);
-    }
-    if (invocation.commandId == "keymap.unbind") {
-        if (!invocation.arguments) {
-            return ssg::CommandHandlerResult::failure(
-                "keymap.unbind requires a sequence argument table");
-        }
-        ssg::KeymapUnbindArguments arguments{
-            luaArgument(*invocation.arguments, "sequence"),
-            luaArgument(*invocation.arguments, "context")};
-        auto result = runtime.dispatch(
-            kInitScriptClientId,
-            {"keymap.unbind", runtime.revision(), arguments});
-        return result.accepted()
-                   ? ssg::CommandHandlerResult::success()
-                   : ssg::CommandHandlerResult::failure(result.message);
-    }
-    return ssg::CommandHandlerResult::failure(
-        "unknown init-script command: " + std::string{invocation.commandId});
-}
 
 // True for empty or whitespace-only content -- treated as "nothing to
 // run", same as an absent file, so a zero-byte read observed mid-truncate
@@ -368,47 +237,22 @@ bool isBlank(std::string const& text) {
 }
 
 // Evaluates `script` (already read from `scriptPath`, used only for
-// diagnostic messages) through a FRESH sandboxed LuaCommandHost attached as
-// the synthetic Lua-origin client, then detaches it -- the SAME path used
-// at startup and on every later auto-reload (never a persistent Lua state
-// shared across evaluations). A broken script prints a one-line stderr
-// diagnostic and otherwise changes nothing -- MUST NEVER be called with an
-// empty/whitespace-only `script`, since an empty Lua chunk is trivially
-// valid and would look like a silent successful "reload" of nothing; the
-// callers below only invoke this when there is real content to run (see
-// isBlank above, applied at every read site before this is called).
-void evaluateInitScript(ssg::EditorRuntime& runtime,
+// diagnostic messages) through the process-lifetime ScriptHost -- the SAME
+// path used at startup and on every later auto-reload. A broken script prints
+// a one-line stderr diagnostic and otherwise leaves the previous evaluation's
+// registrations in place -- MUST NEVER be called with an empty/whitespace-only
+// `script`, since an empty Lua chunk is trivially valid and would look like a
+// silent successful "reload" of nothing; the callers below only invoke this
+// when there is real content to run (see isBlank above, applied at every read
+// site before this is called).
+void evaluateInitScript(ssg::ScriptHost& scripts,
                         std::filesystem::path const& scriptPath,
                         std::string const& script) {
-    // keymap.bind/unbind's "reset-then-reapply" model: init.lua's current
-    // content is the WHOLE keymap customization on every evaluation
-    // (startup and every later auto-reload), never additive -- so a line
-    // removed from init.lua reverts that binding on the next reload, same
-    // as theme.define's replace-on-full-reload behavior.
-    runtime.resetKeymapToDefault();
-    if (!runtime
-             .attach({kInitScriptClientId, ssg::InvocationOrigin::Lua,
-                      initScriptCapabilities()},
-                     ssg::ViewId{0})
-             .accepted()) {
-        std::fprintf(stderr, "ssg: could not start init-script host\n");
-        return;
-    }
-
-    ssg::LuaCommandHostOptions options;
-    options.pluginId = kInitScriptClientId;
-    options.capabilities = initScriptCapabilities();
-    options.commands = initScriptCommandCatalog(*runtime.commandCatalog());
-    ssg::LuaCommandHost host{
-        std::move(options), [&runtime](ssg::LuaInvocation const& invocation) {
-            return dispatchInitScriptCommand(runtime, invocation);
-        }};
-    auto const result = host.evaluate(script);
+    auto const result = scripts.evaluate(script);
     if (!result.accepted()) {
         std::fprintf(stderr, "ssg: %s: %s\n", scriptPath.string().c_str(),
-                    result.message.c_str());
+                     result.message.c_str());
     }
-    (void)runtime.detach(kInitScriptClientId);
 }
 
 // Resolves `init.lua`'s path for this OS. Returns nullopt (after printing a
@@ -461,12 +305,12 @@ std::optional<std::string> readInitScriptIfPresent(
 // editor). Returns the content actually applied (or nullopt), so the
 // caller can seed InitScriptWatcher's "last applied" baseline and avoid
 // redundantly re-evaluating the SAME unchanged content on its first poll.
-std::optional<std::string> loadInitScript(ssg::EditorRuntime& runtime) {
+std::optional<std::string> loadInitScript(ssg::ScriptHost& scripts) {
     auto const scriptPath = resolveInitScriptPath();
     if (!scriptPath) return std::nullopt;
     auto script = readInitScriptIfPresent(*scriptPath, true);
     if (!script) return std::nullopt;
-    evaluateInitScript(runtime, *scriptPath, *script);
+    evaluateInitScript(scripts, *scriptPath, *script);
     return script;
 }
 
@@ -542,7 +386,7 @@ public:
     // Drains the wake pipe and, if a stable new script is queued,
     // evaluates it on the CALLING (main) thread. Call this only after the
     // main loop's select() reports wakeDescriptor() readable.
-    void drainAndEvaluate(ssg::EditorRuntime& runtime) {
+    void drainAndEvaluate(ssg::ScriptHost& scripts) {
         char buffer[64];
         while (::read(wakePipe_[0], buffer, sizeof buffer) > 0) {
         }
@@ -553,7 +397,7 @@ public:
             pendingScript_.reset();
         }
         if (pending) {
-            evaluateInitScript(runtime, scriptPath_, *pending);
+            evaluateInitScript(scripts, scriptPath_, *pending);
         }
     }
 
@@ -661,7 +505,10 @@ int main(int argc, char** argv) {
     }
     STARTUP_MARK("post_attach");
 
-    auto const appliedInitScript = loadInitScript(runtime);
+    // Lives for the rest of the process, so a function init.lua defines
+    // remains callable long after the script that defined it has finished.
+    ssg::ScriptHost scripts{runtime};
+    auto const appliedInitScript = loadInitScript(scripts);
     STARTUP_MARK("post_init_script");
 
     // doc/spec-config.md's auto-reload: watches the SAME path just loaded
@@ -1205,7 +1052,7 @@ int main(int argc, char** argv) {
                 // Unlike git-diff (auto-drained inside EditorRuntime::snapshot()),
                 // nothing else drains this -- evaluate the reloaded script here,
                 // on the main thread, exactly like startup's loadInitScript.
-                initScriptWatcher->drainAndEvaluate(runtime);
+                initScriptWatcher->drainAndEvaluate(scripts);
                 if (!wait.input) continue;
             }
             if (wait.gitDiff && !wait.input) continue;
