@@ -181,24 +181,21 @@ struct EditorRuntime::Impl final : CommandServices,
         ClientCommand command;
     };
 
-    // The queue itself, with its storage private so `defer` is the only way in.
+    // The queue, shaped so `Impl::defer` is the only way to ADD to it -- by
+    // construction, not by convention.
     //
-    // It was previously a bare vector, which two callers pushed to directly and
-    // one reached through a checked method -- so the shortest way to queue a
-    // command was also the only unchecked one.  Draining stays with the owner
-    // (EditorRuntime::dispatch), which is why take/clear are exposed.
+    // It was previously a bare vector that two callers pushed to directly while
+    // a third went through a checked method, so the shortest way to queue a
+    // command was the only unchecked one.  Hiding the vector alone would just
+    // move that hole to the wrapper, so writing is private and `Impl` is the
+    // only friend: a future caller cannot reach the write path at all, whereas
+    // reading (which the drain needs) is harmless and stays public.
     class DeferredCommandQueue {
     public:
         // A handler that queued without limit would spin the drain loop
         // forever; refusing says so, where the alternative is an editor that
         // stops responding for no visible reason.
         static constexpr std::size_t kMaximum = 64;
-
-        [[nodiscard]] bool enqueue(DeferredCommand deferred) {
-            if (commands_.size() >= kMaximum) return false;
-            commands_.push_back(std::move(deferred));
-            return true;
-        }
 
         [[nodiscard]] bool empty() const noexcept { return commands_.empty(); }
         [[nodiscard]] DeferredCommand takeFront() {
@@ -209,6 +206,16 @@ struct EditorRuntime::Impl final : CommandServices,
         void clear() noexcept { commands_.clear(); }
 
     private:
+        // Only reachable through Impl::defer, which is what enforces that a
+        // dispatch is actually in progress.  Queueing outside one would strand
+        // the command until some later, unrelated dispatch drained it.
+        friend struct EditorRuntime::Impl;
+        [[nodiscard]] bool enqueue(DeferredCommand deferred) {
+            if (commands_.size() >= kMaximum) return false;
+            commands_.push_back(std::move(deferred));
+            return true;
+        }
+
         std::vector<DeferredCommand> commands_;
     };
 

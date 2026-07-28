@@ -225,7 +225,12 @@ Implemented in `bdd6148`, `d15f42c`, `075b811` and this commit. Gate green
 - **Step 2** `EditorSession::kNestedDispatchRefusal` is the single definition,
   used by both guards, naming the alternative and the reason.
 - **Step 3** the queue's storage is private to `DeferredCommandQueue` and
-  `Impl::defer` is its only writer; a direct `push_back` no longer compiles.
+  `Impl::defer` is its only writer. Hiding the vector alone was not enough --
+  review caught that `enqueue` was still publicly reachable through the queue
+  member, which only moved the hole -- so `enqueue` is private with `Impl` its
+  only friend. Both a direct `push_back` and a direct `enqueue` are now compile
+  errors, so the check cannot be bypassed by construction rather than by
+  convention.
   `palette.execute` and `prompt.submit` now report a refusal rather than
   queueing into a dispatch that will not drain. Palette and save-as verified
   against the real binary over a pty.
