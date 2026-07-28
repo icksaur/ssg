@@ -586,31 +586,127 @@ void registerClipboardCommands(EditorSessionBuilder& builder,
     declare("clipboard.paste", "Paste", ClipboardCommand::Paste);
 }
 
+// Whole-line and whole-selection edits.  None takes an argument: each acts on
+// wherever the selections already are.
+void registerEditSuiteCommands(EditorSessionBuilder& builder,
+                               EditorRuntime::Impl& runtime) {
+    auto declare = [&](std::string id, std::string label, std::string summary,
+                       EditCommand command) {
+        auto built = CommandSpecBuilder{std::move(id)}
+                         .owner("edit-command-suite")
+                         .summary(std::move(summary))
+                         .mutates()
+                         .lua()
+                         .handler([&runtime, command](CommandContext&) {
+                             return runtime.runTransaction([&] {
+                                 return bindEdit(runtime, command);
+                             });
+                         });
+        if (!label.empty()) built.label(std::move(label));
+        builder.add(std::move(built));
+    };
+    declare("edit.indent", "Indent", "Indent", EditCommand::Indent);
+    declare("edit.outdent", "Outdent", "Outdent", EditCommand::Outdent);
+    declare("edit.duplicate_line", "", "Duplicate Line",
+            EditCommand::DuplicateLine);
+    declare("edit.move_line_up", "", "Move Line Up", EditCommand::MoveLineUp);
+    declare("edit.move_line_down", "", "Move Line Down",
+            EditCommand::MoveLineDown);
+    declare("edit.delete_line", "", "Delete Line", EditCommand::DeleteLine);
+    declare("edit.join_lines", "", "Join Lines", EditCommand::JoinLines);
+    declare("edit.uppercase", "", "Uppercase", EditCommand::Uppercase);
+    declare("edit.lowercase", "", "Lowercase", EditCommand::Lowercase);
+    declare("edit.swap_case", "", "Swap Case", EditCommand::SwapCase);
+    declare("edit.sort_lines", "", "Sort Lines", EditCommand::SortLines);
+    declare("edit.transpose", "", "Transpose", EditCommand::Transpose);
+    declare("edit.toggle_comment", "Toggle Comment", "Toggle Comment",
+            EditCommand::ToggleComment);
+}
+
+// Find and replace, in the open document and across the workspace.
+void registerFindReplaceCommands(EditorSessionBuilder& builder,
+                                 EditorRuntime::Impl& runtime) {
+    auto spec = [](std::string id, std::string summary) {
+        return CommandSpecBuilder{std::move(id)}
+            .owner("find-replace")
+            .summary(std::move(summary))
+            .mutates()
+            .lua();
+    };
+    auto bare = [&](std::string id, std::string label, std::string summary,
+                    FindReplaceCommand command) {
+        auto built = spec(std::move(id), std::move(summary))
+                         .handler([&runtime, command](CommandContext& context) {
+                             return runtime.runTransaction([&] {
+                                 return executeFindReplaceCommand(
+                                     runtime, context.revision(), command, {});
+                             });
+                         });
+        if (!label.empty()) built.label(std::move(label));
+        builder.add(std::move(built));
+    };
+
+    bare("find.open", "Find", "Find", FindReplaceCommand::FindOpen);
+    bare("find.close", "", "Close", FindReplaceCommand::FindClose);
+    bare("find.next", "", "Next", FindReplaceCommand::FindNext);
+    bare("find.previous", "", "Previous", FindReplaceCommand::FindPrevious);
+    bare("find.toggle_case", "", "Toggle Case",
+         FindReplaceCommand::FindToggleCase);
+    bare("find.toggle_whole_word", "", "Toggle Whole Word",
+         FindReplaceCommand::FindToggleWholeWord);
+    bare("find.toggle_regex", "", "Toggle Regex",
+         FindReplaceCommand::FindToggleRegex);
+    bare("find.toggle_selection", "", "Toggle Selection",
+         FindReplaceCommand::FindToggleSelection);
+    bare("replace.open", "Replace", "Replace", FindReplaceCommand::ReplaceOpen);
+    bare("replace.current", "", "Current", FindReplaceCommand::ReplaceCurrent);
+    bare("replace.all", "", "All", FindReplaceCommand::ReplaceAll);
+
+    // These four carry a payload, and each has a defined meaning without one:
+    // an absent query keeps the current one, and an absent preview applies the
+    // one already held.  Demanding a payload would refuse calls that work.
+    auto carrying = [&]<typename Arguments>(std::string id, std::string summary,
+                                            FindReplaceCommand command,
+                                            Arguments const*) {
+        builder.add(spec(std::move(id), std::move(summary))
+                        .optionalHandler<Arguments>(
+                            [&runtime, command](
+                                CommandContext& context,
+                                std::optional<Arguments> const& arguments) {
+                                return runtime.runTransaction([&] {
+                                    return executeFindReplaceCommand(
+                                        runtime, context.revision(), command,
+                                        arguments ? std::any{*arguments}
+                                                  : std::any{});
+                                });
+                            }));
+    };
+    carrying("find.update_query", "Update Query",
+             FindReplaceCommand::FindUpdateQuery,
+             static_cast<FindQueryArguments const*>(nullptr));
+    carrying("replace.update_replacement", "Update Replacement",
+             FindReplaceCommand::ReplaceUpdateReplacement,
+             static_cast<FindQueryArguments const*>(nullptr));
+    carrying("replace.workspace_preview", "Workspace Preview",
+             FindReplaceCommand::ReplaceWorkspacePreview,
+             static_cast<WorkspaceReplaceArguments const*>(nullptr));
+    carrying("replace.workspace_apply", "Workspace Apply",
+             FindReplaceCommand::ReplaceWorkspaceApply,
+             static_cast<WorkspaceReplacePreview const*>(nullptr));
+}
+
 void bindRuntimeEditing(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime) {
     registerTextInputCommands(builder, runtime);
+    registerEditSuiteCommands(builder, runtime);
+    registerFindReplaceCommands(builder, runtime);
     registerHistoryCommands(builder, runtime);
     registerClipboardCommands(builder, runtime);
     auto selectionCommands = selectionNavigationCommandSet();
-    auto editCommands = editCommandSuiteCommandSet();
-    auto findReplaceCommands = findReplaceCommandSet();
     for (auto const& descriptor : selectionCommands.descriptors()) {
         builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext& context, std::any const& payload) {
             return runtime.runTransaction([&] {
                 return bindSelection(runtime, context.principal().clientId(),
                                      descriptor.command, payload);
-            });
-        });
-    }
-    for (auto const& descriptor : editCommands.descriptors()) {
-        builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext&, std::any const&) {
-            return runtime.runTransaction([&] { return bindEdit(runtime, descriptor.command); });
-        });
-    }
-    for (auto const& descriptor : findReplaceCommands.descriptors()) {
-        builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext& context, std::any const& payload) {
-            return runtime.runTransaction([&] {
-                return executeFindReplaceCommand(runtime, context.revision(),
-                                                 descriptor.command, payload);
             });
         });
     }

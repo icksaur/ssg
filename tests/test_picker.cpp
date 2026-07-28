@@ -1,5 +1,7 @@
 #include <ssg/Picker.h>
 
+#include "all_command_ids.h"
+
 #include <ssg/EditorSessionBuilder.h>
 #include <ssg/Search.h>
 
@@ -10,12 +12,13 @@
 
 namespace {
 
+// Against the runtime's catalog: a picker's open command may be declared by the
+// component that implements it rather than by the static table.
 bool isP0Command(std::string_view id) {
-    auto const descriptors = ssg::p0CommandDescriptors();
-    return std::any_of(descriptors.begin(), descriptors.end(),
-                       [&](ssg::CommandDescriptor const& descriptor) {
-                           return descriptor.id == id;
-                       });
+    for (auto const& facts : ssg::testing::allCommandFacts()) {
+        if (facts.id == id) return true;
+    }
+    return false;
 }
 
 }  // namespace

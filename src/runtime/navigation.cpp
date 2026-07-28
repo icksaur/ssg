@@ -369,14 +369,91 @@ void registerTreeCommands(EditorSessionBuilder& builder,
                         }));
 }
 
+// The pickers, workspace search, and the go-to jumps.
+void registerSearchPaletteCommands(EditorSessionBuilder& builder,
+                                   EditorRuntime::Impl& runtime) {
+    auto spec = [](std::string id, std::string summary) {
+        return CommandSpecBuilder{std::move(id)}
+            .owner("search-palette")
+            .summary(std::move(summary))
+            .mutates()
+            .lua();
+    };
+    auto bare = [&](std::string id, std::string label, std::string summary) {
+        auto name = id;
+        auto built = spec(std::move(id), std::move(summary))
+                         .handler([&runtime, name](CommandContext& context) {
+                             return runtime.runTransaction([&] {
+                                 return searchCommand(runtime, context, name,
+                                                      {});
+                             });
+                         });
+        if (!label.empty()) built.label(std::move(label));
+        builder.add(std::move(built));
+    };
+
+    bare("palette.open", "Command Palette", "Command Palette");
+    bare("file_finder.open", "", "Open");
+    bare("file_finder.toggle_gitignore", "", "Toggle Gitignore");
+    bare("palette.close", "", "Close");
+    bare("palette.next", "", "Next");
+    bare("palette.previous", "", "Previous");
+    bare("goto.back", "", "Back");
+    bare("goto.forward", "", "Forward");
+    bare("search.results_next", "", "Results Next");
+    bare("search.results_previous", "", "Results Previous");
+
+    // Names the command to run, so it is the one search command a remote client
+    // may send an argument for.
+    builder.add(spec("palette.execute", "Execute")
+                    .handler<PaletteExecuteArguments>(
+                        [&runtime](CommandContext& context,
+                                   PaletteExecuteArguments const& arguments) {
+                            return runtime.runTransaction([&] {
+                                return searchCommand(runtime, context,
+                                                     "palette.execute",
+                                                     std::any{arguments});
+                            });
+                        }));
+
+    // An absent query searches for the current one.
+    builder.add(spec("search.workspace", "Workspace")
+                    .optionalInProcessHandler<std::string>(
+                        [&runtime](CommandContext& context,
+                                   std::optional<std::string> const& query) {
+                            return runtime.runTransaction([&] {
+                                return searchCommand(
+                                    runtime, context, "search.workspace",
+                                    query ? std::any{*query} : std::any{});
+                            });
+                        }));
+
+    // Each jumps to a place the client resolved, which is meaningless to
+    // another process.
+    auto jump = [&](std::string id, std::string label, std::string summary) {
+        auto name = id;
+        builder.add(spec(std::move(id), std::move(summary))
+                        .label(std::move(label))
+                        .optionalInProcessHandler<NavigationTarget>(
+                            [&runtime, name](
+                                CommandContext& context,
+                                std::optional<NavigationTarget> const& target) {
+                                return runtime.runTransaction([&] {
+                                    return searchCommand(
+                                        runtime, context, name,
+                                        target ? std::any{*target}
+                                               : std::any{});
+                                });
+                            }));
+    };
+    jump("goto.file", "Go to File", "Go to File");
+    jump("goto.line", "Go to Line", "Go to Line");
+    jump("goto.symbol", "Go to Symbol", "Go to Symbol");
+}
+
 void bindRuntimeNavigation(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime) {
     registerDiffAndFollowCommands(builder, runtime);
-    auto searchCommands = searchCommandSet();
-    for (auto const& descriptor : searchCommands.descriptors()) {
-        builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext& context, std::any const& payload) {
-            return runtime.runTransaction([&] { return searchCommand(runtime, context, descriptor.id, payload); });
-        });
-    }
+    registerSearchPaletteCommands(builder, runtime);
     registerTreeCommands(builder, runtime);
 }
 

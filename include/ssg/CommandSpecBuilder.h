@@ -132,6 +132,21 @@ public:
         return *this;
     }
 
+    // The implementation, taking a typed argument that crosses the wire and may
+    // be absent.
+    //
+    // Completes the pair with `handler`: some wire-carried commands have a
+    // meaningful default -- `replace.workspace_apply` applies the preview it
+    // already holds when given none -- and demanding a payload would refuse a
+    // call that used to work.
+    template <typename Arguments, typename Fn>
+    CommandSpecBuilder& optionalHandler(Fn&& fn) {
+        argument_.type = std::type_index{typeid(Arguments)};
+        argument_.wire = true;
+        handler_ = optionalTypedHandler<Arguments>(std::forward<Fn>(fn));
+        return *this;
+    }
+
     // The implementation, taking a typed argument that may be absent.
     //
     // Some in-process commands act on a specific thing when told which and on
@@ -143,14 +158,7 @@ public:
     CommandSpecBuilder& optionalInProcessHandler(Fn&& fn) {
         argument_.type = std::type_index{typeid(Arguments)};
         argument_.wire = false;
-        handler_ = [call = std::forward<Fn>(fn)](
-                       CommandContext& context,
-                       std::any const& payload) -> CommandHandlerResult {
-            auto const* typed = std::any_cast<Arguments>(&payload);
-            return call(context, typed == nullptr
-                                     ? std::optional<Arguments>{}
-                                     : std::optional<Arguments>{*typed});
-        };
+        handler_ = optionalTypedHandler<Arguments>(std::forward<Fn>(fn));
         return *this;
     }
 
@@ -171,6 +179,8 @@ public:
 private:
     friend class CommandCatalog;
 
+    // Refuses a payload of the wrong type, and a missing one: the command said
+    // it needs an argument.
     template <typename Arguments, typename Fn>
     static CommandHandler typedHandler(Fn&& fn) {
         return [call = std::forward<Fn>(fn)](
@@ -182,6 +192,27 @@ private:
                     "command payload has the wrong type");
             }
             return call(context, *typed);
+        };
+    }
+
+    // Absent means absent, and a payload of the wrong type is still an error.
+    //
+    // Testing only whether the cast succeeded would collapse the two, so a
+    // caller that sent the wrong type would be served the default instead of
+    // being told.  The presence of ANY payload is what separates them.
+    template <typename Arguments, typename Fn>
+    static CommandHandler optionalTypedHandler(Fn&& fn) {
+        return [call = std::forward<Fn>(fn)](
+                   CommandContext& context,
+                   std::any const& payload) -> CommandHandlerResult {
+            auto const* typed = std::any_cast<Arguments>(&payload);
+            if (typed == nullptr && payload.has_value()) {
+                return CommandHandlerResult::failure(
+                    "command payload has the wrong type");
+            }
+            return call(context, typed == nullptr
+                                     ? std::optional<Arguments>{}
+                                     : std::optional<Arguments>{*typed});
         };
     }
 

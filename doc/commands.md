@@ -86,15 +86,15 @@ There are 182 commands.
 | `find.close` | Close | none | lua |
 | `find.next` | Next | none | lua |
 | `find.previous` | Previous | none | lua |
-| `find.update_query` | Update Query | query | lua |
 | `find.toggle_case` | Toggle Case | none | lua |
 | `find.toggle_whole_word` | Toggle Whole Word | none | lua |
 | `find.toggle_regex` | Toggle Regex | none | lua |
 | `find.toggle_selection` | Toggle Selection | none | lua |
 | `replace.open` | Replace | none | lua |
-| `replace.update_replacement` | Update Replacement | query | lua |
 | `replace.current` | Current | none | lua |
 | `replace.all` | All | none | lua |
+| `find.update_query` | Update Query | query | lua |
+| `replace.update_replacement` | Update Replacement | query | lua |
 | `replace.workspace_preview` | Workspace Preview | workspace replace | lua |
 | `replace.workspace_apply` | Workspace Apply | workspace apply | lua |
 
@@ -152,20 +152,20 @@ There are 182 commands.
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
 | `palette.open` | Command Palette | none | lua |
+| `file_finder.open` | Open | none | lua |
+| `file_finder.toggle_gitignore` | Toggle Gitignore | none | lua |
 | `palette.close` | Close | none | lua |
 | `palette.next` | Next | none | lua |
 | `palette.previous` | Previous | none | lua |
+| `goto.back` | Back | none | lua |
+| `goto.forward` | Forward | none | lua |
+| `search.results_next` | Results Next | none | lua |
+| `search.results_previous` | Results Previous | none | lua |
 | `palette.execute` | Execute | palette selection | lua |
-| `file_finder.open` | Open | none | lua |
-| `file_finder.toggle_gitignore` | Toggle Gitignore | none | lua |
+| `search.workspace` | Workspace | none | lua |
 | `goto.file` | Go to File | none | lua |
 | `goto.line` | Go to Line | none | lua |
 | `goto.symbol` | Go to Symbol | none | lua |
-| `goto.back` | Back | none | lua |
-| `goto.forward` | Forward | none | lua |
-| `search.workspace` | Workspace | none | lua |
-| `search.results_next` | Results Next | none | lua |
-| `search.results_previous` | Results Previous | none | lua |
 
 ## selection-navigation
 
