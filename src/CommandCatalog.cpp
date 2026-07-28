@@ -19,6 +19,10 @@ void requireField(bool present, std::string_view id, std::string_view field) {
 
 }  // namespace
 
+CommandHandle commandHandleFromIndex(std::size_t index) noexcept {
+    return CommandHandle{static_cast<std::uint16_t>(index)};
+}
+
 CommandCatalog::CommandCatalog() = default;
 CommandCatalog::~CommandCatalog() = default;
 

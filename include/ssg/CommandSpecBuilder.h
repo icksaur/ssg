@@ -162,16 +162,21 @@ public:
         return *this;
     }
 
-    // Migration only: adopt an already type-erased handler together with the
-    // argument type it expects.  Used while commands still come from the static
-    // table in Commands.cpp, where the handler was bound separately from the
-    // declaration.  Deleted with that table (doc/spec-command-registry.md, D5);
-    // a component that has migrated calls `handler<Args>` instead, which is the
-    // whole point -- there the type is deduced rather than asserted.
-    CommandSpecBuilder& adoptBoundHandler(
-        CommandHandler handler, std::optional<std::type_index> argumentType) {
-        argument_.type = argumentType;
-        argument_.wire = argumentType.has_value();
+
+    // The implementation, taking the payload untouched.
+    //
+    // For a handler that stands in for many commands at once and must accept
+    // whatever each of them carries -- a test fixture mirroring the real
+    // catalog, or a forwarding wrapper.  `wireType` states what the protocol
+    // should carry, so a stand-in encodes as the command it stands for.
+    //
+    // A command that knows its own argument uses the typed forms instead: they
+    // are what make a handler and its codec impossible to disagree, and this
+    // gives that up.
+    CommandSpecBuilder& untypedHandler(
+        CommandHandler handler, std::optional<std::type_index> wireType) {
+        argument_.type = wireType;
+        argument_.wire = wireType.has_value();
         handler_ = std::move(handler);
         return *this;
     }

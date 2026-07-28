@@ -21,11 +21,6 @@
 namespace ssg {
 
 class CommandCatalog;
-enum class ArgumentKind : std::uint8_t;
-
-// Migration only: the argument type a static-table ArgumentKind stood for.
-// Deleted with that enum (doc/spec-command-registry.md, D5).
-[[nodiscard]] std::optional<std::type_index> argumentTypeForKind(ArgumentKind kind);
 
 struct ProtocolLimits {
     // Aggregate snapshots can contain the bounded text and binary values below;

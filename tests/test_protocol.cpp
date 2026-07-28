@@ -3,8 +3,9 @@
 #include <ssg/EditorSessionBuilder.h>
 #include <ssg/FileCommands.h>
 #include <ssg/FindReplace.h>
-#include <ssg/Commands.h>
 #include <ssg/CommandCatalog.h>
+
+#include "all_command_ids.h"
 #include <ssg/EditorRuntime.h>
 
 #include <unistd.h>
@@ -33,10 +34,12 @@ namespace {
 // SessionSnapshotSections fixture so this file exercises the same complete,
 // every-section-populated snapshot shape through the wire codec.
 
+// Every command the editor offers, asked of a real runtime: no single file
+// lists them, because each is declared by the component that implements it.
 std::vector<std::string> catalogIds() {
     std::vector<std::string> ids;
-    for (auto const& command : ssg::commandCatalog()) {
-        ids.emplace_back(command.id);
+    for (auto const& facts : ssg::testing::allCommandFacts()) {
+        ids.push_back(facts.id);
     }
     return ids;
 }

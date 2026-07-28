@@ -1,4 +1,3 @@
-#include <ssg/Commands.h>
 #include <ssg/Protocol.h>
 
 #include <ssg/CommandCatalog.h>
@@ -5265,8 +5264,8 @@ namespace {
 // This replaced a switch over an authored ArgumentKind enum, which itself
 // replaced a 20-branch if-chain on command ids whose final `else` silently gave
 // any unlisted command the no-argument codec.  Keying on the type closes the
-// remaining gap: the type comes from the handler, so a command's codec and its
-// handler cannot disagree about what the payload is.
+// remaining gap: the type comes from the handler that consumes it, so a
+// command's codec and its handler cannot disagree about what the payload is.
 //
 // The catalog says which type each command uses; this says how each type
 // travels.  Neither restates the other.
@@ -5318,31 +5317,6 @@ CommandArgumentCodec const* codecForCommand(CommandCatalog const& catalog,
 
 }  // namespace
 
-std::optional<std::type_index> argumentTypeForKind(ArgumentKind kind) {
-    switch (kind) {
-        case ArgumentKind::None: return std::nullopt;
-        case ArgumentKind::TextInput: return std::type_index{typeid(TextInputArguments)};
-        case ArgumentKind::SelectionCommand: return std::type_index{typeid(SelectionCommandArguments)};
-        case ArgumentKind::ScrollLines: return std::type_index{typeid(ScrollLinesArguments)};
-        case ArgumentKind::ScrollPages: return std::type_index{typeid(ScrollPagesArguments)};
-        case ArgumentKind::ScrollFraction: return std::type_index{typeid(ScrollFractionArguments)};
-        case ArgumentKind::DroppedContent: return std::type_index{typeid(DroppedContentArguments)};
-        case ArgumentKind::ReopenWithEncoding: return std::type_index{typeid(ReopenWithEncodingArguments)};
-        case ArgumentKind::SetEncoding: return std::type_index{typeid(SetEncodingArguments)};
-        case ArgumentKind::SetLineEnding: return std::type_index{typeid(SetLineEndingArguments)};
-        case ArgumentKind::SetFinalNewline: return std::type_index{typeid(SetFinalNewlineArguments)};
-        case ArgumentKind::SettingSet: return std::type_index{typeid(SettingSetArguments)};
-        case ArgumentKind::SettingReset: return std::type_index{typeid(SettingResetArguments)};
-        case ArgumentKind::SettingResetScope: return std::type_index{typeid(SettingResetScopeArguments)};
-        case ArgumentKind::WorkspaceReplace: return std::type_index{typeid(WorkspaceReplaceArguments)};
-        case ArgumentKind::WorkspaceApply: return std::type_index{typeid(WorkspaceReplacePreview)};
-        case ArgumentKind::PaletteExecute: return std::type_index{typeid(PaletteExecuteArguments)};
-        case ArgumentKind::TreeSelect: return std::type_index{typeid(TreeSelectArguments)};
-        case ArgumentKind::FindQuery: return std::type_index{typeid(FindQueryArguments)};
-        case ArgumentKind::PromptValue: return std::type_index{typeid(PromptValueArguments)};
-    }
-    return std::nullopt;
-}
 
 struct CommandArgumentCodecRegistry::Impl {
     std::shared_ptr<CommandCatalog const> catalog;

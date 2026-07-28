@@ -35,6 +35,7 @@ struct CommandFacts {
     std::string id;
     std::string owner;
     bool luaApi = false;
+    bool initScript = false;
     bool mutates = true;
     std::vector<std::string> requiredCapabilities;
     // The real argument type, so a stand-in's wire codec matches the real one.
@@ -58,6 +59,7 @@ inline std::vector<CommandFacts> const& allCommandFacts() {
                  created.runtime->commandCatalog()->commands()) {
                 collected.push_back(
                     {command->id, command->owner, command->luaApi,
+                     command->initScript,
                      command->effect == ssg::CommandEffect::Mutation,
                      command->requiredCapabilities,
                      command->argument.type, command->argument.wire});
@@ -87,11 +89,11 @@ void registerStandIns(ssg::EditorSessionBuilder& builder,
         for (auto const& capability : facts.requiredCapabilities) {
             spec.capability(capability);
         }
-        // Adopted rather than typed: a stand-in forwards whatever payload it is
-        // given, so it carries the real command's argument type rather than
-        // deducing one from a handler that ignores it.
-        spec.adoptBoundHandler(makeHandler(facts.id),
-                               facts.wire ? facts.argument : std::nullopt);
+        // Untyped by necessity: one stand-in handler serves every command, so
+        // it cannot name the argument any single one consumes.  It still
+        // declares the real command's WIRE type, so it encodes identically.
+        spec.untypedHandler(makeHandler(facts.id),
+                            facts.wire ? facts.argument : std::nullopt);
         builder.add(std::move(spec));
     }
 }

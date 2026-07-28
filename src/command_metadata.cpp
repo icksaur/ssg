@@ -1,7 +1,6 @@
 #include <ssg/command_metadata.h>
 
 #include <ssg/CommandCatalog.h>
-#include <ssg/Commands.h>
 
 #include <array>
 #include <cctype>

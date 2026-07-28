@@ -1,3 +1,4 @@
+#include <ssg/CommandCatalog.h>
 #include <ssg/CompiledKeymap.h>
 #include <ssg/focus.h>
 #include <ssg/Keymap.h>
@@ -450,8 +451,11 @@ TEST(compiledKeymapResolvesIdenticallyToTheAuthoredMatcher) {
         {escape, ctrlS}, {escape, keyS, keyQ}, {escape, keyS, keyS},
         {keyS, escape}};
 
+    // An empty catalog is enough: the rule under test is which BINDING wins,
+    // which does not depend on whether the command it names exists.
+    const ssg::CommandCatalog catalog;
     for (const auto& keymap : keymaps) {
-        const ssg::CompiledKeymap compiled{keymap};
+        const ssg::CompiledKeymap compiled{keymap, catalog};
         for (const auto focus : {ssg::FocusTarget::Editor,
                                  ssg::FocusTarget::Panel,
                                  ssg::FocusTarget::Prompt}) {
@@ -481,7 +485,8 @@ TEST(compiledKeymapCarriesTheNameOfAnUncataloguedCommand) {
 
     const ssg::KeymapViewState keymap{
         "typo", {ssg::KeyBinding{{escape}, "file.saev", "*"}}};
-    const ssg::CompiledKeymap compiled{keymap};
+    const ssg::CommandCatalog catalog;
+    const ssg::CompiledKeymap compiled{keymap, catalog};
     const std::vector<ssg::CompiledStroke> input{
         ssg::CompiledKeymap::compile(escape)};
 

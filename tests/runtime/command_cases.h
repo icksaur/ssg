@@ -2,9 +2,12 @@
 
 // Kind: seam.
 //
-// Runtime command cases, derived from the compiled command catalog.
+// Every command the editor offers, for tests that must cover all of them.
+// Asked of a real runtime, because a command is declared by the component that
+// implements it and no single file lists them all
+// (doc/spec-command-registry.md).
 
-#include <ssg/Commands.h>
+#include "../all_command_ids.h"
 
 #include <string>
 #include <vector>
@@ -18,10 +21,8 @@ struct RuntimeCommandCase {
 
 [[nodiscard]] inline std::vector<RuntimeCommandCase> runtimeCommandCases() {
     std::vector<RuntimeCommandCase> cases;
-    auto const catalog = ssg::commandCatalog();
-    cases.reserve(catalog.size());
-    for (auto const& command : catalog) {
-        cases.push_back({std::string{command.id}, std::string{command.owner}});
+    for (auto const& facts : ssg::testing::allCommandFacts()) {
+        cases.push_back({facts.id, facts.owner});
     }
     return cases;
 }

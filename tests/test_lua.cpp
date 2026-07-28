@@ -1,6 +1,5 @@
 #include "test_helpers.h"
 
-#include <ssg/Commands.h>
 
 #include "all_command_ids.h"
 #include <ssg/LuaCommandHost.h>

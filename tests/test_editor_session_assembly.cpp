@@ -1,6 +1,5 @@
 #include "test_helpers.h"
 
-#include <ssg/Commands.h>
 #include <ssg/EditorSessionBuilder.h>
 #include <ssg/session_snapshot.h>
 
@@ -16,25 +15,7 @@
 
 namespace {
 
-std::vector<std::string> catalogIds() {
-    std::vector<std::string> ids;
-    for (auto const& command : ssg::commandCatalog()) {
-        ids.emplace_back(command.id);
-    }
-    return ids;
-}
 
-std::map<std::string, std::vector<std::string>> catalogCapabilities() {
-    std::map<std::string, std::vector<std::string>> capabilities;
-    for (auto const& command : ssg::commandCatalog()) {
-        std::vector<std::string> required;
-        for (auto const& capability : command.requiredCapabilities) {
-            required.emplace_back(capability);
-        }
-        capabilities.emplace(std::string{command.id}, std::move(required));
-    }
-    return capabilities;
-}
 
 ssg::SelectionViewState selection(std::uint64_t byte,
                                   std::uint32_t firstRow) {
@@ -101,46 +82,12 @@ ssg::ViewportViewState clientView(std::uint32_t firstRow) {
             {firstRow + 8, 8, firstRow, firstRow, 0, 8}};
 }
 
-TEST(requiredCatalogEqualsAssembledRegistryExactly) {
-    auto expected = catalogIds();
-    auto descriptors = ssg::p0CommandDescriptors();
-    auto expectedCapabilities = catalogCapabilities();
-    std::vector<std::string> actual;
-    for (auto const& descriptor : descriptors) {
-        actual.push_back(descriptor.id);
-    }
-    std::sort(expected.begin(), expected.end());
-    std::sort(actual.begin(), actual.end());
-    ASSERT_EQ(actual, expected);
-    ASSERT_EQ(expectedCapabilities.size(), descriptors.size());
-    for (auto const& descriptor : descriptors) {
-        ASSERT_EQ(descriptor.effect, ssg::CommandEffect::Mutation);
-        std::vector<std::string> actualCapabilities;
-        for (auto const& capability : descriptor.requiredCapabilities) {
-            actualCapabilities.emplace_back(capability.value());
-        }
-        ASSERT_EQ(actualCapabilities, expectedCapabilities.at(descriptor.id));
-    }
-}
 
-// The builder no longer requires bindings to equal the catalog exactly.  That
-// rule proved every declared command had a handler and every handler a
-// declaration; registration now states both in one act, so it compared a thing
-// to itself (doc/spec-command-registry.md).
-//
-// What survives is the migration guard: while commands are still declared in
-// the static table, binding a handler to an id that table does not contain is a
-// wiring mistake and is refused where it happens rather than at build.  A
-// command that goes MISSING is caught by the frozen behavioural snapshot in
-// test_commands, not here.
-TEST(bindingAnUndeclaredCommandIsRefusedAtTheBinding) {
-    ssg::EditorSessionBuilder builder;
-    ASSERT_THROWS(builder.bind("not.p0",
-                               [](ssg::CommandContext&, std::any const&) {
-                                   return ssg::CommandHandlerResult::success();
-                               }),
-                  std::invalid_argument);
-}
+// requiredCatalogEqualsAssembledRegistryExactly and
+// bindingAnUndeclaredCommandIsRefusedAtTheBinding are deleted with the static
+// table.  Both existed to prove a declaration and its handler agreed, which a
+// single registration expression now makes true by construction
+// (doc/spec-command-registry.md).
 
 class TestServices final : public ssg::CommandServices {
 public:
@@ -337,8 +284,6 @@ static_assert(!std::is_copy_constructible_v<ssg::SessionDelta>);
 }  // namespace
 
 int main() {
-    RUN(requiredCatalogEqualsAssembledRegistryExactly);
-    RUN(bindingAnUndeclaredCommandIsRefusedAtTheBinding);
     RUN(builderThreadsServicesThroughTheCommonDispatchPath);
     RUN(fullSnapshotMatchesReplayedAggregateDelta);
     RUN(nonDocumentTransitionReplaysAndRejectsADifferentClient);

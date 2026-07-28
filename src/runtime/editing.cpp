@@ -695,21 +695,67 @@ void registerFindReplaceCommands(EditorSessionBuilder& builder,
              static_cast<WorkspaceReplacePreview const*>(nullptr));
 }
 
+// Moving the caret and changing the selection.
+//
+// All thirty-six take the same optional argument -- where to move to, absent
+// meaning "the usual step from here" -- and differ only in which motion they
+// perform.  They are registered by walking the descriptor table that already
+// pairs each id with its motion, rather than restating that list: the summary
+// is the id's last segment in words, which is the rule every one of them
+// follows.
+void registerSelectionCommands(EditorSessionBuilder& builder,
+                               EditorRuntime::Impl& runtime) {
+    auto summaryOf = [](std::string_view id) {
+        auto const segment = id.substr(id.find('.') + 1);
+        std::string words;
+        bool wordStart = true;
+        for (char raw : segment) {
+            if (raw == '_') {
+                words += ' ';
+                wordStart = true;
+                continue;
+            }
+            auto const ch = static_cast<unsigned char>(raw);
+            words += wordStart ? static_cast<char>(std::toupper(ch)) : raw;
+            wordStart = false;
+        }
+        return words;
+    };
+
+    // Held in a local: descriptors() returns a reference into the command set,
+    // and a range-for over a temporary's member would leave it dangling before
+    // the first iteration (C++20 does not extend the temporary's lifetime).
+    auto const motions = selectionNavigationCommandSet();
+    for (auto const& descriptor : motions.descriptors()) {
+        auto const command = descriptor.command;
+        builder.add(
+            CommandSpecBuilder{std::string{descriptor.id}}
+                .owner("selection-navigation")
+                .summary(summaryOf(descriptor.id))
+                .mutates()
+                .lua()
+                .optionalHandler<SelectionCommandArguments>(
+                    [&runtime, command](
+                        CommandContext& context,
+                        std::optional<SelectionCommandArguments> const&
+                            arguments) {
+                        return runtime.runTransaction([&] {
+                            return bindSelection(
+                                runtime, context.principal().clientId(),
+                                command,
+                                arguments ? std::any{*arguments} : std::any{});
+                        });
+                    }));
+    }
+}
+
 void bindRuntimeEditing(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime) {
     registerTextInputCommands(builder, runtime);
+    registerSelectionCommands(builder, runtime);
     registerEditSuiteCommands(builder, runtime);
     registerFindReplaceCommands(builder, runtime);
     registerHistoryCommands(builder, runtime);
     registerClipboardCommands(builder, runtime);
-    auto selectionCommands = selectionNavigationCommandSet();
-    for (auto const& descriptor : selectionCommands.descriptors()) {
-        builder.bind(std::string{descriptor.id}, [&runtime, descriptor](CommandContext& context, std::any const& payload) {
-            return runtime.runTransaction([&] {
-                return bindSelection(runtime, context.principal().clientId(),
-                                     descriptor.command, payload);
-            });
-        });
-    }
 }
 
 } // namespace ssg

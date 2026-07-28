@@ -1,5 +1,4 @@
 target_sources(ssg PRIVATE
-    ${SSG_SOURCE_DIR}/src/Commands.cpp
     ${SSG_SOURCE_DIR}/src/CommandCatalog.cpp
     ${SSG_SOURCE_DIR}/src/CommandReference.cpp
 )

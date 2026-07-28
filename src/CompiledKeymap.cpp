@@ -1,5 +1,7 @@
 #include <ssg/CompiledKeymap.h>
 
+#include <ssg/CommandCatalog.h>
+
 #include <algorithm>
 
 namespace ssg {
@@ -26,11 +28,17 @@ CompiledContext compileContext(std::string_view name) {
 
 }  // namespace
 
-CompiledKeymap::CompiledKeymap(KeymapViewState const& keymap) {
+CompiledKeymap::CompiledKeymap(KeymapViewState const& keymap,
+                               CommandCatalog const& catalog) {
     entries_.reserve(keymap.bindings.size());
     for (auto const& binding : keymap.bindings) {
         Entry entry;
-        entry.command = CommandRef{binding.commandId};
+        // Resolved once, here.  A binding may name a command the catalog does
+        // not have -- keymap.bind accepts any non-empty id -- and that name is
+        // what the resulting rejection must report, so the ref keeps it either
+        // way.
+        entry.command = CommandRef{binding.commandId,
+                                   catalog.handleFor(binding.commandId)};
         entry.context = compileContext(binding.context);
         entry.sequence.reserve(binding.sequence.size());
         for (auto const& stroke : binding.sequence) {

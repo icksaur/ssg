@@ -37,24 +37,10 @@ TEST(constructionRejectsInvalidCwd) {
     ASSERT_FALSE(result.message.empty());
 }
 
-TEST(commandCaseTableExactlyMatchesP0Catalog) {
-    auto descriptors = ssg::p0CommandDescriptors();
-    std::set<std::string> actual;
-    for (const auto& descriptor : descriptors) actual.insert(descriptor.id);
-
-    auto const cases = ssg::test::runtimeCommandCases();
-    // A failed catalog load yields an empty table, which would make the set
-    // comparison below vacuously interesting rather than failing loudly.
-    ASSERT_FALSE(cases.empty());
-
-    std::set<std::string> expected;
-    for (const auto& command : cases) {
-        ASSERT_TRUE(expected.insert(command.id).second);
-        ASSERT_FALSE(command.owner.empty());
-    }
-
-    ASSERT_EQ(actual, expected);
-}
+// commandCaseTableExactlyMatchesP0Catalog is deleted.  It proved the test
+// case table listed exactly the catalog's commands, back when the table was
+// typed out by hand.  The cases are now derived from the running editor, so it
+// compared a thing to itself.
 
 TEST(runtimeConstructsAttachesAndProducesLiveSnapshot) {
     auto root = uniqueRoot("snapshot");
@@ -279,7 +265,6 @@ TEST(settingsOpenFocusesASettingsPrompt) {
 
 int main() {
     RUN(constructionRejectsInvalidCwd);
-    RUN(commandCaseTableExactlyMatchesP0Catalog);
     RUN(runtimeConstructsAttachesAndProducesLiveSnapshot);
     RUN(runtimeSourcesDoNotIncludeFixtureModel);
     RUN(runtimePublishesValidCuratedKeymap);

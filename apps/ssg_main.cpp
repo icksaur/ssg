@@ -12,11 +12,11 @@
 #include "pointer_routing.h"
 #include "ssg_terminal.h"
 
+#include <ssg/CommandCatalog.h>
 #include <ssg/CompiledKeymap.h>
 #include <ssg/EditorRuntime.h>
 #include <ssg/HitTester.h>
 #include <ssg/FindReplace.h>
-#include <ssg/Commands.h>
 #include <ssg/Keymap.h>
 #include <ssg/LuaCommandHost.h>
 #include <ssg/PaletteSearcher.h>
@@ -245,18 +245,14 @@ std::vector<ssg::CapabilityId> initScriptCapabilities() { return {}; }
 // future capability-gated init-script command must be added BOTH here
 // (with its required capabilities) and to initScriptCapabilities() above,
 // or InvocationPrincipal::hasCapability denies it by default, same as any
-// other Lua caller. Built from the command catalog's surfaces.initScript
-// grant (src/Commands.cpp), the single source of truth doc/config.md's
-// coverage test checks against.
-std::vector<ssg::LuaCommand> initScriptCommandCatalog() {
-    // The init.lua grant: commands whose catalog row sets surfaces.initScript.
-    // This used to be a separate kInitScriptCommands array, which meant a
-    // command's Lua exposure lived apart from the command itself.
+// other Lua caller.  Built from the running editor's catalog: a command's
+// startup grant is declared by the component that implements it, so this asks
+// what is registered rather than reading a list.
+std::vector<ssg::LuaCommand> initScriptCommandCatalog(
+    ssg::CommandCatalog const& catalog) {
     std::vector<ssg::LuaCommand> result;
-    for (auto const& command : ssg::commandCatalog()) {
-        if (command.surfaces.initScript) {
-            result.push_back({std::string{command.id}, {}});
-        }
+    for (auto const* command : catalog.commands()) {
+        if (command->initScript) result.push_back({command->id, {}});
     }
     return result;
 }
@@ -402,7 +398,7 @@ void evaluateInitScript(ssg::EditorRuntime& runtime,
     ssg::LuaCommandHostOptions options;
     options.pluginId = kInitScriptClientId;
     options.capabilities = initScriptCapabilities();
-    options.commands = initScriptCommandCatalog();
+    options.commands = initScriptCommandCatalog(*runtime.commandCatalog());
     ssg::LuaCommandHost host{
         std::move(options), [&runtime](ssg::LuaInvocation const& invocation) {
             return dispatchInitScriptCommand(runtime, invocation);
@@ -842,8 +838,10 @@ int main(int argc, char** argv) {
     bool pathPromptOpen = false;
     std::string pathPromptValue;
     ssg::KeymapViewState keymap;
+    ssg::CatalogRevision compiledForRevision = 0;
     std::unique_ptr<ssg::CompiledKeymap> compiledKeymap =
-        std::make_unique<ssg::CompiledKeymap>(keymap);
+        std::make_unique<ssg::CompiledKeymap>(keymap,
+                                              *runtime.commandCatalog());
     std::vector<ssg::PaletteCandidate> candidates;
 
     auto dispatch = [&](std::string_view id, std::any payload = {}) {
@@ -1025,13 +1023,17 @@ int main(int argc, char** argv) {
         auto snapshot = runtime.snapshot(client, terminalSize(), chord.strokes(), buildReport());
         if (snapshot) {
             focus = snapshot->sections().shell.focus;
-            if (keymap != snapshot->sections().keymap) {
+            // The compiled index is derived from the authored keymap AND the
+            // catalog, so it is rebuilt when either changes -- a keymap.bind, a
+            // config reload, or a command registered since -- and never per
+            // keystroke.
+            auto const catalogRevision = runtime.commandCatalog()->revision();
+            if (keymap != snapshot->sections().keymap ||
+                catalogRevision != compiledForRevision) {
                 keymap = snapshot->sections().keymap;
-                // The compiled index is derived from the authored keymap, so it
-                // is rebuilt exactly when that changes (keymap.bind, a config
-                // reload) and never per keystroke.
-                compiledKeymap =
-                    std::make_unique<ssg::CompiledKeymap>(keymap);
+                compiledForRevision = catalogRevision;
+                compiledKeymap = std::make_unique<ssg::CompiledKeymap>(
+                    keymap, *runtime.commandCatalog());
             }
             candidates = snapshot->sections().palette.candidates;
             pickerMode = snapshot->sections().palette.mode;

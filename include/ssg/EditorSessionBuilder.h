@@ -13,8 +13,6 @@ namespace ssg {
 
 class CommandCatalog;
 
-[[nodiscard]] std::vector<CommandDescriptor> p0CommandDescriptors();
-
 class EditorSessionBuilder {
 public:
     EditorSessionBuilder();
@@ -28,10 +26,6 @@ public:
     // Registers a command: its declaration and its implementation together.
     EditorSessionBuilder& add(CommandSpecBuilder spec);
 
-    // Migration only: binds a handler to a command declared in the static
-    // table.  Deleted with that table (doc/spec-command-registry.md, D5).
-    EditorSessionBuilder& bind(std::string commandId,
-                               CommandHandler handler);
     EditorSessionBuilder& services(CommandServices& services) noexcept;
     [[nodiscard]] std::shared_ptr<CommandCatalog> catalog() const;
     [[nodiscard]] std::unique_ptr<EditorSession> build();

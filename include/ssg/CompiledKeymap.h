@@ -20,7 +20,7 @@
 // and prefix rules are the same ones `KeymapMatcher` applies, expressed over
 // integers.
 
-#include <ssg/Commands.h>
+#include <ssg/CommandHandle.h>
 #include <ssg/Keymap.h>
 
 #include <cstdint>
@@ -29,6 +29,8 @@
 #include <vector>
 
 namespace ssg {
+
+class CommandCatalog;
 
 // A binding's context, compiled.  A keymap context is already a closed set --
 // `"*"` plus the FocusTarget names (focus.h) -- so a compiled binding stores the
@@ -99,7 +101,12 @@ struct CompiledResolution {
 
 class CompiledKeymap {
 public:
-    explicit CompiledKeymap(KeymapViewState const& keymap);
+    // Takes the catalog because a binding names a command and a handle is a
+    // position in a particular catalog.  Rebuild when the keymap OR the
+    // catalog's revision changes (doc/spec-command-registry.md, R7): a binding
+    // for a command registered after this was built resolves only once the
+    // client sees the new revision.
+    CompiledKeymap(KeymapViewState const& keymap, CommandCatalog const& catalog);
 
     CompiledKeymap(CompiledKeymap const&) = delete;
     CompiledKeymap& operator=(CompiledKeymap const&) = delete;

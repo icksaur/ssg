@@ -1,6 +1,5 @@
 #include "editor_runtime_internal.h"
 
-#include <ssg/Commands.h>
 
 #include <algorithm>
 #include <stdexcept>
@@ -574,20 +573,58 @@ void registerPromptStatusCommands(EditorSessionBuilder& builder,
                         }));
 }
 
+// Panes, the sidebar, and distraction-free mode.  None takes an argument; each
+// acts on the current layout.
+void registerShellLayoutCommands(EditorSessionBuilder& builder,
+                                 EditorRuntime::Impl& runtime) {
+    auto declare = [&](std::string id, std::string label, std::string summary) {
+        auto name = id;
+        auto built =
+            CommandSpecBuilder{std::move(id)}
+                .owner("shell-layout")
+                .summary(std::move(summary))
+                .mutates()
+                .lua()
+                .handler([&runtime, name](CommandContext& context) {
+                    return runtime.runTransaction([&] {
+                        auto result = shellCommand(runtime, name);
+                        // Moving focus between panes is the user navigating,
+                        // which pauses follow-edits; splitting or closing one
+                        // is not.
+                        if (result.accepted &&
+                            userNavigationShellCommand(name)) {
+                            runtime.recordNavigation(
+                                context.principal().clientId(),
+                                NavigationClass::User);
+                        }
+                        return result;
+                    });
+                });
+        if (!label.empty()) built.label(std::move(label));
+        builder.add(std::move(built));
+    };
+
+    declare("pane.split_horizontal", "", "Split Horizontal");
+    declare("pane.split_vertical", "", "Split Vertical");
+    declare("pane.close", "", "Close");
+    declare("pane.next", "", "Next");
+    declare("pane.previous", "", "Previous");
+    declare("pane.focus_left", "", "Focus Left");
+    declare("pane.focus_right", "", "Focus Right");
+    declare("pane.focus_up", "", "Focus Up");
+    declare("pane.focus_down", "", "Focus Down");
+    declare("panel.toggle", "Toggle Sidebar", "Toggle Sidebar");
+    declare("panel.focus", "Focus Sidebar", "Focus Sidebar");
+    declare("panel.show_files", "Show Files Sidebar", "Show Files Sidebar");
+    declare("panel.show_git_status", "Show Git Sidebar", "Show Git Sidebar");
+    declare("panel.next_provider", "", "Next Provider");
+    declare("panel.previous_provider", "", "Previous Provider");
+    declare("view.toggle_distraction_free", "", "Toggle Distraction Free");
+}
+
 void bindRuntimePresentation(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime) {
     registerViewportCommands(builder, runtime);
-    for (auto const* descriptor : commandsOwnedBy("shell-layout")) {
-        builder.bind(std::string{descriptor->id}, [&runtime, descriptor](CommandContext& context, std::any const&) {
-            return runtime.runTransaction([&] {
-                auto result = shellCommand(runtime, descriptor->id);
-                if (result.accepted && userNavigationShellCommand(descriptor->id)) {
-                    runtime.recordNavigation(context.principal().clientId(),
-                                             NavigationClass::User);
-                }
-                return result;
-            });
-        });
-    }
+    registerShellLayoutCommands(builder, runtime);
     registerPromptStatusCommands(builder, runtime);
     registerSettingsCommands(builder, runtime);
     registerAppearanceCommands(builder, runtime);

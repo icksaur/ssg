@@ -1,6 +1,5 @@
 #include <ssg/CommandRegistry.h>
 
-#include <ssg/Commands.h>
 
 #include <algorithm>
 #include <stdexcept>
@@ -80,6 +79,7 @@ struct CommandRegistry::Impl {
 
 CommandRegistry::CommandRegistry(std::vector<CommandSet> commandSets)
     : impl_{std::make_unique<Impl>()} {
+    std::vector<std::string> ordered;
     for (auto& commandSet : commandSets) {
         for (auto const& command : commandSet.commands()) {
             auto [unused, inserted] =
@@ -89,13 +89,19 @@ CommandRegistry::CommandRegistry(std::vector<CommandSet> commandSets)
                     "duplicate command ID across command sets: " +
                     command.descriptor.id};
             }
+            ordered.push_back(command.descriptor.id);
         }
     }
-    impl_->byHandle.assign(commandCatalog().size(), nullptr);
-    for (auto const& [id, registration] : impl_->commands) {
-        if (auto const handle = commandHandle(id); handle.valid()) {
-            impl_->byHandle[handle.index()] = &registration;
-        }
+    // A handle is a position in the catalog, and registrations arrive in
+    // catalog order (EditorSessionBuilder::build walks it), so the nth
+    // registration is the command the nth handle names.  Pointers into the map
+    // are stable because nothing is inserted after this loop.
+    impl_->byHandle.reserve(impl_->commands.size());
+    for (auto const& id : ordered) {
+        auto const found = impl_->commands.find(id);
+        impl_->byHandle.push_back(found == impl_->commands.end()
+                                      ? nullptr
+                                      : &found->second);
     }
 }
 

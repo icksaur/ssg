@@ -1,4 +1,4 @@
-#include <ssg/Commands.h>
+#include "all_command_ids.h"
 
 #include "test_helpers.h"
 
@@ -30,9 +30,9 @@ std::string readFile(const char* path) {
 TEST(configDocMentionsEveryInitScriptCommand) {
     const auto doc = readFile(SSG_CONFIG_DOC_PATH);
     ASSERT_FALSE(doc.empty());
-    for (const auto& command : ssg::commandCatalog()) {
-        if (!command.surfaces.initScript) continue;
-        const std::string needle = "`" + std::string{command.id} + "`";
+    for (const auto& command : ssg::testing::allCommandFacts()) {
+        if (!command.initScript) continue;
+        const std::string needle = "`" + command.id + "`";
         ASSERT_TRUE(doc.find(needle) != std::string::npos);
     }
 }
