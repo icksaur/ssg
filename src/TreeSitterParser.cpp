@@ -32,6 +32,7 @@ const TSLanguage* tree_sitter_typescript();
 const TSLanguage* tree_sitter_c_sharp();
 const TSLanguage* tree_sitter_lua();
 const TSLanguage* tree_sitter_markdown();
+const TSLanguage* tree_sitter_markdown_inline();
 }
 
 class TreeSitterParse final : public OpaqueSyntaxParse {};
@@ -80,8 +81,13 @@ std::vector<TreeSitterGrammar> vendoredTreeSitterGrammars() {
         ""));
     grammars.push_back(vendoredGrammar(
         {"markdown", "md"},
-        []() -> SyntaxLanguageHandle { return tree_sitter_markdown(); }, "markdown",
-        ""));
+        []() -> SyntaxLanguageHandle { return tree_sitter_markdown(); },
+        "markdown", ""));
+    // Markdown's inline half runs inside the block grammar's `inline` nodes.
+    grammars.back().injection = TreeSitterGrammar::Injection{
+        "inline",
+        []() -> SyntaxLanguageHandle { return tree_sitter_markdown_inline(); },
+        std::string{embeddedHighlightQuery("markdown_inline")}};
     return grammars;
 }
 
@@ -226,6 +232,39 @@ SyntaxScope scopeForCapture(std::string_view captureName) {
     return SyntaxScope::PlainText;
 }
 
+// Write every capture of `query` over `root` into `perByte`, shifted by
+// `byteOffset`.  Shared by the main pass and the injected pass so an injected
+// grammar colours its content by exactly the same rules -- a capture cannot mean
+// one thing at the top level and another inside an injection.
+void applyCaptures(TSQuery const& query, TSNode root, std::uint32_t byteOffset,
+                   std::vector<SyntaxScope>& perByte) {
+    std::unique_ptr<TSQueryCursor, decltype(&ts_query_cursor_delete)> cursor(
+        ts_query_cursor_new(), &ts_query_cursor_delete);
+    if (!cursor) return;
+    ts_query_cursor_exec(cursor.get(), &query, root);
+    TSQueryMatch match{};
+    std::uint32_t captureIndex = 0;
+    while (ts_query_cursor_next_capture(cursor.get(), &match, &captureIndex)) {
+        if (captureIndex >= match.capture_count) continue;
+        auto const capture = match.captures[captureIndex];
+        std::uint32_t nameLength = 0;
+        char const* const captureName =
+            ts_query_capture_name_for_id(&query, capture.index, &nameLength);
+        if (captureName == nullptr || nameLength == 0) continue;
+        auto const scope =
+            scopeForCapture({captureName, static_cast<std::size_t>(nameLength)});
+        if (scope == SyntaxScope::PlainText) continue;
+        auto const start = ts_node_start_byte(capture.node) + byteOffset;
+        auto const end = ts_node_end_byte(capture.node) + byteOffset;
+        if (start >= end || start >= perByte.size()) continue;
+        auto const boundedEnd =
+            static_cast<std::uint32_t>(std::min<std::size_t>(end, perByte.size()));
+        for (std::uint32_t offset = start; offset < boundedEnd; ++offset) {
+            perByte[offset] = scope;
+        }
+    }
+}
+
 std::vector<SyntaxSpan> spansFromBytes(const std::vector<SyntaxScope>& perByte) {
     if (perByte.empty()) {
         return {};
@@ -337,6 +376,67 @@ SyntaxParseOutput TreeSitterParser::parse(const SyntaxParseRequest& request) {
             static_cast<std::uint32_t>(std::min<std::size_t>(end, perByte.size()));
         for (std::uint32_t offset = start; offset < boundedEnd; ++offset) {
             perByte[offset] = scope;
+        }
+    }
+
+    // Run the injected grammar inside each node that carries it, merging its
+    // captures into the same per-byte map.  Markdown's block grammar leaves
+    // inline content opaque, so without this pass emphasis, code spans and
+    // inline links are unhighlighted in every markdown document.
+    if (grammar->injection && grammar->injection->language != nullptr) {
+        auto const& injection = *grammar->injection;
+        std::unique_ptr<TSParser, decltype(&ts_parser_delete)> inner(
+            ts_parser_new(), &ts_parser_delete);
+        std::uint32_t queryError = 0;
+        TSQueryError queryErrorType = TSQueryErrorNone;
+        std::unique_ptr<TSQuery, decltype(&ts_query_delete)> innerQuery(
+            ts_query_new(static_cast<const TSLanguage*>(injection.language()),
+                         injection.highlightQuery.data(),
+                         static_cast<std::uint32_t>(injection.highlightQuery.size()),
+                         &queryError, &queryErrorType),
+            &ts_query_delete);
+        if (inner && innerQuery && queryErrorType == TSQueryErrorNone &&
+            ts_parser_set_language(
+                inner.get(),
+                static_cast<const TSLanguage*>(injection.language()))) {
+            // Walk the outer tree for the nodes to inject into.
+            std::vector<TSNode> pending{ts_tree_root_node(tree.get())};
+            while (!pending.empty()) {
+                if (request.cancelled()) {
+                    output.status = SyntaxParseStatus::Cancelled;
+                    return output;
+                }
+                TSNode const node = pending.back();
+                pending.pop_back();
+                char const* const type = ts_node_type(node);
+                if (type != nullptr && injection.nodeType == type) {
+                    auto const start = ts_node_start_byte(node);
+                    auto const end = ts_node_end_byte(node);
+                    if (start < end && start < perByte.size()) {
+                        auto const length = std::min<std::size_t>(
+                            end - start, perByte.size() - start);
+                        std::unique_ptr<TSTree, decltype(&ts_tree_delete)>
+                            innerTree(
+                                ts_parser_parse_string(
+                                    inner.get(), nullptr,
+                                    request.text().data() + start,
+                                    static_cast<std::uint32_t>(length)),
+                                &ts_tree_delete);
+                        if (innerTree) {
+                            applyCaptures(*innerQuery,
+                                          ts_tree_root_node(innerTree.get()),
+                                          start, perByte);
+                        }
+                    }
+                    // Injected content is not searched again: the inner grammar
+                    // owns everything inside it.
+                    continue;
+                }
+                auto const children = ts_node_child_count(node);
+                for (std::uint32_t index = 0; index < children; ++index) {
+                    pending.push_back(ts_node_child(node, index));
+                }
+            }
         }
     }
 

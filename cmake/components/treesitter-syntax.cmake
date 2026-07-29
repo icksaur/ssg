@@ -22,6 +22,7 @@ set(_SSG_EMBEDDED_QUERIES
     "csharp=${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-c-sharp/queries/highlights.scm"
     "lua=${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-lua/queries/highlights.scm"
     "markdown=${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-markdown/queries/highlights.scm"
+    "markdown_inline=${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-markdown-inline/queries/highlights.scm"
 )
 
 # Depend on the query files themselves so editing one regenerates the TU.
@@ -77,6 +78,10 @@ set(_SSG_TREESITTER_VENDOR_SOURCES
     # through a language injection, which this parser does not implement.
     ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-markdown/src/parser.c
     ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-markdown/src/scanner.c
+    # The inline half, run as a language injection inside the block grammar's
+    # `inline` nodes (emphasis, code spans, inline links).
+    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-markdown-inline/src/parser.c
+    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-markdown-inline/src/scanner.c
 )
 
 target_sources(ssg PRIVATE
@@ -94,6 +99,7 @@ target_include_directories(ssg PRIVATE
     ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-c-sharp/src
     ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-lua/src
     ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-markdown/src
+    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-markdown-inline/src
 )
 
 set_source_files_properties(${_SSG_TREESITTER_VENDOR_SOURCES}

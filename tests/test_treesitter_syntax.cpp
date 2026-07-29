@@ -85,11 +85,12 @@ TEST(treeSitterSyntaxGoldenByLanguage) {
          SyntaxScope::PlainText, false},
         {"csharp", "csharp.cs", "csharp.golden", "", SyntaxScope::PlainText},
         {"lua", "lua.lua", "lua.golden", "add(", SyntaxScope::Function},
-        // Markdown is the block grammar only, so the oracle checks a BLOCK
-        // construct: the heading text.  Inline markup (emphasis, code spans)
-        // needs an injection this parser does not implement and stays plain.
-        {"markdown", "markdown.md", "markdown.golden", "Heading one",
-         SyntaxScope::Keyword},
+        // Markdown runs TWO grammars: the block grammar, and the inline grammar
+        // injected into its `inline` nodes.  The oracle checks an INLINE
+        // construct -- a code span -- because that is what the injection exists
+        // for and what stays plain if it silently stops running.
+        {"markdown", "markdown.md", "markdown.golden", "a code span",
+         SyntaxScope::String},
     };
 
     std::uint64_t revision = 1;
