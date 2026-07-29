@@ -853,8 +853,8 @@ int main(int argc, char** argv) {
     // reads authoritative state rather than a client-side copy of the register.
     std::string clipboardText;
     // The last clipboard write served to the terminal, so one copy produces one
-    // OSC 52 rather than one per frame for as long as it stays pending.
-    std::uint64_t lastClipboardWriteId = 0;
+    // OSC 52 rather than one per frame for as long as it stays published.
+    ssg::app::SystemClipboardWriter clipboardWriter;
     ssg::KeymapViewState keymap;
     ssg::CatalogRevision compiledForRevision = 0;
     std::unique_ptr<ssg::CompiledKeymap> compiledKeymap =
@@ -1078,11 +1078,10 @@ int main(int argc, char** argv) {
             // one copy is written once, with nothing reported back, and skipped
             // entirely when the terminal did not advertise the capability --
             // where it would be an unrecognised sequence rather than a copy.
-            auto const& systemWrite = snapshot->sections().clipboard.systemWrite;
-            if (systemWrite && systemWrite->id != lastClipboardWriteId &&
-                capabilities.has(ssg::app::Capability::ClipboardWrite)) {
-                lastClipboardWriteId = systemWrite->id;
-                writeAll(ssg::app::encode_clipboard_write(systemWrite->text));
+            if (auto const bytes = clipboardWriter.bytesFor(
+                    snapshot->sections().clipboard.systemWrite,
+                    capabilities.has(ssg::app::Capability::ClipboardWrite))) {
+                writeAll(*bytes);
             }
             // Derive find fulfillment from the ACTIVE prompt kind, not merely the
             // controller being open under prompt focus: a palette/settings prompt

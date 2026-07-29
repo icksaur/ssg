@@ -1388,20 +1388,23 @@ ViewportViewState EditorRuntime::Impl::computeEditorViewport(
     ViewportDimensions dimensions, std::uint32_t firstRow,
     std::uint32_t firstColumn) const {
     const auto diffFile = activeDiffFile();
-    // Scroll against the rows the editor actually PAINTS, not the terminal's
-    // full height.  The shell spends rows on the header, the tab bar, the footer
-    // and any reserved prompt, and a viewport sized to the whole terminal
-    // overshoots by exactly that much: its maximum scroll offset leaves the last
-    // few lines permanently unreachable, and it reports no scrollbar for a
-    // document that is in fact clipped.  `lastPaneContentRows` is the pane
-    // content height the shell layout just computed -- the same number
-    // page-up/page-down already scroll by.
+    // Scroll against the region the editor actually PAINTS, not the terminal's
+    // full surface.  The shell spends rows on the header, the tab bar, the
+    // footer and any reserved prompt, and columns on the sidebar; a viewport
+    // sized to the whole terminal overshoots by exactly that much.  Vertically
+    // its maximum scroll offset leaves the last few lines permanently
+    // unreachable and it reports no scrollbar for a document that is in fact
+    // clipped; horizontally it breaks wrapped lines past the right edge of the
+    // pane, so the tail is painted nowhere.  `lastPaneContentRows` /
+    // `lastPaneContentColumns` are the pane content size the shell layout just
+    // computed -- the same numbers page-up/page-down already scroll by.
     //
-    // Clamped to the terminal height because a terminal too small to lay out at
+    // Clamped to the client surface because a terminal too small to lay out at
     // all leaves that cache holding the last good layout's value, which would
     // otherwise size the viewport larger than the screen.
     ViewportDimensions const content{
-        dimensions.columns,
+        std::max<std::uint32_t>(
+            1, std::min<std::uint32_t>(lastPaneContentColumns, dimensions.columns)),
         std::max<std::uint32_t>(
             1, std::min<std::uint32_t>(lastPaneContentRows, dimensions.rows))};
     auto const view =

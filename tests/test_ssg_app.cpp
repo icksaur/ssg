@@ -2066,6 +2066,36 @@ TEST(edgeScrollDecidesDirectionAtTheContentEdges) {
     ASSERT_FALSE(ssg::app::edge_scroll(true, 5, ssg::Rect{0, 2, 79, 0}).has_value());
 }
 
+TEST(oneCopyIsWrittenOnceAndOnlyToATerminalThatAdvertisedOsc52) {
+    ssg::app::SystemClipboardWriter writer;
+    ssg::ClipboardWrite const first{1, ssg::Revision{1}, "hi"};
+
+    // A snapshot keeps republishing the same write, because nothing reports
+    // back.  It reaches the terminal exactly once.
+    auto const served = writer.bytesFor(first, true);
+    ASSERT_TRUE(served.has_value());
+    ASSERT_EQ(*served, ssg::app::encode_clipboard_write("hi"));
+    ASSERT_FALSE(writer.bytesFor(first, true).has_value());
+    ASSERT_FALSE(writer.bytesFor(first, true).has_value());
+
+    // A new copy is a new id, and is served.
+    ssg::ClipboardWrite const second{2, ssg::Revision{2}, "there"};
+    auto const again = writer.bytesFor(second, true);
+    ASSERT_TRUE(again.has_value());
+    ASSERT_EQ(*again, ssg::app::encode_clipboard_write("there"));
+
+    // Nothing published, nothing written.
+    ASSERT_FALSE(writer.bytesFor(std::nullopt, true).has_value());
+
+    // Without the capability nothing is written at all -- the bytes would be an
+    // unrecognised escape sequence, not a copy.  And the id is NOT consumed, so
+    // a terminal that later advertises OSC 52 still gets the pending copy.
+    ssg::app::SystemClipboardWriter gated;
+    ssg::ClipboardWrite const third{3, ssg::Revision{3}, "x"};
+    ASSERT_FALSE(gated.bytesFor(third, false).has_value());
+    ASSERT_TRUE(gated.bytesFor(third, true).has_value());
+}
+
 int main() {
     RUN(resolveLaunchNoArgumentOpensCwd);
     RUN(resolveLaunchDirectoryOpensThatDirectory);
@@ -2128,7 +2158,10 @@ int main() {
     RUN(routeWheelMapsRegionToScrollTarget);
     RUN(edgeScrollDecidesDirectionAtTheContentEdges);
     RUN(decodeInputEscapeBoundaryIsBounded);
+    RUN(oneCopyIsWrittenOnceAndOnlyToATerminalThatAdvertisedOsc52);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;
 }
+
+

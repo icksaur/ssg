@@ -918,6 +918,26 @@ TEST(malformedAndTruncatedAndOversizedAndUnknownVersionCorpus) {
     }
 }
 
+// Kinds 3 and 4 were clipboard_request/clipboard_response and are retired.  The
+// ordinal is what goes on the wire, so their slots must stay dead rather than be
+// reclaimed: a peer built against the old numbering must be told the kind is
+// unsupported, never handed a message that now means something else.
+TEST(retiredWireKindsAreNeverReclaimed) {
+    ssg::StatusActionInvocation const invocation{ssg::StatusId{1}, "a", 1};
+    auto const canonical =
+        ssg::ProtocolCodec{}.encodeStatusActionInvocation(invocation);
+    for (char const kind : {char{3}, char{4}}) {
+        auto retired = canonical;
+        retired[1] = kind;
+        ASSERT_EQ(ssg::ProtocolCodec{}.decodeStatusActionInvocation(retired).error,
+                  ssg::ProtocolError::UnsupportedMessageKind);
+        ASSERT_EQ(ssg::ProtocolCodec{}.decodeSessionSnapshot(retired).error,
+                  ssg::ProtocolError::UnsupportedMessageKind);
+        ASSERT_EQ(ssg::ProtocolCodec{}.decodeCommandResult(retired).error,
+                  ssg::ProtocolError::UnsupportedMessageKind);
+    }
+}
+
 TEST(valueBoundsAreEnforcedOnDecode) {
     ssg::StatusActionInvocation const invocation{ssg::StatusId{1}, "a", 1};
     auto const bytes = ssg::ProtocolCodec{}.encodeStatusActionInvocation(invocation);
@@ -1257,6 +1277,7 @@ int main() {
     RUN(binaryFrameRejectsOversizedDeclaredLengthAndFrame);
     RUN(binaryFrameRejectsTruncatedInput);
     RUN(malformedAndTruncatedAndOversizedAndUnknownVersionCorpus);
+    RUN(retiredWireKindsAreNeverReclaimed);
     RUN(valueBoundsAreEnforcedOnDecode);
     RUN(regenerateCanonicalFixtures);
     RUN(canonicalFixturesDecodeToTheExpectedValues);

@@ -352,6 +352,46 @@ TEST(anEmptySavedFileIsNeverDiscardedAsScratch) {
     std::filesystem::remove_all(root);
 }
 
+// The same argument as the rows above, in the other axis.  With the sidebar
+// open the editor paints a NARROWER region than the client surface, so wrap
+// must break against the pane width.  Given the full surface width instead, a
+// line that overflows the pane reports as one visual row and its tail is
+// painted nowhere.
+TEST(wrapBreaksAgainstThePaneWidthNotTheClientSurface) {
+    auto root = uniqueRoot("viewport_width");
+    const ssg::ViewportDimensions dims{80, 24};
+    {
+        // One line wider than any plausible pane beside a sidebar, but well
+        // inside the 80-column surface.
+        std::ofstream file{root / "workspace" / "wide.txt"};
+        file << std::string(70, 'a');
+    }
+    auto created = ssg::EditorRuntime::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.open", runtime.revision(),
+                                  std::string{"wide.txt"}}).accepted());
+    runtime.focusEditor();
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"view.toggle_word_wrap", runtime.revision(), {}})
+                    .accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"panel.show_files", runtime.revision(), {}})
+                    .accepted());
+    // Prime the pane-size cache, then read the frame laid out against it.
+    (void)runtime.snapshot(ssg::ClientId{1}, dims);
+    auto snapshot = runtime.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    auto const& view = snapshot->client().viewport;
+    ASSERT_TRUE(view.totalVisualRows > 1);
+    std::filesystem::remove_all(root);
+}
+
 TEST(curatedKeymapBindingsAreArgumentFree) {
     auto root = uniqueRoot("keymap_argfree");
     std::ofstream{root / "workspace" / "doc.txt"} << "alpha\nbeta\n";
@@ -578,6 +618,7 @@ int main() {
     RUN(openingAFileDiscardsOnlyAnEmptySoleScratchTab);
     RUN(aScratchBufferWithContentSurvivesOpeningAFile);
     RUN(anEmptySavedFileIsNeverDiscardedAsScratch);
+    RUN(wrapBreaksAgainstThePaneWidthNotTheClientSurface);
     RUN(curatedKeymapBindingsAreArgumentFree);
     RUN(curatedKeymapResolvesPerContext);
     RUN(addCursorChordProducesMultipleSelections);

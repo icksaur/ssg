@@ -205,6 +205,14 @@ std::string encode_clipboard_write(std::string_view text) {
     return "\x1b]52;c;" + base64(text) + "\x1b\\";
 }
 
+std::optional<std::string> SystemClipboardWriter::bytesFor(
+    std::optional<ssg::ClipboardWrite> const& write, bool terminalCanWrite) {
+    if (!write || !terminalCanWrite) return std::nullopt;
+    if (served_ && *served_ == write->id) return std::nullopt;
+    served_ = write->id;
+    return encode_clipboard_write(write->text);
+}
+
 std::string encode_frame(ssg::CellGrid const& screen, ssg::ColorDepth depth,
                          bool showCursor) {
     std::string frame;

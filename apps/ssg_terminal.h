@@ -271,6 +271,24 @@ struct Decoded {
 // (doc/terminal-rendering-capabilities.html).
 [[nodiscard]] std::string encode_clipboard_write(std::string_view text);
 
+// Turns the clipboard write a snapshot publishes into the bytes to send, or
+// nothing.
+//
+// Owns the two rules that make the fire-and-forget write correct, so neither
+// can be forgotten at a call site: a given write id is served EXACTLY ONCE (a
+// snapshot keeps republishing the last copy, because nothing reports back and
+// the register cannot know it has been served), and nothing is sent at all
+// unless the terminal advertised OSC 52 -- where it would be an unrecognised
+// escape sequence rather than a copy.
+class SystemClipboardWriter {
+public:
+    [[nodiscard]] std::optional<std::string> bytesFor(
+        std::optional<ssg::ClipboardWrite> const& write, bool terminalCanWrite);
+
+private:
+    std::optional<std::uint64_t> served_;
+};
+
 [[nodiscard]] std::string encode_frame(ssg::CellGrid const& screen,
                                        ssg::ColorDepth depth,
                                        bool showCursor = true);
