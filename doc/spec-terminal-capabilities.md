@@ -152,23 +152,48 @@ app resolves the same ambiguity for a lone `ESC` today: on `incomplete` it waits
 `kEscapeTimeoutMs` (30 ms) for more bytes, and if none arrive it re-decodes with
 `inputExhausted = true` (`apps/ssg_main.cpp`, the bounded-Escape resolution).
 
-**Measured against the shipping decoder, that resolution is already total** — no
-stall exists today:
+**Measured against the shipping decoder, `inputExhausted` does not mean "no more
+bytes ever".** It resolves the lone-`ESC` ambiguity and nothing else. Every other
+partial form returns `incomplete` with `consumed = 0` even when exhausted:
 
 ```
-bare_csi_priv   ESC [ ?            exhausted -> none, consumed 3 of 3
-csi_no_final    ESC [ ? 2 0 2 6 ;2 exhausted -> none, consumed 3 of 9
-long_garbage    ESC [ + 4000 bytes exhausted -> none, consumed 3 of 4002
+csi_priv_only  ESC [ ?              exhausted -> none, consumed 3 of 3
+csi_1_trunc    ESC [ 1              exhausted -> INCOMPLETE, consumed 0
+csi_1_semi_2   ESC [ 1 ; 2          exhausted -> INCOMPLETE, consumed 0
+csi_M_trunc    ESC [ M SP           exhausted -> INCOMPLETE, consumed 0
+csi_lt_trunc   ESC [ < 0 ; 1 ; 1    exhausted -> INCOMPLETE, consumed 0
+utf8_trunc     E2 94                exhausted -> INCOMPLETE, consumed 0
 ```
 
-The uncomfortable part is *how* it is total: it always consumes the three-byte
-introducer and moves on. **Totality is currently a consequence of the partial
-consumption this spec exists to remove**, so the two requirements pull against
-each other and step 2 must satisfy both at once. Introducing `incomplete` for
-reply shapes without the rules below would convert a data-corruption bug into a
-hang, which is a worse failure. Hence:
+This is **deliberate and tested** (`decodeInputEscapeBoundaryIsBounded`: "a
+truncated CSI is always incomplete regardless of exhaustion";
+`decodeInputModifiedArrowSplitReadsAreIncomplete`;
+`decodeInputPointerSplitReadsAreIncomplete`). It is what makes a sequence split
+across two reads reassemble correctly, which matters most on exactly the slow
+links where splits happen.
 
-- **`inputExhausted` keeps the decoder total.** When it is true the decoder must
+So **do not make the decoder total under `inputExhausted`.** Doing so would
+discard a legitimate arrow or mouse event whose halves straddle the 30 ms
+window — trading a rare deferral for routine input loss over SSH, which is the
+wrong direction. An earlier draft of this spec required exhausted-totality; that
+requirement is withdrawn, and the three tests above stay as they are.
+
+The liveness property actually needed is weaker and costs nothing:
+
+- **Bounded lookahead.** The decoder never holds more than `kMaxSequenceBytes`
+  (256) of buffered bytes waiting for a terminator. Beyond that the run is not a
+  sequence; it is consumed and discarded rather than held.
+
+That suffices, because every existing `incomplete` path needs only a *small,
+bounded* number of further bytes before it resolves, so the head of the buffer
+always clears within a bounded amount of subsequent input. The one path with
+genuinely unbounded appetite is the SGR mouse scan, which searches forward for
+`M`/`m` with no limit — so a truncated `ESC [ <` today can swallow arbitrarily
+much typed text waiting for an `m`. The reply scan this spec adds would be a
+second such path. The cap closes both.
+
+Discarding is deliberate. A malformed reply carries no usable answer, and the
+capability it would have confirmed correctly stays at its conservative default.
   never return `incomplete`. It resolves with what it has: an unterminated
   reply-shaped run is consumed and discarded as a malformed reply — neither held
   nor emitted as text.
@@ -235,10 +260,11 @@ turn something on.
 
 - **INV-reply-never-input** (new): a byte sequence the decoder does not
   understand is consumed to its terminator and never emitted as document text.
-- **INV-decode-terminates** (new): `decode_input` called with
-  `inputExhausted = true` never returns `incomplete`, and no single sequence
-  scan exceeds `kMaxReplyBytes`. The head of the input buffer can therefore
-  always be consumed within a bounded time, whatever bytes are in it.
+- **INV-decode-terminates** (new): `decode_input` never holds more than
+  `kMaxSequenceBytes` of buffered input waiting for a terminator. Any scan that
+  reaches the cap without finding one consumes and discards its run. The head of
+  the input buffer therefore always clears within a bounded amount of input,
+  whatever bytes are in it.
 - **INV-capability-single-source** (new): every capability answer is resolved by
   `TerminalCapabilities` under the precedence above. No feature reads `$TERM` or
   a query reply directly.
@@ -306,12 +332,11 @@ turn something on.
 - **Risk: a malformed or truncated sequence stalls all input.** The most
   dangerous failure mode of "consume to the terminator" is waiting for a
   terminator that never comes; the symptom is a hung editor, not a garbled one.
-  This is a **regression risk introduced by this spec**, not a pre-existing bug:
-  the decoder is total under `inputExhausted` today, and step 2 must keep it so
-  while removing the partial consumption that currently provides that totality.
-  *Mitigation*: INV-decode-terminates, pinned by
-  `anUnterminatedReplyNeverStallsLaterInput`, which asserts a keystroke queued
-  behind a truncated reply is still delivered.
+  The SGR mouse scan already has this shape, and the reply scan would add a
+  second.
+  *Mitigation*: INV-decode-terminates (bounded lookahead, not
+  exhausted-totality — see the Design note on why totality is the wrong fix),
+  pinned by `anUnboundedSequenceScanCannotHoldTheInputBuffer`.
 - **Risk: scope creep into adopting the features.** This spec is the seam only.
   *Mitigation*: no feature is enabled here; each gets its own spec.
 
@@ -327,7 +352,7 @@ turn something on.
   - the hazard -> `noCapabilityReplyIsEverEmittedAsText`
   - the converse -> `ordinaryInputIsUnaffectedByReplyRecognition`
   - split reads -> `aReplySplitAcrossReadsIsStillConsumedWhole`
-  - liveness -> `anUnterminatedReplyNeverStallsLaterInput`
+  - liveness -> `anUnboundedSequenceScanCannotHoldTheInputBuffer`
   - the fence -> `onlyADa1ReplyMeansTheFeatureIsAbsent`
   - the window -> `aReplyShapeAfterTheFenceIsNotACapabilityAnswer`
   - precedence -> `anOverrideBeatsTheTerminalsOwnAnswer`
@@ -337,8 +362,8 @@ turn something on.
 
 | # | Step | Files | Oracle | Invariants |
 |---|------|-------|--------|------------|
-| 1 | Write the hazard oracle FIRST, against today's decoder: feed each real reply through `decode_input` and assert no text is emitted. It must FAIL immediately, reproducing the table above. Add `anUnterminatedReplyNeverStallsLaterInput` in the same step, which must **PASS** today — it is a regression guard on the existing totality, not a failing oracle, and its value is that step 2 cannot quietly trade the leak for a hang. | `tests/test_input.cpp` | `noCapabilityReplyIsEverEmittedAsText` (fails until step 2); `anUnterminatedReplyNeverStallsLaterInput` (passes throughout) | INV-reply-never-input, INV-decode-terminates |
-| 2 | Add `DecodeStatus::reply`; consume every recognised report shape whole, return `incomplete` only while a terminator may still arrive, and make the decoder total: under `inputExhausted` an unterminated run is discarded rather than held, and no scan exceeds `kMaxReplyBytes`. | `apps/ssg_terminal.h`, `apps/ssg_terminal.cpp` | step 1; `ordinaryInputIsUnaffectedByReplyRecognition`; `aReplySplitAcrossReadsIsStillConsumedWhole`; `anUnterminatedReplyNeverStallsLaterInput` | INV-reply-never-input, INV-decode-terminates |
+| 1 | Write the hazard oracle FIRST, against today's decoder: feed each real reply through `decode_input` and assert no text is emitted. Add `anUnboundedSequenceScanCannotHoldTheInputBuffer` in the same step, asserting no scan holds more than `kMaxSequenceBytes`. **Both must FAIL immediately**, reproducing the leak table and the unbounded SGR scan. | `tests/test_ssg_app.cpp` | `noCapabilityReplyIsEverEmittedAsText`; `anUnboundedSequenceScanCannotHoldTheInputBuffer` (both fail until step 2) | INV-reply-never-input, INV-decode-terminates |
+| 2 | Add `DecodeStatus::reply`; consume every recognised report shape whole, return `incomplete` while a terminator may still arrive, and cap every forward scan (reply and SGR mouse) at `kMaxSequenceBytes`. Do **not** change the exhausted-vs-incomplete contract. | `apps/ssg_terminal.h`, `apps/ssg_terminal.cpp` | step 1; `ordinaryInputIsUnaffectedByReplyRecognition`; `aReplySplitAcrossReadsIsStillConsumedWhole` | INV-reply-never-input, INV-decode-terminates |
 | 3 | Add `TerminalCapabilities`: the query bytes, the reply parser, resolved answers, precedence and overrides, and the probe window that opens on write and closes on the DA1 reply or the backstop timeout. Absorb `detect_color_depth` as its first capability. Pure and unit-testable; no terminal required. | `apps/ssg_terminal.h`, `apps/ssg_terminal.cpp`, `tests/test_ssg_app.cpp` | `onlyADa1ReplyMeansTheFeatureIsAbsent`; `aReplyShapeAfterTheFenceIsNotACapabilityAnswer`; `anOverrideBeatsTheTerminalsOwnAnswer` | INV-capability-single-source |
 | 4 | Write the queries at startup and route `DecodeStatus::reply` from the existing loop into `TerminalCapabilities`. Nothing waits. Verify with a scripted pty harness whose responder holds DA1 back for 500 ms: assert the first frame's bytes are observed on the pty *before* the responder has written a single byte, so the ordering is decided by the code and not by a race. | `apps/ssg_main.cpp`, `tests/test_ssg_app.cpp` | `theFirstFrameIsWrittenBeforeAnyReplyIsRead`; pty run: unchanged startup, typing, mouse, paste | INV-startup-unblocked |
 | 5 | Add a diagnostic that reports what was detected (`--capabilities`, or a settings-screen line), so a user can see what SSG believes. | `apps/ssg_main.cpp` | pty run against kitty reports the keyboard protocol and synchronized output as present | - |

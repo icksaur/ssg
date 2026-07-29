@@ -829,6 +829,65 @@ TEST(decodeInputEscapeBoundaryIsBounded) {
     ASSERT_TRUE(partial.status == ssg::app::DecodeStatus::incomplete);
 }
 
+// Drain `bytes` through the decoder the way the main loop does, returning every
+// committed text fragment.  `incomplete` ends the drain, leaving the remainder
+// reported as held.
+struct DrainResult {
+    std::string text;
+    std::size_t held = 0;
+};
+
+DrainResult drainInput(std::string_view bytes) {
+    DrainResult result;
+    std::string buffer{bytes};
+    while (!buffer.empty()) {
+        std::size_t consumed = 0;
+        auto const decoded = ssg::app::decode_input(buffer, true, consumed);
+        if (decoded.status == ssg::app::DecodeStatus::incomplete || consumed == 0) {
+            result.held = buffer.size();
+            break;
+        }
+        result.text += decoded.text;
+        buffer.erase(0, consumed);
+    }
+    return result;
+}
+
+// Oracle (doc/spec-terminal-capabilities.md, INV-reply-never-input): a terminal
+// reply is a report, not typing.  Whatever the decoder makes of a sequence it
+// does not recognize, it must never turn its bytes into document text -- that is
+// a capability answer being inserted into the user's file.
+TEST(noCapabilityReplyIsEverEmittedAsText) {
+    struct Reply {
+        char const* name;
+        char const* bytes;
+    };
+    for (auto const& reply : {
+             Reply{"DA1", "\x1b[?62;22c"},
+             Reply{"DECRQM 2026", "\x1b[?2026;2$y"},
+             Reply{"kitty keyboard", "\x1b[?1u"},
+             Reply{"cell pixel size", "\x1b[6;17;8t"},
+             Reply{"XTVERSION", "\x1bP>|kitty(0.32.2)\x1b\\"},
+             Reply{"OSC 52 clipboard", "\x1b]52;c;aGk=\x1b\\"},
+         }) {
+        auto const drained = drainInput(reply.bytes);
+        ASSERT_EQ(std::string{reply.name} + ":" + drained.text,
+                  std::string{reply.name} + ":");
+        ASSERT_EQ(std::string{reply.name} + ":" + std::to_string(drained.held),
+                  std::string{reply.name} + ":0");
+    }
+}
+
+// Oracle (INV-decode-terminates): no forward scan may hold an unbounded amount
+// of buffered input waiting for a terminator that may never arrive.  A truncated
+// SGR mouse prefix searches for 'M'/'m' with no limit, so everything typed after
+// it is held hostage until one appears.
+TEST(anUnboundedSequenceScanCannotHoldTheInputBuffer) {
+    std::string const runaway = std::string{"\x1b[<"} + std::string(4096, 'x');
+    auto const drained = drainInput(runaway);
+    ASSERT_EQ(drained.held, std::size_t{0});
+}
+
 TEST(decodeInputPointerPressReleaseDrag) {
     std::size_t consumed = 0;
 
@@ -1436,6 +1495,8 @@ int main() {
     RUN(decodeInputDeleteKeyPlainAndModified);
     RUN(decodeInputPageKeysPlainAndModified);
     RUN(decodeInputArrowsAndMouse);
+    RUN(noCapabilityReplyIsEverEmittedAsText);
+    RUN(anUnboundedSequenceScanCannotHoldTheInputBuffer);
     RUN(decodeInputPointerPressReleaseDrag);
     RUN(decodeInputPointerSplitReadsAreIncomplete);
     RUN(decodeInputPointerRejectsMalformedButTerminatedPayloads);
