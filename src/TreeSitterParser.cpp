@@ -59,28 +59,28 @@ TreeSitterGrammar vendoredGrammar(std::vector<std::string> ids,
 std::vector<TreeSitterGrammar> vendoredTreeSitterGrammars() {
     std::vector<TreeSitterGrammar> grammars;
     grammars.push_back(vendoredGrammar(
-        {"c"}, [] -> SyntaxLanguageHandle { return tree_sitter_c(); }, "c", ""));
+        {"c"}, []() -> SyntaxLanguageHandle { return tree_sitter_c(); }, "c", ""));
     grammars.push_back(vendoredGrammar(
         {"cpp", "c++", "cc"},
-        [] -> SyntaxLanguageHandle { return tree_sitter_cpp(); }, "cpp", "c"));
+        []() -> SyntaxLanguageHandle { return tree_sitter_cpp(); }, "cpp", "c"));
     grammars.push_back(vendoredGrammar(
         {"javascript", "js"},
-        [] -> SyntaxLanguageHandle { return tree_sitter_javascript(); },
+        []() -> SyntaxLanguageHandle { return tree_sitter_javascript(); },
         "javascript", ""));
     grammars.push_back(vendoredGrammar(
         {"typescript", "ts"},
-        [] -> SyntaxLanguageHandle { return tree_sitter_typescript(); },
+        []() -> SyntaxLanguageHandle { return tree_sitter_typescript(); },
         "typescript", "javascript"));
     grammars.push_back(vendoredGrammar(
         {"csharp", "c#", "cs"},
-        [] -> SyntaxLanguageHandle { return tree_sitter_c_sharp(); }, "csharp",
+        []() -> SyntaxLanguageHandle { return tree_sitter_c_sharp(); }, "csharp",
         ""));
     grammars.push_back(vendoredGrammar(
-        {"lua"}, [] -> SyntaxLanguageHandle { return tree_sitter_lua(); }, "lua",
+        {"lua"}, []() -> SyntaxLanguageHandle { return tree_sitter_lua(); }, "lua",
         ""));
     grammars.push_back(vendoredGrammar(
         {"markdown", "md"},
-        [] -> SyntaxLanguageHandle { return tree_sitter_markdown(); }, "markdown",
+        []() -> SyntaxLanguageHandle { return tree_sitter_markdown(); }, "markdown",
         ""));
     return grammars;
 }

@@ -298,7 +298,10 @@ TEST(aStyleGlyphThatEmitsAModeIsRejectedNamingItsKey) {
     }
 
     // A bare control byte, and a shift-out, are refused for the same reason.
-    for (auto const* value : {"\x0e", "\x07", "a\x1bb"}) {
+    // "a\x1b" "b" is split so the hex escape cannot swallow the following 'b'
+    // as a third hex digit -- \x1bb is out of range, and what it would mean is
+    // not what this case is testing.
+    for (auto const* value : {"\x0e", "\x07", "a\x1b" "b"}) {
         auto const rejected = ssg::applyStyleDefine(
             base, ssg::StyleDefineArguments{{{"truncation", value}}});
         ASSERT_FALSE(rejected.accepted());

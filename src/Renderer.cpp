@@ -191,8 +191,7 @@ std::optional<GridPosition> inputLineCaret(ShellViewState const& shell) {
         // column back for it, so this normally needs no clamping; the bound is
         // a guard against a degenerate header rather than routine behavior.
         column = std::min(column, static_cast<int>(shell.viewport.columns) - 1);
-        return GridPosition{static_cast<std::uint32_t>(std::max(column, 0)),
-                            static_cast<std::uint32_t>(node.rect.y)};
+        return GridPosition{std::max(column, 0), node.rect.y};
     }
     return std::nullopt;
 }

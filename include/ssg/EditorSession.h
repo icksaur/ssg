@@ -34,7 +34,12 @@ enum class CommandError : std::uint8_t {
 
 struct CommandResult {
     CommandError error;
-    Revision revision;
+    // Default-constructed to the null sentinel.  Without the initializer,
+    // `CommandResult{}` aggregate-initializes this member from `{}`, which
+    // reaches Revision's EXPLICIT constructor -- legal but warned about, and the
+    // warning is the honest one: an implicit conversion is being performed
+    // through a constructor written to forbid exactly that.
+    Revision revision{};
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
