@@ -8,12 +8,14 @@
 
 #include "test_helpers.h"
 
+#include <algorithm>
 #include <any>
 #include <csignal>
 #include <filesystem>
 #include <fstream>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace fs = std::filesystem;
 
@@ -305,51 +307,136 @@ TEST(unicodeEndToEndGridAndEncoding) {
     fs::remove_all(root);
 }
 
-TEST(terminalSequencesAreInverseControlStrings) {
-    auto setup = ssg::app::terminal_setup_sequence();
-    auto restore = ssg::app::terminal_restore_sequence();
+// One escape sequence, classified by what it does to terminal STATE.
+//
+// The point of classifying rather than pattern-matching one family: an
+// unrecognised sequence is a test failure, so a mode expressed in a form this
+// oracle does not understand cannot be added without teaching it. The previous
+// version understood only CSI ? N h/l, so dropping the cursor-style reset left
+// a real terminal with a blinking bar cursor and failed nothing.
+struct TerminalOp {
+    enum class Kind { PrivateSet, PrivateReset, CursorStyle, Unrecognised };
+    Kind kind = Kind::Unrecognised;
+    int value = 0;
+    std::string raw;
+};
 
-    // A signal-driven restore and the RAII destructor share these, so a private
-    // mode enabled at startup but never disabled would leave a real terminal in
-    // raw/alt-screen state after a terminating signal.
-    //
-    // The rule is asserted generally rather than by pinning the two exact
-    // strings: every private mode the setup turns ON (CSI ? N h) must be turned
-    // OFF (CSI ? N l) by the restore, and in reverse order.  Pinned literals
-    // covered only the modes someone remembered to list a second time, so a
-    // newly added mode could go unrestored without failing anything.
-    auto privateModes = [](std::string const& sequence, char terminator) {
-        std::vector<int> modes;
-        for (std::size_t i = 0; i + 3 < sequence.size(); ++i) {
-            if (sequence[i] != '\x1b' || sequence[i + 1] != '[' ||
-                sequence[i + 2] != '?') {
-                continue;
-            }
-            std::size_t j = i + 3;
-            int value = 0;
-            bool digits = false;
-            while (j < sequence.size() && sequence[j] >= '0' && sequence[j] <= '9') {
-                value = value * 10 + (sequence[j] - '0');
-                ++j;
-                digits = true;
-            }
-            if (digits && j < sequence.size() && sequence[j] == terminator) {
-                modes.push_back(value);
-            }
+std::vector<TerminalOp> classifyTerminalOps(std::string const& sequence) {
+    std::vector<TerminalOp> ops;
+    std::size_t i = 0;
+    while (i < sequence.size()) {
+        if (sequence[i] != '\x1b') {  // Anything not an escape is not a mode op.
+            ops.push_back({TerminalOp::Kind::Unrecognised, 0,
+                           std::string{sequence[i]}});
+            ++i;
+            continue;
         }
-        return modes;
-    };
+        std::size_t const begin = i;
+        if (i + 1 >= sequence.size() || sequence[i + 1] != '[') {
+            ops.push_back({TerminalOp::Kind::Unrecognised, 0,
+                           sequence.substr(begin)});
+            break;
+        }
+        std::size_t j = i + 2;
+        bool const isPrivate = j < sequence.size() && sequence[j] == '?';
+        if (isPrivate) ++j;
+        int value = 0;
+        bool digits = false;
+        while (j < sequence.size() && sequence[j] >= '0' && sequence[j] <= '9') {
+            value = value * 10 + (sequence[j] - '0');
+            ++j;
+            digits = true;
+        }
+        // An intermediate byte (here only SP) distinguishes DECSCUSR from an
+        // ordinary CSI with the same final.
+        bool const hasSpace = j < sequence.size() && sequence[j] == ' ';
+        if (hasSpace) ++j;
+        if (j >= sequence.size() || !digits) {
+            ops.push_back({TerminalOp::Kind::Unrecognised, 0,
+                           sequence.substr(begin)});
+            break;
+        }
+        char const final = sequence[j];
+        auto kind = TerminalOp::Kind::Unrecognised;
+        if (isPrivate && !hasSpace && final == 'h') {
+            kind = TerminalOp::Kind::PrivateSet;
+        } else if (isPrivate && !hasSpace && final == 'l') {
+            kind = TerminalOp::Kind::PrivateReset;
+        } else if (!isPrivate && hasSpace && final == 'q') {
+            kind = TerminalOp::Kind::CursorStyle;
+        }
+        ops.push_back({kind, value, sequence.substr(begin, j + 1 - begin)});
+        i = j + 1;
+    }
+    return ops;
+}
 
-    auto enabled = privateModes(setup, 'h');
-    auto disabled = privateModes(restore, 'l');
+// Today's sequences are known good, so they are the reference the mode stack
+// must reproduce byte for byte (doc/spec-terminal-escape-discipline.md, step 1).
+// Refactors that only change structure must not change these bytes; the ONE
+// step that changes the wire output -- moving cursor visibility to a frame
+// guard -- edits this reference and nothing else does.
+constexpr std::string_view kExpectedSetup =
+    "\x1b[?1049h\x1b[5 q\x1b[?1000h\x1b[?1002h\x1b[?1006h";
+constexpr std::string_view kExpectedRestore =
+    "\x1b[?1006l\x1b[?1002l\x1b[?1000l\x1b[0 q\x1b[?25h\x1b[?1049l";
+
+TEST(terminalSequencesMatchTheKnownGoodBytes) {
+    ASSERT_EQ(ssg::app::terminal_setup_sequence(), std::string{kExpectedSetup});
+    ASSERT_EQ(ssg::app::terminal_restore_sequence(),
+              std::string{kExpectedRestore});
+}
+
+TEST(everyModeTheSetupEntersIsLeftByTheRestore) {
+    auto const setup = ssg::app::terminal_setup_sequence();
+    auto const restore = ssg::app::terminal_restore_sequence();
+
+    auto const setupOps = classifyTerminalOps(setup);
+    auto const restoreOps = classifyTerminalOps(restore);
+
+    // COMPLETENESS. Every sequence in both strings must be one this oracle
+    // understands, so a newly added mode in an unfamiliar form fails here
+    // rather than silently escaping the pairing rules below.
+    for (auto const& op : setupOps) {
+        ASSERT_TRUE(op.kind != TerminalOp::Kind::Unrecognised);
+    }
+    for (auto const& op : restoreOps) {
+        ASSERT_TRUE(op.kind != TerminalOp::Kind::Unrecognised);
+    }
+
+    // PRIVATE MODES: every one enabled is disabled, in reverse order -- leaving
+    // the alternate screen before disabling mouse reporting would leave
+    // reporting on in the primary screen.
+    std::vector<int> enabled;
+    for (auto const& op : setupOps) {
+        if (op.kind == TerminalOp::Kind::PrivateSet) enabled.push_back(op.value);
+    }
+    std::vector<int> disabled;
+    for (auto const& op : restoreOps) {
+        if (op.kind == TerminalOp::Kind::PrivateReset) {
+            disabled.push_back(op.value);
+        }
+    }
     ASSERT_FALSE(enabled.empty());
-    ASSERT_EQ(enabled.size(), disabled.size());
-
-    // Reverse order: the alt screen is entered first and left last.
     std::vector<int> reversed(disabled.rbegin(), disabled.rend());
     ASSERT_EQ(enabled, reversed);
 
-    // The cursor is always made visible again, whatever shape setup chose.
+    // CURSOR STYLE is a single slot rather than a per-id mode: any non-default
+    // style the setup selects must be returned to the default (0), or the
+    // user's cursor keeps ssg's shape after ssg exits.
+    bool const setupChangesCursorStyle = std::any_of(
+        setupOps.begin(), setupOps.end(), [](TerminalOp const& op) {
+            return op.kind == TerminalOp::Kind::CursorStyle && op.value != 0;
+        });
+    bool const restoreResetsCursorStyle = std::any_of(
+        restoreOps.begin(), restoreOps.end(), [](TerminalOp const& op) {
+            return op.kind == TerminalOp::Kind::CursorStyle && op.value == 0;
+        });
+    ASSERT_EQ(setupChangesCursorStyle, restoreResetsCursorStyle);
+
+    // CURSOR VISIBILITY is hidden per FRAME, not at setup, so its debt is
+    // settled here at process scope. Step 4 of the spec moves it to a frame
+    // guard, at which point this assertion and kExpectedRestore change together.
     ASSERT_TRUE(restore.find("\x1b[?25h") != std::string::npos);
 }
 
@@ -1226,7 +1313,8 @@ int main() {
     RUN(resolveLaunchNoArgumentOpensCwd);
     RUN(resolveLaunchDirectoryOpensThatDirectory);
     RUN(resolveLaunchFileOpensParentDirectoryAndFile);
-    RUN(terminalSequencesAreInverseControlStrings);
+    RUN(terminalSequencesMatchTheKnownGoodBytes);
+    RUN(everyModeTheSetupEntersIsLeftByTheRestore);
     RUN(unicodeEndToEndGridAndEncoding);
     RUN(classifySignalTagsMapsSignalNumbers);
     RUN(encodeAnsiFrameAdaptsToColorDepth);
