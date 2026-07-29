@@ -753,9 +753,25 @@ TEST(editRevealsThePrimaryCaretFreeScrollDoesNotAndFollowsPrimary) {
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{-200}}).accepted());
     ASSERT_EQ(firstRow(), 0U);
     // A multi-cursor insert reveals the PRIMARY caret (bottom), not the secondary
-    // (top): the offset jumps to the maximum, not staying at 0.
+    // (top): the offset jumps down far enough to show it, rather than staying at 0.
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"text.insert", runtime.revision(), ssg::TextInputArguments{"z"}}).accepted());
-    ASSERT_EQ(firstRow(), maximum());
+    // Asserted as "the primary caret is on screen" rather than "the offset equals
+    // the maximum".  The primary caret sits on the second-to-last line, so
+    // revealing it lands one row short of the maximum.  This read `== maximum()`
+    // while the viewport scrolled against the terminal height instead of the pane
+    // content height: the maximum was then too small, the reveal clamped to it,
+    // and the assertion passed for the wrong reason -- masking the very bug that
+    // left the last rows of every document unreachable.
+    {
+        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        ASSERT_TRUE(snap.has_value());
+        auto const& view = snap->client().viewport;
+        auto const caretLine =
+            snap->sections().selection.selections.primary().active.line.value();
+        ASSERT_TRUE(view.firstVisualRow > 0);  // did not follow the secondary caret
+        ASSERT_TRUE(caretLine >= view.firstVisualRow);
+        ASSERT_TRUE(caretLine < view.firstVisualRow + view.visibleRows.size());
+    }
     std::filesystem::remove_all(root);
 }
 

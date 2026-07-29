@@ -1382,16 +1382,35 @@ ViewportViewState EditorRuntime::Impl::computeEditorViewport(
     ViewportDimensions dimensions, std::uint32_t firstRow,
     std::uint32_t firstColumn) const {
     const auto diffFile = activeDiffFile();
-    if (wordWrap) {
-        auto runs = activeCellRuns();
-        return Viewport{}.compute(
-            runs, dimensions, firstRow, diffFile ? &*diffFile : nullptr);
-    }
-    // Word wrap off (default): one logical line is one visual row; only the
-    // visible lines are segmented, so this is O(visible rows), not O(document).
-    return Viewport{}.computeUnwrapped(activeText(), dimensions, firstRow,
-                                       firstColumn, 4,
-                                       diffFile ? &*diffFile : nullptr);
+    // Scroll against the rows the editor actually PAINTS, not the terminal's
+    // full height.  The shell spends rows on the header, the tab bar, the footer
+    // and any reserved prompt, and a viewport sized to the whole terminal
+    // overshoots by exactly that much: its maximum scroll offset leaves the last
+    // few lines permanently unreachable, and it reports no scrollbar for a
+    // document that is in fact clipped.  `lastPaneContentRows` is the pane
+    // content height the shell layout just computed -- the same number
+    // page-up/page-down already scroll by.
+    //
+    // Clamped to the terminal height because a terminal too small to lay out at
+    // all leaves that cache holding the last good layout's value, which would
+    // otherwise size the viewport larger than the screen.
+    ViewportDimensions const content{
+        dimensions.columns,
+        std::max<std::uint32_t>(
+            1, std::min<std::uint32_t>(lastPaneContentRows, dimensions.rows))};
+    auto view = wordWrap
+                    ? Viewport{}.compute(activeCellRuns(), content, firstRow,
+                                         diffFile ? &*diffFile : nullptr)
+                    // Word wrap off (default): one logical line is one visual
+                    // row; only the visible lines are segmented, so this is
+                    // O(visible rows), not O(document).
+                    : Viewport{}.computeUnwrapped(activeText(), content, firstRow,
+                                                  firstColumn, 4,
+                                                  diffFile ? &*diffFile : nullptr);
+    // Republish the client's full surface: `dimensions` is what a client sizes
+    // its grid from, while the rows above describe the content region.
+    view.dimensions = dimensions;
+    return view;
 }
 
 ViewportViewState EditorRuntime::Impl::viewport(ViewportDimensions dimensions) const {
@@ -1952,10 +1971,16 @@ std::optional<SessionSnapshot> EditorRuntime::snapshot(ClientId clientId, Viewpo
     const_cast<EditorRuntime::Impl*>(impl_.get())->drainGitDiffScans();
     auto client = impl_->session->attachedClient(clientId);
     if (!client) return std::nullopt;
+    // Sections FIRST, then the viewport: computing the shell layout is what
+    // caches the pane content height the viewport scrolls against.  As
+    // arguments to one call their evaluation order would be unspecified, so the
+    // viewport could be built against the PREVIOUS frame's pane height -- which
+    // is wrong on the frame a resize or a prompt changes it.
+    auto sections = impl_->sections(dimensions, leaderPending, paletteReport);
+    auto viewport = impl_->viewport(dimensions);
     return SessionSnapshotCodec{}.assemble(impl_->session->revision(), impl_->session->topology(),
                                      client->principal, client->viewId,
-                                     impl_->viewport(dimensions),
-                                     impl_->sections(dimensions, leaderPending, paletteReport));
+                                     std::move(viewport), std::move(sections));
 }
 
 int EditorRuntime::gitDiffWakeDescriptor() const {
