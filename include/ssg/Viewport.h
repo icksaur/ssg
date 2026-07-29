@@ -277,11 +277,19 @@ public:    // The scrollbar thumb geometry for a list of `total_rows` items show
         std::optional<uint32_t> selected,
         bool keepSelectionVisible) const;
 
+    // `contentArea` is the region the editor actually PAINTS -- the client
+    // surface minus whatever the shell spends on header, tab bar, footer and any
+    // reserved prompt.  All scroll math derives from it, so a caller that passes
+    // the whole surface here leaves the last rows of a document unreachable.
+    // `clientSurface` is republished as `ViewportViewState::dimensions` for a
+    // client to size its grid from; when omitted the two are the same, which is
+    // what a caller with no surrounding chrome wants.
     [[nodiscard]] ViewportViewState compute(
         std::span<const CellRun> logicalLines,
-        ViewportDimensions dimensions,
+        ViewportDimensions contentArea,
         uint32_t requestedFirstVisualRow = 0,
-        const DiffFileView* diff = nullptr) const;
+        const DiffFileView* diff = nullptr,
+        std::optional<ViewportDimensions> clientSurface = std::nullopt) const;
 
     // Word-wrap-OFF viewport projection.  Builds the SAME ViewportViewState shape as
     // `compute` for a NON-wrapping document, but in O(visible rows) grapheme
@@ -295,11 +303,12 @@ public:    // The scrollbar thumb geometry for a list of `total_rows` items show
     // path's (4 today).  Hit-target byte offsets are document-absolute.
     [[nodiscard]] ViewportViewState computeUnwrapped(
         std::string_view documentText,
-        ViewportDimensions dimensions,
+        ViewportDimensions contentArea,
         uint32_t requestedFirstVisualRow,
         uint32_t requestedFirstVisualColumn,
         int tabWidth,
-        const DiffFileView* diff = nullptr) const;
+        const DiffFileView* diff = nullptr,
+        std::optional<ViewportDimensions> clientSurface = std::nullopt) const;
 
     [[nodiscard]] RowProjection rowProjection(
         std::span<const CellRun> logicalLines,

@@ -1398,18 +1398,17 @@ ViewportViewState EditorRuntime::Impl::computeEditorViewport(
         dimensions.columns,
         std::max<std::uint32_t>(
             1, std::min<std::uint32_t>(lastPaneContentRows, dimensions.rows))};
-    auto view = wordWrap
-                    ? Viewport{}.compute(activeCellRuns(), content, firstRow,
-                                         diffFile ? &*diffFile : nullptr)
-                    // Word wrap off (default): one logical line is one visual
-                    // row; only the visible lines are segmented, so this is
-                    // O(visible rows), not O(document).
-                    : Viewport{}.computeUnwrapped(activeText(), content, firstRow,
-                                                  firstColumn, 4,
-                                                  diffFile ? &*diffFile : nullptr);
-    // Republish the client's full surface: `dimensions` is what a client sizes
-    // its grid from, while the rows above describe the content region.
-    view.dimensions = dimensions;
+    auto const view =
+        wordWrap
+            ? Viewport{}.compute(activeCellRuns(), content, firstRow,
+                                 diffFile ? &*diffFile : nullptr, dimensions)
+            // Word wrap off (default): one logical line is one visual row; only
+            // the visible lines are segmented, so this is O(visible rows), not
+            // O(document).
+            : Viewport{}.computeUnwrapped(activeText(), content, firstRow,
+                                          firstColumn, 4,
+                                          diffFile ? &*diffFile : nullptr,
+                                          dimensions);
     return view;
 }
 

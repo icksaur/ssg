@@ -595,7 +595,12 @@ ViewportDimensions::ViewportDimensions(uint32_t columnCount,
 ViewportViewState Viewport::compute(std::span<const CellRun> logicalLines,
                                     ViewportDimensions dimensions,
                                     uint32_t requestedFirstVisualRow,
-                                    const DiffFileView* diff) const {
+                                    const DiffFileView* diff,
+                                    std::optional<ViewportDimensions> clientSurface) const {
+    // Everything below projects against `dimensions`, the painted content area.
+    // Only the published field differs, so a client sizes its grid from its own
+    // surface while scroll math stays bound to what is actually drawn.
+    ViewportDimensions const surface = clientSurface.value_or(dimensions);
     if (diff != nullptr) {
         auto projected =
             projectedWrappedRows(logicalLines, dimensions.columns, *diff);
@@ -643,7 +648,7 @@ ViewportViewState Viewport::compute(std::span<const CellRun> logicalLines,
             }
         }
         return ViewportViewState{
-            dimensions,
+            surface,
             firstRow,
             0,
             totalRows,
@@ -719,7 +724,7 @@ ViewportViewState Viewport::compute(std::span<const CellRun> logicalLines,
     }
 
     return ViewportViewState{
-        dimensions,
+        surface,
         firstRow,
         0,  // word-wrap-ON never scrolls horizontally (first_visual_column)
         totalRows,
@@ -733,7 +738,11 @@ ViewportViewState Viewport::compute(std::span<const CellRun> logicalLines,
 ViewportViewState Viewport::computeUnwrapped(
     std::string_view documentText, ViewportDimensions dimensions,
     uint32_t requestedFirstVisualRow, uint32_t requestedFirstVisualColumn,
-    int tabWidth, const DiffFileView* diff) const {
+    int tabWidth, const DiffFileView* diff,
+    std::optional<ViewportDimensions> clientSurface) const {
+    // As in `compute`: project against the painted content area, publish the
+    // client's own surface so it can size its grid.
+    ViewportDimensions const surface = clientSurface.value_or(dimensions);
     // Word wrap OFF: one logical line renders as exactly one visual row, clipped
     // to the pane width.  The total visual row count is the logical line count, a
     // cheap byte scan for '\n' — NO compute_cell_run over the whole document.
@@ -971,7 +980,7 @@ ViewportViewState Viewport::computeUnwrapped(
     }
 
     return ViewportViewState{
-        dimensions,
+        surface,
         firstRow,
         requestedFirstVisualColumn,
         totalRows,
