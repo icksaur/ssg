@@ -44,6 +44,22 @@ struct TreeSitterGrammar {
     // convention its query compiler does not process, so inheritance has to be
     // performed here. Empty when the grammar inherits nothing.
     std::string inheritedHighlightQuery;
+    // A grammar to run INSIDE certain nodes of this one, for languages split
+    // across two parsers.  Markdown is the case that needs it: upstream parses
+    // block structure (headings, lists, code fences) and inline structure
+    // (emphasis, code spans, links) with separate grammars, and the block
+    // grammar leaves the inline content as opaque `inline` nodes.  Without this
+    // the whole inline half of a markdown document is unhighlighted.
+    //
+    // Deliberately one level and node-type-driven rather than a general
+    // injection system: that is what the vendored set needs, and a general one
+    // would be untested machinery.
+    struct Injection {
+        std::string nodeType;  // Nodes of this type carry the injected language.
+        SyntaxLanguageFactory language = nullptr;
+        std::string highlightQuery;
+    };
+    std::optional<Injection> injection;
 };
 
 // The grammars SSG vendors: C, C++, JavaScript, TypeScript, C#, Lua, and

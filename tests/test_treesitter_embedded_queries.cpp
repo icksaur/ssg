@@ -50,7 +50,25 @@ TEST(everyVendoredGrammarCarriesItsQueryTextInMemory) {
         // The query travels with the grammar; nothing is resolved later from a
         // path, so there is no point at which a missing file could degrade it.
         ASSERT_FALSE(grammar.highlightQuery.empty());
+        // An injection that names a node type but carries no grammar or query
+        // would silently do nothing, which is indistinguishable from having no
+        // injection at all until someone opens a markdown file and wonders why
+        // half of it is plain.
+        if (grammar.injection) {
+            ASSERT_FALSE(grammar.injection->nodeType.empty());
+            ASSERT_TRUE(grammar.injection->language != nullptr);
+            ASSERT_FALSE(grammar.injection->highlightQuery.empty());
+        }
     }
+    // Markdown is the grammar that needs one: its inline half is a separate
+    // parser upstream.
+    bool markdownInjects = false;
+    for (const auto& grammar : grammars) {
+        for (const auto& id : grammar.languageIds) {
+            if (id == "markdown" && grammar.injection) markdownInjects = true;
+        }
+    }
+    ASSERT_TRUE(markdownInjects);
 }
 
 // Reference-implementation oracle: the test reads the vendor file itself and
@@ -66,6 +84,8 @@ TEST(embeddedQueryTextMatchesTheVendorFilesByteForByte) {
         {"csharp", "tree-sitter-c-sharp/queries/highlights.scm"},
         {"lua", "tree-sitter-lua/queries/highlights.scm"},
         {"markdown", "tree-sitter-markdown/queries/highlights.scm"},
+        {"markdown_inline",
+         "tree-sitter-markdown-inline/queries/highlights.scm"},
     };
     for (const auto& [key, relative] : keyToFile) {
         const auto expected = readFile(vendorRoot / relative);

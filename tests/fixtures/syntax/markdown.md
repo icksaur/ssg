@@ -20,6 +20,8 @@ int main() { return 0; }
 
 A [link label](https://example.com/path) and a backslash escape: \*not emphasis\*.
 
+Inline markup: *emphasis*, **strong**, and `a code span`.
+
 [a reference label]: https://example.com/reference "Title text"
 
 ---
