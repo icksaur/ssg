@@ -137,6 +137,12 @@ KeymapViewState defaultTerminalKeymap() {
     bind(seq({"Escape", "KeyX"}), "clipboard.cut", "editor");
     bind(seq({"Escape", "KeyC"}), "clipboard.copy", "editor");
     bind(seq({"Escape", "KeyV"}), "clipboard.paste", "editor");
+    // Paste also works while a prompt owns the keyboard -- find, replace, a path,
+    // the palette query.  The client fulfils it against the prompt's own text
+    // rather than the document, the same way typing into a prompt is routed.
+    // Cut and copy are deliberately absent: a prompt's value is client-owned and
+    // there is no selection within it to take.
+    bind(seq({"Escape", "KeyV"}), "clipboard.paste", "prompt");
 
     bind(seq({"ArrowDown"}), "cursor.line_down", "editor");
     bind(seq({"ArrowUp"}), "cursor.line_up", "editor");

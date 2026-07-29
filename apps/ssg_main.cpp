@@ -848,6 +848,9 @@ int main(int argc, char** argv) {
     // reports the full next string via prompt.update_value.
     bool pathPromptOpen = false;
     std::string pathPromptValue;
+    // The clipboard's text as the library publishes it, so pasting into a prompt
+    // reads authoritative state rather than a client-side copy of the register.
+    std::string clipboardText;
     ssg::KeymapViewState keymap;
     ssg::CatalogRevision compiledForRevision = 0;
     std::unique_ptr<ssg::CompiledKeymap> compiledKeymap =
@@ -949,6 +952,7 @@ int main(int argc, char** argv) {
         ssg::CommandRef paletteNext{"palette.next"};
         ssg::CommandRef palettePrevious{"palette.previous"};
         ssg::CommandRef paletteClose{"palette.close"};
+        ssg::CommandRef clipboardPaste{"clipboard.paste"};
         std::vector<ssg::CommandRef> pickerOpeners;
     };
     InterceptHandles const intercept = [] {
@@ -1060,6 +1064,10 @@ int main(int argc, char** argv) {
                 picker.paneRows = static_cast<std::uint32_t>(
                     std::max(shell.panes.front().content.height, 1));
             }
+            // The clipboard's text, so a paste into a prompt can be served from
+            // authoritative published state rather than the app keeping its own
+            // copy of what was cut or copied.
+            clipboardText = snapshot->sections().clipboard.plainText;
             // Derive find fulfillment from the ACTIVE prompt kind, not merely the
             // controller being open under prompt focus: a palette/settings prompt
             // may be active while the find controller is still open, and find
@@ -1400,7 +1408,18 @@ int main(int argc, char** argv) {
             chord.push(decoded.stroke, ssg::CompiledKeymap::compile(decoded.stroke));
             auto resolution = compiledKeymap->resolve(chord.compiled(), focus);
             if (resolution.kind == ssg::KeymapMatchKind::Resolved) {
-                dispatchResolved(resolution.command);
+                // Pasting into a prompt inserts into the PROMPT's text, not the
+                // document behind it.  A prompt's value is edited client-side
+                // (the same TextRouting::PromptQuery path typing goes through),
+                // so the paste is served here from the clipboard text the
+                // library publishes.  Dispatching it instead would silently
+                // paste into the document while the user looks at a prompt.
+                if (focus == ssg::FocusTarget::Prompt &&
+                    resolution.command == intercept.clipboardPaste) {
+                    if (!clipboardText.empty()) routeText(clipboardText);
+                } else {
+                    dispatchResolved(resolution.command);
+                }
                 chord.clear();
             } else if (resolution.kind == ssg::KeymapMatchKind::Pending) {
                 // Keep collecting; the leader hint renders next frame.
