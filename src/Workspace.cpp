@@ -533,10 +533,16 @@ std::optional<WorkspaceDocumentState> Workspace::state(
     }
     OpenPhaseTimer timer{OpenPhase::StateDirtyCheck};
     const auto text = entry->document.snapshot().text;
+    const bool untitled = entry->key.kind() == JournalDocumentKeyKind::Untitled;
+    // An untitled buffer used to be dirty unconditionally.  Technically true --
+    // it has never been written anywhere -- but it made the state useless: every
+    // session opens on an empty scratch buffer, so every session began showing
+    // unsaved changes nobody had made, and the badge stopped meaning anything.
+    // An untitled buffer is unsaved exactly when it holds something to lose.
     const bool dirty =
-        entry->key.kind() == JournalDocumentKeyKind::Untitled ||
-        text != entry->persistedText.view() ||
-        entry->decoded.status != entry->persistedStatus;
+        untitled ? !text.empty()
+                 : (text != entry->persistedText.view() ||
+                    entry->decoded.status != entry->persistedStatus);
     return WorkspaceDocumentState{
         entry->id,
         entry->key,

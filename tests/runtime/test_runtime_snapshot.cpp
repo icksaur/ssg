@@ -183,6 +183,34 @@ TEST(aDocumentClippedByTheChromeStillReportsAScrollbar) {
     std::filesystem::remove_all(root);
 }
 
+// Every session opens on an empty untitled buffer.  Reporting it unsaved is
+// technically true and practically useless: the badge appears before the user
+// has done anything, so it stops meaning "you have work to lose".
+TEST(anEmptyScratchBufferIsNotUnsavedUntilItHasContent) {
+    auto root = uniqueRoot("scratch_dirty");
+    auto created = ssg::EditorRuntime::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.new", runtime.revision(), {}}).accepted());
+    runtime.focusEditor();
+
+    auto const dirty = [&] {
+        auto snapshot = runtime.snapshot(ssg::ClientId{1}, {80, 24});
+        auto const& tabs = snapshot->sections().tabs.tabs;
+        return !tabs.empty() && tabs.front().dirty;
+    };
+    ASSERT_FALSE(dirty());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"text.insert", runtime.revision(),
+                                  ssg::TextInputArguments{"x"}}).accepted());
+    ASSERT_TRUE(dirty());
+    std::filesystem::remove_all(root);
+}
+
 TEST(curatedKeymapBindingsAreArgumentFree) {
     auto root = uniqueRoot("keymap_argfree");
     std::ofstream{root / "workspace" / "doc.txt"} << "alpha\nbeta\n";
@@ -396,6 +424,7 @@ int main() {
     RUN(runtimePublishesValidCuratedKeymap);
     RUN(everyDocumentLineIsReachableAndTheCaretIsNeverLost);
     RUN(aDocumentClippedByTheChromeStillReportsAScrollbar);
+    RUN(anEmptyScratchBufferIsNotUnsavedUntilItHasContent);
     RUN(curatedKeymapBindingsAreArgumentFree);
     RUN(curatedKeymapResolvesPerContext);
     RUN(addCursorChordProducesMultipleSelections);

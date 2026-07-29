@@ -674,11 +674,18 @@ int main(int argc, char** argv) {
     // something to edit", NOT "was a file opened": a new buffer is just as
     // editable, and treating it otherwise silently swallows everything typed.
     bool startsWithAnEditableDocument = false;
+    // Distinct from the above: did a file get opened BY NAME?  The Files sidebar
+    // is opened at startup only when it was not -- someone who named a file came
+    // to edit that file, and a sidebar covering a third of the screen is in the
+    // way.  With no argument there is nothing to look at but an empty buffer, so
+    // the sidebar is the useful thing to show.
+    bool openedNamedFile = false;
     if (target.file) {
         if (fs::exists(target.cwd / *target.file)) {
             auto const openResult = runtime.dispatch(
                 client, {"file.open", runtime.revision(), *target.file});
             startsWithAnEditableDocument = openResult.accepted();
+            openedNamedFile = openResult.accepted();
             // panel.show_files (dispatched later, once the deferred tree
             // scan below completes) moves focus to the panel as a side
             // effect; when a file was explicitly named on the command
@@ -1100,31 +1107,29 @@ int main(int argc, char** argv) {
                     // enrichment (tree scan, syntax) deferred off the startup
                     // path.  It publishes on the next snapshot at the loop top.
                     runtime.primeDeferred();
-                    // Always open the Files sidebar once the workspace tree
-                    // scan above has populated the "filesystem" tree
-                    // provider -- lets a user immediately browse for a file
-                    // to open without a separate keystroke. Uses the SAME
-                    // panel.show_files command Escape-B/Escape-O reach
-                    // interactively; this is not a new mechanism, only
-                    // sequenced AFTER primeDeferred() rather than before
-                    // it: dispatching it earlier (pre-loop, before the
-                    // deferred tree scan has run) would fail with "files
-                    // tree provider is unavailable" every startup, since
-                    // the M10 fast-startup path defers registering that
-                    // provider until exactly this point.
-                    if (auto const panelResult = runtime.dispatch(
-                            client, {"panel.show_files", runtime.revision(), {}});
-                        !panelResult.accepted()) {
-                        std::fprintf(stderr, "ssg: could not open Files sidebar: %s\n",
-                                    panelResult.message.c_str());
+                    // Open the Files sidebar only when startup did NOT open a
+                    // named file: with nothing but an empty buffer the sidebar is
+                    // the only thing worth showing, but over a file the user
+                    // asked for by name it just covers the text they came to
+                    // edit.  Uses the SAME panel.show_files command Escape-B and
+                    // Escape-O reach interactively; this is not a new mechanism,
+                    // only sequenced AFTER primeDeferred() rather than before it:
+                    // dispatching it earlier (pre-loop, before the deferred tree
+                    // scan has run) would fail with "files tree provider is
+                    // unavailable" every startup, since the M10 fast-startup path
+                    // defers registering that provider until exactly this point.
+                    if (!openedNamedFile) {
+                        if (auto const panelResult = runtime.dispatch(
+                                client, {"panel.show_files", runtime.revision(), {}});
+                            !panelResult.accepted()) {
+                            std::fprintf(stderr,
+                                         "ssg: could not open Files sidebar: %s\n",
+                                         panelResult.message.c_str());
+                        }
                     }
-                    // panel.show_files (just above) moves focus to the
-                    // panel as a side effect (ShellState::showPanelProvider
-                    // -> togglePanel); when a file was explicitly named on
-                    // the command line and successfully opened earlier, the
-                    // user wants to start editing it, so re-assert editor
-                    // focus here, AFTER panel.show_files, so it's the final
-                    // word on where focus lands.
+                    // panel.show_files moves focus to the panel as a side effect
+                    // (ShellState::showPanelProvider -> togglePanel), so editor
+                    // focus is re-asserted here, AFTER it, to be the final word.
                     if (startsWithAnEditableDocument) {
                         runtime.focusEditor();
                     }
