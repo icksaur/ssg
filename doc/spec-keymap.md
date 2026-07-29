@@ -211,7 +211,12 @@ terminal has no browser-reserved chords, so none is excluded):
 - `panel`: `ArrowDown` → `tree.select_next`, `ArrowUp` → `tree.select_previous`,
   `Enter` → `tree.activate`.
 - `prompt`: `Enter` → `prompt.submit`, `[Escape, Escape]` → `prompt.cancel`,
-  `ArrowDown` → `prompt.next`, `ArrowUp` → `prompt.previous`. (Prompt query
+  `ArrowDown` → `prompt.next`, `ArrowUp` → `prompt.previous`,
+  `[Escape, KeyV]` → `clipboard.paste`, which the client fulfils against the
+  prompt's own value rather than dispatching at the document -- a prompt owns
+  text a user will want to paste into, and pasting behind it would be a silent
+  edit. Cut and copy are deliberately absent: a prompt's value is client-owned
+  and there is no selection within it to take. (Prompt query
   editing — printable insert and backspace — is client-local text handling via
   `text_routing == prompt_query`, not a binding.)
 

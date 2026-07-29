@@ -439,11 +439,10 @@ TEST(curatedKeymapResolvesPerContext) {
         ssg::KeymapMatcher{keymap}.resolveSequence(toggleCase, "prompt").commandId,
         std::string{"find.toggle_case"});
 
-    // Editor-scoped means editor-ONLY.  KeyC is protected by find.toggle_case
-    // above, but KeyX and KeyV have no competing binding, so widening them to
-    // "*" would pass validation and silently claim the chord in every context.
-    // Assert they stay unresolved outside the editor.
-    for (auto const* const key : {"KeyX", "KeyV", "KeyC"}) {
+    // Editor-scoped means editor-ONLY for cut and copy.  KeyC is protected by
+    // find.toggle_case, but KeyX has no competing binding, so widening it to "*"
+    // would pass validation and silently claim the chord in every context.
+    for (auto const* const key : {"KeyX", "KeyC"}) {
         const auto sequence = *ssg::KeyCodec{}.parseSequence({"Escape", key});
         for (auto const* const context : {"panel", "prompt"}) {
             const auto resolved =
@@ -451,6 +450,16 @@ TEST(curatedKeymapResolvesPerContext) {
             ASSERT_TRUE(resolved.commandId.rfind("clipboard.", 0) != 0);
         }
     }
+    // Paste is the exception: it is bound in the prompt too, because a prompt
+    // owns text a user will want to paste into.  It is fulfilled against the
+    // prompt's own value client-side, never dispatched at the document.
+    const auto paste = *ssg::KeyCodec{}.parseSequence({"Escape", "KeyV"});
+    ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(paste, "prompt").commandId,
+              std::string{"clipboard.paste"});
+    // But not in the panel: there is no text there to paste into.
+    ASSERT_TRUE(ssg::KeymapMatcher{keymap}
+                    .resolveSequence(paste, "panel")
+                    .commandId.rfind("clipboard.", 0) != 0);
 
     // M7-M selection/multi-cursor bindings: Shift+Arrow extends the selection in
     // the editor; the multi-cursor and find/replace chords resolve globally.
