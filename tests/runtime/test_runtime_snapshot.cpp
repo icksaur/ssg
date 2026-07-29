@@ -157,6 +157,40 @@ TEST(curatedKeymapResolvesPerContext) {
                   std::string{"settings.open"});
     }
 
+    // Cut/copy/paste ride the leader in the editor.  [Escape, KeyC] is
+    // find.toggle_case in a prompt, so these must resolve per context rather
+    // than globally -- a global binding would shadow the prompt one.
+    struct ClipboardBinding {
+        char const* key;
+        char const* command;
+    };
+    for (auto const& binding : {ClipboardBinding{"KeyX", "clipboard.cut"},
+                                ClipboardBinding{"KeyC", "clipboard.copy"},
+                                ClipboardBinding{"KeyV", "clipboard.paste"}}) {
+        const auto sequence =
+            *ssg::KeyCodec{}.parseSequence({"Escape", binding.key});
+        ASSERT_EQ(
+            ssg::KeymapMatcher{keymap}.resolveSequence(sequence, "editor").commandId,
+            std::string{binding.command});
+    }
+    const auto toggleCase = *ssg::KeyCodec{}.parseSequence({"Escape", "KeyC"});
+    ASSERT_EQ(
+        ssg::KeymapMatcher{keymap}.resolveSequence(toggleCase, "prompt").commandId,
+        std::string{"find.toggle_case"});
+
+    // Editor-scoped means editor-ONLY.  KeyC is protected by find.toggle_case
+    // above, but KeyX and KeyV have no competing binding, so widening them to
+    // "*" would pass validation and silently claim the chord in every context.
+    // Assert they stay unresolved outside the editor.
+    for (auto const* const key : {"KeyX", "KeyV", "KeyC"}) {
+        const auto sequence = *ssg::KeyCodec{}.parseSequence({"Escape", key});
+        for (auto const* const context : {"panel", "prompt"}) {
+            const auto resolved =
+                ssg::KeymapMatcher{keymap}.resolveSequence(sequence, context);
+            ASSERT_TRUE(resolved.commandId.rfind("clipboard.", 0) != 0);
+        }
+    }
+
     // M7-M selection/multi-cursor bindings: Shift+Arrow extends the selection in
     // the editor; the multi-cursor and find/replace chords resolve globally.
     const auto shiftRight = *ssg::KeyCodec{}.parseSequence({"Shift+ArrowRight"});

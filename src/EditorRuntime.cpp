@@ -130,6 +130,14 @@ KeymapViewState defaultTerminalKeymap() {
     bind(seq({"Escape", "Slash"}), "find.open", "*");
     bind(seq({"Escape", "KeyR"}), "replace.open", "*");
 
+    // Cut/copy/paste are bound in `editor` rather than globally: [Escape, KeyC]
+    // already means find.toggle_case in a prompt, and a global binding would
+    // shadow it (KeymapErrorCode::UnreachableBinding).  They act on the editor's
+    // selection anyway, so the narrower context is also the truer one.
+    bind(seq({"Escape", "KeyX"}), "clipboard.cut", "editor");
+    bind(seq({"Escape", "KeyC"}), "clipboard.copy", "editor");
+    bind(seq({"Escape", "KeyV"}), "clipboard.paste", "editor");
+
     bind(seq({"ArrowDown"}), "cursor.line_down", "editor");
     bind(seq({"ArrowUp"}), "cursor.line_up", "editor");
     bind(seq({"ArrowLeft"}), "cursor.left", "editor");
