@@ -450,6 +450,67 @@ TEST(editorScrollbarFractionFeedsScrollToFraction) {
     ASSERT_EQ(resolved, maxFirst);
 }
 
+// A scrollbar drag must follow the pointer's ROW alone.  Once the button is down
+// the user is manipulating that thumb, and every other UI lets the pointer
+// wander off the bar horizontally without dropping the drag.  Resolving a drag
+// through at() instead ends it the moment the pointer leaves a one-column
+// gutter, which is trivially easy to do.
+TEST(aGutterHitFollowsTheRowWhereverTheColumnWent) {
+    auto root = uniqueRoot();
+    std::string text;
+    for (int i = 0; i < 100; ++i) text += "line " + std::to_string(i) + "\n";
+    std::ofstream{root / "tall.txt"} << text;
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(ssg::ClientId{1},
+                            {"file.open", runtime->revision(), std::string{"tall.txt"}});
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    auto const& shell = snapshot->sections().shell;
+    ASSERT_FALSE(shell.panes.empty());
+    if (shell.panes.empty()) return;
+    auto const gutter = shell.panes.front().scrollbar;
+    ASSERT_TRUE(gutter.height > 1);
+    ssg::HitTester const tester{*snapshot};
+    auto const region = ssg::HitRegion::EditorScrollbar;
+
+    // On the gutter's own column, both paths agree -- a drag scrolls to exactly
+    // where a click on that row would.
+    int const row = gutter.y + gutter.height / 2;
+    auto const direct = tester.at(gutter.x, row);
+    auto const byRow = tester.inGutter(region, row);
+    ASSERT_EQ(direct.region, region);
+    ASSERT_EQ(byRow.region, region);
+    ASSERT_EQ(byRow.scrollNumerator, direct.scrollNumerator);
+    ASSERT_EQ(byRow.scrollDenominator, direct.scrollDenominator);
+
+    // Far off the gutter horizontally, at() finds the editor -- which is what
+    // used to kill the drag -- while the row lookup still answers.
+    auto const wandered = tester.at(gutter.x - 20, row);
+    ASSERT_TRUE(wandered.region != region);
+    ASSERT_EQ(tester.inGutter(region, row).scrollNumerator,
+              direct.scrollNumerator);
+
+    // The ends of the gutter are the ends of the scroll range.
+    ASSERT_EQ(tester.inGutter(region, gutter.y).scrollNumerator,
+              std::uint32_t{0});
+    auto const bottom = tester.inGutter(region, gutter.bottom() - 1);
+    ASSERT_EQ(bottom.scrollNumerator, bottom.scrollDenominator);
+
+    // Dragged past either end it clamps rather than escaping the range, so the
+    // scroll pins at top or bottom instead of jumping.
+    ASSERT_EQ(tester.inGutter(region, gutter.y - 50).scrollNumerator,
+              std::uint32_t{0});
+    ASSERT_EQ(tester.inGutter(region, gutter.bottom() + 50).scrollNumerator,
+              bottom.scrollDenominator);
+
+    // A region that is not a gutter has no gutter position.
+    ASSERT_FALSE(tester.inGutter(ssg::HitRegion::Editor, row).hit());
+    ASSERT_FALSE(tester.inGutter(ssg::HitRegion::Tab, row).hit());
+}
+
 TEST(tabBarCellMapsToItsTabIndex) {
     auto root = uniqueRoot();
     std::ofstream{root / "alpha.txt"} << "a\n";
@@ -664,6 +725,7 @@ int main() {
     RUN(paletteRowMapsToItsAbsoluteRankIndex);
     RUN(paletteScrollbarAndEmptyAreaClassifyCorrectly);
     RUN(editorScrollbarFractionFeedsScrollToFraction);
+    RUN(aGutterHitFollowsTheRowWhereverTheColumnWent);
     RUN(tabBarCellMapsToItsTabIndex);
     RUN(statusFieldHitCoordinatesResolvePublishedFieldCommands);
     RUN(clickingPublishedStatusFieldCommandsDispatchesThroughOneGenericPath);

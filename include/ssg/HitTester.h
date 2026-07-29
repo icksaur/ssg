@@ -70,6 +70,16 @@ public:
 
     [[nodiscard]] RegionHit at(int column, int row) const;
 
+    // The hit for a specific gutter at `row`, ignoring the pointer's column.
+    //
+    // A scrollbar drag must follow the row alone: once the button is down the
+    // user is manipulating THAT thumb, and every other UI lets the pointer wander
+    // off the bar horizontally without dropping the drag.  Routing a drag through
+    // `at()` instead ends it the moment the pointer leaves the one-column gutter,
+    // which is both surprising and easy to do.  Returns a hit with region ==
+    // None when `region` is not a scrollbar the snapshot currently lays out.
+    [[nodiscard]] RegionHit inGutter(HitRegion region, int row) const;
+
 private:
     SessionSnapshot const& snapshot_;
 };

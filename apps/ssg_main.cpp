@@ -822,6 +822,12 @@ int main(int argc, char** argv) {
     // transient — the server only ever sees cursor.set_position / select.set_range.
     bool dragging = false;
     std::optional<ssg::DocumentPosition> dragAnchor;
+    // Which scrollbar gutter a press landed on, held until release.  A drag is
+    // routed to THIS gutter regardless of where the pointer has since moved, and
+    // the cursor is hidden while it is set: during a drag the caret is not what
+    // the user is looking at, and the terminal cursor otherwise flickers across
+    // the screen chasing the frame's caret position.
+    std::optional<ssg::HitRegion> draggingGutter;
     // The last pointer cell (0-based) from a press/drag, so a drag held still at
     // the editor edge can auto-scroll on a timer without a fresh pointer event
     // (M8-S2).
@@ -1096,7 +1102,8 @@ int main(int argc, char** argv) {
                 // The library renders every screen branch, including the declined-
                 // layout "too small" placeholder (M11-L); the app only encodes.
                 auto grid = ssg::Renderer{}.render(*snapshot);
-                std::string frame = ssg::app::encode_frame(grid, colorDepth);
+                std::string frame = ssg::app::encode_frame(
+                    grid, colorDepth, !draggingGutter.has_value());
                 if (!firstFrameMarked) {
                     // M10-1 stop mark: the first content frame (an actual rendered
                     // payload), not the earlier terminal-setup bytes.
@@ -1259,8 +1266,19 @@ int main(int argc, char** argv) {
                 ssg::RegionHit hit;
                 ssg::app::PointerTargets targets;
                 if (snapshot) {
-                    hit = ssg::HitTester{*snapshot}.at( decoded.pointer.column,
-                                        decoded.pointer.row);
+                    // A scrollbar drag follows the ROW only.  Once the button is
+                    // down the user is manipulating that thumb, and every other
+                    // UI lets the pointer wander off the bar horizontally without
+                    // dropping the drag.  Re-classifying by column would end it
+                    // the moment the pointer left a one-column gutter.
+                    if (draggingGutter &&
+                        decoded.pointer.kind == ssg::app::PointerKind::drag) {
+                        hit = ssg::HitTester{*snapshot}.inGutter(*draggingGutter,
+                                                                 decoded.pointer.row);
+                    } else {
+                        hit = ssg::HitTester{*snapshot}.at(decoded.pointer.column,
+                                            decoded.pointer.row);
+                    }
                     if (hit.region == ssg::HitRegion::Editor) {
                         targets.document_position = ssg::SelectionNavigator::resolvePosition(
                             snapshot->sections().document.text,
@@ -1315,6 +1333,19 @@ int main(int argc, char** argv) {
                 if (plan.begins_drag) {
                     dragging = true;
                     dragAnchor = targets.document_position;
+                }
+                // A press on a gutter starts a thumb drag; any release ends it.
+                // Tracked here rather than in route_pointer because it is client
+                // gesture state, like `dragging`, not a routing decision.
+                if (decoded.pointer.kind == ssg::app::PointerKind::press &&
+                    decoded.pointer.button == ssg::app::PointerButton::left) {
+                    draggingGutter =
+                        ssg::app::is_scrollbar_region(hit.region)
+                            ? std::optional<ssg::HitRegion>{hit.region}
+                            : std::nullopt;
+                }
+                if (decoded.pointer.kind == ssg::app::PointerKind::release) {
+                    draggingGutter.reset();
                 }
                 if (plan.ends_drag) {
                     dragging = false;

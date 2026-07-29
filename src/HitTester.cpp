@@ -165,4 +165,23 @@ RegionHit HitTester::at(int column, int row) const {
     return {};
 }
 
+RegionHit HitTester::inGutter(HitRegion region, int row) const {
+    auto const& shell = snapshot_.sections().shell;
+    // Resolved from the same rectangles `at()` uses, so a drag scrolls to
+    // exactly the position a click on that row would.
+    switch (region) {
+    case HitRegion::EditorScrollbar:
+        if (shell.panes.empty()) return {};
+        return scrollbarHit(region, shell.panes.front().scrollbar, row);
+    case HitRegion::PanelScrollbar:
+        if (!shell.panelScrollbar) return {};
+        return scrollbarHit(region, *shell.panelScrollbar, row);
+    case HitRegion::PaletteScrollbar:
+        if (!shell.palette) return {};
+        return scrollbarHit(region, shell.palette->scrollbarRect, row);
+    default:
+        return {};
+    }
+}
+
 }  // namespace ssg

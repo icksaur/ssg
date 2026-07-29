@@ -1270,6 +1270,36 @@ TEST(realTerminalRepliesResolveAsObserved) {
     ASSERT_FALSE(classFiftyTwo.has(ssg::app::Capability::ClipboardWrite));
 }
 
+// While a scrollbar thumb is dragged the caret is not what the user is looking
+// at, and a visible cursor lands wherever painting ended -- it flickers around
+// the screen chasing each frame.  A frame asked to hide it must END hidden;
+// every other frame must end visible, which is the balance the escape-discipline
+// spec pins.
+TEST(aDragFrameEndsWithTheCursorHiddenAndEveryOtherFrameShowsIt) {
+    ssg::CellGrid grid;
+    grid.size = {4, 2};
+    grid.cells.resize(8);
+    grid.caret = ssg::GridPosition{1, 1};
+
+    auto const shown = ssg::app::encode_frame(grid, ssg::ColorDepth::Ansi16);
+    auto const hidden =
+        ssg::app::encode_frame(grid, ssg::ColorDepth::Ansi16, false);
+
+    std::string const enter{ssg::app::kCursorHidden.enter};
+    std::string const leave{ssg::app::kCursorHidden.leave};
+
+    // A normal frame places the caret and then ends by showing the cursor.
+    ASSERT_TRUE(shown.ends_with(leave));
+    ASSERT_TRUE(shown.find("\x1b[2;2H") != std::string::npos);
+    ASSERT_TRUE(shown.rfind(enter) < shown.rfind(leave));
+
+    // A drag frame ends hidden, and does not place the caret at all -- placing it
+    // is what would make the cursor appear at a spot the user is not looking at.
+    ASSERT_TRUE(hidden.ends_with(enter));
+    ASSERT_TRUE(hidden.find("\x1b[2;2H") == std::string::npos);
+    ASSERT_TRUE(hidden.rfind(enter) > hidden.rfind(leave));
+}
+
 TEST(decodeInputPointerPressReleaseDrag) {
     std::size_t consumed = 0;
 
@@ -1902,6 +1932,7 @@ int main() {
     RUN(configDocDocumentsEveryCapabilityOverride);
     RUN(theProbeLogSeparatesWhatWasBelievedFromWhatArrivedLate);
     RUN(realTerminalRepliesResolveAsObserved);
+    RUN(aDragFrameEndsWithTheCursorHiddenAndEveryOtherFrameShowsIt);
     RUN(decodeInputPointerPressReleaseDrag);
     RUN(decodeInputPointerSplitReadsAreIncomplete);
     RUN(decodeInputPointerRejectsMalformedButTerminatedPayloads);
