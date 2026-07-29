@@ -602,6 +602,74 @@ TEST(theFirstFrameIsWrittenBeforeAnyReplyIsRead) {
     fs::remove_all(root);
 }
 
+// Oracle for the `--capabilities` diagnostic: run the real binary against a
+// simulated terminal that answers everything, and check the report says so.
+// Without this the diagnostic could confidently print "no" for a capable
+// terminal, which is worse than having no diagnostic -- a user would take it as
+// evidence and stop looking.
+TEST(theCapabilitiesReportReflectsWhatTheTerminalAnswered) {
+    winsize ws{};
+    ws.ws_col = 80;
+    ws.ws_row = 24;
+    int master = -1;
+    pid_t const pid = forkpty(&master, nullptr, nullptr, &ws);
+    ASSERT_TRUE(pid >= 0);
+    if (pid < 0) return;
+    if (pid == 0) {
+        setenv("TERM", "xterm-256color", 1);
+        // Forced, so the reported depth proves the diagnostic surfaces the
+        // resolved value including overrides rather than echoing a hint.
+        setenv("SSG_COLOR_DEPTH", "ansi16", 1);
+        execl(SSG_APP_BINARY, SSG_APP_BINARY, "--capabilities",
+              static_cast<char*>(nullptr));
+        _exit(127);
+    }
+    ::fcntl(master, F_SETFL, ::fcntl(master, F_GETFL, 0) | O_NONBLOCK);
+
+    std::string output;
+    bool answered = false;
+    char buffer[4096];
+    auto const deadline =
+        std::chrono::steady_clock::now() + std::chrono::seconds{5};
+    while (std::chrono::steady_clock::now() < deadline) {
+        pollfd pfd{master, POLLIN, 0};
+        ::poll(&pfd, 1, 10);
+        for (;;) {
+            auto const count = ::read(master, buffer, sizeof buffer);
+            if (count <= 0) break;
+            output.append(buffer, static_cast<std::size_t>(count));
+        }
+        // Answer as soon as the queries arrive, the way a real terminal would:
+        // the speculative answers first, then the DA1 fence advertising OSC 52.
+        if (!answered && output.find("\x1b[c") != std::string::npos) {
+            std::string const replies =
+                "\x1b[?2026;2$y"
+                "\x1b[?1u"
+                "\x1b[?62;4;52c";
+            auto const written =
+                ::write(master, replies.data(), replies.size());
+            ASSERT_EQ(written, static_cast<ssize_t>(replies.size()));
+            answered = true;
+        }
+        if (output.find("clipboard_write") != std::string::npos) break;
+    }
+    int status = 0;
+    ::waitpid(pid, &status, 0);
+    ::close(master);
+
+    ASSERT_TRUE(answered);
+    ASSERT_TRUE(output.find("synchronized_output      yes") != std::string::npos);
+    ASSERT_TRUE(output.find("keyboard_protocol        yes") != std::string::npos);
+    ASSERT_TRUE(output.find("clipboard_write          yes") != std::string::npos);
+    // The queries themselves must not be echoed back into the report, and the
+    // replies must not appear as text: the report is the only output.
+    ASSERT_TRUE(output.find("62;4;52c\r") == std::string::npos);
+    // The depth was forced by SSG_COLOR_DEPTH, and the report shows the resolved
+    // value rather than what TERM alone would have implied (truecolor).
+    ASSERT_TRUE(output.find("color_depth              ansi16") !=
+                std::string::npos);
+}
+
 int main() {
     RUN(decoderRoundtripsTheEncodedFrame);
     RUN(decoderRoundtripsOrthogonalTintBackgrounds);
@@ -609,6 +677,7 @@ int main() {
     RUN(realBinaryOutputMatchesRenderSnapshot);
     RUN(realBinaryWideGlyphOutputMatchesRender);
     RUN(theFirstFrameIsWrittenBeforeAnyReplyIsRead);
+    RUN(theCapabilitiesReportReflectsWhatTheTerminalAnswered);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

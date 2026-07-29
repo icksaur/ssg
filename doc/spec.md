@@ -135,7 +135,11 @@ The build system uses `cmake/components/*.cmake` manifests for component-local s
 - **I17 — Server-owned product:** The server owns editor behavior, themes,
   configuration, keymaps, layout, UI element identity, semantics, and state but
   contains no platform input capture, DOM, terminal, pixel, glyph rasterization,
-  or rendering implementation. Clients contain no editor behavior and must not
+  or rendering implementation. What a *client's* display medium can do is
+  likewise the client's own concern: a terminal client discovers its terminal's
+  capabilities at runtime and adapts its rendering, resolving every answer in one
+  place under a single precedence rule (doc/spec-terminal-capabilities.md), and
+  publishes none of it back into editor state. Clients contain no editor behavior and must not
   invent UI elements, controls, defaults, or authoritative state. A client may
   compute a **latency-sensitive derived view** as a pure function of authoritative
   server-published state plus local input only in this exhaustive set (as of this

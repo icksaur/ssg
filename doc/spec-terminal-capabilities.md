@@ -1,6 +1,6 @@
 # spec-terminal-capabilities
 
-Status: draft
+Status: done
 
 ## Goals
 

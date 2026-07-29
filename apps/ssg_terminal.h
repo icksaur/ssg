@@ -283,6 +283,9 @@ inline constexpr std::array<Capability, 3> kAllCapabilities{
 // (`synchronized_output` -> SSG_TERM_SYNCHRONIZED_OUTPUT).
 [[nodiscard]] std::string_view capability_name(Capability capability);
 
+// The resolved color depth as a user-facing word, for the same diagnostic.
+[[nodiscard]] std::string_view color_depth_name(ssg::ColorDepth depth);
+
 // What the attached terminal can do, resolved in one place.
 //
 // Answers are discovered by writing queries at startup and reading the replies

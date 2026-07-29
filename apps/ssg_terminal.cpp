@@ -362,6 +362,15 @@ Decoded unhandledCsi(std::string_view bytes, std::size_t end, std::size_t& consu
 
 }  // namespace
 
+std::string_view color_depth_name(ssg::ColorDepth depth) {
+    switch (depth) {
+    case ssg::ColorDepth::Truecolor: return "truecolor";
+    case ssg::ColorDepth::Indexed256: return "indexed256";
+    case ssg::ColorDepth::Ansi16: return "ansi16";
+    }
+    return "unknown";
+}
+
 std::string_view capability_name(Capability capability) {
     switch (capability) {
     case Capability::SynchronizedOutput: return "synchronized_output";

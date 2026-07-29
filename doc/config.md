@@ -207,6 +207,49 @@ because neither is obvious:
 There's also a limit -- a few dozen -- on how many commands one of your
 commands may ask for. Past it the call is refused rather than ssg locking up.
 
+## Terminal capabilities
+
+At startup ssg asks your terminal what it supports -- synchronized output,
+the keyboard protocol, clipboard access -- and adapts. Nothing waits for the
+answers, so a terminal that stays silent simply gets the conservative
+rendering rather than a slow start.
+
+To see what ssg decided about your terminal:
+
+```
+ssg --capabilities
+```
+
+It prints the resolved colour depth and one line per capability, then exits
+without opening the editor.
+
+Terminals sometimes claim a capability they render badly, or omit one they
+actually have. Every answer can be overridden, and an override always beats
+what the terminal reports:
+
+- `SSG_TERM_SYNCHRONIZED_OUTPUT` -- tear-free full-frame redraw.
+- `SSG_TERM_KEYBOARD_PROTOCOL` -- disambiguated key reporting.
+- `SSG_TERM_CLIPBOARD_WRITE` -- copying to your system clipboard.
+
+Each takes `on`/`off` (`1`/`0`, `yes`/`no`, `true`/`false` also work). A
+value that isn't one of those is ignored, and the terminal's own answer
+stands. For example, to turn one off for a session:
+
+```
+SSG_TERM_SYNCHRONIZED_OUTPUT=off ssg
+```
+
+Colour depth is resolved the same way and forced with `SSG_COLOR_DEPTH`
+(`truecolor`/`24bit`, `256`/`256color`/`indexed256`, or `16`/`ansi16`).
+
+Two notes worth knowing. Capabilities belong to the *connection*, not the
+machine -- the same computer answers differently over ssh, inside tmux, or
+from a different terminal emulator -- so nothing is cached between runs. And
+a multiplexer answers on its own behalf: under tmux or screen you get what
+the multiplexer supports, which may be less than the terminal behind it.
+That is correct, not a bug: the multiplexer is the terminal ssg is talking
+to.
+
 ## Sandbox notes
 
 `init.lua` runs in a restricted Lua interpreter: no file I/O, no

@@ -489,8 +489,88 @@ private:
 
 }  // namespace
 
+namespace {
+
+// `--capabilities`: ask the terminal what it can do and print the answers, then
+// exit.  This is the only way a user can see what SSG believes about their
+// terminal, which is what makes a wrong answer diagnosable and the SSG_TERM_*
+// overrides actionable.
+//
+// It deliberately does NOT enter the alternate screen -- the report has to stay
+// on the user's scrollback -- but it does need raw mode, or the replies would be
+// line-buffered and echoed into the report itself.
+int reportCapabilities() {
+    ssg::app::TerminalCapabilities capabilities{
+        [](std::string_view name) { return std::getenv(std::string{name}.c_str()); }};
+
+    termios original{};
+    bool raw = false;
+    if (tcgetattr(STDIN_FILENO, &original) == 0) {
+        termios probe = original;
+        probe.c_lflag &= ~(ICANON | ECHO);
+        probe.c_cc[VMIN] = 0;
+        probe.c_cc[VTIME] = 0;
+        raw = tcsetattr(STDIN_FILENO, TCSAFLUSH, &probe) == 0;
+    }
+    if (raw) {
+        writeAll(capabilities.beginProbe());
+        // Read until the fence closes the window or it expires.  Unlike the
+        // editor there is no loop to fold into, so this one waits -- it is the
+        // whole point of the command.
+        auto const deadline = std::chrono::steady_clock::now() +
+                              ssg::app::TerminalCapabilities::kProbeWindow;
+        std::string buffer;
+        while (capabilities.probing() &&
+               std::chrono::steady_clock::now() < deadline) {
+            if (!waitReadiness(10, -1, -1).input) continue;
+            char bytes[256];
+            auto const count = ::read(STDIN_FILENO, bytes, sizeof bytes);
+            if (count <= 0) continue;
+            buffer.append(bytes, static_cast<std::size_t>(count));
+            while (!buffer.empty()) {
+                std::size_t consumed = 0;
+                auto const decoded = ssg::app::decode_input(buffer, true, consumed);
+                if (decoded.status == ssg::app::DecodeStatus::incomplete ||
+                    consumed == 0) {
+                    break;
+                }
+                if (decoded.status == ssg::app::DecodeStatus::reply) {
+                    capabilities.observeReply(decoded.reply);
+                }
+                buffer.erase(0, consumed);
+            }
+        }
+        tcsetattr(STDIN_FILENO, TCSAFLUSH, &original);
+    }
+
+    char const* const term = std::getenv("TERM");
+    std::printf("TERM=%s\n", term == nullptr ? "(unset)" : term);
+    std::printf("%-24s %s\n", "color_depth",
+                ssg::app::color_depth_name(capabilities.colorDepth()).data());
+    for (auto const capability : ssg::app::kAllCapabilities) {
+        std::printf("%-24s %s\n",
+                    std::string{ssg::app::capability_name(capability)}.c_str(),
+                    capabilities.has(capability) ? "yes" : "no");
+    }
+    if (!raw) {
+        std::printf(
+            "\nstdin is not a terminal, so nothing was asked: every queried\n"
+            "capability above reports its default.\n");
+    }
+    std::printf(
+        "\nOverride any answer with SSG_TERM_<NAME>=on|off (for example\n"
+        "SSG_TERM_SYNCHRONIZED_OUTPUT=off), or the color depth with\n"
+        "SSG_COLOR_DEPTH.  An override always beats what the terminal reports.\n");
+    return 0;
+}
+
+}  // namespace
+
 int main(int argc, char** argv) {
     STARTUP_MARK("main_entry");
+    if (argc > 1 && std::string_view{argv[1]} == "--capabilities") {
+        return reportCapabilities();
+    }
     fs::path argument = argc > 1 ? fs::path{argv[1]} : fs::path{};
     auto target = ssg::app::resolve_launch(argument);
 

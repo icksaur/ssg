@@ -1179,6 +1179,29 @@ TEST(aReplyArrivingAfterTheWindowExpiresIsNotBelieved) {
     ASSERT_FALSE(late.has(ssg::app::Capability::SynchronizedOutput));
 }
 
+// An override a user cannot read about is an escape hatch they will never find
+// when a terminal renders a capability badly.  Enumerated from the enum, so a
+// capability added later cannot ship undocumented.
+TEST(configDocDocumentsEveryCapabilityOverride) {
+    std::ifstream input{std::filesystem::path{SSG_TEST_SOURCE_DIR} / "doc" /
+                        "config.md"};
+    std::ostringstream contents;
+    contents << input.rdbuf();
+    auto const doc = contents.str();
+    ASSERT_FALSE(doc.empty());
+    for (auto const capability : ssg::app::kAllCapabilities) {
+        std::string variable = "SSG_TERM_";
+        for (char const ch : ssg::app::capability_name(capability)) {
+            variable.push_back(
+                static_cast<char>(std::toupper(static_cast<unsigned char>(ch))));
+        }
+        ASSERT_TRUE(doc.find(variable) != std::string::npos);
+    }
+    // The diagnostic that makes the overrides actionable must be findable too.
+    ASSERT_TRUE(doc.find("--capabilities") != std::string::npos);
+    ASSERT_TRUE(doc.find("SSG_COLOR_DEPTH") != std::string::npos);
+}
+
 TEST(decodeInputPointerPressReleaseDrag) {
     std::size_t consumed = 0;
 
@@ -1808,6 +1831,7 @@ int main() {
     RUN(everyCapabilityHasAWorkingOverride);
     RUN(theProbeAsksOnlyQuestionsItCanUnderstand);
     RUN(aReplyArrivingAfterTheWindowExpiresIsNotBelieved);
+    RUN(configDocDocumentsEveryCapabilityOverride);
     RUN(decodeInputPointerPressReleaseDrag);
     RUN(decodeInputPointerSplitReadsAreIncomplete);
     RUN(decodeInputPointerRejectsMalformedButTerminatedPayloads);
