@@ -55,6 +55,10 @@ std::span<const ScrollableRegionDescriptor> scrollable_regions() noexcept {
     return kScrollableRegions;
 }
 
+bool is_scrollbar_region(ssg::HitRegion region) noexcept {
+    return gutterRegion(region) != nullptr;
+}
+
 PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
                               PointerKind kind, bool dragging,
                               std::optional<ssg::DocumentPosition> dragAnchor,

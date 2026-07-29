@@ -62,6 +62,11 @@ struct ScrollableRegionDescriptor {
 [[nodiscard]] std::span<const ScrollableRegionDescriptor>
 scrollable_regions() noexcept;
 
+// Whether `region` is a scrollbar gutter, from that same list -- so a caller
+// deciding "did this press start a thumb drag" cannot fall out of step with the
+// surfaces routing knows about.
+[[nodiscard]] bool is_scrollbar_region(ssg::HitRegion region) noexcept;
+
 // A gutter gesture the CALLER must apply to a client-owned offset, because no
 // server command may be dispatched for it (see ScrollableRegionDescriptor).
 struct ClientScroll {

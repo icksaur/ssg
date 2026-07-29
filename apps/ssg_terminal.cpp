@@ -160,7 +160,8 @@ LaunchTarget resolve_launch(fs::path const& argument) {
     return {parent, absolute.filename().string()};
 }
 
-std::string encode_frame(ssg::CellGrid const& screen, ssg::ColorDepth depth) {
+std::string encode_frame(ssg::CellGrid const& screen, ssg::ColorDepth depth,
+                         bool showCursor) {
     std::string frame;
     {
         // Appends to the frame rather than writing to the terminal, so the whole
@@ -169,10 +170,23 @@ std::string encode_frame(ssg::CellGrid const& screen, ssg::ColorDepth depth) {
             [&frame](std::string_view bytes) { frame.append(bytes); }};
         auto const hidden = modes.enter(kCursorHidden);
         frame += encode_ansi_frame(screen, depth);
-        if (screen.caret) {
+        if (screen.caret && showCursor) {
             frame += "\x1b[" + std::to_string(screen.caret->row + 1) + ";" +
                      std::to_string(screen.caret->column + 1) + "H";
         }
+    }
+    if (!showCursor) {
+        // Painting hides the cursor and the guard above shows it again, which is
+        // right for a normal frame.  While a scrollbar thumb is being dragged the
+        // caret is not what the user is looking at, and a visible cursor lands
+        // wherever painting ended -- it flickers around the screen chasing each
+        // frame.  Re-hide it, using the mode's own declared bytes rather than a
+        // hand-written escape.  Deliberately NOT balanced within the frame: it is
+        // meant to persist until the drag ends and the next frame shows it again,
+        // and terminal teardown restores every mode in kAllModes unconditionally,
+        // so no exit path can leave the cursor hidden
+        // (doc/spec-terminal-escape-discipline.md).
+        frame.append(kCursorHidden.enter);
     }
     return frame;
 }

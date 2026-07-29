@@ -246,8 +246,13 @@ struct Decoded {
 // leaves the cursor visible whether or not it had a caret.  A caret-less frame
 // -- the "too small" placeholder -- previously hid the cursor and never showed
 // it (doc/spec-terminal-escape-discipline.md).
+//
+// `showCursor` false ends the frame with the cursor hidden, for a scrollbar drag
+// where a visible cursor only flickers around chasing each frame's caret.  That
+// is the one deliberately unbalanced case; see the note at the implementation.
 [[nodiscard]] std::string encode_frame(ssg::CellGrid const& screen,
-                                       ssg::ColorDepth depth);
+                                       ssg::ColorDepth depth,
+                                       bool showCursor = true);
 
 [[nodiscard]] std::string encode_ansi_frame(
     ssg::CellGrid const& screen, ssg::ColorDepth depth = ssg::ColorDepth::Truecolor);
