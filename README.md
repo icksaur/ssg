@@ -209,4 +209,4 @@ documented in `doc/config.md`.
 - `doc/learnings.md` — durable implementation and integration constraints
 - `cpp-values.md` — public C++ API design values
 - `copilot-instructions.md` — invariants, risk-tiered workflow, and test rules
-- `doc/backlog.md` — deferred work
+- `backlog.md` (repository root) — deferred work, and the process for it
