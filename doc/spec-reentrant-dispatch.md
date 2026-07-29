@@ -50,14 +50,24 @@ which call style is legal. One rule, no exceptions.
 
 ### Two corrections to earlier reasoning
 
-**The lock is not the obstacle.** Prior notes justified the refusal as "the
-handler would run with session state unlocked if we released the lock."
-`impl_->mutex` guards only `revision`, `topology`, `clients` and the catalog
-pointer. `EditorRuntime::Impl` **is** the `CommandServices`
-(`src/runtime/editor_runtime_internal.h:96`), so handlers already mutate
-documents, workspace, shell, prompt and search through `context.services()` with
-no protection from that mutex. Releasing it would not be dangerous for the
-reason usually given; it simply would not fix the revision accounting.
+**The lock is not the obstacle — but it is not idle either.** Prior notes
+justified the refusal as "the handler would run with session state unlocked if
+we released the lock." `impl_->mutex` guards only `revision`, `topology`,
+`clients` and the catalog pointer. `EditorRuntime::Impl` **is** the
+`CommandServices` (`src/runtime/editor_runtime_internal.h:96`), so handlers
+already mutate documents, workspace, shell, prompt and search through
+`context.services()` with no protection from those four fields. Releasing the
+lock would therefore not fix the revision accounting, which is the actual
+obstacle.
+
+**Corrected (see `doc/spec-http-client-interop.md`):** an earlier version of
+this paragraph went further and said releasing the lock "would not be dangerous."
+That is wrong once more than one thread dispatches. Because the lock is held
+ACROSS handler execution, it serialises handler bodies between threads — the
+four field names badly understate what it is doing. `HttpEditorServer`
+dispatches from per-connection threads, so that serialisation is load-bearing
+the moment a WebSocket client shares a session with a terminal one. Do not read
+this spec as licence to release the lock around handlers.
 
 **Concurrent dispatch is not this project's model.** An earlier draft called
 concurrent dispatch on one session "real and tested." That overstated it: the
