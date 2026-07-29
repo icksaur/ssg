@@ -1,6 +1,6 @@
 # spec-terminal-escape-discipline
 
-Status: draft
+Status: done
 
 ## Goals
 
@@ -298,3 +298,34 @@ path that does not. Keeping the undo bytes as data means the ugly path and the
 clean path agree by construction rather than by a second hand-maintained string
 — which is the same failure, one level up, as the two literals this spec
 deletes.
+
+## Status
+
+Implemented in `73f6420`, `7ed37e3`, `2a9c82b`, `b88c789`, `1d38efa` and this
+commit. Gate green throughout (93 tests, 0 warnings).
+
+Two design changes the work itself forced:
+
+**The eagerly published undo buffer was replaced by a constant.** Its own
+torn-read oracle showed that double buffering does not survive a writer lapping
+a reader, and a signal is not always delivered to the thread that is mid-update.
+No lock-free publication of a variable-length buffer fixes that without a
+retry the handler cannot afford. But the superset argument the spec already
+made says precision is not needed: leaving a mode that is not set does nothing.
+So the crash undo is a compile-time constant covering every declared mode in
+reverse declaration order — no synchronisation, no allocation, trivially
+async-signal-safe, and strictly safer than the design it replaces.
+
+**Frame assembly moved into `ssg::app`.** The cursor-balance oracle was
+specified as a pty test because frame assembly lived in the loop. Extracting
+`encode_frame` — which the app header already says is where testable code
+belongs — turned it into a unit test, and the pty run became a confirmation
+rather than the oracle.
+
+Step 6 landed as a scanner rather than a type. `put` is already the only writer
+of cell text, and the glyph table is already the only route by which user text
+reaches a Style field, so the reachable hole was narrower than the spec assumed:
+a new `Style` string field is either in the table and therefore validated, or
+unreachable from `style.define`. The scanner asserts exactly that, and that
+every default satisfies its own rule. A cell-text type remains the stronger
+form and is not needed while `put` holds.

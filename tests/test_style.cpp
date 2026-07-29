@@ -2,6 +2,9 @@
 
 #include <ssg/Style.h>
 
+#include <fstream>
+#include <iostream>
+#include <iterator>
 #include <string>
 
 namespace {
@@ -44,6 +47,31 @@ std::string kinds(ssg::Style const& style, int thumbStart, int thumbSize,
         }
     }
     return out;
+}
+
+
+// The glyph a key currently holds. Spelled out here on purpose: this test's job
+// is to notice when Style.h grows a field, so it must NOT share the table it is
+// checking. If a new field is added, this list fails to compile or the count
+// assertion fails -- both of which are the point.
+std::string currentGlyph(ssg::Style const& style, std::string const& key) {
+    if (key == "scrollbar_gutter") return style.scrollbar.gutter;
+    if (key == "scrollbar_track") return style.scrollbar.track;
+    if (key == "scrollbar_single") return style.scrollbar.single;
+    if (key == "scrollbar_top") return style.scrollbar.top;
+    if (key == "scrollbar_body") return style.scrollbar.body;
+    if (key == "scrollbar_bottom") return style.scrollbar.bottom;
+    if (key == "tree_expanded") return style.tree.expanded;
+    if (key == "tree_collapsed") return style.tree.collapsed;
+    if (key == "tab_dirty_suffix") return style.tab.dirtySuffix;
+    if (key == "tab_live_diff_prefix") return style.tab.liveDiffPrefix;
+    if (key == "toggle_checked") return style.toggle.checked;
+    if (key == "toggle_unchecked") return style.toggle.unchecked;
+    if (key == "truncation") return style.truncation;
+    if (key == "input_line_sigil") return style.inputLineSigil;
+    if (key == "unrenderable") return style.unrenderable;
+    if (key == "prompt_label_separator") return style.promptLabelSeparator;
+    return {};
 }
 
 TEST(scrollbarUsesTheGlyphsItWasConfiguredWith) {
@@ -326,11 +354,63 @@ TEST(aRejectedGlyphChangesNothing) {
     ASSERT_EQ(base.truncation, ssg::Style{}.truncation);
 }
 
+
+// Every glyph a user can set must go through validation, and every default must
+// itself be valid.
+//
+// This closes the CLASS rather than the instance. Validation lives in
+// applyStyleDefine, which reaches a field only through the glyph table -- so a
+// new Style string field is either in that table, and therefore validated, or
+// unreachable from style.define and therefore not an input at all. What the
+// scan catches is the third case: a field added to Style.h and to the table
+// with a default that would itself be rejected, which would make the editor
+// unable to reproduce its own starting state.
+TEST(everyGlyphFieldIsValidatedAndEveryDefaultIsValid) {
+    ssg::Style const defaults{};
+
+    // Round-trip: setting each key to its own current value must be accepted.
+    // A default that fails its own rule would mean the defaults and the
+    // validator disagree about what a legal glyph is.
+    auto const keys = ssg::styleDefineKeys();
+    ASSERT_FALSE(keys.empty());
+    std::size_t glyphKeys = 0;
+    for (auto const& key : keys) {
+        if (key.rfind("dim_", 0) == 0 || key == "tree_indent") continue;
+        ++glyphKeys;
+        auto const applied = ssg::applyStyleDefine(
+            defaults, ssg::StyleDefineArguments{{{key, currentGlyph(defaults, key)}}});
+        if (!applied.accepted() && applied.error) {
+            std::cout << "  offending key: " << key << " -- "
+                      << applied.error->message << "\n";
+        }
+        ASSERT_TRUE(applied.accepted());
+    }
+
+    // Every std::string field declared in Style.h must be one of those keys, so
+    // a newly added glyph cannot quietly skip validation by never being listed.
+    std::ifstream header{std::string{SSG_TEST_SOURCE_DIR} +
+                         "/include/ssg/Style.h"};
+    std::string const source{std::istreambuf_iterator<char>{header},
+                             std::istreambuf_iterator<char>{}};
+    ASSERT_FALSE(source.empty());
+    std::size_t declared = 0;
+    for (std::size_t at = source.find("std::string "); at != std::string::npos;
+         at = source.find("std::string ", at + 1)) {
+        // StyleDefineError::message is a diagnostic, not a drawn glyph.
+        auto const lineEnd = source.find('\n', at);
+        auto const line = source.substr(at, lineEnd - at);
+        if (line.find("message") != std::string::npos) continue;
+        ++declared;
+    }
+    ASSERT_EQ(declared, glyphKeys);
+}
+
 int main() {
     RUN(aStyleGlyphThatEmitsAModeIsRejectedNamingItsKey);
     RUN(aStyleGlyphOfTheWrongWidthIsRejectedNamingItsKey);
     RUN(aStyleGlyphMatchingItsFieldsWidthIsAccepted);
     RUN(aRejectedGlyphChangesNothing);
+    RUN(everyGlyphFieldIsValidatedAndEveryDefaultIsValid);
     RUN(scrollbarUsesTheGlyphsItWasConfiguredWith);
     RUN(aUniformThumbNeedsNoCapAwareness);
     RUN(theResolvedThumbAlwaysCoversExactlyItsRequestedRows);
