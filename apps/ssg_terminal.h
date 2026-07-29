@@ -203,8 +203,5 @@ struct Decoded {
 // editor's display mode.  Pure so the RAII guard, a signal-driven restore, and a
 // test all share one definition (M9-X): setup enters the alternate screen with a
 // blinking bar cursor and SGR mouse reporting; restore reverses each in the
-// opposite order and shows the cursor.
-[[nodiscard]] std::string terminal_setup_sequence();
-[[nodiscard]] std::string terminal_restore_sequence();
 
 }  // namespace ssg::app

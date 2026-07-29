@@ -98,9 +98,17 @@ void writeAll(std::string_view bytes) {
 // performs the same teardown eagerly and idempotently so a terminating-signal
 // path (M9-X) can restore the terminal before re-raising, without the
 // destructor undoing or repeating it.
+//
+// The escape-sequence half is delegated to TerminalModes: each mode names its
+// own exit, and the bytes that undo whatever is currently entered are kept as
+// data so a fatal-signal handler can write them without traversing anything
+// (doc/spec-terminal-escape-discipline.md).  termios is not a mode in that
+// sense -- it is restored by value, and tcsetattr is not async-signal-safe --
+// so it stays here.
 class TerminalMode {
 public:
-    TerminalMode() {
+    TerminalMode()
+        : modes_{[](std::string_view bytes) { writeAll(std::string{bytes}); }} {
         if (tcgetattr(STDIN_FILENO, &original_) != 0) return;
         termios raw = original_;
         raw.c_lflag &= ~(ICANON | ECHO | ISIG | IEXTEN);
@@ -110,7 +118,14 @@ public:
         raw.c_cc[VTIME] = 0;
         if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) != 0) return;
         active_ = true;
-        writeAll(ssg::app::terminal_setup_sequence());
+        // Entry order is the curated order, and the guards leave in reverse:
+        // mouse reporting is disabled before the alternate screen is left, or
+        // reporting would stay on in the primary screen.
+        entered_.push_back(modes_.enter(ssg::app::kAlternateScreen));
+        entered_.push_back(modes_.enter(ssg::app::kCursorStyleBar));
+        entered_.push_back(modes_.enter(ssg::app::kMouseButtons));
+        entered_.push_back(modes_.enter(ssg::app::kMouseMotion));
+        entered_.push_back(modes_.enter(ssg::app::kMouseSgrCoordinates));
     }
 
     ~TerminalMode() { restore(); }
@@ -120,7 +135,15 @@ public:
     void restore() noexcept {
         if (!active_) return;
         active_ = false;
-        writeAll(ssg::app::terminal_restore_sequence());
+        // Dropping the guards in reverse writes every leave sequence.  The
+        // cursor is hidden per FRAME rather than entered here, so its debt is
+        // settled at process scope, between the cursor-style reset and leaving
+        // the alternate screen -- the curated order, preserved exactly because
+        // this step changes structure and not bytes.  A frame guard takes this
+        // over next, and that is the step that changes the wire output.
+        while (entered_.size() > 1) entered_.pop_back();
+        writeAll("\x1b[?25h");
+        entered_.clear();
         tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_);
     }
 
@@ -130,6 +153,8 @@ public:
     [[nodiscard]] bool active() const noexcept { return active_; }
 
 private:
+    ssg::app::TerminalModes modes_;
+    std::vector<ssg::app::TerminalModes::Guard> entered_;
     termios original_{};
     bool active_ = false;
 };

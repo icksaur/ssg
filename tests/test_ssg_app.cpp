@@ -383,65 +383,58 @@ constexpr std::string_view kExpectedSetup =
 constexpr std::string_view kExpectedRestore =
     "\x1b[?1006l\x1b[?1002l\x1b[?1000l\x1b[0 q\x1b[?25h\x1b[?1049l";
 
-TEST(terminalSequencesMatchTheKnownGoodBytes) {
-    ASSERT_EQ(ssg::app::terminal_setup_sequence(), std::string{kExpectedSetup});
-    ASSERT_EQ(ssg::app::terminal_restore_sequence(),
-              std::string{kExpectedRestore});
-}
+TEST(everyDeclaredModeLeavesExactlyWhatItEnters) {
+    // Checked against the DECLARATIONS rather than against two assembled
+    // strings, because the declaration is now the single source of truth: a
+    // mode carries its own exit, so pairing is a property of each mode instead
+    // of a property of two lists that had to mirror each other.
+    struct Named { char const* name; ssg::app::TerminalMode mode; };
+    Named const declared[]{
+        {"alternate screen", ssg::app::kAlternateScreen},
+        {"cursor style", ssg::app::kCursorStyleBar},
+        {"mouse buttons", ssg::app::kMouseButtons},
+        {"mouse motion", ssg::app::kMouseMotion},
+        {"mouse SGR coordinates", ssg::app::kMouseSgrCoordinates},
+        {"cursor hidden", ssg::app::kCursorHidden},
+    };
 
-TEST(everyModeTheSetupEntersIsLeftByTheRestore) {
-    auto const setup = ssg::app::terminal_setup_sequence();
-    auto const restore = ssg::app::terminal_restore_sequence();
+    for (auto const& [name, mode] : declared) {
+        auto const entering = classifyTerminalOps(std::string{mode.enter});
+        auto const leaving = classifyTerminalOps(std::string{mode.leave});
+        // COMPLETENESS: a mode expressed in a form this oracle does not
+        // understand fails here rather than escaping the rules below.
+        ASSERT_EQ(entering.size(), std::size_t{1});
+        ASSERT_EQ(leaving.size(), std::size_t{1});
+        ASSERT_TRUE(entering[0].kind != TerminalOp::Kind::Unrecognised);
+        ASSERT_TRUE(leaving[0].kind != TerminalOp::Kind::Unrecognised);
 
-    auto const setupOps = classifyTerminalOps(setup);
-    auto const restoreOps = classifyTerminalOps(restore);
-
-    // COMPLETENESS. Every sequence in both strings must be one this oracle
-    // understands, so a newly added mode in an unfamiliar form fails here
-    // rather than silently escaping the pairing rules below.
-    for (auto const& op : setupOps) {
-        ASSERT_TRUE(op.kind != TerminalOp::Kind::Unrecognised);
-    }
-    for (auto const& op : restoreOps) {
-        ASSERT_TRUE(op.kind != TerminalOp::Kind::Unrecognised);
-    }
-
-    // PRIVATE MODES: every one enabled is disabled, in reverse order -- leaving
-    // the alternate screen before disabling mouse reporting would leave
-    // reporting on in the primary screen.
-    std::vector<int> enabled;
-    for (auto const& op : setupOps) {
-        if (op.kind == TerminalOp::Kind::PrivateSet) enabled.push_back(op.value);
-    }
-    std::vector<int> disabled;
-    for (auto const& op : restoreOps) {
-        if (op.kind == TerminalOp::Kind::PrivateReset) {
-            disabled.push_back(op.value);
+        bool const entersPrivate =
+            entering[0].kind == TerminalOp::Kind::PrivateSet ||
+            entering[0].kind == TerminalOp::Kind::PrivateReset;
+        if (entersPrivate) {
+            // A private mode is left by applying the OPPOSITE terminator to the
+            // same id -- in either direction.  Hiding the cursor is entered by
+            // RESETTING DECTCEM (?25l) and left by setting it, the inverse of
+            // the alternate screen and the mouse modes, so the rule cannot
+            // assume a mode is always entered by "set".
+            ASSERT_EQ(entering[0].value, leaving[0].value);
+            bool const opposite =
+                (entering[0].kind == TerminalOp::Kind::PrivateSet &&
+                 leaving[0].kind == TerminalOp::Kind::PrivateReset) ||
+                (entering[0].kind == TerminalOp::Kind::PrivateReset &&
+                 leaving[0].kind == TerminalOp::Kind::PrivateSet);
+            ASSERT_TRUE(opposite);
+        } else {
+            // Cursor style is a single slot: whatever shape is selected, the
+            // exit must return it to the default, or the user's cursor keeps
+            // ssg's shape after ssg exits.
+            ASSERT_EQ(entering[0].kind, TerminalOp::Kind::CursorStyle);
+            ASSERT_EQ(leaving[0].kind, TerminalOp::Kind::CursorStyle);
+            ASSERT_TRUE(entering[0].value != 0);
+            ASSERT_EQ(leaving[0].value, 0);
         }
     }
-    ASSERT_FALSE(enabled.empty());
-    std::vector<int> reversed(disabled.rbegin(), disabled.rend());
-    ASSERT_EQ(enabled, reversed);
-
-    // CURSOR STYLE is a single slot rather than a per-id mode: any non-default
-    // style the setup selects must be returned to the default (0), or the
-    // user's cursor keeps ssg's shape after ssg exits.
-    bool const setupChangesCursorStyle = std::any_of(
-        setupOps.begin(), setupOps.end(), [](TerminalOp const& op) {
-            return op.kind == TerminalOp::Kind::CursorStyle && op.value != 0;
-        });
-    bool const restoreResetsCursorStyle = std::any_of(
-        restoreOps.begin(), restoreOps.end(), [](TerminalOp const& op) {
-            return op.kind == TerminalOp::Kind::CursorStyle && op.value == 0;
-        });
-    ASSERT_EQ(setupChangesCursorStyle, restoreResetsCursorStyle);
-
-    // CURSOR VISIBILITY is hidden per FRAME, not at setup, so its debt is
-    // settled here at process scope. Step 4 of the spec moves it to a frame
-    // guard, at which point this assertion and kExpectedRestore change together.
-    ASSERT_TRUE(restore.find("\x1b[?25h") != std::string::npos);
 }
-
 
 TEST(modeStackReproducesTheCuratedSetupAndRestoreSequences) {
     // The curated literals are known good, so entering the same modes in the
@@ -1438,8 +1431,7 @@ int main() {
     RUN(resolveLaunchNoArgumentOpensCwd);
     RUN(resolveLaunchDirectoryOpensThatDirectory);
     RUN(resolveLaunchFileOpensParentDirectoryAndFile);
-    RUN(terminalSequencesMatchTheKnownGoodBytes);
-    RUN(everyModeTheSetupEntersIsLeftByTheRestore);
+    RUN(everyDeclaredModeLeavesExactlyWhatItEnters);
     RUN(modeStackReproducesTheCuratedSetupAndRestoreSequences);
     RUN(everyEnteredModeIsLeftInReverseOrder);
     RUN(theUndoBufferIsAlwaysASupersetOfWhatIsEntered);
