@@ -160,6 +160,49 @@ LaunchTarget resolve_launch(fs::path const& argument) {
     return {parent, absolute.filename().string()};
 }
 
+// Base64 for OSC 52, which carries its payload that way.  Written out rather
+// than pulled in: this is the only base64 in the app, and a dependency for
+// twenty lines would cost more than it saves.
+std::string base64(std::string_view bytes) {
+    static constexpr std::string_view kAlphabet =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string encoded;
+    encoded.reserve(((bytes.size() + 2) / 3) * 4);
+    std::size_t index = 0;
+    while (index + 2 < bytes.size()) {
+        std::uint32_t const triple =
+            (static_cast<std::uint32_t>(static_cast<unsigned char>(bytes[index])) << 16) |
+            (static_cast<std::uint32_t>(static_cast<unsigned char>(bytes[index + 1])) << 8) |
+            static_cast<std::uint32_t>(static_cast<unsigned char>(bytes[index + 2]));
+        encoded += kAlphabet[(triple >> 18) & 0x3f];
+        encoded += kAlphabet[(triple >> 12) & 0x3f];
+        encoded += kAlphabet[(triple >> 6) & 0x3f];
+        encoded += kAlphabet[triple & 0x3f];
+        index += 3;
+    }
+    if (index < bytes.size()) {
+        std::uint32_t triple =
+            static_cast<std::uint32_t>(static_cast<unsigned char>(bytes[index])) << 16;
+        bool const two = index + 1 < bytes.size();
+        if (two) {
+            triple |= static_cast<std::uint32_t>(
+                          static_cast<unsigned char>(bytes[index + 1]))
+                      << 8;
+        }
+        encoded += kAlphabet[(triple >> 18) & 0x3f];
+        encoded += kAlphabet[(triple >> 12) & 0x3f];
+        encoded += two ? kAlphabet[(triple >> 6) & 0x3f] : '=';
+        encoded += '=';
+    }
+    return encoded;
+}
+
+std::string encode_clipboard_write(std::string_view text) {
+    // OSC 52 selection 'c' is the system clipboard.  Terminated with ST rather
+    // than BEL: both are accepted, and ST is the form the standard specifies.
+    return "\x1b]52;c;" + base64(text) + "\x1b\\";
+}
+
 std::string encode_frame(ssg::CellGrid const& screen, ssg::ColorDepth depth,
                          bool showCursor) {
     std::string frame;
@@ -663,6 +706,42 @@ Decoded decode_input(std::string_view bytes, bool inputExhausted,
         case 'D': consumed = 3; return {DecodeStatus::key, ssg::KeyStroke{ssg::KeyCode::ArrowLeft}, {}, 0};
         case 'H': consumed = 3; return {DecodeStatus::key, ssg::KeyStroke{ssg::KeyCode::Home}, {}, 0};
         case 'F': consumed = 3; return {DecodeStatus::key, ssg::KeyStroke{ssg::KeyCode::End}, {}, 0};
+        case '2': {
+            // Bracketed paste: ESC [ 200 ~ <payload> ESC [ 201 ~.  The payload is
+            // CONTENT -- it must never be interpreted as keys, or a pasted
+            // newline fires whatever Enter is bound to and a pasted escape
+            // sequence is obeyed.  Consumed whole so nothing inside it reaches
+            // the keymap.
+            constexpr std::string_view kPasteStart = "\x1b[200~";
+            constexpr std::string_view kPasteEnd = "\x1b[201~";
+            if (bytes.size() < kPasteStart.size()) {
+                if (kPasteStart.starts_with(bytes)) {
+                    return {DecodeStatus::incomplete, {}, {}, 0};
+                }
+                return unhandled();  // Some other '2'-prefixed CSI.
+            }
+            if (bytes.substr(0, kPasteStart.size()) != kPasteStart) {
+                return unhandled();
+            }
+            auto const end = bytes.find(kPasteEnd, kPasteStart.size());
+            if (end == std::string_view::npos) {
+                // The terminal writes the whole paste before anything else, but
+                // a large one can still arrive across reads.  Bounded like every
+                // other scan so a terminator that never comes cannot hold the
+                // buffer (INV-decode-terminates).
+                if (bytes.size() < kMaxPasteBytes) {
+                    return {DecodeStatus::incomplete, {}, {}, 0};
+                }
+                consumed = bytes.size();
+                return {DecodeStatus::none, {}, {}, 0};
+            }
+            Decoded decoded;
+            decoded.status = DecodeStatus::paste;
+            decoded.text = std::string{
+                bytes.substr(kPasteStart.size(), end - kPasteStart.size())};
+            consumed = end + kPasteEnd.size();
+            return decoded;
+        }
         case '3':
         case '5':
         case '6': {

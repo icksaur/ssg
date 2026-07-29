@@ -950,6 +950,12 @@ TEST(noDcsOrOscQueryMaySolicitAnUnparsedReply) {
                   std::string{"Escape"});
     }
 
+    // OSC 52 WRITE is emitted (see encode_clipboard_write) and is deliberately
+    // allowed: a write carries a payload and asks nothing, so no reply can come
+    // back.  The scan below therefore looks for a QUERY -- an OSC or DCS ending
+    // in "?" before its terminator, which is the form that solicits an answer.
+    // Adding one must fail here until the decoder can parse what it will get
+    // back, or the answer lands in the user's document.
     std::vector<std::string> emitters;
     for (auto const& entry : std::filesystem::directory_iterator{
              std::filesystem::path{SSG_TEST_SOURCE_DIR} / "apps"}) {
@@ -960,11 +966,17 @@ TEST(noDcsOrOscQueryMaySolicitAnUnparsedReply) {
         std::ostringstream contents;
         contents << input.rdbuf();
         auto const text = contents.str();
-        if (text.find("\\x1bP") != std::string::npos ||
-            text.find("\\033P") != std::string::npos ||
-            text.find("\\x1b]") != std::string::npos ||
-            text.find("\\033]") != std::string::npos) {
-            emitters.push_back(entry.path().filename().string());
+        for (auto const* const introducer : {"\\x1bP", "\\033P", "\\x1b]", "\\033]"}) {
+            for (std::size_t at = text.find(introducer); at != std::string::npos;
+                 at = text.find(introducer, at + 1)) {
+                // A query ends "?" then its terminator; a write does not.
+                auto const line = text.substr(at, text.find('\n', at) - at);
+                if (line.find("?\\x1b\\\\") != std::string::npos ||
+                    line.find("?\\a") != std::string::npos ||
+                    line.find(";?") != std::string::npos) {
+                    emitters.push_back(entry.path().filename().string());
+                }
+            }
         }
     }
     ASSERT_TRUE(emitters.empty());
@@ -1298,6 +1310,69 @@ TEST(aDragFrameEndsWithTheCursorHiddenAndEveryOtherFrameShowsIt) {
     ASSERT_TRUE(hidden.ends_with(enter));
     ASSERT_TRUE(hidden.find("\x1b[2;2H") == std::string::npos);
     ASSERT_TRUE(hidden.rfind(enter) > hidden.rfind(leave));
+}
+
+// Pasted bytes are CONTENT, not keystrokes.  Without bracketed paste a paste is
+// indistinguishable from very fast typing: a newline in it fires whatever Enter
+// is bound to, and an escape sequence in it is obeyed.
+TEST(aBracketedPasteIsContentAndNeverKeys) {
+    std::size_t consumed = 0;
+    // A paste containing the two things that would otherwise be interpreted: a
+    // newline, and an escape sequence.
+    std::string const payload = "line one\nline two\x1b[A";
+    std::string const wrapped = "\x1b[200~" + payload + "\x1b[201~";
+    auto const decoded = ssg::app::decode_input(wrapped, true, consumed);
+    ASSERT_TRUE(decoded.status == ssg::app::DecodeStatus::paste);
+    ASSERT_EQ(decoded.text, payload);
+    ASSERT_EQ(consumed, wrapped.size());
+    // It is not a keypress, so nothing can route it to the keymap.
+    ASSERT_TRUE(decoded.stroke.code == ssg::KeyCode::None);
+
+    // An empty paste is still a paste, consumed whole.
+    consumed = 0;
+    auto const empty = ssg::app::decode_input("\x1b[200~\x1b[201~", true, consumed);
+    ASSERT_TRUE(empty.status == ssg::app::DecodeStatus::paste);
+    ASSERT_TRUE(empty.text.empty());
+    ASSERT_EQ(consumed, std::size_t{12});
+
+    // Every proper prefix waits rather than being half-consumed, so a paste
+    // split across reads reassembles instead of leaking its head as text.
+    for (std::size_t prefix = 2; prefix < wrapped.size(); ++prefix) {
+        consumed = 99;
+        auto const partial =
+            ssg::app::decode_input(std::string_view{wrapped}.substr(0, prefix),
+                                   false, consumed);
+        ASSERT_TRUE(partial.status == ssg::app::DecodeStatus::incomplete);
+        ASSERT_EQ(consumed, std::size_t{0});
+    }
+
+    // The mode is in kAllModes, so terminal teardown and the crash undo both
+    // turn bracketed paste back off; a terminal left in it would wrap the
+    // shell's pastes after ssg exits.
+    bool listed = false;
+    for (auto const& mode : ssg::app::kAllModes) {
+        if (mode.enter == ssg::app::kBracketedPaste.enter) listed = true;
+    }
+    ASSERT_TRUE(listed);
+}
+
+// OSC 52 is how a remote editor reaches the LOCAL clipboard over SSH -- the one
+// mechanism that crosses that gap.
+TEST(clipboardWriteEncodesOsc52WithBase64) {
+    // Base64 checked against known answers rather than against another encoder,
+    // including both padding lengths, which is where an encoder goes wrong.
+    ASSERT_EQ(ssg::app::encode_clipboard_write("hi"),
+              std::string{"\x1b]52;c;aGk=\x1b\\"});
+    ASSERT_EQ(ssg::app::encode_clipboard_write("abc"),
+              std::string{"\x1b]52;c;YWJj\x1b\\"});
+    ASSERT_EQ(ssg::app::encode_clipboard_write("a"),
+              std::string{"\x1b]52;c;YQ==\x1b\\"});
+    ASSERT_EQ(ssg::app::encode_clipboard_write(""),
+              std::string{"\x1b]52;c;\x1b\\"});
+    // Bytes above 0x7f survive: the payload is base64 of raw bytes, not of text
+    // the encoder has opinions about.
+    ASSERT_EQ(ssg::app::encode_clipboard_write("\xc3\xa9"),
+              std::string{"\x1b]52;c;w6k=\x1b\\"});
 }
 
 TEST(decodeInputPointerPressReleaseDrag) {
@@ -1933,6 +2008,8 @@ int main() {
     RUN(theProbeLogSeparatesWhatWasBelievedFromWhatArrivedLate);
     RUN(realTerminalRepliesResolveAsObserved);
     RUN(aDragFrameEndsWithTheCursorHiddenAndEveryOtherFrameShowsIt);
+    RUN(aBracketedPasteIsContentAndNeverKeys);
+    RUN(clipboardWriteEncodesOsc52WithBase64);
     RUN(decodeInputPointerPressReleaseDrag);
     RUN(decodeInputPointerSplitReadsAreIncomplete);
     RUN(decodeInputPointerRejectsMalformedButTerminatedPayloads);

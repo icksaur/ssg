@@ -59,6 +59,11 @@ inline constexpr TerminalMode kMouseButtons{"\x1b[?1000h", "\x1b[?1000l"};
 inline constexpr TerminalMode kMouseMotion{"\x1b[?1002h", "\x1b[?1002l"};
 inline constexpr TerminalMode kMouseSgrCoordinates{"\x1b[?1006h", "\x1b[?1006l"};
 inline constexpr TerminalMode kCursorHidden{"\x1b[?25l", "\x1b[?25h"};
+// Bracketed paste: the terminal wraps pasted text in ESC[200~ ... ESC[201~ so it
+// can be told apart from typing.  Without it a paste is indistinguishable from
+// someone typing very fast, and any newline in it fires whatever Enter is bound
+// to -- submitting a prompt, or splitting lines the paste did not ask to split.
+inline constexpr TerminalMode kBracketedPaste{"\x1b[?2004h", "\x1b[?2004l"};
 
 // Every mode above, in the order they are entered.  The one iterable list: the
 // crash undo and its test are both DERIVED from it, so a new mode cannot be
@@ -66,6 +71,7 @@ inline constexpr TerminalMode kCursorHidden{"\x1b[?25l", "\x1b[?25h"};
 inline constexpr TerminalMode kAllModes[]{
     kAlternateScreen, kCursorStyleBar,      kMouseButtons,
     kMouseMotion,     kMouseSgrCoordinates, kCursorHidden,
+    kBracketedPaste,
 };
 
 // An ordered stack of entered modes, and the bytes that undo them.
@@ -187,6 +193,7 @@ enum class DecodeStatus : std::uint8_t {
     key,         // A KeyStroke (with optional committed text for printables).
     scroll,      // A mouse-wheel event (signed line count in `scroll`).
     pointer,     // A mouse button press/release/drag (see `pointer`).
+    paste,       // A bracketed paste's payload (`text`); never a keypress.
     reply,       // A terminal report answering a capability query (`reply`).
 };
 
@@ -195,6 +202,11 @@ enum class DecodeStatus : std::uint8_t {
 // would stall every keystroke queued behind it
 // (doc/spec-terminal-capabilities.md, INV-decode-terminates).
 inline constexpr std::size_t kMaxSequenceBytes = 256;
+
+// A bracketed paste's payload is unbounded in principle, so it gets its own much
+// larger cap.  Past this the closing marker is not coming and the run is
+// discarded rather than holding the input buffer for the rest of the session.
+inline constexpr std::size_t kMaxPasteBytes = 4u * 1024u * 1024u;
 
 // A decoded mouse button event (M8): which button, whether it is a press,
 // release, or drag (motion with a button held), and the 0-based grid cell it
@@ -250,6 +262,15 @@ struct Decoded {
 // `showCursor` false ends the frame with the cursor hidden, for a scrollbar drag
 // where a visible cursor only flickers around chasing each frame's caret.  That
 // is the one deliberately unbalanced case; see the note at the implementation.
+// The bytes that put `text` on the user's system clipboard via OSC 52.
+//
+// Matters most over SSH: the editor runs on the remote host but the clipboard a
+// user pastes into is local, and this is the only mechanism that crosses that
+// gap.  Write only -- reading the clipboard is refused outright by Windows
+// Terminal on security grounds, so nothing may be designed around it
+// (doc/terminal-rendering-capabilities.html).
+[[nodiscard]] std::string encode_clipboard_write(std::string_view text);
+
 [[nodiscard]] std::string encode_frame(ssg::CellGrid const& screen,
                                        ssg::ColorDepth depth,
                                        bool showCursor = true);

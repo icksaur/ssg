@@ -126,6 +126,7 @@ public:
         entered_.push_back(modes_.enter(ssg::app::kMouseButtons));
         entered_.push_back(modes_.enter(ssg::app::kMouseMotion));
         entered_.push_back(modes_.enter(ssg::app::kMouseSgrCoordinates));
+        entered_.push_back(modes_.enter(ssg::app::kBracketedPaste));
     }
 
     ~TerminalMode() { restore(); }
@@ -851,6 +852,9 @@ int main(int argc, char** argv) {
     // The clipboard's text as the library publishes it, so pasting into a prompt
     // reads authoritative state rather than a client-side copy of the register.
     std::string clipboardText;
+    // The last clipboard write served to the terminal, so one copy produces one
+    // OSC 52 rather than one per frame for as long as it stays pending.
+    std::uint64_t lastClipboardWriteId = 0;
     ssg::KeymapViewState keymap;
     ssg::CatalogRevision compiledForRevision = 0;
     std::unique_ptr<ssg::CompiledKeymap> compiledKeymap =
@@ -1068,6 +1072,18 @@ int main(int argc, char** argv) {
             // authoritative published state rather than the app keeping its own
             // copy of what was cut or copied.
             clipboardText = snapshot->sections().clipboard.plainText;
+            // A copy or cut raises a pending write.  Serve it by putting the text
+            // on the user's SYSTEM clipboard via OSC 52, which over SSH is the
+            // only way the remote editor can reach the local clipboard at all.
+            // Keyed by request id so one copy is written once, and skipped
+            // entirely when the terminal did not advertise the capability --
+            // where it would be an unrecognised sequence rather than a paste.
+            auto const& pendingWrite = snapshot->sections().clipboard.pendingWrite;
+            if (pendingWrite && pendingWrite->id != lastClipboardWriteId &&
+                capabilities.has(ssg::app::Capability::ClipboardWrite)) {
+                lastClipboardWriteId = pendingWrite->id;
+                writeAll(ssg::app::encode_clipboard_write(pendingWrite->text));
+            }
             // Derive find fulfillment from the ACTIVE prompt kind, not merely the
             // controller being open under prompt focus: a palette/settings prompt
             // may be active while the find controller is still open, and find
@@ -1363,6 +1379,16 @@ int main(int argc, char** argv) {
                 continue;
             }
 
+            if (decoded.status == ssg::app::DecodeStatus::paste) {
+                // Pasted bytes are CONTENT.  They go straight to the text sink
+                // without touching the keymap, so a newline in the paste cannot
+                // fire whatever Enter is bound to and an escape sequence in it
+                // cannot be obeyed.  Any pending chord is abandoned: a paste is
+                // not a chord continuation.
+                chord.clear();
+                if (!decoded.text.empty()) routeText(decoded.text);
+                continue;
+            }
             if (decoded.status == ssg::app::DecodeStatus::scroll) {
                 // Route the wheel to the region under the pointer: the side panel
                 // scrolls its tree, the open palette scrolls its client-owned
