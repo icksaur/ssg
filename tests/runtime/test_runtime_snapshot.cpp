@@ -157,6 +157,27 @@ TEST(curatedKeymapResolvesPerContext) {
                   std::string{"settings.open"});
     }
 
+    // Cut/copy/paste ride the leader in the editor.  [Escape, KeyC] is
+    // find.toggle_case in a prompt, so these must resolve per context rather
+    // than globally -- a global binding would shadow the prompt one.
+    struct ClipboardBinding {
+        char const* key;
+        char const* command;
+    };
+    for (auto const& binding : {ClipboardBinding{"KeyX", "clipboard.cut"},
+                                ClipboardBinding{"KeyC", "clipboard.copy"},
+                                ClipboardBinding{"KeyV", "clipboard.paste"}}) {
+        const auto sequence =
+            *ssg::KeyCodec{}.parseSequence({"Escape", binding.key});
+        ASSERT_EQ(
+            ssg::KeymapMatcher{keymap}.resolveSequence(sequence, "editor").commandId,
+            std::string{binding.command});
+    }
+    const auto toggleCase = *ssg::KeyCodec{}.parseSequence({"Escape", "KeyC"});
+    ASSERT_EQ(
+        ssg::KeymapMatcher{keymap}.resolveSequence(toggleCase, "prompt").commandId,
+        std::string{"find.toggle_case"});
+
     // M7-M selection/multi-cursor bindings: Shift+Arrow extends the selection in
     // the editor; the multi-cursor and find/replace chords resolve globally.
     const auto shiftRight = *ssg::KeyCodec{}.parseSequence({"Shift+ArrowRight"});

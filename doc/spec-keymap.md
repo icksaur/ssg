@@ -197,7 +197,10 @@ terminal has no browser-reserved chords, so none is excluded):
 - `editor`: `ArrowDown` → `cursor.line_down`, `ArrowUp` → `cursor.line_up`,
   `ArrowLeft` → `cursor.left`, `ArrowRight` → `cursor.right`, `Enter` →
   `text.newline`, `Backspace` → `text.delete_backward`, `Delete` →
-  `text.delete_forward`, `[Escape, ArrowLeft]` → `cursor.word_left`,
+  `text.delete_forward`, `[Escape, KeyX]` → `clipboard.cut`, `[Escape, KeyC]` →
+  `clipboard.copy`, `[Escape, KeyV]` → `clipboard.paste` (bound here rather than
+  globally because `[Escape, KeyC]` is `find.toggle_case` in a prompt, and they
+  act on the editor's selection regardless), `[Escape, ArrowLeft]` → `cursor.word_left`,
   `[Escape, ArrowRight]` → `cursor.word_right`, `[Escape, Shift+ArrowLeft]` →
   `select.word_left`, `[Escape, Shift+ArrowRight]` → `select.word_right`,
   `Alt+ArrowLeft` → `cursor.word_left`, `Alt+ArrowRight` →
