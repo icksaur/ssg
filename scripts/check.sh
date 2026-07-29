@@ -60,9 +60,19 @@ build() {
     # Ninja auto-parallelizes across all cores; capture output, surface only
     # warnings/errors and the FAILED marker.
     if cmake --build "$BUILD_DIR" >"$log" 2>&1; then
-        local warns
+        local warns compiled
         warns="$(grep -cE 'warning:' "$log" || true)"
-        echo "BUILD OK (warnings: ${warns:-0})"
+        # Warnings can only be counted for translation units this invocation
+        # actually compiled.  An incremental build that recompiles nothing would
+        # otherwise report "warnings: 0" and read as a clean tree, hiding
+        # whatever the tree already carries -- the gate's most load-bearing
+        # number, silently wrong in the common case.
+        compiled="$(grep -cE '^\[[0-9]+/[0-9]+\] (Building|Compiling)' "$log" || true)"
+        if [ "${compiled:-0}" -eq 0 ] && [ "${warns:-0}" -eq 0 ]; then
+            echo "BUILD OK (warnings: not measured -- nothing recompiled)"
+        else
+            echo "BUILD OK (warnings: ${warns:-0} in ${compiled:-0} recompiled files)"
+        fi
         [ "${warns:-0}" -gt 0 ] && grep -E 'warning:' "$log" | head -40
         return 0
     else
