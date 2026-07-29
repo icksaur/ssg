@@ -269,6 +269,22 @@ std::unique_ptr<ssg::EditorRuntime> makeHeadless(fs::path const& root,
     return runtime;
 }
 
+// Wait for a pty child without ever blocking forever.  An unconditional waitpid
+// turns a child that regresses into a hang into a hung SUITE, which reports
+// nothing useful; escalating to SIGKILL keeps the failure a bounded assertion.
+void reapBounded(pid_t pid) {
+    ::kill(pid, SIGTERM);
+    auto const deadline =
+        std::chrono::steady_clock::now() + std::chrono::seconds{2};
+    int status = 0;
+    while (std::chrono::steady_clock::now() < deadline) {
+        if (::waitpid(pid, &status, WNOHANG) == pid) return;
+        ::usleep(10000);
+    }
+    ::kill(pid, SIGKILL);
+    ::waitpid(pid, &status, 0);
+}
+
 // Launch the real `ssg` binary over `launch_path` (a workspace dir or a file)
 // under a pty and capture its output until it settles (frames drawn, blocked on
 // input).
@@ -313,9 +329,7 @@ std::string captureFrames(std::string const& binary, fs::path const& launchPath)
             break;
         }
     }
-    ::kill(pid, SIGTERM);
-    int status = 0;
-    ::waitpid(pid, &status, 0);
+    reapBounded(pid);
     ::close(master);
     return output;
 }
@@ -577,9 +591,7 @@ TEST(theFirstFrameIsWrittenBeforeAnyReplyIsRead) {
             break;
         }
     }
-    ::kill(pid, SIGTERM);
-    int status = 0;
-    ::waitpid(pid, &status, 0);
+    reapBounded(pid);
     ::close(master);
 
     // The queries were actually written -- otherwise the rest proves nothing.
@@ -653,8 +665,7 @@ TEST(theCapabilitiesReportReflectsWhatTheTerminalAnswered) {
         }
         if (output.find("clipboard_write") != std::string::npos) break;
     }
-    int status = 0;
-    ::waitpid(pid, &status, 0);
+    reapBounded(pid);
     ::close(master);
 
     ASSERT_TRUE(answered);

@@ -568,10 +568,17 @@ int reportCapabilities() {
 
 int main(int argc, char** argv) {
     STARTUP_MARK("main_entry");
-    if (argc > 1 && std::string_view{argv[1]} == "--capabilities") {
+    // `--` ends option parsing, so a file genuinely named `--capabilities` stays
+    // openable (`ssg -- --capabilities`).  Without it the first flag this binary
+    // ever grew would have quietly made a filename unreachable.
+    int firstOperand = 1;
+    if (argc > 1 && std::string_view{argv[1]} == "--") {
+        firstOperand = 2;
+    } else if (argc > 1 && std::string_view{argv[1]} == "--capabilities") {
         return reportCapabilities();
     }
-    fs::path argument = argc > 1 ? fs::path{argv[1]} : fs::path{};
+    fs::path argument =
+        argc > firstOperand ? fs::path{argv[firstOperand]} : fs::path{};
     auto target = ssg::app::resolve_launch(argument);
 
     auto base = fs::temp_directory_path() / ("ssg-" + std::to_string(::getpid()));

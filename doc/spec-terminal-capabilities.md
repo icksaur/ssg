@@ -1,6 +1,14 @@
 # spec-terminal-capabilities
 
-Status: done
+Status: implemented; pending real-terminal signoff
+
+Every capability answer has been verified against a simulated terminal in a pty
+harness, never against a real terminal emulator. The Acceptance clause below
+asks for a capability report that correctly identifies kitty locally; until
+someone runs `ssg --capabilities` in a real terminal and confirms the answers,
+this stays open. The risk is narrow but real: the query bytes and the reply
+grammar are both taken from research rather than from a normative document, and
+a simulated responder answers exactly what the harness was told to answer.
 
 ## Goals
 
