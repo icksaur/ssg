@@ -29,6 +29,17 @@ enum class DiffTint : std::uint8_t {
     ModifiedWord,
 };
 
+// A diagnostic underline on a cell.  Separate from foreground/background so a
+// squiggle can sit under syntax-coloured text without taking its colour, and
+// separate from DiffTint for the same reason: a diagnostic and a diff can both
+// apply to the same cell and neither should erase the other.
+enum class CellUnderline : std::uint8_t {
+    None,
+    Error,    // A red curly underline.
+    Warning,  // A yellow curly underline.
+    Info,     // Information and hint diagnostics, drawn plainer.
+};
+
 struct CellGridCell {
     std::string text{" "};
     std::uint8_t foreground{0};
@@ -36,6 +47,7 @@ struct CellGridCell {
     SemanticRole role{SemanticRole::Background};
     bool continuation{false};
     DiffTint tint{DiffTint::None};
+    CellUnderline underline{CellUnderline::None};
 
     bool operator==(CellGridCell const&) const = default;
 };

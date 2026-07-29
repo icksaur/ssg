@@ -1104,6 +1104,88 @@ TEST(styleDefineRejectionLeavesTheLiveStyleUnchanged) {
     ASSERT_EQ(snapshot->sections().style.tree.expanded, ssg::Style{}.tree.expanded);
 }
 
+// LSP diagnostics reach the cells they cover, and only those cells.  The ranges
+// are LSP positions (UTF-16 characters), so the conversion is what makes a
+// squiggle land under the right text rather than shifted by every non-ASCII
+// character earlier on the line.
+TEST(lspDiagnosticsUnderlineExactlyTheirRange) {
+    ssg::test::SessionSnapshotBuilder builder;
+    auto snapshot =
+        builder.document("alpha bravo\ncharlie\n")
+            .viewport(40, 10)
+            .sections([](ssg::SessionSnapshotSections& sections) {
+                ssg::LspDocumentDiagnostics file;
+                file.uri = "file:///doc";
+                file.revision = sections.document.revision;
+                // "bravo" on line 0: characters 6..11.
+                file.diagnostics.push_back(
+                    {{{0, 6}, {0, 11}}, ssg::LspDiagnosticSeverity::Error, "E1",
+                     "bad"});
+                // "charlie" on line 1, a warning.
+                file.diagnostics.push_back(
+                    {{{1, 0}, {1, 7}}, ssg::LspDiagnosticSeverity::Warning, "W1",
+                     "meh"});
+                sections.lspSync.documents.push_back(std::move(file));
+            })
+            .build();
+    auto const grid = ssg::Renderer{}.render(snapshot);
+
+    // Find the row carrying "alpha bravo" and check exactly its last five cells
+    // are underlined as an error.
+    auto const cellAt = [&](int x, int y) {
+        return grid.cells[static_cast<std::size_t>(y * grid.size.columns + x)];
+    };
+    int alphaRow = -1;
+    int charlieRow = -1;
+    for (int y = 0; y < grid.size.rows; ++y) {
+        if (cellAt(0, y).text == "a" && cellAt(1, y).text == "l") alphaRow = y;
+        if (cellAt(0, y).text == "c" && cellAt(1, y).text == "h") charlieRow = y;
+    }
+    ASSERT_TRUE(alphaRow >= 0);
+    ASSERT_TRUE(charlieRow >= 0);
+    if (alphaRow < 0 || charlieRow < 0) return;
+
+    for (int x = 0; x < 6; ++x) {
+        // "alpha " is not part of the diagnostic.
+        ASSERT_TRUE(cellAt(x, alphaRow).underline == ssg::CellUnderline::None);
+    }
+    for (int x = 6; x < 11; ++x) {
+        ASSERT_TRUE(cellAt(x, alphaRow).underline == ssg::CellUnderline::Error);
+    }
+    ASSERT_TRUE(cellAt(11, alphaRow).underline == ssg::CellUnderline::None);
+    for (int x = 0; x < 7; ++x) {
+        ASSERT_TRUE(cellAt(x, charlieRow).underline == ssg::CellUnderline::Warning);
+    }
+
+    // The text itself is untouched: a diagnostic decorates, it does not replace.
+    ASSERT_EQ(cellAt(6, alphaRow).text, std::string{"b"});
+}
+
+// Diagnostic ranges are offsets into a SPECIFIC revision.  Painting ones the
+// server produced for an older revision underlines whatever text has since moved
+// into those positions, which is worse than showing nothing.
+TEST(staleDiagnosticsAreNotPainted) {
+    ssg::test::SessionSnapshotBuilder builder;
+    auto snapshot =
+        builder.document("alpha bravo\n")
+            .viewport(40, 10)
+            .sections([](ssg::SessionSnapshotSections& sections) {
+                ssg::LspDocumentDiagnostics file;
+                file.uri = "file:///doc";
+                // Deliberately not the document's revision.
+                file.revision = ssg::Revision{sections.document.revision.value() + 1};
+                file.diagnostics.push_back(
+                    {{{0, 0}, {0, 5}}, ssg::LspDiagnosticSeverity::Error, "E1",
+                     "bad"});
+                sections.lspSync.documents.push_back(std::move(file));
+            })
+            .build();
+    auto const grid = ssg::Renderer{}.render(snapshot);
+    for (auto const& cell : grid.cells) {
+        ASSERT_TRUE(cell.underline == ssg::CellUnderline::None);
+    }
+}
+
 int main() {
     RUN(renderPaintsContentNotAccessibilityLabels);
     RUN(renderSegmentsOnlyVisibleLinesNotWholeDocument);
@@ -1134,6 +1216,8 @@ int main() {
     RUN(theRendererDrawsChromeFromTheSnapshotStyleNotFromLiterals);
     RUN(theDocumentReplacementGlyphComesFromStyle);
     RUN(styleDefineRestylesTheLiveSessionChrome);
+    RUN(lspDiagnosticsUnderlineExactlyTheirRange);
+    RUN(staleDiagnosticsAreNotPainted);
     RUN(styleDefineRejectionLeavesTheLiveStyleUnchanged);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
