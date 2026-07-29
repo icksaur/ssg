@@ -103,29 +103,36 @@ public:
 
     [[nodiscard]] Guard enter(TerminalMode mode);
 
-    // The bytes that undo every entered mode, in reverse order.
-    //
-    // ALWAYS A SUPERSET of what is actually entered: the larger undo is
-    // published BEFORE a mode's enter bytes are written, and the smaller one
-    // AFTER its leave bytes are.  A signal arriving mid-change therefore finds
-    // an undo that covers at least everything set, and possibly one thing that
-    // is not -- which is harmless, because leaving a mode you are not in does
-    // nothing, while failing to leave one you are in is exactly the bug.
-    //
-    // Async-signal-safe to read: one atomic load, then bytes and length that
-    // were published together and are never mutated afterwards.
-    [[nodiscard]] std::string_view undoBytes() const noexcept;
-
     // The number of modes currently entered.
     [[nodiscard]] std::size_t depth() const noexcept;
 
 private:
     void leaveThrough(std::size_t depth) noexcept;
-    void publishUndoFor(std::size_t depth) noexcept;
 
     struct Impl;
     std::unique_ptr<Impl> impl_;
 };
+
+// The bytes that leave EVERY declared mode, in reverse declaration order, for a
+// fatal-signal handler to write.
+//
+// A constant rather than a running record of what is entered, and the reason is
+// worth stating because the obvious design is the other one.  Tracking the live
+// set precisely means publishing it for a reader that may be on another thread
+// -- a signal is not always delivered to the thread that is mid-update -- and
+// no lock-free publication of a variable-length buffer survives a writer that
+// laps a reader.  A double-buffered version of this failed exactly that test.
+//
+// It is safe to be imprecise in this direction and only this direction:
+// leaving a mode that is not set does nothing (leaving an alternate screen you
+// are not on, disabling mouse reporting that is off), while failing to leave
+// one that IS set is the bug.  So the constant is a superset by construction,
+// needs no synchronisation, allocates nothing, and is trivially
+// async-signal-safe to write.
+//
+// Order still matters and is encoded here: mouse reporting is disabled before
+// the alternate screen is left, or reporting stays on in the primary screen.
+[[nodiscard]] std::string_view all_modes_undo_sequence() noexcept;
 
 // The workspace directory to open and, optionally, a file within it to open in
 // a tab.  A file argument opens its parent directory; a directory argument
@@ -187,6 +194,17 @@ struct Decoded {
 // to `depth` via ssg::resolve_color (truecolor 38;2, indexed256 38;5, or ANSI16
 // 30-37/90-97).  Continuation cells (the trailing half of a wide glyph) emit
 // nothing because the wide glyph already advanced the cursor.
+// One complete frame's bytes: the grid's cells, the caret placed if there is
+// one, and the cursor hidden for the duration of the redraw.
+//
+// Assembled here rather than in the loop so the balance is unit-testable: the
+// cursor hide is a frame-scoped mode entered through a guard, so every frame
+// leaves the cursor visible whether or not it had a caret.  A caret-less frame
+// -- the "too small" placeholder -- previously hid the cursor and never showed
+// it (doc/spec-terminal-escape-discipline.md).
+[[nodiscard]] std::string encode_frame(ssg::CellGrid const& screen,
+                                       ssg::ColorDepth depth);
+
 [[nodiscard]] std::string encode_ansi_frame(
     ssg::CellGrid const& screen, ssg::ColorDepth depth = ssg::ColorDepth::Truecolor);
 

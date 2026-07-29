@@ -135,14 +135,9 @@ public:
     void restore() noexcept {
         if (!active_) return;
         active_ = false;
-        // Dropping the guards in reverse writes every leave sequence.  The
-        // cursor is hidden per FRAME rather than entered here, so its debt is
-        // settled at process scope, between the cursor-style reset and leaving
-        // the alternate screen -- the curated order, preserved exactly because
-        // this step changes structure and not bytes.  A frame guard takes this
-        // over next, and that is the step that changes the wire output.
-        while (entered_.size() > 1) entered_.pop_back();
-        writeAll("\x1b[?25h");
+        // Dropping the guards in reverse writes every leave sequence.  Nothing
+        // is written by hand here: the cursor is hidden and shown within each
+        // frame, so no cursor debt survives a frame for teardown to settle.
         entered_.clear();
         tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_);
     }
@@ -963,12 +958,7 @@ int main(int argc, char** argv) {
                 // The library renders every screen branch, including the declined-
                 // layout "too small" placeholder (M11-L); the app only encodes.
                 auto grid = ssg::Renderer{}.render(*snapshot);
-                std::string frame = "\x1b[?25l";  // Hide the cursor while redrawing.
-                frame += ssg::app::encode_ansi_frame(grid, colorDepth);
-                if (grid.caret) {
-                    frame += "\x1b[" + std::to_string(grid.caret->row + 1) + ";" +
-                             std::to_string(grid.caret->column + 1) + "H\x1b[?25h";
-                }
+                std::string frame = ssg::app::encode_frame(grid, colorDepth);
                 if (!firstFrameMarked) {
                     // M10-1 stop mark: the first content frame (an actual rendered
                     // payload), not the earlier terminal-setup bytes.

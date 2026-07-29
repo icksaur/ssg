@@ -380,8 +380,11 @@ std::vector<TerminalOp> classifyTerminalOps(std::string const& sequence) {
 // guard -- edits this reference and nothing else does.
 constexpr std::string_view kExpectedSetup =
     "\x1b[?1049h\x1b[5 q\x1b[?1000h\x1b[?1002h\x1b[?1006h";
+// No `?25h`: the cursor is hidden and shown within each frame, so teardown has
+// no cursor debt to settle. This is the one reference change the spec allows,
+// and it belongs to the step that moved cursor visibility to a frame guard.
 constexpr std::string_view kExpectedRestore =
-    "\x1b[?1006l\x1b[?1002l\x1b[?1000l\x1b[0 q\x1b[?25h\x1b[?1049l";
+    "\x1b[?1006l\x1b[?1002l\x1b[?1000l\x1b[0 q\x1b[?1049l";
 
 TEST(everyDeclaredModeLeavesExactlyWhatItEnters) {
     // Checked against the DECLARATIONS rather than against two assembled
@@ -453,11 +456,7 @@ TEST(modeStackReproducesTheCuratedSetupAndRestoreSequences) {
         ASSERT_EQ(written, std::string{kExpectedSetup});
         written.clear();
     }
-    // The curated restore also re-shows the cursor, whose debt is incurred per
-    // frame rather than here; the stack owes only the modes it entered.
-    std::string const expectedLeave =
-        "\x1b[?1006l\x1b[?1002l\x1b[?1000l\x1b[0 q\x1b[?1049l";
-    ASSERT_EQ(written, expectedLeave);
+    ASSERT_EQ(written, std::string{kExpectedRestore});
     ASSERT_EQ(modes.depth(), std::size_t{0});
 }
 
@@ -479,83 +478,63 @@ TEST(everyEnteredModeIsLeftInReverseOrder) {
     ASSERT_TRUE(mousePos < altPos);
 }
 
-TEST(theUndoBufferIsAlwaysASupersetOfWhatIsEntered) {
-    // Independent expectation: the undo bytes must be the leave sequences of
-    // everything entered, deepest first. Compared against a reimplementation
-    // rather than against the class's own bookkeeping.
-    std::vector<ssg::app::TerminalMode> const all{
-        ssg::app::kAlternateScreen, ssg::app::kCursorStyleBar,
-        ssg::app::kMouseButtons,    ssg::app::kMouseMotion,
-        ssg::app::kMouseSgrCoordinates};
-
-    std::string sink;
-    ssg::app::TerminalModes modes{
-        [&sink](std::string_view bytes) { sink.append(bytes); }};
-
-    std::vector<ssg::app::TerminalMode> expected;
-    std::vector<ssg::app::TerminalModes::Guard> guards;
-    for (auto const& mode : all) {
-        guards.push_back(modes.enter(mode));
-        expected.push_back(mode);
-
-        std::string reference;
-        for (std::size_t i = expected.size(); i-- > 0;) {
-            reference.append(expected[i].leave);
-        }
-        ASSERT_EQ(std::string{modes.undoBytes()}, reference);
+TEST(theCrashUndoLeavesEveryDeclaredModeInReverseOrder) {
+    // What a fatal-signal handler writes. A constant rather than a record of
+    // what is currently entered: see all_modes_undo_sequence for why precision
+    // there cannot be published safely, and why over-approximating is the safe
+    // direction.
+    //
+    // Independent expectation: assembled here from the declarations in reverse,
+    // rather than by asking the function how it built itself.
+    std::string expected;
+    for (auto const& mode :
+         {ssg::app::kCursorHidden, ssg::app::kMouseSgrCoordinates,
+          ssg::app::kMouseMotion, ssg::app::kMouseButtons,
+          ssg::app::kCursorStyleBar, ssg::app::kAlternateScreen}) {
+        expected.append(mode.leave);
     }
-    while (!guards.empty()) {
-        guards.pop_back();
-        expected.pop_back();
-        std::string reference;
-        for (std::size_t i = expected.size(); i-- > 0;) {
-            reference.append(expected[i].leave);
-        }
-        ASSERT_EQ(std::string{modes.undoBytes()}, reference);
+    ASSERT_EQ(std::string{ssg::app::all_modes_undo_sequence()}, expected);
+
+    // Every mode the process enters must be covered, or a crash leaves it set.
+    auto const undo = std::string{ssg::app::all_modes_undo_sequence()};
+    for (auto const& mode :
+         {ssg::app::kAlternateScreen, ssg::app::kCursorStyleBar,
+          ssg::app::kMouseButtons, ssg::app::kMouseMotion,
+          ssg::app::kMouseSgrCoordinates, ssg::app::kCursorHidden}) {
+        ASSERT_TRUE(undo.find(std::string{mode.leave}) != std::string::npos);
     }
-    ASSERT_EQ(std::string{modes.undoBytes()}, std::string{});
+
+    // Mouse reporting must be disabled BEFORE the alternate screen is left, or
+    // reporting stays on in the primary screen.
+    ASSERT_TRUE(undo.find("\x1b[?1000l") < undo.find("\x1b[?1049l"));
 }
 
-TEST(theUndoBufferIsNeverObservedMidRebuild) {
-    // A fatal-signal handler reads the undo bytes at an arbitrary instant. If
-    // the buffer were rebuilt in place, it could observe a torn string. Every
-    // sample must be a coherent undo -- one of the valid states, never a splice
-    // of two.
-    std::string sink;
-    ssg::app::TerminalModes modes{
-        [&sink](std::string_view bytes) { sink.append(bytes); }};
+TEST(aFrameWithNoCaretLeavesTheCursorVisible) {
+    auto balanced = [](std::string const& frame) {
+        auto const shown = frame.rfind("\x1b[?25h");
+        auto const hidden = frame.rfind("\x1b[?25l");
+        return shown != std::string::npos && hidden != std::string::npos &&
+               shown > hidden;
+    };
 
-    std::vector<std::string> valid;
-    {
-        std::vector<ssg::app::TerminalMode> const all{
-            ssg::app::kAlternateScreen, ssg::app::kMouseButtons,
-            ssg::app::kMouseMotion};
-        for (std::size_t depth = 0; depth <= all.size(); ++depth) {
-            std::string reference;
-            for (std::size_t i = depth; i-- > 0;) reference.append(all[i].leave);
-            valid.push_back(reference);
-        }
-    }
+    ssg::CellGrid withCaret;
+    withCaret.size = {4, 2};
+    withCaret.cells.resize(8);
+    withCaret.caret = ssg::GridPosition{1, 1};
+    ASSERT_TRUE(balanced(ssg::app::encode_frame(withCaret,
+                                                ssg::ColorDepth::Truecolor)));
 
-    std::atomic<bool> stop{false};
-    std::atomic<bool> sawTorn{false};
-    std::thread sampler{[&] {
-        while (!stop.load(std::memory_order_relaxed)) {
-            std::string const sample{modes.undoBytes()};
-            if (std::find(valid.begin(), valid.end(), sample) == valid.end()) {
-                sawTorn.store(true, std::memory_order_relaxed);
-            }
-        }
-    }};
+    ssg::CellGrid withoutCaret;
+    withoutCaret.size = {4, 2};
+    withoutCaret.cells.resize(8);
+    withoutCaret.caret.reset();
+    ASSERT_TRUE(balanced(ssg::app::encode_frame(withoutCaret,
+                                                ssg::ColorDepth::Truecolor)));
 
-    for (int cycle = 0; cycle < 2000; ++cycle) {
-        auto alt = modes.enter(ssg::app::kAlternateScreen);
-        auto buttons = modes.enter(ssg::app::kMouseButtons);
-        auto motion = modes.enter(ssg::app::kMouseMotion);
-    }
-    stop.store(true, std::memory_order_relaxed);
-    sampler.join();
-    ASSERT_FALSE(sawTorn.load(std::memory_order_relaxed));
+    // And the hide still comes first, so the redraw itself is not visible.
+    auto const frame =
+        ssg::app::encode_frame(withoutCaret, ssg::ColorDepth::Truecolor);
+    ASSERT_TRUE(frame.find("\x1b[?25l") == 0);
 }
 
 TEST(classifySignalTagsMapsSignalNumbers) {
@@ -1434,8 +1413,8 @@ int main() {
     RUN(everyDeclaredModeLeavesExactlyWhatItEnters);
     RUN(modeStackReproducesTheCuratedSetupAndRestoreSequences);
     RUN(everyEnteredModeIsLeftInReverseOrder);
-    RUN(theUndoBufferIsAlwaysASupersetOfWhatIsEntered);
-    RUN(theUndoBufferIsNeverObservedMidRebuild);
+    RUN(theCrashUndoLeavesEveryDeclaredModeInReverseOrder);
+    RUN(aFrameWithNoCaretLeavesTheCursorVisible);
     RUN(unicodeEndToEndGridAndEncoding);
     RUN(classifySignalTagsMapsSignalNumbers);
     RUN(encodeAnsiFrameAdaptsToColorDepth);

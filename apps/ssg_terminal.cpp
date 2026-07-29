@@ -34,35 +34,10 @@ SignalEvents classify_signal_tags(std::string_view drained) {
 }
 
 
-namespace {
-
-// Enough for every mode in kAlternateScreen..kCursorHidden entered at once,
-// several times over.  Fixed so publishing allocates nothing: a fatal-signal
-// handler reads this and must not race an allocator.
-constexpr std::size_t kUndoCapacity = 256;
-
-}  // namespace
-
 struct TerminalModes::Impl {
-    explicit Impl(Writer configuredWriter) : writer{std::move(configuredWriter)} {
-        buffers[0].length = 0;
-        buffers[1].length = 0;
-        published.store(&buffers[0], std::memory_order_release);
-    }
-
-    struct UndoBuffer {
-        char bytes[kUndoCapacity]{};
-        std::size_t length = 0;
-    };
-
+    explicit Impl(Writer configuredWriter) : writer{std::move(configuredWriter)} {}
     Writer writer;
     std::vector<TerminalMode> entered;
-    // Two buffers and one atomic pointer: a rebuild fills the buffer that is
-    // NOT published and then swaps.  Publishing bytes and length together is
-    // what makes a handler unable to pair one buffer's length with the other's
-    // bytes; publishing a length separately would reintroduce the tear.
-    UndoBuffer buffers[2];
-    std::atomic<UndoBuffer const*> published{nullptr};
 };
 
 TerminalModes::TerminalModes(Writer writer)
@@ -70,52 +45,38 @@ TerminalModes::TerminalModes(Writer writer)
 
 TerminalModes::~TerminalModes() { leaveThrough(0); }
 
-// Rebuilds the undo bytes for the first `depth` entered modes and publishes
-// them atomically.  Reverse order: the last entered is the first left.
-void TerminalModes::publishUndoFor(std::size_t depth) noexcept {
-    auto const* current = impl_->published.load(std::memory_order_relaxed);
-    auto& target = (current == &impl_->buffers[0]) ? impl_->buffers[1]
-                                                   : impl_->buffers[0];
-    std::size_t length = 0;
-    for (std::size_t i = depth; i-- > 0;) {
-        auto const leave = impl_->entered[i].leave;
-        if (length + leave.size() > kUndoCapacity) break;
-        std::memcpy(target.bytes + length, leave.data(), leave.size());
-        length += leave.size();
-    }
-    target.length = length;
-    impl_->published.store(&target, std::memory_order_release);
-}
-
 TerminalModes::Guard TerminalModes::enter(TerminalMode mode) {
     impl_->entered.push_back(mode);
-    auto const depth = impl_->entered.size();
-    // Publish the LARGER undo before writing the enter bytes, so a signal
-    // arriving between the two still undoes this mode.
-    publishUndoFor(depth);
     impl_->writer(mode.enter);
-    return Guard{*this, depth};
+    return Guard{*this, impl_->entered.size()};
 }
 
 // Leaves every mode entered at or above `depth`, deepest first.
 void TerminalModes::leaveThrough(std::size_t depth) noexcept {
     while (impl_->entered.size() > depth) {
         auto const mode = impl_->entered.back();
-        // Write the leave bytes BEFORE publishing the smaller undo, so the
-        // published bytes never stop covering a mode that is still set.
-        impl_->writer(mode.leave);
         impl_->entered.pop_back();
-        publishUndoFor(impl_->entered.size());
+        impl_->writer(mode.leave);
     }
-}
-
-std::string_view TerminalModes::undoBytes() const noexcept {
-    auto const* buffer = impl_->published.load(std::memory_order_acquire);
-    return {buffer->bytes, buffer->length};
 }
 
 std::size_t TerminalModes::depth() const noexcept {
     return impl_->entered.size();
+}
+
+std::string_view all_modes_undo_sequence() noexcept {
+    // Reverse declaration order: the alternate screen is entered first and left
+    // last.  Assembled once, at first use, so writing it needs no work.
+    static std::string const undo = [] {
+        std::string bytes;
+        for (auto const& mode :
+             {kCursorHidden, kMouseSgrCoordinates, kMouseMotion, kMouseButtons,
+              kCursorStyleBar, kAlternateScreen}) {
+            bytes.append(mode.leave);
+        }
+        return bytes;
+    }();
+    return undo;
 }
 
 TerminalModes::Guard::~Guard() {
@@ -212,6 +173,23 @@ LaunchTarget resolve_launch(fs::path const& argument) {
     auto parent =
         absolute.has_parent_path() ? absolute.parent_path() : fs::current_path();
     return {parent, absolute.filename().string()};
+}
+
+std::string encode_frame(ssg::CellGrid const& screen, ssg::ColorDepth depth) {
+    std::string frame;
+    {
+        // Appends to the frame rather than writing to the terminal, so the whole
+        // frame is still one write.
+        TerminalModes modes{
+            [&frame](std::string_view bytes) { frame.append(bytes); }};
+        auto const hidden = modes.enter(kCursorHidden);
+        frame += encode_ansi_frame(screen, depth);
+        if (screen.caret) {
+            frame += "\x1b[" + std::to_string(screen.caret->row + 1) + ";" +
+                     std::to_string(screen.caret->column + 1) + "H";
+        }
+    }
+    return frame;
 }
 
 std::string encode_ansi_frame(ssg::CellGrid const& screen, ssg::ColorDepth depth) {
