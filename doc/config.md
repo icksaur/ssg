@@ -144,6 +144,19 @@ whole number (e.g. `dim_header_height = 1`). An unknown key, or a non-numeric
 or negative dimension, rejects the whole call and changes nothing. The full key
 list matches the style fields in `include/ssg/Style.h`.
 
+A glyph has to fit the slot it draws in, so it must be **exactly as wide as the
+one it replaces** -- one column for `scrollbar_track`, two for `tree_expanded`,
+and so on. A double-width character (most CJK, and many emoji) counts as two.
+A glyph of the wrong width is rejected and named, rather than silently shifting
+the rest of the row sideways.
+
+Glyphs also cannot contain **control characters** -- including escape -- or
+invalid UTF-8. A stray escape sequence in a glyph does not draw: it changes how
+your terminal interprets everything after it, which usually looks like the
+whole screen turning into line-drawing characters. If you paste a glyph from
+somewhere and it is rejected for this, the string picked up an invisible
+character along the way.
+
 ### Your own commands
 
 `ssg.register_command` defines a command in your own words and gives it a

@@ -4,6 +4,7 @@
 #include <charconv>
 #include <cstdint>
 #include <functional>
+#include <optional>
 
 #include "ssg/GraphemeLayout.h"
 
@@ -12,27 +13,32 @@ namespace {
 
 // Every glyph field style.define can set, keyed by the same name the wire codec
 // uses.  One table, so a new glyph is added in exactly one place here.
-std::unordered_map<std::string, std::function<void(Style&, std::string)>> const&
+//
+// An ACCESSOR rather than a setter: assigning through it sets the field, and
+// reading it from a default-constructed Style gives the field's default -- which
+// is what says how wide the glyph is allowed to be.  A separate width table
+// would be a second thing to keep in step.
+std::unordered_map<std::string, std::function<std::string&(Style&)>> const&
 glyphSetters() {
     static auto const table = [] {
-        std::unordered_map<std::string, std::function<void(Style&, std::string)>>
+        std::unordered_map<std::string, std::function<std::string&(Style&)>>
             map;
-        map["scrollbar_gutter"] = [](Style& s, std::string v) { s.scrollbar.gutter = std::move(v); };
-        map["scrollbar_track"] = [](Style& s, std::string v) { s.scrollbar.track = std::move(v); };
-        map["scrollbar_single"] = [](Style& s, std::string v) { s.scrollbar.single = std::move(v); };
-        map["scrollbar_top"] = [](Style& s, std::string v) { s.scrollbar.top = std::move(v); };
-        map["scrollbar_body"] = [](Style& s, std::string v) { s.scrollbar.body = std::move(v); };
-        map["scrollbar_bottom"] = [](Style& s, std::string v) { s.scrollbar.bottom = std::move(v); };
-        map["tree_expanded"] = [](Style& s, std::string v) { s.tree.expanded = std::move(v); };
-        map["tree_collapsed"] = [](Style& s, std::string v) { s.tree.collapsed = std::move(v); };
-        map["tab_dirty_suffix"] = [](Style& s, std::string v) { s.tab.dirtySuffix = std::move(v); };
-        map["tab_live_diff_prefix"] = [](Style& s, std::string v) { s.tab.liveDiffPrefix = std::move(v); };
-        map["toggle_checked"] = [](Style& s, std::string v) { s.toggle.checked = std::move(v); };
-        map["toggle_unchecked"] = [](Style& s, std::string v) { s.toggle.unchecked = std::move(v); };
-        map["truncation"] = [](Style& s, std::string v) { s.truncation = std::move(v); };
-        map["input_line_sigil"] = [](Style& s, std::string v) { s.inputLineSigil = std::move(v); };
-        map["unrenderable"] = [](Style& s, std::string v) { s.unrenderable = std::move(v); };
-        map["prompt_label_separator"] = [](Style& s, std::string v) { s.promptLabelSeparator = std::move(v); };
+        map["scrollbar_gutter"] = [](Style& s) -> std::string& { return s.scrollbar.gutter; };
+        map["scrollbar_track"] = [](Style& s) -> std::string& { return s.scrollbar.track; };
+        map["scrollbar_single"] = [](Style& s) -> std::string& { return s.scrollbar.single; };
+        map["scrollbar_top"] = [](Style& s) -> std::string& { return s.scrollbar.top; };
+        map["scrollbar_body"] = [](Style& s) -> std::string& { return s.scrollbar.body; };
+        map["scrollbar_bottom"] = [](Style& s) -> std::string& { return s.scrollbar.bottom; };
+        map["tree_expanded"] = [](Style& s) -> std::string& { return s.tree.expanded; };
+        map["tree_collapsed"] = [](Style& s) -> std::string& { return s.tree.collapsed; };
+        map["tab_dirty_suffix"] = [](Style& s) -> std::string& { return s.tab.dirtySuffix; };
+        map["tab_live_diff_prefix"] = [](Style& s) -> std::string& { return s.tab.liveDiffPrefix; };
+        map["toggle_checked"] = [](Style& s) -> std::string& { return s.toggle.checked; };
+        map["toggle_unchecked"] = [](Style& s) -> std::string& { return s.toggle.unchecked; };
+        map["truncation"] = [](Style& s) -> std::string& { return s.truncation; };
+        map["input_line_sigil"] = [](Style& s) -> std::string& { return s.inputLineSigil; };
+        map["unrenderable"] = [](Style& s) -> std::string& { return s.unrenderable; };
+        map["prompt_label_separator"] = [](Style& s) -> std::string& { return s.promptLabelSeparator; };
         return map;
     }();
     return table;
@@ -98,13 +104,68 @@ ScrollbarCell Style::scrollbarCell(int row, int thumbStart, int thumbSize,
     return thumb(scrollbar.body);
 }
 
+namespace {
+
+// Why a glyph is unacceptable, or nullopt if it is fine.
+//
+// Glyph strings are the one input that reaches a terminal cell WITHOUT passing
+// through GraphemeLayout on the way. Document text and file names are already
+// classified, so a control byte in either draws as a replacement glyph; a glyph
+// was copied verbatim, so scrollbar_track = "<ESC>(0" switched the terminal's
+// character set and every later byte drew as line art
+// (doc/spec-terminal-escape-discipline.md).
+//
+// Asked of the same layout engine everything else uses, so "safe to emit" and
+// "how wide is it" have one answer in this codebase rather than two.
+std::optional<std::string> rejectGlyph(std::string const& key,
+                                       std::string const& value,
+                                       std::string const& defaultValue) {
+    if (value.find('\n') != std::string::npos ||
+        value.find('\r') != std::string::npos) {
+        return "style.define value for '" + key +
+               "' must not contain a line break";
+    }
+    GraphemeLayout const layout;
+    auto const run = layout.computeRun(value);
+    for (auto const& span : run.spans) {
+        if (span.kind == CellKind::Control) {
+            return "style.define value for '" + key +
+                   "' must not contain a control character: it would change "
+                   "how the terminal interprets what follows";
+        }
+        if (span.kind == CellKind::InvalidUtf8) {
+            return "style.define value for '" + key + "' must be valid UTF-8";
+        }
+    }
+    // A glyph fills a fixed slot, so it must be exactly as wide as the one it
+    // replaces. Otherwise the columns the server described and the columns the
+    // terminal draws disagree and the row shifts. The field's DEFAULT is the
+    // width, so a newly added glyph brings its own rule with it.
+    auto const width = run.totalCells;
+    auto const expected = layout.computeRun(defaultValue).totalCells;
+    if (width != expected) {
+        return "style.define value for '" + key + "' must be " +
+               std::to_string(expected) + " column(s) wide, but '" + value +
+               "' is " + std::to_string(width);
+    }
+    return std::nullopt;
+}
+
+}  // namespace
+
 StyleDefineResult applyStyleDefine(Style const& current,
                                    StyleDefineArguments const& arguments) {
     Style next = current;
+    // The widths come from a default-constructed Style, so a glyph's allowed
+    // width is a property of the field and not of whatever was set before it.
+    Style defaults{};
     for (auto const& [key, value] : arguments.values) {
         if (auto const it = glyphSetters().find(key);
             it != glyphSetters().end()) {
-            it->second(next, value);
+            if (auto rejection = rejectGlyph(key, value, it->second(defaults))) {
+                return {StyleDefineError{std::move(*rejection)}, {}};
+            }
+            it->second(next) = value;
             continue;
         }
         if (auto const it = dimensionSetters().find(key);

@@ -251,7 +251,86 @@ TEST(styleDefineWithAnEmptyTableIsANoOp) {
 
 }  // namespace
 
+
+// A glyph is the one string that reaches a terminal cell without passing
+// through GraphemeLayout on the way, so it is the one place a control byte can
+// reach the terminal and change how it reads what follows.
+TEST(aStyleGlyphThatEmitsAModeIsRejectedNamingItsKey) {
+    ssg::Style const base{};
+    // ESC ( 0 switches the terminal's character set: every later byte draws as
+    // line art. This reached a real terminal before it was rejected here.
+    auto const escaped = ssg::applyStyleDefine(
+        base, ssg::StyleDefineArguments{{{"scrollbar_track", "\x1b(0"}}});
+    ASSERT_FALSE(escaped.accepted());
+    if (escaped.error) {
+        ASSERT_TRUE(escaped.error->message.find("scrollbar_track") !=
+                    std::string::npos);
+        ASSERT_TRUE(escaped.error->message.find("control character") !=
+                    std::string::npos);
+    }
+
+    // A bare control byte, and a shift-out, are refused for the same reason.
+    for (auto const* value : {"\x0e", "\x07", "a\x1bb"}) {
+        auto const rejected = ssg::applyStyleDefine(
+            base, ssg::StyleDefineArguments{{{"truncation", value}}});
+        ASSERT_FALSE(rejected.accepted());
+    }
+}
+
+TEST(aStyleGlyphOfTheWrongWidthIsRejectedNamingItsKey) {
+    ssg::Style const base{};
+    // scrollbar_track's default is one column, so a two-column glyph would push
+    // the row's remaining cells sideways.
+    for (auto const* value : {"XY", "\xe4\xb8\xad", "ABCDEFGHIJ", ""}) {
+        auto const rejected = ssg::applyStyleDefine(
+            base, ssg::StyleDefineArguments{{{"scrollbar_track", value}}});
+        ASSERT_FALSE(rejected.accepted());
+        if (rejected.error) {
+            ASSERT_TRUE(rejected.error->message.find("scrollbar_track") !=
+                        std::string::npos);
+        }
+    }
+}
+
+TEST(aStyleGlyphMatchingItsFieldsWidthIsAccepted) {
+    ssg::Style const base{};
+    // One column for a one-column field...
+    auto const narrow = ssg::applyStyleDefine(
+        base, ssg::StyleDefineArguments{{{"scrollbar_track", ":"}}});
+    ASSERT_TRUE(narrow.accepted());
+    ASSERT_EQ(narrow.style.scrollbar.track, std::string{":"});
+
+    // ...and the width is the FIELD's, not one: tree_expanded's default is two
+    // columns, so a two-column replacement is correct and one would not be.
+    auto const wide = ssg::applyStyleDefine(
+        base, ssg::StyleDefineArguments{{{"tree_expanded", "v "}}});
+    ASSERT_TRUE(wide.accepted());
+    ASSERT_FALSE(ssg::applyStyleDefine(
+                     base, ssg::StyleDefineArguments{{{"tree_expanded", "v"}}})
+                     .accepted());
+
+    // A wide CJK glyph is two columns, so it fits a two-column field.
+    ASSERT_TRUE(ssg::applyStyleDefine(
+                    base,
+                    ssg::StyleDefineArguments{{{"tree_expanded", "\xe4\xb8\xad"}}})
+                    .accepted());
+}
+
+TEST(aRejectedGlyphChangesNothing) {
+    ssg::Style const base{};
+    // Rejection is all or nothing, like the unknown-key and bad-dimension cases.
+    auto const rejected = ssg::applyStyleDefine(
+        base, ssg::StyleDefineArguments{{{"truncation", "."},
+                                         {"scrollbar_track", "\x1b(0"}}});
+    ASSERT_FALSE(rejected.accepted());
+    ASSERT_EQ(base.truncation, ssg::Style{}.truncation);
+}
+
 int main() {
+    RUN(aStyleGlyphThatEmitsAModeIsRejectedNamingItsKey);
+    RUN(aStyleGlyphOfTheWrongWidthIsRejectedNamingItsKey);
+    RUN(aStyleGlyphMatchingItsFieldsWidthIsAccepted);
+    RUN(aRejectedGlyphChangesNothing);
     RUN(scrollbarUsesTheGlyphsItWasConfiguredWith);
     RUN(aUniformThumbNeedsNoCapAwareness);
     RUN(theResolvedThumbAlwaysCoversExactlyItsRequestedRows);
