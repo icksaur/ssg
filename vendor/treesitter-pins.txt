@@ -5,3 +5,4 @@ tree-sitter-javascript 58404d8cf191d69f2674a8fd507bd5776f46cb11
 tree-sitter-typescript 75b3874edb2dc714fb1fd77a32013d0f8699989f
 tree-sitter-c-sharp 9150f7d56bb47f1a809fa23623f1ba1413e93fa9
 tree-sitter-lua 10fe0054734eec83049514ea2e718b2a56acd0c9
+tree-sitter-markdown a0a00f817d02412bd92c54d316f164d827b57b5c
