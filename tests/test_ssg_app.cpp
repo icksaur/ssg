@@ -1014,11 +1014,43 @@ TEST(onlyADa1ReplyMeansTheFeatureIsAbsent) {
         ASSERT_FALSE(silent.has(capability));
     }
 
-    // A terminal that knows mode 2026 but reports it unrecognized (state 0).
-    ssg::app::TerminalCapabilities unknownMode{fakeEnvironment({})};
-    (void)unknownMode.beginProbe();
-    unknownMode.observeReply("\x1b[?2026;0$y");
-    ASSERT_FALSE(unknownMode.has(ssg::app::Capability::SynchronizedOutput));
+    // A terminal that knows mode 2026 but reports it unrecognized (state 0), and
+    // one that recognizes it but can never enable it (state 4, permanently
+    // reset), are both absent.  States 1/2/3 are usable.
+    for (auto const* const unusable : {"\x1b[?2026;0$y", "\x1b[?2026;4$y"}) {
+        ssg::app::TerminalCapabilities capabilities{fakeEnvironment({})};
+        (void)capabilities.beginProbe();
+        capabilities.observeReply(unusable);
+        ASSERT_FALSE(capabilities.has(ssg::app::Capability::SynchronizedOutput));
+    }
+    for (auto const* const usable :
+         {"\x1b[?2026;1$y", "\x1b[?2026;2$y", "\x1b[?2026;3$y"}) {
+        ssg::app::TerminalCapabilities capabilities{fakeEnvironment({})};
+        (void)capabilities.beginProbe();
+        capabilities.observeReply(usable);
+        ASSERT_TRUE(capabilities.has(ssg::app::Capability::SynchronizedOutput));
+    }
+}
+
+// Re-probing asks a terminal that may not be the one that answered last time --
+// a resumed session, a reattached multiplexer.  An answer from the old terminal
+// must not survive the fence that is supposed to be able to retire it.
+TEST(reprobingDoesNotCarryStaleAnswersForward) {
+    ssg::app::TerminalCapabilities capabilities{fakeEnvironment({})};
+    (void)capabilities.beginProbe();
+    capabilities.observeReply("\x1b[?2026;2$y");
+    capabilities.observeReply("\x1b[?1u");
+    capabilities.observeReply("\x1b[?62;4;52c");
+    for (auto const capability : ssg::app::kAllCapabilities) {
+        ASSERT_TRUE(capabilities.has(capability));
+    }
+
+    // The new terminal answers only the fence: every previous answer is retired.
+    (void)capabilities.beginProbe();
+    capabilities.observeReply("\x1b[?62;22c");
+    for (auto const capability : ssg::app::kAllCapabilities) {
+        ASSERT_FALSE(capabilities.has(capability));
+    }
 }
 
 // Oracle (the probe window): a reply shape arriving after the fence -- pasted by
@@ -1738,6 +1770,7 @@ int main() {
     RUN(aReplySplitAcrossReadsIsStillConsumedWhole);
     RUN(noDcsOrOscQueryMaySolicitAnUnparsedReply);
     RUN(onlyADa1ReplyMeansTheFeatureIsAbsent);
+    RUN(reprobingDoesNotCarryStaleAnswersForward);
     RUN(aReplyShapeAfterTheFenceIsNotACapabilityAnswer);
     RUN(anOverrideBeatsTheTerminalsOwnAnswer);
     RUN(everyCapabilityHasAWorkingOverride);

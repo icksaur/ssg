@@ -444,6 +444,13 @@ TerminalCapabilities::TerminalCapabilities(EnvironmentLookup lookup)
 }
 
 std::string TerminalCapabilities::beginProbe() {
+    // Start from Unknown rather than carrying answers forward.  A second probe
+    // asks a terminal that may not be the one that answered the first -- a
+    // resumed session, a reattached multiplexer -- and a stale Present would
+    // survive the fence that is supposed to be able to retire it.  Resetting can
+    // only ever turn features off until their answers land, which is the safe
+    // direction.
+    answers_.fill(Answer::Unknown);
     probing_ = true;
     // DA1 is written last: every terminal answers it, so its reply is the fence
     // that tells us the speculative questions above have had their chance.
@@ -473,10 +480,14 @@ void TerminalCapabilities::observeReply(std::string_view reply) {
         return;
     }
     if (parts->final == 'y' && parts->intermediate == '$' && parts->privatePrefix) {
-        // DECRPM: mode, then state.  0 means the terminal does not know the mode
-        // at all; any other state means it does, which is what we asked.
+        // DECRPM: mode, then state.  0 means the terminal does not recognize the
+        // mode; 4 ("permanently reset") means it recognizes it but can never
+        // enable it, which is indistinguishable from absent for our purposes.
+        // 1 (set), 2 (reset) and 3 (permanently set) all mean usable.
         if (parts->params.size() >= 2 && parts->params[0] == 2026) {
-            record(Capability::SynchronizedOutput, parts->params[1] != 0);
+            auto const state = parts->params[1];
+            record(Capability::SynchronizedOutput,
+                   state == 1 || state == 2 || state == 3);
         }
         return;
     }
