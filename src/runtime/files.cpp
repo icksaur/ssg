@@ -351,11 +351,35 @@ CommandHandlerResult EditorRuntime::Impl::activateDocument(FileDocumentId docume
     if (!state) return failure("workspace document does not exist");
     auto const* opened = workspace.tryDocument(document);
     if (opened == nullptr) return failure("workspace document does not exist");
+    // Note the startup scratch buffer BEFORE opening, while it is still the only
+    // tab.  Every session begins on an empty untitled buffer; opening a file
+    // beside it leaves a blank tab nobody asked for and nobody will use.  It is
+    // discarded only when it is the sole tab, is untitled, and holds nothing --
+    // so a buffer the user typed into, or deliberately kept beside others, is
+    // never taken away.
+    std::optional<TabState> disposableScratch;
+    if (auto const& view = tabs.viewState(); view.tabs.size() == 1) {
+        auto const& only = view.tabs.front();
+        if (only.document && *only.document != document && only.documentKey &&
+            only.documentKey->kind() == JournalDocumentKeyKind::Untitled) {
+            auto const* scratchDocument = workspace.tryDocument(*only.document);
+            if (scratchDocument != nullptr &&
+                scratchDocument->snapshot().text.empty()) {
+                disposableScratch = only;
+            }
+        }
+    }
     ensureDocumentRuntimeState(document);
     auto result = tabs.openDocument(document, state->key, state->displayLabel,
                                      opened->mode(), state->dirty,
                                      badgeFor(scratch.durabilityState()));
     if (!result.accepted()) return failure(tabMessage(result));
+    // Closed only after the open succeeded, so a failed open never costs the
+    // buffer the user still has.  TabManager::close takes the tab's ID; the
+    // lifecycle hook it calls is what retires the workspace document.
+    if (disposableScratch) {
+        (void)tabs.close(disposableScratch->id, std::chrono::milliseconds{100});
+    }
     resetSelectionForActiveDocument();
     refreshSyntax();
     return success();
