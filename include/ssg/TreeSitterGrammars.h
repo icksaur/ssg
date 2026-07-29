@@ -46,8 +46,10 @@ struct TreeSitterGrammar {
     std::string inheritedHighlightQuery;
 };
 
-// The grammars SSG vendors: C, C++, JavaScript, TypeScript, C#, and Lua, with
-// their queries compiled into the binary.
+// The grammars SSG vendors: C, C++, JavaScript, TypeScript, C#, Lua, and
+// Markdown, with their queries compiled into the binary.  Markdown is the block
+// grammar only -- upstream splits it in two, and the inline half (emphasis,
+// links, code spans) needs a language injection this parser does not implement.
 [[nodiscard]] std::vector<TreeSitterGrammar> vendoredTreeSitterGrammars();
 
 // A parser over exactly `grammars`. The set is used as given, NOT merged with

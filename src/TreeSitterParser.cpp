@@ -31,6 +31,7 @@ const TSLanguage* tree_sitter_javascript();
 const TSLanguage* tree_sitter_typescript();
 const TSLanguage* tree_sitter_c_sharp();
 const TSLanguage* tree_sitter_lua();
+const TSLanguage* tree_sitter_markdown();
 }
 
 class TreeSitterParse final : public OpaqueSyntaxParse {};
@@ -76,6 +77,10 @@ std::vector<TreeSitterGrammar> vendoredTreeSitterGrammars() {
         ""));
     grammars.push_back(vendoredGrammar(
         {"lua"}, [] -> SyntaxLanguageHandle { return tree_sitter_lua(); }, "lua",
+        ""));
+    grammars.push_back(vendoredGrammar(
+        {"markdown", "md"},
+        [] -> SyntaxLanguageHandle { return tree_sitter_markdown(); }, "markdown",
         ""));
     return grammars;
 }
@@ -201,6 +206,22 @@ SyntaxScope scopeForCapture(std::string_view captureName) {
         captureName == "bracket" || hasTag(captureName, "bracket") ||
         hasTag(captureName, "punctuation")) {
         return SyntaxScope::Punctuation;
+    }
+    // The `text.*` family, used by prose grammars (markdown) and by any grammar
+    // following the nvim-treesitter convention.  Without these a markdown
+    // document highlights only its punctuation: headings, code blocks and links
+    // all carry `text.*` captures and would otherwise fall through to plain.
+    if (captureName == "text.title" || hasTag(captureName, "markup.heading")) {
+        return SyntaxScope::Keyword;  // Headings: the most prominent scope.
+    }
+    if (captureName == "text.literal" || hasTag(captureName, "markup.raw")) {
+        return SyntaxScope::String;  // Code blocks and spans read as literals.
+    }
+    if (captureName == "text.uri" || hasTag(captureName, "markup.link")) {
+        return SyntaxScope::Function;  // Link destinations, like a call target.
+    }
+    if (captureName == "text.reference") {
+        return SyntaxScope::Variable;  // A label naming something defined later.
     }
     return SyntaxScope::PlainText;
 }

@@ -21,6 +21,7 @@ set(_SSG_EMBEDDED_QUERIES
     "typescript=${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-typescript/queries/highlights.scm"
     "csharp=${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-c-sharp/queries/highlights.scm"
     "lua=${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-lua/queries/highlights.scm"
+    "markdown=${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-markdown/queries/highlights.scm"
 )
 
 # Depend on the query files themselves so editing one regenerates the TU.
@@ -71,6 +72,11 @@ set(_SSG_TREESITTER_VENDOR_SOURCES
     ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-c-sharp/src/scanner.c
     ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-lua/src/parser.c
     ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-lua/src/scanner.c
+    # Only the BLOCK grammar is vendored.  Upstream splits markdown in two, and
+    # the inline grammar (emphasis, links, code spans) can only be applied
+    # through a language injection, which this parser does not implement.
+    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-markdown/src/parser.c
+    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-markdown/src/scanner.c
 )
 
 target_sources(ssg PRIVATE
@@ -87,6 +93,7 @@ target_include_directories(ssg PRIVATE
     ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-typescript/typescript/src
     ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-c-sharp/src
     ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-lua/src
+    ${_SSG_TREESITTER_VENDOR_DIR}/tree-sitter-markdown/src
 )
 
 set_source_files_properties(${_SSG_TREESITTER_VENDOR_SOURCES}

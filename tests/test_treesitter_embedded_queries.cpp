@@ -43,7 +43,7 @@ std::string readFile(const fs::path& path) {
 
 TEST(everyVendoredGrammarCarriesItsQueryTextInMemory) {
     const auto grammars = vendoredTreeSitterGrammars();
-    ASSERT_EQ(grammars.size(), std::size_t{6});
+    ASSERT_EQ(grammars.size(), std::size_t{7});
     for (const auto& grammar : grammars) {
         ASSERT_FALSE(grammar.languageIds.empty());
         ASSERT_TRUE(grammar.language != nullptr);
@@ -65,6 +65,7 @@ TEST(embeddedQueryTextMatchesTheVendorFilesByteForByte) {
         {"typescript", "tree-sitter-typescript/queries/highlights.scm"},
         {"csharp", "tree-sitter-c-sharp/queries/highlights.scm"},
         {"lua", "tree-sitter-lua/queries/highlights.scm"},
+        {"markdown", "tree-sitter-markdown/queries/highlights.scm"},
     };
     for (const auto& [key, relative] : keyToFile) {
         const auto expected = readFile(vendorRoot / relative);
