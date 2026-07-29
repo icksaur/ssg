@@ -60,11 +60,26 @@ struct GridPosition {
     bool operator==(GridPosition const&) const = default;
 };
 
+// A run of cells the terminal should make clickable (OSC 8).
+//
+// Kept as grid-level ranges rather than a string on every cell: a URI per cell
+// would pay for a string on all of them to serve the few that are links, and the
+// terminal needs the run's extent anyway to open and close the hyperlink.
+struct CellHyperlink {
+    int row = 0;
+    int column = 0;
+    int width = 0;
+    std::string uri;
+
+    bool operator==(CellHyperlink const&) const = default;
+};
+
 struct CellGrid {
     GridSize size;
     std::array<SrgbColor, kThemePaletteSize> palette{};
     std::vector<CellGridCell> cells;
     std::optional<GridPosition> caret;
+    std::vector<CellHyperlink> hyperlinks;
     DiffTints diffTints;
     SrgbColor selectionFill{};
 
