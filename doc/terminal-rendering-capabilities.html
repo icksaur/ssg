@@ -362,7 +362,7 @@ ESC[&lt;u     pop back to the previous mode on exit</code></pre>
 <thead><tr><th>Terminal</th><th>Support</th><th>Notes</th></tr></thead>
 <tbody>
 <tr><td><strong>kitty</strong></td><td class="y">Full</td><td>Reference implementation.</td></tr>
-<tr><td><strong>Windows Terminal</strong></td><td class="y">Full — since v1.25</td><td><strong>New (merged Feb 2026).</strong> Known bugs remain around F13–F20 and non-Latin layouts.</td></tr>
+<tr><td><strong>Windows Terminal</strong></td><td class="mid">Preview only — v1.25</td><td><strong>Merged Feb 2026, but v1.25 is still preview; the current stable release (1.24) does not implement it.</strong> Verified 2026-07 against WT 1.24 over ssh: it answers DECRQM and DA1 but returns nothing at all to <code>CSI ? u</code>. Known bugs remain around F13–F20 and non-Latin layouts.</td></tr>
 <tr><td><strong>xterm.js</strong></td><td class="p">Implemented, active bugs</td><td>Layout awareness incomplete; test before relying on it.</td></tr>
 <tr><td>ghostty / foot</td><td class="y">Full</td><td></td></tr>
 <tr><td>WezTerm</td><td class="p">Full but opt-in</td><td><code>enable_kitty_keyboard = true</code>, default off.</td></tr>
@@ -562,7 +562,7 @@ keyboard protocol (which changes input parsing) and images (which you should ski
 </tr>
 <tr>
   <td><strong>5</strong></td>
-  <td><strong>Kitty keyboard protocol</strong><br><span class="plat">kitty ✓ · WT ✓ (v1.25+) · xterm.js ⚠</span></td>
+  <td><strong>Kitty keyboard protocol</strong><br><span class="plat">kitty ✓ · WT ✗ stable, ✓ v1.25 preview · xterm.js ⚠</span></td>
   <td>Roughly triples the bindable keyspace and removes the ambiguity that pushed SSG toward an
       Escape-leader keymap in the first place.</td>
   <td><strong>Highest.</strong> Changes what the decoder receives, needs negotiation and a legacy

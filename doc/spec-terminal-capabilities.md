@@ -1,14 +1,44 @@
 # spec-terminal-capabilities
 
-Status: implemented; pending real-terminal signoff
+Status: implemented; verified on Windows Terminal and xterm.js, kitty outstanding
 
-Every capability answer has been verified against a simulated terminal in a pty
-harness, never against a real terminal emulator. The Acceptance clause below
-asks for a capability report that correctly identifies kitty locally; until
-someone runs `ssg --capabilities` in a real terminal and confirms the answers,
-this stays open. The risk is narrow but real: the query bytes and the reply
-grammar are both taken from research rather than from a normative document, and
-a simulated responder answers exactly what the harness was told to answer.
+Verified 2026-07 by running `ssg --capabilities` against real terminals.
+
+Windows Terminal 1.24 over ssh, `TERM=xterm-256color`:
+
+```
+color_depth              truecolor
+synchronized_output      yes
+keyboard_protocol        no
+clipboard_write          yes
+replies (2):
+  <ESC>[?2026;2$y
+  <ESC>[?61;4;6;7;14;21;22;23;24;28;32;42;52c
+```
+
+Every answer is correct, and two rules this spec had to choose are confirmed by
+it. DA1 class 61 (VT510) sits in the parameter list ahead of the extensions, so
+skipping the first parameter is load-bearing rather than cosmetic; extension 52
+is present, and clipboard is reported. DECRPM answered **state 2 (reset)**,
+which this spec treats as *supported* — the terminal knows the mode, which is
+what was asked. The stricter reading would have reported "no" for synchronized
+output on a terminal that demonstrably has it.
+
+`keyboard_protocol no` is also correct: nothing answered `CSI ? u`, and the
+probe log recorded no late replies, so the DA1 fence is not closing early.
+Windows Terminal merged the keyboard protocol in Feb 2026 but it ships only in
+the 1.25 preview; 1.24 is the current stable release. An earlier research note
+in `doc/terminal-rendering-capabilities.html` stated this as shipped and has
+been corrected.
+
+xterm.js answers a bare `CSI ?1;2c` with no extensions and neither speculative
+question, so all three read absent — also correct.
+
+Both are pinned as regression fixtures in `realTerminalRepliesResolveAsObserved`.
+
+**Outstanding:** kitty has not been measured. It is the one terminal expected to
+answer all three, so it is the only case that exercises a *positive* keyboard
+protocol answer end to end against real hardware.
 
 ## Goals
 

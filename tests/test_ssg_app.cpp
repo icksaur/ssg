@@ -1232,6 +1232,44 @@ TEST(theProbeLogSeparatesWhatWasBelievedFromWhatArrivedLate) {
     ASSERT_TRUE(capabilities.probeLog().ignored.empty());
 }
 
+// Field-captured replies, kept verbatim because a hand-written reply would not
+// have exercised a thirteen-parameter DA1 whose class code (61) sits where an
+// extension could, nor a real terminal's choice of DECRPM state.
+TEST(realTerminalRepliesResolveAsObserved) {
+    // Windows Terminal 1.24 over ssh.
+    ssg::app::TerminalCapabilities windowsTerminal{fakeEnvironment({})};
+    (void)windowsTerminal.beginProbe();
+    windowsTerminal.observeReply("\x1b[?2026;2$y");
+    windowsTerminal.observeReply(
+        "\x1b[?61;4;6;7;14;21;22;23;24;28;32;42;52c");
+    ASSERT_TRUE(windowsTerminal.has(ssg::app::Capability::ClipboardWrite));
+    // DECRPM state 2 is "reset": the terminal knows the mode, which is what was
+    // asked.  Reading state 2 as unsupported would report no on a terminal that
+    // demonstrably has it.
+    ASSERT_TRUE(windowsTerminal.has(ssg::app::Capability::SynchronizedOutput));
+    // It answered nothing about the keyboard protocol, so it does not have it
+    // (1.24 predates the release that implements it).
+    ASSERT_FALSE(windowsTerminal.has(ssg::app::Capability::KeyboardProtocol));
+    ASSERT_TRUE(windowsTerminal.probeLog().ignored.empty());
+    ASSERT_EQ(windowsTerminal.probeLog().believed.size(), std::size_t{2});
+
+    // xterm.js: a minimal DA1 with no extensions, and no answer to either
+    // speculative question.
+    ssg::app::TerminalCapabilities xtermJs{fakeEnvironment({})};
+    (void)xtermJs.beginProbe();
+    xtermJs.observeReply("\x1b[?1;2c");
+    for (auto const capability : ssg::app::kAllCapabilities) {
+        ASSERT_FALSE(xtermJs.has(capability));
+    }
+
+    // The terminal class must not be mistaken for an extension: a terminal whose
+    // class happens to be 52 advertises no clipboard by saying so.
+    ssg::app::TerminalCapabilities classFiftyTwo{fakeEnvironment({})};
+    (void)classFiftyTwo.beginProbe();
+    classFiftyTwo.observeReply("\x1b[?52;1c");
+    ASSERT_FALSE(classFiftyTwo.has(ssg::app::Capability::ClipboardWrite));
+}
+
 TEST(decodeInputPointerPressReleaseDrag) {
     std::size_t consumed = 0;
 
@@ -1863,6 +1901,7 @@ int main() {
     RUN(aReplyArrivingAfterTheWindowExpiresIsNotBelieved);
     RUN(configDocDocumentsEveryCapabilityOverride);
     RUN(theProbeLogSeparatesWhatWasBelievedFromWhatArrivedLate);
+    RUN(realTerminalRepliesResolveAsObserved);
     RUN(decodeInputPointerPressReleaseDrag);
     RUN(decodeInputPointerSplitReadsAreIncomplete);
     RUN(decodeInputPointerRejectsMalformedButTerminatedPayloads);
