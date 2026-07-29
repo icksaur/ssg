@@ -211,6 +211,147 @@ TEST(anEmptyScratchBufferIsNotUnsavedUntilItHasContent) {
     std::filesystem::remove_all(root);
 }
 
+// Opening a file beside the startup scratch buffer would otherwise leave a blank
+// tab nobody asked for.  It is discarded only when it is the sole tab, untitled,
+// and empty -- a buffer with content, or one kept beside others, is never taken.
+TEST(openingAFileDiscardsOnlyAnEmptySoleScratchTab) {
+    auto root = uniqueRoot("scratch_close");
+    std::ofstream{root / "workspace" / "alpha.txt"} << "alpha\n";
+    std::ofstream{root / "workspace" / "beta.txt"} << "beta\n";
+    auto created = ssg::EditorRuntime::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1}).accepted());
+    auto const tabLabels = [&] {
+        auto snapshot = runtime.snapshot(ssg::ClientId{1}, {80, 24});
+        std::vector<std::string> labels;
+        for (auto const& tab : snapshot->sections().tabs.tabs) {
+            labels.push_back(tab.label);
+        }
+        return labels;
+    };
+    // Assert on the labels rather than a count: this suite's uniqueRoot places
+    // the workspace under the current directory, so a runtime here can pick up a
+    // tab from a source file lying around.  Counting tabs would make the test
+    // depend on what else the build tree happens to contain.
+    auto const hasTab = [&](std::string_view label) {
+        auto const labels = tabLabels();
+        return std::find(labels.begin(), labels.end(), label) != labels.end();
+    };
+
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.new", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(hasTab("[new buffer]"));
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.open", runtime.revision(),
+                                  std::string{"alpha.txt"}}).accepted());
+    // The scratch tab went with it rather than lingering blank, and the file --
+    // not the scratch buffer -- is what remains.
+    ASSERT_TRUE(hasTab("alpha.txt"));
+    ASSERT_FALSE(hasTab("[new buffer]"));
+
+    // A second open leaves the file already there alone: only the STARTUP
+    // scratch buffer is disposable, never a real document.  Asserted by opening
+    // beta while alpha is the sole tab, which is exactly the shape that would
+    // trip a rule checking only "is this untitled and empty".
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.open", runtime.revision(),
+                                  std::string{"beta.txt"}}).accepted());
+    ASSERT_TRUE(hasTab("alpha.txt"));
+    ASSERT_TRUE(hasTab("beta.txt"));
+
+    // And an EMPTY file is still a file: opening another beside it must not
+    // discard it just because it holds no text.
+    std::ofstream{root / "workspace" / "empty.txt"};
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.open", runtime.revision(),
+                                  std::string{"empty.txt"}}).accepted());
+    ASSERT_TRUE(hasTab("empty.txt"));
+    ASSERT_TRUE(hasTab("alpha.txt"));
+    ASSERT_TRUE(hasTab("beta.txt"));
+
+    // Only the SOLE tab is disposable.  An empty scratch buffer sitting beside
+    // other tabs was opened deliberately -- the user asked for it with file.new
+    // rather than being handed it at startup -- so it stays.  The untitled and
+    // empty checks alone would not preserve it; this is what makes the rule "the
+    // startup buffer" rather than "any blank buffer".
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.new", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(hasTab("[new buffer]"));
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.open", runtime.revision(),
+                                  std::string{"alpha.txt"}}).accepted());
+    ASSERT_TRUE(hasTab("[new buffer]"));
+    std::filesystem::remove_all(root);
+}
+
+// A scratch buffer the user has typed into holds work, so opening a file beside
+// it must keep it.  This is the assertion that makes the feature safe rather
+// than merely tidy.
+TEST(aScratchBufferWithContentSurvivesOpeningAFile) {
+    auto root = uniqueRoot("scratch_keep");
+    std::ofstream{root / "workspace" / "alpha.txt"} << "alpha\n";
+    auto created = ssg::EditorRuntime::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.new", runtime.revision(), {}}).accepted());
+    runtime.focusEditor();
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"text.insert", runtime.revision(),
+                                  ssg::TextInputArguments{"unsaved work"}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.open", runtime.revision(),
+                                  std::string{"alpha.txt"}}).accepted());
+    auto snapshot = runtime.snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    bool keptScratch = false;
+    bool openedFile = false;
+    for (auto const& tab : snapshot->sections().tabs.tabs) {
+        if (tab.label == "[new buffer]") keptScratch = true;
+        if (tab.label == "alpha.txt") openedFile = true;
+    }
+    ASSERT_TRUE(keptScratch);
+    ASSERT_TRUE(openedFile);
+    std::filesystem::remove_all(root);
+}
+
+// An EMPTY FILE is still a file.  The disposal rule turns on "untitled", not on
+// "has no text", so a real but empty document opened as the sole tab must
+// survive opening another beside it.
+TEST(anEmptySavedFileIsNeverDiscardedAsScratch) {
+    auto root = uniqueRoot("scratch_empty_file");
+    std::ofstream{root / "workspace" / "blank.txt"};
+    std::ofstream{root / "workspace" / "alpha.txt"} << "alpha\n";
+    auto created = ssg::EditorRuntime::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.open", runtime.revision(),
+                                  std::string{"blank.txt"}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.open", runtime.revision(),
+                                  std::string{"alpha.txt"}}).accepted());
+    auto snapshot = runtime.snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    bool keptBlank = false;
+    for (auto const& tab : snapshot->sections().tabs.tabs) {
+        if (tab.label == "blank.txt") keptBlank = true;
+    }
+    ASSERT_TRUE(keptBlank);
+    std::filesystem::remove_all(root);
+}
+
 TEST(curatedKeymapBindingsAreArgumentFree) {
     auto root = uniqueRoot("keymap_argfree");
     std::ofstream{root / "workspace" / "doc.txt"} << "alpha\nbeta\n";
@@ -425,6 +566,9 @@ int main() {
     RUN(everyDocumentLineIsReachableAndTheCaretIsNeverLost);
     RUN(aDocumentClippedByTheChromeStillReportsAScrollbar);
     RUN(anEmptyScratchBufferIsNotUnsavedUntilItHasContent);
+    RUN(openingAFileDiscardsOnlyAnEmptySoleScratchTab);
+    RUN(aScratchBufferWithContentSurvivesOpeningAFile);
+    RUN(anEmptySavedFileIsNeverDiscardedAsScratch);
     RUN(curatedKeymapBindingsAreArgumentFree);
     RUN(curatedKeymapResolvesPerContext);
     RUN(addCursorChordProducesMultipleSelections);
