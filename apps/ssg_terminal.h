@@ -20,6 +20,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace ssg::app {
 
@@ -341,6 +342,18 @@ public:
     [[nodiscard]] bool has(Capability capability) const;
     [[nodiscard]] ssg::ColorDepth colorDepth() const;
 
+    // What the terminal actually said, for the `--capabilities` diagnostic.
+    // Without this a reported "no" is unexplainable: it could mean the terminal
+    // stayed silent, or answered in a shape the parser rejects, or answered
+    // after the fence closed the window.  Those need different fixes, so the
+    // report has to be able to tell them apart.  Replies are recorded whether or
+    // not they are believed -- recording is not believing.
+    struct ProbeLog {
+        std::vector<std::string> believed;  // Arrived inside the window.
+        std::vector<std::string> ignored;   // Arrived after it closed.
+    };
+    [[nodiscard]] ProbeLog const& probeLog() const;
+
 private:
     enum class Answer : std::uint8_t { Unknown, Absent, Present };
 
@@ -349,6 +362,7 @@ private:
 
     EnvironmentLookup lookup_;
     Clock clock_;
+    ProbeLog log_;
     std::array<Answer, kAllCapabilities.size()> answers_{};
     bool probing_ = false;
     std::chrono::steady_clock::time_point deadline_{};

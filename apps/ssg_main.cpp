@@ -514,14 +514,14 @@ int reportCapabilities() {
     }
     if (raw) {
         writeAll(capabilities.beginProbe());
-        // Read until the fence closes the window or it expires.  Unlike the
-        // editor there is no loop to fold into, so this one waits -- it is the
-        // whole point of the command.
+        // Drain for the WHOLE window rather than stopping at the fence.  The
+        // editor can stop early -- it has a frame to draw -- but the diagnostic's
+        // job is to show what the terminal said, including anything that arrived
+        // too late to be believed.
         auto const deadline = std::chrono::steady_clock::now() +
                               ssg::app::TerminalCapabilities::kProbeWindow;
         std::string buffer;
-        while (capabilities.probing() &&
-               std::chrono::steady_clock::now() < deadline) {
+        while (std::chrono::steady_clock::now() < deadline) {
             if (!waitReadiness(10, -1, -1).input) continue;
             char bytes[256];
             auto const count = ::read(STDIN_FILENO, bytes, sizeof bytes);
@@ -556,6 +556,43 @@ int reportCapabilities() {
         std::printf(
             "\nstdin is not a terminal, so nothing was asked: every queried\n"
             "capability above reports its default.\n");
+    }
+
+    // What the terminal actually said.  A "no" above means one of three very
+    // different things, and only these lines distinguish them: silence, a reply
+    // in a shape SSG does not parse, or a reply that arrived after the DA1 fence
+    // closed the window.
+    auto const visible = [](std::string_view bytes) {
+        std::string shown;
+        for (unsigned char const byte : bytes) {
+            if (byte == 0x1b) {
+                shown += "<ESC>";
+            } else if (byte < 0x20 || byte == 0x7f) {
+                shown += '.';
+            } else {
+                shown += static_cast<char>(byte);
+            }
+        }
+        return shown;
+    };
+    auto const& log = capabilities.probeLog();
+    if (raw) {
+        std::printf("\nreplies (%zu):\n", log.believed.size());
+        for (auto const& reply : log.believed) {
+            std::printf("  %s\n", visible(reply).c_str());
+        }
+        if (log.believed.empty()) {
+            std::printf("  (none -- the terminal answered nothing at all)\n");
+        }
+        if (!log.ignored.empty()) {
+            std::printf(
+                "\nreplies that arrived AFTER the fence closed the window, and\n"
+                "were therefore not believed (%zu):\n",
+                log.ignored.size());
+            for (auto const& reply : log.ignored) {
+                std::printf("  %s\n", visible(reply).c_str());
+            }
+        }
     }
     std::printf(
         "\nOverride any answer with SSG_TERM_<NAME>=on|off (for example\n"

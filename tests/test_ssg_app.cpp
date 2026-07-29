@@ -1202,6 +1202,36 @@ TEST(configDocDocumentsEveryCapabilityOverride) {
     ASSERT_TRUE(doc.find("SSG_COLOR_DEPTH") != std::string::npos);
 }
 
+// The diagnostic must be able to explain a reported "no".  A reply that arrives
+// after the fence is recorded but not believed, and the two must stay
+// distinguishable -- they call for different fixes.
+TEST(theProbeLogSeparatesWhatWasBelievedFromWhatArrivedLate) {
+    ssg::app::TerminalCapabilities capabilities{fakeEnvironment({})};
+    (void)capabilities.beginProbe();
+    capabilities.observeReply("\x1b[?2026;2$y");
+    capabilities.observeReply("\x1b[?62;22c");  // The fence closes the window.
+    capabilities.observeReply("\x1b[?1u");      // Too late to count.
+
+    auto const& log = capabilities.probeLog();
+    ASSERT_EQ(log.believed.size(), std::size_t{2});
+    ASSERT_EQ(log.believed.front(), std::string{"\x1b[?2026;2$y"});
+    ASSERT_EQ(log.ignored.size(), std::size_t{1});
+    ASSERT_EQ(log.ignored.front(), std::string{"\x1b[?1u"});
+    ASSERT_FALSE(capabilities.has(ssg::app::Capability::KeyboardProtocol));
+
+    // A terminal that says nothing leaves an empty log, which is what tells a
+    // user "silent" rather than "misparsed".
+    ssg::app::TerminalCapabilities silent{fakeEnvironment({})};
+    (void)silent.beginProbe();
+    ASSERT_TRUE(silent.probeLog().believed.empty());
+    ASSERT_TRUE(silent.probeLog().ignored.empty());
+
+    // Re-probing starts a fresh log rather than accumulating across probes.
+    (void)capabilities.beginProbe();
+    ASSERT_TRUE(capabilities.probeLog().believed.empty());
+    ASSERT_TRUE(capabilities.probeLog().ignored.empty());
+}
+
 TEST(decodeInputPointerPressReleaseDrag) {
     std::size_t consumed = 0;
 
@@ -1832,6 +1862,7 @@ int main() {
     RUN(theProbeAsksOnlyQuestionsItCanUnderstand);
     RUN(aReplyArrivingAfterTheWindowExpiresIsNotBelieved);
     RUN(configDocDocumentsEveryCapabilityOverride);
+    RUN(theProbeLogSeparatesWhatWasBelievedFromWhatArrivedLate);
     RUN(decodeInputPointerPressReleaseDrag);
     RUN(decodeInputPointerSplitReadsAreIncomplete);
     RUN(decodeInputPointerRejectsMalformedButTerminatedPayloads);

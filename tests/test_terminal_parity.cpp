@@ -672,9 +672,12 @@ TEST(theCapabilitiesReportReflectsWhatTheTerminalAnswered) {
     ASSERT_TRUE(output.find("synchronized_output      yes") != std::string::npos);
     ASSERT_TRUE(output.find("keyboard_protocol        yes") != std::string::npos);
     ASSERT_TRUE(output.find("clipboard_write          yes") != std::string::npos);
-    // The queries themselves must not be echoed back into the report, and the
-    // replies must not appear as text: the report is the only output.
-    ASSERT_TRUE(output.find("62;4;52c\r") == std::string::npos);
+    // The replies must not be ECHOED as raw bytes (that would be the terminal
+    // typing into the report), but they must appear in the log in escaped form,
+    // which is what makes a reported "no" explainable.
+    ASSERT_TRUE(output.find("\x1b[?62;4;52c") == std::string::npos);
+    ASSERT_TRUE(output.find("<ESC>[?62;4;52c") != std::string::npos);
+    ASSERT_TRUE(output.find("<ESC>[?1u") != std::string::npos);
     // The depth was forced by SSG_COLOR_DEPTH, and the report shows the resolved
     // value rather than what TERM alone would have implied (truecolor).
     ASSERT_TRUE(output.find("color_depth              ansi16") !=
