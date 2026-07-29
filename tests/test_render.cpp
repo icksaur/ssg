@@ -1186,6 +1186,59 @@ TEST(staleDiagnosticsAreNotPainted) {
     }
 }
 
+// A URL is clickable wherever it appears -- a comment, a string, a markdown
+// link, a plain note -- because it is detected from the TEXT, not from one
+// grammar's captures.  Coupling it to syntax would make it work in markdown and
+// nowhere else.
+TEST(urlsInTheDocumentBecomeClickableRuns) {
+    ssg::test::SessionSnapshotBuilder builder;
+    auto snapshot = builder.document("see https://example.com/a for more\n")
+                        .viewport(60, 8)
+                        .build();
+    auto const grid = ssg::Renderer{}.render(snapshot);
+    ASSERT_EQ(grid.hyperlinks.size(), std::size_t{1});
+    if (grid.hyperlinks.empty()) return;
+    auto const& link = grid.hyperlinks.front();
+    ASSERT_EQ(link.uri, std::string{"https://example.com/a"});
+    // Exactly the URL's cells: the words around it are not part of the link.
+    ASSERT_EQ(link.width, static_cast<int>(link.uri.size()));
+    auto const cellAt = [&](int x, int y) {
+        return grid.cells[static_cast<std::size_t>(y * grid.size.columns + x)].text;
+    };
+    ASSERT_EQ(cellAt(link.column, link.row), std::string{"h"});
+    ASSERT_EQ(cellAt(link.column - 1, link.row), std::string{" "});
+}
+
+// Trailing punctuation belongs to the sentence, not the URL, and a scheme in the
+// middle of a word is not a link at all.
+TEST(urlDetectionStopsAtSentenceAndBracketBoundaries) {
+    auto linksFor = [](std::string text) {
+        ssg::test::SessionSnapshotBuilder builder;
+        auto snapshot = builder.document(std::move(text)).viewport(80, 8).build();
+        return ssg::Renderer{}.render(snapshot).hyperlinks;
+    };
+
+    auto const sentence = linksFor("go to https://example.com.\n");
+    ASSERT_EQ(sentence.size(), std::size_t{1});
+    if (!sentence.empty()) {
+        ASSERT_EQ(sentence.front().uri, std::string{"https://example.com"});
+    }
+
+    // A markdown link's closing paren is not part of the destination.
+    auto const markdown = linksFor("[a](https://example.com/x) tail\n");
+    ASSERT_EQ(markdown.size(), std::size_t{1});
+    if (!markdown.empty()) {
+        ASSERT_EQ(markdown.front().uri, std::string{"https://example.com/x"});
+    }
+
+    // A scheme inside a word is not a URL.
+    ASSERT_TRUE(linksFor("nothttps://example.com\n").empty());
+    // A bare scheme with no host is not a URL either.
+    ASSERT_TRUE(linksFor("https:// nothing\n").empty());
+    // Plain prose has none.
+    ASSERT_TRUE(linksFor("no links here at all\n").empty());
+}
+
 int main() {
     RUN(renderPaintsContentNotAccessibilityLabels);
     RUN(renderSegmentsOnlyVisibleLinesNotWholeDocument);
@@ -1216,6 +1269,8 @@ int main() {
     RUN(theRendererDrawsChromeFromTheSnapshotStyleNotFromLiterals);
     RUN(theDocumentReplacementGlyphComesFromStyle);
     RUN(styleDefineRestylesTheLiveSessionChrome);
+    RUN(urlsInTheDocumentBecomeClickableRuns);
+    RUN(urlDetectionStopsAtSentenceAndBracketBoundaries);
     RUN(lspDiagnosticsUnderlineExactlyTheirRange);
     RUN(staleDiagnosticsAreNotPainted);
     RUN(styleDefineRejectionLeavesTheLiveStyleUnchanged);

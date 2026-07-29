@@ -181,6 +181,91 @@ void paintDiagnostics(CellGrid& grid, SessionSnapshot const& snapshot,
     }
 }
 
+// Find URLs in the visible document text and record them as clickable runs.
+//
+// Detected from the TEXT rather than from syntax, deliberately: a URL is a URL
+// in a comment, a string, a markdown link or a plain note, and coupling this to
+// one grammar's captures would make it work in markdown and nowhere else.  That
+// is the "cheap for any language" the feature asks for.
+void paintHyperlinks(CellGrid& grid, SessionSnapshot const& snapshot,
+                      Rect const& content) {
+    auto const& text = snapshot.sections().document.text;
+    auto const& viewport = snapshot.client().viewport;
+    if (text.empty() || viewport.hitTargets.empty()) return;
+
+    // Where a URL stops.  Whitespace and the C0 range always end it; the closing
+    // bracket family and quotes are excluded so a link written inside markdown's
+    // (...) or in a string does not swallow the delimiter.
+    auto const terminates = [](unsigned char byte) {
+        return byte <= 0x20 || byte == 0x7f || byte == '"' || byte == '\'' ||
+               byte == '<' || byte == '>' || byte == ')' || byte == ']' ||
+               byte == '}' || byte == '`';
+    };
+    // What may precede a URL.  A DIFFERENT set: an OPENING bracket or quote
+    // starts one (markdown's `](https://...)`, a quoted URL in code), while a
+    // letter or digit means the scheme is part of a longer word and not a link.
+    auto const opensAUrl = [](unsigned char byte) {
+        return byte <= 0x20 || byte == 0x7f || byte == '"' || byte == '\'' ||
+               byte == '<' || byte == '(' || byte == '[' || byte == '{' ||
+               byte == '`' || byte == ',' || byte == ';' || byte == ':';
+    };
+    auto const trailingPunctuation = [](unsigned char byte) {
+        return byte == '.' || byte == ',' || byte == ';' || byte == ':' ||
+               byte == '!' || byte == '?';
+    };
+
+    // Byte offset -> the cell showing it, for the cells actually on screen.
+    std::unordered_map<std::uint64_t, CellHitTarget const*> onScreen;
+    onScreen.reserve(viewport.hitTargets.size());
+    for (auto const& target : viewport.hitTargets) {
+        onScreen.emplace(target.byteOffset, &target);
+    }
+
+    for (auto const scheme : {std::string_view{"https://"},
+                              std::string_view{"http://"}}) {
+        for (std::size_t at = text.find(scheme); at != std::string::npos;
+             at = text.find(scheme, at + 1)) {
+            // A scheme immediately after a word character is part of that word,
+            // not the start of a URL.
+            if (at > 0 && !opensAUrl(static_cast<unsigned char>(text[at - 1]))) {
+                continue;
+            }
+            std::size_t end = at + scheme.size();
+            while (end < text.size() &&
+                   !terminates(static_cast<unsigned char>(text[end]))) {
+                ++end;
+            }
+            while (end > at + scheme.size() &&
+                   trailingPunctuation(static_cast<unsigned char>(text[end - 1]))) {
+                --end;
+            }
+            if (end <= at + scheme.size()) continue;  // Scheme with no host.
+
+            // Emit one run per contiguous span of on-screen cells: a URL that
+            // wraps or is scrolled half off the screen still linkifies the part
+            // the user can see.
+            std::optional<CellHyperlink> run;
+            for (std::size_t offset = at; offset < end; ++offset) {
+                auto const found = onScreen.find(offset);
+                if (found == onScreen.end()) {
+                    if (run) grid.hyperlinks.push_back(std::move(*run));
+                    run.reset();
+                    continue;
+                }
+                int const x = content.x + static_cast<int>(found->second->viewportColumn);
+                int const y = content.y + static_cast<int>(found->second->viewportRow);
+                if (run && run->row == y && run->column + run->width == x) {
+                    ++run->width;
+                    continue;
+                }
+                if (run) grid.hyperlinks.push_back(std::move(*run));
+                run = CellHyperlink{y, x, 1, text.substr(at, end - at)};
+            }
+            if (run) grid.hyperlinks.push_back(std::move(*run));
+        }
+    }
+}
+
 void put(CellGrid& grid, int x, int y, std::string text, std::uint8_t foreground,
          std::uint8_t background, SemanticRole role, bool continuation = false,
          DiffTint tint = DiffTint::None) {
@@ -995,6 +1080,7 @@ CellGrid Renderer::render(SessionSnapshot const& snapshot) const {
             // After the document: a diagnostic underlines whatever the cell
             // already shows rather than replacing it.
             paintDiagnostics(grid, snapshot, shell.panes.front().content);
+            paintHyperlinks(grid, snapshot, shell.panes.front().content);
             paintScrollbar(grid, shell.panes.front(), snapshot.client().viewport,
                             theme, background, style);
 

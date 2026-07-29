@@ -1425,6 +1425,51 @@ TEST(diagnosticsUnderlineTheirCellsWithoutRecolouringThem) {
     ASSERT_TRUE(frame.size() > bare.size());
 }
 
+// A hyperlink must be CLOSED, or the terminal keeps making everything after it
+// clickable -- worse than not linking at all.
+TEST(hyperlinkRunsAreOpenedAndAlwaysClosed) {
+    ssg::CellGrid grid;
+    grid.size = {8, 1};
+    grid.cells.resize(8);
+    for (int x = 0; x < 8; ++x) {
+        grid.cells[static_cast<std::size_t>(x)].text = "x";
+    }
+    grid.hyperlinks.push_back({0, 2, 3, "https://example.com"});
+    auto const frame =
+        ssg::app::encode_ansi_frame(grid, ssg::ColorDepth::Truecolor);
+    auto const open = frame.find("\x1b]8;;https://example.com\x1b\\");
+    ASSERT_TRUE(open != std::string::npos);
+    auto const close = frame.find("\x1b]8;;\x1b\\", open);
+    ASSERT_TRUE(close != std::string::npos);
+    // Exactly three cells between open and close.
+    auto const between = frame.substr(
+        open + std::string{"\x1b]8;;https://example.com\x1b\\"}.size(),
+        close - open - std::string{"\x1b]8;;https://example.com\x1b\\"}.size());
+    std::size_t glyphs = 0;
+    for (char const byte : between) {
+        if (byte == 'x') ++glyphs;
+    }
+    ASSERT_EQ(glyphs, std::size_t{3});
+
+    // A run reaching the last column still closes: there is no cell after it to
+    // close at, so the row's end must do it.
+    ssg::CellGrid edge = grid;
+    edge.hyperlinks.clear();
+    edge.hyperlinks.push_back({0, 5, 3, "https://example.com"});
+    auto const edgeFrame =
+        ssg::app::encode_ansi_frame(edge, ssg::ColorDepth::Truecolor);
+    auto const edgeOpen = edgeFrame.find("\x1b]8;;https://example.com\x1b\\");
+    ASSERT_TRUE(edgeOpen != std::string::npos);
+    ASSERT_TRUE(edgeFrame.find("\x1b]8;;\x1b\\", edgeOpen) != std::string::npos);
+
+    // No links, no OSC 8 at all: a document without URLs pays nothing.
+    ssg::CellGrid plain = grid;
+    plain.hyperlinks.clear();
+    auto const plainFrame =
+        ssg::app::encode_ansi_frame(plain, ssg::ColorDepth::Truecolor);
+    ASSERT_TRUE(plainFrame.find("\x1b]8;") == std::string::npos);
+}
+
 TEST(decodeInputPointerPressReleaseDrag) {
     std::size_t consumed = 0;
 
@@ -2061,6 +2106,7 @@ int main() {
     RUN(aBracketedPasteIsContentAndNeverKeys);
     RUN(clipboardWriteEncodesOsc52WithBase64);
     RUN(diagnosticsUnderlineTheirCellsWithoutRecolouringThem);
+    RUN(hyperlinkRunsAreOpenedAndAlwaysClosed);
     RUN(decodeInputPointerPressReleaseDrag);
     RUN(decodeInputPointerSplitReadsAreIncomplete);
     RUN(decodeInputPointerRejectsMalformedButTerminatedPayloads);

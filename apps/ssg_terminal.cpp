@@ -15,6 +15,8 @@
 #include <array>
 #include <cctype>
 #include <system_error>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace ssg::app {
 
@@ -296,6 +298,19 @@ std::string encode_ansi_frame(ssg::CellGrid const& screen, ssg::ColorDepth depth
     std::string out = "\x1b[H";
     int const columns = screen.size.columns;
     int const rows = screen.size.rows;
+    // Where each clickable run starts and ends, so the OSC 8 open and close land
+    // exactly around it.  A hyperlink left open would make the rest of the line
+    // clickable, which is worse than not linking at all.
+    std::unordered_map<std::int64_t, std::string const*> linkOpensAt;
+    std::unordered_set<std::int64_t> linkClosesAt;
+    auto const cellKey = [columns](int x, int y) {
+        return static_cast<std::int64_t>(y) * columns + x;
+    };
+    for (auto const& link : screen.hyperlinks) {
+        if (link.width <= 0) continue;
+        linkOpensAt.emplace(cellKey(link.column, link.row), &link.uri);
+        linkClosesAt.insert(cellKey(link.column + link.width, link.row));
+    }
     for (int y = 0; y < rows; ++y) {
         out += "\x1b[" + std::to_string(y + 1) + ";1H\x1b[0m";
         int foreground = -1;
@@ -307,6 +322,15 @@ std::string encode_ansi_frame(ssg::CellGrid const& screen, ssg::ColorDepth depth
             auto const& cell =
                 screen.cells[static_cast<std::size_t>(y * columns + x)];
             if (cell.continuation) continue;
+            // OSC 8: the terminal makes the bytes between open and close
+            // clickable.  Emitted around the run rather than per cell, and
+            // always closed, so a link cannot bleed into the text after it.
+            auto const key = cellKey(x, y);
+            if (linkClosesAt.contains(key)) out += "\x1b]8;;\x1b\\";
+            if (auto const opens = linkOpensAt.find(key);
+                opens != linkOpensAt.end()) {
+                out += "\x1b]8;;" + *opens->second + "\x1b\\";
+            }
             if (cell.foreground != foreground || cell.background != background ||
                 cell.tint != tint || cell.underline != underline ||
                 static_cast<int>(cell.role) != role) {
@@ -327,6 +351,9 @@ std::string encode_ansi_frame(ssg::CellGrid const& screen, ssg::ColorDepth depth
             }
             out += cell.text.empty() ? std::string{" "} : cell.text;
         }
+        // A run reaching the last column has no cell to close at, so close here
+        // rather than leaving the link open into the next row.
+        if (linkClosesAt.contains(cellKey(columns, y))) out += "\x1b]8;;\x1b\\";
     }
     out += "\x1b[0m";
     return out;
