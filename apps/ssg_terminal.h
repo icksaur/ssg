@@ -11,6 +11,7 @@
 #include <ssg/Renderer.h>
 
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -303,7 +304,15 @@ public:
     // environment, and keeps every environment read in one object.
     using EnvironmentLookup = std::function<char const*(std::string_view)>;
 
-    explicit TerminalCapabilities(EnvironmentLookup lookup);
+    // Injected so the probe window can be tested without waiting in real time.
+    using Clock = std::function<std::chrono::steady_clock::time_point()>;
+
+    // How long a silent terminal keeps the window open.  Every answer that is
+    // coming arrives within one round trip; past this the terminal is not
+    // answering at all.
+    static constexpr std::chrono::milliseconds kProbeWindow{250};
+
+    explicit TerminalCapabilities(EnvironmentLookup lookup, Clock clock = {});
 
     // The bytes to write to the terminal, and the opening of the window in which
     // their answers count.  The two are one call because neither is correct
@@ -314,6 +323,10 @@ public:
     [[nodiscard]] std::string beginProbe();
 
     // Offer a reply the decoder classified.  Ignored unless the window is open.
+    // The window's expiry is enforced HERE, at the moment a reply is considered,
+    // rather than by whoever owns the event loop.  A caller polling the clock
+    // separately would always be a step behind: the loop wakes *because* bytes
+    // arrived, so its check runs before the very reply it should have excluded.
     void observeReply(std::string_view reply);
 
     // Close the window without a DA1 answer: the terminal is silent or is not a
@@ -329,10 +342,13 @@ private:
     enum class Answer : std::uint8_t { Unknown, Absent, Present };
 
     [[nodiscard]] std::optional<bool> override_for(Capability capability) const;
+    [[nodiscard]] bool expired() const;
 
     EnvironmentLookup lookup_;
+    Clock clock_;
     std::array<Answer, kAllCapabilities.size()> answers_{};
     bool probing_ = false;
+    std::chrono::steady_clock::time_point deadline_{};
     ssg::ColorDepth colorDepth_ = ssg::ColorDepth::Ansi16;
 };
 

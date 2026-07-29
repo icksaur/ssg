@@ -433,8 +433,11 @@ std::string overrideVariable(Capability capability) {
 
 }  // namespace
 
-TerminalCapabilities::TerminalCapabilities(EnvironmentLookup lookup)
-    : lookup_{std::move(lookup)} {
+TerminalCapabilities::TerminalCapabilities(EnvironmentLookup lookup, Clock clock)
+    : lookup_{std::move(lookup)}, clock_{std::move(clock)} {
+    if (!clock_) {
+        clock_ = [] { return std::chrono::steady_clock::now(); };
+    }
     answers_.fill(Answer::Unknown);
     auto const read = [&](char const* name) {
         return lookup_ ? lookup_(name) : nullptr;
@@ -452,6 +455,7 @@ std::string TerminalCapabilities::beginProbe() {
     // direction.
     answers_.fill(Answer::Unknown);
     probing_ = true;
+    deadline_ = clock_() + kProbeWindow;
     // DA1 is written last: every terminal answers it, so its reply is the fence
     // that tells us the speculative questions above have had their chance.
     return std::string{"\x1b[?2026$p"}  // Synchronized output (DECRQM).
@@ -460,6 +464,7 @@ std::string TerminalCapabilities::beginProbe() {
 }
 
 void TerminalCapabilities::observeReply(std::string_view reply) {
+    if (expired()) endProbe();
     if (!probing_) return;
     auto const parts = parseReply(reply);
     if (!parts) return;
@@ -499,7 +504,11 @@ void TerminalCapabilities::observeReply(std::string_view reply) {
 
 void TerminalCapabilities::endProbe() { probing_ = false; }
 
-bool TerminalCapabilities::probing() const { return probing_; }
+bool TerminalCapabilities::expired() const {
+    return probing_ && clock_ && clock_() > deadline_;
+}
+
+bool TerminalCapabilities::probing() const { return probing_ && !expired(); }
 
 std::optional<bool> TerminalCapabilities::override_for(Capability capability) const {
     if (!lookup_) return std::nullopt;

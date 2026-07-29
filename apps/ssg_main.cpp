@@ -202,12 +202,6 @@ FdReadiness waitReadiness(int timeoutMs, int signalFd, int gitDiffFd,
 
 constexpr int kEscapeTimeoutMs = 30;
 
-// How long a silent terminal keeps the capability probe window open.  Every
-// answer that is coming arrives within one round trip; past this the terminal is
-// not answering at all, and leaving the window open would mean believing any
-// later reply-shaped bytes (doc/spec-terminal-capabilities.md).
-constexpr int kCapabilityProbeTimeoutMs = 250;
-
 // While a drag is held at the editor edge, wake this often to auto-scroll one
 // line and re-extend the selection, even with no new pointer event (M8-S2).
 constexpr int kEdgeScrollIntervalMs = 40;
@@ -616,12 +610,6 @@ int main(int argc, char** argv) {
     // the first frame renders against the conservative defaults
     // (INV-startup-unblocked).
     writeAll(capabilities.beginProbe());
-    // A terminal that answers nothing -- not a terminal, or a broken one -- would
-    // otherwise leave the probe window open for the whole session, and a window
-    // that never closes cannot bound what SSG is willing to believe is a reply.
-    auto const probeDeadline =
-        std::chrono::steady_clock::now() +
-        std::chrono::milliseconds{kCapabilityProbeTimeoutMs};
 
     // Drain and classify any pending signal tags.  Returns false to keep looping;
     // a terminating signal does not return — it restores the terminal in normal
@@ -972,10 +960,6 @@ int main(int argc, char** argv) {
     bool firstFrameMarked = false;
     try {
         while (!quit) {
-            if (capabilities.probing() &&
-                std::chrono::steady_clock::now() > probeDeadline) {
-                capabilities.endProbe();
-            }
             auto snapshot = refresh();
             if (snapshot) {
                 // The library renders every screen branch, including the declined-

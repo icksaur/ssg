@@ -1147,6 +1147,38 @@ TEST(theProbeAsksOnlyQuestionsItCanUnderstand) {
     }
 }
 
+// The probe window must close on the clock, at the moment a reply is CONSIDERED.
+// Enforcing it from the event loop instead would always be a step behind: the
+// loop wakes *because* bytes arrived, so a check at the top of the loop runs
+// before the very reply it should have excluded, and a reply arriving long after
+// startup would be believed.
+TEST(aReplyArrivingAfterTheWindowExpiresIsNotBelieved) {
+    auto now = std::chrono::steady_clock::time_point{};
+    auto const clock = [&now] { return now; };
+
+    ssg::app::TerminalCapabilities capabilities{fakeEnvironment({}), clock};
+    (void)capabilities.beginProbe();
+    ASSERT_TRUE(capabilities.probing());
+
+    // Just inside the window: still believed.
+    now += ssg::app::TerminalCapabilities::kProbeWindow -
+           std::chrono::milliseconds{1};
+    ASSERT_TRUE(capabilities.probing());
+    capabilities.observeReply("\x1b[?1u");
+    ASSERT_TRUE(capabilities.has(ssg::app::Capability::KeyboardProtocol));
+
+    // Past the window, with no loop having run in between: not believed.
+    ssg::app::TerminalCapabilities late{fakeEnvironment({}), clock};
+    (void)late.beginProbe();
+    now += ssg::app::TerminalCapabilities::kProbeWindow +
+           std::chrono::milliseconds{1};
+    ASSERT_FALSE(late.probing());
+    late.observeReply("\x1b[?1u");
+    late.observeReply("\x1b[?2026;2$y");
+    ASSERT_FALSE(late.has(ssg::app::Capability::KeyboardProtocol));
+    ASSERT_FALSE(late.has(ssg::app::Capability::SynchronizedOutput));
+}
+
 TEST(decodeInputPointerPressReleaseDrag) {
     std::size_t consumed = 0;
 
@@ -1775,6 +1807,7 @@ int main() {
     RUN(anOverrideBeatsTheTerminalsOwnAnswer);
     RUN(everyCapabilityHasAWorkingOverride);
     RUN(theProbeAsksOnlyQuestionsItCanUnderstand);
+    RUN(aReplyArrivingAfterTheWindowExpiresIsNotBelieved);
     RUN(decodeInputPointerPressReleaseDrag);
     RUN(decodeInputPointerSplitReadsAreIncomplete);
     RUN(decodeInputPointerRejectsMalformedButTerminatedPayloads);
