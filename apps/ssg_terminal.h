@@ -253,11 +253,88 @@ struct Decoded {
 // Detect the terminal's color capability from environment-derived hints.
 // `color_depth_override` models SSG_COLOR_DEPTH and can force truecolor,
 // indexed256, or ansi16. Nullable inputs (a missing variable) are treated as
-// absent. Pure, so it is unit-testable without touching the real environment.
+// absent. Pure, so it is unit-testable without touching the real environment:
+// it reads no environment itself, which is what keeps TerminalCapabilities the
+// single place that does (INV-capability-single-source).
 [[nodiscard]] ssg::ColorDepth detect_color_depth(char const* color_depth_override,
                                                  char const* colorterm,
                                                  char const* term,
                                                  char const* term_program);
+
+// What the terminal can do beyond drawing colored text.  Each is answered by a
+// query at startup; each defaults to absent, so a terminal that stays silent
+// simply gets the conservative rendering (doc/spec-terminal-capabilities.md).
+enum class Capability : std::uint8_t {
+    SynchronizedOutput,  // DEC private mode 2026: tear-free full-frame redraw.
+    KeyboardProtocol,    // The kitty keyboard protocol: disambiguated keys.
+    ClipboardWrite,      // OSC 52: copy to the user's system clipboard.
+};
+
+// Every capability, so a diagnostic or a test can enumerate them without a
+// second list drifting out of step with the enum.
+inline constexpr std::array<Capability, 3> kAllCapabilities{
+    Capability::SynchronizedOutput,
+    Capability::KeyboardProtocol,
+    Capability::ClipboardWrite,
+};
+
+// The stable name used in diagnostics and to build the override variable
+// (`synchronized_output` -> SSG_TERM_SYNCHRONIZED_OUTPUT).
+[[nodiscard]] std::string_view capability_name(Capability capability);
+
+// What the attached terminal can do, resolved in one place.
+//
+// Answers are discovered by writing queries at startup and reading the replies
+// the decoder hands back as `DecodeStatus::reply`.  Nothing waits for them: the
+// first frame renders against the defaults, and a capability flips from absent
+// to present when its answer lands (INV-startup-unblocked).  "Unknown" and
+// "absent" deliberately resolve identically, so a late answer can only ever turn
+// something on.
+//
+// Interpretation is scoped to the probe window.  Replies are always *consumed*
+// by the decoder, but they are only *believed* between `beginProbe()` and the
+// DA1 answer that fences it, so a byte sequence that merely looks like a report
+// -- pasted, or from a protocol adopted later -- cannot silently reconfigure the
+// editor mid-session.
+class TerminalCapabilities {
+public:
+    // Reads a variable, or returns nullptr when it is unset.  Taking this rather
+    // than calling getenv keeps the class pure and unit-testable against a fake
+    // environment, and keeps every environment read in one object.
+    using EnvironmentLookup = std::function<char const*(std::string_view)>;
+
+    explicit TerminalCapabilities(EnvironmentLookup lookup);
+
+    // The bytes to write to the terminal, and the opening of the window in which
+    // their answers count.  The two are one call because neither is correct
+    // alone: a window that no query will close never closes, and queries whose
+    // answers land outside a window are silently discarded.  Speculative queries
+    // come first and DA1 last, so the DA1 answer fences them -- anything that was
+    // going to reply has replied by the time it arrives.
+    [[nodiscard]] std::string beginProbe();
+
+    // Offer a reply the decoder classified.  Ignored unless the window is open.
+    void observeReply(std::string_view reply);
+
+    // Close the window without a DA1 answer: the terminal is silent or is not a
+    // terminal.  Every unanswered capability keeps its conservative default.
+    void endProbe();
+
+    [[nodiscard]] bool probing() const;
+
+    [[nodiscard]] bool has(Capability capability) const;
+    [[nodiscard]] ssg::ColorDepth colorDepth() const;
+
+private:
+    enum class Answer : std::uint8_t { Unknown, Absent, Present };
+
+    [[nodiscard]] std::optional<bool> override_for(Capability capability) const;
+
+    EnvironmentLookup lookup_;
+    std::array<Answer, kAllCapabilities.size()> answers_{};
+    bool probing_ = false;
+    ssg::ColorDepth colorDepth_ = ssg::ColorDepth::Ansi16;
+};
 
 // The exact control bytes that put the terminal into / take it out of the
 // editor's display mode.  Pure so the RAII guard, a signal-driven restore, and a

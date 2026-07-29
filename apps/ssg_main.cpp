@@ -597,12 +597,13 @@ int main(int argc, char** argv) {
     installSignalTagHandler(SIGTERM);
     installSignalTagHandler(SIGHUP);
 
-    // Detect the terminal color depth once at startup (M9-C2); the frame encoder
-    // adapts the theme's 16 colors to it via the library's resolve_color.
-    ssg::ColorDepth const colorDepth =
-        ssg::app::detect_color_depth(std::getenv("SSG_COLOR_DEPTH"),
-                                     std::getenv("COLORTERM"), std::getenv("TERM"),
-                                     std::getenv("TERM_PROGRAM"));
+    // What the terminal can do, resolved in one place (INV-capability-single-
+    // source).  Color depth is answered from the environment immediately; the
+    // queried capabilities stay at their conservative defaults until their
+    // replies land, so nothing here blocks the first frame.
+    ssg::app::TerminalCapabilities capabilities{
+        [](std::string_view name) { return std::getenv(std::string{name}.c_str()); }};
+    ssg::ColorDepth const colorDepth = capabilities.colorDepth();
 
     // Drain and classify any pending signal tags.  Returns false to keep looping;
     // a terminating signal does not return — it restores the terminal in normal

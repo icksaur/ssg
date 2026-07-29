@@ -14,6 +14,7 @@
 #include <csignal>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <sstream>
 #include <optional>
 #include <string>
@@ -969,6 +970,151 @@ TEST(noDcsOrOscQueryMaySolicitAnUnparsedReply) {
     ASSERT_TRUE(emitters.empty());
 }
 
+// A fake environment, so capability resolution is testable without touching the
+// real one and without a terminal.
+ssg::app::TerminalCapabilities::EnvironmentLookup fakeEnvironment(
+    std::map<std::string, std::string> variables) {
+    return [table = std::move(variables)](std::string_view name) -> char const* {
+        auto const found = table.find(std::string{name});
+        return found == table.end() ? nullptr : found->second.c_str();
+    };
+}
+
+// Oracle (the DA1 fence): a speculative question that goes unanswered before the
+// fence arrives means the feature is absent.  Without the fence there is no way
+// to tell "does not support it" from "has not answered yet", and SSG would wait
+// forever on the terminals it most needs to detect.
+TEST(onlyADa1ReplyMeansTheFeatureIsAbsent) {
+    // A terminal that answers everything.
+    ssg::app::TerminalCapabilities rich{fakeEnvironment({})};
+    (void)rich.beginProbe();
+    rich.observeReply("\x1b[?2026;2$y");
+    rich.observeReply("\x1b[?1u");
+    rich.observeReply("\x1b[?62;4;52c");
+    ASSERT_TRUE(rich.has(ssg::app::Capability::SynchronizedOutput));
+    ASSERT_TRUE(rich.has(ssg::app::Capability::KeyboardProtocol));
+    ASSERT_TRUE(rich.has(ssg::app::Capability::ClipboardWrite));
+    ASSERT_FALSE(rich.probing());  // The fence closed the window.
+
+    // A terminal that answers only the fence: everything else is absent, and
+    // nothing waited to find that out.
+    ssg::app::TerminalCapabilities plain{fakeEnvironment({})};
+    (void)plain.beginProbe();
+    plain.observeReply("\x1b[?62;22c");
+    for (auto const capability : ssg::app::kAllCapabilities) {
+        ASSERT_FALSE(plain.has(capability));
+    }
+    ASSERT_FALSE(plain.probing());
+
+    // A terminal that answers nothing at all: still absent, still not waiting.
+    ssg::app::TerminalCapabilities silent{fakeEnvironment({})};
+    (void)silent.beginProbe();
+    silent.endProbe();
+    for (auto const capability : ssg::app::kAllCapabilities) {
+        ASSERT_FALSE(silent.has(capability));
+    }
+
+    // A terminal that knows mode 2026 but reports it unrecognized (state 0).
+    ssg::app::TerminalCapabilities unknownMode{fakeEnvironment({})};
+    (void)unknownMode.beginProbe();
+    unknownMode.observeReply("\x1b[?2026;0$y");
+    ASSERT_FALSE(unknownMode.has(ssg::app::Capability::SynchronizedOutput));
+}
+
+// Oracle (the probe window): a reply shape arriving after the fence -- pasted by
+// the user, or emitted by some protocol adopted later -- must not reconfigure the
+// editor.  Consumption is unconditional; belief is not.
+TEST(aReplyShapeAfterTheFenceIsNotACapabilityAnswer) {
+    ssg::app::TerminalCapabilities capabilities{fakeEnvironment({})};
+    (void)capabilities.beginProbe();
+    capabilities.observeReply("\x1b[?62;22c");  // The fence closes the window.
+    capabilities.observeReply("\x1b[?2026;2$y");
+    capabilities.observeReply("\x1b[?1u");
+    ASSERT_FALSE(capabilities.has(ssg::app::Capability::SynchronizedOutput));
+    ASSERT_FALSE(capabilities.has(ssg::app::Capability::KeyboardProtocol));
+
+    // Nor before the queries were ever written.
+    ssg::app::TerminalCapabilities unprobed{fakeEnvironment({})};
+    unprobed.observeReply("\x1b[?1u");
+    ASSERT_FALSE(unprobed.has(ssg::app::Capability::KeyboardProtocol));
+}
+
+// Oracle (precedence): the override exists because terminals lie, so it has to
+// beat the terminal's own answer in both directions.
+TEST(anOverrideBeatsTheTerminalsOwnAnswer) {
+    ssg::app::TerminalCapabilities forcedOff{
+        fakeEnvironment({{"SSG_TERM_SYNCHRONIZED_OUTPUT", "off"}})};
+    (void)forcedOff.beginProbe();
+    forcedOff.observeReply("\x1b[?2026;2$y");  // The terminal says yes.
+    ASSERT_FALSE(forcedOff.has(ssg::app::Capability::SynchronizedOutput));
+
+    ssg::app::TerminalCapabilities forcedOn{
+        fakeEnvironment({{"SSG_TERM_KEYBOARD_PROTOCOL", "1"}})};
+    (void)forcedOn.beginProbe();
+    forcedOn.observeReply("\x1b[?62;22c");  // The terminal never answered.
+    ASSERT_TRUE(forcedOn.has(ssg::app::Capability::KeyboardProtocol));
+
+    // An unparseable override defers to the terminal rather than forcing a guess.
+    ssg::app::TerminalCapabilities garbage{
+        fakeEnvironment({{"SSG_TERM_CLIPBOARD_WRITE", "perhaps"}})};
+    (void)garbage.beginProbe();
+    garbage.observeReply("\x1b[?62;4;52c");
+    ASSERT_TRUE(garbage.has(ssg::app::Capability::ClipboardWrite));
+
+    // Color depth is resolved by the same object, from the same environment.
+    ssg::app::TerminalCapabilities colored{
+        fakeEnvironment({{"COLORTERM", "truecolor"}, {"TERM", "xterm"}})};
+    ASSERT_TRUE(colored.colorDepth() == ssg::ColorDepth::Truecolor);
+    ssg::app::TerminalCapabilities dumb{fakeEnvironment({{"TERM", "dumb"}})};
+    ASSERT_TRUE(dumb.colorDepth() == ssg::ColorDepth::Ansi16);
+}
+
+// Every capability must be reachable by an override, or a user hitting a
+// rendering bug in one of them has no escape hatch.  Enumerated from the enum so
+// a capability added later cannot quietly skip its override.
+TEST(everyCapabilityHasAWorkingOverride) {
+    for (auto const capability : ssg::app::kAllCapabilities) {
+        std::string variable = "SSG_TERM_";
+        for (char const ch : ssg::app::capability_name(capability)) {
+            variable.push_back(
+                static_cast<char>(std::toupper(static_cast<unsigned char>(ch))));
+        }
+        ssg::app::TerminalCapabilities forced{fakeEnvironment({{variable, "on"}})};
+        ASSERT_TRUE(forced.has(capability));
+        ssg::app::TerminalCapabilities suppressed{
+            fakeEnvironment({{variable, "off"}})};
+        ASSERT_FALSE(suppressed.has(capability));
+    }
+}
+
+// The queries must be answerable by the parser that reads their replies, and the
+// fence must be written last or it cannot fence anything.
+TEST(theProbeAsksOnlyQuestionsItCanUnderstand) {
+    ssg::app::TerminalCapabilities capabilities{fakeEnvironment({})};
+    ASSERT_FALSE(capabilities.probing());
+    auto const queries = capabilities.beginProbe();
+    ASSERT_TRUE(capabilities.probing());
+
+    // DA1 is last, so every speculative answer precedes the fence.
+    ASSERT_TRUE(queries.ends_with("\x1b[c"));
+    // No query may use an introducer whose reply the decoder does not parse.
+    ASSERT_TRUE(queries.find("\x1b]") == std::string::npos);
+    ASSERT_TRUE(queries.find("\x1bP") == std::string::npos);
+
+    // Each query is a sequence the decoder consumes whole, so writing one cannot
+    // make the terminal echo bytes SSG would then treat as typing.
+    std::size_t offset = 0;
+    while (offset < queries.size()) {
+        std::size_t consumed = 0;
+        auto const decoded =
+            ssg::app::decode_input(std::string_view{queries}.substr(offset), true,
+                                   consumed);
+        ASSERT_TRUE(decoded.status != ssg::app::DecodeStatus::incomplete);
+        ASSERT_TRUE(consumed > 0);
+        offset += consumed;
+    }
+}
+
 TEST(decodeInputPointerPressReleaseDrag) {
     std::size_t consumed = 0;
 
@@ -1591,6 +1737,11 @@ int main() {
     RUN(anUnboundedSequenceScanCannotHoldTheInputBuffer);
     RUN(aReplySplitAcrossReadsIsStillConsumedWhole);
     RUN(noDcsOrOscQueryMaySolicitAnUnparsedReply);
+    RUN(onlyADa1ReplyMeansTheFeatureIsAbsent);
+    RUN(aReplyShapeAfterTheFenceIsNotACapabilityAnswer);
+    RUN(anOverrideBeatsTheTerminalsOwnAnswer);
+    RUN(everyCapabilityHasAWorkingOverride);
+    RUN(theProbeAsksOnlyQuestionsItCanUnderstand);
     RUN(decodeInputPointerPressReleaseDrag);
     RUN(decodeInputPointerSplitReadsAreIncomplete);
     RUN(decodeInputPointerRejectsMalformedButTerminatedPayloads);
