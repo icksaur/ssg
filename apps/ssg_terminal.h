@@ -13,6 +13,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -33,6 +35,97 @@ struct SignalEvents {
 // `resize`; SIGTERM/SIGHUP set `terminate` (last wins).  Pure and total: unknown
 // bytes are ignored, and any number of duplicate tags coalesce.
 [[nodiscard]] SignalEvents classify_signal_tags(std::string_view drained);
+
+// A terminal MODE: a state SSG enters that persists until it is explicitly
+// left.  Distinct from PAINTING (cursor positioning, SGR colour), which takes
+// effect where it lands, owes nothing, and is re-issued every frame -- painting
+// is deliberately not modelled here, so the hot path carries no bookkeeping.
+//
+// Enter and leave bytes are declared TOGETHER, so a mode cannot be added in one
+// place and forgotten in another.  That was the failure mode: two hand-written
+// strings that had to mirror each other by inspection.
+struct TerminalMode {
+    std::string_view enter;
+    std::string_view leave;
+};
+
+// The modes SSG uses.  Adding one here is the only way to add one at all.
+inline constexpr TerminalMode kAlternateScreen{"\x1b[?1049h", "\x1b[?1049l"};
+inline constexpr TerminalMode kCursorStyleBar{"\x1b[5 q", "\x1b[0 q"};
+inline constexpr TerminalMode kMouseButtons{"\x1b[?1000h", "\x1b[?1000l"};
+inline constexpr TerminalMode kMouseMotion{"\x1b[?1002h", "\x1b[?1002l"};
+inline constexpr TerminalMode kMouseSgrCoordinates{"\x1b[?1006h", "\x1b[?1006l"};
+inline constexpr TerminalMode kCursorHidden{"\x1b[?25l", "\x1b[?25h"};
+
+// An ordered stack of entered modes, and the bytes that undo them.
+//
+// Entering returns a guard; the mode is left when the guard is destroyed.  A
+// mode entered without a guard is not expressible, which is the point: the
+// enter and the leave are one statement, so no branch can pay half the debt.
+// Modes leave in reverse order of entry -- leaving the alternate screen before
+// disabling mouse reporting would leave reporting on in the primary screen.
+//
+// CRASH SAFETY.  Destructors handle paths that unwind; a fatal signal is
+// precisely the path that does not.  So the bytes undoing everything currently
+// entered are maintained as data and published atomically, and a handler needs
+// only write(2) -- no allocation, no traversal.  See undoBytes().
+class TerminalModes {
+public:
+    // Writes bytes to the terminal.  Injected so the whole class is testable
+    // with no terminal, and so a frame-scoped guard can append to the frame
+    // buffer being built rather than issuing its own syscalls.
+    using Writer = std::function<void(std::string_view)>;
+
+    explicit TerminalModes(Writer writer);
+    ~TerminalModes();
+
+    TerminalModes(TerminalModes const&) = delete;
+    TerminalModes& operator=(TerminalModes const&) = delete;
+
+    // Leaves `mode` when destroyed.  Movable so it can be stored or returned;
+    // not copyable, or two guards would pay one debt.
+    class Guard {
+    public:
+        Guard() noexcept = default;
+        ~Guard();
+        Guard(Guard&& other) noexcept;
+        Guard& operator=(Guard&& other) noexcept;
+        Guard(Guard const&) = delete;
+        Guard& operator=(Guard const&) = delete;
+
+    private:
+        friend class TerminalModes;
+        Guard(TerminalModes& owner, std::size_t depth) noexcept
+            : owner_{&owner}, depth_{depth} {}
+        TerminalModes* owner_ = nullptr;
+        std::size_t depth_ = 0;
+    };
+
+    [[nodiscard]] Guard enter(TerminalMode mode);
+
+    // The bytes that undo every entered mode, in reverse order.
+    //
+    // ALWAYS A SUPERSET of what is actually entered: the larger undo is
+    // published BEFORE a mode's enter bytes are written, and the smaller one
+    // AFTER its leave bytes are.  A signal arriving mid-change therefore finds
+    // an undo that covers at least everything set, and possibly one thing that
+    // is not -- which is harmless, because leaving a mode you are not in does
+    // nothing, while failing to leave one you are in is exactly the bug.
+    //
+    // Async-signal-safe to read: one atomic load, then bytes and length that
+    // were published together and are never mutated afterwards.
+    [[nodiscard]] std::string_view undoBytes() const noexcept;
+
+    // The number of modes currently entered.
+    [[nodiscard]] std::size_t depth() const noexcept;
+
+private:
+    void leaveThrough(std::size_t depth) noexcept;
+    void publishUndoFor(std::size_t depth) noexcept;
+
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
+};
 
 // The workspace directory to open and, optionally, a file within it to open in
 // a tab.  A file argument opens its parent directory; a directory argument

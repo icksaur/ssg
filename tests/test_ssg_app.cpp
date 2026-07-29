@@ -10,11 +10,13 @@
 
 #include <algorithm>
 #include <any>
+#include <atomic>
 #include <csignal>
 #include <filesystem>
 #include <fstream>
 #include <optional>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -438,6 +440,129 @@ TEST(everyModeTheSetupEntersIsLeftByTheRestore) {
     // settled here at process scope. Step 4 of the spec moves it to a frame
     // guard, at which point this assertion and kExpectedRestore change together.
     ASSERT_TRUE(restore.find("\x1b[?25h") != std::string::npos);
+}
+
+
+TEST(modeStackReproducesTheCuratedSetupAndRestoreSequences) {
+    // The curated literals are known good, so entering the same modes in the
+    // same order must produce exactly those bytes -- and leaving must produce
+    // exactly the reverse. This is what lets the refactor claim it changed
+    // structure only.
+    std::string written;
+    ssg::app::TerminalModes modes{
+        [&written](std::string_view bytes) { written.append(bytes); }};
+    {
+        auto alt = modes.enter(ssg::app::kAlternateScreen);
+        auto cursor = modes.enter(ssg::app::kCursorStyleBar);
+        auto buttons = modes.enter(ssg::app::kMouseButtons);
+        auto motion = modes.enter(ssg::app::kMouseMotion);
+        auto sgr = modes.enter(ssg::app::kMouseSgrCoordinates);
+        ASSERT_EQ(written, std::string{kExpectedSetup});
+        written.clear();
+    }
+    // The curated restore also re-shows the cursor, whose debt is incurred per
+    // frame rather than here; the stack owes only the modes it entered.
+    std::string const expectedLeave =
+        "\x1b[?1006l\x1b[?1002l\x1b[?1000l\x1b[0 q\x1b[?1049l";
+    ASSERT_EQ(written, expectedLeave);
+    ASSERT_EQ(modes.depth(), std::size_t{0});
+}
+
+TEST(everyEnteredModeIsLeftInReverseOrder) {
+    std::string written;
+    ssg::app::TerminalModes modes{
+        [&written](std::string_view bytes) { written.append(bytes); }};
+    {
+        auto outer = modes.enter(ssg::app::kAlternateScreen);
+        auto inner = modes.enter(ssg::app::kMouseButtons);
+        ASSERT_EQ(modes.depth(), std::size_t{2});
+    }
+    ASSERT_EQ(modes.depth(), std::size_t{0});
+    // Entered alt-screen then mouse; must leave mouse then alt-screen.
+    auto const mousePos = written.find("\x1b[?1000l");
+    auto const altPos = written.find("\x1b[?1049l");
+    ASSERT_TRUE(mousePos != std::string::npos);
+    ASSERT_TRUE(altPos != std::string::npos);
+    ASSERT_TRUE(mousePos < altPos);
+}
+
+TEST(theUndoBufferIsAlwaysASupersetOfWhatIsEntered) {
+    // Independent expectation: the undo bytes must be the leave sequences of
+    // everything entered, deepest first. Compared against a reimplementation
+    // rather than against the class's own bookkeeping.
+    std::vector<ssg::app::TerminalMode> const all{
+        ssg::app::kAlternateScreen, ssg::app::kCursorStyleBar,
+        ssg::app::kMouseButtons,    ssg::app::kMouseMotion,
+        ssg::app::kMouseSgrCoordinates};
+
+    std::string sink;
+    ssg::app::TerminalModes modes{
+        [&sink](std::string_view bytes) { sink.append(bytes); }};
+
+    std::vector<ssg::app::TerminalMode> expected;
+    std::vector<ssg::app::TerminalModes::Guard> guards;
+    for (auto const& mode : all) {
+        guards.push_back(modes.enter(mode));
+        expected.push_back(mode);
+
+        std::string reference;
+        for (std::size_t i = expected.size(); i-- > 0;) {
+            reference.append(expected[i].leave);
+        }
+        ASSERT_EQ(std::string{modes.undoBytes()}, reference);
+    }
+    while (!guards.empty()) {
+        guards.pop_back();
+        expected.pop_back();
+        std::string reference;
+        for (std::size_t i = expected.size(); i-- > 0;) {
+            reference.append(expected[i].leave);
+        }
+        ASSERT_EQ(std::string{modes.undoBytes()}, reference);
+    }
+    ASSERT_EQ(std::string{modes.undoBytes()}, std::string{});
+}
+
+TEST(theUndoBufferIsNeverObservedMidRebuild) {
+    // A fatal-signal handler reads the undo bytes at an arbitrary instant. If
+    // the buffer were rebuilt in place, it could observe a torn string. Every
+    // sample must be a coherent undo -- one of the valid states, never a splice
+    // of two.
+    std::string sink;
+    ssg::app::TerminalModes modes{
+        [&sink](std::string_view bytes) { sink.append(bytes); }};
+
+    std::vector<std::string> valid;
+    {
+        std::vector<ssg::app::TerminalMode> const all{
+            ssg::app::kAlternateScreen, ssg::app::kMouseButtons,
+            ssg::app::kMouseMotion};
+        for (std::size_t depth = 0; depth <= all.size(); ++depth) {
+            std::string reference;
+            for (std::size_t i = depth; i-- > 0;) reference.append(all[i].leave);
+            valid.push_back(reference);
+        }
+    }
+
+    std::atomic<bool> stop{false};
+    std::atomic<bool> sawTorn{false};
+    std::thread sampler{[&] {
+        while (!stop.load(std::memory_order_relaxed)) {
+            std::string const sample{modes.undoBytes()};
+            if (std::find(valid.begin(), valid.end(), sample) == valid.end()) {
+                sawTorn.store(true, std::memory_order_relaxed);
+            }
+        }
+    }};
+
+    for (int cycle = 0; cycle < 2000; ++cycle) {
+        auto alt = modes.enter(ssg::app::kAlternateScreen);
+        auto buttons = modes.enter(ssg::app::kMouseButtons);
+        auto motion = modes.enter(ssg::app::kMouseMotion);
+    }
+    stop.store(true, std::memory_order_relaxed);
+    sampler.join();
+    ASSERT_FALSE(sawTorn.load(std::memory_order_relaxed));
 }
 
 TEST(classifySignalTagsMapsSignalNumbers) {
@@ -1315,6 +1440,10 @@ int main() {
     RUN(resolveLaunchFileOpensParentDirectoryAndFile);
     RUN(terminalSequencesMatchTheKnownGoodBytes);
     RUN(everyModeTheSetupEntersIsLeftByTheRestore);
+    RUN(modeStackReproducesTheCuratedSetupAndRestoreSequences);
+    RUN(everyEnteredModeIsLeftInReverseOrder);
+    RUN(theUndoBufferIsAlwaysASupersetOfWhatIsEntered);
+    RUN(theUndoBufferIsNeverObservedMidRebuild);
     RUN(unicodeEndToEndGridAndEncoding);
     RUN(classifySignalTagsMapsSignalNumbers);
     RUN(encodeAnsiFrameAdaptsToColorDepth);
