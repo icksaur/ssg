@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Terminal Rendering Capabilities — 2026 Field Guide</title>
+<style>
+  :root {
+    --bg: #14161a;
+    --panel: #1b1e24;
+    --panel2: #22262e;
+    --ink: #d7dce3;
+    --dim: #8b94a3;
+    --line: #2e333d;
+    --accent: #6cb6ff;
+    --yes: #7ee787;
+    --no: #ff7b72;
+    --partial: #e3b341;
+    --mag: #d2a8ff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.65 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 40px 28px 90px; }
+  code, pre, .mono { font-family: "JetBrains Mono", "Cascadia Mono", "SF Mono", Consolas, monospace; }
+  code { background: var(--panel2); padding: 1px 6px; border-radius: 4px; font-size: 0.88em; color: var(--mag); }
+  pre {
+    background: #0d0f13; border: 1px solid var(--line); border-left: 3px solid var(--accent);
+    padding: 14px 16px; border-radius: 6px; overflow-x: auto; font-size: 13px; line-height: 1.55;
+  }
+  pre code { background: none; padding: 0; color: #b9c2cf; }
+  h1 { font-size: 32px; margin: 0 0 6px; letter-spacing: -0.5px; }
+  h2 {
+    font-size: 22px; margin: 52px 0 14px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--line); letter-spacing: -0.3px;
+  }
+  h3 { font-size: 17px; margin: 30px 0 10px; color: #eaeef4; }
+  .sub { color: var(--dim); font-size: 15px; margin: 0 0 8px; }
+  .meta { color: var(--dim); font-size: 13px; border-top: 1px solid var(--line); padding-top: 14px; margin-top: 26px; }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
+  th, td { text-align: left; padding: 9px 11px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--dim); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; }
+  tbody tr:hover { background: #1d2128; }
+  .y { color: var(--yes); font-weight: 600; }
+  .n { color: var(--no); font-weight: 600; }
+  .p { color: var(--partial); font-weight: 600; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 18px 20px; margin: 18px 0; }
+  .card h4 { margin: 0 0 8px; font-size: 15px; color: #eaeef4; }
+  .callout { border-left: 3px solid var(--accent); background: var(--panel); padding: 14px 18px; margin: 18px 0; border-radius: 0 6px 6px 0; }
+  .callout.warn { border-left-color: var(--partial); }
+  .callout.good { border-left-color: var(--yes); }
+  .callout.bad  { border-left-color: var(--no); }
+  .callout p:first-child { margin-top: 0; }
+  .callout p:last-child { margin-bottom: 0; }
+  .tag {
+    display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 20px;
+    background: var(--panel2); color: var(--dim); border: 1px solid var(--line);
+    text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;
+  }
+  .tag.hi { background: rgba(126,231,135,0.12); color: var(--yes); border-color: rgba(126,231,135,0.3); }
+  .tag.mid { background: rgba(227,179,65,0.12); color: var(--partial); border-color: rgba(227,179,65,0.3); }
+  .tag.lo { background: rgba(255,123,114,0.10); color: var(--no); border-color: rgba(255,123,114,0.28); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; margin: 18px 0; }
+  .swatch { display: flex; height: 26px; border-radius: 4px; overflow: hidden; margin: 10px 0; border: 1px solid var(--line); }
+  .swatch div { flex: 1; }
+  ul { padding-left: 20px; }
+  li { margin: 5px 0; }
+  .lede { font-size: 16.5px; color: #c3cbd6; }
+  .plat { font-size: 12px; color: var(--dim); }
+  .demo {
+    background: #0d0f13; border: 1px solid var(--line); border-radius: 6px;
+    padding: 16px; font-family: "JetBrains Mono", Consolas, monospace; font-size: 14px; margin: 14px 0;
+  }
+  .u-curly { text-decoration: underline wavy #ff7b72; text-decoration-skip-ink: none; }
+  .u-dotted { text-decoration: underline dotted #e3b341; }
+  .u-double { text-decoration: underline double #7ee787; }
+  .toc { columns: 2; column-gap: 30px; font-size: 14px; }
+  .toc a { color: var(--accent); text-decoration: none; display: block; padding: 3px 0; }
+  .toc a:hover { text-decoration: underline; }
+  .verdict { font-weight: 600; color: #eaeef4; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>Terminal Rendering Capabilities</h1>
+<p class="sub">A 2026 field guide, weighted toward <strong>kitty</strong> (local), <strong>Windows Terminal</strong> (over SSH), and <strong>xterm.js</strong>.</p>
+
+<p class="lede">
+Your mental model — 16 colours, a handful of character sets, a cursor — was accurate for about
+twenty-five years. It stopped being accurate around 2017, and the pace has picked up sharply since
+2022. The short version: <strong>character sets are a solved and dead topic</strong>, colour went to
+24-bit and stayed there, and the genuinely new capabilities are in
+<strong>text decoration</strong>, <strong>frame synchronisation</strong>, <strong>keyboard
+fidelity</strong>, and <strong>clipboard access</strong> — not in graphics, which remains fragmented.
+</p>
+
+<div class="callout good">
+<p><strong>The headline for SSG:</strong> three features are supported on <em>all three</em> of your
+platforms today, need no capability negotiation, degrade silently where absent, and each maps onto
+something SSG already has but cannot express. They are <strong>styled underlines</strong> (SSG has LSP
+diagnostics and no way to draw a squiggle), <strong>synchronized output</strong> (SSG redraws whole
+frames), and <strong>OSC 52 clipboard</strong> (SSG has a clipboard register that cannot reach
+Windows when you are on SSH).</p>
+</div>
+
+<h2 id="toc">Contents</h2>
+<div class="toc">
+  <a href="#colour">1. Colour — where 24-bit actually landed</a>
+  <a href="#charsets">2. Character sets — why the question dissolved</a>
+  <a href="#cursor">3. Cursor control</a>
+  <a href="#underline">4. Underlines &amp; text decoration ★</a>
+  <a href="#sync">5. Synchronized output ★</a>
+  <a href="#links">6. Hyperlinks (OSC 8)</a>
+  <a href="#keyboard">7. Keyboard protocols ★</a>
+  <a href="#clipboard">8. Clipboard (OSC 52) ★</a>
+  <a href="#images">9. Images — sixel vs kitty graphics</a>
+  <a href="#detect">10. Capability detection without hanging</a>
+  <a href="#ssg">11. What this means for SSG</a>
+</div>
+
+<!-- ─────────────────────────────────────────────── -->
+<h2 id="colour">1. Colour — where 24-bit actually landed</h2>
+
+<p>Your model is right, and the tiers stack rather than replace each other. All three of your
+platforms support all three tiers.</p>
+
+<table>
+<thead><tr><th>Tier</th><th>Sequence</th><th>Space</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td><strong>ANSI 16</strong></td><td><code>ESC[30–37m</code> / <code>90–97m</code></td><td>8 + 8 bright</td><td>The only tier the <em>user's theme</em> controls. Still the safest floor.</td></tr>
+<tr><td><strong>Indexed 256</strong></td><td><code>ESC[38;5;<i>n</i>m</code></td><td>16 + 6×6×6 cube + 24 greys</td><td>Universal since the 2000s. The cube is not perceptually uniform.</td></tr>
+<tr><td><strong>Truecolor</strong></td><td><code>ESC[38;2;<i>r</i>;<i>g</i>;<i>b</i>m</code></td><td>24-bit, 16.7M</td><td>Yes — 24-bit, as you assumed. Universal on modern terminals.</td></tr>
+</tbody>
+</table>
+
+<div class="swatch">
+  <div style="background:#1e1e1e"></div><div style="background:#3e3e42"></div><div style="background:#569cd6"></div>
+  <div style="background:#4ec9b0"></div><div style="background:#ce9178"></div><div style="background:#c586c0"></div>
+  <div style="background:#dcdcaa"></div><div style="background:#9cdcfe"></div><div style="background:#d16969"></div>
+</div>
+
+<h3>The one subtlety worth knowing</h3>
+<p>There are two syntaxes. The <strong>semicolon</strong> form <code>38;2;r;g;b</code> is what
+everyone actually uses and what SSG emits. The spec-correct form uses <strong>colons</strong>
+(<code>38:2::r:g:b</code>), because <em>r/g/b are sub-parameters of the colour, not siblings of
+it</em>. Both work everywhere you care about for SGR 38/48.</p>
+
+<p>This matters later: for the <em>newer</em> attributes — styled underlines and underline colour —
+the colon form is the canonical one, and it is the form you should emit.</p>
+
+<div class="callout warn">
+<p><strong>Detection.</strong> There is no reliable escape-sequence query for truecolor. The
+convention is the <code>COLORTERM</code> environment variable being <code>truecolor</code> or
+<code>24bit</code>. It does not survive <code>sudo</code> or some SSH configurations, which is why
+SSG's existing <code>ColorDepth</code> fallback chain (env → <code>TERM</code> hints → assume
+truecolor) is the right shape.</p>
+</div>
+
+<!-- ─────────────────────────────────────────────── -->
+<h2 id="charsets">2. Character sets — why the question dissolved</h2>
+
+<p>This is the part of your model that has changed the most, and the change is that
+<strong>the problem went away and was replaced by a harder one</strong>.</p>
+
+<h3>What died</h3>
+<p>The DEC charset machinery — <code>ESC ( 0</code> to switch G0 into the line-drawing set,
+<code>SO</code>/<code>SI</code> shifting between G0 and G1, national replacement character sets — is
+legacy. Terminals still <em>parse</em> it (which is exactly why an escape sequence smuggled into a
+glyph could wreck SSG's display before it was fixed), but nothing should <em>emit</em> it. Box
+drawing is done with real Unicode: <code>│ ├ ─ ┼ ╭ ╯</code>.</p>
+
+<p>CP-437 is a DOS-era artefact. It survives culturally — in ANSI art and in the aesthetics of
+retro-styled TUIs — but not as a wire encoding. <strong>UTF-8 won completely.</strong> There is no
+second widespread encoding you are unaware of; that is genuinely the whole answer.</p>
+
+<h3>What replaced it, and it is harder</h3>
+<p>Once everything is UTF-8, the hard question stops being "which byte means which glyph" and becomes
+<strong>"how many columns does this occupy, and where can I split it"</strong>:</p>
+
+<ul>
+<li><strong>Grapheme clusters</strong> (UAX&nbsp;#29) — <code>é</code> may be one code point or two;
+a family emoji may be seven joined by ZWJ; a flag is two regional indicators. All are one
+<em>character</em> to a user.</li>
+<li><strong>East Asian Width</strong> (UAX&nbsp;#11) — CJK and most emoji occupy two columns.
+Get this wrong and every subsequent cell on the row is misaligned.</li>
+<li><strong>Ambiguous width</strong> — a residual class where terminals genuinely disagree.</li>
+</ul>
+
+<div class="callout good">
+<p><strong>SSG is already ahead here.</strong> <code>GraphemeLayout</code> implements UAX&nbsp;#29
+segmentation and UAX&nbsp;#11 widths against Unicode 15.0, classifies C0/C1/DEL as
+<code>Control</code>, and gives invalid UTF-8 a visible replacement glyph. That is the correct
+modern answer, and most TUI toolkits do it worse.</p>
+</div>
+
+<p><strong>One emerging thing:</strong> DEC mode <code>2027</code> asks the terminal to do grapheme
+clustering itself rather than counting code points. kitty and ghostty support it. It is worth knowing
+about but not worth adopting — SSG already computes authoritative widths, and mode 2027 mainly helps
+applications that do not.</p>
+
+<!-- ─────────────────────────────────────────────── -->
+<h2 id="cursor">3. Cursor control</h2>
+
+<p>More control than you might expect, and all of it is well supported.</p>
+
+<table>
+<thead><tr><th>Control</th><th>Sequence</th><th>Effect</th></tr></thead>
+<tbody>
+<tr><td>Position</td><td><code>ESC[<i>row</i>;<i>col</i>H</code></td><td>1-based. SSG uses this each frame to park the caret.</td></tr>
+<tr><td>Visibility</td><td><code>ESC[?25h</code> / <code>?25l</code></td><td>DECTCEM. Hide during redraw, show after.</td></tr>
+<tr><td><strong>Shape</strong></td><td><code>ESC[<i>n</i> q</code></td><td>DECSCUSR — see below.</td></tr>
+<tr><td>Colour</td><td><code>OSC 12 ; <i>colour</i> ST</code></td><td>Set cursor colour; <code>OSC 112</code> resets. Widely supported.</td></tr>
+<tr><td>Save / restore</td><td><code>ESC 7</code> / <code>ESC 8</code></td><td>Position + attributes. Rarely needed in a full-redraw app.</td></tr>
+</tbody>
+</table>
+
+<p><strong>DECSCUSR shapes</strong> — <code>0</code>/<code>1</code> blinking block, <code>2</code>
+steady block, <code>3</code> blinking underline, <code>4</code> steady underline, <code>5</code>
+blinking bar, <code>6</code> steady bar. SSG uses <code>5</code>, and correctly resets to
+<code>0</code> on exit — that reset is what stops your shell inheriting a bar cursor after ssg quits.</p>
+
+<div class="callout">
+<p>A genuinely useful trick most editors miss: <strong>change the cursor shape with the editing
+mode</strong>. Block for a normal/command mode, bar for insert, underline for replace. It costs one
+escape sequence and communicates modal state better than any status line.</p>
+</div>
+
+<!-- ─────────────────────────────────────────────── -->
+<h2 id="underline">4. Underlines &amp; text decoration <span class="tag hi">Top pick for SSG</span></h2>
+
+<p>This is the feature you saw in those TUI videos, and it is far more capable than plain underline.
+It began as a kitty extension and is now supported by essentially every terminal that matters.</p>
+
+<div class="demo">
+  const <span class="u-curly">recieve</span> = fn();     <span style="color:#8b94a3">← curly, red — a spelling/LSP error</span><br>
+  let <span class="u-dotted">unused</span> = 42;         <span style="color:#8b94a3">← dotted, yellow — a warning</span><br>
+  type <span class="u-double">Handle</span> = u32;       <span style="color:#8b94a3">← double, green — a definition</span>
+</div>
+
+<h3>The two sequences</h3>
+<pre><code>ESC[4:0m   none          ESC[4:3m   curly  ← the squiggle
+ESC[4:1m   single        ESC[4:4m   dotted
+ESC[4:2m   double        ESC[4:5m   dashed
+
+ESC[58:2::<i>r</i>:<i>g</i>:<i>b</i>m   underline colour, independent of the text colour
+ESC[59m               reset underline colour to follow the foreground</code></pre>
+
+<p>The second is the important half. <strong>The underline carries its own colour</strong>, so a red
+squiggle can sit under text that keeps its syntax highlighting. Without SGR 58 you would have to
+recolour the text to signal an error, which destroys the highlighting.</p>
+
+<table>
+<thead><tr><th>Terminal</th><th>Styles 4:0–4:5</th><th>Underline colour</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td><strong>kitty</strong></td><td class="y">Yes — all five</td><td class="y">Yes</td><td>Originated both.</td></tr>
+<tr><td><strong>Windows Terminal</strong></td><td class="y">Yes — all five</td><td class="y">Yes</td><td>Renderer draws wavy/dotted/dashed natively.</td></tr>
+<tr><td><strong>xterm.js</strong></td><td class="y">Yes — all five</td><td class="y">Yes</td><td>Core feature since v5.0 (2022). No addon needed.</td></tr>
+<tr><td>ghostty</td><td class="y">Yes</td><td class="y">Yes</td><td></td></tr>
+<tr><td>WezTerm / foot / Alacritty / iTerm2 / Konsole</td><td class="y">Yes</td><td class="y">Yes</td><td></td></tr>
+<tr><td>GNOME Terminal (VTE)</td><td class="p">VTE ≥ 0.51</td><td class="p">VTE ≥ 0.51</td><td>Older builds: plain + double only.</td></tr>
+</tbody>
+</table>
+
+<div class="callout good">
+<p><span class="verdict">Verdict: adopt unconditionally.</span> Supported on all three of your
+platforms. Use the <strong>colon</strong> form. Avoid legacy <code>SGR 21</code> for double underline
+— it is ambiguous and xterm.js does not implement it.</p>
+</div>
+
+<div class="callout warn">
+<p><strong>The cost is not the escape sequence — it is the cell model.</strong> SSG's
+<code>CellGridCell</code> currently carries foreground, background, role and tint. Underline style
+and underline colour are two more per-cell attributes, which widens the cell and the frame encoder's
+attribute-change comparison. That is the real design decision, and it is worth a spec rather than a
+patch.</p>
+</div>
+
+<!-- ─────────────────────────────────────────────── -->
+<h2 id="sync">5. Synchronized output <span class="tag hi">Top pick for SSG</span></h2>
+
+<p>The least glamorous feature here and possibly the highest value for SSG specifically, because SSG
+<strong>redraws the entire screen every frame</strong>.</p>
+
+<pre><code>ESC[?2026h   begin — terminal keeps parsing, stops painting
+   ... one complete frame ...
+ESC[?2026l   end — terminal paints the final state, once</code></pre>
+
+<p>Without it, a large frame can be painted while it is still arriving, so the user sees a partial
+update — tearing, or a visible sweep down the screen. This is worst exactly where it is most
+annoying: over SSH, where the frame arrives in TCP-sized pieces.</p>
+
+<table>
+<thead><tr><th>Terminal</th><th>Mode 2026</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td><strong>kitty</strong></td><td class="y">Yes</td><td>Comprehensive.</td></tr>
+<tr><td><strong>Windows Terminal</strong></td><td class="y">Yes</td><td>Has an anti-spam guard so a misbehaving app cannot stall the renderer.</td></tr>
+<tr><td><strong>xterm.js</strong></td><td class="p">Yes, v6.0+ — with live bugs</td><td>See warning below.</td></tr>
+<tr><td>ghostty / WezTerm / foot / Alacritty / iTerm2 / Konsole</td><td class="y">Yes</td><td></td></tr>
+</tbody>
+</table>
+
+<div class="callout bad">
+<p><strong>xterm.js has two open bugs that hit full-frame redraw apps specifically.</strong>
+(1) <code>ESC[2J</code> <em>inside</em> a synchronized block still yanks the viewport to the bottom —
+this is the reported cause of scroll-jank with CLI agents in VS Code's terminal.
+(2) Continuous animation can be capped at roughly 1 fps, because the next begin resets the render
+debouncer before the previous end has painted.</p>
+<p><strong>Mitigation:</strong> do not clear inside the block, and make each frame exactly one
+begin/end pair rather than nesting or leaving one open across frames.</p>
+</div>
+
+<div class="callout good">
+<p><span class="verdict">Verdict: adopt, carefully.</span> Unknown DEC private modes are silently
+ignored per ECMA-48, so emitting this on a terminal that lacks it costs nothing and produces no
+garbage. It is safe to send unconditionally — no detection required.</p>
+</div>
+
+<!-- ─────────────────────────────────────────────── -->
+<h2 id="links">6. Hyperlinks (OSC 8)</h2>
+
+<p>Arbitrary text can be a clickable link, independent of whether it <em>looks</em> like a URL.</p>
+
+<pre><code>ESC]8;;https://example.com ESC\  link text  ESC]8;; ESC\
+ESC]8;id=err1;file:///home/carl/src/main.cpp ESC\  main.cpp:42:7  ESC]8;; ESC\</code></pre>
+
+<p>Supported on <strong>all three</strong> of your platforms, plus ghostty, WezTerm, foot, Alacritty,
+iTerm2, Konsole, and GNOME Terminal. Both <code>BEL</code> and <code>ESC \</code> terminators are
+accepted; prefer <code>ESC \</code>. The optional <code>id=</code> parameter groups a link that wraps
+across lines, though xterm.js does not yet unify the highlight for those.</p>
+
+<div class="callout warn">
+<p><strong>Windows Terminal caveat for your SSH workflow:</strong> a <code>file://</code> link
+resolves on the <em>Windows</em> side, so a path on this Linux box will not open. Useful for
+<code>https://</code> documentation links; not useful for jumping to a local file. That jump should
+stay an internal SSG command.</p>
+</div>
+
+<p><span class="verdict">Verdict: nice-to-have.</span> Genuinely useful for LSP diagnostic codes
+linking to documentation, and for URLs in file content. Not transformative.</p>
+
+<!-- ─────────────────────────────────────────────── -->
+<h2 id="keyboard">7. Keyboard protocols <span class="tag mid">Newly viable</span></h2>
+
+<p>The biggest surprise in this research, and it directly contradicts what I would have told you a
+year ago.</p>
+
+<p>Terminals have always sent keys as an ambiguous byte soup: <kbd>Ctrl+I</kbd> and <kbd>Tab</kbd>
+are <em>both</em> <code>0x09</code>. <kbd>Ctrl+M</kbd> and <kbd>Enter</kbd> are both
+<code>0x0D</code>. <kbd>Ctrl+[</kbd> and <kbd>Escape</kbd> are both <code>0x1B</code>. There are no
+key-release events, and many modifier combinations are simply unrepresentable.</p>
+
+<p>The <strong>kitty keyboard protocol</strong> fixes all of that, with per-feature opt-in:</p>
+
+<pre><code>ESC[>1u    disambiguate — Ctrl+I ≠ Tab, Ctrl+M ≠ Enter, Ctrl+[ ≠ Escape
+ESC[>3u    ... plus press / repeat / release event types
+ESC[&lt;u     pop back to the previous mode on exit</code></pre>
+
+<table>
+<thead><tr><th>Terminal</th><th>Support</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td><strong>kitty</strong></td><td class="y">Full</td><td>Reference implementation.</td></tr>
+<tr><td><strong>Windows Terminal</strong></td><td class="y">Full — since v1.25</td><td><strong>New (merged Feb 2026).</strong> Known bugs remain around F13–F20 and non-Latin layouts.</td></tr>
+<tr><td><strong>xterm.js</strong></td><td class="p">Implemented, active bugs</td><td>Layout awareness incomplete; test before relying on it.</td></tr>
+<tr><td>ghostty / foot</td><td class="y">Full</td><td></td></tr>
+<tr><td>WezTerm</td><td class="p">Full but opt-in</td><td><code>enable_kitty_keyboard = true</code>, default off.</td></tr>
+<tr><td>Alacritty</td><td class="p">Mostly</td><td>Some modifier-bit discrepancies.</td></tr>
+<tr><td>xterm proper</td><td class="n">No</td><td>Uses <code>modifyOtherKeys</code> instead.</td></tr>
+</tbody>
+</table>
+
+<div class="callout">
+<p><strong>Why this matters for SSG specifically.</strong> SSG's keymap is chord-based with an
+<kbd>Escape</kbd> leader — a design partly <em>forced</em> by this ambiguity, since <kbd>Ctrl</kbd>
+combinations collide with control characters and cannot be told apart. With this protocol the
+keyspace roughly triples, and <kbd>Ctrl</kbd> chords become bindable without collision.</p>
+<p>The catch: it changes what the decoder receives, so it is a decoder change, not a config flag.
+And <code>modifyOtherKeys</code> — the older xterm fallback — is <strong>not</strong> supported by
+Windows Terminal, so there is no useful middle tier. It is this protocol or the legacy encoding.</p>
+</div>
+
+<h3>Two smaller input features worth having</h3>
+<ul>
+<li><strong>Bracketed paste</strong> (<code>ESC[?2004h</code>) — <span class="y">universal</span>,
+no exceptions. Pasted text arrives wrapped in <code>ESC[200~</code> … <code>ESC[201~</code> so an
+editor can tell paste from typing. Without it, pasting into an editor with auto-indent produces the
+classic staircase.</li>
+<li><strong>Focus events</strong> (<code>ESC[?1004h</code>) — <span class="y">universal</span>.
+The terminal reports focus gained/lost. Useful for pausing a blinking cursor, or triggering an
+external-modification check when the user returns.</li>
+</ul>
+
+<!-- ─────────────────────────────────────────────── -->
+<h2 id="clipboard">8. Clipboard — OSC 52 <span class="tag hi">Matters most for your SSH workflow</span></h2>
+
+<p>An application can put text on the <em>local</em> system clipboard by emitting an escape sequence,
+even when it is running on a remote machine. For your Windows-Terminal-over-SSH setup this is the
+only mechanism that exists — there is no other route from a process on this box to the Windows
+clipboard.</p>
+
+<pre><code>ESC]52;c;<i>&lt;base64 payload&gt;</i>ESC\      write to the system clipboard
+ESC]52;c;?ESC\                     request the clipboard contents</code></pre>
+
+<table>
+<thead><tr><th>Terminal</th><th>Write (copy)</th><th>Read (paste)</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td><strong>kitty</strong></td><td class="y">Yes</td><td class="y">Yes</td><td>~1 MB practical payload limit.</td></tr>
+<tr><td><strong>Windows Terminal</strong></td><td class="y">Yes — since v1.1 (2020)</td><td class="n">No — deliberate</td><td>Read was refused on security grounds: an app could exfiltrate the clipboard silently. Write is focus-gated since v1.25.</td></tr>
+<tr><td><strong>xterm.js</strong></td><td class="y">Yes, via addon</td><td class="p">Host-dependent</td><td><code>@xterm/addon-clipboard</code>; has an open UTF-8 bug.</td></tr>
+<tr><td>ghostty / WezTerm / iTerm2</td><td class="y">Yes</td><td class="y">Yes</td><td></td></tr>
+<tr><td>foot / Alacritty / Konsole</td><td class="y">Yes</td><td class="p">Off by default</td><td>Read is opt-in for the same security reason.</td></tr>
+</tbody>
+</table>
+
+<div class="callout good">
+<p><span class="verdict">Verdict: adopt write; do not design around read.</span> Copy-to-local-clipboard
+works on all three platforms. <strong>Read is not available on Windows Terminal and never will be</strong>,
+so a design that depends on pulling the system clipboard will not work for your primary remote setup.
+Paste should continue to arrive through bracketed paste — which is the terminal pasting <em>into</em>
+you, and works everywhere.</p>
+</div>
+
+<div class="callout warn">
+<p><strong>tmux intercepts OSC 52.</strong> If you use tmux, you need
+<code>set -g allow-passthrough on</code> (tmux ≥ 3.3) or <code>set -g set-clipboard on</code>, or the
+sequence dies at the multiplexer and never reaches Windows Terminal.</p>
+<p>Also note an open Windows Terminal deadlock bug triggered by rapid OSC 52 writes combined with
+mouse interaction — so rate-limit clipboard writes rather than emitting one per keystroke.</p>
+</div>
+
+<!-- ─────────────────────────────────────────────── -->
+<h2 id="images">9. Images — sixel vs the kitty graphics protocol</h2>
+
+<p>Your read is correct on both counts: sixel is clunky, the kitty protocol is markedly better, and
+Windows Terminal does not support the kitty protocol.</p>
+
+<h3>Sixel</h3>
+<p>A DEC format from the 1980s: bitmap data encoded as printable characters, six vertical pixels per
+character. Palette-based and verbose.</p>
+
+<p><strong>Your instinct about variable cell sizes is right</strong>, and here is the precise answer:
+an application must ask the terminal how big a cell is, in pixels, before it can size an image to fit
+a grid region:</p>
+
+<pre><code>ESC[16t   →  ESC[6;<i>height</i>;<i>width</i>t     cell size in pixels — ask this first
+ESC[14t   →  ESC[4;<i>h_px</i>;<i>w_px</i>t        text area in pixels — divide by rows/cols
+ioctl TIOCGWINSZ → ws_xpixel / ws_ypixel   often zero; VTE never fills it in</code></pre>
+
+<p>So it is worse than clunky — it requires a <em>round trip query</em> before you can lay anything
+out, and a fallback path for terminals that answer with zeros.</p>
+
+<h3>The kitty graphics protocol</h3>
+<p>Designed for exactly the problem you identified. Its decisive advantage for a grid-based editor:
+<strong>you place an image in cell coordinates</strong> — "occupy this 20×10 rectangle of the grid" —
+and the terminal handles scaling. No pixel arithmetic, no query round trip. It also has image IDs and
+reuse, z-index so text can layer over images, transfer via file or shared memory instead of a giant
+escape payload, and <em>unicode placeholders</em> — a mechanism that lets images survive scrolling
+and pass through multiplexers, because the image position is anchored to actual grid cells.</p>
+
+<table>
+<thead><tr><th>Terminal</th><th>Sixel</th><th>Kitty graphics</th></tr></thead>
+<tbody>
+<tr><td><strong>kitty</strong></td><td class="y">Yes</td><td class="y">Full — reference</td></tr>
+<tr><td><strong>Windows Terminal</strong></td><td class="y">Yes — since v1.21 (2024)</td><td class="n">No — backlog, no timeline</td></tr>
+<tr><td><strong>xterm.js</strong></td><td class="p">Addon; VS Code ships it <em>disabled</em></td><td class="p">Addon, alpha</td></tr>
+<tr><td>ghostty</td><td class="y">Yes</td><td class="y">Full</td></tr>
+<tr><td>WezTerm</td><td class="y">Yes</td><td class="p">Partial, opt-in</td></tr>
+<tr><td>foot</td><td class="y">Excellent</td><td class="n">No</td></tr>
+<tr><td>Alacritty, GNOME Terminal</td><td class="n">No</td><td class="n">No</td></tr>
+</tbody>
+</table>
+
+<div class="callout bad">
+<p><span class="verdict">Verdict for SSG: do not build on this.</span> There is no image protocol
+that works across your three platforms without user opt-in. Sixel has the widest raw reach, but
+VS Code ships xterm.js's image addon <strong>disabled by default</strong>, and the kitty protocol is
+blocked entirely by Windows Terminal with no timeline.</p>
+<p>Images in a terminal are a <strong>kitty-and-friends progressive enhancement</strong>, not a
+foundation. For a text editor the honest assessment is that the cost — a capability-detection path,
+two protocol encoders, a pixel-geometry fallback, and a degraded mode that has to look deliberate
+rather than broken — buys very little that a text editor actually needs.</p>
+</div>
+
+<!-- ─────────────────────────────────────────────── -->
+<h2 id="detect">10. Capability detection without hanging</h2>
+
+<p>The obvious approach — send a query, wait for a reply — deadlocks on any terminal that ignores the
+query. There is a standard trick.</p>
+
+<div class="card">
+<h4>The DA1 fence</h4>
+<p><strong>Primary Device Attributes</strong> (<code>ESC[c</code>) is answered by
+<em>every</em> terminal. So send your speculative query <em>first</em>, then DA1, then read until you
+see the DA1 reply. If the speculative answer arrived before it, the feature exists. If only DA1 came
+back, it does not — and you never block, because DA1 always answers.</p>
+<pre><code>write("ESC[?u")   // does the terminal support the keyboard protocol?
+write("ESC[c")    // fence — always answered
+// read until the DA1 reply arrives; a ?u reply before it means yes</code></pre>
+</div>
+
+<table>
+<thead><tr><th>Query</th><th>Use</th><th>Reliability</th></tr></thead>
+<tbody>
+<tr><td><code>ESC[c</code> — DA1</td><td>The fence; also advertises OSC 52 via extension <code>52</code></td><td class="y">Universal</td></tr>
+<tr><td><code>ESC[?<i>n</i>$p</code> — DECRQM</td><td>Query a specific private mode (e.g. 2026)</td><td class="y">Best general mechanism</td></tr>
+<tr><td><code>ESC[>0q</code> — XTVERSION</td><td>Terminal name and version</td><td class="n">Windows Terminal does not implement it</td></tr>
+<tr><td><code>ESC[16t</code></td><td>Cell size in pixels</td><td class="p">Needed only for images</td></tr>
+<tr><td><code>$COLORTERM</code></td><td>Truecolor</td><td class="p">Convention; lost across sudo/SSH</td></tr>
+</tbody>
+</table>
+
+<p><strong>DECRQM replies:</strong> <code>0</code> not recognised, <code>1</code> set,
+<code>2</code> supported but reset, <code>4</code> permanently reset. So <code>1</code> or
+<code>2</code> means the feature exists.</p>
+
+<div class="callout good">
+<p><strong>The cheerful conclusion:</strong> for the three features SSG should actually adopt,
+<em>you do not need any of this</em>. Styled underlines, synchronized output and OSC 52 write all
+degrade silently to nothing on a terminal that lacks them. Detection only becomes necessary for the
+keyboard protocol (which changes input parsing) and images (which you should skip).</p>
+</div>
+
+<!-- ─────────────────────────────────────────────── -->
+<h2 id="ssg">11. What this means for SSG</h2>
+
+<p>Ordered by value delivered per unit of risk.</p>
+
+<table>
+<thead><tr><th>#</th><th>Feature</th><th>Why it fits SSG</th><th>Risk</th></tr></thead>
+<tbody>
+<tr>
+  <td><strong>1</strong></td>
+  <td><strong>Styled underlines + underline colour</strong><br><span class="plat">kitty ✓ · WT ✓ · xterm.js ✓</span></td>
+  <td>SSG already has LSP diagnostics and <em>no way to render them in place</em>. This is the missing
+      output half of a feature that already exists. A red curly under an error, a yellow dotted under a
+      warning — while the text keeps its syntax colour.</td>
+  <td>Widens <code>CellGridCell</code> and the frame encoder's attribute comparison. Worth a spec.</td>
+</tr>
+<tr>
+  <td><strong>2</strong></td>
+  <td><strong>Synchronized output</strong><br><span class="plat">kitty ✓ · WT ✓ · xterm.js ⚠</span></td>
+  <td>SSG redraws the whole screen every frame, and you drive it over SSH where frames arrive in
+      pieces. This is the exact scenario mode 2026 exists for.</td>
+  <td>Two escape sequences around the existing single frame write. Nearly free — the frame is already
+      assembled as one string. Mind the xterm.js bugs: one begin/end pair per frame, no clear inside.</td>
+</tr>
+<tr>
+  <td><strong>3</strong></td>
+  <td><strong>OSC 52 clipboard write</strong><br><span class="plat">kitty ✓ · WT ✓ · xterm.js ✓</span></td>
+  <td>SSG has a <code>ClipboardRegister</code> that cannot reach your Windows clipboard over SSH.
+      This is the only mechanism that can. Yank in ssg on this box, paste into a Windows app.</td>
+  <td>Low. Write only — read is unavailable on Windows Terminal by design. Rate-limit it.</td>
+</tr>
+<tr>
+  <td><strong>4</strong></td>
+  <td><strong>Bracketed paste</strong><br><span class="plat">universal</span></td>
+  <td>Lets SSG distinguish a paste from typing — so a paste does not trigger per-character
+      auto-indent, and can be one undo unit rather than hundreds.</td>
+  <td>Low, and it interacts with SSG's existing undo-coalescing rules, which is the interesting part.</td>
+</tr>
+<tr>
+  <td><strong>5</strong></td>
+  <td><strong>Kitty keyboard protocol</strong><br><span class="plat">kitty ✓ · WT ✓ (v1.25+) · xterm.js ⚠</span></td>
+  <td>Roughly triples the bindable keyspace and removes the ambiguity that pushed SSG toward an
+      Escape-leader keymap in the first place.</td>
+  <td><strong>Highest.</strong> Changes what the decoder receives, needs negotiation and a legacy
+      fallback, and xterm.js still has open bugs. Real value, but it is a project.</td>
+</tr>
+<tr>
+  <td>—</td>
+  <td>OSC 8 hyperlinks</td>
+  <td>Diagnostic codes linking to docs. Pleasant, marginal.</td>
+  <td>Low. <code>file://</code> is useless over SSH from Windows.</td>
+</tr>
+<tr>
+  <td>—</td>
+  <td><span style="color:var(--dim)">Images</span></td>
+  <td><span style="color:var(--dim)">No protocol spans your three platforms without opt-in. Skip.</span></td>
+  <td><span style="color:var(--dim)">High cost, low return for a text editor.</span></td>
+</tr>
+</tbody>
+</table>
+
+<div class="callout">
+<p><strong>If you take one thing:</strong> #1 and #2 together are a small, low-risk change that makes
+SSG visibly better on every platform you use — diagnostics you can actually see, and a frame that
+never tears over SSH. Neither needs capability detection, and both degrade to nothing on a terminal
+that lacks them.</p>
+<p>There is also a pleasing symmetry: the escape-discipline work already landed gives SSG a mode
+stack where adding a mode means declaring its entry and exit together. Synchronized output is a
+frame-scoped mode — precisely the shape that infrastructure was built for.</p>
+</div>
+
+<div class="meta">
+<p>Compiled 28 July 2026 from three parallel research passes against terminal source repositories,
+release notes, and issue trackers. Full cited findings — including version numbers, PR references and
+explicitly flagged uncertainties — are in the session files directory as
+<code>terminal-research-styling.md</code>, <code>terminal-research-graphics.md</code> and
+<code>terminal-research-input.md</code>.</p>
+<p><strong>Known uncertainties:</strong> ghostty's unicode-placeholder support was not definitively
+verified; Konsole's keyboard-protocol completeness could not be confirmed (KDE hosts its source
+outside GitHub); iTerm2 is believed <em>not</em> to implement the kitty keyboard protocol but this was
+not confirmed by testing.</p>
+</div>
+
+</div>
+</body>
+</html>

@@ -867,8 +867,8 @@ TEST(noCapabilityReplyIsEverEmittedAsText) {
              Reply{"DECRQM 2026", "\x1b[?2026;2$y"},
              Reply{"kitty keyboard", "\x1b[?1u"},
              Reply{"cell pixel size", "\x1b[6;17;8t"},
-             Reply{"XTVERSION", "\x1bP>|kitty(0.32.2)\x1b\\"},
-             Reply{"OSC 52 clipboard", "\x1b]52;c;aGk=\x1b\\"},
+             Reply{"text area size", "\x1b[4;1080;1920t"},
+             Reply{"DA1 with OSC 52", "\x1b[?62;4;52c"},
          }) {
         auto const drained = drainInput(reply.bytes);
         ASSERT_EQ(std::string{reply.name} + ":" + drained.text,
@@ -879,13 +879,34 @@ TEST(noCapabilityReplyIsEverEmittedAsText) {
 }
 
 // Oracle (INV-decode-terminates): no forward scan may hold an unbounded amount
-// of buffered input waiting for a terminator that may never arrive.  A truncated
-// SGR mouse prefix searches for 'M'/'m' with no limit, so everything typed after
-// it is held hostage until one appears.
+// of buffered input waiting for a terminator that may never arrive.  A run of
+// parameter bytes with no final byte is the case that requires the cap -- any
+// byte outside 0x30-0x3F would itself terminate the sequence.
 TEST(anUnboundedSequenceScanCannotHoldTheInputBuffer) {
-    std::string const runaway = std::string{"\x1b[<"} + std::string(4096, 'x');
-    auto const drained = drainInput(runaway);
-    ASSERT_EQ(drained.held, std::size_t{0});
+    // Parameter bytes only (digits and ';'), never terminated.
+    std::string const runaway =
+        std::string{"\x1b["} + std::string(4096, '1') + std::string(4096, ';');
+    std::size_t consumed = 0;
+    auto const decoded = ssg::app::decode_input(runaway, true, consumed);
+    ASSERT_TRUE(decoded.status != ssg::app::DecodeStatus::incomplete);
+    ASSERT_TRUE(consumed > 0);
+    ASSERT_TRUE(consumed <= ssg::app::kMaxSequenceBytes);
+
+    // A truncated SGR mouse prefix must not swallow arbitrary typed text while
+    // hunting for its 'M'/'m'.
+    std::string const mouseRunaway = std::string{"\x1b[<"} + std::string(4096, '9');
+    consumed = 0;
+    auto const mouse = ssg::app::decode_input(mouseRunaway, true, consumed);
+    ASSERT_TRUE(mouse.status != ssg::app::DecodeStatus::incomplete);
+    ASSERT_TRUE(consumed > 0);
+    ASSERT_TRUE(consumed <= ssg::app::kMaxSequenceBytes);
+
+    // A short unterminated prefix is still held, so a sequence split across two
+    // reads reassembles rather than being discarded.
+    consumed = 99;
+    auto const split = ssg::app::decode_input("\x1b[1;2", true, consumed);
+    ASSERT_TRUE(split.status == ssg::app::DecodeStatus::incomplete);
+    ASSERT_EQ(consumed, std::size_t{0});
 }
 
 TEST(decodeInputPointerPressReleaseDrag) {
@@ -1022,13 +1043,24 @@ TEST(decodeInputPointerRejectsMalformedButTerminatedPayloads) {
     // are malformed: they are consumed and dropped (none), never dispatched as a
     // real pointer event at (0,0).
     for (std::string_view malformed :
-         {"\x1b[<;1;1M", "\x1b[<0;;1M", "\x1b[<0;1;M", "\x1b[<0;1;xM",
-          "\x1b[<0;1M", "\x1b[<0;1;5;9M"}) {
+         {"\x1b[<;1;1M", "\x1b[<0;;1M", "\x1b[<0;1;M", "\x1b[<0;1M",
+          "\x1b[<0;1;5;9M"}) {
         consumed = 0;
         auto decoded = ssg::app::decode_input(malformed, true, consumed);
         ASSERT_TRUE(decoded.status == ssg::app::DecodeStatus::none);
         ASSERT_EQ(consumed, malformed.size());  // consumed so the loop advances
     }
+
+    // A non-digit in a parameter position is a CSI *final* byte (0x40-0x7E), so
+    // the sequence ends there under the grammar and the trailing 'M' is an
+    // ordinary printable that follows it.  The extent of a sequence is decided by
+    // the grammar rather than by hunting for the byte we hoped to find, which is
+    // what bounds the scan (INV-decode-terminates).
+    std::string_view const earlyFinal = "\x1b[<0;1;xM";
+    consumed = 0;
+    auto const decoded = ssg::app::decode_input(earlyFinal, true, consumed);
+    ASSERT_TRUE(decoded.status == ssg::app::DecodeStatus::none);
+    ASSERT_EQ(consumed, earlyFinal.size() - 1);
 }
 
 TEST(routePointerDragExtendsSelectionFromAnchor) {

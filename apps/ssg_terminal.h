@@ -185,7 +185,14 @@ enum class DecodeStatus : std::uint8_t {
     key,         // A KeyStroke (with optional committed text for printables).
     scroll,      // A mouse-wheel event (signed line count in `scroll`).
     pointer,     // A mouse button press/release/drag (see `pointer`).
+    reply,       // A terminal report answering a capability query (`reply`).
 };
+
+// No real escape sequence approaches this length.  A scan that reaches it is
+// looking for a terminator that is not coming, and holding the buffer any longer
+// would stall every keystroke queued behind it
+// (doc/spec-terminal-capabilities.md, INV-decode-terminates).
+inline constexpr std::size_t kMaxSequenceBytes = 256;
 
 // A decoded mouse button event (M8): which button, whether it is a press,
 // release, or drag (motion with a button held), and the 0-based grid cell it
@@ -210,6 +217,8 @@ struct Decoded {
     std::int64_t scroll = 0;  // status == scroll: signed line count.
     PointerEvent pointer;     // status == pointer; also carries the wheel's
                               // 0-based grid position when status == scroll.
+    std::string reply;        // status == reply: the report's bytes, verbatim.
+                              // The decoder classifies; it does not interpret.
 };
 
 // Decode the first event from `bytes` into a KeyStroke / committed text / scroll.

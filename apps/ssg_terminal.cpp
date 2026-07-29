@@ -307,6 +307,59 @@ std::size_t utf8Length(unsigned char lead) {
     return 0;
 }
 
+// A CSI runs ESC [ , then parameter bytes (0x30-0x3F), then intermediate bytes
+// (0x20-0x2F), then one final byte (0x40-0x7E).  Locating that final byte is the
+// only way to know where an unrecognized sequence ends; guessing at its length
+// is what lets a sequence's tail spill into the document as typed text
+// (doc/spec-terminal-capabilities.md, INV-reply-never-input).
+enum class CsiScan {
+    complete,    // `end` is one past the final byte.
+    incomplete,  // The final byte has not arrived; wait for more input.
+    malformed,   // Not a legal CSI, or longer than any real one; discard `end`.
+};
+
+CsiScan scanCsi(std::string_view bytes, std::size_t& end) {
+    std::size_t index = 2;
+    auto within = [&] { return index < bytes.size() && index < kMaxSequenceBytes; };
+    auto const at = [&](std::size_t i) { return static_cast<unsigned char>(bytes[i]); };
+    while (within() && at(index) >= 0x30 && at(index) <= 0x3f) ++index;
+    while (within() && at(index) >= 0x20 && at(index) <= 0x2f) ++index;
+    if (index >= kMaxSequenceBytes) {
+        // No real CSI is this long, so nothing is gained by holding the buffer
+        // waiting for a terminator that is evidently not coming.
+        end = kMaxSequenceBytes;
+        return CsiScan::malformed;
+    }
+    if (index >= bytes.size()) {
+        end = index;
+        return CsiScan::incomplete;
+    }
+    end = index + 1;
+    return at(index) >= 0x40 && at(index) <= 0x7e ? CsiScan::complete
+                                                  : CsiScan::malformed;
+}
+
+// A terminal report rather than a keypress: private-prefixed CSIs (DA1, DECRQM,
+// the keyboard protocol) and the window/cell reports ending in 't'.  DCS and OSC
+// replies are deliberately not recognized -- SSG asks no DCS/OSC question, so it
+// can never receive one, and treating ESC P / ESC ] as a report introducer would
+// break the Escape-then-letter chords the keymap relies on.
+bool isReplyCsi(std::string_view bytes, std::size_t end) {
+    if (end < 3) return false;
+    auto const final = static_cast<unsigned char>(bytes[end - 1]);
+    if (bytes[2] == '?') return final == 'c' || final == 'u' || final == 'y';
+    return final == 't';
+}
+
+Decoded unhandledCsi(std::string_view bytes, std::size_t end, std::size_t& consumed) {
+    consumed = end;
+    if (!isReplyCsi(bytes, end)) return {DecodeStatus::none, {}, {}, 0};
+    Decoded decoded;
+    decoded.status = DecodeStatus::reply;
+    decoded.reply = std::string{bytes.substr(0, end)};
+    return decoded;
+}
+
 }  // namespace
 
 Decoded decode_input(std::string_view bytes, bool inputExhausted,
@@ -347,21 +400,40 @@ Decoded decode_input(std::string_view bytes, bool inputExhausted,
         }
         if (bytes.size() < 3) return {DecodeStatus::incomplete, {}, {}, 0};
         auto const third = static_cast<unsigned char>(bytes[2]);
+        // Every arm below that cannot interpret its sequence defers here rather
+        // than guessing a length, so the sequence is consumed whole or not at
+        // all (INV-reply-never-input).
+        auto const unhandled = [&]() -> Decoded {
+            if (second == 'O') {  // SS3 is always ESC O <final>.
+                consumed = 3;
+                return {DecodeStatus::none, {}, {}, 0};
+            }
+            std::size_t end = 0;
+            switch (scanCsi(bytes, end)) {
+            case CsiScan::incomplete:
+                consumed = 0;
+                return {DecodeStatus::incomplete, {}, {}, 0};
+            case CsiScan::malformed:
+                consumed = end;
+                return {DecodeStatus::none, {}, {}, 0};
+            case CsiScan::complete:
+                break;
+            }
+            return unhandledCsi(bytes, end, consumed);
+        };
         switch (third) {
         case '1': {
             // Modified key: ESC [ 1 ; m {A|B|C|D|H|F}, modifier m = 1 + bitmask
             // (bit0 Shift, bit1 Alt, bit2 Ctrl).  Any partial parameter is
             // incomplete until the final letter arrives.
             if (bytes.size() < 4) return {DecodeStatus::incomplete, {}, {}, 0};
-            if (bytes[3] != ';') {
-                consumed = 3;  // Some other '1'-prefixed CSI; skip conservatively.
-                return {DecodeStatus::none, {}, {}, 0};
-            }
+            if (bytes[3] != ';') return unhandled();
             std::size_t pos = 4;
             auto const modifier = parseDecimal(bytes, pos);
-            if (pos == 4 || pos >= bytes.size()) {
+            if (pos >= bytes.size()) {
                 return {DecodeStatus::incomplete, {}, {}, 0};  // Await digits/final.
             }
+            if (pos == 4) return unhandled();  // No modifier digits.
             auto const final = static_cast<unsigned char>(bytes[pos]);
             ssg::KeyCode code = ssg::KeyCode::None;
             switch (final) {
@@ -372,8 +444,7 @@ Decoded decode_input(std::string_view bytes, bool inputExhausted,
             case 'H': code = ssg::KeyCode::Home; break;
             case 'F': code = ssg::KeyCode::End; break;
             default:
-                consumed = pos + 1;  // Unknown final byte; skip.
-                return {DecodeStatus::none, {}, {}, 0};
+                return unhandled();  // Unknown final byte.
             }
             consumed = pos + 1;
             ssg::KeyStroke stroke{code};
@@ -412,19 +483,13 @@ Decoded decode_input(std::string_view bytes, bool inputExhausted,
                 consumed = 4;
                 return {DecodeStatus::key, ssg::KeyStroke{code}, {}, 0};
             }
-            if (bytes[3] != ';') {
-                consumed = 4;  // Unknown '3'/'5'/'6'-prefixed CSI; skip conservatively.
-                return {DecodeStatus::none, {}, {}, 0};
-            }
+            if (bytes[3] != ';') return unhandled();
             std::size_t pos = 4;
             auto const modifier = parseDecimal(bytes, pos);
-            if (pos == 4 || pos >= bytes.size()) {
+            if (pos >= bytes.size()) {
                 return {DecodeStatus::incomplete, {}, {}, 0};  // Await digits/final.
             }
-            if (bytes[pos] != '~') {
-                consumed = pos + 1;  // Malformed; skip.
-                return {DecodeStatus::none, {}, {}, 0};
-            }
+            if (pos == 4 || bytes[pos] != '~') return unhandled();
             consumed = pos + 1;
             ssg::KeyStroke stroke{code};
             auto const bitmask = modifier - 1;
@@ -440,10 +505,19 @@ Decoded decode_input(std::string_view bytes, bool inputExhausted,
             // its low 2 bits, motion in bit 5 (a drag when a button is held),
             // and the wheel in bit 6 (64 up, 65 down).  The final byte is 'M'
             // for press/drag and 'm' for release.  Coordinates are 1-based.
-            std::size_t end = 3;
-            while (end < bytes.size() && bytes[end] != 'M' && bytes[end] != 'm') ++end;
-            if (end >= bytes.size()) return {DecodeStatus::incomplete, {}, {}, 0};
+            // The sequence's extent is decided by the CSI grammar, not by
+            // hunting for 'M'/'m', so a truncated prefix cannot hold arbitrary
+            // typed text hostage waiting for a terminator (INV-decode-terminates).
+            std::size_t sequenceEnd = 0;
+            switch (scanCsi(bytes, sequenceEnd)) {
+            case CsiScan::incomplete: return {DecodeStatus::incomplete, {}, {}, 0};
+            case CsiScan::malformed: consumed = sequenceEnd;
+                return {DecodeStatus::none, {}, {}, 0};
+            case CsiScan::complete: break;
+            }
+            std::size_t const end = sequenceEnd - 1;
             char const finalByte = bytes[end];
+            if (finalByte != 'M' && finalByte != 'm') return unhandled();
             consumed = end + 1;  // A malformed-but-terminated sequence is consumed.
             std::size_t pos = 3;
             // Each of Cb/Cx/Cy must be a non-empty run of digits followed by its
@@ -504,8 +578,7 @@ Decoded decode_input(std::string_view bytes, bool inputExhausted,
             return {DecodeStatus::none, {}, {}, 0};
         }
         default:
-            consumed = 3;  // Unknown CSI: skip its introducer conservatively.
-            return {DecodeStatus::none, {}, {}, 0};
+            return unhandled();
         }
     }
     if (first >= 0x20) {
