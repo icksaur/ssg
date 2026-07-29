@@ -20,6 +20,9 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ${SSG_SOURCE_DIR}/apps
         ${SSG_SOURCE_DIR}/tests
     )
+    target_compile_definitions(test_ssg_app PRIVATE
+        SSG_TEST_SOURCE_DIR="${SSG_SOURCE_DIR}"
+    )
     target_link_libraries(test_ssg_app PRIVATE ssg)
     add_test(NAME test_ssg_app COMMAND test_ssg_app)
 endif()

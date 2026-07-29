@@ -10,6 +10,7 @@
 #include <ssg/color.h>
 #include <ssg/Renderer.h>
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -56,6 +57,14 @@ inline constexpr TerminalMode kMouseButtons{"\x1b[?1000h", "\x1b[?1000l"};
 inline constexpr TerminalMode kMouseMotion{"\x1b[?1002h", "\x1b[?1002l"};
 inline constexpr TerminalMode kMouseSgrCoordinates{"\x1b[?1006h", "\x1b[?1006l"};
 inline constexpr TerminalMode kCursorHidden{"\x1b[?25l", "\x1b[?25h"};
+
+// Every mode above, in the order they are entered.  The one iterable list: the
+// crash undo and its test are both DERIVED from it, so a new mode cannot be
+// covered by one and missed by the other.
+inline constexpr TerminalMode kAllModes[]{
+    kAlternateScreen, kCursorStyleBar,      kMouseButtons,
+    kMouseMotion,     kMouseSgrCoordinates, kCursorHidden,
+};
 
 // An ordered stack of entered modes, and the bytes that undo them.
 //
@@ -113,6 +122,28 @@ private:
     std::unique_ptr<Impl> impl_;
 };
 
+namespace detail {
+
+inline constexpr std::size_t kUndoLength = [] {
+    std::size_t total = 0;
+    for (auto const& mode : kAllModes) total += mode.leave.size();
+    return total;
+}();
+
+// Built at COMPILE TIME.  A lazily initialised static string would allocate and
+// take a thread-safe-static guard on first call, neither of which a fatal-signal
+// handler may do -- and the first call might BE the handler.
+inline constexpr std::array<char, kUndoLength> kUndoStorage = [] {
+    std::array<char, kUndoLength> bytes{};
+    std::size_t at = 0;
+    for (std::size_t i = std::size(kAllModes); i-- > 0;) {
+        for (char byte : kAllModes[i].leave) bytes[at++] = byte;
+    }
+    return bytes;
+}();
+
+}  // namespace detail
+
 // The bytes that leave EVERY declared mode, in reverse declaration order, for a
 // fatal-signal handler to write.
 //
@@ -132,7 +163,9 @@ private:
 //
 // Order still matters and is encoded here: mouse reporting is disabled before
 // the alternate screen is left, or reporting stays on in the primary screen.
-[[nodiscard]] std::string_view all_modes_undo_sequence() noexcept;
+[[nodiscard]] constexpr std::string_view all_modes_undo_sequence() noexcept {
+    return {detail::kUndoStorage.data(), detail::kUndoStorage.size()};
+}
 
 // The workspace directory to open and, optionally, a file within it to open in
 // a tab.  A file argument opens its parent directory; a directory argument

@@ -312,9 +312,17 @@ a reader, and a signal is not always delivered to the thread that is mid-update.
 No lock-free publication of a variable-length buffer fixes that without a
 retry the handler cannot afford. But the superset argument the spec already
 made says precision is not needed: leaving a mode that is not set does nothing.
-So the crash undo is a compile-time constant covering every declared mode in
-reverse declaration order — no synchronisation, no allocation, trivially
+So the crash undo is a constant covering every declared mode in reverse
+declaration order — no synchronisation, no allocation, trivially
 async-signal-safe, and strictly safer than the design it replaces.
+
+Review caught that the first version of that constant was not one: a lazily
+initialised `static std::string` allocates and takes a thread-safe-static guard
+on first call, and the first call might BE the handler. It is now built at
+compile time from a single iterable `kAllModes` table, which the crash undo and
+its test are both derived from — so a new mode cannot be covered by one and
+missed by the other. That the table itself holds every declared mode is checked
+by scanning the header, independent of the table.
 
 **Frame assembly moved into `ssg::app`.** The cursor-balance oracle was
 specified as a pty test because frame assembly lived in the loop. Extracting

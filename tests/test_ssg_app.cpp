@@ -484,25 +484,33 @@ TEST(theCrashUndoLeavesEveryDeclaredModeInReverseOrder) {
     // there cannot be published safely, and why over-approximating is the safe
     // direction.
     //
-    // Independent expectation: assembled here from the declarations in reverse,
-    // rather than by asking the function how it built itself.
+    // Assembled from the one list, reversed, rather than by asking the function
+    // how it built itself.
     std::string expected;
-    for (auto const& mode :
-         {ssg::app::kCursorHidden, ssg::app::kMouseSgrCoordinates,
-          ssg::app::kMouseMotion, ssg::app::kMouseButtons,
-          ssg::app::kCursorStyleBar, ssg::app::kAlternateScreen}) {
-        expected.append(mode.leave);
+    for (std::size_t i = std::size(ssg::app::kAllModes); i-- > 0;) {
+        expected.append(ssg::app::kAllModes[i].leave);
     }
-    ASSERT_EQ(std::string{ssg::app::all_modes_undo_sequence()}, expected);
-
-    // Every mode the process enters must be covered, or a crash leaves it set.
     auto const undo = std::string{ssg::app::all_modes_undo_sequence()};
-    for (auto const& mode :
-         {ssg::app::kAlternateScreen, ssg::app::kCursorStyleBar,
-          ssg::app::kMouseButtons, ssg::app::kMouseMotion,
-          ssg::app::kMouseSgrCoordinates, ssg::app::kCursorHidden}) {
-        ASSERT_TRUE(undo.find(std::string{mode.leave}) != std::string::npos);
+    ASSERT_EQ(undo, expected);
+
+    // And the list itself must hold every mode DECLARED, or a mode could be
+    // declared, entered, and left out of the crash undo. Counted from the
+    // header, so this does not just re-read the list it is checking.
+    std::ifstream header{std::string{SSG_TEST_SOURCE_DIR} +
+                         "/apps/ssg_terminal.h"};
+    std::string const source{std::istreambuf_iterator<char>{header},
+                             std::istreambuf_iterator<char>{}};
+    ASSERT_FALSE(source.empty());
+    std::size_t declared = 0;
+    for (std::size_t at = source.find("inline constexpr TerminalMode k");
+         at != std::string::npos;
+         at = source.find("inline constexpr TerminalMode k", at + 1)) {
+        // kAllModes is the list, not a mode.
+        std::string_view const marker{"inline constexpr TerminalMode kAllModes"};
+        if (source.compare(at, marker.size(), marker) == 0) continue;
+        ++declared;
     }
+    ASSERT_EQ(declared, std::size(ssg::app::kAllModes));
 
     // Mouse reporting must be disabled BEFORE the alternate screen is left, or
     // reporting stays on in the primary screen.

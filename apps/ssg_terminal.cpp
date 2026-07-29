@@ -64,21 +64,6 @@ std::size_t TerminalModes::depth() const noexcept {
     return impl_->entered.size();
 }
 
-std::string_view all_modes_undo_sequence() noexcept {
-    // Reverse declaration order: the alternate screen is entered first and left
-    // last.  Assembled once, at first use, so writing it needs no work.
-    static std::string const undo = [] {
-        std::string bytes;
-        for (auto const& mode :
-             {kCursorHidden, kMouseSgrCoordinates, kMouseMotion, kMouseButtons,
-              kCursorStyleBar, kAlternateScreen}) {
-            bytes.append(mode.leave);
-        }
-        return bytes;
-    }();
-    return undo;
-}
-
 TerminalModes::Guard::~Guard() {
     if (owner_ != nullptr) owner_->leaveThrough(depth_ - 1);
 }
