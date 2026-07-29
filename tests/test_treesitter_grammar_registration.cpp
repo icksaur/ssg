@@ -52,7 +52,7 @@ std::vector<SyntaxSpan> spansFor(SyntaxParser& parser,
 TreeSitterGrammar customGrammar() {
     TreeSitterGrammar grammar;
     grammar.languageIds = {"ssg-test-lang"};
-    grammar.language = [] -> SyntaxLanguageHandle { return tree_sitter_c(); };
+    grammar.language = []() -> SyntaxLanguageHandle { return tree_sitter_c(); };
     // "return" is an anonymous token in the C grammar; "int" is not (it parses
     // as primitive_type), and querying a nonexistent node type fails to compile.
     grammar.highlightQuery = "\"return\" @keyword\n(identifier) @variable\n";
@@ -103,7 +103,7 @@ TEST(theDefaultParserStillCarriesEveryVendoredGrammar) {
 TEST(parsersDoNotShareCompiledQueriesForTheSameLanguageId) {
     TreeSitterGrammar shadowed;
     shadowed.languageIds = {"c"};
-    shadowed.language = [] -> SyntaxLanguageHandle { return tree_sitter_c(); };
+    shadowed.language = []() -> SyntaxLanguageHandle { return tree_sitter_c(); };
     // Valid query, but captures nothing that maps to a scope.
     shadowed.highlightQuery = "(translation_unit) @none\n";
 

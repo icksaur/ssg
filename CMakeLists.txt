@@ -55,6 +55,18 @@ if(SSG_SANITIZE)
     )
 endif()
 
+# Warnings are errors for THIS project's own code, so the fourteen that had
+# accumulated cannot come back.  Deliberately PRIVATE and deliberately scoped to
+# a top-level build: a consumer embedding ssg via add_subdirectory compiles with
+# its own toolchain and its own idea of which warnings matter, and inheriting
+# -Werror from a dependency is how a library breaks someone else's build on a
+# compiler upgrade.  Vendored third-party sources already build with -w.
+option(SSG_WERROR "Treat compiler warnings as errors in ssg's own sources"
+       ${PROJECT_IS_TOP_LEVEL})
+if(SSG_WERROR)
+    target_compile_options(ssg PRIVATE -Werror)
+endif()
+
 # Auto-discover component manifests.  CONFIGURE_DEPENDS causes Ninja and
 # Makefile generators to re-glob when cmake/components/ changes, so new
 # manifests are discovered on the next build invocation without a manual
