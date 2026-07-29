@@ -185,8 +185,7 @@ TEST(clipboardAndReplaceAreDistinctNoncoalescingUnits) {
     current = *cut.selections;
 
     const auto paste = clipboard.paste(
-        document, history, current, ssg::ClipboardPasteMode::InternalOnly,
-        200);
+        document, history, current, 200);
     ASSERT_TRUE(paste.accepted());
     ASSERT_EQ(document.snapshot().text, std::string{"cat cat"});
 

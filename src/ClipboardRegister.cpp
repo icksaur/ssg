@@ -19,30 +19,10 @@ struct RegisterData {
     std::string plainText;
 };
 
-struct PendingRead {
-    ClipboardRequest request;
-    SelectionSet selections;
-    RegisterData fallback;
-};
-
 ClipboardResult failure(ClipboardError error, Revision revision,
-                        ClipboardSystemStatus status, std::string message) {
-    return {error, status, revision, std::nullopt, std::nullopt, false,
+                        std::string message) {
+    return {error, revision, std::nullopt, std::nullopt, false,
             std::move(message)};
-}
-
-ClipboardSystemStatus systemStatus(ClipboardResponseStatus status) {
-    switch (status) {
-        case ClipboardResponseStatus::Success:
-            return ClipboardSystemStatus::Succeeded;
-        case ClipboardResponseStatus::Denied:
-            return ClipboardSystemStatus::Denied;
-        case ClipboardResponseStatus::Unavailable:
-            return ClipboardSystemStatus::Unavailable;
-        case ClipboardResponseStatus::Disconnected:
-            return ClipboardSystemStatus::Disconnected;
-    }
-    return ClipboardSystemStatus::Unavailable;
 }
 
 bool positionIsValid(std::string_view text, const DocumentPosition& position,
@@ -234,36 +214,31 @@ struct ClipboardRegister::Impl {
     int tabWidth;
     std::uint64_t nextRequestId = 1;
     RegisterData registerData;
-    std::optional<ClipboardRequest> pendingWrite;
-    std::optional<PendingRead> pendingRead;
+    std::optional<ClipboardWrite> systemWrite;
 
-    std::optional<ClipboardRequest> request(ClipboardRequestKind kind,
-                                            Revision revision,
+    std::optional<ClipboardWrite> makeWrite(Revision revision,
                                             std::string text) {
         if (nextRequestId == std::numeric_limits<std::uint64_t>::max()) {
             return std::nullopt;
         }
-        return ClipboardRequest{nextRequestId++, kind, revision,
-                                std::move(text)};
+        return ClipboardWrite{nextRequestId++, revision, std::move(text)};
     }
 
     ClipboardResult pasteData(Document& document, DocumentHistory& history,
                                const SelectionSet& selections,
                                const RegisterData& data,
-                               std::uint64_t timestampMs,
-                               ClipboardSystemStatus status) {
+                               std::uint64_t timestampMs) {
         const auto snapshot = document.snapshot();
         if (const auto error = modeError(snapshot.mode);
             error != ClipboardError::None) {
-            return failure(error, snapshot.revision, status,
-                           modeMessage(snapshot.mode));
+            return failure(error, snapshot.revision, modeMessage(snapshot.mode));
         }
         if (!selectionsAreValid(snapshot.text, selections, tabWidth)) {
             return failure(ClipboardError::InvalidSelection, snapshot.revision,
-                           status, "clipboard paste has an invalid selection");
+                           "clipboard paste has an invalid selection");
         }
         if (data.fragments.empty()) {
-            return {ClipboardError::None, status, snapshot.revision, selections,
+            return {ClipboardError::None, snapshot.revision, selections,
                     std::nullopt, false, {}};
         }
 
@@ -289,14 +264,13 @@ struct ClipboardRegister::Impl {
         const auto resultingText =
             applyReplacements(snapshot.text, edits);
         if (resultingText == snapshot.text) {
-            return {ClipboardError::None, status, snapshot.revision, selections,
+            return {ClipboardError::None, snapshot.revision, selections,
                     std::nullopt, false, {}};
         }
         const auto after = pasteSelections(resultingText, selections,
                                             insertions, tabWidth);
         if (!after) {
             return failure(ClipboardError::InvalidUtf8, snapshot.revision,
-                           status,
                            "clipboard text is not well-formed UTF-8");
         }
 
@@ -305,9 +279,9 @@ struct ClipboardRegister::Impl {
             selections, *after, HistoryEditKind::Other, timestampMs);
         if (!historyResult.accepted()) {
             return failure(documentError(historyResult.documentError),
-                           document.revision(), status, historyResult.message);
+                           document.revision(), historyResult.message);
         }
-        return {ClipboardError::None, status, historyResult.revision,
+        return {ClipboardError::None, historyResult.revision,
                 historyResult.selections, std::nullopt, true, {}};
     }
 };
@@ -351,21 +325,18 @@ ClipboardResult ClipboardRegister::copy(const DocumentSnapshot& document,
                                         const SelectionSet& selections) {
     if (!selectionsAreValid(document.text, selections, impl_->tabWidth)) {
         return failure(ClipboardError::InvalidSelection, document.revision,
-                       ClipboardSystemStatus::NotRequested,
                        "clipboard copy has an invalid selection");
     }
     auto captured = capture(document.text, selections);
-    auto request = impl_->request(ClipboardRequestKind::Write,
-                                  document.revision, captured.plainText);
-    if (!request) {
+    auto write = impl_->makeWrite(document.revision, captured.plainText);
+    if (!write) {
         return failure(ClipboardError::RequestExhausted, document.revision,
-                       ClipboardSystemStatus::NotRequested,
                        "clipboard request identifiers are exhausted");
     }
     impl_->registerData = std::move(captured);
-    impl_->pendingWrite = *request;
-    return {ClipboardError::None, ClipboardSystemStatus::Pending,
-            document.revision, selections, std::move(request), false, {}};
+    impl_->systemWrite = *write;
+    return {ClipboardError::None, document.revision, selections,
+            std::move(write), false, {}};
 }
 
 ClipboardResult ClipboardRegister::cut(Document& document,
@@ -376,12 +347,10 @@ ClipboardResult ClipboardRegister::cut(Document& document,
     if (const auto error = modeError(snapshot.mode);
         error != ClipboardError::None) {
         return failure(error, snapshot.revision,
-                       ClipboardSystemStatus::NotRequested,
                        modeMessage(snapshot.mode));
     }
     if (!selectionsAreValid(snapshot.text, selections, impl_->tabWidth)) {
         return failure(ClipboardError::InvalidSelection, snapshot.revision,
-                       ClipboardSystemStatus::NotRequested,
                        "clipboard cut has an invalid selection");
     }
 
@@ -404,7 +373,6 @@ ClipboardResult ClipboardRegister::cut(Document& document,
         if (!after) {
             return failure(ClipboardError::DocumentRejected,
                            snapshot.revision,
-                           ClipboardSystemStatus::NotRequested,
                            "clipboard cut could not resolve its selections");
         }
         const auto historyResult = history.applyEdit(
@@ -413,114 +381,44 @@ ClipboardResult ClipboardRegister::cut(Document& document,
         if (!historyResult.accepted()) {
             return failure(documentError(historyResult.documentError),
                            document.revision(),
-                           ClipboardSystemStatus::NotRequested,
                            historyResult.message);
         }
         revision = historyResult.revision;
         after = historyResult.selections;
     }
 
-    auto request = impl_->request(ClipboardRequestKind::Write, revision,
-                                  captured.plainText);
-    if (!request) {
+    auto write = impl_->makeWrite(revision, captured.plainText);
+    if (!write) {
         return failure(ClipboardError::RequestExhausted, revision,
-                       ClipboardSystemStatus::NotRequested,
                        "clipboard request identifiers are exhausted");
     }
     impl_->registerData = std::move(captured);
-    impl_->pendingWrite = *request;
-    return {ClipboardError::None, ClipboardSystemStatus::Pending, revision,
-            std::move(after), std::move(request), changed, {}};
+    impl_->systemWrite = *write;
+    return {ClipboardError::None, revision, std::move(after),
+            std::move(write), changed, {}};
 }
 
 ClipboardResult ClipboardRegister::paste(Document& document,
                                          DocumentHistory& history,
                                          const SelectionSet& selections,
-                                         ClipboardPasteMode mode,
                                          std::uint64_t timestampMs) {
     const auto snapshot = document.snapshot();
     if (const auto error = modeError(snapshot.mode);
         error != ClipboardError::None) {
         return failure(error, snapshot.revision,
-                       ClipboardSystemStatus::NotRequested,
                        modeMessage(snapshot.mode));
     }
     if (!selectionsAreValid(snapshot.text, selections, impl_->tabWidth)) {
         return failure(ClipboardError::InvalidSelection, snapshot.revision,
-                       ClipboardSystemStatus::NotRequested,
                        "clipboard paste has an invalid selection");
     }
-    if (mode == ClipboardPasteMode::InternalOnly) {
-        return impl_->pasteData(document, history, selections,
-                                 impl_->registerData, timestampMs,
-                                 ClipboardSystemStatus::NotRequested);
-    }
-
-    auto request =
-        impl_->request(ClipboardRequestKind::Read, snapshot.revision, {});
-    if (!request) {
-        return failure(ClipboardError::RequestExhausted, snapshot.revision,
-                       ClipboardSystemStatus::NotRequested,
-                       "clipboard request identifiers are exhausted");
-    }
-    impl_->pendingRead =
-        PendingRead{*request, selections, impl_->registerData};
-    return {ClipboardError::None, ClipboardSystemStatus::Pending,
-            snapshot.revision, selections, std::move(request), false, {}};
-}
-
-ClipboardResult ClipboardRegister::handleResponse(
-    Document& document, DocumentHistory& history,
-    const SelectionSet& currentSelections, const ClipboardResponse& response,
-    std::uint64_t timestampMs) {
-    const auto currentRevision = document.revision();
-    if (impl_->pendingWrite && impl_->pendingWrite->id == response.id) {
-        const auto request = *impl_->pendingWrite;
-        impl_->pendingWrite.reset();
-        if (response.requestRevision != request.requestRevision ||
-            response.observedDocumentRevision != request.requestRevision) {
-            return failure(ClipboardError::StaleResponse, currentRevision,
-                           ClipboardSystemStatus::Stale,
-                           "stale clipboard write response");
-        }
-        return {ClipboardError::None, systemStatus(response.status),
-                currentRevision, currentSelections, std::nullopt, false, {}};
-    }
-
-    if (!impl_->pendingRead || impl_->pendingRead->request.id != response.id) {
-        return failure(ClipboardError::NoRequest, currentRevision,
-                       ClipboardSystemStatus::Stale,
-                       "clipboard response does not match an outstanding request");
-    }
-    auto pending = std::move(*impl_->pendingRead);
-    impl_->pendingRead.reset();
-    if (response.requestRevision != pending.request.requestRevision ||
-        response.observedDocumentRevision !=
-            pending.request.requestRevision ||
-        currentRevision != pending.request.requestRevision ||
-        currentSelections != pending.selections) {
-        return failure(ClipboardError::StaleResponse, currentRevision,
-                       ClipboardSystemStatus::Stale,
-                       "stale clipboard read response");
-    }
-
-    const auto status = systemStatus(response.status);
-    if (response.status == ClipboardResponseStatus::Success) {
-        RegisterData systemData{{response.text}, response.text};
-        return impl_->pasteData(document, history, currentSelections,
-                                 systemData, timestampMs, status);
-    }
-    return impl_->pasteData(document, history, currentSelections,
-                             pending.fallback, timestampMs, status);
+    return impl_->pasteData(document, history, selections,
+                             impl_->registerData, timestampMs);
 }
 
 ClipboardViewState ClipboardRegister::viewState() const {
-    std::optional<ClipboardRequest> read;
-    if (impl_->pendingRead) {
-        read = impl_->pendingRead->request;
-    }
     return {impl_->registerData.fragments, impl_->registerData.plainText,
-            std::move(read), impl_->pendingWrite};
+            impl_->systemWrite};
 }
 
 }  // namespace ssg

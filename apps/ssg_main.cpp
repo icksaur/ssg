@@ -1072,17 +1072,17 @@ int main(int argc, char** argv) {
             // authoritative published state rather than the app keeping its own
             // copy of what was cut or copied.
             clipboardText = snapshot->sections().clipboard.plainText;
-            // A copy or cut raises a pending write.  Serve it by putting the text
-            // on the user's SYSTEM clipboard via OSC 52, which over SSH is the
-            // only way the remote editor can reach the local clipboard at all.
-            // Keyed by request id so one copy is written once, and skipped
+            // A copy or cut offers its text for the SYSTEM clipboard.  Serve it
+            // with OSC 52, which over SSH is the only way the remote editor can
+            // reach the local clipboard at all.  Fire and forget: keyed by id so
+            // one copy is written once, with nothing reported back, and skipped
             // entirely when the terminal did not advertise the capability --
-            // where it would be an unrecognised sequence rather than a paste.
-            auto const& pendingWrite = snapshot->sections().clipboard.pendingWrite;
-            if (pendingWrite && pendingWrite->id != lastClipboardWriteId &&
+            // where it would be an unrecognised sequence rather than a copy.
+            auto const& systemWrite = snapshot->sections().clipboard.systemWrite;
+            if (systemWrite && systemWrite->id != lastClipboardWriteId &&
                 capabilities.has(ssg::app::Capability::ClipboardWrite)) {
-                lastClipboardWriteId = pendingWrite->id;
-                writeAll(ssg::app::encode_clipboard_write(pendingWrite->text));
+                lastClipboardWriteId = systemWrite->id;
+                writeAll(ssg::app::encode_clipboard_write(systemWrite->text));
             }
             // Derive find fulfillment from the ACTIVE prompt kind, not merely the
             // controller being open under prompt focus: a palette/settings prompt

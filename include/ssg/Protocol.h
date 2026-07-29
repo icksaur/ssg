@@ -215,15 +215,21 @@ private:
 // Versioned message kinds. Each carries a distinct payload; there is no
 // client-asserted capability message (capabilities live in the per-client
 // snapshot/delta).
-
+//
+// Values are PINNED, and a retired kind's value is reserved rather than reused:
+// the ordinal is what goes on the wire, so removing an entry would silently
+// renumber every kind after it and make two peers disagree about what a message
+// means while both still parse it.
 enum class ProtocolMessageKind : std::uint8_t {
-    CommandRequest,
-    SessionSnapshot,
-    SessionDelta,
-    ClipboardRequest,
-    ClipboardResponse,
-    StatusActionInvocation,
-    CommandResult,
+    CommandRequest = 0,
+    SessionSnapshot = 1,
+    SessionDelta = 2,
+    // 3 was clipboard_request and 4 was clipboard_response, from a design where
+    // a client acknowledged clipboard operations.  Both are retired: the
+    // register holds the text either way, so a local paste works regardless of
+    // what a system clipboard did, and a client had nothing useful to report.
+    StatusActionInvocation = 5,
+    CommandResult = 6,
 };
 
 struct DecodeCommandRequestResult {
@@ -259,26 +265,6 @@ struct DecodeSessionSnapshotResult {
 struct DecodeSessionDeltaResult {
     ProtocolError error;
     std::optional<SessionDelta> delta;
-    std::string message;
-
-    [[nodiscard]] bool accepted() const noexcept {
-        return error == ProtocolError::None;
-    }
-};
-
-struct DecodeClipboardRequestResult {
-    ProtocolError error;
-    std::optional<ClipboardRequest> request;
-    std::string message;
-
-    [[nodiscard]] bool accepted() const noexcept {
-        return error == ProtocolError::None;
-    }
-};
-
-struct DecodeClipboardResponseResult {
-    ProtocolError error;
-    std::optional<ClipboardResponse> response;
     std::string message;
 
     [[nodiscard]] bool accepted() const noexcept {
@@ -353,14 +339,6 @@ public:
         std::string_view bytes, ProtocolLimits limits = {}) const;
     [[nodiscard]] std::string encodeSessionDelta(SessionDelta const& delta) const;
     [[nodiscard]] DecodeSessionDeltaResult decodeSessionDelta(
-        std::string_view bytes, ProtocolLimits limits = {}) const;
-    [[nodiscard]] std::string encodeClipboardRequest(
-        ClipboardRequest const& request) const;
-    [[nodiscard]] DecodeClipboardRequestResult decodeClipboardRequest(
-        std::string_view bytes, ProtocolLimits limits = {}) const;
-    [[nodiscard]] std::string encodeClipboardResponse(
-        ClipboardResponse const& response) const;
-    [[nodiscard]] DecodeClipboardResponseResult decodeClipboardResponse(
         std::string_view bytes, ProtocolLimits limits = {}) const;
     [[nodiscard]] std::string encodeStatusActionInvocation(
         StatusActionInvocation const& invocation) const;

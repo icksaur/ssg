@@ -211,20 +211,6 @@ struct HttpEditorRoute::Impl {
             return;
         }
 
-        auto clipboard =
-            ProtocolCodec{}.decodeClipboardResponse(message.data, config.protocolLimits);
-        if (clipboard.accepted()) {
-            try {
-                host.clipboardResponse(
-                    connection->binding->sessionId,
-                    connection->binding->principal.clientId(),
-                    *clipboard.response);
-                publishSession(connection->binding->sessionId);
-            } catch (...) {
-                close(handle, connection);
-            }
-            return;
-        }
         auto status = ProtocolCodec{}.decodeStatusActionInvocation(message.data,
                                                        config.protocolLimits);
         if (status.accepted()) {
@@ -495,11 +481,6 @@ HttpEditorRoute::HttpEditorRoute(
 
 HttpEditorRoute::~HttpEditorRoute() = default;
 
-bool HttpEditorRoute::sendClipboardRequest(
-    ClientId clientId, ClipboardRequest const& request) {
-    return impl_->sendTo(clientId, ProtocolCodec{}.encodeClipboardRequest(request));
-}
-
 bool HttpEditorRoute::sendBinary(ClientId clientId,
                                   BinaryFrame const& frame) {
     return impl_->sendTo(clientId, ProtocolCodec{}.encodeBinaryFrame(frame));
@@ -547,11 +528,6 @@ HttpEditorServer::~HttpEditorServer() = default;
 
 void HttpEditorServer::start() { impl_->start(); }
 void HttpEditorServer::stop() { impl_->stop(); }
-
-bool HttpEditorServer::sendClipboardRequest(
-    ClientId clientId, ClipboardRequest const& request) {
-    return impl_->route.sendClipboardRequest(clientId, request);
-}
 
 bool HttpEditorServer::sendBinary(ClientId clientId,
                                    BinaryFrame const& frame) {

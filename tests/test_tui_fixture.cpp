@@ -127,7 +127,7 @@ public:
              0, std::nullopt},
             {!state_.undo_text.empty(), !state_.redo_text.empty(),
              state_.undo_text.size() + state_.redo_text.size()},
-            {{state_.clipboard}, state_.clipboard, std::nullopt, std::nullopt},
+            {{state_.clipboard}, state_.clipboard, std::nullopt},
             std::move(promptStatus),
             {revision, false, {}, ssg::SearchMode::File, {}, std::nullopt, 0,
              false},

@@ -191,7 +191,7 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision,
         {revision, marker, ssg::ByteOffset{marker.size()}},
         selection(marker.size()),
         {true, false, marker.size()},
-        {{marker}, marker, std::nullopt, std::nullopt},
+        {{marker}, marker, std::nullopt},
         {std::nullopt, {{}, 0}},
         {revision, false, {}, ssg::SearchMode::File, {}, std::nullopt, 0,
          false},
@@ -255,10 +255,6 @@ public:
             sections(session.revision(), document));
     }
 
-    void clipboardResponse(ssg::SessionId const&, ssg::ClientId,
-                            ssg::ClipboardResponse const&) override {
-        ++clipboardResponses;
-    }
     void statusAction(ssg::SessionId const&, ssg::ClientId,
                        ssg::StatusActionInvocation const&) override {
         ++statusActions;
@@ -270,7 +266,6 @@ public:
 
     ssg::EditorSession& session;
     std::string document;
-    std::atomic<int> clipboardResponses{0};
     std::atomic<int> statusActions{0};
     std::atomic<int> binaryFrames{0};
 };
@@ -481,7 +476,7 @@ TEST(commandDeltaReplaysOnReconnectAndEvictionSendsSnapshot) {
     server.stop();
 }
 
-TEST(clipboardStatusAndBinaryIngressShareTheAttachedConnection) {
+TEST(statusAndBinaryIngressShareTheAttachedConnection) {
     Fixture fixture;
     constexpr std::uint16_t port = 18777;
     ssg::HttpEditorServer server{
@@ -494,17 +489,12 @@ TEST(clipboardStatusAndBinaryIngressShareTheAttachedConnection) {
     attach(socket.socket, "remote");
     ASSERT_TRUE(ssg::ProtocolCodec{}.decodeSessionSnapshot(reader.next().payload).accepted());
 
-    auto const clipboard = ssg::ProtocolCodec{}.encodeClipboardResponse(
-        {7, ssg::Revision{1}, ssg::Revision{1},
-         ssg::ClipboardResponseStatus::Success, "ok"});
     auto const status = ssg::ProtocolCodec{}.encodeStatusActionInvocation(
         {ssg::StatusId{3}, "run", 1});
     auto const binary = ssg::ProtocolCodec{}.encodeBinaryFrame(
         {1, ssg::BinaryPayloadKind::DroppedContent, 9, {1, 2, 3}});
-    ASSERT_TRUE(ssg::ProtocolCodec{}.decodeClipboardResponse(clipboard).accepted());
     ASSERT_TRUE(ssg::ProtocolCodec{}.decodeStatusActionInvocation(status).accepted());
     ASSERT_TRUE(ssg::ProtocolCodec{}.decodeBinaryFrame(binary).accepted());
-    sendAll(socket.socket, maskedFrame(0x2, clipboard));
     sendAll(socket.socket, maskedFrame(0x2, status));
     sendAll(socket.socket, maskedFrame(0x2, binary));
     for (int attempt = 0;
@@ -513,7 +503,6 @@ TEST(clipboardStatusAndBinaryIngressShareTheAttachedConnection) {
         std::this_thread::sleep_for(2ms);
     }
 
-    ASSERT_EQ(fixture.host->clipboardResponses.load(), 1);
     ASSERT_EQ(fixture.host->statusActions.load(), 1);
     ASSERT_EQ(fixture.host->binaryFrames.load(), 1);
     server.stop();
@@ -619,7 +608,7 @@ int main() {
     RUN(applicationRouteRejectsWrongAndStaleBearersBeforeAttach);
     RUN(attachUsesHostPrincipalAndSocketSnapshotMatchesInProcess);
     RUN(commandDeltaReplaysOnReconnectAndEvictionSendsSnapshot);
-    RUN(clipboardStatusAndBinaryIngressShareTheAttachedConnection);
+    RUN(statusAndBinaryIngressShareTheAttachedConnection);
     RUN(replayLargerThanTheOutboundQueueFallsBackToSnapshot);
     RUN(configAndAttachCodecRejectUnboundedOrClientAuthorityInputs);
     RUN(slowClientCannotGrowTheOutboundQueue);
