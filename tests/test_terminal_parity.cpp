@@ -503,12 +503,112 @@ TEST(realBinaryWideGlyphOutputMatchesRender) {
     fs::remove_all(root);
 }
 
+// Oracle (INV-startup-unblocked, INV-reply-never-input) against the REAL binary.
+//
+// Two things are only observable end to end.  First, that no capability query
+// delays the first frame: a terminal is simulated that holds its DA1 answer back
+// far longer than any real one would, and the frame must already be on screen
+// before that answer is written.  The ordering is decided by the code rather than
+// by a race -- the reply provably has not been sent when the frame is observed.
+//
+// Second, that a reply never reaches the document.  The answer is written LATE,
+// after the probe window has closed, which is the case most likely to be treated
+// as ordinary typing; its bytes must appear nowhere in any later frame.
+TEST(theFirstFrameIsWrittenBeforeAnyReplyIsRead) {
+    auto const root = fs::temp_directory_path() /
+                      ("ssg-probe-" + std::to_string(::getpid()));
+    fs::remove_all(root);
+    fs::create_directories(root / "workspace");
+    // A marker that cannot occur in terminal setup bytes, so seeing it in the
+    // output means a rendered content frame and not merely mode-setting.
+    std::string const marker = "CAPABILITYPROBEMARKER";
+    std::ofstream{root / "workspace" / "alpha.txt", std::ios::binary}
+        << marker << "\n";
+
+    winsize ws{};
+    ws.ws_col = 80;
+    ws.ws_row = 24;
+    int master = -1;
+    pid_t const pid = forkpty(&master, nullptr, nullptr, &ws);
+    ASSERT_TRUE(pid >= 0);
+    if (pid < 0) { fs::remove_all(root); return; }
+    if (pid == 0) {
+        setenv("COLORTERM", "truecolor", 1);
+        setenv("TERM", "xterm-256color", 1);
+        auto const file = (root / "workspace" / "alpha.txt").string();
+        execl(SSG_APP_BINARY, SSG_APP_BINARY, file.c_str(),
+              static_cast<char*>(nullptr));
+        _exit(127);
+    }
+    ::fcntl(master, F_SETFL, ::fcntl(master, F_GETFL, 0) | O_NONBLOCK);
+
+    // A real terminal answers within a round trip; this one stalls, standing in
+    // for a terminal that is slow, wedged, or not a terminal at all.
+    constexpr auto kReplyDelay = std::chrono::milliseconds{1500};
+    std::string const reply = "\x1b[?62;22c";
+    auto const start = std::chrono::steady_clock::now();
+
+    std::string output;
+    std::optional<std::chrono::steady_clock::time_point> frameSeen;
+    bool replySent = false;
+    std::size_t outputAtReply = 0;
+    char buffer[4096];
+    auto const deadline = start + std::chrono::seconds{5};
+    while (std::chrono::steady_clock::now() < deadline) {
+        pollfd pfd{master, POLLIN, 0};
+        ::poll(&pfd, 1, 20);
+        for (;;) {
+            auto const count = ::read(master, buffer, sizeof buffer);
+            if (count <= 0) break;
+            output.append(buffer, static_cast<std::size_t>(count));
+        }
+        if (!frameSeen && output.find(marker) != std::string::npos) {
+            frameSeen = std::chrono::steady_clock::now();
+        }
+        auto const now = std::chrono::steady_clock::now();
+        if (!replySent && now - start >= kReplyDelay) {
+            outputAtReply = output.size();
+            ASSERT_EQ(::write(master, reply.data(), reply.size()),
+                      static_cast<ssize_t>(reply.size()));
+            replySent = true;
+        }
+        // Give the app time to mishandle the late reply if it is going to.
+        if (replySent && now - start >= kReplyDelay + std::chrono::milliseconds{600}) {
+            break;
+        }
+    }
+    ::kill(pid, SIGTERM);
+    int status = 0;
+    ::waitpid(pid, &status, 0);
+    ::close(master);
+
+    // The queries were actually written -- otherwise the rest proves nothing.
+    ASSERT_TRUE(output.find("\x1b[c") != std::string::npos);
+    ASSERT_TRUE(output.find("\x1b[?2026$p") != std::string::npos);
+
+    // The frame was on screen before the answer was even sent.
+    ASSERT_TRUE(frameSeen.has_value());
+    ASSERT_TRUE(replySent);
+    if (frameSeen) {
+        ASSERT_TRUE(*frameSeen - start < kReplyDelay);
+    }
+
+    // Nothing the terminal answered was ever typed into the document.  Only
+    // output produced AFTER the reply was written can carry it.
+    auto const afterReply = output.substr(outputAtReply);
+    ASSERT_TRUE(afterReply.find("62;22c") == std::string::npos);
+    ASSERT_TRUE(output.find(marker + "62") == std::string::npos);
+
+    fs::remove_all(root);
+}
+
 int main() {
     RUN(decoderRoundtripsTheEncodedFrame);
     RUN(decoderRoundtripsOrthogonalTintBackgrounds);
     RUN(canonicalIncludesTintedBlankCells);
     RUN(realBinaryOutputMatchesRenderSnapshot);
     RUN(realBinaryWideGlyphOutputMatchesRender);
+    RUN(theFirstFrameIsWrittenBeforeAnyReplyIsRead);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

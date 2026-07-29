@@ -202,6 +202,12 @@ FdReadiness waitReadiness(int timeoutMs, int signalFd, int gitDiffFd,
 
 constexpr int kEscapeTimeoutMs = 30;
 
+// How long a silent terminal keeps the capability probe window open.  Every
+// answer that is coming arrives within one round trip; past this the terminal is
+// not answering at all, and leaving the window open would mean believing any
+// later reply-shaped bytes (doc/spec-terminal-capabilities.md).
+constexpr int kCapabilityProbeTimeoutMs = 250;
+
 // While a drag is held at the editor edge, wake this often to auto-scroll one
 // line and re-extend the selection, even with no new pointer event (M8-S2).
 constexpr int kEdgeScrollIntervalMs = 40;
@@ -605,6 +611,18 @@ int main(int argc, char** argv) {
         [](std::string_view name) { return std::getenv(std::string{name}.c_str()); }};
     ssg::ColorDepth const colorDepth = capabilities.colorDepth();
 
+    // Ask the terminal what it can do.  The answers arrive on stdin, which the
+    // readiness loop below already watches, so nothing waits for them here and
+    // the first frame renders against the conservative defaults
+    // (INV-startup-unblocked).
+    writeAll(capabilities.beginProbe());
+    // A terminal that answers nothing -- not a terminal, or a broken one -- would
+    // otherwise leave the probe window open for the whole session, and a window
+    // that never closes cannot bound what SSG is willing to believe is a reply.
+    auto const probeDeadline =
+        std::chrono::steady_clock::now() +
+        std::chrono::milliseconds{kCapabilityProbeTimeoutMs};
+
     // Drain and classify any pending signal tags.  Returns false to keep looping;
     // a terminating signal does not return — it restores the terminal in normal
     // context (tcsetattr is not async-signal-safe) and re-raises with the default
@@ -954,6 +972,10 @@ int main(int argc, char** argv) {
     bool firstFrameMarked = false;
     try {
         while (!quit) {
+            if (capabilities.probing() &&
+                std::chrono::steady_clock::now() > probeDeadline) {
+                capabilities.endProbe();
+            }
             auto snapshot = refresh();
             if (snapshot) {
                 // The library renders every screen branch, including the declined-
@@ -1099,6 +1121,14 @@ int main(int argc, char** argv) {
                 if (decoded.status == ssg::app::DecodeStatus::incomplete) break;
             }
             buffer.erase(0, consumed);
+
+            // A terminal report answering a startup query, not something the user
+            // typed.  It is consumed either way; whether it is believed is the
+            // capability object's decision, not this loop's.
+            if (decoded.status == ssg::app::DecodeStatus::reply) {
+                capabilities.observeReply(decoded.reply);
+                continue;
+            }
 
             // Adopt fresh authoritative focus before every event after the first
             // (the first uses the snapshot already taken at the top of the loop).
