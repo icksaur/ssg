@@ -511,6 +511,111 @@ TEST(aGutterHitFollowsTheRowWhereverTheColumnWent) {
     ASSERT_FALSE(tester.inGutter(ssg::HitRegion::Tab, row).hit());
 }
 
+// Enough open tabs and the active one used to fall off the right edge: invisible
+// AND unclickable, with no way back to it but the keyboard.  The bar now starts
+// wherever it must for the active tab to be on screen, which also means
+// next/previous auto-scroll -- they move the active tab and the window follows.
+TEST(theActiveTabIsAlwaysVisibleAndClickableHoweverManyAreOpen) {
+    auto root = uniqueRoot();
+    // More tabs than can fit an 80-column bar.
+    std::vector<std::string> names;
+    for (int i = 0; i < 12; ++i) {
+        auto const name = "document_number_" + std::to_string(i) + ".txt";
+        std::ofstream{root / name} << "x\n";
+        names.push_back(name);
+    }
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    for (auto const& name : names) {
+        (void)runtime->dispatch(ssg::ClientId{1},
+                                {"file.open", runtime->revision(), name});
+    }
+
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    auto const& tabs = snapshot->sections().tabs.tabs;
+    ASSERT_TRUE(tabs.size() > 1);
+
+    // The last-opened tab is active; it must have a hit rectangle, or it cannot
+    // be clicked back to.
+    auto const activeIndex = [&] {
+        for (std::size_t i = 0; i < tabs.size(); ++i) {
+            if (snapshot->sections().tabs.active == tabs[i].id) return i;
+        }
+        return std::size_t{0};
+    }();
+    auto const& hits = snapshot->sections().shell.tabHits;
+    ASSERT_FALSE(hits.empty());
+    bool activeIsHittable = false;
+    for (auto const& hit : hits) {
+        if (hit.index == activeIndex) activeIsHittable = true;
+    }
+    ASSERT_TRUE(activeIsHittable);
+
+    // Visible is not enough -- it must be WHOLLY visible.  A window that scrolls
+    // one tab too few still leaves a hit rectangle, just a truncated one, so the
+    // active tab's label must fit inside its rectangle.
+    for (auto const& hit : hits) {
+        if (hit.index != activeIndex) continue;
+        auto const& label = tabs[activeIndex].label;
+        ASSERT_TRUE(hit.rect.width >= static_cast<int>(label.size()));
+        ASSERT_TRUE(hit.rect.right() <= snapshot->sections().shell.tabBar->right());
+    }
+
+    // Not every tab fits -- otherwise this proves nothing about scrolling.
+    ASSERT_TRUE(hits.size() < tabs.size());
+
+    // Clicking that rectangle really does resolve to the tab, so the visible tab
+    // is an ACTIONABLE one rather than merely drawn.
+    for (auto const& hit : hits) {
+        if (hit.index != activeIndex) continue;
+        auto const region = ssg::HitTester{*snapshot}.at(
+            hit.rect.x, hit.rect.y);
+        ASSERT_EQ(region.region, ssg::HitRegion::Tab);
+        ASSERT_EQ(region.tabIndex, static_cast<std::uint32_t>(activeIndex));
+    }
+
+    // Switching to the FIRST tab scrolls the bar back: the window follows the
+    // active tab in both directions, so tab.previous cannot strand it either.
+    (void)runtime->dispatch(ssg::ClientId{1},
+                            {"tab.activate", runtime->revision(), tabs.front().id});
+    auto scrolledBack = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(scrolledBack.has_value());
+    if (!scrolledBack) return;
+    bool firstIsHittable = false;
+    for (auto const& hit : scrolledBack->sections().shell.tabHits) {
+        if (hit.index == 0) firstIsHittable = true;
+    }
+    ASSERT_TRUE(firstIsHittable);
+
+    // A tab wider than the whole bar still gets shown, clipped, rather than the
+    // window scrolling past it into an empty bar.  This is the case the "stop at
+    // the active tab" bound exists for; without it a very long filename in a
+    // narrow terminal would leave nothing to click.
+    auto narrow = runtime->snapshot(ssg::ClientId{1}, {20, 24});
+    ASSERT_TRUE(narrow.has_value());
+    if (!narrow) return;
+    auto const& narrowHits = narrow->sections().shell.tabHits;
+    ASSERT_FALSE(narrowHits.empty());
+    // And it is the ACTIVE tab that is shown, not whichever happens to follow
+    // it: scrolling past the active tab would leave the user looking at a bar
+    // that cannot reach the document they are editing.
+    auto const narrowActive = [&] {
+        auto const& list = narrow->sections().tabs.tabs;
+        for (std::size_t i = 0; i < list.size(); ++i) {
+            if (narrow->sections().tabs.active == list[i].id) return i;
+        }
+        return std::size_t{0};
+    }();
+    bool narrowActiveShown = false;
+    for (auto const& hit : narrowHits) {
+        if (hit.index == narrowActive) narrowActiveShown = true;
+    }
+    ASSERT_TRUE(narrowActiveShown);
+}
+
 TEST(tabBarCellMapsToItsTabIndex) {
     auto root = uniqueRoot();
     std::ofstream{root / "alpha.txt"} << "a\n";
@@ -726,6 +831,7 @@ int main() {
     RUN(paletteScrollbarAndEmptyAreaClassifyCorrectly);
     RUN(editorScrollbarFractionFeedsScrollToFraction);
     RUN(aGutterHitFollowsTheRowWhereverTheColumnWent);
+    RUN(theActiveTabIsAlwaysVisibleAndClickableHoweverManyAreOpen);
     RUN(tabBarCellMapsToItsTabIndex);
     RUN(statusFieldHitCoordinatesResolvePublishedFieldCommands);
     RUN(clickingPublishedStatusFieldCommandsDispatchesThroughOneGenericPath);

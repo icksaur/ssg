@@ -545,8 +545,40 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
         view.tabBar = Rect{editor.x, editor.y, editor.width, tabBarHeight};
         addNode(view, ShellNodeKind::TabBar, "tabs", "Open tabs",
                  *view.tabBar, SemanticRole::TabInactive);
+        // Each tab's width, so the window below can be chosen before any of them
+        // is placed.
+        auto const tabWidth = [&](TabLabel const& tab) {
+            std::string const display =
+                tab.dirty ? tab.title + request.style.tab.dirtySuffix : tab.title;
+            return std::max(1, displayCells(display) +
+                                   request.style.dimensions.labelPadding);
+        };
+        // Which tab the bar starts at.  Tabs used to lay out from the first and
+        // simply stop at the edge, so opening enough of them put the active tab
+        // off-screen -- invisible AND unclickable, with no way back to it but the
+        // keyboard.
+        //
+        // Derived rather than stored: the smallest start index that still leaves
+        // room for the active tab.  That keeps the active tab visible, shows as
+        // many preceding tabs as fit, and needs no scroll offset to keep in sync
+        // with tabs opening, closing and being reordered.  next/previous
+        // therefore auto-scroll for free -- they move the active tab, and the
+        // window follows it.
+        std::size_t firstTab = 0;
+        if (!request.tabs.empty()) {
+            std::size_t active = 0;
+            for (std::size_t i = 0; i < request.tabs.size(); ++i) {
+                if (request.tabs[i].active) active = i;
+            }
+            int used = 0;
+            for (std::size_t i = 0; i <= active; ++i) used += tabWidth(request.tabs[i]);
+            while (firstTab < active && used > view.tabBar->width) {
+                used -= tabWidth(request.tabs[firstTab]);
+                ++firstTab;
+            }
+        }
         int tabX = view.tabBar->x;
-        for (std::size_t i = 0; i < request.tabs.size(); ++i) {
+        for (std::size_t i = firstTab; i < request.tabs.size(); ++i) {
             const auto& tab = request.tabs[i];
             const std::string display =
                 tab.dirty ? tab.title + request.style.tab.dirtySuffix
