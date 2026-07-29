@@ -90,6 +90,15 @@ TEST(untitledIdentityChangesOnlyAfterSuccessfulSave) {
     const auto id = *created.document;
     const auto before = workspace.state(id);
     ASSERT_EQ(before->key.kind(), ssg::JournalDocumentKeyKind::Untitled);
+    // A brand-new untitled buffer holds nothing to lose, so it is not unsaved.
+    ASSERT_FALSE(before->dirty);
+    // Type something: now there IS something a failed save would lose, which is
+    // the case worth asserting about below.
+    ASSERT_TRUE(workspace
+                    .apply(id, {workspace.document(id).revision(),
+                                {{ssg::ByteOffset{0}, 0, "content"}}})
+                    .accepted());
+    ASSERT_TRUE(workspace.state(id)->dirty);
 
     std::filesystem::create_directories(temporary.path() / "blocked");
     const auto failedSave = workspace.saveAs(id, "blocked");

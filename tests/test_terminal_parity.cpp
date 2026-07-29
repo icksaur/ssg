@@ -256,14 +256,16 @@ std::unique_ptr<ssg::EditorRuntime> makeHeadless(fs::path const& root,
         (void)runtime->dispatch(ssg::ClientId{1},
                                 {"file.new", runtime->revision(), {}});
     }
-    // apps/ssg_main.cpp always opens the Files sidebar at startup; mirror that
-    // here so this fixture matches the app's actual final frame.
-    (void)runtime->dispatch(ssg::ClientId{1},
-                            {"panel.show_files", runtime->revision(), {}});
-    // Showing the sidebar moves focus to the panel, and the app re-asserts
-    // editor focus afterwards whenever startup left something editable. The
-    // caret position differs otherwise, which this fixture's parity check sees.
+    // apps/ssg_main.cpp opens the Files sidebar at startup ONLY when it did not
+    // open a file by name -- over a file the user asked for, the sidebar just
+    // covers the text they came to edit.  `startsOnANewBuffer` is exactly that
+    // case here, so mirror it or this fixture stops matching the app's frame.
     if (startsOnANewBuffer) {
+        (void)runtime->dispatch(ssg::ClientId{1},
+                                {"panel.show_files", runtime->revision(), {}});
+        // Showing the sidebar moves focus to the panel, and the app re-asserts
+        // editor focus afterwards whenever startup left something editable. The
+        // caret position differs otherwise, which this fixture's check sees.
         runtime->focusEditor();
     }
     return runtime;
