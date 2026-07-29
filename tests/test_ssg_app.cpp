@@ -15,6 +15,7 @@
 #include <filesystem>
 #include <fstream>
 #include <map>
+#include <set>
 #include <sstream>
 #include <optional>
 #include <string>
@@ -1375,6 +1376,55 @@ TEST(clipboardWriteEncodesOsc52WithBase64) {
               std::string{"\x1b]52;c;w6k=\x1b\\"});
 }
 
+// A diagnostic is a DECORATION: it underlines whatever the cell already shows
+// without taking its colour, so an error under syntax-highlighted code is still
+// readable as code.  Severity ranks, so an error is never hidden by a hint on
+// the same cell.
+TEST(diagnosticsUnderlineTheirCellsWithoutRecolouringThem) {
+    ssg::CellGrid grid;
+    grid.size = {6, 1};
+    grid.cells.resize(6);
+    for (int x = 0; x < 6; ++x) {
+        grid.cells[static_cast<std::size_t>(x)].text = "x";
+        grid.cells[static_cast<std::size_t>(x)].foreground = 2;
+    }
+    grid.cells[1].underline = ssg::CellUnderline::Error;
+    grid.cells[2].underline = ssg::CellUnderline::Warning;
+    grid.cells[3].underline = ssg::CellUnderline::Info;
+
+    auto const frame =
+        ssg::app::encode_ansi_frame(grid, ssg::ColorDepth::Truecolor);
+    // Curly underline, coloured independently of the text.
+    ASSERT_TRUE(frame.find("\x1b[4:3m\x1b[58;5;1m") != std::string::npos);
+    ASSERT_TRUE(frame.find("\x1b[4:3m\x1b[58;5;3m") != std::string::npos);
+    ASSERT_TRUE(frame.find("\x1b[4:2m\x1b[58;5;4m") != std::string::npos);
+    // And turned back off, or the underline would run to the end of the row.
+    ASSERT_TRUE(frame.find("\x1b[4:0m\x1b[59m") != std::string::npos);
+
+    // The text's own colour is unchanged: a diagnostic decorates, it does not
+    // recolour, so highlighted code stays readable underneath.  Compared as the
+    // SET of colours used -- underlining breaks the run, so the encoder re-emits
+    // the same colour more often, which is not a change in what is shown.
+    ssg::CellGrid undecorated = grid;
+    for (auto& cell : undecorated.cells) cell.underline = ssg::CellUnderline::None;
+    auto const bare =
+        ssg::app::encode_ansi_frame(undecorated, ssg::ColorDepth::Truecolor);
+    auto const foregroundColours = [](std::string const& text) {
+        std::set<std::string> colours;
+        for (std::size_t at = text.find("\x1b[38;2;"); at != std::string::npos;
+             at = text.find("\x1b[38;2;", at + 1)) {
+            auto const end = text.find('m', at);
+            if (end != std::string::npos) {
+                colours.insert(text.substr(at, end - at + 1));
+            }
+        }
+        return colours;
+    };
+    ASSERT_TRUE(foregroundColours(frame) == foregroundColours(bare));
+    // And the underline sequences are the whole of the difference.
+    ASSERT_TRUE(frame.size() > bare.size());
+}
+
 TEST(decodeInputPointerPressReleaseDrag) {
     std::size_t consumed = 0;
 
@@ -2010,6 +2060,7 @@ int main() {
     RUN(aDragFrameEndsWithTheCursorHiddenAndEveryOtherFrameShowsIt);
     RUN(aBracketedPasteIsContentAndNeverKeys);
     RUN(clipboardWriteEncodesOsc52WithBase64);
+    RUN(diagnosticsUnderlineTheirCellsWithoutRecolouringThem);
     RUN(decodeInputPointerPressReleaseDrag);
     RUN(decodeInputPointerSplitReadsAreIncomplete);
     RUN(decodeInputPointerRejectsMalformedButTerminatedPayloads);

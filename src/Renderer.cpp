@@ -108,6 +108,79 @@ std::unordered_map<std::uint32_t, LogicalLine> visibleLogicalLines(
     return lines;
 }
 
+// Underline the document cells covered by LSP diagnostics.
+//
+// A separate pass over already-painted cells rather than a parameter threaded
+// through painting: a diagnostic is a DECORATION over whatever the cell already
+// shows, so it must not disturb syntax colour, selection, find highlighting or
+// a diff tint -- all of which can apply to the same cell.
+//
+// Only the ACTIVE document's diagnostics are painted, and only when the server
+// produced them for the revision on screen: diagnostic ranges are byte offsets
+// into a specific revision, and painting stale ones underlines whatever text has
+// since moved into those positions.
+void paintDiagnostics(CellGrid& grid, SessionSnapshot const& snapshot,
+                       Rect const& content) {
+    auto const& lsp = snapshot.sections().lspSync;
+    if (lsp.documents.empty()) return;
+    auto const& document = snapshot.sections().document;
+    auto const& viewport = snapshot.client().viewport;
+
+    // Highest severity wins per cell, so an error is never hidden by a hint
+    // that happens to be painted after it.
+    auto const rank = [](CellUnderline underline) {
+        switch (underline) {
+        case CellUnderline::Error: return 3;
+        case CellUnderline::Warning: return 2;
+        case CellUnderline::Info: return 1;
+        case CellUnderline::None: return 0;
+        }
+        return 0;
+    };
+    auto const underlineFor = [](std::optional<LspDiagnosticSeverity> severity) {
+        // An absent severity means the server did not say; LSP treats that as an
+        // error, and under-reporting a real error is the worse mistake.
+        if (!severity) return CellUnderline::Error;
+        switch (*severity) {
+        case LspDiagnosticSeverity::Error: return CellUnderline::Error;
+        case LspDiagnosticSeverity::Warning: return CellUnderline::Warning;
+        case LspDiagnosticSeverity::Information:
+        case LspDiagnosticSeverity::Hint: return CellUnderline::Info;
+        }
+        return CellUnderline::Error;
+    };
+
+    for (auto const& file : lsp.documents) {
+        if (file.revision != document.revision) continue;
+        for (auto const& diagnostic : file.diagnostics) {
+            auto const begin =
+                lspPositionToByteOffset(document.text, diagnostic.range.start);
+            auto const end =
+                lspPositionToByteOffset(document.text, diagnostic.range.end);
+            if (!begin.accepted() || !end.accepted()) continue;
+            auto const from = begin.offset.value();
+            // A zero-width diagnostic still marks something: give it the one
+            // cell at its position, or it would be invisible.
+            auto const to = std::max(end.offset.value(), from + 1);
+            auto const underline = underlineFor(diagnostic.severity);
+            for (auto const& target : viewport.hitTargets) {
+                if (target.byteOffset < from || target.byteOffset >= to) continue;
+                int const x = content.x + static_cast<int>(target.viewportColumn);
+                int const y = content.y + static_cast<int>(target.viewportRow);
+                if (x < 0 || y < 0 || x >= grid.size.columns ||
+                    y >= grid.size.rows) {
+                    continue;
+                }
+                auto& cell =
+                    grid.cells[static_cast<std::size_t>(y * grid.size.columns + x)];
+                if (rank(underline) > rank(cell.underline)) {
+                    cell.underline = underline;
+                }
+            }
+        }
+    }
+}
+
 void put(CellGrid& grid, int x, int y, std::string text, std::uint8_t foreground,
          std::uint8_t background, SemanticRole role, bool continuation = false,
          DiffTint tint = DiffTint::None) {
@@ -919,6 +992,9 @@ CellGrid Renderer::render(SessionSnapshot const& snapshot) const {
         } else {
             paintDocument(grid, snapshot, shell.panes.front().content, theme,
                            background, style);
+            // After the document: a diagnostic underlines whatever the cell
+            // already shows rather than replacing it.
+            paintDiagnostics(grid, snapshot, shell.panes.front().content);
             paintScrollbar(grid, shell.panes.front(), snapshot.client().viewport,
                             theme, background, style);
 

@@ -234,8 +234,27 @@ std::string encode_frame(ssg::CellGrid const& screen, ssg::ColorDepth depth,
     return frame;
 }
 
-std::string encode_ansi_frame(ssg::CellGrid const& screen, ssg::ColorDepth depth) {
-    constexpr std::size_t maxIndex = ssg::kThemePaletteSize - 1;
+namespace {
+
+std::string_view underlineSgr(ssg::CellUnderline underline) {
+    // SGR 4:3 is a CURLY underline and 58;5;n colours it independently of the
+    // text, so a squiggle sits under syntax-coloured code without recolouring
+    // it.  Both are widely supported and, crucially, DEGRADE WELL: a terminal
+    // that does not know 4:3 draws a plain underline, and one that does not know
+    // 58 draws it in the text colour.  Nothing is queried because there is
+    // nothing to ask -- and nothing worth refusing to draw.
+    switch (underline) {
+    case ssg::CellUnderline::Error: return "\x1b[4:3m\x1b[58;5;1m";
+    case ssg::CellUnderline::Warning: return "\x1b[4:3m\x1b[58;5;3m";
+    case ssg::CellUnderline::Info: return "\x1b[4:2m\x1b[58;5;4m";
+    case ssg::CellUnderline::None: return "\x1b[4:0m\x1b[59m";
+    }
+    return "\x1b[4:0m\x1b[59m";
+}
+
+}  // namespace
+
+std::string encode_ansi_frame(ssg::CellGrid const& screen, ssg::ColorDepth depth) {    constexpr std::size_t maxIndex = ssg::kThemePaletteSize - 1;
     auto color = [&](ssg::SrgbColor c, char kind) -> std::string {
         auto const resolved = ssg::resolveColor(c, depth);
         switch (resolved.encoding) {
@@ -283,12 +302,14 @@ std::string encode_ansi_frame(ssg::CellGrid const& screen, ssg::ColorDepth depth
         int background = -1;
         int role = -1;
         auto tint = ssg::DiffTint::None;
+        auto underline = ssg::CellUnderline::None;
         for (int x = 0; x < columns; ++x) {
             auto const& cell =
                 screen.cells[static_cast<std::size_t>(y * columns + x)];
             if (cell.continuation) continue;
             if (cell.foreground != foreground || cell.background != background ||
-                cell.tint != tint || static_cast<int>(cell.role) != role) {
+                cell.tint != tint || cell.underline != underline ||
+                static_cast<int>(cell.role) != role) {
                 out += paletteColor(cell.foreground, '3');
                 if (cell.tint != ssg::DiffTint::None) {
                     out += color(tintColor(cell.tint), '4');
@@ -297,9 +318,11 @@ std::string encode_ansi_frame(ssg::CellGrid const& screen, ssg::ColorDepth depth
                 } else {
                     out += paletteColor(cell.background, '4');
                 }
+                out += underlineSgr(cell.underline);
                 foreground = cell.foreground;
                 background = cell.background;
                 tint = cell.tint;
+                underline = cell.underline;
                 role = static_cast<int>(cell.role);
             }
             out += cell.text.empty() ? std::string{" "} : cell.text;
