@@ -91,6 +91,98 @@ TEST(runtimePublishesValidCuratedKeymap) {
     ASSERT_TRUE(ssg::KeymapMatcher{keymap}.hasGlobalBinding("settings.open", {}));
 }
 
+TEST(everyDocumentLineIsReachableAndTheCaretIsNeverLost) {
+    auto root = uniqueRoot("viewport_reach");
+    // More lines than fit, so the document genuinely scrolls.
+    {
+        std::ofstream file{root / "workspace" / "long.txt"};
+        for (int line = 1; line <= 60; ++line) file << "line " << line << "\n";
+    }
+    auto created = ssg::EditorRuntime::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.open", runtime.revision(),
+                                  std::string{"long.txt"}}).accepted());
+    runtime.focusEditor();
+
+    const ssg::ViewportDimensions dims{80, 24};
+    // Walk the caret to the very last line.  The viewport must scroll against
+    // the rows the editor PAINTS, not the terminal height: sized to the whole
+    // terminal it stops short by the header, tab bar and footer, and the final
+    // lines can never be shown.  The visible symptom is a caret the renderer
+    // cannot place -- in a terminal the hardware cursor then stays wherever
+    // painting ended, which is the footer.
+    std::uint32_t lastVisibleLine = 0;
+    for (int step = 0; step < 80; ++step) {
+        auto snapshot = runtime.snapshot(ssg::ClientId{1}, dims);
+        ASSERT_TRUE(snapshot.has_value());
+        if (!snapshot) return;
+        auto const& view = snapshot->client().viewport;
+        auto const caretLine =
+            snapshot->sections().selection.selections.primary().active.line.value();
+        // The caret's line is always inside the window that is actually painted.
+        ASSERT_TRUE(caretLine >= view.firstVisualRow);
+        ASSERT_TRUE(caretLine < view.firstVisualRow + view.visibleRows.size());
+        lastVisibleLine = std::max<std::uint32_t>(lastVisibleLine, caretLine);
+        (void)runtime.dispatch(ssg::ClientId{1},
+                               {"cursor.line_down", runtime.revision(), {}});
+    }
+    // The last line of the document was reached, not merely approached.
+    auto final = runtime.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(final.has_value());
+    if (!final) return;
+    ASSERT_EQ(lastVisibleLine, final->client().viewport.totalVisualRows - 1);
+
+    // Scrolling to the maximum offset shows the final line, so no row is
+    // stranded past the end of the scroll range.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"view.scroll_lines", runtime.revision(),
+                                  ssg::ScrollLinesArguments{500}}).accepted());
+    auto bottom = runtime.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(bottom.has_value());
+    if (!bottom) return;
+    auto const& view = bottom->client().viewport;
+    ASSERT_EQ(view.firstVisualRow, view.scrollbar.maximumFirstRow);
+    ASSERT_EQ(view.firstVisualRow + view.visibleRows.size(),
+              static_cast<std::size_t>(view.totalVisualRows));
+    std::filesystem::remove_all(root);
+}
+
+// A document that fits the terminal but NOT the smaller region the editor
+// actually paints is still clipped, so it must still report a scrollbar.  Sized
+// against the terminal height instead, the scrollbar silently disappears for
+// exactly the documents that most need one.
+TEST(aDocumentClippedByTheChromeStillReportsAScrollbar) {
+    auto root = uniqueRoot("viewport_scrollbar");
+    const ssg::ViewportDimensions dims{80, 24};
+    {
+        // Fewer lines than the terminal has rows, more than the pane paints.
+        std::ofstream file{root / "workspace" / "snug.txt"};
+        for (int line = 1; line <= 23; ++line) file << "line " << line << "\n";
+    }
+    auto created = ssg::EditorRuntime::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.open", runtime.revision(),
+                                  std::string{"snug.txt"}}).accepted());
+    runtime.focusEditor();
+    auto snapshot = runtime.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    auto const& view = snapshot->client().viewport;
+    ASSERT_TRUE(view.totalVisualRows > view.visibleRows.size());
+    ASSERT_TRUE(view.scrollbar.maximumFirstRow > 0);
+    std::filesystem::remove_all(root);
+}
+
 TEST(curatedKeymapBindingsAreArgumentFree) {
     auto root = uniqueRoot("keymap_argfree");
     std::ofstream{root / "workspace" / "doc.txt"} << "alpha\nbeta\n";
@@ -302,6 +394,8 @@ int main() {
     RUN(runtimeConstructsAttachesAndProducesLiveSnapshot);
     RUN(runtimeSourcesDoNotIncludeFixtureModel);
     RUN(runtimePublishesValidCuratedKeymap);
+    RUN(everyDocumentLineIsReachableAndTheCaretIsNeverLost);
+    RUN(aDocumentClippedByTheChromeStillReportsAScrollbar);
     RUN(curatedKeymapBindingsAreArgumentFree);
     RUN(curatedKeymapResolvesPerContext);
     RUN(addCursorChordProducesMultipleSelections);

@@ -134,6 +134,12 @@ struct ListScrollView {
 };
 
 struct ViewportViewState {
+    // The CLIENT'S full surface, which is what a client allocates its grid from.
+    // Deliberately NOT the scrollable area: the shell spends rows on the header,
+    // tab bar, footer and any reserved prompt, so the editor paints fewer rows
+    // than this.  Everything below -- visibleRows, totalVisualRows, scrollbar --
+    // describes that smaller CONTENT region.  Sizing scroll math from this field
+    // instead leaves the last few lines of a document permanently unreachable.
     ViewportDimensions dimensions;
     uint32_t firstVisualRow;
     // The horizontal scroll offset in cells (word wrap OFF only; always 0 when
