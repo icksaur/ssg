@@ -178,6 +178,19 @@ TEST(curatedKeymapResolvesPerContext) {
         ssg::KeymapMatcher{keymap}.resolveSequence(toggleCase, "prompt").commandId,
         std::string{"find.toggle_case"});
 
+    // Editor-scoped means editor-ONLY.  KeyC is protected by find.toggle_case
+    // above, but KeyX and KeyV have no competing binding, so widening them to
+    // "*" would pass validation and silently claim the chord in every context.
+    // Assert they stay unresolved outside the editor.
+    for (auto const* const key : {"KeyX", "KeyV", "KeyC"}) {
+        const auto sequence = *ssg::KeyCodec{}.parseSequence({"Escape", key});
+        for (auto const* const context : {"panel", "prompt"}) {
+            const auto resolved =
+                ssg::KeymapMatcher{keymap}.resolveSequence(sequence, context);
+            ASSERT_TRUE(resolved.commandId.rfind("clipboard.", 0) != 0);
+        }
+    }
+
     // M7-M selection/multi-cursor bindings: Shift+Arrow extends the selection in
     // the editor; the multi-cursor and find/replace chords resolve globally.
     const auto shiftRight = *ssg::KeyCodec{}.parseSequence({"Shift+ArrowRight"});
