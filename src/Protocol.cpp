@@ -869,7 +869,7 @@ DecodedMessage decodeMessage(std::string_view bytes,
 
 //
 // Every leaf/composite type reachable from SessionSnapshotSections,
-// SessionDelta, ClipboardRequest/Response, and StatusActionInvocation has a
+// SessionDelta and StatusActionInvocation has a
 // toValue()/decodePresent() pair, plumbed through one generic fromValue<T>
 // entry point defined once below.
 //
@@ -1028,8 +1028,6 @@ bool decodePresent(ProtocolValue const& value,
 // (toValue(Enum) is served generically above; only decodePresent needs a
 // forward declaration per enum, each implemented via decode_enum().)
 bool decodePresent(ProtocolValue const& value, std::optional<DocumentMode>& out);
-bool decodePresent(ProtocolValue const& value, std::optional<ClipboardRequestKind>& out);
-bool decodePresent(ProtocolValue const& value, std::optional<ClipboardResponseStatus>& out);
 bool decodePresent(ProtocolValue const& value, std::optional<StatusPriority>& out);
 bool decodePresent(ProtocolValue const& value, std::optional<PromptKind>& out);
 bool decodePresent(ProtocolValue const& value, std::optional<PromptControlKind>& out);
@@ -1118,10 +1116,8 @@ ProtocolValue toValue(HistoryViewState const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<HistoryViewState>& out);
 ProtocolValue toValue(HistoryDelta const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<HistoryDelta>& out);
-ProtocolValue toValue(ClipboardRequest const& value);
-bool decodePresent(ProtocolValue const& value, std::optional<ClipboardRequest>& out);
-ProtocolValue toValue(ClipboardResponse const& value);
-bool decodePresent(ProtocolValue const& value, std::optional<ClipboardResponse>& out);
+ProtocolValue toValue(ClipboardWrite const& value);
+bool decodePresent(ProtocolValue const& value, std::optional<ClipboardWrite>& out);
 ProtocolValue toValue(ClipboardViewState const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<ClipboardViewState>& out);
 ProtocolValue toValue(ClipboardDelta const& value);
@@ -1523,19 +1519,6 @@ template <typename Enum, std::size_t N>
 bool decodePresent(ProtocolValue const& value, std::optional<DocumentMode>& out) {
     static constexpr std::array values{DocumentMode::Edit, DocumentMode::ReadOnly,
                                        DocumentMode::Diff};
-    return decodeEnum(value, out, values);
-}
-
-bool decodePresent(ProtocolValue const& value, std::optional<ClipboardRequestKind>& out) {
-    static constexpr std::array values{ClipboardRequestKind::Write,
-                                       ClipboardRequestKind::Read};
-    return decodeEnum(value, out, values);
-}
-
-bool decodePresent(ProtocolValue const& value, std::optional<ClipboardResponseStatus>& out) {
-    static constexpr std::array values{
-        ClipboardResponseStatus::Success, ClipboardResponseStatus::Denied,
-        ClipboardResponseStatus::Unavailable, ClipboardResponseStatus::Disconnected};
     return decodeEnum(value, out, values);
 }
 
@@ -2517,50 +2500,21 @@ bool decodePresent(ProtocolValue const& value, std::optional<PromptStatusDelta>&
 }
 
 
-ProtocolValue toValue(ClipboardRequest const& value) {
+ProtocolValue toValue(ClipboardWrite const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("id", toValue(value.id));
-    fields.emplace_back("kind", toValue(value.kind));
     fields.emplace_back("request_revision", toValue(value.requestRevision));
     fields.emplace_back("text", toValue(value.text));
     return ProtocolValue::makeObject(std::move(fields));
 }
-bool decodePresent(ProtocolValue const& value, std::optional<ClipboardRequest>& out) {
-    auto const* object = value.asObject();
-    if (!object) return false;
-    auto id = requireField<std::uint64_t>(value.field("id"));
-    auto kind = requireField<ClipboardRequestKind>(value.field("kind"));
-    auto requestRevision = requireField<Revision>(value.field("request_revision"));
-    auto text = requireField<std::string>(value.field("text"));
-    if (!id || !kind || !requestRevision || !text) return false;
-    out.emplace(ClipboardRequest{*id, *kind, *requestRevision, *text});
-    return true;
-}
-
-ProtocolValue toValue(ClipboardResponse const& value) {
-    std::vector<ProtocolValue::Field> fields;
-    fields.emplace_back("id", toValue(value.id));
-    fields.emplace_back("request_revision", toValue(value.requestRevision));
-    fields.emplace_back("observed_document_revision",
-                        toValue(value.observedDocumentRevision));
-    fields.emplace_back("status", toValue(value.status));
-    fields.emplace_back("text", toValue(value.text));
-    return ProtocolValue::makeObject(std::move(fields));
-}
-bool decodePresent(ProtocolValue const& value, std::optional<ClipboardResponse>& out) {
+bool decodePresent(ProtocolValue const& value, std::optional<ClipboardWrite>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
     auto id = requireField<std::uint64_t>(value.field("id"));
     auto requestRevision = requireField<Revision>(value.field("request_revision"));
-    auto observedDocumentRevision =
-        requireField<Revision>(value.field("observed_document_revision"));
-    auto status = requireField<ClipboardResponseStatus>(value.field("status"));
     auto text = requireField<std::string>(value.field("text"));
-    if (!id || !requestRevision || !observedDocumentRevision || !status || !text) {
-        return false;
-    }
-    out.emplace(ClipboardResponse{*id, *requestRevision,
-                                  *observedDocumentRevision, *status, *text});
+    if (!id || !requestRevision || !text) return false;
+    out.emplace(ClipboardWrite{*id, *requestRevision, *text});
     return true;
 }
 
@@ -2568,8 +2522,7 @@ ProtocolValue toValue(ClipboardViewState const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("fragments", toValue(value.fragments));
     fields.emplace_back("plain_text", toValue(value.plainText));
-    fields.emplace_back("pending_read", toValue(value.pendingRead));
-    fields.emplace_back("pending_write", toValue(value.pendingWrite));
+    fields.emplace_back("system_write", toValue(value.systemWrite));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<ClipboardViewState>& out) {
@@ -2581,10 +2534,7 @@ bool decodePresent(ProtocolValue const& value, std::optional<ClipboardViewState>
     ClipboardViewState result;
     result.fragments = *fragments;
     result.plainText = *plainText;
-    if (!decodeOptionalField(value.field("pending_read"), result.pendingRead)) {
-        return false;
-    }
-    if (!decodeOptionalField(value.field("pending_write"), result.pendingWrite)) {
+    if (!decodeOptionalField(value.field("system_write"), result.systemWrite)) {
         return false;
     }
     out.emplace(std::move(result));
@@ -5604,46 +5554,6 @@ DecodeSessionDeltaResult ProtocolCodec::decodeSessionDelta(std::string_view byte
                 std::move(*style),
                 std::move(*shell), std::move(*viewport)),
             {}};
-}
-
-std::string ProtocolCodec::encodeClipboardRequest(ClipboardRequest const& request) const {
-    return encodeMessage(ProtocolMessageKind::ClipboardRequest,
-                          toValue(request));
-}
-
-DecodeClipboardRequestResult ProtocolCodec::decodeClipboardRequest(std::string_view bytes,
-                                                      ProtocolLimits limits) const {
-    auto decoded =
-        decodeMessage(bytes, ProtocolMessageKind::ClipboardRequest, limits);
-    if (decoded.error != ProtocolError::None) {
-        return {decoded.error, std::nullopt, decoded.message};
-    }
-    std::optional<ClipboardRequest> request;
-    if (!fromValue(*decoded.payload, request) || !request.has_value()) {
-        return {ProtocolError::MalformedMessage, std::nullopt,
-                "clipboard request payload is malformed"};
-    }
-    return {ProtocolError::None, std::move(request), {}};
-}
-
-std::string ProtocolCodec::encodeClipboardResponse(ClipboardResponse const& response) const {
-    return encodeMessage(ProtocolMessageKind::ClipboardResponse,
-                          toValue(response));
-}
-
-DecodeClipboardResponseResult ProtocolCodec::decodeClipboardResponse(
-    std::string_view bytes, ProtocolLimits limits) const {
-    auto decoded =
-        decodeMessage(bytes, ProtocolMessageKind::ClipboardResponse, limits);
-    if (decoded.error != ProtocolError::None) {
-        return {decoded.error, std::nullopt, decoded.message};
-    }
-    std::optional<ClipboardResponse> response;
-    if (!fromValue(*decoded.payload, response) || !response.has_value()) {
-        return {ProtocolError::MalformedMessage, std::nullopt,
-                "clipboard response payload is malformed"};
-    }
-    return {ProtocolError::None, std::move(response), {}};
 }
 
 std::string ProtocolCodec::encodeStatusActionInvocation(

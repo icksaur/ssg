@@ -67,7 +67,7 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision, std::string marker
         {revision, marker, ssg::ByteOffset{marker.size()}},
         selection(marker.size(), static_cast<std::uint32_t>(marker.size())),
         {true, false, marker.size()},
-        {{marker}, marker, std::nullopt, std::nullopt},
+        {{marker}, marker, std::nullopt},
         {std::nullopt, {{}, marker.size()}},
         {revision, true, marker, ssg::SearchMode::File, {}, std::nullopt,
          marker.size(), false},
@@ -779,26 +779,6 @@ TEST(commandResultRoundTripsThroughTheWire) {
     ASSERT_EQ(decoded.result->message, result.message);
 }
 
-TEST(clipboardRequestRoundTripsThroughTheWire) {
-    ssg::ClipboardRequest const request{
-        42, ssg::ClipboardRequestKind::Write, ssg::Revision{6}, "copied text"};
-    auto const bytes = ssg::ProtocolCodec{}.encodeClipboardRequest(request);
-    auto const decoded = ssg::ProtocolCodec{}.decodeClipboardRequest(bytes);
-    ASSERT_TRUE(decoded.accepted());
-    ASSERT_TRUE(decoded.request.has_value());
-    ASSERT_EQ(*decoded.request, request);
-}
-
-TEST(clipboardResponseRoundTripsThroughTheWire) {
-    ssg::ClipboardResponse const response{
-        42, ssg::Revision{6}, ssg::Revision{7},
-        ssg::ClipboardResponseStatus::Success, "pasted text"};
-    auto const bytes = ssg::ProtocolCodec{}.encodeClipboardResponse(response);
-    auto const decoded = ssg::ProtocolCodec{}.decodeClipboardResponse(bytes);
-    ASSERT_TRUE(decoded.accepted());
-    ASSERT_TRUE(decoded.response.has_value());
-    ASSERT_EQ(*decoded.response, response);
-}
 
 TEST(statusActionInvocationRoundTripsThroughTheWire) {
     ssg::StatusActionInvocation const invocation{ssg::StatusId{9}, "dismiss", 3};
@@ -875,14 +855,14 @@ TEST(binaryFrameRejectsTruncatedInput) {
 // exercised against a representative message from each of the six kinds.
 
 TEST(malformedAndTruncatedAndOversizedAndUnknownVersionCorpus) {
-    ssg::ClipboardRequest const request{
-        1, ssg::ClipboardRequestKind::Read, ssg::Revision{1}, "x"};
-    auto const canonical = ssg::ProtocolCodec{}.encodeClipboardRequest(request);
+    ssg::StatusActionInvocation const invocation{ssg::StatusId{1}, "x", 1};
+    auto const canonical =
+        ssg::ProtocolCodec{}.encodeStatusActionInvocation(invocation);
     ASSERT_TRUE(canonical.size() > 3);
 
     // Empty buffer: missing version byte.
     {
-        auto const decoded = ssg::ProtocolCodec{}.decodeClipboardRequest(std::string_view{});
+        auto const decoded = ssg::ProtocolCodec{}.decodeStatusActionInvocation(std::string_view{});
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::TruncatedMessage);
     }
@@ -890,7 +870,7 @@ TEST(malformedAndTruncatedAndOversizedAndUnknownVersionCorpus) {
     // Single byte: missing kind byte.
     {
         auto const decoded =
-            ssg::ProtocolCodec{}.decodeClipboardRequest(canonical.substr(0, 1));
+            ssg::ProtocolCodec{}.decodeStatusActionInvocation(canonical.substr(0, 1));
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::TruncatedMessage);
     }
@@ -899,14 +879,14 @@ TEST(malformedAndTruncatedAndOversizedAndUnknownVersionCorpus) {
     {
         auto corrupted = canonical;
         corrupted[0] = static_cast<char>(0xFF);
-        auto const decoded = ssg::ProtocolCodec{}.decodeClipboardRequest(corrupted);
+        auto const decoded = ssg::ProtocolCodec{}.decodeStatusActionInvocation(corrupted);
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::UnsupportedVersion);
     }
 
     // Wrong kind byte (decoded with the wrong expected-kind decoder).
     {
-        auto const decoded = ssg::ProtocolCodec{}.decodeClipboardResponse(canonical);
+        auto const decoded = ssg::ProtocolCodec{}.decodeSessionSnapshot(canonical);
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::UnsupportedMessageKind);
     }
@@ -915,14 +895,14 @@ TEST(malformedAndTruncatedAndOversizedAndUnknownVersionCorpus) {
     {
         ssg::ProtocolLimits limits;
         limits.maxMessageBytes = canonical.size() - 1;
-        auto const decoded = ssg::ProtocolCodec{}.decodeClipboardRequest(canonical, limits);
+        auto const decoded = ssg::ProtocolCodec{}.decodeStatusActionInvocation(canonical, limits);
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::MessageTooLarge);
     }
 
     // Truncated payload: valid header, body cut short.
     {
-        auto const decoded = ssg::ProtocolCodec{}.decodeClipboardRequest(
+        auto const decoded = ssg::ProtocolCodec{}.decodeStatusActionInvocation(
             canonical.substr(0, canonical.size() - 2));
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::TruncatedMessage);
@@ -932,7 +912,7 @@ TEST(malformedAndTruncatedAndOversizedAndUnknownVersionCorpus) {
     {
         auto padded = canonical;
         padded.push_back('\x7f');
-        auto const decoded = ssg::ProtocolCodec{}.decodeClipboardRequest(padded);
+        auto const decoded = ssg::ProtocolCodec{}.decodeStatusActionInvocation(padded);
         ASSERT_FALSE(decoded.accepted());
         ASSERT_EQ(decoded.error, ssg::ProtocolError::MalformedMessage);
     }
@@ -1076,20 +1056,6 @@ TEST(canonicalFixturesDecodeToTheExpectedValues) {
         ASSERT_EQ(decoded.delta->baseRevision(), ssg::Revision{4});
         ASSERT_EQ(decoded.delta->revision(), ssg::Revision{5});
         ASSERT_EQ(decoded.delta->clientId(), ssg::ClientId{7});
-    }
-    {
-        auto decoded = ssg::ProtocolCodec{}.decodeClipboardRequest(
-            readFixtureBytes("clipboard_request.hex"));
-        ASSERT_TRUE(decoded.accepted());
-        ASSERT_EQ(decoded.request->id, std::uint64_t{42});
-        ASSERT_EQ(decoded.request->text, std::string{"copied text"});
-    }
-    {
-        auto decoded = ssg::ProtocolCodec{}.decodeClipboardResponse(
-            readFixtureBytes("clipboard_response.hex"));
-        ASSERT_TRUE(decoded.accepted());
-        ASSERT_EQ(decoded.response->id, std::uint64_t{42});
-        ASSERT_EQ(decoded.response->text, std::string{"pasted text"});
     }
     {
         auto decoded = ssg::ProtocolCodec{}.decodeStatusActionInvocation(
@@ -1283,9 +1249,7 @@ int main() {
     RUN(diffWordRangesRoundTripThroughSnapshotAndDelta);
     RUN(twoClientCapabilityAndViewportIsolationSurvivesTheWire);
     RUN(sessionSnapshotRoundTripsTreeScrollFields);
-    RUN(clipboardRequestRoundTripsThroughTheWire);
     RUN(commandResultRoundTripsThroughTheWire);
-    RUN(clipboardResponseRoundTripsThroughTheWire);
     RUN(statusActionInvocationRoundTripsThroughTheWire);
     RUN(binaryFrameRoundTripsThroughTheWire);
     RUN(binaryFrameDecodedBytesOutliveTheInputBuffer);

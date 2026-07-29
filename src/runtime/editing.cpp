@@ -178,8 +178,8 @@ CommandHandlerResult bindClipboard(EditorRuntime::Impl& runtime, ClipboardComman
     auto* document = runtime.activeDocument();
     if (!id || document == nullptr) return failure("no active document");
     auto& history = runtime.historyFor(*id);
-    ClipboardResult result{ClipboardError::None, ClipboardSystemStatus::NotRequested,
-                           document->revision(), std::nullopt, std::nullopt, false, {}};
+    ClipboardResult result{ClipboardError::None, document->revision(),
+                           std::nullopt, std::nullopt, false, {}};
     switch (command) {
         case ClipboardCommand::Copy:
             result = runtime.clipboard.copy(document->snapshot(), runtime.selection.selections);
@@ -188,8 +188,8 @@ CommandHandlerResult bindClipboard(EditorRuntime::Impl& runtime, ClipboardComman
             result = runtime.clipboard.cut(*document, history, runtime.selection.selections, 0);
             break;
         case ClipboardCommand::Paste:
-            result = runtime.clipboard.paste(*document, history, runtime.selection.selections,
-                                             ClipboardPasteMode::InternalOnly, 0);
+            result = runtime.clipboard.paste(*document, history,
+                                             runtime.selection.selections, 0);
             break;
     }
     if (!result.accepted()) return failure(result.message);

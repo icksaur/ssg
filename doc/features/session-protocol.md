@@ -93,8 +93,10 @@ capabilities, viewport, and every assembled typed section. A protocol-owned
 factory is friended by `SessionDelta` solely to reconstruct a validated delta;
 normal in-process construction remains through aggregate derivation. Distinct
 versioned message kinds carry command requests and typed command results,
-snapshots, deltas,
-`ClipboardRequest`, `ClipboardResponse`, and `StatusActionInvocation`.
+snapshots, deltas, and
+`StatusActionInvocation`.  A copy/cut reaches a client as
+`ClipboardViewState::system_write` in the snapshot/delta it already receives,
+not as a separate message, and nothing reports back.
 Capability state remains part of the per-client snapshot/delta rather than a
 client-asserted message.
 
@@ -109,8 +111,8 @@ the immutable complete command-argument codec registry, and an
 `HttpEditorSessionHost`. The host is the explicit transport seam for resolving
 an opaque credential into a host-created session ID, immutable
 `InvocationPrincipal`, and view ID; producing the current aggregate
-`SessionSnapshot` for that attached client; and accepting decoded clipboard,
-status-action, and binary ingress. Snapshot production continues to use the
+`SessionSnapshot` for that attached client; and accepting decoded
+status-action and binary ingress. Snapshot production continues to use the
 assembly-owned aggregate functions. The transport never reconstructs feature
 state and never reads capabilities from a client payload.
 
@@ -136,15 +138,14 @@ Supplying the current revision requires no state payload. Replay storage is
 bounded by configuration independently of each connection's outbound queue.
 Disconnect detaches the client but preserves its bounded replay state.
 
-Only the connection writer calls `../http::Server::send`. Command, clipboard,
-status, and binary callbacks enqueue owned bytes and never write a socket.
+Only the connection writer calls `../http::Server::send`. Command, status, and
+binary callbacks enqueue owned bytes and never write a socket.
 Queue overflow, an expired/failed write, malformed post-attach input, or an
 interaction before authentication closes that connection deterministically.
 Well-formed command rejection is failure-atomic and returns a typed
 `CommandResult` without disconnecting the client.
 The server does not coalesce revisions because replay must remain contiguous.
-Public send operations for clipboard requests and binary payloads use the same
-connection queue; there is no secondary behavior channel.
+Public send operations for binary payloads use the same connection queue; there is no secondary behavior channel.
 
 `../http` owns one platform socket seam used by HTTP and WebSocket lifecycle,
 receive, and write paths. A complete write loops over partial writes until all
@@ -209,7 +210,7 @@ I1, I2, I3, I10, I11, I12, I16, I21 from `doc/spec.md`.
 - Server oracles: host-policy authentication and capability isolation,
   in-process/socket aggregate snapshot parity, contiguous reconnect replay and
   fresh-snapshot fallback after replay eviction, bounded outbound/replay queues,
-  deadline/slow-client disconnect, and an audit that command, clipboard,
+  deadline/slow-client disconnect, and an audit that command,
   status-action, and binary interactions use the one WebSocket.
 
 ## Plan

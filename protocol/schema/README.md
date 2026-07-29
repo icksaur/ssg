@@ -41,7 +41,8 @@ Every one of the seven message kinds shares one envelope:
 `wire_version` is currently always `1`; a mismatch reports
 `ProtocolError::unsupported_version`. `message_kind` matches
 `ProtocolMessageKind` (`command_request = 0`, `session_snapshot = 1`,
-`session_delta = 2`, `clipboard_request = 3`, `clipboard_response = 4`,
+`session_delta = 2` (3 and 4 are retired clipboard kinds, permanently
+reserved so surviving kinds keep their wire values),
 `status_action_invocation = 5`, `command_result = 6`); decoding with the wrong `decode_*` function
 for a message reports `ProtocolError::unsupported_message_kind`. Trailing
 bytes after a fully-decoded payload are rejected as
@@ -70,9 +71,6 @@ Payload shapes (object field names, all required unless noted optional):
   aggregate via the `decode_wire_session_delta` friend factory declared in
   `session_snapshot.h`, so this is the only construction path outside
   `derive_session_delta`.
-- `clipboard_request` / `clipboard_response`: encode `ClipboardRequest` /
-  `ClipboardResponse` directly (every struct field as a same-named object
-  field).
 - `status_action_invocation`: encodes `StatusActionInvocation` directly
   (`status_id`, `action_id`, `generation`).
 

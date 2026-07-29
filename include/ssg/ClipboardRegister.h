@@ -44,50 +44,22 @@ private:
 
 [[nodiscard]] ClipboardCommandSet clipboardCommandSet();
 
-enum class ClipboardRequestKind : std::uint8_t {
-    Write,
-    Read,
-};
-
-struct ClipboardRequest {
+// A copy or cut's text, offered to whatever client can reach a real system
+// clipboard (the terminal writes it with OSC 52).
+//
+// FIRE AND FORGET, deliberately.  There is no response: the register already
+// holds the text, so a local yank works whether or not the system clipboard
+// accepted it, and reporting a failure the user cannot act on and does not
+// otherwise notice would be worse than saying nothing.
+//
+// `id` increments per copy, so a client can write each one exactly once without
+// the register ever learning that it did.
+struct ClipboardWrite {
     std::uint64_t id;
-    ClipboardRequestKind kind;
     Revision requestRevision;
     std::string text;
 
-    bool operator==(const ClipboardRequest&) const = default;
-};
-
-enum class ClipboardResponseStatus : std::uint8_t {
-    Success,
-    Denied,
-    Unavailable,
-    Disconnected,
-};
-
-struct ClipboardResponse {
-    std::uint64_t id;
-    Revision requestRevision;
-    Revision observedDocumentRevision;
-    ClipboardResponseStatus status;
-    std::string text;
-
-    bool operator==(const ClipboardResponse&) const = default;
-};
-
-enum class ClipboardPasteMode : std::uint8_t {
-    InternalOnly,
-    SystemFirst,
-};
-
-enum class ClipboardSystemStatus : std::uint8_t {
-    NotRequested,
-    Pending,
-    Succeeded,
-    Denied,
-    Unavailable,
-    Disconnected,
-    Stale,
+    bool operator==(const ClipboardWrite&) const = default;
 };
 
 enum class ClipboardError : std::uint8_t {
@@ -96,18 +68,15 @@ enum class ClipboardError : std::uint8_t {
     Diff,
     InvalidSelection,
     InvalidUtf8,
-    StaleResponse,
-    NoRequest,
     RequestExhausted,
     DocumentRejected,
 };
 
 struct ClipboardResult {
     ClipboardError error;
-    ClipboardSystemStatus systemStatus;
     Revision revision;
     std::optional<SelectionSet> selections;
-    std::optional<ClipboardRequest> request;
+    std::optional<ClipboardWrite> write;
     bool documentChanged;
     std::string message;
 
@@ -119,8 +88,10 @@ struct ClipboardResult {
 struct ClipboardViewState {
     std::vector<std::string> fragments;
     std::string plainText;
-    std::optional<ClipboardRequest> pendingRead;
-    std::optional<ClipboardRequest> pendingWrite;
+    // The most recent copy/cut, for a client that can push it to the system
+    // clipboard.  Stays set: nothing reports back, so the register cannot know
+    // when it has been served, and a client keys on the id instead.
+    std::optional<ClipboardWrite> systemWrite;
 
     bool operator==(const ClipboardViewState&) const = default;
 };
@@ -153,14 +124,12 @@ public:
     [[nodiscard]] ClipboardResult cut(
         Document& document, DocumentHistory& history,
         const SelectionSet& selections, std::uint64_t timestampMs);
+    // Pastes the register.  There is no system-clipboard READ: it is refused
+    // outright by some terminals on security grounds, so nothing may be designed
+    // around it, and a read is meaningless without a response path.
     [[nodiscard]] ClipboardResult paste(
         Document& document, DocumentHistory& history,
-        const SelectionSet& selections, ClipboardPasteMode mode,
-        std::uint64_t timestampMs);
-    [[nodiscard]] ClipboardResult handleResponse(
-        Document& document, DocumentHistory& history,
-        const SelectionSet& currentSelections,
-        const ClipboardResponse& response, std::uint64_t timestampMs);
+        const SelectionSet& selections, std::uint64_t timestampMs);
 
     [[nodiscard]] ClipboardViewState viewState() const;
 

@@ -61,9 +61,6 @@ public:
         std::string_view credential) = 0;
     [[nodiscard]] virtual SessionSnapshot snapshot(SessionId const& sessionId,
                                                    ClientId clientId) = 0;
-    virtual void clipboardResponse(SessionId const& sessionId,
-                                    ClientId clientId,
-                                    ClipboardResponse const& response) = 0;
     virtual void statusAction(SessionId const& sessionId, ClientId clientId,
                                StatusActionInvocation const& invocation) = 0;
     virtual void binary(SessionId const& sessionId, ClientId clientId,
@@ -99,8 +96,6 @@ public:
     HttpEditorRoute(HttpEditorRoute const&) = delete;
     HttpEditorRoute& operator=(HttpEditorRoute const&) = delete;
 
-    [[nodiscard]] bool sendClipboardRequest(
-        ClientId clientId, ClipboardRequest const& request);
     [[nodiscard]] bool sendBinary(ClientId clientId,
                                    BinaryFrame const& frame);
 
@@ -122,8 +117,6 @@ public:
     void start();
     void stop();
 
-    [[nodiscard]] bool sendClipboardRequest(
-        ClientId clientId, ClipboardRequest const& request);
     [[nodiscard]] bool sendBinary(ClientId clientId,
                                    BinaryFrame const& frame);
 

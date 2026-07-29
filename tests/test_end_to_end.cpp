@@ -278,7 +278,7 @@ public:
             {ssg::SelectionSet{std::move(sels)}, state_.first_row, 0, std::nullopt},
             {!state_.undo_text.empty(), !state_.redo_text.empty(),
              state_.undo_text.size() + state_.redo_text.size()},
-            {{state_.clipboard}, state_.clipboard, std::nullopt, std::nullopt},
+            {{state_.clipboard}, state_.clipboard, std::nullopt},
             std::move(promptStatus),
             {revision, false, {}, ssg::SearchMode::File, {}, std::nullopt, 0,
              false},
@@ -370,8 +370,6 @@ public:
         return scenario_.snapshot(attached->principal, attached->viewId);
     }
 
-    void clipboardResponse(ssg::SessionId const&, ssg::ClientId,
-                            ssg::ClipboardResponse const&) override {}
     void statusAction(ssg::SessionId const&, ssg::ClientId,
                        ssg::StatusActionInvocation const&) override {}
     void binary(ssg::SessionId const&, ssg::ClientId,
@@ -557,7 +555,7 @@ public:
             {ssg::SelectionSet{{ssg::Selection{pos, pos}}}, firstRow,
              0, std::nullopt},
             {false, false, 0},
-            {{}, {}, std::nullopt, std::nullopt},
+            {{}, {}, std::nullopt},
             {std::nullopt, {{}, 0}},
             {revision, false, {}, ssg::SearchMode::File, {}, std::nullopt, 0,
              false},
@@ -643,8 +641,6 @@ public:
         return scenario_.snapshot(attached->principal, attached->viewId);
     }
 
-    void clipboardResponse(ssg::SessionId const&, ssg::ClientId,
-                            ssg::ClipboardResponse const&) override {}
     void statusAction(ssg::SessionId const&, ssg::ClientId,
                        ssg::StatusActionInvocation const&) override {}
     void binary(ssg::SessionId const&, ssg::ClientId,
