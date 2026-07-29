@@ -14,6 +14,7 @@
 #include <csignal>
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 #include <optional>
 #include <string>
 #include <thread>
@@ -909,6 +910,65 @@ TEST(anUnboundedSequenceScanCannotHoldTheInputBuffer) {
     ASSERT_EQ(consumed, std::size_t{0});
 }
 
+// Oracle (INV-reply-never-input): a reply arriving in two TCP segments over SSH
+// is the highest-risk transition in reply recognition -- every proper prefix must
+// be held rather than half-consumed, and the completed sequence must surface as
+// one reply carrying its bytes verbatim.
+TEST(aReplySplitAcrossReadsIsStillConsumedWhole) {
+    for (std::string_view whole : {"\x1b[?62;22c", "\x1b[?2026;2$y", "\x1b[?1u"}) {
+        for (std::size_t prefix = 2; prefix < whole.size(); ++prefix) {
+            std::size_t consumed = 99;
+            auto const partial =
+                ssg::app::decode_input(whole.substr(0, prefix), false, consumed);
+            ASSERT_TRUE(partial.status == ssg::app::DecodeStatus::incomplete);
+            ASSERT_EQ(consumed, std::size_t{0});
+            ASSERT_TRUE(partial.text.empty());
+        }
+        std::size_t consumed = 0;
+        auto const complete = ssg::app::decode_input(whole, false, consumed);
+        ASSERT_TRUE(complete.status == ssg::app::DecodeStatus::reply);
+        ASSERT_EQ(consumed, whole.size());
+        ASSERT_EQ(complete.reply, std::string{whole});
+        ASSERT_TRUE(complete.text.empty());
+    }
+}
+
+// The decoder deliberately does not recognize DCS (ESC P) or OSC (ESC ])
+// reports, because treating ESC-then-letter as a report introducer would break
+// the Escape-then-letter chords the keymap encodes.  That is only safe while SSG
+// asks no DCS/OSC question, so pin both halves: the introducers stay ordinary
+// Escape strokes, and nothing under apps/ emits a sequence that could solicit
+// such a reply.  Adding one must fail here rather than silently reopen the leak.
+TEST(noDcsOrOscQueryMaySolicitAnUnparsedReply) {
+    for (std::string_view chord : {"\x1bP", "\x1b]", "\x1bX", "\x1b^", "\x1b_"}) {
+        std::size_t consumed = 0;
+        auto const decoded = ssg::app::decode_input(chord, true, consumed);
+        ASSERT_TRUE(decoded.status == ssg::app::DecodeStatus::key);
+        ASSERT_EQ(consumed, std::size_t{1});
+        ASSERT_EQ(std::string{ssg::keyCodeName(decoded.stroke.code)},
+                  std::string{"Escape"});
+    }
+
+    std::vector<std::string> emitters;
+    for (auto const& entry : std::filesystem::directory_iterator{
+             std::filesystem::path{SSG_TEST_SOURCE_DIR} / "apps"}) {
+        if (!entry.is_regular_file()) continue;
+        auto const extension = entry.path().extension().string();
+        if (extension != ".cpp" && extension != ".h") continue;
+        std::ifstream input{entry.path()};
+        std::ostringstream contents;
+        contents << input.rdbuf();
+        auto const text = contents.str();
+        if (text.find("\\x1bP") != std::string::npos ||
+            text.find("\\033P") != std::string::npos ||
+            text.find("\\x1b]") != std::string::npos ||
+            text.find("\\033]") != std::string::npos) {
+            emitters.push_back(entry.path().filename().string());
+        }
+    }
+    ASSERT_TRUE(emitters.empty());
+}
+
 TEST(decodeInputPointerPressReleaseDrag) {
     std::size_t consumed = 0;
 
@@ -1529,6 +1589,8 @@ int main() {
     RUN(decodeInputArrowsAndMouse);
     RUN(noCapabilityReplyIsEverEmittedAsText);
     RUN(anUnboundedSequenceScanCannotHoldTheInputBuffer);
+    RUN(aReplySplitAcrossReadsIsStillConsumedWhole);
+    RUN(noDcsOrOscQueryMaySolicitAnUnparsedReply);
     RUN(decodeInputPointerPressReleaseDrag);
     RUN(decodeInputPointerSplitReadsAreIncomplete);
     RUN(decodeInputPointerRejectsMalformedButTerminatedPayloads);
