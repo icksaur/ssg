@@ -542,26 +542,33 @@ TEST(aNarrowHeaderStillGivesTheInputLineRoom) {
     }
 }
 
-// The leader hint occupies the same slot, so it must follow the input line's
-// position rather than staying at the old left edge -- otherwise the header
-// jumps between two layouts depending on which is active.
-TEST(theLeaderHintSitsWhereTheInputLineWould) {
-    auto withHint = request(120, 12);
-    withHint.leaderHint = "leader: Escape";
-    auto withLine = request(120, 12);
-    withLine.inputLineActive = true;
+// The leader hint moved out of the header's input-line slot to the far right of
+// the footer, so it must sit on the footer row, right-aligned, and never
+// overlap the footer's status actions.
+TEST(theLeaderHintSitsAtTheFooterRight) {
+    auto value = request(80, 12);
+    value.leaderHint = "leader: Escape";
     ShellState state;
-    auto hintResult = computeShellLayout(withHint, state);
-    auto lineResult = computeShellLayout(withLine, state);
-    ASSERT_TRUE(hintResult.accepted() && lineResult.accepted());
-    if (!hintResult.accepted() || !lineResult.accepted()) return;
-    const auto* hint = findNode(*hintResult.view, "leader");
-    const auto* line = findNode(*lineResult.view, "input_line.query");
-    ASSERT_TRUE(hint != nullptr && line != nullptr);
-    if (hint && line) ASSERT_EQ(hint->rect.x, line->rect.x);
+    auto result = computeShellLayout(value, state);
+    ASSERT_TRUE(result.accepted());
+    if (!result.accepted()) return;
+    const auto* hint = findNode(*result.view, "leader");
+    ASSERT_TRUE(hint != nullptr);
+    if (!hint) return;
+    // Rightmost element on its row.
+    ASSERT_EQ(hint->rect.x + hint->rect.width, 80);
+    const auto* action = findNode(*result.view, "status.retry");
+    ASSERT_TRUE(action != nullptr);
+    if (action) {
+        // Same (footer) row, below the header, and to the LEFT of the hint with
+        // no overlap.
+        ASSERT_EQ(action->rect.y, hint->rect.y);
+        ASSERT_TRUE(hint->rect.y > 0);
+        ASSERT_TRUE(action->rect.x + action->rect.width <= hint->rect.x);
+    }
 }
 
-TEST(leaderHintRendersInTheHeaderWhenPresent) {
+TEST(leaderHintRendersInTheFooterWhenPresent) {
     auto value = request(80, 12);
     value.leaderHint = "leader: Escape";
     ShellState state;
@@ -569,7 +576,7 @@ TEST(leaderHintRendersInTheHeaderWhenPresent) {
     ASSERT_TRUE(result.accepted());
     const AccessibilityNode* leader = nullptr;
     for (const auto& node : result.view->accessibilityNodes) {
-        if (node.kind == ShellNodeKind::HeaderField && node.id == "leader") {
+        if (node.kind == ShellNodeKind::FooterField && node.id == "leader") {
             leader = &node;
         }
     }
@@ -577,7 +584,7 @@ TEST(leaderHintRendersInTheHeaderWhenPresent) {
     if (leader) {
         ASSERT_EQ(leader->content, std::string{"leader: Escape"});
         ASSERT_TRUE(leader->role == SemanticRole::Prompt);
-        ASSERT_EQ(leader->rect.y, 0);
+        ASSERT_EQ(leader->rect.x + leader->rect.width, 80);
     }
     // No hint node when the request carries no leader sequence.
     auto plain = computeShellLayout(request(80, 12), state);
@@ -705,14 +712,14 @@ int main() {
     RUN(dirtyTabContentShowsMarker);
     RUN(focusTransitionsFollowTheNavigationTable);
     RUN(hidingAnUnfocusedPanelLeavesFocusUntouched);
-    RUN(leaderHintRendersInTheHeaderWhenPresent);
+    RUN(theLeaderHintSitsAtTheFooterRight);
+    RUN(leaderHintRendersInTheFooterWhenPresent);
     RUN(typingInTheInputLineNeverMovesTheStatusFields);
     RUN(fieldsAreStableEvenWhenTheHeaderIsTight);
     RUN(headerNodesNeverOverlap);
     RUN(anOverlongQueryScrollsItsOwnTextAndLeavesFieldsAlone);
     RUN(theScrolledQueryIsCutOnCharacterBoundaries);
     RUN(aNarrowHeaderStillGivesTheInputLineRoom);
-    RUN(theLeaderHintSitsWhereTheInputLineWould);
     RUN(nonOverlapAndCardinalityProperties);
     RUN(statusFieldManifestHasExactOrderAndLabels);
     RUN(shellLayoutTakesItsDimensionsAndSigilFromStyle);

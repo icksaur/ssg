@@ -479,18 +479,21 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
                          SemanticRole::LineNumber, request.inputLineGhost);
                 headerX += ghostWidth;
             }
-        } else if (!request.leaderHint.empty()) {
-            const int width = std::min(
-                headerRight - headerX,
-                static_cast<int>(request.leaderHint.size()) + 1);
-            if (width > 0) {
-                addNode(view, ShellNodeKind::HeaderField, "leader", "Leader hint",
-                         {headerX, view.header->y, width, 1},
-                         SemanticRole::Prompt, request.leaderHint);
-                headerX += width;
-            }
         }
         int actionX = view.footer->right();
+        // The leader-chord hint lives at the far right of the footer.  It shares
+        // no slot with the footer actions -- it is placed first (rightmost) and
+        // the actions flow to its left -- so an active chord never hides a status
+        // action nor is hidden by one.
+        if (!request.leaderHint.empty()) {
+            const int width = std::min(actionX, displayCells(request.leaderHint) + 1);
+            if (width > 0) {
+                actionX -= width;
+                addNode(view, ShellNodeKind::FooterField, "leader", "Leader hint",
+                         {actionX, view.footer->y, width, 1},
+                         SemanticRole::Prompt, request.leaderHint);
+            }
+        }
         for (auto action = request.footerActions.rbegin();
              action != request.footerActions.rend(); ++action) {
             const int width =
