@@ -97,21 +97,9 @@ bool startsWithSequence(const KeySequence& sequence,
            std::equal(prefix.begin(), prefix.end(), sequence.begin());
 }
 
-bool isStrictPrefix(const KeySequence& shorter, const KeySequence& longer) {
-    return shorter.size() < longer.size() &&
-           std::equal(shorter.begin(), shorter.end(), longer.begin());
-}
-
 bool knownContext(std::string_view context) {
     const auto contexts = keymapContexts();
     return std::ranges::find(contexts, context) != contexts.end();
-}
-
-// Two bindings can both apply during resolution when their contexts overlap:
-// either shares "*", or they name the same context.  A "*" binding is eligible
-// in every context, so it overlaps every binding.
-bool contextsOverlap(std::string_view left, std::string_view right) {
-    return left == "*" || right == "*" || left == right;
 }
 
 bool selectionArgumentsEqual(const SelectionCommandArguments& left,
@@ -206,6 +194,9 @@ std::optional<KeySequence> KeyCodec::parseSequence(
 
 std::optional<KeySequence> KeyCodec::parseSequenceString(
     std::string_view encoded) const {
+    // A single stroke only: the multi-stroke chord model is gone, so an input
+    // naming more than one stroke (space-separated) is rejected rather than
+    // silently binding the first.
     KeySequence result;
     std::size_t begin = 0;
     while (begin < encoded.size()) {
@@ -226,7 +217,7 @@ std::optional<KeySequence> KeyCodec::parseSequenceString(
         result.push_back(*stroke);
         begin = end;
     }
-    if (result.empty()) {
+    if (result.size() != 1) {
         return std::nullopt;
     }
     return result;
@@ -262,6 +253,9 @@ std::vector<KeymapError> KeymapMatcher::validate(
         if (binding.sequence.empty()) {
             errors.push_back({KeymapErrorCode::EmptySequence, index,
                               "binding sequence is empty"});
+        } else if (binding.sequence.size() != 1) {
+            errors.push_back({KeymapErrorCode::MultiStrokeBinding, index,
+                              "binding sequence must be a single stroke"});
         }
         if (std::ranges::any_of(binding.sequence,
                                 [](const auto& stroke) {
@@ -314,24 +308,6 @@ std::vector<KeymapError> KeymapMatcher::validate(
                                   "a global binding shadows this binding"});
             }
         }
-        // A binding whose sequence strictly prefixes (or is strictly prefixed
-        // by) another eligible binding's sequence makes resolution ambiguous:
-        // one input would be both a resolved chord and a pending prefix.  The
-        // check is symmetric and order-independent (it reports the longer,
-        // higher-indexed binding once).
-        for (std::size_t other = 0; other < index; ++other) {
-            const auto& earlier = keymap_.bindings[other];
-            if (!contextsOverlap(earlier.context, binding.context)) {
-                continue;
-            }
-            if (isStrictPrefix(earlier.sequence, binding.sequence) ||
-                isStrictPrefix(binding.sequence, earlier.sequence)) {
-                errors.push_back(
-                    {KeymapErrorCode::AmbiguousPrefix, index,
-                     "binding sequence is a prefix of another eligible binding"});
-                break;
-            }
-        }
     }
     return errors;
 }
@@ -358,7 +334,6 @@ KeymapResolution KeymapMatcher::resolveSequence(
         return {KeymapMatchKind::None, {}};
     }
     const KeyBinding* match = nullptr;
-    bool hasPending = false;
     for (const auto& binding : keymap_.bindings) {
         if (!eligibleIn(binding, context)) {
             continue;
@@ -373,14 +348,12 @@ KeymapResolution KeymapMatcher::resolveSequence(
             } else if (binding.context == "*" && match->context != "*") {
                 match = &binding;
             }
-        } else if (isStrictPrefix(pending, binding.sequence)) {
-            hasPending = true;
         }
     }
     if (match != nullptr) {
         return {KeymapMatchKind::Resolved, match->commandId};
     }
-    return {hasPending ? KeymapMatchKind::Pending : KeymapMatchKind::None, {}};
+    return {KeymapMatchKind::None, {}};
 }
 
 TextRouting SemanticInputRouter::textRouting(std::string_view context) const noexcept {

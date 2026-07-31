@@ -542,59 +542,6 @@ TEST(aNarrowHeaderStillGivesTheInputLineRoom) {
     }
 }
 
-// The leader hint moved out of the header's input-line slot to the far right of
-// the footer, so it must sit on the footer row, right-aligned, and never
-// overlap the footer's status actions.
-TEST(theLeaderHintSitsAtTheFooterRight) {
-    auto value = request(80, 12);
-    value.leaderHint = "leader: Escape";
-    ShellState state;
-    auto result = computeShellLayout(value, state);
-    ASSERT_TRUE(result.accepted());
-    if (!result.accepted()) return;
-    const auto* hint = findNode(*result.view, "leader");
-    ASSERT_TRUE(hint != nullptr);
-    if (!hint) return;
-    // Rightmost element on its row.
-    ASSERT_EQ(hint->rect.x + hint->rect.width, 80);
-    const auto* action = findNode(*result.view, "status.retry");
-    ASSERT_TRUE(action != nullptr);
-    if (action) {
-        // Same (footer) row, below the header, and to the LEFT of the hint with
-        // no overlap.
-        ASSERT_EQ(action->rect.y, hint->rect.y);
-        ASSERT_TRUE(hint->rect.y > 0);
-        ASSERT_TRUE(action->rect.x + action->rect.width <= hint->rect.x);
-    }
-}
-
-TEST(leaderHintRendersInTheFooterWhenPresent) {
-    auto value = request(80, 12);
-    value.leaderHint = "leader: Escape";
-    ShellState state;
-    auto result = computeShellLayout(value, state);
-    ASSERT_TRUE(result.accepted());
-    const AccessibilityNode* leader = nullptr;
-    for (const auto& node : result.view->accessibilityNodes) {
-        if (node.kind == ShellNodeKind::FooterField && node.id == "leader") {
-            leader = &node;
-        }
-    }
-    ASSERT_TRUE(leader != nullptr);
-    if (leader) {
-        ASSERT_EQ(leader->content, std::string{"leader: Escape"});
-        ASSERT_TRUE(leader->role == SemanticRole::Prompt);
-        ASSERT_EQ(leader->rect.x + leader->rect.width, 80);
-    }
-    // No hint node when the request carries no leader sequence.
-    auto plain = computeShellLayout(request(80, 12), state);
-    ASSERT_TRUE(plain.accepted());
-    const bool hasLeader = std::ranges::any_of(
-        plain.view->accessibilityNodes,
-        [](const auto& node) { return node.id == "leader"; });
-    ASSERT_FALSE(hasLeader);
-}
-
 // The layout counterpart to the renderer's routing proof: dimensions and the
 // sigil must come from the request's Style, not from constants that used to
 // live in ShellState.cpp.
@@ -712,8 +659,6 @@ int main() {
     RUN(dirtyTabContentShowsMarker);
     RUN(focusTransitionsFollowTheNavigationTable);
     RUN(hidingAnUnfocusedPanelLeavesFocusUntouched);
-    RUN(theLeaderHintSitsAtTheFooterRight);
-    RUN(leaderHintRendersInTheFooterWhenPresent);
     RUN(typingInTheInputLineNeverMovesTheStatusFields);
     RUN(fieldsAreStableEvenWhenTheHeaderIsTight);
     RUN(headerNodesNeverOverlap);

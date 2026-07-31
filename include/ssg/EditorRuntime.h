@@ -173,7 +173,6 @@ public:
     [[nodiscard]] static std::uint64_t liveDocumentRuntimeStateCountForTests();
     [[nodiscard]] std::optional<SessionSnapshot> snapshot(
         ClientId clientId, ViewportDimensions dimensions,
-        KeySequence leaderPending = {},
         PaletteReport paletteReport = {}) const;
     [[nodiscard]] int gitDiffWakeDescriptor() const;
     [[nodiscard]] std::string activeDocumentText() const;

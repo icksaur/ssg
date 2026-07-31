@@ -7,12 +7,18 @@ account for. This is background for `doc/spec-config.md`'s M2
 (configurable keybindings) — not itself a Plan to implement; fold anything
 actionable into `spec-config.md` when it's ready to build.
 
-## What SSG does today
+> HISTORICAL NOTE: SSG has since removed the Escape leader entirely
+> (`doc/spec-remove-leader.md`, implemented).  Frequent actions are now single
+> `Alt+<key>` chords and Escape is a plain one-press cancel.  The reliability
+> analysis below is why the leader was chosen originally and why Alt (not Ctrl)
+> became the replacement primary; the "What SSG does today" section describes the
+> pre-removal state.
 
-SSG's leader key is `Escape`. Every global (`*`-context) command chord is
+## What SSG did (pre-removal)
+
+SSG's leader key was `Escape`. Every global (`*`-context) command chord was
 `Escape` followed by one or more further strokes (`Escape S` → `file.save`,
-`Escape P` → `palette.open`, etc. — see `doc/spec-keymap.md`,
-`src/EditorRuntime.cpp`'s `defaultTerminalKeymap()`). This was a deliberate
+`Escape P` → `palette.open`, etc.). This was a deliberate
 choice, not an accident: `Escape` is the one input that is simultaneously
 reliable in both of SSG's host environments, for two independent reasons
 (see below) — everything else considered (Ctrl-primary, Alt-primary) fails

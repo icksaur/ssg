@@ -103,7 +103,6 @@ struct ShellLayoutRequest {
     std::vector<StatusField> footerFields;
     std::vector<ShellLabel> footerActions;
     std::vector<TabLabel> tabs;
-    std::string leaderHint;  // Non-empty when a client is mid-chord.
     // The header's single-line text input, shared by every picker (command
     // palette, file finder, ...) -- see doc/spec-ux.md.  Named for the surface
     // rather than one of its callers.

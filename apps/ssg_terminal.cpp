@@ -458,7 +458,7 @@ CsiScan scanCsi(std::string_view bytes, std::size_t& end) {
 // the keyboard protocol) and the window/cell reports ending in 't'.  DCS and OSC
 // replies are deliberately not recognized -- SSG asks no DCS/OSC question, so it
 // can never receive one, and treating ESC P / ESC ] as a report introducer would
-// break the Escape-then-letter chords the keymap relies on.
+// break the Alt+<key> chords the keymap relies on (they are the same bytes).
 bool isReplyCsi(std::string_view bytes, std::size_t end) {
     if (end < 3) return false;
     auto const final = static_cast<unsigned char>(bytes[end - 1]);
@@ -693,8 +693,50 @@ Decoded decode_input(std::string_view bytes, bool inputExhausted,
         }
         auto const second = static_cast<unsigned char>(bytes[1]);
         if (second != '[' && second != 'O') {
-            // ESC followed by a non-CSI byte: ESC is a standalone Escape stroke;
-            // the next byte is decoded on the following call.
+            // Legacy meta-prefix: Alt+<key> transmits as ESC then the key's
+            // byte, so ESC followed by a printable coalesces into one Alt stroke.
+            // ESC [ and ESC O are excluded above as the CSI/SS3 introducers.  The
+            // DCS/OSC/APC/PM/SOS string introducers (ESC P/]/X/^/_) are
+            // byte-identical to Alt+<key> chords; that is safe only because SSG
+            // solicits no DCS/OSC reply (noDcsOrOscQueryMaySolicitAnUnparsedReply),
+            // so those bytes reach the decoder only from the keyboard.
+            // Alt+<named key> whose byte is not a graphic printable: Backspace
+            // (0x7f/0x08), Enter (0x0d/0x0a), Tab (0x09).  These carry no text
+            // and must map to the named key, not fall into the printable branch
+            // (where 0x7f would become a keycode-less text stroke and the
+            // Alt+Backspace = delete-word binding would never resolve).
+            auto const metaNamed = [&]() -> ssg::KeyCode {
+                if (second == 0x7f || second == 0x08) return ssg::KeyCode::Backspace;
+                if (second == '\r' || second == '\n') return ssg::KeyCode::Enter;
+                if (second == '\t') return ssg::KeyCode::Tab;
+                return ssg::KeyCode::None;
+            }();
+            if (metaNamed != ssg::KeyCode::None) {
+                consumed = 2;
+                ssg::KeyStroke stroke{metaNamed};
+                stroke.alt = true;
+                return {DecodeStatus::key, stroke, {}, 0};
+            }
+            if (second >= 0x20) {
+                auto const length = utf8Length(second);
+                if (length == 0) {
+                    // A stray continuation byte after ESC: the ESC stands alone.
+                    consumed = 1;
+                    return {DecodeStatus::key, ssg::KeyStroke{ssg::KeyCode::Escape}, {}, 0};
+                }
+                if (bytes.size() < 1 + length) return {DecodeStatus::incomplete, {}, {}, 0};
+                auto text = std::string{bytes.substr(1, length)};
+                consumed = 1 + length;
+                ssg::KeyStroke stroke;
+                stroke.alt = true;
+                if (length == 1) {
+                    stroke.code = asciiKeyCode(second);
+                    stroke.shift = second >= 'A' && second <= 'Z';
+                }
+                return {DecodeStatus::key, stroke, std::move(text), 0};
+            }
+            // ESC followed by another control byte (e.g. ESC ESC): a bare Escape;
+            // the following byte decodes on the next call.
             consumed = 1;
             return {DecodeStatus::key, ssg::KeyStroke{ssg::KeyCode::Escape}, {}, 0};
         }
@@ -932,8 +974,19 @@ Decoded decode_input(std::string_view bytes, bool inputExhausted,
             stroke.shift = first >= 'A' && first <= 'Z';
         }
         // A printable commits text and, when it has a keycode, also carries a
-        // stroke so it can participate in a chord (e.g. Escape then KeyS).
+        // stroke so it can resolve a binding (e.g. a single letter in a prompt).
         return {DecodeStatus::key, stroke, std::move(text), 0};
+    }
+    if (first >= 0x01 && first <= 0x1a) {
+        // C0 control byte -> Ctrl+<letter>.  The bytes that name a key
+        // (0x08 Backspace, 0x09 Tab, 0x0a/0x0d Enter, 0x1b Escape) are handled
+        // above and never reach here, so what remains maps cleanly onto A..Z.
+        consumed = 1;
+        ssg::KeyStroke stroke;
+        stroke.control = true;
+        stroke.code = static_cast<ssg::KeyCode>(
+            static_cast<std::uint16_t>(ssg::KeyCode::KeyA) + (first - 1));
+        return {DecodeStatus::key, stroke, {}, 0};
     }
     consumed = 1;  // Other control byte: ignore.
     return {DecodeStatus::none, {}, {}, 0};

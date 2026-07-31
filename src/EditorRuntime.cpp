@@ -92,9 +92,10 @@ std::string liveDiffDocumentText(const DiffFileView& file) {
 
 // The curated terminal runtime keymap (doc/spec-keymap.md K2): a small set of
 // argument-free bindings the TUI drives, plus the context-divergent navigation
-// keys.  Only argument-free-usable commands are bound (a bare chord dispatches
-// with no payload); exhaustive reachability is the palette's job.  Global (*)
-// chords are Escape-led and prefix-free; single strokes differ per focus.
+// keys.  Only argument-free-usable commands are bound (a bare stroke dispatches
+// with no payload); exhaustive reachability is the palette's job.  Every binding
+// is a single stroke: global (*) actions are Alt chords, navigation differs per
+// focus, and Escape is a plain cancel.
 KeymapViewState defaultTerminalKeymap() {
     auto seq = [](std::initializer_list<std::string_view> strokes) {
         auto parsed = KeyCodec{}.parseSequence(strokes);
@@ -108,45 +109,51 @@ KeymapViewState defaultTerminalKeymap() {
             {std::move(sequence), std::move(command), std::move(context)});
     };
 
-    bind(seq({"Escape", "KeyS"}), "file.save", "*");
-    bind(seq({"Escape", "KeyN"}), "file.new", "*");
-    bind(seq({"Escape", "KeyZ"}), "edit.undo", "*");
-    bind(seq({"Escape", "Shift+KeyZ"}), "edit.redo", "*");
-    // leader+p opens the file picker (the frequent action) and leader+Shift+P
-    // the command palette, matching the convention users arrive with.
-    bind(seq({"Escape", "KeyP"}), "file_finder.open", "*");
-    bind(seq({"Escape", "Shift+KeyP"}), "palette.open", "*");
-    bind(seq({"Escape", "KeyB"}), "panel.toggle", "*");
-    bind(seq({"Escape", "KeyO"}), "panel.focus", "*");
-    bind(seq({"Escape", "BracketRight"}), "tab.next", "*");
-    bind(seq({"Escape", "BracketLeft"}), "tab.previous", "*");
-    bind(seq({"Escape", "KeyW"}), "tab.close", "*");
-    bind(seq({"Escape", "KeyF", "KeyT"}), "settings.open", "*");
-    bind(seq({"Escape", "KeyA"}), "select.all", "*");
-    bind(seq({"Escape", "KeyD"}), "select.add_next_occurrence", "*");
-    bind(seq({"Escape", "KeyI"}), "select.split_into_lines", "*");
-    bind(seq({"Escape", "KeyK"}), "select.add_cursor_up", "*");
-    bind(seq({"Escape", "KeyJ"}), "select.add_cursor_down", "*");
-    bind(seq({"Escape", "Slash"}), "find.open", "*");
-    // leader,8 seeds find with the word under the caret.  Editor-context: it
-    // acts on the caret and document, and a literal 8 typed after Escape while a
-    // prompt owns the keyboard must not be hijacked.
-    bind(seq({"Escape", "Digit8"}), "find.word_under_cursor", "editor");
-    bind(seq({"Escape", "KeyR"}), "replace.open", "*");
+    // Frequent actions are single Alt+<key> chords.  In a terminal Alt+X
+    // transmits as the bytes ESC X, which decode_input coalesces into one
+    // alt=true stroke, so these are the same keys the user already presses -- the
+    // former Escape leader is gone, and Escape is now a plain cancel key.
+    bind(seq({"Alt+KeyS"}), "file.save", "*");
+    bind(seq({"Alt+KeyN"}), "file.new", "*");
+    bind(seq({"Alt+KeyZ"}), "edit.undo", "*");
+    bind(seq({"Alt+Shift+KeyZ"}), "edit.redo", "*");
+    // Alt+p opens the file picker (the frequent action) and Alt+Shift+P the
+    // command palette, matching the convention users arrive with.
+    bind(seq({"Alt+KeyP"}), "file_finder.open", "*");
+    bind(seq({"Alt+Shift+KeyP"}), "palette.open", "*");
+    bind(seq({"Alt+KeyB"}), "panel.toggle", "*");
+    bind(seq({"Alt+KeyO"}), "panel.focus", "*");
+    // Tab cycling: Alt+BracketRight/Left cannot be used -- ESC ] / ESC [ are the
+    // OSC / CSI introducers -- so the brackets give way to Alt+Period/Comma.
+    bind(seq({"Alt+Period"}), "tab.next", "*");
+    bind(seq({"Alt+Comma"}), "tab.previous", "*");
+    bind(seq({"Alt+KeyW"}), "tab.close", "*");
+    // The Settings escape hatch (protected: a settings.open binding must always
+    // exist) moves from the former three-stroke chord to a single Alt+Shift+T.
+    bind(seq({"Alt+Shift+KeyT"}), "settings.open", "*");
+    bind(seq({"Alt+KeyA"}), "select.all", "*");
+    bind(seq({"Alt+KeyD"}), "select.add_next_occurrence", "*");
+    bind(seq({"Alt+KeyI"}), "select.split_into_lines", "*");
+    bind(seq({"Alt+KeyK"}), "select.add_cursor_up", "*");
+    bind(seq({"Alt+KeyJ"}), "select.add_cursor_down", "*");
+    bind(seq({"Alt+Slash"}), "find.open", "*");
+    // Alt+8 seeds find with the word under the caret.  Editor-context: it acts on
+    // the caret and document.
+    bind(seq({"Alt+Digit8"}), "find.word_under_cursor", "editor");
+    bind(seq({"Alt+KeyR"}), "replace.open", "*");
 
-    // Cut/copy/paste are bound in `editor` rather than globally: [Escape, KeyC]
-    // already means find.toggle_case in a prompt, and a global binding would
-    // shadow it (KeymapErrorCode::UnreachableBinding).  They act on the editor's
-    // selection anyway, so the narrower context is also the truer one.
-    bind(seq({"Escape", "KeyX"}), "clipboard.cut", "editor");
-    bind(seq({"Escape", "KeyC"}), "clipboard.copy", "editor");
-    bind(seq({"Escape", "KeyV"}), "clipboard.paste", "editor");
+    // Cut/copy/paste act on the editor's selection, so they are bound in the
+    // editor context; paste is additionally bound in the prompt so a prompt's
+    // value can be pasted into.
+    bind(seq({"Alt+KeyX"}), "clipboard.cut", "editor");
+    bind(seq({"Alt+KeyC"}), "clipboard.copy", "editor");
+    bind(seq({"Alt+KeyV"}), "clipboard.paste", "editor");
     // Paste also works while a prompt owns the keyboard -- find, replace, a path,
     // the palette query.  The client fulfils it against the prompt's own text
     // rather than the document, the same way typing into a prompt is routed.
     // Cut and copy are deliberately absent: a prompt's value is client-owned and
     // there is no selection within it to take.
-    bind(seq({"Escape", "KeyV"}), "clipboard.paste", "prompt");
+    bind(seq({"Alt+KeyV"}), "clipboard.paste", "prompt");
 
     bind(seq({"ArrowDown"}), "cursor.line_down", "editor");
     bind(seq({"ArrowUp"}), "cursor.line_up", "editor");
@@ -171,27 +178,13 @@ KeymapViewState defaultTerminalKeymap() {
     bind(seq({"Enter"}), "text.newline", "editor");
     bind(seq({"Backspace"}), "text.delete_backward", "editor");
     bind(seq({"Delete"}), "text.delete_forward", "editor");
-    // Alt+Backspace deletes the word to the left.  In a terminal Alt+Backspace
-    // arrives as the bytes ESC 0x7f, which decode_input splits into a standalone
-    // Escape stroke followed by Backspace -- exactly the Escape leader chord
-    // [Escape, Backspace], the same collision that gives Alt+<letter> for free
-    // (doc/spec-mod-keys.md).  Binding the chord is therefore the whole feature.
-    bind(seq({"Escape", "Backspace"}), "text.delete_word_backward", "editor");
-    // Word-left/right: Ctrl+Left/Right is the common editor convention, but
-    // Ctrl is not reliably interceptable in every host (browsers capture
-    // several Ctrl+key combos at the chrome layer; see doc/spec-mod-keys.md).
-    // The Escape leader works in both hosts, so word navigation rides it
-    // instead, with the Shift variant extending the selection.
-    bind(seq({"Escape", "ArrowLeft"}), "cursor.word_left", "editor");
-    bind(seq({"Escape", "ArrowRight"}), "cursor.word_right", "editor");
-    bind(seq({"Escape", "Shift+ArrowLeft"}), "select.word_left", "editor");
-    bind(seq({"Escape", "Shift+ArrowRight"}), "select.word_right", "editor");
-    // Alt+Left/Right is the conventional word-nav shortcut, but unlike
-    // Alt+<letter> it does NOT arrive "for free" via the Escape/Alt byte
-    // collision (see doc/spec-mod-keys.md): arrow keys use the CSI
-    // modifier-parameter form, which decode_input already parses into a
-    // single alt=true stroke, so this is an explicit, deliberate second
-    // binding to the same commands as the Escape-led chords above.
+    // Alt+Backspace deletes the word to the left.  Alt+Backspace transmits as
+    // the bytes ESC 0x7f, which decode_input coalesces into one Alt+Backspace
+    // stroke.
+    bind(seq({"Alt+Backspace"}), "text.delete_word_backward", "editor");
+    // Word navigation: Alt+Left/Right (and Shift to extend).  Arrow keys use the
+    // CSI modifier-parameter form, which decode_input parses into a single
+    // alt=true stroke.
     bind(seq({"Alt+ArrowLeft"}), "cursor.word_left", "editor");
     bind(seq({"Alt+ArrowRight"}), "cursor.word_right", "editor");
     bind(seq({"Alt+Shift+ArrowLeft"}), "select.word_left", "editor");
@@ -202,17 +195,15 @@ KeymapViewState defaultTerminalKeymap() {
     bind(seq({"Enter"}), "tree.activate", "panel");
 
     bind(seq({"Enter"}), "prompt.submit", "prompt");
-    bind(seq({"Escape", "Escape"}), "prompt.cancel", "prompt");
+    // A single Escape cancels a focused prompt (find, replace, path, palette).
+    // With the leader gone Escape is no longer a chord prefix, so one press is
+    // unambiguous.
+    bind(seq({"Escape"}), "prompt.cancel", "prompt");
     bind(seq({"ArrowDown"}), "prompt.next", "prompt");
     bind(seq({"ArrowUp"}), "prompt.previous", "prompt");
-    // Find/replace option toggles and replace-all, reachable while a find or
-    // replace prompt is focused.  KeyC/KeyG/KeyE/KeyL are not in the `*` chord
-    // set, so these Escape-prefixed chords stay prefix-free.  The handlers are
-    // benign no-ops unless a find/replace prompt is active.
-    bind(seq({"Escape", "KeyC"}), "find.toggle_case", "prompt");
-    bind(seq({"Escape", "KeyG"}), "find.toggle_whole_word", "prompt");
-    bind(seq({"Escape", "KeyE"}), "find.toggle_regex", "prompt");
-    bind(seq({"Escape", "KeyL"}), "replace.all", "prompt");
+    // The find/replace option toggles (find.toggle_case/whole_word/regex,
+    // replace.all) are reachable through the command palette; they do not earn a
+    // dedicated key and are left unbound.
 
     return keymap;
 }
@@ -1984,7 +1975,6 @@ GitDiffScanResult EditorRuntime::applyGitDiffScan(GitDiffScan scan) {
     return impl_->applyGitDiffScan(std::move(scan));
 }
 std::optional<SessionSnapshot> EditorRuntime::snapshot(ClientId clientId, ViewportDimensions dimensions,
-                                                       KeySequence leaderPending,
                                                        PaletteReport paletteReport) const {
     const_cast<EditorRuntime::Impl*>(impl_.get())->drainGitDiffScans();
     auto client = impl_->session->attachedClient(clientId);
@@ -1994,7 +1984,7 @@ std::optional<SessionSnapshot> EditorRuntime::snapshot(ClientId clientId, Viewpo
     // arguments to one call their evaluation order would be unspecified, so the
     // viewport could be built against the PREVIOUS frame's pane height -- which
     // is wrong on the frame a resize or a prompt changes it.
-    auto sections = impl_->sections(dimensions, leaderPending, paletteReport);
+    auto sections = impl_->sections(dimensions, paletteReport);
     auto viewport = impl_->viewport(dimensions);
     return SessionSnapshotCodec{}.assemble(impl_->session->revision(), impl_->session->topology(),
                                      client->principal, client->viewId,

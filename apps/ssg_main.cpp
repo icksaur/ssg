@@ -5,7 +5,7 @@
 // forwards input.
 //
 // Milestone 1 scope: launch over a path argument, draw the shell grid, and quit
-// on the `ESC Q` chord.  Input translation through the library keymap and
+// on Alt+Q.  Input translation through the library keymap and
 // editing arrive in later milestones; quitting is an application lifecycle
 // concern owned here.
 
@@ -766,42 +766,6 @@ int main(int argc, char** argv) {
     };
 
     std::string buffer;             // Raw bytes read but not yet decoded.
-    // The pending (mid-entry) key chord, in both of its forms.
-    //
-    // Resolution matches on the compiled strokes; the leader hint and the
-    // app-local quit chord read the authored ones.  They live in one object
-    // because six call sites clear this chord, and a clear that forgot one form
-    // would leave resolution matching strokes the user had already abandoned.
-    class PendingChord {
-    public:
-        void push(ssg::KeyStroke stroke, ssg::CompiledStroke compiled) {
-            strokes_.push_back(std::move(stroke));
-            compiled_.push_back(compiled);
-        }
-        void clear() noexcept {
-            strokes_.clear();
-            compiled_.clear();
-        }
-        [[nodiscard]] ssg::KeySequence const& strokes() const noexcept {
-            return strokes_;
-        }
-        [[nodiscard]] std::span<ssg::CompiledStroke const> compiled()
-            const noexcept {
-            return compiled_;
-        }
-        [[nodiscard]] std::size_t size() const noexcept {
-            return strokes_.size();
-        }
-        [[nodiscard]] ssg::KeyStroke const& operator[](std::size_t index)
-            const {
-            return strokes_[index];
-        }
-
-    private:
-        ssg::KeySequence strokes_;
-        std::vector<ssg::CompiledStroke> compiled_;
-    };
-    PendingChord chord;
     bool quit = false;
     auto focus = ssg::FocusTarget::Editor;
     // Client-owned palette state: query and selection are local (reported for
@@ -1039,7 +1003,7 @@ int main(int argc, char** argv) {
     // coalesced input after a focus-changing command routes against the new
     // focus rather than a stale one.
     auto refresh = [&]() -> std::optional<ssg::SessionSnapshot> {
-        auto snapshot = runtime.snapshot(client, terminalSize(), chord.strokes(), buildReport());
+        auto snapshot = runtime.snapshot(client, terminalSize(), buildReport());
         if (snapshot) {
             focus = snapshot->sections().shell.focus;
             // The compiled index is derived from the authored keymap AND the
@@ -1374,7 +1338,6 @@ int main(int argc, char** argv) {
                     dragging = false;
                     dragAnchor.reset();
                 }
-                chord.clear();
                 continue;
             }
 
@@ -1382,9 +1345,7 @@ int main(int argc, char** argv) {
                 // Pasted bytes are CONTENT.  They go straight to the text sink
                 // without touching the keymap, so a newline in the paste cannot
                 // fire whatever Enter is bound to and an escape sequence in it
-                // cannot be obeyed.  Any pending chord is abandoned: a paste is
-                // not a chord continuation.
-                chord.clear();
+                // cannot be obeyed.
                 if (!decoded.text.empty()) routeText(decoded.text);
                 continue;
             }
@@ -1412,26 +1373,22 @@ int main(int argc, char** argv) {
                     case ssg::app::WheelTarget::none:
                         break;
                 }
-                chord.clear();
                 continue;
             }
             if (decoded.status != ssg::app::DecodeStatus::key) {
-                // A recognized but unhandled byte (unknown CSI, stray control):
-                // a non-matching continuation that clears any pending chord.
-                chord.clear();
+                // A recognized but unhandled byte (unknown CSI, stray control).
                 continue;
             }
 
             // A printable without a keycode (e.g. multibyte text) cannot be a
-            // chord; route it straight to the text sink.
+            // binding; route it straight to the text sink.
             if (decoded.stroke.code == ssg::KeyCode::None) {
                 routeText(decoded.text);
-                chord.clear();
                 continue;
             }
 
-            chord.push(decoded.stroke, ssg::CompiledKeymap::compile(decoded.stroke));
-            auto resolution = compiledKeymap->resolve(chord.compiled(), focus);
+            auto resolution = compiledKeymap->resolve(
+                std::array{ssg::CompiledKeymap::compile(decoded.stroke)}, focus);
             if (resolution.kind == ssg::KeymapMatchKind::Resolved) {
                 // Pasting into a prompt inserts into the PROMPT's text, not the
                 // document behind it.  A prompt's value is edited client-side
@@ -1445,19 +1402,13 @@ int main(int argc, char** argv) {
                 } else {
                     dispatchResolved(resolution.command);
                 }
-                chord.clear();
-            } else if (resolution.kind == ssg::KeymapMatchKind::Pending) {
-                // Keep collecting; the leader hint renders next frame.
             } else {
-                // No binding.  Quit is the sole app-local chord (process
-                // lifecycle); everything else clears the chord and, for a
-                // printable, still routes as text.
-                const bool quitChord =
-                    chord.size() == 2 && chord[0].code == ssg::KeyCode::Escape &&
-                    chord[1].code == ssg::KeyCode::KeyQ;
+                // No binding.  Quit is the sole app-local key (process
+                // lifecycle); everything else routes as text where applicable.
                 const auto stroke = decoded.stroke;
-                chord.clear();
-                if (quitChord) {
+                const bool quitKey = stroke.code == ssg::KeyCode::KeyQ &&
+                                     stroke.alt && !stroke.control;
+                if (quitKey) {
                     quit = true;
                 } else if (pickerOpen && focus == ssg::FocusTarget::Prompt &&
                            stroke.code == ssg::KeyCode::Backspace) {

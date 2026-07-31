@@ -247,7 +247,7 @@ TEST(renderShowsPaletteQueryAndGhostInHeader) {
     report.rows = {{"file.save", "Save File", ""}};
     report.selected = std::uint32_t{0};
     auto snapshot =
-        runtime->snapshot(ssg::ClientId{1}, {80, 24}, {}, report);
+        runtime->snapshot(ssg::ClientId{1}, {80, 24}, report);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto grid = ssg::Renderer{}.render(*snapshot);
@@ -856,7 +856,7 @@ TEST(anOpenPickerPutsTheCaretAtTheEndOfTheTypedQuery) {
     // exactly as the app does.
     ssg::PaletteReport report;
     report.query = "save";
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24}, {}, report);
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24}, report);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto grid = ssg::Renderer{}.render(*snapshot);
@@ -893,7 +893,7 @@ TEST(theInputLineCaretIsPlacedByDisplayWidthNotByteCount) {
 
     ssg::PaletteReport report;
     report.query = "\u00e9\u00e9\u00e9";  // 3 characters, 6 bytes, 3 columns.
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24}, {}, report);
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24}, report);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto grid = ssg::Renderer{}.render(*snapshot);
@@ -926,7 +926,7 @@ TEST(theCaretFollowsAScrolledQueryToTheEndOfTheVisibleText) {
 
     ssg::PaletteReport report;
     report.query = std::string(300, 'x');
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24}, {}, report);
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24}, report);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto grid = ssg::Renderer{}.render(*snapshot);

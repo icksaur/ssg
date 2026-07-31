@@ -809,11 +809,12 @@ TEST(decodeInputEscapeBoundaryIsBounded) {
     auto arrow = ssg::app::decode_input("\x1b[A", false, consumed);
     ASSERT_EQ(std::string{ssg::keyCodeName(arrow.stroke.code)}, std::string{"ArrowUp"});
 
-    // ESC followed by a non-CSI byte: ESC is a standalone Escape stroke consuming
-    // only itself, so the next byte (the chord continuation) decodes separately.
+    // ESC followed by a printable coalesces into one Alt stroke (legacy
+    // meta-prefix), consuming both bytes.
     auto escThen = ssg::app::decode_input("\x1bs", false, consumed);
-    ASSERT_EQ(consumed, std::size_t{1});
-    ASSERT_EQ(std::string{ssg::keyCodeName(escThen.stroke.code)}, std::string{"Escape"});
+    ASSERT_EQ(consumed, std::size_t{2});
+    ASSERT_EQ(std::string{ssg::keyCodeName(escThen.stroke.code)}, std::string{"KeyS"});
+    ASSERT_TRUE(escThen.stroke.alt);
 
     // A lone ESC with more input possibly coming: incomplete, consume nothing.
     auto pending = ssg::app::decode_input("\x1b", false, consumed);
@@ -830,6 +831,77 @@ TEST(decodeInputEscapeBoundaryIsBounded) {
     // byte has not arrived).
     auto partial = ssg::app::decode_input("\x1b[", true, consumed);
     ASSERT_TRUE(partial.status == ssg::app::DecodeStatus::incomplete);
+}
+
+// Legacy meta-prefix: Alt+<key> transmits as ESC then the key's byte, so the
+// decoder coalesces ESC+printable into one Alt stroke.  Case supplies Shift for
+// letters (there is no shift+lowercase on the wire); a shifted symbol carries no
+// keycode and rides as text.  C0 controls become Ctrl+<letter>.
+TEST(decodeInputCoalescesMetaPrefixIntoAltStrokes) {
+    std::size_t consumed = 0;
+
+    // ESC s -> Alt+KeyS (lowercase: no shift), consuming both bytes.
+    auto altS = ssg::app::decode_input("\x1bs", false, consumed);
+    ASSERT_EQ(consumed, std::size_t{2});
+    ASSERT_TRUE(altS.status == ssg::app::DecodeStatus::key);
+    ASSERT_EQ(std::string{ssg::keyCodeName(altS.stroke.code)}, std::string{"KeyS"});
+    ASSERT_TRUE(altS.stroke.alt);
+    ASSERT_FALSE(altS.stroke.shift);
+
+    // ESC P -> Alt+Shift+KeyP; ESC p -> Alt+KeyP.  Distinct strokes: case is the
+    // only shift signal for a letter.
+    auto altShiftP = ssg::app::decode_input("\x1bP", false, consumed);
+    ASSERT_EQ(std::string{ssg::keyCodeName(altShiftP.stroke.code)}, std::string{"KeyP"});
+    ASSERT_TRUE(altShiftP.stroke.alt);
+    ASSERT_TRUE(altShiftP.stroke.shift);
+    auto altP = ssg::app::decode_input("\x1bp", false, consumed);
+    ASSERT_EQ(std::string{ssg::keyCodeName(altP.stroke.code)}, std::string{"KeyP"});
+    ASSERT_TRUE(altP.stroke.alt);
+    ASSERT_FALSE(altP.stroke.shift);
+
+    // ESC * (Shift+8) has no keycode -- a shifted number-row symbol is
+    // unbindable and rides as text, never {Digit8, shift}.
+    auto altStar = ssg::app::decode_input("\x1b*", false, consumed);
+    ASSERT_EQ(consumed, std::size_t{2});
+    ASSERT_TRUE(altStar.stroke.code == ssg::KeyCode::None);
+    ASSERT_EQ(altStar.text, std::string{"*"});
+
+    // C0 control byte -> Ctrl+<letter>.  0x13 = Ctrl+S.
+    auto ctrlS = ssg::app::decode_input("\x13", true, consumed);
+    ASSERT_EQ(consumed, std::size_t{1});
+    ASSERT_TRUE(ctrlS.status == ssg::app::DecodeStatus::key);
+    ASSERT_EQ(std::string{ssg::keyCodeName(ctrlS.stroke.code)}, std::string{"KeyS"});
+    ASSERT_TRUE(ctrlS.stroke.control);
+    ASSERT_TRUE(ctrlS.text.empty());
+
+    // Bytes handled as named keys above never fall into the C0 rule: Tab, Enter,
+    // Backspace stay themselves.
+    auto tab = ssg::app::decode_input("\x09", true, consumed);
+    ASSERT_EQ(std::string{ssg::keyCodeName(tab.stroke.code)}, std::string{"Tab"});
+    auto enter = ssg::app::decode_input("\x0d", true, consumed);
+    ASSERT_EQ(std::string{ssg::keyCodeName(enter.stroke.code)}, std::string{"Enter"});
+    auto lf = ssg::app::decode_input("\x0a", true, consumed);
+    ASSERT_EQ(std::string{ssg::keyCodeName(lf.stroke.code)}, std::string{"Enter"});
+
+    // Alt+Backspace (ESC 0x7f) is one Alt+Backspace stroke -- NOT keycode-less
+    // text -- so the delete-word-backward binding resolves.  Alt+Enter/Tab the
+    // same way.
+    auto altBksp = ssg::app::decode_input("\x1b\x7f", false, consumed);
+    ASSERT_EQ(consumed, std::size_t{2});
+    ASSERT_EQ(std::string{ssg::keyCodeName(altBksp.stroke.code)}, std::string{"Backspace"});
+    ASSERT_TRUE(altBksp.stroke.alt);
+    ASSERT_TRUE(altBksp.text.empty());
+    auto altBksp8 = ssg::app::decode_input("\x1b\x08", false, consumed);
+    ASSERT_EQ(std::string{ssg::keyCodeName(altBksp8.stroke.code)}, std::string{"Backspace"});
+    ASSERT_TRUE(altBksp8.stroke.alt);
+
+    // A lone ESC still resolves to Escape once input is exhausted.
+    auto esc = ssg::app::decode_input("\x1b", true, consumed);
+    ASSERT_EQ(std::string{ssg::keyCodeName(esc.stroke.code)}, std::string{"Escape"});
+    // ESC ESC is a bare Escape (consume one), not Alt+Escape.
+    auto escEsc = ssg::app::decode_input("\x1b\x1b", true, consumed);
+    ASSERT_EQ(consumed, std::size_t{1});
+    ASSERT_EQ(std::string{ssg::keyCodeName(escEsc.stroke.code)}, std::string{"Escape"});
 }
 
 // Drain `bytes` through the decoder the way the main loop does, returning every
@@ -935,22 +1007,19 @@ TEST(aReplySplitAcrossReadsIsStillConsumedWhole) {
     }
 }
 
-// The decoder deliberately does not recognize DCS (ESC P) or OSC (ESC ])
-// reports, because treating ESC-then-letter as a report introducer would break
-// the Escape-then-letter chords the keymap encodes.  That is only safe while SSG
-// asks no DCS/OSC question, so pin both halves: the introducers stay ordinary
-// Escape strokes, and nothing under apps/ emits a sequence that could solicit
-// such a reply.  Adding one must fail here rather than silently reopen the leak.
+// The DCS/OSC/APC/PM/SOS string introducers (ESC P/]/X/^/_) are byte-identical
+// to the Alt+<key> chords the meta-prefix coalescing produces, so a stray such
+// reply would be mistaken for a keystroke.  That is safe only while SSG asks no
+// DCS/OSC question, so pin the real invariant: nothing under apps/ emits a
+// sequence that could solicit such a reply.  Adding one must fail here.
 TEST(noDcsOrOscQueryMaySolicitAnUnparsedReply) {
-    for (std::string_view chord : {"\x1bP", "\x1b]", "\x1bX", "\x1b^", "\x1b_"}) {
-        std::size_t consumed = 0;
-        auto const decoded = ssg::app::decode_input(chord, true, consumed);
-        ASSERT_TRUE(decoded.status == ssg::app::DecodeStatus::key);
-        ASSERT_EQ(consumed, std::size_t{1});
-        ASSERT_EQ(std::string{ssg::keyCodeName(decoded.stroke.code)},
-                  std::string{"Escape"});
-    }
-
+    // The introducers now coalesce to Alt strokes (keyboard input); only the
+    // no-query invariant below keeps a genuine reply from ever reaching here.
+    std::size_t consumed = 0;
+    auto const osc = ssg::app::decode_input("\x1b]", true, consumed);
+    ASSERT_TRUE(osc.status == ssg::app::DecodeStatus::key);
+    ASSERT_EQ(std::string{ssg::keyCodeName(osc.stroke.code)}, std::string{"BracketRight"});
+    ASSERT_TRUE(osc.stroke.alt);
     // OSC 52 WRITE is emitted (see encode_clipboard_write) and is deliberately
     // allowed: a write carries a payload and asks nothing, so no reply can come
     // back.  The scan below therefore looks for a QUERY -- an OSC or DCS ending
@@ -2158,6 +2227,7 @@ int main() {
     RUN(routeWheelMapsRegionToScrollTarget);
     RUN(edgeScrollDecidesDirectionAtTheContentEdges);
     RUN(decodeInputEscapeBoundaryIsBounded);
+    RUN(decodeInputCoalescesMetaPrefixIntoAltStrokes);
     RUN(oneCopyIsWrittenOnceAndOnlyToATerminalThatAdvertisedOsc52);
 
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";

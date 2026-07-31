@@ -331,7 +331,6 @@ struct EditorRuntime::Impl final : CommandServices,
         std::uint32_t firstColumn) const;
     [[nodiscard]] ViewportViewState viewport(ViewportDimensions dimensions) const;
     [[nodiscard]] SessionSnapshotSections sections(ViewportDimensions dimensions,
-                                                   KeySequence const& leaderPending = {},
                                                    PaletteReport const& paletteReport = {}) const;
     [[nodiscard]] PromptStatusViewState promptStatusView(ViewportDimensions dimensions) const;
     void projectFindReplacePrompt(PromptViewState& promptView) const;
@@ -340,7 +339,6 @@ struct EditorRuntime::Impl final : CommandServices,
     // so stale matches are never navigable or projected.
     void reconcileFindDocument();
     [[nodiscard]] ShellViewState shellView(ViewportDimensions dimensions,
-                                            KeySequence const& leaderPending = {},
                                             PaletteReport const& paletteReport = {}) const;
     [[nodiscard]] PaletteViewState paletteView() const;
     // The tree view state with its scroll offset, scrollbar, and visible-window
