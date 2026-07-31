@@ -167,6 +167,12 @@ KeymapViewState defaultTerminalKeymap() {
     bind(seq({"Enter"}), "text.newline", "editor");
     bind(seq({"Backspace"}), "text.delete_backward", "editor");
     bind(seq({"Delete"}), "text.delete_forward", "editor");
+    // Alt+Backspace deletes the word to the left.  In a terminal Alt+Backspace
+    // arrives as the bytes ESC 0x7f, which decode_input splits into a standalone
+    // Escape stroke followed by Backspace -- exactly the Escape leader chord
+    // [Escape, Backspace], the same collision that gives Alt+<letter> for free
+    // (doc/spec-mod-keys.md).  Binding the chord is therefore the whole feature.
+    bind(seq({"Escape", "Backspace"}), "text.delete_word_backward", "editor");
     // Word-left/right: Ctrl+Left/Right is the common editor convention, but
     // Ctrl is not reliably interceptable in every host (browsers capture
     // several Ctrl+key combos at the chrome layer; see doc/spec-mod-keys.md).

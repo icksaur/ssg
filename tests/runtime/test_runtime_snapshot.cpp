@@ -527,6 +527,11 @@ TEST(curatedKeymapResolvesPerContext) {
     const auto del = *ssg::KeyCodec{}.parseSequence({"Delete"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(del, "editor").commandId,
               std::string{"text.delete_forward"});
+    // Alt+Backspace (the bytes ESC 0x7f) rides the Escape leader as
+    // [Escape, Backspace] and deletes the word to the left.
+    const auto deleteWord = *ssg::KeyCodec{}.parseSequence({"Escape", "Backspace"});
+    ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(deleteWord, "editor").commandId,
+              std::string{"text.delete_word_backward"});
     const auto wordLeft = *ssg::KeyCodec{}.parseSequence({"Escape", "ArrowLeft"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(wordLeft, "editor").commandId,
               std::string{"cursor.word_left"});
