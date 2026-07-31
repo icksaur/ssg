@@ -598,12 +598,17 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
                     std::nullopt};
         }
         if (request.reservedPromptRows > 0) {
-            view.prompt = Rect{editor.x, editor.y, editor.width,
+            // The prompt occupies the bottom rows of the screen (over the
+            // footer), which is where promptStatusView renders it.  Shrink the
+            // editor from the BOTTOM -- never move its top -- so opening a prompt
+            // reduces document height without pushing content down.
+            const int promptTop =
+                request.viewport.rows - request.reservedPromptRows;
+            view.prompt = Rect{editor.x, promptTop, editor.width,
                                request.reservedPromptRows};
             addNode(view, ShellNodeKind::PromptReservation, "prompt",
                      "Prompt surface", *view.prompt, SemanticRole::Prompt);
-            editor.y += request.reservedPromptRows;
-            editor.height -= request.reservedPromptRows;
+            editor.height = std::max(0, promptTop - editor.y);
         }
     }
 
