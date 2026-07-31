@@ -84,21 +84,28 @@ value saturates rather than wrapping. Hue is never altered.
 
 ```lua
 ssg.command("keymap.bind", {
-    sequence = "Escape KeyF KeyQ",
-    command = "file.save",
+    sequence = "Alt+KeyG",
+    command = "find.open",
 })
 ssg.command("keymap.unbind", {
-    sequence = "Escape KeyS",
+    sequence = "Alt+KeyS",
 })
 ```
 
-- `sequence` is one or more key strokes separated by spaces, e.g.
-  `"Escape KeyF KeyQ"` (press Escape, then F, then Q) or `"Ctrl+Shift+KeyM"`
-  (a single chord). Each stroke is an optional `Ctrl+`/`Alt+`/`Meta+`/
-  `Shift+` prefix followed by one key name: `KeyA`-`KeyZ`, `Digit0`-
-  `Digit9`, `F1`-`F24`, or a named key (`Escape`, `Enter`, `Tab`, `Space`,
-  `Backspace`, `Delete`, the arrow keys, `Home`/`End`/`PageUp`/`PageDown`,
-  and punctuation names like `BracketLeft`/`Comma`/`Slash`).
+Frequent actions bind to single `Alt+<key>` chords, which a terminal transmits
+as the same bytes as pressing Escape then the key -- so `Alt+S` saves, `Alt+P`
+opens the file finder, `Alt+Shift+P` the command palette.  Escape is a plain key
+that cancels a prompt or closes find in one press.  On macOS the terminal must
+be set to treat Option as Meta (iTerm2: "Use Option as Meta"; Terminal.app: "Use
+Option as Meta key"), or `Option+<letter>` inserts a composed character instead.
+
+- `sequence` is a single key stroke, e.g. `"Alt+KeyS"` or `"Ctrl+Shift+KeyM"`.
+  It is an optional `Ctrl+`/`Alt+`/`Meta+`/`Shift+` prefix followed by one key
+  name: `KeyA`-`KeyZ`, `Digit0`-`Digit9`, `F1`-`F24`, or a named key (`Escape`,
+  `Enter`, `Tab`, `Space`, `Backspace`, `Delete`, the arrow keys,
+  `Home`/`End`/`PageUp`/`PageDown`, and punctuation names like
+  `BracketLeft`/`Comma`/`Slash`).  Multi-stroke sequences are not supported:
+  a value naming more than one stroke is rejected.
 - `command` is the command id to run (the same ids used throughout ssg,
   e.g. `file.save`, `edit.undo`, `tab.next`).
 - `context` is optional and defaults to `"*"` (every focus target); it can
@@ -106,16 +113,16 @@ ssg.command("keymap.unbind", {
   part of the UI has focus.
 - `keymap.bind` replaces any existing binding for the same
   `(sequence, context)` pair rather than adding a duplicate. It's rejected
-  -- leaving the keymap unchanged -- if the sequence is unparseable, the
-  context is unknown, `command` is empty, or the result would be an
-  invalid keymap (e.g. an ambiguous prefix, or removing the last
-  `Escape KeyF KeyT` -> `settings.open` binding, ssg's built-in escape
-  hatch to the Settings screen).
+  -- leaving the keymap unchanged -- if the sequence is unparseable or names
+  more than one stroke, the context is unknown, `command` is empty, or the
+  result would be an invalid keymap (e.g. removing the last `Alt+Shift+KeyT`
+  -> `settings.open` binding, ssg's built-in escape hatch to the Settings
+  screen).
 - `keymap.unbind` removes any binding matching `(sequence, context)`;
   unbinding something that isn't bound is not an error. It's rejected on
   the same "would remove the last `settings.open` binding" ground as
   `keymap.bind`.
-- Bound commands show up in the command palette (`Escape Shift+KeyP`) with
+- Bound commands show up in the command palette (`Alt+Shift+KeyP`) with
   their current key sequence next to them.
 - Binding a command that needs more than a keystroke to do anything
   useful (e.g. `settings.set`, `cursor.set_position`, `text.insert`) is
@@ -171,7 +178,7 @@ ssg.register_command("my.hotpink", function()
 end)
 
 ssg.command("keymap.bind", {
-    sequence = "Escape KeyU",
+    sequence = "Alt+KeyU",
     command = "my.hotpink",
 })
 ```

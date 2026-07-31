@@ -445,8 +445,7 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
         // A space between the fields and whatever follows them.
         if (headerX > view.header->x) ++headerX;
 
-        // The input line and the leader hint share this slot; picker focus and
-        // leader-chord entry are mutually exclusive, so they never compete.
+        // The input line occupies this slot when a picker is open.
         if (request.inputLineActive) {
             const int available = std::max(0, headerRight - headerX);
             // Scroll the query rather than reclaim field width when it outgrows
@@ -481,19 +480,6 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
             }
         }
         int actionX = view.footer->right();
-        // The leader-chord hint lives at the far right of the footer.  It shares
-        // no slot with the footer actions -- it is placed first (rightmost) and
-        // the actions flow to its left -- so an active chord never hides a status
-        // action nor is hidden by one.
-        if (!request.leaderHint.empty()) {
-            const int width = std::min(actionX, displayCells(request.leaderHint) + 1);
-            if (width > 0) {
-                actionX -= width;
-                addNode(view, ShellNodeKind::FooterField, "leader", "Leader hint",
-                         {actionX, view.footer->y, width, 1},
-                         SemanticRole::Prompt, request.leaderHint);
-            }
-        }
         for (auto action = request.footerActions.rbegin();
              action != request.footerActions.rend(); ++action) {
             const int width =

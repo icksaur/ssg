@@ -447,43 +447,35 @@ TEST(curatedKeymapResolvesPerContext) {
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(down, "prompt").commandId,
               std::string{"prompt.next"});
 
-    const auto save = *ssg::KeyCodec{}.parseSequence({"Escape", "KeyS"});
+    const auto save = *ssg::KeyCodec{}.parseSequence({"Alt+KeyS"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(save, "editor").commandId,
               std::string{"file.save"});
 
     // The settings.open escape hatch resolves in every context.
-    const auto settings = *ssg::KeyCodec{}.parseSequence({"Escape", "KeyF", "KeyT"});
+    const auto settings = *ssg::KeyCodec{}.parseSequence({"Alt+Shift+KeyT"});
     for (const auto context : {"editor", "panel", "prompt"}) {
         ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(settings, context).commandId,
                   std::string{"settings.open"});
     }
 
-    // Cut/copy/paste ride the leader in the editor.  [Escape, KeyC] is
-    // find.toggle_case in a prompt, so these must resolve per context rather
-    // than globally -- a global binding would shadow the prompt one.
+    // Cut/copy/paste are editor-context Alt chords; paste is additionally bound
+    // in the prompt.
     struct ClipboardBinding {
         char const* key;
         char const* command;
     };
-    for (auto const& binding : {ClipboardBinding{"KeyX", "clipboard.cut"},
-                                ClipboardBinding{"KeyC", "clipboard.copy"},
-                                ClipboardBinding{"KeyV", "clipboard.paste"}}) {
-        const auto sequence =
-            *ssg::KeyCodec{}.parseSequence({"Escape", binding.key});
+    for (auto const& binding : {ClipboardBinding{"Alt+KeyX", "clipboard.cut"},
+                                ClipboardBinding{"Alt+KeyC", "clipboard.copy"},
+                                ClipboardBinding{"Alt+KeyV", "clipboard.paste"}}) {
+        const auto sequence = *ssg::KeyCodec{}.parseSequence({binding.key});
         ASSERT_EQ(
             ssg::KeymapMatcher{keymap}.resolveSequence(sequence, "editor").commandId,
             std::string{binding.command});
     }
-    const auto toggleCase = *ssg::KeyCodec{}.parseSequence({"Escape", "KeyC"});
-    ASSERT_EQ(
-        ssg::KeymapMatcher{keymap}.resolveSequence(toggleCase, "prompt").commandId,
-        std::string{"find.toggle_case"});
 
-    // Editor-scoped means editor-ONLY for cut and copy.  KeyC is protected by
-    // find.toggle_case, but KeyX has no competing binding, so widening it to "*"
-    // would pass validation and silently claim the chord in every context.
-    for (auto const* const key : {"KeyX", "KeyC"}) {
-        const auto sequence = *ssg::KeyCodec{}.parseSequence({"Escape", key});
+    // Editor-scoped means editor-ONLY for cut and copy.
+    for (auto const* const key : {"Alt+KeyX", "Alt+KeyC"}) {
+        const auto sequence = *ssg::KeyCodec{}.parseSequence({key});
         for (auto const* const context : {"panel", "prompt"}) {
             const auto resolved =
                 ssg::KeymapMatcher{keymap}.resolveSequence(sequence, context);
@@ -493,7 +485,7 @@ TEST(curatedKeymapResolvesPerContext) {
     // Paste is the exception: it is bound in the prompt too, because a prompt
     // owns text a user will want to paste into.  It is fulfilled against the
     // prompt's own value client-side, never dispatched at the document.
-    const auto paste = *ssg::KeyCodec{}.parseSequence({"Escape", "KeyV"});
+    const auto paste = *ssg::KeyCodec{}.parseSequence({"Alt+KeyV"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(paste, "prompt").commandId,
               std::string{"clipboard.paste"});
     // But not in the panel: there is no text there to paste into.
@@ -501,8 +493,13 @@ TEST(curatedKeymapResolvesPerContext) {
                     .resolveSequence(paste, "panel")
                     .commandId.rfind("clipboard.", 0) != 0);
 
+    // A single Escape cancels a focused prompt in one press.
+    const auto escape = *ssg::KeyCodec{}.parseSequence({"Escape"});
+    ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(escape, "prompt").commandId,
+              std::string{"prompt.cancel"});
+
     // M7-M selection/multi-cursor bindings: Shift+Arrow extends the selection in
-    // the editor; the multi-cursor and find/replace chords resolve globally.
+    // the editor; the multi-cursor chords resolve globally.
     const auto shiftRight = *ssg::KeyCodec{}.parseSequence({"Shift+ArrowRight"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(shiftRight, "editor").commandId,
               std::string{"select.right"});
@@ -513,48 +510,35 @@ TEST(curatedKeymapResolvesPerContext) {
     const auto plainRight = *ssg::KeyCodec{}.parseSequence({"ArrowRight"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(plainRight, "editor").commandId,
               std::string{"cursor.right"});
-    const auto addNext = *ssg::KeyCodec{}.parseSequence({"Escape", "KeyD"});
+    const auto addNext = *ssg::KeyCodec{}.parseSequence({"Alt+KeyD"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(addNext, "editor").commandId,
               std::string{"select.add_next_occurrence"});
-    const auto findOpen = *ssg::KeyCodec{}.parseSequence({"Escape", "Slash"});
+    const auto findOpen = *ssg::KeyCodec{}.parseSequence({"Alt+Slash"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(findOpen, "editor").commandId,
               std::string{"find.open"});
-    // leader,8 seeds find with the word under the caret, in the editor context.
-    const auto findWord = *ssg::KeyCodec{}.parseSequence({"Escape", "Digit8"});
+    // Alt+8 seeds find with the word under the caret, in the editor context.
+    const auto findWord = *ssg::KeyCodec{}.parseSequence({"Alt+Digit8"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(findWord, "editor").commandId,
               std::string{"find.word_under_cursor"});
-    const auto replaceOpen = *ssg::KeyCodec{}.parseSequence({"Escape", "KeyR"});
+    const auto replaceOpen = *ssg::KeyCodec{}.parseSequence({"Alt+KeyR"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(replaceOpen, "editor").commandId,
               std::string{"replace.open"});
+    // Tab cycling moved off the brackets to Alt+Period/Comma.
+    const auto tabNext = *ssg::KeyCodec{}.parseSequence({"Alt+Period"});
+    ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(tabNext, "editor").commandId,
+              std::string{"tab.next"});
+    const auto tabPrev = *ssg::KeyCodec{}.parseSequence({"Alt+Comma"});
+    ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(tabPrev, "editor").commandId,
+              std::string{"tab.previous"});
 
-    // Delete forward and Escape-led word navigation (with Shift for select).
+    // Delete forward and Alt word navigation (with Shift for select).
     const auto del = *ssg::KeyCodec{}.parseSequence({"Delete"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(del, "editor").commandId,
               std::string{"text.delete_forward"});
-    // Alt+Backspace (the bytes ESC 0x7f) rides the Escape leader as
-    // [Escape, Backspace] and deletes the word to the left.
-    const auto deleteWord = *ssg::KeyCodec{}.parseSequence({"Escape", "Backspace"});
+    // Alt+Backspace deletes the word to the left.
+    const auto deleteWord = *ssg::KeyCodec{}.parseSequence({"Alt+Backspace"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(deleteWord, "editor").commandId,
               std::string{"text.delete_word_backward"});
-    const auto wordLeft = *ssg::KeyCodec{}.parseSequence({"Escape", "ArrowLeft"});
-    ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(wordLeft, "editor").commandId,
-              std::string{"cursor.word_left"});
-    const auto wordRight = *ssg::KeyCodec{}.parseSequence({"Escape", "ArrowRight"});
-    ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(wordRight, "editor").commandId,
-              std::string{"cursor.word_right"});
-    const auto selectWordLeft =
-        *ssg::KeyCodec{}.parseSequence({"Escape", "Shift+ArrowLeft"});
-    ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(selectWordLeft, "editor").commandId,
-              std::string{"select.word_left"});
-    const auto selectWordRight =
-        *ssg::KeyCodec{}.parseSequence({"Escape", "Shift+ArrowRight"});
-    ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(selectWordRight, "editor").commandId,
-              std::string{"select.word_right"});
-
-    // Alt+Left/Right is a deliberate, explicit alternate binding to the
-    // SAME commands as the Escape-led chords above (doc/spec-mod-keys.md):
-    // arrow keys do not get the free Escape/Alt byte collision that
-    // Alt+<letter> does, so this pair had to be bound explicitly.
     const auto altWordLeft = *ssg::KeyCodec{}.parseSequence({"Alt+ArrowLeft"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(altWordLeft, "editor").commandId,
               std::string{"cursor.word_left"});
@@ -586,7 +570,7 @@ TEST(addCursorChordProducesMultipleSelections) {
     auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
-    const auto chord = *ssg::KeyCodec{}.parseSequence({"Escape", "KeyJ"});
+    const auto chord = *ssg::KeyCodec{}.parseSequence({"Alt+KeyJ"});
     auto resolved = ssg::KeymapMatcher{snapshot->sections().keymap}.resolveSequence(chord, "editor");
     ASSERT_EQ(resolved.kind, ssg::KeymapMatchKind::Resolved);
     ASSERT_EQ(resolved.commandId, std::string{"select.add_cursor_down"});

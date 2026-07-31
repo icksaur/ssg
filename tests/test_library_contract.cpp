@@ -189,7 +189,7 @@ TEST(renderedPaletteLabelsTraceToPublishedCandidates) {
     ASSERT_TRUE(!report.rows.empty());
     if (report.rows.empty()) return;
 
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24}, {}, report);
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24}, report);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto grid = ssg::Renderer{}.render(*snapshot);
@@ -258,7 +258,7 @@ TEST(productionRuntimePaletteScreenSatisfiesTheScreenContract) {
     report.rows = {{"file.save", "Save File", ""},
                    {"file.save_as", "Save As", ""}};
     report.selected = std::uint32_t{0};
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24}, {}, report);
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24}, report);
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto grid = ssg::Renderer{}.render(*snapshot);

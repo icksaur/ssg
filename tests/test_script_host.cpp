@@ -66,7 +66,7 @@ TEST(aScriptStillReachesTheEditorThroughTheOrdinaryCommandBoundary) {
 
     auto const bound = scripts.evaluate(
         "ssg.command('keymap.bind', "
-        "{sequence = 'Escape KeyF KeyQ', command = 'file.save'})");
+        "{sequence = 'Alt+KeyU', command = 'file.save'})");
     ASSERT_TRUE(bound.accepted());
     fs::remove_all(root);
 }
@@ -268,9 +268,9 @@ TEST(aScriptCommandCanCallCommandsAndBothArePerformedInOrder) {
     ASSERT_TRUE(scripts
                     .evaluate("ssg.register_command('user.rebind', function()\n"
                               "  ssg.command('keymap.bind', "
-                              "{sequence = 'Escape KeyY', command = 'file.save'})\n"
+                              "{sequence = 'Alt+KeyY', command = 'file.save'})\n"
                               "  ssg.command('keymap.unbind', "
-                              "{sequence = 'Escape KeyY'})\n"
+                              "{sequence = 'Alt+KeyY'})\n"
                               "end)")
                     .accepted());
 

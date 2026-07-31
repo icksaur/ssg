@@ -8,12 +8,6 @@ namespace ssg {
 
 namespace {
 
-bool isStrictPrefix(std::span<CompiledStroke const> shorter,
-                    CompiledSequence const& longer) {
-    return shorter.size() < longer.size() &&
-           std::equal(shorter.begin(), shorter.end(), longer.begin());
-}
-
 // The authored context name, compiled.  "*" is the global context and every
 // other valid name is a focus; a name outside that closed set matches no
 // keystroke, exactly as KeymapMatcher's name comparison does.
@@ -53,7 +47,6 @@ CompiledResolution CompiledKeymap::resolve(
     if (pending.empty()) return {};
 
     Entry const* match = nullptr;
-    bool hasPending = false;
     for (auto const& entry : entries_) {
         if (!entry.context.eligibleIn(focus)) continue;
         if (std::ranges::equal(entry.sequence, pending)) {
@@ -66,14 +59,12 @@ CompiledResolution CompiledKeymap::resolve(
             } else if (entry.context.isAny() && !match->context.isAny()) {
                 match = &entry;
             }
-        } else if (isStrictPrefix(pending, entry.sequence)) {
-            hasPending = true;
         }
     }
     if (match != nullptr) {
         return {KeymapMatchKind::Resolved, match->command};
     }
-    return {hasPending ? KeymapMatchKind::Pending : KeymapMatchKind::None, {}};
+    return {KeymapMatchKind::None, {}};
 }
 
 }  // namespace ssg

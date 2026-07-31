@@ -110,7 +110,6 @@ void EditorRuntime::Impl::projectFindReplacePrompt(PromptViewState& promptView) 
 }
 
 ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
-                                               KeySequence const& leaderPending,
                                                PaletteReport const& paletteReport) const {
     std::vector<TabLabel> labels;
     for (auto const& tab : tabs.viewState().tabs) {
@@ -138,14 +137,6 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
     request.footerActions = statusProjection.actions;
     request.tabs = std::move(labels);
     request.style = style;
-    if (!leaderPending.empty()) {
-        std::string hint = "leader:";
-        for (auto const& stroke : leaderPending) {
-            hint += ' ';
-            hint += KeyCodec{}.formatStroke(stroke);
-        }
-        request.leaderHint = std::move(hint);
-    }
     bool const paletteOpen = prompt.active() && prompt.request() &&
                               prompt.request()->kind == PromptKind::Palette;
     if (paletteOpen) {
@@ -185,7 +176,6 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
 }
 
 SessionSnapshotSections EditorRuntime::Impl::sections(ViewportDimensions dimensions,
-                                                     KeySequence const& leaderPending,
                                                      PaletteReport const& paletteReport) const {
     auto currentHistory = HistoryViewState{false, false, 0};
     if (auto id = activeDocumentId()) {
@@ -197,7 +187,7 @@ SessionSnapshotSections EditorRuntime::Impl::sections(ViewportDimensions dimensi
     // Compute the shell layout first: it caches the panel height that tree_view
     // resolves the tree scroll offset against (the aggregate below does not
     // guarantee evaluation order).
-    auto shell = shellView(dimensions, leaderPending, paletteReport);
+    auto shell = shellView(dimensions, paletteReport);
     auto treeSection = treeView();
     return {documentView(),
             selection,

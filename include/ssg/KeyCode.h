@@ -112,7 +112,7 @@ struct KeyCodeEntry {
     KeyCode code;
     // The name a keymap binds and the protocol carries.
     std::string_view name;
-    // The short form the leader hint and keymap help render.
+    // The short form the keymap help renders.
     std::string_view display;
 };
 
@@ -216,7 +216,7 @@ static_assert(keyCodeTableIsExhaustive());
     return kKeyCodes[static_cast<std::size_t>(code) - 1].name;
 }
 
-// The short form rendered in the leader hint; empty for `None`.
+// The short form rendered in the keymap help; empty for `None`.
 [[nodiscard]] constexpr std::string_view keyCodeDisplay(KeyCode code) noexcept {
     if (code == KeyCode::None || code >= KeyCode::Count) return {};
     return kKeyCodes[static_cast<std::size_t>(code) - 1].display;

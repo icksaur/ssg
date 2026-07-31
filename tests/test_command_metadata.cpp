@@ -45,16 +45,16 @@ TEST(commandLabelUsesAuthoredLabelsAndHumanizesTheRest) {
 }
 
 TEST(formatKeySequenceIsCompactAndHuman) {
-    ASSERT_EQ(ssg::KeyCodec{}.formatSequence(*ssg::KeyCodec{}.parseSequence({"Escape", "KeyS"})),
-              std::string{"Esc S"});
+    ASSERT_EQ(ssg::KeyCodec{}.formatSequence(*ssg::KeyCodec{}.parseSequence({"Alt+KeyS"})),
+              std::string{"Alt+S"});
     ASSERT_EQ(ssg::KeyCodec{}.formatSequence(*ssg::KeyCodec{}.parseSequence({"ArrowDown"})),
               std::string{"Down"});
     ASSERT_EQ(ssg::KeyCodec{}.formatSequence(
-                  *ssg::KeyCodec{}.parseSequence({"Escape", "Shift+KeyZ"})),
-              std::string{"Esc Shift+Z"});
+                  *ssg::KeyCodec{}.parseSequence({"Alt+Shift+KeyZ"})),
+              std::string{"Alt+Shift+Z"});
     ASSERT_EQ(ssg::KeyCodec{}.formatSequence(
-                  *ssg::KeyCodec{}.parseSequence({"Escape", "BracketRight"})),
-              std::string{"Esc ]"});
+                  *ssg::KeyCodec{}.parseSequence({"Alt+BracketRight"})),
+              std::string{"Alt+]"});
     ASSERT_TRUE(ssg::KeyCodec{}.formatSequence({}).empty());
 }
 

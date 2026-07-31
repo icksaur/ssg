@@ -80,7 +80,7 @@ enum class KeymapErrorCode : std::uint8_t {
     UnreachableBinding,
     ReservedBinding,
     UnknownContext,
-    AmbiguousPrefix,
+    MultiStrokeBinding,
 };
 
 struct KeymapError {
@@ -91,7 +91,7 @@ struct KeymapError {
     bool operator==(const KeymapError&) const = default;
 };
 
-enum class KeymapMatchKind : std::uint8_t { None, Pending, Resolved };
+enum class KeymapMatchKind : std::uint8_t { None, Resolved };
 
 struct KeymapResolution {
     KeymapMatchKind kind = KeymapMatchKind::None;

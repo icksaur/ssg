@@ -173,35 +173,6 @@ TEST(editorScrollUsesTheRealPaneHeightNotAHardcoded24) {
 } // namespace
 
 
-TEST(reportedLeaderSequenceRendersAPerSnapshotHint) {
-    auto root = uniqueRoot();
-    auto created = ssg::EditorRuntime::create(
-        {root / "workspace", root / "scratch", root / "recovery"});
-    ASSERT_TRUE(created.accepted());
-    if (!created.accepted()) return;
-    auto& runtime = *created.runtime;
-    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
-
-    const auto leaderContent = [](ssg::SessionSnapshot const& snapshot) {
-        for (auto const& node : snapshot.sections().shell.accessibilityNodes) {
-            if (node.id == "leader") return node.content;
-        }
-        return std::string{};
-    };
-
-    // A snapshot with a reported leader sequence carries the hint.
-    auto withLeader = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12},
-                                        ssg::KeySequence{ssg::KeyStroke{ssg::KeyCode::Escape}});
-    ASSERT_TRUE(withLeader.has_value());
-    if (withLeader) ASSERT_EQ(leaderContent(*withLeader), std::string{"leader: Escape"});
-
-    // A snapshot with no reported sequence (a second client, or the same client
-    // not in leader mode) carries no hint -- the state is per snapshot call.
-    auto withoutLeader = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
-    ASSERT_TRUE(withoutLeader.has_value());
-    if (withoutLeader) ASSERT_TRUE(leaderContent(*withoutLeader).empty());
-}
-
 TEST(paletteCandidatesMatchTheCommandRegistry) {
     auto root = uniqueRoot();
     auto created = ssg::EditorRuntime::create(
@@ -572,7 +543,6 @@ TEST(panelShowCommandsToggleAndSwitchProviders) {
 int main() {
     RUN(viewportShellSettingsAndThemeAreLiveSections);
     RUN(settingsDispatchMatchesSettingsModelOracleSnapshot);
-    RUN(reportedLeaderSequenceRendersAPerSnapshotHint);
     RUN(paletteCandidatesMatchTheCommandRegistry);
     RUN(shellStatusFieldsUseRegisteredProviders);
     RUN(shellStatusFieldsPreserveDefaultContentOrderAndLabels);
