@@ -519,6 +519,10 @@ TEST(curatedKeymapResolvesPerContext) {
     const auto findOpen = *ssg::KeyCodec{}.parseSequence({"Escape", "Slash"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(findOpen, "editor").commandId,
               std::string{"find.open"});
+    // leader,8 seeds find with the word under the caret, in the editor context.
+    const auto findWord = *ssg::KeyCodec{}.parseSequence({"Escape", "Digit8"});
+    ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(findWord, "editor").commandId,
+              std::string{"find.word_under_cursor"});
     const auto replaceOpen = *ssg::KeyCodec{}.parseSequence({"Escape", "KeyR"});
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(replaceOpen, "editor").commandId,
               std::string{"replace.open"});

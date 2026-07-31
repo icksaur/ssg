@@ -8,7 +8,7 @@ with `SSG_UPDATE_DOCS=1 ./build/test_commands`.
 available to the Lua API when a host grants them
 (see `doc/spec-command-registry.md`).
 
-There are 182 commands.
+There are 183 commands.
 
 ## clipboard-register
 
@@ -83,6 +83,7 @@ There are 182 commands.
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
 | `find.open` | Find | none | lua |
+| `find.word_under_cursor` | Find Word Under Cursor | none | lua |
 | `find.close` | Close | none | lua |
 | `find.next` | Next | none | lua |
 | `find.previous` | Previous | none | lua |

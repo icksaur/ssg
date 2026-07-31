@@ -128,6 +128,10 @@ KeymapViewState defaultTerminalKeymap() {
     bind(seq({"Escape", "KeyK"}), "select.add_cursor_up", "*");
     bind(seq({"Escape", "KeyJ"}), "select.add_cursor_down", "*");
     bind(seq({"Escape", "Slash"}), "find.open", "*");
+    // leader,8 seeds find with the word under the caret.  Editor-context: it
+    // acts on the caret and document, and a literal 8 typed after Escape while a
+    // prompt owns the keyboard must not be hijacked.
+    bind(seq({"Escape", "Digit8"}), "find.word_under_cursor", "editor");
     bind(seq({"Escape", "KeyR"}), "replace.open", "*");
 
     // Cut/copy/paste are bound in `editor` rather than globally: [Escape, KeyC]

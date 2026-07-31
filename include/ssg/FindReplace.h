@@ -74,6 +74,7 @@ public:
 
 enum class FindReplaceCommand : std::uint8_t {
     FindOpen,
+    FindWordUnderCursor,
     FindClose,
     FindNext,
     FindPrevious,
