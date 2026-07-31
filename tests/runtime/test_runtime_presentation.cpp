@@ -209,6 +209,44 @@ TEST(paletteCandidatesMatchTheCommandRegistry) {
     }
 }
 
+TEST(paletteCommandCandidatesAreCachedButInvalidateOnKeymapChange) {
+    auto root = uniqueRoot();
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.open", runtime.revision(), {}}).accepted());
+
+    auto const detailOf = [](ssg::SessionSnapshot const& snap, std::string_view id) {
+        for (auto const& c : snap.sections().palette.candidates) {
+            if (c.id == id) return c.detail;
+        }
+        return std::string{};
+    };
+
+    // Two snapshots with no catalog/keymap change publish the identical
+    // candidate set (the cache is reused, not rebuilt into something different).
+    auto first = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    auto second = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    ASSERT_TRUE(first.has_value() && second.has_value());
+    if (!first || !second) return;
+    ASSERT_EQ(first->sections().palette.candidates,
+              second->sections().palette.candidates);
+    ASSERT_EQ(detailOf(*first, "file.save"), std::string{"Alt+S"});
+
+    // Rebinding a command must invalidate the cache: the new key hint shows up.
+    ASSERT_TRUE(runtime.dispatch(
+                       ssg::ClientId{1},
+                       {"keymap.bind", runtime.revision(),
+                        ssg::KeymapBindArguments{"Alt+KeyG", "file.save", "*"}})
+                    .accepted());
+    auto rebound = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    ASSERT_TRUE(rebound.has_value());
+    if (rebound) ASSERT_EQ(detailOf(*rebound, "file.save"), std::string{"Alt+G"});
+}
+
 TEST(shellStatusFieldsUseRegisteredProviders) {
     auto root = uniqueRoot();
     ssg::EditorRuntimeConfig config{
@@ -544,6 +582,7 @@ int main() {
     RUN(viewportShellSettingsAndThemeAreLiveSections);
     RUN(settingsDispatchMatchesSettingsModelOracleSnapshot);
     RUN(paletteCandidatesMatchTheCommandRegistry);
+    RUN(paletteCommandCandidatesAreCachedButInvalidateOnKeymapChange);
     RUN(shellStatusFieldsUseRegisteredProviders);
     RUN(shellStatusFieldsPreserveDefaultContentOrderAndLabels);
     RUN(shellStatusFieldsRenderBranchWhenGitBranchIsApplied);
