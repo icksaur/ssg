@@ -1,4 +1,5 @@
 #include <ssg/Selection.h>
+#include <ssg/WordClassification.h>
 
 #include <algorithm>
 #include <cctype>
@@ -277,14 +278,7 @@ private:
         const auto start =
             static_cast<std::size_t>(position.byteOffset.value());
         const auto first = static_cast<unsigned char>(text_[start]);
-        if (first >= 0x80 ||
-            (first >= static_cast<unsigned char>('a') &&
-             first <= static_cast<unsigned char>('z')) ||
-            (first >= static_cast<unsigned char>('A') &&
-             first <= static_cast<unsigned char>('Z')) ||
-            (first >= static_cast<unsigned char>('0') &&
-             first <= static_cast<unsigned char>('9')) ||
-            first == static_cast<unsigned char>('_')) {
+        if (isWordByte(first)) {
             return SegmentCategory::Word;
         }
         if (first == static_cast<unsigned char>(' ') ||

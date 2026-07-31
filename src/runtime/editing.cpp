@@ -1,7 +1,11 @@
 #include "editor_runtime_internal.h"
 
+#include <ssg/WordClassification.h>
+
 #include <algorithm>
 #include <cctype>
+#include <string>
+#include <string_view>
 
 namespace ssg {
 namespace {
@@ -9,6 +13,34 @@ namespace {
 template <typename T>
 T const* payloadAs(std::any const& payload) {
     return std::any_cast<T>(&payload);
+}
+
+// The needle for find.word_under_cursor.  A non-caret selection is taken
+// verbatim; a caret takes the word it sits inside, or -- when it sits just past
+// a word's last byte -- that trailing word.  Byte reads are bounds-guarded: a
+// caret can sit at text.size() and the document can be empty, in which case
+// there is no word and the result is empty.
+std::string wordUnderCaret(std::string_view text, Selection const& primary) {
+    if (!primary.isCaret()) {
+        auto const low = static_cast<std::size_t>(primary.lower().byteOffset.value());
+        auto const high = static_cast<std::size_t>(primary.upper().byteOffset.value());
+        if (low <= high && high <= text.size()) {
+            return std::string{text.substr(low, high - low)};
+        }
+        return {};
+    }
+    auto const offset = static_cast<std::size_t>(primary.active.byteOffset.value());
+    const bool onWord =
+        offset < text.size() && isWordByte(static_cast<unsigned char>(text[offset]));
+    const bool afterWord =
+        offset > 0 && offset <= text.size() &&
+        isWordByte(static_cast<unsigned char>(text[offset - 1]));
+    if (!onWord && !afterWord) return {};
+    std::size_t begin = offset;
+    std::size_t end = offset;
+    while (begin > 0 && isWordByte(static_cast<unsigned char>(text[begin - 1]))) --begin;
+    while (end < text.size() && isWordByte(static_cast<unsigned char>(text[end]))) ++end;
+    return std::string{text.substr(begin, end - begin)};
 }
 
 HistoryEditKind historyKind(TextInputCommand command) {
@@ -319,6 +351,28 @@ CommandHandlerResult bindFindReplace(EditorRuntime::Impl& runtime,
                 findOptionToggles(runtime),
                 PromptMatchCount{"find.count", "Match count", ""}});
             return success();
+        case FindReplaceCommand::FindWordUnderCursor: {
+            if (document == nullptr) return success();
+            auto const needle = wordUnderCaret(
+                snapshot.text, runtime.selection.selections.primary());
+            if (needle.empty()) return success();
+            // Always a literal, whole-document search: regex and selection-only
+            // are forced off so a needle with metacharacters (or a multi-line
+            // selection needle) can never be reinterpreted as a pattern, and the
+            // seeded prompt shows the clean word rather than an escaped form.
+            auto options = runtime.findReplace.viewState().options;
+            options.regex = false;
+            options.selectionOnly = false;
+            runtime.findReplace.open(
+                snapshot, FindRequest{needle, options, std::nullopt});
+            runtime.findDocumentId = runtime.activeDocumentId();
+            revealActiveFindMatch(runtime);
+            (void)runtime.prompt.open(PromptRequest{
+                PromptKind::Find, "Find", {{"find.query", "Find query", needle}},
+                findOptionToggles(runtime),
+                PromptMatchCount{"find.count", "Match count", ""}});
+            return success();
+        }
         case FindReplaceCommand::ReplaceOpen:
             runtime.findReplace.openReplace(snapshot, FindRequest{query, runtime.findReplace.viewState().options, range});
             runtime.findDocumentId = runtime.activeDocumentId();
@@ -647,6 +701,8 @@ void registerFindReplaceCommands(EditorSessionBuilder& builder,
     };
 
     bare("find.open", "Find", "Find", FindReplaceCommand::FindOpen);
+    bare("find.word_under_cursor", "Find Word Under Cursor",
+         "Find Word Under Cursor", FindReplaceCommand::FindWordUnderCursor);
     bare("find.close", "", "Close", FindReplaceCommand::FindClose);
     bare("find.next", "", "Next", FindReplaceCommand::FindNext);
     bare("find.previous", "", "Previous", FindReplaceCommand::FindPrevious);

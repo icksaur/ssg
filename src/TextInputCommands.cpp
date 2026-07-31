@@ -1,6 +1,7 @@
 #include <ssg/TextInputCommands.h>
 
 #include <ssg/GraphemeLayout.h>
+#include <ssg/WordClassification.h>
 
 #include <algorithm>
 #include <cstddef>
@@ -122,9 +123,7 @@ std::size_t nextBoundary(const std::vector<std::size_t>& boundaries,
 
 SegmentCategory category(std::string_view text, std::size_t start) {
     const auto first = static_cast<unsigned char>(text[start]);
-    if (first >= 0x80 || (first >= 'a' && first <= 'z') ||
-        (first >= 'A' && first <= 'Z') ||
-        (first >= '0' && first <= '9') || first == '_') {
+    if (isWordByte(first)) {
         return SegmentCategory::Word;
     }
     if (first == ' ' || first == '\t' || first == '\r' || first == '\n') {

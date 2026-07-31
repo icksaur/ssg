@@ -988,6 +988,124 @@ TEST(promptCommandsFulfillFindReplaceByActiveKind) {
     std::filesystem::remove_all(root);
 }
 
+// find.word_under_cursor: leader,8 seeds find with the word under the caret and
+// searches the whole document literally.
+namespace {
+ssg::EditorRuntimeCreateResult openWith(const std::filesystem::path& root,
+                                          std::string_view name,
+                                          std::string_view contents) {
+    auto workspace = root / "workspace";
+    std::filesystem::create_directories(workspace);
+    std::ofstream{workspace / std::string{name}} << contents;
+    return ssg::EditorRuntime::create({workspace, root / "scratch", root / "recovery"});
+}
+}  // namespace
+
+TEST(findWordUnderCursorSeedsTheCaretWordAndFindsEveryOccurrence) {
+    auto root = uniqueRoot();
+    auto created = openWith(root, "w.txt", "alpha beta alpha");
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"w.txt"}}).accepted());
+
+    // The caret starts at offset 0, inside "alpha".
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.word_under_cursor", runtime.revision(), {}}).accepted());
+    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    auto const& find = snapshot->sections().findReplace;
+    ASSERT_TRUE(find.open);
+    ASSERT_EQ(find.query, std::string{"alpha"});
+    ASSERT_EQ(find.matches.size(), std::size_t{2});
+    ASSERT_FALSE(find.options.regex);
+    // The find prompt is open with the query pre-filled.
+    auto const& prompt = snapshot->sections().promptStatus.prompt;
+    ASSERT_TRUE(prompt.has_value());
+    // The query is live, not just prompt text: next moves to the second "alpha".
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.next", runtime.revision(), {}}).accepted());
+    auto advanced = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    ASSERT_TRUE(advanced.has_value());
+    if (advanced) ASSERT_EQ(advanced->sections().findReplace.activeMatch.value_or(999), std::size_t{1});
+    std::filesystem::remove_all(root);
+}
+
+TEST(findWordUnderCursorTakesTheWordWhenTheCaretSitsJustPastIt) {
+    auto root = uniqueRoot();
+    auto created = openWith(root, "w.txt", "alpha beta");
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"w.txt"}}).accepted());
+    // Move the caret to offset 5 -- the space, immediately past "alpha".
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"cursor.word_right", runtime.revision(), {}}).accepted());
+
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.word_under_cursor", runtime.revision(), {}}).accepted());
+    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    ASSERT_TRUE(snapshot.has_value());
+    if (snapshot) ASSERT_EQ(snapshot->sections().findReplace.query, std::string{"alpha"});
+    std::filesystem::remove_all(root);
+}
+
+TEST(findWordUnderCursorPrefersTheSelectionAndSearchesItLiterally) {
+    auto root = uniqueRoot();
+    // "a.b" occurs literally at offsets 0 and 8; "axb" (offset 4) matches "a.b"
+    // only as a regex.  A forced-literal, whole-document search therefore finds
+    // exactly two matches: three would mean regex mode leaked, one would mean the
+    // search was restricted to the selected range.
+    auto created = openWith(root, "w.txt", "a.b axb a.b");
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"w.txt"}}).accepted());
+    // Select the first three bytes, "a.b", spanning a word boundary the caret
+    // word would never include.
+    for (int i = 0; i < 3; ++i) {
+        ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"select.right", runtime.revision(), {}}).accepted());
+    }
+    // Turn regex AND selection-only ON first; the command must force both off so
+    // the seeded word is searched literally across the whole document.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.open", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.toggle_regex", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.toggle_selection", runtime.revision(), {}}).accepted());
+
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.word_under_cursor", runtime.revision(), {}}).accepted());
+    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    auto const& find = snapshot->sections().findReplace;
+    ASSERT_EQ(find.query, std::string{"a.b"});
+    ASSERT_FALSE(find.options.regex);
+    ASSERT_FALSE(find.options.selectionOnly);
+    ASSERT_EQ(find.matches.size(), std::size_t{2});
+    std::filesystem::remove_all(root);
+}
+
+TEST(findWordUnderCursorIsANoOpWithNoWordUnderTheCaret) {
+    auto root = uniqueRoot();
+    auto created = openWith(root, "w.txt", "a  b");
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"w.txt"}}).accepted());
+    // Move the caret to offset 2, between the two spaces: no word on either side.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"cursor.right", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"cursor.right", runtime.revision(), {}}).accepted());
+
+    // Reported success, but no find controller and no prompt were opened.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.word_under_cursor", runtime.revision(), {}}).accepted());
+    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    ASSERT_FALSE(snapshot->sections().findReplace.open);
+    ASSERT_FALSE(snapshot->sections().promptStatus.prompt.has_value());
+    std::filesystem::remove_all(root);
+}
+
 } // namespace
 
 int main() {
@@ -1003,6 +1121,10 @@ int main() {
     RUN(multiCursorPastePreservesAllCursors);
     RUN(replaceAllRevealsTheCaretWhenNoMatchRemains);
     RUN(promptCommandsFulfillFindReplaceByActiveKind);
+    RUN(findWordUnderCursorSeedsTheCaretWordAndFindsEveryOccurrence);
+    RUN(findWordUnderCursorTakesTheWordWhenTheCaretSitsJustPastIt);
+    RUN(findWordUnderCursorPrefersTheSelectionAndSearchesItLiterally);
+    RUN(findWordUnderCursorIsANoOpWithNoWordUnderTheCaret);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }
