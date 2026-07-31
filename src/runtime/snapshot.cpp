@@ -308,14 +308,30 @@ PaletteViewState EditorRuntime::Impl::paletteView() const {
     case PickerKind::Command:
         // Every registered command is a palette candidate, read from the live
         // catalog rather than a static list: a command registered by a plugin
-        // is findable the moment it exists.
-        for (auto const* command : session->catalog()->commands()) {
-            std::string detail;
-            if (auto sequence = KeymapMatcher{keymap}.preferredBinding(command->id)) {
-                detail = KeyCodec{}.formatSequence(*sequence);
+        // is findable the moment it exists.  Resolving each command's key hint
+        // is O(bindings x commands), so the result is cached and reused until
+        // the catalog or keymap changes -- otherwise this ran every frame the
+        // palette was open.
+        {
+            auto const catalogRevision = session->catalog()->revision();
+            if (!commandCandidateCacheValid ||
+                catalogRevision != commandCandidateCatalogRevision ||
+                keymap != commandCandidateKeymap) {
+                commandCandidateCache.clear();
+                for (auto const* command : session->catalog()->commands()) {
+                    std::string detail;
+                    if (auto sequence =
+                            KeymapMatcher{keymap}.preferredBinding(command->id)) {
+                        detail = KeyCodec{}.formatSequence(*sequence);
+                    }
+                    commandCandidateCache.push_back(
+                        {command->id, commandLabel(*command), std::move(detail)});
+                }
+                commandCandidateCatalogRevision = catalogRevision;
+                commandCandidateKeymap = keymap;
+                commandCandidateCacheValid = true;
             }
-            view.candidates.push_back(
-                {command->id, commandLabel(*command), std::move(detail)});
+            view.candidates = commandCandidateCache;
         }
         break;
     case PickerKind::File:

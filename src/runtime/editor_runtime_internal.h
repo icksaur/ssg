@@ -10,6 +10,7 @@
 #include <ssg/FindReplace.h>
 #include <ssg/FollowEditsModel.h>
 #include <ssg/DocumentHistory.h>
+#include <ssg/CommandCatalog.h>
 #include <ssg/Keymap.h>
 #include <ssg/LspFeatureController.h>
 #include <ssg/LspWorkspaceEditController.h>
@@ -239,6 +240,14 @@ struct EditorRuntime::Impl final : CommandServices,
     // per-frame paths, at the cost of not reflecting files created while the
     // picker is open (reopening picks them up).
     std::vector<PaletteCandidate> fileCandidates;
+    // Command-mode palette candidates are the whole catalog with each command's
+    // key hint resolved -- O(bindings x commands) -- so they are cached and
+    // rebuilt only when the catalog or keymap changes, keeping the palette off
+    // the per-frame O(BxC) path (like fileCandidates caches the file walk).
+    mutable std::vector<PaletteCandidate> commandCandidateCache;
+    mutable CatalogRevision commandCandidateCatalogRevision = 0;
+    mutable KeymapViewState commandCandidateKeymap;
+    mutable bool commandCandidateCacheValid = false;
     std::uint32_t requestedFirstVisualRow = 0;
     // Horizontal scroll offset in cells (word wrap OFF only; VP-H). Reveal and the
     // horizontal scroll command update it; the viewport path passes it through.
