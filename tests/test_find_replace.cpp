@@ -305,8 +305,10 @@ TEST(workspacePreviewApplyRecoverAndFailuresRoundTrip) {
 
 TEST(viewDeltaReplayAndCommandExportsAreExact) {
     const auto commands = findReplaceCommandSet();
-    ASSERT_EQ(commands.descriptors().size(), std::size_t{15});
+    ASSERT_EQ(commands.descriptors().size(), std::size_t{16});
     ASSERT_EQ(commands.descriptors().front().id, std::string_view{"find.open"});
+    ASSERT_EQ(commands.descriptors()[1].id,
+              std::string_view{"find.word_under_cursor"});
     ASSERT_EQ(commands.descriptors().back().id,
               std::string_view{"replace.workspace_apply"});
 

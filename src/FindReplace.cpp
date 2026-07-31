@@ -608,6 +608,8 @@ FindResult FindMatcher::find(std::string_view text,
 
 FindReplaceCommandSet::FindReplaceCommandSet()
     : descriptors_{{{"find.open", FindReplaceCommand::FindOpen},
+                    {"find.word_under_cursor",
+                     FindReplaceCommand::FindWordUnderCursor},
                     {"find.close", FindReplaceCommand::FindClose},
                     {"find.next", FindReplaceCommand::FindNext},
                     {"find.previous", FindReplaceCommand::FindPrevious},
@@ -632,7 +634,7 @@ FindReplaceCommandSet::FindReplaceCommandSet()
                     {"replace.workspace_apply",
                      FindReplaceCommand::ReplaceWorkspaceApply}}} {}
 
-const std::array<FindReplaceCommandDescriptor, 15>&
+const std::array<FindReplaceCommandDescriptor, 16>&
 FindReplaceCommandSet::descriptors() const noexcept {
     return descriptors_;
 }
