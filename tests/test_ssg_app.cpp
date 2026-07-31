@@ -1998,6 +1998,43 @@ TEST(routePointerTabPressActivatesTheTab) {
     ASSERT_TRUE(unresolved.commands.empty());
 }
 
+TEST(routePointerMiddleClickOnATabClosesIt) {
+    ssg::RegionHit hit;
+    hit.region = ssg::HitRegion::Tab;
+    hit.tabIndex = 2;
+    ssg::app::PointerTargets targets;
+    targets.tab_id = ssg::TabId{7};
+
+    auto plan = ssg::app::route_pointer(hit, ssg::app::PointerButton::middle,
+                                        ssg::app::PointerKind::press, false,
+                                        std::nullopt, targets);
+    ASSERT_EQ(plan.commands.size(), std::size_t{1});
+    if (plan.commands.size() == 1) {
+        ASSERT_EQ(plan.commands[0].command_id, std::string{"tab.close"});
+        auto const* id = std::any_cast<ssg::TabId>(&plan.commands[0].payload);
+        ASSERT_TRUE(id != nullptr);
+        if (id) ASSERT_TRUE(*id == ssg::TabId{7});
+    }
+
+    // Middle-click off a tab, or a release rather than a press, does nothing.
+    ssg::RegionHit editorHit;
+    editorHit.region = ssg::HitRegion::Editor;
+    ASSERT_TRUE(ssg::app::route_pointer(editorHit, ssg::app::PointerButton::middle,
+                                        ssg::app::PointerKind::press, false,
+                                        std::nullopt, targets)
+                    .commands.empty());
+    ASSERT_TRUE(ssg::app::route_pointer(hit, ssg::app::PointerButton::middle,
+                                        ssg::app::PointerKind::release, false,
+                                        std::nullopt, targets)
+                    .commands.empty());
+    // An unresolved tab id dispatches nothing.
+    ssg::app::PointerTargets const noTab;
+    ASSERT_TRUE(ssg::app::route_pointer(hit, ssg::app::PointerButton::middle,
+                                        ssg::app::PointerKind::press, false,
+                                        std::nullopt, noTab)
+                    .commands.empty());
+}
+
 TEST(routePointerPalettePressExecutesTheCandidate) {
     ssg::RegionHit hit;
     hit.region = ssg::HitRegion::Palette;
@@ -2221,6 +2258,7 @@ int main() {
     RUN(theWheelAndTheGutterAgreeOnEverySurface);
     RUN(theCatalogCoversEveryScrollbarHitRegion);
     RUN(routePointerTabPressActivatesTheTab);
+    RUN(routePointerMiddleClickOnATabClosesIt);
     RUN(routePointerPalettePressExecutesTheCandidate);
     RUN(routePointerFilePickerPressOpensTheFileRatherThanExecutingIt);
     RUN(routePointerPanelPressSelectsAndActivatesTheNode);

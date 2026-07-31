@@ -64,6 +64,15 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
                               std::optional<ssg::DocumentPosition> dragAnchor,
                               PointerTargets const& targets) {
     PointerDispatch dispatch;
+    // Middle-click a tab closes it (a common convention).  Handled before the
+    // left-only guard below; no other middle-button gesture is recognised.
+    if (button == PointerButton::middle) {
+        if (kind == PointerKind::press && hit.region == ssg::HitRegion::Tab &&
+            targets.tab_id) {
+            dispatch.commands.push_back({"tab.close", *targets.tab_id});
+        }
+        return dispatch;
+    }
     // Only the left button drives editing actions in M8; other buttons are a
     // no-op (right-click menus etc. are out of scope).
     if (button != PointerButton::left) return dispatch;
