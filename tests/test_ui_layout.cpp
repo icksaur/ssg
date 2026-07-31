@@ -79,10 +79,21 @@ TEST(handAuthoredGeometryGoldens) {
     assertRect(*wideResult.view->header, {0, 0, 80, 1});
     assertRect(*wideResult.view->panel, {0, 1, 24, 10});
     assertRect(*wideResult.view->tabBar, {24, 1, 56, 1});
-    assertRect(*wideResult.view->prompt, {24, 2, 56, 2});
-    assertRect(wideResult.view->panes[0].content, {24, 4, 55, 7});
-    assertRect(wideResult.view->panes[0].scrollbar, {79, 4, 1, 7});
+    // The prompt reserves the bottom rows (over the footer), where it renders.
+    assertRect(*wideResult.view->prompt, {24, 10, 56, 2});
+    // The pane content stays anchored at the top (y=2, directly below the tab
+    // bar) and only loses height -- opening a prompt must never push it down.
+    assertRect(wideResult.view->panes[0].content, {24, 2, 55, 8});
+    assertRect(wideResult.view->panes[0].scrollbar, {79, 2, 1, 8});
     assertRect(*wideResult.view->footer, {0, 11, 80, 1});
+
+    // Regression proof: the pane's top does not move between no-prompt and
+    // prompt-open layouts -- the footer/prompt only take rows from the bottom.
+    auto noPrompt = request(80, 12);
+    auto noPromptResult = computeShellLayout(noPrompt, state);
+    ASSERT_TRUE(noPromptResult.accepted());
+    ASSERT_EQ(noPromptResult.view->panes[0].content.y,
+              wideResult.view->panes[0].content.y);
 
     auto focused = request(20, 4);
     state.toggleDistractionFree();
