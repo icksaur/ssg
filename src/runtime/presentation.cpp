@@ -52,13 +52,19 @@ CommandHandlerResult setWordWrap(EditorRuntime::Impl& runtime) {
 CommandHandlerResult scrollLines(EditorRuntime::Impl& runtime, std::any const& payload) {
     auto const* arguments = payloadAs<ScrollLinesArguments>(payload);
     if (arguments == nullptr) return failure("view.scroll_lines requires scroll-lines payload");
-    // Clamped at the bottom only; the top clamp is deferred to the viewport,
-    // which resolves it through ScrollOffset. Deliberate: bounding here would
-    // need the document's total visual row count, which is O(document) when word
-    // wrap is on, on a path that fires per wheel notch. The tree and picker DO
-    // bound eagerly because their totals (node count, ranked size) are free.
+    // Clamp the STORED request to the real scroll range. Leaving it unbounded
+    // below the last line lets it drift arbitrarily far, so an upward notch first
+    // burns off invisible slack while the view stays pinned at the bottom -- the
+    // wheel "dead zone". The maximum needs the document's total visual row count,
+    // resolved against the pane the last snapshot cached, the same viewport
+    // scroll_to_fraction bounds against. Word wrap off (the default) makes this
+    // O(visible rows); the drag path already pays the wrapped cost per notch.
+    ViewportDimensions const viewport{
+        std::max<std::uint32_t>(runtime.lastPaneContentColumns, 1),
+        std::max<std::uint32_t>(runtime.lastPaneContentRows, 1)};
+    auto const view = runtime.computeEditorViewport(viewport, 0, 0);
     auto offset = ScrollOffset{runtime.requestedFirstVisualRow};
-    offset.shiftUnbounded(arguments->rows);
+    offset.byLines(arguments->rows, view.totalVisualRows, viewport.rows);
     runtime.requestedFirstVisualRow = offset.firstVisible();
     runtime.selection.firstVisualRow = runtime.requestedFirstVisualRow;
     return success();
@@ -67,17 +73,15 @@ CommandHandlerResult scrollLines(EditorRuntime::Impl& runtime, std::any const& p
 CommandHandlerResult scrollPages(EditorRuntime::Impl& runtime, std::any const& payload) {
     auto const* arguments = payloadAs<ScrollPagesArguments>(payload);
     if (arguments == nullptr) return failure("view.scroll_pages requires scroll-pages payload");
-    // A page is the real pane height cached from the last snapshot, not a fake 24.
-    // Same deferred-top-clamp discipline as scroll_lines above. The multiply is
-    // saturated before it can overflow: `pages` is wire-decoded.
-    auto const pageRows = static_cast<std::int64_t>(
-        std::max<std::uint32_t>(runtime.lastPaneContentRows, 1));
-    constexpr auto kLimit = std::numeric_limits<std::int64_t>::max();
-    auto const delta = arguments->pages > kLimit / pageRows    ? kLimit
-                       : arguments->pages < -kLimit / pageRows ? -kLimit
-                                              : arguments->pages * pageRows;
+    // Same range clamp as scroll_lines above: a page is the real pane height, and
+    // byPages saturates the multiply before bounding, so paging past the end
+    // pins at the last line instead of accumulating slack.
+    ViewportDimensions const viewport{
+        std::max<std::uint32_t>(runtime.lastPaneContentColumns, 1),
+        std::max<std::uint32_t>(runtime.lastPaneContentRows, 1)};
+    auto const view = runtime.computeEditorViewport(viewport, 0, 0);
     auto offset = ScrollOffset{runtime.requestedFirstVisualRow};
-    offset.shiftUnbounded(delta);
+    offset.byPages(arguments->pages, view.totalVisualRows, viewport.rows);
     runtime.requestedFirstVisualRow = offset.firstVisible();
     runtime.selection.firstVisualRow = runtime.requestedFirstVisualRow;
     return success();

@@ -22,9 +22,12 @@ they change what a reader can assume:
   a path that fires per wheel notch. The editor keeps its deferred clamp; the
   clamp *rule* is shared, the *timing* is not. The tree and picker clamp eagerly
   because their totals (node count, ranked size) are free.
-- Two real overflow bugs were found in the editor's scroll handlers: raw
+- One real overflow bug was found in the editor's scroll handlers: raw
   `int64` arithmetic on wire-decoded payloads, which is UB before any clamp can
-  run. `ScrollOffset::shiftUnbounded` saturates instead.
+  run. The handlers now route wheel and page scrolls through
+  `ScrollOffset::byLines`/`byPages`, which saturate the arithmetic and bound the
+  result to the real scroll range, so the stored offset can neither overflow nor
+  drift past the last line (the wheel "dead zone").
 - `listScrollView` with `viewportRows == 0` reports
   `maximumFirstRow == totalItems`, not 0. A caller bounding an offset with those
   metrics lands out of range; `ScrollOffset` checks the height first. Found by a
