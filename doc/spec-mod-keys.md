@@ -181,6 +181,15 @@ that reasoning generalizes beyond "it works in today's terminal client."
 
 ## The modern, more precise answer: the Kitty keyboard protocol (CSI u)
 
+**Status (implemented, Tier A):** SSG now enables the Kitty keyboard protocol
+(progressive-enhancement flag 1) automatically on any terminal that answers the
+capability query, and decodes `CSI ... u` key events into the same neutral
+`KeyStroke` the legacy path produces. This fixes the Caps-Lock ambiguity for
+`Alt+Shift+<letter>` / `Ctrl+<letter>` bindings (shift comes from the modifier
+bit, not letter case). See `doc/spec-kitty-keyboard.md`. A true at-rest Caps-Lock
+*indicator* still needs the higher flags (report-all-keys) and remains deferred
+(Tier B).
+
 Legacy terminal encoding cannot express many modifier combinations at
 all (e.g. `Shift+Enter` vs. `Enter`, most `Ctrl+Shift+<key>` combos).
 The [Kitty keyboard protocol](https://sw.kovidgoyal.net/kitty/keyboard-protocol/)

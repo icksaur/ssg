@@ -8,6 +8,7 @@
 #include <atomic>
 #include <cstring>
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -475,6 +476,103 @@ Decoded unhandledCsi(std::string_view bytes, std::size_t end, std::size_t& consu
     return decoded;
 }
 
+enum class ModifierMode { Legacy, Kitty };
+
+// The `1 + bitmask` modifier encoding shared by legacy CSI sequences (arrows,
+// Home/End, Delete/Page) and the Kitty `CSI ... u` form -- one place owns what a
+// modifier bit means (bit0 Shift, bit1 Alt, bit2 Ctrl, and in Kitty additionally
+// bit3 Super, bit4 Hyper, bit5 Meta, bit6 CapsLock, bit7 NumLock).  `modifier` is
+// the raw parameter as sent (1-based; 1 or absent means no modifiers).
+//
+// Legacy callers IGNORE any bit outside Shift/Alt/Ctrl: an unknown modifier falls
+// back to the plain key, preserving the pre-Kitty behaviour.  Kitty callers
+// additionally map Meta to the bindable `meta` modifier.  Super and Hyper are
+// ignored (Tier A binds neither, and collapsing three physical modifiers onto
+// `meta` would make them indistinguishable).  CapsLock and NumLock are
+// deliberately NOT applied to any KeyStroke bit -- a lock must never enter a
+// stroke, or it would fail to match every binding (KeyStroke is compared by value
+// for keymap resolution).  That is exactly what fixes the caps-lock ambiguity:
+// caps no longer perturbs the decoded stroke.  Surfacing lock state for a future
+// CAPS indicator is a Tier-B concern (report-all-keys) not built here.
+void applyModifierBitmask(ssg::KeyStroke& stroke, std::int64_t modifier,
+                          ModifierMode mode) {
+    if (modifier <= 1) return;
+    auto const bitmask = modifier - 1;
+    if (mode == ModifierMode::Legacy && (bitmask & ~std::int64_t{0b111}) != 0) {
+        return;  // Unknown modifier -> plain key, as before.
+    }
+    stroke.shift = (bitmask & 0b001) != 0;
+    stroke.alt = (bitmask & 0b010) != 0;
+    stroke.control = (bitmask & 0b100) != 0;
+    if (mode == ModifierMode::Kitty) {
+        stroke.meta = (bitmask & 0b100000) != 0;
+    }
+}
+
+// The `KeyCode` a Kitty unicode-key-code stands for.  Printable ASCII folds
+// through the same table the legacy path uses (letters -> KeyA..KeyZ; the shift
+// flag comes from the modifier bitmask, never the codepoint, which is already the
+// unshifted layout key -- this is what makes it caps-lock-immune).  The
+// disambiguated named keys map by their control codepoint.  Kitty's functional
+// PUA codepoints (arrows/Home/End/Page under the higher flag sets) are not
+// emitted under the disambiguate flag this build enables, so they are not mapped
+// here.
+ssg::KeyCode kittyKeyCode(std::int64_t codepoint) {
+    switch (codepoint) {
+    case 27: return ssg::KeyCode::Escape;
+    case 13: return ssg::KeyCode::Enter;
+    case 9: return ssg::KeyCode::Tab;
+    case 127: return ssg::KeyCode::Backspace;
+    default: break;
+    }
+    if (codepoint >= 0x20 && codepoint <= 0x7e) {
+        return asciiKeyCode(static_cast<unsigned char>(codepoint));
+    }
+    return ssg::KeyCode::None;
+}
+
+// Decode a Kitty keyboard-protocol key event: `CSI unicode-key[:alt[:base]]
+// [;mods[:event]][;text] u`, with NO private prefix.  Returns nullopt when the
+// sequence is not a Kitty key event (so the caller can still classify it as a
+// terminal reply or drop it) -- the classification is purely structural: a
+// non-private, `u`-terminated CSI whose first field is a numeric key code.  The
+// capability reply `CSI ? ... u` (private prefix) and legacy input (never a bare
+// `u`) are both excluded, so no mode flag is needed to tell key events apart.
+//
+// Only the unshifted key code and the modifier field are read; the shifted-key /
+// base-layout sub-parameters, the event-type sub-parameter, and the associated-
+// text field are skipped.  Tier A relies on the disambiguate flag alone, under
+// which unmodified printables stay on the UTF-8 text path and only modified or
+// disambiguated keys (which are bindings, not text) arrive here -- so no committed
+// text is produced.
+std::optional<Decoded> decodeKittyKey(std::string_view bytes, std::size_t end,
+                                      std::size_t& consumed) {
+    if (end < 3 || static_cast<unsigned char>(bytes[end - 1]) != 'u') {
+        return std::nullopt;
+    }
+    if (bytes[2] == '?') return std::nullopt;  // capability reply, not a key.
+    std::size_t pos = 2;
+    std::int64_t const codepoint = parseDecimal(bytes, pos);
+    if (pos == 2) return std::nullopt;  // no numeric key code -> not a key event.
+    while (pos + 1 < end && bytes[pos] != ';') ++pos;  // skip field-1 sub-params.
+    std::int64_t modifier = 1;
+    if (pos + 1 < end && bytes[pos] == ';') {
+        ++pos;
+        modifier = parseDecimal(bytes, pos);
+        if (modifier < 1) modifier = 1;  // empty field -> no modifiers.
+    }
+    consumed = end;
+    ssg::KeyCode const code = kittyKeyCode(codepoint);
+    if (code == ssg::KeyCode::None) {
+        // A key SSG does not name: consume it so its bytes never reach the
+        // document, but emit no stroke.
+        return Decoded{DecodeStatus::none, {}, {}, 0};
+    }
+    ssg::KeyStroke stroke{code};
+    applyModifierBitmask(stroke, modifier, ModifierMode::Kitty);
+    return Decoded{DecodeStatus::key, stroke, {}, 0};
+}
+
 }  // namespace
 
 std::string_view color_depth_name(ssg::ColorDepth depth) {
@@ -761,6 +859,11 @@ Decoded decode_input(std::string_view bytes, bool inputExhausted,
             case CsiScan::complete:
                 break;
             }
+            // The single Kitty seam: a complete, non-private, `u`-terminated CSI
+            // is the self-identifying shape of a Kitty key event, so every arm
+            // that could not interpret its sequence funnels through here.  When it
+            // is not a Kitty key, fall through to the reply/none classifier.
+            if (auto kitty = decodeKittyKey(bytes, end, consumed)) return *kitty;
             return unhandledCsi(bytes, end, consumed);
         };
         switch (third) {
@@ -790,14 +893,7 @@ Decoded decode_input(std::string_view bytes, bool inputExhausted,
             }
             consumed = pos + 1;
             ssg::KeyStroke stroke{code};
-            auto const bitmask = modifier - 1;
-            // Only Shift/Alt/Ctrl are supported; any other bits (e.g. m=9) fall
-            // back to the plain, unmodified arrow.
-            if (bitmask > 0 && (bitmask & ~std::int64_t{0b111}) == 0) {
-                stroke.shift = (bitmask & 0b001) != 0;
-                stroke.alt = (bitmask & 0b010) != 0;
-                stroke.control = (bitmask & 0b100) != 0;
-            }
+            applyModifierBitmask(stroke, modifier, ModifierMode::Legacy);
             return {DecodeStatus::key, stroke, {}, 0};
         }
         case 'A': consumed = 3; return {DecodeStatus::key, ssg::KeyStroke{ssg::KeyCode::ArrowUp}, {}, 0};
@@ -870,12 +966,7 @@ Decoded decode_input(std::string_view bytes, bool inputExhausted,
             if (pos == 4 || bytes[pos] != '~') return unhandled();
             consumed = pos + 1;
             ssg::KeyStroke stroke{code};
-            auto const bitmask = modifier - 1;
-            if (bitmask > 0 && (bitmask & ~std::int64_t{0b111}) == 0) {
-                stroke.shift = (bitmask & 0b001) != 0;
-                stroke.alt = (bitmask & 0b010) != 0;
-                stroke.control = (bitmask & 0b100) != 0;
-            }
+            applyModifierBitmask(stroke, modifier, ModifierMode::Legacy);
             return {DecodeStatus::key, stroke, {}, 0};
         }
         case '<': {

@@ -65,6 +65,18 @@ inline constexpr TerminalMode kCursorHidden{"\x1b[?25l", "\x1b[?25h"};
 // to -- submitting a prompt, or splitting lines the paste did not ask to split.
 inline constexpr TerminalMode kBracketedPaste{"\x1b[?2004h", "\x1b[?2004l"};
 
+// The Kitty keyboard protocol (progressive-enhancement flag 1, "disambiguate
+// escape codes"): enable pushes flag 1, leave pops it.  Deliberately NOT a member
+// of kAllModes below: that constant undo superset is written unconditionally on
+// teardown and is safe only because leaving an unentered mode is harmless -- but
+// `CSI < u` is a STACK POP, not an idempotent reset, so writing it when SSG never
+// pushed would pop an outer program's keyboard state.  It is therefore entered
+// through a Guard whose destructor pops it exactly once, on the same normal-
+// context teardown paths as every other mode (return, exception, and the
+// SIGTERM/SIGHUP restore), and is enabled only after the terminal answers the
+// keyboard-protocol capability query.
+inline constexpr TerminalMode kKeyboardProtocol{"\x1b[>1u", "\x1b[<u"};
+
 // Every mode above, in the order they are entered.  The one iterable list: the
 // crash undo and its test are both DERIVED from it, so a new mode cannot be
 // covered by one and missed by the other.

@@ -148,11 +148,24 @@ public:
 
     [[nodiscard]] bool active() const noexcept { return active_; }
 
+    // Enter the Kitty keyboard protocol once, when the terminal has answered the
+    // capability query.  Separate from the constructor's unconditional modes
+    // because the probe reply lands asynchronously, after construction; latched so
+    // a repeated capability check does not push flag 1 twice.  The Guard rides the
+    // same `entered_` teardown as every other mode, so restore()/the destructor
+    // pop it -- the pop is never written unless this push was.
+    void enableKeyboardProtocol() {
+        if (!active_ || keyboardProtocolEntered_) return;
+        entered_.push_back(modes_.enter(ssg::app::kKeyboardProtocol));
+        keyboardProtocolEntered_ = true;
+    }
+
 private:
     ssg::app::TerminalModes modes_;
     std::vector<ssg::app::TerminalModes::Guard> entered_;
     termios original_{};
     bool active_ = false;
+    bool keyboardProtocolEntered_ = false;
 };
 
 ssg::ViewportDimensions terminalSize() {
@@ -1245,6 +1258,13 @@ int main(int argc, char** argv) {
             // capability object's decision, not this loop's.
             if (decoded.status == ssg::app::DecodeStatus::reply) {
                 capabilities.observeReply(decoded.reply);
+                // The moment the terminal confirms the keyboard protocol, enable
+                // it (latched).  Gated solely on the capability -- a terminal that
+                // never answers never gets the enable, which is the whole escape
+                // hatch (INV-capability-single-source).
+                if (capabilities.has(ssg::app::Capability::KeyboardProtocol)) {
+                    mode.enableKeyboardProtocol();
+                }
                 continue;
             }
 

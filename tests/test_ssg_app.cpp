@@ -509,15 +509,41 @@ TEST(theCrashUndoLeavesEveryDeclaredModeInReverseOrder) {
          at != std::string::npos;
          at = source.find("inline constexpr TerminalMode k", at + 1)) {
         // kAllModes is the list, not a mode.
-        std::string_view const marker{"inline constexpr TerminalMode kAllModes"};
-        if (source.compare(at, marker.size(), marker) == 0) continue;
+        std::string_view const listMarker{"inline constexpr TerminalMode kAllModes"};
+        if (source.compare(at, listMarker.size(), listMarker) == 0) continue;
+        // kKeyboardProtocol is the ONE sanctioned exclusion from the constant
+        // crash-undo superset: its leave `CSI < u` is a stack pop, not idempotent,
+        // so it must never be written when it was not entered.  It is torn down by
+        // its Guard on the normal paths instead.
+        std::string_view const kittyMarker{
+            "inline constexpr TerminalMode kKeyboardProtocol"};
+        if (source.compare(at, kittyMarker.size(), kittyMarker) == 0) continue;
         ++declared;
     }
     ASSERT_EQ(declared, std::size(ssg::app::kAllModes));
 
+    // The non-idempotent Kitty pop must NOT appear in the constant crash-undo.
+    ASSERT_TRUE(undo.find(std::string{ssg::app::kKeyboardProtocol.leave}) ==
+                std::string::npos);
+
     // Mouse reporting must be disabled BEFORE the alternate screen is left, or
     // reporting stays on in the primary screen.
     ASSERT_TRUE(undo.find("\x1b[?1000l") < undo.find("\x1b[?1049l"));
+}
+
+TEST(kittyKeyboardModeRoundTripsThroughAGuard) {
+    // Entering the mode writes the flag-1 push; the Guard's destruction writes the
+    // matching pop.  Routing through TerminalModes (not a hand-written pair) is
+    // what makes the pop matched-push-only on every normal teardown path.
+    std::string written;
+    {
+        ssg::app::TerminalModes modes{
+            [&](std::string_view bytes) { written.append(bytes); }};
+        auto guard = modes.enter(ssg::app::kKeyboardProtocol);
+        ASSERT_EQ(written, std::string{ssg::app::kKeyboardProtocol.enter});
+    }
+    ASSERT_EQ(written, std::string{ssg::app::kKeyboardProtocol.enter} +
+                           std::string{ssg::app::kKeyboardProtocol.leave});
 }
 
 TEST(aFrameWithNoCaretLeavesTheCursorVisible) {
@@ -683,6 +709,163 @@ TEST(decodeInputModifiedArrows) {
     ASSERT_FALSE(multi.stroke.alt);
     ASSERT_FALSE(multi.stroke.control);
     ASSERT_FALSE(multi.stroke.shift);
+}
+
+// Encode a KeyStroke as the Kitty `CSI unicode-key ; mods u` bytes, for the
+// parity oracle below. Returns nullopt for keys Kitty does not send as a `u`
+// event under the disambiguate flag (arrows/Home/End/Page/Delete/function keys
+// keep their legacy CSI forms), which the legacy tests already cover.
+std::optional<int> kittyCodepointFor(ssg::KeyCode code) {
+    using K = ssg::KeyCode;
+    if (code >= K::KeyA && code <= K::KeyZ)
+        return 'a' + (static_cast<int>(code) - static_cast<int>(K::KeyA));
+    if (code >= K::Digit0 && code <= K::Digit9)
+        return '0' + (static_cast<int>(code) - static_cast<int>(K::Digit0));
+    switch (code) {
+    case K::Escape: return 27;
+    case K::Enter: return 13;
+    case K::Tab: return 9;
+    case K::Backspace: return 127;
+    case K::Space: return ' ';
+    case K::BracketLeft: return '[';
+    case K::BracketRight: return ']';
+    case K::Backslash: return '\\';
+    case K::Semicolon: return ';';
+    case K::Quote: return '\'';
+    case K::Comma: return ',';
+    case K::Period: return '.';
+    case K::Slash: return '/';
+    case K::Minus: return '-';
+    case K::Equal: return '=';
+    case K::Backquote: return '`';
+    default: return std::nullopt;
+    }
+}
+
+std::string kittyBytes(int codepoint, int bitmask) {
+    std::string out = "\x1b[" + std::to_string(codepoint);
+    if (bitmask != 0) out += ";" + std::to_string(1 + bitmask);
+    out += "u";
+    return out;
+}
+
+int kittyBitmask(const ssg::KeyStroke& stroke) {
+    return (stroke.shift ? 0b1 : 0) | (stroke.alt ? 0b10 : 0) |
+           (stroke.control ? 0b100 : 0) | (stroke.meta ? 0b100000 : 0);
+}
+
+// The load-bearing parity oracle: for EVERY binding in the real default keymap,
+// feeding the Kitty encoding of its KeyStroke must decode back to exactly that
+// KeyStroke. Driven off the live keymap so a new binding cannot be added without
+// coverage. Proves decodeKittyKey is complete for the keys SSG actually binds --
+// including the non-letter modified keys flag 1 reroutes (Alt+Backspace,
+// Alt+Slash, Alt+Digit8, Alt+Period/Comma) that a partial decoder would miss.
+TEST(decodeKittyKeyMatchesEveryDefaultBinding) {
+    auto root = fs::temp_directory_path() / "ssg-kitty-parity";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root / "workspace");
+    std::filesystem::create_directories(root / "scratch");
+    std::filesystem::create_directories(root / "recovery");
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1}).accepted());
+    auto snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(snap.has_value());
+    if (!snap.has_value()) return;
+
+    int covered = 0;
+    for (auto const& binding : snap->sections().keymap.bindings) {
+        if (binding.sequence.size() != 1) continue;  // all defaults are single strokes
+        auto const& stroke = binding.sequence.front();
+        auto const codepoint = kittyCodepointFor(stroke.code);
+        if (!codepoint) continue;  // legacy-encoded key; covered by legacy tests
+        std::size_t consumed = 0;
+        auto const bytes = kittyBytes(*codepoint, kittyBitmask(stroke));
+        auto const decoded = ssg::app::decode_input(bytes, true, consumed);
+        ASSERT_EQ(consumed, bytes.size());
+        ASSERT_TRUE(decoded.status == ssg::app::DecodeStatus::key);
+        ASSERT_TRUE(decoded.stroke == stroke);
+        ++covered;
+    }
+    ASSERT_TRUE(covered > 0);  // the oracle actually exercised bindings
+}
+
+TEST(decodeKittyKeyHandCasesAndCapsLockImmunity) {
+    std::size_t consumed = 0;
+    // Alt+Shift+P: unicode key 'p' (112), mods = 1 + (shift|alt) = 4.
+    auto altShiftP = ssg::app::decode_input("\x1b[112;4u", true, consumed);
+    ASSERT_TRUE(altShiftP.status == ssg::app::DecodeStatus::key);
+    ASSERT_EQ(std::string{ssg::keyCodeName(altShiftP.stroke.code)}, std::string{"KeyP"});
+    ASSERT_TRUE(altShiftP.stroke.alt);
+    ASSERT_TRUE(altShiftP.stroke.shift);
+    ASSERT_FALSE(altShiftP.stroke.control);
+    ASSERT_TRUE(altShiftP.text.empty());  // a modified key commits no text
+
+    // The SAME key with caps-lock ALSO held: mods = 1 + (shift|alt|caps) where
+    // caps is bit 6 (64), so 1 + 3 + 64 = 68. The caps bit must NOT perturb the
+    // stroke -- this is the whole fix, and why the binding no longer swaps under
+    // caps lock.
+    auto withCaps = ssg::app::decode_input("\x1b[112;68u", true, consumed);
+    ASSERT_TRUE(withCaps.stroke == altShiftP.stroke);
+
+    // Ctrl+C: unicode 'c' (99), mods = 1 + ctrl(4) = 5.
+    auto ctrlC = ssg::app::decode_input("\x1b[99;5u", true, consumed);
+    ASSERT_EQ(std::string{ssg::keyCodeName(ctrlC.stroke.code)}, std::string{"KeyC"});
+    ASSERT_TRUE(ctrlC.stroke.control);
+    ASSERT_FALSE(ctrlC.stroke.shift);
+
+    // Plain Escape disambiguates to CSI 27 u under flag 1 -- the freed-Escape
+    // (prompt cancel) must survive the reroute.
+    auto esc = ssg::app::decode_input("\x1b[27u", true, consumed);
+    ASSERT_TRUE(esc.status == ssg::app::DecodeStatus::key);
+    ASSERT_EQ(std::string{ssg::keyCodeName(esc.stroke.code)}, std::string{"Escape"});
+    ASSERT_FALSE(esc.stroke.alt);
+}
+
+TEST(decodeKittyKeySelfIdentifyingAndMalformed) {
+    std::size_t consumed = 0;
+    // A private-prefixed `CSI ? ... u` is the KEYBOARD-PROTOCOL capability reply,
+    // never a key -- it must classify as a reply so the probe still works.
+    auto reply = ssg::app::decode_input("\x1b[?1u", true, consumed);
+    ASSERT_TRUE(reply.status == ssg::app::DecodeStatus::reply);
+
+    // A non-private `CSI <n> u` is a key event (the self-identifying shape).
+    auto key = ssg::app::decode_input("\x1b[112u", true, consumed);
+    ASSERT_TRUE(key.status == ssg::app::DecodeStatus::key);
+    ASSERT_EQ(std::string{ssg::keyCodeName(key.stroke.code)}, std::string{"KeyP"});
+
+    // Field-1 sub-parameters (shifted-key : base-layout-key) are skipped; the
+    // unshifted key code and the modifier field still decode.
+    auto subparams = ssg::app::decode_input("\x1b[112:80;4u", true, consumed);
+    ASSERT_TRUE(subparams.status == ssg::app::DecodeStatus::key);
+    ASSERT_EQ(std::string{ssg::keyCodeName(subparams.stroke.code)}, std::string{"KeyP"});
+    ASSERT_TRUE(subparams.stroke.alt);
+    ASSERT_TRUE(subparams.stroke.shift);
+
+    // An event-type sub-parameter on the modifier field is skipped.
+    auto eventType = ssg::app::decode_input("\x1b[99;5:1u", true, consumed);
+    ASSERT_TRUE(eventType.status == ssg::app::DecodeStatus::key);
+    ASSERT_TRUE(eventType.stroke.control);
+
+    // An empty modifier field decodes as no modifiers, not garbage.
+    auto emptyMods = ssg::app::decode_input("\x1b[112;u", true, consumed);
+    ASSERT_TRUE(emptyMods.status == ssg::app::DecodeStatus::key);
+    ASSERT_FALSE(emptyMods.stroke.alt);
+    ASSERT_FALSE(emptyMods.stroke.shift);
+
+    // A key SSG does not name (a Kitty functional PUA code) is consumed whole and
+    // emits nothing, rather than leaking bytes into the document.
+    auto unknown = ssg::app::decode_input("\x1b[57400u", true, consumed);
+    ASSERT_EQ(consumed, std::string{"\x1b[57400u"}.size());
+    ASSERT_TRUE(unknown.status == ssg::app::DecodeStatus::none);
+
+    // A truncated `CSI ... u` is incomplete (await more), never a partial key.
+    auto partial = ssg::app::decode_input("\x1b[112;4", false, consumed);
+    ASSERT_TRUE(partial.status == ssg::app::DecodeStatus::incomplete);
 }
 
 TEST(decodeInputModifiedArrowSplitReadsAreIncomplete) {
@@ -2248,6 +2431,7 @@ int main() {
     RUN(modeStackReproducesTheCuratedSetupAndRestoreSequences);
     RUN(everyEnteredModeIsLeftInReverseOrder);
     RUN(theCrashUndoLeavesEveryDeclaredModeInReverseOrder);
+    RUN(kittyKeyboardModeRoundTripsThroughAGuard);
     RUN(aFrameWithNoCaretLeavesTheCursorVisible);
     RUN(unicodeEndToEndGridAndEncoding);
     RUN(classifySignalTagsMapsSignalNumbers);
@@ -2258,6 +2442,9 @@ int main() {
     RUN(encodeAnsiFrameSkipsWideGlyphContinuation);
     RUN(decodeInputMapsPrintablesAndNamedKeys);
     RUN(decodeInputModifiedArrows);
+    RUN(decodeKittyKeyMatchesEveryDefaultBinding);
+    RUN(decodeKittyKeyHandCasesAndCapsLockImmunity);
+    RUN(decodeKittyKeySelfIdentifyingAndMalformed);
     RUN(decodeInputModifiedArrowSplitReadsAreIncomplete);
     RUN(decodeInputDeleteKeyPlainAndModified);
     RUN(decodeInputPageKeysPlainAndModified);
