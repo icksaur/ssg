@@ -67,6 +67,23 @@ scrollable_regions() noexcept;
 // surfaces routing knows about.
 [[nodiscard]] bool is_scrollbar_region(ssg::HitRegion region) noexcept;
 
+// Grab-offset scrollbar dragging.  `rel` is the pointer row within the gutter,
+// `thumbStart`/`thumbSize` the thumb geometry, `travel = viewportRows -
+// thumbSize` the range of the thumb's top row.  A press ON the thumb grabs it in
+// place; a press in the well centres the thumb on the cursor.  The fraction the
+// gesture sends is the grabbed thumb-top position over the travel, so the point
+// grabbed at press tracks the cursor for the whole drag.
+struct GutterFraction {
+    std::uint32_t numerator;
+    std::uint32_t denominator;
+
+    bool operator==(const GutterFraction&) const = default;
+};
+[[nodiscard]] int scrollbar_grab_offset(int rel, int thumbStart,
+                                        int thumbSize) noexcept;
+[[nodiscard]] GutterFraction gutter_fraction(int rel, int grabOffset,
+                                             int travel) noexcept;
+
 // A gutter gesture the CALLER must apply to a client-owned offset, because no
 // server command may be dispatched for it (see ScrollableRegionDescriptor).
 struct ClientScroll {

@@ -13,16 +13,13 @@ bool contains(Rect const& rect, int column, int row) {
 // Map a cell inside a scrollbar gutter to a RegionHit for that gutter. The
 // vertical position becomes numerator/denominator for view.scroll_to_fraction
 // (top of the gutter -> 0, bottom -> 1), so a click maps directly to a scroll.
-RegionHit scrollbarHit(HitRegion region, Rect const& gutter, int row) {
+// Classifies a gutter press to its region.  The scroll position a press or drag
+// sends is computed by the app from the region's published thumb geometry
+// (grab-offset dragging), never from the absolute pointer row, so this no longer
+// derives a fraction of its own.
+RegionHit scrollbarHit(HitRegion region, Rect const& /*gutter*/, int /*row*/) {
     RegionHit hit;
     hit.region = region;
-    auto const relative = static_cast<std::uint32_t>(
-        std::clamp(row - gutter.y, 0, std::max(gutter.height - 1, 0)));
-    hit.scrollNumerator = relative;
-    hit.scrollDenominator =
-        static_cast<std::uint32_t>(std::max(gutter.height - 1, 1));
-    hit.scrollbarFraction =
-        static_cast<double>(hit.scrollNumerator) / hit.scrollDenominator;
     return hit;
 }
 
@@ -165,22 +162,28 @@ RegionHit HitTester::at(int column, int row) const {
     return {};
 }
 
-RegionHit HitTester::inGutter(HitRegion region, int row) const {
+std::optional<HitTester::GutterThumb> HitTester::gutterThumb(
+    HitRegion region) const {
     auto const& shell = snapshot_.sections().shell;
-    // Resolved from the same rectangles `at()` uses, so a drag scrolls to
-    // exactly the position a click on that row would.
+    auto const make = [](Rect const& gutter, ScrollbarMetrics const& m) {
+        return GutterThumb{gutter.y, m.viewportRows, m.thumbStart, m.thumbSize};
+    };
     switch (region) {
     case HitRegion::EditorScrollbar:
-        if (shell.panes.empty()) return {};
-        return scrollbarHit(region, shell.panes.front().scrollbar, row);
-    case HitRegion::PanelScrollbar:
-        if (!shell.panelScrollbar) return {};
-        return scrollbarHit(region, *shell.panelScrollbar, row);
+        if (shell.panes.empty()) return std::nullopt;
+        return make(shell.panes.front().scrollbar,
+                    snapshot_.client().viewport.scrollbar);
+    case HitRegion::PanelScrollbar: {
+        if (!shell.panelScrollbar) return std::nullopt;
+        auto const& tree = snapshot_.sections().tree;
+        if (tree.providers.empty()) return std::nullopt;
+        return make(*shell.panelScrollbar, tree.providers.front().scrollbar);
+    }
     case HitRegion::PaletteScrollbar:
-        if (!shell.palette) return {};
-        return scrollbarHit(region, shell.palette->scrollbarRect, row);
+        if (!shell.palette) return std::nullopt;
+        return make(shell.palette->scrollbarRect, shell.palette->scrollbar);
     default:
-        return {};
+        return std::nullopt;
     }
 }
 

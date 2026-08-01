@@ -403,58 +403,25 @@ TEST(paletteScrollbarAndEmptyAreaClassifyCorrectly) {
     ssg::SessionSnapshot projected{snapshot->revision(), snapshot->topology(),
                                    snapshot->client(), std::move(sections)};
 
-    // Top of the palette gutter -> fraction 0; bottom -> fraction ~1.
+    // The gutter classifies as the palette scrollbar along its whole height; the
+    // scroll position a press sends is computed by the app from the published
+    // thumb geometry, not from this hit's row.
     auto top = ssg::HitTester{projected}.at( pane.scrollbar.x, pane.scrollbar.y);
     ASSERT_EQ(top.region, ssg::HitRegion::PaletteScrollbar);
-    ASSERT_EQ(top.scrollNumerator, std::uint32_t{0});
     auto bottom = ssg::HitTester{projected}.at( pane.scrollbar.x, pane.scrollbar.bottom() - 1);
     ASSERT_EQ(bottom.region, ssg::HitRegion::PaletteScrollbar);
-    ASSERT_EQ(bottom.scrollNumerator, bottom.scrollDenominator);
+    auto const thumb = ssg::HitTester{projected}.gutterThumb(
+        ssg::HitRegion::PaletteScrollbar);
+    ASSERT_TRUE(thumb.has_value());
+    if (thumb) ASSERT_EQ(thumb->gutterY, pane.scrollbar.y);
 }
 
-TEST(editorScrollbarFractionFeedsScrollToFraction) {
-    auto root = uniqueRoot();
-    std::string text;
-    for (int i = 0; i < 100; ++i) text += "line " + std::to_string(i) + "\n";
-    std::ofstream{root / "tall.txt"} << text;
-    auto runtime = makeRuntime(root);
-    ASSERT_TRUE(runtime != nullptr);
-    if (!runtime) return;
-    (void)runtime->dispatch(ssg::ClientId{1},
-                            {"file.open", runtime->revision(), std::string{"tall.txt"}});
-    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
-    ASSERT_TRUE(snapshot.has_value());
-    if (!snapshot) return;
-    auto const& shell = snapshot->sections().shell;
-    ASSERT_FALSE(shell.panes.empty());
-    if (shell.panes.empty()) return;
-    auto const gutter = shell.panes.front().scrollbar;
-    ASSERT_TRUE(gutter.height > 1);
-
-    // Top of the gutter -> numerator 0 (scroll to the document top).
-    auto top = ssg::HitTester{*snapshot}.at( gutter.x, gutter.y);
-    ASSERT_EQ(top.region, ssg::HitRegion::EditorScrollbar);
-    ASSERT_EQ(top.scrollNumerator, std::uint32_t{0});
-    ASSERT_EQ(top.scrollDenominator,
-              static_cast<std::uint32_t>(gutter.height - 1));
-
-    // Bottom of the gutter -> numerator == denominator (fraction 1.0), which
-    // view.scroll_to_fraction turns into maximum_first_row (the document end).
-    auto bottom = ssg::HitTester{*snapshot}.at( gutter.x, gutter.bottom() - 1);
-    ASSERT_EQ(bottom.region, ssg::HitRegion::EditorScrollbar);
-    ASSERT_EQ(bottom.scrollNumerator, bottom.scrollDenominator);
-    auto const maxFirst = snapshot->client().viewport.scrollbar.maximumFirstRow;
-    auto const resolved = static_cast<std::uint32_t>(
-        (static_cast<std::uint64_t>(maxFirst) * bottom.scrollNumerator) /
-        bottom.scrollDenominator);
-    ASSERT_EQ(resolved, maxFirst);
-}
-
-// A scrollbar drag must follow the pointer's ROW alone.  Once the button is down
-// the user is manipulating that thumb, and every other UI lets the pointer
-// wander off the bar horizontally without dropping the drag.  Resolving a drag
-// through at() instead ends it the moment the pointer leaves a one-column
-// gutter, which is trivially easy to do.
+// A scrollbar drag follows the pointer's ROW alone.  Once the button is down the
+// user is manipulating that thumb, and every other UI lets the pointer wander off
+// the bar horizontally without dropping the drag.  The app holds the region's
+// thumb geometry from press and computes the scroll fraction with a grab offset,
+// so `gutterThumb` publishes exactly that geometry for a scrollbar region and
+// nothing for a non-gutter one.
 TEST(aGutterHitFollowsTheRowWhereverTheColumnWent) {
     auto root = uniqueRoot();
     std::string text;
@@ -476,39 +443,31 @@ TEST(aGutterHitFollowsTheRowWhereverTheColumnWent) {
     ssg::HitTester const tester{*snapshot};
     auto const region = ssg::HitRegion::EditorScrollbar;
 
-    // On the gutter's own column, both paths agree -- a drag scrolls to exactly
-    // where a click on that row would.
+    // On the gutter's own column at() finds the scrollbar region.
     int const row = gutter.y + gutter.height / 2;
     auto const direct = tester.at(gutter.x, row);
-    auto const byRow = tester.inGutter(region, row);
     ASSERT_EQ(direct.region, region);
-    ASSERT_EQ(byRow.region, region);
-    ASSERT_EQ(byRow.scrollNumerator, direct.scrollNumerator);
-    ASSERT_EQ(byRow.scrollDenominator, direct.scrollDenominator);
 
     // Far off the gutter horizontally, at() finds the editor -- which is what
-    // used to kill the drag -- while the row lookup still answers.
+    // used to kill the drag.  The app does not re-classify by column during a
+    // drag; it holds the thumb geometry captured at press instead.
     auto const wandered = tester.at(gutter.x - 20, row);
     ASSERT_TRUE(wandered.region != region);
-    ASSERT_EQ(tester.inGutter(region, row).scrollNumerator,
-              direct.scrollNumerator);
 
-    // The ends of the gutter are the ends of the scroll range.
-    ASSERT_EQ(tester.inGutter(region, gutter.y).scrollNumerator,
-              std::uint32_t{0});
-    auto const bottom = tester.inGutter(region, gutter.bottom() - 1);
-    ASSERT_EQ(bottom.scrollNumerator, bottom.scrollDenominator);
+    // The published thumb geometry matches the region's scrollbar metrics, so the
+    // app's grab-offset computation and the server's scroll basis cannot drift.
+    auto const thumb = tester.gutterThumb(region);
+    ASSERT_TRUE(thumb.has_value());
+    if (!thumb) return;
+    auto const& metrics = snapshot->client().viewport.scrollbar;
+    ASSERT_EQ(thumb->gutterY, gutter.y);
+    ASSERT_EQ(thumb->viewportRows, metrics.viewportRows);
+    ASSERT_EQ(thumb->thumbStart, metrics.thumbStart);
+    ASSERT_EQ(thumb->thumbSize, metrics.thumbSize);
 
-    // Dragged past either end it clamps rather than escaping the range, so the
-    // scroll pins at top or bottom instead of jumping.
-    ASSERT_EQ(tester.inGutter(region, gutter.y - 50).scrollNumerator,
-              std::uint32_t{0});
-    ASSERT_EQ(tester.inGutter(region, gutter.bottom() + 50).scrollNumerator,
-              bottom.scrollDenominator);
-
-    // A region that is not a gutter has no gutter position.
-    ASSERT_FALSE(tester.inGutter(ssg::HitRegion::Editor, row).hit());
-    ASSERT_FALSE(tester.inGutter(ssg::HitRegion::Tab, row).hit());
+    // A region that is not a gutter publishes no thumb geometry.
+    ASSERT_FALSE(tester.gutterThumb(ssg::HitRegion::Editor).has_value());
+    ASSERT_FALSE(tester.gutterThumb(ssg::HitRegion::Tab).has_value());
 }
 
 // Enough open tabs and the active one used to fall off the right edge: invisible
@@ -829,7 +788,6 @@ int main() {
     RUN(panelRowMapsToItsTreeNodeId);
     RUN(paletteRowMapsToItsAbsoluteRankIndex);
     RUN(paletteScrollbarAndEmptyAreaClassifyCorrectly);
-    RUN(editorScrollbarFractionFeedsScrollToFraction);
     RUN(aGutterHitFollowsTheRowWhereverTheColumnWent);
     RUN(theActiveTabIsAlwaysVisibleAndClickableHoweverManyAreOpen);
     RUN(tabBarCellMapsToItsTabIndex);

@@ -1,5 +1,7 @@
 #include "pointer_routing.h"
 
+#include <algorithm>
+
 #include <ssg/Keymap.h>
 #include <ssg/PaletteSearcher.h>
 #include <ssg/TreeModel.h>
@@ -57,6 +59,20 @@ std::span<const ScrollableRegionDescriptor> scrollable_regions() noexcept {
 
 bool is_scrollbar_region(ssg::HitRegion region) noexcept {
     return gutterRegion(region) != nullptr;
+}
+
+int scrollbar_grab_offset(int rel, int thumbStart, int thumbSize) noexcept {
+    if (rel >= thumbStart && rel < thumbStart + thumbSize) {
+        return rel - thumbStart;  // grabbed on the thumb: hold it in place
+    }
+    return thumbSize / 2;  // well press: centre the thumb on the cursor
+}
+
+GutterFraction gutter_fraction(int rel, int grabOffset, int travel) noexcept {
+    if (travel <= 0) return {0, 1};  // thumb fills the gutter; nothing scrolls
+    int const desiredTop = std::clamp(rel - grabOffset, 0, travel);
+    return {static_cast<std::uint32_t>(desiredTop),
+            static_cast<std::uint32_t>(travel)};
 }
 
 PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
