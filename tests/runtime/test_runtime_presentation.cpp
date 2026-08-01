@@ -77,6 +77,53 @@ TEST(viewportShellSettingsAndThemeAreLiveSections) {
     ASSERT_TRUE(after->sections().shell.panel.has_value());
 }
 
+TEST(paletteIsPopulatedOnTheFrameItOpens) {
+    auto root = uniqueRoot();
+    auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.open", runtime.revision(), {}}).accepted());
+
+    // The app supplies an EMPTY palette report on the frame the palette opens --
+    // it has not yet adopted the just-published candidates.  The rendered
+    // projection must ALREADY be populated, not blank until a later frame when
+    // the app feeds a ranked report back.
+    auto snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(snap.has_value());
+    if (!snap) return;
+    auto const& palette = snap->sections().shell.palette;
+    ASSERT_TRUE(palette.has_value());
+    if (!palette) return;
+    ASSERT_TRUE(!palette->rows.empty());
+}
+
+TEST(fileFinderIsPopulatedOnTheFrameItOpens) {
+    auto root = uniqueRoot();  // workspace/long.txt exists
+    auto workspace = root / "workspace";
+    // The test root lives inside SSG's own repository, whose .gitignore covers it
+    // (the runtime_* artifact glob); give the workspace its own repository so the
+    // file finder's ignore rules are the fixture's, not the enclosing checkout's.
+    ASSERT_EQ(std::system(("git -C \"" + workspace.string() + "\" init -q >/dev/null 2>&1").c_str()), 0);
+    auto created = ssg::EditorRuntime::create({workspace, root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file_finder.open", runtime.revision(), {}}).accepted());
+
+    // Same open-frame guarantee for the file finder, whose candidates come from
+    // the workspace index rather than the command catalog.
+    auto snap = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(snap.has_value());
+    if (!snap) return;
+    auto const& palette = snap->sections().shell.palette;
+    ASSERT_TRUE(palette.has_value());
+    if (!palette) return;
+    ASSERT_TRUE(!palette->rows.empty());
+}
+
 TEST(wheelScrollDownPastTheEndHasNoDeadZone) {
     auto root = uniqueRoot();  // workspace/long.txt has 80 lines
     auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
@@ -615,6 +662,8 @@ TEST(panelShowCommandsToggleAndSwitchProviders) {
 
 int main() {
     RUN(viewportShellSettingsAndThemeAreLiveSections);
+    RUN(paletteIsPopulatedOnTheFrameItOpens);
+    RUN(fileFinderIsPopulatedOnTheFrameItOpens);
     RUN(wheelScrollDownPastTheEndHasNoDeadZone);
     RUN(settingsDispatchMatchesSettingsModelOracleSnapshot);
     RUN(paletteCandidatesMatchTheCommandRegistry);

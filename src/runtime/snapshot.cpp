@@ -4,6 +4,7 @@
 
 #include <ssg/CommandCatalog.h>
 #include <ssg/command_metadata.h>
+#include <ssg/PaletteSearcher.h>
 
 #include <algorithm>
 #include <variant>
@@ -161,13 +162,34 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
                    : 0;
 
     if (paletteOpen && !view.panes.empty()) {
+        // The client owns palette ranking for latency and normally supplies the
+        // windowed report. On the frame the palette OPENS, though, the client has
+        // not yet adopted the just-published candidates, so its report is empty --
+        // and without this the list would paint blank and only fill in a frame
+        // later. Rank the published candidates here for that one frame (empty
+        // query, top of the list) so the palette is populated the instant it
+        // appears. Every later frame carries the client's own non-empty report,
+        // so this is skipped; a genuine no-match query keeps its non-empty query
+        // and is never overridden.
+        PaletteReport seeded;
+        PaletteReport const* source = &paletteReport;
+        if (paletteReport.rows.empty() && paletteReport.query.empty()) {
+            auto candidates = paletteView().candidates;
+            if (!candidates.empty()) {
+                PaletteWindowState window;
+                window.paneRows = static_cast<std::uint32_t>(
+                    std::max(view.panes.front().content.height, 1));
+                seeded = PaletteSearcher{}.report(candidates, window);
+                source = &seeded;
+            }
+        }
         PaletteProjection projection;
         projection.rect = view.panes.front().content;
         projection.scrollbarRect = view.panes.front().scrollbar;
-        projection.selected = paletteReport.selected;
-        projection.firstVisible = paletteReport.firstVisible;
-        projection.scrollbar = paletteReport.scrollbar;
-        for (auto const& candidate : paletteReport.rows) {
+        projection.selected = source->selected;
+        projection.firstVisible = source->firstVisible;
+        projection.scrollbar = source->scrollbar;
+        for (auto const& candidate : source->rows) {
             projection.rows.push_back({candidate.label, candidate.detail});
         }
         view.palette = std::move(projection);
