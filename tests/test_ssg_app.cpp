@@ -2035,6 +2035,44 @@ TEST(routePointerMiddleClickOnATabClosesIt) {
                     .commands.empty());
 }
 
+TEST(scrollbarGrabOffsetHoldsTheThumbUnderTheCursor) {
+    // Press ON the thumb: the offset is where within the thumb it was grabbed,
+    // so the same point of the thumb stays under the cursor as it drags.
+    int const thumbStart = 4;
+    int const thumbSize = 3;  // rows 4,5,6
+    ASSERT_EQ(ssg::app::scrollbar_grab_offset(4, thumbStart, thumbSize), 0);
+    ASSERT_EQ(ssg::app::scrollbar_grab_offset(5, thumbStart, thumbSize), 1);
+    ASSERT_EQ(ssg::app::scrollbar_grab_offset(6, thumbStart, thumbSize), 2);
+    // Press in the well (above or below the thumb): centre the thumb on the
+    // cursor, so it jumps to the click and can then be dragged from its middle.
+    ASSERT_EQ(ssg::app::scrollbar_grab_offset(0, thumbStart, thumbSize),
+              thumbSize / 2);
+    ASSERT_EQ(ssg::app::scrollbar_grab_offset(20, thumbStart, thumbSize),
+              thumbSize / 2);
+}
+
+TEST(gutterFractionTracksTheGrabbedPointAndClamps) {
+    int const travel = 10;  // viewportRows - thumbSize
+    int const grabOffset = 1;
+
+    // The thumb top is rel - grabOffset, reported over the travel.
+    auto const mid = ssg::app::gutter_fraction(6, grabOffset, travel);
+    ASSERT_EQ(mid.numerator, std::uint32_t{5});
+    ASSERT_EQ(mid.denominator, std::uint32_t{10});
+
+    // Above the top and below the bottom clamp rather than escaping the range.
+    auto const top = ssg::app::gutter_fraction(0, grabOffset, travel);
+    ASSERT_EQ(top.numerator, std::uint32_t{0});
+    auto const bottom = ssg::app::gutter_fraction(100, grabOffset, travel);
+    ASSERT_EQ(bottom.numerator, std::uint32_t{10});
+    ASSERT_EQ(bottom.denominator, std::uint32_t{10});
+
+    // A thumb that fills the gutter (travel <= 0) never scrolls: 0/1.
+    auto const still = ssg::app::gutter_fraction(3, grabOffset, 0);
+    ASSERT_EQ(still.numerator, std::uint32_t{0});
+    ASSERT_EQ(still.denominator, std::uint32_t{1});
+}
+
 TEST(routePointerPalettePressExecutesTheCandidate) {
     ssg::RegionHit hit;
     hit.region = ssg::HitRegion::Palette;
@@ -2259,6 +2297,8 @@ int main() {
     RUN(theCatalogCoversEveryScrollbarHitRegion);
     RUN(routePointerTabPressActivatesTheTab);
     RUN(routePointerMiddleClickOnATabClosesIt);
+    RUN(scrollbarGrabOffsetHoldsTheThumbUnderTheCursor);
+    RUN(gutterFractionTracksTheGrabbedPointAndClamps);
     RUN(routePointerPalettePressExecutesTheCandidate);
     RUN(routePointerFilePickerPressOpensTheFileRatherThanExecutingIt);
     RUN(routePointerPanelPressSelectsAndActivatesTheNode);

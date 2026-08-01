@@ -792,7 +792,18 @@ int main(int argc, char** argv) {
     // the cursor is hidden while it is set: during a drag the caret is not what
     // the user is looking at, and the terminal cursor otherwise flickers across
     // the screen chasing the frame's caret position.
-    std::optional<ssg::HitRegion> draggingGutter;
+    // A live scrollbar-thumb drag: the region, the gutter's top row, the thumb's
+    // travel (viewportRows - thumbSize) and the offset from the thumb top to the
+    // grabbed point, all captured at press.  Held so each drag motion moves the
+    // grabbed point of the thumb to the cursor, rather than mapping the absolute
+    // pointer row to the scroll position.
+    struct GutterDrag {
+        ssg::HitRegion region;
+        int gutterY;
+        int travel;
+        int grabOffset;
+    };
+    std::optional<GutterDrag> draggingGutter;
     // The last pointer cell (0-based) from a press/drag, so a drag held still at
     // the editor edge can auto-scroll on a timer without a fresh pointer event
     // (M8-S2).
@@ -1253,18 +1264,55 @@ int main(int argc, char** argv) {
                 ssg::RegionHit hit;
                 ssg::app::PointerTargets targets;
                 if (snapshot) {
-                    // A scrollbar drag follows the ROW only.  Once the button is
-                    // down the user is manipulating that thumb, and every other
-                    // UI lets the pointer wander off the bar horizontally without
-                    // dropping the drag.  Re-classifying by column would end it
-                    // the moment the pointer left a one-column gutter.
+                    ssg::HitTester tester{*snapshot};
                     if (draggingGutter &&
                         decoded.pointer.kind == ssg::app::PointerKind::drag) {
-                        hit = ssg::HitTester{*snapshot}.inGutter(*draggingGutter,
-                                                                 decoded.pointer.row);
+                        // Continue the drag using the offset captured at press:
+                        // the grabbed point of the thumb tracks the cursor.  The
+                        // pointer may wander off the one-column gutter
+                        // horizontally without dropping the drag, so this keys off
+                        // the held region, never a fresh column hit-test.
+                        hit = ssg::RegionHit{};
+                        hit.region = draggingGutter->region;
+                        int const rel =
+                            decoded.pointer.row - draggingGutter->gutterY;
+                        auto const fraction = ssg::app::gutter_fraction(
+                            rel, draggingGutter->grabOffset,
+                            draggingGutter->travel);
+                        hit.scrollNumerator = fraction.numerator;
+                        hit.scrollDenominator = fraction.denominator;
                     } else {
-                        hit = ssg::HitTester{*snapshot}.at(decoded.pointer.column,
-                                            decoded.pointer.row);
+                        hit = tester.at(decoded.pointer.column,
+                                        decoded.pointer.row);
+                        // A left press on a gutter grabs the thumb: capture the
+                        // grab offset and replace the raw absolute-row fraction
+                        // with the grab fraction, so the press and the drag that
+                        // follows compute the position the same way.
+                        const bool leftPress =
+                            decoded.pointer.kind == ssg::app::PointerKind::press &&
+                            decoded.pointer.button == ssg::app::PointerButton::left;
+                        if (leftPress &&
+                            ssg::app::is_scrollbar_region(hit.region)) {
+                            if (auto const thumb = tester.gutterThumb(hit.region)) {
+                                int const rel = decoded.pointer.row - thumb->gutterY;
+                                int const travel =
+                                    static_cast<int>(thumb->viewportRows) -
+                                    static_cast<int>(thumb->thumbSize);
+                                int const grabOffset =
+                                    ssg::app::scrollbar_grab_offset(
+                                        rel, static_cast<int>(thumb->thumbStart),
+                                        static_cast<int>(thumb->thumbSize));
+                                draggingGutter = GutterDrag{hit.region,
+                                                            thumb->gutterY, travel,
+                                                            grabOffset};
+                                auto const fraction = ssg::app::gutter_fraction(
+                                    rel, grabOffset, travel);
+                                hit.scrollNumerator = fraction.numerator;
+                                hit.scrollDenominator = fraction.denominator;
+                            }
+                        } else if (leftPress) {
+                            draggingGutter.reset();
+                        }
                     }
                     if (hit.region == ssg::HitRegion::Editor) {
                         targets.document_position = ssg::SelectionNavigator::resolvePosition(
@@ -1321,16 +1369,9 @@ int main(int argc, char** argv) {
                     dragging = true;
                     dragAnchor = targets.document_position;
                 }
-                // A press on a gutter starts a thumb drag; any release ends it.
-                // Tracked here rather than in route_pointer because it is client
-                // gesture state, like `dragging`, not a routing decision.
-                if (decoded.pointer.kind == ssg::app::PointerKind::press &&
-                    decoded.pointer.button == ssg::app::PointerButton::left) {
-                    draggingGutter =
-                        ssg::app::is_scrollbar_region(hit.region)
-                            ? std::optional<ssg::HitRegion>{hit.region}
-                            : std::nullopt;
-                }
+                // A gutter thumb drag ends on any release; the press that starts
+                // it, and the grab offset it captures, are handled where `hit` is
+                // classified above.
                 if (decoded.pointer.kind == ssg::app::PointerKind::release) {
                     draggingGutter.reset();
                 }

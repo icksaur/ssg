@@ -48,7 +48,6 @@ struct RegionHit {
     // denominator), plus the equivalent [0, 1] fraction for display.
     std::uint32_t scrollNumerator = 0;
     std::uint32_t scrollDenominator = 1;
-    double scrollbarFraction = 0.0;
     // Header/footer status-field hits: the published field id and optional command.
     std::optional<std::string> fieldId;
     std::optional<std::string> commandId;
@@ -70,15 +69,21 @@ public:
 
     [[nodiscard]] RegionHit at(int column, int row) const;
 
-    // The hit for a specific gutter at `row`, ignoring the pointer's column.
-    //
-    // A scrollbar drag must follow the row alone: once the button is down the
-    // user is manipulating THAT thumb, and every other UI lets the pointer wander
-    // off the bar horizontally without dropping the drag.  Routing a drag through
-    // `at()` instead ends it the moment the pointer leaves the one-column gutter,
-    // which is both surprising and easy to do.  Returns a hit with region ==
-    // None when `region` is not a scrollbar the snapshot currently lays out.
-    [[nodiscard]] RegionHit inGutter(HitRegion region, int row) const;
+    // The thumb geometry for a scrollbar region, for grab-offset dragging: the
+    // gutter's top row, and the region's ScrollbarMetrics viewportRows /
+    // thumbStart / thumbSize (the same basis the server scrolls against).  A
+    // scrollbar drag follows the row alone -- once the button is down the user is
+    // manipulating THAT thumb and the pointer may wander off the one-column
+    // gutter horizontally without dropping the drag -- so the app holds this
+    // geometry from press and never re-classifies by column.  Empty when `region`
+    // is not a scrollbar the snapshot currently lays out.
+    struct GutterThumb {
+        int gutterY;
+        std::uint32_t viewportRows;
+        std::uint32_t thumbStart;
+        std::uint32_t thumbSize;
+    };
+    [[nodiscard]] std::optional<GutterThumb> gutterThumb(HitRegion region) const;
 
 private:
     SessionSnapshot const& snapshot_;
