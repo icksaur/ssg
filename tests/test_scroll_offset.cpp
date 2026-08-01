@@ -22,11 +22,18 @@ std::uint32_t referenceShift(std::uint32_t total, std::uint32_t rows,
     const std::uint64_t maximum = total > rows ? total - rows : 0;
     const std::int64_t clamped =
         static_cast<std::int64_t>(std::min<std::uint64_t>(current, maximum));
-    // Saturating: delta is wire-decoded and may be enormous.
-    if (delta > 0 && delta >= static_cast<std::int64_t>(maximum)) {
-        return static_cast<std::uint32_t>(maximum);
+    // Saturating: delta is wire-decoded and may be enormous. Compare magnitudes
+    // WITHOUT negating -- negating INT64_MIN is UB, and this reference must be
+    // sound on exactly the wire extremes it is meant to pin.
+    if (delta >= 0) {
+        if (static_cast<std::uint64_t>(delta) >= maximum) {
+            return static_cast<std::uint32_t>(maximum);
+        }
+    } else {
+        const std::uint64_t magnitude =
+            static_cast<std::uint64_t>(-(delta + 1)) + 1;
+        if (magnitude >= maximum) return 0;
     }
-    if (delta < 0 && -delta >= static_cast<std::int64_t>(maximum)) return 0;
     const std::int64_t next = clamped + delta;
     return static_cast<std::uint32_t>(
         std::clamp<std::int64_t>(next, 0, static_cast<std::int64_t>(maximum)));
@@ -246,37 +253,6 @@ TEST(editorOverScrollResolvesToTheHandComputedMaximum) {
               std::uint32_t{90});
 }
 
-// The wire-extreme inputs that previously reached raw int64 arithmetic in the
-// editor's scroll handlers. Signed overflow is UB, so "it clamped anyway" is
-// not a defence -- these must saturate.
-TEST(unboundedShiftSaturatesOnWireExtremes) {
-    constexpr auto kMaxRow = std::numeric_limits<std::uint32_t>::max();
-
-    ssg::ScrollOffset up{0};
-    up.shiftUnbounded(std::numeric_limits<std::int64_t>::max());
-    ASSERT_EQ(up.firstVisible(), kMaxRow);
-
-    // INT64_MIN cannot be negated; taking its magnitude must not be UB.
-    ssg::ScrollOffset down{500};
-    down.shiftUnbounded(std::numeric_limits<std::int64_t>::min());
-    ASSERT_EQ(down.firstVisible(), std::uint32_t{0});
-
-    ssg::ScrollOffset high{kMaxRow};
-    high.shiftUnbounded(1);
-    ASSERT_EQ(high.firstVisible(), kMaxRow);
-
-    ssg::ScrollOffset zero{0};
-    zero.shiftUnbounded(-1);
-    ASSERT_EQ(zero.firstVisible(), std::uint32_t{0});
-
-    // Ordinary moves are exact, so saturation has not eaten the normal path.
-    ssg::ScrollOffset ordinary{40};
-    ordinary.shiftUnbounded(-15);
-    ASSERT_EQ(ordinary.firstVisible(), std::uint32_t{25});
-    ordinary.shiftUnbounded(7);
-    ASSERT_EQ(ordinary.firstVisible(), std::uint32_t{32});
-}
-
 }  // namespace
 
 int main() {
@@ -289,7 +265,6 @@ int main() {
     RUN(everySurfaceClampsOverScrollToItsOwnMaximum);
     RUN(explicitScrollDoesNotSnapBackButRevealDoes);
     RUN(editorOverScrollResolvesToTheHandComputedMaximum);
-    RUN(unboundedShiftSaturatesOnWireExtremes);
     std::cout << "Passed: " << passed << " Failed: " << failed << '\n';
     return failed == 0 ? 0 : 1;
 }

@@ -77,6 +77,41 @@ TEST(viewportShellSettingsAndThemeAreLiveSections) {
     ASSERT_TRUE(after->sections().shell.panel.has_value());
 }
 
+TEST(wheelScrollDownPastTheEndHasNoDeadZone) {
+    auto root = uniqueRoot();  // workspace/long.txt has 80 lines
+    auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"long.txt"}}).accepted());
+
+    const ssg::ViewportDimensions dims{80, 12};
+    auto primed = runtime.snapshot(ssg::ClientId{1}, dims);  // caches the real pane height
+    ASSERT_TRUE(primed.has_value());
+    if (!primed) return;
+    auto const maxRow = primed->client().viewport.scrollbar.maximumFirstRow;
+    ASSERT_TRUE(maxRow > 1U);  // the document is taller than the pane
+
+    // Over-scroll far below the last line. The displayed top clamps to the max...
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{5000}}).accepted());
+    auto bottom = runtime.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(bottom.has_value());
+    if (!bottom) return;
+    ASSERT_EQ(bottom->client().viewport.firstVisualRow, maxRow);
+
+    // ...and a single line UP must move the view up by exactly one row.  Before
+    // the fix the STORED request had drifted to ~5000, so an upward notch only
+    // trimmed invisible slack and the view stayed pinned at the bottom -- the
+    // wheel dead zone.  The stored request is now clamped to the real range, so
+    // there is no slack to burn through.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{-1}}).accepted());
+    auto up = runtime.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(up.has_value());
+    if (!up) return;
+    ASSERT_EQ(up->client().viewport.firstVisualRow, maxRow - 1U);
+}
+
 TEST(settingsDispatchMatchesSettingsModelOracleSnapshot) {
     auto root = uniqueRoot();
     auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
@@ -580,6 +615,7 @@ TEST(panelShowCommandsToggleAndSwitchProviders) {
 
 int main() {
     RUN(viewportShellSettingsAndThemeAreLiveSections);
+    RUN(wheelScrollDownPastTheEndHasNoDeadZone);
     RUN(settingsDispatchMatchesSettingsModelOracleSnapshot);
     RUN(paletteCandidatesMatchTheCommandRegistry);
     RUN(paletteCommandCandidatesAreCachedButInvalidateOnKeymapChange);

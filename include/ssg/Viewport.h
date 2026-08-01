@@ -196,29 +196,9 @@ public:
 
     // Assign a caller-supplied position. Unclamped on purpose: the surface may
     // set a position before it knows its geometry, and every read goes through
-    // an operation that clamps. Prefer shiftUnbounded below for a relative
-    // move, which cannot overflow.
+    // an operation that clamps. Prefer byLines/byPages below for a relative
+    // move, which cannot overflow and cannot drift outside the scroll range.
     void setFirstVisible(uint32_t value) noexcept { firstVisible_ = value; }
-
-    // Shift with an UNBOUNDED top, so the top clamp stays deferred to the
-    // viewport (see below), but saturating rather than overflowing: `rows` is
-    // wire-decoded and may be any int64, and signed overflow is UB.
-    void shiftUnbounded(std::int64_t delta) noexcept {
-        constexpr auto kMax = std::numeric_limits<std::uint32_t>::max();
-        if (delta >= 0) {
-            const auto room = static_cast<std::uint64_t>(kMax - firstVisible_);
-            firstVisible_ = static_cast<std::uint64_t>(delta) > room
-                                ? kMax
-                                : firstVisible_ + static_cast<std::uint32_t>(delta);
-            return;
-        }
-        // Negating INT64_MIN is UB, so take the magnitude without negating.
-        const std::uint64_t magnitude =
-            static_cast<std::uint64_t>(-(delta + 1)) + 1;
-        firstVisible_ = magnitude > firstVisible_
-                            ? 0
-                            : firstVisible_ - static_cast<std::uint32_t>(magnitude);
-    }
 
     // Explicit scroll gestures. These deliberately do NOT keep the selection
     // visible -- scrolling is the one interaction that decouples the view from
