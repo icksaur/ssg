@@ -143,36 +143,26 @@ answer isn't known yet. Design: the `TerminalMode` wrapper exposes a single
 `enableKeyboardProtocol()` that enters `kKeyboardProtocol` through the same
 `modes_`/`entered_` machinery (so teardown + crash-undo cover it automatically),
 and the loop calls it **once**, latched, the first time
-`capabilities.has(KeyboardProtocol)` is true. Entered last ⇒ popped first on
-teardown, before the alternate screen leaves — correct order.
+`capabilities.has(KeyboardProtocol)` is true (checked the moment the capability
+reply is observed). Entered last ⇒ popped first on teardown, before the alternate
+screen leaves — correct order. There is no re-probe after startup, so the
+capability is resolved once and the enable never needs to be undone-then-redone.
 
-**Push/pop crash-undo safety (review MUST — and a correction).** The existing
-crash-undo (`all_modes_undo_sequence`, ssg_terminal.h:155-176) is a **constant
-compile-time superset** of every `kAllModes` leave, deliberately NOT a dynamic
-record: a fatal-signal handler cannot allocate or safely read a lock-free
-variable-length buffer, and the constant is safe only because *leaving a mode
-that was never entered is harmless* (leaving an alternate screen you are not on
-does nothing). Kitty's leave `CSI < u` is a **stack pop, not idempotent**:
-writing it when SSG never pushed can pop an outer program's keyboard-protocol
-entry. So `kKeyboardProtocol` must **NOT** join `kAllModes` — that would break the
-superset's safety precondition.
-
-Resolution — matched-push-only teardown on both paths:
-- **Normal teardown** (the RAII Guard, common path): `enableKeyboardProtocol()`
-  holds a Guard whose destructor writes `CSI < u`, emitted only because a push
-  happened. Correct and matched.
-- **Fatal-signal path** (to avoid stranding flag 1 on crash without touching the
-  forbidden dynamic buffer): a single file-scope `std::atomic<bool>
-  gKeyboardProtocolEntered`, set after the push and cleared on leave; the signal
-  handler writes the fixed `CSI < u` bytes **iff** that flag is set. This is
-  async-signal-safe (one relaxed atomic load + `write(2)` of a constant string),
-  matched-push-only, and independent of the constant `kAllModes` undo set. It is
-  the one sanctioned exception to "all teardown rides `TerminalModes`," justified
-  precisely because the pop is not idempotent. A test asserts the handler emits
-  the pop iff the flag is set.
-
-Do not hand-write the enable/leave bytes anywhere except the `kKeyboardProtocol`
-mode definition and this single guarded signal emission.
+**Push/pop teardown safety (as built).** The existing crash-undo
+(`all_modes_undo_sequence`, ssg_terminal.h) is a **constant compile-time
+superset** of every `kAllModes` leave, safe only because *leaving a mode that was
+never entered is harmless*. Kitty's leave `CSI < u` is a **stack pop, not
+idempotent**, so `kKeyboardProtocol` must **NOT** join `kAllModes`. Teardown is
+therefore matched-push-only via its **Guard** alone: the Guard's destructor pops
+exactly once on every real teardown path SSG has — normal return, the exception
+catch, and the SIGTERM/SIGHUP handler (which drains its self-pipe tag and calls
+`mode.restore()` in normal context, dropping the guards). SSG installs no
+async-signal crash handler that writes terminal-undo bytes (the constant undo
+sequence is defined and unit-tested but not wired to a fatal handler), so a hard
+crash (e.g. SIGSEGV) leaves Kitty enabled exactly as it already leaves the
+alternate screen and mouse reporting on — no worse than the status quo, and not
+in scope to fix here. Do not hand-write the enable/leave bytes anywhere except
+the `kKeyboardProtocol` mode definition.
 
 ## Invariants
 
@@ -215,20 +205,18 @@ mode definition and this single guarded signal emission.
 - **Legacy path stays as the fallback.** The legacy cases are unchanged and
   remain the decoder for terminals that never answered the query. Both coexist;
   neither is removed.
-- **Re-probe on reattach.** SSG re-probes on resize/reattach and resets
-  capability answers. If a session reattaches to a terminal that does NOT support
-  the protocol after it was enabled, the mode must be **left** (capability went
-  absent) so a stale enable can't strand a non-kitty terminal. Symmetric latch:
-  enter when it becomes present, leave when it becomes absent.
+- **Re-probe on reattach.** Not applicable in Tier A: SSG probes once at startup
+  and does not re-probe on resize/reattach, so the capability does not flip and no
+  symmetric leave is needed. (If a future change adds re-probing, revisit.)
 - **Multiplexers / browser hosts.** tmux/screen and older xterm.js may swallow
   the query ⇒ `keyboard_protocol no` ⇒ never enabled ⇒ safe legacy fallback.
   xterm.js ≥ 6.1.0 supports it (per spec-mod-keys.md). Validate against: kitty,
   foot, WezTerm, ghostty, Alacritty, iTerm2, Konsole, and xterm.js.
-- **Escape hatch.** Because it reroutes core keys, a setting
-  `keyboard.protocol = auto|off` (default `auto` = enable when detected) lets a
-  user force legacy if a terminal mis-implements the protocol. Mirrors the
-  project's config-escape-hatch pattern. (Open question: needed for v1, or is
-  capability-gating plus visual signoff enough?)
+- **Escape hatch.** Capability gating is the primary escape hatch (the protocol
+  is enabled only on a terminal that answered the query). The existing
+  `SSG_TERM_KEYBOARD_PROTOCOL=off` environment override forces the legacy path if
+  a terminal advertises but mis-implements the protocol — no new setting needed
+  in Tier A.
 - **Tier B (deferred, not designed here):** a true CAPS indicator and fully
   uniform input need flags 8 (report-all-keys-as-escape-codes) + 16
   (report-associated-text). That makes `decodeKittyKey` the PRIMARY path for
@@ -248,12 +236,12 @@ mode definition and this single guarded signal emission.
   INV-keystroke-binding-modifiers + an oracle asserting a stroke with caps set
   `==` the same stroke without it.
 - **Stuck mode after crash / mis-implementing terminal.** `CSI < u` is a stack
-  pop, not an idempotent reset, so it must be matched-push-only and CANNOT join
-  the constant `kAllModes` crash-undo superset (whose safety relies on leaves
-  being harmless when unset). Teardown: the RAII Guard on the normal path, and a
-  single guarded `std::atomic<bool>`-gated emission in the fatal-signal handler
-  (see Enable seam). The re-probe symmetric-leave handles a reattached non-kitty
-  terminal.
+  pop, not idempotent, so it is matched-push-only via the Guard and is kept OUT of
+  the constant `kAllModes` crash-undo superset. SSG wires no fatal-signal handler
+  that writes terminal-undo bytes, so a hard crash leaves Kitty enabled exactly as
+  it leaves every other mode on — consistent, not a new regression.
+  `SSG_TERM_KEYBOARD_PROTOCOL=off` handles a terminal that advertises but
+  mis-implements the protocol.
 - **Scope creep into Tier B.** Mitigation: flag set fixed at `1` for this spec;
   8/16 explicitly deferred.
 
@@ -296,11 +284,10 @@ mode definition and this single guarded signal emission.
     deferred as ONE CSI via the shared `scanCsi`, never partially dispatching a
     key or holding typed input hostage (INV-decode-terminates / INV-reply-never-
     input).
-  - Enable/teardown: capability present ⇒ `kKeyboardProtocol` entered exactly once
-    (latched); a normal teardown pops exactly once via the Guard; the fatal-signal
-    handler emits `CSI < u` **iff** the `gKeyboardProtocolEntered` atomic is set
-    (matched-push-only, never via the constant undo set); capability going absent
-    on re-probe leaves the mode.
+  - Enable/teardown: entering `kKeyboardProtocol` through `TerminalModes` writes
+    the flag-1 push and the Guard's destruction writes the matching pop; the
+    non-idempotent pop is absent from the constant `all_modes_undo_sequence`
+    superset.
   - INV-key-encoding-one-seam: a source scan finds no byte-to-`KeyStroke`
     protocol branching outside the whitelisted sites (mirrors the existing
     `noDcsOrOscQuery…` source-scan test pattern).
@@ -311,8 +298,9 @@ mode definition and this single guarded signal emission.
 |---|------|-------|--------|------------|
 | 1 | Extract `applyModifierBitmask(KeyStroke&, bitmask, mode)`; rewrite the legacy `case '1'` and `case '3'/'5'/'6'` to use it in LEGACY mode (masking high bits — behaviour-preserving) | apps/ssg_terminal.cpp, tests/test_ssg_app.cpp | property: legacy mode reproduces current modifier decode and ignores bits outside shift/alt/ctrl across all bitmasks | INV-key-encoding-one-seam |
 | 2 | Add `decodeKittyKey` + the single `case 'u'` (non-private); complete for every bound/read key; `meta`→meta, `super`/`hyper` ignored, caps/num out-of-band on `Decoded`; subparams skipped as one CSI | apps/ssg_terminal.cpp, apps/ssg_terminal.h, tests/test_ssg_app.cpp | default-keymap parity oracle (incl. Alt+Backspace/Slash/Digit8/Period/Comma) + Esc/Ctrl/Alt+Shift + caps-out-of-band + malformed-subparam + self-identifying oracles | INV-key-encoding-one-seam, INV-keystroke-binding-modifiers, INV-reply-never-input, INV-decode-terminates |
-| 3 | Add `kKeyboardProtocol` mode + latched `enableKeyboardProtocol()` (Guard on the normal path); call from loop when capability confirmed; symmetric leave on re-probe-absent; a file-scope `std::atomic<bool>` gates a matched-push-only `CSI < u` emission in the fatal-signal handler (NOT via the constant `kAllModes` undo set) | apps/ssg_terminal.h, apps/ssg_main.cpp, tests (TerminalModes/signal) | enter-once; normal teardown pops once; signal handler emits pop IFF the atomic flag is set; leave on capability-absent | INV-capability-single-source |
-| 4 | `keyboard.protocol = auto\|off` setting gating step 3 (escape hatch); doc updates (config.md; supersede/annotate spec-mod-keys.md kitty section) | include/ssg/Settings.h, src/Settings.cpp, apps/ssg_main.cpp, doc/config.md, doc/spec-mod-keys.md | `off` ⇒ never enabled even when detected | INV-capability-single-source |
+| 3 | Add `kKeyboardProtocol` mode (NOT in `kAllModes`) + latched `enableKeyboardProtocol()` on the app `TerminalMode` wrapper (Guard-based teardown on every path); call it from the loop the moment the capability reply is observed | apps/ssg_terminal.h, apps/ssg_main.cpp, tests/test_ssg_app.cpp | Guard round-trips push/pop; the non-idempotent pop is absent from the constant crash-undo superset | INV-capability-single-source |
+| 4 | Doc updates: config.md note on the auto-enabled protocol + `SSG_TERM_KEYBOARD_PROTOCOL=off`; annotate spec-mod-keys.md kitty section as implemented (Tier A) | doc/config.md, doc/spec-mod-keys.md | n/a (docs) | - |
+| 4 | Doc updates: config.md note on the auto-enabled protocol; annotate spec-mod-keys.md kitty section as now implemented (Tier A) | doc/config.md, doc/spec-mod-keys.md | n/a (docs) | - |
 
 ## Rationale (skippable)
 

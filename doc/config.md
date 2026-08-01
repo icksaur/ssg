@@ -99,6 +99,15 @@ that cancels a prompt or closes find in one press.  On macOS the terminal must
 be set to treat Option as Meta (iTerm2: "Use Option as Meta"; Terminal.app: "Use
 Option as Meta key"), or `Option+<letter>` inserts a composed character instead.
 
+On a terminal that supports the keyboard protocol (kitty, foot, WezTerm,
+ghostty, recent xterm.js and others), ssg enables it automatically and decodes
+these chords from the terminal's exact modifier report instead of the
+Escape-prefix bytes.  This makes `Alt+Shift+<letter>` and `Ctrl+<letter>`
+bindings unambiguous and immune to Caps Lock -- with the legacy encoding, Caps
+Lock inverts letter case and could swap `Alt+P` and `Alt+Shift+P`.  It is enabled
+only when the terminal answers the capability query; `SSG_TERM_KEYBOARD_PROTOCOL=off`
+forces the legacy path if a terminal advertises it but behaves badly.
+
 - `sequence` is a single key stroke, e.g. `"Alt+KeyS"` or `"Ctrl+Shift+KeyM"`.
   It is an optional `Ctrl+`/`Alt+`/`Meta+`/`Shift+` prefix followed by one key
   name: `KeyA`-`KeyZ`, `Digit0`-`Digit9`, `F1`-`F24`, or a named key (`Escape`,
