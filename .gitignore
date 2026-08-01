@@ -7,14 +7,9 @@ build_*/
 .ssg/
 
 # Runtime test artifacts (created under CWD when test binaries run outside build/)
-runtime_editing/
-runtime_language/
-runtime_navigation/
-runtime_presentation/
-runtime_files/
-runtime_snapshot/
-runtime_snapshot_*/
-hit_test_root/
+/runtime_*/
+/hit_test_root/
+/script_host_root_*/
 
 # Working artifacts from agent review and analysis passes. These are inputs to a
 # change, not documents of record: code-review.md alone churned 528 lines across
