@@ -711,6 +711,46 @@ TEST(decodeInputModifiedArrows) {
     ASSERT_FALSE(multi.stroke.shift);
 }
 
+TEST(decodeInputMetaPrefixedCsiFoldsAlt) {
+    std::size_t consumed = 0;
+    // A terminal transmitting Alt as a leading ESC sends Alt+Home as ESC ESC[H:
+    // the inner CSI decodes to Home and Alt is folded in.
+    auto altHome = ssg::app::decode_input("\x1b\x1b[H", true, consumed);
+    ASSERT_EQ(consumed, std::size_t{4});
+    ASSERT_TRUE(altHome.status == ssg::app::DecodeStatus::key);
+    ASSERT_EQ(std::string{ssg::keyCodeName(altHome.stroke.code)}, std::string{"Home"});
+    ASSERT_TRUE(altHome.stroke.alt);
+    ASSERT_FALSE(altHome.stroke.control);
+    ASSERT_FALSE(altHome.stroke.shift);
+
+    auto altEnd = ssg::app::decode_input("\x1b\x1b[F", true, consumed);
+    ASSERT_EQ(std::string{ssg::keyCodeName(altEnd.stroke.code)}, std::string{"End"});
+    ASSERT_TRUE(altEnd.stroke.alt);
+
+    // Alt+ArrowLeft via the same meta-prefix form.
+    auto altLeft = ssg::app::decode_input("\x1b\x1b[D", true, consumed);
+    ASSERT_EQ(std::string{ssg::keyCodeName(altLeft.stroke.code)}, std::string{"ArrowLeft"});
+    ASSERT_TRUE(altLeft.stroke.alt);
+
+    // An already-modified inner sequence keeps both modifiers (Ctrl from the
+    // CSI, Alt from the prefix).
+    auto altCtrlHome = ssg::app::decode_input("\x1b\x1b[1;5H", true, consumed);
+    ASSERT_EQ(std::string{ssg::keyCodeName(altCtrlHome.stroke.code)}, std::string{"Home"});
+    ASSERT_TRUE(altCtrlHome.stroke.alt);
+    ASSERT_TRUE(altCtrlHome.stroke.control);
+
+    // An incomplete inner CSI keeps the whole thing pending rather than
+    // surfacing a spurious bare Escape.
+    auto pending = ssg::app::decode_input("\x1b\x1b[1;3", false, consumed);
+    ASSERT_TRUE(pending.status == ssg::app::DecodeStatus::incomplete);
+
+    // ESC ESC with no CSI introducer following is still a bare Escape.
+    auto doubleEsc = ssg::app::decode_input("\x1b\x1bx", true, consumed);
+    ASSERT_EQ(consumed, std::size_t{1});
+    ASSERT_EQ(std::string{ssg::keyCodeName(doubleEsc.stroke.code)}, std::string{"Escape"});
+    ASSERT_FALSE(doubleEsc.stroke.alt);
+}
+
 // Encode a KeyStroke as the Kitty `CSI unicode-key ; mods u` bytes, for the
 // parity oracle below. Returns nullopt for keys Kitty does not send as a `u`
 // event under the disambiguate flag (arrows/Home/End/Page/Delete/function keys
@@ -2442,6 +2482,7 @@ int main() {
     RUN(encodeAnsiFrameSkipsWideGlyphContinuation);
     RUN(decodeInputMapsPrintablesAndNamedKeys);
     RUN(decodeInputModifiedArrows);
+    RUN(decodeInputMetaPrefixedCsiFoldsAlt);
     RUN(decodeKittyKeyMatchesEveryDefaultBinding);
     RUN(decodeKittyKeyHandCasesAndCapsLockImmunity);
     RUN(decodeKittyKeySelfIdentifyingAndMalformed);

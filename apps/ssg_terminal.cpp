@@ -791,6 +791,31 @@ Decoded decode_input(std::string_view bytes, bool inputExhausted,
         }
         auto const second = static_cast<unsigned char>(bytes[1]);
         if (second != '[' && second != 'O') {
+            // Meta-prefixed escape sequence: a terminal that transmits Alt as a
+            // leading ESC sends Alt+<special key> as ESC followed by that key's
+            // own CSI/SS3 sequence (e.g. Alt+Home = ESC ESC [ H, Alt+End =
+            // ESC ESC [ F).  Decode the inner sequence and fold in Alt so it
+            // matches the Alt+<named key> bindings, instead of surfacing a bare
+            // Escape and an unmodified key.
+            if (second == 0x1b && bytes.size() >= 3 &&
+                (static_cast<unsigned char>(bytes[2]) == '[' ||
+                 static_cast<unsigned char>(bytes[2]) == 'O')) {
+                std::size_t innerConsumed = 0;
+                auto inner =
+                    decode_input(bytes.substr(1), inputExhausted, innerConsumed);
+                if (inner.status == DecodeStatus::incomplete) {
+                    return {DecodeStatus::incomplete, {}, {}, 0};
+                }
+                if (inner.status == DecodeStatus::key) {
+                    inner.stroke.alt = true;
+                    consumed = 1 + innerConsumed;
+                    return inner;
+                }
+                // The inner bytes were not a key (a reply or noise): let the ESC
+                // stand alone and re-decode the remainder on the next call.
+                consumed = 1;
+                return {DecodeStatus::key, ssg::KeyStroke{ssg::KeyCode::Escape}, {}, 0};
+            }
             // Legacy meta-prefix: Alt+<key> transmits as ESC then the key's
             // byte, so ESC followed by a printable coalesces into one Alt stroke.
             // ESC [ and ESC O are excluded above as the CSI/SS3 introducers.  The
