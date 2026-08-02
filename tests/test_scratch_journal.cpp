@@ -77,6 +77,25 @@ std::vector<std::byte> readHexFixture(std::string_view name) {
     return bytesFromHex(text);
 }
 
+// Regenerate a byte fixture when SSG_REGEN_JOURNAL_FIXTURE is set, so a
+// deliberate format change reproduces the on-disk hex rather than being
+// hand-edited. Returns true when it regenerated (the caller then skips the
+// assertion for this run).
+bool maybeRegenerateHexFixture(std::string_view name,
+                               std::span<const std::byte> bytes) {
+    if (std::getenv("SSG_REGEN_JOURNAL_FIXTURE") == nullptr) return false;
+    const auto path =
+        std::filesystem::path{SSG_SCRATCH_JOURNAL_FIXTURE_DIR} / name;
+    std::ofstream output(path, std::ios::binary | std::ios::trunc);
+    static constexpr char kHex[] = "0123456789abcdef";
+    for (const auto byte : bytes) {
+        const auto value = std::to_integer<unsigned>(byte);
+        output << kHex[value >> 4U] << kHex[value & 0x0fU];
+    }
+    output << '\n';
+    return true;
+}
+
 ssg::UntitledDocumentId fixtureUntitledId() {
     std::array<std::byte, 16> value{};
     for (std::size_t index = 0; index < value.size(); ++index) {
@@ -107,8 +126,66 @@ TEST(checkpointEncodingMatchesCrossPlatformByteFixture) {
     const ssg::JournalRecoverySet recovery{
         {savedDocument(), untitledDocument()}};
 
-    ASSERT_EQ(ssg::JournalCodec{}.encodeCheckpoint(recovery),
-              readHexFixture("checkpoint.hex"));
+    const auto encoded = ssg::JournalCodec{}.encodeCheckpoint(recovery);
+    if (maybeRegenerateHexFixture("checkpoint.hex", encoded)) return;
+    ASSERT_EQ(encoded, readHexFixture("checkpoint.hex"));
+}
+
+ssg::JournalDocument savedDocumentWithBaseline() {
+    ssg::JournalDocument document = savedDocument("edited\n");
+    document.baseline =
+        ssg::DraftBaseline{1234567890123456789ULL, 42ULL,
+                           ssg::fastContentHash("hello\n")};
+    return document;
+}
+
+TEST(baselineRoundTripsThroughDocumentAndCheckpoint) {
+    // A single-document record with a baseline replays byte-for-byte.
+    const auto document = savedDocumentWithBaseline();
+    const auto record = ssg::JournalCodec{}.encodeDocument(document);
+    const auto replayed = ssg::JournalCodec{}.replay(record);
+    ASSERT_FALSE(replayed.discardedTail);
+    ASSERT_EQ(replayed.recovery.documents,
+              std::vector<ssg::JournalDocument>{document});
+    ASSERT_TRUE(replayed.recovery.documents.front().baseline.has_value());
+    ASSERT_EQ(replayed.recovery.documents.front().baseline->size,
+              std::uint64_t{42});
+
+    // A baseline also survives inside a checkpoint alongside a baseline-less doc.
+    const ssg::JournalRecoverySet recovery{
+        {savedDocumentWithBaseline(), untitledDocument()}};
+    const auto checkpoint = ssg::JournalCodec{}.encodeCheckpoint(recovery);
+    const auto checkpointReplay = ssg::JournalCodec{}.replay(checkpoint);
+    ASSERT_FALSE(checkpointReplay.discardedTail);
+    ASSERT_EQ(checkpointReplay.recovery, recovery);
+    ASSERT_FALSE(checkpointReplay.recovery.documents.back().baseline.has_value());
+}
+
+TEST(legacyV1RecordReplaysWithUnknownBaseline) {
+    // The v1 fixture predates the baseline field. It must still replay (no torn
+    // tail) with each document's baseline == nullopt ("unknown"), never garbage.
+    const auto v1 = readHexFixture("checkpoint_v1.hex");
+    const auto replayed = ssg::JournalCodec{}.replay(v1);
+    ASSERT_FALSE(replayed.discardedTail);
+    ASSERT_EQ(replayed.validBytes, v1.size());
+    ASSERT_EQ(replayed.recovery.documents.size(), std::size_t{2});
+    for (const auto& document : replayed.recovery.documents) {
+        ASSERT_FALSE(document.baseline.has_value());
+    }
+    // With baseline defaulting to nullopt, the decoded docs equal the helpers.
+    ASSERT_EQ(replayed.recovery.documents.front(), savedDocument());
+    ASSERT_EQ(replayed.recovery.documents.back(), untitledDocument());
+}
+
+TEST(fastContentHashIsDeterministicAndDistinguishes) {
+    ASSERT_EQ(ssg::fastContentHash("hello\n"), ssg::fastContentHash("hello\n"));
+    ASSERT_NE(ssg::fastContentHash("hello\n"), ssg::fastContentHash("hello"));
+    ASSERT_NE(ssg::fastContentHash(""), ssg::fastContentHash("x"));
+    // FNV-1a-64 offset basis for empty input — pins the standard algorithm and
+    // cross-platform stability.
+    ASSERT_EQ(ssg::fastContentHash(""), std::uint64_t{14695981039346656037ULL});
+    // Known FNV-1a-64 test vector for "a" (0xaf63dc4c8601ec8c).
+    ASSERT_EQ(ssg::fastContentHash("a"), std::uint64_t{12638187200555641996ULL});
 }
 
 TEST(replayAppliesCheckpointUpdatesAndRemovals) {
@@ -236,6 +313,9 @@ TEST(appendRejectsInvalidSavedIdentityAndInvalidUtf8) {
 
 int main() {
     RUN(checkpointEncodingMatchesCrossPlatformByteFixture);
+    RUN(baselineRoundTripsThroughDocumentAndCheckpoint);
+    RUN(legacyV1RecordReplaysWithUnknownBaseline);
+    RUN(fastContentHashIsDeterministicAndDistinguishes);
     RUN(replayAppliesCheckpointUpdatesAndRemovals);
     RUN(replayStartsFromNewestCheckpoint);
     RUN(corruptOrTruncatedTailStopsAtLastValidRecord);

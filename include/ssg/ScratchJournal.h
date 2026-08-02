@@ -4,7 +4,9 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -62,11 +64,32 @@ private:
     UntitledDocumentId id_;
 };
 
+// The disk state a saved-file draft branched from, captured when the file is
+// opened and refreshed on each save. On reopen, comparing this to the current
+// disk file tells draft recovery whether the file changed externally since the
+// edits were made. `contentHash` is the authority (a fast non-cryptographic hash
+// of the disk bytes); `mtimeNanos` and `size` are only a cheap pre-check. Absent
+// (nullopt) for untitled buffers, and for legacy records written before the
+// baseline existed — an absent baseline means "unknown", treated as a conflict.
+struct DraftBaseline {
+    std::uint64_t mtimeNanos = 0;
+    std::uint64_t size = 0;
+    std::uint64_t contentHash = 0;
+
+    friend bool operator==(const DraftBaseline&, const DraftBaseline&) = default;
+};
+
+// A fast, deterministic, non-cryptographic hash (FNV-1a, 64-bit) of raw bytes,
+// for change-detection only — no integrity or security guarantee. Stable across
+// processes and platforms so a stored baseline hash compares to a fresh one.
+[[nodiscard]] std::uint64_t fastContentHash(std::string_view bytes) noexcept;
+
 struct JournalDocument {
     JournalDocumentKey key;
     DocumentMode mode = DocumentMode::Edit;
     bool dirty = false;
     std::string utf8Content;
+    std::optional<DraftBaseline> baseline;
 
     friend bool operator==(const JournalDocument&,
                            const JournalDocument&) = default;
