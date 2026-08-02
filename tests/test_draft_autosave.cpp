@@ -85,7 +85,7 @@ TEST(flushAllForcesEveryDirtyDocumentRegardlessOfDebounce) {
     ssg::DraftAutosaveScheduler scheduler{10s};
     const auto t0 = std::chrono::steady_clock::time_point{};
     // Two docs flushed eagerly this tick.
-    scheduler.due(t0, std::vector{dirty(1, 0xAA), dirty(2, 0xBB)});
+    (void)scheduler.due(t0, std::vector{dirty(1, 0xAA), dirty(2, 0xBB)});
     // Immediately after (well within the interval), an exit flush still writes
     // both dirty docs; a clean doc is skipped.
     const auto forced = scheduler.flushAll(

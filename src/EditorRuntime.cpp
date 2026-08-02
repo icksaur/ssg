@@ -1310,6 +1310,7 @@ void EditorRuntime::Impl::ensureDocumentRuntimeState(FileDocumentId document) {
 
 void EditorRuntime::Impl::discardDocumentRuntimeState(FileDocumentId document) {
     documentRuntimeStates.erase(document.value());
+    autosave.forget(document);
     // A find that was scoped to this document no longer has a subject.
     if (findDocumentId == document) findDocumentId.reset();
     // Any live diff tab mapped to it is equally orphaned.
@@ -1577,6 +1578,65 @@ void EditorRuntime::Impl::primeDeferred() {
 void EditorRuntime::Impl::enqueueStatus(StatusPriority priority, std::string text) {
     auto value = nextStatusId++;
     (void)status.enqueue(StatusItem{StatusId{value}, priority, std::move(text), {}});
+}
+
+namespace {
+
+std::vector<AutosaveCandidate> autosaveCandidates(const Workspace& workspace) {
+    std::vector<AutosaveCandidate> candidates;
+    for (const auto id : workspace.documents()) {
+        auto state = workspace.state(id);
+        if (!state) continue;
+        // Only a dirty document is a flush candidate, so only a dirty document
+        // pays for a text snapshot + hash. A clean one still appears (hash 0) so
+        // the scheduler can drop any debounce state it held — cheap, no copy.
+        std::uint64_t contentHash = 0;
+        if (state->dirty) {
+            auto const* current = workspace.tryDocument(id);
+            if (current == nullptr) continue;
+            contentHash = fastContentHash(current->snapshot().text);
+        }
+        candidates.push_back(AutosaveCandidate{id, state->dirty, contentHash});
+    }
+    return candidates;
+}
+
+} // namespace
+
+std::size_t EditorRuntime::Impl::persistAutosaveDraft(FileDocumentId document) {
+    auto state = workspace.state(document);
+    auto const* current = workspace.tryDocument(document);
+    if (!state || current == nullptr) return 0;
+    // Identical JournalDocument to the tab-close path, minus the blocking
+    // durability wait: autosave leaves fsync to the background thread so a tick
+    // never stalls the UI (the recovery badge still reports pending/durable).
+    scratch.updateDocument(JournalDocument{state->key, current->mode(),
+                                           state->dirty,
+                                           current->snapshot().text,
+                                           workspace.baselineFor(document)});
+    return 1;
+}
+
+std::size_t EditorRuntime::Impl::flushDueAutosaveDrafts() {
+    autosave.setInterval(std::chrono::milliseconds{
+        uint32Setting(settings, SettingKey::AutosaveDebounceMs, 10000)});
+    const auto candidates = autosaveCandidates(workspace);
+    std::size_t flushed = 0;
+    for (const auto id :
+         autosave.due(std::chrono::steady_clock::now(), candidates)) {
+        flushed += persistAutosaveDraft(id);
+    }
+    return flushed;
+}
+
+std::size_t EditorRuntime::Impl::flushAllAutosaveDrafts() {
+    const auto candidates = autosaveCandidates(workspace);
+    std::size_t flushed = 0;
+    for (const auto id :
+         autosave.flushAll(std::chrono::steady_clock::now(), candidates)) {
+        flushed += persistAutosaveDraft(id);
+    }
+    return flushed;
 }
 
 ExternalDiffBurstResult EditorRuntime::Impl::applyExternalDiffBurst(
@@ -1859,6 +1919,12 @@ bool EditorRuntime::detach(ClientId clientId) {
 }
 
 void EditorRuntime::primeDeferred() { impl_->primeDeferred(); }
+std::size_t EditorRuntime::flushDueAutosaveDrafts() {
+    return impl_->flushDueAutosaveDrafts();
+}
+std::size_t EditorRuntime::flushAllAutosaveDrafts() {
+    return impl_->flushAllAutosaveDrafts();
+}
 
 EditorRuntime::DeferredWorkCounts EditorRuntime::deferredWorkCounts() const {
     return {impl_->syntaxRunCount, impl_->treeScanCount};

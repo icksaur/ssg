@@ -2,6 +2,7 @@
 
 #include <ssg/ClipboardRegister.h>
 #include <ssg/DiffModel.h>
+#include <ssg/DraftAutosave.h>
 #include <ssg/EditCommands.h>
 #include <ssg/EditorRuntime.h>
 #include <ssg/EditorSessionBuilder.h>
@@ -50,6 +51,13 @@ inline bool boolSetting(SettingsModel const& settings, SettingKey key,
                         bool fallback) {
     auto value = settings.resolve(key).value;
     if (auto const* typed = std::get_if<bool>(&value)) return *typed;
+    return fallback;
+}
+
+inline std::uint32_t uint32Setting(SettingsModel const& settings, SettingKey key,
+                                   std::uint32_t fallback) {
+    auto value = settings.resolve(key).value;
+    if (auto const* typed = std::get_if<std::uint32_t>(&value)) return *typed;
     return fallback;
 }
 
@@ -123,6 +131,10 @@ struct EditorRuntime::Impl final : CommandServices,
     std::map<std::uint64_t, DocumentRuntimeState> documentRuntimeStates;
     ClipboardRegister clipboard;
     SettingsModel settings;
+    // Autosave debounce state for open dirty documents (single-file draft
+    // recovery, M15). The policy lives here (library-owned); the app supplies
+    // only a periodic tick and a clean-exit call.
+    DraftAutosaveScheduler autosave;
     FindReplaceController findReplace;
     // The document the find/replace controller last evaluated against.  Find
     // matches are byte offsets into one specific document; when the active
@@ -407,6 +419,14 @@ struct EditorRuntime::Impl final : CommandServices,
     // pending scan.  The run counters exist for the startup oracle to assert no
     // scan happened before priming.
     void primeDeferred();
+    // Flush drafts of open dirty documents. `flushDueAutosaveDrafts` applies the
+    // debounce policy (eager first, then once per AutosaveDebounceMs); called on
+    // the app's periodic tick. `flushAllAutosaveDrafts` forces every dirty draft,
+    // for a clean process exit. Both return the number of drafts written this
+    // call. Non-blocking: durability is the background fsync thread's job.
+    std::size_t flushDueAutosaveDrafts();
+    std::size_t flushAllAutosaveDrafts();
+    std::size_t persistAutosaveDraft(FileDocumentId document);
     bool deferringEnrichment = false;
     bool pendingTreeRefresh = false;
     bool pendingSyntaxRefresh = false;

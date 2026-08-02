@@ -349,6 +349,63 @@ TEST(closingNonActiveDirtyTabReopensItsOwnContentWithNewDocumentId) {
     ASSERT_TRUE(*reopenedDocumentA != *documentA);
 }
 
+TEST(autosaveFlushesADirtyDocumentEagerlyThenDebounces) {
+    auto root = uniqueRoot("autosave_eager");
+    std::ofstream{root / "workspace" / "note.txt", std::ios::binary} << "hi\n";
+    auto created = ssg::EditorRuntime::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"note.txt"}}).accepted());
+
+    // A clean, just-opened document is not flushed.
+    ASSERT_EQ(runtime.flushDueAutosaveDrafts(), std::size_t{0});
+
+    // Editing makes it dirty; the first tick flushes eagerly (bounds the crash
+    // window to one tick).
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"text.insert", runtime.revision(), ssg::TextInputArguments{"!"}}).accepted());
+    ASSERT_EQ(runtime.flushDueAutosaveDrafts(), std::size_t{1});
+
+    // An immediate second tick with unchanged content is debounced (default
+    // interval is 10s, and nothing changed anyway).
+    ASSERT_EQ(runtime.flushDueAutosaveDrafts(), std::size_t{0});
+}
+
+TEST(autosaveFlushesNothingWhenNoDocumentIsDirty) {
+    auto root = uniqueRoot("autosave_clean");
+    std::ofstream{root / "workspace" / "note.txt", std::ios::binary} << "hi\n";
+    auto created = ssg::EditorRuntime::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"note.txt"}}).accepted());
+    // Edit then save -> clean again -> no autosave.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"text.insert", runtime.revision(), ssg::TextInputArguments{"!"}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.save", runtime.revision(), {}}).accepted());
+    ASSERT_EQ(runtime.flushDueAutosaveDrafts(), std::size_t{0});
+}
+
+TEST(autosaveFlushAllForcesADirtyDocumentAfterAnEagerFlush) {
+    auto root = uniqueRoot("autosave_exit");
+    std::ofstream{root / "workspace" / "note.txt", std::ios::binary} << "hi\n";
+    auto created = ssg::EditorRuntime::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"note.txt"}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"text.insert", runtime.revision(), ssg::TextInputArguments{"!"}}).accepted());
+    ASSERT_EQ(runtime.flushDueAutosaveDrafts(), std::size_t{1});
+    // A clean-exit flush ignores the debounce and writes the dirty draft again,
+    // capturing any edits newer than the last tick.
+    ASSERT_EQ(runtime.flushAllAutosaveDrafts(), std::size_t{1});
+    // A clean document is still skipped by the exit flush.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.save", runtime.revision(), {}}).accepted());
+    ASSERT_EQ(runtime.flushAllAutosaveDrafts(), std::size_t{0});
+}
+
 } // namespace
 
 int main() {
@@ -361,6 +418,9 @@ int main() {
     RUN(tabActivateFocusesTheEditor);
     RUN(switchingTabsRevealsTheNewDocumentsCaret);
     RUN(closingNonActiveDirtyTabReopensItsOwnContentWithNewDocumentId);
+    RUN(autosaveFlushesADirtyDocumentEagerlyThenDebounces);
+    RUN(autosaveFlushesNothingWhenNoDocumentIsDirty);
+    RUN(autosaveFlushAllForcesADirtyDocumentAfterAnEagerFlush);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

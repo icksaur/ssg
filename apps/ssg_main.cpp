@@ -242,6 +242,12 @@ constexpr int kEscapeTimeoutMs = 30;
 // line and re-extend the selection, even with no new pointer event (M8-S2).
 constexpr int kEdgeScrollIntervalMs = 40;
 
+// Idle wake cadence so the runtime's autosave debounce (default 10s, a library
+// setting) gets a periodic "a moment passed" tick even when the user is not
+// typing; the tick itself decides nothing, it only lets the library flush drafts
+// of open dirty documents that are due (single-file draft recovery, M15).
+constexpr int kAutosaveTickMs = 1000;
+
 // M9-W signal-event wakeup: the write end of a non-blocking self-pipe.  Signal
 // handlers are the only writers and touch nothing else, so a raw fd in a
 // sig_atomic-safe int is the whole async-signal-safe surface.  -1 until the pipe
@@ -1240,9 +1246,22 @@ int main(int argc, char** argv) {
             // OR a runtime git-diff wake OR an init-script reload wake. A bare
             // read() could not be interrupted reliably by resize/terminate or
             // background diff/config updates.
-            auto const wait = waitReadiness(
-                -1, signalPipe[0], gitDiffWakeFd,
-                initScriptWatcher ? initScriptWatcher->wakeDescriptor() : -1);
+            // Block until a real event (input / signal / background wake), but
+            // wake on the autosave cadence to flush due drafts. A pure-timeout
+            // tick that writes nothing must NOT repaint (encode_frame is a full
+            // frame, so an idle repaint every second is wasteful) — keep waiting
+            // without re-rendering. Only a flush that actually wrote something
+            // falls through to re-render, since it may change a recovery badge.
+            FdReadiness wait;
+            while (true) {
+                wait = waitReadiness(
+                    kAutosaveTickMs, signalPipe[0], gitDiffWakeFd,
+                    initScriptWatcher ? initScriptWatcher->wakeDescriptor() : -1);
+                if (wait.input || wait.signal || wait.gitDiff || wait.initScript) {
+                    break;
+                }
+                if (runtime.flushDueAutosaveDrafts() > 0) break;
+            }
             if (wait.signal) {
                 // Terminate does not return (restore + re-raise); a resize just
                 // re-snapshots at the loop top.
@@ -1539,6 +1558,12 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "ssg: terminated by an unknown error\n");
         return 1;
     }
+
+    // Clean exit (the loop quit without an exception): best-effort final flush of
+    // every dirty draft, capturing edits newer than the last autosave tick. This
+    // does NOT run on SIGKILL or a crash — those rely on the last debounced tick
+    // (the documented recovery point; see doc/spec-single-file-draft.md).
+    runtime.flushAllAutosaveDrafts();
 
     return 0;
 }

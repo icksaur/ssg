@@ -1575,7 +1575,7 @@ bool decodePresent(ProtocolValue const& value, std::optional<SettingKey>& out) {
         SettingKey::SearchCaseSensitive, SettingKey::SearchWholeWord,
         SettingKey::SearchRegularExpression, SettingKey::UndoByteBudget,
         SettingKey::RecoveryByteBudget, SettingKey::TypingCoalescingMs,
-        SettingKey::FileFinderRespectGitignore};
+        SettingKey::FileFinderRespectGitignore, SettingKey::AutosaveDebounceMs};
     return decodeEnum(value, out, values);
 }
 
