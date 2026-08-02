@@ -124,7 +124,10 @@ CommandHandlerResult searchCommand(EditorRuntime::Impl& runtime, CommandContext&
         }
         if (!runtime.activeDocumentId()) return failure("goto.line requires an active document");
         // Trim surrounding whitespace, then require the whole value to be a
-        // positive base-10 integer.
+        // base-10 integer. The number itself is not range-checked here: it is
+        // clamped to [1, lineCount] below, so 0 or a negative goes to the first
+        // line and an over-large number goes to the last (backlog: clamp to
+        // [1, LINES]).
         std::string_view digits{*lineText};
         while (!digits.empty() && std::isspace(static_cast<unsigned char>(digits.front())))
             digits.remove_prefix(1);
@@ -134,17 +137,21 @@ CommandHandlerResult searchCommand(EditorRuntime::Impl& runtime, CommandContext&
         auto const* first = digits.data();
         auto const* last = first + digits.size();
         auto const [stop, ec] = std::from_chars(first, last, requested);
-        if (ec != std::errc{} || stop != last || requested < 1)
-            return failure("goto.line expects a positive line number");
+        if (ec != std::errc{} || stop != last)
+            return failure("goto.line expects a line number");
         // One source of truth for line boundaries: the active text. The line
         // count is newlines + 1, and the target line's start is taken from the
         // same scan, so the two can never disagree.
         std::string const text = runtime.activeText();
         std::size_t lineCount = 1;
         for (char c : text) if (c == '\n') ++lineCount;
-        std::size_t target = static_cast<unsigned long long>(requested - 1) >= lineCount
-                                 ? lineCount - 1
-                                 : static_cast<std::size_t>(requested - 1);
+        // Clamp the 1-based request to [1, lineCount], then convert to a 0-based
+        // line index.
+        std::size_t target = requested < 1
+                                 ? 0
+                                 : (static_cast<unsigned long long>(requested) > lineCount
+                                        ? lineCount - 1
+                                        : static_cast<std::size_t>(requested - 1));
         std::size_t start = 0;
         if (target > 0) {
             std::size_t seen = 0;
