@@ -790,6 +790,52 @@ TEST(decodeInputTildeHomeEndPlainAndModified) {
     ASSERT_TRUE(pending.status == ssg::app::DecodeStatus::incomplete);
 }
 
+TEST(decodeInputStripsLockModifiersFromFunctionalKeys) {
+    std::size_t consumed = 0;
+    // A terminal speaking the Kitty protocol reports lock states in the modifier
+    // field of the legacy letter/tilde functional-key forms. Captured from a real
+    // terminal with NumLock on: Alt+Home = ESC[1;131H, Alt+End = ESC[1;131F
+    // (modifier 131 -> bitmask 130 = NumLock(128) | Alt(2)). The lock bit must be
+    // stripped so Alt survives and the binding resolves.
+    auto altHome = ssg::app::decode_input("\x1b[1;131H", true, consumed);
+    ASSERT_EQ(consumed, std::size_t{8});
+    ASSERT_EQ(std::string{ssg::keyCodeName(altHome.stroke.code)}, std::string{"Home"});
+    ASSERT_TRUE(altHome.stroke.alt);
+    ASSERT_FALSE(altHome.stroke.control);
+    ASSERT_FALSE(altHome.stroke.shift);
+    auto altEnd = ssg::app::decode_input("\x1b[1;131F", true, consumed);
+    ASSERT_EQ(std::string{ssg::keyCodeName(altEnd.stroke.code)}, std::string{"End"});
+    ASSERT_TRUE(altEnd.stroke.alt);
+
+    // Plain Home with NumLock on (modifier 129 = NumLock only) stays unmodified.
+    auto plainHome = ssg::app::decode_input("\x1b[1;129H", true, consumed);
+    ASSERT_EQ(std::string{ssg::keyCodeName(plainHome.stroke.code)}, std::string{"Home"});
+    ASSERT_FALSE(plainHome.stroke.alt);
+    ASSERT_FALSE(plainHome.stroke.control);
+    ASSERT_FALSE(plainHome.stroke.shift);
+
+    // CapsLock (bit 6 = 64, modifier 65) is likewise stripped; Ctrl+Shift+End
+    // with CapsLock (modifier 1 + 64 + 1 + 4 = 70) keeps only Ctrl+Shift.
+    auto capsCtrlShiftEnd = ssg::app::decode_input("\x1b[1;70F", true, consumed);
+    ASSERT_EQ(std::string{ssg::keyCodeName(capsCtrlShiftEnd.stroke.code)}, std::string{"End"});
+    ASSERT_TRUE(capsCtrlShiftEnd.stroke.control);
+    ASSERT_TRUE(capsCtrlShiftEnd.stroke.shift);
+    ASSERT_FALSE(capsCtrlShiftEnd.stroke.alt);
+
+    // The tilde form carries lock bits too (Alt+End as ESC[4;131~).
+    auto altEndTilde = ssg::app::decode_input("\x1b[4;131~", true, consumed);
+    ASSERT_EQ(std::string{ssg::keyCodeName(altEndTilde.stroke.code)}, std::string{"End"});
+    ASSERT_TRUE(altEndTilde.stroke.alt);
+
+    // A genuine unsupported modifier (Super, bit 3 = 8, modifier 9) still falls
+    // back to the plain key -- stripping locks must not weaken that guard.
+    auto superArrow = ssg::app::decode_input("\x1b[1;9A", true, consumed);
+    ASSERT_EQ(std::string{ssg::keyCodeName(superArrow.stroke.code)}, std::string{"ArrowUp"});
+    ASSERT_FALSE(superArrow.stroke.alt);
+    ASSERT_FALSE(superArrow.stroke.control);
+    ASSERT_FALSE(superArrow.stroke.shift);
+}
+
 // Encode a KeyStroke as the Kitty `CSI unicode-key ; mods u` bytes, for the
 // parity oracle below. Returns nullopt for keys Kitty does not send as a `u`
 // event under the disambiguate flag (arrows/Home/End/Page/Delete/function keys
@@ -2523,6 +2569,7 @@ int main() {
     RUN(decodeInputModifiedArrows);
     RUN(decodeInputMetaPrefixedCsiFoldsAlt);
     RUN(decodeInputTildeHomeEndPlainAndModified);
+    RUN(decodeInputStripsLockModifiersFromFunctionalKeys);
     RUN(decodeKittyKeyMatchesEveryDefaultBinding);
     RUN(decodeKittyKeyHandCasesAndCapsLockImmunity);
     RUN(decodeKittyKeySelfIdentifyingAndMalformed);

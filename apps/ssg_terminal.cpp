@@ -497,7 +497,15 @@ enum class ModifierMode { Legacy, Kitty };
 void applyModifierBitmask(ssg::KeyStroke& stroke, std::int64_t modifier,
                           ModifierMode mode) {
     if (modifier <= 1) return;
-    auto const bitmask = modifier - 1;
+    // CapsLock (bit6) and NumLock (bit7) are lock STATES, not chord modifiers,
+    // and a terminal speaking the Kitty protocol reports them in the modifier
+    // field of even the legacy letter/tilde functional-key forms (Home/End/etc.).
+    // Strip them first so they neither enter the stroke nor trip the Legacy
+    // "unknown modifier" guard below -- otherwise Alt+Home with NumLock on
+    // (bitmask 130 = NumLock|Alt) would be discarded as unsupported and lose its
+    // Alt, and the binding would never resolve.
+    constexpr std::int64_t kLockBits = 0b11000000;  // CapsLock | NumLock
+    auto const bitmask = (modifier - 1) & ~kLockBits;
     if (mode == ModifierMode::Legacy && (bitmask & ~std::int64_t{0b111}) != 0) {
         return;  // Unknown modifier -> plain key, as before.
     }
