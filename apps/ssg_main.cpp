@@ -660,15 +660,50 @@ int main(int argc, char** argv) {
         argc > firstOperand ? fs::path{argv[firstOperand]} : fs::path{};
     auto target = ssg::app::resolve_launch(argument);
 
-    auto base = fs::temp_directory_path() / ("ssg-" + std::to_string(::getpid()));
+    // A STABLE per-user state root so drafts and their archive survive a restart
+    // (single-file draft recovery, M15) -- unlike the old per-PID temp dir, which
+    // vanished with the process. XDG_STATE_HOME (via userStateRoot) is the
+    // standard override; SSG_STATE_DIR is a direct absolute-path override for
+    // tests and packaging.
+    fs::path stateBase;
+    if (const char* stateOverride = std::getenv("SSG_STATE_DIR");
+        stateOverride != nullptr && *stateOverride != '\0' &&
+        fs::path{stateOverride}.is_absolute()) {
+        stateBase = stateOverride;
+    } else {
+        stateBase = ssg::userStateRoot("ssg");
+    }
     std::error_code code;
-    fs::create_directories(base / "scratch", code);
-    fs::create_directories(base / "recovery", code);
+    fs::create_directories(stateBase / "scratch", code);
+    fs::create_directories(stateBase / "archive", code);
+    // The state subtree holds unsaved and deleted user content, so keep it
+    // private regardless of the ambient umask; the ScratchStore hardens its own
+    // journal files, but the enclosing directories are ours to protect.
+    for (const auto& dir : {stateBase, stateBase / "scratch", stateBase / "archive"}) {
+        std::error_code permissionError;
+        if (fs::is_directory(dir, permissionError)) {
+            try {
+                ssg::setOwnerOnlyPermissions(dir);
+            } catch (const std::exception&) {
+                // Best-effort: a filesystem that cannot express owner-only
+                // permissions must not stop the editor from launching.
+            }
+        }
+    }
+
+    // Recovery records are in-session undo of destructive filesystem ops; they
+    // have no cross-restart requirement and MUST stay per-process, so a stable
+    // shared recovery root (with no inter-process budget/eviction coordination)
+    // cannot let concurrent instances race each other's records.
+    auto recoveryBase =
+        fs::temp_directory_path() / ("ssg-" + std::to_string(::getpid()));
+    fs::create_directories(recoveryBase / "recovery", code);
 
     ssg::EditorRuntimeConfig config;
     config.cwd = target.cwd;
-    config.scratchRoot = base / "scratch";
-    config.recoveryRoot = base / "recovery";
+    config.scratchRoot = stateBase / "scratch";
+    config.recoveryRoot = recoveryBase / "recovery";
+    config.archiveRoot = stateBase / "archive";
     // M10 fast startup: defer the workspace tree scan and syntax highlighting off
     // the first-frame path; prime_deferred() runs them once the first frame is
     // drawn.

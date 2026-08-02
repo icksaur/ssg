@@ -268,6 +268,43 @@ std::filesystem::path user_config_root(std::string_view application_name) {
     throw std::runtime_error("APPDATA changed repeatedly during lookup");
 }
 
+// The user's own per-application STATE root. Unlike user_config_root above
+// (ROAMING, synced), state is app-owned data that survives a restart but is
+// neither hand-edited nor roamed -- draft recovery scratch, session remnants.
+// Windows has no XDG state analogue, so this resolves to the LOCAL, disposable
+// LOCALAPPDATA root like user_cache_root, but under a distinct application
+// subtree so it is never mistaken for the cache.
+std::filesystem::path user_state_root(std::string_view application_name) {
+    const auto validation = validate_workspace_relative_path(
+        application_name, PathSyntax::windows);
+    if (!validation.valid() ||
+        application_name.find_first_of("/\\") != std::string_view::npos) {
+        throw std::invalid_argument("state application name must be one valid component");
+    }
+
+    for (int attempt = 0; attempt < 3; ++attempt) {
+        const DWORD required =
+            GetEnvironmentVariableW(L"LOCALAPPDATA", nullptr, 0);
+        if (required == 0) {
+            throw_last_error("resolve LOCALAPPDATA", {});
+        }
+        std::wstring root(required, L'\0');
+        const DWORD copied =
+            GetEnvironmentVariableW(L"LOCALAPPDATA", root.data(), required);
+        if (copied == 0) {
+            throw_last_error("resolve LOCALAPPDATA", {});
+        }
+        if (copied < required) {
+            root.resize(copied);
+            return std::filesystem::path{root} /
+                   std::filesystem::path{std::u8string(
+                       reinterpret_cast<const char8_t*>(application_name.data()),
+                       application_name.size())};
+        }
+    }
+    throw std::runtime_error("LOCALAPPDATA changed repeatedly during lookup");
+}
+
 void replace_file_atomically(const std::filesystem::path& target,
                              std::span<const std::byte> contents) {
     TemporaryFile temporary(target);
