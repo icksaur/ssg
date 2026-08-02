@@ -1,8 +1,11 @@
 #include "editor_runtime_internal.h"
 
 #include <ssg/CommandCatalog.h>
+#include <ssg/Selection.h>
 
 #include <algorithm>
+#include <cctype>
+#include <charconv>
 
 namespace ssg {
 namespace {
@@ -102,10 +105,65 @@ CommandHandlerResult searchCommand(EditorRuntime::Impl& runtime, CommandContext&
         (void)runtime.navigation.back();
     } else if (id == "goto.forward") {
         (void)runtime.navigation.forward();
-    } else if (id == "goto.file" || id == "goto.line" || id == "goto.symbol") {
+    } else if (id == "goto.file" || id == "goto.symbol") {
         auto const* target = payloadAs<NavigationTarget>(payload);
         if (target != nullptr) (void)runtime.navigation.visit(*target, NavigationOrigin::User);
         else return failure(std::string{id} + " requires a navigation target payload");
+    } else if (id == "goto.line") {
+        // No payload means the command was invoked directly (keybinding or
+        // palette): open a one-field prompt that re-dispatches goto.line with the
+        // typed line number via the generic prompt.submit path.
+        auto const* lineText = payloadAs<std::string>(payload);
+        if (lineText == nullptr) {
+            auto opened = runtime.prompt.open(PromptRequest{
+                PromptKind::CommandArgument, "Go to line",
+                {{"line", "Line number", ""}}, {}, std::nullopt, "goto.line"});
+            if (!opened.accepted()) return failure(opened.error->message);
+            runtime.reconcilePromptFocus();
+            return success();
+        }
+        if (!runtime.activeDocumentId()) return failure("goto.line requires an active document");
+        // Trim surrounding whitespace, then require the whole value to be a
+        // positive base-10 integer.
+        std::string_view digits{*lineText};
+        while (!digits.empty() && std::isspace(static_cast<unsigned char>(digits.front())))
+            digits.remove_prefix(1);
+        while (!digits.empty() && std::isspace(static_cast<unsigned char>(digits.back())))
+            digits.remove_suffix(1);
+        long long requested = 0;
+        auto const* first = digits.data();
+        auto const* last = first + digits.size();
+        auto const [stop, ec] = std::from_chars(first, last, requested);
+        if (ec != std::errc{} || stop != last || requested < 1)
+            return failure("goto.line expects a positive line number");
+        // One source of truth for line boundaries: the active text. The line
+        // count is newlines + 1, and the target line's start is taken from the
+        // same scan, so the two can never disagree.
+        std::string const text = runtime.activeText();
+        std::size_t lineCount = 1;
+        for (char c : text) if (c == '\n') ++lineCount;
+        std::size_t target = static_cast<unsigned long long>(requested - 1) >= lineCount
+                                 ? lineCount - 1
+                                 : static_cast<std::size_t>(requested - 1);
+        std::size_t start = 0;
+        if (target > 0) {
+            std::size_t seen = 0;
+            for (std::size_t i = 0; i < text.size(); ++i) {
+                if (text[i] == '\n' && ++seen == target) { start = i + 1; break; }
+            }
+        }
+        auto position = SelectionNavigator::resolvePosition(text, ByteOffset{start}, 4);
+        if (!position) return failure("goto.line could not resolve the target position");
+        SelectionCommandArguments arguments;
+        arguments.position = *position;
+        // Placing and revealing the caret is owned by cursor.set_position; route
+        // through it (deferred, since the session lock is non-reentrant) rather
+        // than duplicating the reveal/focus/history contract here.
+        if (!runtime.defer(std::nullopt,
+                           ClientCommand{"cursor.set_position", revision,
+                                         std::any{arguments}})) {
+            return failure("could not queue cursor.set_position");
+        }
     } else {
         return failure("unknown search command");
     }
@@ -450,8 +508,22 @@ void registerSearchPaletteCommands(EditorSessionBuilder& builder,
                             }));
     };
     jump("goto.file", "Go to File", "Go to File");
-    jump("goto.line", "Go to Line", "Go to Line");
     jump("goto.symbol", "Go to Symbol", "Go to Symbol");
+
+    // goto.line is not a client-resolved jump: with no argument it opens a
+    // line-number prompt, and the prompt round-trip re-dispatches it with the
+    // typed string. An absent payload therefore opens the prompt.
+    builder.add(spec("goto.line", "Go to Line")
+                    .label("Go to Line")
+                    .optionalInProcessHandler<std::string>(
+                        [&runtime](CommandContext& context,
+                                   std::optional<std::string> const& line) {
+                            return runtime.runTransaction([&] {
+                                return searchCommand(
+                                    runtime, context, "goto.line",
+                                    line ? std::any{*line} : std::any{});
+                            });
+                        }));
 }
 
 void bindRuntimeNavigation(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime) {

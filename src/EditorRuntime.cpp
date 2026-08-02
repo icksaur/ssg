@@ -169,6 +169,13 @@ KeymapViewState defaultTerminalKeymap() {
     bind(seq({"Shift+End"}), "select.line_end", "editor");
     bind(seq({"Ctrl+Home"}), "cursor.document_start", "editor");
     bind(seq({"Ctrl+End"}), "cursor.document_end", "editor");
+    // Alt+Home/End also jump to the document extremes: the physical Home/End keys
+    // are natural for "top/bottom of file", and Alt is the modifier the rest of
+    // the editor uses.
+    bind(seq({"Alt+Home"}), "cursor.document_start", "editor");
+    bind(seq({"Alt+End"}), "cursor.document_end", "editor");
+    // Alt+Shift+G opens a prompt for a line number and jumps there (clamped).
+    bind(seq({"Alt+Shift+KeyG"}), "goto.line", "editor");
     bind(seq({"Ctrl+Shift+Home"}), "select.document_start", "editor");
     bind(seq({"Ctrl+Shift+End"}), "select.document_end", "editor");
     bind(seq({"PageUp"}), "cursor.page_up", "editor");

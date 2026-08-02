@@ -451,6 +451,15 @@ TEST(curatedKeymapResolvesPerContext) {
     ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(save, "editor").commandId,
               std::string{"file.save"});
 
+    // Alt+Home/End are additional editor-context bindings for the document
+    // extremes, alongside the existing Ctrl+Home/End.
+    const auto altHome = *ssg::KeyCodec{}.parseSequence({"Alt+Home"});
+    ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(altHome, "editor").commandId,
+              std::string{"cursor.document_start"});
+    const auto altEnd = *ssg::KeyCodec{}.parseSequence({"Alt+End"});
+    ASSERT_EQ(ssg::KeymapMatcher{keymap}.resolveSequence(altEnd, "editor").commandId,
+              std::string{"cursor.document_end"});
+
     // The settings.open escape hatch resolves in every context.
     const auto settings = *ssg::KeyCodec{}.parseSequence({"Alt+Shift+KeyT"});
     for (const auto context : {"editor", "panel", "prompt"}) {

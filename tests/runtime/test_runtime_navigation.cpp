@@ -2,6 +2,7 @@
 
 #include <ssg/EditorRuntime.h>
 #include <ssg/GraphemeLayout.h>
+#include <ssg/PromptSurface.h>
 #include <ssg/TextInputCommands.h>
 
 #include <algorithm>
@@ -1713,6 +1714,100 @@ TEST(wordWrapOffNavigationIsViewportBounded) {
     std::filesystem::remove_all(root);
 }
 
+std::unique_ptr<ssg::EditorRuntime> gotoLineRuntime() {
+    auto root = uniqueRoot();
+    std::ofstream{root / "workspace" / "lines.txt"}
+        << "one\ntwo\nthree\nfour\nfive";
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    if (!created.accepted()) return nullptr;
+    auto runtime = std::move(created.runtime);
+    (void)runtime->attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                          ssg::ViewId{1});
+    (void)runtime->dispatch(
+        ssg::ClientId{1},
+        {"file.open", runtime->revision(), std::string{"lines.txt"}});
+    return runtime;
+}
+
+std::uint32_t gotoCaretLine(ssg::EditorRuntime& runtime) {
+    auto snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    if (!snapshot) return 0;
+    return snapshot->sections().selection.selections.primary().active.line.value();
+}
+
+TEST(gotoLineJumpsToTheClampedOneBasedLine) {
+    auto runtime = gotoLineRuntime();
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    // "3" is 1-based, so the caret lands on line index 2.
+    ASSERT_TRUE(runtime
+                    ->dispatch(ssg::ClientId{1},
+                               {"goto.line", runtime->revision(), std::string{"3"}})
+                    .accepted());
+    ASSERT_EQ(gotoCaretLine(*runtime), 2U);
+    // A number past the end clamps to the last line (index 4), not a failure.
+    ASSERT_TRUE(runtime
+                    ->dispatch(ssg::ClientId{1},
+                               {"goto.line", runtime->revision(), std::string{"999"}})
+                    .accepted());
+    ASSERT_EQ(gotoCaretLine(*runtime), 4U);
+    // "1" is the first line.
+    ASSERT_TRUE(runtime
+                    ->dispatch(ssg::ClientId{1},
+                               {"goto.line", runtime->revision(), std::string{"1"}})
+                    .accepted());
+    ASSERT_EQ(gotoCaretLine(*runtime), 0U);
+}
+
+TEST(gotoLineRejectsNonNumericAndNonPositiveInput) {
+    auto runtime = gotoLineRuntime();
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    ASSERT_TRUE(runtime
+                    ->dispatch(ssg::ClientId{1},
+                               {"goto.line", runtime->revision(), std::string{"3"}})
+                    .accepted());
+    ASSERT_EQ(gotoCaretLine(*runtime), 2U);
+    for (const auto* bad : {"abc", "0", "-2", "2x"}) {
+        ASSERT_FALSE(runtime
+                         ->dispatch(ssg::ClientId{1},
+                                    {"goto.line", runtime->revision(),
+                                     std::string{bad}})
+                         .accepted());
+    }
+    // The rejected inputs never moved the caret.
+    ASSERT_EQ(gotoCaretLine(*runtime), 2U);
+}
+
+TEST(gotoLineWithoutPayloadOpensACommandArgumentPromptThatJumpsOnSubmit) {
+    auto runtime = gotoLineRuntime();
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    ASSERT_TRUE(runtime
+                    ->dispatch(ssg::ClientId{1},
+                               {"goto.line", runtime->revision(), {}})
+                    .accepted());
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    const auto& prompt = snapshot->sections().promptStatus.prompt;
+    ASSERT_TRUE(prompt.has_value());
+    if (!prompt) return;
+    ASSERT_TRUE(prompt->kind == ssg::PromptKind::CommandArgument);
+    // The generic prompt round-trip re-dispatches goto.line with the typed value.
+    ASSERT_TRUE(runtime
+                    ->dispatch(ssg::ClientId{1},
+                               {"prompt.update_value", runtime->revision(),
+                                ssg::PromptValueArguments{0, "4"}})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    ->dispatch(ssg::ClientId{1},
+                               {"prompt.submit", runtime->revision(), {}})
+                    .accepted());
+    ASSERT_EQ(gotoCaretLine(*runtime), 3U);
+}
+
 } // namespace
 
 int main() {
@@ -1742,6 +1837,9 @@ int main() {
     RUN(wordWrapOffRevealsCaretHorizontally);
     RUN(wordWrapOnWrapsLongLinesOffClipsThem);
     RUN(wordWrapOffNavigationIsViewportBounded);
+    RUN(gotoLineJumpsToTheClampedOneBasedLine);
+    RUN(gotoLineRejectsNonNumericAndNonPositiveInput);
+    RUN(gotoLineWithoutPayloadOpensACommandArgumentPromptThatJumpsOnSubmit);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }
