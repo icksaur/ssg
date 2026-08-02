@@ -835,8 +835,11 @@ int main(int argc, char** argv) {
     // Path prompt: same no-copy discipline. The library owns the value and
     // publishes it in the prompt view; the client reads it, edits it, and
     // reports the full next string via prompt.update_value.
-    bool pathPromptOpen = false;
-    std::string pathPromptValue;
+    // A single-line text-entry prompt (Path or CommandArgument): both keep their
+    // authoritative value in the library, publish it in the prompt view, and
+    // collect edits through prompt.update_value on input index 0.
+    bool textPromptOpen = false;
+    std::string textPromptValue;
     // The clipboard's text as the library publishes it, so pasting into a prompt
     // reads authoritative state rather than a client-side copy of the register.
     std::string clipboardText;
@@ -1003,7 +1006,7 @@ int main(int argc, char** argv) {
             if (pickerOpen) { picker.query += text; picker.selected = 0; revealPaletteSelection(); }
             else if (replaceOpen) { dispatch("replace.update_replacement", ssg::FindQueryArguments{replaceReplacement + text}); }
             else if (findOpen) { dispatch("find.update_query", ssg::FindQueryArguments{findQuery + text}); }
-            else if (pathPromptOpen) { dispatch("prompt.update_value", ssg::PromptValueArguments{0, pathPromptValue + text}); }
+            else if (textPromptOpen) { dispatch("prompt.update_value", ssg::PromptValueArguments{0, textPromptValue + text}); }
             break;
         case ssg::TextRouting::Ignore:
             break;
@@ -1088,15 +1091,22 @@ int main(int argc, char** argv) {
                 activePrompt && activePrompt->kind == ssg::PromptKind::Replace;
             replaceOpen = findView.open && replacePromptActive;
             replaceReplacement = findView.replacement;
-            // The path prompt keeps its authoritative value in the library, and
-            // publishes it in the prompt view. Mirroring it here (rather than
-            // holding a client-side copy) means the two cannot drift when the
-            // library rewrites the value -- a rejected save-as, say.
-            pathPromptOpen =
-                activePrompt && activePrompt->kind == ssg::PromptKind::Path;
-            pathPromptValue.clear();
-            if (pathPromptOpen && !activePrompt->controls.empty()) {
-                pathPromptValue = activePrompt->controls.front().value;
+            // A single-line text-entry prompt (save-as/open path, a
+            // CommandArgument prompt such as go-to-line, or the settings query)
+            // keeps its authoritative value in the library, which publishes it in
+            // the prompt view. These all collect edits through prompt.update_value
+            // on input index 0 rather than a dedicated controller (unlike
+            // find/replace/palette). Mirroring the value here (rather than a
+            // client-side copy) means the two cannot drift when the library
+            // rewrites it -- a rejected save-as, say.
+            textPromptOpen =
+                activePrompt &&
+                (activePrompt->kind == ssg::PromptKind::Path ||
+                 activePrompt->kind == ssg::PromptKind::CommandArgument ||
+                 activePrompt->kind == ssg::PromptKind::Settings);
+            textPromptValue.clear();
+            if (textPromptOpen && !activePrompt->controls.empty()) {
+                textPromptValue = activePrompt->controls.front().value;
             }
         }
         return snapshot;
@@ -1486,9 +1496,9 @@ int main(int argc, char** argv) {
                     auto next = replaceReplacement;
                     popCodePoint(next);
                     dispatch("replace.update_replacement", ssg::FindQueryArguments{next});
-                } else if (pathPromptOpen && focus == ssg::FocusTarget::Prompt &&
+                } else if (textPromptOpen && focus == ssg::FocusTarget::Prompt &&
                            stroke.code == ssg::KeyCode::Backspace) {
-                    auto next = pathPromptValue;
+                    auto next = textPromptValue;
                     popCodePoint(next);
                     dispatch("prompt.update_value", ssg::PromptValueArguments{0, next});
                 } else if (!decoded.text.empty()) {
