@@ -186,6 +186,16 @@ public:
     [[nodiscard]] int gitDiffWakeDescriptor() const;
     [[nodiscard]] std::string activeDocumentText() const;
 
+    // The reopen outcome of the active document's recovered draft (single-file
+    // draft recovery, M15). `None` when the document has no recovered draft (the
+    // common case — the feature is invisible without unsaved edits). `Restored`
+    // when a draft was reloaded as a dirty buffer and the disk file is unchanged
+    // since the edits branched (a subtle badge, no conflict). `Conflict` when the
+    // draft was reloaded but the disk file changed externally, so the non-modal
+    // conflict notice applies. Read by the notice/discard phases and by tests.
+    enum class DraftReopenNotice { None, Restored, Conflict };
+    [[nodiscard]] DraftReopenNotice activeDraftReopenNotice() const;
+
     struct Impl;
 
 private:

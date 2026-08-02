@@ -594,6 +594,44 @@ std::optional<DraftBaseline> Workspace::baselineFor(
     return entry ? entry->baseline : std::nullopt;
 }
 
+std::optional<std::string> Workspace::rawDiskContent(
+    FileDocumentId documentId) const {
+    const auto* entry = impl_->find(documentId);
+    if (!entry) return std::nullopt;
+    return std::string{entry->rawBytes.begin(), entry->rawBytes.end()};
+}
+
+bool Workspace::restoreDraft(FileDocumentId documentId,
+                             std::string_view draftContent) {
+    auto* entry = impl_->find(documentId);
+    if (!entry || entry->key.kind() != JournalDocumentKeyKind::Saved) {
+        return false;
+    }
+    if (entry->contentKind != FileContentKind::Text) return false;
+    // Keep persistedText / persistedStatus / baseline (the disk state) so
+    // state() derives dirty from draft-vs-disk; only the live buffer changes.
+    std::string text{draftContent};
+    entry->document = Document{text, entry->document.mode()};
+    // Rebuild decoded to match the draft buffer while preserving the disk file's
+    // encoding/line-ending convention. `decoded.utf8` MUST equal the buffer text:
+    // later edits run applyTerminatorEdits over `decoded`, indexing it by buffer
+    // offset, so a stale disk `decoded` would corrupt terminators or erase out of
+    // range. Per-line terminators are re-derived as the disk default (the draft
+    // record carries only content, not terminators) so a save reproduces the
+    // file's format.
+    const auto terminator = defaultTerminator(entry->decoded.status);
+    entry->decoded.utf8 = text;
+    entry->decoded.lineTerminators.clear();
+    for (const char value : text) {
+        if (value == '\n') entry->decoded.lineTerminators.push_back(terminator);
+    }
+    if (!text.empty() && text.back() != '\n') {
+        entry->decoded.lineTerminators.push_back(LineTerminator::None);
+    }
+    entry->decoded.status.finalNewline = !text.empty() && text.back() == '\n';
+    return true;
+}
+
 const Document& Workspace::document(FileDocumentId id) const {
     const auto* entry = impl_->find(id);
     if (!entry) {

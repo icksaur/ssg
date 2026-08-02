@@ -1,6 +1,7 @@
 #include "runtime/editor_runtime_internal.h"
 
 #include <ssg/CommandCatalog.h>
+#include <ssg/DraftReopen.h>
 #include <ssg/FilesystemWatcher.h>
 #include <ssg/GraphemeLayout.h>
 
@@ -1617,6 +1618,49 @@ std::size_t EditorRuntime::Impl::persistAutosaveDraft(FileDocumentId document) {
     return 1;
 }
 
+void EditorRuntime::Impl::reconcileDraftOnOpen(FileDocumentId document) {
+    auto state = workspace.state(document);
+    if (!state || state->key.kind() != JournalDocumentKeyKind::Saved) return;
+
+    const auto drafts = scratch.recovery().documents;
+    const auto draft = std::find_if(
+        drafts.begin(), drafts.end(), [&](const JournalDocument& candidate) {
+            return candidate.dirty && candidate.key == state->key;
+        });
+    if (draft == drafts.end()) return;
+
+    auto const* opened = workspace.tryDocument(document);
+    auto rawDisk = workspace.rawDiskContent(document);
+    if (opened == nullptr || !rawDisk) return;
+    const DraftDiskState disk{std::move(*rawDisk), opened->snapshot().text};
+
+    auto& runtimeState = documentRuntimeStates.at(document.value());
+    switch (DraftReopenClassifier{}.classify(draft->baseline,
+                                             draft->utf8Content, disk)) {
+        case DraftReopenClass::Converged:
+            // The edits equal disk (or were undone): nothing to recover. Drop the
+            // draft and keep the clean disk buffer already open.
+            scratch.removeDocument(draft->key);
+            runtimeState.reopen = DraftReopenOutcome::None;
+            return;
+        case DraftReopenClass::Unchanged:
+            if (workspace.restoreDraft(document, draft->utf8Content)) {
+                runtimeState.reopen = DraftReopenOutcome::Restored;
+            }
+            return;
+        case DraftReopenClass::Conflict:
+            if (workspace.restoreDraft(document, draft->utf8Content)) {
+                runtimeState.reopen = DraftReopenOutcome::Conflict;
+            }
+            return;
+        case DraftReopenClass::Missing:
+            // Unreachable via file.open (the file was just read from disk), so a
+            // missing disk file here means the classifier's contract changed;
+            // leave the clean buffer rather than guess.
+            return;
+    }
+}
+
 std::size_t EditorRuntime::Impl::flushDueAutosaveDrafts() {
     autosave.setInterval(std::chrono::milliseconds{
         uint32Setting(settings, SettingKey::AutosaveDebounceMs, 10000)});
@@ -2071,5 +2115,18 @@ int EditorRuntime::gitDiffWakeDescriptor() const {
 }
 
 std::string EditorRuntime::activeDocumentText() const { return impl_->activeText(); }
+
+EditorRuntime::DraftReopenNotice EditorRuntime::activeDraftReopenNotice() const {
+    const auto id = impl_->activeDocumentId();
+    if (!id) return DraftReopenNotice::None;
+    const auto found = impl_->documentRuntimeStates.find(id->value());
+    if (found == impl_->documentRuntimeStates.end()) return DraftReopenNotice::None;
+    switch (found->second.reopen) {
+        case DraftReopenOutcome::None: return DraftReopenNotice::None;
+        case DraftReopenOutcome::Restored: return DraftReopenNotice::Restored;
+        case DraftReopenOutcome::Conflict: return DraftReopenNotice::Conflict;
+    }
+    return DraftReopenNotice::None;
+}
 
 } // namespace ssg

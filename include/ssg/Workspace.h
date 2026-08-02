@@ -134,6 +134,19 @@ public:
     // unknown id. Used by draft recovery to detect an external change on reopen.
     [[nodiscard]] std::optional<DraftBaseline> baselineFor(
         FileDocumentId document) const;
+    // The literal bytes read from disk when the document was opened or last
+    // reloaded — the same bytes the baseline hash was computed over. Used by
+    // draft recovery to classify a recovered draft against the current disk
+    // file. nullopt for an unknown id.
+    [[nodiscard]] std::optional<std::string> rawDiskContent(
+        FileDocumentId document) const;
+    // Replaces a freshly-opened saved document's buffer with a recovered draft's
+    // content, leaving the persisted (disk) baseline untouched so the document
+    // reports dirty exactly when the draft differs from disk — dirtiness is
+    // derived, never set. Returns false for an untitled, non-text, or unknown
+    // document. Intended for the single-file draft reopen path only.
+    [[nodiscard]] bool restoreDraft(FileDocumentId document,
+                                    std::string_view draftContent);
     [[nodiscard]] const Document* tryDocument(FileDocumentId document) const noexcept;
     [[nodiscard]] const Document& document(FileDocumentId document) const;
     [[nodiscard]] TransactionResult apply(

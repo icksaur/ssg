@@ -63,6 +63,11 @@ inline std::uint32_t uint32Setting(SettingsModel const& settings, SettingKey key
 
 struct GitDiffRefreshWorkerState;
 
+// The reopen outcome of a document's recovered draft (single-file draft
+// recovery, M15). Mirrors EditorRuntime::DraftReopenNotice; lives per-document
+// so the notice (p5) and discard (p6) phases can read it by document id.
+enum class DraftReopenOutcome { None, Restored, Conflict };
+
 struct DocumentRuntimeState {
     explicit DocumentRuntimeState(
         HistoryConfig historyConfig = HistoryConfig::defaults(),
@@ -72,7 +77,9 @@ struct DocumentRuntimeState {
     }
 
     DocumentRuntimeState(DocumentRuntimeState&& other) noexcept
-        : history{std::move(other.history)}, syntax{std::move(other.syntax)} {
+        : history{std::move(other.history)},
+          syntax{std::move(other.syntax)},
+          reopen{other.reopen} {
         ++liveCount;
     }
 
@@ -88,6 +95,7 @@ struct DocumentRuntimeState {
 
     DocumentHistory history;
     SyntaxModel syntax;
+    DraftReopenOutcome reopen = DraftReopenOutcome::None;
 
 private:
     inline static std::atomic<std::uint64_t> liveCount{0};
@@ -427,6 +435,13 @@ struct EditorRuntime::Impl final : CommandServices,
     std::size_t flushDueAutosaveDrafts();
     std::size_t flushAllAutosaveDrafts();
     std::size_t persistAutosaveDraft(FileDocumentId document);
+    // On the first open of a saved document from disk, reconcile any dirty draft
+    // recovered for its path against the current disk file (single-file draft
+    // recovery, M15). Converged drafts are dropped and the clean disk buffer
+    // kept; otherwise the draft is loaded as a dirty buffer and the document's
+    // reopen outcome recorded (Restored when disk is unchanged, Conflict when it
+    // changed externally). A no-op when there is no dirty draft for the path.
+    void reconcileDraftOnOpen(FileDocumentId document);
     bool deferringEnrichment = false;
     bool pendingTreeRefresh = false;
     bool pendingSyntaxRefresh = false;
