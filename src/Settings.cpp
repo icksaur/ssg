@@ -46,6 +46,7 @@ constexpr std::array kAllKeys{
     SettingKey::RecoveryByteBudget,
     SettingKey::TypingCoalescingMs,
     SettingKey::FileFinderRespectGitignore,
+    SettingKey::AutosaveDebounceMs,
 };
 
 constexpr std::array<std::string_view, kSettingKeyCount> kEyNames{
@@ -66,6 +67,7 @@ constexpr std::array<std::string_view, kSettingKeyCount> kEyNames{
     "recovery_byte_budget",
     "typing_coalescing_ms",
     "file_finder_respect_gitignore",
+    "autosave_debounce_ms",
 };
 
 SettingValue defaultValue(SettingKey key) {
@@ -87,6 +89,7 @@ SettingValue defaultValue(SettingKey key) {
     case SettingKey::RecoveryByteBudget: return std::uint64_t{256u * 1024u * 1024u};
     case SettingKey::TypingCoalescingMs: return std::uint32_t{750};
     case SettingKey::FileFinderRespectGitignore: return true;
+    case SettingKey::AutosaveDebounceMs: return std::uint32_t{10000};
     }
     throw std::logic_error("unknown setting key");
 }
@@ -148,6 +151,13 @@ std::optional<SettingError> validate(SettingKey key, const SettingValue& value) 
         return std::nullopt;
     case SettingKey::TypingCoalescingMs:
         if (!std::holds_alternative<std::uint32_t>(value)) return wrongType();
+        return std::nullopt;
+    case SettingKey::AutosaveDebounceMs:
+        if (!std::holds_alternative<std::uint32_t>(value)) return wrongType();
+        if (std::get<std::uint32_t>(value) < 1) {
+            return SettingError{SettingErrorCode::OutOfRange, key,
+                                "autosave debounce must be at least 1 ms"};
+        }
         return std::nullopt;
     case SettingKey::IndentDetection:
     case SettingKey::AutoIndent:

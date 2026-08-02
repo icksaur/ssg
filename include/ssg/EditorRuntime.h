@@ -161,6 +161,15 @@ public:
     // channel.  Idempotent and a no-op when nothing was deferred; the client
     // calls it once after drawing its first frame.
     void primeDeferred();
+    // Autosave open dirty documents' drafts (single-file draft recovery, M15).
+    // `flushDueAutosaveDrafts` applies the debounce policy (eager first flush,
+    // then at most once per AutosaveDebounceMs) and is called on the app's
+    // periodic tick; `flushAllAutosaveDrafts` forces every dirty draft for a
+    // clean process exit. Both return the number of drafts written and are
+    // non-blocking (durability is the background fsync thread's job). Call on the
+    // app thread only, like the other runtime seams here.
+    std::size_t flushDueAutosaveDrafts();
+    std::size_t flushAllAutosaveDrafts();
     // M10 startup instrumentation: how many times the O(document) syntax
     // highlight pass and the O(workspace) tree scan have actually run.  Exposed
     // so the startup oracle can assert deferred enrichment does not run before
