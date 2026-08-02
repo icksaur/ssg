@@ -129,6 +129,11 @@ public:
     [[nodiscard]] std::vector<FileDocumentId> documents() const;
     [[nodiscard]] std::optional<WorkspaceDocumentState> state(
         FileDocumentId document) const;
+    // The disk baseline captured when the document was opened or last saved (the
+    // state its edits branch from), or nullopt for an untitled buffer or an
+    // unknown id. Used by draft recovery to detect an external change on reopen.
+    [[nodiscard]] std::optional<DraftBaseline> baselineFor(
+        FileDocumentId document) const;
     [[nodiscard]] const Document* tryDocument(FileDocumentId document) const noexcept;
     [[nodiscard]] const Document& document(FileDocumentId document) const;
     [[nodiscard]] TransactionResult apply(

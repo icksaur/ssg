@@ -36,17 +36,17 @@ therefore: **clean quit/close = no loss; kill/crash = at most one flush-interval
 of the newest edits.** Acceptance tests that assert kill-9 recovery must first
 wait for a heartbeat flush.
 
-**Recovery scope.** A draft is keyed by the file's canonical absolute path, so it
-is recovered by *any* path that opens *that same file* — including from a
-different working directory, as long as the file is openable under SSG's
-`Workspace` contract. SSG's `Workspace` today rejects paths outside the launched
-workspace root (`src/Workspace.cpp:328`), so a file can only be opened (and thus
-have a draft, and be recovered) when it is within the workspace SSG was launched
-in. Recovering a file opened from an *arbitrary* out-of-workspace absolute path is
-**out of scope for this spec** — it requires a separate `Workspace`-contract
-change first. The abspath key still buys real value within that contract: the
-same file reached by different relative paths, via a symlink, or under a
-differently-rooted launch of the same tree maps to one draft.
+**Recovery scope.** A draft is keyed within its workspace by the file's
+workspace-relative path, under a store directory named by `sha256(canonical
+workspace root)` — together an absolute-path identity. So it is recovered by *any*
+path that opens *that same file* under the *same workspace root* (a different
+relative path, or a symlink, resolving to it). Because SSG's `Workspace` rejects
+paths outside the launched workspace root (`src/Workspace.cpp:328`), a file can
+only be opened — and thus have a draft, and be recovered — when it is within the
+workspace SSG was launched in. Recovering the same file opened under a *different*
+workspace root, or from an out-of-workspace absolute path, is **out of scope**
+(see Decision 1). Recovery across restarts requires the stable root (Decision 1),
+not per-PID temp.
 
 This upholds SSG's two standing principles: **no blocking actions** and
 **everything recoverable**.
@@ -243,10 +243,11 @@ existing reload. Both register through the normal command builder pattern
 - **File replaced by a directory / unreadable / permission-denied on read**:
   cannot read disk → keep the draft, notice reports "disk unreadable," `[Use
   disk]` disabled until readable.
-- **Path aliasing** (`./foo.txt` vs `/abs/foo.txt` vs a symlink): the draft key
-  is the canonical absolute path, so one file has one draft regardless of how it
-  was opened (Decision 1). Out-of-workspace absolute paths cannot be opened today
-  (Workspace contract) and are out of scope (see Recovery scope).
+- **Path aliasing** (`./foo.txt` vs a symlink, under the same workspace root):
+  the draft key is `sha256(workspace root)` + the workspace-relative path, so one
+  file has one draft regardless of the relative path or symlink used to open it
+  (Decision 1). Out-of-workspace absolute paths cannot be opened today (Workspace
+  contract) and are out of scope (see Recovery scope).
 - **Line-ending / trailing-newline differences**: `contentHash` is over raw
   bytes, so a CRLF↔LF or final-newline change *is* a real disk change (correct —
   it would be overwritten on save).
@@ -266,14 +267,15 @@ existing reload. Both register through the normal command builder pattern
 
 ## What's missing in the code (the build list)
 
-1. **Central abspath-keyed draft store + baseline identity.** Re-key the draft
-   store from workspace-root/relative-path to a **hash of the file's canonical
-   absolute path** (Decision 1), and extend the draft record with `{mtime, size,
-   contentHash}`. Update `ScratchJournal` encode/replay; the app resolves the
-   central root (XDG). *(include/ssg/ScratchStore.h, include/ssg/ScratchJournal.h,
-   src/ScratchStore.cpp, src/ScratchJournal.cpp, apps/ssg_main.cpp)*
-2. **Record the baseline** at open and at each save. *(src/Workspace.cpp,
-   src/EditorRuntime.cpp, src/runtime/files.cpp)*
+1. **Draft baseline in the record.** *(DONE — commit `36f70c2`.)* The draft
+   record carries an optional `{mtime, size, contentHash}`, the journal format is
+   v2 with version-tolerant replay, and `fastContentHash` (FNV-1a-64) exists. The
+   store keeps its existing per-workspace keying (Decision 1 — no re-key).
+1b. **Capture the baseline** at open, save, and reload (fill the field). Plus a
+   **stable XDG root** in the app (`userStateRoot` → `$XDG_STATE_HOME/ssg`)
+   replacing per-PID temp, sequenced with the reopen classification.
+   *(src/Workspace.cpp, src/EditorRuntime.cpp, src/platform/*_files.cpp,
+   apps/ssg_main.cpp)*
 3. **Debounced flush of OPEN documents** (shared Phase 1): flush a dirty doc at
    most once per configurable interval (default 10s) since its last edit, plus on
    tab close (today) and a best-effort flush of all dirty docs on process exit.
@@ -297,31 +299,34 @@ existing reload. Both register through the normal command builder pattern
 
 ## Decisions (settled — implement to these)
 
-1. **Storage: central store for saved-file drafts, keyed by canonical absolute
-   path; per-workspace journal retained for Untitled + the deferred session
-   manifest.** Saved-file drafts move to a single per-user store (e.g.
-   `$XDG_STATE_HOME/ssg/drafts` or `~/.local/state/ssg/drafts`), each keyed by a
-   hash of the file's **canonical absolute path** (vim's `swap//` model). A file
-   is recovered by any path that opens it, from any CWD (within the Workspace
-   contract — see Recovery scope). This replaces the per-PID temp root the app
-   uses today (`apps/ssg_main.cpp:657`) — that root is why nothing survives a
-   restart now. Root-path resolution is the app's job (XDG, overridable); the
-   library owns everything under it. The archive root lives beside it
-   (`.../ssg/archive`), NOT in any workspace `.ssg/`.
+1. **Storage: keep the existing per-workspace store; make its root stable.**
+   *(Revised after implementation investigation — supersedes the original
+   "central per-file abspath store" sketch.)* The existing `ScratchStore` already
+   keys saved-file drafts by **`sha256(canonical-absolute workspace root)` +
+   workspace-relative path**, which *is* the file's canonical absolute path,
+   decomposed. So "recover a file opened by any relative path / symlink / CWD
+   **within the same workspace**" is already structurally keyed by absolute
+   identity — the reasons draft recovery does not work today are NOT the keying,
+   but (a) the app points the scratch/recovery root at a **per-PID temp dir**
+   (`apps/ssg_main.cpp:657`) so nothing survives a restart, and (b) the baseline
+   is never captured. Therefore:
+   - **Do NOT re-architect the store into a central per-file abspath store.** That
+     would rewrite the crash-safe `ScratchSession` remnant/claim/quota model for a
+     narrow benefit (recovering the *same file* under *different* workspace roots)
+     and collide with the deferred multi-tab spec's per-workspace session model.
+   - **Make the root stable:** the app resolves the scratch/recovery/archive root
+     under `$XDG_STATE_HOME/ssg` (add a `userStateRoot` beside the existing
+     `userConfigRoot`/`userCacheRoot`), overridable, instead of per-PID temp. This
+     is what makes drafts survive a restart. Sequence it with/after the reopen
+     classification (a stable root activates the currently-dormant remnant/claim
+     machinery, which needs classification in place to behave).
+   - **Cross-workspace recovery** (the same file opened under two different
+     workspace roots getting one shared draft) is **out of scope**; revisit only
+     if it proves necessary, as its own designed+reviewed change.
 
-   **Reconciliation with the deferred multi-tab spec** (`spec-autosave-tabs.md`,
-   which assumes workspace-root keying + a per-workspace session manifest): the
-   two are complementary storage roles, not a conflict. Saved-file **draft
-   content** is addressed by file identity (central, abspath-keyed) — the same
-   file has one draft no matter which workspace opened it. The **session manifest
-   and Untitled (UUID) drafts** remain a **per-workspace** journal (a session
-   belongs to a launch/working-directory, and an Untitled buffer has no file
-   identity to key by). So the final layout is: *central abspath-keyed store for
-   saved-file drafts + baselines* and *per-workspace journal for Untitled drafts
-   and the (future) ordered session manifest*. The deferred spec must be updated
-   to consume saved-file draft content from the central store rather than
-   re-persisting it per workspace; this spec owns the central store, that spec
-   owns the manifest.
+   This keeps the deferred multi-tab spec's per-workspace session model intact —
+   no reconciliation split is needed after all; saved-file drafts and the session
+   manifest live in the same per-workspace journal, exactly as that spec assumed.
 2. **Hash: a fast non-cryptographic hash** (xxHash/FNV-class) over raw bytes,
    for change-detection only — no integrity/security claim.
 3. **Diff: two-way, draft vs current disk.**
@@ -382,5 +387,6 @@ existing reload. Both register through the normal command builder pattern
     identical to the same document without the notice (proves the notice is
     reserved chrome, not document row 0).
   - Recovery scope: a file opened via two different in-workspace paths (and via a
-    symlink) resolves to ONE draft (abspath key); an out-of-workspace absolute
-    path is rejected by the Workspace contract (documents the scope boundary).
+    symlink) resolves to ONE draft (same workspace-relative key under the same
+    workspace store); an out-of-workspace absolute path is rejected by the
+    Workspace contract (documents the scope boundary).

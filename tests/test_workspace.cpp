@@ -1,10 +1,12 @@
 #include "test_helpers.h"
 
 #include <ssg/Workspace.h>
+#include <ssg/ScratchJournal.h>
 
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <string>
 
 namespace {
@@ -267,6 +269,101 @@ TEST(removeDocumentErasesOnlyInMemoryState) {
     ASSERT_EQ(readBytes(temporary.path() / "keep.txt"), std::string{"keep me"});
 }
 
+TEST(openCapturesDiskBaselineAndUntitledHasNone) {
+    TemporaryDirectory temporary;
+    writeBytes(temporary.path() / "note.txt", "hello world\n");
+    auto recovery =
+        ssg::RecoveryActions::create(temporary.path() / ".recovery");
+    auto workspace = ssg::Workspace::create(temporary.path(), recovery);
+
+    const auto opened = workspace.openFile("note.txt");
+    ASSERT_TRUE(opened.accepted());
+    const auto baseline = workspace.baselineFor(*opened.document);
+    ASSERT_TRUE(baseline.has_value());
+    // The baseline hashes the RAW disk bytes and records the disk size, so it
+    // reflects what the edits branch from, not the decoded buffer.
+    ASSERT_EQ(baseline->size, std::uint64_t{12});
+    ASSERT_EQ(baseline->contentHash, ssg::fastContentHash("hello world\n"));
+    ASSERT_TRUE(baseline->mtimeNanos != 0);
+
+    // An untitled buffer has no disk file, so no baseline.
+    const auto untitled = workspace.newDocument("scratch");
+    ASSERT_TRUE(untitled.accepted());
+    ASSERT_FALSE(workspace.baselineFor(*untitled.document).has_value());
+}
+
+TEST(saveAsCapturesBaselineForWrittenBytes) {
+    TemporaryDirectory temporary;
+    auto recovery =
+        ssg::RecoveryActions::create(temporary.path() / ".recovery");
+    auto workspace = ssg::Workspace::create(temporary.path(), recovery);
+
+    // A fresh untitled buffer starts with no baseline; saving it to disk
+    // captures a baseline for the bytes that were written.
+    const auto untitled = workspace.openVirtualDocument(
+        "draft", "fresh\n", ssg::DocumentMode::Edit);
+    ASSERT_TRUE(untitled.accepted());
+    ASSERT_FALSE(workspace.baselineFor(*untitled.document).has_value());
+
+    const auto saved = workspace.saveAs(*untitled.document, "draft.txt");
+    ASSERT_TRUE(saved.accepted());
+    const auto baseline = workspace.baselineFor(*untitled.document);
+    ASSERT_TRUE(baseline.has_value());
+    ASSERT_EQ(baseline->contentHash,
+              ssg::fastContentHash(readBytes(temporary.path() / "draft.txt")));
+    ASSERT_EQ(baseline->size,
+              readBytes(temporary.path() / "draft.txt").size());
+}
+
+TEST(reloadRefreshesBaselineFromDisk) {
+    TemporaryDirectory temporary;
+    writeBytes(temporary.path() / "live.txt", "first\n");
+    auto recovery =
+        ssg::RecoveryActions::create(temporary.path() / ".recovery");
+    auto workspace = ssg::Workspace::create(temporary.path(), recovery);
+
+    const auto opened = workspace.openFile("live.txt");
+    ASSERT_TRUE(opened.accepted());
+    ASSERT_EQ(workspace.baselineFor(*opened.document)->contentHash,
+              ssg::fastContentHash("first\n"));
+
+    // Something external rewrites the file; reload re-reads disk, so the baseline
+    // now reflects the new disk content (the authority is disk, not the buffer).
+    writeBytes(temporary.path() / "live.txt", "second changed\n");
+    ASSERT_TRUE(workspace.reload(*opened.document).accepted());
+    const auto baseline = workspace.baselineFor(*opened.document);
+    ASSERT_TRUE(baseline.has_value());
+    ASSERT_EQ(baseline->contentHash, ssg::fastContentHash("second changed\n"));
+    ASSERT_EQ(baseline->size, std::uint64_t{15});
+}
+
+TEST(undoingReloadRestoresThePreReloadBaseline) {
+    TemporaryDirectory temporary;
+    writeBytes(temporary.path() / "live.txt", "original\n");
+    auto recovery =
+        ssg::RecoveryActions::create(temporary.path() / ".recovery");
+    auto workspace = ssg::Workspace::create(temporary.path(), recovery);
+
+    const auto opened = workspace.openFile("live.txt");
+    ASSERT_TRUE(opened.accepted());
+
+    // External change, then reload adopts the new disk state as the baseline.
+    writeBytes(temporary.path() / "live.txt", "external edit\n");
+    const auto reloaded = workspace.reload(*opened.document);
+    ASSERT_TRUE(reloaded.accepted());
+    ASSERT_EQ(workspace.baselineFor(*opened.document)->contentHash,
+              ssg::fastContentHash("external edit\n"));
+
+    // Undoing the reload must also restore the baseline the pre-reload edits
+    // branched from — otherwise a later dirty close would record a baseline that
+    // matches the current disk and silently hide the very external change that
+    // prompted the reload.
+    ASSERT_TRUE(reloaded.compensation.has_value());
+    ASSERT_TRUE(workspace.restore(*reloaded.compensation).accepted());
+    ASSERT_EQ(workspace.baselineFor(*opened.document)->contentHash,
+              ssg::fastContentHash("original\n"));
+}
+
 }  // namespace
 
 int main() {
@@ -280,6 +377,10 @@ int main() {
     RUN(emptyAndMixedEndingEditsSaveWithExactMetadata);
     RUN(tryDocumentReturnsNullForAbsentId);
     RUN(removeDocumentErasesOnlyInMemoryState);
+    RUN(openCapturesDiskBaselineAndUntitledHasNone);
+    RUN(saveAsCapturesBaselineForWrittenBytes);
+    RUN(reloadRefreshesBaselineFromDisk);
+    RUN(undoingReloadRestoresThePreReloadBaseline);
     std::cout << "Passed: " << passed << " Failed: " << failed << '\n';
     return failed == 0 ? 0 : 1;
 }

@@ -761,7 +761,8 @@ TabLifecycleResult EditorRuntime::Impl::close(
                         current != nullptr) {
                         journal = JournalDocument{state->key, current->mode(),
                                                   state->dirty,
-                                                  current->snapshot().text};
+                                                  current->snapshot().text,
+                                                  workspace.baselineFor(document)};
                     }
                     auto closed =
                         recovery.closeDocument(journal, scratch, durabilityTimeout);
@@ -811,7 +812,8 @@ TabLifecycleResult EditorRuntime::Impl::close(
     std::optional<JournalDocument> document;
     if (auto const* current = workspace.tryDocument(*tab.document); current != nullptr) {
         document = JournalDocument{state->key, current->mode(), state->dirty,
-                                   current->snapshot().text};
+                                   current->snapshot().text,
+                                   workspace.baselineFor(*tab.document)};
     }
     auto closed = recovery.closeDocument(document, scratch, durabilityTimeout);
     if (!closed.accepted()) {

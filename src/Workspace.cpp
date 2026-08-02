@@ -5,9 +5,13 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
+#include <cstdint>
 #include <fstream>
 #include <iterator>
 #include <limits>
+#include <optional>
+#include <span>
 #include <stdexcept>
 #include <system_error>
 #include <unordered_map>
@@ -34,6 +38,29 @@ std::vector<std::uint8_t> readFileBytes(const std::filesystem::path& path) {
                                  path.string() + ": " + result.message);
     }
     return std::move(result.bytes);
+}
+
+// The disk baseline a document's edits branch from: the mtime and size of the
+// on-disk file plus a fast hash of `diskBytes` (the exact bytes just read from,
+// or written to, that file). Best-effort — nullopt if the file cannot be stat'd,
+// which draft recovery treats as "unknown baseline" (a conflict), never as
+// "unchanged". `diskBytes` must be the literal file bytes, not the decoded
+// buffer, so the hash matches a later re-read of the same file.
+std::optional<DraftBaseline> captureDiskBaseline(
+    const std::filesystem::path& absolute,
+    std::span<const std::uint8_t> diskBytes) {
+    std::error_code code;
+    const auto mtime = std::filesystem::last_write_time(absolute, code);
+    if (code) return std::nullopt;
+    DraftBaseline baseline;
+    baseline.mtimeNanos = static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            mtime.time_since_epoch())
+            .count());
+    baseline.size = static_cast<std::uint64_t>(diskBytes.size());
+    baseline.contentHash = fastContentHash(std::string_view{
+        reinterpret_cast<const char*>(diskBytes.data()), diskBytes.size()});
+    return baseline;
 }
 
 std::span<const std::byte> asBytes(
@@ -252,6 +279,7 @@ public:
         Document document;
         SharedBytes persistedText;
         TextEncodingStatus persistedStatus;
+        std::optional<DraftBaseline> baseline;
     };
 
     struct CompensationState {
@@ -265,6 +293,7 @@ public:
         std::optional<DecodedText> priorDecoded;
         SharedBytes priorPersistedText;
         TextEncodingStatus priorPersistedStatus;
+        std::optional<DraftBaseline> priorBaseline;
     };
 
     struct ReplacedWorkspace {
@@ -459,6 +488,9 @@ public:
                     state.markDirtyOnRestore = true;
                     state.priorPersistedText = priorPersisted;
                     state.priorPersistedStatus = entry.persistedStatus;
+                    // Undoing this save must restore the baseline the prior edits
+                    // branched from, not leave it at the just-written state.
+                    state.priorBaseline = entry.baseline;
                     compensations.emplace(
                         std::string{action.compensation->value()},
                         std::move(state));
@@ -475,6 +507,9 @@ public:
             entry.rawBytes = encoded.bytes;
             entry.persistedText = SharedBytes::owning(current);
             entry.persistedStatus = entry.decoded.status;
+            // The just-written disk bytes become the new branched-from baseline,
+            // so a draft made after this save is compared against what we wrote.
+            entry.baseline = captureDiskBaseline(absolute, entry.rawBytes);
             touchRecent(std::move(path));
             result.document = entry.id;
             return result;
@@ -551,6 +586,12 @@ std::optional<WorkspaceDocumentState> Workspace::state(
         entry->decoded.status,
         dirty,
     };
+}
+
+std::optional<DraftBaseline> Workspace::baselineFor(
+    FileDocumentId documentId) const {
+    const auto* entry = impl_->find(documentId);
+    return entry ? entry->baseline : std::nullopt;
 }
 
 const Document& Workspace::document(FileDocumentId id) const {
@@ -654,9 +695,16 @@ WorkspaceResult Workspace::openFile(std::string_view rawPath) {
                        "path is not a regular file");
     }
     try {
+        auto bytes = readFileBytes(*absolute);
+        auto baseline = captureDiskBaseline(*absolute, bytes);
         auto result = impl_->addBytes(
-            readFileBytes(*absolute), JournalDocumentKey::saved(path),
+            std::move(bytes), JournalDocumentKey::saved(path),
             absolute->filename().string(), false);
+        if (result.accepted() && result.document) {
+            if (auto* entry = impl_->find(*result.document)) {
+                entry->baseline = baseline;
+            }
+        }
         impl_->touchRecent(path);
         return result;
     } catch (const std::exception& exception) {
@@ -803,6 +851,9 @@ WorkspaceResult Workspace::reload(FileDocumentId id) {
             state.priorDecoded = entry->decoded;
             state.priorPersistedText = entry->persistedText;
             state.priorPersistedStatus = entry->persistedStatus;
+            // Undoing the reload must restore the baseline the pre-reload edits
+            // branched from, not the reloaded disk state.
+            state.priorBaseline = entry->baseline;
             impl_->compensations.emplace(
                 std::string{action.compensation->value()}, std::move(state));
         }
@@ -812,6 +863,9 @@ WorkspaceResult Workspace::reload(FileDocumentId id) {
         entry->persistedText =
             SharedBytes::owning(entry->document.snapshot().text);
         entry->persistedStatus = entry->decoded.status;
+        // Reload re-reads disk, so the baseline now branches from the reloaded
+        // disk content.
+        entry->baseline = captureDiskBaseline(*absolute, bytes);
         WorkspaceResult result;
         result.document = id;
         result.compensation = action.compensation;
@@ -1091,6 +1145,7 @@ WorkspaceResult Workspace::restore(
                 ? found->second.priorPersistedText
                 : SharedBytes::owning(restoredDocument->utf8Content);
         entry->persistedStatus = found->second.priorPersistedStatus;
+        entry->baseline = found->second.priorBaseline;
         impl_->compensations.erase(found);
         return {};
     }
@@ -1110,6 +1165,7 @@ WorkspaceResult Workspace::restore(
                 entry->persistedText = found->second.priorPersistedText;
                 entry->persistedStatus =
                     found->second.priorPersistedStatus;
+                entry->baseline = found->second.priorBaseline;
             }
         }
         impl_->compensations.erase(found);
