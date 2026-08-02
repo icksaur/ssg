@@ -1,9 +1,11 @@
 #include "ssg/ShellState.h"
 
 #include "ssg/GraphemeLayout.h"
+#include "ssg/Layout.h"
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <optional>
 #include <utility>
@@ -177,6 +179,42 @@ const PaneGeometry* paneGeometry(const ShellViewState& view, PaneId id) {
 
 double centerX(const Rect& rect) { return rect.x + rect.width / 2.0; }
 double centerY(const Rect& rect) { return rect.y + rect.height / 2.0; }
+
+// The shell's region geometry as a box tree (doc/spec-layout-engine.md). The
+// builder is where sizing POLICY lives: the caller passes the already-decided
+// panel width (0 when the panel is absent), and distraction-free collapses the
+// tree to just the document. The solver then computes every region rect. Chrome
+// leaves carry their kind; structural containers (root/body/content) carry none
+// and are not projected. The document node is never emitted as an a11y node --
+// panes are -- so it is structural here too.
+LayoutNode buildShellTree(bool distractionFree, int headerHeight,
+                          int footerHeight, int tabBarHeight, int panelWidth) {
+    const auto exact = [](int cells) { return Size::exact(cells); };
+    LayoutNode document{"document", std::nullopt, Size::flex(), Axis::Column,
+                        {}, {}};
+    if (distractionFree) return document;
+
+    LayoutNode content{"content", std::nullopt, Size::flex(), Axis::Column,
+                       {}, {}};
+    content.children.push_back({"tabbar", ShellNodeKind::TabBar,
+                                exact(tabBarHeight), Axis::Row, {}, {}});
+    content.children.push_back(std::move(document));
+
+    LayoutNode body{"body", std::nullopt, Size::flex(), Axis::Row, {}, {}};
+    if (panelWidth > 0) {
+        body.children.push_back({"panel", ShellNodeKind::Panel,
+                                 exact(panelWidth), Axis::Column, {}, {}});
+    }
+    body.children.push_back(std::move(content));
+
+    LayoutNode root{"root", std::nullopt, Size::flex(), Axis::Column, {}, {}};
+    root.children.push_back({"header", ShellNodeKind::Header, exact(headerHeight),
+                             Axis::Row, {}, {}});
+    root.children.push_back(std::move(body));
+    root.children.push_back({"footer", ShellNodeKind::Footer, exact(footerHeight),
+                             Axis::Row, {}, {}});
+    return root;
+}
 
 } // namespace
 
@@ -404,16 +442,40 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
     view.viewport = request.viewport;
     view.focus = state.focus();
     const bool distractionFree = state.impl_->distractionFree;
-    Rect editor{0, 0, request.viewport.columns, request.viewport.rows};
     const int gutterWidth = request.style.dimensions.scrollbarGutterWidth;
+    const int headerHeight = request.style.dimensions.headerHeight;
+    const int footerHeight = request.style.dimensions.footerHeight;
+    const int tabBarHeight = request.style.dimensions.tabBarHeight;
+
+    // Region geometry comes from the box-tree solver (doc/spec-layout-engine.md).
+    // Sizing POLICY stays here: the panel width is decided with the same rule as
+    // before (yield to keep the editor's minimum; absent below the threshold) and
+    // handed to the builder, which turns it and the chrome heights into a tree the
+    // solver places. The content packers and the accessibility-node emission below
+    // are unchanged -- they receive the solved rects instead of hand-built ones.
+    int panelWidth = 0;
+    if (!distractionFree && state.impl_->panelRequested &&
+        request.viewport.columns >=
+            request.style.dimensions.editorMinimumWidth +
+                request.style.dimensions.panelMinimumWidth) {
+        panelWidth = std::min(request.style.dimensions.panelTargetWidth,
+                              request.viewport.columns -
+                                  request.style.dimensions.editorMinimumWidth);
+    }
+    auto solved = solveLayout(
+        buildShellTree(distractionFree, headerHeight, footerHeight, tabBarHeight,
+                       panelWidth),
+        {0, 0, request.viewport.columns, request.viewport.rows});
+    if (!solved) {
+        return {ShellLayoutError{ShellLayoutErrorCode::ViewportTooSmall,
+                                 "viewport too small for the shell layout"},
+                std::nullopt};
+    }
+    Rect editor = solved->find("document")->rect;
 
     if (!distractionFree) {
-        const int headerHeight = request.style.dimensions.headerHeight;
-        const int footerHeight = request.style.dimensions.footerHeight;
-        const int tabBarHeight = request.style.dimensions.tabBarHeight;
-        view.header = Rect{0, 0, request.viewport.columns, headerHeight};
-        view.footer = Rect{0, request.viewport.rows - footerHeight,
-                            request.viewport.columns, footerHeight};
+        view.header = solved->find("header")->rect;
+        view.footer = solved->find("footer")->rect;
         addNode(view, ShellNodeKind::Header, "header", "Status header",
                  *view.header, SemanticRole::Header);
         addNode(view, ShellNodeKind::Footer, "footer", "Status footer",
@@ -497,18 +559,8 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
                     actionX - view.footer->x, view.footer->height},
                    ShellNodeKind::FooterField, SemanticRole::Footer);
 
-        const bool panelRequested = state.impl_->panelRequested;
-        int panelWidth = 0;
-        if (panelRequested &&
-            request.viewport.columns >=
-                request.style.dimensions.editorMinimumWidth +
-                    request.style.dimensions.panelMinimumWidth) {
-            panelWidth = std::min(
-                request.style.dimensions.panelTargetWidth,
-                request.viewport.columns -
-                    request.style.dimensions.editorMinimumWidth);
-            view.panel = Rect{0, headerHeight, panelWidth,
-                               request.viewport.rows - headerHeight - footerHeight};
+        if (panelWidth > 0) {
+            view.panel = solved->find("panel")->rect;
             addNode(view, ShellNodeKind::Panel, "panel", "Side panel",
                      *view.panel, SemanticRole::PanelInactive);
             addNode(view, ShellNodeKind::PanelProvider, "panel.provider",
@@ -529,9 +581,8 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
             }
         }
 
-        editor = {panelWidth, headerHeight, request.viewport.columns - panelWidth,
-                  request.viewport.rows - headerHeight - footerHeight};
-        view.tabBar = Rect{editor.x, editor.y, editor.width, tabBarHeight};
+        editor = solved->find("document")->rect;
+        view.tabBar = solved->find("tabbar")->rect;
         addNode(view, ShellNodeKind::TabBar, "tabs", "Open tabs",
                  *view.tabBar, SemanticRole::TabInactive);
         // Each tab's width, so the window below can be chosen before any of them
@@ -589,8 +640,10 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
             tabX += width;
         }
 
-        editor.y += tabBarHeight;
-        editor.height -= tabBarHeight;
+        // `editor` is already the solved document rect (below the tab bar). The
+        // prompt reservation shrinks it from the bottom, over the footer, without
+        // moving its top -- so opening a prompt reduces document height but never
+        // pushes content down.
         if (request.reservedPromptRows >= editor.height) {
             return {ShellLayoutError{
                         ShellLayoutErrorCode::ViewportTooSmall,
