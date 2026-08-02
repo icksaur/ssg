@@ -31,7 +31,11 @@ namespace {
 
 constexpr std::array<std::byte, 4> kMagic{
     std::byte{'S'}, std::byte{'S'}, std::byte{'G'}, std::byte{'J'}};
-constexpr std::uint16_t kFormatVersion = 1;
+// v1: no per-document baseline. v2: an optional {mtime,size,hash} baseline
+// trails each document. Replay accepts BOTH so journals written by an older
+// build still recover (a v1 document decodes with baseline == nullopt).
+constexpr std::uint16_t kFormatVersion = 2;
+constexpr std::uint16_t kFormatVersionLegacyNoBaseline = 1;
 constexpr std::size_t kHeaderSize = 14;
 constexpr std::uint32_t kMaximumPayloadSize = 64U * 1024U * 1024U;
 
@@ -227,6 +231,15 @@ void encodeDocument(Writer& writer, const JournalDocument& document) {
     writer.u8(static_cast<std::uint8_t>(document.mode));
     writer.u8(document.dirty ? 1 : 0);
     writer.string64(document.utf8Content);
+    // v2 trailer: a presence byte, then the baseline triple when present.
+    if (document.baseline) {
+        writer.u8(1);
+        writer.u64(document.baseline->mtimeNanos);
+        writer.u64(document.baseline->size);
+        writer.u64(document.baseline->contentHash);
+    } else {
+        writer.u8(0);
+    }
 }
 
 std::vector<std::byte> frame(RecordKind kind, Writer body) {
@@ -272,7 +285,8 @@ bool decodeKey(Reader& reader, JournalDocumentKey& key) {
     return false;
 }
 
-bool decodeDocument(Reader& reader, JournalDocument& document) {
+bool decodeDocument(Reader& reader, JournalDocument& document,
+                    std::uint16_t version) {
     JournalDocumentKey key =
         JournalDocumentKey::untitled(UntitledDocumentId{{}});
     std::uint8_t mode = 0;
@@ -283,8 +297,24 @@ bool decodeDocument(Reader& reader, JournalDocument& document) {
         !validUtf8(content)) {
         return false;
     }
+    std::optional<DraftBaseline> baseline;
+    // v1 documents have no baseline trailer; a v1 record decodes as "unknown
+    // baseline" (nullopt). v2 documents carry a presence byte plus, when set,
+    // the {mtime,size,hash} triple.
+    if (version >= kFormatVersion) {
+        std::uint8_t present = 0;
+        if (!reader.u8(present) || present > 1) return false;
+        if (present == 1) {
+            DraftBaseline value;
+            if (!reader.u64(value.mtimeNanos) || !reader.u64(value.size) ||
+                !reader.u64(value.contentHash)) {
+                return false;
+            }
+            baseline = value;
+        }
+    }
     document = {std::move(key), static_cast<DocumentMode>(mode), dirty != 0,
-                std::move(content)};
+                std::move(content), baseline};
     return true;
 }
 
@@ -302,7 +332,7 @@ void upsert(std::vector<JournalDocument>& documents,
 }
 
 bool applyPayload(std::span<const std::byte> payload,
-                   JournalRecoverySet& recovery) {
+                   JournalRecoverySet& recovery, std::uint16_t version) {
     Reader reader{payload};
     std::uint8_t rawKind = 0;
     if (!reader.u8(rawKind)) return false;
@@ -316,7 +346,7 @@ bool applyPayload(std::span<const std::byte> payload,
         for (std::uint32_t index = 0; index < count; ++index) {
             JournalDocument document{
                 JournalDocumentKey::untitled(UntitledDocumentId{{}})};
-            if (!decodeDocument(reader, document) ||
+            if (!decodeDocument(reader, document, version) ||
                 std::any_of(documents.begin(), documents.end(),
                             [&](const auto& existing) {
                                 return existing.key == document.key;
@@ -333,7 +363,8 @@ bool applyPayload(std::span<const std::byte> payload,
     if (kind == RecordKind::Document) {
         JournalDocument document{
             JournalDocumentKey::untitled(UntitledDocumentId{{}})};
-        if (!decodeDocument(reader, document) || reader.remaining() != 0) {
+        if (!decodeDocument(reader, document, version) ||
+            reader.remaining() != 0) {
             return false;
         }
         upsert(recovery.documents, std::move(document));
@@ -392,6 +423,19 @@ void syncParentDirectory(const std::filesystem::path& path) {
 #endif
 
 } // namespace
+
+std::uint64_t fastContentHash(std::string_view bytes) noexcept {
+    // FNV-1a, 64-bit. Deterministic and dependency-free; used only for
+    // change-detection, never integrity.
+    constexpr std::uint64_t kOffsetBasis = 14695981039346656037ULL;
+    constexpr std::uint64_t kPrime = 1099511628211ULL;
+    std::uint64_t hash = kOffsetBasis;
+    for (const char byte : bytes) {
+        hash ^= static_cast<std::uint8_t>(byte);
+        hash *= kPrime;
+    }
+    return hash;
+}
 
 UntitledDocumentId UntitledDocumentId::generate() {
     std::array<std::byte, 16> bytes{};
@@ -500,10 +544,15 @@ JournalReplayResult JournalCodec::replay(std::span<const std::byte> bytes) const
         std::uint8_t versionHigh = 0;
         std::uint32_t payloadSize = 0;
         std::uint32_t expectedCrc = 0;
-        if (!header.u8(versionLow) || !header.u8(versionHigh) ||
-            (static_cast<std::uint16_t>(versionLow) |
-             (static_cast<std::uint16_t>(versionHigh) << 8U)) !=
-                kFormatVersion ||
+        if (!header.u8(versionLow) || !header.u8(versionHigh)) {
+            result.discardedTail = true;
+            break;
+        }
+        const auto version = static_cast<std::uint16_t>(
+            static_cast<std::uint16_t>(versionLow) |
+            (static_cast<std::uint16_t>(versionHigh) << 8U));
+        if ((version != kFormatVersion &&
+             version != kFormatVersionLegacyNoBaseline) ||
             !header.u32(payloadSize) ||
             payloadSize > kMaximumPayloadSize ||
             !header.u32(expectedCrc) ||
@@ -514,7 +563,7 @@ JournalReplayResult JournalCodec::replay(std::span<const std::byte> bytes) const
         const auto payload =
             bytes.subspan(position + kHeaderSize, payloadSize);
         if (crc32c(payload) != expectedCrc ||
-            !applyPayload(payload, result.recovery)) {
+            !applyPayload(payload, result.recovery, version)) {
             result.discardedTail = true;
             break;
         }
