@@ -174,6 +174,8 @@ KeymapViewState defaultTerminalKeymap() {
     // the editor uses.
     bind(seq({"Alt+Home"}), "cursor.document_start", "editor");
     bind(seq({"Alt+End"}), "cursor.document_end", "editor");
+    // Alt+Shift+G opens a prompt for a line number and jumps there (clamped).
+    bind(seq({"Alt+Shift+KeyG"}), "goto.line", "editor");
     bind(seq({"Ctrl+Shift+Home"}), "select.document_start", "editor");
     bind(seq({"Ctrl+Shift+End"}), "select.document_end", "editor");
     bind(seq({"PageUp"}), "cursor.page_up", "editor");

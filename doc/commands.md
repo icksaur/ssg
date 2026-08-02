@@ -165,8 +165,8 @@ There are 183 commands.
 | `palette.execute` | Execute | palette selection | lua |
 | `search.workspace` | Workspace | none | lua |
 | `goto.file` | Go to File | none | lua |
-| `goto.line` | Go to Line | none | lua |
 | `goto.symbol` | Go to Symbol | none | lua |
+| `goto.line` | Go to Line | none | lua |
 
 ## selection-navigation
 
