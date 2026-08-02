@@ -94,6 +94,18 @@ void setOwnerOnlyPermissions(const std::filesystem::path& path);
 [[nodiscard]] std::filesystem::path userConfigRoot(
     std::string_view applicationName);
 
+// The user's own per-application STATE root -- distinct from userCacheRoot()
+// (LOCAL/disposable: Linux `~/.cache`, Windows `%LOCALAPPDATA%`) and from
+// userConfigRoot() (backed up/synced/hand-edited: Linux `~/.config`, Windows
+// ROAMING `%APPDATA%`). State is data the app owns and wants to survive a
+// restart but that a user neither hand-edits nor needs synced -- draft
+// recovery scratch, session remnants (Linux XDG `~/.local/state`, Windows
+// LOCAL `%LOCALAPPDATA%`). It resolves to a different root than both other
+// primitives even though all three mirror the same XDG-style
+// env-var-with-fallback shape.
+[[nodiscard]] std::filesystem::path userStateRoot(
+    std::string_view applicationName);
+
 void replaceFileAtomically(
     const std::filesystem::path& target,
     std::span<const std::byte> contents);

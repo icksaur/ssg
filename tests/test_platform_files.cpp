@@ -296,10 +296,56 @@ TEST(configRootThrowsWhenHomeAndXdgAreBothUnset) {
     ScopedEnvVar home("HOME", nullptr);
     ASSERT_THROWS(ssg::userConfigRoot("ssg"), std::runtime_error);
 }
+
+TEST(stateRootPrefersXdgStateHomeWhenSetAndAbsolute) {
+    ScopedEnvVar xdg("XDG_STATE_HOME", "/tmp/ssg-xdg-state-test");
+    ScopedEnvVar home("HOME", "/tmp/ssg-home-test");
+    ASSERT_EQ(ssg::userStateRoot("ssg"),
+              std::filesystem::path{"/tmp/ssg-xdg-state-test/ssg"});
+}
+
+TEST(stateRootFallsBackToHomeDotLocalStateWhenXdgUnsetOrRelative) {
+    {
+        ScopedEnvVar xdg("XDG_STATE_HOME", nullptr);
+        ScopedEnvVar home("HOME", "/tmp/ssg-home-test");
+        ASSERT_EQ(ssg::userStateRoot("ssg"),
+                  std::filesystem::path{"/tmp/ssg-home-test/.local/state/ssg"});
+    }
+    {
+        // A relative XDG_STATE_HOME is ignored -- only an absolute override is
+        // honored, matching the config/cache primitives' XDG rule.
+        ScopedEnvVar xdg("XDG_STATE_HOME", "relative/path");
+        ScopedEnvVar home("HOME", "/tmp/ssg-home-test");
+        ASSERT_EQ(ssg::userStateRoot("ssg"),
+                  std::filesystem::path{"/tmp/ssg-home-test/.local/state/ssg"});
+    }
+}
+
+TEST(stateRootThrowsWhenHomeAndXdgAreBothUnset) {
+    ScopedEnvVar xdg("XDG_STATE_HOME", nullptr);
+    ScopedEnvVar home("HOME", nullptr);
+    ASSERT_THROWS(ssg::userStateRoot("ssg"), std::runtime_error);
+}
+
+TEST(stateRootIsDistinctFromConfigAndCacheRoots) {
+    // State (app-owned, survives restart), config (synced/hand-edited), and
+    // cache (disposable) must resolve to three different directories so no
+    // primitive's cleanup can destroy another's data.
+    ScopedEnvVar stateXdg("XDG_STATE_HOME", nullptr);
+    ScopedEnvVar configXdg("XDG_CONFIG_HOME", nullptr);
+    ScopedEnvVar cacheXdg("XDG_CACHE_HOME", nullptr);
+    ScopedEnvVar home("HOME", "/tmp/ssg-home-test");
+    ASSERT_TRUE(ssg::userStateRoot("ssg-test") != ssg::userConfigRoot("ssg-test"));
+    ASSERT_TRUE(ssg::userStateRoot("ssg-test") != ssg::userCacheRoot("ssg-test"));
+}
 #endif
 
 TEST(configRootRejectsMultiComponentApplicationName) {
     ASSERT_THROWS(ssg::userConfigRoot("../escape"), std::invalid_argument);
+}
+
+TEST(stateRootRejectsMultiComponentApplicationName) {
+    ASSERT_THROWS(ssg::userStateRoot("../escape"), std::invalid_argument);
 }
 
 TEST(configRootIsDistinctFromCacheRootForTheSameApplication) {
@@ -364,8 +410,13 @@ int main() {
     RUN(configRootPrefersXdgConfigHomeWhenSetAndAbsolute);
     RUN(configRootFallsBackToHomeDotConfigWhenXdgUnsetOrRelative);
     RUN(configRootThrowsWhenHomeAndXdgAreBothUnset);
+    RUN(stateRootPrefersXdgStateHomeWhenSetAndAbsolute);
+    RUN(stateRootFallsBackToHomeDotLocalStateWhenXdgUnsetOrRelative);
+    RUN(stateRootThrowsWhenHomeAndXdgAreBothUnset);
+    RUN(stateRootIsDistinctFromConfigAndCacheRoots);
 #endif
     RUN(configRootRejectsMultiComponentApplicationName);
+    RUN(stateRootRejectsMultiComponentApplicationName);
     RUN(configRootIsDistinctFromCacheRootForTheSameApplication);
     std::cout << "Passed: " << passed << " Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
