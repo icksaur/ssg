@@ -1736,7 +1736,7 @@ std::uint32_t gotoCaretLine(ssg::EditorRuntime& runtime) {
     return snapshot->sections().selection.selections.primary().active.line.value();
 }
 
-TEST(gotoLineJumpsToTheClampedOneBasedLine) {
+TEST(gotoLineClampsToTheOneBasedLineRange) {
     auto runtime = gotoLineRuntime();
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
@@ -1746,7 +1746,7 @@ TEST(gotoLineJumpsToTheClampedOneBasedLine) {
                                {"goto.line", runtime->revision(), std::string{"3"}})
                     .accepted());
     ASSERT_EQ(gotoCaretLine(*runtime), 2U);
-    // A number past the end clamps to the last line (index 4), not a failure.
+    // A number past the end clamps to the last line (index 4).
     ASSERT_TRUE(runtime
                     ->dispatch(ssg::ClientId{1},
                                {"goto.line", runtime->revision(), std::string{"999"}})
@@ -1758,9 +1758,32 @@ TEST(gotoLineJumpsToTheClampedOneBasedLine) {
                                {"goto.line", runtime->revision(), std::string{"1"}})
                     .accepted());
     ASSERT_EQ(gotoCaretLine(*runtime), 0U);
+    // Below the range clamps to the first line rather than failing: "0" and a
+    // negative both go to line 1 (index 0). Move off line 0 between each so a
+    // no-op could not masquerade as a successful clamp.
+    ASSERT_TRUE(runtime
+                    ->dispatch(ssg::ClientId{1},
+                               {"goto.line", runtime->revision(), std::string{"4"}})
+                    .accepted());
+    ASSERT_EQ(gotoCaretLine(*runtime), 3U);
+    ASSERT_TRUE(runtime
+                    ->dispatch(ssg::ClientId{1},
+                               {"goto.line", runtime->revision(), std::string{"0"}})
+                    .accepted());
+    ASSERT_EQ(gotoCaretLine(*runtime), 0U);
+    ASSERT_TRUE(runtime
+                    ->dispatch(ssg::ClientId{1},
+                               {"goto.line", runtime->revision(), std::string{"4"}})
+                    .accepted());
+    ASSERT_EQ(gotoCaretLine(*runtime), 3U);
+    ASSERT_TRUE(runtime
+                    ->dispatch(ssg::ClientId{1},
+                               {"goto.line", runtime->revision(), std::string{"-7"}})
+                    .accepted());
+    ASSERT_EQ(gotoCaretLine(*runtime), 0U);
 }
 
-TEST(gotoLineRejectsNonNumericAndNonPositiveInput) {
+TEST(gotoLineRejectsNonNumericInput) {
     auto runtime = gotoLineRuntime();
     ASSERT_TRUE(runtime != nullptr);
     if (!runtime) return;
@@ -1769,7 +1792,7 @@ TEST(gotoLineRejectsNonNumericAndNonPositiveInput) {
                                {"goto.line", runtime->revision(), std::string{"3"}})
                     .accepted());
     ASSERT_EQ(gotoCaretLine(*runtime), 2U);
-    for (const auto* bad : {"abc", "0", "-2", "2x"}) {
+    for (const auto* bad : {"abc", "2x", "1.5", ""}) {
         ASSERT_FALSE(runtime
                          ->dispatch(ssg::ClientId{1},
                                     {"goto.line", runtime->revision(),
@@ -1837,8 +1860,8 @@ int main() {
     RUN(wordWrapOffRevealsCaretHorizontally);
     RUN(wordWrapOnWrapsLongLinesOffClipsThem);
     RUN(wordWrapOffNavigationIsViewportBounded);
-    RUN(gotoLineJumpsToTheClampedOneBasedLine);
-    RUN(gotoLineRejectsNonNumericAndNonPositiveInput);
+    RUN(gotoLineClampsToTheOneBasedLineRange);
+    RUN(gotoLineRejectsNonNumericInput);
     RUN(gotoLineWithoutPayloadOpensACommandArgumentPromptThatJumpsOnSubmit);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;

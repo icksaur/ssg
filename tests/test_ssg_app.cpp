@@ -751,6 +751,45 @@ TEST(decodeInputMetaPrefixedCsiFoldsAlt) {
     ASSERT_FALSE(doubleEsc.stroke.alt);
 }
 
+TEST(decodeInputTildeHomeEndPlainAndModified) {
+    std::size_t consumed = 0;
+    // Terminals that send Home/End in the tilde form rather than the letter form:
+    // ESC[1~/ESC[7~ = Home, ESC[4~/ESC[8~ = End.
+    auto home1 = ssg::app::decode_input("\x1b[1~", true, consumed);
+    ASSERT_EQ(consumed, std::size_t{4});
+    ASSERT_EQ(std::string{ssg::keyCodeName(home1.stroke.code)}, std::string{"Home"});
+    auto home7 = ssg::app::decode_input("\x1b[7~", true, consumed);
+    ASSERT_EQ(std::string{ssg::keyCodeName(home7.stroke.code)}, std::string{"Home"});
+    auto end4 = ssg::app::decode_input("\x1b[4~", true, consumed);
+    ASSERT_EQ(std::string{ssg::keyCodeName(end4.stroke.code)}, std::string{"End"});
+    auto end8 = ssg::app::decode_input("\x1b[8~", true, consumed);
+    ASSERT_EQ(std::string{ssg::keyCodeName(end8.stroke.code)}, std::string{"End"});
+
+    // Modified tilde forms fold in the modifier (Alt = m 3, Ctrl = m 5).
+    auto altHome = ssg::app::decode_input("\x1b[1;3~", true, consumed);
+    ASSERT_EQ(consumed, std::size_t{6});
+    ASSERT_EQ(std::string{ssg::keyCodeName(altHome.stroke.code)}, std::string{"Home"});
+    ASSERT_TRUE(altHome.stroke.alt);
+    ASSERT_FALSE(altHome.stroke.control);
+    auto altEnd = ssg::app::decode_input("\x1b[4;3~", true, consumed);
+    ASSERT_EQ(std::string{ssg::keyCodeName(altEnd.stroke.code)}, std::string{"End"});
+    ASSERT_TRUE(altEnd.stroke.alt);
+    auto ctrlHome7 = ssg::app::decode_input("\x1b[7;5~", true, consumed);
+    ASSERT_EQ(std::string{ssg::keyCodeName(ctrlHome7.stroke.code)}, std::string{"Home"});
+    ASSERT_TRUE(ctrlHome7.stroke.control);
+    ASSERT_FALSE(ctrlHome7.stroke.alt);
+
+    // Delete/Page tilde forms still work after adding the Home/End numbers.
+    auto del = ssg::app::decode_input("\x1b[3~", true, consumed);
+    ASSERT_EQ(std::string{ssg::keyCodeName(del.stroke.code)}, std::string{"Delete"});
+    auto pageUp = ssg::app::decode_input("\x1b[5~", true, consumed);
+    ASSERT_EQ(std::string{ssg::keyCodeName(pageUp.stroke.code)}, std::string{"PageUp"});
+
+    // A split modified tilde form is incomplete until the '~' arrives.
+    auto pending = ssg::app::decode_input("\x1b[4;3", false, consumed);
+    ASSERT_TRUE(pending.status == ssg::app::DecodeStatus::incomplete);
+}
+
 // Encode a KeyStroke as the Kitty `CSI unicode-key ; mods u` bytes, for the
 // parity oracle below. Returns nullopt for keys Kitty does not send as a `u`
 // event under the disambiguate flag (arrows/Home/End/Page/Delete/function keys
@@ -2483,6 +2522,7 @@ int main() {
     RUN(decodeInputMapsPrintablesAndNamedKeys);
     RUN(decodeInputModifiedArrows);
     RUN(decodeInputMetaPrefixedCsiFoldsAlt);
+    RUN(decodeInputTildeHomeEndPlainAndModified);
     RUN(decodeKittyKeyMatchesEveryDefaultBinding);
     RUN(decodeKittyKeyHandCasesAndCapsLockImmunity);
     RUN(decodeKittyKeySelfIdentifyingAndMalformed);

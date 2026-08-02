@@ -50,9 +50,11 @@ that branches on its payload:
 - **Non-empty `std::string` payload** (the prompt round-trip, or a direct
   programmatic line number):
   1. Require an active document; else `failure("goto.line requires an active document")`.
-  2. Parse the string as a base-10 integer with `std::from_chars`. Reject
-     non-numeric, trailing-garbage, or `< 1` input with
-     `failure("goto.line expects a positive line number")`.
+  2. Parse the string as a base-10 integer with `std::from_chars`. Reject only
+     non-numeric or trailing-garbage input (e.g. "abc", "2x", "1.5") with
+     `failure("goto.line expects a line number")`. A numeric but out-of-range
+     value (including `0` and negatives) is NOT rejected — it is clamped in
+     step 4.
   3. **Single source of truth for line boundaries.** In ONE pass over the active
      text (`activeText()`), locate line starts by scanning for `'\n'` (line 0
      starts at offset 0; line `k+1` starts just past the `k`th newline). The line
@@ -60,10 +62,11 @@ that branches on its payload:
      but derived from the same scan that yields the start, so the count and the
      offset can never disagree. Do NOT read `PieceTree::lineCount()` separately;
      that would be a second source of truth for line boundaries.
-  4. Convert 1-based → 0-based and clamp to `[0, lineCount - 1]`. (Out-of-range
-     numbers clamp to the last line rather than failing — "go past the end" means
-     "go to the end", the least-surprising behavior.) Take the clamped line's
-     start offset from the scan in step 3.
+  4. Clamp the 1-based request to `[1, lineCount]`, then convert to the 0-based
+     line index. Below the range (`< 1`, i.e. `0` or negative) clamps to the
+     first line; above `lineCount` clamps to the last. This is the backlog's
+     "clamp to [1, LINES]": every number moves the caret; nothing is a silent
+     no-op. Take the clamped line's start offset from the scan in step 3.
   5. `resolvePosition(text, ByteOffset{start}, tabWidth)` → the valid caret
      `DocumentPosition` (column 1 / cell 0 of the line). A `nullopt` here is an
      internal invariant break → `failure`.
@@ -111,10 +114,11 @@ Library oracles (add to the runtime navigation / search test suite):
    input.
 2. **Submit jumps and clamps**: with a known multi-line document, a submitted
    value of "3" places the primary caret at the start of line 3 (0-based line 2);
-   a value far past the end clamps to the last line's start; "1" goes to offset 0.
-3. **Bad input fails loudly**: non-numeric ("abc"), empty (rejected upstream by
-   `prompt.submit`), and "0"/negative values return a failure and do not move the
-   caret.
+   a value far past the end clamps to the last line's start; "1" goes to offset 0;
+   "0" and a negative clamp to the first line (index 0).
+3. **Only non-numeric input fails**: "abc"/"2x"/"1.5" return a failure and do not
+   move the caret; empty is rejected upstream by `prompt.submit`. Numeric
+   out-of-range values do NOT fail — they clamp (asserted in the clamp test).
 4. **Keymap resolves**: `Alt+Shift+KeyG` resolves to `goto.line` in the editor
    context (extends `curatedKeymapResolvesPerContext`).
 

@@ -895,8 +895,15 @@ Decoded decode_input(std::string_view bytes, bool inputExhausted,
         case '1': {
             // Modified key: ESC [ 1 ; m {A|B|C|D|H|F}, modifier m = 1 + bitmask
             // (bit0 Shift, bit1 Alt, bit2 Ctrl).  Any partial parameter is
-            // incomplete until the final letter arrives.
+            // incomplete until the final letter arrives.  Some terminals also send
+            // Home in the tilde form (ESC [ 1 ~, or modified ESC [ 1 ; m ~); those
+            // are decoded here too so Home reaches the keymap regardless of which
+            // encoding the terminal chose.
             if (bytes.size() < 4) return {DecodeStatus::incomplete, {}, {}, 0};
+            if (bytes[3] == '~') {
+                consumed = 4;
+                return {DecodeStatus::key, ssg::KeyStroke{ssg::KeyCode::Home}, {}, 0};
+            }
             if (bytes[3] != ';') return unhandled();
             std::size_t pos = 4;
             auto const modifier = parseDecimal(bytes, pos);
@@ -913,6 +920,7 @@ Decoded decode_input(std::string_view bytes, bool inputExhausted,
             case 'D': code = ssg::KeyCode::ArrowLeft; break;
             case 'H': code = ssg::KeyCode::Home; break;
             case 'F': code = ssg::KeyCode::End; break;
+            case '~': code = ssg::KeyCode::Home; break;  // ESC [ 1 ; m ~
             default:
                 return unhandled();  // Unknown final byte.
             }
@@ -964,19 +972,25 @@ Decoded decode_input(std::string_view bytes, bool inputExhausted,
             return decoded;
         }
         case '3':
+        case '4':
         case '5':
-        case '6': {
-            // Delete/PageUp/PageDown: plain ESC [ 3|5|6 ~, or the modified form
-            // ESC [ 3|5|6 ; m ~ (m = 1 + bitmask: bit0 Shift, bit1 Alt, bit2
-            // Ctrl), mirroring the '1'-prefixed arrow/Home/End modifier
-            // handling above. Without this case, ESC [ 3 ~ (Delete) fell
-            // through to the `default` branch below, which consumes only the
-            // "ESC [ 3" introducer and leaves the trailing '~' byte to be
-            // decoded on the NEXT call as plain printable text -- inserting a
-            // literal "~" instead of deleting forward.
+        case '6':
+        case '7':
+        case '8': {
+            // Tilde-form navigation keys: plain ESC [ N ~, or the modified form
+            // ESC [ N ; m ~ (m = 1 + bitmask: bit0 Shift, bit1 Alt, bit2 Ctrl),
+            // mirroring the '1'-prefixed arrow/Home/End modifier handling above.
+            // N: 3 Delete, 5 PageUp, 6 PageDown, plus the tilde encodings of
+            // Home/End that some terminals send instead of the letter forms
+            // (1/7 Home, 4/8 End -- 1 is handled in `case '1'`). Without this,
+            // ESC [ 4 ~ (End) fell through to `default`, which consumes only the
+            // "ESC [ 4" introducer and leaves the '~' to be decoded next as a
+            // literal printable, and the modified forms never reached the keymap.
             ssg::KeyCode const code = third == '3'   ? ssg::KeyCode::Delete
                                      : third == '5' ? ssg::KeyCode::PageUp
-                                                    : ssg::KeyCode::PageDown;
+                                     : third == '6' ? ssg::KeyCode::PageDown
+                                     : third == '7' ? ssg::KeyCode::Home
+                                                    : ssg::KeyCode::End;  // 4 or 8
             if (bytes.size() < 4) return {DecodeStatus::incomplete, {}, {}, 0};
             if (bytes[3] == '~') {
                 consumed = 4;
