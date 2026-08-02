@@ -369,7 +369,14 @@ CommandHandlerResult EditorRuntime::Impl::activateDocument(FileDocumentId docume
             }
         }
     }
+    // Reconcile a recovered draft only the first time a document is opened from
+    // disk (fresh runtime state), never when re-activating an already-open tab —
+    // that would clobber the live buffer with a stale draft.
+    const bool freshlyOpened =
+        documentRuntimeStates.find(document.value()) == documentRuntimeStates.end();
     ensureDocumentRuntimeState(document);
+    if (freshlyOpened) reconcileDraftOnOpen(document);
+    state = workspace.state(document);
     auto result = tabs.openDocument(document, state->key, state->displayLabel,
                                      opened->mode(), state->dirty,
                                      badgeFor(scratch.durabilityState()));

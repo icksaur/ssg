@@ -45,6 +45,178 @@ void writeBytes(const std::filesystem::path& path, std::initializer_list<std::ui
     for (auto byte : bytes) output.put(static_cast<char>(byte));
 }
 
+bool activeTabDirty(const ssg::EditorRuntime& runtime) {
+    auto snapshot = runtime.snapshot(ssg::ClientId{1}, {80, 24});
+    if (!snapshot) return false;
+    const auto& tabs = snapshot->sections().tabs;
+    if (!tabs.active) return false;
+    for (const auto& tab : tabs.tabs) {
+        if (tab.id == *tabs.active) return tab.dirty;
+    }
+    return false;
+}
+
+// Edit note.txt to a dirty draft, flush it, then drop the runtime — leaving a
+// recoverable draft in `root/scratch`. Returns the drafted buffer text.
+std::string leaveDirtyDraft(const std::filesystem::path& root) {
+    std::ofstream{root / "workspace" / "note.txt", std::ios::binary} << "hi\n";
+    auto created = ssg::EditorRuntime::create(configFor(root));
+    if (!created.accepted()) return {};
+    auto& runtime = *created.runtime;
+    (void)runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                         ssg::ViewId{1});
+    (void)runtime.dispatch(ssg::ClientId{1},
+                           {"file.open", runtime.revision(), std::string{"note.txt"}});
+    (void)runtime.dispatch(ssg::ClientId{1},
+                           {"text.insert", runtime.revision(),
+                            ssg::TextInputArguments{"!"}});
+    const auto draft = runtime.activeDocumentText();
+    (void)runtime.flushDueAutosaveDrafts();
+    return draft;
+}
+
+ssg::CommandResult reopenNote(ssg::EditorRuntime& runtime) {
+    (void)runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                         ssg::ViewId{1});
+    return runtime.dispatch(
+        ssg::ClientId{1},
+        {"file.open", runtime.revision(), std::string{"note.txt"}});
+}
+
+TEST(reopeningADirtyDraftRestoresTheEditsWhenDiskIsUnchanged) {
+    auto root = uniqueRoot("draft_restore");
+    const auto draft = leaveDirtyDraft(root);
+    ASSERT_TRUE(!draft.empty());
+
+    // Disk untouched since the edits branched: recover the draft as a dirty
+    // buffer with a "restored" notice, no conflict.
+    auto created = ssg::EditorRuntime::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(reopenNote(runtime).accepted());
+    ASSERT_EQ(runtime.activeDocumentText(), draft);
+    ASSERT_TRUE(activeTabDirty(runtime));
+    ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
+                ssg::EditorRuntime::DraftReopenNotice::Restored);
+}
+
+TEST(reopeningAConvergedDraftDropsItAndOpensClean) {
+    auto root = uniqueRoot("draft_converged");
+    const auto draft = leaveDirtyDraft(root);
+    ASSERT_TRUE(!draft.empty());
+    // The file on disk now already holds exactly the drafted content: the edits
+    // converged. There is nothing unsaved to recover.
+    std::ofstream{root / "workspace" / "note.txt", std::ios::binary} << draft;
+
+    auto created = ssg::EditorRuntime::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(reopenNote(runtime).accepted());
+    ASSERT_EQ(runtime.activeDocumentText(), draft);
+    ASSERT_FALSE(activeTabDirty(runtime));
+    ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
+                ssg::EditorRuntime::DraftReopenNotice::None);
+    // The draft was dropped, so the clean buffer has nothing to flush.
+    ASSERT_EQ(runtime.flushAllAutosaveDrafts(), std::size_t{0});
+}
+
+TEST(reopeningADraftAfterAnExternalChangeFlagsConflict) {
+    auto root = uniqueRoot("draft_conflict");
+    const auto draft = leaveDirtyDraft(root);
+    ASSERT_TRUE(!draft.empty());
+    // Something other than SSG rewrote the file since the edits branched.
+    std::ofstream{root / "workspace" / "note.txt", std::ios::binary}
+        << "changed externally\n";
+
+    auto created = ssg::EditorRuntime::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(reopenNote(runtime).accepted());
+    // The draft still loads as a dirty buffer (never a blind blocking choice)...
+    ASSERT_EQ(runtime.activeDocumentText(), draft);
+    ASSERT_TRUE(activeTabDirty(runtime));
+    // ...but the conflict notice fires because disk changed.
+    ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
+                ssg::EditorRuntime::DraftReopenNotice::Conflict);
+}
+
+TEST(editingAndSavingARestoredDraftRoundTripsCoherently) {
+    // Guards the decoded/document coherence seam: a restored draft's `decoded`
+    // must match the buffer so a later edit's terminator bookkeeping and a save
+    // do not desynchronize. The disk file uses CRLF so the terminator convention
+    // is non-trivial.
+    auto root = uniqueRoot("draft_edit_after_restore");
+    {
+        std::ofstream{root / "workspace" / "note.txt", std::ios::binary}
+            << "one\r\ntwo\r\n";
+        auto created = ssg::EditorRuntime::create(configFor(root));
+        ASSERT_TRUE(created.accepted());
+        auto& runtime = *created.runtime;
+        ASSERT_TRUE(reopenNote(runtime).accepted());
+        ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                     {"text.insert", runtime.revision(),
+                                      ssg::TextInputArguments{"X"}})
+                        .accepted());
+        ASSERT_EQ(runtime.flushDueAutosaveDrafts(), std::size_t{1});
+    }
+    auto created = ssg::EditorRuntime::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(reopenNote(runtime).accepted());
+    ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
+                ssg::EditorRuntime::DraftReopenNotice::Restored);
+    const auto restored = runtime.activeDocumentText();
+    // A further edit after restore must apply cleanly and stay dirty...
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"text.insert", runtime.revision(),
+                                  ssg::TextInputArguments{"Y"}})
+                    .accepted());
+    ASSERT_EQ(runtime.activeDocumentText(), "Y" + restored);
+    ASSERT_TRUE(activeTabDirty(runtime));
+    // ...and a save must write CRLF back to disk, proving decoded's terminator
+    // convention survived the restore.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.save", runtime.revision(), {}})
+                    .accepted());
+    ASSERT_FALSE(activeTabDirty(runtime));
+    ASSERT_NE(readText(root / "workspace" / "note.txt").find("\r\n"),
+              std::string::npos);
+}
+
+TEST(reactivatingAnOpenTabDoesNotReapplyItsDraft) {
+    // The freshlyOpened gate: with a draft still present in scratch, switching
+    // back to an already-open tab must not re-run reconcile and clobber the live
+    // buffer with the stale draft.
+    auto root = uniqueRoot("draft_no_reclobber");
+    const auto draft = leaveDirtyDraft(root);
+    ASSERT_TRUE(!draft.empty());
+    std::ofstream{root / "workspace" / "other.txt", std::ios::binary} << "other\n";
+
+    auto created = ssg::EditorRuntime::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(reopenNote(runtime).accepted());
+    ASSERT_EQ(runtime.activeDocumentText(), draft);
+    // Edit past the recovered draft, open another file, then re-open note.txt:
+    // openFile short-circuits to the already-open document, so reconcile must not
+    // run again and must leave the live edited buffer intact.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"text.insert", runtime.revision(),
+                                  ssg::TextInputArguments{"Z"}})
+                    .accepted());
+    const auto live = runtime.activeDocumentText();
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.open", runtime.revision(),
+                                  std::string{"other.txt"}})
+                    .accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.open", runtime.revision(),
+                                  std::string{"note.txt"}})
+                    .accepted());
+    ASSERT_EQ(runtime.activeDocumentText(), live);
+    ASSERT_TRUE(activeTabDirty(runtime));
+}
+
 TEST(openingAFileRevealsTheCaretResettingAStaleScroll) {
     // Reveal-policy audit (doc/spec-scroll.md): opening a document must show the
     // caret, not inherit the previous document's scroll offset. Two tall files.
@@ -421,6 +593,11 @@ int main() {
     RUN(autosaveFlushesADirtyDocumentEagerlyThenDebounces);
     RUN(autosaveFlushesNothingWhenNoDocumentIsDirty);
     RUN(autosaveFlushAllForcesADirtyDocumentAfterAnEagerFlush);
+    RUN(reopeningADirtyDraftRestoresTheEditsWhenDiskIsUnchanged);
+    RUN(reopeningAConvergedDraftDropsItAndOpensClean);
+    RUN(reopeningADraftAfterAnExternalChangeFlagsConflict);
+    RUN(editingAndSavingARestoredDraftRoundTripsCoherently);
+    RUN(reactivatingAnOpenTabDoesNotReapplyItsDraft);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }
