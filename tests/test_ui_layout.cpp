@@ -3,7 +3,9 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdlib>
 #include <fstream>
+#include <functional>
 #include <iterator>
 #include <sstream>
 #include <optional>
@@ -660,6 +662,219 @@ TEST(labelWidthsAreMeasuredInCellsNotBytes) {
     ASSERT_EQ(wideResult.view->tabHits.front().rect.width, 6);
 }
 
+// ---------------------------------------------------------------------------
+// Golden fixture (spec-layout-engine.md, Plan step 1): a deterministic dump of
+// computeShellLayout's full ShellViewState across a broad input matrix, captured
+// from the CURRENT code and committed. The layout-engine rearchitecture must
+// reproduce this byte-for-byte. The palette overlay is added downstream in
+// snapshot.cpp from panes.front().content, which is in this dump, so pinning this
+// output pins the palette too; the palette's own influence on THIS function is
+// the input-line reservation, covered by the input-line cases below.
+// Regenerate (only after an intentional layout change) with SSG_REGEN_GOLDEN=1.
+
+std::string rectStr(const Rect& r) {
+    std::ostringstream o;
+    o << r.x << ',' << r.y << ',' << r.width << ',' << r.height;
+    return o.str();
+}
+
+void dumpOptRect(std::ostringstream& o, const char* name,
+                 const std::optional<Rect>& r) {
+    o << name << '=' << (r ? rectStr(*r) : std::string{"none"}) << '\n';
+}
+
+std::string serializeLayout(const ShellLayoutResult& result) {
+    std::ostringstream o;
+    if (!result.accepted()) {
+        o << "ERROR code=" << static_cast<int>(result.error->code)
+          << " msg=" << result.error->message << '\n';
+        return o.str();
+    }
+    const auto& v = *result.view;
+    o << "viewport=" << v.viewport.columns << 'x' << v.viewport.rows << '\n';
+    o << "focus=" << static_cast<int>(v.focus) << '\n';
+    dumpOptRect(o, "header", v.header);
+    dumpOptRect(o, "footer", v.footer);
+    dumpOptRect(o, "tabBar", v.tabBar);
+    dumpOptRect(o, "panel", v.panel);
+    dumpOptRect(o, "panelScrollbar", v.panelScrollbar);
+    dumpOptRect(o, "prompt", v.prompt);
+    o << "panes:\n";
+    for (const auto& p : v.panes) {
+        o << "  id=" << p.id.value() << " frame=" << rectStr(p.frame)
+          << " content=" << rectStr(p.content) << " scrollbar="
+          << rectStr(p.scrollbar) << '\n';
+    }
+    o << "tabHits:\n";
+    for (const auto& t : v.tabHits) {
+        o << "  index=" << t.index << " rect=" << rectStr(t.rect) << '\n';
+    }
+    o << "a11y:\n";
+    for (const auto& n : v.accessibilityNodes) {
+        o << "  kind=" << static_cast<int>(n.kind) << " role="
+          << static_cast<int>(n.role) << " rect=" << rectStr(n.rect)
+          << " id=" << n.id << " label=" << n.label << " content=" << n.content
+          << " cmd=" << (n.commandId ? *n.commandId : std::string{}) << '\n';
+    }
+    o << "palette=" << (v.palette ? "present" : "none") << '\n';
+    return o.str();
+}
+
+// One case: a descriptive name and the request+state it produces. The state is
+// mutated by `configure` (panel/splits/focus/distraction-free), so every knob
+// that changes the output is represented.
+std::string captureGoldenMatrix() {
+    std::ostringstream out;
+    auto emitCase = [&](const std::string& name, ShellLayoutRequest req,
+                        const std::function<void(ShellState&)>& configure) {
+        ShellState state;
+        if (configure) configure(state);
+        out << "=== " << name << " ===\n"
+            << serializeLayout(computeShellLayout(req, state)) << '\n';
+    };
+    auto panelOn = [](ShellState& s) { s.togglePanel(); };
+
+    // Viewport sizes, panel off/on.
+    emitCase("min-20x4", request(20, 4), nullptr);
+    emitCase("min-20x4-panel", request(20, 4), panelOn);
+    emitCase("below-min-19x4", request(19, 4), nullptr);
+    emitCase("std-80x24", request(80, 24), nullptr);
+    emitCase("std-80x24-panel", request(80, 24), panelOn);
+    emitCase("tall-100x40-panel", request(100, 40), panelOn);
+    emitCase("odd-33x11-panel", request(33, 11), panelOn);
+
+    // Panel width thresholds (default target 24 / min 12 / editorMin 20).
+    for (int cols : {31, 32, 43, 44, 45}) {
+        emitCase("panel-threshold-" + std::to_string(cols), request(cols, 24),
+                 panelOn);
+    }
+
+    // Prompt reservation 0..3, plus the two error paths.
+    for (int rows : {0, 1, 2, 3}) {
+        auto req = request(80, 24);
+        req.reservedPromptRows = static_cast<std::uint8_t>(rows);
+        emitCase("prompt-rows-" + std::to_string(rows), req, nullptr);
+    }
+    {
+        auto tooTall = request(80, 5);  // header+tabbar+footer leave 2 editor rows
+        tooTall.reservedPromptRows = 3;
+        emitCase("prompt-leaves-no-row", tooTall, nullptr);
+        auto invalid = request(80, 24);
+        invalid.reservedPromptRows = 4;
+        emitCase("prompt-rows-invalid-4", invalid, nullptr);
+    }
+
+    // Input line (the palette's influence on this function).
+    {
+        auto req = request(80, 24);
+        req.inputLineActive = true;
+        req.inputLineQuery = "find";
+        req.inputLineGhost = "er";
+        emitCase("inputline-query-ghost", req, nullptr);
+        auto longQ = request(60, 24);
+        longQ.inputLineActive = true;
+        longQ.inputLineQuery =
+            "a-very-long-query-that-must-scroll-under-the-sigil-xyz";
+        emitCase("inputline-long-query", longQ, nullptr);
+    }
+
+    // Pane topologies.
+    emitCase("split-horizontal", request(80, 24),
+             [](ShellState& s) { s.splitActive(SplitAxis::Horizontal); });
+    emitCase("split-vertical", request(80, 24),
+             [](ShellState& s) { s.splitActive(SplitAxis::Vertical); });
+    emitCase("split-nested", request(80, 24), [](ShellState& s) {
+        s.splitActive(SplitAxis::Horizontal);
+        s.splitActive(SplitAxis::Vertical);
+    });
+
+    // Tabs: none, and many (narrow, to exercise the auto-scroll window).
+    {
+        auto none = request(80, 24);
+        none.tabs.clear();
+        emitCase("tabs-none", none, nullptr);
+        auto many = request(30, 24);
+        many.tabs.clear();
+        for (int i = 0; i < 8; ++i) {
+            many.tabs.push_back({"file" + std::to_string(i) + ".cpp",
+                                 "file" + std::to_string(i) + " tab",
+                                 i == 6, i % 2 == 0});
+        }
+        emitCase("tabs-many-narrow", many, nullptr);
+        auto multibyte = request(40, 24);
+        multibyte.tabs = {{"\xE4\xB8\x80\xE4\xBA\x8C.txt", "cjk tab", true}};
+        emitCase("tabs-multibyte", multibyte, nullptr);
+    }
+
+    // Focus targets.
+    emitCase("focus-panel", request(80, 24), [](ShellState& s) {
+        s.togglePanel();
+        (void)s.focusPanel();
+    });
+    emitCase("focus-prompt", request(80, 24),
+             [](ShellState& s) { s.enterPromptFocus(); });
+
+    // Empty state.
+    {
+        auto req = request(80, 24);
+        req.emptyState = true;
+        emitCase("empty-state", req, nullptr);
+    }
+
+    // Distraction-free (with and without a prompt reservation, which it ignores).
+    emitCase("distraction-free", request(80, 24),
+             [](ShellState& s) { s.toggleDistractionFree(); });
+    {
+        auto req = request(80, 24);
+        req.reservedPromptRows = 2;
+        emitCase("distraction-free-with-prompt", req,
+                 [](ShellState& s) { s.toggleDistractionFree(); });
+    }
+
+    // Non-default Style dimensions.
+    {
+        auto req = request(80, 24);
+        req.style.dimensions.headerHeight = 2;
+        req.style.dimensions.footerHeight = 2;
+        req.style.dimensions.tabBarHeight = 2;
+        req.style.dimensions.scrollbarGutterWidth = 2;
+        req.style.dimensions.panelTargetWidth = 30;
+        emitCase("non-default-style-panel", req, panelOn);
+    }
+    return out.str();
+}
+
+std::string readGoldenFile(const std::string& path) {
+    std::ifstream input{path, std::ios::binary};
+    return {std::istreambuf_iterator<char>{input},
+            std::istreambuf_iterator<char>{}};
+}
+
+TEST(shellLayoutMatchesTheCommittedGolden) {
+    const std::string actual = captureGoldenMatrix();
+    const std::string path =
+        std::string{SSG_SOURCE_DIR} + "/tests/fixtures/ui_layout/golden.txt";
+    if (std::getenv("SSG_REGEN_GOLDEN") != nullptr) {
+        std::ofstream{path, std::ios::binary} << actual;
+        std::cout << "  regenerated " << path << '\n';
+        ++passed;
+        return;
+    }
+    const std::string expected = readGoldenFile(path);
+    if (expected.empty()) {
+        std::cerr << "  layout golden missing; run SSG_REGEN_GOLDEN=1 to create "
+                  << path << '\n';
+        ++failed;
+        return;
+    }
+    if (actual != expected) {
+        std::cerr << "  layout golden mismatch (byte-for-byte layout changed)\n";
+        ++failed;
+    } else {
+        ++passed;
+    }
+}
+
 int main() {
     RUN(handAuthoredGeometryGoldens);
     RUN(viewportAndPromptErrorsAreTyped);
@@ -681,6 +896,7 @@ int main() {
     RUN(shellLayoutTakesItsDimensionsAndSigilFromStyle);
     RUN(chromeHeightsAndGutterWidthAreHonoured);
     RUN(labelWidthsAreMeasuredInCellsNotBytes);
+    RUN(shellLayoutMatchesTheCommittedGolden);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << '\n';
     return failed == 0 ? 0 : 1;
 }
