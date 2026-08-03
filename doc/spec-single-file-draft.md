@@ -1,6 +1,11 @@
 # spec-single-file-draft
 
-Status: DRAFT (spec only — collaborate on open questions before implementing)
+Status: IMPLEMENTED — all phases landed and merged to master. Single-file draft
+recovery is complete and hardened; see the build list below for the per-phase
+commits and "Decisions settled during implementation" for the design choices the
+build made beyond the pre-implementation decisions. One optional follow-up
+remains (a persistence on/off toggle + a purge-session command), tracked
+separately and deliberately not built.
 
 Scope: the **single-file** half of the autosave/reopen feature. This is the
 foundation; multi-tab / directory session restore (Notepad++/Kate "reopen all my
@@ -267,35 +272,47 @@ existing reload. Both register through the normal command builder pattern
 
 ## What's missing in the code (the build list)
 
+*All items below are DONE and merged to master. Commits are noted per item.*
+
 1. **Draft baseline in the record.** *(DONE — commit `36f70c2`.)* The draft
    record carries an optional `{mtime, size, contentHash}`, the journal format is
    v2 with version-tolerant replay, and `fastContentHash` (FNV-1a-64) exists. The
    store keeps its existing per-workspace keying (Decision 1 — no re-key).
-1b. **Capture the baseline** at open, save, and reload (fill the field). Plus a
-   **stable XDG root** in the app (`userStateRoot` → `$XDG_STATE_HOME/ssg`)
-   replacing per-PID temp, sequenced with the reopen classification.
-   *(src/Workspace.cpp, src/EditorRuntime.cpp, src/platform/*_files.cpp,
-   apps/ssg_main.cpp)*
-3. **Debounced flush of OPEN documents** (shared Phase 1): flush a dirty doc at
-   most once per configurable interval (default 10s) since its last edit, plus on
-   tab close (today) and a best-effort flush of all dirty docs on process exit.
-   *(src/EditorRuntime.cpp, apps/ssg_main.cpp heartbeat + exit hook,
-   include/ssg/EditorRuntime.h, Settings for the interval)*
-4. **Reopen classification** on `file.open`: look up the draft for the file,
-   compare baseline to disk, and drive load + conflict state. *(src/runtime/
-   files.cpp, src/EditorRuntime.cpp)*
-5. **The yellow clickable conflict notice**: a new **reserved chrome row**
-   (a virtual notice row the viewport reserves above the document, like the
-   prompt row — NOT document content row 0, which would shift line/caret/scroll/
-   hit-test math), hit-tested for `[Diff]`/`[Use disk]`/`[Dismiss]`.
-   *(src/snapshot.cpp / src/ShellState.cpp, viewport/layout reservation,
-   HitTester, Renderer)*
-6. **`draft.diff` command**: assemble a draft-vs-disk diff tab from `computeDiff`
-   + `seedNonGit`. *(src/runtime/files.cpp or navigation.cpp, src/DiffModel.cpp
-   reuse)*
-7. **`draft.discard` command**: archive + `removeDocument` + reload-from-disk +
-   clear dirty/notice. *(src/runtime/files.cpp, reuse ExternalModificationFlow
-   reload)*
+1b. **Capture the baseline** at open, save, and reload. *(DONE — commit
+   `89a61a3`.)* Undo/compensation paths restore the prior baseline (review MUST).
+   *(src/Workspace.cpp, src/EditorRuntime.cpp)*
+1c. **Stable state root.** *(DONE — commit `06a695b`.)* Added `userStateRoot`
+   (`$XDG_STATE_HOME/ssg` → `~/.local/state/ssg`) beside `userConfigRoot`/
+   `userCacheRoot` on both platforms; the app resolves the scratch + archive root
+   there (overridable via `SSG_STATE_DIR`) so drafts survive a restart. The
+   recovery root stays **ephemeral per-PID** (Decision 8). *(src/platform/
+   *_files.cpp, apps/ssg_main.cpp)*
+3. **Debounced flush of OPEN documents.** *(DONE — `DraftAutosaveScheduler`
+   policy `67dd0f7`; runtime + `AutosaveDebounceMs` setting + app tick/exit hook
+   `a245044`.)* Eager first flush then debounce; flush on tab close and clean
+   exit. *(src/EditorRuntime.cpp, apps/ssg_main.cpp, Settings)*
+4. **Reopen classification** on `file.open`. *(DONE — `DraftReopenClassifier`
+   `acc6fa7`/`51dde3d`; wired via `reconcileDraftOnOpen` `c9fa6dc`.)* The
+   classifier takes both raw disk bytes (for the baseline hash compare) and the
+   decoded text (for the converged compare), so CRLF/BOM/UTF-16 files classify
+   correctly. *(src/runtime/files.cpp, src/EditorRuntime.cpp)*
+5. **The yellow clickable conflict notice.** *(DONE — commit `5bfde2a`.)* A
+   reserved chrome row above the document (Decision 6), hit-tested for
+   `[Diff]`/`[Use disk]`/`[Dismiss]`. *(src/ShellState.cpp, src/runtime/
+   snapshot.cpp, HitTester, Renderer)*
+6. **`draft.diff` command.** *(DONE — commit `eaf3089`.)* Draft-vs-disk live diff
+   via the non-git engine; git rescans no longer evict it (Decision 7).
+   *(src/EditorRuntime.cpp, src/DiffModel.cpp, src/runtime/files.cpp)*
+7. **`draft.discard` command.** *(DONE — commit `7057f42`.)* Archive → reload
+   from disk → remove draft → clear notice; `draft.dismiss` (with the notice) and
+   `Alt+Shift+D` also land here. *(src/runtime/files.cpp, src/EditorRuntime.cpp)*
+8. **Corner-case hardening.** *(DONE — commit `6583a7e`; plus autosave-candidate
+   fix `4ee4711`.)* Binary/undecodable disk replacement raises the conflict notice
+   instead of silently dropping the draft; an oversized buffer gets no draft
+   (Decision 9), reported once; live-diff virtual documents are excluded from
+   autosave candidates. Already-present robustness (verified, not rebuilt): FAILED
+   durability badge on write failure, torn-tail journal replay, legacy
+   absent-baseline → conflict.
 
 ## Decisions (settled — implement to these)
 
@@ -341,9 +358,65 @@ existing reload. Both register through the normal command builder pattern
    `.ssg/settings.json`); the app emits the heartbeat, the library decides which
    dirty docs are due.
 5. **`draft.discard` / `[Use disk]`: no prompt.** It is non-destructive because
-   the draft is archived first, so it needs no confirmation. Bind to a
-   discoverable key (proposed `Alt+Shift+D`, confirm during implementation) and
-   expose via the notice's `[Use disk]` region and the palette.
+   the draft is archived first, so it needs no confirmation. *(Implemented:
+   bound to `Alt+Shift+D`, exposed via the notice's `[Use disk]` region and the
+   palette. A `draft.dismiss` command backs the notice's `[Dismiss]`.)*
+
+## Decisions settled during implementation
+
+These were decided while building, beyond the pre-implementation decisions above.
+Each records a choice the code now depends on.
+
+6. **The conflict notice is a shell accessibility node, not a new snapshot
+   section.** Rather than add a `draftNotice` `SessionSnapshot` section (which
+   would need a delta codec + Protocol codec + golden fixtures in ~9 places), the
+   notice piggybacks on the existing `ShellViewState.accessibilityNodes`: two new
+   `ShellNodeKind`s (`NoticeBar`, `NoticeAction`) reuse the existing hit-test and
+   render paths. The only protocol change is two entries appended to the
+   `ShellNodeKind` decode whitelist — no golden churn. The notice reserves ONE
+   row at the **top** of the document region (mirroring the prompt reservation
+   from the bottom): `editor.y += 1; editor.height -= 1`, so the document's own
+   coordinate space (line numbers, caret, scroll, viewport-relative hit-testing)
+   is unperturbed. Only the `Conflict` outcome raises the bar; `Restored` is a
+   quieter state with no notice.
+
+7. **A git rescan reconciles only git-source entries.** `draft.diff` builds a
+   *non-git* `DiffModel` entry (id `"draft:"+savedPath`). The git-scan
+   reconciliation (`applyGitDiffScan`) previously evicted every entry the scan did
+   not mention — which would delete the draft entry (and, latently, external-
+   modification entries). Fixed by `DiffModel::isGitFile`: the scan's removal pass
+   skips non-git entries. The DiffModel is single-threaded on the command thread,
+   so the `revision+1` bump for the draft entry cannot race the worker.
+
+8. **The recovery root stays ephemeral (per-PID); only scratch + archive are
+   stable.** Recovery records (`RecoveryActions`) are in-session undo of
+   destructive filesystem ops; they have no cross-restart requirement and no
+   inter-process coordination. Making them share a stable root would let
+   concurrent instances race each other's records and violate the global budget.
+   So the app points `scratchRoot` and `archiveRoot` at the stable state root but
+   keeps `recoveryRoot` in a per-PID temp dir. The stable state subtree is
+   hardened to owner-only permissions (it holds unsaved content).
+
+9. **The discard archive is named by a bounded hash, and there is a per-draft
+   size cap.** `draft.discard` archives the discarded edits under
+   `<scratch>/../draft-archive/` with a name of `basename` + `fastContentHash(
+   relpath)` + nanosecond stamp — NOT the flattened relative path, which for a
+   legal deep path can exceed a filesystem's 255-byte component limit and make
+   discard fail. Discard waits briefly (`waitUntilDurable(100ms)`, like tab close)
+   after removing the scratch draft so "Use disk" is durable. Separately, a buffer
+   larger than a per-draft byte cap (default 64 MiB) gets **no** draft — a giant
+   draft every debounce tick would blow the 256 MiB scratch quota and stall fsync
+   — reported once via a status warning, never a silent partial draft. Autosave
+   candidacy is gated on `DocumentMode::Edit` so live-diff/read-only virtual
+   documents are never persisted as spurious untitled drafts.
+
+10. **Deferred (optional, not built).** An enable/disable draft-persistence
+    setting and a `draft.purge_session` command (discard all drafts) were judged
+    optional; they expand the settings enum + Protocol decode table + goldens, and
+    are tracked separately. Also noted for that work: the close-path
+    (`recovery.closeDocument` on tab close/exit) does NOT apply the per-draft size
+    cap the debounce path does — an over-cap document still writes a full draft on
+    close; unify if the toggle work lands.
 
 ## Acceptance (Definition of Done)
 
