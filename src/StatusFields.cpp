@@ -17,6 +17,21 @@ std::string composeBranchField(std::string_view branchName) {
     return std::string{"\xE2\x8E\x87 "} + std::string{branchName};
 }
 
+// Replaces a leading home directory with "~" so a home-rooted workspace path
+// shows compactly (e.g. "~/repo/ssg"), leaving header room for the branch. A
+// path outside home, or an unknown home, is returned unchanged.
+std::string abbreviateHome(const std::filesystem::path& path,
+                           std::string_view home) {
+    auto text = path.generic_string();
+    if (home.empty() || text.size() < home.size() ||
+        text.compare(0, home.size(), home) != 0) {
+        return text;
+    }
+    if (text.size() == home.size()) return "~";
+    if (text[home.size()] == '/') return "~" + text.substr(home.size());
+    return text;
+}
+
 std::optional<std::string> objectStringField(const std::string& object,
                                              const std::string& fieldName) {
     const std::regex expression{
@@ -97,7 +112,8 @@ std::vector<StatusFieldProviderBinding> defaultStatusFieldProviders() {
         {"path",
          [](StatusFieldProviderContext const& context)
              -> std::optional<std::string> {
-             return context.workspaceRoot.string();
+             return abbreviateHome(context.workspaceRoot,
+                                   context.homeDirectory);
          }},
         {"branch",
          [](StatusFieldProviderContext const& context)

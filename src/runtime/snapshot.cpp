@@ -7,6 +7,7 @@
 #include <ssg/PaletteSearcher.h>
 
 #include <algorithm>
+#include <cstdlib>
 #include <variant>
 
 namespace ssg {
@@ -68,11 +69,6 @@ TextEncodingViewState EditorRuntime::Impl::textEncodingView() const {
     return {state ? state->encoding : TextEncodingStatus{}};
 }
 
-std::string EditorRuntime::Impl::currentPathLabel() const {
-    auto state = activeWorkspaceState();
-    return state ? state->displayLabel : root.filename().string();
-}
-
 PromptStatusViewState EditorRuntime::Impl::promptStatusView(ViewportDimensions dimensions) const {
     PromptStatusViewState view;
     auto rows = promptRowCount(prompt.request() ? prompt.request()->kind : PromptKind::CommandArgument);
@@ -129,7 +125,7 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
     auto statusFields = projectStatusFields(
         statusFieldCatalog, statusFieldProviders,
         {.workspaceRoot = root,
-         .currentPathLabel = currentPathLabel(),
+         .homeDirectory = homeDirectory,
          .currentBranch = currentGitBranch,
          .statusValue = statusProjection.value,
          .followMode = followProjection.mode});

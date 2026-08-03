@@ -183,6 +183,11 @@ struct EditorRuntime::Impl final : CommandServices,
     // saved; their content is refreshed by remove+recreate, never edited in
     // place (see openReadOnlyTab).
     std::unordered_map<std::string, FileDocumentId> readOnlyTabDocuments;
+    // The user's home directory, resolved once at construction (HOME, then
+    // USERPROFILE, with trailing separators stripped) so the header path field's
+    // "~" abbreviation is deterministic across a session rather than re-reading
+    // the process environment on every snapshot. Empty disables abbreviation.
+    std::string homeDirectory;
     // Per-document syntax language override for documents with no on-disk path
     // to infer a language from (a read-only help/output tab). refreshSyntax
     // consults this before falling back to path-derived detection, so a help
@@ -416,7 +421,6 @@ struct EditorRuntime::Impl final : CommandServices,
     void revealPrimaryCaret();
     [[nodiscard]] TextEncodingViewState textEncodingView() const;
     [[nodiscard]] DocumentViewState documentView() const;
-    [[nodiscard]] std::string currentPathLabel() const;
     [[nodiscard]] CommandHandlerResult updateTabsFor(FileDocumentId document);
     [[nodiscard]] CommandHandlerResult activateDocument(FileDocumentId document);
     [[nodiscard]] ExternalDiffBurstResult applyExternalDiffBurst(

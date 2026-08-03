@@ -81,6 +81,30 @@ std::string liveDiffTabLabelForPath(const std::filesystem::path& path) {
     return filename.empty() ? path.generic_string() : filename;
 }
 
+// The user's home directory for the header path field's "~" abbreviation.
+// HOME first (POSIX), then USERPROFILE (Windows); trailing separators are
+// stripped so a home value like "/home/user/" still matches "/home/user/repo".
+// Empty when unknown, which disables the abbreviation.
+std::string resolveHomeDirectory() {
+    std::string home;
+    if (const char* value = std::getenv("HOME"); value != nullptr) {
+        home = value;
+    } else if (const char* profile = std::getenv("USERPROFILE");
+               profile != nullptr) {
+        home = profile;
+    }
+    while (!home.empty() && (home.back() == '/' || home.back() == '\\')) {
+        home.pop_back();
+    }
+    // The path field compares against workspaceRoot.generic_string() ('/'
+    // separators on every platform), so normalize a Windows USERPROFILE's
+    // backslashes to match.
+    for (auto& ch : home) {
+        if (ch == '\\') ch = '/';
+    }
+    return home;
+}
+
 std::string liveDiffDocumentText(const DiffFileView& file) {
     // A deleted file's whole content is represented as Removed phantom rows
     // (see Viewport.cpp's removedBlocks/phantom-row projection), never as
@@ -444,6 +468,7 @@ EditorRuntime::Impl::Impl(std::filesystem::path canonicalCwd,
         statusFieldProviders.insert_or_assign(provider.id,
                                               std::move(provider.provider));
     }
+    homeDirectory = resolveHomeDirectory();
     refreshTree();
     refreshSyntax();
     startGitDiffWorker(enableGitDiffWorker);
