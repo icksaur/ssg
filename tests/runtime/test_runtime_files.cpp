@@ -2,6 +2,7 @@
 
 #include <ssg/EditorRuntime.h>
 #include <ssg/FileCommands.h>
+#include <ssg/GitDiffSource.h>
 #include <ssg/Keymap.h>
 #include <ssg/session_snapshot.h>
 #include <ssg/TextCodec.h>
@@ -52,6 +53,17 @@ bool activeTabDirty(const ssg::EditorRuntime& runtime) {
     if (!tabs.active) return false;
     for (const auto& tab : tabs.tabs) {
         if (tab.id == *tabs.active) return tab.dirty;
+    }
+    return false;
+}
+
+bool activeTabIsLiveDiff(const ssg::EditorRuntime& runtime) {
+    auto snapshot = runtime.snapshot(ssg::ClientId{1}, {80, 24});
+    if (!snapshot) return false;
+    const auto& tabs = snapshot->sections().tabs;
+    if (!tabs.active) return false;
+    for (const auto& tab : tabs.tabs) {
+        if (tab.id == *tabs.active) return tab.kind == ssg::TabKind::LiveDiff;
     }
     return false;
 }
@@ -215,6 +227,106 @@ TEST(reactivatingAnOpenTabDoesNotReapplyItsDraft) {
                     .accepted());
     ASSERT_EQ(runtime.activeDocumentText(), live);
     ASSERT_TRUE(activeTabDirty(runtime));
+}
+
+TEST(draftDiffOnAConflictShowsDraftAgainstDiskHunks) {
+    auto root = uniqueRoot("draft_diff_conflict");
+    const auto draft = leaveDirtyDraft(root);  // "!hi\n"
+    ASSERT_TRUE(!draft.empty());
+    std::ofstream{root / "workspace" / "note.txt", std::ios::binary}
+        << "changed externally\n";
+
+    auto created = ssg::EditorRuntime::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(reopenNote(runtime).accepted());
+    ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
+                ssg::EditorRuntime::DraftReopenNotice::Conflict);
+
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"draft.diff", runtime.revision(), {}})
+                    .accepted());
+    // The diff is its own derived tab, distinct from the still-dirty draft.
+    ASSERT_TRUE(activeTabIsLiveDiff(runtime));
+    // The merged diff view carries the target (draft) content; the disk-only
+    // baseline line is projected as a phantom removed row, so the draft's own
+    // line is what the diff document text holds.
+    const auto diffText = runtime.activeDocumentText();
+    ASSERT_NE(diffText.find("!hi"), std::string::npos);
+}
+
+TEST(draftDiffWithDiskMissingDiffsDraftAgainstEmpty) {
+    auto root = uniqueRoot("draft_diff_missing");
+    const auto draft = leaveDirtyDraft(root);
+    ASSERT_TRUE(!draft.empty());
+    std::ofstream{root / "workspace" / "note.txt", std::ios::binary}
+        << "changed externally\n";
+
+    auto created = ssg::EditorRuntime::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(reopenNote(runtime).accepted());
+    // The file vanishes after the draft is open: draft.diff must still succeed,
+    // diffing the draft against empty rather than failing.
+    std::filesystem::remove(root / "workspace" / "note.txt");
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"draft.diff", runtime.revision(), {}})
+                    .accepted());
+    ASSERT_TRUE(activeTabIsLiveDiff(runtime));
+    ASSERT_NE(runtime.activeDocumentText().find("!hi"), std::string::npos);
+}
+
+TEST(draftDiffSurvivesAGitScanThatDoesNotMentionTheFile) {
+    // A git rescan reconciles only its own entries; the non-git draft-vs-disk
+    // entry must not be evicted just because the scan does not list it.
+    auto root = uniqueRoot("draft_diff_git_scan");
+    const auto draft = leaveDirtyDraft(root);
+    ASSERT_TRUE(!draft.empty());
+    std::ofstream{root / "workspace" / "note.txt", std::ios::binary}
+        << "changed externally\n";
+
+    auto created = ssg::EditorRuntime::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(reopenNote(runtime).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"draft.diff", runtime.revision(), {}})
+                    .accepted());
+    ASSERT_TRUE(activeTabIsLiveDiff(runtime));
+    // Pause follow-edits so the scan does not auto-navigate to the git-changed
+    // file; this test is about the draft entry surviving, not follow behavior.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"follow_edits.pause", runtime.revision(), {}})
+                    .accepted());
+
+    // A git scan that finds unrelated changes (not note.txt) arrives.
+    ssg::GitDiffScan scan;
+    scan.revision = ssg::Revision{1000};
+    scan.baselineIdentity = "index-a";
+    scan.currentBranch = "main";
+    scan.files.push_back({ssg::DiffFileId{"other.cpp"}, "other.cpp",
+                          std::nullopt, std::string{"x\n"},
+                          std::string{"y\n"}});
+    ASSERT_TRUE(runtime.applyGitDiffScan(std::move(scan)).accepted());
+
+    // The draft-vs-disk diff tab is still active and still shows the draft.
+    ASSERT_TRUE(activeTabIsLiveDiff(runtime));
+    ASSERT_NE(runtime.activeDocumentText().find("!hi"), std::string::npos);
+}
+
+TEST(draftDiffRefusesWhenTheActiveDocumentIsNotASavedFile) {
+    // An untitled scratch buffer has no disk side to diff against.
+    auto root = uniqueRoot("draft_diff_untitled");
+    std::ofstream{root / "workspace" / "note.txt", std::ios::binary} << "hi\n";
+    auto created = ssg::EditorRuntime::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    auto& runtime = *created.runtime;
+    (void)runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                         ssg::ViewId{1});
+    // The session starts on an empty untitled buffer; draft.diff must refuse it.
+    ASSERT_FALSE(runtime.dispatch(ssg::ClientId{1},
+                                  {"draft.diff", runtime.revision(), {}})
+                     .accepted());
 }
 
 TEST(openingAFileRevealsTheCaretResettingAStaleScroll) {
@@ -598,6 +710,10 @@ int main() {
     RUN(reopeningADraftAfterAnExternalChangeFlagsConflict);
     RUN(editingAndSavingARestoredDraftRoundTripsCoherently);
     RUN(reactivatingAnOpenTabDoesNotReapplyItsDraft);
+    RUN(draftDiffOnAConflictShowsDraftAgainstDiskHunks);
+    RUN(draftDiffWithDiskMissingDiffsDraftAgainstEmpty);
+    RUN(draftDiffSurvivesAGitScanThatDoesNotMentionTheFile);
+    RUN(draftDiffRefusesWhenTheActiveDocumentIsNotASavedFile);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

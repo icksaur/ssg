@@ -400,6 +400,11 @@ struct EditorRuntime::Impl final : CommandServices,
     [[nodiscard]] CommandHandlerResult openOrFocusLiveDiffTab(
         const DiffFileView& file, NavigationClass classification,
         std::optional<ClientId> userClient);
+    // Open a live diff tab of the active saved document's buffer (the draft,
+    // the target) against its CURRENT disk content (the baseline), via the
+    // source-agnostic non-git diff engine. A missing/unreadable disk file diffs
+    // the draft against empty. The tab is a derived view, not persisted.
+    [[nodiscard]] CommandHandlerResult openDraftDiff();
     void refreshLiveDiffDocuments(const DiffViewState& view);
     [[nodiscard]] bool openOrRevealFollowTargetProgrammatic(
         const FollowTarget& target);

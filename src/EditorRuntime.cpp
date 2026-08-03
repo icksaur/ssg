@@ -4,6 +4,7 @@
 #include <ssg/DraftReopen.h>
 #include <ssg/FilesystemWatcher.h>
 #include <ssg/GraphemeLayout.h>
+#include <ssg/platform_files.h>
 
 #include <algorithm>
 #include <array>
@@ -1239,6 +1240,50 @@ CommandHandlerResult EditorRuntime::Impl::openOrFocusLiveDiffTab(
     return success();
 }
 
+CommandHandlerResult EditorRuntime::Impl::openDraftDiff() {
+    const auto id = activeDocumentId();
+    if (!id) return failure("no active document");
+    const auto state = workspace.state(*id);
+    if (!state || state->key.kind() != JournalDocumentKeyKind::Saved) {
+        // A live diff tab's document (and an untitled buffer) is not a saved
+        // file, so it has no on-disk side to diff the draft against.
+        return failure("draft.diff needs a saved file");
+    }
+    const auto* opened = workspace.tryDocument(*id);
+    if (opened == nullptr) return failure("no active document");
+    const std::string draft = opened->snapshot().text;
+
+    // The baseline is the file's CURRENT disk content, read now (not the
+    // open-time bytes) so the diff reflects any external change. A missing or
+    // unreadable file diffs the draft against empty, matching a deleted-file
+    // conflict where the draft would recreate the file on save.
+    const auto absolute =
+        workspace.root() / std::filesystem::path{state->key.savedPath()};
+    std::string disk;
+    if (const auto read = readFile(absolute); read.ok()) {
+        disk.assign(reinterpret_cast<const char*>(read.bytes.data()),
+                    read.bytes.size());
+    }
+
+    const DiffFileId diffId{"draft:" + state->key.savedPath()};
+    // Non-git entries share the DiffModel's monotonic revision line; one past
+    // the current revision is always fresh. Create both seeds and updates the
+    // entry (an existing non-git entry is updated in place), so re-running
+    // draft.diff on the same file refreshes its tab.
+    const Revision revision{diff.viewState().revision.value() + 1};
+    const auto applied = diff.applyNonGitEvent(
+        NonGitDiffEvent{NonGitDiffEventKind::Create, diffId,
+                        std::filesystem::path{state->key.savedPath()},
+                        std::nullopt, disk, draft},
+        revision);
+    if (!applied.accepted()) return failure("draft diff could not be computed");
+
+    const auto file = diff.file(diffId);
+    if (!file.has_value()) return failure("draft diff is unavailable");
+    return openOrFocusLiveDiffTab(file->get(), NavigationClass::Programmatic,
+                                  std::nullopt);
+}
+
 void EditorRuntime::Impl::refreshLiveDiffDocuments(const DiffViewState& diffView) {
     for (auto it = liveDiffDocuments.begin(); it != liveDiffDocuments.end();) {
         const auto id = DiffFileId{it->first};
@@ -1791,6 +1836,13 @@ GitDiffScanResult EditorRuntime::Impl::applyGitDiffScan(GitDiffScan scan) {
     for (const auto& file : stagedView.files) {
         if (std::find(scannedIds.begin(), scannedIds.end(), file.id) !=
             scannedIds.end()) {
+            continue;
+        }
+        // A git rescan reconciles only git-source entries. A non-git entry (a
+        // draft-vs-disk diff, or an external-modification view) is owned by a
+        // different flow and must survive a scan that simply does not mention
+        // it, rather than being evicted as "no longer changed".
+        if (!stagedDiff.isGitFile(file.id)) {
             continue;
         }
         const auto prior = stagedDiff.file(file.id);

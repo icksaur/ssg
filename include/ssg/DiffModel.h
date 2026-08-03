@@ -170,6 +170,13 @@ public:
     [[nodiscard]] std::optional<std::reference_wrapper<const DiffFileView>>
     file(const DiffFileId& id) const;
 
+    // Whether an entry exists for `id` and originates from a git scan, as
+    // opposed to a non-git diff (a draft-vs-disk view, or an external
+    // modification view). A git rescan owns and reconciles only its own
+    // entries, so it must leave non-git entries untouched rather than evicting
+    // them as "no longer changed".
+    [[nodiscard]] bool isGitFile(const DiffFileId& id) const noexcept;
+
 private:
     enum class Source { Git, NonGit };
 
