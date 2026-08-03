@@ -78,24 +78,16 @@ public:
         }
 
         ssg::ThemeSnapshot theme{};
-        for (std::size_t index = 0; index < theme.palette.size(); ++index) {
-            auto channel = static_cast<std::uint8_t>(index * 16);
-            theme.palette[index] = ssg::SrgbColor::fromSerializedChannels(
+        for (std::size_t index = 0; index < theme.roleColors.size(); ++index) {
+            auto channel = static_cast<std::uint8_t>(index * 7);
+            theme.roleColors[index] = ssg::SrgbColor::fromSerializedChannels(
                 channel, channel, channel);
         }
-        for (std::size_t index = 0; index < theme.semanticIndices.size();
-             ++index) {
-            theme.semanticIndices[index] =
-                static_cast<std::uint8_t>(index % ssg::kThemePaletteSize);
+        for (std::size_t index = 0; index < theme.syntaxColors.size(); ++index) {
+            auto channel = static_cast<std::uint8_t>((index + 1) * 5);
+            theme.syntaxColors[index] = ssg::SrgbColor::fromSerializedChannels(
+                channel, channel, channel);
         }
-        for (std::size_t index = 0; index < theme.syntaxIndices.size();
-             ++index) {
-            theme.syntaxIndices[index] =
-                static_cast<std::uint8_t>((index + 1) %
-                                          ssg::kThemePaletteSize);
-        }
-        theme.selectionFill = ssg::deriveSelectionFill(
-            theme.palette, theme.semanticIndices, theme.syntaxIndices);
 
         ssg::ShellViewState shell;
         shell.viewport = {24, 8};
@@ -266,15 +258,15 @@ TEST(finalWorkflowScreenUsesOnlyThemeColorsAndRendersDeterministically) {
     }
 
     auto screen = ssg::Renderer{}.render(client.snapshot());
-    ASSERT_EQ(screen.palette.size(), ssg::kThemePaletteSize);
+    ASSERT_EQ(screen.colors.size(), ssg::kThemeColorSlotCount);
     for (auto const& cell : screen.cells) {
-        ASSERT_TRUE(cell.foreground < ssg::kThemePaletteSize);
-        ASSERT_TRUE(cell.background < ssg::kThemePaletteSize);
+        ASSERT_TRUE(cell.foreground < ssg::kThemeColorSlotCount);
+        ASSERT_TRUE(cell.background < ssg::kThemeColorSlotCount);
     }
     // Rendering is a pure function of the snapshot.  This replaced a 49-line
-    // full-screen golden: the 16-colour rule above is the invariant that golden
-    // was said to protect, and it is asserted directly rather than implied by a
-    // recorded appearance.
+    // full-screen golden: the in-bounds color-index rule above is the invariant
+    // that golden was said to protect, and it is asserted directly rather than
+    // implied by a recorded appearance.
     ASSERT_EQ(ssg::Renderer{}.render(client.snapshot()).canonical(),
               screen.canonical());
 }

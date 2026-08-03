@@ -221,17 +221,16 @@ public:
         }
 
         ssg::ThemeSnapshot theme{};
-        for (std::size_t i = 0; i < theme.palette.size(); ++i) {
-            auto ch = static_cast<std::uint8_t>(i * 16);
-            theme.palette[i] = ssg::SrgbColor::fromSerializedChannels(
+        for (std::size_t i = 0; i < theme.roleColors.size(); ++i) {
+            auto ch = static_cast<std::uint8_t>(i * 7);
+            theme.roleColors[i] = ssg::SrgbColor::fromSerializedChannels(
                 ch, static_cast<std::uint8_t>(255 - ch), ch);
-            if (i < theme.semanticIndices.size())
-                theme.semanticIndices[i] = static_cast<std::uint8_t>(i);
-            if (i < theme.syntaxIndices.size())
-                theme.syntaxIndices[i] = static_cast<std::uint8_t>(i);
         }
-        theme.selectionFill = ssg::deriveSelectionFill(
-            theme.palette, theme.semanticIndices, theme.syntaxIndices);
+        for (std::size_t i = 0; i < theme.syntaxColors.size(); ++i) {
+            auto ch = static_cast<std::uint8_t>((i + 1) * 5);
+            theme.syntaxColors[i] = ssg::SrgbColor::fromSerializedChannels(
+                ch, static_cast<std::uint8_t>(255 - ch), ch);
+        }
 
         ssg::ShellViewState shell;
         shell.viewport = {80, 24};
@@ -546,8 +545,6 @@ public:
             ssg::ByteOffset{0}, ssg::LineIndex{0}, ssg::CellIndex{0}};
         ssg::SettingsViewState settings;
         ssg::ThemeSnapshot theme{};
-        theme.selectionFill = ssg::deriveSelectionFill(
-            theme.palette, theme.semanticIndices, theme.syntaxIndices);
         ssg::ShellViewState shell;
         shell.viewport = {80, 24};
         return {

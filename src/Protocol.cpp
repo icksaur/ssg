@@ -1284,11 +1284,6 @@ ProtocolValue toValue(LspFeatureDelta const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<LspFeatureDelta>& out);
 ProtocolValue toValue(SrgbColor const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<SrgbColor>& out);
-ProtocolValue toValue(TintAdjustment const& value);
-bool decodePresent(ProtocolValue const& value, std::optional<TintAdjustment>& out);
-ProtocolValue toValue(BackgroundTintAdjustments const& value);
-bool decodePresent(ProtocolValue const& value,
-                   std::optional<BackgroundTintAdjustments>& out);
 ProtocolValue toValue(ThemeSnapshot const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<ThemeSnapshot>& out);
 ProtocolValue toValue(Style const& value);
@@ -1297,8 +1292,6 @@ ProtocolValue toValue(ThemeSectionDelta const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<ThemeSectionDelta>& out);
 ProtocolValue toValue(StyleSectionDelta const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<StyleSectionDelta>& out);
-ProtocolValue toValue(DiffTints const& value);
-bool decodePresent(ProtocolValue const& value, std::optional<DiffTints>& out);
 ProtocolValue toValue(GridSize const& value);
 bool decodePresent(ProtocolValue const& value, std::optional<GridSize>& out);
 ProtocolValue toValue(AccessibilityNode const& value);
@@ -4536,101 +4529,23 @@ bool decodePresent(ProtocolValue const& value, std::optional<SrgbColor>& out) {
     return true;
 }
 
-ProtocolValue toValue(DiffTints const& value) {
-    std::vector<ProtocolValue::Field> fields;
-    fields.emplace_back("added_row", toValue(value.addedRow));
-    fields.emplace_back("removed_row", toValue(value.removedRow));
-    fields.emplace_back("modified_row", toValue(value.modifiedRow));
-    fields.emplace_back("added_word", toValue(value.addedWord));
-    fields.emplace_back("removed_word", toValue(value.removedWord));
-    fields.emplace_back("modified_word", toValue(value.modifiedWord));
-    return ProtocolValue::makeObject(std::move(fields));
-}
-bool decodePresent(ProtocolValue const& value, std::optional<DiffTints>& out) {
-    auto const* object = value.asObject();
-    if (!object) return false;
-    auto addedRow = requireField<SrgbColor>(value.field("added_row"));
-    auto removedRow = requireField<SrgbColor>(value.field("removed_row"));
-    auto modifiedRow = requireField<SrgbColor>(value.field("modified_row"));
-    auto addedWord = requireField<SrgbColor>(value.field("added_word"));
-    auto removedWord = requireField<SrgbColor>(value.field("removed_word"));
-    auto modifiedWord = requireField<SrgbColor>(value.field("modified_word"));
-    if (!addedRow || !removedRow || !modifiedRow || !addedWord || !removedWord ||
-        !modifiedWord) {
-        return false;
-    }
-    out.emplace(DiffTints{*addedRow, *removedRow, *modifiedRow, *addedWord,
-                          *removedWord, *modifiedWord});
-    return true;
-}
-
-// The wire carries no floating-point scalar, so a multiplier travels as its
-// IEEE-754 bit pattern.  Exact, unlike a fixed-point encoding, which would make
-// the round trip lossy for values not on the chosen decimal grid.
-ProtocolValue toValue(TintAdjustment const& value) {
-    std::vector<ProtocolValue::Field> fields;
-    fields.emplace_back("brightness", toValue(std::bit_cast<std::uint32_t>(value.brightness)));
-    fields.emplace_back("saturation", toValue(std::bit_cast<std::uint32_t>(value.saturation)));
-    return ProtocolValue::makeObject(std::move(fields));
-}
-bool decodePresent(ProtocolValue const& value, std::optional<TintAdjustment>& out) {
-    auto const* object = value.asObject();
-    if (!object) return false;
-    auto brightness = requireField<std::uint32_t>(value.field("brightness"));
-    auto saturation = requireField<std::uint32_t>(value.field("saturation"));
-    if (!brightness || !saturation) return false;
-    out.emplace(TintAdjustment{std::bit_cast<float>(*brightness),
-                               std::bit_cast<float>(*saturation)});
-    return true;
-}
-
-ProtocolValue toValue(BackgroundTintAdjustments const& value) {
-    std::vector<ProtocolValue::Field> fields;
-    fields.emplace_back("by_target", toValue(value.byTarget));
-    return ProtocolValue::makeObject(std::move(fields));
-}
-bool decodePresent(ProtocolValue const& value,
-                   std::optional<BackgroundTintAdjustments>& out) {
-    auto const* object = value.asObject();
-    if (!object) return false;
-    auto byTarget =
-        requireField<std::array<TintAdjustment, kBackgroundTintTargetCount>>(
-            value.field("by_target"));
-    if (!byTarget) return false;
-    out.emplace(BackgroundTintAdjustments{*byTarget});
-    return true;
-}
-
 ProtocolValue toValue(ThemeSnapshot const& value) {
     std::vector<ProtocolValue::Field> fields;
-    fields.emplace_back("palette", toValue(value.palette));
-    fields.emplace_back("semantic_indices", toValue(value.semanticIndices));
-    fields.emplace_back("syntax_indices", toValue(value.syntaxIndices));
-    fields.emplace_back("diff_tints", toValue(value.diffTints));
-    fields.emplace_back("selection_fill", toValue(value.selectionFill));
-    fields.emplace_back("background_tints", toValue(value.backgroundTints));
+    fields.emplace_back("role_colors", toValue(value.roleColors));
+    fields.emplace_back("syntax_colors", toValue(value.syntaxColors));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<ThemeSnapshot>& out) {
     auto const* object = value.asObject();
     if (!object) return false;
-    auto palette =
-        requireField<std::array<SrgbColor, kThemePaletteSize>>(value.field("palette"));
-    auto semanticIndices = requireField<std::array<std::uint8_t, kSemanticRoleCount>>(
-        value.field("semantic_indices"));
-    auto syntaxIndices = requireField<std::array<std::uint8_t, kSyntaxScopeCount>>(
-        value.field("syntax_indices"));
-    auto diffTints = requireField<DiffTints>(value.field("diff_tints"));
-    auto selectionFill = requireField<SrgbColor>(value.field("selection_fill"));
-    auto backgroundTints =
-        requireField<BackgroundTintAdjustments>(value.field("background_tints"));
-    if (!palette || !semanticIndices || !syntaxIndices || !diffTints ||
-        !selectionFill || !backgroundTints) {
+    auto roleColors = requireField<std::array<SrgbColor, kSemanticRoleCount>>(
+        value.field("role_colors"));
+    auto syntaxColors = requireField<std::array<SrgbColor, kSyntaxScopeCount>>(
+        value.field("syntax_colors"));
+    if (!roleColors || !syntaxColors) {
         return false;
     }
-    out.emplace(
-        ThemeSnapshot{*palette, *semanticIndices, *syntaxIndices, *diffTints,
-                      *selectionFill, *backgroundTints});
+    out.emplace(ThemeSnapshot{*roleColors, *syntaxColors});
     return true;
 }
 

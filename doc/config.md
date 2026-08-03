@@ -35,50 +35,49 @@ configured.
 ### Colors
 
 ```lua
-ssg.command("theme.define", {
-    red = "#e06c75",
-    green = "#98c379",
-    blue = "#61afef",
+ssg.command("theme.set", {
+    background = "#1e1e1e",
+    foreground = "#d4d4d4",
+    selection = "#4daafc",
+    comment = "#858585",
+    keyword = "#ab47bc",
 })
 ```
 
-`theme.define`'s table takes the 16 classic ANSI terminal color names, each
-mapped to a `"#rrggbb"` hex string:
+`theme.set`'s table maps **role and scope names** directly to `"#rrggbb"` hex
+strings. Every UI element and every syntax token has its own name and its own
+color -- there is no shared 16-color palette and no fixed slot mapping. Setting
+`selection` sets exactly the selection color and nothing else. You don't need to
+specify all of them -- any name you omit keeps its current color from ssg's
+built-in theme. An unknown name or a malformed `"#rrggbb"` string rejects the
+whole call, leaving your theme untouched.
+
+The UI role names are:
 
 ```
-black   red   green   yellow   blue   magenta   cyan   white
-brightBlack   brightRed   brightGreen   brightYellow
-brightBlue    brightMagenta    brightCyan    brightWhite
+foreground   background   caret   selection
+diagnostic_error   diagnostic_warning   diagnostic_info   diagnostic_hint
+git_added   git_modified   git_deleted   git_conflict
+tree_background   tree_focus   tab_active   tab_inactive
+panel_active   panel_inactive   header   footer
+status_info   status_warning   status_error   line_number
+active_line_number   search_match   prompt   scrollbar_track
+scrollbar_thumb   diff_added   diff_removed   diff_modified
+tab_inactive_background   header_background   footer_background
 ```
 
-You don't need to specify all 16 -- any name you omit keeps its current
-color from ssg's built-in theme. This only changes the 16 raw colors; it
-does not change which UI element (foreground text, selection highlight,
-diff-added lines, etc.) uses which color slot -- that mapping is fixed by
-ssg's built-in theme today.
+The syntax scope names (the color of each token in the document) are:
 
-### Background wash intensity
-
-The diff and selection backgrounds are taken straight from the palette, which
-can be stronger than you want underneath text. `theme.background` scales them
-without touching the palette itself, so foreground text, tabs and tree rows keep
-the full-strength color:
-
-```lua
-ssg.command("theme.background", {
-    brightness = "0.85",              -- every wash
-    saturation = "0.70",
-    selection_brightness = "1.10",    -- override one
-    diff_added_saturation = "0.55",
-})
+```
+plain_text   comment   keyword   string   number   type
+function   variable   operator   punctuation   invalid
 ```
 
-Values are numeric strings. `brightness` and `saturation` apply to all four
-targets; `<target>_brightness` and `<target>_saturation` override one, where
-target is `diff_added`, `diff_removed`, `diff_modified` (the modified-row
-wash), or `selection`. Anything you omit stays at 1.0, which means unchanged.
-Multipliers may exceed 1.0 to strengthen a wash; they are clamped, so a large
-value saturates rather than wrapping. Hue is never altered.
+Each name is set to a full, final color. The diff and selection backgrounds are
+whatever you set `diff_added`, `diff_removed`, `diff_modified` and `selection`
+to -- if a wash is too strong under text, pick a darker hex value for that role
+directly. There is no separate intensity control: the color you set is the color
+that is drawn.
 
 ### Key bindings
 
@@ -182,8 +181,7 @@ built-in does.
 
 ```lua
 ssg.register_command("my.hotpink", function()
-    ssg.command("theme.define", { magenta = "#ff00ff" })
-    ssg.command("theme.background", { brightness = "0.6" })
+    ssg.command("theme.set", { keyword = "#ff00ff", selection = "#402038" })
 end)
 
 ssg.command("keymap.bind", {
@@ -203,7 +201,7 @@ command stops existing. A key still bound to it does nothing. A reload that
 fails leaves your previous commands in place and working.
 
 **Your function may only call the commands listed on this page.** These are the
-same ones `init.lua` can call directly -- `theme.define`, `theme.background`,
+same ones `init.lua` can call directly -- `theme.set`,
 `style.define`, `keymap.bind` and `keymap.unbind`. Anything else, including
 things like `file.save`, is refused. That list is deliberately small and will
 grow deliberately.

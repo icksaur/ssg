@@ -71,8 +71,8 @@ void assertScreenInvariants(ssg::CellGrid const& grid, int columns, int rows) {
             // A continuation cell of a wide glyph is deliberately empty; every
             // other cell must carry text, so no cell is left uninitialised.
             if (!cell.continuation) ASSERT_FALSE(cell.text.empty());
-            ASSERT_TRUE(cell.foreground < ssg::kThemePaletteSize);
-            ASSERT_TRUE(cell.background < ssg::kThemePaletteSize);
+            ASSERT_TRUE(cell.foreground < ssg::kThemeColorSlotCount);
+            ASSERT_TRUE(cell.background < ssg::kThemeColorSlotCount);
         }
     }
 }

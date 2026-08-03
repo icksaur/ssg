@@ -208,8 +208,8 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
     ASSERT_EQ(grid.at(addedColumn, addedRow).tint, ssg::DiffTint::AddedRow);
     ASSERT_EQ(
         grid.at(addedColumn, addedRow).foreground,
-        overlay.sections().theme.syntaxIndices[
-            static_cast<std::size_t>(ssg::SyntaxScope::Keyword)]);
+        ssg::kSemanticRoleCount +
+            static_cast<std::size_t>(ssg::SyntaxScope::Keyword));
     ASSERT_EQ(grid.at(content.right() - 1, addedRow).tint,
               ssg::DiffTint::AddedRow);
 
@@ -228,8 +228,8 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
               ssg::DiffTint::AddedWord);
     ASSERT_EQ(
         grid.at(modifiedColumn + 14, modifiedRow).foreground,
-        overlay.sections().theme.syntaxIndices[
-            static_cast<std::size_t>(ssg::SyntaxScope::Number)]);
+        ssg::kSemanticRoleCount +
+            static_cast<std::size_t>(ssg::SyntaxScope::Number));
     ASSERT_EQ(grid.at(content.right() - 1, modifiedRow).tint,
               ssg::DiffTint::ModifiedRow);
 
@@ -240,8 +240,7 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
     ASSERT_EQ(grid.at(removedColumn, removedRow).tint,
               ssg::DiffTint::RemovedRow);
     ASSERT_EQ(grid.at(removedColumn, removedRow).foreground,
-              overlay.sections().theme.semanticIndices[static_cast<std::size_t>(
-                  ssg::SemanticRole::Foreground)]);
+              static_cast<std::size_t>(ssg::SemanticRole::Foreground));
     ASSERT_EQ(grid.at(content.right() - 1, removedRow).tint,
               ssg::DiffTint::RemovedRow);
 

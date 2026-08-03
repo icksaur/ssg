@@ -356,8 +356,8 @@ int compareScreen(DecodedScreen const& screen, ssg::CellGrid const& grid) {
             }
             std::string const expected = cell.text.empty() ? " " : cell.text;
             ASSERT_EQ(decoded.text, expected);
-            ASSERT_TRUE(colorEq(decoded.foreground, grid.palette[cell.foreground]));
-            auto expectedBackground = grid.palette[cell.background];
+            ASSERT_TRUE(colorEq(decoded.foreground, grid.colors[cell.foreground]));
+            auto expectedBackground = grid.colors[cell.background];
             switch (cell.tint) {
                 case ssg::DiffTint::AddedRow:
                     expectedBackground = grid.diffTints.addedRow;
@@ -417,8 +417,8 @@ TEST(decoderRoundtripsTheEncodedFrame) {
 TEST(decoderRoundtripsOrthogonalTintBackgrounds) {
     ssg::CellGrid grid;
     grid.size = {2, 1};
-    grid.palette[0] = {30, 30, 30};
-    grid.palette[1] = {212, 212, 212};
+    grid.colors[0] = {30, 30, 30};
+    grid.colors[1] = {212, 212, 212};
     grid.diffTints.addedRow = {0, 0, 95};
     ssg::CellGridCell plain;
     plain.text = "X";

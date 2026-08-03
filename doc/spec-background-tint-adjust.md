@@ -1,5 +1,17 @@
 # spec-background-tint-adjust
 
+> **ARCHIVED (superseded by `doc/spec-semantic-color-themes.md`).** This design
+> tuned brightness/saturation of derived background washes in HSL
+> (`theme.background`, `adjustBackgroundTint`, `BackgroundTintAdjustments`)
+> because washes were DERIVED from a shared 16-color palette and could not be set
+> independently. The semantic-color-themes refactor gives every role its own
+> color, so the diff and selection backgrounds (`diff_added`, `diff_removed`,
+> `diff_modified`, `selection`) are set directly via `theme.set` with a plain
+> `"#rrggbb"` value -- there is no derived wash left to scale. The `theme.background`
+> command, the HSV adjustment, and the multiplier table described below no longer
+> exist in the code. Retained only as a record of the retired design; see
+> `doc/spec-color.md` for the current model.
+
 ## Goals
 
 A user can tune the four background washes -- diff added, diff removed, diff

@@ -57,30 +57,37 @@ The derived washes disappear; the renderer reads role colors directly:
 `BackgroundTintAdjustments`, `BackgroundTintTarget`, and `theme.background` are
 deleted. `spec-background-tint-adjust.md` is archived.
 
-### Cells carry color directly (mechanism decision)
+### Cells index a per-role color table (mechanism decision)
 
 Today `CellGridCell` carries `uint8 foreground/background` palette indices, and
-`CellGrid` carries the 16-color `palette`; the terminal client
-(`apps/ssg_terminal.cpp`) does `palette[index] → resolveColor(depth)`.
+`CellGrid` carries the 16-color `palette`; the terminal client resolves
+`palette[index] → resolveColor(depth)`.
 
-**Chosen:** `CellGridCell` carries `SrgbColor foreground/background` directly;
-`CellGrid` drops its `palette` array. The client calls `resolveColor(cell.fg,
-depth)` / `resolveColor(cell.bg, depth)` with no lookup. This removes the last
-index indirection end-to-end and is the point of the change. Rejected
-alternative: keep `uint8` indices into a variable-length palette built from
-role+scope colors — smaller wire but preserves exactly the indirection we are
-removing, and reintroduces a cap.
+**Chosen:** the theme is a direct per-role/per-scope color map
+(`roleColors`/`syntaxColors`), and `CellGrid` carries a flat `colors` table that
+is exactly those role colors followed by the scope colors (size
+`kSemanticRoleCount + kSyntaxScopeCount`). A cell still stores a compact `uint8`
+index, but the index space is now one-slot-per-role/scope, so the painful shared
+16-slot indirection is gone: every role is independently colorable and
+`theme.set` writes `roleColors[role]` directly. `semanticIndex(theme,role)` /
+`syntaxIndex(theme,scope)` keep their `uint8` return type — they become the
+identity/offset into `colors` — so the renderer's ~35 call sites,
+`put`/`fillRect`/`paintText`, and the client's index-lookup path are UNCHANGED
+in shape; only the table they index into changes size and meaning.
 
-Wire cost: the render grid is produced CLIENT-SIDE (`ssg::Renderer{}.render` in
+Rejected alternative: widen every `CellGridCell` to two `SrgbColor`s and drop
+the index entirely. It is marginally purer but cascades a type change through
+~28 files (every cell read, the client emit path, and every test asserting a
+cell index) for no user-visible difference — the remaining index is an internal
+render detail, not the theme-editing indirection the user objected to. The
+smaller change is preferred; if a future need arises for a cell to carry a color
+with no role identity, revisit.
+
+Wire/perf: the render grid is produced CLIENT-SIDE (`ssg::Renderer{}.render` in
 `apps/ssg_main.cpp`); `CellGrid`/`CellGridCell` are terminal-rendering internals
-and are NOT protocol types (the session protocol carries `ThemeSnapshot` and
-snapshots, never cells). So widening a cell's fg/bg from `uint8` to `SrgbColor`
-is an **in-memory renderer/client-path** change, not a wire-size change. The
-only protocol impact is `ThemeSnapshot` losing its palette + index arrays and
-gaining `roleColors`/`syntaxColors`. `SrgbColor` already has a wire codec. The
-renderer stops calling `semanticIndex(theme,role)` to get an index and instead
-calls a `themeColor(theme, role)` returning the role's `SrgbColor`;
-`put`/`fillRect`/`paintText` take `SrgbColor` instead of `uint8`.
+and are NOT protocol types. The only protocol impact is `ThemeSnapshot` losing
+its palette + index arrays and gaining `roleColors`/`syntaxColors`; the client's
+`CellGrid.palette` becomes `CellGrid.colors`.
 
 ### Lua API
 
@@ -231,7 +238,7 @@ not a side effect.
 | 7 | Protocol: encode/decode direct-color `ThemeSnapshot` (roleColors/syntaxColors); regenerate goldens. NOTE: cells are client-side internals, NOT protocol types — no cell codec | src/Protocol.cpp, tests/fixtures/protocol/*.hex, tests/test_protocol.cpp | ThemeSnapshot round-trip + golden | - |
 | 8 | Replace runtime command: `theme.set` + `applyThemeSet`; retire `theme.define`/`theme.background` + their args/derivations | include/ssg/Theme.h, src/Theme.cpp, src/runtime/*.cpp (command reg) | per-role isolation; all-or-nothing | I22 |
 | 9 | Wire `theme.set` into init-script dispatch: remove the `theme.define`/`theme.background` branches, add a `theme.set` branch forwarding `ThemeSetArguments` | src/ScriptHost.cpp | ScriptHost test: `theme.set{...}` dispatches | - |
-| 10 | Docs: rewrite `spec-color.md` theme half; archive `spec-background-tint-adjust.md`; update `doc/config.md` (document `theme.set`, remove old commands) + sample init.lua; regen `doc/commands.md` | doc/spec-color.md, doc/spec-background-tint-adjust.md, doc/config.md, doc/commands.md | config-doc test green | - |
+| 10 | Docs: rewrite `spec-color.md` theme half; archive `spec-background-tint-adjust.md`; update `doc/config.md` (document `theme.set`, remove old commands) + sample init.lua; regen `doc/commands.md` | doc/spec-color.md, doc/spec-background-tint-adjust.md, doc/config.md, doc/commands.md | config-doc test green | DONE |
 
 ## Rationale (optional)
 

@@ -76,7 +76,11 @@ struct CellHyperlink {
 
 struct CellGrid {
     GridSize size;
-    std::array<SrgbColor, kThemePaletteSize> palette{};
+    // The render color table: the theme's role colors (slots
+    // 0..kSemanticRoleCount-1) followed by its scope colors. A cell's
+    // foreground/background index into this; the client resolves colors[index]
+    // to the terminal's depth. Replaces the former 16-color palette.
+    std::array<SrgbColor, kThemeColorSlotCount> colors{};
     std::vector<CellGridCell> cells;
     std::optional<GridPosition> caret;
     std::vector<CellHyperlink> hyperlinks;

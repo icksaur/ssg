@@ -101,21 +101,13 @@ struct ScriptHost::Impl {
             return CommandHandlerResult::failure(std::string{what});
         };
 
-        if (invocation.commandId == "theme.define") {
+        if (invocation.commandId == "theme.set") {
             if (auto refused = requireArguments(
-                    "theme.define requires a color-table argument")) {
+                    "theme.set requires a color-table argument")) {
                 return *refused;
             }
-            return forward("theme.define",
-                           ThemeDefineArguments{*invocation.arguments});
-        }
-        if (invocation.commandId == "theme.background") {
-            if (auto refused = requireArguments(
-                    "theme.background requires a multiplier table argument")) {
-                return *refused;
-            }
-            return forward("theme.background",
-                           ThemeBackgroundArguments{*invocation.arguments});
+            return forward("theme.set",
+                           ThemeSetArguments{*invocation.arguments});
         }
         if (invocation.commandId == "style.define") {
             if (auto refused = requireArguments(

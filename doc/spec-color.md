@@ -17,46 +17,43 @@ display it.
 
 ## Design
 
-### The palette is the only place RGB exists
+### Every role and scope holds its own color
 
-A theme is exactly 16 sRGB colors (`kThemePaletteSize`). Nothing else in the
-system holds a color value:
+A theme is a flat table of sRGB colors, one per UI role and one per syntax
+scope. There is no shared palette and no indirection: a role IS its color.
 
-- 32 `SemanticRole`s (`Foreground`, `Selection`, `GitAdded`, `TabActive`, ...)
-  each map to a palette INDEX, in `semanticIndices`.
-- 11 `SyntaxScope`s (`Comment`, `Keyword`, `String`, ...) each map to a palette
-  INDEX, in `syntaxIndices`.
-- `DiffTints` and `selectionFill` are DERIVED from the palette (below) and
-  carried on the snapshot so clients never recompute them.
+- 35 `SemanticRole`s (`Foreground`, `Selection`, `GitAdded`, `TabActive`, ...)
+  each have their own `SrgbColor`, in `ThemeSnapshot::roleColors`.
+- 11 `SyntaxScope`s (`Comment`, `Keyword`, `String`, ...) each have their own
+  `SrgbColor`, in `ThemeSnapshot::syntaxColors`.
 
-`ThemeSnapshot` is the whole of a theme: palette, the two index arrays, the
-derived tints, and the selection fill. `defaultTheme()` in `src/DefaultTheme.cpp`
-is the one compiled-in theme; there is no data-file theme path.
+`ThemeSnapshot` is the whole of a theme: `roleColors` and `syntaxColors`,
+nothing else. `themeColor(snapshot, role)` and `themeColor(snapshot, scope)`
+read a color out. `defaultTheme()` in `src/DefaultTheme.cpp` is the one
+compiled-in theme; there is no data-file theme path.
 
-### Background tints are flat palette colors
+### Diff and selection backgrounds are just roles
 
-Both derivations are pure functions of the palette and the index arrays, and
-both are FLAT -- the anchor role's palette color is used directly:
+Diff-added, diff-removed, diff-modified, and selection backgrounds are the
+`DiffAdded`, `DiffRemoved`, `DiffModified`, and `Selection` roles read
+directly -- there is no derivation, no muting, no readability search. The
+renderer copies these role colors into the render grid's diff/selection wash
+slots. A word-level mark inside a modified line reuses the added color: a word
+mark says "here specifically" within an already-tinted row, and the inserted
+span reads as added. There is no fourth "modified word" color.
 
-- `deriveDiffTints` -> `addedRow`/`addedWord` = `GitAdded`,
-  `removedRow`/`removedWord` = `GitDeleted`, `modifiedRow` = `GitModified`.
-  `modifiedWord` reuses `GitAdded`: a word mark inside a modified line says
-  "here specifically" within an already-tinted row, and the inserted span reads
-  as added. There is no fourth "modified word" shade.
-- `deriveSelectionFill` -> the `Selection` role's palette color.
+Because a highlight is just a role color used directly, a selected tab
+(`TabActive`), a focused tree row (`TreeFocus`), and a text selection each read
+their own role and render exactly the color the theme states -- no two of them
+can silently diverge through a derivation.
 
-Flatness is the load-bearing property, not an implementation detail. A selected
-tab (`TabActive`), a focused tree row (`TreeFocus`), and a text selection all
-resolve the same palette entry the same way, so all three render as the SAME
-highlight. A derived-and-muted text selection is what made them visibly
-mismatch before.
+### The render grid is a flat color table
 
-### Co-visible roles must stay distinguishable
-
-`kCoVisibleRolePairs` lists role pairs that appear side by side (Caret vs
-Selection, the four Diagnostic levels against each other, the four Git states,
-TabActive vs TabInactive, and so on). A theme whose palette makes any listed
-pair identical is rejected: those pairs carry meaning only by being told apart.
+A rendered cell stores two `uint8` indices (foreground, background) into the
+grid's `colors` table, which is `roleColors` followed by `syntaxColors`
+(`kThemeColorSlotCount` entries). This keeps cells small and the client's job a
+plain table lookup; the theme still gives each role and scope its own slot, so
+nothing is shared and every color is set directly.
 
 ### Color depth is detected, then colors are adapted
 
@@ -90,30 +87,31 @@ not already specify, which is why it does not violate color authority.
 
 ### What a user can change
 
-`theme.define` (init.lua) takes a table of the 16 classic ANSI slot names, each
-optionally mapped to `"#rrggbb"`. Omitted names keep their current value, so the
-table may be partial. It is validated whole and applied all-or-nothing: an
-unknown slot name or malformed hex rejects the entire call with no partial
-mutation. `DiffTints` and `selectionFill` are RE-DERIVED over the new palette on
-every accepted call, so a redefined `GitAdded` immediately changes the add tint.
+`theme.set` (init.lua) takes a table of role and syntax-scope names (the
+snake_case `semanticRoleName`/`syntaxScopeName` strings, e.g. `background`,
+`selection`, `tab_active`, `comment`, `keyword`), each optionally mapped to
+`"#rrggbb"`. Omitted names keep their current value, so the table may be
+partial. It is validated whole and applied all-or-nothing: an unknown name or
+malformed hex rejects the entire call with no partial mutation. The set color is
+the final color -- there is no derivation step, so setting `diff_added`
+immediately and exactly changes the add background.
 
-Role and syntax mappings are never touched by `theme.define`; only the 16 raw
-colors are configurable. There is one active theme -- no named themes, no
-switching.
+Role and scope names share one flat namespace (they are disjoint sets). There is
+one active theme -- no named themes, no switching, no separate wash-intensity
+control (set a darker hex directly if a background is too strong).
 
 ## Invariants
 
-- **I22 (color authority, `doc/spec.md`)** -- `Theme` is the only source of
-  color values. Clients and extensions consume its 16 colors and semantic
-  indices through the API; they never mint or substitute a color. A literal RGB
+- **I22 (color authority, `doc/spec.md`)** -- the theme snapshot is the only
+  source of color values. Clients and extensions consume its role and scope
+  colors through the API; they never mint or substitute a color. A literal RGB
   constant used AS A FINAL COLOR is a violation; a numeric tuning parameter
   (a threshold, a multiplier) is not.
-- **I8 (palette cardinality, `doc/spec.md`)** -- every accepted theme has
-  exactly 16 indexed colors, and every visible semantic role resolves to one.
-- Every `SemanticRole` and every `SyntaxScope` maps to exactly one palette index
-  -- enforced exhaustively, so adding a role without mapping it fails.
-- Derived values (`DiffTints`, `selectionFill`) are pure functions of the
-  palette and index arrays. Same palette in, same tints out, on every client.
+- Every `SemanticRole` and every `SyntaxScope` has exactly one color -- the
+  snapshot's arrays are sized `kSemanticRoleCount`/`kSyntaxScopeCount`, so
+  adding a role without a color fails to compile.
+- `theme.set` is total: an accepted call replaces only the named colors; a
+  rejected call mutates nothing.
 
 ### How I22 is enforced
 
@@ -123,8 +121,8 @@ the repository for independent color sources: hex literals, `rgb(`/`hsl(`,
 `src/Theme.cpp` additionally may not contain a bare RGB triple.
 
 Exempt: `include/ssg/Theme.h`, `include/ssg/color.h`, `src/color.cpp`,
-`tests/test_color.cpp`, `tests/test_theme.cpp`, plus `doc/`, `tasks/`,
-`vendor/`, `.git/`, and `build*`.
+`src/DefaultTheme.cpp`, `tests/test_color.cpp`, `tests/test_theme.cpp`, plus
+`doc/`, `tasks/`, `vendor/`, `.git/`, and `build*`.
 
 `src/DefaultTheme.cpp` exists as its own translation unit for exactly this
 reason: it holds the one compiled-in theme literal, and keeping it out of
@@ -137,37 +135,49 @@ be extended deliberately.
 
 ## Considerations
 
-- **Ansi16 collapses meaning.** At 16 colors, distinct tints can resolve to the
+- **Ansi16 collapses meaning.** At 16 colors, distinct colors can resolve to the
   same swatch, so guarantees about telling add from remove cannot hold. Accepted,
   and the same category of limitation as 16-color syntax highlighting.
 - **The 16 base colors are not ours.** At Ansi16 the terminal owns what index 4
   actually looks like. Anything depending on a specific appearance is only true
   at Truecolor.
-- **Redefining one slot moves everything mapped to it.** Roles are indices, so
-  `theme.define{blue=...}` changes every role pointing at blue -- including
-  derived backgrounds. That is the intended coupling, not a leak.
+- **Distinctness is the theme author's job.** Nothing forces two co-visible
+  roles to differ any more; if a theme sets `caret` and `selection` to the same
+  color they render identically. This freedom is the point -- the author has one
+  color per role and full control -- but it moves the responsibility for
+  legibility onto whoever writes the `theme.set` table.
 
 ## History (retired designs, recorded so they are not reintroduced)
 
-- **Derived, muted diff tints.** Row and word tints were once
-  `blend(Background, desaturate(anchor, s), a)` with different weights per tier
-  (~18% row, ~45% word). Retired in favor of the flat anchor color.
-- **A readability search over tints.** A contrast gate
-  (`contrast(tint, fg) >= max(kFloorContrast, kRetainContrast * contrast(bg, fg))`,
-  with `kFloorContrast`/`kRetainContrast`) once selected the strongest readable
-  tint per theme. Those constants NO LONGER EXIST in the code; specs referencing
-  them describe a superseded design.
-- **A separately derived selection fill.** `selectionFill` was once desaturated
-  to 60% and blended toward Background at up to 40% weight, with its own
-  readability search. That made text selection visibly dimmer than the flat
-  `TabActive`/`TreeFocus` highlight drawn from the same palette entry -- the
-  mismatch the current flat model fixes.
+- **A 16-color palette with role/scope INDICES.** A theme was once exactly 16
+  sRGB colors (`kThemePaletteSize`), and every role and scope mapped to a
+  palette index (`semanticIndices`/`syntaxIndices`). Redefining a slot moved
+  every role pointing at it. Retired: each role and scope now holds its own
+  color directly, removing the indirection, the 16-color cap, and the shared-slot
+  coupling. `theme.define` (16 ANSI slot names) and `theme.background` (wash
+  intensity multipliers) were the commands for that model; both are replaced by
+  the single `theme.set`.
+- **Co-visible distinctness enforcement.** `kCoVisibleRolePairs` listed role
+  pairs that appear side by side, and a theme making any pair identical was
+  rejected. Retired with the palette: with one color per role, distinctness is
+  the author's choice, not a validated constraint.
+- **Derived background tints and selection fill.** `DiffTints`/`selectionFill`
+  were once derived from the palette. Earlier still they were computed and muted:
+  row/word tints as `blend(Background, desaturate(anchor, s), a)` (~18% row, ~45%
+  word), a contrast/readability search selecting the strongest readable tint per
+  theme, and a selection fill desaturated to 60% and blended toward Background at
+  up to 40%. All retired: the diff and selection backgrounds are now the
+  `DiffAdded`/`DiffRemoved`/`DiffModified`/`Selection` roles used flat.
+- **HSV background-tint adjustment.** `theme.background` scaled the derived
+  washes' brightness/saturation in HSL without touching the palette
+  (`adjustBackgroundTint`, `BackgroundTintAdjustments`). Retired: with a color
+  per role there is no derived wash to scale -- set the role's hex directly.
+  `doc/spec-background-tint-adjust.md` is archived.
 - **Hue-fidelity guarantees at Indexed256.** Inter-kind distinctness and hue
   fidelity were specified with per-kind deltaE thresholds, then descoped to
-  Truecolor only: the 6x6x6 cube is too coarse to hold them, so a joint search
-  over all tints could not satisfy the constraints simultaneously.
+  Truecolor only: the 6x6x6 cube is too coarse to hold them.
 
-The through-line: each retirement replaced a computed, per-theme-searched color
-with a flat one the theme states directly. That is what makes the current model
-predictable, and it is why the tuning knobs specified separately operate as
-explicit multipliers rather than as a search.
+The through-line: each retirement replaced a computed, per-theme-searched or
+indexed color with a flat one the theme states directly. That is what makes the
+current model predictable -- one named color per role and scope, set and drawn
+without transformation.

@@ -95,27 +95,27 @@ TEST(chromeBackgroundsShareOneBandAndTheActiveTabMergesWithTheDocument) {
     auto grid = ssg::Renderer{}.render(*snapshot);
 
     const auto& theme = snapshot->sections().theme;
-    const auto band = theme.semanticIndices[static_cast<std::size_t>(
-        ssg::SemanticRole::TabInactiveBackground)];
-    const auto docBg = theme.semanticIndices[static_cast<std::size_t>(
-        ssg::SemanticRole::Background)];
+    const auto bandColor =
+        ssg::themeColor(theme, ssg::SemanticRole::TabInactiveBackground);
+    const auto docColor = ssg::themeColor(theme, ssg::SemanticRole::Background);
     // The chrome band is a distinct color from the document.
-    ASSERT_NE(band, docBg);
+    ASSERT_NE(bandColor, docColor);
     // Header, footer, and tab-bar backgrounds all resolve to the one band.
-    ASSERT_EQ(theme.semanticIndices[static_cast<std::size_t>(
-                  ssg::SemanticRole::HeaderBackground)],
-              band);
-    ASSERT_EQ(theme.semanticIndices[static_cast<std::size_t>(
-                  ssg::SemanticRole::FooterBackground)],
-              band);
+    ASSERT_EQ(ssg::themeColor(theme, ssg::SemanticRole::HeaderBackground),
+              bandColor);
+    ASSERT_EQ(ssg::themeColor(theme, ssg::SemanticRole::FooterBackground),
+              bandColor);
 
+    // A cell's background is a slot index into grid.colors; resolve it back to
+    // the color to check the chrome painting.
+    const auto colorOf = [&](int x, int y) {
+        return grid.colors[grid.at(x, y).background];
+    };
     // The empty tab-bar cell (last column of the tab row) carries the band.
-    const auto& emptyTabCell =
-        grid.at(shell.tabBar->right() - 1, shell.tabBar->y);
-    ASSERT_EQ(emptyTabCell.background, band);
+    ASSERT_EQ(colorOf(shell.tabBar->right() - 1, shell.tabBar->y), bandColor);
     // The header and footer rows carry the band too.
-    ASSERT_EQ(grid.at(shell.header->x, shell.header->y).background, band);
-    ASSERT_EQ(grid.at(shell.footer->x, shell.footer->y).background, band);
+    ASSERT_EQ(colorOf(shell.header->x, shell.header->y), bandColor);
+    ASSERT_EQ(colorOf(shell.footer->x, shell.footer->y), bandColor);
 
     // The active tab's first cell carries the document Background, not the band,
     // so it merges with the content below.
@@ -129,7 +129,7 @@ TEST(chromeBackgroundsShareOneBandAndTheActiveTabMergesWithTheDocument) {
     }
     ASSERT_NE(activeTabX, -1);
     if (activeTabX >= 0) {
-        ASSERT_EQ(grid.at(activeTabX, shell.tabBar->y).background, docBg);
+        ASSERT_EQ(colorOf(activeTabX, shell.tabBar->y), docColor);
     }
 }
 
@@ -227,17 +227,17 @@ TEST(wordWrapOffRendersHorizontallyScrolledContent) {
 }
 
 
-TEST(renderColorsArePaletteIndices) {
+TEST(renderColorsAreInBoundsColorSlots) {
     auto snapshot = ssg::test::SessionSnapshotBuilder{}.viewport(80, 24).build();
     auto grid = ssg::Renderer{}.render(snapshot);
-    bool allInPalette = true;
+    bool allInBounds = true;
     for (auto const& cell : grid.cells) {
-        if (cell.foreground >= ssg::kThemePaletteSize ||
-            cell.background >= ssg::kThemePaletteSize) {
-            allInPalette = false;
+        if (cell.foreground >= ssg::kThemeColorSlotCount ||
+            cell.background >= ssg::kThemeColorSlotCount) {
+            allInBounds = false;
         }
     }
-    ASSERT_TRUE(allInPalette);
+    ASSERT_TRUE(allInBounds);
 }
 
 TEST(renderIsDeterministic) {
@@ -1307,7 +1307,7 @@ int main() {
     RUN(renderPaintsContentNotAccessibilityLabels);
     RUN(renderSegmentsOnlyVisibleLinesNotWholeDocument);
     RUN(wordWrapOffRendersHorizontallyScrolledContent);
-    RUN(renderColorsArePaletteIndices);
+    RUN(renderColorsAreInBoundsColorSlots);
     RUN(renderIsDeterministic);
     RUN(renderProjectsPaletteResultsIntoActivePane);
     RUN(renderShowsPaletteQueryAndGhostInHeader);

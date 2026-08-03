@@ -16,30 +16,51 @@ namespace {
 
 thread_local std::uint64_t gRenderSegmentationCalls = 0;
 
+// A cell stores a uint8 index into CellGrid.colors, which is the theme's role
+// colors (slots 0..kSemanticRoleCount-1) followed by its scope colors. A role
+// or scope IS its own slot, so these are a trivial identity/offset -- the shared
+// palette indirection is gone.
 std::uint8_t semanticIndex(ThemeSnapshot const& theme, SemanticRole role) {
     auto const roleIndex = static_cast<std::size_t>(role);
-    if (roleIndex >= theme.semanticIndices.size()) {
+    if (roleIndex >= theme.roleColors.size()) {
         throw std::invalid_argument{"grid contains an unknown semantic role"};
     }
-    auto const paletteIndex = theme.semanticIndices[roleIndex];
-    if (paletteIndex >= kThemePaletteSize) {
-        throw std::invalid_argument{
-            "semantic role references a color outside the 16-color palette"};
-    }
-    return paletteIndex;
+    return static_cast<std::uint8_t>(roleIndex);
 }
 
 std::uint8_t syntaxIndex(ThemeSnapshot const& theme, SyntaxScope scope) {
     auto const scopeIndex = static_cast<std::size_t>(scope);
-    if (scopeIndex >= theme.syntaxIndices.size()) {
+    if (scopeIndex >= theme.syntaxColors.size()) {
         throw std::invalid_argument{"grid contains an unknown syntax scope"};
     }
-    auto const paletteIndex = theme.syntaxIndices[scopeIndex];
-    if (paletteIndex >= kThemePaletteSize) {
-        throw std::invalid_argument{
-            "syntax scope references a color outside the 16-color palette"};
+    return static_cast<std::uint8_t>(kSemanticRoleCount + scopeIndex);
+}
+
+// The flat render color table = role colors then scope colors, in enum order,
+// so semanticIndex/syntaxIndex address it directly.
+std::array<SrgbColor, kThemeColorSlotCount> themeColorTable(
+    ThemeSnapshot const& theme) {
+    std::array<SrgbColor, kThemeColorSlotCount> table{};
+    for (std::size_t i = 0; i < kSemanticRoleCount; ++i) table[i] = theme.roleColors[i];
+    for (std::size_t i = 0; i < kSyntaxScopeCount; ++i) {
+        table[kSemanticRoleCount + i] = theme.syntaxColors[i];
     }
-    return paletteIndex;
+    return table;
+}
+
+// The diff washes are the theme's Diff* role colors directly (no derivation, no
+// HSV): row and word share one color per kind, and a modified word reuses the
+// added color (an inserted span reads as "added").
+DiffTints themeDiffTints(ThemeSnapshot const& theme) {
+    const auto added = themeColor(theme, SemanticRole::DiffAdded);
+    const auto removed = themeColor(theme, SemanticRole::DiffRemoved);
+    const auto modified = themeColor(theme, SemanticRole::DiffModified);
+    return {.addedRow = added,
+            .removedRow = removed,
+            .modifiedRow = modified,
+            .addedWord = added,
+            .removedWord = removed,
+            .modifiedWord = added};
 }
 
 std::string escaped(std::string_view text) {
@@ -1003,14 +1024,14 @@ CellGrid renderTooSmall(GridSize size, ThemeSnapshot const& theme,
     auto const foreground = semanticIndex(theme, SemanticRole::Foreground);
     auto const background = semanticIndex(theme, SemanticRole::Background);
     CellGrid grid{
-        size, theme.palette,
+        size, themeColorTable(theme),
         std::vector<CellGridCell>(
             static_cast<std::size_t>(std::max(0, size.columns) *
                                      std::max(0, size.rows)),
             CellGridCell{" ", foreground, background, SemanticRole::Background,
                          false})};
-    grid.diffTints = theme.diffTints;
-    grid.selectionFill = theme.selectionFill;
+    grid.diffTints = themeDiffTints(theme);
+    grid.selectionFill = themeColor(theme, SemanticRole::Selection);
     if (size.columns <= 0 || size.rows <= 0) return grid;
     std::string_view const message = "terminal too small";
     auto const messageCells =
@@ -1066,18 +1087,6 @@ CellGrid Renderer::render(SessionSnapshot const& snapshot) const {
     auto const& shell = snapshot.sections().shell;
     auto const& theme = snapshot.sections().theme;
     auto const& style = snapshot.sections().style;
-    for (auto index : theme.semanticIndices) {
-        if (index >= kThemePaletteSize) {
-            throw std::invalid_argument{
-                "semantic role references a color outside the 16-color palette"};
-        }
-    }
-    for (auto index : theme.syntaxIndices) {
-        if (index >= kThemePaletteSize) {
-            throw std::invalid_argument{
-                "syntax scope references a color outside the 16-color palette"};
-        }
-    }
     if (shell.viewport.columns <= 0 || shell.viewport.rows <= 0) {
         // The shell layout was declined (viewport below the 20x4 minimum): the
         // library renders the too-small placeholder, sized from the terminal
@@ -1092,14 +1101,14 @@ CellGrid Renderer::render(SessionSnapshot const& snapshot) const {
     auto const foreground = semanticIndex(theme, SemanticRole::Foreground);
     auto const background = semanticIndex(theme, SemanticRole::Background);
     CellGrid grid{
-        shell.viewport, theme.palette,
+        shell.viewport, themeColorTable(theme),
         std::vector<CellGridCell>(
             static_cast<std::size_t>(shell.viewport.columns *
                                      shell.viewport.rows),
             CellGridCell{" ", foreground, background, SemanticRole::Background,
                          false})};
-    grid.diffTints = theme.diffTints;
-    grid.selectionFill = theme.selectionFill;
+    grid.diffTints = themeDiffTints(theme);
+    grid.selectionFill = themeColor(theme, SemanticRole::Selection);
 
     auto const panelBackground =
         shell.panel ? semanticIndex(theme, SemanticRole::TreeBackground)
@@ -1186,12 +1195,14 @@ CellGrid Renderer::render(SessionSnapshot const& snapshot) const {
                                                 primary.active.cell.value())) {
                     grid.caret = *cell;
                 }
-                auto const caretBg = semanticIndex(theme, SemanticRole::Caret);
-                // Draw the secondary caret glyph in the selection role: the theme
-                // co-visibility constraint already guarantees caret != selection,
-                // so the block cursor is legible in every valid theme without a
-                // new constraint (the primary caret uses the hardware cursor).
-                auto const caretFg = semanticIndex(theme, SemanticRole::Selection);
+                // The secondary caret is a block cursor that INVERTS the cell it
+                // sits on: its glyph takes the cell's own background color and it
+                // paints over the cell's own foreground color. Those two colors
+                // are already legible against each other (the text under the
+                // caret was readable), so the block cursor is legible in every
+                // theme without relying on any cross-role distinctness rule --
+                // there is no longer a co-visibility constraint to lean on. The
+                // primary caret uses the hardware cursor.
                 for (auto const& item : selections.items()) {
                     if (&item == &primary) continue;
                     // Every non-primary selection (ranged or a bare caret) has an
@@ -1204,7 +1215,8 @@ CellGrid Renderer::render(SessionSnapshot const& snapshot) const {
                     auto const& existing = grid.at(cell->column, cell->row);
                     put(grid, cell->column, cell->row,
                         existing.text.empty() ? std::string{" "} : existing.text,
-                        caretFg, caretBg, SemanticRole::Caret);
+                        existing.background, existing.foreground,
+                        SemanticRole::Caret);
                 }
             }
         }

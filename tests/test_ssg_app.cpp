@@ -72,8 +72,8 @@ TEST(encodeAnsiFrameAdaptsToColorDepth) {
     ssg::CellGrid screen;
     screen.size = {1, 1};
     // Foreground pure red (theme index 1), background pure black (index 0).
-    screen.palette[0] = {0, 0, 0};
-    screen.palette[1] = {255, 0, 0};
+    screen.colors[0] = {0, 0, 0};
+    screen.colors[1] = {255, 0, 0};
     ssg::CellGridCell cell;
     cell.text = "X";
     cell.foreground = 1;
@@ -103,8 +103,8 @@ TEST(encodeAnsiFrameAdaptsToColorDepth) {
 TEST(encodeAnsiFrameEmitsOrthogonalTintBackgrounds) {
     ssg::CellGrid screen;
     screen.size = {2, 1};
-    screen.palette[0] = {30, 30, 30};
-    screen.palette[1] = {212, 212, 212};
+    screen.colors[0] = {30, 30, 30};
+    screen.colors[1] = {212, 212, 212};
     screen.diffTints.addedRow = {0, 0, 95};
     ssg::CellGridCell plain;
     plain.text = "X";
@@ -169,8 +169,8 @@ TEST(detectColorDepthReadsEnvironment) {
 TEST(encodeAnsiFrameAddressesRowsAndEmitsPaletteColors) {
     ssg::CellGrid screen;
     screen.size = {2, 1};
-    screen.palette[0] = {10, 20, 30};
-    screen.palette[1] = {200, 100, 50};
+    screen.colors[0] = {10, 20, 30};
+    screen.colors[1] = {200, 100, 50};
     ssg::CellGridCell left;
     left.text = "X";
     left.foreground = 1;
@@ -196,7 +196,7 @@ TEST(encodeAnsiFrameAddressesRowsAndEmitsPaletteColors) {
 TEST(encodeAnsiFrameSkipsWideGlyphContinuation) {
     ssg::CellGrid screen;
     screen.size = {2, 1};
-    screen.palette[0] = {0, 0, 0};
+    screen.colors[0] = {0, 0, 0};
     ssg::CellGridCell wide;
     wide.text = "\xe4\xb8\xad";  // U+4E2D, a double-width glyph.
     ssg::CellGridCell continuation;

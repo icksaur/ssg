@@ -2,66 +2,55 @@
 
 ## Goals
 
-Let a user script replace individual palette colors on the running theme
-without hand-authoring a full theme (all 16 palette slots, every semantic
-role, every syntax scope) just to change a couple of colors.
+Let a user script replace individual theme colors on the running theme without
+hand-authoring a full theme (every UI role and every syntax scope) just to
+change a couple of colors.
 
 ## Design
 
-`Theme` already models a fixed 16-slot indexed palette
-(`kThemePaletteSize`) plus role/syntax index mappings into it
-(`RoleMapping`/`SyntaxMapping`); `ThemeSnapshot` is the flat, renderer-facing
-projection of a `Theme` (palette + role/syntax indices + derived
-`DiffTints`/`selectionFill`).
+`ThemeSnapshot` is the whole of a theme: `roleColors` (one `SrgbColor` per
+`SemanticRole`) and `syntaxColors` (one per `SyntaxScope`). There is no palette
+and no index indirection -- a role or scope IS its color. See `doc/spec-color.md`
+for the full color model.
 
-`theme.background` takes brightness and saturation multipliers for the four
-background washes (diff added, removed, modified, and text selection), applied
-when those washes are derived from the palette. Defaults of 1.0 leave them
-exactly as the palette states them.
+`theme.set` takes a table keyed by role and syntax-scope names (the snake_case
+`semanticRoleName`/`syntaxScopeName` strings, e.g. `background`, `foreground`,
+`selection`, `tab_active`, `diff_added`, `comment`, `keyword`), each mapped to a
+`"#rrggbb"` hex string. A name absent from the table keeps the CURRENT active
+theme's color for that role or scope -- the table may be partial. Role and scope
+names share one flat namespace (they are disjoint sets). The set color is the
+final color: there is no derivation, so setting `diff_added` immediately and
+exactly changes the diff-added background.
 
-`theme.define` takes a table keyed by the 16 classic ANSI palette-slot
-names (`black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`,
-`white`, and their `bright*` counterparts), each mapped to a `"#rrggbb"`
-hex string. A name absent from the table keeps the CURRENT active theme's
-color for that slot -- the table may be partial. `theme.define` replaces
-ONLY those palette entries; it never touches which semantic role or
-syntax scope points at which slot, so overriding one or two colors does
-not require re-specifying all 32 role/11 syntax-scope assignments. Diff
-tints and the selection fill are pure functions of palette + role/syntax
-indices and are recomputed from the new palette after replacement.
-
-The command is all-or-nothing: an unknown slot name or a malformed hex
-string rejects the whole call before any slot is replaced.
+The command is all-or-nothing: an unknown name or a malformed hex string rejects
+the whole call before any color is replaced.
 
 Normative command owned by this feature:
 
-- `theme.define`
+- `theme.set`
 
 ## Invariants
 
-- Literal colors remain forbidden outside `Theme` (I19 from `doc/spec.md`)
-  -- `theme.define`'s hex-string parsing and the one place raw RGB
-  channels are ever constructed from user input live in `Theme.cpp`, the
-  same file already responsible for every other color literal in the
-  system.
-- Role/syntax mappings are never mutated by this command; only the 16
-  palette RGB values can change.
+- Literal colors remain forbidden outside the theme (I22 from `doc/spec.md`) --
+  `theme.set`'s hex-string parsing lives in `Theme.cpp`, and the one place raw
+  RGB channels are stated as final colors is `DefaultTheme.cpp`.
+- `theme.set` is total: an accepted call replaces only the named colors; a
+  rejected call mutates nothing.
 
 ## Considerations
 
-- Palette-slot naming (16 classic ANSI names) was chosen over
-  `SemanticRole` names because it matches how terminal color-scheme
-  configs already name things and fits the palette's own 16-slot shape
-  exactly, without requiring all 32 semantic roles to be specified to
-  produce one legal palette.
+- Role/scope names were chosen over any palette-slot scheme because with one
+  color per role there is nothing to index -- naming the role directly is the
+  whole point, and it lets a user set exactly the element they mean without
+  re-specifying every other role.
 
 ## Acceptance (Definition of Done)
 
-- Observable: a table replacing all 16 slots with the current theme's own
-  values is a byte-identical no-op; a partial table changes only the
-  named slots and leaves every other slot exactly equal to the prior
-  theme's values; an unknown key or malformed hex string is rejected with
-  the prior theme unchanged.
+- Observable: a table naming every role and scope with the current theme's own
+  values is a byte-identical no-op; a partial table changes only the named
+  colors and leaves every other color exactly equal to the prior theme's values;
+  an unknown name or malformed hex string is rejected with the prior theme
+  unchanged.
 - Gates: project build and theme tests are green.
-- Oracles: full/partial/invalid table cases against `ThemeSnapshot`
-  equality (see `doc/spec-config.md`).
+- Oracles: full/partial/invalid table cases against `ThemeSnapshot` equality
+  (see `doc/spec-config.md`).

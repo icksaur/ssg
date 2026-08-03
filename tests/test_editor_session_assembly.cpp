@@ -31,7 +31,7 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision,
     settings.entries[0].effective = {
         static_cast<std::uint32_t>(marker.size()), ssg::SettingScope::User};
     ssg::ThemeSnapshot theme;
-    theme.palette[0].red = static_cast<std::uint8_t>(marker.size());
+    theme.roleColors[0].red = static_cast<std::uint8_t>(marker.size());
 
     ssg::ShellViewState shell;
     shell.viewport = {static_cast<int>(20 + marker.size()), 8};

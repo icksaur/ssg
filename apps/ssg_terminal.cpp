@@ -265,7 +265,7 @@ std::string_view underlineSgr(ssg::CellUnderline underline) {
 
 }  // namespace
 
-std::string encode_ansi_frame(ssg::CellGrid const& screen, ssg::ColorDepth depth) {    constexpr std::size_t maxIndex = ssg::kThemePaletteSize - 1;
+std::string encode_ansi_frame(ssg::CellGrid const& screen, ssg::ColorDepth depth) {    constexpr std::size_t maxIndex = ssg::kThemeColorSlotCount - 1;
     auto color = [&](ssg::SrgbColor c, char kind) -> std::string {
         auto const resolved = ssg::resolveColor(c, depth);
         switch (resolved.encoding) {
@@ -289,7 +289,7 @@ std::string encode_ansi_frame(ssg::CellGrid const& screen, ssg::ColorDepth depth
         return {};
     };
     auto paletteColor = [&](std::uint8_t index, char kind) {
-        return color(screen.palette[std::min<std::size_t>(index, maxIndex)], kind);
+        return color(screen.colors[std::min<std::size_t>(index, maxIndex)], kind);
     };
     auto tintColor = [&](ssg::DiffTint tint) {
         switch (tint) {

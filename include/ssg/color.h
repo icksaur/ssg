@@ -2,10 +2,12 @@
 
 // Color-depth adaptation (M9-C, doc/spec-terminal-robustness.md).
 //
-// Themes are the sole source of color (spec.md I22): CellGrid carries the 16
-// authoritative palette colors plus Theme-derived DiffTints. A client never
-// mints or substitutes editor color; resolveColor only depth-adapts those theme
-// colors to the nearest color its output medium can display.
+// Themes are the sole source of color (spec.md I22): CellGrid carries a flat
+// color table (CellGrid.colors -- one slot per semantic role followed by one per
+// syntax scope), plus the renderer-populated diff-tint and selection-fill
+// colors. A client never mints or substitutes editor color; resolveColor only
+// depth-adapts those theme colors to the nearest color its output medium can
+// display.
 
 #include <ssg/Theme.h>
 
@@ -49,18 +51,5 @@ struct ResolvedColor {
 // (232..255).  Exposed for clients and tests that need the swatch behind an
 // index.
 [[nodiscard]] SrgbColor xterm256Color(std::uint8_t index);
-
-// Scales a color's HSL lightness and saturation by `adjustment`, clamping both
-// to [0, 1].  Hue is never modified, so a wash cannot change identity -- red
-// stays red however hard it is pushed -- and clamping saturates rather than
-// wraps, so a large multiplier yields white rather than a dark value.
-//
-// A neutral adjustment returns `color` EXACTLY.  Measured: this round trip is
-// in fact exact for all 16.7M sRGB colors, so the short-circuit is not what
-// makes identity hold today -- it is a guard so that identity CANNOT stop
-// holding if the math here is ever changed (a different rounding rule or color
-// space would silently perturb every color at the shipped 1.0/1.0 default).
-[[nodiscard]] SrgbColor adjustBackgroundTint(SrgbColor color,
-                                             TintAdjustment adjustment);
 
 }  // namespace ssg

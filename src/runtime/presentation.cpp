@@ -325,28 +325,13 @@ void registerAppearanceCommands(EditorSessionBuilder& builder,
             .initScript();
     };
 
-    builder.add(declare("theme-model", "theme.define", "Define")
-                    .inProcessHandler<ThemeDefineArguments>(
+    builder.add(declare("theme-model", "theme.set", "Set Colors")
+                    .inProcessHandler<ThemeSetArguments>(
                         [&runtime](CommandContext&,
-                                   ThemeDefineArguments const& arguments) {
+                                   ThemeSetArguments const& arguments) {
                             return runtime.runTransaction([&] {
-                                auto result = applyThemeDefine(runtime.theme,
-                                                               arguments);
-                                if (!result.accepted()) {
-                                    return failure(result.error->message);
-                                }
-                                runtime.theme = result.snapshot;
-                                return success();
-                            });
-                        }));
-    builder.add(declare("theme-model", "theme.background", "Background")
-                    .inProcessHandler<ThemeBackgroundArguments>(
-                        [&runtime](CommandContext&,
-                                   ThemeBackgroundArguments const& arguments) {
-                            return runtime.runTransaction([&] {
-                                auto result =
-                                    applyThemeBackground(runtime.theme,
-                                                         arguments);
+                                auto result = applyThemeSet(runtime.theme,
+                                                            arguments);
                                 if (!result.accepted()) {
                                     return failure(result.error->message);
                                 }

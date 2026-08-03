@@ -1,5 +1,16 @@
 # spec-config
 
+> **Note (superseded command name).** This spec describes the init.lua loading
+> mechanism, which is current, but uses the original `theme.define` color
+> command as its running example. That command has since been replaced by
+> `theme.set`, which sets each UI role and syntax scope to its own color
+> directly (no 16-slot ANSI palette, no `RoleMapping`/`SyntaxMapping`,
+> no `ThemeDefineArguments`). See `doc/spec-color.md` and
+> `doc/spec-semantic-color-themes.md` for the current color model; read the
+> `theme.define`/palette references below as the historical example they were
+> written against. The init.lua loading, capability, transactional-apply, and
+> `ssg.command(id, args)` design remain accurate.
+
 ## Goals
 
 SSG loads a user config script (`init.lua`) at startup, from a standard

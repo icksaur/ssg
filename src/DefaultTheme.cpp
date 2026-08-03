@@ -6,51 +6,48 @@
 
 namespace ssg {
 
-// The compiled-in built-in theme (see defaultTheme()'s doc comment in
-// Theme.h): EditorRuntime::create()'s starting ThemeSnapshot, before any
-// init.lua theme.define() call runs. This table lives in its OWN
-// translation unit, separate from Theme.cpp, deliberately: Theme.cpp is
-// the generic color-parsing/derivation engine and is scanned by
+// The compiled-in built-in theme (see defaultTheme()'s doc comment in Theme.h):
+// EditorRuntime::create()'s starting ThemeSnapshot, before any init.lua
+// theme.set() call runs. This table lives in its OWN translation unit, separate
+// from Theme.cpp, deliberately: Theme.cpp is scanned by
 // tests/test_theme.cpp's sourceAndConfigHaveNoIndependentColorSources for
-// hardcoded literal colors (hex strings, SrgbColor construction, bare RGB
-// tuples) precisely so it never grows a second, parallel place a color
-// value could be hardcoded outside a caller-supplied theme.define table --
-// this file is the one narrow, reviewed exception to that rule, holding
-// the literal values a theme must start from before any override exists.
+// hardcoded literal colors precisely so it never grows a second, parallel place
+// a color could be hardcoded outside a caller-supplied theme.set table -- this
+// file is the one narrow, reviewed exception, holding the literal values a theme
+// starts from before any override exists.
+//
+// Each role and scope has its OWN color (no shared 16-slot palette). The values
+// below are the historical VSCode-derived palette, assigned per role/scope so
+// the shipped appearance is unchanged from the palette+index model.
 ThemeSnapshot defaultTheme() noexcept {
-    // Readable dark theme derived from the VSCode-style palette in
-    // caco/public/themes/dark.css. Low indices are dark fills, high indices
-    // are light text, hues sit in the middle. Role assignments keep every
-    // co_visible_role_pairs member on a distinct palette index. This is the
-    // ONE compiled-in copy of these values -- do not duplicate them
-    // elsewhere (see this file's header comment above).
-    ThemeSnapshot snapshot{};
-    constexpr std::array<std::array<std::uint8_t, 3>, kThemePaletteSize>
-        palette{{
-            {30, 30, 30},
-            {212, 212, 212},
-            {62, 62, 66},
-            {133, 133, 133},
-            {77, 170, 252},
-            {229, 192, 123},
-            {239, 74, 74},
-            {76, 175, 80},
-            {171, 71, 188},
-            {38, 192, 192},
-            {212, 149, 106},
-            {209, 109, 158},
-            {187, 187, 187},
-            {106, 106, 106},
-            {232, 232, 232},
-            {255, 255, 255},
-        }};
-    for (std::size_t index = 0; index < snapshot.palette.size(); ++index) {
-        snapshot.palette[index] = SrgbColor::fromSerializedChannels(
-            palette[index][0], palette[index][1], palette[index][2]);
-    }
+    // The historical 16-color palette this theme was seeded from, kept local so
+    // the per-role assignments below read as "role = <one of these tones>".
+    constexpr std::array<std::array<std::uint8_t, 3>, 16> tone{{
+        {30, 30, 30},     // 0  near-black (document background)
+        {212, 212, 212},  // 1  light gray (foreground)
+        {62, 62, 66},     // 2  dark gray (chrome band)
+        {133, 133, 133},  // 3  mid gray
+        {77, 170, 252},   // 4  blue
+        {229, 192, 123},  // 5  amber
+        {239, 74, 74},    // 6  red
+        {76, 175, 80},    // 7  green
+        {171, 71, 188},   // 8  purple
+        {38, 192, 192},   // 9  cyan
+        {212, 149, 106},  // 10 orange
+        {209, 109, 158},  // 11 pink
+        {187, 187, 187},  // 12 light gray
+        {106, 106, 106},  // 13 mid-dark gray
+        {232, 232, 232},  // 14 near-white
+        {255, 255, 255},  // 15 white
+    }};
+    auto c = [&](std::size_t i) {
+        return SrgbColor::fromSerializedChannels(tone[i][0], tone[i][1],
+                                                 tone[i][2]);
+    };
 
-    auto role = [&](SemanticRole which, std::uint8_t index) {
-        snapshot.semanticIndices[static_cast<std::size_t>(which)] = index;
+    ThemeSnapshot snapshot{};
+    auto role = [&](SemanticRole which, std::size_t toneIndex) {
+        snapshot.roleColors[static_cast<std::size_t>(which)] = c(toneIndex);
     };
     role(SemanticRole::Foreground, 1);
     role(SemanticRole::Background, 0);
@@ -84,17 +81,12 @@ ThemeSnapshot defaultTheme() noexcept {
     role(SemanticRole::DiffAdded, 7);
     role(SemanticRole::DiffRemoved, 6);
     role(SemanticRole::DiffModified, 10);
-    // Chrome background: the header, footer, tab bar (including its empty region),
-    // and the inactive tabs all share ONE subtle band (slot 2, a touch lighter
-    // than the document) with light text on it. The active tab is the exception:
-    // it reuses Background (slot 0) so it merges into the document below and reads
-    // as the selected tab notched out of the bar.
     role(SemanticRole::TabInactiveBackground, 2);
     role(SemanticRole::HeaderBackground, 2);
     role(SemanticRole::FooterBackground, 2);
 
-    auto syntax = [&](SyntaxScope scope, std::uint8_t index) {
-        snapshot.syntaxIndices[static_cast<std::size_t>(scope)] = index;
+    auto syntax = [&](SyntaxScope scope, std::size_t toneIndex) {
+        snapshot.syntaxColors[static_cast<std::size_t>(scope)] = c(toneIndex);
     };
     syntax(SyntaxScope::PlainText, 1);
     syntax(SyntaxScope::Comment, 3);
@@ -107,10 +99,6 @@ ThemeSnapshot defaultTheme() noexcept {
     syntax(SyntaxScope::OperatorToken, 5);
     syntax(SyntaxScope::Punctuation, 14);
     syntax(SyntaxScope::Invalid, 6);
-    snapshot.diffTints = deriveDiffTints(
-        snapshot.palette, snapshot.semanticIndices, snapshot.syntaxIndices);
-    snapshot.selectionFill = deriveSelectionFill(
-        snapshot.palette, snapshot.semanticIndices, snapshot.syntaxIndices);
     return snapshot;
 }
 

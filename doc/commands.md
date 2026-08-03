@@ -8,7 +8,7 @@ with `SSG_UPDATE_DOCS=1 ./build/test_commands`.
 available to the Lua API when a host grants them
 (see `doc/spec-command-registry.md`).
 
-There are 186 commands.
+There are 185 commands.
 
 ## clipboard-register
 
@@ -284,8 +284,7 @@ There are 186 commands.
 
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
-| `theme.define` | Define | none | lua, init.lua |
-| `theme.background` | Background | none | lua, init.lua |
+| `theme.set` | Set Colors | none | lua, init.lua |
 
 ## tree-providers
 

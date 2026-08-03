@@ -56,9 +56,8 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision, std::string marker
     settings.entries[0].effective = {
         static_cast<std::uint32_t>(marker.size()), ssg::SettingScope::User};
     ssg::ThemeSnapshot theme;
-    theme.palette[0].red = static_cast<std::uint8_t>(marker.size());
-    theme.diffTints = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9},
-                       {10, 11, 12}, {13, 14, 15}, {16, 17, 18}};
+    theme.roleColors[0].red = static_cast<std::uint8_t>(marker.size());
+    theme.syntaxColors[0].green = static_cast<std::uint8_t>(marker.size());
 
     ssg::ShellViewState shell;
     shell.viewport = {static_cast<int>(20 + marker.size()), 8};

@@ -67,7 +67,7 @@ TEST(viewportShellSettingsAndThemeAreLiveSections) {
     auto before = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(before.has_value());
     ASSERT_EQ(before->client().viewport.firstVisualRow, 0U);
-    ASSERT_EQ(before->sections().theme.palette.size(), ssg::kThemePaletteSize);
+    ASSERT_EQ(before->sections().theme.roleColors.size(), ssg::kSemanticRoleCount);
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"view.scroll_lines", runtime.revision(), ssg::ScrollLinesArguments{5}}).accepted());
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"panel.toggle", runtime.revision(), {}}).accepted());
@@ -533,7 +533,7 @@ TEST(liveDiffTabGlyphColorTracksThemePalette) {
     ASSERT_TRUE(darkLiveTab != nullptr);
     if (!darkLiveTab) return;
     const auto darkCell = darkGrid.at(darkLiveTab->rect.x, darkLiveTab->rect.y);
-    const auto darkColor = darkGrid.palette[darkCell.foreground];
+    const auto darkColor = darkGrid.colors[darkCell.foreground];
 
     ASSERT_TRUE(runtime
                     .dispatch(ssg::ClientId{1},
@@ -559,7 +559,7 @@ TEST(liveDiffTabGlyphColorTracksThemePalette) {
     if (!inactiveLiveTab) return;
     const auto inactiveCell = inactiveGrid.at(inactiveLiveTab->rect.x,
                                               inactiveLiveTab->rect.y);
-    const auto inactiveColor = inactiveGrid.palette[inactiveCell.foreground];
+    const auto inactiveColor = inactiveGrid.colors[inactiveCell.foreground];
     ASSERT_TRUE(darkColor != inactiveColor);
 }
 
