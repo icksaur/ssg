@@ -412,7 +412,26 @@ TEST(shellStatusFieldsPreserveDefaultContentOrderAndLabels) {
     ASSERT_EQ(headerFields.size(), std::size_t{1});
     ASSERT_EQ(headerFields[0]->id, std::string{"path"});
     ASSERT_EQ(headerFields[0]->label, std::string{"Path"});
-    ASSERT_EQ(headerFields[0]->content, runtime.workspaceRoot().string());
+    // The path field shows the workspace root with a leading home directory
+    // abbreviated to "~" (so a home-rooted path leaves room for the branch).
+    // Mirror the runtime's home resolution: HOME, then USERPROFILE, trailing
+    // separators stripped.
+    auto const expectedPath = [&]() -> std::string {
+        std::string h;
+        if (const char* home = std::getenv("HOME"); home != nullptr) {
+            h = home;
+        } else if (const char* profile = std::getenv("USERPROFILE");
+                   profile != nullptr) {
+            h = profile;
+        }
+        while (!h.empty() && (h.back() == '/' || h.back() == '\\')) h.pop_back();
+        auto full = runtime.workspaceRoot().generic_string();
+        if (h.empty() || full.rfind(h, 0) != 0) return full;
+        if (full.size() == h.size()) return "~";
+        if (full[h.size()] == '/') return "~" + full.substr(h.size());
+        return full;
+    }();
+    ASSERT_EQ(headerFields[0]->content, expectedPath);
 
     ASSERT_EQ(snapshot->sections().tabs.tabs.size(), std::size_t{1});
     ASSERT_EQ(snapshot->sections().tabs.tabs.front().label, std::string{"long.txt"});

@@ -23,7 +23,11 @@ struct StatusFieldCatalogEntry {
 
 struct StatusFieldProviderContext {
     std::filesystem::path workspaceRoot;
-    std::string currentPathLabel;
+    // The user's home directory, if known. The header path field abbreviates a
+    // leading home directory to "~" so a home-rooted workspace path stays short
+    // enough to leave room for the branch field beside it. Empty disables the
+    // abbreviation (the full path is shown).
+    std::string homeDirectory;
     std::optional<std::string> currentBranch;
     std::string statusValue;
     std::string followMode;
