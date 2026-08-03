@@ -13,8 +13,9 @@ clients use the same typed command, snapshot, and delta model.
   encoding and mixed-EOL preservation, scratch recovery, external-change
   handling, filesystem/Git/symbol trees, live diffs, and follow-edits.
 - Shared monospace presentation model with wrapping, mouse hit targets, wheel
-  and scrollbar navigation, a collapsible left panel, status header/footer, and
-  themes containing exactly 16 colors.
+  and scrollbar navigation, middle-click to close a tab, a collapsible left
+  panel, status header/footer, and fully themeable per-role and per-syntax-scope
+  colors.
 - Tree-sitter syntax state, LSP synchronization/diagnostics/language features
   and atomic workspace edits, plus a capability-limited Lua 5.4 command host.
 - Versioned, bounded binary protocol and an HTTP/WebSocket server adapter with
