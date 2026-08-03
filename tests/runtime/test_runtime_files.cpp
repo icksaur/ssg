@@ -68,6 +68,17 @@ bool activeTabIsLiveDiff(const ssg::EditorRuntime& runtime) {
     return false;
 }
 
+std::vector<std::filesystem::path> archivedDrafts(const std::filesystem::path& root) {
+    std::vector<std::filesystem::path> result;
+    const auto dir = root / "draft-archive";
+    std::error_code code;
+    for (std::filesystem::directory_iterator it{dir, code}, end;
+         !code && it != end; it.increment(code)) {
+        if (it->is_regular_file()) result.push_back(it->path());
+    }
+    return result;
+}
+
 // Edit note.txt to a dirty draft, flush it, then drop the runtime — leaving a
 // recoverable draft in `root/scratch`. Returns the drafted buffer text.
 std::string leaveDirtyDraft(const std::filesystem::path& root) {
@@ -312,6 +323,135 @@ TEST(draftDiffSurvivesAGitScanThatDoesNotMentionTheFile) {
     // The draft-vs-disk diff tab is still active and still shows the draft.
     ASSERT_TRUE(activeTabIsLiveDiff(runtime));
     ASSERT_NE(runtime.activeDocumentText().find("!hi"), std::string::npos);
+}
+
+TEST(draftDiscardArchivesTheDraftAndLoadsDiskContent) {
+    auto root = uniqueRoot("draft_discard");
+    const auto draft = leaveDirtyDraft(root);  // "!hi\n"
+    ASSERT_TRUE(!draft.empty());
+    std::ofstream{root / "workspace" / "note.txt", std::ios::binary}
+        << "changed externally\n";
+
+    auto created = ssg::EditorRuntime::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(reopenNote(runtime).accepted());
+    ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
+                ssg::EditorRuntime::DraftReopenNotice::Conflict);
+
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"draft.discard", runtime.revision(), {}})
+                    .accepted());
+
+    // (a)+(b): the buffer now holds disk content, is clean, notice cleared.
+    ASSERT_EQ(runtime.activeDocumentText(), std::string{"changed externally\n"});
+    ASSERT_FALSE(activeTabDirty(runtime));
+    ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
+                ssg::EditorRuntime::DraftReopenNotice::None);
+
+    // (a)+(c): the discarded edits were archived (reversible), byte-for-byte.
+    const auto archived = archivedDrafts(root);
+    ASSERT_EQ(archived.size(), std::size_t{1});
+    ASSERT_EQ(readText(archived.front()), draft);
+
+    // (d): the user's file on disk was not written by the discard.
+    ASSERT_EQ(readText(root / "workspace" / "note.txt"),
+              std::string{"changed externally\n"});
+}
+
+TEST(discardedDraftIsRemovedFromScratchSoReopenIsClean) {
+    auto root = uniqueRoot("draft_discard_removed");
+    const auto draft = leaveDirtyDraft(root);
+    ASSERT_TRUE(!draft.empty());
+    std::ofstream{root / "workspace" / "note.txt", std::ios::binary}
+        << "changed externally\n";
+    {
+        auto created = ssg::EditorRuntime::create(configFor(root));
+        ASSERT_TRUE(created.accepted());
+        auto& runtime = *created.runtime;
+        ASSERT_TRUE(reopenNote(runtime).accepted());
+        ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                     {"draft.discard", runtime.revision(), {}})
+                        .accepted());
+    }
+    // A fresh session over the same store must find no draft to recover.
+    auto created = ssg::EditorRuntime::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(reopenNote(runtime).accepted());
+    ASSERT_EQ(runtime.activeDocumentText(), std::string{"changed externally\n"});
+    ASSERT_FALSE(activeTabDirty(runtime));
+    ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
+                ssg::EditorRuntime::DraftReopenNotice::None);
+}
+
+TEST(draftDiscardRefusesACleanSavedDocument) {
+    auto root = uniqueRoot("draft_discard_clean");
+    std::ofstream{root / "workspace" / "note.txt", std::ios::binary} << "hi\n";
+    auto created = ssg::EditorRuntime::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    auto& runtime = *created.runtime;
+    (void)runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                         ssg::ViewId{1});
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.open", runtime.revision(),
+                                  std::string{"note.txt"}})
+                    .accepted());
+    // Nothing unsaved: discard must refuse rather than archive an empty change.
+    ASSERT_FALSE(runtime.dispatch(ssg::ClientId{1},
+                                  {"draft.discard", runtime.revision(), {}})
+                     .accepted());
+    ASSERT_TRUE(archivedDrafts(root).empty());
+}
+
+TEST(draftDiscardArchivesADeeplyNestedPathWithoutExceedingNameLimits) {
+    // Regression guard: the archive filename must not be the flattened full
+    // relative path, which for a legal deep path can exceed a filesystem's
+    // 255-byte per-component limit and make discard fail. The path below flattens
+    // to well over 255 bytes.
+    auto root = uniqueRoot("draft_discard_deep");
+    std::filesystem::path rel;
+    for (int i = 0; i < 6; ++i) {
+        rel /= std::string(50, 'd') + std::to_string(i);
+    }
+    rel /= "note.txt";
+    std::filesystem::create_directories((root / "workspace" / rel).parent_path());
+    std::ofstream{root / "workspace" / rel, std::ios::binary} << "hi\n";
+
+    const auto relKey = rel.generic_string();
+    {
+        auto created = ssg::EditorRuntime::create(configFor(root));
+        ASSERT_TRUE(created.accepted());
+        auto& runtime = *created.runtime;
+        (void)runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                             ssg::ViewId{1});
+        ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                     {"file.open", runtime.revision(), relKey})
+                        .accepted());
+        ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                     {"text.insert", runtime.revision(),
+                                      ssg::TextInputArguments{"!"}})
+                        .accepted());
+        ASSERT_EQ(runtime.flushDueAutosaveDrafts(), std::size_t{1});
+    }
+    std::ofstream{root / "workspace" / rel, std::ios::binary} << "changed\n";
+
+    auto created = ssg::EditorRuntime::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    auto& runtime = *created.runtime;
+    (void)runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                         ssg::ViewId{1});
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.open", runtime.revision(), relKey})
+                    .accepted());
+    // Discard must succeed and produce exactly one bounded-name archive entry.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"draft.discard", runtime.revision(), {}})
+                    .accepted());
+    const auto archived = archivedDrafts(root);
+    ASSERT_EQ(archived.size(), std::size_t{1});
+    ASSERT_TRUE(archived.front().filename().string().size() <= std::size_t{255});
+    ASSERT_EQ(runtime.activeDocumentText(), std::string{"changed\n"});
 }
 
 TEST(draftDiffRefusesWhenTheActiveDocumentIsNotASavedFile) {
@@ -714,6 +854,10 @@ int main() {
     RUN(draftDiffWithDiskMissingDiffsDraftAgainstEmpty);
     RUN(draftDiffSurvivesAGitScanThatDoesNotMentionTheFile);
     RUN(draftDiffRefusesWhenTheActiveDocumentIsNotASavedFile);
+    RUN(draftDiscardArchivesTheDraftAndLoadsDiskContent);
+    RUN(discardedDraftIsRemovedFromScratchSoReopenIsClean);
+    RUN(draftDiscardRefusesACleanSavedDocument);
+    RUN(draftDiscardArchivesADeeplyNestedPathWithoutExceedingNameLimits);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

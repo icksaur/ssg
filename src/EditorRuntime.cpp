@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <array>
+#include <span>
 #include <chrono>
 #include <cerrno>
 #include <condition_variable>
@@ -143,6 +144,9 @@ KeymapViewState defaultTerminalKeymap() {
     // the caret and document.
     bind(seq({"Alt+Digit8"}), "find.word_under_cursor", "editor");
     bind(seq({"Alt+KeyR"}), "replace.open", "*");
+    // Draft recovery's "Use disk": discard unsaved edits back to the disk
+    // version (the draft is archived first, so this is reversible).
+    bind(seq({"Alt+Shift+KeyD"}), "draft.discard", "editor");
 
     // Cut/copy/paste act on the editor's selection, so they are bound in the
     // editor context; paste is additionally bound in the prompt so a prompt's
@@ -1282,6 +1286,76 @@ CommandHandlerResult EditorRuntime::Impl::openDraftDiff() {
     if (!file.has_value()) return failure("draft diff is unavailable");
     return openOrFocusLiveDiffTab(file->get(), NavigationClass::Programmatic,
                                   std::nullopt);
+}
+
+bool EditorRuntime::Impl::archiveDiscardedDraft(std::string_view savedPath,
+                                                std::string_view content) {
+    // Beside the scratch store (not the workspace deleted-file archive, which
+    // the housekeeping pruner owns), so a discarded draft is never pruned as a
+    // stale deleted file.
+    const auto archiveDir = scratchRoot.parent_path() / "draft-archive";
+    std::error_code code;
+    std::filesystem::create_directories(archiveDir, code);
+    if (code) return false;
+
+    // Name by a HASH of the workspace-relative path rather than the flattened
+    // path itself: a legal deep path can exceed a filesystem's per-component
+    // name limit (255 bytes on Linux), which would make discard fail for a valid
+    // file. A short basename prefix stays for humans browsing the archive; the
+    // hash disambiguates two files sharing a basename, and the nanosecond stamp
+    // keeps repeated discards of one file distinct.
+    std::string basename =
+        std::filesystem::path{std::string{savedPath}}.filename().string();
+    if (basename.empty()) basename = "draft";
+    if (basename.size() > 64) basename.resize(64);
+    const auto stamp = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                           std::chrono::system_clock::now().time_since_epoch())
+                           .count();
+    const auto target =
+        archiveDir / (basename + "." + std::to_string(fastContentHash(savedPath)) +
+                      "." + std::to_string(stamp) + ".draft");
+    const std::span<const std::byte> bytes{
+        reinterpret_cast<const std::byte*>(content.data()), content.size()};
+    return createFileExclusively(target, bytes).ok();
+}
+
+CommandHandlerResult EditorRuntime::Impl::discardDraft() {
+    const auto id = activeDocumentId();
+    if (!id) return failure("no active document");
+    const auto state = workspace.state(*id);
+    if (!state || state->key.kind() != JournalDocumentKeyKind::Saved) {
+        return failure("draft.discard needs a saved file");
+    }
+    if (!state->dirty) return failure("no unsaved edits to discard");
+    const auto* opened = workspace.tryDocument(*id);
+    if (opened == nullptr) return failure("no active document");
+    const std::string draftText = opened->snapshot().text;
+
+    // Archive the discarded edits FIRST, before anything is removed or the
+    // buffer is reloaded: even if the reload fails, the draft survives here and
+    // in the scratch store, so a mis-click is always recoverable.
+    if (!archiveDiscardedDraft(state->key.savedPath(), draftText)) {
+        return failure("could not archive the draft before discarding");
+    }
+
+    // Reload the on-disk content, which refreshes the baseline and clears
+    // dirty. A missing or unreadable file leaves the draft untouched.
+    const auto reloaded = workspace.reload(*id);
+    if (!reloaded.accepted()) return failure("could not load the file from disk");
+
+    scratch.removeDocument(state->key);
+    // "Use disk" is meant to be final. removeDocument is queued to the async
+    // durability thread, so wait briefly (as tab close does) to shrink the
+    // window where a crash could replay the just-discarded draft on next launch.
+    // Best-effort: the archived copy already makes a lost race recoverable.
+    (void)scratch.waitUntilDurable(std::chrono::milliseconds{100});
+    if (const auto found = documentRuntimeStates.find(id->value());
+        found != documentRuntimeStates.end()) {
+        found->second.reopen = DraftReopenOutcome::None;
+    }
+    resetSelectionForActiveDocument();
+    refreshSyntax();
+    return updateTabsFor(*id);
 }
 
 void EditorRuntime::Impl::refreshLiveDiffDocuments(const DiffViewState& diffView) {
