@@ -554,6 +554,24 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
                      {actionX, view.footer->y, width, 1},
                      SemanticRole::StatusInfo, action->accessibleLabel);
         }
+        // The help hint packs to the left of the status actions, so status
+        // actions stay rightmost and the hint yields (drops) first when the
+        // footer is crowded. In the common case (no status actions) it is the
+        // rightmost footer element.
+        if (request.footerHint && !request.footerHint->label.empty()) {
+            const int width =
+                std::min(actionX - view.footer->x,
+                         displayCells(request.footerHint->label) +
+                             request.style.dimensions.labelPadding);
+            if (width > 0) {
+                actionX -= width;
+                addNode(view, ShellNodeKind::FooterHint, "footer.hint",
+                         request.footerHint->label,
+                         {actionX, view.footer->y, width, 1},
+                         SemanticRole::Footer, request.footerHint->label,
+                         request.footerHint->commandId);
+            }
+        }
         addFields(view, request.footerFields,
                    {view.footer->x, view.footer->y,
                     actionX - view.footer->x, view.footer->height},

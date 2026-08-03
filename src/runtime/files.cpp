@@ -162,6 +162,13 @@ CommandHandlerResult bindFile(EditorRuntime::Impl& runtime,
         case FileCommand::Save: {
             auto id = runtime.activeDocumentId();
             if (!id) return failure("no active document");
+            // A read-only (or diff) document cannot be saved. Refuse before the
+            // untitled -> Save-As redirect below, so a read-only help tab reports
+            // a clean message instead of opening a naming prompt or writing.
+            if (auto const* doc = runtime.workspace.tryDocument(*id);
+                doc != nullptr && doc->mode() != DocumentMode::Edit) {
+                return failure("this document is read-only and cannot be saved");
+            }
             // A buffer that has never had a name cannot be saved over itself,
             // so saving it IS a save-as. Opening save_as's prompt (rather than
             // one of its own) keeps a single naming path: whatever the user

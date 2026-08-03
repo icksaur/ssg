@@ -33,6 +33,7 @@ glyphSetters() {
         map["tree_collapsed"] = [](Style& s) -> std::string& { return s.tree.collapsed; };
         map["tab_dirty_suffix"] = [](Style& s) -> std::string& { return s.tab.dirtySuffix; };
         map["tab_live_diff_prefix"] = [](Style& s) -> std::string& { return s.tab.liveDiffPrefix; };
+        map["tab_read_only_suffix"] = [](Style& s) -> std::string& { return s.tab.readOnlySuffix; };
         map["toggle_checked"] = [](Style& s) -> std::string& { return s.toggle.checked; };
         map["toggle_unchecked"] = [](Style& s) -> std::string& { return s.toggle.unchecked; };
         map["truncation"] = [](Style& s) -> std::string& { return s.truncation; };

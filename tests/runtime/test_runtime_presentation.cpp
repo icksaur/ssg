@@ -316,7 +316,7 @@ TEST(paletteCommandCandidatesAreCachedButInvalidateOnKeymapChange) {
     if (!first || !second) return;
     ASSERT_EQ(first->sections().palette.candidates,
               second->sections().palette.candidates);
-    ASSERT_EQ(detailOf(*first, "file.save"), std::string{"Alt+S"});
+    ASSERT_EQ(detailOf(*first, "file.save"), std::string{"Alt+s"});
 
     // Rebinding a command must invalidate the cache: the new key hint shows up.
     ASSERT_TRUE(runtime.dispatch(
@@ -326,7 +326,7 @@ TEST(paletteCommandCandidatesAreCachedButInvalidateOnKeymapChange) {
                     .accepted());
     auto rebound = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(rebound.has_value());
-    if (rebound) ASSERT_EQ(detailOf(*rebound, "file.save"), std::string{"Alt+G"});
+    if (rebound) ASSERT_EQ(detailOf(*rebound, "file.save"), std::string{"Alt+g"});
 }
 
 TEST(shellStatusFieldsUseRegisteredProviders) {

@@ -125,6 +125,7 @@ KeymapViewState defaultTerminalKeymap() {
     bind(seq({"Alt+KeyP"}), "file_finder.open", "*");
     bind(seq({"Alt+Shift+KeyP"}), "palette.open", "*");
     bind(seq({"Alt+KeyB"}), "panel.toggle", "*");
+    bind(seq({"Alt+KeyH"}), "help.open", "*");
     bind(seq({"Alt+KeyO"}), "panel.focus", "*");
     // Tab cycling: Alt+BracketRight/Left cannot be used -- ESC ] / ESC [ are the
     // OSC / CSI introducers -- so the brackets give way to Alt+Period/Comma.
@@ -745,6 +746,23 @@ void EditorRuntime::Impl::publishDeltaValue(std::type_index, std::any) {}
 TabLifecycleResult EditorRuntime::Impl::close(
     const TabState& tab, std::chrono::milliseconds durabilityTimeout) {
     if (!tab.document) {
+        if (tab.kind == TabKind::ReadOnlyOutput) {
+            // A read-only output tab (help, generated content) is ephemeral and
+            // regenerable: it is never journaled for reopen and never persists.
+            // Drop its backing document and map entry directly, skipping the
+            // recovery/scratch path entirely, and signal ephemeral so closeAt
+            // accepts the missing compensation record.
+            const auto mapped = readOnlyTabDocuments.find(tab.contentIdentity);
+            if (mapped != readOnlyTabDocuments.end()) {
+                const auto document = mapped->second;
+                readOnlyTabDocuments.erase(mapped);
+                documentRuntimeStates.erase(document.value());
+                documentLanguageOverrides.erase(document.value());
+                (void)workspace.removeDocument(document);
+            }
+            return {TabError::None, {}, std::nullopt, std::nullopt, std::nullopt,
+                    false, true};
+        }
         if (tab.kind == TabKind::LiveDiff) {
             const auto mapped = liveDiffDocuments.find(tab.contentIdentity);
             if (mapped != liveDiffDocuments.end()) {
@@ -1184,6 +1202,12 @@ std::optional<FileDocumentId> EditorRuntime::Impl::activeDocumentId() const {
             return mapped->second;
         }
     }
+    if (found->kind == TabKind::ReadOnlyOutput) {
+        const auto mapped = readOnlyTabDocuments.find(found->contentIdentity);
+        if (mapped != readOnlyTabDocuments.end()) {
+            return mapped->second;
+        }
+    }
     return std::nullopt;
 }
 
@@ -1241,6 +1265,41 @@ CommandHandlerResult EditorRuntime::Impl::openOrFocusLiveDiffTab(
         recordNavigation(*userClient, classification);
     }
     shell.focusEditor();
+    return success();
+}
+
+CommandHandlerResult EditorRuntime::Impl::openReadOnlyTab(
+    TabKind kind, std::string contentIdentity, std::string label,
+    std::string text, LanguageId language) {
+    // Build the replacement document FIRST, then swap: a ReadOnly document
+    // rejects Document::apply, so content is refreshed by remove+recreate (never
+    // an in-place edit) -- and creating before removing keeps a refresh failure
+    // non-destructive, so a failed rebuild leaves the existing tab intact.
+    auto created =
+        workspace.openVirtualDocument(label, text, DocumentMode::ReadOnly);
+    if (!created.accepted() || !created.document) {
+        return failure(workspaceMessage(created));
+    }
+    ensureDocumentRuntimeState(*created.document);
+    documentLanguageOverrides.insert_or_assign(created.document->value(),
+                                                std::move(language));
+    auto mapped = readOnlyTabDocuments.find(contentIdentity);
+    if (mapped != readOnlyTabDocuments.end()) {
+        const auto previous = mapped->second;
+        documentRuntimeStates.erase(previous.value());
+        documentLanguageOverrides.erase(previous.value());
+        (void)workspace.removeDocument(previous);
+    }
+    readOnlyTabDocuments[contentIdentity] = *created.document;
+    auto opened =
+        tabs.openContent(kind, contentIdentity, label, DocumentMode::ReadOnly);
+    if (!opened.accepted()) {
+        return failure(tabMessage(opened));
+    }
+    shell.focusEditor();
+    // Untitled documents get no language from a path, so highlight the override
+    // language (e.g. Markdown) now that this tab is active.
+    refreshSyntax();
     return success();
 }
 
@@ -1444,12 +1503,19 @@ void EditorRuntime::Impl::ensureDocumentRuntimeState(FileDocumentId document) {
 
 void EditorRuntime::Impl::discardDocumentRuntimeState(FileDocumentId document) {
     documentRuntimeStates.erase(document.value());
+    documentLanguageOverrides.erase(document.value());
     autosave.forget(document);
     // A find that was scoped to this document no longer has a subject.
     if (findDocumentId == document) findDocumentId.reset();
     // Any live diff tab mapped to it is equally orphaned.
     for (auto it = liveDiffDocuments.begin(); it != liveDiffDocuments.end();) {
         it = it->second == document ? liveDiffDocuments.erase(it)
+                                    : std::next(it);
+    }
+    // Same for a read-only output (help) tab mapped to it.
+    for (auto it = readOnlyTabDocuments.begin();
+         it != readOnlyTabDocuments.end();) {
+        it = it->second == document ? readOnlyTabDocuments.erase(it)
                                     : std::next(it);
     }
 }
@@ -1665,8 +1731,11 @@ void EditorRuntime::Impl::refreshSyntax() {
     auto text = document ? document->snapshot().text : std::string{};
     auto revision = document ? document->revision() : Revision{0};
     auto language = LanguageId::plainText();
-    if (auto state = activeWorkspaceState();
-        state && state->key.kind() == JournalDocumentKeyKind::Saved) {
+    if (auto const override = documentLanguageOverrides.find(id->value());
+        override != documentLanguageOverrides.end()) {
+        language = override->second;
+    } else if (auto state = activeWorkspaceState();
+               state && state->key.kind() == JournalDocumentKeyKind::Saved) {
         language = LanguageId::fromPath(state->key.savedPath());
     }
     if (deferringEnrichment) {
@@ -2122,6 +2191,7 @@ EditorRuntimeCreateResult EditorRuntime::create(EditorRuntimeConfig config) {
         bindRuntimePresentation(builder, *impl);
         bindRuntimeNavigation(builder, *impl);
         bindRuntimeLanguageServices(builder, *impl);
+        bindRuntimeHelp(builder, *impl);
         impl->session = builder.build();
         return {std::unique_ptr<EditorRuntime>{new EditorRuntime{std::move(impl)}}, {}};
     } catch (std::exception const& exception) {

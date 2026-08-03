@@ -123,6 +123,16 @@ RegionHit HitTester::at(int column, int row) const {
             hit.commandId = node.commandId;
             return hit;
         }
+        if (node.kind == ShellNodeKind::FooterHint) {
+            // The persistent help hint dispatches its command id directly. It is
+            // NOT a status-queue action, so it deliberately does not go through
+            // status.invoke_action's generation freshness gate.
+            RegionHit hit;
+            hit.region = HitRegion::FooterField;
+            hit.fieldId = node.id;
+            hit.commandId = node.commandId;
+            return hit;
+        }
     }
 
     // The side panel and its gutter occupy the leftmost columns, disjoint from

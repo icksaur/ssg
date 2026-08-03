@@ -127,8 +127,23 @@ struct TabManager::Impl {
             return failure(result.error, std::move(result.message));
         }
         if (!result.compensation) {
-            return failure(TabError::LifecycleFailed,
-                           "close did not provide a reopen record");
+            // An ephemeral (read-only/regenerable) tab closes without a reopen
+            // record and is not added to the reopen-closed history. Any other
+            // tab that returns no compensation is a lifecycle bug.
+            if (!result.ephemeral) {
+                return failure(TabError::LifecycleFailed,
+                               "close did not provide a reopen record");
+            }
+            const auto wasActiveEphemeral = view.active == tab.id;
+            view.tabs.erase(view.tabs.begin() +
+                            static_cast<std::ptrdiff_t>(index));
+            if (view.tabs.empty()) {
+                view.active.reset();
+            } else if (wasActiveEphemeral) {
+                const auto replacement = std::min(index, view.tabs.size() - 1);
+                view.active = view.tabs[replacement].id;
+            }
+            return {TabError::None, {}, tab.id, {}};
         }
         if (tab.dirty && !result.durable) {
             return failure(TabError::DurabilityFailed,

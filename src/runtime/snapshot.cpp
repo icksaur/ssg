@@ -14,10 +14,17 @@ namespace ssg {
 namespace {
 
 std::string composedTabTitle(const TabState& tab, const Style& style) {
-    if (tab.kind != TabKind::LiveDiff) {
-        return tab.label;
+    // Per-mode affordance: a live-diff tab keeps its prefix; a read-only tab
+    // (help, generated output, or a binary/decode-failure buffer) gets a
+    // trailing marker so the user knows why editing does nothing. An ordinary
+    // editable tab is unadorned.
+    if (tab.kind == TabKind::LiveDiff) {
+        return style.tab.liveDiffPrefix + tab.label;
     }
-    return style.tab.liveDiffPrefix + tab.label;
+    if (tab.mode == DocumentMode::ReadOnly) {
+        return tab.label + style.tab.readOnlySuffix;
+    }
+    return tab.label;
 }
 
 std::optional<std::string> statusFieldCommandId(
@@ -150,6 +157,20 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
     request.headerFields = std::move(statusFields.headerFields);
     request.footerFields = std::move(statusFields.footerFields);
     request.footerActions = statusProjection.actions;
+    // The persistent bottom-right help hint. Its key label tracks the live
+    // binding for help.open (label-only when unbound); it is never a hardcoded
+    // key string.
+    {
+        ShellFooterHint hint;
+        hint.commandId = "help.open";
+        std::string keys;
+        if (auto sequence =
+                KeymapMatcher{keymap}.preferredBinding("help.open")) {
+            keys = KeyCodec{}.formatSequence(*sequence);
+        }
+        hint.label = keys.empty() ? std::string{"Help"} : keys + "  Help";
+        request.footerHint = std::move(hint);
+    }
     request.tabs = std::move(labels);
     request.style = style;
     bool const paletteOpen = prompt.active() && prompt.request() &&

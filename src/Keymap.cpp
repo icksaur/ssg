@@ -236,7 +236,18 @@ std::string KeyCodec::formatSequence(const KeySequence& sequence) const {
         if (stroke.alt) result += "Alt+";
         if (stroke.shift) result += "Shift+";
         if (stroke.meta) result += "Meta+";
-        result += keyCodeDisplay(stroke.code);
+        auto const display = keyCodeDisplay(stroke.code);
+        // A letter key without Shift transmits as a LOWERCASE character in a
+        // terminal (Alt+H is really ESC h); rendering it uppercase implies a
+        // Shift that is not bound and does not work. So a single A-Z display
+        // with no Shift modifier is lowercased. Shift+, digits, and named keys
+        // keep their table display.
+        if (!stroke.shift && display.size() == 1 && display[0] >= 'A' &&
+            display[0] <= 'Z') {
+            result += static_cast<char>(display[0] - 'A' + 'a');
+        } else {
+            result += display;
+        }
     }
     return result;
 }

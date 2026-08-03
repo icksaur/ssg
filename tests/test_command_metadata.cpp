@@ -45,10 +45,13 @@ TEST(commandLabelUsesAuthoredLabelsAndHumanizesTheRest) {
 }
 
 TEST(formatKeySequenceIsCompactAndHuman) {
+    // A letter with no Shift is lowercased, because in a terminal Alt+letter
+    // transmits the lowercase character; Alt+S (uppercase) would need Shift.
     ASSERT_EQ(ssg::KeyCodec{}.formatSequence(*ssg::KeyCodec{}.parseSequence({"Alt+KeyS"})),
-              std::string{"Alt+S"});
+              std::string{"Alt+s"});
     ASSERT_EQ(ssg::KeyCodec{}.formatSequence(*ssg::KeyCodec{}.parseSequence({"ArrowDown"})),
               std::string{"Down"});
+    // With Shift the letter stays uppercase.
     ASSERT_EQ(ssg::KeyCodec{}.formatSequence(
                   *ssg::KeyCodec{}.parseSequence({"Alt+Shift+KeyZ"})),
               std::string{"Alt+Shift+Z"});

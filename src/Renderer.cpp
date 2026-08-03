@@ -393,6 +393,7 @@ void paintShellLeaves(CellGrid& grid, ShellViewState const& shell,
         case ShellNodeKind::HeaderField:
         case ShellNodeKind::FooterField:
         case ShellNodeKind::FooterAction:
+        case ShellNodeKind::FooterHint:
         case ShellNodeKind::Tab:
         case ShellNodeKind::EmptyState:
             // Chrome backgrounds (M-theme): header/footer fields sit on their
@@ -401,7 +402,8 @@ void paintShellLeaves(CellGrid& grid, ShellViewState const& shell,
             if (node.kind == ShellNodeKind::HeaderField) {
                 nodeBackground = headerBackground;
             } else if (node.kind == ShellNodeKind::FooterField ||
-                       node.kind == ShellNodeKind::FooterAction) {
+                       node.kind == ShellNodeKind::FooterAction ||
+                       node.kind == ShellNodeKind::FooterHint) {
                 nodeBackground = footerBackground;
             } else if (node.kind == ShellNodeKind::Tab) {
                 nodeBackground = node.role == SemanticRole::TabInactive

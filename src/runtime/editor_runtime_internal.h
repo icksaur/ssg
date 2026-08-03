@@ -111,6 +111,7 @@ void bindRuntimeFiles(EditorSessionBuilder& builder, EditorRuntime::Impl& runtim
 void bindRuntimePresentation(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime);
 void bindRuntimeNavigation(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime);
 void bindRuntimeLanguageServices(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime);
+void bindRuntimeHelp(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime);
 [[nodiscard]] CommandHandlerResult executeFindReplaceCommand(
     EditorRuntime::Impl& runtime, Revision revision, FindReplaceCommand command,
     std::any const& payload);
@@ -174,6 +175,19 @@ struct EditorRuntime::Impl final : CommandServices,
     std::vector<StatusFieldCatalogEntry> statusFieldCatalog;
     std::unordered_map<std::string, StatusFieldProvider> statusFieldProviders;
     std::unordered_map<std::string, FileDocumentId> liveDiffDocuments;
+    // Read-only, in-memory "output" tabs (help, and any future generated-content
+    // tab), keyed by the tab's content identity. Mirrors liveDiffDocuments: a
+    // content tab does not store its document id in TabState, so the document is
+    // resolved through this side map. The backing documents are DocumentMode::
+    // ReadOnly and untitled, so they are excluded from autosave and cannot be
+    // saved; their content is refreshed by remove+recreate, never edited in
+    // place (see openReadOnlyTab).
+    std::unordered_map<std::string, FileDocumentId> readOnlyTabDocuments;
+    // Per-document syntax language override for documents with no on-disk path
+    // to infer a language from (a read-only help/output tab). refreshSyntax
+    // consults this before falling back to path-derived detection, so a help
+    // tab can be highlighted as e.g. Markdown despite being untitled.
+    std::unordered_map<std::uint64_t, LanguageId> documentLanguageOverrides;
     SearchController search;
     NavigationHistory navigation{64};
     LspSyncViewState lspSync;
@@ -411,6 +425,17 @@ struct EditorRuntime::Impl final : CommandServices,
     [[nodiscard]] CommandHandlerResult openOrFocusLiveDiffTab(
         const DiffFileView& file, NavigationClass classification,
         std::optional<ClientId> userClient);
+    // Open (or re-focus) a read-only, in-memory tab of generated text content.
+    // The reusable primitive behind the help page and any future
+    // generated-content tab. Opens the text as a DocumentMode::ReadOnly virtual
+    // document (untitled -> never autosaved, never savable) in a tab of `kind`
+    // deduped by `contentIdentity`, and activates it. Re-opening the same
+    // identity REFRESHES the content by remove+recreate -- it constructs a fresh
+    // read-only document rather than editing the existing one, so the read-only
+    // edit chokepoint (Document::apply) is never bypassed.
+    [[nodiscard]] CommandHandlerResult openReadOnlyTab(
+        TabKind kind, std::string contentIdentity, std::string label,
+        std::string text, LanguageId language = LanguageId::plainText());
     // Open a live diff tab of the active saved document's buffer (the draft,
     // the target) against its CURRENT disk content (the baseline), via the
     // source-agnostic non-git diff engine. A missing/unreadable disk file diffs

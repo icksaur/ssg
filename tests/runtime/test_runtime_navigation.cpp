@@ -1262,10 +1262,10 @@ TEST(paletteCandidatesCarryLabelsAndKeyDetail) {
     ASSERT_TRUE(undo != nullptr);
     if (save) {
         ASSERT_EQ(save->label, std::string{"Save File"});
-        ASSERT_EQ(save->detail, std::string{"Alt+S"});  // Its bound chord.
+        ASSERT_EQ(save->detail, std::string{"Alt+s"});  // Its bound chord.
     }
     if (undo) {
-        ASSERT_EQ(undo->detail, std::string{"Alt+Z"});
+        ASSERT_EQ(undo->detail, std::string{"Alt+z"});
     }
 
     // An unbound command shows a label but no key detail.

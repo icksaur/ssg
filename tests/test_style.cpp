@@ -65,6 +65,7 @@ std::string currentGlyph(ssg::Style const& style, std::string const& key) {
     if (key == "tree_collapsed") return style.tree.collapsed;
     if (key == "tab_dirty_suffix") return style.tab.dirtySuffix;
     if (key == "tab_live_diff_prefix") return style.tab.liveDiffPrefix;
+    if (key == "tab_read_only_suffix") return style.tab.readOnlySuffix;
     if (key == "toggle_checked") return style.toggle.checked;
     if (key == "toggle_unchecked") return style.toggle.unchecked;
     if (key == "truncation") return style.truncation;

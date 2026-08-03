@@ -2,6 +2,7 @@ target_sources(ssg PRIVATE
     ${SSG_SOURCE_DIR}/src/EditorRuntime.cpp
     ${SSG_SOURCE_DIR}/src/runtime/editing.cpp
     ${SSG_SOURCE_DIR}/src/runtime/files.cpp
+    ${SSG_SOURCE_DIR}/src/runtime/help.cpp
     ${SSG_SOURCE_DIR}/src/runtime/language_services.cpp
     ${SSG_SOURCE_DIR}/src/runtime/navigation.cpp
     ${SSG_SOURCE_DIR}/src/runtime/presentation.cpp
@@ -79,4 +80,10 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     target_include_directories(test_command_dispatch PRIVATE ${SSG_SOURCE_DIR}/tests)
     target_link_libraries(test_command_dispatch PRIVATE ssg)
     add_test(NAME test_command_dispatch COMMAND test_command_dispatch)
+
+    add_executable(test_help
+        ${SSG_SOURCE_DIR}/tests/runtime/test_help.cpp
+    )
+    target_link_libraries(test_help PRIVATE ssg)
+    add_test(NAME test_help COMMAND test_help)
 endif()

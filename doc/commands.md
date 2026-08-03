@@ -8,7 +8,7 @@ with `SSG_UPDATE_DOCS=1 ./build/test_commands`.
 available to the Lua API when a host grants them
 (see `doc/spec-command-registry.md`).
 
-There are 185 commands.
+There are 186 commands.
 
 ## clipboard-register
 
@@ -114,6 +114,12 @@ There are 185 commands.
 | `follow_edits.resume` | Resume | none | lua |
 | `follow_edits.pause` | Pause | none | lua |
 | `follow_edits.toggle` | Toggle | none | lua |
+
+## help-system
+
+| Command | Summary | Arguments | Surfaces |
+|---|---|---|---|
+| `help.open` | Open Help | none | lua |
 
 ## keymap-model
 

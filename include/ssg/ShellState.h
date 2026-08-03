@@ -64,6 +64,10 @@ enum class ShellNodeKind : std::uint8_t {
     // spans the row (painted yellow); the actions are its clickable sub-regions.
     NoticeBar,
     NoticeAction,
+    // A persistent, right-aligned footer hint (e.g. "Alt+KeyH  Help"). Distinct
+    // from FooterAction so its click dispatches a plain command id directly,
+    // without touching the status-queue action invocation path.
+    FooterHint,
 };
 
 struct AccessibilityNode {
@@ -113,6 +117,14 @@ struct TabLabel {
     bool dirty = false;
 };
 
+// A persistent footer hint: a right-aligned label whose click dispatches
+// `commandId`. Lowest-priority footer content -- it yields space to status
+// actions and fields when the footer is crowded.
+struct ShellFooterHint {
+    std::string label;
+    std::string commandId;
+};
+
 struct ShellLayoutRequest {
     GridSize viewport;
     std::uint8_t reservedPromptRows = 0;
@@ -125,6 +137,10 @@ struct ShellLayoutRequest {
     std::vector<StatusField> headerFields;
     std::vector<StatusField> footerFields;
     std::vector<ShellLabel> footerActions;
+    // The bottom-right help hint, placed after (to the left of) the status
+    // actions so status actions take precedence, and dropped first when the
+    // footer lacks room.
+    std::optional<ShellFooterHint> footerHint;
     std::vector<TabLabel> tabs;
     // The header's single-line text input, shared by every picker (command
     // palette, file finder, ...) -- see doc/spec-ux.md.  Named for the surface

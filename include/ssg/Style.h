@@ -47,6 +47,7 @@ struct TreeGlyphs {
 struct TabGlyphs {
     std::string dirtySuffix = " *";
     std::string liveDiffPrefix = "D ";
+    std::string readOnlySuffix = " (readonly)";
     friend bool operator==(TabGlyphs const&, TabGlyphs const&) = default;
 };
 

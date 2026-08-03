@@ -164,6 +164,11 @@ struct TabLifecycleResult {
     std::optional<FileDocumentId> reopenedDocument;
     std::optional<JournalDocumentKey> reopenedDocumentKey;
     bool durable = false;
+    // An ephemeral tab (e.g. a read-only help/output tab) is regenerable and is
+    // deliberately NOT journaled for reopen, so it legitimately closes without a
+    // compensation record. closeAt accepts a missing compensation only when this
+    // is set, and does not add the tab to the reopen-closed history.
+    bool ephemeral = false;
 
     [[nodiscard]] bool accepted() const noexcept {
         return error == TabError::None;

@@ -1,0 +1,148 @@
+#include "editor_runtime_internal.h"
+
+#include <ssg/CommandCatalog.h>
+#include <ssg/CommandSpecBuilder.h>
+#include <ssg/Keymap.h>
+#include <ssg/SyntaxModel.h>
+#include <ssg/command_metadata.h>
+
+#include <algorithm>
+#include <map>
+#include <string>
+#include <vector>
+
+namespace ssg {
+namespace {
+
+// The compiled-in prose. Kept as plain UTF-8 Markdown; the help tab is opened
+// with the Markdown language so tree-sitter highlights the headings, emphasis,
+// and links. No Markdown TABLES are used -- SSG renders text, not rendered
+// tables, so a pipe table would show as raw pipes. URLs still linkify through
+// the document's URL-run detection.
+constexpr std::string_view kHelpPreamble =
+    "# SSG Help\n"
+    "\n"
+    "Close this tab like any other with Alt+w.\n"
+    "\n"
+    "## Moving around\n"
+    "\n"
+    "- Arrow keys, PageUp/PageDown, Home/End move the cursor.\n"
+    "- Type to filter in a picker; Escape cancels a prompt.\n"
+    "\n"
+    "## Mouse\n"
+    "\n"
+    "- Click to place the cursor; drag to select text.\n"
+    "- Click a tab to switch to it; click a URL to open it.\n"
+    "- Click the working-directory path in the header to show the file tree.\n"
+    "- Click the scrollbar to jump; drag its thumb to scroll.\n"
+    "\n"
+    "## Keybindings\n"
+    "\n";
+
+constexpr std::string_view kHelpConfigSection =
+    "\n"
+    "## Configuring SSG\n"
+    "\n"
+    "SSG reads an optional init.lua at startup (see doc/config.md). From it you\n"
+    "can recolor every UI role and syntax scope with theme.set, and rebind keys\n"
+    "with keymap.bind / keymap.unbind. A missing init.lua is not an error.\n"
+    "\n"
+    "Example:\n"
+    "\n"
+    "    ssg.command(\"keymap.bind\", { sequence = \"Alt+KeyH\", command = \"help.open\" })\n"
+    "\n"
+    "## All commands\n"
+    "\n";
+
+std::string humanBindingLabel(CommandCatalog const& catalog,
+                              std::string const& commandId) {
+    if (auto const* entry = catalog.find(commandId)) {
+        return commandLabel(*entry);
+    }
+    return commandId;
+}
+
+// The live keybinding table, one row per binding, formatted as
+// "<keys>\t<command label>". Reads the runtime's current keymap, so a user's
+// keymap.bind customizations appear here.
+std::string renderKeybindings(KeymapViewState const& keymap,
+                              CommandCatalog const& catalog) {
+    std::vector<std::pair<std::string, std::string>> rows;
+    rows.reserve(keymap.bindings.size());
+    for (auto const& binding : keymap.bindings) {
+        rows.emplace_back(KeyCodec{}.formatSequence(binding.sequence),
+                          humanBindingLabel(catalog, binding.commandId));
+    }
+    std::sort(rows.begin(), rows.end());
+    std::string out;
+    for (auto const& [keys, label] : rows) {
+        out += "  ";
+        out += keys;
+        out += "  ";
+        out += label;
+        out += '\n';
+    }
+    return out;
+}
+
+// The full command list as plain Markdown list items grouped by owner -- NOT a
+// table, because SSG shows text and a pipe table would render as raw pipes. Each
+// row is "- `command.id` -- summary".
+std::string renderCommandList(CommandCatalog const& catalog) {
+    std::map<std::string_view, std::vector<CommandEntry const*>> byOwner;
+    for (auto const* command : catalog.commands()) {
+        byOwner[command->owner].push_back(command);
+    }
+    std::string out;
+    for (auto const& [owner, owned] : byOwner) {
+        out += "\n### ";
+        out += owner;
+        out += "\n\n";
+        for (auto const* command : owned) {
+            out += "- `";
+            out += command->id;
+            out += '`';
+            if (!command->summary.empty()) {
+                out += " -- ";
+                out += command->summary;
+            }
+            out += '\n';
+        }
+    }
+    return out;
+}
+
+} // namespace
+
+// Assembles the read-only help document: compiled-in prose, then the live
+// keybinding table, then configuration help and the full command list.
+// Reassembled on every help.open so the generated sections always reflect the
+// current keymap and catalog.
+std::string buildHelpDocument(EditorRuntime::Impl const& runtime) {
+    auto const& catalog = *runtime.session->catalog();
+    std::string document{kHelpPreamble};
+    document += renderKeybindings(runtime.keymap, catalog);
+    document += kHelpConfigSection;
+    document += renderCommandList(catalog);
+    return document;
+}
+
+void bindRuntimeHelp(EditorSessionBuilder& builder,
+                     EditorRuntime::Impl& runtime) {
+    builder.add(
+        CommandSpecBuilder{"help.open"}
+            .owner("help-system")
+            .summary("Open Help")
+            .label("Open Help")
+            .mutates()
+            .lua()
+            .handler([&runtime](CommandContext&) {
+                return runtime.runTransaction([&] {
+                    return runtime.openReadOnlyTab(
+                        TabKind::ReadOnlyOutput, "help:main", "Help",
+                        buildHelpDocument(runtime), ssg::LanguageId{"markdown"});
+                });
+            }));
+}
+
+} // namespace ssg
