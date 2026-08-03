@@ -180,6 +180,13 @@ and so on. A double-width character (most CJK, and many emoji) counts as two.
 A glyph of the wrong width is rejected and named, rather than silently shifting
 the rest of the row sideways.
 
+The tab layout glyphs are the exception: `tab_left_edge` and `tab_right_edge`
+(drawn at each tab's start and end, both empty by default) and `tab_separator`
+(drawn between adjacent tabs, a single space by default) may be **any** width,
+because the tab row recomputes its geometry from whatever you set. For example,
+`tab_left_edge = "["`, `tab_right_edge = "]"`, `tab_separator = " | "` renders
+tabs as `[one] | [two]`. They still reject control characters and invalid UTF-8.
+
 Glyphs also cannot contain **control characters** -- including escape -- or
 invalid UTF-8. A stray escape sequence in a glyph does not draw: it changes how
 your terminal interprets everything after it, which usually looks like the

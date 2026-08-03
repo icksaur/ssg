@@ -1699,7 +1699,8 @@ bool decodePresent(ProtocolValue const& value, std::optional<ShellNodeKind>& out
         ShellNodeKind::Tab, ShellNodeKind::Panel, ShellNodeKind::PanelProvider,
         ShellNodeKind::Pane, ShellNodeKind::Scrollbar, ShellNodeKind::PromptReservation,
         ShellNodeKind::EmptyState, ShellNodeKind::NoticeBar,
-        ShellNodeKind::NoticeAction, ShellNodeKind::FooterHint};
+        ShellNodeKind::NoticeAction, ShellNodeKind::FooterHint,
+        ShellNodeKind::TabSeparator};
     return decodeEnum(value, out, values);
 }
 
@@ -4565,6 +4566,9 @@ ProtocolValue toValue(Style const& value) {
     fields.emplace_back("tab_dirty_suffix", toValue(value.tab.dirtySuffix));
     fields.emplace_back("tab_live_diff_prefix", toValue(value.tab.liveDiffPrefix));
     fields.emplace_back("tab_read_only_suffix", toValue(value.tab.readOnlySuffix));
+    fields.emplace_back("tab_left_edge", toValue(value.tab.leftEdge));
+    fields.emplace_back("tab_right_edge", toValue(value.tab.rightEdge));
+    fields.emplace_back("tab_separator", toValue(value.tab.separator));
     fields.emplace_back("toggle_checked", toValue(value.toggle.checked));
     fields.emplace_back("toggle_unchecked", toValue(value.toggle.unchecked));
     fields.emplace_back("truncation", toValue(value.truncation));
@@ -4615,6 +4619,9 @@ bool decodePresent(ProtocolValue const& value, std::optional<Style>& out) {
         requireField<std::string>(value.field("tab_live_diff_prefix"));
     auto readOnlySuffix =
         requireField<std::string>(value.field("tab_read_only_suffix"));
+    auto tabLeftEdge = requireField<std::string>(value.field("tab_left_edge"));
+    auto tabRightEdge = requireField<std::string>(value.field("tab_right_edge"));
+    auto tabSeparator = requireField<std::string>(value.field("tab_separator"));
     auto checked = requireField<std::string>(value.field("toggle_checked"));
     auto unchecked = requireField<std::string>(value.field("toggle_unchecked"));
     auto truncation = requireField<std::string>(value.field("truncation"));
@@ -4640,6 +4647,7 @@ bool decodePresent(ProtocolValue const& value, std::optional<Style>& out) {
     if (!gutter || !track || !single || !top || !body || !bottom || !expanded ||
         !collapsed || !indent || !dirtySuffix || !liveDiffPrefix ||
         !readOnlySuffix || !checked ||
+        !tabLeftEdge || !tabRightEdge || !tabSeparator ||
         !unchecked || !truncation || !sigil || !unrenderable || !separator ||
         !minCols || !minRows || !panelTarget || !panelMin || !editorMin ||
         !gutterWidth || !headerHeight || !tabBarHeight || !footerHeight ||
@@ -4649,7 +4657,8 @@ bool decodePresent(ProtocolValue const& value, std::optional<Style>& out) {
     Style style;
     style.scrollbar = {*gutter, *track, *single, *top, *body, *bottom};
     style.tree = {*expanded, *collapsed, *indent};
-    style.tab = {*dirtySuffix, *liveDiffPrefix, *readOnlySuffix};
+    style.tab = {*dirtySuffix, *liveDiffPrefix, *readOnlySuffix,
+                 *tabLeftEdge, *tabRightEdge, *tabSeparator};
     style.toggle = {*checked, *unchecked};
     style.truncation = *truncation;
     style.inputLineSigil = *sigil;

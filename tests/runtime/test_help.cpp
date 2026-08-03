@@ -3,6 +3,7 @@
 #include <ssg/EditorRuntime.h>
 #include <ssg/Keymap.h>
 #include <ssg/ShellState.h>
+#include <ssg/Style.h>
 #include <ssg/SyntaxModel.h>
 #include <ssg/TextInputCommands.h>
 #include <ssg/session_snapshot.h>
@@ -130,6 +131,46 @@ TEST(helpDocumentContainsProseAndTheLiveKeybinding) {
     ASSERT_TRUE(contains(text, "header"));
     // No Markdown TABLE syntax (pipe rows) leaks into the help text.
     ASSERT_FALSE(contains(text, "|---|"));
+}
+
+TEST(helpDocumentListsChromeGlyphsIncludingTabGlyphsWithValues) {
+    Harness harness{"glyphs"};
+    ASSERT_TRUE(harness.runtime != nullptr);
+    if (!harness.runtime) return;
+    auto& runtime = *harness.runtime;
+
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"help.open", runtime.revision(), {}})
+                    .accepted());
+    const auto text = runtime.activeDocumentText();
+    // The glyph listing is generated from styleGlyphValues, so both a fixed-slot
+    // glyph and the new variable tab glyphs appear -- a newly added glyph would
+    // document itself here with no separate list to update.
+    ASSERT_TRUE(contains(text, "Chrome glyphs"));
+    ASSERT_TRUE(contains(text, "`scrollbar_track`"));
+    ASSERT_TRUE(contains(text, "`tab_separator` = \" \""));
+    ASSERT_TRUE(contains(text, "`tab_left_edge`"));
+    ASSERT_TRUE(contains(text, "style.define"));
+}
+
+TEST(helpGlyphListingEscapesQuotesSoItStaysCopyPasteable) {
+    Harness harness{"escape"};
+    ASSERT_TRUE(harness.runtime != nullptr);
+    if (!harness.runtime) return;
+    auto& runtime = *harness.runtime;
+
+    ssg::StyleDefineArguments args;
+    args.values = {{"tab_separator", "\""}};
+    ASSERT_TRUE(
+        runtime.dispatch(ssg::ClientId{1},
+                         {"style.define", runtime.revision(), args})
+            .accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"help.open", runtime.revision(), {}})
+                    .accepted());
+    const auto text = runtime.activeDocumentText();
+    // The quote is backslash-escaped so the listed value is a valid Lua string.
+    ASSERT_TRUE(contains(text, "`tab_separator` = \"\\\"\""));
 }
 
 TEST(helpKeybindingSectionReflectsACustomBind) {
@@ -338,6 +379,8 @@ TEST(helpTabIsHighlightedAsMarkdown) {
 int main() {
     RUN(helpOpenOpensAReadOnlyOutputTab);
     RUN(helpDocumentContainsProseAndTheLiveKeybinding);
+    RUN(helpDocumentListsChromeGlyphsIncludingTabGlyphsWithValues);
+    RUN(helpGlyphListingEscapesQuotesSoItStaysCopyPasteable);
     RUN(helpKeybindingSectionReflectsACustomBind);
     RUN(helpOpenIsIdempotentAndRefreshes);
     RUN(helpTabRejectsEditsAndLeavesTheBufferUnchanged);

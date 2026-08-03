@@ -45,6 +45,22 @@ glyphSetters() {
     return table;
 }
 
+// Layout-affecting glyphs: their width is not locked to the default because the
+// tab row recomputes its geometry from the configured width.  A key lives in
+// EITHER this map or glyphSetters(), never both (asserted by a test).
+std::unordered_map<std::string, std::function<std::string&(Style&)>> const&
+variableGlyphSetters() {
+    static auto const table = [] {
+        std::unordered_map<std::string, std::function<std::string&(Style&)>>
+            map;
+        map["tab_left_edge"] = [](Style& s) -> std::string& { return s.tab.leftEdge; };
+        map["tab_right_edge"] = [](Style& s) -> std::string& { return s.tab.rightEdge; };
+        map["tab_separator"] = [](Style& s) -> std::string& { return s.tab.separator; };
+        return map;
+    }();
+    return table;
+}
+
 std::unordered_map<std::string, std::function<void(Style&, int)>> const&
 dimensionSetters() {
     static auto const table = [] {
@@ -118,9 +134,8 @@ namespace {
 //
 // Asked of the same layout engine everything else uses, so "safe to emit" and
 // "how wide is it" have one answer in this codebase rather than two.
-std::optional<std::string> rejectGlyph(std::string const& key,
-                                       std::string const& value,
-                                       std::string const& defaultValue) {
+std::optional<std::string> rejectVariableGlyph(std::string const& key,
+                                               std::string const& value) {
     if (value.find('\n') != std::string::npos ||
         value.find('\r') != std::string::npos) {
         return "style.define value for '" + key +
@@ -138,11 +153,19 @@ std::optional<std::string> rejectGlyph(std::string const& key,
             return "style.define value for '" + key + "' must be valid UTF-8";
         }
     }
+    return std::nullopt;
+}
+
+std::optional<std::string> rejectGlyph(std::string const& key,
+                                       std::string const& value,
+                                       std::string const& defaultValue) {
+    if (auto shared = rejectVariableGlyph(key, value)) return shared;
     // A glyph fills a fixed slot, so it must be exactly as wide as the one it
     // replaces. Otherwise the columns the server described and the columns the
     // terminal draws disagree and the row shifts. The field's DEFAULT is the
     // width, so a newly added glyph brings its own rule with it.
-    auto const width = run.totalCells;
+    GraphemeLayout const layout;
+    auto const width = layout.computeRun(value).totalCells;
     auto const expected = layout.computeRun(defaultValue).totalCells;
     if (width != expected) {
         return "style.define value for '" + key + "' must be " +
@@ -164,6 +187,14 @@ StyleDefineResult applyStyleDefine(Style const& current,
         if (auto const it = glyphSetters().find(key);
             it != glyphSetters().end()) {
             if (auto rejection = rejectGlyph(key, value, it->second(defaults))) {
+                return {StyleDefineError{std::move(*rejection)}, {}};
+            }
+            it->second(next) = value;
+            continue;
+        }
+        if (auto const it = variableGlyphSetters().find(key);
+            it != variableGlyphSetters().end()) {
+            if (auto rejection = rejectVariableGlyph(key, value)) {
                 return {StyleDefineError{std::move(*rejection)}, {}};
             }
             it->second(next) = value;
@@ -196,10 +227,25 @@ StyleDefineResult applyStyleDefine(Style const& current,
 
 std::vector<std::string> styleDefineKeys() {
     std::vector<std::string> keys;
-    keys.reserve(glyphSetters().size() + dimensionSetters().size());
+    keys.reserve(glyphSetters().size() + variableGlyphSetters().size() +
+                 dimensionSetters().size());
     for (auto const& [key, _] : glyphSetters()) keys.push_back(key);
+    for (auto const& [key, _] : variableGlyphSetters()) keys.push_back(key);
     for (auto const& [key, _] : dimensionSetters()) keys.push_back(key);
     return keys;
+}
+
+std::vector<std::pair<std::string, std::string>> styleGlyphValues(
+    Style const& style) {
+    Style copy = style;  // the accessors read through a mutable Style&
+    std::vector<std::pair<std::string, std::string>> entries;
+    for (auto const* table : {&glyphSetters(), &variableGlyphSetters()}) {
+        for (auto const& [key, accessor] : *table) {
+            entries.emplace_back(key, accessor(copy));
+        }
+    }
+    std::sort(entries.begin(), entries.end());
+    return entries;
 }
 
 }  // namespace ssg

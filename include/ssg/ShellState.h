@@ -68,6 +68,9 @@ enum class ShellNodeKind : std::uint8_t {
     // from FooterAction so its click dispatches a plain command id directly,
     // without touching the status-queue action invocation path.
     FooterHint,
+    // A non-interactive glyph painted between adjacent tabs. Carries no hit and
+    // no command; it exists so a configured tab separator glyph is drawn.
+    TabSeparator,
 };
 
 struct AccessibilityNode {
