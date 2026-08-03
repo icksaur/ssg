@@ -1721,13 +1721,18 @@ std::vector<AutosaveCandidate> autosaveCandidates(const Workspace& workspace) {
     for (const auto id : workspace.documents()) {
         auto state = workspace.state(id);
         if (!state) continue;
+        auto const* current = workspace.tryDocument(id);
+        if (current == nullptr) continue;
+        // Only an editable document can hold unsaved user edits worth a draft. A
+        // live-diff tab's virtual document (DocumentMode::Diff) is a derived view
+        // that is untitled and non-empty, so it would otherwise read as a dirty
+        // untitled buffer and be persisted as a spurious scratch draft.
+        if (current->mode() != DocumentMode::Edit) continue;
         // Only a dirty document is a flush candidate, so only a dirty document
         // pays for a text snapshot + hash. A clean one still appears (hash 0) so
         // the scheduler can drop any debounce state it held — cheap, no copy.
         std::uint64_t contentHash = 0;
         if (state->dirty) {
-            auto const* current = workspace.tryDocument(id);
-            if (current == nullptr) continue;
             contentHash = fastContentHash(current->snapshot().text);
         }
         candidates.push_back(AutosaveCandidate{id, state->dirty, contentHash});

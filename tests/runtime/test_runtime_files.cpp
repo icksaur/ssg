@@ -616,6 +616,59 @@ TEST(dismissRefusesWhenThereIsNoConflictNotice) {
                 ssg::EditorRuntime::DraftReopenNotice::Restored);
 }
 
+TEST(liveDiffVirtualDocumentIsNotAutosavedAsADraft) {
+    // A live-diff tab's virtual document (DocumentMode::Diff) is untitled and
+    // non-empty, so without a mode guard it would be flushed as a spurious
+    // untitled scratch draft. It must never be an autosave candidate.
+    auto root = uniqueRoot("diff_candidate_clean");
+    std::ofstream{root / "workspace" / "note.txt", std::ios::binary} << "hi\n";
+    auto created = ssg::EditorRuntime::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.open", runtime.revision(),
+                                  std::string{"note.txt"}})
+                    .accepted());
+    // A clean file with a live-diff tab open: nothing dirty to draft. The diff
+    // virtual doc must NOT be flushed.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"draft.diff", runtime.revision(), {}})
+                    .accepted());
+    ASSERT_TRUE(activeTabIsLiveDiff(runtime));
+    ASSERT_EQ(runtime.flushDueAutosaveDrafts(), std::size_t{0});
+    ASSERT_EQ(runtime.flushAllAutosaveDrafts(), std::size_t{0});
+}
+
+TEST(liveDiffTabDoesNotInflateTheDirtyDocumentFlushCount) {
+    // With a genuinely dirty saved document AND a live-diff tab open, exactly one
+    // draft flushes (the real document); the diff virtual doc is excluded.
+    auto root = uniqueRoot("diff_candidate_dirty");
+    std::ofstream{root / "workspace" / "note.txt", std::ios::binary} << "hi\n";
+    auto created = ssg::EditorRuntime::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.open", runtime.revision(),
+                                  std::string{"note.txt"}})
+                    .accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"text.insert", runtime.revision(),
+                                  ssg::TextInputArguments{"!"}})
+                    .accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"draft.diff", runtime.revision(), {}})
+                    .accepted());
+    ASSERT_TRUE(activeTabIsLiveDiff(runtime));
+    // Exactly the real document, not the diff virtual doc too.
+    ASSERT_EQ(runtime.flushAllAutosaveDrafts(), std::size_t{1});
+}
+
 TEST(binaryDiskReplacementRaisesConflictNotSilentDraftLoss) {
     // Hardening (M15 p7): a file that had a text draft is externally replaced by
     // binary/non-UTF-8 content. restoreDraft cannot load the draft into the now
@@ -1144,6 +1197,8 @@ int main() {
     RUN(oversizedBufferIsNotAutosavedAndIsReportedOnce);
     RUN(loweringAutosaveDebounceMsEnablesAFlushTheDefaultSuppresses);
     RUN(touchingTheFileWithIdenticalBytesIsNotAFalseConflict);
+    RUN(liveDiffVirtualDocumentIsNotAutosavedAsADraft);
+    RUN(liveDiffTabDoesNotInflateTheDirtyDocumentFlushCount);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }
