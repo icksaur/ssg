@@ -22,8 +22,12 @@ display it.
 A theme is a flat table of sRGB colors, one per UI role and one per syntax
 scope. There is no shared palette and no indirection: a role IS its color.
 
-- 35 `SemanticRole`s (`Foreground`, `Selection`, `GitAdded`, `TabActive`, ...)
-  each have their own `SrgbColor`, in `ThemeSnapshot::roleColors`.
+- 25 `SemanticRole`s (`Text`, `Canvas`, `Selection`, `TabActive`, ...) each have
+  their own `SrgbColor`, in `ThemeSnapshot::roleColors`. Every role is consumed
+  by the renderer for either its color or (for `Caret` alone) as a cell tag; the
+  set is kept honest by `tests/test_render.cpp`'s dead-color-role guard (see
+  `doc/spec-prune-theme-roles.md`). `Text` is the default document text color;
+  `Canvas` is the editor/document background.
 - 11 `SyntaxScope`s (`Comment`, `Keyword`, `String`, ...) each have their own
   `SrgbColor`, in `ThemeSnapshot::syntaxColors`.
 
@@ -88,8 +92,8 @@ not already specify, which is why it does not violate color authority.
 ### What a user can change
 
 `theme.set` (init.lua) takes a table of role and syntax-scope names (the
-snake_case `semanticRoleName`/`syntaxScopeName` strings, e.g. `background`,
-`selection`, `tab_active`, `comment`, `keyword`), each optionally mapped to
+snake_case `semanticRoleName`/`syntaxScopeName` strings, e.g. `canvas`,
+`text`, `selection`, `tab_active`, `comment`, `keyword`), each optionally mapped to
 `"#rrggbb"`. Omitted names keep their current value, so the table may be
 partial. It is validated whole and applied all-or-nothing: an unknown name or
 malformed hex rejects the entire call with no partial mutation. The set color is
@@ -173,6 +177,19 @@ be extended deliberately.
   (`adjustBackgroundTint`, `BackgroundTintAdjustments`). Retired: with a color
   per role there is no derived wash to scale -- set the role's hex directly.
   `doc/spec-background-tint-adjust.md` is archived.
+- **Ten unrendered roles, and the `foreground`/`background` names.** The role
+  set once carried `Foreground`/`Background` (renamed to `Text`/`Canvas` -- their
+  names did not say what they colored) plus ten roles that were assigned a
+  default color but never read by any renderer: `DiagnosticError`/`-Warning`/
+  `-Info`/`-Hint` (no diagnostics rendering exists), `GitAdded`/`-Modified`/
+  `-Deleted`/`-Conflict` (the diff overlay uses the separate `Diff*` roles),
+  `StatusError` (only `StatusInfo`/`StatusWarning` paint), and
+  `ActiveLineNumber` (the gutter only uses `LineNumber`). Setting any of them via
+  `theme.set` changed nothing on screen -- a silent pit of failure. Pruned so a
+  `theme.set` name always corresponds to something that paints; the guard test
+  keeps it that way. The `Git*`/`Diagnostic*` roles are cheap to re-add with the
+  feature that renders them. `Caret` was kept despite its color being unread
+  because it is still a live cell-role tag. See `doc/spec-prune-theme-roles.md`.
 - **Hue-fidelity guarantees at Indexed256.** Inter-kind distinctness and hue
   fidelity were specified with per-kind deltaE thresholds, then descoped to
   Truecolor only: the 6x6x6 cube is too coarse to hold them.

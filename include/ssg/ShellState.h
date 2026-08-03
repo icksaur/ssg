@@ -71,7 +71,7 @@ struct AccessibilityNode {
     std::string id;
     std::string label;
     Rect rect;
-    SemanticRole role = SemanticRole::Background;
+    SemanticRole role = SemanticRole::Canvas;
     std::string content;  // Display text for leaves; empty for containers/panes.
     std::optional<std::string> commandId;
 

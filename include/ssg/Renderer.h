@@ -44,7 +44,7 @@ struct CellGridCell {
     std::string text{" "};
     std::uint8_t foreground{0};
     std::uint8_t background{0};
-    SemanticRole role{SemanticRole::Background};
+    SemanticRole role{SemanticRole::Canvas};
     bool continuation{false};
     DiffTint tint{DiffTint::None};
     CellUnderline underline{CellUnderline::None};

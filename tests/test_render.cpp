@@ -3,6 +3,7 @@
 #include <ssg/EditorRuntime.h>
 #include <ssg/FindReplace.h>
 #include <ssg/PaletteSearcher.h>
+#include <ssg/TreeModel.h>
 #include <ssg/session_snapshot.h>
 
 #include "session_snapshot_builder.h"
@@ -12,6 +13,7 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <set>
 #include <string>
 
 namespace fs = std::filesystem;
@@ -97,7 +99,7 @@ TEST(chromeBackgroundsShareOneBandAndTheActiveTabMergesWithTheDocument) {
     const auto& theme = snapshot->sections().theme;
     const auto bandColor =
         ssg::themeColor(theme, ssg::SemanticRole::TabInactiveBackground);
-    const auto docColor = ssg::themeColor(theme, ssg::SemanticRole::Background);
+    const auto docColor = ssg::themeColor(theme, ssg::SemanticRole::Canvas);
     // The chrome band is a distinct color from the document.
     ASSERT_NE(bandColor, docColor);
     // Header, footer, and tab-bar backgrounds all resolve to the one band.
@@ -1302,7 +1304,163 @@ TEST(urlDetectionStopsAtSentenceAndBracketBoundaries) {
     ASSERT_TRUE(linksFor("no links here at all\n").empty());
 }
 
+// The dead-color-role guard (doc/spec-prune-theme-roles.md). Proves the
+// theme.set name surface equals the actually-color-consumed role surface, with
+// `Caret` the sole exception (a live cell-role TAG whose color is intentionally
+// unread). Not a tautology: it paints a snapshot exercising every surface
+// through the real render path and asserts each role's color is observed in the
+// output. A future role that accepts a color but paints nothing, or a surface
+// that stops consuming its role, fails here.
+TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
+    using ssg::SemanticRole;
+    // A sentinel theme: each role's color is unique, so an observed color names
+    // exactly one role. Roles are reds (index in the red channel), scopes are
+    // greens, both offset past 0 so a default-constructed slot cannot collide.
+    ssg::ThemeSnapshot theme{};
+    for (std::size_t i = 0; i < theme.roleColors.size(); ++i) {
+        theme.roleColors[i] = ssg::SrgbColor::fromSerializedChannels(
+            static_cast<std::uint8_t>(30 + i), 1, 1);
+    }
+    for (std::size_t i = 0; i < theme.syntaxColors.size(); ++i) {
+        theme.syntaxColors[i] = ssg::SrgbColor::fromSerializedChannels(
+            2, static_cast<std::uint8_t>(30 + i), 2);
+    }
+
+    // A tall document so the gutter shows line numbers and the pane scrollbar
+    // draws a thumb.
+    std::string document;
+    for (int i = 0; i < 80; ++i) {
+        document += "line " + std::to_string(i) + " of the document\n";
+    }
+
+    auto snapshot =
+        ssg::test::SessionSnapshotBuilder{}
+            .document(document)
+            .viewport(120, 40)
+            .panel(true)
+            .panelFocused(false)
+            .shellRequest([](ssg::ShellLayoutRequest& request) {
+                request.headerFields = {
+                    {"cwd", "Working directory", "~/project", 0, std::nullopt}};
+                request.footerFields = {
+                    {"encoding", "Encoding", "UTF-8", 0, std::nullopt}};
+                request.footerActions = {{"footer.act", "Save"}};
+                request.tabs = {{"a.txt", "Tab a.txt", true, false},
+                                {"b.txt", "Tab b.txt", false, false}};
+                request.notice =
+                    ssg::ShellNotice{"Draft conflict",
+                                     {{"diff", "Diff", "draft.diff"}}};
+                request.inputLineActive = true;
+                request.inputLineQuery = "needle";
+                request.inputLineGhost = "ghost";
+            })
+            .sections([&](ssg::SessionSnapshotSections& sections) {
+                sections.theme = theme;
+                // A tree with a directory node (PanelActive color) and a
+                // selected file node (TreeFocus fill); the panel provider node
+                // (PanelInactive) and panel fill (TreeBackground) come for free
+                // from the shown panel.
+                ssg::TreeNode dir{ssg::TreeNodeId{"d"}, std::nullopt, "src",
+                                  ssg::TreeNodeKind::Directory};
+                dir.expandable = true;
+                ssg::TreeNode file{ssg::TreeNodeId{"f"}, ssg::TreeNodeId{"d"},
+                                   "main.cpp", ssg::TreeNodeKind::File};
+                ssg::TreeProviderView provider{
+                    ssg::TreeProviderId{"files"},
+                    ssg::TreeProviderKind::Filesystem,
+                    {{dir, 0, true}, {file, 1, false}},
+                    ssg::TreeNodeId{"f"}};
+                sections.tree.providers = {provider};
+                // A ranged selection on line 0 paints real Selection-role
+                // cells, so Selection is proven consumed at the cell level, not
+                // only via grid.selectionFill.
+                sections.selection = ssg::SelectionViewState{
+                    ssg::SelectionSet{{ssg::Selection{
+                        {ssg::ByteOffset{0}, ssg::LineIndex{0},
+                         ssg::CellIndex{0}},
+                        {ssg::ByteOffset{4}, ssg::LineIndex{0},
+                         ssg::CellIndex{4}}}}},
+                    0, 0, std::nullopt};
+                // A diff overlay tints document rows, so the DiffAdded/
+                // DiffModified paths reach real cells (a removed line has no
+                // target row to tint; DiffRemoved's cell-level painting is
+                // covered by test_renderer_diff_overlay). The document opts in
+                // by naming the diff file identity the view carries.
+                sections.document.diffFileIdentity = "guard.diff";
+                ssg::DiffFileView diffFile{
+                    ssg::DiffFileId{"guard.diff"}, {}, std::nullopt, false,
+                    ssg::DiffFileStatus::Modified, {}, {}, {}, {}};
+                diffFile.changedLines = {
+                    {ssg::DiffLineKind::Added, std::nullopt, std::size_t{0},
+                     {}, {}, {}, {}},
+                    {ssg::DiffLineKind::Modified, std::nullopt, std::size_t{1},
+                     {}, {}, {}, {}}};
+                sections.diff.revision = sections.document.revision;
+                sections.diff.files = {diffFile};
+                // An inactive find match (off the selection, on line 1) paints a
+                // cell with the SearchMatch background (an active match would use
+                // Selection instead).
+                sections.findReplace.open = true;
+                sections.findReplace.sourceRevision =
+                    sections.document.revision;
+                sections.findReplace.matches = {
+                    {ssg::ByteOffset{25}, ssg::ByteOffset{29}}};
+                sections.findReplace.activeMatch = std::nullopt;
+            })
+            .build();
+
+    auto grid = ssg::Renderer{}.render(snapshot);
+
+    // Cell-level evidence that the selection and diff surfaces actually paint,
+    // so treating Selection/Diff* colors (carried on grid.selectionFill/
+    // diffTints) as consumed is not vacuous: a regression that stopped painting
+    // selected or tinted cells fails here regardless of the grid-level copies.
+    bool anySelectionCell = false;
+    bool anyTintedCell = false;
+    for (auto const& cell : grid.cells) {
+        if (cell.role == SemanticRole::Selection) anySelectionCell = true;
+        if (cell.tint != ssg::DiffTint::None) anyTintedCell = true;
+    }
+    ASSERT_TRUE(anySelectionCell);
+    ASSERT_TRUE(anyTintedCell);
+
+    // Every color the renderer actually emitted: each cell's resolved
+    // foreground and background, plus the diff washes and selection fill, which
+    // travel on the grid rather than in a cell's fg/bg slot.
+    std::set<std::uint32_t> emitted;
+    auto const encode = [](ssg::SrgbColor c) {
+        return (static_cast<std::uint32_t>(c.red) << 16) |
+               (static_cast<std::uint32_t>(c.green) << 8) | c.blue;
+    };
+    for (auto const& cell : grid.cells) {
+        emitted.insert(encode(grid.colors[cell.foreground]));
+        emitted.insert(encode(grid.colors[cell.background]));
+    }
+    for (auto c : {grid.diffTints.addedRow, grid.diffTints.removedRow,
+                   grid.diffTints.modifiedRow, grid.diffTints.addedWord,
+                   grid.diffTints.removedWord, grid.diffTints.modifiedWord}) {
+        emitted.insert(encode(c));
+    }
+    emitted.insert(encode(grid.selectionFill));
+
+    for (auto const role : ssg::kAllSemanticRoles) {
+        // Caret is a live cell-role TAG whose color is intentionally unread:
+        // the primary caret is the terminal hardware cursor and the secondary
+        // caret inverts the cell it sits on. See doc/spec-prune-theme-roles.md.
+        if (role == SemanticRole::Caret) continue;
+        auto const present =
+            emitted.count(encode(ssg::themeColor(theme, role))) != 0;
+        if (!present) {
+            std::printf("  role never painted: %.*s\n",
+                        static_cast<int>(ssg::semanticRoleName(role).size()),
+                        ssg::semanticRoleName(role).data());
+        }
+        ASSERT_TRUE(present);
+    }
+}
+
 int main() {
+    RUN(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer);
     RUN(chromeBackgroundsShareOneBandAndTheActiveTabMergesWithTheDocument);
     RUN(renderPaintsContentNotAccessibilityLabels);
     RUN(renderSegmentsOnlyVisibleLinesNotWholeDocument);

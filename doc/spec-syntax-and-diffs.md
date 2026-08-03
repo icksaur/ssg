@@ -69,7 +69,7 @@ Diff data + navigation exist; rendering and integration are STUBBED:
   is the entry point the library diff-source uses for computed/agent diffs.
 - `SemanticRole::Diff{Added,Removed,Modified}` and theme colors exist but
   `Renderer::paintDocument` never reads `snapshot.sections().diff`; the cell
-  `role` is only ever set to Selection/SearchMatch/Foreground.
+  `role` is only ever set to Selection/SearchMatch/Text.
 - `nextDiffHunk`/`previousDiffHunk` are correct and bound to
   `diff.next_hunk`/`diff.previous_hunk`, but the handlers `(void)`-discard the
   result — no cursor/viewport movement.

@@ -72,6 +72,14 @@ public:
         return *this;
     }
 
+    // When the panel is shown, whether it holds focus. Showing a panel focuses
+    // it by default (matching togglePanel); pass false to leave focus in the
+    // editor, which is the only state that paints the unfocused-panel roles.
+    SessionSnapshotBuilder& panelFocused(bool focused) {
+        panelFocused_ = focused;
+        return *this;
+    }
+
     SessionSnapshotBuilder& tabs(std::vector<TabLabel> labels) {
         tabs_ = std::move(labels);
         return *this;
@@ -97,6 +105,7 @@ public:
 
         ShellState shell{{"Files"}};
         if (panel_) shell.togglePanel();
+        if (panel_ && !panelFocused_) shell.focusEditor();
 
         ShellLayoutRequest request;
         request.viewport = {columns_, rows_};
@@ -173,6 +182,7 @@ private:
     std::uint32_t firstRow_ = 0;
     Revision revision_{1};
     bool panel_ = false;
+    bool panelFocused_ = true;
     std::vector<TabLabel> tabs_;
     std::vector<std::function<void(SessionSnapshotSections&)>> mutators_;
     std::vector<std::function<void(ShellLayoutRequest&)>> shellMutators_;

@@ -36,8 +36,8 @@ configured.
 
 ```lua
 ssg.command("theme.set", {
-    background = "#1e1e1e",
-    foreground = "#d4d4d4",
+    canvas = "#1e1e1e",
+    text = "#d4d4d4",
     selection = "#4daafc",
     comment = "#858585",
     keyword = "#ab47bc",
@@ -52,17 +52,16 @@ specify all of them -- any name you omit keeps its current color from ssg's
 built-in theme. An unknown name or a malformed `"#rrggbb"` string rejects the
 whole call, leaving your theme untouched.
 
-The UI role names are:
+The UI role names are (`text` is the default document text color; `canvas` is
+the editor/document background):
 
 ```
-foreground   background   caret   selection
-diagnostic_error   diagnostic_warning   diagnostic_info   diagnostic_hint
-git_added   git_modified   git_deleted   git_conflict
+text   canvas   caret   selection
 tree_background   tree_focus   tab_active   tab_inactive
 panel_active   panel_inactive   header   footer
-status_info   status_warning   status_error   line_number
-active_line_number   search_match   prompt   scrollbar_track
-scrollbar_thumb   diff_added   diff_removed   diff_modified
+status_info   status_warning   line_number   search_match
+prompt   scrollbar_track   scrollbar_thumb   diff_added
+diff_removed   diff_modified
 tab_inactive_background   header_background   footer_background
 ```
 

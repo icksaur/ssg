@@ -49,18 +49,10 @@ ThemeSnapshot defaultTheme() noexcept {
     auto role = [&](SemanticRole which, std::size_t toneIndex) {
         snapshot.roleColors[static_cast<std::size_t>(which)] = c(toneIndex);
     };
-    role(SemanticRole::Foreground, 1);
-    role(SemanticRole::Background, 0);
+    role(SemanticRole::Text, 1);
+    role(SemanticRole::Canvas, 0);
     role(SemanticRole::Caret, 15);
     role(SemanticRole::Selection, 4);
-    role(SemanticRole::DiagnosticError, 6);
-    role(SemanticRole::DiagnosticWarning, 5);
-    role(SemanticRole::DiagnosticInfo, 9);
-    role(SemanticRole::DiagnosticHint, 8);
-    role(SemanticRole::GitAdded, 7);
-    role(SemanticRole::GitModified, 10);
-    role(SemanticRole::GitDeleted, 6);
-    role(SemanticRole::GitConflict, 11);
     role(SemanticRole::TreeBackground, 2);
     role(SemanticRole::TreeFocus, 4);
     role(SemanticRole::TabActive, 4);
@@ -71,9 +63,7 @@ ThemeSnapshot defaultTheme() noexcept {
     role(SemanticRole::Footer, 12);
     role(SemanticRole::StatusInfo, 9);
     role(SemanticRole::StatusWarning, 5);
-    role(SemanticRole::StatusError, 6);
     role(SemanticRole::LineNumber, 3);
-    role(SemanticRole::ActiveLineNumber, 14);
     role(SemanticRole::SearchMatch, 10);
     role(SemanticRole::Prompt, 8);
     role(SemanticRole::ScrollbarTrack, 13);

@@ -240,7 +240,7 @@ TEST(rendererComposesDiffOverlayWithSyntaxAndRolePrecedence) {
     ASSERT_EQ(grid.at(removedColumn, removedRow).tint,
               ssg::DiffTint::RemovedRow);
     ASSERT_EQ(grid.at(removedColumn, removedRow).foreground,
-              static_cast<std::size_t>(ssg::SemanticRole::Foreground));
+              static_cast<std::size_t>(ssg::SemanticRole::Text));
     ASSERT_EQ(grid.at(content.right() - 1, removedRow).tint,
               ssg::DiffTint::RemovedRow);
 

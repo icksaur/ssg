@@ -14,7 +14,7 @@ and no index indirection -- a role or scope IS its color. See `doc/spec-color.md
 for the full color model.
 
 `theme.set` takes a table keyed by role and syntax-scope names (the snake_case
-`semanticRoleName`/`syntaxScopeName` strings, e.g. `background`, `foreground`,
+`semanticRoleName`/`syntaxScopeName` strings, e.g. `canvas`, `text`,
 `selection`, `tab_active`, `diff_added`, `comment`, `keyword`), each mapped to a
 `"#rrggbb"` hex string. A name absent from the table keeps the CURRENT active
 theme's color for that role or scope -- the table may be partial. Role and scope

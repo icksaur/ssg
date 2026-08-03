@@ -5,11 +5,15 @@
 > command as its running example. That command has since been replaced by
 > `theme.set`, which sets each UI role and syntax scope to its own color
 > directly (no 16-slot ANSI palette, no `RoleMapping`/`SyntaxMapping`,
-> no `ThemeDefineArguments`). See `doc/spec-color.md` and
-> `doc/spec-semantic-color-themes.md` for the current color model; read the
-> `theme.define`/palette references below as the historical example they were
-> written against. The init.lua loading, capability, transactional-apply, and
-> `ssg.command(id, args)` design remain accurate.
+> no `ThemeDefineArguments`). The role NAMES below are also stale: `foreground`
+> and `background` were renamed to `text` and `canvas`, and the `git_*`,
+> `diagnostic_*`, `status_error`, and `active_line_number` roles were pruned
+> (they were never rendered) -- see `doc/spec-prune-theme-roles.md`. See
+> `doc/spec-color.md` and `doc/spec-semantic-color-themes.md` for the current
+> color model and role set; read the `theme.define`/palette/role-name references
+> below as the historical example they were written against. The init.lua
+> loading, capability, transactional-apply, and `ssg.command(id, args)` design
+> remain accurate.
 
 ## Goals
 

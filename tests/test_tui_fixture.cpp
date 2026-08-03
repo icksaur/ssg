@@ -105,7 +105,7 @@ public:
             {ssg::ShellNodeKind::TabBar, "tabs", state_.label, *shell.tabBar,
              ssg::SemanticRole::TabActive},
             {ssg::ShellNodeKind::Pane, "pane", "Editor",
-             shell.panes.front().content, ssg::SemanticRole::Background},
+             shell.panes.front().content, ssg::SemanticRole::Canvas},
             {ssg::ShellNodeKind::Scrollbar, "scrollbar", "Scroll",
              shell.panes.front().scrollbar,
              ssg::SemanticRole::ScrollbarTrack},

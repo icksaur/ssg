@@ -423,7 +423,7 @@ void paintShellLeaves(CellGrid& grid, ShellViewState const& shell,
             // A full-width yellow bar (StatusWarning bg, dark text) painted
             // before its action nodes so their bracketed labels sit on top.
             auto const noticeBg = semanticIndex(theme, SemanticRole::StatusWarning);
-            auto const noticeFg = semanticIndex(theme, SemanticRole::Background);
+            auto const noticeFg = semanticIndex(theme, SemanticRole::Canvas);
             fillRect(grid, node.rect, noticeFg, noticeBg,
                      SemanticRole::StatusWarning);
             if (!node.content.empty()) {
@@ -435,7 +435,7 @@ void paintShellLeaves(CellGrid& grid, ShellViewState const& shell,
         }
         case ShellNodeKind::NoticeAction: {
             auto const noticeBg = semanticIndex(theme, SemanticRole::StatusWarning);
-            auto const noticeFg = semanticIndex(theme, SemanticRole::Background);
+            auto const noticeFg = semanticIndex(theme, SemanticRole::Canvas);
             paintText(grid, node.rect.x, node.rect.y, node.rect.right(),
                        node.content, noticeFg, noticeBg,
                        SemanticRole::StatusWarning, style);
@@ -483,7 +483,7 @@ void paintPanelTree(CellGrid& grid, Rect const& panel,
                       Style const& style) {
     if (tree.providers.empty() || panel.width <= 0) return;
     auto const& provider = tree.providers.front();
-    auto const foreground = semanticIndex(theme, SemanticRole::Foreground);
+    auto const foreground = semanticIndex(theme, SemanticRole::Text);
     auto const directory = semanticIndex(theme, SemanticRole::PanelActive);
     auto const selectedBg = semanticIndex(theme, SemanticRole::TreeFocus);
     int const top = panel.y + 1;
@@ -515,7 +515,7 @@ void paintPanelTree(CellGrid& grid, Rect const& panel,
         auto const color =
             view.node.kind == TreeNodeKind::Directory ? directory : foreground;
         paintText(grid, panel.x, y, contentRight, line, color, rowBackground,
-                   SemanticRole::Foreground, style);
+                   SemanticRole::Text, style);
     }
     // Paint the reserved gutter (blank when the tree fits).
     if (panelScrollbar) {
@@ -533,7 +533,7 @@ void paintPalette(CellGrid& grid, PaletteProjection const& palette,
                    Style const& style) {
     auto const& rect = palette.rect;
     if (rect.width <= 0 || rect.height <= 0) return;
-    auto const foreground = semanticIndex(theme, SemanticRole::Foreground);
+    auto const foreground = semanticIndex(theme, SemanticRole::Text);
     auto const detailColor = semanticIndex(theme, SemanticRole::LineNumber);
     auto const selectedBg = semanticIndex(theme, SemanticRole::Selection);
     // `rows` is already the client's windowed subset; `selected`/`first_visible`
@@ -547,9 +547,9 @@ void paintPalette(CellGrid& grid, PaletteProjection const& palette,
             *palette.selected == palette.firstVisible + index;
         auto const rowBackground = isSelected ? selectedBg : background;
         auto const rowRole =
-            isSelected ? SemanticRole::Selection : SemanticRole::Background;
+            isSelected ? SemanticRole::Selection : SemanticRole::Canvas;
         auto const labelRole =
-            isSelected ? SemanticRole::Selection : SemanticRole::Foreground;
+            isSelected ? SemanticRole::Selection : SemanticRole::Text;
         auto const detailRole =
             isSelected ? SemanticRole::Selection : SemanticRole::LineNumber;
         fillRect(grid, {rect.x, y, rect.width, 1}, foreground, rowBackground,
@@ -687,7 +687,7 @@ void paintDocument(CellGrid& grid, SessionSnapshot const& snapshot,
            static_cast<std::uint32_t>(rowIndex));
         if (auto const* phantom = std::get_if<PhantomRow>(&projected)) {
            auto const foreground =
-               semanticIndex(theme, SemanticRole::Foreground);
+               semanticIndex(theme, SemanticRole::Text);
            auto const cells = GraphemeLayout{}.computeRun(phantom->text);
            int column = content.x;
            std::size_t firstSpan = 0;
@@ -728,21 +728,21 @@ void paintDocument(CellGrid& grid, SessionSnapshot const& snapshot,
                auto const width = std::max<std::uint32_t>(span.cellWidth, 1);
                put(grid, column, content.y + static_cast<int>(rowIndex),
                    std::move(text), foreground, background,
-                   SemanticRole::Foreground, false, cellTint);
+                   SemanticRole::Text, false, cellTint);
                for (std::uint32_t offset = 1;
                     offset < width &&
                     column + static_cast<int>(offset) < content.right();
                     ++offset) {
                    put(grid, column + static_cast<int>(offset),
                        content.y + static_cast<int>(rowIndex), "", foreground,
-                       background, SemanticRole::Foreground, true,
+                       background, SemanticRole::Text, true,
                        cellTint);
                }
                column += static_cast<int>(width);
            }
            for (; column < content.right(); ++column) {
                put(grid, column, content.y + static_cast<int>(rowIndex), " ",
-                   foreground, background, SemanticRole::Foreground, false,
+                   foreground, background, SemanticRole::Text, false,
                    DiffTint::RemovedRow);
            }
            continue;
@@ -789,7 +789,7 @@ void paintDocument(CellGrid& grid, SessionSnapshot const& snapshot,
                 mergedText += segment.text;
                 bounds.push_back({start, mergedText.size(), segment.kind});
             }
-            auto const foreground = semanticIndex(theme, SemanticRole::Foreground);
+            auto const foreground = semanticIndex(theme, SemanticRole::Text);
             auto const cells = GraphemeLayout{}.computeRun(mergedText);
             int column = content.x;
             std::size_t firstSpan = 0;
@@ -827,20 +827,20 @@ void paintDocument(CellGrid& grid, SessionSnapshot const& snapshot,
                 auto const width = std::max<std::uint32_t>(span.cellWidth, 1);
                 put(grid, column, content.y + static_cast<int>(rowIndex),
                     std::move(text), foreground, background,
-                    SemanticRole::Foreground, false, cellTint);
+                    SemanticRole::Text, false, cellTint);
                 for (std::uint32_t offset = 1;
                      offset < width &&
                      column + static_cast<int>(offset) < content.right();
                      ++offset) {
                     put(grid, column + static_cast<int>(offset),
                         content.y + static_cast<int>(rowIndex), "", foreground,
-                        background, SemanticRole::Foreground, true, cellTint);
+                        background, SemanticRole::Text, true, cellTint);
                 }
                 column += static_cast<int>(width);
             }
             for (; column < content.right(); ++column) {
                 put(grid, column, content.y + static_cast<int>(rowIndex), " ",
-                    foreground, background, SemanticRole::Foreground, false,
+                    foreground, background, SemanticRole::Text, false,
                     DiffTint::ModifiedRow);
             }
             continue;
@@ -864,7 +864,7 @@ void paintDocument(CellGrid& grid, SessionSnapshot const& snapshot,
             auto const selected = offsetInSelection(selection, documentOffset);
             auto cellBg = selected ? selectionBg : background;
             auto cellRole =
-                selected ? SemanticRole::Selection : SemanticRole::Foreground;
+                selected ? SemanticRole::Selection : SemanticRole::Text;
             // Find matches take precedence over the text selection so the query
             // hits stay visible; the active match reuses the selection role.
             auto const matchRole = matchRoleAt(documentOffset);
@@ -931,7 +931,7 @@ void paintDocument(CellGrid& grid, SessionSnapshot const& snapshot,
         if (rowTint != DiffTint::None || eolMatchRole || eolSelected) {
             auto const role = eolMatchRole   ? *eolMatchRole
                               : eolSelected ? SemanticRole::Selection
-                                            : SemanticRole::Foreground;
+                                            : SemanticRole::Text;
             auto const fillBg =
                 role == SemanticRole::SearchMatch
                     ? searchMatchBg
@@ -939,7 +939,7 @@ void paintDocument(CellGrid& grid, SessionSnapshot const& snapshot,
             auto const fillTint =
                 eolMatchRole || eolSelected ? DiffTint::None : rowTint;
             auto const foreground =
-                semanticIndex(theme, SemanticRole::Foreground);
+                semanticIndex(theme, SemanticRole::Text);
             for (int fill = column; fill < content.right(); ++fill) {
                 put(grid, fill, content.y + static_cast<int>(rowIndex), " ",
                     foreground, fillBg, role, false, fillTint);
@@ -967,7 +967,7 @@ std::optional<GridPosition> paintPrompt(CellGrid& grid,
                                          std::uint8_t background,
                                          Style const& style) {
     auto const promptFg = semanticIndex(theme, SemanticRole::Prompt);
-    auto const promptBg = semanticIndex(theme, SemanticRole::Background);
+    auto const promptBg = semanticIndex(theme, SemanticRole::Canvas);
     std::optional<GridPosition> caret;
     for (auto const& control : prompt.controls) {
         std::string text;
@@ -1021,14 +1021,14 @@ std::optional<GridPosition> paintPrompt(CellGrid& grid,
 // viewport carries, since the shell layout was declined (viewport {0,0}).
 CellGrid renderTooSmall(GridSize size, ThemeSnapshot const& theme,
                          Style const& style) {
-    auto const foreground = semanticIndex(theme, SemanticRole::Foreground);
-    auto const background = semanticIndex(theme, SemanticRole::Background);
+    auto const foreground = semanticIndex(theme, SemanticRole::Text);
+    auto const background = semanticIndex(theme, SemanticRole::Canvas);
     CellGrid grid{
         size, themeColorTable(theme),
         std::vector<CellGridCell>(
             static_cast<std::size_t>(std::max(0, size.columns) *
                                      std::max(0, size.rows)),
-            CellGridCell{" ", foreground, background, SemanticRole::Background,
+            CellGridCell{" ", foreground, background, SemanticRole::Canvas,
                          false})};
     grid.diffTints = themeDiffTints(theme);
     grid.selectionFill = themeColor(theme, SemanticRole::Selection);
@@ -1039,7 +1039,7 @@ CellGrid renderTooSmall(GridSize size, ThemeSnapshot const& theme,
     int const row = size.rows / 2;
     int const start = std::max(0, (size.columns - messageCells) / 2);
     paintText(grid, start, row, size.columns, message, foreground, background,
-               SemanticRole::Foreground, style);
+               SemanticRole::Text, style);
     return grid;
 }
 
@@ -1064,7 +1064,7 @@ std::string CellGrid::canonical() const {
     for (int row = 0; row < size.rows; ++row) {
         for (int column = 0; column < size.columns; ++column) {
             auto const& cell = at(column, row);
-            if (cell.text == " " && cell.role == SemanticRole::Background &&
+            if (cell.text == " " && cell.role == SemanticRole::Canvas &&
                 !cell.continuation && cell.tint == DiffTint::None) {
                 continue;
             }
@@ -1098,14 +1098,14 @@ CellGrid Renderer::render(SessionSnapshot const& snapshot) const {
             theme, style);
     }
 
-    auto const foreground = semanticIndex(theme, SemanticRole::Foreground);
-    auto const background = semanticIndex(theme, SemanticRole::Background);
+    auto const foreground = semanticIndex(theme, SemanticRole::Text);
+    auto const background = semanticIndex(theme, SemanticRole::Canvas);
     CellGrid grid{
         shell.viewport, themeColorTable(theme),
         std::vector<CellGridCell>(
             static_cast<std::size_t>(shell.viewport.columns *
                                      shell.viewport.rows),
-            CellGridCell{" ", foreground, background, SemanticRole::Background,
+            CellGridCell{" ", foreground, background, SemanticRole::Canvas,
                          false})};
     grid.diffTints = themeDiffTints(theme);
     grid.selectionFill = themeColor(theme, SemanticRole::Selection);

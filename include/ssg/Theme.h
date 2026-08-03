@@ -35,18 +35,10 @@ struct IndexedColor {
 };
 
 enum class SemanticRole : std::uint8_t {
-    Foreground,
-    Background,
+    Text,
+    Canvas,
     Caret,
     Selection,
-    DiagnosticError,
-    DiagnosticWarning,
-    DiagnosticInfo,
-    DiagnosticHint,
-    GitAdded,
-    GitModified,
-    GitDeleted,
-    GitConflict,
     TreeBackground,
     TreeFocus,
     TabActive,
@@ -57,9 +49,7 @@ enum class SemanticRole : std::uint8_t {
     Footer,
     StatusInfo,
     StatusWarning,
-    StatusError,
     LineNumber,
-    ActiveLineNumber,
     SearchMatch,
     Prompt,
     ScrollbarTrack,
@@ -68,27 +58,19 @@ enum class SemanticRole : std::uint8_t {
     DiffRemoved,
     DiffModified,
     // Chrome BACKGROUND roles (the roles above are foreground/text colors). The
-    // active tab deliberately has no background role: it reuses Background so it
+    // active tab deliberately has no background role: it reuses Canvas so it
     // always matches the document by construction and cannot drift.
     TabInactiveBackground,
     HeaderBackground,
     FooterBackground,
 };
 
-inline constexpr std::size_t kSemanticRoleCount = 35;
+inline constexpr std::size_t kSemanticRoleCount = 25;
 inline constexpr std::array kAllSemanticRoles{
-    SemanticRole::Foreground,
-    SemanticRole::Background,
+    SemanticRole::Text,
+    SemanticRole::Canvas,
     SemanticRole::Caret,
     SemanticRole::Selection,
-    SemanticRole::DiagnosticError,
-    SemanticRole::DiagnosticWarning,
-    SemanticRole::DiagnosticInfo,
-    SemanticRole::DiagnosticHint,
-    SemanticRole::GitAdded,
-    SemanticRole::GitModified,
-    SemanticRole::GitDeleted,
-    SemanticRole::GitConflict,
     SemanticRole::TreeBackground,
     SemanticRole::TreeFocus,
     SemanticRole::TabActive,
@@ -99,9 +81,7 @@ inline constexpr std::array kAllSemanticRoles{
     SemanticRole::Footer,
     SemanticRole::StatusInfo,
     SemanticRole::StatusWarning,
-    SemanticRole::StatusError,
     SemanticRole::LineNumber,
-    SemanticRole::ActiveLineNumber,
     SemanticRole::SearchMatch,
     SemanticRole::Prompt,
     SemanticRole::ScrollbarTrack,

@@ -257,7 +257,7 @@ public:
             {ssg::ShellNodeKind::TabBar, "tabs", "Open tabs", *shell.tabBar,
              ssg::SemanticRole::TabActive},
             {ssg::ShellNodeKind::Pane, "pane-1", "Editor pane",
-             shell.panes.front().content, ssg::SemanticRole::Background},
+             shell.panes.front().content, ssg::SemanticRole::Canvas},
             {ssg::ShellNodeKind::Scrollbar, "scrollbar-1", "Editor scrollbar",
              shell.panes.front().scrollbar, ssg::SemanticRole::ScrollbarThumb},
         };

@@ -708,14 +708,14 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
     for (const auto& pane : view.panes) {
         const auto suffix = std::to_string(pane.id.value());
         addNode(view, ShellNodeKind::Pane, "pane." + suffix,
-                 "Editor pane " + suffix, pane.frame, SemanticRole::Background);
+                 "Editor pane " + suffix, pane.frame, SemanticRole::Canvas);
         addNode(view, ShellNodeKind::Scrollbar, "pane." + suffix + ".scrollbar",
                  "Scrollbar for editor pane " + suffix, pane.scrollbar,
                  SemanticRole::ScrollbarTrack);
         if (request.emptyState) {
             addNode(view, ShellNodeKind::EmptyState,
                      "pane." + suffix + ".empty", "Empty editor",
-                     pane.content, SemanticRole::Background, "Empty editor");
+                     pane.content, SemanticRole::Canvas, "Empty editor");
         }
     }
 
