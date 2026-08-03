@@ -587,7 +587,35 @@ TEST(gitRemoveFileRejectsStaleOrEqualRevisionAndRemovesOnNextRevision) {
     ASSERT_EQ(model.viewState().revision, Revision{2});
 }
 
-} // namespace
+TEST(gitScanClassificationDistinguishesGitFromNonGitEntries) {
+    // The invariant the git-scan reconciliation relies on: isGitFile is true
+    // only for git-sourced entries, so a rescan can leave draft-vs-disk and
+    // external-modification (non-git) entries untouched instead of evicting
+    // them.
+    DiffModel model;
+    ASSERT_TRUE(model
+                    .updateGitFile({.id = DiffFileId{"tracked"},
+                                    .path = "src/file.cpp",
+                                    .baselineContent = std::string{"a\n"},
+                                    .workingContent = std::string{"b\n"},
+                                    .baselineIdentity = "index-a"},
+                                   Revision{1})
+                    .accepted());
+    ASSERT_TRUE(model
+                    .applyNonGitEvent({NonGitDiffEventKind::Create,
+                                       DiffFileId{"draft:note.txt"},
+                                       "note.txt", std::nullopt,
+                                       std::string{"disk\n"},
+                                       std::string{"draft\n"}},
+                                      Revision{2})
+                    .accepted());
+
+    ASSERT_TRUE(model.isGitFile(DiffFileId{"tracked"}));
+    ASSERT_FALSE(model.isGitFile(DiffFileId{"draft:note.txt"}));
+    ASSERT_FALSE(model.isGitFile(DiffFileId{"unknown"}));
+}
+
+}  // namespace
 
 int main() {
     RUN(gitTrackedFixtureReconstructsAndMatchesIndependentChangedLines);
@@ -602,5 +630,6 @@ int main() {
     RUN(deltaReplayAndExactCommandNavigationContract);
     RUN(documentDiffLookupUsesIdentityOnly);
     RUN(gitRemoveFileRejectsStaleOrEqualRevisionAndRemovesOnNextRevision);
+    RUN(gitScanClassificationDistinguishesGitFromNonGitEntries);
     return failed == 0 ? 0 : 1;
 }

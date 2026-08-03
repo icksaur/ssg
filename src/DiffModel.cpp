@@ -798,6 +798,11 @@ DiffModel::file(const DiffFileId& id) const {
     return std::cref(found->view);
 }
 
+bool DiffModel::isGitFile(const DiffFileId& id) const noexcept {
+    const auto found = findEntry(entries_, id);
+    return found != entries_.end() && found->source == Source::Git;
+}
+
 DiffCommandSet diffCommandSet() {
     return {};
 }

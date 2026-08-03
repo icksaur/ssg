@@ -8,7 +8,7 @@ with `SSG_UPDATE_DOCS=1 ./build/test_commands`.
 available to the Lua API when a host grants them
 (see `doc/spec-command-registry.md`).
 
-There are 183 commands.
+There are 184 commands.
 
 ## clipboard-register
 
@@ -25,6 +25,12 @@ There are 183 commands.
 | `diff.next_hunk` | Next Hunk | none | lua |
 | `diff.previous_hunk` | Previous Hunk | none | lua |
 | `diff.open_file` | Open File | none | lua |
+
+## draft-recovery
+
+| Command | Summary | Arguments | Surfaces |
+|---|---|---|---|
+| `draft.diff` | Diff Draft Against Disk | none | lua |
 
 ## edit-command-suite
 

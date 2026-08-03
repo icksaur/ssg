@@ -602,11 +602,31 @@ void registerTabCommands(EditorSessionBuilder& builder,
     declare("tab.move_right", "", "Move Right", TabCommand::MoveRight);
 }
 
+// Draft recovery commands (single-file draft recovery, M15). draft.diff opens a
+// live diff of the current buffer (the draft) against its current disk content,
+// so a conflict can be inspected before it is resolved. In-process only: it
+// opens a live diff tab, a concept with no remote representation.
+void registerDraftCommands(EditorSessionBuilder& builder,
+                           EditorRuntime::Impl& runtime) {
+    builder.add(
+        CommandSpecBuilder{"draft.diff"}
+            .owner("draft-recovery")
+            .summary("Diff Draft Against Disk")
+            .label("Diff Draft Against Disk")
+            .mutates()
+            .lua()
+            .handler([&runtime](CommandContext&) {
+                return runtime.runTransaction(
+                    [&] { return runtime.openDraftDiff(); });
+            }));
+}
+
 void bindRuntimeFiles(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime) {
     registerExternalModificationCommands(builder, runtime);
     registerFileCommands(builder, runtime);
     registerTabCommands(builder, runtime);
     registerEncodingCommands(builder, runtime);
+    registerDraftCommands(builder, runtime);
 }
 
 } // namespace ssg
