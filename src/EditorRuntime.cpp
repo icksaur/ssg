@@ -1741,12 +1741,38 @@ std::size_t EditorRuntime::Impl::persistAutosaveDraft(FileDocumentId document) {
     auto state = workspace.state(document);
     auto const* current = workspace.tryDocument(document);
     if (!state || current == nullptr) return 0;
+
+    // A buffer too large to draft gets NO draft (and thus no crash-safety),
+    // reported rather than silently written: a giant draft would blow the
+    // scratch quota and stall fsync, and a stale partial draft would be false
+    // reassurance. Remove any earlier draft for the key so the on-disk state is
+    // honestly "no draft", and warn once.
+    const auto& text = current->snapshot().text;
+    if (text.size() > autosaveDraftByteCap) {
+        // Report and drop any prior draft exactly ONCE per over-cap episode:
+        // the reported flag gates the whole block so a long oversized edit
+        // session does not enqueue a no-op journal remove on every flush tick.
+        if (const auto found = documentRuntimeStates.find(document.value());
+            found != documentRuntimeStates.end() &&
+            !found->second.autosaveOversizeReported) {
+            found->second.autosaveOversizeReported = true;
+            scratch.removeDocument(state->key);
+            enqueueStatus(StatusPriority::Warning,
+                          "file is too large to autosave a draft; unsaved edits "
+                          "are not crash-protected until saved");
+        }
+        return 0;
+    }
+    if (const auto found = documentRuntimeStates.find(document.value());
+        found != documentRuntimeStates.end()) {
+        found->second.autosaveOversizeReported = false;
+    }
+
     // Identical JournalDocument to the tab-close path, minus the blocking
     // durability wait: autosave leaves fsync to the background thread so a tick
     // never stalls the UI (the recovery badge still reports pending/durable).
     scratch.updateDocument(JournalDocument{state->key, current->mode(),
-                                           state->dirty,
-                                           current->snapshot().text,
+                                           state->dirty, text,
                                            workspace.baselineFor(document)});
     return 1;
 }
@@ -1777,14 +1803,24 @@ void EditorRuntime::Impl::reconcileDraftOnOpen(FileDocumentId document) {
             runtimeState.reopen = DraftReopenOutcome::None;
             return;
         case DraftReopenClass::Unchanged:
+            // Disk is unchanged since the edits branched: load the draft dirty.
+            // If it cannot be loaded (disk is now binary/undecodable, so the
+            // buffer is read-only), do NOT drop it silently -- keep it in scratch
+            // and raise the conflict notice so the user is warned, never falsely
+            // reassured that nothing needs attention.
             if (workspace.restoreDraft(document, draft->utf8Content)) {
                 runtimeState.reopen = DraftReopenOutcome::Restored;
+            } else {
+                runtimeState.reopen = DraftReopenOutcome::Conflict;
             }
             return;
         case DraftReopenClass::Conflict:
-            if (workspace.restoreDraft(document, draft->utf8Content)) {
-                runtimeState.reopen = DraftReopenOutcome::Conflict;
-            }
+            // Best-effort load; the draft stays in scratch whether or not the
+            // buffer can hold it (a binary/undecodable disk file yields a
+            // read-only buffer). Either way the conflict notice is raised, so the
+            // draft is never silently lost.
+            (void)workspace.restoreDraft(document, draft->utf8Content);
+            runtimeState.reopen = DraftReopenOutcome::Conflict;
             return;
         case DraftReopenClass::Missing:
             // Unreachable via file.open (the file was just read from disk), so a
@@ -2116,6 +2152,10 @@ EditorRuntime::DeferredWorkCounts EditorRuntime::deferredWorkCounts() const {
 
 std::uint64_t EditorRuntime::liveDocumentRuntimeStateCountForTests() {
     return DocumentRuntimeState::liveInstances();
+}
+
+void EditorRuntime::setAutosaveDraftByteCapForTests(std::uint64_t cap) {
+    impl_->autosaveDraftByteCap = cap;
 }
 
 bool EditorRuntime::dispatchInProgress() const noexcept {
