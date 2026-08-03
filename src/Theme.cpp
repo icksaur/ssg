@@ -47,6 +47,9 @@ constexpr std::array kSemanticNames{
     std::string_view{"diff_added"},
     std::string_view{"diff_removed"},
     std::string_view{"diff_modified"},
+    std::string_view{"tab_inactive_background"},
+    std::string_view{"header_background"},
+    std::string_view{"footer_background"},
 };
 static_assert(kSemanticNames.size() == kSemanticRoleCount);
 

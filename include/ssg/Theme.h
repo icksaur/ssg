@@ -69,9 +69,15 @@ enum class SemanticRole : std::uint8_t {
     DiffAdded,
     DiffRemoved,
     DiffModified,
+    // Chrome BACKGROUND roles (the roles above are foreground/text colors). The
+    // active tab deliberately has no background role: it reuses Background so it
+    // always matches the document by construction and cannot drift.
+    TabInactiveBackground,
+    HeaderBackground,
+    FooterBackground,
 };
 
-inline constexpr std::size_t kSemanticRoleCount = 32;
+inline constexpr std::size_t kSemanticRoleCount = 35;
 inline constexpr std::array kAllSemanticRoles{
     SemanticRole::Foreground,
     SemanticRole::Background,
@@ -105,6 +111,9 @@ inline constexpr std::array kAllSemanticRoles{
     SemanticRole::DiffAdded,
     SemanticRole::DiffRemoved,
     SemanticRole::DiffModified,
+    SemanticRole::TabInactiveBackground,
+    SemanticRole::HeaderBackground,
+    SemanticRole::FooterBackground,
 };
 static_assert(kAllSemanticRoles.size() == kSemanticRoleCount);
 

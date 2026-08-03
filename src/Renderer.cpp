@@ -357,6 +357,12 @@ std::optional<GridPosition> inputLineCaret(ShellViewState const& shell) {
 void paintShellLeaves(CellGrid& grid, ShellViewState const& shell,
                         ThemeSnapshot const& theme, std::uint8_t background,
                         std::uint8_t panelBackground, Style const& style) {
+    auto const headerBackground =
+        semanticIndex(theme, SemanticRole::HeaderBackground);
+    auto const footerBackground =
+        semanticIndex(theme, SemanticRole::FooterBackground);
+    auto const tabInactiveBackground =
+        semanticIndex(theme, SemanticRole::TabInactiveBackground);
     for (auto const& node : shell.accessibilityNodes) {
         std::uint8_t nodeBackground = background;
         switch (node.kind) {
@@ -368,6 +374,24 @@ void paintShellLeaves(CellGrid& grid, ShellViewState const& shell,
         case ShellNodeKind::FooterAction:
         case ShellNodeKind::Tab:
         case ShellNodeKind::EmptyState:
+            // Chrome backgrounds (M-theme): header/footer fields sit on their
+            // distinct band; an inactive tab is a light chip, while the active
+            // tab keeps the shared Background so it merges into the document.
+            if (node.kind == ShellNodeKind::HeaderField) {
+                nodeBackground = headerBackground;
+            } else if (node.kind == ShellNodeKind::FooterField ||
+                       node.kind == ShellNodeKind::FooterAction) {
+                nodeBackground = footerBackground;
+            } else if (node.kind == ShellNodeKind::Tab) {
+                nodeBackground = node.role == SemanticRole::TabInactive
+                                     ? tabInactiveBackground
+                                     : background;
+                // Fill the whole chip (it is wider than its label by the tab
+                // padding) so the background reads as a solid tab, not just
+                // behind the text.
+                fillRect(grid, node.rect, semanticIndex(theme, node.role),
+                         nodeBackground, node.role);
+            }
             if (!node.content.empty()) {
                 paintText(grid, node.rect.x, node.rect.y, node.rect.right(),
                            node.content, semanticIndex(theme, node.role),
@@ -1083,6 +1107,31 @@ CellGrid Renderer::render(SessionSnapshot const& snapshot) const {
     if (shell.panel) {
         fillRect(grid, *shell.panel, foreground, panelBackground,
                   SemanticRole::TreeBackground);
+    }
+
+    // The header and footer are solid chrome bands distinct from the document,
+    // so fill their whole rows first; the field text then paints on the band and
+    // the gaps between fields carry the band colour rather than the document
+    // background.
+    if (shell.header) {
+        fillRect(grid, *shell.header, foreground,
+                 semanticIndex(theme, SemanticRole::HeaderBackground),
+                 SemanticRole::HeaderBackground);
+    }
+    if (shell.footer) {
+        fillRect(grid, *shell.footer, foreground,
+                 semanticIndex(theme, SemanticRole::FooterBackground),
+                 SemanticRole::FooterBackground);
+    }
+    // The tab bar shares the inactive-tab background across its whole width, so
+    // its empty region (past the last tab) reads as inactive chrome rather than
+    // as the active tab. Each tab then overpaints its own chip: an inactive tab
+    // blends into this band; the active tab cuts a Background-coloured notch that
+    // merges with the document.
+    if (shell.tabBar) {
+        fillRect(grid, *shell.tabBar, foreground,
+                 semanticIndex(theme, SemanticRole::TabInactiveBackground),
+                 SemanticRole::TabInactiveBackground);
     }
 
     paintShellLeaves(grid, shell, theme, background, panelBackground, style);

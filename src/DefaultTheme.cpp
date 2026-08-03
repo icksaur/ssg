@@ -67,7 +67,7 @@ ThemeSnapshot defaultTheme() noexcept {
     role(SemanticRole::TreeBackground, 2);
     role(SemanticRole::TreeFocus, 4);
     role(SemanticRole::TabActive, 4);
-    role(SemanticRole::TabInactive, 13);
+    role(SemanticRole::TabInactive, 12);
     role(SemanticRole::PanelActive, 9);
     role(SemanticRole::PanelInactive, 3);
     role(SemanticRole::Header, 12);
@@ -79,11 +79,19 @@ ThemeSnapshot defaultTheme() noexcept {
     role(SemanticRole::ActiveLineNumber, 14);
     role(SemanticRole::SearchMatch, 10);
     role(SemanticRole::Prompt, 8);
-    role(SemanticRole::ScrollbarTrack, 2);
-    role(SemanticRole::ScrollbarThumb, 13);
+    role(SemanticRole::ScrollbarTrack, 13);
+    role(SemanticRole::ScrollbarThumb, 3);
     role(SemanticRole::DiffAdded, 7);
     role(SemanticRole::DiffRemoved, 6);
     role(SemanticRole::DiffModified, 10);
+    // Chrome background: the header, footer, tab bar (including its empty region),
+    // and the inactive tabs all share ONE subtle band (slot 2, a touch lighter
+    // than the document) with light text on it. The active tab is the exception:
+    // it reuses Background (slot 0) so it merges into the document below and reads
+    // as the selected tab notched out of the bar.
+    role(SemanticRole::TabInactiveBackground, 2);
+    role(SemanticRole::HeaderBackground, 2);
+    role(SemanticRole::FooterBackground, 2);
 
     auto syntax = [&](SyntaxScope scope, std::uint8_t index) {
         snapshot.syntaxIndices[static_cast<std::size_t>(scope)] = index;

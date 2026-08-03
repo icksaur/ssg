@@ -70,6 +70,69 @@ ssg::SessionSnapshot withStyle(ssg::SessionSnapshot const& base,
 
 }  // namespace
 
+TEST(chromeBackgroundsShareOneBandAndTheActiveTabMergesWithTheDocument) {
+    // The chrome color model: the header, footer, tab bar (including its empty
+    // region past the last tab), and inactive tabs share ONE band background,
+    // distinct from the document; the active tab uses the document Background so
+    // it reads as selected by merging into the content below.
+    auto root = uniqueRoot();
+    std::ofstream{root / "alpha.txt"} << "one\n";
+    std::ofstream{root / "beta.txt"} << "two\n";
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(ssg::ClientId{1},
+                            {"file.open", runtime->revision(), std::string{"alpha.txt"}});
+    (void)runtime->dispatch(ssg::ClientId{1},
+                            {"file.open", runtime->revision(), std::string{"beta.txt"}});
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {60, 12});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    const auto& shell = snapshot->sections().shell;
+    ASSERT_TRUE(shell.header.has_value());
+    ASSERT_TRUE(shell.footer.has_value());
+    ASSERT_TRUE(shell.tabBar.has_value());
+    auto grid = ssg::Renderer{}.render(*snapshot);
+
+    const auto& theme = snapshot->sections().theme;
+    const auto band = theme.semanticIndices[static_cast<std::size_t>(
+        ssg::SemanticRole::TabInactiveBackground)];
+    const auto docBg = theme.semanticIndices[static_cast<std::size_t>(
+        ssg::SemanticRole::Background)];
+    // The chrome band is a distinct color from the document.
+    ASSERT_NE(band, docBg);
+    // Header, footer, and tab-bar backgrounds all resolve to the one band.
+    ASSERT_EQ(theme.semanticIndices[static_cast<std::size_t>(
+                  ssg::SemanticRole::HeaderBackground)],
+              band);
+    ASSERT_EQ(theme.semanticIndices[static_cast<std::size_t>(
+                  ssg::SemanticRole::FooterBackground)],
+              band);
+
+    // The empty tab-bar cell (last column of the tab row) carries the band.
+    const auto& emptyTabCell =
+        grid.at(shell.tabBar->right() - 1, shell.tabBar->y);
+    ASSERT_EQ(emptyTabCell.background, band);
+    // The header and footer rows carry the band too.
+    ASSERT_EQ(grid.at(shell.header->x, shell.header->y).background, band);
+    ASSERT_EQ(grid.at(shell.footer->x, shell.footer->y).background, band);
+
+    // The active tab's first cell carries the document Background, not the band,
+    // so it merges with the content below.
+    int activeTabX = -1;
+    for (const auto& node : shell.accessibilityNodes) {
+        if (node.kind == ssg::ShellNodeKind::Tab &&
+            node.role == ssg::SemanticRole::TabActive) {
+            activeTabX = node.rect.x;
+            break;
+        }
+    }
+    ASSERT_NE(activeTabX, -1);
+    if (activeTabX >= 0) {
+        ASSERT_EQ(grid.at(activeTabX, shell.tabBar->y).background, docBg);
+    }
+}
+
 TEST(renderPaintsContentNotAccessibilityLabels) {
     auto root = uniqueRoot();
     std::ofstream{root / "hello.txt"} << "alpha\nbeta\n";
@@ -1240,6 +1303,7 @@ TEST(urlDetectionStopsAtSentenceAndBracketBoundaries) {
 }
 
 int main() {
+    RUN(chromeBackgroundsShareOneBandAndTheActiveTabMergesWithTheDocument);
     RUN(renderPaintsContentNotAccessibilityLabels);
     RUN(renderSegmentsOnlyVisibleLinesNotWholeDocument);
     RUN(wordWrapOffRendersHorizontallyScrolledContent);
