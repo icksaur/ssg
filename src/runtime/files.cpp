@@ -630,6 +630,17 @@ void registerDraftCommands(EditorSessionBuilder& builder,
                 return runtime.runTransaction(
                     [&] { return runtime.discardDraft(); });
             }));
+    builder.add(
+        CommandSpecBuilder{"draft.dismiss"}
+            .owner("draft-recovery")
+            .summary("Dismiss Draft Notice")
+            .label("Dismiss Draft Notice")
+            .mutates()
+            .lua()
+            .handler([&runtime](CommandContext&) {
+                return runtime.runTransaction(
+                    [&] { return runtime.dismissDraftNotice(); });
+            }));
 }
 
 void bindRuntimeFiles(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime) {

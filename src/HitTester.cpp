@@ -114,6 +114,15 @@ RegionHit HitTester::at(int column, int row) const {
             hit.commandId = node.commandId;
             return hit;
         }
+        if (node.kind == ShellNodeKind::NoticeAction) {
+            // The draft-conflict notice's clickable actions dispatch a command
+            // exactly like a HeaderField (M15).
+            RegionHit hit;
+            hit.region = HitRegion::HeaderField;
+            hit.fieldId = node.id;
+            hit.commandId = node.commandId;
+            return hit;
+        }
     }
 
     // The side panel and its gutter occupy the leftmost columns, disjoint from

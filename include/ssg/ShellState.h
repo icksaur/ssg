@@ -60,6 +60,10 @@ enum class ShellNodeKind : std::uint8_t {
     Scrollbar,
     PromptReservation,
     EmptyState,
+    // A one-row draft-conflict notice reserved above the document (M15). The bar
+    // spans the row (painted yellow); the actions are its clickable sub-regions.
+    NoticeBar,
+    NoticeAction,
 };
 
 struct AccessibilityNode {
@@ -87,6 +91,21 @@ struct ShellLabel {
     std::string accessibleLabel;
 };
 
+// One clickable action in the draft-conflict notice (M15): a bracketed label
+// hit-tested to dispatch `commandId`.
+struct ShellNoticeAction {
+    std::string id;
+    std::string label;
+    std::string commandId;
+};
+
+// The draft-conflict notice reserved above the document (M15): a message plus
+// clickable actions. Absent (nullopt on the request) when there is no conflict.
+struct ShellNotice {
+    std::string text;
+    std::vector<ShellNoticeAction> actions;
+};
+
 struct TabLabel {
     std::string title;
     std::string accessibleLabel;
@@ -97,6 +116,10 @@ struct TabLabel {
 struct ShellLayoutRequest {
     GridSize viewport;
     std::uint8_t reservedPromptRows = 0;
+    // A draft-conflict notice to reserve one chrome row for, above the document
+    // (M15). Reserving a chrome row (rather than stealing document row 0) keeps
+    // the document's own coordinate space -- line numbers, caret, scroll -- intact.
+    std::optional<ShellNotice> notice;
     bool emptyState = false;
     std::string panelProviderLabel = "Panel";
     std::vector<StatusField> headerFields;

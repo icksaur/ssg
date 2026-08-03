@@ -665,6 +665,35 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
         }
     }
 
+    // The draft-conflict notice reserves ONE row at the TOP of the document
+    // region (below the tab bar). Shrinking `editor` from the top -- rather than
+    // stealing document row 0 -- keeps the document's own coordinate space (line
+    // numbers, caret, scroll, viewport-relative hit-testing) unperturbed; the
+    // document simply shows one fewer row while the notice is up, exactly as the
+    // prompt reservation does from the bottom.
+    if (request.notice && editor.height > 1) {
+        const Rect noticeRow{editor.x, editor.y, editor.width, 1};
+        addNode(view, ShellNodeKind::NoticeBar, "draft.notice",
+                "Draft conflict notice", noticeRow, SemanticRole::StatusWarning,
+                request.notice->text);
+        // Actions are packed from the right so the message owns the left of the
+        // row; each becomes a clickable sub-rect carrying its command id.
+        int actionX = noticeRow.right();
+        for (auto it = request.notice->actions.rbegin();
+             it != request.notice->actions.rend(); ++it) {
+            const std::string label = "[" + it->label + "]";
+            const int width = displayCells(label);
+            actionX -= width;
+            if (actionX < noticeRow.x) break;
+            addNode(view, ShellNodeKind::NoticeAction, it->id, it->label,
+                    {actionX, noticeRow.y, width, 1}, SemanticRole::StatusWarning,
+                    label, it->commandId);
+            actionX -= 1;  // one-cell gap between actions
+        }
+        editor.y += 1;
+        editor.height -= 1;
+    }
+
     if (canLayout(*state.impl_->root, editor)) {
         layoutPanes(*state.impl_->root, editor, view.panes, gutterWidth);
     } else {

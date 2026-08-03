@@ -1358,6 +1358,20 @@ CommandHandlerResult EditorRuntime::Impl::discardDraft() {
     return updateTabsFor(*id);
 }
 
+CommandHandlerResult EditorRuntime::Impl::dismissDraftNotice() {
+    const auto id = activeDocumentId();
+    if (!id) return failure("no active document");
+    const auto found = documentRuntimeStates.find(id->value());
+    if (found == documentRuntimeStates.end() ||
+        found->second.reopen != DraftReopenOutcome::Conflict) {
+        // Only a Conflict raises the notice; Restored/None show nothing to
+        // dismiss, so dismissing them would silently mutate non-notice state.
+        return failure("no draft notice to dismiss");
+    }
+    found->second.reopen = DraftReopenOutcome::None;
+    return success();
+}
+
 void EditorRuntime::Impl::refreshLiveDiffDocuments(const DiffViewState& diffView) {
     for (auto it = liveDiffDocuments.begin(); it != liveDiffDocuments.end();) {
         const auto id = DiffFileId{it->first};

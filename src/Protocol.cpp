@@ -1705,7 +1705,8 @@ bool decodePresent(ProtocolValue const& value, std::optional<ShellNodeKind>& out
         ShellNodeKind::FooterField, ShellNodeKind::FooterAction, ShellNodeKind::TabBar,
         ShellNodeKind::Tab, ShellNodeKind::Panel, ShellNodeKind::PanelProvider,
         ShellNodeKind::Pane, ShellNodeKind::Scrollbar, ShellNodeKind::PromptReservation,
-        ShellNodeKind::EmptyState};
+        ShellNodeKind::EmptyState, ShellNodeKind::NoticeBar,
+        ShellNodeKind::NoticeAction};
     return decodeEnum(value, out, values);
 }
 
