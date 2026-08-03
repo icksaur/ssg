@@ -34,42 +34,58 @@ configured.
 
 ### Colors
 
+`theme.set` maps **role and scope names** directly to `"#rrggbb"` hex strings.
+Every UI element and every syntax token has its own name and its own color --
+there is no shared palette and no slot mapping, so setting `selection` sets
+exactly the selection color and nothing else. The table may be partial: any name
+you omit keeps its current color. An unknown name or a malformed `"#rrggbb"`
+string rejects the whole call, leaving your theme untouched.
+
+The block below is ssg's complete built-in dark theme. Copy it into `init.lua`
+as a starting point and change the colors you want; the role names double as the
+full list of what can be themed (`text` is the default document text color,
+`canvas` is the editor background, the syntax scopes color document tokens):
+
 ```lua
 ssg.command("theme.set", {
-    canvas = "#1e1e1e",
-    text = "#d4d4d4",
-    selection = "#4daafc",
-    comment = "#858585",
-    keyword = "#ab47bc",
+    text                     = "#d4d4d4",
+    canvas                   = "#1e1e1e",
+    caret                    = "#ffffff",
+    selection                = "#4daafc",
+    tree_background          = "#3e3e42",
+    tree_focus               = "#4daafc",
+    tab_active               = "#4daafc",
+    tab_inactive             = "#bbbbbb",
+    panel_active             = "#26c0c0",
+    panel_inactive           = "#858585",
+    header                   = "#bbbbbb",
+    footer                   = "#bbbbbb",
+    status_info              = "#26c0c0",
+    status_warning           = "#e5c07b",
+    line_number              = "#858585",
+    search_match             = "#d4956a",
+    prompt                   = "#ab47bc",
+    scrollbar_track          = "#6a6a6a",
+    scrollbar_thumb          = "#858585",
+    diff_added               = "#4caf50",
+    diff_removed             = "#ef4a4a",
+    diff_modified            = "#d4956a",
+    tab_inactive_background  = "#3e3e42",
+    header_background        = "#3e3e42",
+    footer_background        = "#3e3e42",
+    -- syntax scopes
+    plain_text               = "#d4d4d4",
+    comment                  = "#858585",
+    keyword                  = "#ab47bc",
+    string                   = "#4caf50",
+    number                   = "#d4956a",
+    type                     = "#26c0c0",
+    ["function"]             = "#4daafc",
+    variable                 = "#d4d4d4",
+    operator                 = "#e5c07b",
+    punctuation              = "#e8e8e8",
+    invalid                  = "#ef4a4a",
 })
-```
-
-`theme.set`'s table maps **role and scope names** directly to `"#rrggbb"` hex
-strings. Every UI element and every syntax token has its own name and its own
-color -- there is no shared 16-color palette and no fixed slot mapping. Setting
-`selection` sets exactly the selection color and nothing else. You don't need to
-specify all of them -- any name you omit keeps its current color from ssg's
-built-in theme. An unknown name or a malformed `"#rrggbb"` string rejects the
-whole call, leaving your theme untouched.
-
-The UI role names are (`text` is the default document text color; `canvas` is
-the editor/document background):
-
-```
-text   canvas   caret   selection
-tree_background   tree_focus   tab_active   tab_inactive
-panel_active   panel_inactive   header   footer
-status_info   status_warning   line_number   search_match
-prompt   scrollbar_track   scrollbar_thumb   diff_added
-diff_removed   diff_modified
-tab_inactive_background   header_background   footer_background
-```
-
-The syntax scope names (the color of each token in the document) are:
-
-```
-plain_text   comment   keyword   string   number   type
-function   variable   operator   punctuation   invalid
 ```
 
 Each name is set to a full, final color. The diff and selection backgrounds are
