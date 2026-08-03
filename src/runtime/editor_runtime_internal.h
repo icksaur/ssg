@@ -79,7 +79,8 @@ struct DocumentRuntimeState {
     DocumentRuntimeState(DocumentRuntimeState&& other) noexcept
         : history{std::move(other.history)},
           syntax{std::move(other.syntax)},
-          reopen{other.reopen} {
+          reopen{other.reopen},
+          autosaveOversizeReported{other.autosaveOversizeReported} {
         ++liveCount;
     }
 
@@ -96,6 +97,10 @@ struct DocumentRuntimeState {
     DocumentHistory history;
     SyntaxModel syntax;
     DraftReopenOutcome reopen = DraftReopenOutcome::None;
+    // Whether the "too large to autosave a draft" warning has already been
+    // surfaced for this document, so an oversized buffer is reported once rather
+    // than on every flush tick. Cleared if the buffer drops back under the cap.
+    bool autosaveOversizeReported = false;
 
 private:
     inline static std::atomic<std::uint64_t> liveCount{0};
@@ -143,6 +148,12 @@ struct EditorRuntime::Impl final : CommandServices,
     // recovery, M15). The policy lives here (library-owned); the app supplies
     // only a periodic tick and a clean-exit call.
     DraftAutosaveScheduler autosave;
+    // Per-draft byte cap: a buffer larger than this is not autosaved (writing a
+    // multi-hundred-MiB draft every debounce would blow the scratch quota and
+    // stall the fsync thread). A field, not a constant, so a test can lower it
+    // without materialising a huge buffer; production keeps the default. Over-cap
+    // is reported (a one-time status), never a silent partial draft.
+    std::uintmax_t autosaveDraftByteCap = 64U * 1024U * 1024U;
     FindReplaceController findReplace;
     // The document the find/replace controller last evaluated against.  Find
     // matches are byte offsets into one specific document; when the active

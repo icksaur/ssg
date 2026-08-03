@@ -180,6 +180,10 @@ public:
     };
     [[nodiscard]] DeferredWorkCounts deferredWorkCounts() const;
     [[nodiscard]] static std::uint64_t liveDocumentRuntimeStateCountForTests();
+    // Lower the per-draft autosave byte cap so a test can exercise the
+    // oversized-draft path without materialising a multi-MiB buffer. Test-only;
+    // production keeps the default cap.
+    void setAutosaveDraftByteCapForTests(std::uint64_t cap);
     [[nodiscard]] std::optional<SessionSnapshot> snapshot(
         ClientId clientId, ViewportDimensions dimensions,
         PaletteReport paletteReport = {}) const;

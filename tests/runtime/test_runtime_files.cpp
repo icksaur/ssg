@@ -5,13 +5,16 @@
 #include <ssg/GitDiffSource.h>
 #include <ssg/HitTester.h>
 #include <ssg/Keymap.h>
+#include <ssg/Settings.h>
 #include <ssg/session_snapshot.h>
 #include <ssg/TextCodec.h>
 #include <ssg/TextInputCommands.h>
 
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace {
@@ -92,6 +95,15 @@ const ssg::AccessibilityNode* findShellNode(const ssg::SessionSnapshot& snapshot
 
 bool hasNoticeBar(const ssg::SessionSnapshot& snapshot) {
     return findShellNode(snapshot, ssg::ShellNodeKind::NoticeBar) != nullptr;
+}
+
+bool statusMentions(const ssg::EditorRuntime& runtime, std::string_view needle) {
+    auto snapshot = runtime.snapshot(ssg::ClientId{1}, {80, 24});
+    if (!snapshot) return false;
+    for (const auto& item : snapshot->sections().promptStatus.status.items) {
+        if (item.accessibleLabel.find(needle) != std::string::npos) return true;
+    }
+    return false;
 }
 
 // Edit note.txt to a dirty draft, flush it, then drop the runtime — leaving a
@@ -604,6 +616,122 @@ TEST(dismissRefusesWhenThereIsNoConflictNotice) {
                 ssg::EditorRuntime::DraftReopenNotice::Restored);
 }
 
+TEST(binaryDiskReplacementRaisesConflictNotSilentDraftLoss) {
+    // Hardening (M15 p7): a file that had a text draft is externally replaced by
+    // binary/non-UTF-8 content. restoreDraft cannot load the draft into the now
+    // read-only binary buffer, but the draft must NOT be silently dropped: the
+    // conflict notice is raised so the user is warned and the draft stays in
+    // scratch.
+    auto root = uniqueRoot("draft_binary_disk");
+    leaveDirtyDraft(root);  // draft "!hi\n", disk "hi\n"
+    writeBytes(root / "workspace" / "note.txt", {0x00, 0x01, 0x02, 0x00, 0xff});
+
+    auto created = ssg::EditorRuntime::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(reopenNote(runtime).accepted());
+    // Not silently None: the conflict is surfaced (old behaviour left it None).
+    ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
+                ssg::EditorRuntime::DraftReopenNotice::Conflict);
+    ASSERT_TRUE(hasNoticeBar(*runtime.snapshot(ssg::ClientId{1}, {80, 24})));
+}
+
+TEST(oversizedBufferIsNotAutosavedAndIsReportedOnce) {
+    // Hardening (M15 p7): a buffer larger than the per-draft cap gets NO draft
+    // (writing a giant draft every tick would blow the scratch quota), reported
+    // rather than silently written or partially drafted.
+    auto root = uniqueRoot("draft_oversize");
+    std::ofstream{root / "workspace" / "note.txt", std::ios::binary} << "hi\n";
+    auto created = ssg::EditorRuntime::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    auto& runtime = *created.runtime;
+    runtime.setAutosaveDraftByteCapForTests(4);  // "hi\n" + edits exceed it
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.open", runtime.revision(),
+                                  std::string{"note.txt"}})
+                    .accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"text.insert", runtime.revision(),
+                                  ssg::TextInputArguments{"ab"}})
+                    .accepted());
+    // Over cap: not persisted (flush count 0) and reported once.
+    ASSERT_EQ(runtime.flushDueAutosaveDrafts(), std::size_t{0});
+    ASSERT_TRUE(statusMentions(runtime, "too large to autosave"));
+    // A fresh session over the same store finds no draft (no false partial).
+    auto reCreated = ssg::EditorRuntime::create(configFor(root));
+    ASSERT_TRUE(reCreated.accepted());
+    auto& reopened = *reCreated.runtime;
+    ASSERT_TRUE(reopenNote(reopened).accepted());
+    ASSERT_TRUE(reopened.activeDraftReopenNotice() ==
+                ssg::EditorRuntime::DraftReopenNotice::None);
+    ASSERT_FALSE(activeTabDirty(reopened));
+}
+
+TEST(loweringAutosaveDebounceMsEnablesAFlushTheDefaultSuppresses) {
+    // Hardening (M15 p7): the flush-interval setting is read and applied each
+    // tick. With the default 10s interval a second edit is debounced (no flush);
+    // lowering AutosaveDebounceMs lets that same pending edit flush.
+    auto root = uniqueRoot("draft_debounce_setting");
+    std::ofstream{root / "workspace" / "note.txt", std::ios::binary} << "hi\n";
+    auto created = ssg::EditorRuntime::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.open", runtime.revision(),
+                                  std::string{"note.txt"}})
+                    .accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"text.insert", runtime.revision(),
+                                  ssg::TextInputArguments{"a"}})
+                    .accepted());
+    ASSERT_EQ(runtime.flushDueAutosaveDrafts(), std::size_t{1});  // eager first flush
+
+    // A further edit within the default 10s interval is debounced.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"text.insert", runtime.revision(),
+                                  ssg::TextInputArguments{"b"}})
+                    .accepted());
+    ASSERT_EQ(runtime.flushDueAutosaveDrafts(), std::size_t{0});
+
+    // Lower the interval to its minimum; after a short wait the pending edit
+    // flushes -- proving the setting is read and applied.
+    auto lower = ssg::SettingSetArguments{ssg::SettingScope::User,
+                                          ssg::SettingKey::AutosaveDebounceMs,
+                                          ssg::SettingValue{std::uint32_t{1}}};
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"settings.set", runtime.revision(), lower})
+                    .accepted());
+    std::this_thread::sleep_for(std::chrono::milliseconds{20});
+    ASSERT_EQ(runtime.flushDueAutosaveDrafts(), std::size_t{1});
+}
+
+TEST(touchingTheFileWithIdenticalBytesIsNotAFalseConflict) {
+    // Acceptance (M15): a touched-but-identical file (new mtime, same content)
+    // must NOT be a conflict -- content is the authority, not the clock.
+    auto root = uniqueRoot("draft_touch");
+    const auto draft = leaveDirtyDraft(root);  // disk "hi\n"
+    ASSERT_TRUE(!draft.empty());
+    std::this_thread::sleep_for(std::chrono::milliseconds{10});
+    std::ofstream{root / "workspace" / "note.txt", std::ios::binary} << "hi\n";
+
+    auto created = ssg::EditorRuntime::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(reopenNote(runtime).accepted());
+    // Unchanged, not Conflict: the draft is restored quietly, no yellow notice.
+    ASSERT_EQ(runtime.activeDocumentText(), draft);
+    ASSERT_TRUE(activeTabDirty(runtime));
+    ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
+                ssg::EditorRuntime::DraftReopenNotice::Restored);
+    ASSERT_FALSE(hasNoticeBar(*runtime.snapshot(ssg::ClientId{1}, {80, 24})));
+}
+
 TEST(draftDiffRefusesWhenTheActiveDocumentIsNotASavedFile) {
     // An untitled scratch buffer has no disk side to diff against.
     auto root = uniqueRoot("draft_diff_untitled");
@@ -1012,6 +1140,10 @@ int main() {
     RUN(conflictNoticeReservesChromeWithoutPerturbingTheDocument);
     RUN(clickingNoticeActionsDispatchesTheirCommands);
     RUN(dismissRefusesWhenThereIsNoConflictNotice);
+    RUN(binaryDiskReplacementRaisesConflictNotSilentDraftLoss);
+    RUN(oversizedBufferIsNotAutosavedAndIsReportedOnce);
+    RUN(loweringAutosaveDebounceMsEnablesAFlushTheDefaultSuppresses);
+    RUN(touchingTheFileWithIdenticalBytesIsNotAFalseConflict);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }
