@@ -131,6 +131,20 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
     ShellLayoutRequest request;
     request.viewport = {static_cast<int>(dimensions.columns), static_cast<int>(dimensions.rows)};
     request.reservedPromptRows = prompt.active() ? promptRowCount(prompt.request()->kind) : 0;
+    // Surface the draft-conflict notice for the active document (M15). Only the
+    // Conflict outcome raises the yellow bar; a Restored draft is a quieter
+    // state with no external change to resolve.
+    if (auto const id = activeDocumentId()) {
+        auto const found = documentRuntimeStates.find(id->value());
+        if (found != documentRuntimeStates.end() &&
+            found->second.reopen == DraftReopenOutcome::Conflict) {
+            request.notice = ShellNotice{
+                "Unsaved draft: file changed on disk externally.",
+                {{"draft.notice.diff", "Diff", "draft.diff"},
+                 {"draft.notice.use_disk", "Use disk", "draft.discard"},
+                 {"draft.notice.dismiss", "Dismiss", "draft.dismiss"}}};
+        }
+    }
     request.emptyState = activeDocument() == nullptr;
     request.panelProviderLabel = std::string{shell.activePanelProvider()};
     request.headerFields = std::move(statusFields.headerFields);

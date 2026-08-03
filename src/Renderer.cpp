@@ -374,6 +374,28 @@ void paintShellLeaves(CellGrid& grid, ShellViewState const& shell,
                            nodeBackground, node.role, style);
             }
             break;
+        case ShellNodeKind::NoticeBar: {
+            // A full-width yellow bar (StatusWarning bg, dark text) painted
+            // before its action nodes so their bracketed labels sit on top.
+            auto const noticeBg = semanticIndex(theme, SemanticRole::StatusWarning);
+            auto const noticeFg = semanticIndex(theme, SemanticRole::Background);
+            fillRect(grid, node.rect, noticeFg, noticeBg,
+                     SemanticRole::StatusWarning);
+            if (!node.content.empty()) {
+                paintText(grid, node.rect.x, node.rect.y, node.rect.right(),
+                           node.content, noticeFg, noticeBg,
+                           SemanticRole::StatusWarning, style);
+            }
+            break;
+        }
+        case ShellNodeKind::NoticeAction: {
+            auto const noticeBg = semanticIndex(theme, SemanticRole::StatusWarning);
+            auto const noticeFg = semanticIndex(theme, SemanticRole::Background);
+            paintText(grid, node.rect.x, node.rect.y, node.rect.right(),
+                       node.content, noticeFg, noticeBg,
+                       SemanticRole::StatusWarning, style);
+            break;
+        }
         default:
             break;  // Containers, panes, and scrollbars are painted elsewhere.
         }

@@ -411,6 +411,9 @@ struct EditorRuntime::Impl final : CommandServices,
     // removed, and the reopen notice cleared. Non-destructive: no user file is
     // written, and the draft survives in the archive.
     [[nodiscard]] CommandHandlerResult discardDraft();
+    // Dismiss the draft-conflict notice for the active document, leaving the
+    // draft in place (the "Dismiss" action). Clears only the notice state.
+    [[nodiscard]] CommandHandlerResult dismissDraftNotice();
     // Copy discarded draft content into the draft archive (beside the scratch
     // store) under a unique name, so a mis-clicked discard is recoverable.
     // Returns false only when the archive copy could not be written.

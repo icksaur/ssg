@@ -3,6 +3,7 @@
 #include <ssg/EditorRuntime.h>
 #include <ssg/FileCommands.h>
 #include <ssg/GitDiffSource.h>
+#include <ssg/HitTester.h>
 #include <ssg/Keymap.h>
 #include <ssg/session_snapshot.h>
 #include <ssg/TextCodec.h>
@@ -77,6 +78,20 @@ std::vector<std::filesystem::path> archivedDrafts(const std::filesystem::path& r
         if (it->is_regular_file()) result.push_back(it->path());
     }
     return result;
+}
+
+// Find a shell accessibility node by kind (+ optional id) in the snapshot.
+const ssg::AccessibilityNode* findShellNode(const ssg::SessionSnapshot& snapshot,
+                                            ssg::ShellNodeKind kind,
+                                            std::string_view id = {}) {
+    for (const auto& node : snapshot.sections().shell.accessibilityNodes) {
+        if (node.kind == kind && (id.empty() || node.id == id)) return &node;
+    }
+    return nullptr;
+}
+
+bool hasNoticeBar(const ssg::SessionSnapshot& snapshot) {
+    return findShellNode(snapshot, ssg::ShellNodeKind::NoticeBar) != nullptr;
 }
 
 // Edit note.txt to a dirty draft, flush it, then drop the runtime — leaving a
@@ -452,6 +467,141 @@ TEST(draftDiscardArchivesADeeplyNestedPathWithoutExceedingNameLimits) {
     ASSERT_EQ(archived.size(), std::size_t{1});
     ASSERT_TRUE(archived.front().filename().string().size() <= std::size_t{255});
     ASSERT_EQ(runtime.activeDocumentText(), std::string{"changed\n"});
+}
+
+TEST(conflictNoticeIsPresentOnlyForAConflictReopen) {
+    const ssg::ViewportDimensions dims{80, 24};
+    {
+        auto root = uniqueRoot("notice_conflict");
+        leaveDirtyDraft(root);
+        std::ofstream{root / "workspace" / "note.txt", std::ios::binary}
+            << "changed externally\n";
+        auto created = ssg::EditorRuntime::create(configFor(root));
+        ASSERT_TRUE(created.accepted());
+        auto& runtime = *created.runtime;
+        ASSERT_TRUE(reopenNote(runtime).accepted());
+        ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
+                    ssg::EditorRuntime::DraftReopenNotice::Conflict);
+        ASSERT_TRUE(hasNoticeBar(*runtime.snapshot(ssg::ClientId{1}, dims)));
+    }
+    {
+        // Restored (disk unchanged): a quieter state, no yellow notice.
+        auto root = uniqueRoot("notice_restored");
+        leaveDirtyDraft(root);  // disk still "hi\n"
+        auto created = ssg::EditorRuntime::create(configFor(root));
+        ASSERT_TRUE(created.accepted());
+        auto& runtime = *created.runtime;
+        ASSERT_TRUE(reopenNote(runtime).accepted());
+        ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
+                    ssg::EditorRuntime::DraftReopenNotice::Restored);
+        ASSERT_FALSE(hasNoticeBar(*runtime.snapshot(ssg::ClientId{1}, dims)));
+    }
+}
+
+TEST(conflictNoticeReservesChromeWithoutPerturbingTheDocument) {
+    // Non-perturbation: the notice is a reserved chrome row, not stolen document
+    // row 0. Two sessions with the IDENTICAL buffer ("!hi\n") -- one Conflict
+    // (notice up), one Restored (no notice) -- must share the document's own
+    // coordinate space: the pane content only loses one row from the TOP for the
+    // reserved notice; its width is unchanged and the same viewport-origin cell
+    // maps to the same document byte.
+    const ssg::ViewportDimensions dims{80, 24};
+
+    auto conflictRoot = uniqueRoot("notice_perturb_conflict");
+    leaveDirtyDraft(conflictRoot);
+    std::ofstream{conflictRoot / "workspace" / "note.txt", std::ios::binary}
+        << "changed externally\n";
+    auto conflictCreated = ssg::EditorRuntime::create(configFor(conflictRoot));
+    ASSERT_TRUE(conflictCreated.accepted());
+    auto& conflict = *conflictCreated.runtime;
+    ASSERT_TRUE(reopenNote(conflict).accepted());
+    auto conflictSnap = conflict.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(conflictSnap.has_value());
+    ASSERT_TRUE(hasNoticeBar(*conflictSnap));
+
+    auto restoredRoot = uniqueRoot("notice_perturb_restored");
+    leaveDirtyDraft(restoredRoot);  // disk unchanged -> Restored, no notice
+    auto restoredCreated = ssg::EditorRuntime::create(configFor(restoredRoot));
+    ASSERT_TRUE(restoredCreated.accepted());
+    auto& restored = *restoredCreated.runtime;
+    ASSERT_TRUE(reopenNote(restored).accepted());
+    auto restoredSnap = restored.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(restoredSnap.has_value());
+    ASSERT_FALSE(hasNoticeBar(*restoredSnap));
+
+    ASSERT_EQ(conflict.activeDocumentText(), restored.activeDocumentText());
+    const auto& withNotice = conflictSnap->sections().shell.panes.front().content;
+    const auto& without = restoredSnap->sections().shell.panes.front().content;
+    // Reserved from the top: same left edge and width, top pushed down one, one
+    // fewer content row -- the document is not shifted, it just shows one less
+    // row (exactly like the prompt reservation costs a row from the bottom).
+    ASSERT_EQ(withNotice.x, without.x);
+    ASSERT_EQ(withNotice.width, without.width);
+    ASSERT_EQ(withNotice.y, without.y + 1);
+    ASSERT_EQ(withNotice.height, without.height - 1);
+    // The same viewport-origin cell resolves to the same document byte offset in
+    // both: the document's internal coordinate space is untouched.
+    const auto withHit =
+        ssg::HitTester{*conflictSnap}.at(withNotice.x, withNotice.y);
+    const auto withoutHit =
+        ssg::HitTester{*restoredSnap}.at(without.x, without.y);
+    ASSERT_EQ(withHit.byteOffset, withoutHit.byteOffset);
+}
+
+TEST(clickingNoticeActionsDispatchesTheirCommands) {
+    const ssg::ViewportDimensions dims{80, 24};
+    auto root = uniqueRoot("notice_click");
+    leaveDirtyDraft(root);
+    std::ofstream{root / "workspace" / "note.txt", std::ios::binary}
+        << "changed externally\n";
+    auto created = ssg::EditorRuntime::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(reopenNote(runtime).accepted());
+    auto snapshot = runtime.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(snapshot.has_value());
+
+    // Each action node hit-tests to its command id.
+    for (const auto& [id, command] :
+         std::vector<std::pair<std::string, std::string>>{
+             {"draft.notice.diff", "draft.diff"},
+             {"draft.notice.use_disk", "draft.discard"},
+             {"draft.notice.dismiss", "draft.dismiss"}}) {
+        const auto* node =
+            findShellNode(*snapshot, ssg::ShellNodeKind::NoticeAction, id);
+        ASSERT_TRUE(node != nullptr);
+        if (!node) continue;
+        const auto hit = ssg::HitTester{*snapshot}.at(node->rect.x, node->rect.y);
+        ASSERT_EQ(hit.commandId, std::optional<std::string>{command});
+    }
+
+    // Dismiss clears the notice.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"draft.dismiss", runtime.revision(), {}})
+                    .accepted());
+    ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
+                ssg::EditorRuntime::DraftReopenNotice::None);
+    ASSERT_FALSE(hasNoticeBar(*runtime.snapshot(ssg::ClientId{1}, dims)));
+}
+
+TEST(dismissRefusesWhenThereIsNoConflictNotice) {
+    const ssg::ViewportDimensions dims{80, 24};
+    // A Restored reopen shows no notice, so dismiss must refuse rather than
+    // silently mutate the (non-notice) restored state.
+    auto root = uniqueRoot("notice_dismiss_restored");
+    leaveDirtyDraft(root);  // disk unchanged -> Restored
+    auto created = ssg::EditorRuntime::create(configFor(root));
+    ASSERT_TRUE(created.accepted());
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(reopenNote(runtime).accepted());
+    ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
+                ssg::EditorRuntime::DraftReopenNotice::Restored);
+    ASSERT_FALSE(runtime.dispatch(ssg::ClientId{1},
+                                  {"draft.dismiss", runtime.revision(), {}})
+                     .accepted());
+    // The restored state is untouched.
+    ASSERT_TRUE(runtime.activeDraftReopenNotice() ==
+                ssg::EditorRuntime::DraftReopenNotice::Restored);
 }
 
 TEST(draftDiffRefusesWhenTheActiveDocumentIsNotASavedFile) {
@@ -858,6 +1008,10 @@ int main() {
     RUN(discardedDraftIsRemovedFromScratchSoReopenIsClean);
     RUN(draftDiscardRefusesACleanSavedDocument);
     RUN(draftDiscardArchivesADeeplyNestedPathWithoutExceedingNameLimits);
+    RUN(conflictNoticeIsPresentOnlyForAConflictReopen);
+    RUN(conflictNoticeReservesChromeWithoutPerturbingTheDocument);
+    RUN(clickingNoticeActionsDispatchesTheirCommands);
+    RUN(dismissRefusesWhenThereIsNoConflictNotice);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }
