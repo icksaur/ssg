@@ -619,6 +619,17 @@ void registerDraftCommands(EditorSessionBuilder& builder,
                 return runtime.runTransaction(
                     [&] { return runtime.openDraftDiff(); });
             }));
+    builder.add(
+        CommandSpecBuilder{"draft.discard"}
+            .owner("draft-recovery")
+            .summary("Discard Draft (Use Disk)")
+            .label("Discard Draft (Use Disk)")
+            .mutates()
+            .lua()
+            .handler([&runtime](CommandContext&) {
+                return runtime.runTransaction(
+                    [&] { return runtime.discardDraft(); });
+            }));
 }
 
 void bindRuntimeFiles(EditorSessionBuilder& builder, EditorRuntime::Impl& runtime) {

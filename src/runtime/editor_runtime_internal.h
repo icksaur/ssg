@@ -405,6 +405,17 @@ struct EditorRuntime::Impl final : CommandServices,
     // source-agnostic non-git diff engine. A missing/unreadable disk file diffs
     // the draft against empty. The tab is a derived view, not persisted.
     [[nodiscard]] CommandHandlerResult openDraftDiff();
+    // Discard the active saved document's unsaved edits in favour of the disk
+    // content (the notice's "Use disk"). The discarded edits are archived first
+    // (reversible), then the buffer is reloaded from disk, the scratch draft
+    // removed, and the reopen notice cleared. Non-destructive: no user file is
+    // written, and the draft survives in the archive.
+    [[nodiscard]] CommandHandlerResult discardDraft();
+    // Copy discarded draft content into the draft archive (beside the scratch
+    // store) under a unique name, so a mis-clicked discard is recoverable.
+    // Returns false only when the archive copy could not be written.
+    [[nodiscard]] bool archiveDiscardedDraft(std::string_view savedPath,
+                                             std::string_view content);
     void refreshLiveDiffDocuments(const DiffViewState& view);
     [[nodiscard]] bool openOrRevealFollowTargetProgrammatic(
         const FollowTarget& target);
