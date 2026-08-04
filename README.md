@@ -7,12 +7,14 @@ clients use the same typed command, snapshot, and delta model.
 ## User-facing deliverables
 
 - Headless editing library with UTF-8 validation, Unicode 15 grapheme/cell
-  layout, multiple selections, undo/redo, clipboard registers, find/replace,
+  layout, multiple cursors (add-next-occurrence, add-cursor-up/down, split-
+  selection-into-lines), undo/redo, clipboard registers, find/replace,
   command palette, configurable keymaps, and 160 stable commands.
 - CWD-focused workspaces with tabs and split panes, atomic file operations,
   encoding and mixed-EOL preservation, scratch recovery, external-change
   handling, filesystem/Git/symbol trees, live diffs, and follow-edits.
-- Shared monospace presentation model with wrapping, mouse hit targets, wheel
+- Shared monospace presentation model with wrapping, mouse hit targets (click to
+  place the cursor, double-click to select a word, drag to select), wheel
   and scrollbar navigation, middle-click to close a tab, a collapsible left
   panel, status header/footer, and fully themeable per-role and per-syntax-scope
   colors.

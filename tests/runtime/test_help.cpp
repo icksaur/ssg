@@ -129,6 +129,12 @@ TEST(helpDocumentContainsProseAndTheLiveKeybinding) {
     ASSERT_TRUE(contains(text, "Alt+h"));
     // The help content mentions clicking the header path to show the file tree.
     ASSERT_TRUE(contains(text, "header"));
+    // Multiple-cursor usage is documented in prose (not only in the generated
+    // keybinding list): the section and its add-cursor key.
+    ASSERT_TRUE(contains(text, "Multiple cursors"));
+    ASSERT_TRUE(contains(text, "next occurrence"));
+    // Double-click word selection is mentioned in the mouse section.
+    ASSERT_TRUE(contains(text, "Double-click a word"));
     // Middle-clicking a tab closes it (mirrors the README note).
     ASSERT_TRUE(contains(text, "middle-click a tab to close it"));
     // No Markdown TABLE syntax (pipe rows) leaks into the help text.
