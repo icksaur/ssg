@@ -74,33 +74,47 @@ bool canLayout(const PaneNode& node, Rect rect) {
 }
 
 void layoutPanes(const PaneNode& node, Rect rect,
-                  std::vector<PaneGeometry>& output, int gutterWidth) {
+                  std::vector<PaneGeometry>& output, int gutterWidth,
+                  int lineNumberWidth, int editorMinimumWidth) {
     if (node.leaf()) {
+        // Reserve the left line-number gutter, but never at the cost of a usable
+        // editor: if the content left after both gutters would fall below the
+        // editor minimum, drop the number gutter for this pane (it reappears when
+        // the pane grows).  The renderer keys off the published rect, so the two
+        // cannot disagree.
+        int lineNumbers = lineNumberWidth;
+        if (lineNumbers > 0 &&
+            rect.width - gutterWidth - lineNumbers < editorMinimumWidth) {
+            lineNumbers = 0;
+        }
         output.push_back({
             node.id,
             rect,
-            {rect.x, rect.y, rect.width - gutterWidth, rect.height},
+            {rect.x + lineNumbers, rect.y,
+             rect.width - gutterWidth - lineNumbers, rect.height},
             {rect.right() - gutterWidth, rect.y, gutterWidth, rect.height},
+            lineNumbers > 0 ? Rect{rect.x, rect.y, lineNumbers, rect.height}
+                            : Rect{0, 0, 0, 0},
         });
         return;
     }
     if (node.axis == SplitAxis::Vertical) {
         const int firstWidth = rect.width / 2;
         layoutPanes(*node.first, {rect.x, rect.y, firstWidth, rect.height},
-                     output, gutterWidth);
+                     output, gutterWidth, lineNumberWidth, editorMinimumWidth);
         layoutPanes(*node.second,
                      {rect.x + firstWidth, rect.y,
                       rect.width - firstWidth, rect.height},
-                     output, gutterWidth);
+                     output, gutterWidth, lineNumberWidth, editorMinimumWidth);
         return;
     }
     const int firstHeight = rect.height / 2;
     layoutPanes(*node.first, {rect.x, rect.y, rect.width, firstHeight},
-                 output, gutterWidth);
+                 output, gutterWidth, lineNumberWidth, editorMinimumWidth);
     layoutPanes(*node.second,
                  {rect.x, rect.y + firstHeight, rect.width,
                   rect.height - firstHeight},
-                 output, gutterWidth);
+                 output, gutterWidth, lineNumberWidth, editorMinimumWidth);
 }
 
 void addNode(ShellViewState& view, ShellNodeKind kind, std::string id,
@@ -747,14 +761,26 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
         editor.height -= 1;
     }
 
+    const int lineNumberWidth = std::max(0, request.lineNumberGutterWidth);
+    const int editorMinimumWidth = request.style.dimensions.editorMinimumWidth;
     if (canLayout(*state.impl_->root, editor)) {
-        layoutPanes(*state.impl_->root, editor, view.panes, gutterWidth);
+        layoutPanes(*state.impl_->root, editor, view.panes, gutterWidth,
+                    lineNumberWidth, editorMinimumWidth);
     } else {
+        int panelessNumbers = lineNumberWidth;
+        if (panelessNumbers > 0 &&
+            editor.width - gutterWidth - panelessNumbers < editorMinimumWidth) {
+            panelessNumbers = 0;
+        }
         view.panes.push_back({
             state.impl_->active,
             editor,
-            {editor.x, editor.y, editor.width - gutterWidth, editor.height},
+            {editor.x + panelessNumbers, editor.y,
+             editor.width - gutterWidth - panelessNumbers, editor.height},
             {editor.right() - gutterWidth, editor.y, gutterWidth, editor.height},
+            panelessNumbers > 0
+                ? Rect{editor.x, editor.y, panelessNumbers, editor.height}
+                : Rect{0, 0, 0, 0},
         });
     }
 

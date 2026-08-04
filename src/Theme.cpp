@@ -36,6 +36,8 @@ constexpr std::array kSemanticNames{
     std::string_view{"tab_inactive_background"},
     std::string_view{"header_background"},
     std::string_view{"footer_background"},
+    std::string_view{"current_line_number"},
+    std::string_view{"current_line_number_background"},
 };
 static_assert(kSemanticNames.size() == kSemanticRoleCount);
 

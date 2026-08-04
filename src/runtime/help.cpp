@@ -51,6 +51,12 @@ constexpr std::string_view kHelpPreamble =
     "- Alt+a selects everything.\n"
     "- Click anywhere to collapse back to a single cursor.\n"
     "\n"
+    "## Line numbers\n"
+    "\n"
+    "The command \"view.toggle_line_numbers\" shows or hides a left gutter with\n"
+    "1-indexed line numbers; the current line's number is highlighted. It is off\n"
+    "by default. Run it from the command palette.\n"
+    "\n"
     "## Keybindings\n"
     "\n";
 

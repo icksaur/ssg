@@ -3,6 +3,7 @@
 #include <ssg/EditorRuntime.h>
 #include <ssg/FindReplace.h>
 #include <ssg/PaletteSearcher.h>
+#include <ssg/Selection.h>
 #include <ssg/TreeModel.h>
 #include <ssg/session_snapshot.h>
 
@@ -154,6 +155,52 @@ TEST(renderPaintsContentNotAccessibilityLabels) {
     ASSERT_FALSE(gridContains(grid, "Workspace"));
     // The open document's real content is painted.
     ASSERT_TRUE(gridContains(grid, "alpha"));
+}
+
+TEST(lineNumberGutterPaintsNumbersAndHighlightsTheCaretLine) {
+    auto root = uniqueRoot();
+    std::ofstream{root / "n.txt"} << "alpha\nbeta\ngamma\n";
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(
+        ssg::ClientId{1},
+        {"file.open", runtime->revision(), std::string{"n.txt"}});
+    (void)runtime->dispatch(
+        ssg::ClientId{1}, {"view.toggle_line_numbers", runtime->revision(), {}});
+    // Put the caret on line 2 (0-indexed 1) so its number highlights.
+    auto atBeta = ssg::SelectionNavigator::resolvePosition("alpha\nbeta\ngamma\n",
+                                                           ssg::ByteOffset{6});
+    ASSERT_TRUE(atBeta.has_value());
+    (void)runtime->dispatch(
+        ssg::ClientId{1},
+        {"cursor.set_position", runtime->revision(),
+         ssg::SelectionCommandArguments{atBeta, std::nullopt}});
+
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    auto const& pane = snapshot->sections().shell.panes.front();
+    ASSERT_TRUE(pane.lineNumbers.width > 0);
+    auto grid = ssg::Renderer{}.render(*snapshot);
+    int const gx = pane.lineNumbers.x;
+    int const gw = pane.lineNumbers.width;  // 4 lines -> 1 digit -> width 2
+    ASSERT_EQ(gw, 2);
+    auto gutterText = [&](int row) {
+        std::string s;
+        for (int c = 0; c < gw; ++c) s += grid.at(gx + c, pane.lineNumbers.y + row).text;
+        return s;
+    };
+    // Right-aligned number + trailing space: "1 ", "2 ", "3 ".
+    ASSERT_EQ(gutterText(0), std::string{"1 "});
+    ASSERT_EQ(gutterText(1), std::string{"2 "});
+    ASSERT_EQ(gutterText(2), std::string{"3 "});
+    // The caret's line (row 1) uses the current-line roles; others use LineNumber.
+    ASSERT_EQ(grid.at(gx, pane.lineNumbers.y + 1).role,
+              ssg::SemanticRole::CurrentLineNumber);
+    ASSERT_EQ(grid.at(gx, pane.lineNumbers.y + 0).role,
+              ssg::SemanticRole::LineNumber);
+    std::filesystem::remove_all(root);
 }
 
 TEST(renderSegmentsOnlyVisibleLinesNotWholeDocument) {
@@ -1353,6 +1400,9 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
                 request.inputLineActive = pickerOpen;
                 request.inputLineQuery = "needle";
                 request.inputLineGhost = "ghost";
+                // A line-number gutter so the LineNumber and current-line roles
+                // are exercised (the caret line uses the current-line roles).
+                request.lineNumberGutterWidth = 3;
             })
             .sections([&](ssg::SessionSnapshotSections& sections) {
                 sections.theme = theme;
@@ -1477,6 +1527,7 @@ int main() {
     RUN(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer);
     RUN(chromeBackgroundsShareOneBandAndTheActiveTabMergesWithTheDocument);
     RUN(renderPaintsContentNotAccessibilityLabels);
+    RUN(lineNumberGutterPaintsNumbersAndHighlightsTheCaretLine);
     RUN(renderSegmentsOnlyVisibleLinesNotWholeDocument);
     RUN(wordWrapOffRendersHorizontallyScrolledContent);
     RUN(renderColorsAreInBoundsColorSlots);

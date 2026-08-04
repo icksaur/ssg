@@ -40,9 +40,10 @@ enum class SettingKey : std::uint8_t {
     TypingCoalescingMs,
     FileFinderRespectGitignore,
     AutosaveDebounceMs,
+    LineNumbers,
 };
 
-inline constexpr std::size_t kSettingKeyCount = 18;
+inline constexpr std::size_t kSettingKeyCount = 19;
 
 enum class TextEncoding : std::uint8_t {
     Utf8,

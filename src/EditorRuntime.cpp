@@ -1592,6 +1592,26 @@ std::string EditorRuntime::Impl::activeText() const {
     return document ? document->snapshot().text : std::string{};
 }
 
+int EditorRuntime::Impl::lineNumberGutterWidth() const {
+    if (!lineNumbers) return 0;
+    auto const* document = activeDocument();
+    if (document == nullptr) return 0;
+    auto const revision = document->revision();
+    auto const documentId = activeDocumentId();
+    if (!lineCountRevision || *lineCountRevision != revision ||
+        lineCountDocument != documentId) {
+        auto const text = document->snapshot().text;
+        std::uint32_t lines = 1;
+        for (char c : text) {
+            if (c == '\n') ++lines;
+        }
+        lineCountCache = lines;
+        lineCountRevision = revision;
+        lineCountDocument = documentId;
+    }
+    return static_cast<int>(std::to_string(lineCountCache).size()) + 1;
+}
+
 void EditorRuntime::Impl::resetSelectionForActiveDocument() {
     selection = initialSelection();
     requestedFirstVisualRow = 0;

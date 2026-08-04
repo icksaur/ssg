@@ -8,7 +8,7 @@ with `SSG_UPDATE_DOCS=1 ./build/test_commands`.
 available to the Lua API when a host grants them
 (see `doc/spec-command-registry.md`).
 
-There are 187 commands.
+There are 188 commands.
 
 ## clipboard-register
 
@@ -318,6 +318,7 @@ There are 187 commands.
 | Command | Summary | Arguments | Surfaces |
 |---|---|---|---|
 | `view.toggle_word_wrap` | Toggle Word Wrap | none | lua |
+| `view.toggle_line_numbers` | Toggle Line Numbers | none | lua |
 | `view.scroll_lines` | Scroll Lines | scroll lines | lua |
 | `view.scroll_pages` | Scroll Pages | scroll pages | lua |
 | `view.scroll_to_fraction` | Scroll To Fraction | scroll fraction | lua |

@@ -131,6 +131,10 @@ struct ShellFooterHint {
 struct ShellLayoutRequest {
     GridSize viewport;
     std::uint8_t reservedPromptRows = 0;
+    // Width in columns of the editor's left line-number gutter, or 0 when line
+    // numbers are off (doc/spec-line-numbers.md). Carved from the LEFT of each
+    // editor pane's content; 0 reproduces today's layout exactly.
+    int lineNumberGutterWidth = 0;
     // A draft-conflict notice to reserve one chrome row for, above the document
     // (M15). Reserving a chrome row (rather than stealing document row 0) keeps
     // the document's own coordinate space -- line numbers, caret, scroll -- intact.
@@ -161,6 +165,9 @@ struct PaneGeometry {
     Rect frame;
     Rect content;
     Rect scrollbar;
+    // The left line-number gutter, carved from the frame's left edge. Empty
+    // ({0,0,0,0}) when line numbers are off (doc/spec-line-numbers.md).
+    Rect lineNumbers;
 
     friend bool operator==(const PaneGeometry&, const PaneGeometry&) = default;
 };

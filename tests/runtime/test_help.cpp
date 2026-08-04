@@ -133,6 +133,8 @@ TEST(helpDocumentContainsProseAndTheLiveKeybinding) {
     // keybinding list): the section and its add-cursor key.
     ASSERT_TRUE(contains(text, "Multiple cursors"));
     ASSERT_TRUE(contains(text, "next occurrence"));
+    ASSERT_TRUE(contains(text, "Line numbers"));
+    ASSERT_TRUE(contains(text, "view.toggle_line_numbers"));
     // Double-click word selection is mentioned in the mouse section.
     ASSERT_TRUE(contains(text, "Double-click a word"));
     // Middle-clicking a tab closes it (mirrors the README note).
