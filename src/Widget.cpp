@@ -49,10 +49,28 @@ RowFit fitRow(const std::vector<FitItem>& items, int extent, int separator,
     for (std::size_t idx : retained) {
         if (!first) offset += separator;
         first = false;
-        fit.placed.push_back({items[idx].id, offset, items[idx].desired});
+        fit.placed.push_back(
+            {items[idx].id, offset, items[idx].desired, idx});
         offset += items[idx].desired;
     }
     return fit;
+}
+
+RowFit packEnd(const std::vector<FitItem>& items, int extent) {
+    // Fill from the right: the last item is rightmost. Each is clamped to the
+    // space still remaining (truncated, not dropped, when it partially fits);
+    // an item with no room is dropped. No separators.
+    int cursor = extent;
+    std::vector<PlacedItem> reversed;
+    for (std::size_t i = items.size(); i-- > 0;) {
+        if (items[i].desired <= 0) continue;
+        const int width = std::min(cursor, items[i].desired);
+        if (width <= 0) continue;
+        cursor -= width;
+        reversed.push_back({items[i].id, cursor, width, i});
+    }
+    std::ranges::reverse(reversed);  // right-to-left -> original order
+    return RowFit{std::move(reversed)};
 }
 
 std::vector<Rect> layoutRow(const RowFit& fit, const Rect& container) {

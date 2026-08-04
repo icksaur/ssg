@@ -18,8 +18,8 @@ FitItem item(std::string id, int desired, int rank = 0) {
 TEST(fitRowStartPacksLeftWithSeparators) {
     const RowFit fit = fitRow({item("a", 2), item("b", 3)}, 10, 1, Align::Start);
     ASSERT_EQ(fit.placed.size(), std::size_t{2});
-    ASSERT_EQ(fit.placed[0], (PlacedItem{"a", 0, 2}));
-    ASSERT_EQ(fit.placed[1], (PlacedItem{"b", 3, 3}));
+    ASSERT_EQ(fit.placed[0], (PlacedItem{"a", 0, 2, 0}));
+    ASSERT_EQ(fit.placed[1], (PlacedItem{"b", 3, 3, 1}));
 }
 
 // End alignment packs the whole retained run flush to the trailing edge. Total
@@ -27,8 +27,8 @@ TEST(fitRowStartPacksLeftWithSeparators) {
 TEST(fitRowEndPacksFlushRight) {
     const RowFit fit = fitRow({item("a", 2), item("b", 3)}, 10, 1, Align::End);
     ASSERT_EQ(fit.placed.size(), std::size_t{2});
-    ASSERT_EQ(fit.placed[0], (PlacedItem{"a", 4, 2}));
-    ASSERT_EQ(fit.placed[1], (PlacedItem{"b", 7, 3}));
+    ASSERT_EQ(fit.placed[0], (PlacedItem{"a", 4, 2, 0}));
+    ASSERT_EQ(fit.placed[1], (PlacedItem{"b", 7, 3, 1}));
 }
 
 // THE discriminating edge (spec Step 1 oracle): stop-at-first-non-fit is NOT
@@ -42,7 +42,7 @@ TEST(fitRowStopsAtFirstNonFitNotDropUntilFits) {
     const RowFit fit = fitRow(
         {item("a", 3, 0), item("b", 5, 1), item("c", 2, 2)}, 6, 1, Align::Start);
     ASSERT_EQ(fit.placed.size(), std::size_t{1});
-    ASSERT_EQ(fit.placed[0], (PlacedItem{"a", 0, 3}));
+    ASSERT_EQ(fit.placed[0], (PlacedItem{"a", 0, 3, 0}));
 }
 
 // Collapse priority is by rank, not input order: a later, higher-priority (lower
@@ -54,7 +54,7 @@ TEST(fitRowCollapsesByRankAndRestoresOriginalOrder) {
     const RowFit fit =
         fitRow({item("a", 4, 2), item("b", 4, 0)}, 4, 1, Align::Start);
     ASSERT_EQ(fit.placed.size(), std::size_t{1});
-    ASSERT_EQ(fit.placed[0], (PlacedItem{"b", 0, 4}));
+    ASSERT_EQ(fit.placed[0], (PlacedItem{"b", 0, 4, 1}));
 }
 
 // When everything fits, all items are retained in original order regardless of
@@ -64,8 +64,8 @@ TEST(fitRowRetainsAllInOriginalOrderWhenEverythingFits) {
     const RowFit fit =
         fitRow({item("a", 2, 1), item("b", 2, 0)}, 10, 1, Align::Start);
     ASSERT_EQ(fit.placed.size(), std::size_t{2});
-    ASSERT_EQ(fit.placed[0], (PlacedItem{"a", 0, 2}));
-    ASSERT_EQ(fit.placed[1], (PlacedItem{"b", 3, 2}));
+    ASSERT_EQ(fit.placed[0], (PlacedItem{"a", 0, 2, 0}));
+    ASSERT_EQ(fit.placed[1], (PlacedItem{"b", 3, 2, 1}));
 }
 
 // The fit test is `used + sep + desired > extent` -> exact fit is NOT a
@@ -73,7 +73,7 @@ TEST(fitRowRetainsAllInOriginalOrderWhenEverythingFits) {
 TEST(fitRowExactFitIsRetained) {
     const RowFit fit = fitRow({item("a", 3), item("b", 2)}, 6, 1, Align::Start);
     ASSERT_EQ(fit.placed.size(), std::size_t{2});
-    ASSERT_EQ(fit.placed[1], (PlacedItem{"b", 4, 2}));
+    ASSERT_EQ(fit.placed[1], (PlacedItem{"b", 4, 2, 1}));
 }
 
 // A single item wider than the extent fits nothing (the scan stops on the first
@@ -87,7 +87,7 @@ TEST(fitRowDropsAnItemWiderThanTheExtent) {
 // offset, y and height from the container's leading row, width = item size.
 TEST(layoutRowMapsOffsetsOntoTheContainerRow) {
     RowFit fit;
-    fit.placed = {{"a", 0, 2}, {"b", 3, 3}};
+    fit.placed = {{"a", 0, 2, 0}, {"b", 3, 3, 1}};
     const auto rects = layoutRow(fit, Rect{5, 2, 20, 1});
     ASSERT_EQ(rects.size(), std::size_t{2});
     ASSERT_EQ(rects[0], (Rect{5, 2, 2, 1}));   // 5 + 0
@@ -110,8 +110,36 @@ TEST(fitRowSkipsNonPositiveWidthItemsWithoutBlocking) {
     const RowFit fit = fitRow(
         {item("a", 2), item("b", 0), item("c", 3)}, 10, 1, Align::Start);
     ASSERT_EQ(fit.placed.size(), std::size_t{2});
-    ASSERT_EQ(fit.placed[0], (PlacedItem{"a", 0, 2}));
-    ASSERT_EQ(fit.placed[1], (PlacedItem{"c", 3, 3}));
+    ASSERT_EQ(fit.placed[0], (PlacedItem{"a", 0, 2, 0}));
+    ASSERT_EQ(fit.placed[1], (PlacedItem{"c", 3, 3, 2}));
+}
+
+// packEnd fills flush-right, last item rightmost, no separators. [a(2),b(3)] in
+// extent 10: b at 7 (rightmost, size 3), a at 5 (size 2, left of b).
+TEST(packEndFillsFlushRightLastItemRightmost) {
+    const RowFit fit = packEnd({item("a", 2), item("b", 3)}, 10);
+    ASSERT_EQ(fit.placed.size(), std::size_t{2});
+    ASSERT_EQ(fit.placed[0], (PlacedItem{"a", 5, 2, 0}));
+    ASSERT_EQ(fit.placed[1], (PlacedItem{"b", 7, 3, 1}));
+}
+
+// packEnd TRUNCATES a partially-fitting item rather than dropping it, and the
+// leftmost item is the one clamped when space runs out (fill is right-first).
+// [a(5),b(4)] in extent 6: b (rightmost) gets its full 4 at offset 2; a gets the
+// remaining 2 (truncated from 5) at offset 0.
+TEST(packEndTruncatesTheLeftmostItemWhenSpaceRunsOut) {
+    const RowFit fit = packEnd({item("a", 5), item("b", 4)}, 6);
+    ASSERT_EQ(fit.placed.size(), std::size_t{2});
+    ASSERT_EQ(fit.placed[0], (PlacedItem{"a", 0, 2, 0}));  // truncated 5 -> 2
+    ASSERT_EQ(fit.placed[1], (PlacedItem{"b", 2, 4, 1}));
+}
+
+// An item with no room left is DROPPED (not placed at width 0). [a(4),b(4)] in
+// extent 4: b takes all 4; a has zero room and is dropped.
+TEST(packEndDropsAnItemWithNoRoomLeft) {
+    const RowFit fit = packEnd({item("a", 4), item("b", 4)}, 4);
+    ASSERT_EQ(fit.placed.size(), std::size_t{1});
+    ASSERT_EQ(fit.placed[0], (PlacedItem{"b", 0, 4, 1}));
 }
 
 }  // namespace
@@ -125,6 +153,9 @@ int main() {
     RUN(fitRowExactFitIsRetained);
     RUN(fitRowDropsAnItemWiderThanTheExtent);
     RUN(fitRowSkipsNonPositiveWidthItemsWithoutBlocking);
+    RUN(packEndFillsFlushRightLastItemRightmost);
+    RUN(packEndTruncatesTheLeftmostItemWhenSpaceRunsOut);
+    RUN(packEndDropsAnItemWithNoRoomLeft);
     RUN(layoutRowMapsOffsetsOntoTheContainerRow);
     RUN(measureFieldCellsIsDisplayCellsPlusPadding);
     return 0;

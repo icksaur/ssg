@@ -54,6 +54,10 @@ struct PlacedItem {
     std::string id;
     int offset = 0;
     int size = 0;
+    // Position of this item in the input `items` vector, so a caller maps a
+    // placement back to its source WITHOUT an id lookup -- ids need not be
+    // unique and the caller never assumes they are.
+    std::size_t index = 0;
 
     friend bool operator==(const PlacedItem&, const PlacedItem&) = default;
 };
@@ -76,6 +80,16 @@ struct RowFit {
 // empty-value fields before the fit loop (callers omit empties upstream too).
 [[nodiscard]] RowFit fitRow(const std::vector<FitItem>& items, int extent,
                             int separator, Align align);
+
+// The right-pack policy for the footer's actions and help hint: items fill flush
+// to the trailing edge from the RIGHT (the last item is rightmost), each clamped
+// to the space still remaining to its left, with NO separators. An item with no
+// room left is dropped; a partially-fitting item is TRUNCATED to what remains
+// (it is not dropped). This is a different rule from `fitRow` -- positional
+// clamp-truncation, not rank-based collapse -- matching the footer's original
+// reverse-iteration packing. Placements are returned in ORIGINAL order; items
+// with `desired <= 0` are skipped. `rank` is unused here.
+[[nodiscard]] RowFit packEnd(const std::vector<FitItem>& items, int extent);
 
 // Map a `RowFit`'s relative offsets onto `container`, producing one absolute,
 // single-row `Rect` per retained item (y and height come from the container's

@@ -2,6 +2,7 @@
 
 #include "ssg/GraphemeLayout.h"
 #include "ssg/Layout.h"
+#include "ssg/Widget.h"
 
 #include <algorithm>
 #include <cmath>
@@ -156,34 +157,35 @@ std::string visibleQueryTail(std::string_view query, int cells) {
 
 int addFields(ShellViewState& view, const std::vector<StatusField>& fields,
                 Rect row, ShellNodeKind kind, SemanticRole role) {
-    std::vector<const StatusField*> prioritized;
-    prioritized.reserve(fields.size());
-    for (const auto& field : fields) prioritized.push_back(&field);
-    std::ranges::stable_sort(prioritized, {}, &StatusField::collapseRank);
-
-    std::vector<const StatusField*> retained;
-    int used = 0;
-    for (const auto* field : prioritized) {
-        if (field->accessibleLabel.empty() || field->value.empty()) continue;
-        const int desired = std::max(1, displayCells(field->value) + 2);
-        const int separator = retained.empty() ? 0 : 1;
-        if (used + separator + desired > row.width) break;
-        used += separator + desired;
-        retained.push_back(field);
+    // The status-field row is a collapse Container (doc/spec-widget-chrome.md):
+    // empty-value fields are dropped up front, the rest are measured, and the
+    // widget fit pass keeps as many as fit by collapse rank, stopping at the
+    // first that does not. This is the same rule the procedural loop encoded;
+    // fitRow/layoutRow are now the single source of the geometry.
+    std::vector<FitItem> items;
+    std::vector<const StatusField*> sources;
+    items.reserve(fields.size());
+    sources.reserve(fields.size());
+    for (const auto& field : fields) {
+        if (field.accessibleLabel.empty() || field.value.empty()) continue;
+        items.push_back(
+            {field.id, measureFieldCells(field.value), field.collapseRank});
+        sources.push_back(&field);
     }
-    std::ranges::sort(retained, [](const auto* a, const auto* b) {
-        return a < b;
-    });
+    const RowFit fit = fitRow(items, row.width, 1, Align::Start);
+    const std::vector<Rect> rects = layoutRow(fit, row);
 
-    int x = row.x;
-    for (const auto* field : retained) {
-        if (x != row.x) ++x;
-        const int width = displayCells(field->value) + 2;
-        addNode(view, kind, field->id, field->accessibleLabel,
-                 {x, row.y, width, 1}, role, field->value, field->commandId);
-        x += width;
+    // Emit in placement order (fitRow returns the retained set in original field
+    // order); each placement's `index` maps back to its source field directly,
+    // so no assumption about field-id uniqueness is made.
+    for (std::size_t i = 0; i < fit.placed.size(); ++i) {
+        const StatusField& field = *sources[fit.placed[i].index];
+        addNode(view, kind, field.id, field.accessibleLabel, rects[i], role,
+                 field.value, field.commandId);
     }
-    return x;
+    return fit.placed.empty()
+               ? row.x
+               : row.x + fit.placed.back().offset + fit.placed.back().size;
 }
 
 const PaneGeometry* paneGeometry(const ShellViewState& view, PaneId id) {
@@ -566,40 +568,59 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
                 headerX += ghostWidth;
             }
         }
-        int actionX = view.footer->right();
-        for (auto action = request.footerActions.rbegin();
-             action != request.footerActions.rend(); ++action) {
-            const int width =
-                std::min(actionX, displayCells(action->accessibleLabel) +
-                                      request.style.dimensions.labelPadding);
-            if (width <= 0 || action->accessibleLabel.empty()) continue;
-            actionX -= width;
-            addNode(view, ShellNodeKind::FooterAction, action->id,
-                     action->accessibleLabel,
-                     {actionX, view.footer->y, width, 1},
-                     SemanticRole::StatusInfo, action->accessibleLabel);
+        // The footer's help hint and status actions are one right-packed group
+        // (doc/spec-widget-chrome.md): actions sit rightmost, the hint to their
+        // left, filling from the trailing edge with clamp-truncation. packEnd is
+        // the single source of that geometry; the leftmost placed cell bounds the
+        // status-field row that fills the space to its left.
+        const int labelPadding = request.style.dimensions.labelPadding;
+        const bool hasHint =
+            request.footerHint && !request.footerHint->label.empty();
+        std::vector<FitItem> rightGroup;
+        std::vector<const ShellLabel*> actionForIndex;  // null at the hint slot
+        if (hasHint) {
+            rightGroup.push_back(
+                {"footer.hint",
+                 displayCells(request.footerHint->label) + labelPadding, 0});
+            actionForIndex.push_back(nullptr);
         }
-        // The help hint packs to the left of the status actions, so status
-        // actions stay rightmost and the hint yields (drops) first when the
-        // footer is crowded. In the common case (no status actions) it is the
-        // rightmost footer element.
-        if (request.footerHint && !request.footerHint->label.empty()) {
-            const int width =
-                std::min(actionX - view.footer->x,
-                         displayCells(request.footerHint->label) +
-                             request.style.dimensions.labelPadding);
-            if (width > 0) {
-                actionX -= width;
-                addNode(view, ShellNodeKind::FooterHint, "footer.hint",
-                         request.footerHint->label,
-                         {actionX, view.footer->y, width, 1},
-                         SemanticRole::Footer, request.footerHint->label,
-                         request.footerHint->commandId);
-            }
+        for (const auto& action : request.footerActions) {
+            if (action.accessibleLabel.empty()) continue;
+            rightGroup.push_back(
+                {action.id, displayCells(action.accessibleLabel) + labelPadding,
+                 0});
+            actionForIndex.push_back(&action);
         }
+        const RowFit rightFit = packEnd(rightGroup, view.footer->width);
+        std::vector<std::optional<Rect>> rightRect(rightGroup.size());
+        for (const auto& p : rightFit.placed)
+            rightRect[p.index] =
+                Rect{view.footer->x + p.offset, view.footer->y, p.size, 1};
+
+        // Emit actions in reverse original order, then the hint, matching the
+        // prior node order so hit-test order and the golden node sequence are
+        // unchanged. `index` maps each placement to its source; no id-uniqueness
+        // assumption.
+        for (std::size_t i = rightGroup.size(); i-- > (hasHint ? 1u : 0u);) {
+            if (!rightRect[i]) continue;
+            const ShellLabel& action = *actionForIndex[i];
+            addNode(view, ShellNodeKind::FooterAction, action.id,
+                     action.accessibleLabel, *rightRect[i],
+                     SemanticRole::StatusInfo, action.accessibleLabel);
+        }
+        if (hasHint && rightRect[0]) {
+            addNode(view, ShellNodeKind::FooterHint, "footer.hint",
+                     request.footerHint->label, *rightRect[0],
+                     SemanticRole::Footer, request.footerHint->label,
+                     request.footerHint->commandId);
+        }
+        // The status-field row fills the space to the left of the right group.
+        const int fieldsWidth = rightFit.placed.empty()
+                                    ? view.footer->width
+                                    : rightFit.placed.front().offset;
         addFields(view, request.footerFields,
-                   {view.footer->x, view.footer->y,
-                    actionX - view.footer->x, view.footer->height},
+                   {view.footer->x, view.footer->y, fieldsWidth,
+                    view.footer->height},
                    ShellNodeKind::FooterField, SemanticRole::Footer);
 
         if (panelWidth > 0) {
