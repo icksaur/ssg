@@ -77,6 +77,92 @@ TEST(viewportShellSettingsAndThemeAreLiveSections) {
     ASSERT_TRUE(after->sections().shell.panel.has_value());
 }
 
+// Line numbers default OFF; view.toggle_line_numbers turns the gutter on and a
+// second toggle turns it off. When on, the editor pane publishes a left
+// line-number gutter sized digits(lineCount)+1 and its content is inset by that
+// width (doc/spec-line-numbers.md).
+TEST(lineNumberGutterTogglesAndSizesToTheLineCount) {
+    auto root = uniqueRoot();  // long.txt has 80 lines + trailing newline = 81
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.open", runtime.revision(),
+                                  std::string{"long.txt"}}).accepted());
+    const ssg::ViewportDimensions dims{80, 12};
+    auto pane = [&] {
+        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        return snap->sections().shell.panes.front();
+    };
+
+    // Default off: no gutter, content spans the pane (minus the right scrollbar).
+    auto off = pane();
+    ASSERT_EQ(off.lineNumbers.width, 0);
+    ASSERT_EQ(off.content.x, off.frame.x);
+    int const contentWidthOff = off.content.width;
+
+    // Toggle on: 81 lines -> 2 digits -> gutter width 3, carved from the left.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"view.toggle_line_numbers", runtime.revision(),
+                                  {}}).accepted());
+    auto on = pane();
+    ASSERT_EQ(on.lineNumbers.width, 3);
+    ASSERT_EQ(on.lineNumbers.x, on.frame.x);
+    ASSERT_EQ(on.content.x, off.content.x + 3);
+    ASSERT_EQ(on.content.width, contentWidthOff - 3);
+
+    // Toggle off again: back to no gutter.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"view.toggle_line_numbers", runtime.revision(),
+                                  {}}).accepted());
+    ASSERT_EQ(pane().lineNumbers.width, 0);
+}
+
+TEST(lineNumberGutterWidthTracksTheActiveDocumentNotJustItsRevision) {
+    auto root = uniqueRoot();
+    // A second, short file alongside the 80-line long.txt.
+    { std::ofstream{root / "workspace" / "short.txt"} << "one\ntwo\n"; }
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"view.toggle_line_numbers", runtime.revision(),
+                                  {}}).accepted());
+    const ssg::ViewportDimensions dims{80, 12};
+    auto width = [&] {
+        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        return snap->sections().shell.panes.front().lineNumbers.width;
+    };
+
+    // short.txt: 3 lines -> 1 digit -> width 2.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.open", runtime.revision(),
+                                  std::string{"short.txt"}}).accepted());
+    ASSERT_EQ(width(), 2);
+
+    // Switch to long.txt (81 lines -> 2 digits -> width 3).  Both freshly-opened
+    // documents share the same edit revision, so keying the cache on revision
+    // alone would leave the gutter mis-sized here.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.open", runtime.revision(),
+                                  std::string{"long.txt"}}).accepted());
+    ASSERT_EQ(width(), 3);
+
+    // Switch back: the gutter must shrink again.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.open", runtime.revision(),
+                                  std::string{"short.txt"}}).accepted());
+    ASSERT_EQ(width(), 2);
+}
+
 TEST(paletteIsPopulatedOnTheFrameItOpens) {
     auto root = uniqueRoot();
     auto created = ssg::EditorRuntime::create({root / "workspace", root / "scratch", root / "recovery"});
@@ -681,6 +767,8 @@ TEST(panelShowCommandsToggleAndSwitchProviders) {
 
 int main() {
     RUN(viewportShellSettingsAndThemeAreLiveSections);
+    RUN(lineNumberGutterTogglesAndSizesToTheLineCount);
+    RUN(lineNumberGutterWidthTracksTheActiveDocumentNotJustItsRevision);
     RUN(paletteIsPopulatedOnTheFrameItOpens);
     RUN(fileFinderIsPopulatedOnTheFrameItOpens);
     RUN(wheelScrollDownPastTheEndHasNoDeadZone);

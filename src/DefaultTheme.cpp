@@ -74,6 +74,10 @@ ThemeSnapshot defaultTheme() noexcept {
     role(SemanticRole::TabInactiveBackground, 2);
     role(SemanticRole::HeaderBackground, 2);
     role(SemanticRole::FooterBackground, 2);
+    // The current line's number: near-white over the chrome band, so it stands
+    // out from the mid-gray inactive numbers.
+    role(SemanticRole::CurrentLineNumber, 14);
+    role(SemanticRole::CurrentLineNumberBackground, 2);
 
     auto syntax = [&](SyntaxScope scope, std::size_t toneIndex) {
         snapshot.syntaxColors[static_cast<std::size_t>(scope)] = c(toneIndex);

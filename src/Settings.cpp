@@ -47,6 +47,7 @@ constexpr std::array kAllKeys{
     SettingKey::TypingCoalescingMs,
     SettingKey::FileFinderRespectGitignore,
     SettingKey::AutosaveDebounceMs,
+    SettingKey::LineNumbers,
 };
 
 constexpr std::array<std::string_view, kSettingKeyCount> kEyNames{
@@ -68,6 +69,7 @@ constexpr std::array<std::string_view, kSettingKeyCount> kEyNames{
     "typing_coalescing_ms",
     "file_finder_respect_gitignore",
     "autosave_debounce_ms",
+    "line_numbers",
 };
 
 SettingValue defaultValue(SettingKey key) {
@@ -90,6 +92,7 @@ SettingValue defaultValue(SettingKey key) {
     case SettingKey::TypingCoalescingMs: return std::uint32_t{750};
     case SettingKey::FileFinderRespectGitignore: return true;
     case SettingKey::AutosaveDebounceMs: return std::uint32_t{10000};
+    case SettingKey::LineNumbers: return false;
     }
     throw std::logic_error("unknown setting key");
 }
@@ -163,6 +166,7 @@ std::optional<SettingError> validate(SettingKey key, const SettingValue& value) 
     case SettingKey::AutoIndent:
     case SettingKey::FinalNewline:
     case SettingKey::WordWrap:
+    case SettingKey::LineNumbers:
     case SettingKey::SearchCaseSensitive:
     case SettingKey::SearchWholeWord:
     case SettingKey::SearchRegularExpression:

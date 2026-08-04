@@ -135,6 +135,7 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
     ShellLayoutRequest request;
     request.viewport = {static_cast<int>(dimensions.columns), static_cast<int>(dimensions.rows)};
     request.reservedPromptRows = prompt.active() ? promptRowCount(prompt.request()->kind) : 0;
+    request.lineNumberGutterWidth = lineNumberGutterWidth();
     // Surface the draft-conflict notice for the active document (M15). Only the
     // Conflict outcome raises the yellow bar; a Restored draft is a quieter
     // state with no external change to resolve.

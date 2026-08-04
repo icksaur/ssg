@@ -320,6 +320,13 @@ struct EditorRuntime::Impl final : CommandServices,
     mutable std::uint32_t lastPanelContentRows = 0;
     std::uint32_t treeFirstVisible = 0;
     bool wordWrap = false;
+    bool lineNumbers = false;
+    // Cache of the active document's logical line count keyed by its revision,
+    // so the line-number gutter width is not recomputed by scanning the whole
+    // document every frame (doc/spec-line-numbers.md).
+    mutable std::optional<Revision> lineCountRevision;
+    mutable std::optional<FileDocumentId> lineCountDocument;
+    mutable std::uint32_t lineCountCache = 1;
     std::uint64_t nextStatusId = 1;
     std::uint64_t nextTreeRevision = 1;
 
@@ -379,6 +386,10 @@ struct EditorRuntime::Impl final : CommandServices,
     [[nodiscard]] std::optional<WorkspaceDocumentState> activeWorkspaceState() const;
     [[nodiscard]] std::optional<DiffFileView> activeDiffFile() const;
     [[nodiscard]] std::string activeText() const;
+    // The line-number gutter width for the active document: 0 when the setting is
+    // off or there is no editor document, else digits(lineCount)+1. The whole-
+    // document line count is cached by revision (doc/spec-line-numbers.md).
+    [[nodiscard]] int lineNumberGutterWidth() const;
     void resetSelectionForActiveDocument();
     // Collapses to a SINGLE caret at the primary's clamped position.  For a
     // document switch, where the carried selection belongs to the previous

@@ -1568,7 +1568,8 @@ bool decodePresent(ProtocolValue const& value, std::optional<SettingKey>& out) {
         SettingKey::SearchCaseSensitive, SettingKey::SearchWholeWord,
         SettingKey::SearchRegularExpression, SettingKey::UndoByteBudget,
         SettingKey::RecoveryByteBudget, SettingKey::TypingCoalescingMs,
-        SettingKey::FileFinderRespectGitignore, SettingKey::AutosaveDebounceMs};
+        SettingKey::FileFinderRespectGitignore, SettingKey::AutosaveDebounceMs,
+        SettingKey::LineNumbers};
     return decodeEnum(value, out, values);
 }
 
@@ -2204,6 +2205,7 @@ ProtocolValue toValue(PaneGeometry const& value) {
     fields.emplace_back("frame", toValue(value.frame));
     fields.emplace_back("content", toValue(value.content));
     fields.emplace_back("scrollbar", toValue(value.scrollbar));
+    fields.emplace_back("line_numbers", toValue(value.lineNumbers));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<PaneGeometry>& out) {
@@ -2213,8 +2215,9 @@ bool decodePresent(ProtocolValue const& value, std::optional<PaneGeometry>& out)
     auto frame = requireField<Rect>(value.field("frame"));
     auto content = requireField<Rect>(value.field("content"));
     auto scrollbar = requireField<Rect>(value.field("scrollbar"));
-    if (!id || !frame || !content || !scrollbar) return false;
-    out.emplace(PaneGeometry{*id, *frame, *content, *scrollbar});
+    auto lineNumbers = requireField<Rect>(value.field("line_numbers"));
+    if (!id || !frame || !content || !scrollbar || !lineNumbers) return false;
+    out.emplace(PaneGeometry{*id, *frame, *content, *scrollbar, *lineNumbers});
     return true;
 }
 

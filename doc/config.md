@@ -73,6 +73,8 @@ ssg.command("theme.set", {
     tab_inactive_background  = "#3e3e42",
     header_background        = "#3e3e42",
     footer_background        = "#3e3e42",
+    current_line_number      = "#e8e8e8",
+    current_line_number_background = "#3e3e42",
     -- syntax scopes
     plain_text               = "#d4d4d4",
     comment                  = "#858585",

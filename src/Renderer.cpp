@@ -960,6 +960,63 @@ void paintScrollbar(CellGrid& grid, PaneGeometry const& pane,
                         background, style);
 }
 
+// The left line-number gutter (doc/spec-line-numbers.md). Each visible row shows
+// its 1-indexed logical line number right-aligned with a trailing space; a
+// wrapped continuation row (firstSpan != 0) shows a blank gutter; the caret's
+// logical line uses the current-line roles.
+void paintLineNumbers(CellGrid& grid, SessionSnapshot const& snapshot,
+                       PaneGeometry const& pane, ThemeSnapshot const& theme,
+                       std::uint8_t background) {
+    if (pane.lineNumbers.width <= 0) return;
+    auto const& viewport = snapshot.client().viewport;
+    auto const numberFg = semanticIndex(theme, SemanticRole::LineNumber);
+    auto const currentFg = semanticIndex(theme, SemanticRole::CurrentLineNumber);
+    auto const currentBg =
+        semanticIndex(theme, SemanticRole::CurrentLineNumberBackground);
+    auto const caretLine =
+        snapshot.sections().selection.selections.primary().active.line.value();
+    int const width = pane.lineNumbers.width;
+    for (std::size_t rowIndex = 0; rowIndex < viewport.visibleRows.size();
+         ++rowIndex) {
+        if (rowIndex >= static_cast<std::size_t>(pane.lineNumbers.height)) break;
+        auto const& row = viewport.visibleRows[rowIndex];
+        int const y = pane.lineNumbers.y + static_cast<int>(rowIndex);
+        bool const isCurrent = row.logicalLine == caretLine;
+        auto const fg = isCurrent ? currentFg : numberFg;
+        auto const bg = isCurrent ? currentBg : background;
+        auto const role =
+            isCurrent ? SemanticRole::CurrentLineNumber : SemanticRole::LineNumber;
+        // Only the first visual row of a logical line shows the number; wrapped
+        // continuation rows show a blank gutter.
+        std::string label(static_cast<std::size_t>(width), ' ');
+        if (row.firstSpan == 0) {
+            auto const number = std::to_string(row.logicalLine + 1);
+            // Right-align in width-1 columns, then a trailing space.
+            if (number.size() <= static_cast<std::size_t>(width - 1)) {
+                auto const pad = static_cast<std::size_t>(width - 1) -
+                                 number.size();
+                for (std::size_t i = 0; i < number.size(); ++i) {
+                    label[pad + i] = number[i];
+                }
+            }
+        }
+        for (int i = 0; i < width; ++i) {
+            put(grid, pane.lineNumbers.x + i, y, std::string{label[i]}, fg, bg,
+                role);
+        }
+    }
+    // Rows below the document content (past the last visible row) get a blank
+    // gutter in the base background so the column reads as a solid gutter.
+    for (int y = pane.lineNumbers.y +
+                 static_cast<int>(viewport.visibleRows.size());
+         y < pane.lineNumbers.bottom(); ++y) {
+        for (int i = 0; i < width; ++i) {
+            put(grid, pane.lineNumbers.x + i, y, " ", numberFg, background,
+                SemanticRole::LineNumber);
+        }
+    }
+}
+
 // Paint the reserved prompt rows (find/replace/settings/command_argument).  The
 // palette is excluded: it renders its query in the header and reserves no rows.
 // Returns the screen cell for the text cursor at the end of the first input, so
@@ -1164,6 +1221,8 @@ CellGrid Renderer::render(SessionSnapshot const& snapshot) const {
             // already shows rather than replacing it.
             paintDiagnostics(grid, snapshot, shell.panes.front().content);
             paintHyperlinks(grid, snapshot, shell.panes.front().content);
+            paintLineNumbers(grid, snapshot, shell.panes.front(), theme,
+                             background);
             paintScrollbar(grid, shell.panes.front(), snapshot.client().viewport,
                             theme, background, style);
 

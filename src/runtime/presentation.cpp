@@ -49,6 +49,16 @@ CommandHandlerResult setWordWrap(EditorRuntime::Impl& runtime) {
     return success();
 }
 
+CommandHandlerResult setLineNumbers(EditorRuntime::Impl& runtime) {
+    bool next = !boolSetting(runtime.settings, SettingKey::LineNumbers,
+                             runtime.lineNumbers);
+    auto mutation = runtime.settings.set(SettingScope::Workspace,
+                                         SettingKey::LineNumbers, next);
+    if (!mutation.accepted()) return failure(mutation.error->message);
+    runtime.lineNumbers = next;
+    return success();
+}
+
 CommandHandlerResult scrollLines(EditorRuntime::Impl& runtime, std::any const& payload) {
     auto const* arguments = payloadAs<ScrollLinesArguments>(payload);
     if (arguments == nullptr) return failure("view.scroll_lines requires scroll-lines payload");
@@ -237,6 +247,8 @@ std::string settingMessage(SettingMutation const& mutation) {
 void syncRuntimeSettings(EditorRuntime::Impl& runtime) {
     runtime.wordWrap = boolSetting(runtime.settings, SettingKey::WordWrap,
                                      runtime.wordWrap);
+    runtime.lineNumbers = boolSetting(runtime.settings, SettingKey::LineNumbers,
+                                      runtime.lineNumbers);
 }
 
 CommandHandlerResult settingsCommand(EditorRuntime::Impl& runtime, std::string_view id, std::any const& payload) {
@@ -398,6 +410,17 @@ void registerViewportCommands(EditorSessionBuilder& builder,
                     .handler([&runtime](CommandContext&) {
                         return runtime.runTransaction(
                             [&] { return setWordWrap(runtime); });
+                    }));
+
+    builder.add(CommandSpecBuilder{"view.toggle_line_numbers"}
+                    .owner("viewport-wrap-scrollbar")
+                    .label("Toggle Line Numbers")
+                    .summary("Toggle Line Numbers")
+                    .mutates()
+                    .lua()
+                    .handler([&runtime](CommandContext&) {
+                        return runtime.runTransaction(
+                            [&] { return setLineNumbers(runtime); });
                     }));
 
     auto scroll = [](std::string id, std::string summary) {
