@@ -1605,6 +1605,37 @@ void EditorRuntime::Impl::clampSelectionToActiveDocument() {
     selection.selections = SelectionSet{std::vector<Selection>{Selection{position, position}}};
 }
 
+void EditorRuntime::Impl::clampSelectionsToActiveDocument() {
+    auto text = activeText();
+    auto clampPosition = [&](DocumentPosition const& p) {
+        auto offset = p.byteOffset.value();
+        if (offset > text.size()) offset = text.size();
+        // Prefer the exact offset; if it is not a grapheme boundary (only
+        // possible for a selection carried from a differently-shaped document,
+        // not for the edit paths this serves), snap DOWN to the nearest boundary
+        // at or below it rather than teleporting to the document end.
+        for (;;) {
+            if (auto at = ssg::SelectionNavigator::resolvePosition(
+                    text, ByteOffset{offset})) {
+                return *at;
+            }
+            if (offset == 0) break;
+            --offset;
+        }
+        return zeroPosition();
+    };
+    std::vector<Selection> clamped;
+    clamped.reserve(selection.selections.items().size());
+    for (auto const& sel : selection.selections.items()) {
+        clamped.push_back(
+            Selection{clampPosition(sel.anchor), clampPosition(sel.active)});
+    }
+    if (clamped.empty()) {
+        clamped.push_back(Selection{zeroPosition(), zeroPosition()});
+    }
+    selection.selections = SelectionSet{std::move(clamped)};
+}
+
 std::vector<CellRun> EditorRuntime::Impl::activeCellRuns() const {
     std::vector<CellRun> runs;
     std::string const text = activeText();

@@ -380,7 +380,14 @@ struct EditorRuntime::Impl final : CommandServices,
     [[nodiscard]] std::optional<DiffFileView> activeDiffFile() const;
     [[nodiscard]] std::string activeText() const;
     void resetSelectionForActiveDocument();
+    // Collapses to a SINGLE caret at the primary's clamped position.  For a
+    // document switch, where the carried selection belongs to the previous
+    // document and must not survive.
     void clampSelectionToActiveDocument();
+    // Clamps EVERY selection into the active document, preserving their number
+    // and ranges.  For in-document edits, where a multi-cursor set must survive
+    // (typing over N selections leaves N carets, Sublime-style).
+    void clampSelectionsToActiveDocument();
     [[nodiscard]] std::vector<CellRun> activeCellRuns() const;
     // The editor viewport, gated on word wrap: exact wrapped geometry when word
     // wrap is on; O(visible rows) unwrapped projection (compute_viewport_unwrapped)
