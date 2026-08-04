@@ -157,12 +157,15 @@ CommandHandlerResult bindSelection(EditorRuntime::Impl& runtime,
     if (auto active = runtime.activeDocumentId()) {
         runtime.historyFor(*active).breakCoalescing();
     }
-    // Focus follows the pointer (M8-F): a click-to-caret / drag-select acts on the
-    // editor, so it moves the authoritative keyboard focus there. Gated on the two
-    // pointer-driven selection commands; keyboard caret motion is a different
-    // SelectionCommand and never reaches here.
+    // Focus follows the pointer (M8-F): a click-to-caret / drag-select / Alt+click
+    // add-caret / Alt+drag add-range acts on the editor, so it moves the
+    // authoritative keyboard focus there. Gated on the pointer-driven selection
+    // commands; keyboard caret motion is a different SelectionCommand and never
+    // reaches here.
     if (command == SelectionCommand::CursorSetPosition ||
         command == SelectionCommand::SelectSetRange ||
+        command == SelectionCommand::SelectSetRanges ||
+        command == SelectionCommand::SelectAddRange ||
         command == SelectionCommand::SelectWordAtPosition) {
         runtime.shell.focusEditor();
     }

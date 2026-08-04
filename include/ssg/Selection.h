@@ -76,6 +76,7 @@ enum class SelectionCommand : std::uint8_t {
     CursorDocumentStart,
     CursorDocumentEnd,
     SelectSetRange,
+    SelectSetRanges,
     SelectAddRange,
     SelectLeft,
     SelectRight,
@@ -115,14 +116,14 @@ public:
     SelectionNavigationCommandSet& operator=(
         const SelectionNavigationCommandSet&) = delete;
 
-    [[nodiscard]] const std::array<SelectionCommandDescriptor, 37>&
+    [[nodiscard]] const std::array<SelectionCommandDescriptor, 38>&
     descriptors() const noexcept;
 
 private:
     friend SelectionNavigationCommandSet selectionNavigationCommandSet();
     SelectionNavigationCommandSet();
 
-    const std::array<SelectionCommandDescriptor, 37> descriptors_;
+    const std::array<SelectionCommandDescriptor, 38> descriptors_;
 };
 
 [[nodiscard]] SelectionNavigationCommandSet
@@ -131,6 +132,7 @@ selectionNavigationCommandSet();
 struct SelectionCommandArguments {
     std::optional<DocumentPosition> position;
     std::optional<Selection> selection;
+    std::vector<Selection> selections;
 };
 
 enum class SelectionNavigationError : std::uint8_t {

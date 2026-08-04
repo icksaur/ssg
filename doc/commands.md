@@ -8,7 +8,7 @@ with `SSG_UPDATE_DOCS=1 ./build/test_commands`.
 available to the Lua API when a host grants them
 (see `doc/spec-command-registry.md`).
 
-There are 188 commands.
+There are 189 commands.
 
 ## clipboard-register
 
@@ -200,6 +200,7 @@ There are 188 commands.
 | `cursor.document_start` | Document Start | selection | lua |
 | `cursor.document_end` | Document End | selection | lua |
 | `select.set_range` | Set Range | selection | lua |
+| `select.set_ranges` | Set Ranges | selection | lua |
 | `select.add_range` | Add Range | selection | lua |
 | `select.left` | Left | selection | lua |
 | `select.right` | Right | selection | lua |

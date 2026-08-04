@@ -231,6 +231,7 @@ struct PointerEvent {
     int row = 0;     // 0-based grid row.
     PointerButton button = PointerButton::left;
     PointerKind kind = PointerKind::press;
+    bool alt = false;
 
     friend bool operator==(const PointerEvent&, const PointerEvent&) = default;
 };

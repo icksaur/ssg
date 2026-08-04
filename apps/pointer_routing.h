@@ -140,11 +140,18 @@ struct PointerTargets {
 };
 
 // Route one pointer event.  `dragging`/`drag_anchor` are the loop's current
-// drag state.  Pure: depends only on its arguments.
+// drag state.  `alt` is the EFFECTIVE Alt modifier for this event: the app
+// supplies the press event's own Alt to establish an Alt-drag gesture, then the
+// established drag state alone for subsequent drag/release (the per-motion bit
+// is ignored once a drag is under way). During an Alt-drag the app also supplies
+// `alt_drag_baseline`, the selection set captured at press, so the router can
+// rebuild the whole set from an immutable baseline each motion. Pure: depends
+// only on its arguments.
 [[nodiscard]] PointerDispatch route_pointer(
-    ssg::RegionHit const& hit, PointerButton button, PointerKind kind,
+    ssg::RegionHit const& hit, PointerButton button, PointerKind kind, bool alt,
     bool dragging, std::optional<ssg::DocumentPosition> drag_anchor,
-    PointerTargets const& targets);
+    PointerTargets const& targets,
+    std::vector<ssg::Selection> const& alt_drag_baseline = {});
 
 // The dispatch for a recognized double-click on the editor: select the word at
 // `position` and arm no drag.  A named helper (rather than an inline dispatch in

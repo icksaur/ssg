@@ -105,9 +105,10 @@ PointerDispatch double_click_dispatch(ssg::DocumentPosition position) {
 }
 
 PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
-                              PointerKind kind, bool dragging,
+                              PointerKind kind, bool alt, bool dragging,
                               std::optional<ssg::DocumentPosition> dragAnchor,
-                              PointerTargets const& targets) {
+                              PointerTargets const& targets,
+                              std::vector<ssg::Selection> const& altDragBaseline) {
     PointerDispatch dispatch;
     // Middle-click a tab closes it (a common convention).  Handled before the
     // left-only guard below; no other middle-button gesture is recognised.
@@ -181,11 +182,22 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
             // A left press on the editor places the caret and begins a potential
             // selection drag (the drag itself is routed on subsequent motion in
             // M8-S).  Requires the caller to have resolved the document position.
+            // With Alt, it instead ADDS a collapsed caret so multi-cursor
+            // gestures compose with the existing set.
             if (hit.region == ssg::HitRegion::Editor && targets.document_position) {
-                dispatch.commands.push_back(
-                    {"cursor.set_position",
-                     ssg::SelectionCommandArguments{*targets.document_position,
-                                                    std::nullopt}});
+                if (alt) {
+                    dispatch.commands.push_back(
+                        {"select.add_range",
+                         ssg::SelectionCommandArguments{
+                             std::nullopt,
+                             ssg::Selection{*targets.document_position,
+                                            *targets.document_position}}});
+                } else {
+                    dispatch.commands.push_back(
+                        {"cursor.set_position",
+                         ssg::SelectionCommandArguments{*targets.document_position,
+                                                        std::nullopt}});
+                }
                 dispatch.begins_drag = true;
             }
             return dispatch;
@@ -202,11 +214,22 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
             // last in-viewport position (edge auto-scroll is M8-S2).
             if (dragging && dragAnchor && hit.region == ssg::HitRegion::Editor &&
                 targets.document_position) {
-                dispatch.commands.push_back(
-                    {"select.set_range",
-                     ssg::SelectionCommandArguments{
-                         std::nullopt,
-                         ssg::Selection{*dragAnchor, *targets.document_position}}});
+                if (alt) {
+                    std::vector<ssg::Selection> ranges = altDragBaseline;
+                    ranges.push_back(
+                        ssg::Selection{*dragAnchor, *targets.document_position});
+                    dispatch.commands.push_back(
+                        {"select.set_ranges",
+                         ssg::SelectionCommandArguments{std::nullopt, std::nullopt,
+                                                        std::move(ranges)}});
+                } else {
+                    dispatch.commands.push_back(
+                        {"select.set_range",
+                         ssg::SelectionCommandArguments{
+                             std::nullopt,
+                             ssg::Selection{*dragAnchor,
+                                            *targets.document_position}}});
+                }
             }
             return dispatch;
         case PointerKind::release:

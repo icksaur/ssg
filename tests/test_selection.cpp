@@ -99,7 +99,7 @@ void assertMatchesReference(const SelectionViewState& actual,
 
 TEST(commandSetIsExactAndImmutable) {
     static_assert(!std::is_copy_assignable_v<ssg::SelectionNavigationCommandSet>);
-    constexpr std::array<std::string_view, 37> expected{{
+    constexpr std::array<std::string_view, 38> expected{{
         "cursor.set_position",
         "cursor.left",
         "cursor.right",
@@ -114,6 +114,7 @@ TEST(commandSetIsExactAndImmutable) {
         "cursor.document_start",
         "cursor.document_end",
         "select.set_range",
+        "select.set_ranges",
         "select.add_range",
         "select.left",
         "select.right",
@@ -647,6 +648,57 @@ TEST(invalidTabWidthIsTypedAndAtomic) {
     ASSERT_FALSE(ssg::SelectionNavigator::resolvePosition(text, ByteOffset{0}, 0).has_value());
 }
 
+TEST(selectSetRangesReplacesTheSetAndNormalizes) {
+    const std::string text = "alpha beta\nxy\nalpha beta";
+    const auto dimensions = ViewportDimensions{80, 20};
+    using Ranges = std::vector<std::pair<std::uint64_t, std::uint64_t>>;
+
+    // An empty list is a typed rejection, mirroring select.set_range's
+    // missing-selection guard.
+    auto empty = ssg::SelectionNavigator{}.apply(
+        text, state(text, {{0, 0}}), SelectionCommand::SelectSetRanges,
+        dimensions, SelectionCommandArguments{});
+    ASSERT_FALSE(empty.accepted());
+    ASSERT_EQ(empty.error, ssg::SelectionNavigationError::MissingArgument);
+
+    // An out-of-layout position is rejected like select.set_range.
+    SelectionCommandArguments invalid;
+    invalid.selections = {Selection{
+        DocumentPosition{ByteOffset{1}, ssg::LineIndex{9}, CellIndex{9}},
+        DocumentPosition{ByteOffset{1}, ssg::LineIndex{9}, CellIndex{9}}}};
+    auto invalidResult = ssg::SelectionNavigator{}.apply(
+        text, state(text, {{0, 0}}), SelectionCommand::SelectSetRanges,
+        dimensions, invalid);
+    ASSERT_FALSE(invalidResult.accepted());
+    ASSERT_EQ(invalidResult.error, ssg::SelectionNavigationError::InvalidPosition);
+
+    // Two disjoint baseline carets plus a dragged range (supplied out of order)
+    // replace the whole set and normalize: sorted by lower offset, three
+    // selections because none overlaps.
+    auto view = state(text, {{text.size(), text.size()}});
+    SelectionCommandArguments disjoint;
+    disjoint.selections = {selection(text, 8, 4), selection(text, 2, 2),
+                           selection(text, 20, 20)};
+    view = resultingState(
+        view, ssg::SelectionNavigator{}.apply(
+                  text, view, SelectionCommand::SelectSetRanges, dimensions,
+                  disjoint));
+    ASSERT_EQ(byteRanges(view), (Ranges{{2, 2}, {8, 4}, {20, 20}}));
+
+    // Rebuilding from the SAME baseline with the dragged range pushed upward so
+    // it now overlaps the LOWER baseline caret merges those two, while the upper
+    // baseline caret is preserved untouched: the full-recompute has no stale
+    // target to corrupt (proves the reorder/overlap contract).
+    SelectionCommandArguments merged;
+    merged.selections = {selection(text, 2, 2), selection(text, 20, 20),
+                         selection(text, 1, 8)};
+    auto overlapView = resultingState(
+        view, ssg::SelectionNavigator{}.apply(
+                  text, view, SelectionCommand::SelectSetRanges, dimensions,
+                  merged));
+    ASSERT_EQ(byteRanges(overlapView), (Ranges{{1, 8}, {20, 20}}));
+}
+
 } // namespace
 
 TEST(selectWordAtPositionSelectsTheSameCategoryRun) {
@@ -722,6 +774,7 @@ int main() {
     RUN(injectedBracketsMatchWithNesting);
     RUN(revealIsMinimalAndCenterClamps);
     RUN(invalidPositionsAndMissingArgumentsAreTypedRejections);
+    RUN(selectSetRangesReplacesTheSetAndNormalizes);
     RUN(invalidTabWidthIsTypedAndAtomic);
     RUN(selectWordAtPositionSelectsTheSameCategoryRun);
     RUN(selectWordAtPositionRejectsAMissingOrInvalidPosition);
