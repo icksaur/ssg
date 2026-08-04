@@ -1,0 +1,131 @@
+#include "ssg/Widget.h"
+#include "test_helpers.h"
+
+#include <string>
+#include <vector>
+
+namespace {
+
+using namespace ssg;
+
+FitItem item(std::string id, int desired, int rank = 0) {
+    return FitItem{std::move(id), desired, rank};
+}
+
+// Start alignment packs from offset 0 with a single-cell separator between
+// adjacent items, matching addFields' left-to-right placement. Hand-computed:
+// A at 0 (size 2), one separator cell at 2, B at 3 (size 3).
+TEST(fitRowStartPacksLeftWithSeparators) {
+    const RowFit fit = fitRow({item("a", 2), item("b", 3)}, 10, 1, Align::Start);
+    ASSERT_EQ(fit.placed.size(), std::size_t{2});
+    ASSERT_EQ(fit.placed[0], (PlacedItem{"a", 0, 2}));
+    ASSERT_EQ(fit.placed[1], (PlacedItem{"b", 3, 3}));
+}
+
+// End alignment packs the whole retained run flush to the trailing edge. Total
+// used = 2 + 1(sep) + 3 = 6; start = extent(10) - 6 = 4. A at 4, B at 7.
+TEST(fitRowEndPacksFlushRight) {
+    const RowFit fit = fitRow({item("a", 2), item("b", 3)}, 10, 1, Align::End);
+    ASSERT_EQ(fit.placed.size(), std::size_t{2});
+    ASSERT_EQ(fit.placed[0], (PlacedItem{"a", 4, 2}));
+    ASSERT_EQ(fit.placed[1], (PlacedItem{"b", 7, 3}));
+}
+
+// THE discriminating edge (spec Step 1 oracle): stop-at-first-non-fit is NOT
+// drop-until-fits. Items in original order A,B,C with ranks 0,1,2 and desired
+// 3,5,2 in an extent of 6 (separator 1). Rank order is already A,B,C.
+// Forward scan: A fits (used 3); B needs 3+1+5=9 > 6 -> STOP. The scan ends at
+// B, so C is NEVER considered even though A + C (3+1+2 = 6) fits exactly. A
+// naive drop-until-fits would drop B and retain {A, C}; the correct rule
+// retains ONLY {A}.
+TEST(fitRowStopsAtFirstNonFitNotDropUntilFits) {
+    const RowFit fit = fitRow(
+        {item("a", 3, 0), item("b", 5, 1), item("c", 2, 2)}, 6, 1, Align::Start);
+    ASSERT_EQ(fit.placed.size(), std::size_t{1});
+    ASSERT_EQ(fit.placed[0], (PlacedItem{"a", 0, 3}));
+}
+
+// Collapse priority is by rank, not input order: a later, higher-priority (lower
+// rank) item is retained over an earlier low-priority one when only one fits,
+// and the retained set is emitted in ORIGINAL order. Items A(rank2,d4),
+// B(rank0,d4) in extent 4: rank order is B,A; B fits (4), A needs 4+1+4 -> stop.
+// Only B retained, at its original position.
+TEST(fitRowCollapsesByRankAndRestoresOriginalOrder) {
+    const RowFit fit =
+        fitRow({item("a", 4, 2), item("b", 4, 0)}, 4, 1, Align::Start);
+    ASSERT_EQ(fit.placed.size(), std::size_t{1});
+    ASSERT_EQ(fit.placed[0], (PlacedItem{"b", 0, 4}));
+}
+
+// When everything fits, all items are retained in original order regardless of
+// how ranks reorder the scan. A(rank1,d2), B(rank0,d2), extent 10: rank order
+// B,A both fit; emitted A,B in original order at 0 and 3.
+TEST(fitRowRetainsAllInOriginalOrderWhenEverythingFits) {
+    const RowFit fit =
+        fitRow({item("a", 2, 1), item("b", 2, 0)}, 10, 1, Align::Start);
+    ASSERT_EQ(fit.placed.size(), std::size_t{2});
+    ASSERT_EQ(fit.placed[0], (PlacedItem{"a", 0, 2}));
+    ASSERT_EQ(fit.placed[1], (PlacedItem{"b", 3, 2}));
+}
+
+// The fit test is `used + sep + desired > extent` -> exact fit is NOT a
+// non-fit. A(3) + sep(1) + B(2) = 6 == extent 6 fits; both retained.
+TEST(fitRowExactFitIsRetained) {
+    const RowFit fit = fitRow({item("a", 3), item("b", 2)}, 6, 1, Align::Start);
+    ASSERT_EQ(fit.placed.size(), std::size_t{2});
+    ASSERT_EQ(fit.placed[1], (PlacedItem{"b", 4, 2}));
+}
+
+// A single item wider than the extent fits nothing (the scan stops on the first
+// item). Guards the empty-result path.
+TEST(fitRowDropsAnItemWiderThanTheExtent) {
+    const RowFit fit = fitRow({item("a", 12)}, 6, 1, Align::Start);
+    ASSERT_TRUE(fit.placed.empty());
+}
+
+// layoutRow maps relative offsets onto a container: absolute x = container.x +
+// offset, y and height from the container's leading row, width = item size.
+TEST(layoutRowMapsOffsetsOntoTheContainerRow) {
+    RowFit fit;
+    fit.placed = {{"a", 0, 2}, {"b", 3, 3}};
+    const auto rects = layoutRow(fit, Rect{5, 2, 20, 1});
+    ASSERT_EQ(rects.size(), std::size_t{2});
+    ASSERT_EQ(rects[0], (Rect{5, 2, 2, 1}));   // 5 + 0
+    ASSERT_EQ(rects[1], (Rect{8, 2, 3, 1}));   // 5 + 3
+}
+
+// A field's desired width is its display cells + 2 padding, floored at 1
+// (matching addFields' `max(1, displayCells(value) + 2)`). ASCII cells == length.
+TEST(measureFieldCellsIsDisplayCellsPlusPadding) {
+    ASSERT_EQ(measureFieldCells("main"), 6);   // 4 + 2
+    ASSERT_EQ(measureFieldCells("x"), 3);       // 1 + 2
+    ASSERT_EQ(measureFieldCells(""), 2);        // 0 + 2 (still above the floor of 1)
+}
+
+// A non-positive-width item is SKIPPED: it is neither retained nor does it end
+// the scan nor consume a separator cell. B(desired 0) sits between A and C; the
+// result is A and C packed as if B were absent (A at 0, C at 3 after one
+// separator), matching addFields dropping empty-value fields.
+TEST(fitRowSkipsNonPositiveWidthItemsWithoutBlocking) {
+    const RowFit fit = fitRow(
+        {item("a", 2), item("b", 0), item("c", 3)}, 10, 1, Align::Start);
+    ASSERT_EQ(fit.placed.size(), std::size_t{2});
+    ASSERT_EQ(fit.placed[0], (PlacedItem{"a", 0, 2}));
+    ASSERT_EQ(fit.placed[1], (PlacedItem{"c", 3, 3}));
+}
+
+}  // namespace
+
+int main() {
+    RUN(fitRowStartPacksLeftWithSeparators);
+    RUN(fitRowEndPacksFlushRight);
+    RUN(fitRowStopsAtFirstNonFitNotDropUntilFits);
+    RUN(fitRowCollapsesByRankAndRestoresOriginalOrder);
+    RUN(fitRowRetainsAllInOriginalOrderWhenEverythingFits);
+    RUN(fitRowExactFitIsRetained);
+    RUN(fitRowDropsAnItemWiderThanTheExtent);
+    RUN(fitRowSkipsNonPositiveWidthItemsWithoutBlocking);
+    RUN(layoutRowMapsOffsetsOntoTheContainerRow);
+    RUN(measureFieldCellsIsDisplayCellsPlusPadding);
+    return 0;
+}
