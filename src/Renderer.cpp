@@ -965,25 +965,35 @@ void paintScrollbar(CellGrid& grid, PaneGeometry const& pane,
 // wrapped continuation row (firstSpan != 0) shows a blank gutter; the caret's
 // logical line uses the current-line roles.
 void paintLineNumbers(CellGrid& grid, SessionSnapshot const& snapshot,
-                       PaneGeometry const& pane, ThemeSnapshot const& theme,
-                       std::uint8_t background) {
+                       PaneGeometry const& pane, ThemeSnapshot const& theme) {
     if (pane.lineNumbers.width <= 0) return;
     auto const& viewport = snapshot.client().viewport;
     auto const numberFg = semanticIndex(theme, SemanticRole::LineNumber);
+    auto const numberBg = semanticIndex(theme, SemanticRole::LineNumberBackground);
     auto const currentFg = semanticIndex(theme, SemanticRole::CurrentLineNumber);
     auto const currentBg =
         semanticIndex(theme, SemanticRole::CurrentLineNumberBackground);
-    auto const caretLine =
-        snapshot.sections().selection.selections.primary().active.line.value();
+    // Every caret's logical line highlights its gutter number, not just the
+    // primary's, so multi-cursor edits show one lit number per cursor.
+    auto const& selections = snapshot.sections().selection.selections;
+    std::vector<std::uint32_t> caretLines;
+    caretLines.reserve(selections.items().size());
+    for (auto const& selection : selections.items()) {
+        caretLines.push_back(selection.active.line.value());
+    }
+    auto const isCaretLine = [&](std::uint32_t logicalLine) {
+        return std::find(caretLines.begin(), caretLines.end(), logicalLine) !=
+               caretLines.end();
+    };
     int const width = pane.lineNumbers.width;
     for (std::size_t rowIndex = 0; rowIndex < viewport.visibleRows.size();
          ++rowIndex) {
         if (rowIndex >= static_cast<std::size_t>(pane.lineNumbers.height)) break;
         auto const& row = viewport.visibleRows[rowIndex];
         int const y = pane.lineNumbers.y + static_cast<int>(rowIndex);
-        bool const isCurrent = row.logicalLine == caretLine;
+        bool const isCurrent = isCaretLine(row.logicalLine);
         auto const fg = isCurrent ? currentFg : numberFg;
-        auto const bg = isCurrent ? currentBg : background;
+        auto const bg = isCurrent ? currentBg : numberBg;
         auto const role =
             isCurrent ? SemanticRole::CurrentLineNumber : SemanticRole::LineNumber;
         // Only the first visual row of a logical line shows the number; wrapped
@@ -1006,12 +1016,13 @@ void paintLineNumbers(CellGrid& grid, SessionSnapshot const& snapshot,
         }
     }
     // Rows below the document content (past the last visible row) get a blank
-    // gutter in the base background so the column reads as a solid gutter.
+    // gutter in the inactive gutter background so the column reads as a solid
+    // band distinct from the document content.
     for (int y = pane.lineNumbers.y +
                  static_cast<int>(viewport.visibleRows.size());
          y < pane.lineNumbers.bottom(); ++y) {
         for (int i = 0; i < width; ++i) {
-            put(grid, pane.lineNumbers.x + i, y, " ", numberFg, background,
+            put(grid, pane.lineNumbers.x + i, y, " ", numberFg, numberBg,
                 SemanticRole::LineNumber);
         }
     }
@@ -1221,8 +1232,7 @@ CellGrid Renderer::render(SessionSnapshot const& snapshot) const {
             // already shows rather than replacing it.
             paintDiagnostics(grid, snapshot, shell.panes.front().content);
             paintHyperlinks(grid, snapshot, shell.panes.front().content);
-            paintLineNumbers(grid, snapshot, shell.panes.front(), theme,
-                             background);
+            paintLineNumbers(grid, snapshot, shell.panes.front(), theme);
             paintScrollbar(grid, shell.panes.front(), snapshot.client().viewport,
                             theme, background, style);
 

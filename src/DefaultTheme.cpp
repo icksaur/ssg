@@ -74,10 +74,14 @@ ThemeSnapshot defaultTheme() noexcept {
     role(SemanticRole::TabInactiveBackground, 2);
     role(SemanticRole::HeaderBackground, 2);
     role(SemanticRole::FooterBackground, 2);
-    // The current line's number: near-white over the chrome band, so it stands
-    // out from the mid-gray inactive numbers.
+    // The current line's number: near-white over a lighter gutter band, so it
+    // stands out both from the mid-gray inactive numbers and from the inactive
+    // gutter background band beside it.
     role(SemanticRole::CurrentLineNumber, 14);
-    role(SemanticRole::CurrentLineNumberBackground, 2);
+    role(SemanticRole::CurrentLineNumberBackground, 13);
+    // Inactive line numbers sit on the chrome band so the gutter reads as
+    // distinct from the near-black document content beside it.
+    role(SemanticRole::LineNumberBackground, 2);
 
     auto syntax = [&](SyntaxScope scope, std::size_t toneIndex) {
         snapshot.syntaxColors[static_cast<std::size_t>(scope)] = c(toneIndex);

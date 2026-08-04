@@ -67,9 +67,12 @@ enum class SemanticRole : std::uint8_t {
     // distinct background so the current line stands out (doc/spec-line-numbers).
     CurrentLineNumber,
     CurrentLineNumberBackground,
+    // The gutter background behind inactive (non-current) line numbers, so the
+    // gutter reads as distinct from the document content it sits beside.
+    LineNumberBackground,
 };
 
-inline constexpr std::size_t kSemanticRoleCount = 27;
+inline constexpr std::size_t kSemanticRoleCount = 28;
 inline constexpr std::array kAllSemanticRoles{
     SemanticRole::Text,
     SemanticRole::Canvas,
@@ -98,6 +101,7 @@ inline constexpr std::array kAllSemanticRoles{
     SemanticRole::FooterBackground,
     SemanticRole::CurrentLineNumber,
     SemanticRole::CurrentLineNumberBackground,
+    SemanticRole::LineNumberBackground,
 };
 static_assert(kAllSemanticRoles.size() == kSemanticRoleCount);
 
