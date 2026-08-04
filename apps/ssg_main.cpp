@@ -880,6 +880,11 @@ int main(int argc, char** argv) {
         int grabOffset;
     };
     std::optional<GutterDrag> draggingGutter;
+    // Double-click tracking (client-side: the terminal reports no click count).
+    // A second left editor press on the same cell within the window selects the
+    // word (doc/spec-double-click-word.md).
+    ssg::app::ClickTracker clickTracker;
+    static constexpr auto kDoubleClickWindow = std::chrono::milliseconds{400};
     // The last pointer cell (0-based) from a press/drag, so a drag held still at
     // the editor edge can auto-scroll on a timer without a fresh pointer event
     // (M8-S2).
@@ -1370,6 +1375,7 @@ int main(int argc, char** argv) {
                 // command sequence and drag-state change.
                 ssg::RegionHit hit;
                 ssg::app::PointerTargets targets;
+                std::optional<ssg::DocumentPosition> doubleClickPosition;
                 if (snapshot) {
                     ssg::HitTester tester{*snapshot};
                     if (draggingGutter &&
@@ -1443,11 +1449,36 @@ int main(int argc, char** argv) {
                                hit.region == ssg::HitRegion::FooterField) {
                         targets.field_command_id = hit.commandId;
                     }
+                    // A second left click on the same editor cell within the
+                    // window selects the word there instead of just placing the
+                    // caret (doc/spec-double-click-word.md). Detected here so the
+                    // word geometry stays server-side; the client only recognizes
+                    // the gesture. The active tab id keys the tracker so a fast
+                    // click on the same cell of a DIFFERENT document does not pair.
+                    const bool leftEditorPress =
+                        decoded.pointer.kind == ssg::app::PointerKind::press &&
+                        decoded.pointer.button == ssg::app::PointerButton::left &&
+                        hit.region == ssg::HitRegion::Editor;
+                    if (leftEditorPress && targets.document_position &&
+                        ssg::app::register_click_is_double(
+                            clickTracker, std::chrono::steady_clock::now(),
+                            snapshot->sections().tabs.active
+                                ? snapshot->sections().tabs.active->value()
+                                : 0,
+                            decoded.pointer.row, decoded.pointer.column,
+                            kDoubleClickWindow)) {
+                        doubleClickPosition = targets.document_position;
+                    }
                 }
+                // A recognized double-click selects the word (no drag); every
+                // other press goes through the normal router. Both yield a
+                // PointerDispatch handled uniformly below.
                 auto plan =
-                    ssg::app::route_pointer(hit, decoded.pointer.button,
-                                            decoded.pointer.kind, dragging,
-                                            dragAnchor, targets);
+                    doubleClickPosition
+                        ? ssg::app::double_click_dispatch(*doubleClickPosition)
+                        : ssg::app::route_pointer(
+                              hit, decoded.pointer.button, decoded.pointer.kind,
+                              dragging, dragAnchor, targets);
                 for (auto const& command : plan.commands) {
                     dispatch(command.command_id, command.payload);
                 }

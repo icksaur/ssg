@@ -162,7 +162,8 @@ CommandHandlerResult bindSelection(EditorRuntime::Impl& runtime,
     // pointer-driven selection commands; keyboard caret motion is a different
     // SelectionCommand and never reaches here.
     if (command == SelectionCommand::CursorSetPosition ||
-        command == SelectionCommand::SelectSetRange) {
+        command == SelectionCommand::SelectSetRange ||
+        command == SelectionCommand::SelectWordAtPosition) {
         runtime.shell.focusEditor();
     }
     runtime.recordNavigation(client, NavigationClass::User);

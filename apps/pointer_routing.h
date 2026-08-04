@@ -16,6 +16,7 @@
 #include <ssg/ShellState.h>
 
 #include <any>
+#include <chrono>
 #include <optional>
 #include <string>
 #include <span>
@@ -84,6 +85,26 @@ struct GutterFraction {
 [[nodiscard]] GutterFraction gutter_fraction(int rel, int grabOffset,
                                              int travel) noexcept;
 
+// Double-click detection.  The terminal mouse protocol carries no click count,
+// so the client pairs presses by time, target surface, and grid cell.
+// `register_click_is_double` returns true iff this press falls within `window` of
+// the previous tracked press AND on the same `surface` and cell; it ALWAYS
+// updates the tracker, and RESETS it after reporting a double-click so a third
+// press starts fresh (no triple-click).  `surface` identifies the document/view
+// (e.g. the active tab id) so a fast click on the same cell of a DIFFERENT
+// document is not mistaken for a double-click.  It is pure: `now` is passed in,
+// no clock is read here.
+struct ClickTracker {
+    std::optional<std::chrono::steady_clock::time_point> time;
+    std::uint64_t surface = 0;
+    int row = 0;
+    int column = 0;
+};
+[[nodiscard]] bool register_click_is_double(
+    ClickTracker& tracker, std::chrono::steady_clock::time_point now,
+    std::uint64_t surface, int row, int column,
+    std::chrono::milliseconds window) noexcept;
+
 // A gutter gesture the CALLER must apply to a client-owned offset, because no
 // server command may be dispatched for it (see ScrollableRegionDescriptor).
 struct ClientScroll {
@@ -124,6 +145,13 @@ struct PointerTargets {
     ssg::RegionHit const& hit, PointerButton button, PointerKind kind,
     bool dragging, std::optional<ssg::DocumentPosition> drag_anchor,
     PointerTargets const& targets);
+
+// The dispatch for a recognized double-click on the editor: select the word at
+// `position` and arm no drag.  A named helper (rather than an inline dispatch in
+// the app loop) so the "double-click selects the word, no drag" decision is a
+// pure, unit-tested unit like route_pointer.
+[[nodiscard]] PointerDispatch double_click_dispatch(
+    ssg::DocumentPosition position);
 
 // Route a mouse-wheel event to the scroll it drives for the region under the
 // pointer: the side panel (or its gutter) scrolls the tree, the palette (or its

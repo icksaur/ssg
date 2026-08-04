@@ -75,6 +75,35 @@ GutterFraction gutter_fraction(int rel, int grabOffset, int travel) noexcept {
             static_cast<std::uint32_t>(travel)};
 }
 
+bool register_click_is_double(ClickTracker& tracker,
+                              std::chrono::steady_clock::time_point now,
+                              std::uint64_t surface, int row, int column,
+                              std::chrono::milliseconds window) noexcept {
+    bool const isDouble = tracker.time.has_value() &&
+                          now - *tracker.time <= window &&
+                          tracker.surface == surface && tracker.row == row &&
+                          tracker.column == column;
+    if (isDouble) {
+        tracker = {};  // reset so a third press is a fresh single (no triple)
+        return true;
+    }
+    tracker.time = now;
+    tracker.surface = surface;
+    tracker.row = row;
+    tracker.column = column;
+    return false;
+}
+
+PointerDispatch double_click_dispatch(ssg::DocumentPosition position) {
+    PointerDispatch dispatch;
+    dispatch.commands.push_back(
+        {"select.word_at_position",
+         ssg::SelectionCommandArguments{position, std::nullopt}});
+    // A double-click selects a word; it must not also start a drag-select.
+    dispatch.begins_drag = false;
+    return dispatch;
+}
+
 PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
                               PointerKind kind, bool dragging,
                               std::optional<ssg::DocumentPosition> dragAnchor,

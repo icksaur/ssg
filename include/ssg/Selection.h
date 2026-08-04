@@ -96,6 +96,7 @@ enum class SelectionCommand : std::uint8_t {
     SelectSplitIntoLines,
     SelectToMatchingBracket,
     GotoMatchingBracket,
+    SelectWordAtPosition,
     ViewRevealCaret,
     ViewCenterCaret,
 };
@@ -114,14 +115,14 @@ public:
     SelectionNavigationCommandSet& operator=(
         const SelectionNavigationCommandSet&) = delete;
 
-    [[nodiscard]] const std::array<SelectionCommandDescriptor, 36>&
+    [[nodiscard]] const std::array<SelectionCommandDescriptor, 37>&
     descriptors() const noexcept;
 
 private:
     friend SelectionNavigationCommandSet selectionNavigationCommandSet();
     SelectionNavigationCommandSet();
 
-    const std::array<SelectionCommandDescriptor, 36> descriptors_;
+    const std::array<SelectionCommandDescriptor, 37> descriptors_;
 };
 
 [[nodiscard]] SelectionNavigationCommandSet

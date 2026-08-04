@@ -2343,6 +2343,89 @@ TEST(routePointerMiddleClickOnATabClosesIt) {
                     .commands.empty());
 }
 
+TEST(doubleClickDetectorPairsPressesByTimeAndCell) {
+    using namespace std::chrono_literals;
+    auto const window = 400ms;
+    auto t0 = std::chrono::steady_clock::time_point{};
+    std::uint64_t const surface = 1;  // one document/tab
+
+    ssg::app::ClickTracker tracker;
+    ASSERT_FALSE(ssg::app::register_click_is_double(tracker, t0, surface, 5, 10,
+                                                    window));
+    ASSERT_TRUE(ssg::app::register_click_is_double(tracker, t0 + 100ms, surface,
+                                                   5, 10, window));
+    // After firing, the tracker resets: a third rapid press is a fresh single
+    // (no triple-click).
+    ASSERT_FALSE(ssg::app::register_click_is_double(tracker, t0 + 150ms, surface,
+                                                    5, 10, window));
+
+    // Same cell but OUTSIDE the window -> two singles.
+    ssg::app::ClickTracker slow;
+    ASSERT_FALSE(
+        ssg::app::register_click_is_double(slow, t0, surface, 2, 2, window));
+    ASSERT_FALSE(ssg::app::register_click_is_double(slow, t0 + 500ms, surface, 2,
+                                                    2, window));
+
+    // Within the window but on a DIFFERENT cell -> two singles, then a same-cell
+    // press within the window of THAT press pairs.
+    ssg::app::ClickTracker moved;
+    ASSERT_FALSE(
+        ssg::app::register_click_is_double(moved, t0, surface, 1, 1, window));
+    ASSERT_FALSE(ssg::app::register_click_is_double(moved, t0 + 50ms, surface, 1,
+                                                    2, window));
+    ASSERT_TRUE(ssg::app::register_click_is_double(moved, t0 + 80ms, surface, 1,
+                                                   2, window));
+
+    // Same cell within the window but a DIFFERENT surface (a fast click after a
+    // tab switch) -> not a double-click.
+    ssg::app::ClickTracker switched;
+    ASSERT_FALSE(
+        ssg::app::register_click_is_double(switched, t0, 1, 3, 3, window));
+    ASSERT_FALSE(ssg::app::register_click_is_double(switched, t0 + 50ms, 2, 3, 3,
+                                                    window));
+}
+
+// The app loop's decision is a thin gate over the classifier: a single left
+// editor press routes to cursor.set_position (with a drag armed), while a
+// recognized double-click routes through double_click_dispatch, which selects
+// the word at the position and arms NO drag. Pinned here so a mis-wire at that
+// seam is caught.
+TEST(aDoubleClickOnTheEditorSelectsTheWordNotJustTheCaret) {
+    ssg::RegionHit hit;
+    hit.region = ssg::HitRegion::Editor;
+    hit.byteOffset = 3;
+    ssg::app::PointerTargets targets;
+    auto const position =
+        ssg::DocumentPosition{ssg::ByteOffset{3}, ssg::LineIndex{0},
+                              ssg::CellIndex{3}};
+    targets.document_position = position;
+
+    // Single press: caret placement, drag armed.
+    auto single = ssg::app::route_pointer(hit, ssg::app::PointerButton::left,
+                                          ssg::app::PointerKind::press, false,
+                                          std::nullopt, targets);
+    ASSERT_EQ(single.commands.size(), std::size_t{1});
+    ASSERT_EQ(single.commands[0].command_id,
+              std::string{"cursor.set_position"});
+    ASSERT_TRUE(single.begins_drag);
+
+    // Double-click: word selection, NO drag, and the clicked position passed
+    // through as the command argument.
+    auto doubled = ssg::app::double_click_dispatch(position);
+    ASSERT_EQ(doubled.commands.size(), std::size_t{1});
+    ASSERT_EQ(doubled.commands[0].command_id,
+              std::string{"select.word_at_position"});
+    ASSERT_FALSE(doubled.begins_drag);
+    auto const* args = std::any_cast<ssg::SelectionCommandArguments>(
+        &doubled.commands[0].payload);
+    ASSERT_TRUE(args != nullptr);
+    if (args) {
+        ASSERT_TRUE(args->position.has_value());
+        if (args->position) ASSERT_EQ(*args->position, position);
+        ASSERT_FALSE(args->selection.has_value());
+    }
+}
+
 TEST(scrollbarGrabOffsetHoldsTheThumbUnderTheCursor) {
     // Press ON the thumb: the offset is where within the thumb it was grabbed,
     // so the same point of the thumb stays under the cursor as it drags.
@@ -2612,6 +2695,8 @@ int main() {
     RUN(theCatalogCoversEveryScrollbarHitRegion);
     RUN(routePointerTabPressActivatesTheTab);
     RUN(routePointerMiddleClickOnATabClosesIt);
+    RUN(doubleClickDetectorPairsPressesByTimeAndCell);
+    RUN(aDoubleClickOnTheEditorSelectsTheWordNotJustTheCaret);
     RUN(scrollbarGrabOffsetHoldsTheThumbUnderTheCursor);
     RUN(gutterFractionTracksTheGrabbedPointAndClamps);
     RUN(routePointerPalettePressExecutesTheCandidate);
