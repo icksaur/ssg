@@ -664,6 +664,81 @@ TEST(wrappedEndByteOffsetIsTheVisualRowEnd) {
     ASSERT_EQ(proj.visibleRows[2].endByteOffset, 9u);   // last line, no newline
 }
 
+// The scrollbar mapping in isolation (doc/spec-scrollbar-grab.md amendment). The
+// render (firstRow -> thumbStart) and drag-inverse (thumbTop -> firstRow) are one
+// matched pair through scrollScaleRounded, so no gutter row is skipped and the
+// ends map to the ends. Driven purely by the pure functions -- no runtime, no app.
+TEST(scrollbarThumbAndFirstRowAreAnExactMatchedPair) {
+    struct Regime { std::uint32_t total, viewport; };
+    for (auto const& r : {Regime{200, 10}, Regime{1000, 30}, Regime{100, 20},
+                          Regime{40, 20}, Regime{25, 20}, Regime{57, 13},
+                          Regime{500, 50}, Regime{80, 79}}) {
+        auto const metrics = ssg::Viewport{}.scrollbarMetrics(r.total, r.viewport, 0);
+        std::uint32_t const maximum = metrics.maximumFirstRow;
+        std::uint32_t const travel = metrics.viewportRows - metrics.thumbSize;
+        ASSERT_TRUE(maximum > 0);
+        ASSERT_TRUE(travel > 0);
+
+        // Endpoints: top cell shows the first line, bottom cell the last.
+        ASSERT_EQ(ssg::scrollFirstRow(0, travel, maximum), std::uint32_t{0});
+        ASSERT_EQ(ssg::scrollFirstRow(travel, travel, maximum), maximum);
+        ASSERT_EQ(ssg::scrollThumbStart(0, maximum, travel), std::uint32_t{0});
+        ASSERT_EQ(ssg::scrollThumbStart(maximum, maximum, travel), travel);
+
+        // Surjective + monotone: every gutter row is reachable and renders back
+        // exactly where it was dragged; firstRow never jumps backward.
+        std::uint32_t previousFirstRow = 0;
+        for (std::uint32_t thumbTop = 0; thumbTop <= travel; ++thumbTop) {
+            std::uint32_t const firstRow =
+                ssg::scrollFirstRow(thumbTop, travel, maximum);
+            ASSERT_EQ(ssg::scrollThumbStart(firstRow, maximum, travel), thumbTop);
+            ASSERT_TRUE(firstRow >= previousFirstRow);
+            previousFirstRow = firstRow;
+        }
+
+        // The thumb always fits and never jumps backward as firstRow advances.
+        std::uint32_t previousThumb = 0;
+        for (std::uint32_t firstRow = 0; firstRow <= maximum; ++firstRow) {
+            auto const m = ssg::Viewport{}.scrollbarMetrics(r.total, r.viewport,
+                                                            firstRow);
+            ASSERT_TRUE(m.thumbStart + m.thumbSize <= r.viewport);
+            ASSERT_TRUE(m.thumbStart >= previousThumb);
+            previousThumb = m.thumbStart;
+        }
+    }
+}
+
+// The rounded fraction mapping is shared by every surface, not editor-only: a
+// list scrollbar (tree/palette shape) resolves the same way through toFraction.
+TEST(scrollToFractionRoundsUniformlyForListSurfaces) {
+    // total=200 items, viewport=10 -> maximumFirstRow=190. A gutter drag that
+    // grabs thumb row 1 of travel 9 sends numerator=1, denominator=9; rounded,
+    // that is round(190*1/9)=21, and the top row (0/9) pins to 0.
+    ssg::ScrollOffset top;
+    top.toFraction(0, 9, 200, 10);
+    ASSERT_EQ(top.firstVisible(), std::uint32_t{0});
+
+    ssg::ScrollOffset bottom;
+    bottom.toFraction(9, 9, 200, 10);
+    ASSERT_EQ(bottom.firstVisible(), std::uint32_t{190});
+
+    ssg::ScrollOffset one;
+    one.toFraction(1, 9, 200, 10);
+    ASSERT_EQ(one.firstVisible(), ssg::scrollFirstRow(1, 9, 190));
+    ASSERT_EQ(one.firstVisible(), std::uint32_t{21});
+}
+
+// Degenerate: a thumb that fills the gutter (travel 0) or a document that fits
+// never scrolls and never divides by zero.
+TEST(scrollMappingIsInertWhenNothingScrolls) {
+    ASSERT_EQ(ssg::scrollFirstRow(3, 0, 0), std::uint32_t{0});
+    ASSERT_EQ(ssg::scrollThumbStart(0, 0, 0), std::uint32_t{0});
+    ASSERT_EQ(ssg::scrollScaleRounded(5, 3, 0), std::uint32_t{0});
+    ssg::ScrollOffset still;
+    still.toFraction(0, 1, 5, 20);  // total 5 < viewport 20: nothing scrolls
+    ASSERT_EQ(still.firstVisible(), std::uint32_t{0});
+}
+
 int main() {
     RUN(emptyViewportGolden);
     RUN(shortViewportGolden);
@@ -695,6 +770,9 @@ int main() {
     RUN(listScrollViewKeepVisibleLeavesInWindowSelectionUntouched);
     RUN(listScrollViewKeepVisibleClampsSelectionToLastItem);
     RUN(listScrollViewMatchesComputeViewportMetrics);
+    RUN(scrollbarThumbAndFirstRowAreAnExactMatchedPair);
+    RUN(scrollToFractionRoundsUniformlyForListSurfaces);
+    RUN(scrollMappingIsInertWhenNothingScrolls);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed > 0 ? 1 : 0;
 }
