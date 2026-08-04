@@ -30,6 +30,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <cerrno>
 
 #include <csignal>
 #include <chrono>
@@ -642,15 +643,31 @@ TEST(theCapabilitiesReportReflectsWhatTheTerminalAnswered) {
 
     std::string output;
     bool answered = false;
+    bool eof = false;
     char buffer[4096];
     auto const deadline =
         std::chrono::steady_clock::now() + std::chrono::seconds{5};
-    while (std::chrono::steady_clock::now() < deadline) {
+    while (!eof && std::chrono::steady_clock::now() < deadline) {
         pollfd pfd{master, POLLIN, 0};
         ::poll(&pfd, 1, 10);
         for (;;) {
             auto const count = ::read(master, buffer, sizeof buffer);
-            if (count <= 0) break;
+            if (count == 0) {  // EOF: the child exited and closed the pty.
+                eof = true;
+                break;
+            }
+            if (count < 0) {
+                // On Linux a pty master read after the slave closes reports EIO
+                // rather than 0, so treat it (and any non-transient error) as
+                // end-of-output.  EAGAIN/EWOULDBLOCK ("nothing right now") and
+                // EINTR (a signal interrupted the read) are transient: keep
+                // polling rather than ending the drain early, which would
+                // reintroduce the partial-report race.
+                if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
+                    eof = true;
+                }
+                break;
+            }
             output.append(buffer, static_cast<std::size_t>(count));
         }
         // Answer as soon as the queries arrive, the way a real terminal would:
@@ -665,7 +682,10 @@ TEST(theCapabilitiesReportReflectsWhatTheTerminalAnswered) {
             ASSERT_EQ(written, static_cast<ssize_t>(replies.size()));
             answered = true;
         }
-        if (output.find("clipboard_write") != std::string::npos) break;
+        // Drain the ENTIRE report before asserting: the `replies:` section the
+        // assertions below check is printed AFTER the capability lines, so
+        // breaking on a mid-report marker (e.g. "clipboard_write") would race
+        // the later output that has not been read yet.
     }
     reapBounded(pid);
     ::close(master);
