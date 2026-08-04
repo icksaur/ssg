@@ -10,14 +10,14 @@ prompt=none
 panes:
   id=1 frame=0,2,20,1 content=0,2,19,1 scrollbar=19,2,1,1
 tabHits:
-  index=0 rect=0,1,10,1
+  index=0 rect=0,1,8,1
 a11y:
   kind=0 role=10 rect=0,0,20,1 id=header label=Status header content= cmd=
   kind=2 role=11 rect=0,3,20,1 id=footer label=Status footer content= cmd=
   kind=1 role=10 rect=0,0,8,1 id=active_command label=Active command content=INSERT cmd=
   kind=4 role=12 rect=0,3,20,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=5 role=7 rect=0,1,20,1 id=tabs label=Open tabs content= cmd=
-  kind=6 role=6 rect=0,1,10,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
+  kind=6 role=6 rect=0,1,8,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
   kind=9 role=1 rect=0,2,20,1 id=pane.1 label=Editor pane 1 content= cmd=
   kind=10 role=17 rect=19,2,1,1 id=pane.1.scrollbar label=Scrollbar for editor pane 1 content= cmd=
 palette=none
@@ -34,14 +34,14 @@ prompt=none
 panes:
   id=1 frame=0,2,20,1 content=0,2,19,1 scrollbar=19,2,1,1
 tabHits:
-  index=0 rect=0,1,10,1
+  index=0 rect=0,1,8,1
 a11y:
   kind=0 role=10 rect=0,0,20,1 id=header label=Status header content= cmd=
   kind=2 role=11 rect=0,3,20,1 id=footer label=Status footer content= cmd=
   kind=1 role=10 rect=0,0,8,1 id=active_command label=Active command content=INSERT cmd=
   kind=4 role=12 rect=0,3,20,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=5 role=7 rect=0,1,20,1 id=tabs label=Open tabs content= cmd=
-  kind=6 role=6 rect=0,1,10,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
+  kind=6 role=6 rect=0,1,8,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
   kind=9 role=1 rect=0,2,20,1 id=pane.1 label=Editor pane 1 content= cmd=
   kind=10 role=17 rect=19,2,1,1 id=pane.1.scrollbar label=Scrollbar for editor pane 1 content= cmd=
 palette=none
@@ -61,7 +61,7 @@ prompt=none
 panes:
   id=1 frame=0,2,80,21 content=0,2,79,21 scrollbar=79,2,1,21
 tabHits:
-  index=0 rect=0,1,10,1
+  index=0 rect=0,1,8,1
 a11y:
   kind=0 role=10 rect=0,0,80,1 id=header label=Status header content= cmd=
   kind=2 role=11 rect=0,23,80,1 id=footer label=Status footer content= cmd=
@@ -78,7 +78,7 @@ a11y:
   kind=3 role=11 rect=47,23,5,1 id=git_repository label=Git repository content=ssg cmd=
   kind=3 role=11 rect=53,23,5,1 id=file_type label=File type content=C++ cmd=
   kind=5 role=7 rect=0,1,80,1 id=tabs label=Open tabs content= cmd=
-  kind=6 role=6 rect=0,1,10,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
+  kind=6 role=6 rect=0,1,8,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
   kind=9 role=1 rect=0,2,80,21 id=pane.1 label=Editor pane 1 content= cmd=
   kind=10 role=17 rect=79,2,1,21 id=pane.1.scrollbar label=Scrollbar for editor pane 1 content= cmd=
 palette=none
@@ -95,7 +95,7 @@ prompt=none
 panes:
   id=1 frame=24,2,56,21 content=24,2,55,21 scrollbar=79,2,1,21
 tabHits:
-  index=0 rect=24,1,10,1
+  index=0 rect=24,1,8,1
 a11y:
   kind=0 role=10 rect=0,0,80,1 id=header label=Status header content= cmd=
   kind=2 role=11 rect=0,23,80,1 id=footer label=Status footer content= cmd=
@@ -115,7 +115,7 @@ a11y:
   kind=8 role=9 rect=0,1,24,22 id=panel.provider label=Files content=Files cmd=
   kind=10 role=17 rect=23,2,1,21 id=panel.scrollbar label=Panel scrollbar content= cmd=
   kind=5 role=7 rect=24,1,56,1 id=tabs label=Open tabs content= cmd=
-  kind=6 role=6 rect=24,1,10,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
+  kind=6 role=6 rect=24,1,8,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
   kind=9 role=1 rect=24,2,56,21 id=pane.1 label=Editor pane 1 content= cmd=
   kind=10 role=17 rect=79,2,1,21 id=pane.1.scrollbar label=Scrollbar for editor pane 1 content= cmd=
 palette=none
@@ -132,7 +132,7 @@ prompt=none
 panes:
   id=1 frame=24,2,76,37 content=24,2,75,37 scrollbar=99,2,1,37
 tabHits:
-  index=0 rect=24,1,10,1
+  index=0 rect=24,1,8,1
 a11y:
   kind=0 role=10 rect=0,0,100,1 id=header label=Status header content= cmd=
   kind=2 role=11 rect=0,39,100,1 id=footer label=Status footer content= cmd=
@@ -153,7 +153,7 @@ a11y:
   kind=8 role=9 rect=0,1,24,38 id=panel.provider label=Files content=Files cmd=
   kind=10 role=17 rect=23,2,1,37 id=panel.scrollbar label=Panel scrollbar content= cmd=
   kind=5 role=7 rect=24,1,76,1 id=tabs label=Open tabs content= cmd=
-  kind=6 role=6 rect=24,1,10,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
+  kind=6 role=6 rect=24,1,8,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
   kind=9 role=1 rect=24,2,76,37 id=pane.1 label=Editor pane 1 content= cmd=
   kind=10 role=17 rect=99,2,1,37 id=pane.1.scrollbar label=Scrollbar for editor pane 1 content= cmd=
 palette=none
@@ -170,7 +170,7 @@ prompt=none
 panes:
   id=1 frame=13,2,20,8 content=13,2,19,8 scrollbar=32,2,1,8
 tabHits:
-  index=0 rect=13,1,10,1
+  index=0 rect=13,1,8,1
 a11y:
   kind=0 role=10 rect=0,0,33,1 id=header label=Status header content= cmd=
   kind=2 role=11 rect=0,10,33,1 id=footer label=Status footer content= cmd=
@@ -183,7 +183,7 @@ a11y:
   kind=8 role=9 rect=0,1,13,9 id=panel.provider label=Files content=Files cmd=
   kind=10 role=17 rect=12,2,1,8 id=panel.scrollbar label=Panel scrollbar content= cmd=
   kind=5 role=7 rect=13,1,20,1 id=tabs label=Open tabs content= cmd=
-  kind=6 role=6 rect=13,1,10,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
+  kind=6 role=6 rect=13,1,8,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
   kind=9 role=1 rect=13,2,20,8 id=pane.1 label=Editor pane 1 content= cmd=
   kind=10 role=17 rect=32,2,1,8 id=pane.1.scrollbar label=Scrollbar for editor pane 1 content= cmd=
 palette=none
@@ -200,7 +200,7 @@ prompt=none
 panes:
   id=1 frame=0,2,31,21 content=0,2,30,21 scrollbar=30,2,1,21
 tabHits:
-  index=0 rect=0,1,10,1
+  index=0 rect=0,1,8,1
 a11y:
   kind=0 role=10 rect=0,0,31,1 id=header label=Status header content= cmd=
   kind=2 role=11 rect=0,23,31,1 id=footer label=Status footer content= cmd=
@@ -210,7 +210,7 @@ a11y:
   kind=4 role=12 rect=10,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=3 role=11 rect=0,23,7,1 id=actionable_status label=Status message content=Saved cmd=
   kind=5 role=7 rect=0,1,31,1 id=tabs label=Open tabs content= cmd=
-  kind=6 role=6 rect=0,1,10,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
+  kind=6 role=6 rect=0,1,8,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
   kind=9 role=1 rect=0,2,31,21 id=pane.1 label=Editor pane 1 content= cmd=
   kind=10 role=17 rect=30,2,1,21 id=pane.1.scrollbar label=Scrollbar for editor pane 1 content= cmd=
 palette=none
@@ -227,7 +227,7 @@ prompt=none
 panes:
   id=1 frame=12,2,20,21 content=12,2,19,21 scrollbar=31,2,1,21
 tabHits:
-  index=0 rect=12,1,10,1
+  index=0 rect=12,1,8,1
 a11y:
   kind=0 role=10 rect=0,0,32,1 id=header label=Status header content= cmd=
   kind=2 role=11 rect=0,23,32,1 id=footer label=Status footer content= cmd=
@@ -240,7 +240,7 @@ a11y:
   kind=8 role=9 rect=0,1,12,22 id=panel.provider label=Files content=Files cmd=
   kind=10 role=17 rect=11,2,1,21 id=panel.scrollbar label=Panel scrollbar content= cmd=
   kind=5 role=7 rect=12,1,20,1 id=tabs label=Open tabs content= cmd=
-  kind=6 role=6 rect=12,1,10,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
+  kind=6 role=6 rect=12,1,8,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
   kind=9 role=1 rect=12,2,20,21 id=pane.1 label=Editor pane 1 content= cmd=
   kind=10 role=17 rect=31,2,1,21 id=pane.1.scrollbar label=Scrollbar for editor pane 1 content= cmd=
 palette=none
@@ -257,7 +257,7 @@ prompt=none
 panes:
   id=1 frame=23,2,20,21 content=23,2,19,21 scrollbar=42,2,1,21
 tabHits:
-  index=0 rect=23,1,10,1
+  index=0 rect=23,1,8,1
 a11y:
   kind=0 role=10 rect=0,0,43,1 id=header label=Status header content= cmd=
   kind=2 role=11 rect=0,23,43,1 id=footer label=Status footer content= cmd=
@@ -271,7 +271,7 @@ a11y:
   kind=8 role=9 rect=0,1,23,22 id=panel.provider label=Files content=Files cmd=
   kind=10 role=17 rect=22,2,1,21 id=panel.scrollbar label=Panel scrollbar content= cmd=
   kind=5 role=7 rect=23,1,20,1 id=tabs label=Open tabs content= cmd=
-  kind=6 role=6 rect=23,1,10,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
+  kind=6 role=6 rect=23,1,8,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
   kind=9 role=1 rect=23,2,20,21 id=pane.1 label=Editor pane 1 content= cmd=
   kind=10 role=17 rect=42,2,1,21 id=pane.1.scrollbar label=Scrollbar for editor pane 1 content= cmd=
 palette=none
@@ -288,7 +288,7 @@ prompt=none
 panes:
   id=1 frame=24,2,20,21 content=24,2,19,21 scrollbar=43,2,1,21
 tabHits:
-  index=0 rect=24,1,10,1
+  index=0 rect=24,1,8,1
 a11y:
   kind=0 role=10 rect=0,0,44,1 id=header label=Status header content= cmd=
   kind=2 role=11 rect=0,23,44,1 id=footer label=Status footer content= cmd=
@@ -302,7 +302,7 @@ a11y:
   kind=8 role=9 rect=0,1,24,22 id=panel.provider label=Files content=Files cmd=
   kind=10 role=17 rect=23,2,1,21 id=panel.scrollbar label=Panel scrollbar content= cmd=
   kind=5 role=7 rect=24,1,20,1 id=tabs label=Open tabs content= cmd=
-  kind=6 role=6 rect=24,1,10,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
+  kind=6 role=6 rect=24,1,8,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
   kind=9 role=1 rect=24,2,20,21 id=pane.1 label=Editor pane 1 content= cmd=
   kind=10 role=17 rect=43,2,1,21 id=pane.1.scrollbar label=Scrollbar for editor pane 1 content= cmd=
 palette=none
@@ -319,7 +319,7 @@ prompt=none
 panes:
   id=1 frame=24,2,21,21 content=24,2,20,21 scrollbar=44,2,1,21
 tabHits:
-  index=0 rect=24,1,10,1
+  index=0 rect=24,1,8,1
 a11y:
   kind=0 role=10 rect=0,0,45,1 id=header label=Status header content= cmd=
   kind=2 role=11 rect=0,23,45,1 id=footer label=Status footer content= cmd=
@@ -333,7 +333,7 @@ a11y:
   kind=8 role=9 rect=0,1,24,22 id=panel.provider label=Files content=Files cmd=
   kind=10 role=17 rect=23,2,1,21 id=panel.scrollbar label=Panel scrollbar content= cmd=
   kind=5 role=7 rect=24,1,21,1 id=tabs label=Open tabs content= cmd=
-  kind=6 role=6 rect=24,1,10,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
+  kind=6 role=6 rect=24,1,8,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
   kind=9 role=1 rect=24,2,21,21 id=pane.1 label=Editor pane 1 content= cmd=
   kind=10 role=17 rect=44,2,1,21 id=pane.1.scrollbar label=Scrollbar for editor pane 1 content= cmd=
 palette=none
@@ -350,7 +350,7 @@ prompt=none
 panes:
   id=1 frame=0,2,80,21 content=0,2,79,21 scrollbar=79,2,1,21
 tabHits:
-  index=0 rect=0,1,10,1
+  index=0 rect=0,1,8,1
 a11y:
   kind=0 role=10 rect=0,0,80,1 id=header label=Status header content= cmd=
   kind=2 role=11 rect=0,23,80,1 id=footer label=Status footer content= cmd=
@@ -367,7 +367,7 @@ a11y:
   kind=3 role=11 rect=47,23,5,1 id=git_repository label=Git repository content=ssg cmd=
   kind=3 role=11 rect=53,23,5,1 id=file_type label=File type content=C++ cmd=
   kind=5 role=7 rect=0,1,80,1 id=tabs label=Open tabs content= cmd=
-  kind=6 role=6 rect=0,1,10,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
+  kind=6 role=6 rect=0,1,8,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
   kind=9 role=1 rect=0,2,80,21 id=pane.1 label=Editor pane 1 content= cmd=
   kind=10 role=17 rect=79,2,1,21 id=pane.1.scrollbar label=Scrollbar for editor pane 1 content= cmd=
 palette=none
@@ -384,7 +384,7 @@ prompt=0,23,80,1
 panes:
   id=1 frame=0,2,80,21 content=0,2,79,21 scrollbar=79,2,1,21
 tabHits:
-  index=0 rect=0,1,10,1
+  index=0 rect=0,1,8,1
 a11y:
   kind=0 role=10 rect=0,0,80,1 id=header label=Status header content= cmd=
   kind=2 role=11 rect=0,23,80,1 id=footer label=Status footer content= cmd=
@@ -401,7 +401,7 @@ a11y:
   kind=3 role=11 rect=47,23,5,1 id=git_repository label=Git repository content=ssg cmd=
   kind=3 role=11 rect=53,23,5,1 id=file_type label=File type content=C++ cmd=
   kind=5 role=7 rect=0,1,80,1 id=tabs label=Open tabs content= cmd=
-  kind=6 role=6 rect=0,1,10,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
+  kind=6 role=6 rect=0,1,8,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
   kind=11 role=16 rect=0,23,80,1 id=prompt label=Prompt surface content= cmd=
   kind=9 role=1 rect=0,2,80,21 id=pane.1 label=Editor pane 1 content= cmd=
   kind=10 role=17 rect=79,2,1,21 id=pane.1.scrollbar label=Scrollbar for editor pane 1 content= cmd=
@@ -419,7 +419,7 @@ prompt=0,22,80,2
 panes:
   id=1 frame=0,2,80,20 content=0,2,79,20 scrollbar=79,2,1,20
 tabHits:
-  index=0 rect=0,1,10,1
+  index=0 rect=0,1,8,1
 a11y:
   kind=0 role=10 rect=0,0,80,1 id=header label=Status header content= cmd=
   kind=2 role=11 rect=0,23,80,1 id=footer label=Status footer content= cmd=
@@ -436,7 +436,7 @@ a11y:
   kind=3 role=11 rect=47,23,5,1 id=git_repository label=Git repository content=ssg cmd=
   kind=3 role=11 rect=53,23,5,1 id=file_type label=File type content=C++ cmd=
   kind=5 role=7 rect=0,1,80,1 id=tabs label=Open tabs content= cmd=
-  kind=6 role=6 rect=0,1,10,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
+  kind=6 role=6 rect=0,1,8,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
   kind=11 role=16 rect=0,22,80,2 id=prompt label=Prompt surface content= cmd=
   kind=9 role=1 rect=0,2,80,20 id=pane.1 label=Editor pane 1 content= cmd=
   kind=10 role=17 rect=79,2,1,20 id=pane.1.scrollbar label=Scrollbar for editor pane 1 content= cmd=
@@ -454,7 +454,7 @@ prompt=0,21,80,3
 panes:
   id=1 frame=0,2,80,19 content=0,2,79,19 scrollbar=79,2,1,19
 tabHits:
-  index=0 rect=0,1,10,1
+  index=0 rect=0,1,8,1
 a11y:
   kind=0 role=10 rect=0,0,80,1 id=header label=Status header content= cmd=
   kind=2 role=11 rect=0,23,80,1 id=footer label=Status footer content= cmd=
@@ -471,7 +471,7 @@ a11y:
   kind=3 role=11 rect=47,23,5,1 id=git_repository label=Git repository content=ssg cmd=
   kind=3 role=11 rect=53,23,5,1 id=file_type label=File type content=C++ cmd=
   kind=5 role=7 rect=0,1,80,1 id=tabs label=Open tabs content= cmd=
-  kind=6 role=6 rect=0,1,10,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
+  kind=6 role=6 rect=0,1,8,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
   kind=11 role=16 rect=0,21,80,3 id=prompt label=Prompt surface content= cmd=
   kind=9 role=1 rect=0,2,80,19 id=pane.1 label=Editor pane 1 content= cmd=
   kind=10 role=17 rect=79,2,1,19 id=pane.1.scrollbar label=Scrollbar for editor pane 1 content= cmd=
@@ -558,7 +558,7 @@ panes:
   id=1 frame=0,2,80,10 content=0,2,79,10 scrollbar=79,2,1,10
   id=2 frame=0,12,80,11 content=0,12,79,11 scrollbar=79,12,1,11
 tabHits:
-  index=0 rect=0,1,10,1
+  index=0 rect=0,1,8,1
 a11y:
   kind=0 role=10 rect=0,0,80,1 id=header label=Status header content= cmd=
   kind=2 role=11 rect=0,23,80,1 id=footer label=Status footer content= cmd=
@@ -575,7 +575,7 @@ a11y:
   kind=3 role=11 rect=47,23,5,1 id=git_repository label=Git repository content=ssg cmd=
   kind=3 role=11 rect=53,23,5,1 id=file_type label=File type content=C++ cmd=
   kind=5 role=7 rect=0,1,80,1 id=tabs label=Open tabs content= cmd=
-  kind=6 role=6 rect=0,1,10,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
+  kind=6 role=6 rect=0,1,8,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
   kind=9 role=1 rect=0,2,80,10 id=pane.1 label=Editor pane 1 content= cmd=
   kind=10 role=17 rect=79,2,1,10 id=pane.1.scrollbar label=Scrollbar for editor pane 1 content= cmd=
   kind=9 role=1 rect=0,12,80,11 id=pane.2 label=Editor pane 2 content= cmd=
@@ -595,7 +595,7 @@ panes:
   id=1 frame=0,2,40,21 content=0,2,39,21 scrollbar=39,2,1,21
   id=2 frame=40,2,40,21 content=40,2,39,21 scrollbar=79,2,1,21
 tabHits:
-  index=0 rect=0,1,10,1
+  index=0 rect=0,1,8,1
 a11y:
   kind=0 role=10 rect=0,0,80,1 id=header label=Status header content= cmd=
   kind=2 role=11 rect=0,23,80,1 id=footer label=Status footer content= cmd=
@@ -612,7 +612,7 @@ a11y:
   kind=3 role=11 rect=47,23,5,1 id=git_repository label=Git repository content=ssg cmd=
   kind=3 role=11 rect=53,23,5,1 id=file_type label=File type content=C++ cmd=
   kind=5 role=7 rect=0,1,80,1 id=tabs label=Open tabs content= cmd=
-  kind=6 role=6 rect=0,1,10,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
+  kind=6 role=6 rect=0,1,8,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
   kind=9 role=1 rect=0,2,40,21 id=pane.1 label=Editor pane 1 content= cmd=
   kind=10 role=17 rect=39,2,1,21 id=pane.1.scrollbar label=Scrollbar for editor pane 1 content= cmd=
   kind=9 role=1 rect=40,2,40,21 id=pane.2 label=Editor pane 2 content= cmd=
@@ -633,7 +633,7 @@ panes:
   id=2 frame=0,12,40,11 content=0,12,39,11 scrollbar=39,12,1,11
   id=3 frame=40,12,40,11 content=40,12,39,11 scrollbar=79,12,1,11
 tabHits:
-  index=0 rect=0,1,10,1
+  index=0 rect=0,1,8,1
 a11y:
   kind=0 role=10 rect=0,0,80,1 id=header label=Status header content= cmd=
   kind=2 role=11 rect=0,23,80,1 id=footer label=Status footer content= cmd=
@@ -650,7 +650,7 @@ a11y:
   kind=3 role=11 rect=47,23,5,1 id=git_repository label=Git repository content=ssg cmd=
   kind=3 role=11 rect=53,23,5,1 id=file_type label=File type content=C++ cmd=
   kind=5 role=7 rect=0,1,80,1 id=tabs label=Open tabs content= cmd=
-  kind=6 role=6 rect=0,1,10,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
+  kind=6 role=6 rect=0,1,8,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
   kind=9 role=1 rect=0,2,80,10 id=pane.1 label=Editor pane 1 content= cmd=
   kind=10 role=17 rect=79,2,1,10 id=pane.1.scrollbar label=Scrollbar for editor pane 1 content= cmd=
   kind=9 role=1 rect=0,12,40,11 id=pane.2 label=Editor pane 2 content= cmd=
@@ -703,9 +703,9 @@ prompt=none
 panes:
   id=1 frame=0,2,30,21 content=0,2,29,21 scrollbar=29,2,1,21
 tabHits:
-  index=5 rect=0,1,11,1
-  index=6 rect=11,1,13,1
-  index=7 rect=24,1,6,1
+  index=5 rect=0,1,9,1
+  index=6 rect=10,1,11,1
+  index=7 rect=22,1,8,1
 a11y:
   kind=0 role=10 rect=0,0,30,1 id=header label=Status header content= cmd=
   kind=2 role=11 rect=0,23,30,1 id=footer label=Status footer content= cmd=
@@ -715,9 +715,11 @@ a11y:
   kind=4 role=12 rect=9,23,21,1 id=status.retry label=Retry status action content=Retry status action cmd=
   kind=3 role=11 rect=0,23,7,1 id=actionable_status label=Status message content=Saved cmd=
   kind=5 role=7 rect=0,1,30,1 id=tabs label=Open tabs content= cmd=
-  kind=6 role=7 rect=0,1,11,1 id=tab.5 label=file5 tab content=file5.cpp cmd=
-  kind=6 role=6 rect=11,1,13,1 id=tab.6 label=file6 tab content=file6.cpp * cmd=
-  kind=6 role=7 rect=24,1,6,1 id=tab.7 label=file7 tab content=file7.cpp cmd=
+  kind=6 role=7 rect=0,1,9,1 id=tab.5 label=file5 tab content=file5.cpp cmd=
+  kind=16 role=7 rect=9,1,1,1 id=tabsep.6 label= content=  cmd=
+  kind=6 role=6 rect=10,1,11,1 id=tab.6 label=file6 tab content=file6.cpp * cmd=
+  kind=16 role=7 rect=21,1,1,1 id=tabsep.7 label= content=  cmd=
+  kind=6 role=7 rect=22,1,8,1 id=tab.7 label=file7 tab content=file7.cpp cmd=
   kind=9 role=1 rect=0,2,30,21 id=pane.1 label=Editor pane 1 content= cmd=
   kind=10 role=17 rect=29,2,1,21 id=pane.1.scrollbar label=Scrollbar for editor pane 1 content= cmd=
 palette=none
@@ -734,7 +736,7 @@ prompt=none
 panes:
   id=1 frame=0,2,40,21 content=0,2,39,21 scrollbar=39,2,1,21
 tabHits:
-  index=0 rect=0,1,10,1
+  index=0 rect=0,1,8,1
 a11y:
   kind=0 role=10 rect=0,0,40,1 id=header label=Status header content= cmd=
   kind=2 role=11 rect=0,23,40,1 id=footer label=Status footer content= cmd=
@@ -745,7 +747,7 @@ a11y:
   kind=3 role=11 rect=0,23,7,1 id=actionable_status label=Status message content=Saved cmd=
   kind=3 role=11 rect=8,23,11,1 id=follow_state label=Follow edits state and resume binding content=following cmd=
   kind=5 role=7 rect=0,1,40,1 id=tabs label=Open tabs content= cmd=
-  kind=6 role=6 rect=0,1,10,1 id=tab.0 label=cjk tab content=一二.txt cmd=
+  kind=6 role=6 rect=0,1,8,1 id=tab.0 label=cjk tab content=一二.txt cmd=
   kind=9 role=1 rect=0,2,40,21 id=pane.1 label=Editor pane 1 content= cmd=
   kind=10 role=17 rect=39,2,1,21 id=pane.1.scrollbar label=Scrollbar for editor pane 1 content= cmd=
 palette=none
@@ -762,7 +764,7 @@ prompt=none
 panes:
   id=1 frame=24,2,56,21 content=24,2,55,21 scrollbar=79,2,1,21
 tabHits:
-  index=0 rect=24,1,10,1
+  index=0 rect=24,1,8,1
 a11y:
   kind=0 role=10 rect=0,0,80,1 id=header label=Status header content= cmd=
   kind=2 role=11 rect=0,23,80,1 id=footer label=Status footer content= cmd=
@@ -782,7 +784,7 @@ a11y:
   kind=8 role=9 rect=0,1,24,22 id=panel.provider label=Files content=Files cmd=
   kind=10 role=17 rect=23,2,1,21 id=panel.scrollbar label=Panel scrollbar content= cmd=
   kind=5 role=7 rect=24,1,56,1 id=tabs label=Open tabs content= cmd=
-  kind=6 role=6 rect=24,1,10,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
+  kind=6 role=6 rect=24,1,8,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
   kind=9 role=1 rect=24,2,56,21 id=pane.1 label=Editor pane 1 content= cmd=
   kind=10 role=17 rect=79,2,1,21 id=pane.1.scrollbar label=Scrollbar for editor pane 1 content= cmd=
 palette=none
@@ -799,7 +801,7 @@ prompt=none
 panes:
   id=1 frame=0,2,80,21 content=0,2,79,21 scrollbar=79,2,1,21
 tabHits:
-  index=0 rect=0,1,10,1
+  index=0 rect=0,1,8,1
 a11y:
   kind=0 role=10 rect=0,0,80,1 id=header label=Status header content= cmd=
   kind=2 role=11 rect=0,23,80,1 id=footer label=Status footer content= cmd=
@@ -816,7 +818,7 @@ a11y:
   kind=3 role=11 rect=47,23,5,1 id=git_repository label=Git repository content=ssg cmd=
   kind=3 role=11 rect=53,23,5,1 id=file_type label=File type content=C++ cmd=
   kind=5 role=7 rect=0,1,80,1 id=tabs label=Open tabs content= cmd=
-  kind=6 role=6 rect=0,1,10,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
+  kind=6 role=6 rect=0,1,8,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
   kind=9 role=1 rect=0,2,80,21 id=pane.1 label=Editor pane 1 content= cmd=
   kind=10 role=17 rect=79,2,1,21 id=pane.1.scrollbar label=Scrollbar for editor pane 1 content= cmd=
 palette=none
@@ -833,7 +835,7 @@ prompt=none
 panes:
   id=1 frame=0,2,80,21 content=0,2,79,21 scrollbar=79,2,1,21
 tabHits:
-  index=0 rect=0,1,10,1
+  index=0 rect=0,1,8,1
 a11y:
   kind=0 role=10 rect=0,0,80,1 id=header label=Status header content= cmd=
   kind=2 role=11 rect=0,23,80,1 id=footer label=Status footer content= cmd=
@@ -850,7 +852,7 @@ a11y:
   kind=3 role=11 rect=47,23,5,1 id=git_repository label=Git repository content=ssg cmd=
   kind=3 role=11 rect=53,23,5,1 id=file_type label=File type content=C++ cmd=
   kind=5 role=7 rect=0,1,80,1 id=tabs label=Open tabs content= cmd=
-  kind=6 role=6 rect=0,1,10,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
+  kind=6 role=6 rect=0,1,8,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
   kind=9 role=1 rect=0,2,80,21 id=pane.1 label=Editor pane 1 content= cmd=
   kind=10 role=17 rect=79,2,1,21 id=pane.1.scrollbar label=Scrollbar for editor pane 1 content= cmd=
   kind=12 role=1 rect=0,2,79,21 id=pane.1.empty label=Empty editor content=Empty editor cmd=
@@ -902,7 +904,7 @@ prompt=none
 panes:
   id=1 frame=30,4,50,18 content=30,4,48,18 scrollbar=78,4,2,18
 tabHits:
-  index=0 rect=30,2,10,2
+  index=0 rect=30,2,8,2
 a11y:
   kind=0 role=10 rect=0,0,80,2 id=header label=Status header content= cmd=
   kind=2 role=11 rect=0,22,80,2 id=footer label=Status footer content= cmd=
@@ -922,7 +924,7 @@ a11y:
   kind=8 role=9 rect=0,2,30,20 id=panel.provider label=Files content=Files cmd=
   kind=10 role=17 rect=28,3,2,19 id=panel.scrollbar label=Panel scrollbar content= cmd=
   kind=5 role=7 rect=30,2,50,2 id=tabs label=Open tabs content= cmd=
-  kind=6 role=6 rect=30,2,10,2 id=tab.0 label=main.cpp tab content=main.cpp cmd=
+  kind=6 role=6 rect=30,2,8,2 id=tab.0 label=main.cpp tab content=main.cpp cmd=
   kind=9 role=1 rect=30,4,50,18 id=pane.1 label=Editor pane 1 content= cmd=
   kind=10 role=17 rect=78,4,2,18 id=pane.1.scrollbar label=Scrollbar for editor pane 1 content= cmd=
 palette=none

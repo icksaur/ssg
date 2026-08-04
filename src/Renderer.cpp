@@ -395,6 +395,7 @@ void paintShellLeaves(CellGrid& grid, ShellViewState const& shell,
         case ShellNodeKind::FooterAction:
         case ShellNodeKind::FooterHint:
         case ShellNodeKind::Tab:
+        case ShellNodeKind::TabSeparator:
         case ShellNodeKind::EmptyState:
             // Chrome backgrounds (M-theme): header/footer fields sit on their
             // distinct band; an inactive tab is a light chip, while the active
@@ -405,13 +406,13 @@ void paintShellLeaves(CellGrid& grid, ShellViewState const& shell,
                        node.kind == ShellNodeKind::FooterAction ||
                        node.kind == ShellNodeKind::FooterHint) {
                 nodeBackground = footerBackground;
-            } else if (node.kind == ShellNodeKind::Tab) {
+            } else if (node.kind == ShellNodeKind::Tab ||
+                       node.kind == ShellNodeKind::TabSeparator) {
                 nodeBackground = node.role == SemanticRole::TabInactive
                                      ? tabInactiveBackground
                                      : background;
-                // Fill the whole chip (it is wider than its label by the tab
-                // padding) so the background reads as a solid tab, not just
-                // behind the text.
+                // Fill the whole chip so the background reads as a solid tab, not
+                // just behind the text; the separator fills its gap the same way.
                 fillRect(grid, node.rect, semanticIndex(theme, node.role),
                          nodeBackground, node.role);
             }

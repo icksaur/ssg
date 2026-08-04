@@ -3,6 +3,7 @@
 #include <ssg/CommandCatalog.h>
 #include <ssg/CommandSpecBuilder.h>
 #include <ssg/Keymap.h>
+#include <ssg/Style.h>
 #include <ssg/SyntaxModel.h>
 #include <ssg/command_metadata.h>
 
@@ -45,15 +46,42 @@ constexpr std::string_view kHelpConfigSection =
     "## Configuring SSG\n"
     "\n"
     "SSG reads an optional init.lua at startup (see doc/config.md). From it you\n"
-    "can recolor every UI role and syntax scope with theme.set, and rebind keys\n"
-    "with keymap.bind / keymap.unbind. A missing init.lua is not an error.\n"
+    "can recolor every UI role and syntax scope with theme.set, rebind keys with\n"
+    "keymap.bind / keymap.unbind, and change the glyphs SSG draws its chrome with\n"
+    "using style.define. A missing init.lua is not an error.\n"
     "\n"
     "Example:\n"
     "\n"
     "    ssg.command(\"keymap.bind\", { sequence = \"Alt+KeyH\", command = \"help.open\" })\n"
     "\n"
-    "## All commands\n"
+    "### Chrome glyphs\n"
+    "\n"
+    "style.define replaces any of these glyphs; the value shown is what is drawn\n"
+    "now. Most must keep their current width, but the tab edge and separator\n"
+    "glyphs may be any width. Example:\n"
+    "\n"
+    "    ssg.command(\"style.define\", { tab_separator = \" | \" })\n"
     "\n";
+
+// The chrome-glyph listing, one Markdown item per style.define glyph key with
+// its current value quoted so spaces and empties are visible. Generated from
+// styleGlyphValues so a newly added glyph appears here without a second list.
+// The value is escaped so a glyph containing a quote or backslash stays a valid,
+// copy-pasteable Lua string literal.
+std::string renderGlyphList(Style const& style) {
+    std::string out;
+    for (auto const& [key, value] : styleGlyphValues(style)) {
+        out += "- `";
+        out += key;
+        out += "` = \"";
+        for (char c : value) {
+            if (c == '\\' || c == '"') out += '\\';
+            out += c;
+        }
+        out += "\"\n";
+    }
+    return out;
+}
 
 std::string humanBindingLabel(CommandCatalog const& catalog,
                               std::string const& commandId) {
@@ -124,6 +152,8 @@ std::string buildHelpDocument(EditorRuntime::Impl const& runtime) {
     std::string document{kHelpPreamble};
     document += renderKeybindings(runtime.keymap, catalog);
     document += kHelpConfigSection;
+    document += renderGlyphList(runtime.style);
+    document += "\n## All commands\n";
     document += renderCommandList(catalog);
     return document;
 }

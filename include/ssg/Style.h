@@ -5,6 +5,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <unordered_map>
 #include <vector>
 
@@ -48,6 +49,14 @@ struct TabGlyphs {
     std::string dirtySuffix = " *";
     std::string liveDiffPrefix = "D ";
     std::string readOnlySuffix = " (readonly)";
+    // Layout-affecting (variable-width) glyphs: the tab row recomputes its rects
+    // from their actual width, so unlike the fixed-slot glyphs above these may be
+    // reconfigured to any width.  A tab draws as leftEdge + title + rightEdge and
+    // tabs are parted by `separator`.  Defaults reproduce a tight row with one
+    // space between tabs.
+    std::string leftEdge = "";
+    std::string rightEdge = "";
+    std::string separator = " ";
     friend bool operator==(TabGlyphs const&, TabGlyphs const&) = default;
 };
 
@@ -176,5 +185,12 @@ struct StyleDefineResult {
 // the two lists are hand-maintained in different files (this and Protocol.cpp),
 // and this is the guard against them drifting apart.
 [[nodiscard]] std::vector<std::string> styleDefineKeys();
+
+// Every glyph style.define key paired with its current value in `style`, sorted
+// by key.  Drives the help system's chrome-glyph listing so a newly added glyph
+// (like a tab edge) documents itself with no second list to maintain.  Dimension
+// keys are excluded -- this is glyphs only.
+[[nodiscard]] std::vector<std::pair<std::string, std::string>> styleGlyphValues(
+    Style const& style);
 
 }  // namespace ssg

@@ -615,14 +615,20 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
             view.tabBar = solved->find("tabbar")->rect;
             addNode(view, ShellNodeKind::TabBar, "tabs", "Open tabs",
                      *view.tabBar, SemanticRole::TabInactive);
-            // Each tab's width, so the window below can be chosen before any of
-            // them is placed.
-            auto const tabWidth = [&](TabLabel const& tab) {
-                std::string const display =
-                    tab.dirty ? tab.title + request.style.tab.dirtySuffix : tab.title;
-                return std::max(1, displayCells(display) +
-                                       request.style.dimensions.labelPadding);
+            // A tab draws as leftEdge + title[+dirtySuffix] + rightEdge; its width
+            // is measured from that, with no fixed padding.  Consecutive tabs are
+            // parted by the separator glyph, emitted as its own non-interactive
+            // node.
+            auto const chipDisplay = [&](TabLabel const& tab) {
+                std::string display = request.style.tab.leftEdge + tab.title;
+                if (tab.dirty) display += request.style.tab.dirtySuffix;
+                display += request.style.tab.rightEdge;
+                return display;
             };
+            auto const tabWidth = [&](TabLabel const& tab) {
+                return std::max(1, displayCells(chipDisplay(tab)));
+            };
+            int const separatorWidth = displayCells(request.style.tab.separator);
             // Which tab the bar starts at.  Tabs used to lay out from the first and
             // simply stop at the edge, so opening enough of them put the active tab
             // off-screen -- invisible AND unclickable, with no way back to it but the
@@ -642,32 +648,48 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
                 }
                 int used = 0;
                 for (std::size_t i = 0; i <= active; ++i) used += tabWidth(request.tabs[i]);
+                used += static_cast<int>(active) * separatorWidth;
                 while (firstTab < active && used > view.tabBar->width) {
-                    used -= tabWidth(request.tabs[firstTab]);
+                    used -= tabWidth(request.tabs[firstTab]) + separatorWidth;
                     ++firstTab;
                 }
             }
             int tabX = view.tabBar->x;
+            bool placedAny = false;
             for (std::size_t i = firstTab; i < request.tabs.size(); ++i) {
                 const auto& tab = request.tabs[i];
-                const std::string display =
-                    tab.dirty ? tab.title + request.style.tab.dirtySuffix
-                              : tab.title;
-                const int width =
-                    std::min(view.tabBar->right() - tabX,
-                             std::max(1, displayCells(display) +
-                                              request.style.dimensions.labelPadding));
-                if (width <= 0 || tab.accessibleLabel.empty()) break;
+                if (tab.accessibleLabel.empty()) break;
+                // A separator sits BETWEEN placed tabs, so it is reserved before the
+                // tab it precedes and emitted only once that tab is confirmed to
+                // fit.  Keying it off the tab that actually lands -- rather than the
+                // logical next index -- is what keeps a separator from dangling past
+                // the last visible tab when the row runs out of room.
+                const int separatorReserve =
+                    (placedAny && separatorWidth > 0)
+                        ? std::min(view.tabBar->right() - tabX, separatorWidth)
+                        : 0;
+                const int chipX = tabX + separatorReserve;
+                const std::string display = chipDisplay(tab);
+                const int width = std::min(view.tabBar->right() - chipX,
+                                           std::max(1, displayCells(display)));
+                if (width <= 0) break;
+                if (separatorReserve > 0) {
+                    addNode(view, ShellNodeKind::TabSeparator,
+                             "tabsep." + std::to_string(i), "",
+                             {tabX, view.tabBar->y, separatorReserve, tabBarHeight},
+                             SemanticRole::TabInactive, request.style.tab.separator);
+                }
                 addNode(view, ShellNodeKind::Tab, "tab." + std::to_string(i),
                          tab.accessibleLabel,
-                         {tabX, view.tabBar->y, width, tabBarHeight},
+                         {chipX, view.tabBar->y, width, tabBarHeight},
                          tab.active ? SemanticRole::TabActive :
                                       SemanticRole::TabInactive,
                          display);
                 view.tabHits.push_back(
-                    TabHit{{tabX, view.tabBar->y, width, tabBarHeight},
+                    TabHit{{chipX, view.tabBar->y, width, tabBarHeight},
                            static_cast<std::uint32_t>(i)});
-                tabX += width;
+                tabX = chipX + width;
+                placedAny = true;
             }
         }
 

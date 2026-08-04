@@ -3,6 +3,7 @@
 #include <ssg/Style.h>
 
 #include <fstream>
+#include <algorithm>
 #include <iostream>
 #include <iterator>
 #include <string>
@@ -66,6 +67,9 @@ std::string currentGlyph(ssg::Style const& style, std::string const& key) {
     if (key == "tab_dirty_suffix") return style.tab.dirtySuffix;
     if (key == "tab_live_diff_prefix") return style.tab.liveDiffPrefix;
     if (key == "tab_read_only_suffix") return style.tab.readOnlySuffix;
+    if (key == "tab_left_edge") return style.tab.leftEdge;
+    if (key == "tab_right_edge") return style.tab.rightEdge;
+    if (key == "tab_separator") return style.tab.separator;
     if (key == "toggle_checked") return style.toggle.checked;
     if (key == "toggle_unchecked") return style.toggle.unchecked;
     if (key == "truncation") return style.truncation;
@@ -409,12 +413,48 @@ TEST(everyGlyphFieldIsValidatedAndEveryDefaultIsValid) {
     ASSERT_EQ(declared, glyphKeys);
 }
 
+TEST(aVariableWidthTabGlyphAcceptsAnyWidthWhileFixedGlyphsDoNot) {
+    ssg::Style const defaults{};
+
+    // Tab edges and separator are layout-affecting: the tab row recomputes its
+    // geometry from the configured width, so a value wider than the default is
+    // legal.  leftEdge defaults to "" (width 0); "[" (width 1) must be accepted.
+    for (auto const& key : {std::string{"tab_left_edge"},
+                            std::string{"tab_right_edge"},
+                            std::string{"tab_separator"}}) {
+        auto const applied = ssg::applyStyleDefine(
+            defaults, ssg::StyleDefineArguments{{{key, " | "}}});
+        ASSERT_TRUE(applied.accepted());
+    }
+
+    // A fixed-slot glyph of the wrong width is still refused: the contrast is
+    // the whole point of the two categories.
+    auto const fixed = ssg::applyStyleDefine(
+        defaults, ssg::StyleDefineArguments{{{"tab_dirty_suffix", " *!"}}});
+    ASSERT_FALSE(fixed.accepted());
+
+    // A variable glyph still rejects control characters / invalid bytes.
+    auto const control = ssg::applyStyleDefine(
+        defaults, ssg::StyleDefineArguments{{{"tab_separator", "\x1b(0"}}});
+    ASSERT_FALSE(control.accepted());
+}
+
+TEST(styleDefineKeysAreUniqueSoNoGlyphLivesInTwoCategories) {
+    // A key present in both glyphSetters() and variableGlyphSetters() would make
+    // validation order a hidden contract.  styleDefineKeys() concatenates every
+    // map, so a duplicate here proves an overlap.
+    auto keys = ssg::styleDefineKeys();
+    std::sort(keys.begin(), keys.end());
+    ASSERT_TRUE(std::adjacent_find(keys.begin(), keys.end()) == keys.end());
+}
+
 int main() {
-    RUN(aStyleGlyphThatEmitsAModeIsRejectedNamingItsKey);
     RUN(aStyleGlyphOfTheWrongWidthIsRejectedNamingItsKey);
     RUN(aStyleGlyphMatchingItsFieldsWidthIsAccepted);
     RUN(aRejectedGlyphChangesNothing);
     RUN(everyGlyphFieldIsValidatedAndEveryDefaultIsValid);
+    RUN(aVariableWidthTabGlyphAcceptsAnyWidthWhileFixedGlyphsDoNot);
+    RUN(styleDefineKeysAreUniqueSoNoGlyphLivesInTwoCategories);
     RUN(scrollbarUsesTheGlyphsItWasConfiguredWith);
     RUN(aUniformThumbNeedsNoCapAwareness);
     RUN(theResolvedThumbAlwaysCoversExactlyItsRequestedRows);

@@ -687,19 +687,124 @@ TEST(labelWidthsAreMeasuredInCellsNotBytes) {
     if (!asciiResult.accepted()) return;
 
     // Two fullwidth characters: 4 bytes each, 2 cells each.  Measured in cells
-    // this tab is 4 wide plus padding; measured in bytes it would be 8.
+    // this tab is 4 wide; measured in bytes it would be 8.  Tabs are tight by
+    // default (empty edge glyphs, no padding), so the hit rect is the label.
     auto wide = request(100, 24);
     wide.tabs = {{"\xef\xbc\xa1\xef\xbc\xa2", "wide tab", true}};
     auto wideResult = computeShellLayout(wide, state);
     ASSERT_TRUE(wideResult.accepted());
     if (!wideResult.accepted()) return;
 
-    ASSERT_EQ(asciiResult.view->tabHits.front().rect.width, 4);
-    ASSERT_EQ(wideResult.view->tabHits.front().rect.width, 6);
+    ASSERT_EQ(asciiResult.view->tabHits.front().rect.width, 2);
+    ASSERT_EQ(wideResult.view->tabHits.front().rect.width, 4);
+}
+
+// Default tabs are tight: no trailing padding, exactly one separator cell
+// between adjacent tabs, emitted as its own TabSeparator node.
+TEST(defaultTabsAreTightWithOneSeparatorCellBetween) {
+    ShellState state;
+    auto req = request(100, 24);
+    req.tabs = {{"aa", "aa tab", true}, {"bb", "bb tab", false}};
+    auto result = computeShellLayout(req, state);
+    ASSERT_TRUE(result.accepted());
+    if (!result.accepted()) return;
+
+    auto const& hits = result.view->tabHits;
+    ASSERT_EQ(hits.size(), std::size_t{2});
+    ASSERT_EQ(hits[0].rect.width, 2);
+    ASSERT_EQ(hits[1].rect.width, 2);
+    // One separator cell sits in the gap: second tab starts one past the first.
+    ASSERT_EQ(hits[1].rect.x, hits[0].rect.right() + 1);
+
+    std::size_t separators = 0;
+    for (auto const& node : result.view->accessibilityNodes) {
+        if (node.kind == ShellNodeKind::TabSeparator) {
+            ++separators;
+            ASSERT_EQ(node.rect.width, 1);
+            ASSERT_EQ(node.rect.x, hits[0].rect.right());
+        }
+    }
+    ASSERT_EQ(separators, std::size_t{1});
+}
+
+// Configured edge glyphs widen each tab; a multi-cell separator widens the gap
+// and its glyph is carried on the TabSeparator node.
+TEST(configuredTabEdgeAndSeparatorGlyphsChangeGeometry) {
+    ShellState state;
+    auto req = request(100, 24);
+    req.style.tab.leftEdge = "[";
+    req.style.tab.rightEdge = "]";
+    req.style.tab.separator = " | ";
+    req.tabs = {{"aa", "aa tab", false}, {"bb", "bb tab", false}};
+    auto result = computeShellLayout(req, state);
+    ASSERT_TRUE(result.accepted());
+    if (!result.accepted()) return;
+
+    auto const& hits = result.view->tabHits;
+    ASSERT_EQ(hits.size(), std::size_t{2});
+    // "[aa]" = 4 cells.
+    ASSERT_EQ(hits[0].rect.width, 4);
+    ASSERT_EQ(hits[1].rect.width, 4);
+    // " | " = 3 cells between the tabs.
+    ASSERT_EQ(hits[1].rect.x, hits[0].rect.right() + 3);
+
+    bool sawSeparator = false;
+    for (auto const& node : result.view->accessibilityNodes) {
+        if (node.kind == ShellNodeKind::TabSeparator) {
+            sawSeparator = true;
+            ASSERT_EQ(node.rect.width, 3);
+            ASSERT_EQ(node.content, std::string{" | "});
+        }
+    }
+    ASSERT_TRUE(sawSeparator);
+}
+
+// The active tab stays visible when separators and edge glyphs push earlier
+// tabs off the left -- the firstTab window must count separator width, not just
+// the tabs.  Uses a multi-cell separator and non-empty edges in a tight bar.
+TEST(activeTabStaysVisibleWhenSeparatorsPushEarlierTabsOff) {
+    ShellState state;
+    auto req = request(24, 24);  // narrow bar
+    req.style.tab.leftEdge = "[";
+    req.style.tab.rightEdge = "]";
+    req.style.tab.separator = " | ";
+    req.tabs = {{"one", "one tab", false}, {"two", "two tab", false},
+                {"three", "three tab", false}, {"four", "four tab", true}};
+    auto result = computeShellLayout(req, state);
+    ASSERT_TRUE(result.accepted());
+    if (!result.accepted()) return;
+
+    bool activeVisible = false;
+    for (auto const& hit : result.view->tabHits) {
+        if (hit.index == 3) activeVisible = true;
+    }
+    ASSERT_TRUE(activeVisible);
+}
+
+// A separator is never emitted unless a following tab is actually placed: when
+// the row has room for the gap but not the next chip, no dangling separator is
+// left past the last visible tab.  The separator count equals gaps between the
+// tabs that landed (placed - 1).
+TEST(noTabSeparatorDanglesPastTheLastPlacedTab) {
+    ShellState state;
+    auto req = request(14, 24);
+    req.style.dimensions.minimumColumns = 8;
+    req.style.tab.separator = " || ";  // 4 cells
+    req.tabs = {{"alpha", "alpha tab", true}, {"bravo", "bravo tab", false},
+                {"charlie", "charlie tab", false}};
+    auto result = computeShellLayout(req, state);
+    ASSERT_TRUE(result.accepted());
+    if (!result.accepted()) return;
+
+    std::size_t separators = 0;
+    for (auto const& node : result.view->accessibilityNodes) {
+        if (node.kind == ShellNodeKind::TabSeparator) ++separators;
+    }
+    ASSERT_TRUE(result.view->tabHits.size() >= std::size_t{1});
+    ASSERT_EQ(separators, result.view->tabHits.size() - 1);
 }
 
 // ---------------------------------------------------------------------------
-// Golden fixture (spec-layout-engine.md, Plan step 1): a deterministic dump of
 // computeShellLayout's full ShellViewState across a broad input matrix, captured
 // from the CURRENT code and committed. The layout-engine rearchitecture must
 // reproduce this byte-for-byte. The palette overlay is added downstream in
@@ -933,6 +1038,10 @@ int main() {
     RUN(shellLayoutTakesItsDimensionsAndSigilFromStyle);
     RUN(chromeHeightsAndGutterWidthAreHonoured);
     RUN(labelWidthsAreMeasuredInCellsNotBytes);
+    RUN(defaultTabsAreTightWithOneSeparatorCellBetween);
+    RUN(configuredTabEdgeAndSeparatorGlyphsChangeGeometry);
+    RUN(activeTabStaysVisibleWhenSeparatorsPushEarlierTabsOff);
+    RUN(noTabSeparatorDanglesPastTheLastPlacedTab);
     RUN(shellLayoutMatchesTheCommittedGolden);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << '\n';
     return failed == 0 ? 0 : 1;
