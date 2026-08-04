@@ -200,6 +200,48 @@ TEST(lineNumberGutterPaintsNumbersAndHighlightsTheCaretLine) {
               ssg::SemanticRole::CurrentLineNumber);
     ASSERT_EQ(grid.at(gx, pane.lineNumbers.y + 0).role,
               ssg::SemanticRole::LineNumber);
+    // The inactive gutter has its own background band: distinct from the
+    // document content background beside it AND from the current line's band.
+    auto gutterBg = [&](int row) {
+        return grid.colors[grid.at(gx, pane.lineNumbers.y + row).background];
+    };
+    auto const contentBg =
+        grid.colors[grid.at(pane.content.x, pane.content.y).background];
+    ASSERT_TRUE(gutterBg(0) != contentBg);
+    ASSERT_TRUE(gutterBg(0) != gutterBg(1));
+    std::filesystem::remove_all(root);
+}
+
+TEST(lineNumberGutterHighlightsEveryCursorLineNotJustThePrimary) {
+    auto root = uniqueRoot();
+    std::ofstream{root / "m.txt"} << "one\ntwo\nthree\nfour\n";
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(
+        ssg::ClientId{1},
+        {"file.open", runtime->revision(), std::string{"m.txt"}});
+    (void)runtime->dispatch(
+        ssg::ClientId{1}, {"view.toggle_line_numbers", runtime->revision(), {}});
+    // Add a second cursor on the line below: carets now on lines 1 and 2.
+    (void)runtime->dispatch(ssg::ClientId{1},
+                            {"select.add_cursor_down", runtime->revision(), {}});
+
+    auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+    ASSERT_TRUE(snapshot.has_value());
+    if (!snapshot) return;
+    ASSERT_EQ(snapshot->sections().selection.selections.items().size(),
+              std::size_t{2});
+    auto const& pane = snapshot->sections().shell.panes.front();
+    auto grid = ssg::Renderer{}.render(*snapshot);
+    int const gx = pane.lineNumbers.x;
+    auto roleAt = [&](int row) {
+        return grid.at(gx, pane.lineNumbers.y + row).role;
+    };
+    // Both cursor lines (rows 0 and 1) highlight; the cursor-free line 3 does not.
+    ASSERT_EQ(roleAt(0), ssg::SemanticRole::CurrentLineNumber);
+    ASSERT_EQ(roleAt(1), ssg::SemanticRole::CurrentLineNumber);
+    ASSERT_EQ(roleAt(2), ssg::SemanticRole::LineNumber);
     std::filesystem::remove_all(root);
 }
 
@@ -1564,6 +1606,7 @@ int main() {
     RUN(chromeBackgroundsShareOneBandAndTheActiveTabMergesWithTheDocument);
     RUN(renderPaintsContentNotAccessibilityLabels);
     RUN(lineNumberGutterPaintsNumbersAndHighlightsTheCaretLine);
+    RUN(lineNumberGutterHighlightsEveryCursorLineNotJustThePrimary);
     RUN(renderSegmentsOnlyVisibleLinesNotWholeDocument);
     RUN(wordWrapOffRendersHorizontallyScrolledContent);
     RUN(renderColorsAreInBoundsColorSlots);
