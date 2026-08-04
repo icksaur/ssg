@@ -951,6 +951,47 @@ TEST(decodeKittyKeyHandCasesAndCapsLockImmunity) {
     ASSERT_FALSE(esc.stroke.alt);
 }
 
+TEST(everyEnterEncodingNormalizesToBareEnter) {
+    std::size_t consumed = 0;
+    auto isBareEnter = [](ssg::app::Decoded const& d) {
+        return d.status == ssg::app::DecodeStatus::key &&
+               d.stroke.code == ssg::KeyCode::Enter && !d.stroke.shift &&
+               !d.stroke.control && !d.stroke.alt && !d.stroke.meta;
+    };
+
+    // Plain CR / LF stay bare Enter (regression guard).
+    ASSERT_TRUE(isBareEnter(ssg::app::decode_input("\r", true, consumed)));
+    ASSERT_TRUE(isBareEnter(ssg::app::decode_input("\n", true, consumed)));
+
+    // Kitty modified Enter (CSI 13 ; mods u): Shift, Ctrl, Alt, Ctrl+Alt, and
+    // Meta (bit5) all fold onto a bare Enter so the newline binding fires.
+    ASSERT_TRUE(isBareEnter(ssg::app::decode_input("\x1b[13;2u", true, consumed)));
+    ASSERT_TRUE(isBareEnter(ssg::app::decode_input("\x1b[13;5u", true, consumed)));
+    ASSERT_TRUE(isBareEnter(ssg::app::decode_input("\x1b[13;3u", true, consumed)));
+    ASSERT_TRUE(isBareEnter(ssg::app::decode_input("\x1b[13;8u", true, consumed)));
+    ASSERT_TRUE(isBareEnter(ssg::app::decode_input("\x1b[13;33u", true, consumed)));
+
+    // Kitty keypad Enter (KP_ENTER = 57414), plain and modified.
+    ASSERT_TRUE(isBareEnter(ssg::app::decode_input("\x1b[57414u", true, consumed)));
+    ASSERT_TRUE(
+        isBareEnter(ssg::app::decode_input("\x1b[57414;2u", true, consumed)));
+
+    // SS3 numpad Enter (application-keypad mode): ESC O M, consumed whole.
+    auto ss3 = ssg::app::decode_input("\x1bOM", true, consumed);
+    ASSERT_TRUE(isBareEnter(ss3));
+    ASSERT_EQ(consumed, std::size_t{3});
+
+    // Alt-prefixed SS3 numpad Enter (ESC ESC O M) rides the recursive alt-chord
+    // path; the outer normalization still strips the folded-in Alt.
+    ASSERT_TRUE(isBareEnter(ssg::app::decode_input("\x1b\x1bOM", true, consumed)));
+
+    // ESC [ M (X10 mouse) must NOT be mistaken for Enter -- only the SS3
+    // introducer means numpad Enter.
+    auto mouse = ssg::app::decode_input("\x1b[M\x20\x21\x21", true, consumed);
+    ASSERT_TRUE(mouse.status != ssg::app::DecodeStatus::key ||
+                mouse.stroke.code != ssg::KeyCode::Enter);
+}
+
 TEST(decodeKittyKeySelfIdentifyingAndMalformed) {
     std::size_t consumed = 0;
     // A private-prefixed `CSI ? ... u` is the KEYBOARD-PROTOCOL capability reply,
@@ -2655,6 +2696,7 @@ int main() {
     RUN(decodeInputStripsLockModifiersFromFunctionalKeys);
     RUN(decodeKittyKeyMatchesEveryDefaultBinding);
     RUN(decodeKittyKeyHandCasesAndCapsLockImmunity);
+    RUN(everyEnterEncodingNormalizesToBareEnter);
     RUN(decodeKittyKeySelfIdentifyingAndMalformed);
     RUN(decodeInputModifiedArrowSplitReadsAreIncomplete);
     RUN(decodeInputDeleteKeyPlainAndModified);

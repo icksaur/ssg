@@ -101,6 +101,34 @@ bool hasError(const std::vector<ssg::KeymapError>& errors,
 
 }  // namespace
 
+TEST(validateKeymapRejectsModifiedEnterBindings) {
+    // Every Enter keypress is normalized to a bare Enter at the input decoder,
+    // so a modified-Enter binding could never fire.  The validator refuses it
+    // rather than accept a dead binding (doc/spec-enter-newline.md).
+    const auto bareEnter = *ssg::KeyCodec{}.parseSequence({"Enter"});
+    ssg::KeymapViewState ok{"m", {{bareEnter, "text.newline", "editor"}}};
+    ASSERT_FALSE(hasError(ssg::KeymapMatcher{ok}.validate({}),
+                          ssg::KeymapErrorCode::ModifiedEnterBinding));
+
+    for (const auto* modified : {"Shift+Enter", "Ctrl+Enter", "Alt+Enter",
+                                 "Meta+Enter"}) {
+        const auto sequence = *ssg::KeyCodec{}.parseSequence({modified});
+        ssg::KeymapViewState bad{"m", {{sequence, "text.newline", "editor"}}};
+        ASSERT_TRUE(hasError(ssg::KeymapMatcher{bad}.validate({}),
+                             ssg::KeymapErrorCode::ModifiedEnterBinding));
+    }
+
+    // The live rebind path (keymap.bind) surfaces the same rejection.
+    const auto settingsSeq = *ssg::KeyCodec{}.parseSequence({"Alt+KeyS"});
+    ssg::KeymapViewState base{"m", {{settingsSeq, "settings.open", "*"}}};
+    ASSERT_FALSE(
+        ssg::applyKeymapBind(base, {"Shift+Enter", "text.newline", "editor"})
+            .accepted());
+    ASSERT_TRUE(
+        ssg::applyKeymapBind(base, {"Enter", "text.newline", "editor"})
+            .accepted());
+}
+
 TEST(validateKeymapRejectsUnknownContext) {
     const auto seq = *ssg::KeyCodec{}.parseSequence({"ArrowDown"});
     ssg::KeymapViewState bad{"bad", {{seq, "cursor.line_down", "sidebar"}}};
@@ -478,6 +506,7 @@ int main() {
     RUN(keyStrokesHaveACanonicalRoundTrip);
     RUN(validateKeymapFlagsDuplicateUnreachableAndReservedBindings);
     RUN(keymapContextsAreStarPlusFocusNames);
+    RUN(validateKeymapRejectsModifiedEnterBindings);
     RUN(validateKeymapRejectsUnknownContext);
     RUN(validateKeymapRejectsMultiStrokeBindings);
     RUN(resolveKeySequenceMapsSameKeyPerContext);
