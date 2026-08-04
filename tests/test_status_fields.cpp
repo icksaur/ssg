@@ -100,6 +100,25 @@ TEST(pathFieldRespectsComponentBoundary) {
     if (path) ASSERT_EQ(path->value, std::string{"/home/username2/project"});
 }
 
+// The configurable CWD prefix glyph (Style::cwdPrefix) is drawn immediately left
+// of the abbreviated path.  Empty by default (the other oracles prove no prefix
+// leaks in); a set value is prepended verbatim.
+TEST(pathFieldPrependsTheConfiguredCwdPrefix) {
+    auto const catalog = ssg::p0StatusFieldCatalog();
+    auto const providers = providerMap();
+    ssg::StatusFieldProviderContext context;
+    context.workspaceRoot = "/home/user/project";
+    context.homeDirectory = "/home/user";
+    context.cwdPrefix = "\xF0\x9F\x93\x81 ";  // folder + space
+
+    auto projection = ssg::projectStatusFields(catalog, providers, context);
+    const auto* path = find(projection.headerFields, "path");
+    ASSERT_TRUE(path != nullptr);
+    if (path) {
+        ASSERT_EQ(path->value, std::string{"\xF0\x9F\x93\x81 ~/project"});
+    }
+}
+
 }  // namespace
 
 int main() {
@@ -108,6 +127,7 @@ int main() {
     RUN(pathFieldUnknownHomeIsNotAbbreviated);
     RUN(pathEqualToHomeBecomesTilde);
     RUN(pathFieldRespectsComponentBoundary);
+    RUN(pathFieldPrependsTheConfiguredCwdPrefix);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

@@ -447,8 +447,38 @@ TEST(typingInTheInputLineNeverMovesTheStatusFields) {
     }
 }
 
-// A focused text input that accepts keys while being invisible is worse than a
-// field that moved, so at a narrow header the fields yield instead.
+// A header field whose value contains a wide/multibyte glyph (as a configured
+// cwd_prefix produces) must be sized in DISPLAY CELLS, not bytes: a CJK glyph is
+// 3 bytes but 2 cells, so a byte-width would oversize the node rect (and its
+// click region) and drop later fields too early.
+TEST(headerFieldWidthIsMeasuredInCellsNotBytes) {
+    auto asciiReq = request(120, 12);
+    asciiReq.headerFields = {{"current_path", "Current path", "xx", 1}};
+    ShellState asciiState;
+    auto asciiResult = computeShellLayout(asciiReq, asciiState);
+    ASSERT_TRUE(asciiResult.accepted());
+    if (!asciiResult.accepted()) return;
+    const auto* asciiPath = findNode(*asciiResult.view, "current_path");
+    ASSERT_TRUE(asciiPath != nullptr);
+
+    // "\xE4\xB8\xAD" (U+4E2D) is a fullwidth CJK glyph: 3 bytes, 2 cells -- the
+    // same visible width as "xx" but a different byte count.
+    auto wideReq = request(120, 12);
+    wideReq.headerFields = {
+        {"current_path", "Current path", "\xE4\xB8\xAD", 1}};
+    ShellState wideState;
+    auto wideResult = computeShellLayout(wideReq, wideState);
+    ASSERT_TRUE(wideResult.accepted());
+    if (!wideResult.accepted()) return;
+    const auto* widePath = findNode(*wideResult.view, "current_path");
+    ASSERT_TRUE(widePath != nullptr);
+
+    // Equal cell width -> equal node rect width (a byte measure would make the
+    // wide one one column wider: 3 bytes vs 2).
+    if (asciiPath && widePath) {
+        ASSERT_EQ(widePath->rect.width, asciiPath->rect.width);
+    }
+}
 // The narrow case is where a query-length-dependent reservation would betray
 // the whole point: if the reservation grows with the query, the fields shrink
 // as the user types and start collapsing again. Assert stability at a width
@@ -1028,6 +1058,7 @@ int main() {
     RUN(hidingAnUnfocusedPanelLeavesFocusUntouched);
     RUN(typingInTheInputLineNeverMovesTheStatusFields);
     RUN(anOpenPickerHidesTheTabBarAndReclaimsItsRow);
+    RUN(headerFieldWidthIsMeasuredInCellsNotBytes);
     RUN(fieldsAreStableEvenWhenTheHeaderIsTight);
     RUN(headerNodesNeverOverlap);
     RUN(anOverlongQueryScrollsItsOwnTextAndLeavesFieldsAlone);

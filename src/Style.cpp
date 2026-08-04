@@ -56,6 +56,7 @@ variableGlyphSetters() {
         map["tab_left_edge"] = [](Style& s) -> std::string& { return s.tab.leftEdge; };
         map["tab_right_edge"] = [](Style& s) -> std::string& { return s.tab.rightEdge; };
         map["tab_separator"] = [](Style& s) -> std::string& { return s.tab.separator; };
+        map["cwd_prefix"] = [](Style& s) -> std::string& { return s.cwdPrefix; };
         return map;
     }();
     return table;
