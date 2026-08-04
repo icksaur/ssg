@@ -1333,13 +1333,13 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
         document += "line " + std::to_string(i) + " of the document\n";
     }
 
-    auto snapshot =
-        ssg::test::SessionSnapshotBuilder{}
+    auto makeSnapshot = [&](bool pickerOpen) {
+        return ssg::test::SessionSnapshotBuilder{}
             .document(document)
             .viewport(120, 40)
             .panel(true)
             .panelFocused(false)
-            .shellRequest([](ssg::ShellLayoutRequest& request) {
+            .shellRequest([pickerOpen](ssg::ShellLayoutRequest& request) {
                 request.headerFields = {
                     {"cwd", "Working directory", "~/project", 0, std::nullopt}};
                 request.footerFields = {
@@ -1350,7 +1350,7 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
                 request.notice =
                     ssg::ShellNotice{"Draft conflict",
                                      {{"diff", "Diff", "draft.diff"}}};
-                request.inputLineActive = true;
+                request.inputLineActive = pickerOpen;
                 request.inputLineQuery = "needle";
                 request.inputLineGhost = "ghost";
             })
@@ -1408,7 +1408,12 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
                 sections.findReplace.activeMatch = std::nullopt;
             })
             .build();
+    };
 
+    // A picker covers the tab bar, so tab roles paint only with it CLOSED and
+    // the input-line Prompt role only with it OPEN -- mutually exclusive states.
+    // Union both renders so every role has a frame that paints it.
+    auto snapshot = makeSnapshot(true);
     auto grid = ssg::Renderer{}.render(snapshot);
 
     // Cell-level evidence that the selection and diff surfaces actually paint,
@@ -1442,6 +1447,15 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
         emitted.insert(encode(c));
     }
     emitted.insert(encode(grid.selectionFill));
+
+    // The tab bar is hidden while the picker is open, so render a picker-CLOSED
+    // frame too and union its colors -- that is the frame in which the tab roles
+    // paint.
+    auto tabGrid = ssg::Renderer{}.render(makeSnapshot(false));
+    for (auto const& cell : tabGrid.cells) {
+        emitted.insert(encode(tabGrid.colors[cell.foreground]));
+        emitted.insert(encode(tabGrid.colors[cell.background]));
+    }
 
     for (auto const role : ssg::kAllSemanticRoles) {
         // Caret is a live cell-role TAG whose color is intentionally unread:

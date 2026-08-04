@@ -188,7 +188,8 @@ double centerY(const Rect& rect) { return rect.y + rect.height / 2.0; }
 // and are not projected. The document node is never emitted as an a11y node --
 // panes are -- so it is structural here too.
 LayoutNode buildShellTree(bool distractionFree, int headerHeight,
-                          int footerHeight, int tabBarHeight, int panelWidth) {
+                          int footerHeight, int tabBarHeight, int panelWidth,
+                          bool showTabBar) {
     const auto exact = [](int cells) { return Size::exact(cells); };
     LayoutNode document{"document", std::nullopt, Size::flex(), Axis::Column,
                         {}, {}};
@@ -196,8 +197,14 @@ LayoutNode buildShellTree(bool distractionFree, int headerHeight,
 
     LayoutNode content{"content", std::nullopt, Size::flex(), Axis::Column,
                        {}, {}};
-    content.children.push_back({"tabbar", ShellNodeKind::TabBar,
-                                exact(tabBarHeight), Axis::Row, {}, {}});
+    // A picker (palette / file find) covers the document, which is not a
+    // document view -- so the tab bar is suppressed and the picker's content
+    // fills its row.  This also removes the one-row gap the tab bar left between
+    // the input line and the results.
+    if (showTabBar) {
+        content.children.push_back({"tabbar", ShellNodeKind::TabBar,
+                                    exact(tabBarHeight), Axis::Row, {}, {}});
+    }
     content.children.push_back(std::move(document));
 
     LayoutNode body{"body", std::nullopt, Size::flex(), Axis::Row, {}, {}};
@@ -446,6 +453,10 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
     const int headerHeight = request.style.dimensions.headerHeight;
     const int footerHeight = request.style.dimensions.footerHeight;
     const int tabBarHeight = request.style.dimensions.tabBarHeight;
+    // A picker (palette / file find) is not a document view, so it covers the
+    // tab bar rather than sitting below it (removing the confusing visible tabs
+    // and the one-row gap between the input line and the results).
+    const bool showTabBar = !request.inputLineActive;
 
     // Region geometry comes from the box-tree solver (doc/spec-layout-engine.md).
     // Sizing POLICY stays here: the panel width is decided with the same rule as
@@ -464,7 +475,7 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
     }
     auto solved = solveLayout(
         buildShellTree(distractionFree, headerHeight, footerHeight, tabBarHeight,
-                       panelWidth),
+                       panelWidth, showTabBar),
         {0, 0, request.viewport.columns, request.viewport.rows});
     if (!solved) {
         return {ShellLayoutError{ShellLayoutErrorCode::ViewportTooSmall,
@@ -600,62 +611,64 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
         }
 
         editor = solved->find("document")->rect;
-        view.tabBar = solved->find("tabbar")->rect;
-        addNode(view, ShellNodeKind::TabBar, "tabs", "Open tabs",
-                 *view.tabBar, SemanticRole::TabInactive);
-        // Each tab's width, so the window below can be chosen before any of them
-        // is placed.
-        auto const tabWidth = [&](TabLabel const& tab) {
-            std::string const display =
-                tab.dirty ? tab.title + request.style.tab.dirtySuffix : tab.title;
-            return std::max(1, displayCells(display) +
-                                   request.style.dimensions.labelPadding);
-        };
-        // Which tab the bar starts at.  Tabs used to lay out from the first and
-        // simply stop at the edge, so opening enough of them put the active tab
-        // off-screen -- invisible AND unclickable, with no way back to it but the
-        // keyboard.
-        //
-        // Derived rather than stored: the smallest start index that still leaves
-        // room for the active tab.  That keeps the active tab visible, shows as
-        // many preceding tabs as fit, and needs no scroll offset to keep in sync
-        // with tabs opening, closing and being reordered.  next/previous
-        // therefore auto-scroll for free -- they move the active tab, and the
-        // window follows it.
-        std::size_t firstTab = 0;
-        if (!request.tabs.empty()) {
-            std::size_t active = 0;
-            for (std::size_t i = 0; i < request.tabs.size(); ++i) {
-                if (request.tabs[i].active) active = i;
+        if (showTabBar) {
+            view.tabBar = solved->find("tabbar")->rect;
+            addNode(view, ShellNodeKind::TabBar, "tabs", "Open tabs",
+                     *view.tabBar, SemanticRole::TabInactive);
+            // Each tab's width, so the window below can be chosen before any of
+            // them is placed.
+            auto const tabWidth = [&](TabLabel const& tab) {
+                std::string const display =
+                    tab.dirty ? tab.title + request.style.tab.dirtySuffix : tab.title;
+                return std::max(1, displayCells(display) +
+                                       request.style.dimensions.labelPadding);
+            };
+            // Which tab the bar starts at.  Tabs used to lay out from the first and
+            // simply stop at the edge, so opening enough of them put the active tab
+            // off-screen -- invisible AND unclickable, with no way back to it but the
+            // keyboard.
+            //
+            // Derived rather than stored: the smallest start index that still leaves
+            // room for the active tab.  That keeps the active tab visible, shows as
+            // many preceding tabs as fit, and needs no scroll offset to keep in sync
+            // with tabs opening, closing and being reordered.  next/previous
+            // therefore auto-scroll for free -- they move the active tab, and the
+            // window follows it.
+            std::size_t firstTab = 0;
+            if (!request.tabs.empty()) {
+                std::size_t active = 0;
+                for (std::size_t i = 0; i < request.tabs.size(); ++i) {
+                    if (request.tabs[i].active) active = i;
+                }
+                int used = 0;
+                for (std::size_t i = 0; i <= active; ++i) used += tabWidth(request.tabs[i]);
+                while (firstTab < active && used > view.tabBar->width) {
+                    used -= tabWidth(request.tabs[firstTab]);
+                    ++firstTab;
+                }
             }
-            int used = 0;
-            for (std::size_t i = 0; i <= active; ++i) used += tabWidth(request.tabs[i]);
-            while (firstTab < active && used > view.tabBar->width) {
-                used -= tabWidth(request.tabs[firstTab]);
-                ++firstTab;
+            int tabX = view.tabBar->x;
+            for (std::size_t i = firstTab; i < request.tabs.size(); ++i) {
+                const auto& tab = request.tabs[i];
+                const std::string display =
+                    tab.dirty ? tab.title + request.style.tab.dirtySuffix
+                              : tab.title;
+                const int width =
+                    std::min(view.tabBar->right() - tabX,
+                             std::max(1, displayCells(display) +
+                                              request.style.dimensions.labelPadding));
+                if (width <= 0 || tab.accessibleLabel.empty()) break;
+                addNode(view, ShellNodeKind::Tab, "tab." + std::to_string(i),
+                         tab.accessibleLabel,
+                         {tabX, view.tabBar->y, width, tabBarHeight},
+                         tab.active ? SemanticRole::TabActive :
+                                      SemanticRole::TabInactive,
+                         display);
+                view.tabHits.push_back(
+                    TabHit{{tabX, view.tabBar->y, width, tabBarHeight},
+                           static_cast<std::uint32_t>(i)});
+                tabX += width;
             }
-        }
-        int tabX = view.tabBar->x;
-        for (std::size_t i = firstTab; i < request.tabs.size(); ++i) {
-            const auto& tab = request.tabs[i];
-            const std::string display =
-                tab.dirty ? tab.title + request.style.tab.dirtySuffix
-                          : tab.title;
-            const int width =
-                std::min(view.tabBar->right() - tabX,
-                         std::max(1, displayCells(display) +
-                                          request.style.dimensions.labelPadding));
-            if (width <= 0 || tab.accessibleLabel.empty()) break;
-            addNode(view, ShellNodeKind::Tab, "tab." + std::to_string(i),
-                     tab.accessibleLabel,
-                     {tabX, view.tabBar->y, width, tabBarHeight},
-                     tab.active ? SemanticRole::TabActive :
-                                  SemanticRole::TabInactive,
-                     display);
-            view.tabHits.push_back(
-                TabHit{{tabX, view.tabBar->y, width, tabBarHeight},
-                       static_cast<std::uint32_t>(i)});
-            tabX += width;
         }
 
         // `editor` is already the solved document rect (below the tab bar). The

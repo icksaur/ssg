@@ -377,6 +377,42 @@ const AccessibilityNode* findNode(const ShellViewState& view, std::string_view i
 // The reason this change exists: typing into a picker must not move the status
 // fields.  Before the fix the query was laid out first and pushed them right,
 // so this fails against the old order.
+// A picker (palette / file find) is not a document, so it covers the tab bar:
+// with a picker open there is no tab bar node, no tab hits, and the document
+// content reclaims the tab bar's row (removing the confusing visible tabs and
+// the one-row gap between the input line and the results).
+TEST(anOpenPickerHidesTheTabBarAndReclaimsItsRow) {
+    auto closed = request(80, 24);
+    closed.inputLineActive = false;
+    ShellState closedState;
+    auto closedResult = computeShellLayout(closed, closedState);
+    ASSERT_TRUE(closedResult.accepted());
+    if (!closedResult.accepted()) return;
+    ASSERT_TRUE(closedResult.view->tabBar.has_value());
+    ASSERT_TRUE(findNode(*closedResult.view, "tabs") != nullptr);
+    ASSERT_FALSE(closedResult.view->tabHits.empty());
+    ASSERT_FALSE(closedResult.view->panes.empty());
+    int const contentTopWithTabs = closedResult.view->panes.front().content.y;
+
+    auto open = request(80, 24);
+    open.inputLineActive = true;
+    ShellState openState;
+    auto openResult = computeShellLayout(open, openState);
+    ASSERT_TRUE(openResult.accepted());
+    if (!openResult.accepted()) return;
+    ASSERT_FALSE(openResult.view->tabBar.has_value());
+    ASSERT_TRUE(findNode(*openResult.view, "tabs") == nullptr);
+    ASSERT_TRUE(findNode(*openResult.view, "tab.0") == nullptr);
+    ASSERT_TRUE(openResult.view->tabHits.empty());
+    ASSERT_FALSE(openResult.view->panes.empty());
+    if (!openResult.view->panes.empty()) {
+        ASSERT_EQ(openResult.view->panes.front().content.y,
+                  contentTopWithTabs - 1);
+        ASSERT_EQ(openResult.view->panes.front().content.y,
+                  openResult.view->header->y + openResult.view->header->height);
+    }
+}
+
 TEST(typingInTheInputLineNeverMovesTheStatusFields) {
     std::optional<Rect> firstPathRect;
     std::optional<Rect> firstQueryRect;
@@ -886,6 +922,7 @@ int main() {
     RUN(focusTransitionsFollowTheNavigationTable);
     RUN(hidingAnUnfocusedPanelLeavesFocusUntouched);
     RUN(typingInTheInputLineNeverMovesTheStatusFields);
+    RUN(anOpenPickerHidesTheTabBarAndReclaimsItsRow);
     RUN(fieldsAreStableEvenWhenTheHeaderIsTight);
     RUN(headerNodesNeverOverlap);
     RUN(anOverlongQueryScrollsItsOwnTextAndLeavesFieldsAlone);
