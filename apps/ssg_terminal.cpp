@@ -529,6 +529,7 @@ ssg::KeyCode kittyKeyCode(std::int64_t codepoint) {
     switch (codepoint) {
     case 27: return ssg::KeyCode::Escape;
     case 13: return ssg::KeyCode::Enter;
+    case 57414: return ssg::KeyCode::Enter;  // Kitty keypad Enter (KP_ENTER).
     case 9: return ssg::KeyCode::Tab;
     case 127: return ssg::KeyCode::Backspace;
     default: break;
@@ -768,8 +769,8 @@ TerminalCapabilities::ProbeLog const& TerminalCapabilities::probeLog() const {
     return log_;
 }
 
-Decoded decode_input(std::string_view bytes, bool inputExhausted,
-                     std::size_t& consumed) {
+Decoded decodeInputRaw(std::string_view bytes, bool inputExhausted,
+                       std::size_t& consumed) {
     consumed = 0;
     if (bytes.empty()) return {};
 
@@ -810,7 +811,7 @@ Decoded decode_input(std::string_view bytes, bool inputExhausted,
                  static_cast<unsigned char>(bytes[2]) == 'O')) {
                 std::size_t innerConsumed = 0;
                 auto inner =
-                    decode_input(bytes.substr(1), inputExhausted, innerConsumed);
+                    decodeInputRaw(bytes.substr(1), inputExhausted, innerConsumed);
                 if (inner.status == DecodeStatus::incomplete) {
                     return {DecodeStatus::incomplete, {}, {}, 0};
                 }
@@ -1085,6 +1086,14 @@ Decoded decode_input(std::string_view bytes, bool inputExhausted,
             return decoded;
         }
         case 'M': {
+            // SS3 numpad Enter (ESC O M, application-keypad mode) shares the 'M'
+            // final with the X10 mouse report (ESC [ M b x y); the SS3 introducer
+            // disambiguates them.
+            if (second == 'O') {
+                consumed = 3;
+                return {DecodeStatus::key,
+                        ssg::KeyStroke{ssg::KeyCode::Enter}, {}, 0};
+            }
             // Legacy X10 mouse: ESC [ M b x y.  Wheel up 0x60, down 0x61.
             if (bytes.size() < 6) return {DecodeStatus::incomplete, {}, {}, 0};
             auto const button = static_cast<unsigned char>(bytes[3]);
@@ -1128,6 +1137,26 @@ Decoded decode_input(std::string_view bytes, bool inputExhausted,
     }
     consumed = 1;  // Other control byte: ignore.
     return {DecodeStatus::none, {}, {}, 0};
+}
+
+// Every Enter/Return encoding -- legacy CR/LF, Kitty `CSI 13;mods u`, Kitty
+// keypad `CSI 57414 u`, and SS3 `ESC O M` -- inserts a newline regardless of
+// which modifiers are held.  Rather than teach each binding context about
+// modified Enter, normalize at this single seam: a decoded Enter is always a
+// bare stroke, so it matches the plain `Enter` binding in every context.  The
+// keymap validator refuses modified-Enter bindings, so nothing downstream can
+// depend on an Enter stroke carrying a modifier.
+Decoded decode_input(std::string_view bytes, bool inputExhausted,
+                     std::size_t& consumed) {
+    Decoded decoded = decodeInputRaw(bytes, inputExhausted, consumed);
+    if (decoded.status == DecodeStatus::key &&
+        decoded.stroke.code == ssg::KeyCode::Enter) {
+        decoded.stroke.shift = false;
+        decoded.stroke.alt = false;
+        decoded.stroke.control = false;
+        decoded.stroke.meta = false;
+    }
+    return decoded;
 }
 
 }  // namespace ssg::app

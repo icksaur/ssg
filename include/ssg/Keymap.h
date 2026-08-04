@@ -81,6 +81,7 @@ enum class KeymapErrorCode : std::uint8_t {
     ReservedBinding,
     UnknownContext,
     MultiStrokeBinding,
+    ModifiedEnterBinding,
 };
 
 struct KeymapError {
