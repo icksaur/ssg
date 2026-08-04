@@ -4576,6 +4576,7 @@ ProtocolValue toValue(Style const& value) {
     fields.emplace_back("unrenderable", toValue(value.unrenderable));
     fields.emplace_back("prompt_label_separator",
                         toValue(value.promptLabelSeparator));
+    fields.emplace_back("cwd_prefix", toValue(value.cwdPrefix));
     fields.emplace_back("dim_minimum_columns",
                         toValue(value.dimensions.minimumColumns));
     fields.emplace_back("dim_minimum_rows",
@@ -4629,6 +4630,7 @@ bool decodePresent(ProtocolValue const& value, std::optional<Style>& out) {
     auto unrenderable = requireField<std::string>(value.field("unrenderable"));
     auto separator =
         requireField<std::string>(value.field("prompt_label_separator"));
+    auto cwdPrefix = requireField<std::string>(value.field("cwd_prefix"));
     auto minCols = requireField<int>(value.field("dim_minimum_columns"));
     auto minRows = requireField<int>(value.field("dim_minimum_rows"));
     auto panelTarget = requireField<int>(value.field("dim_panel_target_width"));
@@ -4649,6 +4651,7 @@ bool decodePresent(ProtocolValue const& value, std::optional<Style>& out) {
         !readOnlySuffix || !checked ||
         !tabLeftEdge || !tabRightEdge || !tabSeparator ||
         !unchecked || !truncation || !sigil || !unrenderable || !separator ||
+        !cwdPrefix ||
         !minCols || !minRows || !panelTarget || !panelMin || !editorMin ||
         !gutterWidth || !headerHeight || !tabBarHeight || !footerHeight ||
         !labelPadding || !separatorWidth || !queryBudget) {
@@ -4664,6 +4667,7 @@ bool decodePresent(ProtocolValue const& value, std::optional<Style>& out) {
     style.inputLineSigil = *sigil;
     style.unrenderable = *unrenderable;
     style.promptLabelSeparator = *separator;
+    style.cwdPrefix = *cwdPrefix;
     style.dimensions = {*minCols,      *minRows,      *panelTarget,
                         *panelMin,     *editorMin,    *gutterWidth,
                         *headerHeight, *tabBarHeight, *footerHeight,

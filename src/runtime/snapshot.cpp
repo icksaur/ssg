@@ -128,7 +128,8 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
          .homeDirectory = homeDirectory,
          .currentBranch = currentGitBranch,
          .statusValue = statusProjection.value,
-         .followMode = followProjection.mode});
+         .followMode = followProjection.mode,
+         .cwdPrefix = style.cwdPrefix});
     bindStatusFieldCommands(statusFields.headerFields, followProjection);
     bindStatusFieldCommands(statusFields.footerFields, followProjection);
     ShellLayoutRequest request;

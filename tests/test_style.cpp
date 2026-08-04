@@ -76,6 +76,7 @@ std::string currentGlyph(ssg::Style const& style, std::string const& key) {
     if (key == "input_line_sigil") return style.inputLineSigil;
     if (key == "unrenderable") return style.unrenderable;
     if (key == "prompt_label_separator") return style.promptLabelSeparator;
+    if (key == "cwd_prefix") return style.cwdPrefix;
     return {};
 }
 

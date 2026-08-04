@@ -112,7 +112,8 @@ std::vector<StatusFieldProviderBinding> defaultStatusFieldProviders() {
         {"path",
          [](StatusFieldProviderContext const& context)
              -> std::optional<std::string> {
-             return abbreviateHome(context.workspaceRoot,
+             return context.cwdPrefix +
+                    abbreviateHome(context.workspaceRoot,
                                    context.homeDirectory);
          }},
         {"branch",

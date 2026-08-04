@@ -31,6 +31,9 @@ struct StatusFieldProviderContext {
     std::optional<std::string> currentBranch;
     std::string statusValue;
     std::string followMode;
+    // Drawn immediately left of the (abbreviated) workspace path in the header.
+    // Empty by default; supplied from Style::cwdPrefix.
+    std::string cwdPrefix;
 };
 
 using StatusFieldProvider =

@@ -118,6 +118,10 @@ public:
     std::string unrenderable = "\xef\xbf\xbd";
     // Separates a prompt control's label from its value ("Find: text").
     std::string promptLabelSeparator = ": ";
+    // Drawn immediately left of the working-directory path in the header (e.g. a
+    // folder icon).  Empty by default and variable-width, so it may be any glyph
+    // or nothing at all.
+    std::string cwdPrefix = "";
     StyleDimensions dimensions{};
 
     // Display width of the sigil, measured -- not declared.  A one-cell sigil

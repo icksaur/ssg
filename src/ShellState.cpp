@@ -151,7 +151,7 @@ int addFields(ShellViewState& view, const std::vector<StatusField>& fields,
     int used = 0;
     for (const auto* field : prioritized) {
         if (field->accessibleLabel.empty() || field->value.empty()) continue;
-        const int desired = std::max(1, static_cast<int>(field->value.size()) + 2);
+        const int desired = std::max(1, displayCells(field->value) + 2);
         const int separator = retained.empty() ? 0 : 1;
         if (used + separator + desired > row.width) break;
         used += separator + desired;
@@ -164,7 +164,7 @@ int addFields(ShellViewState& view, const std::vector<StatusField>& fields,
     int x = row.x;
     for (const auto* field : retained) {
         if (x != row.x) ++x;
-        const int width = static_cast<int>(field->value.size()) + 2;
+        const int width = displayCells(field->value) + 2;
         addNode(view, kind, field->id, field->accessibleLabel,
                  {x, row.y, width, 1}, role, field->value, field->commandId);
         x += width;
