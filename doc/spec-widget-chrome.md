@@ -1,6 +1,6 @@
 # spec-widget-chrome
 
-Status: draft (spec only; not yet implemented)
+Status: done (steps 1-6 shipped)
 
 ## Goals
 
@@ -155,6 +155,47 @@ the procedural code emits today, the `ui_layout` golden and `test_hit_test`
 verify the port span-for-span, and no renderer role/glyph logic is duplicated:
 ownership moves wholesale per surface, never straddling.
 
+### As-built widget model + the `init.lua` composition seam
+
+What actually shipped (steps 1-5) is the geometry + text-composition core, not
+the full `measure`/`paint`/`project` object hierarchy the Design sketched. The
+model is deliberately a set of PURE FREE FUNCTIONS over plain structs in
+`include/ssg/Widget.h`, keyed off a closed `WidgetKind` enum, with NO renderer or
+runtime dependency:
+
+- Layout: `fitRow` (the collapse fit pass: stable-sort by rank, forward-scan,
+  stop at first non-fit) + `packEnd` (right-pack, clamp-truncate) + `layoutRow`
+  (map placements onto a container `Rect`) + `measureFieldCells`. The relative
+  box arrangement itself reuses `solveLayout` (Row/Column/Exact/Flex); the prompt
+  is now a `solveLayout` tree (step 4). The collapse/pack decisions and the
+  prompt geometry no longer live as ad-hoc arithmetic; `ShellState` still does
+  some residual placement (advancing past the input line to position the ghost,
+  and stamping each fit/pack result into a node `Rect`), but the fit and solve
+  rules are the single source of what fits and where.
+- Glyph/text composition: `checkboxText` (checked/unchecked glyph + caption) and
+  `textInputText` (prefix + separator + value) own "what text a widget shows",
+  moved off the renderer so the configurable glyph lives with the widget.
+- The `TextInput` seam: `layoutTextInput` + `visibleTail` own the one-line
+  field's caret reservation + tail scroll (see §TextInput seam).
+
+The projection stayed the existing wire types (`AccessibilityNode` for chrome,
+`PromptViewState`/`PromptControlView` for the prompt) PRODUCED BY this widget
+code, rather than a new `paint`-span list — the behavior-preserving choice the
+Design flagged, so the goldens prove every port.
+
+The `init.lua` composition seam this enables (design only; NOT built, and out of
+scope here): because the widget vocabulary is a CLOSED enum composed by DATA (a
+tree of `{kind, id, size, children, glyph}` descriptors) rather than an open C++
+class hierarchy, a future Lua binding exposes chrome composition the same shape
+`theme.set`/`style.define` already use — a config call hands in a tree of these
+primitive descriptors, the server validates it against the fixed `WidgetKind`
+set + the fit/solve rules (failing loud on an unknown kind or an unsolvable
+tree), and no native code loads. The three gates a future binding must respect
+are already invariants above: server-owned layout, `solveLayout` purity/
+fail-loud, and non-overlapping projected nodes. Nothing on the wire or in the
+renderer changes to KEEP this seam open; it is a property of having funneled all
+chrome through the closed-primitive functions instead of ad-hoc placement.
+
 ## Invariants
 
 - Server owns layout and rendering; the client is a dumb renderer. Widgets live
@@ -277,7 +318,7 @@ reveal math.
 | 3 | Introduce the widget paint primitives `checkboxText` (toggle glyph + caption from `Style.toggle`) and `textInputText` (prefix + separator + value); route the renderer's prompt toggle/input paint and the ShellState input-line sigil composition through them, moving the glyph text-composition off the renderer/ShellState-inline. | `include/ssg/Widget.h`, `src/Widget.cpp`, `src/Renderer.cpp`, `src/ShellState.cpp`, `tests/test_widget.cpp` | `test_render` + `ui_layout` golden stay green without regeneration; `test_widget` exact-string paint oracles | glyph config in Style; role wiring |
 | 4 | Port the prompt to a Container solved by `solveLayout` (Column of full-width input rows + a trailing options Row of Exact toggles and a Flex count), replacing `computePromptLayout`'s procedural placement; keep `PromptViewState` as the produced projection and both error paths (toggle overflow => solver nullopt; zero-width count => flex remainder 0). DONE, green. | `src/PromptSurface.cpp` | `test_render` (prompt cases) + prompt-status tests green without regeneration; `PromptViewState` round-trip unchanged | protocol round-trip; promptRowCount shape |
 | 5 | Extract `TextInput` as the reusable widget seam (`layoutTextInput` + `visibleTail`): move the picker input line's caret-reservation + tail-scroll math off ShellState-inline into `Widget`; route ShellState through it; remove the now-dead `visibleQueryTail`. DONE, green. | `include/ssg/Widget.h`, `src/Widget.cpp`, `src/ShellState.cpp`, `tests/test_widget.cpp`, doc | `test_widget` standalone caret-reservation + tail-scroll cases; `ui_layout`/`test_render`/`test_hit_test` green WITHOUT regeneration | seam owns text+width only; caret stays node-derived |
-| 6 | Document the widget model + the `init.lua`-composition seam it enables (design note only; no binding). | `doc/spec-widget-chrome.md`, `doc/config.md` | doc tests green | - |
+| 6 | Document the as-built widget model (pure free functions over a closed `WidgetKind` set) + the `init.lua`-composition seam it enables, in the spec Design note and a forward-looking note in `doc/config.md` (design only; no binding, no new command/API). DONE. | `doc/spec-widget-chrome.md`, `doc/config.md` | `test_config_doc` stays green (no new command/API claimed) | no wire/API change |
 
 ## Rationale (optional, skippable)
 

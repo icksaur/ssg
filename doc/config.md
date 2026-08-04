@@ -197,6 +197,15 @@ whole screen turning into line-drawing characters. If you paste a glyph from
 somewhere and it is rejected for this, the string picked up an invisible
 character along the way.
 
+What you cannot do yet is change the *arrangement* of the chrome -- which fields
+sit in the header, what order the footer actions collapse in, where the prompt
+puts its toggles. That furniture is built from a small, fixed set of internal
+layout widgets (containers, labels, fields, checkboxes, the input line), each
+positioned relative to its row rather than at a hard-coded column. Composing your
+own arrangement from those widgets is a deliberate future direction, not a knob
+that exists today: for now `init.lua` configures the glyphs and sizes above, and
+the layout itself is fixed.
+
 ### Your own commands
 
 `ssg.register_command` defines a command in your own words and gives it a
