@@ -237,18 +237,21 @@ widget-owned or fully procedural, never split. Interim state between steps:
   now — it is a `TextInput` and its geometry ports with that widget in step 4/5
   (pulling it in half‑formed here then redoing it in step 4 would be churn). The
   prompt is untouched (procedural).
-- After step 3: the input-line sigil/tail and the (prompt) checkbox GLYPHS are
-  widget-`paint`-owned; the prompt LAYOUT is still `computePromptLayout` until
-  step 4. Step 3 therefore ports glyph ownership only for the header input line
-  (whose layout step 2 already moved) and introduces the `Checkbox` widget used
-  by step 4 — no prompt surface is half-ported.
+- After step 3: the prompt toggle glyph and the picker input-line sigil are
+  composed by widget paint primitives (`checkboxText`, `textInputText`) rather
+  than stitched inline by the renderer / ShellState — the configurable glyph
+  knowledge now lives in the widget layer. The renderer/ShellState still own
+  their paint loops and the prompt LAYOUT is still `computePromptLayout` until
+  step 4; step 3 moves only the text COMPOSITION (the glyph concern the user
+  named), keyed by the existing `PromptControlKind`, so no geometry is
+  half-ported. `Checkbox`/`TextInput` as full layout widgets land in step 4.
 - After step 4: the prompt is fully widget-owned (layout + glyphs + projection).
 
 | # | Step | Files | Oracle | Invariants |
 |---|------|-------|--------|------------|
 | 1 | Define the Widget primitives + the pure GEOMETRY core: `WidgetKind`/`Align` + `fitRow` (the collapse fit pass) + `layoutRow` + `measureFieldCells`, no runtime/renderer deps. (`paint`/`project` are deferred to their first callers in steps 2-4 rather than shipped without a consumer.) | new `include/ssg/Widget.h`, `src/Widget.cpp`, `tests/test_widget.cpp`, `cmake/components/widget-chrome.cmake` | `test_widget`: hand-computed fit cases incl. the **stop-at-first-non-fit edge** (a low-rank wide field blocks a later narrow field that would have fit) — DONE, green | solver purity; fail-loud |
 | 2 | Port header/footer status FIELDS (collapse rows) to `fitRow` and the footer actions + help hint to `packEnd`; derive `AccessibilityNode`s from the placements (one node per role-homogeneous span), replacing `addFields` + the reverse-iteration right-edge arithmetic. Renderer still paints from the nodes. The picker input line keeps its scrolling math (ports with `TextInput`, step 4/5). | `src/ShellState.cpp`, `include/ssg/Widget.h`, `src/Widget.cpp` | `ui_layout` golden + `test_hit_test` stay green WITHOUT regeneration; `test_widget` `packEnd` cases | non-overlap; fields-independent-of-input-line |
-| 3 | Move the toggle/checkbox glyph and the input-line sigil/tail into the `Checkbox`/`TextInput` widgets' `paint`; introduce `Checkbox`. | `src/Renderer.cpp`, `src/Widget.cpp` | `test_render` stays green without regeneration | glyph config in Style; role wiring |
+| 3 | Introduce the widget paint primitives `checkboxText` (toggle glyph + caption from `Style.toggle`) and `textInputText` (prefix + separator + value); route the renderer's prompt toggle/input paint and the ShellState input-line sigil composition through them, moving the glyph text-composition off the renderer/ShellState-inline. | `include/ssg/Widget.h`, `src/Widget.cpp`, `src/Renderer.cpp`, `src/ShellState.cpp`, `tests/test_widget.cpp` | `test_render` + `ui_layout` golden stay green without regeneration; `test_widget` exact-string paint oracles | glyph config in Style; role wiring |
 | 4 | Port the prompt to a Container of `TextInput`/`Checkbox`/`Label` widgets, replacing `computePromptLayout`; keep `PromptViewState` as the produced projection. | `src/PromptSurface.cpp` | `test_render` (prompt cases) + prompt-status tests green without regeneration; `PromptViewState` round-trip unchanged | protocol round-trip; promptRowCount shape |
 | 5 | Extract `TextInput` as the reusable widget seam (documented entry point for a future non-prompt text field); no new caller yet. | `include/ssg/Widget.h`, doc | unit test instantiating `TextInput` standalone (caret reservation, tail scroll) | - |
 | 6 | Document the widget model + the `init.lua`-composition seam it enables (design note only; no binding). | `doc/spec-widget-chrome.md`, `doc/config.md` | doc tests green | - |

@@ -2,6 +2,7 @@
 
 #include <ssg/GraphemeLayout.h>
 #include <ssg/SyntaxModel.h>
+#include <ssg/Widget.h>
 
 #include <algorithm>
 #include <iomanip>
@@ -1044,15 +1045,15 @@ std::optional<GridPosition> paintPrompt(CellGrid& grid,
         std::string text;
         switch (control.kind) {
             case PromptControlKind::Input:
-                text = control.accessibleLabel + style.promptLabelSeparator + control.value;
+                text = textInputText(control.accessibleLabel,
+                                     style.promptLabelSeparator, control.value);
                 break;
             case PromptControlKind::Count:
                 text = control.value;
                 break;
             case PromptControlKind::Toggle:
-                text = (control.checked ? style.toggle.checked
-                                         : style.toggle.unchecked) +
-                       control.accessibleLabel;
+                text = checkboxText(control.checked, control.accessibleLabel,
+                                    style.toggle);
                 break;
         }
         // Clear the row region first so a shrinking value does not leave stale
@@ -1072,7 +1073,10 @@ std::optional<GridPosition> paintPrompt(CellGrid& grid,
                 : !caret;
         if (control.kind == PromptControlKind::Input && activeInput && !caret) {
             auto const labelWidth =
-                static_cast<int>(GraphemeLayout{}.computeRun(control.accessibleLabel + style.promptLabelSeparator)
+                static_cast<int>(GraphemeLayout{}
+                                     .computeRun(textInputText(
+                                         control.accessibleLabel,
+                                         style.promptLabelSeparator, {}))
                                      .totalCells);
             auto const valueWidth =
                 static_cast<int>(GraphemeLayout{}.computeRun(control.value).totalCells);

@@ -89,4 +89,17 @@ int measureFieldCells(std::string_view value) {
                             2);
 }
 
+std::string checkboxText(bool checked, std::string_view caption,
+                         const ToggleGlyphs& toggle) {
+    return (checked ? toggle.checked : toggle.unchecked) + std::string(caption);
+}
+
+std::string textInputText(std::string_view prefix, std::string_view separator,
+                          std::string_view value) {
+    std::string text;
+    text.reserve(prefix.size() + separator.size() + value.size());
+    text.append(prefix).append(separator).append(value);
+    return text;
+}
+
 }  // namespace ssg

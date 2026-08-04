@@ -142,6 +142,27 @@ TEST(packEndDropsAnItemWithNoRoomLeft) {
     ASSERT_EQ(fit.placed[0], (PlacedItem{"b", 0, 4, 1}));
 }
 
+// checkboxText composes the Style glyph + caption; checked/unchecked select the
+// glyph. Reference strings hand-composed with the default glyphs.
+TEST(checkboxTextPrependsTheStateGlyphToTheCaption) {
+    ToggleGlyphs glyphs;  // defaults: "[x] " / "[ ] "
+    ASSERT_EQ(checkboxText(true, "case", glyphs), std::string{"[x] case"});
+    ASSERT_EQ(checkboxText(false, "case", glyphs), std::string{"[ ] case"});
+    // Custom glyphs are honored (the widget owns the glyph, not the renderer).
+    ToggleGlyphs custom{"(*) ", "( ) "};
+    ASSERT_EQ(checkboxText(true, "x", custom), std::string{"(*) x"});
+    ASSERT_EQ(checkboxText(false, "x", custom), std::string{"( ) x"});
+}
+
+// textInputText concatenates prefix + separator + value. The three shapes it
+// covers: a prompt input (label + ": " + value), the picker input line (sigil +
+// "" + tail), and a bare label (text + "" + "").
+TEST(textInputTextConcatenatesPrefixSeparatorValue) {
+    ASSERT_EQ(textInputText("find", ": ", "cat"), std::string{"find: cat"});
+    ASSERT_EQ(textInputText("> ", "", "query"), std::string{"> query"});
+    ASSERT_EQ(textInputText("label", "", ""), std::string{"label"});
+}
+
 }  // namespace
 
 int main() {
@@ -156,6 +177,8 @@ int main() {
     RUN(packEndFillsFlushRightLastItemRightmost);
     RUN(packEndTruncatesTheLeftmostItemWhenSpaceRunsOut);
     RUN(packEndDropsAnItemWithNoRoomLeft);
+    RUN(checkboxTextPrependsTheStateGlyphToTheCaption);
+    RUN(textInputTextConcatenatesPrefixSeparatorValue);
     RUN(layoutRowMapsOffsetsOntoTheContainerRow);
     RUN(measureFieldCellsIsDisplayCellsPlusPadding);
     return 0;

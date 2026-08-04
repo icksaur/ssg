@@ -550,8 +550,9 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
             const int drawable = std::max(0, available - 1);
             const int textRoom =
                 std::max(0, drawable - request.style.sigilWidth());
-            std::string query = request.style.inputLineSigil +
-                                 visibleQueryTail(request.inputLineQuery, textRoom);
+            std::string query = textInputText(
+                request.style.inputLineSigil, {},
+                visibleQueryTail(request.inputLineQuery, textRoom));
             const int queryWidth = std::min(drawable, displayCells(query));
             addNode(view, ShellNodeKind::HeaderField, "input_line.query",
                      "Input line", {headerX, view.header->y, queryWidth, 1},

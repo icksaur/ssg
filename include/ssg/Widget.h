@@ -12,6 +12,7 @@
 // fit rule is a pure, hand-checkable integer computation.
 
 #include <ssg/ShellState.h>  // Rect
+#include <ssg/Style.h>       // ToggleGlyphs
 
 #include <cstdint>
 #include <string>
@@ -102,5 +103,28 @@ struct RowFit {
 // at 1, matching `addFields`. Provided so callers measure fields consistently;
 // the fit rule itself takes the already-measured `desired`.
 [[nodiscard]] int measureFieldCells(std::string_view value);
+
+// --- Widget paint (glyph-owning text composition) ---------------------------
+//
+// These own "what text a widget shows", moved out of the renderer so the
+// configurable glyphs live with the widget rather than being stitched in at
+// paint time (doc/spec-widget-chrome.md §Ownership contract). Each is a pure
+// string composition; the caller still blits the result and owns the row rect,
+// role, and caret.
+
+// A `Checkbox`'s cell text: the checked/unchecked glyph from `Style.toggle`
+// followed by the caption. The find toggles (case/word/regex) draw through this.
+[[nodiscard]] std::string checkboxText(bool checked, std::string_view caption,
+                                       const ToggleGlyphs& toggle);
+
+// A `TextInput`'s (or `Label`'s) cell text: a leading `prefix` (a prompt label
+// or the picker input-line sigil), an optional `separator` (the prompt label
+// separator; empty for the sigil), then the `value`. `textInputText(label, sep,
+// value)` reproduces the prompt input composition; `textInputText(sigil, "",
+// tail)` reproduces the picker input line; `textInputText(text, "", "")` is a
+// bare `Label`.
+[[nodiscard]] std::string textInputText(std::string_view prefix,
+                                        std::string_view separator,
+                                        std::string_view value);
 
 }  // namespace ssg
