@@ -488,14 +488,13 @@ viewport=80x24
 focus=0
 header=0,0,80,1
 footer=0,23,80,1
-tabBar=0,1,80,1
+tabBar=none
 panel=none
 panelScrollbar=none
 prompt=none
 panes:
-  id=1 frame=0,2,80,21 content=0,2,79,21 scrollbar=79,2,1,21
+  id=1 frame=0,1,80,22 content=0,1,79,22 scrollbar=79,1,1,22
 tabHits:
-  index=0 rect=0,1,10,1
 a11y:
   kind=0 role=10 rect=0,0,80,1 id=header label=Status header content= cmd=
   kind=2 role=11 rect=0,23,80,1 id=footer label=Status footer content= cmd=
@@ -513,10 +512,8 @@ a11y:
   kind=3 role=11 rect=40,23,6,1 id=git_branch label=Git branch content=main cmd=
   kind=3 role=11 rect=47,23,5,1 id=git_repository label=Git repository content=ssg cmd=
   kind=3 role=11 rect=53,23,5,1 id=file_type label=File type content=C++ cmd=
-  kind=5 role=7 rect=0,1,80,1 id=tabs label=Open tabs content= cmd=
-  kind=6 role=6 rect=0,1,10,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
-  kind=9 role=1 rect=0,2,80,21 id=pane.1 label=Editor pane 1 content= cmd=
-  kind=10 role=17 rect=79,2,1,21 id=pane.1.scrollbar label=Scrollbar for editor pane 1 content= cmd=
+  kind=9 role=1 rect=0,1,80,22 id=pane.1 label=Editor pane 1 content= cmd=
+  kind=10 role=17 rect=79,1,1,22 id=pane.1.scrollbar label=Scrollbar for editor pane 1 content= cmd=
 palette=none
 
 === inputline-long-query ===
@@ -524,14 +521,13 @@ viewport=60x24
 focus=0
 header=0,0,60,1
 footer=0,23,60,1
-tabBar=0,1,60,1
+tabBar=none
 panel=none
 panelScrollbar=none
 prompt=none
 panes:
-  id=1 frame=0,2,60,21 content=0,2,59,21 scrollbar=59,2,1,21
+  id=1 frame=0,1,60,22 content=0,1,59,22 scrollbar=59,1,1,22
 tabHits:
-  index=0 rect=0,1,10,1
 a11y:
   kind=0 role=10 rect=0,0,60,1 id=header label=Status header content= cmd=
   kind=2 role=11 rect=0,23,60,1 id=footer label=Status footer content= cmd=
@@ -545,10 +541,8 @@ a11y:
   kind=3 role=11 rect=20,23,6,1 id=background_activity label=Background activity content=idle cmd=
   kind=3 role=11 rect=27,23,7,1 id=encoding label=Text encoding content=UTF-8 cmd=
   kind=3 role=11 rect=35,23,4,1 id=line_ending label=Line ending content=LF cmd=
-  kind=5 role=7 rect=0,1,60,1 id=tabs label=Open tabs content= cmd=
-  kind=6 role=6 rect=0,1,10,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
-  kind=9 role=1 rect=0,2,60,21 id=pane.1 label=Editor pane 1 content= cmd=
-  kind=10 role=17 rect=59,2,1,21 id=pane.1.scrollbar label=Scrollbar for editor pane 1 content= cmd=
+  kind=9 role=1 rect=0,1,60,22 id=pane.1 label=Editor pane 1 content= cmd=
+  kind=10 role=17 rect=59,1,1,22 id=pane.1.scrollbar label=Scrollbar for editor pane 1 content= cmd=
 palette=none
 
 === split-horizontal ===
