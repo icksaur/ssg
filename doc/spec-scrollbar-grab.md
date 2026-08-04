@@ -171,3 +171,107 @@ does. The fix is not new machinery but the missing piece of state: the offset
 between the grab point and the thumb top, which converts an absolute mapping into
 a relative one. Everything else (thumb geometry, the fraction wire, the
 server-side conversion) already exists.
+
+---
+
+## Amendment (backlog item 7): the thumb skips gutter rows and the top is unreliable
+
+**Symptoms reported.** Dragging the thumb, the glyph "jumps over certain rows
+(never rendering on that row), depending on where I start." The top of the
+scrollbar does NOT reliably scroll to the first line, though the bottom reliably
+reaches the last line. The document scroll is close but wrong.
+
+**Root cause (measured).** The two directions of the scrollbar mapping both use
+integer FLOOR, which is asymmetric:
+
+- Render: `thumbStart = floor(firstRow · travel / maximumFirstRow)`
+  (`Viewport.cpp` `scrollbarMetricsImpl`), where `travel = viewportRows -
+  thumbSize` and `maximumFirstRow = totalRows - viewportRows`.
+- Drag inverse: `firstRow = floor(maximumFirstRow · numerator / denominator)`
+  (`ScrollOffset::toFraction`), with the gutter gesture sending `numerator =
+  desiredTop` (the grabbed thumb-top row), `denominator = travel`.
+
+When `maximumFirstRow > travel` (any document more than ~2× the viewport — the
+common case, and always so for a one-row thumb), floor makes the round-trip
+`thumbTop → firstRow → thumbTop` LOSE the top rows: I measured, across regimes
+(total,V) ∈ {(200,10),(1000,30),(25,20),…}, that `travel` of the `travel+1`
+gutter rows are reachable — one row (the topmost band) never renders, and 3–28
+interior rows are skipped. Floor biases every conversion downward, so the bottom
+(where the clamp pins `firstRow = maximumFirstRow`) looks correct while the top
+and middle drift. That is exactly the reported asymmetry.
+
+**Fix — symmetric rounding, via one shared primitive.** Replace floor with
+round-half-up in BOTH directions, expressed as a single pure library helper so
+the two conversions cannot use different rounding:
+
+```
+scrollScaleRounded(value, numerator, denominator)  // round(value·num/den); den==0 → 0
+  = (value · numerator + denominator/2) / denominator   (all uint64)
+```
+
+- Render: `thumbStart = scrollScaleRounded(firstRow, travel, maximumFirstRow)`.
+- Drag inverse: `firstRow = min(maximumFirstRow, scrollScaleRounded(
+  maximumFirstRow, numerator, denominator))`.
+
+No new wire, no anchors, no per-gesture state. The client keeps sending the plain
+`desiredTop / travel` grab fraction (`apps/pointer_routing.cpp` `gutter_fraction`,
+unchanged). Measured with symmetric round: **every** gutter row is reachable
+(`skips = 0`, all `travel+1` rows render), the top cell maps to `firstRow = 0`,
+and the bottom cell maps to `firstRow = maximumFirstRow`, in every regime tested.
+
+This supersedes an earlier (unmerged) attempt that added an anchor-delta model
+(`gutter_first_row`, published `firstRow`/`maximumFirstRow` on `GutterThumb`,
+gesture anchoring). That was over-complex and did not address the skipped-row
+rendering, which lives in the render direction, not the drag. It is discarded.
+
+### Amendment invariants
+
+- **INV-thumb-surjective**: for a fixed `(total, viewport)`, every gutter thumb
+  row `t ∈ [0, travel]` is the rendered `thumbStart` of some `firstRow` — the
+  thumb can sit on any row it is dragged to (no skipped rows). This holds because
+  in this scrollbar model `maximumFirstRow ≥ travel` always (`travel =
+  viewportRows - thumbSize ≤ viewportRows ≤ totalRows - viewportRows =
+  maximumFirstRow` whenever anything scrolls), so the drag inverse expands and the
+  render compresses by the same ratio; symmetric round-half-up then makes
+  `scrollThumbStart(scrollFirstRow(t)) == t`. Verified exhaustively for all `T ∈
+  [1,80]`, `M ∈ [T,3000]` (~9.8M cases, zero failures).
+- **INV-endpoints**: `thumbTop = 0 → firstRow = 0` (top line shown) and `thumbTop
+  = travel → firstRow = maximumFirstRow` (last line shown); symmetrically
+  `firstRow = 0 → thumbStart = 0`, `firstRow = maximumFirstRow → thumbStart =
+  travel`.
+- **INV-thumb-fits**: `thumbStart + thumbSize ≤ viewportRows` (unchanged; round
+  cannot exceed `travel` because the input is capped at `maximumFirstRow`).
+
+### Amendment oracles (pure, isolated — the user's explicit ask)
+
+Unit-test the two conversions as an isolated matched pair (no runtime, no app),
+sweeping `(total, viewport)` across regimes {(200,10),(1000,30),(100,20),(40,20),
+(25,20),(57,13),(500,50),(80,79)}:
+
+- **No skipped rows / thumb surjective**: for every `thumbTop ∈ [0, travel]`,
+  `scrollThumbStart(scrollFirstRow(thumbTop)) == thumbTop`.
+- **Endpoints**: `scrollFirstRow(0) == 0`, `scrollFirstRow(travel) ==
+  maximumFirstRow`; `scrollThumbStart(0) == 0`, `scrollThumbStart(
+  maximumFirstRow) == travel`.
+- **Monotonic**: both conversions are non-decreasing in their input (no backward
+  jump mid-drag).
+- **Fits**: for every `firstRow ∈ [0, maximumFirstRow]`, `thumbStart + thumbSize
+  ≤ viewportRows`.
+- **Degenerate**: `travel == 0` (document fits, or thumb fills the gutter) →
+  `firstRow == 0`, no divide-by-zero.
+- **Shared-semantics (non-editor path)**: because the rounding lives in the
+  shared `ScrollOffset::toFraction`, one oracle exercises a tree/palette-shaped
+  fraction (a list scrollbar, not the editor) to confirm the rounded mapping is
+  intentional and uniform across every surface, not editor-only.
+
+### Amendment plan
+
+Note: this branch was reset to `master` before implementing, so no artifacts of
+the discarded anchor-delta attempt (`gutter_first_row`, anchored `GutterDrag`
+state, extra `GutterThumb` fields) exist to roll back — the starting point is the
+plain `gutter_fraction` drag. The change below is purely additive/`floor→round`.
+
+| # | Step | Files | Oracle |
+|---|------|-------|--------|
+| B1 | Add pure `scrollScaleRounded(value, num, den)` (round-half-up, den==0→0) and thin wrappers `scrollThumbStart(firstRow, maximumFirstRow, travel)` / `scrollFirstRow(thumbTop, travel, maximumFirstRow)` in the library; unit-test in isolation | `include/ssg/Viewport.h`, `src/Viewport.cpp`, `tests/test_viewport.cpp` | the amendment oracles above |
+| B2 | Route `scrollbarMetricsImpl` (thumbStart) and `ScrollOffset::toFraction` (firstRow) through the shared primitive; regenerate the ui_layout + protocol goldens (thumbStart values change) | `src/Viewport.cpp`, `tests/fixtures/**` | existing viewport/render suites stay green; goldens reflect rounded thumbStart |

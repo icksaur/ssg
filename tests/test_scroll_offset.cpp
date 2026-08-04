@@ -44,7 +44,12 @@ std::uint32_t referenceFraction(std::uint32_t total, std::uint32_t rows,
                                 std::uint32_t denominator) {
     if (rows == 0 || denominator == 0) return 0;
     const std::uint64_t maximum = total > rows ? total - rows : 0;
-    return static_cast<std::uint32_t>((maximum * numerator) / denominator);
+    // Round-half-up, matching scrollScaleRounded: the drag inverse must be the
+    // exact inverse of the rounded thumb render so no gutter row is skipped
+    // (doc/spec-scrollbar-grab.md amendment).
+    const std::uint64_t scaled =
+        (maximum * numerator + denominator / 2) / denominator;
+    return static_cast<std::uint32_t>(std::min<std::uint64_t>(scaled, maximum));
 }
 
 // The geometries every case runs against: empty, shorter than the window,

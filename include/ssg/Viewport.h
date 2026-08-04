@@ -121,6 +121,28 @@ struct ScrollbarMetrics {
     bool operator==(const ScrollbarMetrics&) const noexcept = default;
 };
 
+// The scrollbar's two conversions, as one matched pair so they cannot use
+// different rounding (the source of the "thumb skips rows / top unreliable" bug,
+// doc/spec-scrollbar-grab.md amendment).  `scrollScaleRounded` is round-half-up
+// integer scaling; both directions go through it, so they invert exactly:
+// `scrollThumbStart(scrollFirstRow(t)) == t` for every gutter row `t` (proven
+// exhaustively).  `travel = viewportRows - thumbSize` is the range of the thumb's
+// top row; `maximumFirstRow = totalRows - viewportRows`.
+//
+// `scrollScaleRounded` is plain `round(value * numerator / denominator)` with NO
+// clamping -- the range clamp (to travel / maximumFirstRow) belongs to the two
+// wrappers below, which know the scrollbar regime.  Use those, not this, for
+// scrollbar math.
+[[nodiscard]] uint32_t scrollScaleRounded(uint32_t value, uint32_t numerator,
+                                          uint32_t denominator) noexcept;
+// firstRow -> thumb top row (render direction).
+[[nodiscard]] uint32_t scrollThumbStart(uint32_t firstRow,
+                                        uint32_t maximumFirstRow,
+                                        uint32_t travel) noexcept;
+// thumb top row -> firstRow (drag-inverse direction).
+[[nodiscard]] uint32_t scrollFirstRow(uint32_t thumbTop, uint32_t travel,
+                                      uint32_t maximumFirstRow) noexcept;
+
 // A resolved scroll view for a simple list region: the clamped first visible
 // item, how many items are visible, and the scrollbar geometry.  This is the
 // generalized primitive the tree and palette use, mirroring what

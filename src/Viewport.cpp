@@ -346,8 +346,8 @@ ScrollbarMetrics scrollbarMetricsImpl(uint32_t totalRows,
     const uint32_t thumbSize =
         std::max<uint32_t>(1, static_cast<uint32_t>(scaledSize));
     const uint32_t travel = viewportRows - thumbSize;
-    const uint32_t thumbStart = static_cast<uint32_t>(
-        (static_cast<uint64_t>(firstRow) * travel) / maximumFirst);
+    const uint32_t thumbStart =
+        scrollThumbStart(firstRow, maximumFirst, travel);
     return ScrollbarMetrics{totalRows,
                             viewportRows,
                             firstRow,
@@ -357,6 +357,31 @@ ScrollbarMetrics scrollbarMetricsImpl(uint32_t totalRows,
 }
 
 }  // namespace
+
+uint32_t scrollScaleRounded(uint32_t value, uint32_t numerator,
+                            uint32_t denominator) noexcept {
+    if (denominator == 0) return 0;
+    const uint64_t scaled = (static_cast<uint64_t>(value) * numerator +
+                             denominator / 2) /
+                            denominator;
+    return static_cast<uint32_t>(scaled);
+}
+
+uint32_t scrollThumbStart(uint32_t firstRow, uint32_t maximumFirstRow,
+                          uint32_t travel) noexcept {
+    // Round-half-up so the render is the exact inverse of the drag (below) and
+    // no gutter row is skipped.  Capped at travel because firstRow <=
+    // maximumFirstRow makes the scaled value <= travel already; the min guards
+    // the tie that rounds the last row up.
+    return std::min(travel,
+                    scrollScaleRounded(firstRow, travel, maximumFirstRow));
+}
+
+uint32_t scrollFirstRow(uint32_t thumbTop, uint32_t travel,
+                        uint32_t maximumFirstRow) noexcept {
+    return std::min(maximumFirstRow,
+                    scrollScaleRounded(maximumFirstRow, thumbTop, travel));
+}
 
 RowProjection::RowProjection(std::vector<ProjectedRow> rows)
     : rows_(std::move(rows)) {
@@ -561,9 +586,7 @@ void ScrollOffset::toFraction(uint32_t numerator, uint32_t denominator,
         return;
     }
     const auto maximum = resolve(totalItems, viewportRows).scrollbar.maximumFirstRow;
-    const auto scaled =
-        (static_cast<std::uint64_t>(maximum) * numerator) / denominator;
-    firstVisible_ = static_cast<uint32_t>(std::min<std::uint64_t>(scaled, maximum));
+    firstVisible_ = scrollFirstRow(numerator, denominator, maximum);
 }
 
 void ScrollOffset::revealSelection(uint32_t selected, uint32_t totalItems,

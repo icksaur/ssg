@@ -44,8 +44,10 @@ struct RegionHit {
     // Tab content: the index into sections().tabs.tabs of the clicked tab.
     std::uint32_t tabIndex = 0;
     // Scrollbar regions: the position as a numerator/denominator pair ready to
-    // feed view.scroll_to_fraction (first_row = maximum_first_row * numerator /
-    // denominator), plus the equivalent [0, 1] fraction for display.
+    // feed view.scroll_to_fraction. The server maps it with round-half-up
+    // (first_row = round(maximum_first_row * numerator / denominator), then
+    // clamped), so it is the exact inverse of the rounded thumb render and no
+    // gutter row is skipped (doc/spec-scrollbar-grab.md amendment).
     std::uint32_t scrollNumerator = 0;
     std::uint32_t scrollDenominator = 1;
     // Header/footer status-field hits: the published field id and optional command.
