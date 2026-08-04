@@ -1080,6 +1080,7 @@ Decoded decodeInputRaw(std::string_view bytes, bool inputExhausted,
             event.kind = finalByte == 'm' ? PointerKind::release
                          : (cb & 32) != 0  ? PointerKind::drag
                                            : PointerKind::press;
+            event.alt = (cb & 8) != 0;
             Decoded decoded;
             decoded.status = DecodeStatus::pointer;
             decoded.pointer = event;

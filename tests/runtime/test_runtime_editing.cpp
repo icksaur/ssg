@@ -678,6 +678,20 @@ TEST(pointerSelectionCommandsFocusTheEditorKeyboardMotionDoesNot) {
         ssg::SelectionCommandArguments{std::nullopt, ssg::Selection{ssg::SelectionNavigator::resolvePosition("abc", ssg::ByteOffset{0}).value(), ssg::SelectionNavigator::resolvePosition("abc", ssg::ByteOffset{2}).value()}}}).accepted());
     ASSERT_EQ(focus(), ssg::FocusTarget::Editor);
 
+    // A pointer Alt+click add-caret (select.add_range) focuses the editor too.
+    focusPanel();
+    ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"select.add_range", runtime.revision(),
+        ssg::SelectionCommandArguments{std::nullopt, ssg::Selection{ssg::SelectionNavigator::resolvePosition("abc", ssg::ByteOffset{1}).value(), ssg::SelectionNavigator::resolvePosition("abc", ssg::ByteOffset{1}).value()}}}).accepted());
+    ASSERT_EQ(focus(), ssg::FocusTarget::Editor);
+
+    // A pointer Alt+drag add-range (select.set_ranges) focuses the editor too.
+    focusPanel();
+    ASSERT_EQ(focus(), ssg::FocusTarget::Panel);
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"select.set_ranges", runtime.revision(),
+        ssg::SelectionCommandArguments{std::nullopt, std::nullopt, {ssg::Selection{ssg::SelectionNavigator::resolvePosition("abc", ssg::ByteOffset{0}).value(), ssg::SelectionNavigator::resolvePosition("abc", ssg::ByteOffset{2}).value()}}}}).accepted());
+    ASSERT_EQ(focus(), ssg::FocusTarget::Editor);
+
     // A KEYBOARD caret motion (a different SelectionCommand) does NOT change focus:
     // dispatched from panel focus, the caret moves but the keyboard stays on the panel.
     focusPanel();

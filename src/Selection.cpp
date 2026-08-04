@@ -769,6 +769,7 @@ SelectionNavigationCommandSet::SelectionNavigationCommandSet()
           {"cursor.document_start", SelectionCommand::CursorDocumentStart},
           {"cursor.document_end", SelectionCommand::CursorDocumentEnd},
           {"select.set_range", SelectionCommand::SelectSetRange},
+          {"select.set_ranges", SelectionCommand::SelectSetRanges},
           {"select.add_range", SelectionCommand::SelectAddRange},
           {"select.left", SelectionCommand::SelectLeft},
           {"select.right", SelectionCommand::SelectRight},
@@ -799,7 +800,7 @@ SelectionNavigationCommandSet::SelectionNavigationCommandSet()
           {"view.center_caret", SelectionCommand::ViewCenterCaret},
       }} {}
 
-const std::array<SelectionCommandDescriptor, 37>&
+const std::array<SelectionCommandDescriptor, 38>&
 SelectionNavigationCommandSet::descriptors() const noexcept {
     return descriptors_;
 }
@@ -1011,6 +1012,24 @@ SelectionNavigationResult SelectionNavigator::apply(
         } else {
             selections.push_back(*arguments.selection);
         }
+        desiredCell.reset();
+        break;
+
+    case SelectionCommand::SelectSetRanges:
+        if (arguments.selections.empty()) {
+            return rejected(
+                SelectionNavigationError::MissingArgument,
+                "select.set_ranges requires at least one selection");
+        }
+        for (auto const& candidate : arguments.selections) {
+            if (!isValidPosition(model, candidate.anchor) ||
+                !isValidPosition(model, candidate.active)) {
+                return rejected(
+                    SelectionNavigationError::InvalidPosition,
+                    "selection range does not match the document layout");
+            }
+        }
+        selections = arguments.selections;
         desiredCell.reset();
         break;
 

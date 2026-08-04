@@ -4861,6 +4861,7 @@ ProtocolValue toValue(SelectionCommandArguments const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("position", toValue(value.position));
     fields.emplace_back("selection", toValue(value.selection));
+    fields.emplace_back("selections", toValue(value.selections));
     return ProtocolValue::makeObject(std::move(fields));
 }
 bool decodePresent(ProtocolValue const& value, std::optional<SelectionCommandArguments>& out) {
@@ -4869,6 +4870,9 @@ bool decodePresent(ProtocolValue const& value, std::optional<SelectionCommandArg
     SelectionCommandArguments result;
     if (!decodeOptionalField(value.field("position"), result.position)) return false;
     if (!decodeOptionalField(value.field("selection"), result.selection)) return false;
+    std::optional<std::vector<Selection>> selections;
+    if (!decodeOptionalField(value.field("selections"), selections)) return false;
+    if (selections) result.selections = std::move(*selections);
     out.emplace(std::move(result));
     return true;
 }

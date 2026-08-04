@@ -863,6 +863,12 @@ int main(int argc, char** argv) {
     // transient — the server only ever sees cursor.set_position / select.set_range.
     bool dragging = false;
     std::optional<ssg::DocumentPosition> dragAnchor;
+    // Alt-drag (multi-cursor) state: fixed at press, held for the gesture. The
+    // baseline is the selection set captured BEFORE the press added its caret, so
+    // every motion rebuilds the whole set from an immutable list (baseline + the
+    // dragged range) and the other cursors never move.
+    bool altDrag = false;
+    std::vector<ssg::Selection> altDragBaseline;
     // Which scrollbar gutter a press landed on, held until release.  A drag is
     // routed to THIS gutter regardless of where the pointer has since moved, and
     // the cursor is hidden while it is set: during a drag the caret is not what
@@ -1271,10 +1277,22 @@ int main(int argc, char** argv) {
                                 scrolled->sections().document.text,
                                 ssg::ByteOffset{hit.byteOffset});
                             if (active) {
-                                dispatch("select.set_range",
-                                         ssg::SelectionCommandArguments{
-                                             std::nullopt,
-                                             ssg::Selection{*dragAnchor, *active}});
+                                if (altDrag) {
+                                    std::vector<ssg::Selection> ranges =
+                                        altDragBaseline;
+                                    ranges.push_back(
+                                        ssg::Selection{*dragAnchor, *active});
+                                    dispatch("select.set_ranges",
+                                             ssg::SelectionCommandArguments{
+                                                 std::nullopt, std::nullopt,
+                                                 std::move(ranges)});
+                                } else {
+                                    dispatch("select.set_range",
+                                             ssg::SelectionCommandArguments{
+                                                 std::nullopt,
+                                                 ssg::Selection{*dragAnchor,
+                                                                *active}});
+                                }
                             }
                         }
                     }
@@ -1472,13 +1490,31 @@ int main(int argc, char** argv) {
                 }
                 // A recognized double-click selects the word (no drag); every
                 // other press goes through the normal router. Both yield a
-                // PointerDispatch handled uniformly below.
+                // PointerDispatch handled uniformly below. The router decides the
+                // command from the EFFECTIVE Alt: a press establishes the gesture
+                // from its own Alt bit; a drag/release reuses the established
+                // altDrag so a dropped modifier mid-drag cannot flip it.
+                bool const effectiveAlt =
+                    decoded.pointer.kind == ssg::app::PointerKind::press
+                        ? decoded.pointer.alt
+                        : altDrag;
+                // Capture the baseline BEFORE dispatching the add so it excludes
+                // the caret this press is about to add.
+                if (!doubleClickPosition &&
+                    decoded.pointer.kind == ssg::app::PointerKind::press &&
+                    effectiveAlt && hit.region == ssg::HitRegion::Editor &&
+                    targets.document_position && snapshot) {
+                    auto const& items =
+                        snapshot->sections().selection.selections.items();
+                    altDragBaseline.assign(items.begin(), items.end());
+                }
                 auto plan =
                     doubleClickPosition
                         ? ssg::app::double_click_dispatch(*doubleClickPosition)
                         : ssg::app::route_pointer(
                               hit, decoded.pointer.button, decoded.pointer.kind,
-                              dragging, dragAnchor, targets);
+                              effectiveAlt, dragging, dragAnchor, targets,
+                              altDragBaseline);
                 for (auto const& command : plan.commands) {
                     dispatch(command.command_id, command.payload);
                 }
@@ -1506,6 +1542,8 @@ int main(int argc, char** argv) {
                 if (plan.begins_drag) {
                     dragging = true;
                     dragAnchor = targets.document_position;
+                    altDrag = effectiveAlt;
+                    if (!altDrag) altDragBaseline.clear();
                 }
                 // A gutter thumb drag ends on any release; the press that starts
                 // it, and the grab offset it captures, are handled where `hit` is
@@ -1516,6 +1554,8 @@ int main(int argc, char** argv) {
                 if (plan.ends_drag) {
                     dragging = false;
                     dragAnchor.reset();
+                    altDrag = false;
+                    altDragBaseline.clear();
                 }
                 continue;
             }

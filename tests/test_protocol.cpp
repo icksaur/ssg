@@ -340,6 +340,30 @@ TEST(commandRequestRoundTripsWithEmptySelectionCommandArguments) {
     ASSERT_FALSE(arguments->selection.has_value());
 }
 
+TEST(commandRequestRoundTripsWithSelectionsListSelectionCommandArguments) {
+    auto const registry = ssg::CommandArgumentCodecRegistry{staticTableCatalog()};
+    ssg::DocumentPosition const a{ssg::ByteOffset{1}, ssg::LineIndex{0},
+                                  ssg::CellIndex{1}};
+    ssg::DocumentPosition const b{ssg::ByteOffset{4}, ssg::LineIndex{0},
+                                  ssg::CellIndex{4}};
+    ssg::DocumentPosition const c{ssg::ByteOffset{7}, ssg::LineIndex{1},
+                                  ssg::CellIndex{0}};
+    ssg::SelectionCommandArguments original;
+    original.selections = {ssg::Selection{a, a}, ssg::Selection{b, c}};
+    ssg::ClientCommand const command{"select.set_ranges", ssg::Revision{3},
+                                     original};
+    auto const bytes = ssg::ProtocolCodec{}.encodeCommandRequest(command, registry);
+    auto const decoded = ssg::ProtocolCodec{}.decodeCommandRequest(bytes, registry);
+    ASSERT_TRUE(decoded.accepted());
+    auto const* arguments = std::any_cast<ssg::SelectionCommandArguments>(
+        &decoded.command->payload);
+    ASSERT_TRUE(arguments != nullptr);
+    ASSERT_FALSE(arguments->position.has_value());
+    ASSERT_FALSE(arguments->selection.has_value());
+    ASSERT_EQ(arguments->selections.size(), original.selections.size());
+    ASSERT_TRUE(arguments->selections == original.selections);
+}
+
 TEST(commandRequestRoundTripsWithScrollLinesArguments) {
     auto const registry = ssg::CommandArgumentCodecRegistry{staticTableCatalog()};
     ssg::ClientCommand const command{"view.scroll_lines", ssg::Revision{1},
@@ -1252,6 +1276,7 @@ int main() {
     RUN(findReplaceViewStateRoundTripsReplacementThroughTheWire);
     RUN(commandRequestRoundTripsWithTextInputArguments);
     RUN(commandRequestRoundTripsWithSelectionCommandArguments);
+    RUN(commandRequestRoundTripsWithSelectionsListSelectionCommandArguments);
     RUN(commandRequestRoundTripsWithEmptySelectionCommandArguments);
     RUN(commandRequestRoundTripsWithScrollLinesArguments);
     RUN(commandRequestRoundTripsWithScrollPagesArguments);

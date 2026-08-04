@@ -48,6 +48,8 @@ constexpr std::string_view kHelpPreamble =
     "  can select a word and press it repeatedly to edit each match.\n"
     "- Alt+j and Alt+k add a cursor on the line below or above.\n"
     "- Alt+i splits a multi-line selection into one cursor per line.\n"
+    "- Alt+click adds a cursor where you click; Alt+drag adds a selection. Both\n"
+    "  keep the cursors you already have.\n"
     "- Alt+a selects everything.\n"
     "- Click anywhere to collapse back to a single cursor.\n"
     "\n"
