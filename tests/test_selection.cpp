@@ -99,7 +99,7 @@ void assertMatchesReference(const SelectionViewState& actual,
 
 TEST(commandSetIsExactAndImmutable) {
     static_assert(!std::is_copy_assignable_v<ssg::SelectionNavigationCommandSet>);
-    constexpr std::array<std::string_view, 36> expected{{
+    constexpr std::array<std::string_view, 37> expected{{
         "cursor.set_position",
         "cursor.left",
         "cursor.right",
@@ -134,6 +134,7 @@ TEST(commandSetIsExactAndImmutable) {
         "select.split_into_lines",
         "select.to_matching_bracket",
         "goto.matching_bracket",
+        "select.word_at_position",
         "view.reveal_caret",
         "view.center_caret",
     }};
@@ -648,6 +649,65 @@ TEST(invalidTabWidthIsTypedAndAtomic) {
 
 } // namespace
 
+TEST(selectWordAtPositionSelectsTheSameCategoryRun) {
+    const auto dims = ViewportDimensions{80, 20};
+    auto wordAt = [&](std::string_view text, std::uint64_t offset) {
+        auto const before = state(std::string{text}, {{0, 0}});
+        auto const result = ssg::SelectionNavigator{}.apply(
+            text, before, SelectionCommand::SelectWordAtPosition, dims,
+            {.position = position(text, offset)});
+        ASSERT_TRUE(result.accepted());
+        return byteRanges(resultingState(before, result));
+    };
+    using Ranges = std::vector<std::pair<std::uint64_t, std::uint64_t>>;
+
+    // "alpha beta": word [0,5), space [5,6), word [6,10).
+    const std::string t = "alpha beta";
+    ASSERT_EQ(wordAt(t, 2), (Ranges{{0, 5}}));   // mid-word
+    ASSERT_EQ(wordAt(t, 0), (Ranges{{0, 5}}));   // first byte of the word
+    ASSERT_EQ(wordAt(t, 4), (Ranges{{0, 5}}));   // last byte of the word
+    ASSERT_EQ(wordAt(t, 5), (Ranges{{5, 6}}));   // the space run
+    ASSERT_EQ(wordAt(t, 6), (Ranges{{6, 10}}));  // the second word
+    ASSERT_EQ(wordAt(t, 10), (Ranges{{10, 10}}));  // document end -> empty
+
+    // Punctuation run: "a==b" -> word [0,1), punct [1,3), word [3,4).
+    const std::string p = "a==b";
+    ASSERT_EQ(wordAt(p, 1), (Ranges{{1, 3}}));
+    ASSERT_EQ(wordAt(p, 2), (Ranges{{1, 3}}));
+
+    // A word never crosses a newline (newline is Space): "ab\ncd".
+    const std::string nl = "ab\ncd";
+    ASSERT_EQ(wordAt(nl, 0), (Ranges{{0, 2}}));  // stops before '\n'
+    ASSERT_EQ(wordAt(nl, 2), (Ranges{{2, 3}}));  // the newline is its own space run
+    ASSERT_EQ(wordAt(nl, 3), (Ranges{{3, 5}}));  // next line's word
+
+    // A multi-byte UTF-8 word selects its whole byte range: "he" + U+00E9 ("é",
+    // 2 bytes) -> all word bytes, [0,4).
+    const std::string utf = "he\xC3\xA9";
+    ASSERT_EQ(wordAt(utf, 0), (Ranges{{0, 4}}));
+    ASSERT_EQ(wordAt(utf, 2), (Ranges{{0, 4}}));  // first byte of 'é'
+}
+
+TEST(selectWordAtPositionRejectsAMissingOrInvalidPosition) {
+    const std::string text = "word";
+    const auto before = state(text, {{0, 0}});
+    const auto dims = ViewportDimensions{20, 4};
+
+    auto const missing = ssg::SelectionNavigator{}.apply(
+        text, before, SelectionCommand::SelectWordAtPosition, dims, {});
+    ASSERT_FALSE(missing.accepted());
+    ASSERT_EQ(missing.error, SelectionNavigationError::MissingArgument);
+
+    // A position that does not match the layout is rejected, selection intact.
+    DocumentPosition bogus{ByteOffset{999}, ssg::LineIndex{9}, CellIndex{999}};
+    auto const invalid = ssg::SelectionNavigator{}.apply(
+        text, before, SelectionCommand::SelectWordAtPosition, dims,
+        {.position = bogus});
+    ASSERT_FALSE(invalid.accepted());
+    ASSERT_EQ(invalid.error, SelectionNavigationError::InvalidPosition);
+    ASSERT_FALSE(invalid.delta.changed);
+}
+
 int main() {
     RUN(commandSetIsExactAndImmutable);
     RUN(selectionSetNormalizesOrderDuplicatesAndOverlaps);
@@ -663,6 +723,8 @@ int main() {
     RUN(revealIsMinimalAndCenterClamps);
     RUN(invalidPositionsAndMissingArgumentsAreTypedRejections);
     RUN(invalidTabWidthIsTypedAndAtomic);
+    RUN(selectWordAtPositionSelectsTheSameCategoryRun);
+    RUN(selectWordAtPositionRejectsAMissingOrInvalidPosition);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

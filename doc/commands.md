@@ -8,7 +8,7 @@ with `SSG_UPDATE_DOCS=1 ./build/test_commands`.
 available to the Lua API when a host grants them
 (see `doc/spec-command-registry.md`).
 
-There are 186 commands.
+There are 187 commands.
 
 ## clipboard-register
 
@@ -220,6 +220,7 @@ There are 186 commands.
 | `select.split_into_lines` | Split Into Lines | selection | lua |
 | `select.to_matching_bracket` | To Matching Bracket | selection | lua |
 | `goto.matching_bracket` | Matching Bracket | selection | lua |
+| `select.word_at_position` | Word At Position | selection | lua |
 | `view.reveal_caret` | Reveal Caret | selection | lua |
 | `view.center_caret` | Center Caret | selection | lua |
 

@@ -236,6 +236,31 @@ public:
         return cursor;
     }
 
+    // The maximal run of the SAME category as the character at `position`,
+    // returned as [start, end).  Unlike wordLeft/wordRight (caret motions that
+    // special-case categories), this treats Word/Space/Punctuation uniformly so a
+    // double-click selects the whole word, punctuation run, or whitespace run it
+    // lands in.  A click at documentEnd() (or an empty document) has no character
+    // to classify, so it yields an empty range there.
+    [[nodiscard]] std::pair<DocumentPosition, DocumentPosition> wordRangeAt(
+        const DocumentPosition& position) const {
+        const auto& start = documentStart();
+        const auto& end = documentEnd();
+        if (position == end) return {position, position};
+        const auto category = categoryAt(position);
+        DocumentPosition runStart = position;
+        while (runStart != start) {
+            const auto& candidate = previous(runStart);
+            if (categoryAt(candidate) != category) break;
+            runStart = candidate;
+        }
+        DocumentPosition runEnd = next(position);
+        while (runEnd != end && categoryAt(runEnd) == category) {
+            runEnd = next(runEnd);
+        }
+        return {runStart, runEnd};
+    }
+
     [[nodiscard]] ViewportViewState viewportState(
         ViewportDimensions dimensions,
         std::uint32_t requestedFirstVisualRow,
@@ -768,11 +793,13 @@ SelectionNavigationCommandSet::SelectionNavigationCommandSet()
            SelectionCommand::SelectToMatchingBracket},
           {"goto.matching_bracket",
            SelectionCommand::GotoMatchingBracket},
+          {"select.word_at_position",
+           SelectionCommand::SelectWordAtPosition},
           {"view.reveal_caret", SelectionCommand::ViewRevealCaret},
           {"view.center_caret", SelectionCommand::ViewCenterCaret},
       }} {}
 
-const std::array<SelectionCommandDescriptor, 36>&
+const std::array<SelectionCommandDescriptor, 37>&
 SelectionNavigationCommandSet::descriptors() const noexcept {
     return descriptors_;
 }
@@ -983,6 +1010,23 @@ SelectionNavigationResult SelectionNavigator::apply(
             selections = {*arguments.selection};
         } else {
             selections.push_back(*arguments.selection);
+        }
+        desiredCell.reset();
+        break;
+
+    case SelectionCommand::SelectWordAtPosition:
+        if (!arguments.position) {
+            return rejected(SelectionNavigationError::MissingArgument,
+                            "select.word_at_position requires a position");
+        }
+        if (!isValidPosition(model, *arguments.position)) {
+            return rejected(
+                SelectionNavigationError::InvalidPosition,
+                "word position does not match the document layout");
+        }
+        {
+            auto const range = model.wordRangeAt(*arguments.position);
+            selections = {Selection{range.first, range.second}};
         }
         desiredCell.reset();
         break;
