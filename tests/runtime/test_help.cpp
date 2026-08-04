@@ -128,6 +128,8 @@ TEST(helpDocumentContainsProseAndTheLiveKeybinding) {
     ASSERT_TRUE(contains(text, "Alt+h"));
     // The help content mentions clicking the header path to show the file tree.
     ASSERT_TRUE(contains(text, "header"));
+    // Middle-clicking a tab closes it (mirrors the README note).
+    ASSERT_TRUE(contains(text, "middle-click a tab to close it"));
     // No Markdown TABLE syntax (pipe rows) leaks into the help text.
     ASSERT_FALSE(contains(text, "|---|"));
 }
