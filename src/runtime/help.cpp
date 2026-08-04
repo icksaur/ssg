@@ -189,7 +189,7 @@ void bindRuntimeHelp(EditorSessionBuilder& builder,
             .handler([&runtime](CommandContext&) {
                 return runtime.runTransaction([&] {
                     return runtime.openReadOnlyTab(
-                        TabKind::ReadOnlyOutput, "help:main", "Help",
+                        TabKind::ReadOnlyOutput, "help:main", "help",
                         buildHelpDocument(runtime), ssg::LanguageId{"markdown"});
                 });
             }));

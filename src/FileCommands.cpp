@@ -13,23 +13,23 @@ PromptRequest FileCommandsCommandSet::pathPrompt(FileCommand command) const {
     std::string id;
     switch (command) {
         case FileCommand::OpenDirectory:
-            label = "Open directory";
+            label = "open directory";
             id = "workspace.open_directory";
             break;
         case FileCommand::Open:
-            label = "Open file";
+            label = "open file";
             id = "file.open";
             break;
         case FileCommand::SaveAs:
-            label = "Save file as";
+            label = "save file as";
             id = "file.save_as";
             break;
         case FileCommand::Rename:
-            label = "Rename file";
+            label = "rename file";
             id = "file.rename";
             break;
         case FileCommand::NewDirectory:
-            label = "New directory path";
+            label = "new directory path";
             id = "file.new_directory";
             break;
         // FileCommand::Create is deliberately absent: file.new takes a display

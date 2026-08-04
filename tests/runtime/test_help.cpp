@@ -108,7 +108,7 @@ TEST(helpOpenOpensAReadOnlyOutputTab) {
     if (!tab) return;
     ASSERT_TRUE(tab->kind == ssg::TabKind::ReadOnlyOutput);
     ASSERT_TRUE(tab->mode == ssg::DocumentMode::ReadOnly);
-    ASSERT_EQ(tab->label, std::string{"Help"});
+    ASSERT_EQ(tab->label, std::string{"help"});
 }
 
 TEST(helpDocumentContainsProseAndTheLiveKeybinding) {
@@ -318,7 +318,7 @@ TEST(footerHintShowsTheHelpKeyAndYieldsWhenUnbound) {
     ASSERT_TRUE(hint.has_value());
     if (hint) {
         ASSERT_TRUE(contains(hint->content, "Alt+h"));
-        ASSERT_TRUE(contains(hint->content, "Help"));
+        ASSERT_TRUE(contains(hint->content, "help"));
         ASSERT_TRUE(hint->commandId.has_value());
         if (hint->commandId) ASSERT_EQ(*hint->commandId, std::string{"help.open"});
     }
@@ -332,7 +332,7 @@ TEST(footerHintShowsTheHelpKeyAndYieldsWhenUnbound) {
     ASSERT_TRUE(unbound.has_value());
     if (unbound) {
         ASSERT_FALSE(contains(unbound->content, "Alt+h"));
-        ASSERT_TRUE(contains(unbound->content, "Help"));
+        ASSERT_TRUE(contains(unbound->content, "help"));
     }
 }
 

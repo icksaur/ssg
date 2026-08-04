@@ -793,8 +793,8 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
                  SemanticRole::ScrollbarTrack);
         if (request.emptyState) {
             addNode(view, ShellNodeKind::EmptyState,
-                     "pane." + suffix + ".empty", "Empty editor",
-                     pane.content, SemanticRole::Canvas, "Empty editor");
+                     "pane." + suffix + ".empty", "empty editor",
+                     pane.content, SemanticRole::Canvas, "empty editor");
         }
     }
 

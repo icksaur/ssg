@@ -724,13 +724,13 @@ TEST(clickingPublishedStatusFieldCommandsDispatchesThroughOneGenericPath) {
 
     ASSERT_TRUE(clickField(ssg::ShellNodeKind::HeaderField, "path"));
     ASSERT_TRUE(panelVisible());
-    ASSERT_EQ(panelProviderLabel(), std::optional<std::string>{"Files"});
+    ASSERT_EQ(panelProviderLabel(), std::optional<std::string>{"files"});
     ASSERT_TRUE(clickField(ssg::ShellNodeKind::HeaderField, "path"));
     ASSERT_FALSE(panelVisible());
 
     ASSERT_TRUE(clickField(ssg::ShellNodeKind::HeaderField, "branch"));
     ASSERT_TRUE(panelVisible());
-    ASSERT_EQ(panelProviderLabel(), std::optional<std::string>{"Git"});
+    ASSERT_EQ(panelProviderLabel(), std::optional<std::string>{"git"});
 
     ASSERT_EQ(followMode(), ssg::FollowMode::Following);
     ASSERT_TRUE(clickField(ssg::ShellNodeKind::FooterField, "follow"));

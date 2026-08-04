@@ -49,7 +49,7 @@ TEST(commandPickerDescriptorMatchesThePreRefactorPaletteBehavior) {
     ASSERT_TRUE(descriptor != nullptr);
     if (descriptor == nullptr) return;
     ASSERT_EQ(std::string{descriptor->openCommandId}, std::string{"palette.open"});
-    ASSERT_EQ(std::string{descriptor->promptTitle}, std::string{"Command Palette"});
+    ASSERT_EQ(std::string{descriptor->promptTitle}, std::string{"command palette"});
     ASSERT_TRUE(descriptor->wireMode == ssg::SearchMode::Command);
 }
 
