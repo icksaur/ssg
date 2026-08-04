@@ -83,7 +83,7 @@ CommandHandlerResult applyTransaction(EditorRuntime::Impl& runtime,
                                                        selectionsAfter, kind, 0);
     if (!result.accepted()) return failure(result.message);
     runtime.selection.selections = result.selections.value_or(selectionsAfter);
-    runtime.clampSelectionToActiveDocument();
+    runtime.clampSelectionsToActiveDocument();
     runtime.revealPrimaryCaret();
     (void)runtime.updateTabsFor(*id);
     runtime.refreshSyntax();
@@ -196,7 +196,7 @@ CommandHandlerResult bindHistory(EditorRuntime::Impl& runtime, HistoryCommand co
     auto result = command == HistoryCommand::Undo ? history.undo(*document) : history.redo(*document);
     if (!result.accepted()) return failure(result.message);
     if (result.selections) runtime.selection.selections = *result.selections;
-    runtime.clampSelectionToActiveDocument();
+    runtime.clampSelectionsToActiveDocument();
     runtime.revealPrimaryCaret();
     (void)runtime.updateTabsFor(*id);
     runtime.refreshSyntax();

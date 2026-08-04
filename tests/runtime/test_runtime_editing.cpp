@@ -855,6 +855,79 @@ TEST(multiCursorPastePreservesAllCursors) {
     std::filesystem::remove_all(root);
 }
 
+TEST(multiCursorTypingReplacesEachSelectionAndKeepsAllCursors) {
+    auto root = std::filesystem::current_path() / "runtime_editing_mctype";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root / "workspace");
+    std::filesystem::create_directories(root / "scratch");
+    std::filesystem::create_directories(root / "recovery");
+    std::ofstream{root / "workspace" / "m.txt", std::ios::binary}
+        << "aaa\nbbb\nccc\n";
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"file.open", runtime.revision(),
+                                  std::string{"m.txt"}}).accepted());
+    const ssg::ViewportDimensions dims{80, 24};
+    auto selectionCount = [&] {
+        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        return snap ? snap->sections().selection.selections.items().size()
+                    : std::size_t{0};
+    };
+
+    // Two RANGE selections over "aaa" and "bbb" (as Alt+d would build over a
+    // repeated word).
+    auto doc = runtime.activeDocumentText();
+    auto p0 = ssg::SelectionNavigator::resolvePosition(doc, ssg::ByteOffset{0});
+    auto p3 = ssg::SelectionNavigator::resolvePosition(doc, ssg::ByteOffset{3});
+    auto p4 = ssg::SelectionNavigator::resolvePosition(doc, ssg::ByteOffset{4});
+    auto p7 = ssg::SelectionNavigator::resolvePosition(doc, ssg::ByteOffset{7});
+    ASSERT_TRUE(p0 && p3 && p4 && p7);
+    ASSERT_TRUE(runtime.dispatch(
+        ssg::ClientId{1},
+        {"select.set_range", runtime.revision(),
+         ssg::SelectionCommandArguments{std::nullopt,
+                                        ssg::Selection{*p0, *p3}}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(
+        ssg::ClientId{1},
+        {"select.add_range", runtime.revision(),
+         ssg::SelectionCommandArguments{std::nullopt,
+                                        ssg::Selection{*p4, *p7}}}).accepted());
+    ASSERT_EQ(selectionCount(), std::size_t{2});
+
+    // Typing replaces EACH selection and leaves a caret at each edit -- the
+    // multi-cursor must survive (regression: it used to collapse to one).
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"text.insert", runtime.revision(),
+                                  ssg::TextInputArguments{"X"}}).accepted());
+    ASSERT_EQ(runtime.activeDocumentText(), std::string{"X\nX\nccc\n"});
+    ASSERT_EQ(selectionCount(), std::size_t{2});
+
+    // Continuing to type inserts at BOTH carets, so multi-cursor editing works
+    // across successive keystrokes.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"text.insert", runtime.revision(),
+                                  ssg::TextInputArguments{"Y"}}).accepted());
+    ASSERT_EQ(runtime.activeDocumentText(), std::string{"XY\nXY\nccc\n"});
+    ASSERT_EQ(selectionCount(), std::size_t{2});
+
+    // Undo and redo across the multi-cursor edits keep all cursors too (the
+    // bindHistory clamp must preserve the set, not collapse it).
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"edit.undo", runtime.revision(), {}}).accepted());
+    ASSERT_EQ(selectionCount(), std::size_t{2});
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
+                                 {"edit.redo", runtime.revision(), {}}).accepted());
+    ASSERT_EQ(runtime.activeDocumentText(), std::string{"XY\nXY\nccc\n"});
+    ASSERT_EQ(selectionCount(), std::size_t{2});
+    std::filesystem::remove_all(root);
+}
+
 TEST(replaceAllRevealsTheCaretWhenNoMatchRemains) {
     auto root = std::filesystem::current_path() / "runtime_editing_replacereveal";
     std::filesystem::remove_all(root);
@@ -1119,6 +1192,7 @@ int main() {
     RUN(editRevealsThePrimaryCaretFreeScrollDoesNotAndFollowsPrimary);
     RUN(undoAndPasteRevealTheCaret);
     RUN(multiCursorPastePreservesAllCursors);
+    RUN(multiCursorTypingReplacesEachSelectionAndKeepsAllCursors);
     RUN(replaceAllRevealsTheCaretWhenNoMatchRemains);
     RUN(promptCommandsFulfillFindReplaceByActiveKind);
     RUN(findWordUnderCursorSeedsTheCaretWordAndFindsEveryOccurrence);
