@@ -127,4 +127,35 @@ struct RowFit {
                                         std::string_view separator,
                                         std::string_view value);
 
+// --- TextInput: a one-line editable text field (the reusable seam) ----------
+//
+// A `TextInput` shows a fixed leading `sigil` (the field's pinned identity, e.g.
+// the picker's "> ") followed by a `value` that SCROLLS so its END -- where the
+// next keystroke lands -- stays visible as it outgrows the field. This is the
+// same reveal principle as the editor caret, and it is the seam a future
+// non-prompt text field instantiates; today the picker input line is its only
+// caller. The field reserves one trailing column for the caret so a terminal
+// cursor always has a real cell to sit on when the value fills the width.
+//
+// The caret's screen column is NOT produced here: it is derived from the
+// published node geometry at paint time (Renderer `inputLineCaret`) so the text
+// and the caret are measured once and cannot drift. `layoutTextInput` owns only
+// the text composition and the field width.
+struct TextInputLayout {
+    std::string text;  // sigil followed by the visible tail of value
+    int width;         // cells the field occupies (<= available), caret-safe
+};
+
+// Lay out a TextInput in `available` cells: reserve one column for the caret,
+// keep the `sigil` pinned, and scroll `value` to its visible tail. `width` is
+// clamped so the caret column stays inside `available`.
+[[nodiscard]] TextInputLayout layoutTextInput(std::string_view sigil,
+                                              std::string_view value,
+                                              int available);
+
+// The tail of `value` that fits in `cells` display columns, grapheme-sliced (so
+// a multi-byte or wide cluster is never cut in half) -- the END of a growing
+// value stays visible. Exposed for reuse/testing; `layoutTextInput` uses it.
+[[nodiscard]] std::string visibleTail(std::string_view value, int cells);
+
 }  // namespace ssg

@@ -163,6 +163,38 @@ TEST(textInputTextConcatenatesPrefixSeparatorValue) {
     ASSERT_EQ(textInputText("label", "", ""), std::string{"label"});
 }
 
+// visibleTail keeps the END of a growing value on screen. Hand-computed on
+// ASCII (one cell per char): a value that fits is returned whole; an over-long
+// value is sliced from the right taking clusters while they fit; zero cells
+// yields nothing.
+TEST(visibleTailKeepsTheEndWithinTheCellBudget) {
+    ASSERT_EQ(visibleTail("hello", 10), std::string{"hello"});
+    ASSERT_EQ(visibleTail("hello", 3), std::string{"llo"});
+    ASSERT_EQ(visibleTail("hello", 0), std::string{""});
+}
+
+// layoutTextInput reserves one column for the caret (drawable = available - 1),
+// pins the sigil, and scrolls the value's tail into the room after it.
+// Hand-computed with sigil "> " (2 cells):
+//  - available 10, "hi": drawable 9, textRoom 7, tail "hi", text "> hi" width 4.
+//  - available 6, "abcdef": drawable 5, textRoom 3, tail "def", text "> def"
+//    clamped to drawable 5.
+//  - available 1: drawable 0, textRoom 0, tail "", text "> " clamped to 0 so
+//    the caret column never escapes the field.
+TEST(layoutTextInputReservesCaretAndScrollsTail) {
+    const auto wide = layoutTextInput("> ", "hi", 10);
+    ASSERT_EQ(wide.text, std::string{"> hi"});
+    ASSERT_EQ(wide.width, 4);
+
+    const auto scrolled = layoutTextInput("> ", "abcdef", 6);
+    ASSERT_EQ(scrolled.text, std::string{"> def"});
+    ASSERT_EQ(scrolled.width, 5);
+
+    const auto tiny = layoutTextInput("> ", "x", 1);
+    ASSERT_EQ(tiny.text, std::string{"> "});
+    ASSERT_EQ(tiny.width, 0);
+}
+
 }  // namespace
 
 int main() {
@@ -179,6 +211,8 @@ int main() {
     RUN(packEndDropsAnItemWithNoRoomLeft);
     RUN(checkboxTextPrependsTheStateGlyphToTheCaption);
     RUN(textInputTextConcatenatesPrefixSeparatorValue);
+    RUN(visibleTailKeepsTheEndWithinTheCellBudget);
+    RUN(layoutTextInputReservesCaretAndScrollsTail);
     RUN(layoutRowMapsOffsetsOntoTheContainerRow);
     RUN(measureFieldCellsIsDisplayCellsPlusPadding);
     return 0;

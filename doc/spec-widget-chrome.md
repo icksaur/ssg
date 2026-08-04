@@ -253,6 +253,22 @@ widget-owned or fully procedural, never split. Interim state between steps:
   zero-width count => flex remainder 0). `PromptViewState`/`PromptControlView`
   remain the produced projection, unchanged. Reading rects back by control id is
   safe because a prompt's control ids are distinct by construction.
+- After step 5: the picker input line's caret-reservation + tail-scroll math is
+  the `TextInput` seam (`layoutTextInput` + `visibleTail` in `Widget`), not inline
+  ShellState arithmetic. See §TextInput seam below.
+
+### TextInput seam
+
+`layoutTextInput(sigil, value, available)` is the reusable one-line text-field
+widget: it reserves one trailing column for the caret (`drawable = available -
+1`), keeps the `sigil` pinned, and scrolls `value` to the visible tail that fits
+in the room after the sigil (`visibleTail`, grapheme-sliced), returning the
+composed cell text and the caret-safe field width. It owns ONLY text + width;
+the caret's screen column stays derived from the published node geometry at
+paint time (Renderer `inputLineCaret`) so text and caret are measured once and
+cannot drift. Today the picker input line is its sole caller; the seam exists so
+a future non-prompt text field instantiates it rather than re-deriving the
+reveal math.
 
 | # | Step | Files | Oracle | Invariants |
 |---|------|-------|--------|------------|
@@ -260,7 +276,7 @@ widget-owned or fully procedural, never split. Interim state between steps:
 | 2 | Port header/footer status FIELDS (collapse rows) to `fitRow` and the footer actions + help hint to `packEnd`; derive `AccessibilityNode`s from the placements (one node per role-homogeneous span), replacing `addFields` + the reverse-iteration right-edge arithmetic. Renderer still paints from the nodes. The picker input line keeps its scrolling math (ports with `TextInput`, step 4/5). | `src/ShellState.cpp`, `include/ssg/Widget.h`, `src/Widget.cpp` | `ui_layout` golden + `test_hit_test` stay green WITHOUT regeneration; `test_widget` `packEnd` cases | non-overlap; fields-independent-of-input-line |
 | 3 | Introduce the widget paint primitives `checkboxText` (toggle glyph + caption from `Style.toggle`) and `textInputText` (prefix + separator + value); route the renderer's prompt toggle/input paint and the ShellState input-line sigil composition through them, moving the glyph text-composition off the renderer/ShellState-inline. | `include/ssg/Widget.h`, `src/Widget.cpp`, `src/Renderer.cpp`, `src/ShellState.cpp`, `tests/test_widget.cpp` | `test_render` + `ui_layout` golden stay green without regeneration; `test_widget` exact-string paint oracles | glyph config in Style; role wiring |
 | 4 | Port the prompt to a Container solved by `solveLayout` (Column of full-width input rows + a trailing options Row of Exact toggles and a Flex count), replacing `computePromptLayout`'s procedural placement; keep `PromptViewState` as the produced projection and both error paths (toggle overflow => solver nullopt; zero-width count => flex remainder 0). DONE, green. | `src/PromptSurface.cpp` | `test_render` (prompt cases) + prompt-status tests green without regeneration; `PromptViewState` round-trip unchanged | protocol round-trip; promptRowCount shape |
-| 5 | Extract `TextInput` as the reusable widget seam (documented entry point for a future non-prompt text field); no new caller yet. | `include/ssg/Widget.h`, doc | unit test instantiating `TextInput` standalone (caret reservation, tail scroll) | - |
+| 5 | Extract `TextInput` as the reusable widget seam (`layoutTextInput` + `visibleTail`): move the picker input line's caret-reservation + tail-scroll math off ShellState-inline into `Widget`; route ShellState through it; remove the now-dead `visibleQueryTail`. DONE, green. | `include/ssg/Widget.h`, `src/Widget.cpp`, `src/ShellState.cpp`, `tests/test_widget.cpp`, doc | `test_widget` standalone caret-reservation + tail-scroll cases; `ui_layout`/`test_render`/`test_hit_test` green WITHOUT regeneration | seam owns text+width only; caret stays node-derived |
 | 6 | Document the widget model + the `init.lua`-composition seam it enables (design note only; no binding). | `doc/spec-widget-chrome.md`, `doc/config.md` | doc tests green | - |
 
 ## Rationale (optional, skippable)

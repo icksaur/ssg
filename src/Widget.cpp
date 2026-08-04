@@ -102,4 +102,35 @@ std::string textInputText(std::string_view prefix, std::string_view separator,
     return text;
 }
 
+std::string visibleTail(std::string_view value, int cells) {
+    if (cells <= 0) return {};
+    auto const run = GraphemeLayout{}.computeRun(value);
+    if (static_cast<int>(run.totalCells) <= cells) return std::string{value};
+    // Walk backwards from the end, taking clusters while they fit.
+    int used = 0;
+    std::size_t begin = value.size();
+    for (auto span = run.spans.rbegin(); span != run.spans.rend(); ++span) {
+        auto const width =
+            static_cast<int>(std::max<std::uint32_t>(span->cellWidth, 1));
+        if (used + width > cells) break;
+        used += width;
+        begin = span->byteOffset;
+    }
+    return std::string{value.substr(begin)};
+}
+
+TextInputLayout layoutTextInput(std::string_view sigil, std::string_view value,
+                                int available) {
+    // One column is held back for the caret: text filling the field to its last
+    // column would leave the terminal cursor nowhere to sit.
+    const int drawable = std::max(0, available - 1);
+    const int sigilCells =
+        static_cast<int>(GraphemeLayout{}.computeRun(sigil).totalCells);
+    // The value scrolls against the room AFTER the pinned sigil.
+    const int textRoom = std::max(0, drawable - sigilCells);
+    std::string text = textInputText(sigil, {}, visibleTail(value, textRoom));
+    const int cells = static_cast<int>(GraphemeLayout{}.computeRun(text).totalCells);
+    return {std::move(text), std::min(drawable, cells)};
+}
+
 }  // namespace ssg
