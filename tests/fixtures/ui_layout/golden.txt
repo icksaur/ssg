@@ -855,7 +855,7 @@ a11y:
   kind=6 role=6 rect=0,1,8,1 id=tab.0 label=main.cpp tab content=main.cpp cmd=
   kind=9 role=1 rect=0,2,80,21 id=pane.1 label=Editor pane 1 content= cmd=
   kind=10 role=17 rect=79,2,1,21 id=pane.1.scrollbar label=Scrollbar for editor pane 1 content= cmd=
-  kind=12 role=1 rect=0,2,79,21 id=pane.1.empty label=Empty editor content=Empty editor cmd=
+  kind=12 role=1 rect=0,2,79,21 id=pane.1.empty label=empty editor content=empty editor cmd=
 palette=none
 
 === distraction-free ===

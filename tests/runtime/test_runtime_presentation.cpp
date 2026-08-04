@@ -9,6 +9,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <algorithm>
 #include <set>
 #include <string>
 #include <vector>
@@ -497,7 +498,7 @@ TEST(shellStatusFieldsPreserveDefaultContentOrderAndLabels) {
 
     ASSERT_EQ(headerFields.size(), std::size_t{1});
     ASSERT_EQ(headerFields[0]->id, std::string{"path"});
-    ASSERT_EQ(headerFields[0]->label, std::string{"Path"});
+    ASSERT_EQ(headerFields[0]->label, std::string{"path"});
     // The path field shows the workspace root with a leading home directory
     // abbreviated to "~" (so a home-rooted path leaves room for the branch).
     // Mirror the runtime's home resolution: HOME, then USERPROFILE, trailing
@@ -524,10 +525,10 @@ TEST(shellStatusFieldsPreserveDefaultContentOrderAndLabels) {
 
     ASSERT_EQ(footerFields.size(), std::size_t{2});
     ASSERT_EQ(footerFields[0]->id, std::string{"status"});
-    ASSERT_EQ(footerFields[0]->label, std::string{"Status"});
+    ASSERT_EQ(footerFields[0]->label, std::string{"status"});
     ASSERT_TRUE(footerFields[0]->content.starts_with("schema=1\n"));
     ASSERT_EQ(footerFields[1]->id, std::string{"follow"});
-    ASSERT_EQ(footerFields[1]->label, std::string{"Follow edits"});
+    ASSERT_EQ(footerFields[1]->label, std::string{"follow edits"});
     ASSERT_EQ(footerFields[1]->content, std::string{"following"});
 }
 
@@ -561,7 +562,7 @@ TEST(shellStatusFieldsRenderBranchWhenGitBranchIsApplied) {
     }();
     ASSERT_TRUE(branchField != nullptr);
     if (branchField) {
-        ASSERT_EQ(branchField->label, std::string{"Branch"});
+        ASSERT_EQ(branchField->label, std::string{"branch"});
         ASSERT_EQ(branchField->content, std::string{"\xE2\x8E\x87 main"});
     }
 }
@@ -701,7 +702,7 @@ TEST(panelShowCommandsToggleAndSwitchProviders) {
     snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
     ASSERT_TRUE(snapshot->sections().shell.panel.has_value());
-    ASSERT_EQ(providerLabel(*snapshot), std::string{"Files"});
+    ASSERT_EQ(providerLabel(*snapshot), std::string{"files"});
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                 {"panel.show_files", runtime.revision(), {}})
@@ -716,7 +717,7 @@ TEST(panelShowCommandsToggleAndSwitchProviders) {
     snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
     ASSERT_TRUE(snapshot->sections().shell.panel.has_value());
-    ASSERT_EQ(providerLabel(*snapshot), std::string{"Files"});
+    ASSERT_EQ(providerLabel(*snapshot), std::string{"files"});
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                 {"panel.show_git_status", runtime.revision(), {}})
@@ -724,7 +725,7 @@ TEST(panelShowCommandsToggleAndSwitchProviders) {
     snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
     ASSERT_TRUE(snapshot->sections().shell.panel.has_value());
-    ASSERT_EQ(providerLabel(*snapshot), std::string{"Git"});
+    ASSERT_EQ(providerLabel(*snapshot), std::string{"git"});
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                 {"panel.show_files", runtime.revision(), {}})
@@ -732,7 +733,7 @@ TEST(panelShowCommandsToggleAndSwitchProviders) {
     snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
     ASSERT_TRUE(snapshot->sections().shell.panel.has_value());
-    ASSERT_EQ(providerLabel(*snapshot), std::string{"Files"});
+    ASSERT_EQ(providerLabel(*snapshot), std::string{"files"});
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                 {"panel.show_git_status", runtime.revision(), {}})
@@ -740,7 +741,7 @@ TEST(panelShowCommandsToggleAndSwitchProviders) {
     snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
     ASSERT_TRUE(snapshot->sections().shell.panel.has_value());
-    ASSERT_EQ(providerLabel(*snapshot), std::string{"Git"});
+    ASSERT_EQ(providerLabel(*snapshot), std::string{"git"});
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                 {"panel.show_git_status", runtime.revision(), {}})
@@ -755,7 +756,7 @@ TEST(panelShowCommandsToggleAndSwitchProviders) {
     snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
     ASSERT_TRUE(snapshot->sections().shell.panel.has_value());
-    ASSERT_EQ(providerLabel(*snapshot), std::string{"Files"});
+    ASSERT_EQ(providerLabel(*snapshot), std::string{"files"});
 
     ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1},
                                 {"panel.show_files", runtime.revision(), {}})
@@ -763,6 +764,55 @@ TEST(panelShowCommandsToggleAndSwitchProviders) {
     snapshot = runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
     ASSERT_TRUE(snapshot.has_value());
     ASSERT_FALSE(snapshot->sections().shell.panel.has_value());
+}
+
+TEST(chromeNodeCaptionLabelsAreLowercase) {
+    // Invariant guard: every shell chrome caption (provider tab, header/footer
+    // field, footer/notice action) renders lowercase, across all providers
+    // (doc/spec-lowercase-labels.md).  Excludes the key-bearing footer hint
+    // ("Alt+h  help") and document tab titles (filenames), which are not fixed
+    // chrome captions.
+    auto hasUpper = [](std::string const& s) {
+        return std::any_of(s.begin(), s.end(), [](unsigned char c) {
+            return c >= 'A' && c <= 'Z';
+        });
+    };
+    auto assertLowercaseCaptions = [&](ssg::SessionSnapshot const& snapshot) {
+        for (const auto& node : snapshot.sections().shell.accessibilityNodes) {
+            switch (node.kind) {
+            case ssg::ShellNodeKind::HeaderField:
+            case ssg::ShellNodeKind::FooterField:
+            case ssg::ShellNodeKind::FooterAction:
+            case ssg::ShellNodeKind::PanelProvider:
+            case ssg::ShellNodeKind::NoticeAction:
+                ASSERT_FALSE(hasUpper(node.label));
+                break;
+            default:
+                break;
+            }
+        }
+    };
+
+    auto root = uniqueRoot();
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1})
+                    .accepted());
+
+    for (const auto* command : {"panel.show_files", "panel.show_git_status"}) {
+        ASSERT_TRUE(
+            runtime.dispatch(ssg::ClientId{1}, {command, runtime.revision(), {}})
+                .accepted());
+        auto snapshot =
+            runtime.snapshot(ssg::ClientId{1}, ssg::ViewportDimensions{80, 12});
+        ASSERT_TRUE(snapshot.has_value());
+        if (!snapshot) return;
+        assertLowercaseCaptions(*snapshot);
+    }
 }
 
 int main() {
@@ -781,6 +831,7 @@ int main() {
     RUN(liveDiffTabTitlePrefixesGlyphWithoutChangingDocumentTabs);
     RUN(liveDiffTabGlyphColorTracksThemePalette);
     RUN(panelShowCommandsToggleAndSwitchProviders);
+    RUN(chromeNodeCaptionLabelsAreLowercase);
     RUN(editorScrollUsesTheRealPaneHeightNotAHardcoded24);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;

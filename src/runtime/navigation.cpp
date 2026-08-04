@@ -14,9 +14,9 @@ template <typename T>
 T const* payloadAs(std::any const& payload) { return std::any_cast<T>(&payload); }
 
 std::optional<TreeProviderId> panelProviderTreeId(std::string_view label) {
-    if (label == "Files") return TreeProviderId{"filesystem"};
-    if (label == "Git") return TreeProviderId{"git"};
-    if (label == "Symbols") return TreeProviderId{"symbols"};
+    if (label == "files") return TreeProviderId{"filesystem"};
+    if (label == "git") return TreeProviderId{"git"};
+    if (label == "symbols") return TreeProviderId{"symbols"};
     return std::nullopt;
 }
 
@@ -116,8 +116,8 @@ CommandHandlerResult searchCommand(EditorRuntime::Impl& runtime, CommandContext&
         auto const* lineText = payloadAs<std::string>(payload);
         if (lineText == nullptr) {
             auto opened = runtime.prompt.open(PromptRequest{
-                PromptKind::CommandArgument, "Go to line",
-                {{"line", "Line number", ""}}, {}, std::nullopt, "goto.line"});
+                PromptKind::CommandArgument, "go to line",
+                {{"line", "line number", ""}}, {}, std::nullopt, "goto.line"});
             if (!opened.accepted()) return failure(opened.error->message);
             runtime.reconcilePromptFocus();
             return success();

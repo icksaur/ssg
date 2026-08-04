@@ -728,9 +728,12 @@ TEST(renderFindPromptShowsOptionIndicators) {
         ASSERT_TRUE(snapshot.has_value());
         if (!snapshot) return;
         auto grid = ssg::Renderer{}.render(*snapshot);
-        ASSERT_TRUE(gridContains(grid, "[ ] Case"));
-        ASSERT_TRUE(gridContains(grid, "[ ] Word"));
-        ASSERT_TRUE(gridContains(grid, "[ ] Regex"));
+        ASSERT_TRUE(gridContains(grid, "[ ] case"));
+        ASSERT_TRUE(gridContains(grid, "[ ] word"));
+        ASSERT_TRUE(gridContains(grid, "[ ] regex"));
+        // The query input label is chrome and renders lowercase.
+        ASSERT_TRUE(gridContains(grid, "find query"));
+        ASSERT_FALSE(gridContains(grid, "Find query"));
     }
 
     // Toggling case flips its indicator to checked.
@@ -740,8 +743,41 @@ TEST(renderFindPromptShowsOptionIndicators) {
     ASSERT_TRUE(snapshot.has_value());
     if (!snapshot) return;
     auto grid = ssg::Renderer{}.render(*snapshot);
-    ASSERT_TRUE(gridContains(grid, "[x] Case"));
-    ASSERT_TRUE(gridContains(grid, "[ ] Word"));
+    ASSERT_TRUE(gridContains(grid, "[x] case"));
+    ASSERT_TRUE(gridContains(grid, "[ ] word"));
+}
+
+TEST(renderPromptControlLabelsAreLowercaseChrome) {
+    // Every prompt's rendered control captions are lowercase chrome, across the
+    // settings, goto-line, and open-file path prompts (doc/spec-lowercase-labels).
+    auto root = uniqueRoot();
+    std::ofstream{root / "p.txt"} << "hello\n";
+    auto runtime = makeRuntime(root);
+    ASSERT_TRUE(runtime != nullptr);
+    if (!runtime) return;
+    (void)runtime->dispatch(
+        ssg::ClientId{1},
+        {"file.open", runtime->revision(), std::string{"p.txt"}});
+
+    struct Case {
+        const char* command;
+        const char* lower;
+        const char* title;
+    };
+    for (auto const& c : {Case{"settings.open", "settings query", "Settings query"},
+                          Case{"goto.line", "line number", "Line number"},
+                          Case{"file.open", "open file", "Open file"}}) {
+        (void)runtime->dispatch(ssg::ClientId{1},
+                                {c.command, runtime->revision(), {}});
+        auto snapshot = runtime->snapshot(ssg::ClientId{1}, {80, 24});
+        ASSERT_TRUE(snapshot.has_value());
+        if (!snapshot) continue;
+        auto grid = ssg::Renderer{}.render(*snapshot);
+        ASSERT_TRUE(gridContains(grid, c.lower));
+        ASSERT_FALSE(gridContains(grid, c.title));
+        (void)runtime->dispatch(ssg::ClientId{1},
+                                {"prompt.cancel", runtime->revision(), {}});
+    }
 }
 
 TEST(renderPanelTreeWindowsAndDrawsAThumbWhenTallerThanThePanel) {
@@ -1543,6 +1579,7 @@ int main() {
     RUN(renderHidesFindMatchesAfterDocumentRevisionChanges);
     RUN(renderReplacePromptShowsQueryAndReplacementWithCursorOnReplacement);
     RUN(renderFindPromptShowsOptionIndicators);
+    RUN(renderPromptControlLabelsAreLowercaseChrome);
     RUN(renderPanelTreeWindowsAndDrawsAThumbWhenTallerThanThePanel);
     RUN(renderPanelTreeReservesAnEmptyGutterWhenItFits);
     RUN(renderPaletteWindowsRowsAndDrawsAThumbWithAbsoluteSelection);

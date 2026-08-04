@@ -13,9 +13,9 @@ T const* payloadAs(std::any const& payload) { return std::any_cast<T>(&payload);
 
 bool syncTreeProviderToPanel(EditorRuntime::Impl& runtime) {
     const auto label = runtime.shell.activePanelProvider();
-    if (label == "Files") {
+    if (label == "files") {
         return runtime.tree.activateProvider(TreeProviderId{"filesystem"});
-    } else if (label == "Git") {
+    } else if (label == "git") {
         if (!runtime.tree.activateProvider(TreeProviderId{"git"})) {
             runtime.tree.replaceProvider(TreeProviderSnapshot{
                 TreeProviderId{"git"}, TreeProviderKind::Git,
@@ -23,7 +23,7 @@ bool syncTreeProviderToPanel(EditorRuntime::Impl& runtime) {
             return runtime.tree.activateProvider(TreeProviderId{"git"});
         }
         return true;
-    } else if (label == "Symbols") {
+    } else if (label == "symbols") {
         if (!runtime.tree.activateProvider(TreeProviderId{"symbols"})) {
             runtime.tree.replaceProvider(TreeProviderSnapshot{
                 TreeProviderId{"symbols"}, TreeProviderKind::Symbols,
@@ -130,14 +130,14 @@ CommandHandlerResult shellCommand(EditorRuntime::Impl& runtime, std::string_view
     else if (id == "panel.toggle") runtime.shell.togglePanel();
     else if (id == "panel.focus") (void)runtime.shell.focusPanel();
     else if (id == "panel.show_files") {
-        if (!runtime.shell.showPanelProvider("Files")) {
+        if (!runtime.shell.showPanelProvider("files")) {
             return failure("files panel provider is unavailable");
         }
         if (!syncTreeProviderToPanel(runtime)) {
             return failure("files tree provider is unavailable");
         }
     } else if (id == "panel.show_git_status") {
-        if (!runtime.shell.showPanelProvider("Git")) {
+        if (!runtime.shell.showPanelProvider("git")) {
             return failure("git panel provider is unavailable");
         }
         if (!syncTreeProviderToPanel(runtime)) {
@@ -254,8 +254,8 @@ void syncRuntimeSettings(EditorRuntime::Impl& runtime) {
 CommandHandlerResult settingsCommand(EditorRuntime::Impl& runtime, std::string_view id, std::any const& payload) {
     if (id == "settings.open") {
         (void)runtime.prompt.open(PromptRequest{
-            PromptKind::Settings, "Settings",
-            {{"settings.query", "Settings query", ""}}, {}, std::nullopt});
+            PromptKind::Settings, "settings",
+            {{"settings.query", "settings query", ""}}, {}, std::nullopt});
         return success();
     }
     if (id == "settings.export_workspace") {

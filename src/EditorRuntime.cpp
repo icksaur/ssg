@@ -452,7 +452,7 @@ EditorRuntime::Impl::Impl(std::filesystem::path canonicalCwd,
       workspace{Workspace::create(root, recovery, this->archiveRoot)},
       selection{initialSelection()},
       clipboard{4},
-      shell{{"Files", "Git", "Symbols"}},
+      shell{{"files", "git", "symbols"}},
       tabs{*this},
       external{recovery, diff},
       syntaxParser{std::move(parser)},
@@ -1740,7 +1740,7 @@ bool EditorRuntime::Impl::openPickerPrompt(PickerKind kind) {
     if (picker == nullptr) return false;
     auto opened = prompt.open(PromptRequest{
         PromptKind::Palette, std::string{picker->promptTitle},
-        {{"query", "Command palette query", ""}}, {}, std::nullopt});
+        {{"query", "command palette query", ""}}, {}, std::nullopt});
     if (!opened.accepted()) return false;
     openPicker = kind;
     if (kind == PickerKind::File) rebuildFileCandidates();

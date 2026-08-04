@@ -145,9 +145,9 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
             found->second.reopen == DraftReopenOutcome::Conflict) {
             request.notice = ShellNotice{
                 "Unsaved draft: file changed on disk externally.",
-                {{"draft.notice.diff", "Diff", "draft.diff"},
-                 {"draft.notice.use_disk", "Use disk", "draft.discard"},
-                 {"draft.notice.dismiss", "Dismiss", "draft.dismiss"}}};
+                {{"draft.notice.diff", "diff", "draft.diff"},
+                 {"draft.notice.use_disk", "use disk", "draft.discard"},
+                 {"draft.notice.dismiss", "dismiss", "draft.dismiss"}}};
         }
     }
     request.emptyState = activeDocument() == nullptr;
@@ -166,7 +166,7 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
                 KeymapMatcher{keymap}.preferredBinding("help.open")) {
             keys = KeyCodec{}.formatSequence(*sequence);
         }
-        hint.label = keys.empty() ? std::string{"Help"} : keys + "  Help";
+        hint.label = keys.empty() ? std::string{"help"} : keys + "  help";
         request.footerHint = std::move(hint);
     }
     request.tabs = std::move(labels);
