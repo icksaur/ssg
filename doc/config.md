@@ -263,26 +263,76 @@ commands may ask for. Past it the call is refused rather than ssg locking up.
 ### Custom header and footer
 
 `ssg.chrome` replaces the built-in header and/or footer with your own row of
-widgets. A region is a set of widgets packed `left` and (for the footer) `right`
-with an optional `center`; each widget is a `field`, `label`, `checkbox`, or
-`spacer` carrying literal `text` or a live `provider` (`path`, `branch`,
-`status`, `follow`), and a `field`/`checkbox` may carry a click `command`.
+widgets. Omit a region to keep its built-in chrome untouched.
 
 ```lua
 ssg.chrome{
   header = { left = { { kind = "field", provider = "path" },
                       { kind = "field", provider = "branch" } } },
-  footer = { left  = { { kind = "field", provider = "status" } },
-             right = { { kind = "field", text = "reload",
-                         command = "config.reload" } } },
+  footer = { left   = { { kind = "field", provider = "status" } },
+             center = { kind = "label", text = "— my editor —" },
+             right  = { { kind = "label", text = "RO", role = "footer" },
+                        { kind = "field", text = "Save", command = "file.save" } } },
 }
 ```
 
-Omit a region to keep its built-in chrome; the header is left-group only (the
-picker input line owns its right side). Like your commands, a composition lives
-exactly as long as the `ssg.chrome` call that defines it: drop the call and
-reload and the built-in chrome returns. An invalid descriptor, or any later
-script error, rejects the whole reload and leaves the previous chrome in place.
+**A region** (`header` or `footer`) is a table with `left`, `right`, `center`,
+and `separator` keys, all optional:
+
+- `left` and `right` are arrays of widgets. `left` widgets pack from the left
+  edge and collapse by `rank` when the row runs short of room. `right` widgets
+  pack against the right edge (the last one sits flush right); when the row is
+  too narrow they are clamped and then dropped from the left, regardless of
+  `rank`.
+- `center` is a single widget centred in the row.
+- `separator` is the number of blank cells between adjacent `left` widgets
+  (default `1`).
+- The **header is left-group only**: `header.right` and `header.center` are an
+  error, because the picker input line owns the header's right side. The footer
+  supports all three groups.
+
+**A widget** is a table whose `kind` is one of a fixed set. Each kind allows a
+different set of fields:
+
+| `kind` | text source | click | notes |
+|--------|-------------|-------|-------|
+| `"field"` | `text` **or** `provider` (required) | `command` (optional) | the general cell; a button is a `field` with a `command` |
+| `"label"` | `text` **or** `provider` (required) | — | static text; give it a `role` for colour |
+| `"checkbox"` | `text` caption (optional) | `command` (optional) | display-only here; `checked` **or** `checked_provider` sets the box |
+| `"spacer"` | — | — | a blank gap; needs an integer `width` in `left`/`right`, flexes as `center` |
+
+Shared widget fields:
+
+- `text` is literal text. `provider` names a **live built-in value** instead —
+  one of `path` (the working directory), `branch` (the git branch), `status`
+  (the status message), or `follow` (the follow-edits state). A widget uses
+  `text` **or** `provider`, never both. A `provider` widget also inherits that
+  value's built-in click command (e.g. `path` opens the file panel) unless you
+  give it your own `command`.
+- `command` is a command id to run on click — any built-in id (`file.save`,
+  `tab.next`, …) or a name you defined with `ssg.register_command`. It is only
+  checked when the widget is actually clicked, so you may reference a command
+  defined later in the same file.
+- `role` names a colour role (e.g. `"header"`, `"footer"`, `"status_info"`) —
+  the same roles `theme.set` uses. It defaults to the region's own role.
+- `id` names the widget for accessibility; one is generated from its position
+  when omitted.
+- `rank` (integer, default `0`) sets collapse priority in the `left` group:
+  when the row is too narrow, higher-`rank` widgets drop first and the
+  lowest-`rank` widgets are kept longest. `keep = true` protects a `left` widget
+  from collapsing at all. `overflow` (`"none"`, `"truncate"`, `"scroll_tail"`)
+  controls how an over-long value is clipped.
+- `checkbox` takes `checked = true`/`false` or `checked_provider = "<id>"`; its
+  optional `text` is a caption. It shows the box but does not toggle on click —
+  interactive toggling belongs to a future form surface.
+
+Like your commands, a composition lives exactly as long as the `ssg.chrome`
+call that defines it: drop the call and reload, and the built-in chrome returns.
+Calling `ssg.chrome` twice in one file keeps only the last call. An invalid
+descriptor — an unknown `kind` or `provider`, a widget missing a required field
+or carrying a forbidden one, a `header.right`, or a `text_input` (reserved for
+forms) — names the offending path and rejects the whole reload, leaving the
+previous chrome in place.
 
 ## Terminal capabilities
 
