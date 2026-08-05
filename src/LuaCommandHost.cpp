@@ -1,4 +1,5 @@
 #include <ssg/LuaCommandHost.h>
+#include <ssg/ChromeComposition.h>
 #include <ssg/startup_audit.h>
 
 extern "C" {
@@ -10,6 +11,7 @@ extern "C" {
 #include <algorithm>
 #include <chrono>
 #include <limits>
+#include <optional>
 #include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
@@ -19,6 +21,14 @@ namespace ssg {
 namespace {
 
 constexpr char kHostRegistryKey[] = "ssg.command_host";
+
+// Bounds for the Lua->ChromeValue walk. Depth also breaks a cyclic table (a
+// self-referential table recurses until the depth cap trips), and the node cap
+// bounds a maliciously huge table before the (per-side/total-capped) decoder
+// ever sees it. Chrome is shallow (region->side->widget->value ~= depth 4) and
+// small, so both are generous headroom, not real limits.
+constexpr int kMaxChromeWalkDepth = 32;
+constexpr int kMaxChromeWalkNodes = 100'000;
 
 struct RegisteredCommand {
     std::string id;
@@ -33,7 +43,109 @@ struct HandleSlot {
 struct RegistrationTransaction {
     std::vector<RegisteredCommand> commands;
     std::unordered_set<std::string> ids;
+    // The composition staged by this evaluation's LAST `ssg.chrome` call (last
+    // wins); nullopt when the evaluation called `ssg.chrome` never. Published
+    // wholesale on success, dropped on rollback.
+    std::optional<ChromeComposition> stagedChrome;
 };
+
+// Convert a Lua value at `index` into the decoder's Lua-agnostic `ChromeValue`.
+// Throws std::runtime_error (fail-loud) on an unsupported type, a non-integer
+// number, excessive depth (also catches cyclic tables), an over-large tree, or
+// a malformed table. A Lua table is an ARRAY when its keys are exactly 1..rawlen
+// (a `left`/`right` side) and a keyed TABLE when every key is a string (root,
+// region, widget); a mixed, sparse, or non-string/non-index key is rejected, so
+// no author key is ever silently dropped.
+ChromeValue luaToChromeValue(lua_State* state, int index, int depth,
+                             int& nodeBudget) {
+    if (--nodeBudget < 0)
+        throw std::runtime_error{"chrome table is too large"};
+    if (depth > kMaxChromeWalkDepth)
+        throw std::runtime_error{"chrome table nests too deeply"};
+    // Each recursion level holds a value on the Lua stack while descending; past
+    // LUA_MINSTACK that would overflow (memory corruption) without a reservation.
+    if (lua_checkstack(state, 4) == 0)
+        throw std::runtime_error{"chrome table exhausts the Lua stack"};
+    if (index < 0) index = lua_gettop(state) + index + 1;
+
+    switch (lua_type(state, index)) {
+    case LUA_TBOOLEAN:
+        return ChromeValue::ofBool(lua_toboolean(state, index) != 0);
+    case LUA_TNUMBER:
+        if (!lua_isinteger(state, index))
+            throw std::runtime_error{"chrome numbers must be integers"};
+        return ChromeValue::ofInt(
+            static_cast<long long>(lua_tointeger(state, index)));
+    case LUA_TSTRING: {
+        std::size_t length = 0;
+        char const* data = lua_tolstring(state, index, &length);
+        return ChromeValue::ofString(std::string{data, length});
+    }
+    case LUA_TTABLE:
+        break;  // handled below
+    default:
+        throw std::runtime_error{
+            std::string{"chrome value has unsupported type "} +
+            lua_typename(state, lua_type(state, index))};
+    }
+
+    // Classify the table in one pass. A CHROME table is either a pure keyed
+    // table (root/region/widget: every key a string) or a pure array (a
+    // left/right side: keys exactly 1..rawlen). Anything else -- a non-string,
+    // non-index key, a mix of named and array entries, or a sparse/oversized
+    // index set -- is fail-loud, never silently dropped (the decoder's
+    // unknown-field contract would otherwise be bypassed by a stray key).
+    int stringKeys = 0;
+    int indexKeys = 0;
+    int otherKeys = 0;
+    lua_pushnil(state);
+    while (lua_next(state, index) != 0) {
+        int const keyType = lua_type(state, -2);
+        if (keyType == LUA_TSTRING)
+            ++stringKeys;
+        else if (keyType == LUA_TNUMBER && lua_isinteger(state, -2))
+            ++indexKeys;
+        else
+            ++otherKeys;
+        lua_pop(state, 1);
+    }
+    if (otherKeys > 0)
+        throw std::runtime_error{
+            "chrome table has a key that is neither a name nor an array index"};
+    if (stringKeys > 0 && indexKeys > 0)
+        throw std::runtime_error{
+            "chrome table mixes named fields and array entries"};
+    std::size_t const length = lua_rawlen(state, index);
+
+    if (indexKeys > 0) {
+        if (static_cast<std::size_t>(indexKeys) != length)
+            throw std::runtime_error{
+                "chrome array has holes or out-of-range indices"};
+        std::vector<ChromeValue> items;
+        items.reserve(length);
+        for (std::size_t i = 1; i <= length; ++i) {
+            lua_rawgeti(state, index, static_cast<lua_Integer>(i));
+            items.push_back(
+                luaToChromeValue(state, lua_gettop(state), depth + 1, nodeBudget));
+            lua_pop(state, 1);
+        }
+        return ChromeValue::ofArray(std::move(items));
+    }
+
+    // Keyed table (or empty {} -- an empty keyed table, so an omitted-or-empty
+    // side is a decoder-level "expected an array", not a silent success).
+    std::vector<std::pair<std::string, ChromeValue>> entries;
+    lua_pushnil(state);
+    while (lua_next(state, index) != 0) {
+        std::size_t keyLength = 0;
+        char const* keyData = lua_tolstring(state, -2, &keyLength);
+        entries.emplace_back(
+            std::string{keyData, keyLength},
+            luaToChromeValue(state, lua_gettop(state), depth + 1, nodeBudget));
+        lua_pop(state, 1);
+    }
+    return ChromeValue::ofTable(std::move(entries));
+}
 
 struct BudgetFrame {
     LuaError pendingError;
@@ -121,7 +233,7 @@ struct LuaCommandHost::Impl {
         lua_newtable(state);
         // Installed from the same list the documentation check reads, so a
         // function cannot be exposed without a place to describe it.
-        static_assert(std::size(LuaCommandHost::kApiFunctions) == 2,
+        static_assert(std::size(LuaCommandHost::kApiFunctions) == 3,
                       "add the new API function's installer below");
         lua_pushlightuserdata(state, this);
         lua_pushcclosure(state, &Impl::commandCallback, 1);
@@ -129,6 +241,9 @@ struct LuaCommandHost::Impl {
         lua_pushlightuserdata(state, this);
         lua_pushcclosure(state, &Impl::registerCallback, 1);
         lua_setfield(state, -2, LuaCommandHost::kApiFunctions[1].data());
+        lua_pushlightuserdata(state, this);
+        lua_pushcclosure(state, &Impl::chromeCallback, 1);
+        lua_setfield(state, -2, LuaCommandHost::kApiFunctions[2].data());
         lua_setglobal(state, "ssg");
     }
 
@@ -326,6 +441,54 @@ struct LuaCommandHost::Impl {
         return 0;
     }
 
+    static int chromeCallback(lua_State* callbackState) noexcept {
+        auto& host = callbackHost(callbackState);
+        bool raiseError = false;
+        try {
+            if (lua_gettop(callbackState) < 1 ||
+                lua_type(callbackState, 1) != LUA_TTABLE) {
+                host.pendingError = LuaError::InvalidScript;
+                host.callbackMessage = "ssg.chrome requires a table argument";
+                raiseError = true;
+            } else if (host.registrationStack.empty()) {
+                host.pendingError = LuaError::RuntimeFault;
+                host.callbackMessage =
+                    "ssg.chrome may only be called while evaluating";
+                raiseError = true;
+            } else {
+                int nodeBudget = kMaxChromeWalkNodes;
+                ChromeValue root =
+                    luaToChromeValue(callbackState, 1, 0, nodeBudget);
+                auto decoded = decodeChromeComposition(
+                    root, host.options.chromeProviders);
+                if (!decoded.ok()) {
+                    host.pendingError = LuaError::InvalidScript;
+                    host.callbackMessage = *decoded.error;
+                    raiseError = true;
+                } else {
+                    // Last `ssg.chrome` call in the evaluation wins.
+                    host.registrationStack.back().stagedChrome =
+                        std::move(decoded.composition);
+                }
+            }
+        } catch (std::exception const& exception) {
+            host.pendingError = LuaError::InvalidScript;
+            host.callbackMessage =
+                "ssg.chrome: " + std::string{exception.what()};
+            raiseError = true;
+        } catch (...) {
+            host.pendingError = LuaError::InvalidScript;
+            host.callbackMessage = "ssg.chrome: unknown fault";
+            raiseError = true;
+        }
+        if (!raiseError) {
+            return 0;
+        }
+        lua_pushlstring(callbackState, host.callbackMessage.data(),
+                        host.callbackMessage.size());
+        return lua_error(callbackState);
+    }
+
     static void budgetHook(lua_State* callbackState,
                             lua_Debug*) noexcept {
         lua_getfield(callbackState, LUA_REGISTRYINDEX, kHostRegistryKey);
@@ -416,6 +579,9 @@ struct LuaCommandHost::Impl {
         for (auto& command : transaction.commands) {
             pluginCommands.emplace(command.id, command.functionReference);
         }
+        // Chrome publishes on the SAME success point as commands: a script that
+        // no longer calls ssg.chrome reverts to built-in (stagedChrome nullopt).
+        publishedChrome = std::move(transaction.stagedChrome);
     }
 
     LuaCommandHostOptions options;
@@ -424,6 +590,7 @@ struct LuaCommandHost::Impl {
     lua_State* state{};
     std::unordered_map<std::string, LuaCommand> catalog;
     std::unordered_map<std::string, int> pluginCommands;
+    std::optional<ChromeComposition> publishedChrome;
     std::vector<RegistrationTransaction> registrationStack;
     std::vector<HandleSlot> handles;
     std::string callbackMessage;
@@ -453,6 +620,10 @@ std::vector<std::string> LuaCommandHost::registeredCommands() const {
     // handles for the same script, rather than depending on hash order.
     std::sort(ids.begin(), ids.end());
     return ids;
+}
+
+std::optional<ChromeComposition> const& LuaCommandHost::composition() const noexcept {
+    return impl_->publishedChrome;
 }
 
 LuaResult LuaCommandHost::evaluate(std::string_view script) {

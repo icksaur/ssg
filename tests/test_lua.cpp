@@ -32,6 +32,7 @@ LuaCommandHostOptions options(std::vector<LuaCommand> commands = {}) {
     LuaCommandHostOptions result;
     result.pluginId = ClientId{81};
     result.commands = std::move(commands);
+    result.chromeProviders = {"path", "branch", "status", "follow"};
     return result;
 }
 
@@ -252,6 +253,131 @@ TEST(unsafeStandardLibrariesAndNativeLoaderAreAbsent) {
                     .accepted());
 }
 
+// --- doc/spec-lua-widget-composition.md phase 4: ssg.chrome staging ---
+
+LuaCommandHost chromeHost() {
+    return LuaCommandHost{options(), [](LuaInvocation const&) {
+                             return CommandHandlerResult::success();
+                         }};
+}
+
+// A well-formed ssg.chrome call stages a composition the host then surfaces,
+// decoded through the nested-table walker (providers resolved, regions kept).
+TEST(chromeCallStagesTheComposition) {
+    auto host = chromeHost();
+    ASSERT_FALSE(host.composition().has_value());
+    auto const result = host.evaluate(
+        "ssg.chrome{ header = { left = { { kind = 'field', provider = 'path' } } },"
+        " footer = { left = { { kind = 'label', text = 'RO' } } } }");
+    ASSERT_TRUE(result.accepted());
+    ASSERT_TRUE(host.composition().has_value());
+    ASSERT_TRUE(host.composition()->header.has_value());
+    ASSERT_TRUE(host.composition()->footer.has_value());
+    ASSERT_EQ(host.composition()->header->left.size(), std::size_t{1});
+    ASSERT_TRUE(host.composition()->header->left[0].value.has_value());
+    ASSERT_TRUE(host.composition()->header->left[0].value->isProvider);
+    ASSERT_EQ(host.composition()->header->left[0].value->provider,
+              std::string{"path"});
+}
+
+// Second ssg.chrome call in one evaluation replaces the first (last wins).
+TEST(chromeLastCallWins) {
+    auto host = chromeHost();
+    ASSERT_TRUE(host.evaluate(
+        "ssg.chrome{ header = { left = { { kind = 'label', text = 'A' } } } }"
+        "\nssg.chrome{ footer = { left = { { kind = 'label', text = 'B' } } } }")
+                    .accepted());
+    ASSERT_TRUE(host.composition().has_value());
+    ASSERT_FALSE(host.composition()->header.has_value());
+    ASSERT_TRUE(host.composition()->footer.has_value());
+}
+
+// A script that calls ssg.chrome then errors leaves the PRIOR composition
+// intact (staged-then-rolled-back), and a later successful reload that drops the
+// call reverts to built-in (nullopt).
+TEST(chromeRollsBackOnLaterScriptError) {
+    auto host = chromeHost();
+    ASSERT_TRUE(host.evaluate(
+        "ssg.chrome{ header = { left = { { kind = 'label', text = 'keep' } } } }")
+                    .accepted());
+    ASSERT_TRUE(host.composition().has_value());
+
+    // A second evaluation composes different chrome then raises: the previous
+    // composition must survive unchanged.
+    auto const errored = host.evaluate(
+        "ssg.chrome{ footer = { left = { { kind = 'label', text = 'gone' } } } }"
+        "\nerror('boom')");
+    ASSERT_FALSE(errored.accepted());
+    ASSERT_TRUE(host.composition().has_value());
+    ASSERT_TRUE(host.composition()->header.has_value());
+    ASSERT_FALSE(host.composition()->footer.has_value());
+
+    // A clean reload with no ssg.chrome reverts to built-in.
+    ASSERT_TRUE(host.evaluate("local x = 1").accepted());
+    ASSERT_FALSE(host.composition().has_value());
+}
+
+// An invalid descriptor fails the whole call loud (path-qualified) and stages
+// nothing.
+TEST(chromeInvalidDescriptorFailsLoud) {
+    auto host = chromeHost();
+    auto const unknownKind = host.evaluate(
+        "ssg.chrome{ header = { left = { { kind = 'buton', text = 'x' } } } }");
+    ASSERT_EQ(unknownKind.error, LuaError::InvalidScript);
+    ASSERT_TRUE(unknownKind.message.find("unknown kind") != std::string::npos);
+    ASSERT_FALSE(host.composition().has_value());
+
+    auto const unknownProvider = host.evaluate(
+        "ssg.chrome{ header = { left = { { kind = 'field', provider = 'nope' } } } }");
+    ASSERT_EQ(unknownProvider.error, LuaError::InvalidScript);
+    ASSERT_TRUE(unknownProvider.message.find("unknown provider") !=
+                std::string::npos);
+
+    ASSERT_EQ(host.evaluate("ssg.chrome('not a table')").error,
+              LuaError::InvalidScript);
+}
+
+// A cyclic table cannot hang the walker: the depth guard fails it loud.
+TEST(chromeCyclicTableIsRejected) {
+    auto host = chromeHost();
+    auto const result =
+        host.evaluate("local t = {} t.left = t ssg.chrome{ header = t }");
+    ASSERT_FALSE(result.accepted());
+    ASSERT_EQ(result.error, LuaError::InvalidScript);
+    ASSERT_TRUE(result.message.find("nests too deeply") != std::string::npos);
+    ASSERT_FALSE(host.composition().has_value());
+}
+
+// A non-string key inside a descriptor table is rejected, not dropped -- the
+// fail-loud key contract must not regress to a silent loss. An explicitly empty
+// side is likewise a loud type error (a side must be an array), while an empty
+// root table composes nothing.
+TEST(chromeMalformedTableShapesFailLoud) {
+    auto host = chromeHost();
+    // A stray array index beside named widget fields.
+    auto const mixedWidget = host.evaluate(
+        "ssg.chrome{ header = { left = { { kind = 'label', text = 'x', [1] = 'oops' } } } }");
+    ASSERT_EQ(mixedWidget.error, LuaError::InvalidScript);
+    ASSERT_FALSE(host.composition().has_value());
+
+    // A boolean key is neither a name nor an index.
+    auto const boolKey = host.evaluate(
+        "local w = { kind = 'label', text = 'x' } w[true] = 1"
+        " ssg.chrome{ header = { left = { w } } }");
+    ASSERT_EQ(boolKey.error, LuaError::InvalidScript);
+
+    // An explicitly empty side is a type error (a side is an array of widgets).
+    auto const emptySide =
+        host.evaluate("ssg.chrome{ header = { left = {} } }");
+    ASSERT_EQ(emptySide.error, LuaError::InvalidScript);
+
+    // An empty root composes nothing (valid, no override).
+    ASSERT_TRUE(host.evaluate("ssg.chrome{}").accepted());
+    ASSERT_TRUE(host.composition().has_value());
+    ASSERT_FALSE(host.composition()->header.has_value());
+    ASSERT_FALSE(host.composition()->footer.has_value());
+}
+
 }  // namespace
 
 TEST(aGateThatThrowsRollsTheEvaluationBackLikeAnyOtherRefusal) {
@@ -342,6 +468,12 @@ int main() {
     RUN(commandWithoutSecondArgumentLeavesArgumentsEmpty);
     RUN(malformedCommandArgumentIsRejectedBeforeTheDispatcherIsCalled);
     RUN(unsafeStandardLibrariesAndNativeLoaderAreAbsent);
+    RUN(chromeCallStagesTheComposition);
+    RUN(chromeLastCallWins);
+    RUN(chromeRollsBackOnLaterScriptError);
+    RUN(chromeInvalidDescriptorFailsLoud);
+    RUN(chromeCyclicTableIsRejected);
+    RUN(chromeMalformedTableShapesFailLoud);
     std::cout << "Passed: " << passed << " Failed: " << failed << '\n';
     return failed == 0 ? 0 : 1;
 }

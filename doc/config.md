@@ -260,6 +260,30 @@ because neither is obvious:
 There's also a limit -- a few dozen -- on how many commands one of your
 commands may ask for. Past it the call is refused rather than ssg locking up.
 
+### Custom header and footer
+
+`ssg.chrome` replaces the built-in header and/or footer with your own row of
+widgets. A region is a set of widgets packed `left` and (for the footer) `right`
+with an optional `center`; each widget is a `field`, `label`, `checkbox`, or
+`spacer` carrying literal `text` or a live `provider` (`path`, `branch`,
+`status`, `follow`), and a `field`/`checkbox` may carry a click `command`.
+
+```lua
+ssg.chrome{
+  header = { left = { { kind = "field", provider = "path" },
+                      { kind = "field", provider = "branch" } } },
+  footer = { left  = { { kind = "field", provider = "status" } },
+             right = { { kind = "field", text = "reload",
+                         command = "config.reload" } } },
+}
+```
+
+Omit a region to keep its built-in chrome; the header is left-group only (the
+picker input line owns its right side). Like your commands, a composition lives
+exactly as long as the `ssg.chrome` call that defines it: drop the call and
+reload and the built-in chrome returns. An invalid descriptor, or any later
+script error, rejects the whole reload and leaves the previous chrome in place.
+
 ## Terminal capabilities
 
 At startup ssg asks your terminal what it supports -- synchronized output,

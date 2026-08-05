@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ssg/ChromeComposition.h>
 #include <ssg/CommandRegistry.h>
 
 #include <chrono>
@@ -81,6 +82,11 @@ struct LuaCommandHostOptions {
     ClientId pluginId;
     std::vector<CapabilityId> capabilities;
     std::vector<LuaCommand> commands;
+    // The live provider ids a composed `ssg.chrome` widget may reference (the
+    // built-in status-field providers -- path/branch/status/follow). Injected so
+    // the host does not couple to the status-field registry; a widget naming an
+    // id outside this set is a compose-time error.
+    std::vector<std::string> chromeProviders;
     std::uint64_t instructionBudget{100'000};
     std::chrono::milliseconds timeBudget{50};
     LuaGenerationGate publishGate;
@@ -92,7 +98,8 @@ public:
     // installing the API and checking that it is documented read the same list
     // rather than two hand-maintained ones.
     static constexpr std::string_view kApiFunctions[]{"command",
-                                                      "register_command"};
+                                                      "register_command",
+                                                      "chrome"};
 
     LuaCommandHost(LuaCommandHostOptions options, LuaDispatcher dispatcher);
     ~LuaCommandHost();
@@ -106,6 +113,12 @@ public:
     // The commands the last successful evaluation registered, sorted.  Each
     // evaluation replaces this set entirely.
     [[nodiscard]] std::vector<std::string> registeredCommands() const;
+    // The chrome composition the last successful evaluation staged via
+    // `ssg.chrome`, or nullopt when the current script composes no chrome (so a
+    // consumer falls back to the built-in header/footer). Replaced wholesale by
+    // each successful evaluation -- a reload that drops the `ssg.chrome` call
+    // reverts to built-in, matching the command/keymap reset-then-reapply model.
+    [[nodiscard]] std::optional<ChromeComposition> const& composition() const noexcept;
     [[nodiscard]] LuaResult invoke(std::string_view pluginCommand);
     [[nodiscard]] bool hasCommand(std::string_view pluginCommand) const;
 
