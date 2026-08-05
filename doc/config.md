@@ -198,13 +198,18 @@ somewhere and it is rejected for this, the string picked up an invisible
 character along the way.
 
 What you cannot do yet is change the *arrangement* of the chrome -- which fields
-sit in the header, what order the footer actions collapse in, where the prompt
-puts its toggles. That furniture is built from a small, fixed set of internal
-layout widgets (containers, labels, fields, checkboxes, the input line), each
-positioned relative to its row rather than at a hard-coded column. Composing your
-own arrangement from those widgets is a deliberate future direction, not a knob
-that exists today: for now `init.lua` configures the glyphs and sizes above, and
-the layout itself is fixed.
+sit in the header, what order the footer actions collapse in, where a prompt puts
+its toggles. Internally that furniture is now built from one small vocabulary: a
+row is a *stack* of widgets packed from the left and the right with an optional
+centre (containers, labels, collapsible fields, checkboxes, the input line), each
+positioned relative to its row rather than at a hard-coded column, and each prompt
+is anchored to a region (the command palette to the header, find/replace to the
+footer). That internal model is data-shaped -- a row is a list of widgets with a
+pack side, a collapse priority, and an overflow rule -- which is what makes
+letting `init.lua` compose its own header/footer arrangement a plausible future
+direction. It is not a knob that exists today (the arrangement is still assembled
+in the editor itself): for now `init.lua` configures the glyphs and sizes above,
+and the arrangement is fixed.
 
 ### Your own commands
 

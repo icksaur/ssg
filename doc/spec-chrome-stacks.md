@@ -1,36 +1,40 @@
 # spec-chrome-stacks
 
-Status: draft (spec only; not yet implemented)
+Status: done (phases A–F shipped)
 
 ## Goals
 
 Generalize header/footer chrome from today's three ad-hoc placement mechanisms
-(`fitRow`, `packEnd`, and manual input-line x-arithmetic) into ONE composable
-row primitive — a `WidgetStack` built by `packLeft`/`packRight`/`center` — and
-promote the footer (and the header's prompt) into a **region with modes**, so a
-multi-row surface like find/replace is a footer MODE pushed over the default
-status line rather than a separately-computed bottom-of-editor reservation.
-After this change:
+(`fitRow`, `packEnd`, and manual input-line x-arithmetic) into a small composable
+vocabulary — a `WidgetStack` row primitive (`packLeft`/`packRight`/`center`) for
+the status-field and footer rows, and a `layoutInputLine` widget seam for the
+picker input line — and make prompt anchoring/focus explicit, single-sourcing the
+find/replace footer reservation so its geometry is derived once. After this
+change (as shipped, phases A–F):
 
 - One row is composed as `stack.packLeft(a).packRight(z).packLeft(b)...`,
   yielding `abc…xyz`: left items pack from the leading edge, right items from the
   trailing edge, an optional single `center` slot sits between them at an
   explicit or flexible width.
-- Which items survive a crowded row is a STACK-level policy (`collapse` by rank);
-  how a surviving item's content fits its own cell is a WIDGET-level overflow
-  policy (`truncate` or `scrollTail`). The two are orthogonal, not competing.
-- The footer is a variable-height region with a **mode stack**: the default mode
-  is the 1-row status stack; find is a 2-row mode; replace is a 3-row mode.
-  Opening find PUSHES a footer mode; closing POPS it. `computePromptLayout`'s
-  bottom-reservation math folds into "a footer mode is N rows, each row a
-  `WidgetStack` or a solved sub-tree."
-- A prompt is a **focusable region mode**: exactly one prompt mode is active at a
-  time, anchored to a region (header for the palette, footer for find/replace),
-  and keyboard focus follows the topmost prompt mode. This makes today's
-  implicit "keyboard always goes to the prompt" explicit in the layout model.
+- Which items survive a crowded row is a STACK-level policy (left-group
+  `collapse` by rank; right-group clamp-truncate); how a surviving item's content
+  fits its own cell is a WIDGET-level overflow policy (`Truncate` or
+  `ScrollTail`). The two are orthogonal, not competing.
+- The find/replace prompt reservation is SINGLE-SOURCED: one full-width bottom
+  strip (`view.prompt`) that the shell layout, the a11y node/hit region, and the
+  rendered controls all consume, shrinking the editor from the bottom. (The
+  original plan to make this a variable-height footer MODE STACK — a `FooterMode`
+  value type with push/pop and status-line suppression — was found speculative
+  and DEFERRED; see §The model as shipped. Find still takes 2 rows, replace 3,
+  as before.)
+- Prompt anchoring/focus is made EXPLICIT via `promptFocusRegion(kind)` (header
+  for the palette, footer for find/replace) rather than a new runtime mode stack:
+  there is a single `PromptSurface`, so at most one prompt is active and keyboard
+  focus follows it unambiguously. This makes today's implicit "keyboard always
+  goes to the prompt" explicit in the layout model without new machinery.
 
-Non-goal (explicit): exposing stacks/modes to `init.lua` (a later spec; this one
-only keeps the seam open); moving the palette out of the header; adding
+Non-goal (explicit): exposing stacks/regions to `init.lua` (a later spec; this
+one only keeps the seam open); moving the palette out of the header; adding
 `SemanticRole`s or `PromptKind`s; changing on-screen output in the porting
 phases (the existing goldens are the oracle — byte-identical without
 regeneration).
@@ -39,8 +43,12 @@ regeneration).
 
 ### WidgetStack: one row primitive
 
-`WidgetStack` replaces `fitRow` + `packEnd` + `addFields` + the input-line
-arithmetic with a single builder that lays out one row of the header or footer.
+`WidgetStack` replaces `fitRow` + `packEnd` + `addFields` (the status-field and
+footer-action placement) with a single builder that lays out one row of the
+header or footer. The picker input line is NOT folded into a stack item — it
+keeps its own `layoutInputLine` widget seam (reserve/grow width + ghost), placed
+alongside the header field stack — so "one row primitive" means the STATUS-FIELD
+and footer rows, with the input line a sibling widget on the header row.
 It is a pure value type (no renderer/runtime dependency), consistent with the
 existing `Widget.h` free-function style; the builder methods mutate and return
 `*this` so calls chain.
@@ -78,25 +86,28 @@ honor it in full (graceful, like the left collapse and right truncate); it is
 NOT fail-loud. The only fail-loud center case is a SECOND `center` call, which
 is a structural authoring error, not runtime narrowness.
 
-### Item, and the two overflow levels
+### Item, and the two membership/overflow levels
 
-A stack item is `{ id, WidgetContent, StackFit, Overflow }`:
+A stack item as shipped is `StackItem { id, content, desired, rank, keep,
+overflow, sigil }` — plain fields (there is no separate `StackFit` type; the
+membership policy is expressed by `rank` + `keep` for the left group, and by
+position for the right group):
 
-- `StackFit` — the LEFT-group membership policy when it cannot fit every item:
-  `Collapse{rank}` (drop the whole item, lowest rank first, survivors intact —
-  today's header/footer status FIELDS) or `Keep` (never dropped — the input
-  line, the primary content). The fit pass reproduces `fitRow`'s EXACT rule for
-  the collapse set: stable-sort by rank, forward-scan appending while it fits,
-  STOP at the first non-fit (NOT drop-until-fits — that picks a different
-  retained subset). `StackFit` governs the LEFT group only; the RIGHT group's
-  membership is the positional clamp-truncate/drop rule above (today's footer
-  actions + hint), and the center slot is never dropped — its `Fixed` width
-  clamps to the available gap, and only a second `center` call is fail-loud.
-- `Overflow` — the WIDGET-level policy for a surviving item whose CONTENT
-  exceeds its cell: `Truncate` (clip to the cell; today's footer actions/hint
-  render, clipped by the renderer to the rect) or `ScrollTail{sigil, budget}`
-  (pin a leading sigil, show the grapheme tail of the value; today's input line
-  via `layoutTextInput`). A `Fixed`-content field that always fits uses neither.
+- Left-group MEMBERSHIP when the group cannot fit every item: items with
+  `keep = false` collapse by `rank` (drop the whole item, lowest rank first,
+  survivors intact — today's header/footer status FIELDS); `keep = true` items
+  are never dropped (the primary content). The fit pass reproduces `fitRow`'s
+  EXACT rule: stable-sort by rank, forward-scan appending while it fits, STOP at
+  the first non-fit (NOT drop-until-fits — that picks a different retained
+  subset). The RIGHT group's membership is the positional clamp-truncate/drop
+  rule above (today's footer actions + hint); the center slot is never dropped —
+  its `Fixed` width clamps to the available gap, and only a second `center` call
+  is fail-loud.
+- `overflow` — the WIDGET-level policy for a surviving item whose CONTENT exceeds
+  its cell: `Overflow::Truncate` (clip to the cell; today's footer actions/hint
+  render, clipped by the renderer to the rect) or `Overflow::ScrollTail` (pin the
+  item's `sigil`, show the grapheme tail of `content` via `layoutTextInput`).
+  `Overflow::None` is a field that always fits.
 
 Collapse decides WHICH items are present; Overflow decides how a present item's
 text fills the cell it received. A narrow header collapses the branch field out
@@ -113,10 +124,11 @@ as stack items in phase C: the input line needs two different widths (its fixed
 remaining space, text-limited via `layoutTextInput`) and a non-uniform gap (1
 cell field→input, 0 input→ghost) — neither of which the row primitive expresses.
 That is real primitive design (reserve-vs-grow width, per-item gaps, ghost
-handling), and the input line is the palette PROMPT, which phase E turns into an
-explicit focusable region mode owning a `TextInput` widget. The reserve/grow/
-ghost geometry is designed THERE, not shoehorned into a stack item now. Until
-then the input line keeps the `layoutTextInput` seam it already uses.
+handling), and the input line is the palette PROMPT. Phase E completes it by
+bundling the query + ghost into a `layoutInputLine` widget seam (it does NOT
+become a stack item — that would need the reserve/grow-width + per-item-gap
+primitive extensions, deferred until a Lua binding needs them). Until phase E the
+input line keeps the plain `layoutTextInput` seam it already uses.
 
 ### Output: still the existing projections
 
@@ -127,13 +139,26 @@ like the input line + ghost). The `ui_layout`/`test_hit_test`/`test_render`
 goldens verify each port span-for-span; no wire type changes in the porting
 phases.
 
-### Footer as a region with a mode stack
+### Footer prompt reservation: single-sourced (NOT a mode stack — shipped)
 
-Today `buildShellTree` gives the footer an `exact(footerHeight)` (=1) region,
-and find/replace are rendered by a SEPARATE `computePromptLayout` into a rect
-carved from the bottom of the editor (`reservedPromptRows`, promptRowCount:
-Find=2 Replace=3). This spec unifies them: the footer region becomes
-**variable-height**, driven by the active footer mode's row count.
+The original design promoted the footer to a variable-height REGION WITH MODES (a
+`FooterMode { rows, focusable, promptKind? }` value type, a push/pop mode stack,
+the footer node becoming `exact(activeFooterRows)`, and the footer status line
+suppressed while a prompt owns the region). **That restructure was NOT built** —
+it was found speculative (its only near-term effect, suppressing the
+already-overpainted footer status nodes, changes goldens for no user-visible
+gain) and DEFERRED until a second footer mode or the `init.lua` binding needs it.
+
+What shipped instead (phase D) is the load-bearing part of the fold — a
+SINGLE-SOURCE prompt rect. The footer node stays `exact(footerHeight=1)`, and
+find/replace still reserve rows over the bottom via `computePromptLayout`; but
+`view.prompt` is now the full-width bottom strip that the shell layout, the a11y
+node/hit region, AND the rendered controls all consume (`promptStatusView`
+receives it rather than recomputing). The editor shrinks from the bottom by that
+rect's height. The original mode-stack prose is retained below as the DESIGN
+RATIONALE for the deferred increment, not as shipped behavior:
+
+Design rationale for a future `FooterMode` (deferred):
 
 - A `FooterMode` is `{ rows: [RowSpec], focusable: bool, promptKind? }` where a
   `RowSpec` is either a `WidgetStack` (the status line) or a solved sub-tree (the
@@ -171,15 +196,16 @@ nothing. Oracle: a runtime test asserts `shell.prompt == promptStatus.prompt->re
 AND full-width (x=0, width=columns) across panel-off and panel-on.
 
 Realization note (scope): phase D ships the single-source contract above, which
-IS the "fold" — the prompt is now the footer-anchored prompt mode's ONE rect, and
-the editor still shrinks from the bottom by that rect's height (functionally
-identical to "the footer region grew"). The heavier `FooterMode { rows, focusable,
-promptKind? }` value type + a variable-height footer node + suppressing the footer
-status line while a prompt is open are DEFERRED to phase E, where the mode concept
-earns its keep by carrying focus routing (a mode is `focusable`). Splitting it
-this way keeps phase D behavior-neutral: suppressing the currently-emitted footer
-status nodes under an open prompt would change the goldens, so that restructure
-belongs with the focus-model change that motivates it, not the single-source fix.
+IS the "fold" — the prompt is now the footer-anchored prompt's ONE full-width
+rect, and the editor still shrinks from the bottom by that rect's height
+(functionally identical to "the footer region grew"). The heavier `FooterMode {
+rows, focusable, promptKind? }` value type + a variable-height footer node +
+suppressing the footer status line while a prompt is open were then evaluated in
+phase E and DROPPED as speculative — not built. Rationale: suppressing the
+currently-emitted (and merely over-painted) footer status nodes would change the
+goldens for no user-visible gain, and the `FooterMode` type earns its keep only
+when a SECOND footer mode or the `init.lua` binding needs it. It remains the
+natural next increment, documented but deferred.
 
 Multi-row footer modes are preserved deliberately: find/replace stay 2/3 rows
 even though find alone could be one line, because a future richer footer surface
@@ -229,11 +255,52 @@ layer (the caret column and node rects/roles stay with the caller). It completes
 the input-line generalization deferred from phase C without needing the prompt to
 be a full stack item.
 
+### The model as shipped + the `init.lua` composition seam
+
+What phases A–E leave in place, and the seam a future `init.lua` binding would
+use (design note; NO binding is built, and it is out of scope here):
+
+- **One row primitive.** The header STATUS-FIELD row and the whole footer row are
+  `WidgetStack`s (`packLeft`/`packRight`/`center`) resolved over an extent,
+  replacing the `fitRow` + `packEnd` + `addFields` placement. The picker input
+  line remains a sibling widget (`layoutInputLine`) on the header row, not a stack
+  item. Membership is `rank` + `keep` (left) / positional clamp-truncate (right);
+  content fit is per-item `overflow` (`Truncate` / `ScrollTail`). `solveLayout`
+  places the top-level regions; the stack places a row's contents.
+- **Regions and anchoring.** The shell is regions (header / body / footer) holding
+  content. A prompt is anchored to a region by `promptFocusRegion(kind)` — Header
+  (the palette, whose query is the header input line) or Footer (find/replace,
+  whose reservation is single-sourced full-width and shrinks the editor from the
+  bottom). There is one `PromptSurface`, so at most one prompt is ever active and
+  `FocusTarget::Prompt` resolves unambiguously to the hosting region.
+- **Closed vocabulary, data-SHAPED internally.** The widget kinds are a fixed enum
+  (`Container`/`Label`/`Field`/`Checkbox`/`TextInput`/`Spacer`); a status/footer
+  row's placement is no longer bespoke C++ arithmetic but a list of
+  `StackItem{id, content, desired, rank, keep, overflow, sigil}` plus a `center`.
+  The C++ callers still BUILD those items (there is no runtime data-driven row
+  composition yet) — but because the model is already this shape, exposing it to a
+  Lua author is a matter of accepting the same descriptors, not redesigning the
+  layout.
+
+The `init.lua` seam this opens (design only): a future config call would accept a
+tree of stack/region descriptors — the same data-composition shape
+`theme.set`/`style.define` already use — the server would validate it against the
+fixed `WidgetKind` set and the fit/solve rules (failing loud on an unknown kind
+or an unsolvable row, exactly as `resolve`/`solveLayout` already do), and NO
+native code would load. The three gates a binding must respect are already
+invariants below: server-owned layout, `solveLayout`/stack purity + fail-loud,
+and non-overlapping projected nodes. Nothing on the wire or in the renderer has
+to change to KEEP this seam open — it is a property of having funneled every row
+through the closed-primitive `WidgetStack` instead of ad-hoc placement. The
+`FooterMode` value type (a named, data-described footer mode) is the natural next
+increment WHEN a second footer mode or the Lua binding needs it; this spec
+deliberately does not add it speculatively.
+
 ## Invariants
 
-- Server owns layout/rendering; the client is a dumb renderer. Stacks and modes
-  live server-side; only their projected `AccessibilityNode`/prompt-view
-  artifacts cross the wire.
+- Server owns layout/rendering; the client is a dumb renderer. Stacks and prompt
+  reservations (and any future mode-stack) live server-side; only their projected
+  `AccessibilityNode`/prompt-view artifacts cross the wire.
 - `solveLayout` stays PURE and FAILS LOUDLY. The stack fit pass must guarantee
   fit before any solve; a second `center` is a fail-loud spec error, not a clamp.
 - At most one prompt is active — guaranteed by the single `PromptSurface` (one
@@ -250,20 +317,22 @@ be a full stack item.
   scan, stop at first non-fit) — not drop-until-fits.
 - Opening a prompt shrinks the editor from the BOTTOM only (document top never
   moves).
-- The prompt geometry has a SINGLE source: the active footer-mode rect. The
-  shell reservation and the prompt-status reservation both consume it; neither
-  recomputes a prompt rect independently.
+- The prompt geometry has a SINGLE source: the full-width `view.prompt`
+  reservation rect. The shell reservation and the prompt-status reservation both
+  consume it; neither recomputes a prompt rect independently.
 - Adding a `SemanticRole` or a `Style` glyph key requires its existing wiring
   sites; this spec adds none.
 
 ## Considerations
 
-- **Behavior-preserving ports vs. the fold.** Phases B/C (port footer, then
-  header, onto `WidgetStack`) are strictly behavior-preserving — goldens are the
-  oracle, no regeneration. Phase D (footer modes + fold the prompt reservation
-  in) is ALSO intended to be observably neutral, but it moves the prompt from an
-  editor reservation to a footer region; the risk is a one-row off-by-one in the
-  editor-shrink or the caret row. The prompt-status and render goldens pin it.
+- **Behavior-preserving ports vs. the single-source fold.** Phases B/C (port
+  footer, then header, onto `WidgetStack`) are strictly behavior-preserving —
+  goldens are the oracle, no regeneration. Phase D (single-source the prompt
+  reservation rect) is render-neutral: it makes `view.prompt` full-width and has
+  `promptStatusView` consume it rather than recompute, so the two reservations
+  can no longer diverge under a panel; the only non-render change is the a11y
+  reservation rect widening under a panel to match what already renders. The
+  prompt-status, render, and single-source oracles pin it.
 - **Two input surfaces stay distinct.** The palette (header) and find/replace
   (footer) are different anchors; the unification is the FOCUS model and the
   stack primitive, not merging them into one surface.
@@ -289,18 +358,22 @@ be a full stack item.
   keeps `computePromptLayout`'s solve tree verbatim and re-hosts it; the
   prompt-status + render goldens and `inputLineCaret` tests stay green without
   regeneration.
-- **Focus regression** (keyboard to the wrong surface). Mitigation: the
-  at-most-one-active-prompt invariant is a fail-loud assertion; existing
-  focus-stack tests must stay green.
+- **Focus regression** (keyboard to the wrong surface). Mitigation: at most one
+  prompt is active by construction (a single `PromptSurface` optional), and
+  `reconcilePromptFocus` couples `FocusTarget::Prompt` to `prompt.active()` — no
+  fail-loud assertion is added because there is no way to violate it; existing
+  focus-stack tests plus the region oracle stay green.
 - **Scope creep into Lua.** Mitigation: the Lua binding is explicitly out of
   scope; phase F documents the seam only.
 
 ## Acceptance (Definition of Done)
 
-- Observable: no visible change through phase D (goldens byte-identical without
-  regeneration); find/replace look and behave exactly as today, now driven by
-  footer modes. Any later visible change (e.g. a fixed-width center for the
-  palette) needs signoff.
+- Observable: no visible change in any porting phase (goldens byte-identical
+  without regeneration); find/replace look and behave exactly as today, their
+  reservation now single-sourced full-width rather than derived twice. The one
+  intended non-render change (phase D) is the a11y prompt-reservation rect
+  widening under a panel to match what already renders. Any later visible change
+  (e.g. a fixed-width center for the palette) needs signoff.
 - Budgets: n/a (no perf-sensitive path; layout is already per-frame pure compute).
 - Gates: `bash scripts/check.sh` green at every phase.
 - Oracles:
@@ -310,36 +383,39 @@ be a full stack item.
   - Footer port — `ui_layout` + `test_hit_test` green WITHOUT regeneration.
   - Header port — `ui_layout` + `test_render` + `test_hit_test` green without
     regeneration; `inputLineCaret` unchanged.
-  - Footer modes / prompt fold — `test_prompt_status` + `test_render` prompt
+  - Footer / prompt single-source — `test_prompt_status` + `test_render` prompt
     cases + `PromptViewState` round-trip green without regeneration; the editor-
-    shrink assertion (document top unmoved, height reduced by mode rows); the
-    single-source assertion that the prompt rect the renderer sees equals the
-    active footer-mode rect across panel / distraction-free / notice-row
-    combinations.
+    shrink assertion (document top unmoved, height reduced by the prompt rows);
+    the single-source assertion that the shell reservation, the rendered controls,
+    and the a11y node all consume the one full-width `view.prompt` across panel /
+    distraction-free / notice-row combinations.
   - Focus model — existing focus-stack/keymap-context tests green; a new test
-    asserting at-most-one-active-prompt is fail-loud.
+    asserting the palette resolves to the header and find/replace to the footer,
+    with focus coupled to the single active prompt (at-most-one is guaranteed by
+    the single `PromptSurface`, so there is nothing to fail-loud on).
 
 ## Plan
 
 | # | Step | Files | Oracle | Invariants |
 |---|------|-------|--------|------------|
-| A | Add the `WidgetStack` primitive (`packLeft`/`packRight`/`center` + `StackItem{StackFit: Collapse/Keep, Overflow: Truncate/ScrollTail/None}`), resolving to relative placements over an extent; implement `Collapse` by delegating to the existing `fitRow` engine and `ScrollTail` to `layoutTextInput`. No callers yet. | `include/ssg/Widget.h`, `src/Widget.cpp`, `tests/test_widget.cpp` | `test_widget`: hand-computed left/right/center, packRight order, stop-at-first-non-fit collapse, right-group clamp-truncate/drop, Fixed-center clamps-to-gap when narrow, second-center fail-loud, truncate vs scrollTail | solver purity; fail-loud; collapse == fitRow |
+| A | Add the `WidgetStack` primitive (`packLeft`/`packRight`/`center` + `StackItem{id, content, desired, rank, keep, overflow, sigil}`), resolving to relative placements over an extent; the left group's rank collapse delegates to the existing `fitRow` engine and `ScrollTail` overflow to `layoutTextInput`. No callers yet. | `include/ssg/Widget.h`, `src/Widget.cpp`, `tests/test_widget.cpp` | `test_widget`: hand-computed left/right/center, packRight order, stop-at-first-non-fit collapse, right-group clamp-truncate/drop, Fixed-center clamps-to-gap when narrow, second-center fail-loud, truncate vs scrollTail | solver purity; fail-loud; collapse == fitRow |
 | B | Port the footer status line (left status fields + right actions/hint group) to one `WidgetStack`, replacing the `addFields`+`packEnd` pair and the reverse-emit arithmetic in `computeShellLayout`; `WidgetStack`'s right group now delegates to `packEnd` (one source of the right-fill rule). DONE, green. | `src/ShellState.cpp`, `src/Widget.cpp` | `ui_layout` + `test_hit_test` green WITHOUT regeneration | non-overlap; node emission order; collapse rule |
-| C | Port the header STATUS FIELDS to a `WidgetStack` left collapse group over `width - inputLineReservation` (the fixed floor), replacing `addFields` (deleted; also removes its now-dead `layoutRow` helper). The input line + ghost KEEP the `layoutTextInput` seam — they become a prompt-mode `TextInput` widget in phase E, where reserve/grow/ghost geometry is designed rather than shoehorned. DONE, green. | `src/ShellState.cpp`, `src/Widget.cpp`, `include/ssg/Widget.h`, `tests/test_widget.cpp` | `ui_layout` + `test_render` + `test_hit_test` green without regeneration; `inputLineCaret` unchanged | fields-independent-of-input-line; non-overlap |
-| D | Single-source the prompt rect: make `view.prompt` the FULL-WIDTH bottom strip and have `promptStatusView` CONSUME it (passed from the shell view) instead of recomputing from dimensions, so the shell reservation, the a11y node/hit region, and the rendered controls are one rect. DONE, green. (The `FooterMode` type + variable-height footer node + status-line suppression are deferred to E, where the mode carries focus routing.) | `src/ShellState.cpp`, `src/runtime/snapshot.cpp`, `src/runtime/editor_runtime_internal.h`, `tests/test_ui_layout.cpp`, `tests/runtime/test_runtime_editing.cpp` | runtime oracle: `shell.prompt == promptStatus.prompt->rect` AND full-width across panel-off/on; `test_render` prompt cases + `test_prompt_status` + `PromptViewState` round-trip green without regeneration; editor content rect unchanged (top unmoved, x/width unchanged) | single-source prompt rect; prompt shrinks from bottom; solveLayout purity |
+| C | Port the header STATUS FIELDS to a `WidgetStack` left collapse group over `width - inputLineReservation` (the fixed floor), replacing `addFields` (deleted; also removes its now-dead `layoutRow` helper). The input line + ghost KEEP the `layoutTextInput` seam — phase E bundles them into a `layoutInputLine` widget seam (not a stack item). DONE, green. | `src/ShellState.cpp`, `src/Widget.cpp`, `include/ssg/Widget.h`, `tests/test_widget.cpp` | `ui_layout` + `test_render` + `test_hit_test` green without regeneration; `inputLineCaret` unchanged | fields-independent-of-input-line; non-overlap |
+| D | Single-source the prompt rect: make `view.prompt` the FULL-WIDTH bottom strip and have `promptStatusView` CONSUME it (passed from the shell view) instead of recomputing from dimensions, so the shell reservation, the a11y node/hit region, and the rendered controls are one rect. DONE, green. (The `FooterMode` type + variable-height footer node + status-line suppression were evaluated in phase E and dropped as speculative — deferred to a future Lua-motivated spec.) | `src/ShellState.cpp`, `src/runtime/snapshot.cpp`, `src/runtime/editor_runtime_internal.h`, `tests/test_ui_layout.cpp`, `tests/runtime/test_runtime_editing.cpp` | runtime oracle: `shell.prompt == promptStatus.prompt->rect` AND full-width across panel-off/on; `test_render` prompt cases + `test_prompt_status` + `PromptViewState` round-trip green without regeneration; editor content rect unchanged (top unmoved, x/width unchanged) | single-source prompt rect; prompt shrinks from bottom; solveLayout purity |
 | E | Make prompt focus explicit WITHOUT a runtime mode-stack (the single `PromptSurface` already guarantees at-most-one-active): add `promptFocusRegion(PromptKind) -> {Header, Footer}` as the one source of prompt anchoring and route the header-input-line ANCHORING decision (`inputLineActive`) through it (picker-machinery sites stay gated on `kind == Palette`); bundle the picker query + ghost into a `layoutInputLine` widget seam (completes the phase-C input-line deferral). `FooterMode`/variable footer/status suppression dropped as speculative (deferred to a future Lua-motivated spec). DONE, green. | `include/ssg/PromptSurface.h`, `include/ssg/Widget.h`, `src/Widget.cpp`, `src/ShellState.cpp`, `src/runtime/snapshot.cpp`, `tests/test_widget.cpp`, `tests/runtime/test_runtime_editing.cpp` | runtime oracle: focus↔active-prompt coupling + palette resolves to Header (input line present, no footer reservation) / find to Footer (reservation, no input line); `layoutInputLine` hand-computed cases; all goldens green without regeneration | one active prompt (by construction); keyboard routing unchanged; fields-independent-of-input-line |
-| F | Document the stack/mode/focus model + the `init.lua` composition seam it enables (design only; no binding). | `doc/spec-chrome-stacks.md`, `doc/config.md` | `test_config_doc` green (no new command/API claimed) | no wire/API change |
+| F | Document the stack/region/focus model + the `init.lua` composition seam it enables (design only; no binding), in the spec Design note and the forward-looking note in `doc/config.md`. DONE. | `doc/spec-chrome-stacks.md`, `doc/config.md` | `test_config_doc` green (no new command/API claimed) | no wire/API change |
 
 ## Rationale (optional, skippable)
 
 The widget-chrome work (spec-widget-chrome, done) funneled chrome through closed
-primitive functions but left THREE row-placement rules and a prompt surface
-computed outside the shell tree. This spec collapses the placement rules into one
-`WidgetStack` and pulls the prompt into the same region/mode model as the rest of
-the chrome, so the entire header+footer becomes "regions holding modes holding
-rows of stacked widgets." That uniformity is the precondition for a future
-`init.lua` that hands in a tree of stack/mode descriptors — the same data-
-composition shape `theme.set`/`style.define` already use — without any of the
-three special-case placement paths a Lua author would otherwise have to model.
+primitive functions but left THREE row-placement rules and a prompt reservation
+derived in two places. This spec collapses the placement rules into one
+`WidgetStack` and single-sources the prompt reservation, so the header+footer
+becomes "regions holding rows of stacked widgets" (with a data-described footer
+MODE STACK as a deferred design seam, not shipped). That uniformity is the
+precondition for a future `init.lua` that hands in a tree of stack/region
+descriptors — the same data-composition shape `theme.set`/`style.define` already
+use — without any of the three special-case placement paths a Lua author would
+otherwise have to model.
 Keeping every porting phase golden-verified makes the refactor provable rather
 than inspected.
