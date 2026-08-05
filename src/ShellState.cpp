@@ -127,42 +127,6 @@ void addNode(ShellViewState& view, ShellNodeKind kind, std::string id,
          std::move(commandId)});
 }
 
-// Lays out status fields left to right, retaining as many as fit by collapse
-// rank.  Returns the x just past the last field, so a caller can place
-// something after them without recomputing their widths.
-int addFields(ShellViewState& view, const std::vector<StatusField>& fields,
-                Rect row, ShellNodeKind kind, SemanticRole role) {
-    // The status-field row is a collapse Container (doc/spec-widget-chrome.md):
-    // empty-value fields are dropped up front, the rest are measured, and the
-    // widget fit pass keeps as many as fit by collapse rank, stopping at the
-    // first that does not. This is the same rule the procedural loop encoded;
-    // fitRow/layoutRow are now the single source of the geometry.
-    std::vector<FitItem> items;
-    std::vector<const StatusField*> sources;
-    items.reserve(fields.size());
-    sources.reserve(fields.size());
-    for (const auto& field : fields) {
-        if (field.accessibleLabel.empty() || field.value.empty()) continue;
-        items.push_back(
-            {field.id, measureFieldCells(field.value), field.collapseRank});
-        sources.push_back(&field);
-    }
-    const RowFit fit = fitRow(items, row.width, 1, Align::Start);
-    const std::vector<Rect> rects = layoutRow(fit, row);
-
-    // Emit in placement order (fitRow returns the retained set in original field
-    // order); each placement's `index` maps back to its source field directly,
-    // so no assumption about field-id uniqueness is made.
-    for (std::size_t i = 0; i < fit.placed.size(); ++i) {
-        const StatusField& field = *sources[fit.placed[i].index];
-        addNode(view, kind, field.id, field.accessibleLabel, rects[i], role,
-                 field.value, field.commandId);
-    }
-    return fit.placed.empty()
-               ? row.x
-               : row.x + fit.placed.back().offset + fit.placed.back().size;
-}
-
 const PaneGeometry* paneGeometry(const ShellViewState& view, PaneId id) {
     const auto found = std::ranges::find(view.panes, id, &PaneGeometry::id);
     return found == view.panes.end() ? nullptr : &*found;
@@ -501,11 +465,47 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
                 request.style.inputLineReservation(), view.header->width);
             fieldWidth = std::max(0, view.header->width - reserved);
         }
-        int headerX = addFields(view, request.headerFields,
-                                 {view.header->x, view.header->y, fieldWidth,
-                                  view.header->height},
-                                 ShellNodeKind::HeaderField,
-                                 SemanticRole::Header);
+
+        // Header status fields are a WidgetStack LEFT collapse group over the
+        // field width (doc/spec-chrome-stacks.md). The input line's fixed
+        // reservation is already subtracted from `fieldWidth`, so the fields
+        // collapse independently of the query -- the reservation is the floor
+        // that protects the input's room, and the fields never reflow as the
+        // user types (doc/spec-input-line.md). The input line + ghost keep the
+        // `layoutTextInput` seam below (they become a prompt-mode TextInput
+        // widget in the focus phase, where reserve/grow/ghost geometry is
+        // designed rather than shoehorned into a stack item).
+        WidgetStack headerStack{1};
+        std::vector<const StatusField*> headerFieldSource;
+        for (const auto& field : request.headerFields) {
+            if (field.accessibleLabel.empty() || field.value.empty()) continue;
+            StackItem item;
+            item.id = "F" + std::to_string(headerFieldSource.size());
+            item.content = field.value;
+            item.desired = measureFieldCells(field.value);
+            item.rank = field.collapseRank;
+            headerStack.packLeft(std::move(item));
+            headerFieldSource.push_back(&field);
+        }
+        int headerX = view.header->x;
+        if (const auto resolved = headerStack.resolve(fieldWidth)) {
+            const auto find = [&](std::string_view id) -> const StackPlacement* {
+                for (const auto& p : resolved->placed)
+                    if (p.id == id) return &p;
+                return nullptr;
+            };
+            for (std::size_t i = 0; i < headerFieldSource.size(); ++i) {
+                const auto* p = find("F" + std::to_string(i));
+                if (!p) continue;
+                const StatusField& field = *headerFieldSource[i];
+                addNode(view, ShellNodeKind::HeaderField, field.id,
+                         field.accessibleLabel,
+                         {view.header->x + p->offset, view.header->y, p->size, 1},
+                         SemanticRole::Header, field.value, field.commandId);
+                headerX = std::max(headerX,
+                                   view.header->x + p->offset + p->size);
+            }
+        }
         // A space between the fields and whatever follows them.
         if (headerX > view.header->x) ++headerX;
 

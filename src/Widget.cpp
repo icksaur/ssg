@@ -75,16 +75,6 @@ RowFit packEnd(const std::vector<FitItem>& items, int extent) {
     return RowFit{std::move(reversed)};
 }
 
-std::vector<Rect> layoutRow(const RowFit& fit, const Rect& container) {
-    std::vector<Rect> rects;
-    rects.reserve(fit.placed.size());
-    for (const auto& item : fit.placed) {
-        rects.push_back(
-            Rect{container.x + item.offset, container.y, item.size, 1});
-    }
-    return rects;
-}
-
 int measureFieldCells(std::string_view value) {
     return std::max(1, static_cast<int>(
                             GraphemeLayout{}.computeRun(value).totalCells) +

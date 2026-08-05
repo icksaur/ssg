@@ -102,6 +102,22 @@ Collapse decides WHICH items are present; Overflow decides how a present item's
 text fills the cell it received. A narrow header collapses the branch field out
 (whole), and independently scroll-tails the palette query within its own cell.
 
+### The input line stays on its seam until the prompt-mode phase
+
+Phase C ports the header STATUS FIELDS onto a `WidgetStack` (left collapse group
+over `width - inputLineReservation`, the fixed floor that keeps fields from
+reflowing as the query grows), and deletes `addFields` (the header was its last
+caller after phase B). The picker INPUT LINE + ghost are deliberately NOT modeled
+as stack items in phase C: the input line needs two different widths (its fixed
+`inputLineReservation` budgets the field floor, but its actual node spans ALL the
+remaining space, text-limited via `layoutTextInput`) and a non-uniform gap (1
+cell field→input, 0 input→ghost) — neither of which the row primitive expresses.
+That is real primitive design (reserve-vs-grow width, per-item gaps, ghost
+handling), and the input line is the palette PROMPT, which phase E turns into an
+explicit focusable region mode owning a `TextInput` widget. The reserve/grow/
+ghost geometry is designed THERE, not shoehorned into a stack item now. Until
+then the input line keeps the `layoutTextInput` seam it already uses.
+
 ### Output: still the existing projections
 
 A resolved `WidgetStack` produces the SAME `(id, kind, rect, role, content)`
@@ -256,9 +272,9 @@ the layout model, not just a runtime enum, records where the focused prompt live
 |---|------|-------|--------|------------|
 | A | Add the `WidgetStack` primitive (`packLeft`/`packRight`/`center` + `StackItem{StackFit: Collapse/Keep, Overflow: Truncate/ScrollTail/None}`), resolving to relative placements over an extent; implement `Collapse` by delegating to the existing `fitRow` engine and `ScrollTail` to `layoutTextInput`. No callers yet. | `include/ssg/Widget.h`, `src/Widget.cpp`, `tests/test_widget.cpp` | `test_widget`: hand-computed left/right/center, packRight order, stop-at-first-non-fit collapse, right-group clamp-truncate/drop, Fixed-center clamps-to-gap when narrow, second-center fail-loud, truncate vs scrollTail | solver purity; fail-loud; collapse == fitRow |
 | B | Port the footer status line (left status fields + right actions/hint group) to one `WidgetStack`, replacing the `addFields`+`packEnd` pair and the reverse-emit arithmetic in `computeShellLayout`; `WidgetStack`'s right group now delegates to `packEnd` (one source of the right-fill rule). DONE, green. | `src/ShellState.cpp`, `src/Widget.cpp` | `ui_layout` + `test_hit_test` green WITHOUT regeneration | non-overlap; node emission order; collapse rule |
-| C | Port the header (status fields + input line + ghost) to a `WidgetStack`, replacing `addFields` + the input-line x-advance; input line is a `Keep`+`ScrollTail` right/center item so fields never reflow as the query grows. | `src/ShellState.cpp` | `ui_layout` + `test_render` + `test_hit_test` green without regeneration; `inputLineCaret` unchanged | fields-independent-of-input-line; non-overlap |
+| C | Port the header STATUS FIELDS to a `WidgetStack` left collapse group over `width - inputLineReservation` (the fixed floor), replacing `addFields` (deleted; also removes its now-dead `layoutRow` helper). The input line + ghost KEEP the `layoutTextInput` seam — they become a prompt-mode `TextInput` widget in phase E, where reserve/grow/ghost geometry is designed rather than shoehorned. DONE, green. | `src/ShellState.cpp`, `src/Widget.cpp`, `include/ssg/Widget.h`, `tests/test_widget.cpp` | `ui_layout` + `test_render` + `test_hit_test` green without regeneration; `inputLineCaret` unchanged | fields-independent-of-input-line; non-overlap |
 | D | Introduce the footer region **mode stack**: a `FooterMode{rows, focusable, promptKind?}`, default status mode + find/replace prompt modes; derive footer region height from the active mode and re-host `computePromptLayout`'s solve tree in the footer region, folding out the editor `reservedPromptRows` reservation (bottom-shrink identical). Both the shell reservation and the prompt-status reservation MUST consume the one resolved footer-mode rect (single-source prompt rect). | `src/ShellState.cpp`, `src/PromptSurface.cpp`, `include/ssg/ShellState.h`, `src/runtime/snapshot.cpp` | `test_prompt_status` + `test_render` prompt cases + `PromptViewState` round-trip green without regeneration; editor-shrink assertion (top unmoved); **prompt-rect == footer-mode-rect assertion across panel/distraction-free/notice combinations** | prompt shrinks from bottom; solveLayout purity; single-source prompt rect |
-| E | Make prompt focus explicit: a prompt is a `focusable` region mode with `promptKind`; enforce at-most-one-active-prompt at the mode-stack level; resolve `FocusTarget::Prompt` to the hosting region. Palette = header mode, find/replace = footer modes. No new `FocusTarget`. | `src/ShellState.cpp`, `include/ssg/focus.h` (doc), `src/runtime/*` | focus-stack + keymap-context tests green; new fail-loud at-most-one-prompt test | one active prompt; keyboard routing unchanged |
+| E | Make prompt focus explicit: a prompt is a `focusable` region mode with `promptKind`; enforce at-most-one-active-prompt at the mode-stack level; resolve `FocusTarget::Prompt` to the hosting region. Palette = header mode, find/replace = footer modes. The header palette becomes a `TextInput` widget owned by that mode, which is where the input-line reserve-vs-grow width + per-item gap + ghost geometry (deferred from phase C) is designed. No new `FocusTarget`. | `src/ShellState.cpp`, `include/ssg/focus.h` (doc), `include/ssg/Widget.h`, `src/runtime/*` | focus-stack + keymap-context tests green; new fail-loud at-most-one-prompt test; `inputLineCaret` + input-line goldens green without regeneration | one active prompt; keyboard routing unchanged; fields-independent-of-input-line |
 | F | Document the stack/mode/focus model + the `init.lua` composition seam it enables (design only; no binding). | `doc/spec-chrome-stacks.md`, `doc/config.md` | `test_config_doc` green (no new command/API claimed) | no wire/API change |
 
 ## Rationale (optional, skippable)

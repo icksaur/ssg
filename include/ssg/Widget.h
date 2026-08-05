@@ -71,15 +71,15 @@ struct RowFit {
     friend bool operator==(const RowFit&, const RowFit&) = default;
 };
 
-// The fit pass. Reproduces `ShellState::addFields` EXACTLY (spec §Relative
-// layout): stable-sort the items by `rank` ascending, then a single forward
-// scan that appends each item while it fits and STOPS at the first that does not
-// -- later, lower-priority items are NOT reconsidered even if a smaller one
-// would have fit. `separator` cells sit between adjacent retained items.
+// The fit pass, and the collapse engine behind `WidgetStack`'s left group (spec
+// §Relative layout): stable-sort the items by `rank` ascending, then a single
+// forward scan that appends each item while it fits and STOPS at the first that
+// does not -- later, lower-priority items are NOT reconsidered even if a smaller
+// one would have fit. `separator` cells sit between adjacent retained items.
 // Retained items are emitted in their original order; `align` decides which end
 // they pack toward. Items with `desired <= 0` are SKIPPED entirely -- never
-// retained and never ending the scan -- matching addFields, which drops
-// empty-value fields before the fit loop (callers omit empties upstream too).
+// retained and never ending the scan -- so empty-value fields (which callers
+// give a non-positive width) cannot occupy a cell or a separator.
 [[nodiscard]] RowFit fitRow(const std::vector<FitItem>& items, int extent,
                             int separator, Align align);
 
@@ -93,16 +93,9 @@ struct RowFit {
 // with `desired <= 0` are skipped. `rank` is unused here.
 [[nodiscard]] RowFit packEnd(const std::vector<FitItem>& items, int extent);
 
-// Map a `RowFit`'s relative offsets onto `container`, producing one absolute,
-// single-row `Rect` per retained item (y and height come from the container's
-// leading row). This is the one place a relative offset becomes an absolute
-// coordinate.
-[[nodiscard]] std::vector<Rect> layoutRow(const RowFit& fit,
-                                          const Rect& container);
-
 // A `Field`'s desired width: its display cells plus the 2-cell padding, floored
-// at 1, matching `addFields`. Provided so callers measure fields consistently;
-// the fit rule itself takes the already-measured `desired`.
+// at 1. Provided so callers measure fields consistently; the fit rule itself
+// takes the already-measured `desired`.
 [[nodiscard]] int measureFieldCells(std::string_view value);
 
 // --- Widget paint (glyph-owning text composition) ---------------------------

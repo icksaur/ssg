@@ -83,17 +83,6 @@ TEST(fitRowDropsAnItemWiderThanTheExtent) {
     ASSERT_TRUE(fit.placed.empty());
 }
 
-// layoutRow maps relative offsets onto a container: absolute x = container.x +
-// offset, y and height from the container's leading row, width = item size.
-TEST(layoutRowMapsOffsetsOntoTheContainerRow) {
-    RowFit fit;
-    fit.placed = {{"a", 0, 2, 0}, {"b", 3, 3, 1}};
-    const auto rects = layoutRow(fit, Rect{5, 2, 20, 1});
-    ASSERT_EQ(rects.size(), std::size_t{2});
-    ASSERT_EQ(rects[0], (Rect{5, 2, 2, 1}));   // 5 + 0
-    ASSERT_EQ(rects[1], (Rect{8, 2, 3, 1}));   // 5 + 3
-}
-
 // A field's desired width is its display cells + 2 padding, floored at 1
 // (matching addFields' `max(1, displayCells(value) + 2)`). ASCII cells == length.
 TEST(measureFieldCellsIsDisplayCellsPlusPadding) {
@@ -401,7 +390,6 @@ int main() {
     RUN(widgetStackScrollTailCenterShowsValueTail);
     RUN(widgetStackKeepLeftItemSurvivesCollapse);
     RUN(widgetStackKeepItemTruncatesRatherThanOverlappingRight);
-    RUN(layoutRowMapsOffsetsOntoTheContainerRow);
     RUN(measureFieldCellsIsDisplayCellsPlusPadding);
     return 0;
 }
