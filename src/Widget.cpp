@@ -4,6 +4,8 @@
 
 #include <algorithm>
 #include <numeric>
+#include <optional>
+#include <utility>
 
 namespace ssg {
 
@@ -131,6 +133,133 @@ TextInputLayout layoutTextInput(std::string_view sigil, std::string_view value,
     std::string text = textInputText(sigil, {}, visibleTail(value, textRoom));
     const int cells = static_cast<int>(GraphemeLayout{}.computeRun(text).totalCells);
     return {std::move(text), std::min(drawable, cells)};
+}
+
+namespace {
+
+// Resolve one item's CONTENT fit within `granted` cells: the display text and
+// the size the placement actually occupies. `None`/`Truncate` keep the full text
+// at the granted width (the renderer clips a `Truncate` item to its rect);
+// `ScrollTail` composes the sigil + value tail via `layoutTextInput`, whose
+// width (caret-reserved, <= granted) becomes the placement size.
+std::pair<std::string, int> resolveContent(const StackItem& item, int granted) {
+    if (item.overflow == Overflow::ScrollTail) {
+        const auto laid = layoutTextInput(item.sigil, item.content, granted);
+        return {laid.text, laid.width};
+    }
+    return {item.content, granted};
+}
+
+}  // namespace
+
+WidgetStack& WidgetStack::packLeft(StackItem item) {
+    left_.push_back(std::move(item));
+    return *this;
+}
+
+WidgetStack& WidgetStack::packRight(StackItem item) {
+    right_.push_back(std::move(item));
+    return *this;
+}
+
+WidgetStack& WidgetStack::center(StackItem item, CenterWidth width, int fixed) {
+    if (center_) {
+        centerConflict_ = true;  // a second center is a fail-loud authoring error
+        return *this;
+    }
+    center_ = std::move(item);
+    centerWidth_ = width;
+    centerFixed_ = fixed;
+    return *this;
+}
+
+std::optional<StackLayout> WidgetStack::resolve(int extent) const {
+    if (centerConflict_) return std::nullopt;
+
+    StackLayout layout;
+
+    // --- Right group: fill from the trailing edge leftward (the packEnd rule).
+    // The rightmost item keeps its full width; the leftmost item that still has
+    // room is clamp-truncated; a zero-room item drops. Offsets are absolute from
+    // the left edge; emitted in original (left-to-right) order.
+    std::vector<StackPlacement> rightPlaced;
+    int cursor = extent;
+    for (std::size_t i = right_.size(); i-- > 0;) {
+        const int width = std::min(cursor, right_[i].desired);
+        if (width <= 0) continue;
+        cursor -= width;
+        // A right item owns its full reserved slot; overflow only decides the
+        // text (a `ScrollTail` value tail is anchored within the slot, never
+        // shrinking it, so the reserved right region has no internal hole).
+        auto [text, size] = resolveContent(right_[i], width);
+        rightPlaced.push_back({right_[i].id, cursor, width, std::move(text)});
+    }
+    std::ranges::reverse(rightPlaced);
+    const int rightStart = rightPlaced.empty() ? extent : cursor;
+
+    // --- Left group: `keep` items are always retained and pre-consume budget;
+    // the rest collapse by rank via `fitRow` over the remaining width. Placements
+    // are emitted in original order with `separator` between neighbors.
+    int keepFootprint = 0;
+    int keepCount = 0;
+    std::vector<FitItem> collapse;
+    std::vector<std::size_t> collapseSource;
+    for (std::size_t i = 0; i < left_.size(); ++i) {
+        if (left_[i].keep) {
+            keepFootprint += left_[i].desired;
+            ++keepCount;
+        } else {
+            collapse.push_back({left_[i].id, left_[i].desired, left_[i].rank});
+            collapseSource.push_back(i);
+        }
+    }
+    if (keepCount > 1) keepFootprint += separator_ * (keepCount - 1);
+    const int joinSep = keepCount > 0 ? separator_ : 0;
+    const int collapseExtent = rightStart - keepFootprint - joinSep;
+    const RowFit collapseFit = fitRow(collapse, collapseExtent, separator_,
+                                      Align::Start);
+    std::vector<bool> retained(left_.size(), false);
+    for (std::size_t i = 0; i < left_.size(); ++i)
+        if (left_[i].keep) retained[i] = true;
+    for (const auto& placed : collapseFit.placed)
+        retained[collapseSource[placed.index]] = true;
+
+    // Emit retained left items in original order. Each is clamped to the room
+    // remaining before `rightStart`, so an over-budget `keep` item (which is
+    // never dropped) TRUNCATES rather than overlapping the right group -- the
+    // non-overlap invariant holds without a fail-loud path. Retained collapse
+    // items fit by construction, so the clamp is a no-op for them.
+    int leftOffset = 0;
+    bool leftFirst = true;
+    for (std::size_t i = 0; i < left_.size(); ++i) {
+        if (!retained[i]) continue;
+        const int start = leftOffset + (leftFirst ? 0 : separator_);
+        const int avail = rightStart - start;
+        if (avail <= 0) break;  // no room before the right group; stop placing
+        leftFirst = false;
+        const int granted = std::min(left_[i].desired, avail);
+        auto [text, size] = resolveContent(left_[i], granted);
+        layout.placed.push_back({left_[i].id, start, size, std::move(text)});
+        leftOffset = start + granted;
+    }
+    const int leftEnd = leftOffset;
+
+    // --- Center: the gap between the left group's end and the right group's
+    // start. `Fixed` clamps to that gap; `Flex` takes all of it.
+    if (center_) {
+        const int gap = std::max(0, rightStart - leftEnd);
+        const int width =
+            centerWidth_ == CenterWidth::Fixed ? std::min(centerFixed_, gap) : gap;
+        if (width > 0) {
+            auto [text, size] = resolveContent(*center_, width);
+            layout.placed.push_back({center_->id, leftEnd, size, std::move(text)});
+        }
+    }
+
+    for (auto& placement : rightPlaced)
+        layout.placed.push_back(std::move(placement));
+
+    return layout;
 }
 
 }  // namespace ssg

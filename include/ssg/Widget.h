@@ -15,6 +15,7 @@
 #include <ssg/Style.h>       // ToggleGlyphs
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -157,5 +158,100 @@ struct TextInputLayout {
 // a multi-byte or wide cluster is never cut in half) -- the END of a growing
 // value stays visible. Exposed for reuse/testing; `layoutTextInput` uses it.
 [[nodiscard]] std::string visibleTail(std::string_view value, int cells);
+
+// --- WidgetStack: one composable row (packLeft/packRight/center) -------------
+//
+// A `WidgetStack` lays out ONE row of the header or footer as three groups
+// (doc/spec-chrome-stacks.md): a LEFT group packed from the leading edge, a
+// RIGHT group packed from the trailing edge, and an optional single CENTER slot
+// between them. It is the one primitive that replaces `fitRow` + `packEnd` + the
+// input-line arithmetic; it is a pure value type with no renderer/runtime
+// dependency, and its builder methods return `*this` so calls chain:
+// `stack.packLeft(a).packRight(z).packLeft(b)` yields `ab … z`.
+//
+// Two ORTHOGONAL fit levels:
+//  - membership (which items survive a crowded group): the LEFT group collapses
+//    by `rank` via the `fitRow` rule (stable-sort, forward scan, stop at first
+//    non-fit), except items marked `keep` which are always retained; the RIGHT
+//    group uses the `packEnd` rule (fill from the right, clamp-truncate the
+//    leftmost item that still has room, drop zero-room items); the center slot is
+//    never dropped.
+//  - content fit (how a surviving item's text fills the cell it received):
+//    `Overflow::None` (fits), `Truncate` (renderer clips to the rect; the node
+//    keeps full content), or `ScrollTail` (pin `sigil`, show the value's tail via
+//    `layoutTextInput`).
+//
+// Resolution order (reproduces both regions today): the RIGHT group claims its
+// cells first, the LEFT group fills the remainder to the left of it, and the
+// CENTER slot takes the gap between the left group's end and the right group's
+// start (`Fixed` clamped to that gap, `Flex` = the whole gap).
+
+enum class Overflow : std::uint8_t { None, Truncate, ScrollTail };
+
+// One stack item. `desired` is the cells it wants (its content's display width,
+// including any padding the caller already added). `rank` orders LEFT-group
+// collapse (lower = higher priority, dropped last); `keep` exempts a LEFT item
+// from collapse. `overflow` + `sigil` decide content fit (sigil is ScrollTail
+// only). `content` is the full text the item wants to show.
+struct StackItem {
+    std::string id;
+    std::string content;
+    int desired = 0;
+    int rank = 0;
+    bool keep = false;
+    Overflow overflow = Overflow::None;
+    std::string sigil;
+};
+
+// One resolved placement: a relative `offset`+`size` on the row's main axis and
+// the RESOLVED display `text` (the value tail for `ScrollTail`; the full content
+// otherwise -- `Truncate` leaves the text whole and lets the renderer clip).
+struct StackPlacement {
+    std::string id;
+    int offset = 0;
+    int size = 0;
+    std::string text;
+
+    friend bool operator==(const StackPlacement&, const StackPlacement&) = default;
+};
+
+// Resolved stack: placements in EMISSION order -- left group (original order),
+// then the center slot, then the right group (original order, left-to-right).
+// Callers reorder for node emission as their region requires.
+struct StackLayout {
+    std::vector<StackPlacement> placed;
+
+    friend bool operator==(const StackLayout&, const StackLayout&) = default;
+};
+
+// How the center slot claims the gap between the left and right groups.
+enum class CenterWidth : std::uint8_t { Fixed, Flex };
+
+class WidgetStack {
+public:
+    // `separator` cells sit between adjacent LEFT-group items (as `fitRow`); the
+    // right group has none.
+    explicit WidgetStack(int separator = 0) : separator_{separator} {}
+
+    WidgetStack& packLeft(StackItem item);
+    WidgetStack& packRight(StackItem item);
+    // Sets the SINGLE center slot; a second call is a fail-loud error (`resolve`
+    // returns nullopt), never a silent overwrite.
+    WidgetStack& center(StackItem item, CenterWidth width, int fixed = 0);
+
+    // Resolve over `extent` cells. Returns nullopt only on a structural authoring
+    // error (a second center). Narrowness is handled gracefully (left collapses,
+    // right truncates, a Fixed center clamps to the available gap).
+    [[nodiscard]] std::optional<StackLayout> resolve(int extent) const;
+
+private:
+    int separator_;
+    std::vector<StackItem> left_;
+    std::vector<StackItem> right_;
+    std::optional<StackItem> center_;
+    CenterWidth centerWidth_ = CenterWidth::Flex;
+    int centerFixed_ = 0;
+    bool centerConflict_ = false;
+};
 
 }  // namespace ssg

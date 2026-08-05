@@ -195,6 +195,183 @@ TEST(layoutTextInputReservesCaretAndScrollsTail) {
     ASSERT_EQ(tiny.width, 0);
 }
 
+// --- WidgetStack -----------------------------------------------------------
+
+StackItem stackItem(std::string id, int desired, int rank = 0) {
+    StackItem item;
+    item.id = std::move(id);
+    item.desired = desired;
+    item.rank = rank;
+    item.content = "x";  // content text is irrelevant to geometry-only cases
+    return item;
+}
+
+// packLeft alone packs from offset 0 with the stack separator, exactly like
+// fitRow(Align::Start). a at 0 (size 2), sep at 2, b at 3 (size 3).
+TEST(widgetStackPackLeftPacksFromLeadingEdge) {
+    const auto out =
+        WidgetStack{1}.packLeft(stackItem("a", 2)).packLeft(stackItem("b", 3))
+            .resolve(10);
+    ASSERT_TRUE(out.has_value());
+    ASSERT_EQ(out->placed.size(), std::size_t{2});
+    ASSERT_EQ(out->placed[0].id, std::string{"a"});
+    ASSERT_EQ(out->placed[0].offset, 0);
+    ASSERT_EQ(out->placed[0].size, 2);
+    ASSERT_EQ(out->placed[1].offset, 3);
+    ASSERT_EQ(out->placed[1].size, 3);
+}
+
+// packRight fills flush to the trailing edge; z (last call) is rightmost.
+// extent 10: z desired 3 -> [7,10); x desired 2 -> [5,7). Emitted in original
+// call order x then z.
+TEST(widgetStackPackRightFlushesRightInCallOrder) {
+    const auto out =
+        WidgetStack{}.packRight(stackItem("x", 2)).packRight(stackItem("z", 3))
+            .resolve(10);
+    ASSERT_TRUE(out.has_value());
+    ASSERT_EQ(out->placed.size(), std::size_t{2});
+    ASSERT_EQ(out->placed[0], (StackPlacement{"x", 5, 2, "x"}));
+    ASSERT_EQ(out->placed[1], (StackPlacement{"z", 7, 3, "x"}));
+}
+
+// Left fills the space to the LEFT of the right group. right z -> [7,10);
+// rightStart 7; left a laid out in extent 7 -> a at 0 (size 2).
+TEST(widgetStackLeftFillsSpaceLeftOfRightGroup) {
+    const auto out =
+        WidgetStack{1}.packLeft(stackItem("a", 2)).packRight(stackItem("z", 3))
+            .resolve(10);
+    ASSERT_TRUE(out.has_value());
+    ASSERT_EQ(out->placed.size(), std::size_t{2});
+    ASSERT_EQ(out->placed[0], (StackPlacement{"a", 0, 2, "x"}));
+    ASSERT_EQ(out->placed[1], (StackPlacement{"z", 7, 3, "x"}));
+}
+
+// A Flex center takes the whole gap between left end and right start. left a
+// [0,2), right z [7,10), gap [2,7) width 5. Emission order: left, center, right.
+TEST(widgetStackFlexCenterTakesTheGap) {
+    const auto out =
+        WidgetStack{1}.packLeft(stackItem("a", 2)).packRight(stackItem("z", 3))
+            .center(stackItem("c", 0), CenterWidth::Flex)
+            .resolve(10);
+    ASSERT_TRUE(out.has_value());
+    ASSERT_EQ(out->placed.size(), std::size_t{3});
+    ASSERT_EQ(out->placed[0].id, std::string{"a"});
+    ASSERT_EQ(out->placed[1], (StackPlacement{"c", 2, 5, "x"}));
+    ASSERT_EQ(out->placed[2].id, std::string{"z"});
+}
+
+// A Fixed center wider than the gap clamps to the gap (never fail-loud). Same
+// geometry: gap 5, center fixed 8 -> size 5. A fixed 3 would take 3.
+TEST(widgetStackFixedCenterClampsToGap) {
+    const auto wide =
+        WidgetStack{1}.packLeft(stackItem("a", 2)).packRight(stackItem("z", 3))
+            .center(stackItem("c", 0), CenterWidth::Fixed, 8)
+            .resolve(10);
+    ASSERT_TRUE(wide.has_value());
+    ASSERT_EQ(wide->placed[1], (StackPlacement{"c", 2, 5, "x"}));
+
+    const auto narrow =
+        WidgetStack{1}.packLeft(stackItem("a", 2)).packRight(stackItem("z", 3))
+            .center(stackItem("c", 0), CenterWidth::Fixed, 3)
+            .resolve(10);
+    ASSERT_TRUE(narrow.has_value());
+    ASSERT_EQ(narrow->placed[1], (StackPlacement{"c", 2, 3, "x"}));
+}
+
+// A second center() call is a fail-loud authoring error: resolve -> nullopt.
+TEST(widgetStackSecondCenterFailsLoud) {
+    const auto out =
+        WidgetStack{}.center(stackItem("c", 0), CenterWidth::Flex)
+            .center(stackItem("d", 0), CenterWidth::Flex)
+            .resolve(10);
+    ASSERT_FALSE(out.has_value());
+}
+
+// Left collapse is rank-ordered and STOPS at the first non-fit (not
+// drop-until-fits). Original order a,b,c; ranks a=1(desired5), b=0(desired2),
+// c=2(desired2); sep 1, extent 8. Rank scan b,a,c: b used 2; a 2+1+5=8 ok;
+// c 8+1+2>8 STOP. Retained b,a; emitted original order a,b: a@0(5), b@6(2); c
+// dropped.
+TEST(widgetStackLeftCollapseStopsAtFirstNonFit) {
+    const auto out =
+        WidgetStack{1}.packLeft(stackItem("a", 5, 1))
+            .packLeft(stackItem("b", 2, 0)).packLeft(stackItem("c", 2, 2))
+            .resolve(8);
+    ASSERT_TRUE(out.has_value());
+    ASSERT_EQ(out->placed.size(), std::size_t{2});
+    ASSERT_EQ(out->placed[0], (StackPlacement{"a", 0, 5, "x"}));
+    ASSERT_EQ(out->placed[1], (StackPlacement{"b", 6, 2, "x"}));
+}
+
+// Right group clamp-truncates the leftmost item that has room and drops one with
+// none. extent 6, three items a,b,c each desired 4: c [2,6) full; b room 2 ->
+// [0,2) truncated; a no room -> dropped. Emitted original order b,c.
+TEST(widgetStackRightGroupClampTruncatesAndDrops) {
+    StackItem a = stackItem("a", 4);
+    a.overflow = Overflow::Truncate;
+    StackItem b = stackItem("b", 4);
+    b.overflow = Overflow::Truncate;
+    StackItem c = stackItem("c", 4);
+    c.overflow = Overflow::Truncate;
+    const auto out =
+        WidgetStack{}.packRight(a).packRight(b).packRight(c).resolve(6);
+    ASSERT_TRUE(out.has_value());
+    ASSERT_EQ(out->placed.size(), std::size_t{2});
+    ASSERT_EQ(out->placed[0].id, std::string{"b"});
+    ASSERT_EQ(out->placed[0].offset, 0);
+    ASSERT_EQ(out->placed[0].size, 2);          // clamp-truncated to remaining room
+    ASSERT_EQ(out->placed[0].text, std::string{"x"});  // content stays whole
+    ASSERT_EQ(out->placed[1], (StackPlacement{"c", 2, 4, "x"}));
+}
+
+// A ScrollTail center composes sigil + value tail via layoutTextInput. gap 5,
+// content "abcdef", sigil "> ": drawable 4, sigil 2, textRoom 2 -> tail "ef",
+// text "> ef" width 4.  (Fixed 6 clamps to the gap of 5.)
+TEST(widgetStackScrollTailCenterShowsValueTail) {
+    StackItem query;
+    query.id = "q";
+    query.content = "abcdef";
+    query.sigil = "> ";
+    query.overflow = Overflow::ScrollTail;
+    const auto out =
+        WidgetStack{1}.packLeft(stackItem("a", 2)).packRight(stackItem("z", 3))
+            .center(query, CenterWidth::Fixed, 6)
+            .resolve(10);
+    ASSERT_TRUE(out.has_value());
+    ASSERT_EQ(out->placed[1].id, std::string{"q"});
+    ASSERT_EQ(out->placed[1].offset, 2);
+    ASSERT_EQ(out->placed[1].text, std::string{"> ef"});
+    ASSERT_EQ(out->placed[1].size, 4);
+}
+
+// A `keep` left item is never collapsed and pre-consumes budget; the remaining
+// collapse item fits only in what is left. keep k desired 3, collapse a desired
+// 4, sep 1, extent 6: keepFootprint 3, joinSep 1, collapse extent 6-3-1=2 -> a
+// (desired 4) does not fit and drops; only k survives at [0,3).
+TEST(widgetStackKeepLeftItemSurvivesCollapse) {
+    StackItem keep = stackItem("k", 3);
+    keep.keep = true;
+    const auto out =
+        WidgetStack{1}.packLeft(keep).packLeft(stackItem("a", 4, 0)).resolve(6);
+    ASSERT_TRUE(out.has_value());
+    ASSERT_EQ(out->placed.size(), std::size_t{1});
+    ASSERT_EQ(out->placed[0], (StackPlacement{"k", 0, 3, "x"}));
+}
+
+// An over-budget `keep` item truncates instead of overlapping the right group
+// (non-overlap invariant). extent 10, right z desired 8 -> [2,10), rightStart 2;
+// left keep k desired 5 clamps to the 2 cells before the right group: k [0,2).
+TEST(widgetStackKeepItemTruncatesRatherThanOverlappingRight) {
+    StackItem keep = stackItem("k", 5);
+    keep.keep = true;
+    const auto out =
+        WidgetStack{1}.packLeft(keep).packRight(stackItem("z", 8)).resolve(10);
+    ASSERT_TRUE(out.has_value());
+    ASSERT_EQ(out->placed.size(), std::size_t{2});
+    ASSERT_EQ(out->placed[0], (StackPlacement{"k", 0, 2, "x"}));
+    ASSERT_EQ(out->placed[1], (StackPlacement{"z", 2, 8, "x"}));
+}
+
 }  // namespace
 
 int main() {
@@ -213,6 +390,17 @@ int main() {
     RUN(textInputTextConcatenatesPrefixSeparatorValue);
     RUN(visibleTailKeepsTheEndWithinTheCellBudget);
     RUN(layoutTextInputReservesCaretAndScrollsTail);
+    RUN(widgetStackPackLeftPacksFromLeadingEdge);
+    RUN(widgetStackPackRightFlushesRightInCallOrder);
+    RUN(widgetStackLeftFillsSpaceLeftOfRightGroup);
+    RUN(widgetStackFlexCenterTakesTheGap);
+    RUN(widgetStackFixedCenterClampsToGap);
+    RUN(widgetStackSecondCenterFailsLoud);
+    RUN(widgetStackLeftCollapseStopsAtFirstNonFit);
+    RUN(widgetStackRightGroupClampTruncatesAndDrops);
+    RUN(widgetStackScrollTailCenterShowsValueTail);
+    RUN(widgetStackKeepLeftItemSurvivesCollapse);
+    RUN(widgetStackKeepItemTruncatesRatherThanOverlappingRight);
     RUN(layoutRowMapsOffsetsOntoTheContainerRow);
     RUN(measureFieldCellsIsDisplayCellsPlusPadding);
     return 0;
