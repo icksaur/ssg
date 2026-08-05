@@ -188,15 +188,46 @@ even though find alone could be one line, because a future richer footer surface
 ### Prompt as a focusable region mode
 
 `FocusTarget{Editor, Panel, Prompt}` and the focus stack already route keyboard
-unambiguously to an active prompt. This spec makes the ANCHORING explicit: a
-prompt is a region mode with `focusable = true` and a `promptKind`. The
-invariant "at most one prompt mode is active across all regions" is enforced at
-the mode-stack level (pushing a prompt mode while another is active is a spec
-error), and `FocusTarget::Prompt` resolves to whichever region hosts the active
-prompt mode. The palette is a HEADER-anchored prompt mode (kept where it is — its
-results narrow to the top of the buffer just below the input); find/replace are
-FOOTER-anchored prompt modes. No new `FocusTarget` value; the improvement is that
-the layout model, not just a runtime enum, records where the focused prompt lives.
+unambiguously to an active prompt. This spec makes the ANCHORING explicit —
+WITHOUT inventing a runtime mode-stack, because the focus model is already
+unambiguous by construction and a mode-stack would restate what the type system
+guarantees:
+
+- There is exactly ONE `PromptSurface` (a single `std::optional<PromptRequest>`),
+  so at most one prompt is ever active. "At-most-one" needs no runtime
+  enforcement — a fail-loud assertion would guard an invariant `std::optional`
+  already provides, and a mode-stack that could hold several prompts would exist
+  only to be forbidden. So this spec does NOT add a mode-stack or that assertion.
+- `reconcilePromptFocus` already keeps `FocusTarget::Prompt` coupled to
+  `prompt.active()`. The improvement is to NAME the anchoring: `promptFocusRegion(
+  PromptKind) -> {Header, Footer}` is the single expression of where a prompt of
+  a given kind lives — Header for the palette (its query IS the header input
+  line; results narrow to the top of the buffer just below it), Footer for
+  find/replace/settings/etc. (a footer reservation). The ANCHORING decision
+  "does the header host a prompt input line" (`inputLineActive` in
+  `runtime/snapshot.cpp`) routes through it. Picker-MACHINERY sites (the
+  `palette.execute` guard, the open-picker cleanup) stay gated on the picker
+  identity (`kind == Palette`), not the region — region is reserved for anchoring
+  so a future non-palette header prompt gets an input line without dragging
+  palette-picker plumbing with it.
+
+The heavier `FooterMode` value type, a variable-height footer node, and
+suppressing the footer status line while a prompt is open are DEFERRED: they are
+speculative until a SECOND footer mode or the `init.lua` binding actually needs
+them, and suppressing the currently-emitted footer status nodes would change the
+goldens for no user-visible gain. Phase F documents the model + the seam where a
+future Lua binding would motivate that structure for real.
+
+### Bundling the picker input line
+
+The picker input line's query + completion ghost become one widget computation
+`layoutInputLine(sigil, query, ghost, available)` (extending the `TextInput`
+seam): the query via `layoutTextInput` (caret reservation + tail scroll), then
+the ghost in the cells the query left, clamped to the ghost's display width. This
+moves the reserve/grow + ghost geometry off ShellState-inline into the widget
+layer (the caret column and node rects/roles stay with the caller). It completes
+the input-line generalization deferred from phase C without needing the prompt to
+be a full stack item.
 
 ## Invariants
 
@@ -204,8 +235,11 @@ the layout model, not just a runtime enum, records where the focused prompt live
   live server-side; only their projected `AccessibilityNode`/prompt-view
   artifacts cross the wire.
 - `solveLayout` stays PURE and FAILS LOUDLY. The stack fit pass must guarantee
-  fit before any solve; a second `center`, or a prompt-mode push over an active
-  prompt, is a fail-loud spec error, not a clamp.
+  fit before any solve; a second `center` is a fail-loud spec error, not a clamp.
+- At most one prompt is active — guaranteed by the single `PromptSurface` (one
+  optional request), not by a runtime check; `FocusTarget::Prompt` is coupled to
+  `prompt.active()` by `reconcilePromptFocus`, and `promptFocusRegion(kind)` is
+  the single source of which region hosts it.
 - Projected nodes MUST NOT overlap (hit-testing takes the FIRST node containing a
   cell). The right-group-budgeted-first resolution preserves the current reason
   the input line reserves its width up front.
@@ -293,7 +327,7 @@ the layout model, not just a runtime enum, records where the focused prompt live
 | B | Port the footer status line (left status fields + right actions/hint group) to one `WidgetStack`, replacing the `addFields`+`packEnd` pair and the reverse-emit arithmetic in `computeShellLayout`; `WidgetStack`'s right group now delegates to `packEnd` (one source of the right-fill rule). DONE, green. | `src/ShellState.cpp`, `src/Widget.cpp` | `ui_layout` + `test_hit_test` green WITHOUT regeneration | non-overlap; node emission order; collapse rule |
 | C | Port the header STATUS FIELDS to a `WidgetStack` left collapse group over `width - inputLineReservation` (the fixed floor), replacing `addFields` (deleted; also removes its now-dead `layoutRow` helper). The input line + ghost KEEP the `layoutTextInput` seam — they become a prompt-mode `TextInput` widget in phase E, where reserve/grow/ghost geometry is designed rather than shoehorned. DONE, green. | `src/ShellState.cpp`, `src/Widget.cpp`, `include/ssg/Widget.h`, `tests/test_widget.cpp` | `ui_layout` + `test_render` + `test_hit_test` green without regeneration; `inputLineCaret` unchanged | fields-independent-of-input-line; non-overlap |
 | D | Single-source the prompt rect: make `view.prompt` the FULL-WIDTH bottom strip and have `promptStatusView` CONSUME it (passed from the shell view) instead of recomputing from dimensions, so the shell reservation, the a11y node/hit region, and the rendered controls are one rect. DONE, green. (The `FooterMode` type + variable-height footer node + status-line suppression are deferred to E, where the mode carries focus routing.) | `src/ShellState.cpp`, `src/runtime/snapshot.cpp`, `src/runtime/editor_runtime_internal.h`, `tests/test_ui_layout.cpp`, `tests/runtime/test_runtime_editing.cpp` | runtime oracle: `shell.prompt == promptStatus.prompt->rect` AND full-width across panel-off/on; `test_render` prompt cases + `test_prompt_status` + `PromptViewState` round-trip green without regeneration; editor content rect unchanged (top unmoved, x/width unchanged) | single-source prompt rect; prompt shrinks from bottom; solveLayout purity |
-| E | Make prompt focus explicit via a `FooterMode { rows, focusable, promptKind? }` value type + a footer mode stack: a prompt is a `focusable` region mode; enforce at-most-one-active-prompt; resolve `FocusTarget::Prompt` to the hosting region; the footer node becomes variable-height from the active mode and the footer status line is suppressed while a footer prompt owns the region. Palette = header mode (owns the input-line `TextInput` + its reserve/grow/ghost geometry, deferred from phase C), find/replace = footer modes. No new `FocusTarget`. | `src/ShellState.cpp`, `include/ssg/focus.h` (doc), `include/ssg/Widget.h`, `src/runtime/*` | focus-stack + keymap-context tests green; new fail-loud at-most-one-prompt test; `inputLineCaret` + input-line goldens green without regeneration | one active prompt; keyboard routing unchanged; fields-independent-of-input-line |
+| E | Make prompt focus explicit WITHOUT a runtime mode-stack (the single `PromptSurface` already guarantees at-most-one-active): add `promptFocusRegion(PromptKind) -> {Header, Footer}` as the one source of prompt anchoring and route the header-input-line ANCHORING decision (`inputLineActive`) through it (picker-machinery sites stay gated on `kind == Palette`); bundle the picker query + ghost into a `layoutInputLine` widget seam (completes the phase-C input-line deferral). `FooterMode`/variable footer/status suppression dropped as speculative (deferred to a future Lua-motivated spec). DONE, green. | `include/ssg/PromptSurface.h`, `include/ssg/Widget.h`, `src/Widget.cpp`, `src/ShellState.cpp`, `src/runtime/snapshot.cpp`, `tests/test_widget.cpp`, `tests/runtime/test_runtime_editing.cpp` | runtime oracle: focus↔active-prompt coupling + palette resolves to Header (input line present, no footer reservation) / find to Footer (reservation, no input line); `layoutInputLine` hand-computed cases; all goldens green without regeneration | one active prompt (by construction); keyboard routing unchanged; fields-independent-of-input-line |
 | F | Document the stack/mode/focus model + the `init.lua` composition seam it enables (design only; no binding). | `doc/spec-chrome-stacks.md`, `doc/config.md` | `test_config_doc` green (no new command/API claimed) | no wire/API change |
 
 ## Rationale (optional, skippable)

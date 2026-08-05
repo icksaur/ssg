@@ -152,6 +152,30 @@ struct TextInputLayout {
 // value stays visible. Exposed for reuse/testing; `layoutTextInput` uses it.
 [[nodiscard]] std::string visibleTail(std::string_view value, int cells);
 
+// The full picker input line: a scrolling `TextInput` (sigil + query tail) plus
+// a trailing completion `ghost` that fills whatever room the query left, up to
+// its own display width. This bundles the query field and the ghost into one
+// widget computation so the reserve/grow + ghost geometry lives in the widget
+// layer, not stitched inline by the shell. The caret column and the node rects/
+// roles stay with the caller (Renderer `inputLineCaret`, ShellState emission);
+// this owns only text + widths. `ghostWidth` is 0 when there is no ghost or the
+// query consumed the row; `ghostText` is the whole ghost (the renderer clips it
+// to `ghostWidth`).
+struct InputLineLayout {
+    std::string text;       // sigil + visible query tail
+    int width;              // query field cells (caret-safe, <= available)
+    std::string ghostText;  // the completion ghost (empty when none)
+    int ghostWidth;         // ghost cells after the query (0 when none/no room)
+};
+
+// Lay out a picker input line in `available` cells: the query via
+// `layoutTextInput` (caret reservation + tail scroll), then the ghost in the
+// cells that remain, clamped to the ghost's display width.
+[[nodiscard]] InputLineLayout layoutInputLine(std::string_view sigil,
+                                              std::string_view query,
+                                              std::string_view ghost,
+                                              int available);
+
 // --- WidgetStack: one composable row (packLeft/packRight/center) -------------
 //
 // A `WidgetStack` lays out ONE row of the header or footer as three groups

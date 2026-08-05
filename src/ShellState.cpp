@@ -509,30 +509,26 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
         // A space between the fields and whatever follows them.
         if (headerX > view.header->x) ++headerX;
 
-        // The input line occupies this slot when a picker is open.
+        // The input line occupies this slot when a picker is open. The query and
+        // its completion ghost are one widget computation (layoutInputLine owns
+        // the caret reservation, tail scroll, and ghost clamp); ShellState only
+        // stamps the resulting text/widths into nodes and the renderer derives
+        // the caret from the published geometry.
         if (request.inputLineActive) {
             const int available = std::max(0, headerRight - headerX);
-            // Scroll the query rather than reclaim field width when it outgrows
-            // the space: the fields' positions are the thing being protected,
-            // and the end of the query is what the user is looking at. The "> "
-            // sigil stays put as the surface's identity while the text slides
-            // under it. The TextInput seam owns the caret reservation and tail
-            // scroll (doc/spec-widget-chrome.md §TextInput seam).
-            const auto input = layoutTextInput(request.style.inputLineSigil,
-                                               request.inputLineQuery, available);
+            const auto line = layoutInputLine(request.style.inputLineSigil,
+                                              request.inputLineQuery,
+                                              request.inputLineGhost, available);
             addNode(view, ShellNodeKind::HeaderField, "input_line.query",
-                     "Input line", {headerX, view.header->y, input.width, 1},
-                     SemanticRole::Prompt, input.text);
-            headerX += input.width;
-            if (!request.inputLineGhost.empty() && headerX < headerRight) {
-                const int ghostWidth =
-                    std::min(headerRight - headerX,
-                             displayCells(request.inputLineGhost));
+                     "Input line", {headerX, view.header->y, line.width, 1},
+                     SemanticRole::Prompt, line.text);
+            headerX += line.width;
+            if (line.ghostWidth > 0) {
                 addNode(view, ShellNodeKind::HeaderField, "input_line.ghost",
                          "Input line completion",
-                         {headerX, view.header->y, ghostWidth, 1},
-                         SemanticRole::LineNumber, request.inputLineGhost);
-                headerX += ghostWidth;
+                         {headerX, view.header->y, line.ghostWidth, 1},
+                         SemanticRole::LineNumber, line.ghostText);
+                headerX += line.ghostWidth;
             }
         }
         // The whole footer row is ONE WidgetStack (doc/spec-chrome-stacks.md):

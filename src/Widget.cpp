@@ -125,6 +125,23 @@ TextInputLayout layoutTextInput(std::string_view sigil, std::string_view value,
     return {std::move(text), std::min(drawable, cells)};
 }
 
+InputLineLayout layoutInputLine(std::string_view sigil, std::string_view query,
+                                std::string_view ghost, int available) {
+    const auto input = layoutTextInput(sigil, query, available);
+    InputLineLayout line{input.text, input.width, {}, 0};
+    // The ghost fills the cells the query left, clamped to its own display width;
+    // it is dropped when the query consumed the row. The renderer clips the whole
+    // ghost string to this width (the text is not truncated here).
+    const int remaining = available - input.width;
+    if (!ghost.empty() && remaining > 0) {
+        const int ghostCells =
+            static_cast<int>(GraphemeLayout{}.computeRun(ghost).totalCells);
+        line.ghostWidth = std::min(remaining, ghostCells);
+        line.ghostText = std::string{ghost};
+    }
+    return line;
+}
+
 namespace {
 
 // Resolve one item's CONTENT fit within `granted` cells: the display text and

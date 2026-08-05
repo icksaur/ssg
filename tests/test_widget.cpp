@@ -184,6 +184,41 @@ TEST(layoutTextInputReservesCaretAndScrollsTail) {
     ASSERT_EQ(tiny.width, 0);
 }
 
+// layoutInputLine bundles the query (via layoutTextInput) and the ghost that
+// fills the remaining cells. Hand-computed with sigil "> " (2 cells), available
+// 20: query "hi" -> text "> hi" width 4; remaining 20-4=16; ghost "story" (5
+// cells) fits whole -> ghostWidth 5, ghostText "story".
+TEST(layoutInputLineBundlesQueryAndGhost) {
+    const auto line = layoutInputLine("> ", "hi", "story", 20);
+    ASSERT_EQ(line.text, std::string{"> hi"});
+    ASSERT_EQ(line.width, 4);
+    ASSERT_EQ(line.ghostText, std::string{"story"});
+    ASSERT_EQ(line.ghostWidth, 5);
+}
+
+// The ghost is clamped to the cells the query left (its text stays whole; the
+// renderer clips). available 7, query "ab" -> "> ab" width 4; remaining 3; ghost
+// "longer" (6 cells) clamps to 3, text kept whole.
+TEST(layoutInputLineClampsGhostToRemainingCells) {
+    const auto line = layoutInputLine("> ", "ab", "longer", 7);
+    ASSERT_EQ(line.width, 4);
+    ASSERT_EQ(line.ghostWidth, 3);
+    ASSERT_EQ(line.ghostText, std::string{"longer"});
+}
+
+// No ghost is placed when there is no room at all (available 0) or no ghost
+// text. (The caret reservation means a non-empty query never fully consumes a
+// positive row, so the no-room case is the zero-width row.)
+TEST(layoutInputLineDropsGhostWithNoRoomOrNoGhost) {
+    const auto noRoom = layoutInputLine("> ", "abcd", "ghost", 0);
+    ASSERT_EQ(noRoom.ghostWidth, 0);
+    ASSERT_EQ(noRoom.ghostText, std::string{});
+
+    const auto noGhost = layoutInputLine("> ", "hi", "", 20);
+    ASSERT_EQ(noGhost.ghostWidth, 0);
+    ASSERT_EQ(noGhost.ghostText, std::string{});
+}
+
 // --- WidgetStack -----------------------------------------------------------
 
 StackItem stackItem(std::string id, int desired, int rank = 0) {
@@ -379,6 +414,9 @@ int main() {
     RUN(textInputTextConcatenatesPrefixSeparatorValue);
     RUN(visibleTailKeepsTheEndWithinTheCellBudget);
     RUN(layoutTextInputReservesCaretAndScrollsTail);
+    RUN(layoutInputLineBundlesQueryAndGhost);
+    RUN(layoutInputLineClampsGhostToRemainingCells);
+    RUN(layoutInputLineDropsGhostWithNoRoomOrNoGhost);
     RUN(widgetStackPackLeftPacksFromLeadingEdge);
     RUN(widgetStackPackRightFlushesRightInCallOrder);
     RUN(widgetStackLeftFillsSpaceLeftOfRightGroup);

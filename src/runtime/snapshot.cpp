@@ -182,9 +182,18 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
     }
     request.tabs = std::move(labels);
     request.style = style;
+    // Anchoring decision: a HEADER-anchored prompt hosts its query in the header
+    // input line (promptFocusRegion, doc/spec-chrome-stacks.md). The query/ghost
+    // text come from the picker report, which today only the palette populates.
+    bool const headerPrompt = prompt.active() && prompt.request() &&
+                              promptFocusRegion(prompt.request()->kind) ==
+                                  PromptRegion::Header;
+    // Picker identity: the palette picker specifically (drives candidate ranking
+    // below). Distinct from the anchoring decision so a future non-palette header
+    // prompt does not inherit palette-picker plumbing.
     bool const paletteOpen = prompt.active() && prompt.request() &&
                               prompt.request()->kind == PromptKind::Palette;
-    if (paletteOpen) {
+    if (headerPrompt) {
         request.inputLineActive = true;
         request.inputLineQuery = paletteReport.query;
         request.inputLineGhost = paletteReport.ghost;

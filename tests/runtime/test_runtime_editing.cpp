@@ -1250,6 +1250,81 @@ TEST(promptReservationIsSingleSourcedAndFullWidthAcrossPanel) {
     both(3);  // Replace = 3 rows
 }
 
+// Prompt focus is unambiguous by construction (doc/spec-chrome-stacks.md §Prompt
+// as a focusable region mode): there is one PromptSurface, so at most one prompt
+// is active; focus is Prompt iff a prompt is active; and promptFocusRegion(kind)
+// names where that one prompt lives -- Header for the palette (its query IS the
+// header input line, no footer reservation), Footer for find/replace (a footer
+// reservation, no header input line). Assert the region mapping AND that the
+// named region is the one actually populated in the shell.
+TEST(promptFocusIsSingleAndResolvesToItsRegion) {
+    // The mapping itself (pure): palette -> header, every other kind -> footer.
+    static_assert(ssg::promptFocusRegion(ssg::PromptKind::Palette) ==
+                  ssg::PromptRegion::Header);
+    static_assert(ssg::promptFocusRegion(ssg::PromptKind::Find) ==
+                  ssg::PromptRegion::Footer);
+    static_assert(ssg::promptFocusRegion(ssg::PromptKind::Replace) ==
+                  ssg::PromptRegion::Footer);
+
+    auto root = uniqueRoot();
+    auto workspace = root / "workspace";
+    std::filesystem::create_directories(workspace);
+    std::ofstream{workspace / "hits.txt"} << "cat cat cat";
+    auto created = ssg::EditorRuntime::create({
+        workspace, root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"hits.txt"}}).accepted());
+
+    const ssg::ViewportDimensions dims{80, 24};
+    const auto hasInputLine = [](const ssg::ShellViewState& shell) {
+        for (const auto& node : shell.accessibilityNodes)
+            if (node.id == "input_line.query") return true;
+        return false;
+    };
+
+    // No prompt: focus is not Prompt.
+    {
+        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        ASSERT_TRUE(snap.has_value());
+        if (snap) ASSERT_TRUE(snap->sections().shell.focus != ssg::FocusTarget::Prompt);
+    }
+
+    // Palette (a picker) is HEADER-anchored: focus is Prompt, the header input
+    // line is populated, and NO footer prompt reservation exists.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.open", runtime.revision(), {}}).accepted());
+    {
+        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        ASSERT_TRUE(snap.has_value());
+        if (!snap) return;
+        const auto& s = snap->sections();
+        ASSERT_EQ(s.shell.focus, ssg::FocusTarget::Prompt);
+        ASSERT_TRUE(hasInputLine(s.shell));       // header hosts the query
+        ASSERT_FALSE(s.shell.prompt.has_value()); // no footer reservation
+    }
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"palette.close", runtime.revision(), {}}).accepted());
+    {
+        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        ASSERT_TRUE(snap.has_value());
+        if (snap) ASSERT_TRUE(snap->sections().shell.focus != ssg::FocusTarget::Prompt);
+    }
+
+    // Find is FOOTER-anchored: focus is Prompt, a footer reservation exists, and
+    // NO header input line.
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.open", runtime.revision(), {}}).accepted());
+    {
+        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        ASSERT_TRUE(snap.has_value());
+        if (!snap) return;
+        const auto& s = snap->sections();
+        ASSERT_EQ(s.shell.focus, ssg::FocusTarget::Prompt);
+        ASSERT_TRUE(s.shell.prompt.has_value());  // footer reservation hosts it
+        ASSERT_FALSE(hasInputLine(s.shell));      // not the header input line
+    }
+}
+
 } // namespace
 
 int main() {
@@ -1271,6 +1346,7 @@ int main() {
     RUN(findWordUnderCursorPrefersTheSelectionAndSearchesItLiterally);
     RUN(findWordUnderCursorIsANoOpWithNoWordUnderTheCaret);
     RUN(promptReservationIsSingleSourcedAndFullWidthAcrossPanel);
+    RUN(promptFocusIsSingleAndResolvesToItsRegion);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }
