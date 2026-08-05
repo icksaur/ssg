@@ -1,6 +1,8 @@
 #pragma once
 
+#include "ssg/ChromeComposition.h"
 #include "ssg/focus.h"
+#include "ssg/Geometry.h"
 #include "ssg/Style.h"
 #include "ssg/Theme.h"
 #include "ssg/Viewport.h"
@@ -15,23 +17,6 @@
 #include <vector>
 
 namespace ssg {
-
-struct GridSize {
-    int columns = 0;
-    int rows = 0;
-    friend bool operator==(const GridSize&, const GridSize&) = default;
-};
-
-struct Rect {
-    int x = 0;
-    int y = 0;
-    int width = 0;
-    int height = 0;
-
-    [[nodiscard]] constexpr int right() const noexcept { return x + width; }
-    [[nodiscard]] constexpr int bottom() const noexcept { return y + height; }
-    friend bool operator==(const Rect&, const Rect&) = default;
-};
 
 class PaneId {
 public:
@@ -158,6 +143,14 @@ struct ShellLayoutRequest {
     // Dimensions and chrome glyphs this layout is computed against.  Defaults
     // reproduce the shipped appearance; see doc/spec-style.md.
     Style style;
+    // An optional init.lua-composed header/footer (doc/spec-lua-widget-
+    // composition.md). When a region is present here, its built-in status-field
+    // projection is REPLACED by lowering the composed row; an absent region (the
+    // default) keeps the built-in path byte-identical. `chromeProviderResolver`
+    // supplies live (value,label,command) for a composed widget's `provider`
+    // references; when unset, provider widgets resolve to nothing and drop.
+    std::optional<ChromeComposition> composedChrome;
+    ChromeProviderResolver chromeProviderResolver;
 };
 
 struct PaneGeometry {

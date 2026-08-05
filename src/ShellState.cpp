@@ -1,5 +1,6 @@
 #include "ssg/ShellState.h"
 
+#include "ssg/ChromeLowering.h"
 #include "ssg/GraphemeLayout.h"
 #include "ssg/Layout.h"
 #include "ssg/Widget.h"
@@ -446,6 +447,14 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
                  *view.header, SemanticRole::Header);
         addNode(view, ShellNodeKind::Footer, "footer", "Status footer",
                  *view.footer, SemanticRole::Footer);
+        // A composed region's `provider` widgets resolve through this. When the
+        // request carries no resolver, provider widgets find nothing and drop
+        // (as an empty-value built-in field drops); a null std::function must
+        // not be invoked, so wrap it defensively.
+        const ChromeProviderResolver chromeResolver =
+            request.chromeProviderResolver
+                ? request.chromeProviderResolver
+                : [](std::string_view) { return std::optional<ResolvedProvider>{}; };
         // Status fields FIRST, anchored at the header's left edge, so their
         // position does not depend on the input line's contents: typing into a
         // picker must not slide the working directory and branch rightward or
@@ -475,6 +484,25 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
         // `layoutTextInput` seam below (they become a prompt-mode TextInput
         // widget in the focus phase, where reserve/grow/ghost geometry is
         // designed rather than shoehorned into a stack item).
+        int headerX = view.header->x;
+        const bool composedHeader =
+            request.composedChrome && request.composedChrome->header;
+        if (composedHeader) {
+            // A composed header REPLACES the built-in status fields, laid out
+            // over the SAME fieldWidth the built-in uses so the input-line
+            // reservation floor is honored (doc/spec-lua-widget-composition.md
+            // §Replace semantics; header is left-group only). headerX advances
+            // to the group's consumed right edge -- which INCLUDES node-less
+            // Spacers -- so the input line follows the whole group, never over a
+            // spacer's cells.
+            headerX = std::max(
+                headerX,
+                lowerChromeRow(*request.composedChrome->header,
+                               {view.header->x, view.header->y, fieldWidth, 1},
+                               ShellNodeKind::HeaderField, SemanticRole::Header,
+                               request.style, chromeResolver,
+                               view.accessibilityNodes));
+        } else {
         WidgetStack headerStack{1};
         std::vector<const StatusField*> headerFieldSource;
         for (const auto& field : request.headerFields) {
@@ -487,7 +515,6 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
             headerStack.packLeft(std::move(item));
             headerFieldSource.push_back(&field);
         }
-        int headerX = view.header->x;
         if (const auto resolved = headerStack.resolve(fieldWidth)) {
             const auto find = [&](std::string_view id) -> const StackPlacement* {
                 for (const auto& p : resolved->placed)
@@ -505,6 +532,7 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
                 headerX = std::max(headerX,
                                    view.header->x + p->offset + p->size);
             }
+        }
         }
         // A space between the fields and whatever follows them.
         if (headerX > view.header->x) ++headerX;
@@ -545,6 +573,18 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
         const bool hasHint =
             request.footerHint && !request.footerHint->label.empty();
 
+        const bool composedFooter =
+            request.composedChrome && request.composedChrome->footer;
+        if (composedFooter) {
+            // A composed footer REPLACES the whole built-in footer row (fields,
+            // hint, actions). Unlike the header it supports full left/right/
+            // center, so it lowers over the entire footer rect; every widget
+            // becomes a FooterField node (doc/spec-lua-widget-composition.md).
+            lowerChromeRow(*request.composedChrome->footer,
+                           {view.footer->x, view.footer->y, view.footer->width, 1},
+                           ShellNodeKind::FooterField, SemanticRole::Footer,
+                           request.style, chromeResolver, view.accessibilityNodes);
+        } else {
         WidgetStack footer{1};
         std::vector<const StatusField*> fieldSource;
         for (const auto& field : request.footerFields) {
@@ -614,6 +654,7 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
                          field.accessibleLabel, rectOf(*p), SemanticRole::Footer,
                          field.value, field.commandId);
             }
+        }
         }
 
         if (panelWidth > 0) {

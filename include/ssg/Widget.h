@@ -11,7 +11,7 @@
 // the rest is built on, kept free of any renderer or runtime dependency so its
 // fit rule is a pure, hand-checkable integer computation.
 
-#include <ssg/ShellState.h>  // Rect
+#include <ssg/Geometry.h>    // Rect
 #include <ssg/Style.h>       // ToggleGlyphs
 
 #include <cstdint>

@@ -837,6 +837,162 @@ TEST(noTabSeparatorDanglesPastTheLastPlacedTab) {
     ASSERT_EQ(separators, result.view->tabHits.size() - 1);
 }
 
+// --- doc/spec-lua-widget-composition.md phase 3: composed-chrome routing ---
+
+WidgetDescriptor literalField(std::string id, std::string text, int rank) {
+    WidgetDescriptor w;
+    w.kind = WidgetKind::Field;
+    w.id = std::move(id);
+    ValueSource v;
+    v.literal = std::move(text);
+    w.value = v;
+    w.rank = rank;
+    return w;
+}
+
+WidgetDescriptor providerField(std::string id, std::string provider, int rank) {
+    WidgetDescriptor w;
+    w.kind = WidgetKind::Field;
+    w.id = std::move(id);
+    ValueSource v;
+    v.isProvider = true;
+    v.provider = std::move(provider);
+    w.value = v;
+    w.rank = rank;
+    return w;
+}
+
+// A composed header OWNS the header's status fields (built-in fields are gone,
+// composed ids appear) and a composed footer OWNS the whole footer row (fields,
+// hint, and actions are gone).
+TEST(composedChromeReplacesBuiltinHeaderAndFooter) {
+    ShellState state;
+    auto value = request(100, 24);
+    ChromeComposition comp;
+    RowDescriptor header;
+    header.left.push_back(literalField("custom.header", "HELLO", 0));
+    comp.header = header;
+    RowDescriptor footer;
+    footer.left.push_back(literalField("custom.footer", "WORLD", 0));
+    comp.footer = footer;
+    value.composedChrome = comp;
+
+    auto result = computeShellLayout(value, state);
+    ASSERT_TRUE(result.accepted());
+    if (!result.accepted()) return;
+
+    // Composed nodes present.
+    const auto* customHeader = findNode(*result.view, "custom.header");
+    const auto* customFooter = findNode(*result.view, "custom.footer");
+    ASSERT_TRUE(customHeader != nullptr);
+    ASSERT_TRUE(customFooter != nullptr);
+    if (customHeader) {
+        ASSERT_EQ(customHeader->kind, ShellNodeKind::HeaderField);
+        ASSERT_EQ(customHeader->content, std::string{"HELLO"});
+    }
+    if (customFooter) {
+        ASSERT_EQ(customFooter->kind, ShellNodeKind::FooterField);
+        ASSERT_EQ(customFooter->content, std::string{"WORLD"});
+    }
+    // Every built-in field, action, and hint is gone -- replace, not merge.
+    ASSERT_TRUE(findNode(*result.view, "active_command") == nullptr);
+    ASSERT_TRUE(findNode(*result.view, "current_path") == nullptr);
+    ASSERT_TRUE(findNode(*result.view, "git_branch") == nullptr);
+    ASSERT_TRUE(findNode(*result.view, "status.retry") == nullptr);
+}
+
+// An uncomposed region keeps its built-in chrome even when the OTHER region is
+// composed: composing only the footer must not disturb the header, and vice
+// versa (byte-identical default path).
+TEST(composingOneRegionLeavesTheOtherBuiltin) {
+    ShellState state;
+    auto footerOnly = request(100, 24);
+    ChromeComposition comp;
+    RowDescriptor footer;
+    footer.left.push_back(literalField("custom.footer", "WORLD", 0));
+    comp.footer = footer;
+    footerOnly.composedChrome = comp;
+
+    auto result = computeShellLayout(footerOnly, state);
+    ASSERT_TRUE(result.accepted());
+    if (!result.accepted()) return;
+    // Header is untouched built-in; footer is composed.
+    ASSERT_TRUE(findNode(*result.view, "active_command") != nullptr);
+    ASSERT_TRUE(findNode(*result.view, "custom.footer") != nullptr);
+    ASSERT_TRUE(findNode(*result.view, "git_branch") == nullptr);
+}
+
+// A composed header's `provider` widget resolves live (value, label, command)
+// through the request's resolver, and the input line still follows the composed
+// left group when a picker is open (the header stays left-group only).
+TEST(composedHeaderResolvesProvidersAndKeepsTheInputLine) {
+    ShellState state;
+    auto value = request(100, 24);
+    value.inputLineActive = true;
+    value.inputLineQuery = "abc";
+    ChromeComposition comp;
+    RowDescriptor header;
+    header.left.push_back(providerField("live.path", "path", 0));
+    comp.header = header;
+    value.composedChrome = comp;
+    value.chromeProviderResolver =
+        [](std::string_view id) -> std::optional<ResolvedProvider> {
+        if (id == "path")
+            return ResolvedProvider{"src/main.cpp", "Current path",
+                                    std::string{"panel.show_files"}};
+        return std::nullopt;
+    };
+
+    auto result = computeShellLayout(value, state);
+    ASSERT_TRUE(result.accepted());
+    if (!result.accepted()) return;
+    const auto* live = findNode(*result.view, "live.path");
+    ASSERT_TRUE(live != nullptr);
+    if (live) {
+        ASSERT_EQ(live->content, std::string{"src/main.cpp"});
+        ASSERT_EQ(live->label, std::string{"Current path"});
+        ASSERT_TRUE(live->commandId.has_value());
+        ASSERT_EQ(*live->commandId, std::string{"panel.show_files"});
+    }
+    // The picker input line coexists after the composed left group.
+    const auto* line = findNode(*result.view, "input_line.query");
+    ASSERT_TRUE(line != nullptr);
+    if (live && line) ASSERT_TRUE(line->rect.x >= live->rect.right());
+}
+
+// A node-less left `Spacer` still consumes header cells: the input line must
+// follow the WHOLE composed group (spacer included), not just the last emitted
+// node -- else the query would overlap the spacer's cells.
+TEST(composedHeaderSpacerPushesTheInputLinePastItsCells) {
+    ShellState state;
+    auto value = request(100, 24);
+    value.inputLineActive = true;
+    value.inputLineQuery = "abc";
+    ChromeComposition comp;
+    RowDescriptor header;
+    header.left.push_back(literalField("h.field", "X", 0));
+    WidgetDescriptor spacer;
+    spacer.kind = WidgetKind::Spacer;
+    spacer.id = "h.spacer";
+    spacer.width = 20;
+    header.left.push_back(spacer);
+    comp.header = header;
+    value.composedChrome = comp;
+
+    auto result = computeShellLayout(value, state);
+    ASSERT_TRUE(result.accepted());
+    if (!result.accepted()) return;
+    const auto* field = findNode(*result.view, "h.field");
+    const auto* line = findNode(*result.view, "input_line.query");
+    ASSERT_TRUE(field != nullptr);
+    ASSERT_TRUE(line != nullptr);
+    // The spacer (no node) sits after the field; the input line clears both.
+    if (field && line) {
+        const int spacerRight = field->rect.right() + 1 + 20;  // sep + width
+        ASSERT_TRUE(line->rect.x >= spacerRight);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // computeShellLayout's full ShellViewState across a broad input matrix, captured
 // from the CURRENT code and committed. The layout-engine rearchitecture must
@@ -1076,6 +1232,10 @@ int main() {
     RUN(configuredTabEdgeAndSeparatorGlyphsChangeGeometry);
     RUN(activeTabStaysVisibleWhenSeparatorsPushEarlierTabsOff);
     RUN(noTabSeparatorDanglesPastTheLastPlacedTab);
+    RUN(composedChromeReplacesBuiltinHeaderAndFooter);
+    RUN(composingOneRegionLeavesTheOtherBuiltin);
+    RUN(composedHeaderResolvesProvidersAndKeepsTheInputLine);
+    RUN(composedHeaderSpacerPushesTheInputLinePastItsCells);
     RUN(shellLayoutMatchesTheCommittedGolden);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << '\n';
     return failed == 0 ? 0 : 1;

@@ -13,6 +13,7 @@
 #include <ssg/Widget.h>  // WidgetKind, Overflow, CenterWidth
 
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -129,8 +130,22 @@ struct ChromeComposition {
         default;
 };
 
-struct ChromeDecodeResult {
-    // A path-qualified message on failure (e.g. `header.left[2]: unknown kind
+// What a live provider resolves to for a composed widget: the displayed value,
+// its accessible label, and any inherited click command -- mirroring a built-in
+// status field's (value, accessibleLabel, commandId). A provider with no value
+// returns nullopt, and the widget is dropped (as the built-in drops an
+// empty-value field). Lua-free: the resolver is supplied by the server-side
+// snapshot, keeping this header (and the decoder/lowering) runtime-agnostic.
+struct ResolvedProvider {
+    std::string value;
+    std::string accessibleLabel;
+    std::optional<std::string> commandId;
+};
+
+using ChromeProviderResolver =
+    std::function<std::optional<ResolvedProvider>(std::string_view id)>;
+
+struct ChromeDecodeResult {    // A path-qualified message on failure (e.g. `header.left[2]: unknown kind
     // "buton"`); nullopt on success.
     std::optional<std::string> error;
     std::optional<ChromeComposition> composition;

@@ -121,11 +121,11 @@ StackItem stackItemFor(const WidgetDescriptor& w, std::string stackId,
 
 }  // namespace
 
-void lowerChromeRow(const RowDescriptor& row, const Rect& rect,
-                    ShellNodeKind nodeKind, SemanticRole defaultRole,
-                    const Style& style,
-                    const ChromeProviderResolver& resolveProvider,
-                    std::vector<AccessibilityNode>& out) {
+int lowerChromeRow(const RowDescriptor& row, const Rect& rect,
+                   ShellNodeKind nodeKind, SemanticRole defaultRole,
+                   const Style& style,
+                   const ChromeProviderResolver& resolveProvider,
+                   std::vector<AccessibilityNode>& out) {
     WidgetStack stack{row.separator};
     std::vector<Packed> packed;
 
@@ -152,7 +152,13 @@ void lowerChromeRow(const RowDescriptor& row, const Rect& rect,
     if (row.center) pack(*row.center, "C", false, true);
 
     const auto solved = stack.resolve(rect.width);
-    if (!solved) return;  // a well-formed row cannot fail; guard defensively
+    if (!solved) return rect.x;  // a well-formed row cannot fail; guard defensively
+
+    // The row's consumed right edge INCLUDES node-less Spacers (they are placed
+    // stack items), so a caller placing content after the group clears them.
+    int consumedRight = rect.x;
+    for (const auto& p : solved->placed)
+        consumedRight = std::max(consumedRight, rect.x + p.offset + p.size);
 
     const auto emit = [&](std::string_view stackId) {
         const StackPlacement* placement = nullptr;
@@ -177,6 +183,7 @@ void lowerChromeRow(const RowDescriptor& row, const Rect& rect,
     if (row.center) emit("C");
     for (std::size_t i = 0; i < row.right.size(); ++i)
         emit("R" + std::to_string(i));
+    return consumedRight;
 }
 
 }  // namespace ssg
