@@ -262,21 +262,25 @@ toggleable `Checkbox` with their `value`/`command`. So the form work is additive
   `value`; a `Checkbox` requires a `checked` source; see the matrix.)
 - **Widget count / cost (concrete caps).** The composition is bounded and the
   decoder rejects past explicit limits with a path-qualified message (whole-call
-  reject): max nesting DEPTH 8 (the structure is shallow —
-  composition→region→side→widget→value — so 8 is generous headroom, not a design
-  constraint); max WIDGETS PER ROW-SIDE 64; max TOTAL widgets per `ssg.chrome`
-  call 256. Over any limit → `<path>: exceeds <limit-name> (<n> > <max>)`. These
-  mirror the `ssg.command` fan-out cap so a pathological table cannot stall a
-  reload; the numbers are mechanism (tunable) not invariant.
+  reject): max WIDGETS PER ROW-SIDE 64; max TOTAL widgets per `ssg.chrome` call
+  256. Over a limit → `<path>: exceeds <limit-name> (<n> > <max>)`; negative
+  `separator`/`width` are likewise fail-loud (`must not be negative`). In CHROME
+  the per-side cap is what bites (a header's one side + a footer's three slots is
+  bounded well under 256); the total cap is a forward-looking ceiling for the
+  multi-row FORM reuse. A nesting-DEPTH cap lands with the nested/forms decoder
+  (a `Container` can recurse there); the phase-1 chrome schema is flat, so depth
+  is bounded by the fixed shape and no depth guard ships now. The numbers are
+  mechanism (tunable) not invariant.
 - **Closed-vocabulary honesty.** There is no `Button` kind; a clickable button is
   a `Label`/`Field` with a `command`. The vocabulary stays the shipped six.
 
 ## Risks and Mitigations
 
 - **Nested-table decoder is new surface (injection/crash).** Mitigation: the
-  decoder is pure and total over Lua values, depth- and count-bounded, with a
-  reference-impl round-trip oracle (table → descriptor → compare) incl. malformed
-  cases; it cannot execute Lua, only read values.
+  decoder is pure and total over Lua values, count-bounded (per-side/total caps)
+  with numeric fields range-checked, and has a reference-impl round-trip oracle
+  (table → descriptor → compare) incl. malformed cases; it cannot execute Lua,
+  only read values. (A nesting-depth cap arrives with the nested/forms decoder.)
 - **Replace path diverges from built-in geometry OR interaction.** Mitigation:
   composed rows use the SAME `WidgetStack` lowering + input-line floor as the
   built-in path, and a provider widget inherits the built-in field's command
@@ -321,7 +325,7 @@ toggleable `Checkbox` with their `value`/`command`. So the form work is additive
 
 | # | Step | Files | Oracle | Invariants |
 |---|------|-------|--------|------------|
-| 1 | Define the descriptor value types (`WidgetDescriptor` with `value`/`checked`/`width`/`role`/`command`, `RowDescriptor`, `ChromeComposition`; `Value` = literal XOR provider) + the pure nested-table decoder enforcing the per-kind CHROME-context field matrix, path-qualified fail-loud errors, and the concrete caps (depth 8, 64/side, 256/call). No Lua wiring yet. | new `include/ssg/ChromeComposition.h`, `src/ChromeComposition.cpp`, `tests/test_chrome_composition.cpp`, a `cmake/components/*.cmake` | round-trip decode unit tests incl. every fail-loud case (per-kind required/forbidden field, value exclusivity, `TextInput`-in-chrome, header right/centre, spacer width, caps) | decoder purity; closed kinds; value exclusivity |
+| 1 | Define the descriptor value types (`WidgetDescriptor` with `value`/`checked`/`width`/`role`/`command`, `RowDescriptor`, `ChromeComposition`; `Value` = literal XOR provider) + the pure nested-table decoder enforcing the per-kind CHROME-context field matrix, path-qualified fail-loud errors, and the concrete caps (64/side, 256/call; negatives rejected). No Lua wiring yet. | new `include/ssg/ChromeComposition.h`, `src/ChromeComposition.cpp`, `tests/test_chrome_composition.cpp`, a `cmake/components/*.cmake` | round-trip decode unit tests incl. every fail-loud case (per-kind required/forbidden field, value exclusivity, `TextInput`-in-chrome, header right/centre, spacer width, caps) | decoder purity; closed kinds; value exclusivity |
 | 2 | Lower a `RowDescriptor` to a `WidgetStack` + `AccessibilityNode`s (switch on `WidgetKind`; resolve `provider` vs literal; inherit provider command coupling unless overridden; carry `command`→`commandId`; apply the input-line floor; reject `TextInput` + header right/centre). Build-only reuse of the shipped stack. | `src/ShellState.cpp` (or a new `src/ChromeLowering.cpp`), `include/ssg/…` | hand/golden: provider-only composed header == built-in header span-for-span INCLUDING `commandId`; composed footer click hit-tests | non-overlap; server-owned; no wire change |
 | 3 | Route the built-in header/footer projection through the composition: when a region is composed, lower it; else keep the built-in path verbatim. | `src/runtime/snapshot.cpp`, `src/ShellState.cpp` | existing `ui_layout`/`test_hit_test`/`test_render` green WITHOUT regeneration (uncomposed default) + replace oracle | uncomposed default byte-identical |
 | 4 | Add the `ssg.chrome` API function (3rd `kApiFunctions` entry + installer + nested-table entry point), staged into the reload lifecycle with rollback. | `include/ssg/LuaCommandHost.h`, `src/LuaCommandHost.cpp`, `src/ScriptHost.cpp` | script-host tests: compose applies; error rolls back; second call last-wins | whole-script fail-loud; no per-frame Lua |
