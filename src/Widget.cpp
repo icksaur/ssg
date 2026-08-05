@@ -178,24 +178,25 @@ std::optional<StackLayout> WidgetStack::resolve(int extent) const {
 
     StackLayout layout;
 
-    // --- Right group: fill from the trailing edge leftward (the packEnd rule).
-    // The rightmost item keeps its full width; the leftmost item that still has
-    // room is clamp-truncated; a zero-room item drops. Offsets are absolute from
-    // the left edge; emitted in original (left-to-right) order.
+    // --- Right group: fill from the trailing edge leftward via `packEnd` (the
+    // single source of that rule: rightmost item full width, leftmost with room
+    // clamp-truncated, zero-room dropped). A right item owns its full reserved
+    // slot; overflow only decides the TEXT (a `ScrollTail` value tail is anchored
+    // within the slot, never shrinking it, so the reserved region has no hole).
+    std::vector<FitItem> rightItems;
+    rightItems.reserve(right_.size());
+    for (const auto& item : right_)
+        rightItems.push_back({item.id, item.desired, 0});
+    const RowFit rightFit = packEnd(rightItems, extent);
     std::vector<StackPlacement> rightPlaced;
-    int cursor = extent;
-    for (std::size_t i = right_.size(); i-- > 0;) {
-        const int width = std::min(cursor, right_[i].desired);
-        if (width <= 0) continue;
-        cursor -= width;
-        // A right item owns its full reserved slot; overflow only decides the
-        // text (a `ScrollTail` value tail is anchored within the slot, never
-        // shrinking it, so the reserved right region has no internal hole).
-        auto [text, size] = resolveContent(right_[i], width);
-        rightPlaced.push_back({right_[i].id, cursor, width, std::move(text)});
+    rightPlaced.reserve(rightFit.placed.size());
+    for (const auto& p : rightFit.placed) {
+        auto [text, size] = resolveContent(right_[p.index], p.size);
+        rightPlaced.push_back({right_[p.index].id, p.offset, p.size,
+                               std::move(text)});
     }
-    std::ranges::reverse(rightPlaced);
-    const int rightStart = rightPlaced.empty() ? extent : cursor;
+    const int rightStart =
+        rightFit.placed.empty() ? extent : rightFit.placed.front().offset;
 
     // --- Left group: `keep` items are always retained and pre-consume budget;
     // the rest collapse by rank via `fitRow` over the remaining width. Placements

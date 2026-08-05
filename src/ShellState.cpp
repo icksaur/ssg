@@ -535,60 +535,90 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
                 headerX += ghostWidth;
             }
         }
-        // The footer's help hint and status actions are one right-packed group
-        // (doc/spec-widget-chrome.md): actions sit rightmost, the hint to their
-        // left, filling from the trailing edge with clamp-truncation. packEnd is
-        // the single source of that geometry; the leftmost placed cell bounds the
-        // status-field row that fills the space to its left.
+        // The whole footer row is ONE WidgetStack (doc/spec-chrome-stacks.md):
+        // status fields are the LEFT collapse group, the help hint + status
+        // actions are the RIGHT group (hint leftmost, actions after it, the last
+        // action flush right -- the packEnd rule). The left fields resolve over
+        // the space to the LEFT of the right group automatically (the stack's
+        // rightStart), so no explicit fieldsWidth arithmetic. Synthetic per-item
+        // ids ("F"/"H"/"A") key the placement lookup, so no field/action id
+        // uniqueness is assumed. Nodes are emitted in the SAME order as before
+        // (actions reverse, hint, then fields) so the golden node sequence and
+        // hit-test order are unchanged.
         const int labelPadding = request.style.dimensions.labelPadding;
         const bool hasHint =
             request.footerHint && !request.footerHint->label.empty();
-        std::vector<FitItem> rightGroup;
-        std::vector<const ShellLabel*> actionForIndex;  // null at the hint slot
-        if (hasHint) {
-            rightGroup.push_back(
-                {"footer.hint",
-                 displayCells(request.footerHint->label) + labelPadding, 0});
-            actionForIndex.push_back(nullptr);
+
+        WidgetStack footer{1};
+        std::vector<const StatusField*> fieldSource;
+        for (const auto& field : request.footerFields) {
+            if (field.accessibleLabel.empty() || field.value.empty()) continue;
+            StackItem item;
+            item.id = "F" + std::to_string(fieldSource.size());
+            item.content = field.value;
+            item.desired = measureFieldCells(field.value);
+            item.rank = field.collapseRank;
+            footer.packLeft(std::move(item));
+            fieldSource.push_back(&field);
         }
+        if (hasHint) {
+            StackItem item;
+            item.id = "H";
+            item.content = request.footerHint->label;
+            item.desired = displayCells(request.footerHint->label) + labelPadding;
+            item.overflow = Overflow::Truncate;
+            footer.packRight(std::move(item));
+        }
+        std::vector<const ShellLabel*> actionSource;
         for (const auto& action : request.footerActions) {
             if (action.accessibleLabel.empty()) continue;
-            rightGroup.push_back(
-                {action.id, displayCells(action.accessibleLabel) + labelPadding,
-                 0});
-            actionForIndex.push_back(&action);
+            StackItem item;
+            item.id = "A" + std::to_string(actionSource.size());
+            item.content = action.accessibleLabel;
+            item.desired = displayCells(action.accessibleLabel) + labelPadding;
+            item.overflow = Overflow::Truncate;
+            footer.packRight(std::move(item));
+            actionSource.push_back(&action);
         }
-        const RowFit rightFit = packEnd(rightGroup, view.footer->width);
-        std::vector<std::optional<Rect>> rightRect(rightGroup.size());
-        for (const auto& p : rightFit.placed)
-            rightRect[p.index] =
-                Rect{view.footer->x + p.offset, view.footer->y, p.size, 1};
 
-        // Emit actions in reverse original order, then the hint, matching the
-        // prior node order so hit-test order and the golden node sequence are
-        // unchanged. `index` maps each placement to its source; no id-uniqueness
-        // assumption.
-        for (std::size_t i = rightGroup.size(); i-- > (hasHint ? 1u : 0u);) {
-            if (!rightRect[i]) continue;
-            const ShellLabel& action = *actionForIndex[i];
-            addNode(view, ShellNodeKind::FooterAction, action.id,
-                     action.accessibleLabel, *rightRect[i],
-                     SemanticRole::StatusInfo, action.accessibleLabel);
+        const auto resolved = footer.resolve(view.footer->width);
+        if (resolved) {
+            const auto find = [&](std::string_view id) -> const StackPlacement* {
+                for (const auto& p : resolved->placed)
+                    if (p.id == id) return &p;
+                return nullptr;
+            };
+            const auto rectOf = [&](const StackPlacement& p) {
+                return Rect{view.footer->x + p.offset, view.footer->y, p.size, 1};
+            };
+
+            // Actions in reverse original order, then the hint (unchanged node
+            // order).
+            for (std::size_t i = actionSource.size(); i-- > 0;) {
+                const auto* p = find("A" + std::to_string(i));
+                if (!p) continue;
+                addNode(view, ShellNodeKind::FooterAction, actionSource[i]->id,
+                         actionSource[i]->accessibleLabel, rectOf(*p),
+                         SemanticRole::StatusInfo, actionSource[i]->accessibleLabel);
+            }
+            if (hasHint) {
+                if (const auto* p = find("H")) {
+                    addNode(view, ShellNodeKind::FooterHint, "footer.hint",
+                             request.footerHint->label, rectOf(*p),
+                             SemanticRole::Footer, request.footerHint->label,
+                             request.footerHint->commandId);
+                }
+            }
+            // Status fields left-to-right.
+            for (std::size_t i = 0; i < fieldSource.size(); ++i) {
+                const auto* p = find("F" + std::to_string(i));
+                if (!p) continue;
+                const StatusField& field = *fieldSource[i];
+                addNode(view, ShellNodeKind::FooterField, field.id,
+                         field.accessibleLabel, rectOf(*p), SemanticRole::Footer,
+                         field.value, field.commandId);
+            }
         }
-        if (hasHint && rightRect[0]) {
-            addNode(view, ShellNodeKind::FooterHint, "footer.hint",
-                     request.footerHint->label, *rightRect[0],
-                     SemanticRole::Footer, request.footerHint->label,
-                     request.footerHint->commandId);
-        }
-        // The status-field row fills the space to the left of the right group.
-        const int fieldsWidth = rightFit.placed.empty()
-                                    ? view.footer->width
-                                    : rightFit.placed.front().offset;
-        addFields(view, request.footerFields,
-                   {view.footer->x, view.footer->y, fieldsWidth,
-                    view.footer->height},
-                   ShellNodeKind::FooterField, SemanticRole::Footer);
 
         if (panelWidth > 0) {
             view.panel = solved->find("panel")->rect;
