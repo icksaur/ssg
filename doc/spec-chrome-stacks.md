@@ -150,17 +150,36 @@ Find=2 Replace=3). This spec unifies them: the footer region becomes
   over the footer, replace 3 — but it is now one mechanism (footer modes) rather
   than two (footer region + editor reservation).
 
-Single-source prompt rect (contract): today the prompt geometry is derived in
-TWO places — the shell layout's `reservedPromptRows`/`view.prompt` reservation
-(ShellState.cpp) and the prompt-status reservation passed to
-`computePromptLayout` (runtime/snapshot.cpp). Phase D MUST make both consume the
-SAME resolved footer-mode rect: the active `FooterMode`'s solved region rect is
-the one source, and `computePromptLayout` is handed that rect rather than a
-second independently-computed reservation. Otherwise neutrality can regress under
-panel + distraction-free + notice-row combinations while a prompt-only test still
-passes. This is the load-bearing part of the fold, and its oracle is an assertion
-that the prompt rect the renderer sees equals the footer-mode rect across those
-combinations (not just the bare-prompt case).
+Single-source prompt rect (contract — the load-bearing part of phase D, DONE):
+today the prompt geometry was derived in TWO places — the shell layout's
+`reservedPromptRows`/`view.prompt` reservation (ShellState.cpp) and the
+prompt-status reservation recomputed from viewport dimensions in
+`promptStatusView` (runtime/snapshot.cpp). These DIVERGED under a panel: the
+shell reserved an EDITOR-width rect (`{editor.x, …, editor.width}`) while the
+controls actually rendered FULL width (`{0, …, columns}`), so the a11y node / hit
+region and the rendered controls disagreed on the bottom rows. Phase D makes both
+consume ONE rect: `view.prompt` becomes the FULL-WIDTH bottom strip (`{0,
+promptTop, columns, reservedPromptRows}` — the footer-region width it sits over),
+and `promptStatusView` CONSUMES that rect (passed in from the shell view) rather
+than recomputing. Under no panel the two were already equal, so rendered output
+is byte-identical; under a panel the reservation reconciles toward the full-width
+value the controls already used, so no pixel changes — only the a11y prompt-
+reservation rect (and its hit region) widen to match what renders. The fallback
+(compute from dimensions) remains for the palette (zero prompt rows; its input
+lives in the header) and the no-active-prompt default, where the shell reserves
+nothing. Oracle: a runtime test asserts `shell.prompt == promptStatus.prompt->rect`
+AND full-width (x=0, width=columns) across panel-off and panel-on.
+
+Realization note (scope): phase D ships the single-source contract above, which
+IS the "fold" — the prompt is now the footer-anchored prompt mode's ONE rect, and
+the editor still shrinks from the bottom by that rect's height (functionally
+identical to "the footer region grew"). The heavier `FooterMode { rows, focusable,
+promptKind? }` value type + a variable-height footer node + suppressing the footer
+status line while a prompt is open are DEFERRED to phase E, where the mode concept
+earns its keep by carrying focus routing (a mode is `focusable`). Splitting it
+this way keeps phase D behavior-neutral: suppressing the currently-emitted footer
+status nodes under an open prompt would change the goldens, so that restructure
+belongs with the focus-model change that motivates it, not the single-source fix.
 
 Multi-row footer modes are preserved deliberately: find/replace stay 2/3 rows
 even though find alone could be one line, because a future richer footer surface
@@ -273,8 +292,8 @@ the layout model, not just a runtime enum, records where the focused prompt live
 | A | Add the `WidgetStack` primitive (`packLeft`/`packRight`/`center` + `StackItem{StackFit: Collapse/Keep, Overflow: Truncate/ScrollTail/None}`), resolving to relative placements over an extent; implement `Collapse` by delegating to the existing `fitRow` engine and `ScrollTail` to `layoutTextInput`. No callers yet. | `include/ssg/Widget.h`, `src/Widget.cpp`, `tests/test_widget.cpp` | `test_widget`: hand-computed left/right/center, packRight order, stop-at-first-non-fit collapse, right-group clamp-truncate/drop, Fixed-center clamps-to-gap when narrow, second-center fail-loud, truncate vs scrollTail | solver purity; fail-loud; collapse == fitRow |
 | B | Port the footer status line (left status fields + right actions/hint group) to one `WidgetStack`, replacing the `addFields`+`packEnd` pair and the reverse-emit arithmetic in `computeShellLayout`; `WidgetStack`'s right group now delegates to `packEnd` (one source of the right-fill rule). DONE, green. | `src/ShellState.cpp`, `src/Widget.cpp` | `ui_layout` + `test_hit_test` green WITHOUT regeneration | non-overlap; node emission order; collapse rule |
 | C | Port the header STATUS FIELDS to a `WidgetStack` left collapse group over `width - inputLineReservation` (the fixed floor), replacing `addFields` (deleted; also removes its now-dead `layoutRow` helper). The input line + ghost KEEP the `layoutTextInput` seam — they become a prompt-mode `TextInput` widget in phase E, where reserve/grow/ghost geometry is designed rather than shoehorned. DONE, green. | `src/ShellState.cpp`, `src/Widget.cpp`, `include/ssg/Widget.h`, `tests/test_widget.cpp` | `ui_layout` + `test_render` + `test_hit_test` green without regeneration; `inputLineCaret` unchanged | fields-independent-of-input-line; non-overlap |
-| D | Introduce the footer region **mode stack**: a `FooterMode{rows, focusable, promptKind?}`, default status mode + find/replace prompt modes; derive footer region height from the active mode and re-host `computePromptLayout`'s solve tree in the footer region, folding out the editor `reservedPromptRows` reservation (bottom-shrink identical). Both the shell reservation and the prompt-status reservation MUST consume the one resolved footer-mode rect (single-source prompt rect). | `src/ShellState.cpp`, `src/PromptSurface.cpp`, `include/ssg/ShellState.h`, `src/runtime/snapshot.cpp` | `test_prompt_status` + `test_render` prompt cases + `PromptViewState` round-trip green without regeneration; editor-shrink assertion (top unmoved); **prompt-rect == footer-mode-rect assertion across panel/distraction-free/notice combinations** | prompt shrinks from bottom; solveLayout purity; single-source prompt rect |
-| E | Make prompt focus explicit: a prompt is a `focusable` region mode with `promptKind`; enforce at-most-one-active-prompt at the mode-stack level; resolve `FocusTarget::Prompt` to the hosting region. Palette = header mode, find/replace = footer modes. The header palette becomes a `TextInput` widget owned by that mode, which is where the input-line reserve-vs-grow width + per-item gap + ghost geometry (deferred from phase C) is designed. No new `FocusTarget`. | `src/ShellState.cpp`, `include/ssg/focus.h` (doc), `include/ssg/Widget.h`, `src/runtime/*` | focus-stack + keymap-context tests green; new fail-loud at-most-one-prompt test; `inputLineCaret` + input-line goldens green without regeneration | one active prompt; keyboard routing unchanged; fields-independent-of-input-line |
+| D | Single-source the prompt rect: make `view.prompt` the FULL-WIDTH bottom strip and have `promptStatusView` CONSUME it (passed from the shell view) instead of recomputing from dimensions, so the shell reservation, the a11y node/hit region, and the rendered controls are one rect. DONE, green. (The `FooterMode` type + variable-height footer node + status-line suppression are deferred to E, where the mode carries focus routing.) | `src/ShellState.cpp`, `src/runtime/snapshot.cpp`, `src/runtime/editor_runtime_internal.h`, `tests/test_ui_layout.cpp`, `tests/runtime/test_runtime_editing.cpp` | runtime oracle: `shell.prompt == promptStatus.prompt->rect` AND full-width across panel-off/on; `test_render` prompt cases + `test_prompt_status` + `PromptViewState` round-trip green without regeneration; editor content rect unchanged (top unmoved, x/width unchanged) | single-source prompt rect; prompt shrinks from bottom; solveLayout purity |
+| E | Make prompt focus explicit via a `FooterMode { rows, focusable, promptKind? }` value type + a footer mode stack: a prompt is a `focusable` region mode; enforce at-most-one-active-prompt; resolve `FocusTarget::Prompt` to the hosting region; the footer node becomes variable-height from the active mode and the footer status line is suppressed while a footer prompt owns the region. Palette = header mode (owns the input-line `TextInput` + its reserve/grow/ghost geometry, deferred from phase C), find/replace = footer modes. No new `FocusTarget`. | `src/ShellState.cpp`, `include/ssg/focus.h` (doc), `include/ssg/Widget.h`, `src/runtime/*` | focus-stack + keymap-context tests green; new fail-loud at-most-one-prompt test; `inputLineCaret` + input-line goldens green without regeneration | one active prompt; keyboard routing unchanged; fields-independent-of-input-line |
 | F | Document the stack/mode/focus model + the `init.lua` composition seam it enables (design only; no binding). | `doc/spec-chrome-stacks.md`, `doc/config.md` | `test_config_doc` green (no new command/API claimed) | no wire/API change |
 
 ## Rationale (optional, skippable)

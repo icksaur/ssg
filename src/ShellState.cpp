@@ -736,13 +736,20 @@ ShellLayoutResult computeShellLayout(const ShellLayoutRequest& request,
                     std::nullopt};
         }
         if (request.reservedPromptRows > 0) {
-            // The prompt occupies the bottom rows of the screen (over the
-            // footer), which is where promptStatusView renders it.  Shrink the
-            // editor from the BOTTOM -- never move its top -- so opening a prompt
-            // reduces document height without pushing content down.
+            // The prompt occupies the bottom rows of the screen, FULL WIDTH --
+            // this rect is the single source for the footer-anchored prompt
+            // (doc/spec-chrome-stacks.md §Single-source prompt rect): the shell
+            // reservation (here) and the prompt-status reservation
+            // (runtime/snapshot.cpp) are the SAME rect, so the a11y node, the
+            // hit region, and the rendered controls cannot diverge. It spans the
+            // whole viewport width (like the footer region it sits over), not the
+            // editor width, matching where the controls actually render. Shrink
+            // the editor from the BOTTOM by height only -- never move its top, and
+            // never change its x/width -- so opening a prompt reduces document
+            // height without pushing content down or reflowing it.
             const int promptTop =
                 request.viewport.rows - request.reservedPromptRows;
-            view.prompt = Rect{editor.x, promptTop, editor.width,
+            view.prompt = Rect{0, promptTop, request.viewport.columns,
                                request.reservedPromptRows};
             addNode(view, ShellNodeKind::PromptReservation, "prompt",
                      "Prompt surface", *view.prompt, SemanticRole::Prompt);

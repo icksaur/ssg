@@ -69,11 +69,22 @@ TextEncodingViewState EditorRuntime::Impl::textEncodingView() const {
     return {state ? state->encoding : TextEncodingStatus{}};
 }
 
-PromptStatusViewState EditorRuntime::Impl::promptStatusView(ViewportDimensions dimensions) const {
+PromptStatusViewState EditorRuntime::Impl::promptStatusView(
+    ViewportDimensions dimensions,
+    std::optional<Rect> promptReservation) const {
     PromptStatusViewState view;
+    // Single-source prompt rect (doc/spec-chrome-stacks.md): when the shell laid
+    // out a footer-anchored prompt it passes that rect here, so the controls are
+    // laid out into the SAME reservation the shell reserved (identical a11y node,
+    // hit region, and render). The fallback -- a full-width bottom strip derived
+    // from the viewport -- covers the palette (zero prompt rows, its input lives
+    // in the header) and the no-active-prompt default, where the shell reserves
+    // nothing.
     auto rows = promptRowCount(prompt.request() ? prompt.request()->kind : PromptKind::CommandArgument);
-    Rect reservation{0, static_cast<int>(dimensions.rows > rows ? dimensions.rows - rows : 0),
-                     static_cast<int>(dimensions.columns), static_cast<int>(rows)};
+    Rect reservation =
+        promptReservation.value_or(
+            Rect{0, static_cast<int>(dimensions.rows > rows ? dimensions.rows - rows : 0),
+                 static_cast<int>(dimensions.columns), static_cast<int>(rows)});
     auto promptLayout = computePromptLayout(prompt, reservation);
     if (promptLayout.accepted()) {
         view.prompt = promptLayout.view;
@@ -248,7 +259,7 @@ SessionSnapshotSections EditorRuntime::Impl::sections(ViewportDimensions dimensi
             selection,
             currentHistory,
             clipboard.viewState(),
-            promptStatusView(dimensions),
+            promptStatusView(dimensions, shell.prompt),
             search.viewState(),
             findReplace.viewState(),
             settings.viewState(),

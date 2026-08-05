@@ -81,8 +81,11 @@ TEST(handAuthoredGeometryGoldens) {
     assertRect(*wideResult.view->header, {0, 0, 80, 1});
     assertRect(*wideResult.view->panel, {0, 1, 24, 10});
     assertRect(*wideResult.view->tabBar, {24, 1, 56, 1});
-    // The prompt reserves the bottom rows (over the footer), where it renders.
-    assertRect(*wideResult.view->prompt, {24, 10, 56, 2});
+    // The prompt reserves the bottom rows FULL WIDTH (the footer-region width,
+    // not the editor width), which is the single source both the shell and the
+    // prompt-status view consume, and where the controls actually render
+    // (doc/spec-chrome-stacks.md §Single-source prompt rect).
+    assertRect(*wideResult.view->prompt, {0, 10, 80, 2});
     // The pane content stays anchored at the top (y=2, directly below the tab
     // bar) and only loses height -- opening a prompt must never push it down.
     assertRect(wideResult.view->panes[0].content, {24, 2, 55, 8});

@@ -1193,6 +1193,63 @@ TEST(findWordUnderCursorIsANoOpWithNoWordUnderTheCaret) {
     std::filesystem::remove_all(root);
 }
 
+// Single-source prompt rect (doc/spec-chrome-stacks.md §Single-source prompt
+// rect): the shell reservation (shell.prompt) and the prompt-status reservation
+// (promptStatus.prompt->rect) MUST be the SAME rect, and it MUST be the
+// full-width bottom strip -- so the a11y node, the hit region, and the rendered
+// controls cannot diverge. The panel is the combination that used to break this:
+// the shell reserved an editor-width rect while the controls rendered full
+// width. Assert equality (and full width) for BOTH prompt heights -- find (2
+// rows) and replace (3 rows) -- across panel-off and panel-on, so a
+// height-specific regression cannot satisfy the test.
+TEST(promptReservationIsSingleSourcedAndFullWidthAcrossPanel) {
+    auto root = uniqueRoot();
+    auto workspace = root / "workspace";
+    std::filesystem::create_directories(workspace);
+    std::ofstream{workspace / "hits.txt"} << "cat cat cat";
+    auto created = ssg::EditorRuntime::create({
+        workspace, root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess}, ssg::ViewId{1}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(), std::string{"hits.txt"}}).accepted());
+
+    const ssg::ViewportDimensions dims{80, 12};
+    const auto assertSingleSourced = [&](int expectedHeight) {
+        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        ASSERT_TRUE(snap.has_value());
+        if (!snap) return;
+        const auto& shellPrompt = snap->sections().shell.prompt;
+        const auto& statusPrompt = snap->sections().promptStatus.prompt;
+        ASSERT_TRUE(shellPrompt.has_value());
+        ASSERT_TRUE(statusPrompt.has_value());
+        if (!shellPrompt || !statusPrompt) return;
+        // The two derivations are the one rect.
+        ASSERT_EQ(*shellPrompt, statusPrompt->rect);
+        // ...and it spans the full viewport width (the footer-region width),
+        // independent of the panel, at the reserved height for its kind.
+        ASSERT_EQ(shellPrompt->x, 0);
+        ASSERT_EQ(shellPrompt->width, 80);
+        ASSERT_EQ(shellPrompt->height, expectedHeight);
+        // The prompt sits flush at the bottom of the viewport.
+        ASSERT_EQ(shellPrompt->y, static_cast<int>(dims.rows) - expectedHeight);
+    };
+
+    const auto both = [&](int expectedHeight) {
+        assertSingleSourced(expectedHeight);  // panel off
+        ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"panel.toggle", runtime.revision(), {}}).accepted());
+        assertSingleSourced(expectedHeight);  // panel on -- used to diverge
+        ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"panel.toggle", runtime.revision(), {}}).accepted());
+    };
+
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.open", runtime.revision(), {}}).accepted());
+    both(2);  // Find = 2 rows
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"find.close", runtime.revision(), {}}).accepted());
+    ASSERT_TRUE(runtime.dispatch(ssg::ClientId{1}, {"replace.open", runtime.revision(), {}}).accepted());
+    both(3);  // Replace = 3 rows
+}
+
 } // namespace
 
 int main() {
@@ -1213,6 +1270,7 @@ int main() {
     RUN(findWordUnderCursorTakesTheWordWhenTheCaretSitsJustPastIt);
     RUN(findWordUnderCursorPrefersTheSelectionAndSearchesItLiterally);
     RUN(findWordUnderCursorIsANoOpWithNoWordUnderTheCaret);
+    RUN(promptReservationIsSingleSourcedAndFullWidthAcrossPanel);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }
