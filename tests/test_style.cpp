@@ -242,7 +242,7 @@ TEST(styleDefineReplacesOnlyTheNamedFields) {
     ASSERT_EQ(result.style.dimensions.headerHeight, 3);
     // ...and everything else is untouched (partial table).
     ASSERT_EQ(result.style.tree.expanded, std::string{"v"});
-    ASSERT_EQ(result.style.scrollbar.single, std::string{"#"});
+    ASSERT_EQ(result.style.scrollbar.single, ssg::Style{}.scrollbar.single);
 }
 
 TEST(styleDefineRejectsUnknownKeysWholesale) {

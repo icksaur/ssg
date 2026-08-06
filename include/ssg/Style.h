@@ -28,13 +28,13 @@ struct ScrollbarGlyphs {
     // Painted for the whole column when there is nothing to scroll.  Its own
     // entry rather than a hardcoded blank, so an empty gutter can be styled.
     std::string gutter = " ";
-    std::string track = "|";
+    std::string track = "\xe2\x94\x82";  // U+2502 light vertical
     // Thumb of exactly one row: no room for a top and a bottom, so neither is
     // used.
-    std::string single = "#";
-    std::string top = "#";
-    std::string body = "#";
-    std::string bottom = "#";
+    std::string single = "\xe2\x96\x88";  // U+2588 full block
+    std::string top = "\xe2\x96\x88";
+    std::string body = "\xe2\x96\x88";
+    std::string bottom = "\xe2\x96\x88";
     friend bool operator==(ScrollbarGlyphs const&, ScrollbarGlyphs const&) = default;
 };
 

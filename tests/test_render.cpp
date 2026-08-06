@@ -850,12 +850,12 @@ TEST(renderPanelTreeWindowsAndDrawsAThumbWhenTallerThanThePanel) {
     if (!shell.panelScrollbar) return;
     auto grid = ssg::Renderer{}.render(*snapshot);
 
-    // A thumb ('#') is drawn in the reserved gutter column.
+    // A thumb (the default thumb glyph) is drawn in the reserved gutter column.
     int const gx = shell.panelScrollbar->x;
     bool hasThumb = false;
     for (int y = shell.panelScrollbar->y;
          y < shell.panelScrollbar->y + shell.panelScrollbar->height; ++y) {
-        if (grid.at(gx, y).text == "#") hasThumb = true;
+        if (grid.at(gx, y).text == ssg::Style{}.scrollbar.body) hasThumb = true;
     }
     ASSERT_TRUE(hasThumb);
     // The window scrolled to the end: the first file is off-screen, the last is
@@ -942,7 +942,9 @@ TEST(renderPaletteWindowsRowsAndDrawsAThumbWithAbsoluteSelection) {
     bool hasThumb = false;
     for (int y = projection.scrollbarRect.y;
          y < projection.scrollbarRect.y + projection.scrollbarRect.height; ++y) {
-        if (grid.at(projection.scrollbarRect.x, y).text == "#") hasThumb = true;
+        if (grid.at(projection.scrollbarRect.x, y).text ==
+            ssg::Style{}.scrollbar.body)
+            hasThumb = true;
     }
     ASSERT_TRUE(hasThumb);
 }
