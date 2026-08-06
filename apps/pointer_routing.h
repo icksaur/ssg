@@ -139,6 +139,18 @@ struct PointerTargets {
     std::optional<std::string> field_command_id;    // a header/footer field command
 };
 
+// The index into `baseline` of the selection the click position `P` lands on, or
+// nullopt when it lands on none (the caller then ADDS a caret). A collapsed caret
+// is hit when `P.byteOffset == its offset`; a ranged selection when
+// `lo ≤ P.byteOffset < hi` (exclusive upper: the cell past the range's end does
+// not hit). Compares byte offsets only. When a collapsed caret coexists with a
+// range at the same lower bound (the only overlap `SelectionSet` normalization
+// permits), the FIRST hit in `baseline`'s order is returned -- the caret, which
+// normalizes before a range sharing its lower bound. Pure.
+// (doc/spec-alt-click-remove-caret.md)
+[[nodiscard]] std::optional<std::size_t> caret_hit_index(
+    std::vector<ssg::Selection> const& baseline, ssg::DocumentPosition position);
+
 // Route one pointer event.  `dragging`/`drag_anchor` are the loop's current
 // drag state.  `alt` is the EFFECTIVE Alt modifier for this event: the app
 // supplies the press event's own Alt to establish an Alt-drag gesture, then the

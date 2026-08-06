@@ -2220,6 +2220,226 @@ TEST(routePointerAltPressAddsCollapsedCaret) {
     }
 }
 
+// doc/spec-alt-click-remove-caret.md: Alt+click on an existing caret/selection
+// REMOVES it (Sublime toggle) via select.set_ranges of the baseline minus the
+// hit, and starts no drag; a click on empty space still ADDS; the sole caret is
+// never removed. These are pure-router hand cases.
+namespace {
+ssg::DocumentPosition posAt(std::uint64_t byte, std::uint32_t line,
+                            std::uint32_t cell) {
+    return ssg::DocumentPosition{ssg::ByteOffset{byte}, ssg::LineIndex{line},
+                                 ssg::CellIndex{cell}};
+}
+ssg::app::PointerDispatch altPressAt(ssg::DocumentPosition p,
+                                     std::vector<ssg::Selection> baseline) {
+    ssg::RegionHit hit;
+    hit.region = ssg::HitRegion::Editor;
+    hit.byteOffset = static_cast<int>(p.byteOffset.value());
+    ssg::app::PointerTargets targets;
+    targets.document_position = p;
+    return ssg::app::route_pointer(hit, ssg::app::PointerButton::left,
+                                   ssg::app::PointerKind::press, true, false,
+                                   std::nullopt, targets, std::move(baseline));
+}
+const ssg::SelectionCommandArguments* argsOf(
+    ssg::app::PointerDispatch const& plan) {
+    if (plan.commands.size() != 1) return nullptr;
+    return std::any_cast<ssg::SelectionCommandArguments>(
+        &plan.commands[0].payload);
+}
+}  // namespace
+
+TEST(altClickRemovesOneOfTwoCarets) {
+    auto const c3 = posAt(3, 0, 3);
+    auto const c7 = posAt(7, 0, 7);
+    std::vector<ssg::Selection> baseline{{c3, c3}, {c7, c7}};
+
+    // Alt-click the caret at 3 -> set_ranges with only the caret at 7, no drag.
+    auto plan = altPressAt(c3, baseline);
+    ASSERT_EQ(plan.commands.size(), std::size_t{1});
+    if (plan.commands.size() == 1) {
+        ASSERT_EQ(plan.commands[0].command_id, std::string{"select.set_ranges"});
+        auto const* args = argsOf(plan);
+        ASSERT_TRUE(args != nullptr);
+        if (args) {
+            ASSERT_EQ(args->selections.size(), std::size_t{1});
+            if (args->selections.size() == 1)
+                ASSERT_EQ(args->selections[0], (ssg::Selection{c7, c7}));
+        }
+    }
+    ASSERT_FALSE(plan.begins_drag);
+}
+
+TEST(altClickInsideARangeRemovesThatRange) {
+    auto const c1 = posAt(1, 0, 1);
+    auto const rlo = posAt(5, 0, 5);
+    auto const rhi = posAt(10, 0, 10);
+    std::vector<ssg::Selection> baseline{{c1, c1}, {rlo, rhi}};
+
+    // Click at byte 7 (inside [5,10)) removes the range, keeps the caret at 1.
+    auto plan = altPressAt(posAt(7, 0, 7), baseline);
+    auto const* args = argsOf(plan);
+    ASSERT_TRUE(args != nullptr);
+    if (args) {
+        ASSERT_EQ(args->selections.size(), std::size_t{1});
+        if (args->selections.size() == 1)
+            ASSERT_EQ(args->selections[0], (ssg::Selection{c1, c1}));
+    }
+    ASSERT_FALSE(plan.begins_drag);
+}
+
+TEST(altClickOnEmptySpaceAddsACaret) {
+    auto const c3 = posAt(3, 0, 3);
+    std::vector<ssg::Selection> baseline{{c3, c3}, {posAt(7, 0, 7), posAt(7, 0, 7)}};
+    // Byte 5 is on neither -> add_range, begins_drag stays true.
+    auto plan = altPressAt(posAt(5, 0, 5), baseline);
+    ASSERT_EQ(plan.commands.size(), std::size_t{1});
+    if (plan.commands.size() == 1)
+        ASSERT_EQ(plan.commands[0].command_id, std::string{"select.add_range"});
+    ASSERT_TRUE(plan.begins_drag);
+}
+
+TEST(altClickOnTheSoleCaretIsANoOpAdd) {
+    auto const c3 = posAt(3, 0, 3);
+    std::vector<ssg::Selection> baseline{{c3, c3}};
+    // Size == 1: never removes; falls through to the (self-deduping) add path.
+    auto plan = altPressAt(c3, baseline);
+    ASSERT_EQ(plan.commands.size(), std::size_t{1});
+    if (plan.commands.size() == 1)
+        ASSERT_EQ(plan.commands[0].command_id, std::string{"select.add_range"});
+    ASSERT_TRUE(plan.begins_drag);
+}
+
+TEST(altClickRangeBoundaryIsExclusiveAtTheUpperEnd) {
+    auto const c1 = posAt(1, 0, 1);
+    auto const rlo = posAt(5, 0, 5);
+    auto const rhi = posAt(10, 0, 10);
+    std::vector<ssg::Selection> baseline{{c1, c1}, {rlo, rhi}};
+
+    // P == hi (10) is NOT inside [5,10) -> no hit -> add (not set_ranges).
+    auto atUpper = altPressAt(posAt(10, 0, 10), baseline);
+    ASSERT_EQ(atUpper.commands.size(), std::size_t{1});
+    if (atUpper.commands.size() == 1)
+        ASSERT_EQ(atUpper.commands[0].command_id, std::string{"select.add_range"});
+
+    // P == lo (5) IS inside -> removes the range.
+    auto atLower = altPressAt(posAt(5, 0, 5), baseline);
+    auto const* args = argsOf(atLower);
+    ASSERT_TRUE(args != nullptr);
+    if (args) {
+        ASSERT_EQ(args->selections.size(), std::size_t{1});
+        if (args->selections.size() == 1)
+            ASSERT_EQ(args->selections[0], (ssg::Selection{c1, c1}));
+    }
+}
+
+TEST(altClickPrefersACaretOverARangeSharingItsLowerBound) {
+    // A caret [5,5] coexists with a range [5,10) (strict-< merge keeps both).
+    // The baseline is in normalized order (caret before range), so a click at 5
+    // removes the CARET, leaving the range.
+    auto const caret5 = posAt(5, 0, 5);
+    auto const rlo = posAt(5, 0, 5);
+    auto const rhi = posAt(10, 0, 10);
+    std::vector<ssg::Selection> baseline{{caret5, caret5}, {rlo, rhi}};
+
+    auto plan = altPressAt(posAt(5, 0, 5), baseline);
+    auto const* args = argsOf(plan);
+    ASSERT_TRUE(args != nullptr);
+    if (args) {
+        ASSERT_EQ(args->selections.size(), std::size_t{1});
+        if (args->selections.size() == 1)
+            ASSERT_EQ(args->selections[0], (ssg::Selection{rlo, rhi}));
+    }
+}
+
+TEST(altDoubleClickStillSelectsAWordNeverRemoves) {
+    // The app routes ANY double-click (Alt or not) through double_click_dispatch,
+    // which has no Alt parameter and only ever selects a word -- so the remove
+    // path (which lives solely in route_pointer's Alt-press branch) is
+    // unreachable for a double-click. Pin that the double-click seam yields word
+    // selection and never a select.set_ranges/add_range, guarding the app-loop
+    // short-circuit against a future refactor. doc/spec-alt-click-remove-caret.md.
+    auto const doubled = ssg::app::double_click_dispatch(posAt(5, 0, 5));
+    ASSERT_EQ(doubled.commands.size(), std::size_t{1});
+    if (doubled.commands.size() == 1) {
+        ASSERT_EQ(doubled.commands[0].command_id,
+                  std::string{"select.word_at_position"});
+        ASSERT_NE(doubled.commands[0].command_id, std::string{"select.set_ranges"});
+    }
+    ASSERT_FALSE(doubled.begins_drag);
+}
+
+// End-to-end: the REAL router plan dispatched into a REAL runtime. Two carets,
+// Alt-click one, and exactly the un-clicked caret survives.
+TEST(altClickRemoveEndToEndLeavesTheSurvivingCaret) {
+    auto root = fs::temp_directory_path() / "ssg-altremove-e2e";
+    fs::remove_all(root);
+    fs::create_directories(root / "workspace");
+    fs::create_directories(root / "scratch");
+    fs::create_directories(root / "recovery");
+    std::ofstream{root / "workspace" / "f.txt"} << "abcdefghij\n";
+
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(),
+                                                 std::string{"f.txt"}})
+                    .accepted());
+
+    auto const doc = runtime.activeDocumentText();
+    auto const p2 = ssg::SelectionNavigator::resolvePosition(doc, ssg::ByteOffset{2});
+    auto const p7 = ssg::SelectionNavigator::resolvePosition(doc, ssg::ByteOffset{7});
+    ASSERT_TRUE(p2.has_value() && p7.has_value());
+    if (!p2 || !p7) return;
+
+    // Two carets: one at 2, one at 7.
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"cursor.set_position", runtime.revision(),
+                               ssg::SelectionCommandArguments{p2, std::nullopt}})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"select.add_range", runtime.revision(),
+                               ssg::SelectionCommandArguments{
+                                   std::nullopt, ssg::Selection{*p7, *p7}}})
+                    .accepted());
+
+    auto beforeSnap = runtime.snapshot(ssg::ClientId{1}, {80, 12});
+    ASSERT_TRUE(beforeSnap.has_value());
+    if (!beforeSnap) return;
+    auto const& items = beforeSnap->sections().selection.selections.items();
+    ASSERT_EQ(items.size(), std::size_t{2});
+    std::vector<ssg::Selection> baseline(items.begin(), items.end());
+
+    // Route a REAL Alt-press on the caret at 2 and dispatch the plan.
+    auto plan = altPressAt(*p2, baseline);
+    ASSERT_EQ(plan.commands.size(), std::size_t{1});
+    for (auto const& command : plan.commands) {
+        ASSERT_TRUE(
+            runtime.dispatch(ssg::ClientId{1},
+                             {command.command_id, runtime.revision(),
+                              std::any_cast<ssg::SelectionCommandArguments>(
+                                  command.payload)})
+                .accepted());
+    }
+
+    auto afterSnap = runtime.snapshot(ssg::ClientId{1}, {80, 12});
+    ASSERT_TRUE(afterSnap.has_value());
+    if (!afterSnap) return;
+    auto const& survivors = afterSnap->sections().selection.selections.items();
+    ASSERT_EQ(survivors.size(), std::size_t{1});
+    if (survivors.size() == 1) {
+        ASSERT_EQ(survivors[0], (ssg::Selection{*p7, *p7}));  // the un-clicked one
+    }
+}
+
 TEST(routePointerAltDragSetsRangesFromBaseline) {
     auto const anchor =
         ssg::DocumentPosition{ssg::ByteOffset{3}, ssg::LineIndex{0}, ssg::CellIndex{3}};
@@ -2934,6 +3154,14 @@ int main() {
     RUN(routePointerDragWithoutAnchorOrTargetIsANoOp);
     RUN(routePointerReleaseEndsDragWithoutACommand);
     RUN(routePointerAltPressAddsCollapsedCaret);
+    RUN(altClickRemovesOneOfTwoCarets);
+    RUN(altClickInsideARangeRemovesThatRange);
+    RUN(altClickOnEmptySpaceAddsACaret);
+    RUN(altClickOnTheSoleCaretIsANoOpAdd);
+    RUN(altClickRangeBoundaryIsExclusiveAtTheUpperEnd);
+    RUN(altClickPrefersACaretOverARangeSharingItsLowerBound);
+    RUN(altDoubleClickStillSelectsAWordNeverRemoves);
+    RUN(altClickRemoveEndToEndLeavesTheSurvivingCaret);
     RUN(routePointerAltDragSetsRangesFromBaseline);
     RUN(routePointerAltDragIgnoresPerMotionModifierBit);
     RUN(routePointerEditorScrollbarScrollsToFraction);
