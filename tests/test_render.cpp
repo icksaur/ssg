@@ -100,12 +100,12 @@ TEST(chromeBackgroundsAreDistinctShadesAndTheActiveTabMergesWithTheDocument) {
 
     const auto& theme = snapshot->sections().theme;
     const auto headerBand =
-        ssg::themeColor(theme, ssg::SemanticRole::HeaderBackground);
+        theme.color(ssg::SemanticRole::HeaderBackground);
     const auto footerBand =
-        ssg::themeColor(theme, ssg::SemanticRole::FooterBackground);
+        theme.color(ssg::SemanticRole::FooterBackground);
     const auto tabBand =
-        ssg::themeColor(theme, ssg::SemanticRole::TabInactiveBackground);
-    const auto docColor = ssg::themeColor(theme, ssg::SemanticRole::Canvas);
+        theme.color(ssg::SemanticRole::TabInactiveBackground);
+    const auto docColor = theme.color(ssg::SemanticRole::Canvas);
     // Every chrome band is a distinct color from the document.
     ASSERT_NE(headerBand, docColor);
     ASSERT_NE(footerBand, docColor);
@@ -1594,7 +1594,7 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
         // caret inverts the cell it sits on. See doc/spec-prune-theme-roles.md.
         if (role == SemanticRole::Caret) continue;
         auto const present =
-            emitted.count(encode(ssg::themeColor(theme, role))) != 0;
+            emitted.count(encode(theme.color(role))) != 0;
         if (!present) {
             std::printf("  role never painted: %.*s\n",
                         static_cast<int>(ssg::semanticRoleName(role).size()),

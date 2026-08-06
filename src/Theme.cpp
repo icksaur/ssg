@@ -102,22 +102,21 @@ std::optional<SrgbColor> parseHexColor(std::string_view text) noexcept {
 
 } // namespace
 
-SrgbColor themeColor(ThemeSnapshot const& theme, SemanticRole role) {
+SrgbColor ThemeSnapshot::color(SemanticRole role) const {
     if (!valid(role)) throw std::invalid_argument("semantic role is not recognized");
-    return theme.roleColors[position(role)];
+    return roleColors[position(role)];
 }
-
-SrgbColor themeColor(ThemeSnapshot const& theme, SyntaxScope scope) {
+SrgbColor ThemeSnapshot::color(SyntaxScope scope) const {
     if (!valid(scope)) throw std::invalid_argument("syntax scope is not recognized");
-    return theme.syntaxColors[position(scope)];
+    return syntaxColors[position(scope)];
 }
 
-ThemeSetResult applyThemeSet(ThemeSnapshot const& current,
-                             ThemeSetArguments const& arguments) noexcept {
+ThemeSetResult ThemeSnapshot::withOverrides(
+    ThemeSetArguments const& arguments) const noexcept {
     // Validate the WHOLE table before replacing anything: an unknown name or a
     // malformed hex string rejects the whole call, never a partial apply. Role
     // and scope names share one namespace (disjoint sets).
-    auto next = current;
+    auto next = *this;
     for (auto const& [name, hex] : arguments.colors) {
         const auto color = parseHexColor(hex);
         if (!color) {

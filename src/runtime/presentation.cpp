@@ -342,8 +342,7 @@ void registerAppearanceCommands(EditorSessionBuilder& builder,
                         [&runtime](CommandContext&,
                                    ThemeSetArguments const& arguments) {
                             return runtime.runTransaction([&] {
-                                auto result = applyThemeSet(runtime.theme,
-                                                            arguments);
+                                auto result = runtime.theme.withOverrides(arguments);
                                 if (!result.accepted()) {
                                     return failure(result.error->message);
                                 }
