@@ -355,8 +355,7 @@ void registerAppearanceCommands(EditorSessionBuilder& builder,
                         [&runtime](CommandContext&,
                                    StyleDefineArguments const& arguments) {
                             return runtime.runTransaction([&] {
-                                auto result = applyStyleDefine(runtime.style,
-                                                               arguments);
+                                auto result = runtime.style.withDefine(arguments);
                                 if (!result.accepted()) {
                                     return failure(result.error->message);
                                 }

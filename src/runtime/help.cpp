@@ -85,12 +85,12 @@ constexpr std::string_view kHelpConfigSection =
 
 // The chrome-glyph listing, one Markdown item per style.define glyph key with
 // its current value quoted so spaces and empties are visible. Generated from
-// styleGlyphValues so a newly added glyph appears here without a second list.
+// Style::glyphValues so a newly added glyph appears here without a second list.
 // The value is escaped so a glyph containing a quote or backslash stays a valid,
 // copy-pasteable Lua string literal.
 std::string renderGlyphList(Style const& style) {
     std::string out;
-    for (auto const& [key, value] : styleGlyphValues(style)) {
+    for (auto const& [key, value] : style.glyphValues()) {
         out += "- `";
         out += key;
         out += "` = \"";

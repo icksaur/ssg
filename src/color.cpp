@@ -67,8 +67,8 @@ SrgbColor xterm256Color(std::uint8_t index) {
     return {value, value, value};
 }
 
-ResolvedColor resolveColor(SrgbColor color, ColorDepth depth) {
-    switch (depth) {
+ResolvedColor ColorResolver::resolve(SrgbColor color) const {
+    switch (depth_) {
         case ColorDepth::Truecolor:
             return {ResolvedColor::Encoding::Truecolor, 0, color};
         case ColorDepth::Indexed256: {

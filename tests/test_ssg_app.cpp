@@ -124,8 +124,7 @@ TEST(encodeAnsiFrameEmitsOrthogonalTintBackgrounds) {
     const auto indexed =
         ssg::app::encode_ansi_frame(screen, ssg::ColorDepth::Indexed256);
     const auto tintIndex =
-        ssg::resolveColor(screen.diffTints.addedRow,
-                          ssg::ColorDepth::Indexed256)
+        ssg::ColorResolver{ssg::ColorDepth::Indexed256}.resolve(screen.diffTints.addedRow)
             .index;
     ASSERT_TRUE(indexed.find("\x1b[48;5;" + std::to_string(tintIndex) + "m") !=
                 std::string::npos);

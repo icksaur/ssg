@@ -233,7 +233,7 @@ TEST(styleDefineReplacesOnlyTheNamedFields) {
 
     ssg::StyleDefineArguments args;
     args.values = {{"scrollbar_track", ":"}, {"dim_header_height", "3"}};
-    auto const result = ssg::applyStyleDefine(base, args);
+    auto const result = base.withDefine(args);
     ASSERT_TRUE(result.accepted());
     if (!result.accepted()) return;
 
@@ -253,7 +253,7 @@ TEST(styleDefineRejectsUnknownKeysWholesale) {
     // One good key and one unknown key: the whole call must reject, and the
     // good key must NOT have leaked through (all-or-nothing).
     args.values = {{"scrollbar_track", ":"}, {"not_a_style_field", "x"}};
-    auto const result = ssg::applyStyleDefine(base, args);
+    auto const result = base.withDefine(args);
     ASSERT_FALSE(result.accepted());
     ASSERT_TRUE(result.error.has_value());
 }
@@ -263,21 +263,21 @@ TEST(styleDefineRejectsMalformedAndNegativeDimensions) {
 
     ssg::StyleDefineArguments notInt;
     notInt.values = {{"dim_header_height", "tall"}};
-    ASSERT_FALSE(ssg::applyStyleDefine(base, notInt).accepted());
+    ASSERT_FALSE(base.withDefine(notInt).accepted());
 
     ssg::StyleDefineArguments trailing;
     trailing.values = {{"dim_header_height", "3px"}};
-    ASSERT_FALSE(ssg::applyStyleDefine(base, trailing).accepted());
+    ASSERT_FALSE(base.withDefine(trailing).accepted());
 
     ssg::StyleDefineArguments negative;
     negative.values = {{"dim_header_height", "-1"}};
-    ASSERT_FALSE(ssg::applyStyleDefine(base, negative).accepted());
+    ASSERT_FALSE(base.withDefine(negative).accepted());
 }
 
 TEST(styleDefineWithAnEmptyTableIsANoOp) {
     ssg::Style base;
     base.scrollbar.track = "%";
-    auto const result = ssg::applyStyleDefine(base, ssg::StyleDefineArguments{});
+    auto const result = base.withDefine(ssg::StyleDefineArguments{});
     ASSERT_TRUE(result.accepted());
     if (!result.accepted()) return;
     ASSERT_TRUE(result.style == base);
@@ -293,8 +293,7 @@ TEST(aStyleGlyphThatEmitsAModeIsRejectedNamingItsKey) {
     ssg::Style const base{};
     // ESC ( 0 switches the terminal's character set: every later byte draws as
     // line art. This reached a real terminal before it was rejected here.
-    auto const escaped = ssg::applyStyleDefine(
-        base, ssg::StyleDefineArguments{{{"scrollbar_track", "\x1b(0"}}});
+    auto const escaped = base.withDefine(ssg::StyleDefineArguments{{{"scrollbar_track", "\x1b(0"}}});
     ASSERT_FALSE(escaped.accepted());
     if (escaped.error) {
         ASSERT_TRUE(escaped.error->message.find("scrollbar_track") !=
@@ -308,8 +307,7 @@ TEST(aStyleGlyphThatEmitsAModeIsRejectedNamingItsKey) {
     // as a third hex digit -- \x1bb is out of range, and what it would mean is
     // not what this case is testing.
     for (auto const* value : {"\x0e", "\x07", "a\x1b" "b"}) {
-        auto const rejected = ssg::applyStyleDefine(
-            base, ssg::StyleDefineArguments{{{"truncation", value}}});
+        auto const rejected = base.withDefine(ssg::StyleDefineArguments{{{"truncation", value}}});
         ASSERT_FALSE(rejected.accepted());
     }
 }
@@ -319,8 +317,7 @@ TEST(aStyleGlyphOfTheWrongWidthIsRejectedNamingItsKey) {
     // scrollbar_track's default is one column, so a two-column glyph would push
     // the row's remaining cells sideways.
     for (auto const* value : {"XY", "\xe4\xb8\xad", "ABCDEFGHIJ", ""}) {
-        auto const rejected = ssg::applyStyleDefine(
-            base, ssg::StyleDefineArguments{{{"scrollbar_track", value}}});
+        auto const rejected = base.withDefine(ssg::StyleDefineArguments{{{"scrollbar_track", value}}});
         ASSERT_FALSE(rejected.accepted());
         if (rejected.error) {
             ASSERT_TRUE(rejected.error->message.find("scrollbar_track") !=
@@ -332,32 +329,26 @@ TEST(aStyleGlyphOfTheWrongWidthIsRejectedNamingItsKey) {
 TEST(aStyleGlyphMatchingItsFieldsWidthIsAccepted) {
     ssg::Style const base{};
     // One column for a one-column field...
-    auto const narrow = ssg::applyStyleDefine(
-        base, ssg::StyleDefineArguments{{{"scrollbar_track", ":"}}});
+    auto const narrow = base.withDefine(ssg::StyleDefineArguments{{{"scrollbar_track", ":"}}});
     ASSERT_TRUE(narrow.accepted());
     ASSERT_EQ(narrow.style.scrollbar.track, std::string{":"});
 
     // ...and the width is the FIELD's, not one: tree_expanded's default is two
     // columns, so a two-column replacement is correct and one would not be.
-    auto const wide = ssg::applyStyleDefine(
-        base, ssg::StyleDefineArguments{{{"tree_expanded", "v "}}});
+    auto const wide = base.withDefine(ssg::StyleDefineArguments{{{"tree_expanded", "v "}}});
     ASSERT_TRUE(wide.accepted());
-    ASSERT_FALSE(ssg::applyStyleDefine(
-                     base, ssg::StyleDefineArguments{{{"tree_expanded", "v"}}})
+    ASSERT_FALSE(base.withDefine(ssg::StyleDefineArguments{{{"tree_expanded", "v"}}})
                      .accepted());
 
     // A wide CJK glyph is two columns, so it fits a two-column field.
-    ASSERT_TRUE(ssg::applyStyleDefine(
-                    base,
-                    ssg::StyleDefineArguments{{{"tree_expanded", "\xe4\xb8\xad"}}})
+    ASSERT_TRUE(base.withDefine(ssg::StyleDefineArguments{{{"tree_expanded", "\xe4\xb8\xad"}}})
                     .accepted());
 }
 
 TEST(aRejectedGlyphChangesNothing) {
     ssg::Style const base{};
     // Rejection is all or nothing, like the unknown-key and bad-dimension cases.
-    auto const rejected = ssg::applyStyleDefine(
-        base, ssg::StyleDefineArguments{{{"truncation", "."},
+    auto const rejected = base.withDefine(ssg::StyleDefineArguments{{{"truncation", "."},
                                          {"scrollbar_track", "\x1b(0"}}});
     ASSERT_FALSE(rejected.accepted());
     ASSERT_EQ(base.truncation, ssg::Style{}.truncation);
@@ -380,14 +371,13 @@ TEST(everyGlyphFieldIsValidatedAndEveryDefaultIsValid) {
     // Round-trip: setting each key to its own current value must be accepted.
     // A default that fails its own rule would mean the defaults and the
     // validator disagree about what a legal glyph is.
-    auto const keys = ssg::styleDefineKeys();
+    auto const keys = ssg::Style::defineKeys();
     ASSERT_FALSE(keys.empty());
     std::size_t glyphKeys = 0;
     for (auto const& key : keys) {
         if (key.rfind("dim_", 0) == 0 || key == "tree_indent") continue;
         ++glyphKeys;
-        auto const applied = ssg::applyStyleDefine(
-            defaults, ssg::StyleDefineArguments{{{key, currentGlyph(defaults, key)}}});
+        auto const applied = defaults.withDefine(ssg::StyleDefineArguments{{{key, currentGlyph(defaults, key)}}});
         if (!applied.accepted() && applied.error) {
             std::cout << "  offending key: " << key << " -- "
                       << applied.error->message << "\n";
@@ -423,20 +413,17 @@ TEST(aVariableWidthTabGlyphAcceptsAnyWidthWhileFixedGlyphsDoNot) {
     for (auto const& key : {std::string{"tab_left_edge"},
                             std::string{"tab_right_edge"},
                             std::string{"tab_separator"}}) {
-        auto const applied = ssg::applyStyleDefine(
-            defaults, ssg::StyleDefineArguments{{{key, " | "}}});
+        auto const applied = defaults.withDefine(ssg::StyleDefineArguments{{{key, " | "}}});
         ASSERT_TRUE(applied.accepted());
     }
 
     // A fixed-slot glyph of the wrong width is still refused: the contrast is
     // the whole point of the two categories.
-    auto const fixed = ssg::applyStyleDefine(
-        defaults, ssg::StyleDefineArguments{{{"tab_dirty_suffix", " *!"}}});
+    auto const fixed = defaults.withDefine(ssg::StyleDefineArguments{{{"tab_dirty_suffix", " *!"}}});
     ASSERT_FALSE(fixed.accepted());
 
     // A variable glyph still rejects control characters / invalid bytes.
-    auto const control = ssg::applyStyleDefine(
-        defaults, ssg::StyleDefineArguments{{{"tab_separator", "\x1b(0"}}});
+    auto const control = defaults.withDefine(ssg::StyleDefineArguments{{{"tab_separator", "\x1b(0"}}});
     ASSERT_FALSE(control.accepted());
 }
 
@@ -444,7 +431,7 @@ TEST(styleDefineKeysAreUniqueSoNoGlyphLivesInTwoCategories) {
     // A key present in both glyphSetters() and variableGlyphSetters() would make
     // validation order a hidden contract.  styleDefineKeys() concatenates every
     // map, so a duplicate here proves an overlap.
-    auto keys = ssg::styleDefineKeys();
+    auto keys = ssg::Style::defineKeys();
     std::sort(keys.begin(), keys.end());
     ASSERT_TRUE(std::adjacent_find(keys.begin(), keys.end()) == keys.end());
 }
