@@ -140,7 +140,7 @@ CommandHandle CommandCatalog::appendValidated(ValidatedSpec spec) {
         spec.argument, std::move(spec.handler), false});
     byId_.emplace(entries_[index].id, index);
     ++revision_;
-    return CommandHandle::fromIndex(index);
+    return CommandHandle{static_cast<std::uint16_t>(index)};
 }
 
 CommandHandle CommandCatalog::add(CommandSpecBuilder spec) {
@@ -232,7 +232,7 @@ CommandHandle CommandCatalog::handleFor(std::string_view id) const {
     auto const found = byId_.find(std::string{id});
     if (found == byId_.end()) return {};
     if (entries_[found->second].retired) return {};
-    return CommandHandle::fromIndex(found->second);
+    return CommandHandle{static_cast<std::uint16_t>(found->second)};
 }
 
 std::vector<CommandEntry const*> CommandCatalog::commands() const {
