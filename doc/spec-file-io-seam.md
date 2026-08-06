@@ -42,13 +42,13 @@ Raw I/O to route (from a full-repository audit):
 - `src/EditorRuntime.cpp:1037` LSP rename, `:1045-1055` LSP delete -- raw
   `std::filesystem` calls that clobber.
 - `src/Settings.cpp:308` settings read -- raw `ifstream`.
-- `src/RecoveryActions.cpp:169` manifest write, `:285` manifest read -- raw
+- `src/RecoveryManager.cpp:169` manifest write, `:285` manifest read -- raw
   streams inside an otherwise-hardened subsystem.
 - `src/ScratchJournal.cpp:355` journal read -- raw `ifstream`.
 - `apps/ssg_main.cpp:429, 600` init.lua read -- raw `ifstream`.
 
 Explicitly staying raw: the direct `::open`/`::fsync` directory-sync calls in
-`ScratchJournal.cpp` and `RecoveryActions.cpp`, and read-only tree walks
+`ScratchJournal.cpp` and `RecoveryManager.cpp`, and read-only tree walks
 (`TreeModel`, watchers, scratch session scanning). They are durability
 primitives and directory enumeration respectively, not file content access.
 
@@ -147,7 +147,7 @@ report; absence stays silent.
 - Windows must reach parity: `CREATE_NEW`, `MoveFileEx` without
   `REPLACE_EXISTING`. The seam's contract is defined by behavior, not by the
   POSIX flag names.
-- `RecoveryActions` manifest I/O is inside a two-phase-commit subsystem; routing
+- `RecoveryManager` manifest I/O is inside a two-phase-commit subsystem; routing
   it must not reorder its fsyncs. If routing would change ordering, leave it raw
   and add it to the J1 exemption list with the reason, so the exception is
   visible in the guard rather than only in prose.
@@ -185,7 +185,7 @@ report; absence stays silent.
 | 3 | Route `readFileText`, `Settings` read, `ScratchJournal` read to `readFile` | `src/EditorRuntime.cpp`, `src/Settings.cpp`, `src/ScratchJournal.cpp` | existing suite green, no test edits | J5 |
 | 4 | Route init.lua reads; collapse the two sites to one | `apps/ssg_main.cpp` | behavior: absent init.lua is reported as absent, not as an empty script | J2 |
 | 5 | Make LSP `writeFile` an atomic durable replace; route LSP rename/delete to the non-clobbering primitives | `src/EditorRuntime.cpp` | invariant: after an LSP write the file's content is complete or unchanged, never truncated (fault-injected mid-write) | J3, J4 |
-| 6 | Route `RecoveryActions` manifest read/write; if ordering would change, leave raw and add it to the J1 exemption list with a justification | `src/RecoveryActions.cpp`, `tests/` | existing recovery suite green, no test edits; J1 guard passes either way | J1, J5 |
+| 6 | Route `RecoveryManager` manifest read/write; if ordering would change, leave raw and add it to the J1 exemption list with a justification | `src/RecoveryManager.cpp`, `tests/` | existing recovery suite green, no test edits; J1 guard passes either way | J1, J5 |
 | 7 | Add `FileIoFaultInjector` | `include/ssg/platform_files.h`, `src/platform/` | behavior: an injected failure makes a chosen primitive fail; inert by default | - |
 | 8 | Add the grep guard forbidding raw stream I/O outside `src/platform/` | `tests/` | perturbation: adding an `ifstream` to a non-exempt file fails the test | J1 |
 | 9 | Prompt `commandId` -- **owned by `spec-file-management.md` step 1**, listed here only as the dependency this seam work must land alongside. Do not implement it twice | see `spec-file-management.md` | see that spec | - |

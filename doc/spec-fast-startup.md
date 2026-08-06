@@ -85,7 +85,7 @@ Phases, each separately timestamped and sub-budgeted from the baseline:
 
 `EditorRuntime::create` → `Impl::Impl` ctor synchronously performs:
 - `create_directories` (scratch + recovery); `weakly_canonical` on paths.
-- `RecoveryActions::create`, `ScratchStore::create`, `Workspace::create` — the
+- `RecoveryManager::create`, `ScratchStore::create`, `Workspace::create` — the
   last restores the newest unlocked recoverable session.
 - **`refresh_tree()`** — `filesystem_tree_snapshot(root)`, a workspace directory
   scan; cost grows with workspace file count. **Deferrable.**

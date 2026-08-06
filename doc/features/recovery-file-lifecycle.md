@@ -13,7 +13,7 @@ filesystem/document restoration operations. File-tab, prompt, encoding/EOL,
 save, directory-lifecycle, and command-handler integration remain owned by the
 later `file-commands` and Plan 4 tasks. Plan 3 does not expose tab UI state.
 
-`RecoveryActions` is constructed with an explicit recovery root and immutable
+`RecoveryManager` is constructed with an explicit recovery root and immutable
 finite count and byte budgets. Records are evicted oldest-first only after the
 newest record and every required recovery artifact have been installed
 successfully. An action whose record cannot fit after eligible eviction is

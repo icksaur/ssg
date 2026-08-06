@@ -24,7 +24,7 @@ during implementation, recorded because they change what a reader can assume:
   showed that adding an enumerator compiles CLEANLY, so a switch would let a new
   command silently miss the rule. The classification is a declared descriptor
   field (`mutatesActiveDocumentFile`) with a table-driven test instead.
-- `RecoveryActions::renamePath` replaces its destination. A rename that claimed
+- `RecoveryManager::renamePath` replaces its destination. A rename that claimed
   the name with a placeholder first made the recovery snapshot record that
   placeholder as the destination's prior state, so a rollback restored an empty
   file where there had been none. `renamePathNoClobber` was added so the
@@ -64,10 +64,10 @@ subsystem from scratch.
   "untitled document requires save_as" (`src/Workspace.cpp:677`).
 - `file.open` with no payload already opens a `PromptKind::Path` prompt
   (`src/runtime/files.cpp:59-62`); no other file command does.
-- `Workspace::deleteFile` routes through `RecoveryActions::deletePath`, which
+- `Workspace::deleteFile` routes through `RecoveryManager::deletePath`, which
   snapshots the file into the recovery root before removing it.
 - `RecoveryConfig` is `{maximumRecords = 32, maximumBytes = 64 MiB}`
-  (`include/ssg/RecoveryActions.h:19`).
+  (`include/ssg/RecoveryManager.h:19`).
 - `.gitignore` covers `.ssg/scratch/` only.
 
 ## Gaps this spec closes
@@ -185,7 +185,7 @@ thing that makes the absence of confirmation safe.
 
 Decision: **delete writes to a separate archive, `.ssg/archive/`, distinct from
 `.ssg/recovery/`, with its own retention policy.** Delete continues to also go
-through `RecoveryActions::deletePath` for immediate undo; the archive is the
+through `RecoveryManager::deletePath` for immediate undo; the archive is the
 long-lived copy. Conflating the two is what causes the data loss, so they stay
 separate.
 

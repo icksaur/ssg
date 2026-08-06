@@ -69,7 +69,7 @@ and creates no compensating record. A dirty buffer remains unchanged and enters
 the externally-modified state with footer status and reload, keep-buffer, and
 open-diff actions.
 
-`external.reload` installs a complete reload record through `RecoveryActions`
+`external.reload` installs a complete reload record through `RecoveryManager`
 before replacing the buffer, making the command reversible. `external.keep_buffer`
 acknowledges the current disk content as the diff baseline, clears the
 externally-modified status, preserves the dirty buffer, and creates no recovery

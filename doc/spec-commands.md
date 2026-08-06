@@ -238,12 +238,12 @@ session need to *name* a command without depending on the catalog's data: every
 summary, argument shape and documentation line. Identity is small; the catalog is
 not.
 
-**`CommandRef`** is how a caller names the command it wants to invoke, and it
+**`CommandName`** is how a caller names the command it wants to invoke, and it
 exists because a dispatch target carrying a name *and* a handle as independent
 fields could carry two different commands, with no principled answer as to which
 wins. A ref holds one identity and derives the other: built from a name it
 resolves the handle once; built from a handle the name comes free from the
-catalog. `ClientCommand::id` is a `CommandRef`, so disagreement is not
+catalog. `ClientCommand::id` is a `CommandName`, so disagreement is not
 representable rather than merely detected, and `name()` is always available — a
 rejected dispatch can always say which command it rejected.
 
@@ -314,7 +314,7 @@ when no binding matched, which is discussed under Considerations below.
 ## Invariants
 
 - **V1** A command's identity on the keystroke path is a `CommandHandle`, carried
-  in a `CommandRef` that can always name the command. Command id strings are
+  in a `CommandName` that can always name the command. Command id strings are
   resolved at construction or keymap-compile time, never per keystroke, and a
   command that cannot be identified can still be named in a diagnostic.
 - **V2** `CompiledKeymap` is derived from `KeymapViewState` and owns no policy.
