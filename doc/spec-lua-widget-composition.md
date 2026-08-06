@@ -1,6 +1,6 @@
 # spec-lua-widget-composition
 
-Status: draft (spec only; not yet implemented)
+Status: DONE (phases 1-6 shipped: da55dafc, 874025a8, 0ae0513c, 4022164e, 5f6a2200, 256cc919)
 
 ## Goals
 
