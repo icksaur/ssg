@@ -1,7 +1,7 @@
 #include "runtime/editor_runtime_internal.h"
 
 #include <ssg/CommandCatalog.h>
-#include <ssg/DraftReopen.h>
+#include <ssg/DraftReopenClassifier.h>
 #include <ssg/FilesystemWatcher.h>
 #include <ssg/GraphemeLayout.h>
 #include <ssg/platform_files.h>

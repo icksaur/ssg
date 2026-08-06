@@ -1,4 +1,4 @@
-#include "ssg/DraftReopen.h"
+#include "ssg/DraftReopenClassifier.h"
 #include "test_helpers.h"
 
 #include <optional>
