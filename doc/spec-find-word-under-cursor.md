@@ -58,12 +58,16 @@ needle — a known, intended outcome, consistent with the existing word motions.
   consider a word.
 - The handler lives in `src/runtime/editing.cpp` `bindFindReplace`, reusing the
   `find.open` open/reveal/prompt sequence with the computed needle, forced
-  literal options, and a null range. A small file-local helper
-  `wordUnderCaret(text, primarySelection)` computes the needle using
-  `isWordByte`; it does not belong on `Selection` because it is a find-seeding
-  concern that returns a string, not a caret motion.
+  literal options, and a null range. The needle is computed by
+  `Selection::wordOrCoveredText(text)`: the selected substring for a range, or
+  the word the caret sits in (or touches on its trailing side) for a caret.
+  (Originally a file-local `wordUnderCaret` helper, argued to not belong on
+  `Selection`; the R4 refactor — doc/features/r4-runtime-collaborators.md —
+  moved it onto `Selection` as a pure value transform, since word-run extraction
+  over a selection is the same module that already owns `selectWordAtPosition`,
+  and it is unit-tested there in isolation.)
   - **Bounds:** the caret byte offset can equal `text.size()` and the document
-    can be empty. The helper reads `text[i]` only when `i < text.size()`, reads
+    can be empty. The method reads `text[i]` only when `i < text.size()`, reads
     the "word to the left" as byte `i-1` only when `i > 0`, and returns an empty
     string (no word) otherwise. It never indexes out of range.
   - The needle source is the **primary** selection (`selections.primary()`),
