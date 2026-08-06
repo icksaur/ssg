@@ -1,7 +1,7 @@
 #pragma once
 
 #include <ssg/ChromeComposition.h>
-#include <ssg/CommandRegistry.h>
+#include <ssg/CommandInvocation.h>
 
 #include <chrono>
 #include <compare>

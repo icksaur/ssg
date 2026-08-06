@@ -39,7 +39,6 @@ public:
 
 private:
     friend class CommandCatalog;
-    friend class CommandRegistry;
 
     static constexpr std::uint16_t kInvalid =
         std::numeric_limits<std::uint16_t>::max();

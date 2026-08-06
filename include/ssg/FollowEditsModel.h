@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ssg/CommandRegistry.h"
+#include "ssg/CommandInvocation.h"
 #include "ssg/DiffModel.h"
 #include "ssg/ShellState.h"
 #include "ssg/Viewport.h"

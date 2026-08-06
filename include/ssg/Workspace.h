@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ssg/CommandRegistry.h"
+#include "ssg/CommandInvocation.h"
 #include "ssg/Document.h"
 #include "ssg/platform_files.h"
 #include "ssg/FileArchive.h"

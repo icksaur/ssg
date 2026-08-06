@@ -24,7 +24,7 @@
 // needs no terminator; completeness is `add`'s concern, not its own.
 
 #include <ssg/CommandHandle.h>
-#include <ssg/CommandRegistry.h>
+#include <ssg/CommandInvocation.h>
 
 #include <any>
 #include <functional>

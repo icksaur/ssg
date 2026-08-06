@@ -1,6 +1,6 @@
 #include <ssg/CommandCatalog.h>
 #include <ssg/CommandSpecBuilder.h>
-#include <ssg/CommandRegistry.h>
+#include <ssg/CommandInvocation.h>
 #include <ssg/Document.h>
 #include <ssg/GraphemeLayout.h>
 #include <ssg/EditorSession.h>
