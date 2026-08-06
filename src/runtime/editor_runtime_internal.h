@@ -203,6 +203,11 @@ struct EditorRuntime::Impl final : CommandServices,
     // kind of thing: presentation this runtime owns and hands to layout.  See
     // doc/spec-style.md.
     Style style{};
+    // The init.lua-composed header/footer (doc/spec-lua-widget-composition.md),
+    // pushed by the host after each init.lua evaluation via
+    // EditorRuntime::setComposedChrome. nullopt keeps the built-in chrome; a
+    // present region REPLACES that region's built-in status fields in shellView.
+    std::optional<ChromeComposition> composedChrome;
     std::optional<WorkspaceReplacePreview> workspaceReplacePreview;
     std::unique_ptr<EditorSession> session;
     // Commands a running handler asked to dispatch, run in order once the

@@ -4,7 +4,10 @@
 #include <ssg/EditorRuntime.h>
 #include <ssg/HitTester.h>
 #include <ssg/Renderer.h>
+#include <ssg/ScriptHost.h>
 #include <ssg/Selection.h>
+
+#include "init_script.h"
 
 #include "test_helpers.h"
 
@@ -2815,8 +2818,64 @@ TEST(oneCopyIsWrittenOnceAndOnlyToATerminalThatAdvertisedOsc52) {
     ASSERT_TRUE(gated.bytesFor(third, true).has_value());
 }
 
+// doc/spec-lua-widget-composition.md phase 6 host oracle: the SHARED
+// evaluateInitScript funnel (used by BOTH startup loadInitScript and reload
+// drainAndEvaluate) must push the script's chrome composition into the runtime,
+// so a refactor cannot silently stop wiring one path.
+TEST(evaluateInitScriptPushesChromeCompositionToTheRuntime) {
+    auto root = fs::temp_directory_path() / "ssg-init-chrome";
+    fs::remove_all(root);
+    fs::create_directories(root / "workspace");
+    fs::create_directories(root / "scratch");
+    fs::create_directories(root / "recovery");
+    std::ofstream{root / "workspace" / "f.txt"} << "hello\n";
+
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"file.open", runtime.revision(),
+                               std::string{"f.txt"}})
+                    .accepted());
+    ssg::ScriptHost scripts{runtime};
+
+    const ssg::ViewportDimensions dims{80, 12};
+    const auto hasHeaderField = [&](std::string_view id) {
+        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        if (!snap) return false;
+        for (const auto& node : snap->sections().shell.accessibilityNodes) {
+            if (node.kind == ssg::ShellNodeKind::HeaderField && node.id == id)
+                return true;
+        }
+        return false;
+    };
+
+    // A script composing a header replaces the built-in path field, once run
+    // through the funnel.
+    ssg::app::evaluateInitScript(
+        scripts, runtime, root / "init.lua",
+        "ssg.chrome{ header = { left = { "
+        "{ kind = 'field', id = 'app.path', provider = 'path' } } } }");
+    ASSERT_TRUE(hasHeaderField("app.path"));
+    ASSERT_FALSE(hasHeaderField("path"));
+
+    // A later reload that drops the ssg.chrome call reverts to built-in, again
+    // via the SAME funnel -- proving both effects flow through it.
+    ssg::app::evaluateInitScript(scripts, runtime, root / "init.lua",
+                                 "local x = 1");
+    ASSERT_FALSE(hasHeaderField("app.path"));
+    ASSERT_TRUE(hasHeaderField("path"));
+}
+
 int main() {
     RUN(resolveLaunchNoArgumentOpensCwd);
+    RUN(evaluateInitScriptPushesChromeCompositionToTheRuntime);
     RUN(resolveLaunchDirectoryOpensThatDirectory);
     RUN(resolveLaunchFileOpensParentDirectoryAndFile);
     RUN(everyDeclaredModeLeavesExactlyWhatItEnters);

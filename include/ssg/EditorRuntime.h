@@ -155,6 +155,16 @@ public:
     // Lua/keymap/palette command -- an app/runtime seam only, like
     // resetKeymapToDefault() above.
     void focusEditor();
+    // Installs the init.lua-composed header/footer (doc/spec-lua-widget-
+    // composition.md), or nullopt to keep/restore the built-in chrome. Called by
+    // the host (apps/ssg_main.cpp) after every init.lua evaluation -- startup AND
+    // auto-reload -- with the ScriptHost's currently published composition (which
+    // already reflects rollback: a rejected reload keeps the prior value). Like
+    // resetKeymapToDefault(), an app/runtime seam rather than a Lua command:
+    // ssg.chrome stages a nested widget tree, not a flat command argument. A real
+    // change advances the session revision so delta-based clients repaint; an
+    // identical re-push is a no-op.
+    void setComposedChrome(std::optional<ChromeComposition> composition);
     // M10 fast startup: run the enrichment work that was deferred when the
     // runtime was created with defer_enrichment=true (the workspace tree scan and
     // syntax highlighting), then publish it through the normal snapshot/delta

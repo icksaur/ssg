@@ -143,8 +143,7 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
          .cwdPrefix = style.cwdPrefix});
     bindStatusFieldCommands(statusFields.headerFields, followProjection);
     bindStatusFieldCommands(statusFields.footerFields, followProjection);
-    ShellLayoutRequest request;
-    request.viewport = {static_cast<int>(dimensions.columns), static_cast<int>(dimensions.rows)};
+    ShellLayoutRequest request;    request.viewport = {static_cast<int>(dimensions.columns), static_cast<int>(dimensions.rows)};
     request.reservedPromptRows = prompt.active() ? promptRowCount(prompt.request()->kind) : 0;
     request.lineNumberGutterWidth = lineNumberGutterWidth();
     // Surface the draft-conflict notice for the active document (M15). Only the
@@ -165,6 +164,31 @@ ShellViewState EditorRuntime::Impl::shellView(ViewportDimensions dimensions,
     request.panelProviderLabel = std::string{shell.activePanelProvider()};
     request.headerFields = std::move(statusFields.headerFields);
     request.footerFields = std::move(statusFields.footerFields);
+    // A composed region (doc/spec-lua-widget-composition.md) REPLACES that
+    // region's built-in status fields; an uncomposed region keeps request.header
+    // Fields/footerFields above. A composed `provider` widget resolves through
+    // the SAME projected+bound values the built-in fields carry, so an inherited
+    // click command (e.g. path/branch/follow) survives by construction. The
+    // fields are captured BY VALUE (computeShellLayout runs synchronously below,
+    // but by-value keeps the resolver independent of the moved-from request
+    // vectors) -- field.id equals the provider/catalog id (projectStatusFields
+    // keys providers by entry id), so the scan is the natural lookup.
+    if (composedChrome) {
+        request.composedChrome = composedChrome;
+        request.chromeProviderResolver =
+            [header = request.headerFields, footer = request.footerFields](
+                std::string_view id) -> std::optional<ResolvedProvider> {
+            for (const auto* group : {&header, &footer}) {
+                for (const auto& field : *group) {
+                    if (field.id == id) {
+                        return ResolvedProvider{field.value, field.accessibleLabel,
+                                                field.commandId};
+                    }
+                }
+            }
+            return std::nullopt;
+        };
+    }
     request.footerActions = statusProjection.actions;
     // The persistent bottom-right help hint. Its key label tracks the live
     // binding for help.open (label-only when unbound); it is never a hardcoded

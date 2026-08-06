@@ -6,6 +6,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ${SSG_SOURCE_DIR}/apps/ssg_main.cpp
         ${SSG_SOURCE_DIR}/apps/ssg_terminal.cpp
         ${SSG_SOURCE_DIR}/apps/pointer_routing.cpp
+        ${SSG_SOURCE_DIR}/apps/init_script.cpp
     )
     set_target_properties(ssg_app PROPERTIES OUTPUT_NAME ssg)
     target_include_directories(ssg_app PRIVATE ${SSG_SOURCE_DIR}/apps)
@@ -15,6 +16,7 @@ if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
         ${SSG_SOURCE_DIR}/tests/test_ssg_app.cpp
         ${SSG_SOURCE_DIR}/apps/ssg_terminal.cpp
         ${SSG_SOURCE_DIR}/apps/pointer_routing.cpp
+        ${SSG_SOURCE_DIR}/apps/init_script.cpp
     )
     target_include_directories(test_ssg_app PRIVATE
         ${SSG_SOURCE_DIR}/apps

@@ -26,6 +26,8 @@
 #include <ssg/session_snapshot.h>
 #include <ssg/TextInputCommands.h>
 
+#include "init_script.h"
+
 #include <sys/ioctl.h>
 #include <sys/select.h>
 #include <termios.h>
@@ -57,6 +59,8 @@
 namespace {
 
 namespace fs = std::filesystem;
+
+using ssg::app::evaluateInitScript;
 
 // Env-gated raw-input diagnostic: when SSG_LOG_INPUT names a file, every chunk
 // of bytes read from stdin is appended as space-separated two-digit hex. This is
@@ -298,25 +302,6 @@ bool isBlank(std::string const& text) {
     });
 }
 
-// Evaluates `script` (already read from `scriptPath`, used only for
-// diagnostic messages) through the process-lifetime ScriptHost -- the SAME
-// path used at startup and on every later auto-reload. A broken script prints
-// a one-line stderr diagnostic and otherwise leaves the previous evaluation's
-// registrations in place -- MUST NEVER be called with an empty/whitespace-only
-// `script`, since an empty Lua chunk is trivially valid and would look like a
-// silent successful "reload" of nothing; the callers below only invoke this
-// when there is real content to run (see isBlank above, applied at every read
-// site before this is called).
-void evaluateInitScript(ssg::ScriptHost& scripts,
-                        std::filesystem::path const& scriptPath,
-                        std::string const& script) {
-    auto const result = scripts.evaluate(script);
-    if (!result.accepted()) {
-        std::fprintf(stderr, "ssg: %s: %s\n", scriptPath.string().c_str(),
-                     result.message.c_str());
-    }
-}
-
 // Resolves `init.lua`'s path for this OS. Returns nullopt (after printing a
 // diagnostic) only if the config root itself is unresolvable (e.g. HOME
 // unset) -- an unusual environment problem, distinct from the file simply
@@ -367,15 +352,15 @@ std::optional<std::string> readInitScriptIfPresent(
 // editor). Returns the content actually applied (or nullopt), so the
 // caller can seed InitScriptWatcher's "last applied" baseline and avoid
 // redundantly re-evaluating the SAME unchanged content on its first poll.
-std::optional<std::string> loadInitScript(ssg::ScriptHost& scripts) {
+std::optional<std::string> loadInitScript(ssg::ScriptHost& scripts,
+                                          ssg::EditorRuntime& runtime) {
     auto const scriptPath = resolveInitScriptPath();
     if (!scriptPath) return std::nullopt;
     auto script = readInitScriptIfPresent(*scriptPath, true);
     if (!script) return std::nullopt;
-    evaluateInitScript(scripts, *scriptPath, *script);
+    evaluateInitScript(scripts, runtime, *scriptPath, *script);
     return script;
 }
-
 // How often the background thread re-reads init.lua's content to check for
 // a change (doc/spec-config.md's auto-reload design). Content, not mtime/
 // size, is compared -- a same-size rewrite within one filesystem timestamp
@@ -448,7 +433,7 @@ public:
     // Drains the wake pipe and, if a stable new script is queued,
     // evaluates it on the CALLING (main) thread. Call this only after the
     // main loop's select() reports wakeDescriptor() readable.
-    void drainAndEvaluate(ssg::ScriptHost& scripts) {
+    void drainAndEvaluate(ssg::ScriptHost& scripts, ssg::EditorRuntime& runtime) {
         char buffer[64];
         while (::read(wakePipe_[0], buffer, sizeof buffer) > 0) {
         }
@@ -459,7 +444,7 @@ public:
             pendingScript_.reset();
         }
         if (pending) {
-            evaluateInitScript(scripts, scriptPath_, *pending);
+            evaluateInitScript(scripts, runtime, scriptPath_, *pending);
         }
     }
 
@@ -729,7 +714,7 @@ int main(int argc, char** argv) {
     // Lives for the rest of the process, so a function init.lua defines
     // remains callable long after the script that defined it has finished.
     ssg::ScriptHost scripts{runtime};
-    auto const appliedInitScript = loadInitScript(scripts);
+    auto const appliedInitScript = loadInitScript(scripts, runtime);
     STARTUP_MARK("post_init_script");
 
     // doc/spec-config.md's auto-reload: watches the SAME path just loaded
@@ -1330,7 +1315,7 @@ int main(int argc, char** argv) {
                 // Unlike git-diff (auto-drained inside EditorRuntime::snapshot()),
                 // nothing else drains this -- evaluate the reloaded script here,
                 // on the main thread, exactly like startup's loadInitScript.
-                initScriptWatcher->drainAndEvaluate(scripts);
+                initScriptWatcher->drainAndEvaluate(scripts, runtime);
                 if (!wait.input) continue;
             }
             if (wait.gitDiff && !wait.input) continue;

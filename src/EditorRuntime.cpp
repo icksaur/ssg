@@ -2229,6 +2229,18 @@ void EditorRuntime::resetKeymapToDefault() {
 
 void EditorRuntime::focusEditor() { impl_->shell.focusEditor(); }
 
+void EditorRuntime::setComposedChrome(std::optional<ChromeComposition> composition) {
+    // A composition-only reload (a script that just calls ssg.chrome, or one
+    // that drops the call) runs outside command dispatch, so nothing else
+    // advances the session revision. Delta-gated clients derive a frame only
+    // from a revision change (derive_session_delta rejects a same-revision
+    // pair), so bump on a real CHANGE -- and only then, to avoid a redundant
+    // repaint when the host re-pushes an identical composition on every reload.
+    if (impl_->composedChrome == composition) return;
+    impl_->composedChrome = std::move(composition);
+    if (impl_->session) impl_->session->advanceRevision();
+}
+
 EditorRuntimeCreateResult EditorRuntime::create(EditorRuntimeConfig config) {
     try {
         auto cwd = canonicalDirectory(config.cwd);

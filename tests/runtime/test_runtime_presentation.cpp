@@ -457,8 +457,95 @@ TEST(shellStatusFieldsUseRegisteredProviders) {
     }
 }
 
-TEST(shellStatusFieldsPreserveDefaultContentOrderAndLabels) {
+// doc/spec-lua-widget-composition.md phase 6: a composition pushed via
+// setComposedChrome REPLACES the built-in region, resolves provider widgets
+// through the live status fields, and reverts to built-in when cleared -- and a
+// real change advances the revision so a delta-gated client repaints.
+TEST(composedChromeReplacesBuiltinChromeAndTracksRevision) {
     auto root = uniqueRoot();
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"file.open", runtime.revision(),
+                               std::string{"long.txt"}})
+                    .accepted());
+
+    const ssg::ViewportDimensions dims{80, 12};
+    const auto findNode = [](const auto& snap, ssg::ShellNodeKind kind,
+                             std::string_view id) -> const ssg::AccessibilityNode* {
+        for (const auto& node : snap->sections().shell.accessibilityNodes) {
+            if (node.kind == kind && node.id == id) return &node;
+        }
+        return nullptr;
+    };
+
+    // Baseline: built-in path header field is present.
+    auto builtin = runtime.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(builtin.has_value());
+    ASSERT_TRUE(findNode(builtin, ssg::ShellNodeKind::HeaderField, "path") !=
+                nullptr);
+
+    // Compose a header of one provider widget (id "my.path" -> provider "path").
+    ssg::ChromeComposition comp;
+    ssg::RowDescriptor header;
+    ssg::WidgetDescriptor widget;
+    widget.kind = ssg::WidgetKind::Field;
+    widget.id = "my.path";
+    ssg::ValueSource src;
+    src.isProvider = true;
+    src.provider = "path";
+    widget.value = src;
+    header.left.push_back(widget);
+    comp.header = header;
+
+    auto const revBefore = runtime.revision();
+    runtime.setComposedChrome(comp);
+    // A real change advanced the revision (delta-gated clients will repaint).
+    ASSERT_TRUE(runtime.revision().value() > revBefore.value());
+
+    auto composed = runtime.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(composed.has_value());
+    const auto* my = findNode(composed, ssg::ShellNodeKind::HeaderField, "my.path");
+    ASSERT_TRUE(my != nullptr);
+    if (my) {
+        // Resolves the SAME live value + label + inherited command as the
+        // built-in path field (which opens the file panel on click).
+        const auto* builtinPath =
+            findNode(builtin, ssg::ShellNodeKind::HeaderField, "path");
+        ASSERT_TRUE(builtinPath != nullptr);
+        if (builtinPath) ASSERT_EQ(my->content, builtinPath->content);
+        ASSERT_EQ(my->label, std::string{"path"});
+        ASSERT_TRUE(my->commandId.has_value());
+        ASSERT_EQ(*my->commandId, std::string{"panel.show_files"});
+    }
+    // The built-in path field is GONE -- replaced, not merged.
+    ASSERT_TRUE(findNode(composed, ssg::ShellNodeKind::HeaderField, "path") ==
+                nullptr);
+
+    // Re-pushing the identical composition is a no-op: no revision bump.
+    auto const revStable = runtime.revision();
+    runtime.setComposedChrome(comp);
+    ASSERT_EQ(runtime.revision().value(), revStable.value());
+
+    // Clearing reverts to built-in and advances the revision again.
+    runtime.setComposedChrome(std::nullopt);
+    ASSERT_TRUE(runtime.revision().value() > revStable.value());
+    auto reverted = runtime.snapshot(ssg::ClientId{1}, dims);
+    ASSERT_TRUE(reverted.has_value());
+    ASSERT_TRUE(findNode(reverted, ssg::ShellNodeKind::HeaderField, "path") !=
+                nullptr);
+    ASSERT_TRUE(findNode(reverted, ssg::ShellNodeKind::HeaderField, "my.path") ==
+                nullptr);
+}
+
+TEST(shellStatusFieldsPreserveDefaultContentOrderAndLabels) {    auto root = uniqueRoot();
     auto created = ssg::EditorRuntime::create(
         {root / "workspace", root / "scratch", root / "recovery"});
     ASSERT_TRUE(created.accepted());
@@ -826,6 +913,7 @@ int main() {
     RUN(paletteCandidatesMatchTheCommandRegistry);
     RUN(paletteCommandCandidatesAreCachedButInvalidateOnKeymapChange);
     RUN(shellStatusFieldsUseRegisteredProviders);
+    RUN(composedChromeReplacesBuiltinChromeAndTracksRevision);
     RUN(shellStatusFieldsPreserveDefaultContentOrderAndLabels);
     RUN(shellStatusFieldsRenderBranchWhenGitBranchIsApplied);
     RUN(liveDiffTabTitlePrefixesGlyphWithoutChangingDocumentTabs);
