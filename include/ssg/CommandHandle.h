@@ -33,6 +33,15 @@ class CommandHandle {
 public:
     CommandHandle() = default;
 
+    // Mint a handle for a catalog position. Only a catalog may say what a handle
+    // means, so a public caller cannot fabricate one that aliases a command; the
+    // raw index constructor stays private. (A static factory rather than a public
+    // ctor keeps default-construction the only public way to make an *invalid*
+    // handle.)
+    [[nodiscard]] static CommandHandle fromIndex(std::size_t index) noexcept {
+        return CommandHandle{static_cast<std::uint16_t>(index)};
+    }
+
     [[nodiscard]] bool valid() const noexcept { return index_ != kInvalid; }
 
     bool operator==(CommandHandle const&) const noexcept = default;
@@ -40,7 +49,6 @@ public:
 private:
     friend class CommandCatalog;
     friend class CommandRegistry;
-    friend CommandHandle commandHandleFromIndex(std::size_t index) noexcept;
 
     static constexpr std::uint16_t kInvalid =
         std::numeric_limits<std::uint16_t>::max();
@@ -51,10 +59,6 @@ private:
 
     std::uint16_t index_ = kInvalid;
 };
-
-// Mint a handle for a catalog position.  Only a catalog may say what a handle
-// means, which is why this is not a public constructor.
-[[nodiscard]] CommandHandle commandHandleFromIndex(std::size_t index) noexcept;
 
 // How a caller names the command it wants to invoke.
 //

@@ -5,7 +5,6 @@
 #include <ssg/Keymap.h>
 #include <ssg/Style.h>
 #include <ssg/SyntaxModel.h>
-#include <ssg/command_metadata.h>
 
 #include <algorithm>
 #include <map>
@@ -107,7 +106,7 @@ std::string renderGlyphList(Style const& style) {
 std::string humanBindingLabel(CommandCatalog const& catalog,
                               std::string const& commandId) {
     if (auto const* entry = catalog.find(commandId)) {
-        return commandLabel(*entry);
+        return entry->displayLabel();
     }
     return commandId;
 }

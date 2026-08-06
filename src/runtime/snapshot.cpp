@@ -3,7 +3,6 @@
 #include <ssg/CommandCatalog.h>
 
 #include <ssg/CommandCatalog.h>
-#include <ssg/command_metadata.h>
 #include <ssg/PaletteSearcher.h>
 
 #include <algorithm>
@@ -430,7 +429,7 @@ PaletteViewState EditorRuntime::Impl::paletteView() const {
                         detail = KeyCodec{}.formatSequence(*sequence);
                     }
                     commandCandidateCache.push_back(
-                        {command->id, commandLabel(*command), std::move(detail)});
+                        {command->id, command->displayLabel(), std::move(detail)});
                 }
                 commandCandidateCatalogRevision = catalogRevision;
                 commandCandidateKeymap = keymap;

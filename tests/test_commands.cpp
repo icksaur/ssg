@@ -87,7 +87,7 @@ TEST(theGeneratedCommandReferenceIsCurrent) {
     ASSERT_TRUE(created.runtime != nullptr);
     if (!created.runtime) return;
     auto const catalog = created.runtime->commandCatalog();
-    auto const rendered = ssg::renderCommandReference(*catalog);
+    auto const rendered = ssg::CommandReferenceRenderer{}.render(*catalog);
     std::filesystem::remove_all(root);
 
     if (std::getenv("SSG_UPDATE_DOCS") != nullptr) {

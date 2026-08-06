@@ -1,7 +1,3 @@
-target_sources(ssg PRIVATE
-    ${SSG_SOURCE_DIR}/src/command_metadata.cpp
-)
-
 if(SSG_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     add_executable(test_command_metadata
         ${SSG_SOURCE_DIR}/tests/test_command_metadata.cpp

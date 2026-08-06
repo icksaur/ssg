@@ -58,6 +58,13 @@ struct CommandEntry {
     // A tombstoned command is no longer dispatchable but keeps its slot, so its
     // handle is never reissued to a different command.
     bool retired = false;
+
+    // The palette's display text for this command: its authored `label`, or the
+    // humanised id ("cursor.line_down" -> "Cursor Line Down") when `label` is
+    // empty, so a candidate never shows a raw dotted id. Takes no id lookup --
+    // the entry IS the command, so an author's label can never be lost to a
+    // fallback the way an id-only lookup against one catalog could.
+    [[nodiscard]] std::string displayLabel() const;
 };
 
 // Bumped on every registration.  A client compares it to decide whether the
