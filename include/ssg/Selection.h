@@ -20,6 +20,14 @@ struct Selection {
     [[nodiscard]] const DocumentPosition& lower() const noexcept;
     [[nodiscard]] const DocumentPosition& upper() const noexcept;
     [[nodiscard]] bool isCaret() const noexcept;
+
+    // The text this selection acts on for a word-oriented feature: the covered
+    // substring when it is a range, or the whole word the caret sits in (or
+    // touches on its trailing side) when it is a caret. Empty when a caret is
+    // surrounded by non-word bytes or a range is out of range. `text` is the
+    // whole document; word bytes are WordClassification's isWordByte.
+    [[nodiscard]] std::string wordOrCoveredText(std::string_view text) const;
+
     bool operator==(const Selection&) const noexcept = default;
 };
 

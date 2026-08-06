@@ -1,4 +1,5 @@
 #include <ssg/TextInputCommands.h>
+#include <ssg/HistoryEditClassification.h>
 
 #include "test_helpers.h"
 
@@ -294,6 +295,22 @@ TEST(invalidInputAndNonEditModesFailAtomically) {
 
 }  // namespace
 
+TEST(historyEditKindClassifiesEveryTextInputCommand) {
+    using ssg::historyEditKind;
+    ASSERT_TRUE(historyEditKind(TextInputCommand::Insert) ==
+                ssg::HistoryEditKind::Typing);
+    ASSERT_TRUE(historyEditKind(TextInputCommand::Newline) ==
+                ssg::HistoryEditKind::Typing);
+    ASSERT_TRUE(historyEditKind(TextInputCommand::DeleteBackward) ==
+                ssg::HistoryEditKind::DeleteBackward);
+    ASSERT_TRUE(historyEditKind(TextInputCommand::DeleteWordBackward) ==
+                ssg::HistoryEditKind::DeleteBackward);
+    ASSERT_TRUE(historyEditKind(TextInputCommand::DeleteForward) ==
+                ssg::HistoryEditKind::DeleteForward);
+    ASSERT_TRUE(historyEditKind(TextInputCommand::DeleteWordForward) ==
+                ssg::HistoryEditKind::DeleteForward);
+}
+
 int main() {
     RUN(commandSetIsExactAndImmutable);
     RUN(singleCaretInsertAndSelectionReplacement);
@@ -305,5 +322,6 @@ int main() {
     RUN(overlapNormalizationAndCoincidentCaretsEmitValidEdits);
     RUN(boundaryDeletionIsSuccessfulNoop);
     RUN(invalidInputAndNonEditModesFailAtomically);
+    RUN(historyEditKindClassifiesEveryTextInputCommand);
     return failed == 0 ? 0 : 1;
 }

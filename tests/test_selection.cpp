@@ -760,6 +760,27 @@ TEST(selectWordAtPositionRejectsAMissingOrInvalidPosition) {
     ASSERT_FALSE(invalid.delta.changed);
 }
 
+TEST(wordOrCoveredTextReturnsCaretWordOrSelectionSubstring) {
+    const std::string text = "foo bar_baz  qux";
+    auto pos = [](std::uint64_t off) {
+        return DocumentPosition{ByteOffset{off}, ssg::LineIndex{0}, CellIndex{0}};
+    };
+    auto caret = [&](std::uint64_t off) { return Selection{pos(off), pos(off)}; };
+
+    // Caret inside a word -> the whole word ('_' is a word byte).
+    ASSERT_EQ(caret(5).wordOrCoveredText(text), std::string{"bar_baz"});
+    // Caret at a word's trailing boundary -> that word (the after-word branch).
+    ASSERT_EQ(caret(3).wordOrCoveredText(text), std::string{"foo"});
+    // Caret surrounded by non-word bytes -> empty.
+    ASSERT_EQ(caret(12).wordOrCoveredText(text), std::string{});
+    // A range selection -> exactly the covered substring, verbatim.
+    ASSERT_EQ((Selection{pos(0), pos(3)}).wordOrCoveredText(text),
+              std::string{"foo"});
+    // A range spanning a space is returned verbatim, NOT word-trimmed.
+    ASSERT_EQ((Selection{pos(0), pos(7)}).wordOrCoveredText(text),
+              std::string{"foo bar"});
+}
+
 int main() {
     RUN(commandSetIsExactAndImmutable);
     RUN(selectionSetNormalizesOrderDuplicatesAndOverlaps);
@@ -778,6 +799,7 @@ int main() {
     RUN(invalidTabWidthIsTypedAndAtomic);
     RUN(selectWordAtPositionSelectsTheSameCategoryRun);
     RUN(selectWordAtPositionRejectsAMissingOrInvalidPosition);
+    RUN(wordOrCoveredTextReturnsCaretWordOrSelectionSubstring);
     std::cout << "\nPassed: " << passed << "  Failed: " << failed << "\n";
     return failed == 0 ? 0 : 1;
 }

@@ -1,6 +1,6 @@
 #include "editor_runtime_internal.h"
 
-#include <ssg/WordClassification.h>
+#include <ssg/HistoryEditClassification.h>
 
 #include <algorithm>
 #include <cctype>
@@ -13,49 +13,6 @@ namespace {
 template <typename T>
 T const* payloadAs(std::any const& payload) {
     return std::any_cast<T>(&payload);
-}
-
-// The needle for find.word_under_cursor.  A non-caret selection is taken
-// verbatim; a caret takes the word it sits inside, or -- when it sits just past
-// a word's last byte -- that trailing word.  Byte reads are bounds-guarded: a
-// caret can sit at text.size() and the document can be empty, in which case
-// there is no word and the result is empty.
-std::string wordUnderCaret(std::string_view text, Selection const& primary) {
-    if (!primary.isCaret()) {
-        auto const low = static_cast<std::size_t>(primary.lower().byteOffset.value());
-        auto const high = static_cast<std::size_t>(primary.upper().byteOffset.value());
-        if (low <= high && high <= text.size()) {
-            return std::string{text.substr(low, high - low)};
-        }
-        return {};
-    }
-    auto const offset = static_cast<std::size_t>(primary.active.byteOffset.value());
-    const bool onWord =
-        offset < text.size() && isWordByte(static_cast<unsigned char>(text[offset]));
-    const bool afterWord =
-        offset > 0 && offset <= text.size() &&
-        isWordByte(static_cast<unsigned char>(text[offset - 1]));
-    if (!onWord && !afterWord) return {};
-    std::size_t begin = offset;
-    std::size_t end = offset;
-    while (begin > 0 && isWordByte(static_cast<unsigned char>(text[begin - 1]))) --begin;
-    while (end < text.size() && isWordByte(static_cast<unsigned char>(text[end]))) ++end;
-    return std::string{text.substr(begin, end - begin)};
-}
-
-HistoryEditKind historyKind(TextInputCommand command) {
-    switch (command) {
-        case TextInputCommand::Insert:
-        case TextInputCommand::Newline:
-            return HistoryEditKind::Typing;
-        case TextInputCommand::DeleteBackward:
-        case TextInputCommand::DeleteWordBackward:
-            return HistoryEditKind::DeleteBackward;
-        case TextInputCommand::DeleteForward:
-        case TextInputCommand::DeleteWordForward:
-            return HistoryEditKind::DeleteForward;
-    }
-    return HistoryEditKind::Other;
 }
 
 TextInputSettings textInputSettings(EditorRuntime::Impl const&) {
@@ -108,7 +65,7 @@ CommandHandlerResult bindText(EditorRuntime::Impl& runtime,
         return failure(result.message);
     }
     auto outcome = applyTransaction(runtime, *result.transaction, *result.selections,
-                                     historyKind(command));
+                                     historyEditKind(command));
     // Keep undo word-granular: seal the current unit after a newline or after
     // inserting a whitespace/punctuation boundary, so the next word starts a
     // fresh undo step.
@@ -357,8 +314,8 @@ CommandHandlerResult bindFindReplace(EditorRuntime::Impl& runtime,
             return success();
         case FindReplaceCommand::FindWordUnderCursor: {
             if (document == nullptr) return success();
-            auto const needle = wordUnderCaret(
-                snapshot.text, runtime.selection.selections.primary());
+            auto const needle = runtime.selection.selections.primary()
+                                    .wordOrCoveredText(snapshot.text);
             if (needle.empty()) return success();
             // Always a literal, whole-document search: regex and selection-only
             // are forced off so a needle with metacharacters (or a multi-line

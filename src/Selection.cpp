@@ -707,6 +707,29 @@ bool Selection::isCaret() const noexcept {
     return anchor.byteOffset == active.byteOffset;
 }
 
+std::string Selection::wordOrCoveredText(std::string_view text) const {
+    if (!isCaret()) {
+        auto const low = static_cast<std::size_t>(lower().byteOffset.value());
+        auto const high = static_cast<std::size_t>(upper().byteOffset.value());
+        if (low <= high && high <= text.size()) {
+            return std::string{text.substr(low, high - low)};
+        }
+        return {};
+    }
+    auto const offset = static_cast<std::size_t>(active.byteOffset.value());
+    const bool onWord =
+        offset < text.size() && isWordByte(static_cast<unsigned char>(text[offset]));
+    const bool afterWord =
+        offset > 0 && offset <= text.size() &&
+        isWordByte(static_cast<unsigned char>(text[offset - 1]));
+    if (!onWord && !afterWord) return {};
+    std::size_t begin = offset;
+    std::size_t end = offset;
+    while (begin > 0 && isWordByte(static_cast<unsigned char>(text[begin - 1]))) --begin;
+    while (end < text.size() && isWordByte(static_cast<unsigned char>(text[end]))) ++end;
+    return std::string{text.substr(begin, end - begin)};
+}
+
 SelectionSet::SelectionSet(std::vector<Selection> selections)
     : selections_(std::move(selections)) {
     if (selections_.empty()) {
