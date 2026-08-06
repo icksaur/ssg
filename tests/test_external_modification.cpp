@@ -51,8 +51,8 @@ ssg::ExternalEventInput input(std::uint64_t sequence, std::string content,
 
 struct Fixture {
     TemporaryDirectory temporary;
-    ssg::RecoveryActions recovery =
-        ssg::RecoveryActions::create(temporary.path() / "recovery");
+    ssg::RecoveryManager recovery =
+        ssg::RecoveryManager::create(temporary.path() / "recovery");
     ssg::DiffModel diff;
     ssg::ExternalModificationFlow flow{recovery, diff};
 
@@ -209,7 +209,7 @@ TEST(staleEventIsFailureAtomic) {
 TEST(diffRejectionDoesNotSuppressDirtyBufferSafetyStatus) {
     TemporaryDirectory temporary;
     auto recovery =
-        ssg::RecoveryActions::create(temporary.path() / "recovery");
+        ssg::RecoveryManager::create(temporary.path() / "recovery");
     ssg::DiffModel diff;
     ssg::ExternalModificationFlow flow{recovery, diff};
     std::optional<ssg::JournalDocument> open{document("buffer\n", true)};

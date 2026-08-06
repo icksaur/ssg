@@ -10,7 +10,7 @@
 // gate lands at LF-4b.
 
 #include <ssg/open_metrics.h>
-#include <ssg/RecoveryActions.h>
+#include <ssg/RecoveryManager.h>
 #include <ssg/Workspace.h>
 
 #include <algorithm>
@@ -122,7 +122,7 @@ struct Sample {
 
 Sample openOnce(const fs::path& root, const std::string& name) {
     // A fresh workspace per rep so open_file does not de-duplicate the path.
-    auto recovery = ssg::RecoveryActions::create(root / ".recovery");
+    auto recovery = ssg::RecoveryManager::create(root / ".recovery");
     auto workspace = ssg::Workspace::create(root, recovery);
 
     ssg::resetOpenPhaseTiming();

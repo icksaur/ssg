@@ -92,11 +92,11 @@ using CompiledSequence = std::vector<CompiledStroke>;
 
 struct CompiledResolution {
     KeymapMatchKind kind = KeymapMatchKind::None;
-    // Valid only when `kind` is Resolved.  A CommandRef rather than a bare
+    // Valid only when `kind` is Resolved.  A CommandName rather than a bare
     // handle because `keymap.bind` accepts any non-empty command id: a binding
     // may name a command the catalog does not have, and that NAME is what a
     // rejected dispatch must report.
-    CommandRef command;
+    CommandName command;
 };
 
 class CompiledKeymap {
@@ -125,7 +125,7 @@ public:
 private:
     struct Entry {
         CompiledSequence sequence;
-        CommandRef command;
+        CommandName command;
         CompiledContext context = CompiledContext::never();
     };
 

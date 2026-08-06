@@ -2,7 +2,7 @@
 
 #include <ssg/ClipboardRegister.h>
 #include <ssg/DiffModel.h>
-#include <ssg/DraftAutosave.h>
+#include <ssg/DraftAutosaveScheduler.h>
 #include <ssg/EditCommands.h>
 #include <ssg/EditorRuntime.h>
 #include <ssg/EditorSessionBuilder.h>
@@ -138,7 +138,7 @@ struct EditorRuntime::Impl final : CommandServices,
     std::filesystem::path scratchRoot;
     std::filesystem::path recoveryRoot;
     std::filesystem::path archiveRoot;
-    RecoveryActions recovery;
+    RecoveryManager recovery;
     ScratchStore scratch;
     Workspace workspace;
     SelectionViewState selection;

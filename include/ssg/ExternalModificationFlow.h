@@ -1,7 +1,7 @@
 #pragma once
 
 #include "ssg/DiffModel.h"
-#include "ssg/RecoveryActions.h"
+#include "ssg/RecoveryManager.h"
 #include "ssg/FilesystemWatcher.h"
 
 #include <array>
@@ -143,7 +143,7 @@ struct ExternalOpenDiffResult {
 
 class ExternalModificationFlow {
 public:
-    ExternalModificationFlow(RecoveryActions& recovery, DiffModel& diff);
+    ExternalModificationFlow(RecoveryManager& recovery, DiffModel& diff);
     ~ExternalModificationFlow();
     ExternalModificationFlow(ExternalModificationFlow&&) noexcept;
     ExternalModificationFlow& operator=(ExternalModificationFlow&&) noexcept;

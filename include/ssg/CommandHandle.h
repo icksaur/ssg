@@ -39,7 +39,6 @@ public:
 
 private:
     friend class CommandCatalog;
-    friend class CommandRegistry;
 
     static constexpr std::uint16_t kInvalid =
         std::numeric_limits<std::uint16_t>::max();
@@ -61,34 +60,34 @@ private:
 // a handle, which a caller that already resolved the command supplies so
 // dispatch costs an array index instead of a hash of a constructed string.
 //
-// The name is authoritative: a ref with an absent handle still names the right
-// command.  A ref never resolves a name on its own, because there is no global
+// The name is authoritative: a CommandName with an absent handle still names the
+// right command.  It never resolves a name on its own, because there is no global
 // catalog to resolve it against -- resolution belongs to whoever holds one.
-class CommandRef {
+class CommandName {
 public:
-    CommandRef() = default;
+    CommandName() = default;
 
     // Implicit: a command name is the ordinary way to name a command, and every
     // call site outside the keystroke path spells one as a literal.
-    CommandRef(std::string_view name)  // NOLINT(google-explicit-constructor)
+    CommandName(std::string_view name)  // NOLINT(google-explicit-constructor)
         : name_{name} {}
-    CommandRef(char const* name)  // NOLINT(google-explicit-constructor)
+    CommandName(char const* name)  // NOLINT(google-explicit-constructor)
         : name_{name} {}
-    CommandRef(std::string name)  // NOLINT(google-explicit-constructor)
+    CommandName(std::string name)  // NOLINT(google-explicit-constructor)
         : name_{std::move(name)} {}
 
     // Both spellings, for a caller that already resolved the command against a
     // catalog -- the compiled keymap does this once per binding.
-    CommandRef(std::string name, CommandHandle handle)
+    CommandName(std::string name, CommandHandle handle)
         : name_{std::move(name)}, handle_{handle} {}
 
     [[nodiscard]] CommandHandle handle() const noexcept { return handle_; }
     [[nodiscard]] std::string_view name() const noexcept { return name_; }
     [[nodiscard]] bool empty() const noexcept { return name_.empty(); }
 
-    // Two refs are equal when they name the same command.  A literal converts,
+    // Two names are equal when they name the same command.  A literal converts,
     // so a call site asking "is this file.open?" reads as it always did.
-    [[nodiscard]] bool operator==(CommandRef const& other) const noexcept {
+    [[nodiscard]] bool operator==(CommandName const& other) const noexcept {
         return name_ == other.name_;
     }
 

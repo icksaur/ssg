@@ -1,7 +1,7 @@
 #include "test_helpers.h"
 
 #include <ssg/Document.h>
-#include <ssg/RecoveryActions.h>
+#include <ssg/RecoveryManager.h>
 #include <ssg/TextCodec.h>
 #include <ssg/Workspace.h>
 
@@ -165,7 +165,7 @@ std::vector<Entry> corpus() {
 
 std::string capture() {
     auto root = uniqueRoot();
-    auto recovery = ssg::RecoveryActions::create(root / ".recovery");
+    auto recovery = ssg::RecoveryManager::create(root / ".recovery");
     auto workspace = ssg::Workspace::create(root, recovery);
 
     std::ostringstream out;

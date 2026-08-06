@@ -96,7 +96,7 @@ Do these in order. The first item is the generator of everything else.
 - Extract `DocumentEditingSession`, then `PresentationState` / `WorkspaceSession`
   / `ClientRegistry` / `CommandDispatcher` from `EditorRuntime` (1,911 → ~400 of
   composition). This is what finally makes class-level tests sufficient.
-- Split `RecoveryActions.cpp` into `DurableFileOps` / `RecoveryJournal` /
+- Split `RecoveryManager.cpp` into `DurableFileOps` / `RecoveryJournal` /
   `RecoveryPolicy`. Do this **carefully and last** — it is the riskiest code.
 
 ## Replacement text: `copilot-instructions.md` workflow line

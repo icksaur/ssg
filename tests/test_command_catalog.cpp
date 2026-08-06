@@ -272,7 +272,7 @@ TEST(aCommandRegisteredAfterTheSessionIsBuiltIsDispatchable) {
     ASSERT_TRUE(handle.valid());
     auto const byHandle = session->dispatch(
         ssg::ClientId{1},
-        {ssg::CommandRef{"late.command", handle}, session->revision(), {}});
+        {ssg::CommandName{"late.command", handle}, session->revision(), {}});
     ASSERT_TRUE(byHandle.accepted());
     ASSERT_EQ(lateCalls, 2);
 }

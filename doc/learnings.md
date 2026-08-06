@@ -67,7 +67,7 @@ then remove or shorten the redundant entry here.
 - The HTTP library invokes WebSocket `onOpen`, `onMessage`, and `onClose` on the
   connection thread. Adapter writer threads must stop and join from `onClose`
   before server shutdown completes.
-- A feature-state handler captured by `CommandRegistry` needs one outer lock
+- A feature-state handler captured by `CommandCatalog` needs one outer lock
   spanning dispatch and response-snapshot derivation so another command cannot
   interleave between an accepted mutation and its snapshot.
 

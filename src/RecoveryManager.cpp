@@ -1,4 +1,4 @@
-#include "ssg/RecoveryActions.h"
+#include "ssg/RecoveryManager.h"
 
 #include "ssg/platform_files.h"
 
@@ -624,7 +624,7 @@ RecoveryRecordId::RecoveryRecordId(std::string value) : value_(std::move(value))
     }
 }
 
-class RecoveryActions::Impl {
+class RecoveryManager::Impl {
 public:
     Impl(std::filesystem::path recoveryRoot,
          RecoveryConfig config,
@@ -1418,83 +1418,83 @@ private:
     StoredRecord* recordsUnderPreparation_ = nullptr;
 };
 
-RecoveryActions RecoveryActions::create(
+RecoveryManager RecoveryManager::create(
     const std::filesystem::path& recoveryRoot,
     RecoveryConfig config) {
-    return RecoveryActions{
+    return RecoveryManager{
         std::make_unique<Impl>(recoveryRoot, config, nullptr)};
 }
 
-RecoveryActions RecoveryActions::create(
+RecoveryManager RecoveryManager::create(
     const std::filesystem::path& recoveryRoot,
     RecoveryConfig config,
     RecoveryFaultInjector& faultInjector) {
-    return RecoveryActions{
+    return RecoveryManager{
         std::make_unique<Impl>(recoveryRoot, config, &faultInjector)};
 }
 
-RecoveryActions::RecoveryActions(
+RecoveryManager::RecoveryManager(
     std::unique_ptr<Impl> implementation) noexcept
     : impl_(std::move(implementation)) {}
 
-RecoveryActions::~RecoveryActions() = default;
-RecoveryActions::RecoveryActions(RecoveryActions&&) noexcept = default;
-RecoveryActions& RecoveryActions::operator=(RecoveryActions&&) noexcept =
+RecoveryManager::~RecoveryManager() = default;
+RecoveryManager::RecoveryManager(RecoveryManager&&) noexcept = default;
+RecoveryManager& RecoveryManager::operator=(RecoveryManager&&) noexcept =
     default;
 
-std::vector<RecoveryRecord> RecoveryActions::records() const {
+std::vector<RecoveryRecord> RecoveryManager::records() const {
     return impl_->records();
 }
 
-RecoveryActionResult RecoveryActions::closeDocument(
+RecoveryActionResult RecoveryManager::closeDocument(
     std::optional<JournalDocument>& document,
     ScratchStore& scratch,
     std::chrono::milliseconds durabilityTimeout) {
     return impl_->closeDocument(document, scratch, durabilityTimeout);
 }
 
-RecoveryActionResult RecoveryActions::reloadDocument(
+RecoveryActionResult RecoveryManager::reloadDocument(
     std::optional<JournalDocument>& document,
     JournalDocument replacement) {
     return impl_->reloadDocument(document, std::move(replacement));
 }
 
-RecoveryActionResult RecoveryActions::overwriteFile(
+RecoveryActionResult RecoveryManager::overwriteFile(
     const std::filesystem::path& path,
     std::span<const std::byte> replacement) {
     return impl_->overwriteFile(path, replacement);
 }
 
-RecoveryActionResult RecoveryActions::renamePath(
+RecoveryActionResult RecoveryManager::renamePath(
     const std::filesystem::path& source,
     const std::filesystem::path& destination) {
     return impl_->renamePath(source, destination);
 }
 
-RecoveryActionResult RecoveryActions::renamePathNoClobber(
+RecoveryActionResult RecoveryManager::renamePathNoClobber(
     const std::filesystem::path& source,
     const std::filesystem::path& destination) {
     return impl_->renamePathNoClobber(source, destination);
 }
 
-RecoveryActionResult RecoveryActions::deletePath(
+RecoveryActionResult RecoveryManager::deletePath(
     const std::filesystem::path& path) {
     return impl_->deletePath(path);
 }
 
-RecoveryActionResult RecoveryActions::replaceWorkspace(
+RecoveryActionResult RecoveryManager::replaceWorkspace(
     const std::filesystem::path& workspace,
     const std::filesystem::path& replacement) {
     return impl_->replaceWorkspace(workspace, replacement);
 }
 
-RecoveryRestoreResult RecoveryActions::restoreDocument(
+RecoveryRestoreResult RecoveryManager::restoreDocument(
     const RecoveryRecordId& record,
     std::optional<JournalDocument>& document) {
     return impl_->restoreDocument(record, document);
 }
 
-RecoveryRestoreResult RecoveryActions::restoreFilesystem(
+RecoveryRestoreResult RecoveryManager::restoreFilesystem(
     const RecoveryRecordId& record) {
     return impl_->restoreFilesystem(record);
 }

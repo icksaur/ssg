@@ -1,7 +1,7 @@
 #include "runtime/editor_runtime_internal.h"
 
 #include <ssg/CommandCatalog.h>
-#include <ssg/DraftReopen.h>
+#include <ssg/DraftReopenClassifier.h>
 #include <ssg/FilesystemWatcher.h>
 #include <ssg/GraphemeLayout.h>
 #include <ssg/platform_files.h>
@@ -447,7 +447,7 @@ EditorRuntime::Impl::Impl(std::filesystem::path canonicalCwd,
       scratchRoot{std::filesystem::weakly_canonical(scratchRoot)},
       recoveryRoot{std::filesystem::weakly_canonical(recoveryRoot)},
       archiveRoot{std::filesystem::weakly_canonical(archiveRoot)},
-      recovery{RecoveryActions::create(recoveryRoot)},
+      recovery{RecoveryManager::create(recoveryRoot)},
       scratch{ScratchStore::create(scratchRoot, root)},
       workspace{Workspace::create(root, recovery, this->archiveRoot)},
       selection{initialSelection()},

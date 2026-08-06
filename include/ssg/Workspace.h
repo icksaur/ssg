@@ -1,10 +1,10 @@
 #pragma once
 
-#include "ssg/CommandRegistry.h"
+#include "ssg/CommandInvocation.h"
 #include "ssg/Document.h"
 #include "ssg/platform_files.h"
 #include "ssg/FileArchive.h"
-#include "ssg/RecoveryActions.h"
+#include "ssg/RecoveryManager.h"
 #include "ssg/ScratchJournal.h"
 #include "ssg/TextCodec.h"
 
@@ -110,7 +110,7 @@ inline constexpr std::string_view kNewBufferLabel = "[new buffer]";
 class Workspace {
 public:
     [[nodiscard]] static Workspace create(
-        const std::filesystem::path& root, RecoveryActions& recovery,
+        const std::filesystem::path& root, RecoveryManager& recovery,
         std::optional<std::filesystem::path> archiveRoot = std::nullopt);
 
     // Removes archive entries older than kFileArchiveRetention. Housekeeping:

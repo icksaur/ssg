@@ -1,4 +1,4 @@
-#include <ssg/CommandRegistry.h>
+#include <ssg/CommandInvocation.h>
 
 
 #include <algorithm>

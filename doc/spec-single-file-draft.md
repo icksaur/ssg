@@ -389,7 +389,7 @@ Each records a choice the code now depends on.
    so the `revision+1` bump for the draft entry cannot race the worker.
 
 8. **The recovery root stays ephemeral (per-PID); only scratch + archive are
-   stable.** Recovery records (`RecoveryActions`) are in-session undo of
+   stable.** Recovery records (`RecoveryManager`) are in-session undo of
    destructive filesystem ops; they have no cross-restart requirement and no
    inter-process coordination. Making them share a stable root would let
    concurrent instances race each other's records and violate the global budget.

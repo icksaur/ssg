@@ -2,7 +2,7 @@
 
 #include <ssg/open_metrics.h>
 #include <ssg/Workspace.h>
-#include <ssg/RecoveryActions.h>
+#include <ssg/RecoveryManager.h>
 
 #include <chrono>
 #include <filesystem>
@@ -36,7 +36,7 @@ fs::path uniqueRoot() {
 TEST(directUtf8OpenValidatesOnce) {
     auto root = uniqueRoot();
     { std::ofstream{root / "a.txt", std::ios::binary} << "hello\nworld\n"; }
-    auto recovery = ssg::RecoveryActions::create(root / ".recovery");
+    auto recovery = ssg::RecoveryManager::create(root / ".recovery");
     auto workspace = ssg::Workspace::create(root, recovery);
 
     ssg::resetUtf8ValidationCalls();
@@ -52,7 +52,7 @@ TEST(directUtf8OpenValidatesOnce) {
 TEST(freshOpenStateMaterializesTreeOnceToday) {
     auto root = uniqueRoot();
     { std::ofstream{root / "a.txt", std::ios::binary} << "hello\nworld\n"; }
-    auto recovery = ssg::RecoveryActions::create(root / ".recovery");
+    auto recovery = ssg::RecoveryManager::create(root / ".recovery");
     auto workspace = ssg::Workspace::create(root, recovery);
     auto opened = workspace.openFile("a.txt");
     ASSERT_TRUE(opened.accepted());

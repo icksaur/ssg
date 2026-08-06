@@ -3,7 +3,7 @@
 #include <ssg/EditorRuntime.h>
 #include <ssg/FileCommands.h>
 #include <ssg/PromptSurface.h>
-#include <ssg/RecoveryActions.h>
+#include <ssg/RecoveryManager.h>
 #include <ssg/platform_files.h>
 #include <ssg/Workspace.h>
 
@@ -234,7 +234,7 @@ TEST(rollingBackARenameLeavesNothingAtTheNewName) {
     fs::create_directories(recoveryRoot);
     writeOutOfBand(directory.path() / "before.txt", "payload\n");
 
-    auto recovery = ssg::RecoveryActions::create(recoveryRoot);
+    auto recovery = ssg::RecoveryManager::create(recoveryRoot);
     auto workspace = ssg::Workspace::create(directory.path(), recovery);
     const auto opened = workspace.openFile("before.txt");
     ASSERT_TRUE(opened.accepted());

@@ -1,5 +1,5 @@
 #include "ssg/platform_files.h"
-#include "ssg/RecoveryActions.h"
+#include "ssg/RecoveryManager.h"
 #include "ssg/ScratchStore.h"
 #include "ssg/ScratchJournal.h"
 #include "test_helpers.h"
@@ -224,7 +224,7 @@ TEST(dirtyCloseIsDurableBeforeRemovalAndRestoresExactDocument) {
     std::filesystem::create_directories(workspace);
     auto scratch = ssg::ScratchStore::create(
         temporary.path() / "scratch", workspace, scratchConfig());
-    auto actions = ssg::RecoveryActions::create(
+    auto actions = ssg::RecoveryManager::create(
         temporary.path() / "recovery", recoveryConfig());
     const ssg::JournalDocument expected{
         ssg::JournalDocumentKey::untitled(fixedUntitledId()),
@@ -241,7 +241,7 @@ TEST(dirtyCloseIsDurableBeforeRemovalAndRestoresExactDocument) {
     ASSERT_EQ(scratch.recovery().documents,
               std::vector<ssg::JournalDocument>{expected});
 
-    actions = ssg::RecoveryActions::create(
+    actions = ssg::RecoveryManager::create(
         temporary.path() / "recovery", recoveryConfig());
     const auto reconstructedRecords = actions.records();
     ASSERT_EQ(reconstructedRecords.front().document,
@@ -262,7 +262,7 @@ TEST(dirtyCloseDurabilityFailurePreservesDocumentAndPublishesNothing) {
     auto scratch = ssg::ScratchStore::create(
         temporary.path() / "scratch", workspace, scratchConfig(),
         scratchStorage);
-    auto actions = ssg::RecoveryActions::create(
+    auto actions = ssg::RecoveryManager::create(
         temporary.path() / "recovery", recoveryConfig());
     const auto expected = savedDocument("draft.txt", "not durable");
     std::optional<ssg::JournalDocument> document{expected};
@@ -285,7 +285,7 @@ TEST(reloadCompensationSurvivesReconstructionAndRestoresExactDocument) {
     std::optional<ssg::RecoveryRecordId> compensation;
     {
         auto actions =
-            ssg::RecoveryActions::create(recoveryRoot, recoveryConfig());
+            ssg::RecoveryManager::create(recoveryRoot, recoveryConfig());
         const auto reloaded =
             actions.reloadDocument(document, replacement);
         ASSERT_TRUE(reloaded.accepted());
@@ -295,7 +295,7 @@ TEST(reloadCompensationSurvivesReconstructionAndRestoresExactDocument) {
     }
 
     auto reconstructed =
-        ssg::RecoveryActions::create(recoveryRoot, recoveryConfig());
+        ssg::RecoveryManager::create(recoveryRoot, recoveryConfig());
     ASSERT_EQ(reconstructed.records().size(), std::size_t{1});
     ASSERT_TRUE(
         reconstructed.restoreDocument(*compensation, document).accepted());
@@ -311,7 +311,7 @@ TEST(overwriteExistingAndNewFilesRoundTripToFilesystemTruth) {
     const auto beforeExisting = snapshotTree(existing);
     const auto beforeCreated = snapshotTree(created);
     auto actions =
-        ssg::RecoveryActions::create(recoveryRoot, recoveryConfig());
+        ssg::RecoveryManager::create(recoveryRoot, recoveryConfig());
 
     const auto overwritten =
         actions.overwriteFile(existing, bytes("replacement"));
@@ -322,7 +322,7 @@ TEST(overwriteExistingAndNewFilesRoundTripToFilesystemTruth) {
     ASSERT_EQ(readBytes(existing), "replacement");
     ASSERT_EQ(readBytes(created), "new");
     actions =
-        ssg::RecoveryActions::create(recoveryRoot, recoveryConfig());
+        ssg::RecoveryManager::create(recoveryRoot, recoveryConfig());
     ASSERT_TRUE(
         actions.restoreFilesystem(*newFile.compensation).accepted());
     ASSERT_TRUE(
@@ -340,7 +340,7 @@ TEST(renameRoundTripRestoresBothPathsAndSourceIdentity) {
     writeBytes(destination, "destination bytes");
     const auto before = snapshotTree(canonical);
     const auto sourceIdentity = ssg::fileIdentity(source);
-    auto actions = ssg::RecoveryActions::create(
+    auto actions = ssg::RecoveryManager::create(
         temporary.path() / "recovery", recoveryConfig());
 
     const auto renamed = actions.renamePath(source, destination);
@@ -349,7 +349,7 @@ TEST(renameRoundTripRestoresBothPathsAndSourceIdentity) {
     ASSERT_FALSE(std::filesystem::exists(source));
     ASSERT_EQ(readBytes(destination), "source bytes");
     ASSERT_EQ(ssg::fileIdentity(destination), sourceIdentity);
-    actions = ssg::RecoveryActions::create(
+    actions = ssg::RecoveryManager::create(
         temporary.path() / "recovery", recoveryConfig());
     const auto reconstructedRecords = actions.records();
     ASSERT_EQ(reconstructedRecords.front().affectedPaths,
@@ -368,14 +368,14 @@ TEST(deleteTreeRoundTripRestoresBinaryFilesAndEmptyDirectories) {
                 std::string{"a\0b\xff", 4});
     writeBytes(removed / "root.txt", "root");
     const auto before = snapshotTree(removed);
-    auto actions = ssg::RecoveryActions::create(
+    auto actions = ssg::RecoveryManager::create(
         temporary.path() / "recovery", recoveryConfig());
 
     const auto deleted = actions.deletePath(removed);
 
     ASSERT_TRUE(deleted.accepted());
     ASSERT_FALSE(std::filesystem::exists(removed));
-    actions = ssg::RecoveryActions::create(
+    actions = ssg::RecoveryManager::create(
         temporary.path() / "recovery", recoveryConfig());
     ASSERT_TRUE(
         actions.restoreFilesystem(*deleted.compensation).accepted());
@@ -393,7 +393,7 @@ TEST(workspaceReplacementAndCompensationMatchIndependentTreeSnapshots) {
     std::filesystem::create_directories(replacement / "new-empty");
     const auto workspaceBefore = snapshotTree(workspace);
     const auto replacementBefore = snapshotTree(replacement);
-    auto actions = ssg::RecoveryActions::create(
+    auto actions = ssg::RecoveryManager::create(
         temporary.path() / "recovery", recoveryConfig());
 
     const auto replaced =
@@ -402,7 +402,7 @@ TEST(workspaceReplacementAndCompensationMatchIndependentTreeSnapshots) {
     ASSERT_TRUE(replaced.accepted());
     ASSERT_EQ(snapshotTree(workspace), replacementBefore);
     ASSERT_EQ(snapshotTree(replacement), replacementBefore);
-    actions = ssg::RecoveryActions::create(
+    actions = ssg::RecoveryManager::create(
         temporary.path() / "recovery", recoveryConfig());
     ASSERT_TRUE(
         actions.restoreFilesystem(*replaced.compensation).accepted());
@@ -415,7 +415,7 @@ TEST(recordAndArtifactInstallationCompleteBeforeCanonicalMutation) {
     const auto target = temporary.path() / "canonical" / "document";
     writeBytes(target, "old");
     InjectedRecoveryFailures injection;
-    auto actions = ssg::RecoveryActions::create(
+    auto actions = ssg::RecoveryManager::create(
         temporary.path() / "recovery", recoveryConfig(), injection);
 
     const auto overwritten = actions.overwriteFile(target, bytes("new"));
@@ -441,7 +441,7 @@ TEST(preparationFailurePreservesCanonicalStateAndExistingRecords) {
     writeBytes(first, "first old");
     writeBytes(second, "second old");
     InjectedRecoveryFailures injection;
-    auto actions = ssg::RecoveryActions::create(
+    auto actions = ssg::RecoveryManager::create(
         temporary.path() / "recovery", recoveryConfig(1), injection);
     const auto retained = actions.overwriteFile(first, bytes("first new"));
     ASSERT_TRUE(retained.accepted());
@@ -466,7 +466,7 @@ TEST(publicationFailureAfterMutationRollsBackCanonicalState) {
     const auto before = snapshotTree(target);
     InjectedRecoveryFailures injection;
     injection.fail(ssg::RecoveryStep::PublishRecord);
-    auto actions = ssg::RecoveryActions::create(
+    auto actions = ssg::RecoveryManager::create(
         temporary.path() / "recovery", recoveryConfig(), injection);
 
     const auto result = actions.overwriteFile(target, bytes("new"));
@@ -491,7 +491,7 @@ TEST(eachActionMutationFailureRollsBackAndDiscardsItsRecord) {
             temporary.path() / "close-scratch", workspace, scratchConfig());
         InjectedRecoveryFailures injection;
         injection.fail(ssg::RecoveryStep::MutateDocument);
-        auto actions = ssg::RecoveryActions::create(
+        auto actions = ssg::RecoveryManager::create(
             temporary.path() / "close-recovery", recoveryConfig(), injection);
         const auto expected = savedDocument("close.txt", "dirty");
         std::optional<ssg::JournalDocument> document{expected};
@@ -510,7 +510,7 @@ TEST(eachActionMutationFailureRollsBackAndDiscardsItsRecord) {
     {
         InjectedRecoveryFailures injection;
         injection.fail(ssg::RecoveryStep::MutateDocument);
-        auto actions = ssg::RecoveryActions::create(
+        auto actions = ssg::RecoveryManager::create(
             temporary.path() / "reload-recovery", recoveryConfig(), injection);
         const auto expected = savedDocument("reload.txt", "dirty");
         std::optional<ssg::JournalDocument> document{expected};
@@ -531,7 +531,7 @@ TEST(eachActionMutationFailureRollsBackAndDiscardsItsRecord) {
         [&](std::string_view name, const auto& invoke) {
             InjectedRecoveryFailures injection;
             injection.fail(ssg::RecoveryStep::MutateFilesystem);
-            auto actions = ssg::RecoveryActions::create(
+            auto actions = ssg::RecoveryManager::create(
                 temporary.path() / std::string{name}, recoveryConfig(),
                 injection);
             const auto result = invoke(actions);
@@ -548,7 +548,7 @@ TEST(eachActionMutationFailureRollsBackAndDiscardsItsRecord) {
     writeBytes(overwrite, "old");
     const auto overwriteBefore = snapshotTree(overwrite);
     assertFilesystemActionFailure(
-        "overwrite-recovery", [&](ssg::RecoveryActions& actions) {
+        "overwrite-recovery", [&](ssg::RecoveryManager& actions) {
             return actions.overwriteFile(overwrite, bytes("new"));
         });
     ASSERT_EQ(snapshotTree(overwrite), overwriteBefore);
@@ -560,7 +560,7 @@ TEST(eachActionMutationFailureRollsBackAndDiscardsItsRecord) {
     writeBytes(renameDestination, "destination");
     const auto renameBefore = snapshotTree(temporary.path() / "canonical");
     assertFilesystemActionFailure(
-        "rename-recovery", [&](ssg::RecoveryActions& actions) {
+        "rename-recovery", [&](ssg::RecoveryManager& actions) {
             return actions.renamePath(renameSource, renameDestination);
         });
     ASSERT_EQ(snapshotTree(temporary.path() / "canonical"), renameBefore);
@@ -569,7 +569,7 @@ TEST(eachActionMutationFailureRollsBackAndDiscardsItsRecord) {
     writeBytes(removed / "nested", "remove");
     const auto removedBefore = snapshotTree(removed);
     assertFilesystemActionFailure(
-        "delete-recovery", [&](ssg::RecoveryActions& actions) {
+        "delete-recovery", [&](ssg::RecoveryManager& actions) {
             return actions.deletePath(removed);
         });
     ASSERT_EQ(snapshotTree(removed), removedBefore);
@@ -584,7 +584,7 @@ TEST(partialWorkspaceMutationFailureRollsBackToExactTree) {
     const auto before = snapshotTree(workspace);
     InjectedRecoveryFailures injection;
     injection.fail(ssg::RecoveryStep::MutateFilesystem, 1);
-    auto actions = ssg::RecoveryActions::create(
+    auto actions = ssg::RecoveryManager::create(
         temporary.path() / "recovery", recoveryConfig(), injection);
 
     const auto replaced =
@@ -608,7 +608,7 @@ TEST(actionAndRollbackFailureRetainsRecordForSuccessfulRetry) {
     InjectedRecoveryFailures injection;
     injection.fail(ssg::RecoveryStep::MutateFilesystem, 1);
     injection.fail(ssg::RecoveryStep::RollbackFilesystem);
-    auto actions = ssg::RecoveryActions::create(
+    auto actions = ssg::RecoveryManager::create(
         temporary.path() / "recovery", recoveryConfig(), injection);
 
     const auto replaced =
@@ -638,7 +638,7 @@ TEST(reconstructionDiscardsPersistedInProgressDocumentRecord) {
         InjectedRecoveryFailures injection;
         injection.fail(ssg::RecoveryStep::MutateDocument);
         injection.fail(ssg::RecoveryStep::RollbackDocument);
-        auto actions = ssg::RecoveryActions::create(
+        auto actions = ssg::RecoveryManager::create(
             recoveryRoot, recoveryConfig(), injection);
 
         const auto result = actions.reloadDocument(
@@ -653,7 +653,7 @@ TEST(reconstructionDiscardsPersistedInProgressDocumentRecord) {
     }
 
     auto reconstructed =
-        ssg::RecoveryActions::create(recoveryRoot, recoveryConfig());
+        ssg::RecoveryManager::create(recoveryRoot, recoveryConfig());
     ASSERT_TRUE(reconstructed.records().empty());
     ASSERT_TRUE(std::filesystem::is_empty(recoveryRoot));
 }
@@ -670,7 +670,7 @@ TEST(reconstructionAutoRollsBackPersistedInProgressFilesystemRecord) {
         InjectedRecoveryFailures injection;
         injection.fail(ssg::RecoveryStep::MutateFilesystem, 1);
         injection.fail(ssg::RecoveryStep::RollbackFilesystem);
-        auto actions = ssg::RecoveryActions::create(
+        auto actions = ssg::RecoveryManager::create(
             recoveryRoot, recoveryConfig(), injection);
 
         const auto result =
@@ -685,7 +685,7 @@ TEST(reconstructionAutoRollsBackPersistedInProgressFilesystemRecord) {
     }
 
     auto reconstructed =
-        ssg::RecoveryActions::create(recoveryRoot, recoveryConfig());
+        ssg::RecoveryManager::create(recoveryRoot, recoveryConfig());
     ASSERT_EQ(snapshotTree(workspace), before);
     ASSERT_TRUE(reconstructed.records().empty());
     ASSERT_TRUE(std::filesystem::is_empty(recoveryRoot));
@@ -700,7 +700,7 @@ TEST(reconstructionDiscardsPartiallyRemovedRecordDirectory) {
     bool reconstructed = false;
     try {
         auto actions =
-            ssg::RecoveryActions::create(recoveryRoot, recoveryConfig());
+            ssg::RecoveryManager::create(recoveryRoot, recoveryConfig());
         reconstructed = actions.records().empty();
     } catch (...) {
     }
@@ -723,7 +723,7 @@ TEST(renameFailedPublicationRollbackRemainsSafeAfterReconstruction) {
         InjectedRecoveryFailures injection;
         injection.fail(ssg::RecoveryStep::PublishRecord, 1);
         injection.fail(ssg::RecoveryStep::CleanupRecord);
-        auto actions = ssg::RecoveryActions::create(
+        auto actions = ssg::RecoveryManager::create(
             recoveryRoot, recoveryConfig(), injection);
 
         const auto result = actions.renamePath(source, destination);
@@ -738,7 +738,7 @@ TEST(renameFailedPublicationRollbackRemainsSafeAfterReconstruction) {
     }
 
     auto reconstructed =
-        ssg::RecoveryActions::create(recoveryRoot, recoveryConfig());
+        ssg::RecoveryManager::create(recoveryRoot, recoveryConfig());
     ASSERT_TRUE(reconstructed.records().empty());
     ASSERT_EQ(snapshotTree(canonical), before);
     ASSERT_TRUE(std::filesystem::exists(source));
@@ -753,7 +753,7 @@ TEST(restorationFailureKeepsRecordAndRetryRestoresExactTree) {
     writeBytes(removed / "nested.txt", "recover");
     const auto before = snapshotTree(removed);
     InjectedRecoveryFailures injection;
-    auto actions = ssg::RecoveryActions::create(
+    auto actions = ssg::RecoveryManager::create(
         temporary.path() / "recovery", recoveryConfig(), injection);
     const auto deleted = actions.deletePath(removed);
     ASSERT_TRUE(deleted.accepted());
@@ -783,7 +783,7 @@ TEST(renamePartialRestoreRetryPreservesSourceIdentity) {
     const auto before = snapshotTree(temporary.path() / "canonical");
     const auto sourceIdentity = ssg::fileIdentity(source);
     InjectedRecoveryFailures injection;
-    auto actions = ssg::RecoveryActions::create(
+    auto actions = ssg::RecoveryManager::create(
         temporary.path() / "recovery", recoveryConfig(), injection);
     const auto renamed = actions.renamePath(source, destination);
     ASSERT_TRUE(renamed.accepted());
@@ -819,7 +819,7 @@ TEST(renameCompletedRestoreRetryPreservesSourceIdentity) {
     const auto before = snapshotTree(temporary.path() / "canonical");
     const auto sourceIdentity = ssg::fileIdentity(source);
     InjectedRecoveryFailures injection;
-    auto actions = ssg::RecoveryActions::create(
+    auto actions = ssg::RecoveryManager::create(
         temporary.path() / "recovery", recoveryConfig(), injection);
     const auto renamed = actions.renamePath(source, destination);
     ASSERT_TRUE(renamed.accepted());
@@ -846,7 +846,7 @@ TEST(cleanupFailureKeepsRestoredRecordRetryable) {
     const auto target = temporary.path() / "canonical" / "document";
     writeBytes(target, "old");
     InjectedRecoveryFailures injection;
-    auto actions = ssg::RecoveryActions::create(
+    auto actions = ssg::RecoveryManager::create(
         temporary.path() / "recovery", recoveryConfig(), injection);
     const auto overwritten = actions.overwriteFile(target, bytes("new"));
     ASSERT_TRUE(overwritten.accepted());
@@ -876,7 +876,7 @@ TEST(countBudgetEvictsOldestOnlyAfterNewRecordIsInstalled) {
     writeBytes(a, "a0");
     writeBytes(b, "b0");
     writeBytes(c, "c0");
-    auto actions = ssg::RecoveryActions::create(
+    auto actions = ssg::RecoveryManager::create(
         temporary.path() / "recovery", recoveryConfig(2));
 
     const auto first = actions.overwriteFile(a, bytes("a1"));
@@ -906,7 +906,7 @@ TEST(byteBudgetEvictsOldestWhenNewRecordFitsAfterEviction) {
     writeBytes(b, original);
     writeBytes(c, original);
     auto actions =
-        ssg::RecoveryActions::create(recoveryRoot, recoveryConfig());
+        ssg::RecoveryManager::create(recoveryRoot, recoveryConfig());
     const auto first = actions.overwriteFile(a, bytes("new"));
     const auto second = actions.overwriteFile(b, bytes("new"));
     ASSERT_TRUE(first.accepted());
@@ -914,7 +914,7 @@ TEST(byteBudgetEvictsOldestWhenNewRecordFitsAfterEviction) {
     const auto initialRecords = actions.records();
     const auto twoRecordBudget =
         initialRecords[0].storedBytes + initialRecords[1].storedBytes;
-    actions = ssg::RecoveryActions::create(
+    actions = ssg::RecoveryManager::create(
         recoveryRoot, recoveryConfig(8, twoRecordBudget));
 
     const auto third = actions.overwriteFile(c, bytes("new"));
@@ -934,7 +934,7 @@ TEST(byteBudgetRejectsBeforeMutatingWhenNewestRecordCannotFit) {
     const auto target = temporary.path() / "canonical" / "large";
     const std::string original(4096, 'o');
     writeBytes(target, original);
-    auto actions = ssg::RecoveryActions::create(
+    auto actions = ssg::RecoveryManager::create(
         temporary.path() / "recovery", recoveryConfig(8, 32));
 
     const auto rejected = actions.overwriteFile(target, bytes("new"));
@@ -951,7 +951,7 @@ TEST(compensationRemovesOnlyItsOwnRecordAndArtifacts) {
     const auto secondPath = temporary.path() / "canonical" / "second";
     writeBytes(firstPath, "first old");
     writeBytes(secondPath, "second old");
-    auto actions = ssg::RecoveryActions::create(
+    auto actions = ssg::RecoveryManager::create(
         temporary.path() / "recovery", recoveryConfig());
     const auto first =
         actions.overwriteFile(firstPath, bytes("first new"));
@@ -974,7 +974,7 @@ TEST(recordKindMismatchesAreTypedAndNonDestructive) {
     TemporaryDirectory temporary;
     const auto target = temporary.path() / "canonical" / "file";
     writeBytes(target, "old");
-    auto actions = ssg::RecoveryActions::create(
+    auto actions = ssg::RecoveryManager::create(
         temporary.path() / "recovery", recoveryConfig());
     const auto overwritten = actions.overwriteFile(target, bytes("new"));
     std::optional<ssg::JournalDocument> document{

@@ -159,7 +159,7 @@ The contract:
   that is half-registered.
 
 **What a read may keep.** A shared lock alone is not enough, because catalog
-reads hand out references into catalog storage — `CommandRegistry::find` already
+reads hand out references into catalog storage — `CommandCatalog::find` already
 returns a `CommandRegistration const*`, and a spec's capabilities are a
 `std::span`. If storage moved, a borrowed pointer taken under a lock would
 dangle the moment a concurrent `add` reallocated, and the shared lock would have
@@ -248,7 +248,7 @@ Consequences:
 - `CompiledKeymap` resolves names to handles when it is built. It is already
   rebuilt when the keymap changes; it must **also** be rebuilt when the catalog
   changes, or a binding for a newly registered command would stay unresolved.
-- A binding naming an unregistered command resolves to a `CommandRef` carrying
+- A binding naming an unregistered command resolves to a `CommandName` carrying
   the name with no handle. Dispatch rejects it as `UnknownCommand` **and can say
   which command** — the behaviour already delivered for uncatalogued bindings.
 - The curated keymap is checked against the catalog after core registration.
@@ -484,6 +484,6 @@ declaration and its handler agreed.
 
 **Handles are catalog-relative.** `commandHandle(id)` could not survive: it
 resolved a name against the one global table, and there is no longer one.
-`CommandRef` always carries the name and carries a handle only when someone
+`CommandName` always carries the name and carries a handle only when someone
 holding a catalog resolved it; `CompiledKeymap` takes the catalog and does that
 once per binding, rebuilding when the catalog's revision changes.
