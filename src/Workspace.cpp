@@ -303,14 +303,14 @@ public:
         std::vector<std::string> recent;
     };
 
-    Impl(std::filesystem::path canonicalRoot, RecoveryActions& actions,
+    Impl(std::filesystem::path canonicalRoot, RecoveryManager& actions,
          std::filesystem::path archiveRoot)
         : root(std::move(canonicalRoot)),
           recovery(actions),
           archive(std::move(archiveRoot)) {}
 
     std::filesystem::path root;
-    RecoveryActions& recovery;
+    RecoveryManager& recovery;
     // The durable home for deleted files, separate from `recovery` because that
     // is a bounded evicting undo ring (see FileArchive.h).
     FileArchive archive;
@@ -523,7 +523,7 @@ Workspace::Workspace(std::unique_ptr<Impl> implementation) noexcept
     : impl_(std::move(implementation)) {}
 
 Workspace Workspace::create(const std::filesystem::path& root,
-                            RecoveryActions& recovery,
+                            RecoveryManager& recovery,
                             std::optional<std::filesystem::path> archiveRoot) {
     std::error_code code;
     const auto canonical = std::filesystem::canonical(root, code);

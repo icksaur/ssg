@@ -68,7 +68,7 @@ TEST(pathCommandsOpenNonModalPathPrompts) {
 TEST(localDropRequiresHostCapabilityAndSanitizesLabel) {
     TemporaryDirectory temporary;
     auto recovery =
-        ssg::RecoveryActions::create(temporary.path() / ".recovery");
+        ssg::RecoveryManager::create(temporary.path() / ".recovery");
     auto workspace = ssg::Workspace::create(temporary.path(), recovery);
     const std::array<std::uint8_t, 5> bytes{{'h', 'i', '\r', '\n', '!'}};
     const ssg::InvocationPrincipal local{
@@ -99,7 +99,7 @@ TEST(localDropRequiresHostCapabilityAndSanitizesLabel) {
 TEST(binaryAndInvalidTextDropsOpenReadOnlyWithoutPathAuthority) {
     TemporaryDirectory temporary;
     auto recovery =
-        ssg::RecoveryActions::create(temporary.path() / ".recovery");
+        ssg::RecoveryManager::create(temporary.path() / ".recovery");
     auto workspace = ssg::Workspace::create(temporary.path(), recovery);
     const ssg::InvocationPrincipal local{
         ssg::ClientId{1}, ssg::InvocationOrigin::InProcess,
@@ -130,7 +130,7 @@ TEST(saveAllAttemptsEveryDocumentAndReportsFailures) {
     std::ofstream(temporary.path() / "one.txt") << "one";
     std::ofstream(temporary.path() / "two.txt") << "two";
     auto recovery =
-        ssg::RecoveryActions::create(temporary.path() / ".recovery");
+        ssg::RecoveryManager::create(temporary.path() / ".recovery");
     auto workspace = ssg::Workspace::create(temporary.path(), recovery);
     const auto one = *workspace.openFile("one.txt").document;
     const auto two = *workspace.openFile("two.txt").document;
@@ -159,7 +159,7 @@ TEST(saveAllIgnoresUntitledDocuments) {
     TemporaryDirectory temporary;
     std::ofstream(temporary.path() / "saved.txt") << "saved";
     auto recovery =
-        ssg::RecoveryActions::create(temporary.path() / ".recovery");
+        ssg::RecoveryManager::create(temporary.path() / ".recovery");
     auto workspace = ssg::Workspace::create(temporary.path(), recovery);
     const auto saved = *workspace.openFile("saved.txt").document;
     ASSERT_TRUE(workspace.newDocument().accepted());

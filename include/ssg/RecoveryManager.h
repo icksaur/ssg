@@ -107,25 +107,25 @@ public:
 
     // A repeated step denotes another independently fallible part of the same
     // action. Throwing injects failure before that part begins.
-    // The injector must outlive RecoveryActions.
+    // The injector must outlive RecoveryManager.
     virtual void beforeStep(RecoveryStep step) = 0;
 };
 
-class RecoveryActions {
+class RecoveryManager {
 public:
-    [[nodiscard]] static RecoveryActions create(
+    [[nodiscard]] static RecoveryManager create(
         const std::filesystem::path& recoveryRoot,
         RecoveryConfig config = {});
-    [[nodiscard]] static RecoveryActions create(
+    [[nodiscard]] static RecoveryManager create(
         const std::filesystem::path& recoveryRoot,
         RecoveryConfig config,
         RecoveryFaultInjector& faultInjector);
 
-    ~RecoveryActions();
-    RecoveryActions(RecoveryActions&&) noexcept;
-    RecoveryActions& operator=(RecoveryActions&&) noexcept;
-    RecoveryActions(const RecoveryActions&) = delete;
-    RecoveryActions& operator=(const RecoveryActions&) = delete;
+    ~RecoveryManager();
+    RecoveryManager(RecoveryManager&&) noexcept;
+    RecoveryManager& operator=(RecoveryManager&&) noexcept;
+    RecoveryManager(const RecoveryManager&) = delete;
+    RecoveryManager& operator=(const RecoveryManager&) = delete;
 
     [[nodiscard]] std::vector<RecoveryRecord> records() const;
 
@@ -168,7 +168,7 @@ public:
 
 private:
     class Impl;
-    explicit RecoveryActions(std::unique_ptr<Impl> implementation) noexcept;
+    explicit RecoveryManager(std::unique_ptr<Impl> implementation) noexcept;
 
     std::unique_ptr<Impl> impl_;
 };

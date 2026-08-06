@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ssg/RecoveryActions.h"
+#include "ssg/RecoveryManager.h"
 #include "ssg/Workspace.h"
 
 #include <array>

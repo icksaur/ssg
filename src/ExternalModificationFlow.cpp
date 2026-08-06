@@ -105,7 +105,7 @@ public:
         std::optional<std::string> diskContent;
     };
 
-    Impl(RecoveryActions& recovery, DiffModel& diff)
+    Impl(RecoveryManager& recovery, DiffModel& diff)
         : recovery_{recovery}, diff_{diff} {}
 
     ExternalModificationResult processEvent(
@@ -291,14 +291,14 @@ private:
         revision_ = Revision{revision_.value() + 1};
     }
 
-    RecoveryActions& recovery_;
+    RecoveryManager& recovery_;
     DiffModel& diff_;
     std::uint64_t lastWatcherSequence_ = 0;
     Revision revision_{0};
     std::vector<PendingChange> pending_;
 };
 
-ExternalModificationFlow::ExternalModificationFlow(RecoveryActions& recovery,
+ExternalModificationFlow::ExternalModificationFlow(RecoveryManager& recovery,
                                                    DiffModel& diff)
     : impl_{std::make_unique<Impl>(recovery, diff)} {}
 

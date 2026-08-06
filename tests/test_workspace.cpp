@@ -44,7 +44,7 @@ TEST(openIsByteExactAndPreventsNormalizedDuplicates) {
     TemporaryDirectory temporary;
     writeBytes(temporary.path() / "a.txt", "\xef\xbb\xbfone\r\ntwo\r");
     auto recovery =
-        ssg::RecoveryActions::create(temporary.path() / ".recovery");
+        ssg::RecoveryManager::create(temporary.path() / ".recovery");
     auto workspace = ssg::Workspace::create(temporary.path(), recovery);
 
     const auto first = workspace.openFile("a.txt");
@@ -69,7 +69,7 @@ TEST(pathsCannotEscapeWorkspaceBeforeMutation) {
     std::filesystem::create_directory_symlink(
         outside.path(), temporary.path() / "escape", symlinkError);
     auto recovery =
-        ssg::RecoveryActions::create(temporary.path() / ".recovery");
+        ssg::RecoveryManager::create(temporary.path() / ".recovery");
     auto workspace = ssg::Workspace::create(temporary.path(), recovery);
 
     ASSERT_EQ(workspace.openFile("../secret.txt").error,
@@ -86,7 +86,7 @@ TEST(pathsCannotEscapeWorkspaceBeforeMutation) {
 TEST(untitledIdentityChangesOnlyAfterSuccessfulSave) {
     TemporaryDirectory temporary;
     auto recovery =
-        ssg::RecoveryActions::create(temporary.path() / ".recovery");
+        ssg::RecoveryManager::create(temporary.path() / ".recovery");
     auto workspace = ssg::Workspace::create(temporary.path(), recovery);
     const auto created = workspace.newDocument();
     const auto id = *created.document;
@@ -120,7 +120,7 @@ TEST(untitledIdentityChangesOnlyAfterSuccessfulSave) {
 TEST(recentFilesAreBoundedMruAndDropMissingEntries) {
     TemporaryDirectory temporary;
     auto recovery =
-        ssg::RecoveryActions::create(temporary.path() / ".recovery");
+        ssg::RecoveryManager::create(temporary.path() / ".recovery");
     auto workspace = ssg::Workspace::create(temporary.path(), recovery);
     for (int index = 0; index < 34; ++index) {
         const auto name = std::to_string(index) + ".txt";
@@ -143,7 +143,7 @@ TEST(renameDeleteAndWorkspaceReplaceAreCompensatable) {
     TemporaryDirectory second;
     writeBytes(first.path() / "old.txt", "old");
     writeBytes(second.path() / "other.txt", "other");
-    auto recovery = ssg::RecoveryActions::create(first.path() / ".recovery");
+    auto recovery = ssg::RecoveryManager::create(first.path() / ".recovery");
     auto workspace = ssg::Workspace::create(first.path(), recovery);
     const auto opened = workspace.openFile("old.txt");
 
@@ -172,7 +172,7 @@ TEST(saveOverwriteAndReloadCompensationsRestoreGroundTruth) {
     TemporaryDirectory temporary;
     writeBytes(temporary.path() / "file.txt", "disk");
     auto recovery =
-        ssg::RecoveryActions::create(temporary.path() / ".recovery");
+        ssg::RecoveryManager::create(temporary.path() / ".recovery");
     auto workspace = ssg::Workspace::create(temporary.path(), recovery);
     const auto id = *workspace.openFile("file.txt").document;
     ASSERT_TRUE(workspace
@@ -203,7 +203,7 @@ TEST(saveOverwriteAndReloadCompensationsRestoreGroundTruth) {
 TEST(newDirectoryRejectsEscapeAndCreatesOnlyInsideRoot) {
     TemporaryDirectory temporary;
     auto recovery =
-        ssg::RecoveryActions::create(temporary.path() / ".recovery");
+        ssg::RecoveryManager::create(temporary.path() / ".recovery");
     auto workspace = ssg::Workspace::create(temporary.path(), recovery);
     ASSERT_TRUE(workspace.newDirectory("inside").accepted());
     ASSERT_TRUE(std::filesystem::is_directory(temporary.path() / "inside"));
@@ -216,7 +216,7 @@ TEST(emptyAndMixedEndingEditsSaveWithExactMetadata) {
     writeBytes(temporary.path() / "empty.txt", "disk");
     writeBytes(temporary.path() / "mixed.txt", "a\r\nb\nc");
     auto recovery =
-        ssg::RecoveryActions::create(temporary.path() / ".recovery");
+        ssg::RecoveryManager::create(temporary.path() / ".recovery");
     auto workspace = ssg::Workspace::create(temporary.path(), recovery);
 
     const auto empty = *workspace.openFile("empty.txt").document;
@@ -240,7 +240,7 @@ TEST(emptyAndMixedEndingEditsSaveWithExactMetadata) {
 TEST(tryDocumentReturnsNullForAbsentId) {
     TemporaryDirectory temporary;
     auto recovery =
-        ssg::RecoveryActions::create(temporary.path() / ".recovery");
+        ssg::RecoveryManager::create(temporary.path() / ".recovery");
     auto workspace = ssg::Workspace::create(temporary.path(), recovery);
     ASSERT_EQ(workspace.tryDocument(ssg::FileDocumentId{777}), nullptr);
 
@@ -255,7 +255,7 @@ TEST(removeDocumentErasesOnlyInMemoryState) {
     TemporaryDirectory temporary;
     writeBytes(temporary.path() / "keep.txt", "keep me");
     auto recovery =
-        ssg::RecoveryActions::create(temporary.path() / ".recovery");
+        ssg::RecoveryManager::create(temporary.path() / ".recovery");
     auto workspace = ssg::Workspace::create(temporary.path(), recovery);
     const auto opened = workspace.openFile("keep.txt");
     ASSERT_TRUE(opened.accepted());
@@ -273,7 +273,7 @@ TEST(openCapturesDiskBaselineAndUntitledHasNone) {
     TemporaryDirectory temporary;
     writeBytes(temporary.path() / "note.txt", "hello world\n");
     auto recovery =
-        ssg::RecoveryActions::create(temporary.path() / ".recovery");
+        ssg::RecoveryManager::create(temporary.path() / ".recovery");
     auto workspace = ssg::Workspace::create(temporary.path(), recovery);
 
     const auto opened = workspace.openFile("note.txt");
@@ -295,7 +295,7 @@ TEST(openCapturesDiskBaselineAndUntitledHasNone) {
 TEST(saveAsCapturesBaselineForWrittenBytes) {
     TemporaryDirectory temporary;
     auto recovery =
-        ssg::RecoveryActions::create(temporary.path() / ".recovery");
+        ssg::RecoveryManager::create(temporary.path() / ".recovery");
     auto workspace = ssg::Workspace::create(temporary.path(), recovery);
 
     // A fresh untitled buffer starts with no baseline; saving it to disk
@@ -319,7 +319,7 @@ TEST(reloadRefreshesBaselineFromDisk) {
     TemporaryDirectory temporary;
     writeBytes(temporary.path() / "live.txt", "first\n");
     auto recovery =
-        ssg::RecoveryActions::create(temporary.path() / ".recovery");
+        ssg::RecoveryManager::create(temporary.path() / ".recovery");
     auto workspace = ssg::Workspace::create(temporary.path(), recovery);
 
     const auto opened = workspace.openFile("live.txt");
@@ -341,7 +341,7 @@ TEST(undoingReloadRestoresThePreReloadBaseline) {
     TemporaryDirectory temporary;
     writeBytes(temporary.path() / "live.txt", "original\n");
     auto recovery =
-        ssg::RecoveryActions::create(temporary.path() / ".recovery");
+        ssg::RecoveryManager::create(temporary.path() / ".recovery");
     auto workspace = ssg::Workspace::create(temporary.path(), recovery);
 
     const auto opened = workspace.openFile("live.txt");

@@ -138,7 +138,7 @@ struct EditorRuntime::Impl final : CommandServices,
     std::filesystem::path scratchRoot;
     std::filesystem::path recoveryRoot;
     std::filesystem::path archiveRoot;
-    RecoveryActions recovery;
+    RecoveryManager recovery;
     ScratchStore scratch;
     Workspace workspace;
     SelectionViewState selection;
