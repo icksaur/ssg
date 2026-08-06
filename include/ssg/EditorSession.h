@@ -17,7 +17,7 @@ struct ClientCommand {
     // The command to invoke, named however the caller most cheaply can: a name
     // at the protocol, Lua and palette boundaries, a handle on the keystroke
     // path.  One field, so a dispatch cannot carry two different commands.
-    CommandRef id;
+    CommandName id;
     Revision baseRevision;
     std::any payload;
 };

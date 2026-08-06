@@ -918,7 +918,7 @@ int main(int argc, char** argv) {
     };
     // The keystroke path's dispatch: the command is already identified, so no
     // name is constructed, hashed or compared.
-    auto dispatchHandle = [&](ssg::CommandRef const& command,
+    auto dispatchHandle = [&](ssg::CommandName const& command,
                               std::any payload = {}) {
         (void)runtime.dispatch(
             client, {command, runtime.revision(), std::move(payload)});
@@ -999,15 +999,15 @@ int main(int argc, char** argv) {
     // commands that open a picker.  Both are resolved to handles once, so the
     // keystroke path compares integers instead of command names.
     struct InterceptHandles {
-        ssg::CommandRef promptSubmit{"prompt.submit"};
-        ssg::CommandRef promptCancel{"prompt.cancel"};
-        ssg::CommandRef promptNext{"prompt.next"};
-        ssg::CommandRef promptPrevious{"prompt.previous"};
-        ssg::CommandRef paletteNext{"palette.next"};
-        ssg::CommandRef palettePrevious{"palette.previous"};
-        ssg::CommandRef paletteClose{"palette.close"};
-        ssg::CommandRef clipboardPaste{"clipboard.paste"};
-        std::vector<ssg::CommandRef> pickerOpeners;
+        ssg::CommandName promptSubmit{"prompt.submit"};
+        ssg::CommandName promptCancel{"prompt.cancel"};
+        ssg::CommandName promptNext{"prompt.next"};
+        ssg::CommandName promptPrevious{"prompt.previous"};
+        ssg::CommandName paletteNext{"palette.next"};
+        ssg::CommandName palettePrevious{"palette.previous"};
+        ssg::CommandName paletteClose{"palette.close"};
+        ssg::CommandName clipboardPaste{"clipboard.paste"};
+        std::vector<ssg::CommandName> pickerOpeners;
     };
     InterceptHandles const intercept = [] {
         InterceptHandles handles;
@@ -1016,7 +1016,7 @@ int main(int argc, char** argv) {
         }
         return handles;
     }();
-    auto dispatchResolved = [&](ssg::CommandRef const& command) {
+    auto dispatchResolved = [&](ssg::CommandName const& command) {
         if (pickerOpen && focus == ssg::FocusTarget::Prompt) {
             if (command == intercept.promptSubmit) {
                 submitSelectedCandidate();

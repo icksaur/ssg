@@ -31,7 +31,7 @@ CompiledKeymap::CompiledKeymap(KeymapViewState const& keymap,
         // not have -- keymap.bind accepts any non-empty id -- and that name is
         // what the resulting rejection must report, so the ref keeps it either
         // way.
-        entry.command = CommandRef{binding.commandId,
+        entry.command = CommandName{binding.commandId,
                                    catalog.handleFor(binding.commandId)};
         entry.context = compileContext(binding.context);
         entry.sequence.reserve(binding.sequence.size());
