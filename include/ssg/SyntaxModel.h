@@ -399,6 +399,21 @@ struct SyntaxAcceptResult {
     }
 };
 
+// The outcome of the synchronous SyntaxModel::parse convenience: the request
+// refusal (if any), the accept outcome (usually None on one thread, but a
+// self-cancelling parser yields Cancelled and a mismatched-revision output
+// yields MalformedOutput), and whether the parse fell back to plain text.
+struct SyntaxParseResult {
+    SyntaxRequestError requestError = SyntaxRequestError::None;
+    SyntaxAcceptError acceptError = SyntaxAcceptError::None;
+    bool usedFallback = false;
+
+    [[nodiscard]] bool accepted() const noexcept {
+        return requestError == SyntaxRequestError::None &&
+               acceptError == SyntaxAcceptError::None;
+    }
+};
+
 class SyntaxModel {
 public:
     explicit SyntaxModel(std::shared_ptr<SyntaxParser> parser = nullptr,
@@ -408,6 +423,16 @@ public:
         return parser_ != nullptr;
     }
     [[nodiscard]] bool hasGrammar(const LanguageId& language) const noexcept;
+
+    // Parse `text` and adopt the result, driving request -> run -> accept inline
+    // on the CALLING thread. The convenience for the common synchronous case: it
+    // cannot be called in the wrong order and needs no separate cancel. The
+    // three-call API below remains for the off-thread seam, where run() executes
+    // on a worker while the model is used on the main thread.
+    [[nodiscard]] SyntaxParseResult parse(
+        Revision revision, LanguageId language, std::string text,
+        std::vector<SyntaxEdit> edits = {});
+
     [[nodiscard]] SyntaxParseRequestResult request(
         Revision revision, LanguageId language, std::string text,
         std::vector<SyntaxEdit> edits = {});

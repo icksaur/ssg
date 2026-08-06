@@ -1824,11 +1824,7 @@ void EditorRuntime::Impl::refreshSyntax() {
         }
     }
     ++syntaxRunCount;
-    auto request = model.request(revision, std::move(language), std::move(text));
-    if (request.accepted()) {
-        auto output = model.run(*request.request);
-        (void)model.accept(request.request, output);
-    }
+    (void)model.parse(revision, std::move(language), std::move(text));
 }
 
 void EditorRuntime::Impl::primeDeferred() {

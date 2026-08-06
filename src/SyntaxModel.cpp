@@ -690,6 +690,19 @@ bool SyntaxModel::hasGrammar(const LanguageId& language) const noexcept {
     }
 }
 
+SyntaxParseResult SyntaxModel::parse(
+    Revision revision, LanguageId language, std::string text,
+    std::vector<SyntaxEdit> edits) {
+    auto prepared = request(revision, std::move(language), std::move(text),
+                            std::move(edits));
+    if (!prepared.accepted()) {
+        return {prepared.error, SyntaxAcceptError::None, false};
+    }
+    auto const output = run(*prepared.request);
+    auto const accepted = accept(prepared.request, output);
+    return {SyntaxRequestError::None, accepted.error, accepted.usedFallback};
+}
+
 SyntaxParseRequestResult SyntaxModel::request(
     Revision revision, LanguageId language, std::string text,
     std::vector<SyntaxEdit> edits) {

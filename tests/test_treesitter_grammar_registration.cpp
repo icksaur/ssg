@@ -60,7 +60,7 @@ TreeSitterGrammar customGrammar() {
 }
 
 TEST(aCustomGrammarIsHighlightedUnderItsOwnLanguageId) {
-    auto parser = makeTreeSitterParser({customGrammar()});
+    auto parser = TreeSitterParserFactory::create({customGrammar()});
     ASSERT_TRUE(parser != nullptr);
     if (!parser) return;
     ASSERT_TRUE(parser->hasGrammar(LanguageId{"ssg-test-lang"}));
@@ -75,7 +75,7 @@ TEST(aCustomGrammarIsHighlightedUnderItsOwnLanguageId) {
 // merging implementation would still highlight "c" here, so this is what makes
 // the substitution claim falsifiable.
 TEST(aCustomGrammarSetReplacesRatherThanExtendsTheVendoredOne) {
-    auto parser = makeTreeSitterParser({customGrammar()});
+    auto parser = TreeSitterParserFactory::create({customGrammar()});
     ASSERT_TRUE(parser != nullptr);
     if (!parser) return;
 
@@ -86,7 +86,7 @@ TEST(aCustomGrammarSetReplacesRatherThanExtendsTheVendoredOne) {
 }
 
 TEST(theDefaultParserStillCarriesEveryVendoredGrammar) {
-    auto parser = makeTreeSitterParser();
+    auto parser = TreeSitterParserFactory::createDefault();
     ASSERT_TRUE(parser != nullptr);
     if (!parser) return;
     for (const auto* id : {"c", "cpp", "c++", "javascript", "js", "typescript",
@@ -107,8 +107,8 @@ TEST(parsersDoNotShareCompiledQueriesForTheSameLanguageId) {
     // Valid query, but captures nothing that maps to a scope.
     shadowed.highlightQuery = "(translation_unit) @none\n";
 
-    auto shadowedParser = makeTreeSitterParser({shadowed});
-    auto defaultParser = makeTreeSitterParser();
+    auto shadowedParser = TreeSitterParserFactory::create({shadowed});
+    auto defaultParser = TreeSitterParserFactory::createDefault();
     ASSERT_TRUE(shadowedParser && defaultParser);
     if (!shadowedParser || !defaultParser) return;
 
@@ -127,7 +127,7 @@ TEST(aGrammarWithNoLanguageFactoryIsIgnored) {
     incomplete.languageIds = {"broken"};
     incomplete.highlightQuery = "\"return\" @keyword\n";
 
-    auto parser = makeTreeSitterParser({incomplete});
+    auto parser = TreeSitterParserFactory::create({incomplete});
     ASSERT_TRUE(parser != nullptr);
     if (!parser) return;
     ASSERT_FALSE(parser->hasGrammar(LanguageId{"broken"}));

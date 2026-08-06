@@ -42,7 +42,7 @@ std::string readFile(const fs::path& path) {
 }
 
 TEST(everyVendoredGrammarCarriesItsQueryTextInMemory) {
-    const auto grammars = vendoredTreeSitterGrammars();
+    const auto grammars = TreeSitterParserFactory::vendoredGrammars();
     ASSERT_EQ(grammars.size(), std::size_t{7});
     for (const auto& grammar : grammars) {
         ASSERT_FALSE(grammar.languageIds.empty());
@@ -102,7 +102,7 @@ TEST(embeddedQueryTextMatchesTheVendorFilesByteForByte) {
 // "; inherits:" directive is a convention its query compiler ignores, so C++ and
 // TypeScript would silently lose their base grammar's rules without it.
 TEST(derivedGrammarsCarryTheirInheritedQueryText) {
-    for (const auto& grammar : vendoredTreeSitterGrammars()) {
+    for (const auto& grammar : TreeSitterParserFactory::vendoredGrammars()) {
         const auto& id = grammar.languageIds.front();
         const bool derived = id == "cpp" || id == "typescript";
         ASSERT_EQ(!grammar.inheritedHighlightQuery.empty(), derived);
