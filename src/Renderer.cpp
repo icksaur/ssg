@@ -863,7 +863,7 @@ void paintDocument(CellGrid& grid, SessionSnapshot const& snapshot,
             }
             auto const documentOffset = line.documentOffset + span.byteOffset;
             auto const scope =
-                scopeAt(snapshot.sections().syntax, ByteOffset{documentOffset});
+                snapshot.sections().syntax.scopeAt(ByteOffset{documentOffset});
             auto const foreground = syntaxIndex(theme, scope);
             auto const selected = offsetInSelection(selection, documentOffset);
             auto cellBg = selected ? selectionBg : background;

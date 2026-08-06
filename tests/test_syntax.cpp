@@ -286,7 +286,7 @@ TEST(handComputedMetadataGoldenCoversAllExportedSections) {
             },
     };
 
-    const auto state = buildSyntaxViewState(
+    const auto state = SyntaxViewState::fromParse(
         Revision{7}, LanguageId{"toy"}, text, raw, SyntaxConfig{.tabWidth = 4});
 
     ASSERT_EQ(state.revision(), Revision{7});
@@ -338,12 +338,12 @@ TEST(handComputedMetadataGoldenCoversAllExportedSections) {
             {line(3), byte(30), byte(30), 0, 0, 0, false},
             {line(4), byte(32), byte(32), 0, 0, 0, true},
         }));
-    ASSERT_EQ(matchingBracket(state, ByteOffset{4}),
+    ASSERT_EQ(state.matchingBracket(ByteOffset{4}),
               std::optional<ByteOffset>{ByteOffset{6}});
-    ASSERT_EQ(matchingBracket(state, ByteOffset{20}),
+    ASSERT_EQ(state.matchingBracket(ByteOffset{20}),
               std::optional<ByteOffset>{});
-    ASSERT_EQ(scopeAt(state, ByteOffset{5}), SyntaxScope::Number);
-    ASSERT_EQ(scopeAt(state, ByteOffset{19}), SyntaxScope::PlainText);
+    ASSERT_EQ(state.scopeAt(ByteOffset{5}), SyntaxScope::Number);
+    ASSERT_EQ(state.scopeAt(ByteOffset{19}), SyntaxScope::PlainText);
 
     static_assert(
         std::is_const_v<std::remove_reference_t<decltype(state.spans())>>);
@@ -388,7 +388,7 @@ TEST(injectedParserReceivesPriorParseAndEditsAndMatchesFullParse) {
 }
 
 TEST(immutableDeltaDerivesOnlyChangedSectionsAndReplaysExactly) {
-    const auto before = plainTextSyntaxViewState(
+    const auto before = SyntaxViewState::plainText(
         Revision{4}, LanguageId{"toy"}, "alpha\n", 4);
     SyntaxParseOutput raw{
         .revision = Revision{5},
@@ -400,7 +400,7 @@ TEST(immutableDeltaDerivesOnlyChangedSectionsAndReplaysExactly) {
                 {byte(4), byte(5), SyntaxScope::Number},
             },
     };
-    const auto after = buildSyntaxViewState(
+    const auto after = SyntaxViewState::fromParse(
         Revision{5}, LanguageId{"toy"}, "let 2\n", raw, {});
 
     const auto delta = SyntaxDeltaCodec{}.derive(before, after);
@@ -417,7 +417,7 @@ TEST(immutableDeltaDerivesOnlyChangedSectionsAndReplaysExactly) {
     ASSERT_EQ(SyntaxDeltaCodec{}.replay(after, identical).state,
               std::optional<SyntaxViewState>{after});
 
-    const auto revisionOnlyTarget = plainTextSyntaxViewState(
+    const auto revisionOnlyTarget = SyntaxViewState::plainText(
         Revision{5}, LanguageId{"toy"}, "alpha\n", 4);
     const auto revisionOnly =
         SyntaxDeltaCodec{}.derive(before, revisionOnlyTarget);
@@ -427,7 +427,7 @@ TEST(immutableDeltaDerivesOnlyChangedSectionsAndReplaysExactly) {
     ASSERT_TRUE(revisionOnlyReplay.accepted());
     ASSERT_EQ(*revisionOnlyReplay.state, revisionOnlyTarget);
 
-    const auto staleBase = plainTextSyntaxViewState(
+    const auto staleBase = SyntaxViewState::plainText(
         Revision{3}, LanguageId{"toy"}, "alpha\n", 4);
     ASSERT_EQ(SyntaxDeltaCodec{}.replay(staleBase, delta).error,
               SyntaxReplayError::StaleRevision);

@@ -214,6 +214,27 @@ public:
                     std::vector<CommentRange> commentRanges,
                     std::vector<LineIndentation> indentation);
 
+    // The unhighlighted view for `text`: no spans or brackets, only the
+    // indentation the caret and wrap logic always need.  The view a document
+    // shows before (or without) a parse.
+    [[nodiscard]] static SyntaxViewState plainText(
+        Revision revision, LanguageId language, std::string_view text,
+        std::uint32_t tabWidth);
+
+    // The view derived from a parser's output: spans/brackets/comments as parsed,
+    // falling back to plainText when the output did not parse.
+    [[nodiscard]] static SyntaxViewState fromParse(
+        Revision revision, LanguageId language, std::string_view text,
+        const SyntaxParseOutput& output, const SyntaxConfig& config);
+
+    // The offset of the bracket matching the one at `offset`, or nullopt when
+    // `offset` is not on a matched bracket.
+    [[nodiscard]] std::optional<ByteOffset> matchingBracket(
+        ByteOffset offset) const;
+
+    // The syntax scope covering `offset` (PlainText when none does).
+    [[nodiscard]] SyntaxScope scopeAt(ByteOffset offset) const;
+
     [[nodiscard]] Revision revision() const noexcept { return revision_; }
     [[nodiscard]] const LanguageId& language() const noexcept {
         return language_;
@@ -258,17 +279,6 @@ private:
     std::vector<CommentRange> commentRanges_;
     std::vector<LineIndentation> indentation_;
 };
-
-[[nodiscard]] SyntaxViewState plainTextSyntaxViewState(
-    Revision revision, LanguageId language, std::string_view text,
-    std::uint32_t tabWidth);
-[[nodiscard]] SyntaxViewState buildSyntaxViewState(
-    Revision revision, LanguageId language, std::string_view text,
-    const SyntaxParseOutput& output, const SyntaxConfig& config);
-[[nodiscard]] std::optional<ByteOffset> matchingBracket(
-    const SyntaxViewState& state, ByteOffset offset);
-[[nodiscard]] SyntaxScope scopeAt(const SyntaxViewState& state,
-                                   ByteOffset offset);
 
 class SyntaxDelta {
 public:
