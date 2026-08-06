@@ -35,9 +35,9 @@ struct EditorRuntimeConfig {
     bool deferEnrichment = false;
     // The syntax parser the runtime drives for highlighting. Injected here (not
     // hard-constructed inside the runtime) so an app supplies tree-sitter via
-    // defaultSyntaxParser(), a future LSP semantic-tokens source substitutes
-    // another implementation, and tests inject a deterministic double. Null =
-    // plain-text highlighting.
+    // TreeSitterParserFactory::createDefault(), a future LSP semantic-tokens
+    // source substitutes another implementation, and tests inject a
+    // deterministic double. Null = plain-text highlighting.
     std::shared_ptr<SyntaxParser> syntaxParser;
     // Optional provider overrides keyed by status-field id. These replace the
     // default compiled providers for matching ids.
@@ -46,11 +46,6 @@ struct EditorRuntimeConfig {
     // this for deterministic control; default true keeps git-diff wiring library-owned.
     bool enableGitDiffWorker = true;
 };
-
-// The syntax parser the shipped app injects by default: a tree-sitter parser
-// when built with SSG_TREESITTER, otherwise null (plain text). The app opts in;
-// the library never hard-depends on tree-sitter.
-[[nodiscard]] std::shared_ptr<SyntaxParser> defaultSyntaxParser();
 
 class EditorRuntime;
 

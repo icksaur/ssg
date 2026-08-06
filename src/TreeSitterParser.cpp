@@ -57,7 +57,7 @@ TreeSitterGrammar vendoredGrammar(std::vector<std::string> ids,
 
 }  // namespace
 
-std::vector<TreeSitterGrammar> vendoredTreeSitterGrammars() {
+std::vector<TreeSitterGrammar> TreeSitterParserFactory::vendoredGrammars() {
     std::vector<TreeSitterGrammar> grammars;
     grammars.push_back(vendoredGrammar(
         {"c"}, []() -> SyntaxLanguageHandle { return tree_sitter_c(); }, "c", ""));
@@ -91,12 +91,12 @@ std::vector<TreeSitterGrammar> vendoredTreeSitterGrammars() {
     return grammars;
 }
 
-std::shared_ptr<SyntaxParser> makeTreeSitterParser(
+std::shared_ptr<SyntaxParser> TreeSitterParserFactory::create(
     std::vector<TreeSitterGrammar> grammars) {
     return std::make_shared<TreeSitterParser>(std::move(grammars));
 }
 
-std::shared_ptr<SyntaxParser> makeTreeSitterParser() {
+std::shared_ptr<SyntaxParser> TreeSitterParserFactory::createDefault() {
     return std::make_shared<TreeSitterParser>();
 }
 
@@ -114,7 +114,7 @@ struct TreeSitterParser::QueryCache {
 };
 
 TreeSitterParser::TreeSitterParser()
-    : TreeSitterParser(vendoredTreeSitterGrammars()) {}
+    : TreeSitterParser(TreeSitterParserFactory::vendoredGrammars()) {}
 
 TreeSitterParser::TreeSitterParser(std::vector<TreeSitterGrammar> grammars)
     : grammars_(std::move(grammars)),

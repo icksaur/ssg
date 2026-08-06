@@ -62,19 +62,32 @@ struct TreeSitterGrammar {
     std::optional<Injection> injection;
 };
 
-// The grammars SSG vendors: C, C++, JavaScript, TypeScript, C#, Lua, and
-// Markdown, with their queries compiled into the binary.  Markdown is the block
-// grammar only -- upstream splits it in two, and the inline half (emphasis,
-// links, code spans) needs a language injection this parser does not implement.
-[[nodiscard]] std::vector<TreeSitterGrammar> vendoredTreeSitterGrammars();
+// Mints tree-sitter-backed SyntaxParsers.  A single owner for the three
+// factory operations that were dispersed across two headers and a standalone
+// file: which grammars SSG vendors, a parser over an arbitrary grammar set, and
+// the default parser.  Stateless -- an object, not a namespace, so the parser
+// vocabulary has one named home rather than loose free functions.
+//
+// It hands out a `shared_ptr<SyntaxParser>` (the base) so callers never need
+// the concrete tree-sitter parser type or tree-sitter's headers.
+class TreeSitterParserFactory {
+public:
+    // The grammars SSG vendors: C, C++, JavaScript, TypeScript, C#, Lua, and
+    // Markdown, with their queries compiled into the binary.  Markdown is the
+    // block grammar only -- upstream splits it in two, and the inline half
+    // (emphasis, links, code spans) is registered as a language injection.
+    [[nodiscard]] static std::vector<TreeSitterGrammar> vendoredGrammars();
 
-// A parser over exactly `grammars`. The set is used as given, NOT merged with
-// the vendored set, so a host can replace the defaults rather than only add to
-// them; pass `vendoredTreeSitterGrammars()` plus your own to extend.
-[[nodiscard]] std::shared_ptr<SyntaxParser> makeTreeSitterParser(
-    std::vector<TreeSitterGrammar> grammars);
+    // A parser over exactly `grammars`. The set is used as given, NOT merged
+    // with the vendored set, so a host can replace the defaults rather than only
+    // add to them; pass `vendoredGrammars()` plus your own to extend.
+    [[nodiscard]] static std::shared_ptr<SyntaxParser> create(
+        std::vector<TreeSitterGrammar> grammars);
 
-// The default parser: every vendored grammar.
-[[nodiscard]] std::shared_ptr<SyntaxParser> makeTreeSitterParser();
+    // The default parser: every vendored grammar.  The parser SSG's shipped app
+    // injects for highlighting; the library never hard-depends on it (a runtime
+    // built with a null parser yields plain text).
+    [[nodiscard]] static std::shared_ptr<SyntaxParser> createDefault();
+};
 
 }  // namespace ssg

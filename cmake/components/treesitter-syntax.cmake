@@ -1,6 +1,5 @@
 target_sources(ssg PRIVATE
     ${SSG_SOURCE_DIR}/src/SyntaxModel.cpp
-    ${SSG_SOURCE_DIR}/src/syntax_parser_factory.cpp
 )
 
 # Tree-sitter is compiled unconditionally.  Highlighting is disabled at RUNTIME
