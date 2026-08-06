@@ -90,6 +90,12 @@ PromptStatusViewState EditorRuntime::Impl::promptStatusView(
         view.prompt = promptLayout.view;
         projectFindReplacePrompt(*view.prompt);
     }
+    // The authoritative "which prompt is active" signal, set straight from the
+    // prompt surface's request -- present even for a header-hosted prompt whose
+    // query renders in the header input line and thus produces no footer `prompt`
+    // layout view (doc/spec-header-prompt-input.md). A client routes input by
+    // this, not by the presence of the layout view.
+    if (prompt.request()) view.activeKind = prompt.request()->kind;
     view.status = status.viewState();
     return view;
 }

@@ -1138,16 +1138,22 @@ int main(int argc, char** argv) {
             // may be active while the find controller is still open, and find
             // fulfillment must not hijack that unrelated prompt's keys.
             auto const& findView = snapshot->sections().findReplace;
+            // The AUTHORITATIVE active-prompt kind (doc/spec-header-prompt-
+            // input.md): present even for a header-hosted prompt (palette / file
+            // finder) whose query renders in the header input line and so
+            // produces no footer `prompt` layout view. Deriving the open-flags
+            // from this -- rather than from `promptStatus.prompt->kind`, which is
+            // nullopt for a header-hosted prompt -- is what lets typed text reach
+            // the picker query.
+            auto const activeKind = snapshot->sections().promptStatus.activeKind;
             auto const& activePrompt = snapshot->sections().promptStatus.prompt;
-            pickerOpen =
-                activePrompt && activePrompt->kind == ssg::PromptKind::Palette;
-            bool const findPromptActive =
-                activePrompt && activePrompt->kind == ssg::PromptKind::Find;
+            pickerOpen = activeKind == ssg::PromptKind::Palette;
+            bool const findPromptActive = activeKind == ssg::PromptKind::Find;
             findOpen = findView.open && findPromptActive;
             findQuery = findView.query;
             // The replace prompt edits the replacement, not the query.
             bool const replacePromptActive =
-                activePrompt && activePrompt->kind == ssg::PromptKind::Replace;
+                activeKind == ssg::PromptKind::Replace;
             replaceOpen = findView.open && replacePromptActive;
             replaceReplacement = findView.replacement;
             // A single-line text-entry prompt (save-as/open path, a
@@ -1159,12 +1165,11 @@ int main(int argc, char** argv) {
             // client-side copy) means the two cannot drift when the library
             // rewrites it -- a rejected save-as, say.
             textPromptOpen =
-                activePrompt &&
-                (activePrompt->kind == ssg::PromptKind::Path ||
-                 activePrompt->kind == ssg::PromptKind::CommandArgument ||
-                 activePrompt->kind == ssg::PromptKind::Settings);
+                activeKind == ssg::PromptKind::Path ||
+                activeKind == ssg::PromptKind::CommandArgument ||
+                activeKind == ssg::PromptKind::Settings;
             textPromptValue.clear();
-            if (textPromptOpen && !activePrompt->controls.empty()) {
+            if (textPromptOpen && activePrompt && !activePrompt->controls.empty()) {
                 textPromptValue = activePrompt->controls.front().value;
             }
         }

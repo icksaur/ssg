@@ -416,6 +416,97 @@ TEST(paletteCommandCandidatesAreCachedButInvalidateOnKeymapChange) {
     if (rebound) ASSERT_EQ(detailOf(*rebound, "file.save"), std::string{"Alt+g"});
 }
 
+// doc/spec-header-prompt-input.md: a header-hosted prompt (palette / file finder)
+// publishes its KIND authoritatively even though it produces no footer layout
+// view, so a client detects "which prompt is open" from state and routes typed
+// text to it. A footer prompt publishes both the kind AND a layout view; no
+// prompt publishes neither.
+TEST(headerHostedPromptPublishesActiveKindWithoutAFooterView) {
+    auto root = uniqueRoot();
+    auto created = ssg::EditorRuntime::create(
+        {root / "workspace", root / "scratch", root / "recovery"});
+    ASSERT_TRUE(created.accepted());
+    if (!created.accepted()) return;
+    auto& runtime = *created.runtime;
+    ASSERT_TRUE(runtime.attach({ssg::ClientId{1}, ssg::InvocationOrigin::InProcess},
+                               ssg::ViewId{1})
+                    .accepted());
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1}, {"file.open", runtime.revision(),
+                                                 std::string{"long.txt"}})
+                    .accepted());
+    const ssg::ViewportDimensions dims{80, 12};
+
+    // No prompt: neither the kind nor a view is published.
+    {
+        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        ASSERT_TRUE(snap.has_value());
+        if (snap) {
+            ASSERT_FALSE(snap->sections().promptStatus.activeKind.has_value());
+            ASSERT_FALSE(snap->sections().promptStatus.prompt.has_value());
+        }
+    }
+
+    // The command palette is header-hosted: kind published, NO footer view.
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"palette.open", runtime.revision(), {}})
+                    .accepted());
+    {
+        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        ASSERT_TRUE(snap.has_value());
+        if (snap) {
+            auto const& ps = snap->sections().promptStatus;
+            ASSERT_TRUE(ps.activeKind.has_value());
+            if (ps.activeKind)
+                ASSERT_EQ(*ps.activeKind, ssg::PromptKind::Palette);
+            ASSERT_FALSE(ps.prompt.has_value());  // renders in the header line
+        }
+    }
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"palette.close", runtime.revision(), {}})
+                    .accepted());
+
+    // The file finder is the same header-hosted PromptKind::Palette.
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"file_finder.open", runtime.revision(), {}})
+                    .accepted());
+    {
+        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        ASSERT_TRUE(snap.has_value());
+        if (snap) {
+            auto const& ps = snap->sections().promptStatus;
+            ASSERT_TRUE(ps.activeKind.has_value());
+            if (ps.activeKind)
+                ASSERT_EQ(*ps.activeKind, ssg::PromptKind::Palette);
+        }
+    }
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"palette.close", runtime.revision(), {}})
+                    .accepted());
+
+    // A FOOTER-hosted prompt (go-to-line, a CommandArgument prompt) publishes
+    // BOTH the kind and a layout view -- the orthogonal signals agree.
+    ASSERT_TRUE(runtime
+                    .dispatch(ssg::ClientId{1},
+                              {"goto.line", runtime.revision(), {}})
+                    .accepted());
+    {
+        auto snap = runtime.snapshot(ssg::ClientId{1}, dims);
+        ASSERT_TRUE(snap.has_value());
+        if (snap) {
+            auto const& ps = snap->sections().promptStatus;
+            ASSERT_TRUE(ps.activeKind.has_value());
+            if (ps.activeKind)
+                ASSERT_EQ(*ps.activeKind, ssg::PromptKind::CommandArgument);
+            ASSERT_TRUE(ps.prompt.has_value());  // footer layout view present
+        }
+    }
+}
+
 TEST(shellStatusFieldsUseRegisteredProviders) {
     auto root = uniqueRoot();
     ssg::EditorRuntimeConfig config{
@@ -912,6 +1003,7 @@ int main() {
     RUN(settingsDispatchMatchesSettingsModelOracleSnapshot);
     RUN(paletteCandidatesMatchTheCommandRegistry);
     RUN(paletteCommandCandidatesAreCachedButInvalidateOnKeymapChange);
+    RUN(headerHostedPromptPublishesActiveKindWithoutAFooterView);
     RUN(shellStatusFieldsUseRegisteredProviders);
     RUN(composedChromeReplacesBuiltinChromeAndTracksRevision);
     RUN(shellStatusFieldsPreserveDefaultContentOrderAndLabels);
