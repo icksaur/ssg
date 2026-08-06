@@ -2,7 +2,7 @@
 
 #include <ssg/ClipboardRegister.h>
 #include <ssg/DiffModel.h>
-#include <ssg/DraftAutosave.h>
+#include <ssg/DraftAutosaveScheduler.h>
 #include <ssg/EditCommands.h>
 #include <ssg/EditorRuntime.h>
 #include <ssg/EditorSessionBuilder.h>

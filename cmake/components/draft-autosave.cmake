@@ -1,5 +1,5 @@
 target_sources(ssg PRIVATE
-    ${SSG_SOURCE_DIR}/src/DraftAutosave.cpp
+    ${SSG_SOURCE_DIR}/src/DraftAutosaveScheduler.cpp
     ${SSG_SOURCE_DIR}/src/DraftReopen.cpp
 )
 
