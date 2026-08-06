@@ -37,6 +37,7 @@ class DeterministicParser final : public SyntaxParser {
 public:
     bool grammarAvailable = true;
     bool failParse = false;
+    bool selfCancelDuringParse = false;
     std::size_t parseCalls = 0;
     SyntaxParseHandle lastPrior;
     std::vector<SyntaxEdit> lastEdits;
@@ -47,6 +48,9 @@ public:
 
     SyntaxParseOutput parse(const SyntaxParseRequest& request) override {
         ++parseCalls;
+        if (selfCancelDuringParse) {
+            request.cancel();
+        }
         lastPrior = request.priorParse();
         lastEdits = request.edits();
 
@@ -598,6 +602,72 @@ TEST(requestAndResultValidationIsFailureAtomic) {
     ASSERT_EQ(model.viewState().revision(), Revision{1});
 }
 
+TEST(parseConvenienceMatchesHandDrivenRequestRunAccept) {
+    const std::string text = "fn(a[1]) {\n\tlet x = 12;\n}\n";
+
+    // Grammar hit: parse() must leave the same view-state as the three calls.
+    auto convenientParser = std::make_shared<DeterministicParser>();
+    SyntaxModel convenient{convenientParser};
+    const auto result = convenient.parse(Revision{1}, LanguageId{"toy"}, text);
+    ASSERT_TRUE(result.accepted());
+    ASSERT_FALSE(result.usedFallback);
+
+    auto manualParser = std::make_shared<DeterministicParser>();
+    SyntaxModel manual{manualParser};
+    const auto prepared = manual.request(Revision{1}, LanguageId{"toy"}, text);
+    ASSERT_TRUE(parseAndAccept(manual, prepared).accepted());
+    ASSERT_EQ(convenient.viewState(), manual.viewState());
+
+    // No-grammar fallback: the plain-text view-state, usedFallback set.
+    auto noGrammarParser = std::make_shared<DeterministicParser>();
+    noGrammarParser->grammarAvailable = false;
+    SyntaxModel noGrammar{noGrammarParser};
+    const auto fallback = noGrammar.parse(Revision{1}, LanguageId{"toy"}, text);
+    ASSERT_TRUE(fallback.accepted());
+    ASSERT_TRUE(fallback.usedFallback);
+
+    SyntaxModel plainReference;  // no parser -> plain-text fallback
+    ASSERT_TRUE(parseAndAccept(plainReference,
+                               requestFor(plainReference, Revision{1}, text))
+                    .accepted());
+    ASSERT_EQ(noGrammar.viewState(), plainReference.viewState());
+
+    // Oversized document: refused, view-state untouched.
+    auto tinyParser = std::make_shared<DeterministicParser>();
+    SyntaxModel tiny{tinyParser, SyntaxConfig{.maximumDocumentBytes = 4}};
+    const auto oversized = tiny.parse(Revision{1}, LanguageId{"toy"}, text);
+    ASSERT_EQ(oversized.requestError, SyntaxRequestError::DocumentTooLarge);
+    ASSERT_FALSE(oversized.accepted());
+    ASSERT_EQ(tiny.viewState().revision(), Revision{0});
+
+    // Stale revision: refused, the newer accepted state stands.
+    auto staleParser = std::make_shared<DeterministicParser>();
+    SyntaxModel staleModel{staleParser};
+    ASSERT_TRUE(
+        staleModel.parse(Revision{2}, LanguageId{"toy"}, text).accepted());
+    const auto stale = staleModel.parse(Revision{1}, LanguageId{"toy"}, text);
+    ASSERT_EQ(stale.requestError, SyntaxRequestError::StaleRevision);
+    ASSERT_EQ(staleModel.viewState().revision(), Revision{2});
+}
+
+TEST(parseConvenienceRejectsAParserThatCancelsMidParse) {
+    auto parser = std::make_shared<DeterministicParser>();
+    SyntaxModel model{parser};
+    ASSERT_TRUE(
+        model.parse(Revision{1}, LanguageId{"toy"}, "let a = 1;\n").accepted());
+    const auto accepted = model.viewState();
+
+    // A parser cancelling its own request mid-parse is rejected at accept, and
+    // the last accepted view-state stands -- the synchronous mirror of the
+    // superseded-request path.
+    parser->selfCancelDuringParse = true;
+    const auto result =
+        model.parse(Revision{2}, LanguageId{"toy"}, "let a = 2;\n");
+    ASSERT_FALSE(result.accepted());
+    ASSERT_EQ(result.acceptError, SyntaxAcceptError::Cancelled);
+    ASSERT_EQ(model.viewState(), accepted);
+}
+
 } // namespace
 
 int main() {
@@ -607,5 +677,7 @@ int main() {
     RUN(supersededAndCancelledResultsNeverReplaceNewerState);
     RUN(noParserUnavailableGrammarAndFailedParseShareFallbackSnapshot);
     RUN(requestAndResultValidationIsFailureAtomic);
+    RUN(parseConvenienceMatchesHandDrivenRequestRunAccept);
+    RUN(parseConvenienceRejectsAParserThatCancelsMidParse);
     return failed == 0 ? 0 : 1;
 }
