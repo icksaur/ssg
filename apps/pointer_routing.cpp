@@ -9,6 +9,18 @@
 namespace ssg::app {
 namespace {
 
+// True when the click byte offset lands on `selection`: exactly on a collapsed
+// caret, or inside a range with an exclusive upper bound (matching the
+// caret-between-cells model). doc/spec-alt-click-remove-caret.md.
+bool selectionCoversPosition(ssg::Selection const& selection,
+                             ssg::DocumentPosition position) noexcept {
+    auto const lo = selection.lower().byteOffset.value();
+    auto const hi = selection.upper().byteOffset.value();
+    auto const p = position.byteOffset.value();
+    if (lo == hi) return p == lo;  // collapsed caret
+    return lo <= p && p < hi;      // ranged: [lo, hi)
+}
+
 // The one list of scrollable surfaces. `route_pointer` and `route_wheel` both
 // drive from it, so a surface cannot be wired for one gesture and forgotten for
 // the other -- which is exactly how the panel and picker gutters ended up
@@ -55,6 +67,15 @@ PointerDispatch gutterScroll(ScrollableRegionDescriptor const& descriptor,
 
 std::span<const ScrollableRegionDescriptor> scrollable_regions() noexcept {
     return kScrollableRegions;
+}
+
+std::optional<std::size_t> caret_hit_index(
+    std::vector<ssg::Selection> const& baseline,
+    ssg::DocumentPosition position) {
+    for (std::size_t index = 0; index < baseline.size(); ++index) {
+        if (selectionCoversPosition(baseline[index], position)) return index;
+    }
+    return std::nullopt;
 }
 
 bool is_scrollbar_region(ssg::HitRegion region) noexcept {
@@ -186,6 +207,29 @@ PointerDispatch route_pointer(ssg::RegionHit const& hit, PointerButton button,
             // gestures compose with the existing set.
             if (hit.region == ssg::HitRegion::Editor && targets.document_position) {
                 if (alt) {
+                    // Alt+click TOGGLES: if the click lands on an existing
+                    // selection and more than one exists, REMOVE that whole
+                    // selection (Sublime toggle) by rebuilding the set without
+                    // it; a removal starts no drag. Otherwise ADD a collapsed
+                    // caret (re-adding an existing one de-dups to a no-op, which
+                    // is how an Alt+click on the sole caret becomes a no-op).
+                    // doc/spec-alt-click-remove-caret.md.
+                    auto const hit_index =
+                        altDragBaseline.size() > 1
+                            ? caret_hit_index(altDragBaseline,
+                                              *targets.document_position)
+                            : std::nullopt;
+                    if (hit_index) {
+                        std::vector<ssg::Selection> ranges = altDragBaseline;
+                        ranges.erase(ranges.begin() +
+                                     static_cast<std::ptrdiff_t>(*hit_index));
+                        dispatch.commands.push_back(
+                            {"select.set_ranges",
+                             ssg::SelectionCommandArguments{std::nullopt,
+                                                            std::nullopt,
+                                                            std::move(ranges)}});
+                        return dispatch;  // a discrete removal: no drag
+                    }
                     dispatch.commands.push_back(
                         {"select.add_range",
                          ssg::SelectionCommandArguments{
