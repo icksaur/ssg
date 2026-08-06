@@ -49,7 +49,7 @@ consideration.
 ### Phase B: drop SSG_TREESITTER
 
 The compile-time flag is nearly vestigial. The `#ifdef` surface is three files
-(`src/syntax_parser_factory.cpp`, `src/TreeSitterParser.h`,
+(`src/TreeSitterParser.cpp`, `src/TreeSitterParser.h`,
 `src/TreeSitterParser.cpp`); nothing in the library core references tree-sitter.
 The disable mechanism users actually need already exists at RUNTIME:
 `EditorRuntimeConfig::syntaxParser` is a `std::shared_ptr<SyntaxParser>`, and a
@@ -57,7 +57,7 @@ null parser means plain text. All seven `tests/runtime/*.cpp` files already run
 that way, setting no parser at all.
 
 So the flag's only remaining effect is whether the vendored C is compiled. Remove
-it: always compile the grammars, keep `defaultSyntaxParser()` as the app's opt-in
+it: always compile the grammars, keep `TreeSitterParserFactory::createDefault()` as the app's opt-in
 and a null `syntaxParser` as the documented way to disable highlighting.
 
 This collapses two build configurations into one.
@@ -92,7 +92,7 @@ only possibility.
 **This type must live in a PUBLIC header, or the stated goal is unmet.**
 `src/TreeSitterParser.h` is not public; a host embedding SSG cannot reach it. So
 Phase C adds `include/ssg/TreeSitterGrammars.h` with the registration type and a
-`makeTreeSitterParser(grammars)` factory returning `shared_ptr<SyntaxParser>`.
+`TreeSitterParserFactory::create(grammars)` factory returning `shared_ptr<SyntaxParser>`.
 
 That collides with keeping tree-sitter out of public headers, so the invariant is
 stated precisely: public headers must not INCLUDE tree-sitter headers, and must
@@ -181,10 +181,10 @@ generated TU.
 | 2 | Switch `kGrammars` to hold keys and `queryFor` to resolve through the generated table; delete `readFile`, the `<fstream>` include, and `SSG_TREESITTER_VENDOR_DIR` | `src/TreeSitterParser.cpp`, `cmake/components/treesitter-syntax.cmake` | THREE layers, because no single one is decisive: (a) BEHAVIORAL, primary -- highlight every vendored language with the vendor query files made unreadable, in a temp copy of the tree so no shared state is mutated; (b) STRUCTURAL -- source scan asserting `TreeSitterParser.cpp` contains no `ifstream`/`fopen` and no `highlights.scm` (the same technique `test_theme.cpp` and `test_ssg_app.cpp` already use); (c) SUPPLEMENTAL -- `strings` on the binary finds no `queries/highlights.scm`, which is artifact- and tool-dependent and therefore cannot be the only proof. Existing `test_treesitter_syntax` green unchanged | - |
 | 3 | Verify the inherits-prepending still applies with embedded text | `src/TreeSitterParser.cpp` | test: a C++ fixture highlights a construct defined ONLY in the inherited C query, failing if the prepend is dropped -- **verify by perturbation** (drop the prepend, confirm failure, revert) | - |
 | 4 | **Phase A gate**: full suite green in both configurations, still | - | both gates green | - |
-| 5 | Remove the `SSG_TREESITTER` option and all three `#ifdef`s; always compile grammars; `defaultSyntaxParser()` unconditionally returns a `TreeSitterParser` | `CMakeLists.txt`, `cmake/components/treesitter-syntax.cmake`, `src/syntax_parser_factory.cpp`, `src/TreeSitterParser.h`, `src/TreeSitterParser.cpp`, `include/ssg/EditorRuntime.h` | test: a runtime built with a null `syntaxParser` produces plain-text spans (the disable mechanism, now load-bearing); startup audit green (no grammar constructed before the first frame); COMPATIBILITY -- a minimal `add_subdirectory` consumer project configures, builds and links, so the embedder path is proven still to work rather than assumed | INV-no-optional-init |
+| 5 | Remove the `SSG_TREESITTER` option and all three `#ifdef`s; always compile grammars; `TreeSitterParserFactory::createDefault()` unconditionally returns a `TreeSitterParser` | `CMakeLists.txt`, `cmake/components/treesitter-syntax.cmake`, `src/TreeSitterParser.cpp`, `src/TreeSitterParser.h`, `src/TreeSitterParser.cpp`, `include/ssg/EditorRuntime.h` | test: a runtime built with a null `syntaxParser` produces plain-text spans (the disable mechanism, now load-bearing); startup audit green (no grammar constructed before the first frame); COMPATIBILITY -- a minimal `add_subdirectory` consumer project configures, builds and links, so the embedder path is proven still to work rather than assumed | INV-no-optional-init |
 | 6 | Update the 9 specs naming `SSG_TREESITTER` in their gate to name the single gate, and record the retired claim in `doc/spec-syntax-and-diffs.md` | `doc/spec-color-depth-defaults.md`, `doc/spec-diff-default-wiring.md`, `doc/spec-diff.md`, `doc/spec-diff-tint-hue-fidelity.md`, `doc/spec-document-lifetime.md`, `doc/spec-git-diff-source.md`, `doc/spec-inline-word-diff.md`, `doc/spec-prompt-fulfillment.md`, `doc/spec-syntax-and-diffs.md` | grep: no doc references `SSG_TREESITTER` as a gate | - |
 | 7 | Delete the `build-no-ts` configuration from the workflow | `doc/spec-config.md`, `doc/spec-file-finder.md`, `AGENTS.md` if referenced | grep: no doc instructs a second build dir | - |
-| 8 | Add the PUBLIC registration type and `makeTreeSitterParser(grammars)` factory (default argument = the vendored set), carrying the language factory as the opaque `SyntaxLanguageHandle` | new `include/ssg/TreeSitterGrammars.h`, `src/TreeSitterParser.h`, `src/TreeSitterParser.cpp`, `src/syntax_parser_factory.cpp`, `tests/test_treesitter_syntax.cpp` | test: a parser built with ONLY a custom registration highlights that language and does NOT highlight a vendored one (proves substitution, not merging); and the new public header compiles in a TU that includes NO tree-sitter header, proving a host is not forced to have them | library-is-contract |
+| 8 | Add the PUBLIC registration type and `TreeSitterParserFactory::create(grammars)` factory (default argument = the vendored set), carrying the language factory as the opaque `SyntaxLanguageHandle` | new `include/ssg/TreeSitterGrammars.h`, `src/TreeSitterParser.h`, `src/TreeSitterParser.cpp`, `tests/test_treesitter_syntax.cpp` | test: a parser built with ONLY a custom registration highlights that language and does NOT highlight a vendored one (proves substitution, not merging); and the new public header compiles in a TU that includes NO tree-sitter header, proving a host is not forced to have them | library-is-contract |
 | 9 | **Phase C gate**: single gate green; public headers still free of tree-sitter types | - | full suite green; grep: no `tree_sitter` in `include/` | library-is-contract |
 
 ## Rationale

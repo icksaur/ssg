@@ -148,7 +148,7 @@ seam if ever wanted; this spec does not build it.
 The tree-sitter parser + grammars are compiled UNCONDITIONALLY. Highlighting is
 disabled at RUNTIME by constructing the runtime with a null
 `EditorRuntimeConfig::syntaxParser`, which yields plain text; the shipped app
-opts in via `defaultSyntaxParser()`.
+opts in via `TreeSitterParserFactory::createDefault()`.
 
 Historical note: this was originally an optional CMake component
 (`SSG_TREESITTER`) so the library could build with no tree-sitter dependency at
