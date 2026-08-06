@@ -1,5 +1,4 @@
 #include <ssg/CommandCatalog.h>
-#include <ssg/command_metadata.h>
 #include <ssg/Keymap.h>
 
 #include "test_helpers.h"
@@ -29,7 +28,7 @@ TEST(commandLabelUsesAuthoredLabelsAndHumanizesTheRest) {
 
     auto labelOf = [&catalog](std::string_view id) {
         auto const* command = catalog.find(id);
-        return command == nullptr ? std::string{} : ssg::commandLabel(*command);
+        return command == nullptr ? std::string{} : command->displayLabel();
     };
 
     // An authored label is used verbatim.

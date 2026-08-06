@@ -5,7 +5,7 @@
 // Themes are the sole source of color (spec.md I22): CellGrid carries a flat
 // color table (CellGrid.colors -- one slot per semantic role followed by one per
 // syntax scope), plus the renderer-populated diff-tint and selection-fill
-// colors. A client never mints or substitutes editor color; resolveColor only
+// colors. A client never mints or substitutes editor color; ColorResolver only
 // depth-adapts those theme colors to the nearest color its output medium can
 // display.
 
@@ -44,7 +44,18 @@ struct ResolvedColor {
 // Ties break to the lowest index, so the result is a pure function with a single
 // answer.  `rgb` on a reduced result carries the chosen swatch's canonical
 // channels (for index-less clients and tests).
-[[nodiscard]] ResolvedColor resolveColor(SrgbColor color, ColorDepth depth);
+//
+// The depth an output medium advertises is the resolver's only state, so a
+// client builds one per medium and adapts every theme color through it.
+class ColorResolver {
+public:
+    explicit ColorResolver(ColorDepth depth) noexcept : depth_{depth} {}
+
+    [[nodiscard]] ResolvedColor resolve(SrgbColor color) const;
+
+private:
+    ColorDepth depth_;
+};
 
 // The canonical sRGB channels of xterm palette index `index` (0..255): the 16
 // base colors (0..15), the 6x6x6 cube (16..231), and the 24-step gray ramp

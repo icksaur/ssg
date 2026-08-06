@@ -87,7 +87,7 @@ ssg::SessionSnapshotSections sections(ssg::Revision revision, std::string marker
         {marker.size(), ssg::FollowMode::Following, ssg::PaneId{},
          std::nullopt, {}, {}},
         {ssg::TreeRevision{marker.size()}, {}},
-        ssg::plainTextSyntaxViewState(revision, ssg::LanguageId{"plain"},
+        ssg::SyntaxViewState::plainText(revision, ssg::LanguageId{"plain"},
                                           marker, 4),
         {revision, {}},
         {revision, {}, std::nullopt, {}, marker},
@@ -1254,7 +1254,7 @@ TEST(findReplaceViewStateRoundTripsReplacementThroughTheWire) {
 // settable over the wire but not by style.define (or vice versa).  This asserts
 // the two lists are exactly equal, deriving the codec's names from the codec.
 TEST(styleDefineKeysExactlyMatchTheWireCodecFields) {
-    auto defineKeys = ssg::styleDefineKeys();
+    auto defineKeys = ssg::Style::defineKeys();
     auto wireKeys = ssg::styleWireFieldNames();
     std::sort(defineKeys.begin(), defineKeys.end());
     std::sort(wireKeys.begin(), wireKeys.end());

@@ -1573,7 +1573,7 @@ SyntaxViewState EditorRuntime::Impl::activeSyntaxView() const {
     const auto* document = activeDocument();
     const auto text = document ? document->snapshot().text : std::string{};
     const auto revision = document ? document->revision() : Revision{0};
-    return plainTextSyntaxViewState(revision, LanguageId::plainText(), text, 4);
+    return SyntaxViewState::plainText(revision, LanguageId::plainText(), text, 4);
 }
 
 std::optional<WorkspaceDocumentState> EditorRuntime::Impl::activeWorkspaceState() const {

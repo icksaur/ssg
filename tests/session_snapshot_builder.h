@@ -14,7 +14,7 @@
 //
 // This builder ASSEMBLES PRODUCTION COMPONENTS; it does not reimplement them.
 // The viewport projection comes from `Viewport::computeUnwrapped`, the shell
-// from `computeShellLayout`, syntax from `plainTextSyntaxViewState`, and colour
+// from `computeShellLayout`, syntax from `SyntaxViewState::plainText`, and colour
 // from `defaultTheme`.  A test using it therefore exercises the same projection
 // the runtime does.  Anything it cannot express is set through `sections()`.
 //
@@ -140,7 +140,7 @@ public:
             FollowEditsViewState{0, FollowMode::Following, PaneId{0},
                                   std::nullopt, {}, {}},
             TreeViewState{},
-            plainTextSyntaxViewState(revision_, LanguageId{"plain"}, text_, 4),
+            SyntaxViewState::plainText(revision_, LanguageId{"plain"}, text_, 4),
             LspSyncViewState{},
             LspFeatureViewState{},
             defaultTheme(),

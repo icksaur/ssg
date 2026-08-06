@@ -55,6 +55,8 @@ std::unordered_map<std::type_index, std::string_view> const& argumentNames() {
 
 }  // namespace
 
+namespace {
+
 std::string_view commandArgumentName(CommandEntry const& command) {
     // The reference documents the WIRE surface, so an in-process-only payload
     // reads as no argument: a remote client cannot send one.
@@ -71,8 +73,6 @@ std::string_view commandArgumentName(CommandEntry const& command) {
     return found->second;
 }
 
-namespace {
-
 std::string_view surfaces(CommandEntry const& command) {
     // init.lua implies the Lua API, so naming both would be noise.
     if (command.initScript) return "lua, init.lua";
@@ -82,7 +82,7 @@ std::string_view surfaces(CommandEntry const& command) {
 
 }  // namespace
 
-std::string renderCommandReference(CommandCatalog const& catalog) {
+std::string CommandReferenceRenderer::render(CommandCatalog const& catalog) const {
     auto const commands = catalog.commands();
     std::map<std::string_view, std::vector<CommandEntry const*>> byOwner;
     for (auto const* command : commands) {

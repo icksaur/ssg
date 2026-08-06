@@ -1,5 +1,6 @@
 #include <ssg/CommandCatalog.h>
 
+#include <cctype>
 #include <mutex>
 #include <unordered_set>
 #include <stdexcept>
@@ -8,6 +9,42 @@
 namespace ssg {
 
 namespace {
+
+// Title-case a lowercase segment: "line_down" -> "Line Down". Underscores become
+// spaces; each word's first letter is uppercased.
+std::string humanizeSegment(std::string_view segment) {
+    std::string result;
+    bool wordStart = true;
+    for (char raw : segment) {
+        if (raw == '_') {
+            result += ' ';
+            wordStart = true;
+            continue;
+        }
+        auto ch = static_cast<unsigned char>(raw);
+        if (wordStart) {
+            result += static_cast<char>(std::toupper(ch));
+            wordStart = false;
+        } else {
+            result += static_cast<char>(ch);
+        }
+    }
+    return result;
+}
+
+std::string humanize(std::string_view commandId) {
+    std::string result;
+    std::size_t begin = 0;
+    while (begin <= commandId.size()) {
+        auto dot = commandId.find('.', begin);
+        auto end = dot == std::string_view::npos ? commandId.size() : dot;
+        if (!result.empty()) result += ' ';
+        result += humanizeSegment(commandId.substr(begin, end - begin));
+        if (dot == std::string_view::npos) break;
+        begin = dot + 1;
+    }
+    return result;
+}
 
 // A registration is rejected for exactly one reason at a time, named, so a
 // component author is told which field they left out rather than that
@@ -20,9 +57,10 @@ void requireField(bool present, std::string_view id, std::string_view field) {
 
 }  // namespace
 
-CommandHandle commandHandleFromIndex(std::size_t index) noexcept {
-    return CommandHandle{static_cast<std::uint16_t>(index)};
+std::string CommandEntry::displayLabel() const {
+    return label.empty() ? humanize(id) : label;
 }
+
 
 CommandCatalog::CommandCatalog() = default;
 CommandCatalog::~CommandCatalog() = default;
@@ -102,7 +140,7 @@ CommandHandle CommandCatalog::appendValidated(ValidatedSpec spec) {
         spec.argument, std::move(spec.handler), false});
     byId_.emplace(entries_[index].id, index);
     ++revision_;
-    return commandHandleFromIndex(index);
+    return CommandHandle{static_cast<std::uint16_t>(index)};
 }
 
 CommandHandle CommandCatalog::add(CommandSpecBuilder spec) {
@@ -194,7 +232,7 @@ CommandHandle CommandCatalog::handleFor(std::string_view id) const {
     auto const found = byId_.find(std::string{id});
     if (found == byId_.end()) return {};
     if (entries_[found->second].retired) return {};
-    return commandHandleFromIndex(found->second);
+    return CommandHandle{static_cast<std::uint16_t>(found->second)};
 }
 
 std::vector<CommandEntry const*> CommandCatalog::commands() const {

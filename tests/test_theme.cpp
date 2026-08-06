@@ -36,11 +36,11 @@ ssg::ThemeSetArguments fullIdentityTable(ssg::ThemeSnapshot const& theme) {
     ssg::ThemeSetArguments arguments;
     for (const auto role : ssg::kAllSemanticRoles) {
         arguments.colors.emplace(std::string{ssg::semanticRoleName(role)},
-                                 hexOf(ssg::themeColor(theme, role)));
+                                 hexOf(theme.color(role)));
     }
     for (const auto scope : ssg::kAllSyntaxScopes) {
         arguments.colors.emplace(std::string{ssg::syntaxScopeName(scope)},
-                                 hexOf(ssg::themeColor(theme, scope)));
+                                 hexOf(theme.color(scope)));
     }
     return arguments;
 }
@@ -54,11 +54,11 @@ std::string readFile(const std::filesystem::path& path) {
 TEST(themeColorAccessorsReturnTheDirectRoleAndScopeColors) {
     const auto theme = ssg::defaultTheme();
     for (const auto role : ssg::kAllSemanticRoles) {
-        ASSERT_EQ(ssg::themeColor(theme, role),
+        ASSERT_EQ(theme.color(role),
                   theme.roleColors[static_cast<std::size_t>(role)]);
     }
     for (const auto scope : ssg::kAllSyntaxScopes) {
-        ASSERT_EQ(ssg::themeColor(theme, scope),
+        ASSERT_EQ(theme.color(scope),
                   theme.syntaxColors[static_cast<std::size_t>(scope)]);
     }
     ASSERT_EQ(theme.roleColors.size(), ssg::kSemanticRoleCount);
@@ -72,7 +72,7 @@ TEST(themeSetFullTableRoundTripsToAByteIdenticalSnapshot) {
     // (name lookup, hex parse, direct color replacement) with zero visual
     // ambiguity to eyeball.
     const auto current = ssg::defaultTheme();
-    const auto result = ssg::applyThemeSet(current, fullIdentityTable(current));
+    const auto result = current.withOverrides(fullIdentityTable(current));
     ASSERT_TRUE(result.accepted());
     ASSERT_EQ(result.snapshot, current);
 }
@@ -83,19 +83,19 @@ TEST(themeSetPartialTableChangesOnlyTheNamedColorsExactly) {
     const auto replacement = SrgbColor{1, 2, 3};
     arguments.colors.emplace("selection", hexOf(replacement));
     arguments.colors.emplace("comment", hexOf(replacement));
-    const auto result = ssg::applyThemeSet(current, arguments);
+    const auto result = current.withOverrides(arguments);
     ASSERT_TRUE(result.accepted());
     for (const auto role : ssg::kAllSemanticRoles) {
         const auto expected = role == SemanticRole::Selection
                                   ? replacement
-                                  : ssg::themeColor(current, role);
-        ASSERT_EQ(ssg::themeColor(result.snapshot, role), expected);
+                                  : current.color(role);
+        ASSERT_EQ(result.snapshot.color(role), expected);
     }
     for (const auto scope : ssg::kAllSyntaxScopes) {
         const auto expected = scope == SyntaxScope::Comment
                                   ? replacement
-                                  : ssg::themeColor(current, scope);
-        ASSERT_EQ(ssg::themeColor(result.snapshot, scope), expected);
+                                  : current.color(scope);
+        ASSERT_EQ(result.snapshot.color(scope), expected);
     }
 }
 
@@ -103,7 +103,7 @@ TEST(themeSetUnknownNameIsRejectedWithTheOriginalUntouched) {
     const auto current = ssg::defaultTheme();
     ssg::ThemeSetArguments arguments;
     arguments.colors.emplace("not_a_real_role", "#112233");
-    const auto result = ssg::applyThemeSet(current, arguments);
+    const auto result = current.withOverrides(arguments);
     ASSERT_FALSE(result.accepted());
     ASSERT_FALSE(result.error->message.empty());
 }
@@ -114,7 +114,7 @@ TEST(themeSetMalformedHexColorIsRejected) {
          {"not-a-color", "#12345", "#gggggg", "112233", "#12345678"}) {
         ssg::ThemeSetArguments arguments;
         arguments.colors.emplace("selection", malformed);
-        const auto result = ssg::applyThemeSet(current, arguments);
+        const auto result = current.withOverrides(arguments);
         ASSERT_FALSE(result.accepted());
     }
 }
@@ -127,13 +127,13 @@ TEST(themeSetRejectionIsAllOrNothingNotPartial) {
     ssg::ThemeSetArguments arguments;
     arguments.colors.emplace("selection", "#112233");
     arguments.colors.emplace("comment", "not-a-color");
-    const auto result = ssg::applyThemeSet(current, arguments);
+    const auto result = current.withOverrides(arguments);
     ASSERT_FALSE(result.accepted());
 }
 
 TEST(anEmptyThemeSetTableIsAcceptedAndChangesNothing) {
     const auto before = ssg::defaultTheme();
-    const auto result = ssg::applyThemeSet(before, ssg::ThemeSetArguments{});
+    const auto result = before.withOverrides(ssg::ThemeSetArguments{});
     ASSERT_TRUE(result.accepted());
     if (result.accepted()) ASSERT_EQ(result.snapshot, before);
 }

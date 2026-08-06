@@ -134,7 +134,7 @@ public:
             {state_.follow_generation, state_.follow_mode, ssg::PaneId{1},
              std::nullopt, {}, {}},
             {ssg::TreeRevision{revision.value()}, {}},
-            ssg::plainTextSyntaxViewState(
+            ssg::SyntaxViewState::plainText(
                 revision, ssg::LanguageId{"plain"}, state_.text, 4),
             {revision, {}},
             {revision, {}, std::nullopt, {}, {}},

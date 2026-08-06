@@ -639,10 +639,6 @@ FindReplaceCommandSet::descriptors() const noexcept {
     return descriptors_;
 }
 
-FindReplaceCommandSet findReplaceCommandSet() {
-    return FindReplaceCommandSet{};
-}
-
 FindReplaceDelta FindReplaceDeltaCodec::derive(
     const FindReplaceViewState& before,
     const FindReplaceViewState& after) const {

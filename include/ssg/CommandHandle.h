@@ -40,21 +40,19 @@ public:
 private:
     friend class CommandCatalog;
     friend class CommandRegistry;
-    friend CommandHandle commandHandleFromIndex(std::size_t index) noexcept;
 
     static constexpr std::uint16_t kInvalid =
         std::numeric_limits<std::uint16_t>::max();
 
+    // Only a catalog may say what a handle means, so minting one stays private to
+    // the catalog machinery (its two friends); a public caller cannot fabricate a
+    // handle that aliases a command.
     explicit CommandHandle(std::uint16_t index) noexcept : index_{index} {}
 
     [[nodiscard]] std::size_t index() const noexcept { return index_; }
 
     std::uint16_t index_ = kInvalid;
 };
-
-// Mint a handle for a catalog position.  Only a catalog may say what a handle
-// means, which is why this is not a public constructor.
-[[nodiscard]] CommandHandle commandHandleFromIndex(std::size_t index) noexcept;
 
 // How a caller names the command it wants to invoke.
 //

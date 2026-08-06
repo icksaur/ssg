@@ -304,7 +304,7 @@ TEST(workspacePreviewApplyRecoverAndFailuresRoundTrip) {
 }
 
 TEST(viewDeltaReplayAndCommandExportsAreExact) {
-    const auto commands = findReplaceCommandSet();
+    const auto commands = FindReplaceCommandSet{};
     ASSERT_EQ(commands.descriptors().size(), std::size_t{16});
     ASSERT_EQ(commands.descriptors().front().id, std::string_view{"find.open"});
     ASSERT_EQ(commands.descriptors()[1].id,

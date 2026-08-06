@@ -267,7 +267,7 @@ std::string_view underlineSgr(ssg::CellUnderline underline) {
 
 std::string encode_ansi_frame(ssg::CellGrid const& screen, ssg::ColorDepth depth) {    constexpr std::size_t maxIndex = ssg::kThemeColorSlotCount - 1;
     auto color = [&](ssg::SrgbColor c, char kind) -> std::string {
-        auto const resolved = ssg::resolveColor(c, depth);
+        auto const resolved = ssg::ColorResolver{depth}.resolve(c);
         switch (resolved.encoding) {
             case ssg::ResolvedColor::Encoding::Truecolor:
                 return "\x1b[" + std::string{kind} + "8;2;" +

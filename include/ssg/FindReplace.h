@@ -108,16 +108,14 @@ struct FindReplaceCommandDescriptor {
 
 class FindReplaceCommandSet {
 public:
+    FindReplaceCommandSet();
+
     [[nodiscard]] const std::array<FindReplaceCommandDescriptor, 16>&
     descriptors() const noexcept;
 
 private:
-    friend FindReplaceCommandSet findReplaceCommandSet();
-    FindReplaceCommandSet();
     const std::array<FindReplaceCommandDescriptor, 16> descriptors_;
 };
-
-[[nodiscard]] FindReplaceCommandSet findReplaceCommandSet();
 
 struct FindReplaceViewState {
     std::uint64_t generation = 0;

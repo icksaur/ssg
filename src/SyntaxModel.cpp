@@ -518,7 +518,7 @@ SyntaxViewState::SyntaxViewState(
       commentRanges_(std::move(commentRanges)),
       indentation_(std::move(indentation)) {}
 
-SyntaxViewState plainTextSyntaxViewState(
+SyntaxViewState SyntaxViewState::plainText(
     Revision revision, LanguageId language, std::string_view text,
     std::uint32_t tabWidth) {
     if (tabWidth == 0) {
@@ -540,14 +540,14 @@ SyntaxViewState plainTextSyntaxViewState(
             deriveIndentation(text, tabWidth)};
 }
 
-SyntaxViewState buildSyntaxViewState(
+SyntaxViewState SyntaxViewState::fromParse(
     Revision revision, LanguageId language, std::string_view text,
     const SyntaxParseOutput& output, const SyntaxConfig& config) {
     if (config.tabWidth == 0) {
         throw std::invalid_argument{"tab width must be positive"};
     }
     if (output.status != SyntaxParseStatus::Parsed || !output.parse) {
-        return plainTextSyntaxViewState(
+        return SyntaxViewState::plainText(
             revision, std::move(language), text, config.tabWidth);
     }
     auto brackets = resolveBrackets(text.size(), output.brackets);
@@ -564,9 +564,9 @@ SyntaxViewState buildSyntaxViewState(
     };
 }
 
-std::optional<ByteOffset> matchingBracket(const SyntaxViewState& state,
-                                          ByteOffset offset) {
-    for (const auto& pair : state.bracketPairs()) {
+std::optional<ByteOffset> SyntaxViewState::matchingBracket(
+    ByteOffset offset) const {
+    for (const auto& pair : bracketPairs()) {
         if (pair.open == offset) {
             return pair.close;
         }
@@ -577,16 +577,16 @@ std::optional<ByteOffset> matchingBracket(const SyntaxViewState& state,
     return std::nullopt;
 }
 
-SyntaxScope scopeAt(const SyntaxViewState& state, ByteOffset offset) {
-    if (offset.value() >= state.textBytes()) {
+SyntaxScope SyntaxViewState::scopeAt(ByteOffset offset) const {
+    if (offset.value() >= textBytes()) {
         return SyntaxScope::PlainText;
     }
     const auto span = std::upper_bound(
-        state.spans().begin(), state.spans().end(), offset,
+        spans().begin(), spans().end(), offset,
         [](ByteOffset position, const SyntaxSpan& candidate) {
             return position < candidate.begin;
         });
-    if (span == state.spans().begin()) {
+    if (span == spans().begin()) {
         return SyntaxScope::PlainText;
     }
     return std::prev(span)->scope;
@@ -666,7 +666,7 @@ SyntaxModel::SyntaxModel(std::shared_ptr<SyntaxParser> parser,
                          SyntaxConfig config)
     : parser_(std::move(parser)),
       config_(config),
-      viewState_(plainTextSyntaxViewState(
+      viewState_(SyntaxViewState::plainText(
           Revision{0}, LanguageId::plainText(), {}, config.tabWidth)) {
     // A real Tree-sitter grammar is only present when a parser is injected; the
     // plain-text fallback (parser == nullptr) constructs no grammar, so it is not
@@ -761,10 +761,10 @@ SyntaxAcceptResult SyntaxModel::accept(
     const bool fallback =
         output.status != SyntaxParseStatus::Parsed || !output.parse;
     auto next = fallback
-                    ? plainTextSyntaxViewState(
+                    ? SyntaxViewState::plainText(
                           request->revision(), request->language(),
                           request->text(), config_.tabWidth)
-                    : buildSyntaxViewState(
+                    : SyntaxViewState::fromParse(
                           request->revision(), request->language(),
                           request->text(), output, config_);
     viewState_ = std::move(next);

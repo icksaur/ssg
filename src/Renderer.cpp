@@ -53,9 +53,9 @@ std::array<SrgbColor, kThemeColorSlotCount> themeColorTable(
 // HSV): row and word share one color per kind, and a modified word reuses the
 // added color (an inserted span reads as "added").
 DiffTints themeDiffTints(ThemeSnapshot const& theme) {
-    const auto added = themeColor(theme, SemanticRole::DiffAdded);
-    const auto removed = themeColor(theme, SemanticRole::DiffRemoved);
-    const auto modified = themeColor(theme, SemanticRole::DiffModified);
+    const auto added = theme.color(SemanticRole::DiffAdded);
+    const auto removed = theme.color(SemanticRole::DiffRemoved);
+    const auto modified = theme.color(SemanticRole::DiffModified);
     return {.addedRow = added,
             .removedRow = removed,
             .modifiedRow = modified,
@@ -863,7 +863,7 @@ void paintDocument(CellGrid& grid, SessionSnapshot const& snapshot,
             }
             auto const documentOffset = line.documentOffset + span.byteOffset;
             auto const scope =
-                scopeAt(snapshot.sections().syntax, ByteOffset{documentOffset});
+                snapshot.sections().syntax.scopeAt(ByteOffset{documentOffset});
             auto const foreground = syntaxIndex(theme, scope);
             auto const selected = offsetInSelection(selection, documentOffset);
             auto cellBg = selected ? selectionBg : background;
@@ -1106,7 +1106,7 @@ CellGrid renderTooSmall(GridSize size, ThemeSnapshot const& theme,
             CellGridCell{" ", foreground, background, SemanticRole::Canvas,
                          false})};
     grid.diffTints = themeDiffTints(theme);
-    grid.selectionFill = themeColor(theme, SemanticRole::Selection);
+    grid.selectionFill = theme.color(SemanticRole::Selection);
     if (size.columns <= 0 || size.rows <= 0) return grid;
     std::string_view const message = "terminal too small";
     auto const messageCells =
@@ -1183,7 +1183,7 @@ CellGrid Renderer::render(SessionSnapshot const& snapshot) const {
             CellGridCell{" ", foreground, background, SemanticRole::Canvas,
                          false})};
     grid.diffTints = themeDiffTints(theme);
-    grid.selectionFill = themeColor(theme, SemanticRole::Selection);
+    grid.selectionFill = theme.color(SemanticRole::Selection);
 
     auto const panelBackground =
         shell.panel ? semanticIndex(theme, SemanticRole::TreeBackground)

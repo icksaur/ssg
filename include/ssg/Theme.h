@@ -160,6 +160,9 @@ struct DiffTints {
     friend bool operator==(const DiffTints&, const DiffTints&) = default;
 };
 
+struct ThemeSetArguments;
+struct ThemeSetResult;
+
 struct ThemeSnapshot {
     // One color per semantic role and one per syntax scope, set directly. No
     // palette, no indirection: a role IS its color. The render color table
@@ -167,11 +170,27 @@ struct ThemeSnapshot {
     std::array<SrgbColor, kSemanticRoleCount> roleColors;
     std::array<SrgbColor, kSyntaxScopeCount> syntaxColors;
 
+    // The color for a role/scope. Throws std::invalid_argument on an unrecognized
+    // enumerator (a corrupt/uninitialized value), never a silent wrong slot.
+    [[nodiscard]] SrgbColor color(SemanticRole role) const;
+    [[nodiscard]] SrgbColor color(SyntaxScope scope) const;
+
+    // A copy with theme.set's table applied: replaces ONLY the named role/scope
+    // colors (an omitted name keeps its current color) with no derivation -- the
+    // set color is the final color. Validated whole before anything is replaced:
+    // an unknown name or a malformed "#rrggbb" string rejects the entire call, so
+    // a rejected call never partially mutates the result.
+    [[nodiscard]] ThemeSetResult withOverrides(
+        ThemeSetArguments const& arguments) const noexcept;
+
     friend bool operator==(const ThemeSnapshot&, const ThemeSnapshot&) = default;
 };
 
-[[nodiscard]] SrgbColor themeColor(ThemeSnapshot const& theme, SemanticRole role);
-[[nodiscard]] SrgbColor themeColor(ThemeSnapshot const& theme, SyntaxScope scope);
+struct ThemeSetError {
+    std::string message;
+
+    friend bool operator==(const ThemeSetError&, const ThemeSetError&) = default;
+};
 
 // theme.set's argument: a table of semantic-role and syntax-scope snake_case
 // names (the `semanticRoleName`/`syntaxScopeName` strings, e.g.
@@ -185,12 +204,6 @@ struct ThemeSetArguments {
     friend bool operator==(const ThemeSetArguments&, const ThemeSetArguments&) = default;
 };
 
-struct ThemeSetError {
-    std::string message;
-
-    friend bool operator==(const ThemeSetError&, const ThemeSetError&) = default;
-};
-
 struct ThemeSetResult {
     std::optional<ThemeSetError> error;
     // The replacement snapshot when accepted; left default-constructed (unused)
@@ -199,15 +212,6 @@ struct ThemeSetResult {
 
     [[nodiscard]] bool accepted() const noexcept { return !error.has_value(); }
 };
-
-// Applies theme.set's table to `current`: replaces ONLY the named role/scope
-// colors (an omitted name keeps its current color) with no derivation -- the
-// set color is the final color. Validated whole before anything is replaced: an
-// unknown name or a malformed "#rrggbb" string rejects the entire call, so a
-// rejected call never partially mutates the result.
-[[nodiscard]] ThemeSetResult applyThemeSet(
-    ThemeSnapshot const& current,
-    ThemeSetArguments const& arguments) noexcept;
 
 // The compiled-in built-in theme: EditorRuntime::create()'s starting
 // ThemeSnapshot, before any init.lua theme.set() call runs. This is the ONE

@@ -98,6 +98,9 @@ struct ScrollbarCell {
     ScrollbarCellKind kind = ScrollbarCellKind::Gutter;
 };
 
+struct StyleDefineArguments;
+struct StyleDefineResult;
+
 class Style {
 public:
     Style() = default;
@@ -142,6 +145,27 @@ public:
     ScrollbarCell scrollbarCell(int row, int thumbStart, int thumbSize,
                                  int trackHeight) const;
 
+    // Applies style.define's table (doc/spec-style.md): replaces ONLY the named
+    // fields (an omitted name keeps this style's value).  The whole table is
+    // validated before anything is applied, so a rejected call (unknown key, or
+    // a non-integer or negative value for a `dim_` key) yields a result whose
+    // `.style` is unused -- all-or-nothing, no partial apply on error.
+    [[nodiscard]] StyleDefineResult withDefine(
+        StyleDefineArguments const& arguments) const;
+
+    // Every key style.define accepts (glyph + dimension names).  Exposed so a
+    // test can assert this set exactly matches the wire codec's Style field
+    // names -- the two lists are hand-maintained in different files (this and
+    // Protocol.cpp), and this is the guard against them drifting apart.
+    [[nodiscard]] static std::vector<std::string> defineKeys();
+
+    // Every glyph define key paired with its current value in this style, sorted
+    // by key.  Drives the help system's chrome-glyph listing so a newly added
+    // glyph (like a tab edge) documents itself with no second list to maintain.
+    // Dimension keys are excluded -- this is glyphs only.
+    [[nodiscard]] std::vector<std::pair<std::string, std::string>>
+    glyphValues() const;
+
     // Style is a published snapshot section (doc/spec-style.md Y4), so it
     // participates in equality and wire round-trips like any other section.
     bool operator==(Style const&) const = default;
@@ -175,26 +199,5 @@ struct StyleDefineResult {
 
     [[nodiscard]] bool accepted() const noexcept { return !error.has_value(); }
 };
-
-// Applies style.define's table to `current`: replaces ONLY the named fields (an
-// omitted name keeps its current value).  The whole table is validated before
-// anything is applied, so a rejected call (unknown key, or a non-integer or
-// negative value for a `dim_` key) never partially mutates the result -- the
-// caller simply does not use `.style`.
-[[nodiscard]] StyleDefineResult applyStyleDefine(
-    Style const& current, StyleDefineArguments const& arguments);
-
-// Every key style.define accepts (glyph + dimension names).  Exposed so a test
-// can assert this set exactly matches the wire codec's Style field names --
-// the two lists are hand-maintained in different files (this and Protocol.cpp),
-// and this is the guard against them drifting apart.
-[[nodiscard]] std::vector<std::string> styleDefineKeys();
-
-// Every glyph style.define key paired with its current value in `style`, sorted
-// by key.  Drives the help system's chrome-glyph listing so a newly added glyph
-// (like a tab edge) documents itself with no second list to maintain.  Dimension
-// keys are excluded -- this is glyphs only.
-[[nodiscard]] std::vector<std::pair<std::string, std::string>> styleGlyphValues(
-    Style const& style);
 
 }  // namespace ssg

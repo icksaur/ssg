@@ -178,9 +178,9 @@ std::optional<std::string> rejectGlyph(std::string const& key,
 
 }  // namespace
 
-StyleDefineResult applyStyleDefine(Style const& current,
-                                   StyleDefineArguments const& arguments) {
-    Style next = current;
+StyleDefineResult Style::withDefine(
+    StyleDefineArguments const& arguments) const {
+    Style next = *this;
     // The widths come from a default-constructed Style, so a glyph's allowed
     // width is a property of the field and not of whatever was set before it.
     Style defaults{};
@@ -226,7 +226,7 @@ StyleDefineResult applyStyleDefine(Style const& current,
     return {std::nullopt, std::move(next)};
 }
 
-std::vector<std::string> styleDefineKeys() {
+std::vector<std::string> Style::defineKeys() {
     std::vector<std::string> keys;
     keys.reserve(glyphSetters().size() + variableGlyphSetters().size() +
                  dimensionSetters().size());
@@ -236,9 +236,8 @@ std::vector<std::string> styleDefineKeys() {
     return keys;
 }
 
-std::vector<std::pair<std::string, std::string>> styleGlyphValues(
-    Style const& style) {
-    Style copy = style;  // the accessors read through a mutable Style&
+std::vector<std::pair<std::string, std::string>> Style::glyphValues() const {
+    Style copy = *this;  // the accessors read through a mutable Style&
     std::vector<std::pair<std::string, std::string>> entries;
     for (auto const* table : {&glyphSetters(), &variableGlyphSetters()}) {
         for (auto const& [key, accessor] : *table) {

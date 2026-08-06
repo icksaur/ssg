@@ -63,7 +63,7 @@ int refNearest(ssg::SrgbColor color, int first, int last) {
 
 TEST(truecolorIsIdentity) {
     ssg::SrgbColor const c{37, 200, 9};
-    auto r = ssg::resolveColor(c, ssg::ColorDepth::Truecolor);
+    auto r = ssg::ColorResolver{ssg::ColorDepth::Truecolor}.resolve(c);
     ASSERT_TRUE(r.encoding == ssg::ResolvedColor::Encoding::Truecolor);
     ASSERT_TRUE(r.rgb == c);
 }
@@ -91,7 +91,7 @@ TEST(indexed256MatchesReferenceOverBroadSample) {
                 ssg::SrgbColor const c{static_cast<std::uint8_t>(r),
                                        static_cast<std::uint8_t>(g),
                                        static_cast<std::uint8_t>(b)};
-                auto got = ssg::resolveColor(c, ssg::ColorDepth::Indexed256);
+                auto got = ssg::ColorResolver{ssg::ColorDepth::Indexed256}.resolve(c);
                 int const expected = refNearest(c, 16, 255);
                 ASSERT_TRUE(got.encoding ==
                             ssg::ResolvedColor::Encoding::Indexed256);
@@ -109,7 +109,7 @@ TEST(ansi16MatchesReferenceOverBroadSample) {
                 ssg::SrgbColor const c{static_cast<std::uint8_t>(r),
                                        static_cast<std::uint8_t>(g),
                                        static_cast<std::uint8_t>(b)};
-                auto got = ssg::resolveColor(c, ssg::ColorDepth::Ansi16);
+                auto got = ssg::ColorResolver{ssg::ColorDepth::Ansi16}.resolve(c);
                 int const expected = refNearest(c, 0, 15);
                 ASSERT_TRUE(got.encoding ==
                             ssg::ResolvedColor::Encoding::Ansi16);
@@ -123,13 +123,13 @@ TEST(exactSwatchesMapToThemselves) {
     // Every cube and gray swatch resolves to its own index at indexed256.
     for (int index = 16; index < 256; ++index) {
         auto const swatch = ssg::xterm256Color(static_cast<std::uint8_t>(index));
-        auto got = ssg::resolveColor(swatch, ssg::ColorDepth::Indexed256);
+        auto got = ssg::ColorResolver{ssg::ColorDepth::Indexed256}.resolve(swatch);
         ASSERT_EQ(static_cast<int>(got.index), index);
     }
     // Every base color resolves to its own index at ansi16.
     for (int index = 0; index < 16; ++index) {
         auto const swatch = ssg::xterm256Color(static_cast<std::uint8_t>(index));
-        auto got = ssg::resolveColor(swatch, ssg::ColorDepth::Ansi16);
+        auto got = ssg::ColorResolver{ssg::ColorDepth::Ansi16}.resolve(swatch);
         ASSERT_EQ(static_cast<int>(got.index), index);
     }
 }
@@ -139,7 +139,7 @@ TEST(tiesBreakToTheLowestIndex) {
     // red(128,0,0)=index 1 (64^2 either way); the lower index 0 must win.
     ssg::SrgbColor const midpoint{64, 0, 0};
     ASSERT_EQ(refDistance(midpoint, refXterm(0)), refDistance(midpoint, refXterm(1)));
-    auto got = ssg::resolveColor(midpoint, ssg::ColorDepth::Ansi16);
+    auto got = ssg::ColorResolver{ssg::ColorDepth::Ansi16}.resolve(midpoint);
     ASSERT_EQ(static_cast<int>(got.index), 0);
 }
 
