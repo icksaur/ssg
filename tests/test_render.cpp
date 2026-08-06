@@ -73,11 +73,12 @@ ssg::SessionSnapshot withStyle(ssg::SessionSnapshot const& base,
 
 }  // namespace
 
-TEST(chromeBackgroundsShareOneBandAndTheActiveTabMergesWithTheDocument) {
-    // The chrome color model: the header, footer, tab bar (including its empty
-    // region past the last tab), and inactive tabs share ONE band background,
-    // distinct from the document; the active tab uses the document Background so
-    // it reads as selected by merging into the content below.
+TEST(chromeBackgroundsAreDistinctShadesAndTheActiveTabMergesWithTheDocument) {
+    // The chrome color model: the header, footer, and tab bar each carry their
+    // OWN background shade -- distinct greyscale bands, so the regions read apart
+    // -- and every band is distinct from the document. The active tab uses the
+    // document Background so it reads as selected by merging into the content
+    // below.
     auto root = uniqueRoot();
     std::ofstream{root / "alpha.txt"} << "one\n";
     std::ofstream{root / "beta.txt"} << "two\n";
@@ -98,27 +99,27 @@ TEST(chromeBackgroundsShareOneBandAndTheActiveTabMergesWithTheDocument) {
     auto grid = ssg::Renderer{}.render(*snapshot);
 
     const auto& theme = snapshot->sections().theme;
-    const auto bandColor =
+    const auto headerBand =
+        ssg::themeColor(theme, ssg::SemanticRole::HeaderBackground);
+    const auto footerBand =
+        ssg::themeColor(theme, ssg::SemanticRole::FooterBackground);
+    const auto tabBand =
         ssg::themeColor(theme, ssg::SemanticRole::TabInactiveBackground);
     const auto docColor = ssg::themeColor(theme, ssg::SemanticRole::Canvas);
-    // The chrome band is a distinct color from the document.
-    ASSERT_NE(bandColor, docColor);
-    // Header, footer, and tab-bar backgrounds all resolve to the one band.
-    ASSERT_EQ(ssg::themeColor(theme, ssg::SemanticRole::HeaderBackground),
-              bandColor);
-    ASSERT_EQ(ssg::themeColor(theme, ssg::SemanticRole::FooterBackground),
-              bandColor);
+    // Every chrome band is a distinct color from the document.
+    ASSERT_NE(headerBand, docColor);
+    ASSERT_NE(footerBand, docColor);
+    ASSERT_NE(tabBand, docColor);
 
     // A cell's background is a slot index into grid.colors; resolve it back to
     // the color to check the chrome painting.
     const auto colorOf = [&](int x, int y) {
         return grid.colors[grid.at(x, y).background];
     };
-    // The empty tab-bar cell (last column of the tab row) carries the band.
-    ASSERT_EQ(colorOf(shell.tabBar->right() - 1, shell.tabBar->y), bandColor);
-    // The header and footer rows carry the band too.
-    ASSERT_EQ(colorOf(shell.header->x, shell.header->y), bandColor);
-    ASSERT_EQ(colorOf(shell.footer->x, shell.footer->y), bandColor);
+    // Each region is painted with ITS OWN band role.
+    ASSERT_EQ(colorOf(shell.tabBar->right() - 1, shell.tabBar->y), tabBand);
+    ASSERT_EQ(colorOf(shell.header->x, shell.header->y), headerBand);
+    ASSERT_EQ(colorOf(shell.footer->x, shell.footer->y), footerBand);
 
     // The active tab's first cell carries the document Background, not the band,
     // so it merges with the content below.
@@ -1603,7 +1604,7 @@ TEST(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer) {
 
 int main() {
     RUN(everyNonCaretSemanticRoleIsColorConsumedByTheRenderer);
-    RUN(chromeBackgroundsShareOneBandAndTheActiveTabMergesWithTheDocument);
+    RUN(chromeBackgroundsAreDistinctShadesAndTheActiveTabMergesWithTheDocument);
     RUN(renderPaintsContentNotAccessibilityLabels);
     RUN(lineNumberGutterPaintsNumbersAndHighlightsTheCaretLine);
     RUN(lineNumberGutterHighlightsEveryCursorLineNotJustThePrimary);

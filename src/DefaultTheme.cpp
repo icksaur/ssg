@@ -20,83 +20,75 @@ namespace ssg {
 // below are the historical VSCode-derived palette, assigned per role/scope so
 // the shipped appearance is unchanged from the palette+index model.
 ThemeSnapshot defaultTheme() noexcept {
-    // The historical 16-color palette this theme was seeded from, kept local so
-    // the per-role assignments below read as "role = <one of these tones>".
-    constexpr std::array<std::array<std::uint8_t, 3>, 16> tone{{
-        {30, 30, 30},     // 0  near-black (document background)
-        {212, 212, 212},  // 1  light gray (foreground)
-        {62, 62, 66},     // 2  dark gray (chrome band)
-        {133, 133, 133},  // 3  mid gray
-        {77, 170, 252},   // 4  blue
-        {229, 192, 123},  // 5  amber
-        {239, 74, 74},    // 6  red
-        {76, 175, 80},    // 7  green
-        {171, 71, 188},   // 8  purple
-        {38, 192, 192},   // 9  cyan
-        {212, 149, 106},  // 10 orange
-        {209, 109, 158},  // 11 pink
-        {187, 187, 187},  // 12 light gray
-        {106, 106, 106},  // 13 mid-dark gray
-        {232, 232, 232},  // 14 near-white
-        {255, 255, 255},  // 15 white
-    }};
-    auto c = [&](std::size_t i) {
-        return SrgbColor::fromSerializedChannels(tone[i][0], tone[i][1],
-                                                 tone[i][2]);
+    // A dark theme (see doc for the color model). The palette draws from the
+    // caco "dark" theme (../caco/public/themes/dark.css + style.css): a near-black
+    // document, a dark-green selection, and greyscale chrome, with syntax the
+    // only saturated color. Design intent, per role group below:
+    //  - editor text and file/folder names read WHITE; other UI text is greyscale
+    //    and progressively dimmer (active > header/footer > inactive/line numbers).
+    //  - selection (editor AND the panel/picker "bar") is a dark green, the caco
+    //    list-selection color (green mixed into the base).
+    //  - the chrome bands (tab bar, header, footer, gutter) are distinct greyscale
+    //    shades rather than one flat band, so the regions read apart.
+    //  - syntax stays colorful (it is explicitly outside the greyscale rule).
+    auto rgb = [](std::uint8_t r, std::uint8_t g, std::uint8_t b) {
+        return SrgbColor::fromSerializedChannels(r, g, b);
     };
 
     ThemeSnapshot snapshot{};
-    auto role = [&](SemanticRole which, std::size_t toneIndex) {
-        snapshot.roleColors[static_cast<std::size_t>(which)] = c(toneIndex);
+    auto role = [&](SemanticRole which, SrgbColor color) {
+        snapshot.roleColors[static_cast<std::size_t>(which)] = color;
     };
-    role(SemanticRole::Text, 1);
-    role(SemanticRole::Canvas, 0);
-    role(SemanticRole::Caret, 15);
-    role(SemanticRole::Selection, 4);
-    role(SemanticRole::TreeBackground, 2);
-    role(SemanticRole::TreeFocus, 4);
-    role(SemanticRole::TabActive, 4);
-    role(SemanticRole::TabInactive, 12);
-    role(SemanticRole::PanelActive, 9);
-    role(SemanticRole::PanelInactive, 3);
-    role(SemanticRole::Header, 12);
-    role(SemanticRole::Footer, 12);
-    role(SemanticRole::StatusInfo, 9);
-    role(SemanticRole::StatusWarning, 5);
-    role(SemanticRole::LineNumber, 3);
-    role(SemanticRole::SearchMatch, 10);
-    role(SemanticRole::Prompt, 8);
-    role(SemanticRole::ScrollbarTrack, 13);
-    role(SemanticRole::ScrollbarThumb, 3);
-    role(SemanticRole::DiffAdded, 7);
-    role(SemanticRole::DiffRemoved, 6);
-    role(SemanticRole::DiffModified, 10);
-    role(SemanticRole::TabInactiveBackground, 2);
-    role(SemanticRole::HeaderBackground, 2);
-    role(SemanticRole::FooterBackground, 2);
-    // The current line's number: near-white over a lighter gutter band, so it
-    // stands out both from the mid-gray inactive numbers and from the inactive
-    // gutter background band beside it.
-    role(SemanticRole::CurrentLineNumber, 14);
-    role(SemanticRole::CurrentLineNumberBackground, 13);
-    // Inactive line numbers sit on the chrome band so the gutter reads as
-    // distinct from the near-black document content beside it.
-    role(SemanticRole::LineNumberBackground, 2);
 
-    auto syntax = [&](SyntaxScope scope, std::size_t toneIndex) {
-        snapshot.syntaxColors[static_cast<std::size_t>(scope)] = c(toneIndex);
+    // --- Foreground text (greyscale except where noted) ---
+    role(SemanticRole::Text, rgb(235, 235, 235));   // editor text + file names: white
+    role(SemanticRole::Caret, rgb(255, 255, 255));
+    role(SemanticRole::PanelActive, rgb(228, 232, 238));   // directory names / active panel: white, faint cool tint
+    role(SemanticRole::PanelInactive, rgb(140, 140, 146));  // inactive panel provider: dim grey
+    role(SemanticRole::Header, rgb(166, 166, 172));   // header text: mid grey
+    role(SemanticRole::Footer, rgb(166, 166, 172));   // footer text: mid grey
+    role(SemanticRole::TabActive, rgb(232, 232, 235));   // active tab: bright, stands out
+    role(SemanticRole::TabInactive, rgb(138, 138, 144));  // inactive tabs: dim grey
+    role(SemanticRole::StatusInfo, rgb(150, 150, 156));  // status text: grey
+    role(SemanticRole::StatusWarning, rgb(229, 192, 123));  // amber: a warning must not be greyscale
+    role(SemanticRole::LineNumber, rgb(96, 96, 102));    // inactive gutter numbers: dim
+    role(SemanticRole::CurrentLineNumber, rgb(222, 222, 228));  // current line number: bright
+    role(SemanticRole::Prompt, rgb(216, 216, 222));  // prompt input text: near-white
+    role(SemanticRole::ScrollbarThumb, rgb(120, 120, 128));
+
+    // --- Backgrounds ---
+    role(SemanticRole::Canvas, rgb(30, 30, 30));   // document: near-black (caco --base)
+    role(SemanticRole::TreeBackground, rgb(35, 35, 39));   // side panel: a hair off the document
+    role(SemanticRole::Selection, rgb(42, 78, 46));   // dark green (caco list selection)
+    role(SemanticRole::TreeFocus, rgb(42, 78, 46));   // the selected panel/tree row: same green
+    role(SemanticRole::SearchMatch, rgb(92, 78, 30));   // inactive search match: dark amber (active match uses Selection green)
+    role(SemanticRole::TabInactiveBackground, rgb(52, 52, 58));  // tab-bar band: the lightest chrome shade
+    role(SemanticRole::HeaderBackground, rgb(44, 44, 48));   // header band
+    role(SemanticRole::FooterBackground, rgb(38, 38, 42));   // footer band: the darkest chrome shade
+    role(SemanticRole::CurrentLineNumberBackground, rgb(46, 46, 50));
+    role(SemanticRole::LineNumberBackground, rgb(34, 34, 38));  // inactive gutter band
+    role(SemanticRole::ScrollbarTrack, rgb(52, 52, 58));
+
+    // --- Diff (foreground / row tint; saturated so changes are legible) ---
+    role(SemanticRole::DiffAdded, rgb(76, 175, 80));    // caco green
+    role(SemanticRole::DiffRemoved, rgb(239, 74, 74));   // caco red
+    role(SemanticRole::DiffModified, rgb(229, 192, 123));  // amber, distinct from added green
+
+    // --- Syntax (the only saturated foreground text; caco accent palette) ---
+    auto syntax = [&](SyntaxScope scope, SrgbColor color) {
+        snapshot.syntaxColors[static_cast<std::size_t>(scope)] = color;
     };
-    syntax(SyntaxScope::PlainText, 1);
-    syntax(SyntaxScope::Comment, 3);
-    syntax(SyntaxScope::Keyword, 8);
-    syntax(SyntaxScope::String, 7);
-    syntax(SyntaxScope::Number, 10);
-    syntax(SyntaxScope::Type, 9);
-    syntax(SyntaxScope::Function, 4);
-    syntax(SyntaxScope::Variable, 1);
-    syntax(SyntaxScope::OperatorToken, 5);
-    syntax(SyntaxScope::Punctuation, 14);
-    syntax(SyntaxScope::Invalid, 6);
+    syntax(SyntaxScope::PlainText, rgb(235, 235, 235));   // matches editor Text (white)
+    syntax(SyntaxScope::Comment, rgb(110, 116, 110));   // dim grey-green
+    syntax(SyntaxScope::Keyword, rgb(171, 113, 220));   // purple
+    syntax(SyntaxScope::String, rgb(129, 193, 133));   // green (lighter than the diff/selection green)
+    syntax(SyntaxScope::Number, rgb(212, 149, 106));   // orange (caco --orange)
+    syntax(SyntaxScope::Type, rgb(78, 201, 176));    // teal
+    syntax(SyntaxScope::Function, rgb(97, 175, 239));   // blue
+    syntax(SyntaxScope::Variable, rgb(220, 220, 226));  // near-white: identifiers read like editor text
+    syntax(SyntaxScope::OperatorToken, rgb(198, 198, 204));  // light grey
+    syntax(SyntaxScope::Punctuation, rgb(198, 198, 204));  // light grey
+    syntax(SyntaxScope::Invalid, rgb(239, 74, 74));    // red
     return snapshot;
 }
 
