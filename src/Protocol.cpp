@@ -2466,6 +2466,7 @@ bool decodePresent(ProtocolValue const& value, std::optional<StatusActionInvocat
 ProtocolValue toValue(PromptStatusViewState const& value) {
     std::vector<ProtocolValue::Field> fields;
     fields.emplace_back("prompt", toValue(value.prompt));
+    fields.emplace_back("active_kind", toValue(value.activeKind));
     fields.emplace_back("status", toValue(value.status));
     return ProtocolValue::makeObject(std::move(fields));
 }
@@ -2476,7 +2477,9 @@ bool decodePresent(ProtocolValue const& value, std::optional<PromptStatusViewSta
     if (!status) return false;
     std::optional<PromptViewState> prompt;
     if (!decodeOptionalField(value.field("prompt"), prompt)) return false;
-    out.emplace(PromptStatusViewState{std::move(prompt), *status});
+    std::optional<PromptKind> activeKind;
+    if (!decodeOptionalField(value.field("active_kind"), activeKind)) return false;
+    out.emplace(PromptStatusViewState{std::move(prompt), *status, activeKind});
     return true;
 }
 
