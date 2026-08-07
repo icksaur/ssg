@@ -7,20 +7,20 @@
 
 ## Files / Location
 
-**Frontend — `/home/carl/repo/caco/applets/files/`**
+**Frontend — `../caco/applets/files/`**
 - `meta.json` — manifest (`slug: "files"`, name "Files")
 - `script.js` — 3970-line orchestrator: tab strip, `followEdits` state machine, diff rendering, selection bridge
 - `diff-viewer.js` — `DiffViewer` ViewerInstance: git diff rendering, scroll guard, `_prevHunkWorkRanges`
 - `content.html` — DOM shell (`feFollow`, `feTabs`, `fePane`, ...)
 - `style.css` — all `.fe-*` styling
 
-**Backend — `/home/carl/repo/caco/src/`**
+**Backend — `../caco/src/`**
 - `git-edit-poller.ts` — `GitEditPoller`: diffs working tree vs HEAD, emits `caco.edit` events
 - `file-watcher.ts` — chokidar watcher → `triggerPoll('fs-event')`
 - `file-edits-store.ts` — per-session persisted `CardList` (schema v2)
 - `routes/file-edits.ts` — REST endpoints under `/api/sessions/:sessionId/file-edits`
 
-**Design docs — `/home/carl/repo/caco/docs/`**
+**Design docs — `../caco/docs/`**
 - `spec-files-applet-edits.md`, `spec-files-applet-cards.md`, `spec-files-applet-viewers.md`, `files-applet-roadmap.md`
 
 ---

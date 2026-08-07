@@ -46,13 +46,13 @@
   "testPresets": [
     {
       "name": "dev",
-      "displayName": "Fast unit tests (excludes browser/perf/recovery)",
+      "displayName": "Fast unit tests (excludes perf/recovery)",
       "configurePreset": "dev",
       "output": { "outputOnFailure": true },
       "execution": { "jobs": 20 },
       "filter": {
         "exclude": {
-          "name": "browser_|performance_|test_recovery|test_theme"
+          "name": "performance_|test_recovery|test_theme"
         }
       }
     },

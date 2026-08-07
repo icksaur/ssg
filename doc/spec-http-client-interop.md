@@ -28,7 +28,7 @@ while settling re-entrant dispatch, and the analysis is perishable.
   (`:203`). It uses exactly four session members: `catalog()`, `dispatch()`,
   `attach()`, `detach()`.
 - `Http::Server` accepts on one thread and spawns a **detached thread per
-  connection** (`/home/carl/repo/http/http.cpp:557`). So `received()` — and the
+  connection** (`../http/http.cpp:557`). So `received()` — and the
   dispatch inside it — runs on an arbitrary connection thread, never the
   thread that owns the editor.
 - `HttpEditorServer` serialises its *own* message processing with a

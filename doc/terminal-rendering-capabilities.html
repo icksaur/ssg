@@ -324,7 +324,7 @@ garbage. It is safe to send unconditionally — no detection required.</p>
 <p>Arbitrary text can be a clickable link, independent of whether it <em>looks</em> like a URL.</p>
 
 <pre><code>ESC]8;;https://example.com ESC\  link text  ESC]8;; ESC\
-ESC]8;id=err1;file:///home/carl/src/main.cpp ESC\  main.cpp:42:7  ESC]8;; ESC\</code></pre>
+ESC]8;id=err1;file:///path/to/main.cpp ESC\  main.cpp:42:7  ESC]8;; ESC\</code></pre>
 
 <p>Supported on <strong>all three</strong> of your platforms, plus ghostty, WezTerm, foot, Alacritty,
 iTerm2, Konsole, and GNOME Terminal. Both <code>BEL</code> and <code>ESC \</code> terminators are

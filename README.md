@@ -1,110 +1,75 @@
 # SSG
 
-SSG is a C++20, library-first text editor. The authoritative editor and
-presentation state runs headlessly, and in-process, TUI, and WebSocket/browser
-clients use the same typed command, snapshot, and delta model.
+A C++20 text editor you embed as a **library**, not an application. The editor
+and all of its presentation state run headlessly and in-process; terminal,
+remote (WebSocket), and in-process clients all drive the *same* editor through
+one typed command-and-snapshot model. There is no hidden UI thread and no
+escape-sequence soup — your host renders a cell grid and sends semantic
+commands.
 
-## User-facing deliverables
+If you have ever wanted a real editor core — multiple cursors, undo, find and
+replace, syntax highlighting, LSP, a command palette — without adopting someone
+else's UI framework, that is what SSG is.
 
-- Headless editing library with UTF-8 validation, Unicode 15 grapheme/cell
-  layout, multiple cursors (add-next-occurrence, add-cursor-up/down, split-
-  selection-into-lines), undo/redo, clipboard registers, find/replace,
-  command palette, configurable keymaps, and 160 stable commands.
-- CWD-focused workspaces with tabs and split panes, atomic file operations,
-  encoding and mixed-EOL preservation, scratch recovery, external-change
-  handling, filesystem/Git/symbol trees, live diffs, and follow-edits.
-- Shared monospace presentation model with wrapping, mouse hit targets (click to
-  place the cursor, double-click to select a word, drag to select), wheel
-  and scrollbar navigation, middle-click to close a tab, a collapsible left
-  panel, status header/footer, and fully themeable per-role and per-syntax-scope
-  colors.
-- Tree-sitter syntax state, LSP synchronization/diagnostics/language features
-  and atomic workspace edits, plus a capability-limited Lua 5.4 command host.
-- Versioned, bounded binary protocol and an HTTP/WebSocket server adapter with
-  authentication, reconnect/replay, backpressure, clipboard exchange, and
-  typed errors.
-- Reference TUI and standards-based browser clients. Required browser workflows
-  are exercised in Chromium, Firefox, and WebKit.
-- Cross-transport parity fixtures and a deterministic 10,000-operation
-  performance benchmark.
+## Editor features
 
-Desktop integration through `../gridui`, streaming image/output tabs, DAP, and
-very-large-file mode remain stretch goals. SSG intentionally has no package
-marketplace or plugin registry.
+- **Multiple cursors** — add next occurrence, add cursor up/down, split a
+  selection into one caret per line.
+- **Undo / redo** with word-granular history, and named clipboard registers.
+- **Find and replace**, incremental, with literal/regex/whole-word toggles and
+  a whole-workspace replace.
+- **Command palette** and fully configurable keymaps over 160 stable commands.
+- **Unicode 15** grapheme and cell layout, UTF-8 validation, and correct
+  handling of wide and combining characters.
+- **Tree-sitter syntax highlighting** (C, C++, JavaScript, TypeScript, C#, Lua,
+  Markdown), plus **LSP** synchronization, diagnostics, language features, and
+  atomic workspace edits.
+- **Workspaces** rooted at a working directory: tabs, split panes, filesystem /
+  Git / symbol trees, live diffs, and follow-edits.
+- **Safe files** — atomic writes, encoding and mixed-line-ending preservation,
+  scratch recovery after a crash, and external-change detection.
+- **Fully themeable** per-role and per-syntax-scope colors, adapting down to
+  256- and 16-color terminals.
+- **Scriptable** through a capability-limited Lua 5.4 command host and
+  user-authored `init.lua` startup configuration.
 
-## Requirements
+## Terminal (TUI) editing
 
-- CMake 3.14 or newer
-- A C++20 compiler
-- Lua 5.4 headers and library
-- The `http` repository checked out beside SSG as `../http`
+SSG is built for the terminal first: the core emits **terminal-style cell runs
+and semantic hit targets**, so a TUI host never parses or generates escape
+sequences. Out of the box the model gives you:
 
-Node.js and Chromium, Firefox, and WebKit runtimes are needed only for the
-browser test matrices. Linux and Windows are the required platforms.
+- word wrap and a 16-color themeable cell grid;
+- mouse support — click to place the cursor, double-click to select a word,
+  drag to select, wheel and scrollbar scrolling, middle-click to close a tab;
+- a collapsible left panel (files / Git / symbols), tabs and split panes;
+- a status header and footer with collapsible fields;
+- a line-number gutter, live diffs, and follow-edits.
 
-## Build
+A terminal host does four things: capture events and translate them with the
+supplied keymap, provide viewport dimensions, render the `SessionSnapshot` cell
+grid, and submit semantic commands. `examples/tui/tui_fixture.{h,cpp}` is a
+complete, deterministic reference adapter (a fixture, not a packaged terminal
+application).
 
-Configure once with the `dev` preset (Ninja + ccache, Debug), then iterate with
-a single build command:
+## Browser and remote editing
 
-```sh
-cmake --preset dev     # one-time configuration into build/
-cmake --build build    # steady-state build
-```
+The same session speaks a versioned, bounded binary protocol over an
+HTTP/WebSocket server adapter (`ssg::HttpEditorServer`, from
+`<ssg/HttpEditorServer.h>`) with authentication, reconnect/replay, backpressure,
+clipboard exchange, and typed errors. Because every client — terminal, remote,
+or in-process — drives the session through the same semantic commands, a remote
+front end never reimplements editor behavior; it translates input events and
+renders snapshots. `tests/test_end_to_end.cpp` composes the direct API, a TUI
+adapter, and a WebSocket server against one runtime.
 
-Fast inner loop for iteration:
+## Try it: headless editing
 
-```sh
-cmake --build build --target test_document   # build only the target you touched
-ctest --preset dev                           # fast unit tests (~0.3s)
-```
-
-`ctest --preset dev` excludes the browser, performance, recovery, and theme
-suites so the unit loop stays sub-second. Run everything with:
-
-```sh
-ctest --preset all
-```
-
-Release and sanitizer builds use their own presets and out-of-source build
-directories (`build-release/`, `build-sanitize/`):
-
-```sh
-cmake --preset release && cmake --build build-release
-cmake --preset sanitize && cmake --build build-sanitize && ctest --preset sanitize
-```
-
-Browser tests discover installed runtimes automatically. Override executable
-paths with `SSG_CHROMIUM`, `SSG_FIREFOX`, or `SSG_WEBKIT`.
-
-## Use SSG from CMake
-
-SSG currently supports source-tree consumption with `add_subdirectory`; it
-does not install a package configuration.
-
-```cmake
-add_subdirectory(path/to/ssg)
-
-add_executable(my_editor main.cpp)
-target_link_libraries(my_editor PRIVATE ssg)
-```
-
-Link `ssg_http_server` as well when hosting WebSocket clients:
-
-```cmake
-target_link_libraries(my_editor PRIVATE ssg_http_server)
-```
-
-When loaded as a subdirectory, SSG does not register its internal tests in the
-parent project.
-
-## Basic headless editing
-
-`ssg::Document` is the smallest useful entry point. Transactions use byte
+`ssg::Document` is the smallest useful entry point. Transactions carry byte
 offsets from the pre-transaction revision and are accepted atomically.
 
 ```cpp
-#include <ssg/document.h>
+#include <ssg/Document.h>
 
 #include <iostream>
 
@@ -112,11 +77,11 @@ int main() {
     ssg::Document document{"hello"};
 
     ssg::EditTransaction transaction{
-        .base_revision = document.revision(),
+        .baseRevision = document.revision(),
         .edits = {{
             .offset = ssg::ByteOffset{5},
-            .erased_bytes = 0,
-            .inserted_text = " world",
+            .erasedBytes = 0,
+            .insertedText = " world",
         }},
     };
 
@@ -126,90 +91,59 @@ int main() {
         return 1;
     }
 
-    std::cout << document.snapshot().text << '\n';
+    std::cout << document.snapshot().text << '\n';   // hello world
 }
 ```
 
-For a complete editor session, use `ssg::EditorSessionBuilder` from
-`<ssg/editor_session_builder.h>`. The host binds handlers for every descriptor
-returned by `ssg::p0_command_descriptors()`, optionally injects
-`CommandServices`, and then calls `build()`. Construction rejects missing,
-extra, or duplicate command bindings.
-
-The most complete composition examples are:
+For a batteries-included editor — tabs, workspaces, trees, syntax, the command
+catalog — construct an `ssg::EditorRuntime` with `EditorRuntime::create(config)`
+from `<ssg/EditorRuntime.h>`. For custom command composition, bind commands with
+`ssg::EditorSessionBuilder` (`add()` / `services()` / `build()`) from
+`<ssg/EditorSessionBuilder.h>`. The most complete composition examples are:
 
 - `tests/test_end_to_end.cpp` — direct API, TUI, and WebSocket composition
-- `tests/browser/client/fixture.cpp` — authenticated browser server host
 - `examples/tui/tui_fixture.{h,cpp}` — terminal input and cell-grid adapter
 
-## WebSocket and browser client
+## Add it to your project
 
-`ssg::HttpEditorServer` from `<ssg/http_server.h>` attaches an
-`EditorSession` to the versioned protocol. The embedding host supplies
-authentication/session policy through `HttpEditorSessionHost`, protocol
-argument codecs, and bounded server configuration.
+SSG is consumed from source with `add_subdirectory` (there is no installed
+package configuration yet):
 
-The reference browser client is in `examples/browser/`. Serve those files from
-the same origin as the server, or pass connection settings in the URL:
+```cmake
+add_subdirectory(path/to/ssg)
 
-```text
-index.html?websocket=ws://127.0.0.1:8080/session&credential=remote
+add_executable(my_editor main.cpp)
+target_link_libraries(my_editor PRIVATE ssg)
 ```
 
-The client converts browser keyboard, IME, mouse, wheel, scrollbar, and
-clipboard events into semantic commands. Editor behavior remains in the C++
-session.
+Link `ssg_http_server` as well when hosting WebSocket clients. When loaded as a
+subdirectory, SSG does not register its internal tests in the parent project.
 
-## TUI integration
+### Requirements
 
-The core emits terminal-style cell runs and semantic hit targets, not escape
-sequences. A TUI host is responsible for:
+- A C++20 compiler and CMake 3.14+
+- Lua 5.4 headers and library
+- The [`http`](../http) repository checked out beside SSG as `../http`
 
-1. Capturing terminal events and translating them with the supplied keymap.
-2. Providing viewport dimensions and a snapshot assembler.
-3. Rendering the 16-color `SessionSnapshot` cell grid.
-4. Submitting semantic commands through the attached `EditorSession`.
+Linux and Windows are the supported platforms.
 
-`examples/tui/tui_fixture.{h,cpp}` demonstrates input capture, snapshot refresh,
-and deterministic screen rendering. It is a reference adapter, not a packaged
-terminal application.
+## Configuration
 
-## Performance benchmark
+User-authored startup configuration — custom theme colors, keymaps, chrome
+glyphs — lives in `init.lua`, documented in
+[`doc/config.md`](doc/config.md). Runtime settings resolve through default,
+user, workspace, language, and document scopes.
 
-The benchmark verifies the pinned corpus and deterministic operation script:
+## Scope
 
-```sh
-cmake --build build --target editor_benchmark
-./build/editor_benchmark --verify-only
-./build/editor_benchmark --enforce
-```
+SSG is an editor core, deliberately. Desktop integration (via `../gridui`),
+streaming image/output tabs, DAP debugging, and very-large-file mode are stretch
+goals, and there is intentionally no package marketplace or plugin registry.
 
-The designated-host limits are:
+## Documentation
 
-- Edit latency below 1 ms p50 and 4 ms p99
-- Command-to-delta latency below 2 ms p50 and 8 ms p99
-- First viewport for a 10 MiB document below 250 ms
-- No unchanged-viewport cell payload and no polling CPU while idle
-
-## Data and configuration
-
-- `data/required-commands.json` — exact required command catalog
-- `data/unicode/` — pinned Unicode 15 source data and provenance
-- `data/ui/status_fields.json` — header/footer collapse priorities
-
-Runtime settings support default, user, workspace, language, and document
-scopes. Workspace file authority and persisted relative paths are rooted at the
-canonical CWD.
-
-User-authored startup configuration (`init.lua`, e.g. custom theme colors) is
-documented in `doc/config.md`.
-
-## Project documentation
-
-- `doc/spec.md` — architecture, invariants, acceptance gates, and scope
-- `doc/features/` — detailed feature contracts
-- `doc/config.md` — user guide: writing `init.lua`
-- `doc/learnings.md` — durable implementation and integration constraints
-- `cpp-values.md` — public C++ API design values
-- `copilot-instructions.md` — invariants, risk-tiered workflow, and test rules
-- `backlog.md` (repository root) — deferred work, and the process for it
+- [`doc/spec.md`](doc/spec.md) — architecture, invariants, and scope
+- [`doc/features/`](doc/features/) — detailed feature contracts
+- [`doc/config.md`](doc/config.md) — writing `init.lua`
+- [`development.md`](development.md) — building, testing, benchmarks, and
+  contributor workflow
