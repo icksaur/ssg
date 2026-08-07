@@ -8,9 +8,6 @@
 namespace ssg {
 namespace {
 
-template <typename T>
-T const* payloadAs(std::any const& payload) { return std::any_cast<T>(&payload); }
-
 // Activate the tree provider matching the active panel, creating a git/symbols
 // provider on demand.  The label->provider mapping and the create-on-miss logic
 // now live in the runtime seam (panelProviderBinding) and on TreeModel

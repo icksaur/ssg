@@ -5,9 +5,6 @@
 namespace ssg {
 namespace {
 
-template <typename T>
-T const* payloadAs(std::any const& payload) { return std::any_cast<T>(&payload); }
-
 std::optional<std::string> stringPayload(std::any const& payload) {
     if (auto const* value = payloadAs<std::string>(payload)) return *value;
     if (auto const* value = payloadAs<std::string_view>(payload)) return std::string{*value};
@@ -21,11 +18,6 @@ TabRecoveryBadge badgeFor(ScratchDurabilityState state) {
         case ScratchDurability::Failed: return TabRecoveryBadge::Failed;
     }
     return TabRecoveryBadge::None;
-}
-
-bool activeLiveDiffTab(const EditorRuntime::Impl& runtime) {
-    const auto* tab = runtime.activeTabState();
-    return tab != nullptr && tab->kind == TabKind::LiveDiff;
 }
 
 // The live-diff rule's classification, read from the command's own descriptor
@@ -67,7 +59,7 @@ std::optional<std::string> pathCommandPrecondition(
     const EditorRuntime::Impl& runtime, FileCommand command) {
     if (!mutatesTheActiveDocumentsFile(command)) return std::nullopt;
 
-    if (activeLiveDiffTab(runtime)) {
+    if (runtime.activeTabIsLiveDiff()) {
         return std::string{"command is unavailable in live diff tabs"};
     }
     auto id = runtime.activeDocumentId();
@@ -92,7 +84,7 @@ CommandHandlerResult bindFile(EditorRuntime::Impl& runtime,
     // The live-diff rule, applied once for every command it covers. A live diff
     // tab is a computed view of two revisions, so there is no file to save,
     // rename, reload or delete.
-    if (mutatesTheActiveDocumentsFile(command) && activeLiveDiffTab(runtime)) {
+    if (mutatesTheActiveDocumentsFile(command) && runtime.activeTabIsLiveDiff()) {
         return failure("command is unavailable in live diff tabs");
     }
 
@@ -302,7 +294,7 @@ CommandHandlerResult bindTab(EditorRuntime::Impl& runtime,
 CommandHandlerResult bindEncoding(EditorRuntime::Impl& runtime,
                                     std::string_view id,
                                     std::any const& payload) {
-    if (activeLiveDiffTab(runtime)) {
+    if (runtime.activeTabIsLiveDiff()) {
         return failure(std::string{id} + " is unavailable in live diff tabs");
     }
     auto document = runtime.activeDocumentId();

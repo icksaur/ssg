@@ -3,9 +3,6 @@
 namespace ssg {
 namespace {
 
-template <typename T>
-T const* payloadAs(std::any const& payload) { return std::any_cast<T>(&payload); }
-
 CommandHandlerResult lspFeatureCommand(EditorRuntime::Impl& runtime, std::string_view id) {
     if (id == "completion.dismiss") {
         runtime.lspFeatures.completion.visible = false;

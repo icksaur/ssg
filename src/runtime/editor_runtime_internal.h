@@ -45,6 +45,14 @@
 
 namespace ssg {
 
+// Casts a command payload to the expected type, or null when it holds something
+// else. The one definition shared by every runtime handler file, which each
+// used to re-declare in its own anonymous namespace.
+template <typename T>
+[[nodiscard]] T const* payloadAs(std::any const& payload) {
+    return std::any_cast<T>(&payload);
+}
+
 // Resolves a boolean setting, falling back when the stored value is not a bool.
 // Shared by the presentation commands and the runtime's own reads.
 inline bool boolSetting(SettingsModel const& settings, SettingKey key,
@@ -400,6 +408,13 @@ struct EditorRuntime::Impl final : CommandServices,
 
     [[nodiscard]] std::optional<FileDocumentId> activeDocumentId() const;
     [[nodiscard]] const TabState* activeTabState() const;
+    // Whether the active tab shows a live diff. A guard several command handlers
+    // share (a live-diff tab is read-only for edits), read from the active tab's
+    // own kind so the rule lives in one place.
+    [[nodiscard]] bool activeTabIsLiveDiff() const {
+        const auto* tab = activeTabState();
+        return tab != nullptr && tab->kind == TabKind::LiveDiff;
+    }
     [[nodiscard]] Document const* activeDocument() const;
     [[nodiscard]] Document* activeDocument();
     void ensureDocumentRuntimeState(FileDocumentId document);
