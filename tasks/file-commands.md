@@ -28,7 +28,7 @@ names as bounded display labels without path authority.
 
 Temporary-directory truth, byte-exact saves, duplicate-open prevention,
 untitled identity transitions, path validation, and compensating-command
-scripts on Linux/Windows. Capability fixtures accept authenticated local file
+scripts on Linux/Windows. Capability fixtures accept host-granted local file
 drops and reject Lua, remote, unknown, or client-asserted locality without
 document/tab allocation.
 Path fixtures reject absolute paths, `..` traversal, and symlinks escaping the

@@ -17,40 +17,6 @@
 namespace ssg {
 namespace {
 
-char hexDigit(unsigned value) {
-    return static_cast<char>(value < 10 ? '0' + value : 'a' + value - 10);
-}
-
-std::string hexEncode(std::string_view value) {
-    std::string result;
-    result.reserve(value.size() * 2);
-    for (unsigned char byte : value) {
-        result.push_back(hexDigit(byte >> 4));
-        result.push_back(hexDigit(byte & 0x0f));
-    }
-    return result;
-}
-
-int hexValue(char value) {
-    if (value >= '0' && value <= '9') return value - '0';
-    if (value >= 'a' && value <= 'f') return value - 'a' + 10;
-    if (value >= 'A' && value <= 'F') return value - 'A' + 10;
-    return -1;
-}
-
-std::optional<std::string> hexDecode(std::string_view value) {
-    if ((value.size() & 1u) != 0) return std::nullopt;
-    std::string result;
-    result.reserve(value.size() / 2);
-    for (std::size_t index = 0; index < value.size(); index += 2) {
-        auto const high = hexValue(value[index]);
-        auto const low = hexValue(value[index + 1]);
-        if (high < 0 || low < 0) return std::nullopt;
-        result.push_back(static_cast<char>((high << 4) | low));
-    }
-    return result;
-}
-
 std::vector<std::string_view> split(std::string_view value) {
     std::vector<std::string_view> result;
     while (!value.empty()) {
@@ -76,8 +42,7 @@ std::string encodeSessionAttachRequest(SessionAttachRequest const& request) {
     return "SSG1 ATTACH " +
            (request.lastAppliedRevision
                 ? std::to_string(request.lastAppliedRevision->value())
-                : std::string{"-"}) +
-           " " + hexEncode(request.credential);
+                : std::string{"-"});
 }
 
 DecodeSessionAttachRequestResult decodeSessionAttachRequest(
@@ -87,7 +52,7 @@ DecodeSessionAttachRequestResult decodeSessionAttachRequest(
                 "attach request exceeds message limit"};
     }
     auto const fields = split(message);
-    if (fields.size() != 4 || fields[0] != "SSG1" ||
+    if (fields.size() != 3 || fields[0] != "SSG1" ||
         fields[1] != "ATTACH") {
         return {ProtocolError::MalformedMessage, std::nullopt,
                 "expected SSG1 ATTACH request"};
@@ -105,13 +70,7 @@ DecodeSessionAttachRequestResult decodeSessionAttachRequest(
         }
         revision.emplace(value);
     }
-    auto credential = hexDecode(fields[3]);
-    if (!credential) {
-        return {ProtocolError::MalformedMessage, std::nullopt,
-                "invalid credential encoding"};
-    }
-    return {ProtocolError::None,
-            SessionAttachRequest{std::move(*credential), revision}, {}};
+    return {ProtocolError::None, SessionAttachRequest{revision}, {}};
 }
 
 struct HttpEditorRoute::Impl {
@@ -127,7 +86,7 @@ struct HttpEditorRoute::Impl {
         bool stopping{false};
         bool detached{false};
         std::thread writer;
-        std::optional<AuthenticatedSession> binding;
+        std::optional<AttachedSession> binding;
         std::optional<SessionSnapshot> snapshot;
     };
 
@@ -245,17 +204,17 @@ struct HttpEditorRoute::Impl {
         auto request =
             decodeSessionAttachRequest(payload, config.protocolLimits);
         if (!request.accepted()) return false;
-        auto authenticated = host.authenticate(request.request->credential);
-        if (!authenticated) return false;
-        if (authenticated->principal.origin() != InvocationOrigin::Websocket) {
+        auto attached = host.attach();
+        if (!attached) return false;
+        if (attached->principal.origin() != InvocationOrigin::Websocket) {
             return false;
         }
-        auto const clientId = authenticated->principal.clientId();
-        auto const attached =
-            session.attach(authenticated->principal, authenticated->viewId);
-        if (!attached.accepted()) return false;
+        auto const clientId = attached->principal.clientId();
+        auto const attachResult =
+            session.attach(attached->principal, attached->viewId);
+        if (!attachResult.accepted()) return false;
 
-        connection->binding.emplace(std::move(*authenticated));
+        connection->binding.emplace(std::move(*attached));
         connection->snapshot.emplace(host.snapshot(
             connection->binding->sessionId, clientId));
         auto const currentRevision = connection->snapshot->revision();
@@ -327,7 +286,7 @@ struct HttpEditorRoute::Impl {
         }
     }
 
-    ReplayKey replayKey(AuthenticatedSession const& binding) const {
+    ReplayKey replayKey(AttachedSession const& binding) const {
         return {std::string{binding.sessionId.value()},
                 binding.principal.clientId().value()};
     }

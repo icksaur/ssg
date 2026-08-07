@@ -56,7 +56,7 @@ application).
 
 The same session speaks a versioned, bounded binary protocol over an
 HTTP/WebSocket server adapter (`ssg::HttpEditorServer`, from
-`<ssg/HttpEditorServer.h>`) with authentication, reconnect/replay, backpressure,
+`<ssg/HttpEditorServer.h>`) with reconnect/replay, backpressure,
 clipboard exchange, and typed errors. Because every client — terminal, remote,
 or in-process — drives the session through the same semantic commands, a remote
 front end never reimplements editor behavior; it translates input events and

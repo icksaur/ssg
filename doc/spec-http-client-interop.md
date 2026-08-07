@@ -138,8 +138,7 @@ encoding and enqueueing bytes — which is already thread-safe, because the
 per-connection outbound queue and its writer thread exist for exactly that.
 
 **What does not change.** The wire protocol, the delta derivation, the bounded
-replay history, per-connection outbound queues and writer threads, and
-authentication all stay as they are. This spec moves *where code runs*, not what
+replay history, per-connection outbound queues and writer threads all stay as they are. This spec moves *where code runs*, not what
 it says.
 
 ## Invariants
@@ -255,7 +254,6 @@ it says.
   A separate spec.
 - **Removing `processingMutex`**, which also guards connection bookkeeping.
 - **Multi-session hosting**: this spec assumes one runtime per server, as today.
-- **Authentication and transport security**, unchanged.
 
 ## Rationale (optional, skippable)
 

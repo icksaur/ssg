@@ -47,20 +47,6 @@ non-loopback application exposure is not configurable. Port `0` is the default
 so concurrent local instances do not collide, and the exact selected port is
 printed only after successful startup.
 
-Each application launch obtains 32 random bytes from the platform CSPRNG
-(`getrandom` on Linux and `BCryptGenRandom` on Windows), hex-encodes them, and
-accepts exactly that bearer credential. The printed URL carries it in the
-fragment as `#credential=TOKEN`, which is not sent in HTTP requests.
-examples/browser/app.mjs
-reads the fragment into memory, removes it from browser history before opening
-the WebSocket, and sends it only in `SSG1 ATTACH`. Missing, malformed, stale,
-and incorrect credentials receive the same rejected-attach result. The token
-maps to one local principal with exactly the `local_file_drop` capability;
-commands with no required capability remain available through the existing
-registry rules. `/` serves examples/browser/index.html;
-examples/browser/local.html remains a compatibility
-asset but has no separate hard-coded credential.
-
 Browser assets remain ordinary files. `--assets PATH` overrides discovery;
 otherwise a build-tree post-build rule copies them beside the executable at
 `browser/`, and an installed executable resolves
@@ -79,7 +65,7 @@ ssg-editor [--port PORT] [--assets PATH] [CWD]
 `CWD` defaults to the process current directory. `PORT` defaults to `0`.
 Startup canonicalizes and validates the CWD, initializes the real runtime,
 loads the complete asset manifest, binds loopback, then prints
-`SSG editor: http://127.0.0.1:PORT/#credential=TOKEN` with the selected port.
+`SSG editor: http://127.0.0.1:PORT/` with the selected port.
 On POSIX, SIGINT and SIGTERM are blocked before worker threads start and the
 main thread waits with `sigwait`; on Windows, `SetConsoleCtrlHandler` signals a
 Windows event that the main thread waits on. Both paths converge on main-thread
@@ -127,8 +113,6 @@ stdin.
   coherent revision.
 - Optional services remain lazy or injected. Constructing basic workspace
   editing does not launch LSP, parse Tree-sitter grammars, or create Lua states.
-- Fixture hosts may retain `remote`/`local` credentials for independent tests;
-  the runnable application accepts only its per-launch bearer token.
 - Asset paths and error messages must work from both the build tree and an
   installed prefix.
 - Windows console control handling and POSIX signals both request shutdown;
@@ -145,8 +129,7 @@ stdin.
 - **Incomplete command coverage:** construction compares real bindings against
   `p0_command_descriptors()` and the independent required-command catalog.
 - **Network or same-host access leaks workspace data:** the only bind mode is
-  loopback and every attach requires the per-launch CSPRNG bearer. Native socket
-  and rejected-credential oracles cover both boundaries.
+  loopback. Native socket oracles cover the boundary.
 - **Static modules fail in browsers:** HTTP tests assert JavaScript MIME types,
   and a real-browser smoke test loads the application from the C++ server.
 - **Shutdown loses recovery data:** lifecycle tests mutate a document, signal
@@ -156,7 +139,7 @@ stdin.
 
 - **Observable:** From a clean checkout with sibling `../http`, a user runs the
   documented build commands followed by `./build/ssg-editor PATH`. The process
-  prints one bearer-bearing clickable loopback URL. Opening it loads the browser client without
+  prints one clickable loopback URL. Opening it loads the browser client without
   a second server; the user opens, edits, saves, closes, and reopens a real file,
   and the saved bytes are present beneath `PATH`. SIGINT/SIGTERM exits cleanly.
   This browser workflow requires visual signoff before commit.
@@ -171,8 +154,7 @@ stdin.
   command; exact catalog comparison proves handler completeness; HTTP response
   fixtures prove `/`, the six-asset manifest, `.mjs` MIME, and `/session` share
   one port; OS socket inspection and non-loopback connection tests prove
-  loopback binding; wrong-token and stale-token attaches prove authentication;
-  restart fixtures prove recovery; source scans prove application targets do
+  loopback binding; restart fixtures prove recovery; source scans prove application targets do
   not use test fixtures. Every command-family test initializes two equivalent
   states, dispatches each descriptor through the runtime in one, invokes the
   existing feature-owned operation directly in the other, and compares exact
@@ -193,7 +175,6 @@ stdin.
 | 7 | Bind syntax, LSP feature/workspace-edit, and Lua-dispatch paths | `src/runtime/language_services.cpp`, `tests/runtime/test_runtime_language_services.cpp` | syntax goldens; scripted LSP peer messages/workspace bytes; Lua command invocation vs direct runtime dispatch | I2, I10, I16, I20 |
 | 8 | Prove full-catalog behavioral coverage and aggregate complete server-owned per-client UI snapshots | `src/runtime/snapshot.cpp`, `include/ssg/editor_runtime.h`, `tests/runtime/{command_cases.h,test_runtime_snapshot.cpp}` | case-table IDs exactly equal independent required-command catalog; snapshot goldens and delta replay; exact server UI-element inventory and grid geometry | I2, I3, I7, I14, I15, I16, I17 |
 | 9 | Add externally owned `HttpEditorRoute` while preserving `HttpEditorServer` | `include/ssg/http_server.h`, `src/http_server.cpp`, `tests/test_http_server.cpp` | one-port HTTP/WebSocket lifecycle and existing convenience-server compatibility | I2, I11, I12 |
-| 10 | Add CSPRNG bearer creation, fragment consumption, and exact authentication policy | `src/platform/{secure_random_linux.cpp,secure_random_windows.cpp}`, `examples/browser/{app.mjs,local.html}`, `tests/{test_secure_random.cpp,browser/*}` | token length/uniqueness, wrong/stale attach rejection, browser history has no credential after attach | I4, I11, I21 |
 | 11 | Add the loopback `ssg-editor` executable, six-asset discovery/install, and cross-platform main-thread shutdown | `apps/{ssg_editor_main.cpp,platform/shutdown_posix.cpp,platform/shutdown_windows.cpp}`, `cmake/components/ssg-editor.cmake`, `CMakeLists.txt`, `tests/test_ssg_editor.cpp` | subprocess startup/URL/asset/shutdown and invalid-CWD/assets/port cases; installed-prefix smoke test | I4, I9, I21 |
 | 12 | Replace synthetic product-path parity with real workspace-backed parity and thin-client UI enforcement | `tests/test_end_to_end.cpp`, `tests/browser/client/*`, `tests/browser/end_to_end/*` | direct/TUI/browser states plus exact saved disk bytes after every workflow; real-browser `Escape` leader/configuration access from every state; rendered element inventory equals the server snapshot and uses only its 16 theme colors | I1, I2, I6, I7, I16, I17, I18, I22, I24 |
 | 13 | Rewrite the README around the human launch path and retain embedding as advanced usage | `README.md` | clean-checkout command transcript and link/content smoke test | - |

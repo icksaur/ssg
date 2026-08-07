@@ -154,10 +154,8 @@ SocketOwner connectWebsocket(std::uint16_t port) {
     return owner;
 }
 
-void wsAttach(TestSocket s, std::string credential,
-               std::optional<ssg::Revision> base = std::nullopt) {
-    sendAll(s, maskedFrame(0x1, ssg::encodeSessionAttachRequest(
-                                       {std::move(credential), base})));
+void wsAttach(TestSocket s, std::optional<ssg::Revision> base = std::nullopt) {
+    sendAll(s, maskedFrame(0x1, ssg::encodeSessionAttachRequest({base})));
 }
 
 // ─── Canonical end-to-end state ─────────────────────────────────────────────
@@ -355,10 +353,8 @@ public:
     explicit PeerHost(EndToEndScenario& scenario, ssg::InvocationPrincipal peer)
         : scenario_{scenario}, peer_{std::move(peer)} {}
 
-    std::optional<ssg::AuthenticatedSession> authenticate(
-        std::string_view credential) override {
-        if (credential != "ws-peer") return std::nullopt;
-        return ssg::AuthenticatedSession{
+    std::optional<ssg::AttachedSession> attach() override {
+        return ssg::AttachedSession{
             ssg::SessionId{"e2e-ws"}, peer_, ssg::ViewId{31}};
     }
 
@@ -424,7 +420,7 @@ TEST(directApiLoopbackWebsocketTuiCanonicalStateMatchesPerStep) {
 
     auto ws = connectWebsocket(wsPort);
     FrameReader wsReader{ws.socket};
-    wsAttach(ws.socket, "ws-peer");
+    wsAttach(ws.socket);
     auto initialSnap = ssg::ProtocolCodec{}.decodeSessionSnapshot(wsReader.next().payload);
     ASSERT_TRUE(initialSnap.accepted());
     auto wsSnapshot = std::move(*initialSnap.snapshot);
@@ -624,10 +620,8 @@ public:
                             ssg::InvocationPrincipal peer)
         : scenario_{scenario}, peer_{std::move(peer)} {}
 
-    std::optional<ssg::AuthenticatedSession> authenticate(
-        std::string_view credential) override {
-        if (credential != "conc-ws") return std::nullopt;
-        return ssg::AuthenticatedSession{
+    std::optional<ssg::AttachedSession> attach() override {
+        return ssg::AttachedSession{
             ssg::SessionId{"e2e-conc"}, peer_, ssg::ViewId{42}};
     }
 
@@ -676,7 +670,7 @@ TEST(concurrentTuiAndWebsocketClientsShareFollowInterruption) {
 
     auto ws = connectWebsocket(concPort);
     FrameReader wsReader{ws.socket};
-    wsAttach(ws.socket, "conc-ws");
+    wsAttach(ws.socket);
     auto initialWs = ssg::ProtocolCodec{}.decodeSessionSnapshot(wsReader.next().payload);
     ASSERT_TRUE(initialWs.accepted());
     ssg::Revision wsRev = initialWs.snapshot->revision();

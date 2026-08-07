@@ -62,8 +62,7 @@ The user-facing capability set, stated as engineering deliverables:
 - Tree-sitter syntax state, LSP synchronization/diagnostics/language features
   and atomic workspace edits, plus a capability-limited Lua 5.4 command host.
 - Versioned, bounded binary protocol and an HTTP/WebSocket server adapter with
-  authentication, reconnect/replay, backpressure, clipboard exchange, and typed
-  errors.
+  reconnect/replay, backpressure, clipboard exchange, and typed errors.
 - A reference TUI adapter (`examples/tui/`) and cross-transport parity fixtures.
 - A deterministic 10,000-operation performance benchmark.
 
